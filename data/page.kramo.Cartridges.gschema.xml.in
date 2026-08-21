@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="cartridges">
+
+  <schema id="@APP_ID@" path="@PREFIX@/">
+    <key name="auto-import" type="b">
+        <default>false</default>
+    </key>
+    <key name="minimize-after-launch" type="b">
+      <default>false</default>
+    </key>
+    <key name="cover-launches-game" type="b">
+      <default>false</default>
+    </key>
+    <key name="playtime-tracking" type="b">
+      <default>true</default>
+    </key>
+    <key name="process-tracking-grace" type="i">
+      <default>5</default>
+    </key>
+    <key name="remove-missing" type="b">
+      <default>true</default>
+    </key>
+    <key name="shortcuts" type="b">
+      <default>true</default>
+    </key>
+    <key name="shortcuts-location" type="s">
+      <default>""</default>
+    </key>
+    <key name="shortcuts-recursive" type="b">
+      <default>true</default>
+    </key>
+    <key name="steam-metadata" type="b">
+      <default>true</default>
+    </key>
+    <key name="hltb-metadata" type="b">
+      <default>true</default>
+    </key>
+    <key name="sgdb-key" type="s">
+      <default>""</default>
+    </key>
+    <key name="sgdb" type="b">
+      <default>false</default>
+    </key>
+    <key name="sgdb-prefer" type="b">
+      <default>false</default>
+    </key>
+    <key name="sgdb-animated" type="b">
+      <default>false</default>
+    </key>
+    <key name="library-rows" type="u">
+      <default>0</default>
+    </key>
+    <key name="gamepad" type="b">
+      <default>false</default>
+    </key>
+    <key name="gamepad-rumble" type="b">
+      <default>true</default>
+    </key>
+    <!-- How often (in hours) the repack update feed is polled. 0 disables the
+         check entirely. Novelty is tracked per game (update_dismissed_ts), so
+         no global snapshot state is needed here. -->
+    <key name="updates-check-interval" type="i">
+      <default>12</default>
+    </key>
+    <!-- How often (in hours) the same feed is polled for readable posts, which
+         drives the "Novidades" badge. Kept separate from the key above on
+         purpose: turning per-game update checks off should not also silence the
+         news page. 0 disables the background poll; the page still fetches when
+         it is opened. -->
+    <key name="news-check-interval" type="i">
+      <default>6</default>
+    </key>
+  </schema>
+
+  <schema id="@APP_ID@.State" path="@PREFIX@/State/">
+    <key name="width" type="i">
+      <default>1170</default>
+    </key>
+    <key name="height" type="i">
+      <default>795</default>
+    </key>
+    <key name="is-maximized" type="b">
+      <default>false</default>
+    </key>
+    <!-- Where the window's frame was, so it reopens on the monitor it was
+         closed on. GTK4 has no window-position API, so these are read and
+         applied through Win32; see cartridges/utils/window_geometry.py.
+         -2147483648 means "nothing stored yet" - 0 and -1 are both real
+         coordinates on a desktop whose second monitor sits above the first. -->
+    <key name="x" type="i">
+      <default>-2147483648</default>
+    </key>
+    <key name="y" type="i">
+      <default>-2147483648</default>
+    </key>
+    <key name="sort-mode" type="s">
+      <choices>
+        <choice value="a-z" />
+        <choice value="z-a" />
+        <choice value="newest" />
+        <choice value="oldest" />
+        <choice value="last_played" />
+        <choice value="playtime" />
+        <choice value="rating" />
+        <choice value="released_newest" />
+        <choice value="released_oldest" />
+      </choices>
+      <default>"last_played"</default>
+    </key>
+    <key name="steam-limiter-tokens-history" type="s">
+      <default>"[]"</default>
+    </key>
+    <!-- pubDate (epoch seconds) of the newest feed post the user has already
+         been shown on the Novidades page. Anything newer lights the header-bar
+         badge. Stored as int64 because it is a timestamp. -->
+    <key name="news-last-seen-ts" type="x">
+      <default>0</default>
+    </key>
+  </schema>
+</schemalist>

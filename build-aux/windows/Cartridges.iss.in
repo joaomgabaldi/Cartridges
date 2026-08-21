@@ -1,0 +1,144 @@
+#define MyAppName "Cartridges"
+#define MyAppVersion "@VERSION@"
+#define MyAppPublisher "kramo"
+#define MyAppURL "https://apps.gnome.org/Cartridges/"
+#define MyAppExeName "pythonw.exe"
+
+[Setup]
+AppId={{BC3F8D32-4BDC-4715-B149-D79F589CD7F0}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppVerName={#MyAppName} {#MyAppVersion}
+AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}
+DefaultDirName={autopf64}\{#MyAppName}
+DisableProgramGroupPage=yes
+LicenseFile=..\..\..\LICENSE
+PrivilegesRequiredOverridesAllowed=dialog
+OutputBaseFilename=Cartridges Windows
+SetupIconFile=..\..\..\build-aux\windows\icon.ico
+Compression=lzma
+SolidCompression=yes
+WizardStyle=modern
+
+[Languages]
+Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
+
+; Overrides for the messages the wizard actually shows. Two problems with the
+; stock translation: it is written informally throughout ("pra" for "para",
+; "Aonde" for "Onde"), which clashes with the Portuguese in the app itself; and
+; each page has three text slots that it fills with near-identical sentences —
+; the licence page said "leia as seguintes informações" and then "leia o
+; seguinte Acordo de Licença" directly below it.
+;
+; The rule applied here: the heading names the page, the subtitle says
+; something the body does not, and the body says what to do. Overriding from
+; this script rather than editing the .isl in the Inno Setup folder means an
+; update to Inno Setup cannot quietly undo any of it.
+[Messages]
+brazilianportuguese.WelcomeLabel1=Bem-vindo ao instalador do [name]
+brazilianportuguese.WelcomeLabel2=O [name/ver] será instalado no seu computador.%n%nRecomendamos fechar os outros aplicativos antes de continuar.
+
+brazilianportuguese.PrivilegesRequiredOverrideTitle=Modo de instalação
+brazilianportuguese.PrivilegesRequiredOverrideInstruction=Escolha como instalar
+brazilianportuguese.PrivilegesRequiredOverrideText1=O %1 pode ser instalado para todos os usuários, o que exige privilégios de administrador, ou apenas para você.
+brazilianportuguese.PrivilegesRequiredOverrideText2=O %1 pode ser instalado apenas para você ou para todos os usuários, o que exige privilégios de administrador.
+brazilianportuguese.PrivilegesRequiredOverrideAllUsers=Instalar para &todos os usuários
+brazilianportuguese.PrivilegesRequiredOverrideAllUsersRecommended=Instalar para &todos os usuários (recomendado)
+brazilianportuguese.PrivilegesRequiredOverrideCurrentUser=Instalar apenas para &mim
+brazilianportuguese.PrivilegesRequiredOverrideCurrentUserRecommended=Instalar apenas para &mim (recomendado)
+
+brazilianportuguese.WizardLicense=Acordo de licença
+brazilianportuguese.LicenseLabel=O [name] é software livre, distribuído sob a licença GPL-3.0.
+brazilianportuguese.LicenseLabel3=Leia o acordo abaixo. É preciso aceitá-lo para continuar.
+brazilianportuguese.LicenseAccepted=&Aceito o acordo
+brazilianportuguese.LicenseNotAccepted=&Não aceito o acordo
+
+brazilianportuguese.WizardSelectDir=Local de instalação
+brazilianportuguese.SelectDirDesc=Onde o [name] deve ser instalado?
+brazilianportuguese.SelectDirLabel3=O [name] será instalado na pasta abaixo.
+brazilianportuguese.SelectDirBrowseLabel=Clique em Avançar para continuar ou em Procurar para escolher outra pasta.
+brazilianportuguese.DiskSpaceGBLabel=São necessários pelo menos [gb] GB livres em disco.
+brazilianportuguese.DiskSpaceMBLabel=São necessários pelo menos [mb] MB livres em disco.
+
+brazilianportuguese.WizardSelectTasks=Tarefas adicionais
+brazilianportuguese.SelectTasksDesc=O que mais deve ser feito durante a instalação?
+brazilianportuguese.SelectTasksLabel2=Marque o que desejar e clique em Avançar.
+
+brazilianportuguese.WizardReady=Pronto para instalar
+brazilianportuguese.ReadyLabel1=Tudo pronto para instalar o [name] no seu computador.
+brazilianportuguese.ReadyLabel2a=Clique em Instalar para começar ou em Voltar para revisar as opções.
+brazilianportuguese.ReadyLabel2b=Clique em Instalar para começar.
+
+brazilianportuguese.WizardInstalling=Instalando
+brazilianportuguese.InstallingLabel=Aguarde enquanto o [name] é instalado.
+
+brazilianportuguese.FinishedHeadingLabel=Instalação concluída
+brazilianportuguese.FinishedLabel=O [name] foi instalado e já pode ser aberto pelos atalhos criados.
+brazilianportuguese.FinishedLabelNoIcons=O [name] foi instalado no seu computador.
+brazilianportuguese.ClickFinish=Clique em Concluir para sair.
+
+; Referenced by {cm:...} in [Tasks] and [Run]. A separate section: Inno keeps
+; these apart from the wizard's own strings, and putting them above would be
+; rejected as unknown message names.
+[CustomMessages]
+brazilianportuguese.AdditionalIcons=Atalhos:
+brazilianportuguese.CreateDesktopIcon=Criar atalho na &área de trabalho
+brazilianportuguese.LaunchProgram=Iniciar o %1
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+[Files]
+Source: "C:\msys64\ucrt64\bin\cartridges"; DestDir: "{app}\bin"; Flags: ignoreversion
+Source: "C:\msys64\ucrt64\bin\pythonw.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
+Source: "C:\msys64\ucrt64\bin\python.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
+Source: "C:\msys64\ucrt64\bin\gdbus.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
+Source: "C:\msys64\ucrt64\bin\gspawn-win64-helper.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
+Source: "C:\msys64\ucrt64\bin\gspawn-win64-helper-console.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
+Source: "C:\msys64\ucrt64\bin\*.dll"; DestDir: "{app}\bin"; Flags: recursesubdirs ignoreversion
+
+Source: "C:\msys64\ucrt64\etc\ssl\*"; DestDir: "{app}\etc\ssl"; Flags: recursesubdirs ignoreversion
+
+Source: "C:\msys64\ucrt64\lib\gdk-pixbuf-2.0\*"; DestDir: "{app}\lib\gdk-pixbuf-2.0"; Flags: recursesubdirs ignoreversion
+Source: "C:\msys64\ucrt64\lib\girepository-1.0\*"; DestDir: "{app}\lib\girepository-1.0"; Flags: recursesubdirs ignoreversion
+Source: "C:\msys64\ucrt64\lib\python@PYTHON_VERSION@\*"; DestDir: "{app}\lib\python@PYTHON_VERSION@"; Excludes: "__pycache__"; Flags: recursesubdirs ignoreversion
+
+Source: "C:\msys64\ucrt64\share\cartridges\*"; DestDir: "{app}\share\cartridges"; Excludes: "__pycache__"; Flags: recursesubdirs ignoreversion
+Source: "C:\msys64\ucrt64\share\icons\*"; DestDir: "{app}\share\icons"; Excludes: "*.png,cursors\*"; Flags: recursesubdirs ignoreversion
+Source: "C:\msys64\ucrt64\share\glib-2.0\*"; DestDir: "{app}\share\glib-2.0"; Flags: recursesubdirs ignoreversion
+Source: "C:\msys64\ucrt64\share\gtk-4.0\*"; DestDir: "{app}\share\gtk-4.0"; Flags: recursesubdirs ignoreversion
+
+Source: "..\..\..\build-aux\windows\icon.ico"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+
+[Icons]
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; Parameters: """{app}\bin\cartridges"""; IconFilename: "{app}\icon.ico"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; Parameters: """{app}\bin\cartridges"""; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\bin\{#MyAppExeName}"; Parameters: """{app}\bin\cartridges"""; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall
+
+[Code]
+// Offer to remove the user's library and settings on uninstall. They live
+// outside the install folder (LocalAppData + GSettings in the registry), so the
+// default uninstall would otherwise leave them behind.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    // Accented, like every other string here. The compiler reads this file as
+    // UTF-8 whether or not it carries a byte order mark — compiling the same
+    // script with and without one produces byte-identical installers.
+    if MsgBox('Remover também seus jogos, capas e configurações?' + #13#10 +
+              'Escolha Não para preservar sua biblioteca, por exemplo se for ' +
+              'reinstalar o aplicativo depois.',
+              mbConfirmation, MB_YESNO) = IDYES then
+    begin
+      DelTree(ExpandConstant('{localappdata}\Cartridges'), True, True, True);
+      RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\GSettings\page\kramo\Cartridges');
+      RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\page\kramo');
+      RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\page');
+    end;
+  end;
+end;

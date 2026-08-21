@@ -1,0 +1,172 @@
+diff --git a/gdk/win32/gdkevents-win32.c b/gdk/win32/gdkevents-win32.c
+index 2af2a58..0fd8021 100644
+--- a/gdk/win32/gdkevents-win32.c
++++ b/gdk/win32/gdkevents-win32.c
+@@ -2861,6 +2861,8 @@ gdk_event_translate (MSG *msg,
+ 
+       impl = GDK_WIN32_SURFACE (surface);
+ 
++      gdk_win32_surface_anchor_dcomp_hwnd (impl);
++
+       /* Break grabs on unmap or minimize */
+       if (hwndpos->flags & SWP_HIDEWINDOW ||
+ 	  ((hwndpos->flags & SWP_STATECHANGED) && IsIconic (msg->hwnd)))
+diff --git a/gdk/win32/gdkglcontext-win32.c b/gdk/win32/gdkglcontext-win32.c
+index 45cd688..ce1653c 100644
+--- a/gdk/win32/gdkglcontext-win32.c
++++ b/gdk/win32/gdkglcontext-win32.c
+@@ -110,6 +110,8 @@ gdk_win32_gl_context_surface_attach (GdkDrawContext  *context,
+   hr_warn (IDCompositionDevice_CreateSurfaceFromHwnd (gdk_win32_display_get_dcomp_device (display),
+                                                       self->handle,
+                                                       &dcomp_surface));
++  GDK_WIN32_SURFACE (surface)->dcomp_hwnd = self->handle;
++  gdk_win32_surface_anchor_dcomp_hwnd (GDK_WIN32_SURFACE (surface));
+   gdk_win32_surface_set_dcomp_content (GDK_WIN32_SURFACE (surface), dcomp_surface);
+ 
+   return TRUE;
+@@ -123,6 +125,7 @@ gdk_win32_gl_context_surface_detach (GdkDrawContext *context)
+ 
+   if (!GDK_SURFACE_DESTROYED (surface))
+     {
++      GDK_WIN32_SURFACE (surface)->dcomp_hwnd = NULL;
+       gdk_win32_surface_set_dcomp_content (GDK_WIN32_SURFACE (surface), NULL);
+ 
+       if (!DestroyWindow (self->handle))
+@@ -147,6 +150,9 @@ gdk_win32_gl_context_surface_resized (GdkDrawContext *draw_context)
+                               0,
+                               width, height,
+                               SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOCOPYBITS | SWP_NOZORDER));
++
++      /* The new size may no longer fit where the window is parked */
++      gdk_win32_surface_anchor_dcomp_hwnd (GDK_WIN32_SURFACE (gdk_draw_context_get_surface (draw_context)));
+   }
+ 
+   GDK_DRAW_CONTEXT_CLASS (gdk_win32_gl_context_parent_class)->surface_resized (draw_context);
+diff --git a/gdk/win32/gdksurface-win32.c b/gdk/win32/gdksurface-win32.c
+index e07db46..e8fe80d 100644
+--- a/gdk/win32/gdksurface-win32.c
++++ b/gdk/win32/gdksurface-win32.c
+@@ -3489,6 +3489,68 @@ gdk_win32_drag_surface_iface_init (GdkDragSurfaceInterface *iface)
+   iface->present = gdk_win32_drag_surface_present;
+ }
+ 
++/*<private>
++ * gdk_win32_surface_anchor_dcomp_hwnd:
++ * @self: a toplevel surface
++ *
++ * Keeps the GL/Vulkan rendering window sitting entirely on top of a monitor.
++ *
++ * That window is a WS_POPUP, so it is positioned in screen coordinates rather
++ * than relative to the toplevel that owns it, and DirectComposition reads it
++ * through the DWM redirection surface — which only covers the part of the
++ * window that overlaps a display. Created at (0, 0) it lands on the primary
++ * monitor, so anything past the primary monitor's bounds is never composed:
++ * a toplevel on a larger secondary monitor renders clipped to the primary's
++ * width and height while staying fully interactive, since input goes to the
++ * toplevel and is unaffected.
++ *
++ * The window is cloaked, so it does not have to follow the toplevel — it only
++ * has to fit on some monitor. Moving it while it still fits would flicker
++ * during a drag across monitors, when the toplevel briefly straddles two of
++ * them, so this only acts once it no longer fits where it is.
++ */
++void
++gdk_win32_surface_anchor_dcomp_hwnd (GdkWin32Surface *self)
++{
++  HMONITOR monitor;
++  MONITORINFO mi;
++  RECT rect;
++
++  if (self->dcomp_hwnd == NULL)
++    return;
++
++  if (!GetWindowRect (self->dcomp_hwnd, &rect))
++    return;
++
++  /* Already covered where it is? Then leave it alone. */
++  monitor = MonitorFromWindow (self->dcomp_hwnd, MONITOR_DEFAULTTONEAREST);
++  mi.cbSize = sizeof (mi);
++
++  if (monitor != NULL &&
++      GetMonitorInfo (monitor, &mi) &&
++      rect.left >= mi.rcMonitor.left &&
++      rect.top >= mi.rcMonitor.top &&
++      rect.right <= mi.rcMonitor.right &&
++      rect.bottom <= mi.rcMonitor.bottom)
++    return;
++
++  /* Otherwise park it on the monitor the toplevel is on. If it is larger than
++   * that monitor there is nothing better to pick, and this is still where it
++   * has to be composed. */
++  monitor = MonitorFromWindow (GDK_SURFACE_HWND (self), MONITOR_DEFAULTTONEAREST);
++  mi.cbSize = sizeof (mi);
++
++  if (monitor == NULL || !GetMonitorInfo (monitor, &mi))
++    return;
++
++  API_CALL (SetWindowPos, (self->dcomp_hwnd,
++                           SWP_NOZORDER_SPECIFIED,
++                           mi.rcMonitor.left,
++                           mi.rcMonitor.top,
++                           0, 0,
++                           SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOCOPYBITS | SWP_NOZORDER));
++}
++
+ /*<private>
+  * gdk_win32_surface_set_dcomp_content:
+  * @self: The surface to set the content on
+diff --git a/gdk/win32/gdksurface-win32.h b/gdk/win32/gdksurface-win32.h
+index 666ec67..ec0a9aa 100644
+--- a/gdk/win32/gdksurface-win32.h
++++ b/gdk/win32/gdksurface-win32.h
+@@ -136,6 +136,11 @@ struct _GdkWin32Surface
+   IDCompositionTarget *dcomp_target;
+   IDCompositionVisual *dcomp_visual;
+ 
++  /* The rendering window that the GL and Vulkan backends hand to
++   * IDCompositionDevice::CreateSurfaceFromHwnd(). NULL for the Cairo backend,
++   * which composes a swapchain and needs no window of its own. */
++  HWND dcomp_hwnd;
++
+   HICON   hicon_big;
+   HICON   hicon_small;
+ 
+@@ -227,6 +232,7 @@ GdkSurface *    gdk_win32_drag_surface_new                      (GdkDisplay
+ 
+ void            gdk_win32_surface_set_dcomp_content             (GdkWin32Surface        *self,
+                                                                  IUnknown               *dcomp_content);
++void            gdk_win32_surface_anchor_dcomp_hwnd            (GdkWin32Surface        *self);
+ 
+ #ifdef HAVE_EGL
+ EGLSurface gdk_win32_surface_get_egl_surface (GdkSurface *surface,
+diff --git a/gdk/win32/gdkvulkancontext-win32.c b/gdk/win32/gdkvulkancontext-win32.c
+index dac3b1c..27647af 100644
+--- a/gdk/win32/gdkvulkancontext-win32.c
++++ b/gdk/win32/gdkvulkancontext-win32.c
+@@ -145,6 +145,8 @@ gdk_win32_vulkan_context_surface_attach (GdkDrawContext  *context,
+   hr_warn (IDCompositionDevice_CreateSurfaceFromHwnd (gdk_win32_display_get_dcomp_device (display),
+                                                       self->handle,
+                                                       &dcomp_surface));
++  GDK_WIN32_SURFACE (surface)->dcomp_hwnd = self->handle;
++  gdk_win32_surface_anchor_dcomp_hwnd (GDK_WIN32_SURFACE (surface));
+   gdk_win32_surface_set_dcomp_content (GDK_WIN32_SURFACE (surface), dcomp_surface);
+ 
+   return TRUE;
+@@ -160,6 +162,7 @@ gdk_win32_vulkan_context_surface_detach (GdkDrawContext *context)
+ 
+   if (!GDK_SURFACE_DESTROYED (surface))
+     {
++      GDK_WIN32_SURFACE (surface)->dcomp_hwnd = NULL;
+       gdk_win32_surface_set_dcomp_content (GDK_WIN32_SURFACE (surface), NULL);
+ 
+       if (!DestroyWindow (self->handle))
+@@ -184,6 +187,9 @@ gdk_win32_vulkan_context_surface_resized (GdkDrawContext *draw_context)
+                               0,
+                               width, height,
+                               SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOCOPYBITS | SWP_NOZORDER));
++
++      /* The new size may no longer fit where the window is parked */
++      gdk_win32_surface_anchor_dcomp_hwnd (GDK_WIN32_SURFACE (gdk_draw_context_get_surface (draw_context)));
+     }
+ 
+   GDK_DRAW_CONTEXT_CLASS (gdk_win32_vulkan_context_parent_class)->surface_resized (draw_context);

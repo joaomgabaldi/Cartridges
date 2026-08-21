@@ -1,0 +1,13 @@
+/subprojects/blueprint-compiler
+/.vscode
+.prettierignore
+
+# Saídas de build (regeneráveis — ver RESTAURAR.md)
+/_build/
+/_dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Config local da sessão (não compartilhar)
+/.claude/settings.local.json

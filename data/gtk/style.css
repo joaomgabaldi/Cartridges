@@ -1,0 +1,152 @@
+:root {
+  --accent-color: var(--purple-5);
+  --accent-bg-color: var(--purple-3);
+}
+
+.no-hover > flowboxchild:hover {
+  background-color: transparent;
+}
+
+/* Dark scrim shown over the main window while a play session is in progress */
+.session-blocker {
+  background-color: rgba(0, 0, 0, 0.92);
+}
+
+.session-blocker label {
+  color: white;
+}
+
+/* Subtle lift on the cover cards when hovered */
+#cover_button {
+  transition: box-shadow 200ms ease;
+}
+
+#cover_button:hover {
+  box-shadow: 0 6px 16px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* Gold glow on covers whose game has a patch waiting in the repack feed. Same
+   amber family as the details-page update notice, nudged a touch brighter so
+   it reads as a highlight rather than a warning. Purely a soft, blurred outer
+   shadow — no crisp ring — so it reads as a diffuse halo and wraps the card
+   continuously, including under the title footer, with no hard edge.
+
+   The halo slowly "breathes" between a fainter and a stronger glow so a
+   waiting patch draws the eye without being a hard, static outline. Because an
+   active animation owns the box-shadow property, the pulse also carries over
+   on hover (the separate hover lift can't combine with it), which is fine —
+   the pulsing glow is the point. */
+@keyframes cover-update-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 22px 5px alpha(#f5b820, 0.35);
+  }
+
+  50% {
+    box-shadow: 0 0 22px 5px alpha(#f5b820, 0.8);
+  }
+}
+
+#cover_button.update-available {
+  animation: cover-update-pulse 3.5s ease-in-out infinite;
+}
+
+/* Unread marker on the "Novidades" button in the header bar. A small accent dot
+   pinned to the top-right of the newspaper glyph, ringed with the header bar's
+   own background so it stays legible where it overlaps the icon's strokes
+   instead of smudging into them. Sized entirely from CSS — the widget itself is
+   an empty Box, so the dot cannot change the button's own metrics. */
+.news-badge {
+  min-width: 7px;
+  min-height: 7px;
+  border-radius: 9999px;
+  background-color: var(--accent-bg-color, #3584e4);
+  box-shadow: 0 0 0 1.5px var(--headerbar-bg-color, #ffffff);
+}
+
+/* Disclosure arrows on the news list. Libadwaita tints an expanded row's arrow
+   with the accent colour, which here is whatever the user picked in Windows —
+   so one open post sat in a different colour from every closed one beside it
+   and read as a warning rather than as "open". The arrow's direction already
+   says everything the state needs to say, so both states share the label
+   colour. Scoped to this list so expanders elsewhere keep the platform look. */
+.news-list .expander-row-arrow,
+.news-list row.expander image.expander-row-arrow,
+.news-list row.expander:checked image.expander-row-arrow,
+.news-list row.expander:checked image.expander-row-arrow:not(:disabled) {
+  color: inherit;
+}
+
+/* HowLongToBeat reference block on the details page. The cells are padded
+   generously and share one card so the three estimates read as a single
+   table rather than three loose numbers. */
+.hltb-card {
+  border-radius: 12px;
+}
+
+.hltb-cell {
+  padding: 10px 20px;
+  min-width: 76px;
+}
+
+/* Chapter table for the games catalogued only chapter by chapter. Shares the
+   card with the block above so both read as the same object, but lays its
+   numbers out in rows: one line per chapter, three columns of estimates. */
+.hltb-chapters {
+  padding: 12px 16px;
+}
+
+.hltb-chapters .hltb-chapter-value {
+  min-width: 68px;
+}
+
+/* Preview tiles in the logo picker. Logos are overwhelmingly light artwork on
+   transparency, so they need a dark backdrop to be visible at all — and the
+   page they are being chosen for is dark anyway, which makes this the honest
+   preview rather than a stylistic choice. Only the picker uses it; the logo on
+   the details page itself is drawn with no plate behind it. */
+.logo-preview {
+  padding: 12px;
+  border-radius: 12px;
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+/* Patch-available banner on the details page. Warm accent so it reads as a
+   call to action sitting between the metadata and the Play button, with a
+   little lift on hover to signal it is clickable. */
+#details_view_update_notice {
+  padding: 8px 16px;
+  border-radius: 12px;
+  color: var(--warning-color, #cd9309);
+  background-color: alpha(var(--warning-color, #e5a50a), 0.15);
+  transition: background-color 200ms ease;
+}
+
+#details_view_update_notice:hover {
+  background-color: alpha(var(--warning-color, #e5a50a), 0.25);
+}
+
+#details_view {
+  background-color: white;
+}
+
+#details_view_play_button {
+  color: white;
+  background-color: rgba(0, 0, 0, 0.8);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent-color: var(--purple-1);
+    --accent-bg-color: var(--purple-4);
+  }
+
+  #details_view {
+    background-color: black;
+  }
+
+  #details_view_play_button {
+    color: rgba(0, 0, 0, 0.8);
+    background-color: white;
+  }
+}
