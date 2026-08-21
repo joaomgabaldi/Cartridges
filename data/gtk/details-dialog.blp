@@ -1,0 +1,292 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $DetailsDialog: Adw.Dialog {
+  content-width: 480;
+
+  Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar HeaderBar {
+      show-start-title-buttons: false;
+      show-end-title-buttons: false;
+
+      [start]
+      Button cancel_button {
+        label: _("Cancelar");
+        action-name: "window.close";
+      }
+
+      [end]
+      Button apply_button {
+        styles [
+          "suggested-action"
+        ]
+      }
+    }
+
+    Adw.PreferencesPage {
+      Adw.PreferencesGroup cover_group {
+        Adw.Clamp cover_clamp {
+          maximum-size: 200;
+
+          Overlay {
+            [overlay]
+            Adw.Spinner spinner {
+              visible: false;
+            }
+
+            Overlay cover_overlay {
+              halign: center;
+              valign: center;
+
+              [overlay]
+              Button cover_button_browse {
+                icon-name: "edit-find-symbolic";
+                tooltip-text: _("Buscar capa no SteamGridDB");
+                halign: end;
+                valign: end;
+                margin-bottom: 6;
+                margin-end: 46;
+
+                styles [
+                  "circular",
+                  "osd"
+                ]
+              }
+
+              [overlay]
+              Button cover_button_edit {
+                icon-name: "document-edit-symbolic";
+                tooltip-text: _("Nova capa");
+                halign: end;
+                valign: end;
+                margin-bottom: 6;
+                margin-end: 6;
+
+                styles [
+                  "circular",
+                  "osd"
+                ]
+              }
+
+              [overlay]
+              Revealer cover_button_delete_revealer {
+                transition-type: crossfade;
+                margin-end: 80;
+
+                Button cover_button_delete {
+                  icon-name: "user-trash-symbolic";
+                  tooltip-text: _("Excluir capa");
+                  halign: end;
+                  valign: end;
+                  margin-bottom: 6;
+                  margin-end: 6;
+
+                  styles [
+                    "circular",
+                    "osd"
+                  ]
+                }
+              }
+
+              Picture cover {
+                width-request: 200;
+                height-request: 300;
+
+                styles [
+                  "card"
+                ]
+              }
+            }
+          }
+        }
+      }
+
+      // Header of the details page. It sits right under the cover because it
+      // is the other piece of artwork the game carries, but it is a row rather
+      // than another button floating over the cover: the state matters
+      // (automatic, chosen by hand, or deliberately none) and a row can say
+      // which one it is. Its own group because AdwPreferencesGroup keeps rows
+      // in a list above every non-row child, so a row added to the cover group
+      // would jump above the cover itself.
+      Adw.PreferencesGroup {
+        Adw.ActionRow logo_row {
+          title: _("Logo");
+          activatable-widget: logo_button_browse;
+
+          [suffix]
+          Button logo_button_reset {
+            valign: center;
+            icon-name: "edit-undo-symbolic";
+            tooltip-text: _("Voltar a escolher o logo automaticamente");
+            visible: false;
+
+            styles [
+              "flat",
+            ]
+          }
+
+          [suffix]
+          Button logo_button_browse {
+            valign: center;
+            icon-name: "edit-find-symbolic";
+            tooltip-text: _("Escolher logo no SteamGridDB");
+
+            styles [
+              "flat",
+            ]
+          }
+
+          // O par do "Nova capa" da capa: nem todo jogo tem logo no
+          // SteamGridDB, e sem este botão o único caminho para um logo
+          // que o site não tem era não ter logo.
+          [suffix]
+          Button logo_button_file {
+            valign: center;
+            icon-name: "document-open-symbolic";
+            tooltip-text: _("Escolher logo de um arquivo");
+
+            styles [
+              "flat",
+            ]
+          }
+        }
+      }
+
+      Adw.PreferencesGroup {
+        Adw.EntryRow name {
+          title: _("Título");
+
+          [suffix]
+          Stack steam_fetch_stack {
+            valign: center;
+
+            Button steam_fetch_button {
+              icon-name: "folder-download-symbolic";
+              tooltip-text: _("Buscar dados na Steam pelo título");
+
+              styles [
+                "flat",
+              ]
+            }
+
+            Adw.Spinner steam_fetch_spinner {}
+          }
+        }
+
+        Adw.EntryRow developer {
+          title: _("Desenvolvedora (opcional)");
+        }
+
+        Adw.EntryRow publisher {
+          title: _("Publicadora (opcional)");
+        }
+
+        Adw.EntryRow release_date {
+          title: _("Data de lançamento (opcional)");
+        }
+
+        // Free text rather than a list: the value comes from Steam's user
+        // tags, which run to thousands and change on their own, so any list
+        // here would be a worse copy of one we do not control.
+        Adw.EntryRow genre {
+          title: _("Gênero (opcional)");
+        }
+
+        // The three states the details page can show, in the order they mean
+        // something: nothing said, full, partial. "Não informada" is not the
+        // same as "não tem" — plenty of older games take a gamepad without
+        // ever having been labelled for it, which is why that case shows no
+        // line at all instead of claiming there is no support.
+        Adw.ComboRow controller_support {
+          title: _("Compatibilidade com controle");
+
+          model: StringList {
+            strings [
+              _("Não informada"),
+              _("Total"),
+              _("Parcial"),
+            ]
+          };
+        }
+      }
+
+      // O que é seu sobre o jogo, separado do que é do produto: as linhas
+      // acima descrevem o que a Steam sabe, estas duas o que você acha. O
+      // grupo não tem título porque nenhum outro tem — a separação já é dita
+      // pelo espaço entre os grupos.
+      Adw.PreferencesGroup {
+        // Sem `model` aqui de propósito: a lista é montada em Python a partir
+        // de STATUS_LABELS, que é também de onde saem o menu da tela de
+        // detalhes e o filtro da biblioteca. Escrita nos dois lugares, uma
+        // opção nova entraria numa ordem aqui e noutra lá, e a posição
+        // escolhida gravaria o status errado.
+        Adw.ComboRow status {
+          title: _("Status");
+        }
+
+        Adw.ActionRow rating_row {
+          title: _("Minha nota");
+          subtitle: _("Clique na estrela marcada para tirar a nota");
+
+          [suffix]
+          Box rating_box {
+            valign: center;
+          }
+        }
+      }
+
+      Adw.PreferencesGroup {
+        Adw.EntryRow executable {
+          title: _("Executável");
+
+          [suffix]
+          Button file_chooser_button {
+            valign: center;
+            icon-name: "document-open-symbolic";
+            tooltip-text: _("Selecionar arquivo");
+
+            styles [
+              "flat",
+            ]
+          }
+
+          // Only shown when the command says where the game's files are (see
+          // `game_folder`): a launcher URI names no folder anyone here can find.
+          [suffix]
+          Button open_folder_button {
+            valign: center;
+            icon-name: "folder-symbolic";
+            tooltip-text: _("Abrir a pasta do jogo");
+
+            styles [
+              "flat",
+            ]
+          }
+        }
+
+        Adw.SwitchRow run_as_admin_switch {
+          title: _("Abrir como administrador");
+          subtitle: _("Pede elevação (UAC) ao iniciar este jogo");
+        }
+
+        Adw.SwitchRow track_process_switch {
+          title: _("Rastrear processo do jogo");
+          subtitle: _("Conta o tempo enquanto o processo estiver em execução, em vez de terminar a sessão manualmente");
+        }
+
+        Adw.EntryRow process_executable {
+          title: _("Nome do executável");
+          visible: false;
+        }
+      }
+
+      Adw.PreferencesGroup {
+        Adw.SwitchRow track_updates_switch {
+          title: _("Notificar sobre atualizações");
+          subtitle: _("Avisa quando este jogo aparecer em um novo update de repack");
+        }
+      }
+    }
+  }
+}

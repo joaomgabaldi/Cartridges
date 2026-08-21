@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <!-- lombada / pagina de tras -->
+  <path d="M14 24H8a2 2 0 0 0-2 2v20a5 5 0 0 0 5 5h1" />
+  <!-- pagina principal -->
+  <path d="M14 15a2 2 0 0 1 2-2h38a2 2 0 0 1 2 2v31a5 5 0 0 1-5 5H11a5 5 0 0 0 3-5V15Z" />
+  <!-- bloco de manchete -->
+  <rect x="20" y="20" width="14" height="11" rx="2" />
+  <!-- linhas de texto -->
+  <path d="M40 21h10M40 26h10M40 31h10M20 38h30M20 44h20" />
+</svg>
