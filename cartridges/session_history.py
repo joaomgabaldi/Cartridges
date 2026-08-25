@@ -11,7 +11,7 @@ jeito, e custaria mais um arquivo e mais uma entrada no gresource.
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from gi.repository import Adw, Gtk
 
@@ -19,6 +19,7 @@ from cartridges.game import Game
 from cartridges.utils import session_log
 from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.format_playtime import format_playtime
+from cartridges.utils.game_logo import cached_logo_path, load_logo
 from cartridges.utils.relative_date import MONTHS
 
 
@@ -44,10 +45,13 @@ class SessionHistoryDialog(Adw.Dialog):
         self.set_content_width(480)
         self.set_content_height(620)
 
-        self.group = Adw.PreferencesGroup(title=game.name)
+        self.group = Adw.PreferencesGroup()
         self._rows: list[Gtk.Widget] = []
 
         page = Adw.PreferencesPage()
+        self.logo = self._add_logo_header(page)
+        if self.logo is None:
+            self.group.set_title(game.name)
         page.add(self.group)
 
         toolbar = Adw.ToolbarView()
@@ -56,6 +60,56 @@ class SessionHistoryDialog(Adw.Dialog):
         self.set_child(toolbar)
 
         self.rebuild()
+
+    def _add_logo_header(self, page: Adw.PreferencesPage) -> Optional[Gtk.Picture]:
+        """Encabeça a lista com o logo do jogo, como na tela de detalhes.
+
+        Só o que já está em disco: a busca no SteamGridDB é da tela de detalhes,
+        de onde esta aqui é aberta, e um jogo sem logo simplesmente mantém o
+        nome escrito. O logo *é* o título quando existe, então os dois nunca
+        aparecem juntos.
+
+        Só a largura é imposta, pelo clamp, como na tela de detalhes: a altura
+        sai de height-for-width, então a proporção do logo é preservada por
+        construção. Um ``set_size_request`` no Picture não serve — dentro de um
+        box vertical ele é um piso, não um teto, e o widget recebe a largura
+        inteira do grupo (o ``halign`` não segura). Foi assim que um logo de
+        201x72 apareceu com 445x160, ocupando a caixa de diálogo toda.
+        """
+        path = cached_logo_path(self.game)
+        if not path:
+            return None
+
+        loaded = load_logo(path)
+        if not loaded:
+            return None
+
+        texture, width = loaded
+        picture = Gtk.Picture(
+            paintable=texture,
+            content_fit=Gtk.ContentFit.CONTAIN,
+            can_shrink=True,
+        )
+        clamp = Adw.Clamp(
+            unit=Adw.LengthUnit.PX,
+            # Os dois no mesmo valor para o clamp parar de interpolar entre uma
+            # largura "apertada" e a cheia, e simplesmente alocar a pedida.
+            maximum_size=width,
+            tightening_threshold=width,
+            # Centralizado de propósito, enquanto o resumo logo abaixo e as
+            # linhas continuam à esquerda: o logo é a marca do jogo, não o
+            # começo da coluna de texto. O desencontro entre os dois é
+            # escolhido, não esquecido.
+            halign=Gtk.Align.CENTER,
+            child=picture,
+        )
+
+        # Num grupo só dele porque um filho que não é linha entra *abaixo* da
+        # lista dentro do grupo — no lugar do título é preciso outro grupo.
+        header = Adw.PreferencesGroup()
+        header.add(clamp)
+        page.add(header)
+        return picture
 
     def rebuild(self) -> None:
         """Relê o arquivo e redesenha a lista inteira.

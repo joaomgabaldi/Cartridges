@@ -156,6 +156,69 @@ def test_the_history_lists_one_row_per_session(real_window, store):
     assert dialog._rows[0].get_title() == "15 de novembro de 2023"
 
 
+def cache_logo(game, width=300, height=100):
+    """Grava um logo real em disco, como um fetch bem-sucedido teria feito."""
+    import json
+
+    from gi.repository import GdkPixbuf
+
+    shared.logos_dir.mkdir(parents=True, exist_ok=True)
+    path = shared.logos_dir / f"{game.game_id}.png"
+    GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, width, height).savev(
+        str(path), "png", [], []
+    )
+    (shared.logos_dir / f"{game.game_id}.json").write_text(
+        json.dumps(
+            {
+                "name": game.name,
+                "file": path.name,
+                "timestamp": int(time()),
+                "locked": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_the_logo_takes_the_place_of_the_title(real_window, store):
+    """O logo *é* o título quando existe: os dois nunca aparecem juntos.
+
+    A largura tem de ser travada por fora. Um ``set_size_request`` no Picture
+    é um piso, não um teto: dentro do box vertical do grupo ele recebia a
+    largura inteira e crescia junto na altura — um logo de 201x72 aparecia com
+    445x160, ocupando a caixa de diálogo toda.
+    """
+    from gi.repository import Adw, Gtk
+
+    from cartridges.session_history import SessionHistoryDialog
+    from cartridges.utils.game_logo import LOGO_MAX_HEIGHT, logo_display_size
+
+    game = history_game(store)
+    cache_logo(game, width=1280, height=458)
+
+    dialog = SessionHistoryDialog(game)
+
+    assert not dialog.group.get_title()
+    assert dialog.logo is not None
+
+    clamp = dialog.logo.get_parent()
+    assert isinstance(clamp, Adw.Clamp)
+    width = clamp.get_maximum_size()
+    assert width == logo_display_size(1280, 458)[0]
+    # Com a largura presa, a altura sai da proporção do próprio logo
+    assert dialog.logo.measure(Gtk.Orientation.VERTICAL, width)[1] == LOGO_MAX_HEIGHT
+
+
+def test_without_a_cached_logo_the_name_stays(real_window, store):
+    from cartridges.session_history import SessionHistoryDialog
+
+    dialog = SessionHistoryDialog(history_game(store))
+
+    assert dialog.group.get_title() == "Probe"
+    assert dialog.logo is None
+
+
 def test_the_history_says_so_when_there_is_nothing_yet(real_window, store):
     """A biblioteca inteira antecede o histórico, então a tela vazia é o estado
     normal no começo e precisa explicar por que está vazia."""
