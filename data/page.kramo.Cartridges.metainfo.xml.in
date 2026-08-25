@@ -46,6 +46,13 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.08.24" date="2026-08-24">
+      <description translate="no">
+        <ul>
+          <li>O histórico de sessões passa a ser encabeçado pelo logo do jogo, o mesmo da tela de detalhes, no lugar do nome escrito. Um jogo sem logo em cache continua mostrando o nome — a busca no SteamGridDB é da tela de detalhes, de onde o histórico é aberto, e o histórico não faz nenhuma consulta por conta própria</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.08.20" date="2026-08-20">
       <description translate="no">
         <ul>
