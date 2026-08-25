@@ -662,7 +662,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.details_view_size.set_visible(bool(text))
         if text:
             # A variável é o tamanho da instalação, ex.: "87,4 GB"
-            self.details_view_size.set_label(_("No disco: {}").format(text))
+            self.details_view_size.set_label(_("Tamanho: {}").format(text))
 
     def on_playtime_activated(self, *_args: Any) -> None:
         if not self._playtime_clickable:
