@@ -102,6 +102,7 @@
         <choice value="last_played" />
         <choice value="playtime" />
         <choice value="rating" />
+        <choice value="install_size" />
         <choice value="released_newest" />
         <choice value="released_oldest" />
       </choices>

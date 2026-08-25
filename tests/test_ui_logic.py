@@ -619,6 +619,9 @@ PERSISTED_METADATA = {
     "process_executable": "hollow_knight.exe",
     "status": "beaten",
     "rating": 4,
+    # Com quebra de linha no meio de propósito: a anotação é um bloco, e
+    # aplicar a edição não pode achatá-la numa linha só.
+    "notes": "Parei no capítulo 4.\nSenha do cofre: 8815",
 }
 
 
@@ -757,6 +760,8 @@ NOT_GAME_METADATA = {
     "removed",
     "run_as_admin",
     "shortcut_mtime",
+    "install_size",
+    "install_size_ts",
     "shortcut_path",
     "source",
     "track_process",
@@ -1279,6 +1284,22 @@ def test_the_genre_filter_hides_what_does_not_match(real_window, store):
     assert real_window.filter_func(other.get_parent()) is True
 
 
+def test_the_search_looks_inside_the_notes(real_window, store):
+    """Quem escreveu "senha do cofre: 8815" há seis meses lembra da palavra, e
+    não de qual jogo era — a mesma razão de a busca já olhar a desenvolvedora."""
+    real_window.hidden_search_entry.set_text("")
+    game = library_game(store, 1, notes="Parei no capítulo 4.\nCofre: 8815")
+    other = library_game(store, 2)
+    for each in (game, other):
+        add_game_to(real_window, each, hidden=False)
+
+    real_window.search_entry.set_text("cofre")
+    assert real_window.filter_func(game.get_parent()) is True
+    assert real_window.filter_func(other.get_parent()) is False
+
+    real_window.search_entry.set_text("")
+
+
 def test_filters_and_search_combine(real_window, store):
     """Both must agree for a game to show."""
     real_window.hidden_search_entry.set_text("")
@@ -1550,6 +1571,61 @@ def test_ties_on_rating_fall_back_to_the_title(real_window, store):
 
     assert real_window.sort_func(first.get_parent(), second.get_parent()) == -1
     assert real_window.sort_func(second.get_parent(), first.get_parent()) == 1
+
+
+def test_sorting_by_size_puts_the_unmeasured_last(real_window, store):
+    """Zero é "não medido", não "não ocupa nada".
+
+    A varredura leva um tempo até passar pela biblioteca inteira, então esta
+    ordenação convive com jogos sem tamanho o tempo todo — e a pergunta que ela
+    responde é "o que ocupa mais", que um jogo sem tamanho conhecido não tem
+    como disputar.
+    """
+    big = library_game(store, 1, install_size=90 * 1024**3)
+    small = library_game(store, 2, install_size=3 * 1024**3)
+    unmeasured = library_game(store, 3)
+    for game in (big, small, unmeasured):
+        add_game_to(real_window, game, hidden=False)
+
+    real_window.sort_state = "install_size"
+    order = real_window.sort_func
+
+    assert order(big.get_parent(), small.get_parent()) == -1
+    assert order(small.get_parent(), big.get_parent()) == 1
+    assert order(small.get_parent(), unmeasured.get_parent()) == -1
+    assert order(unmeasured.get_parent(), small.get_parent()) == 1
+
+
+def test_the_details_page_hides_the_size_until_it_is_known(real_window, store):
+    """Um jogo ainda não medido fica sem a linha, e não com um "0 B"."""
+    measured = library_game(store, 1, install_size=int(1024**3 * 87.42))
+    unmeasured = library_game(store, 2)
+
+    real_window.update_install_size_label(measured)
+    assert real_window.details_view_size.get_visible()
+    assert real_window.details_view_size.get_label() == "No disco: 87,4 GB"
+
+    real_window.update_install_size_label(unmeasured)
+    assert not real_window.details_view_size.get_visible()
+
+
+def test_the_note_keeps_its_line_breaks_but_not_its_edges(details_dialog):
+    """As quebras do meio separam um lembrete do outro e ficam.
+
+    As das pontas saem: uma caixa em que se apertou Enter e nada mais é uma
+    caixa vazia, e não uma anotação de uma linha em branco — que a tela de
+    detalhes exibiria como uma seção "Onde eu parei" sem nada dentro.
+    """
+    buffer = details_dialog.notes_view.get_buffer()
+
+    buffer.set_text("\n  Parei no capítulo 4.\nCofre: 8815\n\n")
+    assert details_dialog.get_notes() == "Parei no capítulo 4.\nCofre: 8815"
+
+    buffer.set_text("\n \n")
+    assert details_dialog.get_notes() == ""
+
+    buffer.set_text("")
+    assert details_dialog.get_notes() == ""
 
 
 def test_clicking_the_marked_star_takes_the_rating_away(real_window, store):

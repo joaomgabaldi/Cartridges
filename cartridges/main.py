@@ -58,6 +58,7 @@ from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.store.store import Store
 from cartridges.utils.hltb_backfill import HLTBBackfill
+from cartridges.utils.install_size import InstallSizeSweep
 from cartridges.utils.news_checker import NewsChecker
 from cartridges.utils.open_uri import open_uri
 from cartridges.utils.single_instance import (
@@ -208,6 +209,7 @@ class CartridgesApplication(Adw.Application):
     updates_checker: Optional[UpdatesChecker] = None
     news_checker: Optional[NewsChecker] = None
     hltb_backfill: Optional[HLTBBackfill] = None
+    install_size_sweep: Optional[InstallSizeSweep] = None
     # O provider da cor de destaque, guardado para o watcher do registro poder
     # reescrever o CSS no lugar em vez de empilhar um provider por mudança.
     _accent_provider: Optional[Gtk.CssProvider] = None
@@ -458,6 +460,13 @@ class CartridgesApplication(Adw.Application):
         self.hltb_backfill = HLTBBackfill()
         self.hltb_backfill.start()
 
+        # Mede o que cada jogo ocupa no disco, pelo mesmo motivo e no mesmo
+        # molde: a informação só existe se alguém for atrás dela, e ir atrás
+        # custa uma caminhada pela pasta de cada jogo. Uma vez por execução,
+        # depois da importação, pulando o que já foi medido nesta semana.
+        self.install_size_sweep = InstallSizeSweep()
+        self.install_size_sweep.start()
+
         if self.init_search_term:  # For command line activation
             shared.win.search_bar.set_search_mode(True)
             shared.win.search_entry.set_text(self.init_search_term)
@@ -527,6 +536,9 @@ class CartridgesApplication(Adw.Application):
         # written back into games that are being torn down.
         if self.hltb_backfill is not None:
             self.hltb_backfill.stop()
+
+        if self.install_size_sweep is not None:
+            self.install_size_sweep.stop()
 
         Gio.Application.do_shutdown(self)
 
