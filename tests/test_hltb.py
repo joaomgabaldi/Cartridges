@@ -48,7 +48,7 @@ from cartridges.utils.hltb import (  # noqa: E402
 # Live fixtures
 # --------------------------------------------------------------------------
 
-# Exactly what GET /api/bleed/init answered. The token is base64 of
+# Exactly what GET <INIT_URL> answered. The token is base64 of
 # "<ms>::<ip>|<user-agent>|<hpKey>|<hash>" — hence bound to the session.
 INIT_RESPONSE = {
     "token": "MTc4NDU3MjkzMjMxNTo6MTkyLjAuMi4xfE1vemlsbGEvNS4w",
@@ -56,7 +56,7 @@ INIT_RESPONSE = {
     "hpVal": "4f25e864cd6239e1",
 }
 
-# The five entries POST /api/bleed returned for "The Outer Worlds", in the
+# The five entries POST <SEARCH_URL> returned for "The Outer Worlds", in the
 # order it returned them: the game first, but with its own re-release, its
 # sequel and two DLCs right behind it.
 SEARCH_RESULTS = [
@@ -196,7 +196,11 @@ class FakeSession:
 
     def get(self, url, params=None, timeout=None):
         self.gets.append(url)
-        if "/api/bleed/init" in url:
+        # Casado com a constante do modulo, e nao com o caminho escrito a mao:
+        # o HowLongToBeat renomeia o endpoint de tempos em tempos, e um literal
+        # aqui derrubava estes testes todos junto — dando 23 falhas vermelhas
+        # para uma correcao de duas linhas que ja estava certa.
+        if hltb_module.INIT_URL in url:
             self.inits += 1
             self.uses_of_current_token = 0
             if self.init_status != 200:
@@ -514,7 +518,7 @@ class TestFetchTimes(unittest.TestCase):
         )
 
 
-# The five entries POST /api/bleed returns for "Poppy Playtime", captured live,
+# The five entries POST <SEARCH_URL> returns for "Poppy Playtime", captured live,
 # in the order it returns them. The `game_type` column is the whole reason this
 # fixture exists: only chapter 1 is a "game", every later chapter is filed as
 # "dlc" of it. The ordinary type filter therefore threw away four of the five,
