@@ -41,6 +41,7 @@ from cartridges.utils.game_logo import (
     logo_lookup_needed,
 )
 from cartridges.utils.hltb import format_hltb_time
+from cartridges.utils.install_size import format_size
 from cartridges.utils.news_feed import NewsPost
 from cartridges.utils.open_uri import open_uri
 from cartridges.session_history import SessionHistoryDialog
@@ -103,6 +104,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
     details_view_controller_support: Gtk.Label = Gtk.Template.Child()
     details_view_gamepad_recommended: Gtk.Label = Gtk.Template.Child()
     details_view_description: Gtk.Label = Gtk.Template.Child()
+    details_view_notes_box: Gtk.Box = Gtk.Template.Child()
+    details_view_notes: Gtk.Label = Gtk.Template.Child()
     details_view_hltb_box: Gtk.Box = Gtk.Template.Child()
     details_view_hltb_main_cell: Gtk.Box = Gtk.Template.Child()
     details_view_hltb_main_value: Gtk.Label = Gtk.Template.Child()
@@ -117,6 +120,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
     details_view_added: Gtk.Label = Gtk.Template.Child()
     details_view_last_played: Gtk.Label = Gtk.Template.Child()
     details_view_playtime: Gtk.Label = Gtk.Template.Child()
+    details_view_size: Gtk.Label = Gtk.Template.Child()
     details_view_status_button: Gtk.MenuButton = Gtk.Template.Child()
     details_view_hide_button: Gtk.Button = Gtk.Template.Child()
     details_view_update_notice: Gtk.Button = Gtk.Template.Child()
@@ -646,6 +650,20 @@ class CartridgesWindow(Adw.ApplicationWindow):
             else None
         )
 
+    def update_install_size_label(self, game: Game) -> None:
+        """O tamanho da instalação, quando ele já foi medido.
+
+        Só um rótulo: medir é trabalho da varredura em segundo plano, e a tela
+        de detalhes nunca sai andando no disco para preencher esta linha —
+        abrir um jogo tem de ser instantâneo. Um jogo ainda não medido (ou cujo
+        comando não diz onde ele mora) fica sem a linha, e não com um zero.
+        """
+        text = format_size(game.install_size)
+        self.details_view_size.set_visible(bool(text))
+        if text:
+            # A variável é o tamanho da instalação, ex.: "87,4 GB"
+            self.details_view_size.set_label(_("No disco: {}").format(text))
+
     def on_playtime_activated(self, *_args: Any) -> None:
         if not self._playtime_clickable:
             return
@@ -718,10 +736,15 @@ class CartridgesWindow(Adw.ApplicationWindow):
             .lower()
         )
 
+        # A anotação entra na busca junto do título, da desenvolvedora e da
+        # publicadora: quem escreveu "senha do cofre: 8815" seis meses atrás
+        # lembra da palavra, não de qual jogo era — que é a mesma razão de
+        # procurar por "Team Cherry" e achar o jogo.
         filtered = text != "" and not (
             text in game.name.lower()
             or (text in game.developer.lower() if game.developer else False)
             or (text in game.publisher.lower() if game.publisher else False)
+            or (text in game.notes.lower() if game.notes else False)
         )
 
         # Os filtros do menu se somam à busca. Um jogo sem o campo (sem gênero,
@@ -891,6 +914,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # The sentence is fixed in the template, so only visibility is driven here.
         self.details_view_gamepad_recommended.set_visible(game.gamepad_recommended)
 
+        notes = (game.notes or "").strip()
+        self.details_view_notes.set_label(notes)
+        self.details_view_notes_box.set_visible(bool(notes))
+
         self.details_view_description.set_label(game.description or "")
         self.details_view_description.set_visible(bool(game.description))
 
@@ -956,6 +983,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # passar por aqui, e o total do jogo que acabou de ser jogado pela
         # primeira vez precisa virar link agora, não na execução seguinte.
         self.update_playtime_label(game)
+        self.update_install_size_label(game)
 
         if self.navigation_view.get_visible_page() != self.details_page:
             self.navigation_view.push(self.details_page)
@@ -1556,6 +1584,11 @@ class CartridgesWindow(Adw.ApplicationWindow):
             "oldest": ("added", False),
             "last_played": ("last_played", True),
             "playtime": ("playtime", True),
+            # Tamanho zero é "não medido", e cai no fim da lista sozinho:
+            # é o menor valor possível e a ordem é decrescente. O que a
+            # ordenação promete é "o maior primeiro", e um jogo sem
+            # tamanho conhecido não tem como disputar essa posição.
+            "install_size": ("install_size", True),
         }
         if self.sort_state in numeric:
             attr, descending = numeric[self.sort_state]

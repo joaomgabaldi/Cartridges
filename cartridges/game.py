@@ -46,6 +46,7 @@ PERSISTED_ATTRS = (
     "playtime",
     "status",
     "rating",
+    "notes",
     "name",
     "developer",
     "publisher",
@@ -66,6 +67,8 @@ PERSISTED_ATTRS = (
     "removed",
     "blacklisted",
     "version",
+    "install_size",
+    "install_size_ts",
     "shortcut_mtime",
     "shortcut_path",
     "run_as_admin",
@@ -141,6 +144,11 @@ class Game(Gtk.Box):
     # ordenação manda os sem nota para o fim da lista em vez de tratá-los como
     # os piores jogos da biblioteca.
     rating: int = 0
+    # Onde você parou: texto livre, escrito por você e por mais ninguém. Não é
+    # a `description` — aquela é a peça de marketing da Steam, esta é o recado
+    # que o jogo de seis meses atrás deixou para quem for retomá-lo. Guardado
+    # com as quebras de linha que tiver: é um bloco de anotações, não um campo.
+    notes: str = ""
     name: str
     developer: Optional[str] = None
     publisher: Optional[str] = None
@@ -183,6 +191,13 @@ class Game(Gtk.Box):
     # show — the three fields above stay empty and this carries one entry per
     # chapter ({"number", "name", "hltb_id", "hltb_main", …}) instead.
     hltb_chapters: Optional[list[dict]] = None
+    # Quanto a instalação do jogo ocupa, em bytes, e quando isso foi medido.
+    # Zero é "não sei": ou a varredura ainda não chegou neste jogo, ou o
+    # comando que o inicia não diz onde ele mora (`install_size_folder`), que é
+    # o caso de todo jogo aberto por URL de loja. Nunca é "ocupa nada" — por
+    # isso a ordenação por tamanho manda os zeros para o fim.
+    install_size: int = 0
+    install_size_ts: int = 0
     removed: bool = False
     blacklisted: bool = False
     game_cover: Optional[GameCover] = None

@@ -29,9 +29,69 @@ from gi.repository import Adw, Gio, GLib, Gtk
 
 from cartridges import shared
 from cartridges.errors.friendly_error import FriendlyError
+from cartridges.game import STATUS_LABELS, Game
 from cartridges.metadata_refresh import get_metadata_refresh
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.utils.create_dialog import create_dialog
+
+# O que o backup carrega, e a razão de ser dele: é tudo que veio de você e de
+# mais ninguém. Título, capa, gênero, Metacritic e os tempos do HowLongToBeat
+# ficam de fora de propósito — reimportar a biblioteca traz os cinco de volta
+# sozinho, e um backup que os carregasse restauraria por cima de dados mais
+# novos que os do dia em que foi salvo. Tamanho no disco também fica fora: é
+# medido, não digitado, e é do computador em que a medição aconteceu.
+BACKUP_FIELDS = ("playtime", "status", "rating", "notes")
+
+
+def restore_into(game: Game, entry: dict) -> bool:
+    """Aplica um registro do backup a ``game``. Diz se mudou alguma coisa.
+
+    Duas regras diferentes, porque os campos são de duas naturezas.
+
+    O tempo de jogo **soma**, como sempre somou: o backup é uma parcela do
+    total, e restaurar duas máquinas na mesma biblioteca tem de dar a soma das
+    duas. O preço continua sendo o mesmo de antes: importar o mesmo arquivo
+    duas vezes conta o tempo dele duas vezes.
+
+    Status, nota e anotação **só preenchem o que está vazio**. Eles são valores,
+    não parcelas — não há o que somar —, e o que está na biblioteca agora é
+    mais recente do que o que está no arquivo. Assim restaurar sobre uma
+    instalação nova traz tudo, restaurar sobre uma biblioteca em uso não apaga
+    nada, e importar o mesmo arquivo duas vezes é inofensivo para os três.
+
+    O arquivo veio de fora e pode ter sido editado à mão, então cada valor é
+    conferido antes de entrar: um status que o app não sabe exibir ou uma nota
+    fora de 1–5 é descartado, e não gravado para quebrar uma tela mais adiante.
+    """
+    changed = False
+
+    try:
+        backup_time = int(entry.get("playtime") or 0)
+    except (TypeError, ValueError):
+        backup_time = 0
+    if backup_time > 0:
+        game.playtime += backup_time
+        changed = True
+
+    status = entry.get("status")
+    if isinstance(status, str) and status in STATUS_LABELS and not game.status:
+        game.status = status
+        changed = True
+
+    try:
+        rating = int(entry.get("rating") or 0)
+    except (TypeError, ValueError):
+        rating = 0
+    if 1 <= rating <= 5 and not game.stars:
+        game.rating = rating
+        changed = True
+
+    notes = entry.get("notes")
+    if isinstance(notes, str) and notes.strip() and not (game.notes or "").strip():
+        game.notes = notes.strip()
+        changed = True
+
+    return changed
 
 
 @Gtk.Template(resource_path=shared.PREFIX + "/gtk/preferences.ui")
@@ -74,8 +134,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     sgdb_stack: Gtk.Stack = Gtk.Template.Child()
     sgdb_spinner: Adw.Spinner = Gtk.Template.Child()
 
-    export_playtime_button_row = Gtk.Template.Child()
-    import_playtime_button_row = Gtk.Template.Child()
+    export_backup_button_row = Gtk.Template.Child()
+    import_backup_button_row = Gtk.Template.Child()
 
     danger_zone_group = Gtk.Template.Child()
     remove_all_games_button_row = Gtk.Template.Child()
@@ -94,8 +154,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
         # General
         self.remove_all_games_button_row.connect("activated", self.remove_all_games)
-        self.export_playtime_button_row.connect("activated", self.export_playtime)
-        self.import_playtime_button_row.connect("activated", self.import_playtime)
+        self.export_backup_button_row.connect("activated", self.export_backup)
+        self.import_backup_button_row.connect("activated", self.import_backup)
 
         # Debug
         if shared.PROFILE == "development":
@@ -462,20 +522,30 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         filters.append(json_filter)
         return filters
 
-    def export_playtime(self, *_args: Any) -> None:
-        """Save each played game's stable id and playtime to a JSON file."""
+    def export_backup(self, *_args: Any) -> None:
+        """Grava num arquivo o que cada jogo tem de seu, por id estável."""
         # Tombstones (removed games) stay out of the backup
-        playtimes = {
-            game.game_id: {"name": game.name, "playtime": game.playtime}
-            for game in shared.store
-            if game.playtime and not game.removed
-        }
-        if not playtimes:
-            self.add_toast(Adw.Toast.new(_("Nenhum tempo de jogo para exportar")))
+        games = {}
+        for game in shared.store:
+            if game.removed:
+                continue
+            # Só o que tem valor: um jogo sem nota não ganha `"rating": 0` no
+            # arquivo, e um arquivo que só tem o que existe é um arquivo que dá
+            # para abrir e ler.
+            entry = {
+                field: value
+                for field in BACKUP_FIELDS
+                if (value := getattr(game, field, None))
+            }
+            if entry:
+                games[game.game_id] = {"name": game.name, **entry}
+
+        if not games:
+            self.add_toast(Adw.Toast.new(_("Não há nada para exportar")))
             return
 
         dialog = Gtk.FileDialog()
-        dialog.set_initial_name("cartridges-tempos-de-jogo.json")
+        dialog.set_initial_name("cartridges-backup.json")
         dialog.set_filters(self._json_filters())
 
         def finish(file_dialog: Gtk.FileDialog, result: Gio.Task) -> None:
@@ -486,7 +556,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             try:
                 path.write_text(
                     json.dumps(
-                        {"version": 1, "playtimes": playtimes},
+                        {"version": 2, "games": games},
                         indent=2,
                         ensure_ascii=False,
                     ),
@@ -495,12 +565,12 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             except OSError as error:
                 create_dialog(self, _("Não foi possível exportar"), str(error))
                 return
-            self.add_toast(Adw.Toast.new(_("Tempos de jogo exportados")))
+            self.add_toast(Adw.Toast.new(_("Backup exportado")))
 
         dialog.save(shared.win, None, finish)
 
-    def import_playtime(self, *_args: Any) -> None:
-        """Add playtimes from a backup to the current ones, matching by stable id."""
+    def import_backup(self, *_args: Any) -> None:
+        """Traz de volta o que o backup guardou, casando por id estável."""
         dialog = Gtk.FileDialog()
         dialog.set_filters(self._json_filters())
 
@@ -510,37 +580,36 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             except GLib.Error:
                 return
             try:
-                playtimes = json.loads(path.read_text(encoding="utf-8"))["playtimes"]
-                if not isinstance(playtimes, dict):
+                data = json.loads(path.read_text(encoding="utf-8"))
+                # "playtimes" é o nome que a versão 1 do arquivo usava, quando o
+                # backup só levava tempo de jogo. Um backup daquela época
+                # continua valendo: ele traz menos campos, e é só.
+                entries = data.get("games", data.get("playtimes"))
+                if not isinstance(entries, dict):
                     raise ValueError
-            except (OSError, ValueError, KeyError, TypeError):
+            except (OSError, ValueError, KeyError, TypeError, AttributeError):
                 create_dialog(
                     self,
                     _("Backup inválido"),
-                    _("O arquivo não é um backup de tempos de jogo válido."),
+                    _("O arquivo não é um backup válido do Cartridges."),
                 )
                 return
 
             restored = 0
             for game in shared.store:
-                entry = playtimes.get(game.game_id)
-                if not isinstance(entry, dict):
-                    continue
-                try:
-                    backup_time = int(entry.get("playtime", 0))
-                except (TypeError, ValueError):
-                    continue
-                # Add the backup's time on top of the current one so multiple
-                # backups accumulate. Note: importing the same file twice will
-                # count its time twice.
-                if backup_time > 0:
-                    game.playtime += backup_time
+                entry = entries.get(game.game_id)
+                if isinstance(entry, dict) and restore_into(game, entry):
                     game.save()
+                    game.update()
                     restored += 1
 
             if restored:
                 shared.win.library.invalidate_sort()
                 shared.win.hidden_library.invalidate_sort()
+                # O status restaurado muda quem passa pelo filtro, se houver um
+                # de status ligado na hora da restauração.
+                shared.win.library.invalidate_filter()
+                shared.win.hidden_library.invalidate_filter()
 
             self.add_toast(
                 Adw.Toast.new(

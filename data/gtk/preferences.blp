@@ -51,15 +51,15 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
     }
 
     Adw.PreferencesGroup {
-      title: _("Backup dos tempos de jogo");
-      description: _("Salve os tempos jogados em um arquivo para restaurá-los em outra instalação. Importe seus jogos antes de restaurar.");
+      title: _("Backup da sua biblioteca");
+      description: _("Salve em um arquivo o que só você sabe: tempo de jogo, status, nota e anotações. O resto — capa, gênero, tempos do HowLongToBeat — volta sozinho ao reimportar os jogos. Importe seus jogos antes de restaurar.");
       separate-rows: true;
 
-      Adw.ButtonRow export_playtime_button_row {
+      Adw.ButtonRow export_backup_button_row {
         title: _("Exportar para arquivo");
       }
 
-      Adw.ButtonRow import_playtime_button_row {
+      Adw.ButtonRow import_backup_button_row {
         title: _("Importar de arquivo");
       }
     }
