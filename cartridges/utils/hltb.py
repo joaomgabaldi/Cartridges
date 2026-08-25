@@ -19,10 +19,10 @@
 
 """Fetch completion time estimates from HowLongToBeat.
 
-HowLongToBeat publishes no API. Its search is ``POST /api/bleed``, guarded by
-a short-lived credential from ``GET /api/bleed/init`` — a token plus a honeypot
-pair whose *field name* is randomised per session and has to be echoed both as
-a header and inside the request body. The token itself encodes the client's IP
+HowLongToBeat publishes no API. Its search is ``POST /api/search/site``, guarded
+by a short-lived credential from ``GET /api/search/site/init`` — a token plus a
+honeypot pair whose *field name* is randomised per session and has to be echoed
+both as a header and inside the request body. The token itself encodes the IP
 and User-Agent, so the credential and the search must come from one session
 sending identical headers, and it expires: a 403 means "re-init and retry",
 which is exactly what the site's own front end does.
@@ -43,9 +43,16 @@ Times are in seconds — the same unit :attr:`Game.playtime` uses — so the two
 never need converting to sit side by side. They are never compared: this
 module only provides a reference table.
 
-If this ever breaks, the endpoint and payload were recovered by reading the
-``fetch("/api/bleed"...)`` call in the homepage's JS chunks; that is where to
-look again.
+The path is renamed every so often, and it is the only thing that changes: on
+2026-08-24 ``/api/bleed`` started answering 404 overnight and the pair below
+took its place, serving the same JSON, with the same three credential keys and
+the same search body. Only the two constants had to move.
+
+When it breaks again — and it will — the symptom is ``HowLongToBeat init
+failed`` in the log, at DEBUG, wrapping a 404 from the site itself rather than
+from Cloudflare. The new name is found by sweeping the homepage's JS chunks for
+``"/api/…"``: the paths are in there as plain strings, and the search one is
+whichever has an ``/init`` sibling.
 """
 
 import logging
@@ -63,8 +70,8 @@ from cartridges.utils.rate_limiter import RateLimiter
 from cartridges.utils.title_match import TitleMatch, rank_candidates, tokenize
 
 BASE_URL = "https://howlongtobeat.com"
-SEARCH_URL = f"{BASE_URL}/api/bleed"
-INIT_URL = f"{BASE_URL}/api/bleed/init"
+SEARCH_URL = f"{BASE_URL}/api/search/site"
+INIT_URL = f"{BASE_URL}/api/search/site/init"
 REQUEST_TIMEOUT_SECONDS = 15
 
 # The token embeds the User-Agent that asked for it, so every request in a
@@ -168,7 +175,7 @@ class HLTBTimes(TypedDict, total=False):
 
 @dataclass(frozen=True)
 class _Credential:
-    """One ``/api/bleed/init`` response: a token and its honeypot pair."""
+    """One ``/api/search/site/init`` response: a token and its honeypot pair."""
 
     token: str
     hp_key: str

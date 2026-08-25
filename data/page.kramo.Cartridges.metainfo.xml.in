@@ -46,6 +46,14 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.08.25" date="2026-08-25">
+      <description translate="no">
+        <ul>
+          <li>As estimativas do HowLongToBeat voltaram a funcionar. O site trocou o endereço da busca de um dia para o outro — o antigo passou a responder 404 —, e como a consulta falha em silêncio de propósito (a estimativa é um extra, não pode virar um erro na sua cara), a única pista era uma linha no log. Nada do que já estava gravado se perdeu: o que parou foi só a busca de jogos novos, o preenchimento automático da biblioteca e o botão de buscar na tela de edição</li>
+          <li>Só o nome do caminho mudou, e não o formato da resposta — está anotado no código, junto de como achar o nome novo na próxima vez que eles trocarem, porque vão trocar. Os testes deixaram de casar com o endereço escrito à mão e passaram a ler a constante do módulo: antes, renomear o endereço quebrava vinte e três testes que não tinham nada de errado</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.08.24" date="2026-08-24">
       <description translate="no">
         <ul>
