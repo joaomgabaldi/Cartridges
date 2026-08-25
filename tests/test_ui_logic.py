@@ -1603,7 +1603,7 @@ def test_the_details_page_hides_the_size_until_it_is_known(real_window, store):
 
     real_window.update_install_size_label(measured)
     assert real_window.details_view_size.get_visible()
-    assert real_window.details_view_size.get_label() == "No disco: 87,4 GB"
+    assert real_window.details_view_size.get_label() == "Tamanho: 87,4 GB"
 
     real_window.update_install_size_label(unmeasured)
     assert not real_window.details_view_size.get_visible()
