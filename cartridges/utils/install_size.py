@@ -138,7 +138,10 @@ def folder_size(directory: str) -> int:
             with os.scandir(current) as entries:
                 for entry in entries:
                     try:
-                        if entry.is_dir(follow_symlinks=False):
+                        # follow_symlinks=False só filtra symlink de verdade;
+                        # junção (mklink /J, criável sem privilégio) passa por
+                        # ele e precisa do is_junction() para valer a promessa.
+                        if entry.is_dir(follow_symlinks=False) and not entry.is_junction():
                             stack.append(entry.path)
                         elif entry.is_file(follow_symlinks=False):
                             total += entry.stat(follow_symlinks=False).st_size
@@ -299,6 +302,13 @@ class InstallSizeSweep:
     def _apply(self, game: Game, size: int) -> bool:
         """Grava o tamanho de um jogo e o repinta. Roda no thread principal."""
         if self._stopped or game.removed:
+            return False
+        # Identidade no store, não só o snapshot: um reset apaga a biblioteca
+        # enquanto o worker anda pela lista dele, e o `save()` abaixo
+        # regravaria o JSON de um jogo recém-apagado. Mesmo idioma do
+        # `_in_library` do MetadataRefresh e do HLTBBackfill.
+        store = getattr(shared, "store", None)
+        if store is None or store.get(game.game_id) is not game:
             return False
 
         game.install_size = size

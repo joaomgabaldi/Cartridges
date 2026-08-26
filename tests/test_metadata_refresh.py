@@ -626,3 +626,38 @@ def test_a_usable_stamp_still_short_circuits(refresh) -> None:
     assert refresh.needs_steam(game) is False
     game.steam_checked = STEAM_METADATA_VERSION - 1
     assert refresh.needs_steam(game) is True
+
+
+def test_only_missing_mode_fills_gaps_without_reverting_edits() -> None:
+    """Auditoria 26/08, A3: o modo escolhia quais JOGOS entravam na fila mas
+    aplicava o dict inteiro — nome e desenvolvedora editados à mão voltavam
+    para os da Steam. Campo editável só preenche vazio; os não-editáveis
+    (Metacritic etc.) continuam sempre atualizados."""
+    from cartridges.store.managers.steam_api_manager import _keep_user_edits
+
+    game = SimpleNamespace(
+        name="Witcher 3",
+        developer="Editado à mão",
+        publisher=None,
+        release_date="",
+        genre=None,
+    )
+    online = {
+        "name": "The Witcher 3: Wild Hunt",
+        "developer": "CD PROJEKT RED",
+        "publisher": "CD PROJEKT RED",
+        "release_date": "2015",
+        "genre": "RPG",
+        "metacritic": 93,
+    }
+
+    kept = _keep_user_edits(game, online, {"only_missing": True})
+    assert kept == {
+        "publisher": "CD PROJEKT RED",
+        "release_date": "2015",
+        "genre": "RPG",
+        "metacritic": 93,
+    }
+
+    # Fora do modo (importação, "buscar tudo"), nada muda.
+    assert _keep_user_edits(game, online, {}) == online

@@ -71,6 +71,8 @@ _user32.SetWindowPos.argtypes = [
 _user32.SetWindowPos.restype = wintypes.BOOL
 _user32.MonitorFromRect.argtypes = [ctypes.POINTER(wintypes.RECT), wintypes.DWORD]
 _user32.MonitorFromRect.restype = wintypes.HANDLE
+_user32.IsIconic.argtypes = [wintypes.HWND]
+_user32.IsIconic.restype = wintypes.BOOL
 
 # What the schema holds until a window has been closed once. Not 0, which is a
 # perfectly real coordinate, and not -1, which a second monitor placed above the
@@ -89,7 +91,14 @@ class Geometry(NamedTuple):
 
     @property
     def usable(self) -> bool:
-        """False for the "nothing stored yet" value the schema starts at."""
+        """False for the "nothing stored yet" value the schema starts at.
+
+        Also false for the minimized-window parking spot, exactly
+        (-32000,-32000): `read()` no longer produces it, but a store poisoned
+        by a build that did must not keep reopening the window as a sliver.
+        """
+        if self.x == -32000 and self.y == -32000:
+            return False
         return self.width > 0 and self.height > 0 and self.x != UNSET
 
 
@@ -101,6 +110,14 @@ def read(window: Gtk.Window) -> Optional[Geometry]:
     screen, so callers keep the position and drop the size in that case.
     """
     if (hwnd := _hwnd(window)) is None:
+        return None
+
+    # A minimized window's rect is the icon parking spot — (-32000,-32000),
+    # ~160x28 — not a geometry. And minimized is this app's normal state while a
+    # game runs (it minimizes itself on launch), so closing from the taskbar or
+    # quitting mid-session would persist the sliver and reopen tiny. Treat it
+    # like an unaskable window: the previously stored geometry stays.
+    if _user32.IsIconic(hwnd):
         return None
 
     rect = wintypes.RECT()
