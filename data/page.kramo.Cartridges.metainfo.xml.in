@@ -46,6 +46,25 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.08.26" date="2026-08-26">
+      <description translate="no">
+        <ul>
+          <li>Uma auditoria completa do código — todos os 64 arquivos, lidos linha a linha — encontrou 29 pontos a corrigir, e esta versão corrige todos. Nenhum era travamento em uso comum; o relatório inteiro, achado por achado, está no repositório (auditoria-cartridges-2026-08-26.md, com o fechamento em fechamento-auditoria-2026-08-26.md)</li>
+          <li>Fechar o aplicativo com a janela minimizada — o estado normal enquanto um jogo roda — gravava como "tamanho lembrado" o retângulo de estacionamento do Windows, e a janela reabria como uma tirinha no canto. Janela minimizada agora não é medida, e um tamanho envenenado gravado por versão anterior é reconhecido e descartado sozinho</li>
+          <li>O tamanho no disco não segue mais junções (mklink /J): uma pasta com junção media o alvo junto — o dobro do tamanho, na feature feita para decidir o que apagar — e uma junção apontando para a própria pasta moía o disco em círculo</li>
+          <li>"Buscar só o que falta", em Atualizar metadados, agora respeita o nome: campos que você editou à mão (título, desenvolvedora, publicadora, data, gênero) só são preenchidos quando estão vazios, em vez de voltarem para os valores da Steam. A mesma regra da restauração de backup: o que está preenchido é seu</li>
+          <li>Resetar o aplicativo não deixa mais jogos "renascerem": uma busca de tempos ou medição de tamanho que terminasse depois do reset regravava no disco o jogo recém-apagado. As varreduras agora conferem se o jogo ainda existe na biblioteca antes de gravar qualquer coisa — a mesma proteção que a atualização de metadados já tinha</li>
+          <li>Apertar Enter no campo do executável durante um "Buscar" aplicava a edição no meio da busca: os dados que ainda estavam chegando eram descartados e, com uma capa recém-escolhida, ela aparecia na tela mas nunca era gravada — sumia ao reabrir. O Enter agora respeita a mesma trava do botão Aplicar</li>
+          <li>Trocar a capa de um jogo ficou à prova de queda: a nova só assume o lugar depois de copiada inteira (antes, a antiga era apagada primeiro — disco cheio no meio deixava o jogo sem capa nenhuma, e o SteamGridDB não voltava a buscar). O mesmo vale para os registros regravados na adoção de identidade. E cada capa escolhida à mão deixava um arquivo TIFF órfão na pasta temporária do Windows, para sempre; não deixa mais</li>
+          <li>Os seletores de capa, logo e Steam não ficam mais pendurados no spinner: uma resposta fora do formato esperado ou uma sequência de downloads falhados agora termina em "Não foi possível buscar/carregar" em vez de girar para sempre. Abrir um seletor também disparava a mesma busca duas vezes; agora é uma</li>
+          <li>Títulos em japonês, cirílico e outros alfabetos passaram a participar da busca de metadados: antes eram apagados na comparação — um título sem dígito nunca resolvia, e dois jogos japoneses diferentes com o mesmo número podiam ser tratados como o mesmo jogo</li>
+          <li>O rastreio de tempo por pasta ficou mais leve: os processos do próprio Windows (svchost e companhia, um terço da lista) são descartados pelo nome antes de qualquer consulta ao sistema — o mesmo atalho que o rastreio de jogos da Microsoft Store já usava</li>
+          <li>A tela Sobre abre mesmo quando um log de sessão anterior está truncado por uma queda; o histórico de sessões tolera linhas editadas com datas impossíveis; um registro de jogo com tipo errado num campo numérico ("5h" no tempo de jogo) perde o campo, não o jogo; e um comando shell:appsfolder digitado em minúsculas agora é reconhecido como jogo da Microsoft Store, como o Windows já o aceitava</li>
+          <li>Depois de uma queda no meio da rotação de logs, a sessão seguinte ficava sem log nenhum — justamente a sessão em que alguém ia procurá-lo. A rotação agora sobrevive à queda, e se ainda assim falhar o log vai para o console em vez de desaparecer</li>
+          <li>Miudezas de robustez e limpeza: respostas do HowLongToBeat com teto de tamanho como todo o resto da rede; logos de dimensões absurdas recusados antes de custarem memória; jogos removidos liberam seus widgets na hora em vez de segurá-los até fechar; a brecha teórica no filtro do feed de novidades fechada; código morto do importador Steam removido; a documentação do formato de arquivo reescrita para descrever este fork; e um arquivo alheio ao projeto removido do repositório</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.08.25" date="2026-08-25">
       <description translate="no">
         <ul>
