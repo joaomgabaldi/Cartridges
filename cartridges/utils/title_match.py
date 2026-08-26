@@ -167,7 +167,15 @@ _NUMBER_WORDS = {
 
 _TRADEMARK_RE = re.compile("[™®©]")  # ™ ® ©
 _APOSTROPHE_RE = re.compile("['’ʼ´`]")
-_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+# Separa em tudo que não é caractere de palavra (unicode) — e no underscore,
+# que é \w mas serve de separador em nomes vindos de arquivo. A classe antiga,
+# [^a-z0-9], apagava qualquer script não-latino: "ペルソナ" tokenizava para
+# lista vazia (o metadado nunca resolvia, em silêncio) e "ペルソナ5" para
+# ["5"], que passava o portão numérico e casava como "exato" com qualquer
+# outro título japonês que também carregasse um 5 — a rota real são os aliases
+# do HowLongToBeat. Kana, kanji e cirílico agora são tokens como quaisquer
+# outros; a comparação continua a mesma.
+_NON_ALNUM_RE = re.compile(r"[\W_]+")
 
 # A possessive author credit opening the title: "Sid Meier's Civilization VI",
 # "Tom Clancy's The Division". Stores carry it, shortcuts usually don't.

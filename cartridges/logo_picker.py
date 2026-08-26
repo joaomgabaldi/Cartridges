@@ -89,6 +89,12 @@ class LogoPicker(Adw.Dialog):
         self._debounce_id = 0
         self._closed = False
         self._results: dict[Gtk.FlowBoxChild, str] = {}
+        # Pré-visualizações que chegaram de fato à grade nesta geração; é o que
+        # separa "resultados na tela" de "todo download/decode falhou".
+        self._added = 0
+        # Última consulta disparada, para o debounce não repetir a busca que o
+        # set_text programático do __init__ emite com atraso.
+        self._last_query: Optional[str] = None
         self._temp_dir = Path(tempfile.mkdtemp(prefix="cartridges_logo_"))
 
         self.search_entry.set_text(clean_game_name(name))
@@ -110,6 +116,13 @@ class LogoPicker(Adw.Dialog):
 
     def _debounce_fire(self) -> bool:
         self._debounce_id = 0
+        # GtkSearchEntry emite um search-changed atrasado para o set_text
+        # programático do __init__, depois do connect: sem este guard, abrir o
+        # diálogo buscava duas vezes a mesma coisa — API e downloads em dobro,
+        # com a segunda passada varrendo os previews da primeira. Enter no
+        # campo continua repetindo a busca (caminho do "activate", não daqui).
+        if self.search_entry.get_text().strip() == self._last_query:
+            return False
         self.search()
         return False
 
@@ -119,6 +132,7 @@ class LogoPicker(Adw.Dialog):
         self._clear_results()
 
         query = self.search_entry.get_text().strip()
+        self._last_query = query
         if not query:
             self._show_empty(_("Digite o nome de um jogo"))
             return
@@ -136,7 +150,12 @@ class LogoPicker(Adw.Dialog):
     def _search_thread(self, query: str, generation: int) -> None:
         try:
             games = self.sgdb.search_games(query)
-            logos = self.sgdb.get_logos(games[0]["id"]) if games else []
+            # .get, não [ ]: um item sem "id" (200 de shape inesperado) matava
+            # a thread com KeyError fora dos excepts e o spinner ficava eterno.
+            first_id = (
+                games[0].get("id") if games and isinstance(games[0], dict) else None
+            )
+            logos = self.sgdb.get_logos(first_id) if first_id is not None else []
         except SgdbAuthError:
             GLib.idle_add(
                 self._show_empty, _("Chave da API do SteamGridDB inválida"), generation
@@ -176,6 +195,19 @@ class LogoPicker(Adw.Dialog):
                 continue
             GLib.idle_add(self._add_result, preview_path, full_url, generation)
 
+        # Depois de todos os _add_result (idles de mesma prioridade rodam em
+        # ordem): se nenhum preview chegou à grade — todo download falhou, ou
+        # todo decode falhou —, o loop acabava sem chamar nada e o diálogo
+        # ficava em "loading" para sempre.
+        GLib.idle_add(self._finish_results, generation)
+
+    def _finish_results(self, generation: int) -> bool:
+        if generation != self._generation or self._closed:
+            return False
+        if not self._added:
+            self._show_empty(_("Não foi possível carregar as pré-visualizações"))
+        return False
+
     def _ordered(self, logos: list[dict]) -> list[dict]:
         """Every usable logo, best first, judged the way the page judges them."""
         ordered = []
@@ -194,8 +226,6 @@ class LogoPicker(Adw.Dialog):
     def _add_result(self, preview_path: Path, full_url: str, generation: int) -> bool:
         if generation != self._generation or self._closed:
             return False
-
-        self.stack.set_visible_child_name("results")
 
         picture = Gtk.Picture(
             content_fit=Gtk.ContentFit.SCALE_DOWN,
@@ -233,10 +263,15 @@ class LogoPicker(Adw.Dialog):
         if child := tile.get_parent():
             child.set_focusable(True)
             self._results[child] = full_url
+        # Só agora, com o preview de fato na grade: trocar para "results" antes
+        # do decode deixava uma grade em branco quando todos falhavam.
+        self._added += 1
+        self.stack.set_visible_child_name("results")
         return False
 
     def _clear_results(self) -> None:
         self._results.clear()
+        self._added = 0
         self.flowbox.remove_all()
 
     def _show_empty(self, message: str, generation: Optional[int] = None) -> bool:
@@ -310,5 +345,4 @@ class LogoPicker(Adw.Dialog):
         # this the directory `mkdtemp` created stays in %TEMP% for good — and
         # `_select_thread` hands the chosen logo out through a *separate* temp
         # precisely because it expects this one to be gone.
-        shutil.rmtree(self._temp_dir, ignore_errors=True)
         shutil.rmtree(self._temp_dir, ignore_errors=True)

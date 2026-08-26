@@ -395,6 +395,13 @@ class DetailsDialog(Adw.Dialog):
         self.cover_changed = True
 
     def apply_preferences(self, *_args: Any) -> None:
+        # Enter nas linhas de executável/processo chega aqui direto, sem passar
+        # pelo botão que `begin_loading` desabilita. Aplicar com uma operação em
+        # voo salvava o jogo sem os dados ainda na rede — e, com uma capa em
+        # conversão, instalava a capa na sessão sem nunca gravá-la no disco.
+        # O mesmo portão do botão, na porta que faltava.
+        if self._loading_ops:
+            return
         final_name = self.name.get_text()
         final_developer = self.developer.get_text()
         final_publisher = self.publisher.get_text()

@@ -622,3 +622,35 @@ def test_cleanup_game_dismisses_toasts_on_the_idle(
     assert win.toast_queue.dismissed == [], "must not touch widgets inline"
     flush_idle()
     assert win.toast_queue.dismissed == [toast]
+
+
+def test_atomic_dump_replaces_without_leaving_scratch(tmp_path) -> None:
+    """Auditoria 26/08, M6: os regravadores da adoção escreviam no lugar
+    (truncate + write); uma queda no meio deixava JSON truncado e o jogo
+    voltava zerado. Agora é tmp + replace, o idioma do FileManager."""
+    import json
+
+    from cartridges.store.store import _dump_json_atomic
+
+    target = tmp_path / "g.json"
+    target.write_text('{"old": true}', encoding="utf-8")
+
+    _dump_json_atomic(target, {"new": 1}, indent=4, sort_keys=True)
+
+    assert json.loads(target.read_text(encoding="utf-8")) == {"new": 1}
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_a_failed_atomic_dump_keeps_the_original(tmp_path) -> None:
+    import json
+
+    from cartridges.store.store import _dump_json_atomic
+
+    target = tmp_path / "g.json"
+    target.write_text('{"old": true}', encoding="utf-8")
+
+    with pytest.raises(TypeError):
+        _dump_json_atomic(target, {"bad": object()})
+
+    assert json.loads(target.read_text(encoding="utf-8")) == {"old": True}
+    assert list(tmp_path.glob("*.tmp")) == []

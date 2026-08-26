@@ -362,7 +362,16 @@ def is_process_running_under(directory: str) -> bool:
     if not (prefix := _as_path_prefix(directory)):
         return False
 
-    def matches(pid: int, _exe_file: str) -> bool:
+    def matches(pid: int, exe_file: str) -> bool:
+        # O mesmo pré-filtro de `is_package_running`, pelas mesmas razões: o
+        # nome vem de graça no snapshot, e sem ele cada poll pagava um
+        # `OpenProcess` por processo da máquina — svchost e os hosts do shell
+        # inclusive — na main thread, pelo grace inteiro e pela sessão toda.
+        # É válido aqui porque `_is_watchable_dir` garante que o prefixo
+        # vigiado nunca está sob %SystemRoot%, e todo nome do conjunto só
+        # existe lá: nenhum deles pode ser o jogo.
+        if pid in _PSEUDO_PIDS or exe_file.casefold() in _SYSTEM_PROCESS_NAMES:
+            return False
         path = _process_path(pid)
         return path is not None and path.casefold().startswith(prefix)
 

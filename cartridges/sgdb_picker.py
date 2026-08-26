@@ -78,6 +78,12 @@ class SgdbPicker(Adw.Dialog):
         self._closed = False
         self._covers: list[GameCover] = []
         self._results: dict[Gtk.FlowBoxChild, str] = {}
+        # Previews que chegaram de fato à grade nesta geração, e a última
+        # consulta disparada — o mesmo par do logo_picker, pelas mesmas razões:
+        # "loading" eterno quando nada materializa, e a busca dupla que o
+        # search-changed atrasado do set_text programático dispara.
+        self._added = 0
+        self._last_query: Optional[str] = None
         self._temp_dir = Path(tempfile.mkdtemp(prefix="cartridges_sgdb_"))
 
         self.animated_button.set_active(shared.schema.get_boolean("sgdb-animated"))
@@ -100,6 +106,8 @@ class SgdbPicker(Adw.Dialog):
 
     def _debounce_fire(self) -> bool:
         self._debounce_id = 0
+        if self.search_entry.get_text().strip() == self._last_query:
+            return False
         self.search()
         return False
 
@@ -109,6 +117,7 @@ class SgdbPicker(Adw.Dialog):
         self._clear_results()
 
         query = self.search_entry.get_text().strip()
+        self._last_query = query
         if not query:
             self._show_empty(_("Digite o nome de um jogo"))
             return
@@ -129,9 +138,14 @@ class SgdbPicker(Adw.Dialog):
     def _search_thread(self, query: str, animated: bool, generation: int) -> None:
         try:
             games = self.sgdb.search_games(query)
+            # .get, não [ ]: um item sem "id" matava a thread com KeyError
+            # fora dos excepts e o diálogo ficava no spinner para sempre.
+            first_id = (
+                games[0].get("id") if games and isinstance(games[0], dict) else None
+            )
             grids = (
-                self.sgdb.get_grids(games[0]["id"], animated, dimensions=PORTRAIT_DIMENSIONS)
-                if games
+                self.sgdb.get_grids(first_id, animated, dimensions=PORTRAIT_DIMENSIONS)
+                if first_id is not None
                 else []
             )
             logging.info("SGDB picker: %d grids (animated=%s)", len(grids), animated)
@@ -169,7 +183,7 @@ class SgdbPicker(Adw.Dialog):
                 logging.warning("SGDB picker: preview download failed (%s)", error)
                 continue
             suffix = Path(urlparse(preview_url).path).suffix or ".png"
-            preview_path = self._temp_dir / f"{grid['id']}{suffix}"
+            preview_path = self._temp_dir / f"{grid.get('id', id(grid))}{suffix}"
             try:
                 preview_path.write_bytes(content)
             except OSError:
@@ -177,6 +191,18 @@ class SgdbPicker(Adw.Dialog):
             GLib.idle_add(
                 self._add_result, preview_path, full_url, animated, generation
             )
+
+        # Depois de todos os _add_result (idles de mesma prioridade rodam em
+        # ordem): sem isto, todo download falhando deixava o diálogo em
+        # "loading" pela vida inteira.
+        GLib.idle_add(self._finish_results, generation)
+
+    def _finish_results(self, generation: int) -> bool:
+        if generation != self._generation or self._closed:
+            return False
+        if not self._added:
+            self._show_empty(_("Não foi possível carregar as pré-visualizações"))
+        return False
 
     # endregion
     # region Results
@@ -186,8 +212,6 @@ class SgdbPicker(Adw.Dialog):
     ) -> bool:
         if generation != self._generation or self._closed:
             return False
-
-        self.stack.set_visible_child_name("results")
 
         picture = Gtk.Picture(
             width_request=140,
@@ -206,6 +230,10 @@ class SgdbPicker(Adw.Dialog):
         if child := picture.get_parent():
             child.set_focusable(True)
             self._results[child] = full_url
+        # Só com o preview de fato na grade, para "results" nunca mostrar uma
+        # grade em branco.
+        self._added += 1
+        self.stack.set_visible_child_name("results")
         return False
 
     def _clear_results(self) -> None:
@@ -214,6 +242,7 @@ class SgdbPicker(Adw.Dialog):
             cover.set_details_animation(False)
         self._covers.clear()
         self._results.clear()
+        self._added = 0
         self.flowbox.remove_all()
 
     def _show_empty(self, message: str, generation: Optional[int] = None) -> bool:

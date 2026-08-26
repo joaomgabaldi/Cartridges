@@ -81,18 +81,6 @@ class SteamNotAGameError(SteamError):
     pass
 
 
-class SteamInvalidManifestError(SteamError):
-    pass
-
-
-class SteamManifestData(TypedDict):
-    """Dict returned by SteamFileHelper.get_manifest_data"""
-
-    name: str
-    appid: str
-    stateflags: str
-
-
 class SteamAPIData(TypedDict, total=False):
     """Dict returned by SteamAPIHelper.get_api_data"""
 
@@ -152,30 +140,6 @@ class SteamRateLimiter(RateLimiter):
         super().acquire()
         timestamps_str = json.dumps(self.pick_history.copy_timestamps())
         shared.state_schema.set_string("steam-limiter-tokens-history", timestamps_str)
-
-
-class SteamFileHelper:
-    """Helper for Steam file formats"""
-
-    def get_manifest_data(self, manifest_path: Path) -> SteamManifestData:
-        """Get local data for a game from its manifest"""
-
-        with open(manifest_path, "r", encoding="utf-8") as file:
-            contents = file.read()
-
-        data = {}
-
-        for key in SteamManifestData.__required_keys__:  # pylint: disable=no-member
-            regex = f'"{key}"\\s+"(.*)"\n'
-            if (match := re.search(regex, contents, re.IGNORECASE)) is None:
-                raise SteamInvalidManifestError()
-            data[key] = match.group(1)
-
-        return SteamManifestData(
-            name=data["name"],
-            appid=data["appid"],
-            stateflags=data["stateflags"],
-        )
 
 
 # Month names mapped to their number. Kept explicit so parsing does not depend
@@ -280,7 +244,15 @@ class SteamAPIHelper:
                     timeout=10,
                 ) as response:
                     response.raise_for_status()
-                    items = response.json().get("items", [])
+                    payload = response.json()
+                    # JSON válido que não é objeto (null, lista — proxy no
+                    # meio) fazia `.get()` estourar AttributeError, que nenhum
+                    # except daqui ou do steam_picker cobre: a thread do picker
+                    # morria e o spinner ficava eterno. Shape errado vale o
+                    # mesmo "não encontrado" do JSON inválido logo abaixo.
+                    items = payload.get("items") if isinstance(payload, dict) else None
+                    if not isinstance(items, list):
+                        items = []
             except HTTPError as error:
                 logging.warning("Steam search HTTP error for %s", name, exc_info=error)
                 raise error
@@ -683,7 +655,16 @@ class SteamAPIHelper:
                     timeout=10,
                 ) as response:
                     response.raise_for_status()
-                    summary = response.json().get("query_summary", {})
+                    payload = response.json()
+                    # isinstance antes do .get(): corpo não-objeto estourava
+                    # AttributeError depois do appdetails já ter respondido —
+                    # a mesma perda que o comentário abaixo descreve, pela
+                    # porta do shape em vez da do transporte.
+                    summary = (
+                        payload.get("query_summary")
+                        if isinstance(payload, dict)
+                        else None
+                    )
             except (RequestException, ValueError) as error:
                 # Every transport failure, not just HTTPError: a timeout or a
                 # dropped connection here used to escape *after* appdetails had

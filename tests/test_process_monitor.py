@@ -404,3 +404,31 @@ def test_aumid_from_command(command, expected):
     from cartridges.utils.run_executable import aumid_from_command
 
     assert aumid_from_command(command) == expected
+
+
+def test_folder_matching_skips_system_names_without_opening_handles(
+    snapshot, monkeypatch, tmp_path
+):
+    """Auditoria 26/08, M10: o pré-filtro por nome/pid — construído neste
+    módulo depois do custo de "centenas de ms por poll" — agora vale também
+    para a vigília por pasta, que pagava um OpenProcess por processo da
+    máquina a cada 2 s na main thread."""
+    asked = []
+    monkeypatch.setattr(pm, "_process_path", lambda pid: asked.append(pid) or None)
+
+    game_dir = tmp_path / "Jogos" / "Halo"
+    game_dir.mkdir(parents=True)
+
+    snapshot.processes = [
+        (0, ""),
+        (4, "System"),
+        (200, "svchost.exe"),
+        (300, "RuntimeBroker.exe"),
+    ]
+    assert pm.is_process_running_under(str(game_dir)) is False
+    assert asked == []
+
+    # E um processo comum continua sendo perguntado ao kernel.
+    snapshot.processes = [(500, "game.exe")]
+    pm.is_process_running_under(str(game_dir))
+    assert asked == [500]
