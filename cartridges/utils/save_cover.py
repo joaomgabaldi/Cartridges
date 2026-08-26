@@ -21,6 +21,7 @@
 from pathlib import Path
 from shutil import copyfile
 from typing import Optional
+from uuid import uuid4
 
 from gi.repository import Gdk, GdkPixbuf, Gio, GLib
 from PIL import Image, UnidentifiedImageError
@@ -47,10 +48,25 @@ def convert_cover(
     if not resize and cover_path and cover_path.suffix.lower()[1:] in pixbuf_extensions:
         return cover_path
 
+    pixbuf_temp: Optional[Path] = None
     if pixbuf:
-        cover_path = Path(Gio.File.new_tmp("XXXXXX.tiff")[0].get_path())
-        pixbuf.savev(str(cover_path), "tiff")
+        # Este TIFF é só a entrada do bloco Pillow abaixo, que grava um temp
+        # próprio e devolve esse — o intermediário nunca é o retorno. Sem o
+        # unlink no finally lá embaixo, cada capa escolhida à mão deixava este
+        # arquivo órfão em %TEMP% para sempre: o mesmo vazamento que o ramo de
+        # fallback já conserta, com o mesmo comentário, no finally dele.
+        pixbuf_temp = Path(Gio.File.new_tmp("XXXXXX.tiff")[0].get_path())
+        pixbuf.savev(str(pixbuf_temp), "tiff")
+        cover_path = pixbuf_temp
 
+    try:
+        return _convert_readable_cover(cover_path, resize)
+    finally:
+        if pixbuf_temp is not None:
+            pixbuf_temp.unlink(missing_ok=True)
+
+
+def _convert_readable_cover(cover_path: Path, resize: bool) -> Optional[Path]:
     try:
         with Image.open(cover_path) as image:
             # A cover can come straight off the network (SteamGridDB) or from a
@@ -120,11 +136,11 @@ def convert_cover(
 def save_cover(game_id: str, cover_path: Path) -> None:
     shared.covers_dir.mkdir(parents=True, exist_ok=True)
 
-    # Remove every previous cover for this game, whatever its format
-    for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
-        (shared.covers_dir / f"{game_id}{suffix}").unlink(missing_ok=True)
-
     if not cover_path:
+        # Remoção explícita: aqui sim toda forma anterior cai, e não há nada
+        # novo para proteger.
+        for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
+            (shared.covers_dir / f"{game_id}{suffix}").unlink(missing_ok=True)
         return
 
     # Animated covers keep their own extension; everything else is a TIFF still
@@ -133,7 +149,22 @@ def save_cover(game_id: str, cover_path: Path) -> None:
     else:
         dest = shared.covers_dir / f"{game_id}.tiff"
 
-    copyfile(cover_path, dest)
+    # Copia para um tmp no próprio diretório e só então assume o nome final.
+    # A ordem antiga — apagar tudo e depois copiar — deixava a capa ausente ou
+    # truncada num disco cheio ou numa queda, e uma truncada passa no
+    # `is_file()` do SGDB, que então nunca mais re-busca. O `replace` é atômico
+    # no mesmo volume; uma cópia que falha custa o tmp e preserva a capa atual.
+    tmp_dest = dest.with_name(f"{dest.name}.{uuid4().hex}.tmp")
+    try:
+        copyfile(cover_path, tmp_dest)
+        tmp_dest.replace(dest)
+    finally:
+        tmp_dest.unlink(missing_ok=True)
+
+    # As formas de OUTRO sufixo só caem depois que a nova está no lugar.
+    for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
+        if suffix != dest.suffix:
+            (shared.covers_dir / f"{game_id}{suffix}").unlink(missing_ok=True)
 
     # save_cover can be called from a worker thread (e.g. the async SgdbManager),
     # but refreshing the on-screen cover touches GTK widgets, which must happen

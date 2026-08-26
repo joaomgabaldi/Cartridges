@@ -470,6 +470,28 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         # by the store check in `MetadataRefresh._run_queue`.
         get_metadata_refresh().cancel()
 
+        # Os dois sweeps de fundo (HLTB e tamanho em disco) andam por snapshots
+        # próprios e também regravariam JSONs depois do wipe — o guard de
+        # identidade nos `_apply` deles é a rede de segurança, mas parar a
+        # passada atual poupa lookups e disco gastos numa biblioteca que já
+        # era. `start()` re-arma: uma importação nova depois do reset volta a
+        # ser varrida normalmente.
+        app = Gio.Application.get_default()
+        for sweep_name in ("hltb_backfill", "install_size_sweep"):
+            sweep = getattr(app, sweep_name, None)
+            if sweep is not None:
+                sweep.stop()
+                sweep.start()
+
+        # Um lote de capas do SGDB em voo gravaria arquivos em covers_dir
+        # depois da limpeza; o worker consulta o cancellable entre um jogo e
+        # outro. O reset em seguida deixa os managers prontos para a próxima
+        # importação.
+        for manager in shared.store.managers.values():
+            if hasattr(manager, "cancel_tasks"):
+                manager.cancel_tasks()
+                manager.reset_cancellable()
+
         # Drop pending undo toasts; their games are about to be deleted and
         # clicking "Desfazer" later would resurrect one on disk
         for toast in list(shared.win.toasts.values()):

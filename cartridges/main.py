@@ -201,6 +201,43 @@ def _translate_about_dialog(widget: Gtk.Widget) -> None:
         child = child.get_next_sibling()
 
 
+# Os campos numéricos que um game_id.json persiste. `rating` e `status` têm
+# guarda própria na exibição; os demais eram aplicados por setattr sem checagem.
+_NUMERIC_GAME_KEYS = (
+    "added",
+    "last_played",
+    "playtime",
+    "rating",
+    "metacritic",
+    "steam_checked",
+    "hltb_id",
+    "hltb_main",
+    "hltb_main_extra",
+    "hltb_completionist",
+    "install_size",
+    "install_size_ts",
+    "version",
+    "shortcut_mtime",
+    "update_available_ts",
+    "update_dismissed_ts",
+)
+
+
+def sanitize_numeric_fields(data: dict, record_name: str) -> dict:
+    """Descarta campos numéricos de tipo errado num registro editado à mão.
+
+    ``"playtime": "5h"`` passava pela validação de presença e estourava
+    TypeError na tela de detalhes e na ordenação. Cai o campo, não o jogo —
+    o default da classe vale como "não informado". Muta e devolve ``data``.
+    """
+    for key in _NUMERIC_GAME_KEYS:
+        value = data.get(key)
+        if value is not None and not isinstance(value, (int, float)):
+            logging.warning("Campo %s inválido em %s, ignorado", key, record_name)
+            del data[key]
+    return data
+
+
 class CartridgesApplication(Adw.Application):
     state = shared.AppState.DEFAULT
     win: CartridgesWindow
@@ -338,7 +375,13 @@ class CartridgesApplication(Adw.Application):
         try:
             setup_logging()
         except ValueError:
-            pass
+            # dictConfig embrulha qualquer falha dos handlers em ValueError
+            # (uma rotação de log que não sobreviveu a uma queda, p.ex.).
+            # Ficar sem log NENHUM é o pior resultado possível para a sessão
+            # seguinte a um crash — o console segura as pontas até a rotação
+            # se curar na próxima execução.
+            logging.basicConfig(level=logging.DEBUG)
+            logging.exception("Não foi possível configurar o log em arquivo")
 
         log_system_info()
 
@@ -569,7 +612,7 @@ class CartridgesApplication(Adw.Application):
                 ):
                     logging.warning("Skipping malformed game record %s", game_file.name)
                     continue
-                game = Game(data)
+                game = Game(sanitize_numeric_fields(data, game_file.name))
                 shared.store.add_game(game, {"skip_save": True})
 
     def on_about_action(self, *_args: Any) -> None:
@@ -579,14 +622,19 @@ class CartridgesApplication(Adw.Application):
             # Add a horizontal line between runs
             if index > 0:
                 debug_str += "─" * 37 + "\n"
-            # Add the run's logs
-            log_file = (
-                lzma.open(path, "rt", encoding="utf-8")
-                if path.name.endswith(".xz")
-                else open(path, "r", encoding="utf-8")
-            )
-            debug_str += log_file.read()
-            log_file.close()
+            # Um log ilegível não pode custar o diálogo Sobre. Os .xz de
+            # sessões anteriores podem estar truncados por uma queda, e a
+            # própria rotação preserva de propósito arquivos com um byte
+            # rasgado — o diálogo tem que abrir com o que der para ler.
+            try:
+                with (
+                    lzma.open(path, "rt", encoding="utf-8", errors="replace")
+                    if path.name.endswith(".xz")
+                    else open(path, "r", encoding="utf-8", errors="replace")
+                ) as log_file:
+                    debug_str += log_file.read()
+            except (OSError, EOFError, lzma.LZMAError):
+                debug_str += f"[{path.name}: ilegível]\n"
 
         about = Adw.AboutDialog.new_from_appdata(
             shared.PREFIX + "/" + shared.APP_ID + ".metainfo.xml", shared.VERSION

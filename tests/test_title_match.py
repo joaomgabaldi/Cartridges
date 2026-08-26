@@ -331,5 +331,36 @@ class TestDirectionality(unittest.TestCase):
                 self.assertEqual(0, compare_titles(right, left).score)
 
 
+class TestNonLatinScripts(unittest.TestCase):
+    """Auditoria 26/08, M5: a tokenização apagava kana/kanji/cirílico.
+
+    Sem dígito o título virava lista vazia — "empty title", metadado nunca
+    resolvia. Com dígito era pior: "ペルソナ5" e "ペルソナ5 スクランブル"
+    (jogos diferentes) reduziam ambos a ``["5"]`` com core vazio, e
+    ``[] == []`` saía como "titles match" adotado sem perguntar.
+    """
+
+    def test_identical_japanese_titles_match(self):
+        match = compare_titles("ペルソナ", "ペルソナ")
+        self.assertTrue(match.confident)
+        self.assertNotEqual("empty title", match.reason)
+
+    def test_different_japanese_games_sharing_a_digit_are_not_exact(self):
+        match = compare_titles("ペルソナ5", "ペルソナ5 スクランブル")
+        self.assertFalse(match.confident)
+
+    def test_identical_japanese_titles_with_a_digit_still_match(self):
+        self.assertTrue(compare_titles("ペルソナ5", "ペルソナ5").confident)
+
+    def test_cyrillic_titles_take_part_in_matching(self):
+        self.assertTrue(compare_titles("Ведьмак 3", "Ведьмак 3").confident)
+        self.assertFalse(compare_titles("Ведьмак 3", "Метро 3").confident)
+
+    def test_numeric_only_titles_kept_their_verdicts(self):
+        # O que já funcionava não pode ter mudado de resposta.
+        self.assertTrue(compare_titles("1917", "1917").confident)
+        self.assertFalse(compare_titles("7", "7 Days to Die").confident)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

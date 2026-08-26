@@ -22,6 +22,7 @@ import logging
 from pathlib import Path
 from threading import RLock
 from typing import Any, Generator, Iterable, MutableMapping, Optional
+from uuid import uuid4
 
 from gi.repository import GLib
 
@@ -70,6 +71,23 @@ def _is_derived_command(game: Game) -> bool:
     return bool(game.shortcut_path) and _path_key(game.executable) == _path_key(
         f'start "" "{game.shortcut_path}"'
     )
+
+
+def _dump_json_atomic(path: Path, data: dict, **dump_kwargs: Any) -> None:
+    """Escreve via tmp + replace — o mesmo idioma do FileManager.
+
+    Os dois regravadores da adoção escreviam no lugar (truncate + write): uma
+    queda no meio deixava um JSON truncado, o loader pulava o arquivo e o jogo
+    voltava zerado no próximo scan. Uma queda agora custa um ``.tmp`` órfão,
+    que o loader já ignora pelo sufixo.
+    """
+    tmp_path = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
+    try:
+        with tmp_path.open("w", encoding="utf-8") as file:
+            json.dump(data, file, **dump_kwargs)
+        tmp_path.replace(path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 def _migrate_game_files(old_id: str, new_id: str) -> None:
@@ -127,8 +145,7 @@ def _migrate_game_files(old_id: str, new_id: str) -> None:
                 data = json.load(file)
             if isinstance(data, dict) and data.get("game_id") != new_id:
                 data["game_id"] = new_id
-                with record.open("w", encoding="utf-8") as file:
-                    json.dump(data, file, indent=4, sort_keys=True)
+                _dump_json_atomic(record, data, indent=4, sort_keys=True)
     except (OSError, ValueError) as error:
         logging.warning("Could not restamp the record for %s: %s", new_id, error)
 
@@ -145,8 +162,7 @@ def _migrate_game_files(old_id: str, new_id: str) -> None:
         if not isinstance(data, dict) or not data.get("file"):
             return
         data["file"] = str(data["file"]).replace(old_id, new_id, 1)
-        with sidecar.open("w", encoding="utf-8") as file:
-            json.dump(data, file)
+        _dump_json_atomic(sidecar, data)
     except (OSError, ValueError) as error:
         logging.warning("Could not update the logo record for %s: %s", new_id, error)
 

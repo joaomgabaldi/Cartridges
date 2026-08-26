@@ -186,6 +186,14 @@ class HLTBBackfill:
         """Write one game's times and repaint it. Runs on the main thread."""
         if self._stopped or game.removed:
             return False
+        # Identidade no store, não só o snapshot: um reset apaga a biblioteca
+        # e os arquivos enquanto o worker ainda anda pela lista dele, e o
+        # `save()` abaixo regravaria o JSON de um jogo que o usuário acabou de
+        # apagar — que então renascia na grade e no launch seguinte. O mesmo
+        # idioma do `_in_library` do MetadataRefresh.
+        store = getattr(shared, "store", None)
+        if store is None or store.get(game.game_id) is not game:
+            return False
 
         # update_values only carries the keys the lookup returned, so a game
         # with only a main-story estimate keeps whatever the other two held.

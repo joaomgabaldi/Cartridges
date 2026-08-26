@@ -72,6 +72,24 @@ def auth_error(res: requests.Response) -> SgdbAuthError:
     return SgdbAuthError(message)
 
 
+def _data_list(res: requests.Response) -> list:
+    """O ``data`` de um 200 do SGDB, exigindo o shape documentado.
+
+    Um 200 com JSON válido de outro formato — ``{"success": false}`` de um
+    proxy, por exemplo — levantava ``KeyError`` no ``res.json()["data"]``, que
+    nenhum ``except (SgdbError, RequestException)`` dos pickers cobre: a thread
+    de busca morria e o diálogo ficava no spinner para sempre. Shape errado
+    agora é ``SgdbBadRequest``, um erro tratável como qualquer outro.
+    """
+    try:
+        payload = res.json()
+    except ValueError as error:
+        raise SgdbBadRequest(res.status_code) from error
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+        raise SgdbBadRequest(res.status_code)
+    return payload["data"]
+
+
 class SgdbHelper:
     """Helper class to make queries to SteamGridDB"""
 
@@ -92,14 +110,19 @@ class SgdbHelper:
         res = requests.get(uri, headers=self.auth_headers, timeout=10)
         match res.status_code:
             case 200:
-                results = res.json()["data"]
+                results = [r for r in _data_list(res) if isinstance(r, dict)]
                 if not results:
                     raise SgdbGameNotFound(query)
                 # Prefer an exact (case-insensitive) title match, else the first
                 lowered = query.casefold()
                 for result in results:
-                    if str(result.get("name", "")).casefold() == lowered:
+                    if (
+                        str(result.get("name", "")).casefold() == lowered
+                        and result.get("id") is not None
+                    ):
                         return result["id"]
+                if results[0].get("id") is None:
+                    raise SgdbBadRequest(res.status_code)
                 return results[0]["id"]
             case 401:
                 raise auth_error(res)
@@ -117,7 +140,7 @@ class SgdbHelper:
         res = requests.get(uri, headers=self.auth_headers, timeout=10)
         match res.status_code:
             case 200:
-                return res.json()["data"]
+                return _data_list(res)
             case 401:
                 raise auth_error(res)
             case _:
@@ -144,7 +167,7 @@ class SgdbHelper:
         res = requests.get(uri, headers=self.auth_headers, timeout=10)
         match res.status_code:
             case 200:
-                return res.json()["data"]
+                return _data_list(res)
             case 401:
                 raise auth_error(res)
             case 404:
@@ -169,7 +192,7 @@ class SgdbHelper:
         res = requests.get(uri, headers=self.auth_headers, timeout=10)
         match res.status_code:
             case 200:
-                return res.json()["data"]
+                return _data_list(res)
             case 401:
                 raise auth_error(res)
             case 404:
@@ -186,10 +209,13 @@ class SgdbHelper:
         res = requests.get(uri, headers=self.auth_headers, timeout=10)
         match res.status_code:
             case 200:
-                data = res.json()["data"]
+                data = _data_list(res)
                 if len(data) == 0:
                     raise SgdbNoImageFound()
-                return data[0]["url"]
+                first = data[0]
+                if not isinstance(first, dict) or not first.get("url"):
+                    raise SgdbBadRequest(res.status_code)
+                return first["url"]
             case 401:
                 raise auth_error(res)
             case 404:

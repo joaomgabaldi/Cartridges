@@ -120,3 +120,20 @@ def test_no_results_is_a_not_found(responses, make_game):
 
     with pytest.raises(SgdbGameNotFound):
         sgdb.SgdbHelper().get_game_id(make_game(name="Nonexistent"))
+
+
+def test_a_200_with_an_unexpected_shape_is_a_sgdb_error(responses, make_game):
+    """Auditoria 26/08, M9: um 200 de shape inesperado (proxy devolvendo
+    `{"success": false}`) estourava KeyError fora dos excepts dos pickers —
+    a thread morria e o spinner ficava eterno. Shape errado agora é SgdbError."""
+    responses.append(FakeResponse(200, {"success": False}))
+
+    with pytest.raises(sgdb.SgdbBadRequest):
+        sgdb.SgdbHelper().get_game_id(make_game(name="Celeste"))
+
+
+def test_a_200_whose_items_lack_ids_is_a_sgdb_error(responses, make_game):
+    responses.append(FakeResponse(200, {"data": [{"name": "Celeste"}]}))
+
+    with pytest.raises(sgdb.SgdbBadRequest):
+        sgdb.SgdbHelper().get_game_id(make_game(name="Celeste"))

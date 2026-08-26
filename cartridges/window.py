@@ -704,17 +704,21 @@ class CartridgesWindow(Adw.ApplicationWindow):
             if isinstance(widget.get_parent(), Gtk.Overlay):
                 widget.get_parent().remove_overlay(widget)
 
+        # O aviso que NÃO foi escolhido sai sempre, e não só quando nenhum é
+        # mostrado: a transição direta "Nenhum jogo" → "Nenhum jogo encontrado"
+        # (biblioteca vazia com busca ativa) adicionava o novo sem remover o
+        # antigo, e os dois AdwStatusPage ficavam sobrepostos.
+        for notice in (self.notice_empty, self.notice_no_results):
+            if notice is not child:
+                remove_from_overlay(notice)
         if child:
             self.library_overlay.add_overlay(child)
-        else:
-            remove_from_overlay(self.notice_empty)
-            remove_from_overlay(self.notice_no_results)
 
+        for notice in (self.hidden_notice_empty, self.hidden_notice_no_results):
+            if notice is not hidden_child:
+                remove_from_overlay(notice)
         if hidden_child:
             self.hidden_library_overlay.add_overlay(hidden_child)
-        else:
-            remove_from_overlay(self.hidden_notice_empty)
-            remove_from_overlay(self.hidden_notice_no_results)
 
     def filter_func(self, child: Gtk.Widget) -> bool:
         game = child.get_child()
