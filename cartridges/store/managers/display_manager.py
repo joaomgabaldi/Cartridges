@@ -140,6 +140,14 @@ class DisplayManager(Manager):
             if target is not None:
                 target.append(game)
                 game.get_parent().set_focusable(False)
+            else:
+                # Fora das duas grades = removido/blacklisted. Sem isto o
+                # GameCover continuava dono de `game.cover` e o repintava a
+                # cada troca de frame, segurando o widget morto pela sessão
+                # inteira. Um desfazer volta pelo ramo de criação acima, que
+                # refaz a entrada a partir do arquivo de capa.
+                if (cover := shared.win.game_covers.pop(game.game_id, None)) is not None:
+                    cover.release_picture(game.cover)
 
         # Coalescido: isto roda uma vez por jogo, e cada set_library_child
         # varre a store inteira — no import em massa dava O(n²). O idle roda

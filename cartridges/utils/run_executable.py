@@ -81,6 +81,14 @@ def _elevate_worker(executable: str) -> None:
 # space, an argument after it — ends the AUMID rather than being part of it.
 _AUMID_CHARS = re.compile(r"[\w.!+\-]+")
 
+# Case-insensitive like the shell itself: `shell:appsfolder\PFN!App` typed by
+# hand launches fine, so it must also be recognised as a packaged game — a
+# case-sensitive `find` silently dropped it to exe-style tracking and to the
+# identity-less `cmd /c` elevation branch. A regex (not casefold on the string)
+# so the match positions stay valid in the original text: casefold can change
+# a string's length.
+_MARKER_RE = re.compile(re.escape("shell:AppsFolder\\"), re.IGNORECASE)
+
 
 def aumid_from_command(executable: str) -> str:
     """Extract the AUMID from a ``...shell:AppsFolder\\<AUMID>`` launch command.
@@ -105,12 +113,11 @@ def aumid_from_command(executable: str) -> str:
     them to the manual session window, where a game the shell cannot launch at
     all would sit collecting playtime.
     """
-    marker = "shell:AppsFolder\\"
-    index = executable.find(marker)
-    if index == -1:
+    found = _MARKER_RE.search(executable)
+    if found is None:
         return ""
 
-    match = _AUMID_CHARS.match(executable, index + len(marker))
+    match = _AUMID_CHARS.match(executable, found.end())
     return match.group() if match else ""
 
 

@@ -75,6 +75,9 @@ class SteamPicker(Adw.Dialog):
         self._debounce_id = 0
         self._closed = False
         self._rows: dict[Gtk.ListBoxRow, str] = {}
+        # A mesma proteção dos outros pickers contra a busca dupla que o
+        # search-changed atrasado do set_text programático dispara na abertura.
+        self._last_query: Optional[str] = None
 
         self.search_entry.set_text(clean_game_name(name))
 
@@ -96,6 +99,8 @@ class SteamPicker(Adw.Dialog):
 
     def _debounce_fire(self) -> bool:
         self._debounce_id = 0
+        if self.search_entry.get_text().strip() == self._last_query:
+            return False
         self.search()
         return False
 
@@ -105,6 +110,7 @@ class SteamPicker(Adw.Dialog):
         self._clear_results()
 
         query = self.search_entry.get_text().strip()
+        self._last_query = query
         if not query:
             self._show_empty(_("Digite o nome de um jogo"))
             return

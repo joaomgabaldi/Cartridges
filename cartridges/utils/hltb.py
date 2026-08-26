@@ -57,6 +57,7 @@ whichever has an ``/init`` sibling.
 
 import logging
 import re
+import json
 import threading
 import time
 from dataclasses import dataclass
@@ -73,6 +74,29 @@ BASE_URL = "https://howlongtobeat.com"
 SEARCH_URL = f"{BASE_URL}/api/search/site"
 INIT_URL = f"{BASE_URL}/api/search/site/init"
 REQUEST_TIMEOUT_SECONDS = 15
+# Todo outro leitor de rede do app faz stream com teto (download_bytes, o
+# feed); aqui os corpos eram lidos inteiros com .json()/.text — e o timeout
+# limita silêncio entre bytes, não o tamanho total. 10 MiB cobre com folga a
+# maior página /game/<id> real (~1–2 MiB) e qualquer JSON da busca.
+MAX_RESPONSE_BYTES = 10 * 1024 * 1024
+
+
+def _read_capped(response: requests.Response) -> bytes:
+    """Lê o corpo em stream; passar de MAX_RESPONSE_BYTES é falha de rede.
+
+    Levanta RequestException de propósito: é o que todo chamador daqui já
+    trata como "o site não respondeu direito".
+    """
+    chunks: list[bytes] = []
+    total = 0
+    for chunk in response.iter_content(chunk_size=65536):
+        total += len(chunk)
+        if total > MAX_RESPONSE_BYTES:
+            raise RequestException(
+                f"HowLongToBeat response exceeded {MAX_RESPONSE_BYTES} bytes"
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 # The token embeds the User-Agent that asked for it, so every request in a
 # session must send this exact string or the credential is rejected.
@@ -379,7 +403,13 @@ class HLTBHelper:
         # any cookie the init endpoint expects is already in the jar.
         with self.rate_limiter:
             try:
-                self._session.get(f"{BASE_URL}/", timeout=REQUEST_TIMEOUT_SECONDS)
+                # stream + with: os cookies vêm dos headers, o corpo nunca é
+                # lido — sem stream o requests baixava a homepage inteira para
+                # ninguém.
+                with self._session.get(
+                    f"{BASE_URL}/", timeout=REQUEST_TIMEOUT_SECONDS, stream=True
+                ):
+                    pass
             except RequestException as error:
                 logging.debug("HowLongToBeat homepage failed", exc_info=error)
 
@@ -389,9 +419,10 @@ class HLTBHelper:
                     INIT_URL,
                     params={"t": int(time.time() * 1000)},
                     timeout=REQUEST_TIMEOUT_SECONDS,
+                    stream=True,
                 ) as response:
                     response.raise_for_status()
-                    body = response.json()
+                    body = json.loads(_read_capped(response))
             except (RequestException, ValueError) as error:
                 logging.debug("HowLongToBeat init failed", exc_info=error)
                 return None
@@ -473,12 +504,13 @@ class HLTBHelper:
                     json=self._build_body(name, credential),
                     headers=headers,
                     timeout=REQUEST_TIMEOUT_SECONDS,
+                    stream=True,
                 ) as response:
                     if response.status_code in (401, 403):
                         logging.debug("HowLongToBeat credential rejected, refreshing")
                         return None, True
                     response.raise_for_status()
-                    body = response.json()
+                    body = json.loads(_read_capped(response))
             except (RequestException, ValueError) as error:
                 logging.debug("HowLongToBeat search failed", exc_info=error)
                 return None, False
@@ -663,11 +695,12 @@ class HLTBHelper:
                 with self._session.get(
                     f"{BASE_URL}/game/{int(hltb_id)}",
                     timeout=REQUEST_TIMEOUT_SECONDS,
+                    stream=True,
                 ) as response:
                     if response.status_code == 404:
                         raise HLTBGameNotFoundError()
                     response.raise_for_status()
-                    page = response.text
+                    page = _read_capped(response).decode("utf-8", errors="replace")
             except RequestException as error:
                 self._breaker_record(ok=False)
                 raise HLTBUnavailableError("game page unreachable") from error

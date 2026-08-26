@@ -126,6 +126,43 @@ _DOCTYPE_RE = re.compile(r"<!DOCTYPE", re.IGNORECASE)
 _ELEMENT_START_RE = re.compile(r"<[A-Za-z_]")
 
 
+def _prolog_end(xml_text: str) -> int:
+    """O índice onde o prólogo termina: o primeiro `<` que abre um elemento.
+
+    Comentários e instruções de processamento são pulados por inteiro, não
+    caractere a caractere: um regex solto encontrava o `<a` DENTRO de um
+    comentário e encerrava a janela ali, então `<!-- <a --><!DOCTYPE …>`
+    deixava o DOCTYPE real fora da busca e o guard não guardava nada. Tudo que
+    é legal antes do elemento raiz — declaração XML, comentário, PI, espaço e
+    o próprio DOCTYPE — fica dentro da janela; um comentário ou PI sem
+    fechamento estende o prólogo até o fim, que só pode errar para o lado de
+    recusar o feed.
+    """
+    position = 0
+    length = len(xml_text)
+    while position < length:
+        start = xml_text.find("<", position)
+        if start == -1:
+            return length
+        if xml_text.startswith("<?", start):
+            end = xml_text.find("?>", start + 2)
+            if end == -1:
+                return length
+            position = end + 2
+        elif xml_text.startswith("<!--", start):
+            end = xml_text.find("-->", start + 4)
+            if end == -1:
+                return length
+            position = end + 3
+        elif _ELEMENT_START_RE.match(xml_text, start):
+            return start
+        else:
+            # `<!DOCTYPE`, `<!` de subset interno, ou lixo: continua dentro do
+            # prólogo, avança um caractere e segue procurando o elemento raiz.
+            position = start + 1
+    return length
+
+
 @dataclass(frozen=True)
 class DigestEntry:
     """One patched game named in a digest: its title and its repack page."""
@@ -284,14 +321,11 @@ def parse_xml(xml_text: str) -> Optional[ElementTree.Element]:
     if not xml_text:
         return None
 
-    # Only the prolog may legally carry a doctype, and the prolog ends where the
-    # root element opens — the first `<` followed by a name character, as
-    # opposed to the `<?xml` declaration or a `<!--` comment. Scanning just that
-    # slice keeps the literal string "<!DOCTYPE" inside a post body (harmless:
-    # expat never interprets it there) from failing the whole feed.
-    root_start = _ELEMENT_START_RE.search(xml_text)
-    prolog_end = root_start.start() if root_start else len(xml_text)
-    if _DOCTYPE_RE.search(xml_text, 0, prolog_end):
+    # Only the prolog may legally carry a doctype. Scanning just that slice
+    # keeps the literal string "<!DOCTYPE" inside a post body (harmless: expat
+    # never interprets it there) from failing the whole feed; `_prolog_end`
+    # explica por que a janela é andada, e não regexada.
+    if _DOCTYPE_RE.search(xml_text, 0, _prolog_end(xml_text)):
         logging.warning("Refusing repack feed: document declares a DTD")
         return None
 

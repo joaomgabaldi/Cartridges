@@ -160,3 +160,25 @@ def test_a_corrupt_timestamp_is_treated_as_expired(make_game):
         encoding="utf-8",
     )
     assert game_logo.logo_lookup_needed(make_game(game_id="shortcuts_1")) is True
+
+
+def test_an_oversized_candidate_is_not_usable():
+    """Auditoria 26/08, B8: o ranking desempata PARA o maior, e o loader de
+    PNG decodifica inteiro na main thread — um candidato desmedido é pulado
+    para o pick escolher o próximo."""
+    huge = {"url": "https://x/logo.png", "width": 15000, "height": 8000}
+    fine = {"url": "https://x/logo.png", "width": 1280, "height": 480}
+
+    assert game_logo.pick_logo([huge, fine]) is fine
+    assert game_logo.pick_logo([huge]) is None
+
+
+def test_an_oversized_cached_file_is_not_loaded():
+    """O mesmo teto para o arquivo local (dimensões lidas sem decodificar)."""
+    from PIL import Image
+
+    shared.logos_dir.mkdir(parents=True, exist_ok=True)
+    path = shared.logos_dir / "wide.png"
+    Image.new("RGB", (game_logo.MAX_SOURCE_DIMENSION + 1, 10), "white").save(path)
+
+    assert game_logo.load_logo(path) is None

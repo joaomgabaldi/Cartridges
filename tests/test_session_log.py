@@ -63,6 +63,29 @@ def test_no_file_yet_is_not_an_error():
     assert session_log.load("g") == []
 
 
+def test_a_non_utf8_byte_costs_the_line_not_the_read():
+    """Auditoria 26/08, B3: UnicodeDecodeError é ValueError, escapava do guard
+    de OSError e quebrava a tela de detalhes de todo jogo com playtime."""
+    session_log.record("a", 60, end=1000)
+    with path().open("ab") as file:
+        file.write(b'{"game_id": "b", "seconds": 1, "end": 2\xff}\n')
+    session_log.record("c", 30, end=2000)
+
+    assert {entry["game_id"] for entry in session_log.load()} == {"a", "c"}
+
+
+def test_an_out_of_range_end_costs_the_line_not_the_dialog():
+    """Auditoria 26/08, B2: `end` fora da faixa do fromtimestamp do Windows
+    passava no load (que só checava tipo) e derrubava o diálogo de histórico."""
+    session_log.record("ok", 60, end=1000)
+    with path().open("a", encoding="utf-8") as file:
+        file.write('{"game_id": "neg", "seconds": 60, "end": -1}\n')
+        file.write('{"game_id": "huge", "seconds": 60, "end": 99999999999999}\n')
+        file.write('{"game_id": "negsec", "seconds": -5, "end": 1000}\n')
+
+    assert [entry["game_id"] for entry in session_log.load()] == ["ok"]
+
+
 def test_an_unreadable_line_is_skipped_not_fatal():
     """Uma linha cortada pela metade (queda no meio do append) ou editada à mão
     não pode levar o resto do histórico junto."""

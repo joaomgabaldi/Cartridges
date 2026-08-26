@@ -98,6 +98,16 @@ class SessionFileHandler(StreamHandler):
     def rotate_file(self, path: Path) -> None:
         """Rotate a file's number suffix and remove it if it's too old"""
 
+        # A lista de `rotate()` é um snapshot de antes de qualquer rename: uma
+        # queda entre comprimir e apagar deixa `cartridges.log` e
+        # `cartridges.log.xz` coexistindo no mesmo número, e processar o
+        # primeiro consome o caminho que o snapshot ainda nomeia para o
+        # segundo. Sem este guard, a inicialização seguinte à queda levantava
+        # daqui, o dictConfig embrulhava em ValueError e a sessão rodava sem
+        # log nenhum — justamente a sessão em que alguém ia procurar o log.
+        if not path.exists():
+            return
+
         # If uncompressed, compress
         if not path.name.endswith(".xz"):
             # Streamed through a fixed-size buffer instead of read whole. This
@@ -121,10 +131,12 @@ class SessionFileHandler(StreamHandler):
             path.unlink()
             path = compressed_path
 
-        # Rename with new number suffix
+        # Rename with new number suffix. `replace`, não `rename`: no Windows o
+        # rename recusa sobrescrever, e o par deixado por uma queda no meio da
+        # rotação faz dois arquivos disputarem o mesmo número de destino.
         new_number = self.get_path_number(path) + 1
         new_path_name = self.set_path_number(path, new_number)
-        path = path.rename(path.with_name(new_path_name))
+        path = path.replace(path.with_name(new_path_name))
 
         # Remove older files
         if new_number > self.backup_count:
