@@ -1663,3 +1663,117 @@ def test_the_status_row_round_trips_through_the_dialog(real_window, store):
     dialog.set_status("")
     dialog.apply_preferences()
     assert game.status == ""
+
+
+# ---------------------------------------------------------------------------
+# Auditoria 26/08 — regressões
+# ---------------------------------------------------------------------------
+
+
+def test_the_iconic_parking_spot_is_not_usable():
+    """A1: o Win32 estaciona janela minimizada em (-32000,-32000); um estado
+    envenenado por um build antigo não pode reabrir a janela como uma tira."""
+    assert not window_geometry.Geometry(-32000, -32000, 160, 28, False).usable
+    # E um monitor real em coordenada negativa continua valendo.
+    assert window_geometry.Geometry(-476, 100, 800, 600, False).usable
+
+
+def test_a_minimized_window_is_not_read(monkeypatch):
+    """A1: fechar pela taskbar com a janela minimizada (o estado normal
+    enquanto um jogo roda) gravava o retângulo icônico como geometria."""
+
+    class FakeUser32:
+        @staticmethod
+        def IsIconic(_hwnd):
+            return 1
+
+        @staticmethod
+        def GetWindowRect(*_args):
+            raise AssertionError("não se pergunta o rect de uma janela icônica")
+
+    monkeypatch.setattr(window_geometry, "_user32", FakeUser32())
+    monkeypatch.setattr(window_geometry, "_hwnd", lambda _window: 42)
+
+    assert window_geometry.read(object()) is None
+
+
+def test_wrong_typed_numeric_fields_are_dropped_on_load():
+    """B4: `"playtime": "5h"` num registro editado à mão passava e estourava
+    TypeError na tela de detalhes e na ordenação. Cai o campo, não o jogo."""
+    from cartridges.main import sanitize_numeric_fields
+
+    data = {
+        "name": "Probe",
+        "playtime": "5h",
+        "metacritic": "bom",
+        "install_size": 1024,
+        "hltb_main": None,
+    }
+    cleaned = sanitize_numeric_fields(data, "probe.json")
+
+    assert "playtime" not in cleaned
+    assert "metacritic" not in cleaned
+    assert cleaned["install_size"] == 1024
+    assert cleaned["hltb_main"] is None
+    assert cleaned["name"] == "Probe"
+
+
+def test_enter_cannot_apply_mid_fetch(real_window, store):
+    """M2: entry-activated chamava apply_preferences direto, driblando o
+    botão que begin_loading desabilita — salvava sem os dados em voo."""
+    from cartridges.details_dialog import DetailsDialog
+
+    _stub_sgdb(store)
+    game = _probe_game()
+    dialog = DetailsDialog(game)
+
+    dialog.name.set_text("Nome Novo")
+    dialog.begin_loading()
+    dialog.apply_preferences()
+    assert game.name == "Probe", "aplicar no meio do fetch tem que ser ignorado"
+
+    dialog.end_loading()
+    dialog.apply_preferences()
+    assert game.name == "Nome Novo"
+
+
+def test_switching_empty_notices_does_not_stack_them(real_window, monkeypatch):
+    """M4: a transição direta 'Nenhum jogo' → 'Nenhum jogo encontrado'
+    adicionava o aviso novo sem remover o antigo; os dois ficavam sobrepostos."""
+    from cartridges import shared
+
+    win = real_window
+
+    monkeypatch.setattr(shared, "store", [])
+    win.set_library_child()
+    assert win.notice_empty.get_parent() is win.library_overlay
+
+    filtered = SimpleNamespace(
+        removed=False, blacklisted=False, hidden=False, filtered=True
+    )
+    monkeypatch.setattr(shared, "store", [filtered])
+    win.set_library_child()
+
+    assert win.notice_no_results.get_parent() is win.library_overlay
+    assert win.notice_empty.get_parent() is None, "o aviso antigo tem que sair"
+
+    # E a volta: some o filtro, some o aviso de busca.
+    monkeypatch.setattr(shared, "store", [])
+    win.set_library_child()
+    assert win.notice_empty.get_parent() is win.library_overlay
+    assert win.notice_no_results.get_parent() is None
+
+
+def test_rotation_survives_a_crash_between_compress_and_unlink(tmp_path):
+    """B10: a queda deixava `.log` e `.log.xz` no mesmo número; a próxima
+    inicialização levantava na rotação, o dictConfig virava ValueError e a
+    sessão rodava sem log nenhum — justamente a sessão depois de um crash."""
+    import lzma as lzma_module
+
+    path = tmp_path / "cartridges.log"
+    path.write_text("sessão interrompida\n", encoding="utf-8")
+    with lzma_module.open(tmp_path / "cartridges.log.xz", "wb") as file:
+        file.write(b"metade comprimida")
+
+    handler = SessionFileHandler(filename=path, backup_count=2)  # não pode levantar
+    handler.close()

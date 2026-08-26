@@ -49,6 +49,16 @@ def test_aumid_from_command(command, expected):
     assert aumid_from_command(command) == expected
 
 
+def test_the_marker_is_matched_case_insensitively():
+    """Auditoria 26/08, B5: o shell aceita `shell:appsfolder\\...` em qualquer
+    caixa; o `find` sensível tratava o jogo como exe comum — relógio manual e
+    elevação pelo ramo sem identidade de pacote."""
+    assert (
+        aumid_from_command('start "" "shell:appsfolder\\PFN.Game_abc!App"')
+        == "PFN.Game_abc!App"
+    )
+
+
 def test_the_result_is_usable_as_a_package_family():
     """``ProcessSession`` splits it on "!" to get the family name to watch."""
     aumid = aumid_from_command("explorer.exe shell:AppsFolder\\Pkg_hash!App")

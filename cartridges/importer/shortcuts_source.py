@@ -580,6 +580,13 @@ class ShortcutsSourceIterable(SourceIterable):
         shortcut_path: str = "",
     ) -> Game:
         """Create a Game with a stable id derived from its launch identity"""
+        # Risco arquitetural aceito, herdado do upstream: isto roda na worker
+        # thread do import, e Game é um Gtk.Box — o __init__ instancia template
+        # e controllers fora da main thread. Verificado no runtime real que o
+        # GtkBuilder preserva o __init__ e que a construção fora da thread é
+        # tolerada; o widget só é PARENTEADO na main (DisplayManager marshalla).
+        # Mover a construção para a main custaria refazer o fluxo do importer
+        # inteiro por um defeito nunca observado — fica registrado, não refeito.
         return Game(
             {
                 "source": self.source.source_id,

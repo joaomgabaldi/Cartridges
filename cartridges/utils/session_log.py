@@ -30,6 +30,11 @@ from typing import Any, Optional
 from cartridges import shared
 
 
+# Ano 3000. Qualquer `end` além disto é edição manual ou lixo, e aceitar um
+# valor que o fromtimestamp do Windows recusa só move o erro para quem exibe.
+_MAX_END = 32503680000
+
+
 def _path() -> Path:
     # Resolvido a cada chamada, não no import: `shared.app_dir` é montado pelo
     # meson e repontado pelos testes, e uma constante de módulo congelaria o
@@ -71,7 +76,11 @@ def load(game_id: Optional[str] = None) -> list[dict[str, Any]]:
     menos que uma única capa.
     """
     try:
-        text = _path().read_text(encoding="utf-8")
+        # errors="replace": um byte não-UTF-8 (cauda rasgada pós-queda, edição
+        # salva em ANSI) custa a linha em que está — o replacement char quebra o
+        # json.loads dela — e não a leitura inteira, que era o que o
+        # UnicodeDecodeError fazia por ser ValueError, fora do guard de OSError.
+        text = _path().read_text(encoding="utf-8", errors="replace")
     except FileNotFoundError:
         return []
     except OSError:
@@ -90,6 +99,12 @@ def load(game_id: Optional[str] = None) -> list[dict[str, Any]]:
             end = int(entry["end"])
         except (ValueError, TypeError, KeyError):
             logging.debug("Linha ilegível no histórico de sessões, ignorada")
+            continue
+        # Faixa, além de tipo: um `end` negativo ou além do alcance do
+        # datetime.fromtimestamp do Windows derrubaria o diálogo de histórico —
+        # e o contrato daqui é que uma linha editada à mão custa a linha.
+        if seconds < 0 or end < 0 or end > _MAX_END:
+            logging.debug("Sessão fora de faixa no histórico, ignorada")
             continue
         if game_id is not None and entry_id != game_id:
             continue

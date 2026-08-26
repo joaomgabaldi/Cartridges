@@ -66,6 +66,14 @@ LOGO_MIN_HEIGHT = 44
 # that have no real wordmark.
 MIN_ASPECT_RATIO = 1.3
 
+# Teto de DIMENSÃO, além do teto de bytes do download: o loader de PNG
+# decodifica a imagem inteira antes de escalar, na main thread, a cada visita
+# à página de detalhes — um upload comunitário de 15000x8000 px cabe em 25 MiB
+# e custaria centenas de MB de pico e um engasgo visível, repetidos. E o
+# ranking desempata PARA o maior, então sem isto o candidato desmedido ganha.
+# 4096 é folga larga para um wordmark (os do SGDB raramente passam de 1280).
+MAX_SOURCE_DIMENSION = 4096
+
 # The page is drawn on a dark, blurred cover. A black logo would be invisible
 # on it, so it is ranked below everything else and only used when it is all
 # there is; official art and white wordmarks both sit well on dark.
@@ -147,6 +155,13 @@ def load_logo(path: Path) -> Optional[tuple[Gdk.Texture, int]]:
     """
     size = _intrinsic_size(path)
     if not size:
+        return None
+    # O mesmo teto do fetch, para o arquivo local escolhido à mão: as
+    # dimensões vêm do get_file_info, sem decodificar — recusar aqui custa
+    # nada e evita a decodificação gigante na main thread. O cabeçalho volta
+    # ao título em texto.
+    if max(size) > MAX_SOURCE_DIMENSION:
+        logging.debug("Logo %s excede %d px, ignorado", path, MAX_SOURCE_DIMENSION)
         return None
 
     width, height = logo_display_size(*size)
@@ -389,6 +404,11 @@ def _usable(logo: dict[str, Any]) -> bool:
     if width and height and width / height < MIN_ASPECT_RATIO:
         return False
 
+    # Um candidato desmedido é pulado aqui para que o pick escolha o PRÓXIMO,
+    # em vez de baixar algo que a validação descartaria depois.
+    if width > MAX_SOURCE_DIMENSION or height > MAX_SOURCE_DIMENSION:
+        return False
+
     return True
 
 
@@ -501,8 +521,13 @@ def fetch_logo(game: Game) -> Optional[Path]:
     # page (or a truncated download) was recorded as a *hit*, and a hit is
     # trusted for a month — `logo_lookup_needed` sees a file on disk and does
     # not ask again — so one bad response cost that game its header for weeks.
-    if _intrinsic_size(path) is None:
-        logging.debug("Discarding an undecodable logo for %s", game.name)
+    fetched_size = _intrinsic_size(path)
+    # Desmedido conta como inutilizável: o metadado da API pode mentir sobre as
+    # dimensões, e um arquivo em cache é confiado por um mês — o load recusaria
+    # a cada visita, mas descartar aqui registra "sem logo" no sidecar e não
+    # deixa o arquivo gigante parado no disco.
+    if fetched_size is None or max(fetched_size) > MAX_SOURCE_DIMENSION:
+        logging.debug("Discarding an unusable logo for %s", game.name)
         path.unlink(missing_ok=True)
         _write_sidecar(game.game_id, game.name, None)
         return None

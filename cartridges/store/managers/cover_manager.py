@@ -107,9 +107,19 @@ class CoverManager(Manager):
         Timeout,
     )
 
+    # ponytail: este manager é `blocking` atrás de um async, então o retry com
+    # sleep(3) do handle_error roda na main thread — até ~21 s congelado por
+    # capa que falha. Hoje o caminho é morto (nenhuma fonte deste fork produz
+    # online_cover_url/local_image_path); se uma fonte nova reviver o manager,
+    # o upgrade é torná-lo AsyncManager ou zerar retry_delay para ele.
+
     def download_image(self, url: str) -> Path:
+        # O download vem ANTES do temp: criado primeiro, cada URL que falhasse
+        # vazava um arquivo vazio em %TEMP% por tentativa — três por URL, com o
+        # retry — porque o raise acontecia antes do try/finally do chamador.
+        content = download_bytes(url, timeout=5)
         path = Path(Gio.File.new_tmp()[0].get_path())
-        path.write_bytes(download_bytes(url, timeout=5))
+        path.write_bytes(content)
         return path
 
     def is_stretchable(self, source_size: ImageSize, cover_size: ImageSize) -> bool:

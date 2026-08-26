@@ -187,5 +187,37 @@ class TestExtractionFeedsMatcher(unittest.TestCase):
         self.assertLess(match.score, CONFIDENT_SCORE)
 
 
+class TestDoctypeGuard(unittest.TestCase):
+    """Auditoria 26/08, B6: a janela do guard terminava no primeiro `<`+letra,
+    inclusive dentro de um comentário — `<!-- <a -->` escondia o DOCTYPE."""
+
+    def test_a_doctype_hidden_behind_a_comment_is_refused(self):
+        from cartridges.utils.updates_feed import parse_xml
+
+        doc = (
+            '<?xml version="1.0"?><!-- <a -->'
+            '<!DOCTYPE rss [<!ENTITY a "x">]><rss><channel/></rss>'
+        )
+        self.assertIsNone(parse_xml(doc))
+
+    def test_a_plain_doctype_is_still_refused(self):
+        from cartridges.utils.updates_feed import parse_xml
+
+        doc = '<?xml version="1.0"?><!DOCTYPE rss><rss><channel/></rss>'
+        self.assertIsNone(parse_xml(doc))
+
+    def test_a_doctype_string_inside_the_body_is_harmless(self):
+        from cartridges.utils.updates_feed import parse_xml
+
+        doc = "<rss><channel><title>&lt;!DOCTYPE&gt; no texto</title></channel></rss>"
+        self.assertIsNotNone(parse_xml(doc))
+
+    def test_an_ordinary_commented_feed_still_parses(self):
+        from cartridges.utils.updates_feed import parse_xml
+
+        doc = '<?xml version="1.0"?><!-- gerado às 3h --><rss><channel/></rss>'
+        self.assertIsNotNone(parse_xml(doc))
+
+
 if __name__ == "__main__":
     unittest.main()

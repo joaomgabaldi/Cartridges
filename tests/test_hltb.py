@@ -153,6 +153,21 @@ class FakeResponse:
             raise ValueError("no json body")
         return self._payload
 
+    def iter_content(self, chunk_size=65536):
+        """O que o requests entrega em stream: o corpo, em pedaços.
+
+        O helper passou a ler todo corpo via ``_read_capped`` (stream com teto)
+        em vez de ``.json()``/``.text`` — o fake entrega os mesmos bytes que o
+        real entregaria.
+        """
+        body = (
+            json.dumps(self._payload).encode("utf-8")
+            if self._payload is not None
+            else str(self.text).encode("utf-8")
+        )
+        for start in range(0, len(body), chunk_size):
+            yield body[start : start + chunk_size]
+
     def __enter__(self):
         return self
 
@@ -194,7 +209,7 @@ class FakeSession:
         self.searches = 0
         self.uses_of_current_token = 0
 
-    def get(self, url, params=None, timeout=None):
+    def get(self, url, params=None, timeout=None, stream=None):
         self.gets.append(url)
         # Casado com a constante do modulo, e nao com o caminho escrito a mao:
         # o HowLongToBeat renomeia o endpoint de tempos em tempos, e um literal
@@ -212,7 +227,7 @@ class FakeSession:
             return FakeResponse(text=self.page_html)
         return FakeResponse(text="<html>home</html>")
 
-    def post(self, url, json=None, headers=None, timeout=None):
+    def post(self, url, json=None, headers=None, timeout=None, stream=None):
         self.posts.append(url)
         self.bodies.append(json)
         self.sent_headers.append(headers or {})
@@ -793,6 +808,24 @@ class TestCircuitBreaker(unittest.TestCase):
 
         self.assertIn("waiting", str(caught.exception))
 
+
+class TestResponseCap(unittest.TestCase):
+    """Auditoria 26/08, B7: os corpos eram lidos inteiros com .json()/.text —
+    o único leitor de rede do app sem teto de bytes. Passar do teto é falha de
+    rede como outra qualquer."""
+
+    def test_an_oversized_page_is_a_network_failure(self):
+        session = FakeSession()
+        session.page_html = "x" * 200
+        helper = make_helper(session)
+
+        old_cap = hltb_module.MAX_RESPONSE_BYTES
+        hltb_module.MAX_RESPONSE_BYTES = 100
+        try:
+            with self.assertRaises(HLTBUnavailableError):
+                helper.get_times_by_id(1)
+        finally:
+            hltb_module.MAX_RESPONSE_BYTES = old_cap
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
