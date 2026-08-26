@@ -37,6 +37,32 @@ from cartridges.utils.steam import (
 )
 
 
+# Os campos que a tela de edição grava de volta — os únicos em que um valor
+# vindo da Steam pode atropelar algo que o usuário digitou. Metacritic,
+# avaliações, suporte a controle e afins não são editáveis à mão e continuam
+# sempre atualizados.
+_USER_EDITED_KEYS = ("name", "developer", "publisher", "release_date", "genre")
+
+
+def _keep_user_edits(game: Game, online_data: dict, additional_data: dict) -> dict:
+    """No modo "só o que falta", um campo editável só preenche o que está vazio.
+
+    O modo escolhia quais *jogos* entravam na fila, mas aplicava o dict
+    inteiro: um jogo renomeado à mão que entrasse pela lacuna do gênero saía
+    com o nome e a desenvolvedora revertidos para os da Steam — em silêncio, e
+    na biblioteca inteira de uma vez a cada bump de STEAM_METADATA_VERSION,
+    que re-enfileira tudo. A regra é a mesma da restauração de backup: o que
+    está preenchido na biblioteca é mais recente do que o que veio de fora.
+    """
+    if not additional_data.get("only_missing"):
+        return online_data
+    return {
+        key: value
+        for key, value in online_data.items()
+        if key not in _USER_EDITED_KEYS or not getattr(game, key, None)
+    }
+
+
 class SteamAPIManager(AsyncManager):
     """Manager in charge of completing a game's data from the Steam API.
 
@@ -105,7 +131,7 @@ class SteamAPIManager(AsyncManager):
                 logging.debug("Steam lookup failed for %s", game.name, exc_info=error)
                 return
             game.steam_appid = str(appid)
-            game.update_values(online_data)
+            game.update_values(_keep_user_edits(game, online_data, additional_data))
             # Stamped only on the paths that actually answered. A lookup that
             # failed or found nothing must leave the game looking unchecked, or
             # a network blip would mark it as up to date with fields it never
@@ -130,5 +156,5 @@ class SteamAPIManager(AsyncManager):
 
         # Remember it so later refreshes skip the search entirely.
         game.steam_appid = appid
-        game.update_values(online_data)
+        game.update_values(_keep_user_edits(game, online_data, additional_data))
         game.steam_checked = STEAM_METADATA_VERSION

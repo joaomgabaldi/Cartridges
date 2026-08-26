@@ -239,6 +239,11 @@ class MetadataRefresh(GObject.Object):
         additional_data = {
             "steam_tags": tags,
             "refresh_hltb": not self._only_missing,
+            # Lido pelo SteamAPIManager: no modo só-o-que-falta os campos
+            # editáveis à mão só preenchem o que está vazio, em vez de reverter
+            # edições do usuário — a fila escolhe os jogos, isto escolhe os
+            # campos.
+            "only_missing": self._only_missing,
         }
 
         def next_game() -> None:

@@ -80,6 +80,36 @@ def test_a_folder_holding_a_whole_library_is_refused(tmp_path) -> None:
     )
 
 
+def make_junction(link, target) -> None:
+    """Junção NTFS de verdade — o link que se cria SEM privilégio (mklink /J)."""
+    try:
+        import _winapi  # pylint: disable=import-outside-toplevel
+
+        _winapi.CreateJunction(str(target), str(link))
+    except (ImportError, AttributeError, OSError) as error:
+        pytest.skip(f"não deu para criar junção aqui: {error}")
+
+
+def test_folder_size_does_not_follow_junctions(tmp_path) -> None:
+    """Auditoria 26/08, A2: `is_dir(follow_symlinks=False)` é True para junção,
+    então o alvo era contado junto — o dobro do tamanho na feature feita para
+    decidir o que apagar."""
+    write(tmp_path / "game" / "data.pak", 10)
+    write(tmp_path / "biblioteca" / "grande.pak", 1000)
+    make_junction(tmp_path / "game" / "resto", tmp_path / "biblioteca")
+
+    assert folder_size(str(tmp_path / "game")) == 10
+
+
+def test_folder_size_survives_a_junction_cycle(tmp_path) -> None:
+    """Junção para o próprio ancestral: sem o `is_junction()` a varredura
+    re-entrava em círculo até o caminho estourar o limite do SO."""
+    write(tmp_path / "game" / "data.pak", 10)
+    make_junction(tmp_path / "game" / "loop", tmp_path / "game")
+
+    assert folder_size(str(tmp_path / "game")) == 10
+
+
 def test_folder_size_ignores_links(tmp_path) -> None:
     """O mesmo arquivo do outro lado de um link não é contado duas vezes."""
     write(tmp_path / "game" / "data.pak", 3000)
