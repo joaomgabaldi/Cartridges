@@ -85,14 +85,16 @@ image_size = (600, 900)
 scale_factor = 1
 display_size = (200, 300)
 
-# The details page draws its cover at 280x420, not the grid's 200x300, so a
-# texture decoded at `display_size` was being stretched 1.4x to fill it.
+# The details page draws its cover at 420x630, not the grid's 200x300, so a
+# texture decoded at `display_size` would be stretched to fill it. This is the
+# size the page draws and therefore the size it decodes; the cover files
+# themselves are stored at 600x900, so this is still a reduction of the file.
 # Deliberately a second number rather than a bigger `display_size`: that one is
 # paid for once per game in the library, and raising it to this would double
 # the memory and drawing cost of the whole grid to sharpen one picture. Only
 # the cover on screen right now is decoded at this size — see
 # `GameCover.add_details_picture`.
-details_size = (280, 420)
+details_size = (420, 630)
 
 try:
     scale_factor = max(
@@ -105,7 +107,7 @@ except (AttributeError, ValueError):
     pass
 else:
     display_size = (200 * scale_factor, 300 * scale_factor)
-    details_size = (280 * scale_factor, 420 * scale_factor)
+    details_size = (420 * scale_factor, 630 * scale_factor)
 
 # pylint: disable=invalid-name
 win = None

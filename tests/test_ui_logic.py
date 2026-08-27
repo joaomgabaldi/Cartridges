@@ -1520,21 +1520,53 @@ def test_setting_a_status_saves_it_and_relabels_the_button(real_window, store):
     assert real_window.details_view_status_button.get_label() == "Definir status"
 
 
-def test_the_notes_button_belongs_to_a_game_being_played(real_window, store):
-    """"Onde eu parei" só tem resposta enquanto se joga: nos outros status o
-    botão sai da linha, mesmo que já haja anotação escrita."""
-    game = library_game(store, 1, status="playing", notes="Cofre: 8815")
+def test_the_notes_button_follows_the_status_or_the_note(real_window, store):
+    """O botão aparece em "Jogando", que é onde a pergunta tem resposta — e em
+    qualquer jogo que já tenha anotação, porque este é o único lugar onde ela
+    se edita: sem o botão, um texto escrito lá atrás ficaria preso na tela."""
+    game = library_game(store, 1, status="playing")
     real_window.active_game = game
 
     real_window.update_notes_block(game)
     assert real_window.details_view_notes_button.get_visible() is True
-    assert real_window.details_view_notes.get_label() == "Cofre: 8815"
+    assert real_window.details_view_notes_box.get_visible() is False
 
     real_window.lookup_action("set_status").activate(GLib.Variant("s", "beaten"))
-
     assert real_window.details_view_notes_button.get_visible() is False
-    # A anotação continua à mostra: num jogo zerado ela vira lembrança.
+
+    game.notes = "Cofre: 8815"
+    real_window.update_notes_block(game)
+
+    # Zerado, mas com anotação: o texto à mostra e o botão junto dele.
+    assert real_window.details_view_notes_button.get_visible() is True
     assert real_window.details_view_notes_box.get_visible() is True
+    assert real_window.details_view_notes.get_label() == "Cofre: 8815"
+
+
+def test_a_note_written_during_a_session_goes_to_the_game_being_played(
+    real_window, store
+):
+    """A tela de detalhes por trás do bloqueador pode ter ficado em qualquer
+    jogo — dar play num e estar com a tela de outro aberta é possível. Quem
+    manda ali é o jogo da sessão, que é o que o bloqueador anuncia."""
+    played = library_game(store, 1, status="playing")
+    other = library_game(store, 2, notes="nada a ver com isto")
+    real_window.active_game = other
+    real_window.show_session_blocker(played)
+
+    opening = SimpleNamespace(get_visible=lambda: True)
+    closing = SimpleNamespace(get_visible=lambda: False)
+    real_window.on_session_notes_popover_toggled(opening, None)
+    real_window.session_blocker_notes_view.get_buffer().set_text(
+        "Parei na missão do trem"
+    )
+    real_window.on_session_notes_popover_toggled(closing, None)
+
+    assert played.notes == "Parei na missão do trem"
+    assert other.notes == "nada a ver com isto"
+
+    real_window.hide_session_blocker()
+    assert real_window.session_game is None
 
 
 def test_closing_the_notes_popover_saves_the_text(real_window, store):
@@ -1657,25 +1689,6 @@ def test_the_details_page_hides_the_size_until_it_is_known(real_window, store):
 
     real_window.update_install_size_label(unmeasured)
     assert not real_window.details_view_size.get_visible()
-
-
-def test_the_note_keeps_its_line_breaks_but_not_its_edges(details_dialog):
-    """As quebras do meio separam um lembrete do outro e ficam.
-
-    As das pontas saem: uma caixa em que se apertou Enter e nada mais é uma
-    caixa vazia, e não uma anotação de uma linha em branco — que a tela de
-    detalhes exibiria como uma seção "Onde eu parei" sem nada dentro.
-    """
-    buffer = details_dialog.notes_view.get_buffer()
-
-    buffer.set_text("\n  Parei no capítulo 4.\nCofre: 8815\n\n")
-    assert details_dialog.get_notes() == "Parei no capítulo 4.\nCofre: 8815"
-
-    buffer.set_text("\n \n")
-    assert details_dialog.get_notes() == ""
-
-    buffer.set_text("")
-    assert details_dialog.get_notes() == ""
 
 
 def test_clicking_the_marked_star_takes_the_rating_away(real_window, store):

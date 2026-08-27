@@ -46,7 +46,6 @@ from gi.repository import Adw, GLib
 from cartridges import shared
 from cartridges.game import Game
 from cartridges.utils import session_log
-from cartridges.utils.format_playtime import format_playtime
 from cartridges.utils.process_monitor import (
     install_dir_from_command,
     is_package_running,
@@ -152,7 +151,7 @@ class ProcessSession:
         ProcessSession.active = self
         self.last_persist = monotonic()
         # Block the main window so a second session can't be started from there
-        shared.win.show_session_blocker(self.game.name)
+        shared.win.show_session_blocker(self.game)
         self.poll_id = GLib.timeout_add_seconds(self.POLL_INTERVAL, self._poll)
 
     def _poll(self) -> bool:
@@ -337,17 +336,7 @@ class ProcessSession:
             session_log.record(self.game.game_id, self.session_seconds)
             self.game.save()
             self.game.update()
-            toast = Adw.Toast.new(
-                # The variables are the game's title and the session length
-                _("{}: {} de jogo").format(
-                    self.game.name, format_playtime(self.session_seconds)
-                )
-            )
-            # The game's name is interpolated into the title and Adw.Toast
-            # parses that as Pango markup by default — an "&" or "<" in a title
-            # mangles the toast, or makes Pango reject it and drop the label.
-            toast.set_use_markup(False)
-            shared.win.toast_queue.add(toast)
+            shared.win.session_toast(self.game, self.session_seconds)
         elif record:
             # Pedimos para registrar, mas o processo nunca apareceu: encerrar a
             # sessão pelo botão da janela bloqueada durante a espera cai aqui.

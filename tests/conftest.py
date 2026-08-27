@@ -208,6 +208,7 @@ class FakeWindow:
         self.toasts: dict = {}
         self.toast_queue = FakeToastQueue()
         self.session_blocker_shown: list = []
+        self.notes_toast_games: list = []
         self.presented = 0
         self.application = FakeApplication()
 
@@ -222,11 +223,24 @@ class FakeWindow:
     def restore_library_scroll(self) -> None:
         self.scroll_restored = True
 
-    def show_session_blocker(self, name: str) -> None:
-        self.session_blocker_shown.append(name)
+    def show_session_blocker(self, game: Any) -> None:
+        self.session_blocker_shown.append(game)
 
     def hide_session_blocker(self) -> None:
         self.session_blocker_shown.append(None)
+
+    def session_toast(self, game: Any, seconds: int) -> None:
+        """O aviso de fim de sessão é montado pela janela de verdade.
+
+        Delegado em vez de imitado: é ali que mora a regra de não interpretar o
+        título como markup, e um duplo aqui a testaria no lugar dela.
+        """
+        from cartridges.window import CartridgesWindow  # noqa: PLC0415
+
+        CartridgesWindow.session_toast(self, game, seconds)
+
+    def on_session_toast_notes(self, _toast: Any, game: Any) -> None:
+        self.notes_toast_games.append(game)
 
     def present(self) -> None:
         self.presented += 1
@@ -394,6 +408,8 @@ class FakeGame:
         self.run_as_admin = overrides.pop("run_as_admin", False)
         self.track_process = overrides.pop("track_process", False)
         self.process_executable = overrides.pop("process_executable", "")
+        self.status = overrides.pop("status", "")
+        self.notes = overrides.pop("notes", "")
         for key, value in overrides.items():
             setattr(self, key, value)
         # Derived exactly the way Game.__init__ derives it.

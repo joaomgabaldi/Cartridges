@@ -74,6 +74,8 @@ template $CartridgesWindow: Adw.ApplicationWindow {
       details_view_hltb_box.halign: center;
       details_view_date_box.halign: center;
       details_view_status_box.halign: center;
+      details_view_cover.width-request: 280;
+      details_view_cover.height-request: 420;
       details_view_update_notice.halign: center;
       details_view_toolbar.halign: center;
       details_view_toolbar.orientation: vertical;
@@ -242,6 +244,43 @@ template $CartridgesWindow: Adw.ApplicationWindow {
               "suggested-action",
               "pill",
             ]
+          }
+
+          // Plano, e não uma segunda pílula: sair da sessão é o que se faz
+          // aqui, anotar é o que se pode fazer. Sem status nenhum de por meio
+          // — o jogo desta tela está sendo jogado agora, que é exatamente a
+          // pergunta que a anotação responde.
+          MenuButton session_blocker_notes_button {
+            label: _("Onde eu parei");
+            halign: center;
+            tooltip-text: _("Anotar onde você parou neste jogo");
+
+            styles [
+              "flat",
+            ]
+
+            popover: Popover session_blocker_notes_popover {
+              Box {
+                orientation: vertical;
+                width-request: 320;
+
+                ScrolledWindow {
+                  height-request: 120;
+                  hscrollbar-policy: never;
+
+                  TextView session_blocker_notes_view {
+                    top-margin: 4;
+                    bottom-margin: 4;
+                    left-margin: 4;
+                    right-margin: 4;
+                    wrap-mode: word_char;
+                    accessibility {
+                      label: _("Onde eu parei");
+                    }
+                  }
+                }
+              }
+            };
           }
         }
       }
@@ -425,11 +464,18 @@ Adw.NavigationPage details_page {
           margin-top: 24;
           margin-bottom: 24;
 
-          // 280x420, the 2:3 the covers are stored in. Grown from 200x300
-          // because the column beside it did: genre, controller support, the
-          // gamepad recommendation and the description all arrived after this
-          // number was chosen, and the cover had stopped holding its half of
-          // the page.
+          // 420x630, o 2:3 em que as capas são guardadas. Cresceu de 200x300
+          // para 280x420 e daí para cá porque a coluna ao lado cresceu junto:
+          // gênero, compatibilidade com controle, a recomendação de controle,
+          // a sinopse e a anotação chegaram todos depois desses números, e a
+          // capa tinha parado de segurar a metade dela da página.
+          //
+          // Não passa disso: as capas são gravadas em 600x900, então 420x630
+          // ainda é uma redução do arquivo. Pedir mais seria esticar o que
+          // está guardado, e uma capa borrada é pior que uma capa menor.
+          //
+          // Na janela estreita ela volta a 280x420 (ver o breakpoint lá em
+          // cima): 420 de largura não cabe numa janela de 360.
           //
           // Sharpness is not free here, and the size alone does not buy it:
           // the grid decodes every cover at `shared.display_size` (200x300),
@@ -442,7 +488,7 @@ Adw.NavigationPage details_page {
           // constraint: on its own, a larger width-request would be clamped
           // straight back to the old size.
           Adw.Clamp {
-            maximum-size: 280;
+            maximum-size: 420;
 
             Overlay {
               [overlay]
@@ -453,8 +499,8 @@ Adw.NavigationPage details_page {
               Picture details_view_cover {
                 halign: end;
                 valign: start;
-                width-request: 280;
-                height-request: 420;
+                width-request: 420;
+                height-request: 630;
 
                 styles [
                   "card",
@@ -711,6 +757,12 @@ Adw.NavigationPage details_page {
               // O texto vai como o usuário escreveu, com as quebras de linha
               // que ele pôs: é um bloco de anotações, e uma lista de três
               // coisas vira um parágrafo só se as quebras forem descartadas.
+              //
+              // Três linhas e reticências: a anotação de uma ou duas linhas,
+              // que é a comum, aparece inteira aqui e não custa clique nenhum;
+              // a que virou um capítulo vira chamada, e o resto se lê no botão
+              // ao lado. Sem o teto, uma anotação longa empurrava a sinopse, o
+              // HowLongToBeat e o próprio botão de Jogar para fora da tela.
               Label details_view_notes {
                 margin-top: 3;
                 hexpand: true;
@@ -720,6 +772,8 @@ Adw.NavigationPage details_page {
                 wrap: true;
                 wrap-mode: word_char;
                 natural-wrap-mode: word;
+                lines: 3;
+                ellipsize: end;
 
                 styles [
                   "dim-label",
