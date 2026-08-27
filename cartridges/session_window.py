@@ -25,7 +25,6 @@ from gi.repository import Adw, GLib, Gtk
 from cartridges import shared
 from cartridges.game import Game
 from cartridges.utils import session_log
-from cartridges.utils.format_playtime import format_playtime
 
 
 class SessionWindow(Adw.Window):
@@ -77,7 +76,7 @@ class SessionWindow(Adw.Window):
 
         # Block the main window with a "session in progress" overlay so the user
         # can't start a second session from there while this one is running
-        shared.win.show_session_blocker(game.name)
+        shared.win.show_session_blocker(game)
 
         # Save accumulated time every minute (crash/power-loss safety net)
         self.tick_id = GLib.timeout_add_seconds(60, self.tick)
@@ -114,16 +113,7 @@ class SessionWindow(Adw.Window):
         session_log.record(self.game.game_id, self.session_seconds)
         self.game.update()
 
-        toast = Adw.Toast.new(
-            # The variables are the game's title and the session length
-            _("{}: {} de jogo").format(
-                self.game.name, format_playtime(self.session_seconds)
-            )
-        )
-        # The game's name is interpolated in and Adw.Toast parses its title as
-        # Pango markup by default; an "&" or "<" mangles or drops the label.
-        toast.set_use_markup(False)
-        shared.win.toast_queue.add(toast)
+        shared.win.session_toast(self.game, self.session_seconds)
 
         # Bring the main window back now that the session is over
         shared.win.present()

@@ -236,35 +236,6 @@ template $DetailsDialog: Adw.Dialog {
         }
       }
 
-      // O único grupo com título, e por necessidade: o que ele guarda não é
-      // uma linha, e uma caixa de texto solta não teria como dizer o que é.
-      // Uma EntryRow (que traria o título de graça) daria uma linha só, com
-      // rolagem lateral — e três lembretes numa linha só não se leem.
-      Adw.PreferencesGroup {
-        title: _("Onde eu parei");
-        description: _("Para quando você voltar a este jogo daqui a alguns meses");
-
-        ScrolledWindow {
-          height-request: 110;
-          hscrollbar-policy: never;
-
-          styles [
-            "card",
-          ]
-
-          TextView notes_view {
-            top-margin: 8;
-            bottom-margin: 8;
-            left-margin: 8;
-            right-margin: 8;
-            wrap-mode: word_char;
-            accessibility {
-              label: _("Onde eu parei");
-            }
-          }
-        }
-      }
-
       Adw.PreferencesGroup {
         Adw.EntryRow executable {
           title: _("Executável");

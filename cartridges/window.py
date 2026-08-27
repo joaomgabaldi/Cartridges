@@ -52,6 +52,16 @@ from cartridges.utils.steam import format_release_date, parse_release_date
 from cartridges.utils.toast_queue import ToastQueue
 
 
+def can_edit_notes(game: Game) -> bool:
+    """Onde a anotação se edita: num jogo sendo jogado, ou que já tem uma.
+
+    A anotação responde "onde eu parei?", que só é pergunta enquanto se joga —
+    e o jogo que já tem uma precisa continuar tendo onde apagá-la, senão o
+    texto fica preso na tela de detalhes para sempre.
+    """
+    return game.status == "playing" or bool((game.notes or "").strip())
+
+
 @Gtk.Template(resource_path=shared.PREFIX + "/gtk/window.ui")
 class CartridgesWindow(Adw.ApplicationWindow):
     __gtype_name__ = "CartridgesWindow"
@@ -61,6 +71,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
     session_blocker: Gtk.Box = Gtk.Template.Child()
     session_blocker_label: Gtk.Label = Gtk.Template.Child()
     session_blocker_button: Gtk.Button = Gtk.Template.Child()
+    session_blocker_notes_button: Gtk.MenuButton = Gtk.Template.Child()
+    session_blocker_notes_popover: Gtk.Popover = Gtk.Template.Child()
+    session_blocker_notes_view: Gtk.TextView = Gtk.Template.Child()
     primary_menu_button: Gtk.MenuButton = Gtk.Template.Child()
     details_view: Gtk.Overlay = Gtk.Template.Child()
     library_page: Adw.NavigationPage = Gtk.Template.Child()
@@ -146,6 +159,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
     # that a burst of them plays one at a time instead of interrupting itself.
     toast_queue: ToastQueue
     active_game: Game
+    # O jogo da sessão em andamento, enquanto o bloqueador estiver na tela. É
+    # dele que trata a anotação escrita ali, e não do jogo que a tela de
+    # detalhes por acaso tenha aberto atrás.
+    session_game: Optional[Game] = None
     details_view_game_cover: Optional[GameCover] = None
     sort_state: str = "last_played"
     # The feed watcher driving the Novidades page and its badge. Injected by the
@@ -309,6 +326,12 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.details_view_notes_popover.connect(
             "notify::visible", self.on_notes_popover_toggled
         )
+        # O mesmo editor no bloqueador de sessão: com o jogo aberto, a janela
+        # está travada e a anotação — que é justamente sobre onde se parou —
+        # ficaria inalcançável até a sessão terminar.
+        self.session_blocker_notes_popover.connect(
+            "notify::visible", self.on_session_notes_popover_toggled
+        )
 
         # O histórico abre pelo próprio "Tempo de jogo", que é o que ele detalha
         # — ver `update_playtime_label`. Um clique sobre um Label comum, e não um
@@ -376,9 +399,44 @@ class CartridgesWindow(Adw.ApplicationWindow):
             if not game.removed:
                 game.set_play_icon()
 
-    def show_session_blocker(self, game_name: str) -> None:
+    def session_toast(self, game: Game, seconds: int) -> None:
+        """O aviso de fim de sessão, com um atalho para a anotação.
+
+        Um lugar só para os dois modos de sessão (a janelinha manual e o
+        rastreio de processo), que mostravam o mesmo aviso escrito duas vezes.
+
+        O botão só aparece quando há onde anotar — a mesma condição do botão da
+        tela de detalhes, que é para onde ele leva. Sem isso, ele abriria uma
+        tela sem nada em que clicar. É aqui que a anotação costuma nascer: no
+        fim da sessão você acabou de ver onde parou, e o balão já abre aberto.
+        """
+        toast = Adw.Toast.new(
+            # The variables are the game's title and the session length
+            _("{}: {} de jogo").format(game.name, format_playtime(seconds))
+        )
+        # The game's name is interpolated in and Adw.Toast parses its title as
+        # Pango markup by default; an "&" or "<" mangles or drops the label.
+        toast.set_use_markup(False)
+        if can_edit_notes(game):
+            toast.set_button_label(_("Anotar"))
+            toast.connect("button-clicked", self.on_session_toast_notes, game)
+        self.toast_queue.add(toast)
+
+    def on_session_toast_notes(self, _toast: Adw.Toast, game: Game) -> None:
+        """Abre o jogo com o balão da anotação já aberto.
+
+        Pelo idle porque a página acabou de ser empilhada: um balão pedido
+        antes de o botão dele existir na tela não abre em lugar nenhum.
+        """
+        self.show_details_page(game)
+        GLib.idle_add(self.details_view_notes_popover.popup)
+
+    def show_session_blocker(self, game: Game) -> None:
+        # O jogo inteiro, e não só o nome: o botão de anotação daqui grava
+        # nele, e é o único jogo que o bloqueador tem para oferecer.
+        self.session_game = game
         # The variable is the name of the game currently being played
-        self.session_blocker_label.set_label(_("{} em andamento").format(game_name))
+        self.session_blocker_label.set_label(_("{} em andamento").format(game.name))
         # The opaque overlay covers the whole window content (including the
         # header bar) so "Jogar" can't start a second session; the window can
         # still be moved/closed via the taskbar or system shortcuts
@@ -392,7 +450,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
             GamepadManager.active.suspend()
 
     def hide_session_blocker(self) -> None:
+        # Primeiro esconder, depois esquecer o jogo: esconder fecha um balão de
+        # anotação que esteja aberto, e é esse fechamento que a grava.
         self.session_blocker.set_visible(False)
+        self.session_game = None
 
         # Session over: bring gamepad navigation back.
         from cartridges.gamepad import GamepadManager  # avoid import cycle
@@ -629,30 +690,51 @@ class CartridgesWindow(Adw.ApplicationWindow):
         """A anotação na tela: o texto quando existe, o botão quando cabe.
 
         O bloco de leitura aparece sempre que há algo escrito — inclusive num
-        jogo zerado, onde a anotação vira lembrança do que se achou dele. Já o
-        botão de editar só aparece em "Jogando": é o único status em que a
-        pergunta "onde eu parei?" tem resposta, e um botão para escrever isso
-        num jogo da fila só ocuparia a linha.
+        jogo zerado, onde a anotação vira lembrança do que se achou dele. O
+        botão de editar aparece em "Jogando", o único status em que a pergunta
+        "onde eu parei?" tem resposta, e também em qualquer jogo que já tenha
+        anotação: este é o único lugar onde ela se edita, e um texto à mostra
+        sem como apagar seria uma anotação presa na tela para sempre.
         """
         notes = (game.notes or "").strip()
         self.details_view_notes.set_label(notes)
         self.details_view_notes_box.set_visible(bool(notes))
-        self.details_view_notes_button.set_visible(game.status == "playing")
+        self.details_view_notes_button.set_visible(can_edit_notes(game))
 
     def on_notes_popover_toggled(self, popover: Gtk.Popover, _pspec: Any) -> None:
+        """O balão da tela de detalhes edita o jogo que ela está mostrando."""
+        self.sync_notes_editor(
+            popover, self.details_view_notes_view, getattr(self, "active_game", None)
+        )
+
+    def on_session_notes_popover_toggled(
+        self, popover: Gtk.Popover, _pspec: Any
+    ) -> None:
+        """O balão do bloqueador edita o jogo da sessão, e só ele.
+
+        Nunca o `active_game`: a tela de detalhes por trás do bloqueador pode
+        ter ficado em qualquer jogo, e a anotação escrita durante uma sessão é
+        sobre o jogo que está rodando.
+        """
+        self.sync_notes_editor(
+            popover, self.session_blocker_notes_view, self.session_game
+        )
+
+    def sync_notes_editor(
+        self, popover: Gtk.Popover, view: Gtk.TextView, game: Optional[Game]
+    ) -> None:
         """Carrega a anotação ao abrir o balão e grava ao fechar."""
-        game = getattr(self, "active_game", None)
         if game is None:
             return
 
-        buffer = self.details_view_notes_view.get_buffer()
+        buffer = view.get_buffer()
         if popover.get_visible():
             buffer.set_text(game.notes or "")
             return
 
-        # Mesmo tratamento da tela de edição: as quebras do meio ficam (são o
-        # que separa um lembrete do outro), as das pontas saem para que uma
-        # caixa em que só se apertou Enter conte como vazia.
+        # Mesmo tratamento de antes: as quebras do meio ficam (são o que separa
+        # um lembrete do outro), as das pontas saem para que uma caixa em que
+        # só se apertou Enter conte como vazia.
         notes = buffer.get_text(
             buffer.get_start_iter(), buffer.get_end_iter(), False
         ).strip()
@@ -662,7 +744,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
         game.notes = notes
         game.save()
         game.update()
-        self.update_notes_block(game)
+        # A tela de detalhes pode estar mostrando este mesmo jogo por trás do
+        # bloqueador; quando não for ele, nada ali muda.
+        if game is getattr(self, "active_game", None):
+            self.update_notes_block(game)
 
     def update_playtime_label(self, game: Game) -> None:
         """O tempo de jogo, clicável quando há sessões por trás dele.

@@ -49,7 +49,10 @@
     <release version="2026.08.27" date="2026-08-27">
       <description translate="no">
         <ul>
-          <li>"Onde eu parei" saiu de dentro da tela de edição: em jogos com status "Jogando", um botão ao lado do status abre a anotação ali mesmo, na tela de detalhes, para ler ou escrever sem abrir mais nada. O texto é gravado ao fechar o balão, e é o mesmo campo de sempre — quem preferir a tela de edição continua achando ele lá</li>
+          <li>"Onde eu parei" saiu da tela de edição e foi para a de detalhes: em jogos com status "Jogando", um botão ao lado do status abre a anotação ali mesmo, para ler ou escrever sem abrir mais nada. O texto é gravado ao fechar o balão. Em jogos de outros status o botão aparece quando já existe anotação, para nada ficar escrito sem como editar. É o mesmo campo de sempre, agora num lugar só — o mesmo texto em duas telas só faria procurar nas duas. Na tela de detalhes a anotação mostra até três linhas; passando disso, o resto se lê no botão</li>
+          <li>A capa na tela de detalhes ficou maior, 420x630 no lugar de 280x420 — a coluna de texto ao lado dela cresceu várias vezes ao longo do tempo e a capa tinha ficado pequena para o tamanho da página. Continua sendo uma redução do arquivo guardado, sem esticar nada; em janela estreita ela volta ao tamanho anterior, que é o que cabe lá</li>
+          <li>A anotação também alcança quem está jogando: a tela de "jogo em andamento" ganhou um botão "Onde eu parei" — sem ele, a janela ficava travada justamente enquanto a anotação faria mais falta. O que se escreve ali vai para o jogo da sessão, seja qual for o jogo que a tela de detalhes tenha aberto atrás</li>
+          <li>E o aviso de fim de sessão ("3 h de jogo") ganhou um botão "Anotar", que abre o jogo já com a caixa aberta — é quando você acabou de ver onde parou</li>
         </ul>
       </description>
     </release>

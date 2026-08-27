@@ -444,6 +444,29 @@ def test_the_session_toast_does_not_parse_the_title_as_markup(
     assert "Sam & Max <Save the World>" in toast.get_title()
 
 
+def test_the_session_toast_offers_the_note_when_there_is_one_to_write(
+    make_game, running, clock, win
+):
+    """O botão leva para o balão da tela de detalhes, que não existe em jogo
+    nenhum: só naquele sendo jogado ou que já tem anotação. Oferecê-lo fora
+    disso abriria uma tela sem nada em que clicar."""
+    session = make_session(make_game, status="playing")
+    running.package = True
+    session._poll()
+    clock.advance(30)
+    session.stop(record=True)
+
+    assert win.toast_queue.added[-1].get_button_label() == "Anotar"
+
+    sem_status = make_session(make_game, status="")
+    running.package = True
+    sem_status._poll()
+    clock.advance(30)
+    sem_status.stop(record=True)
+
+    assert win.toast_queue.added[-1].get_button_label() is None
+
+
 def test_the_never_launched_toast_does_not_parse_the_title_as_markup(
     make_game, running, clock, win
 ):

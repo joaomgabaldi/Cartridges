@@ -90,7 +90,6 @@ class DetailsDialog(Adw.Dialog):
     status: Adw.ComboRow = Gtk.Template.Child()
     rating_row: Adw.ActionRow = Gtk.Template.Child()
     rating_box: Gtk.Box = Gtk.Template.Child()
-    notes_view: Gtk.TextView = Gtk.Template.Child()
     executable: Adw.EntryRow = Gtk.Template.Child()
     run_as_admin_switch: Adw.SwitchRow = Gtk.Template.Child()
     track_process_switch: Adw.SwitchRow = Gtk.Template.Child()
@@ -197,7 +196,6 @@ class DetailsDialog(Adw.Dialog):
             self.set_controller_support(self.game.controller_support)
             self.set_status(self.game.status)
             self._rating = self.game.stars
-            self.notes_view.get_buffer().set_text(self.game.notes or "")
             self.executable.set_text(self.game.executable)
             self.run_as_admin_switch.set_active(self.game.run_as_admin)
 
@@ -495,7 +493,6 @@ class DetailsDialog(Adw.Dialog):
         self.game.controller_support = final_controller_support
         self.game.status = final_status
         self.game.rating = self._rating
-        self.game.notes = self.get_notes()
         # Only touch these when a fetch actually returned them, so manual edits
         # without a Steam lookup keep any existing values.
         if self.fetched_metacritic is not None:
@@ -656,19 +653,6 @@ class DetailsDialog(Adw.Dialog):
             self.status.set_selected(self.STATUS_VALUES.index(value or ""))
         except ValueError:
             self.status.set_selected(0)
-
-    def get_notes(self) -> str:
-        """O texto da anotação, sem espaço sobrando nas pontas.
-
-        As quebras de linha do meio ficam: elas são o que separa um
-        lembrete do outro. As das pontas saem para que uma caixa em que se
-        apertou Enter e nada mais conte como vazia, e não como uma
-        anotação de uma linha em branco que a tela de detalhes exibiria.
-        """
-        buffer = self.notes_view.get_buffer()
-        return buffer.get_text(
-            buffer.get_start_iter(), buffer.get_end_iter(), False
-        ).strip()
 
     def get_status(self) -> str:
         """O valor da linha selecionada, ou "" para sem status."""
