@@ -1520,6 +1520,56 @@ def test_setting_a_status_saves_it_and_relabels_the_button(real_window, store):
     assert real_window.details_view_status_button.get_label() == "Definir status"
 
 
+def test_the_notes_button_belongs_to_a_game_being_played(real_window, store):
+    """"Onde eu parei" só tem resposta enquanto se joga: nos outros status o
+    botão sai da linha, mesmo que já haja anotação escrita."""
+    game = library_game(store, 1, status="playing", notes="Cofre: 8815")
+    real_window.active_game = game
+
+    real_window.update_notes_block(game)
+    assert real_window.details_view_notes_button.get_visible() is True
+    assert real_window.details_view_notes.get_label() == "Cofre: 8815"
+
+    real_window.lookup_action("set_status").activate(GLib.Variant("s", "beaten"))
+
+    assert real_window.details_view_notes_button.get_visible() is False
+    # A anotação continua à mostra: num jogo zerado ela vira lembrança.
+    assert real_window.details_view_notes_box.get_visible() is True
+
+
+def test_closing_the_notes_popover_saves_the_text(real_window, store):
+    """O balão grava ao fechar, com o mesmo tratamento de espaços da tela de
+    edição — uma caixa em que só se apertou Enter conta como vazia.
+
+    O balão é aberto e fechado pelo handler, e não por `popup()`: a janela dos
+    testes é realizada mas nunca apresentada, e mapear um popover nela derruba
+    o GTK no Windows.
+    """
+    game = library_game(store, 1, status="playing")
+    real_window.active_game = game
+    opening = SimpleNamespace(get_visible=lambda: True)
+    closing = SimpleNamespace(get_visible=lambda: False)
+    buffer = real_window.details_view_notes_view.get_buffer()
+
+    real_window.on_notes_popover_toggled(opening, None)
+    assert buffer.get_char_count() == 0
+
+    buffer.set_text("\n  Parei no capítulo 4.\nCofre: 8815  \n")
+    real_window.on_notes_popover_toggled(closing, None)
+
+    assert game.notes == "Parei no capítulo 4.\nCofre: 8815"
+    assert real_window.details_view_notes.get_label() == (
+        "Parei no capítulo 4.\nCofre: 8815"
+    )
+
+    real_window.on_notes_popover_toggled(opening, None)
+    buffer.set_text("\n\n")
+    real_window.on_notes_popover_toggled(closing, None)
+
+    assert game.notes == ""
+    assert real_window.details_view_notes_box.get_visible() is False
+
+
 def test_a_hand_edited_status_reads_as_none(real_window, store):
     """O registro é um arquivo editável: um valor que ninguém reconhece não
     pode derrubar a tela nem se passar por um status."""
