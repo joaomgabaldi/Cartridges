@@ -48,8 +48,12 @@ template $CartridgesWindow: Adw.ApplicationWindow {
   width-request: 360;
   height-request: 100;
 
+  // O limiar é o mínimo medido do modo largo da tela de detalhes (835px:
+  // capa de 420 + coluna de texto + espaçamentos), com folga. Abaixo disso o
+  // modo largo não cabe e a página ganharia rolagem lateral — era 564px, de
+  // quando a capa media 280.
   Adw.Breakpoint {
-    condition ("max-width: 564px")
+    condition ("max-width: 850px")
 
     setters {
       details_view_box.orientation: vertical;
