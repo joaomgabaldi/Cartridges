@@ -73,7 +73,7 @@ template $CartridgesWindow: Adw.ApplicationWindow {
       details_view_description.halign: center;
       details_view_hltb_box.halign: center;
       details_view_date_box.halign: center;
-      details_view_status_button.halign: center;
+      details_view_status_box.halign: center;
       details_view_update_notice.halign: center;
       details_view_toolbar.halign: center;
       details_view_toolbar.orientation: vertical;
@@ -952,14 +952,57 @@ Adw.NavigationPage details_page {
             //
             // Sem menu-model: o menu é montado a partir de STATUS_LABELS, como
             // o seletor da tela de edição.
-            MenuButton details_view_status_button {
+            Box details_view_status_box {
+              orientation: horizontal;
               margin-top: 12;
               halign: start;
-              tooltip-text: _("Status deste jogo na sua biblioteca");
+              spacing: 6;
 
-              styles [
-                "flat",
-              ]
+              MenuButton details_view_status_button {
+                tooltip-text: _("Status deste jogo na sua biblioteca");
+
+                styles [
+                  "flat",
+                ]
+              }
+
+              // Só aparece com o jogo em "Jogando", que é a única situação em
+              // que a anotação serve para alguma coisa: um jogo zerado ou na
+              // fila não tem onde se parou. O texto continua sendo o mesmo
+              // campo da tela de edição — este botão é um atalho para ele, e
+              // não um segundo lugar onde escrever.
+              MenuButton details_view_notes_button {
+                visible: false;
+                label: _("Onde eu parei");
+                tooltip-text: _("Anotar onde você parou neste jogo");
+
+                styles [
+                  "flat",
+                ]
+
+                popover: Popover details_view_notes_popover {
+                  Box {
+                    orientation: vertical;
+                    width-request: 320;
+
+                    ScrolledWindow {
+                      height-request: 120;
+                      hscrollbar-policy: never;
+
+                      TextView details_view_notes_view {
+                        top-margin: 4;
+                        bottom-margin: 4;
+                        left-margin: 4;
+                        right-margin: 4;
+                        wrap-mode: word_char;
+                        accessibility {
+                          label: _("Onde eu parei");
+                        }
+                      }
+                    }
+                  }
+                };
+              }
             }
 
             // Patch-available banner. Sits between the date metadata and the

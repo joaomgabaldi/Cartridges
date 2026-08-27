@@ -122,6 +122,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
     details_view_playtime: Gtk.Label = Gtk.Template.Child()
     details_view_size: Gtk.Label = Gtk.Template.Child()
     details_view_status_button: Gtk.MenuButton = Gtk.Template.Child()
+    details_view_notes_button: Gtk.MenuButton = Gtk.Template.Child()
+    details_view_notes_popover: Gtk.Popover = Gtk.Template.Child()
+    details_view_notes_view: Gtk.TextView = Gtk.Template.Child()
     details_view_hide_button: Gtk.Button = Gtk.Template.Child()
     details_view_update_notice: Gtk.Button = Gtk.Template.Child()
 
@@ -297,6 +300,15 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # O menu do status é o mesmo do começo ao fim da execução: as opções
         # não dependem do jogo aberto, só o rótulo do botão depende.
         self.details_view_status_button.set_menu_model(self.build_status_menu())
+
+        # A anotação é lida e escrita aqui mesmo, sem passar pela tela de
+        # edição. Um só handler para os dois lados: ao abrir, o balão carrega o
+        # que está gravado; ao fechar, grava o que ficou escrito — inclusive
+        # quando se fecha com Esc, porque perder o texto por causa de uma tecla
+        # é pior do que salvar uma edição que talvez não se quisesse.
+        self.details_view_notes_popover.connect(
+            "notify::visible", self.on_notes_popover_toggled
+        )
 
         # O histórico abre pelo próprio "Tempo de jogo", que é o que ele detalha
         # — ver `update_playtime_label`. Um clique sobre um Label comum, e não um
@@ -599,6 +611,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         game.update()
 
         self.update_status_button(game)
+        self.update_notes_block(game)
         # Um jogo que acabou de sair do status filtrado tem de sair da grade
         # junto: a alternativa é ele ficar lá contradizendo o próprio filtro
         # até a próxima coisa que invalidar a lista.
@@ -611,6 +624,45 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.details_view_status_button.set_label(
             status_label(game.status) or _("Definir status")
         )
+
+    def update_notes_block(self, game: Game) -> None:
+        """A anotação na tela: o texto quando existe, o botão quando cabe.
+
+        O bloco de leitura aparece sempre que há algo escrito — inclusive num
+        jogo zerado, onde a anotação vira lembrança do que se achou dele. Já o
+        botão de editar só aparece em "Jogando": é o único status em que a
+        pergunta "onde eu parei?" tem resposta, e um botão para escrever isso
+        num jogo da fila só ocuparia a linha.
+        """
+        notes = (game.notes or "").strip()
+        self.details_view_notes.set_label(notes)
+        self.details_view_notes_box.set_visible(bool(notes))
+        self.details_view_notes_button.set_visible(game.status == "playing")
+
+    def on_notes_popover_toggled(self, popover: Gtk.Popover, _pspec: Any) -> None:
+        """Carrega a anotação ao abrir o balão e grava ao fechar."""
+        game = getattr(self, "active_game", None)
+        if game is None:
+            return
+
+        buffer = self.details_view_notes_view.get_buffer()
+        if popover.get_visible():
+            buffer.set_text(game.notes or "")
+            return
+
+        # Mesmo tratamento da tela de edição: as quebras do meio ficam (são o
+        # que separa um lembrete do outro), as das pontas saem para que uma
+        # caixa em que só se apertou Enter conte como vazia.
+        notes = buffer.get_text(
+            buffer.get_start_iter(), buffer.get_end_iter(), False
+        ).strip()
+        if notes == (game.notes or ""):
+            return
+
+        game.notes = notes
+        game.save()
+        game.update()
+        self.update_notes_block(game)
 
     def update_playtime_label(self, game: Game) -> None:
         """O tempo de jogo, clicável quando há sessões por trás dele.
@@ -918,9 +970,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # The sentence is fixed in the template, so only visibility is driven here.
         self.details_view_gamepad_recommended.set_visible(game.gamepad_recommended)
 
-        notes = (game.notes or "").strip()
-        self.details_view_notes.set_label(notes)
-        self.details_view_notes_box.set_visible(bool(notes))
+        self.update_notes_block(game)
 
         self.details_view_description.set_label(game.description or "")
         self.details_view_description.set_visible(bool(game.description))

@@ -46,6 +46,13 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.08.27" date="2026-08-27">
+      <description translate="no">
+        <ul>
+          <li>"Onde eu parei" saiu de dentro da tela de edição: em jogos com status "Jogando", um botão ao lado do status abre a anotação ali mesmo, na tela de detalhes, para ler ou escrever sem abrir mais nada. O texto é gravado ao fechar o balão, e é o mesmo campo de sempre — quem preferir a tela de edição continua achando ele lá</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.08.26" date="2026-08-26">
       <description translate="no">
         <ul>
