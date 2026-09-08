@@ -957,9 +957,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
         for scrolled, value in zip(
             (self.scrolledwindow, self.hidden_scrolledwindow), stored
         ):
-            if not value:
-                continue
-
+            # Zero is not "nothing to restore": a grid at the top is exactly
+            # where scroll-to-focus can only drag the library downwards, to
+            # wherever the edited game sits. Suppress it for zero too.
             adjustment = scrolled.get_vadjustment()
             viewport = scrolled.get_child()
             viewport = viewport if isinstance(viewport, Gtk.Viewport) else None

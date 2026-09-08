@@ -1840,3 +1840,29 @@ def test_rotation_survives_a_crash_between_compress_and_unlink(tmp_path):
 
     handler = SessionFileHandler(filename=path, backup_count=2)  # não pode levantar
     handler.close()
+
+
+# ---------------------------------------------------------------------------
+# A biblioteca no topo também precisa ser segurada
+# ---------------------------------------------------------------------------
+
+
+def test_restoring_the_top_of_the_library_still_suppresses_scroll_to_focus(
+    real_window,
+):
+    """Zero é uma posição, não "nada para restaurar".
+
+    Ao fechar a tela de edição o foco volta para a capa do jogo editado e o
+    viewport rola até ela. Com a grade no topo, `restore_library_scroll` pulava
+    a supressão porque o valor guardado era zero — que é exatamente o caso em
+    que o salto só pode ser para baixo.
+    """
+
+    viewport = real_window.scrolledwindow.get_child()
+    assert isinstance(viewport, Gtk.Viewport)
+
+    real_window.scrolledwindow.get_vadjustment().set_value(0)
+    real_window.store_library_scroll()
+    real_window.restore_library_scroll()
+
+    assert viewport.get_scroll_to_focus() is False

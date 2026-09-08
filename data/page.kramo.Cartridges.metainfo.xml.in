@@ -46,6 +46,13 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.07" date="2026-09-07">
+      <description translate="no">
+        <ul>
+          <li>Editar um jogo com a biblioteca no topo não desce mais a grade sozinho: ao fechar a tela de edição, o foco voltava para a capa do jogo editado e a lista deslizava até ela. A posição da rolagem já era guardada e devolvida, mas o caso de estar no topo ficava de fora justamente por estar valendo zero — que é onde o salto só podia ser para baixo</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.08.27" date="2026-08-27">
       <description translate="no">
         <ul>
