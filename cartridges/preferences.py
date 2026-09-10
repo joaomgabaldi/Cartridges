@@ -113,6 +113,9 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
     session_move_window_switch: Adw.SwitchRow = Gtk.Template.Child()
     session_monitor_row: Adw.ComboRow = Gtk.Template.Child()
+    session_wallpaper_group: Adw.PreferencesGroup = Gtk.Template.Child()
+    session_wallpaper_switch: Adw.SwitchRow = Gtk.Template.Child()
+    wallhaven_key_entry_row: Adw.EntryRow = Gtk.Template.Child()
     session_identify_button_row = Gtk.Template.Child()
 
     auto_import_switch: Adw.SwitchRow = Gtk.Template.Child()
@@ -251,6 +254,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 "cover-launches-game",
                 "playtime-tracking",
                 "session-move-window",
+                "session-wallpaper",
                 "gamepad",
                 "gamepad-rumble",
                 "auto-import",
@@ -294,6 +298,19 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         sync_rumble_sensitive()
 
         self.setup_session_monitor_row()
+
+        # A chave é opcional (a busca SFW do wallhaven responde sem ela), então
+        # nada aqui fica inerte quando ela está vazia — ao contrário da tela do
+        # SteamGridDB, que sem chave não tem o que fazer.
+        def wallhaven_key_changed(*_args: Any) -> None:
+            shared.schema.set_string(
+                "wallhaven-key", self.wallhaven_key_entry_row.get_text().strip()
+            )
+
+        self.wallhaven_key_entry_row.set_text(
+            shared.schema.get_string("wallhaven-key")
+        )
+        self.wallhaven_key_entry_row.connect("changed", wallhaven_key_changed)
 
         # Grace period for process tracking. The row's value is a double while
         # the setting is an int, so map it by hand rather than using bind().

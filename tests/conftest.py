@@ -83,6 +83,9 @@ _SCHEMA_DEFAULTS = {
     "process-tracking-grace": 5,
     "session-move-window": False,
     "session-monitor": "",
+    "session-wallpaper": False,
+    "session-wallpaper-saved": "",
+    "wallhaven-key": "",
     "remove-missing": True,
     "shortcuts": True,
     "shortcuts-location": "",
@@ -284,6 +287,7 @@ def _install_shared() -> types.ModuleType:
     shared.games_dir = placeholder / "games"
     shared.covers_dir = placeholder / "covers"
     shared.logos_dir = placeholder / "logos"
+    shared.wallpapers_dir = placeholder / "wallpapers"
     shared.cache_dir = placeholder / "cache"
     shared.log_dir = placeholder / "logs"
     shared.schema = FakeSchema(_SCHEMA_DEFAULTS)
@@ -317,9 +321,10 @@ def app_dirs(tmp_path, monkeypatch):
     games = tmp_path / "games"
     covers = tmp_path / "covers"
     logos = tmp_path / "logos"
+    wallpapers = tmp_path / "wallpapers"
     cache = tmp_path / "cache"
     logs = tmp_path / "logs"
-    for directory in (games, covers, logos, cache, logs):
+    for directory in (games, covers, logos, wallpapers, cache, logs):
         directory.mkdir(parents=True)
 
     monkeypatch.setattr(shared, "home", tmp_path, raising=False)
@@ -329,10 +334,17 @@ def app_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr(shared, "games_dir", games, raising=False)
     monkeypatch.setattr(shared, "covers_dir", covers, raising=False)
     monkeypatch.setattr(shared, "logos_dir", logos, raising=False)
+    monkeypatch.setattr(shared, "wallpapers_dir", wallpapers, raising=False)
     monkeypatch.setattr(shared, "cache_dir", cache, raising=False)
     monkeypatch.setattr(shared, "log_dir", logs, raising=False)
     return types.SimpleNamespace(
-        root=tmp_path, games=games, covers=covers, logos=logos, cache=cache, logs=logs
+        root=tmp_path,
+        games=games,
+        covers=covers,
+        logos=logos,
+        wallpapers=wallpapers,
+        cache=cache,
+        logs=logs,
     )
 
 

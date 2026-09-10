@@ -35,6 +35,7 @@ install_data(
     'details_dialog.py',
     'sgdb_picker.py',
     'logo_picker.py',
+    'wallpaper_picker.py',
     'steam_picker.py',
     'session_window.py',
     'session_history.py',

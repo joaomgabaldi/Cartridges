@@ -151,6 +151,49 @@ template $DetailsDialog: Adw.Dialog {
             ]
           }
         }
+
+        // A terceira arte do jogo, e a unica que nao aparece no app: ela veste
+        // os monitores em pe enquanto a sessao corre. Mesma linha de tres
+        // estados do logo, pelo mesmo motivo — automatico, escolhido a mao ou
+        // deliberadamente nenhum.
+        Adw.ActionRow wallpaper_row {
+          title: _("Papel de parede da sessão");
+          activatable-widget: wallpaper_button_browse;
+
+          [suffix]
+          Button wallpaper_button_reset {
+            valign: center;
+            icon-name: "edit-undo-symbolic";
+            tooltip-text: _("Voltar a escolher o papel de parede automaticamente");
+            visible: false;
+
+            styles [
+              "flat",
+            ]
+          }
+
+          [suffix]
+          Button wallpaper_button_browse {
+            valign: center;
+            icon-name: "edit-find-symbolic";
+            tooltip-text: _("Escolher papel de parede no wallhaven");
+
+            styles [
+              "flat",
+            ]
+          }
+
+          [suffix]
+          Button wallpaper_button_file {
+            valign: center;
+            icon-name: "document-open-symbolic";
+            tooltip-text: _("Escolher papel de parede de um arquivo");
+
+            styles [
+              "flat",
+            ]
+          }
+        }
       }
 
       Adw.PreferencesGroup {

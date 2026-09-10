@@ -69,6 +69,23 @@
     <key name="session-monitor" type="s">
       <default>""</default>
     </key>
+    <!-- Vestir os monitores em pé com a arte do jogo enquanto a sessão corre.
+         Só os em pé: a arte é vertical, e num monitor deitado ela não cabe. -->
+    <key name="session-wallpaper" type="b">
+      <default>false</default>
+    </key>
+    <!-- O papel de parede de cada monitor antes da sessão, em JSON, para o
+         caminho de volta. Em disco e não em memória porque o app fechado (ou
+         morto) no meio da sessão deixaria as telas vestidas de um jogo que já
+         acabou; vazio quer dizer "nenhuma sessão trocou nada". -->
+    <key name="session-wallpaper-saved" type="s">
+      <default>""</default>
+    </key>
+    <!-- Opcional: a busca SFW do wallhaven responde sem chave nenhuma. Ela
+         serve para NSFW e para os filtros da conta de quem a informar. -->
+    <key name="wallhaven-key" type="s">
+      <default>""</default>
+    </key>
     <!-- How often (in hours) the repack update feed is polled. 0 disables the
          check entirely. Novelty is tracked per game (update_dismissed_ts), so
          no global snapshot state is needed here. -->

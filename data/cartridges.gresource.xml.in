@@ -8,6 +8,7 @@
     <file preprocess="xml-stripblanks">gtk/preferences.ui</file>
     <file preprocess="xml-stripblanks">gtk/sgdb-picker.ui</file>
     <file preprocess="xml-stripblanks">gtk/steam-picker.ui</file>
+    <file preprocess="xml-stripblanks">gtk/wallpaper-picker.ui</file>
     <file preprocess="xml-stripblanks">gtk/window.ui</file>
     <file preprocess="xml-stripblanks" alias="shortcuts-dialog.ui">gtk/shortcuts-dialog.ui</file>
     <file alias="style.css">gtk/style.css</file>

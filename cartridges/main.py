@@ -66,7 +66,7 @@ from cartridges.utils.single_instance import (
     present_running_instance,
 )
 from cartridges.utils.updates_checker import UpdatesChecker
-from cartridges.utils import window_geometry
+from cartridges.utils import session_wallpaper, window_geometry
 from cartridges.window import CartridgesWindow
 
 # Titulo da secao de agradecimentos nos creditos. Fica numa constante porque
@@ -385,6 +385,12 @@ class CartridgesApplication(Adw.Application):
 
         log_system_info()
 
+        # Uma sessão anterior pode ter deixado os monitores vestidos: o app
+        # morto (ou a máquina desligada) no meio dela não passa por
+        # `hide_session_blocker` nem por `do_shutdown`. A marca fica no
+        # GSettings justamente para o arranque seguinte poder desfazer.
+        session_wallpaper.restaurar_orfaos()
+
         # Match the Windows light/dark theme and accent colour, and keep
         # matching them while the app runs
         self.apply_windows_theme()
@@ -566,6 +572,12 @@ class CartridgesApplication(Adw.Application):
             SessionWindow.active.flush()
         if ProcessSession.active is not None:
             ProcessSession.active.flush()
+
+        # A sessão que estava correndo acaba aqui, e as telas em pé não podem
+        # ficar vestidas do jogo depois que o app sumir. Síncrono e antes de
+        # tudo o mais deste método: é a última janela em que ainda existe
+        # processo para desfazer a troca.
+        session_wallpaper.restaurar()
 
         if self.gamepad is not None:
             self.gamepad.detach()

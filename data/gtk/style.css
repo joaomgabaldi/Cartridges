@@ -111,6 +111,14 @@
   background-color: rgba(0, 0, 0, 0.55);
 }
 
+/* Celula da grade de papeis de parede. Sem recheio, ao contrario da do logo:
+   ali o fundo escuro existe para um PNG transparente poder ser julgado, aqui a
+   imagem ja preenche a celula inteira e qualquer margem mentiria sobre o
+   enquadramento. O canto arredondado e recortado no proprio conteudo. */
+.wallpaper-preview {
+  border-radius: 8px;
+}
+
 /* Patch-available banner on the details page. Warm accent so it reads as a
    call to action sitting between the metadata and the Play button, with a
    little lift on hover to signal it is clickable. */

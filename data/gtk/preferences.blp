@@ -116,6 +116,23 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         title: _("Identificar monitores");
       }
     }
+
+    // Sem lista de monitores aqui: quem está em pé é decidido pelo retângulo
+    // que o Windows informa, e um monitor deitado nunca entra — a arte de um
+    // jogo é vertical, e espremida na horizontal não é arte de nada.
+    Adw.PreferencesGroup session_wallpaper_group {
+      title: _("Papel de parede");
+      description: _("Enquanto o jogo roda, os monitores em pé mostram a arte dele. Ao terminar a sessão, cada um volta ao papel de parede que tinha. A imagem sai do wallhaven, e cada jogo pode ter a sua escolhida à mão na tela de edição.");
+
+      Adw.SwitchRow session_wallpaper_switch {
+        title: _("Vestir os monitores em pé");
+      }
+
+      Adw.EntryRow wallhaven_key_entry_row {
+        title: _("Chave da API do wallhaven (opcional)");
+        sensitive: bind session_wallpaper_switch.active;
+      }
+    }
   }
 
   Adw.PreferencesPage import_page {

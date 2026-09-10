@@ -55,6 +55,7 @@ app_dir: Path
 games_dir: Path
 covers_dir: Path
 logos_dir: Path
+wallpapers_dir: Path
 cache_dir: Path
 log_dir: Path
 
