@@ -46,7 +46,7 @@ from cartridges.utils.install_size import format_size
 from cartridges.utils.news_feed import NewsPost
 from cartridges.utils.open_uri import open_uri
 from cartridges.session_history import SessionHistoryDialog
-from cartridges.utils import session_log, window_geometry
+from cartridges.utils import session_log, session_wallpaper, window_geometry
 from cartridges.utils.relative_date import relative_date
 from cartridges.utils.spring_scroll import attach as attach_spring_scroll
 from cartridges.utils.steam import format_release_date, parse_release_date
@@ -487,6 +487,15 @@ class CartridgesWindow(Adw.ApplicationWindow):
             self.session_blocker_timer.set_visible(True)
             self.session_timer_id = GLib.timeout_add_seconds(1, self.session_tick)
 
+        # Vestir os monitores em pé com a arte do jogo. Numa thread porque o
+        # caminho completo é rede (busca e download no wallhaven) mais Pillow,
+        # e nada disso pode segurar a tela enquanto o jogo abre — quando a arte
+        # já está em disco, ela aparece junto com o bloqueador.
+        if shared.schema.get_boolean("session-wallpaper"):
+            threading.Thread(
+                target=session_wallpaper.aplicar, args=(game,), daemon=True
+            ).start()
+
         # Hand the controller entirely to the game for the duration: stop
         # polling and release the XInput DLL until the session ends.
         from cartridges.gamepad import GamepadManager  # avoid import cycle
@@ -510,6 +519,12 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # a janela reaparecer já no lugar certo em vez de aparecer no monitor
         # do jogo e pular.
         window_geometry.restore_from_monitor(self)
+
+        # De volta ao papel de parede de cada monitor. Síncrono, ao contrário
+        # da ida: são alguns milissegundos de COM, e uma thread aqui correria
+        # com o `do_shutdown`, que chama a mesma devolução ao fechar o app no
+        # meio da sessão.
+        session_wallpaper.restaurar()
 
         # Session over: bring gamepad navigation back.
         from cartridges.gamepad import GamepadManager  # avoid import cycle

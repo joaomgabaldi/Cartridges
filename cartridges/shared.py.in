@@ -60,6 +60,10 @@ covers_dir = app_dir / "covers"
 # and must survive), a logo is a purely decorative asset we can always fetch
 # again, so deleting this folder costs nothing but a re-download.
 logos_dir = app_dir / "logos"
+# A arte que veste os monitores em pé durante a sessão: a imagem de partida
+# (uma por jogo) mais o sidecar que diz se ela foi escolhida à mão e em que
+# faixa cortá-la. Apagar a pasta devolve todo mundo à escolha automática.
+wallpapers_dir = app_dir / "wallpapers"
 
 # Deliberately NOT `GLib.get_user_cache_dir()`. On Windows that resolves to
 # CSIDL_INTERNET_CACHE — `AppData\Local\Microsoft\Windows\INetCache`, the

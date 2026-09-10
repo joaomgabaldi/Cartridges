@@ -34,6 +34,7 @@ from cartridges.errors.friendly_error import FriendlyError
 from cartridges.game import Game, STATUS_LABELS
 from cartridges.game_cover import GameCover
 from cartridges.logo_picker import LogoPicker
+from cartridges.wallpaper_picker import WallpaperPicker
 from cartridges.sgdb_picker import SgdbPicker
 from cartridges.steam_picker import SteamPicker
 from cartridges.store.managers.cover_manager import CoverManager
@@ -50,6 +51,12 @@ from cartridges.utils.game_logo import (
     use_title_instead,
 )
 from cartridges.utils.hltb import HLTBTimes, fetch_times, has_times
+from cartridges.utils.session_wallpaper import (
+    escolha as wallpaper_choice,
+    nao_trocar,
+    redefinir as reset_wallpaper,
+    salvar_escolha,
+)
 from cartridges.utils.name_cleaner import clean_for_search, clean_game_name
 from cartridges.utils.run_executable import aumid_from_command
 from cartridges.utils.save_cover import convert_cover, save_cover
@@ -77,6 +84,11 @@ class DetailsDialog(Adw.Dialog):
     logo_button_browse: Gtk.Button = Gtk.Template.Child()
     logo_button_file: Gtk.Button = Gtk.Template.Child()
     logo_button_reset: Gtk.Button = Gtk.Template.Child()
+
+    wallpaper_row: Adw.ActionRow = Gtk.Template.Child()
+    wallpaper_button_browse: Gtk.Button = Gtk.Template.Child()
+    wallpaper_button_file: Gtk.Button = Gtk.Template.Child()
+    wallpaper_button_reset: Gtk.Button = Gtk.Template.Child()
 
     name: Adw.EntryRow = Gtk.Template.Child()
     steam_fetch_stack: Gtk.Stack = Gtk.Template.Child()
@@ -135,6 +147,7 @@ class DetailsDialog(Adw.Dialog):
     # (choice, file), where choice is "manual" (use the file), "title" (no logo
     # at all) or "auto" (forget the decision and let the lookup run again).
     _logo_choice: Optional[tuple[str, Optional[Path]]] = None
+    _wallpaper_choice: Optional[tuple[str, Optional[Path], float]] = None
 
     # A nota escolhida nas estrelas, de 0 a 5. Guardada aqui até o Aplicar,
     # como todo o resto do diálogo: clicar numa estrela e depois cancelar não
@@ -224,6 +237,7 @@ class DetailsDialog(Adw.Dialog):
         self.update_process_rows()
         self.update_open_folder_button()
         self.update_logo_row()
+        self.update_wallpaper_row()
 
         image_filter = Gtk.FileFilter(name=_("Imagens"))
 
@@ -274,6 +288,9 @@ class DetailsDialog(Adw.Dialog):
         self.logo_button_browse.connect("clicked", self.browse_logos)
         self.logo_button_file.connect("clicked", self.choose_logo_file)
         self.logo_button_reset.connect("clicked", self.reset_logo_choice)
+        self.wallpaper_button_browse.connect("clicked", self.browse_wallpapers)
+        self.wallpaper_button_file.connect("clicked", self.choose_wallpaper_file)
+        self.wallpaper_button_reset.connect("clicked", self.reset_wallpaper_choice)
         self.steam_fetch_button.connect("clicked", self.fetch_metadata)
         self.file_chooser_button.connect("clicked", self.choose_executable)
         self.open_folder_button.connect("clicked", self.open_game_folder)
@@ -559,6 +576,7 @@ class DetailsDialog(Adw.Dialog):
             )
 
         self.apply_logo_choice(self.game)
+        self.apply_wallpaper_choice(self.game)
 
         shared.store.add_game(self.game, {}, run_pipeline=False)
         self.game.save()
@@ -856,6 +874,76 @@ class DetailsDialog(Adw.Dialog):
 
         self._logo_choice = None
         return True
+
+    # region Papel de parede da sessão
+
+    def browse_wallpapers(self, *_args: Any) -> None:
+        WallpaperPicker(
+            self.name.get_text(), self.set_wallpaper_from_path, self.set_wallpaper_none
+        ).present(self)
+
+    def choose_wallpaper_file(self, *_args: Any) -> None:
+        self.image_file_dialog.open(self.get_root(), None, self.set_wallpaper_file)
+
+    def set_wallpaper_file(self, _source: Any, result: Gio.Task, *_args: Any) -> None:
+        try:
+            path = Path(self.image_file_dialog.open_finish(result).get_path())
+        except GLib.Error:
+            return
+        # Do meio, que é o que a tela de escolha oferece como ponto de partida.
+        # Quem traz um arquivo próprio quase sempre traz um já no formato do
+        # monitor, e aí a faixa não muda nada.
+        self.set_wallpaper_from_path(path, 0.5)
+
+    def set_wallpaper_from_path(self, path: Path, posicao: float = 0.5) -> None:
+        self._wallpaper_choice = ("manual", path, posicao)
+        self.update_wallpaper_row()
+
+    def set_wallpaper_none(self) -> None:
+        self._wallpaper_choice = ("none", None, 0.5)
+        self.update_wallpaper_row()
+
+    def reset_wallpaper_choice(self, *_args: Any) -> None:
+        self._wallpaper_choice = ("auto", None, 0.5)
+        self.update_wallpaper_row()
+
+    def update_wallpaper_row(self) -> None:
+        if self._wallpaper_choice:
+            choice = self._wallpaper_choice[0]
+        elif self.game:
+            choice = wallpaper_choice(self.game)
+        else:
+            choice = "auto"
+
+        self.wallpaper_row.set_subtitle(
+            {
+                "manual": _("Escolhido manualmente"),
+                "none": _("Não trocar o papel de parede"),
+            }.get(choice, _("Automático (wallhaven)"))
+        )
+        self.wallpaper_button_reset.set_visible(choice != "auto")
+
+    def apply_wallpaper_choice(self, game: Game) -> bool:
+        """Grava a decisão em disco. True quando ela mudou.
+
+        Como a do logo, presa ao nome final: a escolha automática é reaberta
+        quando o jogo é renomeado, e o nome que vale é o desta mesma gravação.
+        """
+        if not self._wallpaper_choice:
+            return False
+
+        choice, path, posicao = self._wallpaper_choice
+        if choice == "manual" and path:
+            salvar_escolha(game.game_id, game.name, path, posicao)
+        elif choice == "none":
+            nao_trocar(game.game_id, game.name)
+        else:
+            reset_wallpaper(game.game_id)
+
+        self._wallpaper_choice = None
+        return True
+
+    # endregion
 
     def fetch_metadata(self, *_args: Any) -> None:
         """Look up the current title online and fill the fields for review.
