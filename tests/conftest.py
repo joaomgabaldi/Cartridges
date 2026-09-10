@@ -81,6 +81,8 @@ _SCHEMA_DEFAULTS = {
     "cover-launches-game": False,
     "playtime-tracking": True,
     "process-tracking-grace": 5,
+    "session-move-window": False,
+    "session-monitor": "",
     "remove-missing": True,
     "shortcuts": True,
     "shortcuts-location": "",

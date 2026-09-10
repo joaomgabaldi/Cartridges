@@ -526,7 +526,15 @@ class CartridgesApplication(Adw.Application):
         Returns False so that, used as a ``close-request`` handler, it lets the
         window close: a true return would stop it and the app would never quit.
         """
-        if shared.win is None or (geometry := window_geometry.read(shared.win)) is None:
+        if shared.win is None:
+            return False
+
+        # Fechar o app no meio de uma sessão: a janela está estacionada no
+        # monitor do jogo, e o que tem de ser lembrado é de onde ela saiu, não
+        # onde ela foi parar. Sem isso, jogar uma vez com a mudança de monitor
+        # ligada e fechar o app dali mudaria de vez o lugar onde ele abre.
+        geometry = window_geometry.session_geometry() or window_geometry.read(shared.win)
+        if geometry is None:
             return False
 
         shared.state_schema.set_int("x", geometry.x)

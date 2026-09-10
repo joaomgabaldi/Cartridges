@@ -46,6 +46,16 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.10" date="2026-09-10">
+      <description translate="no">
+        <ul>
+          <li>Uma aba nova nas configurações, "Sessão": ao iniciar um jogo, em vez de minimizar, a janela pode ir maximizada para outro monitor e ficar ali a sessão inteira, com um relógio contando o tempo de jogo em horas, minutos e segundos. Quando o jogo termina, ela volta para o monitor de onde saiu e para o tamanho que tinha — maximizada se estava maximizada, 800x600 se era 800x600. Desligada, que é como vem, nada muda</li>
+          <li>O relógio conta o mesmo tempo que vai ser gravado no jogo, e não o tempo desde o clique: ele fica parado em 0:00:00 enquanto o jogo ainda está abrindo e para de andar se o jogo fechar, que é exatamente o tempo que não entra na conta. Assim o que o relógio mostra bate com o aviso do fim da sessão</li>
+          <li>O monitor é escolhido pelo mesmo número que as configurações de vídeo do Windows mostram, e um botão "Identificar monitores" pisca esse número em cada tela por três segundos — com dois monitores iguais, nenhum rótulo escrito resolveria a dúvida, e a resposta está nas telas. Se o monitor escolhido não estiver ligado na hora de jogar, a janela minimiza como sempre fez, em vez de sumir para uma tela que não existe</li>
+          <li>A janela sai da frente antes de o jogo ser lançado, e não depois: quando o jogo cria a janela dele, já não há mais nada se mexendo para roubar o foco de um jogo em tela cheia</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.07" date="2026-09-07">
       <description translate="no">
         <ul>

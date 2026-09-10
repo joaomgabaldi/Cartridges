@@ -117,6 +117,21 @@ class ProcessSession:
         self.missing_since: Optional[float] = None  # when the process vanished
         self.poll_id = 0
 
+    @property
+    def elapsed(self) -> int:
+        """Seconds counted so far, including the stretch not yet banked.
+
+        `session_seconds` alone only moves on a poll, so a clock reading it
+        would sit still for two seconds and then jump two. Adding the current
+        stretch is also what makes the clock agree with the total the session
+        ends up recording: it stays at zero while we are still waiting for the
+        game to appear, and stops while the game is gone during the grace wait,
+        which is exactly the time that never reaches `game.playtime`.
+        """
+        if self.counting and self.last_tick is not None:
+            return self.session_seconds + int(monotonic() - self.last_tick)
+        return self.session_seconds
+
     def _is_running(self) -> bool:
         """Is the game running right now?
 

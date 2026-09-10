@@ -368,6 +368,32 @@ class Game(Gtk.Box):
         self.save()
         self.update()
 
+        # Como esta sessão vai ser acompanhada. Decidido antes de lançar o jogo
+        # porque a janela sai da frente antes dele — veja `moved` logo abaixo.
+        # O que é acompanhável são três coisas, e só a primeira precisa ser
+        # configurada: as outras duas saem do próprio comando de lançamento,
+        # que já diz onde o jogo mora ou de que pacote ele é. Sobra o jogo
+        # lançado por URI de loja (Steam, Epic, Ubisoft), cujo comando nomeia
+        # um id e mais nada. A chave "playtime-tracking" desliga tudo.
+        tracking_enabled = shared.schema.get_boolean("playtime-tracking")
+        followable = (
+            (self.track_process and bool(self.process_executable.strip()))
+            or bool(aumid_from_command(self.executable))
+            or bool(install_dir_from_command(self.executable))
+        )
+
+        # Sair da frente *antes* de o jogo existir, e não depois. A janela muda
+        # de monitor e maximiza aqui, com o jogo ainda por lançar, de modo que
+        # quando ele criar a janela dele já não há mais nada se mexendo para
+        # roubar o foco de um jogo em tela cheia. Não custa espera nenhuma ao
+        # clique: `run_executable` não bloqueia (é um Popen, ou uma thread no
+        # caso do UAC) e nada chega a ser desenhado entre uma linha e outra.
+        #
+        # Só quando vai haver sessão: quem devolve a janela ao lugar de origem
+        # é o fim do bloqueador, e sem sessão ele nunca aparece — a janela
+        # ficaria morando no outro monitor.
+        moved = tracking_enabled and shared.win.move_to_session_monitor()
+
         run_executable(self.executable, self.run_as_admin)
 
         # avoid import cycles
@@ -389,26 +415,21 @@ class Game(Gtk.Box):
 
         # Get out of the way while playing. How the session ends depends on the
         # game: anything we can follow is tracked automatically, and only what
-        # we can't needs the user to end the session manually. Three things are
-        # followable, and only the first has to be configured — the other two
-        # are read straight out of the launch command, which already says where
-        # the game lives or which package it is. What is left over is the game
-        # launched through a store URI (Steam, Epic, Ubisoft), where the command
-        # names an id rather than anything on disk. The global
-        # "playtime-tracking" switch turns off every kind of tracking.
-        tracking_enabled = shared.schema.get_boolean("playtime-tracking")
-        followable = (
-            (self.track_process and bool(self.process_executable.strip()))
-            or bool(aumid_from_command(self.executable))
-            or bool(install_dir_from_command(self.executable))
-        )
+        # we can't needs the user to end the session manually.
+        #
+        # Sair da frente é minimizar, a não ser que a janela já tenha saído por
+        # cima — mudada para outro monitor logo acima. Minimizar depois disso
+        # mandaria para a barra de tarefas justamente a tela que a opção existe
+        # para deixar à vista.
         if tracking_enabled and followable:
             ProcessSession(self).start()
-            shared.win.minimize()
+            if not moved:
+                shared.win.minimize()
         elif tracking_enabled:
             # Clock the session in a small window and minimise the main one
             SessionWindow(self).present()
-            shared.win.minimize()
+            if not moved:
+                shared.win.minimize()
         elif shared.schema.get_boolean("minimize-after-launch"):
             shared.win.minimize()
 
