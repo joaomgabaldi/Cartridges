@@ -47,10 +47,12 @@ BASE = "https://wallhaven.cc/api/v1/search"
 # miniatura que ninguém vai rolar até o fim.
 PER_PAGE = 24
 
-# "general" e "anime": jogo de estética anime tem a arte dele catalogada na
-# segunda, e sem ela metade dos JRPGs volta vazio. "people" fica de fora — ali
-# o que existe são ensaios e cosplay, não arte do jogo.
-CATEGORIES = "110"
+# Só "general". A categoria "anime" foi testada e saiu: ela não traz mais arte
+# DE JOGO, traz fan art de personagem no traço de anime — comparadas lado a
+# lado numa busca real, as duas devolvem retrato de personagem, e a segunda
+# apenas troca o render realista pelo desenhado. "people" nunca esteve aqui:
+# ali o que existe são ensaios e cosplay.
+CATEGORIES = "100"
 
 # Sempre SFW. A chave da conta pode liberar o resto no site; um papel de parede
 # que aparece sozinho em três monitores quando um jogo abre não é lugar para
