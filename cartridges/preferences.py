@@ -32,6 +32,7 @@ from cartridges.errors.friendly_error import FriendlyError
 from cartridges.game import STATUS_LABELS, Game
 from cartridges.metadata_refresh import get_metadata_refresh
 from cartridges.store.managers.sgdb_manager import SgdbManager
+from cartridges.utils import window_geometry
 from cartridges.utils.create_dialog import create_dialog
 
 # O que o backup carrega, e a razão de ser dele: é tudo que veio de você e de
@@ -99,6 +100,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     __gtype_name__ = "CartridgesPreferences"
 
     general_page: Adw.PreferencesPage = Gtk.Template.Child()
+    session_page: Adw.PreferencesPage = Gtk.Template.Child()
     import_page: Adw.PreferencesPage = Gtk.Template.Child()
     sgdb_page: Adw.PreferencesPage = Gtk.Template.Child()
 
@@ -108,6 +110,10 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     gamepad_switch: Adw.SwitchRow = Gtk.Template.Child()
     gamepad_rumble_switch: Adw.SwitchRow = Gtk.Template.Child()
     process_grace_spin_row: Adw.SpinRow = Gtk.Template.Child()
+
+    session_move_window_switch: Adw.SwitchRow = Gtk.Template.Child()
+    session_monitor_row: Adw.ComboRow = Gtk.Template.Child()
+    session_identify_button_row = Gtk.Template.Child()
 
     auto_import_switch: Adw.SwitchRow = Gtk.Template.Child()
     remove_missing_switch: Adw.SwitchRow = Gtk.Template.Child()
@@ -244,6 +250,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 "minimize-after-launch",
                 "cover-launches-game",
                 "playtime-tracking",
+                "session-move-window",
                 "gamepad",
                 "gamepad-rumble",
                 "auto-import",
@@ -286,6 +293,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.gamepad_switch.connect("notify::active", sync_rumble_sensitive)
         sync_rumble_sensitive()
 
+        self.setup_session_monitor_row()
+
         # Grace period for process tracking. The row's value is a double while
         # the setting is an int, so map it by hand rather than using bind().
         self.process_grace_spin_row.set_value(
@@ -297,6 +306,73 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 "process-tracking-grace", int(row.get_value())
             ),
         )
+
+    def setup_session_monitor_row(self) -> None:
+        """Enche a lista de monitores com os que estão ligados agora.
+
+        Montada aqui e não no template porque ela é hardware: o que existe é o
+        que a máquina responder no momento em que a tela abre.
+
+        O que está guardado é o nome do dispositivo (``\\\\.\\DISPLAY2``), e não
+        a posição na lista, então desligar um monitor não faz a escolha passar
+        a apontar para outro. Em compensação, abrir esta tela com o monitor
+        escolhido desligado troca a escolha pelo melhor palpite e grava: é a
+        única forma de a lista mostrar o que vai acontecer de verdade, e com
+        ele desligado a opção não teria mesmo o que fazer.
+        """
+        self.session_identify_button_row.connect(
+            "activated", lambda *_: window_geometry.identify_monitors()
+        )
+
+        self.session_monitors = window_geometry.monitors()
+        if not self.session_monitors:
+            self.session_monitor_row.set_subtitle(_("Nenhum monitor encontrado"))
+            self.session_monitor_row.set_sensitive(False)
+            return
+
+        # Só o número, porque só o número tem resposta: resolução e posição
+        # empatam entre telas iguais, e é o botão "Identificar monitores" que
+        # diz qual é qual — na própria tela, que é onde se olha.
+        self.session_monitor_row.set_model(
+            Gtk.StringList.new(
+                [
+                    _("Monitor {}").format(monitor.number)
+                    for monitor in self.session_monitors
+                ]
+            )
+        )
+
+        stored = shared.schema.get_string("session-monitor")
+        selected = next(
+            (
+                index
+                for index, monitor in enumerate(self.session_monitors)
+                if monitor.device == stored
+            ),
+            # O palpite: o primeiro que não é o principal. É onde o jogo não
+            # está, que é o ponto inteiro da opção.
+            next(
+                (
+                    index
+                    for index, monitor in enumerate(self.session_monitors)
+                    if not monitor.primary
+                ),
+                0,
+            ),
+        )
+        self.session_monitor_row.set_selected(selected)
+        self.session_monitor_row.connect("notify::selected", self.set_session_monitor)
+        # Gravado à mão porque `set_selected` acima só avisa quando muda de
+        # valor, e o caso que precisa gravar — nada escolhido ainda, palpite
+        # caindo no índice 0 — é justamente um que não muda nada.
+        self.set_session_monitor()
+
+    def set_session_monitor(self, *_args: Any) -> None:
+        selected = self.session_monitor_row.get_selected()
+        if selected < len(self.session_monitors):
+            shared.schema.set_string(
+                "session-monitor", self.session_monitors[selected].device
+            )
 
     def set_is_open(self, is_open: bool) -> None:
         self.__class__.is_open = is_open

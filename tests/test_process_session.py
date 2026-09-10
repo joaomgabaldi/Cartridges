@@ -486,3 +486,37 @@ def test_stopping_hides_the_session_blocker(make_game, running, clock, win):
     session.stop(record=False)
 
     assert None in win.session_blocker_shown
+
+
+def test_the_clock_shows_the_time_that_is_being_recorded(make_game, running, clock, win):
+    """O relógio da tela de sessão anda com o tempo que vai ser gravado.
+
+    Ele lê `elapsed`, e não `session_seconds`: este último só se mexe a cada
+    verificação, então um relógio de um segundo ficaria parado e daria dois de
+    uma vez. E ele fica em zero enquanto o jogo ainda não apareceu, que é
+    exatamente o tempo que nunca entra em `game.playtime`.
+    """
+    session = make_session(make_game)
+    session.start()
+
+    # Esperando o jogo aparecer: nada a mostrar ainda.
+    clock.advance(30)
+    session._poll()
+    assert session.elapsed == 0
+
+    running.package = True
+    session._poll()  # jogo visto, relógio começa a contar
+
+    clock.advance(5)
+    assert session.elapsed == 5  # sem esperar a próxima verificação
+    session._poll()
+    clock.advance(2)
+    assert session.elapsed == 7
+
+    # Jogo sumiu: o relógio para junto, e a espera de tolerância não conta.
+    running.package = False
+    session._poll()
+    clock.advance(60)
+    assert session.elapsed == 7
+
+    session.stop(record=True)

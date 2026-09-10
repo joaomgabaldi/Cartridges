@@ -56,6 +56,19 @@
     <key name="gamepad-rumble" type="b">
       <default>true</default>
     </key>
+    <!-- Send the main window to another monitor, maximized, while a game runs,
+         instead of minimizing it. Off means today's behaviour, unchanged. -->
+    <key name="session-move-window" type="b">
+      <default>false</default>
+    </key>
+    <!-- Which monitor to send it to, as the Win32 device name the desktop
+         numbering uses ("\\.\DISPLAY2"). Empty, or a monitor that is no longer
+         attached, means the window stays where it is. Not an index: unplugging
+         a screen renumbers the list, and an index would then name a different
+         monitor rather than none. -->
+    <key name="session-monitor" type="s">
+      <default>""</default>
+    </key>
     <!-- How often (in hours) the repack update feed is polled. 0 disables the
          check entirely. Novelty is tracked per game (update_dismissed_ts), so
          no global snapshot state is needed here. -->

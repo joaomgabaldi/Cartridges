@@ -240,6 +240,20 @@ template $CartridgesWindow: Adw.ApplicationWindow {
             ]
           }
 
+          // Só aparece com a mudança de monitor ligada: é lá que a tela fica
+          // visível a sessão inteira e o relógio tem para quem contar.
+          // "numeric" trava os dígitos na mesma largura, senão o relógio
+          // treme a cada segundo.
+          Label session_blocker_timer {
+            visible: false;
+            halign: center;
+
+            styles [
+              "title-1",
+              "numeric",
+            ]
+          }
+
           Button session_blocker_button {
             label: _("Já terminei de jogar");
             halign: center;

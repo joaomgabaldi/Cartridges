@@ -87,6 +87,37 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
     }
   }
 
+  // Uma aba só para o que acontece com a janela enquanto o jogo roda. Sem
+  // contar horas de jogo não existe tela de sessão para levar a lugar nenhum,
+  // então a página inteira acompanha aquela chave.
+  Adw.PreferencesPage session_page {
+    name: "session";
+    title: _("Sessão");
+    icon-name: "video-joined-displays-symbolic";
+    sensitive: bind playtime_tracking_switch.active;
+
+    Adw.PreferencesGroup session_monitor_group {
+      title: _("Enquanto o jogo roda");
+      description: _("Em vez de minimizar, a janela vai maximizada para o monitor escolhido e mostra ali um relógio contando a sessão. Quando o jogo termina, ela volta para o monitor de origem, do tamanho que tinha.");
+
+      Adw.SwitchRow session_move_window_switch {
+        title: _("Levar a janela para outro monitor");
+      }
+
+      Adw.ComboRow session_monitor_row {
+        title: _("Monitor");
+        subtitle: _("A mesma numeração das configurações de vídeo do Windows");
+        sensitive: bind session_move_window_switch.active;
+      }
+
+      // Sempre clicável, mesmo com a opção desligada: é olhando para as telas
+      // que se decide qual escolher, então ele tem de responder antes.
+      Adw.ButtonRow session_identify_button_row {
+        title: _("Identificar monitores");
+      }
+    }
+  }
+
   Adw.PreferencesPage import_page {
     name: "import";
     title: _("Importação");

@@ -1760,6 +1760,150 @@ def test_a_minimized_window_is_not_read(monkeypatch):
     assert window_geometry.read(object()) is None
 
 
+class _FakePlacementUser32:
+    """O bastante do user32 para o vaivém da janela entre monitores.
+
+    Guarda cada `SetWindowPlacement` recebido, que é o que o teste tem para
+    olhar: é a única coisa que a mudança de monitor faz com a janela.
+    """
+
+    def __init__(self, rect=(100, 50, 900, 650), show=1):
+        self.rect = rect
+        self.show = show  # SW_SHOWNORMAL, ou 3 para uma janela maximizada
+        self.written: list = []
+
+    @staticmethod
+    def IsIconic(_hwnd):
+        return 0
+
+    def GetWindowRect(self, _hwnd, ref):
+        (
+            ref._obj.left,
+            ref._obj.top,
+            ref._obj.right,
+            ref._obj.bottom,
+        ) = self.rect
+        return 1
+
+    def GetWindowPlacement(self, _hwnd, ref):
+        ref._obj.showCmd = self.show
+        (
+            ref._obj.rcNormalPosition.left,
+            ref._obj.rcNormalPosition.top,
+            ref._obj.rcNormalPosition.right,
+            ref._obj.rcNormalPosition.bottom,
+        ) = self.rect
+        return 1
+
+    def SetWindowPlacement(self, _hwnd, ref):
+        rect = ref._obj.rcNormalPosition
+        self.written.append(
+            (ref._obj.showCmd, (rect.left, rect.top, rect.right, rect.bottom))
+        )
+        return 1
+
+
+class _FakeWindow:
+    def __init__(self, maximized=False):
+        self.maximized = maximized
+
+    def is_maximized(self):
+        return self.maximized
+
+
+def _no_session(monkeypatch):
+    """Zera o estado de módulo, e devolve-o intacto ao fim do teste."""
+    monkeypatch.setattr(window_geometry, "_before_session", None)
+    monkeypatch.setattr(window_geometry, "_before_placement", None)
+
+
+def test_the_window_never_moves_to_a_monitor_that_is_not_there(monkeypatch):
+    """O monitor escolhido foi desligado: a janela fica onde está.
+
+    Mandá-la para coordenadas de uma tela que não existe é perdê-la — e é por
+    isso que o falso aqui é a resposta que faz quem chamou minimizar, como o
+    app fazia antes desta opção existir.
+    """
+    _no_session(monkeypatch)
+    monkeypatch.setattr(window_geometry, "monitors", list)
+    monkeypatch.setattr(window_geometry, "_hwnd", lambda _window: 42)
+
+    assert window_geometry.move_to_monitor(_FakeWindow(), "\\\\.\\DISPLAY2") is False
+    assert window_geometry.session_geometry() is None
+
+
+def test_the_session_move_puts_the_window_back_exactly(monkeypatch):
+    """Ida e volta: maximiza no monitor escolhido, volta ao estado de origem.
+
+    O `session_geometry` no meio é o que salva a posição lembrada: fechar o app
+    com o jogo aberto tem de gravar de onde a janela saiu, não onde ela está
+    estacionada.
+    """
+    _no_session(monkeypatch)
+    user32 = _FakePlacementUser32()
+    monkeypatch.setattr(window_geometry, "_user32", user32)
+    monkeypatch.setattr(window_geometry, "_hwnd", lambda _window: 42)
+    monkeypatch.setattr(
+        window_geometry,
+        "monitors",
+        lambda: [
+            window_geometry.Monitor("\\\\.\\DISPLAY1", 0, 0, 1920, 1080, True),
+            window_geometry.Monitor("\\\\.\\DISPLAY2", -1080, -512, 1080, 1920, False),
+        ],
+    )
+    window = _FakeWindow()
+
+    assert window_geometry.move_to_monitor(window, "\\\\.\\DISPLAY2") is True
+    # Primeiro pousa no monitor escolhido (SW_SHOWNORMAL) e só então maximiza
+    # (SW_SHOWMAXIMIZED): pedir as duas coisas de uma vez não move janela
+    # maximizada nenhuma, que é o que o teste seguinte guarda.
+    parked = (-1080, -512, 0, 1408)
+    assert user32.written == [(1, parked), (3, parked)]
+    assert window_geometry.session_geometry() == window_geometry.Geometry(
+        100, 50, 800, 600, False
+    )
+
+    window_geometry.restore_from_monitor(window)
+    assert user32.written[-1] == (1, (100, 50, 900, 650))
+    assert window_geometry.session_geometry() is None
+
+    # Chamar de novo não mexe em janela nenhuma: a sessão já acabou.
+    window_geometry.restore_from_monitor(window)
+    assert len(user32.written) == 3
+
+
+def test_a_maximized_window_comes_back_maximized_where_it_was(monkeypatch):
+    """Maximizada antes do jogo, maximizada depois — no monitor de origem.
+
+    O caso que uma escrita só não resolve em nenhuma das duas pontas: o Windows
+    lê o retângulo de uma janela maximizada como "para onde restaurar" e segue
+    maximizando-a sobre o monitor onde ela já está. Sem os dois passos, a ida
+    dizia ter mudado sem ter mudado nada, e a volta deixava a janela no monitor
+    do jogo para sempre.
+    """
+    _no_session(monkeypatch)
+    user32 = _FakePlacementUser32(show=3)
+    monkeypatch.setattr(window_geometry, "_user32", user32)
+    monkeypatch.setattr(window_geometry, "_hwnd", lambda _window: 42)
+    monkeypatch.setattr(
+        window_geometry,
+        "monitors",
+        lambda: [
+            window_geometry.Monitor("\\\\.\\DISPLAY2", -1080, -512, 1080, 1920, False)
+        ],
+    )
+
+    assert (
+        window_geometry.move_to_monitor(_FakeWindow(maximized=True), "\\\\.\\DISPLAY2")
+        is True
+    )
+    window_geometry.restore_from_monitor(_FakeWindow(maximized=True))
+
+    home = (100, 50, 900, 650)
+    parked = (-1080, -512, 0, 1408)
+    assert user32.written == [(1, parked), (3, parked), (1, home), (3, home)]
+
+
 def test_wrong_typed_numeric_fields_are_dropped_on_load():
     """B4: `"playtime": "5h"` num registro editado à mão passava e estourava
     TypeError na tela de detalhes e na ordenação. Cai o campo, não o jogo."""

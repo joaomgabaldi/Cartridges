@@ -23,6 +23,7 @@ import logging
 import threading
 import unicodedata
 from pathlib import Path
+from time import monotonic
 from typing import Any, Optional
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
@@ -32,7 +33,7 @@ from cartridges.game import Game, STATUS_LABELS, status_label
 from cartridges.game_cover import GameCover
 from cartridges.utils.animated_flow_box import AnimatedFlowBox
 from cartridges.utils.dialog_backdrop import block_window_drag
-from cartridges.utils.format_playtime import format_playtime
+from cartridges.utils.format_playtime import format_playtime, format_stopwatch
 from cartridges.utils.game_logo import (
     LOGO_MAX_HEIGHT,
     cached_logo_path,
@@ -45,7 +46,7 @@ from cartridges.utils.install_size import format_size
 from cartridges.utils.news_feed import NewsPost
 from cartridges.utils.open_uri import open_uri
 from cartridges.session_history import SessionHistoryDialog
-from cartridges.utils import session_log
+from cartridges.utils import session_log, window_geometry
 from cartridges.utils.relative_date import relative_date
 from cartridges.utils.spring_scroll import attach as attach_spring_scroll
 from cartridges.utils.steam import format_release_date, parse_release_date
@@ -74,6 +75,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
     session_blocker_notes_button: Gtk.MenuButton = Gtk.Template.Child()
     session_blocker_notes_popover: Gtk.Popover = Gtk.Template.Child()
     session_blocker_notes_view: Gtk.TextView = Gtk.Template.Child()
+    session_blocker_timer: Gtk.Label = Gtk.Template.Child()
     primary_menu_button: Gtk.MenuButton = Gtk.Template.Child()
     details_view: Gtk.Overlay = Gtk.Template.Child()
     library_page: Adw.NavigationPage = Gtk.Template.Child()
@@ -163,6 +165,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
     # dele que trata a anotação escrita ali, e não do jogo que a tela de
     # detalhes por acaso tenha aberto atrás.
     session_game: Optional[Game] = None
+    # O tick de 1s do relógio da sessão, 0 quando não há relógio na tela.
+    session_timer_id: int = 0
     details_view_game_cover: Optional[GameCover] = None
     sort_state: str = "last_played"
     # The feed watcher driving the Novidades page and its badge. Injected by the
@@ -431,6 +435,36 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.show_details_page(game)
         GLib.idle_add(self.details_view_notes_popover.popup)
 
+    def move_to_session_monitor(self) -> bool:
+        """Manda a janela para o monitor escolhido, maximizada. Diz se foi.
+
+        Falso também com a opção ligada, se o monitor escolhido não estiver
+        mais ligado na máquina — e aí quem chamou minimiza a janela, que é o
+        que o app fazia antes desta opção existir. Ficar sem saber onde a
+        janela foi parar é pior do que ela não sair do lugar.
+        """
+        if not shared.schema.get_boolean("session-move-window"):
+            return False
+        return window_geometry.move_to_monitor(
+            self, shared.schema.get_string("session-monitor")
+        )
+
+    def session_elapsed(self) -> int:
+        """Os segundos que a sessão em andamento já contou. Zero sem sessão."""
+        # avoid import cycles
+        from cartridges.process_session import ProcessSession
+        from cartridges.session_window import SessionWindow
+
+        if ProcessSession.active is not None:
+            return ProcessSession.active.elapsed
+        if SessionWindow.active is not None:
+            return int(monotonic() - SessionWindow.active.session_start)
+        return 0
+
+    def session_tick(self, *_args: Any) -> bool:
+        self.session_blocker_timer.set_label(format_stopwatch(self.session_elapsed()))
+        return GLib.SOURCE_CONTINUE
+
     def show_session_blocker(self, game: Game) -> None:
         # O jogo inteiro, e não só o nome: o botão de anotação daqui grava
         # nele, e é o único jogo que o bloqueador tem para oferecer.
@@ -441,6 +475,17 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # header bar) so "Jogar" can't start a second session; the window can
         # still be moved/closed via the taskbar or system shortcuts
         self.session_blocker.set_visible(True)
+
+        # O relógio só faz sentido onde ele pode ser visto: se a janela foi
+        # para o outro monitor, ela fica à vista a sessão inteira; se não foi,
+        # ela está minimizada e ninguém veria segundo nenhum. A pergunta é se a
+        # mudança aconteceu, e não se a opção está ligada — com o monitor
+        # escolhido desligado da máquina, a opção está ligada e a janela
+        # minimizou assim mesmo.
+        if window_geometry.session_geometry() is not None:
+            self.session_tick()
+            self.session_blocker_timer.set_visible(True)
+            self.session_timer_id = GLib.timeout_add_seconds(1, self.session_tick)
 
         # Hand the controller entirely to the game for the duration: stop
         # polling and release the XInput DLL until the session ends.
@@ -454,6 +499,17 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # anotação que esteja aberto, e é esse fechamento que a grava.
         self.session_blocker.set_visible(False)
         self.session_game = None
+
+        if self.session_timer_id:
+            GLib.source_remove(self.session_timer_id)
+            self.session_timer_id = 0
+        self.session_blocker_timer.set_visible(False)
+
+        # De volta ao monitor de onde saiu, do tamanho que tinha. No-op quando
+        # a janela não saiu do lugar. Antes do `present()` de quem chamou, para
+        # a janela reaparecer já no lugar certo em vez de aparecer no monitor
+        # do jogo e pular.
+        window_geometry.restore_from_monitor(self)
 
         # Session over: bring gamepad navigation back.
         from cartridges.gamepad import GamepadManager  # avoid import cycle
