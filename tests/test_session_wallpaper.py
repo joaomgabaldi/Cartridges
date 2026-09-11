@@ -170,8 +170,9 @@ class TestEscolhaPorJogo:
 class _AreaFalsa:
     """O bastante da IDesktopWallpaper para a ida e a volta, sem tocar na tela."""
 
-    def __init__(self, papeis):
+    def __init__(self, papeis, recusa=()):
         self.papeis = dict(papeis)
+        self.recusa = set(recusa)
         self.vestidos: list = []
 
     def __enter__(self):
@@ -184,8 +185,11 @@ class _AreaFalsa:
         return self.papeis.get(monitor)
 
     def vestir(self, monitor, caminho):
+        if monitor in self.recusa:
+            return False
         self.vestidos.append((monitor, caminho))
         self.papeis[monitor] = caminho
+        return True
 
 
 class TestRestauro:
@@ -221,6 +225,26 @@ class TestRestauro:
 
         assert sorted(area.vestidos) == [("M1", ""), ("M2", "c:/b.jpg")]
         assert schema.get_string("session-wallpaper-saved") == ""
+
+    def test_monitor_que_nao_voltou_fica_na_chave(self, schema, monkeypatch):
+        """A volta que falha num monitor só não apaga o original dele.
+
+        O caso de verdade: o papel de parede original mora no iCloud Drive, e
+        sem rede o Windows recusa o arquivo. Apagada a chave, aquele monitor
+        ficava com a arte do jogo e ninguém tentava de novo.
+        """
+        schema["session-wallpaper-saved"] = json.dumps(
+            {"M1": "c:/a.jpg", "M2": "c:/icloud.png"}
+        )
+        area = _AreaFalsa({}, recusa={"M2"})
+        monkeypatch.setattr(session_wallpaper, "_AreaDeTrabalho", lambda: area)
+
+        session_wallpaper.restaurar()
+
+        assert area.vestidos == [("M1", "c:/a.jpg")]
+        assert schema.get_string("session-wallpaper-saved") == json.dumps(
+            {"M2": "c:/icloud.png"}
+        )
 
     def test_sessao_encerrada_nao_veste(self, schema, monkeypatch, tmp_path):
         """A arte que fica pronta depois do fim da sessão não vai para a parede."""

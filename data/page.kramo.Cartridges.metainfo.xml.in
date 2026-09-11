@@ -46,6 +46,14 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.11" date="2026-09-11">
+      <description translate="no">
+        <ul>
+          <li>Se o Windows recusasse devolver o papel de parede de um só monitor no fim da sessão — um original guardado no iCloud Drive com a rede fora, por exemplo —, o registro daquele original era apagado junto com os outros, e o monitor ficava com a arte do jogo para sempre. Agora só sai do registro o monitor que voltou de fato; o que foi recusado é tentado de novo no próximo fim de sessão ou arranque</li>
+          <li>A parede escolhida à mão para um jogo, ou a marca "não trocar", se perdia quando o jogo mudava de identificação por dentro (o que acontece, por exemplo, quando o atalho dele muda de lugar). Ela agora acompanha o jogo, como a capa e o logo já acompanhavam</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.10" date="2026-09-10">
       <description translate="no">
         <ul>

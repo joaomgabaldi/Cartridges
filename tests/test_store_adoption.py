@@ -276,6 +276,26 @@ def test_locked_logo_survives_the_migration(store, make_game, seed):
     assert sidecar["file"] == f"{NEW_ID}.webp"
 
 
+def test_hand_picked_wallpaper_survives_the_migration(store, make_game, seed, write_asset):
+    """T1.12 The session wallpaper is filed by id too, sidecar and image."""
+    seed(make_game(game_id=OLD_ID))
+    write_asset("wallpapers", f"{OLD_ID}.png", b"arte")
+    (shared.wallpapers_dir / f"{OLD_ID}.json").write_text(
+        json.dumps({"name": "Halo", "file": f"{OLD_ID}.png", "locked": True}),
+        encoding="utf-8",
+    )
+
+    store.adopt_legacy_game(make_game(game_id=NEW_ID), [OLD_ID])
+
+    assert (shared.wallpapers_dir / f"{NEW_ID}.png").read_bytes() == b"arte"
+    assert not (shared.wallpapers_dir / f"{OLD_ID}.png").exists()
+    sidecar = json.loads(
+        (shared.wallpapers_dir / f"{NEW_ID}.json").read_text(encoding="utf-8")
+    )
+    assert sidecar["locked"] is True
+    assert sidecar["file"] == f"{NEW_ID}.png"
+
+
 def test_missing_files_do_not_break_the_migration(store, make_game, seed):
     """T1.12 A game with no cover and no logo adopts fine."""
     legacy = seed(make_game(game_id=OLD_ID, playtime=5))

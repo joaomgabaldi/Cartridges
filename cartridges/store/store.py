@@ -33,6 +33,7 @@ from cartridges.store.pipeline import Pipeline
 from cartridges.utils.game_logo import IMAGE_SUFFIXES, remove_logo
 from cartridges.utils.run_executable import aumid_from_command
 from cartridges.utils.save_cover import ANIMATED_SUFFIXES
+from cartridges.utils.wallhaven import IMAGE_SUFFIXES as WALLPAPER_SUFFIXES
 
 
 def _path_key(path: str) -> str:
@@ -93,8 +94,9 @@ def _dump_json_atomic(path: Path, data: dict, **dump_kwargs: Any) -> None:
 def _migrate_game_files(old_id: str, new_id: str) -> None:
     """Move everything filed under ``old_id`` to ``new_id``.
 
-    A game owns three sets of files, all named after its id: its JSON record,
-    its cover, and its cached logo plus the sidecar recording that lookup.
+    A game owns four sets of files, all named after its id: its JSON record,
+    its cover, and its logo and session wallpaper, each an image plus the
+    sidecar recording how it was chosen.
     Best effort throughout — a file that will not move is left where it is
     rather than taking the migration down with it, because the alternative is
     an aborted adoption, which costs the whole game record.
@@ -108,6 +110,13 @@ def _migrate_game_files(old_id: str, new_id: str) -> None:
     for suffix in (".json", *IMAGE_SUFFIXES):
         moves.append(
             (shared.logos_dir / f"{old_id}{suffix}", shared.logos_dir / f"{new_id}{suffix}")
+        )
+    for suffix in (".json", *WALLPAPER_SUFFIXES):
+        moves.append(
+            (
+                shared.wallpapers_dir / f"{old_id}{suffix}",
+                shared.wallpapers_dir / f"{new_id}{suffix}",
+            )
         )
 
     for source, dest in moves:
@@ -149,22 +158,25 @@ def _migrate_game_files(old_id: str, new_id: str) -> None:
     except (OSError, ValueError) as error:
         logging.warning("Could not restamp the record for %s: %s", new_id, error)
 
-    # The logo sidecar names its image file, so the rename above has to be
-    # reflected inside it too — otherwise the record points at a file that no
-    # longer exists and the logo is silently re-fetched (or, for a logo the
-    # user chose by hand, silently lost).
-    sidecar = shared.logos_dir / f"{new_id}.json"
-    try:
-        if not sidecar.exists():
-            return
-        with sidecar.open(encoding="utf-8") as file:
-            data = json.load(file)
-        if not isinstance(data, dict) or not data.get("file"):
-            return
-        data["file"] = str(data["file"]).replace(old_id, new_id, 1)
-        _dump_json_atomic(sidecar, data)
-    except (OSError, ValueError) as error:
-        logging.warning("Could not update the logo record for %s: %s", new_id, error)
+    # Both sidecars name their image file, so the rename above has to be
+    # reflected inside them too — otherwise the record points at a file that no
+    # longer exists and the image is silently re-fetched (or, for one the user
+    # chose by hand, silently lost).
+    for kind, sidecar in (
+        ("logo", shared.logos_dir / f"{new_id}.json"),
+        ("wallpaper", shared.wallpapers_dir / f"{new_id}.json"),
+    ):
+        try:
+            if not sidecar.exists():
+                continue
+            with sidecar.open(encoding="utf-8") as file:
+                data = json.load(file)
+            if not isinstance(data, dict) or not data.get("file"):
+                continue
+            data["file"] = str(data["file"]).replace(old_id, new_id, 1)
+            _dump_json_atomic(sidecar, data)
+        except (OSError, ValueError) as error:
+            logging.warning("Could not update the %s record for %s: %s", kind, new_id, error)
 
 
 class Store:

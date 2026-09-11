@@ -214,11 +214,14 @@ class _AreaDeTrabalho:
             return False
         return bool(estado.value & _DSS_SLIDESHOW)
 
-    def vestir(self, monitor: str, caminho: str) -> None:
+    def vestir(self, monitor: str, caminho: str) -> bool:
+        """Troca a parede de ``monitor``. Diz se o Windows aceitou."""
         try:
             self._set(self._ponteiro, monitor, caminho)
         except OSError as erro:
             logging.warning("Não foi possível trocar o papel de parede: %s", erro)
+            return False
+        return True
 
 
 # region Enquadramento
@@ -590,10 +593,13 @@ def restaurar() -> None:
 
     try:
         with _AreaDeTrabalho() as area:
-            for monitor, caminho in originais.items():
-                # Vazio também volta: é o monitor que mostrava só a cor de
-                # fundo, e a IDesktopWallpaper aceita "" como "sem imagem".
-                area.vestir(monitor, str(caminho))
+            # Vazio também volta: é o monitor que mostrava só a cor de
+            # fundo, e a IDesktopWallpaper aceita "" como "sem imagem".
+            recusados = {
+                monitor: caminho
+                for monitor, caminho in originais.items()
+                if not area.vestir(monitor, str(caminho))
+            }
     except OSError as erro:
         # A chave fica. Ela é o único registro dos originais, a sessão
         # seguinte não a sobrescreve (só acrescenta monitores que faltem) e o
@@ -601,7 +607,14 @@ def restaurar() -> None:
         logging.warning("Não foi possível devolver o papel de parede: %s", erro)
         return
 
-    shared.schema.set_string(_CHAVE_ORIGINAIS, "")
+    # Pela mesma razão, quem o Windows recusou fica na chave — o original no
+    # iCloud Drive sem rede, por exemplo. Só sai dela quem voltou de fato. O
+    # cache vai embora assim mesmo: a tela não depende dele (o Windows guarda
+    # a própria cópia da imagem), e mantê-lo à espera de um monitor que nunca
+    # mais for ligado o faria crescer a cada sessão.
+    shared.schema.set_string(
+        _CHAVE_ORIGINAIS, json.dumps(recusados) if recusados else ""
+    )
     _limpar_cache()
 
 
