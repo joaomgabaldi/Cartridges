@@ -41,12 +41,14 @@ faz quando :func:`restaurar_orfaos` a chama.
 import ctypes
 import json
 import logging
+import threading
 import time
 from ctypes import POINTER, byref, c_uint, c_void_p, c_wchar_p, wintypes
 from io import BytesIO
 from pathlib import Path
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 
+from gi.repository import GLib
 from PIL import Image, ImageFilter, ImageOps
 
 from cartridges import shared
@@ -71,6 +73,8 @@ _IID_IDESKTOP_WALLPAPER = "{B92B56A9-8B55-4E14-9A89-0199BBB6F93B}"
 # INPROC | INPROC_HANDLER | LOCAL | REMOTE. Só INPROC_SERVER responde
 # REGDB_E_CLASSNOTREG aqui, ainda que a classe esteja perfeitamente registrada.
 _CLSCTX_ALL = 23
+# DESKTOP_SLIDESHOW_STATE: uma apresentação de slides está configurada.
+_DSS_SLIDESHOW = 0x2
 
 
 class _GUID(ctypes.Structure):
@@ -125,10 +129,14 @@ class _AreaDeTrabalho:
         # os argumentos deste, e o que sai disso não é um erro: é a memória
         # errada sendo lida.
         self._set = metodo(3, c_wchar_p, c_wchar_p)
-        self._get = metodo(4, c_wchar_p, POINTER(c_wchar_p))
-        self._id_em = metodo(5, c_uint, POINTER(c_wchar_p))
+        # As duas que devolvem texto recebem um ponteiro cru, e não c_wchar_p:
+        # a string é alocada pela COM e tem de voltar para ela em
+        # `CoTaskMemFree`, e o c_wchar_p copia o texto e perde o endereço.
+        self._get = metodo(4, c_wchar_p, POINTER(c_void_p))
+        self._id_em = metodo(5, c_uint, POINTER(c_void_p))
         self._quantos = metodo(6, POINTER(c_uint))
         self._retangulo = metodo(7, c_wchar_p, POINTER(wintypes.RECT))
+        self._estado = metodo(17, POINTER(wintypes.DWORD))
         return self
 
     def __exit__(self, *_args: Any) -> None:
@@ -141,6 +149,15 @@ class _AreaDeTrabalho:
         if self._hresult in (0, 1):  # S_OK / S_FALSE: o COM é nosso
             self._ole32.CoUninitialize()
 
+    def _texto(self, ponteiro: c_void_p) -> str:
+        """Copia uma string alocada pela COM e a devolve à COM."""
+        if not ponteiro.value:
+            return ""
+        try:
+            return ctypes.wstring_at(ponteiro.value)
+        finally:
+            self._ole32.CoTaskMemFree(ponteiro)
+
     def em_pe(self) -> list[Monitor]:
         """Os monitores ligados cujo retângulo é mais alto que largo."""
         quantos = c_uint()
@@ -149,9 +166,12 @@ class _AreaDeTrabalho:
 
         monitores = []
         for indice in range(quantos.value):
-            identificador = c_wchar_p()
-            if self._id_em(self._ponteiro, indice, byref(identificador)):
+            bruto = c_void_p()
+            try:
+                self._id_em(self._ponteiro, indice, byref(bruto))
+            except OSError:
                 continue
+            identificador = self._texto(bruto)
             retangulo = wintypes.RECT()
             try:
                 self._retangulo(self._ponteiro, identificador, byref(retangulo))
@@ -162,17 +182,37 @@ class _AreaDeTrabalho:
             largura = retangulo.right - retangulo.left
             altura = retangulo.bottom - retangulo.top
             if altura > largura > 0:
-                monitores.append(Monitor(identificador.value or "", largura, altura))
+                monitores.append(Monitor(identificador, largura, altura))
         return monitores
 
-    def papel(self, monitor: str) -> str:
-        """O papel de parede do monitor agora. Vazio quando não há um."""
-        atual = c_wchar_p()
+    def papel(self, monitor: str) -> Optional[str]:
+        """O papel de parede do monitor agora.
+
+        Vazio quando o monitor não mostra imagem nenhuma (só a cor de fundo), e
+        ``None`` quando a pergunta falhou. As duas respostas não podem se
+        confundir: a primeira é um estado a devolver no fim da sessão, a
+        segunda é não saber qual era — e aí o monitor não deve ser vestido.
+        """
+        atual = c_void_p()
         try:
             self._get(self._ponteiro, monitor, byref(atual))
         except OSError:
-            return ""
-        return atual.value or ""
+            return None
+        return self._texto(atual)
+
+    def em_apresentacao(self) -> bool:
+        """True com uma apresentação de slides configurada na área de trabalho.
+
+        Vestir um monitor por cima dela a troca por uma imagem fixa, e devolver
+        o caminho de antes não a religa: a apresentação se perderia. Então,
+        com ela ligada, a sessão não mexe em nada.
+        """
+        estado = wintypes.DWORD()
+        try:
+            self._estado(self._ponteiro, byref(estado))
+        except OSError:
+            return False
+        return bool(estado.value & _DSS_SLIDESHOW)
 
     def vestir(self, monitor: str, caminho: str) -> None:
         try:
@@ -281,11 +321,18 @@ def _arquivo_do_sidecar(dados: Optional[dict[str, Any]]) -> Optional[Path]:
 
 
 def escolha(game: "Game") -> str:
-    """Como a parede deste jogo está decidida: ``auto``, ``manual`` ou ``none``."""
+    """Como a parede deste jogo está decidida: ``auto``, ``manual`` ou ``none``.
+
+    "Não trocar" é o sidecar travado SEM arquivo. Travado com um arquivo que
+    sumiu do disco não é essa decisão, é uma escolha que se perdeu — e aí o
+    jogo volta à busca automática em vez de ficar sem parede em silêncio.
+    """
     dados = _ler_sidecar(game.game_id)
     if not dados or not dados.get("locked"):
         return "auto"
-    return "manual" if _arquivo_do_sidecar(dados) else "none"
+    if not dados.get("file"):
+        return "none"
+    return "manual" if _arquivo_do_sidecar(dados) else "auto"
 
 
 def imagem_escolhida(game_id: str) -> Optional[Path]:
@@ -343,8 +390,12 @@ def _fonte(game: "Game", largura: int, altura: int) -> Optional[tuple[Path, floa
     posicao = float(dados.get("position", 0.5)) if dados else 0.5
 
     if dados and dados.get("locked"):
-        arquivo = _arquivo_do_sidecar(dados)
-        return (arquivo, posicao) if arquivo else None
+        if not dados.get("file"):
+            return None  # "não trocar"
+        if arquivo := _arquivo_do_sidecar(dados):
+            return arquivo, posicao
+        # A escolha à mão apontava para um arquivo que sumiu: segue para a
+        # busca, como `escolha` já mostra na tela de edição.
 
     # Uma busca automática que já deu certo fica em disco: a sessão seguinte
     # do mesmo jogo não toca a rede, e a parede aparece no instante em que o
@@ -379,6 +430,13 @@ def _fonte(game: "Game", largura: int, altura: int) -> Optional[tuple[Path, floa
 
 _CHAVE_ORIGINAIS = "session-wallpaper-saved"
 
+# Cada sessão ganha um número, e só a corrente pode vestir as telas. A arte é
+# preparada numa thread (rede e Pillow levam segundos), e uma sessão curta
+# acaba antes disso: sem o número, a preparação vestiria os monitores DEPOIS da
+# devolução, e eles ficariam com a arte de um jogo já fechado até o próximo
+# arranque. Só a thread de UI mexe nele; a de trabalho só o carrega de volta.
+_sessao = 0
+
 
 def _cache() -> Path:
     return shared.wallpapers_dir / "cache"
@@ -403,61 +461,122 @@ def alvo() -> tuple[int, int]:
     return ALVO_PADRAO
 
 
-def aplicar(game: "Game") -> None:
-    """Veste os monitores em pé com a arte de ``game``. Roda fora da thread de UI.
+def comecar(game: "Game") -> None:
+    """Começa a vestir as telas para ``game``. Chamar da thread de UI."""
+    threading.Thread(target=aplicar, args=(game, _sessao), daemon=True).start()
+
+
+def aplicar(game: "Game", sessao: int) -> None:
+    """Prepara a arte de ``game`` para cada monitor em pé. Roda fora da UI.
+
+    Só prepara: os arquivos saem daqui prontos, e quem os põe na parede é
+    :func:`_vestir`, de volta na thread de UI, onde a sessão é conferida.
 
     Nunca levanta: isto é enfeite de sessão, e uma sessão de jogo não pode
     falhar porque um monitor foi desligado ou porque o site saiu do ar.
     """
     try:
         with _AreaDeTrabalho() as area:
-            if not (monitores := area.em_pe()):
+            if area.em_apresentacao():
+                logging.info("Apresentação de slides ligada; parede intocada")
                 return
+            monitores = area.em_pe()
+        if not monitores:
+            return
 
-            maior = max(monitores, key=lambda monitor: monitor.largura * monitor.altura)
-            if not (fonte := _fonte(game, maior.largura, maior.altura)):
-                return
-            origem, posicao = fonte
+        maior = max(monitores, key=lambda monitor: monitor.largura * monitor.altura)
+        if not (fonte := _fonte(game, maior.largura, maior.altura)):
+            return
+        origem, posicao = fonte
 
-            # Os originais são guardados uma vez só. Uma segunda sessão
-            # gravaria por cima a arte do jogo anterior, e a volta ao papel de
-            # parede de verdade se perderia para sempre.
-            if not shared.schema.get_string(_CHAVE_ORIGINAIS):
-                shared.schema.set_string(
-                    _CHAVE_ORIGINAIS,
-                    json.dumps({m.id: area.papel(m.id) for m in monitores}),
-                )
+        _cache().mkdir(parents=True, exist_ok=True)
+        carimbo = int(time.time())
+        # A capa entra pela composição com fundo borrado; tudo o mais é
+        # arte larga o bastante para o corte.
+        da_capa_ = origem.parent == shared.covers_dir
+        quadros = []
+        for monitor in monitores:
+            if da_capa_:
+                quadro = da_capa(origem, monitor.largura, monitor.altura)
+            else:
+                with Image.open(origem) as arquivo:
+                    quadro = enquadrar(
+                        arquivo.convert("RGB"),
+                        monitor.largura,
+                        monitor.altura,
+                        posicao,
+                    )
+            # Nome novo a cada sessão: o Windows guarda o papel de parede
+            # por caminho, e reescrever o mesmo arquivo com outro conteúdo
+            # deixa a tela com a imagem antiga.
+            destino = _cache() / (
+                f"{game.game_id}-{monitor.largura}x{monitor.altura}-{carimbo}.jpg"
+            )
+            quadro.save(destino, quality=92)
+            quadros.append((monitor.id, destino))
+    except Exception as erro:  # pylint: disable=broad-except
+        logging.warning("Não foi possível preparar a arte da sessão: %s", erro)
+        return
 
-            _cache().mkdir(parents=True, exist_ok=True)
-            carimbo = int(time.time())
-            # A capa entra pela composição com fundo borrado; tudo o mais é
-            # arte larga o bastante para o corte.
-            da_capa_ = origem.parent == shared.covers_dir
-            for monitor in monitores:
-                if da_capa_:
-                    quadro = da_capa(origem, monitor.largura, monitor.altura)
-                else:
-                    with Image.open(origem) as arquivo:
-                        quadro = enquadrar(
-                            arquivo.convert("RGB"),
-                            monitor.largura,
-                            monitor.altura,
-                            posicao,
-                        )
-                # Nome novo a cada sessão: o Windows guarda o papel de parede
-                # por caminho, e reescrever o mesmo arquivo com outro conteúdo
-                # deixa a tela com a imagem antiga.
-                destino = _cache() / (
-                    f"{game.game_id}-{monitor.largura}x{monitor.altura}-{carimbo}.jpg"
-                )
-                quadro.save(destino, quality=92)
-                area.vestir(monitor.id, str(destino))
+    GLib.idle_add(_vestir, sessao, quadros)
+
+
+def _vestir(sessao: int, quadros: list[tuple[str, Path]]) -> bool:
+    """Põe na parede o que :func:`aplicar` preparou. Roda na thread de UI.
+
+    Aqui, e não na thread que preparou, porque é onde a sessão pode ser
+    conferida sem corrida com :func:`restaurar`, que também roda aqui.
+    """
+    if sessao != _sessao:
+        # A sessão acabou enquanto a arte era preparada.
+        for _monitor, arquivo in quadros:
+            try:
+                arquivo.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return GLib.SOURCE_REMOVE
+
+    try:
+        originais = json.loads(shared.schema.get_string(_CHAVE_ORIGINAIS) or "{}")
+    except ValueError:
+        originais = {}
+    if not isinstance(originais, dict):
+        originais = {}
+
+    try:
+        with _AreaDeTrabalho() as area:
+            # O original de cada monitor é gravado ANTES de vestir: com a chave
+            # em disco, um app morto no meio da sessão ainda deixa o caminho de
+            # volta. Um monitor que já consta nela (uma devolução anterior que
+            # falhou) fica com o valor de lá, porque o que ele mostra agora
+            # pode ser a nossa arte.
+            for monitor, _arquivo in quadros:
+                if monitor not in originais:
+                    if (atual := area.papel(monitor)) is not None:
+                        originais[monitor] = atual
+            if not originais:
+                return GLib.SOURCE_REMOVE
+            shared.schema.set_string(_CHAVE_ORIGINAIS, json.dumps(originais))
+
+            for monitor, arquivo in quadros:
+                # Sem o original não há como voltar, então não se veste.
+                if monitor in originais:
+                    area.vestir(monitor, str(arquivo))
     except Exception as erro:  # pylint: disable=broad-except
         logging.warning("Não foi possível vestir os monitores: %s", erro)
+    return GLib.SOURCE_REMOVE
 
 
 def restaurar() -> None:
-    """Devolve cada monitor ao papel de parede que tinha. Seguro chamar à toa."""
+    """Devolve cada monitor ao papel de parede que tinha. Seguro chamar à toa.
+
+    Encerra a sessão corrente antes de tudo, mesmo sem nada a devolver: é
+    justamente enquanto a arte ainda está sendo preparada que a chave está
+    vazia, e sem isso a preparação vestiria as telas depois desta volta.
+    """
+    global _sessao  # pylint: disable=global-statement
+    _sessao += 1
+
     guardados = shared.schema.get_string(_CHAVE_ORIGINAIS)
     if not guardados:
         return
@@ -466,20 +585,22 @@ def restaurar() -> None:
         originais = json.loads(guardados)
     except ValueError:
         originais = {}
+    if not isinstance(originais, dict):
+        originais = {}
 
     try:
         with _AreaDeTrabalho() as area:
             for monitor, caminho in originais.items():
-                # Monitor sem papel de parede antes fica sem agora: vesti-lo
-                # de vazio apagaria o fundo em vez de devolvê-lo.
-                if caminho:
-                    area.vestir(monitor, caminho)
+                # Vazio também volta: é o monitor que mostrava só a cor de
+                # fundo, e a IDesktopWallpaper aceita "" como "sem imagem".
+                area.vestir(monitor, str(caminho))
     except OSError as erro:
+        # A chave fica. Ela é o único registro dos originais, a sessão
+        # seguinte não a sobrescreve (só acrescenta monitores que faltem) e o
+        # próximo arranque tenta a volta de novo.
         logging.warning("Não foi possível devolver o papel de parede: %s", erro)
+        return
 
-    # A chave sai mesmo quando a devolução falhou. Ela é a marca de "há uma
-    # sessão vestindo as telas", e mantê-la faria a sessão seguinte guardar a
-    # nossa própria arte como se fosse o papel de parede do usuário.
     shared.schema.set_string(_CHAVE_ORIGINAIS, "")
     _limpar_cache()
 
