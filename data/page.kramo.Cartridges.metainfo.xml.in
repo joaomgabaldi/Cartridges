@@ -63,6 +63,8 @@
           <li>Com a apresentação de slides do Windows ligada, a sessão não mexe no papel de parede, porque trocar a imagem desligaria a apresentação de vez</li>
           <li>A busca na tela de escolha de papel de parede baixa as miniaturas seis de cada vez, e não uma por uma: com a rede lenta, a grade levava minutos para encher</li>
           <li>Uma parede escolhida à mão cujo arquivo sumiu do disco aparecia como "Não trocar". Agora ela volta ao automático, e a busca roda de novo. E a imagem escolhida não fica mais esquecida na pasta temporária do Windows</li>
+          <li>A moldura preta em volta da janela, que aparecia com ela fora do modo maximizado, sumiu. O app agora desenha pelo Vulkan da Microsoft, que roda sobre o Direct3D 12 na mesma placa de vídeo, quando o "OpenCL, OpenGL e Vulkan Compatibility Pack" da Microsoft Store está instalado. O Vulkan da NVIDIA descartava a transparência da margem de sombra da janela, e ela saía preta. As animações ficam praticamente iguais; só a primeira abertura pode dar um pequeno tranco enquanto os shaders são preparados. Sem o pacote, nada muda</li>
+          <li>Os jogos continuam usando o driver da placa de vídeo: a escolha do Vulkan da Microsoft vale só para a janela do app e sai do ambiente antes de qualquer jogo poder ser aberto, então nenhum jogo lançado pelo app a herda</li>
         </ul>
       </description>
     </release>
