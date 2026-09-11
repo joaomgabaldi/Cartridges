@@ -148,6 +148,9 @@ class DetailsDialog(Adw.Dialog):
     # at all) or "auto" (forget the decision and let the lookup run again).
     _logo_choice: Optional[tuple[str, Optional[Path]]] = None
     _wallpaper_choice: Optional[tuple[str, Optional[Path], float]] = None
+    # O arquivo temporário que a tela de escolha entregou, e que é desta tela
+    # apagar. None quando a escolha veio do disco do usuário, que não se apaga.
+    _wallpaper_tmp: Optional[Path] = None
 
     # A nota escolhida nas estrelas, de 0 a 5. Guardada aqui até o Aplicar,
     # como todo o resto do diálogo: clicar numa estrela e depois cancelar não
@@ -170,6 +173,7 @@ class DetailsDialog(Adw.Dialog):
         # closed, however it was closed.
         shared.win.store_library_scroll()
         self.connect("closed", lambda *_: shared.win.restore_library_scroll())
+        self.connect("closed", lambda *_: self.discard_wallpaper_tmp())
 
         self.game: Optional[Game] = game
         self.game_cover: GameCover = GameCover({self.cover})
@@ -879,7 +883,7 @@ class DetailsDialog(Adw.Dialog):
 
     def browse_wallpapers(self, *_args: Any) -> None:
         WallpaperPicker(
-            self.name.get_text(), self.set_wallpaper_from_path, self.set_wallpaper_none
+            self.name.get_text(), self.set_wallpaper_from_picker, self.set_wallpaper_none
         ).present(self)
 
     def choose_wallpaper_file(self, *_args: Any) -> None:
@@ -887,23 +891,48 @@ class DetailsDialog(Adw.Dialog):
 
     def set_wallpaper_file(self, _source: Any, result: Gio.Task, *_args: Any) -> None:
         try:
-            path = Path(self.image_file_dialog.open_finish(result).get_path())
+            chosen = self.image_file_dialog.open_finish(result).get_path()
         except GLib.Error:
             return
+        if not chosen:
+            return
+        path = Path(chosen)
         # Do meio, que é o que a tela de escolha oferece como ponto de partida.
         # Quem traz um arquivo próprio quase sempre traz um já no formato do
         # monitor, e aí a faixa não muda nada.
         self.set_wallpaper_from_path(path, 0.5)
 
     def set_wallpaper_from_path(self, path: Path, posicao: float = 0.5) -> None:
+        self.discard_wallpaper_tmp()
         self._wallpaper_choice = ("manual", path, posicao)
         self.update_wallpaper_row()
 
+    def set_wallpaper_from_picker(self, path: Path, posicao: float) -> None:
+        """Como :meth:`set_wallpaper_from_path`, com o arquivo da tela de escolha.
+
+        Ela o entrega numa pasta temporária e o esquece. Daqui em diante quem o
+        apaga é esta tela: ao trocar de escolha, ao aplicar (a imagem já foi
+        copiada para a pasta das paredes) ou ao fechar sem aplicar.
+        """
+        self.set_wallpaper_from_path(path, posicao)
+        self._wallpaper_tmp = path
+
+    def discard_wallpaper_tmp(self) -> None:
+        if self._wallpaper_tmp is None:
+            return
+        try:
+            self._wallpaper_tmp.unlink(missing_ok=True)
+        except OSError as error:
+            logging.info("Could not remove the staged wallpaper: %s", error)
+        self._wallpaper_tmp = None
+
     def set_wallpaper_none(self) -> None:
+        self.discard_wallpaper_tmp()
         self._wallpaper_choice = ("none", None, 0.5)
         self.update_wallpaper_row()
 
     def reset_wallpaper_choice(self, *_args: Any) -> None:
+        self.discard_wallpaper_tmp()
         self._wallpaper_choice = ("auto", None, 0.5)
         self.update_wallpaper_row()
 
@@ -940,6 +969,7 @@ class DetailsDialog(Adw.Dialog):
         else:
             reset_wallpaper(game.game_id)
 
+        self.discard_wallpaper_tmp()
         self._wallpaper_choice = None
         return True
 

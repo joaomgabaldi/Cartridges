@@ -43,10 +43,6 @@ from cartridges import shared
 
 BASE = "https://wallhaven.cc/api/v1/search"
 
-# Uma página do site. Mais do que isso vira uma fila de downloads de
-# miniatura que ninguém vai rolar até o fim.
-PER_PAGE = 24
-
 # Só "general". A categoria "anime" foi testada e saiu: ela não traz mais arte
 # DE JOGO, traz fan art de personagem no traço de anime — comparadas lado a
 # lado numa busca real, as duas devolvem retrato de personagem, e a segunda

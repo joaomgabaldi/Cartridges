@@ -457,8 +457,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
         if ProcessSession.active is not None:
             return ProcessSession.active.elapsed
-        if SessionWindow.active is not None:
-            return int(monotonic() - SessionWindow.active.session_start)
+        if (active := SessionWindow.active) is not None:
+            # `flush` grava a cada minuto adiantando `session_start`; sem somar
+            # o que já foi gravado, o relógio voltava a zero a cada gravação.
+            return active.session_seconds + int(monotonic() - active.session_start)
         return 0
 
     def session_tick(self, *_args: Any) -> bool:
@@ -487,14 +489,13 @@ class CartridgesWindow(Adw.ApplicationWindow):
             self.session_blocker_timer.set_visible(True)
             self.session_timer_id = GLib.timeout_add_seconds(1, self.session_tick)
 
-        # Vestir os monitores em pé com a arte do jogo. Numa thread porque o
-        # caminho completo é rede (busca e download no wallhaven) mais Pillow,
-        # e nada disso pode segurar a tela enquanto o jogo abre — quando a arte
-        # já está em disco, ela aparece junto com o bloqueador.
+        # Vestir os monitores em pé com a arte do jogo. A preparação roda numa
+        # thread porque o caminho completo é rede (busca e download no
+        # wallhaven) mais Pillow, e nada disso pode segurar a tela enquanto o
+        # jogo abre — quando a arte já está em disco, ela aparece junto com o
+        # bloqueador.
         if shared.schema.get_boolean("session-wallpaper"):
-            threading.Thread(
-                target=session_wallpaper.aplicar, args=(game,), daemon=True
-            ).start()
+            session_wallpaper.comecar(game)
 
         # Hand the controller entirely to the game for the duration: stop
         # polling and release the XInput DLL until the session ends.

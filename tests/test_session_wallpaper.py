@@ -156,6 +156,37 @@ class TestEscolhaPorJogo:
         assert session_wallpaper.escolha(jogo) == "auto"
         assert session_wallpaper.imagem_escolhida(jogo.game_id) is None
 
+    def test_arquivo_manual_sumido_volta_ao_automatico(self, jogo, tmp_path) -> None:
+        """Não é "não trocar": é uma escolha que se perdeu, e a busca volta."""
+        origem = tmp_path / "escolhida.jpg"
+        _arte(64, 64).save(origem)
+        destino = session_wallpaper.salvar_escolha(jogo.game_id, jogo.name, origem, 0.5)
+        assert destino is not None
+        destino.unlink()
+
+        assert session_wallpaper.escolha(jogo) == "auto"
+
+
+class _AreaFalsa:
+    """O bastante da IDesktopWallpaper para a ida e a volta, sem tocar na tela."""
+
+    def __init__(self, papeis):
+        self.papeis = dict(papeis)
+        self.vestidos: list = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return None
+
+    def papel(self, monitor):
+        return self.papeis.get(monitor)
+
+    def vestir(self, monitor, caminho):
+        self.vestidos.append((monitor, caminho))
+        self.papeis[monitor] = caminho
+
 
 class TestRestauro:
     def test_restaurar_sem_sessao_nao_faz_nada(self, schema) -> None:
@@ -163,20 +194,69 @@ class TestRestauro:
         session_wallpaper.restaurar()  # não pode levantar nem tocar em COM
         assert schema.get_string("session-wallpaper-saved") == ""
 
-    def test_a_marca_sai_mesmo_quando_a_devolucao_falha(self, schema, monkeypatch):
-        """A chave é "há sessão vestindo as telas", e tem de sair de qualquer jeito.
+    def test_a_marca_fica_quando_a_devolucao_falha(self, schema, monkeypatch):
+        """Sem COM na volta, a chave com os originais continua em disco.
 
-        Mantê-la faria a sessão seguinte guardar a NOSSA arte como se fosse o
-        papel de parede do usuário, e o de verdade se perderia para sempre.
+        Ela é o único registro do papel de parede de verdade. Apagada, ele se
+        perdia para sempre; mantida, o arranque seguinte tenta de novo, e a
+        sessão seguinte não a sobrescreve (veja o teste dos originais abaixo).
         """
-        schema["session-wallpaper-saved"] = json.dumps({"\\\\?\\DISPLAY#X": "c:/a.jpg"})
+        guardado = json.dumps({"M1": "c:/a.jpg"})
+        schema["session-wallpaper-saved"] = guardado
 
         def sem_com(*_args, **_kwargs):
             raise OSError("sem área de trabalho neste ambiente")
 
         monkeypatch.setattr(session_wallpaper, "_AreaDeTrabalho", sem_com)
         session_wallpaper.restaurar()
+        assert schema.get_string("session-wallpaper-saved") == guardado
+
+    def test_monitor_so_com_a_cor_de_fundo_tambem_volta(self, schema, monkeypatch):
+        """Original vazio quer dizer "sem imagem", e é a esse estado que ele volta."""
+        schema["session-wallpaper-saved"] = json.dumps({"M1": "", "M2": "c:/b.jpg"})
+        area = _AreaFalsa({})
+        monkeypatch.setattr(session_wallpaper, "_AreaDeTrabalho", lambda: area)
+
+        session_wallpaper.restaurar()
+
+        assert sorted(area.vestidos) == [("M1", ""), ("M2", "c:/b.jpg")]
         assert schema.get_string("session-wallpaper-saved") == ""
+
+    def test_sessao_encerrada_nao_veste(self, schema, monkeypatch, tmp_path):
+        """A arte que fica pronta depois do fim da sessão não vai para a parede."""
+        area = _AreaFalsa({"M1": "c:/original.jpg"})
+        monkeypatch.setattr(session_wallpaper, "_AreaDeTrabalho", lambda: area)
+        quadro = tmp_path / "quadro.jpg"
+        quadro.write_bytes(b"jpg")
+
+        sessao = session_wallpaper._sessao
+        session_wallpaper.restaurar()  # o jogo fechou enquanto a arte baixava
+        session_wallpaper._vestir(sessao, [("M1", quadro)])
+
+        assert area.vestidos == []
+        assert schema.get_string("session-wallpaper-saved") == ""
+        assert not quadro.exists()
+
+    def test_originais_sao_gravados_sem_sobrescrever_os_de_antes(
+        self, schema, monkeypatch, tmp_path
+    ):
+        """Quem já consta na chave fica com o valor de lá; quem falta é lido.
+
+        M1 consta de uma devolução que falhou, e o que ele mostra agora é arte
+        nossa. M3 não responde, e sem original não é vestido.
+        """
+        schema["session-wallpaper-saved"] = json.dumps({"M1": "c:/original.jpg"})
+        area = _AreaFalsa({"M1": "c:/arte-velha.jpg", "M2": "c:/m2.jpg", "M3": None})
+        monkeypatch.setattr(session_wallpaper, "_AreaDeTrabalho", lambda: area)
+        quadros = [(m, tmp_path / f"{m}.jpg") for m in ("M1", "M2", "M3")]
+
+        session_wallpaper._vestir(session_wallpaper._sessao, quadros)
+
+        assert json.loads(schema.get_string("session-wallpaper-saved")) == {
+            "M1": "c:/original.jpg",
+            "M2": "c:/m2.jpg",
+        }
+        assert [monitor for monitor, _ in area.vestidos] == ["M1", "M2"]
 
 
 @pytest.fixture

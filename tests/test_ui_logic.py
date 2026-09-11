@@ -2010,3 +2010,31 @@ def test_restoring_the_top_of_the_library_still_suppresses_scroll_to_focus(
     real_window.restore_library_scroll()
 
     assert viewport.get_scroll_to_focus() is False
+
+
+def test_the_manual_session_clock_survives_the_minute_flush(monkeypatch):
+    """O relógio da sessão manual não volta a zero quando o minuto é gravado.
+
+    `SessionWindow.flush` banca o tempo a cada minuto adiantando
+    `session_start`. Um relógio que lê só `monotonic() - session_start` volta
+    a 0:00:00 a cada gravação; ele tem de somar o que já foi gravado.
+    """
+    import types
+
+    from cartridges import session_window, window
+    from cartridges.process_session import ProcessSession
+    from cartridges.session_window import SessionWindow
+
+    agora = [1000.0]
+    monkeypatch.setattr(session_window, "monotonic", lambda: agora[0])
+    monkeypatch.setattr(window, "monotonic", lambda: agora[0])
+    game = types.SimpleNamespace(playtime=0, save=lambda: None)
+    ativa = types.SimpleNamespace(game=game, session_start=1000.0, session_seconds=0)
+    monkeypatch.setattr(ProcessSession, "active", None)
+    monkeypatch.setattr(SessionWindow, "active", ativa)
+
+    agora[0] = 1065.0
+    SessionWindow.flush(ativa)  # o tick de um minuto
+    agora[0] = 1070.0
+
+    assert CartridgesWindow.session_elapsed(None) == 70

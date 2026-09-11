@@ -36,6 +36,7 @@ import logging
 import shutil
 import tempfile
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.parse import urlparse
@@ -187,27 +188,39 @@ class WallpaperPicker(Adw.Dialog):
             )
             return
 
-        for item in achados[:MAX_RESULTS]:
-            if generation != self._generation:
-                return
-            try:
-                miniatura = download_bytes(str(item["thumb"]), timeout=15)
-            except requests.RequestException as error:
-                logging.info("Miniatura não baixou (%s)", error)
-                continue
-            caminho = self._temp_dir / f"{item['id']}.img"
-            try:
-                caminho.write_bytes(miniatura)
-                with Image.open(caminho) as arquivo:
-                    quadro = enquadrar(
-                        arquivo.convert("RGB"), *self._cell_pixels()
-                    )
-                dados = imagem_para_textura_bytes(quadro)
-            except (OSError, UnidentifiedImageError, ValueError):
-                continue
-            GLib.idle_add(self._add_result, dados, item, generation)
+        # Seis de cada vez, na ordem da busca. Uma por vez, com 15s de limite
+        # cada, uma rede ruim segurava a grade por minutos — e a janela fechada
+        # só era notada entre uma miniatura e a seguinte.
+        candidatos = achados[:MAX_RESULTS]
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            miniaturas = executor.map(
+                lambda item: self._miniatura(item, generation), candidatos
+            )
+            for item, dados in zip(candidatos, miniaturas):
+                if generation != self._generation:
+                    return
+                if dados is not None:
+                    GLib.idle_add(self._add_result, dados, item, generation)
 
         GLib.idle_add(self._finish_results, generation)
+
+    def _miniatura(self, item: dict[str, Any], generation: int) -> Optional[bytes]:
+        """A miniatura de ``item`` já cortada, em PNG. None quando não deu."""
+        if generation != self._generation:
+            return None  # busca trocada ou janela fechada: nem baixa
+        try:
+            miniatura = download_bytes(str(item["thumb"]), timeout=15)
+        except requests.RequestException as error:
+            logging.info("Miniatura não baixou (%s)", error)
+            return None
+        caminho = self._temp_dir / f"{item['id']}.img"
+        try:
+            caminho.write_bytes(miniatura)
+            with Image.open(caminho) as arquivo:
+                quadro = enquadrar(arquivo.convert("RGB"), *self._cell_pixels())
+            return imagem_para_textura_bytes(quadro)
+        except (OSError, UnidentifiedImageError, ValueError):
+            return None
 
     def _cell_pixels(self) -> tuple[int, int]:
         """A célula em pixels de verdade, para não sair borrada num monitor HiDPI."""
@@ -383,7 +396,11 @@ class WallpaperPicker(Adw.Dialog):
         # até o Cancelar, que continua cancelando.
         try:
             modelo = f"cartridges_wallpaper_XXXXXX{self._suffix}"
-            caminho = Path(Gio.File.new_tmp(modelo)[0].get_path())
+            arquivo, fluxo = Gio.File.new_tmp(modelo)
+            # Fechado antes da escrita: aberto, o fluxo que `new_tmp` devolve
+            # segura o arquivo até o coletor de lixo passar.
+            fluxo.close()
+            caminho = Path(arquivo.get_path())
             caminho.write_bytes(self._bytes)
         except (GLib.Error, OSError) as error:
             logging.warning("Não foi possível guardar a escolha: %s", error)

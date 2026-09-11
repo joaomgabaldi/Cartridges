@@ -56,6 +56,13 @@
           <li>Ainda em "Sessão": enquanto o jogo roda, os monitores em pé podem mostrar a arte dele como papel de parede, e ao terminar a sessão cada um volta ao papel de parede que tinha. Só os monitores em pé, e por proporção — a arte de um jogo é vertical, e num monitor deitado ela não caberia. Se o app for fechado (ou morrer) no meio da sessão, o arranque seguinte desfaz a troca sozinho. Desligado, que é como vem, nada muda</li>
           <li>A imagem sai do wallhaven, buscada pelo nome do jogo. Como papel de parede em pé é raro no site, a busca desce degraus: retrato primeiro, qualquer formato depois — e o que vem deitado é cortado no formato do monitor. Sem nenhum resultado, entra a capa do jogo, inteira, sobre ela mesma borrada</li>
           <li>E cada jogo pode ter o seu escolhido à mão, na tela de edição, ao lado do logo: a grade de resultados mostra os candidatos JÁ CORTADOS no formato do monitor — o que se vê ali é o que vai para a parede —, e uma barrinha desliza a faixa da imagem antes de gravar. Também dá para apontar um arquivo do disco, ou marcar o jogo como "não trocar". A escolha feita à mão fica travada: a busca automática não mexe mais nela, nem se o jogo for renomeado</li>
+          <li>O relógio da sessão sem acompanhamento de processo, a da janelinha "Jogando", voltava a 0:00:00 a cada minuto, na hora em que o tempo era gravado. Agora ele soma o que já foi gravado</li>
+          <li>Uma sessão curta, com o jogo fechado antes de a arte terminar de baixar, deixava os monitores em pé com a arte do jogo depois do fim dela, até o app ser aberto de novo. A arte agora só vai para a parede se a sessão ainda estiver valendo</li>
+          <li>Monitor que mostrava só a cor de fundo, sem imagem, ficava com a arte do jogo depois da sessão. Agora ele volta à cor</li>
+          <li>Se a devolução do papel de parede falhar, o registro do original não é mais apagado: o arranque seguinte tenta de novo, e a sessão seguinte não grava a arte do jogo por cima do original</li>
+          <li>Com a apresentação de slides do Windows ligada, a sessão não mexe no papel de parede, porque trocar a imagem desligaria a apresentação de vez</li>
+          <li>A busca na tela de escolha de papel de parede baixa as miniaturas seis de cada vez, e não uma por uma: com a rede lenta, a grade levava minutos para encher</li>
+          <li>Uma parede escolhida à mão cujo arquivo sumiu do disco aparecia como "Não trocar". Agora ela volta ao automático, e a busca roda de novo. E a imagem escolhida não fica mais esquecida na pasta temporária do Windows</li>
         </ul>
       </description>
     </release>
