@@ -120,6 +120,43 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; Param
 Filename: "{app}\bin\{#MyAppExeName}"; Parameters: """{app}\bin\cartridges"""; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall
 
 [Code]
+// NVIDIA driver notice, right after the licence page. In its default present
+// method the NVIDIA Vulkan driver drops the alpha of the window's shadow
+// margin, which then shows as a black frame; a per-program "Prefer native"
+// fixes it, and that is a driver setting the installer cannot make. Like the
+// licence page, Next stays disabled until the box is ticked.
+var
+  NvidiaPage: TInputOptionWizardPage;
+
+procedure NvidiaPageCheckClick(Sender: TObject);
+begin
+  WizardForm.NextButton.Enabled := NvidiaPage.Values[0];
+end;
+
+procedure InitializeWizard;
+begin
+  NvidiaPage := CreateInputOptionPage(wpLicense,
+    'Placa de vídeo NVIDIA',
+    'Uma configuração do driver é necessária depois de instalar',
+    'Com placa de vídeo NVIDIA, a janela do Cartridges ganha uma moldura preta ' +
+    'quando não está maximizada. Para evitar isso, depois de instalar:' + #13#10 + #13#10 +
+    '1. Abra o Painel de Controle NVIDIA, em Gerenciar as configurações 3D.' + #13#10 +
+    '2. Na aba Configurações de programa, adicione o pythonw.exe da pasta bin da ' +
+    'instalação (por padrão, C:\Program Files\Cartridges\bin).' + #13#10 +
+    '3. No método de apresentação Vulkan/OpenGL ("Vulkan/OpenGL present method"), ' +
+    'escolha "Preferir nativo" ("Prefer native") e aplique.' + #13#10 + #13#10 +
+    'Sem placa de vídeo NVIDIA, não é preciso fazer nada.',
+    False, False);
+  NvidiaPage.Add('Estou ciente de que preciso fazer essa configuração depois de instalar');
+  NvidiaPage.CheckListBox.OnClickCheck := @NvidiaPageCheckClick;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = NvidiaPage.ID then
+    WizardForm.NextButton.Enabled := NvidiaPage.Values[0];
+end;
+
 // Offer to remove the user's library and settings on uninstall. They live
 // outside the install folder (LocalAppData + GSettings in the registry), so the
 // default uninstall would otherwise leave them behind.

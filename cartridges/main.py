@@ -34,65 +34,6 @@ from urllib.parse import quote
 os.environ.setdefault("GDK_WIN32_FORCE_DCOMP", "1")
 os.environ.setdefault("GSK_RENDERER", "vulkan")
 
-# Vulkan da Microsoft, que roda sobre o Direct3D 12 na mesma placa, no lugar do
-# Vulkan do fabricante. O da NVIDIA descarta a transparência na entrega dos
-# quadros, e a margem de sombra em volta da janela não maximizada sai preta; o
-# da Microsoft a preserva, com animações medidas perto das do driver da placa.
-#
-# A escolha é uma variável de ambiente do carregador Vulkan, e ambiente é
-# herdado: um jogo lançado daqui com ela rodaria no Vulkan de tradução da
-# Microsoft, bem mais lento. Por isso ela vive só até o GTK criar a instância
-# Vulkan dele, no `realize` da janela principal, e sai do ambiente ali mesmo —
-# veja `do_activate`. Nenhum jogo pode ser aberto antes de a janela existir.
-VULKAN_DRIVER_FILTER = "VK_LOADER_DRIVERS_SELECT"
-MICROSOFT_VULKAN_DRIVER = "dzn_icd.x64.json"
-MICROSOFT_VULKAN_PACKAGE = "Microsoft.D3DMappingLayers_8wekyb3d8bbwe"
-
-
-def microsoft_vulkan_installed() -> bool:
-    """Se o pacote da Microsoft Store que traz esse Vulkan está instalado.
-
-    O "OpenCL, OpenGL e Vulkan Compatibility Pack". Perguntado ao Windows pela
-    família do pacote, que não muda entre versões, e não pela pasta dele, que
-    muda a cada atualização e nem pode ser listada por um usuário comum.
-    """
-    import ctypes  # pylint: disable=import-outside-toplevel
-    from ctypes import wintypes  # pylint: disable=import-outside-toplevel
-
-    try:
-        find = ctypes.windll.kernel32.GetPackagesByPackageFamily
-    except (AttributeError, OSError):
-        return False
-    find.argtypes = [
-        wintypes.LPCWSTR,
-        ctypes.POINTER(ctypes.c_uint32),
-        ctypes.c_void_p,
-        ctypes.POINTER(ctypes.c_uint32),
-        ctypes.c_void_p,
-    ]
-    find.restype = ctypes.c_long
-    count, length = ctypes.c_uint32(0), ctypes.c_uint32(0)
-    # Sem buffers, a chamada só conta: ERROR_INSUFFICIENT_BUFFER com a contagem
-    # preenchida quando há pacote, sucesso com zero quando não há.
-    find(MICROSOFT_VULKAN_PACKAGE, ctypes.byref(count), None, ctypes.byref(length), None)
-    return count.value > 0
-
-
-def use_microsoft_vulkan() -> bool:
-    """Aponta o carregador Vulkan para o driver da Microsoft. Diz se apontou.
-
-    Uma escolha que já veio do ambiente é de quem a fez e fica como está. E sem
-    o pacote instalado nada muda: o filtro não acharia driver nenhum, e o GTK
-    cairia no OpenGL, a combinação quebrada descrita acima.
-    """
-    if VULKAN_DRIVER_FILTER in os.environ or not microsoft_vulkan_installed():
-        return False
-    os.environ[VULKAN_DRIVER_FILTER] = MICROSOFT_VULKAN_DRIVER
-    return True
-
-
-VULKAN_FILTER_SET_HERE = use_microsoft_vulkan()
-
 import gi
 
 gi.require_version("Gtk", "4.0")
@@ -458,14 +399,6 @@ class CartridgesApplication(Adw.Application):
         # Create the main window. A second activation returned early above, so
         # there is never an existing window here.
         shared.win = CartridgesWindow(application=self)
-
-        # O GTK cria a instância Vulkan no `realize` da janela, antes deste
-        # handler, e daí em diante o filtro de driver não serve para mais nada.
-        # Fora do ambiente, para os jogos lançados pelo app não o herdarem.
-        if VULKAN_FILTER_SET_HERE:
-            shared.win.connect(
-                "realize", lambda *_: os.environ.pop(VULKAN_DRIVER_FILTER, None)
-            )
 
         # Restore the window's geometry, and save it back on the way out. This
         # used to be three two-way GSettings bindings, which is the usual way to
