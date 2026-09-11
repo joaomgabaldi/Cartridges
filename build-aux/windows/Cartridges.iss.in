@@ -120,13 +120,41 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; Param
 Filename: "{app}\bin\{#MyAppExeName}"; Parameters: """{app}\bin\cartridges"""; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall
 
 [Code]
-// NVIDIA driver notice, right after the licence page. In its default present
-// method the NVIDIA Vulkan driver drops the alpha of the window's shadow
-// margin, which then shows as a black frame; a per-program "Prefer native"
-// fixes it, and that is a driver setting the installer cannot make. Like the
-// licence page, Next stays disabled until the box is ticked.
+// NVIDIA driver notice, right after the licence page, on machines with an
+// NVIDIA card only. In its default present method the NVIDIA Vulkan driver
+// drops the alpha of the window's shadow margin, which then shows as a black
+// frame; a per-program "Prefer native" fixes it, and that is a driver setting
+// the installer cannot make. Like the licence page, Next stays disabled until
+// the box is ticked.
+const
+  DisplayClassKey = 'SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}';
+
 var
   NvidiaPage: TInputOptionWizardPage;
+
+// Whether any display adapter Windows knows about is NVIDIA's. Each one has a
+// subkey under the display class with the vendor in ProviderName, readable
+// without elevation. All of them are checked: the NVIDIA card need not be the
+// first, and a virtual display adapter (Parsec, for one) is enough to push it
+// down. A card that was swapped out can leave its subkey behind, which only
+// shows the notice to someone who no longer needs it.
+function HasNvidiaGpu: Boolean;
+var
+  Adapters: TArrayOfString;
+  Provider: String;
+  I: Integer;
+begin
+  Result := False;
+  if not RegGetSubkeyNames(HKLM, DisplayClassKey, Adapters) then
+    Exit;
+  for I := 0 to GetArrayLength(Adapters) - 1 do
+    if RegQueryStringValue(HKLM, DisplayClassKey + '\' + Adapters[I], 'ProviderName', Provider) then
+      if Pos('NVIDIA', Uppercase(Provider)) > 0 then
+      begin
+        Result := True;
+        Exit;
+      end;
+end;
 
 procedure NvidiaPageCheckClick(Sender: TObject);
 begin
@@ -135,6 +163,9 @@ end;
 
 procedure InitializeWizard;
 begin
+  // No NVIDIA card, no page: the wizard goes straight on.
+  if not HasNvidiaGpu then
+    Exit;
   NvidiaPage := CreateInputOptionPage(wpLicense,
     'Placa de vídeo NVIDIA',
     'Uma configuração do driver é necessária depois de instalar',
@@ -144,8 +175,7 @@ begin
     '2. Na aba Configurações de programa, adicione o pythonw.exe da pasta bin da ' +
     'instalação (por padrão, C:\Program Files\Cartridges\bin).' + #13#10 +
     '3. No método de apresentação Vulkan/OpenGL ("Vulkan/OpenGL present method"), ' +
-    'escolha "Preferir nativo" ("Prefer native") e aplique.' + #13#10 + #13#10 +
-    'Sem placa de vídeo NVIDIA, não é preciso fazer nada.',
+    'escolha "Preferir nativo" ("Prefer native") e aplique.',
     False, False);
   NvidiaPage.Add('Estou ciente de que preciso fazer essa configuração depois de instalar');
   NvidiaPage.CheckListBox.OnClickCheck := @NvidiaPageCheckClick;
@@ -153,8 +183,9 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
-  if CurPageID = NvidiaPage.ID then
-    WizardForm.NextButton.Enabled := NvidiaPage.Values[0];
+  if NvidiaPage <> nil then
+    if CurPageID = NvidiaPage.ID then
+      WizardForm.NextButton.Enabled := NvidiaPage.Values[0];
 end;
 
 // Offer to remove the user's library and settings on uninstall. They live
