@@ -2038,3 +2038,28 @@ def test_the_manual_session_clock_survives_the_minute_flush(monkeypatch):
     agora[0] = 1070.0
 
     assert CartridgesWindow.session_elapsed(None) == 70
+
+
+def test_microsoft_vulkan_only_when_installed_and_not_already_chosen(monkeypatch):
+    """O filtro de driver Vulkan só entra com o pacote da Microsoft instalado.
+
+    Sem o pacote, o filtro não acharia driver nenhum e o GTK cairia no OpenGL.
+    Com uma escolha já no ambiente, ela é de quem a fez e não é trocada.
+    """
+    import os
+
+    from cartridges import main
+
+    monkeypatch.delenv(main.VULKAN_DRIVER_FILTER, raising=False)
+
+    monkeypatch.setattr(main, "microsoft_vulkan_installed", lambda: False)
+    assert main.use_microsoft_vulkan() is False
+    assert main.VULKAN_DRIVER_FILTER not in os.environ
+
+    monkeypatch.setattr(main, "microsoft_vulkan_installed", lambda: True)
+    assert main.use_microsoft_vulkan() is True
+    assert os.environ[main.VULKAN_DRIVER_FILTER] == "dzn_icd.x64.json"
+
+    monkeypatch.setenv(main.VULKAN_DRIVER_FILTER, "nv-vk64.json")
+    assert main.use_microsoft_vulkan() is False
+    assert os.environ[main.VULKAN_DRIVER_FILTER] == "nv-vk64.json"
