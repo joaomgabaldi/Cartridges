@@ -51,6 +51,8 @@
         <ul>
           <li>Se o Windows recusasse devolver o papel de parede de um só monitor no fim da sessão — um original guardado no iCloud Drive com a rede fora, por exemplo —, o registro daquele original era apagado junto com os outros, e o monitor ficava com a arte do jogo para sempre. Agora só sai do registro o monitor que voltou de fato; o que foi recusado é tentado de novo no próximo fim de sessão ou arranque</li>
           <li>A parede escolhida à mão para um jogo, ou a marca "não trocar", se perdia quando o jogo mudava de identificação por dentro (o que acontece, por exemplo, quando o atalho dele muda de lugar). Ela agora acompanha o jogo, como a capa e o logo já acompanhavam</li>
+          <li>O app voltou a desenhar pelo Vulkan da própria placa de vídeo, e não mais pelo Vulkan da Microsoft. A moldura preta em volta da janela vinha de uma opção do driver da NVIDIA, o método de apresentação Vulkan/OpenGL: no modo automático, o driver entrega os quadros por um caminho que descarta a transparência da margem de sombra. Com "Preferir nativo" configurado para o Cartridges, a margem fica transparente — medido com e sem a configuração, no mesmo driver. Assim o app não depende mais de um pacote da Microsoft Store nem de uma camada de tradução, e as animações rodam no driver da placa</li>
+          <li>O instalador ganhou uma página, logo depois da licença, com o passo a passo dessa configuração no Painel de Controle NVIDIA. Para continuar, é preciso marcar que você está ciente de que ela tem de ser feita depois de instalar. Sem placa NVIDIA, nada disso é necessário</li>
         </ul>
       </description>
     </release>
