@@ -66,6 +66,19 @@ class TestPreferencias:
         assert dialog.session_monitor_group.get_sensitive()
         assert dialog.session_wallpaper_switch.get_sensitive()
 
+    def test_desligadas_ficam_desligadas_quando_o_monitor_volta(
+        self, schema, ligados, monkeypatch
+    ):
+        """Religar é escolha do usuário: o segundo monitor de volta não basta."""
+        schema["session-move-window"] = False
+        schema["session-wallpaper"] = False
+        ligados(PRINCIPAL, SEGUNDO)
+
+        _preferencias(monkeypatch)
+
+        assert schema.get_boolean("session-move-window") is False
+        assert schema.get_boolean("session-wallpaper") is False
+
     def test_a_lista_nao_oferece_o_principal(self, schema, ligados, monkeypatch):
         """E um principal já gravado, pelo palpite de antes, vira o primeiro outro."""
         schema["session-monitor"] = PRINCIPAL.device
