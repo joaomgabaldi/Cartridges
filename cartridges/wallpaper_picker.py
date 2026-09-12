@@ -132,12 +132,14 @@ class WallpaperPicker(Adw.Dialog):
         name: str,
         on_selected: Callable[[Path, Posicoes], None],
         on_cleared: Callable[[], None],
+        arquivo: Optional[Path] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
 
         self.on_selected = on_selected
         self.on_cleared = on_cleared
+        self._arquivo = arquivo
 
         self.formatos = formatos_ligados()
         self.largura, self.altura = self.formatos.grade
@@ -176,19 +178,30 @@ class WallpaperPicker(Adw.Dialog):
         self._suffix = ".jpg"
         self._previa: Optional[Image.Image] = None
 
-        self.search_entry.set_text(clean_game_name(name))
-
         self.search_entry.connect("search-changed", self._on_search_changed)
         self.search_entry.connect("activate", lambda *_: self.search())
         self.flowbox.connect("child-activated", self._on_child_activated)
         self.none_button.connect("clicked", self._on_none_clicked)
         for corte in (self._paisagem, self._retrato):
             corte.adjustment.connect("value-changed", self._on_position_changed)
-        self.adjust_back.connect("clicked", lambda *_: self._show_results())
+        self.adjust_back.connect("clicked", self._on_back_clicked)
         self.adjust_apply.connect("clicked", self._on_apply_clicked)
         self.connect("closed", self._on_closed)
 
-        self.search()
+        if arquivo is None:
+            self.search_entry.set_text(clean_game_name(name))
+            self.search()
+        else:
+            # Um arquivo do disco: não há o que buscar nem o que "não trocar",
+            # a tela abre direto no ajuste e "Voltar" desiste da escolha.
+            self.search_bar.set_visible(False)
+            self.none_button.set_visible(False)
+            self.stack.set_visible_child_name("loading")
+            threading.Thread(
+                target=self._open_file_thread,
+                args=(arquivo, self._generation),
+                daemon=True,
+            ).start()
 
     # region Search
 
@@ -362,9 +375,23 @@ class WallpaperPicker(Adw.Dialog):
             logging.warning("Não foi possível baixar o papel de parede: %s", error)
             GLib.idle_add(self._show_empty, _("Não foi possível baixar"), generation)
             return
+        self._preparar(conteudo, Path(urlparse(url).path).suffix, generation)
 
+    def _open_file_thread(self, arquivo: Path, generation: int) -> None:
         try:
-            with Image.open(Path(self._salvar_temporario(conteudo, url))) as arquivo:
+            conteudo = arquivo.read_bytes()
+        except OSError as error:
+            logging.warning("Não foi possível ler o arquivo escolhido: %s", error)
+            GLib.idle_add(
+                self._show_empty, _("Não foi possível abrir a imagem"), generation
+            )
+            return
+        self._preparar(conteudo, arquivo.suffix, generation)
+
+    def _preparar(self, conteudo: bytes, sufixo: str, generation: int) -> None:
+        """Abre ``conteudo`` e entrega a cópia reduzida à tela de ajuste."""
+        try:
+            with Image.open(Path(self._salvar_temporario(conteudo, sufixo))) as arquivo:
                 imagem = arquivo.convert("RGB")
                 escala = min(
                     1.0,
@@ -384,16 +411,16 @@ class WallpaperPicker(Adw.Dialog):
                     else imagem.copy()
                 )
         except (OSError, UnidentifiedImageError, ValueError) as error:
-            logging.warning("Imagem baixada não pôde ser lida: %s", error)
-            GLib.idle_add(self._show_empty, _("Não foi possível abrir a imagem"), generation)
+            logging.warning("Imagem escolhida não pôde ser lida: %s", error)
+            GLib.idle_add(
+                self._show_empty, _("Não foi possível abrir a imagem"), generation
+            )
             return
 
-        GLib.idle_add(
-            self._open_done, conteudo, Path(urlparse(url).path).suffix, previa, generation
-        )
+        GLib.idle_add(self._open_done, conteudo, sufixo, previa, generation)
 
-    def _salvar_temporario(self, conteudo: bytes, url: str) -> str:
-        caminho = self._temp_dir / f"escolhida{Path(urlparse(url).path).suffix or '.jpg'}"
+    def _salvar_temporario(self, conteudo: bytes, sufixo: str) -> str:
+        caminho = self._temp_dir / f"escolhida{sufixo or '.jpg'}"
         caminho.write_bytes(conteudo)
         return str(caminho)
 
@@ -512,6 +539,13 @@ class WallpaperPicker(Adw.Dialog):
             ),
         )
         self.close()
+
+    def _on_back_clicked(self, *_args: Any) -> None:
+        # Aberta com um arquivo, a tela não tem grade para onde voltar.
+        if self._arquivo is not None:
+            self.close()
+        else:
+            self._show_results()
 
     # endregion
 

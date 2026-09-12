@@ -900,30 +900,34 @@ class DetailsDialog(Adw.Dialog):
             chosen = self.image_file_dialog.open_finish(result).get_path()
         except GLib.Error:
             return
-        if not chosen:
-            return
-        path = Path(chosen)
-        # Do meio, que é o que a tela de escolha oferece como ponto de partida.
-        # Quem traz um arquivo próprio quase sempre traz um já no formato do
-        # monitor, e aí a faixa não muda nada.
-        self.set_wallpaper_from_path(path, Posicoes())
+        if chosen:
+            self.open_wallpaper_file(Path(chosen))
 
-    def set_wallpaper_from_path(
-        self, path: Path, posicoes: Posicoes = Posicoes()
-    ) -> None:
-        self.discard_wallpaper_tmp()
-        self._wallpaper_choice = ("manual", path, posicoes)
-        self.update_wallpaper_row()
+    def open_wallpaper_file(self, path: Path) -> None:
+        """Leva o arquivo do disco à tela de ajuste, como uma imagem da busca.
+
+        Nenhum arquivo serve inteiro a um arranjo com monitor em pé e deitado,
+        e mesmo com uma orientação só a faixa é escolha de quem vê a imagem.
+        """
+        WallpaperPicker(
+            self.name.get_text(),
+            self.set_wallpaper_from_picker,
+            self.set_wallpaper_none,
+            arquivo=path,
+        ).present(self)
 
     def set_wallpaper_from_picker(self, path: Path, posicoes: Posicoes) -> None:
-        """Como :meth:`set_wallpaper_from_path`, com o arquivo da tela de escolha.
+        """Adota o arquivo que a tela de escolha entregou.
 
-        Ela o entrega numa pasta temporária e o esquece. Daqui em diante quem o
-        apaga é esta tela: ao trocar de escolha, ao aplicar (a imagem já foi
-        copiada para a pasta das paredes) ou ao fechar sem aplicar.
+        Ela o entrega numa pasta temporária e o esquece — venha ele da busca ou
+        do disco, é sempre uma cópia. Daqui em diante quem o apaga é esta tela:
+        ao trocar de escolha, ao aplicar (a imagem já foi copiada para a pasta
+        das paredes) ou ao fechar sem aplicar.
         """
-        self.set_wallpaper_from_path(path, posicoes)
+        self.discard_wallpaper_tmp()
+        self._wallpaper_choice = ("manual", path, posicoes)
         self._wallpaper_tmp = path
+        self.update_wallpaper_row()
 
     def discard_wallpaper_tmp(self) -> None:
         if self._wallpaper_tmp is None:
