@@ -17,13 +17,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Veste os monitores em pé com a arte do jogo enquanto a sessão corre.
+"""Veste os outros monitores com a arte do jogo enquanto a sessão corre.
 
-Só os monitores em pé, e por proporção, não por preferência: a arte de um jogo
-é vertical ou vira vertical no corte, e espremer isso num monitor deitado dá
-um resultado que ninguém escolheria. Quem está em pé é decidido pelo retângulo
-que o Windows informa (altura maior que largura), então ligar, desligar ou
-girar uma tela não pede configuração nenhuma.
+Os outros são todos menos o principal, em pé ou deitados. O jogo roda no
+principal — é a mesma premissa da opção de levar a janela para outro monitor —,
+e ali a arte ficaria atrás dele. Quem é o principal é o Windows quem diz, pelo
+retângulo: é o único que começa na origem da área de trabalho, então ligar,
+desligar ou girar uma tela não pede configuração nenhuma.
 
 A troca é por monitor, e isso descarta o caminho óbvio: o
 ``SystemParametersInfo(SPI_SETDESKWALLPAPER)`` de sempre pinta a área de
@@ -64,9 +64,10 @@ if TYPE_CHECKING:
 # come a testa antes de comer o chão.
 CENTRO_VERTICAL = 0.4
 
-# Onde a escolha automática cai quando não há monitor em pé ligado — a tela de
-# escolha precisa de uma proporção mesmo com tudo desconectado.
-ALVO_PADRAO = (1080, 1920)
+# Onde a tela de escolha cai quando não há monitor-alvo ligado — ela precisa de
+# uma proporção mesmo com tudo desconectado. Deitado porque é o formato de quase
+# toda arte e de quase todo monitor.
+PAISAGEM_PADRAO = (1920, 1080)
 
 _COINIT_APARTMENTTHREADED = 0x2
 _CLSID_DESKTOP_WALLPAPER = "{C2CF3110-460E-4FC1-B9D0-8A1C0C9CC4BD}"
@@ -88,11 +89,23 @@ class _GUID(ctypes.Structure):
 
 
 class Monitor(NamedTuple):
-    """Um monitor em pé: o id que a COM entende e o tamanho dele."""
+    """Um monitor ligado: o id que a COM entende, onde ele começa e o tamanho."""
 
     id: str
+    x: int
+    y: int
     largura: int
     altura: int
+
+    @property
+    def em_pe(self) -> bool:
+        return self.altura > self.largura
+
+    @property
+    def principal(self) -> bool:
+        # O Windows põe o canto do principal na origem da área de trabalho, e
+        # só o dele: os outros começam onde o arranjo os pôs, até em negativo.
+        return self.x == 0 and self.y == 0
 
 
 class _AreaDeTrabalho:
@@ -159,8 +172,8 @@ class _AreaDeTrabalho:
         finally:
             self._ole32.CoTaskMemFree(ponteiro)
 
-    def em_pe(self) -> list[Monitor]:
-        """Os monitores ligados cujo retângulo é mais alto que largo."""
+    def ligados(self) -> list[Monitor]:
+        """Os monitores ligados agora, cada um com o seu retângulo."""
         quantos = c_uint()
         if self._quantos(self._ponteiro, byref(quantos)):
             return []
@@ -182,8 +195,10 @@ class _AreaDeTrabalho:
                 continue
             largura = retangulo.right - retangulo.left
             altura = retangulo.bottom - retangulo.top
-            if altura > largura > 0:
-                monitores.append(Monitor(identificador, largura, altura))
+            if largura > 0 and altura > 0:
+                monitores.append(
+                    Monitor(identificador, retangulo.left, retangulo.top, largura, altura)
+                )
         return monitores
 
     def papel(self, monitor: str) -> Optional[str]:
@@ -225,6 +240,74 @@ class _AreaDeTrabalho:
         return True
 
 
+# region Monitores-alvo
+
+
+def alvos(monitores: list[Monitor]) -> list[Monitor]:
+    """Os monitores que recebem a arte: todos menos o principal."""
+    return [monitor for monitor in monitores if not monitor.principal]
+
+
+class Formatos(NamedTuple):
+    """O tamanho do maior monitor-alvo de cada orientação; None se não houver."""
+
+    retrato: Optional[tuple[int, int]]
+    paisagem: Optional[tuple[int, int]]
+
+    @property
+    def grade(self) -> tuple[int, int]:
+        """O formato da tela de escolha.
+
+        Em pé só quando todos os alvos estão em pé. No arranjo misto a grade é
+        deitada: quase toda arte é deitada, a miniatura a mostra quase inteira,
+        e o corte agressivo fica para o ajuste em pé.
+        """
+        return self.paisagem or self.retrato or PAISAGEM_PADRAO
+
+    @property
+    def ratio(self) -> str:
+        """Por qual formato a busca começa: o da grade."""
+        largura, altura = self.grade
+        return "portrait" if altura > largura else "landscape"
+
+    @property
+    def minimo(self) -> tuple[int, int]:
+        """O ``atleast`` da busca: a imagem que nenhum dos cortes precisa esticar."""
+        tamanhos = [tamanho for tamanho in (self.retrato, self.paisagem) if tamanho]
+        if not tamanhos:
+            return self.grade
+        return (
+            max(largura for largura, _altura in tamanhos),
+            max(altura for _largura, altura in tamanhos),
+        )
+
+
+def formatos(monitores: list[Monitor]) -> Formatos:
+    """Os formatos dos monitores-alvo entre ``monitores``."""
+
+    def maior(orientacao: list[Monitor]) -> Optional[tuple[int, int]]:
+        if not orientacao:
+            return None
+        monitor = max(orientacao, key=lambda item: item.largura * item.altura)
+        return monitor.largura, monitor.altura
+
+    alvo = alvos(monitores)
+    return Formatos(
+        maior([monitor for monitor in alvo if monitor.em_pe]),
+        maior([monitor for monitor in alvo if not monitor.em_pe]),
+    )
+
+
+def formatos_ligados() -> Formatos:
+    """Os formatos dos monitores-alvo ligados agora. Usada pela tela de escolha."""
+    try:
+        with _AreaDeTrabalho() as area:
+            return formatos(area.ligados())
+    except OSError:
+        return Formatos(None, None)
+
+
+# endregion
 # region Enquadramento
 
 
@@ -384,8 +467,13 @@ def _apagar_imagens(game_id: str, manter: str = "") -> None:
             arquivo.unlink(missing_ok=True)
 
 
-def _fonte(game: "Game", largura: int, altura: int) -> Optional[tuple[Path, float]]:
+def _fonte(
+    game: "Game", largura: int, altura: int, formato: str
+) -> Optional[tuple[Path, float]]:
     """A imagem de partida deste jogo e a faixa dela, baixando se precisar.
+
+    ``largura`` x ``altura`` é o mínimo que os cortes precisam, e ``formato`` é
+    por onde a busca começa — o da grade da tela de escolha.
 
     ``None`` quando o jogo está marcado para não trocar a parede, ou quando
     não sobrou nem busca nem capa.
@@ -407,7 +495,7 @@ def _fonte(game: "Game", largura: int, altura: int) -> Optional[tuple[Path, floa
     if (arquivo := _arquivo_do_sidecar(dados)) and dados.get("name") == game.name:
         return arquivo, posicao
 
-    if achado := melhor_para(game.name, largura, altura, "portrait"):
+    if achado := melhor_para(game.name, largura, altura, formato):
         try:
             conteudo = download_bytes(str(achado["path"]), timeout=30)
             sufixo = Path(str(achado["path"])).suffix.lower()
@@ -454,17 +542,6 @@ def _limpar_cache() -> None:
         pass
 
 
-def alvo() -> tuple[int, int]:
-    """A resolução para a qual enquadrar. Usada pela tela de escolha."""
-    try:
-        with _AreaDeTrabalho() as area:
-            if monitores := area.em_pe():
-                return monitores[0].largura, monitores[0].altura
-    except OSError:
-        pass
-    return ALVO_PADRAO
-
-
 def comecar(game: "Game") -> None:
     """Começa a vestir as telas para ``game``. Chamar da thread de UI.
 
@@ -479,7 +556,7 @@ def comecar(game: "Game") -> None:
 
 
 def aplicar(game: "Game", sessao: int) -> None:
-    """Prepara a arte de ``game`` para cada monitor em pé. Roda fora da UI.
+    """Prepara a arte de ``game`` para cada monitor-alvo. Roda fora da UI.
 
     Só prepara: os arquivos saem daqui prontos, e quem os põe na parede é
     :func:`_vestir`, de volta na thread de UI, onde a sessão é conferida.
@@ -492,12 +569,12 @@ def aplicar(game: "Game", sessao: int) -> None:
             if area.em_apresentacao():
                 logging.info("Apresentação de slides ligada; parede intocada")
                 return
-            monitores = area.em_pe()
+            monitores = alvos(area.ligados())
         if not monitores:
             return
 
-        maior = max(monitores, key=lambda monitor: monitor.largura * monitor.altura)
-        if not (fonte := _fonte(game, maior.largura, maior.altura)):
+        arranjo = formatos(monitores)
+        if not (fonte := _fonte(game, *arranjo.minimo, arranjo.ratio)):
             return
         origem, posicao = fonte
 

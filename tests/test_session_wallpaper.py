@@ -16,6 +16,7 @@ resgata dez jogos de uma biblioteca de 92, e sem a guarda resgata errado:
 """
 
 import json
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -32,6 +33,35 @@ def _arte(largura: int, altura: int) -> Image.Image:
         for y in range(altura // 4, altura // 2):
             imagem.putpixel((x, y), (255, 0, 0))
     return imagem
+
+
+def _tamanho(caminho) -> tuple[int, int]:
+    with Image.open(caminho) as imagem:
+        return imagem.size
+
+
+PRINCIPAL = session_wallpaper.Monitor("M1", 0, 0, 1920, 1080)
+DEITADO = session_wallpaper.Monitor("M2", 1920, 0, 2560, 1440)
+EM_PE = session_wallpaper.Monitor("M3", -1080, -476, 1080, 1920)
+
+
+class _AreaComMonitores:
+    """O bastante da IDesktopWallpaper para a preparação da arte."""
+
+    def __init__(self, monitores):
+        self.monitores = monitores
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return None
+
+    def em_apresentacao(self):
+        return False
+
+    def ligados(self):
+        return list(self.monitores)
 
 
 class TestEnquadramento:
@@ -84,6 +114,74 @@ class TestEnquadramento:
         _arte(600, 900).save(capa)
         quadro = session_wallpaper.da_capa(capa, 1080, 1920)
         assert quadro.size == (1080, 1920)
+
+
+class TestMonitoresAlvo:
+    def test_o_principal_fica_fora_e_os_outros_entram(self) -> None:
+        assert session_wallpaper.alvos([PRINCIPAL, DEITADO, EM_PE]) == [DEITADO, EM_PE]
+
+    def test_so_o_principal_nao_tem_alvo(self) -> None:
+        assert session_wallpaper.alvos([PRINCIPAL]) == []
+
+    def test_grade_em_pe_so_com_todos_em_pe(self) -> None:
+        formatos = session_wallpaper.formatos([PRINCIPAL, EM_PE])
+        assert formatos.grade == (1080, 1920)
+        assert formatos.ratio == "portrait"
+
+    def test_grade_deitada_com_todos_deitados(self) -> None:
+        formatos = session_wallpaper.formatos([PRINCIPAL, DEITADO])
+        assert formatos.grade == (2560, 1440)
+        assert formatos.ratio == "landscape"
+
+    def test_hibrido_tem_grade_deitada_e_minimo_dos_dois(self) -> None:
+        formatos = session_wallpaper.formatos([PRINCIPAL, DEITADO, EM_PE])
+        assert formatos.grade == (2560, 1440)
+        assert formatos.ratio == "landscape"
+        # Largura do deitado e altura do em pé: nenhum dos dois cortes estica.
+        assert formatos.minimo == (2560, 1920)
+
+    def test_sem_alvo_a_grade_cai_no_padrao_deitado(self) -> None:
+        formatos = session_wallpaper.formatos([PRINCIPAL])
+        assert formatos.grade == session_wallpaper.PAISAGEM_PADRAO
+        assert formatos.minimo == session_wallpaper.PAISAGEM_PADRAO
+
+    def test_celula_fixa_o_lado_maior_da_grade(self) -> None:
+        from cartridges import wallpaper_picker  # noqa: PLC0415
+
+        assert wallpaper_picker.celula(1080, 1920) == (146, 260)
+        assert wallpaper_picker.celula(1920, 1080) == (260, 146)
+
+    def test_aplicar_prepara_so_os_alvos_com_o_minimo_e_o_formato_da_grade(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        arte = tmp_path / "arte.jpg"
+        _arte(64, 36).save(arte)
+        monkeypatch.setattr(
+            session_wallpaper,
+            "_AreaDeTrabalho",
+            lambda: _AreaComMonitores([PRINCIPAL, DEITADO, EM_PE]),
+        )
+        pedidos = []
+
+        def fonte(_game, largura, altura, formato):
+            pedidos.append((largura, altura, formato))
+            return arte, 0.5
+
+        monkeypatch.setattr(session_wallpaper, "_fonte", fonte)
+        vestir = []
+        monkeypatch.setattr(
+            session_wallpaper,
+            "GLib",
+            SimpleNamespace(idle_add=lambda _funcao, _sessao, quadros: vestir.append(quadros)),
+        )
+
+        session_wallpaper.aplicar(SimpleNamespace(game_id="jogo"), 0)
+
+        assert pedidos == [(2560, 1920, "landscape")]
+        [quadros] = vestir
+        assert [monitor for monitor, _arquivo in quadros] == ["M2", "M3"]
+        assert _tamanho(quadros[0][1]) == (2560, 1440)
+        assert _tamanho(quadros[1][1]) == (1080, 1920)
 
 
 class TestConsultas:
@@ -352,7 +450,11 @@ class TestTelaDeEscolha:
         from cartridges import wallpaper_picker
 
         monkeypatch.setattr(wallpaper_picker, "buscar", lambda *a, **k: [])
-        monkeypatch.setattr(wallpaper_picker, "alvo", lambda: (1080, 1920))
+        monkeypatch.setattr(
+            wallpaper_picker,
+            "formatos_ligados",
+            lambda: session_wallpaper.Formatos((1080, 1920), None),
+        )
 
         picker = wallpaper_picker.WallpaperPicker("Watch Dogs", lambda *_: None, lambda: None)
 
@@ -370,5 +472,5 @@ class TestTelaDeEscolha:
             assert filho is not None
 
         # A célula acompanha a proporção do monitor, não um número no template.
-        assert picker.cell_width == round(260 * 1080 / 1920)
+        assert (picker.cell_width, picker.cell_height) == (146, 260)
         picker.close()

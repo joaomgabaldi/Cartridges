@@ -20,11 +20,11 @@
 """A escolha à mão do papel de parede da sessão.
 
 A busca automática acerta o tema e erra o enquadramento: medido numa página de
-resultados de verdade, um em cada doze cortes parte alguém ao meio, porque a
-arte é larga e o monitor é estreito. Nenhuma ordenação conserta isso — o site
-não diz onde está o assunto da imagem —, então esta tela é a régua: a grade
-mostra os candidatos JÁ CORTADOS, no formato do monitor, e a barrinha desliza
-a faixa antes de gravar.
+resultados de verdade, um em cada doze cortes para um monitor em pé parte
+alguém ao meio. Nenhuma ordenação conserta isso — o site não diz onde está o
+assunto da imagem —, então esta tela é a régua: a grade mostra os candidatos
+JÁ CORTADOS, no formato dos monitores, e a barrinha desliza a faixa antes de
+gravar.
 
 Toda a fidelidade vem de uma coisa só: a miniatura e o arquivo final passam
 pela mesma :func:`~cartridges.utils.session_wallpaper.enquadrar`. Como ela
@@ -49,9 +49,9 @@ from cartridges import shared
 from cartridges.utils.download import download_bytes
 from cartridges.utils.name_cleaner import clean_game_name
 from cartridges.utils.session_wallpaper import (
-    alvo,
     eixo_do_corte,
     enquadrar,
+    formatos_ligados,
     imagem_para_textura_bytes,
 )
 from cartridges.utils.wallhaven import IMAGE_SUFFIXES, WallhavenError, buscar
@@ -59,10 +59,19 @@ from cartridges.utils.wallhaven import IMAGE_SUFFIXES, WallhavenError, buscar
 # Uma página do site. A grade de quatro colunas mostra seis linhas com isso.
 MAX_RESULTS = 24
 
-# Altura da célula da grade, em pixels lógicos. A largura sai da proporção do
-# monitor: com uma tela 9:16 dá 146, com uma 3:4 dá 195 — e nos dois casos a
-# célula é a tela em miniatura.
-CELL_HEIGHT = 260
+# O lado fixo da célula da grade, em pixels lógicos: a altura numa grade em pé, a
+# largura numa deitada. O outro lado sai da proporção do monitor, e a célula é a
+# tela em miniatura — 146x260 num 9:16, 260x146 num 16:9, três deitadas ou
+# quatro em pé por linha na janela cheia.
+CELL_SIZE = 260
+
+
+def celula(largura: int, altura: int) -> tuple[int, int]:
+    """A célula da grade para um monitor ``largura`` x ``altura``."""
+    if altura > largura:
+        return max(1, round(CELL_SIZE * largura / altura)), CELL_SIZE
+    return CELL_SIZE, max(1, round(CELL_SIZE * altura / largura))
+
 
 # Altura da prévia grande, onde a faixa é escolhida.
 PREVIEW_HEIGHT = 440
@@ -98,8 +107,9 @@ class WallpaperPicker(Adw.Dialog):
         self.on_selected = on_selected
         self.on_cleared = on_cleared
 
-        self.largura, self.altura = alvo()
-        self.cell_width = max(1, round(CELL_HEIGHT * self.largura / self.altura))
+        self.formatos = formatos_ligados()
+        self.largura, self.altura = self.formatos.grade
+        self.cell_width, self.cell_height = celula(self.largura, self.altura)
 
         # A mesma guarda de geração das outras duas telas de escolha: uma
         # busca em voo quando outra começa (ou quando a janela fecha) não pode
@@ -166,16 +176,15 @@ class WallpaperPicker(Adw.Dialog):
 
     def _search_thread(self, query: str, generation: int) -> None:
         try:
-            # Retrato primeiro e paisagem depois, na mesma grade: o que não
-            # precisa de corte aparece na frente, e o que precisa continua à
-            # mão logo abaixo — em quatro de cada cinco jogos ele é tudo o que
-            # existe.
-            achados = buscar(query, self.largura, self.altura, formato="portrait")
+            # O formato da grade primeiro e qualquer formato depois, na mesma
+            # grade: o que menos precisa de corte aparece na frente, e o resto
+            # continua à mão logo abaixo. O mínimo é o de todos os alvos, para
+            # nenhum corte — nem o do outro formato, no arranjo misto — esticar.
+            minimo = self.formatos.minimo
+            achados = buscar(query, *minimo, formato=self.formatos.ratio)
             vistos = {item["id"] for item in achados}
             achados += [
-                item
-                for item in buscar(query, self.largura, self.altura)
-                if item["id"] not in vistos
+                item for item in buscar(query, *minimo) if item["id"] not in vistos
             ]
         except WallhavenError as error:
             logging.warning("Busca de papel de parede falhou: %s", error)
@@ -225,7 +234,7 @@ class WallpaperPicker(Adw.Dialog):
     def _cell_pixels(self) -> tuple[int, int]:
         """A célula em pixels de verdade, para não sair borrada num monitor HiDPI."""
         escala = max(1, int(shared.scale_factor))
-        return self.cell_width * escala, CELL_HEIGHT * escala
+        return self.cell_width * escala, self.cell_height * escala
 
     def _finish_results(self, generation: int) -> bool:
         if generation != self._generation or self._closed:
@@ -252,7 +261,7 @@ class WallpaperPicker(Adw.Dialog):
             paintable=textura,
             content_fit=Gtk.ContentFit.COVER,
             width_request=self.cell_width,
-            height_request=CELL_HEIGHT,
+            height_request=self.cell_height,
             can_shrink=True,
         )
         picture.add_css_class("wallpaper-preview")
