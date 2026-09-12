@@ -573,8 +573,8 @@ class CartridgesApplication(Adw.Application):
         if ProcessSession.active is not None:
             ProcessSession.active.flush()
 
-        # A sessão que estava correndo acaba aqui, e as telas em pé não podem
-        # ficar vestidas do jogo depois que o app sumir. Síncrono e antes de
+        # A sessão que estava correndo acaba aqui, e as telas vestidas não podem
+        # ficar com a arte do jogo depois que o app sumir. Síncrono e antes de
         # tudo o mais deste método: é a última janela em que ainda existe
         # processo para desfazer a troca.
         session_wallpaper.restaurar()

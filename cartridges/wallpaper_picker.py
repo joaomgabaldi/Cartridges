@@ -506,7 +506,8 @@ class WallpaperPicker(Adw.Dialog):
                 textura = Gdk.Texture.new_from_bytes(
                     GLib.Bytes.new(imagem_para_textura_bytes(quadro))
                 )
-            except GLib.Error:
+            except GLib.Error as error:
+                logging.info("Prévia do corte não pôde ser desenhada: %s", error)
                 continue
             corte.picture.set_size_request(previa_largura, previa_altura)
             corte.picture.set_paintable(textura)

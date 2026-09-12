@@ -283,7 +283,10 @@ class Formatos(NamedTuple):
 
 
 def formatos(monitores: list[Monitor]) -> Formatos:
-    """Os formatos dos monitores-alvo entre ``monitores``."""
+    """Os formatos dos monitores-alvo entre ``monitores``.
+
+    Aceita a lista completa ou só os alvos: :func:`alvos` é filtro puro.
+    """
 
     def maior(orientacao: list[Monitor]) -> Optional[tuple[int, int]]:
         if not orientacao:
@@ -614,7 +617,7 @@ def aplicar(game: "Game", sessao: int) -> None:
             return
 
         arranjo = formatos(monitores)
-        if not (fonte := _fonte(game, *arranjo.minimo, arranjo.ratio)):
+        if not (fonte := _fonte(game, *arranjo.minimo, formato=arranjo.ratio)):
             return
         origem, posicoes = fonte
 

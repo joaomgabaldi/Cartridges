@@ -204,7 +204,10 @@ class TestMonitoresAlvo:
         monkeypatch.setattr(
             session_wallpaper,
             "_fonte",
-            lambda *_args: (arte, session_wallpaper.Posicoes(retrato=0.2, paisagem=0.7)),
+            lambda *_args, **_kwargs: (
+                arte,
+                session_wallpaper.Posicoes(retrato=0.2, paisagem=0.7),
+            ),
         )
         monkeypatch.setattr(
             session_wallpaper, "GLib", SimpleNamespace(idle_add=lambda *_args: None)
@@ -607,6 +610,28 @@ class TestTelaDeEscolha:
 
         assert picker.adjust_portrait_box.get_visible()
         assert not picker.adjust_landscape_box.get_visible()
+        picker.close()
+
+    def test_sem_alvo_nenhum_cai_no_corte_deitado(self, win, monkeypatch) -> None:
+        """O monitor foi desligado entre abrir a edição e abrir esta tela.
+
+        Sem alvo não há orientação a seguir, e a grade cai no PAISAGEM_PADRAO —
+        que é deitado, então é a caixa deitada que tem de aparecer.
+        """
+        from cartridges import wallpaper_picker  # noqa: PLC0415
+
+        monkeypatch.setattr(wallpaper_picker, "buscar", lambda *a, **k: [])
+        monkeypatch.setattr(
+            wallpaper_picker,
+            "formatos_ligados",
+            lambda: session_wallpaper.Formatos(None, None),
+        )
+        picker = wallpaper_picker.WallpaperPicker("Halo", lambda *_: None, lambda: None)
+
+        picker._open_done(b"jpg", ".jpg", _arte(192, 108), picker._generation)
+
+        assert picker.adjust_landscape_box.get_visible()
+        assert not picker.adjust_portrait_box.get_visible()
         picker.close()
 
     def test_hibrido_mostra_os_dois_cortes_e_grava_as_duas_posicoes(
