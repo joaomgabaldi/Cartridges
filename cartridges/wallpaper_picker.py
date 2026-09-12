@@ -49,6 +49,7 @@ from cartridges import shared
 from cartridges.utils.download import download_bytes
 from cartridges.utils.name_cleaner import clean_game_name
 from cartridges.utils.session_wallpaper import (
+    Posicoes,
     eixo_do_corte,
     enquadrar,
     formatos_ligados,
@@ -98,7 +99,7 @@ class WallpaperPicker(Adw.Dialog):
     def __init__(
         self,
         name: str,
-        on_selected: Callable[[Path, float], None],
+        on_selected: Callable[[Path, Posicoes], None],
         on_cleared: Callable[[], None],
         **kwargs: Any,
     ) -> None:
@@ -416,7 +417,14 @@ class WallpaperPicker(Adw.Dialog):
             self._show_empty(_("Não foi possível guardar a imagem"))
             return
 
-        self.on_selected(caminho, self.adjust_adjustment.get_value() / 100)
+        # A barrinha é a do formato da grade; a outra orientação fica no meio.
+        valor = self.adjust_adjustment.get_value() / 100
+        self.on_selected(
+            caminho,
+            Posicoes(retrato=valor)
+            if self.altura > self.largura
+            else Posicoes(paisagem=valor),
+        )
         self.close()
 
     # endregion

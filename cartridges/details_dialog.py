@@ -53,6 +53,7 @@ from cartridges.utils.game_logo import (
 )
 from cartridges.utils.hltb import HLTBTimes, fetch_times, has_times
 from cartridges.utils.session_wallpaper import (
+    Posicoes,
     escolha as wallpaper_choice,
     nao_trocar,
     redefinir as reset_wallpaper,
@@ -148,7 +149,7 @@ class DetailsDialog(Adw.Dialog):
     # (choice, file), where choice is "manual" (use the file), "title" (no logo
     # at all) or "auto" (forget the decision and let the lookup run again).
     _logo_choice: Optional[tuple[str, Optional[Path]]] = None
-    _wallpaper_choice: Optional[tuple[str, Optional[Path], float]] = None
+    _wallpaper_choice: Optional[tuple[str, Optional[Path], Posicoes]] = None
     # O arquivo temporário que a tela de escolha entregou, e que é desta tela
     # apagar. None quando a escolha veio do disco do usuário, que não se apaga.
     _wallpaper_tmp: Optional[Path] = None
@@ -905,21 +906,23 @@ class DetailsDialog(Adw.Dialog):
         # Do meio, que é o que a tela de escolha oferece como ponto de partida.
         # Quem traz um arquivo próprio quase sempre traz um já no formato do
         # monitor, e aí a faixa não muda nada.
-        self.set_wallpaper_from_path(path, 0.5)
+        self.set_wallpaper_from_path(path, Posicoes())
 
-    def set_wallpaper_from_path(self, path: Path, posicao: float = 0.5) -> None:
+    def set_wallpaper_from_path(
+        self, path: Path, posicoes: Posicoes = Posicoes()
+    ) -> None:
         self.discard_wallpaper_tmp()
-        self._wallpaper_choice = ("manual", path, posicao)
+        self._wallpaper_choice = ("manual", path, posicoes)
         self.update_wallpaper_row()
 
-    def set_wallpaper_from_picker(self, path: Path, posicao: float) -> None:
+    def set_wallpaper_from_picker(self, path: Path, posicoes: Posicoes) -> None:
         """Como :meth:`set_wallpaper_from_path`, com o arquivo da tela de escolha.
 
         Ela o entrega numa pasta temporária e o esquece. Daqui em diante quem o
         apaga é esta tela: ao trocar de escolha, ao aplicar (a imagem já foi
         copiada para a pasta das paredes) ou ao fechar sem aplicar.
         """
-        self.set_wallpaper_from_path(path, posicao)
+        self.set_wallpaper_from_path(path, posicoes)
         self._wallpaper_tmp = path
 
     def discard_wallpaper_tmp(self) -> None:
@@ -933,12 +936,12 @@ class DetailsDialog(Adw.Dialog):
 
     def set_wallpaper_none(self) -> None:
         self.discard_wallpaper_tmp()
-        self._wallpaper_choice = ("none", None, 0.5)
+        self._wallpaper_choice = ("none", None, Posicoes())
         self.update_wallpaper_row()
 
     def reset_wallpaper_choice(self, *_args: Any) -> None:
         self.discard_wallpaper_tmp()
-        self._wallpaper_choice = ("auto", None, 0.5)
+        self._wallpaper_choice = ("auto", None, Posicoes())
         self.update_wallpaper_row()
 
     def update_wallpaper_row(self) -> None:
@@ -971,9 +974,9 @@ class DetailsDialog(Adw.Dialog):
         if not self._wallpaper_choice:
             return False
 
-        choice, path, posicao = self._wallpaper_choice
+        choice, path, posicoes = self._wallpaper_choice
         if choice == "manual" and path:
-            salvar_escolha(game.game_id, game.name, path, posicao)
+            salvar_escolha(game.game_id, game.name, path, posicoes)
         elif choice == "none":
             nao_trocar(game.game_id, game.name)
         else:
