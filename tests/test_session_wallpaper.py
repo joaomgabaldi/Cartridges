@@ -113,6 +113,49 @@ class TestConsultas:
             assert generico not in consultas(nome)
 
 
+class TestBuscaPorFormato:
+    def test_formato_vira_ratios_e_o_minimo_vira_atleast(self, monkeypatch) -> None:
+        from cartridges.utils import wallhaven  # noqa: PLC0415
+
+        pedidos = []
+
+        class Resposta:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"data": []}
+
+        def get(url, **_kwargs):
+            pedidos.append(url)
+            return Resposta()
+
+        monkeypatch.setattr(wallhaven.requests, "get", get)
+
+        wallhaven.buscar("Halo", 1920, 1920, formato="landscape")
+        wallhaven.buscar("Halo", 1920, 1920)
+
+        assert "ratios=landscape" in pedidos[0]
+        assert "atleast=1920x1920" in pedidos[0]
+        assert "ratios" not in pedidos[1]
+
+    def test_melhor_para_desce_do_formato_pedido_para_qualquer_um(
+        self, monkeypatch
+    ) -> None:
+        from cartridges.utils import wallhaven  # noqa: PLC0415
+
+        degraus = []
+
+        def buscar(_consulta, _largura, _altura, formato=None, **_kwargs):
+            degraus.append(formato)
+            return [{"id": "x"}] if formato is None else []
+
+        monkeypatch.setattr(wallhaven, "buscar", buscar)
+
+        assert wallhaven.melhor_para("Halo", 1920, 1080, "landscape") == {"id": "x"}
+        assert degraus == ["landscape", None]
+
+
 class TestEscolhaPorJogo:
     def test_sem_sidecar_e_automatico(self, jogo) -> None:
         assert session_wallpaper.escolha(jogo) == "auto"

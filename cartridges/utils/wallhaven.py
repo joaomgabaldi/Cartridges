@@ -25,11 +25,11 @@ isso ela mora nas preferências como um extra, e não como um pré-requisito —
 contrário do SteamGridDB, cuja tela fica inerte sem chave.
 
 O que este módulo NÃO faz é escolher formato. Medido nos 92 jogos de uma
-biblioteca real, só 21% têm papel de parede em retrato no site: filtrar por
-`ratios=portrait` e parar aí deixaria quatro em cada cinco jogos sem imagem.
-Então a busca vai em degraus — retrato primeiro, qualquer formato depois — e é
-o corte (:func:`cartridges.utils.session_wallpaper.enquadrar`) que resolve a
-diferença. Quem chama decide se aceita o segundo degrau.
+biblioteca real, só 21% têm papel de parede em retrato no site: filtrar por um
+formato só e parar aí deixaria jogos sem imagem. Então a busca vai em degraus —
+o formato pedido primeiro, qualquer formato depois — e é o corte
+(:func:`cartridges.utils.session_wallpaper.enquadrar`) que resolve a
+diferença. Quem chama decide por qual formato começar.
 """
 
 import logging
@@ -108,16 +108,19 @@ def buscar(
     consulta: str,
     largura: int,
     altura: int,
-    retrato: bool = True,
+    formato: Optional[str] = None,
     pagina: int = 1,
     timeout: float = 15,
 ) -> list[dict[str, Any]]:
     """Uma página de resultados para ``consulta``, do mais favoritado ao menos.
 
-    ``largura`` e ``altura`` são as do monitor: entram como ``atleast`` para
-    nenhum candidato precisar ser ampliado depois do corte. Um 1920x1080 não
-    passa nesse filtro com um monitor em pé — e é isso que se quer, porque
-    dele sairia um recorte de 607px esticado para 1080.
+    ``largura`` e ``altura`` são o mínimo que os cortes dos monitores-alvo
+    precisam: entram como ``atleast`` para nenhum candidato ser ampliado depois
+    do corte. Um 1920x1080 não passa nesse filtro com um monitor em pé — e é
+    isso que se quer, porque dele sairia um recorte de 607px esticado para 1080.
+
+    ``formato`` é o ``ratios`` do site (``"portrait"`` ou ``"landscape"``);
+    ``None`` aceita qualquer um.
 
     :raises WallhavenError: rede fora, resposta não-JSON ou chave recusada
     """
@@ -129,8 +132,8 @@ def buscar(
         "atleast": f"{largura}x{altura}",
         "page": str(pagina),
     }
-    if retrato:
-        parametros["ratios"] = "portrait"
+    if formato:
+        parametros["ratios"] = formato
 
     cabecalhos = {}
     if chave := shared.schema.get_string("wallhaven-key").strip():
@@ -173,17 +176,20 @@ def buscar(
     return resultados
 
 
-def melhor_para(nome: str, largura: int, altura: int) -> Optional[dict[str, Any]]:
+def melhor_para(
+    nome: str, largura: int, altura: int, formato: str
+) -> Optional[dict[str, Any]]:
     """O melhor candidato para ``nome``, descendo os degraus até achar um.
 
+    Em cada forma do nome, ``formato`` primeiro e qualquer formato depois.
     Devolve ``None`` quando nenhum degrau deu resultado — e aí quem chamou cai
     na capa do jogo. Nunca levanta: a escolha automática roda enquanto o jogo
     abre, e um tropeço de rede ali não pode virar erro na cara de ninguém.
     """
     for consulta in consultas(nome):
-        for retrato in (True, False):
+        for degrau in (formato, None):
             try:
-                achados = buscar(consulta, largura, altura, retrato=retrato)
+                achados = buscar(consulta, largura, altura, formato=degrau)
             except WallhavenError as erro:
                 logging.info("Busca no wallhaven falhou (%s): %s", consulta, erro)
                 continue
