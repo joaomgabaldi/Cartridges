@@ -1832,6 +1832,42 @@ def test_the_window_never_moves_to_a_monitor_that_is_not_there(monkeypatch):
     assert window_geometry.session_geometry() is None
 
 
+def test_the_window_never_moves_onto_the_primary_monitor(monkeypatch):
+    """O principal é onde o jogo roda: maximizada ali, a janela o cobriria.
+
+    O caso real é o palpite antigo das Preferências, que num computador com um
+    monitor só gravava o próprio principal como destino.
+    """
+    _no_session(monkeypatch)
+    user32 = _FakePlacementUser32()
+    monkeypatch.setattr(window_geometry, "_user32", user32)
+    monkeypatch.setattr(window_geometry, "_hwnd", lambda _window: 42)
+    monkeypatch.setattr(
+        window_geometry,
+        "monitors",
+        lambda: [window_geometry.Monitor("\\\\.\\DISPLAY1", 0, 0, 1920, 1080, True)],
+    )
+
+    assert window_geometry.move_to_monitor(_FakeWindow(), "\\\\.\\DISPLAY1") is False
+    assert user32.written == []
+    assert window_geometry.session_geometry() is None
+
+
+def test_a_secondary_monitor_is_any_monitor_but_the_primary(monkeypatch):
+    principal = window_geometry.Monitor("\\\\.\\DISPLAY1", 0, 0, 1920, 1080, True)
+    deitado = window_geometry.Monitor("\\\\.\\DISPLAY2", 1920, 0, 1920, 1080, False)
+
+    monkeypatch.setattr(window_geometry, "monitors", lambda: [principal])
+    assert window_geometry.has_secondary_monitor() is False
+
+    monkeypatch.setattr(window_geometry, "monitors", lambda: [principal, deitado])
+    assert window_geometry.has_secondary_monitor() is True
+
+    # Enumeração que falhou: o lado seguro é "não há".
+    monkeypatch.setattr(window_geometry, "monitors", list)
+    assert window_geometry.has_secondary_monitor() is False
+
+
 def test_the_session_move_puts_the_window_back_exactly(monkeypatch):
     """Ida e volta: maximiza no monitor escolhido, volta ao estado de origem.
 

@@ -217,6 +217,17 @@ def monitors() -> list[Monitor]:
     return sorted(found, key=lambda monitor: monitor.device)
 
 
+def has_secondary_monitor() -> bool:
+    """True when some attached monitor is not the primary one.
+
+    What both session options that use other screens need: the game runs on the
+    primary, so without a second monitor there is nowhere to park the window and
+    nowhere to show the art. A failed enumeration answers False, which is the
+    safe side — the caller switches its option off instead of touching a screen.
+    """
+    return any(not monitor.primary for monitor in monitors())
+
+
 def identify_monitors(seconds: int = 3) -> None:
     """Pisca o número de cada monitor sobre ele, como as configurações do Windows.
 
@@ -348,11 +359,12 @@ def session_geometry() -> Optional[Geometry]:
 def move_to_monitor(window: Gtk.Window, device: str) -> bool:
     """Park ``window`` maximized on ``device``. Says whether it went.
 
-    False for every reason there is not to move — no such monitor attached, no
-    handle to move, nothing readable to come back to — and the caller then does
-    what it did before this feature existed (minimize, in the launch path).
-    Losing the window off-screen is a much worse failure than not moving it, so
-    anything unclear counts as a reason not to.
+    False for every reason there is not to move — no such monitor attached, the
+    monitor is the primary one (where the game runs, which the window would then
+    cover), no handle to move, nothing readable to come back to — and the caller
+    then does what it did before this feature existed (minimize, in the launch
+    path). Losing the window off-screen is a much worse failure than not moving
+    it, so anything unclear counts as a reason not to.
 
     Done with ``WINDOWPLACEMENT`` rather than with ``SetWindowPos``, because
     here there is a state to come back to. A placement carries both halves of
@@ -372,6 +384,9 @@ def move_to_monitor(window: Gtk.Window, device: str) -> bool:
     target = next((m for m in monitors() if m.device == device), None)
     if target is None:
         logging.info("Monitor %s is not attached; leaving the window alone", device)
+        return False
+    if target.primary:
+        logging.info("Monitor %s is the primary one; leaving the window alone", device)
         return False
 
     if (hwnd := _hwnd(window)) is None or (current := read(window)) is None:
