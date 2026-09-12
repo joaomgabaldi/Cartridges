@@ -52,6 +52,7 @@ from gi.repository import GLib
 from PIL import Image, ImageFilter, ImageOps
 
 from cartridges import shared
+from cartridges.utils import window_geometry
 from cartridges.utils.download import download_bytes
 from cartridges.utils.wallhaven import IMAGE_SUFFIXES, melhor_para
 
@@ -465,7 +466,15 @@ def alvo() -> tuple[int, int]:
 
 
 def comecar(game: "Game") -> None:
-    """Começa a vestir as telas para ``game``. Chamar da thread de UI."""
+    """Começa a vestir as telas para ``game``. Chamar da thread de UI.
+
+    Sem monitor além do principal, desliga a opção em vez de começar: não há
+    tela para vestir, e quando um segundo monitor voltar quem religa é o
+    usuário, nas Preferências.
+    """
+    if not window_geometry.has_secondary_monitor():
+        shared.schema.set_boolean("session-wallpaper", False)
+        return
     threading.Thread(target=aplicar, args=(game, _sessao), daemon=True).start()
 
 
