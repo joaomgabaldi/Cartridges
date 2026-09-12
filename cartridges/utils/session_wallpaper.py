@@ -407,7 +407,7 @@ def _fonte(game: "Game", largura: int, altura: int) -> Optional[tuple[Path, floa
     if (arquivo := _arquivo_do_sidecar(dados)) and dados.get("name") == game.name:
         return arquivo, posicao
 
-    if achado := melhor_para(game.name, largura, altura):
+    if achado := melhor_para(game.name, largura, altura, "portrait"):
         try:
             conteudo = download_bytes(str(achado["path"]), timeout=30)
             sufixo = Path(str(achado["path"])).suffix.lower()

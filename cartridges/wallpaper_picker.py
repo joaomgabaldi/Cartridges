@@ -170,11 +170,11 @@ class WallpaperPicker(Adw.Dialog):
             # precisa de corte aparece na frente, e o que precisa continua à
             # mão logo abaixo — em quatro de cada cinco jogos ele é tudo o que
             # existe.
-            achados = buscar(query, self.largura, self.altura, retrato=True)
+            achados = buscar(query, self.largura, self.altura, formato="portrait")
             vistos = {item["id"] for item in achados}
             achados += [
                 item
-                for item in buscar(query, self.largura, self.altura, retrato=False)
+                for item in buscar(query, self.largura, self.altura)
                 if item["id"] not in vistos
             ]
         except WallhavenError as error:
