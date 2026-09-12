@@ -41,6 +41,7 @@ from cartridges.store.managers.cover_manager import CoverManager
 from cartridges.store.managers.hltb_manager import shared_helper as shared_hltb_helper
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
+from cartridges.utils import window_geometry
 from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.game_folder import game_folder, open_folder
 from cartridges.utils.game_logo import (
@@ -236,6 +237,10 @@ class DetailsDialog(Adw.Dialog):
         else:
             self.set_title(_("Adicionar novo jogo"))
             self.apply_button.set_label(_("Adicionar"))
+
+        # Lido uma vez, ao abrir: é hardware, e a linha do papel de parede só
+        # tem o que escolher com algum monitor além do principal.
+        self._has_secondary_monitor = window_geometry.has_secondary_monitor()
 
         self.update_rating_stars()
         self.update_process_rows()
@@ -937,6 +942,11 @@ class DetailsDialog(Adw.Dialog):
         self.update_wallpaper_row()
 
     def update_wallpaper_row(self) -> None:
+        if not self._has_secondary_monitor:
+            self.wallpaper_row.set_sensitive(False)
+            self.wallpaper_row.set_subtitle(_("Precisa de um segundo monitor"))
+            return
+
         if self._wallpaper_choice:
             choice = self._wallpaper_choice[0]
         elif self.game:
