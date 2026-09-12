@@ -61,9 +61,10 @@ template $WallpaperPicker: Adw.Dialog {
         child: ScrolledWindow {
           hscrollbar-policy: never;
 
-          // As celulas ja vem na proporcao do monitor em pe, e o corte que
-          // elas mostram e o mesmo que o arquivo final recebe. Quatro por
-          // linha numa janela cheia, uma so quando ela encolhe.
+          // As celulas ja vem na proporcao dos monitores-alvo (em pe so quando
+          // todos estao em pe), e o corte que elas mostram e o mesmo que o
+          // arquivo final recebe. Tres ou quatro por linha numa janela cheia,
+          // uma so quando ela encolhe.
           FlowBox flowbox {
             homogeneous: true;
             halign: center;

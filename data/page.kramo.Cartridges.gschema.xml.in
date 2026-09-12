@@ -62,15 +62,15 @@
       <default>false</default>
     </key>
     <!-- Which monitor to send it to, as the Win32 device name the desktop
-         numbering uses ("\\.\DISPLAY2"). Empty, or a monitor that is no longer
-         attached, means the window stays where it is. Not an index: unplugging
-         a screen renumbers the list, and an index would then name a different
-         monitor rather than none. -->
+         numbering uses ("\\.\DISPLAY2"). Empty, the primary monitor, or a
+         monitor that is no longer attached, means the window stays where it
+         is. Not an index: unplugging a screen renumbers the list, and an index
+         would then name a different monitor rather than none. -->
     <key name="session-monitor" type="s">
       <default>""</default>
     </key>
-    <!-- Vestir os monitores em pé com a arte do jogo enquanto a sessão corre.
-         Só os em pé: a arte é vertical, e num monitor deitado ela não cabe. -->
+    <!-- Vestir os monitores além do principal com a arte do jogo enquanto a
+         sessão corre. Sem um segundo monitor, o app a desliga e não religa. -->
     <key name="session-wallpaper" type="b">
       <default>false</default>
     </key>
