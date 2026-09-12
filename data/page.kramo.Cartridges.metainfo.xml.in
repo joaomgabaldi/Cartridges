@@ -54,6 +54,7 @@
           <li>Um papel de parede escolhido de um arquivo do computador também passa pela tela de ajuste, para escolher a faixa da imagem</li>
           <li>Levar a janela para outro monitor e trocar o papel de parede agora exigem um segundo monitor. Sem ele, as duas opções ficam bloqueadas e são desligadas; quando um segundo monitor volta, elas continuam desligadas até serem religadas nas Preferências</li>
           <li>A lista de monitores para onde a janela vai durante a sessão não oferece mais o monitor principal, onde o jogo roda. Num computador com um monitor só, a janela abria maximizada por cima do jogo</li>
+          <li>A aba Sessão das Preferências virou Personalização, e os textos das opções de monitor e papel de parede ficaram mais diretos</li>
         </ul>
       </description>
     </release>

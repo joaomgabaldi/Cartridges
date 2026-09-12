@@ -92,21 +92,20 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
   // então a página inteira acompanha aquela chave.
   Adw.PreferencesPage session_page {
     name: "session";
-    title: _("Sessão");
+    title: _("Personalização");
     icon-name: "video-joined-displays-symbolic";
     sensitive: bind playtime_tracking_switch.active;
 
     Adw.PreferencesGroup session_monitor_group {
-      title: _("Enquanto o jogo roda");
-      description: _("Em vez de minimizar, a janela vai maximizada para o monitor escolhido e mostra ali um relógio contando a sessão. Quando o jogo termina, ela volta para o monitor de origem, do tamanho que tinha.");
+      title: _("Ao iniciar um jogo");
+      description: _("Move o Cartridges para outro monitor (se disponível) ao invés de minimizar para a barra de tarefas.");
 
       Adw.SwitchRow session_move_window_switch {
-        title: _("Levar a janela para outro monitor");
+        title: _("Mover para outro monitor");
       }
 
       Adw.ComboRow session_monitor_row {
         title: _("Monitor");
-        subtitle: _("A mesma numeração das configurações de vídeo do Windows");
         sensitive: bind session_move_window_switch.active;
       }
 
@@ -122,7 +121,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
     // ligar, desligar ou girar uma tela nao pede configuracao nenhuma.
     Adw.PreferencesGroup session_wallpaper_group {
       title: _("Papel de parede");
-      description: _("Enquanto o jogo roda, os monitores além do principal mostram a arte dele. Ao terminar a sessão, cada um volta ao papel de parede que tinha. A imagem sai do wallhaven, e cada jogo pode ter a sua escolhida à mão na tela de edição.");
+      description: _("Altera temporariamente o papel de parede dos monitores em que o jogo não está sendo executado (se disponíveis) para uma imagem relacionada ao jogo.");
 
       Adw.SwitchRow session_wallpaper_switch {
         title: _("Trocar o papel de parede dos outros monitores");
