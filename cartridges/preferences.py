@@ -111,6 +111,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     gamepad_rumble_switch: Adw.SwitchRow = Gtk.Template.Child()
     process_grace_spin_row: Adw.SpinRow = Gtk.Template.Child()
 
+    session_monitor_group: Adw.PreferencesGroup = Gtk.Template.Child()
     session_move_window_switch: Adw.SwitchRow = Gtk.Template.Child()
     session_monitor_row: Adw.ComboRow = Gtk.Template.Child()
     session_wallpaper_group: Adw.PreferencesGroup = Gtk.Template.Child()
@@ -330,21 +331,27 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         Montada aqui e não no template porque ela é hardware: o que existe é o
         que a máquina responder no momento em que a tela abre.
 
+        O principal fica fora da lista: é onde o jogo roda, e a janela
+        maximizada ali ficaria na frente dele. Sem outro monitor, as duas
+        opções que dependem de um ficam bloqueadas e desligadas
+        (:meth:`block_session_monitor_options`).
+
         O que está guardado é o nome do dispositivo (``\\\\.\\DISPLAY2``), e não
         a posição na lista, então desligar um monitor não faz a escolha passar
         a apontar para outro. Em compensação, abrir esta tela com o monitor
-        escolhido desligado troca a escolha pelo melhor palpite e grava: é a
-        única forma de a lista mostrar o que vai acontecer de verdade, e com
-        ele desligado a opção não teria mesmo o que fazer.
+        escolhido desligado (ou com o principal guardado, de antes de ele sair
+        da lista) troca a escolha pelo primeiro da lista e grava: é a única
+        forma de a lista mostrar o que vai acontecer de verdade.
         """
         self.session_identify_button_row.connect(
             "activated", lambda *_: window_geometry.identify_monitors()
         )
 
-        self.session_monitors = window_geometry.monitors()
+        self.session_monitors = [
+            monitor for monitor in window_geometry.monitors() if not monitor.primary
+        ]
         if not self.session_monitors:
-            self.session_monitor_row.set_subtitle(_("Nenhum monitor encontrado"))
-            self.session_monitor_row.set_sensitive(False)
+            self.block_session_monitor_options()
             return
 
         # Só o número, porque só o número tem resposta: resolução e posição
@@ -366,16 +373,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 for index, monitor in enumerate(self.session_monitors)
                 if monitor.device == stored
             ),
-            # O palpite: o primeiro que não é o principal. É onde o jogo não
-            # está, que é o ponto inteiro da opção.
-            next(
-                (
-                    index
-                    for index, monitor in enumerate(self.session_monitors)
-                    if not monitor.primary
-                ),
-                0,
-            ),
+            0,
         )
         self.session_monitor_row.set_selected(selected)
         self.session_monitor_row.connect("notify::selected", self.set_session_monitor)
@@ -383,6 +381,21 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         # valor, e o caso que precisa gravar — nada escolhido ainda, palpite
         # caindo no índice 0 — é justamente um que não muda nada.
         self.set_session_monitor()
+
+    def block_session_monitor_options(self) -> None:
+        """Sem monitor além do principal, as duas opções não têm onde agir.
+
+        Desligadas, e não só apagadas: quando um segundo monitor voltar, quem
+        religa é o usuário — o app não volta a mexer nas telas sozinho.
+        """
+        shared.schema.set_boolean("session-move-window", False)
+        shared.schema.set_boolean("session-wallpaper", False)
+
+        subtitle = _("Precisa de um segundo monitor")
+        self.session_move_window_switch.set_subtitle(subtitle)
+        self.session_wallpaper_switch.set_subtitle(subtitle)
+        self.session_monitor_group.set_sensitive(False)
+        self.session_wallpaper_switch.set_sensitive(False)
 
     def set_session_monitor(self, *_args: Any) -> None:
         selected = self.session_monitor_row.get_selected()
