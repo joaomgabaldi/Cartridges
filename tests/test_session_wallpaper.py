@@ -108,6 +108,13 @@ class TestEnquadramento:
         # Já na proporção exata: nada sobra, e o eixo lateral é o padrão.
         assert session_wallpaper.eixo_do_corte(1080, 1920, 1080, 1920)
 
+    def test_corta_so_quando_a_proporcao_difere(self) -> None:
+        assert not session_wallpaper.corta(3840, 2160, 1920, 1080)
+        # A cópia reduzida da tela de ajuste arredonda: continua sendo 16:9.
+        assert not session_wallpaper.corta(1564, 880, 1920, 1080)
+        assert session_wallpaper.corta(1920, 1200, 1920, 1080)
+        assert session_wallpaper.corta(3840, 2160, 1080, 1920)
+
     def test_capa_aparece_inteira(self, app_dirs) -> None:
         """A capa não é cortada: 2:3 num monitor 9:16 perderia o título."""
         capa = app_dirs.covers / "capa.png"
@@ -537,9 +544,15 @@ class TestTelaDeEscolha:
             picker.stack,
             picker.status_page,
             picker.none_button,
-            picker.adjust_picture,
-            picker.adjust_scale,
-            picker.adjust_adjustment,
+            picker.adjust_landscape_box,
+            picker.adjust_landscape_picture,
+            picker.adjust_landscape_scale,
+            picker.adjust_landscape_adjustment,
+            picker.adjust_portrait_box,
+            picker.adjust_portrait_picture,
+            picker.adjust_portrait_scale,
+            picker.adjust_portrait_adjustment,
+            picker.adjust_back,
             picker.adjust_apply,
         ):
             assert filho is not None
@@ -547,3 +560,59 @@ class TestTelaDeEscolha:
         # A célula acompanha a proporção do monitor, não um número no template.
         assert (picker.cell_width, picker.cell_height) == (146, 260)
         picker.close()
+
+    def test_previa_cabe_na_caixa_sem_perder_a_proporcao(self) -> None:
+        from cartridges import wallpaper_picker  # noqa: PLC0415
+
+        assert wallpaper_picker.caber(1920, 1080, 800, 440) == (782, 440)
+        assert wallpaper_picker.caber(3440, 1440, 800, 440) == (800, 335)
+        assert wallpaper_picker.caber(1080, 1920, 220, 340) == (191, 340)
+
+    def test_so_em_pe_mostra_um_corte(self, win, monkeypatch) -> None:
+        from cartridges import wallpaper_picker  # noqa: PLC0415
+
+        monkeypatch.setattr(wallpaper_picker, "buscar", lambda *a, **k: [])
+        monkeypatch.setattr(
+            wallpaper_picker,
+            "formatos_ligados",
+            lambda: session_wallpaper.Formatos((1080, 1920), None),
+        )
+        picker = wallpaper_picker.WallpaperPicker("Halo", lambda *_: None, lambda: None)
+
+        picker._open_done(b"jpg", ".jpg", _arte(192, 108), picker._generation)
+
+        assert picker.adjust_portrait_box.get_visible()
+        assert not picker.adjust_landscape_box.get_visible()
+        picker.close()
+
+    def test_hibrido_mostra_os_dois_cortes_e_grava_as_duas_posicoes(
+        self, win, monkeypatch
+    ) -> None:
+        from cartridges import wallpaper_picker  # noqa: PLC0415
+
+        monkeypatch.setattr(wallpaper_picker, "buscar", lambda *a, **k: [])
+        monkeypatch.setattr(
+            wallpaper_picker,
+            "formatos_ligados",
+            lambda: session_wallpaper.Formatos((1080, 1920), (1920, 1080)),
+        )
+        escolhas = []
+
+        def escolhida(caminho, posicoes):
+            escolhas.append(posicoes)
+            caminho.unlink()  # a cópia temporária que a tela entrega
+
+        picker = wallpaper_picker.WallpaperPicker("Halo", escolhida, lambda: None)
+
+        picker._open_done(b"jpg", ".jpg", _arte(192, 108), picker._generation)
+
+        assert picker.adjust_landscape_box.get_visible()
+        assert picker.adjust_portrait_box.get_visible()
+        # Arte 16:9 num monitor 16:9: nada a cortar, nada a deslizar.
+        assert not picker.adjust_landscape_scale.get_visible()
+        assert picker.adjust_portrait_scale.get_visible()
+
+        picker.adjust_portrait_adjustment.set_value(20)
+        picker._on_apply_clicked()
+
+        assert escolhas == [session_wallpaper.Posicoes(retrato=0.2, paisagem=0.5)]

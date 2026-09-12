@@ -98,32 +98,79 @@ template $WallpaperPicker: Adw.Dialog {
           halign: center;
           valign: center;
 
-          Picture adjust_picture {
-            content-fit: contain;
+          // Um corte por orientacao dos monitores-alvo. Com todos do mesmo
+          // jeito, um dos dois fica escondido; no arranjo misto, os dois ficam
+          // lado a lado: a mesma imagem nos dois formatos, cada um com a sua
+          // barrinha.
+          Box {
+            spacing: 12;
             halign: center;
-          }
 
-          Label adjust_hint {
-            label: _("Arraste para escolher a faixa da imagem");
-            halign: center;
+            Box adjust_landscape_box {
+              orientation: vertical;
+              spacing: 12;
+              valign: start;
 
-            styles [
-              "dim-label",
-              "caption",
-            ]
-          }
+              Picture adjust_landscape_picture {
+                content-fit: contain;
+                halign: center;
+              }
 
-          Scale adjust_scale {
-            hexpand: true;
-            draw-value: false;
+              Label adjust_landscape_hint {
+                halign: center;
 
-            adjustment: Adjustment adjust_adjustment {
-              lower: 0;
-              upper: 100;
-              value: 50;
-              step-increment: 1;
-              page-increment: 10;
-            };
+                styles [
+                  "dim-label",
+                  "caption",
+                ]
+              }
+
+              Scale adjust_landscape_scale {
+                hexpand: true;
+                draw-value: false;
+
+                adjustment: Adjustment adjust_landscape_adjustment {
+                  lower: 0;
+                  upper: 100;
+                  value: 50;
+                  step-increment: 1;
+                  page-increment: 10;
+                };
+              }
+            }
+
+            Box adjust_portrait_box {
+              orientation: vertical;
+              spacing: 12;
+              valign: start;
+
+              Picture adjust_portrait_picture {
+                content-fit: contain;
+                halign: center;
+              }
+
+              Label adjust_portrait_hint {
+                halign: center;
+
+                styles [
+                  "dim-label",
+                  "caption",
+                ]
+              }
+
+              Scale adjust_portrait_scale {
+                hexpand: true;
+                draw-value: false;
+
+                adjustment: Adjustment adjust_portrait_adjustment {
+                  lower: 0;
+                  upper: 100;
+                  value: 50;
+                  step-increment: 1;
+                  page-increment: 10;
+                };
+              }
+            }
           }
 
           Box {
