@@ -16,6 +16,7 @@ resgata dez jogos de uma biblioteca de 92, e sem a guarda resgata errado:
 """
 
 import json
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -387,6 +388,29 @@ class TestEscolhaPorJogo:
         )
         assert (gravado["position_portrait"], gravado["position_landscape"]) == (0.2, 0.7)
 
+    def test_escolher_arquivo_abre_a_tela_de_ajuste(
+        self, win, monkeypatch, tmp_path
+    ) -> None:
+        from cartridges import details_dialog  # noqa: PLC0415
+
+        abertas = []
+
+        class TelaFalsa:
+            def __init__(self, _nome, _on_selected, _on_cleared, arquivo=None):
+                abertas.append(arquivo)
+
+            def present(self, _parent):
+                return None
+
+        monkeypatch.setattr(details_dialog, "WallpaperPicker", TelaFalsa)
+        dialog = details_dialog.DetailsDialog()
+
+        dialog.open_wallpaper_file(tmp_path / "minha.png")
+
+        assert abertas == [tmp_path / "minha.png"]
+        # Nada escolhido ainda: a escolha só existe quando a tela a devolver.
+        assert dialog._wallpaper_choice is None
+
 
 class _AreaFalsa:
     """O bastante da IDesktopWallpaper para a ida e a volta, sem tocar na tela."""
@@ -616,3 +640,40 @@ class TestTelaDeEscolha:
         picker._on_apply_clicked()
 
         assert escolhas == [session_wallpaper.Posicoes(retrato=0.2, paisagem=0.5)]
+
+    def test_arquivo_do_disco_abre_direto_no_ajuste(
+        self, win, monkeypatch, tmp_path, flush_idle
+    ) -> None:
+        from cartridges import wallpaper_picker  # noqa: PLC0415
+
+        def nao_busca(*_args, **_kwargs):
+            raise AssertionError("arquivo do disco não busca no wallhaven")
+
+        monkeypatch.setattr(wallpaper_picker, "buscar", nao_busca)
+        monkeypatch.setattr(
+            wallpaper_picker,
+            "formatos_ligados",
+            lambda: session_wallpaper.Formatos((1080, 1920), None),
+        )
+        arquivo = tmp_path / "minha.png"
+        _arte(192, 108).save(arquivo)
+
+        picker = wallpaper_picker.WallpaperPicker(
+            "Halo", lambda *_: None, lambda: None, arquivo=arquivo
+        )
+        # A leitura roda numa thread e entrega pela fila do GLib.
+        for thread in list(threading.enumerate()):
+            if thread is not threading.current_thread() and thread.daemon:
+                thread.join(timeout=5)
+        flush_idle()
+
+        assert picker.stack.get_visible_child_name() == "adjust"
+        assert not picker.search_bar.get_visible()
+        assert not picker.none_button.get_visible()
+        assert picker._suffix == ".png"
+
+        # Sem grade para onde voltar, "Voltar" desiste da escolha.
+        fechou = []
+        monkeypatch.setattr(picker, "close", lambda: fechou.append(True))
+        picker.adjust_back.emit("clicked")
+        assert fechou == [True]
