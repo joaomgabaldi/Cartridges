@@ -165,7 +165,7 @@ class TestMonitoresAlvo:
 
         def fonte(_game, largura, altura, formato):
             pedidos.append((largura, altura, formato))
-            return arte, 0.5
+            return arte, session_wallpaper.Posicoes()
 
         monkeypatch.setattr(session_wallpaper, "_fonte", fonte)
         vestir = []
@@ -182,6 +182,37 @@ class TestMonitoresAlvo:
         assert [monitor for monitor, _arquivo in quadros] == ["M2", "M3"]
         assert _tamanho(quadros[0][1]) == (2560, 1440)
         assert _tamanho(quadros[1][1]) == (1080, 1920)
+
+    def test_cada_monitor_e_cortado_com_a_posicao_da_sua_orientacao(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        arte = tmp_path / "arte.jpg"
+        _arte(64, 36).save(arte)
+        monkeypatch.setattr(
+            session_wallpaper,
+            "_AreaDeTrabalho",
+            lambda: _AreaComMonitores([PRINCIPAL, DEITADO, EM_PE]),
+        )
+        monkeypatch.setattr(
+            session_wallpaper,
+            "_fonte",
+            lambda *_args: (arte, session_wallpaper.Posicoes(retrato=0.2, paisagem=0.7)),
+        )
+        monkeypatch.setattr(
+            session_wallpaper, "GLib", SimpleNamespace(idle_add=lambda *_args: None)
+        )
+        cortes = []
+        original = session_wallpaper.enquadrar
+
+        def enquadrar(imagem, largura, altura, posicao=0.5):
+            cortes.append((largura, altura, posicao))
+            return original(imagem, largura, altura, posicao)
+
+        monkeypatch.setattr(session_wallpaper, "enquadrar", enquadrar)
+
+        session_wallpaper.aplicar(SimpleNamespace(game_id="jogo"), 0)
+
+        assert cortes == [(2560, 1440, 0.7), (1080, 1920, 0.2)]
 
 
 class TestConsultas:
@@ -263,7 +294,7 @@ class TestEscolhaPorJogo:
         _arte(3840, 2160).save(origem)
 
         destino = session_wallpaper.salvar_escolha(
-            jogo.game_id, jogo.name, origem, 0.25
+            jogo.game_id, jogo.name, origem, session_wallpaper.Posicoes(0.25, 0.75)
         )
         assert destino is not None and destino.is_file()
         assert session_wallpaper.escolha(jogo) == "manual"
@@ -272,13 +303,17 @@ class TestEscolhaPorJogo:
             (shared.wallpapers_dir / f"{jogo.game_id}.json").read_text(encoding="utf-8")
         )
         assert gravado["locked"] is True
-        assert gravado["position"] == 0.25
+        assert gravado["position_portrait"] == 0.25
+        assert gravado["position_landscape"] == 0.75
+        assert "position" not in gravado
 
     def test_renomear_nao_desfaz_a_escolha_manual(self, jogo, tmp_path) -> None:
         """A busca automática reabre com o nome novo; a escolha à mão, não."""
         origem = tmp_path / "escolhida.jpg"
         _arte(3840, 2160).save(origem)
-        session_wallpaper.salvar_escolha(jogo.game_id, jogo.name, origem, 0.5)
+        session_wallpaper.salvar_escolha(
+            jogo.game_id, jogo.name, origem, session_wallpaper.Posicoes()
+        )
 
         jogo.name = "Outro nome qualquer"
         assert session_wallpaper.escolha(jogo) == "manual"
@@ -291,7 +326,9 @@ class TestEscolhaPorJogo:
     def test_redefinir_volta_ao_automatico(self, jogo, tmp_path) -> None:
         origem = tmp_path / "escolhida.jpg"
         _arte(3840, 2160).save(origem)
-        session_wallpaper.salvar_escolha(jogo.game_id, jogo.name, origem, 0.5)
+        session_wallpaper.salvar_escolha(
+            jogo.game_id, jogo.name, origem, session_wallpaper.Posicoes()
+        )
 
         session_wallpaper.redefinir(jogo.game_id)
         assert session_wallpaper.escolha(jogo) == "auto"
@@ -301,11 +338,47 @@ class TestEscolhaPorJogo:
         """Não é "não trocar": é uma escolha que se perdeu, e a busca volta."""
         origem = tmp_path / "escolhida.jpg"
         _arte(64, 64).save(origem)
-        destino = session_wallpaper.salvar_escolha(jogo.game_id, jogo.name, origem, 0.5)
+        destino = session_wallpaper.salvar_escolha(
+            jogo.game_id, jogo.name, origem, session_wallpaper.Posicoes()
+        )
         assert destino is not None
         destino.unlink()
 
         assert session_wallpaper.escolha(jogo) == "auto"
+
+    def test_position_antigo_vale_como_em_pe(self, jogo) -> None:
+        """Toda escolha gravada antes das duas orientações foi feita na grade em pé."""
+        (shared.wallpapers_dir / f"{jogo.game_id}.jpg").write_bytes(b"jpg")
+        (shared.wallpapers_dir / f"{jogo.game_id}.json").write_text(
+            json.dumps(
+                {
+                    "name": jogo.name,
+                    "file": f"{jogo.game_id}.jpg",
+                    "position": 0.3,
+                    "locked": True,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        _arquivo, posicoes = session_wallpaper._fonte(jogo, 1080, 1920, "portrait")
+
+        assert posicoes == session_wallpaper.Posicoes(retrato=0.3, paisagem=0.5)
+
+    def test_a_tela_de_edicao_grava_as_duas_posicoes(self, jogo, tmp_path, win) -> None:
+        from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+
+        origem = tmp_path / "escolhida.jpg"
+        _arte(64, 36).save(origem)
+        dialog = DetailsDialog()
+
+        dialog.set_wallpaper_from_picker(origem, session_wallpaper.Posicoes(0.2, 0.7))
+
+        assert dialog.apply_wallpaper_choice(jogo) is True
+        gravado = json.loads(
+            (shared.wallpapers_dir / f"{jogo.game_id}.json").read_text(encoding="utf-8")
+        )
+        assert (gravado["position_portrait"], gravado["position_landscape"]) == (0.2, 0.7)
 
 
 class _AreaFalsa:

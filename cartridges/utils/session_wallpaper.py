@@ -367,6 +367,20 @@ def da_capa(capa: Path, largura: int, altura: int) -> Image.Image:
 # region Escolha por jogo
 
 
+class Posicoes(NamedTuple):
+    """A faixa escolhida para cada orientação de monitor, de 0 a 1.
+
+    Por orientação e não por monitor: dois monitores em pé mostram o mesmo
+    corte, e o id de um monitor muda quando ele troca de porta.
+    """
+
+    retrato: float = 0.5
+    paisagem: float = 0.5
+
+    def para(self, monitor: Monitor) -> float:
+        return self.retrato if monitor.em_pe else self.paisagem
+
+
 def _sidecar(game_id: str) -> Path:
     return shared.wallpapers_dir / f"{game_id}.json"
 
@@ -380,14 +394,26 @@ def _ler_sidecar(game_id: str) -> Optional[dict[str, Any]]:
     return dados if isinstance(dados, dict) else None
 
 
+def _posicoes(dados: Optional[dict[str, Any]]) -> Posicoes:
+    if not dados:
+        return Posicoes()
+    # "position" é o nome de antes das duas orientações, e toda escolha
+    # gravada com ele foi feita na grade em pé.
+    return Posicoes(
+        float(dados.get("position_portrait", dados.get("position", 0.5))),
+        float(dados.get("position_landscape", 0.5)),
+    )
+
+
 def _gravar_sidecar(
-    game_id: str, name: str, arquivo: Optional[str], posicao: float, travado: bool
+    game_id: str, name: str, arquivo: Optional[str], posicoes: Posicoes, travado: bool
 ) -> None:
     shared.wallpapers_dir.mkdir(parents=True, exist_ok=True)
     dados = {
         "name": name,
         "file": arquivo,
-        "position": posicao,
+        "position_portrait": posicoes.retrato,
+        "position_landscape": posicoes.paisagem,
         "timestamp": int(time.time()),
         # Travado é escolha de gente. A busca automática nunca mexe nele, nem
         # quando o jogo é renomeado — foi o usuário que casou aquela arte com
@@ -428,7 +454,7 @@ def imagem_escolhida(game_id: str) -> Optional[Path]:
 
 
 def salvar_escolha(
-    game_id: str, name: str, origem: Path, posicao: float
+    game_id: str, name: str, origem: Path, posicoes: Posicoes
 ) -> Optional[Path]:
     """Adota ``origem`` como a parede de ``game_id``. Trava a escolha."""
     sufixo = origem.suffix.lower()
@@ -444,14 +470,14 @@ def salvar_escolha(
         logging.warning("Não foi possível guardar a parede escolhida: %s", erro)
         return None
 
-    _gravar_sidecar(game_id, name, destino.name, posicao, travado=True)
+    _gravar_sidecar(game_id, name, destino.name, posicoes, travado=True)
     return destino
 
 
 def nao_trocar(game_id: str, name: str) -> None:
     """Este jogo não mexe na parede. Travado, para a busca não o reencontrar."""
     _apagar_imagens(game_id)
-    _gravar_sidecar(game_id, name, None, 0.5, travado=True)
+    _gravar_sidecar(game_id, name, None, Posicoes(), travado=True)
 
 
 def redefinir(game_id: str) -> None:
@@ -469,7 +495,7 @@ def _apagar_imagens(game_id: str, manter: str = "") -> None:
 
 def _fonte(
     game: "Game", largura: int, altura: int, formato: str
-) -> Optional[tuple[Path, float]]:
+) -> Optional[tuple[Path, Posicoes]]:
     """A imagem de partida deste jogo e a faixa dela, baixando se precisar.
 
     ``largura`` x ``altura`` é o mínimo que os cortes precisam, e ``formato`` é
@@ -479,13 +505,13 @@ def _fonte(
     não sobrou nem busca nem capa.
     """
     dados = _ler_sidecar(game.game_id)
-    posicao = float(dados.get("position", 0.5)) if dados else 0.5
+    posicoes = _posicoes(dados)
 
     if dados and dados.get("locked"):
         if not dados.get("file"):
             return None  # "não trocar"
         if arquivo := _arquivo_do_sidecar(dados):
-            return arquivo, posicao
+            return arquivo, posicoes
         # A escolha à mão apontava para um arquivo que sumiu: segue para a
         # busca, como `escolha` já mostra na tela de edição.
 
@@ -493,7 +519,7 @@ def _fonte(
     # do mesmo jogo não toca a rede, e a parede aparece no instante em que o
     # bloqueador aparece.
     if (arquivo := _arquivo_do_sidecar(dados)) and dados.get("name") == game.name:
-        return arquivo, posicao
+        return arquivo, posicoes
 
     if achado := melhor_para(game.name, largura, altura, formato):
         try:
@@ -508,13 +534,15 @@ def _fonte(
         except Exception as erro:  # pylint: disable=broad-except
             logging.info("Não foi possível baixar a parede do jogo: %s", erro)
         else:
-            _gravar_sidecar(game.game_id, game.name, destino.name, 0.5, travado=False)
-            return destino, 0.5
+            _gravar_sidecar(
+                game.game_id, game.name, destino.name, Posicoes(), travado=False
+            )
+            return destino, Posicoes()
 
     # Último degrau: a capa. Não fica guardada como fonte — ela já está em
     # `covers`, e uma cópia aqui envelheceria sozinha quando a capa mudasse.
     capa = game.get_cover_path()
-    return (capa, 0.5) if capa else None
+    return (capa, Posicoes()) if capa else None
 
 
 # endregion
@@ -576,7 +604,7 @@ def aplicar(game: "Game", sessao: int) -> None:
         arranjo = formatos(monitores)
         if not (fonte := _fonte(game, *arranjo.minimo, arranjo.ratio)):
             return
-        origem, posicao = fonte
+        origem, posicoes = fonte
 
         _cache().mkdir(parents=True, exist_ok=True)
         carimbo = int(time.time())
@@ -593,7 +621,7 @@ def aplicar(game: "Game", sessao: int) -> None:
                         arquivo.convert("RGB"),
                         monitor.largura,
                         monitor.altura,
-                        posicao,
+                        posicoes.para(monitor),
                     )
             # Nome novo a cada sessão: o Windows guarda o papel de parede
             # por caminho, e reescrever o mesmo arquivo com outro conteúdo
