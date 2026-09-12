@@ -38,7 +38,7 @@ import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, NamedTuple, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -50,6 +50,7 @@ from cartridges.utils.download import download_bytes
 from cartridges.utils.name_cleaner import clean_game_name
 from cartridges.utils.session_wallpaper import (
     Posicoes,
+    corta,
     eixo_do_corte,
     enquadrar,
     formatos_ligados,
@@ -74,8 +75,32 @@ def celula(largura: int, altura: int) -> tuple[int, int]:
     return CELL_SIZE, max(1, round(CELL_SIZE * altura / largura))
 
 
-# Altura da prévia grande, onde a faixa é escolhida.
-PREVIEW_HEIGHT = 440
+# A caixa em que a prévia grande cabe, em pixels lógicos. Com uma orientação só
+# ela tem a janela inteira; no arranjo misto as duas dividem os 860px de largura,
+# e a deitada fica com a maior parte porque é a mais larga.
+PREVIEW_MAX = (800, 440)
+HYBRID_LANDSCAPE_MAX = (600, 340)
+HYBRID_PORTRAIT_MAX = (220, 340)
+
+# Altura da cópia reduzida que a barrinha recorta: o dobro da maior prévia, para
+# ela não sair borrada.
+PREVIEW_SOURCE_HEIGHT = 2 * PREVIEW_MAX[1]
+
+
+def caber(largura: int, altura: int, max_largura: int, max_altura: int) -> tuple[int, int]:
+    """``largura`` x ``altura`` reduzido para caber na caixa, na mesma proporção."""
+    escala = min(max_largura / largura, max_altura / altura)
+    return max(1, round(largura * escala)), max(1, round(altura * escala))
+
+
+class _Corte(NamedTuple):
+    """Os widgets de um dos dois cortes da tela de ajuste."""
+
+    box: Gtk.Box
+    picture: Gtk.Picture
+    hint: Gtk.Label
+    scale: Gtk.Scale
+    adjustment: Gtk.Adjustment
 
 
 @Gtk.Template(resource_path=shared.PREFIX + "/gtk/wallpaper-picker.ui")
@@ -89,10 +114,16 @@ class WallpaperPicker(Adw.Dialog):
     stack: Gtk.Stack = Gtk.Template.Child()
     status_page: Adw.StatusPage = Gtk.Template.Child()
     flowbox: Gtk.FlowBox = Gtk.Template.Child()
-    adjust_picture: Gtk.Picture = Gtk.Template.Child()
-    adjust_hint: Gtk.Label = Gtk.Template.Child()
-    adjust_scale: Gtk.Scale = Gtk.Template.Child()
-    adjust_adjustment: Gtk.Adjustment = Gtk.Template.Child()
+    adjust_landscape_box: Gtk.Box = Gtk.Template.Child()
+    adjust_landscape_picture: Gtk.Picture = Gtk.Template.Child()
+    adjust_landscape_hint: Gtk.Label = Gtk.Template.Child()
+    adjust_landscape_scale: Gtk.Scale = Gtk.Template.Child()
+    adjust_landscape_adjustment: Gtk.Adjustment = Gtk.Template.Child()
+    adjust_portrait_box: Gtk.Box = Gtk.Template.Child()
+    adjust_portrait_picture: Gtk.Picture = Gtk.Template.Child()
+    adjust_portrait_hint: Gtk.Label = Gtk.Template.Child()
+    adjust_portrait_scale: Gtk.Scale = Gtk.Template.Child()
+    adjust_portrait_adjustment: Gtk.Adjustment = Gtk.Template.Child()
     adjust_back: Gtk.Button = Gtk.Template.Child()
     adjust_apply: Gtk.Button = Gtk.Template.Child()
 
@@ -111,6 +142,21 @@ class WallpaperPicker(Adw.Dialog):
         self.formatos = formatos_ligados()
         self.largura, self.altura = self.formatos.grade
         self.cell_width, self.cell_height = celula(self.largura, self.altura)
+
+        self._paisagem = _Corte(
+            self.adjust_landscape_box,
+            self.adjust_landscape_picture,
+            self.adjust_landscape_hint,
+            self.adjust_landscape_scale,
+            self.adjust_landscape_adjustment,
+        )
+        self._retrato = _Corte(
+            self.adjust_portrait_box,
+            self.adjust_portrait_picture,
+            self.adjust_portrait_hint,
+            self.adjust_portrait_scale,
+            self.adjust_portrait_adjustment,
+        )
 
         # A mesma guarda de geração das outras duas telas de escolha: uma
         # busca em voo quando outra começa (ou quando a janela fecha) não pode
@@ -136,7 +182,8 @@ class WallpaperPicker(Adw.Dialog):
         self.search_entry.connect("activate", lambda *_: self.search())
         self.flowbox.connect("child-activated", self._on_child_activated)
         self.none_button.connect("clicked", self._on_none_clicked)
-        self.adjust_adjustment.connect("value-changed", self._on_position_changed)
+        for corte in (self._paisagem, self._retrato):
+            corte.adjustment.connect("value-changed", self._on_position_changed)
         self.adjust_back.connect("clicked", lambda *_: self._show_results())
         self.adjust_apply.connect("clicked", self._on_apply_clicked)
         self.connect("closed", self._on_closed)
@@ -321,9 +368,8 @@ class WallpaperPicker(Adw.Dialog):
                 imagem = arquivo.convert("RGB")
                 escala = min(
                     1.0,
-                    PREVIEW_HEIGHT
+                    PREVIEW_SOURCE_HEIGHT
                     * max(1, int(shared.scale_factor))
-                    * 2
                     / max(1, imagem.height),
                 )
                 previa = (
@@ -342,61 +388,101 @@ class WallpaperPicker(Adw.Dialog):
             GLib.idle_add(self._show_empty, _("Não foi possível abrir a imagem"), generation)
             return
 
-        GLib.idle_add(self._open_done, conteudo, url, previa, generation)
+        GLib.idle_add(
+            self._open_done, conteudo, Path(urlparse(url).path).suffix, previa, generation
+        )
 
     def _salvar_temporario(self, conteudo: bytes, url: str) -> str:
         caminho = self._temp_dir / f"escolhida{Path(urlparse(url).path).suffix or '.jpg'}"
         caminho.write_bytes(conteudo)
         return str(caminho)
 
+    def _cortes(self) -> list[tuple[tuple[int, int], _Corte]]:
+        """Os cortes deste arranjo: um por orientação dos monitores-alvo."""
+        cortes = [
+            (tamanho, corte)
+            for tamanho, corte in (
+                (self.formatos.paisagem, self._paisagem),
+                (self.formatos.retrato, self._retrato),
+            )
+            if tamanho
+        ]
+        # Sem alvo nenhum (monitor desligado com a tela aberta), o formato da
+        # grade ainda precisa de um corte onde aparecer.
+        return cortes or [(self.formatos.grade, self._paisagem)]
+
     def _open_done(
-        self, conteudo: bytes, url: str, previa: Image.Image, generation: int
+        self, conteudo: bytes, sufixo: str, previa: Image.Image, generation: int
     ) -> bool:
         if generation != self._generation or self._closed:
             return False
 
         self._bytes = conteudo
-        sufixo = Path(urlparse(url).path).suffix.lower()
+        sufixo = sufixo.lower()
         self._suffix = sufixo if sufixo in IMAGE_SUFFIXES else ".jpg"
         self._previa = previa
 
-        # Qual eixo a barrinha move depende das duas proporções: arte larga é
-        # cortada nas laterais, arte alta demais é cortada em cima e embaixo.
-        # Dizer isso poupa o usuário de descobrir arrastando.
-        lateral = eixo_do_corte(previa.width, previa.height, self.largura, self.altura)
-        self.adjust_hint.set_label(
-            _("Arraste para escolher a faixa da imagem")
-            if lateral
-            else _("Arraste para escolher a altura da imagem")
-        )
+        cortes = self._cortes()
+        for corte in (self._paisagem, self._retrato):
+            corte.box.set_visible(any(corte is visivel for _tamanho, visivel in cortes))
 
-        self.adjust_adjustment.set_value(50)
+        for (largura, altura), corte in cortes:
+            # A barrinha só existe onde há o que deslizar: arte já na proporção
+            # do monitor entra inteira.
+            tem_corte = corta(previa.width, previa.height, largura, altura)
+            corte.hint.set_visible(tem_corte)
+            corte.scale.set_visible(tem_corte)
+            # Qual eixo a barrinha move depende das duas proporções: arte larga
+            # é cortada nas laterais, arte alta demais em cima e embaixo. Dizer
+            # isso poupa o usuário de descobrir arrastando.
+            corte.hint.set_label(
+                _("Arraste para escolher a faixa da imagem")
+                if eixo_do_corte(previa.width, previa.height, largura, altura)
+                else _("Arraste para escolher a altura da imagem")
+            )
+            corte.adjustment.set_value(50)
+
         self._redesenhar_previa()
         self.stack.set_visible_child_name("adjust")
         return False
 
-    def _on_position_changed(self, *_args: Any) -> None:
-        self._redesenhar_previa()
+    def _on_position_changed(self, adjustment: Gtk.Adjustment) -> None:
+        self._redesenhar_previa(adjustment)
 
-    def _redesenhar_previa(self) -> None:
+    def _redesenhar_previa(self, so: Optional[Gtk.Adjustment] = None) -> None:
+        """Recorta a prévia de cada corte; só a de ``so``, quando dado.
+
+        Arrastar uma barrinha redesenha só o corte dela: no arranjo misto, os
+        dois a cada pixel de arrasto seriam o dobro do trabalho para nada.
+        """
         if self._previa is None:
             return
+        cortes = self._cortes()
         escala = max(1, int(shared.scale_factor))
-        largura = max(1, round(PREVIEW_HEIGHT * self.largura / self.altura))
-        quadro = enquadrar(
-            self._previa,
-            largura * escala,
-            PREVIEW_HEIGHT * escala,
-            self.adjust_adjustment.get_value() / 100,
-        )
-        try:
-            textura = Gdk.Texture.new_from_bytes(
-                GLib.Bytes.new(imagem_para_textura_bytes(quadro))
+        for (largura, altura), corte in cortes:
+            if so is not None and corte.adjustment is not so:
+                continue
+            if len(cortes) == 1:
+                caixa = PREVIEW_MAX
+            elif altura > largura:
+                caixa = HYBRID_PORTRAIT_MAX
+            else:
+                caixa = HYBRID_LANDSCAPE_MAX
+            previa_largura, previa_altura = caber(largura, altura, *caixa)
+            quadro = enquadrar(
+                self._previa,
+                previa_largura * escala,
+                previa_altura * escala,
+                corte.adjustment.get_value() / 100,
             )
-        except GLib.Error:
-            return
-        self.adjust_picture.set_size_request(largura, PREVIEW_HEIGHT)
-        self.adjust_picture.set_paintable(textura)
+            try:
+                textura = Gdk.Texture.new_from_bytes(
+                    GLib.Bytes.new(imagem_para_textura_bytes(quadro))
+                )
+            except GLib.Error:
+                continue
+            corte.picture.set_size_request(previa_largura, previa_altura)
+            corte.picture.set_paintable(textura)
 
     def _on_apply_clicked(self, *_args: Any) -> None:
         if not self._bytes:
@@ -417,13 +503,13 @@ class WallpaperPicker(Adw.Dialog):
             self._show_empty(_("Não foi possível guardar a imagem"))
             return
 
-        # A barrinha é a do formato da grade; a outra orientação fica no meio.
-        valor = self.adjust_adjustment.get_value() / 100
+        # A orientação que não existe neste arranjo nunca saiu do meio.
         self.on_selected(
             caminho,
-            Posicoes(retrato=valor)
-            if self.altura > self.largura
-            else Posicoes(paisagem=valor),
+            Posicoes(
+                retrato=self.adjust_portrait_adjustment.get_value() / 100,
+                paisagem=self.adjust_landscape_adjustment.get_value() / 100,
+            ),
         )
         self.close()
 

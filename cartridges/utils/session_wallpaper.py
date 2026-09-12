@@ -344,6 +344,18 @@ def eixo_do_corte(
     return (origem_largura / origem_altura) >= (largura / altura)
 
 
+def corta(origem_largura: int, origem_altura: int, largura: int, altura: int) -> bool:
+    """True quando enquadrar a origem no monitor remove alguma parte dela.
+
+    Com meio por cento de folga: a cópia reduzida que a tela de ajuste recorta
+    arredonda um pixel aqui e ali, e 1564x880 é a mesma arte 16:9 de 3840x2160.
+    """
+    if not origem_altura or not altura:
+        return False
+    alvo = largura / altura
+    return abs(origem_largura / origem_altura - alvo) > 0.005 * alvo
+
+
 def da_capa(capa: Path, largura: int, altura: int) -> Image.Image:
     """A capa do jogo virando papel de parede: inteira, sobre ela mesma borrada.
 
