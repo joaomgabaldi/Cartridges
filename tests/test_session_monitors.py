@@ -99,3 +99,58 @@ class TestTelaDeEdicao:
 
         assert dialog.wallpaper_row.get_sensitive()
         assert dialog.wallpaper_row.get_subtitle() == "Automático (wallhaven)"
+
+
+class TestSessao:
+    def test_sem_segundo_monitor_a_janela_nao_sai_e_a_opcao_desliga(
+        self, schema, ligados, monkeypatch
+    ):
+        from cartridges.window import CartridgesWindow  # noqa: PLC0415
+
+        schema["session-move-window"] = True
+        schema["session-monitor"] = PRINCIPAL.device
+        ligados(PRINCIPAL)
+
+        def nao_move(*_args):
+            raise AssertionError("sem segundo monitor não há para onde levar a janela")
+
+        monkeypatch.setattr(window_geometry, "move_to_monitor", nao_move)
+
+        # `self` só chegaria a `move_to_monitor`, que não pode ser chamado.
+        assert CartridgesWindow.move_to_session_monitor(object()) is False
+        assert schema.get_boolean("session-move-window") is False
+
+    def test_sem_segundo_monitor_o_papel_de_parede_nao_comeca_e_desliga(
+        self, schema, ligados, monkeypatch
+    ):
+        schema["session-wallpaper"] = True
+        ligados(PRINCIPAL)
+        iniciadas = []
+        monkeypatch.setattr(
+            session_wallpaper,
+            "threading",
+            SimpleNamespace(Thread=lambda **kwargs: iniciadas.append(kwargs)),
+        )
+
+        session_wallpaper.comecar(object())
+
+        assert iniciadas == []
+        assert schema.get_boolean("session-wallpaper") is False
+
+    def test_com_segundo_monitor_o_papel_de_parede_comeca(
+        self, schema, ligados, monkeypatch
+    ):
+        schema["session-wallpaper"] = True
+        ligados(PRINCIPAL, SEGUNDO)
+        iniciadas = []
+
+        def thread(**kwargs):
+            iniciadas.append(kwargs)
+            return SimpleNamespace(start=lambda: None)
+
+        monkeypatch.setattr(session_wallpaper, "threading", SimpleNamespace(Thread=thread))
+
+        session_wallpaper.comecar(object())
+
+        assert len(iniciadas) == 1
+        assert schema.get_boolean("session-wallpaper") is True

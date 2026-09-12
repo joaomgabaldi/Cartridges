@@ -442,8 +442,15 @@ class CartridgesWindow(Adw.ApplicationWindow):
         mais ligado na máquina — e aí quem chamou minimiza a janela, que é o
         que o app fazia antes desta opção existir. Ficar sem saber onde a
         janela foi parar é pior do que ela não sair do lugar.
+
+        Sem monitor nenhum além do principal, a opção é desligada aqui mesmo,
+        e fica desligada: se um segundo monitor voltar, quem religa é o
+        usuário, nas Preferências.
         """
         if not shared.schema.get_boolean("session-move-window"):
+            return False
+        if not window_geometry.has_secondary_monitor():
+            shared.schema.set_boolean("session-move-window", False)
             return False
         return window_geometry.move_to_monitor(
             self, shared.schema.get_string("session-monitor")
