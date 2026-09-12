@@ -496,11 +496,11 @@ class CartridgesWindow(Adw.ApplicationWindow):
             self.session_blocker_timer.set_visible(True)
             self.session_timer_id = GLib.timeout_add_seconds(1, self.session_tick)
 
-        # Vestir os monitores em pé com a arte do jogo. A preparação roda numa
-        # thread porque o caminho completo é rede (busca e download no
-        # wallhaven) mais Pillow, e nada disso pode segurar a tela enquanto o
-        # jogo abre — quando a arte já está em disco, ela aparece junto com o
-        # bloqueador.
+        # Vestir os monitores além do principal com a arte do jogo. A
+        # preparação roda numa thread porque o caminho completo é rede (busca e
+        # download no wallhaven) mais Pillow, e nada disso pode segurar a tela
+        # enquanto o jogo abre — quando a arte já está em disco, ela aparece
+        # junto com o bloqueador.
         if shared.schema.get_boolean("session-wallpaper"):
             session_wallpaper.comecar(game)
 
