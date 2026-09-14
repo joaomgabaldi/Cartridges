@@ -48,8 +48,11 @@ from cartridges import shared
 RELEASES_URL = "https://api.github.com/repos/joaomgabaldi/Cartridges/releases/latest"
 
 # Janela de progresso sem nenhuma pergunta, e sem reiniciar o Windows. O [Run]
-# do Cartridges.iss.in não tem skipifsilent, então reabre o app no fim.
-INSTALLER_ARGUMENTS = "/SILENT /SUPPRESSMSGBOXES /NORESTART"
+# do Cartridges.iss.in não tem skipifsilent, então reabre o app no fim. O que
+# falhar depois de o app fechar (UAC recusado, arquivo em uso, antivírus) só
+# aparece no log do Inno, em %TEMP%\Setup Log AAAA-MM-DD #NNN.txt, fora da
+# pasta que o app apaga.
+INSTALLER_ARGUMENTS = "/SILENT /SUPPRESSMSGBOXES /NORESTART /LOG"
 
 _VERSION_RE = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
@@ -95,7 +98,7 @@ def parse_release(data: dict) -> Optional[Release]:
 
 def is_newer(version: str, current: str) -> bool:
     """``AAAA.MM.DD`` já ordena como texto; outro formato nunca é mais novo."""
-    if not (_VERSION_RE.match(version) and _VERSION_RE.match(current)):
+    if not (_VERSION_RE.fullmatch(version) and _VERSION_RE.fullmatch(current)):
         return False
     return version > current
 
@@ -244,7 +247,10 @@ class AppUpdater:
             logging.warning("Erro inesperado na checagem de versão nova", exc_info=True)
             return
 
-        if release is None or not is_newer(release.version, shared.VERSION):
+        if release is None:
+            logging.info("A última release não tem instalador .exe")
+            return
+        if not is_newer(release.version, shared.VERSION):
             return
         logging.info("Versão nova disponível: %s", release.version)
         GLib.idle_add(self._ask, release)
@@ -274,8 +280,9 @@ class AppUpdater:
         )
         dialog.add_response("no", _("Não"))
         dialog.add_response("yes", _("Sim"))
+        # Sim destacado, mas não como padrão: a caixa aparece sem ser pedida, e
+        # um Enter perdido (digitando na busca) não pode começar o download.
         dialog.set_response_appearance("yes", Adw.ResponseAppearance.SUGGESTED)
-        dialog.set_default_response("yes")
         dialog.set_close_response("no")
         dialog.connect("response", self._on_answer, release)
         dialog.present(shared.win)
@@ -326,10 +333,10 @@ class AppUpdater:
             message = _("Não foi possível baixar a atualização")
         else:
             try:
-                # ShellExecute, e não subprocess: instalado para todos os
-                # usuários, o instalador pede UAC, e o CreateProcess do
-                # subprocess falharia com o erro 740. As barras são trocadas
-                # porque o Python do MSYS2 monta caminhos com "/".
+                # os.startfile (ShellExecute) abre o instalador sem esperar por
+                # ele; o próprio Inno Setup pede o UAC depois de começar, quando
+                # o app já fechou. As barras são trocadas porque o Python do
+                # MSYS2 monta caminhos com "/".
                 os.startfile(
                     str(target).replace("/", "\\"), arguments=INSTALLER_ARGUMENTS
                 )
