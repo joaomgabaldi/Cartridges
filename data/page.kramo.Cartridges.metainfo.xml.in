@@ -46,6 +46,13 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.13" date="2026-09-13">
+      <description translate="no">
+        <ul>
+          <li>Ao abrir, o Cartridges confere se saiu uma versão nova. Se saiu, mostra as novidades dela e pergunta se quer atualizar; no Sim, baixa o instalador, confere que o arquivo é o original e instala sozinho, reabrindo o app no fim</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.12" date="2026-09-12">
       <description translate="no">
         <ul>
