@@ -238,3 +238,18 @@ def test_download_cancelled_leaves_nothing(tmp_path, fake_get):
         )
 
     assert list(target.parent.iterdir()) == []
+
+
+# -- AppUpdater ---------------------------------------------------------------
+
+from cartridges.utils.app_updater import AppUpdater  # noqa: E402
+
+
+def test_start_does_nothing_outside_the_installation(monkeypatch):
+    monkeypatch.setattr(app_updater, "installed_root", lambda: None)
+
+    def no_thread(*_args, **_kwargs):
+        pytest.fail("rodando do código-fonte, o app não pode checar versão nova")
+
+    monkeypatch.setattr(app_updater.threading, "Thread", no_thread)
+    AppUpdater().start()

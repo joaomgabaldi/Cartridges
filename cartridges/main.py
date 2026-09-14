@@ -57,6 +57,7 @@ from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.store.store import Store
+from cartridges.utils.app_updater import AppUpdater
 from cartridges.utils.hltb_backfill import HLTBBackfill
 from cartridges.utils.install_size import InstallSizeSweep
 from cartridges.utils.news_checker import NewsChecker
@@ -247,6 +248,7 @@ class CartridgesApplication(Adw.Application):
     news_checker: Optional[NewsChecker] = None
     hltb_backfill: Optional[HLTBBackfill] = None
     install_size_sweep: Optional[InstallSizeSweep] = None
+    app_updater: Optional[AppUpdater] = None
     # O provider da cor de destaque, guardado para o watcher do registro poder
     # reescrever o CSS no lugar em vez de empilhar um provider por mudança.
     _accent_provider: Optional[Gtk.CssProvider] = None
@@ -523,6 +525,11 @@ class CartridgesApplication(Adw.Application):
 
         shared.win.present()
 
+        # Pergunta ao GitHub se saiu versão nova. Depois do present(): a caixa
+        # com as novidades precisa de uma janela na tela para se prender.
+        self.app_updater = AppUpdater()
+        self.app_updater.start()
+
         if shared.schema.get_boolean("auto-import"):
             self.on_import_action()
 
@@ -602,6 +609,11 @@ class CartridgesApplication(Adw.Application):
 
         if self.install_size_sweep is not None:
             self.install_size_sweep.stop()
+
+        # Um download no meio para no próximo pedaço, e o resultado de uma
+        # checagem que ainda esteja no caminho é descartado.
+        if self.app_updater is not None:
+            self.app_updater.stop()
 
         Gio.Application.do_shutdown(self)
 
