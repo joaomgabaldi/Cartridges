@@ -163,8 +163,12 @@ end;
 
 procedure InitializeWizard;
 begin
-  // No NVIDIA card, no page: the wizard goes straight on.
-  if not HasNvidiaGpu then
+  // No NVIDIA card, no page: the wizard goes straight on. Silent installs (the
+  // in-app updater runs /SILENT) skip it too: silent mode presses Next on every
+  // page, and a Next that is disabled until the box is ticked aborts the whole
+  // install with "Failed to proceed to next wizard page". Whoever updates has
+  // already seen the notice on the first install.
+  if WizardSilent or not HasNvidiaGpu then
     Exit;
   NvidiaPage := CreateInputOptionPage(wpLicense,
     'Placa de vídeo NVIDIA',

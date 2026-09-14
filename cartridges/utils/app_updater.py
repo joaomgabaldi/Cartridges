@@ -33,6 +33,7 @@ import logging
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -52,7 +53,13 @@ RELEASES_URL = "https://api.github.com/repos/joaomgabaldi/Cartridges/releases/la
 # falhar depois de o app fechar (UAC recusado, arquivo em uso, antivírus) só
 # aparece no log do Inno, em %TEMP%\Setup Log AAAA-MM-DD #NNN.txt, fora da
 # pasta que o app apaga.
-INSTALLER_ARGUMENTS = "/SILENT /SUPPRESSMSGBOXES /NORESTART /LOG"
+#
+# /FORCECLOSEAPPLICATIONS: o gdbus.exe que o GLib abre como barramento de sessão
+# vive uns 3 s depois de o app fechar. Instalado só para o usuário não há UAC
+# no meio, o instalador chega antes, não consegue fechar o gdbus com educação e,
+# em modo silencioso, desiste e desfaz tudo (testado em 13/09/2026). Forçado, o
+# Restart Manager encerra o gdbus e a instalação segue.
+INSTALLER_ARGUMENTS = "/SILENT /SUPPRESSMSGBOXES /NORESTART /LOG /FORCECLOSEAPPLICATIONS"
 
 _VERSION_RE = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
@@ -81,14 +88,16 @@ def parse_release(data: dict) -> Optional[Release]:
         ),
         None,
     )
-    if installer is None or not installer.get("browser_download_url"):
+    # O endereço do anexo na API, e não o browser_download_url: o repositório é
+    # privado, e só a API aceita o token no lugar do login do navegador.
+    if installer is None or not installer.get("url"):
         return None
 
     digest = str(installer.get("digest") or "")
     return Release(
         version=str(data.get("tag_name") or "").removeprefix("v"),
         notes=str(data.get("body") or ""),
-        url=str(installer["browser_download_url"]),
+        url=str(installer["url"]),
         size=int(installer.get("size") or 0),
         sha256=digest.removeprefix("sha256:").lower()
         if digest.startswith("sha256:")
@@ -146,6 +155,43 @@ def installed_root() -> Optional[Path]:
     return root if (root / "unins000.exe").is_file() else None
 
 
+def github_token() -> str:
+    """Token do gh CLI logado neste PC, ou "" sem gh ou sem login.
+
+    O repositório é privado: sem token, a API e o download respondem 404. Sem
+    ele a checagem ainda é tentada, e o 404 fica só no log, como falta de rede.
+    """
+    gh = shutil.which("gh")
+    if gh is None:
+        return ""
+    try:
+        result = subprocess.run(
+            [gh, "auth", "token"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+            # O app roda no pythonw, sem console: sem isto o gh piscaria uma
+            # janela preta na abertura.
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def github_headers(token: str, accept: str) -> dict[str, str]:
+    """Cabeçalhos de uma chamada à API do GitHub, com o token quando houver.
+
+    O ``requests`` tira o ``Authorization`` quando um redirecionamento troca de
+    domínio, então o token não vai junto para o link assinado do download.
+    """
+    headers = {"Accept": accept}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 def download_dir() -> Path:
     """Onde o instalador baixado fica até a próxima abertura do app."""
     return Path(tempfile.gettempdir()) / "Cartridges-update"
@@ -160,6 +206,7 @@ def download_installer(
     target: Path,
     progress: Callable[[float], None],
     cancelled: threading.Event,
+    token: str = "",
 ) -> None:
     """Baixa o instalador para ``target``, conferindo o SHA256 no caminho.
 
@@ -182,7 +229,12 @@ def download_installer(
     hasher = hashlib.sha256()
     received = 0
     try:
-        with requests.get(release.url, timeout=10, stream=True) as response:
+        with requests.get(
+            release.url,
+            timeout=10,
+            stream=True,
+            headers=github_headers(token, "application/octet-stream"),
+        ) as response:
             response.raise_for_status()
             with part.open("wb") as file:
                 for chunk in response.iter_content(chunk_size=1 << 16):
@@ -211,6 +263,8 @@ class AppUpdater:
         # próximo pedaço e um resultado que chegue depois é descartado.
         self._cancel = threading.Event()
         self._stopped = False
+        # Lido do gh na checagem e reusado no download, que vem logo depois.
+        self._token = ""
 
     def start(self) -> None:
         """Checa uma vez, fora da thread principal. Só no app instalado."""
@@ -230,11 +284,12 @@ class AppUpdater:
         # uso (acabou de reabrir o app), o erro é ignorado e ele sai na próxima.
         shutil.rmtree(download_dir(), ignore_errors=True)
 
+        self._token = github_token()
         try:
             response = requests.get(
                 RELEASES_URL,
                 timeout=10,
-                headers={"Accept": "application/vnd.github+json"},
+                headers=github_headers(self._token, "application/vnd.github+json"),
             )
             response.raise_for_status()
             release = parse_release(response.json())
@@ -312,7 +367,9 @@ class AppUpdater:
 
         def work() -> None:
             try:
-                download_installer(release, target, progress, self._cancel)
+                download_installer(
+                    release, target, progress, self._cancel, self._token
+                )
             except DownloadCancelled:
                 return
             except Exception as error:  # pylint: disable=broad-exception-caught

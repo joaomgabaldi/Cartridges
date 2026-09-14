@@ -18,6 +18,7 @@ from cartridges.utils.app_updater import (
     DownloadCancelled,
     Release,
     download_installer,
+    github_token,
     installed_root,
     is_newer,
     notes_to_markup,
@@ -34,6 +35,7 @@ _API = {
         {"name": "notas.txt", "browser_download_url": "https://x/notas.txt", "size": 1},
         {
             "name": "Cartridges.Windows.exe",
+            "url": "https://api.github.com/repos/o/r/releases/assets/2",
             "browser_download_url": "https://x/Cartridges.Windows.exe",
             "size": 63701150,
             "digest": f"sha256:{_SHA.upper()}",
@@ -58,7 +60,9 @@ def test_parse_release_picks_the_exe_and_strips_prefixes():
     assert release == Release(
         version="2026.09.10",
         notes=_API["body"],
-        url="https://x/Cartridges.Windows.exe",
+        # O endereço do anexo na API, não o browser_download_url: num
+        # repositório privado só a API aceita o token.
+        url="https://api.github.com/repos/o/r/releases/assets/2",
         size=63701150,
         sha256=_SHA,
     )
@@ -145,6 +149,32 @@ def test_installed_root_is_none_from_source(tmp_path, monkeypatch):
     assert installed_root() is None
 
 
+# -- github_token -------------------------------------------------------------
+
+
+def test_github_token_without_gh_is_empty(monkeypatch):
+    monkeypatch.setattr(app_updater.shutil, "which", lambda _name: None)
+    assert github_token() == ""
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "expected"),
+    [(0, "gho_abc123\n", "gho_abc123"), (1, "", "")],
+)
+def test_github_token_reads_gh_auth_token(monkeypatch, returncode, stdout, expected):
+    calls: list[list[str]] = []
+
+    def run(args, **_kwargs):
+        calls.append(args)
+        return types.SimpleNamespace(returncode=returncode, stdout=stdout)
+
+    monkeypatch.setattr(app_updater.shutil, "which", lambda _name: r"C:\gh\gh.exe")
+    monkeypatch.setattr(app_updater.subprocess, "run", run)
+
+    assert github_token() == expected
+    assert calls == [[r"C:\gh\gh.exe", "auth", "token"]]
+
+
 # -- download_installer -------------------------------------------------------
 
 _PAYLOAD = b"instalador de mentira"
@@ -174,10 +204,10 @@ def _release(sha256: str) -> Release:
 
 @pytest.fixture
 def fake_get(monkeypatch):
-    calls: list[str] = []
+    calls: list[tuple[str, dict]] = []
 
-    def get(url, **_kwargs):
-        calls.append(url)
+    def get(url, **kwargs):
+        calls.append((url, kwargs.get("headers") or {}))
         return _FakeResponse(_PAYLOAD)
 
     monkeypatch.setattr(app_updater.requests, "get", get)
@@ -193,8 +223,15 @@ def test_download_writes_verified_installer(tmp_path, fake_get):
         target,
         fractions.append,
         threading.Event(),
+        token="gho_abc123",
     )
 
+    # O anexo pela API só devolve o arquivo com este Accept, e o repositório
+    # privado só com o token.
+    assert fake_get[0][1] == {
+        "Accept": "application/octet-stream",
+        "Authorization": "Bearer gho_abc123",
+    }
     assert target.read_bytes() == _PAYLOAD
     assert not target.with_name(target.name + ".part").exists()
     assert fractions[-1] == 1.0
@@ -259,13 +296,21 @@ def test_check_asks_only_for_a_newer_release(tmp_path, monkeypatch, current, ask
     # _check_thread apaga a download_dir(): nunca a %TEMP%\Cartridges-update real.
     monkeypatch.setattr(app_updater, "download_dir", lambda: tmp_path / "update")
     monkeypatch.setattr(app_updater.shared, "VERSION", current)
+    monkeypatch.setattr(app_updater, "github_token", lambda: "gho_abc123")
     response = types.SimpleNamespace(raise_for_status=lambda: None, json=lambda: _API)
-    monkeypatch.setattr(app_updater.requests, "get", lambda *_a, **_k: response)
+    sent: list[dict] = []
+
+    def get(_url, **kwargs):
+        sent.append(kwargs["headers"])
+        return response
+
+    monkeypatch.setattr(app_updater.requests, "get", get)
     queued: list[tuple] = []
     monkeypatch.setattr(app_updater.GLib, "idle_add", lambda *args: queued.append(args))
 
     AppUpdater()._check_thread()  # pylint: disable=protected-access
 
+    assert sent[0]["Authorization"] == "Bearer gho_abc123"
     if asks:
         assert len(queued) == 1
         assert queued[0][1].version == "2026.09.10"

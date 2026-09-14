@@ -50,6 +50,7 @@
       <description translate="no">
         <ul>
           <li>Ao abrir, o Cartridges confere se saiu uma versão nova. Se saiu, mostra as novidades dela e pergunta se quer atualizar; no Sim, baixa o instalador, confere que o arquivo é o original e instala sozinho, reabrindo o app no fim</li>
+          <li>O instalador em modo silencioso, que é o que a atualização pelo app usa, não para mais na página do aviso da placa NVIDIA. Antes, em computadores com NVIDIA, ele desistia nessa página sem instalar nada</li>
         </ul>
       </description>
     </release>
