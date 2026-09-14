@@ -4,14 +4,20 @@
 
 """Checagem de versão nova, notas da release e download do instalador."""
 
+import hashlib
 import sys
+import threading
+import types
 import xml.etree.ElementTree as ET
 
 import pytest
 
 from cartridges.utils import app_updater
 from cartridges.utils.app_updater import (
+    AppUpdater,
+    DownloadCancelled,
     Release,
+    download_installer,
     installed_root,
     is_newer,
     notes_to_markup,
@@ -141,14 +147,6 @@ def test_installed_root_is_none_from_source(tmp_path, monkeypatch):
 
 # -- download_installer -------------------------------------------------------
 
-import hashlib  # noqa: E402
-import threading  # noqa: E402
-
-from cartridges.utils.app_updater import (  # noqa: E402
-    DownloadCancelled,
-    download_installer,
-)
-
 _PAYLOAD = b"instalador de mentira"
 
 
@@ -242,8 +240,6 @@ def test_download_cancelled_leaves_nothing(tmp_path, fake_get):
 
 # -- AppUpdater ---------------------------------------------------------------
 
-from cartridges.utils.app_updater import AppUpdater  # noqa: E402
-
 
 def test_start_does_nothing_outside_the_installation(monkeypatch):
     monkeypatch.setattr(app_updater, "installed_root", lambda: None)
@@ -253,3 +249,37 @@ def test_start_does_nothing_outside_the_installation(monkeypatch):
 
     monkeypatch.setattr(app_updater.threading, "Thread", no_thread)
     AppUpdater().start()
+
+
+@pytest.mark.parametrize(
+    ("current", "asks"),
+    [("2026.09.12", False), ("2026.09.01", True)],
+)
+def test_check_asks_only_for_a_newer_release(tmp_path, monkeypatch, current, asks):
+    # _check_thread apaga a download_dir(): nunca a %TEMP%\Cartridges-update real.
+    monkeypatch.setattr(app_updater, "download_dir", lambda: tmp_path / "update")
+    monkeypatch.setattr(app_updater.shared, "VERSION", current)
+    response = types.SimpleNamespace(raise_for_status=lambda: None, json=lambda: _API)
+    monkeypatch.setattr(app_updater.requests, "get", lambda *_a, **_k: response)
+    queued: list[tuple] = []
+    monkeypatch.setattr(app_updater.GLib, "idle_add", lambda *args: queued.append(args))
+
+    AppUpdater()._check_thread()  # pylint: disable=protected-access
+
+    if asks:
+        assert len(queued) == 1
+        assert queued[0][1].version == "2026.09.10"
+    else:
+        assert queued == []
+
+
+def test_finish_after_cancel_neither_installs_nor_quits(tmp_path, monkeypatch):
+    def no_installer(*_args, **_kwargs):
+        pytest.fail("depois do Cancelar, o instalador não pode abrir")
+
+    monkeypatch.setattr(app_updater.os, "startfile", no_installer, raising=False)
+    updater = AppUpdater()
+    updater._cancel.set()  # pylint: disable=protected-access
+
+    # O FakeApplication não tem quit(): chegar nele levanta AttributeError.
+    assert updater._finish(object(), tmp_path / "x.exe") is False  # pylint: disable=protected-access
