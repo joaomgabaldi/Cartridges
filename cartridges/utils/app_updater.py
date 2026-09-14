@@ -28,13 +28,16 @@ em modo silencioso; o app fecha e o próprio instalador o reabre no fim.
 Não confundir com ``updates_checker``, que trata das atualizações dos jogos.
 """
 
+import hashlib
 import re
 import sys
 import tempfile
+import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
+import requests
 from gi.repository import GLib
 
 RELEASES_URL = "https://api.github.com/repos/joaomgabaldi/Cartridges/releases/latest"
@@ -138,3 +141,55 @@ def installed_root() -> Optional[Path]:
 def download_dir() -> Path:
     """Onde o instalador baixado fica até a próxima abertura do app."""
     return Path(tempfile.gettempdir()) / "Cartridges-update"
+
+
+class DownloadCancelled(Exception):
+    """A pessoa apertou Cancelar, ou o app fechou, no meio do download."""
+
+
+def download_installer(
+    release: Release,
+    target: Path,
+    progress: Callable[[float], None],
+    cancelled: threading.Event,
+) -> None:
+    """Baixa o instalador para ``target``, conferindo o SHA256 no caminho.
+
+    Grava em ``target.part`` e só renomeia depois de o hash bater, então um
+    ``target`` que existe é sempre um instalador inteiro e conferido. Em
+    qualquer falha, Cancelar incluído, o ``.part`` é apagado e a exceção sobe.
+    ``progress`` recebe a fração de 0 a 1, chamado desta mesma thread.
+
+    :raises DownloadCancelled: ``cancelled`` foi ligado no meio
+    :raises ValueError: a release não informa o hash, ou ele não confere
+    :raises requests.RequestException: falha de rede ou HTTP
+    """
+    # Sem hash não há como saber se o .exe é o que foi publicado, e ele vai
+    # rodar com o pedido de administrador. Recusa antes de baixar 60 MB.
+    if not release.sha256:
+        raise ValueError("a release não informa o SHA256 do instalador")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    part = target.with_name(target.name + ".part")
+    hasher = hashlib.sha256()
+    received = 0
+    try:
+        with requests.get(release.url, timeout=10, stream=True) as response:
+            response.raise_for_status()
+            with part.open("wb") as file:
+                for chunk in response.iter_content(chunk_size=1 << 16):
+                    if cancelled.is_set():
+                        raise DownloadCancelled
+                    file.write(chunk)
+                    hasher.update(chunk)
+                    received += len(chunk)
+                    if release.size:
+                        progress(min(received / release.size, 1.0))
+
+        if hasher.hexdigest() != release.sha256:
+            raise ValueError("o SHA256 do instalador baixado não confere")
+        part.replace(target)
+    except BaseException:
+        # O `with` já fechou o arquivo, senão o Windows não deixaria apagar.
+        part.unlink(missing_ok=True)
+        raise

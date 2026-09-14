@@ -137,3 +137,104 @@ def test_installed_root_is_none_from_source(tmp_path, monkeypatch):
     (tmp_path / "bin" / "python.exe").write_bytes(b"")
     monkeypatch.setattr(sys, "executable", str(tmp_path / "bin" / "python.exe"))
     assert installed_root() is None
+
+
+# -- download_installer -------------------------------------------------------
+
+import hashlib  # noqa: E402
+import threading  # noqa: E402
+
+from cartridges.utils.app_updater import (  # noqa: E402
+    DownloadCancelled,
+    download_installer,
+)
+
+_PAYLOAD = b"instalador de mentira"
+
+
+class _FakeResponse:
+    def __init__(self, payload: bytes) -> None:
+        self._payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def iter_content(self, chunk_size: int):
+        for start in range(0, len(self._payload), 8):
+            yield self._payload[start : start + 8]
+
+
+def _release(sha256: str) -> Release:
+    return Release("2026.09.13", "", "https://x/setup.exe", len(_PAYLOAD), sha256)
+
+
+@pytest.fixture
+def fake_get(monkeypatch):
+    calls: list[str] = []
+
+    def get(url, **_kwargs):
+        calls.append(url)
+        return _FakeResponse(_PAYLOAD)
+
+    monkeypatch.setattr(app_updater.requests, "get", get)
+    return calls
+
+
+def test_download_writes_verified_installer(tmp_path, fake_get):
+    target = tmp_path / "update" / "Cartridges-2026.09.13.exe"
+    fractions: list[float] = []
+
+    download_installer(
+        _release(hashlib.sha256(_PAYLOAD).hexdigest()),
+        target,
+        fractions.append,
+        threading.Event(),
+    )
+
+    assert target.read_bytes() == _PAYLOAD
+    assert not target.with_name(target.name + ".part").exists()
+    assert fractions[-1] == 1.0
+    assert fractions == sorted(fractions)
+
+
+# O `app_dirs` do conftest cria pastas dentro do tmp_path; o download vai para
+# uma subpasta própria para "não sobrou nada" poder olhar a pasta inteira.
+
+
+def test_download_with_wrong_hash_leaves_nothing(tmp_path, fake_get):
+    target = tmp_path / "update" / "Cartridges-2026.09.13.exe"
+
+    with pytest.raises(ValueError):
+        download_installer(_release("0" * 64), target, lambda _f: None, threading.Event())
+
+    assert list(target.parent.iterdir()) == []
+
+
+def test_download_without_hash_refuses_before_downloading(tmp_path, fake_get):
+    with pytest.raises(ValueError):
+        download_installer(
+            _release(""), tmp_path / "x.exe", lambda _f: None, threading.Event()
+        )
+    assert fake_get == []
+
+
+def test_download_cancelled_leaves_nothing(tmp_path, fake_get):
+    cancelled = threading.Event()
+    cancelled.set()
+    target = tmp_path / "update" / "Cartridges-2026.09.13.exe"
+
+    with pytest.raises(DownloadCancelled):
+        download_installer(
+            _release(hashlib.sha256(_PAYLOAD).hexdigest()),
+            target,
+            lambda _f: None,
+            cancelled,
+        )
+
+    assert list(target.parent.iterdir()) == []
