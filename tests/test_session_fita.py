@@ -102,3 +102,80 @@ def test_sidecar_corrompido_volta_para_a_capa(tmp_path, schema):
     assert not session_fita.escolhida(jogo.game_id)
     cor = session_fita.cor_do_jogo(jogo)
     assert cor.matiz < 10 or cor.matiz > 350
+
+
+class FitaFalsa:
+    """Um módulo Tuya de mentira, que anota o que mandaram nele."""
+
+    def __init__(self, dps=None, quebrada=False):
+        self.dps = dps or {"20": False, "21": "colour", "24": "000003e800b4"}
+        self.quebrada = quebrada
+        self.recebidos = []
+
+    def status(self):
+        if self.quebrada:
+            return {"Error": "Network Error: Device Unreachable", "Err": "905"}
+        return {"dps": dict(self.dps)}
+
+    def set_multiple_values(self, valores, nowait=False):
+        if self.quebrada:
+            return {"Error": "Network Error: Device Unreachable", "Err": "905"}
+        self.recebidos.append(dict(valores))
+        self.dps.update({str(k): v for k, v in valores.items()})
+        return {"dps": dict(self.dps)}
+
+
+@pytest.fixture
+def falsas(monkeypatch):
+    """Troca as fitas de verdade por módulos de mentira, por id."""
+    modulos = {}
+
+    def montar(*fitas_falsas):
+        lista = []
+        for indice, quebrada in enumerate(fitas_falsas):
+            fita = session_fita.Fita(f"Fita {indice}", f"eb{indice}", "1.2.3.4", "k")
+            modulos[fita.id] = FitaFalsa(quebrada=quebrada)
+            lista.append(fita)
+        session_fita.gravar_fitas(lista)
+        monkeypatch.setattr(session_fita, "_dispositivo", lambda f: modulos[f.id])
+        return modulos
+
+    return montar
+
+
+def test_cor_vira_hexadecimal_do_jeito_do_modulo():
+    assert session_fita.hsv_hex(session_fita.Cor(340, 1000, 150)) == "015403e80096"
+
+
+def test_hexadecimal_volta_a_ser_cor():
+    assert session_fita.cor_de_hex("015403e80096") == session_fita.Cor(340, 1000, 150)
+
+
+def test_hexadecimal_estranho_vira_nada():
+    assert session_fita.cor_de_hex("nao-e-hex") is None
+
+
+def test_ler_estado_traz_ligada_e_cor(falsas):
+    modulos = falsas(False)
+    fita = session_fita.fitas()[0]
+    assert session_fita.ler_estado(fita) == {"ligada": False, "cor": "000003e800b4"}
+    assert modulos
+
+
+def test_ler_estado_de_fita_fora_do_ar_e_nada(falsas):
+    falsas(True)
+    assert session_fita.ler_estado(session_fita.fitas()[0]) is None
+
+
+def test_aplicar_liga_poe_modo_cor_e_manda_a_cor(falsas):
+    modulos = falsas(False)
+    fita = session_fita.fitas()[0]
+    assert session_fita.aplicar(fita, True, "015403e80096") is True
+    assert modulos[fita.id].recebidos == [
+        {"20": True, "21": "colour", "24": "015403e80096"}
+    ]
+
+
+def test_aplicar_em_fita_fora_do_ar_devolve_falso(falsas):
+    falsas(True)
+    assert session_fita.aplicar(session_fita.fitas()[0], True, "015403e80096") is False
