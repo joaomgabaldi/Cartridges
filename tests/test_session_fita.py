@@ -281,6 +281,32 @@ def test_desligado_nas_preferencias_nao_age(falsas, schema):
     assert session_fita.ligada() is False
 
 
+def test_segunda_chamada_nao_repinta_o_estado_guardado(falsas, schema):
+    """O ``do_activate`` dispara de novo quando uma segunda instância é
+    encaminhada para a viva. A chave não pode ser regravada aí: o estado a
+    devolver é o primeiro, e não o roxo que o próprio app pintou por cima.
+    """
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+    modulos["eb0"].dps = {"20": True, "21": "colour", "24": "00b403e80064"}
+
+    session_fita._guardar_e_vestir()
+    primeiro = schema.get_string("fita-estado-anterior")
+    assert json.loads(primeiro) == {"eb0": {"ligada": True, "cor": "00b403e80064"}}
+
+    # O próprio `_vestir` já deixou o módulo roxo: é exatamente esse estado
+    # errado que a segunda chamada gravaria se não houvesse a guarda.
+    assert modulos["eb0"].dps["24"] != "00b403e80064"
+
+    session_fita._guardar_e_vestir()
+    assert schema.get_string("fita-estado-anterior") == primeiro
+
+    session_fita._devolver()
+    ultimo = modulos["eb0"].recebidos[-1]
+    assert ultimo["20"] is True
+    assert ultimo["24"] == "00b403e80064"
+
+
 def test_comecar_tira_a_cor_do_jogo_dentro_da_thread(
     falsas, tmp_path, monkeypatch, schema
 ):
