@@ -4,7 +4,10 @@
 
 """As fitas de LED: o que fica em disco e qual cor cada jogo recebe."""
 
+import json
 import sys
+import threading
+import time
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -214,3 +217,124 @@ def test_dispositivo_nao_insiste_com_fita_muda(monkeypatch):
         "connection_retry_delay": 0,
     }
     assert recebidos["espera"] == session_fita.ESPERA
+
+
+def test_abrir_guarda_o_estado_e_veste_o_roxo(falsas, schema):
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False, False)
+    session_fita._guardar_e_vestir()
+
+    guardado = json.loads(schema.get_string("fita-estado-anterior"))
+    assert set(guardado) == {"eb0", "eb1"}
+    assert guardado["eb0"] == {"ligada": False, "cor": "000003e800b4"}
+
+    for modulo in modulos.values():
+        ultimo = modulo.recebidos[-1]
+        assert ultimo["20"] is True
+        assert session_fita.cor_de_hex(ultimo["24"])[:2] == session_fita.ROXO_DO_APP
+
+
+def test_devolver_repoe_o_estado_e_limpa_a_chave(falsas, schema):
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+    session_fita._guardar_e_vestir()
+    session_fita._devolver()
+
+    assert schema.get_string("fita-estado-anterior") == ""
+    ultimo = modulos["eb0"].recebidos[-1]
+    assert ultimo["20"] is False
+    assert ultimo["24"] == "000003e800b4"
+
+
+def test_fita_fora_do_ar_nao_derruba_as_outras(falsas, schema):
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False, True)
+    session_fita._guardar_e_vestir()
+
+    assert list(json.loads(schema.get_string("fita-estado-anterior"))) == ["eb0"]
+    assert modulos["eb0"].recebidos
+
+
+def test_orfaos_desfazem_a_sessao_que_ficou(falsas, schema):
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+    schema.set_string(
+        "fita-estado-anterior",
+        json.dumps({"eb0": {"ligada": True, "cor": "00b403e80064"}}),
+    )
+    session_fita.restaurar_orfaos()
+
+    assert schema.get_string("fita-estado-anterior") == ""
+    assert modulos["eb0"].recebidos[-1]["24"] == "00b403e80064"
+
+
+def test_sem_fita_configurada_o_recurso_nao_age(schema):
+    schema.set_boolean("session-fita", True)
+    assert session_fita.ligada() is False
+    session_fita._guardar_e_vestir()
+    assert schema.get_string("fita-estado-anterior") == ""
+
+
+def test_desligado_nas_preferencias_nao_age(falsas, schema):
+    schema.set_boolean("session-fita", False)
+    falsas(False)
+    assert session_fita.ligada() is False
+
+
+def test_comecar_tira_a_cor_do_jogo_dentro_da_thread(
+    falsas, tmp_path, monkeypatch, schema
+):
+    """A cor do jogo é calculada na thread, e não antes dela.
+
+    Observável com a thread capturada em vez de iniciada: ``comecar`` volta sem
+    ter chamado ``cor_do_jogo`` nenhuma vez. Tirar a cor abre e quantiza a capa
+    em disco — I/O mais CPU, e isso não pode correr na thread de UI enquanto o
+    jogo abre. A cor sai certa quando a tarefa capturada roda.
+    """
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+    jogo = _jogo(tmp_path)
+    escolha = session_fita.Cor(340, 1000, 150)
+    session_fita.salvar_cor(jogo.game_id, jogo.name, escolha)
+
+    tarefas = []
+    monkeypatch.setattr(session_fita, "_em_thread", tarefas.append)
+    chamadas = []
+    de_verdade = session_fita.cor_do_jogo
+    monkeypatch.setattr(
+        session_fita,
+        "cor_do_jogo",
+        lambda game: (chamadas.append(game), de_verdade(game))[1],
+    )
+
+    session_fita.comecar(jogo)
+    assert chamadas == []
+
+    tarefas[0]()
+    assert chamadas == [jogo]
+    assert modulos["eb0"].recebidos[-1]["24"] == session_fita.hsv_hex(escolha)
+
+
+def test_fechar_nao_espera_alem_do_prazo(falsas, monkeypatch, schema):
+    """Fita muda não segura o fechamento do app.
+
+    A chave fica gravada de propósito quando o prazo estoura: é o
+    ``restaurar_orfaos`` do próximo arranque que termina o serviço.
+    """
+    schema.set_boolean("session-fita", True)
+    falsas(False)
+    session_fita._guardar_e_vestir()
+
+    monkeypatch.setattr(session_fita, "PRAZO_FECHAMENTO", 0.2)
+    preso = threading.Event()
+    monkeypatch.setattr(session_fita, "_devolver", preso.wait)
+
+    comeco = time.monotonic()
+    try:
+        assert session_fita.fechar() is None
+        gasto = time.monotonic() - comeco
+    finally:
+        preso.set()
+
+    assert gasto < 2
+    assert schema.get_string("fita-estado-anterior")

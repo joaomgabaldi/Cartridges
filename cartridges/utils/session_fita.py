@@ -33,6 +33,7 @@ buscar a chave de cada módulo; daí em diante é o PC falando direto com a fita
 
 import json
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
@@ -272,6 +273,137 @@ def aplicar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
         logging.warning("Fita %s recusou o comando: %s", fita.nome, resposta["Error"])
         return False
     return True
+
+
+# endregion
+# region Ciclo de vida
+
+CHAVE_ESTADO = "fita-estado-anterior"
+
+# Quanto o fechamento do app pode esperar pela devolução. Três fitas mudas
+# custam três vezes o ESPERA do soquete, e ninguém deve sentir o app demorar a
+# sumir da tela por causa de um módulo fora da tomada. Estourado o prazo, quem
+# termina o serviço é o arranque seguinte.
+PRAZO_FECHAMENTO = 4
+
+
+def ligada() -> bool:
+    """Se há o que fazer: recurso ligado nas Preferências e fita configurada."""
+    return bool(shared.schema.get_boolean("session-fita") and fitas())
+
+
+def _em_thread(tarefa: Any) -> threading.Thread:
+    """Toda conversa com as fitas sai da thread de UI por aqui."""
+    linha = threading.Thread(target=tarefa, daemon=True)
+    linha.start()
+    return linha
+
+
+def _vestir(cor: Cor) -> None:
+    """Acende todas as fitas na cor pedida. Síncrono; nunca levanta."""
+    cor_hex = hsv_hex(cor)
+    for fita in fitas():
+        aplicar(fita, True, cor_hex)
+
+
+def _roxo() -> Cor:
+    """O roxo do app no brilho que o usuário escolheu."""
+    return Cor(ROXO_DO_APP[0], ROXO_DO_APP[1], brilho_padrao())
+
+
+def _guardar_e_vestir() -> None:
+    """Guarda o estado de cada fita e acende todas no roxo do app.
+
+    O que não respondeu fica de fora do que foi guardado: devolver uma fita ao
+    estado que só foi chutado seria pior que não devolver nada.
+    """
+    if not ligada():
+        return
+
+    estado = {}
+    for fita in fitas():
+        lido = ler_estado(fita)
+        if lido is not None:
+            estado[fita.id] = lido
+    shared.schema.set_string(CHAVE_ESTADO, json.dumps(estado))
+
+    _vestir(_roxo())
+
+
+def _devolver() -> None:
+    """Devolve cada fita ao estado guardado e limpa a chave."""
+    guardado = shared.schema.get_string(CHAVE_ESTADO)
+    if not guardado:
+        return
+
+    try:
+        estados = json.loads(guardado)
+    except ValueError:
+        estados = {}
+    if not isinstance(estados, dict):
+        estados = {}
+
+    por_id = {fita.id: fita for fita in fitas()}
+    for identificador, estado in estados.items():
+        fita = por_id.get(identificador)
+        if fita is None:
+            continue
+        aplicar(fita, bool(estado.get("ligada")), str(estado.get("cor", "")))
+
+    # Limpa mesmo quando alguma fita não respondeu: a chave diz "há uma troca
+    # pendente", e insistir eternamente numa fita que saiu da tomada deixaria o
+    # app tentando desfazer isso em todo arranque.
+    shared.schema.set_string(CHAVE_ESTADO, "")
+
+
+def abrir() -> None:
+    """O app abriu: guarda o estado e acende no roxo. Chamar da thread de UI."""
+    if not ligada():
+        return
+    _em_thread(_guardar_e_vestir)
+
+
+def comecar(game: "Game") -> None:
+    """A sessão começou: veste a cor do jogo. Chamar da thread de UI.
+
+    A cor é calculada dentro da thread, e não antes dela: tirar a cor da capa
+    abre e quantiza uma imagem, e isso não pode acontecer enquanto o jogo abre.
+    """
+    if not ligada():
+        return
+    _em_thread(lambda: _vestir(cor_do_jogo(game)))
+
+
+def voltar() -> None:
+    """A sessão acabou: de volta ao roxo do app. Chamar da thread de UI."""
+    if not ligada():
+        return
+    _em_thread(lambda: _vestir(_roxo()))
+
+
+def fechar() -> None:
+    """O app está fechando: devolve o estado de antes, com hora marcada.
+
+    Aqui se espera, ao contrário dos outros: é a última janela em que ainda há
+    processo para desfazer. Mas não se espera para sempre. Estourado o
+    ``PRAZO_FECHAMENTO``, o app sai assim mesmo — a chave continua gravada e o
+    ``restaurar_orfaos`` do próximo arranque termina o serviço. É exatamente
+    para isso que a chave existe.
+    """
+    linha = _em_thread(_devolver)
+    linha.join(PRAZO_FECHAMENTO)
+    if linha.is_alive():
+        logging.info(
+            "Fitas não devolvidas dentro de %ss; fica para o próximo arranque",
+            PRAZO_FECHAMENTO,
+        )
+
+
+def restaurar_orfaos() -> None:
+    """Desfaz no arranque a troca que uma execução anterior não desfez."""
+    if shared.schema.get_string(CHAVE_ESTADO):
+        logging.info("Fitas de uma sessão anterior encontradas; desfazendo")
+        _devolver()
 
 
 # endregion

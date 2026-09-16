@@ -87,6 +87,18 @@
     <key name="fita-brilho-padrao" type="i">
       <default>180</default>
     </key>
+    <!-- Fazer as fitas de LED acompanharem o app e a sessão. Desligado até que
+         haja fita configurada: sem chave local não há como falar com elas. -->
+    <key name="session-fita" type="b">
+      <default>false</default>
+    </key>
+    <!-- O estado de cada fita antes de o app mexer, em JSON, para o caminho de
+         volta. Em disco e não em memória porque o app morto no meio da sessão
+         deixaria as fitas vestidas de um jogo que já acabou; vazio quer dizer
+         "nada foi trocado". -->
+    <key name="fita-estado-anterior" type="s">
+      <default>""</default>
+    </key>
     <!-- Opcional: a busca SFW do wallhaven responde sem chave nenhuma. Ela
          serve para NSFW e para os filtros da conta de quem a informar. -->
     <key name="wallhaven-key" type="s">
