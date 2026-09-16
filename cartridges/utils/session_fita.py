@@ -286,6 +286,12 @@ CHAVE_ESTADO = "fita-estado-anterior"
 # termina o serviço é o arranque seguinte.
 PRAZO_FECHAMENTO = 4
 
+# Um arranque de cada vez. Guardar o estado é "lê a chave, conversa com as
+# fitas, grava a chave", e o miolo disso leva segundos de rede: sem a trava,
+# dois arranques próximos leriam a chave vazia ao mesmo tempo e o segundo
+# gravaria por cima o roxo que o primeiro acabou de pintar.
+_TRAVA_ARRANQUE = threading.Lock()
+
 
 def ligada() -> bool:
     """Se há o que fazer: recurso ligado nas Preferências e fita configurada."""
@@ -355,6 +361,9 @@ def _devolver() -> None:
         fita = por_id.get(identificador)
         if fita is None:
             continue
+        # Chave mexida à mão não pode virar AttributeError cru aqui dentro.
+        if not isinstance(estado, dict):
+            continue
         aplicar(fita, bool(estado.get("ligada")), str(estado.get("cor", "")))
 
     # Limpa mesmo quando alguma fita não respondeu: a chave diz "há uma troca
@@ -363,11 +372,50 @@ def _devolver() -> None:
     shared.schema.set_string(CHAVE_ESTADO, "")
 
 
-def abrir() -> None:
-    """O app abriu: guarda o estado e acende no roxo. Chamar da thread de UI."""
-    if not ligada():
+def restaurar_orfaos() -> None:
+    """Desfaz a troca que uma execução anterior não desfez.
+
+    Síncrona: ``_devolver`` conversa com cada fita, e isso é rede. Chamar de
+    dentro da thread do arranque (é o que ``_arrancar`` faz), nunca da thread
+    de UI — ali seguraria a tela por segundos toda vez que houvesse órfão.
+    """
+    if shared.schema.get_string(CHAVE_ESTADO):
+        logging.info("Fitas de uma sessão anterior encontradas; desfazendo")
+        _devolver()
+
+
+def _arrancar() -> None:
+    """Os dois passos do arranque, já fora da thread de UI.
+
+    A trava não espera: um segundo arranque enquanto o primeiro corre não tem
+    o que fazer, e esperar só empilharia threads. ``do_activate`` dispara de
+    novo quando uma segunda instância do app é encaminhada para esta.
+    """
+    if not _TRAVA_ARRANQUE.acquire(blocking=False):
+        logging.info("Arranque das fitas já em curso; segunda chamada ignorada")
         return
-    _em_thread(_guardar_e_vestir)
+    try:
+        restaurar_orfaos()
+        if ligada():
+            _guardar_e_vestir()
+    finally:
+        _TRAVA_ARRANQUE.release()
+
+
+def abrir() -> None:
+    """O app abriu: desfaz o que ficou de antes e acende no roxo.
+
+    Chamar da thread de UI. Os dois passos correm na MESMA thread, e nesta
+    ordem: o estado que uma execução anterior deixou pendurado precisa ser
+    devolvido antes de guardarmos o estado novo, senão o roxo do próprio app
+    viraria "o estado de antes" do usuário.
+    """
+    # A devolução de órfãos acontece mesmo com o recurso desligado nas
+    # Preferências: quem desligou a opção no meio do caminho continua com as
+    # fitas vestidas de uma sessão que já acabou.
+    if not ligada() and not shared.schema.get_string(CHAVE_ESTADO):
+        return
+    _em_thread(_arrancar)
 
 
 def comecar(game: "Game") -> None:
@@ -404,13 +452,6 @@ def fechar() -> None:
             "Fitas não devolvidas dentro de %ss; fica para o próximo arranque",
             PRAZO_FECHAMENTO,
         )
-
-
-def restaurar_orfaos() -> None:
-    """Desfaz no arranque a troca que uma execução anterior não desfez."""
-    if shared.schema.get_string(CHAVE_ESTADO):
-        logging.info("Fitas de uma sessão anterior encontradas; desfazendo")
-        _devolver()
 
 
 # endregion
