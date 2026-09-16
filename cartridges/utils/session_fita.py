@@ -186,3 +186,81 @@ def cor_do_jogo(game: "Game") -> Cor:
 
 
 # endregion
+# region Conversa com o módulo
+
+# Os pontos de dado do controlador RGB, medidos nos módulos: 20 liga e desliga,
+# 21 é o modo ("colour" é cor fixa, contra "scene" e "music"), 24 é a cor como
+# matiz, saturação e brilho em hexadecimal de quatro dígitos cada.
+DP_LIGADA = "20"
+DP_MODO = "21"
+DP_COR = "24"
+
+# Cinco segundos é folgado para uma resposta que costuma vir em milissegundos, e
+# curto o bastante para a thread não ficar pendurada quando a fita sumiu.
+ESPERA = 5
+
+
+def hsv_hex(cor: Cor) -> str:
+    """A cor do jeito que o módulo aceita: HHHHSSSSVVVV."""
+    return f"{cor.matiz:04x}{cor.saturacao:04x}{cor.brilho:04x}"
+
+
+def cor_de_hex(valor: str) -> Optional[Cor]:
+    """O caminho de volta, para ler o que o módulo respondeu."""
+    if len(valor) != 12:
+        return None
+    try:
+        return Cor(int(valor[0:4], 16), int(valor[4:8], 16), int(valor[8:12], 16))
+    except ValueError:
+        return None
+
+
+def _dispositivo(fita: Fita) -> Any:
+    """O objeto da tinytuya para esta fita. Trocado nos testes.
+
+    Importado aqui dentro de propósito: a biblioteca só faz falta quando há
+    fita configurada, e o resto do app (e os testes) não paga por ela.
+    """
+    import tinytuya  # noqa: PLC0415
+
+    modulo = tinytuya.BulbDevice(
+        fita.id, fita.ip, fita.key, version=float(fita.versao), persist=False
+    )
+    modulo.set_socketTimeout(ESPERA)
+    return modulo
+
+
+def ler_estado(fita: Fita) -> Optional[dict[str, Any]]:
+    """Se a fita está acesa e em que cor. ``None`` quando ela não responde."""
+    try:
+        resposta = _dispositivo(fita).status()
+    except Exception as erro:  # a tinytuya levanta de tudo: socket, struct, json
+        logging.warning("Fita %s não respondeu: %s", fita.nome, erro)
+        return None
+
+    dps = (resposta or {}).get("dps")
+    if not isinstance(dps, dict):
+        logging.warning("Fita %s respondeu %s", fita.nome, (resposta or {}).get("Error"))
+        return None
+    return {
+        "ligada": bool(dps.get(DP_LIGADA, False)),
+        "cor": str(dps.get(DP_COR, "")),
+    }
+
+
+def aplicar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
+    """Manda cor e estado para uma fita. Nunca levanta; devolve se deu certo."""
+    valores = {DP_LIGADA: ligada, DP_MODO: "colour", DP_COR: cor_hex}
+    try:
+        resposta = _dispositivo(fita).set_multiple_values(valores)
+    except Exception as erro:
+        logging.warning("Fita %s recusou o comando: %s", fita.nome, erro)
+        return False
+
+    if isinstance(resposta, dict) and resposta.get("Error"):
+        logging.warning("Fita %s recusou o comando: %s", fita.nome, resposta["Error"])
+        return False
+    return True
+
+
+# endregion
