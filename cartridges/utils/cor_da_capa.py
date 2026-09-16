@@ -47,11 +47,21 @@ CORES = 8
 
 
 def dominante(capa: Path) -> Optional[tuple[int, int]]:
-    """Matiz (0–359) e saturação (0–1000) da capa, ou ``None`` sem cor útil."""
+    """Matiz (0–359) e saturação (0–1000) da capa, ou ``None`` sem cor útil.
+
+    Nunca levanta: quem chama está na thread de UI, e um enfeite de sessão não
+    pode derrubar a tela.
+    """
     try:
         with Image.open(capa) as imagem:
             amostra = imagem.convert("RGB").resize(AMOSTRA)
-    except (OSError, ValueError) as erro:
+    # A captura é larga de propósito. As capas vêm de fora — download da
+    # SteamGridDB, da Wallhaven, arquivo que o usuário escolheu — e a Pillow
+    # tem um jeito diferente de reclamar de cada defeito: arquivo truncado,
+    # formato estranho, imagem gigante (``DecompressionBombError``, que nem
+    # herda de ``OSError``). Listar as exceções seria apostar que a lista está
+    # completa; qualquer uma delas quer dizer a mesma coisa, "sem cor útil".
+    except Exception as erro:
         logging.info("Capa sem cor legível (%s): %s", capa.name, erro)
         return None
 
