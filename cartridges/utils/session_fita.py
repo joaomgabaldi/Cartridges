@@ -223,8 +223,19 @@ def _dispositivo(fita: Fita) -> Any:
     """
     import tinytuya  # noqa: PLC0415
 
+    # Sem retentativa: a tinytuya tenta cinco vezes com cinco segundos entre
+    # elas, e uma fita que não respondeu na primeira não vai responder na
+    # quinta. O caminho de fechamento do app é síncrono — insistir custaria
+    # dezenas de segundos de encerramento travado por uma fita fora da tomada.
+    # Com isto, o teto por fita é o ESPERA do soquete.
     modulo = tinytuya.BulbDevice(
-        fita.id, fita.ip, fita.key, version=float(fita.versao), persist=False
+        fita.id,
+        fita.ip,
+        fita.key,
+        version=float(fita.versao),
+        persist=False,
+        connection_retry_limit=1,
+        connection_retry_delay=0,
     )
     modulo.set_socketTimeout(ESPERA)
     return modulo

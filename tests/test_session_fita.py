@@ -4,8 +4,9 @@
 
 """As fitas de LED: o que fica em disco e qual cor cada jogo recebe."""
 
+import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -179,3 +180,37 @@ def test_aplicar_liga_poe_modo_cor_e_manda_a_cor(falsas):
 def test_aplicar_em_fita_fora_do_ar_devolve_falso(falsas):
     falsas(True)
     assert session_fita.aplicar(session_fita.fitas()[0], True, "015403e80096") is False
+
+
+def test_dispositivo_nao_insiste_com_fita_muda(monkeypatch):
+    """O único teste que passa pelo ``_dispositivo`` de verdade.
+
+    Prende o que a fita fora da tomada custa: sem cortar as retentativas, o
+    fechamento do app — que é síncrono — esperaria dezenas de segundos por um
+    módulo que não vai responder.
+    """
+    recebidos = {}
+
+    class BulbFalso:
+        def __init__(self, *args, **kwargs):
+            recebidos["args"] = args
+            recebidos["kwargs"] = kwargs
+
+        def set_socketTimeout(self, segundos):
+            recebidos["espera"] = segundos
+
+    falso = ModuleType("tinytuya")
+    falso.BulbDevice = BulbFalso
+    monkeypatch.setitem(sys.modules, "tinytuya", falso)
+
+    fita = session_fita.Fita("Centro", "eb00", "192.168.0.150", "chave", "3.3")
+    assert isinstance(session_fita._dispositivo(fita), BulbFalso)
+
+    assert recebidos["args"] == (fita.id, fita.ip, fita.key)
+    assert recebidos["kwargs"] == {
+        "version": 3.3,
+        "persist": False,
+        "connection_retry_limit": 1,
+        "connection_retry_delay": 0,
+    }
+    assert recebidos["espera"] == session_fita.ESPERA
