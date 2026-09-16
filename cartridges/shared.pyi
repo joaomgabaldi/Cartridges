@@ -56,6 +56,8 @@ games_dir: Path
 covers_dir: Path
 logos_dir: Path
 wallpapers_dir: Path
+fitas_dir: Path
+fitas_arquivo: Path
 cache_dir: Path
 log_dir: Path
 

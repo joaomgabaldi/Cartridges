@@ -81,6 +81,12 @@
     <key name="session-wallpaper-saved" type="s">
       <default>""</default>
     </key>
+    <!-- Brilho das fitas de LED (0 a 1000, como o módulo Tuya conta) para o
+         jogo que não escolheu o seu. O padrão baixo é deliberado: a fita mora
+         atrás do monitor, e luz forte ali lava o preto da tela. -->
+    <key name="fita-brilho-padrao" type="i">
+      <default>180</default>
+    </key>
     <!-- Opcional: a busca SFW do wallhaven responde sem chave nenhuma. Ela
          serve para NSFW e para os filtros da conta de quem a informar. -->
     <key name="wallhaven-key" type="s">

@@ -85,6 +85,7 @@ _SCHEMA_DEFAULTS = {
     "session-monitor": "",
     "session-wallpaper": False,
     "session-wallpaper-saved": "",
+    "fita-brilho-padrao": 180,
     "wallhaven-key": "",
     "remove-missing": True,
     "shortcuts": True,
@@ -288,6 +289,8 @@ def _install_shared() -> types.ModuleType:
     shared.covers_dir = placeholder / "covers"
     shared.logos_dir = placeholder / "logos"
     shared.wallpapers_dir = placeholder / "wallpapers"
+    shared.fitas_dir = placeholder / "fitas"
+    shared.fitas_arquivo = placeholder / "fitas.json"
     shared.cache_dir = placeholder / "cache"
     shared.log_dir = placeholder / "logs"
     shared.schema = FakeSchema(_SCHEMA_DEFAULTS)

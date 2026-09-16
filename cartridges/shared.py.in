@@ -66,6 +66,13 @@ logos_dir = app_dir / "logos"
 # todo mundo à escolha automática.
 wallpapers_dir = app_dir / "wallpapers"
 
+# As fitas de LED que acompanham a sessão: um sidecar por jogo com a cor e o
+# brilho escolhidos, e ao lado o arquivo com as fitas configuradas. O arquivo
+# carrega as chaves locais dos módulos, que é o que permite falar com eles sem
+# passar pela nuvem — por isso ele não mora no GSettings.
+fitas_dir = app_dir / "fitas"
+fitas_arquivo = app_dir / "fitas.json"
+
 # Deliberately NOT `GLib.get_user_cache_dir()`. On Windows that resolves to
 # CSIDL_INTERNET_CACHE — `AppData\Local\Microsoft\Windows\INetCache`, the
 # browser's temporary files folder, which Disk Cleanup and Storage Sense empty
