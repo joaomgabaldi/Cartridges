@@ -38,3 +38,13 @@ def test_arquivo_que_nao_abre_nao_levanta(tmp_path):
     quebrado = tmp_path / "quebrado.png"
     quebrado.write_text("nao sou uma imagem", encoding="utf-8")
     assert dominante(quebrado) is None
+
+
+def test_imagem_que_explode_ao_abrir_nao_levanta(tmp_path, monkeypatch):
+    from PIL import Image as ImagemPIL
+
+    def explodir(*_args, **_kwargs):
+        raise ImagemPIL.DecompressionBombError("grande demais")
+
+    monkeypatch.setattr(ImagemPIL, "open", explodir)
+    assert dominante(tmp_path / "qualquer.png") is None
