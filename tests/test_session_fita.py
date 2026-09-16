@@ -4,6 +4,7 @@
 
 """As fitas de LED: o que fica em disco e qual cor cada jogo recebe."""
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -68,3 +69,36 @@ def test_jogo_sem_capa_usa_o_roxo_do_app(tmp_path, schema):
     jogo = SimpleNamespace(game_id="sem-capa", name="X", get_cover_path=lambda: None)
     cor = session_fita.cor_do_jogo(jogo)
     assert (cor.matiz, cor.saturacao) == session_fita.ROXO_DO_APP
+
+
+def test_salvar_cor_nao_levanta_sem_permissao(tmp_path, monkeypatch, schema):
+    """Quem chama está na thread de UI: disco negado é aviso, nunca exceção."""
+    jogo = _jogo(tmp_path)
+
+    def negar(*_args, **_kwargs):
+        raise PermissionError("pasta negada")
+
+    monkeypatch.setattr(Path, "mkdir", negar)
+    cor = session_fita.Cor(340, 1000, 150)
+    assert session_fita.salvar_cor(jogo.game_id, jogo.name, cor) is None
+    assert not session_fita.escolhida(jogo.game_id)
+
+
+def test_redefinir_nao_levanta_quando_o_unlink_falha(tmp_path, monkeypatch, schema):
+    jogo = _jogo(tmp_path)
+    session_fita.salvar_cor(jogo.game_id, jogo.name, session_fita.Cor(340, 1000, 150))
+
+    def negar(*_args, **_kwargs):
+        raise OSError("arquivo em uso")
+
+    monkeypatch.setattr(Path, "unlink", negar)
+    assert session_fita.redefinir(jogo.game_id) is None
+
+
+def test_sidecar_corrompido_volta_para_a_capa(tmp_path, schema):
+    jogo = _jogo(tmp_path)
+    shared.fitas_dir.mkdir(parents=True, exist_ok=True)
+    (shared.fitas_dir / f"{jogo.game_id}.json").write_text("{lixo", encoding="utf-8")
+    assert not session_fita.escolhida(jogo.game_id)
+    cor = session_fita.cor_do_jogo(jogo)
+    assert cor.matiz < 10 or cor.matiz > 350

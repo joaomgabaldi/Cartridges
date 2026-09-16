@@ -34,6 +34,7 @@ buscar a chave de cada módulo; daí em diante é o PC falando direto com a fita
 import json
 import logging
 import time
+from pathlib import Path
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 
 from cartridges import shared
@@ -65,6 +66,23 @@ class Cor(NamedTuple):
     brilho: int
 
 
+def _gravar_json(caminho: Path, dados: dict[str, Any]) -> None:
+    """Grava um JSON num temporário e troca, para não perder o arquivo se a
+    energia cair no meio.
+
+    Nunca levanta: quem chama está na thread de UI, e um enfeite de sessão não
+    pode derrubar a tela. A pasta entra no mesmo ``try`` da escrita porque ela
+    falha pelo mesmo motivo — permissão negada, disco cheio, caminho ocupado.
+    """
+    temporario = caminho.with_name(caminho.name + ".tmp")
+    try:
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        temporario.write_text(json.dumps(dados), encoding="utf-8")
+        temporario.replace(caminho)
+    except OSError as erro:
+        logging.warning("Não foi possível gravar %s: %s", caminho.name, erro)
+
+
 # region Configuração
 
 
@@ -94,16 +112,9 @@ def fitas() -> list[Fita]:
 
 
 def gravar_fitas(lista: list[Fita]) -> None:
-    """Grava a configuração. Escreve num temporário e troca, para não perder o
-    arquivo se a energia cair no meio."""
-    shared.fitas_arquivo.parent.mkdir(parents=True, exist_ok=True)
-    temporario = shared.fitas_arquivo.with_suffix(".json.tmp")
+    """Grava a configuração das fitas."""
     conteudo = {"fitas": [fita._asdict() for fita in lista]}
-    try:
-        temporario.write_text(json.dumps(conteudo), encoding="utf-8")
-        temporario.replace(shared.fitas_arquivo)
-    except OSError as erro:
-        logging.warning("Não foi possível gravar as fitas: %s", erro)
+    _gravar_json(shared.fitas_arquivo, conteudo)
 
 
 # endregion
@@ -129,8 +140,12 @@ def escolhida(game_id: str) -> bool:
 
 
 def salvar_cor(game_id: str, name: str, cor: Cor) -> None:
-    """Guarda a escolha manual de um jogo."""
-    shared.fitas_dir.mkdir(parents=True, exist_ok=True)
+    """Guarda a escolha manual de um jogo.
+
+    Pelo temporário como o resto: um sidecar truncado por uma queda no meio da
+    escrita é lido como corrompido, e o jogo voltaria em silêncio para a cor
+    automática — o usuário perderia a escolha sem nenhum aviso.
+    """
     dados = {
         "name": name,
         "matiz": cor.matiz,
@@ -139,15 +154,15 @@ def salvar_cor(game_id: str, name: str, cor: Cor) -> None:
         "locked": True,
         "timestamp": int(time.time()),
     }
-    try:
-        _sidecar(game_id).write_text(json.dumps(dados), encoding="utf-8")
-    except OSError as erro:
-        logging.warning("Não foi possível gravar a cor da fita: %s", erro)
+    _gravar_json(_sidecar(game_id), dados)
 
 
 def redefinir(game_id: str) -> None:
     """Devolve o jogo à cor automática."""
-    _sidecar(game_id).unlink(missing_ok=True)
+    try:
+        _sidecar(game_id).unlink(missing_ok=True)
+    except OSError as erro:
+        logging.warning("Não foi possível apagar a cor da fita: %s", erro)
 
 
 def brilho_padrao() -> int:
