@@ -281,6 +281,105 @@ def test_desligado_nas_preferencias_nao_age(falsas, schema):
     assert session_fita.ligada() is False
 
 
+def test_abrir_nao_faz_rede_na_thread_de_ui(falsas, monkeypatch, schema):
+    """``abrir`` só agenda: os dois passos do arranque são rede pura.
+
+    Com a thread capturada em vez de iniciada, ``abrir`` volta sem ter mandado
+    comando nenhum e sem ter tocado na chave.
+    """
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+
+    tarefas = []
+    monkeypatch.setattr(session_fita, "_em_thread", tarefas.append)
+
+    session_fita.abrir()
+    assert modulos["eb0"].recebidos == []
+    assert schema.get_string("fita-estado-anterior") == ""
+
+    tarefas[0]()
+    assert modulos["eb0"].recebidos
+    assert json.loads(schema.get_string("fita-estado-anterior"))
+
+
+def test_arrancar_desfaz_o_orfao_antes_de_guardar_o_novo(falsas, schema):
+    """A ordem importa: desfazer primeiro, guardar depois.
+
+    Invertida, o roxo que o próprio app pintou viraria "o estado de antes" do
+    usuário, e o fechamento devolveria as fitas ao roxo para sempre.
+    """
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+    orfao = {"eb0": {"ligada": True, "cor": "00b403e80064"}}
+    schema.set_string("fita-estado-anterior", json.dumps(orfao))
+
+    session_fita._arrancar()
+
+    roxo = session_fita.hsv_hex(session_fita._roxo())
+    assert [r["24"] for r in modulos["eb0"].recebidos] == ["00b403e80064", roxo]
+
+    guardado = json.loads(schema.get_string("fita-estado-anterior"))
+    assert guardado == orfao
+    assert guardado["eb0"]["cor"] != roxo
+
+
+def test_trava_ignora_o_arranque_que_chegou_junto(falsas, schema):
+    """Dois ``do_activate`` próximos não podem ler a chave ao mesmo tempo."""
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+
+    assert session_fita._TRAVA_ARRANQUE.acquire(blocking=False)
+    try:
+        assert session_fita._arrancar() is None
+    finally:
+        session_fita._TRAVA_ARRANQUE.release()
+
+    assert modulos["eb0"].recebidos == []
+    assert schema.get_string("fita-estado-anterior") == ""
+
+
+def test_desligado_nas_preferencias_ainda_desfaz_o_orfao(falsas, monkeypatch, schema):
+    """Quem desligou a opção no meio do caminho não fica com as fitas vestidas."""
+    schema.set_boolean("session-fita", False)
+    modulos = falsas(False)
+    schema.set_string(
+        "fita-estado-anterior",
+        json.dumps({"eb0": {"ligada": True, "cor": "00b403e80064"}}),
+    )
+
+    tarefas = []
+    monkeypatch.setattr(session_fita, "_em_thread", tarefas.append)
+    session_fita.abrir()
+    tarefas[0]()
+
+    assert schema.get_string("fita-estado-anterior") == ""
+    assert [r["24"] for r in modulos["eb0"].recebidos] == ["00b403e80064"]
+
+
+def test_desligado_e_sem_orfao_o_arranque_nem_agenda(falsas, monkeypatch, schema):
+    schema.set_boolean("session-fita", False)
+    falsas(False)
+
+    tarefas = []
+    monkeypatch.setattr(session_fita, "_em_thread", tarefas.append)
+    assert session_fita.abrir() is None
+    assert tarefas == []
+
+
+def test_estado_adulterado_nao_levanta(falsas, schema):
+    """Chave mexida à mão não pode virar ``AttributeError`` cru."""
+    modulos = falsas(False, False)
+    schema.set_string(
+        "fita-estado-anterior",
+        json.dumps({"eb0": "roxo", "eb1": {"ligada": True, "cor": "00b403e80064"}}),
+    )
+
+    assert session_fita._devolver() is None
+    assert modulos["eb0"].recebidos == []
+    assert modulos["eb1"].recebidos[-1]["24"] == "00b403e80064"
+    assert schema.get_string("fita-estado-anterior") == ""
+
+
 def test_segunda_chamada_nao_repinta_o_estado_guardado(falsas, schema):
     """O ``do_activate`` dispara de novo quando uma segunda instância é
     encaminhada para a viva. A chave não pode ser regravada aí: o estado a
