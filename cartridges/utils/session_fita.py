@@ -320,12 +320,19 @@ def _guardar_e_vestir() -> None:
     if not ligada():
         return
 
-    estado = {}
-    for fita in fitas():
-        lido = ler_estado(fita)
-        if lido is not None:
-            estado[fita.id] = lido
-    shared.schema.set_string(CHAVE_ESTADO, json.dumps(estado))
+    # Grava só quando a chave está vazia. Chave preenchida quer dizer que uma
+    # troca já está em curso, e o estado a devolver é o primeiro — não o roxo
+    # que o próprio app acabou de pintar por cima. Vale de verdade porque o
+    # `do_activate` dispara outra vez quando uma segunda instância é
+    # encaminhada para a viva; sem a guarda, as fitas ficariam roxas para
+    # sempre.
+    if not shared.schema.get_string(CHAVE_ESTADO):
+        estado = {}
+        for fita in fitas():
+            lido = ler_estado(fita)
+            if lido is not None:
+                estado[fita.id] = lido
+        shared.schema.set_string(CHAVE_ESTADO, json.dumps(estado))
 
     _vestir(_roxo())
 
