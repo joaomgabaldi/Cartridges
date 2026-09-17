@@ -116,10 +116,17 @@ def test_sidecar_corrompido_volta_para_a_capa(tmp_path, schema):
 class FitaFalsa:
     """Um módulo Tuya de mentira, que anota o que mandaram nele."""
 
-    def __init__(self, dps=None, quebrada=False):
+    def __init__(self, dps=None, quebrada=False, demora=0.0):
         self.dps = dps or {"20": False, "21": "colour", "24": "000003e800b4"}
         self.quebrada = quebrada
+        # Quanto cada comando custa. Serve para provar que as fitas falam ao
+        # mesmo tempo: em fila, três fitas de 0,1s levariam 0,3s.
+        self.demora = demora
         self.recebidos = []
+        # Quantas conversas correram ao mesmo tempo NESTA fita. O módulo Tuya
+        # aceita uma sessão por vez, então este número não pode passar de um.
+        self.simultaneos = 0
+        self.pico = 0
 
     def status(self):
         if self.quebrada:
@@ -127,11 +134,35 @@ class FitaFalsa:
         return {"dps": dict(self.dps)}
 
     def set_multiple_values(self, valores, nowait=False):
-        if self.quebrada:
-            return {"Error": "Network Error: Device Unreachable", "Err": "905"}
-        self.recebidos.append(dict(valores))
-        self.dps.update({str(k): v for k, v in valores.items()})
-        return {"dps": dict(self.dps)}
+        self.simultaneos += 1
+        self.pico = max(self.pico, self.simultaneos)
+        try:
+            if self.demora:
+                time.sleep(self.demora)
+            if self.quebrada:
+                return {"Error": "Network Error: Device Unreachable", "Err": "905"}
+            self.recebidos.append(dict(valores))
+            self.dps.update({str(k): v for k, v in valores.items()})
+            return {"dps": dict(self.dps)}
+        finally:
+            self.simultaneos -= 1
+
+
+def cor_mandada(modulo):
+    """A última cor que chegou nesta fita, em qualquer um dos comandos.
+
+    Acender vai em dois passos, a cor antes do liga, para a fita não piscar na
+    cor de ontem — então o último comando recebido é o do liga, e quem quer
+    conferir a cor tem de procurá-la.
+    """
+    comandos = [comando for comando in modulo.recebidos if "24" in comando]
+    return comandos[-1]["24"] if comandos else None
+
+
+def estado_mandado(modulo):
+    """O último liga/desliga que chegou nesta fita."""
+    comandos = [comando for comando in modulo.recebidos if "20" in comando]
+    return comandos[-1]["20"] if comandos else None
 
 
 @pytest.fixture
@@ -139,11 +170,11 @@ def falsas(monkeypatch):
     """Troca as fitas de verdade por módulos de mentira, por id."""
     modulos = {}
 
-    def montar(*fitas_falsas):
+    def montar(*fitas_falsas, demora=0.0):
         lista = []
         for indice, quebrada in enumerate(fitas_falsas):
             fita = session_fita.Fita(f"Fita {indice}", f"eb{indice}", "1.2.3.4", "k")
-            modulos[fita.id] = FitaFalsa(quebrada=quebrada)
+            modulos[fita.id] = FitaFalsa(quebrada=quebrada, demora=demora)
             lista.append(fita)
         session_fita.gravar_fitas(lista)
         monkeypatch.setattr(session_fita, "_dispositivo", lambda f: modulos[f.id])
@@ -180,8 +211,11 @@ def test_aplicar_liga_poe_modo_cor_e_manda_a_cor(falsas):
     modulos = falsas(False)
     fita = session_fita.fitas()[0]
     assert session_fita.aplicar(fita, True, "015403e80096") is True
+    # A ordem é o que importa aqui: a cor tem de chegar ANTES do liga, senão a
+    # fita acende na cor de ontem, no brilho de ontem, e só depois obedece.
     assert modulos[fita.id].recebidos == [
-        {"20": True, "21": "colour", "24": "015403e80096"}
+        {"21": "colour", "24": "015403e80096"},
+        {"20": True},
     ]
 
 
@@ -363,9 +397,8 @@ def test_abrir_guarda_o_estado_e_veste_o_roxo(falsas, schema):
     assert guardado["eb0"] == {"ligada": False, "cor": "000003e800b4"}
 
     for modulo in modulos.values():
-        ultimo = modulo.recebidos[-1]
-        assert ultimo["20"] is True
-        assert session_fita.cor_de_hex(ultimo["24"])[:2] == session_fita.ROXO_DO_APP
+        assert estado_mandado(modulo) is True
+        assert session_fita.cor_de_hex(cor_mandada(modulo))[:2] == session_fita.ROXO_DO_APP
 
 
 def test_devolver_repoe_o_estado_e_limpa_a_chave(falsas, schema):
@@ -375,9 +408,8 @@ def test_devolver_repoe_o_estado_e_limpa_a_chave(falsas, schema):
     session_fita._devolver()
 
     assert schema.get_string("fita-estado-anterior") == ""
-    ultimo = modulos["eb0"].recebidos[-1]
-    assert ultimo["20"] is False
-    assert ultimo["24"] == "000003e800b4"
+    assert estado_mandado(modulos["eb0"]) is False
+    assert cor_mandada(modulos["eb0"]) == "000003e800b4"
 
 
 def test_fita_fora_do_ar_nao_derruba_as_outras(falsas, schema):
@@ -474,7 +506,7 @@ def test_orfaos_desfazem_a_sessao_que_ficou(falsas, schema):
     session_fita.restaurar_orfaos()
 
     assert schema.get_string("fita-estado-anterior") == ""
-    assert modulos["eb0"].recebidos[-1]["24"] == "00b403e80064"
+    assert cor_mandada(modulos["eb0"]) == "00b403e80064"
 
 
 def test_sem_fita_configurada_o_recurso_nao_age(schema):
@@ -525,7 +557,10 @@ def test_arrancar_desfaz_o_orfao_antes_de_guardar_o_novo(falsas, schema):
     session_fita._arrancar()
 
     roxo = session_fita.hsv_hex(session_fita.roxo())
-    assert [r["24"] for r in modulos["eb0"].recebidos] == ["00b403e80064", roxo]
+    # Só as cores, na ordem: a do órfão primeiro, a do app depois. Os comandos
+    # de liga/desliga entram no meio, porque acender manda a cor antes do liga.
+    cores = [c["24"] for c in modulos["eb0"].recebidos if "24" in c]
+    assert cores == ["00b403e80064", roxo]
 
     guardado = json.loads(schema.get_string("fita-estado-anterior"))
     assert guardado == orfao
@@ -562,7 +597,9 @@ def test_desligado_nas_preferencias_ainda_desfaz_o_orfao(falsas, monkeypatch, sc
     tarefas[0]()
 
     assert schema.get_string("fita-estado-anterior") == ""
-    assert [r["24"] for r in modulos["eb0"].recebidos] == ["00b403e80064"]
+    assert [c["24"] for c in modulos["eb0"].recebidos if "24" in c] == [
+        "00b403e80064"
+    ]
 
 
 def test_desligado_e_sem_orfao_o_arranque_nem_agenda(falsas, monkeypatch, schema):
@@ -585,7 +622,7 @@ def test_estado_adulterado_nao_levanta(falsas, schema):
 
     assert session_fita._devolver() is None
     assert modulos["eb0"].recebidos == []
-    assert modulos["eb1"].recebidos[-1]["24"] == "00b403e80064"
+    assert cor_mandada(modulos["eb1"]) == "00b403e80064"
     assert schema.get_string("fita-estado-anterior") == ""
 
 
@@ -610,9 +647,8 @@ def test_segunda_chamada_nao_repinta_o_estado_guardado(falsas, schema):
     assert schema.get_string("fita-estado-anterior") == primeiro
 
     session_fita._devolver()
-    ultimo = modulos["eb0"].recebidos[-1]
-    assert ultimo["20"] is True
-    assert ultimo["24"] == "00b403e80064"
+    assert estado_mandado(modulos["eb0"]) is True
+    assert cor_mandada(modulos["eb0"]) == "00b403e80064"
 
 
 def test_comecar_tira_a_cor_do_jogo_dentro_da_thread(
@@ -646,7 +682,7 @@ def test_comecar_tira_a_cor_do_jogo_dentro_da_thread(
 
     tarefas[0]()
     assert chamadas == [jogo]
-    assert modulos["eb0"].recebidos[-1]["24"] == session_fita.hsv_hex(escolha)
+    assert cor_mandada(modulos["eb0"]) == session_fita.hsv_hex(escolha)
 
 
 def test_fechar_nao_espera_alem_do_prazo(falsas, monkeypatch, schema):
@@ -1109,3 +1145,73 @@ def test_sem_fita_o_aplicar_nao_apaga_a_escolha_que_o_jogo_tinha(write_record, w
 
 
 # endregion
+
+
+def test_as_fitas_mudam_de_cor_ao_mesmo_tempo(falsas, schema):
+    """Em fila, dá para ver a troca correndo de um monitor para o outro.
+
+    Três fitas de 0,15s levariam 0,45s uma depois da outra; juntas, pouco mais
+    que 0,15s. A margem é folgada de propósito, para a máquina ocupada não
+    derrubar o teste — o que ele prende é a ordem de grandeza, não o relógio.
+    """
+    schema.set_boolean("session-fita", True)
+    falsas(False, False, False, demora=0.15)
+
+    comeco = time.monotonic()
+    session_fita._vestir(session_fita.Cor(284, 620, 180))
+    gasto = time.monotonic() - comeco
+
+    # Acender manda dois comandos por fita (cor e depois liga), então o piso é
+    # 0,30s. Em fila seriam 0,90s.
+    assert gasto < 0.6
+
+
+def test_nunca_ha_duas_conversas_com_a_mesma_fita(falsas, schema):
+    """O módulo Tuya aceita uma sessão por vez; duas dão erro de soquete."""
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False, False, demora=0.05)
+
+    linhas = [
+        threading.Thread(target=session_fita._vestir, args=(session_fita.roxo(),))
+        for _ in range(4)
+    ]
+    for linha in linhas:
+        linha.start()
+    for linha in linhas:
+        linha.join()
+
+    for modulo in modulos.values():
+        assert modulo.pico == 1
+
+
+def test_duas_varreduras_ao_mesmo_tempo_viram_uma(falsas, monkeypatch, schema):
+    """Duas varreduras juntas brigam pelo mesmo soquete de broadcast.
+
+    No Windows isso volta como "apenas uma utilização de cada endereço de
+    soquete" — foi o erro visto no primeiro teste com as fitas de verdade.
+    """
+    schema.set_boolean("session-fita", True)
+    falsas(True, True)
+    session_fita._ultima_varredura = None
+
+    dentro = []
+    pico = []
+
+    def varredura_lenta():
+        dentro.append(1)
+        pico.append(len(dentro))
+        time.sleep(0.1)
+        dentro.pop()
+
+    monkeypatch.setattr(session_fita, "_varrer_e_gravar", varredura_lenta)
+
+    linhas = [
+        threading.Thread(target=session_fita._redescobrir_ips, kwargs={"forcar": True})
+        for _ in range(3)
+    ]
+    for linha in linhas:
+        linha.start()
+    for linha in linhas:
+        linha.join()
+
+    assert max(pico) == 1

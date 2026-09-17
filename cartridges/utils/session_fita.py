@@ -267,10 +267,25 @@ def _dispositivo(fita: Fita) -> Any:
     return modulo
 
 
+# Uma conversa de cada vez com cada módulo, e não uma de cada vez no total: as
+# três fitas falam ao mesmo tempo, cada uma com a sua trava. O módulo Tuya
+# aceita uma sessão por vez, então dois comandos simultâneos para a MESMA fita
+# disputam o soquete e voltam com erro de endereço em uso.
+_TRAVAS_FITA: dict[str, threading.Lock] = {}
+_TRAVA_DAS_TRAVAS = threading.Lock()
+
+
+def _trava_da(fita: Fita) -> threading.Lock:
+    """A trava daquela fita, criada na primeira vez que alguém fala com ela."""
+    with _TRAVA_DAS_TRAVAS:
+        return _TRAVAS_FITA.setdefault(fita.id, threading.Lock())
+
+
 def ler_estado(fita: Fita) -> Optional[dict[str, Any]]:
     """Se a fita está acesa e em que cor. ``None`` quando ela não responde."""
     try:
-        resposta = _dispositivo(fita).status()
+        with _trava_da(fita):
+            resposta = _dispositivo(fita).status()
     except Exception as erro:  # a tinytuya levanta de tudo: socket, struct, json
         logging.warning("Fita %s não respondeu: %s", fita.nome, erro)
         return None
@@ -292,13 +307,26 @@ def aplicar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
     reporta o ponto da cor, e o estado guardado dela sai com a cor vazia;
     mandar ``24: ""`` faz o módulo recusar o comando inteiro — e aí a fita não
     apaga, que é justamente o que a devolução do fechamento promete.
+
+    Acender vai em dois passos, a cor antes do liga: a fita guarda a última cor
+    que teve, e mandar tudo junto deixa o módulo acender no vermelho de ontem,
+    no brilho de ontem, antes de obedecer à cor de agora. A piscada dura um
+    piscar de olhos e é justamente o que se vê num quarto escuro.
     """
-    valores: dict[str, Any] = {DP_LIGADA: ligada}
-    if cor_hex:
-        valores[DP_MODO] = "colour"
-        valores[DP_COR] = cor_hex
+    if not cor_hex:
+        return _mandar(fita, {DP_LIGADA: ligada})
+    if not ligada:
+        return _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex, DP_LIGADA: False})
+    return _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex}) and _mandar(
+        fita, {DP_LIGADA: True}
+    )
+
+
+def _mandar(fita: Fita, valores: dict[str, Any]) -> bool:
+    """Um comando para uma fita. Nunca levanta; devolve se deu certo."""
     try:
-        resposta = _dispositivo(fita).set_multiple_values(valores)
+        with _trava_da(fita):
+            resposta = _dispositivo(fita).set_multiple_values(valores)
     except Exception as erro:
         logging.warning("Fita %s recusou o comando: %s", fita.nome, erro)
         return False
@@ -325,6 +353,14 @@ INTERVALO_VARREDURA = 300
 # Quando a última varredura rodou, no relógio monotônico. ``None`` é "nunca".
 _ultima_varredura: Optional[float] = None
 
+# Uma varredura de cada vez no processo inteiro. Ela abre um soquete de
+# broadcast numa porta fixa, e o Windows não tem `SO_REUSEPORT`: duas ao mesmo
+# tempo — o arranque e o botão "Testar", por exemplo — fazem a segunda morrer
+# com "apenas uma utilização de cada endereço de soquete". Quem chega depois
+# espera, e aí quase sempre nem precisa varrer: o piso de tempo abaixo já
+# responde por ela.
+_TRAVA_VARREDURA = threading.Lock()
+
 
 def ips_da_varredura(achados: dict[str, Any]) -> dict[str, str]:
     """O que a varredura encontrou, como um mapa de id do módulo para IP."""
@@ -350,18 +386,27 @@ def _redescobrir_ips(forcar: bool = False) -> None:
     """
     global _ultima_varredura  # noqa: PLW0603
 
-    agora = time.monotonic()
-    if (
-        not forcar
-        and _ultima_varredura is not None
-        and agora - _ultima_varredura < INTERVALO_VARREDURA
-    ):
-        logging.info(
-            "Varredura das fitas pulada: a última foi há menos de %ss",
-            INTERVALO_VARREDURA,
-        )
-        return
-    _ultima_varredura = agora
+    # O piso é conferido DEPOIS de pegar a trava, e não antes: quem esperou a
+    # varredura do outro terminar não tem mais o que varrer, e é esse o caso
+    # comum de duas chamadas próximas.
+    with _TRAVA_VARREDURA:
+        agora = time.monotonic()
+        if (
+            not forcar
+            and _ultima_varredura is not None
+            and agora - _ultima_varredura < INTERVALO_VARREDURA
+        ):
+            logging.info(
+                "Varredura das fitas pulada: a última foi há menos de %ss",
+                INTERVALO_VARREDURA,
+            )
+            return
+        _ultima_varredura = agora
+        _varrer_e_gravar()
+
+
+def _varrer_e_gravar() -> None:
+    """A varredura em si, já com a trava na mão."""
 
     try:
         import tinytuya  # noqa: PLC0415
@@ -384,11 +429,13 @@ def _redescobrir_ips(forcar: bool = False) -> None:
 
 CHAVE_ESTADO = "fita-estado-anterior"
 
-# Quanto o fechamento do app pode esperar pela devolução. Três fitas mudas
-# custam três vezes o ESPERA do soquete, e ninguém deve sentir o app demorar a
-# sumir da tela por causa de um módulo fora da tomada. Estourado o prazo, quem
-# termina o serviço é o arranque seguinte.
-PRAZO_FECHAMENTO = 4
+# Quanto o fechamento do app pode esperar pela devolução. Com as fitas falando
+# ao mesmo tempo, o custo do conjunto é o da mais lenta, e a mais lenta possível
+# é uma fita muda: o ESPERA do soquete. O prazo fica um segundo acima disso, e
+# não abaixo — com quatro segundos, uma única fita fora da tomada fazia o
+# fechamento desistir e as três ficavam com a cor do app até o arranque
+# seguinte. Estourado o prazo, quem termina o serviço ainda é o arranque.
+PRAZO_FECHAMENTO = ESPERA + 1
 
 # Um arranque de cada vez. Guardar o estado é "lê a chave, conversa com as
 # fitas, grava a chave", e o miolo disso leva segundos de rede: sem a trava,
@@ -409,6 +456,37 @@ def _em_thread(tarefa: Any) -> threading.Thread:
     return linha
 
 
+def _em_paralelo(itens: list[Any], tarefa: Any) -> list[Any]:
+    """Roda ``tarefa`` para cada item ao mesmo tempo e espera todas.
+
+    As fitas têm de mudar juntas. Em fila, cada uma só começa depois de a
+    anterior ter aberto conexão, mandado o comando e respondido — e a troca de
+    cor corre visivelmente de um monitor para o outro, que é exatamente o que a
+    imersão não pode ter. Em paralelo, o custo do conjunto é o da fita mais
+    lenta, e não a soma delas.
+
+    Cada fita tem a sua trava lá embaixo, então o paralelo aqui nunca faz duas
+    conversas com o mesmo módulo.
+    """
+    if not itens:
+        return []
+
+    resultados: dict[int, Any] = {}
+
+    def correr(indice: int, item: Any) -> None:
+        resultados[indice] = tarefa(item)
+
+    linhas = [
+        threading.Thread(target=correr, args=(indice, item), daemon=True)
+        for indice, item in enumerate(itens)
+    ]
+    for linha in linhas:
+        linha.start()
+    for linha in linhas:
+        linha.join()
+    return [resultados.get(indice) for indice in range(len(itens))]
+
+
 def _vestir(cor: Cor, varrer: bool = True) -> None:
     """Acende todas as fitas na cor pedida. Síncrono; nunca levanta.
 
@@ -421,14 +499,18 @@ def _vestir(cor: Cor, varrer: bool = True) -> None:
     a poucos segundos uma da outra, na mesma rede, não acham mais que uma.
     """
     cor_hex = hsv_hex(cor)
-    mudas = [fita for fita in fitas() if not aplicar(fita, True, cor_hex)]
+    alvos = fitas()
+    respostas = _em_paralelo(alvos, lambda fita: aplicar(fita, True, cor_hex))
+    mudas = [fita for fita, deu in zip(alvos, respostas) if not deu]
     if not mudas or not varrer:
         return
 
     _redescobrir_ips()
     por_id = {fita.id: fita for fita in fitas()}
-    for muda in mudas:
-        aplicar(por_id.get(muda.id, muda), True, cor_hex)
+    _em_paralelo(
+        [por_id.get(muda.id, muda) for muda in mudas],
+        lambda fita: aplicar(fita, True, cor_hex),
+    )
 
 
 def roxo() -> Cor:
@@ -447,12 +529,11 @@ def _estado_de_todas() -> dict[str, dict[str, Any]]:
     Quem não respondeu fica de fora: devolver uma fita ao estado que só foi
     chutado seria pior que não devolver nada.
     """
-    estado = {}
-    for fita in fitas():
-        lido = ler_estado(fita)
-        if lido is not None:
-            estado[fita.id] = lido
-    return estado
+    alvos = fitas()
+    lidos = _em_paralelo(alvos, ler_estado)
+    return {
+        fita.id: lido for fita, lido in zip(alvos, lidos) if lido is not None
+    }
 
 
 def _guardar_e_vestir() -> None:
@@ -522,10 +603,11 @@ def devolver_removidas(removidas: list[Fita]) -> None:
     if not estados:
         return
 
-    for fita in removidas:
-        estado = estados.pop(fita.id, None)
-        if estado is not None:
-            _repor(fita, estado)
+    saindo = [(fita, estados.pop(fita.id, None)) for fita in removidas]
+    _em_paralelo(
+        [par for par in saindo if par[1] is not None],
+        lambda par: _repor(par[0], par[1]),
+    )
 
     shared.schema.set_string(CHAVE_ESTADO, json.dumps(estados) if estados else "")
 
@@ -536,10 +618,12 @@ def _devolver() -> None:
         return
 
     por_id = {fita.id: fita for fita in fitas()}
-    for identificador, estado in _estados_guardados().items():
-        fita = por_id.get(identificador)
-        if fita is not None:
-            _repor(fita, estado)
+    devolver = [
+        (por_id[identificador], estado)
+        for identificador, estado in _estados_guardados().items()
+        if identificador in por_id
+    ]
+    _em_paralelo(devolver, lambda par: _repor(par[0], par[1]))
 
     # Limpa mesmo quando alguma fita não respondeu: a chave diz "há uma troca
     # pendente", e insistir eternamente numa fita que saiu da tomada deixaria o
