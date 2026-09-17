@@ -17,7 +17,13 @@ template $FitaWizard: Adw.Dialog {
         child: Adw.PreferencesPage {
           Adw.PreferencesGroup {
             title: _("Conta de desenvolvedor da Tuya");
-            description: _("As chaves das fitas só saem por aqui. A Secret é usada agora e não fica salva.");
+            description: _("As duas chaves saem de uma conta de desenvolvedor da Tuya, em iot.tuya.com, com o app Smart Life vinculado. A Secret é usada agora e não fica salva.");
+
+            header-suffix: LinkButton {
+              label: _("Abrir iot.tuya.com");
+              uri: "https://iot.tuya.com";
+              valign: center;
+            };
 
             Adw.EntryRow api_key_row {
               title: _("API Key");
@@ -42,14 +48,33 @@ template $FitaWizard: Adw.Dialog {
           }
 
           Adw.PreferencesGroup {
-            Button buscar_button {
-              label: _("Buscar dispositivos");
-              halign: center;
+            Box {
+              orientation: vertical;
+              spacing: 12;
 
-              styles [
-                "pill",
-                "suggested-action",
-              ]
+              // Busca que não achou nada volta para cá, e não para a lista de
+              // dispositivos: lá o único botão é "Salvar", que gravaria uma
+              // lista vazia por cima das fitas já configuradas.
+              Label aviso_label {
+                visible: false;
+                wrap: true;
+                justify: center;
+                label: _("Nada encontrado. Confira as credenciais e a região.");
+
+                styles [
+                  "error",
+                ]
+              }
+
+              Button buscar_button {
+                label: _("Buscar dispositivos");
+                halign: center;
+
+                styles [
+                  "pill",
+                  "suggested-action",
+                ]
+              }
             }
           }
         };

@@ -35,7 +35,12 @@ from typing import Any
 from gi.repository import Adw, GLib, Gtk
 
 from cartridges import shared
-from cartridges.utils.session_fita import Fita, fitas, gravar_fitas
+from cartridges.utils.session_fita import (
+    Fita,
+    devolver_removidas,
+    fitas,
+    gravar_fitas,
+)
 
 # As regiões que a Tuya oferece, na mesma ordem da lista do `.blp`. As duas
 # listas precisam andar juntas: o índice escolhido na tela é o índice aqui.
@@ -86,6 +91,7 @@ class FitaWizard(Adw.Dialog):
     api_secret_row: Adw.PasswordEntryRow = Gtk.Template.Child()
     regiao_row: Adw.ComboRow = Gtk.Template.Child()
     buscar_button: Gtk.Button = Gtk.Template.Child()
+    aviso_label: Gtk.Label = Gtk.Template.Child()
     dispositivos_group: Adw.PreferencesGroup = Gtk.Template.Child()
     salvar_button: Gtk.Button = Gtk.Template.Child()
 
@@ -96,9 +102,6 @@ class FitaWizard(Adw.Dialog):
         # assistente nesse meio-tempo, não há tela para pintar — é a mesma
         # proteção que o sgdb_picker, o steam_picker e o logo_picker usam.
         self._closed = False
-        # O aviso de busca vazia toma o lugar da explicação que vem da tela;
-        # guardada aqui para ser reposta quando a busca achar algo.
-        self._descricao_padrao = self.dispositivos_group.get_description()
         self.buscar_button.connect("clicked", self.buscar)
         self.salvar_button.connect("clicked", self.salvar)
         self.connect("closed", self._on_closed)
@@ -121,9 +124,11 @@ class FitaWizard(Adw.Dialog):
         ).start()
 
     def _buscar_na_nuvem(self, chave: str, segredo: str, regiao: str) -> None:
-        import tinytuya  # noqa: PLC0415
-
         try:
+            # Dentro do try: sem a biblioteca instalada, um ImportError aqui
+            # deixaria a tela presa no "Buscando…" para sempre.
+            import tinytuya  # noqa: PLC0415
+
             nuvem = tinytuya.Cloud(apiRegion=regiao, apiKey=chave, apiSecret=segredo)
             encontrados = fitas_da_nuvem(nuvem.getdevices())
         except Exception as erro:  # a tinytuya levanta de tudo aqui também
@@ -139,13 +144,16 @@ class FitaWizard(Adw.Dialog):
             self.dispositivos_group.remove(linha)
         self._linhas = []
 
+        # Busca vazia fica nas credenciais, com o aviso ali. A página dos
+        # dispositivos só tem o botão "Salvar", e salvar uma lista vazia
+        # apagaria as fitas já configuradas — num clique, e sem caminho de
+        # volta para corrigir a credencial errada.
         if not encontrados:
-            self.dispositivos_group.set_description(
-                _("Nada encontrado. Confira as credenciais e a região.")
-            )
-        else:
-            self.dispositivos_group.set_description(self._descricao_padrao)
+            self.aviso_label.set_visible(True)
+            self.stack.set_visible_child_name("credenciais")
+            return
 
+        self.aviso_label.set_visible(False)
         ja_configuradas = {fita.id for fita in fitas()}
         for fita in encontrados:
             linha = Adw.SwitchRow(title=fita.nome, subtitle=fita.ip or fita.id)
@@ -156,5 +164,16 @@ class FitaWizard(Adw.Dialog):
         self.stack.set_visible_child_name("dispositivos")
 
     def salvar(self, *_args: Any) -> None:
-        gravar_fitas([fita for linha, fita in self._linhas if linha.get_active()])
+        escolhidas = [fita for linha, fita in self._linhas if linha.get_active()]
+        marcadas = {fita.id for fita in escolhidas}
+        # Quem sai da configuração sai antes de o arquivo mudar: depois da
+        # gravação o app não conhece mais essa fita, não tem como devolvê-la ao
+        # estado de antes, e ela ficaria na cor do Cartridges para sempre.
+        saindo = [fita for fita in fitas() if fita.id not in marcadas]
+        gravar_fitas(escolhidas)
+        if saindo:
+            # Rede: fora da thread de UI, como todo o resto da conversa.
+            threading.Thread(
+                target=devolver_removidas, args=(saindo,), daemon=True
+            ).start()
         self.close()
