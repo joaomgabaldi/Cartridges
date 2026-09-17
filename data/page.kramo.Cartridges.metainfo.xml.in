@@ -53,6 +53,8 @@
           <li>A cor de cada jogo sai da capa dele, e na tela do jogo dá para escolher outra cor e outro brilho no lugar dela, com um botão ao lado para voltar a tirar a cor da capa. O jogo que não escolheu brilho usa o brilho padrão das Preferências, baixo de propósito: a fita fica atrás do monitor, e luz forte ali lava o preto da tela</li>
           <li>As fitas são configuradas em Preferências, na aba Personalização: um assistente pede as chaves da sua conta de desenvolvedor da Tuya, busca os dispositivos que há nela e deixa marcar quais são as fitas dos monitores. Um botão "Testar" acende todas de uma vez e diz quais responderam. Desligado, que é como vem, nada muda</li>
           <li>Quando o roteador dá um endereço novo para uma fita, o app procura por ela na rede e conserta sozinho o endereço guardado — antes ela ficaria muda até o assistente ser aberto de novo. Fita fora da tomada também não atrapalha: as outras acendem normalmente, o app não trava nem mostra aviso nenhum durante o jogo</li>
+          <li>As fitas trocam de cor todas ao mesmo tempo, e não uma depois da outra, e a troca acontece sem a piscada na cor anterior: a cor chega antes de a fita acender</li>
+          <li>O brilho aparece em porcentagem e responde na hora: mexeu no controle, as fitas acompanham, nas Preferências e na tela do jogo</li>
         </ul>
       </description>
     </release>
