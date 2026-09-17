@@ -62,6 +62,18 @@ Install the latest release with the command: `winget install cartridges`.
 
 See [Building](https://codeberg.org/kramo/cartridges/src/branch/main/CONTRIBUTING.md#building).
 
+### Build dependencies (MSYS2 UCRT64)
+
+The Windows build is done from the MSYS2 UCRT64 shell. On top of GTK 4 and libadwaita, install:
+
+```bash
+pacman -S mingw-w64-ucrt-x86_64-python-pip
+pacman -S mingw-w64-ucrt-x86_64-python-cryptography
+/c/msys64/ucrt64/bin/python.exe -m pip install --break-system-packages tinytuya
+```
+
+`python-pip` because the MSYS2 Python does not ship pip. `tinytuya` is what the app uses to talk to the Tuya LED strips, and `python-cryptography` is its runtime dependency — without it every exchange with the strips fails.
+
 # Contributing
 
 See [CONTRIBUTING.md](https://codeberg.org/kramo/cartridges/src/branch/main/CONTRIBUTING.md).
