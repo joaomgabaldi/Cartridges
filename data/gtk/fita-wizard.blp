@@ -1,0 +1,94 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $FitaWizard: Adw.Dialog {
+  title: _("Configurar fitas de LED");
+  content-width: 480;
+  content-height: 520;
+
+  Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    Adw.ViewStack stack {
+      Adw.ViewStackPage {
+        name: "credenciais";
+
+        child: Adw.PreferencesPage {
+          Adw.PreferencesGroup {
+            title: _("Conta de desenvolvedor da Tuya");
+            description: _("As chaves das fitas só saem por aqui. A Secret é usada agora e não fica salva.");
+
+            Adw.EntryRow api_key_row {
+              title: _("API Key");
+            }
+
+            Adw.PasswordEntryRow api_secret_row {
+              title: _("API Secret");
+            }
+
+            Adw.ComboRow regiao_row {
+              title: _("Região");
+
+              model: Gtk.StringList {
+                strings [
+                  "us",
+                  "eu",
+                  "cn",
+                  "in",
+                ]
+              };
+            }
+          }
+
+          Adw.PreferencesGroup {
+            Button buscar_button {
+              label: _("Buscar dispositivos");
+              halign: center;
+
+              styles [
+                "pill",
+                "suggested-action",
+              ]
+            }
+          }
+        };
+      }
+
+      Adw.ViewStackPage {
+        name: "dispositivos";
+
+        child: Adw.PreferencesPage {
+          Adw.PreferencesGroup dispositivos_group {
+            title: _("Quais desses são as fitas dos monitores?");
+          }
+
+          Adw.PreferencesGroup {
+            Button salvar_button {
+              label: _("Salvar");
+              halign: center;
+
+              styles [
+                "pill",
+                "suggested-action",
+              ]
+            }
+          }
+        };
+      }
+
+      Adw.ViewStackPage {
+        name: "buscando";
+
+        child: Adw.StatusPage {
+          title: _("Buscando na sua conta…");
+
+          child: Adw.Spinner {
+            width-request: 32;
+            height-request: 32;
+          };
+        };
+      }
+    }
+  }
+}
