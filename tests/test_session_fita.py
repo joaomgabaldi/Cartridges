@@ -504,6 +504,73 @@ def test_preferencias_liberam_a_fita_e_contam_as_configuradas(monkeypatch, schem
     assert preferencias.session_fita_switch.get_subtitle() == "2 fitas configuradas"
 
 
+def test_ligar_o_interruptor_arranca_o_ciclo(monkeypatch, schema):
+    """Ligar com o app aberto tem de guardar o estado de antes na hora.
+
+    Sem isto, o ciclo só arrancaria no arranque seguinte: a chave
+    ``fita-estado-anterior`` ficaria vazia, a sessão seguinte vestiria a cor do
+    jogo e o fechamento não teria o que devolver.
+    """
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
+    chamadas = []
+    monkeypatch.setattr(session_fita, "abrir", lambda: chamadas.append("abrir"))
+
+    preferencias = _preferencias(monkeypatch)
+    assert chamadas == []
+
+    preferencias.session_fita_switch.set_active(True)
+    assert chamadas == ["abrir"]
+
+    # Desligar não desfaz nada aqui: quem devolve as fitas é o fechamento.
+    preferencias.session_fita_switch.set_active(False)
+    assert chamadas == ["abrir"]
+
+
+def test_abrir_a_tela_com_o_recurso_ligado_nao_arranca(monkeypatch, schema):
+    """Abrir as Preferências não é ligar o recurso: construir a tela não acende.
+
+    O ``bind`` do dublê de schema não faz nada, e é justamente ele que acende o
+    interruptor no meio do ``__init__``. Imitado aqui para que a construção
+    passe pelo mesmo ``notify::active`` do app de verdade — é o que torna este
+    teste capaz de pegar um handler ligado cedo demais.
+    """
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
+    schema.set_boolean("session-fita", True)
+    monkeypatch.setattr(
+        schema,
+        "bind",
+        lambda chave, widget, prop, _flags: widget.set_property(
+            prop, schema.get_boolean(chave)
+        ),
+    )
+    chamadas = []
+    monkeypatch.setattr(session_fita, "abrir", lambda: chamadas.append("abrir"))
+
+    preferencias = _preferencias(monkeypatch)
+
+    assert preferencias.session_fita_switch.get_active() is True
+    assert chamadas == []
+
+
+def test_fechar_o_assistente_com_fita_nova_arranca_o_ciclo(monkeypatch, schema):
+    """Configurar a primeira fita com o recurso já ligado também arranca."""
+    schema.set_boolean("session-fita", True)
+    chamadas = []
+    monkeypatch.setattr(session_fita, "abrir", lambda: chamadas.append("abrir"))
+
+    preferencias = _preferencias(monkeypatch)
+    # Sem fita, `atualizar_fitas` desligou a chave: não há o que arrancar.
+    preferencias.fitas_configuradas()
+    assert chamadas == []
+
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
+    schema.set_boolean("session-fita", True)
+    preferencias.fitas_configuradas()
+
+    assert chamadas == ["abrir"]
+    assert preferencias.session_fita_switch.get_sensitive() is True
+
+
 # endregion
 # region A fiação: quem chama o ciclo
 
