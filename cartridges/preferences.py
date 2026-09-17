@@ -159,6 +159,12 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
     is_open = False
 
+    # O sinal de parada do teste das fitas enquanto ele corre, e `None` quando
+    # não há teste. É ele que faz o botão de tocar virar o de parar: com uma
+    # fita fora da tomada o teste leva segundos, e quem já viu o que queria
+    # precisa de um jeito de interromper.
+    _teste_em_curso: Optional[threading.Event] = None
+
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
 
@@ -419,13 +425,11 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         """Liga as linhas das fitas: brilho, assistente e teste."""
         # À mão, e não por `bind`, pela mesma razão do tempo de espera do
         # processo: o valor da linha é um double e a chave é um int.
-        self.fita_brilho_row.set_value(shared.schema.get_int("fita-brilho-padrao"))
-        self.fita_brilho_row.connect(
-            "notify::value",
-            lambda row, *_: shared.schema.set_int(
-                "fita-brilho-padrao", int(row.get_value())
-            ),
+        # A tela fala em porcentagem; a chave guarda a escala do módulo.
+        self.fita_brilho_row.set_value(
+            session_fita.por_cento(shared.schema.get_int("fita-brilho-padrao"))
         )
+        self.fita_brilho_row.connect("notify::value", self.mudar_brilho_padrao)
         self.fita_configurar_button.connect("clicked", self.configurar_fitas)
         self.fita_testar_button.connect("clicked", self.testar_fitas)
         self.atualizar_fitas()
@@ -474,6 +478,17 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             shared.schema.set_boolean("session-fita", True)
             session_fita.abrir()
 
+    def mudar_brilho_padrao(self, row: Adw.SpinRow, *_args: Any) -> None:
+        """Grava o brilho novo e mostra ele nas fitas na mesma hora.
+
+        A prévia é o que dá sentido ao controle: brilho é coisa de olhar, não
+        de adivinhar por um número. Ela engole os passos do meio sozinha, então
+        arrastar o controle não vira uma enxurrada de comandos de rede.
+        """
+        brilho = session_fita.de_por_cento(row.get_value())
+        shared.schema.set_int("fita-brilho-padrao", brilho)
+        session_fita.previa(session_fita.Cor(*session_fita.ROXO_DO_APP, brilho))
+
     def configurar_fitas(self, *_args: Any) -> None:
         from cartridges.fita_wizard import FitaWizard  # noqa: PLC0415
 
@@ -500,28 +515,43 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         e volta para a tela pelo `idle_add`.
         """
 
+        if self._teste_em_curso is not None:
+            # Segundo clique: o botão agora é o de parar.
+            self._teste_em_curso.set()
+            return
+
+        parar = threading.Event()
+        self._teste_em_curso = parar
+
         def tarefa() -> None:
             cor = session_fita.hsv_hex(session_fita.roxo())
-            mudas = [
-                fita.nome
-                for fita in session_fita.fitas()
-                if not session_fita.aplicar(fita, True, cor)
-            ]
-            GLib.idle_add(pronto, mudas)
+            mudas = []
+            for fita in session_fita.fitas():
+                if parar.is_set():
+                    break
+                if not session_fita.aplicar(fita, True, cor):
+                    mudas.append(fita.nome)
+            GLib.idle_add(pronto, mudas, parar.is_set())
 
-        def pronto(mudas: list[str]) -> bool:
+        def pronto(mudas: list[str], cancelado: bool) -> bool:
+            self._teste_em_curso = None
             # O resultado volta pelo `idle_add`, e o diálogo pode ter fechado
             # nesse meio-tempo: não há tela onde escrever.
             if not self.__class__.is_open:
                 return False
-            self.fita_testar_row.set_subtitle(
-                _("Sem resposta: {}").format(", ".join(mudas))
-                if mudas
-                else _("Todas responderam")
-            )
+            self.fita_testar_button.set_icon_name("media-playback-start-symbolic")
+            if cancelado:
+                self.fita_testar_row.set_subtitle(_("Teste interrompido"))
+            else:
+                self.fita_testar_row.set_subtitle(
+                    _("Sem resposta: {}").format(", ".join(mudas))
+                    if mudas
+                    else _("Todas responderam")
+                )
             return False
 
         self.fita_testar_row.set_subtitle(_("Testando…"))
+        self.fita_testar_button.set_icon_name("media-playback-stop-symbolic")
         threading.Thread(target=tarefa, daemon=True).start()
 
     # endregion

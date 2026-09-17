@@ -145,15 +145,15 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
       }
 
       Adw.SpinRow fita_brilho_row {
-        title: _("Brilho padrão");
+        title: _("Brilho padrão (%)");
         subtitle: _("Usado pelos jogos que não escolheram o seu");
         sensitive: bind session_fita_switch.active;
 
         adjustment: Adjustment {
-          lower: 10;
-          upper: 1000;
-          step-increment: 10;
-          page-increment: 100;
+          lower: 1;
+          upper: 100;
+          step-increment: 1;
+          page-increment: 10;
         };
       }
 

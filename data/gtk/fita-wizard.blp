@@ -17,20 +17,20 @@ template $FitaWizard: Adw.Dialog {
         child: Adw.PreferencesPage {
           Adw.PreferencesGroup {
             title: _("Conta de desenvolvedor da Tuya");
-            description: _("As duas chaves saem de uma conta de desenvolvedor da Tuya, em iot.tuya.com, com o app Smart Life vinculado. A Secret é usada agora e não fica salva.");
+            description: _("Os dois códigos saem de uma conta de desenvolvedor da Tuya, com o app Smart Life vinculado. No painel deles, eles aparecem como Access ID e Access Secret. O Access Secret é usado agora e não fica salvo.");
 
             header-suffix: LinkButton {
-              label: _("Abrir iot.tuya.com");
-              uri: "https://iot.tuya.com";
+              label: _("Abrir o painel da Tuya");
+              uri: "https://auth.tuya.com/?from=https%3A%2F%2Fdeveloper.tuya.com%3Fredirect%3Dhttps%3A%2F%2Fplatform.tuya.com";
               valign: center;
             };
 
             Adw.EntryRow api_key_row {
-              title: _("API Key");
+              title: _("Access ID (Client ID)");
             }
 
             Adw.PasswordEntryRow api_secret_row {
-              title: _("API Secret");
+              title: _("Access Secret (Client Secret)");
             }
 
             Adw.ComboRow regiao_row {

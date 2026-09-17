@@ -833,7 +833,12 @@ def test_o_teste_nao_escreve_em_tela_ja_fechada(monkeypatch, schema):
     monkeypatch.setattr(
         preferences_module,
         "threading",
-        SimpleNamespace(Thread=lambda target, daemon: SimpleNamespace(start=target)),
+        # `Event` de verdade: é o sinal de parada do teste, e trocá-lo por um
+        # dublê esconderia justamente o botão que vira "parar".
+        SimpleNamespace(
+            Thread=lambda target, daemon: SimpleNamespace(start=target),
+            Event=threading.Event,
+        ),
     )
     agendadas = []
     monkeypatch.setattr(
@@ -1215,3 +1220,59 @@ def test_duas_varreduras_ao_mesmo_tempo_viram_uma(falsas, monkeypatch, schema):
         linha.join()
 
     assert max(pico) == 1
+
+
+def test_o_brilho_vai_e_volta_entre_a_tela_e_o_modulo():
+    """A tela conta de 0 a 100; o módulo, de 0 a 1000."""
+    assert session_fita.por_cento(1000) == 100
+    assert session_fita.por_cento(180) == 18
+    assert session_fita.de_por_cento(18) == 180
+    assert session_fita.de_por_cento(100) == 1000
+
+
+def test_o_brilho_da_tela_nunca_apaga_a_fita():
+    """Zero por cento não pode virar fita apagada por acidente.
+
+    Apagar é o liga/desliga, não o brilho: uma cor com brilho zero é uma fita
+    que parece queimada, e não uma fita desligada.
+    """
+    assert session_fita.de_por_cento(0) == session_fita.BRILHO_MINIMO
+    assert session_fita.de_por_cento(-5) == session_fita.BRILHO_MINIMO
+    assert session_fita.de_por_cento(200) == session_fita.BRILHO_CHEIO
+
+
+def test_a_previa_engole_os_passos_do_meio(falsas, schema):
+    """Arrastar o controle gera dezenas de valores; a fita só precisa do último.
+
+    Sem isso, cada passo do controle viraria uma conversa de rede com as três
+    fitas e a fila só cresceria enquanto o dedo estivesse no controle.
+    """
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False, demora=0.05)
+
+    for por_cento in range(1, 40):
+        session_fita.previa(session_fita.Cor(284, 620, por_cento * 25))
+
+    # Espera a thread da prévia terminar o que pegou.
+    time.sleep(0.4)
+
+    cores = [comando for comando in modulos["eb0"].recebidos if "24" in comando]
+    assert 0 < len(cores) < 39
+    # A última cor pedida é a que fica valendo na fita.
+    assert cores[-1]["24"] == session_fita.hsv_hex(session_fita.Cor(284, 620, 975))
+
+
+def test_a_previa_nao_mexe_no_liga_desliga(falsas, schema):
+    """Prévia é cor, não interruptor: fita apagada continua apagada."""
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+
+    session_fita.previa(session_fita.Cor(284, 620, 180))
+    time.sleep(0.2)
+
+    assert all("20" not in comando for comando in modulos["eb0"].recebidos)
+
+
+def test_sem_fita_configurada_a_previa_nao_faz_nada(schema):
+    schema.set_boolean("session-fita", True)
+    session_fita.previa(session_fita.Cor(284, 620, 180))
