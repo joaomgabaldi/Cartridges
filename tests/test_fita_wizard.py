@@ -4,10 +4,17 @@
 
 """O que o assistente faz com a resposta da nuvem da Tuya."""
 
+import json
 import logging
+from types import SimpleNamespace
 
+import pytest
+from gi.repository import Adw
+
+from cartridges import shared
 from cartridges.fita_wizard import fitas_da_nuvem
 from cartridges.logging.setup import LIB_LOGGERS
+from cartridges.utils import session_fita
 from cartridges.utils.session_fita import Fita
 
 
@@ -70,3 +77,109 @@ def test_a_tinytuya_fica_calada_no_arquivo_de_log():
     """
     nivel = logging.getLevelNamesMapping()[LIB_LOGGERS["tinytuya"]["level"]]
     assert nivel >= logging.WARNING
+
+
+# region A tela do assistente
+
+
+@pytest.fixture
+def pastas(tmp_path, monkeypatch):
+    """A configuração das fitas vai para uma pasta descartável."""
+    monkeypatch.setattr(shared, "fitas_dir", tmp_path / "fitas")
+    monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
+    return tmp_path
+
+
+def _assistente(monkeypatch):
+    """O assistente de verdade, com a thread da rede rodando na hora.
+
+    Mesmo dublê de ``threading`` do teste do "Testar" nas Preferências: o que
+    interessa aqui é o que a tarefa faz, e não que ela tenha uma thread.
+    """
+    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        wizard_module,
+        "threading",
+        SimpleNamespace(
+            Thread=lambda target, args=(), daemon=False: SimpleNamespace(
+                start=lambda: target(*args)
+            )
+        ),
+    )
+    return wizard_module.FitaWizard()
+
+
+def test_busca_vazia_fica_nas_credenciais_e_nao_apaga_a_configuracao(
+    pastas, monkeypatch
+):
+    """A página dos dispositivos só tem "Salvar", e salvar vazio apaga tudo.
+
+    Sem esta volta, quem reabre o assistente e erra a Secret perde as fitas
+    configuradas num clique, sem caminho de volta para corrigir a credencial.
+    """
+    configuradas = [Fita("Centro", "eb0", "1.2.3.4", "k")]
+    session_fita.gravar_fitas(configuradas)
+    assistente = _assistente(monkeypatch)
+
+    assistente._mostrar([])
+
+    assert assistente.stack.get_visible_child_name() == "credenciais"
+    assert assistente.aviso_label.get_visible()
+    assert session_fita.fitas() == configuradas
+
+
+def test_busca_com_resultado_vai_para_a_lista_e_tira_o_aviso(pastas, monkeypatch):
+    assistente = _assistente(monkeypatch)
+    assistente._mostrar([])
+    assistente._mostrar([Fita("Centro", "eb0", "1.2.3.4", "k")])
+
+    assert assistente.stack.get_visible_child_name() == "dispositivos"
+    assert not assistente.aviso_label.get_visible()
+
+
+def test_fita_desmarcada_volta_ao_estado_guardado_e_sai_da_chave(
+    pastas, monkeypatch, schema
+):
+    """Tirar uma fita da configuração não pode deixá-la acesa para sempre.
+
+    Depois da gravação o app não conhece mais essa fita: o fechamento não a
+    devolve, ainda limpa a chave, e ela fica na cor do Cartridges até alguém
+    abrir o app Smart Life.
+    """
+    ficou = Fita("Centro", "eb0", "1.2.3.4", "k")
+    saiu = Fita("Direita", "eb1", "1.2.3.5", "k")
+    session_fita.gravar_fitas([ficou, saiu])
+    guardado = {
+        "eb0": {"ligada": True, "cor": "00b403e80064"},
+        "eb1": {"ligada": False, "cor": ""},
+    }
+    schema.set_string("fita-estado-anterior", json.dumps(guardado))
+
+    enviados = []
+    monkeypatch.setattr(
+        session_fita,
+        "aplicar",
+        lambda fita, ligada, cor: bool(enviados.append((fita.id, ligada, cor))) or True,
+    )
+
+    assistente = _assistente(monkeypatch)
+    # O diálogo nunca foi apresentado (não há janela de verdade aqui), e fechar
+    # um assim é um Adwaita-CRITICAL na saída dos testes. O que importa deste
+    # `salvar` é o que ele grava e manda, não o fechamento.
+    monkeypatch.setattr(assistente, "close", lambda: None)
+    assistente._linhas = [
+        (Adw.SwitchRow(active=True), ficou),
+        (Adw.SwitchRow(active=False), saiu),
+    ]
+    assistente.salvar()
+
+    assert session_fita.fitas() == [ficou]
+    assert enviados == [("eb1", False, "")]
+    # A que ficou continua na chave: quem a devolve é o fechamento do app.
+    assert json.loads(schema.get_string("fita-estado-anterior")) == {
+        "eb0": guardado["eb0"]
+    }
+
+
+# endregion
