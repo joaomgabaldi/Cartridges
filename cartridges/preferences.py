@@ -501,9 +501,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         """
 
         def tarefa() -> None:
-            cor = session_fita.hsv_hex(
-                session_fita.Cor(*session_fita.ROXO_DO_APP, session_fita.brilho_padrao())
-            )
+            cor = session_fita.hsv_hex(session_fita.roxo())
             mudas = [
                 fita.nome
                 for fita in session_fita.fitas()
