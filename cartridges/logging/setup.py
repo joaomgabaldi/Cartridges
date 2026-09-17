@@ -48,6 +48,48 @@ def _enable_windows_ansi() -> None:
         pass
 
 
+# Bibliotecas barulhentas, silenciadas aqui em vez de na raiz. Módulo, e não
+# variável local de `setup_logging`, para que um teste consiga prender o nível
+# de cada uma sem ter de chamar o `dictConfig` de verdade — que reconfigura o
+# logging do processo inteiro.
+LIB_LOGGERS = {
+    "PIL": {
+        "handlers": ["lib_console_handler", "file_handler"],
+        "propagate": False,
+        "level": "WARNING",
+    },
+    "urllib3": {
+        "handlers": ["lib_console_handler", "file_handler"],
+        "propagate": False,
+        # Explicitly INFO, not NOTSET. NOTSET means "ask my parent",
+        # and the parent here is the root at NOTSET too, i.e. level 0,
+        # i.e. everything passes — so urllib3's DEBUG went straight
+        # into file_handler, which sits at DEBUG. That is one
+        # "Starting new HTTPS connection" plus a request line per cover
+        # download, per SteamGridDB lookup, per HowLongToBeat query and
+        # per poll, and it buried the app's own lines in the session
+        # log people attach to bug reports. `propagate: False` never
+        # helped: file_handler is attached right here, not inherited.
+        # The root is deliberately left at NOTSET — the app's own
+        # DEBUG output is the reason the file handler exists.
+        "level": "INFO",
+    },
+    "tinytuya": {
+        "handlers": ["lib_console_handler", "file_handler"],
+        "propagate": False,
+        # WARNING é obrigatório aqui, e não uma questão de ruído: em DEBUG a
+        # tinytuya loga o dicionário de cabeçalhos inteiro de cada chamada à
+        # nuvem, e enquanto ela ainda não tem token esse dicionário carrega a
+        # API Secret da conta em claro. Sem esta entrada o logger cai na raiz,
+        # que está em NOTSET (tudo passa) e alimenta o `file_handler`, que está
+        # em DEBUG — ou seja, a Secret iria parar no `cartridges.log`, que é
+        # justamente o arquivo que as pessoas anexam a relatório de bug. O
+        # nível cobre os sub-loggers da biblioteca por herança.
+        "level": "WARNING",
+    },
+}
+
+
 def setup_logging() -> None:
     """Intitate the app's logging"""
 
@@ -92,29 +134,7 @@ def setup_logging() -> None:
                 "level": lib_log_level,
             },
         },
-        "loggers": {
-            "PIL": {
-                "handlers": ["lib_console_handler", "file_handler"],
-                "propagate": False,
-                "level": "WARNING",
-            },
-            "urllib3": {
-                "handlers": ["lib_console_handler", "file_handler"],
-                "propagate": False,
-                # Explicitly INFO, not NOTSET. NOTSET means "ask my parent",
-                # and the parent here is the root at NOTSET too, i.e. level 0,
-                # i.e. everything passes — so urllib3's DEBUG went straight
-                # into file_handler, which sits at DEBUG. That is one
-                # "Starting new HTTPS connection" plus a request line per cover
-                # download, per SteamGridDB lookup, per HowLongToBeat query and
-                # per poll, and it buried the app's own lines in the session
-                # log people attach to bug reports. `propagate: False` never
-                # helped: file_handler is attached right here, not inherited.
-                # The root is deliberately left at NOTSET — the app's own
-                # DEBUG output is the reason the file handler exists.
-                "level": "INFO",
-            },
-        },
+        "loggers": LIB_LOGGERS,
         "root": {
             "level": "NOTSET",
             "handlers": ["app_console_handler", "file_handler"],
