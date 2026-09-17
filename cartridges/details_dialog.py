@@ -41,7 +41,7 @@ from cartridges.store.managers.cover_manager import CoverManager
 from cartridges.store.managers.hltb_manager import shared_helper as shared_hltb_helper
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
-from cartridges.utils import window_geometry
+from cartridges.utils import session_fita, window_geometry
 from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.game_folder import game_folder, open_folder
 from cartridges.utils.game_logo import (
@@ -70,6 +70,28 @@ from cartridges.utils.steam import (
 )
 
 
+# Folga do arredondamento da ida e volta pela caixa de cores, que fala RGB: a
+# mesma cor volta de lá com um ou dois graus de matiz a menos. Sem a folga, a
+# comparação de `aplicar_fita` nunca daria igual e todo jogo que passasse pela
+# tela sairia dela com cor "escolhida à mão".
+FOLGA_MATIZ = 2
+FOLGA_SATURACAO = 10
+
+
+def _mesma_cor(uma: session_fita.Cor, outra: session_fita.Cor) -> bool:
+    """Se duas cores são a mesma cor aos olhos — não ao bit.
+
+    A distância de matiz é circular: 359 e 0 são vizinhos, e um vermelho de
+    capa cai bem em cima dessa emenda.
+    """
+    distancia = abs(uma.matiz - outra.matiz) % 360
+    return (
+        min(distancia, 360 - distancia) <= FOLGA_MATIZ
+        and abs(uma.saturacao - outra.saturacao) <= FOLGA_SATURACAO
+        and uma.brilho == outra.brilho
+    )
+
+
 @Gtk.Template(resource_path=shared.PREFIX + "/gtk/details-dialog.ui")
 class DetailsDialog(Adw.Dialog):
     __gtype_name__ = "DetailsDialog"
@@ -91,6 +113,11 @@ class DetailsDialog(Adw.Dialog):
     wallpaper_button_browse: Gtk.Button = Gtk.Template.Child()
     wallpaper_button_file: Gtk.Button = Gtk.Template.Child()
     wallpaper_button_reset: Gtk.Button = Gtk.Template.Child()
+
+    fita_row: Adw.ActionRow = Gtk.Template.Child()
+    fita_button_reset: Gtk.Button = Gtk.Template.Child()
+    fita_color_button: Gtk.ColorDialogButton = Gtk.Template.Child()
+    fita_brilho_row: Adw.SpinRow = Gtk.Template.Child()
 
     name: Adw.EntryRow = Gtk.Template.Child()
     steam_fetch_stack: Gtk.Stack = Gtk.Template.Child()
@@ -162,6 +189,10 @@ class DetailsDialog(Adw.Dialog):
     # The folder behind `open_folder_button`, kept in step with the executable
     # field. None means the command names no folder we can find.
     _game_folder: Optional[str] = None
+
+    # A cor da fita como a linha a mostrou por último. É contra ela que o
+    # Aplicar decide se houve escolha de gente — ver `aplicar_fita`.
+    _fita_mostrada: Optional[session_fita.Cor] = None
 
     def __init__(self, game: Optional[Game] = None, **kwargs: Any):
         super().__init__(**kwargs)
@@ -248,6 +279,7 @@ class DetailsDialog(Adw.Dialog):
         self.update_open_folder_button()
         self.update_logo_row()
         self.update_wallpaper_row()
+        self.atualizar_fita()
 
         image_filter = Gtk.FileFilter(name=_("Imagens"))
 
@@ -301,6 +333,7 @@ class DetailsDialog(Adw.Dialog):
         self.wallpaper_button_browse.connect("clicked", self.browse_wallpapers)
         self.wallpaper_button_file.connect("clicked", self.choose_wallpaper_file)
         self.wallpaper_button_reset.connect("clicked", self.reset_wallpaper_choice)
+        self.fita_button_reset.connect("clicked", self.redefinir_fita)
         self.steam_fetch_button.connect("clicked", self.fetch_metadata)
         self.file_chooser_button.connect("clicked", self.choose_executable)
         self.open_folder_button.connect("clicked", self.open_game_folder)
@@ -587,6 +620,7 @@ class DetailsDialog(Adw.Dialog):
 
         self.apply_logo_choice(self.game)
         self.apply_wallpaper_choice(self.game)
+        self.aplicar_fita(self.game)
 
         shared.store.add_game(self.game, {}, run_pipeline=False)
         self.game.save()
@@ -989,6 +1023,63 @@ class DetailsDialog(Adw.Dialog):
         self.discard_wallpaper_tmp()
         self._wallpaper_choice = None
         return True
+
+    # endregion
+    # region Fita de LED
+
+    def cor_automatica(self) -> session_fita.Cor:
+        """A cor que vale para este jogo hoje.
+
+        Jogo novo ainda não existe em disco nem tem capa de onde tirar cor: o
+        que sobra é o roxo do app, que é o mesmo que ele receberia depois de
+        criado e sem capa.
+        """
+        if self.game:
+            return session_fita.cor_do_jogo(self.game)
+        return session_fita.Cor(*session_fita.ROXO_DO_APP, session_fita.brilho_padrao())
+
+    def atualizar_fita(self) -> None:
+        """Mostra a cor que vale hoje: a escolhida ou a que sai da capa."""
+        cor = self.cor_automatica()
+        self._fita_mostrada = cor
+        self.fita_color_button.set_rgba(session_fita.cor_para_rgba(cor))
+        self.fita_brilho_row.set_value(cor.brilho)
+
+        manual = bool(self.game) and session_fita.escolhida(self.game.game_id)
+        self.fita_button_reset.set_visible(manual)
+        self.fita_row.set_subtitle(
+            _("Escolhida por você") if manual else _("Tirada da capa")
+        )
+
+    def redefinir_fita(self, *_args: Any) -> None:
+        if not self.game:
+            return
+        session_fita.redefinir(self.game.game_id)
+        self.atualizar_fita()
+
+    def aplicar_fita(self, game: Game) -> None:
+        """Grava a cor da fita, mas só quando ela é escolha de verdade.
+
+        Quem abriu a tela para renomear um jogo não pediu cor nenhuma, e gravar
+        aqui marcaria esse jogo como "cor escolhida à mão" para sempre — ele
+        nunca mais acompanharia a capa. Por isso a comparação com o automático
+        antes de gravar. Regravar a escolha que já estava lá é inofensivo.
+        """
+        na_tela = session_fita.rgba_para_cor(
+            self.fita_color_button.get_rgba(), int(self.fita_brilho_row.get_value())
+        )
+        # Contra o que a linha mostrou, e não contra o automático de agora: um
+        # jogo novo ganha a capa neste mesmo Aplicar, e o automático mudaria
+        # debaixo da comparação sem que ninguém tivesse mexido na cor.
+        mostrada = self._fita_mostrada
+        if (
+            mostrada is not None
+            and _mesma_cor(na_tela, mostrada)
+            and not session_fita.escolhida(game.game_id)
+        ):
+            return
+
+        session_fita.salvar_cor(game.game_id, game.name, na_tela)
 
     # endregion
 

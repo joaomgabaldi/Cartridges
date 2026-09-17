@@ -194,6 +194,45 @@ template $DetailsDialog: Adw.Dialog {
             ]
           }
         }
+
+        // A cor que as fitas de LED vestem enquanto este jogo corre. Sem
+        // escolha, ela sai da capa — por isso o botão de voltar ao automático
+        // só aparece quando houve escolha.
+        Adw.ActionRow fita_row {
+          title: _("Fita de LED");
+          activatable-widget: fita_color_button;
+
+          [suffix]
+          Button fita_button_reset {
+            valign: center;
+            icon-name: "edit-undo-symbolic";
+            tooltip-text: _("Voltar a tirar a cor da capa");
+            visible: false;
+
+            styles [
+              "flat",
+            ]
+          }
+
+          [suffix]
+          ColorDialogButton fita_color_button {
+            valign: center;
+
+            dialog: ColorDialog {
+              with-alpha: false;
+            };
+          }
+        }
+
+        Adw.SpinRow fita_brilho_row {
+          title: _("Brilho da fita neste jogo");
+
+          adjustment: Adjustment {
+            lower: 10;
+            upper: 1000;
+            step-increment: 10;
+          };
+        }
       }
 
       Adw.PreferencesGroup {
