@@ -67,7 +67,7 @@ from cartridges.utils.single_instance import (
     present_running_instance,
 )
 from cartridges.utils.updates_checker import UpdatesChecker
-from cartridges.utils import session_wallpaper, window_geometry
+from cartridges.utils import session_fita, session_wallpaper, window_geometry
 from cartridges.window import CartridgesWindow
 
 # Titulo da secao de agradecimentos nos creditos. Fica numa constante porque
@@ -393,6 +393,12 @@ class CartridgesApplication(Adw.Application):
         # GSettings justamente para o arranque seguinte poder desfazer.
         session_wallpaper.restaurar_orfaos()
 
+        # As fitas de LED seguem o mesmo ciclo: `abrir` desfaz numa thread o
+        # que uma execução anterior deixou pendurado — o app morto no meio da
+        # sessão não passa por `hide_session_blocker` nem por `do_shutdown` — e
+        # só então guarda o estado de agora e acende no roxo do app.
+        session_fita.abrir()
+
         # Match the Windows light/dark theme and accent colour, and keep
         # matching them while the app runs
         self.apply_windows_theme()
@@ -585,6 +591,12 @@ class CartridgesApplication(Adw.Application):
         # tudo o mais deste método: é a última janela em que ainda existe
         # processo para desfazer a troca.
         session_wallpaper.restaurar()
+
+        # As fitas voltam ao que eram quando o app abriu. Esperando, pelo mesmo
+        # motivo da parede: depois daqui não há processo para desfazer nada. A
+        # espera tem prazo — ver `PRAZO_FECHAMENTO` —, e o que não couber nele
+        # fica para o `abrir` do próximo arranque.
+        session_fita.fechar()
 
         if self.gamepad is not None:
             self.gamepad.detach()

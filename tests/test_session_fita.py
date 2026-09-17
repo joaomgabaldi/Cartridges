@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""As fitas de LED: o que fica em disco e qual cor cada jogo recebe."""
+"""As fitas de LED: o que fica em disco, qual cor cada jogo recebe, e quem
+chama o ciclo — o arranque do app, a sessão e o fechamento."""
 
 import json
 import sys
@@ -463,3 +464,68 @@ def test_fechar_nao_espera_alem_do_prazo(falsas, monkeypatch, schema):
 
     assert gasto < 2
     assert schema.get_string("fita-estado-anterior")
+
+
+# region A fiação: quem chama o ciclo
+
+
+def test_a_janela_e_o_app_falam_com_o_mesmo_modulo_de_fita():
+    """A fiação só vale se for ESTE módulo que os dois lados chamam.
+
+    Sem isto, um `import` para o lugar errado passaria despercebido: os testes
+    abaixo trocariam funções de um módulo que a janela não usa, e continuariam
+    verdes enquanto o app não acendia fita nenhuma.
+    """
+    import cartridges.main as main_module  # noqa: PLC0415
+    import cartridges.window as window_module  # noqa: PLC0415
+
+    assert window_module.session_fita is session_fita
+    assert main_module.session_fita is session_fita
+
+
+def test_a_sessao_veste_e_despe_as_fitas(real_window, make_game, monkeypatch):
+    """O bloqueador da sessão é quem manda vestir a cor do jogo, e quem despe.
+
+    Pela janela de verdade, e não por um dublê: o que se prova aqui é que as
+    duas chamadas estão mesmo nos dois métodos, e que o jogo que chega ao
+    `comecar` é o da sessão que acabou de abrir.
+    """
+    import cartridges.window as window_module  # noqa: PLC0415
+
+    chamadas = []
+    monkeypatch.setattr(window_module.session_fita, "comecar", chamadas.append)
+    monkeypatch.setattr(
+        window_module.session_fita, "voltar", lambda: chamadas.append("voltar")
+    )
+
+    jogo = make_game(name="Hollow Knight")
+    real_window.show_session_blocker(jogo)
+    assert chamadas == [jogo]
+
+    real_window.hide_session_blocker()
+    assert chamadas == [jogo, "voltar"]
+
+
+def test_o_fechamento_do_app_devolve_as_fitas(monkeypatch):
+    """`do_shutdown` é a última janela em que ainda há processo para desfazer.
+
+    Sem janela, `save_window_geometry` volta na primeira linha e o resto do
+    método é todo `is not None` — sobra exatamente o caminho que interessa.
+    """
+    import cartridges.main as main_module  # noqa: PLC0415
+
+    chamadas = []
+    monkeypatch.setattr(
+        main_module.session_fita, "fechar", lambda: chamadas.append("fechar")
+    )
+    monkeypatch.setattr(shared, "win", None)
+    # `CartridgesApplication.__init__` troca `shared.store` por um novo. O
+    # monkeypatch de agora não muda nada agora; ele é o que devolve o antigo no
+    # fim do teste, para a loja nova não vazar para o teste seguinte.
+    monkeypatch.setattr(shared, "store", shared.store)
+
+    assert main_module.CartridgesApplication().do_shutdown() is None
+    assert chamadas == ["fechar"]
+
+
+# endregion
