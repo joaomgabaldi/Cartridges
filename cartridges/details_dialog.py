@@ -1048,10 +1048,23 @@ class DetailsDialog(Adw.Dialog):
         """
         if self.game:
             return session_fita.cor_do_jogo(self.game, self._fita_redefinir)
-        return session_fita.Cor(*session_fita.ROXO_DO_APP, session_fita.brilho_padrao())
+        return session_fita.roxo()
 
     def atualizar_fita(self) -> None:
         """Mostra a cor que vale hoje: a escolhida ou a que sai da capa."""
+        # Sem fita configurada não há cor para escolher, como a linha do papel
+        # de parede sem um segundo monitor. Sai antes de `cor_automatica`: tirar
+        # a dominante da capa custa milissegundos de thread de UI em toda
+        # abertura da tela, e aqui seriam gastos para uma fita que não existe.
+        if not session_fita.fitas():
+            self._fita_mostrada = None
+            self.fita_row.set_sensitive(False)
+            self.fita_row.set_subtitle(_("Nenhuma fita configurada"))
+            self.fita_brilho_row.set_sensitive(False)
+            self.fita_brilho_row.set_subtitle(_("Nenhuma fita configurada"))
+            self.fita_button_reset.set_visible(False)
+            return
+
         cor = self.cor_automatica()
         self._fita_mostrada = cor
         self.fita_color_button.set_rgba(session_fita.cor_para_rgba(cor))

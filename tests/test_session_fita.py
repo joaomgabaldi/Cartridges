@@ -24,6 +24,10 @@ def pastas(tmp_path, monkeypatch):
     """Tudo o que o módulo grava vai para uma pasta descartável."""
     monkeypatch.setattr(shared, "fitas_dir", tmp_path / "fitas")
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
+    # O carimbo da última varredura é estado de módulo, e sobreviveria ao
+    # teste: sem zerá-lo, o teste seguinte pularia a varredura pelo intervalo
+    # mínimo e passaria pelo motivo errado.
+    monkeypatch.setattr(session_fita, "_ultima_varredura", None)
     return tmp_path
 
 
@@ -181,6 +185,19 @@ def test_aplicar_liga_poe_modo_cor_e_manda_a_cor(falsas):
     ]
 
 
+def test_aplicar_sem_cor_manda_so_o_liga_desliga(falsas):
+    """Fita apagada às vezes não reporta a cor, e o estado sai com ela vazia.
+
+    Mandar ``24: ""`` faz o módulo recusar o comando inteiro — e aí a fita não
+    apaga, que é justamente o que a devolução do fechamento promete.
+    """
+    modulos = falsas(False)
+    fita = session_fita.fitas()[0]
+
+    assert session_fita.aplicar(fita, False, "") is True
+    assert modulos[fita.id].recebidos == [{"20": False}]
+
+
 def test_aplicar_em_fita_fora_do_ar_devolve_falso(falsas):
     falsas(True)
     assert session_fita.aplicar(session_fita.fitas()[0], True, "015403e80096") is False
@@ -282,6 +299,32 @@ def test_varredura_que_falha_deixa_o_arquivo_como_estava(monkeypatch):
     assert session_fita.fitas() == antes
 
 
+def test_varredura_respeita_o_intervalo_minimo(monkeypatch):
+    """Fita fora da tomada não pode custar doze segundos em toda troca de cor.
+
+    Duas falhas seguidas dentro do intervalo varrem uma vez só; passado o
+    intervalo, a varredura volta a valer — é o IP trocado pelo DHCP que ela
+    existe para consertar, e esse caso não pode ficar sem conserto.
+    """
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
+    chamadas = _tinytuya_que_varre(monkeypatch, {})
+    relogio = [1000.0]
+    monkeypatch.setattr(session_fita.time, "monotonic", lambda: relogio[0])
+
+    session_fita._redescobrir_ips()
+    session_fita._redescobrir_ips()
+    assert len(chamadas) == 1
+
+    relogio[0] += session_fita.INTERVALO_VARREDURA + 1
+    session_fita._redescobrir_ips()
+    assert len(chamadas) == 2
+
+    # O arranque força: a fita que o assistente acabou de gravar entra sem IP,
+    # e ali a varredura é a única maneira de achá-la.
+    session_fita._redescobrir_ips(forcar=True)
+    assert len(chamadas) == 3
+
+
 def test_fita_que_falha_dispara_uma_redescoberta_e_uma_segunda_tentativa(
     falsas, monkeypatch
 ):
@@ -358,15 +401,16 @@ def test_ninguem_respondendo_varre_e_le_o_estado_de_novo(falsas, monkeypatch, sc
     modulos = falsas(True, True)
     varreduras = []
 
-    def redescobrir():
-        varreduras.append("varreu")
+    def redescobrir(forcar=False):
+        varreduras.append(forcar)
         for modulo in modulos.values():
             modulo.quebrada = False
 
     monkeypatch.setattr(session_fita, "_redescobrir_ips", redescobrir)
     session_fita._guardar_e_vestir()
 
-    assert varreduras == ["varreu"]
+    # Forçada: o piso entre varreduras não pode calar a estreia do recurso.
+    assert varreduras == [True]
     guardado = json.loads(schema.get_string("fita-estado-anterior"))
     assert set(guardado) == {"eb0", "eb1"}
     assert guardado["eb0"] == {"ligada": False, "cor": "000003e800b4"}
@@ -409,7 +453,9 @@ def test_todas_fora_da_tomada_varrem_uma_vez_so(falsas, monkeypatch, schema):
     falsas(True, True)
     varreduras = []
     monkeypatch.setattr(
-        session_fita, "_redescobrir_ips", lambda: varreduras.append("varreu")
+        session_fita,
+        "_redescobrir_ips",
+        lambda forcar=False: varreduras.append("varreu"),
     )
 
     assert session_fita._guardar_e_vestir() is None
@@ -478,7 +524,7 @@ def test_arrancar_desfaz_o_orfao_antes_de_guardar_o_novo(falsas, schema):
 
     session_fita._arrancar()
 
-    roxo = session_fita.hsv_hex(session_fita._roxo())
+    roxo = session_fita.hsv_hex(session_fita.roxo())
     assert [r["24"] for r in modulos["eb0"].recebidos] == ["00b403e80064", roxo]
 
     guardado = json.loads(schema.get_string("fita-estado-anterior"))
@@ -878,10 +924,16 @@ def test_cor_vai_e_volta_entre_o_seletor_e_o_modulo():
 
 @pytest.fixture
 def tela(write_record, win):
-    """A tela de detalhes de um jogo que ainda não tem cor escolhida."""
+    """A tela de detalhes de um jogo que ainda não tem cor escolhida.
+
+    Com uma fita gravada: sem nenhuma, as duas linhas ficam insensíveis e a
+    tela não mostra cor nenhuma para escolher — ver
+    ``test_sem_fita_a_linha_fica_insensivel_e_nao_calcula_cor``.
+    """
     from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
     from cartridges.game import Game  # noqa: PLC0415
 
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
     write_record("jogo-fita", name="Jogo")
     jogo = Game(
         {
@@ -892,6 +944,52 @@ def tela(write_record, win):
         }
     )
     return DetailsDialog(jogo), jogo
+
+
+def test_sem_fita_a_linha_fica_insensivel_e_nao_calcula_cor(
+    write_record, app_dirs, win, monkeypatch
+):
+    """Sem fita configurada não há cor para escolher — nem para calcular.
+
+    Como a linha do papel de parede sem um segundo monitor. E de quebra: tirar
+    a dominante da capa custa milissegundos na thread de UI em toda abertura da
+    tela, e aqui seriam gastos por uma fita que não existe — por isso o espião
+    na cor da capa, e não só a checagem das duas linhas.
+    """
+    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+    from cartridges.game import Game  # noqa: PLC0415
+
+    write_record("jogo-sem-fita", name="Jogo")
+    # Com capa de verdade: sem ela, `cor_do_jogo` nem chegaria à dominante e o
+    # espião abaixo não provaria nada.
+    Image.new("RGB", (60, 90), (220, 20, 20)).save(
+        app_dirs.covers / "jogo-sem-fita.webp"
+    )
+    monkeypatch.setattr(
+        session_fita,
+        "dominante",
+        lambda *_a, **_k: pytest.fail("calculou a cor da capa sem fita configurada"),
+    )
+
+    jogo = Game(
+        {
+            "game_id": "jogo-sem-fita",
+            "name": "Jogo",
+            "source": "shortcuts",
+            "executable": r'start "" "C:\g\jogo.exe"',
+        }
+    )
+    dialog = DetailsDialog(jogo)
+
+    assert dialog.fita_row.get_sensitive() is False
+    assert dialog.fita_brilho_row.get_sensitive() is False
+    assert dialog.fita_row.get_subtitle() == "Nenhuma fita configurada"
+    assert dialog.fita_brilho_row.get_subtitle() == "Nenhuma fita configurada"
+    assert not dialog.fita_button_reset.get_visible()
+
+    # E o Aplicar não marca escolha nenhuma: não houve cor mostrada.
+    dialog.aplicar_fita(jogo)
+    assert session_fita.escolhida(jogo.game_id) is False
 
 
 def test_aplicar_sem_mexer_na_cor_nao_marca_escolha(tela):

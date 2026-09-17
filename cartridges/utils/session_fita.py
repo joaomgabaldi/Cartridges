@@ -286,8 +286,17 @@ def ler_estado(fita: Fita) -> Optional[dict[str, Any]]:
 
 
 def aplicar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
-    """Manda cor e estado para uma fita. Nunca levanta; devolve se deu certo."""
-    valores = {DP_LIGADA: ligada, DP_MODO: "colour", DP_COR: cor_hex}
+    """Manda cor e estado para uma fita. Nunca levanta; devolve se deu certo.
+
+    Sem cor, só o liga/desliga vai. A fita que estava apagada às vezes não
+    reporta o ponto da cor, e o estado guardado dela sai com a cor vazia;
+    mandar ``24: ""`` faz o módulo recusar o comando inteiro — e aí a fita não
+    apaga, que é justamente o que a devolução do fechamento promete.
+    """
+    valores: dict[str, Any] = {DP_LIGADA: ligada}
+    if cor_hex:
+        valores[DP_MODO] = "colour"
+        valores[DP_COR] = cor_hex
     try:
         resposta = _dispositivo(fita).set_multiple_values(valores)
     except Exception as erro:
@@ -306,6 +315,16 @@ def aplicar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
 # só depois de alguma fita ter falhado.
 ESPERA_VARREDURA = 12
 
+# Piso entre duas varreduras. Uma fita fora da tomada não responde a nenhuma
+# quantidade de tentativas, e sem este piso ela custaria doze segundos de
+# broadcast a cada jogo aberto e a cada jogo fechado, para sempre. Cinco minutos
+# é folgado para o caso que a varredura existe para resolver — o IP que o DHCP
+# trocou — e curto perto de uma sessão de jogo.
+INTERVALO_VARREDURA = 300
+
+# Quando a última varredura rodou, no relógio monotônico. ``None`` é "nunca".
+_ultima_varredura: Optional[float] = None
+
 
 def ips_da_varredura(achados: dict[str, Any]) -> dict[str, str]:
     """O que a varredura encontrou, como um mapa de id do módulo para IP."""
@@ -317,15 +336,36 @@ def ips_da_varredura(achados: dict[str, Any]) -> dict[str, str]:
     return mapa
 
 
-def _redescobrir_ips() -> None:
+def _redescobrir_ips(forcar: bool = False) -> None:
     """Conserta no arquivo os IPs que o DHCP trocou, casando pelo id.
 
     Sem enquete: ``poll=True`` iria perguntar o estado de cada aparelho achado —
     inclusive dos que não são nossos — e aqui só o endereço interessa.
+
+    Desiste cedo quando a última varredura foi há menos que o
+    ``INTERVALO_VARREDURA``. ``forcar`` é só do arranque: a fita que o
+    assistente acabou de gravar entra sem IP nenhum, de propósito, e ali a
+    varredura é a única maneira de achá-la — mesmo que outra tenha rodado há
+    pouco.
     """
-    import tinytuya  # noqa: PLC0415
+    global _ultima_varredura  # noqa: PLW0603
+
+    agora = time.monotonic()
+    if (
+        not forcar
+        and _ultima_varredura is not None
+        and agora - _ultima_varredura < INTERVALO_VARREDURA
+    ):
+        logging.info(
+            "Varredura das fitas pulada: a última foi há menos de %ss",
+            INTERVALO_VARREDURA,
+        )
+        return
+    _ultima_varredura = agora
 
     try:
+        import tinytuya  # noqa: PLC0415
+
         achados = tinytuya.deviceScan(False, ESPERA_VARREDURA, poll=False)
         mapa = ips_da_varredura(achados)
     except Exception as erro:  # a tinytuya levanta de tudo: socket, struct, json
@@ -391,8 +431,13 @@ def _vestir(cor: Cor, varrer: bool = True) -> None:
         aplicar(por_id.get(muda.id, muda), True, cor_hex)
 
 
-def _roxo() -> Cor:
-    """O roxo do app no brilho que o usuário escolheu."""
+def roxo() -> Cor:
+    """O roxo do app no brilho que o usuário escolheu.
+
+    Pública porque as Preferências e a tela de detalhes precisam da mesma cor:
+    enquanto ela era privada, as duas remontavam o ``Cor(*ROXO_DO_APP, …)`` à
+    mão e o roxo do app vivia escrito em três lugares.
+    """
     return Cor(ROXO_DO_APP[0], ROXO_DO_APP[1], brilho_padrao())
 
 
@@ -433,37 +478,68 @@ def _guardar_e_vestir() -> None:
         #
         # Só quando NINGUÉM respondeu: uma fita muda entre três é fita fora da
         # tomada, e a varredura custa caro demais para rodar por causa dela.
+        #
+        # Forçada: é o único caminho em que a varredura não é uma tentativa a
+        # mais, e sim a única maneira de saber o estado de antes. O piso entre
+        # varreduras não pode calar justamente a estreia do recurso.
         if not estado:
-            _redescobrir_ips()
+            _redescobrir_ips(forcar=True)
             varreu = True
             estado = _estado_de_todas()
         shared.schema.set_string(CHAVE_ESTADO, json.dumps(estado))
 
-    _vestir(_roxo(), varrer=not varreu)
+    _vestir(roxo(), varrer=not varreu)
+
+
+def _estados_guardados() -> dict[str, Any]:
+    """A chave lida como dicionário. Chave mexida à mão vira dicionário vazio."""
+    try:
+        estados = json.loads(shared.schema.get_string(CHAVE_ESTADO) or "{}")
+    except ValueError:
+        return {}
+    return estados if isinstance(estados, dict) else {}
+
+
+def _repor(fita: Fita, estado: Any) -> None:
+    """Devolve uma fita ao estado guardado dela.
+
+    Estado que não é dicionário é chave mexida à mão, e não pode virar
+    ``AttributeError`` cru aqui dentro.
+    """
+    if not isinstance(estado, dict):
+        return
+    aplicar(fita, bool(estado.get("ligada")), str(estado.get("cor", "")))
+
+
+def devolver_removidas(removidas: list[Fita]) -> None:
+    """Devolve ao estado guardado as fitas que saem da configuração.
+
+    Sem isto, a fita desmarcada no assistente some do arquivo e, com ela, a
+    única referência que o fechamento do app tinha para devolvê-la: ela ficaria
+    na cor do Cartridges para sempre. É rede — chamar de fora da thread de UI.
+    """
+    estados = _estados_guardados()
+    if not estados:
+        return
+
+    for fita in removidas:
+        estado = estados.pop(fita.id, None)
+        if estado is not None:
+            _repor(fita, estado)
+
+    shared.schema.set_string(CHAVE_ESTADO, json.dumps(estados) if estados else "")
 
 
 def _devolver() -> None:
     """Devolve cada fita ao estado guardado e limpa a chave."""
-    guardado = shared.schema.get_string(CHAVE_ESTADO)
-    if not guardado:
+    if not shared.schema.get_string(CHAVE_ESTADO):
         return
 
-    try:
-        estados = json.loads(guardado)
-    except ValueError:
-        estados = {}
-    if not isinstance(estados, dict):
-        estados = {}
-
     por_id = {fita.id: fita for fita in fitas()}
-    for identificador, estado in estados.items():
+    for identificador, estado in _estados_guardados().items():
         fita = por_id.get(identificador)
-        if fita is None:
-            continue
-        # Chave mexida à mão não pode virar AttributeError cru aqui dentro.
-        if not isinstance(estado, dict):
-            continue
-        aplicar(fita, bool(estado.get("ligada")), str(estado.get("cor", "")))
+        if fita is not None:
+            _repor(fita, estado)
 
     # Limpa mesmo quando alguma fita não respondeu: a chave diz "há uma troca
     # pendente", e insistir eternamente numa fita que saiu da tomada deixaria o
@@ -532,7 +608,7 @@ def voltar() -> None:
     """A sessão acabou: de volta ao roxo do app. Chamar da thread de UI."""
     if not ligada():
         return
-    _em_thread(lambda: _vestir(_roxo()))
+    _em_thread(lambda: _vestir(roxo()))
 
 
 def fechar() -> None:
