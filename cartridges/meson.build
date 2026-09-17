@@ -37,6 +37,7 @@ install_data(
     'logo_picker.py',
     'wallpaper_picker.py',
     'steam_picker.py',
+    'fita_wizard.py',
     'session_window.py',
     'session_history.py',
     'process_session.py',
