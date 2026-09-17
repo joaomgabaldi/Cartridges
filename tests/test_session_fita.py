@@ -466,6 +466,45 @@ def test_fechar_nao_espera_alem_do_prazo(falsas, monkeypatch, schema):
     assert schema.get_string("fita-estado-anterior")
 
 
+# region As Preferências
+
+
+def _preferencias(monkeypatch):
+    """A tela de Preferências de verdade, como em ``test_session_monitors``."""
+    import cartridges.preferences as preferences_module  # noqa: PLC0415
+    from cartridges.metadata_refresh import MetadataRefresh  # noqa: PLC0415
+
+    monkeypatch.setattr(preferences_module, "get_metadata_refresh", MetadataRefresh)
+    return preferences_module.CartridgesPreferences()
+
+
+def test_preferencias_bloqueiam_a_fita_sem_configuracao(monkeypatch, schema):
+    """Sem fita configurada não há o que ligar, e a tela diz isso."""
+    schema.set_boolean("session-fita", True)
+
+    preferencias = _preferencias(monkeypatch)
+
+    assert preferencias.session_fita_switch.get_sensitive() is False
+    assert preferencias.session_fita_switch.get_subtitle() == "Nenhuma fita configurada"
+    assert schema.get_boolean("session-fita") is False
+
+
+def test_preferencias_liberam_a_fita_e_contam_as_configuradas(monkeypatch, schema):
+    """Com fita gravada o interruptor responde, e o subtítulo diz quantas são."""
+    session_fita.gravar_fitas(
+        [
+            session_fita.Fita("Centro", "eb0", "192.168.0.150", "chave"),
+            session_fita.Fita("Direita", "eb1", "192.168.0.151", "chave"),
+        ]
+    )
+
+    preferencias = _preferencias(monkeypatch)
+
+    assert preferencias.session_fita_switch.get_sensitive() is True
+    assert preferencias.session_fita_switch.get_subtitle() == "2 fitas configuradas"
+
+
+# endregion
 # region A fiação: quem chama o ciclo
 
 
