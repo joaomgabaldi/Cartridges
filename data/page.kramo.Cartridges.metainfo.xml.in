@@ -46,6 +46,16 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.17" date="2026-09-17">
+      <description translate="no">
+        <ul>
+          <li>As fitas de LED atrás dos monitores agora acompanham o Cartridges: com o app aberto e fora do jogo elas ficam no roxo dele, durante a sessão vestem a cor do jogo, e ao fechar o app voltam ao que estavam antes de tudo — apagadas, se estavam apagadas. Se o app for fechado (ou morrer) no meio de uma sessão, a próxima vez que abrir desfaz a troca antes de acender no roxo</li>
+          <li>A cor de cada jogo sai da capa dele, e na tela do jogo dá para escolher outra cor e outro brilho no lugar dela, com um botão ao lado para voltar a tirar a cor da capa. O jogo que não escolheu brilho usa o brilho padrão das Preferências, baixo de propósito: a fita fica atrás do monitor, e luz forte ali lava o preto da tela</li>
+          <li>As fitas são configuradas em Preferências, na aba Personalização: um assistente pede as chaves da sua conta de desenvolvedor da Tuya, busca os dispositivos que há nela e deixa marcar quais são as fitas dos monitores. Um botão "Testar" acende todas de uma vez e diz quais responderam. Desligado, que é como vem, nada muda</li>
+          <li>Quando o roteador dá um endereço novo para uma fita, o app procura por ela na rede e conserta sozinho o endereço guardado — antes ela ficaria muda até o assistente ser aberto de novo. Fita fora da tomada também não atrapalha: as outras acendem normalmente, o app não trava nem mostra aviso nenhum durante o jogo</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.13" date="2026-09-13">
       <description translate="no">
         <ul>
