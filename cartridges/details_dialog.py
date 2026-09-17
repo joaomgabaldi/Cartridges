@@ -1094,6 +1094,13 @@ class DetailsDialog(Adw.Dialog):
         aqui marcaria esse jogo como "cor escolhida à mão" para sempre — ele
         nunca mais acompanharia a capa. Por isso a comparação antes de gravar.
         """
+        # Sem fita configurada a linha nem chega a ser preenchida, e o que está
+        # nos widgets é o padrão do .blp, não escolha de ninguém: gravar dali
+        # apagaria a cor que o jogo já tem em disco. A redefinição pedida passa,
+        # porque apagar é justamente o que ela quer.
+        if self._fita_mostrada is None and not self._fita_redefinir:
+            return
+
         na_tela = session_fita.rgba_para_cor(
             self.fita_color_button.get_rgba(), int(self.fita_brilho_row.get_value())
         )

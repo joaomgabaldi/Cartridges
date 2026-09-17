@@ -1077,4 +1077,35 @@ def test_cor_nova_depois_de_redefinir_vence_a_redefinicao(tela):
     assert abs(session_fita.cor_do_jogo(jogo).matiz - 120) <= 2
 
 
+def test_sem_fita_o_aplicar_nao_apaga_a_escolha_que_o_jogo_tinha(write_record, win):
+    """Tirar as fitas da configuração não pode custar a cor já escolhida.
+
+    Sem fita a linha fica insensível e nunca é preenchida, então o que está no
+    seletor é o padrão do .blp. Quem abre a tela só para renomear o jogo e
+    clica em Aplicar veria a escolha de disco trocada por esse lixo, em
+    silêncio.
+    """
+    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+    from cartridges.game import Game  # noqa: PLC0415
+
+    write_record("jogo-guardado", name="Jogo")
+    jogo = Game(
+        {
+            "game_id": "jogo-guardado",
+            "name": "Jogo",
+            "source": "shortcuts",
+            "executable": r'start "" "C:\g\jogo.exe"',
+        }
+    )
+    guardada = session_fita.Cor(340, 1000, 150)
+    session_fita.salvar_cor(jogo.game_id, jogo.name, guardada)
+
+    # Nenhuma fita configurada: `gravar_fitas` nunca foi chamado nesta pasta.
+    dialog = DetailsDialog(jogo)
+    dialog.aplicar_fita(jogo)
+
+    assert session_fita.escolhida(jogo.game_id) is True
+    assert session_fita.cor_do_jogo(jogo) == guardada
+
+
 # endregion
