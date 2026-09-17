@@ -300,6 +300,45 @@ def aplicar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
     return True
 
 
+# A varredura é broadcast: ela acha a fita mesmo com o IP do arquivo errado, ao
+# contrário da conexão, que fala com um endereço só. Doze segundos é o que basta
+# para todo mundo responder — o padrão da tinytuya é dezoito. Custa caro e roda
+# só depois de alguma fita ter falhado.
+ESPERA_VARREDURA = 12
+
+
+def ips_da_varredura(achados: dict[str, Any]) -> dict[str, str]:
+    """O que a varredura encontrou, como um mapa de id do módulo para IP."""
+    mapa = {}
+    for ip, dados in (achados or {}).items():
+        identificador = (dados or {}).get("gwId")
+        if identificador:
+            mapa[str(identificador)] = str(ip)
+    return mapa
+
+
+def _redescobrir_ips() -> None:
+    """Conserta no arquivo os IPs que o DHCP trocou, casando pelo id.
+
+    Sem enquete: ``poll=True`` iria perguntar o estado de cada aparelho achado —
+    inclusive dos que não são nossos — e aqui só o endereço interessa.
+    """
+    import tinytuya  # noqa: PLC0415
+
+    try:
+        achados = tinytuya.deviceScan(False, ESPERA_VARREDURA, poll=False)
+        mapa = ips_da_varredura(achados)
+    except Exception as erro:  # a tinytuya levanta de tudo: socket, struct, json
+        logging.warning("Varredura das fitas falhou: %s", erro)
+        return
+
+    atuais = fitas()
+    novas = [fita._replace(ip=mapa.get(fita.id, fita.ip)) for fita in atuais]
+    if novas != atuais:
+        logging.info("IP de fita mudou; arquivo atualizado")
+        gravar_fitas(novas)
+
+
 # endregion
 # region Ciclo de vida
 
@@ -331,10 +370,22 @@ def _em_thread(tarefa: Any) -> threading.Thread:
 
 
 def _vestir(cor: Cor) -> None:
-    """Acende todas as fitas na cor pedida. Síncrono; nunca levanta."""
+    """Acende todas as fitas na cor pedida. Síncrono; nunca levanta.
+
+    Quem não responde na primeira tentativa costuma ter trocado de IP: uma
+    varredura conserta o arquivo e a segunda tentativa usa o endereço novo. A
+    varredura roda no máximo uma vez por chamada — fita fora da tomada não
+    responde a nenhuma quantidade de tentativas.
+    """
     cor_hex = hsv_hex(cor)
-    for fita in fitas():
-        aplicar(fita, True, cor_hex)
+    mudas = [fita for fita in fitas() if not aplicar(fita, True, cor_hex)]
+    if not mudas:
+        return
+
+    _redescobrir_ips()
+    por_id = {fita.id: fita for fita in fitas()}
+    for muda in mudas:
+        aplicar(por_id.get(muda.id, muda), True, cor_hex)
 
 
 def _roxo() -> Cor:

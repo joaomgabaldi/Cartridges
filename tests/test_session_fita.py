@@ -220,6 +220,96 @@ def test_dispositivo_nao_insiste_com_fita_muda(monkeypatch):
     assert recebidos["espera"] == session_fita.ESPERA
 
 
+def test_varredura_vira_mapa_de_id_para_ip():
+    achados = {
+        "192.168.0.150": {"gwId": "eb0", "version": "3.3"},
+        "192.168.0.195": {"gwId": "eb1", "version": "3.3"},
+        "192.168.0.99": {"sem_id": True},
+    }
+    assert session_fita.ips_da_varredura(achados) == {
+        "eb0": "192.168.0.150",
+        "eb1": "192.168.0.195",
+    }
+
+
+def _tinytuya_que_varre(monkeypatch, resposta):
+    """Põe no lugar da ``tinytuya`` um módulo cujo ``deviceScan`` é anotado.
+
+    ``resposta`` é o que a varredura devolve, ou a exceção que ela levanta.
+    """
+    chamadas = []
+
+    def varrer(*args, **kwargs):
+        chamadas.append((args, kwargs))
+        if isinstance(resposta, Exception):
+            raise resposta
+        return resposta
+
+    falso = ModuleType("tinytuya")
+    falso.deviceScan = varrer
+    monkeypatch.setitem(sys.modules, "tinytuya", falso)
+    return chamadas
+
+
+def test_redescobrir_grava_o_ip_que_o_dhcp_trocou(monkeypatch):
+    """O casamento é pelo id do módulo: no arquivo, o que envelhece é o IP."""
+    antes = [
+        session_fita.Fita("Centro", "eb0", "192.168.0.150", "k"),
+        session_fita.Fita("Direita", "eb1", "192.168.0.151", "k2", "3.4"),
+    ]
+    session_fita.gravar_fitas(antes)
+    chamadas = _tinytuya_que_varre(monkeypatch, {"192.168.0.77": {"gwId": "eb0"}})
+
+    assert session_fita._redescobrir_ips() is None
+    assert session_fita.fitas() == [
+        antes[0]._replace(ip="192.168.0.77"),
+        antes[1],  # quem não apareceu na varredura fica exatamente como estava
+    ]
+
+    # Calada, curta e sem enquete: só os IPs interessam aqui.
+    args, opcoes = chamadas[0]
+    assert args[:2] == (False, session_fita.ESPERA_VARREDURA)
+    assert opcoes.get("poll") is False
+
+
+def test_varredura_que_falha_deixa_o_arquivo_como_estava(monkeypatch):
+    """Rede caída não pode apagar a configuração nem levantar na thread."""
+    antes = [session_fita.Fita("Centro", "eb0", "192.168.0.150", "k")]
+    session_fita.gravar_fitas(antes)
+    _tinytuya_que_varre(monkeypatch, OSError("rede sumiu"))
+
+    assert session_fita._redescobrir_ips() is None
+    assert session_fita.fitas() == antes
+
+
+def test_fita_que_falha_dispara_uma_redescoberta_e_uma_segunda_tentativa(
+    falsas, monkeypatch
+):
+    modulos = falsas(True)
+    tentativas = []
+
+    def redescobrir():
+        tentativas.append("varreu")
+        # A varredura "conserta" o módulo: ele passa a responder.
+        modulos["eb0"].quebrada = False
+
+    monkeypatch.setattr(session_fita, "_redescobrir_ips", redescobrir)
+    session_fita._vestir(session_fita.Cor(284, 620, 180))
+
+    assert tentativas == ["varreu"]
+    assert modulos["eb0"].recebidos  # a segunda tentativa chegou
+
+
+def test_tudo_respondendo_nao_varre_a_rede(falsas, monkeypatch):
+    falsas(False)
+    monkeypatch.setattr(
+        session_fita,
+        "_redescobrir_ips",
+        lambda: pytest.fail("varreu a rede sem precisar"),
+    )
+    session_fita._vestir(session_fita.Cor(284, 620, 180))
+
+
 def test_abrir_guarda_o_estado_e_veste_o_roxo(falsas, schema):
     schema.set_boolean("session-fita", True)
     modulos = falsas(False, False)
