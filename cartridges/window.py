@@ -46,7 +46,12 @@ from cartridges.utils.install_size import format_size
 from cartridges.utils.news_feed import NewsPost
 from cartridges.utils.open_uri import open_uri
 from cartridges.session_history import SessionHistoryDialog
-from cartridges.utils import session_log, session_wallpaper, window_geometry
+from cartridges.utils import (
+    session_fita,
+    session_log,
+    session_wallpaper,
+    window_geometry,
+)
 from cartridges.utils.relative_date import relative_date
 from cartridges.utils.spring_scroll import attach as attach_spring_scroll
 from cartridges.utils.steam import format_release_date, parse_release_date
@@ -504,6 +509,12 @@ class CartridgesWindow(Adw.ApplicationWindow):
         if shared.schema.get_boolean("session-wallpaper"):
             session_wallpaper.comecar(game)
 
+        # E as fitas de LED atrás dos monitores vestem a cor deste jogo. Sai
+        # daqui em thread própria, como a parede: é rede, e o jogo não espera.
+        # Sem `if` nenhum à volta, ao contrário da parede: `comecar` já volta
+        # sozinho quando o recurso está desligado ou não há fita configurada.
+        session_fita.comecar(game)
+
         # Hand the controller entirely to the game for the duration: stop
         # polling and release the XInput DLL until the session ends.
         from cartridges.gamepad import GamepadManager  # avoid import cycle
@@ -533,6 +544,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # com o `do_shutdown`, que chama a mesma devolução ao fechar o app no
         # meio da sessão.
         session_wallpaper.restaurar()
+
+        # De volta ao roxo do app, que é a cor de quando não há jogo correndo.
+        session_fita.voltar()
 
         # Session over: bring gamepad navigation back.
         from cartridges.gamepad import GamepadManager  # avoid import cycle
