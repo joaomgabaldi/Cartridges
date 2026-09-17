@@ -552,6 +552,67 @@ def test_abrir_a_tela_com_o_recurso_ligado_nao_arranca(monkeypatch, schema):
     assert chamadas == []
 
 
+def test_ligar_grava_a_chave_antes_de_arrancar(monkeypatch, schema):
+    """A chave tem de estar gravada quando o ``abrir`` roda, e não depois.
+
+    ``abrir`` decide pela chave, via ``ligada()``, e não pelo widget. Deixar
+    isso por conta do ``bind`` do GSettings amarraria o recurso à ordem em que
+    os handlers foram conectados: invertida, o ciclo não armaria, em silêncio.
+    O dublê lê a chave no momento da chamada, que é o instante que importa.
+    """
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
+    vista = []
+    monkeypatch.setattr(
+        session_fita, "abrir", lambda: vista.append(schema.get_boolean("session-fita"))
+    )
+
+    preferencias = _preferencias(monkeypatch)
+    preferencias.session_fita_switch.set_active(True)
+
+    assert vista == [True]
+
+
+def test_o_teste_nao_escreve_em_tela_ja_fechada(monkeypatch, schema):
+    """O resultado do "Testar" volta pelo ``idle_add``, e a tela pode ter ido.
+
+    Com o diálogo fechado no meio da conversa com as fitas, o que volta não tem
+    onde escrever — e o subtítulo fica no "Testando…" que o clique deixou.
+
+    A thread e o ``idle_add`` são capturados em vez de rodados, como no
+    ``test_abrir_nao_faz_rede_na_thread_de_ui``: o que se prova aqui é o que a
+    volta faz, e rodar o laço principal de verdade não acrescentaria nada.
+    """
+    import cartridges.preferences as preferences_module  # noqa: PLC0415
+
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
+    monkeypatch.setattr(session_fita, "aplicar", lambda *_args: True)
+    monkeypatch.setattr(
+        preferences_module,
+        "threading",
+        SimpleNamespace(Thread=lambda target, daemon: SimpleNamespace(start=target)),
+    )
+    agendadas = []
+    monkeypatch.setattr(
+        preferences_module.GLib,
+        "idle_add",
+        lambda funcao, *args: agendadas.append((funcao, args)),
+    )
+    preferencias = _preferencias(monkeypatch)
+
+    preferencias.testar_fitas()
+    assert preferencias.fita_testar_row.get_subtitle() == "Testando…"
+    volta, argumentos = agendadas.pop()
+    volta(*argumentos)
+    assert preferencias.fita_testar_row.get_subtitle() == "Todas responderam"
+
+    preferencias.testar_fitas()
+    monkeypatch.setattr(preferences_module.CartridgesPreferences, "is_open", False)
+    volta, argumentos = agendadas.pop()
+
+    assert volta(*argumentos) is False
+    assert preferencias.fita_testar_row.get_subtitle() == "Testando…"
+
+
 def test_fechar_o_assistente_com_fita_nova_arranca_o_ciclo(monkeypatch, schema):
     """Configurar a primeira fita com o recurso já ligado também arranca."""
     schema.set_boolean("session-fita", True)

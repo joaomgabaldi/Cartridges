@@ -467,6 +467,11 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         um jogo. Desligar não chama nada: o ciclo se desfaz no fechamento.
         """
         if row.get_active():
+            # Grava antes de chamar: `abrir()` decide pela chave, não pelo
+            # widget, e depender de o `bind` ter escrito primeiro amarraria o
+            # recurso à ordem em que os handlers foram conectados. Idempotente
+            # — é o mesmo `True` que o bind quer gravar.
+            shared.schema.set_boolean("session-fita", True)
             session_fita.abrir()
 
     def configurar_fitas(self, *_args: Any) -> None:
@@ -507,6 +512,10 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             GLib.idle_add(pronto, mudas)
 
         def pronto(mudas: list[str]) -> bool:
+            # O resultado volta pelo `idle_add`, e o diálogo pode ter fechado
+            # nesse meio-tempo: não há tela onde escrever.
+            if not self.__class__.is_open:
+                return False
             self.fita_testar_row.set_subtitle(
                 _("Sem resposta: {}").format(", ".join(mudas))
                 if mudas
