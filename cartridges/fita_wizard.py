@@ -92,8 +92,19 @@ class FitaWizard(Adw.Dialog):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._linhas: list[tuple[Adw.SwitchRow, Fita]] = []
+        # A busca corre numa thread e volta depois. Se o usuário fechou o
+        # assistente nesse meio-tempo, não há tela para pintar — é a mesma
+        # proteção que o sgdb_picker, o steam_picker e o logo_picker usam.
+        self._closed = False
+        # O aviso de busca vazia toma o lugar da explicação que vem da tela;
+        # guardada aqui para ser reposta quando a busca achar algo.
+        self._descricao_padrao = self.dispositivos_group.get_description()
         self.buscar_button.connect("clicked", self.buscar)
         self.salvar_button.connect("clicked", self.salvar)
+        self.connect("closed", self._on_closed)
+
+    def _on_closed(self, *_args: Any) -> None:
+        self._closed = True
 
     def buscar(self, *_args: Any) -> None:
         """Vai à nuvem numa thread; a Secret não sai desta chamada."""
@@ -121,6 +132,9 @@ class FitaWizard(Adw.Dialog):
         GLib.idle_add(self._mostrar, encontrados)
 
     def _mostrar(self, encontrados: list[Fita]) -> None:
+        if self._closed:
+            return
+
         for linha, _fita in self._linhas:
             self.dispositivos_group.remove(linha)
         self._linhas = []
@@ -130,7 +144,7 @@ class FitaWizard(Adw.Dialog):
                 _("Nada encontrado. Confira as credenciais e a região.")
             )
         else:
-            self.dispositivos_group.set_description(None)
+            self.dispositivos_group.set_description(self._descricao_padrao)
 
         ja_configuradas = {fita.id for fita in fitas()}
         for fita in encontrados:
