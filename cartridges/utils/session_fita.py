@@ -369,17 +369,20 @@ def _em_thread(tarefa: Any) -> threading.Thread:
     return linha
 
 
-def _vestir(cor: Cor) -> None:
+def _vestir(cor: Cor, varrer: bool = True) -> None:
     """Acende todas as fitas na cor pedida. Síncrono; nunca levanta.
 
     Quem não responde na primeira tentativa costuma ter trocado de IP: uma
     varredura conserta o arquivo e a segunda tentativa usa o endereço novo. A
     varredura roda no máximo uma vez por chamada — fita fora da tomada não
     responde a nenhuma quantidade de tentativas.
+
+    ``varrer=False`` é para quem já varreu nesta mesma rodada: duas varreduras
+    a poucos segundos uma da outra, na mesma rede, não acham mais que uma.
     """
     cor_hex = hsv_hex(cor)
     mudas = [fita for fita in fitas() if not aplicar(fita, True, cor_hex)]
-    if not mudas:
+    if not mudas or not varrer:
         return
 
     _redescobrir_ips()
@@ -393,15 +396,26 @@ def _roxo() -> Cor:
     return Cor(ROXO_DO_APP[0], ROXO_DO_APP[1], brilho_padrao())
 
 
-def _guardar_e_vestir() -> None:
-    """Guarda o estado de cada fita e acende todas no roxo do app.
+def _estado_de_todas() -> dict[str, dict[str, Any]]:
+    """O estado de cada fita configurada, por id.
 
-    O que não respondeu fica de fora do que foi guardado: devolver uma fita ao
-    estado que só foi chutado seria pior que não devolver nada.
+    Quem não respondeu fica de fora: devolver uma fita ao estado que só foi
+    chutado seria pior que não devolver nada.
     """
+    estado = {}
+    for fita in fitas():
+        lido = ler_estado(fita)
+        if lido is not None:
+            estado[fita.id] = lido
+    return estado
+
+
+def _guardar_e_vestir() -> None:
+    """Guarda o estado de cada fita e acende todas no roxo do app."""
     if not ligada():
         return
 
+    varreu = False
     # Grava só quando a chave está vazia. Chave preenchida quer dizer que uma
     # troca já está em curso, e o estado a devolver é o primeiro — não o roxo
     # que o próprio app acabou de pintar por cima. Vale de verdade porque o
@@ -409,14 +423,23 @@ def _guardar_e_vestir() -> None:
     # encaminhada para a viva; sem a guarda, as fitas ficariam roxas para
     # sempre.
     if not shared.schema.get_string(CHAVE_ESTADO):
-        estado = {}
-        for fita in fitas():
-            lido = ler_estado(fita)
-            if lido is not None:
-                estado[fita.id] = lido
+        estado = _estado_de_todas()
+        # Ninguém responder costuma ser endereço velho, e não fita apagada: a
+        # que o assistente acabou de gravar entra sem IP nenhum, de propósito,
+        # porque é a descoberta por broadcast que acha o endereço dela. Sem
+        # esta releitura o estado original se perderia justamente na estreia do
+        # recurso — o `_vestir` conserta o arquivo logo abaixo e acende a fita,
+        # mas aí já é tarde para saber como ela estava.
+        #
+        # Só quando NINGUÉM respondeu: uma fita muda entre três é fita fora da
+        # tomada, e a varredura custa caro demais para rodar por causa dela.
+        if not estado:
+            _redescobrir_ips()
+            varreu = True
+            estado = _estado_de_todas()
         shared.schema.set_string(CHAVE_ESTADO, json.dumps(estado))
 
-    _vestir(_roxo())
+    _vestir(_roxo(), varrer=not varreu)
 
 
 def _devolver() -> None:

@@ -346,6 +346,78 @@ def test_fita_fora_do_ar_nao_derruba_as_outras(falsas, schema):
     assert modulos["eb0"].recebidos
 
 
+def test_ninguem_respondendo_varre_e_le_o_estado_de_novo(falsas, monkeypatch, schema):
+    """A fita que o assistente acabou de gravar entra sem IP, de propósito.
+
+    Nesse primeiro arranque a leitura falha em todas, e sem a releitura o
+    estado original de cada fita se perderia justamente na estreia do recurso:
+    o ``_vestir`` conserta o endereço logo em seguida e acende tudo, mas aí já
+    é tarde para saber como elas estavam.
+    """
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(True, True)
+    varreduras = []
+
+    def redescobrir():
+        varreduras.append("varreu")
+        for modulo in modulos.values():
+            modulo.quebrada = False
+
+    monkeypatch.setattr(session_fita, "_redescobrir_ips", redescobrir)
+    session_fita._guardar_e_vestir()
+
+    assert varreduras == ["varreu"]
+    guardado = json.loads(schema.get_string("fita-estado-anterior"))
+    assert set(guardado) == {"eb0", "eb1"}
+    assert guardado["eb0"] == {"ligada": False, "cor": "000003e800b4"}
+
+
+def test_uma_fita_respondendo_ja_dispensa_a_varredura_na_leitura(
+    falsas, monkeypatch, schema
+):
+    """Varrer para ler é só para o caso de NINGUÉM responder.
+
+    Com uma fita muda entre duas, a varredura ainda acontece — mas lá no
+    ``_vestir``, com a chave já gravada. Se a leitura tivesse varrido, a
+    primeira varredura veria a chave ainda vazia, e é isso que se prende aqui.
+    """
+    schema.set_boolean("session-fita", True)
+    falsas(False, True)
+    chave_na_varredura = []
+    monkeypatch.setattr(
+        session_fita,
+        "_redescobrir_ips",
+        lambda: chave_na_varredura.append(schema.get_string("fita-estado-anterior")),
+    )
+
+    session_fita._guardar_e_vestir()
+
+    assert len(chave_na_varredura) == 1
+    assert json.loads(chave_na_varredura[0]) == {
+        "eb0": {"ligada": False, "cor": "000003e800b4"}
+    }
+
+
+def test_todas_fora_da_tomada_varrem_uma_vez_so(falsas, monkeypatch, schema):
+    """Varredura que não achou ninguém não é repetida no mesmo arranque.
+
+    Sem isto, o arranque com tudo fora da tomada varreria duas vezes: uma para
+    ler o estado e outra dentro do ``_vestir``, a poucos segundos da primeira e
+    na mesma rede.
+    """
+    schema.set_boolean("session-fita", True)
+    falsas(True, True)
+    varreduras = []
+    monkeypatch.setattr(
+        session_fita, "_redescobrir_ips", lambda: varreduras.append("varreu")
+    )
+
+    assert session_fita._guardar_e_vestir() is None
+
+    assert varreduras == ["varreu"]
+    assert json.loads(schema.get_string("fita-estado-anterior")) == {}
+
+
 def test_orfaos_desfazem_a_sessao_que_ficou(falsas, schema):
     schema.set_boolean("session-fita", True)
     modulos = falsas(False)
