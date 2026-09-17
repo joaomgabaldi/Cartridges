@@ -430,6 +430,12 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.fita_testar_button.connect("clicked", self.testar_fitas)
         self.atualizar_fitas()
 
+        # Ligado só agora, depois do `bind_switches` e do `atualizar_fitas`:
+        # os dois mexem no `active` do interruptor durante a construção da
+        # tela, e abrir as Preferências não pode acender fita nenhuma. Daqui
+        # em diante, quem mexe no interruptor é o usuário.
+        self.session_fita_switch.connect("notify::active", self.arrancar_fitas)
+
     def atualizar_fitas(self) -> None:
         """Sem fita configurada não há o que ligar; o assistente segue à mão."""
         configuradas = session_fita.fitas()
@@ -447,12 +453,39 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         shared.schema.set_boolean("session-fita", False)
         self.session_fita_switch.set_subtitle(_("Nenhuma fita configurada"))
 
+    def arrancar_fitas(self, row: Adw.SwitchRow, *_args: Any) -> None:
+        """Ligar o recurso com o app aberto arranca o ciclo na hora.
+
+        Sem isto o ciclo só arrancaria no arranque seguinte do app: quem liga
+        agora fica com o recurso ligado e a chave `fita-estado-anterior`
+        vazia, então a sessão seguinte veste a cor do jogo e o fechamento não
+        tem o que devolver — o estado de antes nunca chegou a ser guardado.
+
+        `abrir` é seguro de chamar assim: guarda o estado só quando a chave
+        está vazia, corre em thread própria e com trava, e acende no roxo do
+        app — que é onde as fitas devem estar com o Cartridges aberto fora de
+        um jogo. Desligar não chama nada: o ciclo se desfaz no fechamento.
+        """
+        if row.get_active():
+            session_fita.abrir()
+
     def configurar_fitas(self, *_args: Any) -> None:
         from cartridges.fita_wizard import FitaWizard  # noqa: PLC0415
 
         assistente = FitaWizard()
-        assistente.connect("closed", lambda *_: self.atualizar_fitas())
+        assistente.connect("closed", lambda *_: self.fitas_configuradas())
         assistente.present(self)
+
+    def fitas_configuradas(self) -> None:
+        """O assistente fechou: refaz a tela e arranca, se houver o que arrancar.
+
+        Mesma razão do interruptor: quem tinha o recurso ligado e acabou de
+        configurar a primeira fita nunca teve o estado de antes guardado, e
+        sem este arranque o fechamento do app não teria o que devolver.
+        """
+        self.atualizar_fitas()
+        if session_fita.ligada():
+            session_fita.abrir()
 
     def testar_fitas(self, *_args: Any) -> None:
         """Acende cada fita no roxo do app e diz o que respondeu.
