@@ -21,6 +21,7 @@
 
 import json
 import logging
+import threading
 from pathlib import Path
 from shutil import rmtree
 from typing import Any, Callable, Optional
@@ -32,7 +33,7 @@ from cartridges.errors.friendly_error import FriendlyError
 from cartridges.game import STATUS_LABELS, Game
 from cartridges.metadata_refresh import get_metadata_refresh
 from cartridges.store.managers.sgdb_manager import SgdbManager
-from cartridges.utils import window_geometry
+from cartridges.utils import session_fita, window_geometry
 from cartridges.utils.create_dialog import create_dialog
 
 # O que o backup carrega, e a razão de ser dele: é tudo que veio de você e de
@@ -118,6 +119,11 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     session_wallpaper_switch: Adw.SwitchRow = Gtk.Template.Child()
     wallhaven_key_entry_row: Adw.EntryRow = Gtk.Template.Child()
     session_identify_button_row = Gtk.Template.Child()
+    session_fita_switch: Adw.SwitchRow = Gtk.Template.Child()
+    fita_brilho_row: Adw.SpinRow = Gtk.Template.Child()
+    fita_configurar_button: Gtk.Button = Gtk.Template.Child()
+    fita_testar_row: Adw.ActionRow = Gtk.Template.Child()
+    fita_testar_button: Gtk.Button = Gtk.Template.Child()
 
     auto_import_switch: Adw.SwitchRow = Gtk.Template.Child()
     remove_missing_switch: Adw.SwitchRow = Gtk.Template.Child()
@@ -256,6 +262,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 "playtime-tracking",
                 "session-move-window",
                 "session-wallpaper",
+                "session-fita",
                 "gamepad",
                 "gamepad-rumble",
                 "auto-import",
@@ -312,6 +319,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             shared.schema.get_string("wallhaven-key")
         )
         self.wallhaven_key_entry_row.connect("changed", wallhaven_key_changed)
+
+        self.setup_fita_rows()
 
         # Grace period for process tracking. The row's value is a double while
         # the setting is an int, so map it by hand rather than using bind().
@@ -403,6 +412,79 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             shared.schema.set_string(
                 "session-monitor", self.session_monitors[selected].device
             )
+
+    # region Fitas de LED
+
+    def setup_fita_rows(self) -> None:
+        """Liga as linhas das fitas: brilho, assistente e teste."""
+        # À mão, e não por `bind`, pela mesma razão do tempo de espera do
+        # processo: o valor da linha é um double e a chave é um int.
+        self.fita_brilho_row.set_value(shared.schema.get_int("fita-brilho-padrao"))
+        self.fita_brilho_row.connect(
+            "notify::value",
+            lambda row, *_: shared.schema.set_int(
+                "fita-brilho-padrao", int(row.get_value())
+            ),
+        )
+        self.fita_configurar_button.connect("clicked", self.configurar_fitas)
+        self.fita_testar_button.connect("clicked", self.testar_fitas)
+        self.atualizar_fitas()
+
+    def atualizar_fitas(self) -> None:
+        """Sem fita configurada não há o que ligar; o assistente segue à mão."""
+        configuradas = session_fita.fitas()
+        self.session_fita_switch.set_sensitive(bool(configuradas))
+        if configuradas:
+            self.session_fita_switch.set_subtitle(
+                ngettext(
+                    "{} fita configurada", "{} fitas configuradas", len(configuradas)
+                ).format(len(configuradas))
+            )
+            return
+
+        # Desligada, e não só apagada, como nas opções que precisam de um
+        # segundo monitor: quando houver fita, quem religa é o usuário.
+        shared.schema.set_boolean("session-fita", False)
+        self.session_fita_switch.set_subtitle(_("Nenhuma fita configurada"))
+
+    def configurar_fitas(self, *_args: Any) -> None:
+        from cartridges.fita_wizard import FitaWizard  # noqa: PLC0415
+
+        assistente = FitaWizard()
+        assistente.connect("closed", lambda *_: self.atualizar_fitas())
+        assistente.present(self)
+
+    def testar_fitas(self, *_args: Any) -> None:
+        """Acende cada fita no roxo do app e diz o que respondeu.
+
+        É o único lugar onde uma fita fora do ar aparece na tela: aqui o
+        usuário pediu para saber. A conversa é rede, então vai para uma thread
+        e volta para a tela pelo `idle_add`.
+        """
+
+        def tarefa() -> None:
+            cor = session_fita.hsv_hex(
+                session_fita.Cor(*session_fita.ROXO_DO_APP, session_fita.brilho_padrao())
+            )
+            mudas = [
+                fita.nome
+                for fita in session_fita.fitas()
+                if not session_fita.aplicar(fita, True, cor)
+            ]
+            GLib.idle_add(pronto, mudas)
+
+        def pronto(mudas: list[str]) -> bool:
+            self.fita_testar_row.set_subtitle(
+                _("Sem resposta: {}").format(", ".join(mudas))
+                if mudas
+                else _("Todas responderam")
+            )
+            return False
+
+        self.fita_testar_row.set_subtitle(_("Testando…"))
+        threading.Thread(target=tarefa, daemon=True).start()
+
+    # endregion
 
     def set_is_open(self, is_open: bool) -> None:
         self.__class__.is_open = is_open

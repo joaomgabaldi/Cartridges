@@ -132,6 +132,66 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         sensitive: bind session_wallpaper_switch.active;
       }
     }
+
+    // "Configurar fitas" fica sempre clicavel, como o "Identificar monitores":
+    // sem passar pelo assistente nao ha fita nenhuma, e o interruptor acima
+    // nasce bloqueado. O subtitulo dele e escrito em `atualizar_fitas`.
+    Adw.PreferencesGroup session_fita_group {
+      title: _("Fitas de LED");
+      description: _("Muda a cor das fitas de LED enquanto o Cartridges está aberto: o roxo do app fora do jogo, a cor do jogo durante a sessão, e o estado de antes quando o app fecha.");
+
+      Adw.SwitchRow session_fita_switch {
+        title: _("Mudar a cor das fitas");
+      }
+
+      Adw.SpinRow fita_brilho_row {
+        title: _("Brilho padrão");
+        subtitle: _("Usado pelos jogos que não escolheram o seu");
+        sensitive: bind session_fita_switch.active;
+
+        adjustment: Adjustment {
+          lower: 10;
+          upper: 1000;
+          step-increment: 10;
+          page-increment: 100;
+        };
+      }
+
+      Adw.ActionRow fita_configurar_row {
+        title: _("Configurar fitas");
+        subtitle: _("Busca as fitas na sua conta Tuya");
+        activatable-widget: fita_configurar_button;
+
+        [suffix]
+        Button fita_configurar_button {
+          valign: center;
+          icon-name: "applications-engineering-symbolic";
+          tooltip-text: _("Abrir o assistente");
+
+          styles [
+            "flat"
+          ]
+        }
+      }
+
+      Adw.ActionRow fita_testar_row {
+        title: _("Testar");
+        subtitle: _("Acende cada fita no roxo do app");
+        sensitive: bind session_fita_switch.active;
+        activatable-widget: fita_testar_button;
+
+        [suffix]
+        Button fita_testar_button {
+          valign: center;
+          icon-name: "media-playback-start-symbolic";
+          tooltip-text: _("Acender as fitas agora");
+
+          styles [
+            "flat"
+          ]
+        }
+      }
+    }
   }
 
   Adw.PreferencesPage import_page {
