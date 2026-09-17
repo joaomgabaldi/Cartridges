@@ -24,7 +24,7 @@ não está no app Smart Life — ela sai da conta de desenvolvedor da Tuya, pela
 nuvem. Este assistente faz essa viagem uma vez: pede as credenciais da conta,
 lista os dispositivos e grava a chave dos que o usuário apontar como fitas.
 
-A API Secret não é gravada. Ela vive nesta janela e morre com ela: depois da
+O Access Secret não é gravado. Ela vive nesta janela e morre com ela: depois da
 busca, o que serve para acender uma fita é a chave local, e é só ela que fica.
 """
 
