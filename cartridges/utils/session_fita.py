@@ -171,9 +171,15 @@ def brilho_padrao() -> int:
     return shared.schema.get_int("fita-brilho-padrao")
 
 
-def cor_do_jogo(game: "Game") -> Cor:
-    """A cor que este jogo veste: a escolhida, a da capa, ou o roxo do app."""
-    dados = _ler_sidecar(game.game_id)
+def cor_do_jogo(game: "Game", ignorar_escolha: bool = False) -> Cor:
+    """A cor que este jogo veste: a escolhida, a da capa, ou o roxo do app.
+
+    ``ignorar_escolha`` pula o sidecar e devolve o automático mesmo havendo
+    escolha gravada. É o que a tela de detalhes precisa mostrar depois do clique
+    em "voltar ao automático": ali a escolha ainda está em disco, e só o Aplicar
+    a apaga.
+    """
+    dados = None if ignorar_escolha else _ler_sidecar(game.game_id)
     if dados and dados.get("locked"):
         return Cor(
             int(dados.get("matiz", ROXO_DO_APP[0])),

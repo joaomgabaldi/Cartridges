@@ -70,10 +70,13 @@ from cartridges.utils.steam import (
 )
 
 
-# Folga do arredondamento da ida e volta pela caixa de cores, que fala RGB: a
-# mesma cor volta de lá com um ou dois graus de matiz a menos. Sem a folga, a
-# comparação de `aplicar_fita` nunca daria igual e todo jogo que passasse pela
-# tela sairia dela com cor "escolhida à mão".
+# Folga do arredondamento da caixa de cores, que fala RGB: a cor escolhida ali
+# passa pelo campo hexadecimal, de 8 bits por canal, e volta com um ou dois
+# graus de matiz a menos. Sem a folga, `aplicar_fita` leria isso como escolha
+# de gente e marcaria a cor como "escolhida à mão" sem que ninguém a tivesse
+# trocado. Medido: `set_rgba` seguido de `get_rgba`, sem a caixa no meio,
+# devolve matiz e saturação idênticos — um teste que só faça essa ida e volta
+# não reproduz a deriva, e não é motivo para tirar a folga daqui.
 FOLGA_MATIZ = 2
 FOLGA_SATURACAO = 10
 
@@ -193,6 +196,11 @@ class DetailsDialog(Adw.Dialog):
     # A cor da fita como a linha a mostrou por último. É contra ela que o
     # Aplicar decide se houve escolha de gente — ver `aplicar_fita`.
     _fita_mostrada: Optional[session_fita.Cor] = None
+
+    # "Voltar a tirar a cor da capa" foi pedido, mas ainda não aconteceu: como
+    # toda escolha desta tela, ela fica em memória até o Aplicar, e fechar no X
+    # a desfaz.
+    _fita_redefinir: bool = False
 
     def __init__(self, game: Optional[Game] = None, **kwargs: Any):
         super().__init__(**kwargs)
@@ -1028,14 +1036,18 @@ class DetailsDialog(Adw.Dialog):
     # region Fita de LED
 
     def cor_automatica(self) -> session_fita.Cor:
-        """A cor que vale para este jogo hoje.
+        """A cor que a linha deve mostrar agora.
+
+        Com a redefinição pedida, é o automático mesmo havendo escolha em
+        disco: a escolha só será apagada no Aplicar, mas a tela já tem de
+        mostrar o que o Aplicar vai deixar valendo.
 
         Jogo novo ainda não existe em disco nem tem capa de onde tirar cor: o
         que sobra é o roxo do app, que é o mesmo que ele receberia depois de
         criado e sem capa.
         """
         if self.game:
-            return session_fita.cor_do_jogo(self.game)
+            return session_fita.cor_do_jogo(self.game, self._fita_redefinir)
         return session_fita.Cor(*session_fita.ROXO_DO_APP, session_fita.brilho_padrao())
 
     def atualizar_fita(self) -> None:
@@ -1045,16 +1057,21 @@ class DetailsDialog(Adw.Dialog):
         self.fita_color_button.set_rgba(session_fita.cor_para_rgba(cor))
         self.fita_brilho_row.set_value(cor.brilho)
 
-        manual = bool(self.game) and session_fita.escolhida(self.game.game_id)
+        manual = (
+            bool(self.game)
+            and not self._fita_redefinir
+            and session_fita.escolhida(self.game.game_id)
+        )
         self.fita_button_reset.set_visible(manual)
         self.fita_row.set_subtitle(
             _("Escolhida por você") if manual else _("Tirada da capa")
         )
 
     def redefinir_fita(self, *_args: Any) -> None:
+        """Marca a intenção de voltar ao automático. Quem apaga é o Aplicar."""
         if not self.game:
             return
-        session_fita.redefinir(self.game.game_id)
+        self._fita_redefinir = True
         self.atualizar_fita()
 
     def aplicar_fita(self, game: Game) -> None:
@@ -1062,8 +1079,7 @@ class DetailsDialog(Adw.Dialog):
 
         Quem abriu a tela para renomear um jogo não pediu cor nenhuma, e gravar
         aqui marcaria esse jogo como "cor escolhida à mão" para sempre — ele
-        nunca mais acompanharia a capa. Por isso a comparação com o automático
-        antes de gravar. Regravar a escolha que já estava lá é inofensivo.
+        nunca mais acompanharia a capa. Por isso a comparação antes de gravar.
         """
         na_tela = session_fita.rgba_para_cor(
             self.fita_color_button.get_rgba(), int(self.fita_brilho_row.get_value())
@@ -1072,14 +1088,20 @@ class DetailsDialog(Adw.Dialog):
         # jogo novo ganha a capa neste mesmo Aplicar, e o automático mudaria
         # debaixo da comparação sem que ninguém tivesse mexido na cor.
         mostrada = self._fita_mostrada
-        if (
-            mostrada is not None
-            and _mesma_cor(na_tela, mostrada)
-            and not session_fita.escolhida(game.game_id)
-        ):
-            return
+        escolha_nova = mostrada is not None and not _mesma_cor(na_tela, mostrada)
 
-        session_fita.salvar_cor(game.game_id, game.name, na_tela)
+        if escolha_nova:
+            # Uma cor escolhida depois do clique em "voltar ao automático"
+            # cancela a redefinição: vale o que está na tela.
+            session_fita.salvar_cor(game.game_id, game.name, na_tela)
+        elif self._fita_redefinir:
+            session_fita.redefinir(game.game_id)
+        elif session_fita.escolhida(game.game_id):
+            # Nada mudou, mas a escolha é regravada: como a do papel de parede,
+            # ela guarda o nome do jogo, e o que vale é o nome deste Aplicar.
+            session_fita.salvar_cor(game.game_id, game.name, na_tela)
+
+        self._fita_redefinir = False
 
     # endregion
 

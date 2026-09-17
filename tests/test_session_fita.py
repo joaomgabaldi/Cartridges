@@ -757,17 +757,64 @@ def test_cor_trocada_na_tela_vira_escolha(tela):
     assert abs(session_fita.cor_do_jogo(jogo).matiz - 120) <= 2
 
 
-def test_o_botao_de_voltar_ao_automatico_apaga_a_escolha(tela):
+def _com_escolha(dialog, jogo, cor=session_fita.Cor(340, 1000, 150)):
+    """Deixa o jogo com cor escolhida e a tela mostrando essa escolha."""
+    session_fita.salvar_cor(jogo.game_id, jogo.name, cor)
+    dialog.atualizar_fita()
+    return cor
+
+
+def test_a_linha_mostra_a_escolha_e_o_botao_de_voltar(tela):
     """De quebra, o único teste que constrói a linha inteira do .blp."""
     dialog, jogo = tela
-    session_fita.salvar_cor(jogo.game_id, jogo.name, session_fita.Cor(340, 1000, 150))
+    assert not dialog.fita_button_reset.get_visible()
 
-    dialog.atualizar_fita()
+    _com_escolha(dialog, jogo)
+
     assert dialog.fita_button_reset.get_visible()
+    assert dialog.fita_row.get_subtitle() == "Escolhida por você"
+
+
+def test_redefinir_sem_aplicar_nao_apaga_a_escolha(tela):
+    """Como o resto da tela: a intenção fica em memória até o Aplicar.
+
+    Quem clica em "voltar ao automático" e fecha a tela no X não pediu para
+    perder a cor que tinha escolhido.
+    """
+    dialog, jogo = tela
+    _com_escolha(dialog, jogo)
 
     dialog.redefinir_fita()
-    assert not session_fita.escolhida(jogo.game_id)
+
+    assert session_fita.escolhida(jogo.game_id)
+    # A tela já mostra o automático, e o botão saiu junto com a escolha.
     assert not dialog.fita_button_reset.get_visible()
+    assert dialog.fita_row.get_subtitle() == "Tirada da capa"
+
+
+def test_redefinir_e_aplicar_apaga_a_escolha(tela):
+    dialog, jogo = tela
+    _com_escolha(dialog, jogo)
+
+    dialog.redefinir_fita()
+    dialog.aplicar_fita(jogo)
+
+    assert not session_fita.escolhida(jogo.game_id)
+
+
+def test_cor_nova_depois_de_redefinir_vence_a_redefinicao(tela):
+    """O que vale é o que está na tela na hora do Aplicar."""
+    dialog, jogo = tela
+    _com_escolha(dialog, jogo)
+
+    dialog.redefinir_fita()
+    dialog.fita_color_button.set_rgba(
+        session_fita.cor_para_rgba(session_fita.Cor(120, 900, 0))
+    )
+    dialog.aplicar_fita(jogo)
+
+    assert session_fita.escolhida(jogo.game_id)
+    assert abs(session_fita.cor_do_jogo(jogo).matiz - 120) <= 2
 
 
 # endregion
