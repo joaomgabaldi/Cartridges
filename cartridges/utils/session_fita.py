@@ -31,6 +31,7 @@ A conversa é local. A nuvem da Tuya entra uma única vez, no assistente, para
 buscar a chave de cada módulo; daí em diante é o PC falando direto com a fita.
 """
 
+import colorsys
 import json
 import logging
 import threading
@@ -184,6 +185,24 @@ def cor_do_jogo(game: "Game") -> Cor:
     da_capa = dominante(capa) if capa else None
     matiz, saturacao = da_capa if da_capa else ROXO_DO_APP
     return Cor(matiz, saturacao, brilho_padrao())
+
+
+def cor_para_rgba(cor: Cor) -> Any:
+    """A cor do módulo como o GTK mostra num seletor.
+
+    O seletor mostra a cor cheia, não a cor no brilho da fita: um roxo a 18%
+    aparece quase preto no quadradinho, e ninguém escolhe cor assim.
+    """
+    from gi.repository import Gdk  # noqa: PLC0415
+
+    vermelho, verde, azul = colorsys.hsv_to_rgb(cor.matiz / 360, cor.saturacao / 1000, 1)
+    return Gdk.RGBA(red=vermelho, green=verde, blue=azul, alpha=1.0)
+
+
+def rgba_para_cor(rgba: Any, brilho: int) -> Cor:
+    """O caminho de volta, descartando o brilho que o seletor mostrou."""
+    matiz, saturacao, _valor = colorsys.rgb_to_hsv(rgba.red, rgba.green, rgba.blue)
+    return Cor(round(matiz * 360) % 360, round(saturacao * 1000), brilho)
 
 
 # endregion

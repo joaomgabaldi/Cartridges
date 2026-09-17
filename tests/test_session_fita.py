@@ -696,3 +696,78 @@ def test_o_fechamento_do_app_devolve_as_fitas(monkeypatch):
 
 
 # endregion
+
+# region A cor na tela do jogo
+
+
+def test_cor_vai_e_volta_entre_o_seletor_e_o_modulo():
+    from gi.repository import Gdk  # noqa: PLC0415
+
+    original = session_fita.Cor(340, 1000, 150)
+    rgba = session_fita.cor_para_rgba(original)
+    assert isinstance(rgba, Gdk.RGBA)
+
+    volta = session_fita.rgba_para_cor(rgba, 150)
+    # Matiz e saturação sobrevivem à ida e à volta, com folga de arredondamento.
+    assert abs(volta.matiz - original.matiz) <= 2
+    assert abs(volta.saturacao - original.saturacao) <= 10
+    assert volta.brilho == 150
+
+
+@pytest.fixture
+def tela(write_record, win):
+    """A tela de detalhes de um jogo que ainda não tem cor escolhida."""
+    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+    from cartridges.game import Game  # noqa: PLC0415
+
+    write_record("jogo-fita", name="Jogo")
+    jogo = Game(
+        {
+            "game_id": "jogo-fita",
+            "name": "Jogo",
+            "source": "shortcuts",
+            "executable": r'start "" "C:\g\jogo.exe"',
+        }
+    )
+    return DetailsDialog(jogo), jogo
+
+
+def test_aplicar_sem_mexer_na_cor_nao_marca_escolha(tela):
+    """Quem abriu a tela para renomear o jogo não pediu cor nenhuma.
+
+    Gravar aqui tiraria o jogo da cor automática para sempre, e sem que
+    ninguém tivesse escolhido cor alguma.
+    """
+    dialog, jogo = tela
+
+    dialog.aplicar_fita(jogo)
+
+    assert session_fita.escolhida(jogo.game_id) is False
+
+
+def test_cor_trocada_na_tela_vira_escolha(tela):
+    dialog, jogo = tela
+
+    dialog.fita_color_button.set_rgba(
+        session_fita.cor_para_rgba(session_fita.Cor(120, 900, 0))
+    )
+    dialog.aplicar_fita(jogo)
+
+    assert session_fita.escolhida(jogo.game_id)
+    assert abs(session_fita.cor_do_jogo(jogo).matiz - 120) <= 2
+
+
+def test_o_botao_de_voltar_ao_automatico_apaga_a_escolha(tela):
+    """De quebra, o único teste que constrói a linha inteira do .blp."""
+    dialog, jogo = tela
+    session_fita.salvar_cor(jogo.game_id, jogo.name, session_fita.Cor(340, 1000, 150))
+
+    dialog.atualizar_fita()
+    assert dialog.fita_button_reset.get_visible()
+
+    dialog.redefinir_fita()
+    assert not session_fita.escolhida(jogo.game_id)
+    assert not dialog.fita_button_reset.get_visible()
+
+
+# endregion
