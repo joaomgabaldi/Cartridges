@@ -225,12 +225,13 @@ template $DetailsDialog: Adw.Dialog {
         }
 
         Adw.SpinRow fita_brilho_row {
-          title: _("Brilho da fita neste jogo");
+          title: _("Brilho da fita neste jogo (%)");
 
           adjustment: Adjustment {
-            lower: 10;
-            upper: 1000;
-            step-increment: 10;
+            lower: 1;
+            upper: 100;
+            step-increment: 1;
+            page-increment: 10;
           };
         }
       }

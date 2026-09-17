@@ -202,6 +202,9 @@ class DetailsDialog(Adw.Dialog):
     # a desfaz.
     _fita_redefinir: bool = False
 
+    # Se a prévia ao vivo chegou a pintar alguma fita nesta abertura da tela.
+    _fita_previa_usada: bool = False
+
     def __init__(self, game: Optional[Game] = None, **kwargs: Any):
         super().__init__(**kwargs)
 
@@ -342,6 +345,14 @@ class DetailsDialog(Adw.Dialog):
         self.wallpaper_button_file.connect("clicked", self.choose_wallpaper_file)
         self.wallpaper_button_reset.connect("clicked", self.reset_wallpaper_choice)
         self.fita_button_reset.connect("clicked", self.redefinir_fita)
+        # Cor e brilho aparecem na parede enquanto se mexe neles: escolher cor
+        # de fita olhando só para o quadradinho da tela não diz nada sobre como
+        # ela fica atrás do monitor.
+        self.fita_color_button.connect("notify::rgba", self.previa_da_fita)
+        self.fita_brilho_row.connect("notify::value", self.previa_da_fita)
+        # Fechar sem aplicar desfaz a prévia: o que vale fora desta tela é o
+        # roxo do app.
+        self.connect("closed", lambda *_: self.encerrar_previa())
         self.steam_fetch_button.connect("clicked", self.fetch_metadata)
         self.file_chooser_button.connect("clicked", self.choose_executable)
         self.open_folder_button.connect("clicked", self.open_game_folder)
@@ -1068,7 +1079,7 @@ class DetailsDialog(Adw.Dialog):
         cor = self.cor_automatica()
         self._fita_mostrada = cor
         self.fita_color_button.set_rgba(session_fita.cor_para_rgba(cor))
-        self.fita_brilho_row.set_value(cor.brilho)
+        self.fita_brilho_row.set_value(session_fita.por_cento(cor.brilho))
 
         manual = (
             bool(self.game)
@@ -1079,6 +1090,28 @@ class DetailsDialog(Adw.Dialog):
         self.fita_row.set_subtitle(
             _("Escolhida por você") if manual else _("Tirada da capa")
         )
+
+    def previa_da_fita(self, *_args: Any) -> None:
+        """Mostra nas fitas a cor e o brilho que estão na tela agora."""
+        if self._fita_mostrada is None:
+            return
+        self._fita_previa_usada = True
+        session_fita.previa(
+            session_fita.rgba_para_cor(
+                self.fita_color_button.get_rgba(),
+                session_fita.de_por_cento(self.fita_brilho_row.get_value()),
+            )
+        )
+
+    def encerrar_previa(self) -> None:
+        """Devolve as fitas ao roxo do app depois de a tela sumir.
+
+        Só quando houve prévia: sem isso, abrir e fechar a tela de um jogo
+        qualquer repintaria as fitas à toa.
+        """
+        if self._fita_previa_usada:
+            self._fita_previa_usada = False
+            session_fita.previa(session_fita.roxo())
 
     def redefinir_fita(self, *_args: Any) -> None:
         """Marca a intenção de voltar ao automático. Quem apaga é o Aplicar."""
@@ -1102,7 +1135,8 @@ class DetailsDialog(Adw.Dialog):
             return
 
         na_tela = session_fita.rgba_para_cor(
-            self.fita_color_button.get_rgba(), int(self.fita_brilho_row.get_value())
+            self.fita_color_button.get_rgba(),
+            session_fita.de_por_cento(self.fita_brilho_row.get_value()),
         )
         # Contra o que a linha mostrou, e não contra o automático de agora: um
         # jogo novo ganha a capa neste mesmo Aplicar, e o automático mudaria

@@ -167,6 +167,25 @@ def redefinir(game_id: str) -> None:
         logging.warning("Não foi possível apagar a cor da fita: %s", erro)
 
 
+# O módulo conta o brilho de 0 a 1000; gente conta de 0 a 100. A conversão mora
+# aqui, num lugar só, e as telas falam sempre em porcentagem.
+BRILHO_CHEIO = 1000
+
+# O mínimo que ainda acende. Abaixo disto o módulo apaga, e "1%" na tela tem de
+# continuar sendo luz.
+BRILHO_MINIMO = 10
+
+
+def por_cento(brilho: int) -> int:
+    """O brilho do módulo (0–1000) como a tela mostra (0–100)."""
+    return round(brilho * 100 / BRILHO_CHEIO)
+
+
+def de_por_cento(valor: float) -> int:
+    """O caminho de volta, sem deixar a fita pedir um brilho que apaga."""
+    return max(BRILHO_MINIMO, min(BRILHO_CHEIO, round(valor * BRILHO_CHEIO / 100)))
+
+
 def brilho_padrao() -> int:
     return shared.schema.get_int("fita-brilho-padrao")
 
@@ -511,6 +530,52 @@ def _vestir(cor: Cor, varrer: bool = True) -> None:
         [por_id.get(muda.id, muda) for muda in mudas],
         lambda fita: aplicar(fita, True, cor_hex),
     )
+
+
+def _pintar(cor: Cor) -> None:
+    """Só a cor, sem mexer no liga/desliga. Para a prévia ao vivo."""
+    cor_hex = hsv_hex(cor)
+    _em_paralelo(
+        fitas(), lambda fita: _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex})
+    )
+
+
+# A cor que a prévia ainda deve mostrar, e a thread que a serve. Arrastar o
+# controle do brilho gera dezenas de valores por segundo, e cada um deles é uma
+# conversa de rede com três fitas: em vez de enfileirar todos, guardamos só o
+# último e a thread pega o valor mais recente quando termina o anterior. Os
+# passos do meio se perdem, que é exatamente o que se quer — o olho só precisa
+# ver onde o controle parou.
+_previa_alvo: Optional[Cor] = None
+_previa_viva = False
+_PREVIA = threading.Condition()
+
+
+def previa(cor: Cor) -> None:
+    """Mostra esta cor nas fitas agora. Chamar da thread de UI, à vontade."""
+    global _previa_alvo, _previa_viva  # noqa: PLW0603
+
+    if not ligada():
+        return
+    with _PREVIA:
+        _previa_alvo = cor
+        if not _previa_viva:
+            _previa_viva = True
+            _em_thread(_servir_previa)
+
+
+def _servir_previa() -> None:
+    """Pinta o alvo mais recente até não haver mais nada novo."""
+    global _previa_alvo, _previa_viva  # noqa: PLW0603
+
+    while True:
+        with _PREVIA:
+            cor = _previa_alvo
+            _previa_alvo = None
+            if cor is None:
+                _previa_viva = False
+                return
+        _pintar(cor)
 
 
 def roxo() -> Cor:
