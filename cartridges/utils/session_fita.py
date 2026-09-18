@@ -363,6 +363,33 @@ def _fechar_conexao(modulo: Any) -> None:
         pass
 
 
+def _esvaziar(modulo: Any) -> None:
+    """Joga fora o que chegou no soquete sem ninguém pedir.
+
+    A tinytuya não confere se a resposta é do pedido que ela fez: lê a mais
+    antiga que houver. Numa conexão que fica aberta, uma mensagem sobrando — a
+    fita avisando de uma troca feita pelo Smart Life, por exemplo — vira a
+    resposta do comando seguinte, e daí em diante toda resposta é a do
+    anterior. O comando volta vazio (e o "Testar" diz que a fita não
+    respondeu), e o fechamento sai com a resposta do último comando por ler: o
+    Windows fecha com RST, e a fita joga fora o comando que acabou de chegar.
+    Chamar com a trava da fita: aí nada que está no soquete é resposta de
+    alguém.
+    """
+    soquete = getattr(modulo, "socket", None)
+    if soquete is None:
+        return
+    espera = soquete.gettimeout()
+    soquete.settimeout(0)
+    try:
+        while soquete.recv(4096):
+            pass
+    except OSError:  # BlockingIOError: acabou o que havia por ler
+        pass
+    finally:
+        soquete.settimeout(espera)
+
+
 def _descartar(fita: Fita) -> None:
     """Joga fora a conexão desta fita; a próxima conversa abre outra."""
     with _TRAVA_CONEXOES:
@@ -398,6 +425,7 @@ def _conversar(fita: Fita, acao: Any) -> Optional[Any]:
         try:
             with _trava_da(fita):
                 modulo, guardada = _conexao(fita)
+                _esvaziar(modulo)
                 resposta = acao(modulo)
         except Exception as erro:  # a tinytuya levanta de tudo: socket, struct, json
             resposta = {"Error": str(erro)}
@@ -454,9 +482,15 @@ def _bater(geracao: int) -> None:
             # própria conversa mantém a conexão viva.
             if trava is None or not trava.acquire(blocking=False):
                 continue
+            # Uma consulta, e não o `heartbeat` da tinytuya: ele manda sem ler
+            # a resposta, e ela sobrava no soquete — ver `_esvaziar`. A
+            # consulta lê a própria resposta, e de quebra diz se a fita sumiu.
             try:
-                modulo.heartbeat(nowait=True)
-            except Exception:
+                _esvaziar(modulo)
+                resposta = modulo.status()
+                if isinstance(resposta, dict) and resposta.get("Error"):
+                    raise ConnectionError(resposta["Error"])
+            except Exception:  # a tinytuya levanta de tudo
                 with _TRAVA_CONEXOES:
                     _conexoes.pop(identificador, None)
                 _fechar_conexao(modulo)

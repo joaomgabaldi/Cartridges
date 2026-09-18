@@ -58,6 +58,7 @@
           <li>O app mantém a conexão com cada fita aberta enquanto estiver rodando, e a troca de cor ficou praticamente instantânea. Fita que parou de responder três vezes seguidas é deixada de lado até o botão "Testar" ser usado ou o app abrir de novo, e para de atrasar as outras</li>
           <li>Na tela do jogo, o seletor de cor abre ali mesmo, num balão, e cada cor escolhida já acende nas fitas na hora — dá para testar várias cores sem aplicar nenhuma</li>
           <li>A cor das fitas fora do jogo pode ser trocada em Preferências, na aba Personalização. O roxo do Cartridges é o padrão, com um botão ao lado para voltar a ele; a cor escolhida vale também para os jogos sem capa</li>
+          <li>O botão "Testar" não diz mais que todas as fitas estão sem resposta quando elas respondem, e ao fechar o app todas as fitas voltam à cor de antes, e não só uma ou duas. As duas coisas vinham de respostas das fitas que sobravam sem ser lidas na conexão aberta</li>
         </ul>
       </description>
     </release>
