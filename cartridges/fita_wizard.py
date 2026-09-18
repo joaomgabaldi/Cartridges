@@ -38,6 +38,7 @@ from cartridges import shared
 from cartridges.utils.session_fita import (
     Fita,
     devolver_removidas,
+    enderecos_na_rede,
     fitas,
     gravar_fitas,
 )
@@ -80,6 +81,22 @@ def fitas_da_nuvem(resposta: Any) -> list[Fita]:
             )
         )
     return encontradas
+
+
+def com_enderecos(encontradas: list[Fita], mapa: dict[str, str]) -> list[Fita]:
+    """Põe em cada fita o endereço que ela tem na rede de casa.
+
+    A nuvem não sabe o IP local das fitas; quem sabe é a varredura por
+    broadcast, que roda uma única vez, aqui. O endereço achado fica gravado e o
+    app não procura mais: o IP das fitas é fixo, e se um dia mudar é só rodar
+    este assistente de novo. A fita que a varredura não achou mantém o endereço
+    que já tinha na configuração, se tinha um.
+    """
+    conhecidos = {fita.id: fita.ip for fita in fitas() if fita.ip}
+    return [
+        fita._replace(ip=mapa.get(fita.id) or fita.ip or conhecidos.get(fita.id, ""))
+        for fita in encontradas
+    ]
 
 
 @Gtk.Template(resource_path=shared.PREFIX + "/gtk/fita-wizard.ui")
@@ -134,7 +151,7 @@ class FitaWizard(Adw.Dialog):
         except Exception as erro:  # a tinytuya levanta de tudo aqui também
             logging.warning("Busca na nuvem da Tuya falhou: %s", erro)
             encontrados = []
-        GLib.idle_add(self._mostrar, encontrados)
+        GLib.idle_add(self._mostrar, com_enderecos(encontrados, enderecos_na_rede()))
 
     def _mostrar(self, encontrados: list[Fita]) -> None:
         if self._closed:
@@ -156,8 +173,14 @@ class FitaWizard(Adw.Dialog):
         self.aviso_label.set_visible(False)
         ja_configuradas = {fita.id for fita in fitas()}
         for fita in encontrados:
-            linha = Adw.SwitchRow(title=fita.nome, subtitle=fita.ip or fita.id)
-            linha.set_active(fita.id in ja_configuradas)
+            linha = Adw.SwitchRow(
+                title=fita.nome,
+                subtitle=fita.ip or _("Não encontrada na rede — confira se está ligada"),
+            )
+            # Sem endereço não há como falar com a fita: marcá-la seria gravar
+            # uma fita que nunca acende.
+            linha.set_sensitive(bool(fita.ip))
+            linha.set_active(bool(fita.ip) and fita.id in ja_configuradas)
             self.dispositivos_group.add(linha)
             self._linhas.append((linha, fita))
 

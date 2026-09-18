@@ -183,3 +183,41 @@ def test_fita_desmarcada_volta_ao_estado_guardado_e_sai_da_chave(
 
 
 # endregion
+
+
+def test_o_assistente_grava_o_endereco_que_a_rede_deu(monkeypatch, tmp_path):
+    """A nuvem não sabe o IP local; a varredura, feita uma vez aqui, sabe."""
+    from cartridges import shared
+    from cartridges.fita_wizard import com_enderecos
+
+    monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
+    da_nuvem = [Fita("Centro", "eb1", "", "k", "3.3")]
+
+    (fita,) = com_enderecos(da_nuvem, {"eb1": "192.168.0.150"})
+
+    assert fita.ip == "192.168.0.150"
+
+
+def test_fita_que_a_rede_nao_achou_mantem_o_endereco_que_ja_tinha(monkeypatch, tmp_path):
+    """Rodar o assistente com uma fita desligada não pode apagar o IP dela."""
+    from cartridges import shared
+    from cartridges.fita_wizard import com_enderecos
+    from cartridges.utils.session_fita import gravar_fitas
+
+    monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
+    gravar_fitas([Fita("Centro", "eb1", "192.168.0.150", "k", "3.3")])
+
+    (fita,) = com_enderecos([Fita("Centro", "eb1", "", "k", "3.3")], {})
+
+    assert fita.ip == "192.168.0.150"
+
+
+def test_fita_nunca_vista_na_rede_fica_sem_endereco(monkeypatch, tmp_path):
+    from cartridges import shared
+    from cartridges.fita_wizard import com_enderecos
+
+    monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
+
+    (fita,) = com_enderecos([Fita("Centro", "eb1", "", "k", "3.3")], {})
+
+    assert fita.ip == ""

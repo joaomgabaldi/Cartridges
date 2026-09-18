@@ -547,7 +547,13 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 self.fita_testar_row.set_subtitle(_("Teste interrompido"))
             else:
                 self.fita_testar_row.set_subtitle(
-                    _("Sem resposta: {}").format(", ".join(mudas))
+                    # O app não procura mais as fitas na rede sozinho: o
+                    # endereço é o que o assistente achou. Fita muda com a
+                    # tomada ligada é IP que mudou, e o conserto é um só.
+                    _(
+                        "Sem resposta: {}. Se ela está ligada, o endereço dela na "
+                        "rede pode ter mudado — configure as fitas de novo"
+                    ).format(", ".join(mudas))
                     if mudas
                     else _("Todas responderam")
                 )
