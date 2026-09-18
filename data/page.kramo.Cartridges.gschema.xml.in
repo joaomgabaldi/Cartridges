@@ -87,6 +87,16 @@
     <key name="fita-brilho-padrao" type="i">
       <default>180</default>
     </key>
+    <!-- A cor das fitas de LED quando não há jogo correndo — a "cor do app".
+         Matiz de 0 a 359 e saturação de 0 a 1000, como o módulo Tuya conta; o
+         brilho continua sendo o brilho padrão acima. O padrão é o roxo da
+         paleta do app (#9141ac), e é para ele que o botão de voltar leva. -->
+    <key name="fita-matiz-app" type="i">
+      <default>284</default>
+    </key>
+    <key name="fita-saturacao-app" type="i">
+      <default>620</default>
+    </key>
     <!-- Fazer as fitas de LED acompanharem o app e a sessão. Desligado até que
          haja fita configurada: sem chave local não há como falar com elas. -->
     <key name="session-fita" type="b">

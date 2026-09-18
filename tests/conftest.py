@@ -86,6 +86,8 @@ _SCHEMA_DEFAULTS = {
     "session-wallpaper": False,
     "session-wallpaper-saved": "",
     "fita-brilho-padrao": 180,
+    "fita-matiz-app": 284,
+    "fita-saturacao-app": 620,
     "session-fita": False,
     "fita-estado-anterior": "",
     "wallhaven-key": "",

@@ -37,6 +37,7 @@ Cartridges is an easy-to-use, elegant game launcher written in Python using GTK4
 - Automatically downloading cover art from [SteamGridDB](https://www.steamgriddb.com/)
 - Searching for games on various databases
 - Animated covers (played on hover)
+- Tuya LED strips behind the monitors follow the app: the app's color while it is open, each game's color (taken from its cover, or picked by hand) while it runs, and the original state back when the app closes
 
 For updates and questions, join our [Discord server][discord-url]!
 

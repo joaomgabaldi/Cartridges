@@ -45,8 +45,9 @@ from cartridges.utils.cor_da_capa import dominante
 if TYPE_CHECKING:
     from cartridges.game import Game
 
-# Matiz e saturação do #9141ac, o roxo da paleta do app. O brilho não entra:
-# ele é do usuário.
+# Matiz e saturação do #9141ac, o roxo da paleta do app. É o padrão da "cor do
+# app" — a das fitas quando não há jogo correndo —, que o usuário pode trocar
+# nas Preferências. O brilho não entra: ele é do usuário.
 ROXO_DO_APP = (284, 620)
 
 
@@ -201,14 +202,14 @@ def cor_do_jogo(game: "Game", ignorar_escolha: bool = False) -> Cor:
     dados = None if ignorar_escolha else _ler_sidecar(game.game_id)
     if dados and dados.get("locked"):
         return Cor(
-            int(dados.get("matiz", ROXO_DO_APP[0])),
-            int(dados.get("saturacao", ROXO_DO_APP[1])),
+            int(dados.get("matiz", tom_do_app()[0])),
+            int(dados.get("saturacao", tom_do_app()[1])),
             int(dados.get("brilho", brilho_padrao())),
         )
 
     capa = game.get_cover_path()
     da_capa = dominante(capa) if capa else None
-    matiz, saturacao = da_capa if da_capa else ROXO_DO_APP
+    matiz, saturacao = da_capa if da_capa else tom_do_app()
     return Cor(matiz, saturacao, brilho_padrao())
 
 
@@ -679,14 +680,32 @@ def _servir_previa() -> None:
         _pintar(cor)
 
 
-def roxo() -> Cor:
-    """O roxo do app no brilho que o usuário escolheu.
+def tom_do_app() -> tuple[int, int]:
+    """Matiz e saturação da cor do app: a escolhida, ou o roxo de fábrica."""
+    return (
+        shared.schema.get_int("fita-matiz-app"),
+        shared.schema.get_int("fita-saturacao-app"),
+    )
 
-    Pública porque as Preferências e a tela de detalhes precisam da mesma cor:
-    enquanto ela era privada, as duas remontavam o ``Cor(*ROXO_DO_APP, …)`` à
-    mão e o roxo do app vivia escrito em três lugares.
+
+def salvar_tom_do_app(matiz: int, saturacao: int) -> None:
+    """Grava a cor do app escolhida nas Preferências."""
+    shared.schema.set_int("fita-matiz-app", matiz % 360)
+    shared.schema.set_int("fita-saturacao-app", max(0, min(1000, saturacao)))
+
+
+def redefinir_tom_do_app() -> None:
+    """Volta a cor do app ao roxo de fábrica."""
+    salvar_tom_do_app(*ROXO_DO_APP)
+
+
+def cor_do_app() -> Cor:
+    """A cor das fitas quando não há jogo correndo, no brilho padrão.
+
+    Pública porque as Preferências e a tela de detalhes precisam da mesma cor,
+    e ela mora num lugar só.
     """
-    return Cor(ROXO_DO_APP[0], ROXO_DO_APP[1], brilho_padrao())
+    return Cor(*tom_do_app(), brilho_padrao())
 
 
 def _estado_de_todas() -> dict[str, dict[str, Any]]:
@@ -716,7 +735,7 @@ def _guardar_e_vestir() -> None:
     if not shared.schema.get_string(CHAVE_ESTADO):
         shared.schema.set_string(CHAVE_ESTADO, json.dumps(_estado_de_todas()))
 
-    _vestir(roxo())
+    _vestir(cor_do_app())
 
 
 def _estados_guardados() -> dict[str, Any]:
@@ -839,7 +858,7 @@ def voltar() -> None:
     """A sessão acabou: de volta ao roxo do app. Chamar da thread de UI."""
     if not ligada():
         return
-    _em_thread(lambda: _vestir(roxo()))
+    _em_thread(lambda: _vestir(cor_do_app()))
 
 
 def fechar() -> None:

@@ -21,6 +21,7 @@
 
 import json
 import logging
+import math
 import threading
 from pathlib import Path
 from shutil import rmtree
@@ -121,6 +122,11 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     session_identify_button_row = Gtk.Template.Child()
     session_fita_switch: Adw.SwitchRow = Gtk.Template.Child()
     fita_brilho_row: Adw.SpinRow = Gtk.Template.Child()
+    fita_cor_app_reset: Gtk.Button = Gtk.Template.Child()
+    fita_cor_app_amostra: Gtk.DrawingArea = Gtk.Template.Child()
+    # Obsoleto desde o GTK 4.10 e mantido até o GTK 5; é o único seletor com
+    # prévia ao vivo. Ver o comentário gêmeo em `details_dialog.py`.
+    fita_cor_app_seletor: Gtk.ColorChooserWidget = Gtk.Template.Child()
     fita_configurar_button: Gtk.Button = Gtk.Template.Child()
     fita_testar_row: Adw.ActionRow = Gtk.Template.Child()
     fita_testar_button: Gtk.Button = Gtk.Template.Child()
@@ -434,6 +440,18 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.fita_testar_button.connect("clicked", self.testar_fitas)
         self.atualizar_fitas()
 
+        # A cor do app: o seletor começa na cor gravada, e só depois ganha o
+        # sinal — senão abrir as Preferências já contaria como escolha.
+        self.fita_cor_app_seletor.set_property(
+            "rgba", session_fita.cor_para_rgba(session_fita.cor_do_app())
+        )
+        self.fita_cor_app_amostra.set_draw_func(self.desenhar_cor_app)
+        self.fita_cor_app_seletor.connect("notify::rgba", self.mudar_cor_app)
+        self.fita_cor_app_reset.connect("clicked", self.voltar_ao_roxo)
+        self.fita_cor_app_reset.set_visible(
+            session_fita.tom_do_app() != session_fita.ROXO_DO_APP
+        )
+
         # Ligado só agora, depois do `bind_switches` e do `atualizar_fitas`:
         # os dois mexem no `active` do interruptor durante a construção da
         # tela, e abrir as Preferências não pode acender fita nenhuma. Daqui
@@ -487,7 +505,48 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         """
         brilho = session_fita.de_por_cento(row.get_value())
         shared.schema.set_int("fita-brilho-padrao", brilho)
-        session_fita.previa(session_fita.Cor(*session_fita.ROXO_DO_APP, brilho))
+        session_fita.previa(session_fita.Cor(*session_fita.tom_do_app(), brilho))
+
+    def desenhar_cor_app(
+        self, _area: Any, contexto: Any, largura: int, altura: int
+    ) -> None:
+        """A bolinha no botão da cor: a cor do app escolhida agora."""
+        cor = self.fita_cor_app_seletor.props.rgba
+        contexto.set_source_rgb(cor.red, cor.green, cor.blue)
+        raio = min(largura, altura) / 2
+        contexto.arc(largura / 2, altura / 2, raio, 0, 2 * math.pi)
+        contexto.fill()
+
+    def mudar_cor_app(self, seletor: Gtk.ColorChooserWidget, *_args: Any) -> None:
+        """Grava a cor do app e mostra ela nas fitas na mesma hora.
+
+        Aqui, ao contrário da tela do jogo, não há Aplicar: as Preferências
+        gravam tudo na hora, e a cor do app segue a regra delas.
+        """
+        cor = session_fita.rgba_para_cor(
+            seletor.props.rgba, session_fita.brilho_padrao()
+        )
+        session_fita.salvar_tom_do_app(cor.matiz, cor.saturacao)
+        self.fita_cor_app_amostra.queue_draw()
+        self.fita_cor_app_reset.set_visible(
+            session_fita.tom_do_app() != session_fita.ROXO_DO_APP
+        )
+        session_fita.previa(session_fita.cor_do_app())
+
+    def voltar_ao_roxo(self, *_args: Any) -> None:
+        """Devolve a cor do app ao roxo do Cartridges."""
+        # Mexer no seletor dispara `mudar_cor_app`, que redesenha e mostra o
+        # roxo nas fitas. O roxo exato é gravado depois: a ida e volta pela
+        # cor da tela pode arredondar uma unidade, e o padrão tem de ser o
+        # padrão.
+        self.fita_cor_app_seletor.set_property(
+            "rgba",
+            session_fita.cor_para_rgba(
+                session_fita.Cor(*session_fita.ROXO_DO_APP, session_fita.brilho_padrao())
+            ),
+        )
+        session_fita.redefinir_tom_do_app()
+        self.fita_cor_app_reset.set_visible(False)
 
     def configurar_fitas(self, *_args: Any) -> None:
         from cartridges.fita_wizard import FitaWizard  # noqa: PLC0415
@@ -527,7 +586,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         session_fita.retomar()
 
         def tarefa() -> None:
-            cor = session_fita.hsv_hex(session_fita.roxo())
+            cor = session_fita.hsv_hex(session_fita.cor_do_app())
             mudas = []
             for fita in session_fita.fitas():
                 if parar.is_set():
