@@ -200,7 +200,7 @@ template $DetailsDialog: Adw.Dialog {
         // só aparece quando houve escolha.
         Adw.ActionRow fita_row {
           title: _("Fita de LED");
-          activatable-widget: fita_color_button;
+          activatable-widget: fita_cor_menu;
 
           [suffix]
           Button fita_button_reset {
@@ -214,12 +214,24 @@ template $DetailsDialog: Adw.Dialog {
             ]
           }
 
+          // O seletor mora num balão, e não no diálogo de cor do GTK: o diálogo
+          // só devolve a cor no "Selecionar", e escolher cor de fita exige ver
+          // cada tentativa na parede. Aqui cada clique numa cor, ou cada arrasto
+          // no editor, já acende as fitas nela.
           [suffix]
-          ColorDialogButton fita_color_button {
+          MenuButton fita_cor_menu {
             valign: center;
+            tooltip-text: _("Escolher a cor da fita");
 
-            dialog: ColorDialog {
-              with-alpha: false;
+            child: DrawingArea fita_amostra {
+              content-width: 22;
+              content-height: 22;
+            };
+
+            popover: Popover {
+              child: ColorChooserWidget fita_color_button {
+                use-alpha: false;
+              };
             };
           }
         }

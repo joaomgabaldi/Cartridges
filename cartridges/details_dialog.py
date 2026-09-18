@@ -20,6 +20,7 @@
 # pyright: reportAssignmentType=none
 
 import logging
+import math
 import re
 import threading
 from pathlib import Path
@@ -119,7 +120,13 @@ class DetailsDialog(Adw.Dialog):
 
     fita_row: Adw.ActionRow = Gtk.Template.Child()
     fita_button_reset: Gtk.Button = Gtk.Template.Child()
-    fita_color_button: Gtk.ColorDialogButton = Gtk.Template.Child()
+    # O seletor de cor em si, dentro do balão do `fita_cor_menu`. É o
+    # `Gtk.ColorChooserWidget`, obsoleto desde o GTK 4.10 e mantido até o GTK 5:
+    # o substituto oficial é o diálogo modal, que só devolve a cor no
+    # "Selecionar" e não deixa ver cada tentativa na parede. Se o GTK 5 o levar
+    # embora, o caminho é uma paleta própria com um controle de matiz.
+    fita_color_button: Gtk.ColorChooserWidget = Gtk.Template.Child()
+    fita_amostra: Gtk.DrawingArea = Gtk.Template.Child()
     fita_brilho_row: Adw.SpinRow = Gtk.Template.Child()
 
     name: Adw.EntryRow = Gtk.Template.Child()
@@ -349,6 +356,10 @@ class DetailsDialog(Adw.Dialog):
         # de fita olhando só para o quadradinho da tela não diz nada sobre como
         # ela fica atrás do monitor.
         self.fita_color_button.connect("notify::rgba", self.previa_da_fita)
+        self.fita_color_button.connect(
+            "notify::rgba", lambda *_: self.fita_amostra.queue_draw()
+        )
+        self.fita_amostra.set_draw_func(self.desenhar_amostra)
         self.fita_brilho_row.connect("notify::value", self.previa_da_fita)
         # Fechar sem aplicar desfaz a prévia: o que vale fora desta tela é o
         # roxo do app.
@@ -1078,7 +1089,7 @@ class DetailsDialog(Adw.Dialog):
 
         cor = self.cor_automatica()
         self._fita_mostrada = cor
-        self.fita_color_button.set_rgba(session_fita.cor_para_rgba(cor))
+        self.fita_color_button.set_property("rgba", session_fita.cor_para_rgba(cor))
         self.fita_brilho_row.set_value(session_fita.por_cento(cor.brilho))
 
         manual = (
@@ -1091,6 +1102,14 @@ class DetailsDialog(Adw.Dialog):
             _("Escolhida por você") if manual else _("Tirada da capa")
         )
 
+    def desenhar_amostra(self, _area: Any, contexto: Any, largura: int, altura: int) -> None:
+        """A bolinha no botão da cor: a cor que está escolhida agora."""
+        cor = self.fita_color_button.props.rgba
+        contexto.set_source_rgb(cor.red, cor.green, cor.blue)
+        raio = min(largura, altura) / 2
+        contexto.arc(largura / 2, altura / 2, raio, 0, 2 * math.pi)
+        contexto.fill()
+
     def previa_da_fita(self, *_args: Any) -> None:
         """Mostra nas fitas a cor e o brilho que estão na tela agora."""
         if self._fita_mostrada is None:
@@ -1098,7 +1117,7 @@ class DetailsDialog(Adw.Dialog):
         self._fita_previa_usada = True
         session_fita.previa(
             session_fita.rgba_para_cor(
-                self.fita_color_button.get_rgba(),
+                self.fita_color_button.props.rgba,
                 session_fita.de_por_cento(self.fita_brilho_row.get_value()),
             )
         )
@@ -1135,7 +1154,7 @@ class DetailsDialog(Adw.Dialog):
             return
 
         na_tela = session_fita.rgba_para_cor(
-            self.fita_color_button.get_rgba(),
+            self.fita_color_button.props.rgba,
             session_fita.de_por_cento(self.fita_brilho_row.get_value()),
         )
         # Contra o que a linha mostrou, e não contra o automático de agora: um

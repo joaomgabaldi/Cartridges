@@ -382,6 +382,16 @@ def _conversar(fita: Fita, acao: Any) -> Optional[Any]:
     if fita.id in _suspensas:
         return None
 
+    # Nunca entregar uma fita sem IP para a tinytuya. Sem endereço ela faz uma
+    # varredura por conta própria ao abrir a conexão — e com as três fitas em
+    # paralelo, são três varreduras disputando a mesma porta de broadcast: uma
+    # ganha, as outras voltam com "apenas uma utilização de cada endereço de
+    # soquete". Quem acha o IP é a nossa varredura, que tem trava. Isto não
+    # conta como falha: a fita não está fora do ar, só ainda não foi achada.
+    if not fita.ip:
+        logging.info("Fita %s ainda sem endereço na rede", fita.nome)
+        return None
+
     for _tentativa in range(2):
         guardada = False
         try:
@@ -505,28 +515,17 @@ def _mandar(fita: Fita, valores: dict[str, Any]) -> bool:
     return _conversar(fita, lambda modulo: modulo.set_multiple_values(valores)) is not None
 
 
-# A varredura é broadcast: ela acha a fita mesmo com o IP do arquivo errado, ao
-# contrário da conexão, que fala com um endereço só. Doze segundos é o que basta
-# para todo mundo responder — o padrão da tinytuya é dezoito. Custa caro e roda
-# só depois de alguma fita ter falhado.
+# A varredura é broadcast: ela acha as fitas na rede de casa pelo id, e é o
+# assistente quem a usa, uma vez, para descobrir o endereço de cada fita. O app
+# não varre sozinho depois disso — o IP das fitas é fixo, e se um dia mudar é
+# só rodar o assistente de novo. Doze segundos é o que basta para todo mundo
+# responder; o padrão da tinytuya é dezoito.
 ESPERA_VARREDURA = 12
-
-# Piso entre duas varreduras. Uma fita fora da tomada não responde a nenhuma
-# quantidade de tentativas, e sem este piso ela custaria doze segundos de
-# broadcast a cada jogo aberto e a cada jogo fechado, para sempre. Cinco minutos
-# é folgado para o caso que a varredura existe para resolver — o IP que o DHCP
-# trocou — e curto perto de uma sessão de jogo.
-INTERVALO_VARREDURA = 300
-
-# Quando a última varredura rodou, no relógio monotônico. ``None`` é "nunca".
-_ultima_varredura: Optional[float] = None
 
 # Uma varredura de cada vez no processo inteiro. Ela abre um soquete de
 # broadcast numa porta fixa, e o Windows não tem `SO_REUSEPORT`: duas ao mesmo
-# tempo — o arranque e o botão "Testar", por exemplo — fazem a segunda morrer
-# com "apenas uma utilização de cada endereço de soquete". Quem chega depois
-# espera, e aí quase sempre nem precisa varrer: o piso de tempo abaixo já
-# responde por ela.
+# tempo fazem a segunda morrer com "apenas uma utilização de cada endereço de
+# soquete".
 _TRAVA_VARREDURA = threading.Lock()
 
 
@@ -540,61 +539,25 @@ def ips_da_varredura(achados: dict[str, Any]) -> dict[str, str]:
     return mapa
 
 
-def _redescobrir_ips(forcar: bool = False) -> None:
-    """Conserta no arquivo os IPs que o DHCP trocou, casando pelo id.
+def enderecos_na_rede() -> dict[str, str]:
+    """O endereço de cada módulo Tuya que respondeu na rede, por id.
 
     Sem enquete: ``poll=True`` iria perguntar o estado de cada aparelho achado —
-    inclusive dos que não são nossos — e aqui só o endereço interessa.
-
-    Desiste cedo quando a última varredura foi há menos que o
-    ``INTERVALO_VARREDURA``. ``forcar`` é só do arranque: a fita que o
-    assistente acabou de gravar entra sem IP nenhum, de propósito, e ali a
-    varredura é a única maneira de achá-la — mesmo que outra tenha rodado há
-    pouco.
+    inclusive dos que não são nossos — e aqui só o endereço interessa. Nunca
+    levanta; sem rede ou sem biblioteca, devolve um mapa vazio.
     """
-    global _ultima_varredura  # noqa: PLW0603
-
-    # O piso é conferido DEPOIS de pegar a trava, e não antes: quem esperou a
-    # varredura do outro terminar não tem mais o que varrer, e é esse o caso
-    # comum de duas chamadas próximas.
     with _TRAVA_VARREDURA:
-        agora = time.monotonic()
-        if (
-            not forcar
-            and _ultima_varredura is not None
-            and agora - _ultima_varredura < INTERVALO_VARREDURA
-        ):
-            logging.info(
-                "Varredura das fitas pulada: a última foi há menos de %ss",
-                INTERVALO_VARREDURA,
-            )
-            return
-        _ultima_varredura = agora
-        _varrer_e_gravar()
+        try:
+            # Dentro do `try`: sem a biblioteca instalada, o `ImportError` cru
+            # derrubaria a thread do assistente e a tela ficaria em
+            # "Buscando…" para sempre.
+            import tinytuya  # noqa: PLC0415
 
-
-def _varrer_e_gravar() -> None:
-    """A varredura em si, já com a trava na mão."""
-
-    try:
-        import tinytuya  # noqa: PLC0415
-
-        achados = tinytuya.deviceScan(False, ESPERA_VARREDURA, poll=False)
-        mapa = ips_da_varredura(achados)
-    except Exception as erro:  # a tinytuya levanta de tudo: socket, struct, json
-        logging.warning("Varredura das fitas falhou: %s", erro)
-        return
-
-    # Fita que respondeu ao broadcast está na tomada: se estava suspensa por
-    # falhas, volta a valer.
-    retomar(set(mapa))
-
-    atuais = fitas()
-    novas = [fita._replace(ip=mapa.get(fita.id, fita.ip)) for fita in atuais]
-    if novas != atuais:
-        logging.info("IP de fita mudou; arquivo atualizado")
-        gravar_fitas(novas)
-
+            achados = tinytuya.deviceScan(False, ESPERA_VARREDURA, poll=False)
+            return ips_da_varredura(achados)
+        except Exception as erro:  # a tinytuya levanta de tudo: socket, struct, json
+            logging.warning("Varredura das fitas falhou: %s", erro)
+            return {}
 
 # endregion
 # region Ciclo de vida
@@ -659,30 +622,15 @@ def _em_paralelo(itens: list[Any], tarefa: Any) -> list[Any]:
     return [resultados.get(indice) for indice in range(len(itens))]
 
 
-def _vestir(cor: Cor, varrer: bool = True) -> None:
-    """Acende todas as fitas na cor pedida. Síncrono; nunca levanta.
+def _vestir(cor: Cor) -> None:
+    """Acende todas as fitas na cor pedida, ao mesmo tempo. Síncrono; nunca levanta.
 
-    Quem não responde na primeira tentativa costuma ter trocado de IP: uma
-    varredura conserta o arquivo e a segunda tentativa usa o endereço novo. A
-    varredura roda no máximo uma vez por chamada — fita fora da tomada não
-    responde a nenhuma quantidade de tentativas.
-
-    ``varrer=False`` é para quem já varreu nesta mesma rodada: duas varreduras
-    a poucos segundos uma da outra, na mesma rede, não acham mais que uma.
+    Fita que não responde fica como está — e depois de três falhas seguidas é
+    suspensa, para não atrasar as outras. O endereço de cada fita é o que o
+    assistente achou: IP mudou, roda-se o assistente de novo.
     """
     cor_hex = hsv_hex(cor)
-    alvos = fitas()
-    respostas = _em_paralelo(alvos, lambda fita: aplicar(fita, True, cor_hex))
-    mudas = [fita for fita, deu in zip(alvos, respostas) if not deu]
-    if not mudas or not varrer:
-        return
-
-    _redescobrir_ips()
-    por_id = {fita.id: fita for fita in fitas()}
-    _em_paralelo(
-        [por_id.get(muda.id, muda) for muda in mudas],
-        lambda fita: aplicar(fita, True, cor_hex),
-    )
+    _em_paralelo(fitas(), lambda fita: aplicar(fita, True, cor_hex))
 
 
 def _pintar(cor: Cor) -> None:
@@ -759,7 +707,6 @@ def _guardar_e_vestir() -> None:
     if not ligada():
         return
 
-    varreu = False
     # Grava só quando a chave está vazia. Chave preenchida quer dizer que uma
     # troca já está em curso, e o estado a devolver é o primeiro — não o roxo
     # que o próprio app acabou de pintar por cima. Vale de verdade porque o
@@ -767,27 +714,9 @@ def _guardar_e_vestir() -> None:
     # encaminhada para a viva; sem a guarda, as fitas ficariam roxas para
     # sempre.
     if not shared.schema.get_string(CHAVE_ESTADO):
-        estado = _estado_de_todas()
-        # Ninguém responder costuma ser endereço velho, e não fita apagada: a
-        # que o assistente acabou de gravar entra sem IP nenhum, de propósito,
-        # porque é a descoberta por broadcast que acha o endereço dela. Sem
-        # esta releitura o estado original se perderia justamente na estreia do
-        # recurso — o `_vestir` conserta o arquivo logo abaixo e acende a fita,
-        # mas aí já é tarde para saber como ela estava.
-        #
-        # Só quando NINGUÉM respondeu: uma fita muda entre três é fita fora da
-        # tomada, e a varredura custa caro demais para rodar por causa dela.
-        #
-        # Forçada: é o único caminho em que a varredura não é uma tentativa a
-        # mais, e sim a única maneira de saber o estado de antes. O piso entre
-        # varreduras não pode calar justamente a estreia do recurso.
-        if not estado:
-            _redescobrir_ips(forcar=True)
-            varreu = True
-            estado = _estado_de_todas()
-        shared.schema.set_string(CHAVE_ESTADO, json.dumps(estado))
+        shared.schema.set_string(CHAVE_ESTADO, json.dumps(_estado_de_todas()))
 
-    _vestir(roxo(), varrer=not varreu)
+    _vestir(roxo())
 
 
 def _estados_guardados() -> dict[str, Any]:

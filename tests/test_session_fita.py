@@ -24,10 +24,6 @@ def pastas(tmp_path, monkeypatch):
     """Tudo o que o módulo grava vai para uma pasta descartável."""
     monkeypatch.setattr(shared, "fitas_dir", tmp_path / "fitas")
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
-    # O carimbo da última varredura é estado de módulo, e sobreviveria ao
-    # teste: sem zerá-lo, o teste seguinte pularia a varredura pelo intervalo
-    # mínimo e passaria pelo motivo errado.
-    monkeypatch.setattr(session_fita, "_ultima_varredura", None)
     # As conexões abertas, a contagem de falhas e as suspensões também são
     # estado de módulo: um teste que suspendeu uma fita não pode deixá-la
     # suspensa para o seguinte.
@@ -319,91 +315,6 @@ def _tinytuya_que_varre(monkeypatch, resposta):
     return chamadas
 
 
-def test_redescobrir_grava_o_ip_que_o_dhcp_trocou(monkeypatch):
-    """O casamento é pelo id do módulo: no arquivo, o que envelhece é o IP."""
-    antes = [
-        session_fita.Fita("Centro", "eb0", "192.168.0.150", "k"),
-        session_fita.Fita("Direita", "eb1", "192.168.0.151", "k2", "3.4"),
-    ]
-    session_fita.gravar_fitas(antes)
-    chamadas = _tinytuya_que_varre(monkeypatch, {"192.168.0.77": {"gwId": "eb0"}})
-
-    assert session_fita._redescobrir_ips() is None
-    assert session_fita.fitas() == [
-        antes[0]._replace(ip="192.168.0.77"),
-        antes[1],  # quem não apareceu na varredura fica exatamente como estava
-    ]
-
-    # Calada, curta e sem enquete: só os IPs interessam aqui.
-    args, opcoes = chamadas[0]
-    assert args[:2] == (False, session_fita.ESPERA_VARREDURA)
-    assert opcoes.get("poll") is False
-
-
-def test_varredura_que_falha_deixa_o_arquivo_como_estava(monkeypatch):
-    """Rede caída não pode apagar a configuração nem levantar na thread."""
-    antes = [session_fita.Fita("Centro", "eb0", "192.168.0.150", "k")]
-    session_fita.gravar_fitas(antes)
-    _tinytuya_que_varre(monkeypatch, OSError("rede sumiu"))
-
-    assert session_fita._redescobrir_ips() is None
-    assert session_fita.fitas() == antes
-
-
-def test_varredura_respeita_o_intervalo_minimo(monkeypatch):
-    """Fita fora da tomada não pode custar doze segundos em toda troca de cor.
-
-    Duas falhas seguidas dentro do intervalo varrem uma vez só; passado o
-    intervalo, a varredura volta a valer — é o IP trocado pelo DHCP que ela
-    existe para consertar, e esse caso não pode ficar sem conserto.
-    """
-    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
-    chamadas = _tinytuya_que_varre(monkeypatch, {})
-    relogio = [1000.0]
-    monkeypatch.setattr(session_fita.time, "monotonic", lambda: relogio[0])
-
-    session_fita._redescobrir_ips()
-    session_fita._redescobrir_ips()
-    assert len(chamadas) == 1
-
-    relogio[0] += session_fita.INTERVALO_VARREDURA + 1
-    session_fita._redescobrir_ips()
-    assert len(chamadas) == 2
-
-    # O arranque força: a fita que o assistente acabou de gravar entra sem IP,
-    # e ali a varredura é a única maneira de achá-la.
-    session_fita._redescobrir_ips(forcar=True)
-    assert len(chamadas) == 3
-
-
-def test_fita_que_falha_dispara_uma_redescoberta_e_uma_segunda_tentativa(
-    falsas, monkeypatch
-):
-    modulos = falsas(True)
-    tentativas = []
-
-    def redescobrir():
-        tentativas.append("varreu")
-        # A varredura "conserta" o módulo: ele passa a responder.
-        modulos["eb0"].quebrada = False
-
-    monkeypatch.setattr(session_fita, "_redescobrir_ips", redescobrir)
-    session_fita._vestir(session_fita.Cor(284, 620, 180))
-
-    assert tentativas == ["varreu"]
-    assert modulos["eb0"].recebidos  # a segunda tentativa chegou
-
-
-def test_tudo_respondendo_nao_varre_a_rede(falsas, monkeypatch):
-    falsas(False)
-    monkeypatch.setattr(
-        session_fita,
-        "_redescobrir_ips",
-        lambda: pytest.fail("varreu a rede sem precisar"),
-    )
-    session_fita._vestir(session_fita.Cor(284, 620, 180))
-
-
 def test_abrir_guarda_o_estado_e_veste_o_roxo(falsas, schema):
     schema.set_boolean("session-fita", True)
     modulos = falsas(False, False)
@@ -436,81 +347,6 @@ def test_fita_fora_do_ar_nao_derruba_as_outras(falsas, schema):
 
     assert list(json.loads(schema.get_string("fita-estado-anterior"))) == ["eb0"]
     assert modulos["eb0"].recebidos
-
-
-def test_ninguem_respondendo_varre_e_le_o_estado_de_novo(falsas, monkeypatch, schema):
-    """A fita que o assistente acabou de gravar entra sem IP, de propósito.
-
-    Nesse primeiro arranque a leitura falha em todas, e sem a releitura o
-    estado original de cada fita se perderia justamente na estreia do recurso:
-    o ``_vestir`` conserta o endereço logo em seguida e acende tudo, mas aí já
-    é tarde para saber como elas estavam.
-    """
-    schema.set_boolean("session-fita", True)
-    modulos = falsas(True, True)
-    varreduras = []
-
-    def redescobrir(forcar=False):
-        varreduras.append(forcar)
-        for modulo in modulos.values():
-            modulo.quebrada = False
-
-    monkeypatch.setattr(session_fita, "_redescobrir_ips", redescobrir)
-    session_fita._guardar_e_vestir()
-
-    # Forçada: o piso entre varreduras não pode calar a estreia do recurso.
-    assert varreduras == [True]
-    guardado = json.loads(schema.get_string("fita-estado-anterior"))
-    assert set(guardado) == {"eb0", "eb1"}
-    assert guardado["eb0"] == {"ligada": False, "cor": "000003e800b4"}
-
-
-def test_uma_fita_respondendo_ja_dispensa_a_varredura_na_leitura(
-    falsas, monkeypatch, schema
-):
-    """Varrer para ler é só para o caso de NINGUÉM responder.
-
-    Com uma fita muda entre duas, a varredura ainda acontece — mas lá no
-    ``_vestir``, com a chave já gravada. Se a leitura tivesse varrido, a
-    primeira varredura veria a chave ainda vazia, e é isso que se prende aqui.
-    """
-    schema.set_boolean("session-fita", True)
-    falsas(False, True)
-    chave_na_varredura = []
-    monkeypatch.setattr(
-        session_fita,
-        "_redescobrir_ips",
-        lambda: chave_na_varredura.append(schema.get_string("fita-estado-anterior")),
-    )
-
-    session_fita._guardar_e_vestir()
-
-    assert len(chave_na_varredura) == 1
-    assert json.loads(chave_na_varredura[0]) == {
-        "eb0": {"ligada": False, "cor": "000003e800b4"}
-    }
-
-
-def test_todas_fora_da_tomada_varrem_uma_vez_so(falsas, monkeypatch, schema):
-    """Varredura que não achou ninguém não é repetida no mesmo arranque.
-
-    Sem isto, o arranque com tudo fora da tomada varreria duas vezes: uma para
-    ler o estado e outra dentro do ``_vestir``, a poucos segundos da primeira e
-    na mesma rede.
-    """
-    schema.set_boolean("session-fita", True)
-    falsas(True, True)
-    varreduras = []
-    monkeypatch.setattr(
-        session_fita,
-        "_redescobrir_ips",
-        lambda forcar=False: varreduras.append("varreu"),
-    )
-
-    assert session_fita._guardar_e_vestir() is None
-
-    assert varreduras == ["varreu"]
-    assert json.loads(schema.get_string("fita-estado-anterior")) == {}
 
 
 def test_orfaos_desfazem_a_sessao_que_ficou(falsas, schema):
@@ -1066,7 +902,8 @@ def test_aplicar_sem_mexer_na_cor_nao_marca_escolha(tela):
 def test_cor_trocada_na_tela_vira_escolha(tela):
     dialog, jogo = tela
 
-    dialog.fita_color_button.set_rgba(
+    dialog.fita_color_button.set_property(
+        "rgba",
         session_fita.cor_para_rgba(session_fita.Cor(120, 900, 0))
     )
     dialog.aplicar_fita(jogo)
@@ -1126,7 +963,8 @@ def test_cor_nova_depois_de_redefinir_vence_a_redefinicao(tela):
     _com_escolha(dialog, jogo)
 
     dialog.redefinir_fita()
-    dialog.fita_color_button.set_rgba(
+    dialog.fita_color_button.set_property(
+        "rgba",
         session_fita.cor_para_rgba(session_fita.Cor(120, 900, 0))
     )
     dialog.aplicar_fita(jogo)
@@ -1204,39 +1042,6 @@ def test_nunca_ha_duas_conversas_com_a_mesma_fita(falsas, schema):
 
     for modulo in modulos.values():
         assert modulo.pico == 1
-
-
-def test_duas_varreduras_ao_mesmo_tempo_viram_uma(falsas, monkeypatch, schema):
-    """Duas varreduras juntas brigam pelo mesmo soquete de broadcast.
-
-    No Windows isso volta como "apenas uma utilização de cada endereço de
-    soquete" — foi o erro visto no primeiro teste com as fitas de verdade.
-    """
-    schema.set_boolean("session-fita", True)
-    falsas(True, True)
-    session_fita._ultima_varredura = None
-
-    dentro = []
-    pico = []
-
-    def varredura_lenta():
-        dentro.append(1)
-        pico.append(len(dentro))
-        time.sleep(0.1)
-        dentro.pop()
-
-    monkeypatch.setattr(session_fita, "_varrer_e_gravar", varredura_lenta)
-
-    linhas = [
-        threading.Thread(target=session_fita._redescobrir_ips, kwargs={"forcar": True})
-        for _ in range(3)
-    ]
-    for linha in linhas:
-        linha.start()
-    for linha in linhas:
-        linha.join()
-
-    assert max(pico) == 1
 
 
 def test_o_brilho_vai_e_volta_entre_a_tela_e_o_modulo():
@@ -1381,3 +1186,78 @@ def test_fechar_conexoes_fecha_todas(falsas, schema):
 
     assert all(getattr(modulo, "fechada", False) for modulo in modulos.values())
     assert session_fita._conexoes == {}
+
+
+def test_duas_varreduras_ao_mesmo_tempo_viram_uma(monkeypatch):
+    """Duas varreduras juntas brigam pelo mesmo soquete de broadcast.
+
+    No Windows isso volta como "apenas uma utilização de cada endereço de
+    soquete" — foi o erro visto no primeiro teste com as fitas de verdade.
+    """
+    dentro = []
+    pico = []
+
+    def varredura_lenta(*_args, **_kwargs):
+        dentro.append(1)
+        pico.append(len(dentro))
+        time.sleep(0.1)
+        dentro.pop()
+        return {}
+
+    falso = ModuleType("tinytuya")
+    falso.deviceScan = varredura_lenta
+    monkeypatch.setitem(sys.modules, "tinytuya", falso)
+
+    linhas = [threading.Thread(target=session_fita.enderecos_na_rede) for _ in range(3)]
+    for linha in linhas:
+        linha.start()
+    for linha in linhas:
+        linha.join()
+
+    assert max(pico) == 1
+
+
+def test_varredura_que_falha_devolve_mapa_vazio(monkeypatch):
+    def explodir(*_args, **_kwargs):
+        raise OSError("rede fora")
+
+    falso = ModuleType("tinytuya")
+    falso.deviceScan = explodir
+    monkeypatch.setitem(sys.modules, "tinytuya", falso)
+
+    assert session_fita.enderecos_na_rede() == {}
+
+
+def test_fita_sem_endereco_nao_chega_a_abrir_conexao(monkeypatch, schema):
+    """Sem IP, a tinytuya varreria a rede sozinha ao abrir a conexão.
+
+    Com as fitas em paralelo, seriam varreduras simultâneas na mesma porta.
+    """
+    abertas = []
+    monkeypatch.setattr(session_fita, "_dispositivo", lambda fita: abertas.append(fita))
+    fita = session_fita.Fita("Centro", "eb0", "", "k")
+
+    assert session_fita.aplicar(fita, True, "015403e80096") is False
+    assert abertas == []
+    # Não é fita fora do ar: só ainda não foi achada. Não conta falha.
+    assert fita.id not in session_fita._falhas
+
+
+def test_escolher_no_seletor_ja_acende_a_fita_sem_aplicar(tela, monkeypatch):
+    """Cada tentativa de cor aparece na parede na hora, ainda dentro do seletor.
+
+    Antes era preciso abrir o seletor, escolher, confirmar e só então ver — o
+    diálogo de cor do GTK só devolve a cor no "Selecionar".
+    """
+    dialog, jogo = tela
+    pedidas = []
+    monkeypatch.setattr(session_fita, "previa", pedidas.append)
+
+    dialog.fita_color_button.set_property(
+        "rgba", session_fita.cor_para_rgba(session_fita.Cor(200, 1000, 0))
+    )
+
+    assert pedidas
+    assert abs(pedidas[-1].matiz - 200) <= 2
+    # Prévia não é escolha: nada foi gravado sem o Aplicar.
+    assert not session_fita.escolhida(jogo.game_id)
