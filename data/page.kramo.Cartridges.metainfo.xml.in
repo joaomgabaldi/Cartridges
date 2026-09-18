@@ -55,6 +55,7 @@
           <li>Quando o roteador dá um endereço novo para uma fita, o app procura por ela na rede e conserta sozinho o endereço guardado — antes ela ficaria muda até o assistente ser aberto de novo. Fita fora da tomada também não atrapalha: as outras acendem normalmente, o app não trava nem mostra aviso nenhum durante o jogo</li>
           <li>As fitas trocam de cor todas ao mesmo tempo, e não uma depois da outra, e a troca acontece sem a piscada na cor anterior: a cor chega antes de a fita acender</li>
           <li>O brilho aparece em porcentagem e responde na hora: mexeu no controle, as fitas acompanham, nas Preferências e na tela do jogo</li>
+          <li>O app mantém a conexão com cada fita aberta enquanto estiver rodando, e a troca de cor ficou praticamente instantânea. Fita que parou de responder três vezes seguidas é deixada de lado até voltar a aparecer na rede ou até o botão "Testar" ser usado, e para de atrasar as outras</li>
         </ul>
       </description>
     </release>

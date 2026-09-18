@@ -522,6 +522,9 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
         parar = threading.Event()
         self._teste_em_curso = parar
+        # Quem clica em "Testar" quer saber de novo, inclusive das fitas que o
+        # app deu como fora do ar depois de três falhas seguidas.
+        session_fita.retomar()
 
         def tarefa() -> None:
             cor = session_fita.hsv_hex(session_fita.roxo())

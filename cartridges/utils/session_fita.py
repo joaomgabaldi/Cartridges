@@ -273,17 +273,45 @@ def _dispositivo(fita: Fita) -> Any:
     # quinta. O caminho de fechamento do app é síncrono — insistir custaria
     # dezenas de segundos de encerramento travado por uma fita fora da tomada.
     # Com isto, o teto por fita é o ESPERA do soquete.
+    #
+    # Persistente: a conexão fica aberta enquanto o app vive. Abrir custa uns
+    # 225 ms por comando e mandar pela conexão aberta, uns 11 — é a diferença
+    # entre o brilho acompanhar o dedo no controle e correr atrás dele.
     modulo = tinytuya.BulbDevice(
         fita.id,
         fita.ip,
         fita.key,
         version=float(fita.versao),
-        persist=False,
+        persist=True,
         connection_retry_limit=1,
         connection_retry_delay=0,
     )
     modulo.set_socketTimeout(ESPERA)
     return modulo
+
+
+# O intervalo do batimento, que mantém as conexões vivas. Os módulos derrubam
+# conexão parada em torno de trinta segundos; dez dá margem de sobra, e menos
+# que isso seria só pacote a mais sem ganho nenhum.
+BATIMENTO = 10
+
+# Quantas falhas seguidas até a fita ser dada como fora do ar. Uma só pode ser
+# engasgo da rede; três é fita desligada da tomada. Suspensa, ela para de custar
+# o ESPERA do soquete a cada troca de cor.
+FALHAS_PARA_SUSPENDER = 3
+
+# As conexões abertas, por id da fita, com o IP em que foram abertas: se a
+# varredura achar a fita num endereço novo, a conexão velha não serve mais.
+_conexoes: dict[str, tuple[str, Any]] = {}
+_falhas: dict[str, int] = {}
+_suspensas: set[str] = set()
+_TRAVA_CONEXOES = threading.Lock()
+
+# Cada leva de conexões tem um número. O batimento de uma leva morre sozinho
+# quando o número muda — é assim que fechar tudo desliga também o batimento, sem
+# precisar esperar a thread acordar.
+_geracao = 0
+_batimento_vivo = False
 
 
 # Uma conversa de cada vez com cada módulo, e não uma de cada vez no total: as
@@ -300,18 +328,149 @@ def _trava_da(fita: Fita) -> threading.Lock:
         return _TRAVAS_FITA.setdefault(fita.id, threading.Lock())
 
 
-def ler_estado(fita: Fita) -> Optional[dict[str, Any]]:
-    """Se a fita está acesa e em que cor. ``None`` quando ela não responde."""
+def _conexao(fita: Fita) -> tuple[Any, bool]:
+    """A conexão aberta desta fita, e se ela já existia.
+
+    Abre na primeira vez, e de novo quando o IP da fita mudou. Quem chama
+    precisa saber se a conexão é nova: falha numa conexão guardada costuma ser
+    soquete que morreu em silêncio, e vale abrir outra na hora; falha numa
+    conexão recém-aberta é a fita que não responde, e insistir só dobraria a
+    espera.
+    """
+    global _batimento_vivo  # noqa: PLW0603
+
+    with _TRAVA_CONEXOES:
+        guardada = _conexoes.get(fita.id)
+        if guardada is not None and guardada[0] == fita.ip:
+            return guardada[1], True
+
+    if guardada is not None:
+        _fechar_conexao(guardada[1])
+    nova = _dispositivo(fita)
+    with _TRAVA_CONEXOES:
+        _conexoes[fita.id] = (fita.ip, nova)
+        if not _batimento_vivo:
+            _batimento_vivo = True
+            _em_thread(lambda geracao=_geracao: _bater(geracao))
+    return nova, False
+
+
+def _fechar_conexao(modulo: Any) -> None:
     try:
-        with _trava_da(fita):
-            resposta = _dispositivo(fita).status()
-    except Exception as erro:  # a tinytuya levanta de tudo: socket, struct, json
-        logging.warning("Fita %s não respondeu: %s", fita.nome, erro)
+        modulo.close()
+    except Exception:  # fechar uma conexão já morta não é erro de ninguém
+        pass
+
+
+def _descartar(fita: Fita) -> None:
+    """Joga fora a conexão desta fita; a próxima conversa abre outra."""
+    with _TRAVA_CONEXOES:
+        guardada = _conexoes.pop(fita.id, None)
+    if guardada is not None:
+        _fechar_conexao(guardada[1])
+
+
+def _conversar(fita: Fita, acao: Any) -> Optional[Any]:
+    """Uma conversa com a fita pela conexão aberta. ``None`` quando falha.
+
+    Conexão guardada que falha é descartada e tentada de novo uma vez, já com
+    uma conexão nova — é o caso do roteador que reiniciou ou do PC que voltou
+    da suspensão, e o comando segue de onde parou. Três falhas seguidas
+    suspendem a fita até a varredura achá-la, o botão "Testar" pedir, ou o app
+    abrir de novo.
+    """
+    if fita.id in _suspensas:
         return None
 
-    dps = (resposta or {}).get("dps")
+    for _tentativa in range(2):
+        guardada = False
+        try:
+            with _trava_da(fita):
+                modulo, guardada = _conexao(fita)
+                resposta = acao(modulo)
+        except Exception as erro:  # a tinytuya levanta de tudo: socket, struct, json
+            resposta = {"Error": str(erro)}
+
+        if not (isinstance(resposta, dict) and resposta.get("Error")):
+            _falhas.pop(fita.id, None)
+            return resposta
+
+        _descartar(fita)
+        if not guardada:
+            break
+
+    logging.warning("Fita %s não respondeu: %s", fita.nome, resposta.get("Error"))
+    _contar_falha(fita)
+    return None
+
+
+def _contar_falha(fita: Fita) -> None:
+    _falhas[fita.id] = _falhas.get(fita.id, 0) + 1
+    if _falhas[fita.id] >= FALHAS_PARA_SUSPENDER and fita.id not in _suspensas:
+        _suspensas.add(fita.id)
+        logging.info(
+            "Fita %s suspensa depois de %s falhas seguidas", fita.nome, _falhas[fita.id]
+        )
+
+
+def retomar(ids: Optional[set[str]] = None) -> None:
+    """Tira fitas da suspensão. Sem argumento, tira todas.
+
+    Chamado pela varredura (com as fitas que ela achou na rede) e pelo botão
+    "Testar", onde o usuário pediu para tentar de novo.
+    """
+    alvo = set(_suspensas) if ids is None else ids & _suspensas
+    for identificador in alvo:
+        _suspensas.discard(identificador)
+        _falhas.pop(identificador, None)
+
+
+def _bater(geracao: int) -> None:
+    """Mantém as conexões vivas enquanto esta leva de conexões existir."""
+    global _batimento_vivo  # noqa: PLW0603
+
+    while True:
+        time.sleep(BATIMENTO)
+        with _TRAVA_CONEXOES:
+            if geracao != _geracao or not _conexoes:
+                if geracao == _geracao:
+                    _batimento_vivo = False
+                return
+            abertas = list(_conexoes.items())
+        for identificador, (_ip, modulo) in abertas:
+            trava = _TRAVAS_FITA.get(identificador)
+            # Fita ocupada numa conversa de verdade não precisa de batimento: a
+            # própria conversa mantém a conexão viva.
+            if trava is None or not trava.acquire(blocking=False):
+                continue
+            try:
+                modulo.heartbeat(nowait=True)
+            except Exception:
+                with _TRAVA_CONEXOES:
+                    _conexoes.pop(identificador, None)
+                _fechar_conexao(modulo)
+            finally:
+                trava.release()
+
+
+def fechar_conexoes() -> None:
+    """Fecha todas as conexões e desliga o batimento. Seguro chamar à toa."""
+    global _geracao, _batimento_vivo  # noqa: PLW0603
+
+    with _TRAVA_CONEXOES:
+        abertas = list(_conexoes.values())
+        _conexoes.clear()
+        _geracao += 1
+        _batimento_vivo = False
+    for _ip, modulo in abertas:
+        _fechar_conexao(modulo)
+
+
+def ler_estado(fita: Fita) -> Optional[dict[str, Any]]:
+    """Se a fita está acesa e em que cor. ``None`` quando ela não responde."""
+    resposta = _conversar(fita, lambda modulo: modulo.status())
+    dps = (resposta or {}).get("dps") if isinstance(resposta, dict) else None
     if not isinstance(dps, dict):
-        logging.warning("Fita %s respondeu %s", fita.nome, (resposta or {}).get("Error"))
         return None
     return {
         "ligada": bool(dps.get(DP_LIGADA, False)),
@@ -343,17 +502,7 @@ def aplicar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
 
 def _mandar(fita: Fita, valores: dict[str, Any]) -> bool:
     """Um comando para uma fita. Nunca levanta; devolve se deu certo."""
-    try:
-        with _trava_da(fita):
-            resposta = _dispositivo(fita).set_multiple_values(valores)
-    except Exception as erro:
-        logging.warning("Fita %s recusou o comando: %s", fita.nome, erro)
-        return False
-
-    if isinstance(resposta, dict) and resposta.get("Error"):
-        logging.warning("Fita %s recusou o comando: %s", fita.nome, resposta["Error"])
-        return False
-    return True
+    return _conversar(fita, lambda modulo: modulo.set_multiple_values(valores)) is not None
 
 
 # A varredura é broadcast: ela acha a fita mesmo com o IP do arquivo errado, ao
@@ -435,6 +584,10 @@ def _varrer_e_gravar() -> None:
     except Exception as erro:  # a tinytuya levanta de tudo: socket, struct, json
         logging.warning("Varredura das fitas falhou: %s", erro)
         return
+
+    # Fita que respondeu ao broadcast está na tomada: se estava suspensa por
+    # falhas, volta a valer.
+    retomar(set(mapa))
 
     atuais = fitas()
     novas = [fita._replace(ip=mapa.get(fita.id, fita.ip)) for fita in atuais]
@@ -776,6 +929,10 @@ def fechar() -> None:
             "Fitas não devolvidas dentro de %ss; fica para o próximo arranque",
             PRAZO_FECHAMENTO,
         )
+        # A devolução ainda está usando as conexões: fechar agora a derrubaria
+        # no meio. O processo está saindo e leva os soquetes junto.
+        return
+    fechar_conexoes()
 
 
 # endregion

@@ -28,7 +28,18 @@ def pastas(tmp_path, monkeypatch):
     # teste: sem zerá-lo, o teste seguinte pularia a varredura pelo intervalo
     # mínimo e passaria pelo motivo errado.
     monkeypatch.setattr(session_fita, "_ultima_varredura", None)
-    return tmp_path
+    # As conexões abertas, a contagem de falhas e as suspensões também são
+    # estado de módulo: um teste que suspendeu uma fita não pode deixá-la
+    # suspensa para o seguinte.
+    _esquecer_conexoes()
+    yield tmp_path
+    _esquecer_conexoes()
+
+
+def _esquecer_conexoes():
+    session_fita.fechar_conexoes()
+    session_fita._falhas.clear()
+    session_fita._suspensas.clear()
 
 
 def _jogo(tmp_path, game_id="jogo-1", cor=(220, 20, 20)):
@@ -132,6 +143,12 @@ class FitaFalsa:
         if self.quebrada:
             return {"Error": "Network Error: Device Unreachable", "Err": "905"}
         return {"dps": dict(self.dps)}
+
+    def heartbeat(self, nowait=True):
+        self.batimentos = getattr(self, "batimentos", 0) + 1
+
+    def close(self):
+        self.fechada = True
 
     def set_multiple_values(self, valores, nowait=False):
         self.simultaneos += 1
@@ -264,7 +281,7 @@ def test_dispositivo_nao_insiste_com_fita_muda(monkeypatch):
     assert recebidos["args"] == (fita.id, fita.ip, fita.key)
     assert recebidos["kwargs"] == {
         "version": 3.3,
-        "persist": False,
+        "persist": True,
         "connection_retry_limit": 1,
         "connection_retry_delay": 0,
     }
@@ -1276,3 +1293,91 @@ def test_a_previa_nao_mexe_no_liga_desliga(falsas, schema):
 def test_sem_fita_configurada_a_previa_nao_faz_nada(schema):
     schema.set_boolean("session-fita", True)
     session_fita.previa(session_fita.Cor(284, 620, 180))
+
+
+def test_a_conexao_aberta_e_reaproveitada(falsas, monkeypatch, schema):
+    """Abrir conexão custa ~225 ms; mandar pela aberta, ~11 ms."""
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+    abertas = []
+    monkeypatch.setattr(
+        session_fita, "_dispositivo", lambda fita: abertas.append(fita.id) or modulos[fita.id]
+    )
+
+    session_fita._vestir(session_fita.roxo())
+    session_fita._vestir(session_fita.Cor(120, 1000, 180))
+
+    assert abertas == ["eb0"]
+
+
+def test_conexao_que_morreu_em_silencio_e_refeita_na_hora(falsas, monkeypatch, schema):
+    """Roteador reiniciou ou o PC voltou da suspensão: o soquete guardado morreu.
+
+    O comando não pode se perder por isso — abre outra conexão e segue.
+    """
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+    fita = session_fita.fitas()[0]
+    session_fita.aplicar(fita, False, "")
+
+    modulos["eb0"].quebrada = True
+    novo = FitaFalsa()
+    monkeypatch.setattr(session_fita, "_dispositivo", lambda _fita: novo)
+
+    assert session_fita.aplicar(fita, True, "015403e80096") is True
+    assert cor_mandada(novo) == "015403e80096"
+    assert modulos["eb0"].fechada
+
+
+def test_tres_falhas_seguidas_suspendem_a_fita(falsas, schema):
+    """Fita fora da tomada para de custar o tempo de espera a cada troca."""
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(True)
+    fita = session_fita.fitas()[0]
+
+    for _ in range(session_fita.FALHAS_PARA_SUSPENDER):
+        assert session_fita.aplicar(fita, False, "") is False
+    assert fita.id in session_fita._suspensas
+
+    modulos["eb0"].quebrada = False
+    assert session_fita.aplicar(fita, False, "") is False
+    assert modulos["eb0"].recebidos == []
+
+
+def test_retomar_devolve_a_fita_suspensa(falsas, schema):
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(True)
+    fita = session_fita.fitas()[0]
+    for _ in range(session_fita.FALHAS_PARA_SUSPENDER):
+        session_fita.aplicar(fita, False, "")
+
+    modulos["eb0"].quebrada = False
+    session_fita.retomar()
+
+    assert session_fita.aplicar(fita, False, "") is True
+
+
+def test_uma_falha_solta_nao_suspende(falsas, schema):
+    """Um engasgo da rede no meio de respostas boas não conta como fita morta."""
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+    fita = session_fita.fitas()[0]
+
+    for _ in range(session_fita.FALHAS_PARA_SUSPENDER):
+        modulos["eb0"].quebrada = True
+        session_fita.aplicar(fita, False, "")
+        modulos["eb0"].quebrada = False
+        session_fita.aplicar(fita, False, "")
+
+    assert fita.id not in session_fita._suspensas
+
+
+def test_fechar_conexoes_fecha_todas(falsas, schema):
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False, False)
+    session_fita._vestir(session_fita.roxo())
+
+    session_fita.fechar_conexoes()
+
+    assert all(getattr(modulo, "fechada", False) for modulo in modulos.values())
+    assert session_fita._conexoes == {}
