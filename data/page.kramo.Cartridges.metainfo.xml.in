@@ -46,6 +46,14 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.18" date="2026-09-18">
+      <description translate="no">
+        <ul>
+          <li>As fitas de LED trocam de cor deslizando, num degradê de dois segundos, e não mais de uma vez: ao abrir o app, ao dar play, ao sair do jogo e ao fechar o app. A fita que precisa apagar no fechamento escurece antes de desligar; a que estava apagada acende direto. O controle de brilho nas Preferências e na tela do jogo continua respondendo na hora, sem degradê</li>
+          <li>Cada comando para as fitas agora só vale quando a fita avisa que o aplicou, e é reenviado quando ela não avisa. De vez em quando a fita jogava um comando fora sem dizer nada, e ele se perdia</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.17" date="2026-09-17">
       <description translate="no">
         <ul>

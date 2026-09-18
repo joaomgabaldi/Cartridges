@@ -11,6 +11,7 @@ import threading
 import time
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from typing import NamedTuple, Optional
 
 import pytest
 from PIL import Image
@@ -36,6 +37,14 @@ def _esquecer_conexoes():
     session_fita.fechar_conexoes()
     session_fita._falhas.clear()
     session_fita._suspensas.clear()
+    session_fita._mostrada.clear()
+
+
+@pytest.fixture(autouse=True)
+def sem_fade(monkeypatch):
+    """Fade de 1,5 s em todo teste deixaria a suíte lenta e mudaria o que os
+    testes antigos contam. Os testes do fade ligam de volta."""
+    monkeypatch.setattr(session_fita, "DURACAO_FADE", 0)
 
 
 def _jogo(tmp_path, game_id="jogo-1", cor=(220, 20, 20)):
@@ -120,8 +129,51 @@ def test_sidecar_corrompido_volta_para_a_capa(tmp_path, schema):
     assert cor.matiz < 10 or cor.matiz > 350
 
 
+class Msg(NamedTuple):
+    """Uma mensagem da fita: o código do protocolo e o que veio dentro."""
+
+    cmd: int
+    payload: Optional[dict] = None
+
+
+RECEBI, AVISO, BATIMENTO, CONSULTA = 7, 8, 9, 10
+
+
+class SoqueteFalso:
+    """O que chegou da fita e ainda não foi lido, em ordem de chegada.
+
+    ``a_caminho`` são respostas que a fita ainda vai mandar: a fita aplica
+    mais devagar do que recebe, e só quem espera por elas as vê chegar.
+    """
+
+    def __init__(self):
+        self.fila = []
+        self.a_caminho = []
+        self.espera = session_fita.ESPERA
+
+    def chegar(self):
+        self.fila += self.a_caminho
+        self.a_caminho = []
+
+    def gettimeout(self):
+        return self.espera
+
+    def settimeout(self, segundos):
+        self.espera = segundos
+
+    def recv(self, _tamanho):
+        if not self.fila:
+            raise BlockingIOError("nada por ler")
+        self.fila.pop(0)
+        return b"mensagem"
+
+
 class FitaFalsa:
-    """Um módulo Tuya de mentira, que anota o que mandaram nele."""
+    """Um módulo Tuya de mentira, que anota o que mandaram nele.
+
+    Como o de verdade, cada comando volta um "recebi" e depois um aviso com os
+    valores aplicados — menos o modo (21), que a fita nunca avisa.
+    """
 
     def __init__(self, dps=None, quebrada=False, demora=0.0):
         self.dps = dps or {"20": False, "21": "colour", "24": "000003e800b4"}
@@ -134,14 +186,32 @@ class FitaFalsa:
         # aceita uma sessão por vez, então este número não pode passar de um.
         self.simultaneos = 0
         self.pico = 0
+        self.socket = SoqueteFalso()
+        # A fita sobrecarregada às vezes não avisa: medido a 40 degraus/s.
+        self.sem_aviso = False
+        # Quantos dos próximos comandos a fita joga fora: chegam, ganham o
+        # "recebi" e não são aplicados nem avisados.
+        self.perder = 0
 
-    def status(self):
+    def status(self, nowait=False):
         if self.quebrada:
             return {"Error": "Network Error: Device Unreachable", "Err": "905"}
+        if nowait:
+            self.socket.a_caminho.append(Msg(CONSULTA, {"dps": dict(self.dps)}))
+            return None
         return {"dps": dict(self.dps)}
 
     def close(self):
         self.fechada = True
+
+    def _receive(self):
+        self.socket.chegar()
+        if not self.socket.fila:
+            raise TimeoutError("a fita não respondeu")
+        return self.socket.fila.pop(0)
+
+    def _decode_payload(self, payload):
+        return payload
 
     def set_multiple_values(self, valores, nowait=False):
         self.simultaneos += 1
@@ -151,9 +221,17 @@ class FitaFalsa:
                 time.sleep(self.demora)
             if self.quebrada:
                 return {"Error": "Network Error: Device Unreachable", "Err": "905"}
+            if self.perder:
+                self.perder -= 1
+                self.socket.a_caminho.append(Msg(RECEBI))
+                return None
             self.recebidos.append(dict(valores))
             self.dps.update({str(k): v for k, v in valores.items()})
-            return {"dps": dict(self.dps)}
+            self.socket.a_caminho.append(Msg(RECEBI))
+            if not self.sem_aviso:
+                aviso = {chave: valor for chave, valor in valores.items() if chave != "21"}
+                self.socket.a_caminho.append(Msg(AVISO, {"dps": aviso}))
+            return None
         finally:
             self.simultaneos -= 1
 
@@ -1185,65 +1263,38 @@ def test_fechar_conexoes_fecha_todas(falsas, schema):
     assert session_fita._conexoes == {}
 
 
-class SoqueteFalso:
-    """O que chegou da fita e ainda não foi lido, em ordem de chegada."""
-
-    def __init__(self):
-        self.fila = []
-        self.espera = session_fita.ESPERA
-
-    def gettimeout(self):
-        return self.espera
-
-    def settimeout(self, segundos):
-        self.espera = segundos
-
-    def recv(self, _tamanho):
-        if not self.fila:
-            raise BlockingIOError("nada por ler")
-        self.fila.pop(0)
-        return b"mensagem"
-
-
 class FitaComFila(FitaFalsa):
-    """Uma fita que responde como a de verdade numa conexão que fica aberta.
-
-    Medido nos módulos: comando volta um "recebi" vazio e depois o estado;
-    consulta volta o estado; batimento volta uma resposta vazia. E a tinytuya
-    não confere se a resposta é do pedido que ela fez: lê a mais antiga e, se
-    vier vazia, lê mais uma.
-    """
+    """Uma fita cuja consulta e batimento respondem como os de verdade numa
+    conexão que fica aberta: a tinytuya não confere se a resposta é do pedido
+    que ela fez, lê a mais antiga e, se vier vazia, lê mais uma."""
 
     def __init__(self):
         super().__init__()
-        self.socket = SoqueteFalso()
         self.sinais_de_vida = 0
 
-    def _ler(self):
-        resposta = self.socket.fila.pop(0)
-        if resposta is None and self.socket.fila:
-            resposta = self.socket.fila.pop(0)
-        return resposta
+    def _responder(self, *mensagens):
+        # O que já estava a caminho chega antes da resposta deste pedido.
+        self.socket.chegar()
+        self.socket.fila += mensagens
+        mensagem = self.socket.fila.pop(0)
+        if mensagem.payload is None and self.socket.fila:
+            mensagem = self.socket.fila.pop(0)
+        return mensagem.payload
 
     def heartbeat(self, nowait=True):
         self.sinais_de_vida += 1
-        self.socket.fila.append(None)
+        self.socket.fila.append(Msg(BATIMENTO))
 
-    def status(self):
+    def status(self, nowait=False):
         self.sinais_de_vida += 1
-        self.socket.fila.append({"dps": dict(self.dps)})
-        return self._ler()
-
-    def set_multiple_values(self, valores, nowait=False):
-        self.recebidos.append(dict(valores))
-        self.dps.update({str(k): v for k, v in valores.items()})
-        self.socket.fila += [None, {"dps": dict(valores)}]
-        return self._ler()
+        if nowait:
+            return super().status(nowait=True)
+        return self._responder(Msg(CONSULTA, {"dps": dict(self.dps)}))
 
     def close(self):
         # Fechar com resposta por ler faz o Windows mandar RST, e a fita joga
         # fora o último comando — medido: até 4 em 6 perdidos.
-        self.por_ler_ao_fechar = list(self.socket.fila)
+        self.por_ler_ao_fechar = self.socket.fila + self.socket.a_caminho
         super().close()
 
 
@@ -1266,7 +1317,7 @@ def test_mensagem_que_ninguem_pediu_nao_vira_resposta(com_fila):
     """
     fita, modulo = com_fila
     session_fita.aplicar(fita, True, "015403e80096")
-    modulo.socket.fila.append(None)
+    modulo.socket.fila.append(Msg(BATIMENTO))
 
     assert session_fita.aplicar(fita, True, "011b026101f4") is True
 
@@ -1292,12 +1343,201 @@ def test_fechamento_nao_deixa_resposta_por_ler(com_fila, schema):
         json.dumps({fita.id: {"ligada": True, "cor": "011b026101f4"}}),
     )
     session_fita.aplicar(fita, True, "015403e80096")
-    modulo.socket.fila.append(None)
+    modulo.socket.fila.append(Msg(BATIMENTO))
 
     session_fita.fechar()
 
     assert cor_mandada(modulo) == "011b026101f4"
     assert modulo.por_ler_ao_fechar == []
+
+
+def _cores_mandadas(modulo):
+    return [comando["24"] for comando in modulo.recebidos if "24" in comando]
+
+
+@pytest.fixture
+def com_fade(monkeypatch):
+    """Um fade curto: 10 degraus em 0,2 s."""
+    monkeypatch.setattr(session_fita, "DURACAO_FADE", 0.2)
+    monkeypatch.setattr(session_fita, "RITMO_FADE", 50)
+
+
+def test_degraus_vao_pelo_caminho_mais_curto():
+    """De 350° a 10° passa pelo vermelho (0°), e não dá a volta pelo verde."""
+    degraus = session_fita._degraus(
+        session_fita.Cor(350, 1000, 100), session_fita.Cor(10, 1000, 300), 4
+    )
+    cores = [session_fita.cor_de_hex(degrau) for degrau in degraus]
+    assert [cor.matiz for cor in cores] == [355, 0, 5, 10]
+    assert [cor.brilho for cor in cores] == [150, 200, 250, 300]
+
+
+def test_troca_de_cor_passa_pelas_cores_do_meio(com_fila, com_fade):
+    fita, modulo = com_fila
+    session_fita.aplicar(fita, True, "000003e80064")
+
+    session_fita._vestir(session_fita.Cor(120, 1000, 100))
+
+    cores = _cores_mandadas(modulo)
+    assert "003c03e80064" in cores  # 60°, o meio do caminho do vermelho ao verde
+    assert cores[-1] == "007803e80064"
+
+
+def test_estado_lido_serve_de_partida_para_o_fade(com_fila, com_fade):
+    """É o caso da abertura do app: lê a cor de antes e desliza dela."""
+    fita, modulo = com_fila
+    modulo.dps.update({"20": True, "24": "000003e80064"})
+    session_fita.ler_estado(fita)
+
+    session_fita._vestir(session_fita.Cor(120, 1000, 100))
+
+    assert "003c03e80064" in _cores_mandadas(modulo)
+
+
+def test_sem_saber_de_onde_a_fita_parte_nao_ha_fade(com_fila, com_fade):
+    """Sem ter lido nem mandado nada, o fade partiria de uma cor inventada."""
+    fita, modulo = com_fila
+
+    session_fita._vestir(session_fita.Cor(120, 1000, 100))
+
+    assert modulo.recebidos == [{"21": "colour", "24": "007803e80064"}, {"20": True}]
+
+
+def test_fita_apagada_acende_direto_sem_fade(com_fila, com_fade):
+    """Acender do escuro com fade deixava fita apagada no teste com as fitas
+    de verdade; o usuário preferiu acender direto, a cor antes do liga."""
+    fita, modulo = com_fila
+    session_fita.aplicar(fita, False, "000003e80064")
+    modulo.recebidos.clear()
+
+    session_fita._vestir(session_fita.Cor(120, 1000, 500))
+
+    assert modulo.recebidos == [{"21": "colour", "24": "007803e801f4"}, {"20": True}]
+
+
+def test_apagar_desce_o_brilho_antes_de_desligar(com_fila, com_fade):
+    """O fechamento que devolve a fita apagada: ela escurece, e só então desliga."""
+    fita, modulo = com_fila
+    session_fita.aplicar(fita, True, "000003e801f4")
+    modulo.recebidos.clear()
+
+    session_fita._repor(fita, {"ligada": False, "cor": "011b026101f4"})
+
+    *degraus, final = modulo.recebidos
+    assert final == {"21": "colour", "24": "011b026101f4", "20": False}
+    brilhos = [session_fita.cor_de_hex(degrau["24"]).brilho for degrau in degraus]
+    assert brilhos == sorted(brilhos, reverse=True)
+    assert brilhos[-1] == session_fita.BRILHO_MINIMO
+
+
+def test_troca_nova_interrompe_o_fade_em_curso(com_fila, monkeypatch):
+    """Play no meio do fade da abertura: a cor nova parte de onde a fita está."""
+    monkeypatch.setattr(session_fita, "DURACAO_FADE", 1)
+    monkeypatch.setattr(session_fita, "RITMO_FADE", 50)
+    fita, modulo = com_fila
+    session_fita.aplicar(fita, True, "000003e80064")
+
+    primeira = threading.Thread(
+        target=session_fita._vestir, args=(session_fita.Cor(120, 1000, 100),)
+    )
+    primeira.start()
+    time.sleep(0.2)
+    session_fita._vestir(session_fita.Cor(240, 1000, 100))
+    primeira.join()
+
+    assert _cores_mandadas(modulo)[-1] == "00f003e80064"
+    # A primeira nunca chegou ao fim: nem o último degrau, nem o comando final.
+    assert "007803e80064" not in _cores_mandadas(modulo)
+
+
+def test_fade_so_termina_quando_a_fita_para_de_responder(com_fila):
+    """Os degraus vão sem esperar resposta, e as respostas chegam depois.
+
+    Se o comando final saísse com elas ainda a caminho, leria uma delas como a
+    sua, e a dele sobraria no soquete: é o bug do fechamento que perdia a
+    devolução.
+    """
+    fita, modulo = com_fila
+    session_fita.aplicar(fita, True, "000003e80064")
+    session_fita._geracoes[fita.id] = 1
+
+    session_fita._rajada(fita, ["003c03e80064", "007803e80064"], 1)
+
+    assert modulo.socket.fila == []
+    assert modulo.socket.a_caminho == []
+
+
+def test_fade_sem_aviso_do_fim_segue_na_mesma_conexao(com_fila):
+    """A fita às vezes joga fora o fim da rajada. Quem garante a cor final é o
+    comando final, que é reenviado; trocar de conexão ali só punha uma
+    reconexão no pior momento."""
+    fita, modulo = com_fila
+    session_fita.aplicar(fita, True, "000003e80064")
+    session_fita._geracoes[fita.id] = 1
+    modulo.sem_aviso = True
+
+    session_fita._rajada(fita, ["003c03e80064"], 1)
+
+    assert not getattr(modulo, "fechada", False)
+    assert fita.id in session_fita._conexoes
+
+
+def test_comando_perdido_e_reenviado_na_mesma_conexao(com_fila):
+    """Medido: de vez em quando a fita joga fora um comando, sem aviso. O
+    mesmo comando reenviado pega."""
+    fita, modulo = com_fila
+    session_fita.aplicar(fita, True, "000003e80064")
+    modulo.recebidos.clear()
+    modulo.perder = 1
+
+    assert session_fita.aplicar(fita, False, "") is True
+    assert modulo.recebidos == [{"20": False}]
+    assert not getattr(modulo, "fechada", False)
+
+
+def test_aviso_repetido_de_outro_comando_nao_confirma_este(com_fila):
+    """Visto logo depois de um fade: a fita repetiu o aviso do último degrau
+    depois do comando seguinte. Lido como resposta, o aviso de verdade sobrava
+    no soquete — e fechar com ele por ler faz a fita jogar fora o comando."""
+    fita, modulo = com_fila
+    session_fita.aplicar(fita, True, "000003e80064")
+    modulo.socket.a_caminho.append(Msg(AVISO, {"dps": {"24": "000003e80064"}}))
+
+    assert session_fita.aplicar(fita, False, "") is True
+    assert modulo.socket.fila == []
+    assert modulo.socket.a_caminho == []
+
+
+def test_ler_estado_nao_confunde_aviso_com_estado(com_fila):
+    """No arranque com órfãos, a leitura vem logo depois da devolução, com a
+    segunda cópia do último aviso ainda a caminho. Lida como estado, a fita
+    acesa viraria "apagada" — e o fechamento a desligaria."""
+    fita, modulo = com_fila
+    modulo.dps.update({"20": True, "24": "000003e80064"})
+    session_fita.aplicar(fita, True, "000003e80064")
+    modulo.socket.a_caminho.append(Msg(AVISO, {"dps": {"24": "000003e80064"}}))
+
+    assert session_fita.ler_estado(fita) == {"ligada": True, "cor": "000003e80064"}
+
+
+def test_degraus_repetidos_viram_um_so():
+    """Fade de 50% a 50,2%: sem isso, o último degrau apareceria três vezes, e
+    o aviso do primeiro deles pareceria o do fim."""
+    degraus = session_fita._degraus(
+        session_fita.Cor(0, 1000, 500), session_fita.Cor(0, 1000, 502), 10
+    )
+    assert degraus == ["000003e801f5", "000003e801f6"]
+
+
+def test_previa_nao_faz_fade(com_fila, com_fade):
+    """O controle de brilho tem de acompanhar o dedo, e não correr atrás dele."""
+    fita, modulo = com_fila
+    session_fita.aplicar(fita, True, "000003e80064")
+    modulo.recebidos.clear()
+
+    session_fita._pintar(session_fita.Cor(120, 1000, 100))
+
+    assert modulo.recebidos == [{"21": "colour", "24": "007803e80064"}]
 
 
 def test_duas_varreduras_ao_mesmo_tempo_viram_uma(monkeypatch):

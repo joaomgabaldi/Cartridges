@@ -318,15 +318,17 @@ _batimento_vivo = False
 # Uma conversa de cada vez com cada módulo, e não uma de cada vez no total: as
 # três fitas falam ao mesmo tempo, cada uma com a sua trava. O módulo Tuya
 # aceita uma sessão por vez, então dois comandos simultâneos para a MESMA fita
-# disputam o soquete e voltam com erro de endereço em uso.
-_TRAVAS_FITA: dict[str, threading.Lock] = {}
+# disputam o soquete e voltam com erro de endereço em uso. Reentrante porque o
+# fade segura a fita do primeiro degrau ao comando final, e o comando final
+# passa de novo pela trava.
+_TRAVAS_FITA: dict[str, threading.RLock] = {}
 _TRAVA_DAS_TRAVAS = threading.Lock()
 
 
-def _trava_da(fita: Fita) -> threading.Lock:
+def _trava_da(fita: Fita) -> threading.RLock:
     """A trava daquela fita, criada na primeira vez que alguém fala com ela."""
     with _TRAVA_DAS_TRAVAS:
-        return _TRAVAS_FITA.setdefault(fita.id, threading.Lock())
+        return _TRAVAS_FITA.setdefault(fita.id, threading.RLock())
 
 
 def _conexao(fita: Fita) -> tuple[Any, bool]:
@@ -512,15 +514,31 @@ def fechar_conexoes() -> None:
 
 
 def ler_estado(fita: Fita) -> Optional[dict[str, Any]]:
-    """Se a fita está acesa e em que cor. ``None`` quando ela não responde."""
-    resposta = _conversar(fita, lambda modulo: modulo.status())
+    """Se a fita está acesa e em que cor. ``None`` quando ela não responde.
+
+    Espera a resposta da consulta pelo tipo, e não a primeira mensagem que
+    chegar: no arranque com órfãos, a leitura vem logo depois da devolução,
+    com a segunda cópia do último aviso ainda a caminho — e um aviso só com a
+    cor, lido como estado, faria a fita acesa passar por apagada.
+    """
+
+    def consultar(modulo: Any) -> Any:
+        resposta = modulo.status(nowait=True)
+        if isinstance(resposta, dict) and resposta.get("Error"):
+            return resposta
+        dps = _esperar(modulo, lambda cmd, _dps: cmd == RESPOSTA_DA_CONSULTA)
+        return {"Error": "a fita não respondeu à consulta"} if dps is None else {"dps": dps}
+
+    resposta = _conversar(fita, consultar)
     dps = (resposta or {}).get("dps") if isinstance(resposta, dict) else None
     if not isinstance(dps, dict):
         return None
-    return {
+    estado = {
         "ligada": bool(dps.get(DP_LIGADA, False)),
         "cor": str(dps.get(DP_COR, "")),
     }
+    _mostrada[fita.id] = (estado["ligada"], estado["cor"])
+    return estado
 
 
 def aplicar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
@@ -537,17 +555,239 @@ def aplicar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
     piscar de olhos e é justamente o que se vê num quarto escuro.
     """
     if not cor_hex:
-        return _mandar(fita, {DP_LIGADA: ligada})
-    if not ligada:
-        return _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex, DP_LIGADA: False})
-    return _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex}) and _mandar(
-        fita, {DP_LIGADA: True}
-    )
+        feito = _mandar(fita, {DP_LIGADA: ligada})
+    elif not ligada:
+        feito = _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex, DP_LIGADA: False})
+    else:
+        feito = _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex}) and _mandar(
+            fita, {DP_LIGADA: True}
+        )
+
+    # Deu errado no meio, não se sabe o que a fita mostra: o próximo fade não
+    # tem de onde partir e vai direto.
+    if feito:
+        _mostrada[fita.id] = (ligada, cor_hex or _mostrada.get(fita.id, (False, ""))[1])
+    else:
+        _mostrada.pop(fita.id, None)
+    return feito
 
 
 def _mandar(fita: Fita, valores: dict[str, Any]) -> bool:
-    """Um comando para uma fita. Nunca levanta; devolve se deu certo."""
-    return _conversar(fita, lambda modulo: modulo.set_multiple_values(valores)) is not None
+    """Um comando para uma fita. Nunca levanta; devolve se deu certo.
+
+    Confirmado pelo aviso em que a fita diz que está nestes valores, e não pela
+    resposta que a tinytuya leria (ver ``_esperar``). Com a confirmação, o
+    comando foi aplicado de verdade: fechar a conexão depois disso não perde
+    nada, mesmo com a cópia do aviso ainda a caminho.
+    """
+
+    def mandar(modulo: Any) -> Any:
+        # De vez em quando a fita joga fora um comando, sem aviso — mais logo
+        # depois de um fade. O mesmo comando reenviado pega; medido.
+        for _envio in range(ENVIOS):
+            resposta = modulo.set_multiple_values(valores, nowait=True)
+            if isinstance(resposta, dict) and resposta.get("Error"):
+                return resposta
+            if _alcancou(modulo, valores, ESPERA_AVISO / ENVIOS):
+                return True
+        return {"Error": "a fita não avisou que aplicou o comando"}
+
+    return _conversar(fita, mandar) is not None
+
+
+# endregion
+# region Fade
+
+# A fita não sabe fazer fade sozinha: o ponto 28 ("gradiente") é aceito e
+# ignorado nestes módulos. Então o fade é o app mandando as cores do meio, uma
+# atrás da outra, sem esperar resposta. Medido com as três fitas juntas: a 30
+# degraus por segundo elas acompanham com meio segundo de atraso constante; a
+# 40 o atraso cresce e elas começam a jogar degraus fora; a 60 param no meio
+# do caminho. Os degraus menores vêm da duração: 2 s a 30/s dá degraus do
+# tamanho dos de 1,5 s a 40/s. O degrau perdido não aparece; o que não pode se
+# perder é o fim, e por isso o fim vai sempre num comando que espera resposta.
+RITMO_FADE = 30
+DURACAO_FADE = 2
+
+# O que cada fita está mostrando agora, por id: se está acesa, e a cor em
+# hexadecimal. Sem isso o fade não tem de onde partir — e ler a fita antes de
+# cada troca custaria uma volta de rede a cada play. Fita que não está aqui
+# muda direto, sem fade.
+_mostrada: dict[str, tuple[bool, str]] = {}
+
+# Cada troca pedida para uma fita ganha um número. O fade que vê o número da
+# sua fita mudar para de mandar degraus: outra troca chegou (o play no meio do
+# fade da abertura), e ela parte de onde este parou.
+_geracoes: dict[str, int] = {}
+
+
+def _degraus(origem: Cor, destino: Cor, passos: int) -> list[str]:
+    """As cores do caminho, sem a origem e com o destino, em hexadecimal.
+
+    A matiz vai pelo lado mais curto do círculo: do vermelho ao roxo passa pelo
+    magenta, e não dá a volta pelo verde e pelo azul.
+    """
+    matiz = (destino.matiz - origem.matiz + 180) % 360 - 180
+    caminho = []
+    anterior = hsv_hex(origem)
+    for passo in range(1, passos + 1):
+        andado = passo / passos
+        cor_hex = hsv_hex(
+            Cor(
+                round(origem.matiz + matiz * andado) % 360,
+                round(origem.saturacao + (destino.saturacao - origem.saturacao) * andado),
+                round(origem.brilho + (destino.brilho - origem.brilho) * andado),
+            )
+        )
+        # Degrau igual ao anterior não muda nada na fita, e o fim do fade é
+        # reconhecido pelo aviso do último degrau: repetido, o aviso da
+        # primeira cópia pareceria o do fim.
+        if cor_hex != anterior:
+            caminho.append(cor_hex)
+            anterior = cor_hex
+    return caminho
+
+
+def _vigente(fita: Fita, geracao: int) -> bool:
+    return _geracoes.get(fita.id) == geracao
+
+
+# Os códigos das mensagens da fita no protocolo Tuya que importam aqui: o
+# aviso de estado, que ela manda depois de aplicar um comando (o ``STATUS`` da
+# tinytuya), e a resposta a uma consulta (o ``DP_QUERY``). Os "recebi" são 7.
+AVISO_DE_ESTADO = 8
+RESPOSTA_DA_CONSULTA = 10
+
+# Quanto esperar pela mensagem certa. Medido a 30 degraus/s com as três fitas
+# juntas: o aviso do último degrau chega até meio segundo depois do fim da
+# rajada, e uma vez chegou em 1,75 s. Um comando solto é avisado em bem menos
+# de um segundo, e por isso o comando divide a espera em três envios.
+ESPERA_AVISO = 3
+ENVIOS = 3
+
+
+def _esperar(
+    modulo: Any, aceita: Any, prazo: float = ESPERA_AVISO
+) -> Optional[dict[str, Any]]:
+    """Lê o que a fita manda até chegar a mensagem que ``aceita(cmd, dps)``
+    reconhece, e devolve os valores dela. ``None`` quando ela não vem no prazo.
+
+    Leitura crua, e não a da tinytuya, que pega a mensagem mais antiga seja ela
+    qual for — a fita manda cada aviso duas vezes, e a segunda cópia virava a
+    resposta do pedido seguinte. Aqui, o que não é a resposta procurada é
+    pulado.
+    """
+    soquete = modulo.socket
+    espera = soquete.gettimeout()
+    limite = time.monotonic() + prazo
+    try:
+        while (falta := limite - time.monotonic()) > 0:
+            soquete.settimeout(falta)
+            mensagem = modulo._receive()
+            if not mensagem.payload:
+                continue
+            dps = (modulo._decode_payload(mensagem.payload) or {}).get("dps") or {}
+            if aceita(mensagem.cmd, dps):
+                return dps
+    except Exception:  # prazo do soquete, ou mensagem que não se deixou ler
+        pass
+    finally:
+        soquete.settimeout(espera)
+    return None
+
+
+def _alcancou(
+    modulo: Any, valores: dict[str, Any], prazo: float = ESPERA_AVISO
+) -> bool:
+    """Lê o que a fita manda até ela avisar que está nestes valores.
+
+    Os avisos chegam na ordem dos comandos: quando chega o destes valores, os
+    de antes já chegaram. O aviso não traz tudo o que foi mandado — o modo
+    (21) nunca vem —, então vale o aviso que traz algum dos valores e em que
+    todos os que traz batem. A cópia do aviso de um comando anterior traz
+    outro valor e é pulada.
+    """
+
+    def aceita(cmd: int, dps: dict[str, Any]) -> bool:
+        trazidos = [chave for chave in valores if chave in dps]
+        return (
+            cmd == AVISO_DE_ESTADO
+            and bool(trazidos)
+            and all(str(dps[chave]).lower() == str(valores[chave]).lower() for chave in trazidos)
+        )
+
+    return _esperar(modulo, aceita, prazo) is not None
+
+
+def _rajada(fita: Fita, caminho: list[str], geracao: int) -> None:
+    """Manda os degraus no ritmo do fade, sem esperar resposta de nenhum.
+
+    No fim espera a fita alcançar o último degrau: ela aplica mais devagar do
+    que recebe, e avisa de cada degrau aos lotes, até um segundo depois do
+    último — medido. Sem essa espera, o comando final entraria na fila atrás
+    dos degraus e estouraria a própria espera dele. O marco é o aviso do
+    último degrau: nem o silêncio nem uma consulta de estado servem, porque a
+    fita fica calada no meio dos lotes e responde à consulta com o degrau em
+    que está, antes dos avisos que faltam. Às vezes ela joga fora o fim da
+    rajada e o aviso não vem; segue-se assim mesmo, e quem garante a cor final
+    é o comando final, que é reenviado até ser avisado.
+    """
+
+    def degraus(modulo: Any) -> Any:
+        inicio = time.monotonic()
+        ultimo = None
+        for indice, cor_hex in enumerate(caminho):
+            if not _vigente(fita, geracao):
+                break
+            resposta = modulo.set_multiple_values({DP_COR: cor_hex}, nowait=True)
+            if isinstance(resposta, dict) and resposta.get("Error"):
+                return resposta
+            ultimo = cor_hex
+            _mostrada[fita.id] = (True, cor_hex)
+            falta = inicio + (indice + 1) / RITMO_FADE - time.monotonic()
+            if falta > 0:
+                time.sleep(falta)
+        if ultimo is not None:
+            _alcancou(modulo, {DP_COR: ultimo})
+        return True
+
+    _conversar(fita, degraus)
+
+
+def _transitar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
+    """Leva a fita ao estado pedido deslizando, e confirma o fim.
+
+    Síncrona: segura a fita do primeiro degrau ao comando final, para duas
+    trocas nunca se misturarem na mesma fita. Devolve se o fim deu certo, e
+    falso também quando outra troca tomou o lugar desta no meio do caminho.
+    """
+    with _TRAVA_DAS_TRAVAS:
+        geracao = _geracoes[fita.id] = _geracoes.get(fita.id, 0) + 1
+
+    with _trava_da(fita):
+        if not _vigente(fita, geracao):
+            return False
+
+        passos = round(DURACAO_FADE * RITMO_FADE)
+        antes = _mostrada.get(fita.id)
+        alvo = cor_de_hex(cor_hex)
+        # Só fita acesa desliza. A apagada acende direto, a cor antes do liga:
+        # acender do escuro com fade deixava fita apagada no teste com as fitas
+        # de verdade.
+        origem = cor_de_hex(antes[1]) if antes is not None and antes[0] else None
+        if passos and origem is not None:
+            # Apagar é escurecer até o mínimo e só então desligar.
+            destino = alvo if ligada else origem._replace(brilho=BRILHO_MINIMO)
+            if destino is not None and destino != origem:
+                _rajada(fita, _degraus(origem, destino, passos), geracao)
+
+        if not _vigente(fita, geracao):
+            return False
+        return aplicar(fita, ligada, cor_hex)
+
+
+# endregion
+# region Varredura
 
 
 # A varredura é broadcast: ela acha as fitas na rede de casa pelo id, e é o
@@ -604,8 +844,9 @@ CHAVE_ESTADO = "fita-estado-anterior"
 # é uma fita muda: o ESPERA do soquete. O prazo fica um segundo acima disso, e
 # não abaixo — com quatro segundos, uma única fita fora da tomada fazia o
 # fechamento desistir e as três ficavam com a cor do app até o arranque
-# seguinte. Estourado o prazo, quem termina o serviço ainda é o arranque.
-PRAZO_FECHAMENTO = ESPERA + 1
+# seguinte. O fade vem antes da espera, e entra na conta. Estourado o prazo,
+# quem termina o serviço ainda é o arranque.
+PRAZO_FECHAMENTO = ESPERA + DURACAO_FADE + 1
 
 # Um arranque de cada vez. Guardar o estado é "lê a chave, conversa com as
 # fitas, grava a chave", e o miolo disso leva segundos de rede: sem a trava,
@@ -658,22 +899,26 @@ def _em_paralelo(itens: list[Any], tarefa: Any) -> list[Any]:
 
 
 def _vestir(cor: Cor) -> None:
-    """Acende todas as fitas na cor pedida, ao mesmo tempo. Síncrono; nunca levanta.
+    """Acende todas as fitas na cor pedida, ao mesmo tempo e deslizando.
+    Síncrono; nunca levanta.
 
     Fita que não responde fica como está — e depois de três falhas seguidas é
     suspensa, para não atrasar as outras. O endereço de cada fita é o que o
     assistente achou: IP mudou, roda-se o assistente de novo.
     """
     cor_hex = hsv_hex(cor)
-    _em_paralelo(fitas(), lambda fita: aplicar(fita, True, cor_hex))
+    _em_paralelo(fitas(), lambda fita: _transitar(fita, True, cor_hex))
 
 
 def _pintar(cor: Cor) -> None:
-    """Só a cor, sem mexer no liga/desliga. Para a prévia ao vivo."""
+    """Só a cor, sem mexer no liga/desliga e sem fade. Para a prévia ao vivo."""
     cor_hex = hsv_hex(cor)
-    _em_paralelo(
-        fitas(), lambda fita: _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex})
-    )
+
+    def pintar(fita: Fita) -> None:
+        if _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex}) and fita.id in _mostrada:
+            _mostrada[fita.id] = (_mostrada[fita.id][0], cor_hex)
+
+    _em_paralelo(fitas(), pintar)
 
 
 # A cor que a prévia ainda deve mostrar, e a thread que a serve. Arrastar o
@@ -782,14 +1027,14 @@ def _estados_guardados() -> dict[str, Any]:
 
 
 def _repor(fita: Fita, estado: Any) -> None:
-    """Devolve uma fita ao estado guardado dela.
+    """Devolve uma fita ao estado guardado dela, deslizando.
 
     Estado que não é dicionário é chave mexida à mão, e não pode virar
     ``AttributeError`` cru aqui dentro.
     """
     if not isinstance(estado, dict):
         return
-    aplicar(fita, bool(estado.get("ligada")), str(estado.get("cor", "")))
+    _transitar(fita, bool(estado.get("ligada")), str(estado.get("cor", "")))
 
 
 def devolver_removidas(removidas: list[Fita]) -> None:
