@@ -140,9 +140,6 @@ class FitaFalsa:
             return {"Error": "Network Error: Device Unreachable", "Err": "905"}
         return {"dps": dict(self.dps)}
 
-    def heartbeat(self, nowait=True):
-        self.batimentos = getattr(self, "batimentos", 0) + 1
-
     def close(self):
         self.fechada = True
 
@@ -1186,6 +1183,121 @@ def test_fechar_conexoes_fecha_todas(falsas, schema):
 
     assert all(getattr(modulo, "fechada", False) for modulo in modulos.values())
     assert session_fita._conexoes == {}
+
+
+class SoqueteFalso:
+    """O que chegou da fita e ainda não foi lido, em ordem de chegada."""
+
+    def __init__(self):
+        self.fila = []
+        self.espera = session_fita.ESPERA
+
+    def gettimeout(self):
+        return self.espera
+
+    def settimeout(self, segundos):
+        self.espera = segundos
+
+    def recv(self, _tamanho):
+        if not self.fila:
+            raise BlockingIOError("nada por ler")
+        self.fila.pop(0)
+        return b"mensagem"
+
+
+class FitaComFila(FitaFalsa):
+    """Uma fita que responde como a de verdade numa conexão que fica aberta.
+
+    Medido nos módulos: comando volta um "recebi" vazio e depois o estado;
+    consulta volta o estado; batimento volta uma resposta vazia. E a tinytuya
+    não confere se a resposta é do pedido que ela fez: lê a mais antiga e, se
+    vier vazia, lê mais uma.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.socket = SoqueteFalso()
+        self.sinais_de_vida = 0
+
+    def _ler(self):
+        resposta = self.socket.fila.pop(0)
+        if resposta is None and self.socket.fila:
+            resposta = self.socket.fila.pop(0)
+        return resposta
+
+    def heartbeat(self, nowait=True):
+        self.sinais_de_vida += 1
+        self.socket.fila.append(None)
+
+    def status(self):
+        self.sinais_de_vida += 1
+        self.socket.fila.append({"dps": dict(self.dps)})
+        return self._ler()
+
+    def set_multiple_values(self, valores, nowait=False):
+        self.recebidos.append(dict(valores))
+        self.dps.update({str(k): v for k, v in valores.items()})
+        self.socket.fila += [None, {"dps": dict(valores)}]
+        return self._ler()
+
+    def close(self):
+        # Fechar com resposta por ler faz o Windows mandar RST, e a fita joga
+        # fora o último comando — medido: até 4 em 6 perdidos.
+        self.por_ler_ao_fechar = list(self.socket.fila)
+        super().close()
+
+
+@pytest.fixture
+def com_fila(monkeypatch, schema):
+    schema.set_boolean("session-fita", True)
+    fita = session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")
+    session_fita.gravar_fitas([fita])
+    modulo = FitaComFila()
+    monkeypatch.setattr(session_fita, "_dispositivo", lambda _fita: modulo)
+    return fita, modulo
+
+
+def test_mensagem_que_ninguem_pediu_nao_vira_resposta(com_fila):
+    """Foi o "Testar" dizendo que as três fitas estavam fora do ar.
+
+    Uma mensagem antiga no soquete (a resposta de um batimento, ou a fita
+    avisando de uma troca feita pelo Smart Life) virava a resposta do comando
+    seguinte: a tinytuya lia ela e o "recebi" vazio, e devolvia nada.
+    """
+    fita, modulo = com_fila
+    session_fita.aplicar(fita, True, "015403e80096")
+    modulo.socket.fila.append(None)
+
+    assert session_fita.aplicar(fita, True, "011b026101f4") is True
+
+
+def test_batimento_nao_deixa_resposta_por_ler(com_fila, monkeypatch):
+    fita, modulo = com_fila
+    monkeypatch.setattr(session_fita, "BATIMENTO", 0.01)
+    session_fita.aplicar(fita, True, "015403e80096")
+
+    time.sleep(0.1)
+    assert modulo.sinais_de_vida > 1
+    assert fita.id in session_fita._conexoes
+    session_fita.fechar_conexoes()
+
+    assert modulo.por_ler_ao_fechar == []
+
+
+def test_fechamento_nao_deixa_resposta_por_ler(com_fila, schema):
+    """Resposta por ler no fechamento perdia a devolução de uma ou duas fitas."""
+    fita, modulo = com_fila
+    schema.set_string(
+        session_fita.CHAVE_ESTADO,
+        json.dumps({fita.id: {"ligada": True, "cor": "011b026101f4"}}),
+    )
+    session_fita.aplicar(fita, True, "015403e80096")
+    modulo.socket.fila.append(None)
+
+    session_fita.fechar()
+
+    assert cor_mandada(modulo) == "011b026101f4"
+    assert modulo.por_ler_ao_fechar == []
 
 
 def test_duas_varreduras_ao_mesmo_tempo_viram_uma(monkeypatch):
