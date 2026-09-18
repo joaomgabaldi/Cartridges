@@ -1070,7 +1070,7 @@ class DetailsDialog(Adw.Dialog):
         """
         if self.game:
             return session_fita.cor_do_jogo(self.game, self._fita_redefinir)
-        return session_fita.roxo()
+        return session_fita.cor_do_app()
 
     def atualizar_fita(self) -> None:
         """Mostra a cor que vale hoje: a escolhida ou a que sai da capa."""
@@ -1130,7 +1130,7 @@ class DetailsDialog(Adw.Dialog):
         """
         if self._fita_previa_usada:
             self._fita_previa_usada = False
-            session_fita.previa(session_fita.roxo())
+            session_fita.previa(session_fita.cor_do_app())
 
     def redefinir_fita(self, *_args: Any) -> None:
         """Marca a intenção de voltar ao automático. Quem apaga é o Aplicar."""

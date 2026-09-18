@@ -57,6 +57,7 @@
           <li>O brilho aparece em porcentagem e responde na hora: mexeu no controle, as fitas acompanham, nas Preferências e na tela do jogo</li>
           <li>O app mantém a conexão com cada fita aberta enquanto estiver rodando, e a troca de cor ficou praticamente instantânea. Fita que parou de responder três vezes seguidas é deixada de lado até o botão "Testar" ser usado ou o app abrir de novo, e para de atrasar as outras</li>
           <li>Na tela do jogo, o seletor de cor abre ali mesmo, num balão, e cada cor escolhida já acende nas fitas na hora — dá para testar várias cores sem aplicar nenhuma</li>
+          <li>A cor das fitas fora do jogo pode ser trocada em Preferências, na aba Personalização. O roxo do Cartridges é o padrão, com um botão ao lado para voltar a ele; a cor escolhida vale também para os jogos sem capa</li>
         </ul>
       </description>
     </release>

@@ -409,7 +409,7 @@ def test_arrancar_desfaz_o_orfao_antes_de_guardar_o_novo(falsas, schema):
 
     session_fita._arrancar()
 
-    roxo = session_fita.hsv_hex(session_fita.roxo())
+    roxo = session_fita.hsv_hex(session_fita.cor_do_app())
     # Só as cores, na ordem: a do órfão primeiro, a do app depois. Os comandos
     # de liga/desliga entram no meio, porque acender manda a cor antes do liga.
     cores = [c["24"] for c in modulos["eb0"].recebidos if "24" in c]
@@ -1032,7 +1032,7 @@ def test_nunca_ha_duas_conversas_com_a_mesma_fita(falsas, schema):
     modulos = falsas(False, False, demora=0.05)
 
     linhas = [
-        threading.Thread(target=session_fita._vestir, args=(session_fita.roxo(),))
+        threading.Thread(target=session_fita._vestir, args=(session_fita.cor_do_app(),))
         for _ in range(4)
     ]
     for linha in linhas:
@@ -1109,7 +1109,7 @@ def test_a_conexao_aberta_e_reaproveitada(falsas, monkeypatch, schema):
         session_fita, "_dispositivo", lambda fita: abertas.append(fita.id) or modulos[fita.id]
     )
 
-    session_fita._vestir(session_fita.roxo())
+    session_fita._vestir(session_fita.cor_do_app())
     session_fita._vestir(session_fita.Cor(120, 1000, 180))
 
     assert abertas == ["eb0"]
@@ -1180,7 +1180,7 @@ def test_uma_falha_solta_nao_suspende(falsas, schema):
 def test_fechar_conexoes_fecha_todas(falsas, schema):
     schema.set_boolean("session-fita", True)
     modulos = falsas(False, False)
-    session_fita._vestir(session_fita.roxo())
+    session_fita._vestir(session_fita.cor_do_app())
 
     session_fita.fechar_conexoes()
 
@@ -1261,3 +1261,65 @@ def test_escolher_no_seletor_ja_acende_a_fita_sem_aplicar(tela, monkeypatch):
     assert abs(pedidas[-1].matiz - 200) <= 2
     # Prévia não é escolha: nada foi gravado sem o Aplicar.
     assert not session_fita.escolhida(jogo.game_id)
+
+
+def test_a_cor_do_app_vem_de_fabrica_no_roxo(schema):
+    assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
+
+
+def test_a_cor_escolhida_vira_a_cor_oficial_do_app(falsas, schema):
+    """Vermelho escolhido nas Preferências é o que acende com o app aberto."""
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+    session_fita.salvar_tom_do_app(0, 1000)
+
+    session_fita._guardar_e_vestir()
+
+    cor = session_fita.cor_de_hex(cor_mandada(modulos["eb0"]))
+    assert (cor.matiz, cor.saturacao) == (0, 1000)
+
+
+def test_voltar_ao_roxo_desfaz_a_escolha(schema):
+    session_fita.salvar_tom_do_app(210, 800)
+    session_fita.redefinir_tom_do_app()
+    assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
+
+
+def test_jogo_sem_capa_usa_a_cor_escolhida_para_o_app(schema):
+    session_fita.salvar_tom_do_app(210, 800)
+    jogo = SimpleNamespace(game_id="sem-capa", name="X", get_cover_path=lambda: None)
+
+    cor = session_fita.cor_do_jogo(jogo)
+
+    assert (cor.matiz, cor.saturacao) == (210, 800)
+
+
+def test_escolher_a_cor_do_app_nas_preferencias_grava_e_mostra(monkeypatch, schema):
+    """Sem botão de aplicar: as Preferências gravam na hora, e a fita acompanha."""
+    import cartridges.preferences as preferences_module  # noqa: PLC0415
+    from cartridges.metadata_refresh import MetadataRefresh  # noqa: PLC0415
+
+    monkeypatch.setattr(preferences_module, "get_metadata_refresh", MetadataRefresh)
+    pedidas = []
+    monkeypatch.setattr(session_fita, "previa", pedidas.append)
+    preferencias = preferences_module.CartridgesPreferences()
+
+    # Abrir a tela não conta como escolha.
+    assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
+    assert not preferencias.fita_cor_app_reset.get_visible()
+    assert pedidas == []
+
+    preferencias.fita_cor_app_seletor.set_property(
+        "rgba", session_fita.cor_para_rgba(session_fita.Cor(210, 1000, 0))
+    )
+
+    matiz, saturacao = session_fita.tom_do_app()
+    assert abs(matiz - 210) <= 2
+    assert abs(saturacao - 1000) <= 10
+    assert preferencias.fita_cor_app_reset.get_visible()
+    assert pedidas
+
+    preferencias.voltar_ao_roxo()
+
+    assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
+    assert not preferencias.fita_cor_app_reset.get_visible()

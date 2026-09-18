@@ -157,6 +157,45 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         };
       }
 
+      // A cor das fitas quando não há jogo correndo. Mesmo seletor em balão da
+      // tela do jogo, pelo mesmo motivo: cada tentativa aparece na parede na
+      // hora, sem confirmar nada.
+      Adw.ActionRow fita_cor_app_row {
+        title: _("Cor fora do jogo");
+        subtitle: _("A cor das fitas com o app aberto e nenhum jogo rodando");
+        sensitive: bind session_fita_switch.active;
+        activatable-widget: fita_cor_app_menu;
+
+        [suffix]
+        Button fita_cor_app_reset {
+          valign: center;
+          icon-name: "edit-undo-symbolic";
+          tooltip-text: _("Voltar ao roxo do Cartridges");
+          visible: false;
+
+          styles [
+            "flat",
+          ]
+        }
+
+        [suffix]
+        MenuButton fita_cor_app_menu {
+          valign: center;
+          tooltip-text: _("Escolher a cor das fitas fora do jogo");
+
+          child: DrawingArea fita_cor_app_amostra {
+            content-width: 22;
+            content-height: 22;
+          };
+
+          popover: Popover {
+            child: ColorChooserWidget fita_cor_app_seletor {
+              use-alpha: false;
+            };
+          };
+        }
+      }
+
       Adw.ActionRow fita_configurar_row {
         title: _("Configurar fitas");
         subtitle: _("Busca as fitas na sua conta Tuya");
