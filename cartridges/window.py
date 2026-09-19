@@ -864,12 +864,14 @@ class CartridgesWindow(Adw.ApplicationWindow):
         — em vez de um ícone ao lado, que ficava solto numa linha que só tem
         texto.
 
-        Continua um rótulo comum, idêntico aos dois ao lado: nem link nem botão.
-        Um link se pinta da cor de destaque e se sublinha, um botão ganha
+        Continua um rótulo comum, na mesma cor e fonte dos dois ao lado: nem
+        link nem botão. Um link se pinta da cor de destaque e um botão ganha
         preenchimento e canto arredondado, e qualquer um dos dois quebra uma
         linha cujos três itens são o mesmo tipo de informação — a versão com
-        link foi vista na tela e destoava. Quem diz que dá para clicar é o
-        cursor de mão e a dica; o desenho da linha não muda em nada.
+        link foi vista na tela e destoava. Só o cursor de mão e a dica, porém,
+        não bastavam: nada na tela dizia que valia a pena passar o mouse ali.
+        O sublinhado (``.playtime-clickable``, na cor do próprio texto) é o
+        mínimo que avisa sem destoar.
 
         Sem sessão gravada nada disso aparece e o rótulo é só um rótulo: uma
         lista vazia é uma promessa que a tela não cumpre. É o caso de toda a
@@ -894,6 +896,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
             if self._playtime_clickable
             else None
         )
+        if self._playtime_clickable:
+            self.details_view_playtime.add_css_class("playtime-clickable")
+        else:
+            self.details_view_playtime.remove_css_class("playtime-clickable")
 
     def update_install_size_label(self, game: Game) -> None:
         """O tamanho da instalação, quando ele já foi medido.

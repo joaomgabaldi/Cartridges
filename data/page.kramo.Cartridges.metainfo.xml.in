@@ -49,6 +49,7 @@
     <release version="2026.09.19" date="2026-09-19">
       <description translate="no">
         <ul>
+          <li>O histórico de sessões ganhou um gráfico de horas jogadas por dia, ao lado da lista, com a semana, o mês ou todo o período; passe o mouse sobre um dia para ver quanto foi jogado nele. Na tela de detalhes, o “Tempo de jogo” aparece sublinhado quando dá para clicar nele e abrir o histórico</li>
           <li>Um jogo cujo HD externo estava desligado quando o app abriu não perde mais o comando editado à mão, e um atalho com argumentos entre aspas (GOG Galaxy, Battle.net, emuladores com ROMs como “Jogo (USA)”) agora entra na biblioteca</li>
           <li>“Atualizar capas” não troca mais uma capa animada .webp escolhida à mão, e a capa automática do SteamGridDB não pega mais o jogo errado quando o título tem dois-pontos</li>
           <li>As fitas de LED não ficam mais presas na cor do app: fechar o assistente ou religar o recurso com o app aberto não as faz piscar nem esquece como estavam antes; uma fita que caiu da rede durante o jogo é devolvida ao fechar; e uma fita que não respondeu ao abrir o app não é pintada sem ter como voltar. Desligar “Contar horas de jogo” não trava mais a configuração das fitas, e uma troca de cor não perde mais para o fim de uma sessão curta</li>
