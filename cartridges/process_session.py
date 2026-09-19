@@ -76,6 +76,11 @@ class ProcessSession:
     PACKAGE_STARTUP_GRACE = 90
     # How often to write accumulated time to disk (crash/power-loss safety net).
     PERSIST_INTERVAL = 60
+    # A gap between two polls longer than this is not play: the monotonic clock
+    # keeps counting while the PC sleeps, and a game left paused overnight
+    # would otherwise be credited the whole night on the first poll after
+    # waking. Such a gap is credited as a single poll interval.
+    MAX_GAP = POLL_INTERVAL + 30
 
     def __init__(self, game: Game) -> None:
         self.game = game
@@ -268,6 +273,15 @@ class ProcessSession:
         now = monotonic()
         if self.counting and self.last_tick is not None:
             elapsed = int(now - self.last_tick)
+            if elapsed > self.MAX_GAP:
+                logging.info(
+                    "%ss gap while tracking %s (sleep?); counting %ss",
+                    elapsed,
+                    self.game.name,
+                    self.POLL_INTERVAL,
+                )
+                self.last_tick = now - self.POLL_INTERVAL
+                elapsed = self.POLL_INTERVAL
             if elapsed > 0:
                 self.game.playtime += elapsed
                 self.session_seconds += elapsed
@@ -318,16 +332,22 @@ class ProcessSession:
         if ProcessSession.active is self:
             ProcessSession.active = None
 
-        shared.win.hide_session_blocker()
-
         if fall_back:
             # avoid import cycles
             from cartridges.session_window import SessionWindow
 
-            # Deliberately no `shared.win.present()`: the main window was
-            # minimised on launch and the game may well be in the foreground.
+            # Only the tracker changes hands. The game is still running, so the
+            # blocker, the wallpaper, the LED strips, the parked window and the
+            # suspended controller all stay as they are: `show_session_blocker`
+            # recognises the same game and dresses nothing again.
+            #
+            # Deliberately no `shared.win.present()`: the main window is out of
+            # the way (minimised, or parked on the session monitor) and the game
+            # may well be in the foreground.
             SessionWindow(self.game).present()
             return
+
+        shared.win.hide_session_blocker()
 
         if never_launched:
             toast = Adw.Toast.new(

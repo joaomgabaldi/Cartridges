@@ -559,9 +559,9 @@ def test_estado_adulterado_nao_levanta(falsas, schema):
 
 
 def test_segunda_chamada_nao_repinta_o_estado_guardado(falsas, schema):
-    """O ``do_activate`` dispara de novo quando uma segunda instância é
-    encaminhada para a viva. A chave não pode ser regravada aí: o estado a
-    devolver é o primeiro, e não o roxo que o próprio app pintou por cima.
+    """O reacender das Preferências passa por aqui com a chave já gravada. Ela
+    não pode ser regravada aí: o estado a devolver é o primeiro, e não o roxo
+    que o próprio app pintou por cima.
     """
     schema.set_boolean("session-fita", True)
     modulos = falsas(False)
@@ -598,6 +598,10 @@ def test_comecar_tira_a_cor_do_jogo_dentro_da_thread(
     jogo = _jogo(tmp_path)
     escolha = session_fita.Cor(340, 1000, 150)
     session_fita.salvar_cor(jogo.game_id, jogo.name, escolha)
+    # Só a fita com estado de antes guardado é pintada.
+    schema.set_string(
+        session_fita.CHAVE_ESTADO, json.dumps({"eb0": {"ligada": False, "cor": ""}})
+    )
 
     tarefas = []
     monkeypatch.setattr(session_fita, "_em_thread", tarefas.append)
@@ -689,17 +693,17 @@ def test_ligar_o_interruptor_arranca_o_ciclo(monkeypatch, schema):
     """
     session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
     chamadas = []
-    monkeypatch.setattr(session_fita, "abrir", lambda: chamadas.append("abrir"))
+    monkeypatch.setattr(session_fita, "reacender", lambda: chamadas.append("reacender"))
 
     preferencias = _preferencias(monkeypatch)
     assert chamadas == []
 
     preferencias.session_fita_switch.set_active(True)
-    assert chamadas == ["abrir"]
+    assert chamadas == ["reacender"]
 
     # Desligar não desfaz nada aqui: quem devolve as fitas é o fechamento.
     preferencias.session_fita_switch.set_active(False)
-    assert chamadas == ["abrir"]
+    assert chamadas == ["reacender"]
 
 
 def test_abrir_a_tela_com_o_recurso_ligado_nao_arranca(monkeypatch, schema):
@@ -720,7 +724,7 @@ def test_abrir_a_tela_com_o_recurso_ligado_nao_arranca(monkeypatch, schema):
         ),
     )
     chamadas = []
-    monkeypatch.setattr(session_fita, "abrir", lambda: chamadas.append("abrir"))
+    monkeypatch.setattr(session_fita, "reacender", lambda: chamadas.append("reacender"))
 
     preferencias = _preferencias(monkeypatch)
 
@@ -729,9 +733,9 @@ def test_abrir_a_tela_com_o_recurso_ligado_nao_arranca(monkeypatch, schema):
 
 
 def test_ligar_grava_a_chave_antes_de_arrancar(monkeypatch, schema):
-    """A chave tem de estar gravada quando o ``abrir`` roda, e não depois.
+    """A chave tem de estar gravada quando o ``reacender`` roda, e não depois.
 
-    ``abrir`` decide pela chave, via ``ligada()``, e não pelo widget. Deixar
+    ``reacender`` decide pela chave, via ``ligada()``, e não pelo widget. Deixar
     isso por conta do ``bind`` do GSettings amarraria o recurso à ordem em que
     os handlers foram conectados: invertida, o ciclo não armaria, em silêncio.
     O dublê lê a chave no momento da chamada, que é o instante que importa.
@@ -739,7 +743,7 @@ def test_ligar_grava_a_chave_antes_de_arrancar(monkeypatch, schema):
     session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
     vista = []
     monkeypatch.setattr(
-        session_fita, "abrir", lambda: vista.append(schema.get_boolean("session-fita"))
+        session_fita, "reacender", lambda: vista.append(schema.get_boolean("session-fita"))
     )
 
     preferencias = _preferencias(monkeypatch)
@@ -798,7 +802,7 @@ def test_fechar_o_assistente_com_fita_nova_arranca_o_ciclo(monkeypatch, schema):
     """Configurar a primeira fita com o recurso já ligado também arranca."""
     schema.set_boolean("session-fita", True)
     chamadas = []
-    monkeypatch.setattr(session_fita, "abrir", lambda: chamadas.append("abrir"))
+    monkeypatch.setattr(session_fita, "reacender", lambda: chamadas.append("reacender"))
 
     preferencias = _preferencias(monkeypatch)
     # Sem fita, `atualizar_fitas` desligou a chave: não há o que arrancar.
@@ -809,7 +813,7 @@ def test_fechar_o_assistente_com_fita_nova_arranca_o_ciclo(monkeypatch, schema):
     schema.set_boolean("session-fita", True)
     preferencias.fitas_configuradas()
 
-    assert chamadas == ["abrir"]
+    assert chamadas == ["reacender"]
     assert preferencias.session_fita_switch.get_sensitive() is True
 
 
@@ -1584,7 +1588,7 @@ def test_varredura_que_falha_devolve_mapa_vazio(monkeypatch):
     falso.deviceScan = explodir
     monkeypatch.setitem(sys.modules, "tinytuya", falso)
 
-    assert session_fita.enderecos_na_rede() == {}
+    assert session_fita.enderecos_na_rede() == ({}, {})
 
 
 def test_fita_sem_endereco_nao_chega_a_abrir_conexao(monkeypatch, schema):

@@ -72,7 +72,11 @@ def _elevate_worker(executable: str) -> None:
         _shell_execute_runas(f"shell:AppsFolder\\{aumid}", None, None, 1)
         return
 
-    _shell_execute_runas("cmd.exe", "/c " + executable, str(shared.home), 0)
+    # As aspas externas são as que o `shell=True` do caminho normal põe
+    # (`cmd.exe /c "<comando>"`). Sem elas, um comando que começa com aspas e
+    # tem outro par adiante (`"...\Dir (x86)\x.exe" -cfg "..."`) cai na regra do
+    # cmd que tira a primeira e a última aspas da linha, e se parte ao meio.
+    _shell_execute_runas("cmd.exe", f'/c "{executable}"', str(shared.home), 0)
 
 
 # The characters an AUMID is made of, deliberately the same class the importer

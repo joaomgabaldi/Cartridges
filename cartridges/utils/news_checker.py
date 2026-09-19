@@ -186,8 +186,9 @@ class NewsChecker(GObject.Object):
 
         if not posts:
             # Keep whatever was cached: a dropped connection should not empty a
-            # page the user is looking at.
-            self.emit("poll-finished", bool(self._posts))
+            # page the user is looking at. Still a failure, though: the cache
+            # being there does not make "Novidades atualizadas" true.
+            self.emit("poll-finished", False)
             return False
 
         fetched = tuple(posts)

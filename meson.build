@@ -3,7 +3,7 @@ project(
   # Versionamento por data da build: AAAA.MM.DD
   # Atualize esta linha (e a <release> em data/page.kramo.Cartridges.metainfo.xml.in)
   # sempre que fizer uma alteracao que exija rebuildar o projeto.
-  version: '2026.09.18',
+  version: '2026.09.19',
   meson_version: '>= 0.59.0',
   default_options: [
     'warning_level=2',
@@ -12,8 +12,8 @@ project(
 )
 
 dependency('gtk4', version: '>= 4.15.0')
-# 1.7 is needed for Adw.ShortcutsDialog
-dependency('libadwaita-1', version: '>= 1.7')
+# 1.8 is needed for Adw.ShortcutsDialog
+dependency('libadwaita-1', version: '>= 1.8')
 
 # The UI is hardcoded in pt-BR; gettext/po translations were removed
 gnome = import('gnome')

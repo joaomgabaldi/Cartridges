@@ -84,6 +84,10 @@ fitas_arquivo = app_dir / "fitas.json"
 # `AppData\Local\<app>` is the conventional Windows location for both, so both
 # live under `app_dir` now. That also puts everything the app writes under one
 # root, which is what makes `reset_app` able to state what it deletes.
+#
+# Nothing writes to `cache_dir` any more: its one tenant, the Steam app list,
+# went with the fallback that used it (Steam retired `GetAppList`). It stays so
+# the reset still clears the file older versions left there.
 cache_dir = app_dir / "cache"
 log_dir = app_dir / "logs"
 

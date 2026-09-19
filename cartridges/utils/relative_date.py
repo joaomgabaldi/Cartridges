@@ -70,13 +70,17 @@ def relative_date(timestamp: int) -> Any:  # pylint: disable=too-many-return-sta
         return WEEKDAYS[date.weekday()]
     if days_no <= day_of_week + 7:
         return _("Semana passada")
-    if days_no <= (day_of_month := today.day):
+    # Mês e ano pelo calendário também, e não por dias contados: com 30 dias
+    # fixos, 31/08 lido em 18/09 saía "Este mês", e 31/12 de dois anos atrás,
+    # lido no começo de janeiro, saía "Ano passado".
+    months_no = (today.year - date.year) * 12 + today.month - date.month
+    if months_no <= 0:
         return _("Este mês")
-    if days_no <= day_of_month + 30:
+    if months_no == 1:
         return _("Mês passado")
-    if days_no < (day_of_year := today.timetuple().tm_yday):
+    if date.year == today.year:
         return MONTHS[date.month - 1]
-    if days_no <= day_of_year + 365:
+    if date.year == today.year - 1:
         return _("Ano passado")
     return str(date.year)
 

@@ -69,6 +69,11 @@ class HLTBBackfill:
         # request cannot be cancelled, so its result is simply dropped instead
         # of being written into games and widgets that are on their way out.
         self._stopped = False
+        # Bumped by every stop. A worker carries the number it was started
+        # with and quits when it changes: `start()` right after `stop()` (the
+        # reset does exactly that) clears `_stopped`, and the old worker would
+        # otherwise keep looking up a library that no longer exists.
+        self._generation = 0
 
     # -- scheduling -----------------------------------------------------------
 
@@ -84,6 +89,7 @@ class HLTBBackfill:
     def stop(self) -> None:
         """Cancel a pending sweep and disown one already running."""
         self._stopped = True
+        self._generation += 1
         if self._timeout_id is not None:
             GLib.source_remove(self._timeout_id)
             self._timeout_id = None
@@ -133,13 +139,15 @@ class HLTBBackfill:
             self._running = True
 
         logging.info("HowLongToBeat backfill queued for %d games", len(games))
-        threading.Thread(target=self._worker, args=(games,), daemon=True).start()
+        threading.Thread(
+            target=self._worker, args=(games, self._generation), daemon=True
+        ).start()
 
-    def _worker(self, games: list[Game]) -> None:
+    def _worker(self, games: list[Game], generation: int) -> None:
         found = 0
         try:
             for game in games:
-                if self._stopped:
+                if self._stopped or generation != self._generation:
                     break
                 # Re-checked per game, not just in the snapshot: the pipeline or
                 # the details dialog may have filled this one in meanwhile, and
@@ -184,7 +192,11 @@ class HLTBBackfill:
 
     def _apply(self, game: Game, times: HLTBTimes) -> bool:
         """Write one game's times and repaint it. Runs on the main thread."""
-        if self._stopped or game.removed:
+        # `has_hltb_times` again, not just in the worker: the fetch button in
+        # the details may have answered while this lookup was in flight, and
+        # the sweep only ever fills what is missing — it must not overwrite a
+        # correction the user just made.
+        if self._stopped or game.removed or game.has_hltb_times:
             return False
         # Identidade no store, não só o snapshot: um reset apaga a biblioteca
         # e os arquivos enquanto o worker ainda anda pela lista dele, e o

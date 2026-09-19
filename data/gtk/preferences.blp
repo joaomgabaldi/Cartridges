@@ -89,12 +89,14 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
 
   // Uma aba só para o que acontece com a janela enquanto o jogo roda. Sem
   // contar horas de jogo não existe tela de sessão para levar a lugar nenhum,
-  // então a página inteira acompanha aquela chave.
+  // então o monitor e o papel de parede acompanham aquela chave — o do
+  // monitor é ligado em `setup_session_monitor_row`, porque sem segundo
+  // monitor ele fica bloqueado de vez. As fitas não: elas acendem com o app
+  // aberto, contando horas ou não.
   Adw.PreferencesPage session_page {
     name: "session";
     title: _("Personalização");
     icon-name: "video-joined-displays-symbolic";
-    sensitive: bind playtime_tracking_switch.active;
 
     Adw.PreferencesGroup session_monitor_group {
       title: _("Ao iniciar um jogo");
@@ -121,6 +123,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
     // ligar, desligar ou girar uma tela nao pede configuracao nenhuma.
     Adw.PreferencesGroup session_wallpaper_group {
       title: _("Papel de parede");
+      sensitive: bind playtime_tracking_switch.active;
       description: _("Altera temporariamente o papel de parede dos monitores em que o jogo não está sendo executado (se disponíveis) para uma imagem relacionada ao jogo.");
 
       Adw.SwitchRow session_wallpaper_switch {
@@ -138,7 +141,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
     // nasce bloqueado. O subtitulo dele e escrito em `atualizar_fitas`.
     Adw.PreferencesGroup session_fita_group {
       title: _("Fitas de LED");
-      description: _("Muda a cor das fitas de LED enquanto o Cartridges está aberto: o roxo do app fora do jogo, a cor do jogo durante a sessão, e o estado de antes quando o app fecha.");
+      description: _("Muda a cor das fitas de LED enquanto o Cartridges está aberto: a cor do app fora do jogo, a cor do jogo durante a sessão, e o estado de antes quando o app fecha.");
 
       Adw.SwitchRow session_fita_switch {
         title: _("Mudar a cor das fitas");
@@ -215,7 +218,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
 
       Adw.ActionRow fita_testar_row {
         title: _("Testar");
-        subtitle: _("Acende cada fita no roxo do app");
+        subtitle: _("Acende cada fita na cor do app");
         sensitive: bind session_fita_switch.active;
         activatable-widget: fita_testar_button;
 

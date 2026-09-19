@@ -322,9 +322,9 @@ def test_a_game_gone_past_the_grace_ends_and_records(
     running.package = True
 
     session._poll()
-    clock.advance(120)
+    clock.advance(30)
     session._poll()
-    assert session.session_seconds == 120
+    assert session.session_seconds == 30
 
     running.package = False
     session._poll()
@@ -332,7 +332,7 @@ def test_a_game_gone_past_the_grace_ends_and_records(
     session._poll()
 
     assert ProcessSession.active is None
-    assert session.game.playtime == 120
+    assert session.game.playtime == 30
     assert session.game.saves >= 1
     assert win.toast_queue.added
 
@@ -388,11 +388,11 @@ def test_flush_writes_the_current_stretch_and_touches_no_widget(
     session = make_session(make_game)
     running.package = True
     session._poll()
-    clock.advance(45)
+    clock.advance(25)
 
     session.flush()
 
-    assert session.game.playtime == 45
+    assert session.game.playtime == 25
     assert session.game.saves == 1
     assert win.toast_queue.added == []
     assert win.presented == 0
@@ -417,14 +417,14 @@ def test_a_second_launch_ends_the_first_session_recording_it(
     ProcessSession.active = first
     running.package = True
     first._poll()
-    clock.advance(60)
+    clock.advance(30)
 
     # What Game.launch does before starting the next session.
     if ProcessSession.active is not None:
         ProcessSession.active.stop(record=True)
 
     assert ProcessSession.active is None
-    assert first.game.playtime == 60
+    assert first.game.playtime == 30
     assert first.game.saves >= 1
 
 

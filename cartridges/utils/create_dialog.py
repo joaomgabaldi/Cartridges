@@ -28,12 +28,19 @@ def create_dialog(
     body: str,
     extra_option: Optional[str] = None,
     extra_label: Optional[str] = None,
+    destructive: bool = False,
 ) -> Adw.AlertDialog:
+    """``destructive`` é para a pergunta que confirma uma perda: aí a saída é
+    "Cancelar", e não "Dispensar", e a opção extra vem marcada em vermelho."""
     dialog = Adw.AlertDialog.new(heading, body)
-    dialog.add_response("dismiss", _("Dispensar"))
+    dialog.add_response("dismiss", _("Cancelar") if destructive else _("Dispensar"))
 
     if extra_option:
         dialog.add_response(extra_option, extra_label or "")
+        if destructive:
+            dialog.set_response_appearance(
+                extra_option, Adw.ResponseAppearance.DESTRUCTIVE
+            )
 
     dialog.choose(win)
     return dialog

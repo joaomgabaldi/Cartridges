@@ -18,6 +18,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from json import JSONDecodeError
+from typing import Any, Callable
 
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import HTTPError, SSLError, Timeout
@@ -26,6 +27,7 @@ from cartridges.errors.friendly_error import FriendlyError
 from cartridges.game import Game
 from cartridges.store.managers.async_manager import AsyncManager
 from cartridges.store.managers.cover_manager import CoverManager
+from cartridges.store.managers.manager import Manager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.utils.steamgriddb import (
     SgdbAuthError,
@@ -33,6 +35,9 @@ from cartridges.utils.steamgriddb import (
     SgdbHelper,
     SgdbNoImageFound,
 )
+
+# Key under which `process_game` hands `main` the cancellable of its batch.
+_CANCELLABLE = "sgdb_cancellable"
 
 
 class SgdbManager(AsyncManager):
@@ -50,7 +55,19 @@ class SgdbManager(AsyncManager):
     # A missing game or image is an expected outcome, not a user-facing error
     continue_on = (SgdbGameNotFound, SgdbNoImageFound)
 
+    def process_game(
+        self, game: Game, additional_data: dict, callback: Callable[[Manager], Any]
+    ) -> None:
+        # The cancellable is captured here, when the task is queued: a reset
+        # cancels the current one and swaps in a fresh one right away, and a
+        # task that looked up `self.cancellable` only when it got to run would
+        # see the fresh, uncancelled one and write its cover after the wipe.
+        super().process_game(
+            game, {**additional_data, _CANCELLABLE: self.cancellable}, callback
+        )
+
     def main(self, game: Game, additional_data: dict) -> None:
+        cancellable = additional_data.get(_CANCELLABLE) or self.cancellable
         # The cancellation has to be honoured here, by hand, because nothing
         # else will honour it: AsyncManager.process_game builds its Gio.Task
         # with return_on_cancel left at FALSE, so cancelling a task still lets
@@ -61,15 +78,15 @@ class SgdbManager(AsyncManager):
         # library meant 300 identical 401s, 300 identical FriendlyErrors queued
         # for the user and 300 pointless round trips to steamgriddb.com.
         # Checking on the way in is what turns that into one error and stops.
-        if self.cancellable.is_cancelled():
+        if cancellable.is_cancelled():
             return
 
         try:
             sgdb = SgdbHelper()
             sgdb.conditionaly_update_cover(game, additional_data)
         except SgdbAuthError as error:
-            # If invalid auth, cancel all SGDBManager tasks
-            self.cancellable.cancel()
+            # If invalid auth, cancel all SGDBManager tasks of this batch
+            cancellable.cancel()
             raise FriendlyError(
                 _("Não foi possível autenticar no SteamGridDB"),
                 _("Verifique sua chave da API nas preferências"),

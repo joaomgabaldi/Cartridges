@@ -192,6 +192,11 @@ class InstallSizeSweep:
         # medição em curso não dá para cancelar, então o resultado dela é
         # simplesmente descartado.
         self._stopped = False
+        # Sobe a cada `stop()`. O trabalhador leva o número com que nasceu e
+        # para quando ele muda: o `start()` logo depois do `stop()` (é o que o
+        # reset faz) desfaz o `_stopped`, e o trabalhador antigo seguiria
+        # medindo uma biblioteca que já não existe.
+        self._generation = 0
 
     # -- agendamento ----------------------------------------------------------
 
@@ -207,6 +212,7 @@ class InstallSizeSweep:
     def stop(self) -> None:
         """Cancela uma varredura pendente e desliga uma em andamento."""
         self._stopped = True
+        self._generation += 1
         if self._timeout_id is not None:
             GLib.source_remove(self._timeout_id)
             self._timeout_id = None
@@ -251,18 +257,20 @@ class InstallSizeSweep:
             self._running = True
 
         logging.info("Install size sweep queued for %d games", len(games))
-        threading.Thread(target=self._worker, args=(games,), daemon=True).start()
+        threading.Thread(
+            target=self._worker, args=(games, self._generation), daemon=True
+        ).start()
 
     @staticmethod
     def _is_stale(game: Game) -> bool:
         """Este jogo precisa ser medido agora?"""
         return (int(time()) - (game.install_size_ts or 0)) >= _REFRESH_AFTER_SECONDS
 
-    def _worker(self, games: list[Game]) -> None:
+    def _worker(self, games: list[Game], generation: int) -> None:
         measured = 0
         try:
             for game in games:
-                if self._stopped:
+                if self._stopped or generation != self._generation:
                     break
                 # Reconferido por jogo: uma importação pode ter removido este
                 # daqui até a vez dele chegar.
@@ -273,17 +281,16 @@ class InstallSizeSweep:
                 # muito grande leva minutos na primeira execução; se incomodar,
                 # o caminho é medir só o que a tela vai mostrar, não abrir mais
                 # threads em cima do mesmo disco.
-                if not (folder := install_size_folder(game.executable)):
-                    # Sem pasta conhecida não há o que medir, e não há por que
-                    # gravar o carimbo: a próxima varredura descarta este jogo
-                    # de novo sem tocar no disco.
-                    continue
-
-                size = folder_size(folder)
+                # Sem pasta conhecida não há o que medir, e pasta vazia ou
+                # ilegível inteira é jogo que saiu do disco ou instalação que
+                # não dá para ler. Nos dois casos o tamanho vira desconhecido
+                # (zero, que a tela não mostra): um número antigo ficaria no
+                # topo do "o que apagar" por um jogo que já não ocupa nada.
+                folder = install_size_folder(game.executable)
+                size = folder_size(folder) if folder else 0
                 if not size:
-                    # Pasta vazia ou ilegível inteira: o jogo saiu do disco, ou
-                    # é uma instalação que não dá para ler. Nos dois casos o
-                    # tamanho continua desconhecido em vez de virar zero.
+                    if game.install_size:
+                        GLib.idle_add(self._apply, game, 0)
                     continue
 
                 measured += 1
@@ -312,7 +319,11 @@ class InstallSizeSweep:
             return False
 
         game.install_size = size
-        game.install_size_ts = int(time())
+        # Sem carimbo quando o tamanho some: sem ele, a próxima varredura mede
+        # de novo — um disco externo desligado volta a ter tamanho quando
+        # volta, e não uma semana depois.
+        if size:
+            game.install_size_ts = int(time())
         game.save()
 
         win = shared.win

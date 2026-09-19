@@ -43,10 +43,12 @@ import json
 import logging
 import threading
 import time
+import winreg
 from ctypes import POINTER, byref, c_uint, c_void_p, c_wchar_p, wintypes
 from io import BytesIO
 from pathlib import Path
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
+from uuid import uuid4
 
 from gi.repository import GLib
 from PIL import Image, ImageFilter, ImageOps
@@ -77,6 +79,24 @@ _IID_IDESKTOP_WALLPAPER = "{B92B56A9-8B55-4E14-9A89-0199BBB6F93B}"
 _CLSCTX_ALL = 23
 # DESKTOP_SLIDESHOW_STATE: uma apresentação de slides está configurada.
 _DSS_SLIDESHOW = 0x2
+# O Spotlight da área de trabalho (Windows 11) não aparece no estado da
+# IDesktopWallpaper: para ela é só uma imagem fixa numa pasta do sistema. Quem
+# diz que ele está ligado é o registro — qualquer uma das duas marcas basta.
+_SPOTLIGHT = (
+    (r"Software\Microsoft\Windows\CurrentVersion\DesktopSpotlight\Settings", "EnabledState", 1),
+    (r"Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers", "BackgroundType", 3),
+)
+
+
+def _spotlight_ligado() -> bool:
+    for caminho, nome, ligado in _SPOTLIGHT:
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, caminho) as chave:
+                if winreg.QueryValueEx(chave, nome)[0] == ligado:
+                    return True
+        except OSError:
+            continue
+    return False
 
 
 class _GUID(ctypes.Structure):
@@ -217,12 +237,14 @@ class _AreaDeTrabalho:
         return self._texto(atual)
 
     def em_apresentacao(self) -> bool:
-        """True com uma apresentação de slides configurada na área de trabalho.
+        """True com uma apresentação de slides ou o Spotlight na área de trabalho.
 
-        Vestir um monitor por cima dela a troca por uma imagem fixa, e devolver
-        o caminho de antes não a religa: a apresentação se perderia. Então,
-        com ela ligada, a sessão não mexe em nada.
+        Vestir um monitor por cima deles os troca por uma imagem fixa, e
+        devolver o caminho de antes não os religa: a rotação se perderia.
+        Então, com um deles ligado, a sessão não mexe em nada.
         """
+        if _spotlight_ligado():
+            return True
         estado = wintypes.DWORD()
         try:
             self._estado(self._ponteiro, byref(estado))
@@ -423,7 +445,6 @@ def _posicoes(dados: Optional[dict[str, Any]]) -> Posicoes:
 def _gravar_sidecar(
     game_id: str, name: str, arquivo: Optional[str], posicoes: Posicoes, travado: bool
 ) -> None:
-    shared.wallpapers_dir.mkdir(parents=True, exist_ok=True)
     dados = {
         "name": name,
         "file": arquivo,
@@ -435,10 +456,18 @@ def _gravar_sidecar(
         # aquele jogo, e isso vale mais que qualquer palpite de busca.
         "locked": travado,
     }
+    # tmp + replace: uma queda no meio não pode deixar um sidecar truncado,
+    # que se lê como "automático" e entrega a escolha travada à busca.
+    destino = _sidecar(game_id)
+    tmp = destino.with_name(f"{destino.name}.{uuid4().hex}.tmp")
     try:
-        _sidecar(game_id).write_text(json.dumps(dados), encoding="utf-8")
+        shared.wallpapers_dir.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(json.dumps(dados), encoding="utf-8")
+        tmp.replace(destino)
     except OSError as erro:
         logging.warning("Não foi possível gravar a escolha de parede: %s", erro)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _arquivo_do_sidecar(dados: Optional[dict[str, Any]]) -> Optional[Path]:

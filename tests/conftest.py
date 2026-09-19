@@ -344,6 +344,9 @@ def app_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr(shared, "wallpapers_dir", wallpapers, raising=False)
     monkeypatch.setattr(shared, "cache_dir", cache, raising=False)
     monkeypatch.setattr(shared, "log_dir", logs, raising=False)
+    # Not created: the fita code makes it on first write, like the real app.
+    monkeypatch.setattr(shared, "fitas_dir", tmp_path / "fitas", raising=False)
+    monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json", raising=False)
     return types.SimpleNamespace(
         root=tmp_path,
         games=games,

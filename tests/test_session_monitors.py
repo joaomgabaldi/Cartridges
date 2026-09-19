@@ -33,9 +33,20 @@ def ligados(monkeypatch):
 
 def _preferencias(monkeypatch):
     import cartridges.preferences as preferences_module  # noqa: PLC0415
+    from cartridges import shared  # noqa: PLC0415
     from cartridges.metadata_refresh import MetadataRefresh  # noqa: PLC0415
 
     monkeypatch.setattr(preferences_module, "get_metadata_refresh", MetadataRefresh)
+    # O `bind` do dublê não faz nada; imitado aqui para os interruptores
+    # nascerem com o valor da chave, como no app. O grupo do monitor acompanha
+    # o de contar horas, que vem ligado de fábrica.
+    monkeypatch.setattr(
+        shared.schema,
+        "bind",
+        lambda chave, widget, prop, _flags: widget.set_property(
+            prop, shared.schema.get_boolean(chave)
+        ),
+    )
     return preferences_module.CartridgesPreferences()
 
 

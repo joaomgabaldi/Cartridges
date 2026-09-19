@@ -90,6 +90,10 @@ brazilianportuguese.LaunchProgram=Iniciar o %1
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
+[InstallDelete]
+; Atualizar por cima deixaria em {app} todo modulo que saiu do app entre versoes.
+Type: filesandordirs; Name: "{app}\lib\python@PYTHON_VERSION@\site-packages\cartridges"
+
 [Files]
 Source: "C:\msys64\ucrt64\bin\cartridges"; DestDir: "{app}\bin"; Flags: ignoreversion
 Source: "C:\msys64\ucrt64\bin\pythonw.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
@@ -207,6 +211,9 @@ begin
               'reinstalar o aplicativo depois.',
               mbConfirmation, MB_YESNO) = IDYES then
     begin
+      // Limite conhecido: numa instalacao para todos os usuarios o desinstalador
+      // roda elevado, e se o UAC for respondido com outra conta, {localappdata}
+      // e HKCU sao os dessa conta, nao os de quem usa o app.
       DelTree(ExpandConstant('{localappdata}\Cartridges'), True, True, True);
       RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\GSettings\page\kramo\Cartridges');
       RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\page\kramo');

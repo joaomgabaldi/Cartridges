@@ -27,7 +27,7 @@ from pathlib import Path
 from shutil import rmtree
 from typing import Any, Callable, Optional
 
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
 from cartridges import shared
 from cartridges.errors.friendly_error import FriendlyError
@@ -68,9 +68,11 @@ def restore_into(game: Game, entry: dict) -> bool:
     """
     changed = False
 
+    # OverflowError: `Infinity` é JSON válido para o Python, e `int()` dele
+    # levantaria no meio da restauração, com parte dos jogos já somada.
     try:
         backup_time = int(entry.get("playtime") or 0)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         backup_time = 0
     if backup_time > 0:
         game.playtime += backup_time
@@ -83,7 +85,7 @@ def restore_into(game: Game, entry: dict) -> bool:
 
     try:
         rating = int(entry.get("rating") or 0)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         rating = 0
     if 1 <= rating <= 5 and not game.stars:
         game.rating = rating
@@ -246,8 +248,12 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                         create_dialog(self, error.title, error.subtitle)
                         break
 
+                # Só quem ainda está no store: um reset no meio do lote apagou
+                # a biblioteca, e o `update()` de um jogo apagado o punha de
+                # volta na grade — e um clique nele o regravava no disco.
                 for game in games:
-                    game.update()
+                    if shared.store.get(game.game_id) is game:
+                        game.update()
 
                 # No HIGH priority: it is what made a toast cut another one off
                 # mid-life and then reappear, and it buys nothing here — the
@@ -375,6 +381,16 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             self.block_session_monitor_options()
             return
 
+        # Aqui, e não no `.blp` como o do papel de parede: ligado lá, o bind
+        # religaria o grupo que o bloqueio acima apaga assim que a contagem de
+        # horas mudasse.
+        self.playtime_tracking_switch.bind_property(
+            "active",
+            self.session_monitor_group,
+            "sensitive",
+            GObject.BindingFlags.SYNC_CREATE,
+        )
+
         # Só o número, porque só o número tem resposta: resolução e posição
         # empatam entre telas iguais, e é o botão "Identificar monitores" que
         # diz qual é qual — na própria tela, que é onde se olha.
@@ -483,18 +499,20 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         vazia, então a sessão seguinte veste a cor do jogo e o fechamento não
         tem o que devolver — o estado de antes nunca chegou a ser guardado.
 
-        `abrir` é seguro de chamar assim: guarda o estado só quando a chave
-        está vazia, corre em thread própria e com trava, e acende no roxo do
-        app — que é onde as fitas devem estar com o Cartridges aberto fora de
-        um jogo. Desligar não chama nada: o ciclo se desfaz no fechamento.
+        `reacender`, e não `abrir`: com o app aberto, a chave é desta
+        execução e não um órfão a desfazer. Ele guarda o estado só das fitas
+        que ainda não têm um, corre em thread própria e com trava, e acende na
+        cor do app — que é onde as fitas devem estar com o Cartridges aberto
+        fora de um jogo. Desligar não chama nada: o ciclo se desfaz no
+        fechamento.
         """
         if row.get_active():
-            # Grava antes de chamar: `abrir()` decide pela chave, não pelo
+            # Grava antes de chamar: `reacender()` decide pela chave, não pelo
             # widget, e depender de o `bind` ter escrito primeiro amarraria o
             # recurso à ordem em que os handlers foram conectados. Idempotente
             # — é o mesmo `True` que o bind quer gravar.
             shared.schema.set_boolean("session-fita", True)
-            session_fita.abrir()
+            session_fita.reacender()
 
     def mudar_brilho_padrao(self, row: Adw.SpinRow, *_args: Any) -> None:
         """Grava o brilho novo e mostra ele nas fitas na mesma hora.
@@ -564,10 +582,10 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         """
         self.atualizar_fitas()
         if session_fita.ligada():
-            session_fita.abrir()
+            session_fita.reacender()
 
     def testar_fitas(self, *_args: Any) -> None:
-        """Acende cada fita no roxo do app e diz o que respondeu.
+        """Acende cada fita na cor do app e diz o que respondeu.
 
         É o único lugar onde uma fita fora do ar aparece na tela: aqui o
         usuário pediu para saber. A conversa é rede, então vai para uma thread
@@ -843,14 +861,21 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         if shared.games_dir.is_dir():
             for path in shared.games_dir.glob("*.json"):
                 path.unlink(missing_ok=True)
-        if shared.covers_dir.is_dir():
-            for path in shared.covers_dir.iterdir():
-                if path.is_file():
-                    path.unlink(missing_ok=True)
-        if shared.logos_dir.is_dir():
-            for path in shared.logos_dir.iterdir():
-                if path.is_file():
-                    path.unlink(missing_ok=True)
+        # Papel de parede e cor da fita de cada jogo também: os ids são
+        # estáveis, e o jogo reimportado herdaria a escolha do apagado. Só os
+        # arquivos do topo — a pasta `cache` dos papéis de parede não é de
+        # jogo nenhum, e o `fitas.json` (a configuração das fitas) mora fora
+        # de `fitas_dir`.
+        for directory in (
+            shared.covers_dir,
+            shared.logos_dir,
+            shared.wallpapers_dir,
+            shared.fitas_dir,
+        ):
+            if directory.is_dir():
+                for path in directory.iterdir():
+                    if path.is_file():
+                        path.unlink(missing_ok=True)
 
         # Forget the configured shortcuts folder
         shared.schema.set_string("shortcuts-location", "")
@@ -901,8 +926,12 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 path = Path(file_dialog.save_finish(result).get_path())
             except GLib.Error:
                 return
+            # Pelo temporário e troca: exportar por cima de um backup antigo e
+            # cair no meio deixaria o arquivo truncado — o antigo perdido e o
+            # novo ilegível.
+            temporary = path.with_name(path.name + ".tmp")
             try:
-                path.write_text(
+                temporary.write_text(
                     json.dumps(
                         {"version": 2, "games": games},
                         indent=2,
@@ -910,7 +939,9 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                     ),
                     encoding="utf-8",
                 )
+                temporary.replace(path)
             except OSError as error:
+                temporary.unlink(missing_ok=True)
                 create_dialog(self, _("Não foi possível exportar"), str(error))
                 return
             self.add_toast(Adw.Toast.new(_("Backup exportado")))
@@ -945,6 +976,10 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
             restored = 0
             for game in shared.store:
+                # Jogo removido fica no store como lápide: não recebe o tempo
+                # nem entra na conta dos restaurados.
+                if game.removed:
+                    continue
                 entry = entries.get(game.game_id)
                 if isinstance(entry, dict) and restore_into(game, entry):
                     game.save()

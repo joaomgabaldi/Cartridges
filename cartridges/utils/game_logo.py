@@ -38,6 +38,7 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse
+from uuid import uuid4
 
 import requests
 from gi.repository import Gdk, GdkPixbuf, GLib
@@ -201,7 +202,6 @@ def _read_sidecar(game_id: str) -> Optional[dict[str, Any]]:
 def _write_sidecar(
     game_id: str, name: str, filename: Optional[str], locked: bool = False
 ) -> None:
-    shared.logos_dir.mkdir(parents=True, exist_ok=True)
     data = {
         "name": name,
         "file": filename,
@@ -211,10 +211,19 @@ def _write_sidecar(
         # a game (or a better-scoring upload appearing) cannot undo the choice.
         "locked": locked,
     }
+    # Temporário + replace: um sidecar truncado no meio da escrita lê como
+    # "nunca buscado", e a busca automática seguinte apagava o logo que o
+    # usuário tinha escolhido. Nome único porque buscas de jogos diferentes
+    # (e a do seletor) gravam em paralelo. A pasta entra no `try` porque falha
+    # pelos mesmos motivos da escrita.
+    path = _sidecar_path(game_id)
+    tmp_path = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
     try:
-        with _sidecar_path(game_id).open("w", encoding="utf-8") as file:
-            json.dump(data, file)
+        shared.logos_dir.mkdir(parents=True, exist_ok=True)
+        tmp_path.write_text(json.dumps(data), encoding="utf-8")
+        tmp_path.replace(path)
     except OSError as error:
+        tmp_path.unlink(missing_ok=True)
         logging.debug("Could not record logo lookup for %s: %s", game_id, error)
 
 
