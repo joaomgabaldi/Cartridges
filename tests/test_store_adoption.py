@@ -17,6 +17,7 @@ bug that already happened or the guard that stopped it.
 
 import json
 import threading
+import types
 
 import pytest
 
@@ -356,7 +357,7 @@ def test_cover_widget_is_rekeyed_on_the_idle(
     left the grid holding a cover the game no longer points at.
     """
     seed(make_game(game_id=OLD_ID))
-    sentinel = object()
+    sentinel = types.SimpleNamespace(path=None)
     win.game_covers[OLD_ID] = sentinel
 
     store.adopt_legacy_game(make_game(game_id=NEW_ID), [OLD_ID])

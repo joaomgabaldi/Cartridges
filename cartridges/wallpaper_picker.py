@@ -196,6 +196,9 @@ class WallpaperPicker(Adw.Dialog):
             # a tela abre direto no ajuste e "Voltar" desiste da escolha.
             self.search_bar.set_visible(False)
             self.none_button.set_visible(False)
+            # Aqui a tela vazia só aparece numa falha com o arquivo; o título
+            # do .blp ("Nenhum papel de parede encontrado") é o da busca.
+            self.status_page.set_title(_("Não foi possível usar este arquivo"))
             self.stack.set_visible_child_name("loading")
             threading.Thread(
                 target=self._open_file_thread,
@@ -289,7 +292,7 @@ class WallpaperPicker(Adw.Dialog):
             with Image.open(caminho) as arquivo:
                 quadro = enquadrar(arquivo.convert("RGB"), *self._cell_pixels())
             return imagem_para_textura_bytes(quadro)
-        except (OSError, UnidentifiedImageError, ValueError):
+        except (OSError, UnidentifiedImageError, ValueError, Image.DecompressionBombError):
             return None
 
     def _cell_pixels(self) -> tuple[int, int]:
@@ -410,7 +413,14 @@ class WallpaperPicker(Adw.Dialog):
                     if escala < 1
                     else imagem.copy()
                 )
-        except (OSError, UnidentifiedImageError, ValueError) as error:
+        # DecompressionBombError não herda de OSError: sem ela aqui, a thread
+        # morria e a tela ficava girando para sempre.
+        except (
+            OSError,
+            UnidentifiedImageError,
+            ValueError,
+            Image.DecompressionBombError,
+        ) as error:
             logging.warning("Imagem escolhida não pôde ser lida: %s", error)
             GLib.idle_add(
                 self._show_empty, _("Não foi possível abrir a imagem"), generation

@@ -19,10 +19,9 @@
 
 from abc import abstractmethod
 from collections.abc import Iterable
-from typing import Any, Collection, Generator, Optional
+from typing import Any, Generator, Optional
 
 from cartridges.game import Game
-from cartridges.importer.location import Location, UnresolvableLocationError
 
 # Type of the data returned by iterating on a Source
 SourceIterationResult = Optional[Game | tuple[Game, tuple[Any]]]
@@ -70,10 +69,6 @@ class Source(Iterable):
     variant: Optional[str] = None
     iterable_class: type[SourceIterable]
 
-    # NOTE: Locations must be set at __init__ time, not in the class definition.
-    # They must not be shared between source instances.
-    locations: Collection[Location]
-
     @property
     def full_name(self) -> str:
         """The source's full name"""
@@ -93,15 +88,5 @@ class Source(Iterable):
         return True
 
     def __iter__(self) -> Generator[SourceIterationResult, None, None]:
-        """
-        Get an iterator for the source
-        :raises UnresolvableLocationError: Not iterable
-        if any of the mandatory locations are unresolvable
-        """
-        for location in self.locations:
-            try:
-                location.resolve()
-            except UnresolvableLocationError as error:
-                if not error.optional:
-                    raise UnresolvableLocationError from error
+        """Get an iterator for the source"""
         return iter(self.iterable_class(self))

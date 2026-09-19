@@ -93,8 +93,8 @@ class SteamPicker(Adw.Dialog):
     def _on_search_changed(self, *_args: Any) -> None:
         if self._debounce_id:
             GLib.source_remove(self._debounce_id)
-        # Longer than the cover picker's delay: a miss here may fall through to
-        # the full app list, which is expensive to fetch the first time.
+        # Longer than the cover picker's delay: every pause in typing is a
+        # request to the Steam store, which rate limits.
         self._debounce_id = GLib.timeout_add(700, self._debounce_fire)
 
     def _debounce_fire(self) -> bool:

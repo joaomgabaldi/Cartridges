@@ -30,7 +30,7 @@ busca, o que serve para acender uma fita é a chave local, e é só ela que fica
 
 import logging
 import threading
-from typing import Any
+from typing import Any, Optional
 
 from gi.repository import Adw, GLib, Gtk
 
@@ -53,8 +53,9 @@ def fitas_da_nuvem(resposta: Any) -> list[Fita]:
 
     Dispositivo sem chave local fica de fora: sem ela não há conversa possível.
     Sem IP, entra com o campo vazio — a nuvem devolve o IP público do roteador,
-    que não serve para nada aqui, e a descoberta por broadcast acha o IP da
-    fita na hora de acender.
+    que não serve para nada aqui. Quem acha o IP da fita é a varredura que este
+    assistente roda logo depois (``com_enderecos``), uma vez só; o app nunca
+    varre sozinho.
 
     Aceita qualquer coisa como entrada de propósito: quando a busca falha, a
     ``tinytuya`` devolve um dicionário de erro no lugar da lista, e isso não
@@ -83,18 +84,30 @@ def fitas_da_nuvem(resposta: Any) -> list[Fita]:
     return encontradas
 
 
-def com_enderecos(encontradas: list[Fita], mapa: dict[str, str]) -> list[Fita]:
-    """Põe em cada fita o endereço que ela tem na rede de casa.
+def com_enderecos(
+    encontradas: list[Fita],
+    mapa: dict[str, str],
+    versoes: Optional[dict[str, str]] = None,
+) -> list[Fita]:
+    """Põe em cada fita o endereço que ela tem na rede de casa, e a versão do
+    protocolo que ela anunciou.
 
     A nuvem não sabe o IP local das fitas; quem sabe é a varredura por
     broadcast, que roda uma única vez, aqui. O endereço achado fica gravado e o
     app não procura mais: o IP das fitas é fixo, e se um dia mudar é só rodar
     este assistente de novo. A fita que a varredura não achou mantém o endereço
     que já tinha na configuração, se tinha um.
+
+    A versão vem da mesma varredura: a nuvem costuma não dizê-la, e um módulo
+    3.4 ou 3.5 falado como 3.3 nunca responde.
     """
     conhecidos = {fita.id: fita.ip for fita in fitas() if fita.ip}
+    versoes = versoes or {}
     return [
-        fita._replace(ip=mapa.get(fita.id) or fita.ip or conhecidos.get(fita.id, ""))
+        fita._replace(
+            ip=mapa.get(fita.id) or fita.ip or conhecidos.get(fita.id, ""),
+            versao=versoes.get(fita.id) or fita.versao,
+        )
         for fita in encontradas
     ]
 
@@ -151,7 +164,7 @@ class FitaWizard(Adw.Dialog):
         except Exception as erro:  # a tinytuya levanta de tudo aqui também
             logging.warning("Busca na nuvem da Tuya falhou: %s", erro)
             encontrados = []
-        GLib.idle_add(self._mostrar, com_enderecos(encontrados, enderecos_na_rede()))
+        GLib.idle_add(self._mostrar, com_enderecos(encontrados, *enderecos_na_rede()))
 
     def _mostrar(self, encontrados: list[Fita]) -> None:
         if self._closed:

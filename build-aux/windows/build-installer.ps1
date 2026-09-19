@@ -52,7 +52,8 @@ O patch precisa ser refeito contra a versão nova:
   git apply $patches\gtk-dcomp-render-window-origin.patch
   ninja -C _build gtk/libgtk-4-1.dll && cp _build/gtk/libgtk-4-1.dll /ucrt64/bin/
 
-Depois rode este script de novo: ele atualiza a trava sozinho.
+Depois atualize a trava a mao: copie a DLL nova para gtk-patches\libgtk-4-1.dll
+e troque versao e SHA256 em gtk-patches\patched-gtk.txt.
 Contexto completo em gtk-patches\ISSUE.md
 "@
 }
@@ -75,12 +76,15 @@ if ($hashAtual -ne $esperado['libgtk_sha256']) {
 
 Etapa 'Compilando (ninja + meson install)'
 
+# O pacote do app no prefixo e apagado antes do install: o meson install nunca
+# remove modulo que saiu do repositorio, e o curinga do .iss o empacotaria.
+#
 # C:\Users\... -> /c/Users/...
 $repoMsys = '/' + $repo.Substring(0,1).ToLower() + ($repo.Substring(2) -replace '\\','/')
 $env:MSYSTEM = 'UCRT64'
 $env:CHERE_INVOKING = '1'
 
-& (Join-Path $msys 'usr\bin\bash.exe') -lc "cd '$repoMsys' && ninja -C _build && meson install -C _build --quiet"
+& (Join-Path $msys 'usr\bin\bash.exe') -lc "cd '$repoMsys' && ninja -C _build && rm -rf /ucrt64/lib/python3*/site-packages/cartridges && meson install -C _build --quiet"
 if ($LASTEXITCODE -ne 0) { Falha 'O build falhou. Veja a saida acima.' }
 
 # ── 3. Empacotar ──────────────────────────────────────────────────────────

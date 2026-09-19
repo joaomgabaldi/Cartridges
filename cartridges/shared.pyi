@@ -64,6 +64,7 @@ log_dir: Path
 scale_factor: int
 image_size: tuple[int, int]
 display_size: tuple[int, int]
+details_size: tuple[int, int]
 
 win: Optional[CartridgesWindow]
 importer: Optional[Importer]

@@ -66,6 +66,7 @@ from typing import Any, Optional, TypedDict
 import requests
 from requests.exceptions import RequestException
 
+from cartridges.utils.download import MAX_RESPONSE_BYTES, read_capped
 from cartridges.utils.name_cleaner import clean_for_search
 from cartridges.utils.rate_limiter import RateLimiter
 from cartridges.utils.title_match import TitleMatch, rank_candidates, tokenize
@@ -74,29 +75,10 @@ BASE_URL = "https://howlongtobeat.com"
 SEARCH_URL = f"{BASE_URL}/api/search/site"
 INIT_URL = f"{BASE_URL}/api/search/site/init"
 REQUEST_TIMEOUT_SECONDS = 15
-# Todo outro leitor de rede do app faz stream com teto (download_bytes, o
-# feed); aqui os corpos eram lidos inteiros com .json()/.text — e o timeout
-# limita silêncio entre bytes, não o tamanho total. 10 MiB cobre com folga a
-# maior página /game/<id> real (~1–2 MiB) e qualquer JSON da busca.
-MAX_RESPONSE_BYTES = 10 * 1024 * 1024
-
-
-def _read_capped(response: requests.Response) -> bytes:
-    """Lê o corpo em stream; passar de MAX_RESPONSE_BYTES é falha de rede.
-
-    Levanta RequestException de propósito: é o que todo chamador daqui já
-    trata como "o site não respondeu direito".
-    """
-    chunks: list[bytes] = []
-    total = 0
-    for chunk in response.iter_content(chunk_size=65536):
-        total += len(chunk)
-        if total > MAX_RESPONSE_BYTES:
-            raise RequestException(
-                f"HowLongToBeat response exceeded {MAX_RESPONSE_BYTES} bytes"
-            )
-        chunks.append(chunk)
-    return b"".join(chunks)
+# Os corpos são lidos em stream com teto (`read_capped`, o mesmo de Steam, SGDB
+# e wallhaven); o teto é o `MAX_RESPONSE_BYTES` importado acima, lido na hora
+# da chamada. Passar dele é RequestException, que todo chamador daqui já trata
+# como "o site não respondeu direito".
 
 # The token embeds the User-Agent that asked for it, so every request in a
 # session must send this exact string or the credential is rejected.
@@ -422,7 +404,7 @@ class HLTBHelper:
                     stream=True,
                 ) as response:
                     response.raise_for_status()
-                    body = json.loads(_read_capped(response))
+                    body = json.loads(read_capped(response, MAX_RESPONSE_BYTES))
             except (RequestException, ValueError) as error:
                 logging.debug("HowLongToBeat init failed", exc_info=error)
                 return None
@@ -510,7 +492,7 @@ class HLTBHelper:
                         logging.debug("HowLongToBeat credential rejected, refreshing")
                         return None, True
                     response.raise_for_status()
-                    body = json.loads(_read_capped(response))
+                    body = json.loads(read_capped(response, MAX_RESPONSE_BYTES))
             except (RequestException, ValueError) as error:
                 logging.debug("HowLongToBeat search failed", exc_info=error)
                 return None, False
@@ -700,7 +682,9 @@ class HLTBHelper:
                     if response.status_code == 404:
                         raise HLTBGameNotFoundError()
                     response.raise_for_status()
-                    page = _read_capped(response).decode("utf-8", errors="replace")
+                    page = read_capped(response, MAX_RESPONSE_BYTES).decode(
+                        "utf-8", errors="replace"
+                    )
             except RequestException as error:
                 self._breaker_record(ok=False)
                 raise HLTBUnavailableError("game page unreachable") from error

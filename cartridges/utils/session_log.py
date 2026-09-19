@@ -123,7 +123,10 @@ def delete(game_id: str, end: int, seconds: int) -> bool:
     """
     path = _path()
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        # surrogateescape, e não o "replace" do `load`: o arquivo volta ao disco
+        # inteiro, e um byte não-UTF-8 numa linha alheia tem que voltar igual.
+        # Sem isto, o UnicodeDecodeError (ValueError) escapava do guard abaixo.
+        lines = path.read_text(encoding="utf-8", errors="surrogateescape").splitlines()
     except (FileNotFoundError, OSError):
         return False
 
@@ -152,7 +155,9 @@ def delete(game_id: str, end: int, seconds: int) -> bool:
     tmp = path.with_suffix(".jsonl.tmp")
     try:
         tmp.write_text(
-            "".join(line + "\n" for line in kept if line.strip()), encoding="utf-8"
+            "".join(line + "\n" for line in kept if line.strip()),
+            encoding="utf-8",
+            errors="surrogateescape",
         )
         tmp.replace(path)
     except OSError:

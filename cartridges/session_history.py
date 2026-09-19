@@ -183,6 +183,7 @@ class SessionHistoryDialog(Adw.Dialog):
             ),
             "delete",
             _("Apagar"),
+            destructive=True,
         ).connect("response", self.on_delete_response, session)
 
     def on_delete_response(

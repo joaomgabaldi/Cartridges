@@ -41,6 +41,13 @@ class SessionWindow(Adw.Window):
     # could be garbage-collected out from under us.
     active: "Optional[SessionWindow]" = None
 
+    # Seconds between the periodic flushes.
+    TICK_INTERVAL = 60
+    # A gap longer than this between two flushes is the PC having slept, not
+    # play: the monotonic clock counts the time asleep. It is credited as one
+    # tick interval instead of as the whole night.
+    MAX_GAP = TICK_INTERVAL + 30
+
     def __init__(self, game: Game, **kwargs: Any) -> None:
         super().__init__(**kwargs)
 
@@ -79,7 +86,7 @@ class SessionWindow(Adw.Window):
         shared.win.show_session_blocker(game)
 
         # Save accumulated time every minute (crash/power-loss safety net)
-        self.tick_id = GLib.timeout_add_seconds(60, self.tick)
+        self.tick_id = GLib.timeout_add_seconds(self.TICK_INTERVAL, self.tick)
 
         self.connect("map", lambda *_: GLib.idle_add(self.position_bottom_right))
 
@@ -87,6 +94,9 @@ class SessionWindow(Adw.Window):
         """Add elapsed time to the game's total and persist it."""
         now = monotonic()
         elapsed = int(now - self.session_start)
+        if elapsed > self.MAX_GAP:
+            self.session_start = now - self.TICK_INTERVAL
+            elapsed = self.TICK_INTERVAL
         if elapsed > 0:
             self.game.playtime += elapsed
             self.session_seconds += elapsed

@@ -190,6 +190,14 @@ class DetailsDialog(Adw.Dialog):
     # O arquivo temporário que a tela de escolha entregou, e que é desta tela
     # apagar. None quando a escolha veio do disco do usuário, que não se apaga.
     _wallpaper_tmp: Optional[Path] = None
+    # O mesmo para o logo do SteamGridDB e para a capa, que chega sempre como
+    # uma cópia convertida em %TEMP% — venha da busca ou do disco.
+    _logo_tmp: Optional[Path] = None
+    _cover_tmp: Optional[Path] = None
+
+    # Fechada, a tela não abre mais nada: `present()` num diálogo fechado cria
+    # uma janela solta. As buscas em voo conferem isto antes de aterrissar.
+    _closed: bool = False
 
     # A nota escolhida nas estrelas, de 0 a 5. Guardada aqui até o Aplicar,
     # como todo o resto do diálogo: clicar numa estrela e depois cancelar não
@@ -224,7 +232,7 @@ class DetailsDialog(Adw.Dialog):
         # closed, however it was closed.
         shared.win.store_library_scroll()
         self.connect("closed", lambda *_: shared.win.restore_library_scroll())
-        self.connect("closed", lambda *_: self.discard_wallpaper_tmp())
+        self.connect("closed", self._on_closed)
 
         self.game: Optional[Game] = game
         self.game_cover: GameCover = GameCover({self.cover})
@@ -476,8 +484,32 @@ class DetailsDialog(Adw.Dialog):
             return ""
         return Path(candidates[-1].strip('"')).name
 
+    def _on_closed(self, *_args: Any) -> None:
+        self._closed = True
+        self.discard_wallpaper_tmp()
+        self._discard_tmp("_logo_tmp")
+        self._discard_tmp("_cover_tmp")
+
+    def _discard_tmp(self, attribute: str) -> None:
+        if (path := getattr(self, attribute)) is None:
+            return
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as error:
+            logging.info("Could not remove the staged file %s: %s", path, error)
+        setattr(self, attribute, None)
+
+    def _stage_cover(self, new_path: Path) -> None:
+        """Mostra a capa nova e passa a ser dono da cópia temporária dela."""
+        self._discard_tmp("_cover_tmp")
+        self._cover_tmp = new_path
+        self.game_cover.new_cover(new_path)
+        self.cover_button_delete_revealer.set_reveal_child(True)
+        self.cover_changed = True
+
     def delete_pixbuf(self, *_args: Any) -> None:
         self.game_cover.new_cover()
+        self._discard_tmp("_cover_tmp")
 
         self.cover_button_delete_revealer.set_reveal_child(False)
         self.cover_changed = True
@@ -643,10 +675,20 @@ class DetailsDialog(Adw.Dialog):
         shared.win.game_covers[self.game.game_id] = self.game_cover
 
         if self.cover_changed:
-            save_cover(
-                self.game.game_id,
-                self.game_cover.path,
-            )
+            try:
+                save_cover(
+                    self.game.game_id,
+                    self.game_cover.path,
+                )
+            except OSError as error:
+                # Um GIF da capa antiga aberto pela Pillow no Windows recusa o
+                # `replace` (WinError 5). A capa nova fica só nesta sessão — o
+                # temporário não é apagado, é ela que o mostra — e o resto da
+                # edição é salvo, em vez de o Aplicar abortar no meio.
+                logging.warning("Could not save the cover: %s", error)
+                self._cover_tmp = None
+            else:
+                self._discard_tmp("_cover_tmp")
 
         self.apply_logo_choice(self.game)
         self.apply_wallpaper_choice(self.game)
@@ -821,9 +863,7 @@ class DetailsDialog(Adw.Dialog):
         def finish(new_path: Optional[Path]) -> bool:
             # Runs on the main thread: GTK widgets are not thread-safe
             if new_path:
-                self.game_cover.new_cover(new_path)
-                self.cover_button_delete_revealer.set_reveal_child(True)
-                self.cover_changed = True
+                self._stage_cover(new_path)
 
             self.end_loading(cover=True)
             return False
@@ -883,7 +923,7 @@ class DetailsDialog(Adw.Dialog):
 
     def browse_logos(self, *_args: Any) -> None:
         LogoPicker(
-            self.name.get_text(), self.set_logo_from_path, self.set_logo_to_title
+            self.name.get_text(), self.set_logo_from_picker, self.set_logo_to_title
         ).present(self)
 
     def choose_logo_file(self, *_args: Any) -> None:
@@ -899,14 +939,22 @@ class DetailsDialog(Adw.Dialog):
         self.set_logo_from_path(path)
 
     def set_logo_from_path(self, path: Path) -> None:
+        self._discard_tmp("_logo_tmp")
         self._logo_choice = ("manual", path)
         self.update_logo_row()
 
+    def set_logo_from_picker(self, path: Path) -> None:
+        """Como o arquivo do disco, mas este é um temporário e é nosso apagar."""
+        self.set_logo_from_path(path)
+        self._logo_tmp = path
+
     def set_logo_to_title(self) -> None:
+        self._discard_tmp("_logo_tmp")
         self._logo_choice = ("title", None)
         self.update_logo_row()
 
     def reset_logo_choice(self, *_args: Any) -> None:
+        self._discard_tmp("_logo_tmp")
         self._logo_choice = ("auto", None)
         self.update_logo_row()
 
@@ -946,6 +994,7 @@ class DetailsDialog(Adw.Dialog):
         else:
             reset_logo(game.game_id)
 
+        self._discard_tmp("_logo_tmp")
         self._logo_choice = None
         return True
 
@@ -994,13 +1043,7 @@ class DetailsDialog(Adw.Dialog):
         self.update_wallpaper_row()
 
     def discard_wallpaper_tmp(self) -> None:
-        if self._wallpaper_tmp is None:
-            return
-        try:
-            self._wallpaper_tmp.unlink(missing_ok=True)
-        except OSError as error:
-            logging.info("Could not remove the staged wallpaper: %s", error)
-        self._wallpaper_tmp = None
+        self._discard_tmp("_wallpaper_tmp")
 
     def set_wallpaper_none(self) -> None:
         self.discard_wallpaper_tmp()
@@ -1244,6 +1287,8 @@ class DetailsDialog(Adw.Dialog):
 
     def _fetch_metadata_choose(self, helper: SteamAPIHelper, name: str) -> bool:
         """Open the picker so the user can identify the game themselves."""
+        if self._closed:
+            return False
         self.steam_fetch_stack.set_visible_child(self.steam_fetch_button)
         # The fetch ends here as far as the dialog is concerned: dismissing the
         # picker with Esc or a click outside never calls back, so holding Apply
@@ -1257,13 +1302,17 @@ class DetailsDialog(Adw.Dialog):
 
     def _on_steam_picked(self, appid: str, data: dict) -> None:
         # Picking resumes the fetch `_fetch_metadata_choose` let go of, so it
-        # takes the counter back for the HowLongToBeat leg that follows.
+        # takes the counter back for the HowLongToBeat leg that follows — and
+        # the spinner with it, or the button looked idle and clickable.
+        self.steam_fetch_stack.set_visible_child(self.steam_fetch_spinner)
         self.begin_loading()
         self._fetch_metadata_done(data, None, appid)
 
     def _fetch_metadata_done(
         self, data: Optional[dict], error: Optional[Exception], appid: str = ""
     ) -> bool:
+        if self._closed:
+            return False
         if error is not None or not data:
             self.steam_fetch_stack.set_visible_child(self.steam_fetch_button)
             self.end_loading()
@@ -1370,10 +1419,8 @@ class DetailsDialog(Adw.Dialog):
         return False
 
     def set_cover_from_path(self, new_path: Path) -> None:
-        self.game_cover.new_cover(new_path)
+        self._stage_cover(new_path)
         self.game_cover.set_details_animation(True)
-        self.cover_button_delete_revealer.set_reveal_child(True)
-        self.cover_changed = True
 
     def set_is_open(self, is_open: bool) -> None:
         self.__class__.is_open = is_open

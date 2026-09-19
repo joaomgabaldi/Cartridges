@@ -314,7 +314,11 @@ class LogoPicker(Adw.Dialog):
         # the caller holds the file until the edit is applied (or discarded).
         try:
             template = f"cartridges_logo_XXXXXX{suffix}"
-            path = Path(Gio.File.new_tmp(template)[0].get_path())
+            arquivo, fluxo = Gio.File.new_tmp(template)
+            # Fechado antes da escrita: aberto, o fluxo que `new_tmp` devolve
+            # segura o arquivo até o coletor de lixo passar.
+            fluxo.close()
+            path = Path(arquivo.get_path())
             path.write_bytes(content)
         except (GLib.Error, OSError) as error:
             logging.warning("Could not store the chosen logo: %s", error)
@@ -327,6 +331,9 @@ class LogoPicker(Adw.Dialog):
         if not self._closed:
             self.on_selected(path)
             self.close()
+        else:
+            # Ninguém mais vai recebê-lo, e então ninguém mais o apagaria.
+            path.unlink(missing_ok=True)
         return False
 
     # endregion

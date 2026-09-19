@@ -29,9 +29,10 @@ from requests.exceptions import HTTPError, RequestException
 
 from cartridges import shared
 from cartridges.game import Game
-from cartridges.utils.download import download_bytes
+from cartridges.utils.download import download_bytes, get_capped
 from cartridges.utils.name_cleaner import clean_for_search
-from cartridges.utils.save_cover import convert_cover, save_cover
+from cartridges.utils.save_cover import ANIMATED_SUFFIXES, convert_cover, save_cover
+from cartridges.utils.title_match import rank_candidates
 
 
 class SgdbError(Exception):
@@ -107,23 +108,25 @@ class SgdbHelper:
         # spaces and characters like ':', '&', "'" or accents break the request.
         query = clean_for_search(game.name)
         uri = f"{self.base_url}search/autocomplete/{quote(query, safe='')}"
-        res = requests.get(uri, headers=self.auth_headers, timeout=10)
+        res = get_capped(uri, headers=self.auth_headers, timeout=10)
         match res.status_code:
             case 200:
                 results = [r for r in _data_list(res) if isinstance(r, dict)]
                 if not results:
                     raise SgdbGameNotFound(query)
-                # Prefer an exact (case-insensitive) title match, else the first
-                lowered = query.casefold()
-                for result in results:
-                    if (
-                        str(result.get("name", "")).casefold() == lowered
-                        and result.get("id") is not None
-                    ):
-                        return result["id"]
-                if results[0].get("id") is None:
+                with_ids = [r for r in results if r.get("id") is not None]
+                if not with_ids:
                     raise SgdbBadRequest(res.status_code)
-                return results[0]["id"]
+                # Ranked by the same title matching as the Steam lookup, not by
+                # string equality: the query is the *cleaned* name and the
+                # results are raw, so "Alien: Isolation" never equalled
+                # anything and the autocomplete's first (fuzzy) hit won. A
+                # confident match ranks first; failing one, the best plausible
+                # title; a sequel or an unrelated title is never taken.
+                ranked = rank_candidates(query, with_ids)
+                if not ranked:
+                    raise SgdbGameNotFound(query)
+                return ranked[0][0]["id"]
             case 401:
                 raise auth_error(res)
             case 404:
@@ -137,7 +140,7 @@ class SgdbHelper:
     def search_games(self, query: str) -> list[dict]:
         """Return the SGDB games matching a query (list of ``{id, name, …}``)."""
         uri = f"{self.base_url}search/autocomplete/{quote(query, safe='')}"
-        res = requests.get(uri, headers=self.auth_headers, timeout=10)
+        res = get_capped(uri, headers=self.auth_headers, timeout=10)
         match res.status_code:
             case 200:
                 return _data_list(res)
@@ -164,7 +167,7 @@ class SgdbHelper:
         uri = f"{self.base_url}grids/game/{game_id}"
         if params:
             uri += "?" + "&".join(params)
-        res = requests.get(uri, headers=self.auth_headers, timeout=10)
+        res = get_capped(uri, headers=self.auth_headers, timeout=10)
         match res.status_code:
             case 200:
                 return _data_list(res)
@@ -189,7 +192,7 @@ class SgdbHelper:
         behind the metadata.
         """
         uri = f"{self.base_url}logos/game/{game_id}?types=static&nsfw=false&humor=false"
-        res = requests.get(uri, headers=self.auth_headers, timeout=10)
+        res = get_capped(uri, headers=self.auth_headers, timeout=10)
         match res.status_code:
             case 200:
                 return _data_list(res)
@@ -206,7 +209,7 @@ class SgdbHelper:
         uri = f"{self.base_url}grids/game/{game_id}?dimensions=600x900"
         if animated:
             uri += "&types=animated"
-        res = requests.get(uri, headers=self.auth_headers, timeout=10)
+        res = get_capped(uri, headers=self.auth_headers, timeout=10)
         match res.status_code:
             case 200:
                 data = _data_list(res)
@@ -236,13 +239,16 @@ class SgdbHelper:
         if not use_sgdb or game.blacklisted:
             return
 
-        image_trunk = shared.covers_dir / game.game_id
-        still = image_trunk.with_suffix(".tiff")
-        animated = image_trunk.with_suffix(".gif")
         prefer_sgdb = shared.schema.get_boolean("sgdb-prefer")
 
-        # Do nothing if a cover is already present and not preferring SGDB
-        if not prefer_sgdb and (still.is_file() or animated.is_file()):
+        # Do nothing if a cover is already present and not preferring SGDB.
+        # Every suffix `save_cover` writes: checking only .tiff/.gif let a
+        # hand-picked animated .webp pass for "no cover", and saving the
+        # download then deleted it.
+        if not prefer_sgdb and any(
+            (shared.covers_dir / f"{game.game_id}{suffix}").is_file()
+            for suffix in (*ANIMATED_SUFFIXES, ".tiff")
+        ):
             return
 
         # Get ID for the game

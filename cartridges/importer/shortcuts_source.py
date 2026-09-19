@@ -55,10 +55,21 @@ _STEAM_APPID_RE = re.compile(r"steam://(?:rungameid|run)/(\d+)", re.IGNORECASE)
 _UNSAFE_CMD_CHARS_RE = re.compile(r'["\x00-\x1f]')
 
 # Characters cmd.exe acts on when they appear outside quotes: command chaining
-# and grouping (`&`, `|`, `(`, `)`), redirection (`<`, `>`), the escape prefix
-# (`^`) and variable expansion (`%`). Only relevant to values that are not
-# wrapped in quotes at the call site — see :func:`args_safe`.
-_SHELL_METACHARS_RE = re.compile(r"[&|<>^%()]")
+# and grouping (`&`, `|`, `(`, `)`), redirection (`<`, `>`) and the escape
+# prefix (`^`). Inside a quoted run cmd takes them literally — see
+# :func:`args_safe`.
+_SHELL_METACHARS = frozenset("&|<>^()")
+
+# Characters refused in arguments whether quoted or not: control characters
+# (a line break ends the command), `%` (variable expansion happens *inside*
+# quotes too, before any quoting is looked at) and `!` (the same expansion when
+# delayed expansion is on — off by default, but a registry value away).
+_ARGS_ALWAYS_UNSAFE_RE = re.compile(r"[\x00-\x1f%!]")
+
+# A target that names a file on a drive or a UNC share. Such a target is a file
+# path even when the file is missing right now (drive unplugged, share offline),
+# and must keep the file-path identity and command — see `build_from_lnk`.
+_ABSOLUTE_PATH_RE = re.compile(r"^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/])")
 
 
 def cmd_safe(value: str) -> bool:
@@ -76,21 +87,40 @@ def args_safe(value: str) -> bool:
 
     A shortcut's argument string cannot simply be wrapped in quotes — the game
     would then receive the whole thing as one argument instead of several — so
-    it is concatenated raw. That means the quote check :func:`cmd_safe` applies
-    is not enough on its own: outside quotes, `&`, `|`, `<`, `>`, `^`, `(`, `)`
-    and `%` are all interpreted by the shell, and any one of them turns a
-    shortcut into a command of the attacker's choosing.
+    it is concatenated raw, and this is the security boundary for it: outside
+    quotes, `&`, `|`, `<`, `>`, `^`, `(` and `)` are interpreted by the shell,
+    and any one of them turns a shortcut into a command of the attacker's
+    choosing.
 
-    Real game arguments are switches and paths (``-dx11``, ``--skip-intro``,
-    ``"C:\\saves\\a.sav"``), none of which need a shell metacharacter, so
-    refusing them costs nothing a legitimate shortcut relies on.
+    Refusing every quote (the old rule) also refused real launchers: GOG's
+    ``/path="D:\\GOG Games\\X"``, Battle.net's ``--exec="launch Pro"``, an
+    emulator's ``"...\\Game (USA).sfc"``. So the text is walked the way cmd.exe
+    walks it — every ``"`` toggles quoting, with no escape for it — and a
+    metacharacter is accepted only while a quoted run is open. The quotes must
+    balance, so the run cannot spill into anything appended later. `%`, `!`
+    and control characters are refused everywhere (see
+    ``_ARGS_ALWAYS_UNSAFE_RE``).
+
+    The rest of the command (``start "" /D "..." "..."``) always has balanced
+    quotes, so the parity here is the parity cmd sees.
     """
-    return cmd_safe(value) and not _SHELL_METACHARS_RE.search(value)
+    if _ARGS_ALWAYS_UNSAFE_RE.search(value):
+        return False
+    quoted = False
+    for char in value:
+        if char == '"':
+            quoted = not quoted
+        elif not quoted and char in _SHELL_METACHARS:
+            return False
+    return not quoted
 
-# Names that are clearly not games and pollute shortcut folders.
+# Names that are clearly not games and pollute shortcut folders. "Manual",
+# "Support" and "Benchmark" only as the last word ("Halo Manual"): anywhere in
+# the name they also took real games ("Manual Samuel", "Tech Support: Error
+# Unknown").
 _SKIP_NAME_RE = re.compile(
-    r"\b(uninstall|uninstaller|readme|read me|manual|support|website|home\s*page"
-    r"|benchmark)\b",
+    r"\b(uninstall|uninstaller|readme|read me|website|home\s*page)\b"
+    r"|\b(manual|support|benchmark)\s*$",
     re.IGNORECASE,
 )
 
@@ -274,12 +304,25 @@ class ShortcutsSourceIterable(SourceIterable):
             logging.info("Shortcuts folder %s is not a directory", root)
             return
 
-        recursive = shared.schema.get_boolean("shortcuts-recursive")
-        glob = root.rglob if recursive else root.glob
+        if shared.schema.get_boolean("shortcuts-recursive"):
+            # os.walk, not rglob: rglob descends into NTFS junctions (creatable
+            # without admin rights), and one looping back to a parent repeated
+            # every shortcut dozens of times. os.walk already skips symlinks;
+            # junctions are pruned here, as `install_size.folder_size` does.
+            entries: list[Path] = []
+            for dirpath, dirnames, filenames in os.walk(root):
+                dirnames[:] = [
+                    d
+                    for d in dirnames
+                    if not os.path.isjunction(os.path.join(dirpath, d))
+                ]
+                entries += (Path(dirpath, filename) for filename in filenames)
+        else:
+            entries = list(root.glob("*"))
 
         url_files: list[Path] = []
         lnk_files: list[Path] = []
-        for entry in glob("*"):
+        for entry in entries:
             if not entry.is_file():
                 continue
             match entry.suffix.lower():
@@ -352,7 +395,15 @@ class ShortcutsSourceIterable(SourceIterable):
         """Build a game from a ``.url`` internet shortcut"""
         parser = configparser.ConfigParser(interpolation=None, strict=False)
         try:
-            parser.read(entry, encoding="utf-8-sig")
+            raw = entry.read_bytes()
+            try:
+                text = raw.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                # Windows writes .url files in the ANSI code page, not UTF-8: an
+                # accented IconFile path made the whole file unreadable, and a
+                # game already in the library was then marked removed.
+                text = raw.decode("mbcs")
+            parser.read_string(text)
         except (configparser.Error, OSError, UnicodeDecodeError):
             return None
 
@@ -432,7 +483,24 @@ class ShortcutsSourceIterable(SourceIterable):
             logging.warning("Ignoring shortcut with unsafe arguments: %s", entry)
             return None
 
-        if target and Path(target).suffix.lower() != ".lnk" and Path(target).is_file():
+        # A target that looks like a file path is one even while the file is
+        # missing — a game on a USB drive that is unplugged during the scan.
+        # Sent to the URI branch below, it hashed a different identity (`target`
+        # without `|arguments`), so the game's id changed, the anchor adopted the
+        # old record and replaced its command with a poorer one (no /D, no
+        # arguments) — losing any command the user had edited — and the id moved
+        # again when the drive came back. Only a missing path is caught here: an
+        # existing folder target keeps the branch it always had, and a packaged
+        # app's target (WindowsApps, unreadable) still goes to the AUMID branch.
+        is_path = target and Path(target).suffix.lower() != ".lnk"
+        if is_path and (
+            Path(target).is_file()
+            or (
+                not aumid
+                and _ABSOLUTE_PATH_RE.match(target)
+                and not Path(target).exists()
+            )
+        ):
             # Classic executable target
             executable = 'start ""'
             if workdir:
@@ -493,7 +561,7 @@ class ShortcutsSourceIterable(SourceIterable):
                 return None
 
         elif target:
-            # A protocol/URI target (e.g. steam://) or a missing path
+            # A protocol/URI target (e.g. steam://), or a relative path or folder
             # (cmd_safe was already enforced on `target` above)
             if target.lower().startswith(("http://", "https://")):
                 return None
@@ -606,12 +674,6 @@ class ShortcutsSource(Source):
     source_id = "shortcuts"
     name = _("Atalhos")
     iterable_class = ShortcutsSourceIterable
-
-    locations = ()
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.locations = ()
 
     @property
     def is_available(self) -> bool:

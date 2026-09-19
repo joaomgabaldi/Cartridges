@@ -27,6 +27,9 @@ class FakeResponse:
         self._body = body
         self._is_json = is_json
 
+    def iter_content(self, chunk_size=1):  # read by download.get_capped
+        return iter(())
+
     def json(self):
         if not self._is_json:
             raise requests.exceptions.JSONDecodeError("no json", "", 0)

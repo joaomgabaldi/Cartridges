@@ -94,9 +94,9 @@ def _dump_json_atomic(path: Path, data: dict, **dump_kwargs: Any) -> None:
 def _migrate_game_files(old_id: str, new_id: str) -> None:
     """Move everything filed under ``old_id`` to ``new_id``.
 
-    A game owns four sets of files, all named after its id: its JSON record,
-    its cover, and its logo and session wallpaper, each an image plus the
-    sidecar recording how it was chosen.
+    A game owns five sets of files, all named after its id: its JSON record,
+    its cover, its logo and session wallpaper, each an image plus the sidecar
+    recording how it was chosen, and the LED strip colour picked for it.
     Best effort throughout — a file that will not move is left where it is
     rather than taking the migration down with it, because the alternative is
     an aborted adoption, which costs the whole game record.
@@ -118,6 +118,10 @@ def _migrate_game_files(old_id: str, new_id: str) -> None:
                 shared.wallpapers_dir / f"{new_id}{suffix}",
             )
         )
+
+    moves.append(
+        (shared.fitas_dir / f"{old_id}.json", shared.fitas_dir / f"{new_id}.json")
+    )
 
     for source, dest in moves:
         try:
@@ -287,11 +291,20 @@ class Store:
     def cleanup_game(self, game: Game) -> None:
         """Remove a game's files, dismiss any loose toasts"""
         # Covers may be a still .tiff or an animated .gif/.webp
+        # The session wallpaper and the LED strip colour are filed by id too,
+        # and ids are stable: left behind, a reinstalled game would inherit the
+        # removed one's locked choices.
         for path in (
             shared.games_dir / f"{game.game_id}.json",
             shared.covers_dir / f"{game.game_id}.tiff",
             shared.covers_dir / f"{game.game_id}.gif",
             shared.covers_dir / f"{game.game_id}.webp",
+            shared.wallpapers_dir / f"{game.game_id}.json",
+            *(
+                shared.wallpapers_dir / f"{game.game_id}{suffix}"
+                for suffix in WALLPAPER_SUFFIXES
+            ),
+            shared.fitas_dir / f"{game.game_id}.json",
         ):
             path.unlink(missing_ok=True)
 
@@ -552,6 +565,13 @@ class Store:
                 cover = shared.win.game_covers.pop(legacy_id, None)
                 if cover is not None:
                     shared.win.game_covers[game.game_id] = cover
+                    # Its file moved with the rest: left on the old name, the
+                    # blur fell back to the placeholder and the animation was
+                    # gone until the next restart.
+                    if cover.path is not None and cover.path.stem == legacy_id:
+                        cover.new_cover(
+                            shared.covers_dir / f"{game.game_id}{cover.path.suffix}"
+                        )
             return GLib.SOURCE_REMOVE
 
         GLib.idle_add(rekey_cover)

@@ -263,6 +263,9 @@ class TestBuscaPorFormato:
             def raise_for_status(self):
                 return None
 
+            def iter_content(self, chunk_size=1):  # lido por get_capped
+                return iter(())
+
             def json(self):
                 return {"data": []}
 

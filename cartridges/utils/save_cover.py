@@ -105,7 +105,12 @@ def _convert_readable_cover(cover_path: Path, resize: bool) -> Optional[Path]:
                 tmp_path,
                 compression="tiff_adobe_deflate",
             )
-    except (UnidentifiedImageError, Image.DecompressionBombError, OSError, ValueError):
+    except Image.DecompressionBombError:
+        # Fora do fallback abaixo: ele regrava a mesma imagem gigante num TIFF
+        # e chama `convert_cover` de novo, que a recusa de novo — recursão sem
+        # fim, com um TIFF enorme a mais em %TEMP% a cada nível.
+        return None
+    except (UnidentifiedImageError, OSError, ValueError):
         intermediate: Optional[Path] = None
         result: Optional[Path] = None
         try:

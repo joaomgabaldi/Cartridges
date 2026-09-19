@@ -19,8 +19,8 @@
 
 """As fitas de LED atrás dos monitores, acompanhando o app e a sessão.
 
-O ciclo tem quatro momentos: o app abre e as fitas acendem no roxo dele, o jogo
-abre e elas vestem a cor daquele jogo, o jogo fecha e elas voltam ao roxo, o app
+O ciclo tem quatro momentos: o app abre e as fitas acendem na cor dele, o jogo
+abre e elas vestem a cor daquele jogo, o jogo fecha e elas voltam à do app, o app
 fecha e elas voltam exatamente ao que eram antes de tudo — inclusive apagadas.
 
 O estado de antes fica no GSettings, e não em memória, pela mesma razão do papel
@@ -201,11 +201,17 @@ def cor_do_jogo(game: "Game", ignorar_escolha: bool = False) -> Cor:
     """
     dados = None if ignorar_escolha else _ler_sidecar(game.game_id)
     if dados and dados.get("locked"):
-        return Cor(
-            int(dados.get("matiz", tom_do_app()[0])),
-            int(dados.get("saturacao", tom_do_app()[1])),
-            int(dados.get("brilho", brilho_padrao())),
-        )
+        # Sidecar mexido à mão com tipo errado (``"matiz": null``) não pode
+        # levantar aqui: isto roda na thread de UI, abrindo os detalhes. Vale o
+        # automático, como para o sidecar corrompido.
+        try:
+            return Cor(
+                int(dados.get("matiz", tom_do_app()[0])),
+                int(dados.get("saturacao", tom_do_app()[1])),
+                int(dados.get("brilho", brilho_padrao())),
+            )
+        except (TypeError, ValueError):
+            logging.warning("Cor da fita de %s ilegível; vale a automática", game.game_id)
 
     capa = game.get_cover_path()
     da_capa = dominante(capa) if capa else None
@@ -301,8 +307,8 @@ BATIMENTO = 10
 # o ESPERA do soquete a cada troca de cor.
 FALHAS_PARA_SUSPENDER = 3
 
-# As conexões abertas, por id da fita, com o IP em que foram abertas: se a
-# varredura achar a fita num endereço novo, a conexão velha não serve mais.
+# As conexões abertas, por id da fita, com o IP em que foram abertas: se o
+# assistente gravar a fita num endereço novo, a conexão velha não serve mais.
 _conexoes: dict[str, tuple[str, Any]] = {}
 _falhas: dict[str, int] = {}
 _suspensas: set[str] = set()
@@ -392,12 +398,18 @@ def _esvaziar(modulo: Any) -> None:
         soquete.settimeout(espera)
 
 
-def _descartar(fita: Fita) -> None:
-    """Joga fora a conexão desta fita; a próxima conversa abre outra."""
+def _descartar(fita: Fita, modulo: Any) -> None:
+    """Joga fora esta conexão da fita; a próxima conversa abre outra.
+
+    Chamar com a trava da fita, e só tira do mapa se a guardada ainda for esta:
+    fora da trava, o batimento podia pegar o objeto no meio do descarte, e a
+    tinytuya reabria o soquete dele — uma conexão que ninguém mais fechava.
+    """
     with _TRAVA_CONEXOES:
-        guardada = _conexoes.pop(fita.id, None)
-    if guardada is not None:
-        _fechar_conexao(guardada[1])
+        guardada = _conexoes.get(fita.id)
+        if guardada is not None and guardada[1] is modulo:
+            del _conexoes[fita.id]
+    _fechar_conexao(modulo)
 
 
 def _conversar(fita: Fita, acao: Any) -> Optional[Any]:
@@ -406,8 +418,8 @@ def _conversar(fita: Fita, acao: Any) -> Optional[Any]:
     Conexão guardada que falha é descartada e tentada de novo uma vez, já com
     uma conexão nova — é o caso do roteador que reiniciou ou do PC que voltou
     da suspensão, e o comando segue de onde parou. Três falhas seguidas
-    suspendem a fita até a varredura achá-la, o botão "Testar" pedir, ou o app
-    abrir de novo.
+    suspendem a fita até o botão "Testar" pedir, o fechamento do app tentar
+    devolvê-la, ou o app abrir de novo.
     """
     if fita.id in _suspensas:
         return None
@@ -424,19 +436,21 @@ def _conversar(fita: Fita, acao: Any) -> Optional[Any]:
 
     for _tentativa in range(2):
         guardada = False
-        try:
-            with _trava_da(fita):
+        with _trava_da(fita):
+            modulo = None
+            try:
                 modulo, guardada = _conexao(fita)
                 _esvaziar(modulo)
                 resposta = acao(modulo)
-        except Exception as erro:  # a tinytuya levanta de tudo: socket, struct, json
-            resposta = {"Error": str(erro)}
+            except Exception as erro:  # a tinytuya levanta de tudo: socket, struct, json
+                resposta = {"Error": str(erro)}
+            falhou = isinstance(resposta, dict) and bool(resposta.get("Error"))
+            if falhou and modulo is not None:
+                _descartar(fita, modulo)
 
-        if not (isinstance(resposta, dict) and resposta.get("Error")):
+        if not falhou:
             _falhas.pop(fita.id, None)
             return resposta
-
-        _descartar(fita)
         if not guardada:
             break
 
@@ -457,8 +471,9 @@ def _contar_falha(fita: Fita) -> None:
 def retomar(ids: Optional[set[str]] = None) -> None:
     """Tira fitas da suspensão. Sem argumento, tira todas.
 
-    Chamado pela varredura (com as fitas que ela achou na rede) e pelo botão
-    "Testar", onde o usuário pediu para tentar de novo.
+    Chamado pelo botão "Testar", onde o usuário pediu para tentar de novo, e
+    pelo fechamento do app: a fita suspensa no meio do jogo (o roteador que
+    reiniciou) ainda tem um estado de antes para receber.
     """
     alvo = set(_suspensas) if ids is None else ids & _suspensas
     for identificador in alvo:
@@ -488,6 +503,12 @@ def _bater(geracao: int) -> None:
             # a resposta, e ela sobrava no soquete — ver `_esvaziar`. A
             # consulta lê a própria resposta, e de quebra diz se a fita sumiu.
             try:
+                # Reconferido já com a trava: a conexão da lista pode ter sido
+                # descartada depois que ela foi tirada, e usar o objeto fechado
+                # faria a tinytuya reabrir um soquete que ninguém mais fecharia.
+                with _TRAVA_CONEXOES:
+                    if _conexoes.get(identificador, (None, None))[1] is not modulo:
+                        continue
                 _esvaziar(modulo)
                 resposta = modulo.status()
                 if isinstance(resposta, dict) and resposta.get("Error"):
@@ -526,7 +547,7 @@ def ler_estado(fita: Fita) -> Optional[dict[str, Any]]:
         resposta = modulo.status(nowait=True)
         if isinstance(resposta, dict) and resposta.get("Error"):
             return resposta
-        dps = _esperar(modulo, lambda cmd, _dps: cmd == RESPOSTA_DA_CONSULTA)
+        dps = _esperar(modulo, lambda cmd, _dps: cmd in RESPOSTAS_DA_CONSULTA)
         return {"Error": "a fita não respondeu à consulta"} if dps is None else {"dps": dps}
 
     resposta = _conversar(fita, consultar)
@@ -663,9 +684,10 @@ def _vigente(fita: Fita, geracao: int) -> bool:
 
 # Os códigos das mensagens da fita no protocolo Tuya que importam aqui: o
 # aviso de estado, que ela manda depois de aplicar um comando (o ``STATUS`` da
-# tinytuya), e a resposta a uma consulta (o ``DP_QUERY``). Os "recebi" são 7.
+# tinytuya), e a resposta a uma consulta — o ``DP_QUERY`` (10) até a versão
+# 3.3 do protocolo, o ``DP_QUERY_NEW`` (16) da 3.4 em diante. Os "recebi" são 7.
 AVISO_DE_ESTADO = 8
-RESPOSTA_DA_CONSULTA = 10
+RESPOSTAS_DA_CONSULTA = (10, 16)
 
 # Quanto esperar pela mensagem certa. Medido a 30 degraus/s com as três fitas
 # juntas: o aviso do último degrau chega até meio segundo depois do fim da
@@ -763,15 +785,30 @@ def _rajada(fita: Fita, caminho: list[str], geracao: int) -> None:
     _conversar(fita, degraus)
 
 
-def _transitar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
+def _reservar(alvos: list[Fita]) -> dict[str, int]:
+    """O número da próxima troca de cada fita, tirado agora.
+
+    Quem pede a troca na thread de UI reserva ali: a ordem das trocas é a dos
+    pedidos, e não a de quem terminou de calcular a cor primeiro.
+    """
+    with _TRAVA_DAS_TRAVAS:
+        for fita in alvos:
+            _geracoes[fita.id] = _geracoes.get(fita.id, 0) + 1
+        return {fita.id: _geracoes[fita.id] for fita in alvos}
+
+
+def _transitar(
+    fita: Fita, ligada: bool, cor_hex: str, geracao: Optional[int] = None
+) -> bool:
     """Leva a fita ao estado pedido deslizando, e confirma o fim.
 
     Síncrona: segura a fita do primeiro degrau ao comando final, para duas
     trocas nunca se misturarem na mesma fita. Devolve se o fim deu certo, e
     falso também quando outra troca tomou o lugar desta no meio do caminho.
+    ``geracao`` é o número que ``_reservar`` tirou; sem ele, tira agora.
     """
-    with _TRAVA_DAS_TRAVAS:
-        geracao = _geracoes[fita.id] = _geracoes.get(fita.id, 0) + 1
+    if geracao is None:
+        geracao = _reservar([fita])[fita.id]
 
     with _trava_da(fita):
         if not _vigente(fita, geracao):
@@ -823,12 +860,29 @@ def ips_da_varredura(achados: dict[str, Any]) -> dict[str, str]:
     return mapa
 
 
-def enderecos_na_rede() -> dict[str, str]:
-    """O endereço de cada módulo Tuya que respondeu na rede, por id.
+def versoes_da_varredura(achados: dict[str, Any]) -> dict[str, str]:
+    """A versão do protocolo de cada módulo que a varredura achou, por id.
+
+    O assistente grava a fita com ela: um módulo 3.4 ou 3.5 falado como 3.3
+    nunca responde.
+    """
+    mapa = {}
+    for dados in (achados or {}).values():
+        identificador = (dados or {}).get("gwId")
+        versao = (dados or {}).get("version")
+        if identificador and versao:
+            mapa[str(identificador)] = str(versao)
+    return mapa
+
+
+def enderecos_na_rede() -> tuple[dict[str, str], dict[str, str]]:
+    """O endereço e a versão do protocolo de cada módulo Tuya que respondeu
+    na rede, cada um num mapa por id.
 
     Sem enquete: ``poll=True`` iria perguntar o estado de cada aparelho achado —
-    inclusive dos que não são nossos — e aqui só o endereço interessa. Nunca
-    levanta; sem rede ou sem biblioteca, devolve um mapa vazio.
+    inclusive dos que não são nossos — e aqui só o endereço e a versão
+    interessam. Nunca levanta; sem rede ou sem biblioteca, devolve dois mapas
+    vazios.
     """
     with _TRAVA_VARREDURA:
         try:
@@ -838,10 +892,10 @@ def enderecos_na_rede() -> dict[str, str]:
             import tinytuya  # noqa: PLC0415
 
             achados = tinytuya.deviceScan(False, ESPERA_VARREDURA, poll=False)
-            return ips_da_varredura(achados)
+            return ips_da_varredura(achados), versoes_da_varredura(achados)
         except Exception as erro:  # a tinytuya levanta de tudo: socket, struct, json
             logging.warning("Varredura das fitas falhou: %s", erro)
-            return {}
+            return {}, {}
 
 # endregion
 # region Ciclo de vida
@@ -907,16 +961,27 @@ def _em_paralelo(itens: list[Any], tarefa: Any) -> list[Any]:
     return [resultados.get(indice) for indice in range(len(itens))]
 
 
-def _vestir(cor: Cor) -> None:
-    """Acende todas as fitas na cor pedida, ao mesmo tempo e deslizando.
+def _vestir(
+    cor: Cor,
+    alvos: Optional[list[Fita]] = None,
+    geracoes: Optional[dict[str, int]] = None,
+) -> None:
+    """Acende as fitas na cor pedida, ao mesmo tempo e deslizando.
     Síncrono; nunca levanta.
+
+    Sem ``alvos``, acende todas as configuradas. ``geracoes`` são os números
+    que ``_reservar`` tirou na hora do pedido; sem eles, cada fita tira o seu
+    agora.
 
     Fita que não responde fica como está — e depois de três falhas seguidas é
     suspensa, para não atrasar as outras. O endereço de cada fita é o que o
     assistente achou: IP mudou, roda-se o assistente de novo.
     """
     cor_hex = hsv_hex(cor)
-    _em_paralelo(fitas(), lambda fita: _transitar(fita, True, cor_hex))
+    _em_paralelo(
+        fitas() if alvos is None else alvos,
+        lambda fita: _transitar(fita, True, cor_hex, (geracoes or {}).get(fita.id)),
+    )
 
 
 def _pintar(cor: Cor) -> None:
@@ -996,13 +1061,12 @@ def cor_do_app() -> Cor:
     return Cor(*tom_do_app(), brilho_padrao())
 
 
-def _estado_de_todas() -> dict[str, dict[str, Any]]:
-    """O estado de cada fita configurada, por id.
+def _estado_de(alvos: list[Fita]) -> dict[str, dict[str, Any]]:
+    """O estado de cada uma destas fitas, por id.
 
     Quem não respondeu fica de fora: devolver uma fita ao estado que só foi
     chutado seria pior que não devolver nada.
     """
-    alvos = fitas()
     lidos = _em_paralelo(alvos, ler_estado)
     return {
         fita.id: lido for fita, lido in zip(alvos, lidos) if lido is not None
@@ -1010,20 +1074,30 @@ def _estado_de_todas() -> dict[str, dict[str, Any]]:
 
 
 def _guardar_e_vestir() -> None:
-    """Guarda o estado de cada fita e acende todas no roxo do app."""
+    """Guarda o estado das fitas que ainda não têm um e acende na cor do app
+    as que têm. Chamar com a ``_TRAVA_ARRANQUE``.
+
+    Só é lida a fita que falta na chave. A que já está nela tem guardado o
+    primeiro estado, o de antes do app — relê-la agora gravaria por cima a cor
+    que o próprio app pintou, e o fechamento devolveria as fitas à cor do app
+    para sempre.
+
+    Só é pintada a fita que está na chave: fita que não respondeu à leitura e
+    responde ao pintar ficaria na cor do app sem estado para voltar. Ela é lida
+    de novo no próximo arranque ou reacender. Nenhuma lida, nada é gravado — a
+    chave nunca vira ``"{}"``.
+    """
     if not ligada():
         return
 
-    # Grava só quando a chave está vazia. Chave preenchida quer dizer que uma
-    # troca já está em curso, e o estado a devolver é o primeiro — não o roxo
-    # que o próprio app acabou de pintar por cima. Vale de verdade porque o
-    # `do_activate` dispara outra vez quando uma segunda instância é
-    # encaminhada para a viva; sem a guarda, as fitas ficariam roxas para
-    # sempre.
-    if not shared.schema.get_string(CHAVE_ESTADO):
-        shared.schema.set_string(CHAVE_ESTADO, json.dumps(_estado_de_todas()))
+    configuradas = fitas()
+    estados = _estados_guardados()
+    novos = _estado_de([fita for fita in configuradas if fita.id not in estados])
+    if novos:
+        estados.update(novos)
+        shared.schema.set_string(CHAVE_ESTADO, json.dumps(estados))
 
-    _vestir(cor_do_app())
+    _vestir(cor_do_app(), [fita for fita in configuradas if fita.id in estados])
 
 
 def _estados_guardados() -> dict[str, Any]:
@@ -1033,6 +1107,13 @@ def _estados_guardados() -> dict[str, Any]:
     except ValueError:
         return {}
     return estados if isinstance(estados, dict) else {}
+
+
+def _guardadas() -> list[Fita]:
+    """As fitas com estado de antes guardado: as únicas que o app pinta, por
+    serem as únicas que o fechamento sabe devolver."""
+    estados = _estados_guardados()
+    return [fita for fita in fitas() if fita.id in estados]
 
 
 def _repor(fita: Fita, estado: Any) -> None:
@@ -1052,18 +1133,23 @@ def devolver_removidas(removidas: list[Fita]) -> None:
     Sem isto, a fita desmarcada no assistente some do arquivo e, com ela, a
     única referência que o fechamento do app tinha para devolvê-la: ela ficaria
     na cor do Cartridges para sempre. É rede — chamar de fora da thread de UI.
+
+    Com a ``_TRAVA_ARRANQUE``: o assistente fecha logo depois de chamar isto, e
+    o reacender que o fechamento dele dispara também lê e grava a chave. Sem a
+    trava, a última gravação apagaria a outra.
     """
-    estados = _estados_guardados()
-    if not estados:
-        return
+    with _TRAVA_ARRANQUE:
+        estados = _estados_guardados()
+        if not estados:
+            return
 
-    saindo = [(fita, estados.pop(fita.id, None)) for fita in removidas]
-    _em_paralelo(
-        [par for par in saindo if par[1] is not None],
-        lambda par: _repor(par[0], par[1]),
-    )
+        saindo = [(fita, estados.pop(fita.id, None)) for fita in removidas]
+        _em_paralelo(
+            [par for par in saindo if par[1] is not None],
+            lambda par: _repor(par[0], par[1]),
+        )
 
-    shared.schema.set_string(CHAVE_ESTADO, json.dumps(estados) if estados else "")
+        shared.schema.set_string(CHAVE_ESTADO, json.dumps(estados) if estados else "")
 
 
 def _devolver() -> None:
@@ -1100,9 +1186,9 @@ def restaurar_orfaos() -> None:
 def _arrancar() -> None:
     """Os dois passos do arranque, já fora da thread de UI.
 
-    A trava não espera: um segundo arranque enquanto o primeiro corre não tem
-    o que fazer, e esperar só empilharia threads. ``do_activate`` dispara de
-    novo quando uma segunda instância do app é encaminhada para esta.
+    A trava não espera: se alguém a segura, é outra conversa do ciclo em
+    curso (a devolução das fitas removidas no assistente, um reacender), e o
+    arranque não tem o que disputar com ela.
     """
     if not _TRAVA_ARRANQUE.acquire(blocking=False):
         logging.info("Arranque das fitas já em curso; segunda chamada ignorada")
@@ -1116,11 +1202,14 @@ def _arrancar() -> None:
 
 
 def abrir() -> None:
-    """O app abriu: desfaz o que ficou de antes e acende no roxo.
+    """O app abriu: desfaz o que ficou de antes e acende na cor do app.
+
+    Só para o arranque do app. Com o app já aberto, a chave é a desta execução
+    e não um órfão: quem religa o ciclo com o app aberto chama ``reacender``.
 
     Chamar da thread de UI. Os dois passos correm na MESMA thread, e nesta
     ordem: o estado que uma execução anterior deixou pendurado precisa ser
-    devolvido antes de guardarmos o estado novo, senão o roxo do próprio app
+    devolvido antes de guardarmos o estado novo, senão a cor do próprio app
     viraria "o estado de antes" do usuário.
     """
     # A devolução de órfãos acontece mesmo com o recurso desligado nas
@@ -1131,22 +1220,70 @@ def abrir() -> None:
     _em_thread(_arrancar)
 
 
+def _reacender() -> None:
+    with _TRAVA_ARRANQUE:
+        _guardar_e_vestir()
+
+
+def reacender() -> None:
+    """O ciclo foi religado com o app aberto: o interruptor foi ligado, ou o
+    assistente fechou. Chamar da thread de UI.
+
+    Não desfaz órfão nenhum — a chave, se houver, é desta execução, e
+    devolvê-la faria as fitas piscarem no estado de antes. Só guarda o estado
+    das fitas que ainda não têm um (a primeira vez que o recurso liga, a fita
+    nova do assistente) e veste a cor do app. A trava espera aqui, ao contrário
+    do arranque: o reacender que chega junto com a devolução das fitas
+    removidas no assistente tem trabalho a fazer depois dela.
+    """
+    if not ligada():
+        return
+    _em_thread(_reacender)
+
+
 def comecar(game: "Game") -> None:
     """A sessão começou: veste a cor do jogo. Chamar da thread de UI.
 
     A cor é calculada dentro da thread, e não antes dela: tirar a cor da capa
     abre e quantiza uma imagem, e isso não pode acontecer enquanto o jogo abre.
+    A vez de cada fita, essa sim, é tirada aqui: um "Já terminei" logo depois
+    tem de vencer a cor do jogo que ainda estava sendo calculada.
     """
     if not ligada():
         return
-    _em_thread(lambda: _vestir(cor_do_jogo(game)))
+    alvos = _guardadas()
+    geracoes = _reservar(alvos)
+    _em_thread(lambda: _vestir(cor_do_jogo(game), alvos, geracoes))
 
 
 def voltar() -> None:
-    """A sessão acabou: de volta ao roxo do app. Chamar da thread de UI."""
+    """A sessão acabou: de volta à cor do app. Chamar da thread de UI."""
     if not ligada():
         return
-    _em_thread(lambda: _vestir(cor_do_app()))
+    alvos = _guardadas()
+    geracoes = _reservar(alvos)
+    _em_thread(lambda: _vestir(cor_do_app(), alvos, geracoes))
+
+
+def _devolver_no_fechamento() -> None:
+    """A devolução do fechamento, na vez dela.
+
+    Espera um arranque ou reacender em curso terminar: correndo junto, o
+    vestir dele e a devolução disputariam cada fita, e se o vestir vencesse a
+    fita ficaria na cor do app com a chave já limpa. A espera cabe no prazo do
+    fechamento; estourado, a chave fica para o próximo arranque.
+
+    As fitas suspensas são tentadas também: suspensão poupa espera na troca
+    de cor, mas aqui é a última chance de devolvê-las antes de a chave ser
+    limpa.
+    """
+    if not _TRAVA_ARRANQUE.acquire(timeout=PRAZO_FECHAMENTO):
+        return
+    try:
+        retomar()
+        _devolver()
+    finally:
+        _TRAVA_ARRANQUE.release()
 
 
 def fechar() -> None:
@@ -1158,7 +1295,7 @@ def fechar() -> None:
     ``restaurar_orfaos`` do próximo arranque termina o serviço. É exatamente
     para isso que a chave existe.
     """
-    linha = _em_thread(_devolver)
+    linha = _em_thread(_devolver_no_fechamento)
     linha.join(PRAZO_FECHAMENTO)
     if linha.is_alive():
         logging.info(

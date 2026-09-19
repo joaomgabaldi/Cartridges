@@ -403,6 +403,7 @@ _CONTAINER_DIRS = frozenset(
         "windowsapps",
     }
 )
+_PROGRAM_FILES_DIRS = frozenset({"program files", "program files (x86)"})
 
 
 def install_dir_from_command(executable: str) -> str:
@@ -452,17 +453,27 @@ def _game_root(directory: str) -> str:
         return ""
 
     current = os.path.normpath(directory)
+    below = ""  # the folder one level under `current` on the way up
     for _ in range(_MAX_ROOT_WALK):
         parent = os.path.dirname(current)
         if parent == current:
             return ""  # hit the drive root without ever finding a container
-        if os.path.basename(parent).casefold() in _CONTAINER_DIRS:
+        container = os.path.basename(parent).casefold()
+        if container in _CONTAINER_DIRS:
+            # Program Files holds publishers as often as games: `Epic Games`,
+            # `EA Games` and `Rockstar Games` each hold several games — and
+            # Rockstar's launcher, which lingers in the tray after the game.
+            # There the root is the second level, not the first.
+            # ponytail: a game living directly in Program Files with its exe
+            # two levels down gets its subfolder watched, not its root.
+            if container in _PROGRAM_FILES_DIRS and below:
+                current = below
             # Backslashes on the way out, so what this hands to
             # `install_dir_from_command` — and from there to
             # `ProcessSession.install_dir`, which is persisted and compared —
             # is in the same shape as `_as_path_prefix` and `_system_root`.
             return _win32_path(current)
-        current = parent
+        below, current = current, parent
     return ""
 
 

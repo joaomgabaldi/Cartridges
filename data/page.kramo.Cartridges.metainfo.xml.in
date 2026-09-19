@@ -46,6 +46,23 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.19" date="2026-09-19">
+      <description translate="no">
+        <ul>
+          <li>Um jogo cujo HD externo estava desligado quando o app abriu não perde mais o comando editado à mão, e um atalho com argumentos entre aspas (GOG Galaxy, Battle.net, emuladores com ROMs como “Jogo (USA)”) agora entra na biblioteca</li>
+          <li>“Atualizar capas” não troca mais uma capa animada .webp escolhida à mão, e a capa automática do SteamGridDB não pega mais o jogo errado quando o título tem dois-pontos</li>
+          <li>As fitas de LED não ficam mais presas na cor do app: fechar o assistente ou religar o recurso com o app aberto não as faz piscar nem esquece como estavam antes; uma fita que caiu da rede durante o jogo é devolvida ao fechar; e uma fita que não respondeu ao abrir o app não é pintada sem ter como voltar. Desligar “Contar horas de jogo” não trava mais a configuração das fitas, e uma troca de cor não perde mais para o fim de uma sessão curta</li>
+          <li>Durante a sessão, o teclado não age mais por trás do aviso de jogo aberto: Enter ou Espaço não abrem o jogo de novo e Delete não remove o jogo que está rodando. Na biblioteca, Delete e Ctrl+Z voltam a funcionar dentro da caixa de busca, e Ctrl+Z não desfaz mais uma importação de horas atrás</li>
+          <li>Fechar o app com um jogo aberto grava a sessão no histórico, e não só no tempo total; o PC suspenso com o jogo aberto não conta mais como tempo de jogo; e quando o app troca para a janela de tempo manual, a sessão não pisca mais nem traz a biblioteca para a frente do jogo</li>
+          <li>Jogos em pastas de editora (Epic Games, EA Games, Rockstar Games) não são mais confundidos com os outros jogos e launchers da mesma editora, e a sessão termina quando o jogo fecha</li>
+          <li>“Remover todos os jogos” também apaga os papéis de parede e as cores de fita escolhidos por jogo, e uma busca de capas em andamento não traz mais de volta os jogos apagados</li>
+          <li>Um arquivo de jogo editado à mão com tipo errado não impede mais a janela de abrir: só o campo errado é descartado</li>
+          <li>A atualização do app não pergunta mais no meio de uma sessão de jogo; espera a sessão acabar</li>
+          <li>Correções menores: datas como “Este mês” e “Ano passado” na virada do mês e do ano; “Novidades atualizadas” não aparece mais quando a busca falhou; o papel de parede do Windows Spotlight não é mais trocado por uma imagem fixa; imagens enormes não travam mais a escolha de capa ou de papel de parede; temporários de logo e capa não se acumulam mais; o tamanho de um jogo que saiu do disco é zerado; e “Executar como administrador” funciona com comandos que têm mais de um caminho entre aspas</li>
+          <li>A busca de reserva pela lista completa de apps da Steam foi removida: a Steam desativou essa lista, e a busca pela loja continua funcionando</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.18" date="2026-09-18">
       <description translate="no">
         <ul>

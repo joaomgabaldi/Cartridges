@@ -480,6 +480,13 @@ class CartridgesWindow(Adw.ApplicationWindow):
         return GLib.SOURCE_CONTINUE
 
     def show_session_blocker(self, game: Game) -> None:
+        # A mesma sessão trocando de rastreador (o `fall_back` de
+        # `ProcessSession` passando a vez à janela manual): o jogo segue aberto,
+        # e tudo o que veste a sessão já está vestido. Refazer piscaria as
+        # telas e as fitas, e um segundo relógio correria junto do primeiro.
+        if self.session_game is game and self.session_blocker.get_visible():
+            return
+
         # O jogo inteiro, e não só o nome: o botão de anotação daqui grava
         # nele, e é o único jogo que o bloqueador tem para oferecer.
         self.session_game = game
@@ -489,6 +496,12 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # header bar) so "Jogar" can't start a second session; the window can
         # still be moved/closed via the taskbar or system shortcuts
         self.session_blocker.set_visible(True)
+        # O overlay só barra o mouse. Sem isto, Enter ou Espaço no "Jogar" que
+        # ficou com o foco lançava o jogo de novo por trás dele, e Tab andava
+        # pela biblioteca escondida.
+        self.navigation_view.set_sensitive(False)
+        self.session_blocker_button.grab_focus()
+        self.set_show_hidden(self.navigation_view)
 
         # O relógio só faz sentido onde ele pode ser visto: se a janela foi
         # para o outro monitor, ela fica à vista a sessão inteira; se não foi,
@@ -527,6 +540,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # anotação que esteja aberto, e é esse fechamento que a grava.
         self.session_blocker.set_visible(False)
         self.session_game = None
+        self.navigation_view.set_sensitive(True)
+        self.set_show_hidden(self.navigation_view)
 
         if self.session_timer_id:
             GLib.source_remove(self.session_timer_id)
@@ -1844,9 +1859,19 @@ class CartridgesWindow(Adw.ApplicationWindow):
             self.details_view_game_cover.set_details_animation(False)
 
     def set_show_hidden(self, navigation_view: Adw.NavigationView, *_args: Any) -> None:
-        self.lookup_action("show_hidden").set_enabled(
-            navigation_view.get_visible_page() == self.library_page
-        )
+        if show_hidden := self.lookup_action("show_hidden"):
+            show_hidden.set_enabled(
+                navigation_view.get_visible_page() == self.library_page
+            )
+        # Delete é atalho do app: habilitado fora dos detalhes, ele engolia a
+        # tecla da caixa de busca sem apagar nada. Durante a sessão, apagaria
+        # o jogo que está rodando.
+        app = self.get_application()
+        if app and (action := app.lookup_action("remove_game_details_view")):
+            action.set_enabled(
+                navigation_view.get_visible_page() == self.details_page
+                and not self.session_blocker.get_visible()
+            )
 
     def on_go_to_parent_action(self, *_args: Any) -> None:
         if self.navigation_view.get_visible_page() in (
@@ -1909,6 +1934,13 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self, _widget: Any, game: Optional[Game] = None, undo: Optional[str] = None
     ) -> None:
         if not game:  # If the action was activated via Ctrl + Z
+            # O atalho do app vence o do campo de texto. Com o foco num campo,
+            # Ctrl+Z é desfazer a digitação, e não reverter uma remoção.
+            focus = self.get_focus()
+            if isinstance(focus, (Gtk.Editable, Gtk.TextView)):
+                focus.activate_action("text.undo", None)
+                return
+
             if shared.importer and (
                 shared.importer.imported_game_ids or shared.importer.removed_game_ids
             ):

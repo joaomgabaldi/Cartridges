@@ -67,7 +67,7 @@ from cartridges.utils.single_instance import (
     present_running_instance,
 )
 from cartridges.utils.updates_checker import UpdatesChecker
-from cartridges.utils import session_fita, session_wallpaper, window_geometry
+from cartridges.utils import session_fita, session_log, session_wallpaper, window_geometry
 from cartridges.window import CartridgesWindow
 
 # Titulo da secao de agradecimentos nos creditos. Fica numa constante porque
@@ -202,38 +202,106 @@ def _translate_about_dialog(widget: Gtk.Widget) -> None:
         child = child.get_next_sibling()
 
 
-# Os campos numéricos que um game_id.json persiste. `rating` e `status` têm
+# O tipo de cada campo que um game_id.json persiste, fora os quatro de
+# identidade (conferidos em `load_games_from_disk`). `rating` e `status` têm
 # guarda própria na exibição; os demais eram aplicados por setattr sem checagem.
-_NUMERIC_GAME_KEYS = (
-    "added",
-    "last_played",
-    "playtime",
-    "rating",
-    "metacritic",
-    "steam_checked",
-    "hltb_id",
-    "hltb_main",
-    "hltb_main_extra",
-    "hltb_completionist",
-    "install_size",
-    "install_size_ts",
-    "version",
-    "shortcut_mtime",
-    "update_available_ts",
-    "update_dismissed_ts",
+_NUMBER = (int, float)
+_GAME_FIELD_TYPES: dict[str, Any] = {
+    **dict.fromkeys(
+        (
+            "added",
+            "last_played",
+            "playtime",
+            "rating",
+            "metacritic",
+            "steam_checked",
+            "hltb_id",
+            "hltb_main",
+            "hltb_main_extra",
+            "hltb_completionist",
+            "install_size",
+            "install_size_ts",
+            "version",
+            "shortcut_mtime",
+            "update_available_ts",
+            "update_dismissed_ts",
+        ),
+        _NUMBER,
+    ),
+    **dict.fromkeys(
+        (
+            "status",
+            "notes",
+            "developer",
+            "publisher",
+            "release_date",
+            "steam_review",
+            "genre",
+            "controller_support",
+            "description",
+            "steam_appid",
+            "shortcut_path",
+            "process_executable",
+            "update_url",
+        ),
+        str,
+    ),
+    **dict.fromkeys(
+        (
+            "hidden",
+            "gamepad_recommended",
+            "removed",
+            "blacklisted",
+            "run_as_admin",
+            "track_process",
+            "track_updates",
+        ),
+        bool,
+    ),
+    "hltb_chapters": list,
+}
+
+# Os campos cujo default na classe é None: só neles `null` quer dizer "não
+# informado". Nos outros, `"version": null` virava `None > 1.6` na carga.
+_NULLABLE_GAME_KEYS = frozenset(
+    {
+        "metacritic",
+        "hltb_id",
+        "hltb_main",
+        "hltb_main_extra",
+        "hltb_completionist",
+        "developer",
+        "publisher",
+        "release_date",
+        "steam_review",
+        "genre",
+        "controller_support",
+        "description",
+        "steam_appid",
+        "hltb_chapters",
+    }
 )
 
 
-def sanitize_numeric_fields(data: dict, record_name: str) -> dict:
-    """Descarta campos numéricos de tipo errado num registro editado à mão.
+def sanitize_game_fields(data: dict, record_name: str) -> dict:
+    """Descarta campos de tipo errado num registro editado à mão.
 
-    ``"playtime": "5h"`` passava pela validação de presença e estourava
-    TypeError na tela de detalhes e na ordenação. Cai o campo, não o jogo —
-    o default da classe vale como "não informado". Muta e devolve ``data``.
+    ``"playtime": "5h"`` estourava TypeError na tela de detalhes e na
+    ordenação; ``"removed": "false"`` contava como verdadeiro e o jogo sumia;
+    ``"notes": 5`` derrubava os detalhes. Cai o campo, não o jogo — o default
+    da classe vale como "não informado". Muta e devolve ``data``.
     """
-    for key in _NUMERIC_GAME_KEYS:
-        value = data.get(key)
-        if value is not None and not isinstance(value, (int, float)):
+    for key, expected in _GAME_FIELD_TYPES.items():
+        if key not in data:
+            continue
+        value = data[key]
+        if value is None and key in _NULLABLE_GAME_KEYS:
+            continue
+        valid = isinstance(value, expected) and not (
+            key == "hltb_chapters"
+            and not all(isinstance(chapter, dict) for chapter in value)
+        )
+        if not valid:
             logging.warning("Campo %s inválido em %s, ignorado", key, record_name)
             del data[key]
     return data
@@ -480,6 +548,10 @@ class CartridgesApplication(Adw.Application):
             }
         )
 
+        # O Delete só vale com os detalhes à vista; o estado inicial vem daqui,
+        # e daí em diante do "pushed"/"popped" da navegação.
+        shared.win.set_show_hidden(shared.win.navigation_view)
+
         sort_action = Gio.SimpleAction.new_stateful(
             "sort_by",
             GLib.VariantType.new("s"),
@@ -581,10 +653,16 @@ class CartridgesApplication(Adw.Application):
         from cartridges.process_session import ProcessSession
         from cartridges.session_window import SessionWindow
 
-        if SessionWindow.active is not None:
-            SessionWindow.active.flush()
-        if ProcessSession.active is not None:
-            ProcessSession.active.flush()
+        # E a sessão entra no histórico, como no fim normal: sem isto o total
+        # do jogo ficava acima da soma das sessões, por uma diferença que a
+        # tela do histórico não tem como apagar.
+        if (window := SessionWindow.active) is not None:
+            window.flush()
+            session_log.record(window.game.game_id, window.session_seconds)
+        if (session := ProcessSession.active) is not None:
+            session.flush()
+            if session.started:
+                session_log.record(session.game.game_id, session.session_seconds)
 
         # A sessão que estava correndo acaba aqui, e as telas vestidas não podem
         # ficar com a arte do jogo depois que o app sumir. Síncrono e antes de
@@ -656,8 +734,13 @@ class CartridgesApplication(Adw.Application):
                 ):
                     logging.warning("Skipping malformed game record %s", game_file.name)
                     continue
-                game = Game(sanitize_numeric_fields(data, game_file.name))
-                shared.store.add_game(game, {"skip_save": True})
+                # Um arquivo por vez: o que escapar da limpeza acima custa esse
+                # jogo, e não a janela inteira, que abre depois desta carga.
+                try:
+                    game = Game(sanitize_game_fields(data, game_file.name))
+                    shared.store.add_game(game, {"skip_save": True})
+                except Exception:  # pylint: disable=broad-exception-caught
+                    logging.exception("Skipping unloadable game record %s", game_file.name)
 
     def on_about_action(self, *_args: Any) -> None:
         # Get the debug info from the log files

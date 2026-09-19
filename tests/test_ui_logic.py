@@ -389,13 +389,13 @@ def test_rotation_survives_an_undecodable_log(tmp_path):
 
 
 def test_nothing_is_written_to_the_browser_cache():
-    """Session logs and the app list must not live in INetCache.
+    """Session logs and the cache must not live in INetCache.
 
     `GLib.get_user_cache_dir()` resolves to CSIDL_INTERNET_CACHE on Windows —
     `AppData\\Local\\Microsoft\\Windows\\INetCache`, the browser's temporary
-    files folder, which Disk Cleanup and Storage Sense empty by default. The
-    Steam app list survives that (a cache losing its contents is a cache doing
-    its job); the session log does not, because the log of the run that went
+    files folder, which Disk Cleanup and Storage Sense empty by default. A
+    cache survives that (losing its contents is a cache doing its job); the
+    session log does not, because the log of the run that went
     wrong is exactly what a sweep takes away between the crash and somebody
     going to look for it.
 
@@ -528,7 +528,18 @@ def test_the_rows_are_filled_from_the_game(win):
     assert dialog.get_controller_support() == "partial"
 
 
-def test_a_steam_fetch_fills_the_rows_rather_than_hiding_the_values(details_dialog):
+@pytest.fixture
+def no_hltb_lookup(monkeypatch):
+    """`_fetch_metadata_done` encadeia a busca no HowLongToBeat numa thread, e
+    ela ia à rede de verdade, com o erro aparecendo depois do fim da suíte."""
+    from cartridges.details_dialog import DetailsDialog
+
+    monkeypatch.setattr(DetailsDialog, "_fetch_hltb_thread", lambda *_args: None)
+
+
+def test_a_steam_fetch_fills_the_rows_rather_than_hiding_the_values(
+    details_dialog, no_hltb_lookup
+):
     """They used to be fetched and dropped: the lookup pays a request for the
     store tags the genre is picked from, and the answer never reached the game."""
     details_dialog.executable.set_text("x.exe")
@@ -695,7 +706,7 @@ def test_editing_one_field_leaves_the_others_alone(real_window, store):
 
 
 def test_a_steam_fetch_carries_the_gamepad_recommendation_to_the_game(
-    real_window, store
+    real_window, store, no_hltb_lookup
 ):
     """It has no row of its own, so it rides on the fetch like the Metacritic
     score — and like it, must actually reach the record on apply."""
@@ -714,7 +725,9 @@ def test_a_steam_fetch_carries_the_gamepad_recommendation_to_the_game(
     assert game.gamepad_recommended is True
 
 
-def test_a_fetch_can_take_the_recommendation_away(real_window, store):
+def test_a_fetch_can_take_the_recommendation_away(
+    real_window, store, no_hltb_lookup
+):
     """False is an answer, not a missing value: a game that loses the category
     on Steam has to lose the line here too."""
     from cartridges.details_dialog import DetailsDialog
@@ -1943,7 +1956,7 @@ def test_a_maximized_window_comes_back_maximized_where_it_was(monkeypatch):
 def test_wrong_typed_numeric_fields_are_dropped_on_load():
     """B4: `"playtime": "5h"` num registro editado à mão passava e estourava
     TypeError na tela de detalhes e na ordenação. Cai o campo, não o jogo."""
-    from cartridges.main import sanitize_numeric_fields
+    from cartridges.main import sanitize_game_fields
 
     data = {
         "name": "Probe",
@@ -1952,7 +1965,7 @@ def test_wrong_typed_numeric_fields_are_dropped_on_load():
         "install_size": 1024,
         "hltb_main": None,
     }
-    cleaned = sanitize_numeric_fields(data, "probe.json")
+    cleaned = sanitize_game_fields(data, "probe.json")
 
     assert "playtime" not in cleaned
     assert "metacritic" not in cleaned
@@ -2065,7 +2078,13 @@ def test_the_manual_session_clock_survives_the_minute_flush(monkeypatch):
     monkeypatch.setattr(session_window, "monotonic", lambda: agora[0])
     monkeypatch.setattr(window, "monotonic", lambda: agora[0])
     game = types.SimpleNamespace(playtime=0, save=lambda: None)
-    ativa = types.SimpleNamespace(game=game, session_start=1000.0, session_seconds=0)
+    ativa = types.SimpleNamespace(
+        game=game,
+        session_start=1000.0,
+        session_seconds=0,
+        MAX_GAP=SessionWindow.MAX_GAP,
+        TICK_INTERVAL=SessionWindow.TICK_INTERVAL,
+    )
     monkeypatch.setattr(ProcessSession, "active", None)
     monkeypatch.setattr(SessionWindow, "active", ativa)
 

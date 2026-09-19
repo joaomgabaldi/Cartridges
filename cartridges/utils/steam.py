@@ -24,12 +24,11 @@ import re
 from pathlib import Path
 from typing import Callable, Optional, TypedDict
 
-import requests
 from requests.exceptions import HTTPError, RequestException
 
 from cartridges import shared
+from cartridges.utils.download import get_capped
 from cartridges.utils.rate_limiter import RateLimiter
-from cartridges.utils.steam_applist import SteamAppListError, get_app_list
 from cartridges.utils.steam_genre import pick_genre
 from cartridges.utils.title_match import TitleMatch, rank_candidates
 
@@ -238,7 +237,7 @@ class SteamAPIHelper:
         """
         with self.rate_limiter:
             try:
-                with requests.get(
+                with get_capped(
                     self.search_url,
                     params={"term": name, "l": "english", "cc": "us"},
                     timeout=10,
@@ -253,6 +252,15 @@ class SteamAPIHelper:
                     items = payload.get("items") if isinstance(payload, dict) else None
                     if not isinstance(items, list):
                         items = []
+                    # Só entradas com appid numérico: `"id": null` (ou sem
+                    # "id") passava daqui e estourava TypeError/KeyError adiante
+                    # — no `resolve`, no `search_appid` — fora de todo except,
+                    # matando a thread do seletor com o spinner girando.
+                    items = [
+                        item
+                        for item in items
+                        if isinstance(item, dict) and isinstance(item.get("id"), int)
+                    ]
             except HTTPError as error:
                 logging.warning("Steam search HTTP error for %s", name, exc_info=error)
                 raise error
@@ -281,52 +289,24 @@ class SteamAPIHelper:
             raise SteamGameNotFoundError()
         return ranked
 
-    def find_candidates(
-        self, name: str, use_app_list: bool = True
-    ) -> list[tuple[dict, TitleMatch]]:
+    def find_candidates(self, name: str) -> list[tuple[dict, TitleMatch]]:
         """Return everything that could be ``name``, best match first.
 
-        The storefront is asked first because its results carry metadata and
-        are already filtered to real products. Only when it fails to identify
-        the game is the full app list consulted — that is the path that finds
-        titles the storefront no longer indexes, at the cost of a large
-        download and entries that still need confirming.
+        Only the storefront search. The fallback through the full app list
+        (``ISteamApps/GetAppList``) was removed: Steam retired that endpoint
+        (404), and its replacement requires a Web API key the app does not
+        have.
 
         :raises SteamGameNotFoundError: if nothing plausible is found
         """
-        try:
-            candidates = self.search_candidates(name)
-        except SteamGameNotFoundError:
-            candidates = []
-
-        if use_app_list and not any(match.confident for _, match in candidates):
-            try:
-                extra = get_app_list().lookup(name)
-            except SteamAppListError as error:
-                logging.debug("Steam app list unavailable", exc_info=error)
-                extra = []
-            seen = {str(candidate.get("id")) for candidate, _ in candidates}
-            candidates += [
-                (candidate, match)
-                for candidate, match in extra
-                if str(candidate.get("id")) not in seen
-            ]
-
-        if not candidates:
-            raise SteamGameNotFoundError()
-
-        # Appid ascending as the tiebreaker: within equally good titles the
-        # oldest entry is the original release rather than a re-issue.
-        candidates.sort(key=lambda entry: (-entry[1].score, int(entry[0].get("id", 0))))
-        return candidates
+        return self.search_candidates(name)
 
     def resolve(self, name: str, max_attempts: int = 4) -> tuple[str, SteamAPIData]:
         """Find the appid for ``name`` and return it with its metadata.
 
         Confident candidates are tried in order until one turns out to be an
-        actual game. That loop matters for app list results, which are just
-        titles: dedicated servers, test builds and trailers share their game's
-        name and are only distinguishable once appdetails answers.
+        actual game: dedicated servers, test builds and trailers can share
+        their game's name and are only distinguishable once appdetails answers.
 
         :return: an ``(appid, data)`` tuple
         :raises SteamGameNotFoundError: if nothing confident resolves to a game
@@ -384,7 +364,7 @@ class SteamAPIHelper:
         # Get data from the API (way block to satisfy its limits)
         with self.rate_limiter:
             try:
-                with requests.get(
+                with get_capped(
                     # Portuguese, for the one field of this payload that is
                     # prose: the description. Everything else we read survives
                     # the switch untouched — `type` is not translated, category
@@ -595,7 +575,7 @@ class SteamAPIHelper:
             }
             with self.rate_limiter:
                 try:
-                    with requests.get(
+                    with get_capped(
                         self.store_items_url,
                         params={"input_json": json.dumps(payload)},
                         timeout=30,
@@ -643,7 +623,7 @@ class SteamAPIHelper:
         """
         with self.rate_limiter:
             try:
-                with requests.get(
+                with get_capped(
                     f"{self.reviews_url}/{appid}",
                     params={
                         "json": 1,

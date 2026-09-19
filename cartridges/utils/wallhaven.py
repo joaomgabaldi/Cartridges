@@ -40,6 +40,7 @@ from urllib.parse import urlencode
 import requests
 
 from cartridges import shared
+from cartridges.utils.download import get_capped
 
 BASE = "https://wallhaven.cc/api/v1/search"
 
@@ -142,7 +143,7 @@ def buscar(
         cabecalhos["X-API-Key"] = chave
 
     try:
-        resposta = requests.get(
+        resposta = get_capped(
             f"{BASE}?{urlencode(parametros)}", headers=cabecalhos, timeout=timeout
         )
         resposta.raise_for_status()

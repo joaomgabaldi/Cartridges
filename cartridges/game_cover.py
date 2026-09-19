@@ -73,8 +73,9 @@ class GameCover:
     # O desfoque do fundo dos detalhes é computado sob demanda e, na primeira
     # vez, fora do thread principal (decodificar o master 600x900 custa dezenas
     # de ms — era o engasgo da primeira abertura de cada jogo). A geração
-    # invalida um cômputo em voo quando a capa troca no meio; o callback é um
-    # só porque a página de detalhes só mostra um jogo por vez.
+    # invalida um cômputo em voo quando a capa troca no meio — o do desfoque e
+    # o dos quadros da animação; o callback é um só porque a página de
+    # detalhes só mostra um jogo por vez.
     _blur_generation: int = 0
     _blur_loading: bool = False
     _blur_callback: Optional[Callable] = None
@@ -179,6 +180,10 @@ class GameCover:
         """
         self._animation_loading = True
         path = self._animated_path
+        # A geração, e não o caminho, diz se a capa ainda é a mesma: trocar
+        # uma capa animada por outra do mesmo jogo regrava o MESMO arquivo, e
+        # comparar caminhos instalaria os quadros da antiga.
+        generation = self._blur_generation
         width, height = (int(value) for value in shared.display_size)
 
         def worker() -> None:
@@ -193,14 +198,14 @@ class GameCover:
             except (OSError, ValueError):
                 frames, durations = [], []
             GLib.idle_add(
-                self._frames_decoded, path, frames, durations, width, height
+                self._frames_decoded, generation, frames, durations, width, height
             )
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _frames_decoded(
         self,
-        path: Path,
+        generation: int,
         frames: list[bytes],
         durations: list[int],
         width: int,
@@ -212,7 +217,7 @@ class GameCover:
         # stale callback declared that second worker finished. The next hover
         # then saw "no frames, not loading" and started a third thread decoding
         # the same file.
-        if path != self._animated_path:
+        if generation != self._blur_generation:
             return False
 
         self._animation_loading = False
