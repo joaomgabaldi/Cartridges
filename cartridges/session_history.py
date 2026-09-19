@@ -120,14 +120,18 @@ class PlaytimeChart(Gtk.DrawingArea):
             return f"{MONTHS[day.month - 1][:3].lower()} {day.year % 100:02d}"
         return f"{day.day:02d}/{day.month:02d}"
 
-    def _text(self, cr: Any, text: str, x: float, y: float, align: float) -> None:
+    def _text(
+        self, cr: Any, text: str, x: float, y: float, align: float, area: int
+    ) -> None:
         """Escreve ``text`` com o centro vertical em ``y``. ``align`` é onde
-        ``x`` cai no texto: 0 = começo, 0.5 = meio, 1 = fim."""
+        ``x`` cai no texto: 0 = começo, 0.5 = meio, 1 = fim. ``area`` é a
+        largura que o ``draw`` recebeu, e não a do widget: as duas só coincidem
+        quando quem chama é o GTK."""
         layout = self.create_pango_layout(text)
         width, height = layout.get_pixel_size()
         # Preso à área do widget: um "set 26" centrado num dia 1º perto da
         # borda sairia cortado.
-        left = min(max(0, x - width * align), self.get_width() - width)
+        left = min(max(0, x - width * align), area - width)
         cr.move_to(left, y - height / 2)
         PangoCairo.show_layout(cr, layout)
 
@@ -180,7 +184,7 @@ class PlaytimeChart(Gtk.DrawingArea):
             cr.line_to(width - self.MARGIN_RIGHT, y)
             cr.stroke()
             cr.set_source_rgba(fg.red, fg.green, fg.blue, 0.6)
-            self._text(cr, format_hours(value), self.MARGIN_LEFT - 6, y, 1)
+            self._text(cr, format_hours(value), self.MARGIN_LEFT - 6, y, 1, width)
 
         # Eixo X; as pontas alinham para dentro para não sair da área.
         count = len(self.days)
@@ -195,6 +199,7 @@ class PlaytimeChart(Gtk.DrawingArea):
                 self._x(index, width),
                 bottom_y + self.MARGIN_BOTTOM / 2 + 2,
                 align,
+                width,
             )
 
         points = [(self._x(i, width), y_of(h)) for i, h in enumerate(hours)]
@@ -232,8 +237,13 @@ class PlaytimeChart(Gtk.DrawingArea):
         grandeza."""
         if not self.days:
             return False
-        width = self.get_width()
-        index = min(range(len(self.days)), key=lambda i: abs(self._x(i, width) - x))
+        # O inverso de `_x`, que é linear: sem varrer todos os dias a cada
+        # movimento do mouse, o que em anos de histórico são milhares.
+        plot = self.get_width() - self.MARGIN_LEFT - self.MARGIN_RIGHT
+        last = len(self.days) - 1
+        index = 0
+        if last > 0 and plot > 0:
+            index = min(max(round((x - self.MARGIN_LEFT) / plot * last), 0), last)
         day, seconds = self.days[index]
         stamp = int(datetime.combine(day, datetime.min.time()).timestamp())
         tooltip.set_text(
