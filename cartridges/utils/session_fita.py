@@ -549,18 +549,24 @@ def aplicar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
     mandar ``24: ""`` faz o módulo recusar o comando inteiro — e aí a fita não
     apaga, que é justamente o que a devolução do fechamento promete.
 
-    Apagar também vai só com o desliga, mesmo havendo cor: a cor chega antes do
-    desliga e a fita acende nela por um instante — a piscada no brilho de antes
-    no fim do fade do fechamento. O preço é a fita guardar a última cor que o
-    app mostrou, e não a de antes, para quando for religada por fora.
+    Apagar vai em dois passos, o desliga antes da cor: junto, a cor chegava
+    primeiro e a fita acendia nela por um instante — a piscada no brilho de
+    antes no fim do fade do fechamento. A cor vai mesmo assim, depois: sem ela
+    a fita guardaria o último degrau do fade, a 1%, e religada por fora
+    acenderia quase apagada. Desligada, a fita troca a cor guardada sem
+    acender — medido.
 
     Acender vai em dois passos, a cor antes do liga: a fita guarda a última cor
     que teve, e mandar tudo junto deixa o módulo acender no vermelho de ontem,
     no brilho de ontem, antes de obedecer à cor de agora. A piscada dura um
     piscar de olhos e é justamente o que se vê num quarto escuro.
     """
-    if not cor_hex or not ligada:
+    if not cor_hex:
         feito = _mandar(fita, {DP_LIGADA: ligada})
+    elif not ligada:
+        feito = _mandar(fita, {DP_LIGADA: False}) and _mandar(
+            fita, {DP_MODO: "colour", DP_COR: cor_hex}
+        )
     else:
         feito = _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex}) and _mandar(
             fita, {DP_LIGADA: True}
