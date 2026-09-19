@@ -23,6 +23,7 @@ biblioteca.
 
 import json
 import logging
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from time import time
 from typing import Any, Optional
@@ -176,3 +177,42 @@ def seconds_since(sessions: list[dict[str, Any]], days: int) -> int:
     """
     cutoff = int(time()) - days * 86400
     return sum(entry["seconds"] for entry in sessions if entry["end"] >= cutoff)
+
+
+def daily_seconds(
+    sessions: list[dict[str, Any]], first: date, last: date
+) -> list[tuple[date, int]]:
+    """Quanto se jogou em cada dia de ``first`` a ``last``, inclusive.
+
+    Uma sessão que atravessa a meia-noite é repartida entre os dois dias: quem
+    jogou das 23h à 1h jogou uma hora em cada um, e jogar tudo na conta do dia
+    em que ela terminou faria um dia de duas horas e outro de nada. O início é
+    ``end - seconds``, a mesma derivação de ``record``.
+
+    As meias-noites são convertidas em timestamp em vez de subtrair datetimes
+    locais, para que um dia de horário de verão tenha 23 ou 25 horas, e não 24.
+    """
+    days = (last - first).days + 1
+    if days <= 0:
+        return []
+
+    totals = [0] * days
+
+    def midnight(day: date) -> int:
+        return int(datetime.combine(day, datetime.min.time()).timestamp())
+
+    range_start = midnight(first)
+    range_end = midnight(last + timedelta(days=1))
+
+    for entry in sessions:
+        # Recortado à faixa antes de andar dia a dia: uma sessão editada à mão
+        # com anos de duração não pode custar um laço de anos.
+        start = max(entry["end"] - entry["seconds"], range_start)
+        end = min(entry["end"], range_end)
+        while start < end:
+            day = datetime.fromtimestamp(start).date()
+            chunk_end = min(midnight(day + timedelta(days=1)), end)
+            totals[(day - first).days] += chunk_end - start
+            start = chunk_end
+
+    return [(first + timedelta(days=i), totals[i]) for i in range(days)]

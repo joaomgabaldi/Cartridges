@@ -158,3 +158,10 @@
     background-color: white;
   }
 }
+
+/* "Tempo de jogo" na tela de detalhes, quando abre o histórico de sessões. Só
+   o sublinhado, na cor do próprio texto: um link pintado da cor de destaque
+   destoava dos dois rótulos ao lado, que são o mesmo tipo de informação. */
+.playtime-clickable {
+  text-decoration-line: underline;
+}

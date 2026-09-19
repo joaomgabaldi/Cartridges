@@ -5,15 +5,17 @@
 """A tela do histórico de sessões de um jogo.
 
 Montada em Python em vez de num .blp porque não há layout a descrever: é um
-cabeçalho e uma lista de linhas iguais, cujo número só se sabe ao abrir. Um
-template teria de declarar a lista vazia e ser preenchido daqui de qualquer
-jeito, e custaria mais um arquivo e mais uma entrada no gresource.
+cabeçalho e uma lista de linhas iguais, cujo número só se sabe ao abrir, e ao
+lado um gráfico desenhado à mão. Um template teria de declarar a lista vazia e
+ser preenchido daqui de qualquer jeito, e custaria mais um arquivo e mais uma
+entrada no gresource.
 """
 
-from datetime import datetime
+import math
+from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gtk, PangoCairo
 
 from cartridges.game import Game
 from cartridges.utils import session_log
@@ -34,6 +36,213 @@ def format_session_date(timestamp: int) -> str:
     return f"{date.day} de {MONTHS[date.month - 1].lower()} de {date.year}"
 
 
+# Nome do período no seletor → quantos dias ele cobre; None é "desde a
+# primeira sessão".
+PERIODS = {"week": 7, "month": 30, "all": None}
+
+
+def period_range(
+    sessions: list[dict[str, Any]], period: str, today: date
+) -> tuple[date, date]:
+    """O primeiro e o último dia que o gráfico mostra para ``period``.
+
+    Termina sempre hoje, mesmo sem sessão hoje: um gráfico que acaba no último
+    dia jogado esconde justamente os dias parados, que são metade da resposta.
+    """
+    days = PERIODS[period]
+    if days is not None:
+        return today - timedelta(days=days - 1), today
+
+    first = min(
+        (max(0, entry["end"] - entry["seconds"]) for entry in sessions),
+        default=None,
+    )
+    if first is None:
+        return today, today
+    # Uma sessão "no futuro" (relógio adiantado, arquivo editado) não pode
+    # inverter a faixa.
+    return min(datetime.fromtimestamp(first).date(), today), today
+
+
+def nice_step(max_hours: float) -> float:
+    """O intervalo das linhas de grade: o menor que deixa no máximo 4 delas."""
+    for step in (0.25, 0.5, 1, 2, 3, 4, 6, 12, 24):
+        if max_hours <= step * 4:
+            return step
+    return 24.0
+
+
+def format_hours(hours: float) -> str:
+    """"1,5 h" — a vírgula decimal do resto da interface."""
+    return f"{hours:g} h".replace(".", ",")
+
+
+class PlaytimeChart(Gtk.DrawingArea):
+    """Horas jogadas por dia, em linha, desenhadas com cairo.
+
+    A cor da linha vem da classe ``accent`` do próprio widget (a cor de destaque
+    roxa que o style.css define), e a do texto e da grade vem do pai: um widget
+    só tem uma ``color``, e ler a de destaque pelo ``StyleManager`` daria a do
+    sistema, não a do app.
+    """
+
+    MARGIN_LEFT = 44
+    MARGIN_BOTTOM = 24
+    MARGIN_TOP = 8
+    MARGIN_RIGHT = 12
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.days: list[tuple[date, int]] = []
+        self.add_css_class("accent")
+        self.add_css_class("caption")
+        self.set_draw_func(self.draw)
+        self.set_has_tooltip(True)
+        self.connect("query-tooltip", self.on_query_tooltip)
+
+    def set_days(self, days: list[tuple[date, int]]) -> None:
+        self.days = days
+        self.queue_draw()
+
+    def _x(self, index: int, width: int) -> float:
+        plot = width - self.MARGIN_LEFT - self.MARGIN_RIGHT
+        if len(self.days) == 1:
+            return self.MARGIN_LEFT + plot / 2
+        return self.MARGIN_LEFT + plot * index / (len(self.days) - 1)
+
+    def _by_month(self) -> bool:
+        # Mais de dois meses na tela e "12/09" vira ruído que não diz o ano;
+        # aí o eixo é rotulado por mês.
+        return (self.days[-1][0] - self.days[0][0]).days > 60
+
+    def _label_for(self, day: date) -> str:
+        if self._by_month():
+            return f"{MONTHS[day.month - 1][:3].lower()} {day.year % 100:02d}"
+        return f"{day.day:02d}/{day.month:02d}"
+
+    def _text(self, cr: Any, text: str, x: float, y: float, align: float) -> None:
+        """Escreve ``text`` com o centro vertical em ``y``. ``align`` é onde
+        ``x`` cai no texto: 0 = começo, 0.5 = meio, 1 = fim."""
+        layout = self.create_pango_layout(text)
+        width, height = layout.get_pixel_size()
+        # Preso à área do widget: um "set 26" centrado num dia 1º perto da
+        # borda sairia cortado.
+        left = min(max(0, x - width * align), self.get_width() - width)
+        cr.move_to(left, y - height / 2)
+        PangoCairo.show_layout(cr, layout)
+
+    def labeled_indices(self) -> list[int]:
+        """Os dias que ganham rótulo no eixo X, no máximo uns 6.
+
+        Por mês, só os dias 1º: um rótulo "jul 26" posto num dia qualquer
+        aparecia duas vezes seguidas quando o passo caía dentro do mesmo mês.
+        Por dia, sempre o primeiro e o último, e nenhum colado no último a
+        ponto de encostar.
+        """
+        if self._by_month():
+            starts = [i for i, (day, _s) in enumerate(self.days) if day.day == 1]
+            return starts[:: max(1, math.ceil(len(starts) / 6))]
+
+        count = len(self.days)
+        every = max(1, math.ceil(count / 6))
+        labeled = list(range(0, count, every))
+        if labeled[-1] != count - 1:
+            if count - 1 - labeled[-1] < every / 2 and len(labeled) > 1:
+                labeled.pop()
+            labeled.append(count - 1)
+        return labeled
+
+    def draw(self, _area: Any, cr: Any, width: int, height: int) -> None:
+        if not self.days:
+            return
+
+        parent = self.get_parent()
+        fg = (parent or self).get_color()
+        accent = self.get_color()
+
+        hours = [seconds / 3600 for _day, seconds in self.days]
+        step = nice_step(max(hours))
+        top = step * max(1, math.ceil(max(hours) / step))
+
+        bottom_y = height - self.MARGIN_BOTTOM
+        plot_h = bottom_y - self.MARGIN_TOP
+
+        def y_of(value: float) -> float:
+            return bottom_y - plot_h * value / top
+
+        # Grade e eixo Y
+        cr.set_line_width(1)
+        for i in range(round(top / step) + 1):
+            value = step * i
+            y = round(y_of(value)) + 0.5
+            cr.set_source_rgba(fg.red, fg.green, fg.blue, 0.12)
+            cr.move_to(self.MARGIN_LEFT, y)
+            cr.line_to(width - self.MARGIN_RIGHT, y)
+            cr.stroke()
+            cr.set_source_rgba(fg.red, fg.green, fg.blue, 0.6)
+            self._text(cr, format_hours(value), self.MARGIN_LEFT - 6, y, 1)
+
+        # Eixo X; as pontas alinham para dentro para não sair da área.
+        count = len(self.days)
+        for index in self.labeled_indices():
+            if count == 1:
+                align = 0.5
+            else:
+                align = 0.0 if index == 0 else 1.0 if index == count - 1 else 0.5
+            self._text(
+                cr,
+                self._label_for(self.days[index][0]),
+                self._x(index, width),
+                bottom_y + self.MARGIN_BOTTOM / 2 + 2,
+                align,
+            )
+
+        points = [(self._x(i, width), y_of(h)) for i, h in enumerate(hours)]
+
+        if count > 1:
+            # Área sob a linha, bem clara, para o volume ser lido de relance.
+            cr.move_to(points[0][0], bottom_y)
+            for x, y in points:
+                cr.line_to(x, y)
+            cr.line_to(points[-1][0], bottom_y)
+            cr.close_path()
+            cr.set_source_rgba(accent.red, accent.green, accent.blue, 0.15)
+            cr.fill()
+
+            cr.set_source_rgba(accent.red, accent.green, accent.blue, 1)
+            cr.set_line_width(2)
+            cr.set_line_join(1)  # cairo.LINE_JOIN_ROUND
+            cr.move_to(*points[0])
+            for x, y in points[1:]:
+                cr.line_to(x, y)
+            cr.stroke()
+
+        # Pontos só enquanto cabem: num período de anos eles viram uma faixa.
+        plot_w = width - self.MARGIN_LEFT - self.MARGIN_RIGHT
+        if count == 1 or plot_w / count >= 8:
+            cr.set_source_rgba(accent.red, accent.green, accent.blue, 1)
+            for x, y in points:
+                cr.arc(x, y, 3, 0, 2 * math.pi)
+                cr.fill()
+
+    def on_query_tooltip(
+        self, _widget: Any, x: int, _y: int, _keyboard: bool, tooltip: Gtk.Tooltip
+    ) -> bool:
+        """O dia sob o mouse e quanto se jogou nele: o eixo Y só dá a ordem de
+        grandeza."""
+        if not self.days:
+            return False
+        width = self.get_width()
+        index = min(range(len(self.days)), key=lambda i: abs(self._x(i, width) - x))
+        day, seconds = self.days[index]
+        stamp = int(datetime.combine(day, datetime.min.time()).timestamp())
+        tooltip.set_text(
+            f"{format_session_date(stamp)}: "
+            + (format_playtime(seconds) if seconds else _("nada jogado"))
+        )
+        return True
+
+
 class SessionHistoryDialog(Adw.Dialog):
     """As sessões de um jogo, com a opção de apagar uma que contou errado."""
 
@@ -42,24 +251,80 @@ class SessionHistoryDialog(Adw.Dialog):
 
         self.game = game
         self.set_title(_("Histórico de sessões"))
-        self.set_content_width(480)
+        # A lista mantém a largura que tinha sozinha; o resto é do gráfico.
+        self.set_content_width(1040)
         self.set_content_height(620)
 
         self.group = Adw.PreferencesGroup()
         self._rows: list[Gtk.Widget] = []
 
-        page = Adw.PreferencesPage()
+        page = Adw.PreferencesPage(width_request=440, hexpand=False)
         self.logo = self._add_logo_header(page)
         if self.logo is None:
             self.group.set_title(game.name)
         page.add(self.group)
 
+        content = Gtk.Box()
+        content.append(page)
+        content.append(self._build_chart_panel())
+
         toolbar = Adw.ToolbarView()
         toolbar.add_top_bar(Adw.HeaderBar())
-        toolbar.set_content(page)
+        toolbar.set_content(content)
         self.set_child(toolbar)
 
         self.rebuild()
+
+    def _build_chart_panel(self) -> Gtk.Widget:
+        """O gráfico de horas por dia, à direita da lista.
+
+        O seletor de período fica em cima, onde o olho chega antes do gráfico:
+        é ele que diz o que o gráfico está mostrando.
+        """
+        self.period = Adw.ToggleGroup(halign=Gtk.Align.CENTER)
+        for name, label in (
+            ("week", _("Semana")),
+            ("month", _("Mês")),
+            ("all", _("Todo o período")),
+        ):
+            self.period.add(Adw.Toggle(name=name, label=label))
+        self.period.set_active_name("month")
+        self.period.connect("notify::active-name", lambda *_: self.update_chart())
+
+        self.chart_total = Gtk.Label(halign=Gtk.Align.CENTER)
+        self.chart_total.add_css_class("dim-label")
+
+        self.chart = PlaytimeChart(
+            hexpand=True, vexpand=True, width_request=320, height_request=240
+        )
+
+        self.chart_panel = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=12,
+            hexpand=True,
+            margin_top=24,
+            margin_bottom=24,
+            margin_start=12,
+            margin_end=24,
+        )
+        self.chart_panel.append(self.period)
+        self.chart_panel.append(self.chart_total)
+        self.chart_panel.append(self.chart)
+        return self.chart_panel
+
+    def update_chart(self) -> None:
+        """Recalcula os dias do período escolhido a partir das sessões lidas."""
+        first, last = period_range(
+            self._sessions, self.period.get_active_name(), date.today()
+        )
+        days = session_log.daily_seconds(self._sessions, first, last)
+        self.chart.set_days(days)
+        # A variável é o tempo jogado no período escolhido
+        self.chart_total.set_label(
+            _("{} no período").format(
+                format_playtime(sum(seconds for _day, seconds in days))
+            )
+        )
 
     def _add_logo_header(self, page: Adw.PreferencesPage) -> Optional[Gtk.Picture]:
         """Encabeça a lista com o logo do jogo, como na tela de detalhes.
@@ -124,6 +389,13 @@ class SessionHistoryDialog(Adw.Dialog):
         self._rows.clear()
 
         sessions = session_log.load(self.game.game_id)
+        self._sessions = sessions
+
+        # Sem sessão não há o que desenhar: um gráfico todo em zero ao lado de
+        # "Nenhuma sessão registrada" só repetiria a frase.
+        self.chart_panel.set_visible(bool(sessions))
+        if sessions:
+            self.update_chart()
 
         if not sessions:
             self.group.set_description(

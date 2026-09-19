@@ -362,3 +362,118 @@ def test_clicking_a_total_without_sessions_opens_nothing(real_window, store):
     real_window.on_playtime_activated()
 
     assert real_window.get_visible_dialog() is None
+
+
+# -- Gráfico de horas por dia ----------------------------------------------------
+
+
+def local_ts(*args):
+    from datetime import datetime
+
+    return int(datetime(*args).timestamp())
+
+
+def test_a_session_across_midnight_is_split_between_the_two_days():
+    from datetime import date
+
+    # 23h às 1h: uma hora em cada dia, e não duas no dia em que terminou.
+    sessions = [{"end": local_ts(2026, 9, 11, 1), "seconds": 7200}]
+
+    assert session_log.daily_seconds(
+        sessions, date(2026, 9, 9), date(2026, 9, 11)
+    ) == [
+        (date(2026, 9, 9), 0),
+        (date(2026, 9, 10), 3600),
+        (date(2026, 9, 11), 3600),
+    ]
+
+
+def test_only_the_part_of_a_session_inside_the_range_counts():
+    from datetime import date
+
+    # Começou antes da faixa (dia 9, 22h) e termina dentro dela (dia 10, 2h).
+    sessions = [{"end": local_ts(2026, 9, 10, 2), "seconds": 4 * 3600}]
+
+    assert session_log.daily_seconds(sessions, date(2026, 9, 10), date(2026, 9, 10)) == [
+        (date(2026, 9, 10), 2 * 3600)
+    ]
+
+
+def test_an_inverted_range_has_no_days():
+    from datetime import date
+
+    assert session_log.daily_seconds([], date(2026, 9, 10), date(2026, 9, 9)) == []
+
+
+def test_the_periods_end_today_and_all_starts_at_the_first_session():
+    from datetime import date
+
+    from cartridges.session_history import period_range
+
+    today = date(2026, 9, 19)
+    sessions = [
+        {"end": local_ts(2026, 9, 18, 20), "seconds": 60},
+        {"end": local_ts(2026, 3, 2, 1), "seconds": 7200},  # começou dia 1º
+    ]
+
+    assert period_range(sessions, "week", today) == (date(2026, 9, 13), today)
+    assert period_range(sessions, "month", today) == (date(2026, 8, 21), today)
+    assert period_range(sessions, "all", today) == (date(2026, 3, 1), today)
+    # Relógio adiantado não inverte a faixa
+    future = [{"end": local_ts(2027, 1, 1), "seconds": 60}]
+    assert period_range(future, "all", today) == (today, today)
+
+
+def test_the_x_axis_labels_the_first_and_last_day_without_crowding():
+    from datetime import date, timedelta
+
+    from cartridges.session_history import PlaytimeChart
+
+    chart = PlaytimeChart()
+    for count in (1, 2, 7, 30, 31, 61):
+        chart.days = [(date(2026, 1, 1) + timedelta(days=i), 0) for i in range(count)]
+        labeled = chart.labeled_indices()
+        assert labeled[0] == 0 and labeled[-1] == count - 1
+        assert len(labeled) <= 7
+        assert labeled == sorted(set(labeled))
+
+    # Por mês: só dias 1º, então nenhum mês aparece duas vezes.
+    chart.days = [(date(2026, 1, 15) + timedelta(days=i), 0) for i in range(400)]
+    labels = [chart._label_for(chart.days[i][0]) for i in chart.labeled_indices()]
+    assert all(chart.days[i][0].day == 1 for i in chart.labeled_indices())
+    assert len(labels) == len(set(labels)) <= 7
+
+
+def test_the_chart_follows_the_period_and_hides_without_sessions(real_window, store):
+    import cairo
+
+    from cartridges.session_history import SessionHistoryDialog
+
+    game = history_game(store)
+    dialog = SessionHistoryDialog(game)
+    assert dialog.chart_panel.get_visible() is False
+
+    session_log.record(game.game_id, 3600)
+    dialog.rebuild()
+    assert dialog.chart_panel.get_visible() is True
+    assert len(dialog.chart.days) == 30
+    assert dialog.chart_total.get_label() == "1 hora no período"
+
+    dialog.period.set_active_name("week")
+    assert len(dialog.chart.days) == 7
+
+    # Desenhar num surface de verdade: os três períodos, sem exceção.
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 500, 300)
+    for period in ("week", "month", "all"):
+        dialog.period.set_active_name(period)
+        dialog.chart.draw(None, cairo.Context(surface), 500, 300)
+
+
+def test_the_playtime_is_underlined_only_when_it_opens_something(real_window, store):
+    game = history_game(store)
+    real_window.update_playtime_label(game)
+    assert not real_window.details_view_playtime.has_css_class("playtime-clickable")
+
+    session_log.record(game.game_id, 5400, end=1_700_000_000)
+    real_window.update_playtime_label(game)
+    assert real_window.details_view_playtime.has_css_class("playtime-clickable")
