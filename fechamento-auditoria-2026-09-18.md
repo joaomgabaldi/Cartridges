@@ -4,7 +4,7 @@ Fecha os 55 achados de `auditoria-cartridges-2026-09-18.md`. Versão **2026.09.1
 
 ## Resultado
 
-- **Suíte:** **921 testes + 3.241 subtests** verdes no runtime real (MSYS2 ucrt64), com 1 skip
+- **Suíte:** **919 testes + 3.241 subtests** verdes no runtime real (MSYS2 ucrt64), com 1 skip
   ambiental (symlink exige privilégio). Antes eram 830.
 - **Testes novos:** vão em `tests/test_auditoria_0918_{ui,fitas,store,importadores}.py`, um ou mais
   por achado de comportamento.
@@ -53,9 +53,9 @@ Build, instalador, conftest, versão e este documento ficaram com o coordenador.
 
 | ID | Conserto | Teste |
 |---|---|---|
-| M1 | O bloqueador deixa o `navigation_view` insensível e põe o foco em "Já terminei"; o `hide` desfaz. Delete fica desligado durante a sessão. Provado com teclas simuladas. | `test_m1_o_bloqueador_barra_o_teclado` |
-| M2 | `remove_game_details_view` fica habilitada só com os detalhes visíveis e sem sessão. Ctrl+Z com o foco num campo de texto usa o desfazer do campo. | `test_m2_delete_so_vale_com_os_detalhes_a_vista`, `test_m2_ctrl_z_num_campo_desfaz_a_digitacao` |
-| M3 | `importer.forget_undo` zera importados e removidos quando o aviso de resumo some. | `test_m3_o_desfazer_da_importacao_morre_com_o_aviso` |
+| M1 | O bloqueador deixa o `navigation_view` insensível e põe o foco em "Já terminei"; o `hide` desfaz. Provado com teclas simuladas. Sem atalhos do app (M2), nada mais age por trás dele. | `test_m1_o_bloqueador_barra_o_teclado` |
+| M2 | **Todos os atalhos de teclado do app foram removidos**, a pedido do usuário, que não os usava. Com eles saíram a tela "Atalhos de teclado" (`shortcuts-dialog.blp`) e as ações que só o teclado acionava: `shortcuts`, `remove_game_details_view`, `undo`, `go_to_parent`, `go_home`, `close` e `quit`. As ações usadas por botões e menus ficaram, sem atalho. O "Desfazer" dos avisos chama `on_undo_action` direto. | `test_m2_m3_o_app_nao_tem_atalhos_de_teclado` |
+| M3 | Resolvido pela remoção do Ctrl+Z (M2): o botão "Desfazer" só existe enquanto o aviso está na tela. | idem |
 | M4 | O `fall_back` não chama mais `hide_session_blocker`. `show_session_blocker` sai cedo quando é o mesmo jogo com o bloqueador visível. | `test_m4_*` (2) |
 | M5 | `do_shutdown` grava a sessão no histórico depois do `flush` (a `ProcessSession` só se `started`). | `test_m5_fechar_o_app_grava_a_sessao_no_historico` |
 | M6 | Intervalo maior que `MAX_GAP` (um intervalo + 30 s) credita só um intervalo, em `ProcessSession` e `SessionWindow`. | `test_m6_*` (2) |
@@ -120,16 +120,13 @@ Build, instalador, conftest, versão e este documento ficaram com o coordenador.
 | H1 | Fixture `no_hltb_lookup` nos três testes que chamam `_fetch_metadata_done`. |
 | H2 | O `build-installer.ps1` apaga `site-packages\cartridges` do prefixo antes do `meson install`, e o `.iss` ganhou `[InstallDelete]` desse diretório. |
 | H3 | `data/gtk/style-dark.css` apagado. |
-| H4 | O `meson.build` exige libadwaita ≥ 1.8. |
+| H4 | O `meson.build` exige libadwaita ≥ 1.8, a versão embarcada e testada; o `Adw.ShortcutsDialog` que motivava a exigência saiu junto com os atalhos. |
 | H5 | O `Location` saiu. Fica só `UnresolvableLocationError`, que é o contrato de "fonte sem arquivos" que o importador captura. |
 | H6 | Spec do atualizador; `game_id.json.md` (`wallpapers\`, `fitas\`, regra de tipos); `shared.pyi`; comentários das fitas e do assistente; "roxo" virou "cor do app"; `process_session.py`; ADR 0001 (o fechamento tenta as suspensas); spec das fitas (nota de revisão); comentário do debounce do `steam_picker`. |
 | H7 | "Tente outra busca ou outro filtro"; apagar sessão com "Cancelar" e "Apagar" destrutivo (`create_dialog(destructive=)`); título de falha de leitura no seletor de papel de parede. |
 
 ## O que ficou de fora de propósito
 
-- **M1, atalhos com Ctrl:** Ctrl+N, Ctrl+I, Ctrl+vírgula e Ctrl+H ainda funcionam por trás do
-  bloqueador. Nenhum é destrutivo. Desligá-los brigaria com o importador, que liga e desliga as
-  mesmas ações.
 - **B28, `update_cover_callback`:** fica sem a saída cedo. Ele sempre roda depois do Aplicar, e sair
   cedo deixaria o spinner do jogo eterno. O alerta dele abre sobre a janela principal, então não
   cria janela solta.
@@ -137,8 +134,9 @@ Build, instalador, conftest, versão e este documento ficaram com o coordenador.
   conserto de identidade elimina a adoção espúria que causava a perda. Não há marcador de "editado
   à mão" no registro para distinguir os casos.
 - **"Testar" e prévia das fitas:** ainda pintam todas as fitas, inclusive uma sem estado guardado. É
-  ação explícita do usuário. Pelo mesmo motivo do A3.3, uma fita nessa situação não é devolvida no
-  fechamento.
+  ação explícita do usuário, e o usuário aprovou assim em 19/09. Pelo mesmo motivo do A3.3, uma fita
+  nessa situação não é devolvida no fechamento.
+- **M12:** a remoção da busca de reserva foi aprovada pelo usuário em 19/09.
 - **Limite marcado com `ponytail:`:**
   - M7: um jogo instalado direto em `Program Files` com o exe dois níveis abaixo passa a vigiar só a
     subpasta.

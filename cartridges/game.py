@@ -344,8 +344,7 @@ class Game(Gtk.Box):
         if action:
             toast.set_button_label(_("Desfazer"))
             toast.connect("button-clicked", shared.win.on_undo_action, self, action)
-            # Forget the toast once it goes away so Ctrl+Z can't undo actions
-            # whose toast is long gone and the dict doesn't grow forever
+            # Forget the toast once it goes away so the dict doesn't grow forever
             toast.connect(
                 "dismissed",
                 lambda dismissed: (

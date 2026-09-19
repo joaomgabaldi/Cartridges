@@ -519,38 +519,28 @@ class CartridgesApplication(Adw.Application):
         shared.store.add_manager(SgdbManager())
         shared.store.toggle_manager_in_pipelines(FileManager, True)
 
-        # Create actions
+        # Create actions. No keyboard shortcuts on purpose: nobody used them,
+        # and app-wide ones kept stealing keys from the search entries and
+        # acting behind the session blocker (Delete removed the running game).
         self.create_actions(
             {
-                ("quit", ("<primary>q",)),
                 ("about",),
-                ("shortcuts", ("<primary>question",)),
-                ("preferences", ("<primary>comma",)),
+                ("preferences",),
                 ("launch_game",),
                 ("hide_game",),
                 ("edit_game",),
-                ("add_game", ("<primary>n",)),
-                ("import", ("<primary>i",)),
-                ("remove_game_details_view", ("Delete",)),
+                ("add_game",),
+                ("import",),
                 ("remove_game",),
                 ("igdb_search",),
                 ("sgdb_search",),
                 ("pcgw_search",),
                 ("hltb_search",),
-                ("show_hidden", ("<primary>h",), shared.win),
-                ("show_news", ("<primary>j",), shared.win),
-                ("go_to_parent", ("<alt>Up",), shared.win),
-                ("go_home", ("<alt>Home",), shared.win),
-                ("toggle_search", ("<primary>f",), shared.win),
-                ("undo", ("<primary>z",), shared.win),
-                ("open_menu", ("F10",), shared.win),
-                ("close", ("<primary>w",), shared.win),
+                ("show_hidden", shared.win),
+                ("show_news", shared.win),
+                ("toggle_search", shared.win),
             }
         )
-
-        # O Delete só vale com os detalhes à vista; o estado inicial vem daqui,
-        # e daí em diante do "pushed"/"popped" da navegação.
-        shared.win.set_show_hidden(shared.win.navigation_view)
 
         sort_action = Gio.SimpleAction.new_stateful(
             "sort_by",
@@ -812,12 +802,6 @@ class CartridgesApplication(Adw.Application):
         about.present(shared.win)
         _translate_about_dialog(about)
 
-    def on_shortcuts_action(self, *_args: Any) -> None:
-        builder = Gtk.Builder.new_from_resource(
-            shared.PREFIX + "/shortcuts-dialog.ui"
-        )
-        builder.get_object("shortcuts_dialog").present(shared.win)
-
     def on_preferences_action(
         self,
         _action: Any = None,
@@ -863,10 +847,6 @@ class CartridgesApplication(Adw.Application):
     def on_remove_game_action(self, *_args: Any) -> None:
         shared.win.active_game.remove_game()
 
-    def on_remove_game_details_view_action(self, *_args: Any) -> None:
-        if shared.win.navigation_view.get_visible_page() == shared.win.details_page:
-            self.on_remove_game_action()
-
     def search(self, uri: str) -> None:
         open_uri(f"{uri}{quote(shared.win.active_game.name)}")
 
@@ -889,21 +869,12 @@ class CartridgesApplication(Adw.Application):
             return
         self.search("https://howlongtobeat.com/?q=")
 
-    def on_quit_action(self, *_args: Any) -> None:
-        self.quit()
-
     def create_actions(self, actions: set) -> None:
         for action in actions:
             simple_action = Gio.SimpleAction.new(action[0], None)
 
-            scope = action[2] if action[2:3] else self
+            scope = action[1] if action[1:2] else self
             simple_action.connect("activate", getattr(scope, f"on_{action[0]}_action"))
-
-            if action[1:2]:
-                self.set_accels_for_action(
-                    f"app.{action[0]}" if scope == self else f"win.{action[0]}",
-                    action[1],
-                )
 
             scope.add_action(simple_action)
 

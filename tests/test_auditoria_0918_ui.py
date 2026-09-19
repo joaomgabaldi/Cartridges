@@ -43,16 +43,6 @@ def sessao_sem_efeitos(monkeypatch):
     return vestidas
 
 
-def _app_falso(window, monkeypatch):
-    # Não importar o FakeApplication de `tests.conftest`: importado de novo como
-    # módulo, o conftest reinstala um `cartridges.shared` novo por cima do atual.
-    acao = types.SimpleNamespace(enabled=True)
-    acao.set_enabled = lambda valor: setattr(acao, "enabled", valor)
-    app = types.SimpleNamespace(lookup_action=lambda _nome: acao)
-    monkeypatch.setattr(window, "get_application", lambda: app, raising=False)
-    return app
-
-
 # -- M1 -----------------------------------------------------------------------
 
 
@@ -65,67 +55,20 @@ def test_m1_o_bloqueador_barra_o_teclado(real_window, make_game, sessao_sem_efei
     assert real_window.navigation_view.get_sensitive() is True
 
 
-# -- M2 -----------------------------------------------------------------------
+# -- M2 / M3 ------------------------------------------------------------------
 
 
-def test_m2_delete_so_vale_com_os_detalhes_a_vista(
-    real_window, make_game, sessao_sem_efeitos, monkeypatch
-):
-    app = _app_falso(real_window, monkeypatch)
-    delete = app.lookup_action("remove_game_details_view")
+def test_m2_m3_o_app_nao_tem_atalhos_de_teclado():
+    """Sem atalhos do app: eles roubavam teclas das caixas de busca (Delete,
+    Ctrl+Z), agiam por trás do bloqueador de sessão e o Ctrl+Z desfazia uma
+    importação antiga. O usuário não os usava, e saíram todos."""
+    import inspect
 
-    real_window.set_show_hidden(real_window.navigation_view)
-    assert delete.enabled is False, "na biblioteca, Delete é da caixa de busca"
+    import cartridges.main as main_module
 
-    monkeypatch.setattr(
-        real_window.navigation_view,
-        "get_visible_page",
-        lambda: real_window.details_page,
-        raising=False,
-    )
-    real_window.set_show_hidden(real_window.navigation_view)
-    assert delete.enabled is True
-
-    real_window.show_session_blocker(make_game())
-    assert delete.enabled is False, "com a sessão aberta, apagaria o jogo rodando"
-
-
-def test_m2_ctrl_z_num_campo_desfaz_a_digitacao(real_window, store, monkeypatch):
-    texto = real_window.search_entry.get_delegate()
-    pedidos = []
-    monkeypatch.setattr(
-        texto, "activate_action", lambda nome, _p: pedidos.append(nome), raising=False
-    )
-    monkeypatch.setattr(real_window, "get_focus", lambda: texto, raising=False)
-    importer = types.SimpleNamespace(
-        imported_game_ids={"g1"},
-        removed_game_ids=set(),
-        undo_import=lambda: pytest.fail("Ctrl+Z na busca desfez a importação"),
-    )
-    monkeypatch.setattr(shared, "importer", importer)
-
-    real_window.on_undo_action(None)
-
-    assert pedidos == ["text.undo"]
-
-
-# -- M3 -----------------------------------------------------------------------
-
-
-def test_m3_o_desfazer_da_importacao_morre_com_o_aviso(store, make_game):
-    from cartridges.importer.importer import Importer
-
-    importer = Importer()
-    game = make_game(game_id="g1", name="Removido")
-    store.add_game(game, {}, run_pipeline=False)
-    importer.imported_game_ids = {"novo"}
-    importer.removed_game_ids = {"g1"}
-
-    toast = importer.create_summary_toast()
-    toast.emit("dismissed")
-
-    assert importer.imported_game_ids == set()
-    assert importer.removed_game_ids == set()
+    fonte = inspect.getsource(main_module)
+    assert "set_accels_for_action" not in fonte
+    assert "shortcuts-dialog" not in fonte
 
 
 # -- M4 -----------------------------------------------------------------------

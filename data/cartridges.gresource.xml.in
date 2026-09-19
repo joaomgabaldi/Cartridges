@@ -11,7 +11,6 @@
     <file preprocess="xml-stripblanks">gtk/steam-picker.ui</file>
     <file preprocess="xml-stripblanks">gtk/wallpaper-picker.ui</file>
     <file preprocess="xml-stripblanks">gtk/window.ui</file>
-    <file preprocess="xml-stripblanks" alias="shortcuts-dialog.ui">gtk/shortcuts-dialog.ui</file>
     <file alias="style.css">gtk/style.css</file>
     <file>library_placeholder.svg</file>
     <file>library_placeholder_small.svg</file>

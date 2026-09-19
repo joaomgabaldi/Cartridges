@@ -1863,25 +1863,6 @@ class CartridgesWindow(Adw.ApplicationWindow):
             show_hidden.set_enabled(
                 navigation_view.get_visible_page() == self.library_page
             )
-        # Delete é atalho do app: habilitado fora dos detalhes, ele engolia a
-        # tecla da caixa de busca sem apagar nada. Durante a sessão, apagaria
-        # o jogo que está rodando.
-        app = self.get_application()
-        if app and (action := app.lookup_action("remove_game_details_view")):
-            action.set_enabled(
-                navigation_view.get_visible_page() == self.details_page
-                and not self.session_blocker.get_visible()
-            )
-
-    def on_go_to_parent_action(self, *_args: Any) -> None:
-        if self.navigation_view.get_visible_page() in (
-            self.details_page,
-            self.news_page,
-        ):
-            self.navigation_view.pop()
-
-    def on_go_home_action(self, *_args: Any) -> None:
-        self.navigation_view.pop_to_page(self.library_page)
 
     def on_show_hidden_action(self, *_args: Any) -> None:
         if self.navigation_view.get_visible_page() == self.hidden_library_page:
@@ -1930,46 +1911,21 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
             index += 1
 
-    def on_undo_action(
-        self, _widget: Any, game: Optional[Game] = None, undo: Optional[str] = None
-    ) -> None:
-        if not game:  # If the action was activated via Ctrl + Z
-            # O atalho do app vence o do campo de texto. Com o foco num campo,
-            # Ctrl+Z é desfazer a digitação, e não reverter uma remoção.
-            focus = self.get_focus()
-            if isinstance(focus, (Gtk.Editable, Gtk.TextView)):
-                focus.activate_action("text.undo", None)
-                return
+    def on_undo_action(self, _widget: Any, game: Game, undo: str) -> None:
+        """The "Desfazer" button of a hide/remove toast."""
+        if undo == "hide":
+            game.toggle_hidden(False)
 
-            if shared.importer and (
-                shared.importer.imported_game_ids or shared.importer.removed_game_ids
-            ):
-                shared.importer.undo_import()
-                return
+        elif undo == "remove":
+            game.removed = False
+            game.save()
+            game.update()
 
-            try:
-                game = tuple(self.toasts.keys())[-1][0]
-                undo = tuple(self.toasts.keys())[-1][1]
-            except IndexError:
-                return
-
-        if game:
-            if undo == "hide":
-                game.toggle_hidden(False)
-
-            elif undo == "remove":
-                game.removed = False
-                game.save()
-                game.update()
-
-            if toast := self.toasts.pop((game, undo), None):
-                self.toast_queue.dismiss(toast)
+        if toast := self.toasts.pop((game, undo), None):
+            self.toast_queue.dismiss(toast)
 
     def on_open_menu_action(self, *_args: Any) -> None:
         if self.navigation_view.get_visible_page() == self.library_page:
             self.primary_menu_button.popup()
         elif self.navigation_view.get_visible_page() == self.hidden_library_page:
             self.hidden_primary_menu_button.popup()
-
-    def on_close_action(self, *_args: Any) -> None:
-        self.close()
