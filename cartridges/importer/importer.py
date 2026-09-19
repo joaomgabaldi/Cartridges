@@ -424,10 +424,6 @@ class Importer(ErrorProducer):
 
         logging.info("Import undone")
 
-    def forget_undo(self, *_args: Any) -> None:
-        self.imported_game_ids = set()
-        self.removed_game_ids = set()
-
     @staticmethod
     def summarize_names(names: list[str], singular: str, plural: str) -> str:
         """Human-friendly summary: names when few, a count when many"""
@@ -480,10 +476,6 @@ class Importer(ErrorProducer):
             toast_title = " · ".join(parts)
             toast.set_button_label(_("Desfazer"))
             toast.connect("button-clicked", self.undo_import)
-            # Ctrl+Z só desfaz a importação enquanto o aviso dela está na tela,
-            # como os avisos de ocultar e remover. Sem isto, uma remoção feita
-            # horas depois era desfeita desmarcando os jogos importados.
-            toast.connect("dismissed", self.forget_undo)
         else:
             toast_title = _("Nenhum jogo novo encontrado")
             toast.set_button_label(_("Preferências"))

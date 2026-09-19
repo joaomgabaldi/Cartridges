@@ -12,7 +12,7 @@ project(
 )
 
 dependency('gtk4', version: '>= 4.15.0')
-# 1.8 is needed for Adw.ShortcutsDialog
+# 1.8 is what the app ships and is tested on
 dependency('libadwaita-1', version: '>= 1.8')
 
 # The UI is hardcoded in pt-BR; gettext/po translations were removed
