@@ -412,8 +412,11 @@ def test_devolver_repoe_o_estado_e_limpa_a_chave(falsas, schema):
 
     assert schema.get_string("fita-estado-anterior") == ""
     assert estado_mandado(modulos["eb0"]) is False
-    # Apagada não recebe a cor de antes: ela acenderia nela por um instante.
-    assert modulos["eb0"].recebidos[-1] == {"20": False}
+    # O desliga antes da cor de antes: junto, ela acenderia nela por um instante.
+    assert modulos["eb0"].recebidos[-2:] == [
+        {"20": False},
+        {"21": "colour", "24": "000003e800b4"},
+    ]
 
 
 def test_fita_fora_do_ar_nao_derruba_as_outras(falsas, schema):
@@ -1424,9 +1427,11 @@ def test_apagar_desce_o_brilho_antes_de_desligar(com_fila, com_fade):
 
     session_fita._repor(fita, {"ligada": False, "cor": "011b026101f4"})
 
-    *degraus, final = modulo.recebidos
-    # Só o desliga: a cor de antes junto fazia a fita piscar nela ao apagar.
-    assert final == {"20": False}
+    *degraus, desliga, cor = modulo.recebidos
+    # O desliga antes da cor de antes: junto, a fita piscava nela ao apagar. E
+    # a cor vai depois, senão a fita guardaria o último degrau, a 1%.
+    assert desliga == {"20": False}
+    assert cor == {"21": "colour", "24": "011b026101f4"}
     brilhos = [session_fita.cor_de_hex(degrau["24"]).brilho for degrau in degraus]
     assert brilhos == sorted(brilhos, reverse=True)
     assert brilhos[-1] == session_fita.BRILHO_MINIMO
