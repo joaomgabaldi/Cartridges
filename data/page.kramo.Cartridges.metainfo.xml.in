@@ -46,6 +46,13 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.20" date="2026-09-20">
+      <description translate="no">
+        <ul>
+          <li>O assistente das fitas de LED salva o Access ID e o Access Secret da conta da Tuya (criptografados, presos a esta conta do Windows) depois de uma busca com sucesso, e não pede mais os dois de novo toda vez que o assistente é reaberto</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.19" date="2026-09-19">
       <description translate="no">
         <ul>

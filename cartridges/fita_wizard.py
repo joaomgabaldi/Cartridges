@@ -24,8 +24,11 @@ não está no app Smart Life — ela sai da conta de desenvolvedor da Tuya, pela
 nuvem. Este assistente faz essa viagem uma vez: pede as credenciais da conta,
 lista os dispositivos e grava a chave dos que o usuário apontar como fitas.
 
-O Access Secret não é gravado. Ela vive nesta janela e morre com ela: depois da
-busca, o que serve para acender uma fita é a chave local, e é só ela que fica.
+O Access Secret fica salvo — criptografado pelo DPAPI do Windows, amarrado à
+conta do Windows de quem roda o app — só para pré-preencher esta tela na
+próxima vez, e só depois de uma busca que prova que os dois códigos são
+válidos. O dia a dia das fitas nunca usa isso: quem acende uma fita é a chave
+local, achada aqui e gravada à parte, em claro, no `fitas.json`.
 """
 
 import logging
@@ -35,6 +38,7 @@ from typing import Any, Optional
 from gi.repository import Adw, GLib, Gtk
 
 from cartridges import shared
+from cartridges.utils import tuya_conta
 from cartridges.utils.session_fita import (
     Fita,
     devolver_removidas,
@@ -135,9 +139,23 @@ class FitaWizard(Adw.Dialog):
         self.buscar_button.connect("clicked", self.buscar)
         self.salvar_button.connect("clicked", self.salvar)
         self.connect("closed", self._on_closed)
+        self._preencher_credenciais()
 
     def _on_closed(self, *_args: Any) -> None:
         self._closed = True
+
+    def _preencher_credenciais(self) -> None:
+        """Pré-preenche com a conta salva da vez anterior, se houver."""
+        conta = tuya_conta.carregar()
+        if conta is None:
+            return
+        self.api_key_row.set_text(conta.chave)
+        self.api_secret_row.set_text(conta.segredo)
+        try:
+            indice = REGIOES.index(conta.regiao)
+        except ValueError:
+            indice = 0
+        self.regiao_row.set_selected(indice)
 
     def buscar(self, *_args: Any) -> None:
         """Vai à nuvem numa thread; a Secret não sai desta chamada."""
@@ -160,7 +178,13 @@ class FitaWizard(Adw.Dialog):
             import tinytuya  # noqa: PLC0415
 
             nuvem = tinytuya.Cloud(apiRegion=regiao, apiKey=chave, apiSecret=segredo)
-            encontrados = fitas_da_nuvem(nuvem.getdevices())
+            resposta = nuvem.getdevices()
+            # Só uma lista é resposta de sucesso — erro de credencial ou de
+            # rede vira dicionário (ver `fitas_da_nuvem`), e uma credencial
+            # que não funcionou não merece ficar salva para a próxima vez.
+            if isinstance(resposta, list):
+                tuya_conta.salvar(tuya_conta.Conta(chave, segredo, regiao))
+            encontrados = fitas_da_nuvem(resposta)
         except Exception as erro:  # a tinytuya levanta de tudo aqui também
             logging.warning("Busca na nuvem da Tuya falhou: %s", erro)
             encontrados = []
