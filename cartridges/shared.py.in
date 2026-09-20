@@ -73,6 +73,13 @@ wallpapers_dir = app_dir / "wallpapers"
 fitas_dir = app_dir / "fitas"
 fitas_arquivo = app_dir / "fitas.json"
 
+# A conta de nuvem da Tuya que o assistente das fitas usa para buscar
+# dispositivos. Fica criptografada com o DPAPI do Windows (ver
+# `utils/tuya_conta.py`), amarrada à conta do Windows de quem roda o app — por
+# isso mora num arquivo à parte, fora do backup do app (`preferences.py`): um
+# blob DPAPI não decifra numa instalação nova nem numa conta diferente.
+tuya_conta_arquivo = app_dir / "tuya_conta.json"
+
 # Deliberately NOT `GLib.get_user_cache_dir()`. On Windows that resolves to
 # CSIDL_INTERNET_CACHE — `AppData\Local\Microsoft\Windows\INetCache`, the
 # browser's temporary files folder, which Disk Cleanup and Storage Sense empty

@@ -295,6 +295,7 @@ def _install_shared() -> types.ModuleType:
     shared.wallpapers_dir = placeholder / "wallpapers"
     shared.fitas_dir = placeholder / "fitas"
     shared.fitas_arquivo = placeholder / "fitas.json"
+    shared.tuya_conta_arquivo = placeholder / "tuya_conta.json"
     shared.cache_dir = placeholder / "cache"
     shared.log_dir = placeholder / "logs"
     shared.schema = FakeSchema(_SCHEMA_DEFAULTS)
@@ -347,6 +348,9 @@ def app_dirs(tmp_path, monkeypatch):
     # Not created: the fita code makes it on first write, like the real app.
     monkeypatch.setattr(shared, "fitas_dir", tmp_path / "fitas", raising=False)
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json", raising=False)
+    monkeypatch.setattr(
+        shared, "tuya_conta_arquivo", tmp_path / "tuya_conta.json", raising=False
+    )
     return types.SimpleNamespace(
         root=tmp_path,
         games=games,

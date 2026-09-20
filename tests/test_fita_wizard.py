@@ -6,15 +6,16 @@
 
 import json
 import logging
+import sys
 from types import SimpleNamespace
 
 import pytest
 from gi.repository import Adw
 
 from cartridges import shared
-from cartridges.fita_wizard import fitas_da_nuvem
+from cartridges.fita_wizard import REGIOES, fitas_da_nuvem
 from cartridges.logging.setup import LIB_LOGGERS
-from cartridges.utils import session_fita
+from cartridges.utils import session_fita, tuya_conta
 from cartridges.utils.session_fita import Fita
 
 
@@ -180,6 +181,63 @@ def test_fita_desmarcada_volta_ao_estado_guardado_e_sai_da_chave(
     assert json.loads(schema.get_string("fita-estado-anterior")) == {
         "eb0": guardado["eb0"]
     }
+
+
+def test_assistente_abre_pre_preenchido_com_a_conta_salva(pastas, monkeypatch):
+    tuya_conta.salvar(tuya_conta.Conta("chave-salva", "segredo-salvo", "cn"))
+
+    assistente = _assistente(monkeypatch)
+
+    assert assistente.api_key_row.get_text() == "chave-salva"
+    assert assistente.api_secret_row.get_text() == "segredo-salvo"
+    assert assistente.regiao_row.get_selected() == REGIOES.index("cn")
+
+
+def _tinytuya_falso(monkeypatch, resposta):
+    """Põe no lugar da tinytuya real uma nuvem que devolve ``resposta``."""
+    monkeypatch.setitem(
+        sys.modules,
+        "tinytuya",
+        SimpleNamespace(Cloud=lambda **_kw: SimpleNamespace(getdevices=lambda: resposta)),
+    )
+
+
+def test_busca_com_sucesso_salva_a_conta_para_a_proxima_vez(
+    pastas, monkeypatch, flush_idle
+):
+    """Credencial provada válida fica salva; é o que evita voltar ao painel."""
+    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
+
+    _tinytuya_falso(
+        monkeypatch,
+        [{"name": "Centro", "id": "eb0", "key": "k", "ip": "1.2.3.4", "version": "3.3"}],
+    )
+    monkeypatch.setattr(wizard_module, "enderecos_na_rede", lambda: ({}, {}))
+    assistente = _assistente(monkeypatch)
+    assistente.api_key_row.set_text("minha-chave")
+    assistente.api_secret_row.set_text("meu-segredo")
+    assistente.regiao_row.set_selected(REGIOES.index("eu"))
+
+    assistente.buscar()
+    flush_idle()
+
+    assert tuya_conta.carregar() == tuya_conta.Conta("minha-chave", "meu-segredo", "eu")
+
+
+def test_busca_sem_sucesso_nao_salva_a_conta(pastas, monkeypatch, flush_idle):
+    """Erro de credencial (dicionário, não lista) não é uma conta para guardar."""
+    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
+
+    _tinytuya_falso(monkeypatch, {"Error": "Invalid Key", "Err": "901"})
+    monkeypatch.setattr(wizard_module, "enderecos_na_rede", lambda: ({}, {}))
+    assistente = _assistente(monkeypatch)
+    assistente.api_key_row.set_text("chave-errada")
+    assistente.api_secret_row.set_text("segredo-errado")
+
+    assistente.buscar()
+    flush_idle()
+
+    assert tuya_conta.carregar() is None
 
 
 # endregion
