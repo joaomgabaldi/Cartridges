@@ -19,11 +19,9 @@
 
 # pyright: reportAssignmentType=none
 
-import json
 import logging
 import math
 import threading
-import zipfile
 from datetime import date
 from pathlib import Path
 from shutil import rmtree
@@ -33,68 +31,10 @@ from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
 from cartridges import shared
 from cartridges.errors.friendly_error import FriendlyError
-from cartridges.game import STATUS_LABELS, Game
 from cartridges.metadata_refresh import get_metadata_refresh
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.utils import backup, session_fita, window_geometry
 from cartridges.utils.create_dialog import create_dialog
-
-
-def restore_into(game: Game, entry: dict) -> bool:
-    """Aplica um registro de um backup .json a ``game``. Diz se mudou alguma coisa.
-
-    É a mescla dos backups das versões 1 e 2, que levavam só tempo de jogo,
-    status, nota e anotação. O backup de hoje é o .zip de `utils/backup.py`,
-    que substitui a biblioteca inteira; estes continuam sendo importados.
-
-    Duas regras diferentes, porque os campos são de duas naturezas.
-
-    O tempo de jogo **soma**, como sempre somou: o backup é uma parcela do
-    total, e restaurar duas máquinas na mesma biblioteca tem de dar a soma das
-    duas. O preço continua sendo o mesmo de antes: importar o mesmo arquivo
-    duas vezes conta o tempo dele duas vezes.
-
-    Status, nota e anotação **só preenchem o que está vazio**. Eles são valores,
-    não parcelas — não há o que somar —, e o que está na biblioteca agora é
-    mais recente do que o que está no arquivo. Assim restaurar sobre uma
-    instalação nova traz tudo, restaurar sobre uma biblioteca em uso não apaga
-    nada, e importar o mesmo arquivo duas vezes é inofensivo para os três.
-
-    O arquivo veio de fora e pode ter sido editado à mão, então cada valor é
-    conferido antes de entrar: um status que o app não sabe exibir ou uma nota
-    fora de 1–5 é descartado, e não gravado para quebrar uma tela mais adiante.
-    """
-    changed = False
-
-    # OverflowError: `Infinity` é JSON válido para o Python, e `int()` dele
-    # levantaria no meio da restauração, com parte dos jogos já somada.
-    try:
-        backup_time = int(entry.get("playtime") or 0)
-    except (TypeError, ValueError, OverflowError):
-        backup_time = 0
-    if backup_time > 0:
-        game.playtime += backup_time
-        changed = True
-
-    status = entry.get("status")
-    if isinstance(status, str) and status in STATUS_LABELS and not game.status:
-        game.status = status
-        changed = True
-
-    try:
-        rating = int(entry.get("rating") or 0)
-    except (TypeError, ValueError, OverflowError):
-        rating = 0
-    if 1 <= rating <= 5 and not game.stars:
-        game.rating = rating
-        changed = True
-
-    notes = entry.get("notes")
-    if isinstance(notes, str) and notes.strip() and not (game.notes or "").strip():
-        game.notes = notes.strip()
-        changed = True
-
-    return changed
 
 
 @Gtk.Template(resource_path=shared.PREFIX + "/gtk/preferences.ui")
@@ -884,8 +824,6 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     def _backup_filters(self) -> Gio.ListStore:
         backup_filter = Gtk.FileFilter(name=_("Backup do Cartridges"))
         backup_filter.add_suffix("zip")
-        # Os backups .json de antes continuam sendo aceitos na importação.
-        backup_filter.add_suffix("json")
         filters = Gio.ListStore.new(Gtk.FileFilter)
         filters.append(backup_filter)
         return filters
@@ -929,7 +867,6 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         return False
 
     def import_backup(self, *_args: Any) -> None:
-        """O .zip completo substitui tudo; o .json de antes mescla, como sempre."""
         dialog = Gtk.FileDialog()
         dialog.set_filters(self._backup_filters())
 
@@ -938,16 +875,11 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 path = Path(file_dialog.open_finish(result).get_path())
             except GLib.Error:
                 return
-            # Pelo conteúdo, não pela extensão: um .zip renomeado para .json
-            # (ou o contrário) continua sendo o que é.
-            if zipfile.is_zipfile(path):
-                self._restore_full_backup(path)
-            else:
-                self._merge_json_backup(path)
+            self._restore_backup(path)
 
         dialog.open(shared.win, None, finish)
 
-    def _restore_full_backup(self, path: Path) -> None:
+    def _restore_backup(self, path: Path) -> None:
         try:
             backup.validar(path)
         except ValueError:
@@ -961,71 +893,114 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         def on_response(_dialog: Any, response: str) -> None:
             if response != "restore":
                 return
-            try:
-                backup.agendar(path)
-            except OSError as error:
-                create_dialog(self, _("Não foi possível restaurar"), str(error))
-                return
-            shared.win.get_application().quit()
+            self._run_restore(path)
 
         create_dialog(
             self,
             _("Restaurar este backup?"),
             _(
-                "A biblioteca e as configurações atuais serão substituídas. "
-                "O Cartridges vai fechar; abra de novo para concluir."
+                "Os dados de cada jogo (nota, tempo, status, capa, fita) que "
+                "estiverem no backup serão sobrescritos. As configurações do "
+                "app também serão substituídas pelas do backup."
             ),
             "restore",
             _("Restaurar"),
             destructive=True,
         ).connect("response", on_response)
 
-    def _merge_json_backup(self, path: Path) -> None:
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            # "playtimes" é o nome que a versão 1 do arquivo usava, quando o
-            # backup só levava tempo de jogo. Um backup daquela época
-            # continua valendo: ele traz menos campos, e é só.
-            entries = data.get("games", data.get("playtimes"))
-            if not isinstance(entries, dict):
-                raise ValueError
-        except (OSError, ValueError, KeyError, TypeError, AttributeError):
-            create_dialog(
-                self,
-                _("Backup inválido"),
-                _("O arquivo não é um backup válido do Cartridges."),
-            )
-            return
+    def _run_restore(self, path: Path) -> None:
+        progress = Adw.Toast(title=_("Restaurando backup…"), timeout=0)
+        cancelado = threading.Event()
+        # O botão só faz sentido enquanto a varredura de appID roda; depois
+        # disso o restore não passa mais por rede, então não há mais nada
+        # útil para cancelar. Ficar visível o tempo todo não engana ninguém —
+        # clicar depois da varredura só marca a flag um pouco mais cedo do
+        # que ela deixa de ser lida.
+        progress.set_button_label(_("Cancelar"))
+        progress.connect("button-clicked", lambda *_a: cancelado.set())
+        self.add_toast(progress)
 
-        restored = 0
-        for game in shared.store:
-            # Jogo removido fica no store como lápide: não recebe o tempo
-            # nem entra na conta dos restaurados.
-            if game.removed:
-                continue
-            entry = entries.get(game.game_id)
-            if isinstance(entry, dict) and restore_into(game, entry):
-                game.save()
-                game.update()
-                restored += 1
+        def atualizar_progresso(indice: int, total: int) -> bool:
+            # `backup._forcar_appids` já chama isto via `GLib.idle_add` — é
+            # seguro mexer no toast aqui direto, sem embrulhar de novo.
+            progress.set_title(_("Buscando na Steam… {}/{}").format(indice, total))
+            return False
 
-        if restored:
-            shared.win.library.invalidate_sort()
-            shared.win.hidden_library.invalidate_sort()
-            # O status restaurado muda quem passa pelo filtro, se houver um
-            # de status ligado na hora da restauração.
-            shared.win.library.invalidate_filter()
-            shared.win.hidden_library.invalidate_filter()
+        def work() -> None:
+            try:
+                resultado = backup.restaurar(
+                    path,
+                    progresso=atualizar_progresso,
+                    cancelado=cancelado.is_set,
+                )
+            except Exception as error:  # pylint: disable=broad-exception-caught
+                logging.exception("Não foi possível restaurar o backup")
+                GLib.idle_add(self._restore_done, progress, None, str(error))
+            else:
+                GLib.idle_add(self._restore_done, progress, resultado, None)
+
+        threading.Thread(target=work).start()
+
+    def _restore_done(
+        self,
+        progress: Adw.Toast,
+        resultado: Optional[Any],
+        error: Optional[str],
+    ) -> bool:
+        progress.dismiss()
+        if error:
+            create_dialog(self, _("Não foi possível restaurar"), error)
+            return False
+        if resultado is None:
+            self.add_toast(Adw.Toast.new(_("Restauração cancelada")))
+            return False
+
+        if resultado.ambiguos:
+            self._show_ambiguity_alert(resultado.ambiguos)
 
         self.add_toast(
             Adw.Toast.new(
-                ngettext(
-                    "{} jogo restaurado", "{} jogos restaurados", restored
-                ).format(restored)
-                if restored
-                else _("Nenhum jogo correspondente no backup")
+                _("Restaurado: {} de {} jogos").format(resultado.casados, resultado.total)
             )
         )
+        return False
+
+    def _show_ambiguity_alert(self, nomes: list[str]) -> None:
+        """Bloqueante de propósito — não é toast: o usuário precisa saber que
+        esses jogos NÃO receberam os dados do backup porque há mais de um
+        jogo com o mesmo nome na biblioteca, e não tem como escolher qual é
+        qual sozinho. Mesmo molde do diálogo de erros do importer (heading +
+        lista)."""
+        dialog = Adw.AlertDialog()
+        dialog.set_heading(_("Alguns jogos não foram restaurados"))
+        dialog.add_response("close", _("Entendi"))
+
+        if len(nomes) == 1:
+            dialog.set_body(
+                _(
+                    "Há mais de um jogo chamado “{}” na biblioteca, e não é "
+                    "possível saber qual dos dois corresponde ao backup. Nenhum dos "
+                    "dois recebeu os dados."
+                ).format(nomes[0])
+            )
+        else:
+            list_box = Gtk.ListBox()
+            list_box.set_selection_mode(Gtk.SelectionMode.NONE)
+            list_box.set_css_classes(["boxed-list"])
+            list_box.set_margin_top(9)
+            for nome in nomes:
+                row = Adw.ActionRow.new()
+                row.set_title(GLib.markup_escape_text(nome))
+                row.set_subtitle(_("Mais de um jogo com esse nome na biblioteca"))
+                list_box.append(row)
+            dialog.set_extra_child(list_box)
+            dialog.set_body(
+                _("Estes jogos não receberam os dados do backup: há mais de um "
+                  "jogo com o mesmo nome na biblioteca, e não é possível saber "
+                  "qual corresponde a qual.")
+            )
+
+        dialog.choose(shared.win)
 
     def reset_app(self, *_args: Any) -> None:
         # `app_dir` now holds the cache and the logs as well, so the first line
