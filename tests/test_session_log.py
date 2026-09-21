@@ -250,7 +250,7 @@ def test_the_history_says_so_when_there_is_nothing_yet(real_window, store):
     dialog = SessionHistoryDialog(history_game(store))
 
     assert dialog._rows == []
-    assert "a partir desta versão" in dialog.group.get_description()
+    assert dialog.group.get_description() == "Nenhuma sessão registrada."
 
 
 def test_deleting_a_session_takes_its_time_off_the_total(real_window, store):

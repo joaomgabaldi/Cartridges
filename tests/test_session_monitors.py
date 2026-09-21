@@ -63,7 +63,7 @@ class TestPreferencias:
         assert not dialog.session_monitor_group.get_sensitive()
         assert not dialog.session_wallpaper_switch.get_sensitive()
         for row in (dialog.session_move_window_switch, dialog.session_wallpaper_switch):
-            assert row.get_subtitle() == "Precisa de um segundo monitor"
+            assert row.get_subtitle() == "Necessário segundo monitor"
 
     def test_com_segundo_monitor_nada_e_desligado(self, schema, ligados, monkeypatch):
         schema["session-move-window"] = True
@@ -113,7 +113,7 @@ class TestTelaDeEdicao:
         dialog = DetailsDialog()
 
         assert not dialog.wallpaper_row.get_sensitive()
-        assert dialog.wallpaper_row.get_subtitle() == "Precisa de um segundo monitor"
+        assert dialog.wallpaper_row.get_subtitle() == "Necessário segundo monitor"
 
     def test_com_segundo_monitor_a_linha_mostra_a_escolha(self, ligados, win):
         from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415

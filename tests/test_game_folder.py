@@ -19,7 +19,7 @@ import winreg
 
 import pytest
 
-from cartridges.utils.game_folder import game_folder
+from cartridges.utils.game_folder import game_folder, open_folder
 
 pytestmark = pytest.mark.skipif(
     os.name != "nt", reason="game_folder reads the Windows package registry"
@@ -250,3 +250,26 @@ def test_unknown_package_has_no_folder():
     """Nothing installed under that family; the button must not appear."""
     command = "explorer.exe shell:AppsFolder\\NotInstalled.Game_0000000000000!App"
     assert game_folder(command) is None
+
+
+def test_open_folder_reports_success(tmp_path, monkeypatch):
+    monkeypatch.setattr(os, "startfile", lambda _directory: None, raising=False)
+    assert open_folder(str(tmp_path)) is True
+
+
+def test_open_folder_reports_failure_instead_of_raising(monkeypatch):
+    """The folder was there when the button was shown; gone by the click is a
+    message to the user, not an unhandled exception — see `details_dialog.py`."""
+
+    def _missing(_directory):
+        raise OSError("gone")
+
+    monkeypatch.setattr(os, "startfile", _missing, raising=False)
+    assert open_folder("C:\\Nonexistent\\Folder") is False
+
+
+def test_open_folder_with_no_directory_is_a_no_op(monkeypatch):
+    called = []
+    monkeypatch.setattr(os, "startfile", lambda d: called.append(d), raising=False)
+    assert open_folder("") is False
+    assert called == []

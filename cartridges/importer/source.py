@@ -21,13 +21,14 @@ from abc import abstractmethod
 from collections.abc import Iterable
 from typing import Any, Generator, Optional
 
+from cartridges.errors.friendly_error import FriendlyError
 from cartridges.game import Game
 
 # Type of the data returned by iterating on a Source
 SourceIterationResult = Optional[Game | tuple[Game, tuple[Any]]]
 
 
-class SourceScanError(Exception):
+class SourceScanError(FriendlyError):
     """Raised by a source whose scan could not be completed.
 
     A source that simply finds nothing and a source that could not look are
@@ -39,6 +40,10 @@ class SourceScanError(Exception):
     source says it did not, so its games are left alone until a scan succeeds.
     Raise it from `__iter__`, at whatever point the failure becomes known; games
     already yielded still count, and only the rest of the scan is abandoned.
+
+    A `FriendlyError` on purpose, and not just a log line: a scan that quietly
+    gives up is worse than one that says so, so its title/subtitle are what the
+    importer's warning dialog shows the user.
     """
 
 

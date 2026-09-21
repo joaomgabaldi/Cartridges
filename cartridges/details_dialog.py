@@ -445,7 +445,12 @@ class DetailsDialog(Adw.Dialog):
         self.open_folder_button.set_visible(bool(self._game_folder))
 
     def open_game_folder(self, *_args: Any) -> None:
-        open_folder(self._game_folder or "")
+        if not open_folder(self._game_folder or ""):
+            create_dialog(
+                self,
+                _("Não foi possível abrir a pasta"),
+                _("A pasta pode ter sido movida ou apagada."),
+            )
 
     def on_track_process_toggled(self, *_args: Any) -> None:
         active = self.track_process_switch.get_active()

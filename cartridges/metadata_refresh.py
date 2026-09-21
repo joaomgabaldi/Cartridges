@@ -39,6 +39,7 @@ from cartridges.errors.friendly_error import FriendlyError
 from cartridges.game import Game
 from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
+from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.steam import STEAM_METADATA_VERSION
 
 
@@ -281,10 +282,12 @@ class MetadataRefresh(GObject.Object):
         return GLib.SOURCE_REMOVE
 
     def _finish(self) -> None:
+        friendly_errors = []
         for manager in self._managers:
             for error in manager.collect_errors():
                 if isinstance(error, FriendlyError):
                     logging.warning("Metadata refresh: %s", error.title)
+                    friendly_errors.append(error)
 
         done, total, cancelled = self.done, self.total, self.cancelled
         self.running = False
@@ -292,6 +295,8 @@ class MetadataRefresh(GObject.Object):
         self._managers = []
         self.emit("progress")
         self._announce(done, total, cancelled)
+        for error in friendly_errors:
+            self._show_error(error)
 
     @staticmethod
     def _announce(done: int, total: int, cancelled: bool) -> None:
@@ -308,6 +313,28 @@ class MetadataRefresh(GObject.Object):
             message = _("Metadados atualizados para {} jogos").format(done)
         if shared.win is not None:
             shared.win.toast_queue.add(Adw.Toast.new(message))
+
+    @staticmethod
+    def _show_error(error: FriendlyError) -> None:
+        """Same "chave inválida" dialog `details_dialog.py` shows for one game.
+
+        Same reason as `_announce`: the preferences dialog that started this
+        run may already be closed, so this one also goes on the main window.
+        """
+        if shared.win is None:
+            return
+        create_dialog(
+            shared.win,
+            error.title,
+            error.subtitle,
+            "open_preferences_sgdb",
+            _("Preferências"),
+        ).connect("response", MetadataRefresh._error_response)
+
+    @staticmethod
+    def _error_response(_dialog: Adw.AlertDialog, response: str) -> None:
+        if response == "open_preferences_sgdb" and shared.win is not None:
+            shared.win.get_application().on_preferences_action(page_name="sgdb")
 
 
 _refresh: Optional[MetadataRefresh] = None  # pylint: disable=invalid-name

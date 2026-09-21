@@ -200,15 +200,17 @@ def _win32_dir(directory: str) -> str:
     return directory.replace("/", "\\")
 
 
-def open_folder(directory: str) -> None:
-    """Show ``directory`` in Explorer."""
+def open_folder(directory: str) -> bool:
+    """Show ``directory`` in Explorer. Returns whether it worked."""
     if not directory:
-        return
+        return False
 
     logging.info("Opening folder `%s`", directory)
     try:
         os.startfile(directory)  # type: ignore[attr-defined]  # Windows-only
     except OSError:
         # The folder was there when the button was shown; if it went away since,
-        # that is worth a line in the log and nothing more.
+        # the caller is what tells the user — this just gets it into the log too.
         logging.exception("Could not open folder `%s`", directory)
+        return False
+    return True
