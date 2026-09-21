@@ -645,3 +645,64 @@ def test_validar_confere_o_crc_de_cada_entrada(
     destino.write_bytes(dados.replace(b"bytes-da-capa", b"bytes-da-cApa"))
     with pytest.raises(ValueError):
         backup.validar(destino)
+
+
+class _GerenteFalso:
+    """Substitui o SteamAPIManager real: sem rede, sem rate limiter."""
+
+    def __init__(self) -> None:
+        self.chamados: list[str] = []
+
+    def run(self, jogo, _dados) -> None:
+        self.chamados.append(jogo.game_id)
+        jogo.steam_appid = f"resolvido-{jogo.game_id}"
+
+
+def test_forcar_appids_roda_o_gerente_em_cada_jogo(store, make_game, monkeypatch, flush_idle) -> None:
+    from cartridges.store.managers.steam_api_manager import SteamAPIManager
+
+    jogos = [make_game(game_id="a"), make_game(game_id="b")]
+    for jogo in jogos:
+        store.add_game(jogo, {})
+    gerente = _GerenteFalso()
+    monkeypatch.setitem(shared.store.managers, SteamAPIManager, gerente)
+
+    progresso_visto = []
+    ok = backup._forcar_appids(jogos, progresso_visto.append, None)
+    flush_idle()
+
+    assert ok is True
+    assert gerente.chamados == ["a", "b"]
+    assert progresso_visto == [(1, 2), (2, 2)]
+    assert jogos[0].steam_appid == "resolvido-a"
+
+
+def test_forcar_appids_cancelado_para_no_meio(store, make_game, monkeypatch, flush_idle) -> None:
+    from cartridges.store.managers.steam_api_manager import SteamAPIManager
+
+    jogos = [make_game(game_id="a"), make_game(game_id="b"), make_game(game_id="c")]
+    for jogo in jogos:
+        store.add_game(jogo, {})
+    gerente = _GerenteFalso()
+    monkeypatch.setitem(shared.store.managers, SteamAPIManager, gerente)
+
+    cancelar_no_segundo = iter([False, True])
+    ok = backup._forcar_appids(jogos, None, lambda: next(cancelar_no_segundo))
+    flush_idle()
+
+    assert ok is False
+    assert gerente.chamados == ["a"]  # parou antes do segundo
+
+
+def test_forcar_appids_salva_e_atualiza_cada_jogo(store, make_game, monkeypatch, flush_idle) -> None:
+    from cartridges.store.managers.steam_api_manager import SteamAPIManager
+
+    jogo = make_game(game_id="a")
+    store.add_game(jogo, {})
+    monkeypatch.setitem(shared.store.managers, SteamAPIManager, _GerenteFalso())
+
+    backup._forcar_appids([jogo], None, None)
+    flush_idle()
+
+    assert jogo.saves == 1
+    assert jogo.updates == 1
