@@ -111,7 +111,7 @@ class Importer(ErrorProducer):
     def add_source(self, source: Source) -> None:
         self.sources.add(source)
 
-    def run(self) -> None:
+    def run(self, mostrar_progresso: bool = True) -> None:
         """Use several Gio.Task to import games from added sources"""
         shared.win.get_application().state = shared.AppState.IMPORT
 
@@ -129,7 +129,8 @@ class Importer(ErrorProducer):
         with self._pipelines_lock:
             self._counted_done_pipelines.clear()
 
-        self.create_progress_toast()
+        if mostrar_progresso:
+            self.create_progress_toast()
         GLib.timeout_add(100, self.monitor_import)
 
         # Collect all errors and reset the cancellables for the managers
