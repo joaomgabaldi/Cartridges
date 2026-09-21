@@ -567,3 +567,81 @@ def test_exportar_traduz_sessoes_para_identidade(
 
     chave = backup._hash_identidade("steam:1")
     assert manifesto["jogos"][chave]["sessoes"] == [{"end": 1_700_000_000, "seconds": 3600}]
+
+
+# --------------------------------------------------------------------------
+# Validação do novo formato
+# --------------------------------------------------------------------------
+
+
+def test_validar_aceita_um_backup_por_identidade(store, make_game, settings, tmp_path) -> None:
+    jogo = make_game(game_id="a", steam_appid="1", name="Jogo")
+    store.add_game(jogo, {})
+    destino = tmp_path / "b.zip"
+    backup.exportar(destino, backup.ler_configuracoes())
+    manifesto = backup.validar(destino)
+    assert manifesto["version"] == 4
+    assert isinstance(manifesto["jogos"], dict)
+
+
+def test_validar_recusa_a_versao_3_de_ontem(tmp_path) -> None:
+    velho = tmp_path / "velho.zip"
+    with zipfile.ZipFile(velho, "w") as arquivo:
+        arquivo.writestr("backup.json", json.dumps({"version": 3, "settings": {}}))
+    with pytest.raises(ValueError):
+        backup.validar(velho)
+
+
+def test_validar_recusa_entrada_fora_da_pasta_jogos(tmp_path) -> None:
+    ruim = tmp_path / "ruim.zip"
+    with zipfile.ZipFile(ruim, "w") as arquivo:
+        arquivo.writestr(
+            "backup.json", json.dumps({"version": 4, "settings": {}, "jogos": {}})
+        )
+        arquivo.writestr("jogos/../../fora.txt", "x")
+    with pytest.raises(ValueError):
+        backup.validar(ruim)
+
+
+def test_validar_recusa_hash_com_formato_estranho(tmp_path) -> None:
+    ruim = tmp_path / "ruim.zip"
+    with zipfile.ZipFile(ruim, "w") as arquivo:
+        arquivo.writestr(
+            "backup.json", json.dumps({"version": 4, "settings": {}, "jogos": {}})
+        )
+        arquivo.writestr("jogos/nao-e-um-hash/capa.tiff", "x")
+    with pytest.raises(ValueError):
+        backup.validar(ruim)
+
+
+def test_validar_recusa_extensao_fora_da_lista(tmp_path) -> None:
+    ruim = tmp_path / "ruim.zip"
+    hash_valido = backup._hash_identidade("steam:1")
+    with zipfile.ZipFile(ruim, "w") as arquivo:
+        arquivo.writestr(
+            "backup.json", json.dumps({"version": 4, "settings": {}, "jogos": {}})
+        )
+        arquivo.writestr(f"jogos/{hash_valido}/capa.exe", "x")
+    with pytest.raises(ValueError):
+        backup.validar(ruim)
+
+
+def test_validar_confere_o_crc_de_cada_entrada(
+    store, make_game, app_dirs, settings, tmp_path
+) -> None:
+    """Um byte trocado num asset de jogo (gravado sem compressão) passa pelo
+    manifesto; o CRC de cada entrada é conferido antes.
+
+    (Corromper o texto de ``backup.json`` não serve: ele é gravado com
+    ``ZIP_DEFLATED``, então o JSON em claro não aparece nos bytes do zip.)
+    """
+    jogo = make_game(game_id="a", steam_appid="1", name="Jogo")
+    store.add_game(jogo, {})
+    (app_dirs.covers / "a.tiff").write_bytes(b"bytes-da-capa")
+    destino = tmp_path / "b.zip"
+    backup.exportar(destino, backup.ler_configuracoes())
+    dados = destino.read_bytes()
+    assert dados.count(b"bytes-da-capa") == 1
+    destino.write_bytes(dados.replace(b"bytes-da-capa", b"bytes-da-cApa"))
+    with pytest.raises(ValueError):
+        backup.validar(destino)

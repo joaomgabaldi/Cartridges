@@ -20,6 +20,7 @@ os dados.
 
 import json
 import logging
+import re
 import shutil
 import zipfile
 from hashlib import sha256
@@ -294,38 +295,59 @@ def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
         temporario.unlink(missing_ok=True)
 
 
+_HASH_RE = re.compile(r"^[0-9a-f]{16}$")
+
+# Nome base -> extensões aceitas para cada tipo de asset por jogo.
+_EXTENSOES_ASSET = {
+    "capa": (".tiff", ".gif", ".webp"),
+    "logo": (".png", ".webp", ".jpg", ".jpeg"),
+    "wallpaper": (".jpg", ".jpeg", ".png", ".webp"),
+}
+
+
 def _nome_valido(nome: str) -> bool:
-    """Só o que `exportar` grava: o manifesto, os dois arquivos, ou um arquivo
-    direto de uma das pastas. Nada absoluto, nada com `..`, nada mais fundo."""
-    if nome == _MANIFESTO or nome in _arquivos():
+    """Só o que `exportar` grava: o manifesto, ``fitas.json``, ou um asset de
+    jogo em ``jogos/<hash de 16 hex>/<capa|logo|wallpaper><extensão conhecida>``.
+    Nada absoluto, nada com ``..``, nada fora dessas três formas."""
+    if nome in (_MANIFESTO, "fitas.json"):
         return True
     if "\\" in nome or ":" in nome:
         return False
+
     partes = PurePosixPath(nome).parts
-    return len(partes) == 2 and partes[0] in _pastas() and partes[1] not in (".", "..")
+    if len(partes) != 3 or partes[0] != "jogos":
+        return False
+    _pasta, hash_id, arquivo = partes
+    if not _HASH_RE.match(hash_id):
+        return False
+
+    base, ponto, extensao = arquivo.partition(".")
+    if not ponto:
+        return False
+    return base in _EXTENSOES_ASSET and f".{extensao}" in _EXTENSOES_ASSET[base]
 
 
 def validar(caminho: Path) -> dict[str, Any]:
-    """O manifesto de um backup completo. ``ValueError`` se não for um."""
+    """O manifesto de um backup por jogo. ``ValueError`` se não for um."""
     try:
         with zipfile.ZipFile(caminho) as arquivo:
             for nome in arquivo.namelist():
                 if not _nome_valido(nome):
                     raise ValueError(f"entrada inesperada no backup: {nome}")
             # O CRC de cada entrada, e não só o do manifesto: um byte trocado
-            # numa capa passaria daqui e só estouraria no meio da extração.
+            # numa capa passaria daqui e só estouraria no meio da restauração.
             if (corrompida := arquivo.testzip()) is not None:
                 raise ValueError(f"entrada corrompida no backup: {corrompida}")
             manifesto = json.loads(arquivo.read(_MANIFESTO).decode("utf-8"))
     except ValueError:
         raise
     except Exception as erro:  # pylint: disable=broad-exception-caught
-        # O arquivo veio de fora e pode falhar de muitos jeitos: truncado,
-        # criptografado, com uma compressão que o Python não conhece. Para quem
-        # chama, todos querem dizer a mesma coisa.
         raise ValueError(str(erro)) from erro
+
     if not isinstance(manifesto, dict) or manifesto.get("version") != VERSAO:
-        raise ValueError("o arquivo não é um backup completo desta versão")
+        raise ValueError("o arquivo não é um backup desta versão")
+    if not isinstance(manifesto.get("jogos"), dict):
+        raise ValueError("backup sem o bloco de jogos")
     return manifesto
 
 
