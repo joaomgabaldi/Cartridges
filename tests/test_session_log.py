@@ -267,6 +267,31 @@ def test_without_a_cached_logo_the_name_is_the_title(real_window, store):
     assert dialog.name_label.get_label() == "Probe"
 
 
+def test_the_header_bar_shows_no_title_but_the_dialog_keeps_its_name(
+    real_window, store
+):
+    """O logo abre a tela logo abaixo da barra, e um título ali ficava colado
+    nele. Só a barra deixa de mostrar: o diálogo continua com nome, que é o
+    da janela e o que o leitor de tela anuncia."""
+    from gi.repository import Adw
+
+    from cartridges.session_history import SessionHistoryDialog
+
+    dialog = SessionHistoryDialog(history_game(store))
+
+    def header_bars(widget):
+        if isinstance(widget, Adw.HeaderBar):
+            yield widget
+        child = widget.get_first_child()
+        while child is not None:
+            yield from header_bars(child)
+            child = child.get_next_sibling()
+
+    (bar,) = header_bars(dialog.get_child())
+    assert bar.get_show_title() is False
+    assert dialog.get_title() == "Histórico de sessões"
+
+
 def test_the_logo_and_the_summary_span_the_whole_dialog(real_window, store):
     """Logo e resumo ficam numa faixa própria, centralizados na largura toda,
     acima das duas colunas — e não em cima só da tabela."""

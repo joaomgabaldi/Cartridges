@@ -311,7 +311,10 @@ class SessionHistoryDialog(Adw.Dialog):
         body.append(self.columns)
 
         toolbar = Adw.ToolbarView()
-        toolbar.add_top_bar(Adw.HeaderBar())
+        # O logo abre a tela logo abaixo da barra, e o título ali ficava colado
+        # nele. Só a barra o esconde: o diálogo mantém o nome, que é o da
+        # janela e o que o leitor de tela anuncia.
+        toolbar.add_top_bar(Adw.HeaderBar(show_title=False))
         toolbar.set_content(body)
         self.set_child(toolbar)
 
