@@ -321,6 +321,19 @@ class TestEscolhaPorJogo:
         assert gravado["position_landscape"] == 0.75
         assert "position" not in gravado
 
+    def test_posicoes_escolhidas_le_o_sidecar(self, tmp_path) -> None:
+        origem = tmp_path / "escolhida.jpg"
+        _arte(64, 36).save(origem)
+        session_wallpaper.salvar_escolha(
+            "jogo1", "Jogo", origem, session_wallpaper.Posicoes(0.2, 0.8)
+        )
+        posicoes = session_wallpaper.posicoes_escolhidas("jogo1")
+        assert (posicoes.retrato, posicoes.paisagem) == (0.2, 0.8)
+
+    def test_posicoes_escolhidas_sem_sidecar_e_o_padrao(self) -> None:
+        posicoes = session_wallpaper.posicoes_escolhidas("sem-nada")
+        assert (posicoes.retrato, posicoes.paisagem) == (0.5, 0.5)
+
     def test_renomear_nao_desfaz_a_escolha_manual(self, jogo, tmp_path) -> None:
         """A busca automática reabre com o nome novo; a escolha à mão, não."""
         origem = tmp_path / "escolhida.jpg"

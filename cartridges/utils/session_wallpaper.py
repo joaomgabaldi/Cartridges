@@ -497,6 +497,13 @@ def imagem_escolhida(game_id: str) -> Optional[Path]:
     return _arquivo_do_sidecar(_ler_sidecar(game_id))
 
 
+def posicoes_escolhidas(game_id: str) -> Posicoes:
+    """As posições de recorte gravadas para ``game_id``, ou o padrão (0.5,
+    0.5) se não houver escolha. Usado pela exportação do backup, que precisa
+    ler o que já está decidido sem duplicar o parse do sidecar."""
+    return _posicoes(_ler_sidecar(game_id))
+
+
 def salvar_escolha(
     game_id: str, name: str, origem: Path, posicoes: Posicoes
 ) -> Optional[Path]:
