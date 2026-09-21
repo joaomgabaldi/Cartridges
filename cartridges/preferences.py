@@ -968,7 +968,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         if resultado.ambiguos:
             self._show_ambiguity_alert(resultado.ambiguos)
 
-        if resultado.casados == 0 and resultado.total > 0:
+        if resultado.casados == 0 and resultado.total > 0 and not resultado.ambiguos:
             # O cenário central de "restaurei antes de reinstalar os jogos":
             # o genérico "Restaurado: 0 de N" não deixa claro que é isso.
             self.add_toast(
