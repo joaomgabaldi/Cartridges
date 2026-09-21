@@ -626,6 +626,251 @@ def test_validar_recusa_extensao_fora_da_lista(tmp_path) -> None:
         backup.validar(ruim)
 
 
+def _backup_com_um_jogo(
+    tmp_path, *, appid=None, nome="Jogo", configuracoes=None, **campos
+) -> tuple[Path, str]:
+    """Monta um .zip válido com uma entrada só, sem passar pelo `exportar`
+    (útil para testar `restaurar` isolado de `exportar`).
+
+    ``configuracoes``: o bloco ``settings`` do manifesto. Vazio por padrão —
+    o que ``aplicar_configuracoes`` não recebe explicitamente ela reseta para
+    o padrão do schema (``steam-metadata`` é ``true`` por padrão), então um
+    teste que precisa que a varredura forçada fique desligada tem de dizer
+    isso aqui, não só ajustar o schema antes de chamar `restaurar`.
+    """
+    identidade_str = f"steam:{appid}" if appid else f"nome:{nome.casefold()}"
+    chave = backup._hash_identidade(identidade_str)
+    entrada = {campo: 0 if campo != "notes" and campo != "status" and
+               campo != "process_executable" else "" for campo in backup.CAMPOS_OPINIAO}
+    entrada.update(campos)
+    entrada["identidade_exibicao"] = appid or nome
+    entrada["sessoes"] = []
+    manifesto = {
+        "version": backup.VERSAO,
+        "settings": configuracoes or {},
+        "state": {},
+        "jogos": {chave: entrada},
+    }
+    destino = tmp_path / "b.zip"
+    with zipfile.ZipFile(destino, "w") as arquivo:
+        arquivo.writestr("backup.json", json.dumps(manifesto))
+    return destino, chave
+
+
+def test_restaurar_aplica_campos_no_jogo_que_casa_por_appid(
+    store, make_game, tmp_path, settings
+) -> None:
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)  # sem varredura forçada aqui
+    jogo = make_game(game_id="a", steam_appid="1", name="Jogo")
+    store.add_game(jogo, {})
+    destino, _chave = _backup_com_um_jogo(
+        tmp_path, appid="1", playtime=3600, status="beaten", rating=5, notes="Ótimo"
+    )
+
+    resultado = backup.restaurar(destino)
+
+    assert resultado.casados == 1
+    assert resultado.total == 1
+    assert resultado.ambiguos == []
+    assert jogo.playtime == 3600
+    assert jogo.status == "beaten"
+    assert jogo.rating == 5
+    assert jogo.notes == "Ótimo"
+
+
+def test_restaurar_sobrescreve_mesmo_com_dado_mais_novo(store, make_game, tmp_path, settings) -> None:
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    jogo = make_game(game_id="a", steam_appid="1", name="Jogo", playtime=99999, notes="Anotação de hoje")
+    store.add_game(jogo, {})
+    destino, _chave = _backup_com_um_jogo(tmp_path, appid="1", playtime=10, notes="Do backup")
+
+    backup.restaurar(destino)
+
+    assert jogo.playtime == 10
+    assert jogo.notes == "Do backup"
+
+
+def test_restaurar_nao_toca_jogo_sem_correspondencia(store, make_game, tmp_path, settings) -> None:
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    jogo = make_game(game_id="a", steam_appid="2", name="Outro Jogo", playtime=5)
+    store.add_game(jogo, {})
+    destino, _chave = _backup_com_um_jogo(tmp_path, appid="1", playtime=999)
+
+    resultado = backup.restaurar(destino)
+
+    assert resultado.casados == 0
+    assert jogo.playtime == 5
+
+
+def test_restaurar_ignora_jogo_removido(store, make_game, tmp_path, settings) -> None:
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    tumba = make_game(game_id="a", steam_appid="1", name="Jogo", removed=True, playtime=5)
+    store.add_game(tumba, {})
+    destino, _chave = _backup_com_um_jogo(tmp_path, appid="1", playtime=999)
+
+    resultado = backup.restaurar(destino)
+
+    assert resultado.casados == 0
+    assert tumba.playtime == 5
+
+
+def test_restaurar_aplica_nos_dois_jogos_com_mesmo_appid(store, make_game, tmp_path, settings) -> None:
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    original = make_game(game_id="a", steam_appid="1", name="Steam")
+    pirata = make_game(game_id="b", steam_appid="1", name="Pirata")
+    store.add_game(original, {})
+    store.add_game(pirata, {})
+    destino, _chave = _backup_com_um_jogo(tmp_path, appid="1", playtime=42)
+
+    resultado = backup.restaurar(destino)
+
+    assert resultado.casados == 1
+    assert original.playtime == 42
+    assert pirata.playtime == 42
+
+
+def test_restaurar_nao_aplica_em_nome_ambiguo_e_reporta(store, make_game, tmp_path, settings) -> None:
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    um = make_game(game_id="a", name="Legacy (PC)")
+    outro = make_game(game_id="b", name="Legacy™")
+    store.add_game(um, {})
+    store.add_game(outro, {})
+    destino, _chave = _backup_com_um_jogo(
+        tmp_path, nome="Legacy", playtime=42, configuracoes={"steam-metadata": False}
+    )
+
+    resultado = backup.restaurar(destino)
+
+    assert resultado.casados == 0
+    assert resultado.ambiguos == ["Legacy"]
+    assert um.playtime == 0
+    assert outro.playtime == 0
+
+
+def test_restaurar_aplica_as_configuracoes_antes_da_varredura(
+    store, make_game, tmp_path, settings, monkeypatch
+) -> None:
+    """steam-metadata é 'da instalação anterior': o backup pode religá-la, e
+    a varredura forçada tem de respeitar o valor já restaurado, não o de
+    antes de restaurar."""
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    jogo = make_game(game_id="a", name="Jogo")
+    store.add_game(jogo, {})
+
+    destino = tmp_path / "b.zip"
+    chave = backup._hash_identidade("nome:jogo")
+    entrada = {campo: (0 if campo not in ("notes", "status", "process_executable") else "")
+               for campo in backup.CAMPOS_OPINIAO}
+    entrada["identidade_exibicao"] = "Jogo"
+    entrada["sessoes"] = []
+    manifesto = {
+        "version": backup.VERSAO,
+        "settings": {"steam-metadata": True},
+        "state": {},
+        "jogos": {chave: entrada},
+    }
+    with zipfile.ZipFile(destino, "w") as arquivo:
+        arquivo.writestr("backup.json", json.dumps(manifesto))
+
+    chamado = []
+
+    def _fake(_jogos, _progresso, _cancelado):
+        chamado.append(True)
+        return True
+
+    monkeypatch.setattr(backup, "_forcar_appids", _fake)
+    backup.restaurar(destino)
+
+    assert main.get_boolean("steam-metadata") is True
+    assert chamado == [True]
+
+
+def test_restaurar_pula_a_varredura_se_steam_metadata_desligado(
+    store, make_game, tmp_path, settings, monkeypatch
+) -> None:
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    jogo = make_game(game_id="a", name="Jogo")
+    store.add_game(jogo, {})
+    destino, _chave = _backup_com_um_jogo(
+        tmp_path, nome="Jogo", playtime=7, configuracoes={"steam-metadata": False}
+    )
+
+    chamado = []
+    monkeypatch.setattr(
+        backup, "_forcar_appids", lambda *a, **k: chamado.append(True) or True
+    )
+    backup.restaurar(destino)
+
+    assert chamado == []
+
+
+def test_restaurar_cancelado_nao_aplica_nada(
+    store, make_game, tmp_path, settings, monkeypatch
+) -> None:
+    main, _state = settings
+    main.set_boolean("steam-metadata", True)
+    jogo = make_game(game_id="a", name="Jogo")  # sem appid -> entra na varredura
+    store.add_game(jogo, {})
+    destino, _chave = _backup_com_um_jogo(tmp_path, nome="Jogo", playtime=7)
+
+    monkeypatch.setattr(backup, "_forcar_appids", lambda *a, **k: False)
+    resultado = backup.restaurar(destino)
+
+    assert resultado is None
+    assert jogo.playtime == 0
+
+
+def test_restaurar_traduz_sessoes_de_volta_ao_game_id_local(store, make_game, tmp_path, settings, app_dirs) -> None:
+    from cartridges.utils import session_log
+
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    jogo = make_game(game_id="local-x", steam_appid="1", name="Jogo")
+    store.add_game(jogo, {})
+    destino, _chave = _backup_com_um_jogo(tmp_path, appid="1")
+    with zipfile.ZipFile(destino) as arquivo:
+        manifesto = json.loads(arquivo.read("backup.json"))
+    chave = next(iter(manifesto["jogos"]))
+    manifesto["jogos"][chave]["sessoes"] = [{"end": 1_700_000_000, "seconds": 1800}]
+    with zipfile.ZipFile(destino, "w") as arquivo:
+        arquivo.writestr("backup.json", json.dumps(manifesto))
+
+    backup.restaurar(destino)
+
+    sessoes = session_log.load("local-x")
+    assert sessoes == [{"game_id": "local-x", "end": 1_700_000_000, "seconds": 1800}]
+
+
+def test_restaurar_nao_duplica_sessao_ja_existente(store, make_game, tmp_path, settings) -> None:
+    from cartridges.utils import session_log
+
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    jogo = make_game(game_id="local-x", steam_appid="1", name="Jogo")
+    store.add_game(jogo, {})
+    session_log.record("local-x", 1800, end=1_700_000_000)
+
+    destino, _chave = _backup_com_um_jogo(tmp_path, appid="1")
+    with zipfile.ZipFile(destino) as arquivo:
+        manifesto = json.loads(arquivo.read("backup.json"))
+    chave = next(iter(manifesto["jogos"]))
+    manifesto["jogos"][chave]["sessoes"] = [{"end": 1_700_000_000, "seconds": 1800}]
+    with zipfile.ZipFile(destino, "w") as arquivo:
+        arquivo.writestr("backup.json", json.dumps(manifesto))
+
+    backup.restaurar(destino)
+
+    assert len(session_log.load("local-x")) == 1
+
+
 def test_validar_confere_o_crc_de_cada_entrada(
     store, make_game, app_dirs, settings, tmp_path
 ) -> None:
