@@ -181,7 +181,7 @@ def parse_news(xml_text: str) -> list[NewsPost]:
 
         # The link is displayed and eventually launched, so it goes through the
         # same scheme guard as a digest's repack URL. A rejected link costs the
-        # row its "Abrir publicação" action; the post itself still reads.
+        # row its "Abrir no navegador" action; the post itself still reads.
         link = _safe_url(item.findtext("link"))
         identifier = (item.findtext("guid") or link or title).strip()
 

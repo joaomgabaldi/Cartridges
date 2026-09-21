@@ -26,9 +26,9 @@ def format_playtime(seconds: int) -> str:
     """
     if seconds < 60:
         return _("menos de 1 min")
-    if seconds < 3600:
-        # ponytail: 3599s rounds to "60 min" instead of "1 hora" — cosmetic, rare
-        return _("{} min").format(round(seconds / 60))
+    minutes = round(seconds / 60)
+    if minutes < 60:
+        return _("{} min").format(minutes)
 
     hours = round(seconds / 3600, 1)
     if hours == 1:
@@ -59,6 +59,7 @@ if __name__ == "__main__":
     assert format_playtime(59) == "menos de 1 min"
     assert format_playtime(60) == "1 min"
     assert format_playtime(1800) == "30 min"
+    assert format_playtime(3599) == "1 hora"  # rounds up to a full hour, not "60 min"
     assert format_playtime(3600) == "1 hora"
     assert format_playtime(5400) == "1,5 horas"
     assert format_playtime(37800) == "10,5 horas"

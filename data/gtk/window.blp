@@ -38,7 +38,7 @@ Adw.StatusPage notice_empty {
 Adw.StatusPage hidden_notice_empty {
   icon-name: "view-conceal-symbolic";
   title: _("Nenhum jogo oculto");
-  description: _("Jogos que você ocultar aparecem aqui");
+  description: _("Jogos ocultos aparecem aqui");
   vexpand: true;
   valign: center;
 }
@@ -439,7 +439,7 @@ Adw.NavigationPage news_page {
         child: Adw.StatusPage news_status {
           icon-name: "novidades-symbolic";
           title: _("Sem novidades");
-          description: _("Não foi possível ler o feed. Verifique sua conexão e tente novamente.");
+          description: _("Não foi possível ler o feed.");
           vexpand: true;
           valign: center;
 
@@ -1031,7 +1031,7 @@ Adw.NavigationPage details_page {
               spacing: 6;
 
               MenuButton details_view_status_button {
-                tooltip-text: _("Status deste jogo na sua biblioteca");
+                tooltip-text: _("Status deste jogo na biblioteca");
 
                 styles [
                   "flat",

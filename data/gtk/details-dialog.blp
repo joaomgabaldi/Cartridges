@@ -206,7 +206,7 @@ template $DetailsDialog: Adw.Dialog {
           Button fita_button_reset {
             valign: center;
             icon-name: "edit-undo-symbolic";
-            tooltip-text: _("Voltar a tirar a cor da capa");
+            tooltip-text: _("Voltar a escolher a cor a partir da capa");
             visible: false;
 
             styles [
@@ -237,7 +237,7 @@ template $DetailsDialog: Adw.Dialog {
         }
 
         Adw.SpinRow fita_brilho_row {
-          title: _("Brilho da fita neste jogo (%)");
+          title: _("Brilho da fita (%)");
 
           adjustment: Adjustment {
             lower: 1;
@@ -322,7 +322,7 @@ template $DetailsDialog: Adw.Dialog {
 
         Adw.ActionRow rating_row {
           title: _("Minha nota");
-          subtitle: _("Clique na estrela marcada para tirar a nota");
+          subtitle: _("Clique na nota para removê-la");
 
           [suffix]
           Box rating_box {
@@ -362,7 +362,7 @@ template $DetailsDialog: Adw.Dialog {
 
         Adw.SwitchRow run_as_admin_switch {
           title: _("Abrir como administrador");
-          subtitle: _("Pede elevação (UAC) ao iniciar este jogo");
+          subtitle: _("Iniciar como administrador");
         }
 
         Adw.SwitchRow track_process_switch {
@@ -379,7 +379,7 @@ template $DetailsDialog: Adw.Dialog {
       Adw.PreferencesGroup {
         Adw.SwitchRow track_updates_switch {
           title: _("Notificar sobre atualizações");
-          subtitle: _("Avisa quando este jogo aparecer em um novo update de repack");
+          subtitle: _("Avisa quando houver patch disponível");
         }
       }
     }

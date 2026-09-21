@@ -65,7 +65,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
     }
 
     Adw.PreferencesGroup danger_zone_group {
-      title: _("Zona de perigo");
+      title: _("Zona de Perigo");
       separate-rows: true;
 
       Adw.ButtonRow remove_all_games_button_row {
@@ -78,7 +78,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
 
       Adw.ButtonRow reset_button_row {
         visible: false;
-        title: "Reset App";
+        title: _("Resetar App");
 
         styles [
           "destructive-action"
@@ -148,7 +148,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
       }
 
       Adw.SpinRow fita_brilho_row {
-        title: _("Brilho padrão (%)");
+        title: _("Brilho (%)");
         subtitle: _("Usado pelos jogos que não escolheram o seu");
         sensitive: bind session_fita_switch.active;
 
@@ -164,7 +164,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
       // tela do jogo, pelo mesmo motivo: cada tentativa aparece na parede na
       // hora, sem confirmar nada.
       Adw.ActionRow fita_cor_app_row {
-        title: _("Cor fora do jogo");
+        title: _("Cor do app");
         subtitle: _("A cor das fitas com o app aberto e nenhum jogo rodando");
         sensitive: bind session_fita_switch.active;
         activatable-widget: fita_cor_app_menu;
@@ -173,7 +173,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         Button fita_cor_app_reset {
           valign: center;
           icon-name: "edit-undo-symbolic";
-          tooltip-text: _("Voltar ao roxo do Cartridges");
+          tooltip-text: _("Voltar à cor padrão");
           visible: false;
 
           styles [
@@ -184,7 +184,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         [suffix]
         MenuButton fita_cor_app_menu {
           valign: center;
-          tooltip-text: _("Escolher a cor das fitas fora do jogo");
+          tooltip-text: _("Escolher a cor das fitas no app");
 
           child: DrawingArea fita_cor_app_amostra {
             content-width: 22;
@@ -208,7 +208,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         Button fita_configurar_button {
           valign: center;
           icon-name: "applications-engineering-symbolic";
-          tooltip-text: _("Abrir o assistente");
+          tooltip-text: _("Abrir assistente");
 
           styles [
             "flat"
@@ -226,7 +226,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         Button fita_testar_button {
           valign: center;
           icon-name: "media-playback-start-symbolic";
-          tooltip-text: _("Acender as fitas agora");
+          tooltip-text: _("Ligar as fitas");
 
           styles [
             "flat"
