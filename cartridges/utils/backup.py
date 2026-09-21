@@ -11,17 +11,14 @@ idêntica à antiga. Fica fora só o que vale nesta máquina e em mais nenhuma: 
 conta da Tuya (um blob DPAPI não decifra em outra conta do Windows), os logs e
 o caminho de volta de uma sessão em andamento.
 
-Restaurar substitui, não mescla, e não acontece com o app aberto: a varredura
-do HowLongToBeat e a do tamanho no disco gravariam os jogos antigos por cima
-dos restaurados. `agendar` deixa o zip na pasta do app e o app fecha; na
-abertura seguinte, `aplicar_pendente` faz a troca antes de qualquer coisa ler
-os dados.
+Restaurar substitui, não mescla: `restaurar()` casa cada jogo do backup com
+um jogo local pela identidade portátil (ver `identidade`) e aplica os campos
+de opinião e os assets por cima do que já existe, ao vivo, sem fechar o app.
 """
 
 import json
 import logging
 import re
-import shutil
 import threading
 import zipfile
 from hashlib import sha256
@@ -316,10 +313,6 @@ def _invalidar_listas() -> bool:
     return False
 
 
-def _pendente() -> Path:
-    return shared.app_dir / "restaurar.zip"
-
-
 def _chaves_do_app() -> list[str]:
     return [
         chave
@@ -555,100 +548,3 @@ def validar(caminho: Path) -> dict[str, Any]:
     if not isinstance(manifesto.get("jogos"), dict):
         raise ValueError("backup sem o bloco de jogos")
     return manifesto
-
-
-def agendar(caminho: Path) -> None:
-    """Deixa ``caminho`` para ser aplicado na próxima abertura do app."""
-    destino = _pendente()
-    temporario = destino.with_name(destino.name + ".tmp")
-    try:
-        shared.app_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(caminho, temporario)
-        temporario.replace(destino)
-    finally:
-        temporario.unlink(missing_ok=True)
-
-
-def aplicar_pendente() -> Optional[bool]:
-    """Aplica o backup que `agendar` deixou, se houver.
-
-    Chamar na abertura, antes de qualquer coisa ler os dados do app. ``None``:
-    nada agendado. ``True``: restaurado. ``False``: não deu (detalhes no log).
-    """
-    pendente = _pendente()
-    if not pendente.is_file():
-        return None
-
-    extraido = shared.app_dir / "restaurar.tmp"
-    antigo = shared.app_dir / "restaurar.old"
-    # Sobras de uma abertura que caiu depois da troca: o que está no lugar já
-    # é o backup, e o zip ainda aqui vai refazer tudo do zero.
-    shutil.rmtree(extraido, ignore_errors=True)
-    shutil.rmtree(antigo, ignore_errors=True)
-    try:
-        manifesto = validar(pendente)
-        with zipfile.ZipFile(pendente) as arquivo:
-            arquivo.extractall(extraido)
-    except Exception as erro:  # pylint: disable=broad-exception-caught
-        # Nada foi tocado ainda: a biblioteca atual fica, e o zip ruim sai
-        # para não ser tentado de novo a cada abertura.
-        logging.error("Backup agendado inválido: %s", erro)
-        _limpar(extraido, pendente)
-        return False
-
-    try:
-        _trocar(extraido, antigo)
-    except OSError:
-        logging.exception("Não foi possível trocar a biblioteca pela do backup")
-        if antigo.is_dir() and not any(antigo.iterdir()):
-            # Tudo voltou ao lugar: a biblioteca atual fica, como se o backup
-            # nunca tivesse sido agendado.
-            _limpar(extraido, antigo, pendente)
-        # ponytail: se nem desfazer deu, o zip fica e a próxima abertura
-        # termina a restauração; nesta, o app abre com o que estiver no lugar.
-        return False
-
-    # As configurações antes de o zip sair: aplicá-las de novo não muda nada,
-    # e assim uma queda em qualquer ponto até aqui refaz tudo do zero.
-    aplicar_configuracoes(manifesto)
-    _limpar(extraido, antigo, pendente)
-    logging.info("Backup restaurado")
-    return True
-
-
-def _trocar(extraido: Path, antigo: Path) -> None:
-    """Põe o extraído no lugar do atual, que vai para ``antigo``.
-
-    Só com `os.replace`, que no mesmo disco move ou falha inteiro — ao
-    contrário de `rmtree`, que com um arquivo em uso apaga metade da pasta e
-    para. Nada é apagado aqui; uma falha no meio desfaz o que já foi movido e
-    levanta o erro.
-    """
-    itens = [*_pastas().items(), *_arquivos().items()]
-    antigo.mkdir(exist_ok=True)
-    feitos: list[tuple[Path, Path]] = []
-    try:
-        for nome, destino in itens:
-            if destino.exists():
-                destino.replace(antigo / nome)
-                feitos.append((antigo / nome, destino))
-        for nome, destino in itens:
-            origem = extraido / nome
-            if origem.exists():
-                origem.replace(destino)
-                feitos.append((destino, origem))
-    except OSError:
-        for de, para in reversed(feitos):
-            de.replace(para)
-        raise
-
-
-def _limpar(*caminhos: Path) -> None:
-    for caminho in caminhos:
-        if caminho.is_dir():
-            shutil.rmtree(caminho, ignore_errors=True)
-            continue
-        try:
-            caminho.unlink(missing_ok=True)
-        except OSError:
-            logging.exception("Não foi possível apagar %s", caminho)
