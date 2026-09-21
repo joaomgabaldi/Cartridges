@@ -393,3 +393,55 @@ def test_the_preferences_export_then_schedule_a_restore(
 
     assert closed == [True]
     assert (shared.app_dir / "restaurar.zip").is_file()
+
+
+# --------------------------------------------------------------------------
+# Identidade e agrupamento
+# --------------------------------------------------------------------------
+
+
+def test_identidade_prefere_o_appid_da_steam(store, make_game) -> None:
+    jogo = make_game(steam_appid="367520", name="Hollow Knight")
+    assert backup.identidade(jogo) == "steam:367520"
+
+
+def test_identidade_cai_para_o_nome_limpo_sem_appid(store, make_game) -> None:
+    jogo = make_game(name="Legacy (PC)")
+    assert backup.identidade(jogo) == "nome:legacy"
+
+
+def test_hash_da_identidade_e_estavel_e_curto(store) -> None:
+    primeiro = backup._hash_identidade("steam:367520")
+    segundo = backup._hash_identidade("steam:367520")
+    assert primeiro == segundo
+    assert len(primeiro) == 16
+    assert backup._hash_identidade("nome:legacy") != primeiro
+
+
+def test_agrupar_junta_dois_jogos_no_mesmo_appid(store, make_game) -> None:
+    original = make_game(game_id="a", steam_appid="1", name="Jogo Steam")
+    pirata = make_game(game_id="b", steam_appid="1", name="Jogo Pirata")
+    grupos = backup._agrupar_por_identidade([original, pirata])
+
+    chave = backup._hash_identidade("steam:1")
+    tipo, alvos = grupos[chave]
+    assert tipo == "steam"
+    assert {jogo.game_id for jogo in alvos} == {"a", "b"}
+
+
+def test_agrupar_junta_dois_jogos_no_mesmo_nome_sem_appid(store, make_game) -> None:
+    um = make_game(game_id="a", name="Rush (PC)")
+    outro = make_game(game_id="b", name="Rush™")
+    grupos = backup._agrupar_por_identidade([um, outro])
+
+    chave = backup._hash_identidade("nome:rush")
+    tipo, alvos = grupos[chave]
+    assert tipo == "nome"
+    assert len(alvos) == 2
+
+
+def test_agrupar_mantem_jogos_sem_colisao_separados(store, make_game) -> None:
+    um = make_game(game_id="a", name="Celeste")
+    outro = make_game(game_id="b", name="Hades")
+    grupos = backup._agrupar_por_identidade([um, outro])
+    assert len(grupos) == 2

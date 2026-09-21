@@ -22,6 +22,7 @@ import json
 import logging
 import shutil
 import zipfile
+from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from time import time
 from typing import Any, Iterable, Optional
@@ -30,6 +31,7 @@ from gi.repository import Gio, GLib
 
 from cartridges import shared
 from cartridges.utils import session_log
+from cartridges.utils.name_cleaner import clean_for_search
 
 VERSAO = 3
 
@@ -43,6 +45,68 @@ _CHAVES_DE_SESSAO = frozenset({"session-wallpaper-saved", "fita-estado-anterior"
 # Do schema de estado, só a ordenação é escolha de alguém. Tamanho e posição da
 # janela, o balde do limitador da Steam e a última novidade vista são da máquina.
 _CHAVES_DE_ESTADO = ("sort-mode",)
+
+# Campos que representam a opinião do usuário sobre um jogo — os únicos que o
+# backup por jogo leva. Tudo que é identidade (executable, game_id, source,
+# shortcut_*) ou metadado online (developer, steam_appid como dado, hltb_*)
+# fica de fora: identidade nunca viaja, e metadado online o próprio pipeline
+# de import recarrega sozinho assim que o jogo existir.
+CAMPOS_OPINIAO = (
+    "hidden",
+    "last_played",
+    "playtime",
+    "status",
+    "rating",
+    "notes",
+    "run_as_admin",
+    "track_process",
+    "process_executable",
+    "track_updates",
+)
+
+
+def identidade(jogo: Any) -> str:
+    """A identidade portátil de ``jogo``: sobrevive a outra máquina e a outro
+    caminho de instalação, ao contrário do ``game_id`` (que para um atalho é
+    derivado do caminho do executável).
+
+    ``steam:<appid>`` quando o jogo tem um appID da Steam — é o mesmo jogo em
+    qualquer PC. Sem appID, cai para o nome limpo (``clean_for_search``, a
+    mesma normalização já usada para buscar na Steam) — mais frágil, mas é o
+    único sinal que sobra para um jogo que a Steam não conhece.
+    """
+    if getattr(jogo, "steam_appid", None):
+        return f"steam:{jogo.steam_appid}"
+    return f"nome:{clean_for_search(jogo.name).casefold()}"
+
+
+def _hash_identidade(identidade_str: str) -> str:
+    """A identidade como nome de arquivo/chave de manifesto: curta, sem
+    caracteres que o zip ou o nome de um arquivo recusariam. Mesmo mecanismo
+    de ``ShortcutsSourceIterable._game_id`` (sha256 truncado), chave diferente."""
+    return sha256(identidade_str.encode("utf-8")).hexdigest()[:16]
+
+
+def _agrupar_por_identidade(jogos: Iterable[Any]) -> dict[str, tuple[str, list[Any]]]:
+    """Agrupa ``jogos`` pela identidade portátil.
+
+    Cada grupo carrega o tipo da identidade (``"steam"`` ou ``"nome"``) e a
+    lista de jogos que caíram nela. Mais de um jogo no mesmo grupo quer dizer
+    coisas diferentes dependendo do tipo — appID repetido é o mesmo jogo
+    (cópia Steam e cópia pirata, por exemplo), nome repetido sem appID é uma
+    coincidência que ninguém aqui tem como desfazer. Quem chama decide o que
+    fazer com cada caso; esta função só constata a colisão.
+    """
+    grupos: dict[str, tuple[str, list[Any]]] = {}
+    for jogo in jogos:
+        ident = identidade(jogo)
+        tipo = ident.split(":", 1)[0]
+        chave = _hash_identidade(ident)
+        if chave in grupos:
+            grupos[chave][1].append(jogo)
+        else:
+            grupos[chave] = (tipo, [jogo])
+    return grupos
 
 
 def _pastas() -> dict[str, Path]:
