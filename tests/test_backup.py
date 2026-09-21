@@ -871,6 +871,59 @@ def test_restaurar_nao_duplica_sessao_ja_existente(store, make_game, tmp_path, s
     assert len(session_log.load("local-x")) == 1
 
 
+def test_aplicar_configuracoes_fora_da_main_aplica_direto_na_thread_principal(
+    settings, monkeypatch
+) -> None:
+    """`restaurar()` roda no thread do pytest em todo o resto desta suíte —
+    é o caso comum hoje, e continua idêntico: sem GLib.idle_add nenhum."""
+    assert backup.is_main_thread() is True
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+
+    chamado = []
+    monkeypatch.setattr(backup.GLib, "idle_add", lambda *a, **k: chamado.append(a))
+
+    backup._aplicar_configuracoes_fora_da_main(
+        {"settings": {"steam-metadata": True}, "state": {}}
+    )
+
+    assert chamado == []
+    assert main.get_boolean("steam-metadata") is True
+
+
+def test_aplicar_configuracoes_fora_da_main_funciona_fora_da_thread_principal(
+    settings, flush_idle
+) -> None:
+    """O caso real de `restaurar()` chamado de uma thread de fundo (a Task 9
+    vai rodar assim): aplicar_configuracoes só é seguro na thread principal
+    (sinais changed::<chave> do Gio.Settings de verdade têm handler que toca
+    GTK direto), então isto marshalla via GLib.idle_add e espera — sem travar
+    quando o teste bombeia a fila a partir da thread principal."""
+    import threading  # noqa: PLC0415
+    import time  # noqa: PLC0415
+
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+
+    def rodar() -> None:
+        backup._aplicar_configuracoes_fora_da_main(
+            {"settings": {"steam-metadata": True}, "state": {}}
+        )
+
+    trabalhador = threading.Thread(target=rodar)
+    trabalhador.start()
+
+    deadline = time.monotonic() + 5
+    while trabalhador.is_alive():
+        assert time.monotonic() < deadline, "a thread de fundo não terminou a tempo"
+        flush_idle()
+        time.sleep(0.01)
+    trabalhador.join(timeout=5)
+
+    assert not trabalhador.is_alive()
+    assert main.get_boolean("steam-metadata") is True
+
+
 def test_validar_confere_o_crc_de_cada_entrada(
     store, make_game, app_dirs, settings, tmp_path
 ) -> None:
