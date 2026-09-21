@@ -67,7 +67,14 @@ from cartridges.utils.single_instance import (
     present_running_instance,
 )
 from cartridges.utils.updates_checker import UpdatesChecker
-from cartridges.utils import session_fita, session_log, session_wallpaper, window_geometry
+from cartridges.utils import (
+    backup,
+    session_fita,
+    session_log,
+    session_wallpaper,
+    window_geometry,
+)
+from cartridges.utils.create_dialog import create_dialog
 from cartridges.window import CartridgesWindow
 
 # Titulo da secao de agradecimentos nos creditos. Fica numa constante porque
@@ -454,6 +461,16 @@ class CartridgesApplication(Adw.Application):
 
         log_system_info()
 
+        # Um backup completo agendado pelas Preferências troca a biblioteca e as
+        # configurações aqui, antes de qualquer linha abaixo ler uma ou outra.
+        try:
+            restauracao = backup.aplicar_pendente()
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Nada aqui pode impedir o app de abrir: sem janela ainda, e no
+            # pythonw, o erro não chegaria a ninguém.
+            logging.exception("Falha ao aplicar o backup agendado")
+            restauracao = False
+
         # Uma sessão anterior pode ter deixado os monitores vestidos: o app
         # morto (ou a máquina desligada) no meio dela não passa por
         # `hide_session_blocker` nem por `do_shutdown`. A marca fica no
@@ -591,6 +608,15 @@ class CartridgesApplication(Adw.Application):
             shared.win.search_entry.set_position(-1)
 
         shared.win.present()
+
+        if restauracao is True:
+            shared.win.toast_queue.add(Adw.Toast.new(_("Backup restaurado")))
+        elif restauracao is False:
+            create_dialog(
+                shared.win,
+                _("Não foi possível restaurar o backup"),
+                _("Os detalhes estão no log do app."),
+            )
 
         # Pergunta ao GitHub se saiu versão nova. Depois do present(): a caixa
         # com as novidades precisa de uma janela na tela para se prender.
