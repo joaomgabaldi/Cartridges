@@ -25,15 +25,16 @@ import shutil
 import zipfile
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
+from tempfile import TemporaryDirectory
 from time import time
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Callable, Iterable, NamedTuple, Optional
 
 from gi.repository import Gio, GLib
 
 from cartridges import shared
 from cartridges.game import Game
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
-from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper
+from cartridges.utils import game_logo, save_cover, session_fita, session_log, session_wallpaper
 from cartridges.utils.name_cleaner import clean_for_search
 
 VERSAO = 4
@@ -158,6 +159,134 @@ def _forcar_appids(
         if progresso is not None:
             GLib.idle_add(progresso, indice, total)
     return True
+
+
+class ResultadoRestauracao(NamedTuple):
+    casados: int
+    total: int
+    ambiguos: list[str]
+
+
+def _extrair_asset(
+    arquivo: zipfile.ZipFile, tmp_dir: Path, hash_id: str, base: str
+) -> Optional[Path]:
+    prefixo = f"jogos/{hash_id}/{base}."
+    for nome in arquivo.namelist():
+        if nome.startswith(prefixo):
+            destino = tmp_dir / nome.replace("/", "_")
+            destino.write_bytes(arquivo.read(nome))
+            return destino
+    return None
+
+
+def _aplicar_sessoes(game_id: str, sessoes: list[dict[str, Any]]) -> None:
+    existentes = {
+        (sessao["game_id"], sessao["end"], sessao["seconds"])
+        for sessao in session_log.load(game_id)
+    }
+    for sessao in sessoes:
+        try:
+            fim = int(sessao["end"])
+            segundos = int(sessao["seconds"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if (game_id, fim, segundos) not in existentes:
+            session_log.record(game_id, segundos, fim)
+
+
+def _aplicar_jogo(
+    jogo: Game, entrada: dict[str, Any], hash_id: str, arquivo: zipfile.ZipFile, tmp_dir: Path
+) -> None:
+    campos = {campo: entrada[campo] for campo in CAMPOS_OPINIAO if campo in entrada}
+    jogo.update_values(campos)
+    GLib.idle_add(_salvar_e_atualizar, jogo)
+
+    capa = _extrair_asset(arquivo, tmp_dir, hash_id, "capa")
+    if capa is not None:
+        save_cover.save_cover(jogo.game_id, capa)
+
+    logo = _extrair_asset(arquivo, tmp_dir, hash_id, "logo")
+    if logo is not None:
+        game_logo.save_manual_logo(jogo.game_id, jogo.name, logo)
+
+    parede = _extrair_asset(arquivo, tmp_dir, hash_id, "wallpaper")
+    if parede is not None:
+        posicoes = session_wallpaper.Posicoes(
+            entrada.get("wallpaper_posicao_retrato", 0.5),
+            entrada.get("wallpaper_posicao_paisagem", 0.5),
+        )
+        session_wallpaper.salvar_escolha(jogo.game_id, jogo.name, parede, posicoes)
+
+    if all(campo in entrada for campo in ("fita_matiz", "fita_saturacao", "fita_brilho")):
+        session_fita.salvar_cor(
+            jogo.game_id,
+            jogo.name,
+            session_fita.Cor(
+                entrada["fita_matiz"], entrada["fita_saturacao"], entrada["fita_brilho"]
+            ),
+        )
+
+    _aplicar_sessoes(jogo.game_id, entrada.get("sessoes") or [])
+
+
+def restaurar(
+    caminho: Path,
+    progresso: Optional[Callable[[int, int], None]] = None,
+    cancelado: Optional[Callable[[], bool]] = None,
+) -> Optional[ResultadoRestauracao]:
+    """Aplica um backup ``.zip`` à biblioteca e às configurações atuais, ao
+    vivo — sem fechar o app, sem criar jogo, sem participar de import ou
+    remoção. ``None``: a varredura forçada de appID foi cancelada, nada do
+    backup foi tocado.
+
+    Pode (e deve, para uma biblioteca grande ou com jogos sem appID)  rodar
+    fora da thread principal: cada `jogo.save()`/`jogo.update()` já vai
+    marshallado (ver `_salvar_e_atualizar`).
+    """
+    manifesto = validar(caminho)
+    aplicar_configuracoes(manifesto)
+
+    jogos_ativos = [jogo for jogo in shared.store if not jogo.removed]
+    pendentes = [jogo for jogo in jogos_ativos if not jogo.steam_appid]
+    if pendentes and shared.schema.get_boolean("steam-metadata"):
+        if not _forcar_appids(pendentes, progresso, cancelado):
+            return None
+
+    grupos = _agrupar_por_identidade(jogos_ativos)
+    jogos_no_backup = manifesto.get("jogos", {})
+    casados = 0
+    ambiguos: list[str] = []
+
+    with zipfile.ZipFile(caminho) as arquivo, TemporaryDirectory() as pasta_tmp:
+        tmp_dir = Path(pasta_tmp)
+        for hash_id, entrada in jogos_no_backup.items():
+            grupo = grupos.get(hash_id)
+            if grupo is None:
+                continue
+            tipo, alvos = grupo
+            if len(alvos) > 1 and tipo == "nome":
+                ambiguos.append(str(entrada.get("identidade_exibicao", hash_id)))
+                continue
+            for jogo in alvos:
+                _aplicar_jogo(jogo, entrada, hash_id, arquivo, tmp_dir)
+            casados += 1
+
+    if casados:
+        # `hidden`/`status`/`rating` mudando pode mover um jogo entre a
+        # biblioteca e a oculta, ou tirá-lo de um filtro ativo — mesma
+        # invalidação que `_merge_json_backup` já fazia. GTK, então na
+        # thread principal.
+        GLib.idle_add(_invalidar_listas)
+
+    return ResultadoRestauracao(casados, len(jogos_no_backup), ambiguos)
+
+
+def _invalidar_listas() -> bool:
+    shared.win.library.invalidate_sort()
+    shared.win.hidden_library.invalidate_sort()
+    shared.win.library.invalidate_filter()
+    shared.win.hidden_library.invalidate_filter()
+    return False
 
 
 def _pendente() -> Path:
