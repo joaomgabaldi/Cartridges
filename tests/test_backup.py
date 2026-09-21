@@ -2,18 +2,15 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Os dois backups: o .json de antes, que mescla, e o .zip completo, que substitui.
+"""O backup completo (.zip): a biblioteca inteira e as configurações, por identidade.
 
-A primeira metade é a mescla do .json sobre uma biblioteca que já existe.
-
-O backup leva o que veio do usuário e de mais ninguém, e cada campo volta pela
-regra da sua natureza: o tempo de jogo é uma parcela e soma, o status, a nota e
-a anotação são valores e só preenchem o que está vazio. É a diferença entre
-restaurar duas máquinas na mesma biblioteca (soma) e restaurar por cima de uma
-biblioteca em uso (não apaga nada).
-
-O arquivo veio de fora e pode ter sido editado à mão, então metade destes
-testes é sobre o que ele *não* consegue gravar.
+O backup leva só a opinião do usuário sobre cada jogo (tempo, status, nota,
+anotação, capa/logo/parede/fita escolhidos à mão) e as configurações do app —
+nunca identidade nem metadado que o próprio app recarrega sozinho. `restaurar`
+casa cada entrada do backup com um jogo já existente na biblioteca local pela
+identidade portátil (`identidade`) e sobrescreve; nunca cria jogo, nunca apaga,
+nunca mexe em quem não casou. O formato `.json` de versões antigas (que
+mesclava só tempo/status/nota/anotação) não é mais aceito.
 """
 
 import json
@@ -26,107 +23,9 @@ import pytest
 from gi.repository import Gio
 
 from cartridges import shared
-from cartridges.game import Game
-from cartridges.preferences import restore_into
 from cartridges.utils import backup
 
 _ROOT = Path(__file__).resolve().parent.parent
-
-
-def game(**fields) -> Game:
-    return Game(
-        {
-            "source": "shortcuts",
-            "game_id": "shortcuts_1",
-            "name": "Hollow Knight",
-            "executable": "x",
-            "added": 0,
-            **fields,
-        }
-    )
-
-
-def test_an_empty_library_gets_everything_back(win) -> None:
-    """O caso principal: formatou o computador, reimportou os jogos."""
-    fresh = game()
-    entry = {
-        "playtime": 7200,
-        "status": "beaten",
-        "rating": 4,
-        "notes": "Parei no capítulo 4.",
-    }
-
-    assert restore_into(fresh, entry) is True
-    assert fresh.playtime == 7200
-    assert fresh.status == "beaten"
-    assert fresh.rating == 4
-    assert fresh.notes == "Parei no capítulo 4."
-
-
-def test_the_playtime_adds_up(win) -> None:
-    """O backup é uma parcela do total, não o total: restaurar o de outra
-    máquina na mesma biblioteca tem de dar a soma das duas."""
-    played = game(playtime=3600)
-
-    assert restore_into(played, {"playtime": 1800}) is True
-    assert played.playtime == 5400
-
-
-def test_what_is_already_filled_in_survives(win) -> None:
-    """O que está na biblioteca agora é mais novo que o que está no arquivo."""
-    current = game(status="playing", rating=5, notes="Nota de agora")
-    entry = {"status": "dropped", "rating": 1, "notes": "Nota velha"}
-
-    assert restore_into(current, entry) is False
-    assert current.status == "playing"
-    assert current.rating == 5
-    assert current.notes == "Nota de agora"
-
-
-def test_importing_the_same_file_twice_only_doubles_the_playtime(win) -> None:
-    """O preço conhecido do tempo somar. Os outros três ficam de pé."""
-    fresh = game()
-    entry = {"playtime": 3600, "status": "beaten", "rating": 3, "notes": "Zerei"}
-
-    restore_into(fresh, entry)
-    restore_into(fresh, entry)
-
-    assert fresh.playtime == 7200
-    assert (fresh.status, fresh.rating, fresh.notes) == ("beaten", 3, "Zerei")
-
-
-@pytest.mark.parametrize(
-    "entry",
-    (
-        {"status": "zerado"},  # o rótulo, e não a chave
-        {"status": 3},
-        {"status": ""},
-        {"rating": 9},  # fora de 1–5
-        {"rating": -1},
-        {"rating": "ótimo"},
-        {"playtime": "muito"},
-        {"playtime": -3600},  # nunca tira tempo de ninguém
-        {"notes": "   \n  "},  # espaço não é anotação
-        {"notes": 42},
-        {},
-    ),
-)
-def test_a_hand_edited_file_cannot_write_nonsense(win, entry) -> None:
-    """Um valor que o app não sabe exibir é descartado na entrada, e não
-    gravado para quebrar uma tela mais adiante."""
-    fresh = game()
-
-    assert restore_into(fresh, entry) is False
-    assert (fresh.playtime, fresh.status, fresh.rating, fresh.notes) == (0, "", 0, "")
-
-
-def test_a_version_1_entry_still_restores(win) -> None:
-    """Backups salvos quando o arquivo só levava tempo de jogo continuam
-    valendo: eles trazem menos campos, e é só."""
-    fresh = game()
-
-    assert restore_into(fresh, {"name": "Hollow Knight", "playtime": 3600}) is True
-    assert fresh.playtime == 3600
 
 
 # --------------------------------------------------------------------------
@@ -803,3 +702,55 @@ def test_forcar_appids_salva_e_atualiza_cada_jogo(store, make_game, monkeypatch,
 
     assert jogo.saves == 1
     assert jogo.updates == 1
+
+
+# --------------------------------------------------------------------------
+# A tela de verdade (Preferências)
+# --------------------------------------------------------------------------
+
+
+def test_import_backup_confirma_e_restaura_ao_vivo(
+    monkeypatch, app_dirs, settings, store, make_game, tmp_path, win, flush_idle
+) -> None:
+    import cartridges.preferences as preferences_module
+    from tests.test_auditoria_0918_fitas import _dialogo_de_arquivo
+    from tests.test_session_fita import _preferencias
+
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+
+    jogo = make_game(game_id="a", steam_appid="1", name="Jogo")
+    store.add_game(jogo, {})
+    destino, _chave = _backup_com_um_jogo(tmp_path, appid="1", playtime=42)
+
+    _dialogo_de_arquivo(monkeypatch, destino)
+    preferences = _preferencias(monkeypatch)
+    toasts = []
+    monkeypatch.setattr(preferences, "add_toast", toasts.append)
+
+    respostas = []
+
+    class Pergunta:
+        def connect(self, _sinal, callback) -> None:
+            respostas.append(callback)
+
+    monkeypatch.setattr(preferences_module, "create_dialog", lambda *_a, **_k: Pergunta())
+
+    preferences.import_backup()
+    respostas[0](None, "restore")
+
+    import time  # noqa: PLC0415
+
+    deadline = time.monotonic() + 10
+    while jogo.playtime != 42:
+        assert time.monotonic() < deadline
+        flush_idle()
+        time.sleep(0.01)
+    # `jogo.playtime` muda em `update_values`, direto na thread de fundo, sem
+    # `idle_add` — o laço acima pode sair assim que isso acontece, antes de
+    # `_restore_done` (que só chega por `GLib.idle_add`, depois de
+    # `backup.restaurar` retornar) ter sido processado. Uma última passada
+    # garante que o toast final já foi lido da fila antes do assert.
+    flush_idle()
+
+    assert any("Restaurado" in toast.get_title() for toast in toasts)
