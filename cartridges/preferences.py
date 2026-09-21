@@ -213,7 +213,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
         self.sgdb_key_group.set_description(
             _(
-                "É necessária uma chave de API para usar o SteamGridDB. Você pode gerar uma {}aqui{}."
+                "É necessária uma chave de API para usar o SteamGridDB. {}Obtenha aqui{}."
             ).format(
                 '<a href="https://www.steamgriddb.com/profile/preferences/api">', "</a>"
             )
@@ -428,7 +428,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         shared.schema.set_boolean("session-move-window", False)
         shared.schema.set_boolean("session-wallpaper", False)
 
-        subtitle = _("Precisa de um segundo monitor")
+        subtitle = _("Necessário segundo monitor")
         self.session_move_window_switch.set_subtitle(subtitle)
         self.session_wallpaper_switch.set_subtitle(subtitle)
         self.session_monitor_group.set_sensitive(False)
@@ -632,7 +632,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                         "rede pode ter mudado — configure as fitas de novo"
                     ).format(", ".join(mudas))
                     if mudas
-                    else _("Todas responderam")
+                    else _("Teste concluído")
                 )
             return False
 
@@ -716,10 +716,9 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         dialog = Adw.AlertDialog.new(
             _("Atualizar metadados"),
             _(
-                "Buscar apenas o que falta trata {} de {} jogos, consultando de cada "
-                "um só a fonte que lhe deve algo. É o suficiente para preencher "
-                "campos novos. Buscar tudo relê a biblioteca inteira na Steam e no "
-                "HowLongToBeat, e leva bem mais tempo."
+                "Buscar apenas o que falta trata {} de {} jogos, consultando somente "
+                "os campos ausentes. Buscar tudo preenche todos os campos, podendo "
+                "levar mais tempo."
             ).format(len(incomplete), len(games)),
         )
         dialog.add_response("cancel", _("Cancelar"))
@@ -740,7 +739,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             # be plainly wrong.
             self.add_toast(
                 Adw.Toast.new(
-                    _("Nada a atualizar")
+                    _("Sem atualizações")
                     if not wanted
                     else _("Uma atualização já está em andamento")
                 )
@@ -776,10 +775,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         """Ask for confirmation, then wipe the whole library (irreversible)."""
         dialog = Adw.AlertDialog.new(
             _("Resetar o aplicativo?"),
-            _(
-                "Isso apaga todos os jogos e capas e esquece a pasta de atalhos "
-                "configurada. Não é possível desfazer."
-            ),
+            _("Apaga todos os jogos e configurações! Não é possível desfazer."),
         )
         dialog.add_response("cancel", _("Cancelar"))
         dialog.add_response("reset", _("Resetar"))

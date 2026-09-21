@@ -59,7 +59,7 @@ template $FitaWizard: Adw.Dialog {
                 visible: false;
                 wrap: true;
                 justify: center;
-                label: _("Nada encontrado. Confira as credenciais e a região.");
+                label: _("Nenhum dispositivo encontrado. Confira as credenciais e a região.");
 
                 styles [
                   "error",
@@ -85,13 +85,13 @@ template $FitaWizard: Adw.Dialog {
 
         child: Adw.PreferencesPage {
           Adw.PreferencesGroup dispositivos_group {
-            title: _("Quais desses são as fitas dos monitores?");
+            title: _("Selecione as fitas de LED");
             description: _("Ao salvar, só os marcados ficam na configuração. Desmarcar uma fita a remove.");
           }
 
           Adw.PreferencesGroup {
             Button salvar_button {
-              label: _("Salvar");
+              label: _("Aplicar");
               halign: center;
 
               styles [
@@ -108,7 +108,7 @@ template $FitaWizard: Adw.Dialog {
 
         child: Adw.StatusPage {
           title: _("Buscando as fitas…");
-          description: _("Primeiro na sua conta da Tuya, depois na rede de casa. Leva uns quinze segundos.");
+          description: _("Primeiro na nuvem, depois na rede de casa.");
 
           child: Adw.Spinner {
             width-request: 32;

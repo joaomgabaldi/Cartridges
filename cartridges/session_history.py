@@ -408,14 +408,7 @@ class SessionHistoryDialog(Adw.Dialog):
             self.update_chart()
 
         if not sessions:
-            self.group.set_description(
-                _(
-                    "Nenhuma sessão registrada. O histórico começa a ser gravado "
-                    "nas partidas a partir desta versão — o tempo de jogo somado "
-                    "antes dela continua no total, mas sem as sessões que o "
-                    "formaram."
-                )
-            )
+            self.group.set_description(_("Nenhuma sessão registrada."))
             return
 
         self.group.set_description(

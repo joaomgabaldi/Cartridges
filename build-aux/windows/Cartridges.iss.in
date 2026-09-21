@@ -177,15 +177,14 @@ begin
   NvidiaPage := CreateInputOptionPage(wpLicense,
     'Placa de vídeo NVIDIA',
     'Uma configuração do driver é necessária depois de instalar',
-    'Com placa de vídeo NVIDIA, a janela do Cartridges ganha uma moldura preta ' +
-    'quando não está maximizada. Para evitar isso, depois de instalar:' + #13#10 + #13#10 +
+    'Com placas NVIDIA, é necessário realizar o seguinte ajuste após instalação:' + #13#10 + #13#10 +
     '1. Abra o Painel de Controle NVIDIA, em Gerenciar as configurações 3D.' + #13#10 +
     '2. Na aba Configurações de programa, adicione o pythonw.exe da pasta bin da ' +
     'instalação (por padrão, C:\Program Files\Cartridges\bin).' + #13#10 +
     '3. No método de apresentação Vulkan/OpenGL ("Vulkan/OpenGL present method"), ' +
     'escolha "Preferir nativo" ("Prefer native") e aplique.',
     False, False);
-  NvidiaPage.Add('Estou ciente de que preciso fazer essa configuração depois de instalar');
+  NvidiaPage.Add('Ciente');
   NvidiaPage.CheckListBox.OnClickCheck := @NvidiaPageCheckClick;
 end;
 
@@ -206,7 +205,7 @@ begin
     // Accented, like every other string here. The compiler reads this file as
     // UTF-8 whether or not it carries a byte order mark — compiling the same
     // script with and without one produces byte-identical installers.
-    if MsgBox('Remover também seus jogos, capas e configurações?' + #13#10 +
+    if MsgBox('Remover também seus jogos e configurações?' + #13#10 +
               'Escolha Não para preservar sua biblioteca, por exemplo se for ' +
               'reinstalar o aplicativo depois.',
               mbConfirmation, MB_YESNO) = IDYES then

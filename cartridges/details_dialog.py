@@ -600,10 +600,7 @@ class DetailsDialog(Adw.Dialog):
             create_dialog(
                 self,
                 _("Não foi possível salvar"),
-                _(
-                    "Informe o nome do executável para rastrear o processo, ou "
-                    "desative essa opção."
-                ),
+                _("Informe o nome do executável para rastrear o tempo de jogo."),
             )
             return
 
@@ -1058,7 +1055,7 @@ class DetailsDialog(Adw.Dialog):
     def update_wallpaper_row(self) -> None:
         if not self._has_secondary_monitor:
             self.wallpaper_row.set_sensitive(False)
-            self.wallpaper_row.set_subtitle(_("Precisa de um segundo monitor"))
+            self.wallpaper_row.set_subtitle(_("Necessário segundo monitor"))
             return
 
         if self._wallpaper_choice:
@@ -1142,7 +1139,7 @@ class DetailsDialog(Adw.Dialog):
         )
         self.fita_button_reset.set_visible(manual)
         self.fita_row.set_subtitle(
-            _("Escolhida por você") if manual else _("Tirada da capa")
+            _("Escolhida manualmente") if manual else _("Extraída da capa")
         )
 
     def desenhar_amostra(self, _area: Any, contexto: Any, largura: int, altura: int) -> None:
@@ -1318,8 +1315,8 @@ class DetailsDialog(Adw.Dialog):
             self.end_loading()
             create_dialog(
                 self,
-                _("Nada encontrado na Steam"),
-                _("Confira o título e a conexão e tente novamente."),
+                _("Jogo não encontrado na Steam"),
+                _("Confira o título e tente novamente."),
             )
             return False
 

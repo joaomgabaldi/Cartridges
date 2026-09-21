@@ -491,7 +491,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # nele, e é o único jogo que o bloqueador tem para oferecer.
         self.session_game = game
         # The variable is the name of the game currently being played
-        self.session_blocker_label.set_label(_("{} em andamento").format(game.name))
+        self.session_blocker_label.set_label(_("{} em execução").format(game.name))
         # The opaque overlay covers the whole window content (including the
         # header bar) so "Jogar" can't start a second session; the window can
         # still be moved/closed via the taskbar or system shortcuts
@@ -1578,9 +1578,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
         self.toast_queue.add(
             Adw.Toast.new(
-                _("Novidades atualizadas")
+                _("Feed atualizado")
                 if success
-                else _("Não foi possível atualizar as novidades")
+                else _("Não foi possível atualizar o feed")
             )
         )
 
@@ -1595,7 +1595,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # Timeout 0 means "stay until dismissed": the toast is a progress
         # indicator, so it has to outlive an arbitrarily slow request and be
         # replaced by the result rather than time out on its own.
-        toast = Adw.Toast.new(_("Atualizando novidades…"))
+        toast = Adw.Toast.new(_("Atualizando feed…"))
         toast.set_timeout(0)
         self._news_refresh_toast = toast
         self.toast_queue.add(toast)
@@ -1679,7 +1679,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         if post.url:
             open_row = Adw.ActionRow(activatable=True)
             open_row.set_use_markup(False)
-            open_row.set_title(_("Abrir publicação"))
+            open_row.set_title(_("Abrir no navegador"))
             open_row.add_suffix(
                 Gtk.Image(
                     icon_name="adw-external-link-symbolic",

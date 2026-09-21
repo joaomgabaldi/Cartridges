@@ -352,9 +352,7 @@ class ProcessSession:
         if never_launched:
             toast = Adw.Toast.new(
                 # The variable is the game's title
-                _("{} não parece ter iniciado; nada foi registrado").format(
-                    self.game.name
-                )
+                _("{} não parece ter iniciado").format(self.game.name)
             )
             # Same reason as the session toast below: the game's name is
             # interpolated into a title Adw.Toast parses as Pango markup by

@@ -109,9 +109,8 @@ ABOUT_DIALOG_STRINGS = {
     "To assist in troubleshooting, you can view your debugging information. "
     "Providing this information to the application developers can help "
     "diagnose any problems you encounter when you report an issue.": (
-        "Para ajudar a resolver problemas, você pode ver as informações de "
-        "depuração. Fornecer essas informações a quem desenvolve o aplicativo "
-        "ajuda a diagnosticar qualquer problema que você encontrar."
+        "Para ajudar a resolver problemas, abaixo as informações de "
+        "depuração. Forneça essas informações ao seu pedido de suporte."
     ),
 }
 
@@ -331,8 +330,8 @@ class CartridgesApplication(Adw.Application):
         search.flags = 0
         search.arg = int(GLib.OptionArg.STRING)
         search.arg_data = None
-        search.description = "Open the app with this term in the search entry"
-        search.arg_description = "TERM"
+        search.description = "Abre o app já com este termo no campo de busca"
+        search.arg_description = "TERMO"
 
         self.add_main_option_entries((search,))
 
