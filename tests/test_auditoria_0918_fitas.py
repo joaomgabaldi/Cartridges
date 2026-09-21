@@ -317,10 +317,13 @@ def _dialogo_de_arquivo(monkeypatch, caminho):
     return preferences_module
 
 
-def test_b7_exportar_por_cima_nao_trunca_o_backup_antigo(monkeypatch, tmp_path):
+def test_b7_exportar_por_cima_nao_trunca_o_backup_antigo(
+    monkeypatch, store, make_game, tmp_path
+):
     """Hoje o backup é o .zip de `utils/backup.py`; a garantia é a mesma."""
     destino = tmp_path / "backup.zip"
     destino.write_bytes(b"backup antigo")
+    store.add_game(make_game(game_id="a"), {})
     (shared.covers_dir / "a.tiff").write_bytes(b"capa")
 
     def cai_no_meio(*_args, **_kwargs):

@@ -30,10 +30,10 @@ from typing import Any, Iterable, Optional
 from gi.repository import Gio, GLib
 
 from cartridges import shared
-from cartridges.utils import session_log
+from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper
 from cartridges.utils.name_cleaner import clean_for_search
 
-VERSAO = 3
+VERSAO = 4
 
 _MANIFESTO = "backup.json"
 
@@ -107,24 +107,6 @@ def _agrupar_por_identidade(jogos: Iterable[Any]) -> dict[str, tuple[str, list[A
         else:
             grupos[chave] = (tipo, [jogo])
     return grupos
-
-
-def _pastas() -> dict[str, Path]:
-    # Resolvido a cada chamada: os testes repontam `shared`.
-    return {
-        "games": shared.games_dir,
-        "covers": shared.covers_dir,
-        "logos": shared.logos_dir,
-        "wallpapers": shared.wallpapers_dir,
-        "fitas": shared.fitas_dir,
-    }
-
-
-def _arquivos() -> dict[str, Path]:
-    return {
-        "fitas.json": shared.fitas_arquivo,
-        "sessions.jsonl": session_log._path(),  # pylint: disable=protected-access
-    }
 
 
 def _pendente() -> Path:
@@ -210,14 +192,86 @@ def _incluir(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
         logging.debug("%s sumiu durante o backup", caminho)
 
 
+def _jogos_exportaveis(jogos_ativos: list[Any]) -> dict[str, Any]:
+    """hash -> jogo, só para identidades sem colisão entre jogos locais.
+
+    Duas cópias locais do mesmo jogo (mesmo appID, ou mesmo nome sem appID)
+    não têm como decidir de qual delas vem a opinião a exportar — a
+    identidade sai do backup inteira, dos dois lados, em vez de chutar uma.
+    """
+    grupos = _agrupar_por_identidade(jogos_ativos)
+    return {chave: alvos[0] for chave, (_tipo, alvos) in grupos.items() if len(alvos) == 1}
+
+
+def _entrada_do_jogo(jogo: Any, sessoes: list[dict[str, int]]) -> dict[str, Any]:
+    entrada: dict[str, Any] = {campo: getattr(jogo, campo) for campo in CAMPOS_OPINIAO}
+    entrada["identidade_exibicao"] = jogo.steam_appid or jogo.name
+    entrada["sessoes"] = sessoes
+
+    if session_wallpaper.escolha(jogo) == "manual":
+        posicoes = session_wallpaper.posicoes_escolhidas(jogo.game_id)
+        entrada["wallpaper_posicao_retrato"] = posicoes.retrato
+        entrada["wallpaper_posicao_paisagem"] = posicoes.paisagem
+
+    cor = session_fita.cor_escolhida(jogo.game_id)
+    if cor is not None:
+        entrada["fita_matiz"] = cor.matiz
+        entrada["fita_saturacao"] = cor.saturacao
+        entrada["fita_brilho"] = cor.brilho
+
+    return entrada
+
+
+def _assets_do_jogo(jogo: Any) -> list[tuple[Path, str]]:
+    """Lista (caminho_no_disco, nome_no_zip) dos arquivos deste jogo, só os
+    escolhidos à mão — um logo/parede automático é recarregado sozinho pelo
+    pipeline normal, não vale o espaço no backup."""
+    assets: list[tuple[Path, str]] = []
+
+    capa = jogo.get_cover_path()
+    if capa is not None:
+        assets.append((capa, f"capa{capa.suffix.lower()}"))
+
+    if game_logo.logo_choice(jogo) == "manual":
+        logo = game_logo.cached_logo_path(jogo)
+        if logo is not None:
+            assets.append((logo, f"logo{logo.suffix.lower()}"))
+
+    if session_wallpaper.escolha(jogo) == "manual":
+        parede = session_wallpaper.imagem_escolhida(jogo.game_id)
+        if parede is not None:
+            assets.append((parede, f"wallpaper{parede.suffix.lower()}"))
+
+    return assets
+
+
 def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
     """Grava o backup em ``destino``. Pode rodar fora da thread principal."""
+    jogos_ativos = [jogo for jogo in shared.store if not jogo.removed]
+    exportaveis = _jogos_exportaveis(jogos_ativos)
+    game_id_para_hash = {jogo.game_id: chave for chave, jogo in exportaveis.items()}
+
+    sessoes_por_hash: dict[str, list[dict[str, int]]] = {}
+    for sessao in session_log.load():
+        chave = game_id_para_hash.get(sessao["game_id"])
+        if chave is not None:
+            sessoes_por_hash.setdefault(chave, []).append(
+                {"end": sessao["end"], "seconds": sessao["seconds"]}
+            )
+
+    jogos_manifesto = {
+        chave: _entrada_do_jogo(jogo, sessoes_por_hash.get(chave, []))
+        for chave, jogo in exportaveis.items()
+    }
+
     manifesto = {
         "version": VERSAO,
         "app_version": shared.VERSION,
         "created": int(time()),
         **configuracoes,
+        "jogos": jogos_manifesto,
     }
+
     # Temporário + troca: exportar por cima de um backup antigo e cair no meio
     # deixaria o antigo perdido e o novo ilegível.
     temporario = destino.with_name(destino.name + ".tmp")
@@ -230,15 +284,11 @@ def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
                 json.dumps(manifesto, indent=2, ensure_ascii=False),
                 compress_type=zipfile.ZIP_DEFLATED,
             )
-            for nome, pasta in _pastas().items():
-                if not pasta.is_dir():
-                    continue
-                for caminho in sorted(pasta.iterdir()):
-                    if caminho.is_file() and caminho.suffix != ".tmp":
-                        _incluir(arquivo, caminho, f"{nome}/{caminho.name}")
-            for nome, caminho in _arquivos().items():
-                if caminho.is_file():
-                    _incluir(arquivo, caminho, nome)
+            for chave, jogo in exportaveis.items():
+                for caminho, nome_do_asset in _assets_do_jogo(jogo):
+                    _incluir(arquivo, caminho, f"jogos/{chave}/{nome_do_asset}")
+            if shared.fitas_arquivo.is_file():
+                _incluir(arquivo, shared.fitas_arquivo, "fitas.json")
         temporario.replace(destino)
     finally:
         temporario.unlink(missing_ok=True)

@@ -445,3 +445,125 @@ def test_agrupar_mantem_jogos_sem_colisao_separados(store, make_game) -> None:
     outro = make_game(game_id="b", name="Hades")
     grupos = backup._agrupar_por_identidade([um, outro])
     assert len(grupos) == 2
+
+
+# --------------------------------------------------------------------------
+# Exportação por identidade
+# --------------------------------------------------------------------------
+
+
+def test_exportar_leva_so_campos_de_opiniao_por_identidade(
+    store, make_game, settings, tmp_path
+) -> None:
+    jogo = make_game(
+        game_id="a", steam_appid="367520", name="Hollow Knight",
+        playtime=7200, status="beaten", rating=4, notes="Bom jogo",
+        hidden=True, run_as_admin=True, track_process=True,
+        process_executable="hk.exe", track_updates=True, last_played=123,
+        # campos que NUNCA devem ir para o backup:
+        executable="C:\\jogo\\hk.exe", source="shortcuts",
+        developer="Team Cherry", steam_checked=99,
+    )
+    store.add_game(jogo, {})
+
+    destino = tmp_path / "b.zip"
+    backup.exportar(destino, backup.ler_configuracoes())
+
+    manifesto = backup.validar(destino)
+    chave = backup._hash_identidade("steam:367520")
+    entrada = manifesto["jogos"][chave]
+
+    assert entrada["playtime"] == 7200
+    assert entrada["status"] == "beaten"
+    assert entrada["rating"] == 4
+    assert entrada["notes"] == "Bom jogo"
+    assert entrada["hidden"] is True
+    assert entrada["run_as_admin"] is True
+    assert entrada["track_process"] is True
+    assert entrada["process_executable"] == "hk.exe"
+    assert entrada["track_updates"] is True
+    assert entrada["last_played"] == 123
+    assert entrada["identidade_exibicao"] == "367520"
+    for campo_proibido in ("executable", "source", "developer", "steam_checked", "game_id"):
+        assert campo_proibido not in entrada
+
+
+def test_exportar_ignora_jogos_removidos(store, make_game, settings, tmp_path) -> None:
+    tumba = make_game(game_id="a", name="Jogo Removido", removed=True)
+    store.add_game(tumba, {})
+
+    destino = tmp_path / "b.zip"
+    backup.exportar(destino, backup.ler_configuracoes())
+    manifesto = backup.validar(destino)
+    assert manifesto["jogos"] == {}
+
+
+def test_exportar_exclui_identidade_colidida_mesmo_com_appid(
+    store, make_game, settings, tmp_path
+) -> None:
+    """Duas cópias locais do mesmo jogo: não dá pra saber de qual exportar a
+    opinião, então nenhuma das duas entra no backup."""
+    um = make_game(game_id="a", steam_appid="1", name="Jogo A", playtime=10)
+    outro = make_game(game_id="b", steam_appid="1", name="Jogo B", playtime=99)
+    store.add_game(um, {})
+    store.add_game(outro, {})
+
+    destino = tmp_path / "b.zip"
+    backup.exportar(destino, backup.ler_configuracoes())
+    manifesto = backup.validar(destino)
+    assert manifesto["jogos"] == {}
+
+
+def test_exportar_leva_capa_logo_parede_e_fita_quando_escolhidos(
+    store, make_game, app_dirs, settings, tmp_path
+) -> None:
+    from cartridges.utils import game_logo, session_fita, session_wallpaper
+
+    jogo = make_game(game_id="a", steam_appid="1", name="Jogo")
+    store.add_game(jogo, {})
+
+    (app_dirs.covers / "a.tiff").write_bytes(b"capa")
+    origem_logo = tmp_path / "origem_logo.png"
+    origem_logo.write_bytes(b"logo")
+    game_logo.save_manual_logo("a", "Jogo", origem_logo)
+    origem_parede = tmp_path / "origem_parede.jpg"
+    origem_parede.write_bytes(b"parede")
+    session_wallpaper.salvar_escolha(
+        "a", "Jogo", origem_parede, session_wallpaper.Posicoes(0.3, 0.7)
+    )
+    session_fita.salvar_cor("a", "Jogo", session_fita.Cor(100, 500, 900))
+
+    destino = tmp_path / "b.zip"
+    backup.exportar(destino, backup.ler_configuracoes())
+
+    chave = backup._hash_identidade("steam:1")
+    with zipfile.ZipFile(destino) as arquivo:
+        nomes = arquivo.namelist()
+    assert f"jogos/{chave}/capa.tiff" in nomes
+    assert any(nome.startswith(f"jogos/{chave}/logo.") for nome in nomes)
+    assert any(nome.startswith(f"jogos/{chave}/wallpaper.") for nome in nomes)
+
+    manifesto = backup.validar(destino)
+    entrada = manifesto["jogos"][chave]
+    assert entrada["wallpaper_posicao_retrato"] == 0.3
+    assert entrada["wallpaper_posicao_paisagem"] == 0.7
+    assert entrada["fita_matiz"] == 100
+    assert entrada["fita_saturacao"] == 500
+    assert entrada["fita_brilho"] == 900
+
+
+def test_exportar_traduz_sessoes_para_identidade(
+    store, make_game, app_dirs, settings, tmp_path
+) -> None:
+    from cartridges.utils import session_log
+
+    jogo = make_game(game_id="a", steam_appid="1", name="Jogo")
+    store.add_game(jogo, {})
+    session_log.record("a", 3600, end=1_700_000_000)
+
+    destino = tmp_path / "b.zip"
+    backup.exportar(destino, backup.ler_configuracoes())
+    manifesto = backup.validar(destino)
+
+    chave = backup._hash_identidade("steam:1")
+    assert manifesto["jogos"][chave]["sessoes"] == [{"end": 1_700_000_000, "seconds": 3600}]

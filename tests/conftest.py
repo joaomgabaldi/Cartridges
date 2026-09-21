@@ -438,6 +438,9 @@ class FakeGame:
         self.process_executable = overrides.pop("process_executable", "")
         self.status = overrides.pop("status", "")
         self.notes = overrides.pop("notes", "")
+        self.rating = overrides.pop("rating", 0)
+        self.track_updates = overrides.pop("track_updates", False)
+        self.steam_appid = overrides.pop("steam_appid", None)
         for key, value in overrides.items():
             setattr(self, key, value)
         # Derived exactly the way Game.__init__ derives it.
@@ -454,6 +457,15 @@ class FakeGame:
 
     def connect(self, signal, callback) -> None:
         self.signals.append((signal, callback))
+
+    def get_cover_path(self) -> Path | None:
+        # Duck-types Game.get_cover_path: the backup exporter calls this on
+        # whatever `shared.store` holds, real Game or this fake.
+        for suffix in (".gif", ".webp", ".tiff"):
+            cover_path = shared.covers_dir / f"{self.game_id}{suffix}"
+            if cover_path.is_file():
+                return cover_path
+        return None
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"<FakeGame {self.game_id} removed={self.removed}>"
