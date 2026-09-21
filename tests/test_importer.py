@@ -20,6 +20,7 @@ own flag.
 import pytest
 
 from cartridges import shared
+from cartridges.errors.friendly_error import FriendlyError
 from cartridges.importer.importer import Importer
 from cartridges.importer.location import UnresolvableLocationError
 from cartridges.importer.source import SourceScanError
@@ -103,11 +104,18 @@ def test_generic_exception_does_not_mark_the_source(importer, make_game):
 
 def test_source_scan_error_does_not_mark_and_reaches_the_user(importer):
     """T2.3 A scan that quietly produces half a library is worse than one that says so."""
-    source = FakeSource(raises=SourceScanError("could not resolve any .lnk"))
+    source = FakeSource(
+        raises=SourceScanError("Não foi possível ler os atalhos", "PowerShell ausente")
+    )
     scan(importer, source)
 
     assert "shortcuts" not in importer.scanned_source_ids
-    assert any(isinstance(error, SourceScanError) for error in importer.errors)
+    errors = [e for e in importer.errors if isinstance(e, SourceScanError)]
+    assert errors
+    # A FriendlyError is what makes the importer's warning dialog show it
+    # instead of silently dropping it as an unrecognised exception type.
+    assert isinstance(errors[0], FriendlyError)
+    assert errors[0].title == "Não foi possível ler os atalhos"
 
 
 def test_unavailable_source_does_not_mark(importer):

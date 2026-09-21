@@ -350,7 +350,11 @@ class ShortcutsSourceIterable(SourceIterable):
         # so the batch is what has to be checked.
         if lnk_files and not lnk_data:
             raise SourceScanError(
-                f"could not resolve any of {len(lnk_files)} .lnk shortcuts"
+                _("Não foi possível ler os atalhos"),
+                _(
+                    "O Windows não conseguiu resolver os atalhos (.lnk) da pasta. "
+                    "Verifique se o PowerShell está disponível e tente importar de novo."
+                ),
             )
 
         # Map shortcut grouping AUMIDs to real, launchable ones (Xbox/Store).
@@ -377,7 +381,13 @@ class ShortcutsSourceIterable(SourceIterable):
         # whole session of a failing lookup should not cost that in the first
         # place.
         if needs_start_apps and not start_apps:
-            raise SourceScanError("could not list Start apps")
+            raise SourceScanError(
+                _("Não foi possível ler os aplicativos do menu Iniciar"),
+                _(
+                    "Isso afeta jogos da Microsoft Store e do Game Pass. Verifique "
+                    "se o PowerShell está disponível e tente importar de novo."
+                ),
+            )
         self._aumid_by_name = {name.casefold(): appid for name, appid in start_apps}
         self._aumid_by_pkgkey = {}
         for _name, appid in start_apps:

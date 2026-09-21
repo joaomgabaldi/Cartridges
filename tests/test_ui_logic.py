@@ -505,6 +505,23 @@ def test_the_folder_button_is_hidden_on_an_empty_dialog(details_dialog):
     assert details_dialog.open_folder_button.get_visible() is False
 
 
+def test_open_game_folder_tells_the_user_when_it_fails(details_dialog, monkeypatch):
+    """The folder can vanish between the button appearing and the click — that
+    used to only reach the log, leaving the click looking like it did nothing."""
+    from cartridges import details_dialog as modulo  # noqa: PLC0415
+
+    details_dialog._game_folder = "C:\\Some\\Folder"  # pylint: disable=protected-access
+    monkeypatch.setattr(modulo, "open_folder", lambda _directory: False)
+    shown = []
+    monkeypatch.setattr(
+        modulo, "create_dialog", lambda *args, **_kw: shown.append(args)
+    )
+
+    details_dialog.open_game_folder()
+
+    assert shown
+
+
 def test_the_rows_are_filled_from_the_game(win):
     """Opening the dialog on a game shows what it already holds."""
     from cartridges.details_dialog import DetailsDialog

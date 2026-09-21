@@ -52,6 +52,9 @@
           <li>O assistente das fitas de LED salva o Access ID e o Access Secret da conta da Tuya (criptografados, presos a esta conta do Windows) depois de uma busca com sucesso, e não pede mais os dois de novo toda vez que o assistente é reaberto</li>
           <li>Revisão de textos pelo app inteiro: frases mais curtas e diretas nas Preferências (fitas de LED, atualização de metadados, SteamGridDB), no assistente de fitas, na tela de detalhes, na tela Sobre e no instalador, além de dois deslizes de português corrigidos ("removê-la", "à cor padrão")</li>
           <li>O tempo de jogo perto de uma hora não mostra mais "60 min": 59 min e 59 s agora aparece como "1 hora"</li>
+          <li>O botão de abrir a pasta do jogo, na tela de editar detalhes, agora avisa quando a pasta não existe mais, em vez de não fazer nada visivelmente</li>
+          <li>Uma falha ao ler os atalhos (.lnk) ou os aplicativos do menu Iniciar durante a importação agora aparece como aviso, em vez de ficar só no log e a importação seguir como se nada tivesse acontecido</li>
+          <li>Uma chave inválida do SteamGridDB agora avisa também durante "Atualizar metadados"/"Atualizar capas" pelas Preferências — antes só avisava durante a importação, e ficava em silêncio nesse outro caminho</li>
         </ul>
       </description>
     </release>

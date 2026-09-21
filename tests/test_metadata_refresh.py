@@ -22,6 +22,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from cartridges.errors.friendly_error import FriendlyError  # noqa: E402
 from cartridges.metadata_refresh import MetadataRefresh  # noqa: E402
 from cartridges.utils.steam import STEAM_METADATA_VERSION  # noqa: E402
 
@@ -360,6 +361,36 @@ def test_prefetch_stringifies_a_numeric_appid(refresh, monkeypatch) -> None:
             thread.join(timeout=5)
 
     assert asked == [["440"]]
+
+
+def test_finish_shows_a_dialog_for_a_friendly_error(refresh, monkeypatch) -> None:
+    """An SGDB auth failure must reach the user during a refresh too, not just
+    the log — it already did during an import; this is the same fix, here."""
+    from cartridges import shared  # noqa: PLC0415
+    import cartridges.metadata_refresh as metadata_refresh_module  # noqa: PLC0415
+
+    error = FriendlyError(
+        "Não foi possível autenticar no SteamGridDB", "Verifique sua chave da API"
+    )
+    manager = FakeManager()
+    manager.collect_errors = lambda: [error]
+
+    shown = []
+    monkeypatch.setattr(
+        metadata_refresh_module,
+        "create_dialog",
+        lambda *args, **_kw: shown.append(args)
+        or SimpleNamespace(connect=lambda *_a: None),
+    )
+    monkeypatch.setattr(shared, "win", SimpleNamespace(), raising=False)
+
+    refresh._managers = [manager]  # pylint: disable=protected-access
+    refresh._queue = []  # pylint: disable=protected-access
+    refresh.total = 0
+    refresh.running = True
+    refresh._run_queue({})  # pylint: disable=protected-access
+
+    assert shown and shown[0][1:3] == (error.title, error.subtitle)
 
 
 # endregion

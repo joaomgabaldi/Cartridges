@@ -788,7 +788,7 @@ def test_o_teste_nao_escreve_em_tela_ja_fechada(monkeypatch, schema):
     assert preferencias.fita_testar_row.get_subtitle() == "Testando…"
     volta, argumentos = agendadas.pop()
     volta(*argumentos)
-    assert preferencias.fita_testar_row.get_subtitle() == "Todas responderam"
+    assert preferencias.fita_testar_row.get_subtitle() == "Teste concluído"
 
     preferencias.testar_fitas()
     monkeypatch.setattr(preferences_module.CartridgesPreferences, "is_open", False)
@@ -1010,7 +1010,7 @@ def test_a_linha_mostra_a_escolha_e_o_botao_de_voltar(tela):
     _com_escolha(dialog, jogo)
 
     assert dialog.fita_button_reset.get_visible()
-    assert dialog.fita_row.get_subtitle() == "Escolhida por você"
+    assert dialog.fita_row.get_subtitle() == "Escolhida manualmente"
 
 
 def test_redefinir_sem_aplicar_nao_apaga_a_escolha(tela):
@@ -1027,7 +1027,7 @@ def test_redefinir_sem_aplicar_nao_apaga_a_escolha(tela):
     assert session_fita.escolhida(jogo.game_id)
     # A tela já mostra o automático, e o botão saiu junto com a escolha.
     assert not dialog.fita_button_reset.get_visible()
-    assert dialog.fita_row.get_subtitle() == "Tirada da capa"
+    assert dialog.fita_row.get_subtitle() == "Extraída da capa"
 
 
 def test_redefinir_e_aplicar_apaga_a_escolha(tela):
