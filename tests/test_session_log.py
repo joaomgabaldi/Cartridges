@@ -204,62 +204,89 @@ def cache_logo(game, width=300, height=100):
     return path
 
 
-def test_the_logo_takes_the_place_of_the_title(real_window, store):
+def lay_out(dialog, width=1040):
+    """Aloca o conteúdo como a caixa de diálogo faz: largura fixa, altura
+    natural (a caixa não tem altura fixa, segue a tabela)."""
+    from gi.repository import Gdk, Gtk
+
+    content = dialog.get_child()
+    rect = Gdk.Rectangle()
+    rect.x, rect.y = 0, 0
+    rect.width = width
+    rect.height = content.measure(Gtk.Orientation.VERTICAL, width)[1]
+    content.size_allocate(rect, -1)
+    return content
+
+
+def bounds(widget, content):
+    ok, rect = widget.compute_bounds(content)
+    assert ok
+    return rect
+
+
+@pytest.mark.parametrize(
+    ("source", "shown"),
+    [
+        # 5,2:1, como o do Dawnwalker: manda o teto de altura (120).
+        ((2858, 552), (621, 120)),
+        # 10:1: a altura de 120 daria 1200 de largura; manda a largura útil
+        # da caixa (1040 menos as margens de 24). 992 / 10 = 99,2 de altura,
+        # que a medida do GTK arredonda para cima.
+        ((4000, 400), (992, 100)),
+    ],
+)
+def test_the_logo_takes_the_place_of_the_title(real_window, store, source, shown):
     """O logo *é* o título quando existe: os dois nunca aparecem juntos.
 
-    A largura tem de ser travada por fora. Um ``set_size_request`` no Picture
-    é um piso, não um teto: dentro do box vertical do grupo ele recebia a
-    largura inteira e crescia junto na altura — um logo de 201x72 aparecia com
-    445x160, ocupando a caixa de diálogo toda.
+    A largura é travada por fora, pelo clamp: um ``set_size_request`` no
+    Picture é piso, não teto, e ele cresceria junto na altura. A altura sai da
+    proporção do próprio logo — nunca esticado.
     """
     from gi.repository import Adw, Gtk
 
     from cartridges.session_history import SessionHistoryDialog
-    from cartridges.utils.game_logo import LOGO_MAX_HEIGHT, logo_display_size
 
     game = history_game(store)
-    cache_logo(game, width=1280, height=458)
+    cache_logo(game, width=source[0], height=source[1])
 
     dialog = SessionHistoryDialog(game)
 
-    assert not dialog.group.get_title()
-    assert dialog.logo is not None
-
+    assert dialog.name_label is None
     clamp = dialog.logo.get_parent()
     assert isinstance(clamp, Adw.Clamp)
-    width = clamp.get_maximum_size()
-    assert width == logo_display_size(1280, 458)[0]
-    # Com a largura presa, a altura sai da proporção do próprio logo
-    assert dialog.logo.measure(Gtk.Orientation.VERTICAL, width)[1] == LOGO_MAX_HEIGHT
+    assert clamp.get_maximum_size() == shown[0]
+    assert dialog.logo.measure(Gtk.Orientation.VERTICAL, shown[0])[1] == shown[1]
 
 
-def test_without_a_cached_logo_the_name_stays(real_window, store):
+def test_without_a_cached_logo_the_name_is_the_title(real_window, store):
     from cartridges.session_history import SessionHistoryDialog
 
     dialog = SessionHistoryDialog(history_game(store))
 
-    assert dialog.group.get_title() == "Probe"
     assert dialog.logo is None
+    assert dialog.name_label.get_label() == "Probe"
 
 
-def test_the_totals_summary_is_centered_and_not_the_group_description(
-    real_window, store
-):
-    """A description de um Adw.PreferencesGroup nasce alinhada à esquerda; o
-    resumo dos últimos 7/30 dias tem rótulo próprio, centralizado, para
-    combinar com o total do gráfico do outro lado."""
-    from gi.repository import Gtk
-
+def test_the_logo_and_the_summary_span_the_whole_dialog(real_window, store):
+    """Logo e resumo ficam numa faixa própria, centralizados na largura toda,
+    acima das duas colunas — e não em cima só da tabela."""
     from cartridges.session_history import SessionHistoryDialog
 
     game = history_game(store)
+    cache_logo(game, width=2858, height=552)
     session_log.record(game.game_id, 3600, end=int(time()))
 
     dialog = SessionHistoryDialog(game)
+    content = lay_out(dialog)
 
-    assert dialog.summary.get_halign() == Gtk.Align.CENTER
-    assert "Últimos 7 dias" in dialog.summary.get_label()
-    assert not dialog.group.get_description()
+    for widget in (dialog.logo, dialog.summary):
+        rect = bounds(widget, content)
+        assert abs(rect.get_x() + rect.get_width() / 2 - 520) <= 1
+    assert dialog.summary.get_label().startswith("Últimos 7 dias")
+
+    summary = bounds(dialog.summary, content)
+    columns_top = bounds(dialog.columns, content).get_y()
+    assert summary.get_y() + summary.get_height() <= columns_top
 
 
 def test_the_history_says_so_when_there_is_nothing_yet(real_window, store):
@@ -270,7 +297,8 @@ def test_the_history_says_so_when_there_is_nothing_yet(real_window, store):
     dialog = SessionHistoryDialog(history_game(store))
 
     assert dialog._rows == []
-    assert dialog.group.get_description() == "Nenhuma sessão registrada."
+    assert dialog.summary.get_label() == "Nenhuma sessão registrada."
+    assert dialog.columns.get_visible() is False
 
 
 def test_deleting_a_session_takes_its_time_off_the_total(real_window, store):
@@ -485,8 +513,7 @@ def test_the_chart_follows_the_period_and_hides_without_sessions(real_window, st
 
     game = history_game(store)
     dialog = SessionHistoryDialog(game)
-    assert dialog.chart_panel.get_visible() is False
-    assert dialog.summary_group.get_visible() is False
+    assert dialog.columns.get_visible() is False
 
     session_log.record(game.game_id, 3600)
     # Uma sessão antiga também: sem ela, a única sessão (de hoje) seria a
@@ -494,8 +521,7 @@ def test_the_chart_follows_the_period_and_hides_without_sessions(real_window, st
     # dia — o que este teste é sobre é a troca de período, não o corte.
     session_log.record(game.game_id, 60, end=int(time()) - 100 * 86400)
     dialog.rebuild()
-    assert dialog.chart_panel.get_visible() is True
-    assert dialog.summary_group.get_visible() is True
+    assert dialog.columns.get_visible() is True
     assert len(dialog.chart.days) == 30
     assert dialog.chart_total.get_label() == "1 hora no período"
 
@@ -509,43 +535,50 @@ def test_the_chart_follows_the_period_and_hides_without_sessions(real_window, st
         dialog.chart.draw(None, cairo.Context(surface), 500, 300)
 
 
-def test_the_chart_height_matches_a_short_table(real_window, store):
-    """Uma tabela baixa (poucas sessões) não fica com um gráfico esticado ao
-    lado, mas o gráfico também não encolhe abaixo do piso de legibilidade."""
-    from gi.repository import Gtk
-
+def history_with_sessions(store, count):
     from cartridges.session_history import SessionHistoryDialog
 
     game = history_game(store)
-    session_log.record(game.game_id, 3600, end=int(time()))
-
-    dialog = SessionHistoryDialog(game)
-
-    table_natural = dialog.group.measure(Gtk.Orientation.VERTICAL, -1)[1]
-    _width, chart_height = dialog.chart.get_size_request()
-    assert chart_height == max(240, table_natural)
+    for i in range(count):
+        session_log.record(game.game_id, 3600, end=int(time()) - i * 86400)
+    return SessionHistoryDialog(game)
 
 
-def test_the_chart_height_is_capped_so_a_long_table_never_overflows_it(
-    real_window, store
-):
-    """Auditoria manual, 20/09: sem teto, uma tabela comprida (que rola dentro
-    da própria coluna) pedia do gráfico uma altura maior que a caixa de
-    diálogo inteira, e ele vazava por cima dela."""
+def test_the_chart_panel_is_as_tall_as_the_table(real_window, store):
+    """O painel inteiro — seletor de período, total e desenho — ocupa a mesma
+    faixa vertical da tabela: começa e termina junto com ela."""
+    dialog = history_with_sessions(store, 7)
+    content = lay_out(dialog)
+
+    table = bounds(dialog.table, content)
+    panel = bounds(dialog.chart_panel, content)
+    assert panel.get_y() == table.get_y()
+    assert panel.get_height() == table.get_height()
+
+
+def test_a_long_table_scrolls_and_the_panel_stops_with_it(real_window, store):
+    """Passou de ~8 linhas, a tabela rola dentro da faixa em vez de esticar a
+    caixa de diálogo, e o painel do gráfico para na mesma altura."""
     from gi.repository import Gtk
 
-    from cartridges.session_history import SessionHistoryDialog
+    dialog = history_with_sessions(store, 30)
+    content = lay_out(dialog)
 
-    game = history_game(store)
-    for i in range(40):
-        session_log.record(game.game_id, 60, end=int(time()) - i * 86400)
+    visible = bounds(dialog.table.get_ancestor(Gtk.ScrolledWindow), content)
+    assert visible.get_height() <= 440
+    assert dialog.table.measure(Gtk.Orientation.VERTICAL, -1)[1] > visible.get_height()
+    assert bounds(dialog.chart_panel, content).get_height() == visible.get_height()
 
-    dialog = SessionHistoryDialog(game)
 
-    table_natural = dialog.group.measure(Gtk.Orientation.VERTICAL, -1)[1]
-    _width, chart_height = dialog.chart.get_size_request()
-    assert chart_height < table_natural
-    assert chart_height <= dialog.get_content_height()
+def test_with_one_session_the_chart_keeps_a_readable_height(real_window, store):
+    """Uma tabela de uma linha não arrasta o gráfico junto: ele fica no piso
+    legível, e a tabela fica mais baixa que o painel, sem esticar o fundo."""
+    dialog = history_with_sessions(store, 1)
+    content = lay_out(dialog)
+
+    assert bounds(dialog.chart, content).get_height() >= 240
+    table = bounds(dialog.table, content)
+    assert table.get_height() < bounds(dialog.chart_panel, content).get_height()
 
 
 def test_the_playtime_is_underlined_only_when_it_opens_something(real_window, store):

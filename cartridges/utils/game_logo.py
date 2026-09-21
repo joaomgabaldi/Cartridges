@@ -101,18 +101,23 @@ MISS_TTL_SECONDS = 7 * 24 * 60 * 60
 HIT_TTL_SECONDS = 30 * 24 * 60 * 60
 
 
-def logo_display_size(width: int, height: int) -> tuple[int, int]:
+def logo_display_size(
+    width: int,
+    height: int,
+    max_width: int = LOGO_MAX_WIDTH,
+    max_height: int = LOGO_MAX_HEIGHT,
+) -> tuple[int, int]:
     """Clamp an intrinsic logo size to the header box, keeping its ratio.
 
     Returned as an exact pair rather than as a max-height alone: the picture is
     given this size verbatim, so the aspect ratio is preserved by construction
     and the widget can never be handed a box of a different shape to letterbox
-    the logo into.
+    the logo into. The box defaults to the details page's header.
     """
     if width <= 0 or height <= 0:
         return (0, 0)
 
-    scale = min(LOGO_MAX_HEIGHT / height, LOGO_MAX_WIDTH / width)
+    scale = min(max_height / height, max_width / width)
     if scale > 1:
         # Upscaling is a last resort for tiny assets, and it stops as soon as
         # the logo is tall enough to read as a heading.
@@ -141,7 +146,9 @@ def _intrinsic_size(path: Path) -> Optional[tuple[int, int]]:
     return (texture.get_intrinsic_width(), texture.get_intrinsic_height())
 
 
-def load_logo(path: Path) -> Optional[tuple[Gdk.Texture, int]]:
+def load_logo(
+    path: Path, max_width: int = LOGO_MAX_WIDTH, max_height: int = LOGO_MAX_HEIGHT
+) -> Optional[tuple[Gdk.Texture, int]]:
     """Load a cached logo ready to be drawn as the header.
 
     Returns the texture and the width, in logical pixels, it should be given —
@@ -165,7 +172,7 @@ def load_logo(path: Path) -> Optional[tuple[Gdk.Texture, int]]:
         logging.debug("Logo %s excede %d px, ignorado", path, MAX_SOURCE_DIMENSION)
         return None
 
-    width, height = logo_display_size(*size)
+    width, height = logo_display_size(*size, max_width, max_height)
     if not (width and height):
         return None
 
