@@ -721,7 +721,15 @@ def test_import_backup_confirma_e_restaura_ao_vivo(
 
     jogo = make_game(game_id="a", steam_appid="1", name="Jogo")
     store.add_game(jogo, {})
-    destino, _chave = _backup_com_um_jogo(tmp_path, appid="1", playtime=42)
+    # `configuracoes` explícito, e não só o `steam-metadata` do schema acima:
+    # sem appid pendente (o jogo já tem um), quem mantém a varredura desligada
+    # de fato é o schema — mas deixar isso implícito faria este teste passar
+    # a bater rede de verdade (`SteamAPIManager`, sem fake aqui) se algum dia
+    # o jogo perder o appid. A intenção — sem varredura forçada — fica
+    # explícita nos dois lugares, não só num efeito colateral.
+    destino, _chave = _backup_com_um_jogo(
+        tmp_path, appid="1", playtime=42, configuracoes={"steam-metadata": False}
+    )
 
     _dialogo_de_arquivo(monkeypatch, destino)
     preferences = _preferencias(monkeypatch)
@@ -741,16 +749,20 @@ def test_import_backup_confirma_e_restaura_ao_vivo(
 
     import time  # noqa: PLC0415
 
+    # Esperar só `jogo.playtime == 42` não basta: entre `update_values`
+    # gravar o campo (direto na thread de fundo, sem `idle_add`) e o
+    # `GLib.idle_add(self._restore_done, ...)` do `work()` rodar, ainda
+    # acontecem `GLib.idle_add(_salvar_e_atualizar)`, `_extrair_asset` (3x),
+    # `_aplicar_sessoes` (I/O), o fechamento do zip, a limpeza do
+    # `TemporaryDirectory` e `_invalidar_listas` — uma janela real onde o
+    # laço poderia ver o playtime certo e sair antes do toast de resumo
+    # estar sequer enfileirado. Espera o toast diretamente, mesmo molde de
+    # `test_aplicar_configuracoes_fora_da_main_funciona_fora_da_thread_principal`
+    # (mais abaixo neste arquivo) esperando `trabalhador.is_alive()`.
     deadline = time.monotonic() + 10
-    while jogo.playtime != 42:
-        assert time.monotonic() < deadline
+    while not any("Restaurado" in toast.get_title() for toast in toasts):
+        assert time.monotonic() < deadline, "o toast de resumo não chegou"
         flush_idle()
         time.sleep(0.01)
-    # `jogo.playtime` muda em `update_values`, direto na thread de fundo, sem
-    # `idle_add` — o laço acima pode sair assim que isso acontece, antes de
-    # `_restore_done` (que só chega por `GLib.idle_add`, depois de
-    # `backup.restaurar` retornar) ter sido processado. Uma última passada
-    # garante que o toast final já foi lido da fila antes do assert.
-    flush_idle()
 
-    assert any("Restaurado" in toast.get_title() for toast in toasts)
+    assert jogo.playtime == 42

@@ -944,7 +944,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     def _restore_done(
         self,
         progress: Adw.Toast,
-        resultado: Optional[Any],
+        resultado: Optional[backup.ResultadoRestauracao],
         error: Optional[str],
     ) -> bool:
         progress.dismiss()
@@ -960,7 +960,9 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
         self.add_toast(
             Adw.Toast.new(
-                _("Restaurado: {} de {} jogos").format(resultado.casados, resultado.total)
+                ngettext(
+                    "Restaurado: {} de {} jogo", "Restaurado: {} de {} jogos", resultado.total
+                ).format(resultado.casados, resultado.total)
             )
         )
         return False
@@ -979,8 +981,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             dialog.set_body(
                 _(
                     "Há mais de um jogo chamado “{}” na biblioteca, e não é "
-                    "possível saber qual dos dois corresponde ao backup. Nenhum dos "
-                    "dois recebeu os dados."
+                    "possível saber qual dos jogos com esse nome corresponde ao "
+                    "backup. Nenhum deles recebeu os dados."
                 ).format(nomes[0])
             )
         else:
@@ -1000,7 +1002,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                   "qual corresponde a qual.")
             )
 
-        dialog.choose(shared.win)
+        dialog.choose(self)
 
     def reset_app(self, *_args: Any) -> None:
         # `app_dir` now holds the cache and the logs as well, so the first line
