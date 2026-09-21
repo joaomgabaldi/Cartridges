@@ -22,6 +22,7 @@ import json
 import logging
 import re
 import shutil
+import threading
 import zipfile
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
@@ -33,6 +34,7 @@ from gi.repository import Gio, GLib
 
 from cartridges import shared
 from cartridges.game import Game
+from cartridges.store.managers.display_manager import is_main_thread
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.utils import game_logo, save_cover, session_fita, session_log, session_wallpaper
 from cartridges.utils.name_cleaner import clean_for_search
@@ -229,6 +231,28 @@ def _aplicar_jogo(
     _aplicar_sessoes(jogo.game_id, entrada.get("sessoes") or [])
 
 
+def _aplicar_configuracoes_fora_da_main(manifesto: dict[str, Any]) -> None:
+    """`aplicar_configuracoes` grava no Gio.Settings de verdade, que dispara
+    sinais `changed::<chave>` — e handlers já conectados a eles
+    (CartridgesWindow, GamepadManager) tocam GTK direto na resposta. Só
+    seguro na thread principal. `restaurar()` roda fora dela, então isto
+    marshalla e espera terminar: o resto da função depende do valor já
+    restaurado de `steam-metadata`."""
+    if is_main_thread():
+        aplicar_configuracoes(manifesto)
+        return
+
+    concluido = threading.Event()
+
+    def aplicar() -> bool:
+        aplicar_configuracoes(manifesto)
+        concluido.set()
+        return False
+
+    GLib.idle_add(aplicar)
+    concluido.wait()
+
+
 def restaurar(
     caminho: Path,
     progresso: Optional[Callable[[int, int], None]] = None,
@@ -241,10 +265,13 @@ def restaurar(
 
     Pode (e deve, para uma biblioteca grande ou com jogos sem appID)  rodar
     fora da thread principal: cada `jogo.save()`/`jogo.update()` já vai
-    marshallado (ver `_salvar_e_atualizar`).
+    marshallado (ver `_salvar_e_atualizar`), e aplicar as configurações
+    também (ver `_aplicar_configuracoes_fora_da_main`) — os sinais
+    `changed::<chave>` do `Gio.Settings` de verdade têm handler que toca GTK
+    direto.
     """
     manifesto = validar(caminho)
-    aplicar_configuracoes(manifesto)
+    _aplicar_configuracoes_fora_da_main(manifesto)
 
     jogos_ativos = [jogo for jogo in shared.store if not jogo.removed]
     pendentes = [jogo for jogo in jogos_ativos if not jogo.steam_appid]
