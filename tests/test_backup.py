@@ -363,8 +363,18 @@ def _backup_com_um_jogo(
     """
     identidade_str = f"steam:{appid}" if appid else f"nome:{nome.casefold()}"
     chave = backup._hash_identidade(identidade_str)
-    entrada = {campo: 0 if campo != "notes" and campo != "status" and
-               campo != "process_executable" else "" for campo in backup.CAMPOS_OPINIAO}
+    entrada = {}
+    for campo in backup.CAMPOS_OPINIAO:
+        if campo in backup._CAMPOS_BOOLEANOS:
+            # `bool` de verdade: a sanitização da restauração descarta um
+            # `0`/`1` de propósito (não faz coerção truthy), então um valor
+            # numérico aqui faria esses campos nunca serem aplicados em
+            # nenhum teste que usa este helper sem passar `campos` explícito.
+            entrada[campo] = False
+        elif campo in ("notes", "status", "process_executable"):
+            entrada[campo] = ""
+        else:
+            entrada[campo] = 0
     entrada.update(campos)
     entrada["identidade_exibicao"] = appid or nome
     entrada["sessoes"] = []
@@ -664,6 +674,95 @@ def test_restaurar_nao_duplica_sessao_ja_existente(store, make_game, tmp_path, s
     assert len(session_log.load("local-x")) == 1
 
 
+def test_restaurar_descarta_posicao_de_parede_fora_da_faixa(
+    store, make_game, tmp_path, settings
+) -> None:
+    from cartridges.utils import session_wallpaper
+
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    jogo = make_game(game_id="a", steam_appid="1", name="Jogo")
+    store.add_game(jogo, {})
+    destino, chave = _backup_com_um_jogo(tmp_path, appid="1")
+
+    with zipfile.ZipFile(destino) as arquivo:
+        manifesto = json.loads(arquivo.read("backup.json"))
+    manifesto["jogos"][chave]["wallpaper_posicao_retrato"] = 1.5  # fora de 0..1
+    manifesto["jogos"][chave]["wallpaper_posicao_paisagem"] = float("nan")
+    with zipfile.ZipFile(destino, "w") as arquivo:
+        arquivo.writestr("backup.json", json.dumps(manifesto))
+        arquivo.writestr(f"jogos/{chave}/wallpaper.jpg", b"parede")
+
+    backup.restaurar(destino)
+
+    posicoes = session_wallpaper.posicoes_escolhidas("a")
+    assert (posicoes.retrato, posicoes.paisagem) == (0.5, 0.5)
+
+
+def test_restaurar_descarta_cor_de_fita_fora_da_faixa(
+    store, make_game, tmp_path, settings
+) -> None:
+    from cartridges.utils import session_fita
+
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    jogo = make_game(game_id="a", steam_appid="1", name="Jogo")
+    store.add_game(jogo, {})
+    # Matiz vai de 0 a 359 — 400 está fora da faixa que `Cor` documenta.
+    destino, _chave = _backup_com_um_jogo(
+        tmp_path, appid="1", fita_matiz=400, fita_saturacao=500, fita_brilho=900
+    )
+
+    backup.restaurar(destino)
+
+    assert session_fita.cor_escolhida("a") is None
+
+
+def test_restaurar_aplica_fitas_mesmo_com_a_varredura_cancelada(
+    store, make_game, tmp_path, settings, monkeypatch
+) -> None:
+    """`fitas.json` é configuração global, não opinião por jogo — aplica
+    junto das configurações do app, antes do ponto cancelável, não depois."""
+    main, _state = settings
+    main.set_boolean("steam-metadata", True)
+    jogo = make_game(game_id="a", name="Jogo")  # sem appid -> entraria na varredura
+    store.add_game(jogo, {})
+    destino, _chave = _backup_com_um_jogo(tmp_path, nome="Jogo")
+
+    with zipfile.ZipFile(destino) as arquivo:
+        manifesto = json.loads(arquivo.read("backup.json"))
+    with zipfile.ZipFile(destino, "w") as arquivo:
+        arquivo.writestr("backup.json", json.dumps(manifesto))
+        arquivo.writestr("fitas.json", '{"fitas": [{"nome": "Nova"}]}')
+
+    monkeypatch.setattr(backup, "_forcar_appids", lambda *a, **k: False)  # cancelado
+    resultado = backup.restaurar(destino)
+
+    assert resultado is None
+    assert shared.fitas_arquivo.read_text(encoding="utf-8") == '{"fitas": [{"nome": "Nova"}]}'
+
+
+def test_restore_done_nao_mostra_toast_contraditorio_com_ambiguidade(
+    win, monkeypatch
+) -> None:
+    """Todos os jogos do backup caindo em ambiguidade de nome dá `casados ==
+    0` — sem a checagem de `ambiguos`, isso mostrava ao mesmo tempo o alerta
+    bloqueante de ambiguidade E o toast "nenhum jogo encontrado", que se
+    contradizem."""
+    from gi.repository import Adw
+    from tests.test_session_fita import _preferencias
+
+    preferences = _preferencias(monkeypatch)
+    toasts = []
+    monkeypatch.setattr(preferences, "add_toast", toasts.append)
+
+    resultado = backup.ResultadoRestauracao(casados=0, total=2, ambiguos=["Jogo"])
+    preferences._restore_done(Adw.Toast(title="x"), resultado, None)
+
+    titulos = [toast.get_title() for toast in toasts]
+    assert not any("Nenhum dos jogos" in titulo for titulo in titulos)
+
+
 def test_aplicar_configuracoes_fora_da_main_aplica_direto_na_thread_principal(
     settings, monkeypatch
 ) -> None:
@@ -729,6 +828,12 @@ def test_aplicar_configuracoes_fora_da_main_timeout_vira_aviso(
             pass
 
         def wait(self, timeout: float | None = None) -> bool:
+            # Só simula o teto estourando se um teto de verdade foi passado:
+            # sem `timeout`, `Event.wait()` real bloqueia para sempre, então
+            # se alguém apagar o `timeout=30` do código este teste tem de
+            # parar de passar, não continuar "protegendo" um cenário que já
+            # não existe mais.
+            assert timeout is not None, "concluido.wait() chamado sem timeout"
             return False  # simula o teto estourando, sem esperar 30s de verdade
 
     monkeypatch.setattr(backup, "is_main_thread", lambda: False)

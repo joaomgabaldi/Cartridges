@@ -250,6 +250,26 @@ def _sanitizar_campos(entrada: dict[str, Any]) -> dict[str, Any]:
     return campos
 
 
+def _posicao_valida(valor: Any) -> Optional[float]:
+    """``valor`` como posição de recorte (0.0–1.0), ou ``None`` se inválido."""
+    try:
+        numero = float(valor)
+    except (TypeError, ValueError):
+        return None
+    if numero != numero or numero in (float("inf"), float("-inf")):  # NaN/infinito
+        return None
+    return numero if 0.0 <= numero <= 1.0 else None
+
+
+def _componente_de_cor_valido(valor: Any, maximo: int) -> Optional[int]:
+    """``valor`` como componente de ``Cor`` (0–``maximo``), ou ``None`` se
+    inválido — mesma faixa que ``session_fita.Cor`` documenta."""
+    convertido = _para_inteiro_finito(valor)
+    if convertido is None or not (0 <= convertido <= maximo):
+        return None
+    return convertido
+
+
 def _aplicar_jogo(
     jogo: Game, entrada: dict[str, Any], hash_id: str, arquivo: zipfile.ZipFile, tmp_dir: Path
 ) -> None:
@@ -267,19 +287,20 @@ def _aplicar_jogo(
 
     parede = _extrair_asset(arquivo, tmp_dir, hash_id, "wallpaper")
     if parede is not None:
+        retrato = _posicao_valida(entrada.get("wallpaper_posicao_retrato"))
+        paisagem = _posicao_valida(entrada.get("wallpaper_posicao_paisagem"))
         posicoes = session_wallpaper.Posicoes(
-            entrada.get("wallpaper_posicao_retrato", 0.5),
-            entrada.get("wallpaper_posicao_paisagem", 0.5),
+            retrato if retrato is not None else 0.5,
+            paisagem if paisagem is not None else 0.5,
         )
         session_wallpaper.salvar_escolha(jogo.game_id, jogo.name, parede, posicoes)
 
-    if all(campo in entrada for campo in ("fita_matiz", "fita_saturacao", "fita_brilho")):
+    matiz = _componente_de_cor_valido(entrada.get("fita_matiz"), 359)
+    saturacao = _componente_de_cor_valido(entrada.get("fita_saturacao"), 1000)
+    brilho = _componente_de_cor_valido(entrada.get("fita_brilho"), 1000)
+    if matiz is not None and saturacao is not None and brilho is not None:
         session_fita.salvar_cor(
-            jogo.game_id,
-            jogo.name,
-            session_fita.Cor(
-                entrada["fita_matiz"], entrada["fita_saturacao"], entrada["fita_brilho"]
-            ),
+            jogo.game_id, jogo.name, session_fita.Cor(matiz, saturacao, brilho)
         )
 
     _aplicar_sessoes(jogo.game_id, entrada.get("sessoes") or [])
@@ -289,7 +310,11 @@ def _aplicar_fitas(arquivo: zipfile.ZipFile) -> None:
     """Se o `.zip` tiver `fitas.json`, sobrescreve `shared.fitas_arquivo` com
     ele. Configuração global (a lista de fitas de LED, sem a conta Tuya) —
     diferente da opinião por jogo, não depende de nenhum casamento de
-    identidade: aplica sempre que a entrada existir no backup."""
+    identidade: aplica sempre que a entrada existir no backup. Por isso
+    `restaurar()` chama isto junto com `_aplicar_configuracoes_fora_da_main`,
+    antes da varredura cancelável de appID — não depois, como um dado de
+    jogo: cancelar a varredura não pode deixar essa configuração pela
+    metade, restaurada só se der tempo."""
     if "fitas.json" not in arquivo.namelist():
         return
     dados = arquivo.read("fitas.json")
@@ -350,6 +375,9 @@ def restaurar(
     manifesto = validar(caminho)
     _aplicar_configuracoes_fora_da_main(manifesto)
 
+    with zipfile.ZipFile(caminho) as arquivo:
+        _aplicar_fitas(arquivo)
+
     jogos_ativos = [jogo for jogo in shared.store if not jogo.removed]
     pendentes = [jogo for jogo in jogos_ativos if not jogo.steam_appid]
     if pendentes and shared.schema.get_boolean("steam-metadata"):
@@ -363,7 +391,6 @@ def restaurar(
 
     with zipfile.ZipFile(caminho) as arquivo, TemporaryDirectory() as pasta_tmp:
         tmp_dir = Path(pasta_tmp)
-        _aplicar_fitas(arquivo)
         for hash_id, entrada in jogos_no_backup.items():
             grupo = grupos.get(hash_id)
             if grupo is None:
@@ -583,11 +610,14 @@ def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
 
 _HASH_RE = re.compile(r"^[0-9a-f]{16}$")
 
-# Nome base -> extensões aceitas para cada tipo de asset por jogo.
+# Nome base -> extensões aceitas para cada tipo de asset por jogo. Reaproveita
+# as listas que cada módulo já mantém, em vez de duplicar — uma extensão nova
+# aceita por `game_logo`/`save_cover`/`session_wallpaper` entra aqui sozinha,
+# sem precisar lembrar de sincronizar duas listas manualmente.
 _EXTENSOES_ASSET = {
-    "capa": (".tiff", ".gif", ".webp"),
-    "logo": (".png", ".webp", ".jpg", ".jpeg"),
-    "wallpaper": (".jpg", ".jpeg", ".png", ".webp"),
+    "capa": (*save_cover.ANIMATED_SUFFIXES, ".tiff"),
+    "logo": game_logo.IMAGE_SUFFIXES,
+    "wallpaper": session_wallpaper.IMAGE_SUFFIXES,
 }
 
 
