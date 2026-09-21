@@ -668,7 +668,11 @@ def test_forcar_appids_roda_o_gerente_em_cada_jogo(store, make_game, monkeypatch
     monkeypatch.setitem(shared.store.managers, SteamAPIManager, gerente)
 
     progresso_visto = []
-    ok = backup._forcar_appids(jogos, progresso_visto.append, None)
+
+    def coletar(indice, total):
+        progresso_visto.append((indice, total))
+
+    ok = backup._forcar_appids(jogos, coletar, None)
     flush_idle()
 
     assert ok is True

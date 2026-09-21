@@ -126,7 +126,7 @@ def _salvar_e_atualizar(jogo: Game) -> bool:
 
 def _forcar_appids(
     jogos: list[Game],
-    progresso: Optional[Callable[[tuple[int, int]], None]],
+    progresso: Optional[Callable[[int, int], None]],
     cancelado: Optional[Callable[[], bool]],
 ) -> bool:
     """Roda a busca de appID da Steam nos ``jogos`` passados, em primeiro
@@ -134,13 +134,14 @@ def _forcar_appids(
     ``SteamAPIManager`` já registrado no store — mesmo rate limiter da
     varredura normal, não um novo a cada chamada.
 
-    ``progresso``, se passado, é chamado como ``progresso((indice, total))`` —
-    um único argumento tupla, não dois inteiros soltos. Assim como
-    ``_salvar_e_atualizar``, a chamada é marshallada com ``GLib.idle_add`` (quem
-    roda a varredura está em thread de fundo, e ``progresso`` normalmente
-    atualiza uma barra de progresso na UI); ``GLib.idle_add(f, a, b)``
-    desempacota ``a``/``b`` como dois argumentos posicionais, então o par
-    precisa ir como uma tupla só para chegar inteiro em ``progresso``.
+    ``progresso``, se passado, é chamado como ``progresso(indice, total)`` —
+    dois inteiros separados, a mesma convenção de todo outro uso de
+    ``GLib.idle_add`` com múltiplos argumentos no projeto (e a que as Tasks 6
+    e 9 já pressupõem: ``restaurar``'s ``Callable[[int, int], None]`` e o
+    ``atualizar_progresso(indice, total)`` da tela de preferências). Assim
+    como ``_salvar_e_atualizar``, a chamada é marshallada com
+    ``GLib.idle_add`` porque quem roda a varredura está em thread de fundo e
+    ``progresso`` normalmente atualiza uma barra de progresso na UI.
 
     Devolve ``False`` se ``cancelado`` disparar no meio: os jogos processados
     até ali ficam com o appID que a busca achou (resolver appID é
@@ -155,7 +156,7 @@ def _forcar_appids(
         gerente.run(jogo, {})
         GLib.idle_add(_salvar_e_atualizar, jogo)
         if progresso is not None:
-            GLib.idle_add(progresso, (indice, total))
+            GLib.idle_add(progresso, indice, total)
     return True
 
 
