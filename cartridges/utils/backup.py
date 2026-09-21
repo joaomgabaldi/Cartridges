@@ -11,9 +11,10 @@ idêntica à antiga. Fica fora só o que vale nesta máquina e em mais nenhuma: 
 conta da Tuya (um blob DPAPI não decifra em outra conta do Windows), os logs e
 o caminho de volta de uma sessão em andamento.
 
-Restaurar substitui, não mescla: `restaurar()` casa cada jogo do backup com
-um jogo local pela identidade portátil (ver `identidade`) e aplica os campos
-de opinião e os assets por cima do que já existe, ao vivo, sem fechar o app.
+`restaurar()` casa cada jogo do backup com um jogo local já existente pela
+identidade portátil (ver `identidade`) e sobrescreve só a opinião dele e os
+assets escolhidos à mão — nunca cria jogo, nunca apaga, nunca mexe em quem
+não casou. Faz isso ao vivo, sem fechar o app.
 """
 
 import json
