@@ -598,7 +598,14 @@ class CartridgesApplication(Adw.Application):
         self.app_updater.start()
 
         if shared.schema.get_boolean("auto-import"):
-            self.on_import_action()
+            # Com a biblioteca já formada, a importação da abertura só procura o
+            # que mudou: a porcentagem dela não diz nada a ninguém. O resumo
+            # continua aparecendo quando algo entra ou sai.
+            self.on_import_action(
+                mostrar_progresso=not any(
+                    not (game.removed or game.blacklisted) for game in shared.store
+                )
+            )
 
     def save_window_geometry(self, *_args: Any) -> bool:
         """Remember where the window is, if it can still be asked.
@@ -835,13 +842,13 @@ class CartridgesApplication(Adw.Application):
 
         DetailsDialog().present(shared.win)
 
-    def on_import_action(self, *_args: Any) -> None:
+    def on_import_action(self, *_args: Any, mostrar_progresso: bool = True) -> None:
         shared.importer = Importer()
 
         if shared.schema.get_boolean("shortcuts"):
             shared.importer.add_source(ShortcutsSource())
 
-        shared.importer.run()
+        shared.importer.run(mostrar_progresso)
 
     def on_remove_game_action(self, *_args: Any) -> None:
         shared.win.active_game.remove_game()
