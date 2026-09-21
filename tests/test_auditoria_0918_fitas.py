@@ -10,11 +10,14 @@ Cada teste falha sem o conserto do achado cujo id está no nome.
 import json
 import threading
 import time
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from cartridges import shared
-from cartridges.utils import session_fita
+from cartridges.utils import backup, session_fita
 from tests.test_session_fita import (  # noqa: F401 - fixtures reusadas
     FitaFalsa,
     Msg,
@@ -314,26 +317,21 @@ def _dialogo_de_arquivo(monkeypatch, caminho):
     return preferences_module
 
 
-def test_b7_exportar_por_cima_nao_trunca_o_backup_antigo(
-    monkeypatch, store, make_game, tmp_path
-):
-    destino = tmp_path / "backup.json"
-    destino.write_text('{"version": 2, "games": {}}', encoding="utf-8")
-    store.add_game(make_game(game_id="a", playtime=60), {})
-    modulo = _dialogo_de_arquivo(monkeypatch, destino)
-    monkeypatch.setattr(modulo, "create_dialog", lambda *_a: None)
-    preferencias = _preferencias(monkeypatch)
+def test_b7_exportar_por_cima_nao_trunca_o_backup_antigo(monkeypatch, tmp_path):
+    """Hoje o backup é o .zip de `utils/backup.py`; a garantia é a mesma."""
+    destino = tmp_path / "backup.zip"
+    destino.write_bytes(b"backup antigo")
+    (shared.covers_dir / "a.tiff").write_bytes(b"capa")
 
-    def cai_no_meio(self, _texto, **_k):
-        with open(self, "w", encoding="utf-8") as arquivo:
-            arquivo.write("{")
+    def cai_no_meio(*_args, **_kwargs):
         raise OSError("disco cheio")
 
-    monkeypatch.setattr(Path, "write_text", cai_no_meio)
-    preferencias.export_backup()
-    monkeypatch.undo()
+    monkeypatch.setattr(zipfile.ZipFile, "write", cai_no_meio)
+    with pytest.raises(OSError):
+        backup.exportar(destino, {"settings": {}, "state": {}})
 
-    assert json.loads(destino.read_text(encoding="utf-8")) == {"version": 2, "games": {}}
+    assert destino.read_bytes() == b"backup antigo"
+    assert not destino.with_name("backup.zip.tmp").exists()
 
 
 def test_b8_backup_com_infinito_e_lapide(monkeypatch, store, make_game, win, tmp_path):
