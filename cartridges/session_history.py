@@ -48,20 +48,26 @@ def period_range(
 
     Termina sempre hoje, mesmo sem sessão hoje: um gráfico que acaba no último
     dia jogado esconde justamente os dias parados, que são metade da resposta.
+    O início nunca é anterior à primeira sessão já registrada — um histórico
+    que só começou há 2 dias não ganha 28 dias vazios só porque o período
+    escolhido é "mês".
     """
-    days = PERIODS[period]
-    if days is not None:
-        return today - timedelta(days=days - 1), today
-
     first = min(
         (max(0, entry["end"] - entry["seconds"]) for entry in sessions),
         default=None,
     )
-    if first is None:
-        return today, today
     # Uma sessão "no futuro" (relógio adiantado, arquivo editado) não pode
     # inverter a faixa.
-    return min(datetime.fromtimestamp(first).date(), today), today
+    first_date = None
+    if first is not None:
+        first_date = min(datetime.fromtimestamp(first).date(), today)
+
+    days = PERIODS[period]
+    if days is None:
+        return first_date or today, today
+
+    start = today - timedelta(days=days - 1)
+    return (max(start, first_date) if first_date else start), today
 
 
 def nice_step(max_hours: float) -> float:
@@ -272,14 +278,25 @@ class SessionHistoryDialog(Adw.Dialog):
         self.logo = self._add_logo_header(page)
         if self.logo is None:
             self.group.set_title(game.name)
+
+        # Rótulo à parte, e não a description do grupo de baixo: a description
+        # de um Adw.PreferencesGroup nasce alinhada à esquerda, e o par dela do
+        # lado do gráfico — o Adw.ToggleGroup — já é centralizado.
+        self.summary = Gtk.Label(halign=Gtk.Align.CENTER)
+        self.summary.add_css_class("dim-label")
+        self.summary_group = Adw.PreferencesGroup()
+        self.summary_group.add(self.summary)
+        page.add(self.summary_group)
+
         page.add(self.group)
 
         content = Gtk.Box()
         content.append(page)
         content.append(self._build_chart_panel())
 
+        self.headerbar = Adw.HeaderBar()
         toolbar = Adw.ToolbarView()
-        toolbar.add_top_bar(Adw.HeaderBar())
+        toolbar.add_top_bar(self.headerbar)
         toolbar.set_content(content)
         self.set_child(toolbar)
 
@@ -304,14 +321,16 @@ class SessionHistoryDialog(Adw.Dialog):
         self.chart_total = Gtk.Label(halign=Gtk.Align.CENTER)
         self.chart_total.add_css_class("dim-label")
 
-        self.chart = PlaytimeChart(
-            hexpand=True, vexpand=True, width_request=320, height_request=240
-        )
+        self.chart = PlaytimeChart(hexpand=True, width_request=320, height_request=240)
 
         self.chart_panel = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
             spacing=12,
             hexpand=True,
+            # Início, não preenchido: a altura do gráfico segue a da tabela de
+            # sessões (rebuild() ajusta o height_request do gráfico para
+            # combinar), não o espaço que sobra na caixa de diálogo.
+            valign=Gtk.Align.START,
             margin_top=24,
             margin_bottom=24,
             margin_start=12,
@@ -371,10 +390,9 @@ class SessionHistoryDialog(Adw.Dialog):
             # largura "apertada" e a cheia, e simplesmente alocar a pedida.
             maximum_size=width,
             tightening_threshold=width,
-            # Centralizado de propósito, enquanto o resumo logo abaixo e as
-            # linhas continuam à esquerda: o logo é a marca do jogo, não o
-            # começo da coluna de texto. O desencontro entre os dois é
-            # escolhido, não esquecido.
+            # Centralizado de propósito, enquanto as linhas de sessão embaixo
+            # continuam à esquerda: o logo é a marca do jogo, não o começo da
+            # coluna de texto.
             halign=Gtk.Align.CENTER,
             child=picture,
         )
@@ -404,6 +422,7 @@ class SessionHistoryDialog(Adw.Dialog):
         # Sem sessão não há o que desenhar: um gráfico todo em zero ao lado de
         # "Nenhuma sessão registrada" só repetiria a frase.
         self.chart_panel.set_visible(bool(sessions))
+        self.summary_group.set_visible(bool(sessions))
         if sessions:
             self.update_chart()
 
@@ -411,7 +430,7 @@ class SessionHistoryDialog(Adw.Dialog):
             self.group.set_description(_("Nenhuma sessão registrada."))
             return
 
-        self.group.set_description(
+        self.summary.set_label(
             # As variáveis são os tempos jogados nos últimos 7 e 30 dias
             _("Últimos 7 dias: {} · últimos 30 dias: {}").format(
                 format_playtime(session_log.seconds_since(sessions, 7)),
@@ -422,6 +441,25 @@ class SessionHistoryDialog(Adw.Dialog):
         for session in sessions:
             self.group.add(row := self._build_row(session))
             self._rows.append(row)
+
+        # O gráfico acompanha a altura da tabela em vez de esticar até o fundo
+        # da caixa de diálogo: com poucas sessões os dois ficam baixos. O teto
+        # é o espaço que o painel do gráfico realmente tem disponível — sem
+        # ele, uma tabela comprida (que rola dentro da lista, sem vazar) pediria
+        # do gráfico uma altura maior que a caixa de diálogo tem, e ele vazaria
+        # por cima dela em vez de simplesmente preencher o espaço, como antes.
+        chrome = (
+            self.headerbar.measure(Gtk.Orientation.VERTICAL, -1)[1]
+            + self.chart_panel.get_margin_top()
+            + self.chart_panel.get_margin_bottom()
+            + self.period.measure(Gtk.Orientation.VERTICAL, -1)[1]
+            + self.chart_total.measure(Gtk.Orientation.VERTICAL, -1)[1]
+            + 2 * self.chart_panel.get_spacing()
+        )
+        ceiling = self.get_content_height() - chrome
+        width, _height = self.chart.get_size_request()
+        natural_height = self.group.measure(Gtk.Orientation.VERTICAL, -1)[1]
+        self.chart.set_size_request(width, max(240, min(natural_height, ceiling)))
 
     def _build_row(self, session: dict[str, Any]) -> Adw.ActionRow:
         ended = datetime.fromtimestamp(session["end"])

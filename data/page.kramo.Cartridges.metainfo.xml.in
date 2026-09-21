@@ -46,6 +46,14 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.21" date="2026-09-21">
+      <description translate="no">
+        <ul>
+          <li>No histórico de sessões, o gráfico de horas por dia agora acompanha a altura da tabela ao lado, e o logo do jogo e o resumo dos últimos 7/30 dias aparecem centralizados</li>
+          <li>O gráfico do histórico de sessões não mostra mais dias vazios antes da primeira sessão registrada quando "Semana" ou "Mês" está selecionado — um jogo com sessão só há 2 dias, por exemplo, não ganha mais 28 dias em branco no período "Mês"</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.20" date="2026-09-20">
       <description translate="no">
         <ul>
