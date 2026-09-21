@@ -142,6 +142,18 @@ def escolhida(game_id: str) -> bool:
     return bool(dados and dados.get("locked"))
 
 
+def cor_escolhida(game_id: str) -> Optional[Cor]:
+    """A cor manual gravada para ``game_id``, ou ``None`` se a cor for
+    automática (segue a capa). Usado pela exportação do backup."""
+    dados = _ler_sidecar(game_id)
+    if not dados or not dados.get("locked"):
+        return None
+    try:
+        return Cor(int(dados["matiz"]), int(dados["saturacao"]), int(dados["brilho"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def salvar_cor(game_id: str, name: str, cor: Cor) -> None:
     """Guarda a escolha manual de um jogo.
 

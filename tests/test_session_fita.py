@@ -90,6 +90,16 @@ def test_redefinir_devolve_o_automatico(tmp_path, schema):
     assert session_fita.cor_do_jogo(jogo).matiz != 340
 
 
+def test_cor_escolhida_le_o_sidecar():
+    session_fita.salvar_cor("jogo1", "Jogo", session_fita.Cor(200, 500, 800))
+    cor = session_fita.cor_escolhida("jogo1")
+    assert cor == session_fita.Cor(200, 500, 800)
+
+
+def test_cor_escolhida_sem_escolha_e_none():
+    assert session_fita.cor_escolhida("sem-nada") is None
+
+
 def test_jogo_sem_capa_usa_o_roxo_do_app(tmp_path, schema):
     jogo = SimpleNamespace(game_id="sem-capa", name="X", get_cover_path=lambda: None)
     cor = session_fita.cor_do_jogo(jogo)
