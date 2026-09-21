@@ -49,7 +49,7 @@
     <release version="2026.09.21" date="2026-09-21">
       <description translate="no">
         <ul>
-          <li>No histórico de sessões, o gráfico de horas por dia agora acompanha a altura da tabela ao lado, e o logo do jogo e o resumo dos últimos 7/30 dias aparecem centralizados</li>
+          <li>Novo layout do histórico de sessões: o logo do jogo, maior, e o resumo dos últimos 7/30 dias ficam centralizados no topo da tela; embaixo, a tabela de sessões e o painel do gráfico ficam lado a lado, com a mesma altura. A tela acompanha o tamanho da tabela, e a partir de umas 8 sessões a tabela rola</li>
           <li>O gráfico do histórico de sessões não mostra mais dias vazios antes da primeira sessão registrada quando "Semana" ou "Mês" está selecionado — um jogo com sessão só há 2 dias, por exemplo, não ganha mais 28 dias em branco no período "Mês"</li>
         </ul>
       </description>

@@ -259,54 +259,140 @@ class PlaytimeChart(Gtk.DrawingArea):
         return True
 
 
+# A largura da caixa e as margens laterais do conteúdo.
+DIALOG_WIDTH = 1040
+MARGIN = 24
+
+# O logo daqui é a manchete da caixa inteira, não o título de uma coluna: bem
+# maior que o da tela de detalhes (72 de altura), e a largura útil é a caixa
+# toda.
+HEADER_LOGO_MAX_HEIGHT = 120
+HEADER_LOGO_MAX_WIDTH = DIALOG_WIDTH - 2 * MARGIN
+
+# Umas 8 linhas de sessão. Passou disso, a tabela rola em vez de esticar a
+# caixa de diálogo para fora da janela.
+TABLE_MAX_HEIGHT = 440
+
+
 class SessionHistoryDialog(Adw.Dialog):
-    """As sessões de um jogo, com a opção de apagar uma que contou errado."""
+    """As sessões de um jogo, com a opção de apagar uma que contou errado.
+
+    De cima para baixo: o logo (ou o nome) e o resumo dos últimos dias, os dois
+    centralizados na largura toda; embaixo, lado a lado, a tabela de sessões e
+    o painel do gráfico. O painel tem sempre a altura da faixa, e a faixa segue
+    a da tabela — por isso a caixa não tem altura fixa, só largura.
+    """
 
     def __init__(self, game: Game, **kwargs: Any) -> None:
         super().__init__(**kwargs)
 
         self.game = game
         self.set_title(_("Histórico de sessões"))
-        # A lista mantém a largura que tinha sozinha; o resto é do gráfico.
-        self.set_content_width(1040)
-        self.set_content_height(620)
+        self.set_content_width(DIALOG_WIDTH)
 
-        self.group = Adw.PreferencesGroup()
         self._rows: list[Gtk.Widget] = []
 
-        page = Adw.PreferencesPage(width_request=440, hexpand=False)
-        self.logo = self._add_logo_header(page)
-        if self.logo is None:
-            self.group.set_title(game.name)
-
-        # Rótulo à parte, e não a description do grupo de baixo: a description
-        # de um Adw.PreferencesGroup nasce alinhada à esquerda, e o par dela do
-        # lado do gráfico — o Adw.ToggleGroup — já é centralizado.
-        self.summary = Gtk.Label(halign=Gtk.Align.CENTER)
+        self.summary = Gtk.Label(halign=Gtk.Align.CENTER, wrap=True)
         self.summary.add_css_class("dim-label")
-        self.summary_group = Adw.PreferencesGroup()
-        self.summary_group.add(self.summary)
-        page.add(self.summary_group)
 
-        page.add(self.group)
+        self.columns = Gtk.Box(spacing=MARGIN, margin_top=12)
+        self.columns.append(self._build_table())
+        self.columns.append(self._build_chart_panel())
 
-        content = Gtk.Box()
-        content.append(page)
-        content.append(self._build_chart_panel())
+        body = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=12,
+            margin_start=MARGIN,
+            margin_end=MARGIN,
+            margin_bottom=MARGIN,
+        )
+        body.append(self._build_header())
+        body.append(self.summary)
+        body.append(self.columns)
 
-        self.headerbar = Adw.HeaderBar()
         toolbar = Adw.ToolbarView()
-        toolbar.add_top_bar(self.headerbar)
-        toolbar.set_content(content)
+        toolbar.add_top_bar(Adw.HeaderBar())
+        toolbar.set_content(body)
         self.set_child(toolbar)
 
         self.rebuild()
+
+    def _build_header(self) -> Gtk.Widget:
+        """O logo do jogo, ou o nome escrito quando não há logo.
+
+        Só o que já está em disco: a busca no SteamGridDB é da tela de detalhes,
+        de onde esta aqui é aberta. O logo *é* o título quando existe, então os
+        dois nunca aparecem juntos.
+
+        Só a largura é imposta, pelo clamp: a altura sai de height-for-width, e
+        a proporção do logo é preservada por construção. Um ``set_size_request``
+        no Picture não serve — ele é um piso, não um teto, e o widget receberia
+        a largura inteira da caixa, crescendo junto na altura.
+        """
+        self.logo: Optional[Gtk.Picture] = None
+        self.name_label: Optional[Gtk.Label] = None
+
+        path = cached_logo_path(self.game)
+        loaded = (
+            load_logo(path, HEADER_LOGO_MAX_WIDTH, HEADER_LOGO_MAX_HEIGHT)
+            if path
+            else None
+        )
+        if not loaded:
+            self.name_label = Gtk.Label(
+                label=self.game.name,
+                halign=Gtk.Align.CENTER,
+                wrap=True,
+                justify=Gtk.Justification.CENTER,
+            )
+            self.name_label.add_css_class("title-1")
+            return self.name_label
+
+        texture, width = loaded
+        self.logo = Gtk.Picture(
+            paintable=texture,
+            content_fit=Gtk.ContentFit.CONTAIN,
+            can_shrink=True,
+        )
+        return Adw.Clamp(
+            unit=Adw.LengthUnit.PX,
+            # Os dois no mesmo valor para o clamp parar de interpolar entre uma
+            # largura "apertada" e a cheia, e simplesmente alocar a pedida.
+            maximum_size=width,
+            tightening_threshold=width,
+            halign=Gtk.Align.CENTER,
+            child=self.logo,
+        )
+
+    def _build_table(self) -> Gtk.Widget:
+        """A lista de sessões, rolando a partir de ``TABLE_MAX_HEIGHT``.
+
+        Uma ListBox simples, e não um Adw.PreferencesPage: a página tem rolagem
+        e margens próprias e ocupa toda a altura que recebe, então a tabela
+        nunca terminava junto com o painel do gráfico ao lado. Aqui a rolagem
+        propaga a altura natural da lista, e é ela que dá a altura da faixa.
+        """
+        # START: com poucas linhas, a faixa fica na altura mínima do gráfico, e
+        # a lista não pode esticar junto — sobraria um cartão vazio embaixo.
+        self.table = Gtk.ListBox(
+            selection_mode=Gtk.SelectionMode.NONE, valign=Gtk.Align.START
+        )
+        self.table.add_css_class("boxed-list")
+        return Gtk.ScrolledWindow(
+            child=self.table,
+            hscrollbar_policy=Gtk.PolicyType.NEVER,
+            propagate_natural_height=True,
+            max_content_height=TABLE_MAX_HEIGHT,
+            width_request=440,
+        )
 
     def _build_chart_panel(self) -> Gtk.Widget:
         """O gráfico de horas por dia, à direita da lista.
 
         O seletor de período fica em cima, onde o olho chega antes do gráfico:
-        é ele que diz o que o gráfico está mostrando.
+        é ele que diz o que o gráfico está mostrando. O painel preenche a
+        altura da faixa, que é a da tabela; o piso é o ``height_request`` do
+        desenho, para uma tabela de uma linha não achatar o gráfico.
         """
         self.period = Adw.ToggleGroup(halign=Gtk.Align.CENTER)
         for name, label in (
@@ -321,20 +407,12 @@ class SessionHistoryDialog(Adw.Dialog):
         self.chart_total = Gtk.Label(halign=Gtk.Align.CENTER)
         self.chart_total.add_css_class("dim-label")
 
-        self.chart = PlaytimeChart(hexpand=True, width_request=320, height_request=240)
+        self.chart = PlaytimeChart(
+            hexpand=True, vexpand=True, width_request=320, height_request=240
+        )
 
         self.chart_panel = Gtk.Box(
-            orientation=Gtk.Orientation.VERTICAL,
-            spacing=12,
-            hexpand=True,
-            # Início, não preenchido: a altura do gráfico segue a da tabela de
-            # sessões (rebuild() ajusta o height_request do gráfico para
-            # combinar), não o espaço que sobra na caixa de diálogo.
-            valign=Gtk.Align.START,
-            margin_top=24,
-            margin_bottom=24,
-            margin_start=12,
-            margin_end=24,
+            orientation=Gtk.Orientation.VERTICAL, spacing=12, hexpand=True
         )
         self.chart_panel.append(self.period)
         self.chart_panel.append(self.chart_total)
@@ -355,55 +433,6 @@ class SessionHistoryDialog(Adw.Dialog):
             )
         )
 
-    def _add_logo_header(self, page: Adw.PreferencesPage) -> Optional[Gtk.Picture]:
-        """Encabeça a lista com o logo do jogo, como na tela de detalhes.
-
-        Só o que já está em disco: a busca no SteamGridDB é da tela de detalhes,
-        de onde esta aqui é aberta, e um jogo sem logo simplesmente mantém o
-        nome escrito. O logo *é* o título quando existe, então os dois nunca
-        aparecem juntos.
-
-        Só a largura é imposta, pelo clamp, como na tela de detalhes: a altura
-        sai de height-for-width, então a proporção do logo é preservada por
-        construção. Um ``set_size_request`` no Picture não serve — dentro de um
-        box vertical ele é um piso, não um teto, e o widget recebe a largura
-        inteira do grupo (o ``halign`` não segura). Foi assim que um logo de
-        201x72 apareceu com 445x160, ocupando a caixa de diálogo toda.
-        """
-        path = cached_logo_path(self.game)
-        if not path:
-            return None
-
-        loaded = load_logo(path)
-        if not loaded:
-            return None
-
-        texture, width = loaded
-        picture = Gtk.Picture(
-            paintable=texture,
-            content_fit=Gtk.ContentFit.CONTAIN,
-            can_shrink=True,
-        )
-        clamp = Adw.Clamp(
-            unit=Adw.LengthUnit.PX,
-            # Os dois no mesmo valor para o clamp parar de interpolar entre uma
-            # largura "apertada" e a cheia, e simplesmente alocar a pedida.
-            maximum_size=width,
-            tightening_threshold=width,
-            # Centralizado de propósito, enquanto as linhas de sessão embaixo
-            # continuam à esquerda: o logo é a marca do jogo, não o começo da
-            # coluna de texto.
-            halign=Gtk.Align.CENTER,
-            child=picture,
-        )
-
-        # Num grupo só dele porque um filho que não é linha entra *abaixo* da
-        # lista dentro do grupo — no lugar do título é preciso outro grupo.
-        header = Adw.PreferencesGroup()
-        header.add(clamp)
-        page.add(header)
-        return picture
-
     def rebuild(self) -> None:
         """Relê o arquivo e redesenha a lista inteira.
 
@@ -413,21 +442,18 @@ class SessionHistoryDialog(Adw.Dialog):
         gravou.
         """
         for row in self._rows:
-            self.group.remove(row)
+            self.table.remove(row)
         self._rows.clear()
 
         sessions = session_log.load(self.game.game_id)
         self._sessions = sessions
 
-        # Sem sessão não há o que desenhar: um gráfico todo em zero ao lado de
-        # "Nenhuma sessão registrada" só repetiria a frase.
-        self.chart_panel.set_visible(bool(sessions))
-        self.summary_group.set_visible(bool(sessions))
-        if sessions:
-            self.update_chart()
-
+        # Sem sessão não há o que listar nem desenhar: a frase do resumo
+        # explica o vazio, e uma tabela vazia ao lado de um gráfico todo em
+        # zero só a repetiria.
+        self.columns.set_visible(bool(sessions))
         if not sessions:
-            self.group.set_description(_("Nenhuma sessão registrada."))
+            self.summary.set_label(_("Nenhuma sessão registrada."))
             return
 
         self.summary.set_label(
@@ -437,29 +463,11 @@ class SessionHistoryDialog(Adw.Dialog):
                 format_playtime(session_log.seconds_since(sessions, 30)),
             )
         )
+        self.update_chart()
 
         for session in sessions:
-            self.group.add(row := self._build_row(session))
+            self.table.append(row := self._build_row(session))
             self._rows.append(row)
-
-        # O gráfico acompanha a altura da tabela em vez de esticar até o fundo
-        # da caixa de diálogo: com poucas sessões os dois ficam baixos. O teto
-        # é o espaço que o painel do gráfico realmente tem disponível — sem
-        # ele, uma tabela comprida (que rola dentro da lista, sem vazar) pediria
-        # do gráfico uma altura maior que a caixa de diálogo tem, e ele vazaria
-        # por cima dela em vez de simplesmente preencher o espaço, como antes.
-        chrome = (
-            self.headerbar.measure(Gtk.Orientation.VERTICAL, -1)[1]
-            + self.chart_panel.get_margin_top()
-            + self.chart_panel.get_margin_bottom()
-            + self.period.measure(Gtk.Orientation.VERTICAL, -1)[1]
-            + self.chart_total.measure(Gtk.Orientation.VERTICAL, -1)[1]
-            + 2 * self.chart_panel.get_spacing()
-        )
-        ceiling = self.get_content_height() - chrome
-        width, _height = self.chart.get_size_request()
-        natural_height = self.group.measure(Gtk.Orientation.VERTICAL, -1)[1]
-        self.chart.set_size_request(width, max(240, min(natural_height, ceiling)))
 
     def _build_row(self, session: dict[str, Any]) -> Adw.ActionRow:
         ended = datetime.fromtimestamp(session["end"])
