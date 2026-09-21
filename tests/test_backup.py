@@ -320,6 +320,35 @@ def test_validar_recusa_extensao_fora_da_lista(tmp_path) -> None:
         backup.validar(ruim)
 
 
+def test_validar_recusa_backup_sem_bloco_de_configuracoes(tmp_path) -> None:
+    """Sem checagem simétrica à de `jogos`, `aplicar_configuracoes` trataria a
+    ausência como `{}` e `_aplicar` resetaria toda chave do schema pro padrão
+    de fábrica, silenciosamente."""
+    ruim = tmp_path / "ruim.zip"
+    with zipfile.ZipFile(ruim, "w") as arquivo:
+        arquivo.writestr(
+            "backup.json", json.dumps({"version": backup.VERSAO, "jogos": {}})
+        )
+    with pytest.raises(ValueError):
+        backup.validar(ruim)
+
+
+def test_validar_recusa_entrada_maior_que_o_limite(tmp_path, monkeypatch) -> None:
+    """Sem monkeypatchar o limiar, o teste teria que gravar 500 MB de verdade
+    no disco para provar a checagem — o limiar é só rebaixado aqui."""
+    monkeypatch.setattr(backup, "_TAMANHO_MAXIMO_POR_ENTRADA", 10)
+    ruim = tmp_path / "ruim.zip"
+    hash_valido = backup._hash_identidade("steam:1")
+    with zipfile.ZipFile(ruim, "w") as arquivo:
+        arquivo.writestr(
+            "backup.json",
+            json.dumps({"version": backup.VERSAO, "settings": {}, "jogos": {}}),
+        )
+        arquivo.writestr(f"jogos/{hash_valido}/capa.tiff", b"x" * 20)
+    with pytest.raises(ValueError):
+        backup.validar(ruim)
+
+
 def _backup_com_um_jogo(
     tmp_path, *, appid=None, nome="Jogo", configuracoes=None, **campos
 ) -> tuple[Path, str]:
@@ -384,6 +413,76 @@ def test_restaurar_sobrescreve_mesmo_com_dado_mais_novo(store, make_game, tmp_pa
 
     assert jogo.playtime == 10
     assert jogo.notes == "Do backup"
+
+
+def test_restaurar_descarta_playtime_infinito(store, make_game, tmp_path, settings) -> None:
+    """`json.loads` aceita `Infinity` como float — sem saneamento esse valor
+    seria gravado de volta em disco e quebraria ordenação, `format_playtime` e
+    a soma de sessão rio abaixo. O campo é descartado; o jogo mantém o que
+    tinha antes."""
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    jogo = make_game(game_id="a", steam_appid="1", name="Jogo", playtime=50)
+    store.add_game(jogo, {})
+    destino, _chave = _backup_com_um_jogo(tmp_path, appid="1", playtime=float("inf"))
+
+    resultado = backup.restaurar(destino)
+
+    assert resultado.casados == 1
+    assert jogo.playtime == 50
+
+
+def test_restaurar_descarta_campos_invalidos_mas_aplica_os_validos(
+    store, make_game, tmp_path, settings
+) -> None:
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    jogo = make_game(
+        game_id="a", steam_appid="1", name="Jogo",
+        hidden=False, rating=2, status="playing", notes="antes",
+    )
+    store.add_game(jogo, {})
+    destino, _chave = _backup_com_um_jogo(
+        tmp_path,
+        appid="1",
+        hidden=1,  # truthy não vale — só bool de verdade
+        rating=99,  # fora de 0..5, não clampeia
+        status="inexistente",  # fora de STATUS_LABELS
+        notes=5,  # não é str
+        last_played=float("nan"),  # não pode ser NaN
+        playtime=100,  # válido, deve aplicar
+    )
+
+    backup.restaurar(destino)
+
+    assert jogo.hidden is False
+    assert jogo.rating == 2
+    assert jogo.status == "playing"
+    assert jogo.notes == "antes"
+    assert jogo.last_played == 0
+    assert jogo.playtime == 100
+
+
+def test_restaurar_sobrescreve_fitas_json(store, tmp_path, settings, app_dirs) -> None:
+    """`fitas.json` é uma configuração global, não uma opinião por jogo: viaja
+    e substitui o arquivo local inteiro sem depender de nenhum jogo casar."""
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    shared.fitas_arquivo.write_text(
+        json.dumps({"fitas": [{"nome": "antiga"}]}), encoding="utf-8"
+    )
+
+    destino = tmp_path / "b.zip"
+    manifesto = {"version": backup.VERSAO, "settings": {}, "state": {}, "jogos": {}}
+    with zipfile.ZipFile(destino, "w") as arquivo:
+        arquivo.writestr("backup.json", json.dumps(manifesto))
+        arquivo.writestr("fitas.json", json.dumps({"fitas": [{"nome": "nova"}]}))
+
+    backup.restaurar(destino)
+
+    assert json.loads(shared.fitas_arquivo.read_text(encoding="utf-8")) == {
+        "fitas": [{"nome": "nova"}]
+    }
 
 
 def test_restaurar_nao_toca_jogo_sem_correspondencia(store, make_game, tmp_path, settings) -> None:
@@ -618,6 +717,30 @@ def test_aplicar_configuracoes_fora_da_main_funciona_fora_da_thread_principal(
     assert main.get_boolean("steam-metadata") is True
 
 
+def test_aplicar_configuracoes_fora_da_main_timeout_vira_aviso(
+    settings, monkeypatch, caplog
+) -> None:
+    """Se o loop principal do GTK nunca processa o `idle_add` (app fechando no
+    momento errado), a thread de fundo não pode ficar presa para sempre —
+    `concluido.wait` tem um teto, e o teto vira um aviso em vez de travar."""
+
+    class _EventoFalso:
+        def set(self) -> None:
+            pass
+
+        def wait(self, timeout: float | None = None) -> bool:
+            return False  # simula o teto estourando, sem esperar 30s de verdade
+
+    monkeypatch.setattr(backup, "is_main_thread", lambda: False)
+    monkeypatch.setattr(backup.GLib, "idle_add", lambda *a, **k: None)  # nunca roda `aplicar`
+    monkeypatch.setattr(backup.threading, "Event", _EventoFalso)
+
+    with caplog.at_level("WARNING"):
+        backup._aplicar_configuracoes_fora_da_main({"settings": {}, "state": {}})
+
+    assert any("configura" in registro.message.lower() for registro in caplog.records)
+
+
 def test_validar_confere_o_crc_de_cada_entrada(
     store, make_game, app_dirs, settings, tmp_path
 ) -> None:
@@ -702,6 +825,85 @@ def test_forcar_appids_salva_e_atualiza_cada_jogo(store, make_game, monkeypatch,
 
     assert jogo.saves == 1
     assert jogo.updates == 1
+
+
+# --------------------------------------------------------------------------
+# Ida e volta: exportar() de verdade seguido de restaurar() de verdade
+# --------------------------------------------------------------------------
+
+
+def test_backup_ida_e_volta_exportar_e_restaurar_de_verdade(
+    store, make_game, app_dirs, settings, tmp_path
+) -> None:
+    """Fecha dois furos de uma vez: nenhum teste de `restaurar` passava por um
+    `.zip` de fato montado por `exportar` (todos usavam `_backup_com_um_jogo`,
+    à mão) — se alguém renomear uma chave só de um lado (ex.:
+    `wallpaper_posicao_retrato`), a suíte inteira continuaria verde sem isto.
+    Cobre também o ramo de assets de `_aplicar_jogo` (capa/logo/parede/fita),
+    sem nenhuma cobertura antes."""
+    from cartridges.store.store import Store  # noqa: PLC0415
+    from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper  # noqa: PLC0415
+
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+
+    origem = make_game(
+        game_id="origem", steam_appid="1", name="Jogo",
+        playtime=7200, status="beaten", rating=4, notes="Bom jogo",
+        hidden=True, run_as_admin=True, track_process=True,
+        process_executable="jogo.exe", track_updates=True, last_played=123,
+    )
+    store.add_game(origem, {})
+
+    (app_dirs.covers / "origem.tiff").write_bytes(b"capa")
+    origem_logo = tmp_path / "origem_logo.png"
+    origem_logo.write_bytes(b"logo")
+    game_logo.save_manual_logo("origem", "Jogo", origem_logo)
+    origem_parede = tmp_path / "origem_parede.jpg"
+    origem_parede.write_bytes(b"parede")
+    session_wallpaper.salvar_escolha(
+        "origem", "Jogo", origem_parede, session_wallpaper.Posicoes(0.2, 0.8)
+    )
+    session_fita.salvar_cor("origem", "Jogo", session_fita.Cor(120, 600, 800))
+    session_log.record("origem", 1800, end=1_700_000_000)
+
+    destino_zip = tmp_path / "b.zip"
+    backup.exportar(destino_zip, backup.ler_configuracoes())
+
+    # "PC novo": outra biblioteca, um segundo jogo local com `game_id`
+    # diferente mas a mesma identidade (mesmo steam_appid) e nenhum dos dados
+    # acima — o cenário central de "restaurei antes de reinstalar".
+    nova_store = Store()
+    shared.store = nova_store
+    segundo = make_game(game_id="segundo", steam_appid="1", name="Jogo")
+    nova_store.add_game(segundo, {})
+
+    resultado = backup.restaurar(destino_zip)
+
+    assert resultado.casados == 1
+    assert resultado.ambiguos == []
+    assert segundo.playtime == 7200
+    assert segundo.status == "beaten"
+    assert segundo.rating == 4
+    assert segundo.notes == "Bom jogo"
+    assert segundo.hidden is True
+    assert segundo.run_as_admin is True
+    assert segundo.track_process is True
+    assert segundo.process_executable == "jogo.exe"
+    assert segundo.track_updates is True
+    assert segundo.last_played == 123
+
+    assert (app_dirs.covers / "segundo.tiff").is_file()
+    assert game_logo.logo_choice(segundo) == "manual"
+    assert session_wallpaper.escolha(segundo) == "manual"
+    posicoes = session_wallpaper.posicoes_escolhidas("segundo")
+    assert posicoes.retrato == 0.2
+    assert posicoes.paisagem == 0.8
+    cor = session_fita.cor_escolhida("segundo")
+    assert cor == session_fita.Cor(120, 600, 800)
+    assert session_log.load("segundo") == [
+        {"game_id": "segundo", "end": 1_700_000_000, "seconds": 1800}
+    ]
 
 
 # --------------------------------------------------------------------------
