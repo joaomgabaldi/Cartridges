@@ -242,6 +242,26 @@ def test_without_a_cached_logo_the_name_stays(real_window, store):
     assert dialog.logo is None
 
 
+def test_the_totals_summary_is_centered_and_not_the_group_description(
+    real_window, store
+):
+    """A description de um Adw.PreferencesGroup nasce alinhada à esquerda; o
+    resumo dos últimos 7/30 dias tem rótulo próprio, centralizado, para
+    combinar com o total do gráfico do outro lado."""
+    from gi.repository import Gtk
+
+    from cartridges.session_history import SessionHistoryDialog
+
+    game = history_game(store)
+    session_log.record(game.game_id, 3600, end=int(time()))
+
+    dialog = SessionHistoryDialog(game)
+
+    assert dialog.summary.get_halign() == Gtk.Align.CENTER
+    assert "Últimos 7 dias" in dialog.summary.get_label()
+    assert not dialog.group.get_description()
+
+
 def test_the_history_says_so_when_there_is_nothing_yet(real_window, store):
     """A biblioteca inteira antecede o histórico, então a tela vazia é o estado
     normal no começo e precisa explicar por que está vazia."""
@@ -424,6 +444,20 @@ def test_the_periods_end_today_and_all_starts_at_the_first_session():
     assert period_range(future, "all", today) == (today, today)
 
 
+def test_week_and_month_do_not_reach_before_the_first_session():
+    """Um histórico que só começou há 2 dias não ganha dias vazios só porque
+    o período escolhido é "semana" ou "mês"."""
+    from datetime import date
+
+    from cartridges.session_history import period_range
+
+    today = date(2026, 9, 19)
+    sessions = [{"end": local_ts(2026, 9, 17, 12), "seconds": 60}]
+
+    assert period_range(sessions, "week", today) == (date(2026, 9, 17), today)
+    assert period_range(sessions, "month", today) == (date(2026, 9, 17), today)
+
+
 def test_the_x_axis_labels_the_first_and_last_day_without_crowding():
     from datetime import date, timedelta
 
@@ -452,10 +486,16 @@ def test_the_chart_follows_the_period_and_hides_without_sessions(real_window, st
     game = history_game(store)
     dialog = SessionHistoryDialog(game)
     assert dialog.chart_panel.get_visible() is False
+    assert dialog.summary_group.get_visible() is False
 
     session_log.record(game.game_id, 3600)
+    # Uma sessão antiga também: sem ela, a única sessão (de hoje) seria a
+    # primeira já registrada, e o corte de dias vazios reduziria a faixa a 1
+    # dia — o que este teste é sobre é a troca de período, não o corte.
+    session_log.record(game.game_id, 60, end=int(time()) - 100 * 86400)
     dialog.rebuild()
     assert dialog.chart_panel.get_visible() is True
+    assert dialog.summary_group.get_visible() is True
     assert len(dialog.chart.days) == 30
     assert dialog.chart_total.get_label() == "1 hora no período"
 
@@ -467,6 +507,45 @@ def test_the_chart_follows_the_period_and_hides_without_sessions(real_window, st
     for period in ("week", "month", "all"):
         dialog.period.set_active_name(period)
         dialog.chart.draw(None, cairo.Context(surface), 500, 300)
+
+
+def test_the_chart_height_matches_a_short_table(real_window, store):
+    """Uma tabela baixa (poucas sessões) não fica com um gráfico esticado ao
+    lado, mas o gráfico também não encolhe abaixo do piso de legibilidade."""
+    from gi.repository import Gtk
+
+    from cartridges.session_history import SessionHistoryDialog
+
+    game = history_game(store)
+    session_log.record(game.game_id, 3600, end=int(time()))
+
+    dialog = SessionHistoryDialog(game)
+
+    table_natural = dialog.group.measure(Gtk.Orientation.VERTICAL, -1)[1]
+    _width, chart_height = dialog.chart.get_size_request()
+    assert chart_height == max(240, table_natural)
+
+
+def test_the_chart_height_is_capped_so_a_long_table_never_overflows_it(
+    real_window, store
+):
+    """Auditoria manual, 20/09: sem teto, uma tabela comprida (que rola dentro
+    da própria coluna) pedia do gráfico uma altura maior que a caixa de
+    diálogo inteira, e ele vazava por cima dela."""
+    from gi.repository import Gtk
+
+    from cartridges.session_history import SessionHistoryDialog
+
+    game = history_game(store)
+    for i in range(40):
+        session_log.record(game.game_id, 60, end=int(time()) - i * 86400)
+
+    dialog = SessionHistoryDialog(game)
+
+    table_natural = dialog.group.measure(Gtk.Orientation.VERTICAL, -1)[1]
+    _width, chart_height = dialog.chart.get_size_request()
+    assert chart_height < table_natural
+    assert chart_height <= dialog.get_content_height()
 
 
 def test_the_playtime_is_underlined_only_when_it_opens_something(real_window, store):
