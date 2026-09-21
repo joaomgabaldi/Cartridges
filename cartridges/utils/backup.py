@@ -31,7 +31,7 @@ from typing import Any, Callable, Iterable, NamedTuple, Optional
 from gi.repository import Gio, GLib
 
 from cartridges import shared
-from cartridges.game import Game
+from cartridges.game import STATUS_LABELS, Game
 from cartridges.store.managers.display_manager import is_main_thread
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.utils import game_logo, save_cover, session_fita, session_log, session_wallpaper
@@ -194,10 +194,66 @@ def _aplicar_sessoes(game_id: str, sessoes: list[dict[str, Any]]) -> None:
             session_log.record(game_id, segundos, fim)
 
 
+_CAMPOS_BOOLEANOS = frozenset({"hidden", "run_as_admin", "track_process", "track_updates"})
+_CAMPOS_TEXTO = frozenset({"notes", "process_executable"})
+
+
+def _para_inteiro_finito(valor: Any) -> Optional[int]:
+    """``valor`` como ``int``, ou ``None`` se a conversão não for possível ou
+    exata. ``int(float("inf"))`` já levanta ``OverflowError`` e
+    ``int(float("nan"))`` já levanta ``ValueError`` — o mesmo ``try`` cobre os
+    dois sem checagem extra."""
+    try:
+        return int(valor)
+    except (OverflowError, TypeError, ValueError):
+        return None
+
+
+def _sanitizar_campos(entrada: dict[str, Any]) -> dict[str, Any]:
+    """Valida cada campo de ``CAMPOS_OPINIAO`` presente em ``entrada`` e
+    descarta (nunca aplica, nunca derruba a restauração) o que for inválido —
+    mesma filosofia de ``_aplicar_sessoes``.
+
+    ``Game.update_values`` só filtra a CHAVE (contra ``PERSISTED_ATTRS``),
+    nunca o VALOR. Sem isto, um backup com ``"playtime": Infinity`` (JSON
+    válido: ``json.loads`` aceita ``Infinity``/``NaN`` como float) passava
+    direto e o ``FileManager`` gravava esse valor de volta em disco — quebrando
+    ordenação, ``format_playtime`` e a soma de sessão rio abaixo.
+    """
+    campos: dict[str, Any] = {}
+    for campo in CAMPOS_OPINIAO:
+        if campo not in entrada:
+            continue
+        valor = entrada[campo]
+
+        if campo in _CAMPOS_BOOLEANOS:
+            if isinstance(valor, bool):
+                campos[campo] = valor
+        elif campo == "last_played":
+            convertido = _para_inteiro_finito(valor)
+            if convertido is not None:
+                campos[campo] = convertido
+        elif campo == "playtime":
+            convertido = _para_inteiro_finito(valor)
+            if convertido is not None and convertido >= 0:
+                campos[campo] = convertido
+        elif campo == "status":
+            if isinstance(valor, str) and (valor == "" or valor in STATUS_LABELS):
+                campos[campo] = valor
+        elif campo == "rating":
+            convertido = _para_inteiro_finito(valor)
+            if convertido is not None and 0 <= convertido <= 5:
+                campos[campo] = convertido
+        elif campo in _CAMPOS_TEXTO:
+            if isinstance(valor, str):
+                campos[campo] = valor
+    return campos
+
+
 def _aplicar_jogo(
     jogo: Game, entrada: dict[str, Any], hash_id: str, arquivo: zipfile.ZipFile, tmp_dir: Path
 ) -> None:
-    campos = {campo: entrada[campo] for campo in CAMPOS_OPINIAO if campo in entrada}
+    campos = _sanitizar_campos(entrada)
     jogo.update_values(campos)
     GLib.idle_add(_salvar_e_atualizar, jogo)
 
@@ -229,6 +285,23 @@ def _aplicar_jogo(
     _aplicar_sessoes(jogo.game_id, entrada.get("sessoes") or [])
 
 
+def _aplicar_fitas(arquivo: zipfile.ZipFile) -> None:
+    """Se o `.zip` tiver `fitas.json`, sobrescreve `shared.fitas_arquivo` com
+    ele. Configuração global (a lista de fitas de LED, sem a conta Tuya) —
+    diferente da opinião por jogo, não depende de nenhum casamento de
+    identidade: aplica sempre que a entrada existir no backup."""
+    if "fitas.json" not in arquivo.namelist():
+        return
+    dados = arquivo.read("fitas.json")
+    temporario = shared.fitas_arquivo.with_name(shared.fitas_arquivo.name + ".tmp")
+    try:
+        shared.fitas_arquivo.parent.mkdir(parents=True, exist_ok=True)
+        temporario.write_bytes(dados)
+        temporario.replace(shared.fitas_arquivo)
+    except OSError as erro:
+        logging.warning("Não foi possível restaurar fitas.json: %s", erro)
+
+
 def _aplicar_configuracoes_fora_da_main(manifesto: dict[str, Any]) -> None:
     """`aplicar_configuracoes` grava no Gio.Settings de verdade, que dispara
     sinais `changed::<chave>` — e handlers já conectados a eles
@@ -248,7 +321,13 @@ def _aplicar_configuracoes_fora_da_main(manifesto: dict[str, Any]) -> None:
         return False
 
     GLib.idle_add(aplicar)
-    concluido.wait()
+    if not concluido.wait(timeout=30):
+        # Nada aqui pode travar a thread de fundo para sempre — mesmo espírito
+        # de main.py: um app fechando no momento errado nunca processa o
+        # idle_add, e a thread precisa poder seguir (ou morrer) mesmo assim.
+        logging.warning(
+            "Tempo esgotado esperando aplicar as configurações do backup na thread principal"
+        )
 
 
 def restaurar(
@@ -284,6 +363,7 @@ def restaurar(
 
     with zipfile.ZipFile(caminho) as arquivo, TemporaryDirectory() as pasta_tmp:
         tmp_dir = Path(pasta_tmp)
+        _aplicar_fitas(arquivo)
         for hash_id, entrada in jogos_no_backup.items():
             grupo = grupos.get(hash_id)
             if grupo is None:
@@ -298,8 +378,8 @@ def restaurar(
 
     if casados:
         # `hidden`/`status`/`rating` mudando pode mover um jogo entre a
-        # biblioteca e a oculta, ou tirá-lo de um filtro ativo — mesma
-        # invalidação que `_merge_json_backup` já fazia. GTK, então na
+        # biblioteca e a oculta, ou tirá-lo de um filtro ativo — as listas
+        # precisam invalidar sort/filter para refletir isso. GTK, então na
         # thread principal.
         GLib.idle_add(_invalidar_listas)
 
@@ -424,9 +504,15 @@ def _entrada_do_jogo(jogo: Any, sessoes: list[dict[str, int]]) -> dict[str, Any]
 
 
 def _assets_do_jogo(jogo: Any) -> list[tuple[Path, str]]:
-    """Lista (caminho_no_disco, nome_no_zip) dos arquivos deste jogo, só os
-    escolhidos à mão — um logo/parede automático é recarregado sozinho pelo
-    pipeline normal, não vale o espaço no backup."""
+    """Lista (caminho_no_disco, nome_no_zip) dos arquivos deste jogo.
+
+    A capa sempre entra se existir — ao contrário de logo e papel de parede,
+    ela não tem uma versão "automática" que algum processo em segundo plano
+    rebusque sozinho, então não existe "escolha manual" para ela: uma vez
+    definida, nada troca por conta própria. Logo e papel de parede só entram
+    quando travados à mão (`logo_choice`/`escolha` == "manual") — a versão
+    automática é recarregada sozinha pelo pipeline normal, não vale o espaço
+    no backup."""
     assets: list[tuple[Path, str]] = []
 
     capa = jogo.get_cover_path()
@@ -527,13 +613,20 @@ def _nome_valido(nome: str) -> bool:
     return base in _EXTENSOES_ASSET and f".{extensao}" in _EXTENSOES_ASSET[base]
 
 
+# Nenhum asset por jogo (capa/logo/parede) chega perto disso; acima disso é
+# sinal de zip malicioso/corrompido, não de um backup de verdade.
+_TAMANHO_MAXIMO_POR_ENTRADA = 500 * 1024 * 1024
+
+
 def validar(caminho: Path) -> dict[str, Any]:
     """O manifesto de um backup por jogo. ``ValueError`` se não for um."""
     try:
         with zipfile.ZipFile(caminho) as arquivo:
-            for nome in arquivo.namelist():
-                if not _nome_valido(nome):
-                    raise ValueError(f"entrada inesperada no backup: {nome}")
+            for info in arquivo.infolist():
+                if not _nome_valido(info.filename):
+                    raise ValueError(f"entrada inesperada no backup: {info.filename}")
+                if info.file_size > _TAMANHO_MAXIMO_POR_ENTRADA:
+                    raise ValueError(f"entrada grande demais no backup: {info.filename}")
             # O CRC de cada entrada, e não só o do manifesto: um byte trocado
             # numa capa passaria daqui e só estouraria no meio da restauração.
             if (corrompida := arquivo.testzip()) is not None:
@@ -548,4 +641,6 @@ def validar(caminho: Path) -> dict[str, Any]:
         raise ValueError("o arquivo não é um backup desta versão")
     if not isinstance(manifesto.get("jogos"), dict):
         raise ValueError("backup sem o bloco de jogos")
+    if not isinstance(manifesto.get("settings"), dict):
+        raise ValueError("backup sem o bloco de configurações")
     return manifesto

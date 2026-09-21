@@ -854,7 +854,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 else:
                     GLib.idle_add(self._export_done, progress, None)
 
-            threading.Thread(target=work).start()
+            threading.Thread(target=work, daemon=True).start()
 
         dialog.save(shared.win, None, finish)
 
@@ -939,7 +939,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             else:
                 GLib.idle_add(self._restore_done, progress, resultado, None)
 
-        threading.Thread(target=work).start()
+        threading.Thread(target=work, daemon=True).start()
 
     def _restore_done(
         self,
@@ -952,19 +952,36 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             create_dialog(self, _("Não foi possível restaurar"), error)
             return False
         if resultado is None:
-            self.add_toast(Adw.Toast.new(_("Restauração cancelada")))
+            # `restaurar()` já aplicou as configurações do backup (troca
+            # completa) antes de decidir rodar a varredura de appID — mesmo
+            # cancelada, elas não voltam. Só os dados dos jogos ficam de fora.
+            self.add_toast(
+                Adw.Toast.new(
+                    _(
+                        "Busca na Steam cancelada — as configurações do app "
+                        "foram restauradas, os dados dos jogos não"
+                    )
+                )
+            )
             return False
 
         if resultado.ambiguos:
             self._show_ambiguity_alert(resultado.ambiguos)
 
-        self.add_toast(
-            Adw.Toast.new(
-                ngettext(
-                    "Restaurado: {} de {} jogo", "Restaurado: {} de {} jogos", resultado.total
-                ).format(resultado.casados, resultado.total)
+        if resultado.casados == 0 and resultado.total > 0:
+            # O cenário central de "restaurei antes de reinstalar os jogos":
+            # o genérico "Restaurado: 0 de N" não deixa claro que é isso.
+            self.add_toast(
+                Adw.Toast.new(_("Nenhum dos jogos do backup está nesta biblioteca ainda"))
             )
-        )
+        else:
+            self.add_toast(
+                Adw.Toast.new(
+                    ngettext(
+                        "Restaurado: {} de {} jogo", "Restaurado: {} de {} jogos", resultado.total
+                    ).format(resultado.casados, resultado.total)
+                )
+            )
         return False
 
     def _show_ambiguity_alert(self, nomes: list[str]) -> None:
