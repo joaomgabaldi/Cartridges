@@ -26,11 +26,13 @@ import zipfile
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from time import time
-from typing import Any, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 from gi.repository import Gio, GLib
 
 from cartridges import shared
+from cartridges.game import Game
+from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper
 from cartridges.utils.name_cleaner import clean_for_search
 
@@ -108,6 +110,53 @@ def _agrupar_por_identidade(jogos: Iterable[Any]) -> dict[str, tuple[str, list[A
         else:
             grupos[chave] = (tipo, [jogo])
     return grupos
+
+
+def _salvar_e_atualizar(jogo: Game) -> bool:
+    """``jogo.save()``/``jogo.update()`` emitem sinais GObject que managers
+    como o ``DisplayManager`` respondem tocando widgets diretamente — só é
+    seguro chamar na thread principal. Marshallado com ``GLib.idle_add`` por
+    quem roda em thread de fundo (a varredura de appID, o casamento do
+    restore). Devolve ``False`` porque é isso que ``GLib.idle_add`` espera
+    para não repetir a chamada."""
+    jogo.save()
+    jogo.update()
+    return False
+
+
+def _forcar_appids(
+    jogos: list[Game],
+    progresso: Optional[Callable[[tuple[int, int]], None]],
+    cancelado: Optional[Callable[[], bool]],
+) -> bool:
+    """Roda a busca de appID da Steam nos ``jogos`` passados, em primeiro
+    plano (sem depender do pipeline assíncrono de import). Reaproveita o
+    ``SteamAPIManager`` já registrado no store — mesmo rate limiter da
+    varredura normal, não um novo a cada chamada.
+
+    ``progresso``, se passado, é chamado como ``progresso((indice, total))`` —
+    um único argumento tupla, não dois inteiros soltos. Assim como
+    ``_salvar_e_atualizar``, a chamada é marshallada com ``GLib.idle_add`` (quem
+    roda a varredura está em thread de fundo, e ``progresso`` normalmente
+    atualiza uma barra de progresso na UI); ``GLib.idle_add(f, a, b)``
+    desempacota ``a``/``b`` como dois argumentos posicionais, então o par
+    precisa ir como uma tupla só para chegar inteiro em ``progresso``.
+
+    Devolve ``False`` se ``cancelado`` disparar no meio: os jogos processados
+    até ali ficam com o appID que a busca achou (resolver appID é
+    enriquecimento de metadado, não é "aplicar o backup"), mas nenhum jogo
+    depois do ponto do cancelamento é tocado.
+    """
+    gerente = shared.store.managers[SteamAPIManager]
+    total = len(jogos)
+    for indice, jogo in enumerate(jogos, start=1):
+        if cancelado is not None and cancelado():
+            return False
+        gerente.run(jogo, {})
+        GLib.idle_add(_salvar_e_atualizar, jogo)
+        if progresso is not None:
+            GLib.idle_add(progresso, (indice, total))
+    return True
 
 
 def _pendente() -> Path:
