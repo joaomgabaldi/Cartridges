@@ -566,27 +566,10 @@ class DetailsDialog(Adw.Dialog):
                 )
                 return
 
-            # Increment the number after the game id (eg. imported_1, imported_2)
-            source_id = "imported"
-            numbers = [0]
-            game_id: str
-            for game_id in shared.store.source_games.get(source_id, set()):
-                prefix = "imported_"
-                if not game_id.startswith(prefix):
-                    continue
-                # Ignore ids whose suffix isn't a number (hand-edited/corrupted
-                # JSON) instead of crashing the whole "add game" flow
-                try:
-                    numbers.append(int(game_id.replace(prefix, "", 1)))
-                except ValueError:
-                    continue
-
-            game_number = max(numbers) + 1
-
             self.game = Game(
                 {
-                    "game_id": f"imported_{game_number}",
-                    "source": source_id,
+                    "game_id": shared.store.proximo_id_importado(),
+                    "source": "imported",
                     "added": int(time()),
                 }
             )

@@ -57,6 +57,13 @@ def test_ficha_antiga_com_hidden_carrega_normal(store, write_record):
     assert "hidden" not in PERSISTED_ATTRS
 
 
+def test_proximo_id_importado_pula_os_usados_e_os_estranhos(store, make_game):
+    assert store.proximo_id_importado() == "imported_1"
+    for game_id in ("imported_1", "imported_7", "imported_x"):
+        store.add_game(make_game(game_id=game_id, source="imported"), {}, run_pipeline=False)
+    assert store.proximo_id_importado() == "imported_8"
+
+
 @pytest.fixture
 def display(real_window, monkeypatch):
     """O DisplayManager de verdade sobre a janela de verdade.

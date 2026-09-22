@@ -274,6 +274,23 @@ class Store:
         except KeyError:
             return default
 
+    def proximo_id_importado(self) -> str:
+        """O próximo ``imported_N`` livre: o id de um jogo que não veio de
+        fonte nenhuma (adicionado à mão, ou um zerado recriado pelo backup)."""
+        with self._lock:
+            ids = list(self.source_games.get("imported", {}))
+        numbers = [0]
+        for game_id in ids:
+            if not game_id.startswith("imported_"):
+                continue
+            # Ignore ids whose suffix isn't a number (hand-edited/corrupted
+            # JSON) instead of crashing whoever asked
+            try:
+                numbers.append(int(game_id.replace("imported_", "", 1)))
+            except ValueError:
+                continue
+        return f"imported_{max(numbers) + 1}"
+
     def add_manager(self, manager: Manager, in_pipeline: bool = True) -> None:
         """Add a manager to the store"""
         manager_type = type(manager)
