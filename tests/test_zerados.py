@@ -523,3 +523,24 @@ def test_escolher_marca_zerado_e_tira_da_lista(store):
 
     assert game.zerado is True
     assert picker.lista.get_row_at_index(0) is None
+
+
+@pytest.mark.parametrize("como", ["reinstalado", "trocado"])
+def test_escolher_linha_velha_so_tira_da_lista(store, como):
+    """O jogo mudou desde que a lista abriu: a linha sai, o jogo fica como está."""
+    from cartridges import zerados_picker  # noqa: PLC0415
+
+    game = jogo(store, 48, removed=True)
+    picker = zerados_picker.ZeradosPicker()
+    linha = picker.lista.get_row_at_index(0)
+    if como == "reinstalado":
+        game.removed = False
+    else:
+        novo = jogo(store, 48, removed=True)
+        assert store.get(game.game_id) is novo
+
+    picker.on_escolhido(linha, game)
+
+    assert game.status == ""
+    assert picker.lista.get_row_at_index(0) is None
+    assert picker.pilha.get_visible_child_name() == "vazio"

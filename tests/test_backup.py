@@ -1243,10 +1243,28 @@ def test_exportar_leva_o_logo_automatico_de_um_zerado(
 
 
 def test_zerado_que_falha_ao_registrar_nao_conta_como_casado(
-    store, settings, tmp_path, monkeypatch
+    store, make_game, settings, tmp_path, app_dirs, monkeypatch
 ) -> None:
     """Fora da thread principal, uma exceção no `idle_add` não sobe para
-    `restaurar`: `_rodar_na_main` devolve False e o zerado não é contado."""
+    `restaurar`: `_rodar_na_main` devolve False e o zerado não é contado. O
+    que já tinha ido para o disco em nome dele (capa, logo, sessões) sai: o
+    próximo imported_N não pode herdar."""
+    from cartridges.store.store import Store  # noqa: PLC0415
+    from cartridges.utils import game_logo, session_log  # noqa: PLC0415
+
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    zerado = make_game(
+        game_id="z", steam_appid="10", name="Zerado", removed=True, status="beaten"
+    )
+    store.add_game(zerado, {"skip_save": True})
+    (app_dirs.covers / "z.tiff").write_bytes(b"capa")
+    origem_logo = tmp_path / "origem_logo.png"
+    origem_logo.write_bytes(b"logo")
+    game_logo.save_manual_logo("z", "Zerado", origem_logo)
+    session_log.record("z", 3600, end=1_700_000_000)
+    destino = tmp_path / "b.zip"
+    backup.exportar(destino, backup.ler_configuracoes())
 
     def idle_add_como_o_glib(funcao, *args):
         try:
@@ -1257,13 +1275,65 @@ def test_zerado_que_falha_ao_registrar_nao_conta_como_casado(
     def falhar(_dados) -> None:
         raise RuntimeError("falhou")
 
+    monkeypatch.setattr(shared, "store", Store())
     monkeypatch.setattr(backup, "is_main_thread", lambda: False)
     monkeypatch.setattr(backup.GLib, "idle_add", idle_add_como_o_glib)
     monkeypatch.setattr(backup, "_registrar_zerado", falhar)
-    destino, _chave = _backup_com_um_jogo(
-        tmp_path, appid="10", status="beaten", zerado=True,
-        ficha={"name": "Zerado", "steam_appid": "10"},
-        configuracoes={"steam-metadata": False},
-    )
 
     assert backup.restaurar(destino).casados == 0
+    assert not list(app_dirs.covers.glob("imported_1.*"))
+    assert not list(app_dirs.logos.glob("imported_1*"))
+    assert session_log.load("imported_1") == []
+
+
+def test_exportar_zerados_de_mesma_identidade_viram_uma_entrada(
+    store, make_game, app_dirs, settings, tmp_path
+) -> None:
+    """Duas fichas zeradas do mesmo jogo: uma entrada, com a ficha da jogada
+    por último, levando as sessões das duas."""
+    from cartridges.utils import session_log  # noqa: PLC0415
+
+    antigo = make_game(
+        game_id="a", steam_appid="10", name="Antigo", removed=True,
+        status="beaten", last_played=100, playtime=10,
+    )
+    recente = make_game(
+        game_id="b", steam_appid="10", name="Recente", removed=True,
+        status="beaten", last_played=200, playtime=20,
+    )
+    for jogo in (antigo, recente):
+        store.add_game(jogo, {"skip_save": True})
+    session_log.record("a", 60, end=1_700_000_000)
+    session_log.record("b", 120, end=1_700_000_500)
+
+    destino = tmp_path / "b.zip"
+    backup.exportar(destino, backup.ler_configuracoes())
+    jogos = backup.validar(destino)["jogos"]
+
+    assert list(jogos) == [backup._hash_identidade("steam:10")]
+    entrada = next(iter(jogos.values()))
+    assert entrada["zerado"] is True
+    assert entrada["ficha"]["name"] == "Recente"
+    assert entrada["playtime"] == 20
+    assert sorted(entrada["sessoes"], key=lambda s: s["end"]) == [
+        {"end": 1_700_000_000, "seconds": 60},
+        {"end": 1_700_000_500, "seconds": 120},
+    ]
+
+
+def test_exportar_avisa_do_zerado_que_cede_a_identidade(
+    store, make_game, settings, tmp_path, caplog
+) -> None:
+    vivo = make_game(game_id="steam_10", steam_appid="10", name="Jogo")
+    zerado = make_game(
+        game_id="imported_1", steam_appid="10", name="Jogo Zerado", removed=True,
+        status="beaten",
+    )
+    store.add_game(vivo, {})
+    store.add_game(zerado, {"skip_save": True})
+
+    with caplog.at_level("WARNING"):
+        backup.exportar(tmp_path / "b.zip", backup.ler_configuracoes())
+
+    avisos = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert any("Jogo Zerado" in aviso and "imported_1" in aviso for aviso in avisos)
