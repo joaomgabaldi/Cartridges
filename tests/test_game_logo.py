@@ -4,9 +4,9 @@
 
 """When a cached logo lookup is worth repeating.
 
-A hit used to be cached with no expiry at all, so a wrong ``sgdb_id`` wrote a
-hit once and ``logo_lookup_needed`` never asked again — another game's logo,
-permanent until the game was renamed or corrected by hand.
+A hit is kept for good: the logo on screen stays until the game is renamed or
+another logo is picked by hand. Only a miss ("no logo") is asked again, after
+``MISS_TTL_SECONDS``.
 
 The other half is the locked entry: a logo the user chose themselves. That one
 must never expire, never be re-matched against the title, and never be
@@ -57,23 +57,27 @@ def test_a_fresh_hit_is_not_looked_up_again(make_game, sidecar):
     assert game_logo.logo_lookup_needed(make_game(game_id="shortcuts_1")) is False
 
 
-def test_an_expired_hit_is_looked_up_again(make_game, sidecar):
-    """T6.21 A hit is trusted far longer than a miss, but not forever."""
-    sidecar(
-        "shortcuts_1",
-        filename="shortcuts_1.png",
-        age=game_logo.HIT_TTL_SECONDS + 60,
-    )
+A_YEAR = 365 * 24 * 60 * 60
+
+
+def test_an_old_hit_is_kept_for_good(make_game, sidecar):
+    """O logo que está na tela fica: um acerto de um ano atrás não é buscado
+    de novo nem deixa de valer."""
+    sidecar("shortcuts_1", filename="shortcuts_1.png", age=A_YEAR)
+    game = make_game(game_id="shortcuts_1")
+    assert game_logo.logo_lookup_needed(game) is False
+    assert game_logo.cached_logo_path(game) is not None
+
+
+def test_an_old_miss_is_looked_up_again(make_game, sidecar):
+    """Só o "sem logo" envelhece: arte nova no SteamGridDB ainda chega."""
+    sidecar("shortcuts_1", filename=None, age=game_logo.MISS_TTL_SECONDS + 60)
     assert game_logo.logo_lookup_needed(make_game(game_id="shortcuts_1")) is True
 
 
 def test_a_zerado_keeps_its_logo_past_the_expiry(make_game, sidecar):
     """Uma tumba nunca busca de novo, então a validade só apagaria o logo."""
-    sidecar(
-        "shortcuts_1",
-        filename="shortcuts_1.png",
-        age=game_logo.HIT_TTL_SECONDS + 60,
-    )
+    sidecar("shortcuts_1", filename="shortcuts_1.png", age=A_YEAR)
     game = make_game(game_id="shortcuts_1", removed=True, status="beaten")
     assert game_logo.cached_logo_path(game) is not None
 
@@ -94,7 +98,7 @@ def test_a_locked_hit_never_expires(make_game, sidecar):
         "shortcuts_1",
         filename="shortcuts_1.png",
         locked=True,
-        age=game_logo.HIT_TTL_SECONDS * 100,
+        age=A_YEAR * 10,
     )
     assert game_logo.logo_lookup_needed(make_game(game_id="shortcuts_1")) is False
 
