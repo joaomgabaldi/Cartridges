@@ -57,6 +57,7 @@ from cartridges.utils.relative_date import relative_date
 from cartridges.utils.spring_scroll import attach as attach_spring_scroll
 from cartridges.utils.steam import format_release_date, parse_release_date
 from cartridges.utils.toast_queue import ToastQueue
+from cartridges.zerados_picker import ZeradosPicker
 
 
 def can_edit_notes(game: Game) -> bool:
@@ -611,6 +612,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
         delete_game = Gio.SimpleAction.new("delete_game", None)
         delete_game.connect("activate", self.on_delete_game_action)
         self.add_action(delete_game)
+
+        add_zerado = Gio.SimpleAction.new("add_zerado", None)
+        add_zerado.connect("activate", lambda *_: ZeradosPicker().present(self))
+        self.add_action(add_zerado)
 
         self._filter_menu = Gio.Menu()
         model = self.primary_menu_button.get_menu_model()
