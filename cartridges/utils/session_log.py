@@ -115,6 +115,25 @@ def load(game_id: Optional[str] = None) -> list[dict[str, Any]]:
     return sessions
 
 
+def _reescrever(path: Path, kept: list[str]) -> bool:
+    """Grava ``kept`` por cima do histórico, via temporário + troca."""
+    # Mesmo cuidado do FileManager: grava num temporário e substitui, para que
+    # uma queda no meio não deixe um histórico truncado no lugar do inteiro.
+    tmp = path.with_suffix(".jsonl.tmp")
+    try:
+        tmp.write_text(
+            "".join(line + "\n" for line in kept if line.strip()),
+            encoding="utf-8",
+            errors="surrogateescape",
+        )
+        tmp.replace(path)
+    except OSError:
+        logging.exception("Não foi possível reescrever o histórico de sessões")
+        tmp.unlink(missing_ok=True)
+        return False
+    return True
+
+
 def delete(game_id: str, end: int, seconds: int) -> bool:
     """Apaga uma sessão. Devolve se alguma linha saiu de fato.
 
@@ -151,21 +170,30 @@ def delete(game_id: str, end: int, seconds: int) -> bool:
     if not removed:
         return False
 
-    # Mesmo cuidado do FileManager: grava num temporário e substitui, para que
-    # uma queda no meio não deixe um histórico truncado no lugar do inteiro.
-    tmp = path.with_suffix(".jsonl.tmp")
+    return _reescrever(path, kept)
+
+
+def apagar_jogo(game_id: str) -> None:
+    """Apaga todas as sessões de um jogo — o "Excluir" da página de zerados."""
+    path = _path()
     try:
-        tmp.write_text(
-            "".join(line + "\n" for line in kept if line.strip()),
-            encoding="utf-8",
-            errors="surrogateescape",
-        )
-        tmp.replace(path)
+        lines = path.read_text(encoding="utf-8", errors="surrogateescape").splitlines()
     except OSError:
-        logging.exception("Não foi possível reescrever o histórico de sessões")
-        tmp.unlink(missing_ok=True)
-        return False
-    return True
+        return
+
+    kept: list[str] = []
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            if str(json.loads(line).get("game_id")) == game_id:
+                continue
+        except (ValueError, TypeError, AttributeError):
+            pass
+        kept.append(line)
+
+    if len(kept) != sum(1 for line in lines if line.strip()):
+        _reescrever(path, kept)
 
 
 def seconds_since(sessions: list[dict[str, Any]], days: int) -> int:

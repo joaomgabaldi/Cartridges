@@ -527,6 +527,7 @@ class DetailsDialog(Adw.Dialog):
         # O mesmo portão do botão, na porta que faltava.
         if self._loading_ops:
             return
+        era_zerado = bool(self.game and self.game.zerado)
         final_name = self.name.get_text()
         final_developer = self.developer.get_text()
         final_publisher = self.publisher.get_text()
@@ -583,7 +584,8 @@ class DetailsDialog(Adw.Dialog):
                 )
                 return
 
-            if final_executable == "":
+            # Um zerado não tem linha de executável na tela.
+            if final_executable == "" and not self.game.removed:
                 create_dialog(
                     self,
                     _("Não foi possível aplicar as alterações"),
@@ -614,7 +616,7 @@ class DetailsDialog(Adw.Dialog):
         self.game.release_date = final_release_date or None
         self.game.genre = final_genre or None
         self.game.controller_support = final_controller_support
-        self.game.status = final_status
+        self.game.definir_status(final_status)
         self.game.rating = self._rating
         # Only touch these when a fetch actually returned them, so manual edits
         # without a Steam lookup keep any existing values.
@@ -726,7 +728,11 @@ class DetailsDialog(Adw.Dialog):
         )
         self.close()
         if on_details_page:
-            shared.win.show_details_page(self.game)
+            if era_zerado and self.game.removed and not self.game.zerado:
+                # Virou desinstalado comum: não há mais tela de detalhes dele.
+                shared.win.navigation_view.pop()
+            else:
+                shared.win.show_details_page(self.game)
 
     def update_cover_callback(self, manager: SgdbManager) -> None:
         # Set the game as not loading

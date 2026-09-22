@@ -30,6 +30,7 @@ from cartridges import shared
 from cartridges.game import Game
 from cartridges.store.managers.manager import Manager
 from cartridges.store.pipeline import Pipeline
+from cartridges.utils import session_log
 from cartridges.utils.game_logo import IMAGE_SUFFIXES, remove_logo
 from cartridges.utils.run_executable import aumid_from_command
 from cartridges.utils.save_cover import ANIMATED_SUFFIXES
@@ -287,6 +288,23 @@ class Store:
             self.pipeline_managers.add(self.managers[manager_type])
         else:
             self.pipeline_managers.discard(self.managers[manager_type])
+
+    def excluir(self, game: Game) -> None:
+        """Apaga um zerado: arquivos, sessões e o lugar dele na store.
+
+        Sem tumba, ao contrário do "Remover" de um jogo vivo: a tumba existe
+        para um atalho ainda na pasta não trazer o jogo de volta, e um zerado
+        já não tem atalho na pasta.
+        """
+        with self._lock:
+            self.source_games.get(game.base_source, {}).pop(game.game_id, None)
+            self.games_by_id.pop(game.game_id, None)
+            if game.shortcut_path:
+                key = (game.base_source, _path_key(game.shortcut_path))
+                if self._games_by_shortcut.get(key) is game:
+                    del self._games_by_shortcut[key]
+        self.cleanup_game(game)
+        session_log.apagar_jogo(game.game_id)
 
     def cleanup_game(self, game: Game) -> None:
         """Remove a game's files, dismiss any loose toasts"""
