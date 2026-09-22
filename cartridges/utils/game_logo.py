@@ -268,13 +268,13 @@ def cached_logo_path(game: Game) -> Optional[Path]:
     sidecar = _read_sidecar(game.game_id)
     if not sidecar:
         return None
-    if sidecar.get("locked"):
+    # Uma tumba nunca busca de novo (`logo_lookup_needed`), então nem o nome
+    # nem a validade podem descartar o logo de um zerado: sem outro para pôr
+    # no lugar, descartar seria só apagar. E um zerado já passou pela
+    # biblioteca com o título acertado.
+    if sidecar.get("locked") or getattr(game, "removed", False):
         return _cached_file(sidecar)
-    if sidecar.get("name") != game.name:
-        return None
-    # Uma tumba nunca busca de novo (`logo_lookup_needed`), então a validade
-    # só apagaria o logo de um zerado sem pôr outro no lugar.
-    if not getattr(game, "removed", False) and _hit_expired(sidecar):
+    if sidecar.get("name") != game.name or _hit_expired(sidecar):
         return None
     return _cached_file(sidecar)
 

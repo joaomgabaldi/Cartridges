@@ -78,6 +78,16 @@ def test_a_zerado_keeps_its_logo_past_the_expiry(make_game, sidecar):
     assert game_logo.cached_logo_path(game) is not None
 
 
+def test_a_zerado_keeps_its_logo_after_a_rename(make_game, sidecar):
+    """O zerado já passou pela biblioteca com o título acertado, e uma tumba
+    nunca busca de novo: descartar o logo pelo nome só o apagaria."""
+    sidecar("shortcuts_1", name="Nome antigo", filename="shortcuts_1.png", age=60)
+    game = make_game(
+        game_id="shortcuts_1", name="Nome novo", removed=True, status="beaten"
+    )
+    assert game_logo.cached_logo_path(game) is not None
+
+
 def test_a_locked_hit_never_expires(make_game, sidecar):
     """T6.22 The user decided this one; the ranking does not get a second vote."""
     sidecar(
