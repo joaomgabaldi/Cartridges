@@ -247,3 +247,105 @@ def test_tumba_sem_executavel_carrega_e_jogo_vivo_nao(store, write_record):
 
     assert store.get("imported_1") is not None
     assert store.get("imported_2") is None
+
+
+# -- Desmarcar e excluir -------------------------------------------------------
+
+
+def test_desmarcar_com_o_atalho_na_pasta_volta_a_biblioteca(tmp_path):
+    atalho = tmp_path / "Jogo.lnk"
+    atalho.write_bytes(b"")
+    game = jogo(None, 20, removed=True, status="beaten", shortcut_path=str(atalho))
+
+    game.definir_status("")
+
+    assert game.status == ""
+    assert game.removed is False
+
+
+def test_desmarcar_sem_o_atalho_vira_desinstalado_comum(tmp_path):
+    game = jogo(
+        None, 21, removed=True, status="beaten", shortcut_path=str(tmp_path / "x.lnk")
+    )
+
+    game.definir_status("playing")
+
+    assert game.removed is True
+    assert game.zerado is False
+
+
+def test_marcar_zerado_nao_ressuscita_ninguem(tmp_path):
+    atalho = tmp_path / "Jogo.lnk"
+    atalho.write_bytes(b"")
+    game = jogo(None, 22, removed=True, shortcut_path=str(atalho))
+
+    game.definir_status("beaten")
+
+    assert game.zerado is True
+
+
+def test_desmarcar_pela_tela_sem_atalho_fecha_os_detalhes(
+    real_window, store, monkeypatch
+):
+    game = jogo(store, 23, removed=True, status="beaten")
+    real_window.active_game = game
+    fechou = []
+    monkeypatch.setattr(real_window.navigation_view, "pop", lambda: fechou.append(1))
+
+    real_window.on_set_status_action(None, GLib.Variant("s", ""))
+
+    assert game.status == ""
+    assert fechou == [1]
+
+
+def test_desmarcar_pela_edicao_passa_pela_mesma_regra(real_window, store, tmp_path):
+    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+    from tests.test_ui_logic import _stub_sgdb  # noqa: PLC0415
+
+    _stub_sgdb(store)
+    atalho = tmp_path / "Jogo.lnk"
+    atalho.write_bytes(b"")
+    game = jogo(
+        store, 24, removed=True, status="beaten", executable="", shortcut_path=str(atalho)
+    )
+
+    dialog = DetailsDialog(game)
+    dialog.status.set_selected(0)  # "Sem status"
+    dialog.apply_preferences()
+
+    assert game.status == ""
+    assert game.removed is False, "executável vazio não barra a edição de um zerado"
+
+
+def test_apagar_jogo_leva_so_as_sessoes_dele():
+    from cartridges.utils import session_log  # noqa: PLC0415
+
+    session_log.record("a", 60, end=1_700_000_000)
+    session_log.record("b", 120, end=1_700_000_100)
+    session_log.record("a", 30, end=1_700_000_200)
+
+    session_log.apagar_jogo("a")
+
+    assert session_log.load() == [
+        {"game_id": "b", "end": 1_700_000_100, "seconds": 120}
+    ]
+
+
+def test_excluir_apaga_ficha_capa_sessoes_e_o_lugar_na_store(
+    store, make_game, app_dirs, flush_idle
+):
+    from cartridges.utils import session_log  # noqa: PLC0415
+
+    game = make_game(game_id="shortcuts_z", removed=True, status="beaten")
+    store.add_game(game, {"skip_save": True})
+    (app_dirs.games / "shortcuts_z.json").write_text("{}", encoding="utf-8")
+    (app_dirs.covers / "shortcuts_z.tiff").write_bytes(b"capa")
+    session_log.record("shortcuts_z", 60, end=1_700_000_000)
+
+    store.excluir(game)
+
+    assert store.get("shortcuts_z") is None
+    assert game not in list(store)
+    assert not (app_dirs.games / "shortcuts_z.json").exists()
+    assert not (app_dirs.covers / "shortcuts_z.tiff").exists()
+    assert session_log.load("shortcuts_z") == []

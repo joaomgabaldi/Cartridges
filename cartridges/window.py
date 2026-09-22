@@ -763,9 +763,19 @@ class CartridgesWindow(Adw.ApplicationWindow):
         if game is None:
             return
 
-        game.status = target.get_string()
+        era_zerado = game.zerado
+        game.definir_status(target.get_string())
         game.save()
         game.update()
+
+        # Saiu de Jogos Zerados sem voltar à biblioteca: não está em grade
+        # nenhuma, e a tela de detalhes não tem mais de quem falar.
+        if era_zerado and game.removed and not game.zerado:
+            self.navigation_view.pop()
+            return
+        # Voltou à biblioteca: a tela troca de modo (Jogar volta, Excluir sai).
+        if era_zerado and not game.zerado:
+            self.show_details_page(game)
 
         self.update_status_button(game)
         self.update_notes_block(game)

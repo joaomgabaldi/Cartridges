@@ -276,6 +276,25 @@ class Game(Gtk.Box):
         """
         return self.removed and not self.blacklisted and self.status == "beaten"
 
+    def definir_status(self, status: str) -> None:
+        """Troca o status. É o caminho único — o botão da tela e a edição.
+
+        Tirar a marca de um zerado é também decidir para onde ele vai: com o
+        atalho de volta na pasta (foi reinstalado), volta à biblioteca com a
+        ficha inteira; sem ele, vira um desinstalado comum, fora de qualquer
+        grade, que o seletor da página volta a oferecer. Quem chama salva e
+        atualiza depois.
+        """
+        era_zerado = self.zerado
+        self.status = status
+        if (
+            era_zerado
+            and not self.zerado
+            and self.shortcut_path
+            and Path(self.shortcut_path).is_file()
+        ):
+            self.removed = False
+
     def dismiss_update(self) -> None:
         """Acknowledge the advertised patch: remember it and hide the notice.
 
