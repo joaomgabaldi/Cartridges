@@ -67,6 +67,17 @@ def test_an_expired_hit_is_looked_up_again(make_game, sidecar):
     assert game_logo.logo_lookup_needed(make_game(game_id="shortcuts_1")) is True
 
 
+def test_a_zerado_keeps_its_logo_past_the_expiry(make_game, sidecar):
+    """Uma tumba nunca busca de novo, então a validade só apagaria o logo."""
+    sidecar(
+        "shortcuts_1",
+        filename="shortcuts_1.png",
+        age=game_logo.HIT_TTL_SECONDS + 60,
+    )
+    game = make_game(game_id="shortcuts_1", removed=True, status="beaten")
+    assert game_logo.cached_logo_path(game) is not None
+
+
 def test_a_locked_hit_never_expires(make_game, sidecar):
     """T6.22 The user decided this one; the ranking does not get a second vote."""
     sidecar(

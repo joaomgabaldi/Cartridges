@@ -494,7 +494,8 @@ class Game(Gtk.Box):
     def toggle_play(
         self, _widget: Any, _prop1: Any, _prop2: Any, state: bool = True
     ) -> None:
-        if not self.menu_button.get_active():
+        # O card de um zerado não joga nem tem menu: só a capa responde.
+        if not self.menu_button.get_active() and not self.zerado:
             self.play_revealer.set_reveal_child(not state)
             self.menu_revealer.set_reveal_child(not state)
 
@@ -503,6 +504,10 @@ class Game(Gtk.Box):
             self.game_cover.set_hover_animation(not state)
 
     def main_button_clicked(self, _widget: Any, button: bool) -> None:
+        # Um zerado sempre abre os detalhes, mesmo com "capa inicia o jogo".
+        if self.zerado:
+            shared.win.show_details_page(self)
+            return
         if shared.schema.get_boolean("cover-launches-game") ^ button:
             self.launch()
         else:

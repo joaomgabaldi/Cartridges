@@ -1122,7 +1122,19 @@ Adw.NavigationPage details_page {
                   ]
                 }
 
-                Button {
+                Button details_view_delete_button {
+                  icon-name: "user-trash-symbolic";
+                  action-name: "win.delete_game";
+                  tooltip-text: _("Excluir");
+                  visible: false;
+
+                  styles [
+                    "raised",
+                    "circular",
+                  ]
+                }
+
+                Button details_view_remove_button {
                   icon-name: "user-trash-symbolic";
                   action-name: "app.remove_game";
                   tooltip-text: _("Remover");
@@ -1133,7 +1145,7 @@ Adw.NavigationPage details_page {
                   ]
                 }
 
-                MenuButton {
+                MenuButton details_view_search_button {
                   icon-name: "system-search-symbolic";
                   menu-model: search;
                   tooltip-text: _("Buscar");

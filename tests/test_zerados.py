@@ -386,3 +386,81 @@ def test_excluir_apaga_ficha_capa_sessoes_e_o_lugar_na_store(
     assert not (app_dirs.covers / "shortcuts_z.tiff").exists()
     assert session_log.load("shortcuts_z") == []
     assert chave not in store._games_by_shortcut
+
+
+# -- Tela de detalhes, edição e cards -----------------------------------------
+
+
+def test_detalhes_de_um_zerado_so_editam_e_excluem(real_window, store):
+    # Pelos dois pedaços que `show_details_page` chama: ela inteira dispara a
+    # busca do logo numa thread e o desfoque da capa, que nada têm a ver aqui.
+    zerado = jogo(store, 30, removed=True, status="beaten", install_size=10**9)
+    real_window.update_details_mode(zerado)
+    real_window.update_install_size_label(zerado)
+
+    assert real_window.details_view_play_button.get_visible() is False
+    assert real_window.details_view_remove_button.get_visible() is False
+    assert real_window.details_view_search_button.get_visible() is False
+    assert real_window.details_view_delete_button.get_visible() is True
+    assert real_window.details_view_size.get_visible() is False
+
+    vivo = jogo(store, 31)
+    real_window.update_details_mode(vivo)
+    assert real_window.details_view_play_button.get_visible() is True
+    assert real_window.details_view_delete_button.get_visible() is False
+
+
+def test_zerado_nao_mostra_aviso_de_atualizacao(real_window, store):
+    zerado = jogo(
+        store, 32, removed=True, status="beaten", track_updates=True, update_available_ts=5
+    )
+    real_window.update_details_notice(zerado)
+    assert real_window.details_view_update_notice.get_visible() is False
+
+
+def test_edicao_de_um_zerado_esconde_o_que_so_serve_para_lancar(store):
+    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+
+    dialog = DetailsDialog(jogo(store, 33, removed=True, status="beaten"))
+    for widget in (
+        dialog.wallpaper_row,
+        dialog.fita_row,
+        dialog.fita_brilho_row,
+        dialog.executable_group,
+        dialog.updates_group,
+    ):
+        assert widget.get_visible() is False
+    assert dialog.status.get_visible() is True
+    assert dialog.rating_row.get_visible() is True
+
+    vivo = DetailsDialog(jogo(store, 34))
+    assert vivo.executable_group.get_visible() is True
+
+
+def test_card_de_zerado_abre_os_detalhes_e_nao_revela_botoes(
+    store, win, monkeypatch, schema
+):
+    schema["cover-launches-game"] = True
+    abertos = []
+    win.show_details_page = abertos.append
+    zerado = jogo(store, 35, removed=True, status="beaten")
+    monkeypatch.setattr(zerado, "launch", lambda: pytest.fail("lançou um zerado"))
+
+    zerado.main_button_clicked(None, False)
+    zerado.toggle_play(None, None, None, False)
+
+    assert abertos == [zerado]
+    assert zerado.play_revealer.get_reveal_child() is False
+    assert zerado.menu_revealer.get_reveal_child() is False
+
+
+def test_excluir_confirmado_tira_da_grade_e_da_store(real_window, store, flush_idle):
+    zerado = jogo(store, 36, removed=True, status="beaten")
+    real_window.zerados_library.append(zerado)
+
+    real_window.on_delete_game_response(None, "cancel", zerado)
+    assert store.get(zerado.game_id) is zerado
+
+    real_window.on_delete_game_response(None, "delete", zerado)
+    assert store.get(zerado.game_id) is None
+    assert zerado.get_parent() is None
