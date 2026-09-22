@@ -427,7 +427,6 @@ class FakeGame:
         self.shortcut_mtime = overrides.pop("shortcut_mtime", 0)
         self.removed = overrides.pop("removed", False)
         self.blacklisted = overrides.pop("blacklisted", False)
-        self.hidden = overrides.pop("hidden", False)
         self.playtime = overrides.pop("playtime", 0)
         self.version = overrides.pop("version", shared.SPEC_VERSION)
         self.added = overrides.pop("added", 0)
@@ -461,6 +460,11 @@ class FakeGame:
         # holds, real Game or this fake.
         for key, value in data.items():
             setattr(self, key, value)
+
+    @property
+    def zerado(self) -> bool:
+        # A mesma regra de Game.zerado.
+        return self.removed and not self.blacklisted and self.status == "beaten"
 
     def connect(self, signal, callback) -> None:
         self.signals.append((signal, callback))

@@ -145,20 +145,15 @@ class CartridgesWindow(Adw.ApplicationWindow):
     details_view_notes_button: Gtk.MenuButton = Gtk.Template.Child()
     details_view_notes_popover: Gtk.Popover = Gtk.Template.Child()
     details_view_notes_view: Gtk.TextView = Gtk.Template.Child()
-    details_view_hide_button: Gtk.Button = Gtk.Template.Child()
     details_view_update_notice: Gtk.Button = Gtk.Template.Child()
 
-    hidden_library_page: Adw.NavigationPage = Gtk.Template.Child()
-    hidden_primary_menu_button: Gtk.MenuButton = Gtk.Template.Child()
-    hidden_library: AnimatedFlowBox = Gtk.Template.Child()
-    hidden_library_view: Adw.ToolbarView = Gtk.Template.Child()
-    hidden_scrolledwindow: Gtk.ScrolledWindow = Gtk.Template.Child()
-    hidden_library_overlay: Gtk.Overlay = Gtk.Template.Child()
-    hidden_notice_empty: Adw.StatusPage = Gtk.Template.Child()
-    hidden_notice_no_results: Adw.StatusPage = Gtk.Template.Child()
-    hidden_search_bar: Gtk.SearchBar = Gtk.Template.Child()
-    hidden_search_entry: Gtk.SearchEntry = Gtk.Template.Child()
-    hidden_search_button: Gtk.ToggleButton = Gtk.Template.Child()
+    zerados_library_page: Adw.NavigationPage = Gtk.Template.Child()
+    zerados_primary_menu_button: Gtk.MenuButton = Gtk.Template.Child()
+    zerados_library: AnimatedFlowBox = Gtk.Template.Child()
+    zerados_scrolledwindow: Gtk.ScrolledWindow = Gtk.Template.Child()
+    zerados_library_overlay: Gtk.Overlay = Gtk.Template.Child()
+    zerados_notice_empty: Adw.StatusPage = Gtk.Template.Child()
+    zerados_notice_no_results: Adw.StatusPage = Gtk.Template.Child()
 
     game_covers: dict
     toasts: dict
@@ -230,17 +225,17 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.details_view.set_clip_overlay(self.details_view_toolbar_view, False)
 
         self.library.set_filter_func(self.filter_func)
-        self.hidden_library.set_filter_func(self.filter_func)
+        self.zerados_library.set_filter_func(self.filter_func)
 
         self.library.set_sort_func(self.sort_func)
-        self.hidden_library.set_sort_func(self.sort_func)
+        self.zerados_library.set_sort_func(self.sort_func)
 
         self.set_library_child()
 
         # A roda do mouse rola com inércia de mola em vez de pular de degrau
         attach_spring_scroll(
             self.scrolledwindow,
-            self.hidden_scrolledwindow,
+            self.zerados_scrolledwindow,
             self.news_scrolledwindow,
         )
 
@@ -251,7 +246,6 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
         # Connect search entries
         self.search_bar.connect_entry(self.search_entry)
-        self.hidden_search_bar.connect_entry(self.hidden_search_entry)
 
         # Fechar a barra pelo botão da lupa (binding bidirecional) ou pelo Esc
         # nativo do GtkSearchBar esconde a barra sem limpar o texto, e nada
@@ -263,21 +257,14 @@ class CartridgesWindow(Adw.ApplicationWindow):
             self.on_search_mode_changed,
             self.search_entry,
         )
-        self.hidden_search_bar.connect(
-            "notify::search-mode-enabled",
-            self.on_search_mode_changed,
-            self.hidden_search_entry,
-        )
 
         # Connect signals
         self.search_entry.connect("search-changed", self.search_changed, False)
-        self.hidden_search_entry.connect("search-changed", self.search_changed, True)
 
         self.search_entry.connect("activate", self.show_details_page_search)
-        self.hidden_search_entry.connect("activate", self.show_details_page_search)
 
-        self.navigation_view.connect("popped", self.set_show_hidden)
-        self.navigation_view.connect("pushed", self.set_show_hidden)
+        self.navigation_view.connect("popped", self.set_show_zerados)
+        self.navigation_view.connect("pushed", self.set_show_zerados)
         self.navigation_view.connect("popped", self.stop_details_animation)
 
         # Toda caixa de diálogo do app passa por esta propriedade, inclusive as
@@ -373,7 +360,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
             )
             shared.schema.bind(
                 "library-rows",
-                self.hidden_library,
+                self.zerados_library,
                 "max-children-per-line",
                 Gio.SettingsBindFlags.DEFAULT,
             )
@@ -384,7 +371,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
             # número de jogos (o GtkFlowBox nunca abre mais colunas que
             # filhos); 999 só existe porque a propriedade exige um número.
             self.library.set_max_children_per_line(999)
-            self.hidden_library.set_max_children_per_line(999)
+            self.zerados_library.set_max_children_per_line(999)
 
     def detach_global_handlers(self, *_args: Any) -> None:
         """Let go of the process-wide singletons. Called on destroy.
@@ -501,7 +488,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # pela biblioteca escondida.
         self.navigation_view.set_sensitive(False)
         self.session_blocker_button.grab_focus()
-        self.set_show_hidden(self.navigation_view)
+        self.set_show_zerados()
 
         # O relógio só faz sentido onde ele pode ser visto: se a janela foi
         # para o outro monitor, ela fica à vista a sessão inteira; se não foi,
@@ -541,7 +528,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.session_blocker.set_visible(False)
         self.session_game = None
         self.navigation_view.set_sensitive(True)
-        self.set_show_hidden(self.navigation_view)
+        self.set_show_zerados()
 
         if self.session_timer_id:
             GLib.source_remove(self.session_timer_id)
@@ -587,7 +574,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         O conteúdo é dinâmico — só gêneros e anos que existem na biblioteca —
         então o submenu é um Gio.Menu vivo, refeito a cada abertura do popover.
         Inserido no modelo compartilhado uma única vez: os dois botões de menu
-        (biblioteca e ocultos) apontam para o mesmo GMenu, e o popover segue
+        (biblioteca e zerados) apontam para o mesmo GMenu, e o popover segue
         mudanças do modelo sozinho.
 
         As ações moram na janela (não no app) de propósito: filtro é estado da
@@ -622,8 +609,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
         # Refeito na abertura, não a cada mudança da biblioteca: um import em
         # andamento mexeria no menu dezenas de vezes sem ninguém olhando.
-        for button in (self.primary_menu_button, self.hidden_primary_menu_button):
+        for button in (self.primary_menu_button, self.zerados_primary_menu_button):
             button.get_popover().connect("show", self.rebuild_filter_menu)
+            button.get_popover().connect("show", self.set_show_zerados)
 
         self.rebuild_filter_menu()
 
@@ -744,7 +732,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # As duas grades, como a ordenação: o filtro é da biblioteca, não da
         # página que estava aberta quando ele foi escolhido.
         self.library.invalidate_filter()
-        self.hidden_library.invalidate_filter()
+        self.zerados_library.invalidate_filter()
 
     # -- Status e histórico ---------------------------------------------------
 
@@ -786,7 +774,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # até a próxima coisa que invalidar a lista.
         if self.filter_status_state:
             self.library.invalidate_filter()
-            self.hidden_library.invalidate_filter()
+            self.zerados_library.invalidate_filter()
 
     def update_status_button(self, game: Game) -> None:
         """O botão diz o status atual, ou convida a definir um."""
@@ -922,9 +910,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
         if game is not None:
             SessionHistoryDialog(game).present(self)
 
-    def search_changed(self, _widget: Any, hidden: bool) -> None:
+    def search_changed(self, _widget: Any, _hidden: bool) -> None:
         # Refresh search filter on keystroke in search box
-        (self.hidden_library if hidden else self.library).invalidate_filter()
+        self.library.invalidate_filter()
 
     def on_search_mode_changed(
         self, search_bar: Gtk.SearchBar, _pspec: Any, entry: Gtk.SearchEntry
@@ -935,16 +923,18 @@ class CartridgesWindow(Adw.ApplicationWindow):
             entry.set_text("")
 
     def set_library_child(self) -> None:
-        child, hidden_child = self.notice_empty, self.hidden_notice_empty
+        child, zerados_child = self.notice_empty, self.zerados_notice_empty
 
         for game in shared.store:
-            if game.removed or game.blacklisted:
+            if game.blacklisted:
                 continue
-            if game.hidden:
-                if game.filtered and hidden_child:
-                    hidden_child = self.hidden_notice_no_results
+            if game.removed:
+                if not game.zerado:
                     continue
-                hidden_child = None
+                if game.filtered and zerados_child:
+                    zerados_child = self.zerados_notice_no_results
+                    continue
+                zerados_child = None
             else:
                 if game.filtered and child:
                     child = self.notice_no_results
@@ -965,31 +955,23 @@ class CartridgesWindow(Adw.ApplicationWindow):
         if child:
             self.library_overlay.add_overlay(child)
 
-        for notice in (self.hidden_notice_empty, self.hidden_notice_no_results):
-            if notice is not hidden_child:
+        for notice in (self.zerados_notice_empty, self.zerados_notice_no_results):
+            if notice is not zerados_child:
                 remove_from_overlay(notice)
-        if hidden_child:
-            self.hidden_library_overlay.add_overlay(hidden_child)
+        if zerados_child:
+            self.zerados_library_overlay.add_overlay(zerados_child)
 
     def filter_func(self, child: Gtk.Widget) -> bool:
         game = child.get_child()
-        # The same filter is installed on both grids, so the search box to match
-        # against is the one belonging to the grid this child actually lives in.
-        # Deciding by the visible page instead matched a game against the wrong
-        # box whenever the two disagreed: GTK re-runs the filter on `append`, so
-        # a game imported while the hidden page was open was tested against that
-        # page's (empty) entry, came out filtered, and stayed invisible — nothing
-        # invalidates the filter again once the import is over.
-        # A child being appended may not have its parent yet; `game.hidden` is
-        # what routes it to one grid or the other, so it answers the same
-        # question before GTK does.
+        # A mesma função filtra as duas grades, mas só a biblioteca tem caixa
+        # de busca: na de zerados valem só os filtros do menu. A grade é a do
+        # pai do filho, e não a da página à vista — o GTK refiltra no
+        # `append`, e um jogo que entrasse com a outra página aberta seria
+        # medido contra a caixa errada. Um filho ainda sem pai (no meio do
+        # append) responde pela mesma regra que decide para onde ele vai.
         parent = child.get_parent()
-        hidden = parent is self.hidden_library if parent else bool(game.hidden)
-        text = (
-            (self.hidden_search_entry if hidden else self.search_entry)
-            .get_text()
-            .lower()
-        )
+        em_zerados = parent is self.zerados_library if parent else game.zerado
+        text = "" if em_zerados else self.search_entry.get_text().lower()
 
         # A anotação entra na busca junto do título, da desenvolvedora e da
         # publicadora: quem escreveu "senha do cofre: 8815" seis meses atrás
@@ -1060,7 +1042,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         """
         self._library_scroll = tuple(
             scrolled.get_vadjustment().get_value()
-            for scrolled in (self.scrolledwindow, self.hidden_scrolledwindow)
+            for scrolled in (self.scrolledwindow, self.zerados_scrolledwindow)
         )
 
     def restore_library_scroll(self) -> None:
@@ -1069,7 +1051,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self._library_scroll = None
 
         for scrolled, value in zip(
-            (self.scrolledwindow, self.hidden_scrolledwindow), stored
+            (self.scrolledwindow, self.zerados_scrolledwindow), stored
         ):
             # Zero is not "nothing to restore": a grid at the top is exactly
             # where scroll-to-focus can only drag the library downwards, to
@@ -1177,13 +1159,6 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.update_hltb_block(game)
 
         self.update_details_notice(game)
-
-        icon, text = "view-conceal-symbolic", _("Ocultar")
-        if game.hidden:
-            icon, text = "view-reveal-symbolic", _("Reexibir")
-
-        self.details_view_hide_button.set_icon_name(icon)
-        self.details_view_hide_button.set_tooltip_text(text)
 
         if self.details_view_game_cover:
             self.details_view_game_cover.set_details_animation(False)
@@ -1864,23 +1839,27 @@ class CartridgesWindow(Adw.ApplicationWindow):
         ):
             self.details_view_game_cover.set_details_animation(False)
 
-    def set_show_hidden(self, navigation_view: Adw.NavigationView, *_args: Any) -> None:
-        if show_hidden := self.lookup_action("show_hidden"):
-            show_hidden.set_enabled(
-                navigation_view.get_visible_page() == self.library_page
+    def set_show_zerados(self, *_args: Any) -> None:
+        """O item "Jogos Zerados" do menu: só na tela principal, e só quando a
+        página tem o que mostrar ou o seletor dela o que oferecer — um zerado,
+        ou um desinstalado que possa virar um."""
+        if action := self.lookup_action("show_zerados"):
+            action.set_enabled(
+                self.navigation_view.get_visible_page() == self.library_page
+                and any(game.removed and not game.blacklisted for game in shared.store)
             )
 
-    def on_show_hidden_action(self, *_args: Any) -> None:
-        if self.navigation_view.get_visible_page() == self.hidden_library_page:
+    def on_show_zerados_action(self, *_args: Any) -> None:
+        if self.navigation_view.get_visible_page() == self.zerados_library_page:
             return
 
-        self.navigation_view.push(self.hidden_library_page)
+        self.navigation_view.push(self.zerados_library_page)
 
     def on_sort_action(self, action: Gio.SimpleAction, state: GLib.Variant) -> None:
         action.set_state(state)
         self.sort_state = str(state).strip("'")
         self.library.invalidate_sort()
-        self.hidden_library.invalidate_sort()
+        self.zerados_library.invalidate_sort()
 
         shared.state_schema.set_string("sort-mode", self.sort_state)
 
@@ -1888,9 +1867,6 @@ class CartridgesWindow(Adw.ApplicationWindow):
         if self.navigation_view.get_visible_page() == self.library_page:
             search_bar = self.search_bar
             search_entry = self.search_entry
-        elif self.navigation_view.get_visible_page() == self.hidden_library_page:
-            search_bar = self.hidden_search_bar
-            search_entry = self.hidden_search_entry
         else:
             return
 
@@ -1901,10 +1877,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
         search_entry.set_text("")
 
-    def show_details_page_search(self, widget: Gtk.Widget) -> None:
-        library = (
-            self.hidden_library if widget == self.hidden_search_entry else self.library
-        )
+    def show_details_page_search(self, _widget: Gtk.Widget) -> None:
+        library = self.library
         index = 0
 
         while True:
@@ -1918,11 +1892,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
             index += 1
 
     def on_undo_action(self, _widget: Any, game: Game, undo: str) -> None:
-        """The "Desfazer" button of a hide/remove toast."""
-        if undo == "hide":
-            game.toggle_hidden(False)
-
-        elif undo == "remove":
+        """The "Desfazer" button of a remove toast."""
+        if undo == "remove":
             game.removed = False
             game.save()
             game.update()
@@ -1933,5 +1904,5 @@ class CartridgesWindow(Adw.ApplicationWindow):
     def on_open_menu_action(self, *_args: Any) -> None:
         if self.navigation_view.get_visible_page() == self.library_page:
             self.primary_menu_button.popup()
-        elif self.navigation_view.get_visible_page() == self.hidden_library_page:
-            self.hidden_primary_menu_button.popup()
+        elif self.navigation_view.get_visible_page() == self.zerados_library_page:
+            self.zerados_primary_menu_button.popup()

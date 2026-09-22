@@ -79,9 +79,7 @@ class DisplayManager(Manager):
         return False  # one-shot
 
     def main(self, game: Game, _additional_data: dict) -> None:
-        game.menu_button.set_menu_model(
-            game.hidden_game_options if game.hidden else game.game_options
-        )
+        game.menu_button.set_menu_model(game.game_options)
 
         game.title.set_label(game.name)
 
@@ -118,10 +116,15 @@ class DisplayManager(Manager):
         ):
             shared.win.show_details_page(game)
 
-        # Which grid the game belongs in now (None = it shouldn't be shown)
+        # Which grid the game belongs in now (None = it shouldn't be shown):
+        # the library for what is installed, Jogos Zerados for what was
+        # uninstalled after being beaten, nothing for the rest.
         target = None
-        if not game.removed and not game.blacklisted:
-            target = shared.win.hidden_library if game.hidden else shared.win.library
+        if not game.blacklisted:
+            if not game.removed:
+                target = shared.win.library
+            elif game.zerado:
+                target = shared.win.zerados_library
 
         # The FlowBox the game currently lives in, if any
         flowbox_child = game.get_parent()
@@ -130,7 +133,7 @@ class DisplayManager(Manager):
         # Re-parenting the widget makes the ScrolledWindow lose the user's
         # scroll position (the grid jumps back to the top). On a plain edit the
         # game stays in the same grid, so only move it when it actually has to
-        # move — being hidden/unhidden, removed, or added for the first time.
+        # move — uninstalled, removed, or added for the first time.
         if current is not target:
             if current is not None:
                 current.remove(game)
@@ -141,11 +144,12 @@ class DisplayManager(Manager):
                 target.append(game)
                 game.get_parent().set_focusable(False)
             else:
-                # Fora das duas grades = removido/blacklisted. Sem isto o
-                # GameCover continuava dono de `game.cover` e o repintava a
-                # cada troca de frame, segurando o widget morto pela sessão
-                # inteira. Um desfazer volta pelo ramo de criação acima, que
-                # refaz a entrada a partir do arquivo de capa.
+                # Fora das duas grades = desinstalado sem a marca de Zerado,
+                # ou blacklisted. Sem isto o GameCover continuava dono de
+                # `game.cover` e o repintava a cada troca de frame, segurando
+                # o widget morto pela sessão inteira. Um desfazer volta pelo
+                # ramo de criação acima, que refaz a entrada a partir do
+                # arquivo de capa.
                 if (cover := shared.win.game_covers.pop(game.game_id, None)) is not None:
                     cover.release_picture(game.cover)
 
@@ -158,4 +162,4 @@ class DisplayManager(Manager):
         # bulk operations the sort is re-applied once at the end instead.
         if shared.win.get_application().state == shared.AppState.DEFAULT:
             shared.win.library.invalidate_sort()
-            shared.win.hidden_library.invalidate_sort()
+            shared.win.zerados_library.invalidate_sort()

@@ -569,7 +569,6 @@ class DetailsDialog(Adw.Dialog):
             self.game = Game(
                 {
                     "game_id": f"imported_{game_number}",
-                    "hidden": False,
                     "source": source_id,
                     "added": int(time()),
                 }

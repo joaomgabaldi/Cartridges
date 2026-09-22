@@ -316,9 +316,8 @@ class Store:
         # rule DisplayManager follows for everything it touches.
         # TODO: don't run this if the state is startup
         def dismiss_undo_toasts() -> bool:
-            for undo in ("remove", "hide"):
-                if toast := shared.win.toasts.pop((game, undo), None):
-                    shared.win.toast_queue.dismiss(toast)
+            if toast := shared.win.toasts.pop((game, "remove"), None):
+                shared.win.toast_queue.dismiss(toast)
             return GLib.SOURCE_REMOVE
 
         GLib.idle_add(dismiss_undo_toasts)

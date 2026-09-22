@@ -41,7 +41,6 @@ PERSISTED_ATTRS = (
     "executable",
     "game_id",
     "source",
-    "hidden",
     "last_played",
     "playtime",
     "status",
@@ -119,7 +118,6 @@ class Game(Gtk.Box):
     play_revealer = Gtk.Template.Child()
     menu_revealer = Gtk.Template.Child()
     game_options = Gtk.Template.Child()
-    hidden_game_options = Gtk.Template.Child()
 
     loading: int = 0
     filtered: bool = False
@@ -132,7 +130,6 @@ class Game(Gtk.Box):
     executable: str
     game_id: str
     source: str
-    hidden: bool = False
     last_played: int = 0
     playtime: int = 0  # total seconds played, summed across sessions
     # Onde o jogo está na sua vida, não na loja: escolhido à mão e nunca
@@ -269,6 +266,15 @@ class Game(Gtk.Box):
         places (show it, and decide whether the click target is live).
         """
         return self.track_updates and self.update_available_ts > 0
+
+    @property
+    def zerado(self) -> bool:
+        """Está na página Jogos Zerados: desinstalado e marcado como Zerado.
+
+        Sem campo próprio — a regra sai de dois que já são gravados, para que
+        não exista um terceiro capaz de discordar deles.
+        """
+        return self.removed and not self.blacklisted and self.status == "beaten"
 
     def dismiss_update(self) -> None:
         """Acknowledge the advertised patch: remember it and hide the notice.
@@ -434,22 +440,6 @@ class Game(Gtk.Box):
 
         # The variable is the title of the game
         self.create_toast(_("{} iniciado"))
-
-    def toggle_hidden(self, toast: bool = True) -> None:
-        self.hidden = not self.hidden
-        self.save()
-
-        if shared.win.navigation_view.get_visible_page() == shared.win.details_page:
-            shared.win.navigation_view.pop()
-
-        self.update()
-
-        if toast:
-            self.create_toast(
-                # The variable is the title of the game
-                _("{} ocultado") if self.hidden else _("{} reexibido"),
-                "hide",
-            )
 
     def remove_game(self) -> None:
         # Add "removed=True" to the game properties so it can be deleted on next init
