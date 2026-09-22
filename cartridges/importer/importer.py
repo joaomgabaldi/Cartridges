@@ -182,7 +182,7 @@ class Importer(ErrorProducer):
         shared.win.get_application().state = shared.AppState.DEFAULT
         # Re-apply the current sort so freshly imported games land in order
         shared.win.library.invalidate_sort()
-        shared.win.hidden_library.invalidate_sort()
+        shared.win.zerados_library.invalidate_sort()
 
     def remove_games(self) -> None:
         """Set removed to True for missing games"""

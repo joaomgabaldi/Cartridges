@@ -787,7 +787,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
         # Clear the UI and in-memory store
         shared.win.library.remove_all()
-        shared.win.hidden_library.remove_all()
+        shared.win.zerados_library.remove_all()
         shared.store.clear()
         shared.win.game_covers = {}
 

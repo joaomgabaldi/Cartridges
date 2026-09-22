@@ -252,7 +252,6 @@ _GAME_FIELD_TYPES: dict[str, Any] = {
     ),
     **dict.fromkeys(
         (
-            "hidden",
             "gamepad_recommended",
             "removed",
             "blacklisted",
@@ -531,7 +530,6 @@ class CartridgesApplication(Adw.Application):
                 ("about",),
                 ("preferences",),
                 ("launch_game",),
-                ("hide_game",),
                 ("edit_game",),
                 ("add_game",),
                 ("import",),
@@ -540,7 +538,7 @@ class CartridgesApplication(Adw.Application):
                 ("sgdb_search",),
                 ("pcgw_search",),
                 ("hltb_search",),
-                ("show_hidden", shared.win),
+                ("show_zerados", shared.win),
                 ("show_news", shared.win),
                 ("toggle_search", shared.win),
             }
@@ -834,9 +832,6 @@ class CartridgesApplication(Adw.Application):
 
     def on_launch_game_action(self, *_args: Any) -> None:
         shared.win.active_game.launch()
-
-    def on_hide_game_action(self, *_args: Any) -> None:
-        shared.win.active_game.toggle_hidden()
 
     def on_edit_game_action(self, *_args: Any) -> None:
         DetailsDialog(shared.win.active_game).present(shared.win)

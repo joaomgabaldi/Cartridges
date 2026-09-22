@@ -56,7 +56,6 @@ _CHAVES_DE_ESTADO = ("sort-mode",)
 # fica de fora: identidade nunca viaja, e metadado online o próprio pipeline
 # de import recarrega sozinho assim que o jogo existir.
 CAMPOS_OPINIAO = (
-    "hidden",
     "last_played",
     "playtime",
     "status",
@@ -194,7 +193,7 @@ def _aplicar_sessoes(game_id: str, sessoes: list[dict[str, Any]]) -> None:
             session_log.record(game_id, segundos, fim)
 
 
-_CAMPOS_BOOLEANOS = frozenset({"hidden", "run_as_admin", "track_process", "track_updates"})
+_CAMPOS_BOOLEANOS = frozenset({"run_as_admin", "track_process", "track_updates"})
 _CAMPOS_TEXTO = frozenset({"notes", "process_executable"})
 
 
@@ -404,8 +403,8 @@ def restaurar(
             casados += 1
 
     if casados:
-        # `hidden`/`status`/`rating` mudando pode mover um jogo entre a
-        # biblioteca e a oculta, ou tirá-lo de um filtro ativo — as listas
+        # `status`/`rating` mudando pode mover um jogo entre a
+        # biblioteca e os zerados, ou tirá-lo de um filtro ativo — as listas
         # precisam invalidar sort/filter para refletir isso. GTK, então na
         # thread principal.
         GLib.idle_add(_invalidar_listas)
@@ -415,9 +414,9 @@ def restaurar(
 
 def _invalidar_listas() -> bool:
     shared.win.library.invalidate_sort()
-    shared.win.hidden_library.invalidate_sort()
+    shared.win.zerados_library.invalidate_sort()
     shared.win.library.invalidate_filter()
-    shared.win.hidden_library.invalidate_filter()
+    shared.win.zerados_library.invalidate_filter()
     return False
 
 

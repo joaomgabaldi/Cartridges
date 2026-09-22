@@ -342,6 +342,6 @@ class InstallSizeSweep:
         # grade fica na ordem que a varredura encontrou, que é a de antes dela.
         if win.sort_state == "install_size":
             win.library.invalidate_sort()
-            win.hidden_library.invalidate_sort()
+            win.zerados_library.invalidate_sort()
         return False
 

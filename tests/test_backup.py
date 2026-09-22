@@ -152,7 +152,7 @@ def test_exportar_leva_so_campos_de_opiniao_por_identidade(
     jogo = make_game(
         game_id="a", steam_appid="367520", name="Hollow Knight",
         playtime=7200, status="beaten", rating=4, notes="Bom jogo",
-        hidden=True, run_as_admin=True, track_process=True,
+        run_as_admin=True, track_process=True,
         process_executable="hk.exe", track_updates=True, last_played=123,
         # campos que NUNCA devem ir para o backup:
         executable="C:\\jogo\\hk.exe", source="shortcuts",
@@ -171,7 +171,6 @@ def test_exportar_leva_so_campos_de_opiniao_por_identidade(
     assert entrada["status"] == "beaten"
     assert entrada["rating"] == 4
     assert entrada["notes"] == "Bom jogo"
-    assert entrada["hidden"] is True
     assert entrada["run_as_admin"] is True
     assert entrada["track_process"] is True
     assert entrada["process_executable"] == "hk.exe"
@@ -449,13 +448,12 @@ def test_restaurar_descarta_campos_invalidos_mas_aplica_os_validos(
     main.set_boolean("steam-metadata", False)
     jogo = make_game(
         game_id="a", steam_appid="1", name="Jogo",
-        hidden=False, rating=2, status="playing", notes="antes",
+        rating=2, status="playing", notes="antes",
     )
     store.add_game(jogo, {})
     destino, _chave = _backup_com_um_jogo(
         tmp_path,
         appid="1",
-        hidden=1,  # truthy não vale — só bool de verdade
         rating=99,  # fora de 0..5, não clampeia
         status="inexistente",  # fora de STATUS_LABELS
         notes=5,  # não é str
@@ -465,7 +463,6 @@ def test_restaurar_descarta_campos_invalidos_mas_aplica_os_validos(
 
     backup.restaurar(destino)
 
-    assert jogo.hidden is False
     assert jogo.rating == 2
     assert jogo.status == "playing"
     assert jogo.notes == "antes"
@@ -955,7 +952,7 @@ def test_backup_ida_e_volta_exportar_e_restaurar_de_verdade(
     origem = make_game(
         game_id="origem", steam_appid="1", name="Jogo",
         playtime=7200, status="beaten", rating=4, notes="Bom jogo",
-        hidden=True, run_as_admin=True, track_process=True,
+        run_as_admin=True, track_process=True,
         process_executable="jogo.exe", track_updates=True, last_played=123,
     )
     store.add_game(origem, {})
@@ -991,7 +988,6 @@ def test_backup_ida_e_volta_exportar_e_restaurar_de_verdade(
     assert segundo.status == "beaten"
     assert segundo.rating == 4
     assert segundo.notes == "Bom jogo"
-    assert segundo.hidden is True
     assert segundo.run_as_admin is True
     assert segundo.track_process is True
     assert segundo.process_executable == "jogo.exe"

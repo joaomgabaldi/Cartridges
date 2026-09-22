@@ -33,11 +33,9 @@ from cartridges.window import CartridgesWindow
 # ---------------------------------------------------------------------------
 
 
-def add_game_to(window, game, hidden):
-    game.hidden = hidden
-    library = window.hidden_library if hidden else window.library
-    library.append(game)
-    return library
+def add_game_to(window, game):
+    window.library.append(game)
+    return window.library
 
 
 def test_filter_matches_against_the_grid_the_child_lives_in(
@@ -47,14 +45,13 @@ def test_filter_matches_against_the_grid_the_child_lives_in(
 
     Deciding by the visible page matched a game against the wrong box whenever
     the two disagreed. GTK re-runs the filter on ``append``, so a game imported
-    while the hidden page was open was tested against that page's empty entry,
-    came out filtered, and stayed invisible — and nothing invalidates the
-    filter again once the import is over.
+    while the other page was open was tested against the wrong box, came out
+    filtered, and stayed invisible — and nothing invalidates the filter again
+    once the import is over.
     """
     from cartridges.game import Game
 
     real_window.search_entry.set_text("zelda")
-    real_window.hidden_search_entry.set_text("")
 
     matching = Game(
         {
@@ -75,42 +72,11 @@ def test_filter_matches_against_the_grid_the_child_lives_in(
         }
     )
 
-    add_game_to(real_window, matching, hidden=False)
-    add_game_to(real_window, other, hidden=False)
+    add_game_to(real_window, matching)
+    add_game_to(real_window, other)
 
     assert real_window.filter_func(matching.get_parent()) is True
     assert real_window.filter_func(other.get_parent()) is False
-
-
-def test_a_child_with_no_parent_yet_is_routed_by_its_hidden_flag(
-    real_window, make_game
-):
-    """T7.1 A child being appended may not have its parent set yet.
-
-    ``game.hidden`` answers the same question GTK is about to answer, so the
-    filter does not have to wait for the widget tree to catch up.
-    """
-    from cartridges.game import Game
-
-    real_window.search_entry.set_text("zelda")
-    real_window.hidden_search_entry.set_text("")
-
-    game = Game(
-        {
-            "source": "shortcuts",
-            "game_id": "shortcuts_3",
-            "name": "Halo",
-            "executable": "x",
-            "added": 0,
-        }
-    )
-    game.hidden = True
-    child = Gtk.FlowBoxChild()
-    child.set_child(game)
-
-    # Hidden game, hidden box is empty, so nothing filters it out — even though
-    # the *visible* page's entry says "zelda".
-    assert real_window.filter_func(child) is True
 
 
 # ---------------------------------------------------------------------------
@@ -533,7 +499,6 @@ def test_the_rows_are_filled_from_the_game(win):
             "name": "Probe",
             "source": "imported",
             "executable": "x.exe",
-            "hidden": False,
             "added": 0,
             "genre": "Metroidvania",
             "controller_support": "partial",
@@ -598,7 +563,6 @@ def test_apply_writes_both_rows_to_the_game(real_window, store):
             "name": "Probe",
             "source": "imported",
             "executable": "x.exe",
-            "hidden": False,
             "added": 0,
             "genre": "Metroidvania",
             "controller_support": "full",
@@ -681,7 +645,6 @@ def _probe_game():
             "name": "Probe",
             "source": "imported",
             "executable": "x.exe",
-            "hidden": False,
             "added": 0,
             **PERSISTED_METADATA,
         }
@@ -783,7 +746,6 @@ NOT_GAME_METADATA = {
     "blacklisted",
     "executable",
     "game_id",
-    "hidden",
     "last_played",
     "name",
     "playtime",
@@ -988,7 +950,6 @@ def test_an_unchanged_apply_keeps_the_computed_blur(real_window, store, app_dirs
             "name": "Probe",
             "source": "imported",
             "executable": "x.exe",
-            "hidden": False,
             "added": 0,
         }
     )
@@ -1022,7 +983,6 @@ def test_a_logo_can_come_from_a_local_file(real_window, store, app_dirs):
             "name": "Probe",
             "source": "imported",
             "executable": "x.exe",
-            "hidden": False,
             "added": 0,
         }
     )
@@ -1071,7 +1031,7 @@ def test_the_library_grids_are_the_sliding_kind(real_window):
     window is constructed, which is every launch.
     """
     assert isinstance(real_window.library, AnimatedFlowBox)
-    assert isinstance(real_window.hidden_library, AnimatedFlowBox)
+    assert isinstance(real_window.zerados_library, AnimatedFlowBox)
 
 
 def test_a_new_column_count_slides_the_covers():
@@ -1294,14 +1254,13 @@ def test_a_removed_games_values_leave_the_menu(real_window, store):
 def test_the_genre_filter_hides_what_does_not_match(real_window, store):
     """The filter reads the game, not the search box."""
     real_window.search_entry.set_text("")
-    real_window.hidden_search_entry.set_text("")
 
     matching = library_game(store, 1, genre="Metroidvania")
     other = library_game(store, 2, genre="Ação")
     missing = library_game(store, 3)
-    add_game_to(real_window, matching, hidden=False)
-    add_game_to(real_window, other, hidden=False)
-    add_game_to(real_window, missing, hidden=False)
+    add_game_to(real_window, matching)
+    add_game_to(real_window, other)
+    add_game_to(real_window, missing)
 
     real_window.set_filter("filter_genre", "Metroidvania")
 
@@ -1317,11 +1276,10 @@ def test_the_genre_filter_hides_what_does_not_match(real_window, store):
 def test_the_search_looks_inside_the_notes(real_window, store):
     """Quem escreveu "senha do cofre: 8815" há seis meses lembra da palavra, e
     não de qual jogo era — a mesma razão de a busca já olhar a desenvolvedora."""
-    real_window.hidden_search_entry.set_text("")
     game = library_game(store, 1, notes="Parei no capítulo 4.\nCofre: 8815")
     other = library_game(store, 2)
     for each in (game, other):
-        add_game_to(real_window, each, hidden=False)
+        add_game_to(real_window, each)
 
     real_window.search_entry.set_text("cofre")
     assert real_window.filter_func(game.get_parent()) is True
@@ -1332,9 +1290,8 @@ def test_the_search_looks_inside_the_notes(real_window, store):
 
 def test_filters_and_search_combine(real_window, store):
     """Both must agree for a game to show."""
-    real_window.hidden_search_entry.set_text("")
     game = library_game(store, 1, genre="Ação", release_date="2024")
-    add_game_to(real_window, game, hidden=False)
+    add_game_to(real_window, game)
 
     real_window.set_filter("filter_genre", "Ação")
     real_window.set_filter("filter_year", "2024")
@@ -1516,13 +1473,12 @@ def test_the_status_menu_offers_every_status_whatever_the_library_holds(
 
 def test_the_status_filter_hides_what_does_not_match(real_window, store):
     real_window.search_entry.set_text("")
-    real_window.hidden_search_entry.set_text("")
 
     beaten = library_game(store, 1, status="beaten")
     playing = library_game(store, 2, status="playing")
     none = library_game(store, 3)
     for game in (beaten, playing, none):
-        add_game_to(real_window, game, hidden=False)
+        add_game_to(real_window, game)
 
     real_window.set_filter("filter_status", "beaten")
 
@@ -1660,7 +1616,7 @@ def test_sorting_by_rating_puts_the_unrated_last(real_window, store):
     two = library_game(store, 2, rating=2)
     unrated = library_game(store, 3)
     for game in (five, two, unrated):
-        add_game_to(real_window, game, hidden=False)
+        add_game_to(real_window, game)
 
     real_window.sort_state = "rating"
     order = real_window.sort_func
@@ -1676,8 +1632,8 @@ def test_ties_on_rating_fall_back_to_the_title(real_window, store):
     reordenação, que é o que já aconteceu com títulos iguais."""
     first = library_game(store, 1, rating=4)
     second = library_game(store, 2, rating=4)
-    add_game_to(real_window, first, hidden=False)
-    add_game_to(real_window, second, hidden=False)
+    add_game_to(real_window, first)
+    add_game_to(real_window, second)
 
     real_window.sort_state = "rating"
 
@@ -1697,7 +1653,7 @@ def test_sorting_by_size_puts_the_unmeasured_last(real_window, store):
     small = library_game(store, 2, install_size=3 * 1024**3)
     unmeasured = library_game(store, 3)
     for game in (big, small, unmeasured):
-        add_game_to(real_window, game, hidden=False)
+        add_game_to(real_window, game)
 
     real_window.sort_state = "install_size"
     order = real_window.sort_func
@@ -2022,7 +1978,7 @@ def test_switching_empty_notices_does_not_stack_them(real_window, monkeypatch):
     assert win.notice_empty.get_parent() is win.library_overlay
 
     filtered = SimpleNamespace(
-        removed=False, blacklisted=False, hidden=False, filtered=True
+        removed=False, blacklisted=False, filtered=True
     )
     monkeypatch.setattr(shared, "store", [filtered])
     win.set_library_child()

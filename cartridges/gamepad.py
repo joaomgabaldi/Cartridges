@@ -483,12 +483,8 @@ class GamepadManager:
         if library is None:
             return
 
-        search_bar = (
-            shared.win.hidden_search_bar
-            if library is shared.win.hidden_library
-            else shared.win.search_bar
-        )
-        if search_bar.get_search_mode():
+        # A página de zerados não tem busca: só a da biblioteca prende o foco.
+        if library is shared.win.library and shared.win.search_bar.get_search_mode():
             return
 
         if self._focused_flowbox_child(library) is None:
@@ -682,8 +678,8 @@ class GamepadManager:
 
         window = shared.win
         scrolled = (
-            window.hidden_scrolledwindow
-            if library is window.hidden_library
+            window.zerados_scrolledwindow
+            if library is window.zerados_library
             else window.scrolledwindow
         )
 
@@ -787,8 +783,8 @@ class GamepadManager:
         page = window.navigation_view.get_visible_page()
         if page == window.library_page:
             return window.library
-        if page == window.hidden_library_page:
-            return window.hidden_library
+        if page == window.zerados_library_page:
+            return window.zerados_library
         return None
 
     # Buttons ----------------------------------------------------------------
@@ -911,8 +907,6 @@ class GamepadManager:
         search_bar = None
         if page == window.library_page:
             search_bar = window.search_bar
-        elif page == window.hidden_library_page:
-            search_bar = window.hidden_search_bar
 
         if search_bar is not None and search_bar.get_search_mode():
             search_bar.set_search_mode(False)

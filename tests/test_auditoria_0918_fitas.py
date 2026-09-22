@@ -215,7 +215,7 @@ class _Janela:
         win.navigation_view = SimpleNamespace(get_visible_page=lambda: None)
         win.details_page = object()
         win.library = vazio
-        win.hidden_library = vazio
+        win.zerados_library = vazio
         win.set_library_child = lambda: None
 
 
