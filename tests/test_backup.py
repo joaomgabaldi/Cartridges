@@ -840,7 +840,7 @@ def test_aplicar_configuracoes_fora_da_main_timeout_vira_aviso(
     with caplog.at_level("WARNING"):
         backup._aplicar_configuracoes_fora_da_main({"settings": {}, "state": {}})
 
-    assert any("configura" in registro.message.lower() for registro in caplog.records)
+    assert any("tempo esgotado" in registro.message.lower() for registro in caplog.records)
 
 
 def test_validar_confere_o_crc_de_cada_entrada(
@@ -1069,3 +1069,111 @@ def test_import_backup_confirma_e_restaura_ao_vivo(
         time.sleep(0.01)
 
     assert jogo.playtime == 42
+
+
+# --------------------------------------------------------------------------
+# Jogos Zerados
+# --------------------------------------------------------------------------
+
+
+def test_exportar_leva_os_zerados_com_ficha_e_deixa_os_desinstalados(
+    store, make_game, settings, tmp_path
+) -> None:
+    zerado = make_game(
+        game_id="z", steam_appid="10", name="Zerado", removed=True,
+        status="beaten", playtime=3600, developer="Estúdio",
+    )
+    comum = make_game(game_id="c", steam_appid="20", name="Comum", removed=True)
+    for jogo in (zerado, comum):
+        store.add_game(jogo, {"skip_save": True})
+
+    destino = tmp_path / "b.zip"
+    backup.exportar(destino, backup.ler_configuracoes())
+    jogos = backup.validar(destino)["jogos"]
+
+    entrada = jogos[backup._hash_identidade("steam:10")]
+    assert entrada["zerado"] is True
+    assert entrada["ficha"]["name"] == "Zerado"
+    assert entrada["ficha"]["developer"] == "Estúdio"
+    assert entrada["playtime"] == 3600
+    assert backup._hash_identidade("steam:20") not in jogos
+
+
+def test_restaurar_recria_o_zerado_que_nao_existe_no_pc(
+    store, make_game, settings, tmp_path, app_dirs
+) -> None:
+    from cartridges.store.store import Store  # noqa: PLC0415
+    from cartridges.utils import session_log  # noqa: PLC0415
+
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    zerado = make_game(
+        game_id="z", steam_appid="10", name="Zerado", removed=True,
+        status="beaten", playtime=3600, rating=5,
+    )
+    store.add_game(zerado, {"skip_save": True})
+    (app_dirs.covers / "z.tiff").write_bytes(b"capa")
+    session_log.record("z", 3600, end=1_700_000_000)
+    destino = tmp_path / "b.zip"
+    backup.exportar(destino, backup.ler_configuracoes())
+
+    nova = Store()
+    shared.store = nova
+    resultado = backup.restaurar(destino)
+
+    assert resultado.casados == 1
+    recriado = nova.get("imported_1")
+    assert recriado is not None
+    assert recriado.zerado is True
+    assert recriado.name == "Zerado"
+    assert recriado.steam_appid == "10"
+    assert recriado.playtime == 3600
+    assert recriado.rating == 5
+    assert recriado.executable == ""
+    assert (app_dirs.covers / "imported_1.tiff").is_file()
+    assert session_log.load("imported_1") == [
+        {"game_id": "imported_1", "end": 1_700_000_000, "seconds": 3600}
+    ]
+
+    # Restaurar de novo casa com o recriado, em vez de duplicar.
+    assert backup.restaurar(destino).casados == 1
+    assert nova.get("imported_2") is None
+
+
+def test_restaurar_zerado_casa_com_a_tumba_que_ja_existe(
+    store, make_game, settings, tmp_path
+) -> None:
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    destino, _chave = _backup_com_um_jogo(
+        tmp_path, appid="10", status="beaten", playtime=900, zerado=True,
+        ficha={"name": "Zerado", "steam_appid": "10"},
+    )
+    tumba = make_game(game_id="t", steam_appid="10", name="Zerado", removed=True)
+    store.add_game(tumba, {"skip_save": True})
+
+    backup.restaurar(destino)
+
+    assert tumba.zerado is True
+    assert tumba.playtime == 900
+    assert len(store) == 1
+
+
+def test_tumba_com_o_nome_de_um_jogo_vivo_nao_atrapalha(
+    store, make_game, settings, tmp_path
+) -> None:
+    main, _state = settings
+    main.set_boolean("steam-metadata", False)
+    destino, _chave = _backup_com_um_jogo(
+        tmp_path, nome="Jogo", playtime=50, configuracoes={"steam-metadata": False}
+    )
+    vivo = make_game(game_id="v", name="Jogo")
+    tumba = make_game(game_id="t", name="Jogo", removed=True)
+    store.add_game(vivo, {})
+    store.add_game(tumba, {"skip_save": True})
+
+    resultado = backup.restaurar(destino)
+
+    assert resultado.ambiguos == []
+    assert vivo.playtime == 50
+    assert tumba.playtime == 0
