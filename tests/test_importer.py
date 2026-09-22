@@ -172,6 +172,17 @@ def test_remove_games_removes_a_missing_game_of_a_scanned_source(
     assert "shortcuts_1" in importer.removed_game_ids
 
 
+def test_remove_games_leaves_a_zerado_alone(importer, make_game, store):
+    game = make_game(game_id="shortcuts_1", removed=True, status="beaten")
+    store.add_game(game, {"skip_save": True})
+    importer.scanned_source_ids.add("shortcuts")
+
+    importer.remove_games()
+
+    assert game.saves == 0
+    assert "shortcuts_1" not in importer.removed_game_ids
+
+
 @pytest.mark.parametrize("bucket", ["duplicate_game_ids", "new_game_ids"])
 def test_remove_games_skips_games_seen_this_run(importer, make_game, store, bucket):
     """T2.7 A game the scan just saw is not missing."""

@@ -726,10 +726,17 @@ class CartridgesApplication(Adw.Application):
                 # loadable: `Game.__init__` reads `source` to derive
                 # `base_source` and would raise here, outside the JSON guard
                 # above, so a single corrupt file stopped the app from opening
-                # at all rather than costing one game.
-                if not isinstance(data, dict) or not all(
-                    isinstance(data.get(key), str) and data[key]
-                    for key in ("source", "game_id", "name", "executable")
+                # at all rather than costing one game. O executável pode ser
+                # vazio só numa tumba: um zerado recriado pelo backup nunca
+                # teve instalação neste PC.
+                if (
+                    not isinstance(data, dict)
+                    or not all(
+                        isinstance(data.get(key), str) and data[key]
+                        for key in ("source", "game_id", "name")
+                    )
+                    or not isinstance(data.get("executable"), str)
+                    or not (data["executable"] or data.get("removed") is True)
                 ):
                     logging.warning("Skipping malformed game record %s", game_file.name)
                     continue

@@ -600,9 +600,14 @@ class Store:
             )
 
         # A removed game loaded from disk is kept as a "tombstone": it stays in
-        # the store (so later scans know it was removed) but is never shown or
-        # run through the pipeline. This is what stops a still-present shortcut
+        # the store (so later scans know it was removed) but is never run
+        # through the pipeline. This is what stops a still-present shortcut
         # from re-adding a game the user deleted.
+        #
+        # Conectada aos managers como um jogo vivo, porém: sem isso o save() de
+        # uma tumba não chega ao disco nem o update() à tela, e um zerado
+        # precisa das duas coisas — aparecer na página dele, ser marcado pelo
+        # seletor, ser desmarcado.
         if game.removed:
             if not stored_game:
                 with self._lock:
@@ -611,6 +616,11 @@ class Store:
                     ] = game
                     self.games_by_id[game.game_id] = game
                     self._index_shortcut(game)
+                for manager in self.managers.values():
+                    for signal in manager.signals:
+                        game.connect(signal, manager.run)
+                if game.zerado:
+                    game.update()
             return None
 
         # Handle game duplicates
@@ -619,6 +629,23 @@ class Store:
             logging.debug("New store game %s (%s)", game.name, game.game_id)
             self.new_game_ids.add(game.game_id)
         elif stored_game.removed:
+            # Um zerado reinstalado continua zerado: quem o tira da página é a
+            # pessoa, desmarcando "Zerado". Até lá o atalho novo só é anotado
+            # na ficha — é por ele que desmarcar decide se o jogo volta à
+            # biblioteca (`Game.definir_status`).
+            if stored_game.zerado:
+                if game.shortcut_mtime > stored_game.shortcut_mtime:
+                    stored_game.executable = game.executable
+                    stored_game.shortcut_mtime = game.shortcut_mtime
+                    if (
+                        game.shortcut_path
+                        and game.shortcut_path != stored_game.shortcut_path
+                    ):
+                        with self._lock:
+                            self._reindex_shortcut(stored_game, game.shortcut_path)
+                    stored_game.save()
+                self.duplicate_game_ids.add(game.game_id)
+                return None
             # Matches a tombstone. Only bring the game back if this shortcut is
             # newer than the one that was removed (i.e. it was reinstalled);
             # otherwise it's the same removed shortcut still in the folder, so
