@@ -188,7 +188,7 @@ def test_reinstalar_um_zerado_mantem_a_ficha(store, make_game):
         status="beaten",
         playtime=3600,
         executable="velho",
-        shortcut_path="C:\velho.lnk",
+        shortcut_path=r"C:\velho.lnk",
         shortcut_mtime=100,
     )
     store.add_game(tumba, {"skip_save": True})
@@ -196,7 +196,7 @@ def test_reinstalar_um_zerado_mantem_a_ficha(store, make_game):
     novo = make_game(
         game_id="shortcuts_z",
         executable="novo",
-        shortcut_path="C:\novo.lnk",
+        shortcut_path=r"C:\novo.lnk",
         shortcut_mtime=200,
     )
     assert store.add_game(novo, {}) is None
@@ -206,7 +206,7 @@ def test_reinstalar_um_zerado_mantem_a_ficha(store, make_game):
     assert tumba.status == "beaten"
     assert tumba.playtime == 3600
     assert tumba.executable == "novo"
-    assert tumba.shortcut_path == "C:\novo.lnk"
+    assert tumba.shortcut_path == r"C:\novo.lnk"
     assert tumba.shortcut_mtime == 200
     assert tumba.saves == 1
     assert "shortcuts_z" in store.duplicate_game_ids
@@ -295,10 +295,32 @@ def test_desmarcar_pela_tela_sem_atalho_fecha_os_detalhes(
     real_window.on_set_status_action(None, GLib.Variant("s", ""))
 
     assert game.status == ""
+    assert game.removed is True
     assert fechou == [1]
 
 
-def test_desmarcar_pela_edicao_passa_pela_mesma_regra(real_window, store, tmp_path):
+def test_desmarcar_sem_executavel_nao_ressuscita(tmp_path):
+    # A carga descarta uma ficha viva sem executável como malformada: de volta
+    # à biblioteca assim, o jogo sumiria no próximo início.
+    atalho = tmp_path / "Jogo.lnk"
+    atalho.write_bytes(b"")
+    game = jogo(
+        None, 25, removed=True, status="beaten", executable="", shortcut_path=str(atalho)
+    )
+
+    game.definir_status("")
+
+    assert game.removed is True
+
+
+@pytest.mark.parametrize(
+    ("numero", "executavel", "volta"),
+    [(24, "", False), (26, "x", True)],
+    ids=["sem-executavel", "com-executavel"],
+)
+def test_desmarcar_pela_edicao_passa_pela_mesma_regra(
+    real_window, store, tmp_path, numero, executavel, volta
+):
     from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
     from tests.test_ui_logic import _stub_sgdb  # noqa: PLC0415
 
@@ -306,15 +328,21 @@ def test_desmarcar_pela_edicao_passa_pela_mesma_regra(real_window, store, tmp_pa
     atalho = tmp_path / "Jogo.lnk"
     atalho.write_bytes(b"")
     game = jogo(
-        store, 24, removed=True, status="beaten", executable="", shortcut_path=str(atalho)
+        store,
+        numero,
+        removed=True,
+        status="beaten",
+        executable=executavel,
+        shortcut_path=str(atalho),
     )
 
     dialog = DetailsDialog(game)
     dialog.status.set_selected(0)  # "Sem status"
     dialog.apply_preferences()
 
+    # Chegar ao status vazio prova que o executável vazio não barrou a edição.
     assert game.status == ""
-    assert game.removed is False, "executável vazio não barra a edição de um zerado"
+    assert game.removed is not volta
 
 
 def test_apagar_jogo_leva_so_as_sessoes_dele():
@@ -334,10 +362,18 @@ def test_apagar_jogo_leva_so_as_sessoes_dele():
 def test_excluir_apaga_ficha_capa_sessoes_e_o_lugar_na_store(
     store, make_game, app_dirs, flush_idle
 ):
+    from cartridges.store.store import _path_key  # noqa: PLC0415
     from cartridges.utils import session_log  # noqa: PLC0415
 
-    game = make_game(game_id="shortcuts_z", removed=True, status="beaten")
+    game = make_game(
+        game_id="shortcuts_z",
+        removed=True,
+        status="beaten",
+        shortcut_path=r"C:\Jogos\Z.lnk",
+    )
     store.add_game(game, {"skip_save": True})
+    chave = (game.base_source, _path_key(game.shortcut_path))
+    assert store._games_by_shortcut.get(chave) is game
     (app_dirs.games / "shortcuts_z.json").write_text("{}", encoding="utf-8")
     (app_dirs.covers / "shortcuts_z.tiff").write_bytes(b"capa")
     session_log.record("shortcuts_z", 60, end=1_700_000_000)
@@ -349,3 +385,4 @@ def test_excluir_apaga_ficha_capa_sessoes_e_o_lugar_na_store(
     assert not (app_dirs.games / "shortcuts_z.json").exists()
     assert not (app_dirs.covers / "shortcuts_z.tiff").exists()
     assert session_log.load("shortcuts_z") == []
+    assert chave not in store._games_by_shortcut

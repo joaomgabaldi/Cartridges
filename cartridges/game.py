@@ -281,7 +281,8 @@ class Game(Gtk.Box):
 
         Tirar a marca de um zerado é também decidir para onde ele vai: com o
         atalho de volta na pasta (foi reinstalado), volta à biblioteca com a
-        ficha inteira; sem ele, vira um desinstalado comum, fora de qualquer
+        ficha inteira; sem ele — ou sem executável, que a carga descartaria como
+        ficha malformada —, vira um desinstalado comum, fora de qualquer
         grade, que o seletor da página volta a oferecer. Quem chama salva e
         atualiza depois.
         """
@@ -290,6 +291,7 @@ class Game(Gtk.Box):
         if (
             era_zerado
             and not self.zerado
+            and self.executable
             and self.shortcut_path
             and Path(self.shortcut_path).is_file()
         ):
