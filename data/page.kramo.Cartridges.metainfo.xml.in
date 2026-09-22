@@ -9,7 +9,7 @@
   <name>Cartridges</name>
   <summary>Seus jogos em um só lugar</summary>
   <description>
-    <p>O Cartridges é um lançador simples para todos os seus jogos. Ele importa atalhos de jogos (.lnk e .url, incluindo aplicativos da Microsoft Store/UWP) em lote a partir de uma pasta, então jogos da Steam, Epic, Ubisoft Connect, Xbox e outros ficam todos em um só lugar, sem precisar fazer login. Títulos, desenvolvedoras, publicadoras e datas de lançamento são buscados na Steam, e você pode ordenar e ocultar jogos ou baixar capas do SteamGridDB.</p>
+    <p>O Cartridges é um lançador simples para todos os seus jogos. Ele importa atalhos de jogos (.lnk e .url, incluindo aplicativos da Microsoft Store/UWP) em lote a partir de uma pasta, então jogos da Steam, Epic, Ubisoft Connect, Xbox e outros ficam todos em um só lugar, sem precisar fazer login. Títulos, desenvolvedoras, publicadoras e datas de lançamento são buscados na Steam, e você pode ordenar os jogos, guardar os que já zerou em Jogos Zerados ou baixar capas do SteamGridDB.</p>
   </description>
   <developer id="page.kramo">
     <name translate="no">joaomgabaldi</name>
@@ -46,6 +46,15 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.22" date="2026-09-22">
+      <description translate="no">
+        <ul>
+          <li>Nova página "Jogos Zerados", no menu principal: os jogos desinstalados marcados como Zerado continuam no app, com capa, informações, nota e histórico de sessões — sem Jogar nem as opções de lançamento. O botão + da página marca como Zerado um jogo que já tinha sido desinstalado. Reinstalar um zerado não o tira da página; tirar a marca "Zerado" devolve o jogo à biblioteca (se ele estiver instalado) com tudo o que tinha. "Excluir" apaga o jogo definitivamente</li>
+          <li>Os Jogos Zerados entram no backup, e restaurar recria os que não existem neste PC</li>
+          <li>O recurso de ocultar jogos foi removido</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.21" date="2026-09-21">
       <description translate="no">
         <ul>
