@@ -146,6 +146,8 @@ class DetailsDialog(Adw.Dialog):
     track_process_switch: Adw.SwitchRow = Gtk.Template.Child()
     process_executable: Adw.EntryRow = Gtk.Template.Child()
     track_updates_switch: Adw.SwitchRow = Gtk.Template.Child()
+    executable_group: Adw.PreferencesGroup = Gtk.Template.Child()
+    updates_group: Adw.PreferencesGroup = Gtk.Template.Child()
 
     file_chooser_button: Gtk.Button = Gtk.Template.Child()
     open_folder_button: Gtk.Button = Gtk.Template.Child()
@@ -398,6 +400,20 @@ class DetailsDialog(Adw.Dialog):
         self.track_process_switch.connect(
             "notify::active", self.on_track_process_toggled
         )
+
+        # Um zerado não é mais lançado: nada do que só serve para lançar (ou
+        # para a sessão que o lançamento abre) tem o que fazer aqui. Por último
+        # de propósito — as linhas acima acertam a própria visibilidade ao
+        # serem preenchidas, e isto tem de vencer.
+        if self.game is not None and self.game.zerado:
+            for widget in (
+                self.wallpaper_row,
+                self.fita_row,
+                self.fita_brilho_row,
+                self.executable_group,
+                self.updates_group,
+            ):
+                widget.set_visible(False)
 
         self.set_focus(self.name)
 

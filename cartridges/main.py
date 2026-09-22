@@ -838,6 +838,9 @@ class CartridgesApplication(Adw.Application):
         return win
 
     def on_launch_game_action(self, *_args: Any) -> None:
+        # O botão some na tela de um zerado; isto cobre o que chega pela ação.
+        if shared.win.active_game.zerado:
+            return
         shared.win.active_game.launch()
 
     def on_edit_game_action(self, *_args: Any) -> None:

@@ -873,7 +873,7 @@ class GamepadManager:
             return
 
         game = child.get_child()
-        if game is None:
+        if game is None or game.zerado:
             return
 
         game.play_revealer.set_reveal_child(True)

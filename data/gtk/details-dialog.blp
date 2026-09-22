@@ -331,7 +331,7 @@ template $DetailsDialog: Adw.Dialog {
         }
       }
 
-      Adw.PreferencesGroup {
+      Adw.PreferencesGroup executable_group {
         Adw.EntryRow executable {
           title: _("Executável");
 
@@ -376,7 +376,7 @@ template $DetailsDialog: Adw.Dialog {
         }
       }
 
-      Adw.PreferencesGroup {
+      Adw.PreferencesGroup updates_group {
         Adw.SwitchRow track_updates_switch {
           title: _("Notificar sobre atualizações");
           subtitle: _("Avisa quando houver patch disponível");

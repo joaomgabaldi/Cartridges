@@ -32,6 +32,7 @@ from cartridges import shared
 from cartridges.game import Game, STATUS_LABELS, status_label
 from cartridges.game_cover import GameCover
 from cartridges.utils.animated_flow_box import AnimatedFlowBox
+from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.dialog_backdrop import block_window_drag
 from cartridges.utils.format_playtime import format_playtime, format_stopwatch
 from cartridges.utils.game_logo import (
@@ -114,6 +115,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
     details_view_title: Gtk.Label = Gtk.Template.Child()
     details_view_blurred_cover: Gtk.Picture = Gtk.Template.Child()
     details_view_play_button: Gtk.Button = Gtk.Template.Child()
+    details_view_remove_button: Gtk.Button = Gtk.Template.Child()
+    details_view_search_button: Gtk.MenuButton = Gtk.Template.Child()
+    details_view_delete_button: Gtk.Button = Gtk.Template.Child()
     details_view_developer: Gtk.Label = Gtk.Template.Child()
     details_view_publisher: Gtk.Label = Gtk.Template.Child()
     details_view_release_date: Gtk.Label = Gtk.Template.Child()
@@ -599,6 +603,12 @@ class CartridgesWindow(Adw.ApplicationWindow):
         set_status.connect("activate", self.on_set_status_action)
         self.add_action(set_status)
 
+        # O "Excluir" da tela de um zerado. Da janela, como o status: é da
+        # tela de detalhes que ele parte e para ela que a resposta volta.
+        delete_game = Gio.SimpleAction.new("delete_game", None)
+        delete_game.connect("activate", self.on_delete_game_action)
+        self.add_action(delete_game)
+
         self._filter_menu = Gio.Menu()
         model = self.primary_menu_button.get_menu_model()
         section = model.get_item_link(0, "section")
@@ -786,6 +796,47 @@ class CartridgesWindow(Adw.ApplicationWindow):
             self.library.invalidate_filter()
             self.zerados_library.invalidate_filter()
 
+    def on_delete_game_action(self, *_args: Any) -> None:
+        game = getattr(self, "active_game", None)
+        if game is None or not game.zerado:
+            return
+        create_dialog(
+            self,
+            # A variável é o nome do jogo
+            _("Excluir definitivamente {}?").format(game.name),
+            _(
+                "A ficha, a capa e o histórico de sessões serão apagados. "
+                "Não dá para desfazer."
+            ),
+            "delete",
+            _("Excluir"),
+            destructive=True,
+        ).connect("response", self.on_delete_game_response, game)
+
+    def on_delete_game_response(self, _dialog: Any, response: str, game: Game) -> None:
+        if response != "delete":
+            return
+
+        # Como o DisplayManager tira um jogo de uma grade: o FlowBoxChild sai da
+        # grade mas continua segurando o jogo até soltá-lo.
+        if game.get_parent() is not None:
+            self.zerados_library.remove(game)
+            if game.get_parent():
+                game.get_parent().set_child()
+        if (cover := self.game_covers.pop(game.game_id, None)) is not None:
+            cover.release_picture(game.cover)
+
+        shared.store.excluir(game)
+
+        if self.navigation_view.get_visible_page() == self.details_page:
+            self.navigation_view.pop()
+        self.schedule_library_child()
+
+        # A variável é o nome do jogo
+        toast = Adw.Toast.new(_("{} excluído").format(game.name))
+        toast.set_use_markup(False)
+        self.toast_queue.add(toast)
+
     def update_status_button(self, game: Game) -> None:
         """O botão diz o status atual, ou convida a definir um."""
         self.details_view_status_button.set_label(
@@ -906,8 +957,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
         de detalhes nunca sai andando no disco para preencher esta linha —
         abrir um jogo tem de ser instantâneo. Um jogo ainda não medido (ou cujo
         comando não diz onde ele mora) fica sem a linha, e não com um zero.
+        Um zerado também fica sem: o tamanho é de uma instalação que não
+        existe mais.
         """
-        text = format_size(game.install_size)
+        text = "" if game.zerado else format_size(game.install_size)
         self.details_view_size.set_visible(bool(text))
         if text:
             # A variável é o tamanho da instalação, ex.: "87,4 GB"
@@ -1169,6 +1222,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.update_hltb_block(game)
 
         self.update_details_notice(game)
+        self.update_details_mode(game)
 
         if self.details_view_game_cover:
             self.details_view_game_cover.set_details_animation(False)
@@ -1225,7 +1279,11 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
         if self.navigation_view.get_visible_page() != self.details_page:
             self.navigation_view.push(self.details_page)
-            self.set_focus(self.details_view_play_button)
+            self.set_focus(
+                self.details_view_status_button
+                if game.zerado
+                else self.details_view_play_button
+            )
 
         self.set_details_view_opacity()
 
@@ -1452,6 +1510,18 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
         container.append(grid)
 
+    def update_details_mode(self, game: Game) -> None:
+        """Os botões da barra conforme o jogo seja zerado ou não.
+
+        Um zerado não se joga, não se remove (já foi) e não se busca: sobram
+        editar e excluir, e o resto da tela é leitura.
+        """
+        zerado = game.zerado
+        self.details_view_play_button.set_visible(not zerado)
+        self.details_view_remove_button.set_visible(not zerado)
+        self.details_view_search_button.set_visible(not zerado)
+        self.details_view_delete_button.set_visible(zerado)
+
     def update_details_notice(self, game: Game) -> None:
         """Show or hide the patch banner for ``game`` on the details page.
 
@@ -1459,7 +1529,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         checker (raising a notice in the background) and the initial page build
         can both call this and agree on what should be on screen.
         """
-        self.details_view_update_notice.set_visible(game.has_update)
+        self.details_view_update_notice.set_visible(game.has_update and not game.zerado)
 
     def on_update_notice_clicked(self, *_args: Any) -> None:
         """Open the repack page, then confirm before hiding the notice."""
