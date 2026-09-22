@@ -1177,3 +1177,93 @@ def test_tumba_com_o_nome_de_um_jogo_vivo_nao_atrapalha(
     assert resultado.ambiguos == []
     assert vivo.playtime == 50
     assert tumba.playtime == 0
+
+
+def test_exportar_zerado_nao_tira_do_backup_o_jogo_vivo_de_mesmo_appid(
+    store, make_game, settings, tmp_path
+) -> None:
+    """O zerado recriado como imported_1 e depois reinstalado pela Steam: o
+    jogo vivo continua no backup, e o zerado cede a identidade a ele."""
+    vivo = make_game(game_id="steam_10", steam_appid="10", name="Jogo", playtime=500)
+    zerado = make_game(
+        game_id="imported_1", steam_appid="10", name="Jogo", removed=True,
+        status="beaten", playtime=3600,
+    )
+    store.add_game(vivo, {})
+    store.add_game(zerado, {"skip_save": True})
+
+    destino = tmp_path / "b.zip"
+    backup.exportar(destino, backup.ler_configuracoes())
+
+    entrada = backup.validar(destino)["jogos"][backup._hash_identidade("steam:10")]
+    assert "zerado" not in entrada
+    assert entrada["playtime"] == 500
+
+
+@pytest.mark.parametrize("extra", [{}, {"ficha": {"developer": "Estúdio"}}])
+def test_restaurar_zerado_com_ficha_ilegivel_nao_cria_jogo(
+    store, settings, tmp_path, extra
+) -> None:
+    destino, _chave = _backup_com_um_jogo(
+        tmp_path, appid="10", status="beaten", zerado=True,
+        configuracoes={"steam-metadata": False}, **extra,
+    )
+
+    resultado = backup.restaurar(destino)
+
+    assert resultado.casados == 0
+    assert store.get("imported_1") is None
+    assert len(store) == 0
+
+
+def test_exportar_leva_o_logo_automatico_de_um_zerado(
+    store, make_game, settings, tmp_path, app_dirs
+) -> None:
+    import time  # noqa: PLC0415
+
+    zerado = make_game(
+        game_id="z", steam_appid="10", name="Zerado", removed=True, status="beaten"
+    )
+    store.add_game(zerado, {"skip_save": True})
+    shared.logos_dir.mkdir(parents=True, exist_ok=True)
+    (shared.logos_dir / "z.png").write_bytes(b"logo")
+    (shared.logos_dir / "z.json").write_text(
+        json.dumps(
+            {"name": "Zerado", "file": "z.png", "timestamp": int(time.time()), "locked": False}
+        ),
+        encoding="utf-8",
+    )
+
+    destino = tmp_path / "b.zip"
+    backup.exportar(destino, backup.ler_configuracoes())
+
+    chave = backup._hash_identidade("steam:10")
+    with zipfile.ZipFile(destino) as arquivo:
+        assert f"jogos/{chave}/logo.png" in arquivo.namelist()
+
+
+def test_zerado_que_falha_ao_registrar_nao_conta_como_casado(
+    store, settings, tmp_path, monkeypatch
+) -> None:
+    """Fora da thread principal, uma exceção no `idle_add` não sobe para
+    `restaurar`: `_rodar_na_main` devolve False e o zerado não é contado."""
+
+    def idle_add_como_o_glib(funcao, *args):
+        try:
+            funcao(*args)
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass  # o GLib só registra no log e segue
+
+    def falhar(_dados) -> None:
+        raise RuntimeError("falhou")
+
+    monkeypatch.setattr(backup, "is_main_thread", lambda: False)
+    monkeypatch.setattr(backup.GLib, "idle_add", idle_add_como_o_glib)
+    monkeypatch.setattr(backup, "_registrar_zerado", falhar)
+    destino, _chave = _backup_com_um_jogo(
+        tmp_path, appid="10", status="beaten", zerado=True,
+        ficha={"name": "Zerado", "steam_appid": "10"},
+        configuracoes={"steam-metadata": False},
+    )
+
+    assert backup.restaurar(destino).casados == 0

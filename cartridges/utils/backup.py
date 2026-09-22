@@ -331,7 +331,8 @@ def _aplicar_jogo(
 def _criar_zerado(
     entrada: dict[str, Any], hash_id: str, arquivo: zipfile.ZipFile, tmp_dir: Path
 ) -> bool:
-    """Recria no PC um zerado que só existe no backup. False: ficha ilegível.
+    """Recria no PC um zerado que só existe no backup. False: ficha ilegível,
+    ou o registro na thread principal não aconteceu (ver `_rodar_na_main`).
 
     A única exceção a "restaurar nunca cria jogo", e só para zerados, que
     nunca são jogos ativos: nasce como tumba, sem atalho e sem executável,
@@ -369,8 +370,7 @@ def _criar_zerado(
         removed=True,
         status="beaten",
     )
-    _rodar_na_main(lambda: _registrar_zerado(dados))
-    return True
+    return _rodar_na_main(lambda: _registrar_zerado(dados))
 
 
 def _registrar_zerado(dados: dict[str, Any]) -> None:
@@ -400,21 +400,28 @@ def _aplicar_fitas(arquivo: zipfile.ZipFile) -> None:
         logging.warning("Não foi possível restaurar fitas.json: %s", erro)
 
 
-def _rodar_na_main(funcao: Callable[[], None]) -> None:
+def _rodar_na_main(funcao: Callable[[], None]) -> bool:
     """Roda ``funcao`` na thread principal e espera terminar.
 
     `restaurar()` roda fora dela, e o que chama daqui toca GTK: os sinais
     `changed::<chave>` do Gio.Settings, a construção de um `Game`.
+
+    True: ``funcao`` rodou até o fim. False: o teto de espera estourou, ou
+    ``funcao`` levantou exceção dentro do ``idle_add`` (que fica no log do
+    GLib). Já na thread principal, a exceção sobe direto para quem chamou.
     """
     if is_main_thread():
         funcao()
-        return
+        return True
 
     concluido = threading.Event()
+    rodou = False
 
     def rodar() -> bool:
+        nonlocal rodou
         try:
             funcao()
+            rodou = True
         finally:
             concluido.set()
         return False
@@ -425,6 +432,8 @@ def _rodar_na_main(funcao: Callable[[], None]) -> None:
         # de main.py: um app fechando no momento errado nunca processa o
         # idle_add, e a thread precisa poder seguir (ou morrer) mesmo assim.
         logging.warning("Tempo esgotado esperando a thread principal no restore do backup")
+        return False
+    return rodou
 
 
 def _aplicar_configuracoes_fora_da_main(manifesto: dict[str, Any]) -> None:
@@ -661,9 +670,13 @@ def _assets_do_jogo(jogo: Any) -> list[tuple[Path, str]]:
 
 def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
     """Grava o backup em ``destino``. Pode rodar fora da thread principal."""
-    # Os da biblioteca e os zerados — o desinstalado comum não é levado.
-    jogos_ativos = [jogo for jogo in shared.store if not jogo.removed or jogo.zerado]
-    exportaveis = _jogos_exportaveis(jogos_ativos)
+    # Os da biblioteca e os zerados — o desinstalado comum não é levado. Em
+    # duas camadas, como no restore: um zerado só entra numa identidade que
+    # nenhum jogo vivo ocupa, para nunca tornar ambíguo (e tirar do backup) o
+    # jogo reinstalado que tem o mesmo appID.
+    exportaveis = _jogos_exportaveis([jogo for jogo in shared.store if not jogo.removed])
+    for chave, jogo in _jogos_exportaveis([j for j in shared.store if j.zerado]).items():
+        exportaveis.setdefault(chave, jogo)
     game_id_para_hash = {jogo.game_id: chave for chave, jogo in exportaveis.items()}
 
     sessoes_por_hash: dict[str, list[dict[str, int]]] = {}
