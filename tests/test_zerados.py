@@ -480,3 +480,39 @@ def test_anotacao_de_um_zerado_e_so_leitura(real_window, store):
     jogando = jogo(store, 39, status="playing")
     real_window.update_notes_block(jogando)
     assert real_window.details_view_notes_button.get_visible() is True
+
+
+# -- Seletor "Adicionar" -------------------------------------------------------
+
+
+def test_candidatos_sao_os_desinstalados_sem_a_marca(store):
+    from cartridges import zerados_picker  # noqa: PLC0415
+
+    b = jogo(store, 40, removed=True, name="b")
+    a = jogo(store, 41, removed=True, name="A")
+    jogo(store, 42, removed=True, status="beaten")
+    jogo(store, 43)
+    jogo(store, 44, removed=True, blacklisted=True)
+
+    assert zerados_picker.candidatos() == [a, b]
+
+
+def test_descricao_separa_fichas_de_mesmo_nome(store):
+    from cartridges import zerados_picker  # noqa: PLC0415
+
+    assert zerados_picker.descricao(jogo(store, 45)) == "Nunca jogado"
+    jogado = jogo(store, 46, playtime=7200, last_played=1_700_000_000)
+    assert zerados_picker.descricao(jogado).startswith("2 horas · Jogado por último: ")
+
+
+def test_escolher_marca_zerado_e_tira_da_lista(store):
+    from cartridges import zerados_picker  # noqa: PLC0415
+
+    game = jogo(store, 47, removed=True)
+    picker = zerados_picker.ZeradosPicker()
+    linha = picker.lista.get_row_at_index(0)
+
+    picker.on_escolhido(linha, game)
+
+    assert game.zerado is True
+    assert picker.lista.get_row_at_index(0) is None

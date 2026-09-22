@@ -312,6 +312,13 @@ Adw.NavigationPage zerados_library_page {
   Adw.ToolbarView zerados_library_view {
     [top]
     Adw.HeaderBar zerados_header_bar {
+      [start]
+      Button zerados_add_button {
+        tooltip-text: _("Adicionar");
+        icon-name: "list-add-symbolic";
+        action-name: "win.add_zerado";
+      }
+
       [end]
       MenuButton zerados_primary_menu_button {
         tooltip-text: _("Menu principal");
