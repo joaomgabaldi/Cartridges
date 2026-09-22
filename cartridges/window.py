@@ -66,6 +66,9 @@ def can_edit_notes(game: Game) -> bool:
     e o jogo que já tem uma precisa continuar tendo onde apagá-la, senão o
     texto fica preso na tela de detalhes para sempre.
     """
+    # Num zerado a anotação é só leitura: a lembrança do que se achou dele.
+    if game.zerado:
+        return False
     return game.status == "playing" or bool((game.notes or "").strip())
 
 
@@ -814,7 +817,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
         ).connect("response", self.on_delete_game_response, game)
 
     def on_delete_game_response(self, _dialog: Any, response: str, game: Game) -> None:
-        if response != "delete":
+        # De novo o `zerado`: o diálogo guardou o jogo ao abrir, e ele pode ter
+        # mudado enquanto a pergunta estava na tela.
+        if response != "delete" or not game.zerado:
             return
 
         # Como o DisplayManager tira um jogo de uma grade: o FlowBoxChild sai da
@@ -851,7 +856,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
         botão de editar aparece em "Jogando", o único status em que a pergunta
         "onde eu parei?" tem resposta, e também em qualquer jogo que já tenha
         anotação: este é o único lugar onde ela se edita, e um texto à mostra
-        sem como apagar seria uma anotação presa na tela para sempre.
+        sem como apagar seria uma anotação presa na tela para sempre. A exceção
+        é Jogos Zerados, onde o texto fica e o botão some.
         """
         notes = (game.notes or "").strip()
         self.details_view_notes.set_label(notes)

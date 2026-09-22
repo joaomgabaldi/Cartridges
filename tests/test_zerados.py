@@ -461,6 +461,22 @@ def test_excluir_confirmado_tira_da_grade_e_da_store(real_window, store, flush_i
     real_window.on_delete_game_response(None, "cancel", zerado)
     assert store.get(zerado.game_id) is zerado
 
+    # Deixou de ser zerado com a pergunta na tela: a confirmação não vale mais.
+    vivo = jogo(store, 37)
+    real_window.on_delete_game_response(None, "delete", vivo)
+    assert store.get(vivo.game_id) is vivo
+
     real_window.on_delete_game_response(None, "delete", zerado)
     assert store.get(zerado.game_id) is None
     assert zerado.get_parent() is None
+
+
+def test_anotacao_de_um_zerado_e_so_leitura(real_window, store):
+    zerado = jogo(store, 38, removed=True, status="beaten", notes="x")
+    real_window.update_notes_block(zerado)
+    assert real_window.details_view_notes_button.get_visible() is False
+    assert real_window.details_view_notes_box.get_visible() is True
+
+    jogando = jogo(store, 39, status="playing")
+    real_window.update_notes_block(jogando)
+    assert real_window.details_view_notes_button.get_visible() is True
