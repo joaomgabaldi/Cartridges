@@ -150,3 +150,100 @@ def test_item_do_menu_so_com_desinstalados_e_na_tela_principal(
     )
     real_window.set_show_zerados()
     assert acao.get_enabled() is False, "só na tela principal"
+
+
+# -- Store ---------------------------------------------------------------------
+
+
+@pytest.fixture
+def espiao(store):
+    """Um manager que só escuta os dois sinais, como File/DisplayManager."""
+    from cartridges.store.managers.manager import Manager  # noqa: PLC0415
+
+    class Espiao(Manager):
+        signals = {"update-ready", "save-ready"}
+
+        def main(self, game, additional_data):
+            pass
+
+    store.add_manager(Espiao())
+
+
+def test_tumbas_carregadas_ficam_conectadas(store, espiao, make_game):
+    zerado = make_game(game_id="shortcuts_z", removed=True, status="beaten")
+    comum = make_game(game_id="shortcuts_c", removed=True)
+    store.add_game(zerado, {"skip_save": True})
+    store.add_game(comum, {"skip_save": True})
+
+    assert {sinal for sinal, _ in zerado.signals} == {"update-ready", "save-ready"}
+    assert {sinal for sinal, _ in comum.signals} == {"update-ready", "save-ready"}
+    assert zerado.updates == 1, "o zerado vai para a tela na carga"
+    assert comum.updates == 0, "o desinstalado comum continua fora de tela"
+
+
+def test_reinstalar_um_zerado_mantem_a_ficha(store, make_game):
+    tumba = make_game(
+        game_id="shortcuts_z",
+        removed=True,
+        status="beaten",
+        playtime=3600,
+        executable="velho",
+        shortcut_path="C:\velho.lnk",
+        shortcut_mtime=100,
+    )
+    store.add_game(tumba, {"skip_save": True})
+
+    novo = make_game(
+        game_id="shortcuts_z",
+        executable="novo",
+        shortcut_path="C:\novo.lnk",
+        shortcut_mtime=200,
+    )
+    assert store.add_game(novo, {}) is None
+
+    assert store.get("shortcuts_z") is tumba
+    assert tumba.removed is True
+    assert tumba.status == "beaten"
+    assert tumba.playtime == 3600
+    assert tumba.executable == "novo"
+    assert tumba.shortcut_path == "C:\novo.lnk"
+    assert tumba.shortcut_mtime == 200
+    assert tumba.saves == 1
+    assert "shortcuts_z" in store.duplicate_game_ids
+
+
+def test_o_mesmo_atalho_de_sempre_nao_mexe_no_zerado(store, make_game):
+    tumba = make_game(game_id="shortcuts_z", removed=True, status="beaten", shortcut_mtime=100)
+    store.add_game(tumba, {"skip_save": True})
+
+    store.add_game(make_game(game_id="shortcuts_z", shortcut_mtime=100), {})
+
+    assert store.get("shortcuts_z") is tumba
+    assert tumba.saves == 0
+
+
+def test_reinstalar_um_desinstalado_comum_segue_como_antes(
+    store, make_game, app_dirs, flush_idle
+):
+    tumba = make_game(game_id="shortcuts_c", removed=True, shortcut_mtime=100)
+    store.add_game(tumba, {"skip_save": True})
+    (app_dirs.games / "shortcuts_c.json").write_text("{}", encoding="utf-8")
+
+    novo = make_game(game_id="shortcuts_c", shortcut_mtime=200)
+    store.add_game(novo, {}, run_pipeline=False)
+
+    assert store.get("shortcuts_c") is novo
+    assert not (app_dirs.games / "shortcuts_c.json").exists()
+
+
+def test_tumba_sem_executavel_carrega_e_jogo_vivo_nao(store, write_record):
+    from cartridges import main as main_module  # noqa: PLC0415
+
+    write_record(
+        "imported_1", source="imported", executable="", removed=True, status="beaten"
+    )
+    write_record("imported_2", source="imported", executable="")
+    main_module.CartridgesApplication.load_games_from_disk(None)
+
+    assert store.get("imported_1") is not None
+    assert store.get("imported_2") is None
