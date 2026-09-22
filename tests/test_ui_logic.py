@@ -1251,6 +1251,18 @@ def test_a_removed_games_values_leave_the_menu(real_window, store):
     assert menu_labels(filter_submenu(real_window, 1)) == ["Todos"]
 
 
+def test_a_zerados_values_stay_in_the_menu(real_window, store):
+    """A página Jogos Zerados usa o mesmo menu: o gênero de um zerado fica."""
+    game = library_game(store, 1, genre="Corrida", release_date="2020")
+    game.removed = True
+    game.status = "beaten"
+
+    real_window.rebuild_filter_menu()
+
+    assert menu_labels(filter_submenu(real_window, 0)) == ["Todos", "Corrida"]
+    assert menu_labels(filter_submenu(real_window, 1)) == ["Todos", "2020"]
+
+
 def test_the_genre_filter_hides_what_does_not_match(real_window, store):
     """The filter reads the game, not the search box."""
     real_window.search_entry.set_text("")

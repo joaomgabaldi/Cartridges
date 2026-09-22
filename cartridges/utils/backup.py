@@ -370,7 +370,15 @@ def _criar_zerado(
         removed=True,
         status="beaten",
     )
-    return _rodar_na_main(lambda: _registrar_zerado(dados))
+    if _rodar_na_main(lambda: _registrar_zerado(dados)):
+        return True
+    # Sem ficha, este game_id volta a ser o próximo livre: o que ficou em nome
+    # dele seria herdado pelo próximo imported_N.
+    for sufixo in (".tiff", *save_cover.ANIMATED_SUFFIXES):
+        (shared.covers_dir / f"{game_id}{sufixo}").unlink(missing_ok=True)
+    game_logo.remove_logo(game_id)
+    session_log.apagar_jogo(game_id)
+    return False
 
 
 def _registrar_zerado(dados: dict[str, Any]) -> None:
@@ -604,15 +612,37 @@ def _incluir(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
         logging.debug("%s sumiu durante o backup", caminho)
 
 
-def _jogos_exportaveis(jogos_ativos: list[Any]) -> dict[str, Any]:
-    """hash -> jogo, só para identidades sem colisão entre jogos locais.
+def _jogos_exportaveis(jogos: Iterable[Any]) -> tuple[dict[str, Any], dict[str, str]]:
+    """(hash -> jogo exportado, game_id -> hash que leva as sessões dele).
 
-    Duas cópias locais do mesmo jogo (mesmo appID, ou mesmo nome sem appID)
-    não têm como decidir de qual delas vem a opinião a exportar — a
-    identidade sai do backup inteira, dos dois lados, em vez de chutar uma.
+    Os da biblioteca e os zerados — o desinstalado comum não é levado. Em
+    duas camadas, como no restore. Os vivos primeiro: duas cópias locais do
+    mesmo jogo (mesmo appID, ou mesmo nome sem appID) não têm como decidir de
+    qual delas vem a opinião — a identidade sai do backup inteira, em vez de
+    chutar uma. Depois os zerados, só numa identidade que nenhum vivo ocupa,
+    para nunca tornar ambíguo o jogo reinstalado que tem o mesmo appID.
+    Zerados de mesma identidade (fichas duplicadas do mesmo jogo) viram uma
+    entrada só: a ficha do jogado por último, as sessões de todos.
     """
-    grupos = _agrupar_por_identidade(jogos_ativos)
-    return {chave: alvos[0] for chave, (_tipo, alvos) in grupos.items() if len(alvos) == 1}
+    jogos = list(jogos)
+    vivos = _agrupar_por_identidade(j for j in jogos if not j.removed)
+    exportaveis = {chave: alvos[0] for chave, (_tipo, alvos) in vivos.items() if len(alvos) == 1}
+    game_id_para_hash = {jogo.game_id: chave for chave, jogo in exportaveis.items()}
+
+    for chave, (_tipo, zerados) in _agrupar_por_identidade(j for j in jogos if j.zerado).items():
+        if chave in vivos:
+            for zerado in zerados:
+                logging.warning(
+                    "Zerado %r (%s) ficou fora do backup: um jogo instalado tem a mesma identidade",
+                    zerado.name,
+                    zerado.game_id,
+                )
+            continue
+        # max devolve o primeiro no empate.
+        exportaveis[chave] = max(zerados, key=lambda jogo: jogo.last_played)
+        game_id_para_hash.update((zerado.game_id, chave) for zerado in zerados)
+
+    return exportaveis, game_id_para_hash
 
 
 def _entrada_do_jogo(jogo: Any, sessoes: list[dict[str, int]]) -> dict[str, Any]:
@@ -670,14 +700,7 @@ def _assets_do_jogo(jogo: Any) -> list[tuple[Path, str]]:
 
 def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
     """Grava o backup em ``destino``. Pode rodar fora da thread principal."""
-    # Os da biblioteca e os zerados — o desinstalado comum não é levado. Em
-    # duas camadas, como no restore: um zerado só entra numa identidade que
-    # nenhum jogo vivo ocupa, para nunca tornar ambíguo (e tirar do backup) o
-    # jogo reinstalado que tem o mesmo appID.
-    exportaveis = _jogos_exportaveis([jogo for jogo in shared.store if not jogo.removed])
-    for chave, jogo in _jogos_exportaveis([j for j in shared.store if j.zerado]).items():
-        exportaveis.setdefault(chave, jogo)
-    game_id_para_hash = {jogo.game_id: chave for chave, jogo in exportaveis.items()}
+    exportaveis, game_id_para_hash = _jogos_exportaveis(shared.store)
 
     sessoes_por_hash: dict[str, list[dict[str, int]]] = {}
     for sessao in session_log.load():

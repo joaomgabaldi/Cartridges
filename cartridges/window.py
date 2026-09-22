@@ -648,7 +648,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
         genres: set[str] = set()
         years: set[str] = set()
         for game in shared.store:
-            if game.removed or game.blacklisted:
+            # Os zerados também: a página Jogos Zerados usa este mesmo menu.
+            if game.blacklisted or (game.removed and not game.zerado):
                 continue
             if game.genre:
                 genres.add(game.genre)

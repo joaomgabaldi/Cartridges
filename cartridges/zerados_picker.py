@@ -107,8 +107,11 @@ class ZeradosPicker(Adw.Dialog):
 
     def on_escolhido(self, linha: Adw.ActionRow, jogo: Game) -> None:
         # Fica aberto: quem veio marcar os jogos antigos costuma ter vários.
-        jogo.definir_status("beaten")
-        jogo.save()
-        jogo.update()
+        # Linha velha (o jogo foi reinstalado, ou a ficha trocada na store
+        # desde que a lista abriu): só sai da lista, sem mexer no jogo.
+        if shared.store.get(jogo.game_id) is jogo and jogo.removed:
+            jogo.definir_status("beaten")
+            jogo.save()
+            jogo.update()
         self.lista.remove(linha)
         self._mostrar()

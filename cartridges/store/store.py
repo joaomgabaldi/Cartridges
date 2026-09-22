@@ -310,8 +310,9 @@ class Store:
         """Apaga um zerado: arquivos, sessões e o lugar dele na store.
 
         Sem tumba, ao contrário do "Remover" de um jogo vivo: a tumba existe
-        para um atalho ainda na pasta não trazer o jogo de volta, e um zerado
-        já não tem atalho na pasta.
+        para um atalho ainda na pasta não trazer o jogo de volta. Um zerado
+        reinstalado tem atalho na pasta, e depois do Excluir o próximo import
+        o traz de volta como um jogo vivo novo.
         """
         with self._lock:
             self.source_games.get(game.base_source, {}).pop(game.game_id, None)
