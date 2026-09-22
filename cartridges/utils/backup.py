@@ -13,8 +13,9 @@ o caminho de volta de uma sessão em andamento.
 
 `restaurar()` casa cada jogo do backup com um jogo local já existente pela
 identidade portátil (ver `identidade`) e sobrescreve só a opinião dele e os
-assets escolhidos à mão — nunca cria jogo, nunca apaga, nunca mexe em quem
-não casou. Faz isso ao vivo, sem fechar o app.
+assets escolhidos à mão — nunca cria jogo (exceto um zerado que só existe no
+backup), nunca apaga, nunca mexe em quem não casou. Faz isso ao vivo, sem
+fechar o app.
 """
 
 import json
@@ -65,6 +66,28 @@ CAMPOS_OPINIAO = (
     "track_process",
     "process_executable",
     "track_updates",
+)
+
+# O que a tela de um zerado mostra e ninguém mais recarrega. Um jogo vivo busca
+# isto de novo pelo pipeline assim que existir; um zerado nunca passa por ele,
+# então o backup leva junto para poder recriá-lo num PC onde ele não existe.
+CAMPOS_FICHA = (
+    "name",
+    "developer",
+    "publisher",
+    "release_date",
+    "genre",
+    "description",
+    "metacritic",
+    "steam_review",
+    "controller_support",
+    "gamepad_recommended",
+    "steam_appid",
+    "hltb_id",
+    "hltb_main",
+    "hltb_main_extra",
+    "hltb_completionist",
+    "hltb_chapters",
 )
 
 
@@ -305,6 +328,57 @@ def _aplicar_jogo(
     _aplicar_sessoes(jogo.game_id, entrada.get("sessoes") or [])
 
 
+def _criar_zerado(
+    entrada: dict[str, Any], hash_id: str, arquivo: zipfile.ZipFile, tmp_dir: Path
+) -> bool:
+    """Recria no PC um zerado que só existe no backup. False: ficha ilegível.
+
+    A única exceção a "restaurar nunca cria jogo", e só para zerados, que
+    nunca são jogos ativos: nasce como tumba, sem atalho e sem executável,
+    exatamente como ficou no PC de origem. Capa, logo e sessões vão para o
+    disco antes de o jogo existir, para que a página já o mostre com capa.
+    """
+    # Local: main importa (via preferences) este módulo.
+    from cartridges.main import sanitize_game_fields  # noqa: PLC0415
+
+    ficha = entrada.get("ficha")
+    if not isinstance(ficha, dict):
+        return False
+    dados = sanitize_game_fields(
+        {campo: ficha[campo] for campo in CAMPOS_FICHA if campo in ficha},
+        f"backup:{hash_id}",
+    )
+    if not isinstance(dados.get("name"), str) or not dados["name"].strip():
+        return False
+
+    game_id = shared.store.proximo_id_importado()
+    capa = _extrair_asset(arquivo, tmp_dir, hash_id, "capa")
+    if capa is not None:
+        save_cover.save_cover(game_id, capa)
+    logo = _extrair_asset(arquivo, tmp_dir, hash_id, "logo")
+    if logo is not None:
+        game_logo.save_manual_logo(game_id, dados["name"], logo)
+    _aplicar_sessoes(game_id, entrada.get("sessoes") or [])
+
+    dados.update(_sanitizar_campos(entrada))
+    dados.update(
+        game_id=game_id,
+        source="imported",
+        executable="",
+        added=int(time()),
+        removed=True,
+        status="beaten",
+    )
+    _rodar_na_main(lambda: _registrar_zerado(dados))
+    return True
+
+
+def _registrar_zerado(dados: dict[str, Any]) -> None:
+    jogo = Game(dados)
+    shared.store.add_game(jogo, {})
+    jogo.save()
+
+
 def _aplicar_fitas(arquivo: zipfile.ZipFile) -> None:
     """Se o `.zip` tiver `fitas.json`, sobrescreve `shared.fitas_arquivo` com
     ele. Configuração global (a lista de fitas de LED, sem a conta Tuya) —
@@ -326,6 +400,33 @@ def _aplicar_fitas(arquivo: zipfile.ZipFile) -> None:
         logging.warning("Não foi possível restaurar fitas.json: %s", erro)
 
 
+def _rodar_na_main(funcao: Callable[[], None]) -> None:
+    """Roda ``funcao`` na thread principal e espera terminar.
+
+    `restaurar()` roda fora dela, e o que chama daqui toca GTK: os sinais
+    `changed::<chave>` do Gio.Settings, a construção de um `Game`.
+    """
+    if is_main_thread():
+        funcao()
+        return
+
+    concluido = threading.Event()
+
+    def rodar() -> bool:
+        try:
+            funcao()
+        finally:
+            concluido.set()
+        return False
+
+    GLib.idle_add(rodar)
+    if not concluido.wait(timeout=30):
+        # Nada aqui pode travar a thread de fundo para sempre — mesmo espírito
+        # de main.py: um app fechando no momento errado nunca processa o
+        # idle_add, e a thread precisa poder seguir (ou morrer) mesmo assim.
+        logging.warning("Tempo esgotado esperando a thread principal no restore do backup")
+
+
 def _aplicar_configuracoes_fora_da_main(manifesto: dict[str, Any]) -> None:
     """`aplicar_configuracoes` grava no Gio.Settings de verdade, que dispara
     sinais `changed::<chave>` — e handlers já conectados a eles
@@ -333,25 +434,7 @@ def _aplicar_configuracoes_fora_da_main(manifesto: dict[str, Any]) -> None:
     seguro na thread principal. `restaurar()` roda fora dela, então isto
     marshalla e espera terminar: o resto da função depende do valor já
     restaurado de `steam-metadata`."""
-    if is_main_thread():
-        aplicar_configuracoes(manifesto)
-        return
-
-    concluido = threading.Event()
-
-    def aplicar() -> bool:
-        aplicar_configuracoes(manifesto)
-        concluido.set()
-        return False
-
-    GLib.idle_add(aplicar)
-    if not concluido.wait(timeout=30):
-        # Nada aqui pode travar a thread de fundo para sempre — mesmo espírito
-        # de main.py: um app fechando no momento errado nunca processa o
-        # idle_add, e a thread precisa poder seguir (ou morrer) mesmo assim.
-        logging.warning(
-            "Tempo esgotado esperando aplicar as configurações do backup na thread principal"
-        )
+    _rodar_na_main(lambda: aplicar_configuracoes(manifesto))
 
 
 def restaurar(
@@ -360,7 +443,8 @@ def restaurar(
     cancelado: Optional[Callable[[], bool]] = None,
 ) -> Optional[ResultadoRestauracao]:
     """Aplica um backup ``.zip`` à biblioteca e às configurações atuais, ao
-    vivo — sem fechar o app, sem criar jogo, sem participar de import ou
+    vivo — sem fechar o app, sem criar jogo (exceto um zerado que só existe
+    no backup — ver `_criar_zerado`), sem participar de import ou
     remoção. ``None``: a varredura forçada de appID foi cancelada, nada do
     backup foi tocado.
 
@@ -384,6 +468,12 @@ def restaurar(
             return None
 
     grupos = _agrupar_por_identidade(jogos_ativos)
+    # Tumbas entram só para as entradas de zerado, e só depois dos jogos vivos:
+    # uma tumba velha com o nome de um jogo instalado não pode tornar ambíguo
+    # o casamento que já funcionava.
+    grupos_tumbas = _agrupar_por_identidade(
+        [jogo for jogo in shared.store if jogo.removed and not jogo.blacklisted]
+    )
     jogos_no_backup = manifesto.get("jogos", {})
     casados = 0
     ambiguos: list[str] = []
@@ -392,6 +482,12 @@ def restaurar(
         tmp_dir = Path(pasta_tmp)
         for hash_id, entrada in jogos_no_backup.items():
             grupo = grupos.get(hash_id)
+            if grupo is None and entrada.get("zerado") is True:
+                grupo = grupos_tumbas.get(hash_id)
+                if grupo is None:
+                    if _criar_zerado(entrada, hash_id, arquivo, tmp_dir):
+                        casados += 1
+                    continue
             if grupo is None:
                 continue
             tipo, alvos = grupo
@@ -526,6 +622,10 @@ def _entrada_do_jogo(jogo: Any, sessoes: list[dict[str, int]]) -> dict[str, Any]
         entrada["fita_saturacao"] = cor.saturacao
         entrada["fita_brilho"] = cor.brilho
 
+    if jogo.zerado:
+        entrada["zerado"] = True
+        entrada["ficha"] = {campo: getattr(jogo, campo, None) for campo in CAMPOS_FICHA}
+
     return entrada
 
 
@@ -538,14 +638,15 @@ def _assets_do_jogo(jogo: Any) -> list[tuple[Path, str]]:
     definida, nada troca por conta própria. Logo e papel de parede só entram
     quando travados à mão (`logo_choice`/`escolha` == "manual") — a versão
     automática é recarregada sozinha pelo pipeline normal, não vale o espaço
-    no backup."""
+    no backup. O de um zerado entra sempre: ele não passa pelo pipeline, e o
+    automático não seria rebuscado."""
     assets: list[tuple[Path, str]] = []
 
     capa = jogo.get_cover_path()
     if capa is not None:
         assets.append((capa, f"capa{capa.suffix.lower()}"))
 
-    if game_logo.logo_choice(jogo) == "manual":
+    if jogo.zerado or game_logo.logo_choice(jogo) == "manual":
         logo = game_logo.cached_logo_path(jogo)
         if logo is not None:
             assets.append((logo, f"logo{logo.suffix.lower()}"))
@@ -560,7 +661,8 @@ def _assets_do_jogo(jogo: Any) -> list[tuple[Path, str]]:
 
 def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
     """Grava o backup em ``destino``. Pode rodar fora da thread principal."""
-    jogos_ativos = [jogo for jogo in shared.store if not jogo.removed]
+    # Os da biblioteca e os zerados — o desinstalado comum não é levado.
+    jogos_ativos = [jogo for jogo in shared.store if not jogo.removed or jogo.zerado]
     exportaveis = _jogos_exportaveis(jogos_ativos)
     game_id_para_hash = {jogo.game_id: chave for chave, jogo in exportaveis.items()}
 
