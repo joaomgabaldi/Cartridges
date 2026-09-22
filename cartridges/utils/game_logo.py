@@ -24,12 +24,11 @@ title used to be, so everything here is built around staying inside the space
 a title occupied. Nothing is ever invented locally — a game either has a real
 logo on SteamGridDB or it keeps its text title.
 
-Every lookup is remembered on disk, hits and misses alike, each with its own
-expiry. A hit lasts a long time — the page then touches the network for that
-game about once a month — and a miss a much shorter one, because the common
-case for an obscure title is that there is no logo and asking again on every
-visit would be a request per page view for an answer that does not change.
-Only a choice the user made by hand never expires.
+Every lookup is remembered on disk, hits and misses alike. A hit is kept for
+good: a logo on screen stays on screen, and only renaming the game (or picking
+another one by hand) replaces it. A miss is retried after a week, because art
+added to SteamGridDB later should still reach the game, while asking on every
+visit would be a request per page view for an answer that rarely changes.
 """
 
 import json
@@ -91,14 +90,6 @@ IMAGE_SUFFIXES = (".png", ".webp", ".jpg", ".jpeg")
 # browsing the library is not a stream of requests, short enough that art
 # added to SteamGridDB shows up without the user clearing anything.
 MISS_TTL_SECONDS = 7 * 24 * 60 * 60
-
-# How long a fetched logo is trusted. Deliberately much longer — a logo does
-# not go stale, so this is not a refresh policy but a way out of a wrong
-# answer: nothing verifies that the SteamGridDB id the asset came from was
-# really this game, and an automatic hit is otherwise never questioned again,
-# so another game's wordmark would sit on the details page forever. Locked
-# entries are exempt, which is what makes this safe to keep short-ish.
-HIT_TTL_SECONDS = 30 * 24 * 60 * 60
 
 
 def logo_display_size(
@@ -259,11 +250,9 @@ def cached_logo_path(game: Game) -> Optional[Path]:
     A logo the user picked is exempt from that: they matched it to this game
     themselves, which is worth more than any title comparison.
 
-    An automatic logo also stops counting once it is old enough to be worth
-    re-checking (``HIT_TTL_SECONDS``). Vouching for it here is what decides
-    whether a lookup runs at all — the details page shows a cached logo and
-    stops — so an entry that never expires here is an entry that is never
-    questioned, which is precisely how a wrong logo became permanent.
+    A idade nunca desqualifica um logo em disco: o logo que está na tela
+    fica, e só renomear o jogo (ou escolher outro à mão) o troca. Só o "sem
+    logo" envelhece — ver `_miss_expired`.
     """
     sidecar = _read_sidecar(game.game_id)
     if not sidecar:
@@ -274,23 +263,25 @@ def cached_logo_path(game: Game) -> Optional[Path]:
     # biblioteca com o título acertado.
     if sidecar.get("locked") or getattr(game, "removed", False):
         return _cached_file(sidecar)
-    if sidecar.get("name") != game.name or _hit_expired(sidecar):
+    if sidecar.get("name") != game.name:
         return None
     return _cached_file(sidecar)
 
 
-def _hit_expired(sidecar: dict[str, Any]) -> bool:
-    """Whether an automatic lookup is old enough to be worth repeating.
+def _miss_expired(sidecar: dict[str, Any]) -> bool:
+    """Whether an automatic "no logo" answer is old enough to ask again.
 
-    A hit is trusted far longer than a miss, and a hit whose file is no longer
-    on disk counts as a miss — the user emptied the cache, and waiting weeks to
-    notice would be the wrong answer.
+    Um logo em disco nunca vence. Um acerto cujo arquivo sumiu conta como
+    "sem logo" — o usuário esvaziou o cache, e esperar semanas para notar
+    seria a resposta errada.
     """
+    if _cached_file(sidecar):
+        return False
     try:
         age = time.time() - float(sidecar.get("timestamp", 0))
     except (TypeError, ValueError):
         return True
-    return age > (HIT_TTL_SECONDS if _cached_file(sidecar) else MISS_TTL_SECONDS)
+    return age > MISS_TTL_SECONDS
 
 
 def logo_choice(game: Game) -> str:
@@ -372,12 +363,8 @@ def logo_lookup_needed(game: Game) -> bool:
     if sidecar.get("name") != game.name:
         return True
 
-    # Hits expire too, just far more slowly than misses. Asked *after* the
-    # locked branch above, so a logo the user picked themselves is still never
-    # re-fetched — only the automatic ones are ever questioned again. It is the
-    # same test `cached_logo_path` uses, so the two can never disagree about
-    # whether an entry still counts.
-    return _hit_expired(sidecar)
+    # Só o "sem logo" é perguntado de novo; um logo em disco fica para sempre.
+    return _miss_expired(sidecar)
 
 
 def _candidate_key(logo: dict[str, Any]) -> tuple:
@@ -443,15 +430,11 @@ def pick_logo(logos: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
 def _keep_existing_logo(game: Game) -> Optional[Path]:
     """Renew the logo ``game`` already has, for a lookup that found nothing.
 
-    Now that a hit expires, most lookups for a game that has a logo are the
-    periodic re-check of one — and a re-check that could not be completed says
-    nothing about whether the logo it was checking is right. Without this, an
-    unreachable SteamGridDB (or one that has stopped listing the game) would
-    replace a perfectly good logo with a miss, and the details page would fall
-    back to the text title for a game whose artwork is sitting on disk.
-
-    Renewing the timestamp is what stops that turning into a request per page
-    view: the next re-check is a TTL away, not on the next visit.
+    A lookup that could not be completed says nothing about whether the logo
+    already on disk is right. Without this, an unreachable SteamGridDB (or one
+    that has stopped listing the game) would replace a perfectly good logo
+    with a miss, and the details page would fall back to the text title for a
+    game whose artwork is sitting on disk.
     """
     sidecar = _read_sidecar(game.game_id)
     # A renamed game is the one case where the old logo is not worth keeping:
@@ -539,11 +522,11 @@ def fetch_logo(game: Game) -> Optional[Path]:
 
     # Nothing checked that the bytes were an image. A server returning an error
     # page (or a truncated download) was recorded as a *hit*, and a hit is
-    # trusted for a month — `logo_lookup_needed` sees a file on disk and does
-    # not ask again — so one bad response cost that game its header for weeks.
+    # trusted for good — `logo_lookup_needed` sees a file on disk and does
+    # not ask again — so one bad response cost that game its header for good.
     fetched_size = _intrinsic_size(path)
     # Desmedido conta como inutilizável: o metadado da API pode mentir sobre as
-    # dimensões, e um arquivo em cache é confiado por um mês — o load recusaria
+    # dimensões, e um arquivo em cache é confiado para sempre — o load recusaria
     # a cada visita, mas descartar aqui registra "sem logo" no sidecar e não
     # deixa o arquivo gigante parado no disco.
     if fetched_size is None or max(fetched_size) > MAX_SOURCE_DIMENSION:
