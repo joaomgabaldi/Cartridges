@@ -87,7 +87,7 @@ class ZeradosPicker(Adw.Dialog):
         vazio = Adw.StatusPage(
             icon_name="object-select-symbolic",
             title=_("Nenhum jogo desinstalado"),
-            description=_("Todo jogo desinstalado já está em Jogos Zerados"),
+            description=_("Todos os jogos desinstalados já estão em Jogos Zerados."),
         )
 
         self.pilha = Gtk.Stack()

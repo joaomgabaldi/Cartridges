@@ -812,10 +812,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
         create_dialog(
             self,
             # A variável é o nome do jogo
-            _("Excluir definitivamente {}?").format(game.name),
+            _("Excluir {}?").format(game.name),
             _(
-                "A ficha, a capa e o histórico de sessões serão apagados. "
-                "Não dá para desfazer."
+                "Tem certeza que deseja excluir este jogo definitivamente? "
+                "Esta ação é irreversível."
             ),
             "delete",
             _("Excluir"),
