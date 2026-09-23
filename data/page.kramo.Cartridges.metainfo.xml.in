@@ -49,7 +49,7 @@
     <release version="2026.09.22" date="2026-09-22">
       <description translate="no">
         <ul>
-          <li>Nova página "Jogos Zerados", no menu principal: os jogos desinstalados marcados como Zerado continuam no app, com capa, informações, nota e histórico de sessões — sem Jogar nem as opções de lançamento. O botão + da página marca como Zerado um jogo que já tinha sido desinstalado. Reinstalar um zerado não o tira da página; tirar a marca "Zerado" devolve o jogo à biblioteca (se ele estiver instalado) com tudo o que tinha. "Excluir" apaga o jogo definitivamente</li>
+          <li>Nova página "Jogos Zerados", no menu principal: os jogos desinstalados marcados como Zerado continuam no app, com capa, informações, nota e histórico de sessões — sem Jogar nem as opções de lançamento. O botão + da página marca como Zerado um jogo que já tinha sido desinstalado. Reinstalar um jogo zerado não o retira da página; tirar a marca "Zerado" devolve o jogo à biblioteca (se ele estiver instalado) com tudo o que tinha. A opção Excluir remove o jogo definitivamente</li>
           <li>Os Jogos Zerados entram no backup, e restaurar recria os que não existem neste PC</li>
           <li>Um jogo zerado mantém o logo para sempre, mesmo depois de renomeado</li>
           <li>Os logos baixados automaticamente não são mais trocados a cada 30 dias: o logo que está na tela fica, e só muda se você renomear o jogo ou escolher outro à mão. Um jogo sem logo continua tentando achar um a cada 7 dias</li>
