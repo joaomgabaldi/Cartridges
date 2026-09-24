@@ -50,6 +50,9 @@
       <description translate="no">
         <ul>
           <li>O aplicativo instalado ficou com cerca de metade do tamanho: de 296 MB para 157 MB, e de 6.348 para 2.659 arquivos. O instalador passou a levar apenas os componentes que o aplicativo usa, e a atualização remove os que sobraram da versão anterior</li>
+          <li>Os tempos do HowLongToBeat voltaram a ser encontrados: o site mudou a forma de autorizar a busca, e nenhum jogo novo recebia os tempos</li>
+          <li>O brilho dourado das capas com atualização disponível só pulsa quando o aplicativo está em foco. Com outra janela em foco, o brilho permanece aceso, sem animação, e o aplicativo deixa de consumir processador redesenhando a tela</li>
+          <li>A busca por atualizações do aplicativo passou a usar o novo endereço do repositório</li>
         </ul>
       </description>
     </release>
