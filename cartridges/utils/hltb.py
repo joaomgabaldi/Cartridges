@@ -48,6 +48,12 @@ The path is renamed every so often, and it is the only thing that changes: on
 took its place, serving the same JSON, with the same three credential keys and
 the same search body. Only the two constants had to move.
 
+On 2026-09-23 the init stopped sending ``hpKey``/``hpVal`` and the site's own
+front end stopped sending the ``x-hp-*`` headers: the token alone is the whole
+credential now. The honeypot is still sent when the init hands one out, so the
+old scheme keeps working if it comes back. Symptom of that break: ``init
+returned no usable credential`` on every lookup, with the init answering 200.
+
 When it breaks again — and it will — the symptom is ``HowLongToBeat init
 failed`` in the log, at DEBUG, wrapping a 404 from the site itself rather than
 from Cloudflare. The new name is found by sweeping the homepage's JS chunks for
@@ -181,7 +187,11 @@ class HLTBTimes(TypedDict, total=False):
 
 @dataclass(frozen=True)
 class _Credential:
-    """One ``/api/search/site/init`` response: a token and its honeypot pair."""
+    """One ``/api/search/site/init`` response: a token and its honeypot pair.
+
+    ``hp_key`` vazio quer dizer que o site não mandou o par (o caso desde
+    23/09/2026).
+    """
 
     token: str
     hp_key: str
@@ -411,11 +421,13 @@ class HLTBHelper:
 
         if not isinstance(body, dict):
             return None
+        # Desde 23/09/2026 o init responde só o token; o par honeypot é opcional,
+        # e só vai na busca se o site voltar a mandá-lo.
         token, hp_key, hp_val = body.get("token"), body.get("hpKey"), body.get("hpVal")
-        if not token or not hp_key:
+        if not token:
             logging.debug("HowLongToBeat init returned no usable credential")
             return None
-        return _Credential(str(token), str(hp_key), str(hp_val or ""))
+        return _Credential(str(token), str(hp_key or ""), str(hp_val or ""))
 
     def _credential_or_fetch(self, force: bool = False) -> Optional[_Credential]:
         with self._credential_lock:
@@ -460,7 +472,8 @@ class HLTBHelper:
         }
         # The honeypot field goes in the body under its randomised name as
         # well as in the headers; sending only one of the two is rejected.
-        body[credential.hp_key] = credential.hp_val
+        if credential.hp_key:
+            body[credential.hp_key] = credential.hp_val
         return body
 
     def _post_search(
@@ -475,9 +488,10 @@ class HLTBHelper:
         headers = {
             "Content-Type": "application/json",
             "x-auth-token": credential.token,
-            "x-hp-key": credential.hp_key,
-            "x-hp-val": credential.hp_val,
         }
+        if credential.hp_key:
+            headers["x-hp-key"] = credential.hp_key
+            headers["x-hp-val"] = credential.hp_val
 
         with self.rate_limiter:
             try:
