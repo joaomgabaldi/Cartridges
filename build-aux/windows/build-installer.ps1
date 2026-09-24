@@ -17,8 +17,8 @@ function Falha($texto) { Write-Host "`nERRO: $texto" -ForegroundColor Red; exit 
 
 # ── 1. A libgtk corrigida ─────────────────────────────────────────────────
 #
-# O instalador empacota C:\msys64\ucrt64\bin\*.dll, então ele leva junto a
-# libgtk que estiver instalada ali. Se um `pacman -Syu` sobrescrever a nossa
+# A pasta do app é montada a partir de C:\msys64\ucrt64\bin, então ela leva
+# junto a libgtk que estiver instalada ali. Se um `pacman -Syu` sobrescrever a nossa
 # build corrigida, o instalador sai com o bug do monitor de volta — e sem
 # nenhum aviso, porque tudo compila e empacota normalmente. Daí esta checagem.
 
@@ -87,7 +87,17 @@ $env:CHERE_INVOKING = '1'
 & (Join-Path $msys 'usr\bin\bash.exe') -lc "cd '$repoMsys' && ninja -C _build && rm -rf /ucrt64/lib/python3*/site-packages/cartridges && meson install -C _build --quiet"
 if ($LASTEXITCODE -ne 0) { Falha 'O build falhou. Veja a saida acima.' }
 
-# ── 3. Empacotar ──────────────────────────────────────────────────────────
+# ── 3. Montar a pasta do app ──────────────────────────────────────────────
+#
+# Só o que o app usa vai para _build\app, e é essa pasta que o Inno Setup
+# empacota. O script confere no fim que ela roda sem enxergar o MSYS2.
+
+Etapa 'Montando a pasta do app'
+
+& (Join-Path $prefix 'bin\python.exe') (Join-Path $PSScriptRoot 'montar_app.py') $prefix (Join-Path $repo '_build\app')
+if ($LASTEXITCODE -ne 0) { Falha 'A montagem da pasta do app falhou. Veja a saida acima.' }
+
+# ── 4. Empacotar ──────────────────────────────────────────────────────────
 #
 # Tem que ser o .iss do diretorio de build, nao o instalado no prefixo: os
 # caminhos relativos dele (..\..\..\LICENSE) so fecham a partir dali.
@@ -101,7 +111,7 @@ if (-not (Test-Path $iscc)) { Falha "Nao achei o ISCC em $iscc." }
 & $iscc "/O$dist" $iss | Select-Object -Last 3
 if ($LASTEXITCODE -ne 0) { Falha 'O Inno Setup falhou.' }
 
-# ── 4. Abrir ──────────────────────────────────────────────────────────────
+# ── 5. Abrir ──────────────────────────────────────────────────────────────
 
 $exe = Join-Path $dist 'Cartridges Windows.exe'
 if (-not (Test-Path $exe)) { Falha "O instalador nao apareceu em $exe." }

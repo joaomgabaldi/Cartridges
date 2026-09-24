@@ -46,6 +46,13 @@
   </screenshots>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.23" date="2026-09-23">
+      <description translate="no">
+        <ul>
+          <li>O aplicativo instalado ficou com cerca de metade do tamanho: de 296 MB para 157 MB, e de 6.348 para 2.659 arquivos. O instalador passou a levar apenas os componentes que o aplicativo usa, e a atualização remove os que sobraram da versão anterior</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.22" date="2026-09-22">
       <description translate="no">
         <ul>
