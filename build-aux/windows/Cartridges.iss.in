@@ -91,30 +91,19 @@ brazilianportuguese.LaunchProgram=Iniciar o %1
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [InstallDelete]
-; Atualizar por cima deixaria em {app} todo modulo que saiu do app entre versoes.
-Type: filesandordirs; Name: "{app}\lib\python@PYTHON_VERSION@\site-packages\cartridges"
+; Atualizar por cima deixaria em {app} tudo o que saiu do app entre versoes: o
+; modulo removido do repositorio e, na primeira atualizacao depois da 2026.09.22,
+; os ~4.000 arquivos do MSYS2 que o instalador levava sem o app usar. As pastas
+; saem inteiras e voltam do pacote.
+Type: filesandordirs; Name: "{app}\bin"
+Type: filesandordirs; Name: "{app}\etc"
+Type: filesandordirs; Name: "{app}\lib"
+Type: filesandordirs; Name: "{app}\share"
 
 [Files]
-Source: "C:\msys64\ucrt64\bin\cartridges"; DestDir: "{app}\bin"; Flags: ignoreversion
-Source: "C:\msys64\ucrt64\bin\pythonw.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
-Source: "C:\msys64\ucrt64\bin\python.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
-Source: "C:\msys64\ucrt64\bin\gdbus.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
-Source: "C:\msys64\ucrt64\bin\gspawn-win64-helper.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
-Source: "C:\msys64\ucrt64\bin\gspawn-win64-helper-console.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
-Source: "C:\msys64\ucrt64\bin\*.dll"; DestDir: "{app}\bin"; Flags: recursesubdirs ignoreversion
-
-Source: "C:\msys64\ucrt64\etc\ssl\*"; DestDir: "{app}\etc\ssl"; Flags: recursesubdirs ignoreversion
-
-Source: "C:\msys64\ucrt64\lib\gdk-pixbuf-2.0\*"; DestDir: "{app}\lib\gdk-pixbuf-2.0"; Flags: recursesubdirs ignoreversion
-Source: "C:\msys64\ucrt64\lib\girepository-1.0\*"; DestDir: "{app}\lib\girepository-1.0"; Flags: recursesubdirs ignoreversion
-Source: "C:\msys64\ucrt64\lib\python@PYTHON_VERSION@\*"; DestDir: "{app}\lib\python@PYTHON_VERSION@"; Excludes: "__pycache__"; Flags: recursesubdirs ignoreversion
-
-Source: "C:\msys64\ucrt64\share\cartridges\*"; DestDir: "{app}\share\cartridges"; Excludes: "__pycache__"; Flags: recursesubdirs ignoreversion
-Source: "C:\msys64\ucrt64\share\icons\*"; DestDir: "{app}\share\icons"; Excludes: "*.png,cursors\*"; Flags: recursesubdirs ignoreversion
-Source: "C:\msys64\ucrt64\share\glib-2.0\*"; DestDir: "{app}\share\glib-2.0"; Flags: recursesubdirs ignoreversion
-Source: "C:\msys64\ucrt64\share\gtk-4.0\*"; DestDir: "{app}\share\gtk-4.0"; Flags: recursesubdirs ignoreversion
-
-Source: "..\..\..\build-aux\windows\icon.ico"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+; A pasta que o build-installer.ps1 monta com o montar_app.py: so o que o app usa.
+Source: "..\..\app\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+Source: "..\..\..\build-aux\windows\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; Parameters: """{app}\bin\cartridges"""; IconFilename: "{app}\icon.ico"
