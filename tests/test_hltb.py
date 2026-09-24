@@ -182,7 +182,8 @@ class FakeSession:
     """Stands in for requests.Session, recording every call.
 
     ``token_uses`` expires the credential after N searches so the refresh path
-    can be exercised; ``init_status`` and ``search_status`` force failures.
+    can be exercised; ``init_status`` and ``search_status`` force failures;
+    ``init_payload`` replaces what the init endpoint answers.
     """
 
     def __init__(
@@ -193,9 +194,11 @@ class FakeSession:
         token_uses=None,
         page_html=GAME_PAGE_HTML,
         page_status=200,
+        init_payload=None,
     ):
         self.headers = {}
         self.results = SEARCH_RESULTS if results is None else results
+        self.init_payload = INIT_RESPONSE if init_payload is None else init_payload
         self.init_status = init_status
         self.search_status = search_status
         self.token_uses = token_uses
@@ -220,7 +223,7 @@ class FakeSession:
             self.uses_of_current_token = 0
             if self.init_status != 200:
                 return FakeResponse(status_code=self.init_status, text="nope")
-            return FakeResponse(payload=dict(INIT_RESPONSE))
+            return FakeResponse(payload=dict(self.init_payload))
         if "/game/" in url:
             if self.page_status != 200:
                 return FakeResponse(status_code=self.page_status, text="")
@@ -327,6 +330,19 @@ class TestCredentialHandshake(unittest.TestCase):
         # The field name is randomised per session, so it can only be read
         # back out of the init response — never hardcoded.
         self.assertEqual(body[INIT_RESPONSE["hpKey"]], INIT_RESPONSE["hpVal"])
+
+    def test_token_only_credential_searches_without_honeypot(self):
+        """Em 23/09/2026 o init passou a responder só o token, e o front end do
+        site deixou de mandar os x-hp-*: o token sozinho tem de bastar."""
+        session = FakeSession(init_payload={"token": INIT_RESPONSE["token"]})
+        entries = make_helper(session).search("The Outer Worlds")
+
+        self.assertEqual(len(entries), len(SEARCH_RESULTS))
+        headers = session.sent_headers[0]
+        self.assertEqual(headers["x-auth-token"], INIT_RESPONSE["token"])
+        self.assertNotIn("x-hp-key", headers)
+        self.assertNotIn("x-hp-val", headers)
+        self.assertNotIn("", session.bodies[0])
 
     def test_payload_shape_matches_the_site(self):
         session = FakeSession()
