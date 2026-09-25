@@ -1561,6 +1561,31 @@ def test_previa_nao_faz_fade(com_fila, com_fade):
     assert modulo.recebidos == [{"21": "colour", "24": "007803e80064"}]
 
 
+def test_brilho_por_dispositivo_vale_sobre_o_geral(com_fila):
+    """Dispositivo em 50%: o brilho geral de 10% acende a 5%, e a prévia da
+    janela usa o valor que ainda não foi salvo."""
+    fita, modulo = com_fila
+    session_fita.gravar_fitas([fita._replace(brilho=50)])
+
+    session_fita._pintar(session_fita.Cor(120, 1000, 100))
+    session_fita._pintar(session_fita.Cor(120, 1000, 100), {"eb0": 20})
+    session_fita._pintar(session_fita.Cor(120, 1000, 10))
+
+    assert [recebido["24"] for recebido in modulo.recebidos] == [
+        "007803e80032",
+        "007803e80014",
+        "007803e8000a",  # nunca abaixo do mínimo que ainda acende
+    ]
+
+
+def test_brilho_por_dispositivo_ilegivel_vale_100():
+    shared.fitas_arquivo.write_text(
+        json.dumps({"fitas": [{"nome": "C", "id": "a", "ip": "1", "key": "k", "brilho": None}]}),
+        encoding="utf-8",
+    )
+    assert session_fita.fitas()[0].brilho == 100
+
+
 def test_duas_varreduras_ao_mesmo_tempo_viram_uma(monkeypatch):
     """Duas varreduras juntas brigam pelo mesmo soquete de broadcast.
 

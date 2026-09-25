@@ -279,6 +279,21 @@ def test_fita_que_a_rede_nao_achou_mantem_o_endereco_que_ja_tinha(monkeypatch, t
     assert fita.ip == "192.168.0.150"
 
 
+def test_rodar_o_assistente_de_novo_mantem_o_brilho_por_dispositivo(monkeypatch, tmp_path):
+    from cartridges import shared
+    from cartridges.fita_wizard import com_enderecos
+    from cartridges.utils.session_fita import gravar_fitas
+
+    monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
+    gravar_fitas([Fita("Centro", "eb1", "192.168.0.150", "k", "3.3", 40)])
+
+    antiga, nova = com_enderecos(
+        [Fita("Centro", "eb1", "", "k"), Fita("Nova", "eb2", "", "k")], {}
+    )
+
+    assert (antiga.brilho, nova.brilho) == (40, 100)
+
+
 def test_fita_nunca_vista_na_rede_fica_sem_endereco(monkeypatch, tmp_path):
     from cartridges import shared
     from cartridges.fita_wizard import com_enderecos

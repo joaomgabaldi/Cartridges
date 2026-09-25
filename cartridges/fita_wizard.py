@@ -129,12 +129,16 @@ def com_enderecos(
     A versão vem da mesma varredura: a nuvem costuma não dizê-la, e um módulo
     3.4 ou 3.5 falado como 3.3 nunca responde.
     """
-    conhecidos = {fita.id: fita.ip for fita in fitas() if fita.ip}
+    configuradas = {fita.id: fita for fita in fitas()}
     versoes = versoes or {}
     return [
         fita._replace(
-            ip=mapa.get(fita.id) or fita.ip or conhecidos.get(fita.id, ""),
+            ip=mapa.get(fita.id)
+            or fita.ip
+            or getattr(configuradas.get(fita.id), "ip", ""),
             versao=versoes.get(fita.id) or fita.versao,
+            # A nuvem não sabe do brilho por dispositivo: ele é daqui.
+            brilho=getattr(configuradas.get(fita.id), "brilho", fita.brilho),
         )
         for fita in encontradas
     ]
