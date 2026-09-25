@@ -39,6 +39,7 @@
           <li>O item Jogos Zerados do menu fica sempre disponível na tela principal</li>
           <li>Os resultados da busca na Steam mostram somente o ID na Steam, sem a indicação de correspondência com o título</li>
           <li>Os dados da Steam (desenvolvedora, lançamento, descrição e gênero) voltam a ser obtidos. Uma mudança da Steam em 24/09/2026 fazia a busca falhar para todos os jogos; para completar os jogos importados desde então, use Atualizar metadados nas Preferências</li>
+          <li>Ao escolher um logo ou uma capa do SteamGridDB, o aplicativo não volta mais à lista de resultados enquanto as demais pré-visualizações terminam de carregar, o que parecia uma nova busca a cada clique</li>
         </ul>
       </description>
     </release>
