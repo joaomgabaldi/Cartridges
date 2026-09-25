@@ -3,15 +3,16 @@
 
   # Cartridges
 
-  Seus jogos em um só lugar — lançador de jogos para Windows, em GTK4 e Libadwaita
+  Seus jogos em um só lugar — launcher de jogos para Windows, em GTK4 e Libadwaita
 </div>
 
-Esta é uma versão para Windows do [Cartridges](https://codeberg.org/kramo/cartridges), o lançador
-criado por kramo para o GNOME. O projeto original reúne jogos de vários lançadores do Linux; esta
-versão reúne os jogos de um PC com Windows a partir de uma pasta de atalhos e acrescenta tudo o que
-está descrito abaixo: acompanhamento de tempo de jogo por sessão, registro pessoal de cada jogo,
-metadados da Steam e do HowLongToBeat, navegação por controle Xbox, papel de parede e iluminação inteligente
-que acompanham o jogo aberto, backup completo e atualização automática.
+Este é um fork da versão para Windows do [Cartridges](https://codeberg.org/kramo/cartridges), o launcher
+criado por kramo para o GNOME. O projeto original (abandonado) reúne jogos de vários launchers do Linux; esta
+versão reúne os jogos de um PC com Windows a partir de uma pasta de atalhos e acrescenta novas funções como:
+acompanhamento de tempo de jogo por sessão, registro pessoal de cada jogo,
+metadados da Steam e do HowLongToBeat, navegação por controle Xbox, papel de parede,
+busca por capas e logos da Steam e controle de iluminação inteligente
+que acompanham o jogo aberto, além de backup completo e atualização automática.
 
 A interface é inteiramente em português do Brasil.
 
@@ -27,7 +28,6 @@ A interface é inteiramente em português do Brasil.
 - Limpeza dos títulos importados (remove sufixos como "Windows", "DX11" e "DX12").
 - Um jogo continua reconhecido quando o destino do atalho muda — atualização instalada, pasta
   movida, executável trocado —, sem perder tempo de jogo, capa, logo nem histórico.
-- Uma pasta de atalhos ausente ou um disco desconectado não remove jogos da biblioteca.
 - Jogos adicionados manualmente, com seletor de executável e opção "Abrir como administrador".
 - Busca por título, desenvolvedora, publicadora e anotação.
 - Ordenação por título, data de adição, jogados recentemente, mais jogados, data de lançamento,
@@ -35,6 +35,7 @@ A interface é inteiramente em português do Brasil.
 - Filtros por gênero, ano de lançamento e status, combináveis entre si e com a busca.
 - Grade com número de colunas acompanhando a largura da janela, e capas que deslizam até a nova
   posição quando a grade se reorganiza.
+- Navegação suave e agradável.
 
 ### Metadados e imagens
 
@@ -53,7 +54,7 @@ A interface é inteiramente em português do Brasil.
 ### Tela de detalhes
 
 - Capa, logo, fundo desfocado, datas, tempo de jogo e tamanho no disco.
-- Tamanho no disco medido em segundo plano, na mesma base do Explorer.
+- Tamanho da instalação do jogo.
 - Botão para abrir a pasta de instalação do jogo, quando ela pode ser determinada.
 
 ### Registro pessoal de cada jogo
@@ -64,7 +65,7 @@ A interface é inteiramente em português do Brasil.
   andamento e pelo aviso de fim de sessão.
 - **Jogos Zerados**: os jogos desinstalados marcados como Zerado continuam no aplicativo, com capa,
   informações, nota e histórico de sessões. Quando o jogo é reinstalado, os dois registros se unem.
-  Jogos que nunca passaram pelo aplicativo também podem ser adicionados, buscados na Steam ou
+  Jogos também podem ser adicionados diretamente na tela de zerados, buscados na Steam ou
   somente pelo nome.
 
 ### Tempo de jogo e sessões
@@ -92,18 +93,16 @@ Todos estes recursos ficam na aba Personalização das Preferências e vêm desa
 - **Iluminação inteligente Tuya**: a iluminação inteligente fica na cor do aplicativo enquanto ele
   está aberto e passa para a cor do jogo durante a sessão. A cor é extraída da capa ou escolhida
   manualmente, com brilho próprio. As trocas acontecem em degradê, e ao fechar o aplicativo a
-  iluminação inteligente volta ao estado anterior. A configuração é feita por um assistente, que
-  usa uma conta de desenvolvedor da Tuya. As credenciais ficam criptografadas e presas à conta do
-  Windows, e a comunicação com os dispositivos acontece pela rede local.
+  iluminação inteligente volta ao estado anterior.
 
 ### Controle Xbox
 
-- Navegação completa pelo aplicativo com um controle, com vibração opcional.
+- Navegação completa pelo aplicativo usando um controle, com vibração opcional.
 
 ### Atualizações e novidades
 
-- Aviso de atualização disponível por jogo, a partir de um feed de atualizações, com brilho
-  dourado na capa e link para a página da atualização. O aviso pode ser ligado por jogo.
+- Aviso de atualização disponível por jogo, quando a instalação é realizada através de repacks (🏴‍☠️👀), a partir de um feed de atualizações, com brilho
+  dourado na capa e link para a página da atualização. O aviso é configurado por jogo.
 - Página "Novidades" com as publicações recentes do mesmo feed, e indicador quando há algo novo.
 - O próprio aplicativo verifica se há uma versão nova ao abrir, mostra o que mudou e, com a sua
   confirmação, baixa, confere e instala a atualização, reabrindo em seguida. Durante uma sessão de
@@ -133,13 +132,12 @@ Todos estes recursos ficam na aba Personalização das Preferências e vêm desa
   Flatpak e outras) deram lugar à importação de uma pasta de atalhos.
 - Interface somente em português do Brasil.
 - Removidos: atalhos de teclado, ocultar jogos e os links do projeto original na tela Sobre.
-- Versionamento pela data da build (`AAAA.MM.DD`).
+- Todas as outras funções que foram detalhadas acima.
 
 ## Instalação
 
-1. Baixe o instalador `Cartridges.Windows.exe` da versão mais recente em
+1. Baixe e instale através do instalador `Cartridges.Windows.exe` da versão mais recente em
    [Releases](https://github.com/joaomgabaldi/Cartridges/releases).
-2. Execute o instalador. O Windows pode exibir um aviso por o instalador não ser assinado.
 
 Depois de instalado, o aplicativo se atualiza sozinho.
 
@@ -147,12 +145,6 @@ Depois de instalado, o aplicativo se atualiza sozinho.
 janela. No Painel de Controle NVIDIA, em *Gerenciar as configurações 3D*, crie um perfil para o
 `pythonw.exe` do Cartridges e defina o *método de apresentação Vulkan/OpenGL* como *Preferir
 nativo*. O instalador mostra esse passo a passo em computadores com NVIDIA.
-
-### Onde ficam os dados
-
-- Biblioteca, capas, logos, papéis de parede, iluminação inteligente, histórico de sessões e arquivos de
-  diagnóstico: `%LOCALAPPDATA%\Cartridges`.
-- Configurações: registro do Windows, em `HKEY_CURRENT_USER\Software\GSettings\page\kramo\Cartridges`.
 
 Ao desinstalar, o instalador pergunta se deve remover também a biblioteca e as configurações.
 
