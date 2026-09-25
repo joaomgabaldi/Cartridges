@@ -42,6 +42,7 @@
           <li>Ao escolher um logo ou uma capa do SteamGridDB, o aplicativo não volta mais à lista de resultados enquanto as demais pré-visualizações terminam de carregar, o que parecia uma nova busca a cada clique</li>
           <li>A data de lançamento passa a incluir o dia, no formato da Steam (ex.: "Data de lançamento: 2/set./2026"), e a ordenação por lançamento considera o dia. Para exibir o dia nos jogos já importados, use Atualizar metadados, com todos os jogos, nas Preferências</li>
           <li>A tela de edição não aceita uma data de lançamento inválida e indica o formato esperado</li>
+          <li>O número da versão na tela Sobre e a linha do gráfico de horas ficam legíveis no tema escuro</li>
         </ul>
       </description>
     </release>
