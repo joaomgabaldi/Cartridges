@@ -237,7 +237,7 @@ class FitaWizard(Adw.Dialog):
         for fita in encontrados:
             linha = Adw.SwitchRow(
                 title=fita.nome,
-                subtitle=fita.ip or _("Não encontrada na rede. Verifique se a fita está ligada."),
+                subtitle=fita.ip or _("Não encontrado na rede. Verifique se o dispositivo está ligado."),
             )
             # Sem endereço não há como falar com a fita: marcá-la seria gravar
             # uma fita que nunca acende.

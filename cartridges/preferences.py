@@ -472,7 +472,9 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         if configuradas:
             self.session_fita_switch.set_subtitle(
                 ngettext(
-                    "{} fita configurada", "{} fitas configuradas", len(configuradas)
+                    "{} dispositivo configurado",
+                    "{} dispositivos configurados",
+                    len(configuradas),
                 ).format(len(configuradas))
             )
             return
@@ -480,7 +482,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         # Desligada, e não só apagada, como nas opções que precisam de um
         # segundo monitor: quando houver fita, quem religa é o usuário.
         shared.schema.set_boolean("session-fita", False)
-        self.session_fita_switch.set_subtitle(_("Nenhuma fita configurada"))
+        self.session_fita_switch.set_subtitle(_("Nenhum dispositivo configurado"))
 
     def arrancar_fitas(self, row: Adw.SwitchRow, *_args: Any) -> None:
         """Ligar o recurso com o app aberto arranca o ciclo na hora.
@@ -619,9 +621,9 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                     # endereço é o que o assistente achou. Fita muda com a
                     # tomada ligada é IP que mudou, e o conserto é um só.
                     _(
-                        "Sem resposta: {}. Se a fita estiver ligada, o endereço "
-                        "dela na rede pode ter mudado; configure as fitas "
-                        "novamente."
+                        "Sem resposta: {}. Se o dispositivo estiver ligado, o "
+                        "endereço dele na rede pode ter mudado; configure a "
+                        "iluminação inteligente novamente."
                     ).format(", ".join(mudas))
                     if mudas
                     else _("Teste concluído")
@@ -983,10 +985,10 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             _(
                 "Tem certeza que deseja restaurar este backup? A nota, o "
                 "status, o tempo de jogo, a anotação, a capa, o logo, o papel "
-                "de parede e a cor da fita de cada jogo presente no backup "
-                "serão substituídos, e as sessões do backup serão "
-                "acrescentadas ao histórico. As configurações também serão "
-                "substituídas."
+                "de parede e a cor da iluminação inteligente de cada jogo "
+                "presente no backup serão substituídos, e as sessões do backup "
+                "serão acrescentadas ao histórico. As configurações também "
+                "serão substituídas."
             ),
             "restore",
             _("Restaurar"),

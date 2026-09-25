@@ -199,7 +199,7 @@ template $DetailsDialog: Adw.Dialog {
         // escolha, ela sai da capa — por isso o botão de voltar ao automático
         // só aparece quando houve escolha.
         Adw.ActionRow fita_row {
-          title: _("Fita de LED");
+          title: _("Iluminação inteligente");
           activatable-widget: fita_cor_menu;
 
           [suffix]
@@ -221,7 +221,7 @@ template $DetailsDialog: Adw.Dialog {
           [suffix]
           MenuButton fita_cor_menu {
             valign: center;
-            tooltip-text: _("Escolher a cor da fita");
+            tooltip-text: _("Escolher a cor da iluminação inteligente");
 
             child: DrawingArea fita_amostra {
               content-width: 22;
@@ -237,7 +237,7 @@ template $DetailsDialog: Adw.Dialog {
         }
 
         Adw.SpinRow fita_brilho_row {
-          title: _("Brilho da fita (%)");
+          title: _("Brilho (%)");
 
           adjustment: Adjustment {
             lower: 1;

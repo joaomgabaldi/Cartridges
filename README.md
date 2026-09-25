@@ -10,7 +10,7 @@ Esta é uma versão para Windows do [Cartridges](https://codeberg.org/kramo/cart
 criado por kramo para o GNOME. O projeto original reúne jogos de vários lançadores do Linux; esta
 versão reúne os jogos de um PC com Windows a partir de uma pasta de atalhos e acrescenta tudo o que
 está descrito abaixo: acompanhamento de tempo de jogo por sessão, registro pessoal de cada jogo,
-metadados da Steam e do HowLongToBeat, navegação por controle Xbox, papel de parede e fitas de LED
+metadados da Steam e do HowLongToBeat, navegação por controle Xbox, papel de parede e iluminação inteligente
 que acompanham o jogo aberto, backup completo e atualização automática.
 
 A interface é inteiramente em português do Brasil.
@@ -87,12 +87,12 @@ Todos estes recursos ficam na aba Personalização das Preferências e vêm desa
   [wallhaven](https://wallhaven.cc) ou escolhida manualmente, com ajuste de enquadramento para
   monitores em retrato e em paisagem. Ao final da sessão, cada monitor volta ao papel de parede
   que tinha.
-- **Fitas de LED Tuya**: as fitas atrás dos monitores ficam na cor do aplicativo enquanto ele está
-  aberto e passam para a cor do jogo durante a sessão. A cor é extraída da capa ou escolhida
-  manualmente, com brilho próprio. As trocas acontecem em degradê, e ao fechar o aplicativo as fitas
-  voltam ao estado anterior. A configuração é feita por um assistente, que usa uma conta de
-  desenvolvedor da Tuya. As credenciais ficam criptografadas e presas à conta do Windows, e a
-  comunicação com as fitas acontece pela rede local.
+- **Iluminação inteligente Tuya**: a iluminação inteligente fica na cor do aplicativo enquanto ele
+  está aberto e passa para a cor do jogo durante a sessão. A cor é extraída da capa ou escolhida
+  manualmente, com brilho próprio. As trocas acontecem em degradê, e ao fechar o aplicativo a
+  iluminação inteligente volta ao estado anterior. A configuração é feita por um assistente, que
+  usa uma conta de desenvolvedor da Tuya. As credenciais ficam criptografadas e presas à conta do
+  Windows, e a comunicação com os dispositivos acontece pela rede local.
 
 ### Controle Xbox
 
@@ -110,7 +110,7 @@ Todos estes recursos ficam na aba Personalização das Preferências e vêm desa
 ### Backup
 
 - Exporta e importa um arquivo `.zip` com as configurações do aplicativo e, por jogo: nota,
-  status, tempo de jogo, anotação, capa, logo e papel de parede escolhidos manualmente, cor da fita
+  status, tempo de jogo, anotação, capa, logo e papel de parede escolhidos manualmente, cor da iluminação inteligente
   e histórico de sessões. Os Jogos Zerados também entram.
 - Na restauração, cada jogo do backup é associado a um jogo da biblioteca pelo ID da Steam, ou pelo
   nome. A restauração nunca cria nem apaga jogos da biblioteca; apenas os Jogos Zerados ausentes
@@ -148,7 +148,7 @@ nativo*. O instalador mostra esse passo a passo em computadores com NVIDIA.
 
 ### Onde ficam os dados
 
-- Biblioteca, capas, logos, papéis de parede, fitas, histórico de sessões e arquivos de
+- Biblioteca, capas, logos, papéis de parede, iluminação inteligente, histórico de sessões e arquivos de
   diagnóstico: `%LOCALAPPDATA%\Cartridges`.
 - Configurações: registro do Windows, em `HKEY_CURRENT_USER\Software\GSettings\page\kramo\Cartridges`.
 
@@ -173,7 +173,7 @@ pacman -S mingw-w64-ucrt-x86_64-gtk4 mingw-w64-ucrt-x86_64-libadwaita \
 
 O `blueprint-compiler` é baixado pelo Meson na primeira configuração.
 
-O `tinytuya` conversa com as fitas de LED, e o `python-cryptography` é necessário para ele.
+O `tinytuya` conversa com a iluminação inteligente, e o `python-cryptography` é necessário para ele.
 Para gerar o instalador, também é preciso o [Inno Setup 6](https://jrsoftware.org/isinfo.php).
 
 O aplicativo depende de uma correção no GTK que ainda não está no projeto oficial. Sem ela, a

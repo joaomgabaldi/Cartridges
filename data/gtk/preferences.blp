@@ -52,7 +52,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
 
     Adw.PreferencesGroup {
       title: _("Backup da sua biblioteca");
-      description: _("Salve em um arquivo .zip os dados da biblioteca: nota, status, tempo de jogo, anotações, capas, logos, papéis de parede, cores das fitas, histórico de sessões e configurações. As credenciais da Tuya não são incluídas. A restauração aplica esses dados aos jogos que já estão na biblioteca.");
+      description: _("Salve em um arquivo .zip os dados da biblioteca: nota, status, tempo de jogo, anotações, capas, logos, papéis de parede, cores da iluminação inteligente, histórico de sessões e configurações. As credenciais da Tuya não são incluídas. A restauração aplica esses dados aos jogos que já estão na biblioteca.");
       separate-rows: true;
 
       Adw.ButtonRow export_backup_button_row {
@@ -139,11 +139,11 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
     // sem passar pelo assistente nao ha fita nenhuma, e o interruptor acima
     // nasce bloqueado. O subtitulo dele e escrito em `atualizar_fitas`.
     Adw.PreferencesGroup session_fita_group {
-      title: _("Fitas de LED");
-      description: _("Muda a cor das fitas de LED enquanto o Cartridges está aberto: a cor do aplicativo fora do jogo e a cor do jogo durante a sessão. Ao fechar o aplicativo, as fitas voltam ao estado anterior.");
+      title: _("Iluminação inteligente");
+      description: _("Muda a cor da iluminação inteligente enquanto o Cartridges está aberto: a cor do aplicativo fora do jogo e a cor do jogo durante a sessão. Ao fechar o aplicativo, a iluminação inteligente volta ao estado anterior.");
 
       Adw.SwitchRow session_fita_switch {
-        title: _("Mudar a cor das fitas");
+        title: _("Mudar a cor da iluminação inteligente");
       }
 
       Adw.SpinRow fita_brilho_row {
@@ -164,7 +164,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
       // hora, sem confirmar nada.
       Adw.ActionRow fita_cor_app_row {
         title: _("Cor do app");
-        subtitle: _("A cor das fitas com o app aberto e nenhum jogo em execução");
+        subtitle: _("A cor da iluminação inteligente com o aplicativo aberto e nenhum jogo em execução");
         sensitive: bind session_fita_switch.active;
         activatable-widget: fita_cor_app_menu;
 
@@ -183,7 +183,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         [suffix]
         MenuButton fita_cor_app_menu {
           valign: center;
-          tooltip-text: _("Escolher a cor das fitas no app");
+          tooltip-text: _("Escolher a cor da iluminação inteligente");
 
           child: DrawingArea fita_cor_app_amostra {
             content-width: 22;
@@ -199,8 +199,8 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
       }
 
       Adw.ActionRow fita_configurar_row {
-        title: _("Configurar fitas");
-        subtitle: _("Busca as fitas na sua conta da Tuya");
+        title: _("Configurar a iluminação inteligente");
+        subtitle: _("Busca os dispositivos na sua conta da Tuya");
         activatable-widget: fita_configurar_button;
 
         [suffix]
@@ -217,7 +217,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
 
       Adw.ActionRow fita_testar_row {
         title: _("Testar");
-        subtitle: _("Acende cada fita na cor do app");
+        subtitle: _("Acende cada dispositivo na cor do aplicativo");
         sensitive: bind session_fita_switch.active;
         activatable-widget: fita_testar_button;
 
@@ -225,7 +225,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         Button fita_testar_button {
           valign: center;
           icon-name: "media-playback-start-symbolic";
-          tooltip-text: _("Ligar as fitas");
+          tooltip-text: _("Ligar a iluminação inteligente");
 
           styles [
             "flat"
