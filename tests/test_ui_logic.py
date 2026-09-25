@@ -591,7 +591,7 @@ def test_apply_writes_both_rows_to_the_game(real_window, store):
 PERSISTED_METADATA = {
     "developer": "Team Cherry",
     "publisher": "Team Cherry",
-    "release_date": "Fev 2017",
+    "release_date": "24/fev./2017",
     "metacritic": 90,
     "steam_review": "Extremamente positivas",
     "genre": "Metroidvania",

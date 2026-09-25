@@ -658,7 +658,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
                 continue
             if game.genre:
                 genres.add(game.genre)
-            year, _month = parse_release_date(game.release_date or "")
+            year, _month, _day = parse_release_date(game.release_date)
             if year:
                 years.add(str(year))
 
@@ -1079,7 +1079,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         if not filtered and self.filter_genre_state:
             filtered = (game.genre or "") != self.filter_genre_state
         if not filtered and self.filter_year_state:
-            year, _month = parse_release_date(game.release_date or "")
+            year, _month, _day = parse_release_date(game.release_date)
             filtered = str(year or "") != self.filter_year_state
         if not filtered and self.filter_status_state:
             filtered = (game.status or "") != self.filter_status_state
@@ -1187,13 +1187,14 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.details_view_publisher.set_label(game.publisher or "")
         self.details_view_publisher.set_visible(bool(game.publisher))
 
+        release_date = format_release_date(game.release_date)
         self.details_view_release_date.set_label(
             # The variable is the game's release date
-            _("Lançamento: {}").format(format_release_date(game.release_date))
-            if game.release_date
+            _("Data de lançamento: {}").format(release_date)
+            if release_date
             else ""
         )
-        self.details_view_release_date.set_visible(bool(game.release_date))
+        self.details_view_release_date.set_visible(bool(release_date))
 
         # Cheias até a nota, vazias depois: cinco símbolos sempre, para que duas
         # notas lado a lado se comparem pelo desenho e não pela contagem.
@@ -1858,14 +1859,15 @@ class CartridgesWindow(Adw.ApplicationWindow):
     def release_sort_key(game: Game) -> int:
         """Turn a release date string into a chronologically sortable number.
 
-        Release dates are stored for display ("Aug 2012" or just "2012"), which
-        do not sort correctly as text. Returns ``year * 100 + month`` (month 0
-        when only the year is known) or -1 when there is no usable date.
+        Release dates are stored for display ("2/set./2012" or just "2012"),
+        which do not sort correctly as text. Returns ``year * 10000 + month *
+        100 + day`` (0 for a missing month or day) or -1 when there is no
+        usable date.
         """
-        year, month = parse_release_date(game.release_date or "")
+        year, month, day = parse_release_date(game.release_date)
         if year is None:
             return -1
-        return year * 100 + (month or 0)
+        return year * 10000 + (month or 0) * 100 + (day or 0)
 
     @staticmethod
     def compare_names(game1: Game, game2: Game) -> int:
