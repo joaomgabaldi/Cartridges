@@ -24,7 +24,6 @@ from gi.repository import Adw, GLib, Gtk
 
 from cartridges import shared
 from cartridges.game import Game
-from cartridges.steam_picker import SteamPicker
 from cartridges.utils import zerado_manual
 from cartridges.utils.format_playtime import format_playtime
 from cartridges.utils.name_cleaner import clean_for_search
@@ -226,12 +225,12 @@ class ZeradosPicker(Adw.Dialog):
         self.aviso.set_label(aviso or "")
         self.aviso.set_visible(bool(aviso))
 
-        for candidato, match in candidatos_steam:
+        for candidato, _match in candidatos_steam:
             appid = str(candidato.get("id", ""))
             if not appid:
                 continue
             nome = str(candidato.get("name", ""))
-            self._linha(nome, appid, nome, SteamPicker._describe(appid, match))
+            self._linha(nome, appid, nome, _("ID na Steam: {}").format(appid))
         self._linha(
             texto, None, _("Adicionar «{}» sem dados da Steam").format(texto), ""
         )

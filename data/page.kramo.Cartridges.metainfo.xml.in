@@ -37,6 +37,7 @@
           <li>Jogos Zerados agora aceita jogos que nunca passaram pelo Cartridges: no botão Adicionar, busque o jogo na Steam para trazer os dados e a capa, ou adicione-o somente pelo nome</li>
           <li>Um jogo que já está em Jogos Zerados ou na biblioteca não pode ser adicionado novamente; um jogo desinstalado com o mesmo nome é marcado como Zerado, mantendo o tempo de jogo e o histórico de sessões</li>
           <li>O item Jogos Zerados do menu fica sempre disponível na tela principal</li>
+          <li>Os resultados da busca na Steam mostram somente o ID na Steam, sem a indicação de correspondência com o título</li>
         </ul>
       </description>
     </release>
