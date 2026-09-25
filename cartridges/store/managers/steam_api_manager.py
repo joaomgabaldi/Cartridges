@@ -106,7 +106,11 @@ class SteamAPIManager(AsyncManager):
         return tag_ids, tag_ids is None
 
     def main(self, game: Game, additional_data: dict) -> None:
-        if game.blacklisted or game.removed:
+        # Tumba não é processada, exceto o zerado adicionado à mão
+        # (`zerado_manual`), que só existe como tumba e precisa dos dados.
+        if game.blacklisted or (
+            game.removed and not additional_data.get("zerado_manual")
+        ):
             return
 
         # Only fetch metadata when enabled
