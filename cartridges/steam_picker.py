@@ -153,13 +153,13 @@ class SteamPicker(Adw.Dialog):
             return False
 
         self._clear_results()
-        for candidate, match in candidates:
+        for candidate, _match in candidates:
             appid = str(candidate.get("id", ""))
             if not appid:
                 continue
             row = Adw.ActionRow(
                 title=GLib.markup_escape_text(str(candidate.get("name", ""))),
-                subtitle=self._describe(appid, match),
+                subtitle=_("ID na Steam: {}").format(appid),
                 activatable=True,
             )
             row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
@@ -177,13 +177,6 @@ class SteamPicker(Adw.Dialog):
 
         self.stack.set_visible_child_name("results")
         return False
-
-    @staticmethod
-    def _describe(appid: str, match: TitleMatch) -> str:
-        """Explain, in one line, how well a candidate fits the searched title."""
-        if match.confident:
-            return _("ID na Steam: {} · corresponde ao título").format(appid)
-        return _("ID na Steam: {} · parece ser outro produto").format(appid)
 
     def _clear_results(self) -> None:
         self._rows.clear()

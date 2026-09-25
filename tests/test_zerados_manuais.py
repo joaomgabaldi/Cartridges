@@ -225,7 +225,7 @@ def test_resultados_da_steam_e_a_linha_do_nome(store):
     )
 
     assert titulos(picker) == [
-        ("Hades", "ID na Steam: 1145360 · corresponde ao título", True),
+        ("Hades", "ID na Steam: 1145360", True),
         ("Adicionar «hades» sem dados da Steam", "", True),
     ]
     assert picker.aviso.get_visible() is False
