@@ -368,11 +368,16 @@ class SteamAPIHelper:
                 logging.warning("Steam API invalid response for %s", appid)
                 raise SteamGameNotFoundError() from error
 
-        # The response is a dict keyed by appid. Guard every access: a missing
-        # key, an unsuccessful entry or any unexpected shape is treated as "not
-        # found" so a quirk in the API leaves the game untouched instead of
-        # crashing the import with a KeyError/TypeError.
-        entry = payload.get(str(appid)) if isinstance(payload, dict) else None
+        # Um pedido leva um appID só, então a resposta tem uma entrada só, e é
+        # a dele. A chave não serve: desde 24/09/2026 a Steam devolve a entrada
+        # sob o ID de um DLC do jogo (o 391220 veio como "541750"), com o
+        # appID certo dentro de `data`. Qualquer outro formato conta como "não
+        # encontrado": o jogo fica como está, em vez de a importação cair.
+        entry = (
+            next(iter(payload.values()))
+            if isinstance(payload, dict) and len(payload) == 1
+            else None
+        )
         if not isinstance(entry, dict) or not entry.get("success"):
             logging.debug("Appid %s not found", appid)
             raise SteamGameNotFoundError()
