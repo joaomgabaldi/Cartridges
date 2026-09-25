@@ -1,0 +1,128 @@
+# shared.py.in
+#
+# Copyright 2022-2023 kramo
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from enum import IntEnum, auto
+from pathlib import Path
+
+from gi.repository import Gdk, Gio, GLib
+
+
+class AppState(IntEnum):
+    DEFAULT = auto()
+    LOAD_FROM_DISK = auto()
+    IMPORT = auto()
+
+
+APP_ID = "@APP_ID@"
+VERSION = "@VERSION@"
+PREFIX = "@PREFIX@"
+# The version of the game_id.json spec. Deliberately NOT bumped for the
+# HowLongToBeat fields: they are nullable additions that an older Cartridges
+# ignores harmlessly, whereas a bump makes `Store.add_game` reject every file
+# as "from a newer version" and hide the user's whole library on a downgrade.
+SPEC_VERSION = 1.6
+
+schema = Gio.Settings.new(APP_ID)
+state_schema = Gio.Settings.new(APP_ID + ".State")
+
+home = Path.home()
+
+data_dir = Path(GLib.get_user_data_dir())
+
+# Name of the app's own folder inside the data/config dirs.
+APP_DIR_NAME = "Cartridges"
+
+app_dir = data_dir / APP_DIR_NAME
+
+games_dir = app_dir / "games"
+covers_dir = app_dir / "covers"
+# Official horizontal logos used as the details page header. Kept apart from
+# the covers: a cover is user-facing data (it can be picked by hand, exported,
+# and must survive), a logo is a purely decorative asset we can always fetch
+# again, so deleting this folder costs nothing but a re-download.
+logos_dir = app_dir / "logos"
+# A arte que veste os monitores além do principal durante a sessão: a imagem de
+# partida (uma por jogo) mais o sidecar que diz se ela foi escolhida à mão e em
+# que faixa cortá-la para cada orientação de monitor. Apagar a pasta devolve
+# todo mundo à escolha automática.
+wallpapers_dir = app_dir / "wallpapers"
+
+# As fitas de LED que acompanham a sessão: um sidecar por jogo com a cor e o
+# brilho escolhidos, e ao lado o arquivo com as fitas configuradas. O arquivo
+# carrega as chaves locais dos módulos, que é o que permite falar com eles sem
+# passar pela nuvem — por isso ele não mora no GSettings.
+fitas_dir = app_dir / "fitas"
+fitas_arquivo = app_dir / "fitas.json"
+
+# A conta de nuvem da Tuya que o assistente das fitas usa para buscar
+# dispositivos. Fica criptografada com o DPAPI do Windows (ver
+# `utils/tuya_conta.py`), amarrada à conta do Windows de quem roda o app — por
+# isso mora num arquivo à parte, fora do backup do app (`utils/backup.py`): um
+# blob DPAPI não decifra numa instalação nova nem numa conta diferente.
+tuya_conta_arquivo = app_dir / "tuya_conta.json"
+
+# Deliberately NOT `GLib.get_user_cache_dir()`. On Windows that resolves to
+# CSIDL_INTERNET_CACHE — `AppData\Local\Microsoft\Windows\INetCache`, the
+# browser's temporary files folder, which Disk Cleanup and Storage Sense empty
+# by default. The session logs used to be written there, and the log of the run
+# that went wrong is exactly what a cleanup sweep takes away between the crash
+# and somebody looking for it. `AppData\Local\<app>` is the conventional
+# Windows location, and it keeps everything the app writes under one root.
+log_dir = app_dir / "logs"
+
+# Stored cover masters are always kept at high resolution (600x900, the native
+# SteamGridDB/Steam size) so covers stay crisp. The on-screen render size is
+# derived from the monitor scale to keep memory and drawing cost reasonable.
+image_size = (600, 900)
+
+# Sensible defaults so these names always exist, even when there is no display
+# yet (e.g. shared.py imported before the window exists) or no monitors attached.
+scale_factor = 1
+display_size = (200, 300)
+
+# The details page draws its cover at 420x630, not the grid's 200x300, so a
+# texture decoded at `display_size` would be stretched to fill it. This is the
+# size the page draws and therefore the size it decodes; the cover files
+# themselves are stored at 600x900, so this is still a reduction of the file.
+# Deliberately a second number rather than a bigger `display_size`: that one is
+# paid for once per game in the library, and raising it to this would double
+# the memory and drawing cost of the whole grid to sharpen one picture. Only
+# the cover on screen right now is decoded at this size — see
+# `GameCover.add_details_picture`.
+details_size = (420, 630)
+
+try:
+    scale_factor = max(
+        monitor.get_scale_factor()
+        for monitor in Gdk.Display.get_default().get_monitors()
+    )
+except (AttributeError, ValueError):
+    # AttributeError: no display (get_default() is None), e.g. the search
+    # provider. ValueError: max() over zero monitors. Keep the defaults.
+    pass
+else:
+    display_size = (200 * scale_factor, 300 * scale_factor)
+    details_size = (420 * scale_factor, 630 * scale_factor)
+
+# pylint: disable=invalid-name
+win = None
+importer = None
+import_time = None
+store = None
+log_files = []

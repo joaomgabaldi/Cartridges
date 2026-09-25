@@ -1,0 +1,412 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>@APP_ID@</id>
+  <replaces>
+    <id>hu.kramo.Cartridges</id>
+  </replaces>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Cartridges</name>
+  <summary>Seus jogos em um só lugar</summary>
+  <description>
+    <p>O Cartridges é um lançador simples para todos os seus jogos. Ele importa atalhos de jogos (.lnk e .url, incluindo aplicativos da Microsoft Store) a partir de uma pasta, reunindo em um só lugar jogos da Steam, Epic, Ubisoft Connect, Xbox e outros, sem precisar fazer login. Títulos, desenvolvedoras, publicadoras e datas de lançamento são buscados na Steam, e você pode ordenar os jogos, manter em Jogos Zerados os jogos desinstalados que você terminou ou baixar capas do SteamGridDB.</p>
+  </description>
+  <developer id="page.kramo">
+    <name translate="no">joaomgabaldi</name>
+  </developer>
+  <branding>
+    <color type="primary" scheme_preference="light">#d5b0e7</color>
+    <color type="primary" scheme_preference="dark">#501a5c</color>
+  </branding>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="2026.09.24" date="2026-09-24">
+      <description translate="no">
+        <ul>
+          <li>Um jogo instalado marcado como Zerado, quando removido, vai para Jogos Zerados, e o aviso informa isso</li>
+          <li>Um Jogo Zerado com atualização marcada não fica mais com o brilho dourado preso na capa, já que essa página não permite descartar o aviso</li>
+          <li>Os botões de Jogar e do menu não ficam mais presos na capa de um jogo que virou Zerado com o ponteiro sobre ela, e a opção Remover deixou de aparecer para um Jogo Zerado</li>
+          <li>Um atalho de Jogo Zerado renomeado ou movido volta a ser reconhecido, mesmo quando o Windows preserva a data de modificação original ao renomear ou copiar o arquivo</li>
+          <li>Corrigida uma situação rara em que duas operações aconteciam ao mesmo tempo, durante a importação em lote: um Jogo Zerado excluído, reinstalado ou marcado enquanto a importação estava em andamento deixou de ser alterado com base em uma informação desatualizada</li>
+          <li>O ícone de Jogar dos Jogos Zerados volta a ser atualizado quando a preferência "A capa inicia o jogo" muda</li>
+          <li>Um jogo de Jogos Zerados é unido ao jogo reinstalado assim que este recebe o mesmo ID da Steam: o tempo de jogo se soma, o histórico de sessões passa para a biblioteca, e o status, a nota e a anotação passam para o jogo quando ele ainda não os tem</li>
+          <li>A conta da Tuya só é salva quando as credenciais realmente funcionam</li>
+          <li>Um logo não fica mais em branco quando a melhor opção encontrada é uma imagem WebP, que o aplicativo ainda não consegue exibir</li>
+          <li>O backup não mistura mais os dados de jogos desinstalados com os de Jogos Zerados, avisa quando algum jogo fica de fora e pode ser cancelado de fato</li>
+          <li>As fitas de LED que uma restauração de backup remove voltam ao estado anterior, em vez de ficarem presas na cor do aplicativo</li>
+          <li>As escolhas "Não trocar" no papel de parede e "Usar o título" no logo agora são preservadas pelo backup</li>
+          <li>A restauração não traz mais a pasta de atalhos e o monitor de outro computador</li>
+          <li>O histórico de sessões acompanha o jogo quando ele muda de pasta, não se perde com um arquivo interrompido e carrega rapidamente mesmo com milhares de sessões</li>
+          <li>O resumo do histórico de sessões (últimos 7 e 30 dias) passa a coincidir com o gráfico, e mostra "nenhuma sessão" quando não há tempo jogado no período</li>
+          <li>"Remover todos os jogos" também apaga o histórico de sessões</li>
+          <li>Textos do aplicativo revisados para uma linguagem mais clara e formal</li>
+          <li>O aplicativo abre mais rápido logo após a instalação</li>
+          <li>A busca por novas versões do Cartridges funciona em qualquer computador, sem exigir o GitHub CLI instalado e conectado</li>
+          <li>Remoção de código sem uso, herdado de versões anteriores e do projeto original</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.09.23" date="2026-09-23">
+      <description translate="no">
+        <ul>
+          <li>O aplicativo instalado ficou com cerca de metade do tamanho: de 296 MB para 157 MB, e de 6.348 para 2.659 arquivos. O instalador passou a levar apenas os componentes que o aplicativo usa, e a atualização remove os que sobraram da versão anterior</li>
+          <li>Os tempos do HowLongToBeat voltaram a ser encontrados: o site mudou a forma de autorizar a busca, e nenhum jogo novo recebia os tempos</li>
+          <li>O brilho dourado das capas com atualização disponível só pulsa quando o aplicativo está em foco. Com outra janela em foco, o brilho permanece aceso, sem animação, e o aplicativo deixa de consumir processador redesenhando a tela</li>
+          <li>A busca por atualizações do aplicativo passou a usar o novo endereço do repositório</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.09.22" date="2026-09-22">
+      <description translate="no">
+        <ul>
+          <li>Nova página "Jogos Zerados", no menu principal: os jogos desinstalados marcados como Zerado continuam no aplicativo, com capa, informações, nota e histórico de sessões — sem Jogar nem as opções de lançamento. O botão + da página marca como Zerado um jogo que já tinha sido desinstalado. Reinstalar um jogo zerado não o retira da página; tirar a marca "Zerado" devolve o jogo à biblioteca (se ele estiver instalado) com tudo o que tinha. A opção Excluir remove o jogo definitivamente</li>
+          <li>Os Jogos Zerados entram no backup, e restaurar recria os que não existem neste PC</li>
+          <li>Um jogo zerado mantém o logo para sempre, mesmo depois de renomeado</li>
+          <li>Os logos baixados automaticamente não são mais trocados a cada 30 dias: o logo que está na tela fica, e só muda se você renomear o jogo ou escolher outro manualmente. Um jogo sem logo continua tentando achar um a cada 7 dias</li>
+          <li>O recurso de ocultar jogos foi removido</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.09.21" date="2026-09-21">
+      <description translate="no">
+        <ul>
+          <li>Novo layout do histórico de sessões: o logo do jogo, maior, e o resumo dos últimos 7/30 dias ficam centralizados no topo da tela; embaixo, a tabela de sessões e o painel do gráfico ficam lado a lado, com a mesma altura. A tela acompanha o tamanho da tabela, e a partir de umas 8 sessões a tabela rola. A barra de cima não repete mais o título "Histórico de sessões", que ficava colado no logo</li>
+          <li>O gráfico do histórico de sessões não mostra mais dias vazios antes da primeira sessão registrada quando "Semana" ou "Mês" está selecionado — um jogo com sessão só há 2 dias, por exemplo, não ganha mais 28 dias em branco no período "Mês"</li>
+          <li>O backup agora leva as configurações do aplicativo (inclusive as chaves do SteamGridDB e do wallhaven, mas não a conta da Tuya) e, por jogo, nota, status, tempo de jogo, anotação, capa, logo e papel de parede escolhidos manualmente, cor da fita e o histórico de sessões. Restaurar não fecha mais o aplicativo: cada jogo do backup é associado a um jogo que já existe na biblioteca (pelo ID da Steam, ou pelo nome quando não há um), e somente a nota, o status, a anotação e o tempo de jogo são substituídos — nunca cria nem apaga jogo, então restaurar antes de reinstalar tudo não elimina a biblioteca atual. O formato de arquivo antigo não é mais aceito</li>
+          <li>Ao abrir o aplicativo com a biblioteca já carregada, o aviso "Importando jogos… X%" não aparece mais; o resumo continua aparecendo quando algum jogo entra ou sai</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.09.20" date="2026-09-20">
+      <description translate="no">
+        <ul>
+          <li>O assistente das fitas de LED salva o Access ID e o Access Secret da conta da Tuya (criptografados, presos a esta conta do Windows) depois de uma busca com sucesso, e não os solicita novamente toda vez que o assistente é reaberto</li>
+          <li>Revisão de textos em todo o aplicativo: frases mais curtas e diretas nas Preferências (fitas de LED, atualização de metadados, SteamGridDB), no assistente de fitas, na tela de detalhes, na tela Sobre e no instalador, além de dois deslizes de português corrigidos ("removê-la", "à cor padrão")</li>
+          <li>O tempo de jogo perto de uma hora não mostra mais "60 min": 59 min e 59 s agora aparece como "1 hora"</li>
+          <li>O botão de abrir a pasta do jogo, na tela de editar detalhes, agora avisa quando a pasta não existe mais, em vez de não fazer nada visivelmente</li>
+          <li>Uma falha ao ler os atalhos ou os aplicativos do menu Iniciar durante a importação agora aparece como aviso, em vez de ficar registrada apenas no arquivo de diagnóstico, com a importação seguindo como se nada tivesse acontecido</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.09.19" date="2026-09-19">
+      <description translate="no">
+        <ul>
+          <li>O histórico de sessões ganhou um gráfico de horas jogadas por dia, ao lado da lista, com a semana, o mês ou todo o período; passe o mouse sobre um dia para ver quanto foi jogado nele. Na tela de detalhes, o “Tempo de jogo” aparece sublinhado quando é possível clicar nele e abrir o histórico</li>
+          <li>Um jogo cujo HD externo estava desligado quando o aplicativo abriu não perde mais o comando editado manualmente, e um atalho com argumentos entre aspas (GOG Galaxy, Battle.net, emuladores com ROMs como “Jogo (USA)”) agora entra na biblioteca</li>
+          <li>“Atualizar capas” não troca mais uma capa animada escolhida manualmente, e a capa automática do SteamGridDB não pega mais o jogo errado quando o título tem dois-pontos</li>
+          <li>As fitas de LED não ficam mais presas na cor do aplicativo: fechar o assistente ou religar o recurso com o aplicativo aberto não as faz piscar nem esquece como estavam antes; uma fita que caiu da rede durante o jogo é devolvida ao fechar; e uma fita que não respondeu ao abrir o aplicativo não é pintada sem ter como voltar. Desligar “Contar horas de jogo” não trava mais a configuração das fitas, e uma troca de cor não perde mais para o fim de uma sessão curta</li>
+          <li>Os atalhos de teclado do aplicativo (Ctrl+N, Ctrl+I, Delete, Ctrl+Z e os outros) e a tela “Atalhos de teclado” foram removidos. Eles roubavam teclas da caixa de busca, agiam por trás do aviso de jogo aberto (Delete removia o jogo que estava rodando) e o Ctrl+Z podia desfazer uma importação de horas atrás. Durante a sessão, Enter ou Espaço também não abrem mais o jogo novamente por trás do aviso</li>
+          <li>Fechar o aplicativo com um jogo aberto grava a sessão no histórico, e não só no tempo total; o PC suspenso com o jogo aberto não conta mais como tempo de jogo; e quando o aplicativo troca para a janela de tempo manual, a sessão não pisca mais nem traz a biblioteca para a frente do jogo</li>
+          <li>Jogos em pastas de editora (Epic Games, EA Games, Rockstar Games) não são mais confundidos com os outros jogos e lançadores da mesma editora, e a sessão termina quando o jogo fecha</li>
+          <li>“Remover todos os jogos” também apaga os papéis de parede e as cores de fita escolhidos por jogo, e uma busca de capas em andamento não traz mais de volta os jogos apagados</li>
+          <li>Um arquivo de jogo editado manualmente com tipo errado não impede mais a janela de abrir: só o campo errado é descartado</li>
+          <li>A atualização do aplicativo não pergunta mais no meio de uma sessão de jogo; espera a sessão acabar</li>
+          <li>Correções menores: datas como “Este mês” e “Ano passado” na virada do mês e do ano; “Novidades atualizadas” não aparece mais quando a busca falhou; o papel de parede do Windows Spotlight não é mais trocado por uma imagem fixa; imagens enormes não travam mais a escolha de capa ou de papel de parede; temporários de logo e capa não se acumulam mais; o tamanho de um jogo que saiu do disco é zerado; e “Abrir como administrador” funciona com comandos que têm mais de um caminho entre aspas</li>
+          <li>A busca de reserva pela lista completa de aplicativos da Steam foi removida: a Steam desativou essa lista, e a busca pela loja continua funcionando</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.09.18" date="2026-09-18">
+      <description translate="no">
+        <ul>
+          <li>As fitas de LED trocam de cor deslizando, num degradê de dois segundos, e não mais de uma vez: ao abrir o aplicativo, ao dar play, ao sair do jogo e ao fechar o aplicativo. A fita que precisa apagar no fechamento escurece antes de desligar, sem a piscada rápida no brilho de antes que acontecia no fim, e religada por fora volta na cor e no brilho de antes, e não quase apagada; a que estava apagada acende direto. O controle de brilho nas Preferências e na tela do jogo continua respondendo na hora, sem degradê</li>
+          <li>Cada comando para as fitas agora só vale quando a fita avisa que o aplicou, e é reenviado quando ela não avisa. De vez em quando a fita jogava um comando fora sem dizer nada, e ele se perdia</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.09.17" date="2026-09-17">
+      <description translate="no">
+        <ul>
+          <li>As fitas de LED atrás dos monitores agora acompanham o Cartridges: com o aplicativo aberto e fora do jogo elas ficam no roxo dele, durante a sessão vestem a cor do jogo, e ao fechar o aplicativo voltam ao que estavam antes de tudo — apagadas, se estavam apagadas. Se o aplicativo for encerrado inesperadamente no meio de uma sessão, a próxima vez que abrir desfaz a troca antes de acender no roxo</li>
+          <li>A cor de cada jogo sai da capa dele, e na tela do jogo é possível escolher outra cor e outro brilho no lugar dela, com um botão ao lado para voltar a tirar a cor da capa. O jogo que não escolheu brilho usa o brilho padrão das Preferências, baixo de propósito: a fita fica atrás do monitor, e luz forte ali lava o preto da tela</li>
+          <li>As fitas são configuradas em Preferências, na aba Personalização: um assistente pede as chaves da sua conta de desenvolvedor da Tuya, busca os dispositivos que há nela e deixa marcar quais são as fitas dos monitores. Um botão "Testar" acende todas de uma vez e diz quais responderam. A opção vem desativada por padrão</li>
+          <li>O assistente acha o endereço de cada fita na rede de casa na hora da configuração, e o aplicativo usa esse endereço dali em diante, sem procurar pela rede novamente. Se o endereço de uma fita mudar, o botão "Testar" avisa, e basta configurar as fitas outra vez. Fita fora da tomada não atrapalha: as outras acendem normalmente, e o aplicativo não trava nem mostra aviso nenhum durante o jogo</li>
+          <li>As fitas trocam de cor todas ao mesmo tempo, e não uma depois da outra, e a troca acontece sem a piscada na cor anterior: a cor chega antes de a fita acender</li>
+          <li>O brilho aparece em porcentagem e responde na hora: mexeu no controle, as fitas acompanham, nas Preferências e na tela do jogo</li>
+          <li>O aplicativo mantém a conexão com cada fita aberta enquanto estiver em execução, e a troca de cor ficou praticamente instantânea. Fita que parou de responder três vezes seguidas é deixada de lado até o botão "Testar" ser usado ou o aplicativo abrir novamente, e para de atrasar as outras</li>
+          <li>Na tela do jogo, o seletor de cor abre ali mesmo, num balão, e cada cor escolhida já acende nas fitas na hora — é possível testar várias cores sem aplicar nenhuma</li>
+          <li>A cor das fitas fora do jogo pode ser trocada em Preferências, na aba Personalização. O roxo do Cartridges é o padrão, com um botão ao lado para voltar a ele; a cor escolhida vale também para os jogos sem capa</li>
+          <li>O botão "Testar" não diz mais que todas as fitas estão sem resposta quando elas respondem, e ao fechar o aplicativo todas as fitas voltam à cor de antes, e não só uma ou duas. As duas coisas vinham de respostas das fitas que sobravam sem ser lidas na conexão aberta</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.09.13" date="2026-09-13">
+      <description translate="no">
+        <ul>
+          <li>Ao abrir, o Cartridges confere se saiu uma versão nova. Se saiu, mostra as novidades dela e pergunta se quer atualizar; no Sim, baixa o instalador, confere que o arquivo é o original e instala sozinho, reabrindo o aplicativo ao final</li>
+          <li>O instalador em modo silencioso, que é o que a atualização pelo aplicativo usa, não para mais na página do aviso da placa NVIDIA. Antes, em computadores com NVIDIA, ele desistia nessa página sem instalar nada</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.09.12" date="2026-09-12">
+      <description translate="no">
+        <ul>
+          <li>O papel de parede da sessão agora muda em todos os monitores além do principal, em retrato ou paisagem, e não mais somente nos monitores em retrato. Quem tem dois monitores em paisagem passa a ver a arte do jogo no segundo</li>
+          <li>A tela de escolha do papel de parede acompanha os monitores: as imagens aparecem em retrato quando todos os outros monitores estão em retrato, e em paisagem nos outros casos. Com monitores em retrato e em paisagem ao mesmo tempo, a tela de ajuste mostra os dois cortes lado a lado, cada um com a sua barra de ajuste, e o jogo guarda a faixa escolhida para cada formato</li>
+          <li>Um papel de parede escolhido de um arquivo do computador também passa pela tela de ajuste, para escolher a faixa da imagem</li>
+          <li>Levar a janela para outro monitor e trocar o papel de parede agora exigem um segundo monitor. Sem ele, as duas opções ficam bloqueadas e são desligadas; quando um segundo monitor volta, elas continuam desligadas até serem religadas nas Preferências</li>
+          <li>A lista de monitores para onde a janela vai durante a sessão não oferece mais o monitor principal, onde o jogo roda. Num computador com um monitor só, a janela abria maximizada por cima do jogo</li>
+          <li>A aba Sessão das Preferências virou Personalização, e os textos das opções de monitor e papel de parede ficaram mais diretos</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.09.11" date="2026-09-11">
+      <description translate="no">
+        <ul>
+          <li>Se o Windows recusasse devolver o papel de parede de um só monitor no fim da sessão — um original guardado no iCloud Drive com a rede fora, por exemplo —, a referência a esse original era descartada junto com as outras, e o monitor ficava com a arte do jogo permanentemente. Agora só é removida a referência do monitor que realmente voltou ao original; o que foi recusado é tentado novamente no fim da sessão seguinte ou na próxima inicialização do aplicativo</li>
+          <li>A parede escolhida manualmente para um jogo, ou a marca "não trocar", se perdia quando o jogo mudava de identificação internamente (o que acontece, por exemplo, quando o atalho dele muda de lugar). Ela agora acompanha o jogo, como a capa e o logo já acompanhavam</li>
+          <li>O aplicativo voltou a desenhar pelo Vulkan da própria placa de vídeo, e não mais pelo Vulkan da Microsoft. A moldura preta em volta da janela vinha de uma opção do driver da NVIDIA, o método de apresentação Vulkan/OpenGL: no modo automático, o driver entrega os quadros por um caminho que descarta a transparência da margem de sombra. Com "Preferir nativo" configurado para o Cartridges, a margem fica transparente — medido com e sem a configuração, no mesmo driver. Assim o aplicativo não depende mais de um pacote da Microsoft Store nem de uma camada de tradução, e as animações rodam no driver da placa</li>
+          <li>O instalador ganhou uma página, logo depois da licença, com o passo a passo dessa configuração no Painel de Controle NVIDIA. Para continuar, é preciso marcar que você está ciente de que ela tem de ser feita depois de instalar. A página só aparece em computadores com placa de vídeo NVIDIA; nos outros, a instalação segue direto</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.09.10" date="2026-09-10">
+      <description translate="no">
+        <ul>
+          <li>Uma aba nova nas configurações, "Sessão": ao iniciar um jogo, em vez de minimizar, a janela pode ir maximizada para outro monitor e ficar ali a sessão inteira, com um relógio contando o tempo de jogo em horas, minutos e segundos. Quando o jogo termina, ela volta para o monitor de onde saiu e para o tamanho que tinha — maximizada se estava maximizada, 800x600 se era 800x600. A opção vem desativada por padrão</li>
+          <li>O relógio conta o mesmo tempo que vai ser gravado no jogo, e não o tempo desde o clique: ele fica parado em 0:00:00 enquanto o jogo ainda está abrindo e para de andar se o jogo fechar, que é exatamente o tempo que não entra na conta. Assim o que o relógio mostra bate com o aviso do fim da sessão</li>
+          <li>O monitor é escolhido pelo mesmo número que as configurações de vídeo do Windows mostram, e um botão "Identificar monitores" pisca esse número em cada tela por três segundos — com dois monitores iguais, nenhum rótulo escrito resolveria a dúvida, e a resposta está nas telas. Se o monitor escolhido não estiver ligado na hora de jogar, a janela minimiza como sempre fez, em vez de sumir para uma tela que não existe</li>
+          <li>A janela sai da frente antes de o jogo ser lançado, e não depois: quando o jogo cria a janela dele, já não há mais nada se mexendo para roubar o foco de um jogo em tela cheia</li>
+          <li>Ainda em "Sessão": enquanto o jogo roda, os monitores em retrato podem mostrar a arte dele como papel de parede, e ao terminar a sessão cada um volta ao papel de parede que tinha. Somente os monitores em retrato, e por proporção — a arte de um jogo é vertical, e num monitor em paisagem ela não caberia. Se o aplicativo for encerrado inesperadamente no meio da sessão, a inicialização seguinte desfaz a troca sozinha. A opção vem desativada por padrão</li>
+          <li>A imagem sai do wallhaven, buscada pelo nome do jogo. Como papel de parede em retrato é raro no site, a busca desce degraus: retrato primeiro, qualquer formato depois — e o que vem em paisagem é cortado no formato do monitor. Sem nenhum resultado, entra a capa do jogo, inteira, sobre ela mesma borrada</li>
+          <li>E cada jogo pode ter o seu escolhido manualmente, na tela de edição, ao lado do logo: a grade de resultados mostra os candidatos já cortados no formato do monitor — o que se vê ali é o que vai para a parede —, e uma barra desliza a faixa da imagem antes de gravar. Também é possível apontar um arquivo do disco, ou marcar o jogo como "não trocar". A escolha feita manualmente fica travada: a busca automática não mexe mais nela, nem se o jogo for renomeado</li>
+          <li>O relógio da sessão sem acompanhamento de processo, o da janela "Jogando", voltava a 0:00:00 a cada minuto, na hora em que o tempo era gravado. Agora ele soma o que já foi gravado</li>
+          <li>Uma sessão curta, com o jogo fechado antes de a arte terminar de baixar, deixava os monitores em retrato com a arte do jogo depois do fim dela, até o aplicativo ser aberto novamente. A arte agora só vai para a parede se a sessão ainda estiver valendo</li>
+          <li>Monitor que mostrava só a cor de fundo, sem imagem, ficava com a arte do jogo depois da sessão. Agora ele volta à cor</li>
+          <li>Se a devolução do papel de parede falhar, a referência ao original não é mais apagada: a inicialização seguinte tenta novamente, e a sessão seguinte não grava a arte do jogo por cima do original</li>
+          <li>Com a apresentação de slides do Windows ligada, a sessão não mexe no papel de parede, porque trocar a imagem desligaria a apresentação de vez</li>
+          <li>A busca na tela de escolha de papel de parede baixa as miniaturas seis de cada vez, e não uma por uma: com a rede lenta, a grade levava minutos para encher</li>
+          <li>Uma parede escolhida manualmente cujo arquivo sumiu do disco aparecia como "Não trocar". Agora ela volta ao automático, e a busca roda novamente. E a imagem escolhida não fica mais esquecida na pasta temporária do Windows</li>
+          <li>A moldura preta em volta da janela, que aparecia com ela fora do modo maximizado, sumiu. O aplicativo agora desenha pelo Vulkan da Microsoft, que roda sobre o Direct3D 12 na mesma placa de vídeo, quando o "OpenCL, OpenGL e Vulkan Compatibility Pack" da Microsoft Store está instalado. O Vulkan da NVIDIA descartava a transparência da margem de sombra da janela, e ela saía preta. As animações ficam praticamente iguais; só a primeira abertura pode dar um pequeno tranco enquanto os recursos gráficos são preparados. Sem o pacote, nada muda</li>
+          <li>Os jogos continuam usando o driver da placa de vídeo: a escolha do Vulkan da Microsoft vale só para a janela do aplicativo e é removida do ambiente antes de qualquer jogo ser aberto, então nenhum jogo lançado pelo aplicativo a herda</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.09.07" date="2026-09-07">
+      <description translate="no">
+        <ul>
+          <li>Editar um jogo com a biblioteca no topo não desce mais a grade sozinho: ao fechar a tela de edição, o foco voltava para a capa do jogo editado e a lista deslizava até ela. A posição da rolagem já era guardada e devolvida, mas o caso de estar no topo ficava de fora justamente por estar valendo zero — que é onde o salto só podia ser para baixo</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.08.27" date="2026-08-27">
+      <description translate="no">
+        <ul>
+          <li>"Onde eu parei" saiu da tela de edição e foi para a de detalhes: em jogos com status "Jogando", um botão ao lado do status abre a anotação ali mesmo, para ler ou escrever sem abrir mais nada. O texto é gravado ao fechar o balão. Em jogos de outros status o botão aparece quando já existe anotação, para nada ficar escrito sem como editar. É o mesmo campo de sempre, agora num lugar só — o mesmo texto em duas telas só faria procurar nas duas. Na tela de detalhes a anotação mostra até três linhas; passando disso, o resto se lê no botão</li>
+          <li>A capa na tela de detalhes ficou maior, 420x630 no lugar de 280x420 — a coluna de texto ao lado dela cresceu várias vezes ao longo do tempo e a capa tinha ficado pequena para o tamanho da página. Continua sendo uma redução do arquivo guardado, sem esticar nada; em janela estreita ela volta ao tamanho anterior, que é o que cabe lá</li>
+          <li>A anotação também alcança quem está jogando: a tela de "jogo em andamento" ganhou um botão "Onde eu parei" — sem ele, a janela ficava travada justamente enquanto a anotação faria mais falta. O que se escreve ali vai para o jogo da sessão, seja qual for o jogo que a tela de detalhes tenha aberto atrás</li>
+          <li>E o aviso de fim de sessão ("3 horas de jogo") ganhou um botão "Anotar", que abre o jogo já com a caixa aberta — é quando você acabou de ver onde parou</li>
+          <li>Com a capa maior, a tela de detalhes passou a trocar para o leiaute de coluna única já em janelas de até 850 pixels de largura, e não só nas bem estreitas — em larguras intermediárias o leiaute largo não cabia mais e a página ganhava uma barra de rolagem lateral</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.08.26" date="2026-08-26">
+      <description translate="no">
+        <ul>
+          <li>Fechar o aplicativo com a janela minimizada — o estado normal enquanto um jogo roda — gravava como "tamanho lembrado" o retângulo de estacionamento do Windows, e a janela reabria como uma faixa estreita no canto. Janela minimizada agora não é medida, e um tamanho inválido gravado por uma versão anterior é reconhecido e descartado automaticamente</li>
+          <li>O tamanho no disco não segue mais junções de pasta: uma pasta com junção media o alvo em dobro — o dobro do tamanho, no recurso feito para decidir o que apagar — e uma junção apontando para a própria pasta consumia o disco em um ciclo sem fim</li>
+          <li>"Buscar só o que falta", em Atualizar metadados, agora respeita o nome: campos que você editou manualmente (título, desenvolvedora, publicadora, data, gênero) só são preenchidos quando estão vazios, em vez de voltarem para os valores da Steam. A mesma regra da restauração de backup: o que está preenchido é seu</li>
+          <li>Resetar o aplicativo não deixa mais jogos "renascerem": uma busca de tempos ou medição de tamanho que terminasse depois do reset regravava no disco o jogo recém-apagado. As varreduras agora conferem se o jogo ainda existe na biblioteca antes de gravar qualquer coisa — a mesma proteção que a atualização de metadados já tinha</li>
+          <li>Apertar Enter no campo do executável durante um "Buscar" aplicava a edição no meio da busca: os dados que ainda estavam chegando eram descartados e, com uma capa recém-escolhida, ela aparecia na tela mas nunca era gravada — sumia ao reabrir. O Enter agora respeita a mesma trava do botão Aplicar</li>
+          <li>Trocar a capa de um jogo ficou resistente a interrupções: a nova só assume o lugar depois de copiada por completo (antes, a antiga era apagada primeiro — disco cheio no meio deixava o jogo sem capa nenhuma, e o SteamGridDB não voltava a buscar). O mesmo vale para os dados do jogo regravados na adoção de identidade. E cada capa escolhida manualmente deixava um arquivo temporário órfão na pasta temporária do Windows, para sempre; não deixa mais</li>
+          <li>Os seletores de capa, logo e Steam não ficam mais travados no indicador de carregamento: uma resposta fora do formato esperado ou uma sequência de downloads com falha agora termina em "Não foi possível buscar/carregar" em vez de girar para sempre. Abrir um seletor também disparava a mesma busca duas vezes; agora é uma</li>
+          <li>Títulos em japonês, cirílico e outros alfabetos passaram a participar da busca de metadados: antes eram apagados na comparação — um título sem dígito nunca resolvia, e dois jogos japoneses diferentes com o mesmo número podiam ser tratados como o mesmo jogo</li>
+          <li>O rastreio de tempo por pasta ficou mais leve: os processos do próprio Windows (cerca de um terço da lista) são descartados pelo nome antes de qualquer consulta ao sistema — o mesmo atalho que o rastreio de jogos da Microsoft Store já usava</li>
+          <li>A tela Sobre abre mesmo quando o arquivo de diagnóstico de uma sessão anterior está truncado por uma queda; o histórico de sessões tolera linhas editadas com datas impossíveis; um arquivo de jogo com tipo errado num campo numérico ("5h" no tempo de jogo) perde o campo, não o jogo; e um atalho da Microsoft Store digitado em minúsculas agora é reconhecido como jogo, como o Windows já o aceitava</li>
+          <li>Depois de uma queda no meio da rotação dos arquivos de diagnóstico, a sessão seguinte ficava sem nenhum desses arquivos — justamente a sessão em que alguém ia procurá-lo. A rotação agora sobrevive à queda, e se ainda assim falhar, as informações vão para o console em vez de desaparecer</li>
+          <li>Miudezas de robustez: respostas do HowLongToBeat agora têm um limite de tamanho, como o restante da comunicação com a internet; logos com dimensões absurdas são recusados antes de consumirem memória; jogos removidos liberam imediatamente a memória que ocupavam, em vez de mantê-la até o aplicativo ser fechado; e uma brecha teórica na exibição de novidades foi corrigida</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.08.25" date="2026-08-25">
+      <description translate="no">
+        <ul>
+          <li>As estimativas do HowLongToBeat voltaram a funcionar. O site trocou o endereço da busca de um dia para o outro, e o antigo parou de responder; como a consulta falha silenciosamente de propósito (a estimativa é um extra, não pode virar um erro na sua tela), a única pista ficava no arquivo de diagnóstico. Nada do que já estava gravado se perdeu: o que parou foi só a busca de jogos novos, o preenchimento automático da biblioteca e o botão de buscar na tela de edição</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.08.24" date="2026-08-24">
+      <description translate="no">
+        <ul>
+          <li>Cada jogo ganhou uma anotação livre, "Onde eu parei", na tela de editar detalhes. É uma caixa de texto de verdade, com várias linhas, e não um campo: cabem o capítulo em que você parou, a senha do cofre e o que falta para o platina, um por linha. O que estiver escrito aparece na tela de detalhes logo acima da sinopse da Steam — o que é seu antes do que é dos outros, como já acontece com a sua nota e o Metacritic. Um jogo sem anotação não mostra a seção, e uma caixa em que só se apertou Enter conta como vazia</li>
+          <li>A tela de detalhes passa a mostrar quanto o jogo ocupa no disco, ao lado das datas e do tempo de jogo — que é a companhia certa, porque respondem juntos a mesma pergunta: vale a pena manter isto instalado? "Zerado, 90 GB, não abro desde janeiro" agora está escrito na mesma tela</li>
+          <li>Novo "Tamanho" no menu "Ordenar por", do maior para o menor, para quando a pergunta for direta: preciso de espaço, o que eu apago? Jogos ainda não medidos vão para o fim da lista, e não para o começo: zero ali é tamanho desconhecido, não jogo que não ocupa nada</li>
+          <li>A medição do tamanho acontece sozinha, em segundo plano, uma pasta por vez e só depois que a importação termina — é a coisa mais pesada que o aplicativo faz com o disco, então um jogo medido nos últimos sete dias é pulado. A pasta medida é a mesma que o rastreio de processo vigia: se o aplicativo conta o seu tempo de jogo sozinho, ele sabe o tamanho; jogos abertos por URL de loja (Steam, Epic, GOG) continuam sem essa informação, porque quem sabe onde eles estão é o lançador. O número é calculado em base 1024, igual ao do Explorer, para que os dois possam ser comparados. Uma pasta que guarda a biblioteca inteira dentro de si — a do cliente da Steam, por exemplo, no caso de um atalho feito manualmente — fica sem tamanho em vez de dar o tamanho de todos os jogos somados</li>
+          <li>O backup deixou de levar só o tempo de jogo: agora ele carrega também o status, a nota e a anotação de cada jogo — que são, junto com o tempo, as únicas coisas do aplicativo que você preencheu manualmente. Reimportar a biblioteca traz de volta capa, gênero, Metacritic e os tempos do HowLongToBeat sozinho; esses quatro, não. O grupo nas preferências virou "Backup da sua biblioteca", e o arquivo salvo agora se chama "cartridges-backup.json"</li>
+          <li>Na hora de restaurar, cada campo volta pela regra da sua natureza. O tempo de jogo soma, como sempre somou — o backup é uma parcela do total, e restaurar o de outra máquina na mesma biblioteca tem de dar a soma das duas. Status, nota e anotação só preenchem o que está vazio: são valores, não parcelas, e o que está na biblioteca hoje é mais recente do que o que está no arquivo. Restaurar sobre uma instalação nova traz tudo, restaurar sobre uma biblioteca em uso não apaga nada</li>
+          <li>Backups salvos pelas versões anteriores continuam valendo, com o tempo de jogo que eles carregam. Um arquivo editado manualmente não consegue mais gravar um valor que o aplicativo não sabe exibir: um status desconhecido, uma nota fora de 1–5 ou um tempo negativo são descartados na entrada</li>
+          <li>A busca passa a olhar dentro das anotações, junto do título, da desenvolvedora e da publicadora. Quem escreveu "senha do cofre: 8815" seis meses atrás lembra da palavra, e não de qual jogo era</li>
+          <li>O histórico de sessões passa a ser encabeçado pelo logo do jogo, o mesmo da tela de detalhes, no lugar do nome escrito. Um jogo sem logo em cache continua mostrando o nome — a busca no SteamGridDB é da tela de detalhes, de onde o histórico é aberto, e o histórico não faz nenhuma consulta por conta própria</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.08.20" date="2026-08-20">
+      <description translate="no">
+        <ul>
+          <li>Cada jogo ganhou um status: "Quero jogar", "Jogando", "Zerado" ou "Abandonado". Ele fica logo abaixo das datas na tela de detalhes, e é um botão: trocar o status de um jogo recém-terminado é um clique, sem passar pela tela de edição. O status também aparece na tela de editar detalhes, junto do restante do que se preenche manualmente, e nunca é deduzido do tempo de jogo — trinta horas não provam que alguém zerou, e zerar não impede de continuar jogando</li>
+          <li>O menu "Filtrar por" ganhou "Status", ao lado de gênero e ano de lançamento. Ao contrário dos outros dois, a lista é fixa: os quatro status existem mesmo que nenhum jogo os use no momento, porque um "Zerado" que só aparece quando já há jogos zerados esconde justamente a pergunta que se quer fazer. O filtro se combina com os demais e com a busca, e "Limpar" zera os três de uma vez</li>
+          <li>Nova nota pessoal, de uma a cinco estrelas, na tela de editar detalhes. Clicar na estrela já marcada tira a nota, para que "sem nota" continue possível depois de dar uma. A nota aparece na tela de detalhes acima do Metacritic e das avaliações da Steam — a sua nota antes das notas de terceiros — e "Minha nota" entrou no menu "Ordenar por". Jogos sem nota vão para o fim da lista, e não para o começo: zero ali é ausência de nota, não nota zero</li>
+          <li>As sessões de jogo passam a ser registradas uma a uma, e não apenas somadas no total. O "Tempo de jogo", na tela de detalhes, passou a abrir a lista das sessões: o total é a soma delas, então é ele mesmo que as detalha. Continua desenhado como os rótulos ao lado, sem cor de link nem sublinhado — o que avisa que é possível clicar é o cursor de mão e a dica. A lista traz data, hora de término e duração de cada sessão, além do quanto foi jogado nos últimos 7 e 30 dias. Um jogo sem sessão gravada não responde ao clique — é o caso de toda a biblioteca até a primeira partida jogada pelo aplicativo, e também o do tempo restaurado de um backup, que é um total sem sessões por natureza</li>
+          <li>Uma sessão pode ser apagada pelo histórico, com confirmação, e o tempo dela é descontado do total do jogo — antes, uma sessão que contou errado (o jogo deixado aberto a noite toda, o processo que demorou a encerrar) só podia ser corrigida editando o total manualmente. O histórico começa a ser gravado nas partidas a partir desta versão: o tempo somado antes dela continua no total, mas sem as sessões que o formaram</li>
+          <li>O arquivo de diagnóstico passa a registrar o instante em que o processo de um jogo é visto pela primeira vez, e a dizer quando uma sessão termina sem que ele tenha aparecido — encerrar a sessão pela janela bloqueada enquanto o jogo ainda está no lançador cai nesse caso. Antes, uma sessão que não registrava nada e uma que registrava deixavam o mesmo rastro, e a diferença entre as duas é justamente o que se quer saber quando um jogo não acumula tempo</li>
+          <li>O histórico de sessões fica junto do restante dos dados do aplicativo e é escrito uma linha por vez, de modo que terminar uma partida não reescreve o arquivo inteiro. Uma linha ilegível é ignorada em vez de interromper a leitura — é um histórico auxiliar, e perder uma linha dele nunca pode custar a biblioteca</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.08.10" date="2026-08-10">
+      <description translate="no">
+        <ul>
+          <li>Com uma caixa de diálogo aberta — a edição do jogo, as preferências, o seletor de capas —, arrastar a área escurecida em volta dela não move mais a janela inteira. A janela continua sendo movida pela barra de títulos, inclusive a do próprio diálogo, como qualquer janela do Windows</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.08.09" date="2026-08-09">
+      <description translate="no">
+        <ul>
+          <li>A linha "Executável", na edição do jogo, ganhou um botão de pasta que abre no Explorer a pasta onde o jogo está instalado. Ele só aparece quando é possível saber onde o jogo está: um executável (.exe, .bat) que ainda existe no disco, ou um jogo da Microsoft Store / Game Pass, cuja pasta é lida do cadastro de pacotes do Windows. Jogos iniciados pela Steam, Epic, GOG e afins não mostram o botão — quem sabe onde eles estão é o lançador, não o Cartridges</li>
+          <li>Removido o botão de informações (o "i") da linha "Executável", para não sobrecarregar a linha. O texto de ajuda que ele mostrava explicava como montar o comando manualmente, algo que o seletor de arquivo ao lado já resolve</li>
+        </ul>
+      </description>
+    </release>
+
+    <release version="2026.08.08" date="2026-08-08">
+      <description translate="no">
+        <ul>
+          <li>Corrigido o filtro da busca continuar valendo depois de fechar a barra pelo botão da lupa ou pelo Esc na tela de jogos ocultos: a biblioteca ficava dizendo "Nenhum jogo encontrado" sem nenhuma busca visível. Fechar a busca, por qualquer caminho, agora limpa o texto</li>
+          <li>Abrir o aplicativo com ele já aberto agora traz a janela existente para a frente, em vez de parecer que nada aconteceu</li>
+          <li>O tema claro/escuro e a cor de destaque passam a acompanhar as configurações do Windows na hora, sem precisar reiniciar o aplicativo</li>
+          <li>A primeira visita à tela de detalhes de cada jogo não engasga mais: o desfoque do fundo é preparado em segundo plano e entra assim que fica pronto</li>
+          <li>Importações grandes ficaram mais leves: uma checagem interna que rodava uma vez por jogo importado passou a rodar uma vez por lote</li>
+          <li>Arquivos de jogos editados manualmente com campos desconhecidos deixam de sobrescrever partes internas do aplicativo; esses campos agora são ignorados</li>
+          <li>A grade deixou de parar em 10 colunas: o número de colunas agora acompanha a largura da janela, sem teto</li>
+          <li>Novo menu "Filtrar por", acima de "Ordenar por": filtre a biblioteca por gênero ou por ano de lançamento. As listas são montadas com o que existe na biblioteca — gêneros em ordem alfabética, anos do mais novo para o mais antigo — e os filtros se combinam entre si e com a busca. Se o último jogo de um gênero sair da biblioteca, o filtro volta sozinho para "Todos". Com algum filtro ativo, a página do menu ganha um "Limpar", que zera os dois de uma vez</li>
+          <li>Corrigido o fundo da tela de detalhes ficar preto ao adicionar ou trocar a capa com a tela aberta: o desfoque de fundo agora acompanha a capa nova assim que ela é salva</li>
+          <li>Corrigido também o fundo piscar preto por um quadro ao clicar em Aplicar na edição do jogo: com a capa inalterada o desfoque é reaproveitado, e em qualquer troca o fundo atual permanece na tela até o novo ficar pronto</li>
+          <li>O logo da tela de detalhes agora também pode vir de um arquivo do computador, pelo novo botão na linha Logo — para jogos cujo logo não existe no SteamGridDB. Como as demais escolhas, só vale ao clicar em Aplicar</li>
+        </ul>
+      </description>
+    </release>
+
+    <release version="2026.08.07" date="2026-08-07">
+      <description translate="no">
+        <ul>
+          <li>As capas passam a deslizar até o lugar novo quando a grade se refaz, em vez de saltar. Redimensionar a janela até caber outra coluna, recolher ou abrir a barra lateral e trocar a ordenação agora mostram cada capa percorrendo o caminho entre a posição antiga e a nova. O movimento usa uma mola sem repique, do mesmo tipo que a rolagem do mouse já usava: arranca rápido e assenta devagar</li>
+          <li>Arrastar a borda da janela continua acompanhando o cursor sem atraso. Só o refluxo de verdade é animado — a grade se recentrando enquanto a janela cresce não passa pela animação, senão as capas ficariam correndo atrás do mouse</li>
+          <li>Importar, esconder e buscar seguem trocando a grade na hora, sem animação: nesses casos a capa não vinha de lugar nenhum, e vê-la deslizar de uma posição que nunca ocupou pareceria defeito</li>
+          <li>A animação se desliga sozinha quando as animações do sistema estão desativadas nas configurações do Windows, e a grade volta a saltar como antes</li>
+        </ul>
+      </description>
+    </release>
+
+    <release version="2026.08.05" date="2026-08-05">
+      <description translate="no">
+        <ul>
+          <li>A capa na tela de detalhes voltou a ficar nítida. Ela havia sido ampliada de 200x300 para 280x420 para acompanhar a coluna de texto ao lado, mas a imagem continuava sendo preparada no tamanho da grade e era esticada para preencher o espaço. Agora a tela de detalhes prepara a própria cópia, no tamanho em que realmente desenha. Só a capa aberta no momento recebe esse tratamento, então as miniaturas da biblioteca não ficaram mais pesadas</li>
+          <li>Corrigido o botão "Atualizar metadados" não responder quando algum jogo tinha um arquivo editado manualmente com um valor inválido no campo de controle de versão. Um único arquivo assim impedia a janela de escolha de abrir</li>
+          <li>Trocar de jogo na tela de detalhes logo depois de editar a capa não interrompe mais a troca</li>
+        </ul>
+      </description>
+    </release>
+
+    <release version="2026.08.04" date="2026-08-04">
+      <description translate="no">
+        <ul>
+          <li>Corrigida a perda de jogos ao alterar o destino de um atalho. Instalar uma atualização, mover a pasta de instalação ou trocar o executável apontado pelo atalho fazia o aplicativo tratar aquilo como dois eventos: um jogo desaparecido e um jogo novo. O resultado era o jogo antigo ser marcado como removido e uma cópia em branco tomar o seu lugar, levando junto tempo de jogo, histórico, capa, logo e controle de atualizações. O arquivo de atalho passa a ser reconhecido como o mesmo jogo mesmo quando o destino muda, e os dados do jogo são preservados e reapontados para o executável novo</li>
+          <li>O mesmo reconhecimento vale para atalhos de internet, como os da Steam e da Epic, caso o endereço de inicialização mude de forma</li>
+          <li>Bibliotecas que já tinham sido afetadas por esse problema voltam a ficar protegidas. Os dados órfãos deixados para trás bloqueavam o reconhecimento justamente nos jogos que já haviam sido atingidos uma vez, de modo que a atualização seguinte custava mais uma perda. Um jogo removido deixa de disputar espaço com os dados do jogo ativo do mesmo atalho. Observação: isso protege daqui em diante e não recupera o histórico já perdido</li>
+          <li>A tela de detalhes passa a mostrar o gênero do jogo, logo abaixo das avaliações. O gênero vem das etiquetas da própria Steam, e não do campo de categoria da loja: pela categoria, Call of Duty, Doom e Hades seriam todos "Ação", enquanto pelas etiquetas saem "Tiro em Primeira Pessoa (FPS)", "Metroidvania" e "Roguelike de Ação". Quando nenhuma etiqueta conhecida se aplica, a categoria da loja é usada como reserva</li>
+          <li>A tela de detalhes também passa a mostrar a compatibilidade com controle, indicando se ela é total ou parcial. Jogos que a Steam não classifica de nenhuma das duas formas simplesmente não exibem a linha, em vez de serem declarados incompatíveis: muito jogo antigo funciona com controle sem nunca ter recebido o selo</li>
+          <li>Nova opção "Atualizar metadados", na aba Importação das preferências, para buscar dados de jogos que já estão na biblioteca. Ao clicar, o aplicativo pergunta se deve buscar apenas o que falta ou reler tudo: a primeira opção preenche campos novos, como o gênero e a compatibilidade com controle, sem refazer o trabalho já feito na importação; a segunda relê a biblioteca inteira</li>
+          <li>A atualização mostra uma barra com o andamento e o número de jogos concluídos, e pode ser cancelada a qualquer momento. O cancelamento respeita o jogo que está sendo buscado no instante, para não deixar os dados de um jogo pela metade</li>
+          <li>A atualização não pertence à tela de preferências: fechar a janela no meio do processo não interrompe nem esconde nada. Ao reabrir as preferências, a barra reaparece exatamente na posição em que a busca está, com o botão de cancelar disponível. O aviso de conclusão aparece na janela principal, já que uma busca longa costuma terminar com as preferências fechadas</li>
+          <li>As etiquetas usadas para definir o gênero passam a ser buscadas para centenas de jogos numa requisição só, em vez de uma por jogo. Isso reduz em um terço o tempo de uma atualização completa da biblioteca e economiza o limite de requisições da Steam</li>
+          <li>A tela de editar detalhes ganhou um campo de gênero e uma lista para a compatibilidade com controle, que aceita "Não informada", "Total" e "Parcial". Os dois são preenchidos pelo botão de buscar na Steam e podem ser corrigidos manualmente, como já acontecia com desenvolvedora, publicadora e data</li>
+          <li>Buscar dados na Steam pela tela de detalhes passa a trazer também o gênero e a compatibilidade com controle. Antes esses dois campos eram consultados e descartados, o que gastava uma requisição sem que nada aparecesse — corrigir um jogo manualmente nunca lhe dava um gênero, e ele seguia contando como pendente na atualização de metadados</li>
+          <li>Resetar o aplicativo durante uma atualização de metadados não traz mais os jogos de volta. A atualização continuava salvando os jogos da fila depois da limpeza, e eles reapareciam na abertura seguinte. Agora ela é interrompida junto com as sessões de jogo, e nenhum dado é gravado para um jogo que saiu da biblioteca</li>
+          <li>Uma falha de rede fora do previsto durante a atualização de metadados não trava mais o botão. Certos erros deixavam a busca marcada como em andamento para sempre, sem fila nenhuma por trás, e só fechar o aplicativo devolvia o botão</li>
+          <li>Cancelar uma atualização passa a valer também durante a busca inicial de etiquetas, em vez de esperar todas as requisições já programadas</li>
+          <li>A capa na tela de detalhes cresceu de 200x300 para 280x420. A coluna de texto ao lado ganhou quatro linhas novas nesta versão, e a capa havia deixado de equilibrar a página. Não há perda de nitidez: as capas já eram guardadas em 600x900, então mesmo ampliada a imagem usa menos da metade da resolução disponível</li>
+          <li>Os textos do instalador foram reescritos. A tradução que acompanha o Inno Setup é informal ("pra" no lugar de "para") e repetia a mesma frase duas vezes em cada tela — na de licença, pedia para ler o acordo logo abaixo de pedir para ler as informações. Agora cada tela diz uma coisa em cada campo, e a pergunta de desinstalação aparece devidamente acentuada</li>
+          <li>A tela de detalhes passa a mostrar a descrição do jogo, entre a compatibilidade com controle e os tempos do HowLongToBeat. É o resumo curto da própria loja — texto de divulgação, uma ou duas frases —, e não a seção longa "Sobre este jogo": aquela é feita de HTML com imagens e vídeo, e em alguns jogos não tem texto nenhum. A de Cyberpunk 2077, por exemplo, são 3665 caracteres sem uma única palavra</li>
+          <li>Os dados da Steam passam a ser pedidos em português, de modo que a descrição venha traduzida sem custar nenhuma requisição a mais. Nada mais muda com isso: o tipo do aplicativo, os identificadores de categoria e de gênero são iguais nos dois idiomas, e a data, que muda de forma, continua sendo exibida igual porque o aplicativo já sabia ler o formato português</li>
+          <li>"Buscar tudo" passa a rebuscar também os tempos do HowLongToBeat, que antes eram consultados uma única vez e nunca mais. Eles podem mudar: o número é uma média corrente dos tempos enviados por jogadores, então um jogo importado perto do lançamento se apoia numa amostra pequena que ainda se move. A opção fica mais demorada, mas passa a fazer o que o nome diz, sem exceções para lembrar depois</li>
+          <li>A opção "Só o que falta" agora consulta cada fonte separadamente, em vez de tratar o jogo como um bloco. Um jogo a que só faltam os tempos do HowLongToBeat passa a custar uma única consulta lá, sem as três requisições à Steam que antes fazia à toa; um jogo a que só falta gênero ou desenvolvedora consulta a Steam e não o HowLongToBeat</li>
+          <li>O critério de pendência deixou de ser a ausência de um campo. A maioria dos campos pode estar legitimamente vazia — de 30 jogos recém-consultados, 29 não têm recomendação de controle e 5 não têm compatibilidade declarada —, então tratar campo vazio como pendência colocaria quase toda a biblioteca na fila em toda execução. Agora cada jogo guarda em que versão dos metadados foi consultado pela última vez, e volta à fila uma única vez quando um campo novo passa a existir</li>
+          <li>Jogos que a Steam marca como "Gamepad Recomendado" passam a exibir, abaixo da compatibilidade com controle, o aviso "Os desenvolvedores recomendam jogar este jogo com um controle.", com o ícone de estrela usado na própria loja. É uma afirmação diferente da compatibilidade total: esta diz que o jogo funciona com controle, aquela diz que é assim que ele foi pensado. Nenhuma das duas é deduzida da outra — Elden Ring e God of War têm compatibilidade total sem a recomendação, enquanto Black Myth Wukong e Hollow Knight: Silksong têm as duas</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.08.02" date="2026-08-02">
+      <description translate="no">
+        <ul>
+          <li>A tela "Sobre" agora está inteiramente em português, incluindo as páginas de novidades, solução de problemas, informações de depuração, créditos e aviso legal</li>
+          <li>Removidos os itens "Site" e "Relatar um problema", que apontavam para o projeto original</li>
+          <li>A tela de créditos agora mostra os direitos autorais e os agradecimentos do autor original em texto simples, sem links, e o título dos agradecimentos quebra linha em vez de ser cortado</li>
+          <li>Removido o aviso sobre a marca Steam da tela de aviso legal, que não se aplica mais ao projeto</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.08.01" date="2026-08-01">
+      <description translate="no">
+        <ul>
+          <li>Os arquivos de diagnóstico de sessão não são mais gravados na pasta de arquivos temporários do navegador, onde a Limpeza de Disco e o Sensor de Armazenamento os apagavam por padrão — o arquivo de uma execução que deu errado costumava já ter sumido quando alguém ia procurá-lo. Esses arquivos e o cache da lista de aplicativos da Steam agora ficam junto com o restante dos dados do aplicativo</li>
+          <li>Corrigido o sumiço da biblioteca de atalhos: quando não era possível pedir ao Windows que resolvesse os arquivos de atalho — PowerShell ausente, bloqueado por política ou simplesmente lento demais —, a varredura parecia não ter encontrado nada, e todo jogo importado de um atalho era marcado como removido. Também não era possível desfazer, porque voltar exigia que o arquivo de atalho mudasse e nada havia tocado nele. Uma varredura que não consegue olhar agora avisa, relata o problema e deixa a biblioteca em paz</li>
+          <li>Corrigida a mesma perda acontecendo com jogos da Microsoft Store e do Game Pass, por um motivo mais sutil: a identidade de um jogo vinha de uma consulta que podia expirar, então um momento de lentidão renomeava o jogo, e o aplicativo passava a ver um jogo novo e um desaparecido. A identidade não depende mais de nada que possa falhar, e os jogos salvos no esquema antigo são adotados em vez de duplicados — tempo de jogo, capa, logo e controle de atualizações incluídos</li>
+          <li>Jogos pesquisados por um título formado só de dígitos ou de palavras comuns ("7", "300", "1917") não quebram mais a consulta à Steam. A janela de busca ficava presa para sempre no indicador de carregamento</li>
+          <li>Um atalho da Store ou do Game Pass que o menu Iniciar não consegue resolver agora inicia o próprio atalho, em vez de abrir silenciosamente a pasta de aplicativos</li>
+          <li>O acompanhamento de tempo de jogo dos jogos da Store e do Game Pass agora também aceita o nome do executável e a pasta de instalação, em vez de depender só do pacote, e custa bem menos enquanto observa — a biblioteca não trava mais a cada poucos segundos durante uma sessão</li>
+          <li>Um jogo da Store que nunca chega a iniciar não abre mais uma janela de sessão manual contando um tempo que nunca foi jogado</li>
+          <li>Corrigida a busca da biblioteca filtrando a grade errada, o que podia deixar invisíveis os jogos recém-importados ou reexibidos até que a caixa de busca fosse digitada novamente</li>
+          <li>Corrigido o botão Aplicar ficando permanentemente esmaecido depois de dispensar o seletor de correspondência da Steam, ou depois de buscar metadados e trocar a capa ao mesmo tempo</li>
+          <li>A opção "acompanhar processo" agora acompanha o executável conforme ele é editado, em vez de ser decidida uma única vez na abertura da janela</li>
+          <li>Corrigida uma direção mantida pressionada no controle rolando a biblioteca sozinha depois de voltar de um jogo para o aplicativo</li>
+          <li>Corrigido o controle selecionando um jogo oculto pela busca atual, o que fazia o direcional parecer não fazer nada</li>
+          <li>Uma imagem ilegível escolhida como capa não deixa mais o editor carregando para sempre</li>
+          <li>Erros de importação, caminhos de pastas e outros textos contendo "&amp;" agora aparecem, em vez de ficarem em branco</li>
+          <li>Jogos jogados pouco antes da meia-noite não aparecem mais como jogados hoje</li>
+          <li>O histórico de sessão não cresce mais sem limite, e um histórico grande de uma sessão anterior não precisa mais ser lido inteiro na memória antes de o aplicativo abrir</li>
+          <li>Uma chave inválida do SteamGridDB agora se identifica como tal, em vez de tentar novamente e relatar uma falha genérica</li>
+          <li>Uma falha ao baixar a lista de aplicativos da Steam não é mais repetida uma vez por jogo, o que podia travar uma importação por muito tempo</li>
+          <li>O Cartridges não fica mais insistindo com o HowLongToBeat depois que ele começa a recusar</li>
+          <li>Uma capa local não é mais sobrescrita por uma buscada on-line</li>
+          <li>Um arquivo de jogo corrompido não impede mais o aplicativo de abrir</li>
+          <li>Corrigido o limite de requisições à Steam sendo zerado ao reiniciar o aplicativo, o que podia estourar a cota e deixar metadados faltando</li>
+          <li>Um logo de jogo errado não fica mais em cache para sempre</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.07.31" date="2026-07-31">
+      <description translate="no">
+        <ul>
+          <li>Jogos da Microsoft Store e do Game Pass agora acompanham o tempo de jogo automaticamente, sem a janela de sessão manual</li>
+          <li>Jogos iniciados por um executável também acompanham o tempo de jogo automaticamente agora, observando a pasta de instalação — não é preciso informar o executável, e jogos que passam o controle para um segundo executável ou que se dividem em lançador e jogo são acompanhados corretamente</li>
+          <li>A janela de sessão manual agora é usada apenas para jogos iniciados por um link de loja, e como alternativa quando um jogo nunca é detectado</li>
+          <li>A janela agora reabre no monitor em que foi fechada, em vez de sempre no principal</li>
+          <li>Corrigida a janela encolhendo um pouco toda vez que o aplicativo era aberto</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2026.07.25" date="2026-07-25">
+      <description translate="no">
+        <ul>
+          <li>Corrigida a janela de atalhos de teclado que nunca abria pelo menu</li>
+          <li>Adicionados "Jogados recentemente" e "Adicionados há mais tempo" ao menu de ordenação</li>
+          <li>Uma pasta de atalhos ausente ou desconectada não remove mais todos os jogos importados</li>
+          <li>Corrigidos travamentos ao desfazer depois de uma redefinição e ao abrir as preferências pelo aviso de importação</li>
+          <li>Erros de rede durante o download de metadados e capas agora são repetidos corretamente</li>
+          <li>Os arquivos dos jogos são gravados de forma atômica, evitando corrupção em caso de travamento</li>
+          <li>Capas animadas obsoletas agora são limpas na reinstalação</li>
+          <li>A interface agora é somente em português do Brasil</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+</component>

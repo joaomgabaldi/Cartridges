@@ -1,0 +1,392 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CartridgesPreferences: Adw.PreferencesDialog {
+  search-enabled: true;
+
+  Adw.PreferencesPage general_page {
+    name: "general";
+    title: _("Geral");
+    icon-name: "user-home-symbolic";
+
+    Adw.PreferencesGroup behavior_group {
+      title: _("Comportamento");
+
+      Adw.SwitchRow minimize_after_launch_switch {
+        title: _("Minimizar ao iniciar um jogo");
+        subtitle: _("Minimiza a janela ao iniciar um jogo quando a contagem de horas está desligada");
+      }
+
+      Adw.SwitchRow cover_launches_game_switch {
+        title: _("Capa inicia o jogo");
+        subtitle: _("Troca o comportamento da capa e do botão de jogar");
+      }
+
+      Adw.SwitchRow playtime_tracking_switch {
+        title: _("Contar horas de jogo");
+        subtitle: _("Registra o tempo de cada sessão; quando o jogo não pode ser acompanhado automaticamente, abre uma janela compacta para encerrar a sessão");
+      }
+
+      Adw.SwitchRow gamepad_switch {
+        title: _("Usar controle Xbox");
+        subtitle: _("Permite navegar no aplicativo com um controle");
+      }
+
+      Adw.SwitchRow gamepad_rumble_switch {
+        title: _("Vibração");
+        subtitle: _("Vibra ao mover a seleção, ao chegar ao fim da lista e ao iniciar um jogo");
+      }
+
+      Adw.SpinRow process_grace_spin_row {
+        title: _("Tempo de espera ao fechar o jogo");
+        subtitle: _("Segundos de espera após o jogo fechar antes de encerrar a sessão, para que um reinício do jogo não divida a sessão");
+
+        adjustment: Adjustment {
+          lower: 0;
+          upper: 120;
+          step-increment: 1;
+          page-increment: 5;
+        };
+      }
+    }
+
+    Adw.PreferencesGroup {
+      title: _("Backup da sua biblioteca");
+      description: _("Salve em um arquivo .zip os dados da biblioteca: nota, status, tempo de jogo, anotações, capas, logos, papéis de parede, cores das fitas, histórico de sessões e configurações. As credenciais da Tuya não são incluídas. A restauração aplica esses dados aos jogos que já estão na biblioteca.");
+      separate-rows: true;
+
+      Adw.ButtonRow export_backup_button_row {
+        title: _("Exportar para arquivo");
+      }
+
+      Adw.ButtonRow import_backup_button_row {
+        title: _("Importar de arquivo");
+      }
+    }
+
+    Adw.PreferencesGroup danger_zone_group {
+      title: _("Zona de perigo");
+      separate-rows: true;
+
+      Adw.ButtonRow remove_all_games_button_row {
+        title: _("Remover todos os jogos");
+
+        styles [
+          "destructive-action"
+        ]
+      }
+    }
+  }
+
+  // Uma aba só para o que acontece com a janela enquanto o jogo roda. Sem
+  // contar horas de jogo não existe tela de sessão para levar a lugar nenhum,
+  // então o monitor e o papel de parede acompanham aquela chave — o do
+  // monitor é ligado em `setup_session_monitor_row`, porque sem segundo
+  // monitor ele fica bloqueado de vez. As fitas não: elas acendem com o app
+  // aberto, contando horas ou não.
+  Adw.PreferencesPage session_page {
+    name: "session";
+    title: _("Personalização");
+    icon-name: "video-joined-displays-symbolic";
+
+    Adw.PreferencesGroup {
+      title: _("Barra superior");
+
+      Adw.SwitchRow show_news_button_switch {
+        title: _("Mostrar o botão Novidades");
+      }
+    }
+
+    Adw.PreferencesGroup session_monitor_group {
+      title: _("Ao iniciar um jogo");
+      description: _("Move o Cartridges para outro monitor (se disponível) em vez de minimizá-lo para a barra de tarefas.");
+
+      Adw.SwitchRow session_move_window_switch {
+        title: _("Mover para outro monitor");
+      }
+
+      Adw.ComboRow session_monitor_row {
+        title: _("Monitor");
+        sensitive: bind session_move_window_switch.active;
+      }
+
+      // Sempre clicável, mesmo com a opção desligada: é olhando para as telas
+      // que se decide qual escolher, então ele tem de responder antes.
+      Adw.ButtonRow session_identify_button_row {
+        title: _("Identificar monitores");
+      }
+    }
+
+    // Sem lista de monitores aqui: a arte vai para todos menos o principal,
+    // que e onde o jogo roda. Quem e o principal e o Windows quem diz, entao
+    // ligar, desligar ou girar uma tela nao pede configuracao nenhuma.
+    Adw.PreferencesGroup session_wallpaper_group {
+      title: _("Papel de parede");
+      sensitive: bind playtime_tracking_switch.active;
+      description: _("Durante a sessão, substitui temporariamente o papel de parede dos outros monitores por uma imagem relacionada ao jogo.");
+
+      Adw.SwitchRow session_wallpaper_switch {
+        title: _("Trocar o papel de parede dos outros monitores");
+      }
+
+      Adw.EntryRow wallhaven_key_entry_row {
+        title: _("Chave da API do wallhaven (opcional)");
+        sensitive: bind session_wallpaper_switch.active;
+      }
+    }
+
+    // "Configurar fitas" fica sempre clicavel, como o "Identificar monitores":
+    // sem passar pelo assistente nao ha fita nenhuma, e o interruptor acima
+    // nasce bloqueado. O subtitulo dele e escrito em `atualizar_fitas`.
+    Adw.PreferencesGroup session_fita_group {
+      title: _("Fitas de LED");
+      description: _("Muda a cor das fitas de LED enquanto o Cartridges está aberto: a cor do aplicativo fora do jogo e a cor do jogo durante a sessão. Ao fechar o aplicativo, as fitas voltam ao estado anterior.");
+
+      Adw.SwitchRow session_fita_switch {
+        title: _("Mudar a cor das fitas");
+      }
+
+      Adw.SpinRow fita_brilho_row {
+        title: _("Brilho (%)");
+        subtitle: _("Aplicado aos jogos sem brilho próprio definido");
+        sensitive: bind session_fita_switch.active;
+
+        adjustment: Adjustment {
+          lower: 1;
+          upper: 100;
+          step-increment: 1;
+          page-increment: 10;
+        };
+      }
+
+      // A cor das fitas quando não há jogo correndo. Mesmo seletor em balão da
+      // tela do jogo, pelo mesmo motivo: cada tentativa aparece na parede na
+      // hora, sem confirmar nada.
+      Adw.ActionRow fita_cor_app_row {
+        title: _("Cor do app");
+        subtitle: _("A cor das fitas com o app aberto e nenhum jogo em execução");
+        sensitive: bind session_fita_switch.active;
+        activatable-widget: fita_cor_app_menu;
+
+        [suffix]
+        Button fita_cor_app_reset {
+          valign: center;
+          icon-name: "edit-undo-symbolic";
+          tooltip-text: _("Voltar à cor padrão");
+          visible: false;
+
+          styles [
+            "flat",
+          ]
+        }
+
+        [suffix]
+        MenuButton fita_cor_app_menu {
+          valign: center;
+          tooltip-text: _("Escolher a cor das fitas no app");
+
+          child: DrawingArea fita_cor_app_amostra {
+            content-width: 22;
+            content-height: 22;
+          };
+
+          popover: Popover {
+            child: ColorChooserWidget fita_cor_app_seletor {
+              use-alpha: false;
+            };
+          };
+        }
+      }
+
+      Adw.ActionRow fita_configurar_row {
+        title: _("Configurar fitas");
+        subtitle: _("Busca as fitas na sua conta da Tuya");
+        activatable-widget: fita_configurar_button;
+
+        [suffix]
+        Button fita_configurar_button {
+          valign: center;
+          icon-name: "applications-engineering-symbolic";
+          tooltip-text: _("Abrir assistente");
+
+          styles [
+            "flat"
+          ]
+        }
+      }
+
+      Adw.ActionRow fita_testar_row {
+        title: _("Testar");
+        subtitle: _("Acende cada fita na cor do app");
+        sensitive: bind session_fita_switch.active;
+        activatable-widget: fita_testar_button;
+
+        [suffix]
+        Button fita_testar_button {
+          valign: center;
+          icon-name: "media-playback-start-symbolic";
+          tooltip-text: _("Ligar as fitas");
+
+          styles [
+            "flat"
+          ]
+        }
+      }
+    }
+  }
+
+  Adw.PreferencesPage import_page {
+    name: "import";
+    title: _("Importação");
+    icon-name: "document-save-symbolic";
+
+    Adw.PreferencesGroup import_behavior_group {
+      title: _("Comportamento");
+
+      Adw.SwitchRow auto_import_switch {
+        title: _("Importar jogos automaticamente");
+      }
+
+      Adw.SwitchRow remove_missing_switch {
+        title: _("Remover jogos desinstalados");
+      }
+
+      Adw.SwitchRow steam_metadata_switch {
+        title: _("Buscar metadados da Steam");
+        subtitle: _("Busca na Steam título, desenvolvedora, publicadora, lançamento, gênero, descrição, avaliações e compatibilidade com controle");
+      }
+
+      Adw.SwitchRow hltb_metadata_switch {
+        title: _("Buscar tempos do HowLongToBeat");
+        subtitle: _("Busca as estimativas de história principal, extras e completista");
+      }
+    }
+
+    Adw.PreferencesGroup metadata_update_group {
+      Adw.ActionRow metadata_update_row {
+        title: _("Atualizar metadados");
+        subtitle: _("Busca dados para jogos já na biblioteca");
+
+        // Not homogeneous: the stack would otherwise size itself to the widest
+        // child and stretch the little stop icon to the width of "Atualizar".
+        Stack metadata_stack {
+          hhomogeneous: false;
+
+          Button metadata_fetch_button {
+            label: _("Atualizar");
+            valign: center;
+          }
+
+          Button metadata_cancel_button {
+            icon-name: "process-stop-symbolic";
+            valign: center;
+            tooltip-text: _("Cancelar");
+
+            styles [
+              "flat"
+            ]
+          }
+        }
+      }
+
+      // Sits below the row rather than inside it: the counter needs the full
+      // width, and a whole-library refresh can run for several minutes, so
+      // "how much is left" has to be readable at a glance.
+      ProgressBar metadata_progress_bar {
+        visible: false;
+        show-text: true;
+        margin-top: 12;
+      }
+    }
+
+    Adw.PreferencesGroup sources_group {
+      title: _("Atalhos");
+      description: _("Importa atalhos de jogos (.lnk e .url) de uma pasta. Funciona com Steam, Epic, Ubisoft Connect, Xbox/Microsoft Store e outros.");
+      separate-rows: true;
+
+      Adw.ExpanderRow shortcuts_expander_row {
+        title: _("Atalhos");
+        show-enable-switch: true;
+
+        [prefix]
+        Image {
+          icon-name: "shortcuts-source-symbolic";
+        }
+
+        Adw.ActionRow shortcuts_location_action_row {
+          title: _("Pasta");
+          activatable-widget: shortcuts_location_button;
+
+          Button shortcuts_location_button {
+            icon-name: "folder-symbolic";
+            valign: center;
+            tooltip-text: _("Selecionar pasta");
+
+            styles [
+              "flat"
+            ]
+          }
+
+          styles [
+            "property"
+          ]
+        }
+
+        Adw.SwitchRow shortcuts_recursive_switch {
+          title: _("Buscar em subpastas");
+        }
+      }
+    }
+  }
+
+  Adw.PreferencesPage sgdb_page {
+    name: "sgdb";
+    title: _("SteamGridDB");
+    icon-name: "image-x-generic-symbolic";
+
+    Adw.PreferencesGroup sgdb_key_group {
+      title: _("Autenticação");
+
+      Adw.EntryRow sgdb_key_entry_row {
+        title: _("Chave da API");
+      }
+    }
+
+    Adw.PreferencesGroup sgdb_behavior_group {
+      title: _("Comportamento");
+
+      Adw.SwitchRow sgdb_switch {
+        title: _("Usar o SteamGridDB");
+        subtitle: _("Baixa imagens ao adicionar ou importar jogos");
+      }
+
+      Adw.SwitchRow sgdb_prefer_switch {
+        title: _("Priorizar o SteamGridDB às imagens oficiais");
+      }
+
+      Adw.SwitchRow sgdb_animated_switch {
+        title: _("Preferir imagens animadas");
+      }
+    }
+
+    Adw.PreferencesGroup {
+      Adw.ActionRow {
+        title: _("Atualizar capas");
+        subtitle: _("Busca capas para jogos já na biblioteca");
+        sensitive: bind sgdb_switch.active;
+
+        Stack sgdb_stack {
+          Button sgdb_fetch_button {
+            label: _("Atualizar");
+            valign: center;
+          }
+
+          Adw.Spinner sgdb_spinner {
+            visible: false;
+            valign: center;
+          }
+        }
+      }
+    }
+  }
+}
