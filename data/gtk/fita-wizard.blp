@@ -2,7 +2,7 @@ using Gtk 4.0;
 using Adw 1;
 
 template $FitaWizard: Adw.Dialog {
-  title: _("Configurar fitas de LED");
+  title: _("Configurar a iluminação inteligente");
   content-width: 480;
   content-height: 520;
 
@@ -85,8 +85,8 @@ template $FitaWizard: Adw.Dialog {
 
         child: Adw.PreferencesPage {
           Adw.PreferencesGroup dispositivos_group {
-            title: _("Selecione as fitas de LED");
-            description: _("Ao aplicar, somente as fitas marcadas são mantidas. Desmarcar uma fita a remove.");
+            title: _("Selecione os dispositivos");
+            description: _("Ao aplicar, somente os dispositivos marcados são mantidos. Desmarcar um dispositivo o remove.");
           }
 
           Adw.PreferencesGroup {
@@ -107,7 +107,7 @@ template $FitaWizard: Adw.Dialog {
         name: "buscando";
 
         child: Adw.StatusPage {
-          title: _("Buscando as fitas…");
+          title: _("Buscando os dispositivos…");
           description: _("A busca é feita primeiro na nuvem e depois na rede local.");
 
           child: Adw.Spinner {

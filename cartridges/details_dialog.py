@@ -1150,9 +1150,9 @@ class DetailsDialog(Adw.Dialog):
         if not session_fita.fitas():
             self._fita_mostrada = None
             self.fita_row.set_sensitive(False)
-            self.fita_row.set_subtitle(_("Nenhuma fita configurada"))
+            self.fita_row.set_subtitle(_("Nenhum dispositivo configurado"))
             self.fita_brilho_row.set_sensitive(False)
-            self.fita_brilho_row.set_subtitle(_("Nenhuma fita configurada"))
+            self.fita_brilho_row.set_subtitle(_("Nenhum dispositivo configurado"))
             self.fita_button_reset.set_visible(False)
             return
 

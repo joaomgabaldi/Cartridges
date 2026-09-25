@@ -675,7 +675,7 @@ def test_preferencias_bloqueiam_a_fita_sem_configuracao(monkeypatch, schema):
     preferencias = _preferencias(monkeypatch)
 
     assert preferencias.session_fita_switch.get_sensitive() is False
-    assert preferencias.session_fita_switch.get_subtitle() == "Nenhuma fita configurada"
+    assert preferencias.session_fita_switch.get_subtitle() == "Nenhum dispositivo configurado"
     assert schema.get_boolean("session-fita") is False
 
 
@@ -691,7 +691,7 @@ def test_preferencias_liberam_a_fita_e_contam_as_configuradas(monkeypatch, schem
     preferencias = _preferencias(monkeypatch)
 
     assert preferencias.session_fita_switch.get_sensitive() is True
-    assert preferencias.session_fita_switch.get_subtitle() == "2 fitas configuradas"
+    assert preferencias.session_fita_switch.get_subtitle() == "2 dispositivos configurados"
 
 
 def test_ligar_o_interruptor_arranca_o_ciclo(monkeypatch, schema):
@@ -970,8 +970,8 @@ def test_sem_fita_a_linha_fica_insensivel_e_nao_calcula_cor(
 
     assert dialog.fita_row.get_sensitive() is False
     assert dialog.fita_brilho_row.get_sensitive() is False
-    assert dialog.fita_row.get_subtitle() == "Nenhuma fita configurada"
-    assert dialog.fita_brilho_row.get_subtitle() == "Nenhuma fita configurada"
+    assert dialog.fita_row.get_subtitle() == "Nenhum dispositivo configurado"
+    assert dialog.fita_brilho_row.get_subtitle() == "Nenhum dispositivo configurado"
     assert not dialog.fita_button_reset.get_visible()
 
     # E o Aplicar não marca escolha nenhuma: não houve cor mostrada.
