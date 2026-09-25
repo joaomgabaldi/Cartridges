@@ -315,6 +315,10 @@ class LogoPicker(Adw.Dialog):
     ) -> None:
         if not (full_url := self._results.get(child)):
             return
+        # Encerra a busca que ainda baixa prévias: cada prévia que chegasse
+        # depois trazia a grade de volta por cima do carregamento, e parecia
+        # que o clique tinha buscado tudo de novo.
+        self._generation += 1
         self.stack.set_visible_child_name("loading")
         threading.Thread(
             target=self._select_thread, args=(full_url,), daemon=True
