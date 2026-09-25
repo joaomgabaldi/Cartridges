@@ -372,8 +372,12 @@ class CartridgesApplication(Adw.Application):
                     Gtk.STYLE_PROVIDER_PRIORITY_USER,
                 )
             # Reescrever o provider já instalado atualiza a cor ao vivo.
+            # --accent-color é cor de texto sobre o fundo: a mesma fórmula do
+            # Libadwaita a clareia no tema escuro (o realce do Windows costuma
+            # ser escuro demais para texto).
             self._accent_provider.load_from_string(
-                f":root {{ --accent-bg-color: {accent}; --accent-color: {accent}; }}"
+                f":root {{ --accent-bg-color: {accent}; "
+                f"--accent-color: oklab(from {accent} var(--standalone-color-oklab)); }}"
             )
         except OSError:
             pass
