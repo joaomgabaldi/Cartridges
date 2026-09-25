@@ -80,7 +80,7 @@ def test_b27_seletor_vazio_nao_se_contradiz(store, win):
     dialogo = ZeradosPicker()
     vazio = dialogo.pilha.get_child_by_name("vazio")
     assert vazio.get_title() == "Nenhum jogo disponível"
-    assert vazio.get_description() == "Não há jogos desinstalados fora de Jogos Zerados."
+    assert vazio.get_description() == "Busque um jogo na Steam para adicioná-lo."
 
 
 def test_b29_instalador_sem_gnome():

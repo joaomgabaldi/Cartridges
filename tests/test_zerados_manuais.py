@@ -197,3 +197,107 @@ def test_adicionar_desinstalado_marca_em_vez_de_criar(store):
     assert antigo.zerado is True
     assert antigo.playtime == 3600
     assert store.get("imported_1") is None
+
+
+# -- Diálogo -------------------------------------------------------------------
+
+
+def resultado(appid, nome):
+    from cartridges.utils.title_match import TitleMatch  # noqa: PLC0415
+
+    return ({"id": appid, "name": nome}, TitleMatch(100, "teste"))
+
+
+def titulos(picker):
+    linhas, indice = [], 0
+    while (linha := picker.lista.get_row_at_index(indice)) is not None:
+        linhas.append((linha.get_title(), linha.get_subtitle(), linha.get_sensitive()))
+        indice += 1
+    return linhas
+
+
+def test_resultados_da_steam_e_a_linha_do_nome(store):
+    from cartridges import zerados_picker  # noqa: PLC0415
+
+    picker = zerados_picker.ZeradosPicker()
+    picker._mostrar_resultados(
+        "hades", [resultado(1145360, "Hades")], None, picker._geracao
+    )
+
+    assert titulos(picker) == [
+        ("Hades", "ID na Steam: 1145360 · corresponde ao título", True),
+        ("Adicionar «hades» sem dados da Steam", "", True),
+    ]
+    assert picker.aviso.get_visible() is False
+
+
+def test_jogo_que_ja_existe_vem_desativado(store):
+    from cartridges import zerados_picker  # noqa: PLC0415
+
+    jogo(store, 20, name="Hades", removed=True, status="beaten")
+    jogo(store, 21, name="Celeste")
+    picker = zerados_picker.ZeradosPicker()
+    picker._mostrar_resultados(
+        "hades",
+        [resultado(1145360, "Hades"), resultado(504230, "Celeste")],
+        None,
+        picker._geracao,
+    )
+
+    assert titulos(picker) == [
+        ("Hades", "Já está em Jogos Zerados", False),
+        ("Celeste", "Já está na biblioteca", False),
+        ("Adicionar «hades» sem dados da Steam", "Já está em Jogos Zerados", False),
+    ]
+
+
+def test_busca_sem_resultado_mostra_so_o_nome_e_o_aviso(store):
+    from cartridges import zerados_picker  # noqa: PLC0415
+
+    picker = zerados_picker.ZeradosPicker()
+    picker._mostrar_resultados(
+        "chrono", [], "Nenhum jogo encontrado na Steam.", picker._geracao
+    )
+
+    assert [t for t, _s, _a in titulos(picker)] == ["Adicionar «chrono» sem dados da Steam"]
+    assert picker.aviso.get_visible() is True
+    assert picker.aviso.get_label() == "Nenhum jogo encontrado na Steam."
+
+
+def test_clicar_na_linha_do_nome_cria_e_desativa(store):
+    from cartridges import zerados_picker  # noqa: PLC0415
+
+    picker = zerados_picker.ZeradosPicker()
+    picker._mostrar_resultados("Chrono Trigger", [], None, picker._geracao)
+
+    picker.lista.get_row_at_index(0).emit("activated")
+
+    assert store.get("imported_1").zerado is True
+    assert titulos(picker) == [
+        ("Adicionar «Chrono Trigger» sem dados da Steam", "Já está em Jogos Zerados", False)
+    ]
+
+
+def test_resposta_velha_e_ignorada(store):
+    from cartridges import zerados_picker  # noqa: PLC0415
+
+    jogo(store, 22, name="Antigo", removed=True)
+    picker = zerados_picker.ZeradosPicker()
+
+    picker._mostrar_resultados("x", [resultado(1, "X")], None, picker._geracao - 1)
+
+    assert [t for t, _s, _a in titulos(picker)] == ["Antigo"]
+
+
+def test_apagar_a_busca_volta_aos_desinstalados(store):
+    from cartridges import zerados_picker  # noqa: PLC0415
+
+    jogo(store, 23, name="Antigo", removed=True)
+    picker = zerados_picker.ZeradosPicker()
+    picker._mostrar_resultados("x", [resultado(1, "X")], None, picker._geracao)
+
+    picker.busca.set_text("")
+    picker._ao_mudar_busca()
+
+    assert [t for t, _s, _a in titulos(picker)] == ["Antigo"]
+    assert picker.aviso.get_visible() is False
