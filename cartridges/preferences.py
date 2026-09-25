@@ -62,6 +62,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     session_identify_button_row = Gtk.Template.Child()
     session_fita_switch: Adw.SwitchRow = Gtk.Template.Child()
     fita_brilho_row: Adw.SpinRow = Gtk.Template.Child()
+    fita_brilho_individual_button: Gtk.Button = Gtk.Template.Child()
     fita_cor_app_reset: Gtk.Button = Gtk.Template.Child()
     fita_cor_app_amostra: Gtk.DrawingArea = Gtk.Template.Child()
     # Obsoleto desde o GTK 4.10 e mantido até o GTK 5; é o único seletor com
@@ -450,6 +451,9 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self._fita_brilho_changed_id = self.fita_brilho_row.connect(
             "notify::value", self.mudar_brilho_padrao
         )
+        self.fita_brilho_individual_button.connect(
+            "clicked", self.brilho_por_dispositivo
+        )
         self.fita_configurar_button.connect("clicked", self.configurar_fitas)
         self.fita_testar_button.connect("clicked", self.testar_fitas)
 
@@ -517,6 +521,68 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         brilho = session_fita.de_por_cento(row.get_value())
         shared.schema.set_int("fita-brilho-padrao", brilho)
         session_fita.previa(session_fita.Cor(*session_fita.tom_do_app(), brilho))
+
+    def brilho_por_dispositivo(self, *_args: Any) -> None:
+        """Abre a janela do brilho máximo de cada dispositivo.
+
+        Mexer mostra na hora, como o brilho de cima; só o Salvar grava. Fechar
+        de qualquer outro jeito devolve as fitas ao brilho salvo.
+        """
+        configuradas = session_fita.fitas()
+        dialogo = Adw.Dialog(title=_("Brilho por dispositivo"), content_width=420)
+        cabecalho = Adw.HeaderBar(
+            show_start_title_buttons=False, show_end_title_buttons=False
+        )
+        cancelar = Gtk.Button(label=_("Cancelar"))
+        salvar = Gtk.Button(label=_("Salvar"), css_classes=["suggested-action"])
+        cabecalho.pack_start(cancelar)
+        cabecalho.pack_end(salvar)
+
+        grupo = Adw.PreferencesGroup(
+            description=_(
+                "Brilho máximo de cada dispositivo, em porcentagem. O brilho "
+                "definido nas Preferências e em cada jogo é aplicado "
+                "proporcionalmente sobre estes valores."
+            )
+        )
+        linhas: dict[str, Adw.SpinRow] = {}
+
+        def mostrar(*_args: Any) -> None:
+            session_fita.previa(
+                session_fita.cor_do_app(),
+                {id_: round(linha.get_value()) for id_, linha in linhas.items()},
+            )
+
+        for fita in configuradas:
+            linha = Adw.SpinRow.new_with_range(1, 100, 1)
+            linha.set_title(fita.nome)
+            linha.set_value(fita.brilho)
+            linha.connect("notify::value", mostrar)
+            grupo.add(linha)
+            linhas[fita.id] = linha
+
+        pagina = Adw.PreferencesPage()
+        pagina.add(grupo)
+        vista = Adw.ToolbarView(content=pagina)
+        vista.add_top_bar(cabecalho)
+        dialogo.set_child(vista)
+
+        def gravar(*_args: Any) -> None:
+            session_fita.gravar_fitas(
+                [
+                    fita._replace(brilho=round(linhas[fita.id].get_value()))
+                    if fita.id in linhas
+                    else fita
+                    for fita in session_fita.fitas()
+                ]
+            )
+            dialogo.close()
+
+        cancelar.connect("clicked", lambda *_: dialogo.close())
+        salvar.connect("clicked", gravar)
+        # Depois do Salvar é o mesmo brilho da prévia; sem ele, volta ao salvo.
+        dialogo.connect("closed", lambda *_: session_fita.previa(session_fita.cor_do_app()))
+        dialogo.present(self)
 
     def desenhar_cor_app(
         self, _area: Any, contexto: Any, largura: int, altura: int
@@ -597,12 +663,14 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         session_fita.retomar()
 
         def tarefa() -> None:
-            cor = session_fita.hsv_hex(session_fita.cor_do_app())
+            cor = session_fita.cor_do_app()
             mudas = []
             for fita in session_fita.fitas():
                 if parar.is_set():
                     break
-                if not session_fita.aplicar(fita, True, cor):
+                if not session_fita.aplicar(
+                    fita, True, session_fita.hsv_hex(session_fita.na_fita(cor, fita))
+                ):
                     mudas.append(fita.nome)
             GLib.idle_add(pronto, mudas, parar.is_set())
 

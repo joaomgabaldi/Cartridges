@@ -59,6 +59,9 @@ class Fita(NamedTuple):
     ip: str
     key: str
     versao: str = "3.3"
+    # O teto deste dispositivo, em porcentagem: o brilho do app e o de cada
+    # jogo valem sobre ele. Um brilho de 50% num dispositivo em 50 acende a 25.
+    brilho: int = 100
 
 
 class Cor(NamedTuple):
@@ -107,11 +110,21 @@ def fitas() -> list[Fita]:
                     str(item["ip"]),
                     str(item["key"]),
                     str(item.get("versao", "3.3")),
+                    _teto(item.get("brilho")),
                 )
             )
         except (KeyError, TypeError):
             logging.warning("Fita ignorada por estar incompleta no arquivo")
     return achadas
+
+
+def _teto(valor: Any) -> int:
+    """O brilho por dispositivo lido do arquivo. Valor mexido à mão vale 100,
+    e não tira o dispositivo da lista."""
+    try:
+        return max(1, min(100, int(valor)))
+    except (TypeError, ValueError):
+        return 100
 
 
 def gravar_fitas(lista: list[Fita]) -> None:
@@ -201,6 +214,16 @@ def de_por_cento(valor: float) -> int:
 
 def brilho_padrao() -> int:
     return shared.schema.get_int("fita-brilho-padrao")
+
+
+def na_fita(cor: Cor, fita: Fita, teto: Optional[int] = None) -> Cor:
+    """A cor com o brilho proporcional ao teto do dispositivo.
+
+    ``teto`` troca o do arquivo, para a prévia da janela de brilho por
+    dispositivo mostrar o que ainda não foi salvo.
+    """
+    teto = fita.brilho if teto is None else teto
+    return cor._replace(brilho=max(BRILHO_MINIMO, round(cor.brilho * teto / 100)))
 
 
 def cor_do_jogo(game: "Game", ignorar_escolha: bool = False) -> Cor:
@@ -989,18 +1012,19 @@ def _vestir(
     suspensa, para não atrasar as outras. O endereço de cada fita é o que o
     assistente achou: IP mudou, roda-se o assistente de novo.
     """
-    cor_hex = hsv_hex(cor)
     _em_paralelo(
         fitas() if alvos is None else alvos,
-        lambda fita: _transitar(fita, True, cor_hex, (geracoes or {}).get(fita.id)),
+        lambda fita: _transitar(
+            fita, True, hsv_hex(na_fita(cor, fita)), (geracoes or {}).get(fita.id)
+        ),
     )
 
 
-def _pintar(cor: Cor) -> None:
+def _pintar(cor: Cor, tetos: Optional[dict[str, int]] = None) -> None:
     """Só a cor, sem mexer no liga/desliga e sem fade. Para a prévia ao vivo."""
-    cor_hex = hsv_hex(cor)
 
     def pintar(fita: Fita) -> None:
+        cor_hex = hsv_hex(na_fita(cor, fita, (tetos or {}).get(fita.id)))
         if _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex}) and fita.id in _mostrada:
             _mostrada[fita.id] = (_mostrada[fita.id][0], cor_hex)
 
@@ -1013,19 +1037,22 @@ def _pintar(cor: Cor) -> None:
 # último e a thread pega o valor mais recente quando termina o anterior. Os
 # passos do meio se perdem, que é exatamente o que se quer — o olho só precisa
 # ver onde o controle parou.
-_previa_alvo: Optional[Cor] = None
+_previa_alvo: Optional[tuple[Cor, Optional[dict[str, int]]]] = None
 _previa_viva = False
 _PREVIA = threading.Condition()
 
 
-def previa(cor: Cor) -> None:
-    """Mostra esta cor nas fitas agora. Chamar da thread de UI, à vontade."""
+def previa(cor: Cor, tetos: Optional[dict[str, int]] = None) -> None:
+    """Mostra esta cor nas fitas agora. Chamar da thread de UI, à vontade.
+
+    ``tetos`` troca o brilho por dispositivo do arquivo (id → porcentagem).
+    """
     global _previa_alvo, _previa_viva  # noqa: PLW0603
 
     if not ligada():
         return
     with _PREVIA:
-        _previa_alvo = cor
+        _previa_alvo = (cor, tetos)
         if not _previa_viva:
             _previa_viva = True
             _em_thread(_servir_previa)
@@ -1037,12 +1064,12 @@ def _servir_previa() -> None:
 
     while True:
         with _PREVIA:
-            cor = _previa_alvo
+            alvo = _previa_alvo
             _previa_alvo = None
-            if cor is None:
+            if alvo is None:
                 _previa_viva = False
                 return
-        _pintar(cor)
+        _pintar(*alvo)
 
 
 def tom_do_app() -> tuple[int, int]:

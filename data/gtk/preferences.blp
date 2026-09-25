@@ -159,6 +159,26 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         };
       }
 
+      // O teto de cada dispositivo. O brilho acima e o de cada jogo valem
+      // proporcionalmente sobre ele; a janela e montada em `preferences.py`.
+      Adw.ActionRow fita_brilho_individual_row {
+        title: _("Brilho por dispositivo");
+        subtitle: _("Define o brilho máximo de cada dispositivo");
+        sensitive: bind session_fita_switch.active;
+        activatable-widget: fita_brilho_individual_button;
+
+        [suffix]
+        Button fita_brilho_individual_button {
+          valign: center;
+          icon-name: "go-next-symbolic";
+          tooltip-text: _("Ajustar o brilho de cada dispositivo");
+
+          styles [
+            "flat"
+          ]
+        }
+      }
+
       // A cor das fitas quando não há jogo correndo. Mesmo seletor em balão da
       // tela do jogo, pelo mesmo motivo: cada tentativa aparece na parede na
       // hora, sem confirmar nada.
