@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="@PREFIX@">
+    <file preprocess="xml-stripblanks">@APP_ID@.metainfo.xml</file>
+    <file preprocess="xml-stripblanks">gtk/details-dialog.ui</file>
+    <file preprocess="xml-stripblanks">gtk/fita-wizard.ui</file>
+    <file preprocess="xml-stripblanks">gtk/game.ui</file>
+    <file preprocess="xml-stripblanks">gtk/logo-picker.ui</file>
+    <file preprocess="xml-stripblanks">gtk/preferences.ui</file>
+    <file preprocess="xml-stripblanks">gtk/sgdb-picker.ui</file>
+    <file preprocess="xml-stripblanks">gtk/steam-picker.ui</file>
+    <file preprocess="xml-stripblanks">gtk/wallpaper-picker.ui</file>
+    <file preprocess="xml-stripblanks">gtk/window.ui</file>
+    <file alias="style.css">gtk/style.css</file>
+    <file>library_placeholder.svg</file>
+    <file>library_placeholder_small.svg</file>
+  </gresource>
+  <gresource prefix="@PREFIX@/icons/scalable/categories/">
+  <file alias="shortcuts-source-symbolic.svg">icons/sources/shortcuts-source-symbolic.svg</file>
+  </gresource>
+  <!-- GtkApplication adds <resource_base_path>/icons to the icon theme search
+       path automatically, so anything dropped here is reachable by plain
+       icon-name from the .blp files. -->
+  <gresource prefix="@PREFIX@/icons/scalable/actions/">
+  <file alias="novidades-symbolic.svg">icons/actions/novidades-symbolic.svg</file>
+  </gresource>
+</gresources>

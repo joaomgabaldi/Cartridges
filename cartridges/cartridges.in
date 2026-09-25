@@ -1,0 +1,57 @@
+#!@PYTHON@
+
+# cartridges.in
+#
+# Copyright 2022-2024 kramo
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+import builtins
+import os
+import signal
+import sys
+
+PKGDATADIR = os.path.join(os.path.dirname(__file__), "..", "share", "cartridges")
+
+# MSYS2's gtk4 package ships with DirectComposition disabled by default
+# (003-default-dcomp-off.patch, "disable broken dcomp"), and GTK 4.2x's GL
+# and Vulkan renderers refuse to realize without it ("… requires Direct
+# Composition"), silently dropping every app to the Cairo software
+# renderer. The patch leaves a switch: GDK_WIN32_FORCE_DCOMP re-enables it.
+# Vulkan + DComp runs clean here (GL + DComp is the combination that is
+# actually broken — don't use "gl"). Both values use setdefault, so they
+# can be overridden from the environment; and if Vulkan is unavailable on
+# a machine, GTK falls back towards Cairo on its own.
+os.environ.setdefault("GDK_WIN32_FORCE_DCOMP", "1")
+os.environ.setdefault("GSK_RENDERER", "vulkan")
+
+sys.path.insert(1, PKGDATADIR)
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+# A interface é hardcoded em pt-BR. Não há tradução: _ e ngettext são no-ops
+# instalados como builtins para não precisar alterar todas as chamadas no código.
+builtins._ = lambda message: message
+builtins.ngettext = lambda singular, plural, n: singular if n == 1 else plural
+
+if __name__ == "__main__":
+    from gi.repository import Gio
+
+    resource = Gio.Resource.load(os.path.join(PKGDATADIR, "cartridges.gresource"))
+    resource._register()  # pylint: disable=protected-access
+
+    from cartridges import main
+
+    sys.exit(main.main())
