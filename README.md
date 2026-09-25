@@ -64,6 +64,8 @@ A interface é inteiramente em português do Brasil.
   andamento e pelo aviso de fim de sessão.
 - **Jogos Zerados**: os jogos desinstalados marcados como Zerado continuam no aplicativo, com capa,
   informações, nota e histórico de sessões. Quando o jogo é reinstalado, os dois registros se unem.
+  Jogos que nunca passaram pelo aplicativo também podem ser adicionados, buscados na Steam ou
+  somente pelo nome.
 
 ### Tempo de jogo e sessões
 
