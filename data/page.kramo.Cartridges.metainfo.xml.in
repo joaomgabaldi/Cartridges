@@ -38,6 +38,7 @@
           <li>Um jogo que já está em Jogos Zerados ou na biblioteca não pode ser adicionado novamente; um jogo desinstalado com o mesmo nome é marcado como Zerado, mantendo o tempo de jogo e o histórico de sessões</li>
           <li>O item Jogos Zerados do menu fica sempre disponível na tela principal</li>
           <li>Os resultados da busca na Steam mostram somente o ID na Steam, sem a indicação de correspondência com o título</li>
+          <li>Os dados da Steam (desenvolvedora, lançamento, descrição e gênero) voltam a ser obtidos. Uma mudança da Steam em 24/09/2026 fazia a busca falhar para todos os jogos; para completar os jogos importados desde então, use Atualizar metadados nas Preferências</li>
         </ul>
       </description>
     </release>
