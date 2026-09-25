@@ -162,7 +162,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
       // O teto de cada dispositivo. O brilho acima e o de cada jogo valem
       // proporcionalmente sobre ele; a janela e montada em `preferences.py`.
       Adw.ActionRow fita_brilho_individual_row {
-        title: _("Brilho por dispositivo");
+        title: _("Brilho máximo por dispositivo");
         subtitle: _("Define o brilho máximo de cada dispositivo");
         sensitive: bind session_fita_switch.active;
         activatable-widget: fita_brilho_individual_button;

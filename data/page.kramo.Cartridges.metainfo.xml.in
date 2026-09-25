@@ -33,7 +33,7 @@
         <ul>
           <li>As fitas de LED passam a se chamar iluminação inteligente em todo o aplicativo</li>
           <li>A iluminação inteligente passa a aceitar também as lâmpadas inteligentes da Tuya, que mudam de cor junto com o restante: a cor do aplicativo fora do jogo, a cor do jogo durante a sessão e o estado anterior ao fechar o aplicativo</li>
-          <li>Nas Preferências, "Brilho por dispositivo" define o brilho máximo de cada dispositivo da iluminação inteligente, com prévia ao vivo. O brilho geral e o de cada jogo passam a ser aplicados proporcionalmente sobre esses valores: com um dispositivo em 50%, o brilho de 50% o acende a 25%</li>
+          <li>Nas Preferências, "Brilho máximo por dispositivo" define o brilho máximo de cada dispositivo da iluminação inteligente. Com a janela aberta, cada dispositivo acende exatamente no valor ajustado, sem o brilho geral. O brilho geral e o de cada jogo passam a ser aplicados proporcionalmente sobre esses valores: com um dispositivo em 50%, o brilho de 50% o acende a 25%</li>
           <li>O assistente de configuração da iluminação inteligente lista somente os dispositivos que mudam de cor, sem interruptores, tomadas, sensores ou controles remotos</li>
           <li>Jogos Zerados agora aceita jogos que nunca passaram pelo Cartridges: no botão Adicionar, busque o jogo na Steam para trazer os dados e a capa, ou adicione-o somente pelo nome</li>
           <li>Um jogo que já está em Jogos Zerados ou na biblioteca não pode ser adicionado novamente; um jogo desinstalado com o mesmo nome é marcado como Zerado, mantendo o tempo de jogo e o histórico de sessões</li>
