@@ -63,10 +63,18 @@ def credencial_valida(nuvem: Any, resposta: Any) -> bool:
     ) and isinstance(resposta, list)
 
 
+# Categorias da nuvem da Tuya que falam cor pelos pontos 20/21/24: fita de LED
+# (dd) e lâmpada (dj). O resto da conta — interruptor, tomada, sensor, controle
+# IR — não tem o que fazer aqui.
+CATEGORIAS = ("dd", "dj")
+
+
 def fitas_da_nuvem(resposta: Any) -> list[Fita]:
     """Converte a lista que a nuvem devolve em fitas.
 
-    Dispositivo sem chave local fica de fora: sem ela não há conversa possível.
+    Só fita de LED e lâmpada entram (``CATEGORIAS``); dispositivo sem categoria
+    na resposta entra também. Dispositivo sem chave local fica de fora: sem ela
+    não há conversa possível.
     Sem IP, entra com o campo vazio — a nuvem devolve o IP público do roteador,
     que não serve para nada aqui. Quem acha o IP da fita é a varredura que este
     assistente roda logo depois (``com_enderecos``), uma vez só; o app nunca
@@ -82,6 +90,11 @@ def fitas_da_nuvem(resposta: Any) -> list[Fita]:
     encontradas = []
     for item in resposta:
         if not isinstance(item, dict):
+            continue
+        # Sem categoria entra: resposta que não traz o campo não é prova de
+        # que o dispositivo não fala cor.
+        categoria = item.get("category")
+        if categoria and categoria not in CATEGORIAS:
             continue
         chave = str(item.get("key") or "")
         identificador = str(item.get("id") or "")

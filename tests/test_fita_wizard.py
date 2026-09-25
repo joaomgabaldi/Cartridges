@@ -288,3 +288,20 @@ def test_fita_nunca_vista_na_rede_fica_sem_endereco(monkeypatch, tmp_path):
     (fita,) = com_enderecos([Fita("Centro", "eb1", "", "k", "3.3")], {})
 
     assert fita.ip == ""
+
+
+def test_so_fitas_e_lampadas_entram_na_lista():
+    """A conta Tuya traz interruptores, tomadas, sensores e controles IR; só
+    fita (dd) e lâmpada (dj) falam cor."""
+    resposta = [
+        {"name": "Fita Monitor Centro", "id": "a", "key": "k", "category": "dd"},
+        {"name": "Abajur", "id": "b", "key": "k", "category": "dj"},
+        {"name": "Sala", "id": "c", "key": "k", "category": "tdq"},
+        {"name": "PC", "id": "d", "key": "k", "category": "cz"},
+        {"name": "LED", "id": "e", "key": "k", "category": "infrared_light"},
+        {"name": "Bateria #1", "id": "f", "key": "k", "category": "wsdcg"},
+    ]
+    assert [fita.nome for fita in fitas_da_nuvem(resposta)] == [
+        "Fita Monitor Centro",
+        "Abajur",
+    ]
