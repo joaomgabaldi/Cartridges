@@ -525,11 +525,15 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     def brilho_por_dispositivo(self, *_args: Any) -> None:
         """Abre a janela do brilho máximo de cada dispositivo.
 
-        Mexer mostra na hora, como o brilho de cima; só o Salvar grava. Fechar
-        de qualquer outro jeito devolve as fitas ao brilho salvo.
+        Enquanto ela está aberta, cada dispositivo acende exatamente no número
+        dele, sem o brilho geral por cima: o que se vê é o que se ajusta. Só o
+        Salvar grava; ao fechar, tudo volta ao brilho geral sobre o máximo
+        salvo.
         """
         configuradas = session_fita.fitas()
-        dialogo = Adw.Dialog(title=_("Brilho por dispositivo"), content_width=420)
+        dialogo = Adw.Dialog(
+            title=_("Brilho máximo por dispositivo"), content_width=420
+        )
         cabecalho = Adw.HeaderBar(
             show_start_title_buttons=False, show_end_title_buttons=False
         )
@@ -549,7 +553,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
         def mostrar(*_args: Any) -> None:
             session_fita.previa(
-                session_fita.cor_do_app(),
+                session_fita.Cor(*session_fita.tom_do_app(), session_fita.BRILHO_CHEIO),
                 {id_: round(linha.get_value()) for id_, linha in linhas.items()},
             )
 
@@ -583,6 +587,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         # Depois do Salvar é o mesmo brilho da prévia; sem ele, volta ao salvo.
         dialogo.connect("closed", lambda *_: session_fita.previa(session_fita.cor_do_app()))
         dialogo.present(self)
+        mostrar()
 
     def desenhar_cor_app(
         self, _area: Any, contexto: Any, largura: int, altura: int
