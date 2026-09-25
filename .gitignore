@@ -11,3 +11,9 @@ __pycache__/
 
 # Config local da sessão (não compartilhar)
 /.claude/settings.local.json
+
+# Docs internos e notas de trabalho (só locais)
+/docs/
+/CLAUDE.md
+/CONTEXT.md
+/RESTAURAR.md
