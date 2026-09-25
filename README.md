@@ -16,6 +16,8 @@ que acompanham o jogo aberto, além de backup completo e atualização automáti
 
 A interface é inteiramente em português do Brasil.
 
+![Biblioteca de jogos](data/screenshots/biblioteca.jpg)
+
 ## Recursos
 
 ### Biblioteca e importação
@@ -57,6 +59,8 @@ A interface é inteiramente em português do Brasil.
 - Tamanho da instalação do jogo.
 - Botão para abrir a pasta de instalação do jogo, quando ela pode ser determinada.
 
+![Tela de detalhes de um jogo](data/screenshots/detalhes.jpg)
+
 ### Registro pessoal de cada jogo
 
 - Status: "Quero jogar", "Jogando", "Zerado" ou "Abandonado", alterado com um clique.
@@ -67,6 +71,8 @@ A interface é inteiramente em português do Brasil.
   informações, nota e histórico de sessões. Quando o jogo é reinstalado, os dois registros se unem.
   Jogos também podem ser adicionados diretamente na tela de zerados, buscados na Steam ou
   somente pelo nome.
+
+![Jogos Zerados](data/screenshots/zerados.jpg)
 
 ### Tempo de jogo e sessões
 
@@ -79,6 +85,8 @@ A interface é inteiramente em português do Brasil.
   total dos últimos 7 e 30 dias. Uma sessão pode ser excluída, e o tempo dela é descontado do total.
 - O PC suspenso com o jogo aberto não conta como tempo de jogo, e um reinício rápido do jogo não
   divide a sessão.
+
+![Histórico de sessões com gráfico de horas por dia](data/screenshots/historico.png)
 
 ### Durante a sessão
 
@@ -94,6 +102,8 @@ Todos estes recursos ficam na aba Personalização das Preferências e vêm desa
   está aberto e passa para a cor do jogo durante a sessão. A cor é extraída da capa ou escolhida
   manualmente, com brilho próprio. As trocas acontecem em degradê, e ao fechar o aplicativo a
   iluminação inteligente volta ao estado anterior.
+
+<p align="center"><img src="data/screenshots/personalizacao.png" width="480" alt="Aba Personalização das Preferências"></p>
 
 ### Controle Xbox
 
