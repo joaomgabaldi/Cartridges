@@ -136,7 +136,7 @@ Todos estes recursos ficam na aba Personalização das Preferências e vêm desa
 ## Instalação
 
 1. Baixe o instalador `Cartridges.Windows.exe` da versão mais recente em
-   [Releases](https://github.com/SuperUser50517/Cartridges/releases).
+   [Releases](https://github.com/joaomgabaldi/Cartridges/releases).
 2. Execute o instalador. O Windows pode exibir um aviso por o instalador não ser assinado.
 
 Depois de instalado, o aplicativo se atualiza sozinho.

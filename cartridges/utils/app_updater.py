@@ -45,7 +45,7 @@ from gi.repository import Adw, GLib, Gtk
 
 from cartridges import shared
 
-RELEASES_URL = "https://api.github.com/repos/SuperUser50517/Cartridges/releases/latest"
+RELEASES_URL = "https://api.github.com/repos/joaomgabaldi/Cartridges/releases/latest"
 
 # Janela de progresso sem nenhuma pergunta, e sem reiniciar o Windows. O [Run]
 # do Cartridges.iss.in não tem skipifsilent, então reabre o app no fim. O que
