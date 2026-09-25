@@ -28,6 +28,15 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.25" date="2026-09-25">
+      <description translate="no">
+        <ul>
+          <li>As fitas de LED passam a se chamar iluminação inteligente em todo o aplicativo</li>
+          <li>A iluminação inteligente passa a aceitar também as lâmpadas inteligentes da Tuya, que mudam de cor junto com o restante: a cor do aplicativo fora do jogo, a cor do jogo durante a sessão e o estado anterior ao fechar o aplicativo</li>
+          <li>O assistente de configuração da iluminação inteligente lista somente os dispositivos que mudam de cor, sem interruptores, tomadas, sensores ou controles remotos</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.24" date="2026-09-24">
       <description translate="no">
         <ul>
