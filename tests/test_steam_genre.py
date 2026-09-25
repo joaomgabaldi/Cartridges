@@ -32,6 +32,7 @@ from cartridges.utils.steam import (  # noqa: E402
     SteamAPIHelper,
     SteamGameNotFoundError,
     format_release_date,
+    parse_release_date,
 )
 from cartridges.utils.steam_genre import (  # noqa: E402
     GENRE_NAMES,
@@ -446,10 +447,33 @@ class TestPortugueseDates(unittest.TestCase):
     that was checked against both languages over 25 games before the switch.
     """
 
-    def test_the_portuguese_shape_parses(self) -> None:
-        self.assertEqual(format_release_date("5/dez./2019"), "dez. 2019")
-        self.assertEqual(format_release_date("23/set./2026"), "set. 2026")
-        self.assertEqual(format_release_date("10/nov./2023"), "nov. 2023")
+    def test_the_portuguese_shape_keeps_the_day(self) -> None:
+        self.assertEqual(format_release_date("5/dez./2019"), "5/dez./2019")
+        self.assertEqual(format_release_date("02/set./2026"), "2/set./2026")
+        self.assertEqual(parse_release_date("10/nov./2023"), (2023, 11, 10))
+
+    def test_the_stored_month_year_shape(self) -> None:
+        """O que o app gravava até 25/09/2026 continua valendo, sem o dia."""
+        self.assertEqual(format_release_date("set. 2020"), "set./2020")
+        self.assertEqual(parse_release_date("set. 2020"), (2020, 9, None))
 
     def test_a_year_only_date_is_unchanged(self) -> None:
         self.assertEqual(format_release_date("2027"), "2027")
+
+    def test_a_numeric_date_typed_by_hand(self) -> None:
+        self.assertEqual(format_release_date("02/09/2026"), "2/set./2026")
+
+    def test_the_known_texts(self) -> None:
+        self.assertEqual(format_release_date("em breve"), "Em breve")
+        self.assertEqual(format_release_date("A ser anunciado"), "A ser anunciado")
+
+    def test_garbage_is_discarded(self) -> None:
+        for raw in ("99/inf./99", "31/fev./2026", "0/set./2026", "13/2026", "", "set."):
+            with self.subTest(raw=raw):
+                self.assertIsNone(format_release_date(raw))
+                self.assertEqual(parse_release_date(raw), (None, None, None))
+
+    def test_a_discarded_date_is_logged(self) -> None:
+        with self.assertLogs(level="DEBUG") as logs:
+            format_release_date("99/inf./99")
+        self.assertIn("99/inf./99", logs.output[0])

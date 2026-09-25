@@ -68,6 +68,7 @@ from cartridges.utils.steam import (
     SteamAPIHelper,
     SteamGameNotFoundError,
     SteamRateLimiter,
+    format_release_date,
 )
 
 
@@ -561,7 +562,8 @@ class DetailsDialog(Adw.Dialog):
         final_name = self.name.get_text()
         final_developer = self.developer.get_text()
         final_publisher = self.publisher.get_text()
-        final_release_date = self.release_date.get_text()
+        typed_release_date = self.release_date.get_text().strip()
+        final_release_date = format_release_date(typed_release_date)
         final_genre = self.genre.get_text().strip()
         final_controller_support = self.get_controller_support()
         final_status = self.get_status()
@@ -606,6 +608,14 @@ class DetailsDialog(Adw.Dialog):
                 )
                 return
 
+        if typed_release_date and not final_release_date:
+            create_dialog(
+                self,
+                _("Não foi possível aplicar as alterações"),
+                _("A data de lançamento informada é inválida. Utilize o formato 2/set./2026."),
+            )
+            return
+
         # Forced off for a packaged game: its rows are hidden, so an old value
         # left over from before must not trip the validation below over a switch
         # the user can no longer see.
@@ -626,7 +636,7 @@ class DetailsDialog(Adw.Dialog):
         self.game.name = final_name
         self.game.developer = final_developer or None
         self.game.publisher = final_publisher or None
-        self.game.release_date = final_release_date or None
+        self.game.release_date = final_release_date
         self.game.genre = final_genre or None
         self.game.controller_support = final_controller_support
         self.game.definir_status(final_status)

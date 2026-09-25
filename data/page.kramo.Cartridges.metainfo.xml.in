@@ -40,6 +40,8 @@
           <li>Os resultados da busca na Steam mostram somente o ID na Steam, sem a indicação de correspondência com o título</li>
           <li>Os dados da Steam (desenvolvedora, lançamento, descrição e gênero) voltam a ser obtidos. Uma mudança da Steam em 24/09/2026 fazia a busca falhar para todos os jogos; para completar os jogos importados desde então, use Atualizar metadados nas Preferências</li>
           <li>Ao escolher um logo ou uma capa do SteamGridDB, o aplicativo não volta mais à lista de resultados enquanto as demais pré-visualizações terminam de carregar, o que parecia uma nova busca a cada clique</li>
+          <li>A data de lançamento passa a incluir o dia, no formato da Steam (ex.: "Data de lançamento: 2/set./2026"), e a ordenação por lançamento considera o dia. Para exibir o dia nos jogos já importados, use Atualizar metadados, com todos os jogos, nas Preferências</li>
+          <li>A tela de edição não aceita uma data de lançamento inválida e indica o formato esperado</li>
         </ul>
       </description>
     </release>

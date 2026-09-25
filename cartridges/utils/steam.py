@@ -21,6 +21,7 @@
 import json
 import logging
 import re
+from datetime import date
 from typing import Callable, Optional, TypedDict
 
 from requests.exceptions import HTTPError, RequestException
@@ -165,40 +166,61 @@ _MONTH_ABBR = (
 )  # fmt: skip
 
 
-def parse_release_date(raw: str) -> tuple[Optional[int], Optional[int]]:
-    """Parse a release date string into ``(year, month)`` (month may be None).
+# Textos da Steam para jogo sem data, na grafia que o app mostra.
+_UNDATED_TEXTS = {"em breve": "Em breve", "a ser anunciado": "A ser anunciado"}
 
-    Locale-independent in the sense that matters: the month names are matched
-    from an explicit table rather than through the process locale, which is
-    what `datetime.strptime("%b")` would do. The API answers in Portuguese
-    ("17/set./2020"), which is also what the app stores ("out. 2020").
 
-    Returns ``(None, None)`` when no four-digit year can be found, which is how
-    "Em breve" and "A ser anunciado" come through untouched.
+def parse_release_date(raw: Optional[str]) -> tuple[Optional[int], Optional[int], Optional[int]]:
+    """Lê uma data de lançamento como ``(ano, mês, dia)``; mês e dia podem faltar.
+
+    Formatos aceitos, e só eles: "17/set./2020" (o da Steam), "02/09/2020"
+    (digitado à mão), "set. 2020" ou "set./2020" (mês e ano) e "2020". Os meses
+    vêm de uma tabela própria, e não do locale do processo, que é o que
+    `datetime.strptime("%b")` usaria.
+
+    O dia e o mês só passam se formarem uma data que existe: "31/fev./2026" e
+    "99/inf./99" dão ``(None, None, None)``, como "Em breve".
     """
-    raw = (raw or "").strip()
-    if not raw:
-        return None, None
-    year_match = re.search(r"\b(\d{4})\b", raw)
-    if not year_match:
-        return None, None
-    month = None
-    if word_match := re.search(r"[A-Za-z]+", raw):
-        month = _MONTH_NUMBERS.get(word_match.group(0).lower())
-    return int(year_match.group(1)), month
+    text = (raw or "").strip().lower()
+    day = month = None
+    if m := re.fullmatch(r"(\d{1,2})/([a-zç]+)\.?/(\d{4})", text):
+        day, month, year = int(m[1]), _MONTH_NUMBERS.get(m[2]), int(m[3])
+    elif m := re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{4})", text):
+        day, month, year = int(m[1]), int(m[2]), int(m[3])
+    elif m := re.fullmatch(r"([a-zç]+)\.?[ /](?:de )?(\d{4})", text):
+        month, year = _MONTH_NUMBERS.get(m[1]), int(m[2])
+    elif m := re.fullmatch(r"\d{4}", text):
+        year = int(m[0])
+    else:
+        return None, None, None
+    try:
+        date(year, 1 if month is None else month, 1 if day is None else day)
+    except (TypeError, ValueError):
+        return None, None, None
+    return year, month, day
 
 
-def format_release_date(raw: str) -> str:
-    """Normalize a Steam release date string to a "Mon YYYY" (or "YYYY") form.
+def format_release_date(raw: Optional[str]) -> Optional[str]:
+    """A data no formato da Steam ("2/set./2026", "set./2026", "2026").
 
-    Falls back to the raw string when no year can be found.
+    "Em breve" e "A ser anunciado" passam na grafia do app. Qualquer outra
+    coisa é descartada (``None``, com registro no log de depuração): o texto
+    mostrado é sempre montado aqui, nunca o que veio de fora.
     """
-    year, month = parse_release_date(raw)
+    text = (raw or "").strip()
+    if not text:
+        return None
+    if undated := _UNDATED_TEXTS.get(text.lower()):
+        return undated
+    year, month, day = parse_release_date(text)
     if year is None:
-        return (raw or "").strip()
+        logging.debug("Data de lançamento descartada: %r", text)
+        return None
     if month is None:
         return str(year)
-    return f"{_MONTH_ABBR[month]} {year}"
+    if day is None:
+        return f"{_MONTH_ABBR[month]}/{year}"
+    return f"{day}/{_MONTH_ABBR[month]}/{year}"
 
 
 class SteamAPIHelper:
@@ -432,8 +454,10 @@ class SteamAPIHelper:
         if publishers := app_data.get("publishers"):
             values["publisher"] = ", ".join(publishers)
         release_info = app_data.get("release_date")
-        if isinstance(release_info, dict) and (release_date := release_info.get("date")):
-            values["release_date"] = format_release_date(release_date)
+        if isinstance(release_info, dict) and (
+            release_date := format_release_date(release_info.get("date"))
+        ):
+            values["release_date"] = release_date
         metacritic_info = app_data.get("metacritic")
         if isinstance(metacritic_info, dict) and isinstance(
             (score := metacritic_info.get("score")), int
