@@ -137,18 +137,13 @@ def test_pagina_vazia_mostra_o_aviso(real_window, store):
     assert real_window.zerados_notice_empty.get_parent() is None
 
 
-def test_item_do_menu_so_com_desinstalados_e_na_tela_principal(
-    real_window, store, monkeypatch
-):
+def test_item_do_menu_sempre_na_tela_principal(real_window, store, monkeypatch):
+    """Sempre há o que adicionar: um jogo da Steam ou só pelo nome."""
     acao = Gio.SimpleAction.new("show_zerados", None)
     real_window.add_action(acao)
 
     real_window.set_show_zerados()
-    assert acao.get_enabled() is False, "nada a mostrar nem a oferecer"
-
-    jogo(store, 8, removed=True)
-    real_window.set_show_zerados()
-    assert acao.get_enabled() is True
+    assert acao.get_enabled() is True, "store vazia também"
 
     monkeypatch.setattr(
         real_window.navigation_view,

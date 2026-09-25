@@ -1949,13 +1949,11 @@ class CartridgesWindow(Adw.ApplicationWindow):
             self.details_view_game_cover.set_details_animation(False)
 
     def set_show_zerados(self, *_args: Any) -> None:
-        """O item "Jogos Zerados" do menu: só na tela principal, e só quando a
-        página tem o que mostrar ou o seletor dela o que oferecer — um zerado,
-        ou um desinstalado que possa virar um."""
+        """O item "Jogos Zerados" do menu: só na tela principal. Sempre há o que
+        adicionar ali — um jogo da Steam, ou só pelo nome."""
         if action := self.lookup_action("show_zerados"):
             action.set_enabled(
                 self.navigation_view.get_visible_page() == self.library_page
-                and any(game.removed and not game.blacklisted for game in shared.store)
             )
 
     def on_show_zerados_action(self, *_args: Any) -> None:
