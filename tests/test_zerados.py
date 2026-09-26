@@ -440,15 +440,14 @@ def test_edicao_de_um_zerado_esconde_o_que_so_serve_para_lancar(store):
 
 
 def test_card_de_zerado_abre_os_detalhes_e_nao_revela_botoes(
-    store, win, monkeypatch, schema
+    store, win, monkeypatch
 ):
-    schema["cover-launches-game"] = True
     abertos = []
     win.show_details_page = abertos.append
     zerado = jogo(store, 35, removed=True, status="beaten")
     monkeypatch.setattr(zerado, "launch", lambda: pytest.fail("lançou um zerado"))
 
-    zerado.main_button_clicked(None, False)
+    zerado.main_button_clicked(None, True)
     zerado.toggle_play(None, None, None, False)
 
     assert abertos == [zerado]

@@ -62,14 +62,6 @@ def test_atalho_renomeado_de_zerado_e_seguido(store, make_game, tmp_path):
     assert zerado.shortcut_path == str(novo)
 
 
-def test_icone_de_jogar_e_refeito_para_removidos(store, real_window):
-    g = jogo(store, 4, removed=True, status="beaten")
-    chamadas = []
-    g.set_play_icon = lambda: chamadas.append(g)
-    real_window.update_play_icons()
-    assert chamadas == [g]
-
-
 def test_remover_jogo_zerado_instalado_avisa_ida_para_zerados(store, real_window):
     g = jogo(store, 5, status="beaten")
     real_window.active_game = g

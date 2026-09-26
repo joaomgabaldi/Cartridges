@@ -52,7 +52,7 @@ from typing import Any, Optional
 # silently falls open, which is the case it was added to prevent.
 #
 # The name is arbitrary but must never change: it is the identity of the lock.
-_MUTEX_NAME = "Local\\page.kramo.Cartridges.SingleInstance"
+_MUTEX_NAME = "Local\\io.github.joaomgabaldi.Cartridges.SingleInstance"
 
 _ERROR_ALREADY_EXISTS = 183
 

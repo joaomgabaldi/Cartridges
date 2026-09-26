@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="data/icons/hicolor/scalable/apps/page.kramo.Cartridges.svg" width="128" height="128">
+  <img src="data/icons/hicolor/scalable/apps/io.github.joaomgabaldi.Cartridges.svg" width="128" height="128">
 
   # Cartridges
 
@@ -211,7 +211,7 @@ Os testes usam o GTK real do MSYS2, e não o Python do sistema.
 ## Histórico de versões
 
 A lista completa de mudanças de cada versão aparece no aplicativo, em *Sobre o Cartridges →
-Novidades*, e está em [`data/page.kramo.Cartridges.metainfo.xml.in`](data/page.kramo.Cartridges.metainfo.xml.in).
+Novidades*, e está em [`data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in`](data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in).
 
 ## Créditos e licença
 

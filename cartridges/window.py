@@ -299,15 +299,6 @@ class CartridgesWindow(Adw.ApplicationWindow):
                     "notify::high-contrast", self.set_details_view_opacity
                 ),
             ),
-            # Refresh every game's play/details icon from one handler when the
-            # setting changes, instead of one per-game handler that is never
-            # released
-            (
-                shared.schema,
-                shared.schema.connect(
-                    "changed::cover-launches-game", self.update_play_icons
-                ),
-            ),
         ]
         self.connect("destroy", self.detach_global_handlers)
 
@@ -403,10 +394,6 @@ class CartridgesWindow(Adw.ApplicationWindow):
     def block_dialog_backdrop_drag(self, *_args: Any) -> None:
         if (dialog := self.get_visible_dialog()) is not None:
             block_window_drag(dialog)
-
-    def update_play_icons(self, *_args: Any) -> None:
-        for game in shared.store:
-            game.set_play_icon()
 
     def session_toast(self, game: Game, seconds: int) -> None:
         """O aviso de fim de sessão, com um atalho para a anotação.

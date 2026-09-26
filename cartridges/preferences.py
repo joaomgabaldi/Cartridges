@@ -46,7 +46,6 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     sgdb_page: Adw.PreferencesPage = Gtk.Template.Child()
 
     minimize_after_launch_switch: Adw.SwitchRow = Gtk.Template.Child()
-    cover_launches_game_switch: Adw.SwitchRow = Gtk.Template.Child()
     show_news_button_switch: Adw.SwitchRow = Gtk.Template.Child()
     playtime_tracking_switch: Adw.SwitchRow = Gtk.Template.Child()
     gamepad_switch: Adw.SwitchRow = Gtk.Template.Child()
@@ -209,7 +208,6 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.bind_switches(
             {
                 "minimize-after-launch",
-                "cover-launches-game",
                 "show-news-button",
                 "playtime-tracking",
                 "session-move-window",

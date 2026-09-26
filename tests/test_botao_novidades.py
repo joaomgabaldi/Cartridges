@@ -8,7 +8,7 @@ from cartridges import shared
 from cartridges.main import CartridgesApplication
 from cartridges.utils import backup
 
-_GSCHEMA = Path(__file__).parent.parent / "data" / "page.kramo.Cartridges.gschema.xml.in"
+_GSCHEMA = Path(__file__).parent.parent / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml.in"
 
 
 def test_nasce_oculto():
