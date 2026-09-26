@@ -236,8 +236,6 @@ class Game(Gtk.Box):
         self.update_values(data)
         self.base_source = self.source.split("_")[0]
 
-        self.set_play_icon()
-
         self.event_controller_motion = Gtk.EventControllerMotion.new()
         self.add_controller(self.event_controller_motion)
         self.event_controller_motion.connect("enter", self.toggle_play, False)
@@ -508,21 +506,11 @@ class Game(Gtk.Box):
             self.game_cover.set_hover_animation(not state)
 
     def main_button_clicked(self, _widget: Any, button: bool) -> None:
-        # Um zerado sempre abre os detalhes, mesmo com "capa inicia o jogo".
-        if self.zerado:
-            shared.win.show_details_page(self)
-            return
-        if shared.schema.get_boolean("cover-launches-game") ^ button:
+        # A capa abre os detalhes, o botão inicia o jogo; um zerado não joga.
+        if button and not self.zerado:
             self.launch()
         else:
             shared.win.show_details_page(self)
-
-    def set_play_icon(self) -> None:
-        self.play_button.set_icon_name(
-            "help-about-symbolic"
-            if shared.schema.get_boolean("cover-launches-game")
-            else "media-playback-start-symbolic"
-        )
 
     @GObject.Signal(name="update-ready", arg_types=[object])
     def update_ready(self, _additional_data):  # type: ignore

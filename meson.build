@@ -1,9 +1,9 @@
 project(
   'cartridges',
   # Versionamento por data da build: AAAA.MM.DD
-  # Atualize esta linha (e a <release> em data/page.kramo.Cartridges.metainfo.xml.in)
+  # Atualize esta linha (e a <release> em data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in)
   # sempre que fizer uma alteracao que exija rebuildar o projeto.
-  version: '2026.09.25',
+  version: '2026.09.26',
   meson_version: '>= 0.59.0',
   default_options: [
     'warning_level=2',
@@ -25,8 +25,8 @@ python_dir = join_paths(get_option('prefix'), py_installation.get_install_dir())
 pkgdatadir = join_paths(get_option('prefix'), get_option('datadir'), meson.project_name())
 libexecdir = join_paths(get_option('prefix'), get_option('libexecdir'))
 
-app_id = 'page.kramo.Cartridges'
-prefix = '/page/kramo/Cartridges'
+app_id = 'io.github.joaomgabaldi.Cartridges'
+prefix = '/io/github/joaomgabaldi/Cartridges'
 
 conf = configuration_data()
 conf.set('PYTHON', py_installation.full_path())

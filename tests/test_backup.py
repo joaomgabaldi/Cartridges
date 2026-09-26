@@ -43,16 +43,16 @@ def settings(tmp_path, monkeypatch):
     """
     schemas = tmp_path / "_schemas"
     schemas.mkdir()
-    shutil.copy(_ROOT / "_build" / "data" / "page.kramo.Cartridges.gschema.xml", schemas)
+    shutil.copy(_ROOT / "_build" / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml", schemas)
     compiler = shutil.which("glib-compile-schemas") or (
         "C:/msys64/ucrt64/bin/glib-compile-schemas.exe"
     )
     subprocess.run([compiler, str(schemas)], check=True)
     source = Gio.SettingsSchemaSource.new_from_directory(str(schemas), None, False)
     memory = Gio.memory_settings_backend_new()
-    main = Gio.Settings.new_full(source.lookup("page.kramo.Cartridges", False), memory, None)
+    main = Gio.Settings.new_full(source.lookup("io.github.joaomgabaldi.Cartridges", False), memory, None)
     state = Gio.Settings.new_full(
-        source.lookup("page.kramo.Cartridges.State", False), memory, None
+        source.lookup("io.github.joaomgabaldi.Cartridges.State", False), memory, None
     )
     monkeypatch.setattr(shared, "schema", main)
     monkeypatch.setattr(shared, "state_schema", state)
@@ -87,6 +87,15 @@ def test_a_setting_the_schema_does_not_accept_falls_back_to_default(settings) ->
     assert main.get_boolean("gamepad-rumble") is True
     assert main.get_boolean("gamepad") is False
     assert state.get_string("sort-mode") == "last_played"
+
+
+def test_a_setting_removed_from_the_schema_is_ignored(settings) -> None:
+    """Backup de uma versão que ainda tinha "Capa inicia o jogo"."""
+    main, _state = settings
+    backup.aplicar_configuracoes(
+        {"settings": {"cover-launches-game": True, "sgdb": True}, "state": {}}
+    )
+    assert main.get_boolean("sgdb") is True
 
 
 # --------------------------------------------------------------------------

@@ -72,13 +72,12 @@ Gtk.init()
 Adw.init()
 
 
-# Defaults copied from data/page.kramo.Cartridges.gschema.xml.in. Copied rather
+# Defaults copied from data/io.github.joaomgabaldi.Cartridges.gschema.xml.in. Copied rather
 # than parsed so a test that depends on one of these values fails loudly when
 # the schema changes underneath it, instead of quietly following it.
 _SCHEMA_DEFAULTS = {
     "auto-import": False,
     "minimize-after-launch": False,
-    "cover-launches-game": False,
     "playtime-tracking": True,
     "process-tracking-grace": 5,
     "session-move-window": False,
@@ -269,11 +268,11 @@ def _install_shared() -> types.ModuleType:
 
     shared = types.ModuleType("cartridges.shared")
     shared.AppState = AppState
-    shared.APP_ID = "page.kramo.Cartridges"
+    shared.APP_ID = "io.github.joaomgabaldi.Cartridges"
     shared.VERSION = "0000.00.00"
     # Must match the real build: `game_cover` resolves gresource paths off it,
     # and a wrong value aborts the process with a Gdk-ERROR on import.
-    shared.PREFIX = "/page/kramo/Cartridges"
+    shared.PREFIX = "/io/github/joaomgabaldi/Cartridges"
     shared.SPEC_VERSION = 1.6
     shared.APP_DIR_NAME = "Cartridges"
     shared.image_size = (600, 900)

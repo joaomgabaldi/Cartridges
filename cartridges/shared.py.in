@@ -46,7 +46,7 @@ home = Path.home()
 data_dir = Path(GLib.get_user_data_dir())
 
 # Name of the app's own folder inside the data/config dirs.
-APP_DIR_NAME = "Cartridges"
+APP_DIR_NAME = APP_ID
 
 app_dir = data_dir / APP_DIR_NAME
 

@@ -5,14 +5,14 @@
 #define MyAppExeName "pythonw.exe"
 
 [Setup]
-AppId={{BC3F8D32-4BDC-4715-B149-D79F589CD7F0}
+AppId={{88FC7AF8-9F74-40EC-AAED-FA6356261CBB}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf64}\{#MyAppName}
+DefaultDirName={autopf64}\Cartridges Revamped
 DisableProgramGroupPage=yes
 LicenseFile=..\..\..\LICENSE
 PrivilegesRequiredOverridesAllowed=dialog
@@ -169,7 +169,7 @@ begin
     'Após a instalação, faça o seguinte ajuste:' + #13#10 + #13#10 +
     '1. Abra o Painel de Controle NVIDIA e acesse Gerenciar as configurações 3D.' + #13#10 +
     '2. Na aba Configurações de programa, adicione o pythonw.exe da pasta bin da ' +
-    'instalação (por padrão, C:\Program Files\Cartridges\bin).' + #13#10 +
+    'instalação (por padrão, C:\Program Files\Cartridges Revamped\bin).' + #13#10 +
     '3. No método de apresentação Vulkan/OpenGL ("Vulkan/OpenGL present method"), ' +
     'escolha "Preferir nativo" ("Prefer native") e aplique.',
     False, False);
@@ -202,10 +202,11 @@ begin
       // Limite conhecido: numa instalacao para todos os usuarios o desinstalador
       // roda elevado, e se o UAC for respondido com outra conta, {localappdata}
       // e HKCU sao os dessa conta, nao os de quem usa o app.
-      DelTree(ExpandConstant('{localappdata}\Cartridges'), True, True, True);
-      RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\GSettings\page\kramo\Cartridges');
-      RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\page\kramo');
-      RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\page');
+      DelTree(ExpandConstant('{localappdata}\io.github.joaomgabaldi.Cartridges'), True, True, True);
+      RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\GSettings\io\github\joaomgabaldi\Cartridges');
+      RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\io\github\joaomgabaldi');
+      RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\io\github');
+      RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\io');
     end;
   end;
 end;

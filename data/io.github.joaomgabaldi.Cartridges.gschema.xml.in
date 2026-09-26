@@ -8,9 +8,6 @@
     <key name="minimize-after-launch" type="b">
       <default>false</default>
     </key>
-    <key name="cover-launches-game" type="b">
-      <default>false</default>
-    </key>
     <key name="playtime-tracking" type="b">
       <default>true</default>
     </key>

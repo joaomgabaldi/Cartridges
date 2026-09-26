@@ -29,7 +29,7 @@ blueprints = custom_target(
 # (build-aux/windows), so no launcher entry is generated here.
 
 appstream_file = configure_file(
-  input: 'page.kramo.Cartridges.metainfo.xml.in',
+  input: 'io.github.joaomgabaldi.Cartridges.metainfo.xml.in',
   output: app_id + '.metainfo.xml',
   configuration: conf,
   install: true,
@@ -51,7 +51,7 @@ gnome.compile_resources(
 
 install_data(
   configure_file(
-    input: 'page.kramo.Cartridges.gschema.xml.in',
+    input: 'io.github.joaomgabaldi.Cartridges.gschema.xml.in',
     output: app_id + '.gschema.xml',
     configuration: conf,
   ),

@@ -11,7 +11,7 @@
   <description>
     <p>O Cartridges é um lançador simples para todos os seus jogos. Ele importa atalhos de jogos (.lnk e .url, incluindo aplicativos da Microsoft Store) a partir de uma pasta, reunindo em um só lugar jogos da Steam, Epic, Ubisoft Connect, Xbox e outros, sem precisar fazer login. Títulos, desenvolvedoras, publicadoras e datas de lançamento são buscados na Steam, e você pode ordenar os jogos, manter em Jogos Zerados os jogos desinstalados que você terminou ou baixar capas do SteamGridDB.</p>
   </description>
-  <developer id="page.kramo">
+  <developer id="io.github.joaomgabaldi">
     <name translate="no">joaomgabaldi</name>
   </developer>
   <branding>
@@ -28,6 +28,15 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.26" date="2026-09-26">
+      <description translate="no">
+        <ul>
+          <li>A opção "Capa inicia o jogo" foi removida.</li>
+          <li>AppID do Cartridges foi modificado para não conflitar com o app original.</li>
+          <li>Por isso, esta versão é instalada ao lado da anterior e começa com a biblioteca vazia. Para trazer seus dados: na versão anterior, em Preferências → Backup da sua biblioteca, escolha Exportar para arquivo; nesta versão, configure a pasta de atalhos, importe os jogos e escolha Importar de arquivo. A pasta de atalhos e a conta da Tuya precisam ser configuradas novamente. Após a restauração, desinstale a versão anterior.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.25" date="2026-09-25">
       <description translate="no">
         <ul>
