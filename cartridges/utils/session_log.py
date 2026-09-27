@@ -176,7 +176,10 @@ def delete(game_id: str, end: int, seconds: int) -> bool:
             # voltar igual. Sem isto, o UnicodeDecodeError (ValueError)
             # escapava do guard abaixo.
             lines = path.read_text(encoding="utf-8", errors="surrogateescape").splitlines()
-        except (FileNotFoundError, OSError):
+        except FileNotFoundError:
+            return False
+        except OSError:
+            logging.exception("Não foi possível ler o histórico de sessões")
             return False
 
         kept: list[str] = []
@@ -210,7 +213,10 @@ def apagar_jogo(game_id: str) -> None:
     with _LOCK:
         try:
             lines = path.read_text(encoding="utf-8", errors="surrogateescape").splitlines()
+        except FileNotFoundError:
+            return
         except OSError:
+            logging.exception("Não foi possível ler o histórico de sessões")
             return
 
         kept: list[str] = []
@@ -238,7 +244,10 @@ def mover_jogo(id_antigo: str, id_novo: str) -> None:
     with _LOCK:
         try:
             lines = path.read_text(encoding="utf-8", errors="surrogateescape").splitlines()
+        except FileNotFoundError:
+            return
         except OSError:
+            logging.exception("Não foi possível ler o histórico de sessões")
             return
 
         kept: list[str] = []

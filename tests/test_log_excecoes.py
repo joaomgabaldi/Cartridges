@@ -73,3 +73,58 @@ def test_aviso_do_gtk_com_acento_chega_inteiro_ao_log(caplog):
     registro = next(r for r in caplog.records if "Capa de" in r.getMessage())
     assert registro.levelno == logging.WARNING
     assert registro.getMessage() == "Gtk-WARNING: Capa de Plaž — ação"
+
+
+def test_erro_nao_levantavel_vai_para_o_log(monkeypatch, caplog):
+    # Um erro num __del__ não sobe para ninguém: o Python o entrega ao
+    # sys.unraisablehook, que por padrão só escreve no stderr.
+    import gc  # pylint: disable=import-outside-toplevel
+
+    monkeypatch.setattr(sys, "excepthook", sys.excepthook)
+    monkeypatch.setattr(threading, "excepthook", threading.excepthook)
+    monkeypatch.setattr(sys, "unraisablehook", sys.unraisablehook)
+    setup.registrar_excecoes_nao_tratadas()
+
+    class Quebra:
+        def __del__(self):
+            raise RuntimeError("erro no destrutor")
+
+    Quebra()
+    gc.collect()
+
+    registro = next(r for r in caplog.records if r.exc_info)
+    assert registro.getMessage().startswith("Erro não tratado (não levantável)")
+    assert registro.exc_info[1].args == ("erro no destrutor",)
+
+
+def test_queda_nativa_fica_no_arquivo_de_log(tmp_path):
+    # Uma queda em C (driver de vídeo, GTK) mata o processo sem passar pelo
+    # Python: só o faulthandler, apontado para o arquivo, deixa a pilha.
+    import subprocess  # pylint: disable=import-outside-toplevel
+    import textwrap  # pylint: disable=import-outside-toplevel
+    from pathlib import Path  # pylint: disable=import-outside-toplevel
+
+    raiz = Path(__file__).resolve().parent.parent
+    log = tmp_path / "cartridges.log"
+    script = textwrap.dedent(
+        f"""
+        import faulthandler, sys, types
+        sys.path.insert(0, {str(raiz)!r})
+        import cartridges
+        cartridges.shared = sys.modules["cartridges.shared"] = types.ModuleType("cartridges.shared")
+        from cartridges.logging import setup
+        arquivo = open({str(log)!r}, "w", encoding="utf-8")
+        arquivo.write("antes da queda\\n")
+        arquivo.flush()
+        setup.registrar_quedas_nativas(arquivo)
+        faulthandler._sigsegv()
+        """
+    )
+    filho = subprocess.run(
+        [sys.executable, "-c", script], check=False, capture_output=True, text=True
+    )
+
+    assert log.exists(), filho.stderr
+    texto = log.read_text(encoding="utf-8", errors="replace")
+    assert texto.startswith("antes da queda")
+    assert "Fatal Python error" in texto

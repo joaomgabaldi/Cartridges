@@ -35,6 +35,8 @@
           <li>Os avisos internos da interface também passam a ser registrados no log do aplicativo</li>
           <li>Avisos internos com acentos passam a ser registrados corretamente no log</li>
           <li>Na primeira abertura após a instalação, a janela abre no tamanho padrão, e não reduzida a uma faixa estreita</li>
+          <li>Um fechamento inesperado do aplicativo passa a deixar o registro da falha no log</li>
+          <li>Arquivos da biblioteca que não puderam ser lidos (jogos, capas, histórico de sessões, escolhas de papel de parede e de iluminação) passam a ser informados no log</li>
         </ul>
       </description>
     </release>

@@ -194,7 +194,10 @@ def _read_sidecar(game_id: str) -> Optional[dict[str, Any]]:
     try:
         with _sidecar_path(game_id).open(encoding="utf-8") as file:
             data = json.load(file)
-    except (OSError, ValueError):
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as error:
+        logging.warning("Unreadable logo sidecar %s: %s", _sidecar_path(game_id).name, error)
         return None
     return data if isinstance(data, dict) else None
 

@@ -708,7 +708,8 @@ class CartridgesApplication(Adw.Application):
                 try:
                     with game_file.open(encoding="utf-8") as open_file:
                         data = json.load(open_file)
-                except (OSError, json.decoder.JSONDecodeError):
+                except (OSError, json.decoder.JSONDecodeError) as error:
+                    logging.warning("Skipping unreadable game record %s: %s", game_file.name, error)
                     continue
                 # A record missing one of the fields that has no default is not
                 # loadable: `Game.__init__` reads `source` to derive

@@ -18,6 +18,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+import logging
 from pathlib import Path
 from shutil import copyfile
 from typing import Optional
@@ -109,6 +110,7 @@ def _convert_readable_cover(cover_path: Path, resize: bool) -> Optional[Path]:
         # Fora do fallback abaixo: ele regrava a mesma imagem gigante num TIFF
         # e chama `convert_cover` de novo, que a recusa de novo — recursão sem
         # fim, com um TIFF enorme a mais em %TEMP% a cada nível.
+        logging.warning("Cover refused, image too large: %s", Path(cover_path).name)
         return None
     except (UnidentifiedImageError, OSError, ValueError):
         intermediate: Optional[Path] = None
@@ -123,7 +125,8 @@ def _convert_readable_cover(cover_path: Path, resize: bool) -> Optional[Path]:
             intermediate = Path(tmp_path)
             result = convert_cover(intermediate)
             return result
-        except (GLib.Error, OSError):
+        except (GLib.Error, OSError) as error:
+            logging.warning("Could not convert cover %s: %s", Path(cover_path).name, error)
             return None
         finally:
             # The re-encoded scratch file is only an input to the recursive
