@@ -42,13 +42,13 @@ _EXCECOES_DE_REDE = (
 
 def e_de_rede(registro: dict[str, Any]) -> bool:
     mensagem = registro["mensagem"]
+    if any(marca in mensagem for marca in _NUNCA_DE_REDE):
+        return False
     rastro = registro["rastro"]
     if rastro:
         linhas = [linha for linha in rastro.splitlines() if linha.strip()]
         ultima = linhas[-1] if linhas else ""
         return any(marca in ultima for marca in _EXCECOES_DE_REDE)
-    if any(marca in mensagem for marca in _NUNCA_DE_REDE):
-        return False
     if registro["logger"].startswith(_LOGGERS_DE_REDE):
         return True
     return any(palavra in mensagem for palavra in _PALAVRAS_DE_REDE)
