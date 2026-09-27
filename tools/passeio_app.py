@@ -177,9 +177,10 @@ class Motor:
         self.jsonl = open(saida / "passos.jsonl", "a", encoding="utf-8")  # pylint: disable=consider-using-with
 
     def iniciar(self) -> None:
+        # O coletor já está pendurado no logger raiz desde `setup_logging`
+        # (ver `main`): pendurar de novo aqui duplicaria cada registro.
         from gi.repository import GLib  # pylint: disable=import-outside-toplevel
 
-        logging.getLogger().addHandler(self.coletor)
         GLib.timeout_add(50, self._tick)
 
     def _tick(self) -> bool:
@@ -216,7 +217,6 @@ class Motor:
     def _comecar(self, passo: Passo) -> None:
         nome, jogo, fabrica = passo
         self.atual = passo
-        self.coletor.registros = []
         self.inicio = time.monotonic()
         (self.saida / "atual.txt").write_text(
             f"{nome}\t{getattr(jogo, 'game_id', '')}\t{getattr(jogo, 'name', '')}",
@@ -258,6 +258,10 @@ class Motor:
         }
         self.jsonl.write(json.dumps(linha, ensure_ascii=False) + "\n")
         self.jsonl.flush()
+        # Só depois de a linha estar gravada: tudo que for logado antes do
+        # primeiro passo (setup_logging, load_games_from_disk, managers) cai
+        # aqui, em "Carregar a biblioteca", em vez de ser descartado.
+        self.coletor.registros = []
         print(f"[{estado}] {nome}" + (f" · {linha['jogo_nome']}" if jogo else ""), flush=True)
         self.atual = self.gerador = self.espera = None
         if estado == "falha":
@@ -654,10 +658,32 @@ def main() -> int:
     chamadas = preparar(saida)
 
     from cartridges.main import CartridgesApplication  # pylint: disable=import-outside-toplevel
+    import cartridges.main as modulo_main  # pylint: disable=import-outside-toplevel
+    from gi.repository import Gio  # pylint: disable=import-outside-toplevel
 
     app = CartridgesApplication()
+    # Sem isto, uma segunda cópia do passeio (ou qualquer app com o mesmo ID
+    # rodando por acaso) vira instância secundária: o GLib do MSYS2 sobe um
+    # gdbus.exe, o app.run() só repassa o "activate" e devolve 0 na hora, sem
+    # rodar um único passo. Ver cartridges/utils/single_instance.py:20-29.
+    app.set_flags(app.get_flags() | Gio.ApplicationFlags.NON_UNIQUE)
     MOTOR = Motor(app, saida)
     MOTOR.fila.append(("Carregar a biblioteca", None, carregar_biblioteca))
+
+    # `setup_logging` roda no início do `do_activate` real, antes da janela e
+    # da carga da biblioteca — e substitui os handlers do logger raiz
+    # (dictConfig). Pendurar o coletor só depois de `iniciar` (via
+    # `connect_after`) perderia tudo isso: os avisos de "Skipping malformed
+    # game record", por exemplo, aconteceriam antes do coletor existir na
+    # cadeia. Por isso o coletor entra aqui, logo que o `setup_logging` real
+    # termina, uma única vez.
+    setup_logging_original = modulo_main.setup_logging
+
+    def setup_logging_com_coletor() -> None:
+        setup_logging_original()
+        logging.getLogger().addHandler(MOTOR.coletor)
+
+    modulo_main.setup_logging = setup_logging_com_coletor
 
     app.connect_after("activate", lambda *_: MOTOR.iniciar())
     codigo = app.run([sys.argv[0]])

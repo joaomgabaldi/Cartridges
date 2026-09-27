@@ -1,8 +1,11 @@
 """Lógica pura do passeio (tools/passeio_relatorio.py): sem janela, sem rede."""
 
+import faulthandler
+import json
 import logging
+import types
 
-from tools.passeio_app import Coletor
+from tools.passeio_app import Coletor, Motor
 from tools.passeio_relatorio import (
     agrupar,
     classificar,
@@ -151,3 +154,45 @@ def test_coletor_ignora_info_e_captura_aviso_e_excecao():
         assert rastro is not None and "ValueError" in rastro
     finally:
         logger.removeHandler(coletor)
+
+
+def test_registros_de_antes_do_primeiro_passo_sao_atribuidos_a_ele(tmp_path):
+    """Spec: atribuição de registros a passo e jogo.
+
+    O coletor real é pendurado no logger raiz antes de qualquer passo rodar
+    (em `main`, junto com `setup_logging`) — não em `Motor.iniciar`. Um aviso
+    de antes do primeiro passo (como "Skipping malformed game record", do
+    `load_games_from_disk` real) tem de aparecer nos registros desse
+    primeiro passo, e não ser descartado.
+    """
+    app_falso = types.SimpleNamespace(quit=lambda: None)
+    motor = Motor(app_falso, tmp_path)
+    logger = logging.getLogger()
+    logger.addHandler(motor.coletor)
+    try:
+        logger.warning("aviso de antes do passo (como o startup faria)")
+
+        jogo = types.SimpleNamespace(game_id="jogo_1", name="Jogo Um")
+
+        def fabrica():
+            logger.warning("aviso dentro do passo")
+            return
+            yield  # torna esta função um gerador, nunca alcançado
+
+        motor._comecar(("Passo X", jogo, fabrica))  # pylint: disable=protected-access
+
+        linhas = (tmp_path / "passos.jsonl").read_text(encoding="utf-8").splitlines()
+        assert len(linhas) == 1
+        linha = json.loads(linhas[0])
+        assert linha["passo"] == "Passo X"
+        assert linha["jogo_id"] == "jogo_1"
+        assert linha["jogo_nome"] == "Jogo Um"
+        assert linha["estado"] == "ok"
+        mensagens = {r["mensagem"] for r in linha["registros"]}
+        assert "aviso de antes do passo (como o startup faria)" in mensagens
+        assert "aviso dentro do passo" in mensagens
+    finally:
+        logger.removeHandler(motor.coletor)
+        faulthandler.cancel_dump_traceback_later()
+        motor.jsonl.close()
+        motor.despejo.close()
