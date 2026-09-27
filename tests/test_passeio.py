@@ -1,5 +1,8 @@
 """Lógica pura do passeio (tools/passeio_relatorio.py): sem janela, sem rede."""
 
+import logging
+
+from tools.passeio_app import Coletor
 from tools.passeio_relatorio import (
     agrupar,
     classificar,
@@ -119,3 +122,32 @@ def test_erro_nao_tratado_nunca_e_de_rede_mesmo_com_excecao_de_rede_no_rastro():
     )
     assert not e_de_rede(escapou)
     assert classificar(passo(registros=[escapou])) == "falha"
+
+
+def test_coletor_ignora_info_e_captura_aviso_e_excecao():
+    logger = logging.getLogger("teste_passeio_coletor")
+    logger.setLevel(logging.DEBUG)
+    coletor = Coletor()
+    logger.addHandler(coletor)
+    try:
+        logger.info("isso não deveria ser coletado")
+        assert coletor.registros == []
+
+        logger.warning("cuidado")
+        assert len(coletor.registros) == 1
+        registrado = coletor.registros[0]
+        assert set(registrado) == {"nivel", "logger", "mensagem", "rastro"}
+        assert registrado["nivel"] == logging.WARNING
+        assert registrado["logger"] == "teste_passeio_coletor"
+        assert registrado["mensagem"] == "cuidado"
+        assert registrado["rastro"] is None
+
+        try:
+            raise ValueError("boom")
+        except ValueError:
+            logger.exception("falhou")
+        assert len(coletor.registros) == 2
+        rastro = coletor.registros[1]["rastro"]
+        assert rastro is not None and "ValueError" in rastro
+    finally:
+        logger.removeHandler(coletor)
