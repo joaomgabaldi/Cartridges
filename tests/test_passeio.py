@@ -109,3 +109,13 @@ def test_rastro_decide_se_e_de_rede_mesmo_citando_a_steam():
         rastro="Traceback (most recent call last):\n  File x\nrequests.exceptions.ConnectionError: boom",
     )
     assert e_de_rede(rede)
+
+
+def test_erro_nao_tratado_nunca_e_de_rede_mesmo_com_excecao_de_rede_no_rastro():
+    escapou = registro(
+        "Erro não tratado",
+        nivel=50,
+        rastro="Traceback (most recent call last):\n  File x\nrequests.exceptions.ConnectionError: boom",
+    )
+    assert not e_de_rede(escapou)
+    assert classificar(passo(registros=[escapou])) == "falha"
