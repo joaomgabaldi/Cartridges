@@ -22,6 +22,7 @@ import logging.config as logging_dot_config
 import os
 import platform
 import sys
+import threading
 
 from cartridges import shared
 
@@ -138,6 +139,25 @@ def setup_logging() -> None:
         },
     }
     logging_dot_config.dictConfig(config)
+    registrar_excecoes_nao_tratadas()
+
+
+def registrar_excecoes_nao_tratadas() -> None:
+    """Grava no log todo erro não tratado, do thread principal ou de outro.
+
+    O padrão do Python só escreve no stderr, e o app instalado roda no
+    pythonw, sem console: um erro num callback do GTK (abrir a tela de edição,
+    salvar) sumia sem deixar rastro no `cartridges.log`. O PyGObject entrega
+    esses erros ao `sys.excepthook`.
+    """
+
+    def registrar(tipo, valor, rastro) -> None:  # type: ignore
+        logging.critical("Erro não tratado", exc_info=(tipo, valor, rastro))
+
+    sys.excepthook = registrar
+    threading.excepthook = lambda args: registrar(
+        args.exc_type, args.exc_value, args.exc_traceback
+    )
 
 
 def log_system_info() -> None:
