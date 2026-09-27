@@ -25,10 +25,28 @@ _PALAVRAS_DE_REDE = (
 # Nunca de rede, mesmo citando a Steam: um erro que escapou do app, ou um aviso
 # do GTK/GLib (o writer grava "Gtk-CRITICAL **", "GLib-WARNING **" etc.).
 _NUNCA_DE_REDE = ("Erro não tratado", "-CRITICAL", "-WARNING", "-ERROR")
+# Quando há rastro, só a exceção de fato levantada decide — a mensagem pode
+# citar "Steam" e o bug ser outro (ex.: metadata_refresh.py:193 loga
+# "could not prefetch Steam tags" num except genérico; um KeyError ali dentro
+# não é falha de rede só porque a mensagem cita a Steam).
+_EXCECOES_DE_REDE = (
+    "requests.",
+    "urllib3.",
+    "socket.",
+    "ssl.",
+    "http.client.",
+    "TimeoutError",
+    "ConnectionError",
+)
 
 
 def e_de_rede(registro: dict[str, Any]) -> bool:
     mensagem = registro["mensagem"]
+    rastro = registro["rastro"]
+    if rastro:
+        linhas = [linha for linha in rastro.splitlines() if linha.strip()]
+        ultima = linhas[-1] if linhas else ""
+        return any(marca in ultima for marca in _EXCECOES_DE_REDE)
     if any(marca in mensagem for marca in _NUNCA_DE_REDE):
         return False
     if registro["logger"].startswith(_LOGGERS_DE_REDE):
@@ -37,12 +55,14 @@ def e_de_rede(registro: dict[str, Any]) -> bool:
 
 
 def classificar(passo: dict[str, Any]) -> str:
-    if passo["estado"] in ("travou", "falha", "pulado"):
+    if passo["estado"] in ("travou", "falha"):
         return passo["estado"]
     if any(
         r["nivel"] >= logging.ERROR and not e_de_rede(r) for r in passo["registros"]
     ):
         return "falha"
+    if passo["estado"] == "pulado":
+        return "pulado"
     return "ok"
 
 

@@ -87,3 +87,25 @@ def test_codigo_de_saida():
     assert codigo_de_saida([passo(), passo(estado="pulado")]) == 0
     assert codigo_de_saida([passo(), passo(estado="falha")]) == 1
     assert codigo_de_saida([passo(estado="travou")]) == 1
+
+
+def test_erro_em_passo_pulado_vira_falha():
+    critico = registro("Gtk-CRITICAL **: algo", nivel=40)
+    pulado = passo(estado="pulado", motivo="Jogo sem capa", registros=[critico])
+    assert classificar(pulado) == "falha"
+    assert codigo_de_saida([pulado]) == 1
+
+
+def test_rastro_decide_se_e_de_rede_mesmo_citando_a_steam():
+    bug = registro(
+        "Metadata refresh: could not prefetch Steam tags",
+        nivel=40,
+        rastro="Traceback (most recent call last):\n  File x\nKeyError: 'x'",
+    )
+    assert not e_de_rede(bug)
+    rede = registro(
+        "Metadata refresh: could not prefetch Steam tags",
+        nivel=40,
+        rastro="Traceback (most recent call last):\n  File x\nrequests.exceptions.ConnectionError: boom",
+    )
+    assert e_de_rede(rede)
