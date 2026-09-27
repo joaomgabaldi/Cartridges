@@ -415,7 +415,8 @@ class ShortcutsSourceIterable(SourceIterable):
                 # game already in the library was then marked removed.
                 text = raw.decode("mbcs")
             parser.read_string(text)
-        except (configparser.Error, OSError, UnicodeDecodeError):
+        except (configparser.Error, OSError, UnicodeDecodeError) as error:
+            logging.warning("Unreadable internet shortcut %s: %s", entry.name, error)
             return None
 
         if not parser.has_section("InternetShortcut"):

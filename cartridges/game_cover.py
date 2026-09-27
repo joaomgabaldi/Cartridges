@@ -17,6 +17,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import logging
 import threading
 from io import BytesIO
 from pathlib import Path
@@ -275,7 +276,9 @@ class GameCover:
                 buffer = BytesIO()
                 image.convert("RGBA").save(buffer, "tiff", compression=None)
                 return Gdk.Texture.new_from_bytes(GLib.Bytes.new(buffer.getvalue()))
-        except (OSError, GLib.Error):
+        except (OSError, GLib.Error) as error:
+            # Last decoder in the chain: the cover file itself is unreadable.
+            logging.warning("Unreadable cover %s: %s", Path(path).name, error)
             return None
 
     def get_texture(self) -> Gdk.Texture:

@@ -1317,6 +1317,8 @@ class DetailsDialog(Adw.Dialog):
             GLib.idle_add(self._fetch_metadata_choose, helper, name)
             return
         except Exception as error:  # pylint: disable=broad-exception-caught
+            # A tela diz só "não encontrado"; um bug aqui teria o mesmo aviso.
+            logging.warning("Steam lookup failed for %s", name, exc_info=error)
             GLib.idle_add(self._fetch_metadata_done, None, error, str(appid or ""))
             return
         GLib.idle_add(self._fetch_metadata_done, data, None, str(appid))

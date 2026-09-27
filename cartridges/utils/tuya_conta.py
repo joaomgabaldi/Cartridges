@@ -135,7 +135,10 @@ def carregar() -> Optional[Conta]:
     """
     try:
         protegido = shared.tuya_conta_arquivo.read_bytes()
-    except OSError:
+    except FileNotFoundError:
+        return None
+    except OSError as erro:
+        logging.warning("Conta da Tuya ilegível: %s", erro)
         return None
 
     dados = _chamar(_crypt32.CryptUnprotectData, protegido)

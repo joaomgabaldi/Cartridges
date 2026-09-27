@@ -426,7 +426,10 @@ def _ler_sidecar(game_id: str) -> Optional[dict[str, Any]]:
     try:
         with _sidecar(game_id).open(encoding="utf-8") as arquivo:
             dados = json.load(arquivo)
-    except (OSError, ValueError):
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as erro:
+        logging.warning("Escolha de papel de parede ilegível (%s): %s", _sidecar(game_id).name, erro)
         return None
     return dados if isinstance(dados, dict) else None
 

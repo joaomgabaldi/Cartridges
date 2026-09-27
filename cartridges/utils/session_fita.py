@@ -96,7 +96,10 @@ def fitas() -> list[Fita]:
     """As fitas configuradas. Lista vazia quando não há configuração válida."""
     try:
         dados = json.loads(shared.fitas_arquivo.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError) as erro:
+        logging.warning("Lista de fitas ilegível (%s): %s", shared.fitas_arquivo.name, erro)
         return []
     if not isinstance(dados, dict):
         return []
@@ -144,7 +147,10 @@ def _sidecar(game_id: str):
 def _ler_sidecar(game_id: str) -> Optional[dict[str, Any]]:
     try:
         dados = json.loads(_sidecar(game_id).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as erro:
+        logging.warning("Cor da fita ilegível (%s): %s", _sidecar(game_id).name, erro)
         return None
     return dados if isinstance(dados, dict) else None
 

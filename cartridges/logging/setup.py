@@ -18,6 +18,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import ctypes
+import faulthandler
 import logging
 import logging.config as logging_dot_config
 import os
@@ -28,6 +29,7 @@ import threading
 from gi.repository import GLib
 
 from cartridges import shared
+from cartridges.logging.session_file_handler import SessionFileHandler
 
 
 def _enable_windows_ansi() -> None:
@@ -144,6 +146,9 @@ def setup_logging() -> None:
     logging_dot_config.dictConfig(config)
     registrar_excecoes_nao_tratadas()
     registrar_avisos_do_glib()
+    for handler in logging.getLogger().handlers:
+        if isinstance(handler, SessionFileHandler):
+            registrar_quedas_nativas(handler.log_file)
 
 
 def registrar_excecoes_nao_tratadas() -> None:
@@ -162,6 +167,23 @@ def registrar_excecoes_nao_tratadas() -> None:
     threading.excepthook = lambda args: registrar(
         args.exc_type, args.exc_value, args.exc_traceback
     )
+    # Erros que não sobem para ninguém (num __del__, na coleta de lixo): o
+    # Python os entrega a este gancho, que por padrão também só usa o stderr.
+    sys.unraisablehook = lambda u: logging.critical(
+        "Erro não tratado (não levantável): %s",
+        u.err_msg or "exceção ignorada",
+        exc_info=(u.exc_type, u.exc_value, u.exc_traceback),
+    )
+
+
+def registrar_quedas_nativas(arquivo) -> None:  # type: ignore
+    """Grava no ``arquivo`` a pilha de uma queda nativa (C, driver, GTK).
+
+    Uma queda dessas mata o processo sem passar pelo Python, e o log ficava
+    parado na última linha normal. O ``faulthandler`` escreve direto no
+    descritor do arquivo, por isso precisa do arquivo que continua aberto.
+    """
+    faulthandler.enable(file=arquivo, all_threads=True)
 
 
 # Erro, crítico, aviso e mensagem; depuração e informação o GLib já descarta
