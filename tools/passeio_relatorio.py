@@ -5,6 +5,7 @@ formato de ``passos.jsonl`` (ver ``tools/passeio_app.py``).
 """
 
 import logging
+import re
 from typing import Any
 
 # Falha de internet não é bug do app: Steam fora do ar, jogo que o
@@ -70,17 +71,52 @@ def _rotulo(passo: dict[str, Any]) -> str:
     return f"{passo['passo']} · {passo['jogo_nome']}" if passo["jogo_nome"] else passo["passo"]
 
 
+# O GLib grava cada aviso com um prefixo de processo, um horário e endereços
+# de memória em hexa — tudo isso muda a cada execução (e a cada aviso) sem
+# mudar o aviso em si. Sem normalizar, 329 "grupos" únicos eram na verdade uns
+# 4 avisos repetidos.
+_RE_PREFIXO_PROCESSO = re.compile(r"^\([^()]*:\d+\):\s*")
+_RE_HORARIO = re.compile(r"\b\d{2}:\d{2}:\d{2}\.\d+:\s*")
+_RE_HEX = re.compile(r"\b[0-9a-fA-F]{8,16}\b")
+_RE_NUMERO = re.compile(r"\d+")
+
+
+def _chave_normalizada(mensagem: str) -> str:
+    sem_prefixo = _RE_PREFIXO_PROCESSO.sub("", mensagem)
+    sem_horario = _RE_HORARIO.sub("", sem_prefixo)
+    sem_hex = _RE_HEX.sub("<end>", sem_horario)
+    return _RE_NUMERO.sub("<n>", sem_hex)
+
+
 def agrupar(passos: list[dict[str, Any]], de_rede: bool) -> list[tuple[str, int, str]]:
-    """Avisos (abaixo de ERROR, fora da rede) ou avisos de rede (qualquer nível)."""
+    """Avisos (abaixo de ERROR, fora da rede) ou avisos de rede (qualquer nível).
+
+    Agrupa por uma chave normalizada (sem pid, horário, endereços e números);
+    a mensagem de exemplo mostrada é a primeira mensagem crua do grupo.
+    """
     grupos: dict[str, list[Any]] = {}
     for passo in passos:
         for r in passo["registros"]:
             rede = e_de_rede(r)
             if rede != de_rede or (not rede and r["nivel"] >= logging.ERROR):
                 continue
-            grupo = grupos.setdefault(r["mensagem"], [0, _rotulo(passo)])
+            chave = _chave_normalizada(r["mensagem"])
+            grupo = grupos.setdefault(chave, [0, _rotulo(passo), r["mensagem"]])
             grupo[0] += 1
-    return [(mensagem, n, primeiro) for mensagem, (n, primeiro) in grupos.items()]
+    return [(exemplo, n, primeiro) for n, primeiro, exemplo in grupos.values()]
+
+
+def _agrupar_registros(registros: list[dict[str, Any]]) -> list[tuple[dict[str, Any], int]]:
+    """Mesma normalização de `agrupar`, mas para a lista de registros de uma falha."""
+    grupos: dict[tuple[int, str], list[Any]] = {}
+    ordem: list[tuple[int, str]] = []
+    for r in registros:
+        chave = (r["nivel"], _chave_normalizada(r["mensagem"]))
+        if chave not in grupos:
+            grupos[chave] = [r, 0]
+            ordem.append(chave)
+        grupos[chave][1] += 1
+    return [(r, n) for r, n in (grupos[c] for c in ordem)]
 
 
 def _duracao(segundos: float) -> str:
@@ -92,11 +128,22 @@ def codigo_de_saida(passos: list[dict[str, Any]]) -> int:
     return int(any(classificar(p) in ("falha", "travou") for p in passos))
 
 
-def montar_relatorio(passos: list[dict[str, Any]], duracao: float, despejo: str) -> str:
+def montar_relatorio(
+    passos: list[dict[str, Any]], duracao: float, despejo: str, janela: str = ""
+) -> str:
     estados = [classificar(p) for p in passos]
     linhas = [
         "# Relatório do passeio",
         "",
+    ]
+    if janela:
+        linhas.append(f"- Janela: {janela} px")
+        altura = janela.split("x")[-1]
+        if altura.isdigit() and int(altura) < 360:
+            linhas.append(
+                f"- **Aviso**: janela com {altura} px de altura, abaixo dos 360 px esperados."
+            )
+    linhas += [
         f"- Passos executados: {len(passos)}",
         f"- Falhas: {estados.count('falha')}",
         f"- Travamentos: {estados.count('travou')}",
@@ -119,10 +166,12 @@ def montar_relatorio(passos: list[dict[str, Any]], duracao: float, despejo: str)
         linhas.append("")
         if passo["rastro"]:
             linhas += ["```", passo["rastro"].rstrip(), "```", ""]
-        for r in passo["registros"]:
-            if r["nivel"] < logging.WARNING or e_de_rede(r):
-                continue
-            linhas.append(f"- `{logging.getLevelName(r['nivel'])}` {r['mensagem']}")
+        candidatos = [
+            r for r in passo["registros"] if r["nivel"] >= logging.WARNING and not e_de_rede(r)
+        ]
+        for r, n in _agrupar_registros(candidatos):
+            prefixo = f"{n}× " if n > 1 else ""
+            linhas.append(f"- {prefixo}`{logging.getLevelName(r['nivel'])}` {r['mensagem']}")
             if r["rastro"]:
                 linhas += ["", "```", r["rastro"].rstrip(), "```", ""]
         linhas.append("")
