@@ -305,8 +305,12 @@ def apply_size(window: Gtk.Window, geometry: Geometry) -> None:
     and :func:`apply_placement` corrects it exactly, before anything is visible.
     Doing it here as well keeps the window from being laid out at a default size
     it is never going to have.
+
+    Só o tamanho, e não `usable`: na primeira abertura não há posição salva, e
+    exigir uma deixava a janela no mínimo do GTK (508x104) em vez do padrão do
+    schema.
     """
-    if geometry.usable:
+    if geometry.width > 0 and geometry.height > 0:
         window.set_default_size(geometry.width, geometry.height)
 
 

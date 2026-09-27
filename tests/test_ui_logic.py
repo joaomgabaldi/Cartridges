@@ -414,6 +414,18 @@ def test_apply_size_sets_the_requested_size(real_window):
     assert real_window.get_default_size() == (900, 600)
 
 
+def test_apply_size_needs_no_stored_position(real_window):
+    """Na primeira abertura não há posição salva: o tamanho vale mesmo assim.
+
+    Sem isto a janela de uma instalação nova abria no mínimo do GTK (508x104).
+    """
+    unset = window_geometry.UNSET
+    window_geometry.apply_size(
+        real_window, window_geometry.Geometry(unset, unset, 1170, 795, False)
+    )
+    assert real_window.get_default_size() == (1170, 795)
+
+
 # ---------------------------------------------------------------------------
 # The genre and gamepad-support rows on the edit dialog
 # ---------------------------------------------------------------------------

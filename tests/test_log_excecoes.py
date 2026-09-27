@@ -57,3 +57,19 @@ def test_erro_numa_thread_vai_para_o_log(monkeypatch, caplog):
 
     registro = next(r for r in caplog.records if r.exc_info)
     assert registro.exc_info[1].args == ("erro na thread",)
+
+
+def test_aviso_do_gtk_com_acento_chega_inteiro_ao_log(caplog):
+    # O GLib devolvia o texto formatado na codificação do Windows, não em
+    # UTF-8: qualquer acento derrubava o registro e a mensagem se perdia.
+    import ctypes  # pylint: disable=import-outside-toplevel
+
+    setup.registrar_avisos_do_glib()
+    glib = ctypes.CDLL("libglib-2.0-0.dll")
+    glib.g_log_structured(
+        b"Gtk", 1 << 4, b"MESSAGE", b"%s", "Capa de Plaž — ação".encode("utf-8"), None
+    )
+
+    registro = next(r for r in caplog.records if "Capa de" in r.getMessage())
+    assert registro.levelno == logging.WARNING
+    assert registro.getMessage() == "Gtk-WARNING: Capa de Plaž — ação"
