@@ -17,6 +17,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import ctypes
 import logging
 import logging.config as logging_dot_config
 import os
@@ -166,10 +167,27 @@ def registrar_excecoes_nao_tratadas() -> None:
 # Erro, crítico, aviso e mensagem; depuração e informação o GLib já descarta
 # por padrão, e continuam descartadas.
 _NIVEIS_DO_GLIB = (
-    (GLib.LogLevelFlags.LEVEL_ERROR | GLib.LogLevelFlags.LEVEL_CRITICAL, logging.ERROR),
-    (GLib.LogLevelFlags.LEVEL_WARNING, logging.WARNING),
-    (GLib.LogLevelFlags.LEVEL_MESSAGE, logging.INFO),
+    (GLib.LogLevelFlags.LEVEL_ERROR, "ERROR", logging.ERROR),
+    (GLib.LogLevelFlags.LEVEL_CRITICAL, "CRITICAL", logging.ERROR),
+    (GLib.LogLevelFlags.LEVEL_WARNING, "WARNING", logging.WARNING),
+    (GLib.LogLevelFlags.LEVEL_MESSAGE, "MESSAGE", logging.INFO),
 )
+
+
+def _campo(campos, chave: str) -> str:  # type: ignore
+    """O valor de um campo do GLib, lido como UTF-8.
+
+    Não `GLib.log_writer_format_fields`: ele devolve o texto na codificação do
+    Windows, e qualquer acento na mensagem (UTF-8 no GTK) quebrava a leitura.
+    """
+    for campo in campos:
+        if campo.key == chave and campo.value:
+            if campo.length < 0:
+                bruto = ctypes.string_at(campo.value)
+            else:
+                bruto = ctypes.string_at(campo.value, campo.length)
+            return bruto.decode("utf-8", errors="replace")
+    return ""
 _glib_registrado = False
 
 
@@ -187,10 +205,11 @@ def registrar_avisos_do_glib() -> None:
     _glib_registrado = True
 
     def registrar(nivel, campos, _n, _dados):  # type: ignore
-        for bandeiras, nivel_do_log in _NIVEIS_DO_GLIB:
-            if nivel & bandeiras:
-                texto = GLib.log_writer_format_fields(nivel, campos, False)
-                logging.log(nivel_do_log, "%s", texto.strip())
+        for bandeira, nome, nivel_do_log in _NIVEIS_DO_GLIB:
+            if nivel & bandeira:
+                dominio = _campo(campos, "GLIB_DOMAIN") or "GLib"
+                mensagem = _campo(campos, "MESSAGE")
+                logging.log(nivel_do_log, "%s-%s: %s", dominio, nome, mensagem)
                 break
         return GLib.LogWriterOutput.HANDLED
 
