@@ -65,16 +65,23 @@ def ler_passos(saida: Path, codigo_do_filho: int) -> list[dict]:
         else []
     )
     atual = saida / "atual.txt"
-    # O filho morreu no meio de um passo: travamento (faulthandler) ou queda.
-    if codigo_do_filho != 0 and atual.exists():
+    # atual.txt sobrevive tanto a um travamento quanto a um fechamento manual
+    # da janela (aí o app.run devolve 0 e o passo em andamento, sem isto,
+    # desaparecia do relatório em silêncio): sintetiza o passo interrompido
+    # sempre que ele existir, não só quando o código de saída é diferente de 0.
+    if atual.exists():
         nome, jogo_id, jogo_nome = (atual.read_text(encoding="utf-8").split("\t") + ["", ""])[:3]
+        if codigo_do_filho != 0:
+            estado, motivo = "travou", f"o app parou de responder ou fechou (código {codigo_do_filho})"
+        else:
+            estado, motivo = "falha", "o passeio foi interrompido (janela fechada?)"
         passos.append(
             {
                 "passo": nome,
                 "jogo_id": jogo_id or None,
                 "jogo_nome": jogo_nome or None,
-                "estado": "travou",
-                "motivo": f"o app parou de responder ou fechou (código {codigo_do_filho})",
+                "estado": estado,
+                "motivo": motivo,
                 "rastro": None,
                 "duracao": 0,
                 "registros": [],
@@ -84,7 +91,7 @@ def ler_passos(saida: Path, codigo_do_filho: int) -> list[dict]:
         # Terminou o roteiro, mas saiu com erro: a falha está no encerramento.
         passos.append(
             {
-                "passo": "Encerrar o app",
+                "passo": "O app saiu com erro fora de um passo",
                 "jogo_id": None,
                 "jogo_nome": None,
                 "estado": "falha",
@@ -118,11 +125,15 @@ def main() -> int:
 
     passos = ler_passos(saida, filho.returncode)
     despejo = saida / "despejo.txt"
+    janela = saida / "janela.txt"
     log = saida / "biblioteca" / "logs" / "cartridges.log"
     if log.exists():
         shutil.copy(log, saida / "cartridges.log")
     relatorio = montar_relatorio(
-        passos, duracao, despejo.read_text(encoding="utf-8") if despejo.exists() else ""
+        passos,
+        duracao,
+        despejo.read_text(encoding="utf-8") if despejo.exists() else "",
+        janela.read_text(encoding="utf-8").strip() if janela.exists() else "",
     )
     (saida / "relatorio.md").write_text(relatorio, encoding="utf-8")
     print(relatorio.split("## Falhas", 1)[0])

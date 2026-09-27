@@ -19,6 +19,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
 from pathlib import Path
@@ -84,6 +85,16 @@ def preparar(saida: Path) -> dict[str, list]:
     # As chaves vêm das preferências reais, só lidas. Todo o resto das
     # preferências fica no padrão, em memória: o registro nunca é gravado.
     chaves = {k: shared.schema.get_string(k) for k in ("sgdb-key", "wallhaven-key")}
+    # Geometria real da janela, só lida: sem isto o schema em memória começa
+    # no padrão pequeno e os diálogos do libadwaita rodam em modo "bottom
+    # sheet" (a janela do passeio saía com ~104 px de altura). x/y não: a
+    # janela pode abrir numa posição inválida se o monitor mudou.
+    geometria = {
+        "width": shared.state_schema.get_int("width"),
+        "height": shared.state_schema.get_int("height"),
+        "is-maximized": shared.state_schema.get_boolean("is-maximized"),
+    }
+    tokens_steam = shared.state_schema.get_string("steam-limiter-tokens-history")
     fonte = Gio.SettingsSchemaSource.get_default()
     memoria = Gio.memory_settings_backend_new()
     shared.schema = Gio.Settings.new_full(fonte.lookup(shared.APP_ID, True), memoria, None)
@@ -92,6 +103,10 @@ def preparar(saida: Path) -> dict[str, list]:
     )
     for chave, valor in chaves.items():
         shared.schema.set_string(chave, valor)
+    shared.state_schema.set_int("width", geometria["width"])
+    shared.state_schema.set_int("height", geometria["height"])
+    shared.state_schema.set_boolean("is-maximized", geometria["is-maximized"])
+    shared.state_schema.set_string("steam-limiter-tokens-history", tokens_steam)
 
     shared.data_dir = biblioteca.parent
     shared.app_dir = biblioteca
@@ -138,19 +153,43 @@ class Coletor(logging.Handler):
         self.registros: list[dict[str, Any]] = []
 
     def emit(self, record: logging.LogRecord) -> None:
-        rastro = (
-            "".join(traceback.format_exception(*record.exc_info))
-            if record.exc_info and record.exc_info[0]
-            else None
-        )
-        self.registros.append(
-            {
-                "nivel": record.levelno,
-                "logger": record.name,
-                "mensagem": record.getMessage(),
-                "rastro": rastro,
-            }
-        )
+        # `record.getMessage()` pode lançar (ex.: `%s` sem argumento, num log
+        # malformado do próprio app) — e essa exceção cairia dentro do código
+        # do app, não do passeio. Um substituto vale mais que travar o app.
+        try:
+            rastro = (
+                "".join(traceback.format_exception(*record.exc_info))
+                if record.exc_info and record.exc_info[0]
+                else None
+            )
+            self.registros.append(
+                {
+                    "nivel": record.levelno,
+                    "logger": record.name,
+                    "mensagem": record.getMessage(),
+                    "rastro": rastro,
+                }
+            )
+        except Exception:  # pylint: disable=broad-exception-caught
+            self.registros.append(
+                {
+                    "nivel": 40,
+                    "logger": getattr(record, "name", ""),
+                    "mensagem": f"registro ilegível: {record.msg!r}",
+                    "rastro": None,
+                }
+            )
+
+
+def _pilhas_das_threads() -> str:
+    """As pilhas de todas as threads, agora. `faulthandler` exige um arquivo
+    com descritor real; um arquivo à parte, fechado antes da leitura, evita
+    qualquer questão de buffer."""
+    with tempfile.TemporaryDirectory() as pasta:
+        caminho = Path(pasta) / "pilhas.txt"
+        with open(caminho, "w", encoding="utf-8") as arquivo:
+            faulthandler.dump_traceback(file=arquivo, all_threads=True)
+        return caminho.read_text(encoding="utf-8")
 
 
 Passo = tuple[str, Any, Callable[[], Iterator[Esperar]]]
@@ -173,6 +212,7 @@ class Motor:
         self.espera: Optional[Esperar] = None
         self.atual: Optional[Passo] = None
         self.inicio = self.inicio_espera = 0.0
+        self.erro = False
         self.despejo = open(saida / "despejo.txt", "w", encoding="utf-8")  # pylint: disable=consider-using-with
         self.jsonl = open(saida / "passos.jsonl", "a", encoding="utf-8")  # pylint: disable=consider-using-with
 
@@ -190,7 +230,10 @@ class Motor:
             return self._tick_seguro()
         except Exception:  # pylint: disable=broad-exception-caught
             logging.exception("passeio: erro no motor")
-            self._fim()
+            self.erro = True
+            # Mantém atual.txt: sem isto o passo em andamento desaparecia do
+            # relatório e o passeio saía com código 0, escondendo o erro.
+            self._fim(manter_atual=True)
             return False
 
     def _tick_seguro(self) -> bool:
@@ -242,7 +285,12 @@ class Motor:
         except Pulado as pulo:
             self._concluir("pulado", str(pulo))
         except Exception as falha:  # pylint: disable=broad-exception-caught
-            self._concluir("falha", str(falha) or type(falha).__name__, traceback.format_exc())
+            rastro = traceback.format_exc()
+            if isinstance(falha, TimeoutError):
+                # "Tempo esgotado" sem pilha não diz onde o app travou: soma
+                # as pilhas de todas as threads no momento do estouro.
+                rastro = rastro.rstrip() + "\n\n--- pilhas de todas as threads ---\n" + _pilhas_das_threads()
+            self._concluir("falha", str(falha) or type(falha).__name__, rastro)
 
     def _concluir(self, estado: str, motivo: Optional[str] = None, rastro: Optional[str] = None) -> None:
         nome, jogo, _ = self.atual  # type: ignore[misc]
@@ -256,12 +304,18 @@ class Motor:
             "duracao": round(time.monotonic() - self.inicio, 2),
             "registros": list(self.coletor.registros),
         }
-        self.jsonl.write(json.dumps(linha, ensure_ascii=False) + "\n")
+        # json.dumps com ensure_ascii=False pode lançar num par substituto
+        # (surrogate) isolado, que um nome de jogo malformado pode conter — o
+        # ascii default escapa em vez de lançar.
+        self.jsonl.write(json.dumps(linha) + "\n")
         self.jsonl.flush()
         # Só depois de a linha estar gravada: tudo que for logado antes do
         # primeiro passo (setup_logging, load_games_from_disk, managers) cai
         # aqui, em "Carregar a biblioteca", em vez de ser descartado.
         self.coletor.registros = []
+        # Apagado assim que o passo conclui: se o app cair entre dois passos,
+        # atual.txt não existir mais evita culpar o passo anterior.
+        (self.saida / "atual.txt").unlink(missing_ok=True)
         print(f"[{estado}] {nome}" + (f" · {linha['jogo_nome']}" if jogo else ""), flush=True)
         self.atual = self.gerador = self.espera = None
         if estado == "falha":
@@ -270,9 +324,12 @@ class Motor:
             except Exception:  # pylint: disable=broad-exception-caught
                 logging.exception("passeio: não foi possível voltar à biblioteca")
 
-    def _fim(self) -> None:
-        faulthandler.cancel_dump_traceback_later()
-        (self.saida / "atual.txt").unlink(missing_ok=True)
+    def _fim(self, manter_atual: bool = False) -> None:
+        # Rearma em vez de cancelar: o encerramento do GTK também pode travar,
+        # e sem o watchdog o processo ficaria pendurado sem ninguém avisando.
+        faulthandler.dump_traceback_later(LIMITE_TRAVA, exit=True, file=self.despejo)
+        if not manter_atual:
+            (self.saida / "atual.txt").unlink(missing_ok=True)
         self.jsonl.close()
         self.app.quit()
 
@@ -370,6 +427,11 @@ def salvar_edicao() -> Iterator[Esperar]:
 
 
 def carregar_biblioteca() -> Iterator[Esperar]:
+    win = shared().win
+    # A geometria em memória copia a real (ver `preparar`), mas a janela pode
+    # ter sido minimizada da última vez: sem isto ela nunca aparece na tela.
+    win.unminimize()
+    win.present()
     esperado = len(list(shared().games_dir.glob("*.json")))
     try:
         yield Esperar(
@@ -382,6 +444,9 @@ def carregar_biblioteca() -> Iterator[Esperar]:
         # Mesmo se nem todos carregarem (um arquivo inválido é um achado), o
         # passeio segue com os que carregaram.
         assert MOTOR is not None
+        (MOTOR.saida / "janela.txt").write_text(
+            f"{win.get_width()}x{win.get_height()}", encoding="utf-8"
+        )
         MOTOR.fila.extend(montar_roteiro(list(shared().store or [])))
 
 
@@ -654,6 +719,10 @@ def montar_roteiro(jogos: list[Any]) -> list[Passo]:
 
 def main() -> int:
     global MOTOR  # pylint: disable=global-statement
+    # cp1252 no stdout (console padrão do Windows) lança em qualquer nome de
+    # jogo fora dessa página de código; troca por "?" em vez de derrubar o
+    # processo no meio do roteiro.
+    sys.stdout.reconfigure(errors="replace")
     saida = Path(sys.argv[1]).resolve()
     chamadas = preparar(saida)
 
@@ -680,13 +749,23 @@ def main() -> int:
     setup_logging_original = modulo_main.setup_logging
 
     def setup_logging_com_coletor() -> None:
-        setup_logging_original()
-        logging.getLogger().addHandler(MOTOR.coletor)
+        # O coletor entra mesmo se o `setup_logging` real lançar: sem ele
+        # pendurado, um passeio inteiro roda sem capturar aviso nenhum.
+        try:
+            setup_logging_original()
+        finally:
+            logging.getLogger().addHandler(MOTOR.coletor)
 
     modulo_main.setup_logging = setup_logging_com_coletor
 
     app.connect_after("activate", lambda *_: MOTOR.iniciar())
+    (saida / "atual.txt").write_text("Abrir o app", encoding="utf-8")
+    faulthandler.dump_traceback_later(LIMITE_TRAVA, exit=True, file=MOTOR.despejo)
     codigo = app.run([sys.argv[0]])
+    if MOTOR.erro:
+        # O motor travou no próprio laço (ver `_tick`): o app pode ter saído
+        # com 0 mesmo assim, mas o passeio não terminou o roteiro.
+        codigo = 1
     print(
         f"Chamadas neutralizadas: iniciar jogo {len(chamadas['iniciar'])}, "
         f"luzes {len(chamadas['luzes'])}, papel de parede {len(chamadas['papel'])}",
