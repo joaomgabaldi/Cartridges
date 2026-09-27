@@ -24,6 +24,8 @@ import platform
 import sys
 import threading
 
+from gi.repository import GLib
+
 from cartridges import shared
 
 
@@ -140,6 +142,7 @@ def setup_logging() -> None:
     }
     logging_dot_config.dictConfig(config)
     registrar_excecoes_nao_tratadas()
+    registrar_avisos_do_glib()
 
 
 def registrar_excecoes_nao_tratadas() -> None:
@@ -158,6 +161,40 @@ def registrar_excecoes_nao_tratadas() -> None:
     threading.excepthook = lambda args: registrar(
         args.exc_type, args.exc_value, args.exc_traceback
     )
+
+
+# Erro, crítico, aviso e mensagem; depuração e informação o GLib já descarta
+# por padrão, e continuam descartadas.
+_NIVEIS_DO_GLIB = (
+    (GLib.LogLevelFlags.LEVEL_ERROR | GLib.LogLevelFlags.LEVEL_CRITICAL, logging.ERROR),
+    (GLib.LogLevelFlags.LEVEL_WARNING, logging.WARNING),
+    (GLib.LogLevelFlags.LEVEL_MESSAGE, logging.INFO),
+)
+_glib_registrado = False
+
+
+def registrar_avisos_do_glib() -> None:
+    """Grava no log os avisos do GTK, do GLib e do Adwaita.
+
+    Pelo mesmo motivo de `registrar_excecoes_nao_tratadas`: o padrão é o
+    stderr, e o pythonw não tem console. Um `Gtk-CRITICAL` é o rastro típico de
+    uma tela que parou de responder. Só age na primeira chamada: o GLib aborta
+    o processo se o destino dos avisos for trocado duas vezes.
+    """
+    global _glib_registrado  # pylint: disable=global-statement
+    if _glib_registrado:
+        return
+    _glib_registrado = True
+
+    def registrar(nivel, campos, _n, _dados):  # type: ignore
+        for bandeiras, nivel_do_log in _NIVEIS_DO_GLIB:
+            if nivel & bandeiras:
+                texto = GLib.log_writer_format_fields(nivel, campos, False)
+                logging.log(nivel_do_log, "%s", texto.strip())
+                break
+        return GLib.LogWriterOutput.HANDLED
+
+    GLib.log_set_writer_func(registrar, None)
 
 
 def log_system_info() -> None:

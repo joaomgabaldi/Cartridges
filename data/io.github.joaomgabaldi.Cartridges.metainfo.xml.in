@@ -32,6 +32,7 @@
       <description translate="no">
         <ul>
           <li>Erros inesperados passam a ser registrados no log do aplicativo, o que permite identificar a causa de falhas relatadas</li>
+          <li>Os avisos internos da interface também passam a ser registrados no log do aplicativo</li>
         </ul>
       </description>
     </release>
