@@ -857,6 +857,54 @@ def test_releasing_a_picture_the_cover_never_held_is_not_an_error(cover_file):
     cover.release_details_picture(Gtk.Picture())  # must not raise
 
 
+def test_a_cover_decoded_ahead_is_not_decoded_again(cover_file, monkeypatch):
+    """A abertura decodifica as capas em threads; a grade só usa o resultado."""
+    from gi.repository import GdkPixbuf
+    from cartridges import shared
+    from cartridges.game_cover import GameCover
+
+    def decodificar_de_novo(*_args):
+        raise AssertionError("a capa foi decodificada de novo")
+
+    with GameCover.pre_decodificadas([cover_file, None]):
+        monkeypatch.setattr(GdkPixbuf.Pixbuf, "new_from_file_at_scale", decodificar_de_novo)
+        texture = GameCover(set(), cover_file).get_texture()
+
+    assert (texture.get_width(), texture.get_height()) == shared.display_size
+
+
+def test_the_library_load_decodes_the_covers_ahead_and_keeps_none(
+    store, write_record, app_dirs, monkeypatch
+):
+    """Todas as capas vão juntas para as threads antes de os jogos entrarem na
+    grade, e a que a grade não usou não fica presa na memória depois."""
+    import cartridges.main as main_module
+    from PIL import Image
+    from cartridges.game_cover import GameCover
+
+    write_record("imported_1", executable="x.exe", source="imported")
+    write_record("imported_2", executable="x.exe", source="imported")
+    capa = app_dirs.covers / "imported_1.tiff"
+    capa.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (600, 900), "red").save(capa, compression=None)
+
+    pedidas = []
+    real = GameCover.pre_decodificadas
+
+    def espiar(caminhos):
+        caminhos = list(caminhos)
+        pedidas.append(caminhos)
+        return real(caminhos)
+
+    monkeypatch.setattr(GameCover, "pre_decodificadas", espiar)
+
+    main_module.CartridgesApplication.load_games_from_disk(None)
+
+    assert len(pedidas) == 1 and set(pedidas[0]) == {capa, None}
+    assert GameCover._pre_decodificadas == {}
+    assert store.get("imported_1") is not None and store.get("imported_2") is not None
+
+
 def test_the_grid_keeps_its_own_texture_while_details_is_open(cover_file):
     """Two sizes on screen at once: the same cover in the grid and the page."""
     from cartridges import shared
