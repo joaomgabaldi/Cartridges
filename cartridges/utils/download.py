@@ -26,6 +26,7 @@ lies about (or omits) the Content-Length header. The request timeout does not
 bound size: it limits silence between bytes, not the total.
 """
 
+import threading
 from typing import Any
 
 import requests
@@ -38,6 +39,8 @@ MAX_IMAGE_BYTES = 25 * 1024 * 1024
 # largest real one — a HowLongToBeat /game/<id> page, ~1–2 MiB.
 MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 
+_local = threading.local()
+
 
 class ResponseTooLargeError(requests.RequestException):
     """Raised when a body exceeds the allowed size.
@@ -46,6 +49,27 @@ class ResponseTooLargeError(requests.RequestException):
     (which already catches request failures) treats an oversized body the same
     way as any other failed request.
     """
+
+
+def _get(url: str, **kwargs: Any) -> requests.Response:
+    """``requests.get`` through this thread's own session, keeping connections.
+
+    ``requests.get`` opens a new connection (DNS, TCP, TLS) on every call. A
+    picker downloads up to 30 previews in a row, and a fresh connection is what
+    pays the 1-7 s stalls of a lost packet with no RTT estimate yet (measured on
+    28/09/2026). One session per thread, not one global: ``requests.Session``
+    is not documented as thread-safe, and the wallpaper picker downloads with
+    six workers at once.
+    """
+    session = getattr(_local, "session", None)
+    if session is None:
+        session = _local.session = requests.Session()
+    try:
+        return session.get(url, **kwargs)
+    finally:
+        # `requests.get` never carried a cookie from one call to the next, and
+        # a Steam cookie (country, session) must not change a later answer.
+        session.cookies.clear()
 
 
 def read_capped(response: requests.Response, max_bytes: int) -> bytes:
@@ -63,13 +87,13 @@ def read_capped(response: requests.Response, max_bytes: int) -> bytes:
 def get_capped(
     url: str, max_bytes: int = MAX_RESPONSE_BYTES, **kwargs: Any
 ) -> requests.Response:
-    """``requests.get`` whose body is read under a cap before it is returned.
+    """A GET whose body is read under a cap before it is returned.
 
     A drop-in for call sites that go on to use ``.json()`` / ``.status_code``:
     the body is already read, so ``.json()`` parses what was read and never
     reads more. Raises :class:`ResponseTooLargeError` past ``max_bytes``.
     """
-    response = requests.get(url, stream=True, **kwargs)
+    response = _get(url, stream=True, **kwargs)
     try:
         body = read_capped(response, max_bytes)
     except BaseException:
@@ -90,7 +114,7 @@ def download_bytes(
     :raises requests.HTTPError: on a 4xx/5xx response
     :raises ResponseTooLargeError: if the payload exceeds ``max_bytes``
     """
-    with requests.get(url, timeout=timeout, stream=True) as response:
+    with _get(url, timeout=timeout, stream=True) as response:
         response.raise_for_status()
 
         # Trust a declared length when it's clearly too big (fail fast), but

@@ -17,6 +17,7 @@ import json
 import pytest
 import requests
 
+from cartridges.utils import download
 from cartridges.utils import steamgriddb as sgdb
 from cartridges.utils.steamgriddb import SgdbAuthError, SgdbGameNotFound
 
@@ -50,7 +51,7 @@ def responses(monkeypatch):
     def fake_get(*_args, **_kwargs):
         return queue.pop(0)
 
-    monkeypatch.setattr(sgdb.requests, "get", fake_get)
+    monkeypatch.setattr(download, "_get", fake_get)
     return queue
 
 
