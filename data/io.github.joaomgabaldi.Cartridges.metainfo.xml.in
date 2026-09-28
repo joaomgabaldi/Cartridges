@@ -43,6 +43,7 @@
           <li>Quando o atalho escolhido já tem histórico neste PC, é possível manter o do backup, manter o deste PC ou mesclar os dois</li>
           <li>Ao fim da restauração, quando todos os jogos têm atalho, o aviso "Restauração concluída" é exibido</li>
           <li>Backups feitos em versões anteriores não são mais aceitos</li>
+          <li>Arrastar ou clicar duas vezes na barra de título de uma janela interna, como Sobre ou Preferências, não move nem maximiza mais a janela do aplicativo; somente a barra de título principal tem esse comportamento</li>
         </ul>
       </description>
     </release>
