@@ -744,7 +744,6 @@ class DetailsDialog(Adw.Dialog):
             if checker is not None:
                 checker.check_async()
 
-        # TODO: this is fucked up (less than before)
         # Get a cover from SGDB if none is present
         if not self.game_cover.get_texture():
             self.game.set_loading(1)

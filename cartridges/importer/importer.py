@@ -58,7 +58,6 @@ class Importer(ErrorProducer):
 
         shared.import_time = int(time())
 
-        # TODO: make this stateful
         shared.store.new_game_ids = set()
         shared.store.duplicate_game_ids = set()
 
