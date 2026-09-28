@@ -275,7 +275,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
         # Toda caixa de diálogo do app passa por esta propriedade, inclusive as
         # de alerta criadas na hora, então é daqui que dá para desarmar de uma
-        # vez o arrasto da janela pelo fundo escurecido.
+        # vez o arrasto e a maximização da janela pelo fundo escurecido e pelas
+        # barras das próprias caixas.
         self.connect("notify::visible-dialog", self.block_dialog_backdrop_drag)
 
         style_manager = Adw.StyleManager.get_default()

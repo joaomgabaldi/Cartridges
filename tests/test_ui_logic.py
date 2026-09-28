@@ -24,6 +24,7 @@ from gi.repository import GLib, Gtk
 from cartridges import gamepad as gp
 from cartridges.logging.session_file_handler import SessionFileHandler
 from cartridges.utils.animated_flow_box import AnimatedFlowBox
+from cartridges.utils.dialog_backdrop import drag_would_move_window
 from cartridges.utils import window_geometry
 from cartridges.window import CartridgesWindow
 
@@ -1408,24 +1409,25 @@ def test_an_unchanged_allocation_reuses_the_cached_layout():
 # ---------------------------------------------------------------------------
 
 
-def capture_clicks(widget):
-    """The capture-phase click gestures installed on `widget`."""
+def capture_gestures(widget, kind):
+    """The capture-phase gestures of type `kind` installed on `widget`."""
     controllers = widget.observe_controllers()
     return [
         controller
         for i in range(controllers.get_n_items())
-        if isinstance(controller := controllers.get_item(i), Gtk.GestureClick)
+        if isinstance(controller := controllers.get_item(i), kind)
         and controller.get_propagation_phase() == Gtk.PropagationPhase.CAPTURE
     ]
 
 
-def backdrop_of(dialog):
-    """libadwaita's dimming layer: the one window handle holding nothing."""
+def window_handle_of(dialog, *, empty):
+    """The first window handle in `dialog` with (or without) a child."""
     pending = [dialog]
     while pending:
         widget = pending.pop()
-        if isinstance(widget, Gtk.WindowHandle) and widget.get_child() is None:
-            return widget
+        if isinstance(widget, Gtk.WindowHandle):
+            if (widget.get_child() is None) == empty:
+                return widget
         child = widget.get_first_child()
         while child is not None:
             pending.append(child)
@@ -1436,14 +1438,14 @@ def backdrop_of(dialog):
 def test_a_presented_dialog_gets_the_backdrop_guard(real_window, details_dialog):
     """Every dialog goes through `visible-dialog`, so one handler covers them all.
 
-    libadwaita builds the dimmed area around a floating dialog out of a
-    GtkWindowHandle, which drags the whole window — most of the screen behaving
-    like a title bar for as long as a dialog is open.
+    libadwaita builds the dimmed area around a floating dialog, and the dialog's
+    own title bar, out of a GtkWindowHandle, which drags the whole window.
     """
     details_dialog.present(real_window)
 
     assert real_window.get_visible_dialog() is details_dialog
-    assert len(capture_clicks(details_dialog)) == 1
+    assert len(capture_gestures(details_dialog, Gtk.GestureClick)) == 1
+    assert len(capture_gestures(details_dialog, Gtk.GestureDrag)) == 1
 
 
 def test_the_guard_is_installed_once(real_window, details_dialog):
@@ -1452,21 +1454,61 @@ def test_the_guard_is_installed_once(real_window, details_dialog):
     real_window.block_dialog_backdrop_drag()
     real_window.block_dialog_backdrop_drag()
 
-    assert len(capture_clicks(details_dialog)) == 1
+    assert len(capture_gestures(details_dialog, Gtk.GestureClick)) == 1
+    assert len(capture_gestures(details_dialog, Gtk.GestureDrag)) == 1
 
 
 def test_the_backdrop_is_the_only_empty_window_handle(real_window, details_dialog):
     """What the guard recognises the backdrop by, pinned.
 
-    It claims a press when the widget under it is a window handle with no child.
-    Every other handle in a dialog wraps a header bar's box, so this is what
-    keeps a press on the dialog's own title bar moving the window, as it should.
-    Should libadwaita build the dimming out of something else, this fails here
-    rather than silently going back to a window that follows any drag.
+    It claims any press when the widget under it is a window handle with no
+    child. Every other handle in a dialog wraps a bar holding buttons, which a
+    claimed press would silence. Should libadwaita build the dimming out of
+    something else, this fails here rather than silently going back to a window
+    that follows any drag.
     """
     details_dialog.present(real_window)
 
-    assert backdrop_of(details_dialog) is not None
+    assert window_handle_of(details_dialog, empty=True) is not None
+
+
+def test_a_drag_on_the_dialog_title_bar_does_not_move_the_window(
+    real_window, details_dialog
+):
+    """Claimed at the very distance the bar's own handle would start moving it."""
+    details_dialog.present(real_window)
+    title = window_handle_of(details_dialog, empty=False).get_child()
+    threshold = details_dialog.get_settings().props.gtk_dnd_drag_threshold
+
+    assert drag_would_move_window(details_dialog, title, threshold, 0)
+    assert drag_would_move_window(details_dialog, title, 0, -threshold)
+    # Short of it the press is still a click, and a click on a bar button must land.
+    assert not drag_would_move_window(details_dialog, title, threshold - 1, 0)
+
+
+def test_a_drag_inside_the_dialog_content_is_left_alone(real_window, details_dialog):
+    details_dialog.present(real_window)
+    threshold = details_dialog.get_settings().props.gtk_dnd_drag_threshold
+
+    assert not drag_would_move_window(
+        details_dialog, details_dialog.get_child(), threshold * 10, 0
+    )
+
+
+def test_a_double_click_on_the_dialog_title_bar_does_not_maximize(
+    real_window, details_dialog
+):
+    """On Windows a title bar maximizes through `window.toggle-maximized`."""
+    details_dialog.present(real_window)
+
+    window_handle_of(details_dialog, empty=False).activate_action(
+        "window.toggle-maximized", None
+    )
+    assert not real_window.is_maximized()
+
+    # The same action from the main window's own bar still maximizes it.
+    real_window.activate_action("window.toggle-maximized", None)
+    assert real_window.is_maximized()
 
 
 # ---------------------------------------------------------------------------
