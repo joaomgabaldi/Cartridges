@@ -189,7 +189,7 @@ class FakeResponse:
 
 def _helper_returning(monkeypatch, payload, error=None) -> SteamAPIHelper:
     monkeypatch.setattr(
-        "cartridges.utils.download.requests.get",
+        "cartridges.utils.download._get",
         lambda *_a, **_k: FakeResponse(payload, error),
     )
     return SteamAPIHelper(contextlib.nullcontext())
@@ -303,7 +303,7 @@ def test_bulk_stops_between_batches_when_asked(monkeypatch) -> None:
         calls.append(kwargs["params"])
         return FakeResponse({"response": {"store_items": []}})
 
-    monkeypatch.setattr("cartridges.utils.download.requests.get", record)
+    monkeypatch.setattr("cartridges.utils.download._get", record)
     monkeypatch.setattr(steam_module, "TAG_BATCH_SIZE", 2)
     helper = SteamAPIHelper(contextlib.nullcontext())
 

@@ -40,7 +40,7 @@ def _response(body, status=200, url="https://example.invalid/"):
 
 @pytest.fixture
 def http(monkeypatch):
-    """Roteia todo ``requests.get`` para uma fila de respostas prontas."""
+    """Roteia todo GET de ``download`` para uma fila de respostas prontas."""
     calls: list = []
     queue: list = []
 
@@ -48,7 +48,7 @@ def http(monkeypatch):
         calls.append((url, kwargs))
         return queue.pop(0)
 
-    monkeypatch.setattr(download.requests, "get", fake_get)
+    monkeypatch.setattr(download, "_get", fake_get)
     return queue, calls
 
 

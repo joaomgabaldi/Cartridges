@@ -255,7 +255,7 @@ class TestConsultas:
 
 class TestBuscaPorFormato:
     def test_formato_vira_ratios_e_o_minimo_vira_atleast(self, monkeypatch) -> None:
-        from cartridges.utils import wallhaven  # noqa: PLC0415
+        from cartridges.utils import download, wallhaven  # noqa: PLC0415
 
         pedidos = []
 
@@ -273,7 +273,7 @@ class TestBuscaPorFormato:
             pedidos.append(url)
             return Resposta()
 
-        monkeypatch.setattr(wallhaven.requests, "get", get)
+        monkeypatch.setattr(download, "_get", get)
 
         wallhaven.buscar("Halo", 1920, 1920, formato="landscape")
         wallhaven.buscar("Halo", 1920, 1920)
