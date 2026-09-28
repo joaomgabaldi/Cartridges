@@ -44,6 +44,7 @@ import requests
 from gi.repository import Adw, GLib, Gtk
 
 from cartridges import shared
+from cartridges.utils.na_tela import entregar_na_tela
 
 RELEASES_URL = "https://api.github.com/repos/joaomgabaldi/Cartridges/releases/latest"
 
@@ -352,7 +353,7 @@ class AppUpdater:
         target = download_dir() / f"Cartridges-{release.version}.exe"
 
         def progress(fraction: float) -> None:
-            GLib.idle_add(bar.set_fraction, fraction)
+            entregar_na_tela(bar.set_fraction, fraction)
 
         def work() -> None:
             try:
@@ -361,9 +362,9 @@ class AppUpdater:
                 return
             except Exception as error:  # pylint: disable=broad-exception-caught
                 logging.warning("Download da atualização falhou: %s", error)
-                GLib.idle_add(self._finish, dialog, None)
+                entregar_na_tela(self._finish, dialog, None)
                 return
-            GLib.idle_add(self._finish, dialog, target)
+            entregar_na_tela(self._finish, dialog, target)
 
         threading.Thread(target=work, daemon=True).start()
 

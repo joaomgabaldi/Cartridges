@@ -306,7 +306,7 @@ def test_prefetch_failure_does_not_wedge_the_run(refresh, monkeypatch) -> None:
             raise AttributeError("boom")
 
     scheduled: list = []
-    monkeypatch.setattr(GLib, "idle_add", lambda *args: scheduled.append(args))
+    monkeypatch.setattr(GLib, "idle_add", lambda *args, **_kw: scheduled.append(args))
     shared.store.managers = {
         SteamAPIManager: Exploding(),
         HLTBManager: Exploding(),
@@ -348,7 +348,7 @@ def test_prefetch_stringifies_a_numeric_appid(refresh, monkeypatch) -> None:
                 or {}
             )
 
-    monkeypatch.setattr(GLib, "idle_add", lambda *args: None)
+    monkeypatch.setattr(GLib, "idle_add", lambda *args, **_kw: None)
     shared.store.managers = {
         SteamAPIManager: Recording(),
         HLTBManager: Recording(),

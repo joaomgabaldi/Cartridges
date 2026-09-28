@@ -47,6 +47,7 @@ from PIL import Image, UnidentifiedImageError
 
 from cartridges import shared
 from cartridges.utils.download import download_bytes
+from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.name_cleaner import clean_game_name
 from cartridges.utils.session_wallpaper import (
     Posicoes,
@@ -251,7 +252,7 @@ class WallpaperPicker(Adw.Dialog):
             ]
         except WallhavenError as error:
             logging.warning("Busca de papel de parede falhou: %s", error)
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Não foi possível concluir a busca"),
                 _("Verifique a conexão e tente novamente."),
@@ -260,7 +261,7 @@ class WallpaperPicker(Adw.Dialog):
             return
 
         if not achados:
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Nenhum papel de parede encontrado"),
                 _("Tente buscar por outro nome."),
@@ -280,9 +281,9 @@ class WallpaperPicker(Adw.Dialog):
                 if generation != self._generation:
                     return
                 if dados is not None:
-                    GLib.idle_add(self._add_result, dados, item, generation)
+                    entregar_na_tela(self._add_result, dados, item, generation)
 
-        GLib.idle_add(self._finish_results, generation)
+        entregar_na_tela(self._finish_results, generation)
 
     def _miniatura(self, item: dict[str, Any], generation: int) -> Optional[bytes]:
         """A miniatura de ``item`` já cortada, em PNG. None quando não deu."""
@@ -391,7 +392,7 @@ class WallpaperPicker(Adw.Dialog):
             conteudo = download_bytes(url, timeout=45)
         except requests.RequestException as error:
             logging.warning("Não foi possível baixar o papel de parede: %s", error)
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Não foi possível baixar a imagem"),
                 _("Tente novamente."),
@@ -405,7 +406,7 @@ class WallpaperPicker(Adw.Dialog):
             conteudo = arquivo.read_bytes()
         except OSError as error:
             logging.warning("Não foi possível ler o arquivo escolhido: %s", error)
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Não foi possível abrir a imagem"),
                 _("Tente outra imagem."),
@@ -445,7 +446,7 @@ class WallpaperPicker(Adw.Dialog):
             Image.DecompressionBombError,
         ) as error:
             logging.warning("Imagem escolhida não pôde ser lida: %s", error)
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Não foi possível abrir a imagem"),
                 _("Tente outra imagem."),
@@ -453,7 +454,7 @@ class WallpaperPicker(Adw.Dialog):
             )
             return
 
-        GLib.idle_add(self._open_done, conteudo, sufixo, previa, generation)
+        entregar_na_tela(self._open_done, conteudo, sufixo, previa, generation)
 
     def _salvar_temporario(self, conteudo: bytes, sufixo: str) -> str:
         caminho = self._temp_dir / f"escolhida{sufixo or '.jpg'}"

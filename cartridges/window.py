@@ -44,6 +44,7 @@ from cartridges.utils.game_logo import (
 )
 from cartridges.utils.hltb import format_hltb_time
 from cartridges.utils.install_size import format_size
+from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.news_feed import NewsPost
 from cartridges.utils.open_uri import open_uri
 from cartridges.session_history import SessionHistoryDialog
@@ -1369,7 +1370,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
                 "Unexpected error fetching a logo for %s", game.name, exc_info=True
             )
         finally:
-            GLib.idle_add(self.logo_lookup_done, game.game_id, path)
+            entregar_na_tela(self.logo_lookup_done, game.game_id, path)
 
     def logo_lookup_done(self, game_id: str, path: Optional[Path]) -> bool:
         self._logo_fetches.discard(game_id)

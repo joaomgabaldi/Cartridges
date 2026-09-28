@@ -59,6 +59,7 @@ from cartridges.utils.session_wallpaper import (
     redefinir as reset_wallpaper,
     salvar_escolha,
 )
+from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.name_cleaner import clean_for_search, clean_game_name
 from cartridges.utils.run_executable import aumid_from_command
 from cartridges.utils.save_cover import composite_cover, convert_cover, save_cover
@@ -932,7 +933,7 @@ class DetailsDialog(Adw.Dialog):
                 logging.exception("Could not prepare the chosen cover")
                 new_path = None
 
-            GLib.idle_add(finish, new_path)
+            entregar_na_tela(finish, new_path)
 
         self.begin_loading(cover=True)
         threading.Thread(target=thread_func, daemon=True).start()
@@ -1315,14 +1316,14 @@ class DetailsDialog(Adw.Dialog):
             # Nothing the matcher trusts. Rather than adopt the closest hit —
             # which for "The Outer Worlds" is its own sequel — let the user say
             # which game this is.
-            GLib.idle_add(self._fetch_metadata_choose, helper, name)
+            entregar_na_tela(self._fetch_metadata_choose, helper, name)
             return
         except Exception as error:  # pylint: disable=broad-exception-caught
             # A tela diz só "não encontrado"; um bug aqui teria o mesmo aviso.
             logging.warning("Steam lookup failed for %s", name, exc_info=error)
-            GLib.idle_add(self._fetch_metadata_done, None, error, str(appid or ""))
+            entregar_na_tela(self._fetch_metadata_done, None, error, str(appid or ""))
             return
-        GLib.idle_add(self._fetch_metadata_done, data, None, str(appid))
+        entregar_na_tela(self._fetch_metadata_done, data, None, str(appid))
 
     def _fetch_metadata_choose(self, helper: SteamAPIHelper, name: str) -> bool:
         """Open the picker so the user can identify the game themselves."""
@@ -1434,7 +1435,7 @@ class DetailsDialog(Adw.Dialog):
                 # stays disabled with nothing loading.
                 logging.exception("Could not fetch HowLongToBeat times")
                 times = None
-        GLib.idle_add(self._fetch_hltb_done, times, name)
+        entregar_na_tela(self._fetch_hltb_done, times, name)
 
     def _fetch_hltb_done(self, times: Optional[HLTBTimes], name: str) -> bool:
         """Stash the fetched estimates; silence is fine when there are none.

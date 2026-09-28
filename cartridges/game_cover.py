@@ -27,6 +27,7 @@ from gi.repository import Gdk, GdkPixbuf, GLib, Gtk
 from PIL import Image, ImageFilter, ImageSequence, ImageStat
 
 from cartridges import shared
+from cartridges.utils.na_tela import entregar_na_tela
 
 
 def texture_from_pixbuf(pixbuf: GdkPixbuf.Pixbuf) -> Gdk.Texture:
@@ -198,7 +199,7 @@ class GameCover:
                         frames.append(rgba.tobytes())
             except (OSError, ValueError):
                 frames, durations = [], []
-            GLib.idle_add(
+            entregar_na_tela(
                 self._frames_decoded, generation, frames, durations, width, height
             )
 
@@ -366,7 +367,7 @@ class GameCover:
 
         def worker() -> None:
             computed = self._compute_blur(path)
-            GLib.idle_add(self._blur_ready, generation, computed)
+            entregar_na_tela(self._blur_ready, generation, computed)
 
         threading.Thread(target=worker, daemon=True).start()
 
