@@ -47,6 +47,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 from cartridges import restauracao_dialogs, shared
 from cartridges.details_dialog import DetailsDialog
 from cartridges.game import Game
+from cartridges.game_cover import GameCover
 from cartridges.gamepad import GamepadManager
 from cartridges.importer.importer import Importer  # yo dawg
 from cartridges.importer.shortcuts_source import ShortcutsSource
@@ -734,6 +735,7 @@ class CartridgesApplication(Adw.Application):
         Gio.Application.do_shutdown(self)
 
     def load_games_from_disk(self) -> None:
+        games: list[tuple[Game, str]] = []
         if shared.games_dir.is_dir():
             for game_file in shared.games_dir.iterdir():
                 # Skip leftovers such as .json.tmp from an interrupted save
@@ -766,10 +768,18 @@ class CartridgesApplication(Adw.Application):
                 # Um arquivo por vez: o que escapar da limpeza acima custa esse
                 # jogo, e não a janela inteira, que abre depois desta carga.
                 try:
-                    game = Game(sanitize_game_fields(data, game_file.name))
-                    shared.store.add_game(game, {"skip_save": True})
+                    games.append((Game(sanitize_game_fields(data, game_file.name)), game_file.name))
                 except Exception:  # pylint: disable=broad-exception-caught
                     logging.exception("Skipping unloadable game record %s", game_file.name)
+
+        # As capas de todos os jogos, decodificadas juntas em threads antes de
+        # a grade pedir uma por uma: ver GameCover.pre_decodificadas.
+        with GameCover.pre_decodificadas(game.get_cover_path() for game, _name in games):
+            for game, name in games:
+                try:
+                    shared.store.add_game(game, {"skip_save": True})
+                except Exception:  # pylint: disable=broad-exception-caught
+                    logging.exception("Skipping unloadable game record %s", name)
 
     def on_about_action(self, *_args: Any) -> None:
         # Get the debug info from the log files

@@ -42,6 +42,8 @@
           <li>O texto para adicionar um jogo a Jogos Zerados sem dados da Steam passa a usar aspas no padrão brasileiro</li>
           <li>As buscas online da edição de jogo (Steam, capa, logo e papel de parede) exibem o resultado assim que ele chega, sem espera de vários segundos</li>
           <li>As prévias de capa, logo e papel de parede carregam mais rápido, sem as esperas ocasionais de vários segundos</li>
+          <li>O brilho dourado das capas com atualização disponível agora é fixo, o que reduz o uso do processador enquanto a janela está em foco</li>
+          <li>A biblioteca abre mais rápido: as capas são carregadas em paralelo</li>
         </ul>
       </description>
     </release>

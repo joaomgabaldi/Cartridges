@@ -19,9 +19,11 @@
 
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Iterable, Iterator, Optional
 
 from gi.repository import Gdk, GdkPixbuf, GLib, Gtk
 from PIL import Image, ImageFilter, ImageSequence, ImageStat
@@ -100,12 +102,53 @@ class GameCover:
     # turning into a re-decode every time the pointer sweeps across the grid.
     _FRAME_RELEASE_DELAY_SECONDS = 30
 
+    # Capas da abertura já decodificadas no tamanho da grade; ver
+    # `pre_decodificadas`. Cada uma é usada uma vez.
+    _pre_decodificadas: dict[Path, GdkPixbuf.Pixbuf] = {}
+
     placeholder = Gdk.Texture.new_from_resource(
         shared.PREFIX + "/library_placeholder.svg"
     )
     placeholder_small = Gdk.Texture.new_from_resource(
         shared.PREFIX + "/library_placeholder_small.svg"
     )
+
+    @classmethod
+    @contextmanager
+    def pre_decodificadas(cls, caminhos: Iterable[Optional[Path]]) -> Iterator[None]:
+        """Decodifica as capas estáticas em threads, antes de a grade pedir.
+
+        Uma por vez na thread principal, as 107 capas de uma biblioteca real
+        levavam 0,67 s antes de a janela aparecer (medido em 28/09/2026); em
+        threads, ~0,1 s: o GdkPixbuf solta o GIL enquanto decodifica. Só o
+        pixbuf sai das threads, e a textura continua sendo feita na thread
+        principal, em `_load_display_texture`. A capa que falhar aqui fica de
+        fora e segue o caminho normal de lá, com os mesmos substitutos. Ao sair
+        do bloco, as que a grade não usou são descartadas.
+        """
+        width, height = (int(value) for value in shared.display_size)
+
+        def decodificar(path: Path) -> Optional[GdkPixbuf.Pixbuf]:
+            try:
+                return GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                    str(path), width, height, False
+                )
+            except GLib.Error:
+                return None
+
+        estaticas = [
+            path for path in caminhos
+            if path and path.suffix.lower() not in (".gif", ".webp")
+        ]
+        with ThreadPoolExecutor() as executor:
+            prontas = zip(estaticas, executor.map(decodificar, estaticas))
+            cls._pre_decodificadas = {
+                path: pixbuf for path, pixbuf in prontas if pixbuf is not None
+            }
+        try:
+            yield
+        finally:
+            cls._pre_decodificadas = {}
 
     def __init__(self, pictures: set[Gtk.Picture], path: Optional[Path] = None) -> None:
         self.pictures = pictures
@@ -255,6 +298,10 @@ class GameCover:
         that for the one cover the details page is showing, which is drawn
         larger than the grid ever draws it.
         """
+        if size is None and (
+            pixbuf := GameCover._pre_decodificadas.pop(path, None)
+        ) is not None:
+            return texture_from_pixbuf(pixbuf)
         width, height = size or shared.display_size
         try:
             return texture_from_pixbuf(
