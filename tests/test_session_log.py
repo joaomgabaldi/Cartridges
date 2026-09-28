@@ -562,7 +562,12 @@ def history_with_sessions(store, count):
 
 def test_the_chart_panel_is_as_tall_as_the_table(real_window, store):
     """O painel inteiro — seletor de período, total e desenho — ocupa a mesma
-    faixa vertical da tabela: começa e termina junto com ela."""
+    faixa vertical da tabela: começa e termina junto com ela.
+
+    Espera a escala de 100% do Windows. As 7 sessões cabem no teto da tabela
+    (TABLE_MAX_HEIGHT, umas 8 linhas de 55 px); em 150% a linha tem 64 px, a
+    lista rola e o teste falha sem defeito no app.
+    """
     dialog = history_with_sessions(store, 7)
     content = lay_out(dialog)
 
