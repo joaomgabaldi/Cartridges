@@ -463,10 +463,11 @@ def _game_root(directory: str) -> str:
             # Program Files holds publishers as often as games: `Epic Games`,
             # `EA Games` and `Rockstar Games` each hold several games — and
             # Rockstar's launcher, which lingers in the tray after the game.
-            # There the root is the second level, not the first.
-            # ponytail: a game living directly in Program Files with its exe
-            # two levels down gets its subfolder watched, not its root.
-            if container in _PROGRAM_FILES_DIRS and below:
+            # There the root is the second level, not the first — unless the
+            # first level carries an uninstaller, which only a game has.
+            # Without that check `Unreal Tournament III\Binaries` was taken
+            # for the game, and its size came out at 125 MB of 9 GB.
+            if container in _PROGRAM_FILES_DIRS and below and not _has_uninstaller(current):
                 current = below
             # Backslashes on the way out, so what this hands to
             # `install_dir_from_command` — and from there to
@@ -475,6 +476,27 @@ def _game_root(directory: str) -> str:
             return _win32_path(current)
         below, current = current, parent
     return ""
+
+
+def _has_uninstaller(directory: str) -> bool:
+    """Was ``directory`` installed as one program, rather than holding several?
+
+    ``unins000.exe`` is Inno Setup's (every repack, GOG's offline installers),
+    ``uninstall.exe`` NSIS's, and ``__Installer`` is what the EA app leaves at a
+    game's root. A publisher folder holds its games' installers, not its own.
+    """
+    try:
+        with os.scandir(directory) as entries:
+            return any(
+                entry.name.casefold() == "__installer"
+                or (
+                    entry.name.casefold().startswith("unins")
+                    and entry.name.casefold().endswith(".exe")
+                )
+                for entry in entries
+            )
+    except OSError:
+        return False
 
 
 def _is_watchable_dir(directory: str) -> bool:

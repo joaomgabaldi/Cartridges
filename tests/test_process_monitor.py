@@ -131,6 +131,37 @@ def test_game_root_respects_the_walk_limit():
     assert pm._game_root(deep) == ""
 
 
+@pytest.mark.parametrize(
+    "marker,is_dir,expected",
+    [
+        # Inno Setup, the installer behind every repack: the folder is a game.
+        ("unins000.exe", False, "Unreal Tournament III"),
+        # EA app installs leave this behind at the game's root.
+        ("__Installer", True, "Unreal Tournament III"),
+        # No installer at the top: could be a publisher, so stay one level down.
+        (None, False, "Unreal Tournament III\\Binaries"),
+    ],
+)
+def test_game_root_in_program_files_trusts_an_uninstaller(
+    tmp_path, marker, is_dir, expected
+):
+    """A game living directly in Program Files with its exe in a subfolder.
+
+    Unreal Tournament III launches ``Binaries\\UT3.exe``; measuring Binaries
+    alone showed 125 MB for a 9 GB install.
+    """
+    game = tmp_path / "Program Files" / "Unreal Tournament III"
+    binaries = game / "Binaries"
+    binaries.mkdir(parents=True)
+    if marker and is_dir:
+        (game / marker).mkdir()
+    elif marker:
+        (game / marker).write_bytes(b"")
+
+    root = _win32(pm._game_root(str(binaries)))
+    assert root == _win32(str(tmp_path / "Program Files" / expected))
+
+
 # ---------------------------------------------------------------------------
 # 4.6 - 4.8  Refusing folders that are not one game
 # ---------------------------------------------------------------------------
