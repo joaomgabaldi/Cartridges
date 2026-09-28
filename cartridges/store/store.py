@@ -512,6 +512,15 @@ class Store:
         game.shortcut_path = shortcut_path
         self._index_shortcut(game)
 
+    def apontar_atalho(self, game: Game, shortcut_path: str) -> None:
+        """Faz ``game`` reclamar o atalho em ``shortcut_path``: a escolha manual
+        da janela de pendências da restauração. A próxima varredura acha o
+        jogo por esse caminho (a âncora, ver `adopt_legacy_game`) e o adota
+        sob o id que o atalho der, com executável e tudo."""
+        with self._lock:
+            self._reindex_shortcut(game, shortcut_path)
+        game.save()
+
     def adopt_legacy_game(self, game: Game) -> Optional[Game]:
         """Re-file a stored game under ``game``'s id, keeping everything it has.
 

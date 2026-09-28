@@ -1997,7 +1997,7 @@ def test_switching_empty_notices_does_not_stack_them(real_window, monkeypatch):
     assert win.notice_empty.get_parent() is win.library_overlay
 
     filtered = SimpleNamespace(
-        removed=False, blacklisted=False, filtered=True
+        game_id="shortcuts_1", removed=False, blacklisted=False, filtered=True
     )
     monkeypatch.setattr(shared, "store", [filtered])
     win.set_library_child()

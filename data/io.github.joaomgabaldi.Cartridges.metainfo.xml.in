@@ -37,6 +37,12 @@
           <li>Na primeira abertura após a instalação, a janela abre no tamanho padrão, e não reduzida a uma faixa estreita</li>
           <li>Um fechamento inesperado do aplicativo passa a deixar o registro da falha no log</li>
           <li>Arquivos da biblioteca que não puderam ser lidos (jogos, capas, histórico de sessões, escolhas de papel de parede e de iluminação) passam a ser informados no log</li>
+          <li>O backup passa a guardar a biblioteca inteira e todas as configurações, e a restauração devolve o aplicativo exatamente como estava</li>
+          <li>Restaurar um backup reinicia o aplicativo e aplica os dados antes de abrir a biblioteca; se algo falhar, os dados atuais são mantidos</li>
+          <li>Jogos restaurados cujo atalho não foi encontrado aparecem na janela "Jogos sem atalho", onde é possível escolher o atalho, excluir o jogo ou decidir mais tarde</li>
+          <li>Quando o atalho escolhido já tem histórico neste PC, é possível manter o do backup, manter o deste PC ou mesclar os dois</li>
+          <li>Ao fim da restauração, quando todos os jogos têm atalho, o aviso "Restauração concluída" é exibido</li>
+          <li>Backups feitos em versões anteriores não são mais aceitos</li>
         </ul>
       </description>
     </release>

@@ -963,8 +963,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         return filters
 
     def export_backup(self, *_args: Any) -> None:
-        """Grava, num .zip, os dados que cada jogo tem do usuário e as
-        configurações (ver o docstring do módulo `backup`)."""
+        """Grava, num .zip, a pasta do app e as configurações (ver o docstring
+        do módulo `backup`)."""
         dialog = Gtk.FileDialog()
         dialog.set_initial_name(f"cartridges-backup-{date.today().isoformat()}.zip")
         dialog.set_filters(self._backup_filters())
@@ -982,20 +982,18 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 # Qualquer erro volta para a tela: o toast de progresso não
                 # pode ficar pendurado para sempre.
                 try:
-                    excluidos = backup.exportar(path, settings)
+                    backup.exportar(path, settings)
                 except Exception as error:  # pylint: disable=broad-exception-caught
                     logging.exception("Não foi possível exportar o backup")
                     GLib.idle_add(self._export_done, progress, str(error))
                 else:
-                    GLib.idle_add(self._export_done, progress, None, excluidos)
+                    GLib.idle_add(self._export_done, progress, None)
 
             threading.Thread(target=work, daemon=True).start()
 
         dialog.save(shared.win, None, finish)
 
-    def _export_done(
-        self, progress: Adw.Toast, error: Optional[str], excluidos: Optional[list[str]] = None
-    ) -> bool:
+    def _export_done(self, progress: Adw.Toast, error: Optional[str]) -> bool:
         progress.dismiss()
         if error:
             create_dialog(
@@ -1008,28 +1006,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             )
         else:
             self.add_toast(Adw.Toast.new(_("Backup exportado")))
-            if excluidos:
-                self._show_export_collisions(excluidos)
         return False
-
-    def _show_export_collisions(self, nomes: list[str]) -> None:
-        """Os jogos que ficaram fora do backup por terem mais de uma cópia."""
-        dialog = Adw.AlertDialog()
-        dialog.set_heading(_("Alguns jogos não foram incluídos no backup"))
-        dialog.set_body(
-            _(
-                "Há mais de um jogo com a mesma identidade na biblioteca, e não é "
-                "possível saber de qual deles os dados devem ser salvos."
-            )
-        )
-        dialog.add_response("close", _("Dispensar"))
-        list_box = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE, margin_top=9)
-        list_box.add_css_class("boxed-list")
-        for nome in nomes:
-            row = Adw.ActionRow(title=nome, use_markup=False)
-            list_box.append(row)
-        dialog.set_extra_child(list_box)
-        dialog.choose(self)
 
     def import_backup(self, *_args: Any) -> None:
         dialog = Gtk.FileDialog()
@@ -1046,58 +1023,35 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
     def _restore_backup(self, path: Path) -> None:
         def on_response(_dialog: Any, response: str) -> None:
-            if response != "restore":
-                return
-            self._run_restore(path)
+            if response == "restore":
+                self._schedule_restore(path)
 
         create_dialog(
             self,
             _("Restaurar este backup?"),
-            _(
-                "Tem certeza que deseja restaurar este backup? A nota, o "
-                "status, o tempo de jogo, a anotação, a capa, o logo, o papel "
-                "de parede e a cor da iluminação inteligente de cada jogo "
-                "presente no backup serão substituídos, e as sessões do backup "
-                "serão acrescentadas ao histórico. As configurações também "
-                "serão substituídas."
-            ),
+            _("Tem certeza que deseja restaurar este backup? Esta ação é irreversível."),
             "restore",
             _("Restaurar"),
             destructive=True,
         ).connect("response", on_response)
 
-    def _run_restore(self, path: Path) -> None:
-        progress = Adw.Toast(title=_("Restaurando backup…"), timeout=0)
-        cancelado = threading.Event()
-        # O botão só faz sentido enquanto a varredura de appID roda: depois
-        # dela o restore não passa mais por rede, e não há mais nada para
-        # cancelar. `fim_da_varredura` tira o botão assim que a varredura
-        # termina (`set_button_label(None)` some com ele).
-        progress.set_button_label(_("Cancelar"))
-        progress.connect("button-clicked", lambda *_a: cancelado.set())
+    def _schedule_restore(self, path: Path) -> None:
+        """Valida e copia o .zip fora da thread principal (um backup de
+        centenas de capas leva segundos), depois reinicia o app."""
+        progress = Adw.Toast(title=_("Preparando a restauração…"), timeout=0)
         self.add_toast(progress)
-
-        def atualizar_progresso(indice: int, total: int) -> bool:
-            # `backup._forcar_appids` já chama isto via `GLib.idle_add` — é
-            # seguro mexer no toast aqui direto, sem embrulhar de novo.
-            progress.set_title(_("Buscando na Steam… {}/{}").format(indice, total))
-            return False
 
         def work() -> None:
             try:
-                resultado = backup.restaurar(
-                    path,
-                    progresso=atualizar_progresso,
-                    cancelado=cancelado.is_set,
-                    fim_da_varredura=lambda: progress.set_button_label(None),
-                )
+                backup.validar(path)
+                backup.agendar(path)
             except backup.BackupInvalido:
                 GLib.idle_add(self._restore_invalid, progress)
-            except Exception as error:  # pylint: disable=broad-exception-caught
-                logging.exception("Não foi possível restaurar o backup")
-                GLib.idle_add(self._restore_done, progress, None, str(error))
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.exception("Não foi possível agendar a restauração do backup")
+                GLib.idle_add(self._restore_failed, progress)
             else:
-                GLib.idle_add(self._restore_done, progress, resultado, None)
+                GLib.idle_add(self._restart_to_restore)
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -1110,92 +1064,20 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         )
         return False
 
-    def _restore_done(
-        self,
-        progress: Adw.Toast,
-        resultado: Optional[backup.ResultadoRestauracao],
-        error: Optional[str],
-    ) -> bool:
+    def _restore_failed(self, progress: Adw.Toast) -> bool:
         progress.dismiss()
-        # As configurações (schema-backed) já foram gravadas por `restaurar()`
-        # antes deste retorno, cancelado, com erro ou não — as linhas sem
-        # `bind` desta tela (chave do SGDB, brilho da fita etc.) ficam
-        # desatualizadas até alguém relê-las. Um erro depois desse ponto (ex.:
-        # falha na varredura de appID) não desfaz o que já foi aplicado.
-        self.reler_do_schema()
-        if error:
-            create_dialog(self, _("Não foi possível restaurar"), _("Não foi possível ler o backup."))
-            return False
-        if resultado is None:
-            # `restaurar()` já aplicou as configurações e as fitas do backup
-            # (troca completa) antes de decidir rodar a varredura de appID —
-            # mesmo cancelada, elas não voltam. Só os dados dos jogos ficam
-            # de fora.
-            self.add_toast(
-                Adw.Toast.new(
-                    _(
-                        "Restauração cancelada. As configurações foram "
-                        "restauradas, mas os dados dos jogos não."
-                    )
-                )
-            )
-            return False
-
-        if resultado.ambiguos:
-            self._show_ambiguity_alert(resultado.ambiguos)
-
-        if resultado.casados == 0 and resultado.total > 0 and not resultado.ambiguos:
-            # O cenário central de "restaurei antes de reinstalar os jogos":
-            # o genérico "Restaurado: 0 de N" não deixa claro que é isso.
-            self.add_toast(
-                Adw.Toast.new(_("Nenhum jogo do backup está na biblioteca"))
-            )
-        else:
-            self.add_toast(
-                Adw.Toast.new(
-                    ngettext(
-                        "Restaurado: {} de {} jogo", "Restaurado: {} de {} jogos", resultado.total
-                    ).format(resultado.casados, resultado.total)
-                )
-            )
+        create_dialog(
+            self,
+            _("Não foi possível restaurar"),
+            _("Não foi possível restaurar o backup. Tente novamente."),
+        )
         return False
 
-    def _show_ambiguity_alert(self, nomes: list[str]) -> None:
-        """Bloqueante de propósito — não é toast: o usuário precisa saber que
-        esses jogos NÃO receberam os dados do backup porque há mais de um
-        jogo com o mesmo nome na biblioteca, e não tem como escolher qual é
-        qual sozinho. Mesmo molde do diálogo de erros do importer (heading +
-        lista)."""
-        dialog = Adw.AlertDialog()
-        dialog.set_heading(_("Alguns jogos não foram restaurados"))
-        dialog.add_response("close", _("Dispensar"))
-
-        if len(nomes) == 1:
-            dialog.set_body(
-                _(
-                    "Há mais de um jogo chamado “{}” na biblioteca, e não é "
-                    "possível saber qual dos jogos com esse nome corresponde ao "
-                    "backup. Nenhum deles recebeu os dados."
-                ).format(nomes[0])
-            )
-        else:
-            list_box = Gtk.ListBox()
-            list_box.set_selection_mode(Gtk.SelectionMode.NONE)
-            list_box.set_css_classes(["boxed-list"])
-            list_box.set_margin_top(9)
-            for nome in nomes:
-                row = Adw.ActionRow.new()
-                row.set_title(GLib.markup_escape_text(nome))
-                row.set_subtitle(_("Mais de um jogo com esse nome na biblioteca"))
-                list_box.append(row)
-            dialog.set_extra_child(list_box)
-            dialog.set_body(
-                _("Estes jogos não receberam os dados do backup: há mais de um "
-                  "jogo com o mesmo nome na biblioteca, e não é possível saber "
-                  "qual corresponde a qual.")
-            )
-
-        dialog.choose(self)
+    def _restart_to_restore(self) -> bool:
+        app = shared.win.get_application()
+        app.reiniciar = True
+        app.quit()
+        return False
 
     def update_shortcuts_location_subtitle(self) -> None:
         """Show the currently selected shortcuts folder as the row subtitle"""

@@ -462,3 +462,17 @@ def test_non_game_shortcuts_are_skipped(scan, tmp_path, stem):
 def test_steam_appid_extraction(url, expected):
     """T3.20 Composite 64-bit ids belong to mods, not to store pages."""
     assert ss.steam_appid_from_url(url) == expected
+
+
+def test_atalhos_da_pasta_so_lnk_e_url(tmp_path, schema):
+    from cartridges.importer.shortcuts_source import atalhos_da_pasta  # noqa: PLC0415
+
+    (tmp_path / "sub").mkdir()
+    for nome in ("a.lnk", "b.URL", "c.txt", "sub/d.lnk"):
+        (tmp_path / nome).write_text("x", encoding="utf-8")
+    schema["shortcuts-location"] = str(tmp_path)
+
+    schema["shortcuts-recursive"] = False
+    assert sorted(p.name for p in atalhos_da_pasta()) == ["a.lnk", "b.URL"]
+    schema["shortcuts-recursive"] = True
+    assert sorted(p.name for p in atalhos_da_pasta()) == ["a.lnk", "b.URL", "d.lnk"]

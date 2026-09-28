@@ -11,13 +11,19 @@ sempre. O arquivo nasce na troca (`backup.aplicar_pendente`) e morre quando a
 última pendência sai.
 """
 
+import difflib
 import json
 import logging
+import shutil
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 from cartridges import shared
 from cartridges.game import Game
+from cartridges.importer.shortcuts_source import atalhos_da_pasta
+from cartridges.store.store import _path_key
+from cartridges.utils import session_log
+from cartridges.utils.name_cleaner import clean_for_search
 
 _NOME = "restauracao_pendente.json"
 
@@ -130,3 +136,119 @@ def ids_que_dependem_de_atalho(pasta_games: Path) -> list[str]:
         ):
             game_ids.append(dados["game_id"])
     return game_ids
+
+
+# region Escolher atalho
+
+
+class AtalhoJaExiste(Exception):
+    """Já existe na pasta de atalhos um arquivo com o nome do escolhido."""
+
+
+def _do_backup(jogo: Game) -> bool:
+    """Veio no backup, e não da importação depois dele."""
+    return (jogo.added or 0) < restaurado_em()
+
+
+def _pasta() -> Path:
+    return Path(shared.schema.get_string("shortcuts-location")).expanduser()
+
+
+def candidatos(jogo: Game) -> list[Path]:
+    """Os atalhos da pasta que nenhum jogo do backup usa, os de nome mais
+    parecido com o de ``jogo`` primeiro. Os de jogos que a importação criou
+    depois da restauração entram: escolher um deles resolve o conflito."""
+    usados = {
+        _path_key(outro.shortcut_path)
+        for outro in shared.store
+        if outro.shortcut_path and _do_backup(outro)
+    }
+    alvo = clean_for_search(jogo.name).casefold()
+
+    def parecido(caminho: Path) -> float:
+        nome = clean_for_search(caminho.stem).casefold()
+        return difflib.SequenceMatcher(None, alvo, nome).ratio()
+
+    livres = [c for c in atalhos_da_pasta() if _path_key(str(c)) not in usados]
+    return sorted(livres, key=lambda c: (-parecido(c), c.name.casefold()))
+
+
+def copiar_para_a_pasta(origem: Path) -> Path:
+    """``origem`` como a importação vai enxergá-lo: dentro da pasta de
+    atalhos. Um arquivo de fora é copiado para a raiz dela (o original fica
+    onde está). ``AtalhoJaExiste`` se já houver lá um arquivo com esse nome:
+    dois atalhos do mesmo jogo virariam um jogo duplicado na importação."""
+    raiz = _pasta()
+    chave_raiz = _path_key(str(raiz)).rstrip("\\")
+    chave_pai = _path_key(str(origem.parent)).rstrip("\\")
+    if chave_pai == chave_raiz or (
+        shared.schema.get_boolean("shortcuts-recursive")
+        and chave_pai.startswith(chave_raiz + "\\")
+    ):
+        return origem
+    destino = raiz / origem.name
+    if destino.exists():
+        raise AtalhoJaExiste(origem.name)
+    shutil.copy2(origem, destino)
+    return destino
+
+
+def jogo_do_atalho(caminho: Path) -> Optional[Game]:
+    """O jogo que a importação criou a partir de ``caminho`` depois da
+    restauração, se houver."""
+    chave = _path_key(str(caminho))
+    for jogo in shared.store:
+        if (
+            jogo.shortcut_path
+            and not jogo.removed
+            and not jogo.blacklisted
+            and not _do_backup(jogo)
+            and _path_key(jogo.shortcut_path) == chave
+        ):
+            return jogo
+    return None
+
+
+def tem_historico(jogo: Game) -> bool:
+    """Horas jogadas ou sessões. As duas, e não só as sessões: o tempo é
+    gravado a cada minuto de jogo, e a sessão só entra no histórico quando
+    termina bem. Um jogo cuja sessão caiu no meio tem horas e nenhuma sessão,
+    e excluí-lo sem perguntar apagaria esse tempo."""
+    return bool(jogo.playtime) or bool(session_log.load(jogo.game_id))
+
+
+def resumo(jogo: Game) -> tuple[int, int, int]:
+    """(segundos jogados, número de sessões, última vez jogado) para os
+    cartões da tela de conflito."""
+    return jogo.playtime or 0, len(session_log.load(jogo.game_id)), jogo.last_played or 0
+
+
+def excluir(jogo: Game) -> None:
+    """Exclui ``jogo`` de vez, sem tumba, e o tira das pendências."""
+    shared.win.retirar_da_grade(jogo)
+    shared.store.excluir(jogo)
+    remover(jogo.game_id)
+
+
+def decidir(restaurado: Game, caminho: Path, novo: Optional[Game], decisao: str) -> None:
+    """Aplica a escolha feita para ``restaurado`` com o atalho ``caminho``.
+
+    ``novo`` é o jogo que a importação já criou a partir de ``caminho``, se
+    houver. ``"backup"`` e ``"mesclar"`` ficam com o restaurado (a mescla leva
+    antes as sessões e o tempo do novo); ``"este_pc"`` fica com o novo. Quem
+    chama importa em seguida, exceto em ``"este_pc"``: é a varredura que adota
+    o restaurado pelo atalho novo e o tira das pendências.
+    """
+    if decisao == "este_pc":
+        excluir(restaurado)
+        return
+    if novo is not None:
+        if decisao == "mesclar":
+            session_log.mover_jogo(novo.game_id, restaurado.game_id)
+            restaurado.playtime = (restaurado.playtime or 0) + (novo.playtime or 0)
+            restaurado.last_played = max(restaurado.last_played or 0, novo.last_played or 0)
+        excluir(novo)
+    shared.store.apontar_atalho(restaurado, str(caminho))
+
+
+# endregion

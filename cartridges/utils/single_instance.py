@@ -111,6 +111,23 @@ def acquire() -> bool:
     return True
 
 
+def release() -> None:
+    """Solta o lock antes de um reinício pedido pelo próprio app (restauração
+    de backup): o processo novo sobe enquanto este ainda termina de sair, e
+    sem isto ele se acharia a segunda cópia e fecharia."""
+    global _handle  # pylint: disable=global-statement
+
+    if _handle is None or sys.platform != "win32":
+        return
+    try:
+        import ctypes  # pylint: disable=import-outside-toplevel
+
+        ctypes.WinDLL("kernel32").CloseHandle(ctypes.c_void_p(_handle))
+    except (OSError, AttributeError) as error:
+        logging.warning("Could not release the single-instance lock: %s", error)
+    _handle = None
+
+
 # Título da janela principal (window.blp). Não passa por tradução — a
 # interface é hardcoded — então dá para casar contra ele daqui, onde o gettext
 # do launcher pode nem ter sido instalado ainda.
