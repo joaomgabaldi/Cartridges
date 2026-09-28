@@ -1,6 +1,6 @@
 # game_logo.py
 #
-# Copyright 2026 kramo
+# Copyright 2026 joaomgabaldi
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -46,6 +46,7 @@ from cartridges import shared
 from cartridges.game import Game
 from cartridges.game_cover import texture_from_pixbuf
 from cartridges.utils.download import download_bytes
+from cartridges.utils.ler_json import ler_json
 from cartridges.utils.steamgriddb import SgdbAuthError, SgdbError, SgdbHelper
 
 # On-screen bounds for the header. The height is the primary control (a logo
@@ -192,8 +193,7 @@ def _sidecar_path(game_id: str) -> Path:
 
 def _read_sidecar(game_id: str) -> Optional[dict[str, Any]]:
     try:
-        with _sidecar_path(game_id).open(encoding="utf-8") as file:
-            data = json.load(file)
+        data = ler_json(_sidecar_path(game_id))
     except FileNotFoundError:
         return None
     except (OSError, ValueError) as error:

@@ -1,3 +1,9 @@
+# montar_app.py
+#
+# Copyright 2026 joaomgabaldi
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Monta numa pasta só o que o app instalado usa, para o Inno Setup empacotar.
 
 O instalador copiava ucrt64/bin/*.dll e lib/python3.14 inteiros, e com isso

@@ -182,9 +182,9 @@ class SteamAPIManager(AsyncManager):
         incluído) termina. Fora de um pipeline (ex.: atualização de metadados
         em lote), quem chama `main` decide sozinho o que fazer com a marca.
 
-        ``sem_ligacao`` é usado pela restauração de backup, que já casa
-        zerados com jogos vivos por identidade e não pode ter uma fusão
-        acontecendo no meio dela.
+        ``sem_ligacao`` é usado pelo zerado adicionado à mão
+        (`zerado_manual`): o seletor já impede um zerado com o appID de um jogo
+        da biblioteca, e a ligação não precisa rodar por baixo.
         """
         if str(game.steam_appid) != str(anterior) and not additional_data.get("sem_ligacao"):
             additional_data["ligar_zerado"] = True

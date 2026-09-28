@@ -268,7 +268,7 @@ class Store:
             raise KeyError("Game not found in store") from None
 
     def clear(self) -> None:
-        """Remove every game from the store (used when resetting the app)"""
+        """Remove every game from the store ("Remover todos os jogos")"""
         with self._lock:
             self.source_games = {}
             self.games_by_id = {}

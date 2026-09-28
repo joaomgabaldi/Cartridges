@@ -92,9 +92,13 @@ def _is_noise(token: str) -> bool:
 
 
 def _strip_noise_brackets(match: re.Match) -> str:
-    """Drop bracketed groups whose content is purely a noise token."""
+    """Drop bracketed groups whose content is purely a noise token.
+
+    An empty group counts too: "(DirectX 12)" is emptied by the phrase rule
+    before this runs, and "ICARUS ( )" reached the library.
+    """
     inner = _normalize(match.group(0))
-    return " " if inner in _BRACKET_NOISE_TOKENS else match.group(0)
+    return " " if not inner or inner in _BRACKET_NOISE_TOKENS else match.group(0)
 
 
 def clean_game_name(name: str) -> str:

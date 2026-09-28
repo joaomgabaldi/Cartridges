@@ -1,6 +1,6 @@
 # session_wallpaper.py
 #
-# Copyright 2026 kramo
+# Copyright 2026 joaomgabaldi
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -56,6 +56,7 @@ from PIL import Image, ImageFilter, ImageOps
 from cartridges import shared
 from cartridges.utils import window_geometry
 from cartridges.utils.download import download_bytes
+from cartridges.utils.ler_json import ler_json
 from cartridges.utils.wallhaven import IMAGE_SUFFIXES, melhor_para
 
 if TYPE_CHECKING:
@@ -424,8 +425,7 @@ def _sidecar(game_id: str) -> Path:
 
 def _ler_sidecar(game_id: str) -> Optional[dict[str, Any]]:
     try:
-        with _sidecar(game_id).open(encoding="utf-8") as arquivo:
-            dados = json.load(arquivo)
+        dados = ler_json(_sidecar(game_id))
     except FileNotFoundError:
         return None
     except (OSError, ValueError) as erro:

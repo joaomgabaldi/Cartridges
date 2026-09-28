@@ -59,3 +59,49 @@ def test_passing_none_still_clears_every_format():
     save_cover("g1", None)
 
     assert not (shared.covers_dir / "g1.tiff").exists()
+
+
+# region Montagem da capa a partir de uma imagem qualquer
+
+
+def test_imagem_mais_alta_que_a_capa_e_esticada(tmp_path):
+    from cartridges.utils.save_cover import composite_cover  # noqa: PLC0415
+
+    pixbuf = composite_cover(make_image_sized(tmp_path / "alta.png", (400, 900)))
+
+    assert (pixbuf.get_width(), pixbuf.get_height()) == (400, 900)
+
+
+def test_imagem_pouco_mais_larga_ainda_e_esticada(tmp_path):
+    # 600x800: esticar para 600x900 distorce 11 %, dentro dos 12 % tolerados.
+    from cartridges.utils.save_cover import composite_cover  # noqa: PLC0415
+
+    pixbuf = composite_cover(make_image_sized(tmp_path / "quase.png", (600, 800)))
+
+    assert (pixbuf.get_width(), pixbuf.get_height()) == (600, 800)
+
+
+def test_imagem_larga_vai_ao_centro_sobre_o_proprio_desfoque(tmp_path):
+    from cartridges.utils.save_cover import composite_cover  # noqa: PLC0415
+
+    pixbuf = composite_cover(make_image_sized(tmp_path / "larga.png", (1200, 400)))
+
+    assert (pixbuf.get_width(), pixbuf.get_height()) == shared.image_size
+    pixels = pixbuf.get_pixels()
+    meio = (pixbuf.get_height() // 2) * pixbuf.get_rowstride() + (pixbuf.get_width() // 2) * pixbuf.get_n_channels()
+    assert tuple(pixels[meio : meio + 3]) == (0, 0, 255)
+
+
+def test_arquivo_ilegivel_levanta(tmp_path):
+    from cartridges.utils.save_cover import UnreadableCoverError, composite_cover  # noqa: PLC0415
+
+    ruim = tmp_path / "ruim.png"
+    ruim.write_bytes(b"nada")
+
+    with pytest.raises(UnreadableCoverError):
+        composite_cover(ruim)
+
+
+def make_image_sized(path, size):
+    Image.new("RGB", size, "blue").save(path)
+    return path

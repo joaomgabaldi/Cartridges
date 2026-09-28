@@ -1,5 +1,7 @@
 # backup.py
 #
+# Copyright 2026 joaomgabaldi
+#
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """O backup: um retrato completo do app num .zip.

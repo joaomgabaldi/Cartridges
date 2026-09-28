@@ -1,5 +1,7 @@
 # session_log.py
 #
+# Copyright 2026 joaomgabaldi
+#
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """Histórico de sessões de jogo: uma linha por sessão terminada.

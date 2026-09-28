@@ -1,5 +1,7 @@
 # restauracao_dialogs.py
 #
+# Copyright 2026 joaomgabaldi
+#
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """As telas da restauração de um backup: a pasta de atalhos que falta, os

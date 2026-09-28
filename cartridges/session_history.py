@@ -1,5 +1,7 @@
 # session_history.py
 #
+# Copyright 2026 joaomgabaldi
+#
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """A tela do histórico de sessões de um jogo.

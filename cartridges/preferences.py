@@ -32,7 +32,7 @@ from cartridges import shared
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.metadata_refresh import get_metadata_refresh
 from cartridges.store.managers.sgdb_manager import SgdbManager
-from cartridges.utils import backup, session_fita, window_geometry
+from cartridges.utils import backup, restauracao, session_fita, window_geometry
 from cartridges.utils.create_dialog import create_dialog
 
 
@@ -284,9 +284,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.reler_do_schema()
 
     def reler_do_schema(self) -> None:
-        """Preenche de novo as linhas que não usam ``bind`` — chamado uma vez
-        no ``__init__`` e de novo depois de um restore de backup, que grava
-        direto no ``Gio.Settings`` sem passar por nenhum widget.
+        """Preenche as linhas que não usam ``bind``. Chamado no fim do
+        ``__init__``.
 
         O sinal de cada linha fica bloqueado enquanto ela é preenchida: ele
         existe para gravar o que o USUÁRIO digitou, e um preenchimento nosso
@@ -906,8 +905,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             shared.win.toast_queue.dismiss(toast)
         shared.win.toasts = {}
 
-        # Forget the last import's undo data for the same reason (Ctrl+Z
-        # would otherwise look up games that no longer exist)
+        # Forget the last import's undo data for the same reason ("Desfazer"
+        # on its summary would otherwise look up games that no longer exist)
         if shared.importer:
             shared.importer.imported_game_ids = set()
             shared.importer.removed_game_ids = set()
@@ -944,6 +943,11 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         # O histórico de sessões também: os ids de atalho são estáveis, e os
         # jogos reimportados herdariam as sessões dos apagados.
         (shared.app_dir / "sessions.jsonl").unlink(missing_ok=True)
+
+        # Uma restauração pendente também acaba aqui: os jogos dela foram
+        # apagados, e a abertura seguinte exigiria a pasta de atalhos esvaziada
+        # logo abaixo para procurar atalhos de jogos que não existem mais.
+        restauracao.gravar([], 0)
 
         # Forget the configured shortcuts folder
         shared.schema.set_string("shortcuts-location", "")

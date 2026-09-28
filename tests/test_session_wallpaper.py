@@ -84,7 +84,7 @@ class TestEnquadramento:
             b = pequena.resize((36, 64), Image.LANCZOS)
             diferenca = max(
                 abs(int(p) - int(q))
-                for p, q in zip(a.convert("L").getdata(), b.convert("L").getdata())
+                for p, q in zip(a.convert("L").get_flattened_data(), b.convert("L").get_flattened_data())
             )
             # Reamostragem não é exata; o que se afirma é o enquadramento, e
             # um quadro diferente daria centenas de níveis de diferença.
@@ -94,7 +94,7 @@ class TestEnquadramento:
         original = _arte(3840, 2160)
         esquerda = session_wallpaper.enquadrar(original, 1080, 1920, 0.0)
         direita = session_wallpaper.enquadrar(original, 1080, 1920, 1.0)
-        assert list(esquerda.getdata()) != list(direita.getdata())
+        assert list(esquerda.get_flattened_data()) != list(direita.get_flattened_data())
 
     def test_saida_tem_exatamente_o_tamanho_do_monitor(self) -> None:
         for origem in ((3840, 2160), (1080, 2400), (600, 900)):

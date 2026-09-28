@@ -1,3 +1,9 @@
+# passeio_app.py
+#
+# Copyright 2026 joaomgabaldi
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Filho do passeio: o Cartridges real, isolado, dirigido por um roteiro.
 
 Uso (normalmente chamado por ``tools/passeio.py``)::

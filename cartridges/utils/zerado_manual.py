@@ -1,5 +1,7 @@
 # zerado_manual.py
 #
+# Copyright 2026 joaomgabaldi
+#
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """Jogos Zerados adicionados à mão: jogos terminados que nunca passaram pelo

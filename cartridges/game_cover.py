@@ -335,11 +335,6 @@ class GameCover:
             self.blurred = self.placeholder_small
             self.luminance = (0.3, 0.5)
 
-    def get_blurred(self) -> Gdk.Texture:
-        if not self.blurred:
-            self._apply_blur(self._compute_blur(self.path))
-        return self.blurred
-
     def ensure_blurred(self, callback: Callable[["GameCover"], None]) -> None:
         """Hand the blurred texture to ``callback``, computing it off-thread.
 

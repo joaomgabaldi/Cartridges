@@ -309,7 +309,7 @@ def test_b13_capa_que_nao_grava_nao_derruba_o_aplicar(
 
 
 def test_b10_temporarios_de_logo_e_capa_sao_apagados(
-    real_window, store, tmp_path
+    real_window, store, tmp_path, flush_idle
 ):
     from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
 
@@ -326,6 +326,9 @@ def test_b10_temporarios_de_logo_e_capa_sao_apagados(
     dialog.apply_preferences()
 
     assert not logo.exists(), "o logo já foi copiado para a pasta dos logos"
+    # A capa sai depois da recarga que o `save_cover` agenda: até lá a tela de
+    # detalhes ainda lê dela.
+    flush_idle()
     assert not capa.exists(), "a capa já foi copiada para a pasta das capas"
 
 

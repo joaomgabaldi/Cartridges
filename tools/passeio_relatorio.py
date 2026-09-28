@@ -1,3 +1,9 @@
+# passeio_relatorio.py
+#
+# Copyright 2026 joaomgabaldi
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Lógica pura do passeio: classifica os passos e escreve o relatório.
 
 Sem GTK e sem rede, para ser testada na suíte normal. Recebe os passos no

@@ -1,5 +1,7 @@
 # ligacao_zerado.py
 #
+# Copyright 2026 joaomgabaldi
+#
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """Liga um jogo de Jogos Zerados ao jogo da biblioteca que tem o mesmo appID.

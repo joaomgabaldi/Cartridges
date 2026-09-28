@@ -686,8 +686,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
             ),
         )
 
-        # "Limpar" só existe enquanto há o que limpar: zera os dois filtros num
-        # clique, em vez de entrar em cada lista e marcar "Todos" duas vezes.
+        # "Limpar" só existe enquanto há o que limpar: zera os três filtros num
+        # clique, em vez de entrar em cada lista e marcar "Todos" uma a uma.
         # Escolher um filtro fecha o popover, então a próxima abertura já
         # remonta o menu com (ou sem) ele — nada fica desatualizado na tela.
         if self.filter_genre_state or self.filter_year_state or self.filter_status_state:
@@ -725,7 +725,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         )
 
     def on_clear_filters_action(self, *_args: Any) -> None:
-        """Volta gênero e ano para "Todos" de uma vez."""
+        """Volta gênero, ano e status para "Todos" de uma vez."""
         self.set_filter("filter_genre", "")
         self.set_filter("filter_year", "")
         self.set_filter("filter_status", "")
@@ -1833,7 +1833,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
             self.details_view_blurred_cover.set_opacity(0.3)
             return
 
-        # `luminance` only exists once `get_blurred` has computed it, and
+        # `luminance` only exists once `ensure_blurred` has computed it, and
         # `new_cover` clears it again. A cover saved while the details page is
         # already up goes through exactly that gap: `save_cover` hands the
         # reload back with `GLib.idle_add`, so it lands after `apply_preferences`
