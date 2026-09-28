@@ -367,7 +367,6 @@ class Store:
         # The toasts are libadwaita widgets and this runs on an import worker
         # thread, so the dismissal has to be handed to the main loop — the same
         # rule DisplayManager follows for everything it touches.
-        # TODO: don't run this if the state is startup
         def dismiss_undo_toasts() -> bool:
             if toast := shared.win.toasts.pop((game, "remove"), None):
                 shared.win.toast_queue.dismiss(toast)
