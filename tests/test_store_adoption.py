@@ -520,3 +520,20 @@ def test_tombstone_adoption_leaves_the_resurrection_gate_alone(store, make_game)
     )
 
     assert tomb.shortcut_mtime == 100
+
+
+def test_atalho_apontado_a_mao_e_adotado_na_varredura(store, make_game, seed):
+    """A escolha manual da janela de pendências da restauração
+    (`Store.apontar_atalho`) é o que a âncora encontra na varredura seguinte."""
+    restaurado = seed(
+        make_game(game_id=OLD_ID, playtime=900, shortcut_path="C:\Velho\Halo.lnk")
+    )
+    store.apontar_atalho(restaurado, LNK)
+
+    varrido = make_game(game_id=NEW_ID, shortcut_path=LNK)
+    store.add_game(varrido, {"identity_anchor": LNK})
+
+    assert store.get(NEW_ID) is restaurado
+    assert store.get(OLD_ID) is None
+    assert restaurado.playtime == 900
+    assert NEW_ID in store.duplicate_game_ids

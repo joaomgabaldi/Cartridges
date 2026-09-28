@@ -5,10 +5,9 @@
 """Jogos Zerados adicionados à mão: jogos terminados que nunca passaram pelo
 Cartridges (console, outro PC, anos atrás).
 
-Viram a mesma tumba zerada que a restauração do backup cria para um zerado que
-só existe no `.zip` (`backup._criar_zerado`): ``imported_N``, sem atalho, sem
-executável, sem tempo de jogo. Por isso backup, edição, Excluir e ordenação não
-precisam saber que eles existem.
+Viram uma tumba zerada: ``imported_N``, sem atalho, sem executável, sem
+tempo de jogo. Por isso backup, edição, Excluir e ordenação não precisam saber
+que eles existem.
 
 Sem repetição: um jogo que já está em Jogos Zerados ou na biblioteca não é
 criado de novo, e um desinstalado com a mesma identidade é marcado em vez de
@@ -28,7 +27,7 @@ from cartridges.utils.steam import SteamAPIHelper, SteamRateLimiter
 
 
 def _chaves(nome: str, appid: Optional[str]) -> set[str]:
-    """As identidades do backup (`backup.identidade`), as duas de uma vez: um
+    """As duas identidades de um jogo, appID e nome limpo: um
     resultado da Steam é o mesmo jogo pelo appID ou pelo nome."""
     chaves = {f"nome:{clean_for_search(nome or '').casefold()}"}
     if appid:

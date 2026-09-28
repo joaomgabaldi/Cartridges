@@ -48,6 +48,7 @@ from cartridges.utils.news_feed import NewsPost
 from cartridges.utils.open_uri import open_uri
 from cartridges.session_history import SessionHistoryDialog
 from cartridges.utils import (
+    restauracao,
     session_fita,
     session_log,
     session_wallpaper,
@@ -641,7 +642,11 @@ class CartridgesWindow(Adw.ApplicationWindow):
         years: set[str] = set()
         for game in shared.store:
             # Os zerados também: a página Jogos Zerados usa este mesmo menu.
-            if game.blacklisted or (game.removed and not game.zerado):
+            if (
+                game.blacklisted
+                or (game.removed and not game.zerado)
+                or restauracao.e_pendente(game.game_id)
+            ):
                 continue
             if game.genre:
                 genres.add(game.genre)
@@ -1002,7 +1007,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         child, zerados_child = self.notice_empty, self.zerados_notice_empty
 
         for game in shared.store:
-            if game.blacklisted:
+            if game.blacklisted or restauracao.e_pendente(game.game_id):
                 continue
             if game.removed:
                 if not game.zerado:
@@ -1039,6 +1044,11 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
     def filter_func(self, child: Gtk.Widget) -> bool:
         game = child.get_child()
+        # Um jogo restaurado cujo atalho não foi achado só existe na janela
+        # de pendências (`restauracao_dialogs`), não na biblioteca.
+        if restauracao.e_pendente(game.game_id):
+            self.schedule_library_child()
+            return False
         # A mesma função filtra as duas grades, mas só a biblioteca tem caixa
         # de busca: na de zerados valem só os filtros do menu. A grade é a do
         # pai do filho, e não a da página à vista — o GTK refiltra no

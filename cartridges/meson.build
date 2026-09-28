@@ -41,6 +41,7 @@ install_data(
     'session_window.py',
     'session_history.py',
     'zerados_picker.py',
+    'restauracao_dialogs.py',
     'process_session.py',
     'metadata_refresh.py',
     'game.py',

@@ -23,7 +23,7 @@ from gi.repository import Adw, GLib
 from cartridges import shared
 from cartridges.game import Game
 from cartridges.store.managers.display_manager import is_main_thread
-from cartridges.utils import backup, game_logo, session_fita, session_log, session_wallpaper
+from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper
 from cartridges.utils.save_cover import ANIMATED_SUFFIXES
 
 
@@ -84,14 +84,6 @@ def _mover_escolhas(zerado: Game, jogo: Game) -> None:
 def ligar_zerado(jogo: Game) -> bool:
     """Liga ``jogo`` ao zerado de mesmo appID. True: ligou."""
     assert is_main_thread(), "ligar_zerado toca a store e widgets"
-    if backup.RESTAURANDO.is_set():
-        # O restore já casa zerados com jogos vivos por identidade, na thread
-        # dele; uma fusão daqui no meio apagaria uma tumba que essa thread
-        # ainda vai tocar (`_forcar_appids` já evita a origem mais comum disto
-        # passando `sem_ligacao`, mas um import ou uma edição em paralelo não
-        # passam por lá).
-        logging.info("Sem ligação de zerado: restauração de backup em andamento")
-        return False
     appid = getattr(jogo, "steam_appid", None)
     if not appid or jogo.removed or jogo.blacklisted:
         return False

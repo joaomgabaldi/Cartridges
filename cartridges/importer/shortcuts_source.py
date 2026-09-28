@@ -288,48 +288,57 @@ def resolve_start_apps() -> list[tuple[str, str]]:
     ]
 
 
+def atalhos_da_pasta() -> list[Path]:
+    """Os ``.lnk`` e ``.url`` da pasta de atalhos configurada, com ou sem
+    subpastas conforme a preferência. Lista vazia se a pasta não existir.
+
+    Compartilhada pela varredura e pela janela de pendências da restauração,
+    que precisa oferecer exatamente os atalhos que a importação enxerga.
+    """
+    location = shared.schema.get_string("shortcuts-location")
+    if not location:
+        return []
+    root = Path(location).expanduser()
+    if not root.is_dir():
+        return []
+
+    if shared.schema.get_boolean("shortcuts-recursive"):
+        # os.walk, not rglob: rglob descends into NTFS junctions (creatable
+        # without admin rights), and one looping back to a parent repeated
+        # every shortcut dozens of times. os.walk already skips symlinks;
+        # junctions are pruned here, as `install_size.folder_size` does.
+        entries: list[Path] = []
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [
+                d for d in dirnames if not os.path.isjunction(os.path.join(dirpath, d))
+            ]
+            entries += (Path(dirpath, filename) for filename in filenames)
+    else:
+        entries = list(root.glob("*"))
+
+    return [
+        entry
+        for entry in entries
+        if entry.is_file() and entry.suffix.lower() in (".lnk", ".url")
+    ]
+
+
 class ShortcutsSourceIterable(SourceIterable):
     source: "ShortcutsSource"
 
     def __iter__(self):
-        """Generator method producing games from shortcut files"""
+        """Generator method producing games from shortcut files.
 
-        location = shared.schema.get_string("shortcuts-location")
-        if not location:
-            logging.info("Shortcuts source skipped, no folder selected")
-            return
-
-        root = Path(location).expanduser()
-        if not root.is_dir():
-            logging.info("Shortcuts folder %s is not a directory", root)
-            return
-
-        if shared.schema.get_boolean("shortcuts-recursive"):
-            # os.walk, not rglob: rglob descends into NTFS junctions (creatable
-            # without admin rights), and one looping back to a parent repeated
-            # every shortcut dozens of times. os.walk already skips symlinks;
-            # junctions are pruned here, as `install_size.folder_size` does.
-            entries: list[Path] = []
-            for dirpath, dirnames, filenames in os.walk(root):
-                dirnames[:] = [
-                    d
-                    for d in dirnames
-                    if not os.path.isjunction(os.path.join(dirpath, d))
-                ]
-                entries += (Path(dirpath, filename) for filename in filenames)
-        else:
-            entries = list(root.glob("*"))
+        A pasta existir já é checado antes (`ShortcutsSource.is_available`);
+        `atalhos_da_pasta` devolve lista vazia se ela sumir no meio."""
 
         url_files: list[Path] = []
         lnk_files: list[Path] = []
-        for entry in entries:
-            if not entry.is_file():
-                continue
-            match entry.suffix.lower():
-                case ".url":
-                    url_files.append(entry)
-                case ".lnk":
-                    lnk_files.append(entry)
+        for entry in atalhos_da_pasta():
+            if entry.suffix.lower() == ".url":
+                url_files.append(entry)
+            else:
+                lnk_files.append(entry)
 
         # The `.url` shortcuts first, deliberately: they are parsed here, in
         # process, and cannot be taken down by the PowerShell failures guarded

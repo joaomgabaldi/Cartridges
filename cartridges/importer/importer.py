@@ -21,7 +21,7 @@
 import logging
 import threading
 from time import time
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
@@ -32,6 +32,7 @@ from cartridges.game import Game
 from cartridges.importer.source import Source, SourceScanError
 from cartridges.store.managers.async_manager import AsyncManager
 from cartridges.store.pipeline import Pipeline
+from cartridges.utils import restauracao
 
 
 # pylint: disable=too-many-instance-attributes
@@ -64,6 +65,10 @@ class Importer(ErrorProducer):
         self.removed_game_ids = set()
         self.imported_game_ids = set()
         self.scanned_source_ids = set()
+        # Chamado no fim de `finish_import`, na thread principal. A
+        # restauração de backup o usa para abrir a janela dos jogos sem
+        # atalho só depois de a importação da abertura terminar.
+        self.ao_terminar: Optional[Callable[[], None]] = None
 
         self.game_pipelines = set()
         self.sources = set()
@@ -166,6 +171,9 @@ class Importer(ErrorProducer):
     def finish_import(self) -> None:
         """Callback called when importing has finished"""
         logging.info("Import done")
+        # Antes de `remove_games` e do reset abaixo: as duas leem
+        # `duplicate_game_ids`.
+        self.resolver_pendencias()
         self.remove_games()
         self.imported_game_ids = shared.store.new_game_ids
         shared.store.new_game_ids = set()
@@ -182,6 +190,17 @@ class Importer(ErrorProducer):
         # Re-apply the current sort so freshly imported games land in order
         shared.win.library.invalidate_sort()
         shared.win.zerados_library.invalidate_sort()
+        # Um pendente resolvido volta a aparecer; o filtro é quem o escondia.
+        shared.win.library.invalidate_filter()
+        if self.ao_terminar is not None:
+            self.ao_terminar()
+
+    def resolver_pendencias(self) -> None:
+        """Tira das pendências da restauração os jogos que esta importação
+        achou. Só depois de varrer a pasta de atalhos até o fim: uma
+        varredura que não aconteceu não sabe quem está lá."""
+        if "shortcuts" in self.scanned_source_ids and restauracao.existe():
+            restauracao.resolver(shared.store.duplicate_game_ids)
 
     def remove_games(self) -> None:
         """Set removed to True for missing games"""
@@ -194,6 +213,10 @@ class Importer(ErrorProducer):
             if game.removed:
                 continue
             if game.source == "imported":
+                continue
+            # Um jogo restaurado cujo atalho ainda não foi achado espera na
+            # janela de pendências, não vira desinstalado.
+            if restauracao.e_pendente(game.game_id):
                 continue
             # Only remove games whose source was actually scanned this run.
             # A missing/unset folder (e.g. a disconnected drive) must not be

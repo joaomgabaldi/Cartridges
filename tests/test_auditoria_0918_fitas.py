@@ -337,10 +337,8 @@ def test_b7_exportar_por_cima_nao_trunca_o_backup_antigo(
     assert not destino.with_name("backup.zip.tmp").exists()
 
 
-# O b8 testava a mescla do backup .json antigo (`preferencias.import_backup()`
-# caindo em `_merge_json_backup`) — a Task 9 apagou esse caminho: hoje
-# `import_backup` só aceita o .zip completo (`backup.validar`/`backup.restaurar`,
-# cobertos em `tests/test_backup.py`, seção "A tela de verdade").
+# O b8 testava a mescla do backup .json antigo; o backup de hoje é o snapshot
+# coberto em `tests/test_backup.py`.
 
 
 # endregion

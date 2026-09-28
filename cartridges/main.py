@@ -21,9 +21,11 @@ import json
 import logging
 import lzma
 import os
+import subprocess
 import sys
 import threading
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any, Callable, Optional
 from urllib.parse import quote
 
 # Mirrors the launcher (cartridges.in) for direct module runs: MSYS2's
@@ -42,7 +44,7 @@ gi.require_version("Adw", "1")
 # pylint: disable=wrong-import-position
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
-from cartridges import shared
+from cartridges import restauracao_dialogs, shared
 from cartridges.details_dialog import DetailsDialog
 from cartridges.game import Game
 from cartridges.gamepad import GamepadManager
@@ -64,10 +66,13 @@ from cartridges.utils.news_checker import NewsChecker
 from cartridges.utils.open_uri import open_uri
 from cartridges.utils.single_instance import (
     acquire as acquire_single_instance,
+    release as release_single_instance,
     present_running_instance,
 )
 from cartridges.utils.updates_checker import UpdatesChecker
 from cartridges.utils import (
+    backup,
+    restauracao,
     session_fita,
     session_log,
     session_wallpaper,
@@ -319,6 +324,11 @@ class CartridgesApplication(Adw.Application):
     hltb_backfill: Optional[HLTBBackfill] = None
     install_size_sweep: Optional[InstallSizeSweep] = None
     app_updater: Optional[AppUpdater] = None
+    # Ligado por Preferências depois de agendar uma restauração: `main()`
+    # reabre o app quando este processo terminar de sair.
+    reiniciar = False
+    # A restauração agendada falhou nesta abertura; o aviso espera a janela.
+    restauracao_falhou = False
     # O provider da cor de destaque, guardado para o watcher do registro poder
     # reescrever o CSS no lugar em vez de empilhar um provider por mudança.
     _accent_provider: Optional[Gtk.CssProvider] = None
@@ -444,6 +454,11 @@ class CartridgesApplication(Adw.Application):
             logging.exception("Não foi possível configurar o log em arquivo")
 
         log_system_info()
+
+        # Um backup agendado por Preferências é aplicado aqui, antes de
+        # qualquer leitura de dados: fitas, papéis de parede e a biblioteca
+        # abaixo já nascem do backup. O aviso de falha espera a janela.
+        self.restauracao_falhou = backup.aplicar_pendente() is False
 
         # Uma sessão anterior pode ter deixado os monitores vestidos: o app
         # morto (ou a máquina desligada) no meio dela não passa por
@@ -585,7 +600,12 @@ class CartridgesApplication(Adw.Application):
         self.app_updater = AppUpdater()
         self.app_updater.start()
 
-        if shared.schema.get_boolean("auto-import"):
+        if self.restauracao_falhou:
+            restauracao_dialogs.avisar_falha()
+
+        if restauracao.existe():
+            self.continuar_restauracao()
+        elif shared.schema.get_boolean("auto-import"):
             # Com a biblioteca já formada, a importação da abertura só procura o
             # que mudou: a porcentagem dela não diz nada a ninguém. O resumo
             # continua aparecendo quando algo entra ou sai.
@@ -594,6 +614,21 @@ class CartridgesApplication(Adw.Application):
                     not (game.removed or game.blacklisted) for game in shared.store
                 )
             )
+
+    def continuar_restauracao(self) -> None:
+        """A cada abertura enquanto houver pendências da restauração: a pasta
+        de atalhos é obrigatória, a importação roda mesmo com "Importar jogos
+        automaticamente" desligado, e a janela dos jogos sem atalho abre no
+        fim dela."""
+        local = shared.schema.get_string("shortcuts-location")
+        if not local or not Path(local).expanduser().is_dir():
+            restauracao_dialogs.PedirPasta(self.continuar_restauracao).present()
+            return
+        self.on_import_action(
+            mostrar_progresso=False,
+            ao_terminar=restauracao_dialogs.mostrar_pendentes,
+            varrer_atalhos=True,
+        )
 
     def save_window_geometry(self, *_args: Any) -> bool:
         """Remember where the window is, if it can still be asked.
@@ -841,10 +876,20 @@ class CartridgesApplication(Adw.Application):
 
         DetailsDialog().present(shared.win)
 
-    def on_import_action(self, *_args: Any, mostrar_progresso: bool = True) -> None:
+    def on_import_action(
+        self,
+        *_args: Any,
+        mostrar_progresso: bool = True,
+        ao_terminar: Optional[Callable[[], None]] = None,
+        varrer_atalhos: bool = False,
+    ) -> None:
+        """``varrer_atalhos`` varre a pasta de atalhos mesmo com a fonte
+        desligada em Preferências: as pendências da restauração só se resolvem
+        com essa varredura, e a configuração em si não muda."""
         shared.importer = Importer()
+        shared.importer.ao_terminar = ao_terminar
 
-        if shared.schema.get_boolean("shortcuts"):
+        if varrer_atalhos or shared.schema.get_boolean("shortcuts"):
             shared.importer.add_source(ShortcutsSource())
 
         shared.importer.run(mostrar_progresso)
@@ -888,6 +933,15 @@ class CartridgesApplication(Adw.Application):
             scope.add_action(simple_action)
 
 
+def relancar() -> None:
+    """Abre o app de novo, desacoplado deste processo, que já está saindo."""
+    subprocess.Popen(  # pylint: disable=consider-using-with
+        [sys.executable, *sys.argv],
+        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        close_fds=True,
+    )
+
+
 def main() -> Any:
     """App entry point.
 
@@ -914,4 +968,8 @@ def main() -> Any:
         return 0
 
     app = CartridgesApplication()
-    return app.run(sys.argv)
+    status = app.run(sys.argv)
+    if app.reiniciar:
+        release_single_instance()
+        relancar()
+    return status

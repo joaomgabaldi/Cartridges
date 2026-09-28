@@ -448,8 +448,7 @@ class FakeGame:
 
     def update_values(self, data: dict) -> None:
         # Duck-types Game.update_values (plain setattr, no _KNOWN_KEYS
-        # filtering): backup.restaurar calls this on whatever `shared.store`
-        # holds, real Game or this fake.
+        # filtering).
         for key, value in data.items():
             setattr(self, key, value)
 
