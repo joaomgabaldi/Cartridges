@@ -162,6 +162,29 @@ def test_game_root_in_program_files_trusts_an_uninstaller(
     assert root == _win32(str(tmp_path / "Program Files" / expected))
 
 
+@pytest.mark.parametrize("library", ["jogos", "jogos instalados", "Meus Jogos"])
+def test_game_root_anywhere_is_found_by_its_uninstaller(tmp_path, library):
+    """Games live wherever their owner put them, not only in folders we know.
+
+    ``tmp_path`` sits under no container at all, like ``Y:\\jogos`` would.
+    """
+    game = tmp_path / library / "Unreal Tournament III"
+    binaries = game / "Binaries"
+    binaries.mkdir(parents=True)
+    (game / "unins000.exe").write_bytes(b"")
+
+    assert _win32(pm._game_root(str(binaries))) == _win32(str(game))
+
+
+def test_game_root_anywhere_without_uninstaller_is_still_unknown(tmp_path):
+    """A portable game outside any container: guessing the exe's folder is what
+    once measured Unreal Tournament III at 125 MB of 9 GB."""
+    binaries = tmp_path / "jogos" / "Portatil" / "Binaries" / "Win64"
+    binaries.mkdir(parents=True)
+
+    assert pm._game_root(str(binaries)) == ""
+
+
 # ---------------------------------------------------------------------------
 # 4.6 - 4.8  Refusing folders that are not one game
 # ---------------------------------------------------------------------------
