@@ -31,32 +31,11 @@
    shadow — no crisp ring — so it reads as a diffuse halo and wraps the card
    continuously, including under the title footer, with no hard edge.
 
-   The halo slowly "breathes" between a fainter and a stronger glow so a
-   waiting patch draws the eye without being a hard, static outline. Because an
-   active animation owns the box-shadow property, the pulse also carries over
-   on hover (the separate hover lift can't combine with it), which is fine —
-   the pulsing glow is the point. */
-@keyframes cover-update-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 22px 5px alpha(#f5b820, 0.35);
-  }
-
-  50% {
-    box-shadow: 0 0 22px 5px alpha(#f5b820, 0.8);
-  }
-}
-
+   Static on purpose. It used to "breathe", and an infinite animation keeps the
+   frame clock redrawing the window at ~57 fps: measured on 2026-09-28, 12-13%
+   of a core for as long as the window had focus. Declared after the :hover
+   lift with the same specificity, so the glow also wins on hover. */
 #cover_button.update-available {
-  animation: cover-update-pulse 3.5s ease-in-out infinite;
-}
-
-/* With another window focused the halo holds still at its strongest. The
-   infinite pulse keeps the frame clock ticking for as long as the window is
-   visible: measured on 2026-09-23, ~3% of a core with the app sitting idle
-   behind another window. Focused, it breathes as above. */
-#cover_button.update-available:backdrop {
-  animation: none;
   box-shadow: 0 0 22px 5px alpha(#f5b820, 0.8);
 }
 
