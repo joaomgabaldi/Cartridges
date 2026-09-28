@@ -444,10 +444,13 @@ def _game_root(directory: str) -> str:
     ``Binaries\\Win64``. Watching only the folder the command names would miss
     the game itself and bank a session lasting as long as the launcher did.
 
-    The climb stops at the folder whose parent is a well-known container of many
-    games, which is what marks a root. Returns "" when no container is reached:
-    that layout is not one we recognise, and the alternative to admitting so
-    would be watching a folder that holds somebody else's games too.
+    The climb stops at the first folder carrying an uninstaller, wherever the
+    player chose to install (``Y:\\jogos``, a folder in their profile), or else
+    at the folder whose parent is a well-known container of many games. Returns
+    "" when neither is reached: that layout is not one we recognise, and the
+    alternative to admitting so would be guessing — the executable's own folder
+    once measured Unreal Tournament III (``Binaries\\UT3.exe``) at 125 MB of
+    9 GB — or watching a folder that holds somebody else's games too.
     """
     if not directory:
         return ""
@@ -457,17 +460,19 @@ def _game_root(directory: str) -> str:
     for _ in range(_MAX_ROOT_WALK):
         parent = os.path.dirname(current)
         if parent == current:
-            return ""  # hit the drive root without ever finding a container
+            return ""  # hit the drive root without ever finding a root marker
+        if _has_uninstaller(current):
+            return _win32_path(current)
         container = os.path.basename(parent).casefold()
         if container in _CONTAINER_DIRS:
             # Program Files holds publishers as often as games: `Epic Games`,
             # `EA Games` and `Rockstar Games` each hold several games — and
             # Rockstar's launcher, which lingers in the tray after the game.
-            # There the root is the second level, not the first — unless the
-            # first level carries an uninstaller, which only a game has.
-            # Without that check `Unreal Tournament III\Binaries` was taken
-            # for the game, and its size came out at 125 MB of 9 GB.
-            if container in _PROGRAM_FILES_DIRS and below and not _has_uninstaller(current):
+            # There the root is the second level, not the first.
+            # ponytail: a game living directly in Program Files with its exe
+            # two levels down and no uninstaller gets its subfolder watched,
+            # not its root.
+            if container in _PROGRAM_FILES_DIRS and below:
                 current = below
             # Backslashes on the way out, so what this hands to
             # `install_dir_from_command` — and from there to
