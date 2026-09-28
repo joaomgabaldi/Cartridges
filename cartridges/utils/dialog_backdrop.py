@@ -17,14 +17,15 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Keep a dialog from moving or maximizing the window it is shown in.
+"""Keep a dialog from moving the window it is shown in, or from acting as its title bar.
 
 libadwaita builds both the dimmed area around a dialog and the dialog's own
 bars (its title bar, and whatever else sits above or below its content) out of
 `GtkWindowHandle`, the same widget as the main window's title bar. Dragging any
-of them moves the whole window, and double-clicking one maximizes it. On
-Windows a window is moved by its own title bar and by nothing else, and a
-dialog drawn inside the window is not that title bar.
+of them moves the whole window, double-clicking one maximizes it, and
+right-clicking one opens the window's menu — whose Close shuts the whole app,
+not the dialog. On Windows a window is moved by its own title bar and by
+nothing else, and a dialog drawn inside the window is not that title bar.
 
 The handles are private and are rebuilt whenever the dialog switches between
 floating and bottom sheet, so their gestures cannot simply be removed once and
@@ -41,30 +42,39 @@ bubble phase, and claims the press before a handle can act on it:
   `window.toggle-maximized` action, which the dialog answers itself with an
   action that does nothing. Buttons and search boxes in the bars keep their
   own double-clicks.
+- A right-click on a bar or on the dimmed area is claimed outright, except on
+  a search box in a bar, which takes it for its own copy-and-paste menu.
 
 The bottom sheet used in a narrow window dims with a plain gizmo rather than a
 window handle and closes when tapped; nothing here touches that.
 """
 
-from gi.repository import Adw, Gio, Gtk
+from gi.repository import Adw, Gdk, Gio, Gtk
 
 _BLOCKED = "_cartridges_backdrop_drag_blocked"
 
 
 def block_window_drag(dialog: Adw.Dialog) -> None:
-    """Stop presses in `dialog` and around it from moving the window."""
+    """Stop presses in `dialog` and around it from acting on the window."""
     # A dialog becomes the visible one again every time a dialog stacked on top
     # of it closes, and one set of gestures is enough.
     if getattr(dialog, _BLOCKED, False):
         return
     setattr(dialog, _BLOCKED, True)
 
-    # Only the primary button, which is the one the handle drags with. What the
-    # secondary button does there — the window's system menu — is libadwaita's
-    # to decide and is not what makes the window wander.
-    click = Gtk.GestureClick(propagation_phase=Gtk.PropagationPhase.CAPTURE)
+    click = Gtk.GestureClick(
+        button=Gdk.BUTTON_PRIMARY, propagation_phase=Gtk.PropagationPhase.CAPTURE
+    )
     click.connect("pressed", _claim_backdrop_press)
     dialog.add_controller(click)
+
+    # The window's menu is not an action the dialog could answer in its place:
+    # the handle asks Windows for it directly.
+    menu = Gtk.GestureClick(
+        button=Gdk.BUTTON_SECONDARY, propagation_phase=Gtk.PropagationPhase.CAPTURE
+    )
+    menu.connect("pressed", _claim_menu_press)
+    dialog.add_controller(menu)
 
     drag = Gtk.GestureDrag(propagation_phase=Gtk.PropagationPhase.CAPTURE)
     drag.connect("drag-update", _claim_bar_drag)
@@ -90,7 +100,18 @@ def drag_would_move_window(
     if max(abs(offset_x), abs(offset_y)) < threshold:
         return False
 
+    return reaches_window_handle(dialog, target)
+
+
+def reaches_window_handle(dialog: Adw.Dialog, target: Gtk.Widget | None) -> bool:
+    """Whether a press on `target` is left for a window handle to act on.
+
+    A text box takes every press on it for itself, the right-click included, so
+    one sitting in a bar keeps them.
+    """
     while target is not None and target is not dialog:
+        if isinstance(target, Gtk.Editable):
+            return False
         if isinstance(target, Gtk.WindowHandle):
             return True
         target = target.get_parent()
@@ -108,6 +129,15 @@ def _claim_backdrop_press(
     target = gesture.get_widget().pick(x, y, Gtk.PickFlags.DEFAULT)
 
     if isinstance(target, Gtk.WindowHandle) and target.get_child() is None:
+        gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+
+
+def _claim_menu_press(
+    gesture: Gtk.GestureClick, _n_press: int, x: float, y: float
+) -> None:
+    dialog = gesture.get_widget()
+
+    if reaches_window_handle(dialog, dialog.pick(x, y, Gtk.PickFlags.DEFAULT)):
         gesture.set_state(Gtk.EventSequenceState.CLAIMED)
 
 

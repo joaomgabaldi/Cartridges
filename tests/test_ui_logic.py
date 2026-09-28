@@ -19,12 +19,15 @@ import logging
 from types import SimpleNamespace
 
 import pytest
-from gi.repository import GLib, Gtk
+from gi.repository import Gdk, GLib, Gtk
 
 from cartridges import gamepad as gp
 from cartridges.logging.session_file_handler import SessionFileHandler
 from cartridges.utils.animated_flow_box import AnimatedFlowBox
-from cartridges.utils.dialog_backdrop import drag_would_move_window
+from cartridges.utils.dialog_backdrop import (
+    drag_would_move_window,
+    reaches_window_handle,
+)
 from cartridges.utils import window_geometry
 from cartridges.window import CartridgesWindow
 
@@ -1420,6 +1423,11 @@ def capture_gestures(widget, kind):
     ]
 
 
+def click_buttons(widget):
+    """The mouse buttons the capture-phase click gestures on `widget` listen to."""
+    return sorted(g.get_button() for g in capture_gestures(widget, Gtk.GestureClick))
+
+
 def window_handle_of(dialog, *, empty):
     """The first window handle in `dialog` with (or without) a child."""
     pending = [dialog]
@@ -1444,7 +1452,7 @@ def test_a_presented_dialog_gets_the_backdrop_guard(real_window, details_dialog)
     details_dialog.present(real_window)
 
     assert real_window.get_visible_dialog() is details_dialog
-    assert len(capture_gestures(details_dialog, Gtk.GestureClick)) == 1
+    assert click_buttons(details_dialog) == [Gdk.BUTTON_PRIMARY, Gdk.BUTTON_SECONDARY]
     assert len(capture_gestures(details_dialog, Gtk.GestureDrag)) == 1
 
 
@@ -1454,7 +1462,7 @@ def test_the_guard_is_installed_once(real_window, details_dialog):
     real_window.block_dialog_backdrop_drag()
     real_window.block_dialog_backdrop_drag()
 
-    assert len(capture_gestures(details_dialog, Gtk.GestureClick)) == 1
+    assert click_buttons(details_dialog) == [Gdk.BUTTON_PRIMARY, Gdk.BUTTON_SECONDARY]
     assert len(capture_gestures(details_dialog, Gtk.GestureDrag)) == 1
 
 
@@ -1509,6 +1517,37 @@ def test_a_double_click_on_the_dialog_title_bar_does_not_maximize(
     # The same action from the main window's own bar still maximizes it.
     real_window.activate_action("window.toggle-maximized", None)
     assert real_window.is_maximized()
+
+
+def test_a_right_click_on_the_dialog_bars_does_not_open_the_window_menu(
+    real_window, details_dialog
+):
+    """On Windows that menu offers to minimize, maximize and close the whole app."""
+    details_dialog.present(real_window)
+    title = window_handle_of(details_dialog, empty=False).get_child()
+    backdrop = window_handle_of(details_dialog, empty=True)
+
+    assert reaches_window_handle(details_dialog, title)
+    assert reaches_window_handle(details_dialog, backdrop)
+    assert not reaches_window_handle(details_dialog, details_dialog.get_child())
+
+
+def test_a_right_click_on_a_search_box_in_a_bar_keeps_its_own_menu():
+    """The pickers' search sits in a bar; its copy-and-paste menu must still open."""
+    dialog = Gtk.Box()
+    bar = Gtk.WindowHandle()
+    dialog.append(bar)
+    row = Gtk.Box()
+    bar.set_child(row)
+    search = Gtk.SearchEntry()
+    button = Gtk.Button()
+    row.append(search)
+    row.append(button)
+    text = search.get_delegate()
+
+    assert isinstance(text, Gtk.Text)
+    assert not reaches_window_handle(dialog, text)
+    assert reaches_window_handle(dialog, button)
 
 
 # ---------------------------------------------------------------------------
