@@ -44,6 +44,8 @@
           <li>As prévias de capa, logo e papel de parede carregam mais rápido, sem as esperas ocasionais de vários segundos</li>
           <li>O brilho dourado das capas com atualização disponível agora é fixo, o que reduz o uso do processador enquanto a janela está em foco</li>
           <li>A biblioteca abre mais rápido: as capas são carregadas em paralelo</li>
+          <li>O tamanho da instalação de um jogo instalado diretamente em Program Files, com o executável em uma subpasta, passa a considerar a pasta inteira do jogo; antes, apenas a subpasta do executável era medida (o Unreal Tournament III, por exemplo, aparecia com 125 MB em vez de 9 GB)</li>
+          <li>O acompanhamento do tempo de jogo passa a reconhecer todos os executáveis desses jogos, como os capítulos do Poppy Playtime e o executável principal do Battlefield 6</li>
         </ul>
       </description>
     </release>
