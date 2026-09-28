@@ -39,6 +39,7 @@ from cartridges.errors.friendly_error import FriendlyError
 from cartridges.game import Game
 from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
+from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.steam import STEAM_METADATA_VERSION
 
 
@@ -191,7 +192,7 @@ class MetadataRefresh(GObject.Object):
                 # a failed bulk request produces — the run goes ahead and
                 # leaves every genre exactly as it is.
                 logging.exception("Metadata refresh: could not prefetch Steam tags")
-            GLib.idle_add(self._run_queue, tags)
+            entregar_na_tela(self._run_queue, tags)
 
         Thread(target=prefetch, daemon=True).start()
         return True

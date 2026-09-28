@@ -36,6 +36,7 @@ import requests
 from gi.repository import Adw, GLib, Gtk
 
 from cartridges import shared
+from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.name_cleaner import clean_for_search, clean_game_name
 from cartridges.utils.steam import (
     SteamAPIData,
@@ -124,7 +125,7 @@ class SteamPicker(Adw.Dialog):
         try:
             candidates = self.helper.find_candidates(clean_for_search(query))
         except SteamGameNotFoundError:
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Nenhum jogo encontrado"),
                 _("Tente buscar por outro nome."),
@@ -133,7 +134,7 @@ class SteamPicker(Adw.Dialog):
             return
         except (SteamError, requests.RequestException) as error:
             logging.warning("Steam picker search failed: %s", error)
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Não foi possível concluir a busca"),
                 _("Verifique a conexão e tente novamente."),
@@ -141,7 +142,7 @@ class SteamPicker(Adw.Dialog):
             )
             return
 
-        GLib.idle_add(self._show_results, candidates, generation)
+        entregar_na_tela(self._show_results, candidates, generation)
 
     # endregion
     # region Results
@@ -209,7 +210,7 @@ class SteamPicker(Adw.Dialog):
         try:
             data = self.helper.get_api_data(appid)
         except SteamNotAGameError:
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Este item não é um jogo"),
                 _("Escolha outro resultado."),
@@ -217,13 +218,13 @@ class SteamPicker(Adw.Dialog):
             return
         except (SteamError, requests.RequestException) as error:
             logging.warning("Steam picker fetch failed: %s", error)
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Não foi possível obter os dados"),
                 _("Verifique a conexão e tente novamente."),
             )
             return
-        GLib.idle_add(self._select_done, appid, data)
+        entregar_na_tela(self._select_done, appid, data)
 
     def _select_done(self, appid: str, data: SteamAPIData) -> bool:
         if not self._closed:

@@ -40,6 +40,7 @@
           <li>Jogos que o HowLongToBeat não conhece deixam de registrar detalhes de erro no log a cada abertura</li>
           <li>Escolhas de logo, de papel de parede e de cor lidas no mesmo instante em que são gravadas não geram mais avisos indevidos no log</li>
           <li>O texto para adicionar um jogo a Jogos Zerados sem dados da Steam passa a usar aspas no padrão brasileiro</li>
+          <li>As buscas online da edição de jogo (Steam, capa, logo e papel de parede) exibem o resultado assim que ele chega, sem espera de vários segundos</li>
         </ul>
       </description>
     </release>

@@ -22,12 +22,13 @@ import threading
 from typing import Any, Optional
 
 import requests
-from gi.repository import Adw, GLib, Gtk
+from gi.repository import Adw, Gtk
 
 from cartridges import shared
 from cartridges.game import Game
 from cartridges.utils import zerado_manual
 from cartridges.utils.format_playtime import format_playtime
+from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.name_cleaner import clean_for_search
 from cartridges.utils.relative_date import relative_date
 from cartridges.utils.spring_scroll import attach as attach_spring_scroll
@@ -211,7 +212,9 @@ class ZeradosPicker(Adw.Dialog):
         except (SteamError, requests.RequestException) as erro:
             logging.warning("Busca de zerado na Steam falhou: %s", erro)
             aviso = _("Não foi possível concluir a busca na Steam.")
-        GLib.idle_add(self._mostrar_resultados, texto, candidatos_steam, aviso, geracao)
+        entregar_na_tela(
+            self._mostrar_resultados, texto, candidatos_steam, aviso, geracao
+        )
 
     def _mostrar_resultados(
         self,

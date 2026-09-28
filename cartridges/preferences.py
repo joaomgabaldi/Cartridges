@@ -34,6 +34,7 @@ from cartridges.metadata_refresh import get_metadata_refresh
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.utils import backup, restauracao, session_fita, window_geometry
 from cartridges.utils.create_dialog import create_dialog
+from cartridges.utils.na_tela import entregar_na_tela
 
 
 @Gtk.Template(resource_path=shared.PREFIX + "/gtk/preferences.ui")
@@ -650,7 +651,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
         É o único lugar onde uma fita fora do ar aparece na tela: aqui o
         usuário pediu para saber. A conversa é rede, então vai para uma thread
-        e volta para a tela pelo `idle_add`.
+        e volta para a tela pelo `entregar_na_tela`.
         """
 
         if self._teste_em_curso is not None:
@@ -674,11 +675,11 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                     fita, True, session_fita.hsv_hex(session_fita.na_fita(cor, fita))
                 ):
                     mudas.append(fita.nome)
-            GLib.idle_add(pronto, mudas, parar.is_set())
+            entregar_na_tela(pronto, mudas, parar.is_set())
 
         def pronto(mudas: list[str], cancelado: bool) -> bool:
             self._teste_em_curso = None
-            # O resultado volta pelo `idle_add`, e o diálogo pode ter fechado
+            # O resultado volta pelo `entregar_na_tela`, e o diálogo pode ter fechado
             # nesse meio-tempo: não há tela onde escrever.
             if not self.__class__.is_open:
                 return False
@@ -989,9 +990,9 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                     backup.exportar(path, settings)
                 except Exception as error:  # pylint: disable=broad-exception-caught
                     logging.exception("Não foi possível exportar o backup")
-                    GLib.idle_add(self._export_done, progress, str(error))
+                    entregar_na_tela(self._export_done, progress, str(error))
                 else:
-                    GLib.idle_add(self._export_done, progress, None)
+                    entregar_na_tela(self._export_done, progress, None)
 
             threading.Thread(target=work, daemon=True).start()
 
@@ -1050,12 +1051,12 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 backup.validar(path)
                 backup.agendar(path)
             except backup.BackupInvalido:
-                GLib.idle_add(self._restore_invalid, progress)
+                entregar_na_tela(self._restore_invalid, progress)
             except Exception:  # pylint: disable=broad-exception-caught
                 logging.exception("Não foi possível agendar a restauração do backup")
-                GLib.idle_add(self._restore_failed, progress)
+                entregar_na_tela(self._restore_failed, progress)
             else:
-                GLib.idle_add(self._restart_to_restore)
+                entregar_na_tela(self._restart_to_restore)
 
         threading.Thread(target=work, daemon=True).start()
 

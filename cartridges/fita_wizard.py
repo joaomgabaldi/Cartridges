@@ -35,10 +35,11 @@ import logging
 import threading
 from typing import Any, Optional
 
-from gi.repository import Adw, GLib, Gtk
+from gi.repository import Adw, Gtk
 
 from cartridges import shared
 from cartridges.utils import tuya_conta
+from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.session_fita import (
     Fita,
     devolver_removidas,
@@ -217,7 +218,9 @@ class FitaWizard(Adw.Dialog):
         except Exception as erro:  # a tinytuya levanta de tudo aqui também
             logging.warning("Busca na nuvem da Tuya falhou: %s", erro)
             encontrados = []
-        GLib.idle_add(self._mostrar, com_enderecos(encontrados, *enderecos_na_rede()))
+        entregar_na_tela(
+            self._mostrar, com_enderecos(encontrados, *enderecos_na_rede())
+        )
 
     def _mostrar(self, encontrados: list[Fita]) -> None:
         if self._closed:

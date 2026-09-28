@@ -39,6 +39,7 @@ from gi.repository import Adw, GLib, Gtk
 from cartridges import shared
 from cartridges.game_cover import GameCover
 from cartridges.utils.download import download_bytes
+from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.name_cleaner import clean_game_name
 from cartridges.utils.save_cover import convert_cover
 from cartridges.utils.steamgriddb import SgdbAuthError, SgdbError, SgdbHelper
@@ -151,7 +152,7 @@ class SgdbPicker(Adw.Dialog):
             )
             logging.info("SGDB picker: %d grids (animated=%s)", len(grids), animated)
         except SgdbAuthError:
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Chave da API inválida"),
                 _("Verifique a chave da API do SteamGridDB nas Preferências."),
@@ -160,7 +161,7 @@ class SgdbPicker(Adw.Dialog):
             return
         except (SgdbError, requests.RequestException) as error:
             logging.warning("SGDB picker search failed: %s", error)
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Não foi possível concluir a busca"),
                 _("Verifique a conexão e tente novamente."),
@@ -169,7 +170,7 @@ class SgdbPicker(Adw.Dialog):
             return
 
         if not grids:
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Nenhuma capa encontrada"),
                 _("Tente buscar por outro nome."),
@@ -200,14 +201,14 @@ class SgdbPicker(Adw.Dialog):
                 preview_path.write_bytes(content)
             except OSError:
                 continue
-            GLib.idle_add(
+            entregar_na_tela(
                 self._add_result, preview_path, full_url, animated, generation
             )
 
         # Depois de todos os _add_result (idles de mesma prioridade rodam em
         # ordem): sem isto, todo download falhando deixava o diálogo em
         # "loading" pela vida inteira.
-        GLib.idle_add(self._finish_results, generation)
+        entregar_na_tela(self._finish_results, generation)
 
     def _finish_results(self, generation: int) -> bool:
         if generation != self._generation or self._closed:
@@ -294,7 +295,7 @@ class SgdbPicker(Adw.Dialog):
             content = download_bytes(full_url, timeout=15)
         except requests.RequestException as error:
             logging.warning("Could not download chosen cover: %s", error)
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Não foi possível baixar a capa"),
                 _("Tente novamente."),
@@ -310,7 +311,7 @@ class SgdbPicker(Adw.Dialog):
             logging.warning("Could not process chosen cover: %s", error)
             new_path = None
 
-        GLib.idle_add(self._select_done, new_path)
+        entregar_na_tela(self._select_done, new_path)
 
     def _select_done(self, new_path: Optional[Path]) -> bool:
         if new_path and not self._closed:

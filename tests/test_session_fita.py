@@ -790,7 +790,7 @@ def test_o_teste_nao_escreve_em_tela_ja_fechada(monkeypatch, schema):
     monkeypatch.setattr(
         preferences_module.GLib,
         "idle_add",
-        lambda funcao, *args: agendadas.append((funcao, args)),
+        lambda funcao, *args, **_kw: agendadas.append((funcao, args)),
     )
     preferencias = _preferencias(monkeypatch)
 

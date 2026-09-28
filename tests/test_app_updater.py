@@ -271,7 +271,9 @@ def test_check_asks_only_for_a_newer_release(tmp_path, monkeypatch, current, ask
 
     monkeypatch.setattr(app_updater.requests, "get", get)
     queued: list[tuple] = []
-    monkeypatch.setattr(app_updater.GLib, "idle_add", lambda *args: queued.append(args))
+    monkeypatch.setattr(
+        app_updater.GLib, "idle_add", lambda *args, **_kw: queued.append(args)
+    )
 
     AppUpdater()._check_thread()  # pylint: disable=protected-access
 

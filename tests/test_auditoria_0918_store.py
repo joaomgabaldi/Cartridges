@@ -236,7 +236,7 @@ def test_b13_quadros_da_capa_antiga_nao_entram(monkeypatch, tmp_path):
     monkeypatch.setattr(
         game_cover.GLib,
         "idle_add",
-        lambda funcao, *args: fila.append((funcao, args)),
+        lambda funcao, *args, **_kw: fila.append((funcao, args)),
     )
 
     capa = game_cover.GameCover(set(), gif)

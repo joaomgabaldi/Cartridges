@@ -45,6 +45,7 @@ from cartridges import shared
 from cartridges.game_cover import texture_from_pixbuf
 from cartridges.utils.download import download_bytes
 from cartridges.utils.game_logo import IMAGE_SUFFIXES, pick_logo
+from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.name_cleaner import clean_game_name
 from cartridges.utils.steamgriddb import SgdbAuthError, SgdbError, SgdbHelper
 
@@ -158,7 +159,7 @@ class LogoPicker(Adw.Dialog):
             )
             logos = self.sgdb.get_logos(first_id) if first_id is not None else []
         except SgdbAuthError:
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Chave da API inválida"),
                 _("Verifique a chave da API do SteamGridDB nas Preferências."),
@@ -167,7 +168,7 @@ class LogoPicker(Adw.Dialog):
             return
         except (SgdbError, requests.RequestException) as error:
             logging.warning("Logo picker search failed: %s", error)
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Não foi possível concluir a busca"),
                 _("Verifique a conexão e tente novamente."),
@@ -181,7 +182,7 @@ class LogoPicker(Adw.Dialog):
         # to see the alternatives it passed over.
         ordered = self._ordered(logos)
         if not ordered:
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Nenhum logo encontrado"),
                 _("Tente buscar por outro nome."),
@@ -207,13 +208,13 @@ class LogoPicker(Adw.Dialog):
                 preview_path.write_bytes(content)
             except OSError:
                 continue
-            GLib.idle_add(self._add_result, preview_path, full_url, generation)
+            entregar_na_tela(self._add_result, preview_path, full_url, generation)
 
         # Depois de todos os _add_result (idles de mesma prioridade rodam em
         # ordem): se nenhum preview chegou à grade — todo download falhou, ou
         # todo decode falhou —, o loop acabava sem chamar nada e o diálogo
         # ficava em "loading" para sempre.
-        GLib.idle_add(self._finish_results, generation)
+        entregar_na_tela(self._finish_results, generation)
 
     def _finish_results(self, generation: int) -> bool:
         if generation != self._generation or self._closed:
@@ -329,7 +330,7 @@ class LogoPicker(Adw.Dialog):
             content = download_bytes(full_url, timeout=15)
         except requests.RequestException as error:
             logging.warning("Could not download the chosen logo: %s", error)
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Não foi possível baixar o logo"),
                 _("Tente novamente."),
@@ -352,14 +353,14 @@ class LogoPicker(Adw.Dialog):
             path.write_bytes(content)
         except (GLib.Error, OSError) as error:
             logging.warning("Could not store the chosen logo: %s", error)
-            GLib.idle_add(
+            entregar_na_tela(
                 self._show_empty,
                 _("Não foi possível baixar o logo"),
                 _("Tente novamente."),
             )
             return
 
-        GLib.idle_add(self._select_done, path)
+        entregar_na_tela(self._select_done, path)
 
     def _select_done(self, path: Path) -> bool:
         if not self._closed:
