@@ -592,7 +592,68 @@ class GamepadManager:
             return
 
         scope = self._focus_scope()
-        self._focus_and_scroll(lambda: scope.child_focus(direction))
+        self._focus_and_scroll(lambda: self._step(window, scope, direction))
+
+    def _step(
+        self, window: Gtk.Window, scope: Gtk.Widget, direction: Gtk.DirectionType
+    ) -> bool:
+        """One focus move, with ↑ off the grid's first row landing in the header.
+
+        On its first row the FlowBox answers ↑ with True without moving — it
+        rings the bell and keeps the focus — so nothing above it was reachable,
+        and the header holds buttons that live nowhere else (Jogos Zerados,
+        Novidades).
+        """
+        before = window.get_focus()
+        moved = scope.child_focus(direction)
+        if direction != Gtk.DirectionType.UP or window.get_focus() is not before:
+            return moved
+
+        library = self._visible_library()
+        if library is None or self._focused_flowbox_child(library) is None:
+            return moved
+
+        button = self._header_button_above(library, before)
+        return button is not None and button.grab_focus()
+
+    @staticmethod
+    def _header_button_above(
+        library: Gtk.FlowBox, card: Gtk.Widget
+    ) -> Optional[Gtk.Widget]:
+        """The button of the grid's header horizontally nearest to ``card``.
+
+        What a console does, rather than GTK's own pick, which is always the
+        leftmost button. The window controls are not focusable, so ↑ never
+        lands on "close".
+        """
+        window = shared.win
+        menu = (
+            window.primary_menu_button
+            if library is window.library
+            else window.zerados_primary_menu_button
+        )
+        header = menu.get_ancestor(Adw.HeaderBar)
+        if header is None:
+            return None
+
+        def center(widget: Gtk.Widget) -> float:
+            return widget.compute_bounds(header)[1].get_center().x
+
+        buttons = []
+        pending: list[Gtk.Widget] = [header]
+        while pending:
+            widget = pending.pop()
+            if isinstance(widget, Gtk.Button):
+                if widget.get_mapped() and widget.get_focusable() and widget.is_sensitive():
+                    buttons.append(widget)
+                continue
+            child = widget.get_first_child()
+            while child is not None:
+                pending.append(child)
+                child = child.get_next_sibling()
+
+        x = center(card)
+        return min(buttons, key=lambda button: abs(center(button) - x), default=None)
 
     def _focus_scope(self) -> Gtk.Widget:
         """The widget the focus should be allowed to move within.

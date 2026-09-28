@@ -112,8 +112,15 @@ template $CartridgesWindow: Adw.ApplicationWindow {
               }
 
               // HeaderBar packs [end] children right to left in declaration
-              // order, so this sits between the hamburger (declared first, thus
-              // furthest right) and the search toggle below it. The icon is
+              // order: hamburger, trophy, news, search, read from the right.
+              [end]
+              Button {
+                tooltip-text: _("Jogos Zerados");
+                icon-name: "trofeu-symbolic";
+                action-name: "win.show_zerados";
+              }
+
+              // Between the trophy and the search toggle. The icon is
               // wrapped in an Overlay purely to hang the unread dot off its
               // corner; the dot never takes input, the whole button is one
               // target.
@@ -1243,12 +1250,6 @@ menu primary_menu {
         action: "win.sort_by";
         target: "install_size";
       }
-    }
-
-    item {
-      label: _("Jogos Zerados");
-      action: "win.show_zerados";
-      hidden-when: "action-disabled";
     }
   }
 

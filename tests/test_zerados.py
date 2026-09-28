@@ -7,7 +7,7 @@
 from types import SimpleNamespace
 
 import pytest
-from gi.repository import Gio, GLib, Gtk
+from gi.repository import GLib, Gtk
 
 from cartridges import shared
 
@@ -135,23 +135,6 @@ def test_pagina_vazia_mostra_o_aviso(real_window, store):
     jogo(store, 7, removed=True, status="beaten")
     real_window.set_library_child()
     assert real_window.zerados_notice_empty.get_parent() is None
-
-
-def test_item_do_menu_sempre_na_tela_principal(real_window, store, monkeypatch):
-    """Sempre há o que adicionar: um jogo da Steam ou só pelo nome."""
-    acao = Gio.SimpleAction.new("show_zerados", None)
-    real_window.add_action(acao)
-
-    real_window.set_show_zerados()
-    assert acao.get_enabled() is True, "store vazia também"
-
-    monkeypatch.setattr(
-        real_window.navigation_view,
-        "get_visible_page",
-        lambda: real_window.zerados_library_page,
-    )
-    real_window.set_show_zerados()
-    assert acao.get_enabled() is False, "só na tela principal"
 
 
 # -- Store ---------------------------------------------------------------------
