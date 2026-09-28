@@ -269,8 +269,6 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
         self.search_entry.connect("activate", self.show_details_page_search)
 
-        self.navigation_view.connect("popped", self.set_show_zerados)
-        self.navigation_view.connect("pushed", self.set_show_zerados)
         self.navigation_view.connect("popped", self.stop_details_animation)
 
         # Toda caixa de diálogo do app passa por esta propriedade, inclusive as
@@ -490,7 +488,6 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # pela biblioteca escondida.
         self.navigation_view.set_sensitive(False)
         self.session_blocker_button.grab_focus()
-        self.set_show_zerados()
 
         # O relógio só faz sentido onde ele pode ser visto: se a janela foi
         # para o outro monitor, ela fica à vista a sessão inteira; se não foi,
@@ -530,7 +527,6 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.session_blocker.set_visible(False)
         self.session_game = None
         self.navigation_view.set_sensitive(True)
-        self.set_show_zerados()
 
         if self.session_timer_id:
             GLib.source_remove(self.session_timer_id)
@@ -623,7 +619,6 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # andamento mexeria no menu dezenas de vezes sem ninguém olhando.
         for button in (self.primary_menu_button, self.zerados_primary_menu_button):
             button.get_popover().connect("show", self.rebuild_filter_menu)
-            button.get_popover().connect("show", self.set_show_zerados)
 
         self.rebuild_filter_menu()
 
@@ -1947,14 +1942,6 @@ class CartridgesWindow(Adw.ApplicationWindow):
             and self.navigation_view.get_visible_page() != self.details_page
         ):
             self.details_view_game_cover.set_details_animation(False)
-
-    def set_show_zerados(self, *_args: Any) -> None:
-        """O item "Jogos Zerados" do menu: só na tela principal. Sempre há o que
-        adicionar ali — um jogo da Steam, ou só pelo nome."""
-        if action := self.lookup_action("show_zerados"):
-            action.set_enabled(
-                self.navigation_view.get_visible_page() == self.library_page
-            )
 
     def on_show_zerados_action(self, *_args: Any) -> None:
         if self.navigation_view.get_visible_page() == self.zerados_library_page:

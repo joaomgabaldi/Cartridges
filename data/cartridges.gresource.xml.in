@@ -23,5 +23,6 @@
        icon-name from the .blp files. -->
   <gresource prefix="@PREFIX@/icons/scalable/actions/">
   <file alias="novidades-symbolic.svg">icons/actions/novidades-symbolic.svg</file>
+  <file alias="trofeu-symbolic.svg">icons/actions/trofeu-symbolic.svg</file>
   </gresource>
 </gresources>

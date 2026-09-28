@@ -44,6 +44,8 @@
           <li>Ao fim da restauração, quando todos os jogos têm atalho, o aviso "Restauração concluída" é exibido</li>
           <li>Backups feitos em versões anteriores não são mais aceitos</li>
           <li>A barra de título de uma janela interna, como Sobre ou Preferências, não move, não maximiza nem abre mais o menu da janela do aplicativo ao ser arrastada, clicada duas vezes ou clicada com o botão direito; somente a barra de título principal tem esse comportamento</li>
+          <li>Jogos Zerados passa a ter um botão próprio, com ícone de troféu, na barra de título da tela principal, ao lado do menu</li>
+          <li>No controle, o direcional para cima na primeira linha de jogos leva à barra de título, ao botão mais próximo, o que permite chegar a Jogos Zerados e a Novidades sem mouse</li>
         </ul>
       </description>
     </release>
