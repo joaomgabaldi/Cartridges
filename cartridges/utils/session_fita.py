@@ -1,6 +1,6 @@
 # session_fita.py
 #
-# Copyright 2026 kramo
+# Copyright 2026 joaomgabaldi
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -41,6 +41,7 @@ from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 
 from cartridges import shared
 from cartridges.utils.cor_da_capa import dominante
+from cartridges.utils.ler_json import ler_json
 
 if TYPE_CHECKING:
     from cartridges.game import Game
@@ -146,7 +147,7 @@ def _sidecar(game_id: str):
 
 def _ler_sidecar(game_id: str) -> Optional[dict[str, Any]]:
     try:
-        dados = json.loads(_sidecar(game_id).read_text(encoding="utf-8"))
+        dados = ler_json(_sidecar(game_id))
     except FileNotFoundError:
         return None
     except (OSError, ValueError) as erro:

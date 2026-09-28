@@ -226,7 +226,7 @@ def test_resultados_da_steam_e_a_linha_do_nome(store):
 
     assert titulos(picker) == [
         ("Hades", "ID na Steam: 1145360", True),
-        ("Adicionar «hades» sem dados da Steam", "", True),
+        ("Adicionar “hades” sem dados da Steam", "", True),
     ]
     assert picker.aviso.get_visible() is False
 
@@ -247,7 +247,7 @@ def test_jogo_que_ja_existe_vem_desativado(store):
     assert titulos(picker) == [
         ("Hades", "Já está em Jogos Zerados", False),
         ("Celeste", "Já está na biblioteca", False),
-        ("Adicionar «hades» sem dados da Steam", "Já está em Jogos Zerados", False),
+        ("Adicionar “hades” sem dados da Steam", "Já está em Jogos Zerados", False),
     ]
 
 
@@ -259,7 +259,7 @@ def test_busca_sem_resultado_mostra_so_o_nome_e_o_aviso(store):
         "chrono", [], "Nenhum jogo encontrado na Steam.", picker._geracao
     )
 
-    assert [t for t, _s, _a in titulos(picker)] == ["Adicionar «chrono» sem dados da Steam"]
+    assert [t for t, _s, _a in titulos(picker)] == ["Adicionar “chrono” sem dados da Steam"]
     assert picker.aviso.get_visible() is True
     assert picker.aviso.get_label() == "Nenhum jogo encontrado na Steam."
 
@@ -274,7 +274,7 @@ def test_clicar_na_linha_do_nome_cria_e_desativa(store):
 
     assert store.get("imported_1").zerado is True
     assert titulos(picker) == [
-        ("Adicionar «Chrono Trigger» sem dados da Steam", "Já está em Jogos Zerados", False)
+        ("Adicionar “Chrono Trigger” sem dados da Steam", "Já está em Jogos Zerados", False)
     ]
 
 

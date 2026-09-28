@@ -1,6 +1,6 @@
 # hltb_manager.py
 #
-# Copyright 2026 kramo
+# Copyright 2026 joaomgabaldi
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ from cartridges.store.managers.async_manager import AsyncManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.utils.hltb import (
     HLTBError,
+    HLTBGameNotFoundError,
     HLTBHelper,
     HLTBRateLimiter,
     HLTBTimes,
@@ -76,6 +77,10 @@ class HLTBManager(AsyncManager):
 
         try:
             times = self._fetch(game)
+        except HLTBGameNotFoundError:
+            # Resposta, não erro: sem traceback no log.
+            logging.debug("HowLongToBeat lookup failed for %s", game.name)
+            return
         except HLTBError as error:
             logging.debug(
                 "HowLongToBeat lookup failed for %s", game.name, exc_info=error

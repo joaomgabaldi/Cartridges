@@ -1,3 +1,9 @@
+# passeio.py
+#
+# Copyright 2026 joaomgabaldi
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Passeio: roda o Cartridges de verdade sobre uma cópia de uma biblioteca.
 
 Uso, com o Python do MSYS2 e o _build atualizado (ninja)::

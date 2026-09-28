@@ -41,6 +41,18 @@ class TestBracketedNoise(unittest.TestCase):
         self.assertEqual("Hades", clean_game_name("Hades (Windows)"))
         self.assertEqual("Hades", clean_game_name("Hades (x64)"))
 
+    def test_directx_phrase_in_brackets_leaves_no_empty_brackets(self) -> None:
+        # "DirectX 12" sai antes dos parênteses; sobrava "ICARUS ( )" na tela.
+        for raw in (
+            "ICARUS (DirectX 12)",
+            "ICARUS (DirectX12)",
+            "ICARUS [DirectX 11]",
+            "ICARUS {DirectX 9}",
+        ):
+            with self.subTest(raw=raw):
+                self.assertEqual("ICARUS", clean_game_name(raw))
+                self.assertEqual("ICARUS", clean_for_search(raw))
+
     def test_a_real_word_in_brackets_is_kept(self) -> None:
         # Only whole-bracket noise goes; a subtitle must survive.
         self.assertEqual(

@@ -141,6 +141,53 @@ def _convert_readable_cover(cover_path: Path, resize: bool) -> Optional[Path]:
     return tmp_path
 
 
+class UnreadableCoverError(Exception):
+    """The candidate cover could not be decoded by Pillow or GdkPixbuf."""
+
+
+# How much a stretch may distort an image before it gets blurred bars instead.
+_MAX_STRETCH = 0.12
+
+
+def composite_cover(image_path: Path) -> GdkPixbuf.Pixbuf:
+    """``image_path`` shaped as a cover, for a cover picked from a file.
+
+    An image taller than a cover, or wider by at most `_MAX_STRETCH`, is just
+    stretched later; anything wider is fitted in the middle over a blurred,
+    stretched copy of itself.
+    """
+    # `convert_cover` returns None for anything neither Pillow nor GdkPixbuf
+    # can read; `str(None)` used to turn that into a literal "None" filename.
+    converted = convert_cover(image_path, resize=False)
+    if converted is None:
+        raise UnreadableCoverError(image_path)
+    try:
+        source = GdkPixbuf.Pixbuf.new_from_file(str(converted))
+    except GLib.Error as error:
+        raise UnreadableCoverError(image_path) from error
+    finally:
+        # `convert_cover` may hand back the input untouched; only a temp it
+        # made is ours to remove.
+        if converted != image_path:
+            converted.unlink(missing_ok=True)
+
+    width, height = source.get_width(), source.get_height()
+    cover_width, cover_height = shared.image_size
+    taller = width / height < cover_width / cover_height
+    if taller or 1 - (height / width * cover_width) / cover_height <= _MAX_STRETCH:
+        return source
+
+    interp = GdkPixbuf.InterpType.BILINEAR
+    cover = source.scale_simple(2, 2, interp).scale_simple(cover_width, cover_height, interp)
+    scale = min(cover_width / width, cover_height / height)
+    x, y = (cover_width - width * scale) / 2, (cover_height - height * scale) / 2
+    source.composite(
+        cover, int(x), int(y), int(width * scale), int(height * scale),
+        x, y, scale, scale, interp, 255,
+    )  # fmt: skip
+    return cover
+
+
 def save_cover(game_id: str, cover_path: Path) -> None:
     shared.covers_dir.mkdir(parents=True, exist_ok=True)
 

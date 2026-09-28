@@ -27,7 +27,7 @@ A interface é inteiramente em português do Brasil.
   - atalhos de internet `.url` (Steam, Epic, Ubisoft Connect e outros);
   - atalhos de aplicativos da Microsoft Store e do Game Pass.
 - Importação automática ao abrir o aplicativo, e remoção automática dos jogos desinstalados (opcional).
-- Limpeza dos títulos importados (remove sufixos como "Windows", "DX11" e "DX12").
+- Limpeza dos títulos importados (remove sufixos como "Windows", "DX11", "DX12" e "(DirectX 12)").
 - Um jogo continua reconhecido quando o destino do atalho muda — atualização instalada, pasta
   movida, executável trocado —, sem perder tempo de jogo, capa, logo nem histórico.
 - Jogos adicionados manualmente, com seletor de executável e opção "Abrir como administrador".
@@ -56,7 +56,6 @@ A interface é inteiramente em português do Brasil.
 ### Tela de detalhes
 
 - Capa, logo, fundo desfocado, datas, tempo de jogo e tamanho no disco.
-- Tamanho da instalação do jogo.
 - Botão para abrir a pasta de instalação do jogo, quando ela pode ser determinada.
 
 ![Tela de detalhes de um jogo](data/screenshots/detalhes.jpg)
@@ -120,14 +119,17 @@ Todos estes recursos ficam na aba Personalização das Preferências e vêm desa
 
 ### Backup
 
-- Exporta e importa um arquivo `.zip` com as configurações do aplicativo e, por jogo: nota,
-  status, tempo de jogo, anotação, capa, logo e papel de parede escolhidos manualmente, cor da iluminação inteligente
-  e histórico de sessões. Os Jogos Zerados também entram.
-- Na restauração, cada jogo do backup é associado a um jogo da biblioteca pelo ID da Steam, ou pelo
-  nome. A restauração nunca cria nem apaga jogos da biblioteca; apenas os Jogos Zerados ausentes
-  são recriados.
-- A conta da Tuya, a pasta de atalhos e o monitor escolhido não viajam no backup, porque pertencem
-  a este computador.
+- Exporta um arquivo `.zip` com a biblioteca inteira e todas as configurações: jogos, capas,
+  logos, papéis de parede, cores e dispositivos da iluminação inteligente, histórico de sessões e
+  Jogos Zerados.
+- Restaurar um backup reinicia o aplicativo e devolve a biblioteca e as configurações como
+  estavam na exportação. Se algo falhar, os dados atuais são mantidos.
+- Jogos restaurados cujo atalho não é encontrado neste computador aparecem na janela "Jogos sem
+  atalho", onde é possível escolher o atalho, excluir o jogo ou decidir mais tarde. Quando o
+  atalho escolhido já tem histórico neste computador, é possível manter o do backup, manter o
+  deste computador ou mesclar os dois.
+- A conta da Tuya vai no backup, mas só é lida no mesmo computador e na mesma conta do Windows;
+  em outro, o assistente da iluminação inteligente pede os códigos novamente.
 
 ### Integração com o Windows
 

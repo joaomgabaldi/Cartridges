@@ -1,6 +1,6 @@
 # tuya_conta.py
 #
-# Copyright 2026 kramo
+# Copyright 2026 joaomgabaldi
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -27,10 +27,10 @@ para pegar os dois códigos de novo.
 
 Gravados com o DPAPI do Windows (`CryptProtectData`), amarrado à conta do
 Windows de quem roda o app: decifra só quem já é esse usuário, neste PC — o
-mesmo modelo de um navegador guardando senha salva. Por isso o arquivo mora à
-parte e fora do backup do app: um blob DPAPI não decifra numa instalação nova
-nem numa conta diferente, então não pertenceria a um backup portátil mesmo se
-entrasse nele.
+mesmo modelo de um navegador guardando senha salva. O arquivo vai no backup com
+o resto da pasta do app, mas um blob DPAPI não decifra numa instalação nova nem
+numa conta diferente: lá, `carregar` devolve ``None`` e o assistente pede os
+códigos de novo.
 """
 
 import ctypes

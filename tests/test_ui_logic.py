@@ -972,7 +972,9 @@ def test_an_unchanged_apply_keeps_the_computed_blur(real_window, store, app_dirs
     Image.new("RGB", (600, 900), "green").save(cover_path, compression=None)
 
     old_cover = GameCover(set(), cover_path)
-    old_blur = old_cover.get_blurred()
+    # O que `ensure_blurred` faz numa thread, aqui na hora.
+    old_cover._apply_blur(old_cover._compute_blur(cover_path))  # pylint: disable=protected-access
+    old_blur = old_cover.blurred
     shared.win.game_covers[game.game_id] = old_cover
 
     DetailsDialog(game).apply_preferences()
@@ -981,6 +983,43 @@ def test_an_unchanged_apply_keeps_the_computed_blur(real_window, store, app_dirs
     assert new_cover is not old_cover, "apply swaps the cover object"
     assert new_cover.blurred is old_blur, "the backdrop must be inherited"
     assert new_cover.luminance == old_cover.luminance
+
+
+def test_an_applied_cover_is_readable_until_it_is_reloaded(
+    real_window, store, app_dirs, tmp_path, flush_idle
+):
+    """Apply copies the chosen cover and deletes the temporary copy. The cover
+    object still named the temporary until the reload `save_cover` queues, so
+    the details page shown right after read a deleted file ("Unreadable cover"
+    in the log, twice per cover chosen)."""
+    from PIL import Image
+    from cartridges import shared
+    from cartridges.details_dialog import DetailsDialog
+    from cartridges.game import Game
+
+    game = Game(
+        {
+            "game_id": "imported_10",
+            "name": "Probe",
+            "source": "imported",
+            "executable": "x.exe",
+            "added": 0,
+        }
+    )
+    staged = tmp_path / "escolhida.tiff"
+    Image.new("RGB", (600, 900), "red").save(staged, compression=None)
+
+    dialog = DetailsDialog(game)
+    dialog.set_cover_from_path(staged)
+    dialog.apply_preferences()
+
+    cover = shared.win.game_covers[game.game_id]
+    assert cover.path.is_file(), "the page shown after Apply reads this path"
+
+    flush_idle()
+
+    assert cover.path == shared.covers_dir / "imported_10.tiff"
+    assert not staged.exists(), "the temporary still goes, once reloaded"
 
 
 def test_a_logo_can_come_from_a_local_file(real_window, store, app_dirs):

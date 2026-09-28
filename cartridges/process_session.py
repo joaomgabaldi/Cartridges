@@ -373,7 +373,7 @@ class ProcessSession:
         elif record:
             # Pedimos para registrar, mas o processo nunca apareceu: encerrar a
             # sessão pelo botão da janela bloqueada durante a espera cai aqui.
-            # Não há o que registrar — nada foi medido —, e o silenêncio era
+            # Não há o que registrar — nada foi medido —, e o silêncio era
             # indistinguível de uma sessão gravada normalmente.
             logging.info(
                 "Session for %s ended before %s was ever seen; nothing recorded",

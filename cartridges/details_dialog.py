@@ -38,7 +38,6 @@ from cartridges.logo_picker import LogoPicker
 from cartridges.wallpaper_picker import WallpaperPicker
 from cartridges.sgdb_picker import SgdbPicker
 from cartridges.steam_picker import SteamPicker
-from cartridges.store.managers.cover_manager import CoverManager
 from cartridges.store.managers.hltb_manager import shared_helper as shared_hltb_helper
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
@@ -62,7 +61,7 @@ from cartridges.utils.session_wallpaper import (
 )
 from cartridges.utils.name_cleaner import clean_for_search, clean_game_name
 from cartridges.utils.run_executable import aumid_from_command
-from cartridges.utils.save_cover import convert_cover, save_cover
+from cartridges.utils.save_cover import composite_cover, convert_cover, save_cover
 from cartridges.utils.steam import (
     STEAM_METADATA_VERSION,
     SteamAPIHelper,
@@ -715,7 +714,13 @@ class DetailsDialog(Adw.Dialog):
                 logging.warning("Could not save the cover: %s", error)
                 self._cover_tmp = None
             else:
-                self._discard_tmp("_cover_tmp")
+                # O temporário sai depois da recarga que o `save_cover` agenda
+                # (mesma prioridade, então roda antes deste). Até lá a capa
+                # ainda aponta para ele, e a tela de detalhes, aberta logo
+                # abaixo, lia um arquivo já apagado.
+                staged, self._cover_tmp = self._cover_tmp, None
+                if staged is not None:
+                    GLib.idle_add(lambda: staged.unlink(missing_ok=True) and False)
 
         self.apply_logo_choice(self.game)
         self.apply_wallpaper_choice(self.game)
@@ -916,11 +921,7 @@ class DetailsDialog(Adw.Dialog):
                     pass
 
                 if not new_path:
-                    new_path = convert_cover(
-                        pixbuf=shared.store.managers[CoverManager].composite_cover(
-                            Path(path)
-                        )
-                    )
+                    new_path = convert_cover(pixbuf=composite_cover(Path(path)))
             except Exception:  # pylint: disable=broad-exception-caught
                 # `composite_cover` raises UnreadableCoverError for a truncated
                 # file or an SVG nothing here can rasterise — and the file

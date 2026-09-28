@@ -28,6 +28,21 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.09.28" date="2026-09-28">
+      <description translate="no">
+        <ul>
+          <li>A barra de título de uma janela interna, como Sobre ou Preferências, não move, não maximiza nem abre mais o menu da janela do aplicativo ao ser arrastada, clicada duas vezes ou clicada com o botão direito; somente a barra de título principal tem esse comportamento</li>
+          <li>Jogos Zerados passa a ter um botão próprio, com ícone de troféu, na barra de título da tela principal, ao lado do menu</li>
+          <li>No controle, o direcional para cima na primeira linha de jogos leva à barra de título, ao botão mais próximo, o que permite chegar a Jogos Zerados e a Novidades sem mouse</li>
+          <li>Na importação, atalhos com “(DirectX 12)” ou “[DirectX 11]” no nome não deixam mais parênteses vazios no título do jogo; um jogo já importado com esse defeito pode ser renomeado na edição</li>
+          <li>Remover todos os jogos durante uma restauração de backup pendente encerra a restauração, e a abertura seguinte não pede mais a pasta de atalhos</li>
+          <li>Trocar a capa de um jogo pela edição não registra mais avisos indevidos no log</li>
+          <li>Jogos que o HowLongToBeat não conhece deixam de registrar detalhes de erro no log a cada abertura</li>
+          <li>Escolhas de logo, de papel de parede e de cor lidas no mesmo instante em que são gravadas não geram mais avisos indevidos no log</li>
+          <li>O texto para adicionar um jogo a Jogos Zerados sem dados da Steam passa a usar aspas no padrão brasileiro</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.27" date="2026-09-27">
       <description translate="no">
         <ul>
@@ -43,9 +58,6 @@
           <li>Quando o atalho escolhido já tem histórico neste PC, é possível manter o do backup, manter o deste PC ou mesclar os dois</li>
           <li>Ao fim da restauração, quando todos os jogos têm atalho, o aviso "Restauração concluída" é exibido</li>
           <li>Backups feitos em versões anteriores não são mais aceitos</li>
-          <li>A barra de título de uma janela interna, como Sobre ou Preferências, não move, não maximiza nem abre mais o menu da janela do aplicativo ao ser arrastada, clicada duas vezes ou clicada com o botão direito; somente a barra de título principal tem esse comportamento</li>
-          <li>Jogos Zerados passa a ter um botão próprio, com ícone de troféu, na barra de título da tela principal, ao lado do menu</li>
-          <li>No controle, o direcional para cima na primeira linha de jogos leva à barra de título, ao botão mais próximo, o que permite chegar a Jogos Zerados e a Novidades sem mouse</li>
         </ul>
       </description>
     </release>

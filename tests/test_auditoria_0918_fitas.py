@@ -239,6 +239,19 @@ def test_m9_reset_apaga_papel_de_parede_e_cor_da_fita_dos_jogos(
     assert session_fita.fitas()
 
 
+def test_reset_encerra_a_restauracao_pendente(monkeypatch, schema, store, win, app_dirs):
+    # Sem isto, a abertura seguinte pedia a pasta de atalhos (que o reset
+    # esvazia) para pendências de jogos que já não existem.
+    from cartridges.utils import restauracao  # noqa: PLC0415
+
+    _Janela(win)
+    restauracao.gravar(["shortcuts_1"], 1)
+
+    _preferencias(monkeypatch).reset_app_data()
+
+    assert not restauracao.existe()
+
+
 def test_m8_lote_de_capas_nao_repinta_jogo_apagado(monkeypatch, store, make_game):
     from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
 

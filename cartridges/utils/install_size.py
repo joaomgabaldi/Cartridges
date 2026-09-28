@@ -1,6 +1,6 @@
 # install_size.py
 #
-# Copyright 2026 kramo
+# Copyright 2026 joaomgabaldi
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

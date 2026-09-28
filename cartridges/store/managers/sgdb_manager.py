@@ -26,7 +26,6 @@ from requests.exceptions import HTTPError, SSLError, Timeout
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.game import Game
 from cartridges.store.managers.async_manager import AsyncManager
-from cartridges.store.managers.cover_manager import CoverManager
 from cartridges.store.managers.manager import Manager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.utils.steamgriddb import (
@@ -43,7 +42,7 @@ _CANCELLABLE = "sgdb_cancellable"
 class SgdbManager(AsyncManager):
     """Manager in charge of downloading a game's cover from SteamGridDB"""
 
-    run_after = (SteamAPIManager, CoverManager)
+    run_after = (SteamAPIManager,)
     retryable_on = (
         HTTPError,
         SSLError,

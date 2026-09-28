@@ -29,4 +29,4 @@ ignored-classes=Child
 
 [VARIABLES]
 
-additional-builtins=_
+additional-builtins=_,ngettext

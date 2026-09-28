@@ -1,5 +1,7 @@
 # restauracao.py
 #
+# Copyright 2026 joaomgabaldi
+#
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """O que sobra de uma restauração de backup depois da troca: os jogos

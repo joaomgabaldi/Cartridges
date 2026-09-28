@@ -1,6 +1,6 @@
 # hltb_backfill.py
 #
-# Copyright 2026 kramo
+# Copyright 2026 joaomgabaldi
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -44,7 +44,13 @@ from gi.repository import GLib
 from cartridges import shared
 from cartridges.game import Game
 from cartridges.store.managers.hltb_manager import shared_helper
-from cartridges.utils.hltb import HLTBError, HLTBTimes, fetch_times, has_times
+from cartridges.utils.hltb import (
+    HLTBError,
+    HLTBGameNotFoundError,
+    HLTBTimes,
+    fetch_times,
+    has_times,
+)
 
 # Startup is busy (window, disk load, and usually an auto-import right after),
 # and the auto-import's own HowLongToBeat lookups share this rate limiter. Wait
@@ -159,6 +165,11 @@ class HLTBBackfill:
 
                 try:
                     times = fetch_times(shared_helper(), game.name, game.hltb_id)
+                except HLTBGameNotFoundError:
+                    # Resposta, não erro: sem rastro, ou cada jogo que o site
+                    # não conhece deixava um traceback no log a cada abertura.
+                    logging.debug("HowLongToBeat backfill missed %s", game.name)
+                    continue
                 except HLTBError as error:
                     # A miss is the common case (plenty of games have no entry)
                     # and a network failure is not worth a dialog either: the

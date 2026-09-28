@@ -1,5 +1,7 @@
 # zerados_picker.py
 #
+# Copyright 2026 joaomgabaldi
+#
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """O "Adicionar" da página Jogos Zerados: marcar como Zerado um jogo que já
@@ -232,7 +234,7 @@ class ZeradosPicker(Adw.Dialog):
             nome = str(candidato.get("name", ""))
             self._linha(nome, appid, nome, _("ID na Steam: {}").format(appid))
         self._linha(
-            texto, None, _("Adicionar «{}» sem dados da Steam").format(texto), ""
+            texto, None, _("Adicionar “{}” sem dados da Steam").format(texto), ""
         )
         self._mostrar()
         return False

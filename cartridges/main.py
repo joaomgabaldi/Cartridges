@@ -52,7 +52,6 @@ from cartridges.importer.importer import Importer  # yo dawg
 from cartridges.importer.shortcuts_source import ShortcutsSource
 from cartridges.logging.setup import log_system_info, setup_logging
 from cartridges.preferences import CartridgesPreferences
-from cartridges.store.managers.cover_manager import CoverManager
 from cartridges.store.managers.display_manager import DisplayManager
 from cartridges.store.managers.file_manager import FileManager
 from cartridges.store.managers.sgdb_manager import SgdbManager
@@ -518,7 +517,6 @@ class CartridgesApplication(Adw.Application):
         shared.win.set_library_child()
 
         # Add rest of the managers for game imports
-        shared.store.add_manager(CoverManager())
         shared.store.add_manager(SteamAPIManager())
         shared.store.add_manager(HLTBManager())
         shared.store.add_manager(SgdbManager())
@@ -672,8 +670,9 @@ class CartridgesApplication(Adw.Application):
         playtime (both trackers only persist periodically). Only the file flush
         runs here — no toasts or window calls, the UI is already going away.
         """
-        # Quitting from the menu or with Ctrl+Q never asks the window to close,
-        # so this is the only chance to save its geometry on that path.
+        # `app.quit()` (restarting to restore a backup, closing for an update)
+        # never asks the window to close, so this is the only chance to save
+        # its geometry on that path.
         self.save_window_geometry()
 
         # avoid import cycles

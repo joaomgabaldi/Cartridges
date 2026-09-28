@@ -259,7 +259,7 @@ class SteamAPIHelper:
                         items = []
                     # Só entradas com appid numérico: `"id": null` (ou sem
                     # "id") passava daqui e estourava TypeError/KeyError adiante
-                    # — no `resolve`, no `search_appid` — fora de todo except,
+                    # — no `resolve`, nos seletores — fora de todo except,
                     # matando a thread do seletor com o spinner girando.
                     items = [
                         item
@@ -334,24 +334,6 @@ class SteamAPIHelper:
             except (SteamNotAGameError, SteamGameNotFoundError):
                 continue
         raise SteamGameNotFoundError()
-
-    def search_appid(self, name: str) -> tuple[str, bool]:
-        """Resolve a game name to a Steam appid via the store search endpoint.
-
-        :return: an ``(appid, confident)`` tuple. ``confident`` is True only
-            when the matched title is the same game rather than a related one,
-            signalling the caller may adopt it without asking the user.
-        :raises SteamGameNotFoundError: if no plausible match is found
-        """
-        candidate, match = self.search_candidates(name)[0]
-        logging.debug(
-            "Steam match for %s: %s (%s, score %d)",
-            name,
-            candidate.get("name"),
-            match.reason,
-            match.score,
-        )
-        return str(candidate["id"]), match.confident
 
     def get_api_data(
         self,

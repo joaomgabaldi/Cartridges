@@ -72,9 +72,9 @@ fitas_arquivo = app_dir / "fitas.json"
 
 # A conta de nuvem da Tuya que o assistente das fitas usa para buscar
 # dispositivos. Fica criptografada com o DPAPI do Windows (ver
-# `utils/tuya_conta.py`), amarrada à conta do Windows de quem roda o app — por
-# isso mora num arquivo à parte, fora do backup do app (`utils/backup.py`): um
-# blob DPAPI não decifra numa instalação nova nem numa conta diferente.
+# `utils/tuya_conta.py`), amarrada à conta do Windows de quem roda o app. Vai no
+# backup com o resto da pasta, mas só decifra de volta no mesmo PC e na mesma
+# conta; em outro, o assistente pede os códigos de novo.
 tuya_conta_arquivo = app_dir / "tuya_conta.json"
 
 # Deliberately NOT `GLib.get_user_cache_dir()`. On Windows that resolves to
