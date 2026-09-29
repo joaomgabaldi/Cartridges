@@ -546,3 +546,18 @@ def write_asset(app_dirs):
         return target
 
     return writer
+
+
+@pytest.fixture(autouse=True)
+def _quadro_de_tarefas_limpo():
+    """O quadro de tarefas é global ao processo: entregas que ficaram na fila e
+    tarefas que ninguém terminou passariam de um teste para o seguinte."""
+    yield
+    from cartridges.utils import tarefas  # noqa: PLC0415
+
+    contexto = GLib.MainContext.default()
+    for _ in range(1000):
+        if not contexto.pending():
+            break
+        contexto.iteration(False)
+    tarefas.lista.remove_all()
