@@ -256,3 +256,42 @@ def test_a_tombstone_is_not_removed_again(importer, make_game, store):
     importer.remove_games()
 
     assert importer.removed_game_ids == set()
+
+
+# region Tarefas em andamento
+
+
+def test_importacao_sem_jogo_novo_nao_vira_tarefa(importer, flush_idle, monkeypatch):
+    from cartridges.utils import tarefas  # noqa: PLC0415
+
+    monkeypatch.setattr(importer, "finish_import", lambda: None)
+    importer.n_source_tasks_created = 1
+    importer.n_source_tasks_done = 0
+    importer.monitor_import()
+    importer.n_source_tasks_done = 1  # a verificação acabou sem achar nada
+    importer.monitor_import()
+    flush_idle()
+    assert tarefas.lista.get_n_items() == 0
+
+
+def test_jogo_novo_vira_tarefa_que_termina_com_a_importacao(
+    importer, flush_idle, monkeypatch
+):
+    from cartridges.utils import tarefas  # noqa: PLC0415
+
+    monkeypatch.setattr(importer, "finish_import", lambda: None)
+    importer.n_source_tasks_created = 1
+    importer.game_pipelines.update({object(), object()})
+    importer.monitor_import()
+    flush_idle()
+    tarefa = tarefas.lista.get_item(0)
+    assert (tarefa.nome, tarefa.feitos, tarefa.total) == ("Importação", 0, 2)
+
+    importer.n_pipelines_done = 2
+    importer.n_source_tasks_done = 1
+    assert importer.monitor_import() is False
+    flush_idle()
+    assert tarefas.lista.get_n_items() == 0
+
+
+# endregion

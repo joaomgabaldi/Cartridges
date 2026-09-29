@@ -605,14 +605,7 @@ class CartridgesApplication(Adw.Application):
         if restauracao.existe():
             self.continuar_restauracao()
         elif shared.schema.get_boolean("auto-import"):
-            # Com a biblioteca já formada, a importação da abertura só procura o
-            # que mudou: a porcentagem dela não diz nada a ninguém. O resumo
-            # continua aparecendo quando algo entra ou sai.
-            self.on_import_action(
-                mostrar_progresso=not any(
-                    not (game.removed or game.blacklisted) for game in shared.store
-                )
-            )
+            self.on_import_action()
 
     def continuar_restauracao(self) -> None:
         """A cada abertura enquanto houver pendências da restauração: a pasta
@@ -624,7 +617,6 @@ class CartridgesApplication(Adw.Application):
             restauracao_dialogs.PedirPasta(self.continuar_restauracao).present()
             return
         self.on_import_action(
-            mostrar_progresso=False,
             ao_terminar=restauracao_dialogs.mostrar_pendentes,
             varrer_atalhos=True,
         )
@@ -888,7 +880,6 @@ class CartridgesApplication(Adw.Application):
     def on_import_action(
         self,
         *_args: Any,
-        mostrar_progresso: bool = True,
         ao_terminar: Optional[Callable[[], None]] = None,
         varrer_atalhos: bool = False,
     ) -> None:
@@ -901,7 +892,7 @@ class CartridgesApplication(Adw.Application):
         if varrer_atalhos or shared.schema.get_boolean("shortcuts"):
             shared.importer.add_source(ShortcutsSource())
 
-        shared.importer.run(mostrar_progresso)
+        shared.importer.run()
 
     def on_remove_game_action(self, *_args: Any) -> None:
         # Um zerado já saiu da biblioteca: o "Desfazer" o traria de volta

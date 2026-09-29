@@ -293,7 +293,7 @@ class EscolherAtalho:
         # A varredura adota o jogo pelo atalho novo e o tira das pendências.
         self.ao_importar()
         shared.win.get_application().on_import_action(
-            mostrar_progresso=False, ao_terminar=self.ao_concluir, varrer_atalhos=True
+            ao_terminar=self.ao_concluir, varrer_atalhos=True
         )
 
 

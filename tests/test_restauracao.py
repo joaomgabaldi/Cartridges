@@ -310,7 +310,7 @@ def test_importacao_da_restauracao_varre_atalhos_mesmo_com_a_fonte_desligada(sch
         def add_source(self, fonte):
             fontes.append(type(fonte).__name__)
 
-        def run(self, _mostrar_progresso):
+        def run(self):
             pass
 
     monkeypatch.setattr(main_module, "Importer", ImporterFalso)

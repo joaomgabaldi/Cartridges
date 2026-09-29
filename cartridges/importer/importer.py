@@ -32,14 +32,13 @@ from cartridges.game import Game
 from cartridges.importer.source import Source, SourceScanError
 from cartridges.store.managers.async_manager import AsyncManager
 from cartridges.store.pipeline import Pipeline
-from cartridges.utils import restauracao
+from cartridges.utils import restauracao, tarefas
 
 
 # pylint: disable=too-many-instance-attributes
 class Importer(ErrorProducer):
     """A class in charge of scanning sources for games"""
 
-    progress_toast: Optional[Adw.Toast] = None
     summary_toast: Optional[Adw.Toast] = None
 
     sources: set[Source]
@@ -68,6 +67,9 @@ class Importer(ErrorProducer):
         # restauração de backup o usa para abrir a janela dos jogos sem
         # atalho só depois de a importação da abertura terminar.
         self.ao_terminar: Optional[Callable[[], None]] = None
+        # A tarefa na janela de tarefas nasce com o primeiro jogo novo e
+        # termina com a importação; ver `monitor_import`.
+        self.tarefa: Optional[tarefas.Tarefa] = None
 
         self.game_pipelines = set()
         self.sources = set()
@@ -83,25 +85,6 @@ class Importer(ErrorProducer):
         self._counted_done_pipelines: set[Pipeline] = set()
 
     @property
-    def pipelines_progress(self) -> float:
-        with self._pipelines_lock:
-            pipelines = list(self.game_pipelines)
-        progress = sum(pipeline.progress for pipeline in pipelines)
-        try:
-            progress = progress / len(pipelines)
-        except ZeroDivisionError:
-            progress = 0
-        return progress  # type: ignore
-
-    @property
-    def sources_progress(self) -> float:
-        try:
-            progress = self.n_source_tasks_done / self.n_source_tasks_created
-        except ZeroDivisionError:
-            progress = 0
-        return progress
-
-    @property
     def finished(self) -> bool:
         with self._pipelines_lock:
             n_pipelines = len(self.game_pipelines)
@@ -114,14 +97,12 @@ class Importer(ErrorProducer):
     def add_source(self, source: Source) -> None:
         self.sources.add(source)
 
-    def run(self, mostrar_progresso: bool = True) -> None:
+    def run(self) -> None:
         """Use several Gio.Task to import games from added sources"""
         shared.win.get_application().state = shared.AppState.IMPORT
 
         if self.__class__.summary_toast:
             shared.win.toast_queue.dismiss(self.__class__.summary_toast)
-        if self.__class__.progress_toast:
-            shared.win.toast_queue.dismiss(self.__class__.progress_toast)
 
         shared.win.get_application().lookup_action("import").set_enabled(False)
         shared.win.get_application().lookup_action("add_game").set_enabled(False)
@@ -132,8 +113,6 @@ class Importer(ErrorProducer):
         with self._pipelines_lock:
             self._counted_done_pipelines.clear()
 
-        if mostrar_progresso:
-            self.create_progress_toast()
         GLib.timeout_add(100, self.monitor_import)
 
         # Collect all errors and reset the cancellables for the managers
@@ -158,12 +137,23 @@ class Importer(ErrorProducer):
             )
 
     def monitor_import(self) -> bool:
-        """Monitor import progress to update the progress toast and to trigger
-        import cleanup once the work has finished"""
+        """Acompanha a importação: a tarefa na janela de tarefas nasce com o
+        primeiro jogo novo — a verificação que não acha nada nunca aparece — e
+        o fim dispara a limpeza."""
+        with self._pipelines_lock:
+            total = len(self.game_pipelines)
+            feitos = self.n_pipelines_done
+        if total and self.tarefa is None:
+            self.tarefa = tarefas.comecar(_("Importação"), total)
+        if self.tarefa is not None:
+            self.tarefa.atualizar(feitos, total)
+
         if not self.finished:
-            self.update_progress_toast()
             return True
 
+        if self.tarefa is not None:
+            self.tarefa.terminar()
+            self.tarefa = None
         self.finish_import()
         return False
 
@@ -177,9 +167,6 @@ class Importer(ErrorProducer):
         self.imported_game_ids = shared.store.new_game_ids
         shared.store.new_game_ids = set()
         shared.store.duplicate_game_ids = set()
-        if self.__class__.progress_toast:
-            shared.win.toast_queue.dismiss(self.__class__.progress_toast)
-            self.__class__.progress_toast = None
         self.__class__.summary_toast = self.create_summary_toast()
         self.create_error_dialog()
         shared.win.get_application().lookup_action("import").set_enabled(True)
@@ -346,23 +333,6 @@ class Importer(ErrorProducer):
                     self.n_pipelines_done += 1
 
     """GUI Actions"""
-
-    def create_progress_toast(self) -> None:
-        """Show a persistent toast while games are imported in the background"""
-        toast = Adw.Toast(title=_("Importando jogos…"), timeout=0)
-        self.__class__.progress_toast = toast
-        shared.win.toast_queue.add(toast)
-
-    def update_progress_toast(self) -> None:
-        """Update the toast title with the overall import progress"""
-        if not self.__class__.progress_toast:
-            return
-
-        # Reserve 10% for the sources discovery, the rest is the pipelines
-        progress = (0.1 * self.sources_progress) + (0.9 * self.pipelines_progress)
-        self.__class__.progress_toast.set_title(
-            _("Importando jogos… {}%").format(int(progress * 100))
-        )
 
     def create_error_dialog(self) -> None:
         """Dialog containing all errors raised by importers"""
