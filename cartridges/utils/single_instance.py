@@ -217,11 +217,16 @@ def present_running_instance() -> None:
     if sys.platform != "win32":
         return
 
+    # Com o próprio `try`: se acordar a primeira cópia falhar, o realce abaixo
+    # ainda é tentado.
+    try:
+        _wake_running_instance()
+    except Exception as error:  # pylint: disable=broad-exception-caught
+        logging.warning("Could not wake the running Cartridges instance: %s", error)
+
     try:
         import ctypes  # pylint: disable=import-outside-toplevel
         from ctypes import wintypes  # pylint: disable=import-outside-toplevel
-
-        _wake_running_instance()
 
         user32 = ctypes.WinDLL("user32")
         user32.GetWindowTextW.argtypes = (
@@ -235,6 +240,7 @@ def present_running_instance() -> None:
             ctypes.c_int,
         )
         user32.IsIconic.argtypes = (ctypes.c_void_p,)
+        user32.IsWindowVisible.argtypes = (ctypes.c_void_p,)
         user32.ShowWindow.argtypes = (ctypes.c_void_p, ctypes.c_int)
         user32.SetForegroundWindow.argtypes = (ctypes.c_void_p,)
 
@@ -261,6 +267,11 @@ def present_running_instance() -> None:
             return
 
         hwnd = ctypes.c_void_p(found[0])
+        # Principal escondida (só a janela das tarefas à vista): quem a mostra é
+        # a primeira cópia, ao acordar. Dar foreground aqui à HWND escondida a
+        # faria reaparecer visível mas sem foco de teclado (`is_active()` falso).
+        if not user32.IsWindowVisible(hwnd):
+            return
         if user32.IsIconic(hwnd):
             user32.ShowWindow(hwnd, 9)  # SW_RESTORE
         # Funciona porque este processo acabou de ser iniciado pelo usuário e

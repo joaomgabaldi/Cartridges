@@ -491,19 +491,19 @@ class CartridgesApplication(Adw.Application):
         # 28x29 pixels on every run, and it could not remember which monitor the
         # window had been on, so a second screen was unusable. See
         # cartridges/utils/window_geometry.py.
-        geometry = window_geometry.Geometry(
-            shared.state_schema.get_int("x"),
-            shared.state_schema.get_int("y"),
-            shared.state_schema.get_int("width"),
-            shared.state_schema.get_int("height"),
-            shared.state_schema.get_boolean("is-maximized"),
+        window_geometry.apply_size(
+            shared.win, window_geometry.stored(shared.state_schema)
         )
-        window_geometry.apply_size(shared.win, geometry)
         # On "map", not the earlier "realize": a window realized but not yet
         # shown does have a Win32 handle, but GTK positions it again on the way
-        # to the screen and throws the placement away.
+        # to the screen and throws the placement away. Reads the schema at each
+        # "map": the window also maps again when it reappears after being hidden
+        # (`on_win_close_request`), and by then the schema holds where it was.
         shared.win.connect(
-            "map", lambda *_: window_geometry.apply_placement(shared.win, geometry)
+            "map",
+            lambda *_: window_geometry.apply_placement(
+                shared.win, window_geometry.stored(shared.state_schema)
+            ),
         )
         # Closing the window and quitting the app are different paths and only
         # one of them runs do_shutdown with the window still around, so both save.

@@ -397,6 +397,22 @@ def test_a_geometry_needs_a_size_to_be_usable():
     assert window_geometry.Geometry(10, 10, 1170, 795, False).usable is True
 
 
+def test_stored_monta_a_geometria_das_chaves_do_estado():
+    """A janela reaparecida volta ao que o close-request gravou, não à abertura."""
+    valores = {"x": -7, "y": 20, "width": 900, "height": 600, "is-maximized": True}
+    schema = SimpleNamespace(
+        get_int=lambda chave: valores[chave],
+        get_boolean=lambda chave: valores[chave],
+    )
+    assert window_geometry.stored(schema) == window_geometry.Geometry(
+        -7, 20, 900, 600, True
+    )
+    valores["x"], valores["is-maximized"] = 50, False  # gravado depois
+    assert window_geometry.stored(schema) == window_geometry.Geometry(
+        50, 20, 900, 600, False
+    )
+
+
 def test_a_maximized_geometry_keeps_the_restored_size():
     """T7.6 Saving the maximized size would grow the window on every run."""
     geometry = window_geometry.Geometry(10, 10, 1170, 795, True)

@@ -150,6 +150,7 @@ class TarefasJanela(Adw.Window):
         contagem = Gtk.Label(xalign=0)
         contagem.add_css_class("dim-label")
         barra = Gtk.ProgressBar()
+        barra.update_property([Gtk.AccessibleProperty.LABEL], [tarefa.nome])
         bloco.append(nome)
         bloco.append(contagem)
         bloco.append(barra)

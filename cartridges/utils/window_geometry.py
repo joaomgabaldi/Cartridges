@@ -162,6 +162,22 @@ class Geometry(NamedTuple):
         return self.width > 0 and self.height > 0 and self.x != UNSET
 
 
+def stored(schema: Any) -> Geometry:
+    """A geometria que ``save_window_geometry`` gravou no GSettings do estado.
+
+    Lida de novo a cada "map", e não uma vez na abertura: a janela principal
+    pode ser escondida e reaparecer (veja `on_win_close_request`), e o "map"
+    seguinte tem de devolvê-la a onde o usuário a deixou, não a onde ela abriu.
+    """
+    return Geometry(
+        schema.get_int("x"),
+        schema.get_int("y"),
+        schema.get_int("width"),
+        schema.get_int("height"),
+        schema.get_boolean("is-maximized"),
+    )
+
+
 class Monitor(NamedTuple):
     """An attached screen, in the same physical coordinates as :class:`Geometry`."""
 

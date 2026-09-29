@@ -88,6 +88,13 @@ def preparar(saida: Path) -> dict[str, list]:
     spec.loader.exec_module(shared)  # type: ignore[union-attr]
     cartridges.shared = shared  # type: ignore[attr-defined]
 
+    # O evento nomeado com que uma segunda cópia acorda a primeira é do
+    # sistema inteiro: com o app instalado aberto ao mesmo tempo, uma segunda
+    # abertura dele acordaria o passeio. Nome próprio.
+    from cartridges.utils import single_instance  # pylint: disable=import-outside-toplevel
+
+    single_instance._EVENT_NAME = "Local\\Cartridges.Passeio.Present"  # pylint: disable=protected-access
+
     # As chaves vêm das preferências reais, só lidas. Todo o resto das
     # preferências fica no padrão, em memória: o registro nunca é gravado.
     chaves = {k: shared.schema.get_string(k) for k in ("sgdb-key", "wallhaven-key")}
@@ -864,18 +871,28 @@ def tarefas_borda_e_janela() -> Iterator[Esperar]:
 
 def tarefas_fechar_principal() -> Iterator[Esperar]:
     from cartridges.tarefas_janela import TarefasJanela  # pylint: disable=import-outside-toplevel
+    from cartridges.utils import window_geometry  # pylint: disable=import-outside-toplevel
 
     win = shared().win
     try:
         assert TarefasJanela.aberta is not None and TAREFA is not None, (
             "o passo anterior não deixou a janela das tarefas aberta"
         )
+        antes = window_geometry.read(win)
         win.close()
         yield ocioso()
         assert not win.get_visible(), "fechar a principal com tarefa rodando não a escondeu"
         assert TarefasJanela.aberta is not None, "a janela das tarefas sumiu com a principal"
         win.present()
         yield Esperar(win.get_visible, LOCAL, "a principal voltar à tela")
+        yield ocioso()
+        depois = window_geometry.read(win)
+        if antes is not None and depois is not None:
+            # O "map" da principal reaparecida não pode devolvê-la à posição e ao
+            # tamanho da abertura: tem de ser onde estava ao ser escondida.
+            assert all(abs(a - d) <= 4 for a, d in zip(antes[:4], depois[:4])), (
+                f"a principal voltou em outro lugar: {antes[:4]} -> {depois[:4]}"
+            )
     except BaseException:
         encerrar_tarefa_de_teste()
         raise

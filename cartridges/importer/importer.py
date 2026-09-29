@@ -70,6 +70,9 @@ class Importer(ErrorProducer):
         # A tarefa na janela de tarefas nasce com o primeiro jogo novo e
         # termina com a importação; ver `monitor_import`.
         self.tarefa: Optional[tarefas.Tarefa] = None
+        # O último (feitos, total) entregue à tarefa: o monitor roda a cada
+        # 100 ms e só entrega quando o par muda.
+        self._progresso: Optional[tuple[int, int]] = None
 
         self.game_pipelines = set()
         self.sources = set()
@@ -145,7 +148,8 @@ class Importer(ErrorProducer):
             feitos = self.n_pipelines_done
         if total and self.tarefa is None:
             self.tarefa = tarefas.comecar(_("Importação"), total)
-        if self.tarefa is not None:
+        if self.tarefa is not None and (feitos, total) != self._progresso:
+            self._progresso = (feitos, total)
             self.tarefa.atualizar(feitos, total)
 
         if not self.finished:
@@ -154,6 +158,7 @@ class Importer(ErrorProducer):
         if self.tarefa is not None:
             self.tarefa.terminar()
             self.tarefa = None
+            self._progresso = None
         self.finish_import()
         return False
 
