@@ -449,3 +449,69 @@ def test_segunda_abertura_mostra_a_principal_escondida(monkeypatch):
     monkeypatch.setattr(shared, "win", SimpleNamespace(present=lambda: chamadas.append(1)))
     assert CartridgesApplication.on_second_launch(None) is False  # idle de uma vez só
     assert chamadas == [1]
+
+
+def _user32_falso(monkeypatch, visivel):
+    """Um user32 em que EnumWindows acha a principal (HWND 42); devolve as chamadas."""
+    import ctypes  # noqa: PLC0415
+    from unittest.mock import MagicMock  # noqa: PLC0415
+
+    from cartridges.utils import single_instance  # noqa: PLC0415
+
+    user32 = MagicMock()
+
+    def titulo(_hwnd, buffer, _n):
+        buffer.value = "Cartridges"
+
+    def classe(_hwnd, buffer, _n):
+        buffer.value = "gdkSurfaceToplevel"
+
+    user32.GetWindowTextW.side_effect = titulo
+    user32.GetClassNameW.side_effect = classe
+    user32.EnumWindows.side_effect = lambda callback, _param: callback(42, 0)
+    user32.IsWindowVisible.return_value = visivel
+    user32.IsIconic.return_value = False
+    monkeypatch.setattr(ctypes, "WinDLL", lambda _nome: user32, raising=False)
+    monkeypatch.setattr(single_instance.sys, "platform", "win32")
+    return user32
+
+
+def test_segunda_abertura_nao_da_foreground_a_principal_escondida(monkeypatch):
+    from cartridges.utils import single_instance  # noqa: PLC0415
+
+    monkeypatch.setattr(single_instance, "_wake_running_instance", lambda: None)
+    user32 = _user32_falso(monkeypatch, visivel=False)
+    single_instance.present_running_instance()
+    user32.SetForegroundWindow.assert_not_called()
+
+
+def test_segunda_abertura_realca_a_principal_visivel(monkeypatch):
+    from cartridges.utils import single_instance  # noqa: PLC0415
+
+    monkeypatch.setattr(single_instance, "_wake_running_instance", lambda: None)
+    user32 = _user32_falso(monkeypatch, visivel=True)
+    single_instance.present_running_instance()
+    user32.SetForegroundWindow.assert_called_once()
+
+
+def test_falha_ao_acordar_a_primeira_copia_nao_pula_o_realce(monkeypatch):
+    from cartridges.utils import single_instance  # noqa: PLC0415
+
+    def falha():
+        raise OSError("sem evento")
+
+    monkeypatch.setattr(single_instance, "_wake_running_instance", falha)
+    user32 = _user32_falso(monkeypatch, visivel=True)
+    single_instance.present_running_instance()
+    user32.SetForegroundWindow.assert_called_once()
+
+
+def test_barra_de_cada_tarefa_aceita_o_nome_acessivel(flush_idle):
+    from cartridges.tarefas_janela import TarefasJanela  # noqa: PLC0415
+
+    tarefas.comecar("Importação", 3)
+    flush_idle()
+    dialogo = TarefasJanela()
+    barra = dialogo.caixa.get_first_child().get_last_child()
+    assert isinstance(barra, Gtk.ProgressBar)
+    assert barra.get_accessible_role() == Gtk.AccessibleRole.PROGRESS_BAR

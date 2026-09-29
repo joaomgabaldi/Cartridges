@@ -294,4 +294,28 @@ def test_jogo_novo_vira_tarefa_que_termina_com_a_importacao(
     assert tarefas.lista.get_n_items() == 0
 
 
+def test_monitor_so_atualiza_a_tarefa_quando_o_progresso_muda(
+    importer, flush_idle, monkeypatch
+):
+    from cartridges.utils import tarefas  # noqa: PLC0415
+
+    monkeypatch.setattr(importer, "finish_import", lambda: None)
+    importer.n_source_tasks_created = 1
+    importer.game_pipelines.update({object(), object()})
+    importer.monitor_import()
+    flush_idle()
+    tarefa = tarefas.lista.get_item(0)
+    chamadas = []
+    monkeypatch.setattr(tarefa, "atualizar", lambda *args: chamadas.append(args))
+
+    importer.monitor_import()
+    importer.monitor_import()
+    assert chamadas == []  # o par (0, 2) já foi entregue
+
+    importer.n_pipelines_done = 1
+    importer.monitor_import()
+    importer.monitor_import()
+    assert chamadas == [(1, 2)]
+
+
 # endregion
