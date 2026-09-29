@@ -512,6 +512,9 @@ def real_window(store, monkeypatch):
     instance = CartridgesWindow()
     monkeypatch.setattr(shared, "win", instance, raising=False)
     yield instance
+    # A janela nunca é destruída aqui; sem soltar o que ela ligou nos singletons
+    # (o quadro de tarefas, por exemplo), ela seguiria ouvindo os testes seguintes.
+    instance.detach_global_handlers()
 
 
 @pytest.fixture

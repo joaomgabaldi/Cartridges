@@ -20,9 +20,10 @@
 """O botão do canto inferior esquerdo que abre as tarefas em andamento.
 
 Não fica na tela: entra deslizando quando uma tarefa começa, recua depois de
-3 s e volta quando o mouse passa pelo canto. Sem tarefa nenhuma, nem o canto
-responde. Nunca aparece fora das duas bibliotecas, com uma janela aberta por
-cima ou durante uma sessão de jogo.
+3 s e volta quando o mouse passa pelo canto. Escondido, o botão não recebe
+nada do mouse: quem vigia o canto é um controlador no overlay da janela, que
+enxerga o movimento sem ficar na frente das capas. Nunca aparece fora das duas
+bibliotecas, com uma janela aberta por cima ou durante uma sessão de jogo.
 """
 
 from typing import Any
@@ -34,6 +35,7 @@ from cartridges.utils import tarefas
 
 _ENTRADA_MS = 3000
 _SAIDA_MS = 1000
+_CANTO = 72  # lado, em px, do canto que faz o botão voltar
 
 
 def pode_mostrar(win: Any) -> bool:
@@ -53,7 +55,8 @@ class BotaoTarefas(Gtk.Box):
         super().__init__(halign=Gtk.Align.START, valign=Gtk.Align.END)
         self.win = win
         self._recolher_id = 0
-        self.set_size_request(72, 72)
+        self._no_canto = False
+        self.set_size_request(_CANTO, _CANTO)
         self.set_can_target(False)
 
         self.botao = Gtk.Button(
@@ -64,6 +67,7 @@ class BotaoTarefas(Gtk.Box):
             margin_bottom=12,
         )
         self.botao.add_css_class("circular")
+        self.botao.add_css_class("osd")
         self.botao.add_css_class("botao-tarefas")
         self.botao.connect("clicked", self._abrir)
 
@@ -72,26 +76,35 @@ class BotaoTarefas(Gtk.Box):
             valign=Gtk.Align.END,
         )
         self.revealer.set_child(self.botao)
-        # O giro só existe enquanto o botão está à vista: escondido, nada anima.
-        self.revealer.connect("notify::child-revealed", self._girar)
+        # O alvo do mouse e o giro seguem o que está à vista, não o que se pediu.
+        self.revealer.connect("notify::reveal-child", self.reavaliar)
+        self.revealer.connect("notify::child-revealed", self.reavaliar)
         self.append(self.revealer)
 
-        self._movimento = Gtk.EventControllerMotion()
-        self._movimento.connect("enter", self._ao_entrar)
-        self._movimento.connect("leave", self._ao_sair)
-        self.add_controller(self._movimento)
+        # No overlay, e não neste Box: um Box alvejável ali na frente tiraria
+        # os cliques e a roda do mouse das capas que ficam debaixo do canto.
+        movimento = Gtk.EventControllerMotion(
+            propagation_phase=Gtk.PropagationPhase.CAPTURE
+        )
+        movimento.connect("motion", self._ao_mover)
+        movimento.connect("leave", self._ao_deixar)
+        win.session_overlay.add_controller(movimento)
 
-        # Um recuo agendado não pode sobreviver à janela: o temporizador do
-        # GLib segura o botão (e a janela) até disparar.
+        # O temporizador do GLib segura o botão (e, por ele, a janela) até
+        # disparar: destruída a janela, o recuo agendado não deve sobreviver.
         win.connect("destroy", self._cancelar_recolher)
 
     # -- quando pode ----------------------------------------------------------
 
     def reavaliar(self, *_args: Any) -> None:
         pode = pode_mostrar(self.win)
-        self.set_can_target(pode)
+        a_vista = self.revealer.get_reveal_child() or self.revealer.get_child_revealed()
+        self.set_can_target(pode and a_vista)
+        if not a_vista:
+            self.botao.remove_css_class("girando")
         if not pode:
-            self._esconder()
+            # Na sessão o botão está acima do bloqueador: some sem deslizar.
+            self._esconder(animado=self.win.session_game is None)
 
     def ao_mudar_lista(
         self, _lista: Any, _posicao: int, _removidos: int, adicionados: int
@@ -102,6 +115,21 @@ class BotaoTarefas(Gtk.Box):
             self._agendar_recolher(_ENTRADA_MS)
 
     # -- mouse ----------------------------------------------------------------
+
+    def _ao_mover(self, _controlador: Any, x: float, y: float) -> None:
+        altura = self.win.session_overlay.get_height()
+        dentro = x < _CANTO and y > altura - _CANTO
+        if dentro and not self._no_canto:
+            self._no_canto = True
+            self._ao_entrar()
+        elif not dentro and self._no_canto:
+            self._no_canto = False
+            self._ao_sair()
+
+    def _ao_deixar(self, *_args: Any) -> None:
+        if self._no_canto:
+            self._no_canto = False
+            self._ao_sair()
 
     def _ao_entrar(self, *_args: Any) -> None:
         if pode_mostrar(self.win):
@@ -117,9 +145,15 @@ class BotaoTarefas(Gtk.Box):
         self.botao.add_css_class("girando")
         self.revealer.set_reveal_child(True)
 
-    def _esconder(self) -> None:
+    def _esconder(self, animado: bool = True) -> None:
         self._cancelar_recolher()
+        if animado:
+            self.revealer.set_reveal_child(False)
+            return
+        tipo = self.revealer.get_transition_type()
+        self.revealer.set_transition_type(Gtk.RevealerTransitionType.NONE)
         self.revealer.set_reveal_child(False)
+        self.revealer.set_transition_type(tipo)
 
     def _agendar_recolher(self, espera_ms: int) -> None:
         self._cancelar_recolher()
@@ -127,9 +161,9 @@ class BotaoTarefas(Gtk.Box):
 
     def _recolher(self) -> bool:
         self._recolher_id = 0
-        # Com o mouse em cima, a entrada automática não tira o botão de baixo
-        # dele; o `leave` agenda a saída quando o mouse for embora.
-        if not self._movimento.contains_pointer():
+        # Com o mouse no canto, a entrada automática não tira o botão de baixo
+        # dele; sair do canto agenda a saída de novo.
+        if not self._no_canto:
             self.revealer.set_reveal_child(False)
         return GLib.SOURCE_REMOVE
 
@@ -137,10 +171,6 @@ class BotaoTarefas(Gtk.Box):
         if self._recolher_id:
             GLib.source_remove(self._recolher_id)
             self._recolher_id = 0
-
-    def _girar(self, *_args: Any) -> None:
-        if not self.revealer.get_child_revealed() and not self.revealer.get_reveal_child():
-            self.botao.remove_css_class("girando")
 
     def _abrir(self, *_args: Any) -> None:
         self._esconder()
