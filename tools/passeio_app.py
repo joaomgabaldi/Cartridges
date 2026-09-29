@@ -664,6 +664,294 @@ def excluir_zerado(jogo: Any) -> Iterator[Esperar]:
     )
 
 
+# ----------------------------------------------------------------------------
+# Tarefas em andamento: o botão do canto e a janela solta
+# ----------------------------------------------------------------------------
+
+# A tarefa de teste que os passos 2 a 4 dividem: a janela solta tem de seguir
+# aberta de um passo para o outro, e a tarefa com ela.
+TAREFA: Optional[Any] = None
+NOME_TAREFA = "Tarefa do passeio"
+
+
+def botao_tarefas() -> Any:
+    return shared().win.botao_tarefas
+
+
+def altura_canto() -> float:
+    return shared().win.session_overlay.get_height()
+
+
+def tarefas_paradas() -> bool:
+    from cartridges.utils import tarefas  # pylint: disable=import-outside-toplevel
+
+    return tarefas.lista.get_n_items() == 0
+
+
+def escurecer_botao() -> None:
+    """O botão escondido de imediato e o mouse fora do canto: o ponto de partida
+    de cada conferência, sem esperar os 10 s da entrada nem a saída animada."""
+    botao = botao_tarefas()
+    botao._no_canto = False  # pylint: disable=protected-access
+    botao._esconder(animado=False)  # pylint: disable=protected-access
+
+
+def bloco_da_tarefa(janela: Any) -> Optional[Any]:
+    """O bloco da tarefa de teste na janela solta: nome, contagem e barra."""
+    filho = janela.caixa.get_first_child()
+    while filho is not None:
+        if filho.get_first_child().get_label() == NOME_TAREFA:
+            return filho
+        filho = filho.get_next_sibling()
+    return None
+
+
+def contagem_da_tarefa(janela: Any) -> str:
+    if (bloco := bloco_da_tarefa(janela)) is None:
+        return ""
+    return bloco.get_first_child().get_next_sibling().get_label()
+
+
+def bordas_visiveis(janela: Any) -> Optional[tuple[float, float, float]]:
+    """(esquerda, base, escala) da parte visível da janela, em pixels do Windows,
+    ou None sem HWND. O retângulo do Windows inclui a sombra que o GTK desenha."""
+    import ctypes  # pylint: disable=import-outside-toplevel
+    from ctypes import wintypes  # pylint: disable=import-outside-toplevel
+
+    from cartridges.utils import window_geometry  # pylint: disable=import-outside-toplevel
+
+    hwnd = window_geometry._hwnd(janela)  # pylint: disable=protected-access
+    if hwnd is None:
+        return None
+    rect = wintypes.RECT()
+    if not window_geometry._user32.GetWindowRect(hwnd, ctypes.byref(rect)):  # pylint: disable=protected-access
+        return None
+    surface = janela.get_surface()
+    escala = surface.get_scale() if hasattr(surface, "get_scale") else 1
+    sombra = janela.get_surface_transform()
+    return (
+        rect.left + sombra[0] * escala,
+        rect.top + (sombra[1] + janela.get_height()) * escala,
+        escala,
+    )
+
+
+def encerrar_tarefa_de_teste() -> None:
+    """Limpeza dos passos das tarefas: principal de volta à tela, tarefa
+    terminada, janela solta fechada e o botão em repouso. A principal primeiro:
+    fechar a solta com a principal escondida encerraria o app."""
+    global TAREFA  # pylint: disable=global-statement
+    from cartridges.tarefas_janela import TarefasJanela  # pylint: disable=import-outside-toplevel
+
+    shared().win.present()
+    if TAREFA is not None:
+        TAREFA.terminar()
+        TAREFA = None
+    if TarefasJanela.aberta is not None:
+        TarefasJanela.aberta.close()
+    escurecer_botao()
+
+
+def tarefas_botao_entra_e_recua() -> Iterator[Esperar]:
+    from cartridges.utils import tarefas  # pylint: disable=import-outside-toplevel
+
+    botao = botao_tarefas()
+    escurecer_botao()
+    tarefa = tarefas.comecar(NOME_TAREFA, 3)
+    try:
+        yield Esperar(
+            lambda: botao.revealer.get_reveal_child() and botao.revealer.get_child_revealed(),
+            LOCAL,
+            "o botão das tarefas entrar",
+        )
+        assert botao.get_can_target(), "o botão à vista não aceita clique"
+        # 10 s à vista e o deslizar de volta.
+        yield Esperar(
+            lambda: not botao.revealer.get_reveal_child() and not botao.revealer.get_child_revealed(),
+            15,
+            "o botão das tarefas recuar sozinho",
+        )
+        assert not botao.get_can_target(), "o botão recuado ainda aceita clique"
+    finally:
+        tarefa.terminar()
+        escurecer_botao()
+    yield Esperar(tarefas_paradas, LOCAL, "o quadro de tarefas esvaziar")
+
+
+def abrir_janela_das_tarefas() -> Iterator[Esperar]:
+    """Do passo 2. Devolve True se a posição não pôde ser conferida (sem HWND)."""
+    global TAREFA  # pylint: disable=global-statement
+    from cartridges.tarefas_janela import TarefasJanela  # pylint: disable=import-outside-toplevel
+    from cartridges.utils import tarefas, window_geometry  # pylint: disable=import-outside-toplevel
+
+    win = shared().win
+    botao = botao_tarefas()
+    TAREFA = tarefa = tarefas.comecar(NOME_TAREFA, 3)
+    yield Esperar(lambda: not tarefas_paradas(), LOCAL, "a tarefa entrar no quadro")
+    escurecer_botao()
+    assert not botao.revealer.get_reveal_child(), "o botão não escondeu"
+
+    # Longe da borda: nada. Rente à borda, embaixo: o botão entra.
+    botao._ao_mover(None, 30, altura_canto() - 10)  # pylint: disable=protected-access
+    assert not botao.revealer.get_reveal_child(), "o botão apareceu fora da faixa da borda"
+    botao._ao_mover(None, 8, altura_canto() - 10)  # pylint: disable=protected-access
+    assert botao.revealer.get_reveal_child(), "a borda não trouxe o botão"
+
+    botao.botao.emit("clicked")
+    yield Esperar(
+        lambda: TarefasJanela.aberta is not None and TarefasJanela.aberta.get_visible(),
+        LOCAL,
+        "a janela das tarefas abrir",
+    )
+    janela = TarefasJanela.aberta
+    assert janela.get_transient_for() is None, "a janela das tarefas está presa à principal"
+    assert not janela.get_modal(), "a janela das tarefas é modal"
+    assert not janela.get_resizable(), "a janela das tarefas é redimensionável"
+    assert win.get_visible_dialog() is None, "a janela das tarefas prendeu a biblioteca num diálogo"
+
+    assert bloco_da_tarefa(janela) is not None, "o bloco da tarefa não apareceu na janela"
+    assert contagem_da_tarefa(janela) == "0 de 3", f"contagem inicial: {contagem_da_tarefa(janela)!r}"
+    tarefa.atualizar(2)
+    yield Esperar(
+        lambda: contagem_da_tarefa(janela) == "2 de 3", LOCAL, "a contagem virar 2 de 3"
+    )
+
+    # A posição só vale depois do "map" + 30 ms: a janela sai invisível e volta a
+    # 1 de opacidade quando já está no lugar.
+    yield Esperar(lambda: janela.get_opacity() == 1, LOCAL, "a janela das tarefas ir para o canto")
+    yield ocioso()
+    sem_posicao = False
+    solta, principal = bordas_visiveis(janela), bordas_visiveis(win)
+    if solta is None or principal is None:
+        sem_posicao = True
+    else:
+        escala = solta[2]
+        margem = window_geometry._MARGEM_BOTAO * escala  # pylint: disable=protected-access
+        acima = (
+            window_geometry._MARGEM_BOTAO  # pylint: disable=protected-access
+            + window_geometry._ALTURA_BOTAO  # pylint: disable=protected-access
+            + window_geometry._FOLGA_BOTAO  # pylint: disable=protected-access
+        ) * escala
+        assert solta[1] < principal[1], "a janela solta não ficou acima da base da principal"
+        assert abs((solta[0] - principal[0]) - margem) <= 4, (
+            f"esquerda da janela solta a {solta[0] - principal[0]:.0f} px da principal "
+            f"(esperado {margem:.0f})"
+        )
+        assert abs((principal[1] - solta[1]) - acima) <= 4, (
+            f"base da janela solta a {principal[1] - solta[1]:.0f} px acima da principal "
+            f"(esperado {acima:.0f})"
+        )
+
+    # Um segundo clique traz a mesma janela, não abre outra.
+    botao._ao_mover(None, 8, altura_canto() - 10)  # pylint: disable=protected-access
+    assert botao.revealer.get_reveal_child(), "a borda não trouxe o botão de novo"
+    botao.botao.emit("clicked")
+    yield ocioso()
+    assert TarefasJanela.aberta is janela, "o segundo clique abriu outra janela das tarefas"
+    return sem_posicao
+
+
+def tarefas_borda_e_janela() -> Iterator[Esperar]:
+    try:
+        sem_posicao = yield from abrir_janela_das_tarefas()
+    except BaseException:
+        encerrar_tarefa_de_teste()
+        raise
+    # A janela e a tarefa seguem abertas para os dois passos seguintes.
+    if sem_posicao:
+        raise Pulado("sem HWND: a posição da janela solta não foi conferida")
+
+
+def tarefas_fechar_principal() -> Iterator[Esperar]:
+    from cartridges.tarefas_janela import TarefasJanela  # pylint: disable=import-outside-toplevel
+
+    win = shared().win
+    try:
+        assert TarefasJanela.aberta is not None and TAREFA is not None, (
+            "o passo anterior não deixou a janela das tarefas aberta"
+        )
+        win.close()
+        yield ocioso()
+        assert not win.get_visible(), "fechar a principal com tarefa rodando não a escondeu"
+        assert TarefasJanela.aberta is not None, "a janela das tarefas sumiu com a principal"
+        win.present()
+        yield Esperar(win.get_visible, LOCAL, "a principal voltar à tela")
+    except BaseException:
+        encerrar_tarefa_de_teste()
+        raise
+
+
+def tarefas_esc_fecha() -> Iterator[Esperar]:
+    from gi.repository import Gtk  # pylint: disable=import-outside-toplevel
+
+    from cartridges.tarefas_janela import TarefasJanela  # pylint: disable=import-outside-toplevel
+
+    try:
+        janela = TarefasJanela.aberta
+        assert janela is not None, "a janela das tarefas não estava aberta"
+        # O atalho que a própria janela registra: o gatilho tem de ser o Esc, e a
+        # ação dele (a mesma que o controlador dispara) é que fecha a janela.
+        atalho = None
+        controladores = janela.observe_controllers()
+        for i in range(controladores.get_n_items()):
+            controlador = controladores.get_item(i)
+            if isinstance(controlador, Gtk.ShortcutController):
+                for j in range(controlador.get_n_items()):
+                    candidato = controlador.get_item(j)
+                    if candidato.get_trigger().to_string() == "Escape":
+                        atalho = candidato
+        assert atalho is not None, "a janela das tarefas não tem atalho para o Esc"
+        atalho.get_action().activate(Gtk.ShortcutActionFlags.EXCLUSIVE, janela, None)
+        yield Esperar(lambda: TarefasJanela.aberta is None, LOCAL, "o Esc fechar a janela das tarefas")
+    finally:
+        encerrar_tarefa_de_teste()
+    yield Esperar(tarefas_paradas, LOCAL, "o quadro de tarefas esvaziar")
+
+
+def tarefas_onde_nao_aparece(jogo: Any) -> Iterator[Esperar]:
+    from cartridges.utils import tarefas  # pylint: disable=import-outside-toplevel
+
+    if jogo is None:
+        raise Pulado("a biblioteca não tem jogo")
+    win = shared().win
+    botao = botao_tarefas()
+
+    def chamar_pela_borda() -> bool:
+        escurecer_botao()
+        botao._ao_mover(None, 8, altura_canto() - 10)  # pylint: disable=protected-access
+        return botao.revealer.get_reveal_child()
+
+    tarefa = tarefas.comecar(NOME_TAREFA, 3)
+    try:
+        yield Esperar(lambda: not tarefas_paradas(), LOCAL, "a tarefa entrar no quadro")
+
+        yield from ir_aos_detalhes(jogo)
+        assert not chamar_pela_borda(), "o botão apareceu nos detalhes do jogo"
+
+        yield from abrir_edicao(jogo)
+        assert not chamar_pela_borda(), "o botão apareceu com a edição aberta"
+        yield from fechar_dialogo("a edição")
+
+        win.show_session_blocker(jogo)
+        try:
+            assert not chamar_pela_borda(), "o botão apareceu durante uma sessão"
+        finally:
+            win.hide_session_blocker()
+
+        win.navigation_view.pop_to_page(win.library_page)
+        win.activate_action("win.show_zerados", None)
+        yield Esperar(lambda: pagina() == win.zerados_library_page, LOCAL, "abrir Jogos Zerados")
+        assert chamar_pela_borda(), "o botão não apareceu em Jogos Zerados"
+
+        win.navigation_view.pop_to_page(win.library_page)
+        yield Esperar(lambda: pagina() == win.library_page, LOCAL, "voltar à biblioteca")
+        assert chamar_pela_borda(), "o botão não apareceu na biblioteca"
+    finally:
+        tarefa.terminar()
+        escurecer_botao()
+    yield Esperar(tarefas_paradas, LOCAL, "o quadro de tarefas esvaziar")
+
+
 def amostra(jogos: list[Any]) -> list[Any]:
     """Até 3 jogos variados: com ID da Steam, sem ID, de Jogos Zerados."""
     escolhidos: list[Any] = []
@@ -682,6 +970,7 @@ def amostra(jogos: list[Any]) -> list[Any]:
 def montar_roteiro(jogos: list[Any]) -> list[Passo]:
     visiveis = [g for g in jogos if not g.removed or g.zerado]
     vivos = [g for g in visiveis if not g.removed]
+    alvo_tarefas = vivos[0] if vivos else None
     roteiro: list[Passo] = [
         ("Cada ordenação", None, ordenar),
         ("Busca", None, buscar),
@@ -689,6 +978,11 @@ def montar_roteiro(jogos: list[Any]) -> list[Passo]:
         ("Preferências", None, preferencias),
         ("Sobre", None, sobre),
         ("Novidades", None, novidades),
+        ("Tarefas: o botão entra e recua", None, tarefas_botao_entra_e_recua),
+        ("Tarefas: a borda traz o botão e o clique abre a janela", None, tarefas_borda_e_janela),
+        ("Tarefas: fechar a principal com tarefa só a esconde", None, tarefas_fechar_principal),
+        ("Tarefas: Esc fecha a janela", None, tarefas_esc_fecha),
+        ("Tarefas: onde o botão não aparece", alvo_tarefas, lambda g=alvo_tarefas: tarefas_onde_nao_aparece(g)),
     ]
     for g in visiveis:
         roteiro += [
