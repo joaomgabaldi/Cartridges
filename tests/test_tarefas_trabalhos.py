@@ -100,3 +100,42 @@ def test_metadados_cancelado_tambem_sai_do_quadro(monkeypatch, flush_idle):
 
     assert vistas == [("Metadados", 2)]
     assert tarefas.lista.get_n_items() == 0
+
+
+def test_tamanho_conta_so_jogos_com_pasta(monkeypatch, store, make_game, win, flush_idle):
+    from cartridges.utils import install_size  # noqa: PLC0415
+
+    win.sort_state = "name"
+    store.add_game(make_game(game_id="com", executable="com", install_size=0, install_size_ts=0), {})
+    store.add_game(make_game(game_id="sem", executable="sem", install_size=0, install_size_ts=0), {})
+    vistas = _tarefas_vistas(monkeypatch)
+    monkeypatch.setattr(
+        install_size, "install_size_folder", lambda cmd: "C:/jogo" if cmd == "com" else ""
+    )
+    monkeypatch.setattr(install_size, "folder_size", lambda _pasta: 10)
+    _thread_em_linha(install_size, monkeypatch)
+
+    install_size.InstallSizeSweep().run_async()
+    flush_idle()
+
+    assert vistas == [("Tamanho em disco", 1)]
+    assert tarefas.lista.get_n_items() == 0
+
+
+def test_tamanho_so_com_jogos_sem_pasta_nao_vira_tarefa(
+    monkeypatch, store, make_game, win, flush_idle
+):
+    from cartridges.utils import install_size  # noqa: PLC0415
+
+    win.sort_state = "name"
+    jogo = make_game(game_id="sem", install_size=5000, install_size_ts=0)
+    store.add_game(jogo, {})
+    vistas = _tarefas_vistas(monkeypatch)
+    monkeypatch.setattr(install_size, "install_size_folder", lambda _cmd: "")
+    _thread_em_linha(install_size, monkeypatch)
+
+    install_size.InstallSizeSweep().run_async()
+    flush_idle()
+
+    assert vistas == []
+    assert jogo.install_size == 0  # o tamanho antigo continua sendo zerado

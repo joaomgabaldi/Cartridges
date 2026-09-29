@@ -50,6 +50,7 @@ from gi.repository import GLib
 
 from cartridges import shared
 from cartridges.game import Game
+from cartridges.utils import tarefas
 from cartridges.utils.game_folder import game_folder
 from cartridges.utils.process_monitor import install_dir_from_command
 from cartridges.utils.run_executable import aumid_from_command
@@ -268,26 +269,45 @@ class InstallSizeSweep:
 
     def _worker(self, games: list[Game], generation: int) -> None:
         measured = 0
+        tarefa: Optional[tarefas.Tarefa] = None
         try:
+            # Primeiro a pasta de cada um. Sem pasta conhecida não há o que
+            # medir — nem o que mostrar nas tarefas: um jogo aberto pela loja
+            # passaria pela fila em milissegundos a cada abertura, e o botão do
+            # canto piscaria por nada.
+            com_pasta: list[tuple[Game, str]] = []
             for game in games:
                 if self._stopped or generation != self._generation:
-                    break
+                    return
                 # Reconferido por jogo: uma importação pode ter removido este
                 # daqui até a vez dele chegar.
                 if game.removed or not self._is_stale(game):
+                    continue
+                folder = install_size_folder(game.executable)
+                if folder:
+                    com_pasta.append((game, folder))
+                elif game.install_size:
+                    GLib.idle_add(self._apply, game, 0)
+            if not com_pasta:
+                return
+
+            tarefa = tarefas.comecar(_("Tamanho em disco"), len(com_pasta))
+            for feitos, (game, folder) in enumerate(com_pasta):
+                tarefa.atualizar(feitos)
+                if self._stopped or generation != self._generation:
+                    break
+                if game.removed:
                     continue
 
                 # ponytail: uma pasta por vez, sem paralelismo. Uma biblioteca
                 # muito grande leva minutos na primeira execução; se incomodar,
                 # o caminho é medir só o que a tela vai mostrar, não abrir mais
                 # threads em cima do mesmo disco.
-                # Sem pasta conhecida não há o que medir, e pasta vazia ou
-                # ilegível inteira é jogo que saiu do disco ou instalação que
-                # não dá para ler. Nos dois casos o tamanho vira desconhecido
-                # (zero, que a tela não mostra): um número antigo ficaria no
-                # topo do "o que apagar" por um jogo que já não ocupa nada.
-                folder = install_size_folder(game.executable)
-                size = folder_size(folder) if folder else 0
+                # Pasta vazia ou ilegível inteira é jogo que saiu do disco ou
+                # instalação que não dá para ler: o tamanho vira desconhecido
+                # (zero, que a tela não mostra), porque um número antigo ficaria
+                # no topo do "o que apagar" por um jogo que já não ocupa nada.
+                size = folder_size(folder)
                 if not size:
                     if game.install_size:
                         GLib.idle_add(self._apply, game, 0)
@@ -296,6 +316,8 @@ class InstallSizeSweep:
                 measured += 1
                 GLib.idle_add(self._apply, game, size)
         finally:
+            if tarefa is not None:
+                tarefa.terminar()
             with self._lock:
                 self._running = False
             logging.info(
