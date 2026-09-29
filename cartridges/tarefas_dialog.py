@@ -82,6 +82,7 @@ class TarefasDialog(Adw.Dialog):
         bloco.append(barra)
 
         def mostrar(*_args: Any) -> None:
+            # As variáveis são quantos itens foram feitos e quantos há no total
             contagem.set_label(_("{} de {}").format(tarefa.feitos, tarefa.total))
             barra.set_fraction(tarefa.feitos / tarefa.total if tarefa.total else 0)
 
