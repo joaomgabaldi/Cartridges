@@ -34,7 +34,7 @@ def test_janela_mostra_cada_tarefa_e_acompanha(flush_idle):
     dialogo.emit("closed")
 
 
-def test_janela_vazia_avisa_e_continua_aberta(flush_idle):
+def test_janela_vazia_avisa(flush_idle):
     from cartridges.tarefas_dialog import TarefasDialog  # noqa: PLC0415
 
     tarefa = tarefas.comecar("Metadados", 2)
@@ -184,3 +184,34 @@ def test_sessao_esconde_o_botao_sem_deslizar(real_window, flush_idle, make_game)
     assert (
         botao.revealer.get_transition_type() == Gtk.RevealerTransitionType.SLIDE_RIGHT
     )
+
+
+def test_mouse_ainda_no_canto_depois_de_fechar_a_janela_traz_o_botao(
+    real_window, flush_idle, monkeypatch
+):
+    botao = real_window.botao_tarefas
+    monkeypatch.setattr(real_window.session_overlay, "get_height", lambda: 600)
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    botao._ao_mover(None, 10, 590)  # pylint: disable=protected-access
+    botao._esconder()  # pylint: disable=protected-access  # o que _abrir faz
+    assert not botao.revealer.get_reveal_child()
+
+    botao._ao_mover(None, 12, 588)  # pylint: disable=protected-access
+    assert botao.revealer.get_reveal_child()
+
+
+def test_movimento_sem_tarefas_nao_faz_nada_e_a_tarefa_nova_funciona(
+    real_window, flush_idle, monkeypatch
+):
+    botao = real_window.botao_tarefas
+    monkeypatch.setattr(real_window.session_overlay, "get_height", lambda: 600)
+    botao._ao_mover(None, 10, 590)  # pylint: disable=protected-access
+    assert not botao._no_canto  # pylint: disable=protected-access
+    assert not botao.revealer.get_reveal_child()
+
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    botao.revealer.set_reveal_child(False)
+    botao._ao_mover(None, 10, 590)  # pylint: disable=protected-access
+    assert botao.revealer.get_reveal_child()
