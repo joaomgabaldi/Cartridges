@@ -86,18 +86,6 @@ class Pipeline(GObject.Object):
         with self._lock:
             return self.waiting - self.blocked
 
-    @property
-    def progress(self) -> float:
-        """Get the pipeline progress. Should only be a rough idea."""
-        with self._lock:
-            n_done = len(self.done)
-            n_total = len(self.waiting) + len(self.running) + n_done
-        try:
-            progress = n_done / n_total
-        except ZeroDivisionError:
-            progress = 1
-        return progress
-
     def advance(self) -> None:
         """Spawn tasks for managers that are able to run for a game"""
 
