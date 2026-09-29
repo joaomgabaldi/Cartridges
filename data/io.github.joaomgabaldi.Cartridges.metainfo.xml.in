@@ -31,6 +31,8 @@
     <release version="2026.09.29" date="2026-09-29">
       <description translate="no">
         <ul>
+          <li>Agora o aplicativo dá visibilidade às tarefas em segundo plano em andamento, como a importação de jogos ou a atualização de metadados. Um botão aparece no canto inferior esquerdo da biblioteca e abre a janela Tarefas em andamento, com o progresso de cada uma</li>
+          <li>A janela Tarefas em andamento pode ficar aberta ao lado do aplicativo e o trabalho em andamento continua mesmo com a janela principal fechada, até que a janela de tarefas seja fechada</li>
           <li>Agora as buscas por capas, logos, papel de parede e metadados dos jogos estão mais rápidas</li>
           <li>O brilho dourado das capas com atualização disponível agora é fixo, o que reduz o uso do processador enquanto a janela está em foco</li>
           <li>Foi melhorada a renderização das capas dos jogos, acelerando a abertura do aplicativo</li>
