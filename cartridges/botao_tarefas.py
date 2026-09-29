@@ -49,22 +49,25 @@ def pode_mostrar(win: Any) -> bool:
 
 
 class BotaoTarefas(Gtk.Box):
-    """O canto sensível ao mouse, com o botão dentro de um revealer."""
+    """O botão das tarefas dentro de um revealer, do tamanho exato do botão."""
 
     def __init__(self, win: Any) -> None:
-        super().__init__(halign=Gtk.Align.START, valign=Gtk.Align.END)
+        # As margens são do Box, e não do botão: ficam fora da caixa que o GTK
+        # usa para achar o alvo do mouse, então só o botão em si recebe cliques.
+        super().__init__(
+            halign=Gtk.Align.START,
+            valign=Gtk.Align.END,
+            margin_start=12,
+            margin_bottom=12,
+        )
         self.win = win
         self._recolher_id = 0
         self._no_canto = False
-        self.set_size_request(_CANTO, _CANTO)
         self.set_can_target(False)
 
         self.botao = Gtk.Button(
             icon_name="view-refresh-symbolic",
             tooltip_text=_("Tarefas em andamento"),
-            valign=Gtk.Align.END,
-            margin_start=12,
-            margin_bottom=12,
         )
         self.botao.add_css_class("circular")
         self.botao.add_css_class("osd")
@@ -89,10 +92,6 @@ class BotaoTarefas(Gtk.Box):
         movimento.connect("motion", self._ao_mover)
         movimento.connect("leave", self._ao_deixar)
         win.session_overlay.add_controller(movimento)
-
-        # O temporizador do GLib segura o botão (e, por ele, a janela) até
-        # disparar: destruída a janela, o recuo agendado não deve sobreviver.
-        win.connect("destroy", self._cancelar_recolher)
 
     # -- quando pode ----------------------------------------------------------
 
@@ -167,7 +166,7 @@ class BotaoTarefas(Gtk.Box):
             self.revealer.set_reveal_child(False)
         return GLib.SOURCE_REMOVE
 
-    def _cancelar_recolher(self, *_args: Any) -> None:
+    def _cancelar_recolher(self) -> None:
         if self._recolher_id:
             GLib.source_remove(self._recolher_id)
             self._recolher_id = 0
