@@ -60,6 +60,12 @@ from gi.repository import GLib, Gtk
 _MONITOR_DEFAULTTONULL = 0x00000000
 # SWP_NOZORDER | SWP_NOACTIVATE: place it exactly, without raising or focusing
 _PLACE = 0x0004 | 0x0010
+_SWP_NOSIZE = 0x0001
+# Distância entre a janela solta das tarefas e o canto do app: a margem do botão,
+# o botão e a folga que o separa dela.
+_MARGEM_BOTAO = 12
+_ALTURA_BOTAO = 34
+_FOLGA_BOTAO = 12
 _MONITORINFOF_PRIMARY = 0x00000001
 _SW_SHOWNORMAL = 1
 _SW_SHOWMAXIMIZED = 3
@@ -463,6 +469,62 @@ def _get_placement(hwnd: int) -> "Optional[_WINDOWPLACEMENT]":
     if not _user32.GetWindowPlacement(hwnd, ctypes.byref(placement)):
         return None
     return placement
+
+
+def posicao_acima_do_botao(
+    app_rect: tuple[int, int, int, int],
+    app_sombra: tuple[float, float],
+    nova_sombra: tuple[float, float],
+    app_altura: float,
+    nova_altura: float,
+    escala: float,
+) -> tuple[int, int]:
+    """Onde pôr o canto (x, y) do retângulo Win32 de uma janela solta para que ela
+    fique no canto inferior esquerdo do app, logo acima do botão das tarefas.
+
+    Só aritmética, para poder ser conferida sem janela nenhuma. O retângulo do
+    Windows inclui a sombra que o GTK desenha em volta de cada janela;
+    `get_surface_transform` diz quanto dela há à esquerda e em cima. É descontada
+    dos dois lados, para as bordas *visíveis* é que ficarem alinhadas: a esquerda
+    da nova a 12 px da esquerda do app, e a base a 12 + 34 + 12 px acima da base
+    do app (margem do botão, o botão e a folga).
+
+    `app_rect` é (esquerda, topo, direita, base) em pixels do Windows; as sombras
+    e as alturas estão em unidades do GTK, que a escala converte em pixels.
+    """
+    visivel_esq = app_rect[0] + app_sombra[0] * escala
+    visivel_baixo = app_rect[1] + (app_sombra[1] + app_altura) * escala
+    alvo_baixo = visivel_baixo - (_MARGEM_BOTAO + _ALTURA_BOTAO + _FOLGA_BOTAO) * escala
+    x = int(visivel_esq + _MARGEM_BOTAO * escala - nova_sombra[0] * escala)
+    y = int(alvo_baixo - nova_altura * escala - nova_sombra[1] * escala)
+    return x, y
+
+
+def posicionar_acima_do_botao(janela: Gtk.Window, win: Gtk.Window) -> bool:
+    """Leva a janela solta para o canto inferior esquerdo de ``win``. Diz se foi.
+
+    Chame depois do "map": a superfície e a altura só existem então (veja
+    :func:`apply_placement`). Só move, sem mudar o tamanho nem a ordem das
+    janelas nem tirar o foco de ninguém.
+    """
+    if (hwnd_app := _hwnd(win)) is None or (hwnd_nova := _hwnd(janela)) is None:
+        return False
+
+    rect = wintypes.RECT()
+    if not _user32.GetWindowRect(hwnd_app, ctypes.byref(rect)):
+        return False
+
+    surface = win.get_surface()
+    escala = surface.get_scale() if hasattr(surface, "get_scale") else 1
+    x, y = posicao_acima_do_botao(
+        (rect.left, rect.top, rect.right, rect.bottom),
+        win.get_surface_transform(),
+        janela.get_surface_transform(),
+        win.get_height(),
+        janela.get_height(),
+        escala,
+    )
+    return bool(_user32.SetWindowPos(hwnd_nova, 0, x, y, 0, 0, _SWP_NOSIZE | _PLACE))
 
 
 def _place(window: Gtk.Window, geometry: Geometry) -> bool:

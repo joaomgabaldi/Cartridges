@@ -42,7 +42,7 @@ install_data(
     'session_history.py',
     'zerados_picker.py',
     'restauracao_dialogs.py',
-    'tarefas_dialog.py',
+    'tarefas_janela.py',
     'botao_tarefas.py',
     'process_session.py',
     'metadata_refresh.py',

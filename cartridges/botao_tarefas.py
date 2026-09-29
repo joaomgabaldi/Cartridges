@@ -30,7 +30,7 @@ from typing import Any
 
 from gi.repository import GLib, Gtk
 
-from cartridges.tarefas_dialog import TarefasDialog
+from cartridges.tarefas_janela import TarefasJanela
 from cartridges.utils import tarefas
 
 _ENTRADA_MS = 10000
@@ -185,4 +185,4 @@ class BotaoTarefas(Gtk.Box):
 
     def _abrir(self, *_args: Any) -> None:
         self._esconder()
-        TarefasDialog().present(self.win)
+        TarefasJanela.mostrar(self.win)

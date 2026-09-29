@@ -38,7 +38,8 @@ is killed, so a crash cannot leave a lock behind that blocks the next start.
 
 import logging
 import sys
-from typing import Any, Optional
+import threading
+from typing import Any, Callable, Optional
 
 # Session-local namespace, which is the same granularity as the data being
 # protected: the games, covers and logos this guard exists to keep two copies
@@ -134,6 +135,73 @@ def release() -> None:
 _MAIN_WINDOW_TITLE = "Cartridges"
 
 
+# Evento nomeado que a segunda cópia acende para a primeira: a janela principal
+# pode estar escondida (fechada com tarefas rodando, só a das tarefas à vista), e
+# uma janela que o GTK escondeu não volta por Win32 — o GTK segue achando que ela
+# não está na tela. Só a primeira cópia sabe se mostrar. Mesmo escopo e mesma
+# regra do mutex: o nome nunca muda.
+_EVENT_NAME = "Local\\io.github.joaomgabaldi.Cartridges.Present"
+
+_EVENT_MODIFY_STATE = 0x0002
+_INFINITE = 0xFFFFFFFF
+
+
+def watch_second_launch(callback: Callable[[], None]) -> None:
+    """Chama ``callback`` sempre que uma segunda cópia do app tentar abrir.
+
+    Numa thread de fundo: quem chama entrega o resultado à thread da interface.
+    Best-effort como o resto do módulo: sem o evento, só se perde o retorno da
+    janela escondida.
+    """
+    if sys.platform != "win32":
+        return
+
+    try:
+        import ctypes  # pylint: disable=import-outside-toplevel
+
+        kernel32 = ctypes.WinDLL("kernel32")
+        kernel32.CreateEventW.argtypes = (
+            ctypes.c_void_p,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_wchar_p,
+        )
+        kernel32.CreateEventW.restype = ctypes.c_void_p
+        kernel32.WaitForSingleObject.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+        kernel32.WaitForSingleObject.restype = ctypes.c_uint32
+
+        # Reinício automático (auto-reset): cada acendida acorda uma vez.
+        if not (handle := kernel32.CreateEventW(None, False, False, _EVENT_NAME)):
+            return
+    except (OSError, AttributeError, ValueError) as error:
+        logging.warning("Could not create the second-launch event: %s", error)
+        return
+
+    def wait() -> None:
+        while kernel32.WaitForSingleObject(handle, _INFINITE) == 0:  # WAIT_OBJECT_0
+            callback()
+
+    threading.Thread(target=wait, daemon=True).start()
+
+
+def _wake_running_instance() -> None:
+    """Acende o evento que a primeira cópia vigia (veja `watch_second_launch`)."""
+    import ctypes  # pylint: disable=import-outside-toplevel
+
+    kernel32 = ctypes.WinDLL("kernel32")
+    kernel32.OpenEventW.argtypes = (ctypes.c_uint32, ctypes.c_int, ctypes.c_wchar_p)
+    kernel32.OpenEventW.restype = ctypes.c_void_p
+    kernel32.SetEvent.argtypes = (ctypes.c_void_p,)
+    kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+    if not (handle := kernel32.OpenEventW(_EVENT_MODIFY_STATE, False, _EVENT_NAME)):
+        return
+    # Este processo acabou de ser iniciado pelo usuário e carrega o direito de
+    # foreground: cede-o à primeira cópia, que é quem vai mostrar a janela.
+    ctypes.WinDLL("user32").AllowSetForegroundWindow(ctypes.c_uint32(0xFFFFFFFF))
+    kernel32.SetEvent(handle)
+    kernel32.CloseHandle(handle)
+
+
 def present_running_instance() -> None:
     """Traz a janela da instância que já está rodando para a frente.
 
@@ -152,6 +220,8 @@ def present_running_instance() -> None:
     try:
         import ctypes  # pylint: disable=import-outside-toplevel
         from ctypes import wintypes  # pylint: disable=import-outside-toplevel
+
+        _wake_running_instance()
 
         user32 = ctypes.WinDLL("user32")
         user32.GetWindowTextW.argtypes = (
