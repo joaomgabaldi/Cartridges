@@ -39,6 +39,7 @@ from cartridges.errors.friendly_error import FriendlyError
 from cartridges.game import Game
 from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
+from cartridges.utils import tarefas
 from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.steam import STEAM_METADATA_VERSION
 
@@ -58,6 +59,7 @@ class MetadataRefresh(GObject.Object):
         self._queue: list[Game] = []
         self._managers: list[Any] = []
         self._only_missing: bool = False
+        self._tarefa: Optional[tarefas.Tarefa] = None
 
     @GObject.Signal(name="progress")
     def progress(self):  # type: ignore
@@ -158,6 +160,7 @@ class MetadataRefresh(GObject.Object):
         self.done = 0
         self.total = len(games)
         self.emit("progress")
+        self._tarefa = tarefas.comecar(_("Metadados"), self.total)
 
         # The tags of every game in one or two requests instead of one each.
         # Off the main thread because it is network work, and before anything
@@ -282,6 +285,8 @@ class MetadataRefresh(GObject.Object):
 
                             ligacao_zerado.agendar(game)
                     self.done += 1
+                    if self._tarefa is not None:
+                        self._tarefa.atualizar(self.done)
                     self.emit("progress")
                     next_game()
                     return
@@ -303,6 +308,9 @@ class MetadataRefresh(GObject.Object):
                     logging.warning("Metadata refresh: %s", error.title)
 
         done, total, cancelled = self.done, self.total, self.cancelled
+        if self._tarefa is not None:
+            self._tarefa.terminar()
+            self._tarefa = None
         self.running = False
         self._queue = []
         self._managers = []
