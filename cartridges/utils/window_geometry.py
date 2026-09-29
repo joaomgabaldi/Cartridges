@@ -67,6 +67,7 @@ _MARGEM_BOTAO = 12
 _ALTURA_BOTAO = 34
 _FOLGA_BOTAO = 12
 _MONITORINFOF_PRIMARY = 0x00000001
+_SW_HIDE = 0
 _SW_SHOWNORMAL = 1
 _SW_SHOWMAXIMIZED = 3
 
@@ -435,23 +436,24 @@ def restore_from_monitor(window: Gtk.Window) -> None:
     """Put the window back exactly where :func:`move_to_monitor` found it.
 
     A no-op when no move happened, so the end of every session can call it
-    without asking. Also a no-op, apart from forgetting the parking, for a
-    window GTK has hidden (`on_win_close_request` does that mid-session): a
-    placement written to a hidden window makes Windows show it behind GTK's
-    back, and the `present()` after it then leaves it without keyboard focus.
-    The next "map" puts it back from the schema, which `save_window_geometry`
-    filled from :func:`session_geometry` when the window was closed.
+    without asking. A window GTK has hidden (`on_win_close_request` does that
+    mid-session) gets the placement written as ``SW_HIDE`` instead: showing it
+    here, behind GTK's back, leaves it without keyboard focus after the
+    `present()` that follows. Hidden is enough to bring back what matters — the
+    rectangle it un-maximizes to and whether it was maximized — which would
+    otherwise stay the game monitor's, and the next "map" moves the window
+    still maximized without touching that rectangle.
     """
     global _before_session, _before_placement  # pylint: disable=global-statement
 
     placement = _before_placement
     _before_session, _before_placement = None, None
 
-    if (
-        placement is None
-        or not window.get_visible()
-        or (hwnd := _hwnd(window)) is None
-    ):
+    if placement is None or (hwnd := _hwnd(window)) is None:
+        return
+
+    if not window.get_visible():
+        _set_placement(hwnd, placement, _SW_HIDE)
         return
 
     # The mirror of the two steps in `move_to_monitor`, for the same reason: a

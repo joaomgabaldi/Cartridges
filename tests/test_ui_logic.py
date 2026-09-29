@@ -2101,17 +2101,11 @@ def test_the_session_move_puts_the_window_back_exactly(monkeypatch):
     assert len(user32.written) == 3
 
 
-def test_a_window_hidden_at_the_end_of_the_session_is_not_placed(monkeypatch):
-    """Principal escondida no fim da sessão: nada de placement Win32.
-
-    `on_win_close_request` a esconde com a sessão rodando. Um
-    SetWindowPlacement numa janela escondida a mostra por fora do GTK, e o
-    `present()` seguinte a deixa sem foco de teclado. A volta fica com o "map",
-    que lê a geometria gravada; aqui só o estacionamento é esquecido, para a
-    próxima sessão não herdar o da anterior.
-    """
+def _hidden_at_the_end(monkeypatch, show):
+    """Estaciona a janela, esconde-a como `on_win_close_request` e encerra a
+    sessão. Devolve o falso do user32 e a janela."""
     _no_session(monkeypatch)
-    user32 = _FakePlacementUser32()
+    user32 = _FakePlacementUser32(show=show)
     monkeypatch.setattr(window_geometry, "_user32", user32)
     monkeypatch.setattr(window_geometry, "_hwnd", lambda _window: 42)
     monkeypatch.setattr(
@@ -2121,14 +2115,27 @@ def test_a_window_hidden_at_the_end_of_the_session_is_not_placed(monkeypatch):
             window_geometry.Monitor("\\\\.\\DISPLAY2", -1080, -512, 1080, 1920, False)
         ],
     )
-    window = _FakeWindow()
+    window = _FakeWindow(maximized=show == 3)
     assert window_geometry.move_to_monitor(window, "\\\\.\\DISPLAY2") is True
-    written = len(user32.written)
+    user32.written.clear()
 
     window.visible = False
     window_geometry.restore_from_monitor(window)
+    return user32, window
 
-    assert len(user32.written) == written
+
+def test_a_window_hidden_at_the_end_of_the_session_is_written_hidden(monkeypatch):
+    """Principal escondida no fim da sessão: placement gravado com SW_HIDE.
+
+    `on_win_close_request` a esconde com a sessão rodando. Um
+    SetWindowPlacement que a mostrasse por fora do GTK a deixaria sem foco de
+    teclado após o `present()`; sem escrita nenhuma, porém, o retângulo de
+    restauração ficaria o do monitor do jogo. SW_HIDE traz o retângulo de volta
+    e a janela segue escondida.
+    """
+    user32, window = _hidden_at_the_end(monkeypatch, show=1)
+
+    assert user32.written == [(0, (100, 50, 900, 650))]
     assert window_geometry.session_geometry() is None
     assert window_geometry._before_placement is None
 
@@ -2137,6 +2144,16 @@ def test_a_window_hidden_at_the_end_of_the_session_is_not_placed(monkeypatch):
     assert window_geometry.move_to_monitor(window, "\\\\.\\DISPLAY2") is True
     window_geometry.restore_from_monitor(window)
     assert user32.written[-1] == (1, (100, 50, 900, 650))
+
+
+def test_a_maximized_window_hidden_at_the_end_keeps_its_restore_rectangle(monkeypatch):
+    """Maximizada antes do jogo e escondida no fim: o retângulo para onde ela
+    desmaximiza é o de antes (não o monitor do jogo), gravado numa escrita só,
+    escondida. O "map" seguinte a maximiza de novo no monitor de origem."""
+    user32, _window = _hidden_at_the_end(monkeypatch, show=3)
+
+    assert user32.written == [(0, (100, 50, 900, 650))]
+    assert window_geometry.session_geometry() is None
 
 
 def test_a_maximized_window_comes_back_maximized_where_it_was(monkeypatch):
