@@ -887,7 +887,8 @@ def tarefas_fechar_principal() -> Iterator[Esperar]:
         yield Esperar(win.get_visible, LOCAL, "a principal voltar à tela")
         yield ocioso()
         depois = window_geometry.read(win)
-        if antes is not None and depois is not None:
+        sem_posicao = antes is None or depois is None
+        if not sem_posicao:
             # O "map" da principal reaparecida não pode devolvê-la à posição e ao
             # tamanho da abertura: tem de ser onde estava ao ser escondida.
             assert all(abs(a - d) <= 4 for a, d in zip(antes[:4], depois[:4])), (
@@ -896,6 +897,10 @@ def tarefas_fechar_principal() -> Iterator[Esperar]:
     except BaseException:
         encerrar_tarefa_de_teste()
         raise
+    # Depois do `try`, com a principal de volta e a janela solta aberta para o
+    # passo seguinte: o `Pulado` não pode passar pelo `encerrar_tarefa_de_teste`.
+    if sem_posicao:
+        raise Pulado("sem HWND: a posição da principal reaparecida não foi conferida")
 
 
 def tarefas_esc_fecha() -> Iterator[Esperar]:

@@ -1993,11 +1993,15 @@ class _FakePlacementUser32:
 
 
 class _FakeWindow:
-    def __init__(self, maximized=False):
+    def __init__(self, maximized=False, visible=True):
         self.maximized = maximized
+        self.visible = visible
 
     def is_maximized(self):
         return self.maximized
+
+    def get_visible(self):
+        return self.visible
 
 
 def _no_session(monkeypatch):
@@ -2095,6 +2099,44 @@ def test_the_session_move_puts_the_window_back_exactly(monkeypatch):
     # Chamar de novo não mexe em janela nenhuma: a sessão já acabou.
     window_geometry.restore_from_monitor(window)
     assert len(user32.written) == 3
+
+
+def test_a_window_hidden_at_the_end_of_the_session_is_not_placed(monkeypatch):
+    """Principal escondida no fim da sessão: nada de placement Win32.
+
+    `on_win_close_request` a esconde com a sessão rodando. Um
+    SetWindowPlacement numa janela escondida a mostra por fora do GTK, e o
+    `present()` seguinte a deixa sem foco de teclado. A volta fica com o "map",
+    que lê a geometria gravada; aqui só o estacionamento é esquecido, para a
+    próxima sessão não herdar o da anterior.
+    """
+    _no_session(monkeypatch)
+    user32 = _FakePlacementUser32()
+    monkeypatch.setattr(window_geometry, "_user32", user32)
+    monkeypatch.setattr(window_geometry, "_hwnd", lambda _window: 42)
+    monkeypatch.setattr(
+        window_geometry,
+        "monitors",
+        lambda: [
+            window_geometry.Monitor("\\\\.\\DISPLAY2", -1080, -512, 1080, 1920, False)
+        ],
+    )
+    window = _FakeWindow()
+    assert window_geometry.move_to_monitor(window, "\\\\.\\DISPLAY2") is True
+    written = len(user32.written)
+
+    window.visible = False
+    window_geometry.restore_from_monitor(window)
+
+    assert len(user32.written) == written
+    assert window_geometry.session_geometry() is None
+    assert window_geometry._before_placement is None
+
+    # A sessão seguinte estaciona de novo, sem herdar nada.
+    window.visible = True
+    assert window_geometry.move_to_monitor(window, "\\\\.\\DISPLAY2") is True
+    window_geometry.restore_from_monitor(window)
+    assert user32.written[-1] == (1, (100, 50, 900, 650))
 
 
 def test_a_maximized_window_comes_back_maximized_where_it_was(monkeypatch):

@@ -435,14 +435,23 @@ def restore_from_monitor(window: Gtk.Window) -> None:
     """Put the window back exactly where :func:`move_to_monitor` found it.
 
     A no-op when no move happened, so the end of every session can call it
-    without asking.
+    without asking. Also a no-op, apart from forgetting the parking, for a
+    window GTK has hidden (`on_win_close_request` does that mid-session): a
+    placement written to a hidden window makes Windows show it behind GTK's
+    back, and the `present()` after it then leaves it without keyboard focus.
+    The next "map" puts it back from the schema, which `save_window_geometry`
+    filled from :func:`session_geometry` when the window was closed.
     """
     global _before_session, _before_placement  # pylint: disable=global-statement
 
     placement = _before_placement
     _before_session, _before_placement = None, None
 
-    if placement is None or (hwnd := _hwnd(window)) is None:
+    if (
+        placement is None
+        or not window.get_visible()
+        or (hwnd := _hwnd(window)) is None
+    ):
         return
 
     # The mirror of the two steps in `move_to_monitor`, for the same reason: a
