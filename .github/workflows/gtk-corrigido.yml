@@ -1,0 +1,94 @@
+name: Compilar GTK corrigido
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  gtk:
+    runs-on: windows-latest
+    timeout-minutes: 240
+    steps:
+      # O patch precisa chegar com LF: o `patch` do MSYS2 não casa CRLF com a árvore do tarball.
+      - run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: msys2/MINGW-packages
+          path: MINGW-packages
+          sparse-checkout: mingw-w64-gtk4
+
+      # release: false usa o C:\msys64 do runner, os mesmos caminhos do PC.
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          release: false
+          update: true
+          install: base-devel mingw-w64-ucrt-x86_64-toolchain
+
+      - name: Conferir a receita contra o MSYS2
+        shell: msys2 {0}
+        run: |
+          cd MINGW-packages/mingw-w64-gtk4
+          receita="$(sed -n 's/^pkgver=//p' PKGBUILD)-$(sed -n 's/^pkgrel=//p' PKGBUILD)"
+          oferecida="$(pacman -Si mingw-w64-ucrt-x86_64-gtk4 | awk '/^Version/ {print $3}')"
+          echo "Receita: $receita. MSYS2: $oferecida."
+          if [ "$receita" != "$oferecida" ]; then
+            echo "::error::A receita do gtk4 ($receita) difere do pacote publicado no MSYS2 ($oferecida). Aguarde o MSYS2 publicar o pacote e execute novamente."
+            exit 1
+          fi
+
+      - name: Acrescentar o patch à receita
+        shell: msys2 {0}
+        run: |
+          cd MINGW-packages/mingw-w64-gtk4
+          cp ../../build-aux/windows/gtk-patches/gtk-dcomp-render-window-origin.patch .
+          cat >> PKGBUILD <<'EOF'
+
+          # Cartridges: build-aux/windows/gtk-patches
+          source+=("gtk-dcomp-render-window-origin.patch")
+          sha256sums+=('SKIP')
+          eval "_prepare_msys2() $(declare -f prepare | tail -n +2)"
+          prepare() {
+            _prepare_msys2
+            cd "${srcdir}/gtk-${pkgver}"
+            patch -Np1 -i "${srcdir}/gtk-dcomp-render-window-origin.patch"
+          }
+          EOF
+
+      - name: Compilar o pacote
+        shell: msys2 {0}
+        run: |
+          cd MINGW-packages/mingw-w64-gtk4
+          MINGW_ARCH=ucrt64 makepkg-mingw --syncdeps --noconfirm --skippgpcheck --nocheck --cleanbuild
+
+      - name: Hash da libgtk
+        shell: msys2 {0}
+        run: |
+          cd MINGW-packages/mingw-w64-gtk4
+          pacote=$(ls mingw-w64-ucrt-x86_64-gtk4-[0-9]*-any.pkg.tar.zst)
+          bsdtar -xOf "$pacote" ucrt64/bin/libgtk-4-1.dll | sha256sum | cut -d' ' -f1 | tr a-f A-F > ../../libgtk.sha256
+          echo "$pacote" > ../../pacote.txt
+
+      - name: Publicar na pré-release gtk-corrigido
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pacote=$(cat pacote.txt)
+          versao=${pacote#mingw-w64-ucrt-x86_64-gtk4-}; versao=${versao%-any.pkg.tar.zst}
+          gh release view gtk-corrigido >/dev/null 2>&1 || gh release create gtk-corrigido \
+            --prerelease --latest=false --title "GTK corrigido" \
+            --notes "Biblioteca GTK 4 com a correção de desenho em monitores maiores que o principal, usada na geração do instalador. Não é uma versão do aplicativo."
+          gh release upload gtk-corrigido "MINGW-packages/mingw-w64-gtk4/$pacote" --clobber
+          {
+            echo "Trava para build-aux/windows/gtk-patches/patched-gtk.txt:"
+            echo '```'
+            echo "gtk4_package_version=$versao"
+            echo "libgtk_sha256=$(cat libgtk.sha256)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
