@@ -43,6 +43,7 @@ install_data(
     'zerados_picker.py',
     'restauracao_dialogs.py',
     'tarefas_dialog.py',
+    'botao_tarefas.py',
     'process_session.py',
     'metadata_refresh.py',
     'game.py',
