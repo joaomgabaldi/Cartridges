@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+from gi.repository import Gtk
+
 from cartridges.utils import tarefas
 
 
@@ -112,3 +114,73 @@ def test_sessao_esconde_o_botao(real_window, flush_idle, make_game):
     assert not botao.get_can_target()
     botao._ao_entrar()  # pylint: disable=protected-access
     assert not botao.revealer.get_reveal_child()
+
+
+def test_girar_para_quando_a_tarefa_acaba(real_window, flush_idle):
+    botao = real_window.botao_tarefas
+    tarefa = tarefas.comecar("Importação", 1)
+    flush_idle()
+    assert botao.botao.has_css_class("girando")
+
+    tarefa.terminar()
+    flush_idle()
+    assert not botao.botao.has_css_class("girando")
+
+
+def test_canto_escondido_nao_recebe_entrada(real_window, flush_idle):
+    botao = real_window.botao_tarefas
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    botao.revealer.set_reveal_child(False)  # os 3 s da entrada já passaram
+    assert not botao.get_can_target()
+
+
+def test_movimento_no_canto_mostra_e_fora_agenda_o_recuo(
+    real_window, flush_idle, monkeypatch
+):
+    botao = real_window.botao_tarefas
+    monkeypatch.setattr(real_window.session_overlay, "get_height", lambda: 600)
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    botao.revealer.set_reveal_child(False)
+
+    botao._ao_mover(None, 500, 100)  # pylint: disable=protected-access
+    assert not botao.revealer.get_reveal_child()
+
+    botao._ao_mover(None, 10, 590)  # pylint: disable=protected-access
+    assert botao.revealer.get_reveal_child()
+    assert botao.get_can_target()
+    botao._recolher()  # pylint: disable=protected-access
+    assert botao.revealer.get_reveal_child()  # com o mouse em cima, fica
+
+    botao._ao_mover(None, 200, 590)  # pylint: disable=protected-access
+    assert botao._recolher_id  # pylint: disable=protected-access
+    botao._recolher()  # pylint: disable=protected-access
+    assert not botao.revealer.get_reveal_child()
+
+
+def test_sair_da_janela_agenda_o_recuo(real_window, flush_idle, monkeypatch):
+    botao = real_window.botao_tarefas
+    monkeypatch.setattr(real_window.session_overlay, "get_height", lambda: 600)
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    botao._ao_mover(None, 10, 590)  # pylint: disable=protected-access
+    botao._ao_deixar(None)  # pylint: disable=protected-access
+    assert botao._recolher_id  # pylint: disable=protected-access
+
+
+def test_sessao_esconde_o_botao_sem_deslizar(real_window, flush_idle, make_game):
+    botao = real_window.botao_tarefas
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    transicoes = []
+    botao.revealer.connect(
+        "notify::reveal-child", lambda r, _p: transicoes.append(r.get_transition_type())
+    )
+
+    real_window.session_game = make_game(game_id="x")
+    botao.reavaliar()
+    assert transicoes == [Gtk.RevealerTransitionType.NONE]
+    assert (
+        botao.revealer.get_transition_type() == Gtk.RevealerTransitionType.SLIDE_RIGHT
+    )
