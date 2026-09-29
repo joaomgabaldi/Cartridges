@@ -98,7 +98,7 @@ def test_mouse_no_canto_traz_o_botao_de_volta(real_window, flush_idle):
     botao = real_window.botao_tarefas
     tarefas.comecar("Importação", 1)
     flush_idle()
-    botao.revealer.set_reveal_child(False)  # os 3 s da entrada já passaram
+    botao.revealer.set_reveal_child(False)  # os 10 s da entrada já passaram
 
     botao._ao_entrar()  # pylint: disable=protected-access
     assert botao.revealer.get_reveal_child()
@@ -131,7 +131,7 @@ def test_canto_escondido_nao_recebe_entrada(real_window, flush_idle):
     botao = real_window.botao_tarefas
     tarefas.comecar("Importação", 1)
     flush_idle()
-    botao.revealer.set_reveal_child(False)  # os 3 s da entrada já passaram
+    botao.revealer.set_reveal_child(False)  # os 10 s da entrada já passaram
     assert not botao.get_can_target()
 
 
@@ -157,6 +157,33 @@ def test_movimento_no_canto_mostra_e_fora_agenda_o_recuo(
     assert botao._recolher_id  # pylint: disable=protected-access
     botao._recolher()  # pylint: disable=protected-access
     assert not botao.revealer.get_reveal_child()
+
+
+def test_so_a_faixa_junto_a_borda_chama_e_o_botao_a_vista_segura(
+    real_window, flush_idle, monkeypatch
+):
+    botao = real_window.botao_tarefas
+    monkeypatch.setattr(real_window.session_overlay, "get_height", lambda: 600)
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    botao.revealer.set_reveal_child(False)
+
+    botao._ao_mover(None, 30, 590)  # pylint: disable=protected-access
+    assert not botao.revealer.get_reveal_child()  # fora da faixa de 16 px
+
+    botao._ao_mover(None, 10, 590)  # pylint: disable=protected-access
+    assert botao.revealer.get_reveal_child()
+
+    # Da faixa até o botão, para clicar: o botão à vista segura a área.
+    botao._ao_mover(None, 30, 575)  # pylint: disable=protected-access
+    assert not botao._recolher_id  # pylint: disable=protected-access
+
+
+def test_tempos_de_entrada_e_de_saida():
+    from cartridges import botao_tarefas  # noqa: PLC0415
+
+    assert botao_tarefas._ENTRADA_MS == 10000  # pylint: disable=protected-access
+    assert botao_tarefas._SAIDA_MS == 5000  # pylint: disable=protected-access
 
 
 def test_sair_da_janela_agenda_o_recuo(real_window, flush_idle, monkeypatch):
@@ -225,5 +252,5 @@ def test_tarefa_que_comeca_com_o_mouse_parado_no_canto_nao_recua(
 
     tarefas.comecar("Importação", 1)
     flush_idle()
-    botao._recolher()  # pylint: disable=protected-access  # os 3 s da entrada
+    botao._recolher()  # pylint: disable=protected-access  # os 10 s da entrada
     assert botao.revealer.get_reveal_child()
