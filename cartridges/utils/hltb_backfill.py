@@ -44,6 +44,7 @@ from gi.repository import GLib
 from cartridges import shared
 from cartridges.game import Game
 from cartridges.store.managers.hltb_manager import shared_helper
+from cartridges.utils import tarefas
 from cartridges.utils.hltb import (
     HLTBError,
     HLTBGameNotFoundError,
@@ -151,8 +152,12 @@ class HLTBBackfill:
 
     def _worker(self, games: list[Game], generation: int) -> None:
         found = 0
+        # Jogo que o site não conhece volta a cada abertura, e de propósito
+        # aparece nas tarefas toda vez: é o sinal de que vale conferir o nome.
+        tarefa = tarefas.comecar(_("HowLongToBeat"), len(games))
         try:
-            for game in games:
+            for feitos, game in enumerate(games):
+                tarefa.atualizar(feitos)
                 if self._stopped or generation != self._generation:
                     break
                 # Re-checked per game, not just in the snapshot: the pipeline or
@@ -191,6 +196,7 @@ class HLTBBackfill:
                 found += 1
                 GLib.idle_add(self._apply, game, times)
         finally:
+            tarefa.terminar()
             with self._lock:
                 self._running = False
             logging.info(
