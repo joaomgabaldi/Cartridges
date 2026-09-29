@@ -20,9 +20,9 @@
 """O botão do canto inferior esquerdo que abre as tarefas em andamento.
 
 Não fica na tela: entra deslizando quando uma tarefa começa, recua depois de
-3 s e volta quando o mouse passa pelo canto. Escondido, o botão não recebe
-nada do mouse: quem vigia o canto é um controlador no overlay da janela, que
-enxerga o movimento sem ficar na frente das capas. Nunca aparece fora das duas
+10 s e volta quando o mouse passa rente à borda, no canto. Escondido, o botão
+não recebe nada do mouse: quem vigia o canto é um controlador no overlay da
+janela, que enxerga o movimento sem ficar na frente das capas. Nunca aparece fora das duas
 bibliotecas, com uma janela aberta por cima ou durante uma sessão de jogo.
 """
 
@@ -33,9 +33,10 @@ from gi.repository import GLib, Gtk
 from cartridges.tarefas_dialog import TarefasDialog
 from cartridges.utils import tarefas
 
-_ENTRADA_MS = 3000
-_SAIDA_MS = 1000
-_CANTO = 72  # lado, em px, do canto que faz o botão voltar
+_ENTRADA_MS = 10000
+_SAIDA_MS = 5000
+_CANTO = 72  # altura do canto, e largura dele com o botão à vista
+_FAIXA = 16  # largura, junto à borda, que chama o botão escondido
 
 
 def pode_mostrar(win: Any) -> bool:
@@ -117,7 +118,10 @@ class BotaoTarefas(Gtk.Box):
 
     def _ao_mover(self, _controlador: Any, x: float, y: float) -> None:
         altura = self.win.session_overlay.get_height()
-        dentro = x < _CANTO and y > altura - _CANTO
+        # Escondido, só a faixa colada à borda chama o botão; à vista, o canto
+        # cobre o botão inteiro, para o mouse chegar até ele sem que recue.
+        largura = _CANTO if self.revealer.get_reveal_child() else _FAIXA
+        dentro = x < largura and y > altura - _CANTO
         # Sem tarefas não há o que mostrar, mas o canto continua anotado: uma
         # tarefa que começa com o mouse parado ali não recua debaixo dele.
         if tarefas.lista.get_n_items() == 0:
