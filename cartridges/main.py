@@ -59,15 +59,18 @@ from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.store.store import Store
+from cartridges.tarefas_janela import TarefasJanela
 from cartridges.utils.app_updater import AppUpdater
 from cartridges.utils.hltb_backfill import HLTBBackfill
 from cartridges.utils.install_size import InstallSizeSweep
+from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.news_checker import NewsChecker
 from cartridges.utils.open_uri import open_uri
 from cartridges.utils.single_instance import (
     acquire as acquire_single_instance,
     release as release_single_instance,
     present_running_instance,
+    watch_second_launch,
 )
 from cartridges.utils.updates_checker import UpdatesChecker
 from cartridges.utils import (
@@ -76,6 +79,7 @@ from cartridges.utils import (
     session_fita,
     session_log,
     session_wallpaper,
+    tarefas,
     window_geometry,
 )
 from cartridges.window import CartridgesWindow
@@ -504,6 +508,9 @@ class CartridgesApplication(Adw.Application):
         # Closing the window and quitting the app are different paths and only
         # one of them runs do_shutdown with the window still around, so both save.
         shared.win.connect("close-request", self.save_window_geometry)
+        # Depois do de cima: este pode devolver True, e o primeiro handler que o
+        # faz interrompe a emissão, então a geometria já tem de estar salva.
+        shared.win.connect("close-request", self.on_win_close_request)
 
         # Load games from disk
         shared.store.add_manager(FileManager(), False)
@@ -594,6 +601,10 @@ class CartridgesApplication(Adw.Application):
 
         shared.win.present()
 
+        # Uma segunda cópia do app pede a esta que se mostre: é o que traz de volta
+        # a janela principal escondida (veja `on_win_close_request`).
+        watch_second_launch(lambda: entregar_na_tela(self.on_second_launch))
+
         # Pergunta ao GitHub se saiu versão nova. Depois do present(): a caixa
         # com as novidades precisa de uma janela na tela para se prender.
         self.app_updater = AppUpdater()
@@ -648,6 +659,28 @@ class CartridgesApplication(Adw.Application):
             shared.state_schema.set_int("height", geometry.height)
         return False
 
+    def on_win_close_request(self, win: Gtk.Window) -> bool:
+        """Fechar a janela principal com a das tarefas aberta.
+
+        Com tarefa rodando, a principal só é escondida: as tarefas ainda escrevem
+        nos widgets da biblioteca, e o app segue trabalhando com a janela das
+        tarefas à vista (fechá-la, então, encerra o app). Sem tarefa rodando,
+        fecha como sempre, e leva junto a janela das tarefas, que senão manteria
+        o app vivo sozinha. Devolve True para impedir o fechamento.
+        """
+        if (janela := TarefasJanela.aberta) is None:
+            return False
+        if tarefas.lista.get_n_items() > 0:
+            win.set_visible(False)
+            return True
+        janela.close()
+        return False
+
+    def on_second_launch(self) -> bool:
+        if shared.win is not None:
+            shared.win.present()
+        return GLib.SOURCE_REMOVE
+
     def on_show_news_changed(self, *_args: Any) -> None:
         if self.news_checker is None:
             return
@@ -665,7 +698,9 @@ class CartridgesApplication(Adw.Application):
         """
         # `app.quit()` (restarting to restore a backup, closing for an update)
         # never asks the window to close, so this is the only chance to save
-        # its geometry on that path.
+        # its geometry on that path. Com a principal escondida (só a janela das
+        # tarefas à vista), `read` ainda devolve o retângulo em que ela estava, o
+        # mesmo que o close-request já gravou: nada de geometria errada aqui.
         self.save_window_geometry()
 
         # avoid import cycles
