@@ -1,8 +1,8 @@
 diff --git a/gdk/win32/gdkevents-win32.c b/gdk/win32/gdkevents-win32.c
-index 2af2a58..0fd8021 100644
+index 0e384dd..f47656a 100644
 --- a/gdk/win32/gdkevents-win32.c
 +++ b/gdk/win32/gdkevents-win32.c
-@@ -2861,6 +2861,8 @@ gdk_event_translate (MSG *msg,
+@@ -2789,6 +2789,8 @@ gdk_event_translate (MSG *msg,
  
        impl = GDK_WIN32_SURFACE (surface);
  
@@ -43,10 +43,10 @@ index 45cd688..ce1653c 100644
  
    GDK_DRAW_CONTEXT_CLASS (gdk_win32_gl_context_parent_class)->surface_resized (draw_context);
 diff --git a/gdk/win32/gdksurface-win32.c b/gdk/win32/gdksurface-win32.c
-index e07db46..e8fe80d 100644
+index 930a165..1c2e8ca 100644
 --- a/gdk/win32/gdksurface-win32.c
 +++ b/gdk/win32/gdksurface-win32.c
-@@ -3489,6 +3489,68 @@ gdk_win32_drag_surface_iface_init (GdkDragSurfaceInterface *iface)
+@@ -3502,6 +3502,68 @@ gdk_win32_drag_surface_iface_init (GdkDragSurfaceInterface *iface)
    iface->present = gdk_win32_drag_surface_present;
  }
  
@@ -116,7 +116,7 @@ index e07db46..e8fe80d 100644
   * gdk_win32_surface_set_dcomp_content:
   * @self: The surface to set the content on
 diff --git a/gdk/win32/gdksurface-win32.h b/gdk/win32/gdksurface-win32.h
-index 666ec67..ec0a9aa 100644
+index 4fce290..ef999a6 100644
 --- a/gdk/win32/gdksurface-win32.h
 +++ b/gdk/win32/gdksurface-win32.h
 @@ -136,6 +136,11 @@ struct _GdkWin32Surface
@@ -137,13 +137,13 @@ index 666ec67..ec0a9aa 100644
                                                                   IUnknown               *dcomp_content);
 +void            gdk_win32_surface_anchor_dcomp_hwnd            (GdkWin32Surface        *self);
  
- #ifdef HAVE_EGL
- EGLSurface gdk_win32_surface_get_egl_surface (GdkSurface *surface,
+ G_END_DECLS
+ 
 diff --git a/gdk/win32/gdkvulkancontext-win32.c b/gdk/win32/gdkvulkancontext-win32.c
-index dac3b1c..27647af 100644
+index c2b2bfc..ac09322 100644
 --- a/gdk/win32/gdkvulkancontext-win32.c
 +++ b/gdk/win32/gdkvulkancontext-win32.c
-@@ -145,6 +145,8 @@ gdk_win32_vulkan_context_surface_attach (GdkDrawContext  *context,
+@@ -140,6 +140,8 @@ gdk_win32_vulkan_context_surface_attach (GdkDrawContext  *context,
    hr_warn (IDCompositionDevice_CreateSurfaceFromHwnd (gdk_win32_display_get_dcomp_device (display),
                                                        self->handle,
                                                        &dcomp_surface));
@@ -152,7 +152,7 @@ index dac3b1c..27647af 100644
    gdk_win32_surface_set_dcomp_content (GDK_WIN32_SURFACE (surface), dcomp_surface);
  
    return TRUE;
-@@ -160,6 +162,7 @@ gdk_win32_vulkan_context_surface_detach (GdkDrawContext *context)
+@@ -155,6 +157,7 @@ gdk_win32_vulkan_context_surface_detach (GdkDrawContext *context)
  
    if (!GDK_SURFACE_DESTROYED (surface))
      {
@@ -160,7 +160,7 @@ index dac3b1c..27647af 100644
        gdk_win32_surface_set_dcomp_content (GDK_WIN32_SURFACE (surface), NULL);
  
        if (!DestroyWindow (self->handle))
-@@ -184,6 +187,9 @@ gdk_win32_vulkan_context_surface_resized (GdkDrawContext *draw_context)
+@@ -179,6 +182,9 @@ gdk_win32_vulkan_context_surface_resized (GdkDrawContext *draw_context)
                                0,
                                width, height,
                                SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOCOPYBITS | SWP_NOZORDER));
