@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+from tests.test_metadata_refresh import FakeManager, FakeStore, make_game
+
 from cartridges.utils import tarefas
 
 
@@ -14,7 +16,7 @@ def _thread_em_linha(modulo, monkeypatch):
 
 
 def _tarefas_vistas(monkeypatch):
-    """Registra cada tarefa começada, com o total, e a última contagem."""
+    """Registra o (nome, total) de cada tarefa começada, na ordem."""
     vistas = []
     comecar = tarefas.comecar
 
@@ -52,24 +54,48 @@ def test_hltb_vira_tarefa_com_a_fila_e_termina(monkeypatch, store, make_game, fl
     assert tarefas.lista.get_n_items() == 0
 
 
-def test_metadados_vira_tarefa_e_termina(monkeypatch, flush_idle):
-    from tests.test_metadata_refresh import FakeManager, drive, make_game  # noqa: PLC0415
-    from cartridges import shared  # noqa: PLC0415
-    from cartridges.metadata_refresh import MetadataRefresh  # noqa: PLC0415
-    from tests.test_metadata_refresh import FakeStore  # noqa: PLC0415
+def _refresh_com_managers(monkeypatch):
+    """Um MetadataRefresh sem rede: managers falsos, thread em linha e o
+    prefetch de tags sem nada a buscar."""
+    from cartridges import metadata_refresh, shared  # noqa: PLC0415
+    from cartridges.store.managers.hltb_manager import HLTBManager  # noqa: PLC0415
+    from cartridges.store.managers.steam_api_manager import (  # noqa: PLC0415
+        SteamAPIManager,
+    )
+
+    class Manager(FakeManager):
+        steam_api_helper = None
 
     monkeypatch.setattr(shared, "store", FakeStore(), raising=False)
-    refresh = MetadataRefresh()
+    shared.store.managers = {SteamAPIManager: Manager(), HLTBManager: Manager()}
+    # `metadata_refresh` importa `Thread` direto, então não serve o helper acima.
+    monkeypatch.setattr(
+        metadata_refresh,
+        "Thread",
+        lambda target, daemon: SimpleNamespace(start=target),
+    )
+    refresh = metadata_refresh.MetadataRefresh()
     monkeypatch.setattr(refresh, "_announce", lambda *_a: None)
+    return refresh
+
+
+def test_metadados_vira_tarefa_e_termina(monkeypatch, flush_idle):
+    refresh = _refresh_com_managers(monkeypatch)
     vistas = _tarefas_vistas(monkeypatch)
 
-    games = [make_game() for _ in range(2)]
-    refresh._queue = list(games)  # pylint: disable=protected-access
-    refresh.total = 2
-    refresh.running = True
-    refresh._tarefa = tarefas.comecar("Metadados", 2)  # o que `start` faz
+    assert refresh.start([make_game(), make_game()]) is True
     flush_idle()
-    drive(refresh, [FakeManager()])
+
+    assert vistas == [("Metadados", 2)]
+    assert tarefas.lista.get_n_items() == 0
+
+
+def test_metadados_cancelado_tambem_sai_do_quadro(monkeypatch, flush_idle):
+    refresh = _refresh_com_managers(monkeypatch)
+    vistas = _tarefas_vistas(monkeypatch)
+
+    assert refresh.start([make_game(), make_game()]) is True
+    refresh.cancel()
     flush_idle()
 
     assert vistas == [("Metadados", 2)]
