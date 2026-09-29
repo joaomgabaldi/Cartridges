@@ -207,11 +207,23 @@ def test_movimento_sem_tarefas_nao_faz_nada_e_a_tarefa_nova_funciona(
     botao = real_window.botao_tarefas
     monkeypatch.setattr(real_window.session_overlay, "get_height", lambda: 600)
     botao._ao_mover(None, 10, 590)  # pylint: disable=protected-access
-    assert not botao._no_canto  # pylint: disable=protected-access
     assert not botao.revealer.get_reveal_child()
 
     tarefas.comecar("Importação", 1)
     flush_idle()
     botao.revealer.set_reveal_child(False)
     botao._ao_mover(None, 10, 590)  # pylint: disable=protected-access
+    assert botao.revealer.get_reveal_child()
+
+
+def test_tarefa_que_comeca_com_o_mouse_parado_no_canto_nao_recua(
+    real_window, flush_idle, monkeypatch
+):
+    botao = real_window.botao_tarefas
+    monkeypatch.setattr(real_window.session_overlay, "get_height", lambda: 600)
+    botao._ao_mover(None, 10, 590)  # pylint: disable=protected-access
+
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    botao._recolher()  # pylint: disable=protected-access  # os 3 s da entrada
     assert botao.revealer.get_reveal_child()

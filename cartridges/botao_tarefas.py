@@ -116,13 +116,13 @@ class BotaoTarefas(Gtk.Box):
     # -- mouse ----------------------------------------------------------------
 
     def _ao_mover(self, _controlador: Any, x: float, y: float) -> None:
-        # Sem tarefas não há o que mostrar: o movimento do mouse pela janela
-        # inteira não custa nada além desta linha.
-        if tarefas.lista.get_n_items() == 0:
-            self._no_canto = False
-            return
         altura = self.win.session_overlay.get_height()
         dentro = x < _CANTO and y > altura - _CANTO
+        # Sem tarefas não há o que mostrar, mas o canto continua anotado: uma
+        # tarefa que começa com o mouse parado ali não recua debaixo dele.
+        if tarefas.lista.get_n_items() == 0:
+            self._no_canto = dentro
+            return
         if dentro:
             # Fechar a janela das tarefas com o mouse ainda no canto deixa o
             # botão escondido: o próximo movimento ali o traz de volta.
