@@ -1,5 +1,7 @@
 """A janela de tarefas e a regra de quando o botão do canto pode aparecer."""
 
+from types import SimpleNamespace
+
 from cartridges.utils import tarefas
 
 
@@ -27,6 +29,7 @@ def test_janela_mostra_cada_tarefa_e_acompanha(flush_idle):
     importacao.atualizar(3)
     flush_idle()
     assert _textos(dialogo)[0] == ("Importação", "3 de 30")
+    dialogo.emit("closed")
 
 
 def test_janela_vazia_avisa_e_continua_aberta(flush_idle):
@@ -40,3 +43,72 @@ def test_janela_vazia_avisa_e_continua_aberta(flush_idle):
     assert _textos(dialogo) == []
     assert dialogo.vazio.get_visible()
     assert dialogo.vazio.get_label() == "Nenhuma tarefa em andamento"
+    dialogo.emit("closed")
+
+
+def _janela(pagina="biblioteca", dialogo=None, sessao=None):
+    biblioteca, zerados, detalhes = object(), object(), object()
+    paginas = {"biblioteca": biblioteca, "zerados": zerados, "detalhes": detalhes}
+    return SimpleNamespace(
+        library_page=biblioteca,
+        zerados_library_page=zerados,
+        navigation_view=SimpleNamespace(get_visible_page=lambda: paginas[pagina]),
+        get_visible_dialog=lambda: dialogo,
+        session_game=sessao,
+    )
+
+
+def test_sem_tarefa_o_botao_nunca_aparece():
+    from cartridges.botao_tarefas import pode_mostrar  # noqa: PLC0415
+
+    assert not pode_mostrar(_janela())
+
+
+def test_com_tarefa_aparece_so_nas_duas_bibliotecas_livres(flush_idle):
+    from cartridges.botao_tarefas import pode_mostrar  # noqa: PLC0415
+
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    assert pode_mostrar(_janela("biblioteca"))
+    assert pode_mostrar(_janela("zerados"))
+    assert not pode_mostrar(_janela("detalhes"))
+    assert not pode_mostrar(_janela(dialogo=object()))
+    assert not pode_mostrar(_janela(sessao=object()))
+
+
+def test_tarefa_nova_faz_o_botao_entrar_e_o_fim_recolhe(real_window, flush_idle):
+    botao = real_window.botao_tarefas
+    assert not botao.revealer.get_reveal_child()
+    assert not botao.get_can_target()
+
+    tarefa = tarefas.comecar("Importação", 1)
+    flush_idle()
+    assert botao.revealer.get_reveal_child()
+    assert botao.get_can_target()
+
+    tarefa.terminar()
+    flush_idle()
+    assert not botao.revealer.get_reveal_child()
+    assert not botao.get_can_target()
+
+
+def test_mouse_no_canto_traz_o_botao_de_volta(real_window, flush_idle):
+    botao = real_window.botao_tarefas
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    botao.revealer.set_reveal_child(False)  # os 3 s da entrada já passaram
+
+    botao._ao_entrar()  # pylint: disable=protected-access
+    assert botao.revealer.get_reveal_child()
+
+
+def test_sessao_esconde_o_botao(real_window, flush_idle, make_game):
+    botao = real_window.botao_tarefas
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    real_window.session_game = make_game(game_id="x")
+    botao.reavaliar()
+    assert not botao.revealer.get_reveal_child()
+    assert not botao.get_can_target()
+    botao._ao_entrar()  # pylint: disable=protected-access
+    assert not botao.revealer.get_reveal_child()

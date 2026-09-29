@@ -29,6 +29,7 @@ from typing import Any, Optional
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from cartridges import shared
+from cartridges.botao_tarefas import BotaoTarefas
 from cartridges.game import Game, STATUS_LABELS, status_label
 from cartridges.game_cover import GameCover
 from cartridges.utils.animated_flow_box import AnimatedFlowBox
@@ -53,6 +54,7 @@ from cartridges.utils import (
     session_fita,
     session_log,
     session_wallpaper,
+    tarefas,
     window_geometry,
 )
 from cartridges.utils.relative_date import relative_date
@@ -81,6 +83,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
     navigation_view: Adw.NavigationView = Gtk.Template.Child()
     toast_overlay: Adw.ToastOverlay = Gtk.Template.Child()
+    session_overlay: Gtk.Overlay = Gtk.Template.Child()
     session_blocker: Gtk.Box = Gtk.Template.Child()
     session_blocker_label: Gtk.Label = Gtk.Template.Child()
     session_blocker_button: Gtk.Button = Gtk.Template.Child()
@@ -303,6 +306,21 @@ class CartridgesWindow(Adw.ApplicationWindow):
         ]
         self.connect("destroy", self.detach_global_handlers)
 
+        # O botão das tarefas em andamento fica por cima das duas bibliotecas,
+        # no canto inferior esquerdo. O quadro de tarefas vive o processo
+        # inteiro: a ligação entra em `_global_handler_ids` pelo mesmo motivo
+        # das outras daquela lista.
+        self.botao_tarefas = BotaoTarefas(self)
+        self.session_overlay.add_overlay(self.botao_tarefas)
+        self._global_handler_ids.append(
+            (
+                tarefas.lista,
+                tarefas.lista.connect("items-changed", self.botao_tarefas.ao_mudar_lista),
+            )
+        )
+        self.navigation_view.connect("notify::visible-page", self.botao_tarefas.reavaliar)
+        self.connect("notify::visible-dialog", self.botao_tarefas.reavaliar)
+
         # The "session in progress" overlay button ends the session, same as the
         # compact window's button
         self.session_blocker_button.connect("clicked", self.on_session_blocker_clicked)
@@ -478,6 +496,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # O jogo inteiro, e não só o nome: o botão de anotação daqui grava
         # nele, e é o único jogo que o bloqueador tem para oferecer.
         self.session_game = game
+        self.botao_tarefas.reavaliar()
         # The variable is the name of the game currently being played
         self.session_blocker_label.set_label(_("{} em execução").format(game.name))
         # The opaque overlay covers the whole window content (including the
@@ -527,6 +546,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # anotação que esteja aberto, e é esse fechamento que a grava.
         self.session_blocker.set_visible(False)
         self.session_game = None
+        self.botao_tarefas.reavaliar()
         self.navigation_view.set_sensitive(True)
 
         if self.session_timer_id:
