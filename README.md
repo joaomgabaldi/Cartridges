@@ -166,7 +166,7 @@ A build é feita no [MSYS2](https://www.msys2.org), ambiente UCRT64.
 
 ### Dependências
 
-No shell UCRT64 (GTK 4.15 ou mais recente, libadwaita 1.8 ou mais recente):
+No shell UCRT64 (GTK 4.24 e libadwaita 1.10 ou mais recente):
 
 ```bash
 pacman -S mingw-w64-ucrt-x86_64-gtk4 mingw-w64-ucrt-x86_64-libadwaita \
