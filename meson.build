@@ -11,9 +11,11 @@ project(
   ],
 )
 
-dependency('gtk4', version: '>= 4.15.0')
-# 1.8 is what the app ships and is tested on
-dependency('libadwaita-1', version: '>= 1.8')
+# 4.24 is the patched GTK the app ships (build-aux/windows/gtk-patches) and
+# the first with GDK_DEBUG=dcomp, which the launcher relies on
+dependency('gtk4', version: '>= 4.24.0')
+# 1.10 is what the app ships and is tested on
+dependency('libadwaita-1', version: '>= 1.10')
 
 # The UI is hardcoded in pt-BR; gettext/po translations were removed
 gnome = import('gnome')
