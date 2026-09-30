@@ -1,0 +1,84 @@
+name: Gerar instalador (beta)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # blueprint-compiler lê os .blp na codificação do locale; sem isto, cp1252.
+  PYTHONUTF8: "1"
+
+jobs:
+  instalador:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      # release: false usa o C:\msys64 do runner, o caminho que o build-installer.ps1 espera.
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          release: false
+          update: true
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-libadwaita
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python-gobject
+            mingw-w64-ucrt-x86_64-python-requests
+            mingw-w64-ucrt-x86_64-python-pillow
+            mingw-w64-ucrt-x86_64-python-cryptography
+            mingw-w64-ucrt-x86_64-python-pip
+            mingw-w64-ucrt-x86_64-meson
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-binutils
+
+      - name: GTK corrigido, tinytuya e meson setup
+        shell: msys2 {0}
+        run: |
+          trava=$(sed -n 's/^gtk4_package_version=//p' build-aux/windows/gtk-patches/patched-gtk.txt | tr -d '\r')
+          atual=$(pacman -Q mingw-w64-ucrt-x86_64-gtk4 | cut -d' ' -f2)
+          if [ "$atual" != "$trava" ]; then
+            echo "::error::O MSYS2 publicou o gtk4 $atual, mas a trava está em $trava. Execute 'Compilar GTK corrigido', teste a versão nova no PC e atualize a trava (build-aux/windows/gtk-patches/README.md)."
+            exit 1
+          fi
+          pacote="mingw-w64-ucrt-x86_64-gtk4-$trava-any.pkg.tar.zst"
+          curl -fsSLO "https://github.com/$GITHUB_REPOSITORY/releases/download/gtk-corrigido/$pacote"
+          pacman -U --noconfirm "$pacote"
+          python -m pip install --break-system-packages tinytuya==1.20.0
+          meson setup _build
+
+      - name: Inno Setup
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
+      - name: Instalador
+        run: ./build-aux/windows/build-installer.ps1
+
+      - name: Publicar pré-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          versao=$(sed -n "s/^  version: '\(.*\)',\$/\1/p" meson.build)
+          tag="v$versao"
+          C:/msys64/ucrt64/bin/python.exe build-aux/windows/notas_release.py data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in "$versao" > notas.md
+          cp "_dist/Cartridges Windows.exe" Cartridges.Windows.exe
+          if pre=$(gh release view "$tag" --json isPrerelease --jq .isPrerelease 2>/dev/null); then
+            if [ "$pre" != "true" ]; then
+              echo "::error::A release $tag já foi publicada como versão final. Atualize a versão no meson.build e no metainfo antes de gerar outro instalador."
+              exit 1
+            fi
+            git tag -f "$tag"
+            git push -f origin "refs/tags/$tag"
+            gh release edit "$tag" --notes-file notas.md
+            gh release upload "$tag" Cartridges.Windows.exe --clobber
+          else
+            gh release create "$tag" Cartridges.Windows.exe --prerelease --latest=false \
+              --target "$GITHUB_SHA" --title "Cartridges $versao" --notes-file notas.md
+          fi

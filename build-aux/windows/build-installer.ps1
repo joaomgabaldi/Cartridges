@@ -1,6 +1,6 @@
 ﻿# build-installer.ps1
 #
-# Compila o app, empacota com o Inno Setup e abre o instalador.
+# Compila o app, empacota com o Inno Setup e abre o instalador (fora da CI).
 # Chamado pelo build-installer.bat na raiz do projeto (dois cliques).
 
 $ErrorActionPreference = 'Stop'
@@ -18,59 +18,49 @@ function Falha($texto) { Write-Host "`nERRO: $texto" -ForegroundColor Red; exit 
 # ── 1. A libgtk corrigida ─────────────────────────────────────────────────
 #
 # A pasta do app é montada a partir de C:\msys64\ucrt64\bin, então ela leva
-# junto a libgtk que estiver instalada ali. Se um `pacman -Syu` sobrescrever a nossa
+# junto a libgtk que estiver instalada ali. Se um `pacman -Syu` sobrescrever a
 # build corrigida, o instalador sai com o bug do monitor de volta — e sem
 # nenhum aviso, porque tudo compila e empacota normalmente. Daí esta checagem.
+# O pacote corrigido sai do workflow "Compilar GTK corrigido" (gtk-patches\README.md).
 
 Etapa 'Conferindo a libgtk corrigida'
 
 $estado = Join-Path $patches 'patched-gtk.txt'
-$backup = Join-Path $patches 'libgtk-4-1.dll'
 $dll    = Join-Path $prefix 'bin\libgtk-4-1.dll'
 
-if (-not (Test-Path $estado) -or -not (Test-Path $backup)) {
-    Falha "Faltam $estado ou $backup. Sem eles não dá para saber se a libgtk instalada tem a correção."
+if (-not (Test-Path $estado)) {
+    Falha "Falta $estado. Sem ele não dá para saber se a libgtk instalada tem a correção."
 }
 
 $esperado = @{}
-Get-Content $estado | Where-Object { $_ -match '^\s*(\w+)\s*=\s*(.+)$' } | ForEach-Object {
+Get-Content $estado | ForEach-Object {
     if ($_ -match '^\s*(\w+)\s*=\s*(.+)$') { $esperado[$Matches[1]] = $Matches[2].Trim() }
 }
 
 $versaoAtual = ((& (Join-Path $msys 'usr\bin\pacman.exe') -Q mingw-w64-ucrt-x86_64-gtk4 2>$null) -replace '^\S+\s+','').Trim()
+$pacote = "mingw-w64-ucrt-x86_64-gtk4-$($esperado['gtk4_package_version'])-any.pkg.tar.zst"
+$link   = "https://github.com/joaomgabaldi/Cartridges/releases/download/gtk-corrigido/$pacote"
 
 if ($versaoAtual -ne $esperado['gtk4_package_version']) {
-    # Restaurar aqui seria pior que o bug: uma libgtk de outra versão junto do
-    # resto do GTK atualizado quebra de formas bem menos óbvias que um recorte
-    # de desenho.
     Falha @"
-O pacote gtk4 mudou de $($esperado['gtk4_package_version']) para $versaoAtual.
-A libgtk guardada em gtk-patches é da versão antiga e NÃO pode ser usada com esta.
+O pacote gtk4 instalado é $versaoAtual, mas a trava está em $($esperado['gtk4_package_version']).
 
-O patch precisa ser refeito contra a versão nova:
-  cd ~/gtk-build && git fetch --depth 1 origin <tag da versao nova> && git checkout FETCH_HEAD
-  git apply $patches\gtk-dcomp-render-window-origin.patch
-  ninja -C _build gtk/libgtk-4-1.dll && cp _build/gtk/libgtk-4-1.dll /ucrt64/bin/
-
-Depois atualize a trava a mao: copie a DLL nova para gtk-patches\libgtk-4-1.dll
-e troque versao e SHA256 em gtk-patches\patched-gtk.txt.
-Contexto completo em gtk-patches\ISSUE.md
+Para passar a usar a versão nova: execute o workflow "Compilar GTK corrigido" no
+GitHub, instale o pacote gerado neste PC, teste, e atualize patched-gtk.txt com
+as duas linhas mostradas no resumo do workflow.
+Passo a passo em $patches\README.md
 "@
 }
 
-$hashAtual = (Get-FileHash $dll -Algorithm SHA256).Hash
-
-if ($hashAtual -ne $esperado['libgtk_sha256']) {
-    # Mesma versão de pacote, DLL diferente: o pacman reinstalou por cima.
-    # Aqui restaurar é seguro, porque a ABI é a mesma.
-    Write-Host "A libgtk instalada foi sobrescrita (mesma versao do pacote). Restaurando a corrigida..." -ForegroundColor Yellow
-    Copy-Item $backup $dll -Force
-    $hashAtual = (Get-FileHash $dll -Algorithm SHA256).Hash
-    if ($hashAtual -ne $esperado['libgtk_sha256']) { Falha 'A restauracao nao bateu com o hash esperado.' }
-    Write-Host 'Restaurada.' -ForegroundColor Green
-} else {
-    Write-Host "OK - gtk4 $versaoAtual com a correcao aplicada." -ForegroundColor Green
+if ((Get-FileHash $dll -Algorithm SHA256).Hash -ne $esperado['libgtk_sha256']) {
+    Falha @"
+A libgtk instalada não é a corrigida (o pacman provavelmente reinstalou a oficial).
+Instale a corrigida no terminal UCRT64 do MSYS2:
+  curl -fLO $link && pacman -U --noconfirm $pacote
+"@
 }
+
+Write-Host "OK - gtk4 $versaoAtual com a correcao aplicada." -ForegroundColor Green
 
 # ── 2. Compilar e instalar no prefixo ─────────────────────────────────────
 
@@ -125,4 +115,5 @@ Etapa 'Pronto'
 Write-Host ("  {0}" -f $info.FullName)
 Write-Host ("  {0} MB - versao {1}" -f [math]::Round($info.Length/1MB,1), $info.VersionInfo.ProductVersion.Trim())
 
-Start-Process $exe
+# Na CI (o GitHub define CI=true) não há quem instale.
+if (-not $env:CI) { Start-Process $exe }
