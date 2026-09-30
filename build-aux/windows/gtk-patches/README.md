@@ -25,7 +25,9 @@ instalado é a versão da trava e que a `libgtk-4-1.dll` tem o hash da trava:
 
 - **Versão diferente** → para. O MSYS2 publicou um GTK novo; ver abaixo.
 - **Mesma versão, hash diferente** → para e mostra o comando que reinstala a
-  corrigida. Um `pacman -Syu` que reinstale o gtk4 oficial cai aqui.
+  corrigida. Uma reinstalação do gtk4 oficial
+  (`pacman -S mingw-w64-ucrt-x86_64-gtk4`) ou uma instalação nova do MSYS2
+  cai aqui.
 
 ## Quando o MSYS2 publicar um GTK novo
 
@@ -41,4 +43,7 @@ instalado é a versão da trava e que a `libgtk-4-1.dll` tem o hash da trava:
 
 Quando a correção entrar no GTK e o MSYS2 empacotar uma versão que a contenha.
 Aí basta apagar este diretório, o workflow `gtk-corrigido.yml`, a checagem no
-início do `build-installer.ps1` e o passo "GTK corrigido" do `instalador.yml`.
+início do `build-installer.ps1`. No passo "GTK corrigido, tinytuya e meson setup"
+do `instalador.yml`, remover apenas a checagem da trava e o download e a
+instalação do pacote corrigido (`curl` e `pacman -U`); a instalação do tinytuya
+e o `meson setup` continuam.

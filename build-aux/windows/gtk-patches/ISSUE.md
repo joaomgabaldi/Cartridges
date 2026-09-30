@@ -14,6 +14,8 @@ and has been verified against 4.22.4 and 4.24.0.
 - `GDK_WIN32_FORCE_DCOMP=1` — MSYS2 ships `003-default-dcomp-off.patch`, and the
   GL and Vulkan renderers refuse to realize without DirectComposition
   ("OpenGL requires Direct Composition"), so this is required to use them at all
+- On 4.24.0 the MSYS2 patch is gone and DirectComposition is opt-in upstream: use
+  `GDK_DEBUG=dcomp` instead.
 
 ## Symptom
 
