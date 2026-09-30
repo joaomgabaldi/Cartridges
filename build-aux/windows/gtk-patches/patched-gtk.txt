@@ -1,4 +1,4 @@
-﻿# Estado da libgtk corrigida guardada aqui.
+﻿# Estado da libgtk corrigida instalada.
 # O build-installer confere estas duas linhas antes de empacotar.
-gtk4_package_version=4.22.4-1
-libgtk_sha256=4B460D753CC8C6A93DEDF5CB5F2F98167D045A254C6D58B35C30487838828B4A
+gtk4_package_version=4.24.0-1
+libgtk_sha256=CF33B666E75434881710D57E1F22DB2CA5CE1F1FBEEE7D2AEAF23FA244BC9709
