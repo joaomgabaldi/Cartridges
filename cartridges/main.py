@@ -28,12 +28,12 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.parse import quote
 
-# Mirrors the launcher (cartridges.in) for direct module runs: MSYS2's
-# gtk4 disables DirectComposition by default, which GTK 4.2x's GL/Vulkan
-# renderers require — everything silently fell back to Cairo. Re-enable
-# DComp and use Vulkan, the combination that works (GL + DComp is the
-# broken one). setdefault keeps user-set environment values in charge.
-os.environ.setdefault("GDK_WIN32_FORCE_DCOMP", "1")
+# Mirrors the launcher (cartridges.in) for direct module runs: GTK 4.24
+# made DirectComposition opt-in (GDK_DEBUG=dcomp), which its GL/Vulkan
+# renderers require — without it everything silently fell back to Cairo.
+# Enable DComp and use Vulkan, the combination that works (GL + DComp is
+# the broken one). setdefault keeps user-set environment values in charge.
+os.environ.setdefault("GDK_DEBUG", "dcomp")
 os.environ.setdefault("GSK_RENDERER", "vulkan")
 
 import gi

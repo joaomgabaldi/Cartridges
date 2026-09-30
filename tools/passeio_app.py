@@ -53,7 +53,7 @@ class Pulado(Exception):
 def preparar(saida: Path) -> dict[str, list]:
     """Isola o app. Devolve o registro das chamadas neutralizadas."""
     biblioteca = saida / "biblioteca"
-    os.environ.setdefault("GDK_WIN32_FORCE_DCOMP", "1")
+    os.environ.setdefault("GDK_DEBUG", "dcomp")
     os.environ.setdefault("GSK_RENDERER", "vulkan")
     sys.path.insert(0, str(RAIZ))
     builtins._ = lambda mensagem: mensagem  # type: ignore[attr-defined]

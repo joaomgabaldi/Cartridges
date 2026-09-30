@@ -26,16 +26,14 @@ import sys
 
 PKGDATADIR = os.path.join(os.path.dirname(__file__), "..", "share", "cartridges")
 
-# MSYS2's gtk4 package ships with DirectComposition disabled by default
-# (003-default-dcomp-off.patch, "disable broken dcomp"), and GTK 4.2x's GL
-# and Vulkan renderers refuse to realize without it ("… requires Direct
+# GTK 4.24 made DirectComposition opt-in (GDK_DEBUG=dcomp), and its GL and
+# Vulkan renderers refuse to realize without it ("… requires Direct
 # Composition"), silently dropping every app to the Cairo software
-# renderer. The patch leaves a switch: GDK_WIN32_FORCE_DCOMP re-enables it.
-# Vulkan + DComp runs clean here (GL + DComp is the combination that is
-# actually broken — don't use "gl"). Both values use setdefault, so they
-# can be overridden from the environment; and if Vulkan is unavailable on
-# a machine, GTK falls back towards Cairo on its own.
-os.environ.setdefault("GDK_WIN32_FORCE_DCOMP", "1")
+# renderer. Vulkan + DComp runs clean here (GL + DComp is the combination
+# that is actually broken — don't use "gl"). Both values use setdefault, so
+# they can be overridden from the environment; and if Vulkan is unavailable
+# on a machine, GTK falls back on its own.
+os.environ.setdefault("GDK_DEBUG", "dcomp")
 os.environ.setdefault("GSK_RENDERER", "vulkan")
 
 sys.path.insert(1, PKGDATADIR)
