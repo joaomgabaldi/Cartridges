@@ -183,13 +183,16 @@ O `tinytuya` conversa com a iluminação inteligente, e o `python-cryptography` 
 Para gerar o instalador, também é preciso o [Inno Setup 6](https://jrsoftware.org/isinfo.php).
 
 O aplicativo depende de uma correção no GTK que ainda não está no projeto oficial. Sem ela, a
-janela é desenhada pela metade em monitores maiores que o principal. A correção, a DLL compilada e
-o procedimento para refazê-la estão em [`build-aux/windows/gtk-patches`](build-aux/windows/gtk-patches/README.md).
+janela é desenhada pela metade em monitores maiores que o principal. A correção e o procedimento
+para instalá-la estão em [`build-aux/windows/gtk-patches`](build-aux/windows/gtk-patches/README.md).
 
 ### Instalador
 
-Execute `build-installer.bat`. Ele compila o aplicativo, confere a DLL corrigida do GTK, empacota
-com o Inno Setup e grava o instalador em `_dist`.
+O instalador oficial é gerado pelo workflow **Gerar instalador (beta)** do GitHub Actions, que o
+publica como pré-release. Depois de testada, a pré-release é promovida a versão final.
+
+Para gerar um instalador local de teste, execute `build-installer.bat`. Ele confere o GTK
+corrigido, compila o aplicativo, empacota com o Inno Setup e grava o instalador em `_dist`.
 
 ### Build manual
 
