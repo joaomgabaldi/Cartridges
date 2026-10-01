@@ -97,6 +97,7 @@ _SCHEMA_DEFAULTS = {
     "steam-metadata": True,
     "hltb-metadata": True,
     "sgdb-key": "",
+    "conquistas-chave-steam": "",
     "sgdb": False,
     "sgdb-prefer": False,
     "sgdb-animated": False,
@@ -292,6 +293,7 @@ def _install_shared() -> types.ModuleType:
     shared.wallpapers_dir = placeholder / "wallpapers"
     shared.fitas_dir = placeholder / "fitas"
     shared.conquistas_dir = placeholder / "conquistas"
+    shared.conquistas_cache_dir = placeholder / "cache" / "conquistas"
     shared.fitas_arquivo = placeholder / "fitas.json"
     shared.tuya_conta_arquivo = placeholder / "tuya_conta.json"
     shared.log_dir = placeholder / "logs"
@@ -342,6 +344,9 @@ def app_dirs(tmp_path, monkeypatch):
     # Not created: the fita code makes it on first write, like the real app.
     monkeypatch.setattr(shared, "fitas_dir", tmp_path / "fitas", raising=False)
     monkeypatch.setattr(shared, "conquistas_dir", tmp_path / "conquistas", raising=False)
+    monkeypatch.setattr(
+        shared, "conquistas_cache_dir", tmp_path / "cache" / "conquistas", raising=False
+    )
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json", raising=False)
     monkeypatch.setattr(
         shared, "tuya_conta_arquivo", tmp_path / "tuya_conta.json", raising=False

@@ -35,6 +35,9 @@
     <key name="sgdb-key" type="s">
       <default>""</default>
     </key>
+    <key name="conquistas-chave-steam" type="s">
+      <default>""</default>
+    </key>
     <key name="sgdb" type="b">
       <default>false</default>
     </key>
