@@ -1,6 +1,9 @@
 """O catálogo de conquistas: Steam, arquivo do jogo, raridade e cache."""
 
 import json
+import logging
+import threading
+import time
 
 import pytest
 from requests.exceptions import ConnectionError as ErroDeConexao
@@ -110,9 +113,114 @@ def test_cache_ida_e_volta():
 
 def test_vencido():
     cat = Catalogo((), 1000, False)
-    assert not catalogo.vencido(cat, 1000 + catalogo.VALIDADE - 1, tem_chave=False)
-    assert catalogo.vencido(cat, 1000 + catalogo.VALIDADE, tem_chave=False)
-    assert catalogo.vencido(cat, 1001, tem_chave=True)  # chave nova: renova
+    assert not catalogo.vencido(cat, 1000 + catalogo.VALIDADE - 1, "")
+    assert catalogo.vencido(cat, 1000 + catalogo.VALIDADE, "")
+
+
+def test_impressao_da_chave():
+    assert catalogo._impressao("") == ""
+    assert catalogo._impressao("A") != catalogo._impressao("B")
+    assert catalogo._impressao("A") == catalogo._impressao("A") != ""
+    assert len(catalogo._impressao("A")) == 16
+
+
+def test_cache_feito_com_a_chave_a_vale_para_a_e_vence_para_b():
+    impressao_a = catalogo._impressao("A")
+    cat = Catalogo((INFO,), 1000, True, impressao_a)
+    assert not catalogo.vencido(cat, 1010, impressao_a)
+    assert catalogo.vencido(cat, 1010, catalogo._impressao("B"))
+    assert catalogo.vencido(cat, 1010, "")  # chave removida: renova
+
+
+def test_cache_feito_sem_chave_vence_quando_uma_chave_aparece():
+    cat = Catalogo((INFO,), 1000, False)
+    assert catalogo.vencido(cat, 1010, catalogo._impressao("A"))
+
+
+def test_impressao_vai_para_o_cache():
+    cat = Catalogo((INFO,), 1000, False, catalogo._impressao("A"))
+    catalogo._gravar_cache("570", cat)
+    assert catalogo.em_cache("570") == cat
+
+
+def test_cache_antigo_sem_impressao_le_como_vazia():
+    destino = catalogo._arquivo_do_cache("570")
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(json.dumps({"obtido_em": 1, "com_chave": True, "conquistas": []}))
+    assert catalogo.em_cache("570") == Catalogo((), 1, True, "")
+
+
+def test_impressao_de_tipo_errado_no_cache_e_ilegivel():
+    destino = catalogo._arquivo_do_cache("570")
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(
+        json.dumps({"obtido_em": 1, "com_chave": True, "conquistas": [], "impressao_da_chave": 7})
+    )
+    assert catalogo.em_cache("570") is None
+
+
+def test_chave_recusada_nao_e_repetida_por_sete_dias(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "ruim")
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
+    monkeypatch.setattr(
+        catalogo,
+        "_pedir",
+        _pedidos({"GetSchemaForGame": catalogo.ChaveRecusada(), "GetGlobal": PORCENTAGENS}),
+    )
+    assert catalogo.renovar("570", "", agora=10).chave_recusada
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({}))  # qualquer pedido falha o teste
+    assert [i.nome for i in catalogo.obter("570", "", agora=20).catalogo.conquistas] == ["ACH_L"]
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetSchemaForGame": SCHEMA, "GetGlobal": {}}))
+    schema.set_string("conquistas-chave-steam", "outra")
+    assert catalogo.obter("570", "", agora=20).catalogo.com_chave
+
+
+def test_chave_nunca_vai_para_o_log(monkeypatch, schema, caplog):
+    schema.set_string("conquistas-chave-steam", "SEGREDO123")
+    url = f"{catalogo._API}/GetSchemaForGame/v2/?key=SEGREDO123&appid=570&l=brazilian"
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
+    monkeypatch.setattr(
+        catalogo,
+        "_pedir",
+        _pedidos({"GetSchemaForGame": ErroDeConexao(f"Max retries exceeded with url: {url}"), "GetGlobal": {}}),
+    )
+    with caplog.at_level(logging.DEBUG):
+        catalogo.renovar("570", "", agora=10)
+    assert "ConnectionError" in caplog.text
+    assert "SEGREDO123" not in caplog.text
+
+
+def test_com_chave_sem_rede_e_sem_cache_usa_o_arquivo_do_jogo(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
+    monkeypatch.setattr(
+        catalogo,
+        "_pedir",
+        _pedidos({"GetSchemaForGame": ErroDeConexao(), "GetGlobal": ErroDeConexao()}),
+    )
+    cat = catalogo.renovar("570", "", agora=10).catalogo
+    assert [i.nome for i in cat.conquistas] == ["ACH_L"]
+    # Falha de rede não é veredito: na próxima abertura a chave é tentada de novo.
+    assert catalogo.vencido(cat, 11, catalogo._impressao("abc"))
+
+
+def test_criacao_do_limitador_e_uma_so(monkeypatch):
+    monkeypatch.setattr(catalogo, "_limitador", None)
+    criados = []
+
+    class Falso:
+        def __init__(self):
+            time.sleep(0.02)  # alarga a janela da corrida
+            criados.append(self)
+
+    monkeypatch.setattr(catalogo, "SteamWebApiLimiter", Falso)
+    achados = []
+    fios = [threading.Thread(target=lambda: achados.append(catalogo._limite())) for _ in range(8)]
+    for fio in fios:
+        fio.start()
+    for fio in fios:
+        fio.join()
+    assert len(criados) == 1 and all(item is criados[0] for item in achados)
 
 
 def test_renovar_com_chave(monkeypatch, schema):

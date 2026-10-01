@@ -13,9 +13,11 @@ Nada aqui levanta para quem chama: resposta da rede, arquivo do jogo e cache em
 disco são lidos como dado não confiável, e o que não serve vira log e lista vazia.
 """
 
+import hashlib
 import json
 import logging
 import math
+import threading
 import time
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -58,9 +60,12 @@ class ConquistaInfo:
 class Catalogo:
     conquistas: tuple[ConquistaInfo, ...]
     obtido_em: int
-    # Se veio da Steam com chave. Um catálogo feito sem chave é renovado assim
-    # que uma chave aparece, para trocar o texto em inglês pelo português.
+    # Se veio da Steam com chave.
     com_chave: bool
+    # Impressão da chave configurada quando o catálogo foi feito ("" se não havia).
+    # Chave nova, trocada ou removida renova o catálogo; a mesma chave, mesmo
+    # recusada, não é tentada de novo antes dos 7 dias.
+    impressao_da_chave: str = ""
 
     def por_nome(self) -> dict[str, ConquistaInfo]:
         return {info.nome.upper(): info for info in self.conquistas}
@@ -81,13 +86,15 @@ class SteamWebApiLimiter(RateLimiter):
 
 
 _limitador: Optional[SteamWebApiLimiter] = None
+_trava_do_limitador = threading.Lock()
 
 
 def _limite() -> SteamWebApiLimiter:
     global _limitador  # pylint: disable=global-statement
-    if _limitador is None:
-        _limitador = SteamWebApiLimiter()
-    return _limitador
+    with _trava_do_limitador:
+        if _limitador is None:
+            _limitador = SteamWebApiLimiter()
+        return _limitador
 
 
 def _pedir(url: str) -> Any:
@@ -221,6 +228,12 @@ def _info_do_cache(item: Any) -> ConquistaInfo:
     return info
 
 
+def _impressao_do_cache(valor: Any) -> str:
+    if not isinstance(valor, str):
+        raise TypeError("impressão da chave de tipo errado")
+    return valor
+
+
 def em_cache(appid: str) -> Optional[Catalogo]:
     try:
         dados = ler_json(_arquivo_do_cache(appid))
@@ -228,6 +241,7 @@ def em_cache(appid: str) -> Optional[Catalogo]:
             tuple(_info_do_cache(item) for item in dados["conquistas"]),
             int(dados["obtido_em"]),
             bool(dados["com_chave"]),
+            _impressao_do_cache(dados.get("impressao_da_chave", "")),
         )
     except FileNotFoundError:
         return None
@@ -245,6 +259,7 @@ def _gravar_cache(appid: str, cat: Catalogo) -> None:
             {
                 "obtido_em": cat.obtido_em,
                 "com_chave": cat.com_chave,
+                "impressao_da_chave": cat.impressao_da_chave,
                 "conquistas": [asdict(info) for info in cat.conquistas],
             },
             ensure_ascii=False,
@@ -254,8 +269,15 @@ def _gravar_cache(appid: str, cat: Catalogo) -> None:
     temporario.replace(destino)
 
 
-def vencido(cat: Catalogo, agora: int, tem_chave: bool) -> bool:
-    return agora - cat.obtido_em >= VALIDADE or (tem_chave and not cat.com_chave)
+def _impressao(chave: str) -> str:
+    """Identifica a chave sem guardá-la: o cache fica em disco."""
+    if not chave:
+        return ""
+    return hashlib.sha256(chave.encode()).hexdigest()[:16]
+
+
+def vencido(cat: Catalogo, agora: int, impressao_atual: str) -> bool:
+    return agora - cat.obtido_em >= VALIDADE or cat.impressao_da_chave != impressao_atual
 
 
 def _local(executavel: str) -> list[ConquistaInfo]:
@@ -281,6 +303,7 @@ def renovar(appid: str, executavel: str, agora: Optional[int] = None) -> Renovac
     recusada = False
     infos: list[ConquistaInfo] = []
     com_chave = False
+    impressao = _impressao(chave)
 
     if chave:
         try:
@@ -291,8 +314,15 @@ def renovar(appid: str, executavel: str, agora: Optional[int] = None) -> Renovac
         except ChaveRecusada:
             recusada = True
         except (RequestException, ValueError, RecursionError) as erro:
-            logging.info("Catálogo de conquistas indisponível para %s: %s", appid, erro)
-            return Renovacao(anterior)
+            # Só o tipo: a mensagem do requests traz a URL, e a URL traz a chave.
+            logging.info(
+                "Catálogo de conquistas indisponível para %s: %s", appid, type(erro).__name__
+            )
+            if anterior is not None:
+                return Renovacao(anterior)
+            # Falha de rede não é veredito sobre a chave: sem impressão, a
+            # próxima abertura tenta a Steam de novo.
+            impressao = ""
 
     if not infos:
         infos = _local(executavel)
@@ -313,7 +343,9 @@ def renovar(appid: str, executavel: str, agora: Optional[int] = None) -> Renovac
     except (ChaveRecusada, RequestException, ValueError, RecursionError) as erro:
         logging.info("Raridade das conquistas indisponível para %s: %s", appid, erro)
 
-    cat = Catalogo(tuple(com_porcentagens(infos, porcentagens)), agora, com_chave)
+    cat = Catalogo(
+        tuple(com_porcentagens(infos, porcentagens)), agora, com_chave, impressao
+    )
     try:
         _gravar_cache(appid, cat)
     except OSError as erro:
@@ -325,6 +357,6 @@ def obter(appid: str, executavel: str, agora: Optional[int] = None) -> Renovacao
     """O catálogo em cache, renovado só quando venceu."""
     agora = int(time.time()) if agora is None else agora
     cat = em_cache(appid)
-    if cat is not None and not vencido(cat, agora, bool(_chave())):
+    if cat is not None and not vencido(cat, agora, _impressao(_chave())):
         return Renovacao(cat)
     return renovar(appid, executavel, agora)
