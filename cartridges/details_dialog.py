@@ -31,6 +31,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 from PIL import Image, UnidentifiedImageError
 
 from cartridges import shared
+from cartridges.conquistas import historico
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.game import Game, STATUS_LABELS
 from cartridges.game_cover import GameCover
@@ -147,6 +148,7 @@ class DetailsDialog(Adw.Dialog):
     track_process_switch: Adw.SwitchRow = Gtk.Template.Child()
     process_executable: Adw.EntryRow = Gtk.Template.Child()
     track_updates_switch: Adw.SwitchRow = Gtk.Template.Child()
+    conquistas_switch: Adw.SwitchRow = Gtk.Template.Child()
     executable_group: Adw.PreferencesGroup = Gtk.Template.Child()
     updates_group: Adw.PreferencesGroup = Gtk.Template.Child()
 
@@ -281,6 +283,7 @@ class DetailsDialog(Adw.Dialog):
             self.track_process_switch.set_active(self.game.track_process)
 
             self.track_updates_switch.set_active(self.game.track_updates)
+            self.conquistas_switch.set_active(self.game.conquistas)
             # Pre-fill the process name: use the saved value, else derive it from
             # the launch command when that points to an .exe (blank otherwise).
             process_exe = self.game.process_executable or self.exe_name_from_command(
@@ -298,6 +301,7 @@ class DetailsDialog(Adw.Dialog):
         else:
             self.set_title(_("Adicionar novo jogo"))
             self.apply_button.set_label(_("Adicionar"))
+            self.conquistas_switch.set_active(True)
 
         # Lido uma vez, ao abrir: é hardware, e a linha do papel de parede só
         # tem o que escolher com algum monitor além do principal.
@@ -679,6 +683,8 @@ class DetailsDialog(Adw.Dialog):
             self.game.update_available_ts = 0
             self.game.update_url = ""
         self.game.track_updates = track_updates
+        conquistas_antes = self.game.conquistas
+        self.game.conquistas = self.conquistas_switch.get_active()
 
         if self.game.game_id in shared.win.game_covers.keys():
             # Fully stop the cover being replaced
@@ -731,10 +737,22 @@ class DetailsDialog(Adw.Dialog):
         self.game.save()
         self.game.update()
 
+        appid_mudou = str(self.game.steam_appid or "") != str(appid_anterior or "")
+        if appid_anterior and appid_mudou:
+            # O appID antigo estava errado: as conquistas guardadas eram de
+            # outro jogo. A varredura logo abaixo lê as do appID certo.
+            historico.apagar(self.game.game_id)
+
         if self.game.steam_appid and str(self.game.steam_appid) != str(appid_anterior):
             from cartridges.utils.ligacao_zerado import ligar_zerado  # noqa: PLC0415
 
             ligar_zerado(self.game)
+
+        if self.game.conquistas and self.game.steam_appid and (appid_mudou or not conquistas_antes):
+            app = shared.win.get_application()
+            varredura = getattr(app, "varredura_conquistas", None)
+            if varredura is not None:
+                varredura.varrer_jogo(self.game)
 
         # Newly opted in: poll the feed now rather than at the next scheduled
         # tick, so the notice can appear on this session instead of a later one.
