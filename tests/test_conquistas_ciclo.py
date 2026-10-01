@@ -67,6 +67,17 @@ def test_troca_de_id_leva_o_historico():
     assert historico.ler("velho") is None
 
 
+def test_troca_de_id_passa_pela_trava_do_historico(monkeypatch):
+    """O arquivo não anda por fora do `historico`: a varredura pode estar
+    gravando nele, na thread principal, e a trava é dele."""
+    chamadas = []
+    monkeypatch.setattr(historico, "mover", lambda de, para: chamadas.append((de, para)))
+    historico.registrar("velho", [Desbloqueio("A", 1)])
+    store_module._migrate_game_files("velho", "novo")
+    assert chamadas == [("velho", "novo")]
+    assert historico.ler("velho") == {"A": 1}  # só o `historico` mexe no arquivo
+
+
 def test_ligacao_de_zerado_soma_os_historicos(store, ligar):  # noqa: F811
     zerado = jogo(store, 1, removed=True, status="beaten", steam_appid="570")
     vivo = jogo(store, 2, steam_appid="570")
@@ -76,6 +87,20 @@ def test_ligacao_de_zerado_soma_os_historicos(store, ligar):  # noqa: F811
     assert ligar(vivo) is True
     assert historico.ler(vivo.game_id) == {"A": 5, "B": 7}
     assert historico.ler(zerado.game_id) is None  # saiu com o zerado
+
+
+def test_ligacao_sem_gravar_nao_perde_o_historico_do_zerado(store, ligar, monkeypatch):  # noqa: F811
+    zerado = jogo(store, 1, removed=True, status="beaten", steam_appid="570")
+    vivo = jogo(store, 2, steam_appid="570")
+    historico.registrar(zerado.game_id, [Desbloqueio("A", 5)])
+
+    def falha(_game_id, _desbloqueadas):
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr(historico, "_gravar", falha)
+    assert ligar(vivo) is True
+    pendente = historico.caminho(zerado.game_id).with_name(f"{zerado.game_id}.json.pendente")
+    assert pendente.is_file()
 
 
 def test_backup_leva_o_historico(tmp_path):

@@ -124,9 +124,6 @@ def _migrate_game_files(old_id: str, new_id: str) -> None:
     moves.append(
         (shared.fitas_dir / f"{old_id}.json", shared.fitas_dir / f"{new_id}.json")
     )
-    moves.append(
-        (shared.conquistas_dir / f"{old_id}.json", shared.conquistas_dir / f"{new_id}.json")
-    )
 
     for source, dest in moves:
         try:
@@ -134,6 +131,10 @@ def _migrate_game_files(old_id: str, new_id: str) -> None:
                 source.replace(dest)
         except OSError as error:
             logging.warning("Could not move %s to %s: %s", source, dest, error)
+
+    # The achievement history is not in `moves`: `historico` owns its file and
+    # its lock (a scan may be writing it from the main loop right now).
+    historico.mover(old_id, new_id)
 
     # The record names its own id, and moving the file does not change what is
     # written inside it. Done here rather than left to the caller's `save()`

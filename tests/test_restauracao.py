@@ -281,6 +281,38 @@ def test_mesclar_soma_as_conquistas(store, make_game, pasta_de_atalhos, retirado
     assert historico.ler("shortcuts_novo") is None
 
 
+def test_manter_backup_soma_as_conquistas_do_novo(
+    store, make_game, pasta_de_atalhos, retirados
+):
+    """Conquista desbloqueada é fato, não versão que se escolhe: o jogo novo
+    sai, mas o que ele tinha vai para o restaurado."""
+    from cartridges.conquistas import historico  # noqa: PLC0415
+    from cartridges.conquistas.formatos import Desbloqueio  # noqa: PLC0415
+
+    caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
+    historico.registrar("gt", [Desbloqueio("A", 5)])
+    historico.registrar("shortcuts_novo", [Desbloqueio("A", 3), Desbloqueio("B", 9)])
+    restauracao.decidir(restaurado, caminho, novo, "backup")
+    assert store.get("shortcuts_novo") is None
+    assert historico.ler("gt") == {"A": 3, "B": 9}
+    assert historico.ler("shortcuts_novo") is None
+
+
+def test_manter_este_pc_soma_as_conquistas_do_restaurado(
+    store, make_game, pasta_de_atalhos, retirados
+):
+    from cartridges.conquistas import historico  # noqa: PLC0415
+    from cartridges.conquistas.formatos import Desbloqueio  # noqa: PLC0415
+
+    caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
+    historico.registrar("gt", [Desbloqueio("A", 5), Desbloqueio("B", 9)])
+    historico.registrar("shortcuts_novo", [Desbloqueio("A", 7)])
+    restauracao.decidir(restaurado, caminho, novo, "este_pc")
+    assert store.get("gt") is None
+    assert historico.ler("shortcuts_novo") == {"A": 5, "B": 9}
+    assert historico.ler("gt") is None
+
+
 def test_manter_este_pc(store, make_game, pasta_de_atalhos, retirados):
     caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
     restauracao.decidir(restaurado, caminho, novo, "este_pc")
