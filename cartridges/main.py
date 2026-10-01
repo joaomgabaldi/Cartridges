@@ -46,6 +46,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from cartridges import restauracao_dialogs, shared
 from cartridges.conquistas import icones
+from cartridges.conquistas.varredura import VarreduraConquistas
 from cartridges.details_dialog import DetailsDialog
 from cartridges.game import Game
 from cartridges.game_cover import GameCover
@@ -328,6 +329,7 @@ class CartridgesApplication(Adw.Application):
     news_checker: Optional[NewsChecker] = None
     hltb_backfill: Optional[HLTBBackfill] = None
     install_size_sweep: Optional[InstallSizeSweep] = None
+    varredura_conquistas: Optional[VarreduraConquistas] = None
     app_updater: Optional[AppUpdater] = None
     # Ligado por Preferências depois de agendar uma restauração: `main()`
     # reabre o app quando este processo terminar de sair.
@@ -600,6 +602,12 @@ class CartridgesApplication(Adw.Application):
         self.install_size_sweep = InstallSizeSweep()
         self.install_size_sweep.start()
 
+        # Lê as conquistas de cada jogo e guarda o que achar, inclusive o que
+        # foi jogado por fora do app desde a última abertura. Uma vez por
+        # execução, depois da importação, como as duas varreduras acima.
+        self.varredura_conquistas = VarreduraConquistas()
+        self.varredura_conquistas.start()
+
         shared.win.present()
 
         # Uma segunda cópia do app pede a esta que se mostre: é o que traz de volta
@@ -754,6 +762,9 @@ class CartridgesApplication(Adw.Application):
 
         if self.install_size_sweep is not None:
             self.install_size_sweep.stop()
+
+        if self.varredura_conquistas is not None:
+            self.varredura_conquistas.stop()
 
         # Os ícones das conquistas na fila não devem segurar o processo com a
         # rede travada.
