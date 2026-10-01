@@ -140,7 +140,11 @@ def transferir(de_id: str, para_id: str) -> None:
     with _trava:
         origem, origem_ilegivel = _ler_estado(de_id)
         if origem_ilegivel:
+            # Quem chama exclui a origem logo depois, e o Excluir apaga
+            # `<id>.json`: pô-lo à parte antes, para o que não deu para ler
+            # não ir embora junto.
             logging.warning("Conquistas de %s ilegíveis: nada a transferir", de_id)
+            _guardar_ilegivel(de_id)
             return
         if not origem:
             return

@@ -1,11 +1,13 @@
 """O histórico de conquistas segue o jogo para onde ele for."""
 
+import json
 import zipfile
 
 from cartridges import shared
 from cartridges.conquistas import historico
 from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.store import store as store_module
+from cartridges.store.managers.file_manager import FileManager
 from cartridges.utils import backup
 from tests.test_auditoria_0923_ligacao import ligar  # noqa: F401
 from tests.test_zerados import jogo
@@ -15,10 +17,12 @@ def test_campo_novo_vem_ligado_e_e_gravado(store):
     game = jogo(store, 1)
     assert game.conquistas is True
     game.conquistas = False
-    game.save()
-    from cartridges.game import PERSISTED_ATTRS  # noqa: PLC0415
-
-    assert "conquistas" in PERSISTED_ATTRS
+    # `save()` só emite "save-ready"; quem escreve o arquivo é o FileManager.
+    FileManager().main(game, {})
+    gravado = json.loads(
+        (shared.games_dir / f"{game.game_id}.json").read_text(encoding="utf-8")
+    )
+    assert gravado["conquistas"] is False
 
 
 def test_excluir_apaga_o_historico(store, make_game):
@@ -27,6 +31,33 @@ def test_excluir_apaga_o_historico(store, make_game):
     historico.registrar("shortcuts_1", [Desbloqueio("A", 1)])
     store.excluir(game)
     assert historico.ler("shortcuts_1") is None
+
+
+def test_reinstalar_mantem_o_historico(store, make_game):
+    """O ramo de reinstalação do `add_game` também passa por `cleanup_game`, e
+    o histórico de conquistas só some com o Excluir."""
+    tumba = make_game(
+        game_id="shortcuts_1", removed=True, shortcut_path="C:\\A\\Jogo.lnk",
+        shortcut_mtime=100,
+    )
+    store.add_game(tumba, {})
+    store.new_game_ids = set()
+    store.duplicate_game_ids = set()
+    historico.registrar("shortcuts_1", [Desbloqueio("A", 1)])
+
+    volta = make_game(
+        game_id="shortcuts_1", shortcut_path="C:\\A\\Jogo.lnk", shortcut_mtime=999
+    )
+    assert store.add_game(volta, {}) is not None
+    assert "shortcuts_1" in store.new_game_ids  # passou pelo ramo da reinstalação
+    assert historico.ler("shortcuts_1") == {"A": 1}
+
+
+def test_cleanup_game_sozinho_nao_apaga_o_historico(store, make_game):
+    game = make_game(game_id="shortcuts_1")
+    historico.registrar("shortcuts_1", [Desbloqueio("A", 1)])
+    store.cleanup_game(game)
+    assert historico.ler("shortcuts_1") == {"A": 1}
 
 
 def test_troca_de_id_leva_o_historico():
