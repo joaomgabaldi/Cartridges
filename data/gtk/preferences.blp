@@ -404,4 +404,27 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
       }
     }
   }
+
+  Adw.PreferencesPage conquistas_page {
+    name: "conquistas";
+    title: _("Conquistas");
+    icon-name: "starred-symbolic";
+
+    Adw.PreferencesGroup conquistas_chave_group {
+      title: _("Steam Web API");
+
+      Adw.EntryRow conquistas_chave_row {
+        title: _("Chave da API");
+      }
+    }
+
+    Adw.PreferencesGroup {
+      title: _("Exibição");
+
+      Adw.SwitchRow conquistas_ocultas_switch {
+        title: _("Mostrar descrição das conquistas ocultas");
+        subtitle: _("Exibe o nome e a descrição das conquistas ocultas ainda não desbloqueadas");
+      }
+    }
+  }
 }

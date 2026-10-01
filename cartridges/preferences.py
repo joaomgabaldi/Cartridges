@@ -96,6 +96,9 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     sgdb_fetch_button: Gtk.Button = Gtk.Template.Child()
     sgdb_stack: Gtk.Stack = Gtk.Template.Child()
     sgdb_spinner: Adw.Spinner = Gtk.Template.Child()
+    conquistas_chave_group: Adw.PreferencesGroup = Gtk.Template.Child()
+    conquistas_chave_row: Adw.EntryRow = Gtk.Template.Child()
+    conquistas_ocultas_switch: Adw.SwitchRow = Gtk.Template.Child()
 
     export_backup_button_row = Gtk.Template.Child()
     import_backup_button_row = Gtk.Template.Child()
@@ -150,6 +153,27 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             ).format(
                 '<a href="https://www.steamgriddb.com/profile/preferences/api">', "</a>"
             )
+        )
+
+        # Conquistas
+        self._conquistas_chave_changed_id = self.conquistas_chave_row.connect(
+            "changed",
+            lambda row: shared.schema.set_string(
+                "conquistas-chave-steam", row.get_text().strip()
+            ),
+        )
+        self.conquistas_chave_group.set_description(
+            _(
+                "Com a chave, os nomes e as descrições das conquistas aparecem em "
+                "português. Sem ela, o Cartridges usa os dados que acompanham o jogo, "
+                "quando existem. {}Obtenha a chave aqui{}."
+            ).format('<a href="https://steamcommunity.com/dev/apikey">', "</a>")
+        )
+        shared.schema.bind(
+            "conquistas-mostrar-ocultas",
+            self.conquistas_ocultas_switch,
+            "active",
+            Gio.SettingsBindFlags.DEFAULT,
         )
 
         def update_sgdb(*_args: Any) -> None:
@@ -302,6 +326,16 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             self.sgdb_key_entry_row.handler_unblock(self._sgdb_key_changed_id)
             self.sgdb_key_entry_row.handler_unblock(self._sgdb_key_sensitive_id)
         self.sgdb_switch.set_sensitive(bool(self.sgdb_key_entry_row.get_text()))
+
+        self.conquistas_chave_row.handler_block(self._conquistas_chave_changed_id)
+        try:
+            self.conquistas_chave_row.set_text(
+                shared.schema.get_string("conquistas-chave-steam")
+            )
+        finally:
+            self.conquistas_chave_row.handler_unblock(
+                self._conquistas_chave_changed_id
+            )
 
         self.wallhaven_key_entry_row.handler_block(self._wallhaven_key_changed_id)
         try:
