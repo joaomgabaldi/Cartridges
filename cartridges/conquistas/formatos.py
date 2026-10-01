@@ -47,7 +47,7 @@ _HORA = re.compile(r"(?:^|[{,\s])time\s*=\s*(\d+)", re.IGNORECASE)
 
 def _linhas(caminho: Path) -> list[str]:
     texto = caminho.read_text(encoding="utf-8", errors="replace")
-    if texto.startswith("﻿"):
+    if texto.startswith("\ufeff"):
         texto = texto[1:]
     return re.split(r"[\r\n]+", texto)
 
@@ -77,7 +77,7 @@ def _ler_json(caminho: Path) -> Any:
 def _inteiro(valor: Any) -> int:
     try:
         return int(float(str(valor).strip() or 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
@@ -234,7 +234,16 @@ def ler(caminho: Path, formato: str) -> list[Desbloqueio]:
         desbloqueios = leitor(caminho)
     except FileNotFoundError:
         return []
-    except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError) as erro:
+    except (
+        OSError,
+        ValueError,
+        TypeError,
+        AttributeError,
+        KeyError,
+        IndexError,
+        ArithmeticError,
+        RecursionError,
+    ) as erro:
         logging.info("Conquistas ilegíveis em %s (%s): %s", caminho, formato, erro)
         return []
     return [
