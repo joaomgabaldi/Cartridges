@@ -185,3 +185,44 @@ def test_encerrar_nunca_levanta(executor_proprio, monkeypatch):
     with monkeypatch.context() as parcial:
         parcial.setattr(executor_proprio, "shutdown", quebrar)
         icones.encerrar()
+
+
+def _titulos(linhas):
+    return [linha.get_title() for linha in linhas]
+
+
+def test_lista_em_duas_secoes(real_window, com_conquistas):
+    from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415
+
+    dialogo = ConquistasDialog(com_conquistas)
+    assert _titulos(dialogo.linhas_desbloqueadas) == ["Rara", "Primeira"]  # recente primeiro
+    assert _titulos(dialogo.linhas_bloqueadas) == ["Conquista oculta"]
+    assert dialogo.linhas_bloqueadas[0].get_subtitle() == (
+        "Os detalhes aparecem depois do desbloqueio."
+    )
+
+
+def test_ocultas_reveladas_pela_preferencia(real_window, com_conquistas, schema):
+    from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415
+
+    schema.set_boolean("conquistas-mostrar-ocultas", True)
+    dialogo = ConquistasDialog(com_conquistas)
+    assert _titulos(dialogo.linhas_bloqueadas) == ["Segredo"]
+
+
+def test_oculta_desbloqueada_aparece_sempre(real_window, com_conquistas):
+    from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415
+
+    historico.registrar(com_conquistas.game_id, [Desbloqueio("C", 300)])
+    dialogo = ConquistasDialog(com_conquistas)
+    assert _titulos(dialogo.linhas_desbloqueadas) == ["Segredo", "Rara", "Primeira"]
+    assert dialogo.linhas_bloqueadas == []
+
+
+@pytest.mark.parametrize("quando", [2**62, -(2**62), -1, 2**63 - 1, -(2**63)])
+def test_data_absurda_nao_derruba_a_lista(real_window, com_conquistas, quando):
+    from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415
+
+    historico.registrar(com_conquistas.game_id, [Desbloqueio("C", quando)])
+    dialogo = ConquistasDialog(com_conquistas)
+    assert "Segredo" in _titulos(dialogo.linhas_desbloqueadas)

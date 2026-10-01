@@ -98,6 +98,7 @@ _SCHEMA_DEFAULTS = {
     "hltb-metadata": True,
     "sgdb-key": "",
     "conquistas-chave-steam": "",
+    "conquistas-mostrar-ocultas": False,
     "sgdb": False,
     "sgdb-prefer": False,
     "sgdb-animated": False,
