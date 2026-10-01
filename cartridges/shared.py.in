@@ -74,6 +74,9 @@ fitas_arquivo = app_dir / "fitas.json"
 # (`conquistas/historico.py`). Entra no backup.
 conquistas_dir = app_dir / "conquistas"
 
+# Catálogos e ícones das conquistas: refeitos da rede, fora do backup.
+conquistas_cache_dir = app_dir / "cache" / "conquistas"
+
 # A conta de nuvem da Tuya que o assistente das fitas usa para buscar
 # dispositivos. Fica criptografada com o DPAPI do Windows (ver
 # `utils/tuya_conta.py`), amarrada à conta do Windows de quem roda o app. Vai no
