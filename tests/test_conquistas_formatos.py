@@ -25,7 +25,7 @@ def test_codex_le_so_as_desbloqueadas(tmp_path):
 
 def test_ini_com_bom_e_comentarios(tmp_path):
     caminho = _arquivo(
-        tmp_path, "a.ini", "﻿; comentário\n# outro\n[ACH_A]\nAchieved=1\nUnlockTime=5\n"
+        tmp_path, "a.ini", "\ufeff; comentário\n# outro\n[ACH_A]\nAchieved=1\nUnlockTime=5\n"
     )
     assert formatos.ler(caminho, formatos.PADRAO) == [Desbloqueio("ACH_A", 5)]
 
@@ -171,3 +171,14 @@ def test_cache_da_steam_le_todas_as_listas(tmp_path):
         Desbloqueio("ACH_A", 1700000000),
         Desbloqueio("ACH_C", 1700000500),
     ]
+
+
+def test_hora_infinita_no_ini_nao_levanta(tmp_path):
+    caminho = _arquivo(tmp_path, "a.ini", "[ACH_A]\nAchieved=1\nUnlockTime=inf\n")
+    assert formatos.ler(caminho, formatos.PADRAO) == [Desbloqueio("ACH_A", 0)]
+
+
+def test_hora_gigante_no_json_nao_levanta(tmp_path):
+    # Escrito à mão: `json.dumps` não produz 1e999.
+    caminho = _arquivo(tmp_path, "a.json", '{"ACH_A": {"earned": true, "earned_time": 1e999}}')
+    assert formatos.ler(caminho, formatos.GOLDBERG) == [Desbloqueio("ACH_A", 0)]
