@@ -30,6 +30,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from cartridges import shared
 from cartridges.botao_tarefas import BotaoTarefas
+from cartridges.conquistas import icones, progresso
 from cartridges.game import Game, STATUS_LABELS, status_label
 from cartridges.game_cover import GameCover
 from cartridges.utils.animated_flow_box import AnimatedFlowBox
@@ -139,6 +140,12 @@ class CartridgesWindow(Adw.ApplicationWindow):
     details_view_description: Gtk.Label = Gtk.Template.Child()
     details_view_notes_box: Gtk.Box = Gtk.Template.Child()
     details_view_notes: Gtk.Label = Gtk.Template.Child()
+    details_view_conquistas_box: Gtk.Box = Gtk.Template.Child()
+    details_view_conquistas_card: Gtk.Button = Gtk.Template.Child()
+    details_view_conquistas_count: Gtk.Label = Gtk.Template.Child()
+    details_view_conquistas_percent: Gtk.Label = Gtk.Template.Child()
+    details_view_conquistas_bar: Gtk.ProgressBar = Gtk.Template.Child()
+    details_view_conquistas_icons: Gtk.Box = Gtk.Template.Child()
     details_view_hltb_box: Gtk.Box = Gtk.Template.Child()
     details_view_hltb_main_cell: Gtk.Box = Gtk.Template.Child()
     details_view_hltb_main_value: Gtk.Label = Gtk.Template.Child()
@@ -356,6 +363,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.details_view_update_notice.connect(
             "clicked", self.on_update_notice_clicked
         )
+        self.details_view_conquistas_card.connect("clicked", self.on_conquistas_clicked)
 
         # Both refresh affordances on the news page do the same thing: force a
         # poll. The retry button only ever appears on the "nothing to show"
@@ -1261,6 +1269,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.details_view_description.set_visible(bool(game.description))
 
         self.update_hltb_block(game)
+        self.update_conquistas_block(game)
 
         self.update_details_notice(game)
         self.update_details_mode(game)
@@ -1505,6 +1514,41 @@ class CartridgesWindow(Adw.ApplicationWindow):
             )
 
         self.details_view_hltb_box.set_visible(any(visible_flags))
+
+    _ICONES_NO_CARTAO = 4
+
+    def update_conquistas_block(self, game: Game) -> None:
+        """Preenche o cartão de conquistas; some sem catálogo ou desligado."""
+        atual = progresso.do_jogo(game)
+        self.details_view_conquistas_box.set_visible(atual is not None)
+        if atual is None:
+            return
+
+        # A primeira variável é quantas foram desbloqueadas; a segunda, o total
+        self.details_view_conquistas_count.set_label(
+            _("{} de {}").format(atual.feitas, atual.total)
+        )
+        self.details_view_conquistas_percent.set_label(f"{round(atual.fracao * 100)}%")
+        self.details_view_conquistas_bar.set_fraction(atual.fracao)
+
+        caixa = self.details_view_conquistas_icons
+        while (filho := caixa.get_first_child()) is not None:
+            caixa.remove(filho)
+        for linha in atual.desbloqueadas[: self._ICONES_NO_CARTAO]:
+            imagem = Gtk.Picture(can_shrink=True)
+            imagem.set_size_request(32, 32)
+            imagem.add_css_class("conquistas-icone")
+            icones.carregar(linha.info.icone, imagem.set_paintable)
+            caixa.append(imagem)
+        if (resto := atual.feitas - self._ICONES_NO_CARTAO) > 0:
+            caixa.append(Gtk.Label(label=f"+{resto}", css_classes=["dim-label"]))
+        caixa.set_visible(atual.feitas > 0)
+
+    def on_conquistas_clicked(self, *_args: Any) -> None:
+        from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415
+
+        if (game := getattr(self, "active_game", None)) is not None:
+            ConquistasDialog(game).present(self)
 
     def fill_hltb_chapters(self, chapters: list[dict]) -> None:
         """Rebuild the chapter table: a header row, then one row per chapter.

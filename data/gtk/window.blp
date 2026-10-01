@@ -76,6 +76,7 @@ template $CartridgesWindow: Adw.ApplicationWindow {
       details_view_gamepad_recommended.halign: center;
       details_view_description.halign: center;
       details_view_hltb_box.halign: center;
+      details_view_conquistas_box.halign: center;
       details_view_date_box.halign: center;
       details_view_status_box.halign: center;
       details_view_cover.width-request: 280;
@@ -960,6 +961,68 @@ Adw.NavigationPage details_page {
                   "hltb-card",
                   "hltb-chapters",
                 ]
+              }
+            }
+
+            // As conquistas logo abaixo do HowLongToBeat: as duas respondem a
+            // "quanto do jogo já foi feito", uma em horas, a outra em metas.
+            Box details_view_conquistas_box {
+              orientation: vertical;
+              margin-top: 18;
+              hexpand: true;
+              halign: start;
+              visible: false;
+
+              Label {
+                label: _("Conquistas");
+                halign: start;
+                margin-bottom: 6;
+                margin-start: 3;
+
+                styles [
+                  "caption-heading",
+                  "dim-label",
+                ]
+              }
+
+              Button details_view_conquistas_card {
+                tooltip-text: _("Ver todas as conquistas");
+
+                styles [
+                  "card",
+                  "conquistas-card",
+                ]
+
+                Box {
+                  orientation: vertical;
+                  spacing: 8;
+
+                  Box {
+                    orientation: horizontal;
+
+                    Label details_view_conquistas_count {
+                      hexpand: true;
+                      xalign: 0;
+
+                      styles [
+                        "title-4",
+                      ]
+                    }
+
+                    Label details_view_conquistas_percent {
+                      styles [
+                        "dim-label",
+                      ]
+                    }
+                  }
+
+                  ProgressBar details_view_conquistas_bar {}
+
+                  Box details_view_conquistas_icons {
+                    orientation: horizontal;
+                    spacing: 6;
+                  }
+                }
               }
             }
 

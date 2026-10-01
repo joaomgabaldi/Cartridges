@@ -88,6 +88,23 @@
   min-width: 68px;
 }
 
+/* O cartão de conquistas da página do jogo: o mesmo canto do HowLongToBeat,
+   porque os dois ficam um embaixo do outro e respondem à mesma pergunta. */
+.conquistas-card {
+  border-radius: 12px;
+  padding: 12px 16px;
+  min-width: 260px;
+}
+
+.conquistas-icone {
+  border-radius: 6px;
+}
+
+.conquista-rara {
+  color: #e5a50a;
+  font-weight: bold;
+}
+
 /* Preview tiles in the logo picker. Logos are overwhelmingly light artwork on
    transparency, so they need a dark backdrop to be visible at all — and the
    page they are being chosen for is dark anyway, which makes this the honest
