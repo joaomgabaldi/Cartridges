@@ -45,6 +45,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from cartridges import restauracao_dialogs, shared
+from cartridges.conquistas import icones
 from cartridges.details_dialog import DetailsDialog
 from cartridges.game import Game
 from cartridges.game_cover import GameCover
@@ -753,6 +754,10 @@ class CartridgesApplication(Adw.Application):
 
         if self.install_size_sweep is not None:
             self.install_size_sweep.stop()
+
+        # Os ícones das conquistas na fila não devem segurar o processo com a
+        # rede travada.
+        icones.encerrar()
 
         # Um download no meio para no próximo pedaço, e o resultado de uma
         # checagem que ainda esteja no caminho é descartado.

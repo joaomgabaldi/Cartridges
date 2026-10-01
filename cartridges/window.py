@@ -1535,10 +1535,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
         while (filho := caixa.get_first_child()) is not None:
             caixa.remove(filho)
         for linha in atual.desbloqueadas[: self._ICONES_NO_CARTAO]:
-            imagem = Gtk.Picture(can_shrink=True)
-            imagem.set_size_request(32, 32)
+            imagem = Gtk.Image(pixel_size=32)
             imagem.add_css_class("conquistas-icone")
-            icones.carregar(linha.info.icone, imagem.set_paintable)
+            icones.carregar(linha.info.icone, imagem.set_from_paintable)
             caixa.append(imagem)
         if (resto := atual.feitas - self._ICONES_NO_CARTAO) > 0:
             caixa.append(Gtk.Label(label=f"+{resto}", css_classes=["dim-label"]))
