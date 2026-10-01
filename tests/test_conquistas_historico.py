@@ -1,5 +1,7 @@
 """O histórico de conquistas: só soma."""
 
+from pathlib import Path
+
 from cartridges import shared
 from cartridges.conquistas import historico
 from cartridges.conquistas.formatos import Desbloqueio as D
@@ -43,6 +45,74 @@ def test_arquivo_ilegivel_conta_como_nunca_varrido():
     historico.caminho("g1").parent.mkdir(parents=True)
     historico.caminho("g1").write_text("{", encoding="utf-8")
     assert historico.ler("g1") is None
+
+
+def test_registrar_guarda_o_arquivo_ilegivel_antes_de_gravar():
+    historico.caminho("g1").parent.mkdir(parents=True)
+    historico.caminho("g1").write_text("{", encoding="utf-8")
+    assert historico.registrar("g1", [D("A", 1)]) == (["A"], True)
+    assert historico.ler("g1") == {"A": 1}
+    guardado = historico.caminho("g1").with_name("g1.json.corrompido")
+    assert guardado.read_text(encoding="utf-8") == "{"
+
+
+def test_formato_inesperado_tambem_e_guardado():
+    historico.caminho("g1").parent.mkdir(parents=True)
+    historico.caminho("g1").write_text('{"desbloqueadas": [1]}', encoding="utf-8")
+    assert historico.ler("g1") is None
+    assert historico.registrar("g1", [D("A", 1)]) == (["A"], True)
+    assert historico.caminho("g1").with_name("g1.json.corrompido").is_file()
+
+
+def test_arquivo_ilegivel_travado_nao_e_sobrescrito(monkeypatch):
+    historico.caminho("g1").parent.mkdir(parents=True)
+    historico.caminho("g1").write_text("{", encoding="utf-8")
+
+    def travado(self, destino):
+        raise PermissionError("travado")
+
+    monkeypatch.setattr(Path, "replace", travado)
+    assert historico.registrar("g1", [D("A", 1)]) == ([], False)
+    assert historico.caminho("g1").read_text(encoding="utf-8") == "{"
+
+
+def test_transferir_guarda_o_destino_ilegivel():
+    historico.registrar("de", [D("A", 5)])
+    historico.caminho("para").write_text("{", encoding="utf-8")
+    historico.transferir("de", "para")
+    assert historico.ler("para") == {"A": 5}
+    assert historico.caminho("para").with_name("para.json.corrompido").read_text(
+        encoding="utf-8"
+    ) == "{"
+
+
+def test_transferir_destino_travado_nao_grava(monkeypatch):
+    historico.registrar("de", [D("A", 5)])
+    historico.caminho("para").write_text("{", encoding="utf-8")
+
+    def travado(self, destino):
+        raise PermissionError("travado")
+
+    monkeypatch.setattr(Path, "replace", travado)
+    historico.transferir("de", "para")
+    assert historico.caminho("para").read_text(encoding="utf-8") == "{"
+
+
+def test_transferir_origem_ilegivel_nao_mexe_no_destino():
+    historico.registrar("para", [D("B", 7)])
+    historico.caminho("de").write_text("{", encoding="utf-8")
+    historico.transferir("de", "para")
+    assert historico.ler("para") == {"B": 7}
+    assert historico.caminho("de").read_text(encoding="utf-8") == "{"
+
+
+def test_valores_invalidos_sao_pulados_um_a_um():
+    historico.caminho("g1").parent.mkdir(parents=True)
+    historico.caminho("g1").write_text(
+        '{"desbloqueadas": {"A": NaN, "B": Infinity, "C": 5, "D": true}}',
+        encoding="utf-8",
+    )
+    assert historico.ler("g1") == {"C": 5}
 
 
 def test_grava_na_pasta_do_app():
