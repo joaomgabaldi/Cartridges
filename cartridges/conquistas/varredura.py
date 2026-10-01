@@ -83,10 +83,10 @@ def ler_jogo(game: Any) -> Leitura:
     return Leitura(game, appid, desbloqueios)
 
 
-def renovar_catalogo(game: Any, rede: bool = True) -> Catalogacao:
+def renovar_catalogo(game: Any, rede: bool = True, usar_chave: bool = True) -> Catalogacao:
     """Trabalho de thread: renova o catálogo, que pode ir à rede. Não grava."""
     appid = str(game.steam_appid)
-    renovacao = catalogo.obter(appid, game.executable, rede=rede)
+    renovacao = catalogo.obter(appid, game.executable, rede=rede, usar_chave=usar_chave)
     return Catalogacao(
         game,
         appid,
@@ -226,13 +226,14 @@ class VarreduraConquistas:
         self, games: list[Any], geracao: int, avisar: bool, tarefa: Optional[Any]
     ) -> None:
         rede = True
+        usar_chave = True
         for feitos, game in enumerate(games, start=len(games)):
             if tarefa is not None:
                 tarefa.atualizar(feitos)
             if self._deve_parar(geracao):
                 break
             try:
-                catalogacao = renovar_catalogo(game, rede)
+                catalogacao = renovar_catalogo(game, rede, usar_chave)
             except Exception:  # pylint: disable=broad-exception-caught
                 logging.warning("Falha ao renovar o catálogo de %s", game.name, exc_info=True)
                 continue
@@ -241,6 +242,11 @@ class VarreduraConquistas:
                 # passada fica com o cache e o arquivo de cada jogo.
                 rede = False
                 logging.info("Sem rede para o catálogo de conquistas; seguindo só com o disco")
+            if catalogacao.chave_recusada and usar_chave:
+                # A mesma chave seria recusada em cada jogo: os seguintes não
+                # a mandam à Steam. O aviso ao usuário segue sendo um só.
+                usar_chave = False
+                logging.info("Chave da Steam recusada; os demais jogos seguem sem ela")
             catalogacao.avisar = avisar
             GLib.idle_add(self._entregar_catalogo, catalogacao)
 

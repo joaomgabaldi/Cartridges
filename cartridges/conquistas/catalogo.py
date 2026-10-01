@@ -315,13 +315,21 @@ def _chave() -> str:
 
 
 def renovar(
-    appid: str, executavel: str, agora: Optional[int] = None, rede: bool = True
+    appid: str,
+    executavel: str,
+    agora: Optional[int] = None,
+    rede: bool = True,
+    usar_chave: bool = True,
 ) -> Renovacao:
     """Busca o catálogo de novo e grava no cache. Nunca levanta.
 
     Com ``rede=False`` nada vai à Steam: vale o cache (mesmo vencido) ou o
     arquivo do jogo. É o que quem varre vários jogos usa depois que um pedido
     falhou por rede, para não esperar o tempo limite de cada jogo.
+
+    Com `usar_chave=False` a Steam já recusou a chave nesta passada: o schema
+    não é pedido de novo, e o resultado sai como se a recusa tivesse acabado de
+    voltar (``chave_recusada``).
     """
     if not arquivos.appid_valido(appid):
         return Renovacao(None)
@@ -341,6 +349,8 @@ def renovar(
         # Nada foi perguntado à Steam, então não há veredito sobre a chave: sem
         # impressão, a próxima abertura tenta de novo.
         impressao = ""
+    elif chave and not usar_chave:
+        recusada = True
     elif chave:
         try:
             infos = ler_schema_da_steam(
@@ -365,16 +375,17 @@ def renovar(
     if not infos:
         infos = _local(executavel)
     if not infos:
-        if schema_respondeu and (anterior is None or not anterior.conquistas):
-            # A Steam respondeu à chave e o jogo não tem conquistas: guarda o
-            # "nenhuma" pelos mesmos 7 dias, em vez de perguntar a cada abertura.
-            # O cartão segue escondido (`progresso.montar` não monta catálogo vazio).
-            vazio = Catalogo((), agora, True, impressao)
+        if (schema_respondeu or recusada) and (anterior is None or not anterior.conquistas):
+            # A Steam respondeu à chave e o jogo não tem conquistas, ou recusou a
+            # chave: guarda o "nenhuma" pelos mesmos 7 dias, em vez de perguntar a
+            # cada abertura (trocar a chave muda a impressão e renova). O cartão
+            # segue escondido (`progresso.montar` não monta catálogo vazio).
+            vazio = Catalogo((), agora, schema_respondeu, impressao)
             try:
                 _gravar_cache(appid, vazio)
             except OSError as erro:
                 logging.warning("Catálogo de conquistas de %s não gravado: %s", appid, erro)
-            return Renovacao(vazio)
+            return Renovacao(vazio, recusada)
         return Renovacao(anterior, recusada, rede_falhou)
 
     porcentagens = {
@@ -404,7 +415,11 @@ def renovar(
 
 
 def obter(
-    appid: str, executavel: str, agora: Optional[int] = None, rede: bool = True
+    appid: str,
+    executavel: str,
+    agora: Optional[int] = None,
+    rede: bool = True,
+    usar_chave: bool = True,
 ) -> Renovacao:
     """O catálogo em cache, renovado só quando venceu."""
     if not arquivos.appid_valido(appid):
@@ -413,7 +428,7 @@ def obter(
     cat = em_cache(appid)
     if cat is not None and not vencido(cat, agora, _impressao(_chave())):
         return Renovacao(cat)
-    return renovar(appid, executavel, agora, rede)
+    return renovar(appid, executavel, agora, rede, usar_chave)
 
 
 

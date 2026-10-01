@@ -492,6 +492,60 @@ def test_cache_negativo_nao_apaga_um_catalogo_anterior(monkeypatch, schema):
     assert catalogo.em_cache("570") == anterior
 
 
+def test_chave_recusada_sem_arquivo_do_jogo_vira_cache_negativo(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "ruim")
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [])
+    monkeypatch.setattr(
+        catalogo, "_pedir", _pedidos({"GetSchemaForGame": catalogo.ChaveRecusada()})
+    )
+    primeira = catalogo.obter("570", "", agora=10)
+    assert primeira.chave_recusada
+    assert primeira.catalogo == Catalogo((), 10, False, catalogo._impressao("ruim"))
+    assert catalogo.em_cache("570") == primeira.catalogo
+    # Dentro dos 7 dias, nenhum pedido: a chave recusada não vai à Steam a cada abertura.
+    pedidos = _sem_pedidos(monkeypatch)
+    segunda = catalogo.obter("570", "", agora=10 + catalogo.VALIDADE - 1)
+    assert segunda.catalogo.conquistas == ()
+    assert pedidos == []
+
+
+def test_trocar_a_chave_renova_o_cache_da_chave_recusada(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "ruim")
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [])
+    monkeypatch.setattr(
+        catalogo, "_pedir", _pedidos({"GetSchemaForGame": catalogo.ChaveRecusada()})
+    )
+    catalogo.obter("570", "", agora=10)
+    schema.set_string("conquistas-chave-steam", "nova")
+    monkeypatch.setattr(
+        catalogo, "_pedir", _pedidos({"GetSchemaForGame": SCHEMA, "GetGlobal": PORCENTAGENS})
+    )
+    renovacao = catalogo.obter("570", "", agora=20)
+    assert not renovacao.chave_recusada
+    assert [i.nome for i in renovacao.catalogo.conquistas] == ["ACH_A", "ACH_B"]
+
+
+def test_chave_ja_recusada_na_passada_nao_pergunta_a_steam(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "ruim")
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
+    # Só a raridade (sem chave) pode ir à rede; o schema com a chave, não.
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetGlobal": PORCENTAGENS}))
+    renovacao = catalogo.obter("570", "", agora=10, usar_chave=False)
+    assert renovacao.chave_recusada
+    assert [i.nome for i in renovacao.catalogo.conquistas] == ["ACH_L"]
+    assert renovacao.catalogo.impressao_da_chave == catalogo._impressao("ruim")
+
+
+def test_chave_ja_recusada_na_passada_e_sem_arquivo_vira_cache_negativo(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "ruim")
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [])
+    pedidos = _sem_pedidos(monkeypatch)
+    renovacao = catalogo.obter("570", "", agora=10, usar_chave=False)
+    assert renovacao.chave_recusada and renovacao.catalogo.conquistas == ()
+    assert pedidos == []
+    assert catalogo.em_cache("570") == renovacao.catalogo
+
+
 def test_sem_chave_e_sem_arquivo_nao_cria_cache_negativo(monkeypatch):
     monkeypatch.setattr(catalogo, "_local", lambda _exe: [])
     pedidos = _sem_pedidos(monkeypatch)
