@@ -154,8 +154,17 @@ def _na_steam(appid: str) -> list[ArquivoDeConquista]:
     ]
 
 
+def appid_valido(appid: object) -> bool:
+    """Só dígitos ASCII. O appID vira pedaço de caminho (as pastas dos emuladores,
+    o arquivo do cache) e entra em URL; `..` ou uma barra escapariam da pasta."""
+    texto = str(appid)
+    return texto.isascii() and texto.isdigit()
+
+
 def arquivos_do_jogo(appid: str, executavel: str) -> list[ArquivoDeConquista]:
     """Os arquivos de conquista que existem hoje para ``appid``, sem repetição."""
+    if not appid_valido(appid):
+        return []
     pastas = pastas_do_sistema()
     candidatos = [
         *_fixos(pastas, appid),

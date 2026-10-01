@@ -10,9 +10,12 @@ from cartridges.conquistas.varredura import VarreduraConquistas
 from tests.apoio_conquistas import criar, pastas  # noqa: F401
 
 
+_OBTER_REAL = catalogo.obter
+
+
 @pytest.fixture(autouse=True)
 def sem_catalogo(monkeypatch):
-    monkeypatch.setattr(catalogo, "obter", lambda _appid, _exe: catalogo.Renovacao(None))
+    monkeypatch.setattr(catalogo, "obter", lambda _appid, _exe, rede=True: catalogo.Renovacao(None))
 
 
 def _goldberg(pastas, appid, conquistas):  # noqa: F811
@@ -101,7 +104,7 @@ def test_appid_corrigido_durante_a_leitura_descarta_a_leitura(
 
 def test_chave_recusada_avisa_uma_vez(store, make_game, pastas, win, flush_idle, monkeypatch):
     monkeypatch.setattr(
-        catalogo, "obter", lambda _appid, _exe: catalogo.Renovacao(None, chave_recusada=True)
+        catalogo, "obter", lambda _appid, _exe, rede=True: catalogo.Renovacao(None, chave_recusada=True)
     )
     jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
     _rodar(jogos, flush_idle)
@@ -157,7 +160,7 @@ def test_concluir_nao_levanta_e_zera_a_lista(monkeypatch):
 
 def test_varredura_de_um_jogo_fica_calada(store, make_game, pastas, win, flush_idle, monkeypatch):
     monkeypatch.setattr(
-        catalogo, "obter", lambda _appid, _exe: catalogo.Renovacao(None, chave_recusada=True)
+        catalogo, "obter", lambda _appid, _exe, rede=True: catalogo.Renovacao(None, chave_recusada=True)
     )
     game = _registrado(store, make_game, 1, steam_appid="570")
     historico.registrar(game.game_id, [Desbloqueio("ACH_A", 100)])
@@ -188,7 +191,7 @@ def test_pagina_aberta_atualiza_quando_so_o_catalogo_chegou(
     monkeypatch.setattr(
         catalogo,
         "obter",
-        lambda _appid, _exe: catalogo.Renovacao(catalogo.Catalogo((), 1, False)),
+        lambda _appid, _exe, rede=True: catalogo.Renovacao(catalogo.Catalogo((), 1, False)),
     )
     game = _registrado(store, make_game, 1, steam_appid="570")
     chamadas = _janela_com_jogo_aberto(win, game)
@@ -207,10 +210,199 @@ def test_pagina_de_outro_jogo_nao_atualiza(store, make_game, pastas, win, flush_
     monkeypatch.setattr(
         catalogo,
         "obter",
-        lambda _appid, _exe: catalogo.Renovacao(catalogo.Catalogo((), 1, False)),
+        lambda _appid, _exe, rede=True: catalogo.Renovacao(catalogo.Catalogo((), 1, False)),
     )
     game = _registrado(store, make_game, 1, steam_appid="570")
     outro = _registrado(store, make_game, 2, steam_appid="620")
     chamadas = _janela_com_jogo_aberto(win, outro)
     _rodar([game], flush_idle)
     assert chamadas == []
+
+
+# --- duas passadas: arquivos primeiro, rede depois ---------------------------------
+
+
+def test_arquivos_de_todos_os_jogos_antes_de_qualquer_catalogo(
+    store, make_game, pastas, flush_idle, monkeypatch
+):
+    eventos = []
+    ler_de_verdade = varredura.ler_jogo
+
+    def ler(game):
+        eventos.append(("arquivos", game.game_id))
+        return ler_de_verdade(game)
+
+    def obter(appid, _exe, rede=True):
+        eventos.append(("catalogo", appid))
+        return catalogo.Renovacao(None)
+
+    monkeypatch.setattr(varredura, "ler_jogo", ler)
+    monkeypatch.setattr(catalogo, "obter", obter)
+    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
+    _rodar(jogos, flush_idle)
+    assert [tipo for tipo, _ in eventos] == ["arquivos"] * 3 + ["catalogo"] * 3
+
+
+def test_aviso_de_conquista_nova_nao_espera_a_rede(
+    store, make_game, pastas, win, flush_idle, monkeypatch
+):
+    """O aviso sai depois da passada dos arquivos, antes do primeiro catálogo."""
+    um = _registrado(store, make_game, 1, steam_appid="570")
+    historico.registrar(um.game_id, [])
+    _goldberg(pastas, "570", [("ACH_A", 100)])
+    vistos = []
+
+    def obter(_appid, _exe, rede=True):
+        flush_idle()  # o laço principal que rodaria enquanto a thread espera a rede
+        vistos.append(_avisos(win))
+        return catalogo.Renovacao(None)
+
+    monkeypatch.setattr(catalogo, "obter", obter)
+    _rodar([um], flush_idle)
+    assert vistos == [["1 nova conquista em Jogo 1"]]
+    assert _avisos(win) == ["1 nova conquista em Jogo 1"]  # uma vez só
+
+
+def test_historico_gravado_antes_do_primeiro_catalogo(
+    store, make_game, pastas, flush_idle, monkeypatch
+):
+    _goldberg(pastas, "570", [("ACH_A", 100)])
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    vistos = []
+
+    def obter(_appid, _exe, rede=True):
+        flush_idle()
+        vistos.append(historico.ler(game.game_id))
+        return catalogo.Renovacao(None)
+
+    monkeypatch.setattr(catalogo, "obter", obter)
+    _rodar([game], flush_idle)
+    assert vistos == [{"ACH_A": 100}]
+
+
+class _TarefaFalsa:
+    def __init__(self, total):
+        self.total = total
+        self.feitos = []
+        self.terminada = False
+
+    def atualizar(self, feitos, total=None):
+        self.feitos.append(feitos)
+
+    def terminar(self):
+        self.terminada = True
+
+
+def test_tarefa_cobre_as_duas_passadas(store, make_game, pastas, flush_idle, monkeypatch):
+    criadas = []
+
+    def comecar(_nome, total):
+        criadas.append(_TarefaFalsa(total))
+        return criadas[0]
+
+    monkeypatch.setattr(varredura.tarefas, "comecar", comecar)
+    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
+    _rodar(jogos, flush_idle)
+    assert criadas[0].total == 6
+    assert criadas[0].feitos == [0, 1, 2, 3, 4, 5]
+    assert criadas[0].terminada
+
+
+def test_rede_que_falhou_poupa_os_jogos_seguintes(
+    store, make_game, pastas, flush_idle, monkeypatch
+):
+    chamadas = []
+
+    def obter(appid, _exe, rede=True):
+        chamadas.append((appid, rede))
+        return catalogo.Renovacao(None, rede_falhou=rede)
+
+    monkeypatch.setattr(catalogo, "obter", obter)
+    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
+    _rodar(jogos, flush_idle)
+    assert chamadas == [("1", True), ("2", False), ("3", False)]
+
+
+def test_tres_jogos_sem_rede_fazem_um_pedido_so(
+    store, make_game, pastas, flush_idle, monkeypatch
+):
+    from requests.exceptions import ConnectionError as ErroDeConexao  # noqa: PLC0415
+
+    pedidos = []
+
+    def pedir(url):
+        pedidos.append(url)
+        if len(pedidos) > 1:
+            raise AssertionError(f"pedido depois da rede cair: {url}")
+        raise ErroDeConexao("sem rede")
+
+    info = catalogo.ConquistaInfo("ACH_L", "Local", "", "", "", False)
+    monkeypatch.setattr(catalogo, "obter", _OBTER_REAL)
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [info])
+    monkeypatch.setattr(catalogo, "_pedir", pedir)
+    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
+    _rodar(jogos, flush_idle)
+    assert len(pedidos) == 1
+    # Os três jogos ficaram com o catálogo do arquivo do próprio jogo.
+    assert all(catalogo.em_cache(str(n)) is not None for n in (1, 2, 3))
+
+
+def test_parar_no_meio_da_segunda_passada(store, make_game, pastas, flush_idle, monkeypatch):
+    instancia = VarreduraConquistas()
+    chamadas = []
+
+    def obter(appid, _exe, rede=True):
+        chamadas.append(appid)
+        instancia.stop()
+        return catalogo.Renovacao(None)
+
+    monkeypatch.setattr(catalogo, "obter", obter)
+    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
+    instancia._worker(jogos, instancia._generation)
+    flush_idle()
+    assert chamadas == ["1"]
+
+
+def test_geracao_nova_para_a_segunda_passada(store, make_game, pastas, flush_idle, monkeypatch):
+    instancia = VarreduraConquistas()
+    chamadas = []
+
+    def obter(appid, _exe, rede=True):
+        chamadas.append(appid)
+        instancia._generation += 1
+        return catalogo.Renovacao(None)
+
+    monkeypatch.setattr(catalogo, "obter", obter)
+    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2)]
+    instancia._worker(jogos, instancia._generation)
+    flush_idle()
+    assert chamadas == ["1"]
+
+
+def test_catalogo_que_estoura_nao_derruba_a_passada(
+    store, make_game, pastas, win, flush_idle, monkeypatch
+):
+    def obter(appid, _exe, rede=True):
+        if appid == "1":
+            raise RuntimeError("defeito")
+        return catalogo.Renovacao(None, chave_recusada=True)
+
+    monkeypatch.setattr(catalogo, "obter", obter)
+    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2)]
+    instancia = _rodar(jogos, flush_idle)
+    assert instancia._running is False
+    assert _avisos(win) == [
+        "A chave da Steam Web API foi recusada. Verifique-a nas Preferências."
+    ]
+
+
+def test_entregar_catalogo_nao_levanta_no_laco_principal(store, make_game, win):
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    win.active_game = game
+
+    def estoura(_game):
+        raise RuntimeError("widget morto")
+
+    win.update_conquistas_block = estoura
+    resultado = varredura.Catalogacao(game, "570", mudou=True)
+    assert VarreduraConquistas()._entregar_catalogo(resultado) is False

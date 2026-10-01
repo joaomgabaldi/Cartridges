@@ -19,6 +19,7 @@ import logging
 import math
 import threading
 import time
+import uuid
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -32,6 +33,7 @@ from cartridges.utils.ler_json import ler_json
 from cartridges.utils.rate_limiter import RateLimiter
 
 VALIDADE = 7 * 24 * 3600
+_FUTURO_TOLERADO = 24 * 3600
 RARA_ABAIXO_DE = 10.0
 _API = "https://api.steampowered.com/ISteamUserStats"
 
@@ -75,6 +77,9 @@ class Catalogo:
 class Renovacao:
     catalogo: Optional[Catalogo]
     chave_recusada: bool = False
+    # Um pedido à Steam falhou por rede (conexão, tempo esgotado, erro HTTP):
+    # quem varre vários jogos para de pedir pelo resto da passada.
+    rede_falhou: bool = False
 
 
 class SteamWebApiLimiter(RateLimiter):
@@ -253,20 +258,28 @@ def em_cache(appid: str) -> Optional[Catalogo]:
 def _gravar_cache(appid: str, cat: Catalogo) -> None:
     destino = _arquivo_do_cache(appid)
     destino.parent.mkdir(parents=True, exist_ok=True)
-    temporario = destino.with_name(destino.name + ".tmp")
-    temporario.write_text(
-        json.dumps(
-            {
-                "obtido_em": cat.obtido_em,
-                "com_chave": cat.com_chave,
-                "impressao_da_chave": cat.impressao_da_chave,
-                "conquistas": [asdict(info) for info in cat.conquistas],
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    temporario.replace(destino)
+    # Um nome por gravação: a varredura e a varredura de um jogo só podem
+    # gravar o mesmo appID ao mesmo tempo.
+    temporario = destino.with_name(f"{destino.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        temporario.write_text(
+            json.dumps(
+                {
+                    "obtido_em": cat.obtido_em,
+                    "com_chave": cat.com_chave,
+                    "impressao_da_chave": cat.impressao_da_chave,
+                    "conquistas": [asdict(info) for info in cat.conquistas],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        temporario.replace(destino)
+    finally:
+        try:
+            temporario.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _impressao(chave: str) -> str:
@@ -277,7 +290,13 @@ def _impressao(chave: str) -> str:
 
 
 def vencido(cat: Catalogo, agora: int, impressao_atual: str) -> bool:
-    return agora - cat.obtido_em >= VALIDADE or cat.impressao_da_chave != impressao_atual
+    # Cache de mais de um dia no futuro (relógio errado quando foi feito, ou
+    # arquivo adulterado) nunca venceria: conta como vencido.
+    return (
+        agora - cat.obtido_em >= VALIDADE
+        or cat.obtido_em - agora > _FUTURO_TOLERADO
+        or cat.impressao_da_chave != impressao_atual
+    )
 
 
 def _local(executavel: str) -> list[ConquistaInfo]:
@@ -295,31 +314,50 @@ def _chave() -> str:
     return shared.schema.get_string("conquistas-chave-steam").strip()
 
 
-def renovar(appid: str, executavel: str, agora: Optional[int] = None) -> Renovacao:
-    """Busca o catálogo de novo e grava no cache. Nunca levanta."""
+def renovar(
+    appid: str, executavel: str, agora: Optional[int] = None, rede: bool = True
+) -> Renovacao:
+    """Busca o catálogo de novo e grava no cache. Nunca levanta.
+
+    Com ``rede=False`` nada vai à Steam: vale o cache (mesmo vencido) ou o
+    arquivo do jogo. É o que quem varre vários jogos usa depois que um pedido
+    falhou por rede, para não esperar o tempo limite de cada jogo.
+    """
+    if not arquivos.appid_valido(appid):
+        return Renovacao(None)
     agora = int(time.time()) if agora is None else agora
     chave = _chave()
     anterior = em_cache(appid)
     recusada = False
+    rede_falhou = False
+    schema_respondeu = False
     infos: list[ConquistaInfo] = []
     com_chave = False
     impressao = _impressao(chave)
 
-    if chave:
+    if chave and not rede:
+        if anterior is not None:
+            return Renovacao(anterior)
+        # Nada foi perguntado à Steam, então não há veredito sobre a chave: sem
+        # impressão, a próxima abertura tenta de novo.
+        impressao = ""
+    elif chave:
         try:
             infos = ler_schema_da_steam(
                 _pedir(f"{_API}/GetSchemaForGame/v2/?key={chave}&appid={appid}&l=brazilian")
             )
             com_chave = bool(infos)
+            schema_respondeu = True
         except ChaveRecusada:
             recusada = True
         except (RequestException, ValueError, RecursionError) as erro:
+            rede_falhou = isinstance(erro, RequestException)
             # Só o tipo: a mensagem do requests traz a URL, e a URL traz a chave.
             logging.info(
                 "Catálogo de conquistas indisponível para %s: %s", appid, type(erro).__name__
             )
             if anterior is not None:
-                return Renovacao(anterior)
+                return Renovacao(anterior, rede_falhou=rede_falhou)
             # Falha de rede não é veredito sobre a chave: sem impressão, a
             # próxima abertura tenta a Steam de novo.
             impressao = ""
@@ -327,21 +365,33 @@ def renovar(appid: str, executavel: str, agora: Optional[int] = None) -> Renovac
     if not infos:
         infos = _local(executavel)
     if not infos:
-        return Renovacao(anterior, recusada)
+        if schema_respondeu and (anterior is None or not anterior.conquistas):
+            # A Steam respondeu à chave e o jogo não tem conquistas: guarda o
+            # "nenhuma" pelos mesmos 7 dias, em vez de perguntar a cada abertura.
+            # O cartão segue escondido (`progresso.montar` não monta catálogo vazio).
+            vazio = Catalogo((), agora, True, impressao)
+            try:
+                _gravar_cache(appid, vazio)
+            except OSError as erro:
+                logging.warning("Catálogo de conquistas de %s não gravado: %s", appid, erro)
+            return Renovacao(vazio)
+        return Renovacao(anterior, recusada, rede_falhou)
 
     porcentagens = {
         info.nome.upper(): info.porcentagem
         for info in (anterior.conquistas if anterior else ())
         if info.porcentagem is not None
     }
-    try:
-        porcentagens.update(
-            ler_porcentagens(
-                _pedir(f"{_API}/GetGlobalAchievementPercentagesForApp/v2/?gameid={appid}")
+    if rede and not rede_falhou:
+        try:
+            porcentagens.update(
+                ler_porcentagens(
+                    _pedir(f"{_API}/GetGlobalAchievementPercentagesForApp/v2/?gameid={appid}")
+                )
             )
-        )
-    except (ChaveRecusada, RequestException, ValueError, RecursionError) as erro:
-        logging.info("Raridade das conquistas indisponível para %s: %s", appid, erro)
+        except (ChaveRecusada, RequestException, ValueError, RecursionError) as erro:
+            rede_falhou = isinstance(erro, RequestException)
+            logging.info("Raridade das conquistas indisponível para %s: %s", appid, erro)
 
     cat = Catalogo(
         tuple(com_porcentagens(infos, porcentagens)), agora, com_chave, impressao
@@ -350,13 +400,20 @@ def renovar(appid: str, executavel: str, agora: Optional[int] = None) -> Renovac
         _gravar_cache(appid, cat)
     except OSError as erro:
         logging.warning("Catálogo de conquistas de %s não gravado: %s", appid, erro)
-    return Renovacao(cat, recusada)
+    return Renovacao(cat, recusada, rede_falhou)
 
 
-def obter(appid: str, executavel: str, agora: Optional[int] = None) -> Renovacao:
+def obter(
+    appid: str, executavel: str, agora: Optional[int] = None, rede: bool = True
+) -> Renovacao:
     """O catálogo em cache, renovado só quando venceu."""
+    if not arquivos.appid_valido(appid):
+        return Renovacao(None)
     agora = int(time.time()) if agora is None else agora
     cat = em_cache(appid)
     if cat is not None and not vencido(cat, agora, _impressao(_chave())):
         return Renovacao(cat)
-    return renovar(appid, executavel, agora)
+    return renovar(appid, executavel, agora, rede)
+
+
+
