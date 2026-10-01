@@ -115,6 +115,15 @@ def test_valores_invalidos_sao_pulados_um_a_um():
     assert historico.ler("g1") == {"C": 5}
 
 
+def test_inteiro_gigante_nao_levanta():
+    historico.caminho("g1").parent.mkdir(parents=True)
+    historico.caminho("g1").write_text(
+        '{"desbloqueadas": {"A": 1' + "0" * 400 + ', "B": 5}}', encoding="utf-8"
+    )
+    # "A" não cabe como data (passa de 2**63): é pulada, sem levantar; "B" fica.
+    assert historico.ler("g1") == {"B": 5}
+
+
 def test_grava_na_pasta_do_app():
     historico.registrar("g1", [D("A", 1)])
     assert historico.caminho("g1") == shared.conquistas_dir / "g1.json"
