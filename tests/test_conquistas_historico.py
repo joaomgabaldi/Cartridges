@@ -1,5 +1,6 @@
 """O histórico de conquistas: só soma."""
 
+import json
 from pathlib import Path
 
 from cartridges import shared
@@ -115,6 +116,74 @@ def test_transferir_guarda_a_origem_ilegivel():
     assert historico.caminho("de").with_name("de.json.corrompido").read_text(
         encoding="utf-8"
     ) == "{"
+
+
+def test_transferir_devolve_true_quando_fundiu_ou_nao_havia_nada():
+    historico.registrar("de", [D("A", 5)])
+    assert historico.transferir("de", "para") is True
+    assert historico.transferir("sem_arquivo", "para") is True
+
+
+def test_transferir_que_nao_grava_poe_a_origem_de_lado(monkeypatch, caplog):
+    """Quem chama exclui a origem logo depois: se o destino não recebeu, a
+    origem não pode ser o único exemplar a ir embora com o Excluir."""
+    historico.registrar("de", [D("A", 5)])
+    historico.registrar("para", [D("B", 7)])
+
+    def falha(_game_id, _desbloqueadas):
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr(historico, "_gravar", falha)
+    with caplog.at_level("WARNING"):
+        assert historico.transferir("de", "para") is False
+    assert not historico.caminho("de").exists()
+    pendente = historico.caminho("de").with_name("de.json.pendente")
+    assert json.loads(pendente.read_text(encoding="utf-8")) == {"desbloqueadas": {"A": 5}}
+    assert historico.ler("para") == {"B": 7}
+    assert "não transferidas" in caplog.text
+    # O Excluir que vem em seguida não leva o arquivo à parte.
+    historico.apagar("de")
+    assert pendente.is_file()
+
+
+def test_registrar_que_nao_grava_nao_anuncia_o_que_nao_guardou(monkeypatch):
+    def falha(_game_id, _desbloqueadas):
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr(historico, "_gravar", falha)
+    assert historico.registrar("g1", [D("A", 1)]) == ([], True)
+    historico.registrar("g2", [])  # também sem arquivo, e também sem levantar
+    assert historico.ler("g1") is None
+
+
+def test_registrar_que_nao_grava_um_historico_existente_devolve_vazio(monkeypatch):
+    historico.registrar("g1", [D("A", 1)])
+
+    def falha(_game_id, _desbloqueadas):
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr(historico, "_gravar", falha)
+    assert historico.registrar("g1", [D("B", 2)]) == ([], False)
+    assert historico.ler("g1") == {"A": 1}
+
+
+def test_mover_leva_o_historico_e_nao_levanta(monkeypatch, caplog):
+    historico.registrar("velho", [D("A", 1)])
+    historico.mover("velho", "novo")
+    assert historico.ler("novo") == {"A": 1}
+    assert historico.ler("velho") is None
+
+    historico.mover("sem_arquivo", "outro")  # sem origem: nada a fazer
+    assert historico.ler("outro") is None
+
+    def travado(self, destino):
+        raise PermissionError("travado")
+
+    monkeypatch.setattr(Path, "replace", travado)
+    with caplog.at_level("WARNING"):
+        historico.mover("novo", "terceiro")  # não levanta
+    assert "não movidas" in caplog.text
+    assert historico.ler("novo") == {"A": 1}
 
 
 def test_valores_invalidos_sao_pulados_um_a_um():

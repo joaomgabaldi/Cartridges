@@ -132,25 +132,43 @@ def registrar(game_id: str, novos: Iterable[Desbloqueio]) -> tuple[list[str], bo
                 _gravar(game_id, resultado)
             except OSError as erro:
                 logging.warning("Conquistas de %s não gravadas: %s", game_id, erro)
+                # O aviso de "conquista nova" não anuncia o que não foi guardado.
+                return [], primeira
         return entraram, primeira
 
 
-def transferir(de_id: str, para_id: str) -> None:
-    """Funde o que ``de_id`` tem no que ``para_id`` tem (ligação de zerado)."""
+def _por_a_origem_de_lado(game_id: str) -> None:
+    """`<id>.json` vira `<id>.json.pendente`, onde o Excluir não alcança."""
+    origem = caminho(game_id)
+    try:
+        origem.replace(origem.with_name(origem.name + ".pendente"))
+    except OSError as erro:
+        logging.warning("Conquistas de %s não guardadas à parte: %s", game_id, erro)
+    else:
+        logging.warning("Conquistas de %s guardadas em %s.pendente", game_id, origem.name)
+
+
+def transferir(de_id: str, para_id: str) -> bool:
+    """Funde o que ``de_id`` tem no que ``para_id`` tem (ligação de zerado).
+
+    True: a fusão foi gravada, ou não havia o que transferir. False: não deu
+    para gravar. Quem chama exclui a origem logo depois, e o Excluir apaga
+    `<id>.json`; por isso, no False, a origem já saiu do caminho (vira
+    `<id>.json.pendente`) e o fluxo de quem chama não precisa mudar.
+    """
     with _trava:
         origem, origem_ilegivel = _ler_estado(de_id)
         if origem_ilegivel:
-            # Quem chama exclui a origem logo depois, e o Excluir apaga
-            # `<id>.json`: pô-lo à parte antes, para o que não deu para ler
+            # Pô-lo à parte antes do Excluir, para o que não deu para ler
             # não ir embora junto.
             logging.warning("Conquistas de %s ilegíveis: nada a transferir", de_id)
-            _guardar_ilegivel(de_id)
-            return
+            return _guardar_ilegivel(de_id)
         if not origem:
-            return
+            return True
         destino, destino_ilegivel = _ler_estado(para_id)
         if destino_ilegivel and not _guardar_ilegivel(para_id):
-            return
+            _por_a_origem_de_lado(de_id)
+            return False
         resultado, _entraram = fundir(
             destino or {}, [Desbloqueio(nome, quando) for nome, quando in origem.items()]
         )
@@ -158,6 +176,20 @@ def transferir(de_id: str, para_id: str) -> None:
             _gravar(para_id, resultado)
         except OSError as erro:
             logging.warning("Conquistas de %s não transferidas: %s", de_id, erro)
+            _por_a_origem_de_lado(de_id)
+            return False
+        return True
+
+
+def mover(de_id: str, para_id: str) -> None:
+    """Passa o arquivo de ``de_id`` para ``para_id`` (troca de id do jogo)."""
+    with _trava:
+        try:
+            origem = caminho(de_id)
+            if origem.exists():
+                origem.replace(caminho(para_id))
+        except OSError as erro:
+            logging.warning("Conquistas de %s não movidas para %s: %s", de_id, para_id, erro)
 
 
 def apagar(game_id: str) -> None:

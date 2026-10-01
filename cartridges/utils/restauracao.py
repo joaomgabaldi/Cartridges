@@ -242,17 +242,20 @@ def decidir(restaurado: Game, caminho: Path, novo: Optional[Game], decisao: str)
     chama importa em seguida, exceto em ``"este_pc"``: é a varredura que adota
     o restaurado pelo atalho novo e o tira das pendências.
     """
+    # Conquista desbloqueada é fato, não uma versão que se escolhe: nas três
+    # decisões o histórico do jogo que sai passa para o que fica, antes do
+    # Excluir que apagaria o arquivo.
     if decisao == "este_pc":
+        if novo is not None:
+            historico.transferir(restaurado.game_id, novo.game_id)
         excluir(restaurado)
         return
     if novo is not None:
         if decisao == "mesclar":
             session_log.mover_jogo(novo.game_id, restaurado.game_id)
-            # As conquistas do jogo novo também são somadas, não perdidas
-            # com o Excluir logo abaixo.
-            historico.transferir(novo.game_id, restaurado.game_id)
             restaurado.playtime = (restaurado.playtime or 0) + (novo.playtime or 0)
             restaurado.last_played = max(restaurado.last_played or 0, novo.last_played or 0)
+        historico.transferir(novo.game_id, restaurado.game_id)
         excluir(novo)
     shared.store.apontar_atalho(restaurado, str(caminho))
 
