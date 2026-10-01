@@ -70,6 +70,10 @@ wallpapers_dir = app_dir / "wallpapers"
 fitas_dir = app_dir / "fitas"
 fitas_arquivo = app_dir / "fitas.json"
 
+# As conquistas desbloqueadas de cada jogo, uma por arquivo, com o nome do id
+# (`conquistas/historico.py`). Entra no backup.
+conquistas_dir = app_dir / "conquistas"
+
 # A conta de nuvem da Tuya que o assistente das fitas usa para buscar
 # dispositivos. Fica criptografada com o DPAPI do Windows (ver
 # `utils/tuya_conta.py`), amarrada à conta do Windows de quem roda o app. Vai no
