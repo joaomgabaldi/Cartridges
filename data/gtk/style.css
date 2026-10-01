@@ -98,6 +98,7 @@
 
 .conquistas-icone {
   border-radius: 6px;
+  overflow: hidden;
 }
 
 .conquista-rara {
