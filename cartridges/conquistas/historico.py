@@ -16,6 +16,7 @@ mesmo sem nada desbloqueado, e não conta como conquista nova.
 
 import json
 import logging
+import math
 import threading
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -37,20 +38,46 @@ def _limpo(dados: Any) -> Optional[dict[str, int]]:
     return {
         str(nome).upper(): int(quando)
         for nome, quando in dados["desbloqueadas"].items()
-        if isinstance(quando, (int, float)) and str(nome).strip()
+        if isinstance(quando, (int, float))
+        and not isinstance(quando, bool)
+        and math.isfinite(quando)
+        and str(nome).strip()
     }
 
 
-def ler(game_id: str) -> Optional[dict[str, int]]:
-    """O que está guardado, ou None se o jogo nunca foi varrido."""
+def _ler_estado(game_id: str) -> tuple[Optional[dict[str, int]], bool]:
+    """``(dados, ilegivel)``: ``ilegivel`` é True se o arquivo existe e não deu para ler."""
     try:
         dados = ler_json(caminho(game_id))
     except FileNotFoundError:
-        return None
-    except (OSError, ValueError) as erro:
+        return None, False
+    except (OSError, ValueError, RecursionError) as erro:
         logging.warning("Conquistas guardadas ilegíveis (%s): %s", caminho(game_id).name, erro)
-        return None
-    return _limpo(dados)
+        return None, True
+    limpo = _limpo(dados)
+    if limpo is None:
+        logging.warning(
+            "Conquistas guardadas ilegíveis (%s): formato inesperado", caminho(game_id).name
+        )
+        return None, True
+    return limpo, False
+
+
+def ler(game_id: str) -> Optional[dict[str, int]]:
+    """O que está guardado, ou None se o jogo nunca foi varrido (ou está ilegível)."""
+    return _ler_estado(game_id)[0]
+
+
+def _guardar_ilegivel(game_id: str) -> bool:
+    """Põe de lado o arquivo ilegível, para não ser sobrescrito. False se não deu."""
+    origem = caminho(game_id)
+    try:
+        origem.replace(origem.with_name(origem.name + ".corrompido"))
+    except OSError as erro:
+        logging.warning("Conquistas de %s ilegíveis e não guardadas à parte: %s", game_id, erro)
+        return False
+    logging.warning("Conquistas de %s ilegíveis; guardadas em %s.corrompido", game_id, origem.name)
+    return True
 
 
 def fundir(
@@ -89,7 +116,9 @@ def registrar(game_id: str, novos: Iterable[Desbloqueio]) -> tuple[list[str], bo
     Devolve ``(as que entraram agora, se era a primeira vez)``.
     """
     with _trava:
-        atual = ler(game_id)
+        atual, ilegivel = _ler_estado(game_id)
+        if ilegivel and not _guardar_ilegivel(game_id):
+            return [], False
         primeira = atual is None
         resultado, entraram = fundir(atual or {}, novos)
         if primeira or resultado != atual:
@@ -103,11 +132,17 @@ def registrar(game_id: str, novos: Iterable[Desbloqueio]) -> tuple[list[str], bo
 def transferir(de_id: str, para_id: str) -> None:
     """Funde o que ``de_id`` tem no que ``para_id`` tem (ligação de zerado)."""
     with _trava:
-        origem = ler(de_id)
+        origem, origem_ilegivel = _ler_estado(de_id)
+        if origem_ilegivel:
+            logging.warning("Conquistas de %s ilegíveis: nada a transferir", de_id)
+            return
         if not origem:
             return
+        destino, destino_ilegivel = _ler_estado(para_id)
+        if destino_ilegivel and not _guardar_ilegivel(para_id):
+            return
         resultado, _entraram = fundir(
-            ler(para_id) or {}, [Desbloqueio(nome, quando) for nome, quando in origem.items()]
+            destino or {}, [Desbloqueio(nome, quando) for nome, quando in origem.items()]
         )
         try:
             _gravar(para_id, resultado)
