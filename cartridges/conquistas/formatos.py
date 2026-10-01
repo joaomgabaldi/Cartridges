@@ -1,0 +1,242 @@
+"""Os arquivos em que os emuladores de Steam (e a Steam) gravam as conquistas.
+
+Um leitor por formato, todos com a mesma saída: o que está desbloqueado, com o
+nome interno da conquista (o "API name" da Steam) e a hora em segundos Unix.
+Transcrito de `parse-achievement-formats.ts` e `parse-achievement-file.ts` do
+Hydra Launcher (hydralauncher/hydra, licença MIT), que mantém esses formatos
+contra arquivos reais há anos.
+
+Nenhum leitor levanta. O jogo pode estar gravando o arquivo no instante da
+leitura, e um arquivo pela metade vale "nada novo agora", não um erro: a leitura
+seguinte, com o arquivo inteiro, pega o que faltou. E o histórico só soma, então
+uma leitura vazia nunca apaga o que já foi guardado.
+"""
+
+import json
+import logging
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable, Optional
+
+
+@dataclass(frozen=True)
+class Desbloqueio:
+    """Uma conquista desbloqueada, do jeito que o arquivo a descreve."""
+
+    nome: str
+    # Segundos Unix. Zero quando o arquivo não diz quando foi.
+    quando: int
+
+
+PADRAO = "padrao"
+ONLINEFIX = "onlinefix"
+GOLDBERG = "goldberg"
+USERSTATS = "userstats"
+RLD = "rld"
+SKIDROW = "skidrow"
+TRES_DM = "3dm"
+ALI213 = "ali213"
+CREAMAPI = "creamapi"
+RAZOR1911 = "razor1911"
+STEAM = "steam"
+
+_DESBLOQUEADA = re.compile(r"\bunlocked\s*=\s*true\b", re.IGNORECASE)
+_HORA = re.compile(r"(?:^|[{,\s])time\s*=\s*(\d+)", re.IGNORECASE)
+
+
+def _linhas(caminho: Path) -> list[str]:
+    texto = caminho.read_text(encoding="utf-8", errors="replace")
+    if texto.startswith("﻿"):
+        texto = texto[1:]
+    return re.split(r"[\r\n]+", texto)
+
+
+def _ler_ini(caminho: Path) -> dict[str, dict[str, str]]:
+    """INI lido à mão, como no Hydra: seções repetidas recomeçam, `=` pode
+    aparecer dentro do valor, e uma linha sem seção cai na seção ``""``."""
+    secoes: dict[str, dict[str, str]] = {}
+    atual = ""
+    for linha in _linhas(caminho):
+        linha = linha.strip()
+        if not linha or linha.startswith(("#", ";")):
+            continue
+        if linha.startswith("[") and linha.endswith("]"):
+            atual = linha[1:-1]
+            secoes[atual] = {}
+            continue
+        nome, _sep, valor = linha.partition("=")
+        secoes.setdefault(atual, {})[nome.strip()] = valor.strip()
+    return secoes
+
+
+def _ler_json(caminho: Path) -> Any:
+    return json.loads(caminho.read_text(encoding="utf-8-sig"))
+
+
+def _inteiro(valor: Any) -> int:
+    try:
+        return int(float(str(valor).strip() or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _hora_do_hydra(valor: Any) -> int:
+    """A regra de `parseUnlockTime`: texto de 7 dígitos vale mil vezes mais."""
+    if isinstance(valor, str) and len(valor.strip()) == 7:
+        return _inteiro(valor) * 1000
+    return _inteiro(valor)
+
+
+def _hexadecimal(valor: Any) -> Optional[int]:
+    """Um inteiro de 32 bits gravado em hexadecimal, little-endian."""
+    try:
+        dados = bytes.fromhex(str(valor).strip())
+    except ValueError:
+        return None
+    if not dados:
+        return None
+    return int.from_bytes(dados[:4].ljust(4, b"\0"), "little")
+
+
+def _padrao(caminho: Path, chave_feita: str = "Achieved", chave_hora: str = "UnlockTime"):
+    return [
+        Desbloqueio(nome, _inteiro(campos.get(chave_hora)))
+        for nome, campos in _ler_ini(caminho).items()
+        if campos.get(chave_feita) == "1"
+    ]
+
+
+def _onlinefix(caminho: Path) -> list[Desbloqueio]:
+    achados = []
+    for nome, campos in _ler_ini(caminho).items():
+        if campos.get("achieved") == "true":
+            achados.append(Desbloqueio(nome, _inteiro(campos.get("timestamp"))))
+        elif campos.get("Achieved") == "true":
+            achados.append(Desbloqueio(nome, _hora_do_hydra(campos.get("TimeUnlocked", ""))))
+    return achados
+
+
+def _creamapi(caminho: Path) -> list[Desbloqueio]:
+    return [
+        Desbloqueio(nome, _hora_do_hydra(campos.get("unlocktime", "")))
+        for nome, campos in _ler_ini(caminho).items()
+        if campos.get("achieved") == "true"
+    ]
+
+
+def _skidrow(caminho: Path) -> list[Desbloqueio]:
+    achados = []
+    for nome, valor in _ler_ini(caminho).get("Achievements", {}).items():
+        partes = valor.split("@")
+        if partes[0] == "1":
+            achados.append(Desbloqueio(nome, _inteiro(partes[-1])))
+    return achados
+
+
+def _goldberg(caminho: Path) -> list[Desbloqueio]:
+    dados = _ler_json(caminho)
+    if isinstance(dados, list):
+        return [
+            Desbloqueio(str(item.get("name", "")), _inteiro(item.get("earned_time")))
+            for item in dados
+            if isinstance(item, dict) and item.get("earned")
+        ]
+    if isinstance(dados, dict):
+        return [
+            Desbloqueio(str(nome), _inteiro(item.get("earned_time")))
+            for nome, item in dados.items()
+            if isinstance(item, dict) and item.get("earned")
+        ]
+    return []
+
+
+def _tres_dm(caminho: Path) -> list[Desbloqueio]:
+    secoes = _ler_ini(caminho)
+    horas = secoes.get("Time", {})
+    return [
+        Desbloqueio(nome, _hexadecimal(horas.get(nome, "")) or 0)
+        for nome, estado in secoes.get("State", {}).items()
+        if estado == "0101"
+    ]
+
+
+def _rld(caminho: Path) -> list[Desbloqueio]:
+    achados = []
+    for nome, campos in _ler_ini(caminho).items():
+        if nome == "Steam" or not campos.get("State"):
+            continue
+        if _hexadecimal(campos["State"]) == 1:
+            achados.append(Desbloqueio(nome, _hexadecimal(campos.get("Time", "")) or 0))
+    return achados
+
+
+def _userstats(caminho: Path) -> list[Desbloqueio]:
+    achados = []
+    for nome, valor in _ler_ini(caminho).get("ACHIEVEMENTS", {}).items():
+        if not _DESBLOQUEADA.search(valor):
+            continue
+        if hora := _HORA.search(valor):
+            achados.append(Desbloqueio(nome.replace('"', ""), int(hora.group(1))))
+    return achados
+
+
+def _razor1911(caminho: Path) -> list[Desbloqueio]:
+    achados = []
+    for linha in _linhas(caminho):
+        partes = linha.split(" ")
+        if len(partes) >= 2 and partes[1] == "1":
+            achados.append(Desbloqueio(partes[0], _inteiro(partes[2] if len(partes) > 2 else 0)))
+    return achados
+
+
+def _steam(caminho: Path) -> list[Desbloqueio]:
+    """O cache da biblioteca da Steam. O Hydra lê só ``vecHighlight``; aqui
+    entram todas as listas ``vec…``, porque as desbloqueadas ocultas e as que
+    não estão em destaque moram nas outras."""
+    achados = []
+    for item in _ler_json(caminho):
+        if not (isinstance(item, list) and len(item) == 2 and item[0] == "achievements"):
+            continue
+        for chave, lista in (item[1].get("data") or {}).items():
+            if not (chave.startswith("vec") and isinstance(lista, list)):
+                continue
+            for conquista in lista:
+                if isinstance(conquista, dict) and conquista.get("bAchieved"):
+                    achados.append(
+                        Desbloqueio(str(conquista.get("strID", "")), _inteiro(conquista.get("rtUnlocked")))
+                    )
+    return achados
+
+
+_LEITORES: dict[str, Callable[[Path], list[Desbloqueio]]] = {
+    PADRAO: _padrao,
+    ONLINEFIX: _onlinefix,
+    GOLDBERG: _goldberg,
+    USERSTATS: _userstats,
+    RLD: _rld,
+    SKIDROW: _skidrow,
+    TRES_DM: _tres_dm,
+    ALI213: lambda caminho: _padrao(caminho, "HaveAchieved", "HaveAchievedTime"),
+    CREAMAPI: _creamapi,
+    RAZOR1911: _razor1911,
+    STEAM: _steam,
+}
+
+
+def ler(caminho: Path, formato: str) -> list[Desbloqueio]:
+    """As conquistas desbloqueadas em ``caminho``. Nunca levanta."""
+    leitor = _LEITORES.get(formato)
+    if leitor is None:
+        logging.warning("Formato de conquistas desconhecido: %s", formato)
+        return []
+    try:
+        desbloqueios = leitor(caminho)
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError, TypeError, AttributeError, KeyError, IndexError) as erro:
+        logging.info("Conquistas ilegíveis em %s (%s): %s", caminho, formato, erro)
+        return []
+    return [
+        Desbloqueio(d.nome.strip(), max(d.quando, 0)) for d in desbloqueios if d.nome.strip()
+    ]

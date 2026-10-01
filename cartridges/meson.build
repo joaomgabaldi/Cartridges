@@ -27,6 +27,7 @@ install_subdir(
 )
 install_subdir('logging', install_dir: moduledir, exclude_directories: '__pycache__')
 install_subdir('errors', install_dir: moduledir, exclude_directories: '__pycache__')
+install_subdir('conquistas', install_dir: moduledir, exclude_directories: '__pycache__')
 install_data(
   [
     'main.py',
