@@ -44,6 +44,11 @@ class Leitura:
     game: Any
     desbloqueios: list[formatos.Desbloqueio] = field(default_factory=list)
     chave_recusada: bool = False
+    # Veio um catálogo (novo ou do cache): o cartão do jogo aberto pode ter de
+    # aparecer mesmo sem conquista nova.
+    catalogo_mudou: bool = False
+    # Falso na varredura de um jogo só: nem entra no aviso final nem avisa da chave.
+    avisar: bool = True
 
 
 def ler_jogo(game: Any) -> Leitura:
@@ -55,7 +60,12 @@ def ler_jogo(game: Any) -> Leitura:
         for desbloqueio in formatos.ler(achado.caminho, achado.formato)
     ]
     renovacao = catalogo.obter(appid, game.executable)
-    return Leitura(game, desbloqueios, renovacao.chave_recusada)
+    return Leitura(
+        game,
+        desbloqueios,
+        renovacao.chave_recusada,
+        catalogo_mudou=renovacao.catalogo is not None,
+    )
 
 
 def mensagem(novas_por_jogo: list[tuple[str, int]]) -> Optional[str]:
@@ -143,8 +153,10 @@ class VarreduraConquistas:
     # -- a passada ------------------------------------------------------------
 
     def _worker(self, games: list[Any], geracao: int, avisar: bool = True) -> None:
-        tarefa = tarefas.comecar(_("Conquistas"), len(games)) if avisar else None
+        tarefa = None
         try:
+            if avisar:
+                tarefa = tarefas.comecar(_("Conquistas"), len(games))
             for feitos, game in enumerate(games):
                 if tarefa is not None:
                     tarefa.atualizar(feitos)
@@ -155,6 +167,7 @@ class VarreduraConquistas:
                 except Exception:  # pylint: disable=broad-exception-caught
                     logging.warning("Falha ao ler as conquistas de %s", game.name, exc_info=True)
                     continue
+                leitura.avisar = avisar
                 GLib.idle_add(self._entregar, leitura)
         finally:
             if tarefa is not None:
@@ -171,9 +184,9 @@ class VarreduraConquistas:
         try:
             if not self._stopped:
                 novas = self._gravar(leitura)
-                if novas:
+                if novas and leitura.avisar:
                     self._novas.append((leitura.game.name, novas))
-                if leitura.chave_recusada and not self._avisou_chave:
+                if leitura.avisar and leitura.chave_recusada and not self._avisou_chave:
                     self._avisou_chave = True
                     _aviso(
                         _("A chave da Steam Web API foi recusada. Verifique-a nas Preferências.")
@@ -188,7 +201,8 @@ class VarreduraConquistas:
         if shared.store.get(game.game_id) is not game or not participa(game):
             return 0
         entraram, primeira = historico.registrar(game.game_id, leitura.desbloqueios)
-        if entraram and getattr(shared.win, "active_game", None) is game:
+        mudou = bool(entraram) or leitura.catalogo_mudou
+        if mudou and getattr(shared.win, "active_game", None) is game:
             atualizar = getattr(shared.win, "update_conquistas_block", None)
             if atualizar is not None:
                 atualizar(game)

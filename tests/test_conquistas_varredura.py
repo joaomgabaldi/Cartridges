@@ -140,3 +140,64 @@ def test_concluir_nao_levanta_e_zera_a_lista(monkeypatch):
     monkeypatch.setattr(varredura, "_aviso", estoura)
     assert instancia._concluir() is False
     assert instancia._novas == []
+
+
+def test_varredura_de_um_jogo_fica_calada(store, make_game, pastas, win, flush_idle, monkeypatch):
+    monkeypatch.setattr(
+        catalogo, "obter", lambda _appid, _exe: catalogo.Renovacao(None, chave_recusada=True)
+    )
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    historico.registrar(game.game_id, [Desbloqueio("ACH_A", 100)])
+    _goldberg(pastas, "570", [("ACH_A", 100), ("ACH_B", 200)])
+    instancia = VarreduraConquistas()
+    instancia._worker([game], instancia._generation, avisar=False)
+    flush_idle()
+    assert historico.ler(game.game_id) == {"ACH_A": 100, "ACH_B": 200}
+    assert _avisos(win) == []
+    assert instancia._novas == []
+    # A passada completa que vem depois, sem nada novo, também não avisa do que
+    # a varredura de um jogo só já guardou.
+    instancia._worker([game], instancia._generation)
+    flush_idle()
+    assert [aviso for aviso in _avisos(win) if "conquista" in aviso] == []
+
+
+def _janela_com_jogo_aberto(win, game):
+    chamadas = []
+    win.active_game = game
+    win.update_conquistas_block = chamadas.append
+    return chamadas
+
+
+def test_pagina_aberta_atualiza_quando_so_o_catalogo_chegou(
+    store, make_game, pastas, win, flush_idle, monkeypatch
+):
+    monkeypatch.setattr(
+        catalogo,
+        "obter",
+        lambda _appid, _exe: catalogo.Renovacao(catalogo.Catalogo((), 1, False)),
+    )
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    chamadas = _janela_com_jogo_aberto(win, game)
+    _rodar([game], flush_idle)
+    assert chamadas == [game]
+
+
+def test_pagina_aberta_nao_atualiza_sem_novidade(store, make_game, pastas, win, flush_idle):
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    chamadas = _janela_com_jogo_aberto(win, game)
+    _rodar([game], flush_idle)
+    assert chamadas == []
+
+
+def test_pagina_de_outro_jogo_nao_atualiza(store, make_game, pastas, win, flush_idle, monkeypatch):
+    monkeypatch.setattr(
+        catalogo,
+        "obter",
+        lambda _appid, _exe: catalogo.Renovacao(catalogo.Catalogo((), 1, False)),
+    )
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    outro = _registrado(store, make_game, 2, steam_appid="620")
+    chamadas = _janela_com_jogo_aberto(win, outro)
+    _rodar([game], flush_idle)
+    assert chamadas == []
