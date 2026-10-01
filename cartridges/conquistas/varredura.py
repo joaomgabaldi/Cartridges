@@ -42,6 +42,9 @@ def participa(game: Any) -> bool:
 @dataclass
 class Leitura:
     game: Any
+    # O appID que a leitura de fato usou: o jogo pode ter o appID corrigido
+    # enquanto a thread lê, e a leitura velha não vale para o appID novo.
+    appid: str
     desbloqueios: list[formatos.Desbloqueio] = field(default_factory=list)
     chave_recusada: bool = False
     # Veio um catálogo (novo ou do cache): o cartão do jogo aberto pode ter de
@@ -62,6 +65,7 @@ def ler_jogo(game: Any) -> Leitura:
     renovacao = catalogo.obter(appid, game.executable)
     return Leitura(
         game,
+        appid,
         desbloqueios,
         renovacao.chave_recusada,
         catalogo_mudou=renovacao.catalogo is not None,
@@ -199,6 +203,11 @@ class VarreduraConquistas:
         """Grava o histórico. Devolve quantas contam para o aviso."""
         game = leitura.game
         if shared.store.get(game.game_id) is not game or not participa(game):
+            return 0
+        # O appID foi corrigido durante a leitura (e o Aplicar já apagou o
+        # histórico antigo): estas conquistas são do jogo errado e, como o
+        # histórico só cresce, gravá-las as deixaria para sempre.
+        if str(game.steam_appid or "") != leitura.appid:
             return 0
         entraram, primeira = historico.registrar(game.game_id, leitura.desbloqueios)
         mudou = bool(entraram) or leitura.catalogo_mudou

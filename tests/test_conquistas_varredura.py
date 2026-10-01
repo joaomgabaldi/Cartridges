@@ -86,6 +86,19 @@ def test_jogo_que_saiu_durante_a_leitura_nao_ganha_arquivo(store, make_game, pas
     assert historico.ler(game.game_id) is None
 
 
+def test_appid_corrigido_durante_a_leitura_descarta_a_leitura(
+    store, make_game, pastas, flush_idle
+):
+    _goldberg(pastas, "570", [("ACH_A", 100)])
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    leitura = varredura.ler_jogo(game)
+    game.steam_appid = "620"
+    historico.apagar(game.game_id)
+    assert VarreduraConquistas()._gravar(leitura) == 0
+    flush_idle()
+    assert historico.ler(game.game_id) is None
+
+
 def test_chave_recusada_avisa_uma_vez(store, make_game, pastas, win, flush_idle, monkeypatch):
     monkeypatch.setattr(
         catalogo, "obter", lambda _appid, _exe: catalogo.Renovacao(None, chave_recusada=True)
