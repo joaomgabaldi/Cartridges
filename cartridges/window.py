@@ -1528,7 +1528,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.details_view_conquistas_count.set_label(
             _("{} de {}").format(atual.feitas, atual.total)
         )
-        self.details_view_conquistas_percent.set_label(f"{round(atual.fracao * 100)}%")
+        self.details_view_conquistas_percent.set_label(f"{atual.porcentagem}%")
         self.details_view_conquistas_bar.set_fraction(atual.fracao)
 
         caixa = self.details_view_conquistas_icons

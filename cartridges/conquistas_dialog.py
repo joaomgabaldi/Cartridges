@@ -31,10 +31,13 @@ def _data(quando: int) -> Optional[str]:
     Windows, para qualquer carimbo negativo). Sem data a fileira continua boa.
     """
     try:
-        return str(relative_date(quando))
+        texto = str(relative_date(quando))
     except (OverflowError, OSError, ValueError):
         logging.getLogger(__name__).debug("Carimbo fora do calendário: %r", quando)
         return None
+    # `relative_date` devolve minúsculas, para seguir um rótulo com dois-pontos;
+    # aqui a data aparece sozinha, então a primeira letra sobe.
+    return texto[:1].upper() + texto[1:]
 
 
 class ConquistasDialog(Adw.Dialog):

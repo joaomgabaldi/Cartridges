@@ -1,9 +1,11 @@
 """O cartão de conquistas na página do jogo e a lista completa."""
 
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+from gi.repository import Gtk
 from requests.exceptions import ConnectionError as ErroDeConexao
 
 from cartridges.conquistas import catalogo, historico, icones
@@ -54,8 +56,25 @@ def test_cartao_mostra_o_progresso(real_window, com_conquistas):
     real_window.update_conquistas_block(com_conquistas)
     assert real_window.details_view_conquistas_box.get_visible()
     assert real_window.details_view_conquistas_count.get_label() == "2 de 3"
-    assert real_window.details_view_conquistas_percent.get_label() == "67%"
+    assert real_window.details_view_conquistas_percent.get_label() == "66%"  # para baixo
     assert real_window.details_view_conquistas_bar.get_fraction() == pytest.approx(2 / 3)
+
+
+def test_cartao_nao_arredonda_para_cima_ate_o_fim(real_window, store):
+    """999 de 1000 é 99%: 100% só quando está tudo desbloqueado."""
+    grande = Catalogo(
+        tuple(ConquistaInfo(f"N{n}", f"N{n}", "", "", "", False) for n in range(1000)), 0, True
+    )
+    catalogo._gravar_cache("570", grande)
+    game = jogo(store, 1, steam_appid="570")
+    historico.registrar(game.game_id, [Desbloqueio(f"N{n}", 1) for n in range(999)])
+    real_window.update_conquistas_block(game)
+    assert real_window.details_view_conquistas_count.get_label() == "999 de 1000"
+    assert real_window.details_view_conquistas_percent.get_label() == "99%"
+
+    historico.registrar(game.game_id, [Desbloqueio("N999", 1)])
+    real_window.update_conquistas_block(game)
+    assert real_window.details_view_conquistas_percent.get_label() == "100%"
 
 
 def test_cartao_some_sem_catalogo_ou_desligado(real_window, store, com_conquistas):
@@ -217,6 +236,32 @@ def test_oculta_desbloqueada_aparece_sempre(real_window, com_conquistas):
     dialogo = ConquistasDialog(com_conquistas)
     assert _titulos(dialogo.linhas_desbloqueadas) == ["Segredo", "Rara", "Primeira"]
     assert dialogo.linhas_bloqueadas == []
+
+
+def _rotulos(widget):
+    """Os textos de todos os Gtk.Label dentro de ``widget``."""
+    textos = []
+    filho = widget.get_first_child()
+    while filho is not None:
+        if isinstance(filho, Gtk.Label):
+            textos.append(filho.get_label())
+        textos.extend(_rotulos(filho))
+        filho = filho.get_next_sibling()
+    return textos
+
+
+def test_data_da_conquista_comeca_com_maiuscula(real_window, com_conquistas):
+    from cartridges.conquistas_dialog import ConquistasDialog, _data  # noqa: PLC0415
+
+    assert _data(int(time.time())) == "Hoje"
+    assert _data(int(time.time()) - 86400) == "Ontem"
+    assert _data(2**62) is None
+
+    historico.registrar(com_conquistas.game_id, [Desbloqueio("C", int(time.time()))])
+    dialogo = ConquistasDialog(com_conquistas)
+    textos = [texto for fileira in dialogo.linhas_desbloqueadas for texto in _rotulos(fileira)]
+    assert "Hoje" in textos
+    assert "hoje" not in textos
 
 
 @pytest.mark.parametrize("quando", [2**62, -(2**62), -1, 2**63 - 1, -(2**63)])
