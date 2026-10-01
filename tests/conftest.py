@@ -439,6 +439,7 @@ class FakeGame:
         self.rating = overrides.pop("rating", 0)
         self.track_updates = overrides.pop("track_updates", False)
         self.steam_appid = overrides.pop("steam_appid", None)
+        self.conquistas = overrides.pop("conquistas", True)
         for key, value in overrides.items():
             setattr(self, key, value)
         # Derived exactly the way Game.__init__ derives it.

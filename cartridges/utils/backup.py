@@ -70,6 +70,7 @@ def _extensoes() -> dict[str, tuple[str, ...]]:
         "logos": (".json", *game_logo.IMAGE_SUFFIXES),
         "wallpapers": (".json", *session_wallpaper.IMAGE_SUFFIXES),
         "fitas": (".json",),
+        "conquistas": (".json",),
     }
 
 

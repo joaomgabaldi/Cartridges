@@ -123,6 +123,9 @@ def _migrate_game_files(old_id: str, new_id: str) -> None:
     moves.append(
         (shared.fitas_dir / f"{old_id}.json", shared.fitas_dir / f"{new_id}.json")
     )
+    moves.append(
+        (shared.conquistas_dir / f"{old_id}.json", shared.conquistas_dir / f"{new_id}.json")
+    )
 
     for source, dest in moves:
         try:
@@ -337,9 +340,10 @@ class Store:
     def cleanup_game(self, game: Game, apagar_sessoes: bool = True) -> None:
         """Remove a game's files, dismiss any loose toasts"""
         # Covers may be a still .tiff or an animated .gif/.webp
-        # The session wallpaper and the LED strip colour are filed by id too,
-        # and ids are stable: left behind, a reinstalled game would inherit the
-        # removed one's locked choices.
+        # The session wallpaper, the LED strip colour and the achievements
+        # history are filed by id too, and ids are stable: left behind, a
+        # reinstalled game would inherit the removed one's locked choices and
+        # unlocked achievements.
         for path in (
             shared.games_dir / f"{game.game_id}.json",
             shared.covers_dir / f"{game.game_id}.tiff",
@@ -351,6 +355,7 @@ class Store:
                 for suffix in WALLPAPER_SUFFIXES
             ),
             shared.fitas_dir / f"{game.game_id}.json",
+            shared.conquistas_dir / f"{game.game_id}.json",
         ):
             path.unlink(missing_ok=True)
 

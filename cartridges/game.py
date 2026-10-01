@@ -76,6 +76,7 @@ PERSISTED_ATTRS = (
     "update_available_ts",
     "update_dismissed_ts",
     "update_url",
+    "conquistas",
 )
 
 _KNOWN_KEYS = frozenset(PERSISTED_ATTRS)
@@ -226,6 +227,10 @@ class Game(Gtk.Box):
     # raised the notice. Opened when the user acts on the notice; "" when there
     # is no notice or the digest carried no link.
     update_url: str = ""
+    # Acompanhar as conquistas deste jogo: varredura, cartão na página e, na
+    # fase 2, aviso e iluminação. Ligado por padrão; desligar não apaga o que
+    # já foi guardado, e religar traz tudo de volta.
+    conquistas: bool = True
 
     def __init__(self, data: dict[str, Any], **kwargs: Any) -> None:
         super().__init__(**kwargs)

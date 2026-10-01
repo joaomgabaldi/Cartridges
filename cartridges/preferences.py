@@ -925,8 +925,9 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         if shared.games_dir.is_dir():
             for path in shared.games_dir.glob("*.json"):
                 path.unlink(missing_ok=True)
-        # Papel de parede e cor da fita de cada jogo também: os ids são
-        # estáveis, e o jogo reimportado herdaria a escolha do apagado. Só os
+        # Papel de parede, cor da fita e conquistas de cada jogo também: os ids
+        # são estáveis, e o jogo reimportado herdaria a escolha (ou as
+        # conquistas) do apagado. Só os
         # arquivos do topo — a pasta `cache` dos papéis de parede não é de
         # jogo nenhum, e o `fitas.json` (a configuração das fitas) mora fora
         # de `fitas_dir`.
@@ -935,6 +936,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             shared.logos_dir,
             shared.wallpapers_dir,
             shared.fitas_dir,
+            shared.conquistas_dir,
         ):
             if directory.is_dir():
                 for path in directory.iterdir():
