@@ -41,6 +41,15 @@ class Progresso:
         return self.feitas / self.total if self.total else 0.0
 
     @property
+    def porcentagem(self) -> int:
+        """Inteira, para baixo: 999 de 1000 é 99%, e só tudo desbloqueado é 100%.
+
+        Em inteiros, não em `floor(fracao * 100)`: 29 de 100 dá
+        0.29 * 100 = 28.999999999999996 em ponto flutuante.
+        """
+        return self.feitas * 100 // self.total if self.total else 0
+
+    @property
     def completo(self) -> bool:
         return self.total > 0 and self.feitas == self.total
 

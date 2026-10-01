@@ -1,5 +1,7 @@
 """Catálogo + histórico: o que a página do jogo e a lista mostram."""
 
+import pytest
+
 from cartridges.conquistas import catalogo, historico, progresso
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.formatos import Desbloqueio
@@ -28,6 +30,16 @@ def test_separa_e_ordena():
 def test_completo():
     p = progresso.montar(CAT, {"A": 1, "B": 2, "C": 3, "D": 4})
     assert p.completo and p.fracao == 1.0
+
+
+@pytest.mark.parametrize(
+    ("feitas", "total", "esperado"),
+    [(0, 4, 0), (2, 3, 66), (999, 1000, 99), (29, 100, 29), (7, 100, 7), (4, 4, 100), (1, 200, 0)],
+)
+def test_porcentagem_arredonda_para_baixo(feitas, total, esperado):
+    catalogo_grande = Catalogo(tuple(_info(f"N{n}") for n in range(total)), 0, False)
+    p = progresso.montar(catalogo_grande, {f"N{n}": 1 for n in range(feitas)})
+    assert p.porcentagem == esperado
 
 
 def test_nunca_varrido_mostra_tudo_bloqueado():
