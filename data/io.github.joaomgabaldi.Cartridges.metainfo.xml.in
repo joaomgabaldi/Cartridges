@@ -28,6 +28,14 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.01" date="2026-10-01">
+      <description translate="no">
+        <ul>
+          <li>Agora a página de cada jogo mostra as conquistas, com o progresso e a lista completa, inclusive as obtidas antes de o jogo ser adicionado ao Cartridges</li>
+          <li>Ao informar a chave da Steam Web API nas Preferências, os nomes e as descrições das conquistas aparecem em português</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.30" date="2026-09-30">
       <description translate="no">
         <ul>
