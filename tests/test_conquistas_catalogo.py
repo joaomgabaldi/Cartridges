@@ -4,10 +4,12 @@ import json
 import logging
 import threading
 import time
+from pathlib import Path
 
 import pytest
 from requests.exceptions import ConnectionError as ErroDeConexao
 
+from cartridges import shared
 from cartridges.conquistas import catalogo
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 
@@ -363,6 +365,182 @@ def test_porcentagens_ilegiveis_nao_derrubam_a_renovacao(monkeypatch):
     monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
     monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetGlobal": RecursionError()}))
     assert catalogo.renovar("570", "", agora=10).catalogo.conquistas == (INFO,)
+
+
+# --- rede fora, cache negativo, entradas estranhas ------------------------------
+
+
+def _sem_pedidos(monkeypatch):
+    chamadas = []
+
+    def pedir(url):
+        chamadas.append(url)
+        raise AssertionError(f"pedido inesperado: {url}")
+
+    monkeypatch.setattr(catalogo, "_pedir", pedir)
+    return chamadas
+
+
+def test_falha_de_rede_no_schema_marca_rede_falhou(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
+    monkeypatch.setattr(
+        catalogo,
+        "_pedir",
+        _pedidos({"GetSchemaForGame": ErroDeConexao(), "GetGlobal": ErroDeConexao()}),
+    )
+    assert catalogo.renovar("570", "", agora=10).rede_falhou
+
+
+def test_falha_de_rede_nas_porcentagens_marca_rede_falhou(monkeypatch):
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetGlobal": ErroDeConexao()}))
+    renovacao = catalogo.renovar("570", "", agora=10)
+    assert renovacao.rede_falhou
+    assert renovacao.catalogo.conquistas == (INFO,)  # o arquivo do jogo vale
+
+
+def test_sucesso_nao_marca_rede_falhou(monkeypatch):
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetGlobal": PORCENTAGENS}))
+    assert not catalogo.renovar("570", "", agora=10).rede_falhou
+
+
+def test_resposta_ilegivel_nao_conta_como_rede_fora(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
+    monkeypatch.setattr(
+        catalogo, "_pedir", _pedidos({"GetSchemaForGame": ValueError(), "GetGlobal": {}})
+    )
+    assert not catalogo.renovar("570", "", agora=10).rede_falhou
+
+
+def test_sem_rede_usa_o_cache_vencido_sem_pedir(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    anterior = Catalogo((INFO,), 1, True, catalogo._impressao("abc"))
+    catalogo._gravar_cache("570", anterior)
+    pedidos = _sem_pedidos(monkeypatch)
+    renovacao = catalogo.obter("570", "", agora=10**9, rede=False)
+    assert renovacao.catalogo == anterior
+    assert not renovacao.rede_falhou
+    assert pedidos == []
+
+
+def test_sem_rede_e_sem_cache_usa_o_arquivo_do_jogo(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
+    pedidos = _sem_pedidos(monkeypatch)
+    cat = catalogo.obter("570", "", agora=10, rede=False).catalogo
+    assert [i.nome for i in cat.conquistas] == ["ACH_L"]
+    assert pedidos == []
+    # Nada foi perguntado à Steam: na próxima abertura a chave é tentada.
+    assert catalogo.vencido(cat, 11, catalogo._impressao("abc"))
+
+
+def test_sem_rede_e_sem_nada_devolve_vazio(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [])
+    pedidos = _sem_pedidos(monkeypatch)
+    assert catalogo.obter("570", "", agora=10, rede=False).catalogo is None
+    assert catalogo.em_cache("570") is None
+    assert pedidos == []
+
+
+def test_steam_sem_conquistas_vira_cache_negativo(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [])
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetSchemaForGame": {"game": {}}}))
+    primeira = catalogo.obter("570", "", agora=10)
+    assert primeira.catalogo is not None and primeira.catalogo.conquistas == ()
+    assert catalogo.em_cache("570") == Catalogo((), 10, True, catalogo._impressao("abc"))
+    # Dentro dos 7 dias, nenhum pedido: o jogo sem conquistas não vai à rede a cada abertura.
+    pedidos = _sem_pedidos(monkeypatch)
+    segunda = catalogo.obter("570", "", agora=10 + catalogo.VALIDADE - 1)
+    assert segunda.catalogo.conquistas == ()
+    assert pedidos == []
+    # Depois dos 7 dias, pergunta de novo.
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetSchemaForGame": SCHEMA, "GetGlobal": {}}))
+    assert catalogo.obter("570", "", agora=10 + catalogo.VALIDADE).catalogo.conquistas
+
+
+def test_cache_negativo_nao_vale_para_outra_chave(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [])
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetSchemaForGame": {"game": {}}}))
+    catalogo.obter("570", "", agora=10)
+    schema.set_string("conquistas-chave-steam", "outra")
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetSchemaForGame": SCHEMA, "GetGlobal": {}}))
+    assert catalogo.obter("570", "", agora=20).catalogo.conquistas
+
+
+def test_falha_de_rede_nao_vira_cache_negativo(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [])
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetSchemaForGame": ErroDeConexao()}))
+    renovacao = catalogo.obter("570", "", agora=10)
+    assert renovacao.catalogo is None and renovacao.rede_falhou
+    assert catalogo.em_cache("570") is None
+
+
+def test_cache_negativo_nao_apaga_um_catalogo_anterior(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    anterior = Catalogo((INFO,), 1, True, catalogo._impressao("abc"))
+    catalogo._gravar_cache("570", anterior)
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [])
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetSchemaForGame": {"game": {}}}))
+    assert catalogo.renovar("570", "", agora=10**9).catalogo == anterior
+    assert catalogo.em_cache("570") == anterior
+
+
+def test_sem_chave_e_sem_arquivo_nao_cria_cache_negativo(monkeypatch):
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [])
+    pedidos = _sem_pedidos(monkeypatch)
+    assert catalogo.obter("570", "", agora=10).catalogo is None
+    assert catalogo.em_cache("570") is None
+    assert pedidos == []
+
+
+def test_cache_do_futuro_esta_vencido():
+    cat = Catalogo((), 10_000_000, False)
+    um_dia = 24 * 3600
+    assert not catalogo.vencido(cat, 10_000_000 - um_dia, "")
+    assert catalogo.vencido(cat, 10_000_000 - um_dia - 1, "")
+
+
+@pytest.mark.parametrize("appid", ["", "..\\x", "../x", "57 0", "abc", "-5", "5.7", "²", "٣"])
+def test_appid_que_nao_e_numero_nao_toca_disco_nem_rede(monkeypatch, schema, appid):
+    schema.set_string("conquistas-chave-steam", "abc")
+    pedidos = _sem_pedidos(monkeypatch)
+    assert catalogo.obter(appid, "", agora=10) == catalogo.Renovacao(None)
+    assert catalogo.renovar(appid, "", agora=10) == catalogo.Renovacao(None)
+    assert pedidos == []
+    assert not (shared.conquistas_cache_dir).exists() or not list(
+        shared.conquistas_cache_dir.glob("**/*")
+    )
+
+
+def test_gravar_cache_nao_deixa_temporario_para_tras(monkeypatch):
+    def travado(self, destino):
+        raise PermissionError("travado")
+
+    monkeypatch.setattr(Path, "replace", travado)
+    with pytest.raises(OSError):
+        catalogo._gravar_cache("570", Catalogo((INFO,), 1, False))
+    assert list(shared.conquistas_cache_dir.glob("*")) == []
+
+
+def test_gravar_cache_tem_um_temporario_por_gravacao(monkeypatch):
+    nomes = []
+    original = Path.write_text
+
+    def espiar(self, *args, **kwargs):
+        nomes.append(self.name)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", espiar)
+    catalogo._gravar_cache("570", Catalogo((INFO,), 1, False))
+    catalogo._gravar_cache("570", Catalogo((INFO,), 2, False))
+    assert len(set(nomes)) == 2 and all(n.endswith(".tmp") for n in nomes)
 
 
 def test_steam_settings_fundo_demais_nao_levanta(tmp_path):

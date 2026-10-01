@@ -6,14 +6,18 @@ uma vez por execução, em segundo plano, aparecendo em "Tarefas em andamento".
 Entram os jogos da biblioteca e os de Jogos Zerados — as pastas do AppData
 sobrevivem à desinstalação, então um zerado antigo ainda recupera o que tinha.
 
-A leitura (arquivos e catálogo, que pode ir à rede) roda numa thread; a gravação
-do histórico volta para a thread principal, onde dá para conferir que o jogo
-ainda está na store. Sem essa conferência, um jogo excluído no meio da passada
-ganharia de volta o arquivo que o Excluir acabou de apagar.
+A leitura roda numa thread, em duas passadas. A primeira lê só os arquivos dos
+emuladores (disco) de todos os jogos; a gravação do histórico volta para a
+thread principal, onde dá para conferir que o jogo ainda está na store. Sem
+essa conferência, um jogo excluído no meio da passada ganharia de volta o
+arquivo que o Excluir acabou de apagar. A segunda renova o catálogo de cada
+jogo, que pode ir à rede; quando um pedido falha por rede, os jogos seguintes
+ficam só com o cache e o arquivo do jogo.
 
-Ao final, um aviso só com o que entrou desde a abertura anterior: o que foi
-jogado por fora do app. A primeira varredura de um jogo não conta — senão quem
-acabou de instalar receberia "quinhentas conquistas novas".
+Terminada a primeira passada, um aviso só com o que entrou desde a abertura
+anterior: o que foi jogado por fora do app. Ele não espera a rede. A primeira
+varredura de um jogo não conta — senão quem acabou de instalar receberia
+"quinhentas conquistas novas".
 """
 
 import logging
@@ -41,34 +45,54 @@ def participa(game: Any) -> bool:
 
 @dataclass
 class Leitura:
+    """O que os arquivos de um jogo trazem (primeira passada)."""
+
     game: Any
     # O appID que a leitura de fato usou: o jogo pode ter o appID corrigido
     # enquanto a thread lê, e a leitura velha não vale para o appID novo.
     appid: str
     desbloqueios: list[formatos.Desbloqueio] = field(default_factory=list)
+    # Falso na varredura de um jogo só: não entra no aviso final.
+    avisar: bool = True
+
+
+@dataclass
+class Catalogacao:
+    """O que a renovação do catálogo de um jogo trouxe (segunda passada)."""
+
+    game: Any
+    appid: str
     chave_recusada: bool = False
     # Veio um catálogo (novo ou do cache): o cartão do jogo aberto pode ter de
     # aparecer mesmo sem conquista nova.
-    catalogo_mudou: bool = False
-    # Falso na varredura de um jogo só: nem entra no aviso final nem avisa da chave.
+    mudou: bool = False
+    # A Steam não respondeu: o resto da passada não vai à rede.
+    rede_falhou: bool = False
+    # Falso na varredura de um jogo só: não avisa da chave.
     avisar: bool = True
 
 
 def ler_jogo(game: Any) -> Leitura:
-    """Trabalho de thread: lê os arquivos e renova o catálogo. Não grava."""
+    """Trabalho de thread: lê os arquivos do jogo. Só disco; não grava."""
     appid = str(game.steam_appid)
     desbloqueios = [
         desbloqueio
         for achado in arquivos.arquivos_do_jogo(appid, game.executable)
         for desbloqueio in formatos.ler(achado.caminho, achado.formato)
     ]
-    renovacao = catalogo.obter(appid, game.executable)
-    return Leitura(
+    return Leitura(game, appid, desbloqueios)
+
+
+def renovar_catalogo(game: Any, rede: bool = True) -> Catalogacao:
+    """Trabalho de thread: renova o catálogo, que pode ir à rede. Não grava."""
+    appid = str(game.steam_appid)
+    renovacao = catalogo.obter(appid, game.executable, rede=rede)
+    return Catalogacao(
         game,
         appid,
-        desbloqueios,
         renovacao.chave_recusada,
-        catalogo_mudou=renovacao.catalogo is not None,
+        mudou=renovacao.catalogo is not None,
+        rede_falhou=renovacao.rede_falhou,
     )
 
 
@@ -157,29 +181,68 @@ class VarreduraConquistas:
     # -- a passada ------------------------------------------------------------
 
     def _worker(self, games: list[Any], geracao: int, avisar: bool = True) -> None:
+        """Duas passadas. A dos arquivos vem primeiro e só toca o disco: o
+        histórico é gravado e o aviso de conquistas novas sai sem esperar a
+        Steam. A do catálogo, que pode ir à rede, vem depois."""
         tarefa = None
+        concluiu = False
         try:
             if avisar:
-                tarefa = tarefas.comecar(_("Conquistas"), len(games))
-            for feitos, game in enumerate(games):
-                if tarefa is not None:
-                    tarefa.atualizar(feitos)
-                if self._stopped or geracao != self._generation:
-                    break
-                try:
-                    leitura = ler_jogo(game)
-                except Exception:  # pylint: disable=broad-exception-caught
-                    logging.warning("Falha ao ler as conquistas de %s", game.name, exc_info=True)
-                    continue
-                leitura.avisar = avisar
-                GLib.idle_add(self._entregar, leitura)
+                tarefa = tarefas.comecar(_("Conquistas"), 2 * len(games))
+            self._passada_dos_arquivos(games, geracao, avisar, tarefa)
+            if avisar:
+                concluiu = True
+                GLib.idle_add(self._concluir)
+            self._passada_dos_catalogos(games, geracao, avisar, tarefa)
         finally:
             if tarefa is not None:
                 tarefa.terminar()
             if avisar:
                 with self._lock:
                     self._running = False
-                GLib.idle_add(self._concluir)
+                if not concluiu:
+                    GLib.idle_add(self._concluir)
+
+    def _deve_parar(self, geracao: int) -> bool:
+        return self._stopped or geracao != self._generation
+
+    def _passada_dos_arquivos(
+        self, games: list[Any], geracao: int, avisar: bool, tarefa: Optional[Any]
+    ) -> None:
+        for feitos, game in enumerate(games):
+            if tarefa is not None:
+                tarefa.atualizar(feitos)
+            if self._deve_parar(geracao):
+                break
+            try:
+                leitura = ler_jogo(game)
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.warning("Falha ao ler as conquistas de %s", game.name, exc_info=True)
+                continue
+            leitura.avisar = avisar
+            GLib.idle_add(self._entregar, leitura)
+
+    def _passada_dos_catalogos(
+        self, games: list[Any], geracao: int, avisar: bool, tarefa: Optional[Any]
+    ) -> None:
+        rede = True
+        for feitos, game in enumerate(games, start=len(games)):
+            if tarefa is not None:
+                tarefa.atualizar(feitos)
+            if self._deve_parar(geracao):
+                break
+            try:
+                catalogacao = renovar_catalogo(game, rede)
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.warning("Falha ao renovar o catálogo de %s", game.name, exc_info=True)
+                continue
+            if catalogacao.rede_falhou and rede:
+                # Sem rede para um jogo, sem rede para os outros: o resto da
+                # passada fica com o cache e o arquivo de cada jogo.
+                rede = False
+                logging.info("Sem rede para o catálogo de conquistas; seguindo só com o disco")
+            catalogacao.avisar = avisar
+            GLib.idle_add(self._entregar_catalogo, catalogacao)
 
     # -- na thread principal --------------------------------------------------
 
@@ -190,13 +253,25 @@ class VarreduraConquistas:
                 novas = self._gravar(leitura)
                 if novas and leitura.avisar:
                     self._novas.append((leitura.game.name, novas))
-                if leitura.avisar and leitura.chave_recusada and not self._avisou_chave:
-                    self._avisou_chave = True
-                    _aviso(
-                        _("A chave da Steam Web API foi recusada. Verifique-a nas Preferências.")
-                    )
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Falha ao guardar as conquistas de um jogo", exc_info=True)
+        return False
+
+    def _entregar_catalogo(self, catalogacao: Catalogacao) -> bool:
+        # Também callback ocioso do GLib: nada pode escapar daqui.
+        try:
+            if self._stopped:
+                return False
+            game = catalogacao.game
+            if catalogacao.mudou and getattr(shared.win, "active_game", None) is game:
+                atualizar = getattr(shared.win, "update_conquistas_block", None)
+                if atualizar is not None:
+                    atualizar(game)
+            if catalogacao.avisar and catalogacao.chave_recusada and not self._avisou_chave:
+                self._avisou_chave = True
+                _aviso(_("A chave da Steam Web API foi recusada. Verifique-a nas Preferências."))
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Falha ao entregar o catálogo de conquistas", exc_info=True)
         return False
 
     def _gravar(self, leitura: Leitura) -> int:
@@ -210,8 +285,7 @@ class VarreduraConquistas:
         if str(game.steam_appid or "") != leitura.appid:
             return 0
         entraram, primeira = historico.registrar(game.game_id, leitura.desbloqueios)
-        mudou = bool(entraram) or leitura.catalogo_mudou
-        if mudou and getattr(shared.win, "active_game", None) is game:
+        if entraram and getattr(shared.win, "active_game", None) is game:
             atualizar = getattr(shared.win, "update_conquistas_block", None)
             if atualizar is not None:
                 atualizar(game)

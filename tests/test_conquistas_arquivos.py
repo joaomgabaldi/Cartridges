@@ -1,5 +1,7 @@
 """Onde cada emulador grava as conquistas de um jogo."""
 
+import pytest
+
 from cartridges.conquistas import arquivos, formatos
 from cartridges.conquistas.arquivos import ArquivoDeConquista
 from tests.apoio_conquistas import criar, pastas  # noqa: F401
@@ -79,6 +81,14 @@ def test_cache_da_steam_so_nos_jogos_da_steam(tmp_path, pastas, monkeypatch):
         ArquivoDeConquista(cache, formatos.STEAM)
     ]
     assert arquivos.arquivos_do_jogo("570", f'"{exe}"') == []
+
+
+@pytest.mark.parametrize("appid", ["", "..", "../570", "57 0", "abc", "²", "٣"])
+def test_appid_que_nao_e_numero_nao_vira_caminho(pastas, appid):
+    """O appID vira pedaço de caminho: `..` escaparia da pasta do emulador."""
+    criar(pastas.appdata / "achievements.json")  # onde `GSE Saves\..` apontaria
+    criar(pastas.appdata / "GSE Saves" / "570" / "achievements.json")
+    assert arquivos.arquivos_do_jogo(appid, "") == []
 
 
 def test_eh_jogo_da_steam():
