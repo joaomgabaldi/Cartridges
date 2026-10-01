@@ -38,11 +38,17 @@ def _limpo(dados: Any) -> Optional[dict[str, int]]:
     return {
         str(nome).upper(): int(quando)
         for nome, quando in dados["desbloqueadas"].items()
-        if isinstance(quando, (int, float))
-        and not isinstance(quando, bool)
-        and math.isfinite(quando)
-        and str(nome).strip()
+        if _data_valida(quando) and str(nome).strip()
     }
+
+
+def _data_valida(quando: Any) -> bool:
+    """Número que cabe como data: nem bool, nem NaN/infinito, nem gigante demais."""
+    if isinstance(quando, bool) or not isinstance(quando, (int, float)):
+        return False
+    if isinstance(quando, float) and not math.isfinite(quando):
+        return False
+    return -(2**63) <= quando < 2**63
 
 
 def _ler_estado(game_id: str) -> tuple[Optional[dict[str, int]], bool]:
@@ -51,7 +57,7 @@ def _ler_estado(game_id: str) -> tuple[Optional[dict[str, int]], bool]:
         dados = ler_json(caminho(game_id))
     except FileNotFoundError:
         return None, False
-    except (OSError, ValueError, RecursionError) as erro:
+    except (OSError, ValueError, RecursionError, OverflowError) as erro:
         logging.warning("Conquistas guardadas ilegíveis (%s): %s", caminho(game_id).name, erro)
         return None, True
     limpo = _limpo(dados)
