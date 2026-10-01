@@ -103,7 +103,18 @@ def test_transferir_origem_ilegivel_nao_mexe_no_destino():
     historico.caminho("de").write_text("{", encoding="utf-8")
     historico.transferir("de", "para")
     assert historico.ler("para") == {"B": 7}
-    assert historico.caminho("de").read_text(encoding="utf-8") == "{"
+
+
+def test_transferir_guarda_a_origem_ilegivel():
+    """Quem chama exclui a origem em seguida (apagando `<id>.json`): o que não
+    deu para ler precisa já estar à parte, no `.corrompido`."""
+    historico.registrar("para", [D("B", 7)])
+    historico.caminho("de").write_text("{", encoding="utf-8")
+    historico.transferir("de", "para")
+    assert not historico.caminho("de").exists()
+    assert historico.caminho("de").with_name("de.json.corrompido").read_text(
+        encoding="utf-8"
+    ) == "{"
 
 
 def test_valores_invalidos_sao_pulados_um_a_um():

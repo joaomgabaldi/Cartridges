@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from cartridges import shared
+from cartridges.conquistas import historico
 from cartridges.game import Game
 from cartridges.importer.shortcuts_source import atalhos_da_pasta
 from cartridges.store.store import _path_key
@@ -247,6 +248,9 @@ def decidir(restaurado: Game, caminho: Path, novo: Optional[Game], decisao: str)
     if novo is not None:
         if decisao == "mesclar":
             session_log.mover_jogo(novo.game_id, restaurado.game_id)
+            # As conquistas do jogo novo também são somadas, não perdidas
+            # com o Excluir logo abaixo.
+            historico.transferir(novo.game_id, restaurado.game_id)
             restaurado.playtime = (restaurado.playtime or 0) + (novo.playtime or 0)
             restaurado.last_played = max(restaurado.last_played or 0, novo.last_played or 0)
         excluir(novo)

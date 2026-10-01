@@ -27,6 +27,7 @@ from uuid import uuid4
 from gi.repository import GLib
 
 from cartridges import shared
+from cartridges.conquistas import historico
 from cartridges.game import Game
 from cartridges.store.managers.manager import Manager
 from cartridges.store.pipeline import Pipeline
@@ -336,14 +337,17 @@ class Store:
                 if self._games_by_shortcut.get(key) is game:
                     del self._games_by_shortcut[key]
         self.cleanup_game(game, apagar_sessoes=apagar_sessoes)
+        # As conquistas ficam aqui e não em `cleanup_game`: ele também roda
+        # quando um jogo desinstalado é reinstalado (`add_game`), e o histórico
+        # de conquistas só some com o Excluir.
+        historico.apagar(game.game_id)
 
     def cleanup_game(self, game: Game, apagar_sessoes: bool = True) -> None:
         """Remove a game's files, dismiss any loose toasts"""
         # Covers may be a still .tiff or an animated .gif/.webp
-        # The session wallpaper, the LED strip colour and the achievements
-        # history are filed by id too, and ids are stable: left behind, a
-        # reinstalled game would inherit the removed one's locked choices and
-        # unlocked achievements.
+        # The session wallpaper and the LED strip colour are filed by id too,
+        # and ids are stable: left behind, a reinstalled game would inherit the
+        # removed one's locked choices.
         for path in (
             shared.games_dir / f"{game.game_id}.json",
             shared.covers_dir / f"{game.game_id}.tiff",
@@ -355,7 +359,6 @@ class Store:
                 for suffix in WALLPAPER_SUFFIXES
             ),
             shared.fitas_dir / f"{game.game_id}.json",
-            shared.conquistas_dir / f"{game.game_id}.json",
         ):
             path.unlink(missing_ok=True)
 

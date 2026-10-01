@@ -269,6 +269,18 @@ def test_mesclar_dados(store, make_game, pasta_de_atalhos, retirados):
     assert restaurado.shortcut_path == str(caminho)
 
 
+def test_mesclar_soma_as_conquistas(store, make_game, pasta_de_atalhos, retirados):
+    from cartridges.conquistas import historico  # noqa: PLC0415
+    from cartridges.conquistas.formatos import Desbloqueio  # noqa: PLC0415
+
+    caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
+    historico.registrar("gt", [Desbloqueio("A", 5)])
+    historico.registrar("shortcuts_novo", [Desbloqueio("A", 3), Desbloqueio("B", 9)])
+    restauracao.decidir(restaurado, caminho, novo, "mesclar")
+    assert historico.ler("gt") == {"A": 3, "B": 9}
+    assert historico.ler("shortcuts_novo") is None
+
+
 def test_manter_este_pc(store, make_game, pasta_de_atalhos, retirados):
     caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
     restauracao.decidir(restaurado, caminho, novo, "este_pc")
