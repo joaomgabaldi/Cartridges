@@ -75,6 +75,28 @@ def test_primeiro_appid_nao_descarta_nada(store, real_window, varredura):
     assert varredura.pedidos == [game.game_id]
 
 
+def test_desligar_mantem_o_historico_e_nao_varre(store, real_window, varredura):
+    _stub_sgdb(store)
+    game = jogo(store, 25, executable="x.exe", steam_appid="570")
+    historico.registrar(game.game_id, [Desbloqueio("A", 1)])
+    _aplicar(game, conquistas=False)
+    assert game.conquistas is False
+    assert historico.ler(game.game_id) == {"A": 1}
+    assert varredura.pedidos == []
+
+
+def test_appid_que_liga_um_zerado_mantem_o_historico_dele(store, real_window, varredura):
+    _stub_sgdb(store)
+    zerado = jogo(store, 26, removed=True, status="beaten", steam_appid="640")
+    historico.registrar(zerado.game_id, [Desbloqueio("Z", 5)])
+    vivo = jogo(store, 27, executable="x.exe", steam_appid="10")
+    historico.registrar(vivo.game_id, [Desbloqueio("ERRADA", 1)])
+    _aplicar(vivo, fetched_steam_appid="640")
+    # A conquista errada saiu antes da ligação, que então trouxe a do zerado.
+    assert historico.ler(vivo.game_id) == {"Z": 5}
+    assert varredura.pedidos == [vivo.game_id]
+
+
 def test_sem_mudanca_nao_varre(store, real_window, varredura):
     _stub_sgdb(store)
     game = jogo(store, 24, executable="x.exe", steam_appid="570")
