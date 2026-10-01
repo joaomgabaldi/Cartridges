@@ -644,6 +644,8 @@ PERSISTED_METADATA = {
     # Com quebra de linha no meio de propósito: a anotação é um bloco, e
     # aplicar a edição não pode achatá-la numa linha só.
     "notes": "Parei no capítulo 4.\nSenha do cofre: 8815",
+    # O padrão é True; False é o valor que um aplicar esquecido perderia.
+    "conquistas": False,
 }
 
 

@@ -23,6 +23,7 @@ import shutil
 from gi.repository import Adw, GLib
 
 from cartridges import shared
+from cartridges.conquistas import historico
 from cartridges.game import Game
 from cartridges.store.managers.display_manager import is_main_thread
 from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper
@@ -110,6 +111,9 @@ def ligar_zerado(jogo: Game) -> bool:
             setattr(jogo, campo, getattr(zerado, campo))
 
     session_log.mover_jogo(zerado.game_id, jogo.game_id)
+    # As conquistas também, somadas às do jogo: as do zerado são do mesmo
+    # jogo (mesmo appID), e o arquivo dele vai embora com o Excluir abaixo.
+    historico.transferir(zerado.game_id, jogo.game_id)
     try:
         _mover_capa(zerado, jogo)
         _mover_escolhas(zerado, jogo)
