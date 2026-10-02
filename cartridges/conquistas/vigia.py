@@ -27,6 +27,8 @@ from cartridges.conquistas.catalogo import ConquistaInfo
 
 INTERVALO = 2
 REBUSCA = 15
+# Falhas seguidas de um arquivo antes de ele passar a ser tentado só a cada rebusca.
+TENTATIVAS = 3
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,9 @@ class Vigia:
         self._mtimes: dict[str, Optional[int]] = {}
         # Arquivos cuja base ainda não foi lida: lidos em silêncio até dar certo.
         self._pendentes: set[str] = set()
+        # Falhas seguidas por arquivo (leitura ou gravação). Passando de
+        # `TENTATIVAS`, o arquivo só é tentado de novo a cada rebusca.
+        self._falhas: dict[str, int] = {}
         self._fonte = 0
         self._olhadas = 0
 
@@ -93,6 +98,16 @@ class Vigia:
 
     def _achar(self) -> list[ArquivoDeConquista]:
         return arquivos.arquivos_do_jogo(str(self.game.steam_appid), self.game.executable)
+
+    def _desistiu(self, chave: str, rebusca: bool) -> bool:
+        """Se o arquivo falhou vezes demais para ser tentado neste tique."""
+        return self._falhas.get(chave, 0) >= TENTATIVAS and not rebusca
+
+    def _resultado(self, chave: str, deu_certo: bool) -> None:
+        if deu_certo:
+            self._falhas.pop(chave, None)
+        else:
+            self._falhas[chave] = self._falhas.get(chave, 0) + 1
 
     def _gravados(self, lidos: list[formatos.Desbloqueio]) -> bool:
         """Se tudo o que foi lido já está no histórico (ele só soma)."""
@@ -129,13 +144,17 @@ class Vigia:
         chave = str(achado.caminho)
         if atual is None:
             self._pendentes.discard(chave)
+            self._falhas.pop(chave, None)
             self._mtimes[chave] = None
             return
         lidos = formatos.ler_ou_none(achado.caminho, achado.formato)
         if lidos is None:
+            self._resultado(chave, False)
             return
         historico.registrar(self.game.game_id, lidos)
-        if self._gravados(lidos):
+        gravados = self._gravados(lidos)
+        self._resultado(chave, gravados)
+        if gravados:
             self._pendentes.discard(chave)
             self._mtimes[chave] = atual
 
@@ -143,7 +162,8 @@ class Vigia:
         """Um tique. Sempre devolve True: o timer só para em `parar`."""
         try:
             self._olhadas += 1
-            if self._olhadas % REBUSCA == 0:
+            rebusca = self._olhadas % REBUSCA == 0
+            if rebusca:
                 conhecidos = {str(a.caminho) for a in self._arquivos}
                 # Arquivo novo: sem mtime guardado, tudo o que ele traz é desta partida.
                 self._arquivos.extend(
@@ -154,13 +174,18 @@ class Vigia:
                 chave = str(achado.caminho)
                 atual = _mtime(achado.caminho)
                 if chave in self._pendentes:
-                    self._retomar_base(achado, atual)
+                    if not self._desistiu(chave, rebusca):
+                        self._retomar_base(achado, atual)
                 elif atual is None:
+                    self._falhas.pop(chave, None)
                     self._mtimes[chave] = None
-                elif atual != self._mtimes.get(chave):
+                elif atual != self._mtimes.get(chave) and not self._desistiu(chave, rebusca):
                     lidos = formatos.ler_ou_none(achado.caminho, achado.formato)
                     # Leitura que falhou: o mtime antigo fica, e o próximo tique tenta de novo.
-                    if lidos is not None:
+                    if lidos is None:
+                        self._resultado(chave, False)
+                    else:
+                        # O sucesso só vale quando a gravação também der certo (`_processar`).
                         mudaram.append((achado, atual, lidos))
             if mudaram:
                 self._processar(mudaram)
@@ -173,12 +198,20 @@ class Vigia:
     def _processar(self, mudaram: list[tuple[ArquivoDeConquista, int, list]]) -> None:
         lidos = [d for _a, _m, lidos_do_arquivo in mudaram for d in lidos_do_arquivo]
         antes = progresso.do_jogo(self.game)
-        entraram, primeira = historico.registrar(self.game.game_id, lidos)
+        try:
+            entraram, primeira = historico.registrar(self.game.game_id, lidos)
+        except Exception:
+            for achado, _atual, _lidos in mudaram:
+                self._resultado(str(achado.caminho), False)
+            raise
         # Só vale como visto o arquivo cujo conteúdo foi mesmo guardado; o resto
         # volta no próximo tique.
         for achado, atual, lidos_do_arquivo in mudaram:
-            if self._gravados(lidos_do_arquivo):
-                self._mtimes[str(achado.caminho)] = atual
+            chave = str(achado.caminho)
+            gravados = self._gravados(lidos_do_arquivo)
+            self._resultado(chave, gravados)
+            if gravados:
+                self._mtimes[chave] = atual
         if primeira or not entraram:
             return
         cat = catalogo.em_cache(str(self.game.steam_appid))

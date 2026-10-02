@@ -76,6 +76,19 @@ def test_ler_ou_none_distingue_falha_de_vazio(tmp_path):
     assert formatos.ler_ou_none(valido, "flt") == []
 
 
+def test_hora_fora_do_que_o_historico_aceita_vira_zero(tmp_path):
+    grande = _arquivo(tmp_path, "a.json", '{"ACH_A": {"earned": true, "earned_time": 1e30}}')
+    enorme = _arquivo(
+        tmp_path, "b.json", '{"ACH_A": {"earned": true, "earned_time": ' + "9" * 400 + "}}"
+    )
+    limite = _arquivo(
+        tmp_path, "c.json", '{"ACH_A": {"earned": true, "earned_time": %d}}' % 2**62
+    )
+    assert formatos.ler_ou_none(grande, formatos.GOLDBERG) == [Desbloqueio("ACH_A", 0)]
+    assert formatos.ler_ou_none(enorme, formatos.GOLDBERG) == [Desbloqueio("ACH_A", 0)]
+    assert formatos.ler_ou_none(limite, formatos.GOLDBERG) == [Desbloqueio("ACH_A", 2**62)]
+
+
 def test_formato_desconhecido(tmp_path):
     caminho = _arquivo(tmp_path, "a.ini", "[ACH_A]\nAchieved=1\n")
     assert formatos.ler(caminho, "flt") == []

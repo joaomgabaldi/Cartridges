@@ -42,6 +42,8 @@ RAZOR1911 = "razor1911"
 STEAM = "steam"
 
 _DESBLOQUEADA = re.compile(r"\bunlocked\s*=\s*true\b", re.IGNORECASE)
+# O limite do que o histórico aceita; acima disso a hora vale 0 ("sem data").
+_HORA_MAXIMA = 2**63
 _HORA = re.compile(r"(?:^|[{,\s])time\s*=\s*(\d+)", re.IGNORECASE)
 
 
@@ -224,6 +226,14 @@ _LEITORES: dict[str, Callable[[Path], list[Desbloqueio]]] = {
 }
 
 
+def _hora_valida(quando: Any) -> int:
+    """A hora, ou 0 ("sem data") se for negativa ou grande demais para o histórico."""
+    try:
+        return int(quando) if 0 <= quando < _HORA_MAXIMA else 0
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
 def ler_ou_none(caminho: Path, formato: str) -> Optional[list[Desbloqueio]]:
     """Como `ler`, mas diz quando a leitura falhou.
 
@@ -252,7 +262,7 @@ def ler_ou_none(caminho: Path, formato: str) -> Optional[list[Desbloqueio]]:
         logging.info("Conquistas ilegíveis em %s (%s): %s", caminho, formato, erro)
         return None
     return [
-        Desbloqueio(d.nome.strip(), max(d.quando, 0)) for d in desbloqueios if d.nome.strip()
+        Desbloqueio(d.nome.strip(), _hora_valida(d.quando)) for d in desbloqueios if d.nome.strip()
     ]
 
 
