@@ -79,7 +79,8 @@ def _valor_do_registro(raiz: int, caminho: str, nome: str) -> Optional[str]:
 def pasta_da_steam() -> Optional[Path]:
     for raiz, caminho, nome in _CHAVES_DA_STEAM:
         valor = _valor_do_registro(raiz, caminho, nome)
-        if valor and (pasta := Path(valor.strip())).is_dir():
+        # Só caminho absoluto: um valor relativo valeria a partir da pasta atual do app.
+        if valor and (pasta := Path(valor.strip())).is_absolute() and pasta.is_dir():
             return pasta
     return None
 
