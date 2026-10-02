@@ -412,10 +412,12 @@ def _estado_da_steam(caminho, conquistas, pendente=False):
     os.utime(caminho, ns=(2 * 10**18 + passo * 10**9, 2 * 10**18 + passo * 10**9))
 
 
-def _vigia_da_steam(make_game):
+def _vigia_da_steam(make_game, agora=300):
+    """``agora``: a hora do início da sessão. O padrão (300 s) deixa a margem da
+    Steam em zero, de modo que as horas pequenas dos testes valem como "desta sessão"."""
     avisos = []
     jogo = make_game(game_id="g1", name="Jogo", steam_appid="570", executable="steam://rungameid/570")
-    return vigia.Vigia(jogo, avisos.append), avisos
+    return vigia.Vigia(jogo, avisos.append, relogio=lambda: agora), avisos
 
 
 def _nomes(avisos):
@@ -459,3 +461,69 @@ def test_bin_da_steam_que_ja_existia_no_inicio_entra_na_base(tmp_path, pastas, m
     instancia.iniciar()
     instancia._olhar()
     assert avisos == [] and "ACH_A" in historico.ler("g1")
+
+
+# --- Conquistas que a Steam sincroniza de outro aparelho ao abrir o jogo ---
+
+AGORA = 10**7
+DIAS_ATRAS = AGORA - 3 * 86400
+
+
+def _sessao_da_steam(tmp_path, make_game, monkeypatch, antes):
+    """Sessão iniciada em ``AGORA`` com o estado ``antes`` já na Steam."""
+    estado = _steam(tmp_path, monkeypatch)
+    _estado_da_steam(estado, antes)
+    instancia, avisos = _vigia_da_steam(make_game, agora=AGORA)
+    instancia.iniciar()
+    return estado, instancia, avisos
+
+
+def test_conquista_sincronizada_de_outro_aparelho_nao_avisa(tmp_path, pastas, make_game, monkeypatch):
+    estado, instancia, avisos = _sessao_da_steam(tmp_path, make_game, monkeypatch, {0: DIAS_ATRAS})
+    # Ao abrir o jogo, a Steam baixa do servidor a conquista ganha dias antes em outro PC.
+    _estado_da_steam(estado, {0: DIAS_ATRAS, 1: DIAS_ATRAS + 60})
+    instancia._olhar()
+    assert avisos == []
+    assert set(historico.ler("g1")) == {"ACH_A", "ACH_B"}
+
+
+def test_conquista_com_hora_de_agora_avisa(tmp_path, pastas, make_game, monkeypatch):
+    estado, instancia, avisos = _sessao_da_steam(tmp_path, make_game, monkeypatch, {0: DIAS_ATRAS})
+    # Dentro da margem: o relógio do PC pode estar um pouco adiantado em relação ao da Steam.
+    _estado_da_steam(estado, {0: DIAS_ATRAS, 1: AGORA - vigia.MARGEM_DA_STEAM + 1})
+    instancia._olhar()
+    assert _nomes(avisos) == [["ACH_B"]]
+
+
+def test_conquista_sem_hora_da_steam_avisa(tmp_path, pastas, make_game, monkeypatch):
+    estado, instancia, avisos = _sessao_da_steam(tmp_path, make_game, monkeypatch, {0: DIAS_ATRAS})
+    _estado_da_steam(estado, {0: DIAS_ATRAS, 1: 0})
+    instancia._olhar()
+    assert _nomes(avisos) == [["ACH_B"]]
+
+
+def test_lote_misto_da_steam_avisa_so_a_nova(tmp_path, pastas, make_game, monkeypatch):
+    estado, instancia, avisos = _sessao_da_steam(tmp_path, make_game, monkeypatch, {})
+    _estado_da_steam(estado, {0: DIAS_ATRAS, 1: AGORA + 10})
+    instancia._olhar()
+    assert _nomes(avisos) == [["ACH_B"]]
+    assert set(historico.ler("g1")) == {"ACH_A", "ACH_B"}
+
+
+def test_jogo_que_nao_e_da_steam_com_hora_antiga_avisa_como_antes(pastas, make_game):
+    _arquivo(pastas, [])
+    avisos = []
+    instancia = vigia.Vigia(_jogo(make_game), avisos.append, relogio=lambda: AGORA)
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_A", DIAS_ATRAS)])
+    instancia._olhar()
+    assert _nomes(avisos) == [["ACH_A"]]
+
+
+def test_cem_por_cento_so_de_conquista_sincronizada_nao_pulsa(tmp_path, pastas, make_game, monkeypatch):
+    catalogo._gravar_cache("570", CAT)
+    estado, instancia, avisos = _sessao_da_steam(tmp_path, make_game, monkeypatch, {})
+    _estado_da_steam(estado, {0: DIAS_ATRAS, 1: DIAS_ATRAS})
+    instancia._olhar()
+    assert avisos == []
+    assert set(historico.ler("g1")) == {"ACH_A", "ACH_B"}

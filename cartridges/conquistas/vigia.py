@@ -19,6 +19,7 @@ quando aparece entra em silêncio, como a base.
 
 import logging
 import os
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -32,6 +33,9 @@ INTERVALO = 2
 REBUSCA = 15
 # Falhas seguidas de um arquivo antes de ele passar a ser tentado só a cada rebusca.
 TENTATIVAS = 3
+# Nos jogos da Steam, conquista com hora anterior ao início da sessão por mais
+# que isto (o relógio do PC e o da Steam podem diferir) veio de outro aparelho.
+MARGEM_DA_STEAM = 5 * 60
 
 
 @dataclass(frozen=True)
@@ -60,9 +64,17 @@ def _mtime(caminho: Any) -> Optional[int]:
 
 
 class Vigia:
-    def __init__(self, game: Any, avisar: Callable[[list[Desbloqueada]], None]) -> None:
+    def __init__(
+        self,
+        game: Any,
+        avisar: Callable[[list[Desbloqueada]], None],
+        relogio: Callable[[], float] = time.time,
+    ) -> None:
         self.game = game
         self._avisar = avisar
+        self._relogio = relogio
+        # A hora em que a sessão começou; None antes de `iniciar`.
+        self._inicio: Optional[float] = None
         self._arquivos: list[ArquivoDeConquista] = []
         # O mtime de cada arquivo na última leitura que foi guardada com sucesso.
         self._mtimes: dict[str, Optional[int]] = {}
@@ -84,6 +96,7 @@ class Vigia:
     def iniciar(self) -> None:
         if self._fonte or not acompanha(self.game):
             return
+        self._inicio = self._relogio()
         try:
             self._arquivos = self._achar()
             esperados = arquivos.da_steam_esperados(
@@ -240,8 +253,29 @@ class Vigia:
         )
         horas = {d.nome.strip().upper(): d.quando for d in lidos}
         ordem = sorted(entraram, key=lambda nome: horas.get(nome, 0))
+        limite = self._limite_da_steam()
+        # Conquista antiga que a Steam acabou de sincronizar entra no histórico, mas não é aviso.
+        avisaveis = [
+            nome for nome in ordem if limite is None or not 0 < horas.get(nome, 0) < limite
+        ]
+        if not avisaveis:
+            return
         # O 100% é da última conquista do catálogo, nunca de um nome que ele não conhece.
-        ultima = next((nome for nome in reversed(ordem) if nome in por_nome), None)
+        ultima = next((nome for nome in reversed(avisaveis) if nome in por_nome), None)
         self._avisar(
-            [Desbloqueada(nome, por_nome.get(nome), completou and nome == ultima) for nome in ordem]
+            [
+                Desbloqueada(nome, por_nome.get(nome), completou and nome == ultima)
+                for nome in avisaveis
+            ]
         )
+
+    def _limite_da_steam(self) -> Optional[float]:
+        """A hora abaixo da qual uma conquista da Steam não é desta sessão.
+
+        Ao abrir o jogo a Steam baixa do servidor o que foi ganho em outro
+        aparelho e regrava o arquivo: essas conquistas têm horas antigas. Só vale
+        para jogos da Steam; a hora dos emuladores é menos confiável.
+        """
+        if self._inicio is None or not arquivos.eh_jogo_da_steam(self.game.executable):
+            return None
+        return self._inicio - MARGEM_DA_STEAM
