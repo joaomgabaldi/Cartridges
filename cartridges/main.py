@@ -270,6 +270,7 @@ _GAME_FIELD_TYPES: dict[str, Any] = {
             "run_as_admin",
             "track_process",
             "track_updates",
+            "conquistas",
         ),
         bool,
     ),
@@ -736,8 +737,9 @@ class CartridgesApplication(Adw.Application):
 
         # A sessão que estava correndo acaba aqui, e as telas vestidas não podem
         # ficar com a arte do jogo depois que o app sumir. Síncrono e antes de
-        # tudo o mais deste método: é a última janela em que ainda existe
-        # processo para desfazer a troca.
+        # tudo o mais deste método, salvo a parada do vigia acima (rápida e que
+        # nunca levanta): é a última janela em que ainda existe processo para
+        # desfazer a troca.
         session_wallpaper.restaurar()
 
         # As fitas voltam ao que eram quando o app abriu. Esperando, pelo mesmo

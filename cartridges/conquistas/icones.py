@@ -16,6 +16,7 @@ from gi.repository import Gdk, GLib
 from requests.exceptions import RequestException
 
 from cartridges import shared
+from cartridges.conquistas import arquivos
 from cartridges.utils.download import download_bytes
 
 _MAX_BYTES = 512 * 1024
@@ -56,6 +57,9 @@ def _resolver(origem: str) -> tuple[Optional[Path], bool]:
         if not origem:
             return None, False
         if not origem.startswith(("http://", "https://")):
+            # Caminho de rede nunca: só checar o arquivo já conecta no servidor.
+            if arquivos.eh_caminho_de_rede(origem):
+                return None, False
             caminho = Path(origem)
             return (caminho if caminho.is_file() else None), False
 
