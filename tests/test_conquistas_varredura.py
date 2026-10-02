@@ -206,6 +206,78 @@ def test_varredura_de_um_jogo_fica_calada(store, make_game, pastas, win, flush_i
     assert [aviso for aviso in _avisos(win) if "conquista" in aviso] == []
 
 
+class _ThreadFalsa:
+    iniciadas: list = []
+
+    def __init__(self, target, args=(), daemon=False):
+        self.target, self.args, self.daemon = target, args, daemon
+
+    def start(self):
+        _ThreadFalsa.iniciadas.append(self)
+
+
+@pytest.fixture
+def threads_falsas(monkeypatch):
+    _ThreadFalsa.iniciadas = []
+    monkeypatch.setattr(varredura.threading, "Thread", _ThreadFalsa)
+    return _ThreadFalsa.iniciadas
+
+
+def test_varrer_jogos_usa_uma_thread_so_e_ignora_quem_nao_participa(
+    store, make_game, threads_falsas
+):
+    a = _registrado(store, make_game, 1, steam_appid="570")
+    b = _registrado(store, make_game, 2, steam_appid="620")
+    sem_appid = _registrado(store, make_game, 3)
+    desligado = _registrado(store, make_game, 4, steam_appid="730", conquistas=False)
+    VarreduraConquistas().varrer_jogos([a, sem_appid, b, desligado])
+    (thread,) = threads_falsas
+    jogos, geracao, avisar = thread.args[0], thread.args[1], thread.args[2]
+    assert jogos == [a, b] and avisar is False and geracao == 0
+    assert thread.daemon is True
+
+
+def test_varrer_jogos_vazio_ou_sem_ninguem_que_participe_nao_faz_nada(
+    store, make_game, threads_falsas
+):
+    instancia = VarreduraConquistas()
+    instancia.varrer_jogos([])
+    instancia.varrer_jogos([_registrado(store, make_game, 1)])
+    assert threads_falsas == []
+
+
+def test_varrer_jogo_e_varrer_jogos_de_um(store, make_game, threads_falsas):
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    VarreduraConquistas().varrer_jogo(game)
+    (thread,) = threads_falsas
+    assert thread.args[0] == [game] and thread.args[2] is False
+
+
+def test_varrer_jogos_fica_calada_e_nao_guarda_a_data(
+    store, make_game, pastas, win, flush_idle, state_schema, monkeypatch
+):
+    a = _registrado(store, make_game, 1, steam_appid="570")
+    b = _registrado(store, make_game, 2, steam_appid="620")
+    historico.registrar(a.game_id, [Desbloqueio("ACH_A", 100)])
+    _goldberg(pastas, "570", [("ACH_A", 100), ("ACH_B", 200)])
+    _goldberg(pastas, "620", [("ACH_X", 100)])
+    ligada = []
+
+    class Sincrona(_ThreadFalsa):
+        def start(self):
+            ligada.append(1)
+            self.target(*self.args)
+
+    monkeypatch.setattr(varredura.threading, "Thread", Sincrona)
+    VarreduraConquistas().varrer_jogos([a, b])
+    flush_idle()
+    assert ligada == [1]
+    assert historico.ler(a.game_id) == {"ACH_A": 100, "ACH_B": 200}
+    assert historico.ler(b.game_id) == {"ACH_X": 100}
+    assert _avisos(win) == []
+    assert state_schema.get_int64("conquistas-ultima-varredura") == 0
+
+
 def _janela_com_jogo_aberto(win, game):
     chamadas = []
     win.active_game = game

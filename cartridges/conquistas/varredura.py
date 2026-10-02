@@ -181,11 +181,20 @@ class VarreduraConquistas:
         ).start()
 
     def varrer_jogo(self, game: Any) -> None:
-        """Um jogo só, sem aviso (appID corrigido, interruptor religado)."""
-        if not participa(game):
+        """Um jogo só, sem aviso (appID corrigido, interruptor religado, fim de sessão)."""
+        self.varrer_jogos([game])
+
+    def varrer_jogos(self, games: Any) -> None:
+        """Alguns jogos, numa thread só e sem aviso (jogos recém-importados).
+
+        Não grava a data da varredura e não conta como a passada da abertura.
+        Quem não participa fica de fora; sem ninguém, nada roda.
+        """
+        jogos = [game for game in games if participa(game)]
+        if not jogos:
             return
         threading.Thread(
-            target=self._worker, args=([game], self._generation, False), daemon=True
+            target=self._worker, args=(jogos, self._generation, False), daemon=True
         ).start()
 
     # -- a passada ------------------------------------------------------------
