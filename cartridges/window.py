@@ -554,10 +554,22 @@ class CartridgesWindow(Adw.ApplicationWindow):
         if GamepadManager.active is not None:
             GamepadManager.active.suspend()
 
+    def _varrer_jogo_da_sessao(self, game: Optional[Game]) -> None:
+        """Pede a leitura final das conquistas do jogo da sessão. Nunca levanta."""
+        if game is None:
+            return
+        try:
+            varredura = getattr(self.get_application(), "varredura_conquistas", None)
+            if varredura is not None:
+                varredura.varrer_jogo(game)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Falha ao ler as conquistas no fim da sessão", exc_info=True)
+
     def hide_session_blocker(self) -> None:
         # Primeiro esconder, depois esquecer o jogo: esconder fecha um balão de
         # anotação que esteja aberto, e é esse fechamento que a grava.
         self.session_blocker.set_visible(False)
+        jogo_da_sessao = self.session_game
         self.session_game = None
         self.botao_tarefas.reavaliar()
         self.navigation_view.set_sensitive(True)
@@ -582,6 +594,13 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # O vigia para antes de a iluminação voltar à cor do app: um pulso
         # pedido depois disso não teria sessão para pulsar.
         sessao_conquistas.parar()
+
+        # Uma última leitura do jogo: o vigia olha a cada 2 s (e acha arquivos
+        # novos a cada 30 s), então o que saiu nos últimos instantes ainda não
+        # está no histórico — e contaria como "jogado por fora" no aviso da
+        # próxima abertura. Em segundo plano e sem aviso; só no fim da sessão,
+        # nunca no fechamento do app (o `do_shutdown` não passa por aqui).
+        self._varrer_jogo_da_sessao(jogo_da_sessao)
 
         # De volta ao roxo do app, que é a cor de quando não há jogo correndo.
         session_fita.voltar()

@@ -183,8 +183,36 @@ class Importer(ErrorProducer):
         shared.win.zerados_library.invalidate_sort()
         # Um pendente resolvido volta a aparecer; o filtro é quem o escondia.
         shared.win.library.invalidate_filter()
+        self.varrer_conquistas_dos_importados()
         if self.ao_terminar is not None:
             self.ao_terminar()
+
+    def varrer_conquistas_dos_importados(self) -> None:
+        """Dá catálogo e histórico aos jogos recém-importados, em silêncio.
+
+        O vigia da sessão só usa o catálogo já guardado: sem isto, um jogo
+        importado com o app aberto ficaria sem catálogo (e sem o cartão de
+        conquistas) até a próxima abertura. Se a varredura da abertura ainda
+        não rodou, ela os inclui e esta passada só se repete — sem dano. Nunca
+        levanta: nada aqui derruba o fim da importação.
+        """
+        try:
+            varredura = getattr(
+                shared.win.get_application(), "varredura_conquistas", None
+            )
+            if varredura is None:
+                return
+            jogos = [
+                game
+                for game_id in self.imported_game_ids
+                if (game := shared.store.get(game_id)) is not None
+            ]
+            if jogos:
+                varredura.varrer_jogos(jogos)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning(
+                "Falha ao ler as conquistas dos jogos importados", exc_info=True
+            )
 
     def resolver_pendencias(self) -> None:
         """Tira das pendências da restauração os jogos que esta importação

@@ -17,6 +17,8 @@ looking successful. It cannot be inferred from how the loop ended; it needs its
 own flag.
 """
 
+from types import SimpleNamespace
+
 import pytest
 
 from cartridges import shared
@@ -316,6 +318,85 @@ def test_monitor_so_atualiza_a_tarefa_quando_o_progresso_muda(
     importer.monitor_import()
     importer.monitor_import()
     assert chamadas == [(1, 2)]
+
+
+# endregion
+
+
+# region Conquistas dos jogos importados
+
+
+class _AppFalso:
+    def __init__(self, varredura):
+        self.varredura_conquistas = varredura
+        self.state = None
+        self._acoes = {}
+
+    def lookup_action(self, nome):
+        return self._acoes.setdefault(nome, SimpleNamespace(set_enabled=lambda _on: None))
+
+
+def _terminar_importacao(importer, real_window, monkeypatch, varredura, importados, na_store):
+    for jogo in na_store:
+        shared.store.add_game(jogo, {}, run_pipeline=False)
+    shared.store.new_game_ids = set(importados)
+    app = _AppFalso(varredura)
+    monkeypatch.setattr(real_window, "get_application", lambda: app)
+    importer.finish_import()
+    return app
+
+
+def test_fim_da_importacao_pede_a_varredura_dos_jogos_importados(
+    importer, real_window, make_game, monkeypatch
+):
+    a = make_game(game_id="shortcuts_a", steam_appid="570")
+    b = make_game(game_id="shortcuts_b", steam_appid="620")
+    antigo = make_game(game_id="shortcuts_c", steam_appid="730")
+    pedidos = []
+    varredura = type("V", (), {"varrer_jogos": lambda _s, jogos: pedidos.append(list(jogos))})()
+    app = _terminar_importacao(
+        importer, real_window, monkeypatch, varredura, {"shortcuts_a", "shortcuts_b", "x_sumido"},
+        [a, b, antigo],
+    )
+    assert len(pedidos) == 1
+    assert {j.game_id for j in pedidos[0]} == {"shortcuts_a", "shortcuts_b"}
+    assert app.state == shared.AppState.DEFAULT  # depois de o estado voltar ao normal
+
+
+def test_fim_da_importacao_sem_jogo_novo_nao_pede_varredura(
+    importer, real_window, make_game, monkeypatch
+):
+    pedidos = []
+    varredura = type("V", (), {"varrer_jogos": lambda _s, jogos: pedidos.append(list(jogos))})()
+    _terminar_importacao(
+        importer, real_window, monkeypatch, varredura, set(), [make_game(game_id="shortcuts_c")]
+    )
+    assert pedidos == []
+
+
+def test_varredura_que_estoura_nao_derruba_o_fim_da_importacao(
+    importer, real_window, make_game, monkeypatch
+):
+    def estoura(_s, _jogos):
+        raise RuntimeError("falhou")
+
+    varredura = type("V", (), {"varrer_jogos": estoura})()
+    terminou = []
+    importer.ao_terminar = lambda: terminou.append(1)
+    _terminar_importacao(
+        importer, real_window, monkeypatch, varredura, {"shortcuts_a"},
+        [make_game(game_id="shortcuts_a", steam_appid="570")],
+    )
+    assert terminou == [1]
+
+
+def test_fim_da_importacao_sem_varredura_nao_levanta(importer, real_window, make_game, monkeypatch):
+    terminou = []
+    importer.ao_terminar = lambda: terminou.append(1)
+    _terminar_importacao(
+        importer, real_window, monkeypatch, None, {"shortcuts_a"}, [make_game(game_id="shortcuts_a")]
+    )
+    assert terminou == [1]
 
 
 # endregion

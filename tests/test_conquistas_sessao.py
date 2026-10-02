@@ -1,5 +1,7 @@
 """A sessão liga o vigia e decide o que fazer com cada conquista nova."""
 
+from types import SimpleNamespace
+
 import pytest
 
 from cartridges import conquista_aviso
@@ -189,6 +191,83 @@ def test_a_sessao_da_janela_liga_e_desliga_o_vigia(real_window, make_game, monke
     real_window.show_session_blocker(jogo)
     real_window.hide_session_blocker()
     assert chamadas == [jogo, "parar"]
+
+
+def _app_com_varredura(real_window, monkeypatch):
+    varridos = []
+    app = SimpleNamespace(
+        varredura_conquistas=SimpleNamespace(varrer_jogo=lambda jogo: varridos.append(jogo))
+    )
+    monkeypatch.setattr(real_window, "get_application", lambda: app)
+    return varridos
+
+
+def test_o_fim_da_sessao_pede_a_leitura_final_depois_de_parar_o_vigia(
+    real_window, make_game, monkeypatch
+):
+    import cartridges.window as window_module  # noqa: PLC0415
+
+    ordem = []
+    monkeypatch.setattr(window_module.sessao_conquistas, "comecar", lambda _j: None)
+    monkeypatch.setattr(window_module.sessao_conquistas, "parar", lambda: ordem.append("parar"))
+    app = SimpleNamespace(
+        varredura_conquistas=SimpleNamespace(varrer_jogo=lambda j: ordem.append(("varrer", j)))
+    )
+    monkeypatch.setattr(real_window, "get_application", lambda: app)
+    jogo = make_game(name="Hollow Knight", steam_appid="570")
+    real_window.show_session_blocker(jogo)
+    assert ordem == []  # o começo da sessão não varre
+    real_window.hide_session_blocker()
+    # Depois de o vigia parar: com ele ativo, o histórico do jogo é dele.
+    assert ordem == ["parar", ("varrer", jogo)]
+
+
+def test_fim_de_sessao_sem_varredura_ou_sem_jogo_nao_levanta(real_window, make_game, monkeypatch):
+    import cartridges.window as window_module  # noqa: PLC0415
+
+    monkeypatch.setattr(window_module.sessao_conquistas, "comecar", lambda _j: None)
+    app = SimpleNamespace(varredura_conquistas=None)
+    monkeypatch.setattr(real_window, "get_application", lambda: app)
+    real_window.show_session_blocker(make_game(name="X"))
+    real_window.hide_session_blocker()  # varredura None: nada
+    varridos = _app_com_varredura(real_window, monkeypatch)
+    real_window.hide_session_blocker()  # sem jogo de sessão: nada
+    assert varridos == []
+
+
+def test_varredura_que_estoura_no_fim_da_sessao_nao_derruba_o_resto(
+    real_window, make_game, monkeypatch
+):
+    import cartridges.window as window_module  # noqa: PLC0415
+
+    def estoura(_jogo):
+        raise RuntimeError("falhou")
+
+    app = SimpleNamespace(varredura_conquistas=SimpleNamespace(varrer_jogo=estoura))
+    monkeypatch.setattr(real_window, "get_application", lambda: app)
+    voltou = []
+    monkeypatch.setattr(window_module.session_fita, "voltar", lambda: voltou.append(1))
+    real_window.show_session_blocker(make_game(name="X"))
+    real_window.hide_session_blocker()
+    assert voltou == [1]
+
+
+def test_o_fechamento_do_app_nao_pede_a_leitura_final(monkeypatch):
+    import cartridges.main as main_module  # noqa: PLC0415
+    from cartridges import shared  # noqa: PLC0415
+
+    varridos, parou = [], []
+    monkeypatch.setattr(main_module.sessao_conquistas, "parar", lambda: None)
+    monkeypatch.setattr(main_module.session_wallpaper, "restaurar", lambda: None)
+    monkeypatch.setattr(main_module.session_fita, "fechar", lambda: None)
+    monkeypatch.setattr(shared, "win", None)
+    monkeypatch.setattr(shared, "store", shared.store)
+    app = main_module.CartridgesApplication()
+    app.varredura_conquistas = SimpleNamespace(
+        varrer_jogo=varridos.append, varrer_jogos=varridos.extend, stop=lambda: parou.append(1)
+    )
+    app.do_shutdown()
+    assert varridos == [] and parou == [1]
 
 
 def test_jogo_da_steam_so_pulsa(make_game, isolar):
