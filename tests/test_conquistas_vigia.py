@@ -214,6 +214,67 @@ def test_arquivo_apagado_e_recriado_com_conquista_nova(pastas, make_game):
     assert [d.nome for d in avisos[0]] == ["ACH_B"]
 
 
+def test_hora_grande_demais_avisa_uma_vez_so(pastas, make_game):
+    """O histórico recusa hora de 2**63 para cima; ela vira "sem data", e não um aviso por tique."""
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 10**20)])
+    for _tique in range(5):
+        instancia._olhar()
+    assert len(avisos) == 1
+    assert historico.ler("g1") == {"ACH_A": 100, "ACH_B": 0}
+
+
+def test_hora_grande_demais_na_base_nao_deixa_o_arquivo_pendente(pastas, make_game):
+    _arquivo(pastas, [("ACH_A", 10**20)])
+    instancia, _avisos = _vigia(make_game)
+    instancia.iniciar()
+    assert historico.ler("g1") == {"ACH_A": 0} and not instancia._pendentes
+
+
+@pytest.mark.parametrize("na_base", [False, True])
+def test_arquivo_que_sempre_falha_so_volta_na_rebusca(pastas, make_game, monkeypatch, na_base):
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    chamadas = []
+
+    def sempre_falha(caminho, _formato):
+        chamadas.append(caminho)
+        return None
+
+    if na_base:
+        monkeypatch.setattr(vigia.formatos, "ler_ou_none", sempre_falha)
+        instancia.iniciar()
+        chamadas.clear()  # a leitura da base não conta
+    else:
+        instancia.iniciar()
+        _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+        monkeypatch.setattr(vigia.formatos, "ler_ou_none", sempre_falha)
+    for _tique in range(3):
+        instancia._olhar()
+    assert len(chamadas) == vigia.TENTATIVAS == 3
+    for _tique in range(vigia.REBUSCA - 4):
+        instancia._olhar()
+    assert len(chamadas) == 3  # tiques 4 a REBUSCA - 1: nada
+    instancia._olhar()  # o tique da rebusca tenta de novo
+    assert len(chamadas) == 4 and avisos == []
+
+
+def test_gravacao_que_nunca_se_completa_tambem_para_de_insistir(pastas, make_game, monkeypatch):
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, _avisos = _vigia(make_game)
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    chamadas = []
+    monkeypatch.setattr(
+        vigia.historico, "registrar", lambda *_a: chamadas.append(1) or ([], False)
+    )
+    for _tique in range(vigia.REBUSCA - 1):
+        instancia._olhar()
+    assert len(chamadas) == 3
+
+
 CAT3 = Catalogo(
     (
         ConquistaInfo("ACH_A", "Um", "", "", "", False, 50.0),
