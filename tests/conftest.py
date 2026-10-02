@@ -387,6 +387,15 @@ def win(monkeypatch):
     return fake
 
 
+@pytest.fixture(autouse=True)
+def sem_steam_no_registro(monkeypatch):
+    """A Steam desta máquina (se houver) não entra nos testes: quem precisa de
+    uma Steam monta a sua em ``tmp_path``."""
+    from cartridges.conquistas import arquivos  # noqa: PLC0415
+
+    monkeypatch.setattr(arquivos, "_valor_do_registro", lambda *_a: None)
+
+
 @pytest.fixture
 def flush_idle():
     """Drain everything ``GLib.idle_add`` has queued.
