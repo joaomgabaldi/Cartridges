@@ -77,10 +77,16 @@ _user32: Optional[Any] = None
 
 
 def _api() -> Any:
-    """user32 com os tipos declarados (HWND de 64 bits não pode virar int de 32)."""
+    """user32 com os tipos declarados (HWND de 64 bits não pode virar int de 32).
+
+    Uma cópia só deste módulo: ``ctypes.windll.user32`` é compartilhado, e os
+    ``argtypes`` declarados aqui (o ``GetMonitorInfoW`` com a estrutura simples)
+    quebrariam as chamadas de ``window_geometry``, que declara outra estrutura
+    para a mesma função.
+    """
     global _user32  # pylint: disable=global-statement
     if _user32 is None:
-        u = ctypes.windll.user32  # type: ignore[attr-defined]
+        u = ctypes.WinDLL("user32")  # type: ignore[attr-defined]
         u.GetWindowLongPtrW.restype = ctypes.c_ssize_t
         u.GetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int]
         u.SetWindowLongPtrW.restype = ctypes.c_ssize_t
