@@ -1302,27 +1302,29 @@ def comecar(game: "Game") -> None:
     tem de vencer a cor do jogo que ainda estava sendo calculada.
     """
     global _jogo_da_sessao  # noqa: PLW0603
-    _jogo_da_sessao = game
-    if not ligada():
+    alvos = _guardadas() if ligada() else None
+    # A sessão e a vez de cada fita mudam juntas, sob a trava do pulso: um
+    # pulso que vê a sessão antiga não reserva depois desta troca.
+    with _TRAVA_PULSO:
+        _jogo_da_sessao = game
+        _fila_de_pulsos.clear()
+        geracoes = _reservar(alvos) if alvos is not None else {}
+    if alvos is None:
         return
-    alvos = _guardadas()
-    geracoes = _reservar(alvos)
     _em_thread(lambda: _vestir(cor_do_jogo(game), alvos, geracoes))
 
 
 def voltar() -> None:
     """A sessão acabou: de volta à cor do app. Chamar da thread de UI."""
-    global _jogo_da_sessao  # noqa: PLW0603
     # Antes de tudo: o pulso que estiver no meio para no próximo passo, e a
-    # fila do que não começou vai fora — a sessão acabou.
-    _jogo_da_sessao = None
-    with _TRAVA_PULSO:
-        _fila_de_pulsos.clear()
-    if not ligada():
+    # fila do que não começou vai fora — a sessão acabou. A vez de cada fita
+    # é tirada na mesma trava: depois dela nenhum pulso reserva mais, e a volta
+    # à cor do app nunca é atropelada por um passo dourado.
+    alvos = _guardadas() if ligada() else None
+    geracoes = _encerrar_pulsos(alvos)
+    if alvos is None:
         return
-    alvos = _guardadas()
-    geracoes = _reservar(alvos)
-    _em_thread(lambda: _vestir(cor_do_app(), alvos, geracoes))
+    _em_thread(lambda: _vestir(cor_do_app(), alvos, geracoes or {}))
 
 
 # region Pulso de conquista
@@ -1346,10 +1348,30 @@ PULSOS: dict[str, list[tuple[str, float]]] = {
     ],
 }
 
-# Pulsos pedidos durante outro pulso esperam a vez; uma thread só serve a fila.
+# Da mais fraca à mais forte: o pedido que espera a vez sobe para o maior.
+FORCA_DOS_PULSOS = ("normal", "rara", "completo")
+
+# Uma thread só serve os pulsos. Durante um pulso fica no máximo UM pedido
+# esperando, e quem chega depois só o promove ao tipo mais forte. Esta trava
+# guarda a sessão, a fila e a vez de cada fita: quem confere a sessão e quem
+# a encerra tiram a vez das fitas dentro dela, e nenhum passo de pulso reserva
+# depois de a sessão acabar. Dentro dela só entram a conferência, a reserva
+# (``_TRAVA_DAS_TRAVAS``, nunca o contrário) e a fila — nada de rede, e nunca
+# com a trava de uma fita na mão.
 _TRAVA_PULSO = threading.Lock()
 _fila_de_pulsos: list[tuple["Game", str]] = []
 _pulsando = False
+
+
+def _encerrar_pulsos(alvos: Optional[list[Fita]] = None) -> Optional[dict[str, int]]:
+    """A sessão acabou (ou o app vai fechar): o pulso em curso para no próximo
+    passo e a fila vai fora. Com ``alvos``, devolve a vez de cada um deles,
+    tirada na mesma trava."""
+    global _jogo_da_sessao  # noqa: PLW0603
+    with _TRAVA_PULSO:
+        _jogo_da_sessao = None
+        _fila_de_pulsos.clear()
+        return _reservar(alvos) if alvos is not None else None
 
 
 def pulsar_conquista(tipo: str) -> None:
@@ -1363,11 +1385,24 @@ def pulsar_conquista(tipo: str) -> None:
     if jogo is None or tipo not in PULSOS or not ligada():
         return
     with _TRAVA_PULSO:
-        _fila_de_pulsos.append((jogo, tipo))
+        if _jogo_da_sessao is not jogo:
+            return
+        if _fila_de_pulsos:
+            esperando = _fila_de_pulsos[0][1]
+            if FORCA_DOS_PULSOS.index(tipo) > FORCA_DOS_PULSOS.index(esperando):
+                _fila_de_pulsos[0] = (jogo, tipo)
+        else:
+            _fila_de_pulsos.append((jogo, tipo))
         if _pulsando:
             return
         _pulsando = True
-    _em_thread(_servir_pulsos)
+    try:
+        _em_thread(_servir_pulsos)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.warning("Não foi possível iniciar o pulso de conquista", exc_info=True)
+        with _TRAVA_PULSO:
+            _pulsando = False
+            _fila_de_pulsos.clear()
 
 
 def _servir_pulsos() -> None:
@@ -1392,6 +1427,25 @@ def _tingir(fita: Fita, cor: Cor, geracao: int) -> None:
         cor_hex = hsv_hex(na_fita(cor, fita))
         if _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex}):
             _mostrada[fita.id] = (True, cor_hex)
+        else:
+            # Não se sabe o que a fita mostra: o próximo fade parte direto.
+            _mostrada.pop(fita.id, None)
+
+
+def _vez_na_sessao(jogo: "Game", alvos: list[Fita]) -> Optional[dict[str, int]]:
+    """A vez de cada fita para o próximo passo do pulso, ou ``None`` se a
+    sessão acabou (ou o recurso foi desligado) e o pulso deve parar.
+
+    A conferência da sessão e a reserva são uma coisa só, sob a trava: sem
+    isso, o fim da sessão podia caber entre as duas, e o passo dourado, com a
+    vez maior, tomava o lugar da volta à cor do app.
+    """
+    if not ligada():
+        return None
+    with _TRAVA_PULSO:
+        if _jogo_da_sessao is not jogo:
+            return None
+        return _reservar(alvos)
 
 
 def _pulsar(jogo: "Game", tipo: str) -> None:
@@ -1400,15 +1454,15 @@ def _pulsar(jogo: "Game", tipo: str) -> None:
         return
     cor_jogo = cor_do_jogo(jogo)
     for qual, segundos in PULSOS[tipo]:
-        if _jogo_da_sessao is not jogo:
+        geracoes = _vez_na_sessao(jogo, alvos)
+        if geracoes is None:
             return
         cor = OURO if qual == "ouro" else cor_jogo
-        geracoes = _reservar(alvos)
         _em_paralelo(alvos, lambda fita, c=cor, g=geracoes: _tingir(fita, c, g[fita.id]))
         time.sleep(segundos)
-    if _jogo_da_sessao is not jogo:
+    geracoes = _vez_na_sessao(jogo, alvos)
+    if geracoes is None:
         return
-    geracoes = _reservar(alvos)
     _em_paralelo(
         alvos,
         lambda fita: _transitar(fita, True, hsv_hex(na_fita(cor_jogo, fita)), geracoes[fita.id]),
@@ -1448,6 +1502,11 @@ def fechar() -> None:
     ``restaurar_orfaos`` do próximo arranque termina o serviço. É exatamente
     para isso que a chave existe.
     """
+    # Antes de devolver qualquer coisa: o app fecha sem passar por ``voltar``,
+    # e um pulso ainda vivo tiraria uma vez maior que a da devolução e deixaria
+    # a fita dourada, com a chave já limpa e nada para o próximo arranque
+    # consertar.
+    _encerrar_pulsos()
     linha = _em_thread(_devolver_no_fechamento)
     linha.join(PRAZO_FECHAMENTO)
     if linha.is_alive():
