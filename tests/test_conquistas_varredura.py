@@ -474,3 +474,97 @@ def test_tres_jogos_com_chave_recusada_um_pedido_e_um_aviso(
     ]
     # Os três ficam com o "nenhum" guardado: a próxima abertura não pergunta.
     assert all(catalogo.em_cache(str(n)) is not None for n in (1, 2, 3))
+
+
+# -- Conquistas antigas que chegam agora (jogo da Steam rodado aqui pela primeira vez) --
+
+ANTERIOR = 1_800_000_000  # início da varredura anterior, guardado no estado
+VELHA = ANTERIOR - 365 * 24 * 3600  # ganha um ano antes, em outro aparelho
+NOVA = ANTERIOR + 3600  # ganha depois da abertura anterior
+
+
+def _da_steam(store, make_game, numero, appid="570"):
+    game = make_game(
+        game_id=f"steam_{numero}",
+        name=f"Jogo {numero}",
+        steam_appid=appid,
+        executable=f"steam://rungameid/{appid}",
+    )
+    store.add_game(game, {}, run_pipeline=False)
+    historico.registrar(game.game_id, [])  # já varrido antes, sem nada
+    return game
+
+
+def test_conquista_antiga_de_jogo_da_steam_nao_conta_no_aviso(
+    store, make_game, pastas, win, flush_idle, state_schema
+):
+    state_schema.set_int64("conquistas-ultima-varredura", ANTERIOR)
+    game = _da_steam(store, make_game, 1)
+    _goldberg(pastas, "570", [("ACH_A", VELHA), ("ACH_B", VELHA)])
+    _rodar([game], flush_idle)
+    assert historico.ler(game.game_id) == {"ACH_A": VELHA, "ACH_B": VELHA}
+    assert _avisos(win) == []
+
+
+def test_conquista_depois_da_varredura_anterior_conta(
+    store, make_game, pastas, win, flush_idle, state_schema
+):
+    state_schema.set_int64("conquistas-ultima-varredura", ANTERIOR)
+    game = _da_steam(store, make_game, 1)
+    _goldberg(pastas, "570", [("ACH_A", VELHA), ("ACH_B", NOVA), ("ACH_C", 0)])
+    _rodar([game], flush_idle)
+    assert set(historico.ler(game.game_id)) == {"ACH_A", "ACH_B", "ACH_C"}
+    # A nova e a sem data contam; a de um ano antes, não.
+    assert _avisos(win) == ["2 novas conquistas em Jogo 1"]
+
+
+def test_dentro_da_margem_conta(store, make_game, pastas, win, flush_idle, state_schema):
+    state_schema.set_int64("conquistas-ultima-varredura", ANTERIOR)
+    game = _da_steam(store, make_game, 1)
+    _goldberg(pastas, "570", [("ACH_A", ANTERIOR - 60)])
+    _rodar([game], flush_idle)
+    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+
+
+def test_jogo_fora_da_steam_com_data_antiga_conta_como_antes(
+    store, make_game, pastas, win, flush_idle, state_schema
+):
+    state_schema.set_int64("conquistas-ultima-varredura", ANTERIOR)
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    historico.registrar(game.game_id, [])
+    _goldberg(pastas, "570", [("ACH_A", VELHA)])
+    _rodar([game], flush_idle)
+    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+
+
+def test_sem_varredura_anterior_registrada_conta(store, make_game, pastas, win, flush_idle):
+    game = _da_steam(store, make_game, 1)
+    _goldberg(pastas, "570", [("ACH_A", VELHA)])
+    _rodar([game], flush_idle)
+    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+
+
+def test_varredura_completa_guarda_quando_comecou(
+    store, make_game, pastas, flush_idle, state_schema, monkeypatch
+):
+    monkeypatch.setattr(varredura.time, "time", lambda: ANTERIOR + 99.7)
+    game = _da_steam(store, make_game, 1)
+    _rodar([game], flush_idle)
+    assert state_schema.get_int64("conquistas-ultima-varredura") == ANTERIOR + 99
+
+
+def test_varredura_interrompida_nao_guarda(store, make_game, pastas, flush_idle, state_schema):
+    game = _da_steam(store, make_game, 1)
+    instancia = VarreduraConquistas()
+    instancia.stop()  # para antes de ler qualquer arquivo
+    instancia._worker([game], instancia._generation)
+    flush_idle()
+    assert state_schema.get_int64("conquistas-ultima-varredura") == 0
+
+
+def test_varredura_de_um_jogo_nao_guarda(store, make_game, pastas, flush_idle, state_schema):
+    game = _da_steam(store, make_game, 1)
+    instancia = VarreduraConquistas()
+    instancia._worker([game], instancia._generation, False)
+    flush_idle()
+    assert state_schema.get_int64("conquistas-ultima-varredura") == 0

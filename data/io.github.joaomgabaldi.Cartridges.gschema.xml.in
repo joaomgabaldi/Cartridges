@@ -192,5 +192,12 @@
     <key name="news-last-seen-ts" type="x">
       <default>0</default>
     </key>
+    <!-- Quando (epoch seconds) começou a última varredura de conquistas da
+         abertura que leu os arquivos de todos os jogos até o fim. Num jogo da
+         Steam, conquista com data anterior a isso não conta como nova no aviso:
+         chegou de outro aparelho. 0 = nenhuma ainda. -->
+    <key name="conquistas-ultima-varredura" type="x">
+      <default>0</default>
+    </key>
   </schema>
 </schemalist>

@@ -17,11 +17,15 @@ ficam só com o cache e o arquivo do jogo.
 Terminada a primeira passada, um aviso só com o que entrou desde a abertura
 anterior: o que foi jogado por fora do app. Ele não espera a rede. A primeira
 varredura de um jogo não conta — senão quem acabou de instalar receberia
-"quinhentas conquistas novas".
+"quinhentas conquistas novas". Num jogo da Steam, também não conta a conquista
+com data anterior à varredura anterior: ela foi ganha em outro aparelho e só
+chegou agora porque a Steam deste PC criou o arquivo quando o jogo rodou aqui
+pela primeira vez (o mesmo critério do vigia, com a mesma margem).
 """
 
 import logging
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -29,7 +33,10 @@ from gi.repository import Adw, GLib
 
 from cartridges import shared
 from cartridges.conquistas import arquivos, catalogo, formatos, historico, sessao
+from cartridges.conquistas.vigia import MARGEM_DA_STEAM
 from cartridges.utils import tarefas
+
+_ULTIMA_VARREDURA = "conquistas-ultima-varredura"
 
 _ATRASO_INICIAL = 10
 _ESPERA_IMPORTACAO = 30
@@ -128,6 +135,9 @@ class VarreduraConquistas:
         # Um aviso de chave recusada por execução, não um por jogo.
         self._avisou_chave = False
         self._novas: list[tuple[str, int]] = []
+        # Quando começou a varredura anterior que foi até o fim (0 = nenhuma),
+        # lido do estado no começo de cada passada com aviso.
+        self._desde = 0
 
     # -- agenda ---------------------------------------------------------------
 
@@ -188,11 +198,15 @@ class VarreduraConquistas:
         concluiu = False
         try:
             if avisar:
+                inicio = int(time.time())
+                # Na fila antes de qualquer `_entregar` desta passada: o
+                # GLib serve os callbacks ociosos na ordem em que entraram.
+                GLib.idle_add(self._comecar_aviso)
                 tarefa = tarefas.comecar(_("Conquistas"), 2 * len(games))
-            self._passada_dos_arquivos(games, geracao, avisar, tarefa)
+            leu_tudo = self._passada_dos_arquivos(games, geracao, avisar, tarefa)
             if avisar:
                 concluiu = True
-                GLib.idle_add(self._concluir)
+                GLib.idle_add(self._concluir, inicio if leu_tudo else None)
             self._passada_dos_catalogos(games, geracao, avisar, tarefa)
         finally:
             if tarefa is not None:
@@ -208,12 +222,13 @@ class VarreduraConquistas:
 
     def _passada_dos_arquivos(
         self, games: list[Any], geracao: int, avisar: bool, tarefa: Optional[Any]
-    ) -> None:
+    ) -> bool:
+        """Lê os arquivos de cada jogo. Devolve se foi até o fim sem ser parada."""
         for feitos, game in enumerate(games):
             if tarefa is not None:
                 tarefa.atualizar(feitos)
             if self._deve_parar(geracao):
-                break
+                return False
             try:
                 leitura = ler_jogo(game)
             except Exception:  # pylint: disable=broad-exception-caught
@@ -221,6 +236,7 @@ class VarreduraConquistas:
                 continue
             leitura.avisar = avisar
             GLib.idle_add(self._entregar, leitura)
+        return True
 
     def _passada_dos_catalogos(
         self, games: list[Any], geracao: int, avisar: bool, tarefa: Optional[Any]
@@ -251,6 +267,32 @@ class VarreduraConquistas:
             GLib.idle_add(self._entregar_catalogo, catalogacao)
 
     # -- na thread principal --------------------------------------------------
+
+    def _comecar_aviso(self) -> bool:
+        # Callback ocioso do GLib: nada pode escapar daqui.
+        try:
+            self._desde = int(shared.state_schema.get_int64(_ULTIMA_VARREDURA))
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Data da varredura anterior de conquistas ilegível", exc_info=True)
+            self._desde = 0
+        return False
+
+    def _contam(self, game: Any, entraram: list[str], lidos: list[formatos.Desbloqueio]) -> int:
+        """Quantas das que entraram contam como novas no aviso.
+
+        Num jogo da Steam, a conquista com data anterior à varredura anterior
+        (menos a margem do relógio) é de outro aparelho: entrou no histórico,
+        mas não é novidade desde a última abertura. Sem data, conta.
+        """
+        if not self._desde or not arquivos.eh_jogo_da_steam(getattr(game, "executable", "") or ""):
+            return len(entraram)
+        horas: dict[str, int] = {}
+        for lido in lidos:
+            nome = lido.nome.strip().upper()
+            if lido.quando > 0 and (nome not in horas or lido.quando < horas[nome]):
+                horas[nome] = lido.quando
+        limite = self._desde - MARGEM_DA_STEAM
+        return sum(1 for nome in entraram if not 0 < horas.get(nome, 0) < limite)
 
     def _entregar(self, leitura: Leitura) -> bool:
         # Roda como callback ocioso do GLib: nada pode escapar daqui.
@@ -298,10 +340,14 @@ class VarreduraConquistas:
             atualizar = getattr(shared.win, "update_conquistas_block", None)
             if atualizar is not None:
                 atualizar(game)
-        return 0 if primeira else len(entraram)
+        return 0 if primeira else self._contam(game, entraram, leitura.desbloqueios)
 
-    def _concluir(self) -> bool:
-        # Também callback ocioso do GLib: não levanta, e a lista sempre zera.
+    def _concluir(self, inicio: Optional[int] = None) -> bool:
+        """Também callback ocioso do GLib: não levanta, e a lista sempre zera.
+
+        ``inicio``: quando começou esta passada, se ela leu os arquivos de todos
+        os jogos; vira a "varredura anterior" da próxima abertura.
+        """
         try:
             if not self._stopped and (texto := mensagem(self._novas)):
                 _aviso(texto)
@@ -309,4 +355,9 @@ class VarreduraConquistas:
             logging.warning("Falha ao avisar das conquistas novas", exc_info=True)
         finally:
             self._novas = []
+        if inicio is not None and not self._stopped:
+            try:
+                shared.state_schema.set_int64(_ULTIMA_VARREDURA, inicio)
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.warning("Falha ao guardar a data da varredura de conquistas", exc_info=True)
         return False
