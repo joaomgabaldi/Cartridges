@@ -174,6 +174,35 @@ def test_gravacao_que_falha_e_tentada_de_novo_no_tique_seguinte(pastas, make_gam
     assert len(avisos) == 1
 
 
+def test_historico_indisponivel_por_um_tique_avisa_no_seguinte_uma_vez_so(
+    pastas, make_game, monkeypatch
+):
+    """Antivírus com o histórico aberto no instante da releitura: nada se perde nem se duplica."""
+    catalogo._gravar_cache("570", CAT)
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    real = historico.ler_json
+    negar = [True]
+
+    def negado(caminho):
+        if negar[0]:
+            raise PermissionError("em uso por outro processo")
+        return real(caminho)
+
+    monkeypatch.setattr(historico, "ler_json", negado)
+    instancia._olhar()
+    assert avisos == []
+    negar[0] = False
+    assert historico.ler("g1") == {"ACH_A": 100}  # intacto, sem .corrompido
+    assert not historico.caminho("g1").with_name("g1.json.corrompido").exists()
+    instancia._olhar()
+    assert [d.nome for d in avisos[0]] == ["ACH_B"]
+    instancia._olhar()
+    assert len(avisos) == 1
+
+
 def test_base_que_nao_pode_ser_lida_nao_vira_aviso(pastas, make_game, monkeypatch):
     _arquivo(pastas, [("ACH_A", 100)])
     historico.registrar("g1", [Desbloqueio("ANTIGA", 5)])  # o histórico já existe

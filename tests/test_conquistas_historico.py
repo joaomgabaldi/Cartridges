@@ -99,6 +99,73 @@ def test_transferir_destino_travado_nao_grava(monkeypatch):
     assert historico.caminho("para").read_text(encoding="utf-8") == "{"
 
 
+def _indisponivel(monkeypatch, *quais):
+    """O arquivo existe, mas ``ler_json`` levanta ``PermissionError`` mesmo depois das tentativas."""
+    real = historico.ler_json
+
+    def negado(caminho):
+        if not quais or caminho.stem in quais:
+            raise PermissionError("em uso por outro processo")
+        return real(caminho)
+
+    monkeypatch.setattr(historico, "ler_json", negado)
+    return real
+
+
+def test_arquivo_indisponivel_nao_vai_para_o_corrompido(monkeypatch):
+    """Antivírus ou indexador com o arquivo aberto: não é conteúdo ruim, é o momento errado."""
+    historico.registrar("g1", [D("A", 1)])
+    antes = historico.caminho("g1").read_text(encoding="utf-8")
+    real = _indisponivel(monkeypatch)
+    assert historico.ler("g1") is None
+    assert historico.registrar("g1", [D("B", 2)]) == ([], False)
+    assert historico.caminho("g1").read_text(encoding="utf-8") == antes
+    assert not historico.caminho("g1").with_name("g1.json.corrompido").exists()
+    monkeypatch.setattr(historico, "ler_json", real)
+    assert historico.registrar("g1", [D("B", 2)]) == (["B"], False)
+    assert historico.ler("g1") == {"A": 1, "B": 2}
+
+
+def test_arquivo_indisponivel_nunca_e_a_primeira_vez(monkeypatch):
+    historico.registrar("g1", [D("A", 1)])
+    _indisponivel(monkeypatch)
+    assert historico.registrar("g1", []) == ([], False)
+    assert historico.registrar("g1", [D("A", 1)]) == ([], False)
+
+
+def test_json_invalido_continua_indo_para_o_corrompido():
+    historico.caminho("g1").parent.mkdir(parents=True)
+    historico.caminho("g1").write_text("{", encoding="utf-8")
+    assert historico.registrar("g1", [D("A", 1)]) == (["A"], True)
+    assert historico.caminho("g1").with_name("g1.json.corrompido").is_file()
+
+
+def test_transferir_destino_indisponivel_nao_o_renomeia(monkeypatch):
+    historico.registrar("de", [D("A", 5)])
+    historico.registrar("para", [D("B", 7)])
+    antes = historico.caminho("para").read_text(encoding="utf-8")
+    _indisponivel(monkeypatch, "para")
+    assert historico.transferir("de", "para") is False
+    assert historico.caminho("para").read_text(encoding="utf-8") == antes
+    assert not historico.caminho("para").with_name("para.json.corrompido").exists()
+    # A origem fica à parte, onde o Excluir que vem em seguida não alcança.
+    assert not historico.caminho("de").exists()
+    pendente = historico.caminho("de").with_name("de.json.pendente")
+    assert json.loads(pendente.read_text(encoding="utf-8")) == {"desbloqueadas": {"A": 5}}
+
+
+def test_transferir_origem_indisponivel_nao_vai_para_o_corrompido(monkeypatch):
+    historico.registrar("de", [D("A", 5)])
+    historico.registrar("para", [D("B", 7)])
+    _indisponivel(monkeypatch, "de")
+    assert historico.transferir("de", "para") is False
+    assert not historico.caminho("de").with_name("de.json.corrompido").exists()
+    assert historico.ler("para") == {"B": 7}
+    # O arquivo à parte (.pendente) segura o conteúdo contra o Excluir.
+    assert historico.caminho("de").with_name("de.json.pendente").is_file()
+    assert not historico.caminho("de").exists()
+
+
 def test_transferir_origem_ilegivel_nao_mexe_no_destino():
     historico.registrar("para", [D("B", 7)])
     historico.caminho("de").write_text("{", encoding="utf-8")

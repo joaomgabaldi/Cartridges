@@ -14,6 +14,7 @@ Não existir o arquivo é o que marca "nunca varrido": a primeira varredura grav
 mesmo sem nada desbloqueado, e não conta como conquista nova.
 """
 
+import enum
 import json
 import logging
 import math
@@ -51,26 +52,38 @@ def _data_valida(quando: Any) -> bool:
     return -(2**63) <= quando < 2**63
 
 
-def _ler_estado(game_id: str) -> tuple[Optional[dict[str, int]], bool]:
-    """``(dados, ilegivel)``: ``ilegivel`` é True se o arquivo existe e não deu para ler."""
+class _Estado(enum.Enum):
+    OK = enum.auto()
+    # Existe e o conteúdo não presta (JSON inválido, formato errado): vai para o `.corrompido`.
+    ILEGIVEL = enum.auto()
+    # Existe, mas não deu para abrir agora (antivírus, indexador, disco): o
+    # conteúdo pode estar perfeito, então nada é gravado nem renomeado.
+    INDISPONIVEL = enum.auto()
+
+
+def _ler_estado(game_id: str) -> tuple[Optional[dict[str, int]], _Estado]:
+    """``(dados, estado)``. Sem arquivo: ``(None, OK)``, o jogo nunca foi varrido."""
     try:
         dados = ler_json(caminho(game_id))
     except FileNotFoundError:
-        return None, False
-    except (OSError, ValueError, RecursionError, OverflowError) as erro:
+        return None, _Estado.OK
+    except OSError as erro:
+        logging.warning("Conquistas guardadas indisponíveis (%s): %s", caminho(game_id).name, erro)
+        return None, _Estado.INDISPONIVEL
+    except (ValueError, RecursionError, OverflowError) as erro:
         logging.warning("Conquistas guardadas ilegíveis (%s): %s", caminho(game_id).name, erro)
-        return None, True
+        return None, _Estado.ILEGIVEL
     limpo = _limpo(dados)
     if limpo is None:
         logging.warning(
             "Conquistas guardadas ilegíveis (%s): formato inesperado", caminho(game_id).name
         )
-        return None, True
-    return limpo, False
+        return None, _Estado.ILEGIVEL
+    return limpo, _Estado.OK
 
 
 def ler(game_id: str) -> Optional[dict[str, int]]:
-    """O que está guardado, ou None se o jogo nunca foi varrido (ou está ilegível)."""
+    """O que está guardado, ou None se o jogo nunca foi varrido (ou não deu para ler)."""
     return _ler_estado(game_id)[0]
 
 
@@ -122,8 +135,11 @@ def registrar(game_id: str, novos: Iterable[Desbloqueio]) -> tuple[list[str], bo
     Devolve ``(as que entraram agora, se era a primeira vez)``.
     """
     with _trava:
-        atual, ilegivel = _ler_estado(game_id)
-        if ilegivel and not _guardar_ilegivel(game_id):
+        atual, estado = _ler_estado(game_id)
+        if estado is _Estado.INDISPONIVEL:
+            # Não é a primeira vez nem arquivo ruim: quem chama tenta de novo depois.
+            return [], False
+        if estado is _Estado.ILEGIVEL and not _guardar_ilegivel(game_id):
             return [], False
         primeira = atual is None
         resultado, entraram = fundir(atual or {}, novos)
@@ -157,16 +173,24 @@ def transferir(de_id: str, para_id: str) -> bool:
     `<id>.json.pendente`) e o fluxo de quem chama não precisa mudar.
     """
     with _trava:
-        origem, origem_ilegivel = _ler_estado(de_id)
-        if origem_ilegivel:
+        origem, estado_da_origem = _ler_estado(de_id)
+        if estado_da_origem is _Estado.ILEGIVEL:
             # Pô-lo à parte antes do Excluir, para o que não deu para ler
             # não ir embora junto.
             logging.warning("Conquistas de %s ilegíveis: nada a transferir", de_id)
             return _guardar_ilegivel(de_id)
+        if estado_da_origem is _Estado.INDISPONIVEL:
+            # O conteúdo pode estar bom: sem `.corrompido`, só fica à parte.
+            logging.warning("Conquistas de %s indisponíveis: nada a transferir", de_id)
+            _por_a_origem_de_lado(de_id)
+            return False
         if not origem:
             return True
-        destino, destino_ilegivel = _ler_estado(para_id)
-        if destino_ilegivel and not _guardar_ilegivel(para_id):
+        destino, estado_do_destino = _ler_estado(para_id)
+        if estado_do_destino is _Estado.INDISPONIVEL:
+            _por_a_origem_de_lado(de_id)
+            return False
+        if estado_do_destino is _Estado.ILEGIVEL and not _guardar_ilegivel(para_id):
             _por_a_origem_de_lado(de_id)
             return False
         resultado, _entraram = fundir(
