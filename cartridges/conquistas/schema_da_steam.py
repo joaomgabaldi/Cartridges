@@ -37,10 +37,18 @@ def conquistas(schema: Any, appid: str) -> list[ConquistaDoSchema]:
         if not isinstance(bits, dict):
             continue
         for chave_do_bit, item in bits.items():
-            if not (isinstance(item, dict) and chave_do_bit.isascii() and chave_do_bit.isdigit()):
+            # Os bits vão de 0 a 31: chave com mais de dois caracteres nunca serve
+            # (e evita o limite de dígitos do `int`, que levantaria).
+            if not (
+                isinstance(item, dict)
+                and len(chave_do_bit) <= 2
+                and chave_do_bit.isascii()
+                and chave_do_bit.isdigit()
+            ):
                 continue
             bit = int(chave_do_bit)
-            nome = str(item.get("name") or "").strip()
+            nome = item.get("name")
+            nome = nome.strip() if isinstance(nome, str) else ""
             if bit > 31 or not nome:
                 continue
             display = item.get("display")
