@@ -4,13 +4,15 @@ conquista nova: o cartão por cima do jogo e o pulso na iluminação.
 Quem chama é a janela, nos mesmos dois pontos em que a sessão já veste o papel
 de parede e as fitas (`show_session_blocker` e `hide_session_blocker`). As
 preferências são lidas na hora do aviso, então mudá-las no meio da partida
-vale para a próxima conquista.
+vale para a próxima conquista. Nos jogos da Steam, só o pulso: a Steam já
+mostra o aviso dela.
 """
 
 import logging
 from typing import Any, Optional
 
 from cartridges import conquista_aviso, shared
+from cartridges.conquistas import arquivos
 from cartridges.conquistas.vigia import Desbloqueada, Vigia, acompanha
 from cartridges.utils import session_fita
 
@@ -23,6 +25,10 @@ def tipo_do_pulso(desbloqueada: Desbloqueada) -> str:
     if desbloqueada.info is not None and desbloqueada.info.rara:
         return "rara"
     return "normal"
+
+
+def _da_steam(game: Any) -> bool:
+    return game is not None and arquivos.eh_jogo_da_steam(getattr(game, "executable", "") or "")
 
 
 def acompanhando(game: Any) -> bool:
@@ -75,7 +81,7 @@ def _avisar(desbloqueadas: list[Desbloqueada]) -> None:
     # Um try por efeito: a falha de um não cala os outros.
     game = _vigia.game if _vigia is not None else None
     try:
-        if shared.schema.get_boolean("conquistas-aviso"):
+        if shared.schema.get_boolean("conquistas-aviso") and not _da_steam(game):
             for desbloqueada in desbloqueadas:
                 aviso = conquista_aviso.Aviso.de(desbloqueada)
                 if aviso is not None:

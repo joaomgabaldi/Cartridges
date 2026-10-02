@@ -189,3 +189,11 @@ def test_a_sessao_da_janela_liga_e_desliga_o_vigia(real_window, make_game, monke
     real_window.show_session_blocker(jogo)
     real_window.hide_session_blocker()
     assert chamadas == [jogo, "parar"]
+
+
+def test_jogo_da_steam_so_pulsa(make_game, isolar):
+    mostrados, pulsos = isolar
+    sessao.comecar(make_game(executable="steam://rungameid/570"))
+    _VigiaFalso.criados[0].avisar([Desbloqueada("A", _info(rara=True), False)])
+    assert mostrados == []
+    assert pulsos == ["rara"]
