@@ -65,6 +65,17 @@ def test_arquivo_que_nao_existe(tmp_path):
     assert formatos.ler(tmp_path / "nada.ini", formatos.PADRAO) == []
 
 
+def test_ler_ou_none_distingue_falha_de_vazio(tmp_path):
+    corrompido = _arquivo(tmp_path, "a.json", '{"ACH_A": {"earned": tr')
+    valido = _arquivo(tmp_path, "b.json", json.dumps({"ACH_A": {"earned": True, "earned_time": 7}}))
+    sem_nada = _arquivo(tmp_path, "c.ini", "[ACH_A]\nAchieved=0\n")
+    assert formatos.ler_ou_none(corrompido, formatos.GOLDBERG) is None
+    assert formatos.ler_ou_none(tmp_path / "nada.ini", formatos.PADRAO) == []
+    assert formatos.ler_ou_none(valido, formatos.GOLDBERG) == [Desbloqueio("ACH_A", 7)]
+    assert formatos.ler_ou_none(sem_nada, formatos.PADRAO) == []
+    assert formatos.ler_ou_none(valido, "flt") == []
+
+
 def test_formato_desconhecido(tmp_path):
     caminho = _arquivo(tmp_path, "a.ini", "[ACH_A]\nAchieved=1\n")
     assert formatos.ler(caminho, "flt") == []
