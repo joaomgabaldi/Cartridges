@@ -32,6 +32,8 @@
       <description translate="no">
         <ul>
           <li>Ao desbloquear uma conquista durante o jogo, um aviso aparece por cima da tela e a iluminação inteligente pisca em dourado</li>
+          <li>Nos jogos da Steam, as conquistas aparecem em português mesmo sem a chave da Steam Web API</li>
+          <li>A iluminação inteligente também pisca ao desbloquear uma conquista nos jogos da Steam</li>
         </ul>
       </description>
     </release>

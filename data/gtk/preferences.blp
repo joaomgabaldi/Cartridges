@@ -429,11 +429,10 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
 
     Adw.PreferencesGroup {
       title: _("Durante o jogo");
-      description: _("Não se aplica aos jogos da Steam, que já exibem o próprio aviso.");
 
       Adw.SwitchRow conquistas_aviso_switch {
         title: _("Mostrar aviso durante o jogo");
-        subtitle: _("Exibe um cartão por cima do jogo ao desbloquear uma conquista");
+        subtitle: _("Exibe um aviso por cima do jogo ao desbloquear uma conquista. Nos jogos da Steam, aparece o aviso da própria Steam.");
       }
 
       Adw.ComboRow conquistas_posicao_row {
@@ -450,7 +449,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
       }
 
       Adw.SwitchRow conquistas_iluminacao_switch {
-        title: _("Reagir na iluminação inteligente");
+        title: _("Piscar a iluminação inteligente");
         subtitle: _("Os dispositivos piscam em dourado ao desbloquear uma conquista");
       }
 
