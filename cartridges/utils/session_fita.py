@@ -1287,6 +1287,12 @@ def reacender() -> None:
     _em_thread(_reacender)
 
 
+# O jogo da sessão em curso, para o pulso de conquista saber se ainda há
+# sessão. Só a thread de UI escreve (em `comecar` e `voltar`); a thread do
+# pulso só lê, e lê de novo antes de cada passo.
+_jogo_da_sessao: Optional["Game"] = None
+
+
 def comecar(game: "Game") -> None:
     """A sessão começou: veste a cor do jogo. Chamar da thread de UI.
 
@@ -1295,6 +1301,8 @@ def comecar(game: "Game") -> None:
     A vez de cada fita, essa sim, é tirada aqui: um "Já terminei" logo depois
     tem de vencer a cor do jogo que ainda estava sendo calculada.
     """
+    global _jogo_da_sessao  # noqa: PLW0603
+    _jogo_da_sessao = game
     if not ligada():
         return
     alvos = _guardadas()
@@ -1304,11 +1312,110 @@ def comecar(game: "Game") -> None:
 
 def voltar() -> None:
     """A sessão acabou: de volta à cor do app. Chamar da thread de UI."""
+    global _jogo_da_sessao  # noqa: PLW0603
+    # Antes de tudo: o pulso que estiver no meio para no próximo passo, e a
+    # fila do que não começou vai fora — a sessão acabou.
+    _jogo_da_sessao = None
+    with _TRAVA_PULSO:
+        _fila_de_pulsos.clear()
     if not ligada():
         return
     alvos = _guardadas()
     geracoes = _reservar(alvos)
     _em_thread(lambda: _vestir(cor_do_app(), alvos, geracoes))
+
+
+# region Pulso de conquista
+
+# Dourado no brilho máximo de cada dispositivo (o teto dele ainda vale).
+OURO = Cor(45, 1000, BRILHO_CHEIO)
+
+# Os passos de cada pulso: dourado ou a cor do jogo, e quanto tempo segura.
+# Depois do último, a fita desliza de volta à cor do jogo.
+PULSOS: dict[str, list[tuple[str, float]]] = {
+    "normal": [("ouro", 1.5)],
+    "rara": [("ouro", 0.6), ("jogo", 0.5), ("ouro", 0.6)],
+    "completo": [
+        ("ouro", 0.5),
+        ("jogo", 0.4),
+        ("ouro", 0.5),
+        ("jogo", 0.4),
+        ("ouro", 0.5),
+        ("jogo", 0.4),
+        ("ouro", 2.0),
+    ],
+}
+
+# Pulsos pedidos durante outro pulso esperam a vez; uma thread só serve a fila.
+_TRAVA_PULSO = threading.Lock()
+_fila_de_pulsos: list[tuple["Game", str]] = []
+_pulsando = False
+
+
+def pulsar_conquista(tipo: str) -> None:
+    """Uma conquista saiu: as fitas piscam em dourado e voltam à cor do jogo.
+
+    Chamar da thread de UI. Não faz nada fora de sessão, com o recurso
+    desligado ou com um tipo que não está em ``PULSOS``.
+    """
+    global _pulsando  # noqa: PLW0603
+    jogo = _jogo_da_sessao
+    if jogo is None or tipo not in PULSOS or not ligada():
+        return
+    with _TRAVA_PULSO:
+        _fila_de_pulsos.append((jogo, tipo))
+        if _pulsando:
+            return
+        _pulsando = True
+    _em_thread(_servir_pulsos)
+
+
+def _servir_pulsos() -> None:
+    global _pulsando  # noqa: PLW0603
+    while True:
+        with _TRAVA_PULSO:
+            if not _fila_de_pulsos:
+                _pulsando = False
+                return
+            jogo, tipo = _fila_de_pulsos.pop(0)
+        try:
+            _pulsar(jogo, tipo)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Falha no pulso de conquista", exc_info=True)
+
+
+def _tingir(fita: Fita, cor: Cor, geracao: int) -> None:
+    """Só a cor, direto, sem fade: a fita já está acesa na sessão."""
+    with _trava_da(fita):
+        if not _vigente(fita, geracao):
+            return
+        cor_hex = hsv_hex(na_fita(cor, fita))
+        if _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex}):
+            _mostrada[fita.id] = (True, cor_hex)
+
+
+def _pulsar(jogo: "Game", tipo: str) -> None:
+    alvos = _guardadas()
+    if not alvos:
+        return
+    cor_jogo = cor_do_jogo(jogo)
+    for qual, segundos in PULSOS[tipo]:
+        if _jogo_da_sessao is not jogo:
+            return
+        cor = OURO if qual == "ouro" else cor_jogo
+        geracoes = _reservar(alvos)
+        _em_paralelo(alvos, lambda fita, c=cor, g=geracoes: _tingir(fita, c, g[fita.id]))
+        time.sleep(segundos)
+    if _jogo_da_sessao is not jogo:
+        return
+    geracoes = _reservar(alvos)
+    _em_paralelo(
+        alvos,
+        lambda fita: _transitar(fita, True, hsv_hex(na_fita(cor_jogo, fita)), geracoes[fita.id]),
+    )
+
+
+# endregion
 
 
 def _devolver_no_fechamento() -> None:
