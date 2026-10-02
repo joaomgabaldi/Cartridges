@@ -112,3 +112,37 @@ def test_ler_arquivo_grande_demais(tmp_path, monkeypatch):
     caminho = tmp_path / "x.bin"
     caminho.write_bytes(kv_bytes({"a": 1}))
     assert keyvalues.ler(caminho) is None
+
+
+# --- o KeyValues em texto (`config\loginusers.vdf`) ---
+
+
+def test_texto_aninhado_e_aspas_escapadas():
+    dados = (
+        b'"users"\n{\n\t"7656"\n\t{\n\t\t"PersonaName"\t\t"Ana \\"A\\" {x}"\n'
+        b'\t\t"MostRecent"\t\t"1"\n\t}\n}\n'
+    )
+    assert keyvalues.ler_texto_bytes(dados) == {
+        "users": {"7656": {"PersonaName": 'Ana \\"A\\" {x}', "MostRecent": "1"}}
+    }
+
+
+@pytest.mark.parametrize(
+    "dados",
+    [b'"a" {', b'"a" }', b'{ "a" "b" }', b'"a" { "b" }', b'"a"', b'"a" "b" "c"'],
+)
+def test_texto_mal_formado_e_none(dados):
+    assert keyvalues.ler_texto_bytes(dados) is None
+
+
+def test_texto_fundo_demais_e_grande_demais_sao_none():
+    fundo = b'"a" {' * (keyvalues.LIMITE_DE_NIVEIS + 2) + b"}" * (keyvalues.LIMITE_DE_NIVEIS + 2)
+    assert keyvalues.ler_texto_bytes(fundo) is None
+    assert keyvalues.ler_texto_bytes(b" " * (keyvalues.LIMITE_DO_TEXTO + 1)) is None
+
+
+def test_ler_texto_arquivo_ausente_ou_com_bytes_ruins(tmp_path):
+    assert keyvalues.ler_texto(tmp_path / "nao_existe.vdf") is None
+    ruim = tmp_path / "x.vdf"
+    ruim.write_bytes(b'"a" "\xff\xfe"')
+    assert keyvalues.ler_texto(ruim) == {"a": "\ufffd\ufffd"}

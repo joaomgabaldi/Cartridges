@@ -10,6 +10,7 @@ tenta de novo depois.
 """
 
 import logging
+import re
 import struct
 from pathlib import Path
 from typing import Any, Optional
@@ -71,6 +72,56 @@ def ler_bytes(dados: bytes) -> Optional[dict[str, Any]]:
         return _secao(dados, 0, 0)[0]
     except _Ilegivel:
         return None
+
+
+LIMITE_DO_TEXTO = 1024 * 1024
+# Uma string entre aspas (com barra invertida escapando o que vier) ou uma chave.
+_TOKEN_DE_TEXTO = re.compile(r'"((?:[^"\\]|\\.)*)"|([{}])', re.DOTALL)
+
+
+def ler_texto_bytes(dados: bytes) -> Optional[dict[str, Any]]:
+    """O KeyValues em texto (``"chave" "valor"`` e ``"chave" { ... }``), ou None.
+
+    Tolerante: só entende strings entre aspas e chaves, e vale None para
+    qualquer coisa que não feche direito. Os valores vêm como texto.
+    """
+    if len(dados) > LIMITE_DO_TEXTO:
+        return None
+    texto = dados.decode("utf-8", errors="replace")
+    raiz: dict[str, Any] = {}
+    pilha = [raiz]
+    chave: Optional[str] = None
+    for achado in _TOKEN_DE_TEXTO.finditer(texto):
+        if achado.group(2) == "{":
+            if chave is None or len(pilha) > LIMITE_DE_NIVEIS:
+                return None
+            secao: dict[str, Any] = {}
+            pilha[-1][chave] = secao
+            pilha.append(secao)
+            chave = None
+        elif achado.group(2) == "}":
+            if len(pilha) == 1 or chave is not None:
+                return None
+            pilha.pop()
+        elif chave is None:
+            chave = achado.group(1)
+        else:
+            pilha[-1][chave] = achado.group(1)
+            chave = None
+    return raiz if len(pilha) == 1 and chave is None else None
+
+
+def ler_texto(caminho: Path) -> Optional[dict[str, Any]]:
+    """O arquivo KeyValues em texto, ou None se não pôde ser lido ou entendido.
+
+    Nada do conteúdo vai ao log (o ``loginusers.vdf`` traz nomes de conta).
+    """
+    try:
+        with open(caminho, "rb") as arquivo:
+            dados = arquivo.read(LIMITE_DO_TEXTO + 1)
+    except (OSError, ValueError):
+        return None
+    return ler_texto_bytes(dados)
 
 
 def ler(caminho: Path) -> Optional[dict[str, Any]]:

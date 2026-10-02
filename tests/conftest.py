@@ -395,6 +395,7 @@ def sem_steam_no_registro(monkeypatch):
     from cartridges.conquistas import arquivos  # noqa: PLC0415
 
     monkeypatch.setattr(arquivos, "_valor_do_registro", lambda *_a: None)
+    monkeypatch.setattr(arquivos, "_inteiro_do_registro", lambda *_a: None)
 
 
 @pytest.fixture
