@@ -11,7 +11,10 @@ cada olhada é um punhado de `stat`, e a releitura é de arquivos pequenos. Um
 arquivo pode aparecer no meio da partida (a primeira conquista de um jogo
 novo), então a lista de arquivos é refeita a cada `REBUSCA` olhadas.
 
-Fase 2: só jogos que não são da Steam. Os da Steam ficam para a fase 3.
+Nos jogos da Steam, o estado vem do `UserGameStats` que a própria Steam grava
+no instante do desbloqueio. Ela cria esse arquivo ao abrir o jogo, já com as
+conquistas antigas: por isso ele é conhecido desde o início da sessão, e
+quando aparece entra em silêncio, como a base.
 """
 
 import logging
@@ -43,11 +46,9 @@ class Desbloqueada:
 
 
 def acompanha(game: Any) -> bool:
-    """Se o vigia acompanha este jogo nesta fase."""
-    return (
-        arquivos.appid_valido(getattr(game, "steam_appid", None))
-        and bool(getattr(game, "conquistas", True))
-        and not arquivos.eh_jogo_da_steam(getattr(game, "executable", "") or "")
+    """Se o vigia acompanha este jogo: appID válido e conquistas ligadas."""
+    return arquivos.appid_valido(getattr(game, "steam_appid", None)) and bool(
+        getattr(game, "conquistas", True)
     )
 
 
@@ -67,6 +68,9 @@ class Vigia:
         self._mtimes: dict[str, Optional[int]] = {}
         # Arquivos cuja base ainda não foi lida: lidos em silêncio até dar certo.
         self._pendentes: set[str] = set()
+        # Arquivos da Steam conhecidos antes de existirem (`arquivos.da_steam_esperados`):
+        # quando aparecem, entram em silêncio.
+        self._esperados: set[str] = set()
         # Falhas seguidas por arquivo (leitura ou gravação). Passando de
         # `TENTATIVAS`, o arquivo só é tentado de novo a cada rebusca.
         self._falhas: dict[str, int] = {}
@@ -82,6 +86,12 @@ class Vigia:
             return
         try:
             self._arquivos = self._achar()
+            esperados = arquivos.da_steam_esperados(
+                str(self.game.steam_appid), self.game.executable
+            )
+            self._esperados = {str(a.caminho) for a in esperados}
+            conhecidos = {str(a.caminho) for a in self._arquivos}
+            self._arquivos.extend(a for a in esperados if str(a.caminho) not in conhecidos)
             self._base()
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Falha ao preparar o vigia de %s", self.game.name, exc_info=True)
@@ -125,6 +135,10 @@ class Vigia:
         lidos_por_arquivo: list[tuple[ArquivoDeConquista, Optional[int], list]] = []
         for achado in self._arquivos:
             atual = _mtime(achado.caminho)
+            if atual is None and str(achado.caminho) in self._esperados:
+                # Ainda não existe: quando a Steam o criar, entra em silêncio.
+                self._pendentes.add(str(achado.caminho))
+                continue
             lidos = formatos.ler_ou_none(achado.caminho, achado.formato)
             if lidos is None:
                 self._pendentes.add(str(achado.caminho))
@@ -143,6 +157,8 @@ class Vigia:
         """Nova tentativa de ler, em silêncio, um arquivo que ficou sem base."""
         chave = str(achado.caminho)
         if atual is None:
+            if chave in self._esperados:
+                return  # a Steam ainda não criou o arquivo; continua pendente
             self._pendentes.discard(chave)
             self._falhas.pop(chave, None)
             self._mtimes[chave] = None

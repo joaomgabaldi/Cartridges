@@ -5,10 +5,10 @@ import os
 
 import pytest
 
-from cartridges.conquistas import catalogo, historico, vigia
+from cartridges.conquistas import arquivos, catalogo, historico, vigia
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.formatos import Desbloqueio
-from tests.apoio_conquistas import criar, pastas  # noqa: F401
+from tests.apoio_conquistas import criar, kv_bytes, pastas, schema_de_teste  # noqa: F401
 
 CAT = Catalogo(
     (
@@ -351,7 +351,7 @@ def test_jogo_ja_completo_que_recebe_nome_desconhecido_nao_completa(pastas, make
     [
         ({}, True),
         ({"conquistas": False}, False),
-        ({"executable": "steam://rungameid/570"}, False),
+        ({"executable": "steam://rungameid/570"}, True),
         ({"steam_appid": None}, False),
         ({"steam_appid": "..\\x"}, False),
     ],
@@ -383,3 +383,79 @@ def test_historico_ja_existente_continua_somando(pastas, make_game):
     instancia.iniciar()
     assert historico.ler("g1") == {"ANTIGA": 5, "ACH_A": 100}
     assert avisos == []  # o que já estava no arquivo no começo da sessão é base
+
+
+def _steam(tmp_path, monkeypatch):
+    """Uma Steam com uma conta (123) e o schema do jogo 570; devolve o caminho do estado."""
+    steam = tmp_path / "Steam"
+    (steam / "userdata" / "123").mkdir(parents=True)
+    stats = steam / "appcache" / "stats"
+    stats.mkdir(parents=True)
+    (stats / "UserGameStatsSchema_570.bin").write_bytes(
+        schema_de_teste("570", {"1": {"0": {"name": "ACH_A"}, "1": {"name": "ACH_B"}}})
+    )
+    monkeypatch.setattr(arquivos, "pasta_da_steam", lambda: steam)
+    return stats / "UserGameStats_123_570.bin"
+
+
+def _estado_da_steam(caminho, conquistas, pendente=False):
+    """``conquistas``: {bit: hora}. Como a Steam grava: pendente, depois confirmado."""
+    bloco = {
+        "data": sum(1 << bit for bit in conquistas),
+        "AchievementTimes": {str(bit): hora for bit, hora in conquistas.items()},
+    }
+    if pendente:
+        bloco.update(state=2, pendingbits=0)
+    caminho.write_bytes(kv_bytes({"cache": {"crc": 0, "PendingChanges": int(pendente), "1": bloco}}))
+    passo = getattr(_estado_da_steam, "passo", 0) + 1
+    _estado_da_steam.passo = passo
+    os.utime(caminho, ns=(2 * 10**18 + passo * 10**9, 2 * 10**18 + passo * 10**9))
+
+
+def _vigia_da_steam(make_game):
+    avisos = []
+    jogo = make_game(game_id="g1", name="Jogo", steam_appid="570", executable="steam://rungameid/570")
+    return vigia.Vigia(jogo, avisos.append), avisos
+
+
+def _nomes(avisos):
+    return [[d.nome for d in lote] for lote in avisos]
+
+
+def test_bin_da_steam_que_aparece_durante_a_sessao_entra_em_silencio(
+    tmp_path, pastas, make_game, monkeypatch
+):
+    estado = _steam(tmp_path, monkeypatch)
+    instancia, avisos = _vigia_da_steam(make_game)
+    instancia.iniciar()
+    for _tique in range(vigia.REBUSCA):
+        instancia._olhar()
+    # A Steam cria o arquivo ao abrir o jogo, já com as conquistas antigas.
+    _estado_da_steam(estado, {0: 100})
+    instancia._olhar()
+    assert avisos == []
+    assert "ACH_A" in historico.ler("g1")
+    _estado_da_steam(estado, {0: 100, 1: 200})
+    instancia._olhar()
+    assert _nomes(avisos) == [["ACH_B"]]
+
+
+def test_gravacao_dupla_da_steam_avisa_uma_vez(tmp_path, pastas, make_game, monkeypatch):
+    estado = _steam(tmp_path, monkeypatch)
+    _estado_da_steam(estado, {})
+    instancia, avisos = _vigia_da_steam(make_game)
+    instancia.iniciar()
+    _estado_da_steam(estado, {0: 100}, pendente=True)
+    instancia._olhar()
+    _estado_da_steam(estado, {0: 100})
+    instancia._olhar()
+    assert _nomes(avisos) == [["ACH_A"]]
+
+
+def test_bin_da_steam_que_ja_existia_no_inicio_entra_na_base(tmp_path, pastas, make_game, monkeypatch):
+    estado = _steam(tmp_path, monkeypatch)
+    _estado_da_steam(estado, {0: 100})
+    instancia, avisos = _vigia_da_steam(make_game)
+    instancia.iniciar()
+    instancia._olhar()
+    assert avisos == [] and "ACH_A" in historico.ler("g1")
