@@ -1,5 +1,7 @@
 """Onde cada emulador grava as conquistas de um jogo."""
 
+import winreg
+
 import pytest
 
 from cartridges.conquistas import arquivos, formatos
@@ -81,6 +83,82 @@ def test_cache_da_steam_so_nos_jogos_da_steam(tmp_path, pastas, monkeypatch):
         ArquivoDeConquista(cache, formatos.STEAM)
     ]
     assert arquivos.arquivos_do_jogo("570", f'"{exe}"') == []
+
+
+def _registro(monkeypatch, valores):
+    """``valores``: {(raiz, nome_do_valor): texto}."""
+    monkeypatch.setattr(
+        arquivos, "_valor_do_registro", lambda raiz, _caminho, nome: valores.get((raiz, nome))
+    )
+
+
+def test_pasta_da_steam_pelo_registro_do_usuario(tmp_path, monkeypatch):
+    steam = tmp_path / "Onde Quiser" / "Steam"
+    steam.mkdir(parents=True)
+    _registro(monkeypatch, {(winreg.HKEY_CURRENT_USER, "SteamPath"): str(steam).replace("\\", "/")})
+    assert arquivos.pasta_da_steam() == steam
+
+
+def test_pasta_da_steam_pela_chave_da_maquina(tmp_path, monkeypatch):
+    steam = tmp_path / "D" / "Steam"
+    steam.mkdir(parents=True)
+    _registro(
+        monkeypatch,
+        {
+            (winreg.HKEY_CURRENT_USER, "SteamPath"): str(tmp_path / "nao_existe"),
+            (winreg.HKEY_LOCAL_MACHINE, "InstallPath"): str(steam),
+        },
+    )
+    assert arquivos.pasta_da_steam() == steam
+
+
+def test_sem_steam_no_registro():
+    assert arquivos.pasta_da_steam() is None
+
+
+def _steam_com_contas(tmp_path, monkeypatch, *contas):
+    steam = tmp_path / "Steam"
+    for conta in contas:
+        (steam / "userdata" / conta).mkdir(parents=True)
+    (steam / "appcache" / "stats").mkdir(parents=True)
+    monkeypatch.setattr(arquivos, "pasta_da_steam", lambda: steam)
+    return steam
+
+
+def test_arquivos_da_steam_por_conta(tmp_path, pastas, monkeypatch):
+    steam = _steam_com_contas(tmp_path, monkeypatch, "123", "456", "anonymous")
+    stats = steam / "appcache" / "stats"
+    stats_123 = criar(stats / "UserGameStats_123_570.bin")
+    stats_456 = criar(stats / "UserGameStats_456_570.bin")
+    criar(stats / "UserGameStats_anonymous_570.bin")
+    cache_123 = criar(steam / "userdata" / "123" / "config" / "librarycache" / "570.json")
+    criar(steam / "userdata" / "anonymous" / "config" / "librarycache" / "570.json")
+    assert arquivos.arquivos_do_jogo("570", "steam://rungameid/570") == [
+        arquivos.ArquivoDeConquista(stats_123, formatos.STEAM_STATS),
+        arquivos.ArquivoDeConquista(cache_123, formatos.STEAM),
+        arquivos.ArquivoDeConquista(stats_456, formatos.STEAM_STATS),
+    ]
+
+
+def test_jogo_fora_da_steam_nao_recebe_os_arquivos_da_conta(tmp_path, pastas, monkeypatch):
+    steam = _steam_com_contas(tmp_path, monkeypatch, "123")
+    criar(steam / "appcache" / "stats" / "UserGameStats_123_570.bin")
+    assert arquivos.arquivos_do_jogo("570", '"C:\\Jogos\\x.exe"') == []
+    assert arquivos.da_steam_esperados("570", '"C:\\Jogos\\x.exe"') == []
+
+
+def test_da_steam_esperados_inclui_os_que_ainda_nao_existem(tmp_path, monkeypatch):
+    steam = _steam_com_contas(tmp_path, monkeypatch, "123", "456")
+    stats = steam / "appcache" / "stats"
+    assert arquivos.da_steam_esperados("570", "steam://rungameid/570") == [
+        arquivos.ArquivoDeConquista(stats / "UserGameStats_123_570.bin", formatos.STEAM_STATS),
+        arquivos.ArquivoDeConquista(stats / "UserGameStats_456_570.bin", formatos.STEAM_STATS),
+    ]
+    assert arquivos.da_steam_esperados("..\\x", "steam://rungameid/570") == []
+
+
+def test_da_steam_esperados_sem_steam():
+    assert arquivos.da_steam_esperados("570", "steam://rungameid/570") == []
 
 
 @pytest.mark.parametrize("appid", ["", "..", "../570", "57 0", "abc", "²", "٣"])

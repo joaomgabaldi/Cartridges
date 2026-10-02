@@ -57,14 +57,31 @@ def pastas_do_sistema() -> Pastas:
     )
 
 
-def pasta_da_steam() -> Optional[Path]:
+# Onde a Steam diz que está instalada: a chave do usuário e, na falta dela (uma
+# instalação para todos os usuários), a da máquina. Nunca um caminho fixo: cada
+# um instala a Steam onde quiser. `appcache` e `userdata` ficam sempre ali,
+# nunca nas bibliotecas de jogos de outros discos.
+_CHAVES_DA_STEAM = (
+    (winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamPath"),
+    (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath"),
+)
+
+
+def _valor_do_registro(raiz: int, caminho: str, nome: str) -> Optional[str]:
     try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as chave:
-            valor = winreg.QueryValueEx(chave, "SteamPath")[0]
+        with winreg.OpenKey(raiz, caminho) as chave:
+            valor = winreg.QueryValueEx(chave, nome)[0]
     except OSError:
         return None
-    pasta = Path(str(valor))
-    return pasta if pasta.is_dir() else None
+    return valor if isinstance(valor, str) and valor.strip() else None
+
+
+def pasta_da_steam() -> Optional[Path]:
+    for raiz, caminho, nome in _CHAVES_DA_STEAM:
+        valor = _valor_do_registro(raiz, caminho, nome)
+        if valor and (pasta := Path(valor.strip())).is_dir():
+            return pasta
+    return None
 
 
 def eh_jogo_da_steam(executavel: str) -> bool:
@@ -144,14 +161,30 @@ def _na_pasta_do_jogo(bases: list[Path], appid: str) -> list[ArquivoDeConquista]
     return achados
 
 
+def _contas(steam: Path) -> list[Path]:
+    """As contas da Steam neste PC: as pastas de `userdata` com nome só de dígitos."""
+    return [conta for conta in _subpastas(steam / "userdata") if appid_valido(conta.name)]
+
+
+def _estado_na_steam(steam: Path, conta: Path, appid: str) -> ArquivoDeConquista:
+    return ArquivoDeConquista(
+        steam / "appcache" / "stats" / f"UserGameStats_{conta.name}_{appid}.bin",
+        formatos.STEAM_STATS,
+    )
+
+
 def _na_steam(appid: str) -> list[ArquivoDeConquista]:
-    pasta = pasta_da_steam()
-    if pasta is None:
+    """O estado que a própria Steam guarda e o cache da biblioteca, por conta."""
+    steam = pasta_da_steam()
+    if steam is None:
         return []
-    return [
-        ArquivoDeConquista(conta / "config" / "librarycache" / f"{appid}.json", formatos.STEAM)
-        for conta in _subpastas(pasta / "userdata")
-    ]
+    achados = []
+    for conta in _contas(steam):
+        achados.append(_estado_na_steam(steam, conta, appid))
+        achados.append(
+            ArquivoDeConquista(conta / "config" / "librarycache" / f"{appid}.json", formatos.STEAM)
+        )
+    return achados
 
 
 def appid_valido(appid: object) -> bool:
@@ -183,3 +216,17 @@ def arquivos_do_jogo(appid: str, executavel: str) -> list[ArquivoDeConquista]:
         vistos.add(chave)
         existentes.append(candidato)
     return existentes
+
+
+def da_steam_esperados(appid: str, executavel: str) -> list[ArquivoDeConquista]:
+    """O estado da Steam de cada conta, exista ou não ainda.
+
+    A Steam cria esse arquivo ao abrir o jogo, já com as conquistas antigas: o
+    vigia precisa conhecê-lo antes, para lê-lo em silêncio quando aparecer.
+    """
+    if not appid_valido(appid) or not eh_jogo_da_steam(executavel):
+        return []
+    steam = pasta_da_steam()
+    if steam is None:
+        return []
+    return [_estado_na_steam(steam, conta, appid) for conta in _contas(steam)]
