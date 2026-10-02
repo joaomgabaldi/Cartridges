@@ -38,6 +38,10 @@ def _esquecer_conexoes():
     session_fita._falhas.clear()
     session_fita._suspensas.clear()
     session_fita._mostrada.clear()
+    # O pulso de conquista também: sessão e fila não passam para o teste seguinte.
+    session_fita._jogo_da_sessao = None
+    session_fita._fila_de_pulsos.clear()
+    session_fita._pulsando = False
 
 
 @pytest.fixture(autouse=True)
@@ -1721,3 +1725,127 @@ def test_escolher_a_cor_do_app_nas_preferencias_grava_e_mostra(monkeypatch, sche
 
     assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
     assert not preferencias.fita_cor_app_reset.get_visible()
+
+
+# region Pulso de conquista
+
+
+@pytest.fixture
+def pulso(falsas, tmp_path, monkeypatch, schema):
+    """Uma fita falsa numa sessão já vestida, com threads capturadas e sem espera."""
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+    schema.set_string(
+        session_fita.CHAVE_ESTADO, json.dumps({"eb0": {"ligada": True, "cor": ""}})
+    )
+    tarefas = []
+    monkeypatch.setattr(session_fita, "_em_thread", tarefas.append)
+    monkeypatch.setattr(
+        session_fita,
+        "PULSOS",
+        {tipo: [(cor, 0) for cor, _s in passos] for tipo, passos in session_fita.PULSOS.items()},
+    )
+    jogo = _jogo(tmp_path)
+    session_fita.comecar(jogo)
+    tarefas.pop(0)()  # veste a cor do jogo
+    # Abrir a conexão agendou o batimento na mesma captura. Ele roda em laço
+    # até o fim do processo: nunca pode ser executado aqui, e não pode sobrar
+    # na lista, onde o `tarefas.pop()` dos testes o tomaria pela volta do app.
+    tarefas.clear()
+    modulos["eb0"].recebidos.clear()
+    return SimpleNamespace(modulo=modulos["eb0"], tarefas=tarefas, jogo=jogo)
+
+
+def _cores(modulo):
+    return [comando["24"] for comando in modulo.recebidos if "24" in comando]
+
+
+def _ouro():
+    fita = session_fita.fitas()[0]
+    return session_fita.hsv_hex(session_fita.na_fita(session_fita.OURO, fita))
+
+
+def test_pulso_normal_vai_ao_ouro_e_volta(pulso):
+    session_fita.pulsar_conquista("normal")
+    assert len(pulso.tarefas) == 1
+    pulso.tarefas.pop(0)()
+    cores = _cores(pulso.modulo)
+    fita = session_fita.fitas()[0]
+    cor_do_jogo = session_fita.hsv_hex(
+        session_fita.na_fita(session_fita.cor_do_jogo(pulso.jogo), fita)
+    )
+    assert cores[0] == _ouro()
+    assert cores[-1] == cor_do_jogo
+
+
+def test_pulso_raro_pisca_duas_vezes(pulso):
+    session_fita.pulsar_conquista("rara")
+    pulso.tarefas.pop(0)()
+    assert _cores(pulso.modulo).count(_ouro()) == 2
+
+
+def test_completo_pisca_quatro_vezes(pulso):
+    session_fita.pulsar_conquista("completo")
+    pulso.tarefas.pop(0)()
+    assert _cores(pulso.modulo).count(_ouro()) == 4
+
+
+def test_pulsos_pedidos_juntos_entram_em_fila(pulso):
+    session_fita.pulsar_conquista("normal")
+    session_fita.pulsar_conquista("rara")
+    assert len(pulso.tarefas) == 1  # uma thread serve a fila
+    pulso.tarefas.pop(0)()
+    assert _cores(pulso.modulo).count(_ouro()) == 3
+
+
+def test_fim_da_sessao_interrompe_o_pulso(pulso, monkeypatch):
+    chamadas = {"n": 0}
+    dormir_de_verdade = session_fita.time.sleep
+
+    def dormir(segundos):
+        chamadas["n"] += 1
+        if chamadas["n"] == 1:
+            session_fita.voltar()
+            pulso.tarefas.pop()()  # a volta à cor do app roda já
+        dormir_de_verdade(0)
+
+    monkeypatch.setattr(session_fita.time, "sleep", dormir)
+    session_fita.pulsar_conquista("rara")
+    pulso.tarefas.pop(0)()
+    cores = _cores(pulso.modulo)
+    fita = session_fita.fitas()[0]
+    cor_do_app = session_fita.hsv_hex(session_fita.na_fita(session_fita.cor_do_app(), fita))
+    assert cores[-1] == cor_do_app
+    assert cores.count(_ouro()) == 1
+
+
+def test_fora_de_sessao_nao_pulsa(falsas, monkeypatch, schema):
+    schema.set_boolean("session-fita", True)
+    falsas(False)
+    tarefas = []
+    monkeypatch.setattr(session_fita, "_em_thread", tarefas.append)
+    session_fita.voltar()
+    tarefas.clear()
+    session_fita.pulsar_conquista("normal")
+    assert tarefas == []
+
+
+def test_recurso_desligado_nao_pulsa(pulso, schema):
+    schema.set_boolean("session-fita", False)
+    session_fita.pulsar_conquista("normal")
+    assert pulso.tarefas == []
+
+
+def test_tipo_desconhecido_nao_pulsa(pulso):
+    session_fita.pulsar_conquista("lendaria")
+    assert pulso.tarefas == []
+
+
+def test_fita_que_nao_responde_nao_derruba_o_pulso(pulso):
+    pulso.modulo.quebrada = True
+    session_fita.pulsar_conquista("normal")
+    pulso.tarefas.pop(0)()  # não levanta
+    assert _cores(pulso.modulo) == []
+
+
+# endregion
