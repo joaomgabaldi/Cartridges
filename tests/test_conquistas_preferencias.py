@@ -98,3 +98,23 @@ def test_posicao_so_responde_com_o_aviso_ligado(monkeypatch):
     assert preferencias.conquistas_posicao_row.get_sensitive() is True
     preferencias.conquistas_aviso_switch.set_active(False)
     assert preferencias.conquistas_posicao_row.get_sensitive() is False
+
+
+def test_textos_do_grupo_durante_o_jogo(monkeypatch):
+    from gi.repository import Adw  # noqa: PLC0415
+
+    preferencias = _preferencias(monkeypatch)
+    aviso = preferencias.conquistas_aviso_switch
+    assert aviso.get_title() == "Mostrar aviso durante o jogo"
+    assert aviso.get_subtitle() == (
+        "Exibe um aviso por cima do jogo ao desbloquear uma conquista. "
+        "Nos jogos da Steam, aparece o aviso da própria Steam."
+    )
+    iluminacao = preferencias.conquistas_iluminacao_switch
+    assert iluminacao.get_title() == "Piscar a iluminação inteligente"
+    assert iluminacao.get_subtitle() == (
+        "Os dispositivos piscam em dourado ao desbloquear uma conquista"
+    )
+    grupo = aviso.get_ancestor(Adw.PreferencesGroup)
+    assert grupo.get_title() == "Durante o jogo"
+    assert not grupo.get_description()
