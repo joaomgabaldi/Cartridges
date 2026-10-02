@@ -558,6 +558,26 @@ def test_esperado_que_some_zera_as_falhas_e_volta_a_ser_lido_no_tique_seguinte(
     assert not instancia._pendentes
 
 
+def test_esperado_que_some_num_tique_comum_zera_as_falhas_sem_esperar_a_rebusca(
+    tmp_path, pastas, make_game, monkeypatch
+):
+    estado = _steam(tmp_path, monkeypatch)
+    _estado_cortado(estado, {0})
+    instancia, avisos = _vigia_da_steam(make_game)
+    instancia.iniciar()
+    for _tique in range(vigia.TENTATIVAS + 1):
+        instancia._olhar()
+    assert instancia._falhas == {str(estado): vigia.TENTATIVAS}
+    assert (instancia._olhadas + 1) % vigia.REBUSCA != 0  # o próximo tique é comum
+    estado.unlink()
+    instancia._olhar()
+    assert instancia._falhas == {}
+    _estado_da_steam(estado, {0: 100})
+    instancia._olhar()  # bem antes da próxima rebusca
+    assert "ACH_A" in historico.ler("g1") and avisos == []
+    assert not instancia._pendentes
+
+
 def test_esperado_ausente_nao_acumula_falhas(tmp_path, pastas, make_game, monkeypatch):
     estado = _steam(tmp_path, monkeypatch)
     instancia, avisos = _vigia_da_steam(make_game)

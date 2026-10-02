@@ -204,7 +204,10 @@ class Vigia:
                 chave = str(achado.caminho)
                 atual = _mtime(achado.caminho)
                 if chave in self._pendentes:
-                    if not self._desistiu(chave, rebusca):
+                    # Ausente não faz E/S: `_retomar_base` zera as falhas já neste
+                    # tique, em vez de esperar a rebusca (30 s) para o arquivo que
+                    # volta ser lido.
+                    if atual is None or not self._desistiu(chave, rebusca):
                         self._retomar_base(achado, atual)
                 elif atual is None:
                     self._falhas.pop(chave, None)
