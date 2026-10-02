@@ -15,6 +15,14 @@ def test_chave_digitada_vai_para_o_schema(monkeypatch, schema):
     assert schema.get_string("conquistas-chave-steam") == "abc123"
 
 
+def test_descricao_do_grupo_da_chave(monkeypatch):
+    preferencias = _preferencias(monkeypatch)
+    assert preferencias.conquistas_chave_group.get_description() == (
+        "Informe a chave da Steam Web API. "
+        '<a href="https://steamcommunity.com/dev/apikey">Obtenha aqui</a>.'
+    )
+
+
 def test_chave_guardada_aparece_na_linha(monkeypatch, schema):
     schema.set_string("conquistas-chave-steam", "xyz")
     preferencias = _preferencias(monkeypatch)
