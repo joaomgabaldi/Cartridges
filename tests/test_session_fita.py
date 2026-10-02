@@ -1790,12 +1790,38 @@ def test_completo_pisca_quatro_vezes(pulso):
     assert _cores(pulso.modulo).count(_ouro()) == 4
 
 
-def test_pulsos_pedidos_juntos_entram_em_fila(pulso):
+def _pedir_durante_o_pulso(monkeypatch, *tipos):
+    """Pede estes tipos de pulso na primeira espera de um pulso em curso."""
+    chamadas = {"n": 0}
+    dormir_de_verdade = session_fita.time.sleep
+
+    def dormir(segundos):
+        chamadas["n"] += 1
+        if chamadas["n"] == 1:
+            for tipo in tipos:
+                session_fita.pulsar_conquista(tipo)
+        dormir_de_verdade(0)
+
+    monkeypatch.setattr(session_fita.time, "sleep", dormir)
+
+
+def test_pulsos_pedidos_juntos_entram_em_fila(pulso, monkeypatch):
+    _pedir_durante_o_pulso(monkeypatch, "rara", "normal")
     session_fita.pulsar_conquista("normal")
-    session_fita.pulsar_conquista("rara")
     assert len(pulso.tarefas) == 1  # uma thread serve a fila
     pulso.tarefas.pop(0)()
-    assert _cores(pulso.modulo).count(_ouro()) == 3
+    # O normal que tocava, e um só pedido à espera: a rara.
+    assert _cores(pulso.modulo).count(_ouro()) == 1 + 2
+    assert len(pulso.tarefas) == 0
+
+
+def test_pedidos_durante_um_pulso_viram_um_so_do_tipo_mais_forte(pulso, monkeypatch):
+    _pedir_durante_o_pulso(monkeypatch, "rara", "normal", "completo", "rara")
+    session_fita.pulsar_conquista("normal")
+    pulso.tarefas.pop(0)()
+    assert _cores(pulso.modulo).count(_ouro()) == 1 + 4
+    assert session_fita._fila_de_pulsos == []
+    assert session_fita._pulsando is False
 
 
 def test_fim_da_sessao_interrompe_o_pulso(pulso, monkeypatch):
@@ -1846,6 +1872,100 @@ def test_fita_que_nao_responde_nao_derruba_o_pulso(pulso):
     session_fita.pulsar_conquista("normal")
     pulso.tarefas.pop(0)()  # não levanta
     assert _cores(pulso.modulo) == []
+
+
+def test_fechar_o_app_no_meio_do_pulso_devolve_o_estado_de_antes(pulso, monkeypatch, schema):
+    original = "000003e800b4"
+    schema.set_string(
+        session_fita.CHAVE_ESTADO, json.dumps({"eb0": {"ligada": True, "cor": original}})
+    )
+    chamadas = {"n": 0}
+    dormir_de_verdade = session_fita.time.sleep
+
+    def em_linha(tarefa):
+        tarefa()
+        return SimpleNamespace(join=lambda prazo=None: None, is_alive=lambda: False)
+
+    def dormir(segundos):
+        chamadas["n"] += 1
+        if chamadas["n"] == 1:
+            # O app fecha sem passar por `voltar`.
+            monkeypatch.setattr(session_fita, "_em_thread", em_linha)
+            session_fita.fechar()
+        dormir_de_verdade(0)
+
+    monkeypatch.setattr(session_fita.time, "sleep", dormir)
+    session_fita.pulsar_conquista("rara")
+    pulso.tarefas.pop(0)()
+    cores = _cores(pulso.modulo)
+    assert cores[-1] == original
+    assert cores.count(_ouro()) == 1  # o dourado de antes do fechamento, nenhum depois
+
+
+def test_o_fim_da_sessao_entre_a_conferencia_e_a_vez_nao_deixa_o_ouro(pulso, monkeypatch):
+    """O fim da sessão tenta entrar logo depois de o pulso reservar a vez: só
+    entra depois, com a vez maior, e a fita termina na cor do app."""
+    reservar = session_fita._reservar
+    interrupcao = {}
+
+    def reservar_e_encerrar(alvos):
+        vezes = reservar(alvos)
+        if "linha" not in interrupcao:
+            interrupcao["linha"] = threading.Thread(target=session_fita.voltar)
+            interrupcao["linha"].start()
+            interrupcao["linha"].join(0.3)
+            interrupcao["bloqueada"] = interrupcao["linha"].is_alive()
+        return vezes
+
+    monkeypatch.setattr(session_fita, "_reservar", reservar_e_encerrar)
+    session_fita.pulsar_conquista("rara")
+    pulso.tarefas.pop(0)()
+    interrupcao["linha"].join()
+    # `voltar` esperou a conferência e a reserva do pulso terminarem.
+    assert interrupcao["bloqueada"]
+    pulso.tarefas.pop()()  # a volta à cor do app
+    fita = session_fita.fitas()[0]
+    cor_do_app = session_fita.hsv_hex(session_fita.na_fita(session_fita.cor_do_app(), fita))
+    assert _cores(pulso.modulo)[-1] == cor_do_app
+
+
+def test_falha_ao_criar_a_thread_nao_trava_os_pulsos_seguintes(pulso, monkeypatch):
+    def quebra(_tarefa):
+        raise RuntimeError("sem threads")
+
+    monkeypatch.setattr(session_fita, "_em_thread", quebra)
+    session_fita.pulsar_conquista("normal")  # não levanta
+    assert session_fita._pulsando is False
+    assert session_fita._fila_de_pulsos == []
+    monkeypatch.setattr(session_fita, "_em_thread", pulso.tarefas.append)
+    session_fita.pulsar_conquista("normal")
+    assert len(pulso.tarefas) == 1
+
+
+def test_recurso_desligado_no_meio_do_pulso_para_o_pulso(pulso, monkeypatch, schema):
+    chamadas = {"n": 0}
+    dormir_de_verdade = session_fita.time.sleep
+
+    def dormir(segundos):
+        chamadas["n"] += 1
+        if chamadas["n"] == 1:
+            schema.set_boolean("session-fita", False)
+        dormir_de_verdade(0)
+
+    monkeypatch.setattr(session_fita.time, "sleep", dormir)
+    session_fita.pulsar_conquista("rara")
+    pulso.tarefas.pop(0)()
+    assert _cores(pulso.modulo).count(_ouro()) == 1
+    assert session_fita._pulsando is False
+
+
+def test_comando_que_falha_no_pulso_esquece_o_que_a_fita_mostra(pulso):
+    fita = session_fita.fitas()[0]
+    assert fita.id in session_fita._mostrada
+    vez = session_fita._reservar([fita])[fita.id]
+    pulso.modulo.quebrada = True
+    session_fita._tingir(fita, session_fita.OURO, vez)
+    assert fita.id not in session_fita._mostrada
 
 
 # endregion
