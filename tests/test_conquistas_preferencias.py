@@ -42,11 +42,17 @@ def test_posicao_estranha_no_schema_cai_no_padrao(monkeypatch, schema):
 
 
 def test_posicao_sem_selecao_nao_levanta_nem_grava(monkeypatch, schema):
+    """O ComboRow ignora ``set_selected(INVALID_LIST_POSITION)``; o handler é chamado
+    direto, com uma linha cujo ``get_selected`` devolve a posição inválida."""
     from gi.repository import Gtk  # noqa: PLC0415
+
+    class LinhaSemSelecao:
+        def get_selected(self):
+            return Gtk.INVALID_LIST_POSITION
 
     schema.set_string("conquistas-aviso-posicao", "superior-direito")
     preferencias = _preferencias(monkeypatch)
-    preferencias.conquistas_posicao_row.set_selected(Gtk.INVALID_LIST_POSITION)
+    preferencias._gravar_posicao_do_aviso(LinhaSemSelecao(), None)
     assert schema.get_string("conquistas-aviso-posicao") == "superior-direito"
 
 
@@ -58,6 +64,31 @@ def test_botao_de_exemplo_mostra_um_aviso(monkeypatch):
     preferencias = _preferencias(monkeypatch)
     preferencias.conquistas_exemplo_row.emit("activated")
     assert len(mostrados) == 1 and mostrados[0] == conquista_aviso.Aviso.exemplo()
+
+
+def test_botao_de_exemplo_fecha_o_anterior_antes_de_mostrar(monkeypatch):
+    from cartridges import conquista_aviso  # noqa: PLC0415
+
+    chamadas = []
+    monkeypatch.setattr(conquista_aviso, "fechar", lambda: chamadas.append("fechar"))
+    monkeypatch.setattr(conquista_aviso, "mostrar", lambda _a: chamadas.append("mostrar"))
+    preferencias = _preferencias(monkeypatch)
+    preferencias.conquistas_exemplo_row.emit("activated")
+    assert chamadas == ["fechar", "mostrar"]
+
+
+def test_cliques_repetidos_no_exemplo_nao_enfileiram(monkeypatch):
+    from cartridges import conquista_aviso  # noqa: PLC0415
+
+    # Sem janela de verdade: só a fila importa.
+    monkeypatch.setattr(conquista_aviso, "_proximo", lambda: False)
+    preferencias = _preferencias(monkeypatch)
+    try:
+        for _clique in range(3):
+            preferencias.conquistas_exemplo_row.emit("activated")
+        assert len(conquista_aviso._fila) == 1
+    finally:
+        conquista_aviso.fechar()
 
 
 def test_posicao_so_responde_com_o_aviso_ligado(monkeypatch):

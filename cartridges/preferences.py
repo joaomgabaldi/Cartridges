@@ -204,21 +204,10 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             GObject.BindingFlags.SYNC_CREATE,
         )
 
-        def gravar_posicao(row: Adw.ComboRow, *_args: Any) -> None:
-            # Sem item escolhido, ``get_selected`` devolve INVALID_LIST_POSITION.
-            indice = row.get_selected()
-            if indice < len(janela_por_cima.CANTOS):
-                shared.schema.set_string(
-                    "conquistas-aviso-posicao", janela_por_cima.CANTOS[indice]
-                )
-
         self._conquistas_posicao_id = self.conquistas_posicao_row.connect(
-            "notify::selected", gravar_posicao
+            "notify::selected", self._gravar_posicao_do_aviso
         )
-        self.conquistas_exemplo_row.connect(
-            "activated",
-            lambda *_: conquista_aviso.mostrar(conquista_aviso.Aviso.exemplo()),
-        )
+        self.conquistas_exemplo_row.connect("activated", self._mostrar_aviso_de_exemplo)
 
         def update_sgdb(*_args: Any) -> None:
             counter = 0
@@ -351,6 +340,17 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         )
 
         self.reler_do_schema()
+
+    def _gravar_posicao_do_aviso(self, row: Adw.ComboRow, *_args: Any) -> None:
+        # Sem item escolhido, ``get_selected`` devolve INVALID_LIST_POSITION.
+        indice = row.get_selected()
+        if indice < len(janela_por_cima.CANTOS):
+            shared.schema.set_string("conquistas-aviso-posicao", janela_por_cima.CANTOS[indice])
+
+    def _mostrar_aviso_de_exemplo(self, *_args: Any) -> None:
+        # Cliques repetidos não enfileiram vários exemplos: o anterior sai.
+        conquista_aviso.fechar()
+        conquista_aviso.mostrar(conquista_aviso.Aviso.exemplo())
 
     def reler_do_schema(self) -> None:
         """Preenche as linhas que não usam ``bind``. Chamado no fim do
