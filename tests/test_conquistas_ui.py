@@ -3,6 +3,7 @@
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pytest
 from gi.repository import Gtk
@@ -163,6 +164,23 @@ def test_erro_inesperado_leva_traceback_sem_a_chave_na_mensagem(monkeypatch, cap
 def test_icone_local_inexistente_ou_vazio(tmp_path):
     assert icones.arquivo_local("") is None
     assert icones.arquivo_local(str(tmp_path / "nao_existe.png")) is None
+
+
+@pytest.mark.parametrize(
+    "origem", [r"\\servidor\pasta\x.png", "//servidor/pasta/x.png", r"\\?\UNC\srv\x.png"]
+)
+def test_icone_em_caminho_de_rede_nao_toca_no_disco(monkeypatch, origem):
+    tocou = []
+
+    def is_file(self, *_a, **_k):
+        # `_resolver` engole qualquer exceção: o registro é o que prova o acesso.
+        tocou.append(str(self))
+        return False
+
+    monkeypatch.setattr(Path, "is_file", is_file)
+    assert icones.arquivo_local(origem) is None
+    assert icones._textura(origem) is None
+    assert tocou == []
 
 
 def test_arquivo_ilegivel_no_cache_e_apagado(monkeypatch):

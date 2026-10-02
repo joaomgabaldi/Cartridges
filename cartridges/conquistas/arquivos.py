@@ -85,6 +85,14 @@ def pasta_da_steam() -> Optional[Path]:
     return None
 
 
+def eh_caminho_de_rede(caminho: object) -> bool:
+    """Se ``caminho`` começa como UNC (``\\\\servidor\\…``, ``//servidor/…``,
+    ``\\\\?\\UNC\\…``, ``\\\\.\\…``). Só olha o texto: checar o arquivo já faria o
+    Windows conectar na máquina e mandar as credenciais do usuário."""
+    texto = str(caminho or "").lstrip()
+    return len(texto) >= 2 and texto[0] in "\\/" and texto[1] in "\\/"
+
+
 def eh_jogo_da_steam(executavel: str) -> bool:
     return steam_appid_from_url(executavel or "") is not None
 

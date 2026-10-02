@@ -109,6 +109,68 @@ def test_steam_settings_idiomas_e_icones(tmp_path):
     assert b.oculta and b.icone_cinza == "https://x/b.jpg"
 
 
+def _arquivo_com_icones(tmp_path, *icones):
+    pasta = tmp_path / "steam_settings"
+    pasta.mkdir(parents=True, exist_ok=True)
+    arquivo = pasta / "achievements.json"
+    arquivo.write_text(
+        json.dumps([{"name": "ACH_A", "displayName": "A", "icon": icone} for icone in icones]),
+        encoding="utf-8",
+    )
+    return arquivo
+
+
+@pytest.mark.parametrize(
+    "icone",
+    [r"\\servidor\pasta\x.png", "//servidor/pasta/x.png", r"\\?\UNC\servidor\pasta\x.png",
+     r"\\.\pipe\x", r"/\servidor\x.png"],
+)
+def test_icone_em_caminho_de_rede_e_recusado_sem_tocar_no_disco(tmp_path, monkeypatch, icone):
+    arquivo = _arquivo_com_icones(tmp_path, icone)
+    original = Path.is_file
+    tocou = []
+
+    def is_file(self, *a, **k):
+        if str(self).replace("/", "\\").startswith("\\\\"):
+            tocou.append(str(self))
+            return False
+        return original(self, *a, **k)
+
+    monkeypatch.setattr(Path, "is_file", is_file)
+    (info,) = catalogo.ler_steam_settings(arquivo)
+    assert info.icone == ""
+    assert tocou == [], "acessou o disco de rede"
+
+
+def test_icone_local_relativo_e_absoluto_continuam_valendo(tmp_path):
+    pasta = tmp_path / "steam_settings"
+    (pasta / "images").mkdir(parents=True)
+    (pasta / "images" / "a.png").write_bytes(b"png")
+    fora = tmp_path / "AppData" / "icone.png"
+    fora.parent.mkdir()
+    fora.write_bytes(b"png")
+    arquivo = _arquivo_com_icones(tmp_path, "images/a.png", str(fora))
+    infos = catalogo.ler_steam_settings(arquivo)
+    assert infos[0].icone == str(pasta / "images" / "a.png")
+    assert infos[1].icone == str(fora)
+
+
+def test_chave_da_steam_vai_codificada_na_url(monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "a&b#c d")
+    urls = []
+
+    def pedir(url):
+        urls.append(url)
+        return {}
+
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [])
+    monkeypatch.setattr(catalogo, "_pedir", pedir)
+    catalogo.renovar("570", "", agora=10)
+    schema_url = next(u for u in urls if "GetSchemaForGame" in u)
+    assert "key=a%26b%23c%20d&appid=570" in schema_url
+    assert "a&b" not in schema_url and "#" not in schema_url
+
+
 def test_cache_ida_e_volta():
     cat = Catalogo((ConquistaInfo("ACH_A", "A", "d", "i", "g", True, 3.5),), 1000, True)
     catalogo._gravar_cache("570", cat)

@@ -2211,6 +2211,19 @@ def test_wrong_typed_numeric_fields_are_dropped_on_load():
     assert cleaned["name"] == "Probe"
 
 
+def test_campo_conquistas_de_tipo_errado_cai_no_saneador():
+    """`"conquistas": "false"` (texto) mantinha o recurso ligado e `null`
+    o desligava; o campo precisa passar pelo saneador como os outros booleanos."""
+    from cartridges.main import sanitize_game_fields
+
+    for ruim in ("false", None, 0, "sim"):
+        limpo = sanitize_game_fields({"name": "Probe", "conquistas": ruim}, "p.json")
+        assert "conquistas" not in limpo, ruim
+
+    assert sanitize_game_fields({"conquistas": False}, "p.json")["conquistas"] is False
+    assert sanitize_game_fields({"conquistas": True}, "p.json")["conquistas"] is True
+
+
 def test_enter_cannot_apply_mid_fetch(real_window, store):
     """M2: entry-activated chamava apply_preferences direto, driblando o
     botão que begin_loading desabilita — salvava sem os dados em voo."""

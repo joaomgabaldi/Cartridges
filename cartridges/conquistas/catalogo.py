@@ -30,6 +30,7 @@ import uuid
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Iterable, Optional
+from urllib.parse import quote
 
 from requests.exceptions import RequestException
 
@@ -175,6 +176,9 @@ def ler_steam_settings(arquivo: Path) -> list[ConquistaInfo]:
         valor = str(valor or "")
         if not valor or valor.startswith(("http://", "https://")):
             return valor
+        # Caminho de rede nunca: só checar o arquivo já conecta no servidor.
+        if arquivos.eh_caminho_de_rede(valor):
+            return ""
         local = arquivo.parent / valor
         return str(local) if local.is_file() else ""
 
@@ -455,7 +459,10 @@ def renovar(
         else:
             try:
                 infos = ler_schema_da_steam(
-                    _pedir(f"{_API}/GetSchemaForGame/v2/?key={chave}&appid={appid}&l=brazilian")
+                    _pedir(
+                        f"{_API}/GetSchemaForGame/v2/"
+                        f"?key={quote(chave, safe='')}&appid={appid}&l=brazilian"
+                    )
                 )
                 com_chave = bool(infos)
                 schema_respondeu = True
@@ -536,6 +543,3 @@ def obter(
     ):
         return Renovacao(cat)
     return renovar(appid, executavel, agora, rede, usar_chave)
-
-
-
