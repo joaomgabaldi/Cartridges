@@ -173,11 +173,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             ),
         )
         self.conquistas_chave_group.set_description(
-            _(
-                "Com a chave, os nomes e as descrições das conquistas aparecem em "
-                "português. Sem ela, o Cartridges usa os dados que acompanham o jogo, "
-                "quando existem. {}Obtenha a chave aqui{}."
-            ).format('<a href="https://steamcommunity.com/dev/apikey">', "</a>")
+            _("Informe a chave da Steam Web API. {}Obtenha aqui{}.").format('<a href="https://steamcommunity.com/dev/apikey">', "</a>")
         )
         shared.schema.bind(
             "conquistas-mostrar-ocultas",
