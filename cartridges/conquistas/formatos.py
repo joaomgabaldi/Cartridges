@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from cartridges.conquistas import keyvalues, schema_da_steam
+
 
 @dataclass(frozen=True)
 class Desbloqueio:
@@ -40,11 +42,13 @@ ALI213 = "ali213"
 CREAMAPI = "creamapi"
 RAZOR1911 = "razor1911"
 STEAM = "steam"
+STEAM_STATS = "steam-stats"
 
 _DESBLOQUEADA = re.compile(r"\bunlocked\s*=\s*true\b", re.IGNORECASE)
 # O limite do que o histórico aceita; acima disso a hora vale 0 ("sem data").
 _HORA_MAXIMA = 2**63
 _HORA = re.compile(r"(?:^|[{,\s])time\s*=\s*(\d+)", re.IGNORECASE)
+_ESTADO_DA_STEAM = re.compile(r"^UserGameStats_(\d+)_(\d+)\.bin$", re.IGNORECASE)
 
 
 def _linhas(caminho: Path) -> list[str]:
@@ -211,6 +215,46 @@ def _steam(caminho: Path) -> list[Desbloqueio]:
     return achados
 
 
+def _steam_stats(caminho: Path) -> list[Desbloqueio]:
+    """O estado que a própria Steam guarda em `appcache\\stats`, o mesmo que ela
+    grava no instante do desbloqueio. Ele só diz bloco e bit; o nome vem do
+    schema do jogo, que mora na mesma pasta."""
+    achado = _ESTADO_DA_STEAM.match(caminho.name)
+    if achado is None:
+        return []
+    estado = keyvalues.ler(caminho)
+    if estado is None:
+        if not caminho.exists():
+            raise FileNotFoundError(caminho)
+        raise ValueError("estado da Steam ilegível")
+    appid = achado.group(2)
+    arquivo_do_schema = caminho.with_name(f"UserGameStatsSchema_{appid}.bin")
+    if not arquivo_do_schema.is_file():
+        return []
+    schema = keyvalues.ler(arquivo_do_schema)
+    if schema is None:
+        raise ValueError("schema da Steam ilegível")
+    cache = estado.get("cache")
+    if not isinstance(cache, dict):
+        return []
+    achados = []
+    for conquista in schema_da_steam.conquistas(schema, appid):
+        bloco = cache.get(conquista.bloco)
+        if not isinstance(bloco, dict):
+            continue
+        bits = bloco.get("data")
+        if isinstance(bits, bool) or not isinstance(bits, int):
+            continue
+        if not ((bits & 0xFFFFFFFF) >> conquista.bit) & 1:
+            continue
+        horas = bloco.get("AchievementTimes")
+        quando = horas.get(str(conquista.bit), 0) if isinstance(horas, dict) else 0
+        if isinstance(quando, bool) or not isinstance(quando, int):
+            quando = 0
+        achados.append(Desbloqueio(conquista.nome, quando))
+    return achados
+
+
 _LEITORES: dict[str, Callable[[Path], list[Desbloqueio]]] = {
     PADRAO: _padrao,
     ONLINEFIX: _onlinefix,
@@ -223,6 +267,7 @@ _LEITORES: dict[str, Callable[[Path], list[Desbloqueio]]] = {
     CREAMAPI: _creamapi,
     RAZOR1911: _razor1911,
     STEAM: _steam,
+    STEAM_STATS: _steam_stats,
 }
 
 
