@@ -1862,6 +1862,12 @@ def test_recurso_desligado_nao_pulsa(pulso, schema):
     assert pulso.tarefas == []
 
 
+def test_todo_pulso_tem_sua_forca_e_vice_versa():
+    """A fila de pedidos compara por ``FORCA_DOS_PULSOS``: um tipo que faltasse
+    lá levantaria no `index` em vez de pulsar."""
+    assert set(session_fita.PULSOS) == set(session_fita.FORCA_DOS_PULSOS)
+
+
 def test_tipo_desconhecido_nao_pulsa(pulso):
     session_fita.pulsar_conquista("lendaria")
     assert pulso.tarefas == []
