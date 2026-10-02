@@ -1,6 +1,7 @@
 """Os leitores dos arquivos de conquista, um formato por teste."""
 
 import json
+import os
 
 import pytest
 
@@ -315,3 +316,70 @@ def test_nome_de_arquivo_estranho_e_nada(tmp_path):
     caminho = tmp_path / "outro.bin"
     caminho.write_bytes(STEAM_CONFIRMADO)
     assert formatos.ler_ou_none(caminho, formatos.STEAM_STATS) == []
+
+
+# --- o schema interpretado fica em memória, por (caminho, mtime, tamanho) -----------
+
+
+@pytest.fixture
+def leituras_do_schema(monkeypatch):
+    """Esvazia o cache de schemas e conta as leituras de `UserGameStatsSchema_*`."""
+    formatos._schemas.clear()
+    lidos = []
+    original = formatos.keyvalues.ler
+
+    def contando(caminho):
+        if caminho.name.startswith("UserGameStatsSchema_"):
+            lidos.append(caminho)
+        return original(caminho)
+
+    monkeypatch.setattr(formatos.keyvalues, "ler", contando)
+    yield lidos
+    formatos._schemas.clear()
+
+
+def test_schema_igual_nao_e_lido_de_novo(tmp_path, leituras_do_schema):
+    caminho = _stats_da_steam(tmp_path / "stats", STEAM_CONFIRMADO)
+    esperado = [Desbloqueio("ACH_BONUS_MANY_STARS", 1790952235)]
+    assert formatos.ler(caminho, formatos.STEAM_STATS) == esperado
+    assert formatos.ler(caminho, formatos.STEAM_STATS) == esperado
+    assert len(leituras_do_schema) == 1
+
+
+def test_schema_regravado_e_relido(tmp_path, leituras_do_schema):
+    caminho = _stats_da_steam(tmp_path / "stats", STEAM_CONFIRMADO)
+    arquivo_do_schema = caminho.with_name("UserGameStatsSchema_282800.bin")
+    assert formatos.ler(caminho, formatos.STEAM_STATS) == [
+        Desbloqueio("ACH_BONUS_MANY_STARS", 1790952235)
+    ]
+    novo = schema_de_teste("282800", {"1": {"13": {"name": "ACH_OUTRA"}, "14": {"name": "ACH_RENOMEADA"}}})
+    arquivo_do_schema.write_bytes(novo)
+    mtime = arquivo_do_schema.stat().st_mtime_ns + 10**9  # o NTFS guarda 100 ns: passo de 1 s
+    os.utime(arquivo_do_schema, ns=(mtime, mtime))
+    assert formatos.ler(caminho, formatos.STEAM_STATS) == [Desbloqueio("ACH_RENOMEADA", 1790952235)]
+    assert len(leituras_do_schema) == 2
+
+
+def test_estado_sem_nenhum_bit_ligado_nao_le_o_schema(tmp_path, leituras_do_schema):
+    pasta = tmp_path / "stats"
+    caminho = _stats_da_steam(pasta, STEAM_ANTES)
+    assert formatos.ler_ou_none(caminho, formatos.STEAM_STATS) == []
+    zerado = kv_bytes({"cache": {"crc": 0, "1": {"data": 0}, "2": {"data": 0}, "3": 5}})
+    caminho.write_bytes(zerado)
+    assert formatos.ler_ou_none(caminho, formatos.STEAM_STATS) == []
+    assert leituras_do_schema == []
+
+
+def test_schema_ilegivel_nao_fica_guardado(tmp_path, leituras_do_schema):
+    caminho = _stats_da_steam(tmp_path / "stats", STEAM_CONFIRMADO, schema=b"\x00lixo")
+    for _vez in range(2):
+        assert formatos.ler_ou_none(caminho, formatos.STEAM_STATS) is None
+    assert len(leituras_do_schema) == 2 and not formatos._schemas
+
+
+def test_cache_de_schemas_tem_tamanho_limitado(tmp_path, leituras_do_schema):
+    for numero in range(formatos._SCHEMAS_GUARDADOS + 3):
+        pasta = tmp_path / f"stats{numero}"
+        caminho = _stats_da_steam(pasta, STEAM_CONFIRMADO)
+        assert formatos.ler(caminho, formatos.STEAM_STATS)
+    assert len(formatos._schemas) == formatos._SCHEMAS_GUARDADOS
