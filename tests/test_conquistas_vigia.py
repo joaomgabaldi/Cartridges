@@ -527,3 +527,75 @@ def test_cem_por_cento_so_de_conquista_sincronizada_nao_pulsa(tmp_path, pastas, 
     instancia._olhar()
     assert avisos == []
     assert set(historico.ler("g1")) == {"ACH_A", "ACH_B"}
+
+
+# --- arquivo da Steam esperado: sumiço, rebusca e leitura cortada ---
+
+
+def _estado_cortado(caminho, conquistas):
+    """O estado como o leitor o vê quando a Steam está no meio da gravação."""
+    bloco = {"data": sum(1 << bit for bit in conquistas)}
+    caminho.write_bytes(kv_bytes({"cache": {"crc": 0, "1": bloco}})[:-3])
+
+
+def test_esperado_que_some_zera_as_falhas_e_volta_a_ser_lido_no_tique_seguinte(
+    tmp_path, pastas, make_game, monkeypatch
+):
+    estado = _steam(tmp_path, monkeypatch)
+    _estado_cortado(estado, {0})
+    instancia, avisos = _vigia_da_steam(make_game)
+    instancia.iniciar()
+    for _tique in range(vigia.REBUSCA - 1):
+        instancia._olhar()
+    # Falhou `TENTATIVAS` vezes e desistiu: só a rebusca tenta de novo.
+    assert instancia._falhas == {str(estado): vigia.TENTATIVAS}
+    estado.unlink()
+    instancia._olhar()  # o tique da rebusca vê o arquivo ausente
+    assert instancia._falhas == {}
+    _estado_da_steam(estado, {0: 100})
+    instancia._olhar()  # bem antes da próxima rebusca
+    assert "ACH_A" in historico.ler("g1") and avisos == []
+    assert not instancia._pendentes
+
+
+def test_esperado_ausente_nao_acumula_falhas(tmp_path, pastas, make_game, monkeypatch):
+    estado = _steam(tmp_path, monkeypatch)
+    instancia, avisos = _vigia_da_steam(make_game)
+    instancia.iniciar()
+    for _tique in range(vigia.REBUSCA + 3):
+        instancia._olhar()
+    assert instancia._falhas == {} and avisos == []
+    assert instancia._pendentes == {str(estado)}
+
+
+def test_rebusca_com_o_esperado_ja_presente_nao_o_trata_como_arquivo_novo(
+    tmp_path, pastas, make_game, monkeypatch
+):
+    estado = _steam(tmp_path, monkeypatch)
+    _estado_da_steam(estado, {0: 100})
+    instancia, avisos = _vigia_da_steam(make_game)
+    instancia.iniciar()
+    for _tique in range(vigia.REBUSCA * 2):
+        instancia._olhar()
+    assert avisos == []
+    assert [str(a.caminho) for a in instancia._arquivos] == [str(estado)]
+    _estado_da_steam(estado, {0: 100, 1: 200})
+    instancia._olhar()
+    assert _nomes(avisos) == [["ACH_B"]]
+
+
+def test_bin_cortado_no_inicio_e_depois_valido_entra_em_silencio(
+    tmp_path, pastas, make_game, monkeypatch
+):
+    estado = _steam(tmp_path, monkeypatch)
+    _estado_cortado(estado, {0})
+    instancia, avisos = _vigia_da_steam(make_game)
+    instancia.iniciar()
+    instancia._olhar()
+    assert avisos == [] and historico.ler("g1") in (None, {})
+    _estado_da_steam(estado, {0: 100})
+    instancia._olhar()
+    assert avisos == [] and "ACH_A" in historico.ler("g1")
+    _estado_da_steam(estado, {0: 100, 1: 200})
+    instancia._olhar()
+    assert _nomes(avisos) == [["ACH_B"]]
