@@ -28,11 +28,17 @@ from typing import Any, Callable, Optional
 
 from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
-from cartridges import shared
+from cartridges import conquista_aviso, shared
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.metadata_refresh import get_metadata_refresh
 from cartridges.store.managers.sgdb_manager import SgdbManager
-from cartridges.utils import backup, restauracao, session_fita, window_geometry
+from cartridges.utils import (
+    backup,
+    janela_por_cima,
+    restauracao,
+    session_fita,
+    window_geometry,
+)
 from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.na_tela import entregar_na_tela
 
@@ -99,6 +105,10 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     conquistas_chave_group: Adw.PreferencesGroup = Gtk.Template.Child()
     conquistas_chave_row: Adw.EntryRow = Gtk.Template.Child()
     conquistas_ocultas_switch: Adw.SwitchRow = Gtk.Template.Child()
+    conquistas_aviso_switch: Adw.SwitchRow = Gtk.Template.Child()
+    conquistas_posicao_row: Adw.ComboRow = Gtk.Template.Child()
+    conquistas_iluminacao_switch: Adw.SwitchRow = Gtk.Template.Child()
+    conquistas_exemplo_row: Adw.ButtonRow = Gtk.Template.Child()
 
     export_backup_button_row = Gtk.Template.Child()
     import_backup_button_row = Gtk.Template.Child()
@@ -174,6 +184,40 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             self.conquistas_ocultas_switch,
             "active",
             Gio.SettingsBindFlags.DEFAULT,
+        )
+        shared.schema.bind(
+            "conquistas-aviso",
+            self.conquistas_aviso_switch,
+            "active",
+            Gio.SettingsBindFlags.DEFAULT,
+        )
+        shared.schema.bind(
+            "conquistas-iluminacao",
+            self.conquistas_iluminacao_switch,
+            "active",
+            Gio.SettingsBindFlags.DEFAULT,
+        )
+        self.conquistas_aviso_switch.bind_property(
+            "active",
+            self.conquistas_posicao_row,
+            "sensitive",
+            GObject.BindingFlags.SYNC_CREATE,
+        )
+
+        def gravar_posicao(row: Adw.ComboRow, *_args: Any) -> None:
+            # Sem item escolhido, ``get_selected`` devolve INVALID_LIST_POSITION.
+            indice = row.get_selected()
+            if indice < len(janela_por_cima.CANTOS):
+                shared.schema.set_string(
+                    "conquistas-aviso-posicao", janela_por_cima.CANTOS[indice]
+                )
+
+        self._conquistas_posicao_id = self.conquistas_posicao_row.connect(
+            "notify::selected", gravar_posicao
+        )
+        self.conquistas_exemplo_row.connect(
+            "activated",
+            lambda *_: conquista_aviso.mostrar(conquista_aviso.Aviso.exemplo()),
         )
 
         def update_sgdb(*_args: Any) -> None:
@@ -336,6 +380,17 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             self.conquistas_chave_row.handler_unblock(
                 self._conquistas_chave_changed_id
             )
+
+        canto = shared.schema.get_string("conquistas-aviso-posicao")
+        if canto not in janela_por_cima.CANTOS:
+            canto = "inferior-direito"
+        self.conquistas_posicao_row.handler_block(self._conquistas_posicao_id)
+        try:
+            self.conquistas_posicao_row.set_selected(
+                janela_por_cima.CANTOS.index(canto)
+            )
+        finally:
+            self.conquistas_posicao_row.handler_unblock(self._conquistas_posicao_id)
 
         self.wallhaven_key_entry_row.handler_block(self._wallhaven_key_changed_id)
         try:
