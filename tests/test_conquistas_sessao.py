@@ -16,6 +16,10 @@ class _VigiaFalso:
         self.game, self.avisar, self.iniciado, self.parado = game, avisar, False, False
         _VigiaFalso.criados.append(self)
 
+    @property
+    def ativo(self):
+        return self.iniciado and not self.parado
+
     def iniciar(self):
         self.iniciado = True
 
@@ -89,9 +93,61 @@ def test_tipo_do_pulso():
 
 
 def test_erro_no_despacho_nao_levanta(make_game, isolar, monkeypatch):
+    mostrados, pulsos = isolar
     sessao.comecar(make_game())
     monkeypatch.setattr(conquista_aviso.Aviso, "de", classmethod(lambda cls, d: 1 / 0))
     _VigiaFalso.criados[0].avisar([Desbloqueada("A", _info(), False)])  # não levanta
+    assert mostrados == [] and pulsos == ["normal"]  # a falha no cartão não cala o pulso
+
+
+def test_falha_no_pulso_nao_cala_a_pagina(make_game, isolar, monkeypatch, win):
+    jogo = make_game()
+    chamadas = []
+    win.active_game = jogo
+    win.update_conquistas_block = chamadas.append
+
+    def quebra(_tipo):
+        raise OSError("fita fora do ar")
+
+    monkeypatch.setattr(session_fita, "pulsar_conquista", quebra)
+    sessao.comecar(jogo)
+    _VigiaFalso.criados[0].avisar([Desbloqueada("A", _info(), False)])
+    assert [a.titulo for a in isolar[0]] == ["Título"]
+    assert chamadas == [jogo]
+
+
+def test_falha_na_pagina_nao_levanta(make_game, isolar, win):
+    jogo = make_game()
+    win.active_game = jogo
+
+    def quebra(_jogo):
+        raise RuntimeError("página fechada")
+
+    win.update_conquistas_block = quebra
+    sessao.comecar(jogo)
+    _VigiaFalso.criados[0].avisar([Desbloqueada("A", _info(), False)])
+    assert isolar[1] == ["normal"]
+
+
+def test_falha_ao_parar_o_vigia_ainda_fecha_os_cartoes(make_game, isolar):
+    mostrados, _pulsos = isolar
+    sessao.comecar(make_game())
+
+    def quebra():
+        raise RuntimeError("falha de teste")
+
+    _VigiaFalso.criados[0].parar = quebra
+    sessao.parar()  # não levanta
+    assert "fechar" in mostrados  # nada de cartão depois do fim do jogo
+
+
+def test_acompanhando_so_enquanto_a_sessao_do_jogo_esta_aberta(make_game):
+    jogo, outro = make_game(game_id="g1"), make_game(game_id="g2")
+    assert not sessao.acompanhando(jogo)
+    sessao.comecar(jogo)
+    assert sessao.acompanhando(jogo) and not sessao.acompanhando(outro)
+    sessao.parar()
+    assert not sessao.acompanhando(jogo)
 
 
 def test_pagina_aberta_do_jogo_e_atualizada(make_game, isolar, win):
@@ -102,6 +158,25 @@ def test_pagina_aberta_do_jogo_e_atualizada(make_game, isolar, win):
     sessao.comecar(jogo)
     _VigiaFalso.criados[0].avisar([Desbloqueada("A", None, False)])
     assert chamadas == [jogo]
+
+
+def test_o_fechamento_do_app_para_o_vigia_antes_de_devolver_papel_e_fitas(monkeypatch):
+    """Simétrico ao `hide_session_blocker`: um pulso pedido depois de as fitas
+    voltarem à cor do app não teria sessão para pulsar."""
+    import cartridges.main as main_module  # noqa: PLC0415
+    from cartridges import shared  # noqa: PLC0415
+
+    chamadas = []
+    monkeypatch.setattr(main_module.sessao_conquistas, "parar", lambda: chamadas.append("vigia"))
+    monkeypatch.setattr(
+        main_module.session_wallpaper, "restaurar", lambda: chamadas.append("papel")
+    )
+    monkeypatch.setattr(main_module.session_fita, "fechar", lambda: chamadas.append("fitas"))
+    monkeypatch.setattr(shared, "win", None)
+    monkeypatch.setattr(shared, "store", shared.store)
+
+    main_module.CartridgesApplication().do_shutdown()
+    assert chamadas == ["vigia", "papel", "fitas"]
 
 
 def test_a_sessao_da_janela_liga_e_desliga_o_vigia(real_window, make_game, monkeypatch):

@@ -1,10 +1,11 @@
 """A varredura de abertura: grava o histórico e avisa do que é novo."""
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
-from cartridges.conquistas import catalogo, historico, varredura
+from cartridges.conquistas import catalogo, historico, sessao, varredura
 from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.conquistas.varredura import VarreduraConquistas
 from tests.apoio_conquistas import criar, pastas  # noqa: F401
@@ -100,6 +101,33 @@ def test_appid_corrigido_durante_a_leitura_descarta_a_leitura(
     assert VarreduraConquistas()._gravar(leitura) == 0
     flush_idle()
     assert historico.ler(game.game_id) is None
+
+
+def test_jogo_em_sessao_com_vigia_fica_para_o_vigia(
+    store, make_game, pastas, win, flush_idle, monkeypatch
+):
+    """Durante a sessão o vigia é dono do histórico do jogo: se a varredura fundisse
+    a conquista nova antes dele, o vigia não veria novidade (sem cartão e sem pulso)."""
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    outro = _registrado(store, make_game, 2, steam_appid="620")
+    historico.registrar(game.game_id, [Desbloqueio("ACH_A", 100)])
+    historico.registrar(outro.game_id, [])
+    _goldberg(pastas, "570", [("ACH_A", 100), ("ACH_B", 200)])
+    _goldberg(pastas, "620", [("ACH_C", 300)])
+    monkeypatch.setattr(sessao, "_vigia", SimpleNamespace(game=game, ativo=True))
+    _rodar([game, outro], flush_idle)
+    assert historico.ler(game.game_id) == {"ACH_A": 100}  # o vigia cuida deste
+    assert historico.ler(outro.game_id) == {"ACH_C": 300}  # os outros seguem normalmente
+    assert _avisos(win) == ["1 nova conquista em Jogo 2"]
+
+
+def test_vigia_parado_nao_segura_a_varredura(store, make_game, pastas, flush_idle, monkeypatch):
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    historico.registrar(game.game_id, [])
+    _goldberg(pastas, "570", [("ACH_A", 100)])
+    monkeypatch.setattr(sessao, "_vigia", SimpleNamespace(game=game, ativo=False))
+    _rodar([game], flush_idle)
+    assert historico.ler(game.game_id) == {"ACH_A": 100}
 
 
 def test_chave_recusada_avisa_uma_vez(store, make_game, pastas, win, flush_idle, monkeypatch):

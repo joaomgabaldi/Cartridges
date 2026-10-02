@@ -28,7 +28,7 @@ from typing import Any, Optional
 from gi.repository import Adw, GLib
 
 from cartridges import shared
-from cartridges.conquistas import arquivos, catalogo, formatos, historico
+from cartridges.conquistas import arquivos, catalogo, formatos, historico, sessao
 from cartridges.utils import tarefas
 
 _ATRASO_INICIAL = 10
@@ -289,6 +289,9 @@ class VarreduraConquistas:
         # histórico antigo): estas conquistas são do jogo errado e, como o
         # histórico só cresce, gravá-las as deixaria para sempre.
         if str(game.steam_appid or "") != leitura.appid:
+            return 0
+        # Sessão aberta com o vigia ativo: o histórico do jogo é dele agora.
+        if sessao.acompanhando(game):
             return 0
         entraram, primeira = historico.registrar(game.game_id, leitura.desbloqueios)
         if entraram and getattr(shared.win, "active_game", None) is game:

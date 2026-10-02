@@ -728,6 +728,12 @@ class CartridgesApplication(Adw.Application):
             if session.started:
                 session_log.record(session.game.game_id, session.session_seconds)
 
+        # O vigia de conquistas para e o aviso que estiver na tela some, antes
+        # de a iluminação e o papel de parede voltarem ao que eram (como no
+        # `hide_session_blocker`): um pulso pedido depois disso não teria
+        # sessão para pulsar. Nunca levanta, e é rápido.
+        sessao_conquistas.parar()
+
         # A sessão que estava correndo acaba aqui, e as telas vestidas não podem
         # ficar com a arte do jogo depois que o app sumir. Síncrono e antes de
         # tudo o mais deste método: é a última janela em que ainda existe
@@ -770,9 +776,6 @@ class CartridgesApplication(Adw.Application):
         # Os ícones das conquistas na fila não devem segurar o processo com a
         # rede travada.
         icones.encerrar()
-
-        # A sessão pode estar aberta: o vigia para e o aviso que estiver na tela some.
-        sessao_conquistas.parar()
 
         # Um download no meio para no próximo pedaço, e o resultado de uma
         # checagem que ainda esteja no caminho é descartado.
