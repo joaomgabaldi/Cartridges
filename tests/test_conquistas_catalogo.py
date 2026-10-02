@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import threading
 import time
 from pathlib import Path
@@ -10,8 +11,9 @@ import pytest
 from requests.exceptions import ConnectionError as ErroDeConexao
 
 from cartridges import shared
-from cartridges.conquistas import catalogo
+from cartridges.conquistas import arquivos, catalogo
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
+from tests.apoio_conquistas import kv_bytes, schema_de_teste
 
 SCHEMA = {
     "game": {
@@ -601,3 +603,107 @@ def test_steam_settings_fundo_demais_nao_levanta(tmp_path):
     arquivo = tmp_path / "achievements.json"
     arquivo.write_text("[" * 100000, encoding="utf-8")
     assert catalogo.ler_steam_settings(arquivo) == []
+
+
+BITS_LOCAIS = {
+    "1": {
+        "0": {
+            "name": "ACH_A",
+            "display": {
+                "name": {"token": "T0", "english": "First", "brazilian": "Primeira"},
+                "desc": {"token": "T0D", "english": "Do it", "brazilian": "Faça"},
+                "hidden": 0,
+                "icon": "a.jpg",
+                "icon_gray": "a_g.jpg",
+            },
+        },
+        "1": {
+            "name": "ACH_B",
+            "display": {
+                "name": {"token": "T1", "english": "Secret"},
+                "desc": "Texto simples",
+                "hidden": 1,
+                "icon": "../fora.jpg",
+            },
+        },
+        "2": {"name": "ACH_C", "display": {"name": {"token": "T2", "french": "Troisième"}}},
+    }
+}
+
+
+def _schema_local(tmp_path, monkeypatch, conteudo=None, mtime=None):
+    steam = tmp_path / "Steam"
+    pasta = steam / "appcache" / "stats"
+    pasta.mkdir(parents=True)
+    monkeypatch.setattr(arquivos, "pasta_da_steam", lambda: steam)
+    arquivo = pasta / "UserGameStatsSchema_570.bin"
+    arquivo.write_bytes(schema_de_teste("570", BITS_LOCAIS) if conteudo is None else conteudo)
+    if mtime is not None:
+        os.utime(arquivo, (mtime, mtime))
+    return arquivo
+
+
+def test_schema_local_em_portugues_com_recaida(tmp_path, monkeypatch):
+    arquivo = _schema_local(tmp_path, monkeypatch)
+    url = "https://shared.steamstatic.com/community_assets/images/apps/570/"
+    assert catalogo.ler_schema_local(arquivo, "570") == [
+        ConquistaInfo("ACH_A", "Primeira", "Faça", url + "a.jpg", url + "a_g.jpg", False),
+        ConquistaInfo("ACH_B", "Secret", "Texto simples", "", "", True),
+        ConquistaInfo("ACH_C", "Troisième", "", "", "", False),
+    ]
+
+
+def test_schema_local_vem_antes_da_chave(tmp_path, monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    _schema_local(tmp_path, monkeypatch)
+    # Um pedido de schema à Steam falharia o teste: só a raridade vai à rede.
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetGlobal": PORCENTAGENS}))
+    renovacao = catalogo.renovar("570", '"C:\\Jogos\\x.exe"', agora=1000)
+    cat = renovacao.catalogo
+    assert [info.nome for info in cat.conquistas] == ["ACH_A", "ACH_B", "ACH_C"]
+    assert cat.por_nome()["ACH_A"].porcentagem == 55.5
+    assert cat.com_chave is False
+    assert cat.impressao_da_chave == catalogo._impressao("abc")
+    assert renovacao.chave_recusada is False
+
+
+def test_schema_local_sem_rede(tmp_path, monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    _schema_local(tmp_path, monkeypatch)
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({}))  # qualquer pedido falha o teste
+    cat = catalogo.renovar("570", "", agora=1000, rede=False).catalogo
+    assert [info.nome for info in cat.conquistas] == ["ACH_A", "ACH_B", "ACH_C"]
+
+
+@pytest.mark.parametrize("conteudo", [b"\x00lixo", kv_bytes({"570": {"stats": {}}})])
+def test_schema_local_ilegivel_ou_vazio_segue_para_a_proxima_fonte(tmp_path, monkeypatch, conteudo):
+    _schema_local(tmp_path, monkeypatch, conteudo)
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetGlobal": PORCENTAGENS}))
+    cat = catalogo.renovar("570", "", agora=1000).catalogo
+    assert [info.nome for info in cat.conquistas] == ["ACH_L"]
+
+
+def test_vencido_pelo_schema_mais_novo():
+    cat = Catalogo((INFO,), 1000, False, "")
+    assert catalogo.vencido(cat, 1000, "", 2000) is True
+    assert catalogo.vencido(cat, 1000, "", 500) is False
+    assert catalogo.vencido(cat, 1000, "", None) is False
+
+
+def test_obter_renova_quando_o_schema_local_fica_mais_novo(tmp_path, monkeypatch):
+    agora = int(time.time())
+    catalogo._gravar_cache("570", Catalogo((INFO,), agora - 10, False, ""))
+    arquivo = _schema_local(tmp_path, monkeypatch, mtime=agora - 100)
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetGlobal": PORCENTAGENS}))
+    assert [i.nome for i in catalogo.obter("570", "").catalogo.conquistas] == ["ACH_L"]
+    os.utime(arquivo, (agora, agora))
+    assert [i.nome for i in catalogo.obter("570", "").catalogo.conquistas] == [
+        "ACH_A",
+        "ACH_B",
+        "ACH_C",
+    ]
+
+
+def test_sem_steam_nao_ha_schema_local():
+    assert catalogo.arquivo_do_schema_local("570") is None

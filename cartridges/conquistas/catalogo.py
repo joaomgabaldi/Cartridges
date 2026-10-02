@@ -1,9 +1,12 @@
 """O catálogo de conquistas de um jogo: nomes, descrições, ícones e raridade.
 
-Com a chave da Steam Web API (Preferências), vem da Steam em português
-(`GetSchemaForGame`, ``l=brazilian``). Sem chave, ou quando a Steam não tem
-catálogo, vem do `steam_settings\\achievements.json` que muitos jogos trazem ao
-lado do executável. A porcentagem global (`GetGlobalAchievementPercentagesForApp`)
+Primeiro, o schema que a Steam deste PC já guardou para o jogo
+(`appcache\\stats\\UserGameStatsSchema_<appid>.bin`): o catálogo inteiro, em
+português e sem rede. Sem ele, com a chave da Steam Web API (Preferências), vem
+da Steam em português (`GetSchemaForGame`, ``l=brazilian``). Sem nenhum dos
+dois, ou quando a Steam não tem catálogo, vem do
+`steam_settings\\achievements.json` que muitos jogos trazem ao lado do
+executável. A porcentagem global (`GetGlobalAchievementPercentagesForApp`)
 não exige chave e é o que marca as raras (menos de 10% dos jogadores).
 
 Guardado em cache por appID durante 7 dias. Rede fora usa o cache vencido: o
@@ -17,6 +20,7 @@ import hashlib
 import json
 import logging
 import math
+import re
 import threading
 import time
 import uuid
@@ -27,7 +31,7 @@ from typing import Any, Iterable, Optional
 from requests.exceptions import RequestException
 
 from cartridges import shared
-from cartridges.conquistas import arquivos
+from cartridges.conquistas import arquivos, keyvalues, schema_da_steam
 from cartridges.utils.download import get_capped
 from cartridges.utils.ler_json import ler_json
 from cartridges.utils.rate_limiter import RateLimiter
@@ -36,6 +40,9 @@ VALIDADE = 7 * 24 * 3600
 _FUTURO_TOLERADO = 24 * 3600
 RARA_ABAIXO_DE = 10.0
 _API = "https://api.steampowered.com/ISteamUserStats"
+_ICONE_DA_STEAM = "https://shared.steamstatic.com/community_assets/images/apps/{appid}/{arquivo}"
+# O schema traz só o nome do arquivo do ícone; qualquer outra coisa é ignorada.
+_NOME_DE_ICONE = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*$")
 
 
 class ChaveRecusada(Exception):
@@ -181,6 +188,64 @@ def ler_steam_settings(arquivo: Path) -> list[ConquistaInfo]:
     return infos
 
 
+def _sem_token(valor: Any) -> Any:
+    """Tira o "token" (identificador de tradução, nunca texto para ler) das línguas."""
+    if isinstance(valor, dict):
+        return {lingua: texto for lingua, texto in valor.items() if lingua != "token"}
+    return valor
+
+
+def arquivo_do_schema_local(appid: str) -> Optional[Path]:
+    """O schema do jogo que a Steam deste PC guardou, se houver."""
+    steam = arquivos.pasta_da_steam()
+    if steam is None or not arquivos.appid_valido(appid):
+        return None
+    arquivo = steam / "appcache" / "stats" / f"UserGameStatsSchema_{appid}.bin"
+    return arquivo if arquivo.is_file() else None
+
+
+def ler_schema_local(arquivo: Path, appid: str) -> list[ConquistaInfo]:
+    dados = keyvalues.ler(arquivo)
+    if dados is None:
+        logging.info("Schema local da Steam ilegível: %s", arquivo)
+        return []
+
+    def icone(valor: Any) -> str:
+        nome = str(valor or "").strip()
+        return _ICONE_DA_STEAM.format(appid=appid, arquivo=nome) if _NOME_DE_ICONE.match(nome) else ""
+
+    infos = []
+    for conquista in schema_da_steam.conquistas(dados, appid):
+        exibicao = conquista.display
+        colorido = icone(exibicao.get("icon"))
+        infos.append(
+            ConquistaInfo(
+                nome=conquista.nome,
+                titulo=_no_idioma(_sem_token(exibicao.get("name"))) or conquista.nome,
+                descricao=_no_idioma(_sem_token(exibicao.get("desc"))),
+                icone=colorido,
+                icone_cinza=icone(exibicao.get("icon_gray")) or colorido,
+                oculta=_sim(exibicao.get("hidden", 0)),
+            )
+        )
+    return infos
+
+
+def _do_schema_local(appid: str) -> list[ConquistaInfo]:
+    arquivo = arquivo_do_schema_local(appid)
+    return ler_schema_local(arquivo, appid) if arquivo is not None else []
+
+
+def _schema_local_mudou_em(appid: str) -> Optional[int]:
+    arquivo = arquivo_do_schema_local(appid)
+    if arquivo is None:
+        return None
+    try:
+        return int(arquivo.stat().st_mtime)
+    except OSError:
+        return None
+
+
 def ler_porcentagens(payload: Any) -> dict[str, float]:
     try:
         lista = payload["achievementpercentages"]["achievements"]
@@ -289,13 +354,18 @@ def _impressao(chave: str) -> str:
     return hashlib.sha256(chave.encode()).hexdigest()[:16]
 
 
-def vencido(cat: Catalogo, agora: int, impressao_atual: str) -> bool:
+def vencido(
+    cat: Catalogo, agora: int, impressao_atual: str, schema_mudou_em: Optional[int] = None
+) -> bool:
     # Cache de mais de um dia no futuro (relógio errado quando foi feito, ou
-    # arquivo adulterado) nunca venceria: conta como vencido.
+    # arquivo adulterado) nunca venceria: conta como vencido. Schema local mais
+    # novo que o catálogo: a Steam o regravou (o jogo ganhou conquistas numa
+    # atualização).
     return (
         agora - cat.obtido_em >= VALIDADE
         or cat.obtido_em - agora > _FUTURO_TOLERADO
         or cat.impressao_da_chave != impressao_atual
+        or (schema_mudou_em is not None and schema_mudou_em > cat.obtido_em)
     )
 
 
@@ -339,38 +409,41 @@ def renovar(
     recusada = False
     rede_falhou = False
     schema_respondeu = False
-    infos: list[ConquistaInfo] = []
     com_chave = False
     impressao = _impressao(chave)
+    # O schema que a Steam deste PC já guardou é o catálogo inteiro, em
+    # português e sem rede: com ele, a chave nem é usada neste jogo.
+    infos: list[ConquistaInfo] = _do_schema_local(appid)
 
-    if chave and not rede:
-        if anterior is not None:
-            return Renovacao(anterior)
-        # Nada foi perguntado à Steam, então não há veredito sobre a chave: sem
-        # impressão, a próxima abertura tenta de novo.
-        impressao = ""
-    elif chave and not usar_chave:
-        recusada = True
-    elif chave:
-        try:
-            infos = ler_schema_da_steam(
-                _pedir(f"{_API}/GetSchemaForGame/v2/?key={chave}&appid={appid}&l=brazilian")
-            )
-            com_chave = bool(infos)
-            schema_respondeu = True
-        except ChaveRecusada:
-            recusada = True
-        except (RequestException, ValueError, RecursionError) as erro:
-            rede_falhou = isinstance(erro, RequestException)
-            # Só o tipo: a mensagem do requests traz a URL, e a URL traz a chave.
-            logging.info(
-                "Catálogo de conquistas indisponível para %s: %s", appid, type(erro).__name__
-            )
+    if not infos and chave:
+        if not rede:
             if anterior is not None:
-                return Renovacao(anterior, rede_falhou=rede_falhou)
-            # Falha de rede não é veredito sobre a chave: sem impressão, a
-            # próxima abertura tenta a Steam de novo.
+                return Renovacao(anterior)
+            # Nada foi perguntado à Steam, então não há veredito sobre a chave:
+            # sem impressão, a próxima abertura tenta de novo.
             impressao = ""
+        elif not usar_chave:
+            recusada = True
+        else:
+            try:
+                infos = ler_schema_da_steam(
+                    _pedir(f"{_API}/GetSchemaForGame/v2/?key={chave}&appid={appid}&l=brazilian")
+                )
+                com_chave = bool(infos)
+                schema_respondeu = True
+            except ChaveRecusada:
+                recusada = True
+            except (RequestException, ValueError, RecursionError) as erro:
+                rede_falhou = isinstance(erro, RequestException)
+                # Só o tipo: a mensagem do requests traz a URL, e a URL traz a chave.
+                logging.info(
+                    "Catálogo de conquistas indisponível para %s: %s", appid, type(erro).__name__
+                )
+                if anterior is not None:
+                    return Renovacao(anterior, rede_falhou=rede_falhou)
+                # Falha de rede não é veredito sobre a chave: sem impressão, a
+                # próxima abertura tenta a Steam de novo.
+                impressao = ""
 
     if not infos:
         infos = _local(executavel)
@@ -426,7 +499,9 @@ def obter(
         return Renovacao(None)
     agora = int(time.time()) if agora is None else agora
     cat = em_cache(appid)
-    if cat is not None and not vencido(cat, agora, _impressao(_chave())):
+    if cat is not None and not vencido(
+        cat, agora, _impressao(_chave()), _schema_local_mudou_em(appid)
+    ):
         return Renovacao(cat)
     return renovar(appid, executavel, agora, rede, usar_chave)
 
