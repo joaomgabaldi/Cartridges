@@ -10,7 +10,9 @@ executável. A porcentagem global (`GetGlobalAchievementPercentagesForApp`)
 não exige chave e é o que marca as raras (menos de 10% dos jogadores).
 
 Guardado em cache por appID durante 7 dias. Rede fora usa o cache vencido: o
-catálogo muda pouco, e um catálogo de ontem é melhor que nenhum.
+catálogo muda pouco, e um catálogo de ontem é melhor que nenhum. O schema local
+da Steam, quando existe, vem antes e não precisa de rede nem de chave; um schema
+mais novo que o cache também o renova.
 
 Nada aqui levanta para quem chama: resposta da rede, arquivo do jogo e cache em
 disco são lidos como dado não confiável, e o que não serve vira log e lista vazia.
@@ -189,10 +191,15 @@ def ler_steam_settings(arquivo: Path) -> list[ConquistaInfo]:
 
 
 def _sem_token(valor: Any) -> Any:
-    """Tira o "token" (identificador de tradução, nunca texto para ler) das línguas."""
+    """Só texto: tira o "token" (identificador de tradução, nunca texto para ler) das
+    línguas e ignora o que não é texto (uma seção dentro do schema, por exemplo)."""
     if isinstance(valor, dict):
-        return {lingua: texto for lingua, texto in valor.items() if lingua != "token"}
-    return valor
+        return {
+            lingua: texto
+            for lingua, texto in valor.items()
+            if lingua != "token" and isinstance(texto, str)
+        }
+    return valor if isinstance(valor, str) else ""
 
 
 def arquivo_do_schema_local(appid: str) -> Optional[Path]:
@@ -236,14 +243,17 @@ def _do_schema_local(appid: str) -> list[ConquistaInfo]:
     return ler_schema_local(arquivo, appid) if arquivo is not None else []
 
 
-def _schema_local_mudou_em(appid: str) -> Optional[int]:
+def _schema_local_mudou_em(appid: str, agora: int) -> Optional[int]:
     arquivo = arquivo_do_schema_local(appid)
     if arquivo is None:
         return None
     try:
-        return int(arquivo.stat().st_mtime)
-    except OSError:
+        mudou_em = int(arquivo.stat().st_mtime)
+    except (OSError, ValueError, OverflowError):
         return None
+    # Data muito à frente do relógio (relógio errado quando a Steam gravou): o
+    # catálogo nunca a alcançaria e seria refeito a cada abertura.
+    return None if mudou_em - agora > _FUTURO_TOLERADO else mudou_em
 
 
 def ler_porcentagens(payload: Any) -> dict[str, float]:
@@ -395,11 +405,14 @@ def renovar(
 
     Com ``rede=False`` nada vai à Steam: vale o cache (mesmo vencido) ou o
     arquivo do jogo. É o que quem varre vários jogos usa depois que um pedido
-    falhou por rede, para não esperar o tempo limite de cada jogo.
+    falhou por rede, para não esperar o tempo limite de cada jogo. O schema que a
+    Steam deste PC guardou, quando existe, vem antes de tudo isso: não precisa de
+    rede nem de chave.
 
     Com `usar_chave=False` a Steam já recusou a chave nesta passada: o schema
     não é pedido de novo, e o resultado sai como se a recusa tivesse acabado de
-    voltar (``chave_recusada``).
+    voltar (``chave_recusada``). Com o schema local presente, nem a chave nem a
+    recusa entram: o catálogo vem dele.
     """
     if not arquivos.appid_valido(appid):
         return Renovacao(None)
@@ -500,7 +513,7 @@ def obter(
     agora = int(time.time()) if agora is None else agora
     cat = em_cache(appid)
     if cat is not None and not vencido(
-        cat, agora, _impressao(_chave()), _schema_local_mudou_em(appid)
+        cat, agora, _impressao(_chave()), _schema_local_mudou_em(appid, agora)
     ):
         return Renovacao(cat)
     return renovar(appid, executavel, agora, rede, usar_chave)

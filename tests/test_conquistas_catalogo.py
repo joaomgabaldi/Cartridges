@@ -707,3 +707,73 @@ def test_obter_renova_quando_o_schema_local_fica_mais_novo(tmp_path, monkeypatch
 
 def test_sem_steam_nao_ha_schema_local():
     assert catalogo.arquivo_do_schema_local("570") is None
+
+
+def test_schema_local_ignora_valores_que_nao_sao_texto(tmp_path, monkeypatch):
+    bits = {
+        "1": {
+            "0": {
+                "name": "ACH_A",
+                "display": {
+                    "name": {"brazilian": {"x": "y"}, "english": "First"},
+                    "desc": {"x": {"y": "z"}},
+                },
+            },
+            "1": {"name": "ACH_B", "display": {"name": 7, "desc": {"brazilian": 3}}},
+        }
+    }
+    arquivo = _schema_local(tmp_path, monkeypatch, schema_de_teste("570", bits))
+    infos = catalogo.ler_schema_local(arquivo, "570")
+    assert [(i.titulo, i.descricao) for i in infos] == [("First", ""), ("ACH_B", "")]
+
+
+def test_schema_local_oculta_em_texto_e_icone_sem_cinza(tmp_path, monkeypatch):
+    bits = {
+        "1": {
+            "0": {
+                "name": "ACH_A",
+                "display": {"name": "A", "hidden": "1", "icon": "a.jpg"},
+            }
+        }
+    }
+    arquivo = _schema_local(tmp_path, monkeypatch, schema_de_teste("570", bits))
+    (info,) = catalogo.ler_schema_local(arquivo, "570")
+    url = "https://shared.steamstatic.com/community_assets/images/apps/570/a.jpg"
+    assert info.oculta is True
+    assert info.icone == info.icone_cinza == url
+
+
+def test_schema_local_ilegivel_com_chave_vai_para_a_web_api(tmp_path, monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    _schema_local(tmp_path, monkeypatch, b"\x00lixo")
+    pedidos = []
+    respostas = _pedidos({"GetSchemaForGame": SCHEMA, "GetGlobal": PORCENTAGENS})
+
+    def pedir(url):
+        pedidos.append(url)
+        return respostas(url)
+
+    monkeypatch.setattr(catalogo, "_pedir", pedir)
+    cat = catalogo.renovar("570", "", agora=1000).catalogo
+    assert any("GetSchemaForGame" in url for url in pedidos)
+    assert cat.com_chave is True
+    assert [info.nome for info in cat.conquistas] == ["ACH_A", "ACH_B"]
+
+
+def test_obter_mantem_cache_da_chave_com_schema_local_mais_velho(tmp_path, monkeypatch, schema):
+    schema.set_string("conquistas-chave-steam", "abc")
+    agora = int(time.time())
+    catalogo._gravar_cache("570", Catalogo((INFO,), agora - 10, True, catalogo._impressao("abc")))
+    _schema_local(tmp_path, monkeypatch, mtime=agora - 100)
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({}))  # qualquer pedido falha o teste
+    cat = catalogo.obter("570", "").catalogo
+    assert [i.nome for i in cat.conquistas] == ["ACH_L"]
+    assert cat.com_chave is True
+
+
+def test_obter_ignora_schema_local_com_data_no_futuro(tmp_path, monkeypatch):
+    agora = int(time.time())
+    catalogo._gravar_cache("570", Catalogo((INFO,), agora - 10, False, ""))
+    _schema_local(tmp_path, monkeypatch, mtime=agora + 3 * 24 * 3600)
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({}))  # qualquer pedido falha o teste
+    assert [i.nome for i in catalogo.obter("570", "").catalogo.conquistas] == ["ACH_L"]
