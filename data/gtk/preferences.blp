@@ -426,5 +426,37 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         subtitle: _("Exibe o nome e a descrição das conquistas ocultas ainda não desbloqueadas");
       }
     }
+
+    Adw.PreferencesGroup {
+      title: _("Durante o jogo");
+      description: _("Não se aplica aos jogos da Steam, que já exibem o próprio aviso.");
+
+      Adw.SwitchRow conquistas_aviso_switch {
+        title: _("Mostrar aviso durante o jogo");
+        subtitle: _("Exibe um cartão por cima do jogo ao desbloquear uma conquista");
+      }
+
+      Adw.ComboRow conquistas_posicao_row {
+        title: _("Posição do aviso");
+
+        model: StringList {
+          strings [
+            _("Canto superior esquerdo"),
+            _("Canto superior direito"),
+            _("Canto inferior esquerdo"),
+            _("Canto inferior direito"),
+          ]
+        };
+      }
+
+      Adw.SwitchRow conquistas_iluminacao_switch {
+        title: _("Reagir na iluminação inteligente");
+        subtitle: _("Os dispositivos piscam em dourado ao desbloquear uma conquista");
+      }
+
+      Adw.ButtonRow conquistas_exemplo_row {
+        title: _("Mostrar um aviso de exemplo");
+      }
+    }
   }
 }
