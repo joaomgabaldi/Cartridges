@@ -74,3 +74,8 @@ def do_jogo(game: Any) -> Optional[Progresso]:
     if not appid or not getattr(game, "conquistas", True):
         return None
     return montar(catalogo.em_cache(str(appid)), historico.ler(game.game_id))
+
+
+def porcentagem_em_texto(valor: float) -> str:
+    """Porcentagem global no jeito brasileiro: 4.1 vira "4,1%"."""
+    return f"{valor:.1f}%".replace(".", ",")

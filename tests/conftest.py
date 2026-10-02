@@ -99,6 +99,7 @@ _SCHEMA_DEFAULTS = {
     "sgdb-key": "",
     "conquistas-chave-steam": "",
     "conquistas-mostrar-ocultas": False,
+    "conquistas-aviso-posicao": "inferior-direito",
     "sgdb": False,
     "sgdb-prefer": False,
     "sgdb-animated": False,

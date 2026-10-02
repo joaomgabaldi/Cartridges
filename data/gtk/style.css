@@ -187,3 +187,29 @@
 .botao-tarefas.girando image {
   animation: girar-tarefas 1.2s linear infinite;
 }
+
+/* O aviso de conquista por cima do jogo: a janela é só o cartão. */
+window.conquista-aviso {
+  background: transparent;
+}
+
+window.conquista-aviso.conquista-aviso-opaco {
+  background: #1c1b22;
+}
+
+.conquista-aviso-cartao {
+  background: rgba(28, 27, 34, 0.94);
+  color: #ffffff;
+  border-radius: 12px;
+  border-left: 3px solid @accent_bg_color;
+  padding: 12px 16px 12px 12px;
+  min-width: 280px;
+}
+
+window.conquista-aviso-opaco .conquista-aviso-cartao {
+  border-radius: 0;
+}
+
+.conquista-aviso-rotulo {
+  opacity: 0.75;
+}
