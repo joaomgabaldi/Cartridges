@@ -9,7 +9,8 @@ dois, ou quando a Steam não tem catálogo, vem do
 executável. A porcentagem global (`GetGlobalAchievementPercentagesForApp`)
 não exige chave e é o que marca as raras (menos de 10% dos jogadores).
 
-Guardado em cache por appID durante 7 dias. Rede fora usa o cache vencido: o
+Guardado em cache por appID durante 7 dias (1 dia quando a raridade não pôde
+ser buscada e nenhuma conquista tem porcentagem). Rede fora usa o cache vencido: o
 catálogo muda pouco, e um catálogo de ontem é melhor que nenhum. O schema local
 da Steam, quando existe, vem antes e não precisa de rede nem de chave; um schema
 mais novo que o cache também o renova.
@@ -39,6 +40,8 @@ from cartridges.utils.ler_json import ler_json
 from cartridges.utils.rate_limiter import RateLimiter
 
 VALIDADE = 7 * 24 * 3600
+# Catálogo feito sem a raridade (sem rede, ou o pedido falhou): refeito mais cedo.
+VALIDADE_SEM_RARIDADE = 24 * 3600
 _FUTURO_TOLERADO = 24 * 3600
 RARA_ABAIXO_DE = 10.0
 _API = "https://api.steampowered.com/ISteamUserStats"
@@ -77,6 +80,9 @@ class Catalogo:
     # Chave nova, trocada ou removida renova o catálogo; a mesma chave, mesmo
     # recusada, não é tentada de novo antes dos 7 dias.
     impressao_da_chave: str = ""
+    # Se nenhuma conquista ficou com porcentagem porque a raridade não pôde ser
+    # buscada: o catálogo vale 1 dia, não 7 (`VALIDADE_SEM_RARIDADE`).
+    sem_raridade: bool = False
 
     def por_nome(self) -> dict[str, ConquistaInfo]:
         return {info.nome.upper(): info for info in self.conquistas}
@@ -314,6 +320,12 @@ def _impressao_do_cache(valor: Any) -> str:
     return valor
 
 
+def _sem_raridade_do_cache(valor: Any) -> bool:
+    if not isinstance(valor, bool):
+        raise TypeError("sem_raridade de tipo errado")
+    return valor
+
+
 def em_cache(appid: str) -> Optional[Catalogo]:
     try:
         dados = ler_json(_arquivo_do_cache(appid))
@@ -322,6 +334,7 @@ def em_cache(appid: str) -> Optional[Catalogo]:
             int(dados["obtido_em"]),
             bool(dados["com_chave"]),
             _impressao_do_cache(dados.get("impressao_da_chave", "")),
+            _sem_raridade_do_cache(dados.get("sem_raridade", False)),
         )
     except FileNotFoundError:
         return None
@@ -343,6 +356,7 @@ def _gravar_cache(appid: str, cat: Catalogo) -> None:
                     "obtido_em": cat.obtido_em,
                     "com_chave": cat.com_chave,
                     "impressao_da_chave": cat.impressao_da_chave,
+                    "sem_raridade": cat.sem_raridade,
                     "conquistas": [asdict(info) for info in cat.conquistas],
                 },
                 ensure_ascii=False,
@@ -370,9 +384,10 @@ def vencido(
     # Cache de mais de um dia no futuro (relógio errado quando foi feito, ou
     # arquivo adulterado) nunca venceria: conta como vencido. Schema local mais
     # novo que o catálogo: a Steam o regravou (o jogo ganhou conquistas numa
-    # atualização).
+    # atualização). Sem raridade, vale só 1 dia: a próxima abertura com rede a busca.
+    validade = VALIDADE_SEM_RARIDADE if cat.sem_raridade else VALIDADE
     return (
-        agora - cat.obtido_em >= VALIDADE
+        agora - cat.obtido_em >= validade
         or cat.obtido_em - agora > _FUTURO_TOLERADO
         or cat.impressao_da_chave != impressao_atual
         or (schema_mudou_em is not None and schema_mudou_em > cat.obtido_em)
@@ -479,6 +494,7 @@ def renovar(
         for info in (anterior.conquistas if anterior else ())
         if info.porcentagem is not None
     }
+    buscou_a_raridade = False
     if rede and not rede_falhou:
         try:
             porcentagens.update(
@@ -486,13 +502,16 @@ def renovar(
                     _pedir(f"{_API}/GetGlobalAchievementPercentagesForApp/v2/?gameid={appid}")
                 )
             )
+            buscou_a_raridade = True
         except (ChaveRecusada, RequestException, ValueError, RecursionError) as erro:
             rede_falhou = isinstance(erro, RequestException)
             logging.info("Raridade das conquistas indisponível para %s: %s", appid, erro)
 
-    cat = Catalogo(
-        tuple(com_porcentagens(infos, porcentagens)), agora, com_chave, impressao
+    conquistas = tuple(com_porcentagens(infos, porcentagens))
+    sem_raridade = not buscou_a_raridade and not any(
+        info.porcentagem is not None for info in conquistas
     )
+    cat = Catalogo(conquistas, agora, com_chave, impressao, sem_raridade)
     try:
         _gravar_cache(appid, cat)
     except OSError as erro:
