@@ -46,6 +46,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from cartridges import restauracao_dialogs, shared
 from cartridges.conquistas import icones
+from cartridges.conquistas import sessao as sessao_conquistas
 from cartridges.conquistas.varredura import VarreduraConquistas
 from cartridges.details_dialog import DetailsDialog
 from cartridges.game import Game
@@ -769,6 +770,9 @@ class CartridgesApplication(Adw.Application):
         # Os ícones das conquistas na fila não devem segurar o processo com a
         # rede travada.
         icones.encerrar()
+
+        # A sessão pode estar aberta: o vigia para e o aviso que estiver na tela some.
+        sessao_conquistas.parar()
 
         # Um download no meio para no próximo pedaço, e o resultado de uma
         # checagem que ainda esteja no caminho é descartado.

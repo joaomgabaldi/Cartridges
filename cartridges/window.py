@@ -31,6 +31,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 from cartridges import shared
 from cartridges.botao_tarefas import BotaoTarefas
 from cartridges.conquistas import icones, progresso
+from cartridges.conquistas import sessao as sessao_conquistas
 from cartridges.game import Game, STATUS_LABELS, status_label
 from cartridges.game_cover import GameCover
 from cartridges.utils.animated_flow_box import AnimatedFlowBox
@@ -542,6 +543,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # sozinho quando o recurso está desligado ou não há fita configurada.
         session_fita.comecar(game)
 
+        # E o vigia das conquistas: a partir daqui, uma conquista que sair no
+        # jogo aparece por cima dele e pisca a iluminação.
+        sessao_conquistas.comecar(game)
+
         # Hand the controller entirely to the game for the duration: stop
         # polling and release the XInput DLL until the session ends.
         from cartridges.gamepad import GamepadManager  # avoid import cycle
@@ -573,6 +578,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # com o `do_shutdown`, que chama a mesma devolução ao fechar o app no
         # meio da sessão.
         session_wallpaper.restaurar()
+
+        # O vigia para antes de a iluminação voltar à cor do app: um pulso
+        # pedido depois disso não teria sessão para pulsar.
+        sessao_conquistas.parar()
 
         # De volta ao roxo do app, que é a cor de quando não há jogo correndo.
         session_fita.voltar()

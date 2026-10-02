@@ -100,6 +100,8 @@ _SCHEMA_DEFAULTS = {
     "conquistas-chave-steam": "",
     "conquistas-mostrar-ocultas": False,
     "conquistas-aviso-posicao": "inferior-direito",
+    "conquistas-aviso": True,
+    "conquistas-iluminacao": True,
     "sgdb": False,
     "sgdb-prefer": False,
     "sgdb-animated": False,
