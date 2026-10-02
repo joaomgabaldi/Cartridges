@@ -1,0 +1,169 @@
+"""O vigia: percebe as conquistas que saem durante a partida."""
+
+import json
+import os
+
+import pytest
+
+from cartridges.conquistas import catalogo, historico, vigia
+from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
+from cartridges.conquistas.formatos import Desbloqueio
+from tests.apoio_conquistas import criar, pastas  # noqa: F401
+
+CAT = Catalogo(
+    (
+        ConquistaInfo("ACH_A", "Primeira", "", "", "", False, 50.0),
+        ConquistaInfo("ACH_B", "Rara", "", "", "", False, 4.0),
+    ),
+    0,
+    False,
+)
+
+
+@pytest.fixture(autouse=True)
+def sem_timeout(monkeypatch):
+    """O tique é chamado à mão; nada de GLib.timeout de verdade nos testes."""
+    fontes = []
+    monkeypatch.setattr(vigia.GLib, "timeout_add_seconds", lambda _s, f: fontes.append(f) or 7)
+    monkeypatch.setattr(vigia.GLib, "source_remove", lambda _id: None)
+    return fontes
+
+
+def _arquivo(pastas, conquistas):  # noqa: F811
+    caminho = pastas.appdata / "GSE Saves" / "570" / "achievements.json"
+    criar(caminho, json.dumps({n: {"earned": True, "earned_time": t} for n, t in conquistas}))
+    # O mtime tem de andar mesmo quando o teste regrava no mesmo instante. O NTFS
+    # só distingue múltiplos de 100 ns, então o passo é de 1 s.
+    passo = getattr(_arquivo, "passo", 0) + 1
+    _arquivo.passo = passo
+    os.utime(caminho, ns=(10**18 + passo * 10**9, 10**18 + passo * 10**9))
+    return caminho
+
+
+def _jogo(make_game, **campos):
+    return make_game(game_id="g1", name="Jogo", steam_appid="570", executable="", **campos)
+
+
+def _vigia(make_game, **campos):
+    avisos = []
+    instancia = vigia.Vigia(_jogo(make_game, **campos), avisos.append)
+    return instancia, avisos
+
+
+def test_inicio_grava_em_silencio(pastas, make_game):
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    assert historico.ler("g1") == {"ACH_A": 100}
+    assert instancia._olhar() is True
+    assert avisos == []
+
+
+def test_conquista_nova_durante_a_partida(pastas, make_game):
+    catalogo._gravar_cache("570", CAT)
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    instancia._olhar()
+    assert historico.ler("g1") == {"ACH_A": 100, "ACH_B": 200}
+    assert len(avisos) == 1
+    (nova,) = avisos[0]
+    assert nova.nome == "ACH_B" and nova.info.titulo == "Rara"
+    assert nova.completou is True  # 2 de 2
+
+
+def test_arquivo_regravado_sem_novidade_nao_avisa(pastas, make_game):
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    instancia._olhar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    instancia._olhar()
+    assert len(avisos) == 1
+
+
+def test_varias_de_uma_vez_saem_em_ordem_de_hora(pastas, make_game):
+    _arquivo(pastas, [])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_B", 300), ("ACH_A", 200)])
+    instancia._olhar()
+    assert [d.nome for d in avisos[0]] == ["ACH_A", "ACH_B"]
+    assert all(d.info is None for d in avisos[0])  # sem catálogo
+
+
+def test_arquivo_que_aparece_no_meio_da_partida(pastas, make_game):
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()  # nenhum arquivo ainda: primeira vez grava vazio
+    _arquivo(pastas, [("ACH_A", 100)])
+    for _tique in range(vigia.REBUSCA):
+        instancia._olhar()
+    assert [d.nome for d in avisos[0]] == ["ACH_A"]
+
+
+def test_arquivo_que_some_nao_levanta(pastas, make_game):
+    caminho = _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    caminho.unlink()
+    assert instancia._olhar() is True
+    assert avisos == []
+
+
+def test_erro_inesperado_nao_derruba_o_tique(pastas, make_game, monkeypatch):
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, _avisos = _vigia(make_game)
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 1)])
+    monkeypatch.setattr(vigia.historico, "registrar", lambda *_a: 1 / 0)
+    assert instancia._olhar() is True
+
+
+def test_primeira_varredura_durante_a_sessao_nao_avisa(pastas, make_game):
+    """Jogo que nunca foi varrido: o que já estava no arquivo é base, não novidade."""
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    instancia._olhar()
+    assert avisos == []
+
+
+@pytest.mark.parametrize(
+    ("campos", "esperado"),
+    [
+        ({}, True),
+        ({"conquistas": False}, False),
+        ({"executable": "steam://rungameid/570"}, False),
+        ({"steam_appid": None}, False),
+        ({"steam_appid": "..\\x"}, False),
+    ],
+)
+def test_quem_o_vigia_acompanha(make_game, campos, esperado):
+    base = {"game_id": "g1", "name": "Jogo", "steam_appid": "570", "executable": ""}
+    base.update(campos)
+    assert vigia.acompanha(make_game(**base)) is esperado
+
+
+def test_jogo_que_nao_e_acompanhado_nao_liga_o_timer(make_game, sem_timeout):
+    instancia, _avisos = _vigia(make_game, conquistas=False)
+    instancia.iniciar()
+    assert sem_timeout == [] and not instancia.ativo
+
+
+def test_parar_desliga(pastas, make_game, sem_timeout):
+    instancia, _avisos = _vigia(make_game)
+    instancia.iniciar()
+    assert instancia.ativo
+    instancia.parar()
+    assert not instancia.ativo
+
+
+def test_historico_ja_existente_continua_somando(pastas, make_game):
+    historico.registrar("g1", [Desbloqueio("ANTIGA", 5)])
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    assert historico.ler("g1") == {"ANTIGA": 5, "ACH_A": 100}
+    assert avisos == []  # o que já estava no arquivo no começo da sessão é base
