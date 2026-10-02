@@ -15,6 +15,9 @@ uma leitura vazia nunca apaga o que já foi guardado.
 import json
 import logging
 import re
+import stat
+import threading
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -215,6 +218,47 @@ def _steam(caminho: Path) -> list[Desbloqueio]:
     return achados
 
 
+# O schema (até algumas centenas de KB) muda só quando a Steam o regrava, e o
+# estado muda a cada conquista: o schema já interpretado fica guardado por
+# (caminho, mtime, tamanho). A varredura de abertura lê em outra thread.
+_SCHEMAS_GUARDADOS = 8
+_schemas: "OrderedDict[tuple[str, int, int], tuple]" = OrderedDict()
+_trava_dos_schemas = threading.Lock()
+
+
+def _tem_bit_ligado(bloco: Any) -> bool:
+    if not isinstance(bloco, dict):
+        return False
+    bits = bloco.get("data")
+    return not isinstance(bits, bool) and isinstance(bits, int) and bool(bits & 0xFFFFFFFF)
+
+
+def _conquistas_do_schema(arquivo: Path, appid: str) -> tuple:
+    """As conquistas do schema da Steam; ``()`` se ele não existe, e levanta
+    ValueError se não pôde ser lido (esse caso nunca fica guardado)."""
+    try:
+        info = arquivo.stat()
+    except OSError:
+        return ()
+    if not stat.S_ISREG(info.st_mode):
+        return ()
+    chave = (str(arquivo), info.st_mtime_ns, info.st_size)
+    with _trava_dos_schemas:
+        if chave in _schemas:
+            _schemas.move_to_end(chave)
+            return _schemas[chave]
+    schema = keyvalues.ler(arquivo)
+    if schema is None:
+        raise ValueError("schema da Steam ilegível")
+    achadas = tuple(schema_da_steam.conquistas(schema, appid))
+    with _trava_dos_schemas:
+        _schemas[chave] = achadas
+        _schemas.move_to_end(chave)
+        while len(_schemas) > _SCHEMAS_GUARDADOS:
+            _schemas.popitem(last=False)
+    return achadas
+
+
 def _steam_stats(caminho: Path) -> list[Desbloqueio]:
     """O estado que a própria Steam guarda em `appcache\\stats`, o mesmo que ela
     grava no instante do desbloqueio. Ele só diz bloco e bit; o nome vem do
@@ -227,18 +271,14 @@ def _steam_stats(caminho: Path) -> list[Desbloqueio]:
         if not caminho.exists():
             raise FileNotFoundError(caminho)
         raise ValueError("estado da Steam ilegível")
+    cache = estado.get("cache")
+    # Estado sem nenhum bit ligado (o jogo ainda sem conquistas): nem olha o schema.
+    if not isinstance(cache, dict) or not any(_tem_bit_ligado(bloco) for bloco in cache.values()):
+        return []
     appid = achado.group(2)
     arquivo_do_schema = caminho.with_name(f"UserGameStatsSchema_{appid}.bin")
-    if not arquivo_do_schema.is_file():
-        return []
-    schema = keyvalues.ler(arquivo_do_schema)
-    if schema is None:
-        raise ValueError("schema da Steam ilegível")
-    cache = estado.get("cache")
-    if not isinstance(cache, dict):
-        return []
     achados = []
-    for conquista in schema_da_steam.conquistas(schema, appid):
+    for conquista in _conquistas_do_schema(arquivo_do_schema, appid):
         bloco = cache.get(conquista.bloco)
         if not isinstance(bloco, dict):
             continue
