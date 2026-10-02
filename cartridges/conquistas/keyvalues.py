@@ -78,7 +78,7 @@ def ler(caminho: Path) -> Optional[dict[str, Any]]:
     try:
         with open(caminho, "rb") as arquivo:
             dados = arquivo.read(LIMITE_DE_BYTES + 1)
-    except OSError as erro:
+    except (OSError, ValueError) as erro:  # ValueError: caminho com NUL embutido
         logging.info("KeyValues ilegível em %s: %s", caminho, type(erro).__name__)
         return None
     return ler_bytes(dados)
