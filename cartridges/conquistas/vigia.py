@@ -171,6 +171,7 @@ class Vigia:
         chave = str(achado.caminho)
         if atual is None:
             if chave in self._esperados:
+                self._falhas.pop(chave, None)
                 return  # a Steam ainda não criou o arquivo; continua pendente
             self._pendentes.discard(chave)
             self._falhas.pop(chave, None)
