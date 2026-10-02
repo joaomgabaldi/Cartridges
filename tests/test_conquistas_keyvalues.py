@@ -55,10 +55,16 @@ def test_escritor_de_teste_ida_e_volta():
     assert keyvalues.ler_bytes(kv_bytes(original)) == original
 
 
-@pytest.mark.parametrize("corte", [0, 1, 3, 10, 20, -1])
+@pytest.mark.parametrize("corte", [0, 1, 3, 10, 14, 20, 24, 26, -1])
 def test_arquivo_cortado_e_falha(corte):
+    # 14 corta dentro do int32, 24 dentro do texto, 26 deixa a seção sem fim.
     dados = kv_bytes({"cache": {"crc": 0, "nome": "abc"}})
     assert keyvalues.ler_bytes(dados[:corte]) is None
+
+
+def test_valor_de_8_bytes_cortado_e_falha():
+    # O valor tem 3 dos 8 bytes: o fim (8) vem depois, mas já dentro do valor.
+    assert keyvalues.ler_bytes(_item(7, "u", b"\0\0\0") + b"\x08") is None
 
 
 @pytest.mark.parametrize("tipo", [5, 9, 12, 255])
@@ -77,7 +83,7 @@ def test_tamanho_acima_do_limite(monkeypatch):
 
 
 def test_utf8_invalido_vira_substituicao():
-    assert keyvalues.ler_bytes(_item(1, "t", b"\xff\xfe\0") + b"\x08") == {"t": "��"}
+    assert keyvalues.ler_bytes(_item(1, "t", b"\xff\xfe\0") + b"\x08") == {"t": "\ufffd\ufffd"}
 
 
 def test_chave_repetida_vale_a_ultima():
@@ -95,6 +101,10 @@ def test_ler_arquivo(tmp_path):
     assert keyvalues.ler(caminho) == {"a": 1}
     assert keyvalues.ler(tmp_path / "nao_existe.bin") is None
     assert keyvalues.ler(tmp_path) is None  # pasta, não arquivo
+
+
+def test_ler_caminho_com_nul(tmp_path):
+    assert keyvalues.ler(tmp_path / "x\0.bin") is None
 
 
 def test_ler_arquivo_grande_demais(tmp_path, monkeypatch):
