@@ -224,8 +224,13 @@ _LEITORES: dict[str, Callable[[Path], list[Desbloqueio]]] = {
 }
 
 
-def ler(caminho: Path, formato: str) -> list[Desbloqueio]:
-    """As conquistas desbloqueadas em ``caminho``. Nunca levanta."""
+def ler_ou_none(caminho: Path, formato: str) -> Optional[list[Desbloqueio]]:
+    """Como `ler`, mas diz quando a leitura falhou.
+
+    Devolve None se o arquivo não pôde ser lido ou entendido (em uso por outro
+    programa, gravado pela metade). Devolve ``[]`` se o arquivo não existe, se o
+    formato é desconhecido ou se ele foi lido sem nada desbloqueado. Nunca levanta.
+    """
     leitor = _LEITORES.get(formato)
     if leitor is None:
         logging.warning("Formato de conquistas desconhecido: %s", formato)
@@ -245,7 +250,12 @@ def ler(caminho: Path, formato: str) -> list[Desbloqueio]:
         RecursionError,
     ) as erro:
         logging.info("Conquistas ilegíveis em %s (%s): %s", caminho, formato, erro)
-        return []
+        return None
     return [
         Desbloqueio(d.nome.strip(), max(d.quando, 0)) for d in desbloqueios if d.nome.strip()
     ]
+
+
+def ler(caminho: Path, formato: str) -> list[Desbloqueio]:
+    """As conquistas desbloqueadas em ``caminho``. Nunca levanta."""
+    return ler_ou_none(caminho, formato) or []

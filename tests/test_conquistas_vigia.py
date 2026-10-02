@@ -130,6 +130,132 @@ def test_primeira_varredura_durante_a_sessao_nao_avisa(pastas, make_game):
     assert avisos == []
 
 
+def test_leitura_que_falha_e_tentada_de_novo_no_tique_seguinte(pastas, make_game, monkeypatch):
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    real = vigia.formatos.ler_ou_none
+    falhas = []
+
+    def falha_uma_vez(caminho, formato):
+        if not falhas:
+            falhas.append(caminho)
+            return None
+        return real(caminho, formato)
+
+    monkeypatch.setattr(vigia.formatos, "ler_ou_none", falha_uma_vez)
+    instancia._olhar()
+    assert avisos == [] and "ACH_B" not in historico.ler("g1")
+    instancia._olhar()  # o arquivo não mudou de novo
+    assert [d.nome for d in avisos[0]] == ["ACH_B"]
+
+
+def test_gravacao_que_falha_e_tentada_de_novo_no_tique_seguinte(pastas, make_game, monkeypatch):
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    real = vigia.historico.registrar
+    chamadas = []
+
+    def falha_uma_vez(game_id, novos):
+        if not chamadas:
+            chamadas.append(game_id)
+            return [], False
+        return real(game_id, novos)
+
+    monkeypatch.setattr(vigia.historico, "registrar", falha_uma_vez)
+    instancia._olhar()
+    assert avisos == [] and "ACH_B" not in historico.ler("g1")
+    instancia._olhar()
+    assert [d.nome for d in avisos[0]] == ["ACH_B"]
+    instancia._olhar()  # e agora está visto: nada se repete
+    assert len(avisos) == 1
+
+
+def test_base_que_nao_pode_ser_lida_nao_vira_aviso(pastas, make_game, monkeypatch):
+    _arquivo(pastas, [("ACH_A", 100)])
+    historico.registrar("g1", [Desbloqueio("ANTIGA", 5)])  # o histórico já existe
+    real = vigia.formatos.ler_ou_none
+    monkeypatch.setattr(vigia.formatos, "ler_ou_none", lambda *_a: None)
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    assert historico.ler("g1") == {"ANTIGA": 5}
+    instancia._olhar()  # continua ilegível
+    assert avisos == []
+    monkeypatch.setattr(vigia.formatos, "ler_ou_none", real)
+    instancia._olhar()  # agora lê: é a base, em silêncio
+    assert avisos == [] and historico.ler("g1") == {"ANTIGA": 5, "ACH_A": 100}
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    instancia._olhar()  # e daqui em diante é um arquivo como os outros
+    assert [d.nome for d in avisos[0]] == ["ACH_B"]
+
+
+def test_historico_que_sumiu_no_meio_da_partida_nao_avisa(pastas, make_game):
+    """Jogo nunca varrido: sem histórico na hora da mudança, é a primeira vez, não novidade."""
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    historico.caminho("g1").unlink()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    instancia._olhar()
+    assert avisos == [] and historico.ler("g1") == {"ACH_A": 100, "ACH_B": 200}
+
+
+def test_arquivo_apagado_e_recriado_com_conquista_nova(pastas, make_game):
+    caminho = _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    caminho.unlink()
+    instancia._olhar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    instancia._olhar()
+    assert [d.nome for d in avisos[0]] == ["ACH_B"]
+
+
+CAT3 = Catalogo(
+    (
+        ConquistaInfo("ACH_A", "Um", "", "", "", False, 50.0),
+        ConquistaInfo("ACH_B", "Dois", "", "", "", False, 50.0),
+        ConquistaInfo("ACH_C", "Três", "", "", "", False, 50.0),
+    ),
+    0,
+    False,
+)
+
+
+def test_duas_de_uma_vez_sem_fechar_o_jogo_nao_completam(pastas, make_game):
+    catalogo._gravar_cache("570", CAT3)
+    _arquivo(pastas, [])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    instancia._olhar()
+    assert [d.completou for d in avisos[0]] == [False, False]
+
+
+def test_o_cem_por_cento_e_da_ultima_conquista_do_catalogo(pastas, make_game):
+    catalogo._gravar_cache("570", CAT)
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    # ACH_X é a mais recente, mas o catálogo não a conhece.
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200), ("ACH_X", 300)])
+    instancia._olhar()
+    assert [(d.nome, d.completou) for d in avisos[0]] == [("ACH_B", True), ("ACH_X", False)]
+
+
+def test_jogo_ja_completo_que_recebe_nome_desconhecido_nao_completa(pastas, make_game):
+    catalogo._gravar_cache("570", CAT)
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200), ("ACH_X", 300)])
+    instancia._olhar()
+    assert [(d.nome, d.completou) for d in avisos[0]] == [("ACH_X", False)]
+
+
 @pytest.mark.parametrize(
     ("campos", "esperado"),
     [
