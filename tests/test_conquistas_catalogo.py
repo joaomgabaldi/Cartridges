@@ -777,3 +777,61 @@ def test_obter_ignora_schema_local_com_data_no_futuro(tmp_path, monkeypatch):
     _schema_local(tmp_path, monkeypatch, mtime=agora + 3 * 24 * 3600)
     monkeypatch.setattr(catalogo, "_pedir", _pedidos({}))  # qualquer pedido falha o teste
     assert [i.nome for i in catalogo.obter("570", "").catalogo.conquistas] == ["ACH_L"]
+
+
+# --- catálogo sem raridade: vale 1 dia, não 7 ---------------------------------------
+
+
+def test_catalogo_feito_sem_rede_marca_sem_raridade_e_vence_em_um_dia(monkeypatch):
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({}))  # qualquer pedido falha o teste
+    cat = catalogo.renovar("570", "", agora=1000, rede=False).catalogo
+    assert cat.sem_raridade is True
+    assert catalogo.em_cache("570").sem_raridade is True
+    assert not catalogo.vencido(cat, 1000 + catalogo.VALIDADE_SEM_RARIDADE - 1, "")
+    assert catalogo.vencido(cat, 1000 + catalogo.VALIDADE_SEM_RARIDADE, "")
+    assert catalogo.VALIDADE_SEM_RARIDADE == 24 * 3600 < catalogo.VALIDADE
+
+
+def test_pedido_de_porcentagens_que_falhou_marca_sem_raridade(monkeypatch):
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetGlobal": ErroDeConexao()}))
+    assert catalogo.renovar("570", "", agora=1000).catalogo.sem_raridade is True
+
+
+def test_catalogo_com_porcentagens_nao_marca_sem_raridade(monkeypatch):
+    do_jogo = ConquistaInfo("ACH_A", "A", "", "", "", False)
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [do_jogo])
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetGlobal": PORCENTAGENS}))
+    cat = catalogo.renovar("570", "", agora=1000).catalogo
+    assert cat.sem_raridade is False
+    assert not catalogo.vencido(cat, 1000 + catalogo.VALIDADE - 1, "")
+
+
+def test_porcentagem_do_catalogo_anterior_conta_como_raridade(monkeypatch):
+    anterior = Catalogo((ConquistaInfo("ACH_L", "Local", "", "", "", False, 3.0),), 1, False)
+    catalogo._gravar_cache("570", anterior)
+    monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
+    monkeypatch.setattr(catalogo, "_pedir", _pedidos({}))  # qualquer pedido falha o teste
+    assert catalogo.renovar("570", "", agora=1000, rede=False).catalogo.sem_raridade is False
+
+
+def test_sem_raridade_vai_para_o_cache():
+    cat = Catalogo((INFO,), 1000, False, "", True)
+    catalogo._gravar_cache("570", cat)
+    assert catalogo.em_cache("570") == cat
+
+
+def test_cache_antigo_sem_o_campo_sem_raridade_le_como_falso():
+    destino = catalogo._arquivo_do_cache("570")
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(json.dumps({"obtido_em": 1, "com_chave": True, "conquistas": []}))
+    assert catalogo.em_cache("570").sem_raridade is False
+
+
+@pytest.mark.parametrize("valor", [1, "sim", None, []])
+def test_sem_raridade_de_tipo_errado_no_cache_e_ilegivel(valor):
+    destino = catalogo._arquivo_do_cache("570")
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(_cache_com(sem_raridade=valor), encoding="utf-8")
+    assert catalogo.em_cache("570") is None
