@@ -170,6 +170,16 @@ def test_sem_typelib_do_gdkwin32_o_modulo_importa_e_nao_ha_handle(monkeypatch):
         janela.destroy()
 
 
+def test_declarar_os_tipos_aqui_nao_estraga_o_user32_do_window_geometry(monkeypatch):
+    """``ctypes.windll.user32`` é compartilhado: declarar o ``GetMonitorInfoW`` com a
+    estrutura simples deixava ``window_geometry.monitors()`` sem nenhum monitor."""
+    from cartridges.utils import window_geometry  # noqa: PLC0415
+
+    monkeypatch.setattr(jpc, "_user32", None)
+    jpc._api()
+    assert window_geometry.monitors()
+
+
 def test_falha_do_win32_nao_levanta(monkeypatch):
     janela = Gtk.Window(decorated=False)
     janela.realize()
