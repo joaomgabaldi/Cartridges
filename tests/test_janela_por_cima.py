@@ -1,7 +1,10 @@
 """A janela que fica por cima do jogo sem pegar o foco."""
 
+import importlib
+import time
+
 import pytest
-from gi.repository import Gtk
+from gi.repository import GLib, Gtk
 
 from cartridges.utils import janela_por_cima as jpc
 
@@ -41,6 +44,128 @@ def test_preparar_aplica_os_estilos():
         for bit in (jpc.WS_EX_NOACTIVATE, jpc.WS_EX_TOOLWINDOW, jpc.WS_EX_TOPMOST, jpc.WS_EX_TRANSPARENT):
             assert estilos & bit, hex(bit)
         assert bool(estilos & jpc.WS_EX_LAYERED) is jpc.USAR_CAMADAS
+    finally:
+        janela.destroy()
+
+
+class _Win32ComFalha:
+    """O user32 de verdade, menos as funções em ``trocas``."""
+
+    def __init__(self, real, **trocas):
+        self._real, self._trocas = real, trocas
+
+    def __getattr__(self, nome):
+        return self._trocas.get(nome, getattr(self._real, nome))
+
+
+@pytest.mark.parametrize(
+    "falha",
+    [
+        {"SetWindowLongPtrW": lambda *_a: 0},  # o estilo não pega: o foco seria roubado
+        {"SetWindowPos": lambda *_a: 0},
+        {"SetLayeredWindowAttributes": lambda *_a: 0},
+    ],
+    ids=["estilo-nao-pega", "setwindowpos-falha", "camadas-falham"],
+)
+def test_preparar_so_devolve_true_com_os_estilos_aplicados(monkeypatch, falha):
+    janela = Gtk.Window(decorated=False)
+    janela.realize()
+    try:
+        monkeypatch.setattr(jpc, "_api", lambda real=jpc._api(): _Win32ComFalha(real, **falha))
+        assert jpc.preparar(janela) is False
+        # Sem ter aplicado nada, a janela não ficou sem ativação.
+        if "SetWindowLongPtrW" in falha:
+            assert not jpc.estilos_de(janela) & jpc.WS_EX_NOACTIVATE
+    finally:
+        janela.destroy()
+
+
+def _bombear(segundos=0.6):
+    contexto = GLib.MainContext.default()
+    fim = time.monotonic() + segundos
+    while time.monotonic() < fim:
+        while contexto.iteration(False):
+            pass
+        time.sleep(0.01)
+
+
+def test_cartao_mostrado_nao_tem_botao_na_barra_de_tarefas():
+    """O GTK tira o WS_EX_TOOLWINDOW ao mostrar a janela; o que a tira da barra e
+    do Alt+Tab é o dono (e o WS_EX_NOACTIVATE), sem tomar o foco."""
+    u = jpc._api()
+    primeiro_plano = u.GetForegroundWindow()
+    janela = Gtk.Window(decorated=False, resizable=False, title="teste-cartao")
+    janela.set_child(Gtk.Label(label="Conquista desbloqueada"))
+    janela.realize()
+    try:
+        assert jpc.preparar(janela) is True
+        janela.set_visible(True)
+        assert jpc.por_no_canto(janela, "inferior-direito") is True
+        _bombear()
+        hwnd = jpc.handle(janela)
+        estilos = jpc.estilos_de(janela)
+        assert u.IsWindowVisible(hwnd)
+        assert estilos & jpc.WS_EX_NOACTIVATE
+        assert not estilos & jpc.WS_EX_APPWINDOW
+        dono = jpc.dono_de(janela)
+        assert estilos & jpc.WS_EX_TOOLWINDOW or (dono and not u.IsIconic(dono))
+        assert dono and not u.IsIconic(dono)
+        assert u.GetForegroundWindow() == primeiro_plano  # e sem pegar o foco
+    finally:
+        janela.destroy()
+
+
+def test_todos_os_cartoes_compartilham_o_mesmo_dono():
+    a, b = Gtk.Window(decorated=False), Gtk.Window(decorated=False)
+    a.realize()
+    b.realize()
+    try:
+        assert jpc.preparar(a) and jpc.preparar(b)
+        assert jpc.dono_de(a) and jpc.dono_de(a) == jpc.dono_de(b)
+        a.destroy()  # destruir um cartão não leva o dono embora
+        assert jpc.dono_de(b) and jpc._api().IsWindow(jpc.dono_de(b))
+    finally:
+        a.destroy()
+        b.destroy()
+
+
+def test_sem_dono_o_cartao_ainda_e_preparado(monkeypatch, caplog):
+    janela = Gtk.Window(decorated=False)
+    janela.realize()
+    try:
+        def sem_dono():
+            raise OSError("sem dono")
+
+        monkeypatch.setattr(jpc, "_dono_oculto", sem_dono)
+        with caplog.at_level("WARNING"):
+            assert jpc.preparar(janela) is True
+        assert "dono" in caplog.text
+        assert jpc.dono_de(janela) == 0
+    finally:
+        janela.destroy()
+
+
+def test_sem_typelib_do_gdkwin32_o_modulo_importa_e_nao_ha_handle(monkeypatch):
+    import gi  # noqa: PLC0415
+
+    real = gi.require_version
+
+    def sem_gdkwin32(nome, versao):
+        if nome == "GdkWin32":
+            raise ValueError("Namespace GdkWin32 not available")
+        return real(nome, versao)
+
+    janela = Gtk.Window(decorated=False)
+    janela.realize()
+    try:
+        with monkeypatch.context() as ctx:
+            ctx.setattr(gi, "require_version", sem_gdkwin32)
+            importlib.reload(jpc)  # o import do módulo não pode derrubar o app
+            assert jpc.handle(janela) is None
+            assert jpc.preparar(janela) is False
+            assert jpc.por_no_canto(janela, "inferior-direito") is False
+        importlib.reload(jpc)  # volta ao estado normal para os outros testes
+        assert jpc.handle(janela) is not None
     finally:
         janela.destroy()
 

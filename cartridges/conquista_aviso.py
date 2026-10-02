@@ -19,6 +19,7 @@ from cartridges.utils import janela_por_cima
 
 DURACAO = 5
 _ENTRADA_MS = 250
+_LIMITE_DA_SAIDA = 1  # segundos até a saída ser dada por terminada, com ou sem animação
 
 
 def _agendar(segundos: int, funcao: Callable[[], Any]) -> int:
@@ -106,18 +107,34 @@ class _JanelaDoAviso(Gtk.Window):
 
     def entrar(self, canto: str) -> None:
         self.realize()
-        janela_por_cima.preparar(self)
+        if not janela_por_cima.preparar(self):
+            # Sem os estilos o cartão ativaria e tiraria o jogo da tela cheia:
+            # quem chama descarta a janela, que nunca chegou a ser mostrada.
+            raise RuntimeError("a janela do aviso não pôde ser preparada")
         self.cartao.set_opacity(0)
         self.set_visible(True)
         janela_por_cima.por_no_canto(self, canto)
-        self._animacao = Adw.TimedAnimation(
+        self._animar(0, 1)
+
+    def sair(self, ao_terminar: Callable[[], None]) -> None:
+        """Some com o cartão (opacidade 1 → 0) e chama ``ao_terminar`` no fim."""
+        if not self._destruida:
+            self._animar(1, 0, ao_terminar)
+
+    def _animar(
+        self, de: float, para: float, ao_terminar: Optional[Callable[[], None]] = None
+    ) -> None:
+        animacao = Adw.TimedAnimation(
             widget=self.cartao,
-            value_from=0,
-            value_to=1,
+            value_from=de,
+            value_to=para,
             duration=_ENTRADA_MS,
             target=Adw.PropertyAnimationTarget.new(self.cartao, "opacity"),
         )
-        self._animacao.play()
+        if ao_terminar is not None:
+            animacao.connect("done", lambda _a: None if self._destruida else ao_terminar())
+        self._animacao = animacao
+        animacao.play()
 
     def fechar(self) -> None:
         self._destruida = True
@@ -175,16 +192,39 @@ def _destruir(janela: Optional[_JanelaDoAviso]) -> None:
 
 
 def _esconder(vez: int) -> bool:
-    global _atual  # pylint: disable=global-statement
+    """O tempo do aviso acabou: ele sai animado; o próximo só entra depois."""
     try:
         if vez != _vez or _atual is None:
             return False
-        janela, _atual = _atual, None
+        janela = _atual
+        # Se a animação nunca terminar (janela encoberta, sem quadros), a fila não pode travar.
+        _agendar(_LIMITE_DA_SAIDA, lambda: _forcar_saida(vez, janela))
+        try:
+            janela.sair(lambda: _saiu(vez, janela))
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Falha na saída do aviso de conquista", exc_info=True)
+            _saiu(vez, janela)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.warning("Falha ao fechar o aviso de conquista", exc_info=True)
+    return False
+
+
+def _forcar_saida(vez: int, janela: _JanelaDoAviso) -> bool:
+    _saiu(vez, janela)
+    return False
+
+
+def _saiu(vez: int, janela: _JanelaDoAviso) -> None:
+    """A saída terminou: a janela se vai e o próximo aviso entra."""
+    global _atual  # pylint: disable=global-statement
+    try:
+        if vez != _vez or _atual is not janela:
+            return  # `fechar` (ou outra troca) já cuidou desta janela
+        _atual = None
         _destruir(janela)
         _proximo()
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning("Falha ao fechar o aviso de conquista", exc_info=True)
-    return False
 
 
 def fechar() -> None:
