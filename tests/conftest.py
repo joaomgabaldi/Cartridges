@@ -122,6 +122,7 @@ _STATE_DEFAULTS = {
     "y": -2147483648,
     "steam-limiter-tokens-history": "[]",
     "news-last-seen-ts": 0,
+    "conquistas-ultima-varredura": 0,
 }
 
 
