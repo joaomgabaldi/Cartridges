@@ -112,6 +112,38 @@ def test_pasta_da_steam_pela_chave_da_maquina(tmp_path, monkeypatch):
     assert arquivos.pasta_da_steam() == steam
 
 
+def test_pasta_do_usuario_vence_a_da_maquina_quando_as_duas_existem(tmp_path, monkeypatch):
+    do_usuario = tmp_path / "Usuario" / "Steam"
+    da_maquina = tmp_path / "Maquina" / "Steam"
+    do_usuario.mkdir(parents=True)
+    da_maquina.mkdir(parents=True)
+    _registro(
+        monkeypatch,
+        {
+            (winreg.HKEY_CURRENT_USER, "SteamPath"): str(do_usuario),
+            (winreg.HKEY_LOCAL_MACHINE, "InstallPath"): str(da_maquina),
+        },
+    )
+    assert arquivos.pasta_da_steam() == do_usuario
+
+
+def test_valor_relativo_do_registro_e_ignorado(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "Steam").mkdir()  # existiria, se "Steam" valesse a partir da pasta atual
+    _registro(monkeypatch, {(winreg.HKEY_CURRENT_USER, "SteamPath"): "Steam"})
+    assert arquivos.pasta_da_steam() is None
+    absoluta = tmp_path / "D" / "Steam"
+    absoluta.mkdir(parents=True)
+    _registro(
+        monkeypatch,
+        {
+            (winreg.HKEY_CURRENT_USER, "SteamPath"): "Steam",
+            (winreg.HKEY_LOCAL_MACHINE, "InstallPath"): str(absoluta),
+        },
+    )
+    assert arquivos.pasta_da_steam() == absoluta
+
+
 def test_sem_steam_no_registro():
     assert arquivos.pasta_da_steam() is None
 
