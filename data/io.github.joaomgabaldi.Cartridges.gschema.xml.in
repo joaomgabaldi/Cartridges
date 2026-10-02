@@ -41,6 +41,9 @@
     <key name="conquistas-mostrar-ocultas" type="b">
       <default>false</default>
     </key>
+    <key name="conquistas-aviso-posicao" type="s">
+      <default>"inferior-direito"</default>
+    </key>
     <key name="sgdb" type="b">
       <default>false</default>
     </key>

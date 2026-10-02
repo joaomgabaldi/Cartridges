@@ -19,10 +19,6 @@ from cartridges.utils.relative_date import relative_date
 _TAMANHO_ICONE = 36
 
 
-def _porcentagem(valor: float) -> str:
-    return f"{valor:.1f}%".replace(".", ",")
-
-
 def _data(quando: int) -> Optional[str]:
     """A data por extenso; ``None`` se o carimbo não couber num calendário.
 
@@ -115,7 +111,7 @@ class ConquistasDialog(Adw.Dialog):
         if linha.quando and (data := _data(linha.quando)):
             lado.append(Gtk.Label(label=data, xalign=1, css_classes=["dim-label"]))
         if info.porcentagem is not None:
-            texto = _porcentagem(info.porcentagem)
+            texto = progresso.porcentagem_em_texto(info.porcentagem)
             rotulo = Gtk.Label(label=f"★ {texto}" if info.rara else texto, xalign=1)
             rotulo.add_css_class("conquista-rara" if info.rara else "dim-label")
             lado.append(rotulo)

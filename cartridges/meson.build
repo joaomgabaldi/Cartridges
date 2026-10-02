@@ -34,6 +34,7 @@ install_data(
     'window.py',
     'preferences.py',
     'details_dialog.py',
+    'conquista_aviso.py',
     'conquistas_dialog.py',
     'sgdb_picker.py',
     'logo_picker.py',
