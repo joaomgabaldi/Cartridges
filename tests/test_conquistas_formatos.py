@@ -2,8 +2,11 @@
 
 import json
 
+import pytest
+
 from cartridges.conquistas import formatos
 from cartridges.conquistas.formatos import Desbloqueio
+from tests.apoio_conquistas import kv_bytes, schema_de_teste
 
 
 def _arquivo(tmp_path, nome, texto):
@@ -206,3 +209,109 @@ def test_hora_gigante_no_json_nao_levanta(tmp_path):
     # Escrito à mão: `json.dumps` não produz 1e999.
     caminho = _arquivo(tmp_path, "a.json", '{"ACH_A": {"earned": true, "earned_time": 1e999}}')
     assert formatos.ler(caminho, formatos.GOLDBERG) == [Desbloqueio("ACH_A", 0)]
+
+
+# Os três estados reais da prova de 02/10/2026 (100% Orange Juice, appID 282800):
+# antes de marcar, marcado e pendente de envio, e marcado e confirmado.
+STEAM_ANTES = bytes.fromhex(
+    "006361636865000263726300000000000250656e64696e674368616e67657300000000000808"
+)
+STEAM_PENDENTE = bytes.fromhex(
+    "006361636865000263726300000000000250656e64696e674368616e676573000100000000"
+    "310002646174610000400000027374617465000200000002"
+    "70656e64696e6762697473000000000000416368696576656d656e7454696d6573000231"
+    "34002bc3bf6a08080808"
+)
+STEAM_CONFIRMADO = bytes.fromhex(
+    "0063616368650002637263006ba339950250656e64696e674368616e676573000000000000"
+    "31000264617461000040000000416368696576656d656e7454696d657300023134002bc3bf6a08080808"
+)
+SCHEMA_282800 = schema_de_teste(
+    "282800", {"1": {"13": {"name": "ACH_OUTRA"}, "14": {"name": "ACH_BONUS_MANY_STARS"}}}
+)
+
+
+def _stats_da_steam(pasta, estado: bytes, schema=SCHEMA_282800, appid="282800"):
+    pasta.mkdir(parents=True, exist_ok=True)
+    caminho = pasta / f"UserGameStats_123_{appid}.bin"
+    caminho.write_bytes(estado)
+    if schema is not None:
+        (pasta / f"UserGameStatsSchema_{appid}.bin").write_bytes(schema)
+    return caminho
+
+
+@pytest.mark.parametrize("estado", [STEAM_PENDENTE, STEAM_CONFIRMADO], ids=["pendente", "confirmado"])
+def test_steam_stats_reais_da_prova(tmp_path, estado):
+    caminho = _stats_da_steam(tmp_path / "stats", estado)
+    assert formatos.ler(caminho, formatos.STEAM_STATS) == [
+        Desbloqueio("ACH_BONUS_MANY_STARS", 1790952235)
+    ]
+
+
+def test_steam_stats_sem_conquistas(tmp_path):
+    caminho = _stats_da_steam(tmp_path / "stats", STEAM_ANTES)
+    assert formatos.ler_ou_none(caminho, formatos.STEAM_STATS) == []
+
+
+def test_steam_stats_varios_blocos_bit_31_e_sem_hora(tmp_path):
+    schema = schema_de_teste(
+        "570",
+        {"1": {"0": {"name": "A"}, "31": {"name": "B"}, "5": {"name": "NAO"}}, "9": {"2": {"name": "C"}}},
+    )
+    estado = kv_bytes(
+        {
+            "cache": {
+                "crc": 0,
+                "1": {"data": -(2**31) | 1, "AchievementTimes": {"0": 100, "31": -7}},
+                "9": {"data": 4},
+            }
+        }
+    )
+    caminho = _stats_da_steam(tmp_path / "stats", estado, schema, appid="570")
+    assert formatos.ler(caminho, formatos.STEAM_STATS) == [
+        Desbloqueio("A", 100),
+        Desbloqueio("B", 0),
+        Desbloqueio("C", 0),
+    ]
+
+
+def test_steam_stats_so_blocos_de_conquistas(tmp_path):
+    schema = kv_bytes(
+        {
+            "570": {
+                "stats": {
+                    "1": {"type": 4, "bits": {"0": {"name": "A"}}},
+                    "2": {"type": "INT", "name": "STAT_X", "bits": {"0": {"name": "NAO"}}},
+                    "3": {"type": "ACHIEVEMENTS", "bits": {"40": {"name": "FORA"}, "x": {"name": "NAO"}}},
+                }
+            }
+        }
+    )
+    estado = kv_bytes({"cache": {"1": {"data": 1}, "2": {"data": 1}, "3": {"data": -1}}})
+    caminho = _stats_da_steam(tmp_path / "stats", estado, schema, appid="570")
+    assert formatos.ler(caminho, formatos.STEAM_STATS) == [Desbloqueio("A", 0)]
+
+
+def test_steam_stats_sem_schema_nao_tem_nome(tmp_path):
+    caminho = _stats_da_steam(tmp_path / "stats", STEAM_CONFIRMADO, schema=None)
+    assert formatos.ler_ou_none(caminho, formatos.STEAM_STATS) == []
+
+
+def test_schema_ilegivel_e_falha(tmp_path):
+    caminho = _stats_da_steam(tmp_path / "stats", STEAM_CONFIRMADO, schema=b"\x00lixo")
+    assert formatos.ler_ou_none(caminho, formatos.STEAM_STATS) is None
+
+
+def test_estado_cortado_e_falha(tmp_path):
+    caminho = _stats_da_steam(tmp_path / "stats", STEAM_CONFIRMADO[:-3])
+    assert formatos.ler_ou_none(caminho, formatos.STEAM_STATS) is None
+
+
+def test_estado_ausente_e_nada(tmp_path):
+    assert formatos.ler_ou_none(tmp_path / "UserGameStats_123_570.bin", formatos.STEAM_STATS) == []
+
+
+def test_nome_de_arquivo_estranho_e_nada(tmp_path):
+    caminho = tmp_path / "outro.bin"
+    caminho.write_bytes(STEAM_CONFIRMADO)
+    assert formatos.ler_ou_none(caminho, formatos.STEAM_STATS) == []
