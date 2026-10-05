@@ -1,0 +1,70 @@
+{
+ "data": {
+  "PlayerProfile": {
+   "playerProfile": {
+    "epicAccountId": "00000000000000000000000000000000",
+    "displayName": "Jogador",
+    "relationship": "SELF",
+    "productAchievements": {
+     "__typename": "PlayerProductAchievementsResponseSuccess",
+     "data": {
+      "epicAccountId": "00000000000000000000000000000000",
+      "sandboxId": "50118b7f954e450f8823df1614b24e80",
+      "totalXP": 180,
+      "totalUnlocked": 3,
+      "achievementSets": [
+       {
+        "achievementSetId": "59meapj",
+        "isBase": true,
+        "totalUnlocked": 12,
+        "totalXP": 180
+       }
+      ],
+      "playerAwards": [],
+      "playerAchievements": [
+       {
+        "playerAchievement": {
+         "achievementName": "ACH_BIG_BULLY",
+         "epicAccountId": "00000000000000000000000000000000",
+         "progress": 1,
+         "sandboxId": "50118b7f954e450f8823df1614b24e80",
+         "unlocked": true,
+         "unlockDate": "2024-01-23T01:23:20.159Z",
+         "XP": 15,
+         "achievementSetId": "59meapj",
+         "isBase": true
+        }
+       },
+       {
+        "playerAchievement": {
+         "achievementName": "ACH_FALL_10_QUALIFY_RACE",
+         "epicAccountId": "00000000000000000000000000000000",
+         "progress": 1,
+         "sandboxId": "50118b7f954e450f8823df1614b24e80",
+         "unlocked": true,
+         "unlockDate": "2024-01-23T01:20:57.133Z",
+         "XP": 15,
+         "achievementSetId": "59meapj",
+         "isBase": true
+        }
+       },
+       {
+        "playerAchievement": {
+         "achievementName": "ACH_STYLE_POINTS",
+         "epicAccountId": "00000000000000000000000000000000",
+         "progress": 1,
+         "sandboxId": "50118b7f954e450f8823df1614b24e80",
+         "unlocked": true,
+         "unlockDate": "2024-01-24T03:14:01.682Z",
+         "XP": 15,
+         "achievementSetId": "59meapj",
+         "isBase": true
+        }
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+}

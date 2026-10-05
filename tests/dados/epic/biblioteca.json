@@ -1,0 +1,84 @@
+{
+ "responseMetadata": {
+  "stateToken": "ffcb20f9-572f-46a2-912c-394c08d7c79c"
+ },
+ "records": [
+  {
+   "namespace": "9f3ffc77b7264d63859bfd9bc935c9f8",
+   "catalogItemId": "37b1f7d89d0e4be0971c3614911abf3c",
+   "appName": "fb81c41914b345e3bad3ce9b6db4463b",
+   "country": "BR",
+   "platform": [
+    "Windows"
+   ],
+   "productId": "eda0432529164b29b8a659d627d660e4",
+   "sandboxName": "Live",
+   "sandboxType": "PUBLIC",
+   "recordType": "APPLICATION",
+   "acquisitionDate": "2026-07-19T03:59:14.940Z",
+   "dependencies": []
+  },
+  {
+   "namespace": "5aab0660c2db4caa8a535d267a84633c",
+   "catalogItemId": "afd45fad1ecb4c6a99b23df4e127f69c",
+   "appName": "1014022493bd421eb54dae5386502c06",
+   "country": "BR",
+   "platform": [
+    "Windows"
+   ],
+   "productId": "20e7e7b1cd6b430cb062405676369c2a",
+   "sandboxName": "Live",
+   "sandboxType": "PUBLIC",
+   "recordType": "APPLICATION",
+   "acquisitionDate": "2026-05-27T23:34:40.189Z",
+   "availableDate": "2024-02-14T18:00:00.000Z",
+   "dependencies": []
+  },
+  {
+   "namespace": "0558e58003aa447a8ace48c3a0d53b54",
+   "catalogItemId": "e059859c0aef407e81320c78ed08f57a",
+   "appName": "1b3d52e6278749868913aa1cdd12e974",
+   "country": "BR",
+   "platform": [
+    "Windows",
+    "Mac"
+   ],
+   "productId": "77dba99a6e6245d19bb2fb552cb7590c",
+   "sandboxName": "Quinn",
+   "sandboxType": "PUBLIC",
+   "recordType": "APPLICATION",
+   "acquisitionDate": "2026-05-27T23:34:59.892Z",
+   "dependencies": []
+  },
+  {
+   "namespace": "1319020a7c08408489d4dc9c5b1df4c0",
+   "catalogItemId": "f1de33de1cff4a8f94cd7df1e981498c",
+   "appName": "ab9bdfa5a0c945f69b9e7d651990cb14",
+   "country": "BR",
+   "platform": [
+    "Windows"
+   ],
+   "productId": "bed02187768e44afb05319f40660d9fa",
+   "sandboxName": "Live",
+   "sandboxType": "PUBLIC",
+   "recordType": "APPLICATION",
+   "acquisitionDate": "2026-02-20T14:41:48.593Z",
+   "dependencies": []
+  },
+  {
+   "namespace": "37c3db39e71e40249ed6adb1fe399570",
+   "catalogItemId": "ea62a20d904a423185ac4169104858c2",
+   "appName": "f3e74269154447708c333fdf85972aa9",
+   "country": "BR",
+   "platform": [
+    "Windows"
+   ],
+   "productId": "e465742edbce4b73a6712c259aea910f",
+   "sandboxName": "Live",
+   "sandboxType": "PUBLIC",
+   "recordType": "APPLICATION",
+   "acquisitionDate": "2026-02-21T22:05:02.900Z",
+   "dependencies": []
+  }
+ ]
+}

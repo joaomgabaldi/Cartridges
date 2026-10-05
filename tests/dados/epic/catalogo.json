@@ -1,0 +1,199 @@
+{
+ "data": {
+  "Achievement": {
+   "productAchievementsRecordBySandbox": {
+    "productId": "d42d7101bb7a41c09a810ee418b7d3d0",
+    "sandboxId": "50118b7f954e450f8823df1614b24e80",
+    "totalAchievements": 6,
+    "totalProductXP": 1000,
+    "achievementSets": [
+     {
+      "achievementSetId": "59meapj",
+      "isBase": true,
+      "totalAchievements": 34,
+      "totalXP": 1000
+     }
+    ],
+    "platinumRarity": {
+     "percent": 0.2
+    },
+    "achievements": [
+     {
+      "achievement": {
+       "sandboxId": "50118b7f954e450f8823df1614b24e80",
+       "deploymentId": "8bedfebaf56f406ebab78986ada3f9b3",
+       "name": "ACHI_BARELY_MADE_IT",
+       "hidden": false,
+       "isBase": true,
+       "achievementSetId": "59meapj",
+       "unlockedDisplayName": "Azarão",
+       "lockedDisplayName": "Azarão",
+       "unlockedDescription": "Classifique-se em um jogo de equipes com 1 ponto",
+       "lockedDescription": "Classifique-se em um jogo de equipes com 1 ponto",
+       "unlockedIconId": "ACHI_BARELY_MADE_IT.png",
+       "lockedIconId": "ACHI_BARELY_MADE_IT_Locked.png",
+       "XP": 15,
+       "flavorText": "",
+       "unlockedIconLink": "https://shared-static-prod.epicgames.com/epic-achievements/d42d7101bb7a41c09a810ee418b7d3d0/50118b7f954e450f8823df1614b24e80/icons/9f6fab91d0abb69ad5caab4e0c202f5b",
+       "lockedIconLink": "https://shared-static-prod.epicgames.com/epic-achievements/d42d7101bb7a41c09a810ee418b7d3d0/50118b7f954e450f8823df1614b24e80/icons/927b856d73ab404edc08c99d65a71ef1",
+       "tier": {
+        "name": "bronze",
+        "hexColor": "#CA512B",
+        "min": 0,
+        "max": 45
+       },
+       "rarity": {
+        "percent": 3
+       }
+      }
+     },
+     {
+      "achievement": {
+       "sandboxId": "50118b7f954e450f8823df1614b24e80",
+       "deploymentId": "8bedfebaf56f406ebab78986ada3f9b3",
+       "name": "ACH_BIG_BULLY",
+       "hidden": false,
+       "isBase": true,
+       "achievementSetId": "59meapj",
+       "unlockedDisplayName": "Valentão",
+       "lockedDisplayName": "Valentão",
+       "unlockedDescription": "Derrube alguém",
+       "lockedDescription": "Derrube alguém",
+       "unlockedIconId": "ACH_BIG_BULLY.png",
+       "lockedIconId": "ACH_BIG_BULLY_Locked.png",
+       "XP": 15,
+       "flavorText": "",
+       "unlockedIconLink": "https://shared-static-prod.epicgames.com/epic-achievements/d42d7101bb7a41c09a810ee418b7d3d0/50118b7f954e450f8823df1614b24e80/icons/45cbe735e5e5e15271d1929047ec46cd",
+       "lockedIconLink": "https://shared-static-prod.epicgames.com/epic-achievements/d42d7101bb7a41c09a810ee418b7d3d0/50118b7f954e450f8823df1614b24e80/icons/85574180ddd96f47cc6e08874f39abd5",
+       "tier": {
+        "name": "bronze",
+        "hexColor": "#CA512B",
+        "min": 0,
+        "max": 45
+       },
+       "rarity": {
+        "percent": 23
+       }
+      }
+     },
+     {
+      "achievement": {
+       "sandboxId": "50118b7f954e450f8823df1614b24e80",
+       "deploymentId": "8bedfebaf56f406ebab78986ada3f9b3",
+       "name": "ACH_BIG_TEASE",
+       "hidden": false,
+       "isBase": true,
+       "achievementSetId": "59meapj",
+       "unlockedDisplayName": "Provocação",
+       "lockedDisplayName": "Provocação",
+       "unlockedDescription": "Use um gesto logo antes de chegar em primeiro em um round de corrida",
+       "lockedDescription": "Use um gesto logo antes de chegar em primeiro em um round de corrida",
+       "unlockedIconId": "ACH_BIG_TEASE.png",
+       "lockedIconId": "ACH_BIG_TEASE_Locked.png",
+       "XP": 15,
+       "flavorText": "",
+       "unlockedIconLink": "https://shared-static-prod.epicgames.com/epic-achievements/d42d7101bb7a41c09a810ee418b7d3d0/50118b7f954e450f8823df1614b24e80/icons/0f00b7c21ca3c8133d1c3c4f021f0a3c",
+       "lockedIconLink": "https://shared-static-prod.epicgames.com/epic-achievements/d42d7101bb7a41c09a810ee418b7d3d0/50118b7f954e450f8823df1614b24e80/icons/613c7106f6637169fa5b81411f42bda9",
+       "tier": {
+        "name": "bronze",
+        "hexColor": "#CA512B",
+        "min": 0,
+        "max": 45
+       },
+       "rarity": {
+        "percent": 0.6
+       }
+      }
+     },
+     {
+      "achievement": {
+       "sandboxId": "50118b7f954e450f8823df1614b24e80",
+       "deploymentId": "8bedfebaf56f406ebab78986ada3f9b3",
+       "name": "ACH_FALL_10_QUALIFY_RACE",
+       "hidden": false,
+       "isBase": true,
+       "achievementSetId": "59meapj",
+       "unlockedDisplayName": "De Cara",
+       "lockedDisplayName": "De Cara",
+       "unlockedDescription": "Classifique-se em um round de corrida mesmo caindo mais de 10 vezes",
+       "lockedDescription": "Classifique-se em um round de corrida mesmo caindo mais de 10 vezes",
+       "unlockedIconId": "ACH_FALL_10_QUALIFY_RACE.png",
+       "lockedIconId": "ACH_FALL_10_QUALIFY_RACE_Locked.png",
+       "XP": 15,
+       "flavorText": "",
+       "unlockedIconLink": "https://shared-static-prod.epicgames.com/epic-achievements/d42d7101bb7a41c09a810ee418b7d3d0/50118b7f954e450f8823df1614b24e80/icons/ac77d11b386ef5876161ee5bd0a31098",
+       "lockedIconLink": "https://shared-static-prod.epicgames.com/epic-achievements/d42d7101bb7a41c09a810ee418b7d3d0/50118b7f954e450f8823df1614b24e80/icons/5ae03edf2bbbe182f504c32171d911e4",
+       "tier": {
+        "name": "bronze",
+        "hexColor": "#CA512B",
+        "min": 0,
+        "max": 45
+       },
+       "rarity": {
+        "percent": 17
+       }
+      }
+     },
+     {
+      "achievement": {
+       "sandboxId": "50118b7f954e450f8823df1614b24e80",
+       "deploymentId": "8bedfebaf56f406ebab78986ada3f9b3",
+       "name": "ACH_FAME_TIER_2",
+       "hidden": false,
+       "isBase": true,
+       "achievementSetId": "59meapj",
+       "unlockedDisplayName": "Nome Familiar",
+       "lockedDisplayName": "Nome Familiar",
+       "unlockedDescription": "Alcance o nv. 25 de fama durante uma temporada",
+       "lockedDescription": "Alcance o nv. 25 de fama durante uma temporada",
+       "unlockedIconId": "ACH_FAME_TIER_2.png",
+       "lockedIconId": "ACH_FAME_TIER_2_Locked.png",
+       "XP": 15,
+       "flavorText": "",
+       "unlockedIconLink": "https://shared-static-prod.epicgames.com/epic-achievements/d42d7101bb7a41c09a810ee418b7d3d0/50118b7f954e450f8823df1614b24e80/icons/56c2f56c081a45985870b969846d4e6d",
+       "lockedIconLink": "https://shared-static-prod.epicgames.com/epic-achievements/d42d7101bb7a41c09a810ee418b7d3d0/50118b7f954e450f8823df1614b24e80/icons/7157b2ba69be6f16d6d5daf9fe55c499",
+       "tier": {
+        "name": "bronze",
+        "hexColor": "#CA512B",
+        "min": 0,
+        "max": 45
+       },
+       "rarity": {
+        "percent": 7
+       }
+      }
+     },
+     {
+      "achievement": {
+       "sandboxId": "50118b7f954e450f8823df1614b24e80",
+       "deploymentId": "8bedfebaf56f406ebab78986ada3f9b3",
+       "name": "ACH_STYLE_POINTS",
+       "hidden": false,
+       "isBase": true,
+       "achievementSetId": "59meapj",
+       "unlockedDisplayName": "Pontos de Estilo",
+       "lockedDisplayName": "Pontos de Estilo",
+       "unlockedDescription": "Despenque por pelo menos 3 segundos antes de cair de cabeça",
+       "lockedDescription": "Despenque por pelo menos 3 segundos antes de cair de cabeça",
+       "unlockedIconId": "ACH_STYLE_POINTS.png",
+       "lockedIconId": "ACH_STYLE_POINTS_Locked.png",
+       "XP": 15,
+       "flavorText": "",
+       "unlockedIconLink": "https://shared-static-prod.epicgames.com/epic-achievements/d42d7101bb7a41c09a810ee418b7d3d0/50118b7f954e450f8823df1614b24e80/icons/52094b5473bee2d456e7f91e222c1ed8",
+       "lockedIconLink": "https://shared-static-prod.epicgames.com/epic-achievements/d42d7101bb7a41c09a810ee418b7d3d0/50118b7f954e450f8823df1614b24e80/icons/468c1a40d25e6360a745c2fadada30f1",
+       "tier": {
+        "name": "bronze",
+        "hexColor": "#CA512B",
+        "min": 0,
+        "max": 45
+       },
+       "rarity": {
+        "percent": 19
+       }
+      }
+     }
+    ]
+   }
+  }
+ }
+}
