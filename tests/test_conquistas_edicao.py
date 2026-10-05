@@ -34,6 +34,8 @@ def _aplicar(game, **mudancas):
     for nome, valor in mudancas.items():
         if nome == "conquistas":
             dialogo.conquistas_switch.set_active(valor)
+        elif nome == "executavel":
+            dialogo.executable.set_text(valor)
         else:
             setattr(dialogo, nome, valor)
     dialogo.apply_preferences()
@@ -101,4 +103,46 @@ def test_sem_mudanca_nao_varre(store, real_window, varredura):
     _stub_sgdb(store)
     game = jogo(store, 24, executable="x.exe", steam_appid="570")
     _aplicar(game)
+    assert varredura.pedidos == []
+
+
+def test_corrigir_o_appid_de_jogo_do_xbox_nao_apaga_o_historico(store, real_window, varredura):
+    """O appID não é a fonte de um jogo do Xbox: as conquistas dele não eram de outro jogo."""
+    _stub_sgdb(store)
+    game = jogo(store, 28, executable="x.exe", steam_appid="10")
+    historico.registrar(game.game_id, [Desbloqueio("XBOX:1", 1)], fonte="xbox:7", conta="111")
+    _aplicar(game, fetched_steam_appid="20")
+    assert historico.ler(game.game_id) == {"XBOX:1": 1}
+    assert historico.fonte(game.game_id) == "xbox:7"
+    assert varredura.pedidos == [game.game_id]
+
+
+def test_corrigir_o_appid_de_jogo_da_steam_descarta_o_historico(store, real_window, varredura):
+    _stub_sgdb(store)
+    game = jogo(store, 29, executable="x.exe", steam_appid="10")
+    historico.registrar(game.game_id, [Desbloqueio("ERRADA", 1)], fonte="steam:10")
+    _aplicar(game, fetched_steam_appid="20")
+    assert historico.ler(game.game_id) is None
+
+
+def test_religar_pede_varredura_sem_appid(store, real_window, varredura):
+    """Jogo do Xbox não tem appID: a varredura não pode depender dele."""
+    _stub_sgdb(store)
+    game = jogo(store, 30, executable="x.exe", conquistas=False)
+    _aplicar(game, conquistas=True)
+    assert varredura.pedidos == [game.game_id]
+
+
+def test_editar_o_executavel_pede_varredura_sem_appid(store, real_window, varredura):
+    _stub_sgdb(store)
+    game = jogo(store, 31, executable="x.exe")
+    _aplicar(game, executavel="y.exe")
+    assert game.executable == "y.exe"
+    assert varredura.pedidos == [game.game_id]
+
+
+def test_jogo_sem_conquistas_nao_e_varrido_ao_editar_o_executavel(store, real_window, varredura):
+    _stub_sgdb(store)
+    game = jogo(store, 32, executable="x.exe", conquistas=False)
+    _aplicar(game, executavel="y.exe")
     assert varredura.pedidos == []
