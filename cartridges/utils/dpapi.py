@@ -34,6 +34,10 @@ _crypt32 = ctypes.windll.crypt32  # type: ignore
 _kernel32 = ctypes.windll.kernel32  # type: ignore
 
 
+# `CRYPTPROTECT_UI_FORBIDDEN`: nenhuma das duas chamadas pode abrir uma janela de confirmação.
+_UI_FORBIDDEN = 0x1
+
+
 class _DATA_BLOB(ctypes.Structure):
     _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
 
@@ -75,7 +79,9 @@ def _chamar(funcao: Any, dados: bytes) -> Optional[bytes]:
     """Roda ``CryptProtectData`` ou ``CryptUnprotectData`` sobre ``dados``."""
     entrada, _buffer = _blob(dados)
     saida = _DATA_BLOB()
-    if not funcao(ctypes.byref(entrada), None, None, None, None, 0, ctypes.byref(saida)):
+    if not funcao(
+        ctypes.byref(entrada), None, None, None, None, _UI_FORBIDDEN, ctypes.byref(saida)
+    ):
         return None
     try:
         return ctypes.string_at(saida.pbData, saida.cbData)
