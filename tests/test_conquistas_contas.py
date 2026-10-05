@@ -6,6 +6,7 @@ import pytest
 
 from cartridges.conquistas import contas, fontes
 from cartridges.conquistas.fontes import Fonte
+from tests.apoio_conquistas import pastas  # noqa: F401
 
 
 def test_xbox_esta_no_registro():
@@ -45,3 +46,24 @@ def test_ativa_pergunta_a_loja(loja_falsa):
 def test_chave_do_catalogo_pergunta_a_loja(loja_falsa):
     assert fontes.chave_do_catalogo(Fonte("xbox", "7")) == "falsa-7"
     assert fontes.chave_do_catalogo(Fonte("steam", "570")) == "570"
+
+
+def test_epic_esta_no_registro():
+    from cartridges.conquistas.epic import loja  # noqa: PLC0415
+
+    assert contas.lojas()["epic"] is loja and loja.TIPO == "epic"
+
+
+def test_historico_guarda_conta_de_toda_loja_do_registro():
+    from cartridges.conquistas import historico  # noqa: PLC0415
+
+    assert {prefixo.rstrip(":") for prefixo in historico._FONTES_COM_CONTA} == set(contas.lojas())
+
+
+def test_resolver_da_epic(make_game, monkeypatch, pastas):  # noqa: F811
+    from cartridges.conquistas.epic import api, loja  # noqa: PLC0415
+
+    monkeypatch.setattr(api, "namespace_do_app", lambda app: "n1" if app == "Sugar" else "")
+    url = 'start "" "com.epicgames.launcher://apps/Sugar?action=launch"'
+    assert loja.resolver(make_game(executable=url), Fonte("epic", "")) == "n1"
+    assert loja.resolver(make_game(executable="x.exe"), Fonte("epic", "")) == ""

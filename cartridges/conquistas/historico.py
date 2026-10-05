@@ -11,9 +11,10 @@ dos dados por id: Jogos Zerados (o id não muda), troca de id e Excluir
 (`store.py`), ligação de zerado (`transferir`) e backup.
 
 O arquivo também guarda de onde vêm as conquistas do jogo (`"fonte"`, como
-`"xbox:123"` ou `"steam:570"`; ver `fontes.py`) e, na fonte do Xbox, de qual
-conta (`"conta"`, o XUID): o `xbox:<titleId>` não distingue duas contas, e trocar
-de conta traz conquistas que o histórico não conhecia. A regra de só somar vale
+`"xbox:123"` ou `"steam:570"`; ver `fontes.py`) e, na fonte do Xbox ou da Epic,
+de qual conta (`"conta"`, o XUID ou o `account_id`): o `xbox:<titleId>` não
+distingue duas contas, e trocar de conta traz conquistas que o histórico não
+conhecia. A regra de só somar vale
 para as desbloqueadas; fonte e conta são só dados do jogo e podem trocar.
 
 Não existir o arquivo é o que marca "nunca varrido": a primeira varredura grava
@@ -33,6 +34,9 @@ from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.utils.ler_json import ler_json
 
 _trava = threading.Lock()
+# As fontes de loja com conta (`contas.lojas()`): só elas guardam a conta. Sem
+# importar `contas`, que fecharia um ciclo (um teste confere que batem).
+_FONTES_COM_CONTA = ("xbox:", "epic:")
 
 
 def caminho(game_id: str) -> Path:
@@ -115,7 +119,7 @@ def fonte(game_id: str) -> Optional[str]:
 
 
 def conta(game_id: str) -> Optional[str]:
-    """A conta (XUID) que gerou a fonte do Xbox do jogo, ou None se não há."""
+    """A conta (XUID ou ``account_id``) que gerou a fonte de loja do jogo, ou None se não há."""
     dados = _ler_estado(game_id)[0]
     return dados.conta if dados else None
 
@@ -181,8 +185,8 @@ def registrar(
     """Funde ``novos`` no que está guardado e grava.
 
     Com ``fonte``, grava também de onde vêm as conquistas (mesmo que nada novo
-    tenha entrado) e, só para a fonte do Xbox, a ``conta``; sem fonte, a que já
-    estava guardada (e a conta dela) fica.
+    tenha entrado) e, só para as fontes de loja com conta (Xbox, Epic), a
+    ``conta``; sem fonte, a que já estava guardada (e a conta dela) fica.
 
     Devolve ``(as que entraram agora, se era a primeira vez)``.
     """
@@ -199,7 +203,7 @@ def registrar(
             fonte_final, conta_final = fonte_atual, conta_atual
         else:
             fonte_final = fonte
-            conta_final = conta if fonte.startswith("xbox:") else None
+            conta_final = conta if fonte.startswith(_FONTES_COM_CONTA) else None
         resultado, entraram = fundir(atual or {}, novos)
         if (
             primeira

@@ -465,3 +465,8 @@ def test_mover_leva_a_conta():
     historico.registrar("de", [D("A", 1)], fonte="xbox:9", conta="111")
     historico.mover("de", "para")
     assert historico.conta("para") == "111"
+
+
+def test_conta_gravada_junto_da_fonte_da_epic():
+    historico.registrar("g", [D("EPIC:A", 5)], fonte="epic:fn", conta="c1")
+    assert historico.conta("g") == "c1"

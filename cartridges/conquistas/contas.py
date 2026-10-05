@@ -51,9 +51,10 @@ _lojas: Optional[dict[str, ModuleType]] = None
 def lojas() -> dict[str, ModuleType]:
     global _lojas  # pylint: disable=global-statement
     if _lojas is None:
+        from cartridges.conquistas.epic import loja as epic  # noqa: PLC0415
         from cartridges.conquistas.xbox import loja as xbox  # noqa: PLC0415
 
-        _lojas = {xbox.TIPO: xbox}
+        _lojas = {xbox.TIPO: xbox, epic.TIPO: epic}
     return _lojas
 
 

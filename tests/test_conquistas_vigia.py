@@ -714,3 +714,8 @@ def test_bin_cortado_no_inicio_e_depois_valido_entra_em_silencio(
     _estado_da_steam(estado, {0: 100, 1: 200})
     instancia._olhar()
     assert _nomes(avisos) == [["ACH_B"]]
+
+
+def test_jogo_da_epic_nao_e_do_vigia_de_arquivos(make_game):
+    url = 'start "" "com.epicgames.launcher://apps/Sugar?action=launch"'
+    assert not vigia.acompanha(make_game(executable=url, steam_appid="570"))
