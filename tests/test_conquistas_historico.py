@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from cartridges import shared
 from cartridges.conquistas import historico
 from cartridges.conquistas.formatos import Desbloqueio as D
@@ -197,7 +199,7 @@ def test_transferir_que_nao_grava_poe_a_origem_de_lado(monkeypatch, caplog):
     historico.registrar("de", [D("A", 5)])
     historico.registrar("para", [D("B", 7)])
 
-    def falha(_game_id, _desbloqueadas):
+    def falha(*_args):
         raise OSError("disco cheio")
 
     monkeypatch.setattr(historico, "_gravar", falha)
@@ -214,7 +216,7 @@ def test_transferir_que_nao_grava_poe_a_origem_de_lado(monkeypatch, caplog):
 
 
 def test_registrar_que_nao_grava_nao_anuncia_o_que_nao_guardou(monkeypatch):
-    def falha(_game_id, _desbloqueadas):
+    def falha(*_args):
         raise OSError("disco cheio")
 
     monkeypatch.setattr(historico, "_gravar", falha)
@@ -226,7 +228,7 @@ def test_registrar_que_nao_grava_nao_anuncia_o_que_nao_guardou(monkeypatch):
 def test_registrar_que_nao_grava_um_historico_existente_devolve_vazio(monkeypatch):
     historico.registrar("g1", [D("A", 1)])
 
-    def falha(_game_id, _desbloqueadas):
+    def falha(*_args):
         raise OSError("disco cheio")
 
     monkeypatch.setattr(historico, "_gravar", falha)
@@ -294,3 +296,96 @@ def test_apagar():
     historico.apagar("g1")
     assert historico.ler("g1") is None
     historico.apagar("g1")  # de novo, sem arquivo: não levanta
+
+
+def test_fonte_gravada_junto_das_desbloqueadas():
+    historico.registrar("g", [D("A", 1)], fonte="steam:570")
+    assert historico.fonte("g") == "steam:570"
+    assert historico.ler("g") == {"A": 1}
+
+
+def test_registrar_sem_fonte_mantem_a_gravada():
+    historico.registrar("g", [], fonte="xbox:9")
+    historico.registrar("g", [D("XBOX:1", 5)])
+    assert historico.fonte("g") == "xbox:9"
+
+
+def test_trocar_so_a_fonte_grava():
+    historico.registrar("g", [D("A", 1)], fonte="steam:570")
+    entraram, primeira = historico.registrar("g", [], fonte="xbox:9")
+    assert (entraram, primeira) == ([], False)
+    assert historico.fonte("g") == "xbox:9"
+    assert historico.ler("g") == {"A": 1}
+
+
+def test_esquecer_fonte_nao_cria_arquivo():
+    historico.esquecer_fonte("nunca")
+    assert not historico.caminho("nunca").exists()
+    historico.registrar("g", [D("A", 1)], fonte="steam:570")
+    historico.esquecer_fonte("g")
+    assert historico.fonte("g") is None
+    assert historico.ler("g") == {"A": 1}
+
+
+@pytest.mark.parametrize("valor", [5, None, ["x"], {"a": 1}, ""])
+def test_fonte_estranha_vira_none(valor):
+    historico.caminho("g").parent.mkdir(parents=True, exist_ok=True)
+    historico.caminho("g").write_text(
+        json.dumps({"desbloqueadas": {"A": 1}, "fonte": valor}), encoding="utf-8"
+    )
+    assert historico.fonte("g") is None
+    assert historico.ler("g") == {"A": 1}
+
+
+def test_transferir_leva_a_fonte_so_se_o_destino_nao_tem():
+    historico.registrar("de", [D("A", 1)], fonte="xbox:9")
+    historico.registrar("para", [D("B", 2)])
+    assert historico.transferir("de", "para")
+    assert historico.fonte("para") == "xbox:9"
+    historico.registrar("de2", [D("C", 3)], fonte="steam:1")
+    assert historico.transferir("de2", "para")
+    assert historico.fonte("para") == "xbox:9"
+
+
+def test_mover_leva_a_fonte():
+    historico.registrar("de", [D("A", 1)], fonte="steam:570")
+    historico.mover("de", "para")
+    assert historico.fonte("para") == "steam:570"
+
+
+def test_fonte_sem_arquivo_ou_ilegivel_e_none():
+    assert historico.fonte("nunca") is None
+    historico.caminho("g").parent.mkdir(parents=True, exist_ok=True)
+    historico.caminho("g").write_text("{não é json", encoding="utf-8")
+    assert historico.fonte("g") is None
+
+
+def test_esquecer_fonte_nao_mexe_em_arquivo_ilegivel_nem_indisponivel(monkeypatch):
+    historico.caminho("g").parent.mkdir(parents=True, exist_ok=True)
+    historico.caminho("g").write_text("{não é json", encoding="utf-8")
+    historico.esquecer_fonte("g")
+    assert historico.caminho("g").read_text(encoding="utf-8") == "{não é json"
+    assert not historico.caminho("g").with_name("g.json.corrompido").exists()
+
+    historico.registrar("h", [D("A", 1)], fonte="xbox:9")
+    antes = historico.caminho("h").read_text(encoding="utf-8")
+
+    def travado(_caminho):
+        raise PermissionError("em uso")
+
+    with monkeypatch.context() as quebrado:
+        quebrado.setattr(historico, "ler_json", travado)
+        historico.esquecer_fonte("h")
+    assert historico.caminho("h").read_text(encoding="utf-8") == antes
+
+
+def test_esquecer_fonte_que_nao_grava_nao_levanta(monkeypatch):
+    historico.registrar("g", [D("A", 1)], fonte="xbox:9")
+
+    def falha(*_args):
+        raise OSError("disco cheio")
+
+    with monkeypatch.context() as quebrado:
+        quebrado.setattr(historico, "_gravar", falha)
+        historico.esquecer_fonte("g")
+    assert historico.fonte("g") == "xbox:9"

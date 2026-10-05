@@ -94,7 +94,7 @@ def test_ligacao_sem_gravar_nao_perde_o_historico_do_zerado(store, ligar, monkey
     vivo = jogo(store, 2, steam_appid="570")
     historico.registrar(zerado.game_id, [Desbloqueio("A", 5)])
 
-    def falha(_game_id, _desbloqueadas):
+    def falha(*_args):
         raise OSError("disco cheio")
 
     monkeypatch.setattr(historico, "_gravar", falha)
