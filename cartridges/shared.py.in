@@ -77,6 +77,11 @@ conquistas_dir = app_dir / "conquistas"
 # Catálogos e ícones das conquistas: refeitos da rede, fora do backup.
 conquistas_cache_dir = app_dir / "cache" / "conquistas"
 
+# Contas de lojas (conta Microsoft das conquistas do Xbox), com a chave de
+# renovação cifrada pelo DPAPI: presa a este PC e a este usuário do Windows,
+# então fica fora do backup (`utils/backup.py`).
+contas_dir = app_dir / "contas"
+
 # A conta de nuvem da Tuya que o assistente das fitas usa para buscar
 # dispositivos. Fica criptografada com o DPAPI do Windows (ver
 # `utils/tuya_conta.py`), amarrada à conta do Windows de quem roda o app. Vai no
