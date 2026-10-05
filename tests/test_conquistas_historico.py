@@ -389,3 +389,79 @@ def test_esquecer_fonte_que_nao_grava_nao_levanta(monkeypatch):
         quebrado.setattr(historico, "_gravar", falha)
         historico.esquecer_fonte("g")
     assert historico.fonte("g") == "xbox:9"
+
+
+# -- a conta da fonte do Xbox -----------------------------------------------------
+
+
+def test_conta_gravada_junto_da_fonte_do_xbox():
+    historico.registrar("g", [D("XBOX:1", 5)], fonte="xbox:9", conta="111")
+    assert historico.conta("g") == "111"
+    assert historico.fonte("g") == "xbox:9"
+    assert json.loads(historico.caminho("g").read_text(encoding="utf-8"))["conta"] == "111"
+
+
+def test_conta_sem_arquivo_ou_sem_conta_gravada_e_none():
+    assert historico.conta("nunca") is None
+    historico.registrar("g", [D("A", 1)], fonte="steam:570")
+    assert historico.conta("g") is None
+
+
+def test_fonte_da_steam_nao_guarda_conta():
+    historico.registrar("g", [], fonte="steam:570", conta="111")
+    assert historico.conta("g") is None
+    assert "conta" not in json.loads(historico.caminho("g").read_text(encoding="utf-8"))
+
+
+def test_registrar_sem_fonte_mantem_a_conta():
+    historico.registrar("g", [], fonte="xbox:9", conta="111")
+    historico.registrar("g", [D("XBOX:1", 5)])
+    assert historico.conta("g") == "111"
+
+
+def test_trocar_so_a_conta_grava():
+    historico.registrar("g", [D("XBOX:1", 5)], fonte="xbox:9", conta="111")
+    assert historico.registrar("g", [], fonte="xbox:9", conta="222") == ([], False)
+    assert historico.conta("g") == "222"
+    assert historico.ler("g") == {"XBOX:1": 5}
+
+
+def test_trocar_a_fonte_para_a_steam_tira_a_conta():
+    historico.registrar("g", [], fonte="xbox:9", conta="111")
+    historico.registrar("g", [], fonte="steam:570")
+    assert historico.conta("g") is None
+
+
+def test_esquecer_fonte_esquece_a_conta():
+    historico.registrar("g", [D("XBOX:1", 5)], fonte="xbox:9", conta="111")
+    historico.esquecer_fonte("g")
+    assert historico.fonte("g") is None
+    assert historico.conta("g") is None
+    assert historico.ler("g") == {"XBOX:1": 5}
+
+
+@pytest.mark.parametrize("valor", [5, None, ["x"], {"a": 1}, ""])
+def test_conta_estranha_vira_none(valor):
+    historico.caminho("g").parent.mkdir(parents=True, exist_ok=True)
+    historico.caminho("g").write_text(
+        json.dumps({"desbloqueadas": {"A": 1}, "fonte": "xbox:9", "conta": valor}),
+        encoding="utf-8",
+    )
+    assert historico.conta("g") is None
+    assert historico.fonte("g") == "xbox:9"
+
+
+def test_transferir_leva_a_conta_junto_da_fonte():
+    historico.registrar("de", [D("A", 1)], fonte="xbox:9", conta="111")
+    historico.registrar("para", [D("B", 2)])
+    assert historico.transferir("de", "para")
+    assert (historico.fonte("para"), historico.conta("para")) == ("xbox:9", "111")
+    historico.registrar("de2", [D("C", 3)], fonte="xbox:5", conta="222")
+    assert historico.transferir("de2", "para")
+    assert (historico.fonte("para"), historico.conta("para")) == ("xbox:9", "111")
+
+
+def test_mover_leva_a_conta():
+    historico.registrar("de", [D("A", 1)], fonte="xbox:9", conta="111")
+    historico.mover("de", "para")
+    assert historico.conta("para") == "111"

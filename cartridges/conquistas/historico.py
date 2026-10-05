@@ -11,8 +11,10 @@ dos dados por id: Jogos Zerados (o id não muda), troca de id e Excluir
 (`store.py`), ligação de zerado (`transferir`) e backup.
 
 O arquivo também guarda de onde vêm as conquistas do jogo (`"fonte"`, como
-`"xbox:123"` ou `"steam:570"`; ver `fontes.py`). A regra de só somar vale para as
-desbloqueadas; a fonte é só um dado do jogo e pode trocar.
+`"xbox:123"` ou `"steam:570"`; ver `fontes.py`) e, na fonte do Xbox, de qual
+conta (`"conta"`, o XUID): o `xbox:<titleId>` não distingue duas contas, e trocar
+de conta traz conquistas que o histórico não conhecia. A regra de só somar vale
+para as desbloqueadas; fonte e conta são só dados do jogo e podem trocar.
 
 Não existir o arquivo é o que marca "nunca varrido": a primeira varredura grava
 mesmo sem nada desbloqueado, e não conta como conquista nova.
@@ -24,7 +26,7 @@ import logging
 import math
 import threading
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, NamedTuple, Optional
 
 from cartridges import shared
 from cartridges.conquistas.formatos import Desbloqueio
@@ -37,7 +39,17 @@ def caminho(game_id: str) -> Path:
     return shared.conquistas_dir / f"{game_id}.json"
 
 
-def _limpo(dados: Any) -> Optional[tuple[dict[str, int], Optional[str]]]:
+class _Dados(NamedTuple):
+    desbloqueadas: dict[str, int]
+    fonte: Optional[str] = None
+    conta: Optional[str] = None
+
+
+def _texto_ou_none(valor: Any) -> Optional[str]:
+    return valor if isinstance(valor, str) and valor.strip() else None
+
+
+def _limpo(dados: Any) -> Optional[_Dados]:
     if not isinstance(dados, dict) or not isinstance(dados.get("desbloqueadas"), dict):
         return None
     desbloqueadas = {
@@ -45,8 +57,7 @@ def _limpo(dados: Any) -> Optional[tuple[dict[str, int], Optional[str]]]:
         for nome, quando in dados["desbloqueadas"].items()
         if _data_valida(quando) and str(nome).strip()
     }
-    fonte = dados.get("fonte")
-    return desbloqueadas, fonte if isinstance(fonte, str) and fonte.strip() else None
+    return _Dados(desbloqueadas, _texto_ou_none(dados.get("fonte")), _texto_ou_none(dados.get("conta")))
 
 
 def _data_valida(quando: Any) -> bool:
@@ -67,10 +78,8 @@ class _Estado(enum.Enum):
     INDISPONIVEL = enum.auto()
 
 
-def _ler_estado(
-    game_id: str,
-) -> tuple[Optional[tuple[dict[str, int], Optional[str]]], _Estado]:
-    """``(dados, estado)``, com ``dados`` sendo ``(desbloqueadas, fonte)``.
+def _ler_estado(game_id: str) -> tuple[Optional[_Dados], _Estado]:
+    """``(dados, estado)``, com ``dados`` sendo ``(desbloqueadas, fonte, conta)``.
 
     Sem arquivo: ``(None, OK)``, o jogo nunca foi varrido.
     """
@@ -96,13 +105,19 @@ def _ler_estado(
 def ler(game_id: str) -> Optional[dict[str, int]]:
     """O que está guardado, ou None se o jogo nunca foi varrido (ou não deu para ler)."""
     dados = _ler_estado(game_id)[0]
-    return dados[0] if dados else None
+    return dados.desbloqueadas if dados else None
 
 
 def fonte(game_id: str) -> Optional[str]:
     """De onde vêm as conquistas do jogo (``"xbox:123"``), ou None se não há."""
     dados = _ler_estado(game_id)[0]
-    return dados[1] if dados else None
+    return dados.fonte if dados else None
+
+
+def conta(game_id: str) -> Optional[str]:
+    """A conta (XUID) que gerou a fonte do Xbox do jogo, ou None se não há."""
+    dados = _ler_estado(game_id)[0]
+    return dados.conta if dados else None
 
 
 def _guardar_ilegivel(game_id: str) -> bool:
@@ -136,13 +151,20 @@ def fundir(
     return resultado, entraram
 
 
-def _gravar(game_id: str, desbloqueadas: dict[str, int], fonte: Optional[str] = None) -> None:
+def _gravar(
+    game_id: str,
+    desbloqueadas: dict[str, int],
+    fonte: Optional[str] = None,
+    conta: Optional[str] = None,
+) -> None:
     destino = caminho(game_id)
     destino.parent.mkdir(parents=True, exist_ok=True)
     temporario = destino.with_name(destino.name + ".tmp")
     conteudo: dict[str, Any] = {"desbloqueadas": desbloqueadas}
     if fonte is not None:
         conteudo["fonte"] = fonte
+        if conta is not None:
+            conteudo["conta"] = conta
     temporario.write_text(
         json.dumps(conteudo, ensure_ascii=False, sort_keys=True),
         encoding="utf-8",
@@ -151,12 +173,16 @@ def _gravar(game_id: str, desbloqueadas: dict[str, int], fonte: Optional[str] = 
 
 
 def registrar(
-    game_id: str, novos: Iterable[Desbloqueio], fonte: Optional[str] = None
+    game_id: str,
+    novos: Iterable[Desbloqueio],
+    fonte: Optional[str] = None,
+    conta: Optional[str] = None,
 ) -> tuple[list[str], bool]:
     """Funde ``novos`` no que está guardado e grava.
 
     Com ``fonte``, grava também de onde vêm as conquistas (mesmo que nada novo
-    tenha entrado); sem ela, a que já estava guardada fica.
+    tenha entrado) e, só para a fonte do Xbox, a ``conta``; sem fonte, a que já
+    estava guardada (e a conta dela) fica.
 
     Devolve ``(as que entraram agora, se era a primeira vez)``.
     """
@@ -167,13 +193,22 @@ def registrar(
             return [], False
         if estado is _Estado.ILEGIVEL and not _guardar_ilegivel(game_id):
             return [], False
-        atual, fonte_atual = dados if dados else (None, None)
+        atual, fonte_atual, conta_atual = dados if dados else (None, None, None)
         primeira = atual is None
-        fonte_final = fonte if fonte is not None else fonte_atual
+        if fonte is None:
+            fonte_final, conta_final = fonte_atual, conta_atual
+        else:
+            fonte_final = fonte
+            conta_final = conta if fonte.startswith("xbox:") else None
         resultado, entraram = fundir(atual or {}, novos)
-        if primeira or resultado != atual or fonte_final != fonte_atual:
+        if (
+            primeira
+            or resultado != atual
+            or fonte_final != fonte_atual
+            or conta_final != conta_atual
+        ):
             try:
-                _gravar(game_id, resultado, fonte_final)
+                _gravar(game_id, resultado, fonte_final, conta_final)
             except OSError as erro:
                 logging.warning("Conquistas de %s não gravadas: %s", game_id, erro)
                 # O aviso de "conquista nova" não anuncia o que não foi guardado.
@@ -189,10 +224,10 @@ def esquecer_fonte(game_id: str) -> None:
     """
     with _trava:
         dados, estado = _ler_estado(game_id)
-        if estado is not _Estado.OK or not dados or dados[1] is None:
+        if estado is not _Estado.OK or not dados or dados.fonte is None:
             return
         try:
-            _gravar(game_id, dados[0], None)
+            _gravar(game_id, dados.desbloqueadas, None, None)
         except OSError as erro:
             logging.warning("Fonte das conquistas de %s não esquecida: %s", game_id, erro)
 
@@ -228,7 +263,9 @@ def transferir(de_id: str, para_id: str) -> bool:
             logging.warning("Conquistas de %s indisponíveis: nada a transferir", de_id)
             _por_a_origem_de_lado(de_id)
             return False
-        origem, fonte_da_origem = dados_da_origem if dados_da_origem else (None, None)
+        origem, fonte_da_origem, conta_da_origem = (
+            dados_da_origem if dados_da_origem else (None, None, None)
+        )
         if not origem:
             return True
         dados_do_destino, estado_do_destino = _ler_estado(para_id)
@@ -238,12 +275,19 @@ def transferir(de_id: str, para_id: str) -> bool:
         if estado_do_destino is _Estado.ILEGIVEL and not _guardar_ilegivel(para_id):
             _por_a_origem_de_lado(de_id)
             return False
-        destino, fonte_do_destino = dados_do_destino if dados_do_destino else (None, None)
+        destino, fonte_do_destino, conta_do_destino = (
+            dados_do_destino if dados_do_destino else (None, None, None)
+        )
+        # A conta vai junto da fonte a que pertence.
+        if fonte_do_destino:
+            fonte_final, conta_final = fonte_do_destino, conta_do_destino
+        else:
+            fonte_final, conta_final = fonte_da_origem, conta_da_origem
         resultado, _entraram = fundir(
             destino or {}, [Desbloqueio(nome, quando) for nome, quando in origem.items()]
         )
         try:
-            _gravar(para_id, resultado, fonte_do_destino or fonte_da_origem)
+            _gravar(para_id, resultado, fonte_final, conta_final)
         except OSError as erro:
             logging.warning("Conquistas de %s não transferidas: %s", de_id, erro)
             _por_a_origem_de_lado(de_id)
