@@ -2,7 +2,7 @@
 
 import base64
 import hashlib
-import threading
+import socket
 import urllib.parse
 import urllib.request
 
@@ -109,6 +109,40 @@ def test_prazo_esgotado_cancela_e_fecha(navegador, flush_idle):
     assert _esperar(pedido, resultados, flush_idle) == [login.Resultado.CANCELADO]
     with pytest.raises(OSError):
         urllib.request.urlopen(f"http://127.0.0.1:{pedido.porta}/", timeout=1)
+
+
+def test_conexao_ociosa_nao_impede_o_prazo(navegador, flush_idle):
+    resultados = []
+    pedido = login.entrar(resultados.append, abrir=navegador.append, prazo=0.5)
+    with socket.create_connection(("127.0.0.1", pedido.porta), timeout=5):
+        assert _esperar(pedido, resultados, flush_idle, tempo=3.0) == [login.Resultado.CANCELADO]
+        with pytest.raises(OSError):
+            urllib.request.urlopen(f"http://127.0.0.1:{pedido.porta}/", timeout=1)
+
+
+def test_conexao_ociosa_nao_segura_a_volta_real(monkeypatch, navegador, flush_idle):
+    chamadas = []
+    monkeypatch.setattr(conta, "conectar", lambda c, v, r: chamadas.append(c))
+    resultados = []
+    pedido = login.entrar(resultados.append, abrir=navegador.append)
+    estado = _parametros(navegador[0])["state"]
+    with socket.create_connection(("127.0.0.1", pedido.porta), timeout=5):
+        assert login.TEXTO_OK in _voltar(pedido, {"code": "COD", "state": estado})
+        assert _esperar(pedido, resultados, flush_idle) == [login.Resultado.OK]
+    assert chamadas == ["COD"]
+
+
+def test_volta_repetida_troca_o_codigo_uma_vez(monkeypatch, navegador, flush_idle):
+    chamadas = []
+    monkeypatch.setattr(conta, "conectar", lambda c, v, r: chamadas.append(c))
+    resultados = []
+    pedido = login.entrar(resultados.append, abrir=navegador.append)
+    estado = _parametros(navegador[0])["state"]
+    pedido._trocando = True  # outra volta já está trocando o código
+    assert _voltar(pedido, {"code": "COD", "state": estado}) == "HTTP 400"
+    assert chamadas == []
+    pedido.cancelar()
+    assert _esperar(pedido, resultados, flush_idle) == [login.Resultado.CANCELADO]
 
 
 def test_cancelar_duas_vezes_termina_uma(navegador, flush_idle):

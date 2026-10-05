@@ -31,6 +31,8 @@ from cartridges.conquistas.xbox import conta
 
 TEXTO_OK = "Login concluído. Pode fechar esta aba e voltar ao Cartridges."
 TEXTO_FALHOU = "O login não foi concluído. Pode fechar esta aba."
+# Quanto uma conexão pode ficar aberta sem terminar a requisição.
+_TEMPO_DA_CONEXAO = 5
 
 
 class Resultado(enum.Enum):
@@ -68,14 +70,25 @@ class Pedido:
         pedido = self
 
         class _Volta(http.server.BaseHTTPRequestHandler):
+            # Uma conexão aberta que não manda requisição (pré-conexão
+            # especulativa do navegador, outro processo local) não pode
+            # segurar a thread para sempre.
+            timeout = _TEMPO_DA_CONEXAO
+
             def do_GET(self) -> None:  # noqa: N802
                 pedido._receber(self)  # pylint: disable=protected-access
 
             def log_message(self, *_args) -> None:
                 pass
 
-        self._servidor = http.server.HTTPServer(("127.0.0.1", 0), _Volta)
+        # Uma thread por conexão: a conexão ociosa não segura a volta real
+        # nem o laço que confere o prazo. Threads daemon: fechar o servidor
+        # não espera por elas.
+        self._servidor = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Volta)
+        self._servidor.daemon_threads = True
+        self._servidor.block_on_close = False
         self._servidor.timeout = 0.2
+        self._trocando = False
         self.porta: int = self._servidor.server_port
         # Forma aprovada pela prova ao vivo: sem barra no fim.
         self.retorno = f"http://localhost:{self.porta}"
@@ -130,6 +143,13 @@ class Pedido:
         if self._terminou.is_set() or not secrets.compare_digest(
             valor.get("state", "").encode("utf-8"), self._estado.encode("utf-8")
         ):
+            self._responder(pedido_http, 400, TEXTO_FALHOU)
+            return
+        with self._fim:
+            # Com uma thread por conexão, só a primeira volta válida troca o código.
+            repetida = self._trocando
+            self._trocando = True
+        if repetida:
             self._responder(pedido_http, 400, TEXTO_FALHOU)
             return
         resultado = Resultado.CANCELADO
