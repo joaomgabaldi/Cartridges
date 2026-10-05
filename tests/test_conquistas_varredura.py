@@ -37,8 +37,17 @@ def _avisos(win):
     return [toast.get_title() for toast in win.toast_queue.added]
 
 
+def _da_steam_aberta(store, make_game, numero, appid=None):
+    """Jogo da Steam (atalho steam://): tem fonte mesmo sem arquivo de emulador."""
+    appid = appid or str(numero)
+    return _registrado(
+        store, make_game, numero, steam_appid=appid, executable=f"steam://rungameid/{appid}"
+    )
+
+
 def _registrado(store, make_game, numero, **campos):
-    game = make_game(game_id=f"shortcuts_{numero}", name=f"Jogo {numero}", executable="", **campos)
+    campos.setdefault("executable", "")
+    game = make_game(game_id=f"shortcuts_{numero}", name=f"Jogo {numero}", **campos)
     store.add_game(game, {}, run_pipeline=False)
     return game
 
@@ -134,7 +143,7 @@ def test_chave_recusada_avisa_uma_vez(store, make_game, pastas, win, flush_idle,
     monkeypatch.setattr(
         catalogo, "obter", lambda _appid, _exe, rede=True, usar_chave=True: catalogo.Renovacao(None, chave_recusada=True)
     )
-    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
+    jogos = [_da_steam_aberta(store, make_game, n) for n in (1, 2, 3)]
     _rodar(jogos, flush_idle)
     assert _avisos(win).count(
         "A chave da Steam Web API foi recusada. Verifique-a nas Preferências."
@@ -146,7 +155,7 @@ def test_chave_recusada_avisa_uma_vez(store, make_game, pastas, win, flush_idle,
     [
         ({"steam_appid": "570"}, True),
         ({"steam_appid": "570", "conquistas": False}, False),
-        ({}, False),
+        ({}, True),  # sem appID também participa: a fonte pode ser o Xbox
         ({"steam_appid": "570", "removed": True}, False),  # removido, não zerado
         ({"steam_appid": "570", "removed": True, "status": "beaten"}, True),  # zerado
         ({"steam_appid": "570", "removed": True, "status": "beaten", "blacklisted": True}, False),
@@ -228,9 +237,9 @@ def test_varrer_jogos_usa_uma_thread_so_e_ignora_quem_nao_participa(
 ):
     a = _registrado(store, make_game, 1, steam_appid="570")
     b = _registrado(store, make_game, 2, steam_appid="620")
-    sem_appid = _registrado(store, make_game, 3)
+    bloqueado = _registrado(store, make_game, 3, steam_appid="440", blacklisted=True)
     desligado = _registrado(store, make_game, 4, steam_appid="730", conquistas=False)
-    VarreduraConquistas().varrer_jogos([a, sem_appid, b, desligado])
+    VarreduraConquistas().varrer_jogos([a, bloqueado, b, desligado])
     (thread,) = threads_falsas
     jogos, geracao, avisar = thread.args[0], thread.args[1], thread.args[2]
     assert jogos == [a, b] and avisar is False and geracao == 0
@@ -242,7 +251,7 @@ def test_varrer_jogos_vazio_ou_sem_ninguem_que_participe_nao_faz_nada(
 ):
     instancia = VarreduraConquistas()
     instancia.varrer_jogos([])
-    instancia.varrer_jogos([_registrado(store, make_game, 1)])
+    instancia.varrer_jogos([_registrado(store, make_game, 1, conquistas=False)])
     assert threads_falsas == []
 
 
@@ -293,14 +302,16 @@ def test_pagina_aberta_atualiza_quando_so_o_catalogo_chegou(
         "obter",
         lambda _appid, _exe, rede=True, usar_chave=True: catalogo.Renovacao(catalogo.Catalogo((), 1, False)),
     )
-    game = _registrado(store, make_game, 1, steam_appid="570")
+    game = _da_steam_aberta(store, make_game, 1, "570")
+    historico.registrar(game.game_id, [], fonte="steam:570")
     chamadas = _janela_com_jogo_aberto(win, game)
     _rodar([game], flush_idle)
     assert chamadas == [game]
 
 
 def test_pagina_aberta_nao_atualiza_sem_novidade(store, make_game, pastas, win, flush_idle):
-    game = _registrado(store, make_game, 1, steam_appid="570")
+    game = _da_steam_aberta(store, make_game, 1, "570")
+    historico.registrar(game.game_id, [], fonte="steam:570")
     chamadas = _janela_com_jogo_aberto(win, game)
     _rodar([game], flush_idle)
     assert chamadas == []
@@ -338,7 +349,7 @@ def test_arquivos_de_todos_os_jogos_antes_de_qualquer_catalogo(
 
     monkeypatch.setattr(varredura, "ler_jogo", ler)
     monkeypatch.setattr(catalogo, "obter", obter)
-    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
+    jogos = [_da_steam_aberta(store, make_game, n) for n in (1, 2, 3)]
     _rodar(jogos, flush_idle)
     assert [tipo for tipo, _ in eventos] == ["arquivos"] * 3 + ["catalogo"] * 3
 
@@ -401,7 +412,7 @@ def test_tarefa_cobre_as_duas_passadas(store, make_game, pastas, flush_idle, mon
         return criadas[0]
 
     monkeypatch.setattr(varredura.tarefas, "comecar", comecar)
-    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
+    jogos = [_da_steam_aberta(store, make_game, n) for n in (1, 2, 3)]
     _rodar(jogos, flush_idle)
     assert criadas[0].total == 6
     assert criadas[0].feitos == [0, 1, 2, 3, 4, 5]
@@ -418,7 +429,7 @@ def test_rede_que_falhou_poupa_os_jogos_seguintes(
         return catalogo.Renovacao(None, rede_falhou=rede)
 
     monkeypatch.setattr(catalogo, "obter", obter)
-    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
+    jogos = [_da_steam_aberta(store, make_game, n) for n in (1, 2, 3)]
     _rodar(jogos, flush_idle)
     assert chamadas == [("1", True), ("2", False), ("3", False)]
 
@@ -440,7 +451,7 @@ def test_tres_jogos_sem_rede_fazem_um_pedido_so(
     monkeypatch.setattr(catalogo, "obter", _OBTER_REAL)
     monkeypatch.setattr(catalogo, "_local", lambda _exe: [info])
     monkeypatch.setattr(catalogo, "_pedir", pedir)
-    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
+    jogos = [_da_steam_aberta(store, make_game, n) for n in (1, 2, 3)]
     _rodar(jogos, flush_idle)
     assert len(pedidos) == 1
     # Os três jogos ficaram com o catálogo do arquivo do próprio jogo.
@@ -457,7 +468,7 @@ def test_parar_no_meio_da_segunda_passada(store, make_game, pastas, flush_idle, 
         return catalogo.Renovacao(None)
 
     monkeypatch.setattr(catalogo, "obter", obter)
-    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
+    jogos = [_da_steam_aberta(store, make_game, n) for n in (1, 2, 3)]
     instancia._worker(jogos, instancia._generation)
     flush_idle()
     assert chamadas == ["1"]
@@ -473,7 +484,7 @@ def test_geracao_nova_para_a_segunda_passada(store, make_game, pastas, flush_idl
         return catalogo.Renovacao(None)
 
     monkeypatch.setattr(catalogo, "obter", obter)
-    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2)]
+    jogos = [_da_steam_aberta(store, make_game, n) for n in (1, 2)]
     instancia._worker(jogos, instancia._generation)
     flush_idle()
     assert chamadas == ["1"]
@@ -488,7 +499,7 @@ def test_catalogo_que_estoura_nao_derruba_a_passada(
         return catalogo.Renovacao(None, chave_recusada=True)
 
     monkeypatch.setattr(catalogo, "obter", obter)
-    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2)]
+    jogos = [_da_steam_aberta(store, make_game, n) for n in (1, 2)]
     instancia = _rodar(jogos, flush_idle)
     assert instancia._running is False
     assert _avisos(win) == [
@@ -518,7 +529,7 @@ def test_chave_recusada_poupa_o_schema_dos_jogos_seguintes(
         return catalogo.Renovacao(None, chave_recusada=usar_chave)
 
     monkeypatch.setattr(catalogo, "obter", obter)
-    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
+    jogos = [_da_steam_aberta(store, make_game, n) for n in (1, 2, 3)]
     _rodar(jogos, flush_idle)
     assert chamadas == [("1", True), ("2", False), ("3", False)]
 
@@ -538,7 +549,7 @@ def test_tres_jogos_com_chave_recusada_um_pedido_e_um_aviso(
     monkeypatch.setattr(catalogo, "obter", _OBTER_REAL)
     monkeypatch.setattr(catalogo, "_local", lambda _exe: [])
     monkeypatch.setattr(catalogo, "_pedir", pedir)
-    jogos = [_registrado(store, make_game, n, steam_appid=str(n)) for n in (1, 2, 3)]
+    jogos = [_da_steam_aberta(store, make_game, n) for n in (1, 2, 3)]
     _rodar(jogos, flush_idle)
     assert len(pedidos) == 1 and "GetSchemaForGame" in pedidos[0]
     assert _avisos(win) == [
@@ -640,3 +651,277 @@ def test_varredura_de_um_jogo_nao_guarda(store, make_game, pastas, flush_idle, s
     instancia._worker([game], instancia._generation, False)
     flush_idle()
     assert state_schema.get_int64("conquistas-ultima-varredura") == 0
+
+
+# -- As fontes e o Xbox ----------------------------------------------------------
+
+_AUMID = 'start "" "shell:AppsFolder\\Pkg.Jogo_abc!Game"'
+
+
+@pytest.fixture
+def xbox(monkeypatch):
+    """Conta conectada e uma API falsa que devolve o que o teste puser em `estado`."""
+    from cartridges.conquistas.xbox import api, conta  # noqa: PLC0415
+
+    estado = SimpleNamespace(desbloqueios=[], titulo="7", falha=None, chamadas=0)
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    monkeypatch.setattr(api, "titulo_local", lambda pfn, bases: None)
+    monkeypatch.setattr(api, "titulo", lambda pfn, bases: estado.titulo)
+
+    def ler(titulo):
+        estado.chamadas += 1
+        if estado.falha is not None:
+            raise estado.falha
+        cat = catalogo.Catalogo(
+            tuple(catalogo.ConquistaInfo(f"XBOX:{n}", "T", "", "", "", False) for n in range(1, 4)), 0, False
+        )
+        catalogo.guardar(f"xbox-{titulo}", cat)
+        return api.Leitura(cat, list(estado.desbloqueios))
+
+    monkeypatch.setattr(api, "ler", ler)
+    return estado
+
+
+def test_varredura_grava_a_fonte_steam(store, make_game, pastas, flush_idle):
+    _goldberg(pastas, "570", [("ACH_A", 100)])
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) == "steam:570"
+
+
+def test_varrer_jogo_mantem_o_cartao_do_jogo_da_steam(store, make_game, pastas, flush_idle, monkeypatch):
+    from cartridges.conquistas import fontes  # noqa: PLC0415
+
+    class Sincrona(_ThreadFalsa):
+        def start(self):
+            self.target(*self.args)
+
+    monkeypatch.setattr(varredura.threading, "Thread", Sincrona)
+    game = _da_steam(store, make_game, 1)
+    VarreduraConquistas().varrer_jogo(game)
+    flush_idle()
+    assert fontes.gravada(game) == fontes.Fonte("steam", "570")
+
+
+def test_sem_fonte_esquece_a_gravada(store, make_game, pastas, flush_idle):
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    historico.registrar(game.game_id, [Desbloqueio("A", 1)], fonte="steam:570")
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) is None
+    assert historico.ler(game.game_id) == {"A": 1}
+
+
+def test_sem_fonte_nao_renova_catalogo_da_steam(store, make_game, pastas, flush_idle, monkeypatch):
+    chamadas = []
+
+    def obter(appid, _exe, rede=True, usar_chave=True):
+        chamadas.append(appid)
+        return catalogo.Renovacao(None)
+
+    monkeypatch.setattr(catalogo, "obter", obter)
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    _rodar([game], flush_idle)
+    assert chamadas == []
+
+
+def test_jogo_do_xbox_entra_e_grava_a_fonte(store, make_game, pastas, flush_idle, xbox):
+    xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) == "xbox:7"
+    assert historico.ler(game.game_id) == {"XBOX:1": 100}
+
+
+def test_fonte_pendente_do_xbox_nunca_e_gravada(store, make_game, pastas, flush_idle, xbox):
+    from cartridges.conquistas.xbox import api  # noqa: PLC0415
+
+    xbox.falha = api.FalhaDeRede()
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) is None
+
+
+def test_primeira_leitura_do_xbox_nao_avisa(store, make_game, pastas, win, flush_idle, xbox):
+    xbox.desbloqueios = [Desbloqueio("XBOX:1", 100), Desbloqueio("XBOX:2", 200)]
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    historico.registrar(game.game_id, [Desbloqueio("ACH_STEAM", 5)])  # já havia histórico, de outra fonte
+    _rodar([game], flush_idle)
+    assert _avisos(win) == []
+
+
+def test_xbox_novas_desde_a_ultima_abertura_avisam(store, make_game, pastas, win, flush_idle, xbox):
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    historico.registrar(game.game_id, [Desbloqueio("XBOX:1", 100)], fonte="xbox:7")
+    xbox.desbloqueios = [Desbloqueio("XBOX:1", 100), Desbloqueio("XBOX:2", 200)]
+    _rodar([game], flush_idle)
+    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+
+
+def test_aviso_do_xbox_soma_os_jogos_num_so(store, make_game, pastas, win, flush_idle, xbox):
+    jogos = [_registrado(store, make_game, n, executable=_AUMID.replace("Jogo", f"J{n}")) for n in (1, 2)]
+    for jogo in jogos:
+        historico.registrar(jogo.game_id, [], fonte="xbox:7")
+    xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
+    _rodar(jogos, flush_idle)
+    assert _avisos(win) == ["2 novas conquistas em 2 jogos"]
+
+
+def test_varredura_de_um_jogo_do_xbox_fica_calada(store, make_game, pastas, win, flush_idle, xbox):
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    historico.registrar(game.game_id, [], fonte="xbox:7")
+    xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
+    instancia = VarreduraConquistas()
+    instancia._worker([game], instancia._generation, False)
+    flush_idle()
+    assert historico.ler(game.game_id) == {"XBOX:1": 100}
+    assert _avisos(win) == []
+
+
+def test_reconectar_nao_avisa_o_que_ja_existia(store, make_game, pastas, win, flush_idle, xbox, monkeypatch):
+    from cartridges.conquistas.xbox import conta  # noqa: PLC0415
+
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    historico.registrar(game.game_id, [Desbloqueio("XBOX:1", 100)], fonte="xbox:7")
+    monkeypatch.setattr(conta, "conectada", lambda: False)
+    _rodar([game], flush_idle)  # desconectado: a fonte é esquecida
+    assert historico.fonte(game.game_id) is None
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    xbox.desbloqueios = [Desbloqueio("XBOX:1", 100), Desbloqueio("XBOX:2", 200)]
+    _rodar([game], flush_idle)
+    assert _avisos(win) == []
+    assert "XBOX:2" in historico.ler(game.game_id)
+
+
+def test_rede_fora_no_xbox_para_os_outros(store, make_game, pastas, flush_idle, xbox):
+    from cartridges.conquistas.xbox import api  # noqa: PLC0415
+
+    xbox.falha = api.FalhaDeRede()
+    jogos = [_registrado(store, make_game, n, executable=_AUMID.replace("Jogo", f"J{n}")) for n in (1, 2)]
+    _rodar(jogos, flush_idle)
+    assert xbox.chamadas == 1
+
+
+def test_rede_fora_no_xbox_poupa_tambem_a_steam(store, make_game, pastas, flush_idle, xbox, monkeypatch):
+    from cartridges.conquistas.xbox import api  # noqa: PLC0415
+
+    chamadas = []
+
+    def obter(appid, _exe, rede=True, usar_chave=True):
+        chamadas.append((appid, rede))
+        return catalogo.Renovacao(None)
+
+    monkeypatch.setattr(catalogo, "obter", obter)
+    xbox.falha = api.FalhaDeRede()
+    _goldberg(pastas, "570", [("ACH_A", 1)])
+    jogos = [
+        _registrado(store, make_game, 1, executable=_AUMID),
+        _registrado(store, make_game, 2, steam_appid="570"),
+    ]
+    _rodar(jogos, flush_idle)
+    assert chamadas == [("570", False)]
+
+
+def test_conta_caida_no_meio_pula_os_outros_xbox(store, make_game, pastas, flush_idle, xbox, monkeypatch):
+    from cartridges.conquistas.xbox import api, conta  # noqa: PLC0415
+
+    estado = {"conectada": True}
+    monkeypatch.setattr(conta, "conectada", lambda: estado["conectada"])
+
+    def ler(_titulo):
+        xbox.chamadas += 1
+        estado["conectada"] = False
+        return None
+
+    monkeypatch.setattr(api, "ler", ler)
+    jogos = [_registrado(store, make_game, n, executable=_AUMID.replace("Jogo", f"J{n}")) for n in (1, 2)]
+    _rodar(jogos, flush_idle)
+    assert xbox.chamadas == 1
+
+
+def test_pacote_sem_xbox_live_nao_vira_fonte(store, make_game, pastas, flush_idle, xbox):
+    xbox.titulo = ""
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) is None
+    assert xbox.chamadas == 0
+
+
+def test_xbox_sem_conquistas_grava_a_fonte(store, make_game, pastas, flush_idle, xbox, monkeypatch):
+    from cartridges.conquistas.xbox import api  # noqa: PLC0415
+
+    monkeypatch.setattr(api, "ler", lambda titulo: api.Leitura(catalogo.Catalogo((), 0, False), []))
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) == "xbox:7"
+
+
+def test_xbox_durante_a_sessao_fica_para_o_vigia(store, make_game, pastas, flush_idle, xbox, monkeypatch):
+    monkeypatch.setattr(sessao, "acompanhando", lambda g: True)
+    xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    _rodar([game], flush_idle)
+    assert historico.ler(game.game_id) is None
+
+
+def test_xbox_de_jogo_excluido_no_meio_nao_grava(store, make_game, pastas, flush_idle, xbox):
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    leitura, falhou = varredura.ler_xbox(game, varredura.Fonte("xbox", ""))
+    assert falhou is False and leitura.fonte.texto == "xbox:7"
+    store.excluir(game)
+    assert VarreduraConquistas()._entregar_xbox(leitura) is False
+    assert historico.ler(game.game_id) is None
+
+
+def test_xbox_desconectado_no_meio_nao_grava(store, make_game, pastas, flush_idle, xbox, monkeypatch):
+    from cartridges.conquistas.xbox import conta  # noqa: PLC0415
+
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    leitura, _ = varredura.ler_xbox(game, varredura.Fonte("xbox", ""))
+    monkeypatch.setattr(conta, "conectada", lambda: False)
+    VarreduraConquistas()._entregar_xbox(leitura)
+    assert historico.ler(game.game_id) is None
+
+
+def test_entregar_xbox_nao_levanta(store, make_game, pastas, xbox, monkeypatch):
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    leitura, _ = varredura.ler_xbox(game, varredura.Fonte("xbox", "7"))
+
+    def estoura(*_args, **_kwargs):
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr(historico, "registrar", estoura)
+    assert VarreduraConquistas()._entregar_xbox(leitura) is False
+
+
+def test_concluir_xbox_nao_levanta_e_zera_a_lista(monkeypatch):
+    instancia = VarreduraConquistas()
+    instancia._novas_xbox = [("Jogo 1", 2)]
+
+    def estoura(_texto):
+        raise RuntimeError("sem janela")
+
+    monkeypatch.setattr(varredura, "_aviso", estoura)
+    assert instancia._concluir_xbox() is False
+    assert instancia._novas_xbox == []
+
+
+def test_ler_xbox_titulo_pendente_sem_xbox_live_e_nada(store, make_game, xbox):
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    xbox.titulo = ""
+    assert varredura.ler_xbox(game, varredura.Fonte("xbox", "")) == (None, False)
+
+
+def test_ler_xbox_sem_rede(store, make_game, xbox):
+    from cartridges.conquistas.xbox import api  # noqa: PLC0415
+
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    xbox.falha = api.FalhaDeRede()
+    assert varredura.ler_xbox(game, varredura.Fonte("xbox", "7")) == (None, True)
+
+
+def test_pagina_aberta_atualiza_quando_a_fonte_muda(store, make_game, pastas, win, flush_idle):
+    _goldberg(pastas, "570", [])
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    chamadas = _janela_com_jogo_aberto(win, game)
+    _rodar([game], flush_idle)
+    assert chamadas == [game]
