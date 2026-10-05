@@ -191,14 +191,20 @@ def _icone(valor: Any) -> str:
     return valor if isinstance(valor, str) and valor.startswith("https://") and codifica(valor) else ""
 
 
+def _numero_finito(valor: Any) -> bool:
+    """Número (não booleano) que cabe num float: um inteiro de 400 dígitos faz
+    ``math.isfinite`` levantar ``OverflowError``."""
+    if isinstance(valor, bool) or not isinstance(valor, (int, float)):
+        return False
+    try:
+        return math.isfinite(valor)
+    except OverflowError:
+        return False
+
+
 def _porcentagem(item: dict) -> Optional[float]:
     valor = _caminho(item, "rarity", "percent")
-    if (
-        isinstance(valor, bool)
-        or not isinstance(valor, (int, float))
-        or not math.isfinite(valor)
-        or not 0 <= valor <= 100
-    ):
+    if not _numero_finito(valor) or not 0 <= valor <= 100:
         return None
     return float(valor)
 
@@ -411,8 +417,7 @@ def _ler_biblioteca() -> tuple[dict[str, str], float]:
     if not isinstance(apps, dict):
         return {}, 0.0
     limpos = {k: v for k, v in apps.items() if isinstance(k, str) and namespace_valido(v)}
-    valido = isinstance(em, (int, float)) and not isinstance(em, bool) and math.isfinite(em)
-    return limpos, float(em) if valido else 0.0
+    return limpos, float(em) if _numero_finito(em) else 0.0
 
 
 def _chamar_biblioteca(params: dict[str, str]) -> Optional[Any]:
