@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from cartridges.conquistas import arquivos
+from cartridges.conquistas import arquivos, historico
 
 
 def kv_bytes(itens: dict) -> bytes:
@@ -48,6 +48,14 @@ def criar(caminho: Path, texto: str = "x") -> Path:
     caminho.parent.mkdir(parents=True, exist_ok=True)
     caminho.write_text(texto, encoding="utf-8")
     return caminho
+
+
+def com_fonte(game, texto: str) -> None:
+    """Grava no histórico de ``game`` a fonte das conquistas (``"steam:570"``).
+
+    Sem fonte gravada o cartão fica oculto; é o que a varredura faz de verdade.
+    """
+    historico.registrar(game.game_id, [], fonte=texto)
 
 
 @pytest.fixture
