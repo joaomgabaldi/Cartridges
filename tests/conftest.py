@@ -299,6 +299,7 @@ def _install_shared() -> types.ModuleType:
     shared.fitas_dir = placeholder / "fitas"
     shared.conquistas_dir = placeholder / "conquistas"
     shared.conquistas_cache_dir = placeholder / "cache" / "conquistas"
+    shared.contas_dir = placeholder / "contas"
     shared.fitas_arquivo = placeholder / "fitas.json"
     shared.tuya_conta_arquivo = placeholder / "tuya_conta.json"
     shared.log_dir = placeholder / "logs"
@@ -352,6 +353,7 @@ def app_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr(
         shared, "conquistas_cache_dir", tmp_path / "cache" / "conquistas", raising=False
     )
+    monkeypatch.setattr(shared, "contas_dir", tmp_path / "contas", raising=False)
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json", raising=False)
     monkeypatch.setattr(
         shared, "tuya_conta_arquivo", tmp_path / "tuya_conta.json", raising=False

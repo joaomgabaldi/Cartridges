@@ -33,42 +33,12 @@ numa conta diferente: lá, `carregar` devolve ``None`` e o assistente pede os
 códigos de novo.
 """
 
-import ctypes
 import json
 import logging
-from ctypes import wintypes
-from typing import Any, NamedTuple, Optional
+from typing import NamedTuple, Optional
 
 from cartridges import shared
-
-_crypt32 = ctypes.windll.crypt32  # type: ignore
-_kernel32 = ctypes.windll.kernel32  # type: ignore
-
-
-class _DATA_BLOB(ctypes.Structure):
-    _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
-
-
-# As duas funções têm a mesma forma no que interessa aqui: o segundo, terceiro,
-# quarto e quinto parâmetros só recebem `None` nas chamadas deste módulo (sem
-# descrição, sem entropia extra, sem prompt), então uma assinatura serve às
-# duas — a diferença real entre elas (o `ppszDataDescr` de saída da
-# `CryptUnprotectData`) nunca é usada.
-_ARGTYPES = [
-    ctypes.POINTER(_DATA_BLOB),
-    wintypes.LPCWSTR,
-    ctypes.POINTER(_DATA_BLOB),
-    wintypes.LPVOID,
-    wintypes.LPVOID,
-    wintypes.DWORD,
-    ctypes.POINTER(_DATA_BLOB),
-]
-_crypt32.CryptProtectData.argtypes = _ARGTYPES
-_crypt32.CryptProtectData.restype = wintypes.BOOL
-_crypt32.CryptUnprotectData.argtypes = _ARGTYPES
-_crypt32.CryptUnprotectData.restype = wintypes.BOOL
-_kernel32.LocalFree.argtypes = [wintypes.LPVOID]
-_kernel32.LocalFree.restype = wintypes.LPVOID
+from cartridges.utils import dpapi
 
 
 class Conta(NamedTuple):
@@ -79,29 +49,6 @@ class Conta(NamedTuple):
     regiao: str
 
 
-def _blob(dados: bytes) -> tuple[_DATA_BLOB, Any]:
-    """Um DATA_BLOB apontando para ``dados``, com o buffer que o sustenta.
-
-    O DATA_BLOB só guarda o ponteiro, não o dono da memória — sem uma
-    referência Python viva ao buffer enquanto a chamada ao DPAPI está em
-    curso, o coletor de lixo pode liberá-lo antes da leitura.
-    """
-    buffer = ctypes.create_string_buffer(dados, len(dados))
-    return _DATA_BLOB(len(dados), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_char))), buffer
-
-
-def _chamar(funcao: Any, dados: bytes) -> Optional[bytes]:
-    """Roda ``CryptProtectData`` ou ``CryptUnprotectData`` sobre ``dados``."""
-    entrada, _buffer = _blob(dados)
-    saida = _DATA_BLOB()
-    if not funcao(ctypes.byref(entrada), None, None, None, None, 0, ctypes.byref(saida)):
-        return None
-    try:
-        return ctypes.string_at(saida.pbData, saida.cbData)
-    finally:
-        _kernel32.LocalFree(saida.pbData)
-
-
 def salvar(conta: Conta) -> None:
     """Grava as credenciais, criptografadas. Nunca levanta.
 
@@ -109,9 +56,7 @@ def salvar(conta: Conta) -> None:
     energia no meio não pode deixar um arquivo truncado que nem o DPAPI nem o
     JSON leem de volta, apagando a conta salva sem aviso nenhum.
     """
-    protegido = _chamar(
-        _crypt32.CryptProtectData, json.dumps(conta._asdict()).encode("utf-8")
-    )
+    protegido = dpapi.proteger(json.dumps(conta._asdict()).encode("utf-8"))
     if protegido is None:
         logging.warning("Não foi possível criptografar as credenciais da Tuya")
         return
@@ -141,7 +86,7 @@ def carregar() -> Optional[Conta]:
         logging.warning("Conta da Tuya ilegível: %s", erro)
         return None
 
-    dados = _chamar(_crypt32.CryptUnprotectData, protegido)
+    dados = dpapi.abrir(protegido)
     if dados is None:
         return None
     try:
