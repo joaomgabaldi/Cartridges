@@ -463,7 +463,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             self._janela_epic = janela
             janela.mostrar(self)
         except Exception as erro:  # pylint: disable=broad-exception-caught
-            # O handler de GTK não levanta.
+            # O handler de GTK não levanta. Sem soltar a janela, "Entrar" ficaria morto.
+            self._janela_epic = None
             logging.warning(
                 "Falha ao abrir o login da conta Epic: %s", type(erro).__name__
             )

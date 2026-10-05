@@ -118,6 +118,16 @@ def test_raridade_estranha_fica_sem_porcentagem(monkeypatch, rarity):
     assert leitura.catalogo.sem_raridade
 
 
+@pytest.mark.parametrize("enorme", [10**400, -(10**400)], ids=["positivo", "negativo"])
+def test_porcentagem_com_inteiro_enorme_fica_sem_porcentagem(monkeypatch, enorme):
+    """`math.isfinite` levanta OverflowError num inteiro de 400 dígitos."""
+    rarity = {"currentCategory": "Rare", "currentPercentage": enorme}
+    rede_falsa(monkeypatch, api, {_ACH: [_pagina([_conquista("1", rarity=rarity)])]}, nome="_requisitar")
+    leitura = api.ler("1")
+    assert leitura is not None and len(leitura.catalogo.conquistas) == 1
+    assert leitura.catalogo.conquistas[0].porcentagem is None
+
+
 def test_cabecalhos(monkeypatch):
     chamadas = rede_falsa(monkeypatch, api, {_ACH: [_pagina([])]}, nome="_requisitar")
     api.ler("123")
@@ -446,6 +456,14 @@ def test_cache_de_titulos_ilegivel_e_ignorado():
                                       '{"P": {"titulo": null, "em": "x"}}', '{"P": {"titulo": null, "em": NaN}}'])
 def test_cache_de_titulos_com_formato_errado_e_ignorado(conteudo):
     shared.conquistas_cache_dir.mkdir(parents=True)
+    (shared.conquistas_cache_dir / "xbox-titulos.json").write_text(conteudo, encoding="utf-8")
+    assert api.titulo_local("P", []) is None
+
+
+def test_cache_de_titulos_com_instante_enorme_e_entrada_invalida():
+    """O `em` com 400 dígitos faz `math.isfinite` levantar OverflowError: "não se sabe"."""
+    shared.conquistas_cache_dir.mkdir(parents=True)
+    conteudo = '{"P": {"titulo": null, "em": ' + "9" * 400 + "}}"
     (shared.conquistas_cache_dir / "xbox-titulos.json").write_text(conteudo, encoding="utf-8")
     assert api.titulo_local("P", []) is None
 

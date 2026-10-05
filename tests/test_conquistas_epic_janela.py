@@ -74,19 +74,52 @@ def test_outra_falha_fica_aberta(abertas, monkeypatch):
     assert j.campo.get_text() == _COD and j.botao_conectar.get_sensitive()
 
 
-def test_resultado_depois_de_fechada_e_descartado(abertas, monkeypatch):
+def _fechada_com_troca_pendente(abertas, conectados):
+    """Janela fechada (Cancelar, Esc ou Preferências) com a troca do código ainda na rede."""
     pendente = []
-    monkeypatch.setattr(conta, "conectar", lambda _c: None)
-    conectados = []
     j = janela.JanelaDeLogin(
         lambda: conectados.append(1), abrir=abertas.append, em_thread=lambda t, e: pendente.append((t, e))
     )
     j.campo.set_text(_COD)
     j.botao_conectar.emit("clicked")
     j.emit("closed")
-    trabalho, entregar = pendente[0]
+    return j, pendente[0]
+
+
+def test_resultado_depois_de_fechada_e_descartado(abertas, monkeypatch):
+    def quebra(_codigo):
+        raise OSError("rede")
+
+    monkeypatch.setattr(conta, "conectar", quebra)
+    conectados = []
+    j, (trabalho, entregar) = _fechada_com_troca_pendente(abertas, conectados)
     entregar(trabalho())
-    assert conectados == []
+    assert conectados == [] and not j.erro.get_visible()
+
+
+def test_conta_conectada_depois_de_fechada_ainda_avisa(abertas, monkeypatch):
+    """A conta já conectou: a leitura dos jogos da Epic tem de acontecer mesmo sem a janela."""
+    monkeypatch.setattr(conta, "conectar", lambda _c: None)
+    conectados = []
+    _j, (trabalho, entregar) = _fechada_com_troca_pendente(abertas, conectados)
+    entregar(trabalho())
+    assert conectados == [1]
+
+
+def test_aviso_de_conta_conectada_que_levanta_nao_escapa(abertas, monkeypatch, caplog):
+    monkeypatch.setattr(conta, "conectar", lambda _c: None)
+
+    def quebra():
+        raise RuntimeError("falha no ouvinte")
+
+    pendente = []
+    j = janela.JanelaDeLogin(quebra, abrir=abertas.append, em_thread=lambda t, e: pendente.append((t, e)))
+    j.campo.set_text(_COD)
+    j.botao_conectar.emit("clicked")
+    j.emit("closed")
+    trabalho, entregar = pendente[0]
+    entregar(trabalho())  # não levanta
+    assert "Falha" in caplog.text
 
 
 def test_texto_colado_nao_vai_ao_log(abertas, monkeypatch, caplog):

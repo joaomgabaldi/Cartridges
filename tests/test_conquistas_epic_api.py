@@ -58,6 +58,7 @@ def rede(monkeypatch):
     monkeypatch.setattr(conta, "account_id", lambda: "c" * 32)
     monkeypatch.setattr(conta, "autorizacao", lambda forcar=False: "A2" if forcar else "A1")
     monkeypatch.setattr(api, "_limite", lambda: _SemLimite())
+    monkeypatch.setattr(api, "_acesso_ja_renovado", None)
 
     def requisitar(metodo, url, **kwargs):
         estado["pedidos"].append((metodo, url, kwargs))
@@ -177,6 +178,31 @@ def test_conta_nao_reconhecida_duas_vezes_e_none_sem_desconectar(rede, monkeypat
     assert recusas == []
 
 
+def test_loja_que_nao_reconhece_a_conta_forca_a_renovacao_uma_vez_por_acesso(rede, monkeypatch):
+    """O vigia consulta a cada 15 s: sem este teto seriam ~240 renovações por hora."""
+    estado = {"acesso": "A1", "forcadas": 0}
+
+    def autorizacao(forcar=False):
+        if forcar:
+            estado["forcadas"] += 1
+            estado["acesso"] = f"F{estado['forcadas']}"
+        return estado["acesso"]
+
+    monkeypatch.setattr(conta, "autorizacao", autorizacao)
+    sem = _dado("progresso-sem-reconhecer.json")
+    rede["respostas"] = [Resposta(200, _catalogo(_conquista())), Resposta(200, sem), Resposta(200, sem), Resposta(200, sem)]
+    assert api.desbloqueadas("ns1") is None
+    assert api.desbloqueadas("ns1") is None
+    assert estado["forcadas"] == 1
+    assert len(rede["pedidos"]) == 4
+
+    # Um acesso novo (o anterior venceu) volta a poder forçar uma renovação.
+    estado["acesso"] = "A9"
+    rede["respostas"] = [Resposta(200, sem), Resposta(200, sem)]
+    assert api.desbloqueadas("ns1") is None
+    assert estado["forcadas"] == 2
+
+
 @pytest.mark.parametrize("resposta", [Resposta(429), Resposta(503), requests.ConnectionError("x")])
 def test_falhas_de_rede(rede, resposta):
     rede["respostas"] = [resposta]
@@ -225,6 +251,17 @@ def test_desbloqueadas_usa_o_produto_guardado(rede):
     assert [d.nome for d in api.desbloqueadas("ns1")] == ["EPIC:ACH_1"]
     assert len(rede["pedidos"]) == 3
     assert json.loads(rede["pedidos"][2][2]["params"]["variables"])["productId"] == "p9"
+
+
+@pytest.mark.parametrize("ns", ["produtos", "biblioteca"])
+def test_arquivos_auxiliares_nao_colidem_com_o_catalogo_de_um_namespace_assim(rede, ns):
+    """O `.` está fora de `[A-Za-z0-9_-]`: nenhum namespace chega a `epic.produtos.json`."""
+    rede["respostas"] = [Resposta(200, _catalogo(_conquista(), produto="p7")), Resposta(200, _progresso())]
+    assert api.ler(ns) is not None
+    pasta = shared.conquistas_cache_dir
+    assert (pasta / f"epic-{ns}.json").is_file()
+    assert json.loads((pasta / "epic.produtos.json").read_text(encoding="utf-8")) == {ns: "p7"}
+    assert api._produto_guardado(ns) == "p7" and catalogo.em_cache(f"epic-{ns}") is not None
 
 
 def test_desbloqueadas_sem_produto_busca_o_catalogo(rede):
@@ -287,7 +324,7 @@ def test_biblioteca_recente_nao_busca_de_novo(rede):
 
 
 def test_biblioteca_velha_busca_de_novo(rede):
-    destino = shared.conquistas_cache_dir / "epic-biblioteca.json"
+    destino = shared.conquistas_cache_dir / "epic.biblioteca.json"
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_text(json.dumps({"apps": {"sugar": "abc123"}, "em": time.time() - 2 * 86400}), encoding="utf-8")
     rede["respostas"] = [Resposta(200, _biblioteca(("Sugar", "abc123"), ("Novo", "n1")))]
@@ -297,7 +334,7 @@ def test_biblioteca_velha_busca_de_novo(rede):
 
 
 def test_biblioteca_com_data_enorme_e_velha(rede):
-    destino = shared.conquistas_cache_dir / "epic-biblioteca.json"
+    destino = shared.conquistas_cache_dir / "epic.biblioteca.json"
     destino.parent.mkdir(parents=True, exist_ok=True)
     # O texto direto: um inteiro de 400 dígitos continua inteiro e não cabe num float.
     destino.write_text('{"apps": {"sugar": "abc123"}, "em": ' + "9" * 400 + "}", encoding="utf-8")
@@ -308,7 +345,7 @@ def test_biblioteca_com_data_enorme_e_velha(rede):
 
 
 def test_biblioteca_ilegivel_e_vazia(rede):
-    destino = shared.conquistas_cache_dir / "epic-biblioteca.json"
+    destino = shared.conquistas_cache_dir / "epic.biblioteca.json"
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_text("{ruim", encoding="utf-8")
     assert api.namespace_local_do_app("Sugar") is None
@@ -317,7 +354,7 @@ def test_biblioteca_ilegivel_e_vazia(rede):
 def test_biblioteca_fora_do_formato_nao_grava(rede):
     rede["respostas"] = [Resposta(200, {"inesperado": True})]
     assert api.namespace_do_app("Sugar") is None
-    assert not (shared.conquistas_cache_dir / "epic-biblioteca.json").exists()
+    assert not (shared.conquistas_cache_dir / "epic.biblioteca.json").exists()
 
 
 def test_biblioteca_real_da_prova(rede):

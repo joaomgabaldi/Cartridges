@@ -18,7 +18,6 @@ cabeçalho ``Authorization`` vai para o log, e a mensagem de uma exceção do
 
 import json
 import logging
-import math
 import re
 import threading
 import time
@@ -34,7 +33,7 @@ from cartridges.conquistas import arquivos, catalogo
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.contas import Leitura
 from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.conquistas.saneamento import codifica, limpo, segundos_iso
+from cartridges.conquistas.saneamento import codifica, limpo, numero_finito, segundos_iso
 from cartridges.conquistas.xbox import conta
 from cartridges.utils import download
 from cartridges.utils.ler_json import ler_json
@@ -237,13 +236,7 @@ def titulo_local(pfn: Optional[str], bases: list[Path]) -> Optional[str]:
     if _titulo_valido(titulo):
         return titulo
     em = entrada.get("em")
-    if (
-        titulo is None
-        and isinstance(em, (int, float))
-        and not isinstance(em, bool)
-        and math.isfinite(em)
-        and 0 <= time.time() - em < _SEM_XBOX_LIVE_VALE
-    ):
+    if titulo is None and numero_finito(em) and 0 <= time.time() - em < _SEM_XBOX_LIVE_VALE:
         return ""
     return None
 
@@ -303,12 +296,7 @@ def _porcentagem(item: dict) -> Optional[float]:
         return None
     raridade = item.get("rarity")
     valor = raridade.get("currentPercentage") if isinstance(raridade, dict) else None
-    if (
-        isinstance(valor, bool)
-        or not isinstance(valor, (int, float))
-        or not math.isfinite(valor)
-        or not 0 <= valor <= 100
-    ):
+    if not numero_finito(valor) or not 0 <= valor <= 100:
         return None
     return float(valor)
 
