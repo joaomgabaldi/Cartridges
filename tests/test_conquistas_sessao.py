@@ -345,3 +345,38 @@ def test_fonte_steam_gravada_segue_o_caminho_dos_arquivos(make_game, xbox):
 def test_so_pulso_sem_jogo_ou_sem_fonte(make_game):
     assert not sessao._so_pulso(None)
     assert not sessao._so_pulso(make_game())
+
+
+@pytest.fixture
+def epic(monkeypatch):
+    from cartridges.conquistas.epic import conta, vigia as vigia_epic  # noqa: PLC0415
+
+    _VigiaXboxFalso.criados = []
+    monkeypatch.setattr(vigia_epic, "Vigia", _VigiaXboxFalso)
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    return conta
+
+
+def test_jogo_da_epic_usa_o_vigia_da_epic_e_so_pulsa(make_game, epic, isolar):
+    mostrados, pulsos = isolar
+    game = make_game(executable='start "" "com.epicgames.launcher://apps/Sugar"', steam_appid="570")
+    historico.registrar(game.game_id, [], fonte="epic:ns1")
+    sessao.comecar(game)
+    assert _VigiaFalso.criados == []  # nada do vigia de arquivos
+    (vigia_,) = _VigiaXboxFalso.criados
+    assert vigia_.game is game and vigia_.ativo and sessao.acompanhando(game)
+    assert sessao._so_pulso(game)
+    vigia_.avisar([Desbloqueada("A", _info(rara=True), False)])
+    assert mostrados == []  # o overlay da Epic já mostra o aviso
+    assert pulsos == ["rara"]
+    sessao.parar()
+    assert not vigia_.ativo
+
+
+def test_jogo_da_epic_sem_conta_nao_e_acompanhado(make_game, epic, monkeypatch):
+    monkeypatch.setattr(epic, "conectada", lambda: False)
+    game = make_game(executable='start "" "com.epicgames.launcher://apps/Sugar"')
+    historico.registrar(game.game_id, [], fonte="epic:ns1")
+    sessao.comecar(game)
+    assert sessao._vigia is None
+    assert _VigiaXboxFalso.criados == [] and _VigiaFalso.criados == []

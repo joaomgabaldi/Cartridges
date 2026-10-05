@@ -1050,3 +1050,108 @@ def test_executavel_editado_durante_a_leitura_da_conta_nao_grava(
     assert historico.ler(game.game_id) is None
     assert historico.fonte(game.game_id) is None
     assert _avisos(win) == []
+
+
+# -- A Epic -----------------------------------------------------------------------
+
+_URL_EPIC = 'start "" "com.epicgames.launcher://apps/ns1%3Aitem%3ASugar?action=launch&silent=true"'
+
+
+@pytest.fixture
+def epic(monkeypatch):
+    """Conta Epic conectada e uma API falsa que devolve o que o teste puser em `estado`."""
+    from cartridges.conquistas.epic import api, conta  # noqa: PLC0415
+
+    estado = SimpleNamespace(desbloqueios=[], falha=None, chamadas=0, conta="c1", biblioteca="ns9")
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    monkeypatch.setattr(conta, "account_id", lambda: estado.conta)
+    monkeypatch.setattr(api, "namespace_local_do_app", lambda app: None)
+    monkeypatch.setattr(api, "namespace_do_app", lambda app: estado.biblioteca)
+
+    def ler(ns):
+        estado.chamadas += 1
+        if estado.falha is not None:
+            raise estado.falha
+        cat = catalogo.Catalogo(
+            tuple(catalogo.ConquistaInfo(f"EPIC:{n}", "T", "", "", "", False) for n in range(1, 4)), 0, False
+        )
+        catalogo.guardar(f"epic-{ns}", cat)
+        return api.Leitura(cat, list(estado.desbloqueios))
+
+    monkeypatch.setattr(api, "ler", ler)
+    return estado
+
+
+def test_jogo_da_epic_entra_e_grava_fonte_e_conta(store, make_game, pastas, flush_idle, epic):
+    epic.desbloqueios = [Desbloqueio("EPIC:1", 100)]
+    game = _registrado(store, make_game, 1, executable=_URL_EPIC)
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) == "epic:ns1"
+    assert historico.conta(game.game_id) == "c1"
+    assert historico.ler(game.game_id) == {"EPIC:1": 100}
+
+
+def test_primeira_leitura_da_epic_nao_avisa(store, make_game, pastas, win, flush_idle, epic):
+    epic.desbloqueios = [Desbloqueio("EPIC:1", 100), Desbloqueio("EPIC:2", 200)]
+    game = _registrado(store, make_game, 1, executable=_URL_EPIC)
+    _rodar([game], flush_idle)
+    assert _avisos(win) == []
+
+
+def test_epic_novas_desde_a_ultima_abertura_avisam(store, make_game, pastas, win, flush_idle, epic):
+    game = _registrado(store, make_game, 1, executable=_URL_EPIC)
+    historico.registrar(game.game_id, [Desbloqueio("EPIC:1", 100)], fonte="epic:ns1", conta="c1")
+    epic.desbloqueios = [Desbloqueio("EPIC:1", 100), Desbloqueio("EPIC:2", 200)]
+    _rodar([game], flush_idle)
+    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+
+
+def test_aviso_soma_xbox_e_epic_num_so(store, make_game, pastas, win, flush_idle, xbox, epic):
+    jogo_x = _registrado(store, make_game, 1, executable=_AUMID)
+    jogo_e = _registrado(store, make_game, 2, executable=_URL_EPIC)
+    historico.registrar(jogo_x.game_id, [], fonte="xbox:7", conta="111")
+    historico.registrar(jogo_e.game_id, [], fonte="epic:ns1", conta="c1")
+    xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
+    epic.desbloqueios = [Desbloqueio("EPIC:1", 100)]
+    _rodar([jogo_x, jogo_e], flush_idle)
+    assert _avisos(win) == ["2 novas conquistas em 2 jogos"]
+
+
+def test_pendente_da_epic_resolvido_na_rede(store, make_game, pastas, flush_idle, epic):
+    game = _registrado(store, make_game, 1, executable='start "" "com.epicgames.launcher://apps/Sugar?action=launch"')
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) == "epic:ns9"
+
+
+def test_pendente_fora_da_biblioteca_fica_sem_fonte(store, make_game, pastas, flush_idle, epic):
+    epic.biblioteca = ""
+    game = _registrado(store, make_game, 1, executable='start "" "com.epicgames.launcher://apps/Sugar?action=launch"')
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) is None and epic.chamadas == 0
+
+
+def test_rede_fora_na_epic_para_os_outros(store, make_game, pastas, flush_idle, epic):
+    from cartridges.conquistas.epic import api  # noqa: PLC0415
+
+    jogos = [_registrado(store, make_game, n, executable=_URL_EPIC) for n in (1, 2)]
+    epic.falha = api.FalhaDeRede()
+    _rodar(jogos, flush_idle)
+    assert epic.chamadas == 1
+
+
+def test_epic_sem_conta_nao_vai_a_rede_e_fica_oculta(store, make_game, pastas, flush_idle, epic, monkeypatch):
+    from cartridges.conquistas.epic import conta  # noqa: PLC0415
+
+    monkeypatch.setattr(conta, "conectada", lambda: False)
+    game = _registrado(store, make_game, 1, executable=_URL_EPIC, steam_appid="570")
+    _rodar([game], flush_idle)
+    assert epic.chamadas == 0 and historico.fonte(game.game_id) is None
+
+
+def test_outra_conta_epic_e_primeira_leitura(store, make_game, pastas, win, flush_idle, epic):
+    game = _registrado(store, make_game, 1, executable=_URL_EPIC)
+    historico.registrar(game.game_id, [Desbloqueio("EPIC:1", 100)], fonte="epic:ns1", conta="c1")
+    epic.conta = "c2"
+    epic.desbloqueios = [Desbloqueio("EPIC:1", 100), Desbloqueio("EPIC:2", 200)]
+    _rodar([game], flush_idle)
+    assert _avisos(win) == [] and historico.conta(game.game_id) == "c2"
