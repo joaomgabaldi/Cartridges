@@ -259,6 +259,19 @@ def test_aplicar_pendente_troca_tudo_e_cria_as_pendencias(tmp_path, monkeypatch)
     assert restauracao.ids() == frozenset({"shortcuts_1"})
 
 
+def test_restaurar_mantem_a_conta_microsoft_deste_pc(tmp_path, monkeypatch):
+    """A pasta `contas` é desta máquina e deste usuário do Windows (o DPAPI não
+    abre em outro PC): restaurar um backup não a leva nem a apaga."""
+    _preparar_restauracao(tmp_path, monkeypatch)
+    shared.contas_dir.mkdir()
+    (shared.contas_dir / "microsoft.json").write_text('{"gamertag": "Jogador"}', encoding="utf-8")
+
+    assert backup.aplicar_pendente() is True
+
+    assert (shared.contas_dir / "microsoft.json").read_text("utf-8") == '{"gamertag": "Jogador"}'
+    assert sorted(p.name for p in shared.games_dir.iterdir()) == ["imported_1.json", "shortcuts_1.json"]
+
+
 def test_aplicar_pendente_que_falha_devolve_tudo(tmp_path, monkeypatch):
     aplicadas = _preparar_restauracao(tmp_path, monkeypatch)
 
