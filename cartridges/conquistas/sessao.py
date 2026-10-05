@@ -17,12 +17,13 @@ from typing import Any, Optional
 
 from cartridges import conquista_aviso, shared
 from cartridges.conquistas import arquivos, contas, fontes
+from cartridges.conquistas.epic import vigia as vigia_epic
 from cartridges.conquistas.vigia import Desbloqueada, Vigia, acompanha
 from cartridges.conquistas.xbox import vigia as vigia_xbox
 from cartridges.utils import session_fita
 
 # O módulo do vigia de cada loja com conta. `Vigia` é procurado na hora (os testes o trocam).
-_VIGIAS = {"xbox": vigia_xbox}
+_VIGIAS = {"xbox": vigia_xbox, "epic": vigia_epic}
 
 # Os vigias (arquivos e de cada loja com conta) têm o mesmo contrato: `game`, `ativo`, `iniciar` e `parar`.
 _vigia: Optional[Any] = None

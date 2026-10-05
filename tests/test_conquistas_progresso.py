@@ -87,3 +87,15 @@ def test_fonte_gravada_manda_mais_que_o_appid_atual(make_game):
     game = make_game(steam_appid="999")
     com_fonte(game, "steam:570")
     assert progresso.do_jogo(game) is not None
+
+
+def test_cartao_da_epic_some_sem_conta(make_game, monkeypatch):
+    from cartridges.conquistas.epic import conta as conta_epic  # noqa: PLC0415
+
+    game = make_game()
+    catalogo.guardar("epic-ns1", Catalogo((ConquistaInfo("EPIC:1", "T", "", "", "", False),), 0, False))
+    historico.registrar(game.game_id, [Desbloqueio("EPIC:1", 5)], fonte="epic:ns1", conta="c1")
+    monkeypatch.setattr(conta_epic, "conectada", lambda: True)
+    assert progresso.do_jogo(game).feitas == 1
+    monkeypatch.setattr(conta_epic, "conectada", lambda: False)
+    assert progresso.do_jogo(game) is None
