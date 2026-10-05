@@ -1,0 +1,335 @@
+{
+  "achievements": [
+    {
+      "id": "16",
+      "serviceConfigId": "00000000-0000-0000-0000-0000776e74db",
+      "name": "Foco Total",
+      "titleAssociations": [
+        {
+          "name": "Call of Duty®: Modern Warfare® III",
+          "id": 2003727579
+        }
+      ],
+      "progressState": "Achieved",
+      "progression": {
+        "requirements": [],
+        "timeUnlocked": "2026-08-06T01:15:55.7870000Z"
+      },
+      "mediaAssets": [
+        {
+          "name": "67109c9f-0d4a-4f34-a5b3-533b2b9b7d6d",
+          "type": "Icon",
+          "url": "https://images-eds-ssl.xboxlive.com/image?url=27S1DHqE.cHkmFg4nspsdzSGY58G2FRADLNxEukYRlC99FGNSu4VfMGrm8BfPR67J1cyP3iSw_l0xDZWOQaMU2JvZqMty0gsZFcvtfp8frMcXu0ALrUBJFcMWHtGe_Jcs6Twhkg5hEz871Meizk0fQ--"
+        }
+      ],
+      "platforms": [
+        "XboxOne"
+      ],
+      "isSecret": false,
+      "description": "Personalize seu armamento em todas as Missões de Combate Aberto.",
+      "lockedDescription": "Personalize seu armamento em todas as Missões de Combate Aberto.",
+      "productId": "00000000-0000-0000-0000-0000776e74db",
+      "achievementType": "Persistent",
+      "participationType": "Individual",
+      "timeWindow": null,
+      "rewards": [
+        {
+          "name": null,
+          "description": null,
+          "value": "15",
+          "type": "Gamerscore",
+          "mediaAsset": null,
+          "valueType": "Int"
+        }
+      ],
+      "estimatedTime": "00:00:00",
+      "deeplink": "",
+      "isRevoked": false,
+      "rarity": {
+        "currentCategory": "Common",
+        "currentPercentage": 16.05
+      }
+    },
+    {
+      "id": "20",
+      "serviceConfigId": "00000000-0000-0000-0000-0000776e74db",
+      "name": "Marcação Cerrada",
+      "titleAssociations": [
+        {
+          "name": "Call of Duty®: Modern Warfare® III",
+          "id": 2003727579
+        }
+      ],
+      "progressState": "Achieved",
+      "progression": {
+        "requirements": [],
+        "timeUnlocked": "2026-07-30T02:42:21.1930000Z"
+      },
+      "mediaAssets": [
+        {
+          "name": "177f9440-abf0-4ef0-a7cd-8b14ccc964ec",
+          "type": "Icon",
+          "url": "https://images-eds-ssl.xboxlive.com/image?url=27S1DHqE.cHkmFg4nspsd.P6HP.biVaN9EsBkoevMCaI3y72JB_dLnG.94GswUnYJJ0wmI2AfjmHBqrvmk5sibMwYxl35gpnDRioxBLokAuFhL2h4fCisR0nr7hNYvKS"
+        }
+      ],
+      "platforms": [
+        "XboxOne"
+      ],
+      "isSecret": false,
+      "description": "Use a luneta de observação para marcar 60 inimigos ou itens em Missões de Combate Aberto.",
+      "lockedDescription": "Use a luneta de observação para marcar 60 inimigos ou itens em Missões de Combate Aberto.",
+      "productId": "00000000-0000-0000-0000-0000776e74db",
+      "achievementType": "Persistent",
+      "participationType": "Individual",
+      "timeWindow": null,
+      "rewards": [
+        {
+          "name": null,
+          "description": null,
+          "value": "15",
+          "type": "Gamerscore",
+          "mediaAsset": null,
+          "valueType": "Int"
+        }
+      ],
+      "estimatedTime": "00:00:00",
+      "deeplink": "",
+      "isRevoked": false,
+      "rarity": {
+        "currentCategory": "Rare",
+        "currentPercentage": 3.84
+      }
+    },
+    {
+      "id": "29",
+      "serviceConfigId": "00000000-0000-0000-0000-0000776e74db",
+      "name": "Corredor da Morte",
+      "titleAssociations": [
+        {
+          "name": "Call of Duty®: Modern Warfare® III",
+          "id": 2003727579
+        }
+      ],
+      "progressState": "Achieved",
+      "progression": {
+        "requirements": [],
+        "timeUnlocked": "2026-01-01T03:16:03.8030000Z"
+      },
+      "mediaAssets": [
+        {
+          "name": "3fd0db66-125d-466c-a617-cba0bd8755ac",
+          "type": "Icon",
+          "url": "https://images-eds-ssl.xboxlive.com/image?url=27S1DHqE.cHkmFg4nspsdxgj61tTBMGs_D0MzKzYpViY.KXHT1AzaakzzZ4WiPqeBkcEykIhhpyJmsDbS3PjsH9H9ai3T_UY3b6VQRIboRzcpSEEn8Re7wGsiNNJlr0w"
+        }
+      ],
+      "platforms": [
+        "XboxOne"
+      ],
+      "isSecret": false,
+      "description": "Elimine 12 inimigos enquanto desce pelo cabo em 'Operação 627'.",
+      "lockedDescription": "Elimine 12 inimigos enquanto desce pelo cabo em 'Operação 627'.",
+      "productId": "00000000-0000-0000-0000-0000776e74db",
+      "achievementType": "Persistent",
+      "participationType": "Individual",
+      "timeWindow": null,
+      "rewards": [
+        {
+          "name": null,
+          "description": null,
+          "value": "15",
+          "type": "Gamerscore",
+          "mediaAsset": null,
+          "valueType": "Int"
+        }
+      ],
+      "estimatedTime": "00:00:00",
+      "deeplink": "",
+      "isRevoked": false,
+      "rarity": {
+        "currentCategory": "Common",
+        "currentPercentage": 24.89
+      }
+    },
+    {
+      "id": "15",
+      "serviceConfigId": "00000000-0000-0000-0000-0000776e74db",
+      "name": "Nunca é Demais",
+      "titleAssociations": [
+        {
+          "name": "Call of Duty®: Modern Warfare® III",
+          "id": 2003727579
+        }
+      ],
+      "progressState": "InProgress",
+      "progression": {
+        "requirements": [
+          {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "current": "33",
+            "target": "100",
+            "operationType": "Sum",
+            "valueType": "Integer",
+            "ruleParticipationType": "Individual"
+          }
+        ],
+        "timeUnlocked": "0001-01-01T00:00:00.0000000Z"
+      },
+      "mediaAssets": [
+        {
+          "name": "26f462e1-b527-4a9e-9e4a-15e42d4aaeab",
+          "type": "Icon",
+          "url": "https://images-eds-ssl.xboxlive.com/image?url=27S1DHqE.cHkmFg4nspsd2PbZplLsQHDU3T8RkpLCimtJqpeJhlfdndnO_aB5JkFAD8Yx.ySRJA1qVZmgsACqB875eVVk2vyhMoJ_h73eLlWa4M4c0RP4nvxjSTU7brOoZtvDQBbFOxEpCT42dnjyw--"
+        }
+      ],
+      "platforms": [
+        "XboxOne"
+      ],
+      "isSecret": false,
+      "description": "Encontre e use todos os armamentos em Missões de Combate Aberto.",
+      "lockedDescription": "Encontre e use todos os armamentos em Missões de Combate Aberto.",
+      "productId": "00000000-0000-0000-0000-0000776e74db",
+      "achievementType": "Persistent",
+      "participationType": "Individual",
+      "timeWindow": null,
+      "rewards": [
+        {
+          "name": null,
+          "description": null,
+          "value": "30",
+          "type": "Gamerscore",
+          "mediaAsset": null,
+          "valueType": "Int"
+        }
+      ],
+      "estimatedTime": "00:00:00",
+      "deeplink": "",
+      "isRevoked": false,
+      "rarity": {
+        "currentCategory": "Rare",
+        "currentPercentage": 0.51
+      }
+    },
+    {
+      "id": "8",
+      "serviceConfigId": "00000000-0000-0000-0000-0000776e74db",
+      "name": "Quem é Um Bom Garoto?",
+      "titleAssociations": [
+        {
+          "name": "Call of Duty®: Modern Warfare® III",
+          "id": 2003727579
+        }
+      ],
+      "progressState": "NotStarted",
+      "progression": {
+        "requirements": [
+          {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "current": "0",
+            "target": "100",
+            "operationType": "Sum",
+            "valueType": "Integer",
+            "ruleParticipationType": "Individual"
+          }
+        ],
+        "timeUnlocked": "0001-01-01T00:00:00.0000000Z"
+      },
+      "mediaAssets": [
+        {
+          "name": "e2ecded1-cfe3-4356-9688-66f10768aef4",
+          "type": "Icon",
+          "url": "https://images-eds-ssl.xboxlive.com/image?url=27S1DHqE.cHkmFg4nspsd2sROkWAKOMBTctems.CiimYmIr4_A7AFM.5.XZ.yu7.0uKxvKtDb0ZqpTVHEeQRBnpqvS8VjnyE.95zPk2g8X0JA_CK8xmlbsD1UwizETisE0BgHD93AKtUUijG05fN6w--"
+        }
+      ],
+      "platforms": [
+        "XboxOne"
+      ],
+      "isSecret": true,
+      "description": "Faça carinho em um Cão Infernal em MWZ.",
+      "lockedDescription": "Faça carinho em um Cão Infernal em MWZ.",
+      "productId": "00000000-0000-0000-0000-0000776e74db",
+      "achievementType": "Persistent",
+      "participationType": "Individual",
+      "timeWindow": null,
+      "rewards": [
+        {
+          "name": null,
+          "description": null,
+          "value": "10",
+          "type": "Gamerscore",
+          "mediaAsset": null,
+          "valueType": "Int"
+        }
+      ],
+      "estimatedTime": "00:00:00",
+      "deeplink": "",
+      "isRevoked": false,
+      "rarity": {
+        "currentCategory": "Rare",
+        "currentPercentage": 5.12
+      }
+    },
+    {
+      "id": "1",
+      "serviceConfigId": "00000000-0000-0000-0000-0000776e74db",
+      "name": "Cinquentão",
+      "titleAssociations": [
+        {
+          "name": "Call of Duty®: Modern Warfare® III",
+          "id": 2003727579
+        }
+      ],
+      "progressState": "NotStarted",
+      "progression": {
+        "requirements": [
+          {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "current": "0",
+            "target": "100",
+            "operationType": "Sum",
+            "valueType": "Integer",
+            "ruleParticipationType": "Individual"
+          }
+        ],
+        "timeUnlocked": "0001-01-01T00:00:00.0000000Z"
+      },
+      "mediaAssets": [
+        {
+          "name": "1f173354-875d-44e1-a13c-1a53ad98988b",
+          "type": "Icon",
+          "url": "https://images-eds-ssl.xboxlive.com/image?url=27S1DHqE.cHkmFg4nspsd0vlMtPbpIWDZBbNZVHXaCaQ2osxKFduXFjg6jxdTHrM_mlTKJ8AyROOjUcK3gJmNqSkib60XrNdAQ8TicKx8B8j9OQs7_buowJvLyH0Spi3"
+        }
+      ],
+      "platforms": [
+        "XboxOne"
+      ],
+      "isSecret": false,
+      "description": "Alcance o nível 55.",
+      "lockedDescription": "Alcance o nível 55.",
+      "productId": "00000000-0000-0000-0000-0000776e74db",
+      "achievementType": "Persistent",
+      "participationType": "Individual",
+      "timeWindow": null,
+      "rewards": [
+        {
+          "name": null,
+          "description": null,
+          "value": "100",
+          "type": "Gamerscore",
+          "mediaAsset": null,
+          "valueType": "Int"
+        }
+      ],
+      "estimatedTime": "00:00:00",
+      "deeplink": "",
+      "isRevoked": false,
+      "rarity": {
+        "currentCategory": "Common",
+        "currentPercentage": 23.78
+      }
+    }
+  ],
+  "pagingInfo": {
+    "continuationToken": null,
+    "totalRecords": 6
+  }
+}
