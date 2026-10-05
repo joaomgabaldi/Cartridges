@@ -4,19 +4,24 @@ conquista nova: o cartão por cima do jogo e o pulso na iluminação.
 Quem chama é a janela, nos mesmos dois pontos em que a sessão já veste o papel
 de parede e as fitas (`show_session_blocker` e `hide_session_blocker`). As
 preferências são lidas na hora do aviso, então mudá-las no meio da partida
-vale para a próxima conquista. Nos jogos da Steam, só o pulso: a Steam já
-mostra o aviso dela.
+vale para a próxima conquista. Nos jogos da Steam e do Xbox, só o pulso: a
+Steam e a Xbox Game Bar já mostram o aviso delas.
+
+O vigia depende da fonte gravada do jogo: a do Xbox consulta a conta
+(`xbox.vigia`); a da Steam, ou nenhuma, olha os arquivos (`vigia`).
 """
 
 import logging
 from typing import Any, Optional
 
 from cartridges import conquista_aviso, shared
-from cartridges.conquistas import arquivos
+from cartridges.conquistas import arquivos, fontes
 from cartridges.conquistas.vigia import Desbloqueada, Vigia, acompanha
+from cartridges.conquistas.xbox import vigia as vigia_xbox
 from cartridges.utils import session_fita
 
-_vigia: Optional[Vigia] = None
+# Os dois vigias (arquivos e Xbox) têm o mesmo contrato: `game`, `ativo`, `iniciar` e `parar`.
+_vigia: Optional[Any] = None
 
 
 def tipo_do_pulso(desbloqueada: Desbloqueada) -> str:
@@ -29,6 +34,18 @@ def tipo_do_pulso(desbloqueada: Desbloqueada) -> str:
 
 def _da_steam(game: Any) -> bool:
     return game is not None and arquivos.eh_jogo_da_steam(getattr(game, "executable", "") or "")
+
+
+def _so_pulso(game: Any) -> bool:
+    """Steam e Xbox já mostram o aviso deles: aqui, só o pulso."""
+    if _da_steam(game):
+        return True
+    try:
+        fonte = fontes.gravada(game) if game is not None else None
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.warning("Falha ao ler a fonte das conquistas", exc_info=True)
+        return False
+    return fonte is not None and fonte.tipo == fontes.XBOX
 
 
 def acompanhando(game: Any) -> bool:
@@ -50,6 +67,14 @@ def comecar(game: Any) -> None:
     global _vigia  # pylint: disable=global-statement
     parar()
     try:
+        fonte = fontes.gravada(game)
+        if fonte is not None and fonte.tipo == fontes.XBOX:
+            # Sem a conta conectada (ou com o interruptor desligado), não há o que acompanhar:
+            # o jogo do Xbox não cai no vigia de arquivos.
+            if fontes.ativa(fonte) and getattr(game, "conquistas", True):
+                _vigia = vigia_xbox.Vigia(game, _avisar)
+                _vigia.iniciar()
+            return
         if not acompanha(game):
             return
         _vigia = Vigia(game, _avisar)
@@ -81,7 +106,7 @@ def _avisar(desbloqueadas: list[Desbloqueada]) -> None:
     # Um try por efeito: a falha de um não cala os outros.
     game = _vigia.game if _vigia is not None else None
     try:
-        if shared.schema.get_boolean("conquistas-aviso") and not _da_steam(game):
+        if shared.schema.get_boolean("conquistas-aviso") and not _so_pulso(game):
             for desbloqueada in desbloqueadas:
                 aviso = conquista_aviso.Aviso.de(desbloqueada)
                 if aviso is not None:

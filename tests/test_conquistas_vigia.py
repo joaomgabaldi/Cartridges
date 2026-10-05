@@ -5,7 +5,7 @@ import os
 
 import pytest
 
-from cartridges.conquistas import arquivos, catalogo, historico, vigia
+from cartridges.conquistas import arquivos, catalogo, fontes, historico, vigia
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.formatos import Desbloqueio
 from tests.apoio_conquistas import com_fonte, criar, kv_bytes, pastas, schema_de_teste  # noqa: F401
@@ -74,6 +74,66 @@ def test_conquista_nova_durante_a_partida(pastas, make_game):
     assert nova.completou is True  # 2 de 2
 
 
+def test_vigia_grava_a_fonte_steam_quando_le_algo(pastas, make_game):
+    instancia, _avisos = _vigia(make_game)
+    instancia.iniciar()  # nenhum arquivo ainda: nada lido, nenhuma fonte
+    assert historico.fonte("g1") is None
+    _arquivo(pastas, [("ACH_A", 100)])
+    for _tique in range(vigia.REBUSCA):
+        instancia._olhar()
+    assert historico.fonte("g1") == "steam:570"
+
+
+def test_base_com_arquivo_ja_grava_a_fonte_steam(pastas, make_game):
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, _avisos = _vigia(make_game)
+    instancia.iniciar()
+    assert historico.fonte("g1") == "steam:570"
+
+
+def test_novidade_numa_sessao_sem_fonte_grava_a_fonte_steam(pastas, make_game):
+    _arquivo(pastas, [])
+    instancia, _avisos = _vigia(make_game)
+    instancia.iniciar()  # base vazia: sem fonte
+    assert historico.fonte("g1") is None
+    _arquivo(pastas, [("ACH_B", 200)])
+    instancia._olhar()
+    assert historico.fonte("g1") == "steam:570"
+
+
+def test_base_sem_nada_lido_nao_grava_fonte(pastas, make_game):
+    instancia, _avisos = _vigia(make_game)
+    instancia.iniciar()
+    instancia._olhar()
+    assert historico.fonte("g1") is None
+
+
+def test_titulos_vem_do_catalogo_da_fonte_gravada(pastas, make_game, monkeypatch):
+    """`progresso.do_jogo` usa a chave da fonte gravada; o aviso tem de usar a mesma."""
+    catalogo._gravar_cache("999", CAT)
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    # Difere do steam_appid do jogo (570): só a chave da fonte tem este catálogo.
+    monkeypatch.setattr(vigia.fontes, "gravada", lambda _g: fontes.Fonte(fontes.STEAM, "999"))
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    instancia._olhar()
+    (nova,) = avisos[0]
+    assert nova.info.titulo == "Rara" and nova.completou is True
+
+
+def test_sem_fonte_o_titulo_cai_para_o_appid_do_jogo(pastas, make_game, monkeypatch):
+    catalogo._gravar_cache("570", CAT)
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(make_game)
+    instancia.iniciar()
+    # Sem fonte gravada o cartão some, mas o título do aviso ainda vem do appID.
+    monkeypatch.setattr(vigia.fontes, "gravada", lambda _g: None)
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    instancia._olhar()
+    assert avisos[0][0].info.titulo == "Rara"
+
+
 def test_arquivo_regravado_sem_novidade_nao_avisa(pastas, make_game):
     _arquivo(pastas, [("ACH_A", 100)])
     instancia, avisos = _vigia(make_game)
@@ -118,7 +178,7 @@ def test_erro_inesperado_nao_derruba_o_tique(pastas, make_game, monkeypatch):
     instancia, _avisos = _vigia(make_game)
     instancia.iniciar()
     _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 1)])
-    monkeypatch.setattr(vigia.historico, "registrar", lambda *_a: 1 / 0)
+    monkeypatch.setattr(vigia.historico, "registrar", lambda *_a, **_k: 1 / 0)
     assert instancia._olhar() is True
 
 
@@ -160,11 +220,11 @@ def test_gravacao_que_falha_e_tentada_de_novo_no_tique_seguinte(pastas, make_gam
     real = vigia.historico.registrar
     chamadas = []
 
-    def falha_uma_vez(game_id, novos):
+    def falha_uma_vez(game_id, novos, fonte=None):
         if not chamadas:
             chamadas.append(game_id)
             return [], False
-        return real(game_id, novos)
+        return real(game_id, novos, fonte=fonte)
 
     monkeypatch.setattr(vigia.historico, "registrar", falha_uma_vez)
     instancia._olhar()
@@ -298,7 +358,7 @@ def test_gravacao_que_nunca_se_completa_tambem_para_de_insistir(pastas, make_gam
     _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
     chamadas = []
     monkeypatch.setattr(
-        vigia.historico, "registrar", lambda *_a: chamadas.append(1) or ([], False)
+        vigia.historico, "registrar", lambda *_a, **_k: chamadas.append(1) or ([], False)
     )
     for _tique in range(vigia.REBUSCA - 1):
         instancia._olhar()

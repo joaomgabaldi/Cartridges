@@ -15,6 +15,10 @@ Nos jogos da Steam, o estado vem do `UserGameStats` que a própria Steam grava
 no instante do desbloqueio. Ela cria esse arquivo ao abrir o jogo, já com as
 conquistas antigas: por isso ele é conhecido desde o início da sessão, e
 quando aparece entra em silêncio, como a base.
+
+Tudo o que o vigia lê vem de arquivos de emulador ou da Steam, então quando lê
+algo ele grava a fonte `steam:<appid>` do jogo: um emulador que aparece no meio
+da partida dá fonte ao jogo sem esperar a varredura.
 """
 
 import logging
@@ -25,7 +29,7 @@ from typing import Any, Callable, Optional
 
 from gi.repository import GLib
 
-from cartridges.conquistas import arquivos, catalogo, formatos, historico, progresso
+from cartridges.conquistas import arquivos, catalogo, formatos, fontes, historico, progresso
 from cartridges.conquistas.arquivos import ArquivoDeConquista
 from cartridges.conquistas.catalogo import ConquistaInfo
 
@@ -132,6 +136,11 @@ class Vigia:
         else:
             self._falhas[chave] = self._falhas.get(chave, 0) + 1
 
+    def _registrar(self, lidos: list[formatos.Desbloqueio]) -> tuple[list[str], bool]:
+        """Grava ``lidos`` no histórico; com algo lido, grava também a fonte do jogo."""
+        fonte = f"steam:{self.game.steam_appid}" if lidos else None
+        return historico.registrar(self.game.game_id, lidos, fonte=fonte)
+
     def _gravados(self, lidos: list[formatos.Desbloqueio]) -> bool:
         """Se tudo o que foi lido já está no histórico (ele só soma)."""
         guardado = historico.ler(self.game.game_id)
@@ -157,9 +166,7 @@ class Vigia:
                 self._pendentes.add(str(achado.caminho))
             else:
                 lidos_por_arquivo.append((achado, atual, lidos))
-        historico.registrar(
-            self.game.game_id, [d for _a, _m, lidos in lidos_por_arquivo for d in lidos]
-        )
+        self._registrar([d for _a, _m, lidos in lidos_por_arquivo for d in lidos])
         for achado, atual, lidos in lidos_por_arquivo:
             if self._gravados(lidos):
                 self._mtimes[str(achado.caminho)] = atual
@@ -181,7 +188,7 @@ class Vigia:
         if lidos is None:
             self._resultado(chave, False)
             return
-        historico.registrar(self.game.game_id, lidos)
+        self._registrar(lidos)
         gravados = self._gravados(lidos)
         self._resultado(chave, gravados)
         if gravados:
@@ -232,7 +239,7 @@ class Vigia:
         lidos = [d for _a, _m, lidos_do_arquivo in mudaram for d in lidos_do_arquivo]
         antes = progresso.do_jogo(self.game)
         try:
-            entraram, primeira = historico.registrar(self.game.game_id, lidos)
+            entraram, primeira = self._registrar(lidos)
         except Exception:
             for achado, _atual, _lidos in mudaram:
                 self._resultado(str(achado.caminho), False)
@@ -247,7 +254,7 @@ class Vigia:
                 self._mtimes[chave] = atual
         if primeira or not entraram:
             return
-        cat = catalogo.em_cache(str(self.game.steam_appid))
+        cat = catalogo.em_cache(self._chave_do_catalogo())
         por_nome = cat.por_nome() if cat is not None else {}
         depois = progresso.do_jogo(self.game)
         completou = bool(
@@ -272,6 +279,15 @@ class Vigia:
                 for nome in avisaveis
             ]
         )
+
+    def _chave_do_catalogo(self) -> str:
+        """A chave do catálogo da fonte gravada, a mesma que `progresso.do_jogo` usa.
+
+        Assim os títulos e o `completou` saem do mesmo catálogo. Sem fonte
+        gravada, o appID do jogo.
+        """
+        fonte = fontes.gravada(self.game)
+        return fontes.chave_do_catalogo(fonte) if fonte is not None else str(self.game.steam_appid)
 
     def _limite_da_steam(self) -> Optional[float]:
         """A hora abaixo da qual uma conquista da Steam não é desta sessão.
