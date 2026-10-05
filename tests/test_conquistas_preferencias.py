@@ -198,6 +198,24 @@ def test_entrar_espera_e_cancelar(monkeypatch):
     assert pedidos[-1] == "cancelado"
 
 
+def test_entrar_que_levanta_vira_aviso_e_nao_escapa(monkeypatch):
+    """Socket bloqueado, limite de handles, falha de bind: o clique não levanta,
+    a linha volta ao estado certo e o usuário vê o aviso."""
+    monkeypatch.setattr(conta, "conectada", lambda: False)
+
+    def entrar(_ao_terminar, **_k):
+        raise OSError("bloqueado")
+
+    monkeypatch.setattr(login, "entrar", entrar)
+    dialogo = _preferencias(monkeypatch)
+    avisos = []
+    monkeypatch.setattr(dialogo, "add_toast", lambda toast: avisos.append(toast.get_title()))
+    dialogo.conquistas_conta_botao.emit("clicked")
+    assert avisos == ["Não foi possível entrar na conta Microsoft."]
+    assert dialogo.conquistas_conta_row.get_subtitle() == "Não conectada"
+    assert dialogo.conquistas_conta_botao.get_label() == "Entrar"
+
+
 @pytest.mark.parametrize(
     "nome, aviso",
     [
