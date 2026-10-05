@@ -12,6 +12,8 @@ from requests.exceptions import ConnectionError as ErroDeConexao
 from cartridges.conquistas import catalogo, historico, icones
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.formatos import Desbloqueio
+from cartridges.conquistas.xbox import conta
+from tests.apoio_conquistas import com_fonte
 from tests.test_zerados import jogo
 
 # A fixture abaixo troca `icones.carregar` por um no-op; os testes do próprio
@@ -50,6 +52,7 @@ def com_conquistas(store):
     catalogo._gravar_cache("570", CAT)
     game = jogo(store, 1, steam_appid="570")
     historico.registrar(game.game_id, [Desbloqueio("A", 100), Desbloqueio("B", 200)])
+    com_fonte(game, "steam:570")
     return game
 
 
@@ -69,6 +72,7 @@ def test_cartao_nao_arredonda_para_cima_ate_o_fim(real_window, store):
     catalogo._gravar_cache("570", grande)
     game = jogo(store, 1, steam_appid="570")
     historico.registrar(game.game_id, [Desbloqueio(f"N{n}", 1) for n in range(999)])
+    com_fonte(game, "steam:570")
     real_window.update_conquistas_block(game)
     assert real_window.details_view_conquistas_count.get_label() == "999 de 1000"
     assert real_window.details_view_conquistas_percent.get_label() == "99%"
@@ -84,8 +88,40 @@ def test_cartao_some_sem_catalogo_ou_desligado(real_window, store, com_conquista
     assert not real_window.details_view_conquistas_box.get_visible()
 
     sem_catalogo = jogo(store, 2, steam_appid="999")
+    com_fonte(sem_catalogo, "steam:999")
     real_window.update_conquistas_block(sem_catalogo)
     assert not real_window.details_view_conquistas_box.get_visible()
+
+
+def test_historico_antigo_sem_fonte_fica_oculto_ate_a_varredura(real_window, store):
+    catalogo.guardar("570", CAT)
+    game = jogo(store, 1, steam_appid="570")
+    historico.registrar(game.game_id, [Desbloqueio("A", 1)])
+    real_window.update_conquistas_block(game)
+    assert not real_window.details_view_conquistas_box.get_visible()
+    com_fonte(game, "steam:570")
+    real_window.update_conquistas_block(game)
+    assert real_window.details_view_conquistas_box.get_visible()
+
+
+def test_xbox_some_ao_sair_da_conta(real_window, store, monkeypatch):
+    catalogo.guardar("xbox-7", CAT)
+    game = jogo(store, 1)
+    com_fonte(game, "xbox:7")
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    real_window.update_conquistas_block(game)
+    assert real_window.details_view_conquistas_box.get_visible()
+    monkeypatch.setattr(conta, "conectada", lambda: False)
+    real_window.update_conquistas_block(game)
+    assert not real_window.details_view_conquistas_box.get_visible()
+
+
+def test_fonte_gravada_manda_mais_que_o_appid_atual(real_window, store):
+    catalogo.guardar("570", CAT)
+    game = jogo(store, 1, steam_appid="999")
+    com_fonte(game, "steam:570")
+    real_window.update_conquistas_block(game)
+    assert real_window.details_view_conquistas_box.get_visible()
 
 
 def test_icone_baixado_vai_para_o_cache(monkeypatch):
@@ -266,6 +302,51 @@ def _rotulos(widget):
         textos.extend(_rotulos(filho))
         filho = filho.get_next_sibling()
     return textos
+
+
+def _imagens(widget):
+    """Todos os Gtk.Image dentro de ``widget``."""
+    achadas = []
+    filho = widget.get_first_child()
+    while filho is not None:
+        if isinstance(filho, Gtk.Image):
+            achadas.append(filho)
+        achadas.extend(_imagens(filho))
+        filho = filho.get_next_sibling()
+    return achadas
+
+
+def test_bloqueada_sem_icone_cinza_usa_o_icone_apagado(real_window, store, monkeypatch):
+    from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415
+
+    carregados = []
+    monkeypatch.setattr(icones, "carregar", lambda origem, _entregar: carregados.append(origem))
+    cat = Catalogo((ConquistaInfo("XBOX:1", "T", "D", "https://x/1.png", "", False),), 0, False)
+    catalogo.guardar("xbox-7", cat)
+    game = jogo(store, 1)
+    com_fonte(game, "xbox:7")
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    dialogo = ConquistasDialog(game)
+    assert carregados == ["https://x/1.png"]
+    imagens = [i for fileira in dialogo.linhas_bloqueadas for i in _imagens(fileira)]
+    assert any(i.has_css_class("conquistas-icone-bloqueada") for i in imagens)
+
+
+def test_bloqueada_com_icone_cinza_nao_ganha_filtro(real_window, store, monkeypatch):
+    from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415
+
+    carregados = []
+    monkeypatch.setattr(icones, "carregar", lambda origem, _entregar: carregados.append(origem))
+    cat = Catalogo(
+        (ConquistaInfo("A", "T", "D", "https://x/cor.png", "https://x/cinza.png", False),), 0, False
+    )
+    catalogo.guardar("570", cat)
+    game = jogo(store, 1, steam_appid="570")
+    com_fonte(game, "steam:570")
+    dialogo = ConquistasDialog(game)
+    assert carregados == ["https://x/cinza.png"]
+    imagens = [i for fileira in dialogo.linhas_bloqueadas for i in _imagens(fileira)]
+    assert imagens and not any(i.has_css_class("conquistas-icone-bloqueada") for i in imagens)
 
 
 def test_data_da_conquista_comeca_com_maiuscula(real_window, com_conquistas):

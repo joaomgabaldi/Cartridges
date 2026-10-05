@@ -5,6 +5,8 @@ import pytest
 from cartridges.conquistas import catalogo, historico, progresso
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.formatos import Desbloqueio
+from cartridges.conquistas.xbox import conta
+from tests.apoio_conquistas import com_fonte
 
 
 def _info(nome):
@@ -51,6 +53,7 @@ def test_do_jogo(make_game):
     catalogo._gravar_cache("570", CAT)
     historico.registrar("g1", [Desbloqueio("a", 10)])
     game = make_game(game_id="g1", steam_appid="570")
+    com_fonte(game, "steam:570")
     assert progresso.do_jogo(game).feitas == 1
 
     game.conquistas = False
@@ -58,3 +61,29 @@ def test_do_jogo(make_game):
 
     sem_appid = make_game(game_id="g2")
     assert progresso.do_jogo(sem_appid) is None
+
+
+def test_historico_antigo_sem_fonte_fica_oculto_ate_a_varredura(make_game):
+    catalogo.guardar("570", CAT)
+    game = make_game(steam_appid="570")
+    historico.registrar(game.game_id, [Desbloqueio("A", 1)])
+    assert progresso.do_jogo(game) is None
+    com_fonte(game, "steam:570")
+    assert progresso.do_jogo(game) is not None
+
+
+def test_xbox_some_ao_sair_da_conta(make_game, monkeypatch):
+    catalogo.guardar("xbox-7", CAT)
+    game = make_game()
+    com_fonte(game, "xbox:7")
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    assert progresso.do_jogo(game) is not None
+    monkeypatch.setattr(conta, "conectada", lambda: False)
+    assert progresso.do_jogo(game) is None
+
+
+def test_fonte_gravada_manda_mais_que_o_appid_atual(make_game):
+    catalogo.guardar("570", CAT)
+    game = make_game(steam_appid="999")
+    com_fonte(game, "steam:570")
+    assert progresso.do_jogo(game) is not None

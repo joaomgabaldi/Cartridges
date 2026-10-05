@@ -101,6 +101,11 @@
   overflow: hidden;
 }
 
+/* Conquista bloqueada que só tem o ícone colorido (Xbox): em cinza. */
+.conquistas-icone-bloqueada {
+  filter: grayscale(1);
+}
+
 .conquista-rara {
   color: #e5a50a;
   font-weight: bold;

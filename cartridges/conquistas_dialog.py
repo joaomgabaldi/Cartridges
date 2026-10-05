@@ -101,10 +101,11 @@ class ConquistasDialog(Adw.Dialog):
             fileira.set_subtitle(info.descricao)
             imagem = Gtk.Image(pixel_size=_TAMANHO_ICONE)
             imagem.add_css_class("conquistas-icone")
-            icones.carregar(
-                info.icone if linha.desbloqueada else info.icone_cinza,
-                imagem.set_from_paintable,
-            )
+            origem = info.icone if linha.desbloqueada else (info.icone_cinza or info.icone)
+            if not linha.desbloqueada and not info.icone_cinza:
+                # O Xbox manda um ícone só: a bloqueada usa o mesmo, em cinza.
+                imagem.add_css_class("conquistas-icone-bloqueada")
+            icones.carregar(origem, imagem.set_from_paintable)
             fileira.add_prefix(imagem)
 
         lado = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, valign=Gtk.Align.CENTER)

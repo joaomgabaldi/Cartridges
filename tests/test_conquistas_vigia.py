@@ -8,7 +8,7 @@ import pytest
 from cartridges.conquistas import arquivos, catalogo, historico, vigia
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.formatos import Desbloqueio
-from tests.apoio_conquistas import criar, kv_bytes, pastas, schema_de_teste  # noqa: F401
+from tests.apoio_conquistas import com_fonte, criar, kv_bytes, pastas, schema_de_teste  # noqa: F401
 
 CAT = Catalogo(
     (
@@ -63,6 +63,7 @@ def test_conquista_nova_durante_a_partida(pastas, make_game):
     catalogo._gravar_cache("570", CAT)
     _arquivo(pastas, [("ACH_A", 100)])
     instancia, avisos = _vigia(make_game)
+    com_fonte(instancia.game, "steam:570")
     instancia.iniciar()
     _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
     instancia._olhar()
@@ -319,6 +320,7 @@ def test_duas_de_uma_vez_sem_fechar_o_jogo_nao_completam(pastas, make_game):
     catalogo._gravar_cache("570", CAT3)
     _arquivo(pastas, [])
     instancia, avisos = _vigia(make_game)
+    com_fonte(instancia.game, "steam:570")
     instancia.iniciar()
     _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
     instancia._olhar()
@@ -329,6 +331,7 @@ def test_o_cem_por_cento_e_da_ultima_conquista_do_catalogo(pastas, make_game):
     catalogo._gravar_cache("570", CAT)
     _arquivo(pastas, [("ACH_A", 100)])
     instancia, avisos = _vigia(make_game)
+    com_fonte(instancia.game, "steam:570")
     instancia.iniciar()
     # ACH_X é a mais recente, mas o catálogo não a conhece.
     _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200), ("ACH_X", 300)])
@@ -340,6 +343,7 @@ def test_jogo_ja_completo_que_recebe_nome_desconhecido_nao_completa(pastas, make
     catalogo._gravar_cache("570", CAT)
     _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
     instancia, avisos = _vigia(make_game)
+    com_fonte(instancia.game, "steam:570")
     instancia.iniciar()
     _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200), ("ACH_X", 300)])
     instancia._olhar()
@@ -522,6 +526,7 @@ def test_jogo_que_nao_e_da_steam_com_hora_antiga_avisa_como_antes(pastas, make_g
 
 def test_cem_por_cento_so_de_conquista_sincronizada_nao_pulsa(tmp_path, pastas, make_game, monkeypatch):
     catalogo._gravar_cache("570", CAT)
+    com_fonte(make_game(game_id="g1"), "steam:570")
     estado, instancia, avisos = _sessao_da_steam(tmp_path, make_game, monkeypatch, {})
     _estado_da_steam(estado, {0: DIAS_ATRAS, 1: DIAS_ATRAS})
     instancia._olhar()

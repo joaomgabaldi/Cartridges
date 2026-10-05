@@ -2,13 +2,15 @@
 
 Só contam as conquistas que existem no catálogo (`resolveUnlockedAchievementCount`
 do Hydra): um nome estranho no arquivo de um crack fica guardado, mas não infla o
-"X de Y". Sem catálogo não há o que mostrar, e o cartão some.
+"X de Y". Sem catálogo não há o que mostrar, e o cartão some. Também some sem
+fonte gravada no histórico (a varredura grava de onde vêm as conquistas do jogo):
+sem de onde ler o progresso, "0 de N" ficaria parado para sempre.
 """
 
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from cartridges.conquistas import catalogo, historico
+from cartridges.conquistas import catalogo, fontes, historico
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 
 
@@ -70,10 +72,14 @@ def montar(cat: Optional[Catalogo], hist: Optional[dict[str, int]]) -> Optional[
 
 
 def do_jogo(game: Any) -> Optional[Progresso]:
-    appid = getattr(game, "steam_appid", None)
-    if not appid or not getattr(game, "conquistas", True):
+    """O progresso do cartão, ou None (cartão oculto): interruptor desligado,
+    sem fonte gravada, conta Xbox desconectada ou sem catálogo."""
+    if not getattr(game, "conquistas", True):
         return None
-    return montar(catalogo.em_cache(str(appid)), historico.ler(game.game_id))
+    fonte = fontes.gravada(game)
+    if not fontes.ativa(fonte):
+        return None
+    return montar(catalogo.em_cache(fontes.chave_do_catalogo(fonte)), historico.ler(game.game_id))
 
 
 def porcentagem_em_texto(valor: float) -> str:
