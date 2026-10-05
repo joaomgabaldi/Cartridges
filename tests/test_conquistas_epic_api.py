@@ -130,6 +130,16 @@ def test_conquista_com_campo_errado_cai_sozinha(rede):
     assert [(d.nome, d.quando) for d in leitura.desbloqueios] == [("EPIC:BOA", 0)]
 
 
+def test_raridade_enorme_so_perde_a_porcentagem(rede):
+    rede["respostas"] = [
+        Resposta(200, _catalogo(_conquista("ENORME", rarity={"percent": 10**400}), _conquista("BOA"))),
+        Resposta(200, _progresso()),
+    ]
+    enorme, boa = api.ler("ns1").catalogo.conquistas
+    assert (enorme.nome, enorme.porcentagem) == ("EPIC:ENORME", None)
+    assert (boa.nome, boa.porcentagem) == ("EPIC:BOA", 42.5)
+
+
 def test_errors_e_none(rede):
     rede["respostas"] = [Resposta(200, {"errors": [{"message": "PersistedQueryNotFound"}], "data": None})]
     assert api.ler("ns1") is None
@@ -284,6 +294,17 @@ def test_biblioteca_velha_busca_de_novo(rede):
     assert api.namespace_do_app("Sugar") == "abc123"
     assert rede["pedidos"] == []
     assert api.namespace_do_app("Novo") == "n1"
+
+
+def test_biblioteca_com_data_enorme_e_velha(rede):
+    destino = shared.conquistas_cache_dir / "epic-biblioteca.json"
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    # O texto direto: um inteiro de 400 dígitos continua inteiro e não cabe num float.
+    destino.write_text('{"apps": {"sugar": "abc123"}, "em": ' + "9" * 400 + "}", encoding="utf-8")
+    rede["respostas"] = [Resposta(200, _biblioteca(("Outro", "o1")))]
+    assert api.namespace_local_do_app("Sugar") == "abc123"
+    assert api.namespace_do_app("Outro") == "o1"
+    assert len(rede["pedidos"]) == 1
 
 
 def test_biblioteca_ilegivel_e_vazia(rede):
