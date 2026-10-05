@@ -76,6 +76,8 @@ class Leitura:
     avisar: bool = True
     # De onde vêm as conquistas do jogo; None = de lugar nenhum.
     fonte: Optional[Fonte] = None
+    # O executável que gerou a fonte: se for editado até a entrega, a leitura é descartada.
+    executavel: str = ""
 
 
 @dataclass
@@ -87,6 +89,9 @@ class LeituraXbox:
     desbloqueios: list[formatos.Desbloqueio] = field(default_factory=list)
     # Falso na varredura de um jogo só: não entra no aviso do Xbox.
     avisar: bool = True
+    # O executável que gerou a fonte: se for editado até a entrega (o jogo passou a
+    # ser outro, ou de outra loja), a leitura é descartada, como a do appID corrigido.
+    executavel: str = ""
 
 
 @dataclass
@@ -107,22 +112,28 @@ class Catalogacao:
 
 def ler_jogo(game: Any) -> Leitura:
     """Trabalho de thread: decide a fonte e lê os arquivos (só Steam/emulador). Só disco."""
+    executavel = getattr(game, "executable", "") or ""
     fonte = fontes.do_jogo(game)
     if fonte is None or fonte.tipo != fontes.STEAM:
-        return Leitura(game, "", [], fonte=fonte)
+        return Leitura(game, "", [], fonte=fonte, executavel=executavel)
     desbloqueios = [
         desbloqueio
         for achado in arquivos.arquivos_do_jogo(fonte.id, game.executable)
         for desbloqueio in formatos.ler(achado.caminho, achado.formato)
     ]
-    return Leitura(game, fonte.id, desbloqueios, fonte=fonte)
+    return Leitura(game, fonte.id, desbloqueios, fonte=fonte, executavel=executavel)
 
 
-def ler_xbox(game: Any, fonte: Fonte) -> tuple[Optional[LeituraXbox], bool]:
+def ler_xbox(
+    game: Any, fonte: Fonte, executavel: Optional[str] = None
+) -> tuple[Optional[LeituraXbox], bool]:
     """Trabalho de thread, com rede: titleId (se faltar) e a leitura da conta.
 
+    ``executavel``: o que a primeira passada leu (sem ele, o de agora).
     Devolve ``(leitura, rede_falhou)``.
     """
+    if executavel is None:
+        executavel = getattr(game, "executable", "") or ""
     try:
         titulo = fonte.id or api.titulo(fontes.pfn(game), fontes.bases(game))
         if not titulo:
@@ -133,7 +144,7 @@ def ler_xbox(game: Any, fonte: Fonte) -> tuple[Optional[LeituraXbox], bool]:
         return None, True
     if leitura is None:
         return None, False
-    return LeituraXbox(game, Fonte(fontes.XBOX, titulo), leitura.desbloqueios), False
+    return LeituraXbox(game, Fonte(fontes.XBOX, titulo), leitura.desbloqueios, executavel=executavel), False
 
 
 def renovar_catalogo(game: Any, rede: bool = True, usar_chave: bool = True) -> Catalogacao:
@@ -259,7 +270,7 @@ class VarreduraConquistas:
                 # GLib serve os callbacks ociosos na ordem em que entraram.
                 GLib.idle_add(self._comecar_aviso)
                 tarefa = tarefas.comecar(_("Conquistas"), 2 * len(games))
-            lidas: dict[str, Optional[Fonte]] = {}
+            lidas: dict[str, tuple[Optional[Fonte], str]] = {}
             leu_tudo = self._passada_dos_arquivos(games, geracao, avisar, tarefa, lidas)
             if avisar:
                 concluiu = True
@@ -285,9 +296,9 @@ class VarreduraConquistas:
         geracao: int,
         avisar: bool,
         tarefa: Optional[Any],
-        lidas: dict[str, Optional[Fonte]],
+        lidas: dict[str, tuple[Optional[Fonte], str]],
     ) -> bool:
-        """Lê os arquivos de cada jogo e anota em ``lidas`` a fonte de cada um.
+        """Lê os arquivos de cada jogo e anota em ``lidas`` a fonte (e o executável) de cada um.
 
         Devolve se foi até o fim sem ser parada.
         """
@@ -302,7 +313,7 @@ class VarreduraConquistas:
                 logging.warning("Falha ao ler as conquistas de %s", game.name, exc_info=True)
                 continue
             leitura.avisar = avisar
-            lidas[game.game_id] = leitura.fonte
+            lidas[game.game_id] = (leitura.fonte, leitura.executavel)
             GLib.idle_add(self._entregar, leitura)
         return True
 
@@ -312,7 +323,7 @@ class VarreduraConquistas:
         geracao: int,
         avisar: bool,
         tarefa: Optional[Any],
-        lidas: dict[str, Optional[Fonte]],
+        lidas: dict[str, tuple[Optional[Fonte], str]],
     ) -> None:
         rede = True
         usar_chave = True
@@ -321,11 +332,11 @@ class VarreduraConquistas:
                 tarefa.atualizar(feitos)
             if self._deve_parar(geracao):
                 break
-            fonte = lidas.get(game.game_id)
+            fonte, executavel = lidas.get(game.game_id, (None, ""))
             if fonte is None:
                 continue
             if fonte.tipo == fontes.XBOX:
-                rede = self._ler_xbox(game, fonte, rede, avisar)
+                rede = self._ler_xbox(game, fonte, executavel, rede, avisar)
                 continue
             try:
                 catalogacao = renovar_catalogo(game, rede, usar_chave)
@@ -345,12 +356,12 @@ class VarreduraConquistas:
             catalogacao.avisar = avisar
             GLib.idle_add(self._entregar_catalogo, catalogacao)
 
-    def _ler_xbox(self, game: Any, fonte: Fonte, rede: bool, avisar: bool) -> bool:
+    def _ler_xbox(self, game: Any, fonte: Fonte, executavel: str, rede: bool, avisar: bool) -> bool:
         """Lê a conta Xbox de um jogo. Devolve se a rede segue valendo."""
         if not rede or not conta.conectada():
             return rede
         try:
-            leitura, falhou = ler_xbox(game, fonte)
+            leitura, falhou = ler_xbox(game, fonte, executavel)
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Falha ao ler as conquistas do Xbox de %s", game.name, exc_info=True)
             return rede
@@ -466,6 +477,11 @@ class VarreduraConquistas:
                 or sessao.acompanhando(game)
                 or not conta.conectada()
             ):
+                return False
+            # O executável foi editado depois da leitura: o jogo pode ser outro (ou
+            # de outra loja) e, como o histórico só cresce, gravar deixaria as
+            # conquistas do jogo errado para sempre. A próxima varredura refaz.
+            if (getattr(game, "executable", "") or "") != leitura.executavel:
                 return False
             texto = leitura.fonte.texto
             antes = historico.fonte(game.game_id)
