@@ -378,7 +378,14 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             conta.sair()
             self._atualizar_conta()
             return
-        self._pedido_de_login = login.entrar(self._ao_entrar)
+        try:
+            self._pedido_de_login = login.entrar(self._ao_entrar)
+        except Exception as erro:  # pylint: disable=broad-exception-caught
+            # Porta local bloqueada, limite de handles, falha ao criar a thread:
+            # o handler de GTK não levanta e o usuário vê o aviso.
+            logging.warning("Falha ao iniciar o login da conta Microsoft: %s", type(erro).__name__)
+            self._ao_entrar(login.Resultado.FALHOU)
+            return
         self._atualizar_conta()
 
     def _ao_entrar(self, resultado: "login.Resultado") -> None:
