@@ -31,7 +31,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 from PIL import Image, UnidentifiedImageError
 
 from cartridges import shared
-from cartridges.conquistas import historico
+from cartridges.conquistas import fontes, historico
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.game import Game, STATUS_LABELS
 from cartridges.game_cover import GameCover
@@ -668,6 +668,7 @@ class DetailsDialog(Adw.Dialog):
             # so a game with only a main-story estimate keeps whatever the
             # other two already held instead of having them blanked.
             self.game.update_values(dict(self.fetched_hltb))
+        executavel_mudou = final_executable != (self.game.executable or "")
         self.game.executable = final_executable
         self.game.run_as_admin = self.run_as_admin_switch.get_active()
         self.game.track_process = track_process
@@ -740,15 +741,18 @@ class DetailsDialog(Adw.Dialog):
         appid_mudou = str(self.game.steam_appid or "") != str(appid_anterior or "")
         if appid_anterior and appid_mudou:
             # O appID antigo estava errado: as conquistas guardadas eram de
-            # outro jogo. A varredura logo abaixo lê as do appID certo.
-            historico.apagar(self.game.game_id)
+            # outro jogo. A varredura logo abaixo lê as do appID certo. Num jogo
+            # do Xbox o appID não é a fonte: as conquistas guardadas são da conta.
+            fonte_gravada = fontes.gravada(self.game)
+            if fonte_gravada is None or fonte_gravada.tipo != fontes.XBOX:
+                historico.apagar(self.game.game_id)
 
         if self.game.steam_appid and str(self.game.steam_appid) != str(appid_anterior):
             from cartridges.utils.ligacao_zerado import ligar_zerado  # noqa: PLC0415
 
             ligar_zerado(self.game)
 
-        if self.game.conquistas and self.game.steam_appid and (appid_mudou or not conquistas_antes):
+        if self.game.conquistas and (appid_mudou or executavel_mudou or not conquistas_antes):
             app = shared.win.get_application()
             varredura = getattr(app, "varredura_conquistas", None)
             if varredura is not None:
