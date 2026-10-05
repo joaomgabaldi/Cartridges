@@ -347,7 +347,8 @@ def em_cache(appid: str) -> Optional[Catalogo]:
         return None
 
 
-def _gravar_cache(appid: str, cat: Catalogo) -> None:
+def guardar(appid: str, cat: Catalogo) -> None:
+    """Grava o catálogo no cache. A chave é o appID da Steam ou `xbox-<titleId>`."""
     destino = _arquivo_do_cache(appid)
     destino.parent.mkdir(parents=True, exist_ok=True)
     # Um nome por gravação: a varredura e a varredura de um jogo só podem
@@ -373,6 +374,10 @@ def _gravar_cache(appid: str, cat: Catalogo) -> None:
             temporario.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+# O nome antigo, que os testes e `renovar` ainda usam.
+_gravar_cache = guardar
 
 
 def _impressao(chave: str) -> str:
