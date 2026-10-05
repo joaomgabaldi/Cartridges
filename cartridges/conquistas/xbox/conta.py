@@ -74,7 +74,10 @@ class _Sessao:
     uhs: str = ""
 
 
+# `_trava` guarda `_sessao` e o arquivo (só memória e disco, nunca rede);
+# `_renovando` serializa as renovações, que vão à rede.
 _trava = threading.Lock()
+_renovando = threading.Lock()
 _sessao: Optional[_Sessao] = None
 # Um aviso de desconexão por execução (volta a valer depois de um login).
 _avisou = False
@@ -320,32 +323,50 @@ def autorizacao(forcar: bool = False) -> Optional[tuple[str, str]]:
     Roda em thread. ``None``: sem conta, falha (logada) ou renovação recusada
     (a conta já foi desconectada e o usuário avisado).
     """
-    with _trava:
-        sessao = _sessao
-        if sessao is None:
-            return None
+    # A rede roda fora de `_trava`, que só guarda memória e arquivo: `sair()` e
+    # `recusada()` vêm da thread principal e não podem esperar uma renovação
+    # lenta. `_renovando` só serializa as renovações entre si. Cada passo que
+    # publica confere que a sessão ainda é a mesma (sair, recusada ou um novo
+    # login a trocam): se mudou, o resultado é descartado sem gravar nada.
+    with _renovando:
+        with _trava:
+            sessao = _sessao
+            if sessao is None:
+                return None
+            renovacao, msa, xsts, uhs = sessao.renovacao, sessao.msa, sessao.xsts, sessao.uhs
         agora = time.time()
         try:
-            if forcar or sessao.xsts is None or sessao.xsts.vence - agora < _MARGEM:
-                if forcar or sessao.msa is None or sessao.msa.vence - agora < _MARGEM:
-                    sessao.msa, nova = _msa({"grant_type": "refresh_token", "refresh_token": sessao.renovacao})
-                    if nova and nova != sessao.renovacao:
-                        sessao.renovacao = nova
+            if forcar or xsts is None or xsts.vence - agora < _MARGEM:
+                if forcar or msa is None or msa.vence - agora < _MARGEM:
+                    msa, nova = _msa({"grant_type": "refresh_token", "refresh_token": renovacao})
+                    with _trava:
+                        if _sessao is not sessao:
+                            return None
+                        sessao.msa = msa
+                        if nova and nova != sessao.renovacao:
+                            sessao.renovacao = nova
+                            _salvar(sessao)
+                xsts, uhs, xuid_, gamertag_ = _xbox(msa.valor)
+                with _trava:
+                    if _sessao is not sessao:
+                        return None
+                    sessao.xsts, sessao.uhs = xsts, uhs
+                    if (xuid_, gamertag_) != (sessao.xuid, sessao.gamertag):
+                        sessao.xuid, sessao.gamertag = xuid_, gamertag_
                         _salvar(sessao)
-                sessao.xsts, sessao.uhs, xuid_, gamertag_ = _xbox(sessao.msa.valor)
-                if (xuid_, gamertag_) != (sessao.xuid, sessao.gamertag):
-                    sessao.xuid, sessao.gamertag = xuid_, gamertag_
-                    _salvar(sessao)
         except (Recusada, SemPerfilXbox, ContaInfantil):
-            logging.info("Conta Microsoft: renovação recusada; desconectando")
-            _desconectar(avisar=True)
+            with _trava:
+                if _sessao is not sessao:
+                    return None
+                logging.info("Conta Microsoft: renovação recusada; desconectando")
+                _desconectar(avisar=True)
             return None
         except Exception as erro:  # pylint: disable=broad-exception-caught
             # Rede fora, resposta fora do formato, o que for: a conta continua
             # conectada e a próxima tentativa renova de novo.
             logging.info("Conta Microsoft: renovação falhou (%s)", type(erro).__name__)
             return None
-        return sessao.uhs, sessao.xsts.valor
+        return uhs, xsts.valor
 
 
 def recusada() -> None:
