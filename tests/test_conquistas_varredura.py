@@ -1095,6 +1095,7 @@ def test_primeira_leitura_da_epic_nao_avisa(store, make_game, pastas, win, flush
     epic.desbloqueios = [Desbloqueio("EPIC:1", 100), Desbloqueio("EPIC:2", 200)]
     game = _registrado(store, make_game, 1, executable=_URL_EPIC)
     _rodar([game], flush_idle)
+    assert historico.ler(game.game_id) == {"EPIC:1": 100, "EPIC:2": 200}  # a leitura houve, em silêncio
     assert _avisos(win) == []
 
 
@@ -1143,6 +1144,7 @@ def test_epic_sem_conta_nao_vai_a_rede_e_fica_oculta(store, make_game, pastas, f
     from cartridges.conquistas.epic import conta  # noqa: PLC0415
 
     monkeypatch.setattr(conta, "conectada", lambda: False)
+    _goldberg(pastas, "570", [("ACH_A", 100)])  # sinal real da Steam: cairia para ela se pudesse
     game = _registrado(store, make_game, 1, executable=_URL_EPIC, steam_appid="570")
     _rodar([game], flush_idle)
     assert epic.chamadas == 0 and historico.fonte(game.game_id) is None

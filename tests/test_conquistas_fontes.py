@@ -147,7 +147,9 @@ def test_atalho_com_namespace(make_game, epic_conectada, pastas):  # noqa: F811
 
 def test_epic_sem_conta_e_nenhuma_mesmo_com_appid(make_game, monkeypatch, pastas):  # noqa: F811
     monkeypatch.setattr(epic_conta, "conectada", lambda: False)
+    criar(pastas.appdata / "GSE Saves" / "570" / "achievements.json", "{}")  # sinal real da Steam
     game = make_game(executable=_URL.format(f"{_NS}%3Aitem%3ASugar"), steam_appid="570")
+    assert fontes._da_steam(game) == Fonte("steam", "570")  # sem a regra da Epic, a Steam casaria
     assert fontes.do_jogo(game) is None
 
 
