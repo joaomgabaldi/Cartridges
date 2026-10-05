@@ -271,8 +271,19 @@ def titulo(pfn: Optional[str], bases: list[Path]) -> Optional[str]:
         # Não é a resposta do titlehub: nada se sabe, nada vai para o cache.
         logging.info("Xbox: resposta do titlehub fora do formato")
         return None
-    primeiro = titulos[0] if titulos else None
-    achado = primeiro.get("titleId") if isinstance(primeiro, dict) else None
+    # Só vale o item do pacote pedido: o primeiro da lista pode ser de outro.
+    pedido = pfn.casefold()
+    do_pacote = next(
+        (
+            item
+            for item in titulos
+            if isinstance(item, dict)
+            and isinstance(item.get("pfn"), str)
+            and item["pfn"].casefold() == pedido
+        ),
+        None,
+    )
+    achado = do_pacote.get("titleId") if do_pacote is not None else None
     if _titulo_valido(achado):
         _guardar_titulo(pfn, achado)
         return achado

@@ -373,11 +373,38 @@ def test_config_grande_demais_e_ignorado(tmp_path):
 
 
 def test_titulo_pelo_titlehub_e_cache(monkeypatch):
-    chamadas = rede_falsa(monkeypatch, api, {_HUB: [Resposta(200, {"titles": [{"titleId": "1234"}]})]}, nome="_requisitar")
+    chamadas = rede_falsa(monkeypatch, api, {_HUB: [Resposta(200, {"titles": [{"titleId": "1234", "pfn": "Pkg_abc"}]})]}, nome="_requisitar")
     assert api.titulo("Pkg_abc", []) == "1234"
     assert chamadas[0][1]["json"] == {"pfns": ["Pkg_abc"], "windowsPhoneProductIds": []}
     assert api.titulo_local("Pkg_abc", []) == "1234"
     assert api.titulo("Pkg_abc", []) == "1234" and len(chamadas) == 1
+
+
+def test_titlehub_procura_o_pfn_pedido_na_lista(monkeypatch):
+    titulos = [
+        {"titleId": "111", "pfn": "Outro_x"},
+        {"titleId": "222", "pfn": "PKG_Abc"},
+        {"titleId": "333"},
+    ]
+    rede_falsa(monkeypatch, api, {_HUB: [Resposta(200, {"titles": titulos})]}, nome="_requisitar")
+    assert api.titulo("pkg_ABC", []) == "222"
+    assert api.titulo_local("pkg_ABC", []) == "222"
+
+
+@pytest.mark.parametrize(
+    "titulos",
+    [
+        [{"titleId": "111", "pfn": "Outro_x"}],
+        [{"titleId": "111"}],
+        [{"titleId": "111", "pfn": None}, "lixo", 5],
+        [{"titleId": "111", "pfn": 7}],
+    ],
+)
+def test_titlehub_sem_o_pfn_pedido_e_sem_xbox_live(monkeypatch, titulos):
+    """O primeiro item da lista não vale se não é do pacote pedido."""
+    rede_falsa(monkeypatch, api, {_HUB: [Resposta(200, {"titles": titulos})]}, nome="_requisitar")
+    assert api.titulo("Pkg_abc", []) == ""
+    assert api.titulo_local("Pkg_abc", []) == ""
 
 
 def test_titulo_sem_pfn_nao_vai_a_rede(monkeypatch):
@@ -405,7 +432,7 @@ def test_pacote_sem_xbox_live_fica_7_dias(monkeypatch):
 
 @pytest.mark.parametrize("titulo", ["12a", "", None, 5, "١٢"])
 def test_titlehub_com_titulo_estranho(monkeypatch, titulo):
-    rede_falsa(monkeypatch, api, {_HUB: [Resposta(200, {"titles": [{"titleId": titulo}]})]}, nome="_requisitar")
+    rede_falsa(monkeypatch, api, {_HUB: [Resposta(200, {"titles": [{"titleId": titulo, "pfn": "P"}]})]}, nome="_requisitar")
     assert api.titulo("P", []) == ""
 
 
@@ -424,8 +451,8 @@ def test_cache_de_titulos_com_formato_errado_e_ignorado(conteudo):
 
 
 def test_gravar_titulo_preserva_os_outros(monkeypatch):
-    rede_falsa(monkeypatch, api, {_HUB: [Resposta(200, {"titles": [{"titleId": "1"}]}),
-                                         Resposta(200, {"titles": [{"titleId": "2"}]})]}, nome="_requisitar")
+    rede_falsa(monkeypatch, api, {_HUB: [Resposta(200, {"titles": [{"titleId": "1", "pfn": "A"}]}),
+                                         Resposta(200, {"titles": [{"titleId": "2", "pfn": "B"}]})]}, nome="_requisitar")
     api.titulo("A", [])
     api.titulo("B", [])
     assert api.titulo_local("A", []) == "1" and api.titulo_local("B", []) == "2"
