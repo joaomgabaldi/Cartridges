@@ -51,6 +51,8 @@ _UMA_HORA = 3600
 _CODIGO = re.compile(r"[0-9A-Fa-f]{32}")
 _CODIGO_NO_JSON = re.compile(r'"authorizationCode"\s*:\s*"([0-9A-Fa-f]{32})"')
 _TAMANHO_MAXIMO_COLADO = 64 * 1024
+# A biblioteca da conta em `conquistas_cache_dir` (quem a lê e grava é `epic/api.py`).
+BIBLIOTECA = "epic.biblioteca.json"
 
 
 class Recusada(Exception):
@@ -129,7 +131,7 @@ def _vence(corpo: dict) -> float:
         pass
     try:
         segundos = float(corpo.get("expires_in"))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         segundos = _UMA_HORA
     if not math.isfinite(segundos):
         segundos = _UMA_HORA
@@ -141,7 +143,8 @@ def _token(dados: dict[str, str]) -> dict:
     resposta = _pedir("POST", TOKEN, data={**dados, "token_type": "eg1"}, auth=(CLIENT_ID, SEGREDO))
     corpo = _corpo(resposta)
     if resposta.status_code in (400, 401) and corpo.get("error") == "invalid_grant":
-        logging.info("Conta Epic: pedido recusado (%s)", corpo.get("errorCode"))
+        # O `errorCode` é da Epic e vem sem limite de tamanho.
+        logging.info("Conta Epic: pedido recusado (%s)", str(corpo.get("errorCode"))[:120])
         raise Recusada()
     resposta.raise_for_status()
     if not isinstance(corpo.get("access_token"), str) or not isinstance(corpo.get("refresh_token"), str):
@@ -263,6 +266,15 @@ def _desconectar(avisar: bool) -> None:
     GLib.idle_add(_notificar, avisar)
 
 
+def _esquecer_a_biblioteca() -> None:
+    """A biblioteca guardada é de uma conta só: outra conta não herda o "fora da
+    biblioteca" da primeira. Só log em caso de erro."""
+    try:
+        (shared.conquistas_cache_dir / BIBLIOTECA).unlink(missing_ok=True)
+    except OSError as erro:
+        logging.info("Conta Epic: biblioteca guardada não apagada (%s)", type(erro).__name__)
+
+
 def conectar(codigo: str) -> None:
     """Troca o código colado pelas chaves, guarda e conecta.
 
@@ -284,6 +296,7 @@ def conectar(codigo: str) -> None:
         _Acesso(corpo["access_token"], _vence(corpo)),
     )
     _salvar(sessao)
+    _esquecer_a_biblioteca()
     with _trava:
         _sessao = sessao
         _avisou = False

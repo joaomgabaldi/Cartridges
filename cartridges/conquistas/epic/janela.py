@@ -3,8 +3,9 @@ cola aqui o código que ela mostra.
 
 É um `Adw.Dialog` próprio (não `Adw.AlertDialog`, que fecha a cada resposta):
 código recusado mantém a janela aberta, com o motivo, para colar outro. A troca
-do código vai à rede numa thread; o resultado volta na thread principal e é
-descartado se a janela já fechou. O texto colado nunca vai para o log.
+do código vai à rede numa thread; o resultado volta na thread principal. Com a janela
+já fechada, só a conta conectada conta (o aviso ainda é dado); o resto é descartado.
+O texto colado nunca vai para o log.
 """
 
 import logging
@@ -146,14 +147,24 @@ class JanelaDeLogin(Adw.Dialog):
             self._receber(_FALHOU)
 
     def _receber(self, resultado: str) -> None:
+        if resultado == _OK:
+            # A conta já conectou, com a janela aberta ou não (Cancelar, Esc, Preferências
+            # fechadas durante a troca): a leitura dos jogos da Epic tem de acontecer.
+            if not self._fechada:
+                try:
+                    self._ocupada(False)
+                    self.close()
+                except Exception:  # pylint: disable=broad-exception-caught
+                    logging.warning("Falha ao fechar a janela de login da Epic", exc_info=True)
+            try:
+                self._ao_conectar()
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.warning("Falha ao avisar que a conta Epic conectou", exc_info=True)
+            return
         if self._fechada:
             return
         try:
             self._ocupada(False)
-            if resultado == _OK:
-                self.close()
-                self._ao_conectar()
-                return
             if resultado == _RECUSADO:
                 self.campo.set_text("")
                 texto = _("O código não foi aceito. Gere um novo código na página da Epic e tente novamente.")

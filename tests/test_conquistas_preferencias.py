@@ -437,6 +437,21 @@ def test_entrar_abre_a_janela_e_o_sucesso_varre_os_jogos_da_epic(monkeypatch, st
     assert [filtro for _games, filtro in pedidos] == [fontes.eh_da_epic]
 
 
+def test_entrar_com_janela_que_falha_ao_mostrar_deixa_tentar_de_novo(monkeypatch):
+    class _LoginQueFalha(_LoginEpicFalso):
+        def mostrar(self, pai):
+            raise RuntimeError("falha ao apresentar")
+
+    _LoginEpicFalso.criados = []
+    monkeypatch.setattr(epic_conta, "conectada", lambda: False)
+    monkeypatch.setattr(epic_janela, "JanelaDeLogin", _LoginQueFalha)
+    dialogo = _preferencias(monkeypatch)
+    dialogo.conquistas_epic_botao.emit("clicked")
+    dialogo.conquistas_epic_botao.emit("clicked")
+    # O segundo clique não fica morto: cria outra janela.
+    assert len(_LoginEpicFalso.criados) == 2
+
+
 def test_sair_da_epic(monkeypatch):
     estado = {"conectada": True}
     monkeypatch.setattr(epic_conta, "conectada", lambda: estado["conectada"])

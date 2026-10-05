@@ -18,7 +18,6 @@ para o log: só o tipo da exceção e o status.
 
 import json
 import logging
-import math
 import re
 import threading
 import time
@@ -34,7 +33,7 @@ from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.contas import Leitura
 from cartridges.conquistas.epic import conta
 from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.conquistas.saneamento import codifica, limpo, segundos_iso
+from cartridges.conquistas.saneamento import codifica, limpo, numero_finito, segundos_iso
 from cartridges.utils import download
 from cartridges.utils.ler_json import ler_json
 from cartridges.utils.rate_limiter import RateLimiter
@@ -75,6 +74,10 @@ class EpicLimiter(RateLimiter):
 _limitador: Optional[EpicLimiter] = None
 _trava_do_limitador = threading.Lock()
 _trava_dos_arquivos = threading.Lock()
+# O acesso obtido pela última renovação forçada por "a loja não reconheceu a conta":
+# com o mesmo acesso, não se força outra (o vigia consulta a cada 15 s).
+_acesso_ja_renovado: Optional[str] = None
+_trava_do_acesso = threading.Lock()
 
 
 def _limite() -> EpicLimiter:
@@ -191,20 +194,9 @@ def _icone(valor: Any) -> str:
     return valor if isinstance(valor, str) and valor.startswith("https://") and codifica(valor) else ""
 
 
-def _numero_finito(valor: Any) -> bool:
-    """Número (não booleano) que cabe num float: um inteiro de 400 dígitos faz
-    ``math.isfinite`` levantar ``OverflowError``."""
-    if isinstance(valor, bool) or not isinstance(valor, (int, float)):
-        return False
-    try:
-        return math.isfinite(valor)
-    except OverflowError:
-        return False
-
-
 def _porcentagem(item: dict) -> Optional[float]:
     valor = _caminho(item, "rarity", "percent")
-    if not _numero_finito(valor) or not 0 <= valor <= 100:
+    if not numero_finito(valor) or not 0 <= valor <= 100:
         return None
     return float(valor)
 
@@ -276,11 +268,15 @@ def _desbloqueios(produto: str) -> Optional[list[Desbloqueio]]:
     conta_id = conta.account_id()
     if not conta_id:
         return None
+    global _acesso_ja_renovado  # pylint: disable=global-statement
     perfil = None
     for forcar in (False, True):
         acesso = conta.autorizacao(forcar=forcar)
         if acesso is None:
             return _sem_autorizacao()
+        if forcar:
+            with _trava_do_acesso:
+                _acesso_ja_renovado = acesso
         dados = _consulta(_PROGRESSO, {"epicAccountId": conta_id, "productId": produto}, acesso)
         perfil = _caminho(dados, "PlayerProfile", "playerProfile")
         if not isinstance(perfil, dict):
@@ -291,6 +287,13 @@ def _desbloqueios(produto: str) -> Optional[list[Desbloqueio]]:
             break
         # A loja não reconheceu a conta: o token pode ter vencido antes da hora.
         logging.info("Epic: a loja não reconheceu a conta")
+        with _trava_do_acesso:
+            ja_renovado = not forcar and acesso == _acesso_ja_renovado
+        if ja_renovado:
+            # No máximo uma renovação forçada por acesso: sem isto, uma loja que
+            # mudou o cookie faria o vigia renovar (e gravar a chave) a cada 15 s.
+            logging.info("Epic: este acesso já foi renovado à força; sem nova tentativa")
+            return None
     else:
         # Duas vezes sem reconhecer: não é a conta (a renovação diria), é a loja. Só log.
         return None
@@ -309,7 +312,8 @@ def _desbloqueios(produto: str) -> Optional[list[Desbloqueio]]:
 
 
 def _arquivo_dos_produtos() -> Path:
-    return shared.conquistas_cache_dir / "epic-produtos.json"
+    # Com `.`, que nenhum namespace tem: `epic-<namespace>.json` é o catálogo.
+    return shared.conquistas_cache_dir / "epic.produtos.json"
 
 
 def _ler_dicionario(arquivo: Path) -> dict:
@@ -407,7 +411,7 @@ def desbloqueadas(ns: str) -> Optional[list[Desbloqueio]]:
 
 
 def _arquivo_da_biblioteca() -> Path:
-    return shared.conquistas_cache_dir / "epic-biblioteca.json"
+    return shared.conquistas_cache_dir / conta.BIBLIOTECA
 
 
 def _ler_biblioteca() -> tuple[dict[str, str], float]:
@@ -417,7 +421,7 @@ def _ler_biblioteca() -> tuple[dict[str, str], float]:
     if not isinstance(apps, dict):
         return {}, 0.0
     limpos = {k: v for k, v in apps.items() if isinstance(k, str) and namespace_valido(v)}
-    return limpos, float(em) if _numero_finito(em) else 0.0
+    return limpos, float(em) if numero_finito(em) else 0.0
 
 
 def _chamar_biblioteca(params: dict[str, str]) -> Optional[Any]:

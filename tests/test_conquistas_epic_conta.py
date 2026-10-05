@@ -2,6 +2,7 @@
 
 import json
 import threading
+import time
 
 import pytest
 
@@ -53,14 +54,51 @@ def test_extrair_codigo(texto, esperado):
 
 
 def test_conectar_guarda_cifrado_e_conecta(monkeypatch):
-    chamadas = rede_falsa(monkeypatch, conta, {conta.TOKEN: [_token()]}, nome="_pedir")
+    chamadas = rede_falsa(monkeypatch, conta, {conta.TOKEN: [_token(renovacao="RENOVACAO-SECRETA")]}, nome="_pedir")
     conta.conectar(_COD)
     assert conta.conectada() and conta.nome() == "Jogador" and conta.account_id() == "c" * 32
     texto = (shared.contas_dir / "epic.json").read_text(encoding="utf-8")
-    assert "R1" not in texto and json.loads(texto)["conta"] == "c" * 32
+    # Um texto distintivo: "R1" aparece por acaso no base64 de vez em quando.
+    assert "RENOVACAO-SECRETA" not in texto and json.loads(texto)["conta"] == "c" * 32
     _url, kwargs = chamadas[0]
     assert kwargs["data"]["grant_type"] == "authorization_code" and kwargs["data"]["token_type"] == "eg1"
     assert kwargs["auth"] == (conta.CLIENT_ID, conta.SEGREDO)
+
+
+def test_validade_com_inteiro_enorme_vira_uma_hora(monkeypatch):
+    """`float(10**400)` levanta OverflowError: cai no padrão de 1 h e a conta conecta."""
+    corpo = {**_token().json(), "expires_in": 10**400}
+    del corpo["expires_at"]
+    assert 3000 < conta._vence(corpo) - time.time() <= 3600
+    rede_falsa(monkeypatch, conta, {conta.TOKEN: [Resposta(200, corpo)]}, nome="_pedir")
+    conta.conectar(_COD)
+    assert conta.conectada()
+
+
+def test_conectar_apaga_a_biblioteca_da_conta_anterior(monkeypatch):
+    """A biblioteca é de uma conta: outra conta não herda o "fora da biblioteca" da primeira."""
+    shared.conquistas_cache_dir.mkdir(parents=True)
+    biblioteca = shared.conquistas_cache_dir / "epic.biblioteca.json"
+    catalogo = shared.conquistas_cache_dir / "epic-ns1.json"
+    biblioteca.write_text('{"apps": {}, "em": 1}', encoding="utf-8")
+    catalogo.write_text("{}", encoding="utf-8")
+    rede_falsa(monkeypatch, conta, {conta.TOKEN: [_token()]}, nome="_pedir")
+    conta.conectar(_COD)
+    assert conta.conectada()
+    assert not biblioteca.exists() and catalogo.exists()
+
+
+def test_conectar_sem_biblioteca_ou_com_erro_ao_apagar_conecta_assim_mesmo(monkeypatch):
+    rede_falsa(monkeypatch, conta, {conta.TOKEN: [_token(), _token()]}, nome="_pedir")
+    conta.conectar(_COD)  # sem arquivo: missing_ok
+    assert conta.conectada()
+
+    def nega(*_a, **_k):
+        raise PermissionError("negado")
+
+    monkeypatch.setattr("pathlib.Path.unlink", nega)
+    conta.conectar(_COD)
+    assert conta.conectada()
 
 
 def test_codigo_recusado(monkeypatch):
@@ -177,6 +215,15 @@ def test_sair_com_rede_fora_nao_levanta(monkeypatch):
     conta.conectar(_COD)
     conta.sair()
     assert not conta.conectada()
+
+
+def test_error_code_enorme_vai_ao_log_com_teto(monkeypatch, caplog):
+    """O `errorCode` é um valor da Epic, sem limite de tamanho."""
+    caplog.set_level("DEBUG")
+    rede_falsa(monkeypatch, conta, {conta.TOKEN: [_recusa("x" * 5000)]}, nome="_pedir")
+    with pytest.raises(conta.CodigoRecusado):
+        conta.conectar(_COD)
+    assert "x" * 120 in caplog.text and "x" * 121 not in caplog.text
 
 
 def test_nada_secreto_no_log(monkeypatch, caplog):

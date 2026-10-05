@@ -168,6 +168,18 @@ def test_validade_nao_finita_vira_uma_hora():
         assert 3000 < conta._vence_em(estranho) - time.time() <= 3600
 
 
+def test_validade_com_inteiro_enorme_vira_uma_hora(monkeypatch):
+    """`float(10**400)` levanta OverflowError: cai no padrão de 1 h e a conta conecta."""
+    assert 3000 < conta._vence_em(10**400) - time.time() <= 3600
+    respostas = respostas_de_login()
+    respostas[conta.TOKEN] = [
+        Resposta(200, {"access_token": "A1", "refresh_token": "R1", "expires_in": 10**400})
+    ]
+    rede_falsa(monkeypatch, conta, respostas)
+    conta.conectar("codigo", "verificador", "http://localhost:1")
+    assert conta.conectada()
+
+
 @pytest.mark.parametrize("xerr, erro", [(2148916233, conta.SemPerfilXbox), (2148916238, conta.ContaInfantil)])
 def test_xerr_no_login(monkeypatch, xerr, erro):
     respostas = respostas_de_login()

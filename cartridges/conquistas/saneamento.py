@@ -2,7 +2,19 @@
 
 import calendar
 import datetime
+import math
 from typing import Any
+
+
+def numero_finito(valor: Any) -> bool:
+    """Número (não booleano) que cabe num float: um inteiro de 400 dígitos faz
+    ``math.isfinite`` levantar ``OverflowError``."""
+    if isinstance(valor, bool) or not isinstance(valor, (int, float)):
+        return False
+    try:
+        return math.isfinite(valor)
+    except OverflowError:
+        return False
 
 
 def segundos_iso(texto: Any) -> int:

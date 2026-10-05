@@ -104,7 +104,7 @@ def _vence_em(segundos: Any) -> float:
     """Instante em que um token de `segundos` de vida vence; na dúvida, 1 h."""
     try:
         duracao = float(segundos)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         duracao = _UMA_HORA
     if not math.isfinite(duracao):
         duracao = _UMA_HORA

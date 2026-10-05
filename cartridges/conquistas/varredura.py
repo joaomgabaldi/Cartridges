@@ -7,21 +7,22 @@ Entram os jogos da biblioteca e os de Jogos Zerados — as pastas do AppData
 sobrevivem à desinstalação, então um zerado antigo ainda recupera o que tinha.
 
 A leitura roda numa thread, em duas passadas. A primeira decide a fonte das
-conquistas de cada jogo (`fontes.do_jogo`: a conta de uma loja — Xbox; ver
-`contas.py` —, Steam/emulador ou nenhuma) e lê só os arquivos dos emuladores
-(disco); a gravação do histórico,
-com a fonte (ou o esquecimento dela, para o jogo sem fonte), volta para a
-thread principal, onde dá para conferir que o jogo ainda está na store. Sem
-essa conferência, um jogo excluído no meio da passada ganharia de volta o
-arquivo que o Excluir acabou de apagar. A segunda vai à rede: renova o
-catálogo dos jogos da Steam e lê a conta da loja dos jogos que vêm dela. Quando um
-pedido falha por rede, os jogos seguintes (de qualquer fonte) ficam só com o
-cache e o arquivo do jogo. Jogo sem fonte não vai à rede.
+conquistas de cada jogo (`fontes.do_jogo`: a conta de uma loja — Xbox, Epic;
+ver `contas.py` —, Steam/emulador ou nenhuma) e lê só os arquivos dos
+emuladores (disco); a gravação do histórico, com a fonte (ou o esquecimento
+dela, para o jogo sem fonte), volta para a thread principal, onde dá para
+conferir que o jogo ainda está na store. Sem essa conferência, um jogo
+excluído no meio da passada ganharia de volta o arquivo que o Excluir acabou
+de apagar. A segunda vai à rede: renova o catálogo dos jogos da Steam e lê as
+contas das lojas (Xbox, Epic) dos jogos que vêm delas. Quando um pedido falha
+por rede, os jogos seguintes (de qualquer fonte) ficam só com o cache e o
+arquivo do jogo. Jogo sem fonte não vai à rede.
 
 A fonte de uma loja com conta só é gravada na segunda passada, junto com as
-conquistas da conta. A primeira leitura de uma fonte (o jogo ainda não tinha o Xbox como
-fonte, ou ela era de outra conta: conta recém-conectada, por exemplo) não conta
-no aviso, senão as conquistas antigas da conta apareceriam como novas.
+conquistas da conta. A primeira leitura de uma fonte (o jogo ainda não tinha
+aquela loja como fonte, ou ela era de outra conta: conta recém-conectada, por
+exemplo) não conta no aviso, senão as conquistas antigas da conta apareceriam
+como novas.
 
 Terminada a primeira passada, um aviso só com o que entrou desde a abertura
 anterior: o que foi jogado por fora do app. Ele não espera a rede; as
@@ -284,7 +285,7 @@ class VarreduraConquistas:
     ) -> None:
         """Duas passadas. A dos arquivos vem primeiro e só toca o disco: o
         histórico é gravado e o aviso de conquistas novas sai sem esperar a
-        Steam. A da rede (catálogo da Steam, conta Xbox) vem depois."""
+        Steam. A da rede (catálogo da Steam, contas das lojas: Xbox, Epic) vem depois."""
         tarefa = None
         concluiu = False
         try:
