@@ -711,8 +711,9 @@ def xbox(monkeypatch):
     """Conta conectada e uma API falsa que devolve o que o teste puser em `estado`."""
     from cartridges.conquistas.xbox import api, conta  # noqa: PLC0415
 
-    estado = SimpleNamespace(desbloqueios=[], titulo="7", falha=None, chamadas=0)
+    estado = SimpleNamespace(desbloqueios=[], titulo="7", falha=None, chamadas=0, xuid="111")
     monkeypatch.setattr(conta, "conectada", lambda: True)
+    monkeypatch.setattr(conta, "xuid", lambda: estado.xuid)
     monkeypatch.setattr(api, "titulo_local", lambda pfn, bases: None)
     monkeypatch.setattr(api, "titulo", lambda pfn, bases: estado.titulo)
 
@@ -799,7 +800,7 @@ def test_primeira_leitura_do_xbox_nao_avisa(store, make_game, pastas, win, flush
 
 def test_xbox_novas_desde_a_ultima_abertura_avisam(store, make_game, pastas, win, flush_idle, xbox):
     game = _registrado(store, make_game, 1, executable=_AUMID)
-    historico.registrar(game.game_id, [Desbloqueio("XBOX:1", 100)], fonte="xbox:7")
+    historico.registrar(game.game_id, [Desbloqueio("XBOX:1", 100)], fonte="xbox:7", conta="111")
     xbox.desbloqueios = [Desbloqueio("XBOX:1", 100), Desbloqueio("XBOX:2", 200)]
     _rodar([game], flush_idle)
     assert _avisos(win) == ["1 nova conquista em Jogo 1"]
@@ -808,7 +809,7 @@ def test_xbox_novas_desde_a_ultima_abertura_avisam(store, make_game, pastas, win
 def test_aviso_do_xbox_soma_os_jogos_num_so(store, make_game, pastas, win, flush_idle, xbox):
     jogos = [_registrado(store, make_game, n, executable=_AUMID.replace("Jogo", f"J{n}")) for n in (1, 2)]
     for jogo in jogos:
-        historico.registrar(jogo.game_id, [], fonte="xbox:7")
+        historico.registrar(jogo.game_id, [], fonte="xbox:7", conta="111")
     xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
     _rodar(jogos, flush_idle)
     assert _avisos(win) == ["2 novas conquistas em 2 jogos"]
@@ -816,7 +817,7 @@ def test_aviso_do_xbox_soma_os_jogos_num_so(store, make_game, pastas, win, flush
 
 def test_varredura_de_um_jogo_do_xbox_fica_calada(store, make_game, pastas, win, flush_idle, xbox):
     game = _registrado(store, make_game, 1, executable=_AUMID)
-    historico.registrar(game.game_id, [], fonte="xbox:7")
+    historico.registrar(game.game_id, [], fonte="xbox:7", conta="111")
     xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
     instancia = VarreduraConquistas()
     instancia._worker([game], instancia._generation, False)
@@ -829,7 +830,7 @@ def test_reconectar_nao_avisa_o_que_ja_existia(store, make_game, pastas, win, fl
     from cartridges.conquistas.xbox import conta  # noqa: PLC0415
 
     game = _registrado(store, make_game, 1, executable=_AUMID)
-    historico.registrar(game.game_id, [Desbloqueio("XBOX:1", 100)], fonte="xbox:7")
+    historico.registrar(game.game_id, [Desbloqueio("XBOX:1", 100)], fonte="xbox:7", conta="111")
     monkeypatch.setattr(conta, "conectada", lambda: False)
     _rodar([game], flush_idle)  # desconectado: a fonte é esquecida
     assert historico.fonte(game.game_id) is None
@@ -838,6 +839,42 @@ def test_reconectar_nao_avisa_o_que_ja_existia(store, make_game, pastas, win, fl
     _rodar([game], flush_idle)
     assert _avisos(win) == []
     assert "XBOX:2" in historico.ler(game.game_id)
+
+
+def test_outra_conta_nao_avisa_o_que_a_nova_ja_tinha(
+    store, make_game, pastas, win, flush_idle, xbox
+):
+    """A conta A cai e o usuário entra com a B, que já tinha conquistas que a A não tinha:
+    a fonte (`xbox:<titleId>`) é a mesma, mas a conta não: é a primeira leitura da B."""
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    historico.registrar(game.game_id, [Desbloqueio("XBOX:1", 100)], fonte="xbox:7", conta="AAA")
+    xbox.xuid = "BBB"
+    xbox.desbloqueios = [Desbloqueio("XBOX:1", 100), Desbloqueio("XBOX:2", 200)]
+    _rodar([game], flush_idle)
+    assert _avisos(win) == []
+    assert historico.conta(game.game_id) == "BBB"
+    assert "XBOX:2" in historico.ler(game.game_id)
+    # Na leitura seguinte já é a conta B: o que entrar de novo avisa.
+    xbox.desbloqueios.append(Desbloqueio("XBOX:3", 300))
+    _rodar([game], flush_idle)
+    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+
+
+def test_xbox_sem_conta_gravada_conta_como_primeira_leitura(
+    store, make_game, pastas, win, flush_idle, xbox
+):
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    historico.registrar(game.game_id, [Desbloqueio("XBOX:1", 100)], fonte="xbox:7")
+    xbox.desbloqueios = [Desbloqueio("XBOX:1", 100), Desbloqueio("XBOX:2", 200)]
+    _rodar([game], flush_idle)
+    assert _avisos(win) == []
+    assert historico.conta(game.game_id) == "111"
+
+
+def test_varredura_do_xbox_grava_a_conta_com_a_fonte(store, make_game, pastas, flush_idle, xbox):
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    _rodar([game], flush_idle)
+    assert historico.conta(game.game_id) == "111"
 
 
 def test_rede_fora_no_xbox_para_os_outros(store, make_game, pastas, flush_idle, xbox):

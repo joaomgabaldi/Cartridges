@@ -19,8 +19,8 @@ cache e o arquivo do jogo. Jogo sem fonte não vai à rede.
 
 A fonte do Xbox só é gravada na segunda passada, junto com as conquistas da
 conta. A primeira leitura de uma fonte (o jogo ainda não tinha o Xbox como
-fonte: conta recém-conectada, por exemplo) não conta no aviso, senão as
-conquistas antigas da conta apareceriam como novas.
+fonte, ou ela era de outra conta: conta recém-conectada, por exemplo) não conta
+no aviso, senão as conquistas antigas da conta apareceriam como novas.
 
 Terminada a primeira passada, um aviso só com o que entrou desde a abertura
 anterior: o que foi jogado por fora do app. Ele não espera a rede; as
@@ -507,14 +507,21 @@ class VarreduraConquistas:
             if (getattr(game, "executable", "") or "") != leitura.executavel:
                 return False
             texto = leitura.fonte.texto
+            xuid = conta.xuid()
+            if xuid is None:
+                return False
             antes = historico.fonte(game.game_id)
+            conta_antes = historico.conta(game.game_id)
             entraram, primeira = historico.registrar(
-                game.game_id, leitura.desbloqueios, fonte=texto
+                game.game_id, leitura.desbloqueios, fonte=texto, conta=xuid
             )
             # A primeira leitura da fonte (conta recém-conectada, por exemplo)
-            # traz o que a conta já tinha: não é novidade.
-            novas = 0 if (primeira or antes != texto) else len(entraram)
-            self._atualizar_pagina(game, bool(entraram) or antes != texto)
+            # traz o que a conta já tinha: não é novidade. Vale também quando só a
+            # conta mudou: o `xbox:<titleId>` é o mesmo, mas as conquistas de uma
+            # conta que não é a que o histórico conhecia não são novidade.
+            primeira_da_conta = antes != texto or conta_antes != xuid
+            novas = 0 if (primeira or primeira_da_conta) else len(entraram)
+            self._atualizar_pagina(game, bool(entraram) or primeira_da_conta)
             if novas and leitura.avisar:
                 self._novas_xbox.append((game.name, novas))
         except Exception:  # pylint: disable=broad-exception-caught
