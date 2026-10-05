@@ -4,6 +4,8 @@ import pytest
 
 from cartridges import shared
 from cartridges.conquistas import fontes
+from cartridges.conquistas.epic import conta as epic_conta
+from cartridges.conquistas.epic import janela as epic_janela
 from cartridges.conquistas.xbox import conta, login
 
 
@@ -373,3 +375,97 @@ def test_fechar_cancela_o_login_e_solta_o_ouvinte(monkeypatch):
     dialogo.emit("closed")
     assert cancelados == [1]
     assert removidos == [1]
+
+
+# --- A conta Epic ---------------------------------------------------------
+
+
+def test_descricao_do_grupo_das_contas(monkeypatch):
+    dialogo = _preferencias(monkeypatch)
+    assert dialogo.conquistas_contas_group.get_description() == (
+        "Entre com as contas das lojas para acompanhar as conquistas dos jogos do Xbox, "
+        "do Game Pass e da Epic Games Store."
+    )
+
+
+def test_conta_epic_desconectada(monkeypatch):
+    monkeypatch.setattr(epic_conta, "conectada", lambda: False)
+    dialogo = _preferencias(monkeypatch)
+    assert dialogo.conquistas_epic_row.get_subtitle() == "Não conectada"
+    assert dialogo.conquistas_epic_botao.get_label() == "Entrar"
+
+
+def test_conta_epic_conectada_mostra_o_nome(monkeypatch):
+    monkeypatch.setattr(epic_conta, "conectada", lambda: True)
+    monkeypatch.setattr(epic_conta, "nome", lambda: "Jogador")
+    dialogo = _preferencias(monkeypatch)
+    assert dialogo.conquistas_epic_row.get_subtitle() == "Jogador"
+    assert dialogo.conquistas_epic_botao.get_label() == "Sair"
+
+
+class _LoginEpicFalso:
+    criados: list = []
+
+    def __init__(self, ao_conectar, **_kw):
+        self.ao_conectar, self.mostrada, self.fechada, self._fechar = ao_conectar, None, False, []
+        _LoginEpicFalso.criados.append(self)
+
+    def connect(self, sinal, funcao):
+        assert sinal == "closed"
+        self._fechar.append(funcao)
+
+    def mostrar(self, pai):
+        self.mostrada = pai
+
+    def force_close(self):
+        self.fechada = True
+        for funcao in self._fechar:
+            funcao(self)
+
+
+def test_entrar_abre_a_janela_e_o_sucesso_varre_os_jogos_da_epic(monkeypatch, store):
+    _LoginEpicFalso.criados = []
+    monkeypatch.setattr(epic_conta, "conectada", lambda: False)
+    monkeypatch.setattr(epic_janela, "JanelaDeLogin", _LoginEpicFalso)
+    pedidos = []
+    _varredura_falsa(monkeypatch, [], pedidos)
+    dialogo = _preferencias(monkeypatch)
+    dialogo.conquistas_epic_botao.emit("clicked")
+    (janela_,) = _LoginEpicFalso.criados
+    assert janela_.mostrada is dialogo
+    janela_.ao_conectar()
+    assert [filtro for _games, filtro in pedidos] == [fontes.eh_da_epic]
+
+
+def test_sair_da_epic(monkeypatch):
+    estado = {"conectada": True}
+    monkeypatch.setattr(epic_conta, "conectada", lambda: estado["conectada"])
+    monkeypatch.setattr(epic_conta, "nome", lambda: "Jogador")
+    monkeypatch.setattr(epic_conta, "sair", lambda: estado.update(conectada=False))
+    dialogo = _preferencias(monkeypatch)
+    dialogo.conquistas_epic_botao.emit("clicked")
+    assert dialogo.conquistas_epic_row.get_subtitle() == "Não conectada"
+
+
+def test_conta_epic_que_muda_atualiza_a_linha(monkeypatch):
+    estado = {"conectada": False}
+    ouvintes = []
+    monkeypatch.setattr(epic_conta, "conectada", lambda: estado["conectada"])
+    monkeypatch.setattr(epic_conta, "nome", lambda: "Jogador")
+    monkeypatch.setattr(epic_conta, "ao_mudar", lambda ouvinte: ouvintes.append(ouvinte) or (lambda: None))
+    dialogo = _preferencias(monkeypatch)
+    estado["conectada"] = True
+    ouvintes[0]()
+    assert dialogo.conquistas_epic_row.get_subtitle() == "Jogador"
+
+
+def test_fechar_as_preferencias_fecha_a_janela_e_solta_o_ouvinte(monkeypatch):
+    _LoginEpicFalso.criados = []
+    removidos = []
+    monkeypatch.setattr(epic_conta, "conectada", lambda: False)
+    monkeypatch.setattr(epic_conta, "ao_mudar", lambda _o: lambda: removidos.append(1))
+    monkeypatch.setattr(epic_janela, "JanelaDeLogin", _LoginEpicFalso)
+    dialogo = _preferencias(monkeypatch)
+    dialogo.conquistas_epic_botao.emit("clicked")
+    dialogo.emit("closed")
+    assert _LoginEpicFalso.criados[0].fechada and removidos == [1]

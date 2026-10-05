@@ -30,6 +30,8 @@ from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
 from cartridges import conquista_aviso, shared
 from cartridges.conquistas import fontes
+from cartridges.conquistas.epic import conta as epic_conta
+from cartridges.conquistas.epic import janela as epic_janela
 from cartridges.conquistas.xbox import conta, login
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.metadata_refresh import get_metadata_refresh
@@ -113,6 +115,9 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     conquistas_exemplo_row: Adw.ButtonRow = Gtk.Template.Child()
     conquistas_conta_row: Adw.ActionRow = Gtk.Template.Child()
     conquistas_conta_botao: Gtk.Button = Gtk.Template.Child()
+    conquistas_contas_group: Adw.PreferencesGroup = Gtk.Template.Child()
+    conquistas_epic_row: Adw.ActionRow = Gtk.Template.Child()
+    conquistas_epic_botao: Gtk.Button = Gtk.Template.Child()
 
     export_backup_button_row = Gtk.Template.Child()
     import_backup_button_row = Gtk.Template.Child()
@@ -216,6 +221,14 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self._remover_ouvinte_da_conta = conta.ao_mudar(self._atualizar_conta)
         self.connect("closed", self._ao_fechar_conta)
         self._atualizar_conta()
+
+        # Conta Epic: a janela de login e o ouvinte da conta morrem com o
+        # diálogo.
+        self._janela_epic = None
+        self.conquistas_epic_botao.connect("clicked", self._on_conta_epic_clicked)
+        self._remover_ouvinte_da_epic = epic_conta.ao_mudar(self._atualizar_conta_epic)
+        self.connect("closed", self._ao_fechar_conta_epic)
+        self._atualizar_conta_epic()
 
         def update_sgdb(*_args: Any) -> None:
             counter = 0
@@ -428,6 +441,60 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     def _ao_fechar_conta(self, *_args: Any) -> None:
         login.cancelar_pendente()
         self._remover_ouvinte_da_conta()
+
+    def _atualizar_conta_epic(self) -> None:
+        if epic_conta.conectada():
+            subtitulo, rotulo = epic_conta.nome() or _("Conta Epic"), _("Sair")
+        else:
+            subtitulo, rotulo = _("Não conectada"), _("Entrar")
+        self.conquistas_epic_row.set_subtitle(subtitulo)
+        self.conquistas_epic_botao.set_label(rotulo)
+
+    def _on_conta_epic_clicked(self, *_args: Any) -> None:
+        try:
+            if epic_conta.conectada():
+                epic_conta.sair()
+                self._atualizar_conta_epic()
+                return
+            if self._janela_epic is not None:
+                return
+            janela = epic_janela.JanelaDeLogin(self._varrer_jogos_da_epic)
+            janela.connect("closed", self._ao_fechar_janela_epic)
+            self._janela_epic = janela
+            janela.mostrar(self)
+        except Exception as erro:  # pylint: disable=broad-exception-caught
+            # O handler de GTK não levanta.
+            logging.warning(
+                "Falha ao abrir o login da conta Epic: %s", type(erro).__name__
+            )
+
+    def _ao_fechar_janela_epic(self, *_args: Any) -> None:
+        self._janela_epic = None
+        self._atualizar_conta_epic()
+
+    def _varrer_jogos_da_epic(self) -> None:
+        """Lê na hora as conquistas dos jogos da Epic, sem aviso de novas."""
+        try:
+            app = shared.win.get_application() if shared.win is not None else None
+            varredura = getattr(app, "varredura_conquistas", None)
+            if varredura is not None:
+                # `eh_da_epic` lê o disco do jogo: quem o aplica é a thread da varredura.
+                varredura.varrer_jogos(list(shared.store), filtro=fontes.eh_da_epic)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning(
+                "Falha ao ler as conquistas da Epic depois do login", exc_info=True
+            )
+
+    def _ao_fechar_conta_epic(self, *_args: Any) -> None:
+        janela, self._janela_epic = self._janela_epic, None
+        if janela is not None:
+            try:
+                janela.force_close()
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.warning(
+                    "Falha ao fechar a janela de login da Epic", exc_info=True
+                )
+        self._remover_ouvinte_da_epic()
 
     def reler_do_schema(self) -> None:
         """Preenche as linhas que não usam ``bind``. Chamado no fim do

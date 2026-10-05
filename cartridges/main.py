@@ -47,6 +47,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 from cartridges import restauracao_dialogs, shared
 from cartridges.conquistas import icones
 from cartridges.conquistas import sessao as sessao_conquistas
+from cartridges.conquistas.epic import conta as epic_conta
 from cartridges.conquistas.varredura import VarreduraConquistas
 from cartridges.conquistas.xbox import conta, login
 from cartridges.details_dialog import DetailsDialog
@@ -608,8 +609,9 @@ class CartridgesApplication(Adw.Application):
         # Lê as conquistas de cada jogo e guarda o que achar, inclusive o que
         # foi jogado por fora do app desde a última abertura. Uma vez por
         # execução, depois da importação, como as duas varreduras acima.
-        # A conta Microsoft é lida do disco antes, sem rede (nunca levanta).
+        # As contas Microsoft e Epic são lidas do disco antes, sem rede (nunca levantam).
         conta.carregar()
+        epic_conta.carregar()
         self.varredura_conquistas = VarreduraConquistas()
         self.varredura_conquistas.start()
 
