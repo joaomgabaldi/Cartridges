@@ -28,6 +28,14 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.04" date="2026-10-04">
+      <description translate="no">
+        <ul>
+          <li>Ao restaurar um backup, a mensagem que pede a pasta de atalhos ficou mais clara</li>
+          <li>Em Jogos sem atalho, quando não há atalho para sugerir, o botão Escolher atalho abre direto a seleção do arquivo</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.09.30" date="2026-09-30">
       <description translate="no">
         <ul>
