@@ -2,6 +2,7 @@
 
 import json
 import logging
+import threading
 import time
 
 import pytest
@@ -32,10 +33,12 @@ def _vencer_os_tokens():
 
 
 def test_conectar_guarda_cifrado_e_conecta(monkeypatch):
-    _conectar(monkeypatch)
+    _conectar(monkeypatch, renovacao="RENOVACAO-SECRETA")
     assert conta.conectada() and conta.gamertag() == "Jogador" and conta.xuid() == "2535400000000000"
     texto = (shared.contas_dir / "microsoft.json").read_text(encoding="utf-8")
-    assert "R1" not in texto and "A1" not in texto and "X1" not in texto
+    # Um texto distintivo: "R1" ou "A1" podem aparecer por acaso no base64.
+    assert "RENOVACAO-SECRETA" not in texto
+    assert set(json.loads(texto)) == {"gamertag", "xuid", "renovacao"}  # nenhum token de acesso
     assert json.loads(texto)["gamertag"] == "Jogador"
 
 
@@ -189,6 +192,73 @@ def test_sair_apaga_sem_aviso_e_chama_os_ouvintes(monkeypatch, win, flush_idle):
     _conectar(monkeypatch)
     flush_idle()
     assert chamados == [1]
+
+
+def test_sair_durante_renovacao_lenta_volta_logo_e_a_renovacao_nao_ressuscita(monkeypatch, flush_idle):
+    """`sair()` roda na thread principal: não pode esperar a rede de uma renovação."""
+    _conectar(monkeypatch)
+    _vencer_os_tokens()
+    rede_falsa(monkeypatch, conta, respostas_de_login(renovacao="R2"))
+    post_falso = conta._post
+    na_rede = threading.Event()
+    liberar = threading.Event()
+
+    def post_lento(*args, **kwargs):
+        na_rede.set()
+        liberar.wait(10)
+        return post_falso(*args, **kwargs)
+
+    monkeypatch.setattr(conta, "_post", post_lento)
+    resultado = []
+    renovacao = threading.Thread(target=lambda: resultado.append(conta.autorizacao()))
+    renovacao.start()
+    try:
+        assert na_rede.wait(5)
+        saida = threading.Thread(target=conta.sair)
+        saida.start()
+        saida.join(2)
+        assert not saida.is_alive(), "sair() ficou esperando a rede"
+    finally:
+        liberar.set()
+        renovacao.join(10)
+    assert not renovacao.is_alive()
+    flush_idle()
+    assert resultado == [None]
+    assert not conta.conectada()
+    assert not (shared.contas_dir / "microsoft.json").exists()
+
+
+def test_login_durante_renovacao_lenta_descarta_a_renovacao_velha(monkeypatch, flush_idle):
+    _conectar(monkeypatch, gamertag="Antigo", renovacao="R1")
+    _vencer_os_tokens()
+    rede_falsa(monkeypatch, conta, respostas_de_login(gamertag="Velho", renovacao="R2"))
+    post_falso = conta._post
+    na_rede = threading.Event()
+    liberar = threading.Event()
+
+    def post_lento(*args, **kwargs):
+        na_rede.set()
+        liberar.wait(10)
+        return post_falso(*args, **kwargs)
+
+    monkeypatch.setattr(conta, "_post", post_lento)
+    resultado = []
+    renovacao = threading.Thread(target=lambda: resultado.append(conta.autorizacao()))
+    renovacao.start()
+    try:
+        assert na_rede.wait(5)
+        # Um novo login (outra conta) entra enquanto a renovação espera a rede.
+        sessao_nova = conta._Sessao("R9", "Novo", "1")
+        conta._salvar(sessao_nova)
+        conta._sessao = sessao_nova
+    finally:
+        liberar.set()
+        renovacao.join(10)
+    assert resultado == [None]
+    assert conta._sessao is sessao_nova and conta.gamertag() == "Novo"
+    monkeypatch.setattr(conta, "_sessao", None)
+    conta.carregar()
+    assert conta._sessao.renovacao == "R9"
 
 
 def test_recusada_desconecta(monkeypatch, flush_idle):
