@@ -1,0 +1,14 @@
+{
+ "data": {
+  "PlayerProfile": {
+   "playerProfile": {
+    "epicAccountId": "00000000000000000000000000000000",
+    "displayName": "Jogador",
+    "relationship": "SELF",
+    "productAchievements": {
+     "__typename": "ServiceError"
+    }
+   }
+  }
+ }
+}
