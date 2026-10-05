@@ -371,11 +371,16 @@ def test_pagina_de_outro_jogo_nao_atualiza(store, make_game, pastas, win, flush_
         "obter",
         lambda _appid, _exe, rede=True, usar_chave=True: catalogo.Renovacao(catalogo.Catalogo((), 1, False)),
     )
-    game = _registrado(store, make_game, 1, steam_appid="570")
-    outro = _registrado(store, make_game, 2, steam_appid="620")
+    game = _da_steam_aberta(store, make_game, 1, "570")
+    outro = _da_steam_aberta(store, make_game, 2, "620")
+    historico.registrar(game.game_id, [], fonte="steam:570")
     chamadas = _janela_com_jogo_aberto(win, outro)
     _rodar([game], flush_idle)
+    # O catálogo do jogo chegou (e a página dele atualizaria), mas a aberta é a de outro.
     assert chamadas == []
+    chamadas = _janela_com_jogo_aberto(win, game)
+    _rodar([game], flush_idle)
+    assert chamadas == [game]
 
 
 # --- duas passadas: arquivos primeiro, rede depois ---------------------------------
