@@ -38,8 +38,9 @@ _AGENDADO = "restaurar.zip"
 # Arquivos soltos na raiz da pasta do app que vão no backup.
 _SOLTOS = ("fitas.json", "sessions.jsonl", "tuya_conta.json")
 # O que fica na pasta do app durante a troca: os logs são desta máquina e desta
-# execução, e o .zip agendado é a própria fonte da troca.
-_FICAM = frozenset({"logs", _AGENDADO})
+# execução, e o .zip agendado é a própria fonte da troca. A pasta `contas` também
+# é desta máquina e deste usuário do Windows (o DPAPI não abre em outro PC).
+_FICAM = frozenset({"logs", "contas", _AGENDADO})
 # Marca, dentro de `.anterior`, que todos os dados de antes já saíram da pasta
 # do app: a partir dali, o que estiver nela veio do backup.
 _COMPLETO = ".completo"
