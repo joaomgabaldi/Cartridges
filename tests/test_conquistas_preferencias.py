@@ -3,6 +3,7 @@
 import pytest
 
 from cartridges import shared
+from cartridges.conquistas import fontes
 from cartridges.conquistas.xbox import conta, login
 
 
@@ -149,10 +150,15 @@ class _JanelaFalsa:
         return self._app
 
 
-def _varredura_falsa(monkeypatch, varridos):
+def _varredura_falsa(monkeypatch, varridos, pedidos=None):
     class Varredura:
-        def varrer_jogos(self, games):
-            varridos.extend(games)
+        def varrer_jogos(self, games, filtro=None):
+            # O filtro é de quem varre (na thread dela): a falsa aplica aqui o que a
+            # varredura de verdade aplicaria lá, a menos que o teste só queira ver o pedido.
+            if pedidos is not None:
+                pedidos.append((list(games), filtro))
+                return
+            varridos.extend(game for game in games if filtro is None or filtro(game))
 
     monkeypatch.setattr(shared, "win", _JanelaFalsa(_AppFalso(Varredura())))
 
@@ -255,6 +261,33 @@ def test_login_ok_varre_os_jogos_do_xbox(monkeypatch, store, make_game):
     assert dialogo.conquistas_conta_row.get_subtitle() == "Jogador"
 
 
+def test_login_ok_nao_olha_o_disco_dos_jogos_na_thread_principal(
+    monkeypatch, store, make_game
+):
+    """A foto da store sai na thread principal; o filtro (que lê o disco do jogo)
+    vai para a thread da varredura, que o aplica lá."""
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    monkeypatch.setattr(conta, "gamertag", lambda: "Jogador")
+    xbox = make_game(
+        game_id="shortcuts_1", executable='start "" "shell:AppsFolder\\P_a!G"'
+    )
+    outro = make_game(game_id="shortcuts_2")
+    for g in (xbox, outro):
+        store.add_game(g, {}, run_pipeline=False)
+    consultados = []
+    monkeypatch.setattr(
+        fontes, "eh_do_xbox", lambda game: consultados.append(game) or game is xbox
+    )
+    pedidos = []
+    _varredura_falsa(monkeypatch, [], pedidos)
+    dialogo = _preferencias(monkeypatch)
+    dialogo._ao_entrar(login.Resultado.OK)
+    ((jogos, filtro),) = pedidos
+    assert set(jogos) == {xbox, outro}
+    assert consultados == []
+    assert filtro(xbox) is True and filtro(outro) is False
+
+
 def test_cancelar_na_troca_com_a_conta_conectada_conta_como_ok(
     monkeypatch, store, make_game
 ):
@@ -294,7 +327,7 @@ def test_varredura_do_xbox_que_falha_nao_levanta(monkeypatch, store, make_game):
     monkeypatch.setattr(conta, "gamertag", lambda: "Jogador")
 
     class Varredura:
-        def varrer_jogos(self, games):
+        def varrer_jogos(self, games, filtro=None):
             raise RuntimeError("falhou")
 
     monkeypatch.setattr(shared, "win", _JanelaFalsa(_AppFalso(Varredura())))

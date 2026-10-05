@@ -418,9 +418,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             app = shared.win.get_application() if shared.win is not None else None
             varredura = getattr(app, "varredura_conquistas", None)
             if varredura is not None:
-                varredura.varrer_jogos(
-                    [game for game in shared.store if fontes.eh_do_xbox(game)]
-                )
+                # `eh_do_xbox` lê o disco do jogo: quem o aplica é a thread da varredura.
+                varredura.varrer_jogos(list(shared.store), filtro=fontes.eh_do_xbox)
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning(
                 "Falha ao ler as conquistas do Xbox depois do login", exc_info=True
