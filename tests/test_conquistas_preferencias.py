@@ -1,5 +1,10 @@
 """A página Conquistas das Preferências."""
 
+import pytest
+
+from cartridges import shared
+from cartridges.conquistas.xbox import conta, login
+
 
 def _preferencias(monkeypatch):
     import cartridges.preferences as preferences_module  # noqa: PLC0415
@@ -126,3 +131,194 @@ def test_textos_do_grupo_durante_o_jogo(monkeypatch):
     grupo = aviso.get_ancestor(Adw.PreferencesGroup)
     assert grupo.get_title() == "Durante o jogo"
     assert not grupo.get_description()
+
+
+# A conta Microsoft
+
+
+class _AppFalso:
+    def __init__(self, varredura) -> None:
+        self.varredura_conquistas = varredura
+
+
+class _JanelaFalsa:
+    def __init__(self, app) -> None:
+        self._app = app
+
+    def get_application(self):
+        return self._app
+
+
+def _varredura_falsa(monkeypatch, varridos):
+    class Varredura:
+        def varrer_jogos(self, games):
+            varridos.extend(games)
+
+    monkeypatch.setattr(shared, "win", _JanelaFalsa(_AppFalso(Varredura())))
+
+
+def test_conta_desconectada(monkeypatch):
+    monkeypatch.setattr(conta, "conectada", lambda: False)
+    dialogo = _preferencias(monkeypatch)
+    assert dialogo.conquistas_conta_row.get_subtitle() == "Não conectada"
+    assert dialogo.conquistas_conta_botao.get_label() == "Entrar"
+
+
+def test_conta_conectada_mostra_o_gamertag(monkeypatch):
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    monkeypatch.setattr(conta, "gamertag", lambda: "Jogador")
+    dialogo = _preferencias(monkeypatch)
+    assert dialogo.conquistas_conta_row.get_subtitle() == "Jogador"
+    assert dialogo.conquistas_conta_botao.get_label() == "Sair"
+
+
+def test_conta_conectada_sem_gamertag_mostra_o_nome_da_conta(monkeypatch):
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    monkeypatch.setattr(conta, "gamertag", lambda: None)
+    dialogo = _preferencias(monkeypatch)
+    assert dialogo.conquistas_conta_row.get_subtitle() == "Conta Microsoft"
+
+
+def test_entrar_espera_e_cancelar(monkeypatch):
+    monkeypatch.setattr(conta, "conectada", lambda: False)
+    pedidos = []
+
+    class Pedido:
+        def cancelar(self):
+            pedidos.append("cancelado")
+
+    monkeypatch.setattr(
+        login, "entrar", lambda ao_terminar, **_k: pedidos.append(ao_terminar) or Pedido()
+    )
+    dialogo = _preferencias(monkeypatch)
+    dialogo.conquistas_conta_botao.emit("clicked")
+    assert dialogo.conquistas_conta_row.get_subtitle() == "Aguardando o login no navegador…"
+    assert dialogo.conquistas_conta_botao.get_label() == "Cancelar"
+    dialogo.conquistas_conta_botao.emit("clicked")
+    assert pedidos[-1] == "cancelado"
+
+
+@pytest.mark.parametrize(
+    "nome, aviso",
+    [
+        ("SEM_PERFIL_XBOX", "Esta conta Microsoft não tem um perfil Xbox."),
+        (
+            "CONTA_INFANTIL",
+            "Esta conta precisa de permissão de um responsável para usar o Xbox.",
+        ),
+        ("FALHOU", "Não foi possível entrar na conta Microsoft."),
+        ("CANCELADO", None),
+    ],
+)
+def test_resultado_do_login(monkeypatch, nome, aviso):
+    monkeypatch.setattr(conta, "conectada", lambda: False)
+    dialogo = _preferencias(monkeypatch)
+    avisos = []
+    monkeypatch.setattr(dialogo, "add_toast", lambda toast: avisos.append(toast.get_title()))
+    dialogo._ao_entrar(login.Resultado[nome])
+    assert avisos == ([aviso] if aviso else [])
+    assert dialogo.conquistas_conta_botao.get_label() == "Entrar"
+
+
+def test_login_ok_varre_os_jogos_do_xbox(monkeypatch, store, make_game):
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    monkeypatch.setattr(conta, "gamertag", lambda: "Jogador")
+    xbox = make_game(
+        game_id="shortcuts_1", executable='start "" "shell:AppsFolder\\P_a!G"'
+    )
+    outro = make_game(game_id="shortcuts_2")
+    for g in (xbox, outro):
+        store.add_game(g, {}, run_pipeline=False)
+    varridos = []
+    _varredura_falsa(monkeypatch, varridos)
+    dialogo = _preferencias(monkeypatch)
+    dialogo._ao_entrar(login.Resultado.OK)
+    assert varridos == [xbox]
+    assert dialogo.conquistas_conta_row.get_subtitle() == "Jogador"
+
+
+def test_cancelar_na_troca_com_a_conta_conectada_conta_como_ok(
+    monkeypatch, store, make_game
+):
+    """Cancelar durante a troca pode deixar a conta conectada: o resultado chega
+    como CANCELADO, mas o que vale é o estado da conta."""
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    monkeypatch.setattr(conta, "gamertag", lambda: "Jogador")
+    xbox = make_game(
+        game_id="shortcuts_1", executable='start "" "shell:AppsFolder\\P_a!G"'
+    )
+    store.add_game(xbox, {}, run_pipeline=False)
+    varridos = []
+    _varredura_falsa(monkeypatch, varridos)
+    dialogo = _preferencias(monkeypatch)
+    avisos = []
+    monkeypatch.setattr(dialogo, "add_toast", lambda toast: avisos.append(toast))
+    dialogo._ao_entrar(login.Resultado.CANCELADO)
+    assert varridos == [xbox]
+    assert avisos == []
+    assert dialogo.conquistas_conta_botao.get_label() == "Sair"
+
+
+def test_falha_com_a_conta_conectada_nao_varre(monkeypatch, store, make_game):
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    monkeypatch.setattr(conta, "gamertag", lambda: "Jogador")
+    varridos = []
+    _varredura_falsa(monkeypatch, varridos)
+    dialogo = _preferencias(monkeypatch)
+    monkeypatch.setattr(dialogo, "add_toast", lambda toast: None)
+    dialogo._ao_entrar(login.Resultado.FALHOU)
+    assert varridos == []
+    assert dialogo.conquistas_conta_botao.get_label() == "Sair"
+
+
+def test_varredura_do_xbox_que_falha_nao_levanta(monkeypatch, store, make_game):
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    monkeypatch.setattr(conta, "gamertag", lambda: "Jogador")
+
+    class Varredura:
+        def varrer_jogos(self, games):
+            raise RuntimeError("falhou")
+
+    monkeypatch.setattr(shared, "win", _JanelaFalsa(_AppFalso(Varredura())))
+    xbox = make_game(
+        game_id="shortcuts_1", executable='start "" "shell:AppsFolder\\P_a!G"'
+    )
+    store.add_game(xbox, {}, run_pipeline=False)
+    dialogo = _preferencias(monkeypatch)
+    dialogo._ao_entrar(login.Resultado.OK)
+
+
+def test_sair(monkeypatch):
+    estado = {"conectada": True}
+    monkeypatch.setattr(conta, "conectada", lambda: estado["conectada"])
+    monkeypatch.setattr(conta, "gamertag", lambda: "Jogador")
+    monkeypatch.setattr(conta, "sair", lambda: estado.update(conectada=False))
+    dialogo = _preferencias(monkeypatch)
+    dialogo.conquistas_conta_botao.emit("clicked")
+    assert dialogo.conquistas_conta_row.get_subtitle() == "Não conectada"
+    assert dialogo.conquistas_conta_botao.get_label() == "Entrar"
+
+
+def test_conta_que_muda_atualiza_a_linha(monkeypatch):
+    estado = {"conectada": False}
+    ouvintes = []
+    monkeypatch.setattr(conta, "conectada", lambda: estado["conectada"])
+    monkeypatch.setattr(conta, "gamertag", lambda: "Jogador")
+    monkeypatch.setattr(
+        conta, "ao_mudar", lambda ouvinte: ouvintes.append(ouvinte) or (lambda: None)
+    )
+    dialogo = _preferencias(monkeypatch)
+    estado["conectada"] = True
+    ouvintes[0]()
+    assert dialogo.conquistas_conta_row.get_subtitle() == "Jogador"
+
+
+def test_fechar_cancela_o_login_e_solta_o_ouvinte(monkeypatch):
+    cancelados = []
+    removidos = []
+    monkeypatch.setattr(login, "cancelar_pendente", lambda: cancelados.append(1))
+    monkeypatch.setattr(conta, "ao_mudar", lambda _o: lambda: removidos.append(1))
+    dialogo = _preferencias(monkeypatch)
+    dialogo.emit("closed")
+    assert cancelados == [1]
+    assert removidos == [1]

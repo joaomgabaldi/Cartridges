@@ -29,6 +29,8 @@ from typing import Any, Callable, Optional
 from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
 from cartridges import conquista_aviso, shared
+from cartridges.conquistas import fontes
+from cartridges.conquistas.xbox import conta, login
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.metadata_refresh import get_metadata_refresh
 from cartridges.store.managers.sgdb_manager import SgdbManager
@@ -109,6 +111,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     conquistas_posicao_row: Adw.ComboRow = Gtk.Template.Child()
     conquistas_iluminacao_switch: Adw.SwitchRow = Gtk.Template.Child()
     conquistas_exemplo_row: Adw.ButtonRow = Gtk.Template.Child()
+    conquistas_conta_row: Adw.ActionRow = Gtk.Template.Child()
+    conquistas_conta_botao: Gtk.Button = Gtk.Template.Child()
 
     export_backup_button_row = Gtk.Template.Child()
     import_backup_button_row = Gtk.Template.Child()
@@ -204,6 +208,14 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             "notify::selected", self._gravar_posicao_do_aviso
         )
         self.conquistas_exemplo_row.connect("activated", self._mostrar_aviso_de_exemplo)
+
+        # Conta Microsoft: o ouvinte da conta e o login pendente morrem com o
+        # diálogo.
+        self._pedido_de_login = None
+        self.conquistas_conta_botao.connect("clicked", self._on_conta_clicked)
+        self._remover_ouvinte_da_conta = conta.ao_mudar(self._atualizar_conta)
+        self.connect("closed", self._ao_fechar_conta)
+        self._atualizar_conta()
 
         def update_sgdb(*_args: Any) -> None:
             counter = 0
@@ -347,6 +359,69 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         # Cliques repetidos não enfileiram vários exemplos: o anterior sai.
         conquista_aviso.fechar()
         conquista_aviso.mostrar(conquista_aviso.Aviso.exemplo())
+
+    def _atualizar_conta(self) -> None:
+        if self._pedido_de_login is not None:
+            subtitulo, rotulo = _("Aguardando o login no navegador…"), _("Cancelar")
+        elif conta.conectada():
+            subtitulo, rotulo = conta.gamertag() or _("Conta Microsoft"), _("Sair")
+        else:
+            subtitulo, rotulo = _("Não conectada"), _("Entrar")
+        self.conquistas_conta_row.set_subtitle(subtitulo)
+        self.conquistas_conta_botao.set_label(rotulo)
+
+    def _on_conta_clicked(self, *_args: Any) -> None:
+        if self._pedido_de_login is not None:
+            self._pedido_de_login.cancelar()
+            return
+        if conta.conectada():
+            conta.sair()
+            self._atualizar_conta()
+            return
+        self._pedido_de_login = login.entrar(self._ao_entrar)
+        self._atualizar_conta()
+
+    def _ao_entrar(self, resultado: "login.Resultado") -> None:
+        self._pedido_de_login = None
+        self._atualizar_conta()
+        # Cancelar durante a troca de código pode deixar a conta conectada: o
+        # que vale é o estado da conta, não o resultado que chegou.
+        if resultado is login.Resultado.CANCELADO and conta.conectada():
+            resultado = login.Resultado.OK
+        textos = {
+            login.Resultado.SEM_PERFIL_XBOX: _(
+                "Esta conta Microsoft não tem um perfil Xbox."
+            ),
+            login.Resultado.CONTA_INFANTIL: _(
+                "Esta conta precisa de permissão de um responsável para usar o Xbox."
+            ),
+            login.Resultado.FALHOU: _("Não foi possível entrar na conta Microsoft."),
+        }
+        if resultado in textos:
+            toast = Adw.Toast.new(textos[resultado])
+            toast.set_use_markup(False)
+            self.add_toast(toast)
+            return
+        if resultado is login.Resultado.OK:
+            self._varrer_jogos_do_xbox()
+
+    def _varrer_jogos_do_xbox(self) -> None:
+        """Lê na hora as conquistas dos jogos do Xbox, sem esperar a próxima abertura."""
+        try:
+            app = shared.win.get_application() if shared.win is not None else None
+            varredura = getattr(app, "varredura_conquistas", None)
+            if varredura is not None:
+                varredura.varrer_jogos(
+                    [game for game in shared.store if fontes.eh_do_xbox(game)]
+                )
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning(
+                "Falha ao ler as conquistas do Xbox depois do login", exc_info=True
+            )
+
+    def _ao_fechar_conta(self, *_args: Any) -> None:
+        login.cancelar_pendente()
+        self._remover_ouvinte_da_conta()
 
     def reler_do_schema(self) -> None:
         """Preenche as linhas que não usam ``bind``. Chamado no fim do
