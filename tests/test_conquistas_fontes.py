@@ -197,8 +197,29 @@ def test_url_da_epic_e_so_texto(make_game):
 
 def test_xbox_vem_antes_da_epic(make_game, conectada, epic_conectada, monkeypatch, pastas):  # noqa: F811
     monkeypatch.setattr(api, "titulo_local", lambda *_a: "999")
+    monkeypatch.setattr(fontes, "da_epic", lambda _game: (_NS, "x"))
     assert fontes.do_jogo(make_game(executable=_AUMID)) == Fonte("xbox", "999")
 
 
 def test_chave_do_catalogo_da_epic():
     assert fontes.chave_do_catalogo(Fonte("epic", "fn")) == "epic-fn"
+
+
+def test_manifest_com_raiz_do_disco_nao_pega_todo_jogo(make_game, epic_conectada, tmp_path, pastas):  # noqa: F811
+    exe = criar(tmp_path / "Jogo" / "Jogo.exe")
+    _manifest(pastas, "app", _NS, instalado=tmp_path.anchor)
+    assert not fontes.eh_da_epic(make_game(executable=f'"{exe}"'))
+
+
+def test_manifest_com_pasta_relativa_e_ignorado(make_game, epic_conectada, tmp_path, monkeypatch, pastas):  # noqa: F811
+    monkeypatch.chdir(tmp_path)  # sem o filtro, "Jogo" viraria `tmp_path/Jogo`
+    exe = criar(tmp_path / "Jogo" / "Jogo.exe")
+    _manifest(pastas, "app", _NS, instalado="Jogo")
+    assert not fontes.eh_da_epic(make_game(executable=f'"{exe}"'))
+
+
+def test_vence_o_manifest_da_pasta_mais_funda(make_game, epic_conectada, tmp_path, pastas):  # noqa: F811
+    exe = criar(tmp_path / "Games" / "FallGuys" / "Game" / "Binaries" / "Win64" / "x.exe")
+    _manifest(pastas, "AppA", "nsA", instalado=tmp_path / "Games")
+    _manifest(pastas, "AppB", "nsB", instalado=tmp_path / "Games" / "FallGuys")
+    assert fontes.do_jogo(make_game(executable=f'"{exe}"')) == Fonte("epic", "nsB")

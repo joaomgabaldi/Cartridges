@@ -170,24 +170,31 @@ def _da_pasta(pastas: list[Path]) -> Optional[tuple[str, str]]:
 
     Atalho `.lnk` direto para o exe: a pasta do jogo não guarda o namespace (o
     ``.egstore`` só tem o manifesto binário, conferido no host), o manifest do launcher guarda.
+    Vale a pasta de instalação mais funda; relativa ou raiz do disco não vale.
     """
     if not pastas:
         return None
+    melhor: Optional[tuple[int, dict]] = None
     for dados in _manifests():
         local = dados.get("InstallLocation")
-        if not isinstance(local, str) or not local.strip():
+        if not isinstance(local, str) or not local.strip() or not os.path.isabs(local):
             continue
         try:
             raiz = Path(os.path.normcase(os.path.abspath(local)))
         except (OSError, ValueError):
             continue
+        if raiz.parent == raiz:
+            # Raiz do disco: pegaria todo jogo instalado nele.
+            continue
         for base in pastas:
             pasta = Path(os.path.normcase(os.path.abspath(base)))
             # Pasta inteira: `FallGuys2` não está dentro de `FallGuys`.
-            if pasta == raiz or raiz in pasta.parents:
-                app = dados.get("AppName")
-                return dados["CatalogNamespace"], app if isinstance(app, str) else ""
-    return None
+            if (pasta == raiz or raiz in pasta.parents) and (melhor is None or len(raiz.parts) > melhor[0]):
+                melhor = (len(raiz.parts), dados)
+    if melhor is None:
+        return None
+    app = melhor[1].get("AppName")
+    return melhor[1]["CatalogNamespace"], app if isinstance(app, str) else ""
 
 
 def da_epic(game: Any) -> Optional[tuple[str, str]]:
