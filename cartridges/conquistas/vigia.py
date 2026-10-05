@@ -17,8 +17,9 @@ conquistas antigas: por isso ele é conhecido desde o início da sessão, e
 quando aparece entra em silêncio, como a base.
 
 Tudo o que o vigia lê vem de arquivos de emulador ou da Steam, então quando lê
-algo ele grava a fonte `steam:<appid>` do jogo: um emulador que aparece no meio
-da partida dá fonte ao jogo sem esperar a varredura.
+algo num jogo sem fonte gravada ele grava a fonte `steam:<appid>`: um emulador
+que aparece no meio da partida dá fonte ao jogo sem esperar a varredura. Uma
+fonte já gravada nunca é trocada por ele.
 """
 
 import logging
@@ -54,9 +55,16 @@ class Desbloqueada:
 
 
 def acompanha(game: Any) -> bool:
-    """Se o vigia acompanha este jogo: appID válido e conquistas ligadas."""
-    return arquivos.appid_valido(getattr(game, "steam_appid", None)) and bool(
-        getattr(game, "conquistas", True)
+    """Se o vigia de arquivos acompanha este jogo: appID válido e conquistas ligadas.
+
+    Jogo do Xbox/Game Pass (o executável é um AUMID) fica de fora: ele é do vigia
+    da conta, e um arquivo velho de emulador com o mesmo appID não o faz da Steam.
+    Só o texto do executável é olhado, nunca o disco.
+    """
+    return (
+        arquivos.appid_valido(getattr(game, "steam_appid", None))
+        and bool(getattr(game, "conquistas", True))
+        and fontes.pfn(game) is None
     )
 
 
@@ -137,8 +145,10 @@ class Vigia:
             self._falhas[chave] = self._falhas.get(chave, 0) + 1
 
     def _registrar(self, lidos: list[formatos.Desbloqueio]) -> tuple[list[str], bool]:
-        """Grava ``lidos`` no histórico; com algo lido, grava também a fonte do jogo."""
-        fonte = f"steam:{self.game.steam_appid}" if lidos else None
+        """Grava ``lidos`` no histórico; com algo lido e o jogo sem fonte, grava a Steam."""
+        fonte = None
+        if lidos and historico.fonte(self.game.game_id) is None:
+            fonte = f"steam:{self.game.steam_appid}"
         return historico.registrar(self.game.game_id, lidos, fonte=fonte)
 
     def _gravados(self, lidos: list[formatos.Desbloqueio]) -> bool:

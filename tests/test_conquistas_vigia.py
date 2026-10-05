@@ -41,7 +41,8 @@ def _arquivo(pastas, conquistas):  # noqa: F811
 
 
 def _jogo(make_game, **campos):
-    return make_game(game_id="g1", name="Jogo", steam_appid="570", executable="", **campos)
+    campos.setdefault("executable", "")
+    return make_game(game_id="g1", name="Jogo", steam_appid="570", **campos)
 
 
 def _vigia(make_game, **campos):
@@ -84,6 +85,31 @@ def test_vigia_grava_a_fonte_steam_quando_le_algo(pastas, make_game):
     assert historico.fonte("g1") == "steam:570"
 
 
+def test_vigia_nao_troca_a_fonte_ja_gravada(pastas, make_game):
+    """Jogo do Xbox com um arquivo velho de emulador do mesmo appID: a fonte segue sendo a conta."""
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, _avisos = _vigia(make_game)
+    com_fonte(instancia.game, "xbox:7")
+    instancia.iniciar()
+    _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
+    instancia._olhar()
+    assert historico.fonte("g1") == "xbox:7"
+    assert historico.ler("g1") == {"ACH_A": 100, "ACH_B": 200}
+
+
+def test_vigia_nao_acompanha_jogo_do_xbox_sem_conta(pastas, make_game, sem_timeout):
+    """Sem fonte gravada (conta não conectada), um jogo com AUMID não ganha `steam:<appid>`
+    de um arquivo velho de emulador."""
+    _arquivo(pastas, [("ACH_A", 100)])
+    instancia, avisos = _vigia(
+        make_game, executable='start "" "shell:AppsFolder\\Pkg.Jogo_abc!Game"'
+    )
+    instancia.iniciar()
+    assert sem_timeout == [] and not instancia.ativo
+    assert historico.fonte("g1") is None and historico.ler("g1") is None
+    assert avisos == []
+
+
 def test_base_com_arquivo_ja_grava_a_fonte_steam(pastas, make_game):
     _arquivo(pastas, [("ACH_A", 100)])
     instancia, _avisos = _vigia(make_game)
@@ -113,9 +139,11 @@ def test_titulos_vem_do_catalogo_da_fonte_gravada(pastas, make_game, monkeypatch
     catalogo._gravar_cache("999", CAT)
     _arquivo(pastas, [("ACH_A", 100)])
     instancia, avisos = _vigia(make_game)
-    # Difere do steam_appid do jogo (570): só a chave da fonte tem este catálogo.
-    monkeypatch.setattr(vigia.fontes, "gravada", lambda _g: fontes.Fonte(fontes.STEAM, "999"))
+    # Difere do steam_appid do jogo (570): só a chave da fonte tem este catálogo. A fonte já
+    # gravada não é trocada pelo vigia (só grava quando o jogo não tem fonte).
+    com_fonte(instancia.game, "steam:999")
     instancia.iniciar()
+    assert historico.fonte("g1") == "steam:999"
     _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
     instancia._olhar()
     (nova,) = avisos[0]
@@ -418,6 +446,8 @@ def test_jogo_ja_completo_que_recebe_nome_desconhecido_nao_completa(pastas, make
         ({"executable": "steam://rungameid/570"}, True),
         ({"steam_appid": None}, False),
         ({"steam_appid": "..\\x"}, False),
+        # Jogo do Xbox/Game Pass (AUMID): é do vigia do Xbox, nunca do de arquivos.
+        ({"executable": 'start "" "shell:AppsFolder\\Pkg.Jogo_abc!Game"'}, False),
     ],
 )
 def test_quem_o_vigia_acompanha(make_game, campos, esperado):
