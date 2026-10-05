@@ -262,6 +262,54 @@ def test_varrer_jogo_e_varrer_jogos_de_um(store, make_game, threads_falsas):
     assert thread.args[0] == [game] and thread.args[2] is False
 
 
+def test_varrer_jogos_entrega_o_filtro_a_thread_sem_aplicar(
+    store, make_game, threads_falsas
+):
+    """O filtro pode ler o disco do jogo: quem aplica é a thread, nunca quem pede."""
+    a = _registrado(store, make_game, 1, steam_appid="570")
+    b = _registrado(store, make_game, 2, steam_appid="620")
+    consultados = []
+
+    def filtro(game):
+        consultados.append(game)
+        return game is a
+
+    VarreduraConquistas().varrer_jogos([a, b], filtro=filtro)
+    (thread,) = threads_falsas
+    assert consultados == []
+    assert thread.args[3] is filtro
+
+
+def test_filtro_roda_na_thread_e_deixa_de_fora_quem_nao_passa(
+    store, make_game, pastas, win, flush_idle
+):
+    a = _da_steam_aberta(store, make_game, 1, "570")
+    b = _da_steam_aberta(store, make_game, 2, "620")
+    instancia = VarreduraConquistas()
+    instancia._worker([a, b], instancia._generation, False, lambda game: game is a)
+    flush_idle()
+    assert historico.ler(a.game_id) == {}
+    assert historico.ler(b.game_id) is None
+
+
+def test_filtro_que_levanta_deixa_o_jogo_de_fora_sem_derrubar_a_thread(
+    store, make_game, pastas, win, flush_idle
+):
+    a = _da_steam_aberta(store, make_game, 1, "570")
+    b = _da_steam_aberta(store, make_game, 2, "620")
+
+    def filtro(game):
+        if game is a:
+            raise RuntimeError("disco")
+        return True
+
+    instancia = VarreduraConquistas()
+    instancia._worker([a, b], instancia._generation, False, filtro)
+    flush_idle()
+    assert historico.ler(a.game_id) is None
+    assert historico.ler(b.game_id) == {}
+
+
 def test_varrer_jogos_fica_calada_e_nao_guarda_a_data(
     store, make_game, pastas, win, flush_idle, state_schema, monkeypatch
 ):

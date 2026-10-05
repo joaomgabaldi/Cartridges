@@ -37,7 +37,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from gi.repository import Adw, GLib
 
@@ -60,6 +60,18 @@ def participa(game: Any) -> bool:
     if game.blacklisted:
         return False
     return not game.removed or game.zerado
+
+
+def _filtrar(games: list[Any], filtro: Callable[[Any], bool]) -> list[Any]:
+    """Trabalho de thread: quem passa no filtro. O que o filtro não souber decidir fica de fora."""
+    passaram = []
+    for game in games:
+        try:
+            if filtro(game):
+                passaram.append(game)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Falha ao filtrar %s para a varredura de conquistas", game.name, exc_info=True)
+    return passaram
 
 
 @dataclass
@@ -242,28 +254,39 @@ class VarreduraConquistas:
         """Um jogo só, sem aviso (appID corrigido, interruptor religado, fim de sessão)."""
         self.varrer_jogos([game])
 
-    def varrer_jogos(self, games: Any) -> None:
+    def varrer_jogos(self, games: Any, filtro: Optional[Callable[[Any], bool]] = None) -> None:
         """Alguns jogos, numa thread só e sem aviso (jogos recém-importados).
 
         Não grava a data da varredura e não conta como a passada da abertura.
         Quem não participa fica de fora; sem ninguém, nada roda.
+
+        ``filtro``: critério extra que pode ler o disco do jogo; por isso é
+        aplicado na thread da varredura, nunca por quem pede.
         """
         jogos = [game for game in games if participa(game)]
         if not jogos:
             return
         threading.Thread(
-            target=self._worker, args=(jogos, self._generation, False), daemon=True
+            target=self._worker, args=(jogos, self._generation, False, filtro), daemon=True
         ).start()
 
     # -- a passada ------------------------------------------------------------
 
-    def _worker(self, games: list[Any], geracao: int, avisar: bool = True) -> None:
+    def _worker(
+        self,
+        games: list[Any],
+        geracao: int,
+        avisar: bool = True,
+        filtro: Optional[Callable[[Any], bool]] = None,
+    ) -> None:
         """Duas passadas. A dos arquivos vem primeiro e só toca o disco: o
         histórico é gravado e o aviso de conquistas novas sai sem esperar a
         Steam. A da rede (catálogo da Steam, conta Xbox) vem depois."""
         tarefa = None
         concluiu = False
         try:
+            if filtro is not None:
+                games = _filtrar(games, filtro)
             if avisar:
                 inicio = int(time.time())
                 # Na fila antes de qualquer `_entregar` desta passada: o
