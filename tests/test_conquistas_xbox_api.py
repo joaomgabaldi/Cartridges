@@ -21,6 +21,7 @@ _HUB = "https://titlehub.xboxlive.com"
 def conectado(monkeypatch):
     monkeypatch.setattr(conta, "autorizacao", lambda forcar=False: ("UHS", "XSTS"))
     monkeypatch.setattr(conta, "xuid", lambda: "2535400000000000")
+    monkeypatch.setattr(conta, "conectada", lambda: False)
     monkeypatch.setattr(api, "_limite", lambda: _SemLimite())
 
 
@@ -242,6 +243,39 @@ def test_sem_conta_nao_vai_a_rede(monkeypatch):
     assert chamadas == []
 
 
+def test_renovacao_que_falhou_com_a_conta_conectada_e_falha_de_rede(monkeypatch):
+    """`conta.autorizacao` devolve None quando a renovação cai por rede: a conta segue
+    conectada, e quem varre precisa do `FalhaDeRede` para acionar o disjuntor."""
+    monkeypatch.setattr(conta, "autorizacao", lambda forcar=False: None)
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    chamadas = rede_falsa(monkeypatch, api, {}, nome="_requisitar")
+    with pytest.raises(api.FalhaDeRede):
+        api.ler("1")
+    with pytest.raises(api.FalhaDeRede):
+        api.desbloqueadas("1")
+    with pytest.raises(api.FalhaDeRede):
+        api.titulo("Pkg_x", [])
+    assert chamadas == []
+
+
+def test_renovacao_forcada_apos_401_que_falha_com_a_conta_conectada(monkeypatch):
+    monkeypatch.setattr(conta, "autorizacao", lambda forcar=False: None if forcar else ("U", "X"))
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    recusas = []
+    monkeypatch.setattr(conta, "recusada", lambda: recusas.append(1))
+    rede_falsa(monkeypatch, api, {_ACH: [Resposta(401, {})]}, nome="_requisitar")
+    with pytest.raises(api.FalhaDeRede):
+        api.ler("1")
+    assert recusas == []
+
+
+def test_segundo_401_desconecta_e_e_none_mesmo_conectada(monkeypatch):
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    monkeypatch.setattr(conta, "recusada", lambda: None)
+    rede_falsa(monkeypatch, api, {_ACH: [Resposta(401, {}), Resposta(401, {})]}, nome="_requisitar")
+    assert api.ler("1") is None
+
+
 def test_sem_xuid_e_none(monkeypatch):
     monkeypatch.setattr(conta, "xuid", lambda: None)
     chamadas = rede_falsa(monkeypatch, api, {}, nome="_requisitar")
@@ -265,6 +299,46 @@ def test_desbloqueadas_ignora_o_que_nao_e_achieved(monkeypatch):
 def test_cache_que_nao_grava_nao_derruba_a_leitura(monkeypatch):
     def falha(_chave, _cat):
         raise OSError("disco cheio")
+
+    monkeypatch.setattr(catalogo, "guardar", falha)
+    rede_falsa(monkeypatch, api, {_ACH: [_pagina([_conquista("1")])]}, nome="_requisitar")
+    assert api.ler("1") is not None
+
+
+def test_surrogate_solto_no_id_derruba_so_a_conquista(monkeypatch):
+    itens = [
+        _conquista("1", "Boa", True),
+        _conquista("\ud800", "Id ruim", True),
+        _conquista("3", "Terceira", True),
+    ]
+    rede_falsa(monkeypatch, api, {_ACH: [_pagina(itens)]}, nome="_requisitar")
+    leitura = api.ler("1")
+    assert [i.nome for i in leitura.catalogo.conquistas] == ["XBOX:1", "XBOX:3"]
+    assert [d.nome for d in leitura.desbloqueios] == ["XBOX:1", "XBOX:3"]
+    assert catalogo.em_cache("xbox-1") == leitura.catalogo
+    rede_falsa(monkeypatch, api, {_ACH: [_pagina(itens)]}, nome="_requisitar")
+    assert [d.nome for d in api.desbloqueadas("1")] == ["XBOX:1", "XBOX:3"]
+
+
+def test_surrogate_solto_no_texto_e_trocado_e_o_cache_grava(monkeypatch):
+    itens = [
+        _conquista("1", "Nome\ud800ruim", True, description="Desc\udfffruim"),
+        _conquista("2", "\ud800", lockedDescription="\ud800", description=""),
+        _conquista("3", mediaAssets=[{"type": "Icon", "url": "https://x/\ud800.png"}]),
+    ]
+    rede_falsa(monkeypatch, api, {_ACH: [_pagina(itens)]}, nome="_requisitar")
+    leitura = api.ler("1")
+    um, dois, tres = leitura.catalogo.conquistas
+    assert (um.titulo, um.descricao) == ("Nome?ruim", "Desc?ruim")
+    assert dois.titulo == "?" and dois.descricao == "?"
+    assert tres.icone == ""
+    assert leitura.desbloqueios == [Desbloqueio("XBOX:1", 1790856000)]
+    assert catalogo.em_cache("xbox-1") == leitura.catalogo
+
+
+def test_cache_que_nao_grava_por_valueerror_nao_derruba_a_leitura(monkeypatch):
+    def falha(_chave, _cat):
+        raise UnicodeEncodeError("utf-8", "x", 0, 1, "surrogate")
 
     monkeypatch.setattr(catalogo, "guardar", falha)
     rede_falsa(monkeypatch, api, {_ACH: [_pagina([_conquista("1")])]}, nome="_requisitar")

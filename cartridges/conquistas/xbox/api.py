@@ -119,19 +119,30 @@ def _pedir(metodo: str, url: str, contrato: str, aut: tuple[str, str], kwargs: d
         raise FalhaDeRede() from None
 
 
+def _sem_autorizacao() -> None:
+    """`conta.autorizacao` devolveu None: sem conta (ou recusada e já desconectada)
+    é None; conta ainda conectada é a renovação que falhou por rede, e quem varre
+    precisa saber para parar de esperar o tempo limite de cada jogo."""
+    if conta.conectada():
+        logging.info("Xbox: a renovação do acesso falhou")
+        raise FalhaDeRede()
+    return None
+
+
 def _chamar(metodo: str, url: str, contrato: str, **kwargs: Any) -> Optional[Any]:
     """O JSON da resposta. ``None``: sem conta, conta recusada ou resposta 4xx.
 
-    Levanta ``FalhaDeRede`` para rede, 5xx, 429 e resposta que não é JSON.
+    Levanta ``FalhaDeRede`` para rede, 5xx, 429, resposta que não é JSON e
+    renovação do acesso que falhou com a conta ainda conectada.
     """
     aut = conta.autorizacao()
     if aut is None:
-        return None
+        return _sem_autorizacao()
     resposta = _pedir(metodo, url, contrato, aut, kwargs)
     if resposta.status_code == 401:
         aut = conta.autorizacao(forcar=True)
         if aut is None:
-            return None
+            return _sem_autorizacao()
         resposta = _pedir(metodo, url, contrato, aut, kwargs)
         if resposta.status_code == 401:
             logging.info("Xbox: acesso recusado duas vezes; desconectando a conta")
@@ -206,7 +217,7 @@ def _guardar_titulo(pfn: str, titulo: Optional[str]) -> None:
             destino.parent.mkdir(parents=True, exist_ok=True)
             temporario.write_text(json.dumps(dados, ensure_ascii=False), encoding="utf-8")
             temporario.replace(destino)
-        except OSError as erro:
+        except (OSError, ValueError) as erro:
             logging.warning("Cache de títulos do Xbox não gravado: %s", type(erro).__name__)
         finally:
             try:
@@ -293,9 +304,23 @@ def _icone(item: dict) -> str:
         if not isinstance(asset, dict) or asset.get("type") != "Icon":
             continue
         url = asset.get("url")
-        if isinstance(url, str) and url.startswith("https://"):
+        if isinstance(url, str) and url.startswith("https://") and _codifica(url):
             return url
     return ""
+
+
+def _codifica(texto: str) -> bool:
+    """Se o texto grava em UTF-8: `json.loads` aceita `"\\ud800"`, que não grava."""
+    try:
+        texto.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
+def _limpo(texto: str) -> str:
+    """O texto sem surrogate solto (vira `?`)."""
+    return texto.encode("utf-8", "replace").decode("utf-8")
 
 
 def _porcentagem(item: dict) -> Optional[float]:
@@ -317,7 +342,8 @@ def _info(item: Any) -> Optional[tuple[ConquistaInfo, Optional[Desbloqueio]]]:
     if not isinstance(item, dict):
         return None
     id_, nome = item.get("id"), item.get("name")
-    if not isinstance(id_, str) or not id_.strip() or not isinstance(nome, str):
+    # O id vira a chave do histórico: um id que não grava em UTF-8 derruba a conquista.
+    if not isinstance(id_, str) or not id_.strip() or not _codifica(id_) or not isinstance(nome, str):
         return None
     descricao = item.get("description")
     if not isinstance(descricao, str) or not descricao:
@@ -325,8 +351,8 @@ def _info(item: Any) -> Optional[tuple[ConquistaInfo, Optional[Desbloqueio]]]:
     chave = f"{PREFIXO}{id_}"
     info = ConquistaInfo(
         nome=chave,
-        titulo=nome.strip() or id_,
-        descricao=descricao if isinstance(descricao, str) else "",
+        titulo=_limpo(nome).strip() or id_,
+        descricao=_limpo(descricao) if isinstance(descricao, str) else "",
         icone=_icone(item),
         icone_cinza="",
         oculta=item.get("isSecret") is True,
@@ -388,7 +414,7 @@ def ler(titulo: str) -> Optional[Leitura]:
     )
     try:
         catalogo.guardar(chave_do_catalogo(titulo), cat)
-    except OSError as erro:
+    except (OSError, ValueError) as erro:
         logging.warning("Catálogo de conquistas do Xbox não gravado: %s", type(erro).__name__)
     return Leitura(cat, [d for _, d in achadas if d is not None])
 
