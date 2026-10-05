@@ -7,25 +7,26 @@ Entram os jogos da biblioteca e os de Jogos Zerados — as pastas do AppData
 sobrevivem à desinstalação, então um zerado antigo ainda recupera o que tinha.
 
 A leitura roda numa thread, em duas passadas. A primeira decide a fonte das
-conquistas de cada jogo (`fontes.do_jogo`: conta Xbox, Steam/emulador ou
-nenhuma) e lê só os arquivos dos emuladores (disco); a gravação do histórico,
+conquistas de cada jogo (`fontes.do_jogo`: a conta de uma loja — Xbox; ver
+`contas.py` —, Steam/emulador ou nenhuma) e lê só os arquivos dos emuladores
+(disco); a gravação do histórico,
 com a fonte (ou o esquecimento dela, para o jogo sem fonte), volta para a
 thread principal, onde dá para conferir que o jogo ainda está na store. Sem
 essa conferência, um jogo excluído no meio da passada ganharia de volta o
 arquivo que o Excluir acabou de apagar. A segunda vai à rede: renova o
-catálogo dos jogos da Steam e lê a conta Xbox dos jogos do Xbox. Quando um
+catálogo dos jogos da Steam e lê a conta da loja dos jogos que vêm dela. Quando um
 pedido falha por rede, os jogos seguintes (de qualquer fonte) ficam só com o
 cache e o arquivo do jogo. Jogo sem fonte não vai à rede.
 
-A fonte do Xbox só é gravada na segunda passada, junto com as conquistas da
-conta. A primeira leitura de uma fonte (o jogo ainda não tinha o Xbox como
+A fonte de uma loja com conta só é gravada na segunda passada, junto com as
+conquistas da conta. A primeira leitura de uma fonte (o jogo ainda não tinha o Xbox como
 fonte, ou ela era de outra conta: conta recém-conectada, por exemplo) não conta
 no aviso, senão as conquistas antigas da conta apareceriam como novas.
 
 Terminada a primeira passada, um aviso só com o que entrou desde a abertura
 anterior: o que foi jogado por fora do app. Ele não espera a rede; as
-conquistas novas do Xbox, que só chegam pela rede, saem num aviso próprio no
-fim da segunda passada, com o mesmo texto. A primeira
+conquistas novas das contas, que só chegam pela rede, saem num aviso próprio
+(um só, somando as lojas) no fim da segunda passada, com o mesmo texto. A primeira
 varredura de um jogo não conta — senão quem acabou de instalar receberia
 "quinhentas conquistas novas". Num jogo da Steam, também não conta a conquista
 com data anterior à varredura anterior: ela foi ganha em outro aparelho e só
@@ -42,10 +43,9 @@ from typing import Any, Callable, Optional
 from gi.repository import Adw, GLib
 
 from cartridges import shared
-from cartridges.conquistas import arquivos, catalogo, fontes, formatos, historico, sessao
+from cartridges.conquistas import arquivos, catalogo, contas, fontes, formatos, historico, sessao
 from cartridges.conquistas.fontes import Fonte
 from cartridges.conquistas.vigia import MARGEM_DA_STEAM
-from cartridges.conquistas.xbox import api, conta
 from cartridges.utils import tarefas
 
 _ULTIMA_VARREDURA = "conquistas-ultima-varredura"
@@ -93,13 +93,13 @@ class Leitura:
 
 
 @dataclass
-class LeituraXbox:
-    """O que a conta Xbox trouxe para um jogo (segunda passada)."""
+class LeituraDaConta:
+    """O que a conta de uma loja trouxe para um jogo (segunda passada)."""
 
     game: Any
     fonte: Fonte
     desbloqueios: list[formatos.Desbloqueio] = field(default_factory=list)
-    # Falso na varredura de um jogo só: não entra no aviso do Xbox.
+    # Falso na varredura de um jogo só: não entra no aviso das contas.
     avisar: bool = True
     # O executável que gerou a fonte: se for editado até a entrega (o jogo passou a
     # ser outro, ou de outra loja), a leitura é descartada, como a do appID corrigido.
@@ -136,27 +136,30 @@ def ler_jogo(game: Any) -> Leitura:
     return Leitura(game, fonte.id, desbloqueios, fonte=fonte, executavel=executavel)
 
 
-def ler_xbox(
+def ler_da_conta(
     game: Any, fonte: Fonte, executavel: Optional[str] = None
-) -> tuple[Optional[LeituraXbox], bool]:
-    """Trabalho de thread, com rede: titleId (se faltar) e a leitura da conta.
+) -> tuple[Optional[LeituraDaConta], bool]:
+    """Trabalho de thread, com rede: o id da fonte (se faltar) e a leitura da conta.
 
     ``executavel``: o que a primeira passada leu (sem ele, o de agora).
     Devolve ``(leitura, rede_falhou)``.
     """
     if executavel is None:
         executavel = getattr(game, "executable", "") or ""
+    loja = contas.da_fonte(fonte)
+    if loja is None:
+        return None, False
     try:
-        titulo = fonte.id or api.titulo(fontes.pfn(game), fontes.bases(game))
-        if not titulo:
+        id_ = fonte.id or loja.resolver(game, fonte)
+        if not id_:
             return None, False
-        leitura = api.ler(titulo)
-    except api.FalhaDeRede:
-        logging.info("Sem rede para as conquistas do Xbox; o resto da passada fica sem rede")
+        leitura = loja.ler(id_)
+    except loja.FalhaDeRede:
+        logging.info("Sem rede para as conquistas da conta; o resto da passada fica sem rede")
         return None, True
     if leitura is None:
         return None, False
-    return LeituraXbox(game, Fonte(fontes.XBOX, titulo), leitura.desbloqueios, executavel=executavel), False
+    return LeituraDaConta(game, Fonte(fonte.tipo, id_), leitura.desbloqueios, executavel=executavel), False
 
 
 def renovar_catalogo(game: Any, rede: bool = True, usar_chave: bool = True) -> Catalogacao:
@@ -204,7 +207,7 @@ class VarreduraConquistas:
         # Um aviso de chave recusada por execução, não um por jogo.
         self._avisou_chave = False
         self._novas: list[tuple[str, int]] = []
-        self._novas_xbox: list[tuple[str, int]] = []
+        self._novas_da_conta: list[tuple[str, int]] = []
         # Quando começou a varredura anterior que foi até o fim (0 = nenhuma),
         # lido do estado no começo de cada passada com aviso.
         self._desde = 0
@@ -307,8 +310,8 @@ class VarreduraConquistas:
                     self._running = False
                 if not concluiu:
                     GLib.idle_add(self._concluir)
-                # Depois de todo `_entregar_xbox` desta passada (ordem do GLib).
-                GLib.idle_add(self._concluir_xbox)
+                # Depois de todo `_entregar_da_conta` desta passada (ordem do GLib).
+                GLib.idle_add(self._concluir_da_conta)
 
     def _deve_parar(self, geracao: int) -> bool:
         return self._stopped or geracao != self._generation
@@ -358,8 +361,8 @@ class VarreduraConquistas:
             fonte, executavel = lidas.get(game.game_id, (None, ""))
             if fonte is None:
                 continue
-            if fonte.tipo == fontes.XBOX:
-                rede = self._ler_xbox(game, fonte, executavel, rede, avisar)
+            if contas.da_fonte(fonte) is not None:
+                rede = self._ler_da_conta(game, fonte, executavel, rede, avisar)
                 continue
             try:
                 catalogacao = renovar_catalogo(game, rede, usar_chave)
@@ -379,20 +382,21 @@ class VarreduraConquistas:
             catalogacao.avisar = avisar
             GLib.idle_add(self._entregar_catalogo, catalogacao)
 
-    def _ler_xbox(self, game: Any, fonte: Fonte, executavel: str, rede: bool, avisar: bool) -> bool:
-        """Lê a conta Xbox de um jogo. Devolve se a rede segue valendo."""
-        if not rede or not conta.conectada():
+    def _ler_da_conta(self, game: Any, fonte: Fonte, executavel: str, rede: bool, avisar: bool) -> bool:
+        """Lê a conta da loja de um jogo. Devolve se a rede segue valendo."""
+        loja = contas.da_fonte(fonte)
+        if not rede or loja is None or not loja.conectada():
             return rede
         try:
-            leitura, falhou = ler_xbox(game, fonte, executavel)
+            leitura, falhou = ler_da_conta(game, fonte, executavel)
         except Exception:  # pylint: disable=broad-exception-caught
-            logging.warning("Falha ao ler as conquistas do Xbox de %s", game.name, exc_info=True)
+            logging.warning("Falha ao ler as conquistas da conta de %s", game.name, exc_info=True)
             return rede
         if falhou:
             return False
         if leitura is not None:
             leitura.avisar = avisar
-            GLib.idle_add(self._entregar_xbox, leitura)
+            GLib.idle_add(self._entregar_da_conta, leitura)
         return rede
 
     # -- na thread principal --------------------------------------------------
@@ -475,7 +479,7 @@ class VarreduraConquistas:
             self._atualizar_pagina(game, antes is not None)
             return 0
         if fonte.tipo != fontes.STEAM:
-            # A do Xbox é gravada na segunda passada, junto com as conquistas.
+            # A de uma loja com conta é gravada na segunda passada, junto com as conquistas.
             return 0
         entraram, primeira = historico.registrar(
             game.game_id, leitura.desbloqueios, fonte=fonte.texto
@@ -489,7 +493,7 @@ class VarreduraConquistas:
             if atualizar is not None:
                 atualizar(game)
 
-    def _entregar_xbox(self, leitura: LeituraXbox) -> bool:
+    def _entregar_da_conta(self, leitura: LeituraDaConta) -> bool:
         # Também callback ocioso do GLib: nada pode escapar daqui.
         try:
             game = leitura.game
@@ -498,7 +502,8 @@ class VarreduraConquistas:
                 or shared.store.get(game.game_id) is not game
                 or not participa(game)
                 or sessao.acompanhando(game)
-                or not conta.conectada()
+                or (loja := contas.da_fonte(leitura.fonte)) is None
+                or not loja.conectada()
             ):
                 return False
             # O executável foi editado depois da leitura: o jogo pode ser outro (ou
@@ -507,36 +512,37 @@ class VarreduraConquistas:
             if (getattr(game, "executable", "") or "") != leitura.executavel:
                 return False
             texto = leitura.fonte.texto
-            xuid = conta.xuid()
-            if xuid is None:
+            id_conta = loja.id_da_conta()
+            if id_conta is None:
                 return False
             antes = historico.fonte(game.game_id)
             conta_antes = historico.conta(game.game_id)
             entraram, primeira = historico.registrar(
-                game.game_id, leitura.desbloqueios, fonte=texto, conta=xuid
+                game.game_id, leitura.desbloqueios, fonte=texto, conta=id_conta
             )
             # A primeira leitura da fonte (conta recém-conectada, por exemplo)
             # traz o que a conta já tinha: não é novidade. Vale também quando só a
-            # conta mudou: o `xbox:<titleId>` é o mesmo, mas as conquistas de uma
-            # conta que não é a que o histórico conhecia não são novidade.
-            primeira_da_conta = antes != texto or conta_antes != xuid
+            # conta mudou: a fonte (`xbox:<titleId>`, `epic:<namespace>`) é a mesma,
+            # mas as conquistas de uma conta que não é a que o histórico conhecia
+            # não são novidade.
+            primeira_da_conta = antes != texto or conta_antes != id_conta
             novas = 0 if (primeira or primeira_da_conta) else len(entraram)
             self._atualizar_pagina(game, bool(entraram) or primeira_da_conta)
             if novas and leitura.avisar:
-                self._novas_xbox.append((game.name, novas))
+                self._novas_da_conta.append((game.name, novas))
         except Exception:  # pylint: disable=broad-exception-caught
-            logging.warning("Falha ao guardar as conquistas do Xbox de um jogo", exc_info=True)
+            logging.warning("Falha ao guardar as conquistas da conta de um jogo", exc_info=True)
         return False
 
-    def _concluir_xbox(self) -> bool:
+    def _concluir_da_conta(self) -> bool:
         """Callback ocioso do GLib: não levanta, e a lista sempre zera."""
         try:
-            if not self._stopped and (texto := mensagem(self._novas_xbox)):
+            if not self._stopped and (texto := mensagem(self._novas_da_conta)):
                 _aviso(texto)
         except Exception:  # pylint: disable=broad-exception-caught
-            logging.warning("Falha ao avisar das conquistas novas do Xbox", exc_info=True)
+            logging.warning("Falha ao avisar das conquistas novas das contas", exc_info=True)
         finally:
-            self._novas_xbox = []
+            self._novas_da_conta = []
         return False
 
     def _concluir(self, inicio: Optional[int] = None) -> bool:

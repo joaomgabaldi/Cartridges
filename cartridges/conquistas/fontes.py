@@ -1,10 +1,11 @@
 """De onde vêm as conquistas de cada jogo — ou de lugar nenhum, e o cartão some.
 
-Três respostas: a conta Xbox (jogo do Xbox/Game Pass com a conta Microsoft
-conectada), a Steam ou um emulador (appID e onde ler o progresso: atalho
-`steam://`, arquivo de emulador, ou sinal de emulador na pasta do jogo), ou
-nenhuma. Jogo do Xbox sem conta não cai para a Steam: o catálogo da Steam
-ficaria parado em "0 de N", que é justamente o que esta regra acaba.
+Três respostas: a conta de uma loja (Xbox; ver `contas.py`; jogo do Xbox/Game
+Pass com a conta Microsoft conectada), a Steam ou um emulador (appID e onde ler
+o progresso: atalho `steam://`, arquivo de emulador, ou sinal de emulador na
+pasta do jogo), ou nenhuma. Jogo do Xbox sem conta não cai para a Steam: o
+catálogo da Steam ficaria parado em "0 de N", que é justamente o que esta regra
+acaba.
 
 `do_jogo` olha o disco e roda em thread (varredura, vigia). A página do jogo
 não pode tocar no disco do jogo (um HD dormindo travaria a tela), então a
@@ -17,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from cartridges.conquistas import arquivos, historico
+from cartridges.conquistas import arquivos, contas, historico
 from cartridges.conquistas.xbox import api, conta
 from cartridges.utils.run_executable import aumid_from_command
 
@@ -127,8 +128,13 @@ def gravada(game: Any) -> Optional[Fonte]:
 
 
 def ativa(fonte: Optional[Fonte]) -> bool:
-    return fonte is not None and (fonte.tipo != XBOX or conta.conectada())
+    """Steam e emulador sempre; loja com conta, só com a conta conectada."""
+    if fonte is None:
+        return False
+    loja = contas.da_fonte(fonte)
+    return loja is None or loja.conectada()
 
 
 def chave_do_catalogo(fonte: Fonte) -> str:
-    return api.chave_do_catalogo(fonte.id) if fonte.tipo == XBOX else fonte.id
+    loja = contas.da_fonte(fonte)
+    return loja.chave_do_catalogo(fonte.id) if loja is not None else fonte.id

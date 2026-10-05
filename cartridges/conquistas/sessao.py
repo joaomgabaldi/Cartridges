@@ -4,23 +4,27 @@ conquista nova: o cartão por cima do jogo e o pulso na iluminação.
 Quem chama é a janela, nos mesmos dois pontos em que a sessão já veste o papel
 de parede e as fitas (`show_session_blocker` e `hide_session_blocker`). As
 preferências são lidas na hora do aviso, então mudá-las no meio da partida
-vale para a próxima conquista. Nos jogos da Steam e do Xbox, só o pulso: a
-Steam e a Xbox Game Bar já mostram o aviso delas.
+vale para a próxima conquista. Nos jogos da Steam e das lojas com conta (Xbox,
+Epic), só o pulso: a Steam, a Xbox Game Bar e o overlay da Epic já mostram o
+aviso delas.
 
-O vigia depende da fonte gravada do jogo: a do Xbox consulta a conta
-(`xbox.vigia`); a da Steam, ou nenhuma, olha os arquivos (`vigia`).
+O vigia depende da fonte gravada do jogo: a de uma loja com conta consulta a
+conta (`vigia_da_conta`); a da Steam, ou nenhuma, olha os arquivos (`vigia`).
 """
 
 import logging
 from typing import Any, Optional
 
 from cartridges import conquista_aviso, shared
-from cartridges.conquistas import arquivos, fontes
+from cartridges.conquistas import arquivos, contas, fontes
 from cartridges.conquistas.vigia import Desbloqueada, Vigia, acompanha
 from cartridges.conquistas.xbox import vigia as vigia_xbox
 from cartridges.utils import session_fita
 
-# Os dois vigias (arquivos e Xbox) têm o mesmo contrato: `game`, `ativo`, `iniciar` e `parar`.
+# O módulo do vigia de cada loja com conta. `Vigia` é procurado na hora (os testes o trocam).
+_VIGIAS = {"xbox": vigia_xbox}
+
+# Os vigias (arquivos e de cada loja com conta) têm o mesmo contrato: `game`, `ativo`, `iniciar` e `parar`.
 _vigia: Optional[Any] = None
 
 
@@ -37,7 +41,7 @@ def _da_steam(game: Any) -> bool:
 
 
 def _so_pulso(game: Any) -> bool:
-    """Steam e Xbox já mostram o aviso deles: aqui, só o pulso."""
+    """Steam e as lojas com conta já mostram o aviso delas: aqui, só o pulso."""
     if _da_steam(game):
         return True
     try:
@@ -45,7 +49,7 @@ def _so_pulso(game: Any) -> bool:
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning("Falha ao ler a fonte das conquistas", exc_info=True)
         return False
-    return fonte is not None and fonte.tipo == fontes.XBOX
+    return contas.da_fonte(fonte) is not None
 
 
 def acompanhando(game: Any) -> bool:
@@ -68,11 +72,12 @@ def comecar(game: Any) -> None:
     parar()
     try:
         fonte = fontes.gravada(game)
-        if fonte is not None and fonte.tipo == fontes.XBOX:
+        if contas.da_fonte(fonte) is not None:
             # Sem a conta conectada (ou com o interruptor desligado), não há o que acompanhar:
-            # o jogo do Xbox não cai no vigia de arquivos.
-            if fontes.ativa(fonte) and getattr(game, "conquistas", True):
-                _vigia = vigia_xbox.Vigia(game, _avisar)
+            # o jogo de uma loja com conta não cai no vigia de arquivos.
+            modulo = _VIGIAS.get(fonte.tipo)
+            if modulo is not None and fontes.ativa(fonte) and getattr(game, "conquistas", True):
+                _vigia = modulo.Vigia(game, _avisar)
                 _vigia.iniciar()
             return
         if not acompanha(game):

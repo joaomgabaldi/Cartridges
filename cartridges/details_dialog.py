@@ -31,7 +31,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 from PIL import Image, UnidentifiedImageError
 
 from cartridges import shared
-from cartridges.conquistas import fontes, historico
+from cartridges.conquistas import contas, fontes, historico
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.game import Game, STATUS_LABELS
 from cartridges.game_cover import GameCover
@@ -742,9 +742,9 @@ class DetailsDialog(Adw.Dialog):
         if appid_anterior and appid_mudou:
             # O appID antigo estava errado: as conquistas guardadas eram de
             # outro jogo. A varredura logo abaixo lê as do appID certo. Num jogo
-            # do Xbox o appID não é a fonte: as conquistas guardadas são da conta.
+            # de loja com conta o appID não é a fonte: as conquistas guardadas são da conta.
             fonte_gravada = fontes.gravada(self.game)
-            if fonte_gravada is None or fonte_gravada.tipo != fontes.XBOX:
+            if contas.da_fonte(fonte_gravada) is None:
                 historico.apagar(self.game.game_id)
 
         if self.game.steam_appid and str(self.game.steam_appid) != str(appid_anterior):

@@ -955,10 +955,10 @@ def test_xbox_durante_a_sessao_fica_para_o_vigia(store, make_game, pastas, flush
 
 def test_xbox_de_jogo_excluido_no_meio_nao_grava(store, make_game, pastas, flush_idle, xbox):
     game = _registrado(store, make_game, 1, executable=_AUMID)
-    leitura, falhou = varredura.ler_xbox(game, varredura.Fonte("xbox", ""))
+    leitura, falhou = varredura.ler_da_conta(game, varredura.Fonte("xbox", ""))
     assert falhou is False and leitura.fonte.texto == "xbox:7"
     store.excluir(game)
-    assert VarreduraConquistas()._entregar_xbox(leitura) is False
+    assert VarreduraConquistas()._entregar_da_conta(leitura) is False
     assert historico.ler(game.game_id) is None
 
 
@@ -966,39 +966,39 @@ def test_xbox_desconectado_no_meio_nao_grava(store, make_game, pastas, flush_idl
     from cartridges.conquistas.xbox import conta  # noqa: PLC0415
 
     game = _registrado(store, make_game, 1, executable=_AUMID)
-    leitura, _ = varredura.ler_xbox(game, varredura.Fonte("xbox", ""))
+    leitura, _ = varredura.ler_da_conta(game, varredura.Fonte("xbox", ""))
     monkeypatch.setattr(conta, "conectada", lambda: False)
-    VarreduraConquistas()._entregar_xbox(leitura)
+    VarreduraConquistas()._entregar_da_conta(leitura)
     assert historico.ler(game.game_id) is None
 
 
 def test_entregar_xbox_nao_levanta(store, make_game, pastas, xbox, monkeypatch):
     game = _registrado(store, make_game, 1, executable=_AUMID)
-    leitura, _ = varredura.ler_xbox(game, varredura.Fonte("xbox", "7"))
+    leitura, _ = varredura.ler_da_conta(game, varredura.Fonte("xbox", "7"))
 
     def estoura(*_args, **_kwargs):
         raise OSError("disco cheio")
 
     monkeypatch.setattr(historico, "registrar", estoura)
-    assert VarreduraConquistas()._entregar_xbox(leitura) is False
+    assert VarreduraConquistas()._entregar_da_conta(leitura) is False
 
 
 def test_concluir_xbox_nao_levanta_e_zera_a_lista(monkeypatch):
     instancia = VarreduraConquistas()
-    instancia._novas_xbox = [("Jogo 1", 2)]
+    instancia._novas_da_conta = [("Jogo 1", 2)]
 
     def estoura(_texto):
         raise RuntimeError("sem janela")
 
     monkeypatch.setattr(varredura, "_aviso", estoura)
-    assert instancia._concluir_xbox() is False
-    assert instancia._novas_xbox == []
+    assert instancia._concluir_da_conta() is False
+    assert instancia._novas_da_conta == []
 
 
 def test_ler_xbox_titulo_pendente_sem_xbox_live_e_nada(store, make_game, xbox):
     game = _registrado(store, make_game, 1, executable=_AUMID)
     xbox.titulo = ""
-    assert varredura.ler_xbox(game, varredura.Fonte("xbox", "")) == (None, False)
+    assert varredura.ler_da_conta(game, varredura.Fonte("xbox", "")) == (None, False)
 
 
 def test_ler_xbox_sem_rede(store, make_game, xbox):
@@ -1006,7 +1006,7 @@ def test_ler_xbox_sem_rede(store, make_game, xbox):
 
     game = _registrado(store, make_game, 1, executable=_AUMID)
     xbox.falha = api.FalhaDeRede()
-    assert varredura.ler_xbox(game, varredura.Fonte("xbox", "7")) == (None, True)
+    assert varredura.ler_da_conta(game, varredura.Fonte("xbox", "7")) == (None, True)
 
 
 def test_pagina_aberta_atualiza_quando_a_fonte_muda(store, make_game, pastas, win, flush_idle):
@@ -1023,9 +1023,9 @@ def test_executavel_editado_entre_a_leitura_e_a_entrega_descarta_a_leitura(
     game = _registrado(store, make_game, 1, executable=_AUMID)
     historico.registrar(game.game_id, [Desbloqueio("ACH_STEAM", 5)], fonte="steam:570")
     xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
-    leitura, _ = varredura.ler_xbox(game, varredura.Fonte("xbox", "7"))
+    leitura, _ = varredura.ler_da_conta(game, varredura.Fonte("xbox", "7"))
     game.executable = "steam://rungameid/570"
-    assert VarreduraConquistas()._entregar_xbox(leitura) is False
+    assert VarreduraConquistas()._entregar_da_conta(leitura) is False
     flush_idle()
     assert historico.ler(game.game_id) == {"ACH_STEAM": 5}
     assert historico.fonte(game.game_id) == "steam:570"
