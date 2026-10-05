@@ -925,3 +925,38 @@ def test_pagina_aberta_atualiza_quando_a_fonte_muda(store, make_game, pastas, wi
     chamadas = _janela_com_jogo_aberto(win, game)
     _rodar([game], flush_idle)
     assert chamadas == [game]
+
+
+def test_executavel_editado_entre_a_leitura_e_a_entrega_descarta_a_leitura(
+    store, make_game, pastas, win, flush_idle, xbox
+):
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    historico.registrar(game.game_id, [Desbloqueio("ACH_STEAM", 5)], fonte="steam:570")
+    xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
+    leitura, _ = varredura.ler_xbox(game, varredura.Fonte("xbox", "7"))
+    game.executable = "steam://rungameid/570"
+    assert VarreduraConquistas()._entregar_xbox(leitura) is False
+    flush_idle()
+    assert historico.ler(game.game_id) == {"ACH_STEAM": 5}
+    assert historico.fonte(game.game_id) == "steam:570"
+    assert _avisos(win) == []
+
+
+def test_executavel_editado_durante_a_leitura_da_conta_nao_grava(
+    store, make_game, pastas, win, flush_idle, xbox, monkeypatch
+):
+    from cartridges.conquistas.xbox import api  # noqa: PLC0415
+
+    game = _registrado(store, make_game, 1, executable=_AUMID)
+    ler_falso = api.ler
+
+    def ler(titulo):
+        game.executable = _AUMID.replace("Jogo", "Outro")  # o usuário edita enquanto a thread espera a rede
+        return ler_falso(titulo)
+
+    xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
+    monkeypatch.setattr(api, "ler", ler)
+    _rodar([game], flush_idle)
+    assert historico.ler(game.game_id) is None
+    assert historico.fonte(game.game_id) is None
+    assert _avisos(win) == []
