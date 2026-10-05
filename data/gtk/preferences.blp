@@ -410,6 +410,22 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
     title: _("Conquistas");
     icon-name: "starred-symbolic";
 
+    Adw.PreferencesGroup {
+      title: _("Contas");
+      description: _("Entre com a conta Microsoft para acompanhar as conquistas dos jogos do Xbox e do Game Pass.");
+
+      Adw.ActionRow conquistas_conta_row {
+        title: _("Conta Microsoft");
+        subtitle: _("Não conectada");
+
+        [suffix]
+        Gtk.Button conquistas_conta_botao {
+          label: _("Entrar");
+          valign: center;
+        }
+      }
+    }
+
     Adw.PreferencesGroup conquistas_chave_group {
       title: _("Steam Web API");
 

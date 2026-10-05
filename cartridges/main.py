@@ -48,6 +48,7 @@ from cartridges import restauracao_dialogs, shared
 from cartridges.conquistas import icones
 from cartridges.conquistas import sessao as sessao_conquistas
 from cartridges.conquistas.varredura import VarreduraConquistas
+from cartridges.conquistas.xbox import conta, login
 from cartridges.details_dialog import DetailsDialog
 from cartridges.game import Game
 from cartridges.game_cover import GameCover
@@ -607,6 +608,8 @@ class CartridgesApplication(Adw.Application):
         # Lê as conquistas de cada jogo e guarda o que achar, inclusive o que
         # foi jogado por fora do app desde a última abertura. Uma vez por
         # execução, depois da importação, como as duas varreduras acima.
+        # A conta Microsoft é lida do disco antes, sem rede (nunca levanta).
+        conta.carregar()
         self.varredura_conquistas = VarreduraConquistas()
         self.varredura_conquistas.start()
 
@@ -734,6 +737,13 @@ class CartridgesApplication(Adw.Application):
         # `hide_session_blocker`): um pulso pedido depois disso não teria
         # sessão para pulsar. Nunca levanta, e é rápido.
         sessao_conquistas.parar()
+
+        # Um login da conta Microsoft esperando o navegador não pode sobreviver
+        # ao app: fecha o servidor local da porta de retorno.
+        try:
+            login.cancelar_pendente()
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Falha ao cancelar o login pendente", exc_info=True)
 
         # A sessão que estava correndo acaba aqui, e as telas vestidas não podem
         # ficar com a arte do jogo depois que o app sumir. Síncrono e antes de
