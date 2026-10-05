@@ -16,8 +16,6 @@ cabeçalho ``Authorization`` vai para o log, e a mensagem de uma exceção do
 ``requests`` (que pode trazer a URL) também não: só o tipo e o status.
 """
 
-import calendar
-import datetime
 import json
 import logging
 import math
@@ -25,7 +23,6 @@ import re
 import threading
 import time
 import uuid
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 from xml.etree import ElementTree
@@ -35,7 +32,9 @@ import requests
 from cartridges import shared
 from cartridges.conquistas import arquivos, catalogo
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
+from cartridges.conquistas.contas import Leitura
 from cartridges.conquistas.formatos import Desbloqueio
+from cartridges.conquistas.saneamento import codifica, limpo, segundos_iso
 from cartridges.conquistas.xbox import conta
 from cartridges.utils import download
 from cartridges.utils.ler_json import ler_json
@@ -64,12 +63,6 @@ class XboxLimiter(RateLimiter):
     refill_period_seconds = 60
     refill_period_tokens = 30
     burst_tokens = 10
-
-
-@dataclass(frozen=True)
-class Leitura:
-    catalogo: Catalogo
-    desbloqueios: list[Desbloqueio]
 
 
 _limitador: Optional[XboxLimiter] = None
@@ -294,44 +287,15 @@ def titulo(pfn: Optional[str], bases: list[Path]) -> Optional[str]:
 # --- conquistas -------------------------------------------------------------
 
 
-def _segundos(texto: Any) -> int:
-    """``2026-08-06T01:15:55.7870000Z`` em segundos Unix; 0 quando não vale."""
-    if not isinstance(texto, str):
-        return 0
-    try:
-        momento = datetime.datetime.strptime(texto[:19], "%Y-%m-%dT%H:%M:%S")
-        # O Xbox usa o ano 1 para "nunca"; nada anterior a 1971 é uma data real.
-        if momento.year < 1971:
-            return 0
-        segundos = calendar.timegm(momento.timetuple())
-    except (ValueError, OverflowError, OSError):
-        return 0
-    return segundos if 0 <= segundos < 2**63 else 0
-
-
 def _icone(item: dict) -> str:
     assets = item.get("mediaAssets")
     for asset in assets if isinstance(assets, list) else []:
         if not isinstance(asset, dict) or asset.get("type") != "Icon":
             continue
         url = asset.get("url")
-        if isinstance(url, str) and url.startswith("https://") and _codifica(url):
+        if isinstance(url, str) and url.startswith("https://") and codifica(url):
             return url
     return ""
-
-
-def _codifica(texto: str) -> bool:
-    """Se o texto grava em UTF-8: `json.loads` aceita `"\\ud800"`, que não grava."""
-    try:
-        texto.encode("utf-8")
-    except UnicodeEncodeError:
-        return False
-    return True
-
-
-def _limpo(texto: str) -> str:
-    """O texto sem surrogate solto (vira `?`)."""
-    return texto.encode("utf-8", "replace").decode("utf-8")
 
 
 def _porcentagem(item: dict) -> Optional[float]:
@@ -354,7 +318,7 @@ def _info(item: Any) -> Optional[tuple[ConquistaInfo, Optional[Desbloqueio]]]:
         return None
     id_, nome = item.get("id"), item.get("name")
     # O id vira a chave do histórico: um id que não grava em UTF-8 derruba a conquista.
-    if not isinstance(id_, str) or not id_.strip() or not _codifica(id_) or not isinstance(nome, str):
+    if not isinstance(id_, str) or not id_.strip() or not codifica(id_) or not isinstance(nome, str):
         return None
     descricao = item.get("description")
     if not isinstance(descricao, str) or not descricao:
@@ -362,8 +326,8 @@ def _info(item: Any) -> Optional[tuple[ConquistaInfo, Optional[Desbloqueio]]]:
     chave = f"{PREFIXO}{id_}"
     info = ConquistaInfo(
         nome=chave,
-        titulo=_limpo(nome).strip() or id_,
-        descricao=_limpo(descricao) if isinstance(descricao, str) else "",
+        titulo=limpo(nome).strip() or id_,
+        descricao=limpo(descricao) if isinstance(descricao, str) else "",
         icone=_icone(item),
         icone_cinza="",
         oculta=item.get("isSecret") is True,
@@ -373,7 +337,7 @@ def _info(item: Any) -> Optional[tuple[ConquistaInfo, Optional[Desbloqueio]]]:
     # Só `Achieved`: `unlockedOnly=true` também devolve as `InProgress`.
     if item.get("progressState") == "Achieved":
         progresso = item.get("progression")
-        quando = _segundos(progresso.get("timeUnlocked")) if isinstance(progresso, dict) else 0
+        quando = segundos_iso(progresso.get("timeUnlocked")) if isinstance(progresso, dict) else 0
         desbloqueio = Desbloqueio(chave, quando)
     return info, desbloqueio
 
