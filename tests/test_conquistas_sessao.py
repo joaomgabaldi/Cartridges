@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from cartridges import conquista_aviso
-from cartridges.conquistas import sessao
+from cartridges.conquistas import historico, sessao
 from cartridges.conquistas.catalogo import ConquistaInfo
 from cartridges.conquistas.vigia import Desbloqueada
 from cartridges.utils import session_fita
@@ -276,3 +276,72 @@ def test_jogo_da_steam_so_pulsa(make_game, isolar):
     _VigiaFalso.criados[0].avisar([Desbloqueada("A", _info(rara=True), False)])
     assert mostrados == []
     assert pulsos == ["rara"]
+
+
+class _VigiaXboxFalso:
+    criados: list = []
+
+    def __init__(self, game, avisar, **_kw):
+        self.game, self.avisar, self.ativo = game, avisar, False
+        _VigiaXboxFalso.criados.append(self)
+
+    def iniciar(self):
+        self.ativo = True
+
+    def parar(self):
+        self.ativo = False
+
+
+@pytest.fixture
+def xbox(monkeypatch):
+    from cartridges.conquistas.xbox import conta, vigia as vigia_xbox  # noqa: PLC0415
+
+    _VigiaXboxFalso.criados = []
+    monkeypatch.setattr(vigia_xbox, "Vigia", _VigiaXboxFalso)
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    return conta
+
+
+def test_jogo_do_xbox_usa_o_vigia_do_xbox_e_so_pulsa(make_game, xbox, isolar):
+    mostrados, pulsos = isolar
+    game = make_game()
+    historico.registrar(game.game_id, [], fonte="xbox:7")
+    sessao.comecar(game)
+    assert _VigiaFalso.criados == []  # nada do vigia de arquivos
+    (vigia_,) = _VigiaXboxFalso.criados
+    assert vigia_.game is game and vigia_.ativo and sessao.acompanhando(game)
+    assert sessao._so_pulso(game)
+    vigia_.avisar([Desbloqueada("A", _info(rara=True), False)])
+    assert mostrados == []  # a Xbox Game Bar já mostra o aviso
+    assert pulsos == ["rara"]
+    sessao.parar()
+    assert not vigia_.ativo
+
+
+def test_jogo_do_xbox_sem_conta_nao_e_acompanhado(make_game, xbox, monkeypatch):
+    monkeypatch.setattr(xbox, "conectada", lambda: False)
+    game = make_game()
+    historico.registrar(game.game_id, [], fonte="xbox:7")
+    sessao.comecar(game)
+    assert sessao._vigia is None
+    assert _VigiaXboxFalso.criados == [] and _VigiaFalso.criados == []
+
+
+def test_jogo_do_xbox_com_conquistas_desligadas_nao_e_acompanhado(make_game, xbox):
+    game = make_game(conquistas=False)
+    historico.registrar(game.game_id, [], fonte="xbox:7")
+    sessao.comecar(game)
+    assert sessao._vigia is None and _VigiaXboxFalso.criados == []
+
+
+def test_fonte_steam_gravada_segue_o_caminho_dos_arquivos(make_game, xbox):
+    game = make_game()
+    historico.registrar(game.game_id, [], fonte="steam:570")
+    sessao.comecar(game)
+    assert _VigiaXboxFalso.criados == [] and len(_VigiaFalso.criados) == 1
+    assert not sessao._so_pulso(game)  # sem executável da Steam: cartão e pulso
+
+
+def test_so_pulso_sem_jogo_ou_sem_fonte(make_game):
+    assert not sessao._so_pulso(None)
+    assert not sessao._so_pulso(make_game())
