@@ -410,9 +410,9 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
     title: _("Conquistas");
     icon-name: "starred-symbolic";
 
-    Adw.PreferencesGroup {
+    Adw.PreferencesGroup conquistas_contas_group {
       title: _("Contas");
-      description: _("Entre com a conta Microsoft para acompanhar as conquistas dos jogos do Xbox e do Game Pass.");
+      description: _("Entre com as contas das lojas para acompanhar as conquistas dos jogos do Xbox, do Game Pass e da Epic Games Store.");
 
       Adw.ActionRow conquistas_conta_row {
         title: _("Conta Microsoft");
@@ -420,6 +420,17 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
 
         [suffix]
         Gtk.Button conquistas_conta_botao {
+          label: _("Entrar");
+          valign: center;
+        }
+      }
+
+      Adw.ActionRow conquistas_epic_row {
+        title: _("Conta Epic");
+        subtitle: _("Não conectada");
+
+        [suffix]
+        Gtk.Button conquistas_epic_botao {
           label: _("Entrar");
           valign: center;
         }
