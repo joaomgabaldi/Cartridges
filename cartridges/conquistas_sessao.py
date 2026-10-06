@@ -37,6 +37,9 @@ class CartaoDaSessao(Gtk.Box):
 
         self.icones = Gtk.FlowBox(
             selection_mode=Gtk.SelectionMode.NONE,
+            # Sem o destaque ao passar o mouse, como nas outras FlowBox: o
+            # cartão é passivo e os ícones não parecem clicáveis.
+            css_classes=["no-hover"],
             homogeneous=True,
             halign=Gtk.Align.CENTER,
             max_children_per_line=1000,
@@ -74,7 +77,10 @@ class CartaoDaSessao(Gtk.Box):
         # cresce para os lados até a janela e só então quebra a linha.
         self.icones.set_max_children_per_line(max(1, len(atual.todas)))
         for linha in atual.todas:
-            self.icones.append(self._icone(linha, mostrar_ocultas))
+            # O wrapper explícito (não focável) tira os ícones da ordem do Tab.
+            self.icones.append(
+                Gtk.FlowBoxChild(child=self._icone(linha, mostrar_ocultas), focusable=False)
+            )
 
     @staticmethod
     def _icone(linha: progresso.Linha, mostrar_ocultas: bool) -> Gtk.Widget:

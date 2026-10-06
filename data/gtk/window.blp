@@ -310,8 +310,10 @@ template $CartridgesWindow: Adw.ApplicationWindow {
           }
 
           // O cartão de conquistas do jogo, preenchido em Python
-          // (conquistas_sessao.py). Vazio e escondido sem conquistas.
+          // (conquistas_sessao.py). Vazio e escondido sem conquistas: visível
+          // só junto com o cartão, senão o espaçamento da coluna desloca a tela.
           Box session_blocker_conquistas {
+            visible: false;
             orientation: vertical;
             halign: fill;
             margin-top: 12;
