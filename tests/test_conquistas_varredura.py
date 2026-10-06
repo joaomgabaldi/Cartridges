@@ -1,6 +1,7 @@
 """A varredura de abertura: grava o histórico e avisa do que é novo."""
 
 import json
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -8,7 +9,7 @@ import pytest
 from cartridges.conquistas import catalogo, historico, sessao, varredura
 from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.conquistas.varredura import VarreduraConquistas
-from tests.apoio_conquistas import criar, pastas  # noqa: F401
+from tests.apoio_conquistas import criar, gravar_pacote, gravar_spool, pastas  # noqa: F401
 
 
 _OBTER_REAL = catalogo.obter
@@ -1157,3 +1158,134 @@ def test_outra_conta_epic_e_primeira_leitura(store, make_game, pastas, win, flus
     epic.desbloqueios = [Desbloqueio("EPIC:1", 100), Desbloqueio("EPIC:2", 200)]
     _rodar([game], flush_idle)
     assert _avisos(win) == [] and historico.conta(game.game_id) == "c2"
+
+
+# -- A Ubisoft ----------------------------------------------------------------------
+
+
+def _da_ubisoft(store, make_game, numero=1, produto="65043"):
+    """Jogo da Ubisoft com appID da Steam nos metadados (a Ubisoft vence)."""
+    return _registrado(
+        store, make_game, numero, executable=f'start "" "uplay://launch/{produto}/0"', steam_appid="242050"
+    )
+
+
+def test_jogo_da_ubisoft_grava_fonte_conta_e_catalogo(store, make_game, pastas, flush_idle):
+    gravar_spool(pastas, "65043", [(23, VELHA)], conta="aaa")
+    gravar_pacote(pastas, "65043", {"pt-BR": {23: ("A Vivaz Havana", "x")}})
+    game = _da_ubisoft(store, make_game)
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) == "ubisoft:65043"
+    assert historico.conta(game.game_id) == "aaa"
+    assert historico.ler(game.game_id) == {"UBI:23": VELHA}
+    assert catalogo.em_cache("ubisoft-65043") is not None
+
+
+def test_ubisoft_sem_spool_grava_so_a_fonte(store, make_game, pastas, flush_idle):
+    game = _da_ubisoft(store, make_game)
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) == "ubisoft:65043"
+    assert historico.conta(game.game_id) is None
+    assert not historico.ler(game.game_id)
+
+
+def test_primeira_leitura_da_ubisoft_nao_avisa(store, make_game, pastas, win, flush_idle):
+    gravar_spool(pastas, "65043", [(23, NOVA), (12, NOVA)])
+    _rodar([_da_ubisoft(store, make_game)], flush_idle)
+    assert _avisos(win) == []
+
+
+def test_spool_que_nasce_depois_nao_avisa_o_que_a_conta_tinha(
+    store, make_game, pastas, win, flush_idle, state_schema
+):
+    game = _da_ubisoft(store, make_game)
+    _rodar([game], flush_idle)  # nunca aberto neste PC: só a fonte
+    state_schema.set_int64("conquistas-ultima-varredura", ANTERIOR)
+    gravar_spool(pastas, "65043", [(23, VELHA), (12, NOVA)], conta="aaa")
+    _rodar([game], flush_idle)
+    assert historico.ler(game.game_id) == {"UBI:23": VELHA, "UBI:12": NOVA}
+    assert _avisos(win) == []
+
+
+def test_conquista_nova_da_ubisoft_desde_a_ultima_abertura_avisa(
+    store, make_game, pastas, win, flush_idle, state_schema
+):
+    gravar_spool(pastas, "65043", [(23, VELHA)])
+    game = _da_ubisoft(store, make_game)
+    _rodar([game], flush_idle)
+    state_schema.set_int64("conquistas-ultima-varredura", ANTERIOR)
+    gravar_spool(pastas, "65043", [(23, VELHA), (12, NOVA), (5, VELHA + 10)])
+    _rodar([game], flush_idle)
+    # A nova conta; a antiga que chegou agora (sincronizada da conta) não.
+    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+
+
+def test_outra_conta_ubisoft_nao_avisa_o_que_ja_tinha(store, make_game, pastas, win, flush_idle, state_schema):
+    primeiro = gravar_spool(pastas, "65043", [(23, VELHA)], conta="aaa")
+    game = _da_ubisoft(store, make_game)
+    _rodar([game], flush_idle)
+    state_schema.set_int64("conquistas-ultima-varredura", ANTERIOR)
+    segundo = gravar_spool(pastas, "65043", [(7, NOVA)], conta="bbb")
+    os.utime(primeiro, (1_700_000_000, 1_700_000_000))
+    os.utime(segundo, (1_900_000_000, 1_900_000_000))
+    _rodar([game], flush_idle)
+    assert historico.conta(game.game_id) == "bbb"
+    assert historico.ler(game.game_id) == {"UBI:23": VELHA, "UBI:7": NOVA}
+    assert _avisos(win) == []
+
+
+def test_spool_ilegivel_nao_grava_nada(store, make_game, pastas, flush_idle):
+    gravar_spool(pastas, "65043", [(23, VELHA)]).write_bytes(b"\x8a")
+    game = _da_ubisoft(store, make_game)
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) is None
+    assert historico.ler(game.game_id) is None
+
+
+def test_sem_spool_agora_mantem_a_conta_gravada(store, make_game, pastas, flush_idle):
+    caminho = gravar_spool(pastas, "65043", [(23, VELHA)], conta="aaa")
+    game = _da_ubisoft(store, make_game)
+    _rodar([game], flush_idle)
+    caminho.unlink()
+    _rodar([game], flush_idle)
+    assert historico.conta(game.game_id) == "aaa"
+    assert historico.ler(game.game_id) == {"UBI:23": VELHA}
+
+
+def test_executavel_editado_durante_a_leitura_da_ubisoft_descarta(store, make_game, pastas, flush_idle, monkeypatch):
+    gravar_spool(pastas, "65043", [(23, VELHA)])
+    game = _da_ubisoft(store, make_game)
+    real = varredura.ubisoft_spool.ler_ou_none
+
+    def ler(caminho):
+        game.executable = 'start "" "uplay://launch/274/0"'  # o usuário edita enquanto a thread lê
+        return real(caminho)
+
+    monkeypatch.setattr(varredura.ubisoft_spool, "ler_ou_none", ler)
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) is None
+    assert historico.ler(game.game_id) is None
+
+
+def test_ubisoft_nao_vai_a_rede(store, make_game, pastas, flush_idle, monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(catalogo, "obter", lambda *a, **k: chamadas.append(a) or catalogo.Renovacao(None))
+    _rodar([_da_ubisoft(store, make_game)], flush_idle)
+    assert chamadas == []
+
+
+def test_pagina_aberta_atualiza_quando_so_o_catalogo_da_ubisoft_chegou(store, make_game, pastas, win, flush_idle):
+    game = _da_ubisoft(store, make_game)
+    historico.registrar(game.game_id, [], fonte="ubisoft:65043")
+    gravar_pacote(pastas, "65043", {"pt-BR": {1: ("A", "a")}})
+    chamadas = _janela_com_jogo_aberto(win, game)
+    _rodar([game], flush_idle)
+    assert chamadas == [game]
+
+
+def test_ubisoft_em_sessao_fica_para_o_vigia(store, make_game, pastas, flush_idle, monkeypatch):
+    gravar_spool(pastas, "65043", [(23, VELHA)])
+    game = _da_ubisoft(store, make_game)
+    monkeypatch.setattr(sessao, "acompanhando", lambda g: g is game)
+    _rodar([game], flush_idle)
+    assert historico.ler(game.game_id) is None

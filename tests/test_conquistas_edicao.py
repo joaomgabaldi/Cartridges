@@ -117,6 +117,15 @@ def test_corrigir_o_appid_de_jogo_do_xbox_nao_apaga_o_historico(store, real_wind
     assert varredura.pedidos == [game.game_id]
 
 
+def test_corrigir_o_appid_de_jogo_da_ubisoft_nao_apaga_o_historico(store, real_window, varredura):
+    """Na Ubisoft o appID não é a fonte: as conquistas guardadas são dos arquivos do launcher."""
+    _stub_sgdb(store)
+    game = jogo(store, 29, executable="x.exe", steam_appid="10")
+    historico.registrar(game.game_id, [Desbloqueio("UBI:1", 1)], fonte="ubisoft:65043", conta="aaa")
+    _aplicar(game, fetched_steam_appid="20")
+    assert historico.ler(game.game_id) == {"UBI:1": 1}
+
+
 def test_corrigir_o_appid_de_jogo_da_steam_descarta_o_historico(store, real_window, varredura):
     _stub_sgdb(store)
     game = jogo(store, 29, executable="x.exe", steam_appid="10")
