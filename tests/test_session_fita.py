@@ -1740,10 +1740,17 @@ def pulso(falsas, tmp_path, monkeypatch, schema):
     )
     tarefas = []
     monkeypatch.setattr(session_fita, "_em_thread", tarefas.append)
+    # Sem espera nenhuma: segura e desliza zerados em todos os estilos.
     monkeypatch.setattr(
         session_fita,
-        "PULSOS",
-        {tipo: [(cor, 0) for cor, _s in passos] for tipo, passos in session_fita.PULSOS.items()},
+        "ESTILOS_DO_PULSO",
+        {
+            estilo: {
+                tipo: [passo._replace(segura=0, desliza=0) for passo in passos]
+                for tipo, passos in tipos.items()
+            }
+            for estilo, tipos in session_fita.ESTILOS_DO_PULSO.items()
+        },
     )
     jogo = _jogo(tmp_path)
     session_fita.comecar(jogo)
@@ -1862,10 +1869,11 @@ def test_recurso_desligado_nao_pulsa(pulso, schema):
     assert pulso.tarefas == []
 
 
-def test_todo_pulso_tem_sua_forca_e_vice_versa():
-    """A fila de pedidos compara por ``FORCA_DOS_PULSOS``: um tipo que faltasse
-    lá levantaria no `index` em vez de pulsar."""
-    assert set(session_fita.PULSOS) == set(session_fita.FORCA_DOS_PULSOS)
+def test_todo_estilo_tem_os_tres_tipos():
+    """A fila compara por ``FORCA_DOS_PULSOS``: um tipo que faltasse num
+    estilo levantaria no meio do pulso."""
+    for tipos in session_fita.ESTILOS_DO_PULSO.values():
+        assert set(tipos) == set(session_fita.FORCA_DOS_PULSOS)
 
 
 def test_tipo_desconhecido_nao_pulsa(pulso):
@@ -1972,6 +1980,115 @@ def test_comando_que_falha_no_pulso_esquece_o_que_a_fita_mostra(pulso):
     pulso.modulo.quebrada = True
     session_fita._tingir(fita, session_fita.OURO, vez)
     assert fita.id not in session_fita._mostrada
+
+
+# O pulso de antes desta mudança, copiado: "Piscar" não pode mudar.
+_PULSOS_ANTIGOS = {
+    "normal": [("ouro", 1.5)],
+    "rara": [("ouro", 0.6), ("jogo", 0.5), ("ouro", 0.6)],
+    "completo": [
+        ("ouro", 0.5), ("jogo", 0.4), ("ouro", 0.5), ("jogo", 0.4),
+        ("ouro", 0.5), ("jogo", 0.4), ("ouro", 2.0),
+    ],
+}
+
+
+def test_piscar_e_o_pulso_de_sempre():
+    nomes = {"pulso": "ouro", "base": "jogo"}
+    for tipo, passos in session_fita.ESTILOS_DO_PULSO["piscar"].items():
+        assert [(nomes[p.alvo], p.segura) for p in passos] == _PULSOS_ANTIGOS[tipo]
+        assert all(p.desliza == 0 for p in passos)
+
+
+def test_piscar_rapido_nao_passa_de_dois_e_meio_por_segundo():
+    for passos in session_fita.ESTILOS_DO_PULSO["rapido"].values():
+        for acende, apaga in zip(passos[::2], passos[1::2]):
+            assert (acende.alvo, apaga.alvo) == ("pulso", "base")
+            assert acende.segura + acende.desliza + apaga.segura + apaga.desliza >= 0.4
+
+
+def test_todo_passo_dura_e_tem_alvo_conhecido():
+    for tipos in session_fita.ESTILOS_DO_PULSO.values():
+        for passos in tipos.values():
+            assert passos
+            for passo in passos:
+                assert passo.alvo in ("pulso", "base")
+                assert passo.segura >= 0 and passo.desliza >= 0
+                assert passo.segura + passo.desliza > 0
+
+
+def test_cor_do_pulso_padrao_e_o_ouro(schema):
+    assert session_fita.cor_do_pulso() == session_fita.OURO
+    assert session_fita.tom_do_pulso() == session_fita.TOM_DO_OURO
+
+
+def test_cor_do_pulso_salva_e_redefinida(schema):
+    session_fita.salvar_tom_do_pulso(400, 1500)
+    assert session_fita.tom_do_pulso() == (40, 1000)  # matiz no círculo, saturação no teto
+    assert session_fita.cor_do_pulso().brilho == session_fita.BRILHO_CHEIO
+    session_fita.redefinir_tom_do_pulso()
+    assert session_fita.tom_do_pulso() == session_fita.TOM_DO_OURO
+
+
+def test_estilo_desconhecido_vira_piscar(schema):
+    schema.set_string("conquistas-pulso-estilo", "discoteca")
+    assert session_fita.estilo_do_pulso() == "piscar"
+    schema.set_string("conquistas-pulso-estilo", "respirar")
+    assert session_fita.estilo_do_pulso() == "respirar"
+
+
+def test_pulso_usa_a_cor_escolhida(pulso, schema):
+    schema.set_int("conquistas-pulso-matiz", 200)
+    schema.set_int("conquistas-pulso-saturacao", 800)
+    session_fita.pulsar_conquista("normal")
+    pulso.tarefas.pop(0)()
+    fita = session_fita.fitas()[0]
+    escolhida = session_fita.hsv_hex(
+        session_fita.na_fita(session_fita.Cor(200, 800, session_fita.BRILHO_CHEIO), fita)
+    )
+    assert _cores(pulso.modulo)[0] == escolhida
+    assert _ouro() not in _cores(pulso.modulo)
+
+
+def test_estilo_rapido_pisca_quatro_vezes_no_normal(pulso, schema):
+    schema.set_string("conquistas-pulso-estilo", "rapido")
+    session_fita.pulsar_conquista("normal")
+    pulso.tarefas.pop(0)()
+    assert _cores(pulso.modulo).count(_ouro()) == 4
+
+
+def test_estilo_longo_acende_uma_vez(pulso, schema):
+    schema.set_string("conquistas-pulso-estilo", "longo")
+    session_fita.pulsar_conquista("completo")
+    pulso.tarefas.pop(0)()
+    assert _cores(pulso.modulo).count(_ouro()) == 1
+
+
+def test_respirar_desliza_ate_o_pulso(pulso, schema, monkeypatch):
+    """Com deslize, a fita passa por cores do meio antes de chegar ao pulso."""
+    schema.set_string("conquistas-pulso-estilo", "respirar")
+    monkeypatch.setattr(
+        session_fita,
+        "ESTILOS_DO_PULSO",
+        {
+            "respirar": {
+                tipo: [session_fita.Passo("pulso", 0, 0.1), session_fita.Passo("base", 0, 0.1)]
+                for tipo in session_fita.FORCA_DOS_PULSOS
+            }
+        },
+    )
+    monkeypatch.setattr(session_fita, "RITMO_FADE", 30)  # 3 degraus por deslize de 0,1 s
+    session_fita.pulsar_conquista("normal")
+    pulso.tarefas.pop(0)()
+    cores = _cores(pulso.modulo)
+    fita = session_fita.fitas()[0]
+    cor_do_jogo = session_fita.hsv_hex(
+        session_fita.na_fita(session_fita.cor_do_jogo(pulso.jogo), fita)
+    )
+    chegada = cores.index(_ouro())
+    assert chegada >= 2  # degraus do meio antes de chegar ao pulso
+    assert cor_do_jogo not in cores[:chegada]
+    assert cores[-1] == cor_do_jogo
 
 
 # endregion

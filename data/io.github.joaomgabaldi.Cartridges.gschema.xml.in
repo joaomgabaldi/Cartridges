@@ -50,6 +50,17 @@
     <key name="conquistas-iluminacao" type="b">
       <default>true</default>
     </key>
+    <!-- A cor e o estilo do pulso da iluminação ao desbloquear uma conquista.
+         Padrão: o dourado (matiz 45, saturação 1000) e o estilo "piscar". -->
+    <key name="conquistas-pulso-matiz" type="i">
+      <default>45</default>
+    </key>
+    <key name="conquistas-pulso-saturacao" type="i">
+      <default>1000</default>
+    </key>
+    <key name="conquistas-pulso-estilo" type="s">
+      <default>"piscar"</default>
+    </key>
     <key name="sgdb" type="b">
       <default>false</default>
     </key>

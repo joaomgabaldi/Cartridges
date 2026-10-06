@@ -1329,24 +1329,78 @@ def voltar() -> None:
 
 # region Pulso de conquista
 
-# Dourado no brilho máximo de cada dispositivo (o teto dele ainda vale).
-OURO = Cor(45, 1000, BRILHO_CHEIO)
+# A cor de fábrica do pulso: dourado no brilho máximo de cada dispositivo (o
+# teto dele ainda vale). A escolhida nas Preferências sai de ``cor_do_pulso``.
+TOM_DO_OURO = (45, 1000)
+OURO = Cor(*TOM_DO_OURO, BRILHO_CHEIO)
 
-# Os passos de cada pulso: dourado ou a cor do jogo, e quanto tempo segura.
-# Depois do último, a fita desliza de volta à cor do jogo.
-PULSOS: dict[str, list[tuple[str, float]]] = {
-    "normal": [("ouro", 1.5)],
-    "rara": [("ouro", 0.6), ("jogo", 0.5), ("ouro", 0.6)],
-    "completo": [
-        ("ouro", 0.5),
-        ("jogo", 0.4),
-        ("ouro", 0.5),
-        ("jogo", 0.4),
-        ("ouro", 0.5),
-        ("jogo", 0.4),
-        ("ouro", 2.0),
-    ],
+
+class Passo(NamedTuple):
+    """Um passo do pulso: a cor (``pulso`` ou ``base``, a de antes), quanto
+    tempo ela segura e em quantos segundos chega deslizando (0 = direto)."""
+
+    alvo: str
+    segura: float
+    desliza: float = 0.0
+
+
+_RESPIRAR = [Passo("pulso", 0.4, 0.8), Passo("base", 0.0, 0.8)]
+# 0,2 s + 0,2 s: 2,5 piscadas por segundo, abaixo das 3 por segundo que as
+# normas de acessibilidade tratam como risco para quem é sensível a luz.
+_RAPIDO = [Passo("pulso", 0.2), Passo("base", 0.2)]
+
+# Os passos de cada estilo, por tipo. Depois do último, a fita desliza de
+# volta à cor de base. "piscar" é o pulso de sempre, passo a passo.
+ESTILOS_DO_PULSO: dict[str, dict[str, list[Passo]]] = {
+    "piscar": {
+        "normal": [Passo("pulso", 1.5)],
+        "rara": [Passo("pulso", 0.6), Passo("base", 0.5), Passo("pulso", 0.6)],
+        "completo": [Passo("pulso", 0.5), Passo("base", 0.4)] * 3 + [Passo("pulso", 2.0)],
+    },
+    "respirar": {
+        "normal": _RESPIRAR,
+        "rara": _RESPIRAR * 2,
+        "completo": _RESPIRAR * 3 + [Passo("pulso", 2.0, 0.8)],
+    },
+    "rapido": {"normal": _RAPIDO * 4, "rara": _RAPIDO * 8, "completo": _RAPIDO * 16},
+    "longo": {
+        "normal": [Passo("pulso", 3.0)],
+        "rara": [Passo("pulso", 5.0)],
+        "completo": [Passo("pulso", 8.0)],
+    },
 }
+ESTILO_PADRAO = "piscar"
+
+
+def tom_do_pulso() -> tuple[int, int]:
+    """Matiz e saturação da cor do pulso: a escolhida, ou o dourado de fábrica."""
+    return (
+        shared.schema.get_int("conquistas-pulso-matiz"),
+        shared.schema.get_int("conquistas-pulso-saturacao"),
+    )
+
+
+def salvar_tom_do_pulso(matiz: int, saturacao: int) -> None:
+    """Grava a cor do pulso escolhida nas Preferências."""
+    shared.schema.set_int("conquistas-pulso-matiz", matiz % 360)
+    shared.schema.set_int("conquistas-pulso-saturacao", max(0, min(1000, saturacao)))
+
+
+def redefinir_tom_do_pulso() -> None:
+    """Volta a cor do pulso ao dourado de fábrica."""
+    salvar_tom_do_pulso(*TOM_DO_OURO)
+
+
+def cor_do_pulso() -> Cor:
+    """A cor do pulso, sempre no brilho máximo (o teto de cada fita vale)."""
+    return Cor(*tom_do_pulso(), BRILHO_CHEIO)
+
+
+def estilo_do_pulso() -> str:
+    """O estilo escolhido; um valor que não existe vira o padrão."""
+    estilo = shared.schema.get_string("conquistas-pulso-estilo")
+    return estilo if estilo in ESTILOS_DO_PULSO else ESTILO_PADRAO
+
 
 # Da mais fraca à mais forte: o pedido que espera a vez sobe para o maior.
 FORCA_DOS_PULSOS = ("normal", "rara", "completo")
@@ -1375,14 +1429,14 @@ def _encerrar_pulsos(alvos: Optional[list[Fita]] = None) -> Optional[dict[str, i
 
 
 def pulsar_conquista(tipo: str) -> None:
-    """Uma conquista saiu: as fitas piscam em dourado e voltam à cor do jogo.
+    """Uma conquista saiu: as fitas piscam na cor do pulso e voltam à cor do jogo.
 
     Chamar da thread de UI. Não faz nada fora de sessão, com o recurso
-    desligado ou com um tipo que não está em ``PULSOS``.
+    desligado ou com um tipo que não está em ``FORCA_DOS_PULSOS``.
     """
     global _pulsando  # noqa: PLW0603
     jogo = _jogo_da_sessao
-    if jogo is None or tipo not in PULSOS or not ligada():
+    if jogo is None or tipo not in FORCA_DOS_PULSOS or not ligada():
         return
     with _TRAVA_PULSO:
         if _jogo_da_sessao is not jogo:
@@ -1432,6 +1486,23 @@ def _tingir(fita: Fita, cor: Cor, geracao: int) -> None:
             _mostrada.pop(fita.id, None)
 
 
+def _deslizar(fita: Fita, cor: Cor, segundos: float, geracao: int) -> None:
+    """A cor chegando aos poucos, no ritmo do fade, e o comando direto no fim.
+
+    Fita sem cor conhecida (``_mostrada``) não tem de onde deslizar: vai direto.
+    """
+    with _trava_da(fita):
+        if not _vigente(fita, geracao):
+            return
+        destino = na_fita(cor, fita)
+        antes = _mostrada.get(fita.id)
+        origem = cor_de_hex(antes[1]) if antes is not None and antes[0] else None
+        passos = round(segundos * RITMO_FADE)
+        if passos and origem is not None and origem != destino:
+            _rajada(fita, _degraus(origem, destino, passos), geracao)
+        _tingir(fita, cor, geracao)
+
+
 def _vez_na_sessao(jogo: "Game", alvos: list[Fita]) -> Optional[dict[str, int]]:
     """A vez de cada fita para o próximo passo do pulso, ou ``None`` se a
     sessão acabou (ou o recurso foi desligado) e o pulso deve parar.
@@ -1453,13 +1524,20 @@ def _pulsar(jogo: "Game", tipo: str) -> None:
     if not alvos:
         return
     cor_jogo = cor_do_jogo(jogo)
-    for qual, segundos in PULSOS[tipo]:
+    cor_pulso = cor_do_pulso()
+    for passo in ESTILOS_DO_PULSO[estilo_do_pulso()][tipo]:
         geracoes = _vez_na_sessao(jogo, alvos)
         if geracoes is None:
             return
-        cor = OURO if qual == "ouro" else cor_jogo
-        _em_paralelo(alvos, lambda fita, c=cor, g=geracoes: _tingir(fita, c, g[fita.id]))
-        time.sleep(segundos)
+        cor = cor_pulso if passo.alvo == "pulso" else cor_jogo
+        if passo.desliza > 0:
+            _em_paralelo(
+                alvos,
+                lambda fita, c=cor, s=passo.desliza, g=geracoes: _deslizar(fita, c, s, g[fita.id]),
+            )
+        else:
+            _em_paralelo(alvos, lambda fita, c=cor, g=geracoes: _tingir(fita, c, g[fita.id]))
+        time.sleep(passo.segura)
     geracoes = _vez_na_sessao(jogo, alvos)
     if geracoes is None:
         return
