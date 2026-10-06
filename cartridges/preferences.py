@@ -47,6 +47,10 @@ from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.na_tela import entregar_na_tela
 
 
+# A ordem da lista "Estilo do pulso" na tela.
+ESTILOS_NA_TELA = ("piscar", "respirar", "rapido", "longo")
+
+
 @Gtk.Template(resource_path=shared.PREFIX + "/gtk/preferences.ui")
 class CartridgesPreferences(Adw.PreferencesDialog):
     __gtype_name__ = "CartridgesPreferences"
@@ -112,6 +116,13 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     conquistas_aviso_switch: Adw.SwitchRow = Gtk.Template.Child()
     conquistas_posicao_row: Adw.ComboRow = Gtk.Template.Child()
     conquistas_iluminacao_switch: Adw.SwitchRow = Gtk.Template.Child()
+    conquistas_pulso_cor_row: Adw.ActionRow = Gtk.Template.Child()
+    conquistas_pulso_cor_reset: Gtk.Button = Gtk.Template.Child()
+    conquistas_pulso_cor_amostra: Gtk.DrawingArea = Gtk.Template.Child()
+    conquistas_pulso_cor_balao: Gtk.Popover = Gtk.Template.Child()
+    conquistas_pulso_cor_seletor: Gtk.ColorChooserWidget = Gtk.Template.Child()
+    conquistas_pulso_estilo_row: Adw.ComboRow = Gtk.Template.Child()
+    conquistas_pulso_testar_row: Adw.ButtonRow = Gtk.Template.Child()
     conquistas_exemplo_row: Adw.ButtonRow = Gtk.Template.Child()
     conquistas_conta_row: Adw.ActionRow = Gtk.Template.Child()
     conquistas_conta_botao: Gtk.Button = Gtk.Template.Child()
@@ -201,6 +212,27 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             self.conquistas_iluminacao_switch,
             "active",
             Gio.SettingsBindFlags.DEFAULT,
+        )
+        self.conquistas_pulso_cor_amostra.set_draw_func(self.desenhar_cor_do_pulso)
+        self._pulso_cor_changed_id = self.conquistas_pulso_cor_seletor.connect(
+            "notify::rgba", self.mudar_cor_do_pulso
+        )
+        self.conquistas_pulso_cor_reset.connect("clicked", self.voltar_ao_ouro)
+        # Fechado o balão, as fitas saem da prévia e voltam à cor do app.
+        self.conquistas_pulso_cor_balao.connect(
+            "closed", lambda *_: session_fita.previa(session_fita.cor_do_app())
+        )
+        self._pulso_estilo_id = self.conquistas_pulso_estilo_row.connect(
+            "notify::selected", self._gravar_estilo_do_pulso
+        )
+        self.conquistas_pulso_testar_row.connect(
+            "activated", lambda *_: session_fita.testar_pulso()
+        )
+        self.conquistas_iluminacao_switch.connect(
+            "notify::active", lambda *_: self._atualizar_linhas_do_pulso()
+        )
+        self.session_fita_switch.connect(
+            "notify::active", lambda *_: self._atualizar_linhas_do_pulso()
         )
         self.conquistas_aviso_switch.bind_property(
             "active",
@@ -367,6 +399,56 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         indice = row.get_selected()
         if indice < len(janela_por_cima.CANTOS):
             shared.schema.set_string("conquistas-aviso-posicao", janela_por_cima.CANTOS[indice])
+
+    def _atualizar_linhas_do_pulso(self) -> None:
+        """Cor, estilo e teste do pulso só valem com as duas coisas ligadas:
+        a iluminação inteligente e o piscar das conquistas."""
+        ativas = (
+            self.session_fita_switch.get_active()
+            and self.conquistas_iluminacao_switch.get_active()
+        )
+        for linha in (
+            self.conquistas_pulso_cor_row,
+            self.conquistas_pulso_estilo_row,
+            self.conquistas_pulso_testar_row,
+        ):
+            linha.set_sensitive(ativas)
+
+    def desenhar_cor_do_pulso(
+        self, _area: Any, contexto: Any, largura: int, altura: int
+    ) -> None:
+        """A bolinha no botão da cor do pulso."""
+        cor = self.conquistas_pulso_cor_seletor.props.rgba
+        contexto.set_source_rgb(cor.red, cor.green, cor.blue)
+        raio = min(largura, altura) / 2
+        contexto.arc(largura / 2, altura / 2, raio, 0, 2 * math.pi)
+        contexto.fill()
+
+    def mudar_cor_do_pulso(self, seletor: Gtk.ColorChooserWidget, *_args: Any) -> None:
+        """Grava a cor do pulso e mostra ela nas fitas enquanto o balão está aberto."""
+        cor = session_fita.rgba_para_cor(seletor.props.rgba, session_fita.BRILHO_CHEIO)
+        session_fita.salvar_tom_do_pulso(cor.matiz, cor.saturacao)
+        self.conquistas_pulso_cor_amostra.queue_draw()
+        self.conquistas_pulso_cor_reset.set_visible(
+            session_fita.tom_do_pulso() != session_fita.TOM_DO_OURO
+        )
+        session_fita.previa(session_fita.cor_do_pulso())
+
+    def voltar_ao_ouro(self, *_args: Any) -> None:
+        """Devolve a cor do pulso ao dourado de fábrica."""
+        # Como em `voltar_ao_roxo`: o seletor dispara `mudar_cor_do_pulso`, e o
+        # dourado exato é gravado depois, porque a ida e volta pela cor da tela
+        # pode arredondar uma unidade.
+        self.conquistas_pulso_cor_seletor.set_property(
+            "rgba", session_fita.cor_para_rgba(session_fita.OURO)
+        )
+        session_fita.redefinir_tom_do_pulso()
+        self.conquistas_pulso_cor_reset.set_visible(False)
+
+    def _gravar_estilo_do_pulso(self, row: Adw.ComboRow, *_args: Any) -> None:
+        indice = row.get_selected()
+        if indice < len(ESTILOS_NA_TELA):
+            shared.schema.set_string("conquistas-pulso-estilo", ESTILOS_NA_TELA[indice])
 
     def _mostrar_aviso_de_exemplo(self, *_args: Any) -> None:
         # Cliques repetidos não enfileiram vários exemplos: o anterior sai.
@@ -577,6 +659,26 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.fita_cor_app_reset.set_visible(
             session_fita.tom_do_app() != session_fita.ROXO_DO_APP
         )
+
+        estilo = session_fita.estilo_do_pulso()
+        self.conquistas_pulso_estilo_row.handler_block(self._pulso_estilo_id)
+        try:
+            self.conquistas_pulso_estilo_row.set_selected(ESTILOS_NA_TELA.index(estilo))
+        finally:
+            self.conquistas_pulso_estilo_row.handler_unblock(self._pulso_estilo_id)
+
+        self.conquistas_pulso_cor_seletor.handler_block(self._pulso_cor_changed_id)
+        try:
+            self.conquistas_pulso_cor_seletor.set_property(
+                "rgba", session_fita.cor_para_rgba(session_fita.cor_do_pulso())
+            )
+        finally:
+            self.conquistas_pulso_cor_seletor.handler_unblock(self._pulso_cor_changed_id)
+        self.conquistas_pulso_cor_amostra.queue_draw()
+        self.conquistas_pulso_cor_reset.set_visible(
+            session_fita.tom_do_pulso() != session_fita.TOM_DO_OURO
+        )
+        self._atualizar_linhas_do_pulso()
 
         self.update_shortcuts_location_subtitle()
 

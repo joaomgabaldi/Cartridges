@@ -477,7 +477,61 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
 
       Adw.SwitchRow conquistas_iluminacao_switch {
         title: _("Piscar a iluminação inteligente");
-        subtitle: _("Os dispositivos piscam em dourado ao desbloquear uma conquista");
+        subtitle: _("Os dispositivos piscam ao desbloquear uma conquista");
+      }
+
+      // A cor do pulso: o mesmo seletor em balão da "Cor do app". Com o balão
+      // aberto, as fitas mostram a cor escolhida; ao fechar, voltam.
+      Adw.ActionRow conquistas_pulso_cor_row {
+        title: _("Cor do pulso");
+        subtitle: _("A cor da iluminação inteligente ao desbloquear uma conquista");
+        activatable-widget: conquistas_pulso_cor_menu;
+
+        [suffix]
+        Button conquistas_pulso_cor_reset {
+          valign: center;
+          icon-name: "edit-undo-symbolic";
+          tooltip-text: _("Voltar à cor padrão");
+          visible: false;
+
+          styles [
+            "flat",
+          ]
+        }
+
+        [suffix]
+        MenuButton conquistas_pulso_cor_menu {
+          valign: center;
+          tooltip-text: _("Escolher a cor do pulso");
+
+          child: DrawingArea conquistas_pulso_cor_amostra {
+            content-width: 22;
+            content-height: 22;
+          };
+
+          popover: Popover conquistas_pulso_cor_balao {
+            child: ColorChooserWidget conquistas_pulso_cor_seletor {
+              use-alpha: false;
+            };
+          };
+        }
+      }
+
+      Adw.ComboRow conquistas_pulso_estilo_row {
+        title: _("Estilo do pulso");
+
+        model: StringList {
+          strings [
+            _("Piscar"),
+            _("Respirar"),
+            _("Piscar rápido"),
+            _("Brilho longo"),
+          ]
+        };
+      }
+
+      Adw.ButtonRow conquistas_pulso_testar_row {
+        title: _("Testar o pulso");
       }
 
       Adw.ButtonRow conquistas_exemplo_row {

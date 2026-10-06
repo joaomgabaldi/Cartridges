@@ -832,6 +832,82 @@ def test_fechar_o_assistente_com_fita_nova_arranca_o_ciclo(monkeypatch, schema):
     assert preferencias.session_fita_switch.get_sensitive() is True
 
 
+def _com_fita():
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "192.168.0.150", "chave")])
+
+
+def test_linhas_do_pulso_desativadas_sem_iluminacao(monkeypatch, schema):
+    _com_fita()
+    schema.set_boolean("session-fita", False)
+    preferencias = _preferencias(monkeypatch)
+    for linha in (preferencias.conquistas_pulso_cor_row, preferencias.conquistas_pulso_estilo_row,
+                  preferencias.conquistas_pulso_testar_row):
+        assert linha.get_sensitive() is False
+
+
+def test_linhas_do_pulso_desativadas_sem_piscar(monkeypatch, schema):
+    _com_fita()
+    schema.set_boolean("conquistas-iluminacao", False)
+    monkeypatch.setattr(session_fita, "reacender", lambda: None)
+    preferencias = _preferencias(monkeypatch)
+    # O `bind` do schema é falso nos testes e não preenche os interruptores:
+    # liga-se o das fitas à mão, como o usuário faria.
+    preferencias.session_fita_switch.set_active(True)
+    assert preferencias.conquistas_pulso_testar_row.get_sensitive() is False
+    preferencias.conquistas_iluminacao_switch.set_active(True)
+    assert preferencias.conquistas_pulso_testar_row.get_sensitive() is True
+
+
+def test_estilo_do_pulso_gravado_pela_lista(monkeypatch, schema):
+    _com_fita()
+    preferencias = _preferencias(monkeypatch)
+    assert preferencias.conquistas_pulso_estilo_row.get_selected() == 0
+    preferencias.conquistas_pulso_estilo_row.set_selected(2)
+    assert schema.get_string("conquistas-pulso-estilo") == "rapido"
+
+
+def test_cor_do_pulso_gravada_e_voltar_ao_padrao(monkeypatch, schema):
+    _com_fita()
+    preferencias = _preferencias(monkeypatch)
+    assert preferencias.conquistas_pulso_cor_reset.get_visible() is False
+    preferencias.conquistas_pulso_cor_seletor.set_property(
+        "rgba", session_fita.cor_para_rgba(session_fita.Cor(200, 800, session_fita.BRILHO_CHEIO))
+    )
+    assert session_fita.tom_do_pulso() != session_fita.TOM_DO_OURO
+    assert preferencias.conquistas_pulso_cor_reset.get_visible() is True
+    preferencias.conquistas_pulso_cor_reset.emit("clicked")
+    assert session_fita.tom_do_pulso() == session_fita.TOM_DO_OURO
+    assert preferencias.conquistas_pulso_cor_reset.get_visible() is False
+
+
+def test_fechar_o_balao_volta_a_cor_do_app(monkeypatch, schema):
+    _com_fita()
+    previas = []
+    monkeypatch.setattr(session_fita, "previa", lambda cor, *_a: previas.append(cor))
+    preferencias = _preferencias(monkeypatch)
+    preferencias.conquistas_pulso_cor_seletor.set_property(
+        "rgba", session_fita.cor_para_rgba(session_fita.Cor(200, 800, session_fita.BRILHO_CHEIO))
+    )
+    assert previas[-1] == session_fita.cor_do_pulso()
+    preferencias.conquistas_pulso_cor_balao.emit("closed")
+    assert previas[-1] == session_fita.cor_do_app()
+
+
+def test_testar_o_pulso_chama_o_teste(monkeypatch, schema):
+    _com_fita()
+    chamadas = []
+    monkeypatch.setattr(session_fita, "testar_pulso", lambda: chamadas.append("teste"))
+    preferencias = _preferencias(monkeypatch)
+    preferencias.conquistas_pulso_testar_row.emit("activated")
+    assert chamadas == ["teste"]
+
+
+def test_a_lista_de_estilos_da_tela_cobre_todos_os_estilos():
+    import cartridges.preferences as preferences_module  # noqa: PLC0415
+
+    assert set(preferences_module.ESTILOS_NA_TELA) == set(session_fita.ESTILOS_DO_PULSO)
+
+
 # endregion
 # region A fiação: quem chama o ciclo
 

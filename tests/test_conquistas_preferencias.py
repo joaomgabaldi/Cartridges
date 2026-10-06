@@ -129,7 +129,7 @@ def test_textos_do_grupo_durante_o_jogo(monkeypatch):
     iluminacao = preferencias.conquistas_iluminacao_switch
     assert iluminacao.get_title() == "Piscar a iluminação inteligente"
     assert iluminacao.get_subtitle() == (
-        "Os dispositivos piscam em dourado ao desbloquear uma conquista"
+        "Os dispositivos piscam ao desbloquear uma conquista"
     )
     grupo = aviso.get_ancestor(Adw.PreferencesGroup)
     assert grupo.get_title() == "Durante o jogo"
