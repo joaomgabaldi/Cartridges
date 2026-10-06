@@ -109,13 +109,15 @@ class PedirPasta:
 
     def __init__(self, ao_escolher: Callable[[], None]) -> None:
         self.ao_escolher = ao_escolher
-        caminho = shared.schema.get_string("shortcuts-location")
         caixa = _caixa()
         self.texto = Gtk.Label(
             label=(
-                _("A pasta de atalhos {} não foi encontrada.").format(caminho)
-                if caminho
-                else _("A pasta de atalhos não foi encontrada.")
+                _(
+                    "A pasta de atalhos usada anteriormente não foi encontrada. "
+                    "Selecione a pasta onde estão os atalhos dos jogos."
+                )
+                if shared.schema.get_string("shortcuts-location")
+                else _("Selecione a pasta onde estão os atalhos dos jogos.")
             ),
             wrap=True,
             justify=Gtk.Justification.CENTER,
@@ -198,7 +200,7 @@ class JanelaPendentes:
     def _escolher(self, jogo: Game) -> None:
         EscolherAtalho(
             jogo, self.atualizar, lambda: self.lista.set_sensitive(False)
-        ).dialogo.present(self.dialogo)
+        ).abrir(self.dialogo)
 
     def _excluir(self, jogo: Game) -> None:
         def resposta(_dialogo: Adw.AlertDialog, escolha: str) -> None:
@@ -242,11 +244,22 @@ class EscolherAtalho:
         procurar = Gtk.Button(label=_("Procurar outro atalho…"), halign=Gtk.Align.CENTER)
         procurar.add_css_class("pill")
         procurar.connect("clicked", self._procurar)
-        if self.lista.get_row_at_index(0) is not None:
+        self.tem_candidatos = self.lista.get_row_at_index(0) is not None
+        if self.tem_candidatos:
             caixa.append(_rolagem(self.lista, 360))
         caixa.append(procurar)
 
         self.dialogo = _dialogo(jogo.name, caixa)
+        self.pai: Gtk.Widget = shared.win
+
+    def abrir(self, pai: Gtk.Widget) -> None:
+        """Sem atalho para sugerir, a janela teria só o botão de procurar:
+        abre direto o seletor de arquivos."""
+        self.pai = pai
+        if self.tem_candidatos:
+            self.dialogo.present(pai)
+        else:
+            self._procurar()
 
     def _procurar(self, *_args: object) -> None:
         filtro = Gtk.FileFilter(name=_("Atalhos"))
@@ -265,11 +278,20 @@ class EscolherAtalho:
             try:
                 caminho = restauracao.copiar_para_a_pasta(origem)
             except restauracao.AtalhoJaExiste:
-                create_dialog(
-                    self.dialogo,
-                    _("Já existe um atalho com este nome. Selecione-o na lista."),
-                    "",
-                )
+                # Sem candidatos, o atalho de mesmo nome é de outro jogo e não
+                # há lista onde selecioná-lo.
+                if self.tem_candidatos:
+                    create_dialog(
+                        self.dialogo,
+                        _("Já existe um atalho com este nome. Selecione-o na lista."),
+                        "",
+                    )
+                else:
+                    create_dialog(
+                        self.pai,
+                        _("Já existe um atalho com este nome na pasta de atalhos."),
+                        "",
+                    )
                 return
             self._usar(caminho)
 

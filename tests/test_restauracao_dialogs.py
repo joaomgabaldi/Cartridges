@@ -12,8 +12,41 @@ def test_pedir_pasta_nao_fecha_sem_escolher(schema):
     schema["shortcuts-location"] = "D:\\Atalhos"
     tela = telas.PedirPasta(lambda: None)
     assert tela.dialogo.get_can_close() is False
-    assert tela.texto.get_label() == "A pasta de atalhos D:\\Atalhos não foi encontrada."
+    assert tela.texto.get_label() == (
+        "A pasta de atalhos usada anteriormente não foi encontrada. "
+        "Selecione a pasta onde estão os atalhos dos jogos."
+    )
     assert tela.botao.get_label() == "Escolher pasta…"
+
+
+def test_pedir_pasta_sem_pasta_anterior_so_pede_a_escolha(schema):
+    schema["shortcuts-location"] = ""
+    tela = telas.PedirPasta(lambda: None)
+    assert tela.texto.get_label() == "Selecione a pasta onde estão os atalhos dos jogos."
+
+
+def test_escolher_atalho_sem_candidatos_abre_direto_o_seletor(make_game, monkeypatch):
+    monkeypatch.setattr(restauracao, "candidatos", lambda _jogo: [])
+    tela = telas.EscolherAtalho(make_game(game_id="gt", name="Gran Turismo 7"), lambda: None)
+    eventos = []
+    monkeypatch.setattr(tela.dialogo, "present", lambda *_a: eventos.append("janela"))
+    monkeypatch.setattr(tela, "_procurar", lambda *_a: eventos.append("seletor"))
+
+    tela.abrir(None)
+
+    assert eventos == ["seletor"]
+
+
+def test_escolher_atalho_com_candidatos_abre_a_lista(make_game, monkeypatch, tmp_path):
+    monkeypatch.setattr(restauracao, "candidatos", lambda _jogo: [tmp_path / "GT7.lnk"])
+    tela = telas.EscolherAtalho(make_game(game_id="gt", name="Gran Turismo 7"), lambda: None)
+    eventos = []
+    monkeypatch.setattr(tela.dialogo, "present", lambda *_a: eventos.append("janela"))
+    monkeypatch.setattr(tela, "_procurar", lambda *_a: eventos.append("seletor"))
+
+    tela.abrir(None)
+
+    assert eventos == ["janela"]
 
 
 def test_janela_lista_os_pendentes(store, make_game):
