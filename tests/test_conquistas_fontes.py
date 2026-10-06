@@ -7,6 +7,7 @@ import pytest
 from cartridges.conquistas import fontes, historico
 from cartridges.conquistas.epic import api as epic_api, conta as epic_conta
 from cartridges.conquistas.fontes import Fonte
+from cartridges.conquistas.ubisoft import locais
 from cartridges.conquistas.xbox import api, conta
 from tests.apoio_conquistas import criar, pastas  # noqa: F401
 
@@ -225,3 +226,44 @@ def test_vence_o_manifest_da_pasta_mais_funda(make_game, epic_conectada, tmp_pat
     _manifest(pastas, "AppA", "nsA", instalado=tmp_path / "Games")
     _manifest(pastas, "AppB", "nsB", instalado=tmp_path / "Games" / "FallGuys")
     assert fontes.do_jogo(make_game(executable=f'"{exe}"')) == Fonte("epic", "nsB")
+
+
+# -- Ubisoft ----------------------------------------------------------------------
+
+_UPLAY = 'start "" "uplay://launch/65043/0"'
+
+
+def test_texto_da_ubisoft():
+    assert Fonte.de_texto("ubisoft:65043") == Fonte("ubisoft", "65043")
+    assert Fonte.de_texto("ubisoft:../x") is None
+    assert Fonte.de_texto("ubisoft:") is None
+
+
+def test_ubisoft_pelo_atalho(make_game, pastas):  # noqa: F811
+    assert fontes.do_jogo(make_game(executable=_UPLAY)) == Fonte("ubisoft", "65043")
+
+
+def test_ubisoft_vem_antes_da_steam(make_game, tmp_path, pastas):  # noqa: F811
+    """Appid da Steam nos metadados e arquivo de emulador na pasta: continua da Ubisoft."""
+    criar(pastas.appdata / "GSE Saves" / "242050" / "achievements.json", "{}")
+    assert fontes.do_jogo(make_game(executable=_UPLAY, steam_appid="242050")) == Fonte("ubisoft", "65043")
+
+
+def test_ubisoft_pela_pasta_de_instalacao(make_game, tmp_path, monkeypatch, pastas):  # noqa: F811
+    exe = criar(tmp_path / "AC" / "ACBlackFlag.exe")
+    monkeypatch.setattr(locais, "_do_registro", lambda: {"65043": str(tmp_path / "AC")})
+    assert fontes.do_jogo(make_game(executable=f'"{exe}"')) == Fonte("ubisoft", "65043")
+
+
+def test_ubisoft_sem_arquivos_locais_ainda_e_fonte(make_game, pastas):  # noqa: F811
+    """Jogo nunca aberto neste PC: a fonte existe (a sessão sabe qual vigia subir)."""
+    assert fontes.ativa(fontes.do_jogo(make_game(executable=_UPLAY)))
+
+
+def test_chave_do_catalogo_da_ubisoft():
+    assert fontes.chave_do_catalogo(Fonte("ubisoft", "65043")) == "ubisoft-65043"
+
+
+def test_url_da_ubisoft_e_so_texto(make_game):
+    assert fontes.url_da_ubisoft(make_game(executable=_UPLAY))
+    assert not fontes.url_da_ubisoft(make_game(executable="steam://rungameid/570"))

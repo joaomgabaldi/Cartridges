@@ -719,3 +719,8 @@ def test_bin_cortado_no_inicio_e_depois_valido_entra_em_silencio(
 def test_jogo_da_epic_nao_e_do_vigia_de_arquivos(make_game):
     url = 'start "" "com.epicgames.launcher://apps/Sugar?action=launch"'
     assert not vigia.acompanha(make_game(executable=url, steam_appid="570"))
+
+
+def test_vigia_de_arquivos_nao_acompanha_uplay(make_game):
+    """Jogo da Ubisoft com appID da Steam: é do vigia da Ubisoft, nunca do de arquivos."""
+    assert not vigia.acompanha(make_game(executable='start "" "uplay://launch/65043/0"', steam_appid="242050"))

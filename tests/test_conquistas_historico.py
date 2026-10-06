@@ -470,3 +470,10 @@ def test_mover_leva_a_conta():
 def test_conta_gravada_junto_da_fonte_da_epic():
     historico.registrar("g", [D("EPIC:A", 5)], fonte="epic:fn", conta="c1")
     assert historico.conta("g") == "c1"
+
+
+def test_conta_guardada_tambem_para_a_ubisoft():
+    historico.registrar("u1", [D("UBI:1", 100)], fonte="ubisoft:65043", conta="aaa")
+    assert historico.conta("u1") == "aaa"
+    historico.registrar("u1", [], fonte="steam:570", conta="aaa")
+    assert historico.conta("u1") is None  # a Steam não tem conta

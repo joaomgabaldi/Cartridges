@@ -34,9 +34,10 @@ from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.utils.ler_json import ler_json
 
 _trava = threading.Lock()
-# As fontes de loja com conta (`contas.lojas()`): só elas guardam a conta. Sem
-# importar `contas`, que fecharia um ciclo (um teste confere que batem).
-_FONTES_COM_CONTA = ("xbox:", "epic:")
+# Fontes cuja conta é guardada junto: as lojas com conta (`contas.lojas()`) e a Ubisoft
+# (a pasta da conta no `.spool`). "Primeira leitura" = fonte ou conta diferente da
+# gravada. Sem importar `contas`, que fecharia um ciclo (um teste confere que batem).
+_FONTES_COM_CONTA_GUARDADA = ("xbox:", "epic:", "ubisoft:")
 
 
 def caminho(game_id: str) -> Path:
@@ -185,8 +186,8 @@ def registrar(
     """Funde ``novos`` no que está guardado e grava.
 
     Com ``fonte``, grava também de onde vêm as conquistas (mesmo que nada novo
-    tenha entrado) e, só para as fontes de loja com conta (Xbox, Epic), a
-    ``conta``; sem fonte, a que já estava guardada (e a conta dela) fica.
+    tenha entrado) e, só para as fontes de loja com conta (Xbox, Epic) e da Ubisoft,
+    a ``conta``; sem fonte, a que já estava guardada (e a conta dela) fica.
 
     Devolve ``(as que entraram agora, se era a primeira vez)``.
     """
@@ -203,7 +204,7 @@ def registrar(
             fonte_final, conta_final = fonte_atual, conta_atual
         else:
             fonte_final = fonte
-            conta_final = conta if fonte.startswith(_FONTES_COM_CONTA) else None
+            conta_final = conta if fonte.startswith(_FONTES_COM_CONTA_GUARDADA) else None
         resultado, entraram = fundir(atual or {}, novos)
         if (
             primeira

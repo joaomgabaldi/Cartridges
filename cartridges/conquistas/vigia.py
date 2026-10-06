@@ -58,8 +58,8 @@ def acompanha(game: Any) -> bool:
     """Se o vigia de arquivos acompanha este jogo: appID válido e conquistas ligadas.
 
     Jogo do Xbox/Game Pass (o executável é um AUMID) e jogo aberto pelo launcher
-    da Epic ficam de fora: eles são do vigia da conta, e um arquivo velho de
-    emulador com o mesmo appID não os faz da Steam.
+    da Epic ou da Ubisoft ficam de fora: eles têm vigia próprio, e um arquivo
+    velho de emulador com o mesmo appID não os faz da Steam.
     Só o texto do executável é olhado, nunca o disco.
     """
     return (
@@ -67,6 +67,7 @@ def acompanha(game: Any) -> bool:
         and bool(getattr(game, "conquistas", True))
         and fontes.pfn(game) is None
         and not fontes.url_da_epic(game)
+        and not fontes.url_da_ubisoft(game)
     )
 
 
