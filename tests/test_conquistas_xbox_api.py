@@ -501,3 +501,17 @@ def test_gravar_titulo_preserva_os_outros(monkeypatch):
     api.titulo("A", [])
     api.titulo("B", [])
     assert api.titulo_local("A", []) == "1" and api.titulo_local("B", []) == "2"
+
+
+@pytest.mark.parametrize("entrada, esperada", [
+    ("https://x/i?a=1&W=1920&b=2&H=1080", "https://x/i?a=1&b=2&w=128&h=128"),
+    ("https://x/i?w&a=1&h", "https://x/i?a=1&w=128&h=128"),
+    ("https://x/i?a&&b", "https://x/i?a&b&w=128&h=128"),
+    ("https://x/i?a=1#frag", "https://x/i?a=1&w=128&h=128#frag"),
+    ("https://x/i#frag", "https://x/i?w=128&h=128#frag"),
+    ("https://x/i", "https://x/i?w=128&h=128"),
+    ("https://x/i?", "https://x/i?w=128&h=128"),
+    ("https://x/i?c=3&a=1&b=2", "https://x/i?c=3&a=1&b=2&w=128&h=128"),
+])
+def test_no_tamanho(entrada, esperada):
+    assert api._no_tamanho(entrada) == esperada

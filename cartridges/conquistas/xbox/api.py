@@ -284,10 +284,10 @@ def titulo(pfn: Optional[str], bases: list[Path]) -> Optional[str]:
 
 
 def _no_tamanho(url: str) -> str:
-    """A URL com ``w`` e ``h`` pedidos; o resto da consulta fica como veio."""
+    """A URL com ``w`` e ``h`` pedidos; os demais parâmetros mantêm a ordem (os vazios caem)."""
     base, cerquilha, ancora = url.partition("#")
     base, _, consulta = base.partition("?")
-    resto = [p for p in consulta.split("&") if p and p.partition("=")[0] not in ("w", "h")]
+    resto = [p for p in consulta.split("&") if p and p.partition("=")[0].lower() not in ("w", "h")]
     resto += [f"w={_LADO_DO_ICONE}", f"h={_LADO_DO_ICONE}"]
     return f"{base}?{'&'.join(resto)}{cerquilha}{ancora}"
 
