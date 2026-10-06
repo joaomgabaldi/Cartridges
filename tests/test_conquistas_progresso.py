@@ -50,7 +50,7 @@ def test_nunca_varrido_mostra_tudo_bloqueado():
 
 
 def test_do_jogo(make_game):
-    catalogo._gravar_cache("570", CAT)
+    catalogo.guardar("570", CAT)
     historico.registrar("g1", [Desbloqueio("a", 10)])
     game = make_game(game_id="g1", steam_appid="570")
     com_fonte(game, "steam:570")
