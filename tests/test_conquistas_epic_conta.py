@@ -8,7 +8,7 @@ import pytest
 
 from cartridges import shared
 from cartridges.conquistas.epic import conta
-from tests.apoio_xbox import Resposta, rede_falsa
+from tests.apoio_xbox import Resposta, RespostaSemFim, rede_falsa
 
 _COD = "0123456789abcdef0123456789abcdef"
 
@@ -233,3 +233,29 @@ def test_nada_secreto_no_log(monkeypatch, caplog):
     conta.autorizacao(forcar=True)
     for segredo in (_COD, "A1", "R1", "c" * 32):
         assert segredo not in caplog.text
+
+
+def test_corpo_sem_fim_na_renovacao_e_rede_fora_e_continua_conectada(monkeypatch, caplog):
+    import logging  # noqa: PLC0415
+    import requests  # noqa: PLC0415
+
+    caplog.set_level(logging.DEBUG)
+    pedir = conta._pedir
+    rede_falsa(monkeypatch, conta, {conta.TOKEN: [_token(renovacao="RENOVACAO-SECRETA")]}, nome="_pedir")
+    conta.conectar(_COD)
+    sem_fim = RespostaSemFim()
+    monkeypatch.setattr(conta, "_pedir", pedir)
+    monkeypatch.setattr(requests, "request", lambda *_a, **_k: sem_fim)
+    assert conta.autorizacao(forcar=True) is None
+    assert sem_fim.fechada and conta.conectada()
+    assert "ResponseTooLargeError" in caplog.text and "RENOVACAO-SECRETA" not in caplog.text
+
+
+def test_corpo_sem_fim_no_login_levanta_erro_de_rede(monkeypatch):
+    import requests  # noqa: PLC0415
+
+    sem_fim = RespostaSemFim()
+    monkeypatch.setattr(requests, "request", lambda *_a, **_k: sem_fim)
+    with pytest.raises(requests.RequestException):
+        conta.conectar(_COD)
+    assert sem_fim.fechada and not conta.conectada()

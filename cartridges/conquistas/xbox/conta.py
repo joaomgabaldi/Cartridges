@@ -28,7 +28,7 @@ import requests
 from gi.repository import Adw, GLib
 
 from cartridges import shared
-from cartridges.utils import dpapi
+from cartridges.utils import download, dpapi
 
 CLIENT_ID = "6a0af9cc-6dce-49d8-a53d-bcc9130275f0"
 AUTORIZAR = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize"
@@ -89,7 +89,8 @@ def _arquivo():
 
 
 def _post(url: str, **kwargs: Any) -> requests.Response:
-    return requests.post(url, timeout=_TEMPO, **kwargs)
+    """O único ponto de rede da conta. O corpo é lido sob um teto antes de devolver."""
+    return download.request_capped("POST", url, timeout=_TEMPO, **kwargs)
 
 
 def _corpo(resposta: Any) -> dict:

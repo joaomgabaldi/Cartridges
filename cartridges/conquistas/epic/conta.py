@@ -32,7 +32,7 @@ import requests
 from gi.repository import Adw, GLib
 
 from cartridges import shared
-from cartridges.utils import dpapi
+from cartridges.utils import download, dpapi
 
 # O client do Epic Games Launcher (segredo público; legendary `egs.py`).
 CLIENT_ID = "34a02cf8f4414e29b15921876da36f9a"
@@ -92,8 +92,8 @@ def _arquivo():
 
 
 def _pedir(metodo: str, url: str, **kwargs: Any) -> requests.Response:
-    """O único ponto de rede da conta."""
-    return requests.request(metodo, url, timeout=_TEMPO, **kwargs)
+    """O único ponto de rede da conta. O corpo é lido sob um teto antes de devolver."""
+    return download.request_capped(metodo, url, timeout=_TEMPO, **kwargs)
 
 
 def _em_segundo_plano(funcao: Callable[..., None], *args: Any) -> None:
