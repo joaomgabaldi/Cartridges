@@ -4,6 +4,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+import requests
 
 from cartridges.utils import download
 
@@ -53,3 +54,69 @@ def test_cookie_recebido_nao_volta_na_chamada_seguinte(servidor):
     download.download_bytes(url, timeout=5)
     download.download_bytes(url, timeout=5)
     assert cookies == [None, None]
+
+
+class _Chega:
+    """Resposta em pedaços, como o `requests` a entrega com `stream=True`."""
+
+    def __init__(self, pedacos):
+        self._pedacos = pedacos
+        self.fechada = False
+
+    def iter_content(self, chunk_size=1):
+        yield from self._pedacos
+
+    def close(self):
+        self.fechada = True
+
+
+def test_request_capped_guarda_o_corpo_para_json_e_text(monkeypatch):
+    resposta = requests.Response()
+    resposta.status_code = 200
+    resposta.iter_content = lambda chunk_size=1: iter([b'{"a":', b" 1}"])
+    chamadas = []
+
+    def falso(metodo, url, **kwargs):
+        chamadas.append((metodo, url, kwargs))
+        return resposta
+
+    monkeypatch.setattr(requests, "request", falso)
+    lida = download.request_capped("POST", "http://x/", timeout=5, data={"k": "v"})
+    assert lida is resposta and lida.json() == {"a": 1} and lida.text == '{"a": 1}'
+    assert chamadas == [("POST", "http://x/", {"stream": True, "timeout": 5, "data": {"k": "v"}})]
+
+
+def test_request_capped_acima_do_teto_levanta_e_fecha(monkeypatch):
+    resposta = _Chega([b"x" * 6, b"x" * 6])
+    monkeypatch.setattr(requests, "request", lambda *_a, **_k: resposta)
+    with pytest.raises(download.ResponseTooLargeError):
+        download.request_capped("GET", "http://x/", max_bytes=10)
+    assert resposta.fechada
+
+
+def test_request_capped_no_teto_exato_passa(monkeypatch):
+    resposta = requests.Response()
+    resposta.iter_content = lambda chunk_size=1: iter([b"x" * 10])
+    monkeypatch.setattr(requests, "request", lambda *_a, **_k: resposta)
+    assert download.request_capped("GET", "http://x/", max_bytes=10).content == b"x" * 10
+
+
+def test_request_capped_fecha_se_a_leitura_falha(monkeypatch):
+    class Cai(_Chega):
+        def iter_content(self, chunk_size=1):
+            yield b"x"
+            raise requests.ConnectionError("cortou")
+
+    resposta = Cai([])
+    monkeypatch.setattr(requests, "request", lambda *_a, **_k: resposta)
+    with pytest.raises(requests.ConnectionError):
+        download.request_capped("GET", "http://x/")
+    assert resposta.fechada
+
+
+def test_get_capped_acima_do_teto_levanta_e_fecha(monkeypatch):
+    resposta = _Chega([b"x" * 6, b"x" * 6])
+    monkeypatch.setattr(download, "_get", lambda *_a, **_k: resposta)
+    with pytest.raises(download.ResponseTooLargeError):
+        download.get_capped("http://x/", max_bytes=10)
+    assert resposta.fechada

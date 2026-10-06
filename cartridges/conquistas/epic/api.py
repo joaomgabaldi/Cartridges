@@ -98,15 +98,7 @@ def chave_do_catalogo(ns: str) -> str:
 
 def _requisitar(metodo: str, url: str, **kwargs: Any) -> requests.Response:
     """O único ponto de rede. O corpo é lido sob um teto antes de devolver."""
-    resposta = requests.request(metodo, url, timeout=_TEMPO, stream=True, **kwargs)
-    try:
-        corpo = download.read_capped(resposta, download.MAX_RESPONSE_BYTES)
-    except BaseException:
-        resposta.close()
-        raise
-    # Mesmo atalho de `download.get_capped`: o cache do corpo do próprio requests.
-    resposta._content = corpo  # pylint: disable=protected-access
-    return resposta
+    return download.request_capped(metodo, url, timeout=_TEMPO, **kwargs)
 
 
 def _pedir(metodo: str, url: str, **kwargs: Any) -> requests.Response:
