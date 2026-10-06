@@ -23,6 +23,22 @@ class Resposta:
             raise requests.HTTPError(f"{self.status_code}")
 
 
+class RespostaSemFim:
+    """Corpo que não acaba: só o teto de `download.request_capped` o interrompe."""
+
+    status_code = 200
+
+    def __init__(self) -> None:
+        self.fechada = False
+
+    def iter_content(self, chunk_size: int = 1):
+        while True:
+            yield b"x" * chunk_size
+
+    def close(self) -> None:
+        self.fechada = True
+
+
 def rede_falsa(monkeypatch, modulo, respostas, nome="_post"):
     """Cada URL (por prefixo) devolve a próxima resposta da sua fila.
 

@@ -10,7 +10,7 @@ from cartridges import shared
 from cartridges.conquistas import catalogo
 from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.conquistas.xbox import api, conta
-from tests.apoio_xbox import Resposta, rede_falsa
+from tests.apoio_xbox import Resposta, RespostaSemFim, rede_falsa
 
 _DADOS = Path(__file__).parent / "dados" / "xbox" / "conquistas.json"
 _ACH = "https://achievements.xboxlive.com"
@@ -515,3 +515,14 @@ def test_gravar_titulo_preserva_os_outros(monkeypatch):
 ])
 def test_no_tamanho(entrada, esperada):
     assert api._no_tamanho(entrada) == esperada
+
+
+def test_corpo_sem_fim_e_falha_de_rede_e_fecha_a_resposta(monkeypatch, caplog):
+    sem_fim = RespostaSemFim()
+    monkeypatch.setattr(requests, "request", lambda *_a, **_k: sem_fim)
+    with caplog.at_level("DEBUG"):
+        with pytest.raises(api.FalhaDeRede):
+            api._pedir("GET", _ACH + "/segredo?token=ABC", "4", ("UHS", "XSTS"), {})
+    assert sem_fim.fechada
+    assert "segredo" not in caplog.text and "ABC" not in caplog.text
+    assert "ResponseTooLargeError" in caplog.text

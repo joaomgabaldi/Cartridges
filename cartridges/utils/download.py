@@ -84,16 +84,10 @@ def read_capped(response: requests.Response, max_bytes: int) -> bytes:
     return bytes(buffer)
 
 
-def get_capped(
-    url: str, max_bytes: int = MAX_RESPONSE_BYTES, **kwargs: Any
-) -> requests.Response:
-    """A GET whose body is read under a cap before it is returned.
-
-    A drop-in for call sites that go on to use ``.json()`` / ``.status_code``:
-    the body is already read, so ``.json()`` parses what was read and never
-    reads more. Raises :class:`ResponseTooLargeError` past ``max_bytes``.
-    """
-    response = _get(url, stream=True, **kwargs)
+def _with_body(response: requests.Response, max_bytes: int) -> requests.Response:
+    """Read a streamed ``response`` under the cap and keep the body on it, so
+    ``.json()`` / ``.text`` / ``.content`` work without reading again. Closes
+    the response if the read fails or exceeds ``max_bytes``."""
     try:
         body = read_capped(response, max_bytes)
     except BaseException:
@@ -104,6 +98,27 @@ def get_capped(
     # the upgrade if requests ever moves it.
     response._content = body  # pylint: disable=protected-access
     return response
+
+
+def get_capped(
+    url: str, max_bytes: int = MAX_RESPONSE_BYTES, **kwargs: Any
+) -> requests.Response:
+    """A GET whose body is read under a cap before it is returned.
+
+    A drop-in for call sites that go on to use ``.json()`` / ``.status_code``:
+    the body is already read, so ``.json()`` parses what was read and never
+    reads more. Raises :class:`ResponseTooLargeError` past ``max_bytes``.
+    """
+    return _with_body(_get(url, stream=True, **kwargs), max_bytes)
+
+
+def request_capped(
+    method: str, url: str, max_bytes: int = MAX_RESPONSE_BYTES, **kwargs: Any
+) -> requests.Response:
+    """Like :func:`get_capped` for any method (POST, DELETE...), on a fresh
+    connection: sign-in and token calls carry credentials and must not share a
+    session with the covers' keep-alive pool."""
+    return _with_body(requests.request(method, url, stream=True, **kwargs), max_bytes)
 
 
 def download_bytes(

@@ -10,7 +10,7 @@ import requests
 from cartridges import shared
 from cartridges.conquistas import catalogo
 from cartridges.conquistas.epic import api, conta
-from tests.apoio_xbox import Resposta
+from tests.apoio_xbox import Resposta, RespostaSemFim
 
 _DADOS = Path(__file__).parent / "dados" / "epic"
 
@@ -362,3 +362,15 @@ def test_biblioteca_real_da_prova(rede):
     rede["respostas"] = [Resposta(200, corpo)]
     primeiro = corpo["records"][0]
     assert api.namespace_do_app(primeiro["appName"]) == primeiro["namespace"]
+
+
+def test_corpo_sem_fim_e_falha_de_rede_e_fecha_a_resposta(monkeypatch, caplog):
+    sem_fim = RespostaSemFim()
+    monkeypatch.setattr(api, "_limite", lambda: _SemLimite())
+    monkeypatch.setattr(requests, "request", lambda *_a, **_k: sem_fim)
+    with caplog.at_level("DEBUG"):
+        with pytest.raises(api.FalhaDeRede):
+            api._pedir("GET", "https://graphql.epic/segredo?token=ABC")
+    assert sem_fim.fechada
+    assert "segredo" not in caplog.text and "ABC" not in caplog.text
+    assert "ResponseTooLargeError" in caplog.text
