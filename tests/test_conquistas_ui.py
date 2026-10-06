@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from gi.repository import Gtk
+from gi.repository import GLib, Gtk
 from requests.exceptions import ConnectionError as ErroDeConexao
 
 from cartridges import conquistas_sessao
@@ -394,6 +394,13 @@ def _icones(cartao):
     return caixas
 
 
+def _filhos_do_cartao(cartao):
+    filho = cartao.icones.get_first_child()
+    while filho is not None:
+        yield filho
+        filho = filho.get_next_sibling()
+
+
 def test_cartao_da_sessao_mostra_progresso_e_todos_os_icones(real_window, com_conquistas, sessao_sem_efeitos):
     real_window.show_session_blocker(com_conquistas)
     cartao = _cartao(real_window)
@@ -446,3 +453,60 @@ def test_muitas_conquistas_rolam_dentro_do_cartao(real_window, store, sessao_sem
     assert cartao.rolagem.get_propagate_natural_height() is True
     assert cartao.rolagem.get_policy()[0] == Gtk.PolicyType.NEVER
     assert len(_icones(cartao)) == 157
+
+
+def _catalogo_de(quantas):
+    return Catalogo(
+        tuple(ConquistaInfo(f"N{n}", f"N{n}", "", "", "", False) for n in range(quantas)), 0, True
+    )
+
+
+def _apresentar_e_mostrar(real_window, game):
+    """A janela de verdade, do tamanho de um monitor, com o bloqueador aberto e
+    o layout resolvido: é a alocação real que diz se os ícones se espalham."""
+    real_window.set_default_size(1280, 800)
+    real_window.present()
+    real_window.show_session_blocker(game)
+    contexto = GLib.MainContext.default()
+    for _ in range(300):
+        contexto.iteration(False)
+
+
+def test_icones_se_espalham_para_os_lados_antes_de_quebrar(real_window, store, sessao_sem_efeitos):
+    catalogo.guardar("570", _catalogo_de(12))
+    game = jogo(store, 1, steam_appid="570")
+    com_fonte(game, "steam:570")
+    _apresentar_e_mostrar(real_window, game)
+    cartao = _cartao(real_window)
+    assert cartao.icones.get_max_children_per_line() == 12
+    assert cartao.rolagem.get_propagate_natural_width() is True
+    linhas = {filho.compute_bounds(cartao.icones)[1].get_y() for filho in _filhos_do_cartao(cartao)}
+    assert len(linhas) == 1, "12 ícones cabem numa linha só"
+    assert cartao.get_width() < real_window.get_width()
+
+
+def test_com_157_conquistas_o_cartao_rola_e_o_botao_continua_na_janela(real_window, store, sessao_sem_efeitos):
+    catalogo.guardar("570", _catalogo_de(157))
+    game = jogo(store, 1, steam_appid="570")
+    com_fonte(game, "steam:570")
+    _apresentar_e_mostrar(real_window, game)
+    cartao = _cartao(real_window)
+    assert 0 < cartao.rolagem.get_height() <= conquistas_sessao.ALTURA_MAXIMA
+    # O cartão cresce até a janela e não passa dela
+    assert cartao.get_width() <= real_window.get_width()
+    assert real_window.get_width() == 1280
+    ok, limites = real_window.session_blocker_button.compute_bounds(real_window)
+    assert ok
+    assert limites.get_y() >= 0
+    assert limites.get_y() + limites.get_height() <= real_window.get_height()
+
+
+def test_falha_no_cartao_nao_derruba_o_bloqueador(real_window, com_conquistas, sessao_sem_efeitos, monkeypatch):
+    def quebrar(_self, _game):
+        raise RuntimeError("falha de teste")
+
+    monkeypatch.setattr(conquistas_sessao.CartaoDaSessao, "mostrar", quebrar)
+    real_window.show_session_blocker(com_conquistas)
+    assert real_window.session_blocker.get_visible()
+    assert real_window.session_blocker_button.get_sensitive()
+    assert not _cartao(real_window).get_visible()
