@@ -1470,10 +1470,17 @@ def pulsar_conquista(tipo: str) -> None:
         if _pulsando:
             return
         _pulsando = True
+    _servir_em_thread("Não foi possível iniciar o pulso de conquista")
+
+
+def _servir_em_thread(mensagem_de_falha: str) -> None:
+    """Põe `_servir_pulsos` numa thread (quem chama já marcou `_pulsando`); se não
+    der, desfaz a marca e esvazia a fila, para o próximo pulso tentar de novo."""
+    global _pulsando  # noqa: PLW0603
     try:
         _em_thread(_servir_pulsos)
     except Exception:  # pylint: disable=broad-exception-caught
-        logging.warning("Não foi possível iniciar o pulso de conquista", exc_info=True)
+        logging.warning(mensagem_de_falha, exc_info=True)
         with _TRAVA_PULSO:
             _pulsando = False
             _fila_de_pulsos.clear()
@@ -1596,13 +1603,7 @@ def testar_pulso() -> None:
         if _pulsando:
             return
         _pulsando = True
-    try:
-        _em_thread(_servir_pulsos)
-    except Exception:  # pylint: disable=broad-exception-caught
-        logging.warning("Não foi possível iniciar o teste do pulso", exc_info=True)
-        with _TRAVA_PULSO:
-            _pulsando = False
-            _fila_de_pulsos.clear()
+    _servir_em_thread("Não foi possível iniciar o teste do pulso")
 
 
 # endregion

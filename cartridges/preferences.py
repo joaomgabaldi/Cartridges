@@ -520,16 +520,19 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
     def _varrer_jogos_do_xbox(self) -> None:
         """Lê na hora as conquistas dos jogos do Xbox, sem esperar a próxima abertura."""
+        self._varrer_jogos_da_loja(fontes.eh_do_xbox, "Xbox")
+
+    @staticmethod
+    def _varrer_jogos_da_loja(filtro: Any, loja: str) -> None:
+        """Depois do login: lê as conquistas dos jogos da loja, sem aviso de novas."""
         try:
             app = shared.win.get_application() if shared.win is not None else None
             varredura = getattr(app, "varredura_conquistas", None)
             if varredura is not None:
-                # `eh_do_xbox` lê o disco do jogo: quem o aplica é a thread da varredura.
-                varredura.varrer_jogos(list(shared.store), filtro=fontes.eh_do_xbox)
+                # O filtro lê o disco do jogo: quem o aplica é a thread da varredura.
+                varredura.varrer_jogos(list(shared.store), filtro=filtro)
         except Exception:  # pylint: disable=broad-exception-caught
-            logging.warning(
-                "Falha ao ler as conquistas do Xbox depois do login", exc_info=True
-            )
+            logging.warning("Falha ao ler as conquistas da conta %s depois do login", loja, exc_info=True)
 
     def _ao_fechar_conta(self, *_args: Any) -> None:
         login.cancelar_pendente()
@@ -568,16 +571,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
     def _varrer_jogos_da_epic(self) -> None:
         """Lê na hora as conquistas dos jogos da Epic, sem aviso de novas."""
-        try:
-            app = shared.win.get_application() if shared.win is not None else None
-            varredura = getattr(app, "varredura_conquistas", None)
-            if varredura is not None:
-                # `eh_da_epic` lê o disco do jogo: quem o aplica é a thread da varredura.
-                varredura.varrer_jogos(list(shared.store), filtro=fontes.eh_da_epic)
-        except Exception:  # pylint: disable=broad-exception-caught
-            logging.warning(
-                "Falha ao ler as conquistas da Epic depois do login", exc_info=True
-            )
+        self._varrer_jogos_da_loja(fontes.eh_da_epic, "Epic")
 
     def _ao_fechar_conta_epic(self, *_args: Any) -> None:
         janela, self._janela_epic = self._janela_epic, None
