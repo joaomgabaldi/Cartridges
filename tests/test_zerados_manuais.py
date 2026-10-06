@@ -301,3 +301,59 @@ def test_apagar_a_busca_volta_aos_desinstalados(store):
 
     assert [t for t, _s, _a in titulos(picker)] == ["Antigo"]
     assert picker.aviso.get_visible() is False
+
+
+# -- situacao: a mesma resposta com ou sem o índice ------------------------------
+
+
+def _situacao_por_varredura(nome, appid=None):
+    """A regra antiga, jogo a jogo, para conferir o índice contra ela."""
+    from cartridges.utils import zerado_manual  # noqa: PLC0415
+
+    procuradas = zerado_manual._chaves(nome, appid)
+    na_biblioteca, desinstalados = None, []
+    for game in shared.store:
+        if game.blacklisted or not zerado_manual._chaves(game.name, game.steam_appid) & procuradas:
+            continue
+        if game.zerado:
+            return ("zerado", game)
+        if not game.removed:
+            na_biblioteca = game
+        else:
+            desinstalados.append(game)
+    if na_biblioteca is not None:
+        return ("biblioteca", na_biblioteca)
+    if desinstalados:
+        return ("desinstalado", max(desinstalados, key=lambda j: j.last_played or 0))
+    return ("novo", None)
+
+
+def test_situacao_com_indice_decide_como_a_varredura(store):
+    from cartridges.utils import zerado_manual  # noqa: PLC0415
+
+    jogo(store, 10, name="Hades", steam_appid="1145360")
+    jogo(store, 11, name="Hades II")
+    jogo(store, 12, name="Hades", removed=True, last_played=5)
+    jogo(store, 13, name="Celeste", removed=True, last_played=9)
+    jogo(store, 14, name="Celeste", removed=True, last_played=7)
+    jogo(store, 15, name="Outro", steam_appid="504230", removed=True, status="beaten")
+    jogo(store, 16, name="Lista negra", blacklisted=True)
+    jogo(store, 17, name="Hades")  # o último da biblioteca vence
+
+    indice = zerado_manual.indice()
+    for nome, appid in (
+        ("Hades", None),
+        ("hades", "1145360"),
+        ("Hades II", None),
+        ("Celeste", None),
+        ("Celeste", "504230"),
+        ("Lista negra", None),
+        ("Novo", None),
+        ("Novo", "1145360"),
+    ):
+        esperado = _situacao_por_varredura(nome, appid)
+        assert zerado_manual.situacao(nome, appid) == esperado
+        assert zerado_manual.situacao(nome, appid, indice) == esperado
+
+    estado, existente = zerado_manual.situacao("Hades", None, indice)
+    assert (estado, existente.game_id) == ("biblioteca", "shortcuts_m17")

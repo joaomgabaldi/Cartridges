@@ -230,22 +230,29 @@ class ZeradosPicker(Adw.Dialog):
         self.aviso.set_label(aviso or "")
         self.aviso.set_visible(bool(aviso))
 
+        # Um índice por desenho: cada linha pergunta se o jogo já existe.
+        jogos = zerado_manual.indice()
         for candidato, _match in candidatos_steam:
             appid = str(candidato.get("id", ""))
             if not appid:
                 continue
             nome = str(candidato.get("name", ""))
-            self._linha(nome, appid, nome, _("ID na Steam: {}").format(appid))
+            self._linha(nome, appid, nome, _("ID na Steam: {}").format(appid), jogos)
         self._linha(
-            texto, None, _("Adicionar “{}” sem dados da Steam").format(texto), ""
+            texto, None, _("Adicionar “{}” sem dados da Steam").format(texto), "", jogos
         )
         self._mostrar()
         return False
 
     def _linha(
-        self, nome: str, appid: Optional[str], titulo: str, subtitulo: str
+        self,
+        nome: str,
+        appid: Optional[str],
+        titulo: str,
+        subtitulo: str,
+        jogos: Optional[zerado_manual.Indice] = None,
     ) -> None:
-        estado, _existente = zerado_manual.situacao(nome, appid)
+        estado, _existente = zerado_manual.situacao(nome, appid, jogos)
         linha = Adw.ActionRow(
             title=titulo,
             subtitle=_MOTIVO.get(estado, subtitulo),
