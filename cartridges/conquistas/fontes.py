@@ -1,11 +1,12 @@
 """De onde vêm as conquistas de cada jogo — ou de lugar nenhum, e o cartão some.
 
-Três respostas: a conta de uma loja (Xbox ou Epic; ver `contas.py`; jogo do
+Quatro respostas: a conta de uma loja (Xbox ou Epic; ver `contas.py`; jogo do
 Xbox/Game Pass com a conta Microsoft conectada, ou jogo da Epic com a conta Epic
-conectada), a Steam ou um emulador (appID e onde ler o progresso: atalho
-`steam://`, arquivo de emulador, ou sinal de emulador na pasta do jogo), ou
-nenhuma. Jogo do Xbox ou da Epic sem conta não cai para a Steam: o catálogo da
-Steam ficaria parado em "0 de N", que é justamente o que esta regra acaba.
+conectada), os arquivos locais da Ubisoft Connect (atalho `uplay://` ou pasta de
+instalação do launcher; ver `ubisoft/`), a Steam ou um emulador (appID e onde ler o
+progresso: atalho `steam://`, arquivo de emulador, ou sinal de emulador na pasta do
+jogo), ou nenhuma. Jogo do Xbox ou da Epic sem conta não cai para a Steam: o catálogo
+da Steam ficaria parado em "0 de N", que é justamente o que esta regra acaba.
 
 `do_jogo` olha o disco e roda em thread (varredura, vigia). A página do jogo
 não pode tocar no disco do jogo (um HD dormindo travaria a tela), então a
@@ -24,12 +25,14 @@ from typing import Any, Optional
 
 from cartridges.conquistas import arquivos, contas, historico
 from cartridges.conquistas.epic import api as epic_api, conta as epic_conta
+from cartridges.conquistas.ubisoft import loja as ubisoft_loja, pacote as ubisoft_pacote
 from cartridges.conquistas.xbox import api, conta
 from cartridges.utils.run_executable import aumid_from_command
 
 XBOX = "xbox"
 STEAM = "steam"
 EPIC = "epic"
+UBISOFT = "ubisoft"
 _NAMESPACE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 # `com.epicgames.launcher://apps/<ns>%3A<item>%3A<AppName>?action=launch` (Playnite
 # `EpicLauncher.cs`) ou, nos atalhos antigos, `.../apps/<AppName>?...`.
@@ -53,8 +56,8 @@ SINAIS_DE_EMULADOR = frozenset(
 @dataclass(frozen=True)
 class Fonte:
     tipo: str
-    # titleId (xbox), namespace (epic) ou appID (steam); "" numa fonte de loja ainda
-    # sem id (nunca gravada).
+    # titleId (xbox), namespace (epic), productId (ubisoft) ou appID (steam); "" numa
+    # fonte de loja ainda sem id (nunca gravada).
     id: str
 
     @property
@@ -69,7 +72,7 @@ class Fonte:
         if tipo == EPIC:
             valido = _NAMESPACE.fullmatch(id_) is not None
         else:
-            valido = tipo in (XBOX, STEAM) and arquivos.appid_valido(id_)
+            valido = tipo in (XBOX, STEAM, UBISOFT) and arquivos.appid_valido(id_)
         return Fonte(tipo, id_) if valido else None
 
 
@@ -133,6 +136,11 @@ def _da_url(executavel: str) -> Optional[tuple[str, str]]:
 def url_da_epic(game: Any) -> bool:
     """Se o executável é o atalho do launcher da Epic. Só o texto, nunca o disco."""
     return _da_url(getattr(game, "executable", "") or "") is not None
+
+
+def url_da_ubisoft(game: Any) -> bool:
+    """Se o executável é o atalho do Ubisoft Connect. Só o texto, nunca o disco."""
+    return ubisoft_loja.de_url(getattr(game, "executable", "") or "") is not None
 
 
 def _manifests() -> list[dict]:
@@ -233,6 +241,10 @@ def do_jogo(game: Any) -> Optional[Fonte]:
         if epic is not None:
             # Jogo da Epic sem conta não cai para a Steam (cartão oculto).
             return Fonte(EPIC, epic[0]) if epic_conta.conectada() else None
+        produto = ubisoft_loja.do_jogo(game)
+        if produto is not None:
+            # Arquivos locais, sem conta: a fonte vale mesmo antes de o jogo rodar neste PC.
+            return Fonte(UBISOFT, produto)
         return _da_steam(game)
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning(
@@ -247,7 +259,7 @@ def gravada(game: Any) -> Optional[Fonte]:
 
 
 def ativa(fonte: Optional[Fonte]) -> bool:
-    """Steam e emulador sempre; loja com conta, só com a conta conectada."""
+    """Steam, emulador e Ubisoft sempre; loja com conta, só com a conta conectada."""
     if fonte is None:
         return False
     loja = contas.da_fonte(fonte)
@@ -255,5 +267,7 @@ def ativa(fonte: Optional[Fonte]) -> bool:
 
 
 def chave_do_catalogo(fonte: Fonte) -> str:
+    if fonte.tipo == UBISOFT:
+        return ubisoft_pacote.chave(fonte.id)
     loja = contas.da_fonte(fonte)
     return loja.chave_do_catalogo(fonte.id) if loja is not None else fonte.id

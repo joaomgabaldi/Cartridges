@@ -57,7 +57,7 @@ def test_epic_esta_no_registro():
 def test_historico_guarda_conta_de_toda_loja_do_registro():
     from cartridges.conquistas import historico  # noqa: PLC0415
 
-    assert {prefixo.rstrip(":") for prefixo in historico._FONTES_COM_CONTA} == set(contas.lojas())
+    assert {prefixo.rstrip(":") for prefixo in historico._FONTES_COM_CONTA_GUARDADA} == set(contas.lojas()) | {"ubisoft"}
 
 
 def test_resolver_da_epic(make_game, monkeypatch, pastas):  # noqa: F811
