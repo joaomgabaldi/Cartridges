@@ -577,6 +577,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         jogo_da_sessao = self.session_game
         self.session_game = None
         self.cartao_da_sessao.limpar()
+        self._sincronizar_slot_conquistas_sessao()
         self.botao_tarefas.reavaliar()
         self.navigation_view.set_sensitive(True)
 
@@ -1587,6 +1588,12 @@ class CartridgesWindow(Adw.ApplicationWindow):
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Falha ao montar as conquistas da tela de sessão", exc_info=True)
             self.cartao_da_sessao.limpar()
+        self._sincronizar_slot_conquistas_sessao()
+
+    def _sincronizar_slot_conquistas_sessao(self) -> None:
+        # O slot só ocupa espaço (margem e o espaçamento da coluna) com o cartão
+        # visível; sem conquistas a tela fica como era.
+        self.session_blocker_conquistas.set_visible(self.cartao_da_sessao.get_visible())
 
     def on_conquistas_clicked(self, *_args: Any) -> None:
         from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415

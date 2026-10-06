@@ -510,3 +510,33 @@ def test_falha_no_cartao_nao_derruba_o_bloqueador(real_window, com_conquistas, s
     assert real_window.session_blocker.get_visible()
     assert real_window.session_blocker_button.get_sensitive()
     assert not _cartao(real_window).get_visible()
+
+
+def test_slot_do_cartao_acompanha_a_visibilidade_do_cartao(real_window, com_conquistas, store, sessao_sem_efeitos):
+    slot = real_window.session_blocker_conquistas
+    assert not slot.get_visible()  # sem sessão, o slot não ocupa espaço
+    real_window.show_session_blocker(jogo(store, 9, steam_appid="999"))
+    assert not slot.get_visible()  # jogo sem conquistas: a tela fica como era
+    real_window.hide_session_blocker()
+    real_window.show_session_blocker(com_conquistas)
+    assert slot.get_visible()
+    real_window.hide_session_blocker()
+    assert not slot.get_visible()
+
+
+def test_slot_do_cartao_some_quando_o_cartao_falha(real_window, com_conquistas, sessao_sem_efeitos, monkeypatch):
+    def quebrar(_self, _game):
+        raise RuntimeError("falha de teste")
+
+    monkeypatch.setattr(conquistas_sessao.CartaoDaSessao, "mostrar", quebrar)
+    real_window.show_session_blocker(com_conquistas)
+    assert not real_window.session_blocker_conquistas.get_visible()
+
+
+def test_icones_do_cartao_sao_passivos(real_window, com_conquistas, sessao_sem_efeitos):
+    real_window.show_session_blocker(com_conquistas)
+    cartao = _cartao(real_window)
+    assert cartao.icones.has_css_class("no-hover")
+    filhos = list(_filhos_do_cartao(cartao))
+    assert len(filhos) == 3
+    assert not any(filho.get_focusable() for filho in filhos)
