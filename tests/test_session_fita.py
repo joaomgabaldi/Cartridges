@@ -1732,8 +1732,8 @@ def test_escolher_a_cor_do_app_nas_preferencias_grava_e_mostra(monkeypatch, sche
 
 
 @pytest.fixture
-def pulso(falsas, tmp_path, monkeypatch, schema):
-    """Uma fita falsa numa sessão já vestida, com threads capturadas e sem espera."""
+def fora_de_sessao(falsas, monkeypatch, schema):
+    """Uma fita falsa vestida na cor do app, sem sessão, com threads capturadas."""
     schema.set_boolean("session-fita", True)
     modulos = falsas(False)
     schema.set_string(
@@ -1741,7 +1741,6 @@ def pulso(falsas, tmp_path, monkeypatch, schema):
     )
     tarefas = []
     monkeypatch.setattr(session_fita, "_em_thread", tarefas.append)
-    # Sem espera nenhuma: segura e desliza zerados em todos os estilos.
     monkeypatch.setattr(
         session_fita,
         "ESTILOS_DO_PULSO",
@@ -1753,15 +1752,24 @@ def pulso(falsas, tmp_path, monkeypatch, schema):
             for estilo, tipos in session_fita.ESTILOS_DO_PULSO.items()
         },
     )
+    modulos["eb0"].recebidos.clear()
+    return SimpleNamespace(modulo=modulos["eb0"], tarefas=tarefas)
+
+
+@pytest.fixture
+def pulso(fora_de_sessao, tmp_path):
+    """A fita de ``fora_de_sessao`` numa sessão já vestida."""
     jogo = _jogo(tmp_path)
     session_fita.comecar(jogo)
-    tarefas.pop(0)()  # veste a cor do jogo
+    fora_de_sessao.tarefas.pop(0)()  # veste a cor do jogo
     # Abrir a conexão agendou o batimento na mesma captura. Ele roda em laço
     # até o fim do processo: nunca pode ser executado aqui, e não pode sobrar
     # na lista, onde o `tarefas.pop()` dos testes o tomaria pela volta do app.
-    tarefas.clear()
-    modulos["eb0"].recebidos.clear()
-    return SimpleNamespace(modulo=modulos["eb0"], tarefas=tarefas, jogo=jogo)
+    fora_de_sessao.tarefas.clear()
+    fora_de_sessao.modulo.recebidos.clear()
+    return SimpleNamespace(
+        modulo=fora_de_sessao.modulo, tarefas=fora_de_sessao.tarefas, jogo=jogo
+    )
 
 
 def _cores(modulo):
@@ -2092,31 +2100,6 @@ def test_respirar_desliza_ate_o_pulso(pulso, schema, monkeypatch):
     assert cores[-1] == cor_do_jogo
 
 
-@pytest.fixture
-def fora_de_sessao(falsas, monkeypatch, schema):
-    """Uma fita falsa vestida na cor do app, sem sessão, com threads capturadas."""
-    schema.set_boolean("session-fita", True)
-    modulos = falsas(False)
-    schema.set_string(
-        session_fita.CHAVE_ESTADO, json.dumps({"eb0": {"ligada": True, "cor": ""}})
-    )
-    tarefas = []
-    monkeypatch.setattr(session_fita, "_em_thread", tarefas.append)
-    monkeypatch.setattr(
-        session_fita,
-        "ESTILOS_DO_PULSO",
-        {
-            estilo: {
-                tipo: [passo._replace(segura=0, desliza=0) for passo in passos]
-                for tipo, passos in tipos.items()
-            }
-            for estilo, tipos in session_fita.ESTILOS_DO_PULSO.items()
-        },
-    )
-    modulos["eb0"].recebidos.clear()
-    return SimpleNamespace(modulo=modulos["eb0"], tarefas=tarefas)
-
-
 def _cor_do_app_na_fita():
     fita = session_fita.fitas()[0]
     return session_fita.hsv_hex(session_fita.na_fita(session_fita.cor_do_app(), fita))
@@ -2160,9 +2143,20 @@ def test_sessao_que_comeca_interrompe_o_teste(fora_de_sessao, monkeypatch, tmp_p
     fora_de_sessao.tarefas.pop(0)()  # o teste: um passo e para
     assert _cores(fora_de_sessao.modulo).count(_ouro()) == 1
     assert session_fita._teste_do_pulso is None
+    # O que a sessão vestiu vem depois do teste: a fita termina na cor do jogo.
+    # A última tarefa é o vestir de `comecar`; a anterior é o batimento, que
+    # roda em laço e nunca pode ser executado aqui.
+    fora_de_sessao.tarefas.pop()()
+    fita = session_fita.fitas()[0]
+    cor_do_jogo = session_fita.hsv_hex(session_fita.na_fita(session_fita.cor_do_jogo(jogo), fita))
+    assert _cores(fora_de_sessao.modulo)[-1] == cor_do_jogo
 
 
-def test_fechar_interrompe_o_teste(fora_de_sessao, monkeypatch):
+def test_fechar_interrompe_o_teste(fora_de_sessao, monkeypatch, schema):
+    original = "000003e800b4"
+    schema.set_string(
+        session_fita.CHAVE_ESTADO, json.dumps({"eb0": {"ligada": True, "cor": original}})
+    )
     monkeypatch.setattr(
         session_fita,
         "ESTILOS_DO_PULSO",
@@ -2171,14 +2165,25 @@ def test_fechar_interrompe_o_teste(fora_de_sessao, monkeypatch):
     )
     dormir_de_verdade = session_fita.time.sleep
 
+    def em_linha(tarefa):
+        tarefa()
+        return SimpleNamespace(join=lambda prazo=None: None, is_alive=lambda: False)
+
+    chamadas = {"n": 0}
+
     def dormir(segundos):
-        session_fita._encerrar_pulsos()  # o que `fechar` faz antes de devolver
+        chamadas["n"] += 1
+        if chamadas["n"] == 1:
+            monkeypatch.setattr(session_fita, "_em_thread", em_linha)
+            session_fita.fechar()  # devolve o estado de antes, na hora
         dormir_de_verdade(0)
 
     monkeypatch.setattr(session_fita.time, "sleep", dormir)
     session_fita.testar_pulso()
     fora_de_sessao.tarefas.pop(0)()
-    assert _cores(fora_de_sessao.modulo).count(_ouro()) == 1  # parou no primeiro passo
+    cores = _cores(fora_de_sessao.modulo)
+    assert cores.count(_ouro()) == 1  # parou no primeiro passo
+    assert cores[-1] == original  # e a devolução não foi atropelada pelo pulso
     assert session_fita._teste_do_pulso is None
 
 

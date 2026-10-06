@@ -1417,12 +1417,13 @@ def estilo_do_pulso() -> str:
 FORCA_DOS_PULSOS = ("normal", "rara", "completo")
 
 # Uma thread só serve os pulsos. Durante um pulso fica no máximo UM pedido
-# esperando, e quem chega depois só o promove ao tipo mais forte. Esta trava
-# guarda a sessão, a fila e a vez de cada fita: quem confere a sessão e quem
-# a encerra tiram a vez das fitas dentro dela, e nenhum passo de pulso reserva
-# depois de a sessão acabar. Dentro dela só entram a conferência, a reserva
-# (``_TRAVA_DAS_TRAVAS``, nunca o contrário) e a fila — nada de rede, e nunca
-# com a trava de uma fita na mão.
+# esperando: um pedido de conquista só o promove ao tipo mais forte, já um
+# teste novo toma o lugar da fila inteira. Esta trava guarda a sessão, o teste
+# do pulso, a fila e a vez de cada fita: quem confere o dono do pulso e quem
+# encerra a sessão ou o teste tiram a vez das fitas dentro dela, e nenhum passo
+# de pulso reserva depois de o dono perder a validade. Dentro dela só entram a
+# conferência, a reserva (``_TRAVA_DAS_TRAVAS``, nunca o contrário) e a fila —
+# nada de rede, e nunca com a trava de uma fita na mão.
 _TRAVA_PULSO = threading.Lock()
 _fila_de_pulsos: list[tuple[object, str]] = []
 _pulsando = False
