@@ -162,6 +162,30 @@ def test_pagina_aberta_do_jogo_e_atualizada(make_game, isolar, win):
     assert chamadas == [jogo]
 
 
+def test_cartao_da_sessao_atualiza_com_outra_pagina_aberta(make_game, isolar, win):
+    jogo, outro = make_game(game_id="g1"), make_game(game_id="g2")
+    chamadas = []
+    win.active_game = outro  # a página aberta é de outro jogo
+    win.session_game = jogo
+    win.update_conquistas_sessao = chamadas.append
+    sessao.comecar(jogo)
+    _VigiaFalso.criados[0].avisar([Desbloqueada("A", None, False)])
+    assert chamadas == [jogo]
+
+
+def test_falha_no_cartao_da_sessao_nao_levanta(make_game, isolar, win):
+    jogo = make_game()
+    win.session_game = jogo
+
+    def quebra(_jogo):
+        raise RuntimeError("cartão fora")
+
+    win.update_conquistas_sessao = quebra
+    sessao.comecar(jogo)
+    _VigiaFalso.criados[0].avisar([Desbloqueada("A", _info(), False)])
+    assert isolar[1] == ["normal"]  # o pulso saiu assim mesmo
+
+
 def test_o_fechamento_do_app_para_o_vigia_antes_de_devolver_papel_e_fitas(monkeypatch):
     """Simétrico ao `hide_session_blocker`: um pulso pedido depois de as fitas
     voltarem à cor do app não teria sessão para pulsar."""
