@@ -94,9 +94,9 @@ class Vigia:
         self._mtimes: dict[str, Optional[int]] = {}
         # Arquivos cuja base ainda não foi lida: lidos em silêncio até dar certo.
         self._pendentes: set[str] = set()
-        # Arquivos da Steam conhecidos antes de existirem (`arquivos.da_steam_esperados`):
+        # Arquivos da Steam conhecidos antes de existirem (`_esperados`):
         # quando aparecem, entram em silêncio.
-        self._esperados: set[str] = set()
+        self._caminhos_esperados: set[str] = set()
         # Falhas seguidas por arquivo (leitura ou gravação). Passando de
         # `TENTATIVAS`, o arquivo só é tentado de novo a cada rebusca.
         self._falhas: dict[str, int] = {}
@@ -108,15 +108,13 @@ class Vigia:
         return bool(self._fonte)
 
     def iniciar(self) -> None:
-        if self._fonte or not acompanha(self.game):
+        if self._fonte or not self._acompanha():
             return
         self._inicio = self._relogio()
         try:
             self._arquivos = self._achar()
-            esperados = arquivos.da_steam_esperados(
-                str(self.game.steam_appid), self.game.executable
-            )
-            self._esperados = {str(a.caminho) for a in esperados}
+            esperados = self._esperados()
+            self._caminhos_esperados = {str(a.caminho) for a in esperados}
             conhecidos = {str(a.caminho) for a in self._arquivos}
             self._arquivos.extend(a for a in esperados if str(a.caminho) not in conhecidos)
             self._base()
@@ -133,8 +131,31 @@ class Vigia:
             GLib.source_remove(self._fonte)
             self._fonte = 0
 
+    # -- o que cada tipo de fonte troca (o vigia da Ubisoft é uma subclasse) ----------
+
+    def _acompanha(self) -> bool:
+        return acompanha(self.game)
+
     def _achar(self) -> list[ArquivoDeConquista]:
         return arquivos.arquivos_do_jogo(str(self.game.steam_appid), self.game.executable)
+
+    def _esperados(self) -> list[ArquivoDeConquista]:
+        """Arquivos que ainda não existem e, quando aparecerem, entram em silêncio."""
+        return arquivos.da_steam_esperados(str(self.game.steam_appid), self.game.executable)
+
+    def _ler(self, achado: ArquivoDeConquista) -> Optional[list[formatos.Desbloqueio]]:
+        return formatos.ler_ou_none(achado.caminho, achado.formato)
+
+    def _fonte_ao_registrar(self) -> str:
+        """A fonte gravada quando o vigia lê algo num jogo ainda sem fonte."""
+        return f"steam:{self.game.steam_appid}"
+
+    def _novo_em_silencio(self) -> bool:
+        """Se o arquivo que aparece no meio da partida entra em silêncio, como a base.
+
+        Nos emuladores, não: o arquivo novo é a primeira conquista do jogo, desta partida.
+        """
+        return False
 
     def _desistiu(self, chave: str, rebusca: bool) -> bool:
         """Se o arquivo falhou vezes demais para ser tentado neste tique."""
@@ -150,7 +171,7 @@ class Vigia:
         """Grava ``lidos`` no histórico; com algo lido e o jogo sem fonte, grava a Steam."""
         fonte = None
         if lidos and historico.fonte(self.game.game_id) is None:
-            fonte = f"steam:{self.game.steam_appid}"
+            fonte = self._fonte_ao_registrar()
         return historico.registrar(self.game.game_id, lidos, fonte=fonte)
 
     def _gravados(self, lidos: list[formatos.Desbloqueio]) -> bool:
@@ -169,11 +190,11 @@ class Vigia:
         lidos_por_arquivo: list[tuple[ArquivoDeConquista, Optional[int], list]] = []
         for achado in self._arquivos:
             atual = _mtime(achado.caminho)
-            if atual is None and str(achado.caminho) in self._esperados:
+            if atual is None and str(achado.caminho) in self._caminhos_esperados:
                 # Ainda não existe: quando a Steam o criar, entra em silêncio.
                 self._pendentes.add(str(achado.caminho))
                 continue
-            lidos = formatos.ler_ou_none(achado.caminho, achado.formato)
+            lidos = self._ler(achado)
             if lidos is None:
                 self._pendentes.add(str(achado.caminho))
             else:
@@ -189,14 +210,14 @@ class Vigia:
         """Nova tentativa de ler, em silêncio, um arquivo que ficou sem base."""
         chave = str(achado.caminho)
         if atual is None:
-            if chave in self._esperados:
+            if chave in self._caminhos_esperados:
                 self._falhas.pop(chave, None)
                 return  # a Steam ainda não criou o arquivo; continua pendente
             self._pendentes.discard(chave)
             self._falhas.pop(chave, None)
             self._mtimes[chave] = None
             return
-        lidos = formatos.ler_ou_none(achado.caminho, achado.formato)
+        lidos = self._ler(achado)
         if lidos is None:
             self._resultado(chave, False)
             return
@@ -214,10 +235,12 @@ class Vigia:
             rebusca = self._olhadas % REBUSCA == 0
             if rebusca:
                 conhecidos = {str(a.caminho) for a in self._arquivos}
-                # Arquivo novo: sem mtime guardado, tudo o que ele traz é desta partida.
-                self._arquivos.extend(
-                    a for a in self._achar() if str(a.caminho) not in conhecidos
-                )
+                # Arquivo novo: sem mtime guardado, tudo o que ele traz é desta partida
+                # (salvo quando o tipo da fonte diz que ele nasce com o que já havia).
+                novos = [a for a in self._achar() if str(a.caminho) not in conhecidos]
+                self._arquivos.extend(novos)
+                if self._novo_em_silencio():
+                    self._pendentes.update(str(a.caminho) for a in novos)
             mudaram: list[tuple[ArquivoDeConquista, int, list]] = []
             for achado in self._arquivos:
                 chave = str(achado.caminho)
@@ -232,7 +255,7 @@ class Vigia:
                     self._falhas.pop(chave, None)
                     self._mtimes[chave] = None
                 elif atual != self._mtimes.get(chave) and not self._desistiu(chave, rebusca):
-                    lidos = formatos.ler_ou_none(achado.caminho, achado.formato)
+                    lidos = self._ler(achado)
                     # Leitura que falhou: o mtime antigo fica, e o próximo tique tenta de novo.
                     if lidos is None:
                         self._resultado(chave, False)
@@ -276,7 +299,7 @@ class Vigia:
         )
         horas = {d.nome.strip().upper(): d.quando for d in lidos}
         ordem = sorted(entraram, key=lambda nome: horas.get(nome, 0))
-        limite = self._limite_da_steam()
+        limite = self._limite()
         # Conquista antiga que a Steam acabou de sincronizar entra no histórico, mas não é aviso.
         avisaveis = [
             nome for nome in ordem if limite is None or not 0 < horas.get(nome, 0) < limite
@@ -301,7 +324,7 @@ class Vigia:
         fonte = fontes.gravada(self.game)
         return fontes.chave_do_catalogo(fonte) if fonte is not None else str(self.game.steam_appid)
 
-    def _limite_da_steam(self) -> Optional[float]:
+    def _limite(self) -> Optional[float]:
         """A hora abaixo da qual uma conquista da Steam não é desta sessão.
 
         Ao abrir o jogo a Steam baixa do servidor o que foi ganho em outro
