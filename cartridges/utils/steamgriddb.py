@@ -137,18 +137,29 @@ class SgdbHelper:
                 res.raise_for_status()
                 raise SgdbBadRequest(res.status_code)
 
-    def search_games(self, query: str) -> list[dict]:
-        """Return the SGDB games matching a query (list of ``{id, name, …}``)."""
-        uri = f"{self.base_url}search/autocomplete/{quote(query, safe='')}"
+    def _lista(self, uri: str, jogo: bool = True) -> list[dict]:
+        """O ``data`` de uma resposta em lista. Levanta na chave recusada e, com
+        ``jogo``, no 404 (`SgdbGameNotFound`); qualquer outro erro HTTP levanta pelo
+        ``raise_for_status``, e um 2xx/3xx inesperado vira lista vazia."""
         res = get_capped(uri, headers=self.auth_headers, timeout=10)
         match res.status_code:
             case 200:
                 return _data_list(res)
             case 401:
                 raise auth_error(res)
+            case 404 if jogo:
+                raise SgdbGameNotFound(res.status_code)
             case _:
                 res.raise_for_status()
                 return []
+
+    def search_games(self, query: str) -> list[dict]:
+        """Return the SGDB games matching a query (list of ``{id, name, …}``)."""
+        # Busca sem resultado é lista vazia, não "jogo não encontrado": aqui o
+        # 404 não tem significado próprio e cai no `raise_for_status`.
+        return self._lista(
+            f"{self.base_url}search/autocomplete/{quote(query, safe='')}", jogo=False
+        )
 
     def get_grids(
         self, game_id: str, animated: bool = False, dimensions: Optional[str] = None
@@ -167,17 +178,7 @@ class SgdbHelper:
         uri = f"{self.base_url}grids/game/{game_id}"
         if params:
             uri += "?" + "&".join(params)
-        res = get_capped(uri, headers=self.auth_headers, timeout=10)
-        match res.status_code:
-            case 200:
-                return _data_list(res)
-            case 401:
-                raise auth_error(res)
-            case 404:
-                raise SgdbGameNotFound(res.status_code)
-            case _:
-                res.raise_for_status()
-                return []
+        return self._lista(uri)
 
     def get_logos(self, game_id: str) -> list[dict]:
         """Return the horizontal logos available for a SGDB game id.
@@ -191,18 +192,9 @@ class SgdbHelper:
         header is a piece of branding, not a place for an animation to loop
         behind the metadata.
         """
-        uri = f"{self.base_url}logos/game/{game_id}?types=static&nsfw=false&humor=false"
-        res = get_capped(uri, headers=self.auth_headers, timeout=10)
-        match res.status_code:
-            case 200:
-                return _data_list(res)
-            case 401:
-                raise auth_error(res)
-            case 404:
-                raise SgdbGameNotFound(res.status_code)
-            case _:
-                res.raise_for_status()
-                return []
+        return self._lista(
+            f"{self.base_url}logos/game/{game_id}?types=static&nsfw=false&humor=false"
+        )
 
     def get_image_uri(self, game_id: str, animated: bool = False) -> Any:
         """Get the image for a SGDB game id"""
