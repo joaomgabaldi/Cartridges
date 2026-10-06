@@ -51,6 +51,7 @@ from cartridges.conquistas.fontes import Fonte
 from cartridges.conquistas.ubisoft import locais as ubisoft_locais, pacote as ubisoft_pacote, spool as ubisoft_spool
 from cartridges.conquistas.vigia import MARGEM_DA_STEAM
 from cartridges.utils import tarefas
+from cartridges.utils.passada_agendada import PassadaAgendada
 
 _ULTIMA_VARREDURA = "conquistas-ultima-varredura"
 
@@ -223,15 +224,14 @@ def _aviso(texto: str) -> None:
     shared.win.toast_queue.add(toast)
 
 
-class VarreduraConquistas:
+class VarreduraConquistas(PassadaAgendada):
     """Uma passada por execução, no molde de `HLTBBackfill`."""
 
+    atraso_inicial = _ATRASO_INICIAL
+    espera_da_importacao = _ESPERA_IMPORTACAO
+
     def __init__(self) -> None:
-        self._timeout_id: Optional[int] = None
-        self._lock = threading.Lock()
-        self._running = False
-        self._stopped = False
-        self._generation = 0
+        super().__init__()
         # Um aviso de chave recusada por execução, não um por jogo.
         self._avisou_chave = False
         self._novas: list[tuple[str, int]] = []
@@ -240,32 +240,6 @@ class VarreduraConquistas:
         # lido do estado no começo de cada passada com aviso.
         self._desde = 0
 
-    # -- agenda ---------------------------------------------------------------
-
-    def start(self) -> None:
-        self._stopped = False
-        if self._timeout_id is not None:
-            GLib.source_remove(self._timeout_id)
-        self._timeout_id = GLib.timeout_add_seconds(_ATRASO_INICIAL, self._on_timer)
-
-    def stop(self) -> None:
-        self._stopped = True
-        self._generation += 1
-        if self._timeout_id is not None:
-            GLib.source_remove(self._timeout_id)
-            self._timeout_id = None
-
-    def _on_timer(self) -> bool:
-        self._timeout_id = None
-        if self._stopped:
-            return False
-        app = shared.win.get_application() if shared.win is not None else None
-        if app is not None and app.state == shared.AppState.IMPORT:
-            self._timeout_id = GLib.timeout_add_seconds(_ESPERA_IMPORTACAO, self._on_timer)
-            return False
-        self.run_async()
-        return False
-
     def run_async(self) -> None:
         if self._stopped:
             return
@@ -273,10 +247,8 @@ class VarreduraConquistas:
         games = [game for game in shared.store if participa(game)]
         if not games:
             return
-        with self._lock:
-            if self._running:
-                return
-            self._running = True
+        if not self._reservar():
+            return
         threading.Thread(
             target=self._worker, args=(games, self._generation), daemon=True
         ).start()
@@ -334,15 +306,11 @@ class VarreduraConquistas:
             if tarefa is not None:
                 tarefa.terminar()
             if avisar:
-                with self._lock:
-                    self._running = False
+                self._liberar()
                 if not concluiu:
                     GLib.idle_add(self._concluir)
                 # Depois de todo `_entregar_da_conta` desta passada (ordem do GLib).
                 GLib.idle_add(self._concluir_da_conta)
-
-    def _deve_parar(self, geracao: int) -> bool:
-        return self._stopped or geracao != self._generation
 
     def _passada_dos_arquivos(
         self,
