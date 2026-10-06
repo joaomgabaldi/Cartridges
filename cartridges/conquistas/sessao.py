@@ -4,13 +4,13 @@ conquista nova: o cartão por cima do jogo e o pulso na iluminação.
 Quem chama é a janela, nos mesmos dois pontos em que a sessão já veste o papel
 de parede e as fitas (`show_session_blocker` e `hide_session_blocker`). As
 preferências são lidas na hora do aviso, então mudá-las no meio da partida
-vale para a próxima conquista. Nos jogos da Steam e das lojas com conta (Xbox,
-Epic), só o pulso: a Steam, a Xbox Game Bar e o overlay da Epic já mostram o
-aviso delas.
+vale para a próxima conquista. Nos jogos da Steam, das lojas com conta (Xbox,
+Epic) e da Ubisoft Connect, só o pulso: a Steam, a Xbox Game Bar e os overlays da
+Epic e da Ubisoft já mostram o aviso deles.
 
 O vigia depende do tipo da fonte gravada do jogo (`_VIGIAS`): a de uma loja com
-conta consulta a conta (`vigia_da_conta`); a da Steam, ou nenhuma, olha os arquivos
-(`vigia`).
+conta consulta a conta (`vigia_da_conta`); a da Ubisoft olha o `.spool`
+(`ubisoft/vigia`); a da Steam, ou nenhuma, olha os arquivos (`vigia`).
 """
 
 import logging
@@ -19,6 +19,7 @@ from typing import Any, Optional
 from cartridges import conquista_aviso, shared
 from cartridges.conquistas import arquivos, fontes
 from cartridges.conquistas.epic import vigia as vigia_epic
+from cartridges.conquistas.ubisoft import vigia as vigia_ubisoft
 from cartridges.conquistas.vigia import Desbloqueada, Vigia, acompanha
 from cartridges.conquistas.xbox import vigia as vigia_xbox
 from cartridges.utils import session_fita
@@ -26,10 +27,10 @@ from cartridges.utils import session_fita
 # O vigia de cada tipo de fonte gravada que não é a Steam: o tipo do jogo decide o
 # vigia. `Vigia` é procurado na hora (os testes o trocam). Fonte Steam, ou nenhuma,
 # fica com o vigia de arquivos (`Vigia`/`acompanha` deste módulo).
-_VIGIAS = {"xbox": vigia_xbox, "epic": vigia_epic}
+_VIGIAS = {"xbox": vigia_xbox, "epic": vigia_epic, "ubisoft": vigia_ubisoft}
 # Fontes cujo próprio aviso já aparece durante a partida (Xbox Game Bar, overlay da
-# Epic): aqui, só o pulso.
-_SO_PULSO = frozenset({"xbox", "epic"})
+# Epic, overlay do Ubisoft Connect): aqui, só o pulso.
+_SO_PULSO = frozenset({"xbox", "epic", "ubisoft"})
 
 # Os vigias (arquivos e de cada loja com conta) têm o mesmo contrato: `game`, `ativo`, `iniciar` e `parar`.
 _vigia: Optional[Any] = None

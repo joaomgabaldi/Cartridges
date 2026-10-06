@@ -380,3 +380,32 @@ def test_jogo_da_epic_sem_conta_nao_e_acompanhado(make_game, epic, monkeypatch):
     sessao.comecar(game)
     assert sessao._vigia is None
     assert _VigiaXboxFalso.criados == [] and _VigiaFalso.criados == []
+
+
+@pytest.fixture
+def ubisoft(monkeypatch):
+    from cartridges.conquistas.ubisoft import vigia as vigia_ubisoft  # noqa: PLC0415
+
+    _VigiaXboxFalso.criados = []
+    monkeypatch.setattr(vigia_ubisoft, "Vigia", _VigiaXboxFalso)
+
+
+def test_jogo_da_ubisoft_usa_o_vigia_da_ubisoft_e_so_pulsa(make_game, ubisoft, isolar):
+    mostrados, pulsos = isolar
+    game = make_game(executable='start "" "uplay://launch/65043/0"', steam_appid="242050")
+    historico.registrar(game.game_id, [], fonte="ubisoft:65043")
+    sessao.comecar(game)
+    assert _VigiaFalso.criados == []  # nada do vigia de arquivos
+    (vigia_,) = _VigiaXboxFalso.criados
+    assert vigia_.game is game and vigia_.ativo and sessao.acompanhando(game)
+    assert sessao._so_pulso(game)
+    vigia_.avisar([Desbloqueada("UBI:1", _info(), False)])
+    assert mostrados == []  # o overlay do Ubisoft Connect já mostra o aviso
+    assert pulsos == ["normal"]
+
+
+def test_ubisoft_com_interruptor_desligado_nao_cria_vigia(make_game, ubisoft):
+    game = make_game(conquistas=False)
+    historico.registrar(game.game_id, [], fonte="ubisoft:65043")
+    sessao.comecar(game)
+    assert _VigiaXboxFalso.criados == [] and _VigiaFalso.criados == []
