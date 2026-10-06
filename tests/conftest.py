@@ -400,6 +400,15 @@ def sem_steam_no_registro(monkeypatch):
     monkeypatch.setattr(arquivos, "_inteiro_do_registro", lambda *_a: None)
 
 
+@pytest.fixture(autouse=True)
+def sem_ubisoft_no_registro(monkeypatch):
+    """Os jogos da Ubisoft instalados nesta máquina (se houver) não entram nos testes:
+    quem precisa de instalações troca `locais._do_registro`."""
+    from cartridges.conquistas.ubisoft import locais  # noqa: PLC0415
+
+    monkeypatch.setattr(locais, "_do_registro", lambda: {})
+
+
 @pytest.fixture
 def flush_idle():
     """Drain everything ``GLib.idle_add`` has queued.
