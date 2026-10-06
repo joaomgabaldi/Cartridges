@@ -37,6 +37,7 @@
           <li>Ao desbloquear uma conquista durante o jogo, a iluminação inteligente pisca e, nos jogos da Steam, um aviso aparece por cima da tela</li>
           <li>Agora é possível escolher, nas Preferências, a cor e o estilo com que a iluminação inteligente pisca ao desbloquear uma conquista</li>
           <li>A tela do jogo em execução mostra as conquistas do jogo; ao passar o mouse sobre uma, aparece o que é preciso fazer para desbloqueá-la</li>
+          <li>A verificação das conquistas ficou mais leve, e a busca ao adicionar um jogo zerado ficou mais rápida</li>
         </ul>
       </description>
     </release>
