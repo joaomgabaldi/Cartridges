@@ -46,6 +46,9 @@ class CartaoDaSessao(Gtk.Box):
         self.rolagem = Gtk.ScrolledWindow(
             hscrollbar_policy=Gtk.PolicyType.NEVER,
             propagate_natural_height=True,
+            # Sem isto o cartão pediria só a largura de um ícone, e a coluna
+            # (centralizada) ficaria com a largura do título.
+            propagate_natural_width=True,
             max_content_height=ALTURA_MAXIMA,
             child=self.icones,
         )
@@ -67,6 +70,9 @@ class CartaoDaSessao(Gtk.Box):
         self.porcentagem.set_label(f"{atual.porcentagem}%")
         self.barra.set_fraction(atual.fracao)
         mostrar_ocultas = shared.schema.get_boolean("conquistas-mostrar-ocultas")
+        # A largura natural acompanha a quantidade real de ícones: o cartão
+        # cresce para os lados até a janela e só então quebra a linha.
+        self.icones.set_max_children_per_line(max(1, len(atual.todas)))
         for linha in atual.todas:
             self.icones.append(self._icone(linha, mostrar_ocultas))
 
