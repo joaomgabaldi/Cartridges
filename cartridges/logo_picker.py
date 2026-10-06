@@ -43,6 +43,7 @@ from gi.repository import Adw, GdkPixbuf, Gio, GLib, Gtk
 
 from cartridges import shared
 from cartridges.game_cover import texture_from_pixbuf
+from cartridges.utils.busca_do_seletor import BuscaDoSeletor
 from cartridges.utils.download import download_bytes
 from cartridges.utils.game_logo import IMAGE_SUFFIXES, pick_logo
 from cartridges.utils.na_tela import entregar_na_tela
@@ -60,7 +61,7 @@ PREVIEW_HEIGHT = 110
 
 
 @Gtk.Template(resource_path=shared.PREFIX + "/gtk/logo-picker.ui")
-class LogoPicker(Adw.Dialog):
+class LogoPicker(BuscaDoSeletor, Adw.Dialog):
     __gtype_name__ = "LogoPicker"
 
     header_bar: Adw.HeaderBar = Gtk.Template.Child()
@@ -109,23 +110,6 @@ class LogoPicker(Adw.Dialog):
         self.search()
 
     # region Search
-
-    def _on_search_changed(self, *_args: Any) -> None:
-        if self._debounce_id:
-            GLib.source_remove(self._debounce_id)
-        self._debounce_id = GLib.timeout_add(500, self._debounce_fire)
-
-    def _debounce_fire(self) -> bool:
-        self._debounce_id = 0
-        # GtkSearchEntry emite um search-changed atrasado para o set_text
-        # programático do __init__, depois do connect: sem este guard, abrir o
-        # diálogo buscava duas vezes a mesma coisa — API e downloads em dobro,
-        # com a segunda passada varrendo os previews da primeira. Enter no
-        # campo continua repetindo a busca (caminho do "activate", não daqui).
-        if self.search_entry.get_text().strip() == self._last_query:
-            return False
-        self.search()
-        return False
 
     def search(self) -> None:
         self._generation += 1
@@ -291,18 +275,6 @@ class LogoPicker(Adw.Dialog):
         self._results.clear()
         self._added = 0
         self.flowbox.remove_all()
-
-    def _show_empty(
-        self, titulo: str, descricao: str = "", generation: Optional[int] = None
-    ) -> bool:
-        if generation is not None and generation != self._generation:
-            return False
-        # Título e descrição juntos: com o título fixo, uma busca que falhou
-        # dizia "Nenhum … encontrado".
-        self.status_page.set_title(titulo)
-        self.status_page.set_description(descricao)
-        self.stack.set_visible_child_name("empty")
-        return False
 
     # endregion
     # region Selection
