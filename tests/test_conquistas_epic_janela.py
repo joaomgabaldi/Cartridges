@@ -1,7 +1,10 @@
 """A janela de login da Epic: colar o código e conectar."""
 
+import inspect
+
 import pytest
 
+from cartridges.conquistas import vigia_da_conta
 from cartridges.conquistas.epic import conta, janela
 
 _COD = "0123456789abcdef0123456789abcdef"
@@ -135,8 +138,13 @@ def test_texto_colado_nao_vai_ao_log(abertas, monkeypatch, caplog):
     assert _COD not in caplog.text
 
 
-def test_tarefa_que_levanta_chega_como_none_e_vira_falha_generica(abertas):
-    """O `_em_thread` compartilhado entrega None quando o trabalho levanta."""
+def test_o_padrao_e_o_em_thread_do_vigia_da_conta():
+    """A janela usa o `_em_thread` compartilhado, o que não deixa a thread morrer calada."""
+    padrao = inspect.signature(janela.JanelaDeLogin.__init__).parameters["em_thread"].default
+    assert padrao is vigia_da_conta._em_thread
+
+
+def test_resultado_none_vira_falha_generica(abertas):
     j = janela.JanelaDeLogin(lambda: None, abrir=abertas.append, em_thread=lambda _t, entregar: entregar(None))
     j.close = lambda: abertas.append("fechou")
     j.campo.set_text(_COD)
