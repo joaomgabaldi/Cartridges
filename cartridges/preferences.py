@@ -218,10 +218,12 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             "notify::rgba", self.mudar_cor_do_pulso
         )
         self.conquistas_pulso_cor_reset.connect("clicked", self.voltar_ao_ouro)
-        # Fechado o balão, as fitas saem da prévia e voltam à cor do app.
-        self.conquistas_pulso_cor_balao.connect(
-            "closed", lambda *_: session_fita.previa(session_fita.cor_do_app())
-        )
+        # Com o balão aberto, as fitas mostram a cor do pulso; fechado, voltam
+        # à cor do app. O botão de voltar ao padrão fica fora do balão: sem
+        # esta guarda, clicar nele deixaria as fitas na prévia para sempre.
+        self._pulso_balao_aberto = False
+        self.conquistas_pulso_cor_balao.connect("show", self._abrir_balao_do_pulso)
+        self.conquistas_pulso_cor_balao.connect("closed", self._fechar_balao_do_pulso)
         self._pulso_estilo_id = self.conquistas_pulso_estilo_row.connect(
             "notify::selected", self._gravar_estilo_do_pulso
         )
@@ -432,7 +434,16 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.conquistas_pulso_cor_reset.set_visible(
             session_fita.tom_do_pulso() != session_fita.TOM_DO_OURO
         )
+        if self._pulso_balao_aberto:
+            session_fita.previa(session_fita.cor_do_pulso())
+
+    def _abrir_balao_do_pulso(self, *_args: Any) -> None:
+        self._pulso_balao_aberto = True
         session_fita.previa(session_fita.cor_do_pulso())
+
+    def _fechar_balao_do_pulso(self, *_args: Any) -> None:
+        self._pulso_balao_aberto = False
+        session_fita.previa(session_fita.cor_do_app())
 
     def voltar_ao_ouro(self, *_args: Any) -> None:
         """Devolve a cor do pulso ao dourado de fábrica."""

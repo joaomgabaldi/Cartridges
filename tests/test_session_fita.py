@@ -836,13 +836,29 @@ def _com_fita():
     session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "192.168.0.150", "chave")])
 
 
+def _linhas_do_pulso(preferencias):
+    return (
+        preferencias.conquistas_pulso_cor_row,
+        preferencias.conquistas_pulso_estilo_row,
+        preferencias.conquistas_pulso_testar_row,
+    )
+
+
 def test_linhas_do_pulso_desativadas_sem_iluminacao(monkeypatch, schema):
+    """Com o piscar ligado, as linhas seguem o interruptor das fitas."""
     _com_fita()
-    schema.set_boolean("session-fita", False)
+    monkeypatch.setattr(session_fita, "reacender", lambda: None)
     preferencias = _preferencias(monkeypatch)
-    for linha in (preferencias.conquistas_pulso_cor_row, preferencias.conquistas_pulso_estilo_row,
-                  preferencias.conquistas_pulso_testar_row):
-        assert linha.get_sensitive() is False
+    # O `bind` do schema é falso nos testes: os interruptores se ligam à mão.
+    preferencias.conquistas_iluminacao_switch.set_active(True)
+    assert not preferencias.session_fita_switch.get_active()
+    assert [linha.get_sensitive() for linha in _linhas_do_pulso(preferencias)] == [False] * 3
+
+    preferencias.session_fita_switch.set_active(True)
+    assert [linha.get_sensitive() for linha in _linhas_do_pulso(preferencias)] == [True] * 3
+
+    preferencias.session_fita_switch.set_active(False)
+    assert [linha.get_sensitive() for linha in _linhas_do_pulso(preferencias)] == [False] * 3
 
 
 def test_linhas_do_pulso_desativadas_sem_piscar(monkeypatch, schema):
@@ -866,6 +882,18 @@ def test_estilo_do_pulso_gravado_pela_lista(monkeypatch, schema):
     assert schema.get_string("conquistas-pulso-estilo") == "rapido"
 
 
+def test_estilo_e_cor_gravados_sao_lidos_ao_abrir(monkeypatch, schema):
+    _com_fita()
+    schema.set_string("conquistas-pulso-estilo", "longo")
+    session_fita.salvar_tom_do_pulso(200, 800)
+    preferencias = _preferencias(monkeypatch)
+    assert preferencias.conquistas_pulso_estilo_row.get_selected() == 3
+    assert preferencias.conquistas_pulso_cor_reset.get_visible() is True
+    # Ler o que está gravado não regrava nada nem acende as fitas.
+    assert schema.get_string("conquistas-pulso-estilo") == "longo"
+    assert session_fita.tom_do_pulso() == (200, 800)
+
+
 def test_cor_do_pulso_gravada_e_voltar_ao_padrao(monkeypatch, schema):
     _com_fita()
     preferencias = _preferencias(monkeypatch)
@@ -885,12 +913,39 @@ def test_fechar_o_balao_volta_a_cor_do_app(monkeypatch, schema):
     previas = []
     monkeypatch.setattr(session_fita, "previa", lambda cor, *_a: previas.append(cor))
     preferencias = _preferencias(monkeypatch)
+    preferencias._abrir_balao_do_pulso()  # o "show" do Popover real precisa de janela
     preferencias.conquistas_pulso_cor_seletor.set_property(
         "rgba", session_fita.cor_para_rgba(session_fita.Cor(200, 800, session_fita.BRILHO_CHEIO))
     )
     assert previas[-1] == session_fita.cor_do_pulso()
     preferencias.conquistas_pulso_cor_balao.emit("closed")
     assert previas[-1] == session_fita.cor_do_app()
+
+
+def test_abrir_o_balao_mostra_a_cor_do_pulso_nas_fitas(monkeypatch, schema):
+    _com_fita()
+    session_fita.salvar_tom_do_pulso(200, 800)
+    previas = []
+    monkeypatch.setattr(session_fita, "previa", lambda cor, *_a: previas.append(cor))
+    preferencias = _preferencias(monkeypatch)
+    assert previas == []  # abrir as Preferências não acende fita nenhuma
+
+    preferencias._abrir_balao_do_pulso()  # o "show" do Popover real precisa de janela
+    assert previas == [session_fita.cor_do_pulso()]
+
+
+def test_voltar_ao_padrao_com_o_balao_fechado_nao_deixa_previa(monkeypatch, schema):
+    """O botão fica fora do balão: sem balão aberto, não há prévia a mostrar."""
+    _com_fita()
+    session_fita.salvar_tom_do_pulso(200, 800)
+    previas = []
+    monkeypatch.setattr(session_fita, "previa", lambda cor, *_a: previas.append(cor))
+    preferencias = _preferencias(monkeypatch)
+
+    preferencias.conquistas_pulso_cor_reset.emit("clicked")
+
+    assert session_fita.tom_do_pulso() == session_fita.TOM_DO_OURO
+    assert previas == []
 
 
 def test_testar_o_pulso_chama_o_teste(monkeypatch, schema):
