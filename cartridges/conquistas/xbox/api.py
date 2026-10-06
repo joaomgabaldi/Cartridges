@@ -49,6 +49,9 @@ _PAGINAS = 10
 _SEM_XBOX_LIVE_VALE = 7 * 24 * 3600
 _TAMANHO_DO_CONFIG = 1024 * 1024
 _TEMPO = 15
+# Sem o tamanho, o serviço devolve a imagem inteira (1920x1080, alguns MB), acima
+# do limite de download de ícones em icones.py.
+_LADO_DO_ICONE = 128
 _TITULO_EM_HEX = re.compile(r"[0-9A-Fa-f]{1,8}")
 
 
@@ -280,6 +283,15 @@ def titulo(pfn: Optional[str], bases: list[Path]) -> Optional[str]:
 # --- conquistas -------------------------------------------------------------
 
 
+def _no_tamanho(url: str) -> str:
+    """A URL com ``w`` e ``h`` pedidos; o resto da consulta fica como veio."""
+    base, cerquilha, ancora = url.partition("#")
+    base, _, consulta = base.partition("?")
+    resto = [p for p in consulta.split("&") if p and p.partition("=")[0] not in ("w", "h")]
+    resto += [f"w={_LADO_DO_ICONE}", f"h={_LADO_DO_ICONE}"]
+    return f"{base}?{'&'.join(resto)}{cerquilha}{ancora}"
+
+
 def _icone(item: dict) -> str:
     assets = item.get("mediaAssets")
     for asset in assets if isinstance(assets, list) else []:
@@ -287,7 +299,7 @@ def _icone(item: dict) -> str:
             continue
         url = asset.get("url")
         if isinstance(url, str) and url.startswith("https://") and codifica(url):
-            return url
+            return _no_tamanho(url)
     return ""
 
 
