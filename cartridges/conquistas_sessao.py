@@ -40,6 +40,10 @@ class CartaoDaSessao(Gtk.Box):
             # Sem o destaque ao passar o mouse, como nas outras FlowBox: o
             # cartão é passivo e os ícones não parecem clicáveis.
             css_classes=["no-hover"],
+            # Sem foco na FlowBox nem na rolagem: o cartão é só para olhar. Com
+            # a FlowBox focável e os filhos não, o GTK dava o foco a ela sem
+            # movê-lo e o Tab travava na tela de sessão.
+            can_focus=False,
             homogeneous=True,
             halign=Gtk.Align.CENTER,
             max_children_per_line=1000,
@@ -53,6 +57,7 @@ class CartaoDaSessao(Gtk.Box):
             # (centralizada) ficaria com a largura do título.
             propagate_natural_width=True,
             max_content_height=ALTURA_MAXIMA,
+            can_focus=False,
             child=self.icones,
         )
         self.append(self.rolagem)
@@ -77,10 +82,7 @@ class CartaoDaSessao(Gtk.Box):
         # cresce para os lados até a janela e só então quebra a linha.
         self.icones.set_max_children_per_line(max(1, len(atual.todas)))
         for linha in atual.todas:
-            # O wrapper explícito (não focável) tira os ícones da ordem do Tab.
-            self.icones.append(
-                Gtk.FlowBoxChild(child=self._icone(linha, mostrar_ocultas), focusable=False)
-            )
+            self.icones.append(self._icone(linha, mostrar_ocultas))
 
     @staticmethod
     def _icone(linha: progresso.Linha, mostrar_ocultas: bool) -> Gtk.Widget:
