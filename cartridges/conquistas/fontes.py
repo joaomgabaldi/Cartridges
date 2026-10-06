@@ -16,7 +16,6 @@ cartão usa `gravada`.
 
 import json
 import logging
-import os
 import re
 import urllib.parse
 from dataclasses import dataclass
@@ -24,6 +23,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from cartridges.conquistas import arquivos, contas, historico
+from cartridges.conquistas.cache_de_leitura import CacheDeLeitura, assinatura
 from cartridges.conquistas.epic import api as epic_api, conta as epic_conta
 from cartridges.conquistas.ubisoft import loja as ubisoft_loja, pacote as ubisoft_pacote
 from cartridges.conquistas.xbox import api, conta
@@ -143,25 +143,44 @@ def url_da_ubisoft(game: Any) -> bool:
     return ubisoft_loja.de_url(getattr(game, "executable", "") or "") is not None
 
 
-def _manifests() -> list[dict]:
-    """Os manifests do Epic Games Launcher instalado (`<guid>.item`, JSON), já filtrados."""
-    pasta = arquivos.pastas_do_sistema().programdata / "Epic" / "EpicGamesLauncher" / "Data" / "Manifests"
-    try:
-        itens = sorted(item for item in pasta.iterdir() if item.suffix.casefold() == ".item")[:_MANIFESTS]
-    except OSError:
-        return []
+# A varredura pergunta pelos manifests uma vez por jogo; eles só mudam quando o
+# launcher instala, atualiza ou remove um jogo.
+_cache_dos_manifests = CacheDeLeitura()
+
+
+def _ler_manifests(itens: tuple[Path, ...]) -> tuple[dict, ...]:
     lidos = []
     for item in itens:
         try:
-            if item.stat().st_size > _TAMANHO_DO_MANIFEST:
-                continue
             dados = json.loads(item.read_text(encoding="utf-8-sig"))
         except (OSError, ValueError, RecursionError):
             continue
         namespace = dados.get("CatalogNamespace") if isinstance(dados, dict) else None
         if isinstance(namespace, str) and _NAMESPACE.fullmatch(namespace):
             lidos.append(dados)
-    return lidos
+    return tuple(lidos)
+
+
+def _manifests() -> tuple[dict, ...]:
+    """Os manifests do Epic Games Launcher instalado (`<guid>.item`, JSON), já filtrados.
+
+    Só são lidos de novo quando algum muda (`cache_de_leitura`): sem isso, cada
+    jogo da varredura relia e interpretava todos eles.
+    """
+    pasta = arquivos.pastas_do_sistema().programdata / "Epic" / "EpicGamesLauncher" / "Data" / "Manifests"
+    try:
+        itens = sorted(item for item in pasta.iterdir() if item.suffix.casefold() == ".item")[:_MANIFESTS]
+    except OSError:
+        return ()
+    validos = []
+    assinaturas = []
+    for item in itens:
+        marca = assinatura(item)
+        if marca is None or marca[2] > _TAMANHO_DO_MANIFEST:
+            continue
+        validos.append(item)
+        assinaturas.append(marca)
+    return _cache_dos_manifests.obter(tuple(assinaturas), lambda: _ler_manifests(tuple(validos)))
 
 
 def _dos_manifests(app: str) -> Optional[str]:
@@ -182,27 +201,16 @@ def _da_pasta(pastas: list[Path]) -> Optional[tuple[str, str]]:
     """
     if not pastas:
         return None
-    melhor: Optional[tuple[int, dict]] = None
-    for dados in _manifests():
-        local = dados.get("InstallLocation")
-        if not isinstance(local, str) or not local.strip() or not os.path.isabs(local):
-            continue
-        try:
-            raiz = Path(os.path.normcase(os.path.abspath(local)))
-        except (OSError, ValueError):
-            continue
-        if raiz.parent == raiz:
-            # Raiz do disco: pegaria todo jogo instalado nele.
-            continue
-        for base in pastas:
-            pasta = Path(os.path.normcase(os.path.abspath(base)))
-            # Pasta inteira: `FallGuys2` não está dentro de `FallGuys`.
-            if (pasta == raiz or raiz in pasta.parents) and (melhor is None or len(raiz.parts) > melhor[0]):
-                melhor = (len(raiz.parts), dados)
-    if melhor is None:
+    raizes = (
+        (raiz, dados)
+        for dados in _manifests()
+        if (raiz := arquivos.raiz_de_instalacao(dados.get("InstallLocation"))) is not None
+    )
+    dados = arquivos.da_instalacao_mais_funda(pastas, raizes)
+    if dados is None:
         return None
-    app = melhor[1].get("AppName")
-    return melhor[1]["CatalogNamespace"], app if isinstance(app, str) else ""
+    app = dados.get("AppName")
+    return dados["CatalogNamespace"], app if isinstance(app, str) else ""
 
 
 def da_epic(game: Any) -> Optional[tuple[str, str]]:

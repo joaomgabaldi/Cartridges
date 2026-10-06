@@ -26,7 +26,6 @@ import math
 import re
 import threading
 import time
-import uuid
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -37,6 +36,7 @@ from requests.exceptions import RequestException
 from cartridges import shared
 from cartridges.conquistas import arquivos, keyvalues, schema_da_steam
 from cartridges.utils.download import get_capped
+from cartridges.utils.gravar_atomico import gravar_atomico
 from cartridges.utils.ler_json import ler_json
 from cartridges.utils.rate_limiter import RateLimiter
 
@@ -349,31 +349,20 @@ def em_cache(appid: str) -> Optional[Catalogo]:
 
 def guardar(appid: str, cat: Catalogo) -> None:
     """Grava o catálogo no cache. A chave é o appID da Steam ou `xbox-<titleId>`."""
-    destino = _arquivo_do_cache(appid)
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    # Um nome por gravação: a varredura e a varredura de um jogo só podem
-    # gravar o mesmo appID ao mesmo tempo.
-    temporario = destino.with_name(f"{destino.name}.{uuid.uuid4().hex}.tmp")
-    try:
-        temporario.write_text(
-            json.dumps(
-                {
-                    "obtido_em": cat.obtido_em,
-                    "com_chave": cat.com_chave,
-                    "impressao_da_chave": cat.impressao_da_chave,
-                    "sem_raridade": cat.sem_raridade,
-                    "conquistas": [asdict(info) for info in cat.conquistas],
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-        temporario.replace(destino)
-    finally:
-        try:
-            temporario.unlink(missing_ok=True)
-        except OSError:
-            pass
+    # A varredura e a varredura de um jogo podem gravar o mesmo appID ao mesmo tempo.
+    gravar_atomico(
+        _arquivo_do_cache(appid),
+        json.dumps(
+            {
+                "obtido_em": cat.obtido_em,
+                "com_chave": cat.com_chave,
+                "impressao_da_chave": cat.impressao_da_chave,
+                "sem_raridade": cat.sem_raridade,
+                "conquistas": [asdict(info) for info in cat.conquistas],
+            },
+            ensure_ascii=False,
+        ),
+    )
 
 
 def _impressao(chave: str) -> str:

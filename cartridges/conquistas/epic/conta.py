@@ -24,7 +24,6 @@ import re
 import threading
 import time
 import urllib.parse
-import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -33,6 +32,7 @@ from gi.repository import Adw, GLib
 
 from cartridges import shared
 from cartridges.utils import download, dpapi
+from cartridges.utils.gravar_atomico import gravar_atomico
 
 # O client do Epic Games Launcher (segredo público; legendary `egs.py`).
 CLIENT_ID = "34a02cf8f4414e29b15921876da36f9a"
@@ -157,29 +157,18 @@ def _salvar(sessao: _Sessao) -> None:
     if protegido is None:
         logging.warning("Conta Epic: não foi possível cifrar a chave de renovação")
         return
-    destino = _arquivo()
-    temporario = destino.with_name(f"{destino.name}.{uuid.uuid4().hex}.tmp")
+    conteudo = json.dumps(
+        {
+            "nome": sessao.nome,
+            "conta": sessao.conta,
+            "renovacao": base64.b64encode(protegido).decode("ascii"),
+        },
+        ensure_ascii=False,
+    )
     try:
-        destino.parent.mkdir(parents=True, exist_ok=True)
-        temporario.write_text(
-            json.dumps(
-                {
-                    "nome": sessao.nome,
-                    "conta": sessao.conta,
-                    "renovacao": base64.b64encode(protegido).decode("ascii"),
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-        temporario.replace(destino)
+        gravar_atomico(_arquivo(), conteudo)
     except OSError as erro:
         logging.warning("Conta Epic não gravada: %s", type(erro).__name__)
-    finally:
-        try:
-            temporario.unlink(missing_ok=True)
-        except OSError:
-            pass
 
 
 def carregar() -> None:

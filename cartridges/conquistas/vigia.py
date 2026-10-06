@@ -71,6 +71,36 @@ def acompanha(game: Any) -> bool:
     )
 
 
+def completou(antes: Optional[progresso.Progresso], depois: Optional[progresso.Progresso]) -> bool:
+    """Se o jogo acabou de chegar a 100%."""
+    return bool(depois is not None and depois.completo and not (antes is not None and antes.completo))
+
+
+def para_avisar(
+    entraram: list[str], lidos: list[formatos.Desbloqueio], limite: Optional[float]
+) -> list[str]:
+    """As que entraram, da mais antiga para a mais nova, sem as de antes de ``limite``.
+
+    Conquista com hora anterior ao limite veio de outro aparelho (ou a Steam acabou
+    de sincronizá-la): entra no histórico, mas não é aviso. Sem hora, avisa.
+    """
+    horas = {d.nome.strip().upper(): d.quando for d in lidos}
+    return [
+        nome
+        for nome in sorted(entraram, key=lambda nome: horas.get(nome, 0))
+        if limite is None or not 0 < horas.get(nome, 0) < limite
+    ]
+
+
+def desbloqueadas(
+    avisaveis: list[str], por_nome: dict[str, ConquistaInfo], fechou_100: bool
+) -> list[Desbloqueada]:
+    """O aviso pronto. O 100% é da última conquista do catálogo, nunca de um nome
+    que ele não conhece."""
+    ultima = next((nome for nome in reversed(avisaveis) if nome in por_nome), None)
+    return [Desbloqueada(nome, por_nome.get(nome), fechou_100 and nome == ultima) for nome in avisaveis]
+
+
 def _mtime(caminho: Any) -> Optional[int]:
     try:
         return os.stat(caminho).st_mtime_ns
@@ -176,11 +206,7 @@ class Vigia:
         return historico.registrar(self.game.game_id, lidos, fonte=fonte)
 
     def _gravados(self, lidos: list[formatos.Desbloqueio]) -> bool:
-        """Se tudo o que foi lido já está no histórico (ele só soma)."""
-        guardado = historico.ler(self.game.game_id)
-        if guardado is None:
-            return not lidos
-        return all(d.nome.strip().upper() in guardado for d in lidos)
+        return historico.contem(self.game.game_id, lidos)
 
     def _base(self) -> None:
         """O que já está nos arquivos entra no histórico em silêncio.
@@ -290,31 +316,12 @@ class Vigia:
                 self._mtimes[chave] = atual
         if primeira or not entraram:
             return
-        cat = catalogo.em_cache(self._chave_do_catalogo())
-        por_nome = cat.por_nome() if cat is not None else {}
-        depois = progresso.do_jogo(self.game)
-        completou = bool(
-            depois is not None
-            and depois.completo
-            and not (antes is not None and antes.completo)
-        )
-        horas = {d.nome.strip().upper(): d.quando for d in lidos}
-        ordem = sorted(entraram, key=lambda nome: horas.get(nome, 0))
-        limite = self._limite()
-        # Conquista antiga que a Steam acabou de sincronizar entra no histórico, mas não é aviso.
-        avisaveis = [
-            nome for nome in ordem if limite is None or not 0 < horas.get(nome, 0) < limite
-        ]
+        avisaveis = para_avisar(entraram, lidos, self._limite())
         if not avisaveis:
             return
-        # O 100% é da última conquista do catálogo, nunca de um nome que ele não conhece.
-        ultima = next((nome for nome in reversed(avisaveis) if nome in por_nome), None)
-        self._avisar(
-            [
-                Desbloqueada(nome, por_nome.get(nome), completou and nome == ultima)
-                for nome in avisaveis
-            ]
-        )
+        cat = catalogo.em_cache(self._chave_do_catalogo())
+        por_nome = cat.por_nome() if cat is not None else {}
+        self._avisar(desbloqueadas(avisaveis, por_nome, completou(antes, progresso.do_jogo(self.game))))
 
     def _chave_do_catalogo(self) -> str:
         """A chave do catálogo da fonte gravada, a mesma que `progresso.do_jogo` usa.

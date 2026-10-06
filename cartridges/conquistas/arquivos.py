@@ -12,13 +12,17 @@ import os
 import winreg
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional, TypeVar
 
 from gi.repository import GLib
 
 from cartridges.conquistas import formatos, keyvalues
+from cartridges.conquistas.cache_de_leitura import CacheDeLeitura, assinatura
 from cartridges.importer.shortcuts_source import steam_appid_from_url
 from cartridges.utils.game_folder import game_folder
+
+
+T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -67,12 +71,17 @@ _CHAVES_DA_STEAM = (
 )
 
 
-def _valor_do_registro(raiz: int, caminho: str, nome: str) -> Optional[str]:
+def _do_registro(raiz: int, caminho: str, nome: str) -> object:
+    """O valor cru do registro, ou None se a chave ou o valor não existem. Nunca levanta."""
     try:
         with winreg.OpenKey(raiz, caminho) as chave:
-            valor = winreg.QueryValueEx(chave, nome)[0]
+            return winreg.QueryValueEx(chave, nome)[0]
     except OSError:
         return None
+
+
+def _valor_do_registro(raiz: int, caminho: str, nome: str) -> Optional[str]:
+    valor = _do_registro(raiz, caminho, nome)
     return valor if isinstance(valor, str) and valor.strip() else None
 
 
@@ -87,11 +96,7 @@ _STEAMID64_BASE = 76561197960265728
 
 def _inteiro_do_registro(raiz: int, caminho: str, nome: str) -> Optional[int]:
     """Um valor DWORD do registro. Nunca levanta; o que não é inteiro vale None."""
-    try:
-        with winreg.OpenKey(raiz, caminho) as chave:
-            valor = winreg.QueryValueEx(chave, nome)[0]
-    except OSError:
-        return None
+    valor = _do_registro(raiz, caminho, nome)
     return valor if isinstance(valor, int) and not isinstance(valor, bool) else None
 
 
@@ -123,6 +128,45 @@ def _subpastas(pasta: Path) -> list[Path]:
         return []
 
 
+def raiz_de_instalacao(texto: object) -> Optional[Path]:
+    """A pasta de instalação que um launcher guarda, normalizada para comparar.
+
+    Só pasta absoluta e que não é a raiz do disco (que pegaria todo jogo instalado
+    nele). Só olha o texto, nunca o disco.
+    """
+    if not isinstance(texto, str) or not texto.strip() or not os.path.isabs(texto):
+        return None
+    try:
+        pasta = Path(os.path.normcase(os.path.abspath(texto)))
+    except (OSError, ValueError):
+        return None
+    return None if pasta.parent == pasta else pasta
+
+
+def da_instalacao_mais_funda(pastas: list[Path], raizes: Iterable[tuple[Path, T]]) -> Optional[T]:
+    """O valor da pasta de instalação mais funda que contém uma das ``pastas`` do jogo.
+
+    ``raizes`` vem de `raiz_de_instalacao`. Pasta inteira: `FallGuys2` não está
+    dentro de `FallGuys`. No empate vale a primeira.
+    """
+    normalizadas = []
+    for base in pastas:
+        try:
+            normalizadas.append(Path(os.path.normcase(os.path.abspath(base))))
+        except (OSError, ValueError):
+            continue
+    if not normalizadas:
+        return None
+    melhor: Optional[tuple[int, T]] = None
+    for raiz, valor in raizes:
+        profundidade = len(raiz.parts)
+        if (melhor is None or profundidade > melhor[0]) and any(
+            pasta == raiz or raiz in pasta.parents for pasta in normalizadas
+        ):
+            melhor = (profundidade, valor)
+    return melhor[1] if melhor is not None else None
+
+
 def bases_do_jogo(executavel: str) -> list[Path]:
     """A pasta do executável e as pastas-pai que ainda são do jogo."""
     pasta = game_folder(executavel or "")
@@ -138,42 +182,47 @@ def bases_do_jogo(executavel: str) -> list[Path]:
     return bases
 
 
-def _fixos(p: Pastas, appid: str) -> list[ArquivoDeConquista]:
-    def a(caminho: Path, formato: str) -> ArquivoDeConquista:
-        return ArquivoDeConquista(caminho, formato)
+# Os caminhos fixos de cada emulador, na ordem de preferência (entre dois caminhos
+# iguais, vale o primeiro): a pasta do sistema (atributo de `Pastas`), o caminho a
+# partir dela com ``{appid}`` no lugar do appID, e o formato do arquivo.
+_FIXOS: tuple[tuple[str, str, str], ...] = (
+    ("appdata", "Goldberg SteamEmu Saves/{appid}/achievements.json", formatos.GOLDBERG),
+    ("appdata", "GSE Saves/{appid}/achievements.json", formatos.GOLDBERG),
+    ("documentos_publicos", "Steam/CODEX/{appid}/achievements.ini", formatos.PADRAO),
+    ("appdata", "Steam/CODEX/{appid}/achievements.ini", formatos.PADRAO),
+    ("documentos_publicos", "Steam/RUNE/{appid}/achievements.ini", formatos.PADRAO),
+    ("documentos_publicos", "OnlineFix/{appid}/Stats/Achievements.ini", formatos.ONLINEFIX),
+    ("documentos_publicos", "OnlineFix/{appid}/Achievements.ini", formatos.ONLINEFIX),
+    ("appdata", "EMPRESS/remote/{appid}/achievements.json", formatos.GOLDBERG),
+    ("documentos_publicos", "EMPRESS/{appid}/remote/{appid}/achievements.json", formatos.GOLDBERG),
+    ("programdata", "RLD!/{appid}/achievements.ini", formatos.RLD),
+    ("programdata", "Steam/Player/{appid}/stats/achievements.ini", formatos.RLD),
+    ("programdata", "Steam/RLD!/{appid}/stats/achievements.ini", formatos.RLD),
+    ("programdata", "Steam/dodi/{appid}/stats/achievements.ini", formatos.RLD),
+    ("documentos", "SKIDROW/{appid}/SteamEmu/UserStats/achiev.ini", formatos.SKIDROW),
+    ("documentos", "Player/{appid}/SteamEmu/UserStats/achiev.ini", formatos.SKIDROW),
+    ("localappdata", "SKIDROW/{appid}/SteamEmu/UserStats/achiev.ini", formatos.SKIDROW),
+    ("appdata", "CreamAPI/{appid}/stats/CreamAPI.Achievements.cfg", formatos.CREAMAPI),
+    ("appdata", ".1911/{appid}/achievement", formatos.RAZOR1911),
+)
+# Goldberg e GSE guardam também um nível abaixo do appID (`scan-nested-achievement-files.ts`).
+_RAIZES_ANINHADAS = ("Goldberg SteamEmu Saves", "GSE Saves")
 
+
+def _fixos(p: Pastas, appid: str) -> list[ArquivoDeConquista]:
     return [
-        a(p.appdata / "Goldberg SteamEmu Saves" / appid / "achievements.json", formatos.GOLDBERG),
-        a(p.appdata / "GSE Saves" / appid / "achievements.json", formatos.GOLDBERG),
-        a(p.documentos_publicos / "Steam" / "CODEX" / appid / "achievements.ini", formatos.PADRAO),
-        a(p.appdata / "Steam" / "CODEX" / appid / "achievements.ini", formatos.PADRAO),
-        a(p.documentos_publicos / "Steam" / "RUNE" / appid / "achievements.ini", formatos.PADRAO),
-        a(p.documentos_publicos / "OnlineFix" / appid / "Stats" / "Achievements.ini", formatos.ONLINEFIX),
-        a(p.documentos_publicos / "OnlineFix" / appid / "Achievements.ini", formatos.ONLINEFIX),
-        a(p.appdata / "EMPRESS" / "remote" / appid / "achievements.json", formatos.GOLDBERG),
-        a(
-            p.documentos_publicos / "EMPRESS" / appid / "remote" / appid / "achievements.json",
-            formatos.GOLDBERG,
-        ),
-        a(p.programdata / "RLD!" / appid / "achievements.ini", formatos.RLD),
-        a(p.programdata / "Steam" / "Player" / appid / "stats" / "achievements.ini", formatos.RLD),
-        a(p.programdata / "Steam" / "RLD!" / appid / "stats" / "achievements.ini", formatos.RLD),
-        a(p.programdata / "Steam" / "dodi" / appid / "stats" / "achievements.ini", formatos.RLD),
-        a(p.documentos / "SKIDROW" / appid / "SteamEmu" / "UserStats" / "achiev.ini", formatos.SKIDROW),
-        a(p.documentos / "Player" / appid / "SteamEmu" / "UserStats" / "achiev.ini", formatos.SKIDROW),
-        a(p.localappdata / "SKIDROW" / appid / "SteamEmu" / "UserStats" / "achiev.ini", formatos.SKIDROW),
-        a(p.appdata / "CreamAPI" / appid / "stats" / "CreamAPI.Achievements.cfg", formatos.CREAMAPI),
-        a(p.appdata / ".1911" / appid / "achievement", formatos.RAZOR1911),
+        ArquivoDeConquista(getattr(p, pasta).joinpath(*modelo.format(appid=appid).split("/")), formato)
+        for pasta, modelo, formato in _FIXOS
     ]
 
 
 def _aninhados(p: Pastas, appid: str) -> list[ArquivoDeConquista]:
-    """Goldberg e GSE com um nível a mais (`scan-nested-achievement-files.ts`)."""
-    achados = []
-    for raiz in (p.appdata / "Goldberg SteamEmu Saves" / appid, p.appdata / "GSE Saves" / appid):
-        for sub in _subpastas(raiz):
-            achados.append(ArquivoDeConquista(sub / "achievements.json", formatos.GOLDBERG))
-    return achados
+    """Goldberg e GSE com um nível a mais."""
+    return [
+        ArquivoDeConquista(sub / "achievements.json", formatos.GOLDBERG)
+        for raiz in _RAIZES_ANINHADAS
+        for sub in _subpastas(p.appdata / raiz / appid)
+    ]
 
 
 def _na_pasta_do_jogo(bases: list[Path], appid: str) -> list[ArquivoDeConquista]:
@@ -202,10 +251,16 @@ def _conta_conectada() -> Optional[str]:
     return str(ativa) if ativa is not None and ativa > 0 else None
 
 
+_cache_do_loginusers = CacheDeLeitura()
+
+
 def _conta_mais_recente(steam: Path) -> Optional[str]:
     """A última conta que entrou na Steam, pelo `config\\loginusers.vdf`: a marcada
     com ``MostRecent`` ou, sem marca, a de maior ``Timestamp``. Ilegível: None."""
-    dados = keyvalues.ler_texto(steam / "config" / "loginusers.vdf")
+    arquivo = steam / "config" / "loginusers.vdf"
+    marca = assinatura(arquivo)
+    # Lido uma vez por mudança, não uma vez por jogo da Steam na varredura.
+    dados = _cache_do_loginusers.obter(marca, lambda: keyvalues.ler_texto(arquivo)) if marca else None
     usuarios = dados.get("users") if dados else None
     if not isinstance(usuarios, dict):
         return None

@@ -724,3 +724,36 @@ def test_jogo_da_epic_nao_e_do_vigia_de_arquivos(make_game):
 def test_vigia_de_arquivos_nao_acompanha_uplay(make_game):
     """Jogo da Ubisoft com appID da Steam: é do vigia da Ubisoft, nunca do de arquivos."""
     assert not vigia.acompanha(make_game(executable='start "" "uplay://launch/65043/0"', steam_appid="242050"))
+
+
+# -- as regras do aviso, compartilhadas com o vigia da conta -------------------------
+
+
+def test_para_avisar_ordena_pela_hora_e_tira_as_antigas():
+    lidos = [Desbloqueio("c", 300), Desbloqueio("a", 100), Desbloqueio("b", 0)]
+    assert vigia.para_avisar(["A", "B", "C"], lidos, None) == ["B", "A", "C"]
+    # Antes do limite veio de outro aparelho; sem hora (0), avisa.
+    assert vigia.para_avisar(["A", "B", "C"], lidos, 200) == ["B", "C"]
+
+
+def test_desbloqueadas_poe_o_100_na_ultima_do_catalogo():
+    por_nome = CAT.por_nome()
+    avisos = vigia.desbloqueadas(["ACH_A", "ACH_B", "ESTRANHA"], por_nome, True)
+    assert [(a.nome, a.completou) for a in avisos] == [
+        ("ACH_A", False),
+        ("ACH_B", True),
+        ("ESTRANHA", False),
+    ]
+    assert avisos[2].info is None
+    assert not any(a.completou for a in vigia.desbloqueadas(["ACH_A"], por_nome, False))
+
+
+def test_completou_so_na_virada_para_100():
+    from cartridges.conquistas import progresso  # noqa: PLC0415
+
+    metade = progresso.montar(CAT, {"ACH_A": 1})
+    tudo = progresso.montar(CAT, {"ACH_A": 1, "ACH_B": 2})
+    assert vigia.completou(metade, tudo)
+    assert vigia.completou(None, tudo)
+    assert not vigia.completou(tudo, tudo)
+    assert not vigia.completou(None, metade)

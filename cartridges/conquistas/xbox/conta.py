@@ -20,7 +20,6 @@ import logging
 import math
 import threading
 import time
-import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -29,6 +28,7 @@ from gi.repository import Adw, GLib
 
 from cartridges import shared
 from cartridges.utils import download, dpapi
+from cartridges.utils.gravar_atomico import gravar_atomico
 
 CLIENT_ID = "6a0af9cc-6dce-49d8-a53d-bcc9130275f0"
 AUTORIZAR = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize"
@@ -185,29 +185,18 @@ def _salvar(sessao: _Sessao) -> None:
     if protegido is None:
         logging.warning("Conta Microsoft: não foi possível cifrar a chave de renovação")
         return
-    destino = _arquivo()
-    temporario = destino.with_name(f"{destino.name}.{uuid.uuid4().hex}.tmp")
+    conteudo = json.dumps(
+        {
+            "gamertag": sessao.gamertag,
+            "xuid": sessao.xuid,
+            "renovacao": base64.b64encode(protegido).decode("ascii"),
+        },
+        ensure_ascii=False,
+    )
     try:
-        destino.parent.mkdir(parents=True, exist_ok=True)
-        temporario.write_text(
-            json.dumps(
-                {
-                    "gamertag": sessao.gamertag,
-                    "xuid": sessao.xuid,
-                    "renovacao": base64.b64encode(protegido).decode("ascii"),
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-        temporario.replace(destino)
+        gravar_atomico(_arquivo(), conteudo)
     except OSError as erro:
         logging.warning("Conta Microsoft não gravada: %s", type(erro).__name__)
-    finally:
-        try:
-            temporario.unlink(missing_ok=True)
-        except OSError:
-            pass
 
 
 def carregar() -> None:

@@ -10,7 +10,6 @@ O `.spool` e o ZIP só existem depois que o jogo é aberto pelo Ubisoft Connect 
 Tudo aqui olha o disco ou o registro: só em thread (o vigia só lista o `.spool` de um jogo).
 """
 
-import os
 import re
 import winreg
 from pathlib import Path
@@ -120,13 +119,9 @@ def instalacoes() -> dict[str, Path]:
     do disco (que pegaria todo jogo instalado nele); caminho de rede nunca é tocado."""
     validas: dict[str, Path] = {}
     for produto, texto in _do_registro().items():
-        if arquivos.eh_caminho_de_rede(texto) or not os.path.isabs(texto):
+        if arquivos.eh_caminho_de_rede(texto):
             continue
-        try:
-            pasta = Path(os.path.normcase(os.path.abspath(texto)))
-        except (OSError, ValueError):
-            continue
-        if pasta.parent == pasta:
-            continue
-        validas[produto] = pasta
+        pasta = arquivos.raiz_de_instalacao(texto)
+        if pasta is not None:
+            validas[produto] = pasta
     return validas

@@ -15,14 +15,12 @@ uma leitura vazia nunca apaga o que já foi guardado.
 import json
 import logging
 import re
-import stat
-import threading
-from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 from cartridges.conquistas import keyvalues, schema_da_steam
+from cartridges.conquistas.cache_de_leitura import CacheDeLeitura, assinatura
 
 
 @dataclass(frozen=True)
@@ -222,41 +220,33 @@ def _steam(caminho: Path) -> list[Desbloqueio]:
 # estado muda a cada conquista: o schema já interpretado fica guardado por
 # (caminho, mtime, tamanho). A varredura de abertura lê em outra thread.
 _SCHEMAS_GUARDADOS = 8
-_schemas: "OrderedDict[tuple[str, int, int], tuple]" = OrderedDict()
-_trava_dos_schemas = threading.Lock()
+_schemas = CacheDeLeitura(_SCHEMAS_GUARDADOS)
 
 
-def _tem_bit_ligado(bloco: Any) -> bool:
+def _bits(bloco: Any) -> Optional[int]:
+    """Os 32 bits de conquista de um bloco do estado, ou None se o bloco não os tem."""
     if not isinstance(bloco, dict):
-        return False
+        return None
     bits = bloco.get("data")
-    return not isinstance(bits, bool) and isinstance(bits, int) and bool(bits & 0xFFFFFFFF)
+    if isinstance(bits, bool) or not isinstance(bits, int):
+        return None
+    return bits & 0xFFFFFFFF
+
+
+def _ler_conquistas_do_schema(arquivo: Path, appid: str) -> tuple:
+    schema = keyvalues.ler(arquivo)
+    if schema is None:
+        raise ValueError("schema da Steam ilegível")
+    return tuple(schema_da_steam.conquistas(schema, appid))
 
 
 def _conquistas_do_schema(arquivo: Path, appid: str) -> tuple:
     """As conquistas do schema da Steam; ``()`` se ele não existe, e levanta
     ValueError se não pôde ser lido (esse caso nunca fica guardado)."""
-    try:
-        info = arquivo.stat()
-    except OSError:
+    chave = assinatura(arquivo)
+    if chave is None:
         return ()
-    if not stat.S_ISREG(info.st_mode):
-        return ()
-    chave = (str(arquivo), info.st_mtime_ns, info.st_size)
-    with _trava_dos_schemas:
-        if chave in _schemas:
-            _schemas.move_to_end(chave)
-            return _schemas[chave]
-    schema = keyvalues.ler(arquivo)
-    if schema is None:
-        raise ValueError("schema da Steam ilegível")
-    achadas = tuple(schema_da_steam.conquistas(schema, appid))
-    with _trava_dos_schemas:
-        _schemas[chave] = achadas
-        _schemas.move_to_end(chave)
-        while len(_schemas) > _SCHEMAS_GUARDADOS:
-            _schemas.popitem(last=False)
-    return achadas
+    return _schemas.obter(chave, lambda: _ler_conquistas_do_schema(arquivo, appid))
 
 
 def _steam_stats(caminho: Path) -> list[Desbloqueio]:
@@ -273,19 +263,15 @@ def _steam_stats(caminho: Path) -> list[Desbloqueio]:
         raise ValueError("estado da Steam ilegível")
     cache = estado.get("cache")
     # Estado sem nenhum bit ligado (o jogo ainda sem conquistas): nem olha o schema.
-    if not isinstance(cache, dict) or not any(_tem_bit_ligado(bloco) for bloco in cache.values()):
+    if not isinstance(cache, dict) or not any(_bits(bloco) for bloco in cache.values()):
         return []
     appid = achado.group(2)
     arquivo_do_schema = caminho.with_name(f"UserGameStatsSchema_{appid}.bin")
     achados = []
     for conquista in _conquistas_do_schema(arquivo_do_schema, appid):
         bloco = cache.get(conquista.bloco)
-        if not isinstance(bloco, dict):
-            continue
-        bits = bloco.get("data")
-        if isinstance(bits, bool) or not isinstance(bits, int):
-            continue
-        if not ((bits & 0xFFFFFFFF) >> conquista.bit) & 1:
+        bits = _bits(bloco)
+        if bits is None or not (bits >> conquista.bit) & 1:
             continue
         horas = bloco.get("AchievementTimes")
         quando = horas.get(str(conquista.bit), 0) if isinstance(horas, dict) else 0

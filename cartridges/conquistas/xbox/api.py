@@ -21,7 +21,6 @@ import logging
 import re
 import threading
 import time
-import uuid
 from pathlib import Path
 from typing import Any, Optional
 from xml.etree import ElementTree
@@ -37,6 +36,7 @@ from cartridges.conquistas.saneamento import codifica, limpo, numero_finito, seg
 from cartridges.conquistas.xbox import conta
 from cartridges.utils import download
 from cartridges.utils.ler_json import ler_json
+from cartridges.utils.gravar_atomico import gravar_atomico
 from cartridges.utils.rate_limiter import RateLimiter
 
 # Aprovado pela prova: as mesmas chaves do contrato 2, mais a raridade.
@@ -198,19 +198,10 @@ def _guardar_titulo(pfn: str, titulo: Optional[str]) -> None:
     with _trava_dos_titulos:
         dados = {chave: valor for chave, valor in _ler_titulos().items() if isinstance(valor, dict)}
         dados[pfn] = {"titulo": titulo, "em": int(time.time())}
-        destino = _arquivo_dos_titulos()
-        temporario = destino.with_name(f"{destino.name}.{uuid.uuid4().hex}.tmp")
         try:
-            destino.parent.mkdir(parents=True, exist_ok=True)
-            temporario.write_text(json.dumps(dados, ensure_ascii=False), encoding="utf-8")
-            temporario.replace(destino)
+            gravar_atomico(_arquivo_dos_titulos(), json.dumps(dados, ensure_ascii=False))
         except (OSError, ValueError) as erro:
             logging.warning("Cache de títulos do Xbox não gravado: %s", type(erro).__name__)
-        finally:
-            try:
-                temporario.unlink(missing_ok=True)
-            except OSError:
-                pass
 
 
 def titulo_local(pfn: Optional[str], bases: list[Path]) -> Optional[str]:

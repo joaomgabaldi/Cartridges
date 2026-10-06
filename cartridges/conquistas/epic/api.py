@@ -21,7 +21,6 @@ import logging
 import re
 import threading
 import time
-import uuid
 from pathlib import Path
 from typing import Any, Optional
 
@@ -36,6 +35,7 @@ from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.conquistas.saneamento import codifica, limpo, numero_finito, segundos_iso
 from cartridges.utils import download
 from cartridges.utils.ler_json import ler_json
+from cartridges.utils.gravar_atomico import gravar_atomico
 from cartridges.utils.rate_limiter import RateLimiter
 
 PREFIXO = "EPIC:"
@@ -320,18 +320,10 @@ def _ler_dicionario(arquivo: Path) -> dict:
 
 
 def _gravar(arquivo: Path, dados: dict) -> None:
-    temporario = arquivo.with_name(f"{arquivo.name}.{uuid.uuid4().hex}.tmp")
     try:
-        arquivo.parent.mkdir(parents=True, exist_ok=True)
-        temporario.write_text(json.dumps(dados, ensure_ascii=False), encoding="utf-8")
-        temporario.replace(arquivo)
+        gravar_atomico(arquivo, json.dumps(dados, ensure_ascii=False))
     except (OSError, ValueError) as erro:
         logging.warning("Cache da Epic não gravado: %s", type(erro).__name__)
-    finally:
-        try:
-            temporario.unlink(missing_ok=True)
-        except OSError:
-            pass
 
 
 def _produto_guardado(ns: str) -> Optional[str]:
