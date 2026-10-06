@@ -116,8 +116,8 @@ def request_capped(
     method: str, url: str, max_bytes: int = MAX_RESPONSE_BYTES, **kwargs: Any
 ) -> requests.Response:
     """Like :func:`get_capped` for any method (POST, DELETE...), on a fresh
-    connection: sign-in and token calls carry credentials and must not share a
-    session with the covers' keep-alive pool."""
+    connection: these calls carry credentials and must not share a session
+    (connections, cookies) with the covers' keep-alive pool."""
     return _with_body(requests.request(method, url, stream=True, **kwargs), max_bytes)
 
 

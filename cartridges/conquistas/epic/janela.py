@@ -135,7 +135,8 @@ class JanelaDeLogin(Adw.Dialog):
             self._receber(_FALHOU)
 
     def _receber(self, resultado: Optional[str]) -> None:
-        # None: o trabalho levantou (o `_em_thread` entrega None); cai na falha genérica.
+        # None só chega se o trabalho levantar fora de `Exception` (o `_em_thread`
+        # entrega None); defensivo: cai na falha genérica.
         if resultado == _OK:
             # A conta já conectou, com a janela aberta ou não (Cancelar, Esc, Preferências
             # fechadas durante a troca): a leitura dos jogos da Epic tem de acontecer.
