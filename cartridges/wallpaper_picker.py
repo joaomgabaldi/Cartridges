@@ -46,6 +46,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 from PIL import Image, UnidentifiedImageError
 
 from cartridges import shared
+from cartridges.utils.busca_do_seletor import BuscaDoSeletor
 from cartridges.utils.download import download_bytes
 from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.name_cleaner import clean_game_name
@@ -105,7 +106,7 @@ class _Corte(NamedTuple):
 
 
 @Gtk.Template(resource_path=shared.PREFIX + "/gtk/wallpaper-picker.ui")
-class WallpaperPicker(Adw.Dialog):
+class WallpaperPicker(BuscaDoSeletor, Adw.Dialog):
     __gtype_name__ = "WallpaperPicker"
 
     header_bar: Adw.HeaderBar = Gtk.Template.Child()
@@ -207,20 +208,6 @@ class WallpaperPicker(Adw.Dialog):
             ).start()
 
     # region Search
-
-    def _on_search_changed(self, *_args: Any) -> None:
-        if self._debounce_id:
-            GLib.source_remove(self._debounce_id)
-        self._debounce_id = GLib.timeout_add(500, self._debounce_fire)
-
-    def _debounce_fire(self) -> bool:
-        self._debounce_id = 0
-        # O set_text do __init__ emite um search-changed atrasado; sem este
-        # guard, abrir a janela buscava duas vezes a mesma coisa.
-        if self.search_entry.get_text().strip() == self._last_query:
-            return False
-        self.search()
-        return False
 
     def search(self) -> None:
         self._generation += 1
@@ -353,18 +340,6 @@ class WallpaperPicker(Adw.Dialog):
         self._results.clear()
         self._added = 0
         self.flowbox.remove_all()
-
-    def _show_empty(
-        self, titulo: str, descricao: str = "", generation: Optional[int] = None
-    ) -> bool:
-        if generation is not None and generation != self._generation:
-            return False
-        # Título e descrição juntos: com o título fixo, uma busca que falhou
-        # dizia "Nenhum … encontrado".
-        self.status_page.set_title(titulo)
-        self.status_page.set_description(descricao)
-        self.stack.set_visible_child_name("empty")
-        return False
 
     def _show_results(self) -> None:
         # A imagem aberta some junto com a tela de ajuste: são dezenas de MB

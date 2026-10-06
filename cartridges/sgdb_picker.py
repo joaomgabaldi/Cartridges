@@ -38,6 +38,7 @@ from gi.repository import Adw, GLib, Gtk
 
 from cartridges import shared
 from cartridges.game_cover import GameCover
+from cartridges.utils.busca_do_seletor import BuscaDoSeletor
 from cartridges.utils.download import download_bytes
 from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.name_cleaner import clean_game_name
@@ -54,7 +55,7 @@ PORTRAIT_DIMENSIONS = "600x900,342x482,660x930"
 
 
 @Gtk.Template(resource_path=shared.PREFIX + "/gtk/sgdb-picker.ui")
-class SgdbPicker(Adw.Dialog):
+class SgdbPicker(BuscaDoSeletor, Adw.Dialog):
     __gtype_name__ = "SgdbPicker"
 
     animated_button: Gtk.ToggleButton = Gtk.Template.Child()
@@ -99,18 +100,6 @@ class SgdbPicker(Adw.Dialog):
         self.search()
 
     # region Search
-
-    def _on_search_changed(self, *_args: Any) -> None:
-        if self._debounce_id:
-            GLib.source_remove(self._debounce_id)
-        self._debounce_id = GLib.timeout_add(500, self._debounce_fire)
-
-    def _debounce_fire(self) -> bool:
-        self._debounce_id = 0
-        if self.search_entry.get_text().strip() == self._last_query:
-            return False
-        self.search()
-        return False
 
     def search(self) -> None:
         self._generation += 1
@@ -260,18 +249,6 @@ class SgdbPicker(Adw.Dialog):
         self._results.clear()
         self._added = 0
         self.flowbox.remove_all()
-
-    def _show_empty(
-        self, titulo: str, descricao: str = "", generation: Optional[int] = None
-    ) -> bool:
-        if generation is not None and generation != self._generation:
-            return False
-        # Título e descrição juntos: com o título fixo, uma busca que falhou
-        # dizia "Nenhum … encontrado".
-        self.status_page.set_title(titulo)
-        self.status_page.set_description(descricao)
-        self.stack.set_visible_child_name("empty")
-        return False
 
     # endregion
     # region Selection
