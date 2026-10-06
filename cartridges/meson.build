@@ -18,8 +18,8 @@ install_subdir('importer', install_dir: moduledir, exclude_directories: '__pycac
 install_subdir('utils', install_dir: moduledir, exclude_directories: '__pycache__')
 # Meson reads these names as paths relative to the subdir, not as basenames to
 # match anywhere in the tree, and it does not accept wildcards — so the nested
-# package needs spelling out or its bytecode ships regardless. `store` is the
-# only one of the five with a subpackage.
+# package needs spelling out or its bytecode ships regardless. `store` and
+# `conquistas` are the only ones with subpackages.
 install_subdir(
   'store',
   install_dir: moduledir,
@@ -27,7 +27,16 @@ install_subdir(
 )
 install_subdir('logging', install_dir: moduledir, exclude_directories: '__pycache__')
 install_subdir('errors', install_dir: moduledir, exclude_directories: '__pycache__')
-install_subdir('conquistas', install_dir: moduledir, exclude_directories: '__pycache__')
+install_subdir(
+  'conquistas',
+  install_dir: moduledir,
+  exclude_directories: [
+    '__pycache__',
+    'epic/__pycache__',
+    'ubisoft/__pycache__',
+    'xbox/__pycache__',
+  ],
+)
 install_data(
   [
     'main.py',
