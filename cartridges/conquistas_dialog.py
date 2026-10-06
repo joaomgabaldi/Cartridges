@@ -13,7 +13,7 @@ from gi.repository import Adw, Gtk
 
 from cartridges import shared
 from cartridges.conquistas import icones, progresso
-from cartridges.conquistas.progresso import Linha
+from cartridges.conquistas.progresso import Linha, aparencia
 from cartridges.utils.relative_date import relative_date
 
 _TAMANHO_ICONE = 36
@@ -86,10 +86,10 @@ class ConquistasDialog(Adw.Dialog):
     @staticmethod
     def _fileira(linha: Linha, mostrar_ocultas: bool) -> Adw.ActionRow:
         info = linha.info
-        escondida = info.oculta and not linha.desbloqueada and not mostrar_ocultas
+        visual = aparencia(linha, mostrar_ocultas)
 
         fileira = Adw.ActionRow(use_markup=False)
-        if escondida:
+        if visual.oculta:
             fileira.set_title(_("Conquista oculta"))
             fileira.set_subtitle(_("Os detalhes aparecem depois do desbloqueio."))
             simbolo = Gtk.Image.new_from_icon_name("dialog-question-symbolic")
@@ -101,11 +101,10 @@ class ConquistasDialog(Adw.Dialog):
             fileira.set_subtitle(info.descricao)
             imagem = Gtk.Image(pixel_size=_TAMANHO_ICONE)
             imagem.add_css_class("conquistas-icone")
-            origem = info.icone if linha.desbloqueada else (info.icone_cinza or info.icone)
-            if not linha.desbloqueada and not info.icone_cinza:
+            if visual.cinza:
                 # O Xbox manda um ícone só: a bloqueada usa o mesmo, em cinza.
                 imagem.add_css_class("conquistas-icone-bloqueada")
-            icones.carregar(origem, imagem.set_from_paintable)
+            icones.carregar(visual.origem, imagem.set_from_paintable)
             fileira.add_prefix(imagem)
 
         lado = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, valign=Gtk.Align.CENTER)
