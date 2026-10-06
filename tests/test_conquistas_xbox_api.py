@@ -99,7 +99,7 @@ def test_mapeamento(monkeypatch):
     leitura = api.ler("123")
     um, dois = leitura.catalogo.conquistas
     assert (um.nome, um.titulo, um.descricao, um.oculta) == ("XBOX:1", "Primeira", "Descrição 1", False)
-    assert um.icone == "https://images-eds-ssl.xboxlive.com/1.png" and um.icone_cinza == ""
+    assert um.icone == "https://images-eds-ssl.xboxlive.com/1.png?w=128&h=128" and um.icone_cinza == ""
     assert (dois.oculta, dois.descricao) == (True, "Bloqueada 2")
     assert leitura.desbloqueios == [Desbloqueio("XBOX:1", 1790856000)]
     if api.CONTRATO == "4":
@@ -158,6 +158,33 @@ def test_icone_que_nao_e_https_cai(monkeypatch, url):
     item = _conquista("1", mediaAssets=[{"type": "Icon", "url": url}])
     rede_falsa(monkeypatch, api, {_ACH: [_pagina([item])]}, nome="_requisitar")
     assert api.ler("1").catalogo.conquistas[0].icone == ""
+
+
+def _icone_lido(monkeypatch, url):
+    item = _conquista("1", mediaAssets=[{"type": "Icon", "url": url}])
+    rede_falsa(monkeypatch, api, {_ACH: [_pagina([item])]}, nome="_requisitar")
+    return api.ler("1").catalogo.conquistas[0].icone
+
+
+def test_icone_pede_128_sem_mexer_no_token(monkeypatch):
+    """O serviço devolve a imagem inteira se não se pede o tamanho."""
+    url = "https://images-eds-ssl.xboxlive.com/image?url=ABC.d_e-f"
+    assert _icone_lido(monkeypatch, url) == url + "&w=128&h=128"
+
+
+def test_icone_da_resposta_real_mantem_o_token(monkeypatch):
+    corpo = json.loads(_DADOS.read_text(encoding="utf-8"))
+    originais = [a["url"] for i in corpo["achievements"] for a in i["mediaAssets"] if a["type"] == "Icon"]
+    rede_falsa(monkeypatch, api, {_ACH: [Resposta(200, corpo)]}, nome="_requisitar")
+    lidos = [info.icone for info in api.ler("123").catalogo.conquistas]
+    assert originais and sorted(lidos) == sorted(f"{o}&w=128&h=128" for o in originais)
+
+
+def test_icone_que_ja_tem_tamanho_nao_duplica(monkeypatch):
+    url = "https://images-eds-ssl.xboxlive.com/image?w=1920&url=ABC.d_e-f&h=1080"
+    icone = _icone_lido(monkeypatch, url)
+    consulta = icone.split("?", 1)[1].split("&")
+    assert sorted(consulta) == ["h=128", "url=ABC.d_e-f", "w=128"]
 
 
 def test_conquista_com_campo_errado_cai_sozinha(monkeypatch):
