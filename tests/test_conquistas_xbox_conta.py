@@ -10,7 +10,7 @@ import requests
 
 from cartridges import shared
 from cartridges.conquistas.xbox import conta
-from tests.apoio_xbox import Resposta, rede_falsa, respostas_de_login
+from tests.apoio_xbox import Resposta, RespostaSemFim, rede_falsa, respostas_de_login
 
 
 @pytest.fixture(autouse=True)
@@ -287,3 +287,26 @@ def test_ouvinte_que_levanta_nao_cala_os_outros(monkeypatch, flush_idle):
     _conectar(monkeypatch)
     flush_idle()
     assert chamados == [1]
+
+
+def test_corpo_sem_fim_na_renovacao_e_rede_fora_e_continua_conectada(monkeypatch, caplog, flush_idle, win):
+    caplog.set_level(logging.DEBUG)
+    post = conta._post
+    _conectar(monkeypatch)
+    _vencer_os_tokens()
+    sem_fim = RespostaSemFim()
+    monkeypatch.setattr(conta, "_post", post)
+    monkeypatch.setattr(requests, "request", lambda *_a, **_k: sem_fim)
+    assert conta.autorizacao() is None
+    flush_idle()
+    assert sem_fim.fechada and conta.conectada()
+    assert "ResponseTooLargeError" in caplog.text and "R1" not in caplog.text
+    assert win.toast_queue.added == []
+
+
+def test_corpo_sem_fim_no_login_levanta_erro_de_rede(monkeypatch):
+    sem_fim = RespostaSemFim()
+    monkeypatch.setattr(requests, "request", lambda *_a, **_k: sem_fim)
+    with pytest.raises(requests.RequestException):
+        conta.conectar("codigo", "verificador", "http://localhost:1")
+    assert sem_fim.fechada and not conta.conectada()
