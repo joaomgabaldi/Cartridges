@@ -8,8 +8,8 @@ sobrevivem à desinstalação, então um zerado antigo ainda recupera o que tinh
 
 A leitura roda numa thread, em duas passadas. A primeira decide a fonte das
 conquistas de cada jogo (`fontes.do_jogo`: a conta de uma loja — Xbox, Epic;
-ver `contas.py` —, Steam/emulador ou nenhuma) e lê só os arquivos dos
-emuladores (disco); a gravação do histórico, com a fonte (ou o esquecimento
+ver `contas.py` —, Steam/emulador, Ubisoft ou nenhuma) e lê o que está no disco:
+os arquivos dos emuladores e os da Ubisoft Connect (`.spool` e o catálogo do ZIP); a gravação do histórico, com a fonte (ou o esquecimento
 dela, para o jogo sem fonte), volta para a thread principal, onde dá para
 conferir que o jogo ainda está na store. Sem essa conferência, um jogo
 excluído no meio da passada ganharia de volta o arquivo que o Excluir acabou
@@ -32,7 +32,9 @@ varredura de um jogo não conta — senão quem acabou de instalar receberia
 "quinhentas conquistas novas". Num jogo da Steam, também não conta a conquista
 com data anterior à varredura anterior: ela foi ganha em outro aparelho e só
 chegou agora porque a Steam deste PC criou o arquivo quando o jogo rodou aqui
-pela primeira vez (o mesmo critério do vigia, com a mesma margem).
+pela primeira vez (o mesmo critério do vigia, com a mesma margem). O mesmo vale para a Ubisoft, cuja
+hora também é confiável: o `.spool` nasce, ao abrir o jogo neste PC, com o que a
+conta já tinha.
 """
 
 import logging
@@ -46,6 +48,7 @@ from gi.repository import Adw, GLib
 from cartridges import shared
 from cartridges.conquistas import arquivos, catalogo, contas, fontes, formatos, historico, sessao
 from cartridges.conquistas.fontes import Fonte
+from cartridges.conquistas.ubisoft import locais as ubisoft_locais, pacote as ubisoft_pacote, spool as ubisoft_spool
 from cartridges.conquistas.vigia import MARGEM_DA_STEAM
 from cartridges.utils import tarefas
 
@@ -91,6 +94,12 @@ class Leitura:
     fonte: Optional[Fonte] = None
     # O executável que gerou a fonte: se for editado até a entrega, a leitura é descartada.
     executavel: str = ""
+    # Ubisoft: a conta do `.spool` lido (None = nenhum `.spool` agora).
+    conta: Optional[str] = None
+    # Ubisoft: o catálogo foi refeito nesta leitura (a página aberta atualiza).
+    catalogo_mudou: bool = False
+    # Falso quando o arquivo existia mas não pôde ser lido agora: nada é gravado.
+    valida: bool = True
 
 
 @dataclass
@@ -123,10 +132,28 @@ class Catalogacao:
     avisar: bool = True
 
 
+def _ler_da_ubisoft(game: Any, fonte: Fonte, executavel: str) -> Leitura:
+    """Trabalho de thread: o catálogo do ZIP (refeito se mudou) e o `.spool`. Só disco."""
+    _catalogo, refeito = ubisoft_pacote.obter(fonte.id)
+    achado = ubisoft_locais.spool(fonte.id)
+    if achado is None:
+        return Leitura(game, "", [], fonte=fonte, executavel=executavel, catalogo_mudou=refeito)
+    caminho, conta = achado
+    lidos = ubisoft_spool.ler_ou_none(caminho)
+    if lidos is None:
+        # O launcher gravando no mesmo instante, por exemplo: a próxima varredura lê.
+        return Leitura(game, "", [], fonte=fonte, executavel=executavel, catalogo_mudou=refeito, valida=False)
+    return Leitura(
+        game, "", lidos, fonte=fonte, executavel=executavel, conta=conta, catalogo_mudou=refeito
+    )
+
+
 def ler_jogo(game: Any) -> Leitura:
-    """Trabalho de thread: decide a fonte e lê os arquivos (só Steam/emulador). Só disco."""
+    """Trabalho de thread: decide a fonte e lê o que está no disco (Steam/emulador, Ubisoft). Só disco."""
     executavel = getattr(game, "executable", "") or ""
     fonte = fontes.do_jogo(game)
+    if fonte is not None and fonte.tipo == fontes.UBISOFT:
+        return _ler_da_ubisoft(game, fonte, executavel)
     if fonte is None or fonte.tipo != fontes.STEAM:
         return Leitura(game, "", [], fonte=fonte, executavel=executavel)
     desbloqueios = [
@@ -365,6 +392,9 @@ class VarreduraConquistas:
             if contas.da_fonte(fonte) is not None:
                 rede = self._ler_da_conta(game, fonte, executavel, rede, avisar)
                 continue
+            if fonte.tipo != fontes.STEAM:
+                # Ubisoft: tudo vem do disco e já foi lido na primeira passada.
+                continue
             try:
                 catalogacao = renovar_catalogo(game, rede, usar_chave)
             except Exception:  # pylint: disable=broad-exception-caught
@@ -411,14 +441,14 @@ class VarreduraConquistas:
             self._desde = 0
         return False
 
-    def _contam(self, game: Any, entraram: list[str], lidos: list[formatos.Desbloqueio]) -> int:
+    def _contam(self, entraram: list[str], lidos: list[formatos.Desbloqueio], hora_confiavel: bool) -> int:
         """Quantas das que entraram contam como novas no aviso.
 
-        Num jogo da Steam, a conquista com data anterior à varredura anterior
-        (menos a margem do relógio) é de outro aparelho: entrou no histórico,
-        mas não é novidade desde a última abertura. Sem data, conta.
+        Quando a hora é confiável (Steam, Ubisoft), a conquista com data anterior à
+        varredura anterior (menos a margem do relógio) é de outro aparelho ou chegou da
+        conta: entrou no histórico, mas não é novidade desde a última abertura. Sem data, conta.
         """
-        if not self._desde or not arquivos.eh_jogo_da_steam(getattr(game, "executable", "") or ""):
+        if not self._desde or not hora_confiavel:
             return len(entraram)
         horas: dict[str, int] = {}
         for lido in lidos:
@@ -479,6 +509,8 @@ class VarreduraConquistas:
             historico.esquecer_fonte(game.game_id)
             self._atualizar_pagina(game, antes is not None)
             return 0
+        if fonte.tipo == fontes.UBISOFT:
+            return self._gravar_da_ubisoft(leitura, antes)
         if fonte.tipo != fontes.STEAM:
             # A de uma loja com conta é gravada na segunda passada, junto com as conquistas.
             return 0
@@ -486,7 +518,36 @@ class VarreduraConquistas:
             game.game_id, leitura.desbloqueios, fonte=fonte.texto
         )
         self._atualizar_pagina(game, bool(entraram) or antes != fonte.texto)
-        return 0 if primeira else self._contam(game, entraram, leitura.desbloqueios)
+        executavel = getattr(game, "executable", "") or ""
+        return 0 if primeira else self._contam(entraram, leitura.desbloqueios, arquivos.eh_jogo_da_steam(executavel))
+
+    def _gravar_da_ubisoft(self, leitura: Leitura, antes: Optional[str]) -> int:
+        """Grava o histórico, a fonte e a conta da Ubisoft. Devolve quantas contam para o aviso.
+
+        A primeira leitura (histórico novo, ou fonte ou conta diferente da gravada) não
+        avisa: o `.spool` nasce com o que a conta já tinha.
+        """
+        game = leitura.game
+        fonte = leitura.fonte
+        if fonte is None or not leitura.valida:
+            return 0
+        # O executável foi editado depois da leitura: o productId pode ser outro e, como o
+        # histórico só cresce, gravar deixaria as conquistas do jogo errado para sempre.
+        if (getattr(game, "executable", "") or "") != leitura.executavel:
+            return 0
+        conta_antes = historico.conta(game.game_id)
+        conta = leitura.conta
+        if conta is None and antes == fonte.texto:
+            # Sem `.spool` agora (o launcher desinstalado, por exemplo): a conta gravada fica.
+            conta = conta_antes
+        entraram, primeira = historico.registrar(
+            game.game_id, leitura.desbloqueios, fonte=fonte.texto, conta=conta
+        )
+        primeira_da_conta = antes != fonte.texto or conta_antes != conta
+        self._atualizar_pagina(game, bool(entraram) or primeira_da_conta or leitura.catalogo_mudou)
+        if primeira or primeira_da_conta:
+            return 0
+        return self._contam(entraram, leitura.desbloqueios, hora_confiavel=True)
 
     def _atualizar_pagina(self, game: Any, mudou: bool) -> None:
         if mudou and getattr(shared.win, "active_game", None) is game:
