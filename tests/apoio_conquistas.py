@@ -1,6 +1,7 @@
 """O que os testes de conquistas compartilham: pastas do sistema falsas."""
 
 import struct
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -71,3 +72,77 @@ def pastas(tmp_path, monkeypatch):
     monkeypatch.setattr(arquivos, "pastas_do_sistema", lambda: falsas)
     monkeypatch.setattr(arquivos, "pasta_da_steam", lambda: None)
     return falsas
+
+
+# -- Ubisoft Connect --------------------------------------------------------------
+
+# O `.spool` real do AC Black Flag Resynced (productId 65043), lido no host em 05/10/2026:
+# conquistas 23 (1785102639) e 12 (1791243494). Só varints: nenhum dado pessoal.
+SPOOL_DO_HOST = bytes.fromhex(
+    "0a0a0a020817" "10af829ad306" "0a0a0a02080c" "10e6e990d606"
+)
+# Basta a assinatura: nenhum teste decodifica a imagem.
+PNG_MINIMO = bytes.fromhex("89504e470d0a1a0a")
+
+
+def varint(valor: int) -> bytes:
+    saida = bytearray()
+    while True:
+        byte = valor & 0x7F
+        valor >>= 7
+        if valor:
+            saida.append(byte | 0x80)
+        else:
+            saida.append(byte)
+            return bytes(saida)
+
+
+def spool_bytes(conquistas: list[tuple[int, int]]) -> bytes:
+    """Um `.spool` no formato real: `1:{1:{1:id}, 2:hora}` por conquista."""
+    saida = bytearray()
+    for id_, hora in conquistas:
+        dentro = b"\x08" + varint(id_)
+        registro = b"\x0a" + varint(len(dentro)) + dentro + b"\x10" + varint(hora)
+        saida += b"\x0a" + varint(len(registro)) + registro
+    return bytes(saida)
+
+
+def gravar_spool(pastas, produto: str, conquistas, conta: str = "conta-1") -> Path:
+    caminho = pastas.localappdata / "Ubisoft Game Launcher" / "spool" / conta / f"{produto}.spool"
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    caminho.write_bytes(spool_bytes(conquistas))
+    return caminho
+
+
+def gravar_pacote(
+    pastas,
+    produto: str,
+    idiomas: dict,
+    pngs=None,
+    extras=None,
+    hash_: str = "c261752455c1fa666d515971dd6645a6",
+) -> Path:
+    """O ZIP do catálogo como o Ubisoft Connect grava (sem extensão), com cópias `file_*` ao lado.
+
+    ``idiomas``: ``{"pt-BR": {id: (título, descrição)}}``; ``pngs``: ids com ícone (padrão:
+    todos os ids); ``extras``: entradas a mais, ``{nome: bytes}``.
+    """
+    pasta = pastas.programdata / "Ubisoft" / "Ubisoft Game Launcher" / "cache" / "achievements"
+    pasta.mkdir(parents=True, exist_ok=True)
+    if pngs is None:
+        pngs = sorted({id_ for conquistas in idiomas.values() for id_ in conquistas})
+    caminho = pasta / f"{produto}_{hash_}"
+    with zipfile.ZipFile(caminho, "w", zipfile.ZIP_DEFLATED) as arquivo:
+        arquivo.writestr("achievements.dat", b"\x0a\x08\x08\x01\x10\x01\x18\x01\x20\x01")
+        for idioma, conquistas in idiomas.items():
+            linhas = "".join(f"{id_}\t{titulo}\t{descricao}\n" for id_, (titulo, descricao) in conquistas.items())
+            # BOM e primeira linha vazia, como no host.
+            arquivo.writestr(f"{idioma}_loc.txt", ("﻿\n" + linhas).encode("utf-8"))
+        for id_ in pngs:
+            arquivo.writestr(f"{id_}.png", PNG_MINIMO)
+        for nome, dados in (extras or {}).items():
+            arquivo.writestr(nome, dados)
+    # As cópias que o Ubisoft Connect extrai ao lado do ZIP.
+    (pasta / f"file_{hash_}").write_bytes(b"\xef\xbb\xbf\n1\tcopia\tcopia")
+    (pasta / f"file_{hash_}1.png").write_bytes(PNG_MINIMO)
+    return caminho
