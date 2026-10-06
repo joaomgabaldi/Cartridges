@@ -37,15 +37,43 @@ def _chaves(nome: str, appid: Optional[str]) -> set[str]:
     return chaves
 
 
-def situacao(nome: str, appid: Optional[str] = None) -> tuple[str, Optional[Game]]:
+# Chave de `_chaves` → os jogos (fora da lista negra) com ela, com a posição de cada
+# um na store: `situacao` decide pela ordem da store (o último da biblioteca vence).
+Indice = dict[str, list[tuple[int, Game]]]
+
+
+def indice() -> Indice:
+    """Os jogos por chave, para várias `situacao` seguidas sem relimpar cada nome.
+
+    O seletor pergunta por cada resultado da busca: sem o índice, cada pergunta
+    percorria a biblioteca inteira limpando o nome de cada jogo.
+    """
+    por_chave: Indice = {}
+    for posicao, jogo in enumerate(shared.store):
+        if jogo.blacklisted:
+            continue
+        for chave in _chaves(jogo.name, jogo.steam_appid):
+            por_chave.setdefault(chave, []).append((posicao, jogo))
+    return por_chave
+
+
+def situacao(
+    nome: str, appid: Optional[str] = None, jogos: Optional[Indice] = None
+) -> tuple[str, Optional[Game]]:
     """Onde o jogo ``nome``/``appid`` já está: ``"zerado"``, ``"biblioteca"``,
-    ``"desinstalado"`` (o jogado por último, se houver vários) ou ``"novo"``."""
-    procuradas = _chaves(nome, appid)
+    ``"desinstalado"`` (o jogado por último, se houver vários) ou ``"novo"``.
+
+    ``jogos``: um `indice` já montado (sem ele, é montado agora)."""
+    por_chave = indice() if jogos is None else jogos
+    # Pela posição: o jogo com as duas chaves conta uma vez, na ordem da store.
+    achados = {
+        posicao: jogo
+        for chave in _chaves(nome, appid)
+        for posicao, jogo in por_chave.get(chave, ())
+    }
     na_biblioteca: Optional[Game] = None
     desinstalados: list[Game] = []
-    for jogo in shared.store:
-        if jogo.blacklisted or not _chaves(jogo.name, jogo.steam_appid) & procuradas:
-            continue
+    for _posicao, jogo in sorted(achados.items(), key=lambda item: item[0]):
         if jogo.zerado:
             return ("zerado", jogo)
         if not jogo.removed:

@@ -11,11 +11,29 @@ from gi.repository import Gtk
 
 from cartridges import shared
 from cartridges.conquistas import icones, progresso
+from cartridges.conquistas.progresso import Aparencia
 
 TAMANHO_ICONE = 48
 # A área dos ícones cresce até aqui e depois rola: o "Já terminei de jogar"
 # nunca sai da tela, nem num jogo com 150 conquistas.
 ALTURA_MAXIMA = 220
+
+
+def imagem(visual: Aparencia, tamanho: int, interrogacao: int) -> Gtk.Image:
+    """O ícone de uma conquista, na lista e na tela de sessão: a interrogação da
+    oculta (``interrogacao`` px, num espaço de ``tamanho``) ou a imagem, que chega
+    depois (`icones.carregar`), em cinza quando a loja não tem a versão bloqueada."""
+    if visual.oculta:
+        simbolo = Gtk.Image.new_from_icon_name("dialog-question-symbolic")
+        simbolo.set_pixel_size(interrogacao)
+        simbolo.set_size_request(tamanho, tamanho)
+        return simbolo
+    figura = Gtk.Image(pixel_size=tamanho, css_classes=["conquistas-icone"])
+    if visual.cinza:
+        # O Xbox manda um ícone só: a bloqueada usa o mesmo, em cinza.
+        figura.add_css_class("conquistas-icone-bloqueada")
+    icones.carregar(visual.origem, figura.set_from_paintable)
+    return figura
 
 
 class CartaoDaSessao(Gtk.Box):
@@ -86,15 +104,6 @@ class CartaoDaSessao(Gtk.Box):
 
     @staticmethod
     def _icone(linha: progresso.Linha, mostrar_ocultas: bool) -> Gtk.Widget:
-        jeito = progresso.aparencia(linha, mostrar_ocultas)
-        if jeito.oculta:
-            imagem = Gtk.Image.new_from_icon_name("dialog-question-symbolic")
-            imagem.set_pixel_size(TAMANHO_ICONE // 2)
-            imagem.set_size_request(TAMANHO_ICONE, TAMANHO_ICONE)
-        else:
-            imagem = Gtk.Image(pixel_size=TAMANHO_ICONE, css_classes=["conquistas-icone"])
-            if jeito.cinza:
-                imagem.add_css_class("conquistas-icone-bloqueada")
-            icones.carregar(jeito.origem, imagem.set_from_paintable)
-        imagem.set_tooltip_markup(progresso.dica(linha, mostrar_ocultas))
-        return imagem
+        figura = imagem(progresso.aparencia(linha, mostrar_ocultas), TAMANHO_ICONE, TAMANHO_ICONE // 2)
+        figura.set_tooltip_markup(progresso.dica(linha, mostrar_ocultas))
+        return figura

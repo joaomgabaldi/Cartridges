@@ -20,15 +20,16 @@ import logging
 import math
 import threading
 import time
-import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 import requests
-from gi.repository import Adw, GLib
+from gi.repository import GLib
 
 from cartridges import shared
+from cartridges.conquistas import aviso_da_conta
 from cartridges.utils import download, dpapi
+from cartridges.utils.gravar_atomico import gravar_atomico
 
 CLIENT_ID = "6a0af9cc-6dce-49d8-a53d-bcc9130275f0"
 AUTORIZAR = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize"
@@ -185,29 +186,18 @@ def _salvar(sessao: _Sessao) -> None:
     if protegido is None:
         logging.warning("Conta Microsoft: não foi possível cifrar a chave de renovação")
         return
-    destino = _arquivo()
-    temporario = destino.with_name(f"{destino.name}.{uuid.uuid4().hex}.tmp")
+    conteudo = json.dumps(
+        {
+            "gamertag": sessao.gamertag,
+            "xuid": sessao.xuid,
+            "renovacao": base64.b64encode(protegido).decode("ascii"),
+        },
+        ensure_ascii=False,
+    )
     try:
-        destino.parent.mkdir(parents=True, exist_ok=True)
-        temporario.write_text(
-            json.dumps(
-                {
-                    "gamertag": sessao.gamertag,
-                    "xuid": sessao.xuid,
-                    "renovacao": base64.b64encode(protegido).decode("ascii"),
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-        temporario.replace(destino)
+        gravar_atomico(_arquivo(), conteudo)
     except OSError as erro:
         logging.warning("Conta Microsoft não gravada: %s", type(erro).__name__)
-    finally:
-        try:
-            temporario.unlink(missing_ok=True)
-        except OSError:
-            pass
 
 
 def carregar() -> None:
@@ -245,40 +235,13 @@ def xuid() -> Optional[str]:
 def ao_mudar(ouvinte: Callable[[], None]) -> Callable[[], None]:
     """Registra `ouvinte` (chamado na thread principal a cada conexão ou
     desconexão) e devolve a função que o remove."""
-    _ouvintes.append(ouvinte)
-
-    def remover() -> None:
-        try:
-            _ouvintes.remove(ouvinte)
-        except ValueError:
-            pass
-
-    return remover
+    return aviso_da_conta.inscrever(_ouvintes, ouvinte)
 
 
 def _notificar(avisar: bool) -> bool:
     """Na thread principal: aviso (uma vez), ouvintes e o cartão do jogo aberto."""
     global _avisou  # pylint: disable=global-statement
-    try:
-        if avisar and not _avisou and shared.win is not None:
-            _avisou = True
-            toast = Adw.Toast.new(_("A conta Microsoft foi desconectada. Entre novamente nas Preferências."))
-            toast.set_use_markup(False)
-            shared.win.toast_queue.add(toast)
-    except Exception:  # pylint: disable=broad-exception-caught
-        logging.warning("Falha ao avisar da desconexão da conta Microsoft", exc_info=True)
-    for ouvinte in list(_ouvintes):
-        try:
-            ouvinte()
-        except Exception:  # pylint: disable=broad-exception-caught
-            logging.warning("Falha num ouvinte da conta Microsoft", exc_info=True)
-    try:
-        game = getattr(shared.win, "active_game", None)
-        atualizar = getattr(shared.win, "update_conquistas_block", None)
-        if game is not None and atualizar is not None:
-            atualizar(game)
-    except Exception:  # pylint: disable=broad-exception-caught
-        logging.warning("Falha ao atualizar o cartão de conquistas", exc_info=True)
+    _avisou = aviso_da_conta.notificar(avisar, _avisou, _ouvintes, _("A conta Microsoft foi desconectada. Entre novamente nas Preferências."), "Microsoft")
     return False
 
 

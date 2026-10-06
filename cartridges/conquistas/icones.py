@@ -7,7 +7,6 @@ trabalhadores bastam e não disputam a rede com o resto do app.
 
 import hashlib
 import logging
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
@@ -18,6 +17,7 @@ from requests.exceptions import RequestException
 from cartridges import shared
 from cartridges.conquistas import arquivos
 from cartridges.utils.download import download_bytes
+from cartridges.utils.gravar_atomico import gravar_atomico
 
 _MAX_BYTES = 512 * 1024
 _trabalhadores = ThreadPoolExecutor(
@@ -73,25 +73,8 @@ def _resolver(origem: str) -> tuple[Optional[Path], bool]:
             return destino, True
 
         dados = download_bytes(origem, timeout=10, max_bytes=_MAX_BYTES)
-        destino.parent.mkdir(parents=True, exist_ok=True)
-        # Um nome por download: duas threads pedindo o mesmo ícone não pisam
-        # no arquivo uma da outra.
-        temporario = destino.with_name(f"{destino.name}.{uuid.uuid4().hex}.tmp")
-        try:
-            temporario.write_bytes(dados)
-            try:
-                temporario.replace(destino)
-            except OSError:
-                # No Windows, dois replace no mesmo destino ao mesmo tempo
-                # fazem um deles falhar; se o arquivo já está lá (o outro
-                # download, com o mesmo conteúdo, ganhou), basta.
-                if not destino.is_file():
-                    raise
-        finally:
-            try:
-                temporario.unlink(missing_ok=True)
-            except OSError:
-                pass
+        # Duas threads podem pedir o mesmo ícone: o destino é o hash da origem.
+        gravar_atomico(destino, dados, outro_igual_basta=True)
         return destino, True
     except Exception as erro:  # noqa: BLE001 - nada daqui derruba o app
         _registrar_falha("Ícone de conquista indisponível", origem, erro)

@@ -36,6 +36,7 @@ import requests
 from gi.repository import Adw, GLib, Gtk
 
 from cartridges import shared
+from cartridges.utils.busca_do_seletor import BuscaDoSeletor
 from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.name_cleaner import clean_for_search, clean_game_name
 from cartridges.utils.steam import (
@@ -49,8 +50,12 @@ from cartridges.utils.title_match import TitleMatch
 
 
 @Gtk.Template(resource_path=shared.PREFIX + "/gtk/steam-picker.ui")
-class SteamPicker(Adw.Dialog):
+class SteamPicker(BuscaDoSeletor, Adw.Dialog):
     __gtype_name__ = "SteamPicker"
+
+    # Mais que nos outros seletores: cada pausa na digitação é um pedido à loja
+    # da Steam, que limita a frequência.
+    atraso_da_busca_ms = 700
 
     search_bar: Gtk.SearchBar = Gtk.Template.Child()
     search_entry: Gtk.SearchEntry = Gtk.Template.Child()
@@ -90,20 +95,6 @@ class SteamPicker(Adw.Dialog):
         self.search()
 
     # region Search
-
-    def _on_search_changed(self, *_args: Any) -> None:
-        if self._debounce_id:
-            GLib.source_remove(self._debounce_id)
-        # Longer than the cover picker's delay: every pause in typing is a
-        # request to the Steam store, which rate limits.
-        self._debounce_id = GLib.timeout_add(700, self._debounce_fire)
-
-    def _debounce_fire(self) -> bool:
-        self._debounce_id = 0
-        if self.search_entry.get_text().strip() == self._last_query:
-            return False
-        self.search()
-        return False
 
     def search(self) -> None:
         self._generation += 1
@@ -182,18 +173,6 @@ class SteamPicker(Adw.Dialog):
     def _clear_results(self) -> None:
         self._rows.clear()
         self.listbox.remove_all()
-
-    def _show_empty(
-        self, titulo: str, descricao: str = "", generation: Optional[int] = None
-    ) -> bool:
-        if generation is not None and generation != self._generation:
-            return False
-        # Título e descrição juntos: com o título fixo, uma busca que falhou
-        # dizia "Nenhum … encontrado".
-        self.status_page.set_title(titulo)
-        self.status_page.set_description(descricao)
-        self.stack.set_visible_child_name("empty")
-        return False
 
     # endregion
     # region Selection

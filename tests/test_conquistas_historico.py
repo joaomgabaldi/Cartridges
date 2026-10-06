@@ -477,3 +477,11 @@ def test_conta_guardada_tambem_para_a_ubisoft():
     assert historico.conta("u1") == "aaa"
     historico.registrar("u1", [], fonte="steam:570", conta="aaa")
     assert historico.conta("u1") is None  # a Steam não tem conta
+
+
+def test_contem_diz_se_tudo_ja_esta_guardado():
+    assert historico.contem("jogo-contem", [])  # nunca varrido: só a leitura vazia
+    assert not historico.contem("jogo-contem", [D("a", 1)])
+    historico.registrar("jogo-contem", [D("a", 1)])
+    assert historico.contem("jogo-contem", [D(" A ", 5)])
+    assert not historico.contem("jogo-contem", [D("a", 1), D("b", 2)])

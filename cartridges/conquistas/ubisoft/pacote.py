@@ -12,7 +12,6 @@ Só disco: roda em thread (varredura). O vigia, na thread principal, só lê o c
 import logging
 import re
 import time
-import uuid
 import zipfile
 import zlib
 from pathlib import Path
@@ -23,6 +22,7 @@ from cartridges.conquistas import catalogo
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.ubisoft import locais
 from cartridges.conquistas.ubisoft.spool import PREFIXO
+from cartridges.utils.gravar_atomico import gravar_atomico
 
 _ZIP_MAXIMO = 20 * 1024 * 1024
 _ENTRADAS_MAXIMAS = 2000
@@ -124,25 +124,13 @@ def _ler_zip(caminho: Path) -> tuple[dict[int, tuple[str, str]], dict[int, bytes
 
 
 def _gravar_icone(destino: Path, dados: bytes) -> bool:
-    """Grava por um temporário de nome único e troca no fim, como `icones._resolver`."""
-    temporario = destino.with_name(f"{destino.name}.{uuid.uuid4().hex}.tmp")
+    """Grava como `icones._resolver`: duas varreduras podem gravar o mesmo ícone."""
     try:
-        temporario.write_bytes(dados)
-        try:
-            temporario.replace(destino)
-        except OSError:
-            # Duas varreduras gravando o mesmo ícone: se o outro já está lá, basta.
-            if not destino.is_file():
-                raise
-        return True
+        gravar_atomico(destino, dados, outro_igual_basta=True)
     except OSError as erro:
         logging.info("Ícone de conquista da Ubisoft não gravado: %s", type(erro).__name__)
         return False
-    finally:
-        try:
-            temporario.unlink(missing_ok=True)
-        except OSError:
-            pass
+    return True
 
 
 def _montar(produto: str, caminho: Path) -> Catalogo:

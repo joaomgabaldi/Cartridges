@@ -52,6 +52,7 @@ from cartridges import shared
 from cartridges.game import Game
 from cartridges.utils import tarefas
 from cartridges.utils.game_folder import game_folder
+from cartridges.utils.passada_agendada import PassadaAgendada
 from cartridges.utils.process_monitor import install_dir_from_command
 from cartridges.utils.run_executable import aumid_from_command
 
@@ -180,60 +181,11 @@ def format_size(size: int) -> str:
     return f"{text} {_UNITS[unit]}"
 
 
-class InstallSizeSweep:
+class InstallSizeSweep(PassadaAgendada):
     """Uma varredura em segundo plano pelo tamanho de cada jogo no disco."""
 
-    def __init__(self) -> None:
-        self._timeout_id: Optional[int] = None
-        # Uma varredura por vez: `run_async` é alcançável pelo temporizador e
-        # duas varreduras só fariam o mesmo trabalho duas vezes, no mesmo disco.
-        self._lock = threading.Lock()
-        self._running = False
-        # Marcado ao sair. O trabalhador confere entre um jogo e outro — uma
-        # medição em curso não dá para cancelar, então o resultado dela é
-        # simplesmente descartado.
-        self._stopped = False
-        # Sobe a cada `stop()`. O trabalhador leva o número com que nasceu e
-        # para quando ele muda: o `start()` logo depois do `stop()` (é o que o
-        # reset faz) desfaz o `_stopped`, e o trabalhador antigo seguiria
-        # medindo uma biblioteca que já não existe.
-        self._generation = 0
-
-    # -- agendamento ----------------------------------------------------------
-
-    def start(self) -> None:
-        """Arma a varredura. Chamada uma vez, no início do app."""
-        self._stopped = False
-        if self._timeout_id is not None:
-            GLib.source_remove(self._timeout_id)
-        self._timeout_id = GLib.timeout_add_seconds(
-            _START_DELAY_SECONDS, self._on_timer
-        )
-
-    def stop(self) -> None:
-        """Cancela uma varredura pendente e desliga uma em andamento."""
-        self._stopped = True
-        self._generation += 1
-        if self._timeout_id is not None:
-            GLib.source_remove(self._timeout_id)
-            self._timeout_id = None
-
-    def _on_timer(self) -> bool:
-        self._timeout_id = None
-        if self._stopped:
-            return False
-
-        # A importação já mexe no disco (e adiciona jogos que esta varredura
-        # teria de medir depois de qualquer jeito). Espera ela acabar.
-        app = shared.win.get_application() if shared.win is not None else None
-        if app is not None and app.state == shared.AppState.IMPORT:
-            self._timeout_id = GLib.timeout_add_seconds(
-                _IMPORT_RETRY_SECONDS, self._on_timer
-            )
-            return False
-
-        self.run_async()
-        return False
+    atraso_inicial = _START_DELAY_SECONDS
+    espera_da_importacao = _IMPORT_RETRY_SECONDS
 
     # -- a varredura ----------------------------------------------------------
 
@@ -252,10 +204,8 @@ class InstallSizeSweep:
         if not games:
             return
 
-        with self._lock:
-            if self._running:
-                return
-            self._running = True
+        if not self._reservar():
+            return
 
         logging.info("Install size sweep queued for %d games", len(games))
         threading.Thread(
@@ -277,7 +227,7 @@ class InstallSizeSweep:
             # canto piscaria por nada.
             com_pasta: list[tuple[Game, str]] = []
             for game in games:
-                if self._stopped or generation != self._generation:
+                if self._deve_parar(generation):
                     return
                 # Reconferido por jogo: uma importação pode ter removido este
                 # daqui até a vez dele chegar.
@@ -294,7 +244,7 @@ class InstallSizeSweep:
             tarefa = tarefas.comecar(_("Tamanho em disco"), len(com_pasta))
             for feitos, (game, folder) in enumerate(com_pasta):
                 tarefa.atualizar(feitos)
-                if self._stopped or generation != self._generation:
+                if self._deve_parar(generation):
                     break
                 if game.removed:
                     continue
@@ -318,8 +268,7 @@ class InstallSizeSweep:
         finally:
             if tarefa is not None:
                 tarefa.terminar()
-            with self._lock:
-                self._running = False
+            self._liberar()
             logging.info(
                 "Install size sweep done: %d of %d games measured",
                 measured,

@@ -32,6 +32,7 @@ from typing import Any, Iterable, NamedTuple, Optional
 from cartridges import shared
 from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.utils.ler_json import ler_json
+from cartridges.utils.gravar_atomico import gravar_atomico
 
 _trava = threading.Lock()
 # Fontes cuja conta é guardada junto: as lojas com conta (`contas.lojas()`) e a Ubisoft
@@ -125,6 +126,17 @@ def conta(game_id: str) -> Optional[str]:
     return dados.conta if dados else None
 
 
+def contem(game_id: str, lidos: Iterable[Desbloqueio]) -> bool:
+    """Se tudo o que foi lido já está guardado (o histórico só soma).
+
+    Jogo nunca varrido: só vale para uma leitura vazia.
+    """
+    guardado = ler(game_id)
+    if guardado is None:
+        return not any(True for _lido in lidos)
+    return all(d.nome.strip().upper() in guardado for d in lidos)
+
+
 def _guardar_ilegivel(game_id: str) -> bool:
     """Põe de lado o arquivo ilegível, para não ser sobrescrito. False se não deu."""
     origem = caminho(game_id)
@@ -162,19 +174,12 @@ def _gravar(
     fonte: Optional[str] = None,
     conta: Optional[str] = None,
 ) -> None:
-    destino = caminho(game_id)
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    temporario = destino.with_name(destino.name + ".tmp")
     conteudo: dict[str, Any] = {"desbloqueadas": desbloqueadas}
     if fonte is not None:
         conteudo["fonte"] = fonte
         if conta is not None:
             conteudo["conta"] = conta
-    temporario.write_text(
-        json.dumps(conteudo, ensure_ascii=False, sort_keys=True),
-        encoding="utf-8",
-    )
-    temporario.replace(destino)
+    gravar_atomico(caminho(game_id), json.dumps(conteudo, ensure_ascii=False, sort_keys=True))
 
 
 def registrar(
