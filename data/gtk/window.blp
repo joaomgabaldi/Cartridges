@@ -308,6 +308,14 @@ template $CartridgesWindow: Adw.ApplicationWindow {
               }
             };
           }
+
+          // O cartão de conquistas do jogo, preenchido em Python
+          // (conquistas_sessao.py). Vazio e escondido sem conquistas.
+          Box session_blocker_conquistas {
+            orientation: vertical;
+            halign: fill;
+            margin-top: 12;
+          }
         }
       }
     }

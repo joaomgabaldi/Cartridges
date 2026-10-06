@@ -27,22 +27,6 @@ def sem_sessao(monkeypatch):
     monkeypatch.setattr(SessionWindow, "active", None)
 
 
-@pytest.fixture
-def sessao_sem_efeitos(monkeypatch):
-    """O bloqueador da janela de verdade, sem parede, fita nem controle."""
-    import cartridges.window as window_module
-
-    vestidas = []
-    monkeypatch.setattr(window_module.session_fita, "comecar", vestidas.append)
-    monkeypatch.setattr(window_module.session_fita, "voltar", lambda: None)
-    monkeypatch.setattr(window_module.session_wallpaper, "comecar", lambda _g: None)
-    monkeypatch.setattr(window_module.session_wallpaper, "restaurar", lambda: None)
-    monkeypatch.setattr(
-        window_module.window_geometry, "restore_from_monitor", lambda _w: None
-    )
-    return vestidas
-
-
 # -- M1 -----------------------------------------------------------------------
 
 

@@ -9,6 +9,7 @@ import pytest
 from gi.repository import Gtk
 from requests.exceptions import ConnectionError as ErroDeConexao
 
+from cartridges import conquistas_sessao
 from cartridges.conquistas import catalogo, historico, icones
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.formatos import Desbloqueio
@@ -370,3 +371,78 @@ def test_data_absurda_nao_derruba_a_lista(real_window, com_conquistas, quando):
     historico.registrar(com_conquistas.game_id, [Desbloqueio("C", quando)])
     dialogo = ConquistasDialog(com_conquistas)
     assert "Segredo" in _titulos(dialogo.linhas_desbloqueadas)
+
+
+# -- Cartão da tela de sessão --------------------------------------------------
+
+
+def _cartao(real_window):
+    filhos = []
+    filho = real_window.session_blocker_conquistas.get_first_child()
+    while filho is not None:
+        filhos.append(filho)
+        filho = filho.get_next_sibling()
+    return next(f for f in filhos if isinstance(f, conquistas_sessao.CartaoDaSessao))
+
+
+def _icones(cartao):
+    caixas = []
+    filho = cartao.icones.get_first_child()
+    while filho is not None:
+        caixas.append(filho.get_child())
+        filho = filho.get_next_sibling()
+    return caixas
+
+
+def test_cartao_da_sessao_mostra_progresso_e_todos_os_icones(real_window, com_conquistas, sessao_sem_efeitos):
+    real_window.show_session_blocker(com_conquistas)
+    cartao = _cartao(real_window)
+    assert cartao.get_visible()
+    assert cartao.contagem.get_label() == "2 de 3"
+    assert cartao.porcentagem.get_label() == "66%"
+    imagens = _icones(cartao)
+    assert len(imagens) == 3  # A, B e a oculta C, na ordem do catálogo
+    assert imagens[0].get_tooltip_markup().startswith("<b>Primeira</b>")
+    assert imagens[2].get_tooltip_markup() == (
+        "<b>Conquista oculta</b>\nOs detalhes aparecem depois do desbloqueio."
+    )
+
+
+def test_cartao_da_sessao_some_sem_conquistas(real_window, store, sessao_sem_efeitos):
+    real_window.show_session_blocker(jogo(store, 9, steam_appid="999"))
+    assert not _cartao(real_window).get_visible()
+
+
+def test_cartao_da_sessao_esvazia_no_fim(real_window, com_conquistas, sessao_sem_efeitos):
+    real_window.show_session_blocker(com_conquistas)
+    real_window.hide_session_blocker()
+    cartao = _cartao(real_window)
+    assert not cartao.get_visible() and _icones(cartao) == []
+
+
+def test_cartao_da_sessao_atualiza_ao_vivo(real_window, com_conquistas, sessao_sem_efeitos):
+    real_window.show_session_blocker(com_conquistas)
+    historico.registrar(com_conquistas.game_id, [Desbloqueio("C", 300)])
+    real_window.update_conquistas_sessao(com_conquistas)
+    assert _cartao(real_window).contagem.get_label() == "3 de 3"
+
+
+def test_atualizar_outro_jogo_nao_mexe_no_cartao(real_window, com_conquistas, store, sessao_sem_efeitos):
+    real_window.show_session_blocker(com_conquistas)
+    real_window.update_conquistas_sessao(jogo(store, 9, steam_appid="999"))
+    assert _cartao(real_window).contagem.get_label() == "2 de 3"
+
+
+def test_muitas_conquistas_rolam_dentro_do_cartao(real_window, store, sessao_sem_efeitos):
+    grande = Catalogo(
+        tuple(ConquistaInfo(f"N{n}", f"N{n}", "", "", "", False) for n in range(157)), 0, True
+    )
+    catalogo.guardar("570", grande)
+    game = jogo(store, 1, steam_appid="570")
+    com_fonte(game, "steam:570")
+    real_window.show_session_blocker(game)
+    cartao = _cartao(real_window)
+    assert cartao.rolagem.get_max_content_height() == conquistas_sessao.ALTURA_MAXIMA
+    assert cartao.rolagem.get_propagate_natural_height() is True
+    assert cartao.rolagem.get_policy()[0] == Gtk.PolicyType.NEVER
+    assert len(_icones(cartao)) == 157
