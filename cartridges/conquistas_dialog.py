@@ -12,8 +12,9 @@ from typing import Any, Optional
 from gi.repository import Adw, Gtk
 
 from cartridges import shared
-from cartridges.conquistas import icones, progresso
+from cartridges.conquistas import progresso
 from cartridges.conquistas.progresso import Linha, aparencia
+from cartridges.conquistas_sessao import imagem
 from cartridges.utils.relative_date import relative_date
 
 _TAMANHO_ICONE = 36
@@ -62,21 +63,16 @@ class ConquistasDialog(Adw.Dialog):
             topo.add(Gtk.ProgressBar(fraction=atual.fracao))
             pagina.add(topo)
 
-            desbloqueadas = Adw.PreferencesGroup(title=_("Desbloqueadas"))
-            for linha in atual.desbloqueadas:
-                fileira = self._fileira(linha, mostrar_ocultas)
-                self.linhas_desbloqueadas.append(fileira)
-                desbloqueadas.add(fileira)
-            desbloqueadas.set_visible(bool(atual.desbloqueadas))
-            pagina.add(desbloqueadas)
-
-            bloqueadas = Adw.PreferencesGroup(title=_("Bloqueadas"))
-            for linha in atual.bloqueadas:
-                fileira = self._fileira(linha, mostrar_ocultas)
-                self.linhas_bloqueadas.append(fileira)
-                bloqueadas.add(fileira)
-            bloqueadas.set_visible(bool(atual.bloqueadas))
-            pagina.add(bloqueadas)
+            for titulo_do_grupo, linhas, fileiras in (
+                (_("Desbloqueadas"), atual.desbloqueadas, self.linhas_desbloqueadas),
+                (_("Bloqueadas"), atual.bloqueadas, self.linhas_bloqueadas),
+            ):
+                grupo = Adw.PreferencesGroup(title=titulo_do_grupo, visible=bool(linhas))
+                for linha in linhas:
+                    fileira = self._fileira(linha, mostrar_ocultas)
+                    fileiras.append(fileira)
+                    grupo.add(fileira)
+                pagina.add(grupo)
 
         vista = Adw.ToolbarView()
         vista.add_top_bar(cabecalho)
@@ -92,20 +88,10 @@ class ConquistasDialog(Adw.Dialog):
         if visual.oculta:
             fileira.set_title(_("Conquista oculta"))
             fileira.set_subtitle(_("Os detalhes aparecem depois do desbloqueio."))
-            simbolo = Gtk.Image.new_from_icon_name("dialog-question-symbolic")
-            simbolo.set_pixel_size(24)
-            simbolo.set_size_request(_TAMANHO_ICONE, _TAMANHO_ICONE)
-            fileira.add_prefix(simbolo)
         else:
             fileira.set_title(info.titulo)
             fileira.set_subtitle(info.descricao)
-            imagem = Gtk.Image(pixel_size=_TAMANHO_ICONE)
-            imagem.add_css_class("conquistas-icone")
-            if visual.cinza:
-                # O Xbox manda um ícone só: a bloqueada usa o mesmo, em cinza.
-                imagem.add_css_class("conquistas-icone-bloqueada")
-            icones.carregar(visual.origem, imagem.set_from_paintable)
-            fileira.add_prefix(imagem)
+        fileira.add_prefix(imagem(visual, _TAMANHO_ICONE, 24))
 
         lado = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, valign=Gtk.Align.CENTER)
         if linha.quando and (data := _data(linha.quando)):
