@@ -37,7 +37,6 @@ whatever was already found.
 
 import logging
 import threading
-from typing import Optional
 
 from gi.repository import GLib
 
@@ -45,6 +44,7 @@ from cartridges import shared
 from cartridges.game import Game
 from cartridges.store.managers.hltb_manager import shared_helper
 from cartridges.utils import tarefas
+from cartridges.utils.passada_agendada import PassadaAgendada
 from cartridges.utils.hltb import (
     HLTBError,
     HLTBGameNotFoundError,
@@ -60,64 +60,11 @@ _START_DELAY_SECONDS = 20
 _IMPORT_RETRY_SECONDS = 30
 
 
-class HLTBBackfill:
+class HLTBBackfill(PassadaAgendada):
     """One background sweep over the library for missing completion times."""
 
-    def __init__(self) -> None:
-        # GLib source id of the pending start, so it can be cancelled on
-        # shutdown and never armed twice.
-        self._timeout_id: Optional[int] = None
-        # A single sweep at a time. The guard is a lock rather than a plain flag
-        # because `run_async` is reachable from the timer and (in future) from
-        # the UI, and two sweeps would double every request.
-        self._lock = threading.Lock()
-        self._running = False
-        # Set on shutdown. The worker checks it between games — an in-flight
-        # request cannot be cancelled, so its result is simply dropped instead
-        # of being written into games and widgets that are on their way out.
-        self._stopped = False
-        # Bumped by every stop. A worker carries the number it was started
-        # with and quits when it changes: `start()` right after `stop()` (the
-        # reset does exactly that) clears `_stopped`, and the old worker would
-        # otherwise keep looking up a library that no longer exists.
-        self._generation = 0
-
-    # -- scheduling -----------------------------------------------------------
-
-    def start(self) -> None:
-        """Arm the one-shot sweep. Safe to call once at startup."""
-        self._stopped = False
-        if self._timeout_id is not None:
-            GLib.source_remove(self._timeout_id)
-        self._timeout_id = GLib.timeout_add_seconds(
-            _START_DELAY_SECONDS, self._on_timer
-        )
-
-    def stop(self) -> None:
-        """Cancel a pending sweep and disown one already running."""
-        self._stopped = True
-        self._generation += 1
-        if self._timeout_id is not None:
-            GLib.source_remove(self._timeout_id)
-            self._timeout_id = None
-
-    def _on_timer(self) -> bool:
-        self._timeout_id = None
-        if self._stopped:
-            return False
-
-        # An import already fetches times for the games it adds, through the
-        # same rate limiter. Sweeping alongside it would only make the import
-        # the user is watching slower, so wait for it to finish.
-        app = shared.win.get_application() if shared.win is not None else None
-        if app is not None and app.state == shared.AppState.IMPORT:
-            self._timeout_id = GLib.timeout_add_seconds(
-                _IMPORT_RETRY_SECONDS, self._on_timer
-            )
-            return False
-
-        self.run_async()
-        return False
+    atraso_inicial = _START_DELAY_SECONDS
+    espera_da_importacao = _IMPORT_RETRY_SECONDS
 
     # -- the sweep ------------------------------------------------------------
 
@@ -140,10 +87,8 @@ class HLTBBackfill:
         if not games:
             return
 
-        with self._lock:
-            if self._running:
-                return
-            self._running = True
+        if not self._reservar():
+            return
 
         logging.info("HowLongToBeat backfill queued for %d games", len(games))
         threading.Thread(
@@ -158,7 +103,7 @@ class HLTBBackfill:
         try:
             for feitos, game in enumerate(games):
                 tarefa.atualizar(feitos)
-                if self._stopped or generation != self._generation:
+                if self._deve_parar(generation):
                     break
                 # Re-checked per game, not just in the snapshot: the pipeline or
                 # the details dialog may have filled this one in meanwhile, and
@@ -197,8 +142,7 @@ class HLTBBackfill:
                 GLib.idle_add(self._apply, game, times)
         finally:
             tarefa.terminar()
-            with self._lock:
-                self._running = False
+            self._liberar()
             logging.info(
                 "HowLongToBeat backfill done: %d of %d games filled in",
                 found,
