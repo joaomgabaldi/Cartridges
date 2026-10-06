@@ -42,6 +42,7 @@ def _esquecer_conexoes():
     session_fita._jogo_da_sessao = None
     session_fita._fila_de_pulsos.clear()
     session_fita._pulsando = False
+    session_fita._teste_do_pulso = None
 
 
 @pytest.fixture(autouse=True)
@@ -2089,6 +2090,112 @@ def test_respirar_desliza_ate_o_pulso(pulso, schema, monkeypatch):
     assert chegada >= 2  # degraus do meio antes de chegar ao pulso
     assert cor_do_jogo not in cores[:chegada]
     assert cores[-1] == cor_do_jogo
+
+
+@pytest.fixture
+def fora_de_sessao(falsas, monkeypatch, schema):
+    """Uma fita falsa vestida na cor do app, sem sessão, com threads capturadas."""
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+    schema.set_string(
+        session_fita.CHAVE_ESTADO, json.dumps({"eb0": {"ligada": True, "cor": ""}})
+    )
+    tarefas = []
+    monkeypatch.setattr(session_fita, "_em_thread", tarefas.append)
+    monkeypatch.setattr(
+        session_fita,
+        "ESTILOS_DO_PULSO",
+        {
+            estilo: {
+                tipo: [passo._replace(segura=0, desliza=0) for passo in passos]
+                for tipo, passos in tipos.items()
+            }
+            for estilo, tipos in session_fita.ESTILOS_DO_PULSO.items()
+        },
+    )
+    modulos["eb0"].recebidos.clear()
+    return SimpleNamespace(modulo=modulos["eb0"], tarefas=tarefas)
+
+
+def _cor_do_app_na_fita():
+    fita = session_fita.fitas()[0]
+    return session_fita.hsv_hex(session_fita.na_fita(session_fita.cor_do_app(), fita))
+
+
+def test_teste_fora_de_sessao_vai_ao_pulso_e_volta_a_cor_do_app(fora_de_sessao):
+    session_fita.testar_pulso()
+    assert len(fora_de_sessao.tarefas) == 1
+    fora_de_sessao.tarefas.pop(0)()
+    cores = _cores(fora_de_sessao.modulo)
+    assert cores[0] == _ouro()
+    assert cores[-1] == _cor_do_app_na_fita()
+
+
+def test_teste_em_sessao_e_o_pulso_normal_do_jogo(pulso):
+    session_fita.testar_pulso()
+    pulso.tarefas.pop(0)()
+    fita = session_fita.fitas()[0]
+    cor_do_jogo = session_fita.hsv_hex(session_fita.na_fita(session_fita.cor_do_jogo(pulso.jogo), fita))
+    cores = _cores(pulso.modulo)
+    assert cores.count(_ouro()) == 1 and cores[-1] == cor_do_jogo
+
+
+def test_sessao_que_comeca_interrompe_o_teste(fora_de_sessao, monkeypatch, tmp_path):
+    jogo = _jogo(tmp_path)
+    dormir_de_verdade = session_fita.time.sleep
+    monkeypatch.setattr(
+        session_fita,
+        "ESTILOS_DO_PULSO",
+        {e: {t: [session_fita.Passo("pulso", 0), session_fita.Passo("base", 0), session_fita.Passo("pulso", 0)]
+             for t in session_fita.FORCA_DOS_PULSOS} for e in ("piscar",)},
+    )
+
+    def dormir(segundos):
+        if session_fita._jogo_da_sessao is None:
+            session_fita.comecar(jogo)  # a sessão começa no meio do teste
+        dormir_de_verdade(0)
+
+    monkeypatch.setattr(session_fita.time, "sleep", dormir)
+    session_fita.testar_pulso()
+    fora_de_sessao.tarefas.pop(0)()  # o teste: um passo e para
+    assert _cores(fora_de_sessao.modulo).count(_ouro()) == 1
+    assert session_fita._teste_do_pulso is None
+
+
+def test_fechar_interrompe_o_teste(fora_de_sessao, monkeypatch):
+    monkeypatch.setattr(
+        session_fita,
+        "ESTILOS_DO_PULSO",
+        {"piscar": {t: [session_fita.Passo("pulso", 0), session_fita.Passo("base", 0), session_fita.Passo("pulso", 0)]
+                    for t in session_fita.FORCA_DOS_PULSOS}},
+    )
+    dormir_de_verdade = session_fita.time.sleep
+
+    def dormir(segundos):
+        session_fita._encerrar_pulsos()  # o que `fechar` faz antes de devolver
+        dormir_de_verdade(0)
+
+    monkeypatch.setattr(session_fita.time, "sleep", dormir)
+    session_fita.testar_pulso()
+    fora_de_sessao.tarefas.pop(0)()
+    assert _cores(fora_de_sessao.modulo).count(_ouro()) == 1  # parou no primeiro passo
+    assert session_fita._teste_do_pulso is None
+
+
+def test_clique_novo_toma_o_lugar_do_teste_anterior(fora_de_sessao):
+    session_fita.testar_pulso()
+    primeiro = session_fita._teste_do_pulso
+    session_fita.testar_pulso()
+    assert session_fita._teste_do_pulso is not primeiro
+    assert len(session_fita._fila_de_pulsos) == 1
+    assert len(fora_de_sessao.tarefas) == 1  # uma thread só serve a fila
+
+
+def test_teste_sem_fita_nao_faz_nada(schema, monkeypatch):
+    tarefas = []
+    monkeypatch.setattr(session_fita, "_em_thread", tarefas.append)
+    session_fita.testar_pulso()
+    assert tarefas == []
 
 
 # endregion

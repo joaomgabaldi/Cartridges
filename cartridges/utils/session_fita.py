@@ -1293,6 +1293,15 @@ def reacender() -> None:
 _jogo_da_sessao: Optional["Game"] = None
 
 
+class _TesteDoPulso:
+    """Marcador de um teste do pulso: um novo a cada clique em "Testar"."""
+
+
+# O teste do pulso que está valendo (um marcador novo a cada clique), ou None.
+# Como ``_jogo_da_sessao``: só a thread de UI escreve, sob ``_TRAVA_PULSO``.
+_teste_do_pulso: Optional[_TesteDoPulso] = None
+
+
 def comecar(game: "Game") -> None:
     """A sessão começou: veste a cor do jogo. Chamar da thread de UI.
 
@@ -1301,12 +1310,14 @@ def comecar(game: "Game") -> None:
     A vez de cada fita, essa sim, é tirada aqui: um "Já terminei" logo depois
     tem de vencer a cor do jogo que ainda estava sendo calculada.
     """
-    global _jogo_da_sessao  # noqa: PLW0603
+    global _jogo_da_sessao, _teste_do_pulso  # noqa: PLW0603
     alvos = _guardadas() if ligada() else None
     # A sessão e a vez de cada fita mudam juntas, sob a trava do pulso: um
-    # pulso que vê a sessão antiga não reserva depois desta troca.
+    # pulso que vê a sessão antiga não reserva depois desta troca. Um teste do
+    # pulso em curso também acaba: a sessão é dona das fitas.
     with _TRAVA_PULSO:
         _jogo_da_sessao = game
+        _teste_do_pulso = None
         _fila_de_pulsos.clear()
         geracoes = _reservar(alvos) if alvos is not None else {}
     if alvos is None:
@@ -1413,7 +1424,7 @@ FORCA_DOS_PULSOS = ("normal", "rara", "completo")
 # (``_TRAVA_DAS_TRAVAS``, nunca o contrário) e a fila — nada de rede, e nunca
 # com a trava de uma fita na mão.
 _TRAVA_PULSO = threading.Lock()
-_fila_de_pulsos: list[tuple["Game", str]] = []
+_fila_de_pulsos: list[tuple[object, str]] = []
 _pulsando = False
 
 
@@ -1421,11 +1432,19 @@ def _encerrar_pulsos(alvos: Optional[list[Fita]] = None) -> Optional[dict[str, i
     """A sessão acabou (ou o app vai fechar): o pulso em curso para no próximo
     passo e a fila vai fora. Com ``alvos``, devolve a vez de cada um deles,
     tirada na mesma trava."""
-    global _jogo_da_sessao  # noqa: PLW0603
+    global _jogo_da_sessao, _teste_do_pulso  # noqa: PLW0603
     with _TRAVA_PULSO:
         _jogo_da_sessao = None
+        _teste_do_pulso = None
         _fila_de_pulsos.clear()
         return _reservar(alvos) if alvos is not None else None
+
+
+def _dono_vale(dono: object) -> bool:
+    """O pulso deste dono ainda vale? Chamar com ``_TRAVA_PULSO`` na mão."""
+    if dono is _jogo_da_sessao:
+        return dono is not None
+    return dono is _teste_do_pulso and _jogo_da_sessao is None
 
 
 def pulsar_conquista(tipo: str) -> None:
@@ -1439,7 +1458,7 @@ def pulsar_conquista(tipo: str) -> None:
     if jogo is None or tipo not in FORCA_DOS_PULSOS or not ligada():
         return
     with _TRAVA_PULSO:
-        if _jogo_da_sessao is not jogo:
+        if not _dono_vale(jogo):
             return
         if _fila_de_pulsos:
             esperando = _fila_de_pulsos[0][1]
@@ -1466,9 +1485,9 @@ def _servir_pulsos() -> None:
             if not _fila_de_pulsos:
                 _pulsando = False
                 return
-            jogo, tipo = _fila_de_pulsos.pop(0)
+            dono, tipo = _fila_de_pulsos.pop(0)
         try:
-            _pulsar(jogo, tipo)
+            _pulsar(dono, tipo)
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Falha no pulso de conquista", exc_info=True)
 
@@ -1503,33 +1522,39 @@ def _deslizar(fita: Fita, cor: Cor, segundos: float, geracao: int) -> None:
         _tingir(fita, cor, geracao)
 
 
-def _vez_na_sessao(jogo: "Game", alvos: list[Fita]) -> Optional[dict[str, int]]:
+def _vez_do_pulso(dono: object, alvos: list[Fita]) -> Optional[dict[str, int]]:
     """A vez de cada fita para o próximo passo do pulso, ou ``None`` se a
-    sessão acabou (ou o recurso foi desligado) e o pulso deve parar.
+    sessão acabou, o teste foi interrompido ou o recurso foi desligado, e o
+    pulso deve parar.
 
-    A conferência da sessão e a reserva são uma coisa só, sob a trava: sem
+    A conferência do dono e a reserva são uma coisa só, sob a trava: sem
     isso, o fim da sessão podia caber entre as duas, e o passo dourado, com a
     vez maior, tomava o lugar da volta à cor do app.
     """
     if not ligada():
         return None
     with _TRAVA_PULSO:
-        if _jogo_da_sessao is not jogo:
+        if not _dono_vale(dono):
             return None
         return _reservar(alvos)
 
 
-def _pulsar(jogo: "Game", tipo: str) -> None:
+def _base_do_pulso(dono: object) -> Cor:
+    """A cor de antes do pulso: a do app no teste, a do jogo na sessão."""
+    return cor_do_app() if isinstance(dono, _TesteDoPulso) else cor_do_jogo(dono)
+
+
+def _pulsar(dono: object, tipo: str) -> None:
     alvos = _guardadas()
     if not alvos:
         return
-    cor_jogo = cor_do_jogo(jogo)
+    cor_base = _base_do_pulso(dono)
     cor_pulso = cor_do_pulso()
     for passo in ESTILOS_DO_PULSO[estilo_do_pulso()][tipo]:
-        geracoes = _vez_na_sessao(jogo, alvos)
+        geracoes = _vez_do_pulso(dono, alvos)
         if geracoes is None:
             return
-        cor = cor_pulso if passo.alvo == "pulso" else cor_jogo
+        cor = cor_pulso if passo.alvo == "pulso" else cor_base
         if passo.desliza > 0:
             _em_paralelo(
                 alvos,
@@ -1538,13 +1563,45 @@ def _pulsar(jogo: "Game", tipo: str) -> None:
         else:
             _em_paralelo(alvos, lambda fita, c=cor, g=geracoes: _tingir(fita, c, g[fita.id]))
         time.sleep(passo.segura)
-    geracoes = _vez_na_sessao(jogo, alvos)
+    geracoes = _vez_do_pulso(dono, alvos)
     if geracoes is None:
         return
     _em_paralelo(
         alvos,
-        lambda fita: _transitar(fita, True, hsv_hex(na_fita(cor_jogo, fita)), geracoes[fita.id]),
+        lambda fita: _transitar(fita, True, hsv_hex(na_fita(cor_base, fita)), geracoes[fita.id]),
     )
+
+
+def testar_pulso() -> None:
+    """Toca o pulso normal com a cor e o estilo escolhidos, para ver como ficou.
+
+    Chamar da thread de UI. Numa sessão, é o pulso normal do jogo; fora dela,
+    parte da cor do app e volta a ela. Um clique novo toma o lugar do teste
+    anterior (o que tocava para no próximo passo); uma sessão que começa ou o
+    app fechando interrompem o teste do mesmo jeito.
+    """
+    global _teste_do_pulso, _pulsando  # noqa: PLW0603
+    if _jogo_da_sessao is not None:
+        pulsar_conquista("normal")
+        return
+    if not ligada():
+        return
+    with _TRAVA_PULSO:
+        if _jogo_da_sessao is not None:
+            return
+        _teste_do_pulso = dono = _TesteDoPulso()
+        # Fora de sessão a fila só tem testes: o novo é o único que espera.
+        _fila_de_pulsos[:] = [(dono, "normal")]
+        if _pulsando:
+            return
+        _pulsando = True
+    try:
+        _em_thread(_servir_pulsos)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.warning("Não foi possível iniciar o teste do pulso", exc_info=True)
+        with _TRAVA_PULSO:
+            _pulsando = False
+            _fila_de_pulsos.clear()
 
 
 # endregion
