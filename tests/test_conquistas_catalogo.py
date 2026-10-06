@@ -173,7 +173,7 @@ def test_chave_da_steam_vai_codificada_na_url(monkeypatch, schema):
 
 def test_cache_ida_e_volta():
     cat = Catalogo((ConquistaInfo("ACH_A", "A", "d", "i", "g", True, 3.5),), 1000, True)
-    catalogo._gravar_cache("570", cat)
+    catalogo.guardar("570", cat)
     assert catalogo.em_cache("570") == cat
 
 
@@ -205,7 +205,7 @@ def test_cache_feito_sem_chave_vence_quando_uma_chave_aparece():
 
 def test_impressao_vai_para_o_cache():
     cat = Catalogo((INFO,), 1000, False, catalogo._impressao("A"))
-    catalogo._gravar_cache("570", cat)
+    catalogo.guardar("570", cat)
     assert catalogo.em_cache("570") == cat
 
 
@@ -325,14 +325,14 @@ def test_chave_recusada_cai_no_arquivo_do_jogo(monkeypatch, schema):
 def test_rede_fora_fica_com_o_cache(monkeypatch, schema):
     schema.set_string("conquistas-chave-steam", "abc")
     anterior = Catalogo((INFO,), 1, True)
-    catalogo._gravar_cache("570", anterior)
+    catalogo.guardar("570", anterior)
     monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetSchemaForGame": ErroDeConexao()}))
     assert catalogo.renovar("570", "", agora=10**9).catalogo == anterior
 
 
 def test_obter_usa_o_cache_valido(monkeypatch):
     cat = Catalogo((INFO,), 1000, False)
-    catalogo._gravar_cache("570", cat)
+    catalogo.guardar("570", cat)
     monkeypatch.setattr(catalogo, "_pedir", _pedidos({}))  # qualquer pedido falha o teste
     assert catalogo.obter("570", "", agora=1010).catalogo == cat
 
@@ -420,7 +420,7 @@ def test_cache_ilegivel_nao_levanta(texto):
 def test_resposta_da_steam_ilegivel_fica_com_o_cache(monkeypatch, schema, erro):
     schema.set_string("conquistas-chave-steam", "abc")
     anterior = Catalogo((INFO,), 1, True)
-    catalogo._gravar_cache("570", anterior)
+    catalogo.guardar("570", anterior)
     monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetSchemaForGame": erro}))
     assert catalogo.renovar("570", "", agora=10**9).catalogo == anterior
 
@@ -482,7 +482,7 @@ def test_resposta_ilegivel_nao_conta_como_rede_fora(monkeypatch, schema):
 def test_sem_rede_usa_o_cache_vencido_sem_pedir(monkeypatch, schema):
     schema.set_string("conquistas-chave-steam", "abc")
     anterior = Catalogo((INFO,), 1, True, catalogo._impressao("abc"))
-    catalogo._gravar_cache("570", anterior)
+    catalogo.guardar("570", anterior)
     pedidos = _sem_pedidos(monkeypatch)
     renovacao = catalogo.obter("570", "", agora=10**9, rede=False)
     assert renovacao.catalogo == anterior
@@ -549,7 +549,7 @@ def test_falha_de_rede_nao_vira_cache_negativo(monkeypatch, schema):
 def test_cache_negativo_nao_apaga_um_catalogo_anterior(monkeypatch, schema):
     schema.set_string("conquistas-chave-steam", "abc")
     anterior = Catalogo((INFO,), 1, True, catalogo._impressao("abc"))
-    catalogo._gravar_cache("570", anterior)
+    catalogo.guardar("570", anterior)
     monkeypatch.setattr(catalogo, "_local", lambda _exe: [])
     monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetSchemaForGame": {"game": {}}}))
     assert catalogo.renovar("570", "", agora=10**9).catalogo == anterior
@@ -637,17 +637,17 @@ def test_appid_que_nao_e_numero_nao_toca_disco_nem_rede(monkeypatch, schema, app
     )
 
 
-def test_gravar_cache_nao_deixa_temporario_para_tras(monkeypatch):
+def test_guardar_nao_deixa_temporario_para_tras(monkeypatch):
     def travado(self, destino):
         raise PermissionError("travado")
 
     monkeypatch.setattr(Path, "replace", travado)
     with pytest.raises(OSError):
-        catalogo._gravar_cache("570", Catalogo((INFO,), 1, False))
+        catalogo.guardar("570", Catalogo((INFO,), 1, False))
     assert list(shared.conquistas_cache_dir.glob("*")) == []
 
 
-def test_gravar_cache_tem_um_temporario_por_gravacao(monkeypatch):
+def test_guardar_tem_um_temporario_por_gravacao(monkeypatch):
     nomes = []
     original = Path.write_text
 
@@ -656,8 +656,8 @@ def test_gravar_cache_tem_um_temporario_por_gravacao(monkeypatch):
         return original(self, *args, **kwargs)
 
     monkeypatch.setattr(Path, "write_text", espiar)
-    catalogo._gravar_cache("570", Catalogo((INFO,), 1, False))
-    catalogo._gravar_cache("570", Catalogo((INFO,), 2, False))
+    catalogo.guardar("570", Catalogo((INFO,), 1, False))
+    catalogo.guardar("570", Catalogo((INFO,), 2, False))
     assert len(set(nomes)) == 2 and all(n.endswith(".tmp") for n in nomes)
 
 
@@ -755,7 +755,7 @@ def test_vencido_pelo_schema_mais_novo():
 
 def test_obter_renova_quando_o_schema_local_fica_mais_novo(tmp_path, monkeypatch):
     agora = int(time.time())
-    catalogo._gravar_cache("570", Catalogo((INFO,), agora - 10, False, ""))
+    catalogo.guardar("570", Catalogo((INFO,), agora - 10, False, ""))
     arquivo = _schema_local(tmp_path, monkeypatch, mtime=agora - 100)
     monkeypatch.setattr(catalogo, "_pedir", _pedidos({"GetGlobal": PORCENTAGENS}))
     assert [i.nome for i in catalogo.obter("570", "").catalogo.conquistas] == ["ACH_L"]
@@ -825,7 +825,7 @@ def test_schema_local_ilegivel_com_chave_vai_para_a_web_api(tmp_path, monkeypatc
 def test_obter_mantem_cache_da_chave_com_schema_local_mais_velho(tmp_path, monkeypatch, schema):
     schema.set_string("conquistas-chave-steam", "abc")
     agora = int(time.time())
-    catalogo._gravar_cache("570", Catalogo((INFO,), agora - 10, True, catalogo._impressao("abc")))
+    catalogo.guardar("570", Catalogo((INFO,), agora - 10, True, catalogo._impressao("abc")))
     _schema_local(tmp_path, monkeypatch, mtime=agora - 100)
     monkeypatch.setattr(catalogo, "_pedir", _pedidos({}))  # qualquer pedido falha o teste
     cat = catalogo.obter("570", "").catalogo
@@ -835,7 +835,7 @@ def test_obter_mantem_cache_da_chave_com_schema_local_mais_velho(tmp_path, monke
 
 def test_obter_ignora_schema_local_com_data_no_futuro(tmp_path, monkeypatch):
     agora = int(time.time())
-    catalogo._gravar_cache("570", Catalogo((INFO,), agora - 10, False, ""))
+    catalogo.guardar("570", Catalogo((INFO,), agora - 10, False, ""))
     _schema_local(tmp_path, monkeypatch, mtime=agora + 3 * 24 * 3600)
     monkeypatch.setattr(catalogo, "_pedir", _pedidos({}))  # qualquer pedido falha o teste
     assert [i.nome for i in catalogo.obter("570", "").catalogo.conquistas] == ["ACH_L"]
@@ -872,7 +872,7 @@ def test_catalogo_com_porcentagens_nao_marca_sem_raridade(monkeypatch):
 
 def test_porcentagem_do_catalogo_anterior_conta_como_raridade(monkeypatch):
     anterior = Catalogo((ConquistaInfo("ACH_L", "Local", "", "", "", False, 3.0),), 1, False)
-    catalogo._gravar_cache("570", anterior)
+    catalogo.guardar("570", anterior)
     monkeypatch.setattr(catalogo, "_local", lambda _exe: [INFO])
     monkeypatch.setattr(catalogo, "_pedir", _pedidos({}))  # qualquer pedido falha o teste
     assert catalogo.renovar("570", "", agora=1000, rede=False).catalogo.sem_raridade is False
@@ -880,7 +880,7 @@ def test_porcentagem_do_catalogo_anterior_conta_como_raridade(monkeypatch):
 
 def test_sem_raridade_vai_para_o_cache():
     cat = Catalogo((INFO,), 1000, False, "", True)
-    catalogo._gravar_cache("570", cat)
+    catalogo.guardar("570", cat)
     assert catalogo.em_cache("570") == cat
 
 

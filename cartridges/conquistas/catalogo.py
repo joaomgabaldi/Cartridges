@@ -376,10 +376,6 @@ def guardar(appid: str, cat: Catalogo) -> None:
             pass
 
 
-# O nome antigo, que os testes e `renovar` ainda usam.
-_gravar_cache = guardar
-
-
 def _impressao(chave: str) -> str:
     """Identifica a chave sem guardá-la: o cache fica em disco."""
     if not chave:
@@ -495,7 +491,7 @@ def renovar(
             # segue escondido (`progresso.montar` não monta catálogo vazio).
             vazio = Catalogo((), agora, schema_respondeu, impressao)
             try:
-                _gravar_cache(appid, vazio)
+                guardar(appid, vazio)
             except OSError as erro:
                 logging.warning("Catálogo de conquistas de %s não gravado: %s", appid, erro)
             return Renovacao(vazio, recusada)
@@ -525,7 +521,7 @@ def renovar(
     )
     cat = Catalogo(conquistas, agora, com_chave, impressao, sem_raridade)
     try:
-        _gravar_cache(appid, cat)
+        guardar(appid, cat)
     except OSError as erro:
         logging.warning("Catálogo de conquistas de %s não gravado: %s", appid, erro)
     return Renovacao(cat, recusada, rede_falhou)

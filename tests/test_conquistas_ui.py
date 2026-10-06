@@ -49,7 +49,7 @@ def executor_proprio(monkeypatch):
 
 @pytest.fixture
 def com_conquistas(store):
-    catalogo._gravar_cache("570", CAT)
+    catalogo.guardar("570", CAT)
     game = jogo(store, 1, steam_appid="570")
     historico.registrar(game.game_id, [Desbloqueio("A", 100), Desbloqueio("B", 200)])
     com_fonte(game, "steam:570")
@@ -69,7 +69,7 @@ def test_cartao_nao_arredonda_para_cima_ate_o_fim(real_window, store):
     grande = Catalogo(
         tuple(ConquistaInfo(f"N{n}", f"N{n}", "", "", "", False) for n in range(1000)), 0, True
     )
-    catalogo._gravar_cache("570", grande)
+    catalogo.guardar("570", grande)
     game = jogo(store, 1, steam_appid="570")
     historico.registrar(game.game_id, [Desbloqueio(f"N{n}", 1) for n in range(999)])
     com_fonte(game, "steam:570")

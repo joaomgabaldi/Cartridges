@@ -61,7 +61,7 @@ def test_inicio_grava_em_silencio(pastas, make_game):
 
 
 def test_conquista_nova_durante_a_partida(pastas, make_game):
-    catalogo._gravar_cache("570", CAT)
+    catalogo.guardar("570", CAT)
     _arquivo(pastas, [("ACH_A", 100)])
     instancia, avisos = _vigia(make_game)
     com_fonte(instancia.game, "steam:570")
@@ -136,7 +136,7 @@ def test_base_sem_nada_lido_nao_grava_fonte(pastas, make_game):
 
 def test_titulos_vem_do_catalogo_da_fonte_gravada(pastas, make_game, monkeypatch):
     """`progresso.do_jogo` usa a chave da fonte gravada; o aviso tem de usar a mesma."""
-    catalogo._gravar_cache("999", CAT)
+    catalogo.guardar("999", CAT)
     _arquivo(pastas, [("ACH_A", 100)])
     instancia, avisos = _vigia(make_game)
     # Difere do steam_appid do jogo (570): só a chave da fonte tem este catálogo. A fonte já
@@ -151,7 +151,7 @@ def test_titulos_vem_do_catalogo_da_fonte_gravada(pastas, make_game, monkeypatch
 
 
 def test_sem_fonte_o_titulo_cai_para_o_appid_do_jogo(pastas, make_game, monkeypatch):
-    catalogo._gravar_cache("570", CAT)
+    catalogo.guardar("570", CAT)
     _arquivo(pastas, [("ACH_A", 100)])
     instancia, avisos = _vigia(make_game)
     instancia.iniciar()
@@ -267,7 +267,7 @@ def test_historico_indisponivel_por_um_tique_avisa_no_seguinte_uma_vez_so(
     pastas, make_game, monkeypatch
 ):
     """Antivírus com o histórico aberto no instante da releitura: nada se perde nem se duplica."""
-    catalogo._gravar_cache("570", CAT)
+    catalogo.guardar("570", CAT)
     _arquivo(pastas, [("ACH_A", 100)])
     instancia, avisos = _vigia(make_game)
     instancia.iniciar()
@@ -405,7 +405,7 @@ CAT3 = Catalogo(
 
 
 def test_duas_de_uma_vez_sem_fechar_o_jogo_nao_completam(pastas, make_game):
-    catalogo._gravar_cache("570", CAT3)
+    catalogo.guardar("570", CAT3)
     _arquivo(pastas, [])
     instancia, avisos = _vigia(make_game)
     com_fonte(instancia.game, "steam:570")
@@ -416,7 +416,7 @@ def test_duas_de_uma_vez_sem_fechar_o_jogo_nao_completam(pastas, make_game):
 
 
 def test_o_cem_por_cento_e_da_ultima_conquista_do_catalogo(pastas, make_game):
-    catalogo._gravar_cache("570", CAT)
+    catalogo.guardar("570", CAT)
     _arquivo(pastas, [("ACH_A", 100)])
     instancia, avisos = _vigia(make_game)
     com_fonte(instancia.game, "steam:570")
@@ -428,7 +428,7 @@ def test_o_cem_por_cento_e_da_ultima_conquista_do_catalogo(pastas, make_game):
 
 
 def test_jogo_ja_completo_que_recebe_nome_desconhecido_nao_completa(pastas, make_game):
-    catalogo._gravar_cache("570", CAT)
+    catalogo.guardar("570", CAT)
     _arquivo(pastas, [("ACH_A", 100), ("ACH_B", 200)])
     instancia, avisos = _vigia(make_game)
     com_fonte(instancia.game, "steam:570")
@@ -615,7 +615,7 @@ def test_jogo_que_nao_e_da_steam_com_hora_antiga_avisa_como_antes(pastas, make_g
 
 
 def test_cem_por_cento_so_de_conquista_sincronizada_nao_pulsa(tmp_path, pastas, make_game, monkeypatch):
-    catalogo._gravar_cache("570", CAT)
+    catalogo.guardar("570", CAT)
     com_fonte(make_game(game_id="g1"), "steam:570")
     estado, instancia, avisos = _sessao_da_steam(tmp_path, make_game, monkeypatch, {})
     _estado_da_steam(estado, {0: DIAS_ATRAS, 1: DIAS_ATRAS})
