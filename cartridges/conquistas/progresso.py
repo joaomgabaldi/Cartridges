@@ -8,7 +8,8 @@ sem de onde ler o progresso, "0 de N" ficaria parado para sempre.
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
+from xml.sax.saxutils import escape as _escapar
 
 from cartridges.conquistas import catalogo, fontes, historico
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
@@ -29,6 +30,9 @@ class Linha:
 class Progresso:
     desbloqueadas: tuple[Linha, ...]
     bloqueadas: tuple[Linha, ...]
+    # As mesmas linhas na ordem do catálogo: a tela de sessão mostra os
+    # ícones sempre no mesmo lugar.
+    todas: tuple[Linha, ...] = ()
 
     @property
     def total(self) -> int:
@@ -62,13 +66,16 @@ def montar(cat: Optional[Catalogo], hist: Optional[dict[str, int]]) -> Optional[
     hist = hist or {}
     feitas: list[Linha] = []
     faltam: list[Linha] = []
+    todas: list[Linha] = []
     for info in cat.conquistas:
         quando = hist.get(info.nome.upper())
-        (feitas if quando is not None else faltam).append(Linha(info, quando))
+        linha = Linha(info, quando)
+        todas.append(linha)
+        (feitas if quando is not None else faltam).append(linha)
     # Mais recente primeiro. `sort` é estável, então as sem data (0) ficam no
     # fim, na ordem do catálogo.
     feitas.sort(key=lambda linha: linha.quando or 0, reverse=True)
-    return Progresso(tuple(feitas), tuple(faltam))
+    return Progresso(tuple(feitas), tuple(faltam), tuple(todas))
 
 
 def do_jogo(game: Any) -> Optional[Progresso]:
@@ -85,3 +92,43 @@ def do_jogo(game: Any) -> Optional[Progresso]:
 def porcentagem_em_texto(valor: float) -> str:
     """Porcentagem global no jeito brasileiro: 4.1 vira "4,1%"."""
     return f"{valor:.1f}%".replace(".", ",")
+
+
+class Aparencia(NamedTuple):
+    """O que um ícone de conquista mostra: de onde vem a imagem, se leva o
+    filtro cinza e se é a interrogação de uma oculta."""
+
+    origem: str
+    cinza: bool
+    oculta: bool
+
+
+def _escondida(linha: Linha, mostrar_ocultas: bool) -> bool:
+    return linha.info.oculta and not linha.desbloqueada and not mostrar_ocultas
+
+
+def aparencia(linha: Linha, mostrar_ocultas: bool) -> Aparencia:
+    """A regra da lista e da tela de sessão: colorida se desbloqueada; a
+    bloqueada usa o ícone cinza da loja ou, sem ele, o mesmo em cinza."""
+    if _escondida(linha, mostrar_ocultas):
+        return Aparencia("", False, True)
+    info = linha.info
+    if linha.desbloqueada:
+        return Aparencia(info.icone, False, False)
+    return Aparencia(info.icone_cinza or info.icone, not info.icone_cinza, False)
+
+
+def dica(linha: Linha, mostrar_ocultas: bool) -> str:
+    """O texto ao passar o mouse no ícone: nome, descrição e porcentagem (markup Pango)."""
+    if _escondida(linha, mostrar_ocultas):
+        return "<b>{}</b>\n{}".format(
+            _escapar(_("Conquista oculta")), _escapar(_("Os detalhes aparecem depois do desbloqueio."))
+        )
+    info = linha.info
+    partes = [f"<b>{_escapar(info.titulo)}</b>"]
+    if info.descricao:
+        partes.append(_escapar(info.descricao))
+    if info.porcentagem is not None:
+        # A variável é a porcentagem já formatada, como "3,8%"
+        partes.append(_escapar(_("{} dos jogadores").format(porcentagem_em_texto(info.porcentagem))))
+    return "\n".join(partes)
