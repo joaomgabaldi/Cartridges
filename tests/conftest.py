@@ -588,6 +588,26 @@ def write_asset(app_dirs):
     return writer
 
 
+@pytest.fixture
+def sessao_sem_efeitos(monkeypatch):
+    """O bloqueador da janela de verdade, sem parede, fita nem controle."""
+    import cartridges.window as window_module  # noqa: PLC0415
+
+    vestidas = []
+    monkeypatch.setattr(window_module.session_fita, "comecar", vestidas.append)
+    monkeypatch.setattr(window_module.session_fita, "voltar", lambda: None)
+    monkeypatch.setattr(window_module.session_wallpaper, "comecar", lambda _g: None)
+    monkeypatch.setattr(window_module.session_wallpaper, "restaurar", lambda: None)
+    monkeypatch.setattr(
+        window_module.window_geometry, "restore_from_monitor", lambda _w: None
+    )
+    # O vigia de conquistas é global ao processo: um teste que mostra o
+    # bloqueador sem escondê-lo o deixaria vivo para o teste seguinte.
+    monkeypatch.setattr(window_module.sessao_conquistas, "comecar", lambda _g: None)
+    monkeypatch.setattr(window_module.sessao_conquistas, "parar", lambda: None)
+    return vestidas
+
+
 @pytest.fixture(autouse=True)
 def _quadro_de_tarefas_limpo():
     """O quadro de tarefas é global ao processo: entregas que ficaram na fila e

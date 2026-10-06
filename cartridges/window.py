@@ -32,6 +32,7 @@ from cartridges import shared
 from cartridges.botao_tarefas import BotaoTarefas
 from cartridges.conquistas import icones, progresso
 from cartridges.conquistas import sessao as sessao_conquistas
+from cartridges.conquistas_sessao import CartaoDaSessao
 from cartridges.game import Game, STATUS_LABELS, status_label
 from cartridges.game_cover import GameCover
 from cartridges.utils.animated_flow_box import AnimatedFlowBox
@@ -89,6 +90,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
     session_blocker: Gtk.Box = Gtk.Template.Child()
     session_blocker_label: Gtk.Label = Gtk.Template.Child()
     session_blocker_button: Gtk.Button = Gtk.Template.Child()
+    session_blocker_conquistas: Gtk.Box = Gtk.Template.Child()
     session_blocker_notes_button: Gtk.MenuButton = Gtk.Template.Child()
     session_blocker_notes_popover: Gtk.Popover = Gtk.Template.Child()
     session_blocker_notes_view: Gtk.TextView = Gtk.Template.Child()
@@ -332,6 +334,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # The "session in progress" overlay button ends the session, same as the
         # compact window's button
         self.session_blocker_button.connect("clicked", self.on_session_blocker_clicked)
+        self.cartao_da_sessao = CartaoDaSessao()
+        self.session_blocker_conquistas.append(self.cartao_da_sessao)
 
         # O menu do status é o mesmo do começo ao fim da execução: as opções
         # não dependem do jogo aberto, só o rótulo do botão depende.
@@ -508,6 +512,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.botao_tarefas.reavaliar()
         # The variable is the name of the game currently being played
         self.session_blocker_label.set_label(_("{} em execução").format(game.name))
+        self.update_conquistas_sessao(game)
         # The opaque overlay covers the whole window content (including the
         # header bar) so "Jogar" can't start a second session; the window can
         # still be moved/closed via the taskbar or system shortcuts
@@ -571,6 +576,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.session_blocker.set_visible(False)
         jogo_da_sessao = self.session_game
         self.session_game = None
+        self.cartao_da_sessao.limpar()
         self.botao_tarefas.reavaliar()
         self.navigation_view.set_sensitive(True)
 
@@ -1570,6 +1576,17 @@ class CartridgesWindow(Adw.ApplicationWindow):
         if (resto := atual.feitas - self._ICONES_NO_CARTAO) > 0:
             caixa.append(Gtk.Label(label=f"+{resto}", css_classes=["dim-label"]))
         caixa.set_visible(atual.feitas > 0)
+
+    def update_conquistas_sessao(self, game: Game) -> None:
+        """O cartão de conquistas da tela de sessão, se ``game`` é o da sessão.
+        Nunca levanta: falhar aqui não pode travar o "Já terminei de jogar"."""
+        if self.session_game is not game:
+            return
+        try:
+            self.cartao_da_sessao.mostrar(game)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Falha ao montar as conquistas da tela de sessão", exc_info=True)
+            self.cartao_da_sessao.limpar()
 
     def on_conquistas_clicked(self, *_args: Any) -> None:
         from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415

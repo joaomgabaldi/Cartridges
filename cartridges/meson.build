@@ -45,6 +45,7 @@ install_data(
     'details_dialog.py',
     'conquista_aviso.py',
     'conquistas_dialog.py',
+    'conquistas_sessao.py',
     'sgdb_picker.py',
     'logo_picker.py',
     'wallpaper_picker.py',
