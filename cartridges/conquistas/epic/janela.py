@@ -10,28 +10,16 @@ O texto colado nunca vai para o log.
 
 import logging
 import os
-import threading
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
-from gi.repository import Adw, GLib, Gtk
+from gi.repository import Adw, Gtk
 
 from cartridges.conquistas.epic import conta
+from cartridges.conquistas.vigia_da_conta import _em_thread
 
 
 def _abrir_navegador(url: str) -> None:
     os.startfile(url)  # type: ignore[attr-defined]  # pylint: disable=no-member
-
-
-def _em_thread(trabalho: Callable[[], Any], entregar: Callable[[Any], None]) -> None:
-    def devolver(resultado: Any) -> bool:
-        entregar(resultado)
-        return False
-
-    def rodar() -> None:
-        resultado = trabalho()
-        GLib.idle_add(devolver, resultado)
-
-    threading.Thread(target=rodar, daemon=True).start()
 
 
 _OK, _RECUSADO, _FALHOU = "ok", "recusado", "falhou"
@@ -146,7 +134,8 @@ class JanelaDeLogin(Adw.Dialog):
             logging.warning("Falha ao iniciar o login da Epic: %s", type(erro).__name__)
             self._receber(_FALHOU)
 
-    def _receber(self, resultado: str) -> None:
+    def _receber(self, resultado: Optional[str]) -> None:
+        # None: o trabalho levantou (o `_em_thread` entrega None); cai na falha genérica.
         if resultado == _OK:
             # A conta já conectou, com a janela aberta ou não (Cancelar, Esc, Preferências
             # fechadas durante a troca): a leitura dos jogos da Epic tem de acontecer.
