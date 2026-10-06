@@ -133,3 +133,13 @@ def test_texto_colado_nao_vai_ao_log(abertas, monkeypatch, caplog):
     j.campo.set_text(_COD)
     j.botao_conectar.emit("clicked")
     assert _COD not in caplog.text
+
+
+def test_tarefa_que_levanta_chega_como_none_e_vira_falha_generica(abertas):
+    """O `_em_thread` compartilhado entrega None quando o trabalho levanta."""
+    j = janela.JanelaDeLogin(lambda: None, abrir=abertas.append, em_thread=lambda _t, entregar: entregar(None))
+    j.close = lambda: abertas.append("fechou")
+    j.campo.set_text(_COD)
+    j.botao_conectar.emit("clicked")
+    assert j.erro.get_visible() and j.erro.get_label() == "Não foi possível entrar na conta Epic."
+    assert j.botao_conectar.get_sensitive() and "fechou" not in abertas

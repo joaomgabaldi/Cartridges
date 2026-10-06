@@ -40,12 +40,12 @@ def _em_thread(trabalho: Callable[[], Any], entregar: Callable[[Any], None]) -> 
             resultado = trabalho()
         except Exception as erro:  # pylint: disable=broad-exception-caught
             # Só o tipo: a mensagem de uma falha de rede pode trazer endereços.
-            logging.warning("Falha ao consultar as conquistas da conta (%s)", type(erro).__name__)
+            logging.warning("Falha numa tarefa da conta em segundo plano (%s)", type(erro).__name__)
             resultado = None
         try:
             GLib.idle_add(devolver, resultado)
         except Exception:  # pylint: disable=broad-exception-caught
-            logging.warning("Falha ao entregar as conquistas da conta", exc_info=True)
+            logging.warning("Falha ao entregar o resultado de uma tarefa da conta", exc_info=True)
 
     threading.Thread(target=rodar, daemon=True).start()
 
