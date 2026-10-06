@@ -6,7 +6,6 @@ que o registro do launcher guarda para cada produto (`locais.instalacoes`): vale
 funda que contém a pasta do executável.
 """
 
-import os
 import re
 from pathlib import Path
 from typing import Any, Optional
@@ -24,17 +23,9 @@ def de_url(executavel: str) -> Optional[str]:
 
 
 def _da_pasta(pastas: list[Path]) -> Optional[str]:
-    melhor: Optional[tuple[int, str]] = None
-    for produto, raiz in locais.instalacoes().items():
-        for base in pastas:
-            try:
-                pasta = Path(os.path.normcase(os.path.abspath(base)))
-            except (OSError, ValueError):
-                continue
-            # Pasta inteira: `AC2` não está dentro de `AC`.
-            if (pasta == raiz or raiz in pasta.parents) and (melhor is None or len(raiz.parts) > melhor[0]):
-                melhor = (len(raiz.parts), produto)
-    return melhor[1] if melhor is not None else None
+    return arquivos.da_instalacao_mais_funda(
+        pastas, ((raiz, produto) for produto, raiz in locais.instalacoes().items())
+    )
 
 
 def do_jogo(game: Any) -> Optional[str]:

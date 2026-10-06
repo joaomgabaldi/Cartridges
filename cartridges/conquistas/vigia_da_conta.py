@@ -23,7 +23,7 @@ from gi.repository import GLib
 
 from cartridges.conquistas import catalogo, contas, fontes, historico, progresso
 from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.conquistas.vigia import MARGEM_DA_STEAM, Desbloqueada
+from cartridges.conquistas.vigia import MARGEM_DA_STEAM, Desbloqueada, completou, desbloqueadas, para_avisar
 
 INTERVALO = 15
 
@@ -162,35 +162,17 @@ class Vigia:
             )
 
     def _gravados(self, lidos: list[Desbloqueio]) -> bool:
-        """Se tudo o que foi lido já está no histórico (ele só soma)."""
-        guardado = historico.ler(self.game.game_id)
-        if guardado is None:
-            return not lidos
-        return all(d.nome.strip().upper() in guardado for d in lidos)
+        return historico.contem(self.game.game_id, lidos)
 
     def _processar(self, lidos: list[Desbloqueio]) -> None:
         antes = progresso.do_jogo(self.game)
         entraram, primeira = historico.registrar(self.game.game_id, lidos)
         if primeira or not entraram:
             return
-        depois = progresso.do_jogo(self.game)
-        completou = bool(
-            depois is not None and depois.completo and not (antes is not None and antes.completo)
-        )
-        horas = {d.nome.strip().upper(): d.quando for d in lidos}
-        limite = (self._inicio or 0) - MARGEM_DA_STEAM
-        # Conquista com hora anterior ao início da sessão veio de outro aparelho: não é aviso.
-        avisaveis = [
-            nome
-            for nome in sorted(entraram, key=lambda nome: horas.get(nome, 0))
-            if not 0 < horas.get(nome, 0) < limite
-        ]
+        fechou_100 = completou(antes, progresso.do_jogo(self.game))
+        avisaveis = para_avisar(entraram, lidos, (self._inicio or 0) - MARGEM_DA_STEAM)
         if not avisaveis:
             return
         cat = catalogo.em_cache(self._loja.chave_do_catalogo(self._id))
         por_nome = cat.por_nome() if cat is not None else {}
-        # O 100% é da última conquista do catálogo, nunca de um nome que ele não conhece.
-        ultima = next((nome for nome in reversed(avisaveis) if nome in por_nome), None)
-        self._avisar(
-            [Desbloqueada(nome, por_nome.get(nome), completou and nome == ultima) for nome in avisaveis]
-        )
+        self._avisar(desbloqueadas(avisaveis, por_nome, fechou_100))
