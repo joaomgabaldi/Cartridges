@@ -539,4 +539,37 @@ def test_icones_do_cartao_sao_passivos(real_window, com_conquistas, sessao_sem_e
     assert cartao.icones.has_css_class("no-hover")
     filhos = list(_filhos_do_cartao(cartao))
     assert len(filhos) == 3
-    assert not any(filho.get_focusable() for filho in filhos)
+    # Ícones só com tooltip: nada no cartão pode entrar na ordem do Tab
+    assert not cartao.icones.get_can_focus()
+    assert not cartao.rolagem.get_can_focus()
+
+
+def _foco_dentro_de(real_window, ancestral):
+    """O foco pode estar num filho interno (o MenuButton foca o botão de dentro)."""
+    foco = real_window.get_focus()
+    while foco is not None:
+        if foco is ancestral:
+            return True
+        foco = foco.get_parent()
+    return False
+
+
+@pytest.mark.parametrize(
+    ("origem", "direcao"),
+    [
+        ("session_blocker_notes_button", Gtk.DirectionType.TAB_FORWARD),
+        ("session_blocker_button", Gtk.DirectionType.TAB_BACKWARD),
+    ],
+)
+def test_tab_atravessa_o_cartao_sem_perder_o_foco(real_window, store, sessao_sem_efeitos, origem, direcao):
+    catalogo.guardar("570", _catalogo_de(12))
+    game = jogo(store, 1, steam_appid="570")
+    com_fonte(game, "steam:570")
+    _apresentar_e_mostrar(real_window, game)
+    botao = getattr(real_window, origem)
+    botao.grab_focus()
+    assert _foco_dentro_de(real_window, botao)
+    assert real_window.child_focus(direcao)
+    assert real_window.get_focus() is not None
+    assert not _foco_dentro_de(real_window, botao)
+    assert not _foco_dentro_de(real_window, _cartao(real_window))
