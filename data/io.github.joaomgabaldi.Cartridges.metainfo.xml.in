@@ -35,6 +35,8 @@
           <li>Também aparecem as conquistas dos jogos do Xbox, do Game Pass, da Epic Games Store e da Ubisoft Connect; nos do Xbox e da Epic, basta entrar com a conta nas Preferências</li>
           <li>Nos jogos da Steam, as conquistas aparecem em português, mesmo sem a chave da Steam Web API</li>
           <li>Ao desbloquear uma conquista durante o jogo, a iluminação inteligente pisca em dourado e, nos jogos da Steam, um aviso aparece por cima da tela</li>
+          <li>Agora é possível escolher, nas Preferências, a cor e o estilo com que a iluminação inteligente pisca ao desbloquear uma conquista</li>
+          <li>A tela do jogo em execução mostra as conquistas do jogo; ao passar o mouse sobre uma, aparece o que é preciso fazer para desbloqueá-la</li>
         </ul>
       </description>
     </release>
