@@ -30,34 +30,26 @@
   <releases>
     <release version="2026.10.07" date="2026-10-07">
       <description translate="no">
+        <p>GRANDE ATUALIZAÇÃO!</p>
+        <p>Conquistas:</p>
         <ul>
-          <li>Foi corrigido o aviso de conquista, que às vezes ficava escondido atrás do jogo</li>
-          <li>O quadro de conquistas da tela de sessão agora tem título</li>
+          <li>Agora o Cartridges rastreia as conquistas desbloqueadas ao jogar, com suporte às lojas Steam, Epic, Ubisoft, Xbox e alguns jogos 🏴‍☠️;</li>
+          <li>Se você tiver jogos 🏴‍☠️, configure uma chave da Steam Web API na aba Conquistas, para que as conquistas desses jogos apareçam com nome e descrição em português;</li>
+          <li>Para jogos do Xbox e da Epic, será necessário fazer login na sua conta, também na aba Conquistas;</li>
+          <li>Ao abrir o aplicativo, ele avisa quantas conquistas novas foram desbloqueadas desde a última vez;</li>
+          <li>Ao desbloquear uma conquista durante o jogo, a iluminação inteligente reage e, quando a loja do jogo não mostra o próprio aviso, o Cartridges mostra um no canto da tela;</li>
+          <li>Nas Preferências, é possível escolher a cor e o estilo com que a iluminação reage ao desbloquear uma conquista;</li>
+          <li>A tela do jogo em execução mostra as conquistas do jogo; ao passar o mouse sobre uma, aparece a descrição;</li>
         </ul>
-      </description>
-    </release>
-    <release version="2026.10.06" date="2026-10-06">
-      <description translate="no">
+        <p>Correção de bugs e melhorias de desempenho:</p>
         <ul>
-          <li>Agora a página de cada jogo mostra as conquistas, com o progresso e a lista completa, inclusive as obtidas antes de o jogo ser adicionado ao Cartridges</li>
-          <li>Também aparecem as conquistas dos jogos do Xbox, do Game Pass, da Epic Games Store e da Ubisoft Connect; nos do Xbox e da Epic, basta entrar com a conta nas Preferências</li>
-          <li>Nos jogos da Steam, as conquistas aparecem em português, mesmo sem a chave da Steam Web API</li>
-          <li>Ao desbloquear uma conquista durante o jogo, a iluminação inteligente pisca e, nos jogos da Steam, um aviso aparece por cima da tela</li>
-          <li>Agora é possível escolher, nas Preferências, a cor e o estilo com que a iluminação inteligente pisca ao desbloquear uma conquista</li>
-          <li>A tela do jogo em execução mostra as conquistas do jogo; ao passar o mouse sobre uma, aparece o que é preciso fazer para desbloqueá-la</li>
-          <li>A verificação das conquistas ficou mais leve, e a busca ao adicionar um jogo zerado ficou mais rápida</li>
-          <li>Ao escolher uma cor para a iluminação inteligente, os dispositivos mudam na hora, mesmo que algum deles esteja desligado</li>
-          <li>Ao importar jogos, o aplicativo agora avisa quando nenhum jogo novo é encontrado</li>
-          <li>Na tela do jogo em execução, as conquistas ficam em uma única linha, que pode ser rolada com a roda do mouse, começando pelas já desbloqueadas</li>
-          <li>Os monitores agora aparecem numerados corretamente nas Preferências</li>
-        </ul>
-      </description>
-    </release>
-    <release version="2026.10.04" date="2026-10-04">
-      <description translate="no">
-        <ul>
-          <li>Ao restaurar um backup, a mensagem que pede a pasta de atalhos ficou mais clara</li>
-          <li>Em Jogos sem atalho, quando não há atalho para sugerir, o botão Escolher atalho abre direto a seleção do arquivo</li>
+          <li>A busca ao adicionar um jogo zerado ficou mais rápida;</li>
+          <li>Ao escolher uma cor para a iluminação inteligente, os dispositivos mudam na hora, mesmo quando algum deles não responde;</li>
+          <li>Ao importar jogos manualmente, o aplicativo agora avisa quando nenhum jogo novo é encontrado;</li>
+          <li>Os monitores agora aparecem numerados corretamente nas Preferências;</li>
+          <li>Ao restaurar um backup, a mensagem que pede a pasta de atalhos ficou mais clara;</li>
+          <li>Em Jogos sem atalho, quando não há atalho para sugerir, o botão Escolher atalho abre direto a seleção do arquivo;</li>
+          <li>Outras melhorias menores...</li>
         </ul>
       </description>
     </release>
