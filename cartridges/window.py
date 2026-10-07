@@ -38,6 +38,7 @@ from cartridges.game_cover import GameCover
 from cartridges.utils.animated_flow_box import AnimatedFlowBox
 from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.dialog_backdrop import block_window_drag
+from cartridges.utils.sem_arrastar_texto import sem_arrastar_texto
 from cartridges.utils.format_playtime import format_playtime, format_stopwatch
 from cartridges.utils.game_logo import (
     LOGO_MAX_HEIGHT,
@@ -290,6 +291,12 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # vez o arrasto e a maximização da janela pelo fundo escurecido e pelas
         # barras das próprias caixas.
         self.connect("notify::visible-dialog", self.block_dialog_backdrop_drag)
+
+        # A janela cobre todo campo de texto nela e nas caixas de diálogo; os
+        # popovers das anotações são superfícies à parte.
+        sem_arrastar_texto(self)
+        sem_arrastar_texto(self.details_view_notes_popover)
+        sem_arrastar_texto(self.session_blocker_notes_popover)
 
         style_manager = Adw.StyleManager.get_default()
 
