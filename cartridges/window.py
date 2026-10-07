@@ -294,10 +294,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
         # Com uma caixa de diálogo aberta, o clique para nela e não chega à
         # janela; cada caixa ganha o seu em block_dialog_backdrop_drag. Os
-        # popovers das anotações também são superfícies à parte.
+        # popovers das anotações entram junto com a janela.
         sem_arrastar_texto(self)
-        sem_arrastar_texto(self.details_view_notes_popover)
-        sem_arrastar_texto(self.session_blocker_notes_popover)
 
         style_manager = Adw.StyleManager.get_default()
 

@@ -1528,6 +1528,11 @@ def capture_gestures(widget, kind):
     ]
 
 
+# The backdrop guard's primary and secondary clicks, plus the primary click of
+# the guard against dragging selected text.
+GUARD_BUTTONS = [Gdk.BUTTON_PRIMARY, Gdk.BUTTON_PRIMARY, Gdk.BUTTON_SECONDARY]
+
+
 def click_buttons(widget):
     """The mouse buttons the capture-phase click gestures on `widget` listen to."""
     return sorted(g.get_button() for g in capture_gestures(widget, Gtk.GestureClick))
@@ -1557,8 +1562,26 @@ def test_a_presented_dialog_gets_the_backdrop_guard(real_window, details_dialog)
     details_dialog.present(real_window)
 
     assert real_window.get_visible_dialog() is details_dialog
-    assert click_buttons(details_dialog) == [Gdk.BUTTON_PRIMARY, Gdk.BUTTON_SECONDARY]
+    assert click_buttons(details_dialog) == GUARD_BUTTONS
     assert len(capture_gestures(details_dialog, Gtk.GestureDrag)) == 1
+
+
+def test_a_presented_dialog_and_its_popovers_get_the_text_drag_guard(
+    real_window, details_dialog
+):
+    """A press in a dialog or popover stops there and never reaches the window.
+
+    So the guard against dragging selected text (which leaves its image stuck
+    on screen on Windows) goes on the dialog and on every popover inside it,
+    like the colour picker's, whose editor has a text field.
+    """
+    details_dialog.present(real_window)
+
+    popover = details_dialog.fita_color_button
+    while not isinstance(popover, Gtk.Popover):
+        popover = popover.get_parent()
+
+    assert click_buttons(popover) == [Gdk.BUTTON_PRIMARY]
 
 
 def test_the_guard_is_installed_once(real_window, details_dialog):
@@ -1567,7 +1590,7 @@ def test_the_guard_is_installed_once(real_window, details_dialog):
     real_window.block_dialog_backdrop_drag()
     real_window.block_dialog_backdrop_drag()
 
-    assert click_buttons(details_dialog) == [Gdk.BUTTON_PRIMARY, Gdk.BUTTON_SECONDARY]
+    assert click_buttons(details_dialog) == GUARD_BUTTONS
     assert len(capture_gestures(details_dialog, Gtk.GestureDrag)) == 1
 
 
