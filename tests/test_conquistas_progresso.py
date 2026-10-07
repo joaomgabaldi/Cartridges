@@ -107,11 +107,22 @@ def _conquista(nome="A", titulo="Primeira", descricao="Faça algo.", icone="a.pn
     return ConquistaInfo(nome, titulo, descricao, icone, cinza, oculta, pct)
 
 
-def test_todas_na_ordem_do_catalogo():
-    cat = Catalogo((_conquista("A"), _conquista("B"), _conquista("C")), 0, True)
-    prog = montar(cat, {"C": 10, "A": 20})
-    assert [l.info.nome for l in prog.todas] == ["A", "B", "C"]
-    assert [l.desbloqueada for l in prog.todas] == [True, False, True]
+def test_ordem_da_sessao_desbloqueadas_bloqueadas_e_ocultas_por_ultimo():
+    cat = Catalogo(
+        (
+            _conquista("O1", oculta=True),
+            _conquista("A"),
+            _conquista("B"),
+            _conquista("O2", oculta=True),
+            _conquista("C"),
+            _conquista("D"),
+        ),
+        0,
+        True,
+    )
+    # D e a oculta O2 desbloqueadas: a oculta feita já não é segredo
+    prog = montar(cat, {"D": 10, "O2": 20})
+    assert [l.info.nome for l in prog.em_ordem_da_sessao] == ["O2", "D", "A", "B", "C", "O1"]
 
 
 def test_aparencia_desbloqueada_colorida():

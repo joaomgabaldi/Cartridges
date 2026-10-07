@@ -40,6 +40,8 @@
           <li>A verificação das conquistas ficou mais leve, e a busca ao adicionar um jogo zerado ficou mais rápida</li>
           <li>Ao escolher uma cor para a iluminação inteligente, os dispositivos mudam na hora, mesmo que algum deles esteja desligado</li>
           <li>Ao importar jogos, o aplicativo agora avisa quando nenhum jogo novo é encontrado</li>
+          <li>Na tela do jogo em execução, as conquistas ficam em uma única linha, que pode ser rolada com a roda do mouse, começando pelas já desbloqueadas</li>
+          <li>Os monitores agora aparecem numerados corretamente nas Preferências</li>
         </ul>
       </description>
     </release>

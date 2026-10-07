@@ -101,6 +101,18 @@
   overflow: hidden;
 }
 
+/* Lugar de um ícone de conquista que não há (oculta) ou não chegou: o mesmo
+   quadrado cinza dos ícones bloqueados, para não destoar deles. */
+.conquistas-ladrilho {
+  border-radius: 6px;
+  background-color: alpha(currentColor, 0.12);
+  color: alpha(currentColor, 0.6);
+}
+
+.conquistas-interrogacao {
+  font-weight: 800;
+}
+
 /* Conquista bloqueada que só tem o ícone colorido (Xbox): em cinza. */
 .conquistas-icone-bloqueada {
   filter: grayscale(1);

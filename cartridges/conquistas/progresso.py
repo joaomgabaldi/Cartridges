@@ -30,9 +30,6 @@ class Linha:
 class Progresso:
     desbloqueadas: tuple[Linha, ...]
     bloqueadas: tuple[Linha, ...]
-    # As mesmas linhas na ordem do catálogo: a tela de sessão mostra os
-    # ícones sempre no mesmo lugar.
-    todas: tuple[Linha, ...] = ()
 
     @property
     def total(self) -> int:
@@ -59,6 +56,14 @@ class Progresso:
     def completo(self) -> bool:
         return self.total > 0 and self.feitas == self.total
 
+    @property
+    def em_ordem_da_sessao(self) -> tuple[Linha, ...]:
+        """A fila da tela de sessão: as desbloqueadas (mais recente primeiro),
+        depois as bloqueadas que se pode ver e, por último, as ocultas."""
+        visiveis = tuple(linha for linha in self.bloqueadas if not linha.info.oculta)
+        ocultas = tuple(linha for linha in self.bloqueadas if linha.info.oculta)
+        return self.desbloqueadas + visiveis + ocultas
+
 
 def montar(cat: Optional[Catalogo], hist: Optional[dict[str, int]]) -> Optional[Progresso]:
     if cat is None or not cat.conquistas:
@@ -66,16 +71,14 @@ def montar(cat: Optional[Catalogo], hist: Optional[dict[str, int]]) -> Optional[
     hist = hist or {}
     feitas: list[Linha] = []
     faltam: list[Linha] = []
-    todas: list[Linha] = []
     for info in cat.conquistas:
         quando = hist.get(info.nome.upper())
         linha = Linha(info, quando)
-        todas.append(linha)
         (feitas if quando is not None else faltam).append(linha)
     # Mais recente primeiro. `sort` é estável, então as sem data (0) ficam no
     # fim, na ordem do catálogo.
     feitas.sort(key=lambda linha: linha.quando or 0, reverse=True)
-    return Progresso(tuple(feitas), tuple(faltam), tuple(todas))
+    return Progresso(tuple(feitas), tuple(faltam))
 
 
 def do_jogo(game: Any) -> Optional[Progresso]:

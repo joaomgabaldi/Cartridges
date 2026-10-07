@@ -188,12 +188,34 @@ class Monitor(NamedTuple):
     width: int
     height: int
     primary: bool
+    ordinal: int = 0  # 1-based place in :func:`monitors`; 0 when built by hand
 
     @property
     def number(self) -> str:
-        """The "2" of ``\\\\.\\DISPLAY2`` — what Windows' own display settings
-        calls this screen, so the preference reads like the list there."""
+        """What the preference list and the identify badge call this screen.
+
+        The place in the list, and not the "22" of ``\\\\.\\DISPLAY22``: the
+        desktop keeps counting up as screens and drivers come and go, so after
+        a while the device names read 22, 23, 24 while Windows' own display
+        settings still say 1, 2, 3.
+        """
+        if self.ordinal:
+            return str(self.ordinal)
         return self.device.rsplit("DISPLAY", 1)[-1] or "?"
+
+
+def _device_order(monitor: Monitor) -> tuple[int, str]:
+    """DISPLAY2 before DISPLAY10, which plain string order gets backwards."""
+    digits = monitor.device.rsplit("DISPLAY", 1)[-1]
+    return (int(digits) if digits.isdigit() else 0, monitor.device)
+
+
+def numbered(found: list[Monitor]) -> list[Monitor]:
+    """The monitors in device order, each told its place (1, 2, 3...)."""
+    return [
+        monitor._replace(ordinal=place)
+        for place, monitor in enumerate(sorted(found, key=_device_order), 1)
+    ]
 
 
 def monitors() -> list[Monitor]:
@@ -230,7 +252,7 @@ def monitors() -> list[Monitor]:
     # Sorted by name, not by the order the callback fired in: the enumeration
     # order is whatever the driver hands over, and a list that reshuffles
     # between runs would make "Monitor 2" mean a different screen each time.
-    return sorted(found, key=lambda monitor: monitor.device)
+    return numbered(found)
 
 
 def has_secondary_monitor() -> bool:

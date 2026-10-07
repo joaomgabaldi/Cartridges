@@ -55,16 +55,21 @@ EPSILON = 0.5
 class _SpringScroller:
     """Estado da mola de um único GtkScrolledWindow."""
 
-    def __init__(self, scrolled: Gtk.ScrolledWindow) -> None:
+    def __init__(self, scrolled: Gtk.ScrolledWindow, horizontal: bool) -> None:
         self.scrolled = scrolled
+        self.horizontal = horizontal
         self.animation: Optional[Adw.SpringAnimation] = None
         # Destino em voo. Entalhes seguidos precisam somar sobre ele, e não
         # sobre a posição atual — senão girar rápido anda bem menos do que os
         # entalhes pedem, porque cada um recomeçaria do meio do trajeto.
         self.target = 0.0
 
+        # Numa lista deitada a roda comum (vertical) também anda para os
+        # lados: é a única roda que a maioria dos mouses tem.
         controller = Gtk.EventControllerScroll.new(
-            Gtk.EventControllerScrollFlags.VERTICAL
+            Gtk.EventControllerScrollFlags.BOTH_AXES
+            if horizontal
+            else Gtk.EventControllerScrollFlags.VERTICAL
         )
         # Captura: precisa chegar antes do GtkScrolledWindow, que senão já teria
         # pulado o adjustment para o valor novo
@@ -73,7 +78,7 @@ class _SpringScroller:
         scrolled.add_controller(controller)
 
     def _on_scroll(
-        self, controller: Gtk.EventControllerScroll, _dx: float, dy: float
+        self, controller: Gtk.EventControllerScroll, dx: float, dy: float
     ) -> bool:
         # Touchpad e touch mandam unidades de superfície e já rolam de forma
         # contínua; mexer neles só pioraria
@@ -81,7 +86,12 @@ class _SpringScroller:
         if event is None or event.get_unit() != Gdk.ScrollUnit.WHEEL:
             return Gdk.EVENT_PROPAGATE
 
-        adjustment = self.scrolled.get_vadjustment()
+        if self.horizontal:
+            adjustment = self.scrolled.get_hadjustment()
+            delta = dy or dx
+        else:
+            adjustment = self.scrolled.get_vadjustment()
+            delta = dy
         upper = adjustment.get_upper() - adjustment.get_page_size()
         if upper <= 0:
             # Nada a rolar: deixa seguir para quem estiver por fora
@@ -106,7 +116,7 @@ class _SpringScroller:
             # mudado por fora (barra de rolagem, teclado, foco)
             self.target = value
 
-        self.target = max(0.0, min(self.target + dy * STEP, upper))
+        self.target = max(0.0, min(self.target + delta * STEP, upper))
 
         self.animation = Adw.SpringAnimation.new(
             self.scrolled,
@@ -125,10 +135,13 @@ class _SpringScroller:
         return Gdk.EVENT_STOP
 
 
-def attach(*scrolled_windows: Gtk.ScrolledWindow) -> None:
-    """Liga a rolagem por mola nas scrolled windows dadas."""
+def attach(*scrolled_windows: Gtk.ScrolledWindow, horizontal: bool = False) -> None:
+    """Liga a rolagem por mola nas scrolled windows dadas.
+
+    ``horizontal`` é para listas deitadas: a roda move o conteúdo para os lados.
+    """
 
     for scrolled in scrolled_windows:
         # A referência vive presa ao widget: o controlador guarda o callback, e
         # sem isto o objeto seria coletado com a mola pela metade
-        scrolled._spring_scroller = _SpringScroller(scrolled)  # noqa: SLF001
+        scrolled._spring_scroller = _SpringScroller(scrolled, horizontal)  # noqa: SLF001

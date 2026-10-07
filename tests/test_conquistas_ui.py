@@ -6,13 +6,14 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from gi.repository import GLib, Gtk
+from gi.repository import Gdk, GLib, Gtk
 from requests.exceptions import ConnectionError as ErroDeConexao
 
 from cartridges import conquistas_sessao
 from cartridges.conquistas import catalogo, historico, icones
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.formatos import Desbloqueio
+from cartridges.conquistas.progresso import Aparencia
 from cartridges.conquistas.xbox import conta
 from tests.apoio_conquistas import com_fonte
 from tests.test_zerados import jogo
@@ -389,7 +390,7 @@ def _icones(cartao):
     caixas = []
     filho = cartao.icones.get_first_child()
     while filho is not None:
-        caixas.append(filho.get_child())
+        caixas.append(filho)
         filho = filho.get_next_sibling()
     return caixas
 
@@ -408,8 +409,8 @@ def test_cartao_da_sessao_mostra_progresso_e_todos_os_icones(real_window, com_co
     assert cartao.contagem.get_label() == "2 de 3"
     assert cartao.porcentagem.get_label() == "66%"
     imagens = _icones(cartao)
-    assert len(imagens) == 3  # A, B e a oculta C, na ordem do catálogo
-    assert imagens[0].get_tooltip_markup().startswith("<b>Primeira</b>")
+    assert len(imagens) == 3  # B (a mais recente), A e a oculta C por último
+    assert imagens[1].get_tooltip_markup().startswith("<b>Primeira</b>")
     assert imagens[2].get_tooltip_markup() == (
         "<b>Conquista oculta</b>\nOs detalhes aparecem depois do desbloqueio."
     )
@@ -440,18 +441,14 @@ def test_atualizar_outro_jogo_nao_mexe_no_cartao(real_window, com_conquistas, st
     assert _cartao(real_window).contagem.get_label() == "2 de 3"
 
 
-def test_muitas_conquistas_rolam_dentro_do_cartao(real_window, store, sessao_sem_efeitos):
-    grande = Catalogo(
-        tuple(ConquistaInfo(f"N{n}", f"N{n}", "", "", "", False) for n in range(157)), 0, True
-    )
-    catalogo.guardar("570", grande)
+def test_muitas_conquistas_ficam_numa_linha_que_rola_para_os_lados(real_window, store, sessao_sem_efeitos):
+    catalogo.guardar("570", _catalogo_de(157))
     game = jogo(store, 1, steam_appid="570")
     com_fonte(game, "steam:570")
     real_window.show_session_blocker(game)
     cartao = _cartao(real_window)
-    assert cartao.rolagem.get_max_content_height() == conquistas_sessao.ALTURA_MAXIMA
-    assert cartao.rolagem.get_propagate_natural_height() is True
-    assert cartao.rolagem.get_policy()[0] == Gtk.PolicyType.NEVER
+    assert cartao.icones.get_orientation() == Gtk.Orientation.HORIZONTAL
+    assert cartao.rolagem.get_policy()[1] == Gtk.PolicyType.NEVER
     assert len(_icones(cartao)) == 157
 
 
@@ -472,17 +469,44 @@ def _apresentar_e_mostrar(real_window, game):
         contexto.iteration(False)
 
 
-def test_icones_se_espalham_para_os_lados_antes_de_quebrar(real_window, store, sessao_sem_efeitos):
+def test_poucos_icones_deixam_o_cartao_estreito(real_window, store, sessao_sem_efeitos):
     catalogo.guardar("570", _catalogo_de(12))
     game = jogo(store, 1, steam_appid="570")
     com_fonte(game, "steam:570")
     _apresentar_e_mostrar(real_window, game)
     cartao = _cartao(real_window)
-    assert cartao.icones.get_max_children_per_line() == 12
-    assert cartao.rolagem.get_propagate_natural_width() is True
-    linhas = {filho.compute_bounds(cartao.icones)[1].get_y() for filho in _filhos_do_cartao(cartao)}
-    assert len(linhas) == 1, "12 ícones cabem numa linha só"
     assert cartao.get_width() < real_window.get_width()
+    ajuste = cartao.rolagem.get_hadjustment()
+    assert ajuste.get_upper() <= ajuste.get_page_size(), "12 ícones cabem sem rolar"
+
+
+def _rodar(cartao, dy):
+    """Um entalhe da roda, direto no controlador da mola."""
+    mola = cartao.rolagem._spring_scroller  # noqa: SLF001
+    mola._on_scroll(_EntalheDaRoda(), 0.0, dy)  # noqa: SLF001
+    # O destino da mola, e não o valor: a animação só anda com o relógio de
+    # quadros, que nos testes não corre
+    return mola.target
+
+
+class _EntalheDaRoda:
+    def get_current_event(self):
+        from gi.repository import Gdk  # noqa: PLC0415
+
+        return type("E", (), {"get_unit": lambda _s: Gdk.ScrollUnit.WHEEL})()
+
+
+def test_roda_do_mouse_rola_para_os_lados(real_window, store, sessao_sem_efeitos):
+    catalogo.guardar("570", _catalogo_de(157))
+    game = jogo(store, 1, steam_appid="570")
+    com_fonte(game, "steam:570")
+    _apresentar_e_mostrar(real_window, game)
+    cartao = _cartao(real_window)
+    ajuste = cartao.rolagem.get_hadjustment()
+    assert ajuste.get_upper() > ajuste.get_page_size()
+    andou = _rodar(cartao, 1.0)
+    assert andou > 0
+    assert _rodar(cartao, -1.0) < andou
 
 
 def test_com_157_conquistas_o_cartao_rola_e_o_botao_continua_na_janela(real_window, store, sessao_sem_efeitos):
@@ -491,7 +515,8 @@ def test_com_157_conquistas_o_cartao_rola_e_o_botao_continua_na_janela(real_wind
     com_fonte(game, "steam:570")
     _apresentar_e_mostrar(real_window, game)
     cartao = _cartao(real_window)
-    assert 0 < cartao.rolagem.get_height() <= conquistas_sessao.ALTURA_MAXIMA
+    # Uma linha só: a altura é a de um ícone (mais a folga da barra)
+    assert 0 < cartao.rolagem.get_height() < 2 * conquistas_sessao.TAMANHO_ICONE
     # O cartão cresce até a janela e não passa dela
     assert cartao.get_width() <= real_window.get_width()
     assert real_window.get_width() == 1280
@@ -536,7 +561,6 @@ def test_slot_do_cartao_some_quando_o_cartao_falha(real_window, com_conquistas, 
 def test_icones_do_cartao_sao_passivos(real_window, com_conquistas, sessao_sem_efeitos):
     real_window.show_session_blocker(com_conquistas)
     cartao = _cartao(real_window)
-    assert cartao.icones.has_css_class("no-hover")
     filhos = list(_filhos_do_cartao(cartao))
     assert len(filhos) == 3
     # Ícones só com tooltip: nada no cartão pode entrar na ordem do Tab
@@ -573,3 +597,21 @@ def test_tab_atravessa_o_cartao_sem_perder_o_foco(real_window, store, sessao_sem
     assert real_window.get_focus() is not None
     assert not _foco_dentro_de(real_window, botao)
     assert not _foco_dentro_de(real_window, _cartao(real_window))
+
+
+def test_icone_que_nao_chega_fica_com_o_generico(monkeypatch):
+    """Sem imagem (falha ou demora), um troféu genérico no quadrado cinza, e
+    não um buraco na fileira; quando a imagem chega, ela toma o lugar."""
+    entregas = []
+    monkeypatch.setattr(icones, "carregar", lambda _origem, entregar: entregas.append(entregar))
+    pilha = conquistas_sessao.imagem(Aparencia("a.png", False, False), 48, 24)
+    assert pilha.get_visible_child().has_css_class("conquistas-ladrilho")
+
+    entregas[0](Gdk.MemoryTexture.new(1, 1, Gdk.MemoryFormat.R8G8B8A8, GLib.Bytes.new(b"\0" * 4), 4))
+    assert pilha.get_visible_child().has_css_class("conquistas-icone")
+
+
+def test_oculta_e_um_quadrado_igual_aos_outros():
+    oculta = conquistas_sessao.imagem(Aparencia("", False, True), 48, 24)
+    assert oculta.has_css_class("conquistas-ladrilho")
+    assert oculta.get_size_request() == (48, 48)

@@ -178,3 +178,32 @@ class TestSessao:
 
         assert len(iniciadas) == 1
         assert schema.get_boolean("session-wallpaper") is True
+
+
+class TestNumeracao:
+    def test_conta_pela_posicao_e_nao_pelo_nome_do_dispositivo(self):
+        """Depois de muitas reconexões o Windows chama as telas de DISPLAY22,
+        23 e 24, mas as configurações dele continuam dizendo 1, 2 e 3."""
+        telas = window_geometry.numbered(
+            [
+                window_geometry.Monitor("\\\\.\\DISPLAY24", 2560, -573, 1080, 1920, False),
+                window_geometry.Monitor("\\\\.\\DISPLAY22", 0, 0, 2560, 1080, True),
+                window_geometry.Monitor("\\\\.\\DISPLAY23", -1080, -573, 1080, 1920, False),
+            ]
+        )
+
+        assert [(tela.device, tela.number) for tela in telas] == [
+            ("\\\\.\\DISPLAY22", "1"),
+            ("\\\\.\\DISPLAY23", "2"),
+            ("\\\\.\\DISPLAY24", "3"),
+        ]
+
+    def test_display10_vem_depois_do_display2(self):
+        telas = window_geometry.numbered(
+            [
+                window_geometry.Monitor("\\\\.\\DISPLAY10", 0, 0, 1920, 1080, False),
+                window_geometry.Monitor("\\\\.\\DISPLAY2", 0, 0, 1920, 1080, True),
+            ]
+        )
+
+        assert [tela.device for tela in telas] == ["\\\\.\\DISPLAY2", "\\\\.\\DISPLAY10"]
