@@ -39,7 +39,7 @@ def test_spool_de_outro_produto_nao_conta(pastas):  # noqa: F811
 def test_pacote_ignora_as_copias_extraidas(pastas):  # noqa: F811
     caminho = gravar_pacote(pastas, "65043", {"pt-BR": {1: ("A", "a")}})
     assert caminho.name == "65043_c261752455c1fa666d515971dd6645a6"
-    assert locais.pacote("65043") == caminho
+    assert locais.pacote("65043").samefile(caminho)
     assert locais.pacote("6504") is None  # prefixo de outro produto não casa
 
 
@@ -48,7 +48,8 @@ def test_dois_pacotes_vale_o_mais_novo(pastas):  # noqa: F811
     novo = gravar_pacote(pastas, "65043", {"pt-BR": {1: ("B", "b")}}, hash_="bbbb")
     os.utime(velho, (1_900_000_000, 1_900_000_000))
     os.utime(novo, (2_000_000_000, 2_000_000_000))
-    assert locais.pacote("65043") == novo
+    # samefile: no shell UCRT64 o iterdir junta o nome com "\" e o Path do teste usa "/".
+    assert locais.pacote("65043").samefile(novo)
 
 
 def test_instalacoes_so_pastas_validas(monkeypatch, tmp_path):
