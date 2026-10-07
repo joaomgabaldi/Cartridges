@@ -104,7 +104,7 @@ _SCHEMA_DEFAULTS = {
     "conquistas-iluminacao": True,
     "conquistas-pulso-matiz": 45,
     "conquistas-pulso-saturacao": 1000,
-    "conquistas-pulso-estilo": "piscar",
+    "conquistas-pulso-estilo": "respirar",
     "sgdb": False,
     "sgdb-prefer": False,
     "sgdb-animated": False,

@@ -47,7 +47,7 @@ from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.na_tela import entregar_na_tela
 
 
-# A ordem da lista "Estilo do pulso" na tela.
+# A ordem da lista "Estilo do alerta" na tela.
 ESTILOS_NA_TELA = ("piscar", "respirar", "rapido", "longo")
 
 

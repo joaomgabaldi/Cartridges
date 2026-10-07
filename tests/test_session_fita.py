@@ -877,7 +877,7 @@ def test_linhas_do_pulso_desativadas_sem_piscar(monkeypatch, schema):
 def test_estilo_do_pulso_gravado_pela_lista(monkeypatch, schema):
     _com_fita()
     preferencias = _preferencias(monkeypatch)
-    assert preferencias.conquistas_pulso_estilo_row.get_selected() == 0
+    assert preferencias.conquistas_pulso_estilo_row.get_selected() == 1  # Respirar, o padrão
     preferencias.conquistas_pulso_estilo_row.set_selected(2)
     assert schema.get_string("conquistas-pulso-estilo") == "rapido"
 
@@ -1692,7 +1692,7 @@ def test_previa_nao_faz_fade(com_fila, com_fade):
     session_fita.aplicar(fita, True, "000003e80064")
     modulo.recebidos.clear()
 
-    session_fita._pintar(session_fita.Cor(120, 1000, 100))
+    session_fita._pintar_fita(fita, session_fita.Cor(120, 1000, 100))
 
     assert modulo.recebidos == [{"21": "colour", "24": "007803e80064"}]
 
@@ -1703,9 +1703,10 @@ def test_brilho_por_dispositivo_vale_sobre_o_geral(com_fila):
     fita, modulo = com_fila
     session_fita.gravar_fitas([fita._replace(brilho=50)])
 
-    session_fita._pintar(session_fita.Cor(120, 1000, 100))
-    session_fita._pintar(session_fita.Cor(120, 1000, 100), {"eb0": 20})
-    session_fita._pintar(session_fita.Cor(120, 1000, 10))
+    fita = session_fita.fitas()[0]
+    session_fita._pintar_fita(fita, session_fita.Cor(120, 1000, 100))
+    session_fita._pintar_fita(fita, session_fita.Cor(120, 1000, 100), {"eb0": 20})
+    session_fita._pintar_fita(fita, session_fita.Cor(120, 1000, 10))
 
     assert [recebido["24"] for recebido in modulo.recebidos] == [
         "007803e80032",
@@ -2170,11 +2171,11 @@ def test_cor_do_pulso_salva_e_redefinida(schema):
     assert session_fita.tom_do_pulso() == session_fita.TOM_DO_OURO
 
 
-def test_estilo_desconhecido_vira_piscar(schema):
+def test_estilo_desconhecido_vira_respirar(schema):
     schema.set_string("conquistas-pulso-estilo", "discoteca")
-    assert session_fita.estilo_do_pulso() == "piscar"
-    schema.set_string("conquistas-pulso-estilo", "respirar")
     assert session_fita.estilo_do_pulso() == "respirar"
+    schema.set_string("conquistas-pulso-estilo", "piscar")
+    assert session_fita.estilo_do_pulso() == "piscar"
 
 
 def test_pulso_usa_a_cor_escolhida(pulso, schema):
@@ -2261,7 +2262,7 @@ def test_sessao_que_comeca_interrompe_o_teste(fora_de_sessao, monkeypatch, tmp_p
         session_fita,
         "ESTILOS_DO_PULSO",
         {e: {t: [session_fita.Passo("pulso", 0), session_fita.Passo("base", 0), session_fita.Passo("pulso", 0)]
-             for t in session_fita.FORCA_DOS_PULSOS} for e in ("piscar",)},
+             for t in session_fita.FORCA_DOS_PULSOS} for e in ("respirar",)},
     )
 
     def dormir(segundos):
@@ -2291,7 +2292,7 @@ def test_fechar_interrompe_o_teste(fora_de_sessao, monkeypatch, schema):
     monkeypatch.setattr(
         session_fita,
         "ESTILOS_DO_PULSO",
-        {"piscar": {t: [session_fita.Passo("pulso", 0), session_fita.Passo("base", 0), session_fita.Passo("pulso", 0)]
+        {"respirar": {t: [session_fita.Passo("pulso", 0), session_fita.Passo("base", 0), session_fita.Passo("pulso", 0)]
                     for t in session_fita.FORCA_DOS_PULSOS}},
     )
     dormir_de_verdade = session_fita.time.sleep
@@ -2335,3 +2336,39 @@ def test_teste_sem_fita_nao_faz_nada(schema, monkeypatch):
 
 
 # endregion
+
+
+def test_fita_que_nao_responde_nao_atrasa_a_previa_das_outras(monkeypatch, schema):
+    """O seletor de cor parecia não responder: cada clique esperava a fita fora
+    do ar desistir antes de pintar as outras."""
+    schema.set_boolean("session-fita", True)
+    session_fita.gravar_fitas(
+        [
+            session_fita.Fita("Abajur", "morta", "1.2.3.4", "k"),
+            session_fita.Fita("Centro", "viva", "1.2.3.5", "k"),
+        ]
+    )
+    solta = threading.Event()
+    pintadas = []
+
+    def pintar(fita, cor, _tetos=None):
+        if fita.id == "morta":
+            solta.wait(5)
+        else:
+            pintadas.append(cor.matiz)
+
+    monkeypatch.setattr(session_fita, "_pintar_fita", pintar)
+
+    def _esperar_que(condicao):
+        limite = time.monotonic() + 1
+        while not condicao() and time.monotonic() < limite:
+            time.sleep(0.01)
+        assert condicao()
+
+    try:
+        session_fita.previa(session_fita.Cor(10, 1000, 100))
+        _esperar_que(lambda: pintadas == [10])
+        session_fita.previa(session_fita.Cor(20, 1000, 100))
+        _esperar_que(lambda: pintadas == [10, 20])
+    finally:
+        solta.set()

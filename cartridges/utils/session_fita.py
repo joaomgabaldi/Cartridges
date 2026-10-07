@@ -1027,26 +1027,23 @@ def _vestir(
     )
 
 
-def _pintar(cor: Cor, tetos: Optional[dict[str, int]] = None) -> None:
+def _pintar_fita(fita: Fita, cor: Cor, tetos: Optional[dict[str, int]] = None) -> None:
     """Só a cor, sem mexer no liga/desliga e sem fade. Para a prévia ao vivo."""
-
-    def pintar(fita: Fita) -> None:
-        cor_hex = hsv_hex(na_fita(cor, fita, (tetos or {}).get(fita.id)))
-        if _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex}) and fita.id in _mostrada:
-            _mostrada[fita.id] = (_mostrada[fita.id][0], cor_hex)
-
-    _em_paralelo(fitas(), pintar)
+    cor_hex = hsv_hex(na_fita(cor, fita, (tetos or {}).get(fita.id)))
+    if _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex}) and fita.id in _mostrada:
+        _mostrada[fita.id] = (_mostrada[fita.id][0], cor_hex)
 
 
-# A cor que a prévia ainda deve mostrar, e a thread que a serve. Arrastar o
-# controle do brilho gera dezenas de valores por segundo, e cada um deles é uma
-# conversa de rede com três fitas: em vez de enfileirar todos, guardamos só o
-# último e a thread pega o valor mais recente quando termina o anterior. Os
-# passos do meio se perdem, que é exatamente o que se quer — o olho só precisa
-# ver onde o controle parou.
-_previa_alvo: Optional[tuple[Cor, Optional[dict[str, int]]]] = None
-_previa_viva = False
-_PREVIA = threading.Condition()
+# A cor que a prévia ainda deve mostrar em cada fita, e as fitas que têm uma
+# thread servindo. Arrastar o controle do brilho gera dezenas de valores por
+# segundo, e cada um deles é uma conversa de rede: em vez de enfileirar todos,
+# guardamos só o último e a thread pega o valor mais recente quando termina o
+# anterior. Os passos do meio se perdem, que é exatamente o que se quer — o olho
+# só precisa ver onde o controle parou. Uma thread por fita: uma fita que não
+# responde leva segundos para desistir, e as outras não podem esperar por ela.
+_previa_alvos: dict[str, tuple[Cor, Optional[dict[str, int]]]] = {}
+_previa_vivas: set[str] = set()
+_PREVIA = threading.Lock()
 
 
 def previa(cor: Cor, tetos: Optional[dict[str, int]] = None) -> None:
@@ -1054,29 +1051,25 @@ def previa(cor: Cor, tetos: Optional[dict[str, int]] = None) -> None:
 
     ``tetos`` troca o brilho por dispositivo do arquivo (id → porcentagem).
     """
-    global _previa_alvo, _previa_viva  # noqa: PLW0603
-
     if not ligada():
         return
     with _PREVIA:
-        _previa_alvo = (cor, tetos)
-        if not _previa_viva:
-            _previa_viva = True
-            _em_thread(_servir_previa)
+        for fita in fitas():
+            _previa_alvos[fita.id] = (cor, tetos)
+            if fita.id not in _previa_vivas:
+                _previa_vivas.add(fita.id)
+                _em_thread(lambda fita=fita: _servir_previa(fita))
 
 
-def _servir_previa() -> None:
-    """Pinta o alvo mais recente até não haver mais nada novo."""
-    global _previa_alvo, _previa_viva  # noqa: PLW0603
-
+def _servir_previa(fita: Fita) -> None:
+    """Pinta nesta fita o alvo mais recente até não haver mais nada novo."""
     while True:
         with _PREVIA:
-            alvo = _previa_alvo
-            _previa_alvo = None
+            alvo = _previa_alvos.pop(fita.id, None)
             if alvo is None:
-                _previa_viva = False
+                _previa_vivas.discard(fita.id)
                 return
-        _pintar(*alvo)
+        _pintar_fita(fita, *alvo)
 
 
 def tom_do_app() -> tuple[int, int]:
@@ -1380,7 +1373,7 @@ ESTILOS_DO_PULSO: dict[str, dict[str, list[Passo]]] = {
         "completo": [Passo("pulso", 8.0)],
     },
 }
-ESTILO_PADRAO = "piscar"
+ESTILO_PADRAO = "respirar"
 
 
 def tom_do_pulso() -> tuple[int, int]:

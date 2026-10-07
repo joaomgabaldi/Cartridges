@@ -59,7 +59,7 @@
       <default>1000</default>
     </key>
     <key name="conquistas-pulso-estilo" type="s">
-      <default>"piscar"</default>
+      <default>"respirar"</default>
     </key>
     <key name="sgdb" type="b">
       <default>false</default>

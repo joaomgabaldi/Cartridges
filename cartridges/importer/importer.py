@@ -67,6 +67,9 @@ class Importer(ErrorProducer):
         # restauração de backup o usa para abrir a janela dos jogos sem
         # atalho só depois de a importação da abertura terminar.
         self.ao_terminar: Optional[Callable[[], None]] = None
+        # A importação que o app dispara sozinho não avisa quando não acha
+        # nada; ver `on_import_action`.
+        self.silenciosa = False
         # A tarefa na janela de tarefas nasce com o primeiro jogo novo e
         # termina com a importação; ver `monitor_import`.
         self.tarefa: Optional[tarefas.Tarefa] = None
@@ -510,7 +513,7 @@ class Importer(ErrorProducer):
 
         toast.set_title(toast_title)
 
-        if parts or not shared.schema.get_boolean("auto-import"):
+        if parts or not self.silenciosa:
             shared.win.toast_queue.add(toast)
 
         return toast

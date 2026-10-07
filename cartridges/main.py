@@ -632,7 +632,7 @@ class CartridgesApplication(Adw.Application):
         if restauracao.existe():
             self.continuar_restauracao()
         elif shared.schema.get_boolean("auto-import"):
-            self.on_import_action()
+            self.on_import_action(silenciosa=True)
 
     def continuar_restauracao(self) -> None:
         """A cada abertura enquanto houver pendências da restauração: a pasta
@@ -646,6 +646,7 @@ class CartridgesApplication(Adw.Application):
         self.on_import_action(
             ao_terminar=restauracao_dialogs.mostrar_pendentes,
             varrer_atalhos=True,
+            silenciosa=True,
         )
 
     def save_window_geometry(self, *_args: Any) -> bool:
@@ -954,12 +955,18 @@ class CartridgesApplication(Adw.Application):
         *_args: Any,
         ao_terminar: Optional[Callable[[], None]] = None,
         varrer_atalhos: bool = False,
+        silenciosa: bool = False,
     ) -> None:
         """``varrer_atalhos`` varre a pasta de atalhos mesmo com a fonte
         desligada em Preferências: as pendências da restauração só se resolvem
-        com essa varredura, e a configuração em si não muda."""
+        com essa varredura, e a configuração em si não muda.
+
+        ``silenciosa`` é para as importações que o próprio app dispara: sem
+        nada novo, elas não mostram aviso. A que o usuário pede mostra sempre,
+        senão o clique parece não ter funcionado."""
         shared.importer = Importer()
         shared.importer.ao_terminar = ao_terminar
+        shared.importer.silenciosa = silenciosa
 
         if varrer_atalhos or shared.schema.get_boolean("shortcuts"):
             shared.importer.add_source(ShortcutsSource())

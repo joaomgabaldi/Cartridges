@@ -2,6 +2,7 @@ using Gtk 4.0;
 using Adw 1;
 
 template $CartridgesPreferences: Adw.PreferencesDialog {
+  title: _("Preferências");
   search-enabled: true;
 
   Adw.PreferencesPage general_page {
@@ -483,7 +484,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
       // A cor do pulso: o mesmo seletor em balão da "Cor do app". Com o balão
       // aberto, as fitas mostram a cor escolhida; ao fechar, voltam.
       Adw.ActionRow conquistas_pulso_cor_row {
-        title: _("Cor do pulso");
+        title: _("Cor do alerta");
         subtitle: _("A cor da iluminação inteligente ao desbloquear uma conquista");
         activatable-widget: conquistas_pulso_cor_menu;
 
@@ -502,7 +503,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         [suffix]
         MenuButton conquistas_pulso_cor_menu {
           valign: center;
-          tooltip-text: _("Escolher a cor do pulso");
+          tooltip-text: _("Escolher a cor do alerta");
 
           child: DrawingArea conquistas_pulso_cor_amostra {
             content-width: 22;
@@ -518,7 +519,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
       }
 
       Adw.ComboRow conquistas_pulso_estilo_row {
-        title: _("Estilo do pulso");
+        title: _("Estilo do alerta");
 
         model: StringList {
           strings [
@@ -531,7 +532,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
       }
 
       Adw.ButtonRow conquistas_pulso_testar_row {
-        title: _("Testar o pulso");
+        title: _("Testar o alerta");
       }
 
       Adw.ButtonRow conquistas_exemplo_row {
