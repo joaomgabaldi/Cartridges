@@ -48,6 +48,7 @@ SWP_SHOWWINDOW = 0x0040
 LWA_ALPHA = 0x2
 MONITOR_DEFAULTTOPRIMARY = 1
 HWND_TOPMOST = -1
+HWND_NOTOPMOST = -2
 
 # Decididos na prova técnica (Tarefa 1 do plano da fase 2): sem WS_EX_LAYERED e
 # SetLayeredWindowAttributes(0, 255, LWA_ALPHA) o clique não passa (o
@@ -286,6 +287,11 @@ def por_no_canto(janela: Any, canto: str, margem: int = 24) -> bool:
         u.GetWindowRect(hwnd, ctypes.byref(retangulo))
         tamanho = (retangulo.right - retangulo.left, retangulo.bottom - retangulo.top)
         x, y = posicao(canto, _monitor_em_uso(), tamanho, margem)
+        # O GTK tira o TOPMOST ao mostrar a janela, e logo depois de o primeiro
+        # plano mudar o Windows aceita o HWND_TOPMOST sem aplicá-lo (devolve
+        # sucesso): o cartão ficava atrás do jogo e da barra de tarefas. Passar
+        # antes por HWND_NOTOPMOST faz o pedido valer (medido em 06/10/2026).
+        u.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE)
         u.SetWindowPos(
             hwnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW
         )

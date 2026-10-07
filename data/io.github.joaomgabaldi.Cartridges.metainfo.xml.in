@@ -28,6 +28,14 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.07" date="2026-10-07">
+      <description translate="no">
+        <ul>
+          <li>Foi corrigido o aviso de conquista, que às vezes ficava escondido atrás do jogo</li>
+          <li>O quadro de conquistas da tela de sessão agora tem título</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.10.06" date="2026-10-06">
       <description translate="no">
         <ul>

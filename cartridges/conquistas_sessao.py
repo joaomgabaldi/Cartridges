@@ -68,8 +68,10 @@ class CartaoDaSessao(Gtk.Box):
         self.set_visible(False)
 
         topo = Gtk.Box(spacing=12)
-        self.contagem = Gtk.Label(xalign=0, hexpand=True, css_classes=["heading"])
+        titulo = Gtk.Label(label=_("Conquistas"), xalign=0, hexpand=True, css_classes=["heading"])
+        self.contagem = Gtk.Label(xalign=1, css_classes=["dim-label", "numeric"])
         self.porcentagem = Gtk.Label(xalign=1, css_classes=["dim-label", "numeric"])
+        topo.append(titulo)
         topo.append(self.contagem)
         topo.append(self.porcentagem)
         self.append(topo)

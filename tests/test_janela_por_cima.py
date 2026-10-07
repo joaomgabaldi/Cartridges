@@ -115,6 +115,27 @@ def test_cartao_mostrado_nao_tem_botao_na_barra_de_tarefas():
         janela.destroy()
 
 
+def test_por_no_canto_passa_por_notopmost_antes_de_topmost(monkeypatch):
+    """Logo depois de o primeiro plano mudar, o Windows aceitava o HWND_TOPMOST
+    sem aplicá-lo, e o cartão ficava atrás do jogo e da barra de tarefas. Pedir
+    HWND_NOTOPMOST antes faz o HWND_TOPMOST valer (medido em 06/10/2026)."""
+    janela = Gtk.Window(decorated=False, resizable=False)
+    janela.realize()
+    pedidos = []
+    real = jpc._api()
+
+    def set_window_pos(hwnd, depois_de, *resto):
+        pedidos.append(depois_de)
+        return real.SetWindowPos(hwnd, depois_de, *resto)
+
+    try:
+        monkeypatch.setattr(jpc, "_api", lambda: _Win32ComFalha(real, SetWindowPos=set_window_pos))
+        assert jpc.por_no_canto(janela, "inferior-direito") is True
+        assert pedidos == [jpc.HWND_NOTOPMOST, jpc.HWND_TOPMOST]
+    finally:
+        janela.destroy()
+
+
 def test_todos_os_cartoes_compartilham_o_mesmo_dono():
     a, b = Gtk.Window(decorated=False), Gtk.Window(decorated=False)
     a.realize()
