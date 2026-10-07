@@ -1,4 +1,4 @@
-"""Onde o Ubisoft Connect deixa as conquistas neste PC (conferido no host em 05/10/2026).
+"""Onde o Ubisoft Connect deixa as conquistas neste PC (conferido em 05/10/2026).
 
 - progresso: `%LOCALAPPDATA%\\Ubisoft Game Launcher\\spool\\<conta>\\<productId>.spool`;
 - catálogo: `%ProgramData%\\Ubisoft\\Ubisoft Game Launcher\\cache\\achievements\\<productId>_<hash>`,

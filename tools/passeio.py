@@ -8,7 +8,7 @@
 
 Uso, com o Python do MSYS2 e o _build atualizado (ninja)::
 
-    PYTHONUTF8=1 C:/msys64/ucrt64/bin/python.exe tools/passeio.py <pasta-ou-zip>
+    PYTHONUTF8=1 /ucrt64/bin/python.exe tools/passeio.py <pasta-ou-zip>
 
 A entrada é o conteúdo de %LOCALAPPDATA%\\io.github.joaomgabaldi.Cartridges
 (pasta ou .zip). Ela é copiada para _passeio/<data-hora>/biblioteca, sem a

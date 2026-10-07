@@ -76,7 +76,7 @@ def pastas(tmp_path, monkeypatch):
 
 # -- Ubisoft Connect --------------------------------------------------------------
 
-# O `.spool` real do AC Black Flag Resynced (productId 65043), lido no host em 05/10/2026:
+# O `.spool` real do AC Black Flag Resynced (productId 65043), lido em 05/10/2026:
 # conquistas 23 (1785102639) e 12 (1791243494). Só varints: nenhum dado pessoal.
 SPOOL_DO_HOST = bytes.fromhex(
     "0a0a0a020817" "10af829ad306" "0a0a0a02080c" "10e6e990d606"
@@ -136,7 +136,7 @@ def gravar_pacote(
         arquivo.writestr("achievements.dat", b"\x0a\x08\x08\x01\x10\x01\x18\x01\x20\x01")
         for idioma, conquistas in idiomas.items():
             linhas = "".join(f"{id_}\t{titulo}\t{descricao}\n" for id_, (titulo, descricao) in conquistas.items())
-            # BOM e primeira linha vazia, como no host.
+            # BOM e primeira linha vazia, como no arquivo real.
             arquivo.writestr(f"{idioma}_loc.txt", ("﻿\n" + linhas).encode("utf-8"))
         for id_ in pngs:
             arquivo.writestr(f"{id_}.png", PNG_MINIMO)

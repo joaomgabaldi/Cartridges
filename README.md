@@ -162,7 +162,9 @@ Ao desinstalar, o instalador pergunta se deve remover também a biblioteca e as 
 
 ## Compilação
 
-A build é feita no [MSYS2](https://www.msys2.org), ambiente UCRT64.
+A build é feita no [MSYS2](https://www.msys2.org), ambiente UCRT64, instalado em
+`C:\msys64` (o caminho que o `build-installer.bat` espera; fora de `Program Files`, que exige
+administrador para gravar). Os comandos abaixo rodam no terminal UCRT64.
 
 ### Dependências
 
@@ -174,7 +176,7 @@ pacman -S mingw-w64-ucrt-x86_64-gtk4 mingw-w64-ucrt-x86_64-libadwaita \
   mingw-w64-ucrt-x86_64-python-requests mingw-w64-ucrt-x86_64-python-pillow \
   mingw-w64-ucrt-x86_64-python-cryptography mingw-w64-ucrt-x86_64-python-pip \
   mingw-w64-ucrt-x86_64-meson mingw-w64-ucrt-x86_64-ninja
-/c/msys64/ucrt64/bin/python.exe -m pip install --break-system-packages tinytuya
+/ucrt64/bin/python.exe -m pip install --break-system-packages tinytuya
 ```
 
 O `blueprint-compiler` é baixado pelo Meson na primeira configuração.
@@ -197,7 +199,7 @@ corrigido, compila o aplicativo, empacota com o Inno Setup e grava o instalador 
 ### Build manual
 
 ```bash
-export PATH="/c/msys64/ucrt64/bin:$PATH" PYTHONUTF8=1
+export PATH="/ucrt64/bin:$PATH" PYTHONUTF8=1
 meson setup _build
 ninja -C _build
 ```
@@ -208,7 +210,7 @@ codificação do Windows e falha.
 ### Testes
 
 ```bash
-/c/msys64/ucrt64/bin/python.exe -m pytest
+/ucrt64/bin/python.exe -m pytest
 ```
 
 Os testes usam o GTK real do MSYS2, e não o Python do sistema.

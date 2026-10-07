@@ -2,7 +2,7 @@
 
 Report drafted for <https://gitlab.gnome.org/GNOME/gtk/-/issues>.
 The patch in this directory (`gtk-dcomp-render-window-origin.patch`) fixes it
-and has been verified against 4.22.4 and 4.24.0.
+and has been verified against 4.22.4, 4.24.0 and 4.24.1.
 
 ---
 

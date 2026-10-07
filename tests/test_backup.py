@@ -8,6 +8,7 @@ num .zip, restaurado com o app fechado (`agendar` + `aplicar_pendente`)."""
 import json
 import shutil
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
@@ -36,8 +37,9 @@ def settings(tmp_path, monkeypatch):
     schemas = tmp_path / "_schemas"
     schemas.mkdir()
     shutil.copy(_ROOT / "_build" / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml", schemas)
-    compiler = shutil.which("glib-compile-schemas") or (
-        "C:/msys64/ucrt64/bin/glib-compile-schemas.exe"
+    # Fora do PATH, o do mesmo ucrt64/bin do Python que roda os testes.
+    compiler = shutil.which("glib-compile-schemas") or str(
+        Path(sys.executable).with_name("glib-compile-schemas.exe")
     )
     subprocess.run([compiler, str(schemas)], check=True)
     source = Gio.SettingsSchemaSource.new_from_directory(str(schemas), None, False)

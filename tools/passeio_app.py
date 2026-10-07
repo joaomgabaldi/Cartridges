@@ -64,8 +64,9 @@ def preparar(saida: Path) -> dict[str, list]:
     schemas = saida / "_schemas"
     schemas.mkdir(exist_ok=True)
     shutil.copy(BUILD / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml", schemas)
-    compilador = shutil.which("glib-compile-schemas") or (
-        "C:/msys64/ucrt64/bin/glib-compile-schemas.exe"
+    # Fora do PATH, o do mesmo ucrt64/bin do Python que roda o passeio.
+    compilador = shutil.which("glib-compile-schemas") or str(
+        Path(sys.executable).with_name("glib-compile-schemas.exe")
     )
     subprocess.run([compilador, str(schemas)], check=True)
     os.environ["GSETTINGS_SCHEMA_DIR"] = str(schemas)

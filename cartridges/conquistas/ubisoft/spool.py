@@ -2,9 +2,9 @@
 
 O Ubisoft Connect grava em `%LOCALAPPDATA%\\Ubisoft Game Launcher\\spool\\<conta>\\` o
 histórico das conquistas da conta para cada jogo aberto neste PC, e o regrava no instante
-do desbloqueio (conferido no host em 05/10/2026). O formato é protobuf sem schema: o campo
+do desbloqueio (conferido em 05/10/2026). O formato é protobuf sem schema: o campo
 1, repetido, é uma conquista; dentro dele, o campo 1 traz o id — numa submensagem,
-`1:{1:id}`, como no host; o PSerban93/Achievements (MIT) lê o id direto, `1:id`, e os
+`1:{1:id}`, como no arquivo real; o PSerban93/Achievements (MIT) lê o id direto, `1:id`, e os
 dois são aceitos — e o campo 2 traz a hora do desbloqueio, em segundos Unix.
 """
 

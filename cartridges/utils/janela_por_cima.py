@@ -12,7 +12,7 @@ Windows) e antes de ela aparecer:
   ``SetLayeredWindowAttributes``: o clique passa para o que está embaixo
   (``WS_EX_TRANSPARENT`` sozinho é ignorado);
 - ``WS_EX_TOOLWINDOW``: pede para ficar fora da barra de tarefas e do Alt+Tab,
-  mas o GTK o tira da janela quando a mostra (medido na VM), então não se
+  mas o GTK o tira da janela quando a mostra (medido), então não se
   conta com ele.
 
 O que mantém o cartão fora da barra e do Alt+Tab, além do ``WS_EX_NOACTIVATE``,

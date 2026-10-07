@@ -1,8 +1,8 @@
 """O catálogo de um jogo da Ubisoft Connect, a partir do ZIP do cache do launcher.
 
 O ZIP (`cache\\achievements\\<productId>_<hash>`, sem extensão) traz `<idioma>_loc.txt`
-(UTF-8 com BOM, uma conquista por linha: `id⇥nome⇥descrição`) e `<id>.png`, conferidos no
-host em 05/10/2026. Não há raridade nem conquista oculta, e o ícone é um só: a bloqueada usa
+(UTF-8 com BOM, uma conquista por linha: `id⇥nome⇥descrição`) e `<id>.png`, conferidos em
+05/10/2026. Não há raridade nem conquista oculta, e o ícone é um só: a bloqueada usa
 o mesmo, em cinza (a página aplica o filtro). Os ícones são extraídos para o cache do app,
 porque a página só sabe abrir um arquivo ou uma URL.
 

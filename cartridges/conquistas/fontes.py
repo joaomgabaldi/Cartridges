@@ -196,7 +196,7 @@ def _da_pasta(pastas: list[Path]) -> Optional[tuple[str, str]]:
     """O jogo cuja pasta de instalação (``InstallLocation`` do manifest) contém o exe.
 
     Atalho `.lnk` direto para o exe: a pasta do jogo não guarda o namespace (o
-    ``.egstore`` só tem o manifesto binário, conferido no host), o manifest do launcher guarda.
+    ``.egstore`` só tem o manifesto binário, conferido neste PC), o manifest do launcher guarda.
     Vale a pasta de instalação mais funda; relativa ou raiz do disco não vale.
     """
     if not pastas:
