@@ -26,9 +26,10 @@ remove a imagem do texto arrastado ao soltar: ela fica parada na tela, por
 cima de tudo.
 
 O arraste só começa se o clique cair dentro de uma seleção. Um gesto na fase
-de captura, posto na janela (ou no popover, que é uma superfície à parte),
-roda antes do gesto do próprio campo e desfaz a seleção no clique; o campo
-então começa uma seleção nova a partir dali, como em qualquer outro ponto.
+de captura roda antes do gesto do próprio campo e desfaz a seleção no clique;
+o campo então começa uma seleção nova a partir dali, como em qualquer outro
+ponto. O gesto vai na janela, em cada caixa de diálogo e em cada popover: o
+clique num diálogo ou popover para nele e não chega à janela.
 Duplo e triplo clique continuam selecionando palavra e linha, e o
 Shift+clique fica intocado para estender a seleção.
 """
@@ -36,8 +37,17 @@ Shift+clique fica intocado para estender a seleção.
 from gi.repository import Gdk, Gtk
 
 
+_LIGADO = "_cartridges_sem_arrastar_texto"
+
+
 def sem_arrastar_texto(raiz: Gtk.Widget) -> None:
     """Vale para todo campo de texto dentro de `raiz`, inclusive os criados depois."""
+    # Uma caixa de diálogo volta a ser a visível sempre que outra aberta por
+    # cima dela fecha, e um gesto basta.
+    if getattr(raiz, _LIGADO, False):
+        return
+    setattr(raiz, _LIGADO, True)
+
     clique = Gtk.GestureClick(
         button=Gdk.BUTTON_PRIMARY, propagation_phase=Gtk.PropagationPhase.CAPTURE
     )

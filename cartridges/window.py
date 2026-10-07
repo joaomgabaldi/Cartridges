@@ -292,8 +292,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # barras das próprias caixas.
         self.connect("notify::visible-dialog", self.block_dialog_backdrop_drag)
 
-        # A janela cobre todo campo de texto nela e nas caixas de diálogo; os
-        # popovers das anotações são superfícies à parte.
+        # Com uma caixa de diálogo aberta, o clique para nela e não chega à
+        # janela; cada caixa ganha o seu em block_dialog_backdrop_drag. Os
+        # popovers das anotações também são superfícies à parte.
         sem_arrastar_texto(self)
         sem_arrastar_texto(self.details_view_notes_popover)
         sem_arrastar_texto(self.session_blocker_notes_popover)
@@ -433,6 +434,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
     def block_dialog_backdrop_drag(self, *_args: Any) -> None:
         if (dialog := self.get_visible_dialog()) is not None:
             block_window_drag(dialog)
+            sem_arrastar_texto(dialog)
 
     def session_toast(self, game: Game, seconds: int) -> None:
         """O aviso de fim de sessão, com um atalho para a anotação.
