@@ -9,7 +9,11 @@ $repo    = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $patches = Join-Path $PSScriptRoot 'gtk-patches'
 $msys    = 'C:\msys64'
 $prefix  = Join-Path $msys 'ucrt64'
-$iscc    = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+# Inno Setup 7 no PC, 6 na CI (o que o runner traz ou o choco instala).
+$iscc    = @(
+    (Join-Path ${env:ProgramFiles} 'Inno Setup 7\ISCC.exe'),
+    (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe')
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
 $dist    = Join-Path $repo '_dist'
 
 function Etapa($texto) { Write-Host "`n=== $texto ===" -ForegroundColor Cyan }
@@ -100,7 +104,7 @@ Etapa 'Empacotando com o Inno Setup'
 
 $iss = Join-Path $repo '_build\build-aux\windows\Cartridges.iss'
 if (-not (Test-Path $iss)) { Falha "Nao achei $iss. O meson gerou o build?" }
-if (-not (Test-Path $iscc)) { Falha "Nao achei o ISCC em $iscc." }
+if (-not $iscc) { Falha 'Nao achei o ISCC do Inno Setup 7 nem do 6.' }
 
 & $iscc "/O$dist" $iss | Select-Object -Last 3
 if ($LASTEXITCODE -ne 0) { Falha 'O Inno Setup falhou.' }
