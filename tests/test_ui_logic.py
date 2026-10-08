@@ -1309,12 +1309,70 @@ def test_aplicar_a_edicao_deixa_a_capa_sem_o_motivo_da_edicao(
     from cartridges import shared
     from cartridges.details_dialog import DetailsDialog
 
+    from cartridges.game_cover import GameCover
+
     game = _jogo_com_capa_animada("imported_12", gif)
+    old_cover = GameCover({Gtk.Picture()}, gif)
+    old_cover.set_visible_animation(True)
+    shared.win.game_covers[game.game_id] = old_cover
     dialog = DetailsDialog(game)
     dialog.apply_preferences()
 
     assert shared.win.game_covers[game.game_id] is dialog.game_cover
     assert not dialog.game_cover.active
+    assert not old_cover.active, "a capa solta de vez não pode seguir tocando"
+
+
+def test_desligar_animacao_desliga_todos_os_motivos(gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    cover = GameCover({Gtk.Picture()}, gif)
+    cover.set_hover_animation(True)
+    cover.set_details_animation(True)
+    cover.set_visible_animation(True)
+    cover.desligar_animacao()
+
+    assert not cover.active
+    assert capas_falsas.tocador.parados[-1] is cover
+
+
+def test_retirar_da_grade_desliga_a_capa(real_window, store, gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    game = _jogo_com_capa_animada("imported_13", gif)
+    cover = GameCover({game.cover}, game.get_cover_path())
+    cover.set_visible_animation(True)
+    real_window.game_covers[game.game_id] = cover
+
+    real_window.retirar_da_grade(game)
+
+    assert not cover.active
+
+
+def test_previa_animada_do_seletor_toca_a_copia_da_grade(gif, capas_falsas):
+    """A prévia tem o tamanho da grade; a cópia dos detalhes seria o dobro."""
+    import shutil
+
+    from cartridges.sgdb_picker import SgdbPicker
+    from cartridges.utils import copias_animadas
+
+    picker = SgdbPicker("Jogo", lambda _p: None)
+    previa = picker._temp_dir / "123.gif"
+    shutil.copyfile(gif, previa)
+    picker._add_result(previa, "https://x/y.gif", True, picker._generation)
+    grade = copias_animadas.tamanhos()[0]
+    copia = copias_animadas.caminho_para(previa, grade)
+
+    assert [(p.destino, p.tamanho) for p in capas_falsas.pedidos] == [(copia, grade)]
+    assert copia.parent == picker._temp_dir
+
+    copia.write_bytes(b"copia")
+    capas_falsas.pedidos[0].pronto("pronta")
+    assert capas_falsas.tocador.tocados[-1].copia == copia
+
+    cover = picker._covers[0]
+    picker._on_closed()
+    assert not cover.active
 
 
 def test_an_unchanged_apply_keeps_the_computed_blur(real_window, store, app_dirs):

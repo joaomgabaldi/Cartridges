@@ -1260,6 +1260,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         shared.win.library.remove_all()
         shared.win.zerados_library.remove_all()
         shared.store.clear()
+        for cover in shared.win.game_covers.values():
+            cover.desligar_animacao()
         shared.win.game_covers = {}
 
         # Delete the files on disk (games + covers)

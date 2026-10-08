@@ -153,6 +153,7 @@ class DisplayManager(Manager):
                 # ramo de criação acima, que refaz a entrada a partir do
                 # arquivo de capa.
                 if (cover := shared.win.game_covers.pop(game.game_id, None)) is not None:
+                    cover.desligar_animacao()
                     cover.release_picture(game.cover)
 
         # Coalescido: isto roda uma vez por jogo, e cada set_library_child

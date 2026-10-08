@@ -695,8 +695,7 @@ class DetailsDialog(Adw.Dialog):
         if self.game.game_id in shared.win.game_covers.keys():
             # Fully stop the cover being replaced
             old_cover = shared.win.game_covers[self.game.game_id]
-            old_cover.set_hover_animation(False)
-            old_cover.set_details_animation(False)
+            old_cover.desligar_animacao()
             # Pausing it is not enough: the grid's Gtk.Picture is about to be
             # driven by the new cover, but the old one still lists it and
             # repaints everything it lists whenever a frame of its animation

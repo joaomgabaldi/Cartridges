@@ -228,7 +228,10 @@ class SgdbPicker(BuscaDoSeletor, Adw.Dialog):
 
         cover = GameCover({picture}, preview_path)
         if animated:
-            cover.set_details_animation(True)
+            # "À vista" toca a cópia da grade, que é o tamanho da prévia; a dos
+            # detalhes seria mais que o dobro. O autoplay da janela só percorre
+            # `shared.win.game_covers`, então não mexe neste motivo.
+            cover.set_visible_animation(True)
         self._covers.append(cover)
 
         self.flowbox.append(picture)
@@ -243,8 +246,7 @@ class SgdbPicker(BuscaDoSeletor, Adw.Dialog):
 
     def _clear_results(self) -> None:
         for cover in self._covers:
-            cover.set_hover_animation(False)
-            cover.set_details_animation(False)
+            cover.desligar_animacao()
         self._covers.clear()
         self._results.clear()
         self._added = 0

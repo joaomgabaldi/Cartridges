@@ -919,6 +919,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
             if game.get_parent():
                 game.get_parent().set_child()
         if (cover := self.game_covers.pop(game.game_id, None)) is not None:
+            cover.desligar_animacao()
             cover.release_picture(game.cover)
 
     def update_status_button(self, game: Game) -> None:

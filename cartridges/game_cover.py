@@ -460,6 +460,13 @@ class GameCover:
         self._visible_active = playing
         self._reconcile_animation()
 
+    def desligar_animacao(self) -> None:
+        """Desliga todos os motivos de uma vez. Para quem solta a capa de vez:
+        o tocador a seguraria tocando sem ninguém ver por qualquer motivo
+        esquecido ligado."""
+        self._hover_active = self._details_active = self._visible_active = False
+        self._reconcile_animation()
+
     def _reconcile_animation(self) -> None:
         """Toca ou pausa conforme os motivos.
 
