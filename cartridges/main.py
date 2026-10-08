@@ -80,6 +80,7 @@ from cartridges.utils.single_instance import (
 from cartridges.utils.updates_checker import UpdatesChecker
 from cartridges.utils import (
     backup,
+    copias_animadas,
     restauracao,
     session_fita,
     session_log,
@@ -323,6 +324,36 @@ def sanitize_game_fields(data: dict, record_name: str) -> dict:
             logging.warning("Campo %s inválido em %s, ignorado", key, record_name)
             del data[key]
     return data
+
+
+def limpar_e_preparar_capas_animadas() -> None:
+    """Limpa a pasta das cópias animadas e, se a opção está ligada, prepara as
+    que faltam.
+
+    A limpeza apaga todo ``.tmp`` da pasta, então precisa terminar antes de
+    qualquer ``preparar``: ela roda numa thread de segundo plano, e só depois
+    volta à principal para preparar. Os ids saem da loja aqui, na principal,
+    antes de a thread começar. Os tamanhos das cópias já são os finais: saem de
+    ``shared``, preenchido na importação do módulo.
+
+    Janela mínima aceita: o hover numa capa pode pedir uma cópia antes de a
+    limpeza acabar, e ela pode apagar o ``.tmp`` dessa geração. O ``rename``
+    falha, o resultado é ``falhou``, a capa fica parada e tenta de novo no
+    próximo hover.
+    """
+    ids = {game.game_id for game in shared.store}
+
+    def limpar() -> None:
+        copias_animadas.limpar(ids)
+        entregar_na_tela(_preparar_capas_apos_a_limpeza)
+
+    threading.Thread(target=limpar, daemon=True).start()
+
+
+def _preparar_capas_apos_a_limpeza() -> bool:
+    if shared.win is not None and shared.schema.get_boolean("cover-autoplay"):
+        copias_animadas.preparar(shared.win.capas_na_ordem())
+    return False  # o GLib repetiria o callback que devolvesse um valor verdadeiro
 
 
 class CartridgesApplication(Adw.Application):
@@ -599,6 +630,11 @@ class CartridgesApplication(Adw.Application):
         self.hltb_backfill = HLTBBackfill()
         self.hltb_backfill.start()
 
+        # Apaga o que sobrou na pasta das cópias animadas e deixa prontas as das
+        # capas que ainda não têm. Em segundo plano, depois de a biblioteca
+        # carregada: é ela que diz quais capas existem e em que ordem.
+        limpar_e_preparar_capas_animadas()
+
         # Mede o que cada jogo ocupa no disco, pelo mesmo motivo e no mesmo
         # molde: a informação só existe se alguém for atrás dela, e ir atrás
         # custa uma caminhada pela pasta de cada jogo. Uma vez por execução,
@@ -787,6 +823,10 @@ class CartridgesApplication(Adw.Application):
 
         if self.varredura_conquistas is not None:
             self.varredura_conquistas.stop()
+
+        # A fila das cópias animadas não pode segurar o processo: o que está na
+        # fila sai sem gerar e a geração em curso para no próximo quadro.
+        copias_animadas.encerrar()
 
         # Os ícones das conquistas na fila não devem segurar o processo com a
         # rede travada.

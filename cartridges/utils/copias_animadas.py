@@ -16,6 +16,7 @@ import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Callable, Literal
 from uuid import uuid4
@@ -23,7 +24,7 @@ from uuid import uuid4
 from PIL import Image, ImageSequence
 
 from cartridges import shared
-from cartridges.utils import tocador_capas
+from cartridges.utils import tarefas, tocador_capas
 from cartridges.utils.na_tela import entregar_na_tela
 
 # Como terminou um pedido. ``ilegivel`` é só a origem que não abre; ``falhou``
@@ -199,6 +200,11 @@ def _rodar(
     except (OSError, ValueError, Image.DecompressionBombError):
         logging.warning("Não foi possível ler a capa animada %s", origem.name)
         resultado = "ilegivel"
+    except Exception:  # pylint: disable=broad-exception-caught
+        # Um erro que ninguém previu não pode deixar o pedido sem resposta: a
+        # tarefa "Capas animadas" esperaria por ele para sempre.
+        logging.exception("Erro inesperado ao gerar a cópia animada de %s", origem.name)
+        resultado = "falhou"
     finally:
         with _trava:
             if _trabalhos.get(destino) is trabalho:
@@ -222,6 +228,12 @@ def _entregar(pronto: Callable[[Resultado], None], resultado: Resultado) -> bool
 
 def apagar(game_id: str) -> None:
     """Apaga as cópias do jogo e invalida os trabalhos dele, pendentes ou não."""
+    # Os trabalhos invalidados abaixo nunca avisam: a tarefa precisa saber que
+    # não deve mais esperá-los. Pode vir de uma thread de segundo plano, e a
+    # tarefa é da thread principal. Quem pediu as cópias de novo (a capa nova)
+    # o fez depois desta chamada, e a entrega mantém a ordem.
+    if _lote is not None:
+        entregar_na_tela(_descartar_do_lote, game_id)
     with _trava:
         for destino, trabalho in list(_trabalhos.items()):
             if trabalho.chave == game_id:
@@ -300,12 +312,103 @@ def encerrar() -> None:
         for trabalho in _trabalhos.values():
             trabalho.invalido = True
         _trabalhos.clear()
+    _encerrar_lote()
 
 
 def cancelar_pendentes() -> None:
-    """Descarta o que ainda não começou; o que já roda segue até o fim."""
+    """Descarta o que ainda não começou; o que já roda segue até o fim.
+
+    Quem cancela não vai receber o aviso dos pedidos descartados, então a tarefa
+    "Capas animadas" também termina aqui. Sempre na thread principal.
+    """
     with _trava:
         for destino, trabalho in list(_trabalhos.items()):
             if not trabalho.iniciado:
                 trabalho.invalido = True
                 del _trabalhos[destino]
+    _encerrar_lote()
+
+
+# --- A tarefa "Capas animadas" -------------------------------------------------
+
+
+class _Lote:
+    """O que a tarefa "Capas animadas" em andamento ainda espera."""
+
+    def __init__(self, tarefa: tarefas.Tarefa, total: int) -> None:
+        self.tarefa = tarefa
+        self.total = total
+        self.feitos = 0
+        self.pendentes: dict[Path, str] = {}  # destino -> game_id
+
+
+# Só a thread principal troca isto. Há no máximo uma tarefa: um pedido novo
+# durante ela entra no mesmo lote em vez de abrir outro item na lista.
+_lote: _Lote | None = None
+
+
+def preparar(capas: list[tuple[str, Path]]) -> None:
+    """Gera, em segundo plano, as cópias que faltam das capas (na ordem dada).
+
+    Sempre na thread principal. Mostra uma só tarefa "Capas animadas" nas
+    tarefas em andamento, que termina quando todo pedido voltou (``estatica``,
+    ``ilegivel`` e ``falhou`` também contam) ou quando é cancelada. Sem nada a
+    gerar, não mostra tarefa nenhuma. Chamada durante uma tarefa em andamento,
+    acrescenta as cópias novas a ela; cópia já esperada não conta duas vezes.
+    """
+    global _lote  # pylint: disable=global-statement
+    novos: dict[Path, tuple[str, Path, tuple[int, int]]] = {}
+    for game_id, origem in capas:
+        for tamanho in tamanhos():
+            destino = caminho_para(origem, tamanho)
+            if destino.exists() or (_lote and destino in _lote.pendentes):
+                continue
+            novos.setdefault(destino, (game_id, origem, tamanho))
+    if not novos:
+        return
+
+    # O lote e as pendências ficam prontos antes do primeiro ``pedir``: um aviso
+    # nunca chega a um lote que ainda acha que terminou.
+    if _lote is None:
+        _lote = _Lote(tarefas.comecar(_("Capas animadas"), len(novos)), len(novos))
+    else:
+        _lote.total += len(novos)
+        _lote.tarefa.atualizar(_lote.feitos, _lote.total)
+    lote = _lote
+    for destino, (game_id, _origem, _tamanho) in novos.items():
+        lote.pendentes[destino] = game_id
+    for destino, (_game_id, origem, tamanho) in novos.items():
+        pedir(origem, destino, tamanho, partial(_voltou, lote, destino))
+
+
+def _voltou(lote: _Lote, destino: Path, _resultado: Resultado) -> None:
+    # Um aviso tardio de lote que já terminou ou foi cancelado, ou de cópia que
+    # a tarefa já deixou de esperar, não conta nem reabre nada.
+    if lote is not _lote or destino not in lote.pendentes:
+        return
+    del lote.pendentes[destino]
+    lote.feitos += 1
+    lote.tarefa.atualizar(lote.feitos)
+    if not lote.pendentes:
+        _encerrar_lote()
+
+
+def _descartar_do_lote(game_id: str) -> bool:
+    """A capa do jogo mudou: a tarefa deixa de esperar as cópias antigas."""
+    if _lote is not None:
+        descartadas = [d for d, dono in _lote.pendentes.items() if dono == game_id]
+        for destino in descartadas:
+            del _lote.pendentes[destino]
+        if descartadas and not _lote.pendentes:
+            _encerrar_lote()
+        elif descartadas:
+            _lote.total -= len(descartadas)
+            _lote.tarefa.atualizar(_lote.feitos, _lote.total)
+    return False  # o GLib repetiria o callback que devolvesse um valor verdadeiro
+
+
+def _encerrar_lote() -> None:
+    global _lote  # pylint: disable=global-statement
+    if _lote is not None:
+        _lote.tarefa.terminar()
+        _lote = None

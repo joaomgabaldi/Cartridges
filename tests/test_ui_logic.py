@@ -2920,3 +2920,52 @@ def test_filtrar_com_a_grade_cabendo_na_tela_reavalia_o_autoplay(
         assert cover.active, "de volta com a busca limpa: toca de novo"
     finally:
         real_window.destroy()
+
+
+def _ao_mudar_autoplay(schema):
+    """O que a janela ligou a ``changed::cover-autoplay`` (uma só ligação)."""
+    ligados = [f for sinal, f in schema.handlers if sinal == "changed::cover-autoplay"]
+    assert len(ligados) == 1
+    return ligados[0]
+
+
+def test_ligar_o_autoplay_prepara_as_capas_na_ordem_da_grade(
+    real_window, store, gif, capas_falsas, schema, monkeypatch
+):
+    from cartridges.utils import copias_animadas
+
+    chamadas = []
+    monkeypatch.setattr(copias_animadas, "preparar", lambda c: chamadas.append(c))
+    monkeypatch.setattr(
+        copias_animadas, "cancelar_pendentes", lambda: chamadas.append("cancelar")
+    )
+    _capa_na_grade(real_window, real_window.library, "imported_a", "A", gif, capas_falsas)
+
+    schema.set_boolean("cover-autoplay", True)
+    _ao_mudar_autoplay(schema)(schema, "cover-autoplay")
+
+    assert chamadas == [[("imported_a", gif)]]
+    assert real_window._autoplay_id is not None, "e a reavaliação continua agendada"
+
+
+def test_desligar_o_autoplay_cancela_o_que_esta_na_fila(
+    real_window, store, schema, monkeypatch
+):
+    from cartridges.utils import copias_animadas
+
+    chamadas = []
+    monkeypatch.setattr(copias_animadas, "preparar", lambda c: chamadas.append(c))
+    monkeypatch.setattr(
+        copias_animadas, "cancelar_pendentes", lambda: chamadas.append("cancelar")
+    )
+
+    schema.set_boolean("cover-autoplay", False)
+    _ao_mudar_autoplay(schema)(schema, "cover-autoplay")
+
+    assert chamadas == ["cancelar"]
+
+
+def test_a_ligacao_do_autoplay_e_desfeita_ao_destruir_a_janela(real_window, schema):
+    ligacoes = [h for objeto, h in real_window._global_handler_ids if objeto is schema]
+
+    assert len(ligacoes) == 1

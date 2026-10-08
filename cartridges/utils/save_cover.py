@@ -29,6 +29,7 @@ from PIL import Image, UnidentifiedImageError
 
 from cartridges import shared
 from cartridges.utils import copias_animadas
+from cartridges.utils.na_tela import entregar_na_tela
 
 # Cover formats that hold an animation and are stored in their original form
 ANIMATED_SUFFIXES = (".gif", ".webp")
@@ -225,6 +226,13 @@ def save_cover(game_id: str, cover_path: Path) -> None:
     for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
         if suffix != dest.suffix:
             (shared.covers_dir / f"{game_id}{suffix}").unlink(missing_ok=True)
+
+    # Capa animada nova: as cópias reduzidas dela são geradas em segundo plano.
+    # Pela mesma entrega do ``apagar`` lá em cima (que avisa a tarefa para não
+    # esperar as cópias da capa velha): as duas chegam à thread principal na
+    # ordem das chamadas, e a tarefa é dela.
+    if dest.suffix in ANIMATED_SUFFIXES and shared.schema.get_boolean("cover-autoplay"):
+        entregar_na_tela(copias_animadas.preparar, [(game_id, dest)])
 
     # save_cover can be called from a worker thread (e.g. the async SgdbManager),
     # but refreshing the on-screen cover touches GTK widgets, which must happen

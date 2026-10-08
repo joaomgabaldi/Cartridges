@@ -84,6 +84,57 @@ def test_remover_capa_apaga_as_copias():
     assert [p.name for p in shared.capas_animadas_dir.iterdir()] == ["g2_200x300.webp"]
 
 
+@pytest.fixture
+def entregas(monkeypatch):
+    """Troca a entrega à thread principal por um registro."""
+    from cartridges.utils import save_cover as modulo
+
+    registro = []
+    monkeypatch.setattr(
+        modulo, "entregar_na_tela", lambda func, *args: registro.append((func, args))
+    )
+    return registro
+
+
+def _gif(caminho):
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    quadros = [Image.new("RGB", (60, 90), cor) for cor in ("red", "blue")]
+    quadros[0].save(caminho, save_all=True, append_images=quadros[1:], duration=100)
+    return caminho
+
+
+def test_capa_animada_nova_com_a_opcao_ligada_prepara_as_copias(
+    tmp_path, schema, entregas
+):
+    from cartridges.utils import copias_animadas
+
+    schema.set_boolean("cover-autoplay", True)
+
+    save_cover("g1", _gif(tmp_path / "nova.gif"))
+
+    # Pela mesma entrega do ``apagar``: a ordem entre as duas é a das chamadas.
+    assert entregas == [
+        (copias_animadas.preparar, ([("g1", shared.covers_dir / "g1.gif")],))
+    ]
+
+
+def test_capa_animada_nova_com_a_opcao_desligada_nao_prepara(
+    tmp_path, schema, entregas
+):
+    save_cover("g1", _gif(tmp_path / "nova.gif"))
+
+    assert entregas == []
+
+
+def test_capa_estatica_ou_removida_nao_prepara(tmp_path, schema, entregas):
+    schema.set_boolean("cover-autoplay", True)
+
+    save_cover("g1", make_image(tmp_path / "nova.tiff"))
+    save_cover("g1", None)
+
+    assert entregas == []
+
+
 # region Montagem da capa a partir de uma imagem qualquer
 
 

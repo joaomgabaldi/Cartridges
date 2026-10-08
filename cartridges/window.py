@@ -54,6 +54,7 @@ from cartridges.utils.news_feed import NewsPost
 from cartridges.utils.open_uri import open_uri
 from cartridges.session_history import SessionHistoryDialog
 from cartridges.utils import (
+    copias_animadas,
     restauracao,
     session_fita,
     session_log,
@@ -367,7 +368,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self._global_handler_ids.append(
             (
                 shared.schema,
-                shared.schema.connect("changed::cover-autoplay", self.agendar_autoplay),
+                shared.schema.connect("changed::cover-autoplay", self.ao_mudar_autoplay),
             )
         )
         configuracoes = Gtk.Settings.get_default()
@@ -1311,6 +1312,15 @@ class CartridgesWindow(Adw.ApplicationWindow):
         if self._autoplay_id is not None:
             GLib.source_remove(self._autoplay_id)
         self._autoplay_id = GLib.timeout_add(200, self._aplicar_autoplay)
+
+    def ao_mudar_autoplay(self, *_args: Any) -> None:
+        """A opção foi ligada ou desligada: reavalia o que toca e, junto,
+        começa a preparar as cópias das capas ou larga o que ainda esperava."""
+        self.agendar_autoplay()
+        if shared.schema.get_boolean("cover-autoplay"):
+            copias_animadas.preparar(self.capas_na_ordem())
+        else:
+            copias_animadas.cancelar_pendentes()
 
     def _aplicar_autoplay(self) -> bool:
         """Liga o motivo "à vista" das capas animadas da biblioteca que estão

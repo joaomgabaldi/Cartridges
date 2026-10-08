@@ -610,3 +610,296 @@ def test_limpar_segue_adiante_quando_um_arquivo_resiste(monkeypatch):
     copias_animadas.limpar(set())
 
     assert [p.name for p in pasta.iterdir()] == ["a_200x300.webp"]
+
+
+# --- Tarefa de fundo que prepara as cópias -----------------------------------
+
+
+class _TarefaFalsa:
+    """Anota, na ordem, o que a tarefa em andamento recebeu."""
+
+    def __init__(self, nome, total):
+        self.nome = nome
+        self.total = total
+        self.eventos = []
+
+    def atualizar(self, feitos, total=None):
+        if total is not None:
+            self.total = total
+        self.eventos.append(("atualizar", feitos, self.total))
+
+    def terminar(self):
+        self.eventos.append(("terminar",))
+
+    @property
+    def terminadas(self):
+        return self.eventos.count(("terminar",))
+
+
+@pytest.fixture
+def tarefas_criadas(monkeypatch):
+    criadas = []
+
+    def comecar(nome, total):
+        criadas.append(_TarefaFalsa(nome, total))
+        return criadas[-1]
+
+    monkeypatch.setattr(copias_animadas.tarefas, "comecar", comecar)
+    return criadas
+
+
+@pytest.fixture
+def geradas(monkeypatch, tocador_falso):
+    """Troca o ``gerar``: anota o destino de cada trabalho que rodou."""
+    nomes = []
+
+    def gerar(origem, destino, tamanho, vigente):
+        nomes.append(destino.name)
+        return True
+
+    monkeypatch.setattr(copias_animadas, "gerar", gerar)
+    return nomes
+
+
+def _capa(game_id):
+    return game_id, shared.covers_dir / f"{game_id}.webp"
+
+
+def _nomes(game_id):
+    return [f"{game_id}_{l}x{a}.webp" for l, a in copias_animadas.tamanhos()]
+
+
+def _criar_copia(nome):
+    shared.capas_animadas_dir.mkdir(parents=True, exist_ok=True)
+    (shared.capas_animadas_dir / nome).write_bytes(b"x")
+
+
+def test_preparar_na_ordem_recebida(fila, tarefas_criadas, geradas):
+    copias_animadas.preparar([_capa("a"), _capa("b")])
+    fila.rodar_tudo()
+
+    assert geradas == _nomes("a") + _nomes("b")
+    assert [(t.nome, t.total) for t in tarefas_criadas] == [("Capas animadas", 4)]
+    assert tarefas_criadas[0].eventos == [
+        ("atualizar", 1, 4),
+        ("atualizar", 2, 4),
+        ("atualizar", 3, 4),
+        ("atualizar", 4, 4),
+        ("terminar",),
+    ]
+
+
+def test_preparar_so_o_que_falta(fila, tarefas_criadas, geradas):
+    for nome in _nomes("a") + _nomes("b")[:1]:
+        _criar_copia(nome)
+
+    copias_animadas.preparar([_capa("a"), _capa("b")])
+    fila.rodar_tudo()
+
+    assert geradas == _nomes("b")[1:]
+    assert tarefas_criadas[0].total == 1
+
+
+def test_sem_trabalho_sem_tarefa(fila, tarefas_criadas, geradas):
+    for nome in _nomes("a"):
+        _criar_copia(nome)
+
+    copias_animadas.preparar([_capa("a")])
+    copias_animadas.preparar([])
+
+    assert fila.fila == []
+    assert tarefas_criadas == []
+
+
+def test_tarefa_termina_mesmo_com_ilegivel(fila, tarefas_criadas, tocador_falso):
+    shared.covers_dir.mkdir(parents=True, exist_ok=True)
+    _animada(shared.covers_dir / "a.webp", [100, 100])
+    (shared.covers_dir / "b.webp").write_bytes(b"isto nao e uma imagem")
+    _animada(shared.covers_dir / "c.webp", [100, 100])
+
+    copias_animadas.preparar([_capa("a"), _capa("b"), _capa("c")])
+    fila.rodar_tudo()
+
+    (tarefa,) = tarefas_criadas
+    assert tarefa.total == 6
+    assert [e[0] for e in tarefa.eventos] == ["atualizar"] * 6 + ["terminar"]
+    assert [e[1] for e in tarefa.eventos[:-1]] == [1, 2, 3, 4, 5, 6]
+
+
+def test_estatica_e_falhou_tambem_contam_como_feitos(
+    fila, tarefas_criadas, monkeypatch, tocador_falso
+):
+    resultados = iter([False, copias_animadas.GravacaoFalhou()])
+
+    def gerar(origem, destino, tamanho, vigente):
+        resultado = next(resultados)
+        if isinstance(resultado, Exception):
+            raise resultado
+        return resultado
+
+    monkeypatch.setattr(copias_animadas, "gerar", gerar)
+
+    copias_animadas.preparar([_capa("a")])
+    fila.rodar_tudo()
+
+    assert tarefas_criadas[0].eventos == [
+        ("atualizar", 1, 2),
+        ("atualizar", 2, 2),
+        ("terminar",),
+    ]
+
+
+def test_cancelar_termina_a_tarefa(fila, tarefas_criadas, geradas):
+    copias_animadas.preparar([_capa("a"), _capa("b")])
+
+    copias_animadas.cancelar_pendentes()
+    fila.rodar_tudo()
+
+    assert geradas == []
+    assert tarefas_criadas[0].eventos == [("terminar",)]
+
+
+def test_encerrar_termina_a_tarefa(fila, tarefas_criadas, geradas):
+    copias_animadas.preparar([_capa("a")])
+
+    copias_animadas.encerrar()
+    fila.rodar_tudo()
+
+    assert geradas == []
+    assert tarefas_criadas[0].eventos == [("terminar",)]
+
+
+def test_cancelar_sem_tarefa_nao_faz_nada(fila, tarefas_criadas):
+    copias_animadas.cancelar_pendentes()
+    copias_animadas.encerrar()
+
+    assert tarefas_criadas == []
+
+
+def test_pronto_tardio_depois_de_cancelar_e_inofensivo(
+    fila, tarefas_criadas, monkeypatch, tocador_falso
+):
+    def gerar_e_cancelar(origem, destino, tamanho, vigente):
+        # O trabalho já roda quando o usuário desliga a opção: ele termina,
+        # mas a tarefa já se encerrou.
+        copias_animadas.cancelar_pendentes()
+        return True
+
+    monkeypatch.setattr(copias_animadas, "gerar", gerar_e_cancelar)
+    copias_animadas.preparar([_capa("a")])
+
+    fila.rodar_tudo()
+
+    (tarefa,) = tarefas_criadas
+    assert tarefa.eventos == [("terminar",)]
+
+
+def test_preparar_depois_de_cancelar_abre_tarefa_nova(fila, tarefas_criadas, geradas):
+    copias_animadas.preparar([_capa("a")])
+    copias_animadas.cancelar_pendentes()
+
+    copias_animadas.preparar([_capa("a")])
+    fila.rodar_tudo()
+
+    assert len(tarefas_criadas) == 2
+    assert tarefas_criadas[0].eventos == [("terminar",)]
+    assert tarefas_criadas[1].eventos[-1] == ("terminar",)
+    assert geradas == _nomes("a")
+
+
+def test_preparar_durante_uma_tarefa_amplia_a_mesma(fila, tarefas_criadas, geradas):
+    copias_animadas.preparar([_capa("a")])
+    copias_animadas.preparar([_capa("b")])
+    fila.rodar_tudo()
+
+    (tarefa,) = tarefas_criadas
+    assert tarefa.eventos == [
+        ("atualizar", 0, 4),
+        ("atualizar", 1, 4),
+        ("atualizar", 2, 4),
+        ("atualizar", 3, 4),
+        ("atualizar", 4, 4),
+        ("terminar",),
+    ]
+    assert geradas == _nomes("a") + _nomes("b")
+
+
+def test_preparar_a_mesma_capa_duas_vezes_nao_conta_em_dobro(
+    fila, tarefas_criadas, geradas
+):
+    copias_animadas.preparar([_capa("a")])
+    copias_animadas.preparar([_capa("a")])
+    fila.rodar_tudo()
+
+    (tarefa,) = tarefas_criadas
+    assert tarefa.total == 2
+    assert tarefa.terminadas == 1
+    assert geradas == _nomes("a")
+
+
+def test_depois_de_terminar_a_proxima_preparacao_abre_outra_tarefa(
+    fila, tarefas_criadas, geradas
+):
+    copias_animadas.preparar([_capa("a")])
+    fila.rodar_tudo()
+
+    copias_animadas.preparar([_capa("a")])  # as cópias não chegaram a existir
+    fila.rodar_tudo()
+
+    assert len(tarefas_criadas) == 2
+    assert [t.terminadas for t in tarefas_criadas] == [1, 1]
+
+
+def test_apagar_tira_a_capa_da_tarefa(fila, tarefas_criadas, geradas):
+    copias_animadas.preparar([_capa("a"), _capa("b")])
+
+    copias_animadas.apagar("a")
+    fila.rodar_tudo()
+
+    (tarefa,) = tarefas_criadas
+    assert geradas == _nomes("b")
+    assert tarefa.eventos == [
+        ("atualizar", 0, 2),
+        ("atualizar", 1, 2),
+        ("atualizar", 2, 2),
+        ("terminar",),
+    ]
+
+
+def test_apagar_a_unica_capa_termina_a_tarefa(fila, tarefas_criadas, geradas):
+    copias_animadas.preparar([_capa("a")])
+
+    copias_animadas.apagar("a")
+    fila.rodar_tudo()
+
+    assert geradas == []
+    assert tarefas_criadas[0].eventos[-1] == ("terminar",)
+    assert tarefas_criadas[0].terminadas == 1
+
+
+def test_apagar_e_preparar_de_novo_conta_a_capa_nova(fila, tarefas_criadas, geradas):
+    copias_animadas.preparar([_capa("a"), _capa("b")])
+
+    copias_animadas.apagar("a")  # a capa de "a" mudou...
+    copias_animadas.preparar([_capa("a")])  # ...e a nova também precisa de cópias
+    fila.rodar_tudo()
+
+    (tarefa,) = tarefas_criadas
+    assert sorted(geradas) == sorted(_nomes("a") + _nomes("b"))
+    assert tarefa.terminadas == 1
+    assert tarefa.total == 4
+
+
+def test_erro_inesperado_resulta_falhou_e_a_tarefa_termina(
+    fila, tarefas_criadas, monkeypatch, tocador_falso, caplog
+):
+    def gerar(origem, destino, tamanho, vigente):
+        raise RuntimeError("ninguém previu")
+
+    monkeypatch.setattr(copias_animadas, "gerar", gerar)
+
+    copias_animadas.preparar([_capa("a")])
+    fila.rodar_tudo()
+
+    assert tarefas_criadas[0].eventos[-1] == ("terminar",)
+    assert "a.webp" in caplog.text
