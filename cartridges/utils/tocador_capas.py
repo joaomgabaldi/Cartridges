@@ -21,6 +21,7 @@ import threading
 import time
 from bisect import bisect_right
 from dataclasses import dataclass, field
+from itertools import accumulate
 from pathlib import Path
 from typing import Any, Callable
 
@@ -33,6 +34,12 @@ TICK = 1 / 30
 # Parada há mais que isto, a capa fecha a cópia: quem sai da tela e volta logo
 # retoma do mesmo quadro; quem sumiu de vez não ocupa memória.
 FECHAR_APOS = 30.0
+
+# Mais paradas que isto com a cópia aberta, as paradas há mais tempo fecham
+# antes dos 30 s. Cada uma custa ~10 MB (grade) a ~30 MB (detalhes), e rolar
+# uma biblioteca grande pausa dezenas delas; 8 ainda cobre ir e voltar do
+# mouse e da rolagem por perto, que é o que a retomada do mesmo quadro serve.
+MAX_PAUSADAS_ABERTAS = 8
 
 FALHAS_ATE_CORROMPIDA = 3
 
@@ -119,7 +126,7 @@ def _abrir(estado: _Estado) -> None:
             imagem.load()
             duracoes.append(int(imagem.info.get("duration") or 1))
     duracoes = [max(1, d) for d in duracoes]
-    inicios = [sum(duracoes[:n]) for n in range(len(duracoes))]
+    inicios = list(accumulate(duracoes[:-1], initial=0))
     estado.imagem = imagem
     estado.duracoes = duracoes
     estado.inicios = inicios
@@ -139,8 +146,9 @@ class Tocador:
         self._agora = agora
         self._entregar = entregar
         self._iniciar_thread = iniciar_thread
-        # Um dono é uma capa; fica no dicionário até ``parar`` + 30 s ou até a
-        # cópia falhar de vez. Quem chama deve parar o dono ao destruí-lo.
+        # Um dono é uma capa; fica no dicionário até ``parar`` + 30 s (ou até
+        # sair das ``MAX_PAUSADAS_ABERTAS`` mais recentes) ou até a cópia
+        # falhar de vez. Quem chama deve parar o dono ao destruí-lo.
         self._estados: dict[object, _Estado] = {}
         self._trava = threading.Lock()
         self._acordar = threading.Event()
@@ -224,7 +232,8 @@ class Tocador:
             return estado.posicao if estado is not None else 0
 
     def passo(self) -> None:
-        """Um tick: fecha as pausadas há muito e avança as capas vencidas.
+        """Um tick: fecha as pausadas há muito (ou além das
+        ``MAX_PAUSADAS_ABERTAS`` com a cópia aberta) e avança as vencidas.
 
         A decodificação roda fora da trava, para ``tocar``/``parar`` da thread
         principal nunca esperarem por ela. O estado é copiado antes (os
@@ -233,12 +242,16 @@ class Tocador:
         """
         agora = self._agora()
         with self._trava:
-            for dono in [
-                d
-                for d, e in self._estados.items()
-                if e.pausado_em is not None and agora - e.pausado_em > FECHAR_APOS
-            ]:
-                del self._estados[dono]
+            pausadas = sorted(
+                (d for d, e in self._estados.items() if e.pausado_em is not None),
+                key=lambda d: self._estados[d].pausado_em,
+            )
+            abertas = [d for d in pausadas if self._estados[d].imagem is not None]
+            excesso = set(abertas[: max(0, len(abertas) - MAX_PAUSADAS_ABERTAS)])
+            for dono in pausadas:
+                parada_ha = agora - self._estados[dono].pausado_em
+                if dono in excesso or parada_ha > FECHAR_APOS:
+                    del self._estados[dono]
             devidos = [
                 (dono, estado, estado.versao)
                 for dono, estado in self._estados.items()
@@ -262,15 +275,16 @@ class Tocador:
         avisos = []
         with self._trava:
             for dono, estado, versao, n, quadro in lido:
-                if (
-                    self._estados.get(dono) is not estado
-                    or estado.pausado_em is not None
-                ):
+                if self._estados.get(dono) is not estado:
                     continue
                 if estado.versao != versao:
                     # ``esquecer`` chegou no meio: o que foi lido é do arquivo
-                    # antigo. Descarta e reabre no próximo passo.
+                    # antigo. Descarta e reabre no próximo passo. Antes da
+                    # checagem de pausa: uma parada logo depois do ``esquecer``
+                    # guardaria a imagem velha para a retomada.
                     estado.imagem = None
+                    continue
+                if estado.pausado_em is not None:
                     continue
                 if quadro is not None:
                     estado.falhas = 0

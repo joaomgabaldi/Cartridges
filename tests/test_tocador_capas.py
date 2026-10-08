@@ -508,3 +508,45 @@ def test_esquecer_fecha_a_pausada_e_ignora_outras_copias(banca, tmp_path):
 
     assert banca.tocador.posicao_ms(pausada) == 0
     assert banca.tocador.posicao_ms(outra) == 100
+
+
+def test_no_maximo_8_paradas_seguram_a_copia_aberta(banca, tmp_path):
+    # Rolar uma biblioteca grande pausa dezenas de capas: cada uma com a cópia
+    # aberta custa de 10 a 30 MB por 30 s.
+    copia = criar_webp(tmp_path / "a.webp", [100, 100])
+    donos = [object() for _ in range(10)]
+    quadro, _, falhar, _ = banca.captura()
+    for dono in donos:
+        banca.tocador.tocar(dono, copia, quadro, falhar)
+    banca.tocador.passo()
+    for i, dono in enumerate(donos):
+        banca.relogio.t = 0.01 * (i + 1)
+        banca.tocador.parar(dono)
+
+    banca.tocador.passo()
+
+    abertos = [d for d in donos if d in banca.tocador._estados]
+    assert abertos == donos[2:]
+    assert tocador_capas.MAX_PAUSADAS_ABERTAS == 8
+
+
+def test_esquecer_durante_a_abertura_e_parar_nao_guarda_o_arquivo_velho(
+    banca, tmp_path, monkeypatch
+):
+    copia = criar_webp(tmp_path / "a.webp", [100, 100])
+    dono = object()
+    quadro, _, falhar, _ = banca.captura()
+    original = tocador_capas._abrir
+
+    def abrir_e_trocar(estado):
+        # A cópia é regravada e a capa sai da tela enquanto o tocador abria:
+        # o que ele termina de abrir já é do arquivo velho.
+        banca.tocador.esquecer(copia)
+        banca.tocador.parar(dono)
+        original(estado)
+
+    monkeypatch.setattr(tocador_capas, "_abrir", abrir_e_trocar)
+    banca.tocador.tocar(dono, copia, quadro, falhar)
+    banca.tocador.passo()
+
+    assert banca.tocador._estados[dono].imagem is None
