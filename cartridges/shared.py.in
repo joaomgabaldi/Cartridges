@@ -78,7 +78,8 @@ conquistas_dir = app_dir / "conquistas"
 conquistas_cache_dir = app_dir / "cache" / "conquistas"
 
 # Cópias reduzidas das capas animadas, uma por tamanho de exibição
-# (`utils/copias_animadas.py`): refeitas da capa, fora do backup.
+# (`utils/copias_animadas.py`). Poderiam ser refeitas da capa, mas entram no
+# backup: levá-las prontas sai mais barato do que regerá-las ao restaurar.
 capas_animadas_dir = app_dir / "cache" / "capas_animadas"
 
 # Contas de lojas (conta Microsoft das conquistas do Xbox), com a chave de

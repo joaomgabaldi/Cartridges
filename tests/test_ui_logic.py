@@ -1126,11 +1126,13 @@ def test_origem_ilegivel_mostra_a_capa_padrao(gif, capas_falsas):
     assert not cover.animada
 
 
-def test_gravacao_falha_fica_animada_sem_pedir_em_loop(gif, capas_falsas):
-    """Disco cheio: o quadro parado fica, e só o próximo reconcile pede de novo."""
+def test_gravacao_falha_nao_pede_de_novo_ate_a_capa_mudar(gif, capas_falsas):
+    """Disco cheio ou falta de memória: refazer a cada reconcile custaria de 10
+    a 25 s de CPU toda vez. O quadro parado fica até a capa mudar."""
     from cartridges.game_cover import GameCover
 
-    cover = GameCover({Gtk.Picture()}, gif)
+    picture = Gtk.Picture()
+    cover = GameCover({picture}, gif)
     cover.set_hover_animation(True)
     capas_falsas.pedidos[0].pronto("falhou")
 
@@ -1139,7 +1141,12 @@ def test_gravacao_falha_fica_animada_sem_pedir_em_loop(gif, capas_falsas):
 
     cover.set_hover_animation(False)
     cover.set_hover_animation(True)
-    assert len(capas_falsas.pedidos) == 2
+    cover.set_details_animation(True)
+    assert len(capas_falsas.pedidos) == 1
+    assert picture.get_paintable() is cover.texture
+
+    cover.new_cover(gif)
+    assert len(capas_falsas.pedidos) == 2, "capa nova: pede de novo"
 
 
 def test_copia_corrompida_e_regerada(gif, capas_falsas):

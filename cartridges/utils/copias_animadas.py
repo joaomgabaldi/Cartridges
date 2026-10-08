@@ -354,8 +354,10 @@ def apagar(game_id: str) -> None:
     # não deve mais esperá-los. Pode vir de uma thread de segundo plano, e a
     # tarefa é da thread principal. Quem pediu as cópias de novo (a capa nova)
     # o fez depois desta chamada, e a entrega mantém a ordem.
-    if _lote is not None:
-        entregar_na_tela(_descartar_do_lote, game_id)
+    # Sempre agendado: ler ``_lote`` aqui, fora da thread principal e sem
+    # trava, podia ver None um instante antes de um ``preparar`` criar o lote,
+    # e a tarefa ficaria esperando para sempre. O descarte já ignora o None.
+    entregar_na_tela(_descartar_do_lote, game_id)
     with _trava:
         for destino, trabalho in list(_trabalhos.items()):
             if trabalho.chave == game_id:

@@ -96,6 +96,10 @@ class GameCover:
     # último quadro recebido.
     _animated_path: Optional[Path] = None
     _frame_texture: Optional[Gdk.Texture] = None
+    # Uma cópia desta capa terminou em "falhou" (disco cheio, falta de
+    # memória): não se pede outra até a capa mudar, ou cada reconcile
+    # refaria de 10 a 25 s de geração para falhar de novo.
+    _gravacao_falhou: bool = False
 
     # Capas da abertura já decodificadas no tamanho da grade; ver
     # `pre_decodificadas`. Cada uma é usada uma vez.
@@ -155,6 +159,7 @@ class GameCover:
         tocador_capas.tocador.parar(self)
         self._animated_path = None
         self._frame_texture = None
+        self._gravacao_falhou = False
         self.texture = None
         self.blurred = None
         self.luminance = None
@@ -494,9 +499,10 @@ class GameCover:
         tamanho = detalhes if self._details_active else grade
         copia = copias_animadas.caminho_para(origem, tamanho)
         if not copia.is_file():
-            copias_animadas.pedir(
-                origem, copia, tamanho, partial(self._copia_pronta, geracao)
-            )
+            if not self._gravacao_falhou:
+                copias_animadas.pedir(
+                    origem, copia, tamanho, partial(self._copia_pronta, geracao)
+                )
             # Os detalhes tocam a cópia da grade, ampliada, até a deles sair.
             copia = copias_animadas.caminho_para(origem, grade)
             if not copia.is_file():
@@ -528,8 +534,11 @@ class GameCover:
             if resultado == "ilegivel":
                 self.texture = None
             self.set_texture(self.texture)
-        # "falhou" (disco cheio, sem permissão): fica como está e continua
-        # animada; o próximo reconcile pede de novo. Pedir daqui seria um loop.
+        elif resultado == "falhou":
+            # Disco cheio, sem permissão, sem memória: fica como está (a
+            # cópia da grade, se houver, ou o quadro parado) e não pede mais
+            # até a capa mudar.
+            self._gravacao_falhou = True
 
     def _quadro(self, geracao: int, dados: bytes, largura: int, altura: int) -> None:
         """Um quadro do tocador, em RGBA. Thread principal."""
