@@ -38,6 +38,7 @@ from gi.repository import Adw, GLib, Gtk
 
 from cartridges import shared
 from cartridges.game_cover import GameCover
+from cartridges.utils import copias_animadas
 from cartridges.utils.busca_do_seletor import BuscaDoSeletor
 from cartridges.utils.download import download_bytes
 from cartridges.utils.na_tela import entregar_na_tela
@@ -247,6 +248,10 @@ class SgdbPicker(BuscaDoSeletor, Adw.Dialog):
     def _clear_results(self) -> None:
         for cover in self._covers:
             cover.desligar_animacao()
+            # As cópias da prévia ainda na fila rodariam por minutos depois de
+            # o seletor fechar, à frente das da biblioteca.
+            if cover.path is not None:
+                copias_animadas.abandonar(cover.path)
         self._covers.clear()
         self._results.clear()
         self._added = 0

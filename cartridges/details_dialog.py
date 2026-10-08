@@ -42,7 +42,7 @@ from cartridges.steam_picker import SteamPicker
 from cartridges.store.managers.hltb_manager import shared_helper as shared_hltb_helper
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
-from cartridges.utils import session_fita, window_geometry
+from cartridges.utils import copias_animadas, session_fita, window_geometry
 from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.game_folder import game_folder, open_folder
 from cartridges.utils.game_logo import (
@@ -528,6 +528,9 @@ class DetailsDialog(Adw.Dialog):
             path.unlink(missing_ok=True)
         except OSError as error:
             logging.info("Could not remove the staged file %s: %s", path, error)
+        if attribute == "_cover_tmp":
+            # A cópia animada da provisória mora ao lado dela, em %TEMP%.
+            copias_animadas.abandonar(path)
         setattr(self, attribute, None)
 
     def _stage_cover(self, new_path: Path) -> None:
@@ -732,7 +735,13 @@ class DetailsDialog(Adw.Dialog):
                 # abaixo, lia um arquivo já apagado.
                 staged, self._cover_tmp = self._cover_tmp, None
                 if staged is not None:
-                    GLib.idle_add(lambda: staged.unlink(missing_ok=True) and False)
+
+                    def descartar_provisoria() -> bool:
+                        staged.unlink(missing_ok=True)
+                        copias_animadas.abandonar(staged)
+                        return False
+
+                    GLib.idle_add(descartar_provisoria)
 
         self.apply_logo_choice(self.game)
         self.apply_wallpaper_choice(self.game)

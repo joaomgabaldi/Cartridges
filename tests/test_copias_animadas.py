@@ -422,6 +422,77 @@ def test_trabalho_que_falha_nao_trava_o_destino(fila, tmp_path):
     assert recebidos == ["pronta"]
 
 
+def _destinos(origem):
+    return [copias_animadas.caminho_para(origem, t) for t in copias_animadas.tamanhos()]
+
+
+def test_abandonar_cancela_o_pendente_e_apaga_as_copias(fila, tmp_path, tocador_falso):
+    # Uma prévia do seletor: as cópias moram ao lado dela.
+    origem = _animada(tmp_path / "previa.webp", [100, 100])
+    grade, detalhes = _destinos(origem)
+    detalhes.write_bytes(b"x")  # já gerada
+    recebidos = []
+    copias_animadas.pedir(origem, grade, (200, 300), recebidos.append)
+
+    copias_animadas.abandonar(origem)
+    fila.rodar_tudo()
+
+    assert recebidos == []
+    assert not grade.exists() and not detalhes.exists()
+    assert ("esquecer", detalhes) in tocador_falso.eventos
+
+
+def test_abandonar_no_meio_da_geracao_descarta(fila, tmp_path, monkeypatch, tocador_falso):
+    origem = _animada(tmp_path / "previa.webp", [100] * 5)
+    grade = _destinos(origem)[0]
+    recebidos = []
+    original = copias_animadas.gerar
+
+    def gerar_e_abandonar(*args, **kwargs):
+        copias_animadas.abandonar(origem)  # o seletor fechou com o trabalho rodando
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(copias_animadas, "gerar", gerar_e_abandonar)
+    copias_animadas.pedir(origem, grade, (200, 300), recebidos.append)
+    fila.rodar_tudo()
+
+    assert recebidos == []
+    assert not grade.exists()
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_gerar_nao_recria_a_pasta_que_sumiu(tmp_path):
+    origem = _animada(tmp_path / "a.webp", [100, 100])
+    pasta = tmp_path / "cartridges_sgdb_x"  # o seletor já a apagou
+
+    with pytest.raises(copias_animadas.GravacaoFalhou):
+        copias_animadas.gerar(origem, pasta / "a_200x300.webp", (200, 300))
+    assert not pasta.exists()
+
+
+def test_gerar_cria_a_pasta_das_copias_da_biblioteca():
+    shared.covers_dir.mkdir(parents=True, exist_ok=True)
+    origem = _animada(shared.covers_dir / "g1.webp", [100, 100])
+    destino = copias_animadas.caminho_para(origem, (200, 300))
+
+    assert copias_animadas.gerar(origem, destino, (200, 300)) is True
+    assert destino.exists()
+
+
+def test_gerar_nao_segura_a_origem_aberta(tmp_path):
+    # No Windows um arquivo aberto não pode ser apagado: o seletor apaga a
+    # pasta das prévias e o save_cover substitui a capa com a geração rodando.
+    origem = _animada(tmp_path / "a.webp", [100] * 4)
+
+    def vigente():
+        if origem.exists():
+            origem.unlink()
+        return True
+
+    assert copias_animadas.gerar(origem, tmp_path / "copia.webp", (200, 300), vigente)
+    assert not origem.exists()
+
+
 def test_apagar_remove_todos_os_tamanhos():
     pasta = shared.capas_animadas_dir
     pasta.mkdir(parents=True, exist_ok=True)

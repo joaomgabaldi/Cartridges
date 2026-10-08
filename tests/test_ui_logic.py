@@ -1373,6 +1373,68 @@ def test_previa_animada_do_seletor_toca_a_copia_da_grade(gif, capas_falsas):
     cover = picker._covers[0]
     picker._on_closed()
     assert not cover.active
+    assert capas_falsas.abandonadas == [previa], "as cópias da prévia vão junto"
+
+
+def test_busca_nova_abandona_as_copias_das_previas(gif, capas_falsas):
+    """Sem isto, até 12 cópias de prévias seguiam na fila por minutos."""
+    import shutil
+
+    from cartridges.sgdb_picker import SgdbPicker
+
+    picker = SgdbPicker("Jogo", lambda _p: None)
+    previas = []
+    for nome in ("1.gif", "2.gif"):
+        previas.append(picker._temp_dir / nome)
+        shutil.copyfile(gif, previas[-1])
+        picker._add_result(previas[-1], "https://x/y.gif", True, picker._generation)
+
+    picker._clear_results()
+
+    assert capas_falsas.abandonadas == previas
+    picker._on_closed()
+
+
+def test_capa_provisoria_descartada_abandona_as_copias(
+    real_window, store, gif, capas_falsas, tmp_path
+):
+    import shutil
+
+    from cartridges.details_dialog import DetailsDialog
+
+    dialog = DetailsDialog(_jogo_com_capa_animada("imported_14", gif))
+    primeira, segunda = tmp_path / "a.gif", tmp_path / "b.gif"
+    for provisoria in (primeira, segunda):
+        shutil.copyfile(gif, provisoria)
+
+    dialog._stage_cover(primeira)
+    dialog._stage_cover(segunda)  # troca a provisória
+    assert capas_falsas.abandonadas == [primeira]
+
+    dialog.emit("closed")  # fecha sem aplicar
+    assert capas_falsas.abandonadas == [primeira, segunda]
+    assert not segunda.exists()
+
+
+def test_capa_provisoria_aplicada_abandona_as_copias(
+    real_window, store, gif, capas_falsas, tmp_path
+):
+    import shutil
+
+    from cartridges.details_dialog import DetailsDialog
+
+    dialog = DetailsDialog(_jogo_com_capa_animada("imported_15", gif))
+    provisoria = tmp_path / "a.gif"
+    shutil.copyfile(gif, provisoria)
+    dialog._stage_cover(provisoria)
+
+    dialog.apply_preferences()
+    contexto = GLib.MainContext.default()
+    while contexto.pending():
+        contexto.iteration(False)
+
+    assert not provisoria.exists()
+    assert capas_falsas.abandonadas == [provisoria]
 
 
 def test_an_unchanged_apply_keeps_the_computed_blur(real_window, store, app_dirs):

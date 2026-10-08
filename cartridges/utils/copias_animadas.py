@@ -216,6 +216,12 @@ def gerar(
     ou seja, do tamanho. A contagem de quadros das cópias da grade e dos
     detalhes pode divergir; a duração total, que a fusão preserva, não. Quem
     troca de uma cópia para a outra continua pelo tempo, não pelo quadro.
+
+    A origem é lida inteira para a memória antes de abrir: nenhum trabalho
+    segura o arquivo, que no Windows não poderia ser apagado (a pasta do
+    seletor) nem substituído (``save_cover``) enquanto estivesse aberto. Só a
+    pasta das cópias da biblioteca é criada aqui; a de uma prévia que já sumiu
+    não é recriada, e a gravação falha com ``GravacaoFalhou``.
     """
     global _sem_codificador  # pylint: disable=global-statement
     dados = origem.read_bytes()
@@ -236,7 +242,8 @@ def gerar(
     # troca, o trabalho velho e o novo podem gravar o mesmo destino juntos.
     temporario = destino.with_name(f"{destino.name}.{uuid4().hex}.tmp")
     try:
-        destino.parent.mkdir(parents=True, exist_ok=True)
+        if destino.parent == shared.capas_animadas_dir:
+            destino.parent.mkdir(parents=True, exist_ok=True)
         temporario.write_bytes(webp)
         # A checagem e a troca formam um passo só em relação ao ``apagar``,
         # que invalida e apaga com a mesma trava: o rename cai antes da
@@ -364,6 +371,30 @@ def apagar(game_id: str) -> None:
             continue
         # Fora da ``_trava``, pelo mesmo motivo do ``_rodar``.
         tocador_capas.tocador.esquecer(arquivo)
+
+
+def abandonar(origem: Path) -> None:
+    """Cancela e apaga as cópias de uma capa fora da biblioteca.
+
+    Para as prévias do seletor e a capa provisória da edição: ``apagar`` só
+    acha as da biblioteca, pelo id do jogo, e as destas ficariam na fila
+    (minutos de CPU depois de o seletor fechar) e no disco (ao lado do
+    temporário, em %TEMP%). Sempre na thread principal.
+    """
+    destinos = [caminho_para(origem, tamanho) for tamanho in tamanhos()]
+    with _trava:
+        for destino in destinos:
+            if (trabalho := _trabalhos.pop(destino, None)) is not None:
+                trabalho.invalido = True
+    # O mesmo desconto do ``apagar``: a tarefa não espera trabalho invalidado.
+    entregar_na_tela(_descartar_do_lote, origem.stem)
+    for destino in destinos:
+        try:
+            destino.unlink(missing_ok=True)
+        except OSError:
+            logging.warning("Não foi possível apagar a cópia animada %s", destino.name)
+            continue
+        tocador_capas.tocador.esquecer(destino)
 
 
 def _dono_e_tamanho(arquivo: Path) -> tuple[str, str]:

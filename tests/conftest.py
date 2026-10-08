@@ -674,7 +674,9 @@ def capas_falsas(monkeypatch):
 
     tocador = TocadorFalso()
     pedidos = []
+    abandonadas = []
     monkeypatch.setattr(tocador_capas, "tocador", tocador)
+    monkeypatch.setattr(copias_animadas, "abandonar", abandonadas.append)
     monkeypatch.setattr(
         copias_animadas,
         "pedir",
@@ -684,4 +686,6 @@ def capas_falsas(monkeypatch):
             )
         ),
     )
-    return types.SimpleNamespace(tocador=tocador, pedidos=pedidos)
+    return types.SimpleNamespace(
+        tocador=tocador, pedidos=pedidos, abandonadas=abandonadas
+    )
