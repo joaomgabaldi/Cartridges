@@ -119,3 +119,245 @@ def test_tamanhos_sao_inteiros():
         (int(shared.display_size[0]), int(shared.display_size[1])),
         (int(shared.details_size[0]), int(shared.details_size[1])),
     )
+
+
+# --- Fila de geração e invalidação -------------------------------------------
+
+
+class _ExecutorManual:
+    """Guarda os trabalhos; o teste decide quando rodá-los."""
+
+    def __init__(self):
+        self.fila = []
+
+    def submit(self, funcao):
+        self.fila.append(funcao)
+
+    def rodar_tudo(self):
+        while self.fila:
+            self.fila.pop(0)()
+
+
+@pytest.fixture
+def fila(monkeypatch):
+    executor = _ExecutorManual()
+    monkeypatch.setattr(copias_animadas, "_executor", executor)
+    # A entrega "na thread principal" vira uma chamada direta.
+    monkeypatch.setattr(
+        copias_animadas, "entregar_na_tela", lambda funcao, *args: funcao(*args)
+    )
+    yield executor
+    # Nenhum estado da fila vaza para o teste seguinte.
+    copias_animadas.cancelar_pendentes()
+
+
+def _pedido(tmp_path, nome="g1", animada=True):
+    origem = tmp_path / f"{nome}.webp"
+    if animada:
+        _animada(origem, [100, 100])
+    else:
+        Image.new("RGBA", (8, 12)).save(origem)
+    return origem, tmp_path / f"{nome}_200x300.webp"
+
+
+def test_pedido_repetido_nao_duplica(fila, tmp_path):
+    origem, destino = _pedido(tmp_path)
+    recebidos = []
+
+    copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
+    copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
+
+    assert len(fila.fila) == 1
+    fila.rodar_tudo()
+    assert recebidos == ["pronta", "pronta"]
+    assert destino.exists()
+
+
+def test_pedido_depois_do_fim_gera_de_novo(fila, tmp_path):
+    origem, destino = _pedido(tmp_path)
+
+    copias_animadas.pedir(origem, destino, (200, 300), lambda _r: None)
+    fila.rodar_tudo()
+    copias_animadas.pedir(origem, destino, (200, 300), lambda _r: None)
+
+    assert len(fila.fila) == 1
+
+
+def test_capa_trocada_durante_a_geracao_nao_grava_a_antiga(fila, tmp_path):
+    origem, destino = _pedido(tmp_path)
+    recebidos = []
+    copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
+
+    copias_animadas.apagar("g1")
+    fila.rodar_tudo()
+
+    assert not destino.exists()
+    assert list(tmp_path.glob("*.tmp")) == []
+    assert recebidos == []
+
+
+def test_capa_trocada_no_meio_do_trabalho_descarta_sem_avisar(
+    fila, tmp_path, monkeypatch
+):
+    origem, destino = _pedido(tmp_path)
+    recebidos = []
+    original = copias_animadas.gerar
+
+    def gerar_e_trocar(*args, **kwargs):
+        # A capa muda quando o trabalho já está rodando.
+        copias_animadas.apagar("g1")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(copias_animadas, "gerar", gerar_e_trocar)
+    copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
+    fila.rodar_tudo()
+
+    assert not destino.exists()
+    assert list(tmp_path.glob("*.tmp")) == []
+    assert recebidos == []
+
+
+def test_pedido_novo_depois_de_apagar_nao_herda_o_trabalho_velho(fila, tmp_path):
+    origem, destino = _pedido(tmp_path)
+    antigos, novos = [], []
+    copias_animadas.pedir(origem, destino, (200, 300), antigos.append)
+
+    copias_animadas.apagar("g1")
+    copias_animadas.pedir(origem, destino, (200, 300), novos.append)
+    fila.rodar_tudo()
+
+    assert antigos == []
+    assert novos == ["pronta"]
+    assert destino.exists()
+
+
+def test_apagar_de_outro_jogo_nao_atrapalha(fila, tmp_path):
+    origem, destino = _pedido(tmp_path)
+    recebidos = []
+    copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
+
+    copias_animadas.apagar("g10")
+    fila.rodar_tudo()
+
+    assert recebidos == ["pronta"]
+
+
+def test_cancelar_pendentes(fila, tmp_path):
+    recebidos = []
+    for nome in ("g1", "g2"):
+        origem, destino = _pedido(tmp_path, nome)
+        copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
+
+    copias_animadas.cancelar_pendentes()
+    fila.rodar_tudo()
+
+    assert recebidos == []
+    assert list(tmp_path.glob("*_200x300.webp")) == []
+
+
+def test_pedido_depois_de_cancelar_roda(fila, tmp_path):
+    origem, destino = _pedido(tmp_path)
+    recebidos = []
+    copias_animadas.pedir(origem, destino, (200, 300), lambda _r: None)
+
+    copias_animadas.cancelar_pendentes()
+    copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
+    fila.rodar_tudo()
+
+    assert recebidos == ["pronta"]
+
+
+def test_origem_ilegivel_resulta_ilegivel(fila, tmp_path, caplog):
+    origem = tmp_path / "g1.webp"
+    origem.write_bytes(b"isto nao e uma imagem")
+    recebidos = []
+
+    copias_animadas.pedir(
+        origem, tmp_path / "g1_200x300.webp", (200, 300), recebidos.append
+    )
+    fila.rodar_tudo()
+
+    assert recebidos == ["ilegivel"]
+    assert "g1.webp" in caplog.text
+
+
+def test_origem_estatica_resulta_estatica(fila, tmp_path):
+    origem, destino = _pedido(tmp_path, animada=False)
+    recebidos = []
+
+    copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
+    fila.rodar_tudo()
+
+    assert recebidos == ["estatica"]
+    assert not destino.exists()
+
+
+def test_gravacao_negada_resulta_falhou(fila, tmp_path, monkeypatch, caplog):
+    origem, destino = _pedido(tmp_path)
+    recebidos = []
+
+    def negar(self, alvo):
+        raise PermissionError("negado")
+
+    monkeypatch.setattr(copias_animadas.Path, "replace", negar)
+    copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
+    fila.rodar_tudo()
+
+    assert recebidos == ["falhou"]
+    assert not destino.exists()
+    assert list(tmp_path.glob("*.tmp")) == []
+    assert "g1.webp" in caplog.text
+
+
+def test_falha_ao_gravar_levanta_gravacao_falhou(tmp_path, monkeypatch):
+    origem = _animada(tmp_path / "a.webp", [100, 100])
+    destino = tmp_path / "copia.webp"
+
+    def negar(self, alvo):
+        raise PermissionError("negado")
+
+    monkeypatch.setattr(copias_animadas.Path, "replace", negar)
+
+    with pytest.raises(copias_animadas.GravacaoFalhou):
+        copias_animadas.gerar(origem, destino, (200, 300))
+    assert not destino.exists()
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_pasta_de_destino_impossivel_levanta_gravacao_falhou(tmp_path):
+    origem = _animada(tmp_path / "a.webp", [100, 100])
+    arquivo = tmp_path / "arquivo"
+    arquivo.write_text("x")  # um arquivo no lugar da pasta
+
+    with pytest.raises(copias_animadas.GravacaoFalhou):
+        copias_animadas.gerar(origem, arquivo / "copia.webp", (200, 300))
+
+
+def test_trabalho_que_falha_nao_trava_o_destino(fila, tmp_path):
+    origem = tmp_path / "g1.webp"
+    origem.write_bytes(b"isto nao e uma imagem")
+    destino = tmp_path / "g1_200x300.webp"
+    copias_animadas.pedir(origem, destino, (200, 300), lambda _r: None)
+    fila.rodar_tudo()
+
+    _animada(origem, [100, 100])
+    recebidos = []
+    copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
+    fila.rodar_tudo()
+
+    assert recebidos == ["pronta"]
+
+
+def test_apagar_remove_todos_os_tamanhos():
+    pasta = shared.capas_animadas_dir
+    pasta.mkdir(parents=True, exist_ok=True)
+    for nome in ("g1_200x300.webp", "g1_280x420.webp", "g10_200x300.webp"):
+        (pasta / nome).write_bytes(b"x")
+
+    copias_animadas.apagar("g1")
+
+    assert [p.name for p in pasta.iterdir()] == ["g10_200x300.webp"]
+
+
+def test_apagar_sem_pasta_nao_levanta():
+    copias_animadas.apagar("g1")
