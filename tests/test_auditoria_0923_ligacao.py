@@ -66,6 +66,73 @@ def test_liga_e_transfere_tudo(store, ligar, write_asset, avisos):
     assert "Os dados de Jogo 2 em Jogos Zerados foram transferidos para a biblioteca" in avisos
 
 
+@pytest.fixture
+def fila_das_copias(monkeypatch):
+    """A fila das cópias animadas com o executor e a entrega nas mãos do teste."""
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    fila, avisos = [], []
+    monkeypatch.setattr(copias_animadas, "_executor", SimpleNamespace(submit=fila.append))
+    monkeypatch.setattr(
+        copias_animadas, "entregar_na_tela", lambda func, *a: avisos.append((func, a))
+    )
+    yield SimpleNamespace(fila=fila, avisos=avisos)
+    copias_animadas.encerrar()
+
+
+def _animada(caminho, cor):
+    from PIL import Image  # noqa: PLC0415
+
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    quadros = [Image.new("RGB", (60, 90), c) for c in (cor, "black")]
+    quadros[0].save(caminho, save_all=True, append_images=quadros[1:], duration=100)
+    return caminho
+
+
+def _copias_de(game_id):
+    """As cópias animadas do jogo, gravadas de verdade a partir da capa dele."""
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    capa = shared.covers_dir / f"{game_id}.gif"
+    copias = []
+    for tamanho in copias_animadas.tamanhos():
+        copias.append(copias_animadas.caminho_para(capa, tamanho))
+        assert copias_animadas.gerar(capa, copias[-1], tamanho)
+    return copias
+
+
+@pytest.mark.parametrize("capa_do_zerado", ["animada", "estatica"])
+def test_a_capa_do_zerado_leva_embora_as_copias_da_capa_anterior(
+    store, ligar, schema, fila_das_copias, write_asset, capa_do_zerado
+):
+    """O nome da cópia é só o id: sem invalidar, o jogo tocaria a animação da
+    capa que acabou de ser substituída (ou guardaria cópias órfãs)."""
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    zerado = jogo(store, 30, removed=True, status="beaten", steam_appid="99")
+    vivo = jogo(store, 31, steam_appid="99")
+    _animada(shared.covers_dir / f"{vivo.game_id}.gif", "red")
+    copias = _copias_de(vivo.game_id)
+    if capa_do_zerado == "animada":
+        _animada(shared.covers_dir / f"{zerado.game_id}.gif", "lime")
+    else:
+        write_asset("covers", f"{zerado.game_id}.tiff", b"capa-do-zerado")
+    # Uma geração da capa anterior ainda na fila, pedida antes da ligação.
+    recebidos = []
+    capa_velha = shared.covers_dir / f"{vivo.game_id}.gif"
+    copias[0].unlink()
+    copias_animadas.pedir(capa_velha, copias[0], copias_animadas.tamanhos()[0], recebidos.append)
+
+    assert ligar(vivo) is True
+    while fila_das_copias.fila:
+        fila_das_copias.fila.pop(0)()
+
+    assert [c for c in copias if c.exists()] == []
+    assert recebidos == []
+
+
 def test_so_preenche_o_vazio(store, ligar):
     jogo(store, 3, removed=True, status="beaten", steam_appid="10", rating=2, notes="a")
     vivo = jogo(store, 4, steam_appid="10", status="playing", rating=5, notes="b")

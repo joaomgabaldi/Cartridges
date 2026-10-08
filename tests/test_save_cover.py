@@ -126,6 +126,48 @@ def test_capa_animada_nova_com_a_opcao_desligada_nao_prepara(
     assert entregas == []
 
 
+def test_pedido_no_meio_da_troca_nao_deixa_copia_da_capa_velha(tmp_path, monkeypatch):
+    """A capa na tela ainda é a velha até o ``new_cover`` (por idle) e pode pedir
+    a cópia durante a troca: o que for gerado da velha não sobrevive a ela."""
+    from cartridges.utils import copias_animadas
+    from cartridges.utils import save_cover as modulo
+
+    def animada(caminho, cor):
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        quadros = [Image.new("RGB", (60, 90), c) for c in (cor, "black")]
+        quadros[0].save(caminho, save_all=True, append_images=quadros[1:], duration=100)
+        return caminho
+
+    velha = animada(shared.covers_dir / "g1.gif", "red")
+    nova = animada(tmp_path / "nova.gif", "lime")
+    fila, avisos, recebidos = [], [], []
+    monkeypatch.setattr(copias_animadas, "_executor", SimpleNamespace(submit=fila.append))
+    monkeypatch.setattr(
+        copias_animadas, "entregar_na_tela", lambda func, *a: avisos.append((func, a))
+    )
+    grade, detalhes = copias_animadas.tamanhos()
+    copias = [copias_animadas.caminho_para(velha, t) for t in (grade, detalhes)]
+    copiar = modulo.copyfile
+
+    def copiar_com_pedidos(origem, destino):
+        # Um pedido da capa velha gera inteiro antes da cópia; outro fica na fila.
+        copias_animadas.pedir(velha, copias[0], grade, recebidos.append)
+        fila.pop(0)()
+        copias_animadas.pedir(velha, copias[1], detalhes, recebidos.append)
+        return copiar(origem, destino)
+
+    monkeypatch.setattr(modulo, "copyfile", copiar_com_pedidos)
+    save_cover("g1", nova)
+    while fila:
+        fila.pop(0)()
+    for func, args in avisos:
+        func(*args)
+
+    assert [c for c in copias if c.exists()] == []
+    # Só o que terminou antes da troca avisou; o pendente foi invalidado.
+    assert recebidos == ["pronta"]
+
+
 def test_capa_estatica_ou_removida_nao_prepara(tmp_path, schema, entregas):
     schema.set_boolean("cover-autoplay", True)
 

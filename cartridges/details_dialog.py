@@ -737,8 +737,15 @@ class DetailsDialog(Adw.Dialog):
                 if staged is not None:
 
                     def descartar_provisoria() -> bool:
-                        staged.unlink(missing_ok=True)
+                        # Abandona antes: uma provisória presa (antivírus) não
+                        # pode deixar a geração dela na fila.
                         copias_animadas.abandonar(staged)
+                        try:
+                            staged.unlink(missing_ok=True)
+                        except OSError as error:
+                            logging.info(
+                                "Could not remove the staged file %s: %s", staged, error
+                            )
                         return False
 
                     GLib.idle_add(descartar_provisoria)

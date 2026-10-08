@@ -1444,6 +1444,40 @@ def test_capa_provisoria_aplicada_abandona_as_copias(
     assert capas_falsas.abandonadas == [provisoria]
 
 
+def test_provisoria_presa_apos_aplicar_ainda_abandona_as_copias(
+    real_window, store, gif, capas_falsas, tmp_path, monkeypatch
+):
+    """Um antivírus segurando a provisória não pode deixar a geração dela
+    rodando nem as cópias em %TEMP%: o abandono não depende da remoção."""
+    import shutil
+    from pathlib import Path
+
+    from cartridges import shared
+    from cartridges.details_dialog import DetailsDialog
+
+    dialog = DetailsDialog(_jogo_com_capa_animada("imported_16", gif))
+    provisoria = tmp_path / "a.gif"
+    shutil.copyfile(gif, provisoria)
+    dialog._stage_cover(provisoria)
+    unlink = Path.unlink
+
+    def unlink_preso(self, missing_ok=False):
+        if self == provisoria:
+            raise PermissionError(32, "arquivo em uso")
+        return unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", unlink_preso)
+    dialog.apply_preferences()
+    contexto = GLib.MainContext.default()
+    while contexto.pending():
+        contexto.iteration(False)
+
+    assert capas_falsas.abandonadas == [provisoria]
+    # A capa é a da biblioteca, parada: a provisória presa não volta à tela.
+    assert dialog.game_cover.path.parent == shared.covers_dir
+    assert not dialog.game_cover.active
+
+
 def test_an_unchanged_apply_keeps_the_computed_blur(real_window, store, app_dirs):
     """Apply replaces the game's GameCover with the dialog's own object; when
     the cover file did not change, the computed backdrop must ride along —

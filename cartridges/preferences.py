@@ -38,6 +38,7 @@ from cartridges.metadata_refresh import get_metadata_refresh
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.utils import (
     backup,
+    copias_animadas,
     janela_por_cima,
     restauracao,
     session_fita,
@@ -1243,6 +1244,10 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 manager.cancel_tasks()
                 manager.reset_cancellable()
 
+        # O mesmo com as cópias das capas animadas: a geração em curso para
+        # sem gravar e a fila larga o resto. Ela segue de pé para depois.
+        copias_animadas.encerrar()
+
         # Drop pending undo toasts; their games are about to be deleted and
         # clicking "Desfazer" later would resurrect one on disk
         for toast in list(shared.win.toasts.values()):
@@ -1281,6 +1286,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             shared.wallpapers_dir,
             shared.fitas_dir,
             shared.conquistas_dir,
+            shared.capas_animadas_dir,
         ):
             if directory.is_dir():
                 for path in directory.iterdir():

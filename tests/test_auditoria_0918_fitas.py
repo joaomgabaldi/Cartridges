@@ -239,6 +239,63 @@ def test_m9_reset_apaga_papel_de_parede_e_cor_da_fita_dos_jogos(
     assert session_fita.fitas()
 
 
+def test_reset_para_a_fila_e_apaga_as_copias_animadas(
+    monkeypatch, schema, store, win, app_dirs
+):
+    """Sem isto, a geração em curso gravava a cópia de um jogo já apagado e os
+    pendentes rodavam depois do reset, um aviso de capa ilegível cada."""
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    _Janela(win)
+    fila, avisos, recebidos = [], [], []
+    monkeypatch.setattr(copias_animadas, "_executor", SimpleNamespace(submit=fila.append))
+    monkeypatch.setattr(
+        copias_animadas, "entregar_na_tela", lambda func, *a: avisos.append((func, a))
+    )
+    pasta = shared.capas_animadas_dir
+    pasta.mkdir(parents=True)
+    (pasta / "g0_200x300.webp").write_bytes(b"x")
+    (pasta / "g0_200x300.webp.abc.tmp").write_bytes(b"x")
+    comecou, segue = threading.Event(), threading.Event()
+
+    def gerar_devagar(_origem, destino, _tamanho, vigente):
+        # Para no meio da geração até o teste deixar seguir; a troca final só
+        # acontece se o trabalho ainda vale, como no ``gerar`` de verdade.
+        comecou.set()
+        segue.wait(5)
+        if not vigente():
+            return False
+        destino.write_bytes(b"copia")
+        return True
+
+    monkeypatch.setattr(copias_animadas, "gerar", gerar_devagar)
+    origem = shared.covers_dir / "g1.gif"
+    copias_animadas.pedir(origem, pasta / "g1_200x300.webp", (200, 300), recebidos.append)
+    copias_animadas.pedir(origem, pasta / "g1_420x630.webp", (420, 630), recebidos.append)
+    em_andamento = threading.Thread(target=fila.pop(0))
+    em_andamento.start()
+    assert comecou.wait(5)
+
+    _preferencias(monkeypatch).reset_app_data()
+    segue.set()
+    em_andamento.join(5)
+    while fila:
+        fila.pop(0)()
+    for func, args in avisos:
+        func(*args)
+
+    assert list(pasta.iterdir()) == []
+    assert recebidos == []
+
+    # A fila segue de pé para a biblioteca que vier depois do reset.
+    avisos.clear()
+    copias_animadas.pedir(origem, pasta / "g2_200x300.webp", (200, 300), recebidos.append)
+    fila.pop(0)()
+    for func, args in avisos:
+        func(*args)
+    assert recebidos == ["pronta"]
+
+
 def test_reset_encerra_a_restauracao_pendente(monkeypatch, schema, store, win, app_dirs):
     # Sem isto, a abertura seguinte pedia a pasta de atalhos (que o reset
     # esvazia) para pendências de jogos que já não existem.

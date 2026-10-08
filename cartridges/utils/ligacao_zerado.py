@@ -18,7 +18,6 @@ no log — escolher às cegas estragaria dados.
 """
 
 import logging
-import shutil
 
 from gi.repository import Adw, GLib
 
@@ -27,7 +26,7 @@ from cartridges.conquistas import historico
 from cartridges.game import Game
 from cartridges.store.managers.display_manager import is_main_thread
 from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper
-from cartridges.utils.save_cover import ANIMATED_SUFFIXES
+from cartridges.utils.save_cover import save_cover
 
 
 def agendar(jogo: Game) -> None:
@@ -45,15 +44,11 @@ def _vazio(valor) -> bool:
 
 
 def _mover_capa(zerado: Game, jogo: Game) -> None:
+    # Pela troca de capa de sempre: ela invalida as cópias animadas da capa
+    # anterior (o nome delas é só o id) e atualiza a capa na tela.
     origem = zerado.get_cover_path()
-    if origem is None:
-        return
-    for sufixo in (*ANIMATED_SUFFIXES, ".tiff"):
-        (shared.covers_dir / f"{jogo.game_id}{sufixo}").unlink(missing_ok=True)
-    destino = shared.covers_dir / f"{jogo.game_id}{origem.suffix}"
-    shutil.copyfile(origem, destino)
-    if (capa := shared.win.game_covers.get(jogo.game_id)) is not None:
-        capa.new_cover(destino)
+    if origem is not None:
+        save_cover(jogo.game_id, origem)
 
 
 def _mover_escolhas(zerado: Game, jogo: Game) -> None:

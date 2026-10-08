@@ -193,15 +193,17 @@ def composite_cover(image_path: Path) -> GdkPixbuf.Pixbuf:
 def save_cover(game_id: str, cover_path: Path) -> None:
     shared.covers_dir.mkdir(parents=True, exist_ok=True)
 
-    # As cópias reduzidas são da capa de agora: apagadas antes de a nova entrar,
-    # para ninguém tocar a velha por cima dela.
-    copias_animadas.apagar(game_id)
+    # As cópias reduzidas são apagadas só com a capa nova já no lugar (aqui e
+    # no fim): até lá a tela ainda mostra a velha e pode pedir a cópia dela. O
+    # ``apagar`` invalida todo pedido que já existe, então o que leu a velha
+    # não sobrevive, e o que vier depois só acha a nova.
 
     if not cover_path:
         # Remoção explícita: aqui sim toda forma anterior cai, e não há nada
         # novo para proteger.
         for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
             (shared.covers_dir / f"{game_id}{suffix}").unlink(missing_ok=True)
+        copias_animadas.apagar(game_id)
         return
 
     # Animated covers keep their own extension; everything else is a TIFF still
@@ -227,8 +229,10 @@ def save_cover(game_id: str, cover_path: Path) -> None:
         if suffix != dest.suffix:
             (shared.covers_dir / f"{game_id}{suffix}").unlink(missing_ok=True)
 
+    copias_animadas.apagar(game_id)
+
     # Capa animada nova: as cópias reduzidas dela são geradas em segundo plano.
-    # Pela mesma entrega do ``apagar`` lá em cima (que avisa a tarefa para não
+    # Pela mesma entrega do ``apagar`` logo acima (que avisa a tarefa para não
     # esperar as cópias da capa velha): as duas chegam à thread principal na
     # ordem das chamadas, e a tarefa é dela.
     if dest.suffix in ANIMATED_SUFFIXES and shared.schema.get_boolean("cover-autoplay"):
