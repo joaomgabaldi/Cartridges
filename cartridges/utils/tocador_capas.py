@@ -1,0 +1,252 @@
+# tocador_capas.py
+#
+# Copyright 2026 joaomgabaldi
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+"""Um único tocador, a 30 Hz, para todas as capas animadas à vista.
+
+Um timer por capa na thread principal decodificava os quadros no mesmo lugar
+que desenha a tela. Aqui uma só thread decodifica o próximo quadro de cada capa
+cujo prazo venceu e entrega o lote inteiro à thread principal de uma vez: a
+tela só precisa trocar as texturas.
+
+Este módulo não conhece o GTK. Quem chama recebe os bytes RGBA no
+``ao_quadro`` (já na thread principal) e monta a textura.
+"""
+
+import io
+import logging
+import threading
+import time
+from bisect import bisect_right
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable
+
+from PIL import Image
+
+from cartridges.utils.na_tela import entregar_na_tela
+
+TICK = 1 / 30
+
+# Parada há mais que isto, a capa fecha a cópia: quem sai da tela e volta logo
+# retoma do mesmo quadro; quem sumiu de vez não ocupa memória.
+FECHAR_APOS = 30.0
+
+FALHAS_ATE_CORROMPIDA = 3
+
+
+@dataclass(eq=False)
+class _Estado:
+    """O que o tocador guarda de cada dono.
+
+    ``imagem`` e as listas de durações só são tocadas pela thread do tocador
+    (dentro de ``passo``). ``tocar`` nunca mexe nelas: troca de cópia criando
+    um estado novo. Assim a decodificação roda fora da trava sem disputar a
+    imagem com a thread principal.
+    """
+
+    copia: Path
+    ao_quadro: Callable[[bytes, int, int], None]
+    ao_falhar: Callable[[], None]
+    # Instante do loop em que a cópia deve ser posicionada ao (re)abrir.
+    inicial_ms: int
+    prazo: float
+    # Início do quadro mostrado (ou do que vai ser mostrado primeiro).
+    posicao: int = 0
+    imagem: Image.Image | None = None
+    inicios: list[int] = field(default_factory=list)
+    duracoes: list[int] = field(default_factory=list)
+    proximo: int = 0
+    falhas: int = 0
+    pausado_em: float | None = None
+
+
+def _abrir(estado: _Estado) -> None:
+    """Abre a cópia e posiciona no quadro que cobre ``inicial_ms``.
+
+    Lê os bytes do arquivo e abre a imagem sobre a memória: no Windows um
+    arquivo aberto não pode ser apagado nem substituído, e o app apaga e
+    regenera cópias enquanto elas tocam. Ler todas as durações de uma vez é o
+    que dá a duração total e o início de cada quadro; as cópias são pequenas.
+    """
+    imagem = Image.open(io.BytesIO(estado.copia.read_bytes()))
+    duracoes = []
+    for n in range(getattr(imagem, "n_frames", 1)):
+        imagem.seek(n)
+        # No WebP, ``info["duration"]`` só é preenchido depois do ``load``.
+        imagem.load()
+        duracoes.append(max(1, int(imagem.info.get("duration") or 1)))
+    inicios = [sum(duracoes[:n]) for n in range(len(duracoes))]
+    estado.imagem = imagem
+    estado.duracoes = duracoes
+    estado.inicios = inicios
+    # Contagens diferentes de quadros (grade x detalhes) têm a mesma duração
+    # total: a continuidade entre cópias é pelo tempo, não pelo índice.
+    p = estado.inicial_ms % sum(duracoes)
+    estado.proximo = bisect_right(inicios, p) - 1
+
+
+class Tocador:
+    def __init__(
+        self,
+        agora: Callable[[], float] = time.monotonic,
+        entregar: Callable[..., Any] = entregar_na_tela,
+        iniciar_thread: bool = True,
+    ) -> None:
+        self._agora = agora
+        self._entregar = entregar
+        self._iniciar_thread = iniciar_thread
+        # Um dono é uma capa; fica no dicionário até ``parar`` + 30 s ou até a
+        # cópia falhar de vez. Quem chama deve parar o dono ao destruí-lo.
+        self._estados: dict[object, _Estado] = {}
+        self._trava = threading.Lock()
+        self._acordar = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def tocar(
+        self,
+        dono: object,
+        copia: Path,
+        ao_quadro: Callable[[bytes, int, int], None],
+        ao_falhar: Callable[[], None],
+        posicao_inicial_ms: int = 0,
+    ) -> None:
+        """Começa (ou retoma) a capa ``dono``; o 1º quadro sai no próximo passo.
+
+        Não abre o arquivo aqui: a leitura e a decodificação das durações
+        ficam na thread do tocador, e uma cópia que sumiu vira falha no
+        degrau normal em vez de estourar na thread principal.
+        """
+        agora = self._agora()
+        with self._trava:
+            estado = self._estados.get(dono)
+            if estado is not None and estado.copia == copia:
+                # Mesma cópia ainda aberta: segue de onde parou.
+                estado.ao_quadro = ao_quadro
+                estado.ao_falhar = ao_falhar
+                if estado.pausado_em is not None:
+                    estado.pausado_em = None
+                    estado.prazo = agora
+            else:
+                self._estados[dono] = _Estado(
+                    copia=copia,
+                    ao_quadro=ao_quadro,
+                    ao_falhar=ao_falhar,
+                    inicial_ms=posicao_inicial_ms,
+                    posicao=posicao_inicial_ms,
+                    prazo=agora,
+                )
+            if self._iniciar_thread and self._thread is None:
+                self._thread = threading.Thread(
+                    target=self._rodar, name="tocador-capas", daemon=True
+                )
+                self._thread.start()
+        self._acordar.set()
+
+    def parar(self, dono: object) -> None:
+        """Pausa a capa mantendo a cópia aberta, para retomar do mesmo quadro."""
+        agora = self._agora()
+        with self._trava:
+            estado = self._estados.get(dono)
+            if estado is not None and estado.pausado_em is None:
+                estado.pausado_em = agora
+
+    def posicao_ms(self, dono: object) -> int:
+        """Instante do loop em que começa o quadro mostrado agora."""
+        with self._trava:
+            estado = self._estados.get(dono)
+            return estado.posicao if estado is not None else 0
+
+    def passo(self) -> None:
+        """Um tick: fecha as pausadas há muito e avança as capas vencidas.
+
+        A decodificação roda fora da trava, para ``tocar``/``parar`` da thread
+        principal nunca esperarem por ela. O estado é copiado antes (os
+        devidos) e conferido depois: se o dono foi parado ou trocado no meio,
+        o quadro é descartado e nada avança.
+        """
+        agora = self._agora()
+        with self._trava:
+            for dono in [
+                d
+                for d, e in self._estados.items()
+                if e.pausado_em is not None and agora - e.pausado_em > FECHAR_APOS
+            ]:
+                del self._estados[dono]
+            devidos = [
+                (dono, estado)
+                for dono, estado in self._estados.items()
+                if estado.pausado_em is None and estado.prazo <= agora
+            ]
+
+        lido = []
+        for dono, estado in devidos:
+            try:
+                if estado.imagem is None:
+                    _abrir(estado)
+                n = estado.proximo
+                estado.imagem.seek(n)
+                rgba = estado.imagem.convert("RGBA")
+                lido.append((dono, estado, n, (rgba.tobytes(), *rgba.size)))
+            except Exception as erro:  # noqa: BLE001 - a thread não pode morrer
+                logging.warning("Capa animada ilegível (%s): %s", estado.copia, erro)
+                lido.append((dono, estado, -1, None))
+
+        lote = []
+        avisos = []
+        with self._trava:
+            for dono, estado, n, quadro in lido:
+                if (
+                    self._estados.get(dono) is not estado
+                    or estado.pausado_em is not None
+                ):
+                    continue
+                if quadro is not None:
+                    estado.falhas = 0
+                    estado.posicao = estado.inicios[n]
+                    estado.proximo = (n + 1) % len(estado.duracoes)
+                    estado.prazo = agora + estado.duracoes[n] / 1000
+                    lote.append((estado.ao_quadro, *quadro))
+                    continue
+                # Degrau 1: fecha e reabre no próximo tick, do quadro 0.
+                estado.imagem = None
+                estado.inicial_ms = 0
+                estado.falhas += 1
+                if estado.falhas >= FALHAS_ATE_CORROMPIDA:
+                    del self._estados[dono]
+                    avisos.append(estado.ao_falhar)
+
+        # Fora da trava: os callbacks podem voltar a chamar o tocador.
+        if lote:
+            self._entregar(self._aplicar, lote)
+        for ao_falhar in avisos:
+            self._entregar(ao_falhar)
+
+    @staticmethod
+    def _aplicar(lote: list[tuple]) -> None:
+        for ao_quadro, *args in lote:
+            try:
+                ao_quadro(*args)
+            except Exception:  # noqa: BLE001 - uma capa não derruba as outras
+                logging.exception("Erro ao aplicar o quadro da capa")
+
+    def _rodar(self) -> None:
+        while True:
+            # Limpa antes de conferir: um ``tocar`` que chegue depois do
+            # ``clear`` deixa o evento ligado e o ``wait`` não dorme.
+            self._acordar.clear()
+            with self._trava:
+                ocioso = not self._estados
+            if ocioso:
+                self._acordar.wait()
+            inicio = time.monotonic()
+            try:
+                self.passo()
+            except Exception:  # noqa: BLE001
+                logging.exception("Erro no tocador de capas")
+            time.sleep(max(0.0, TICK - (time.monotonic() - inicio)))
+
+
+tocador = Tocador()
