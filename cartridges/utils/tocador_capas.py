@@ -153,6 +153,15 @@ class Tocador:
         self._trava = threading.Lock()
         self._acordar = threading.Event()
         self._thread: threading.Thread | None = None
+        # Janela fora da tela (minimizada, escondida, coberta pela sessão de
+        # jogo): nenhuma capa decodifica, por qualquer motivo. Ver `suspender`.
+        self._suspenso = False
+        # Quadros que a thread principal ainda não aplicou, o mais novo de cada
+        # dono: (estado, versão, ao_quadro, (dados, largura, altura)). Guardado
+        # pela `_trava`. Não vazio = há exatamente um `_aplicar` agendado: com
+        # a tela travada, o quadro novo substitui o velho em vez de empilhar
+        # um lote RGBA por tick na fila do GLib.
+        self._pendentes: dict[object, tuple] = {}
 
     def tocar(
         self,
@@ -225,6 +234,26 @@ class Tocador:
                 estado.recomecou = True
                 estado.versao += 1
 
+    def suspender(self, suspenso: bool) -> None:
+        """Suspende (True) ou retoma (False) todas as capas de uma vez.
+
+        Para quando nada do app está à vista: vale para todo motivo de tocar
+        (hover, detalhes, edição, prévias), que segue ligado em cada capa.
+        Suspensas, as que tocam fecham a cópia no próximo passo; ao retomar,
+        reabrem no instante em que pararam. As pausadas seguem pausadas.
+        """
+        agora = self._agora()
+        with self._trava:
+            if suspenso == self._suspenso:
+                return
+            self._suspenso = suspenso
+            if not suspenso:
+                for estado in self._estados.values():
+                    if estado.pausado_em is None:
+                        estado.prazo = agora
+                        estado.recomecou = True
+        self._acordar.set()
+
     def posicao_ms(self, dono: object) -> int:
         """Instante do loop em que começa o quadro mostrado agora."""
         with self._trava:
@@ -252,11 +281,22 @@ class Tocador:
                 parada_ha = agora - self._estados[dono].pausado_em
                 if dono in excesso or parada_ha > FECHAR_APOS:
                     del self._estados[dono]
-            devidos = [
-                (dono, estado, estado.versao)
-                for dono, estado in self._estados.items()
-                if estado.pausado_em is None and estado.prazo <= agora
-            ]
+            if self._suspenso:
+                # Uma sessão de jogo dura horas: a cópia fecha e, ao retomar,
+                # reabre no quadro que estava na tela. A versão nova descarta
+                # o que um passo anterior ainda estivesse lendo dela.
+                for estado in self._estados.values():
+                    if estado.pausado_em is None and estado.imagem is not None:
+                        estado.imagem = None
+                        estado.inicial_ms = estado.posicao
+                        estado.versao += 1
+                devidos = []
+            else:
+                devidos = [
+                    (dono, estado, estado.versao)
+                    for dono, estado in self._estados.items()
+                    if estado.pausado_em is None and estado.prazo <= agora
+                ]
 
         lido = []
         for dono, estado, versao in devidos:
@@ -271,7 +311,7 @@ class Tocador:
                 logging.warning("Capa animada ilegível (%s): %s", estado.copia, erro)
                 lido.append((dono, estado, versao, -1, None))
 
-        lote = []
+        agendar = False
         avisos = []
         with self._trava:
             for dono, estado, versao, n, quadro in lido:
@@ -302,7 +342,8 @@ class Tocador:
                     estado.prazo = base + duracao
                     if estado.prazo <= agora:
                         estado.prazo = agora + duracao
-                    lote.append((estado.ao_quadro, *quadro))
+                    agendar = agendar or not self._pendentes
+                    self._pendentes[dono] = (estado, versao, estado.ao_quadro, quadro)
                     continue
                 # Degrau 1: fecha e reabre no próximo tick, do quadro 0.
                 estado.imagem = None
@@ -313,19 +354,46 @@ class Tocador:
                     del self._estados[dono]
                     avisos.append(estado.ao_falhar)
 
-        # Fora da trava: os callbacks podem voltar a chamar o tocador.
-        if lote:
-            self._entregar(self._aplicar, lote)
+        # Fora da trava: os callbacks podem voltar a chamar o tocador. Nunca
+        # espera a thread principal: com um ``_aplicar`` já na fila, o quadro
+        # novo só substitui o pendente.
+        if agendar:
+            self._entregar(self._aplicar)
         for ao_falhar in avisos:
             self._entregar(ao_falhar)
 
-    @staticmethod
-    def _aplicar(lote: list[tuple]) -> None:
-        for ao_quadro, *args in lote:
+    def _aplicar(self) -> bool:
+        """Aplica o quadro mais novo de cada dono. Thread principal.
+
+        Descarta o de quem o tocador largou ou esqueceu depois de o ler (capa
+        parada de vez, cópia regravada): ele seria do estado antigo.
+        """
+        with self._trava:
+            pendentes, self._pendentes = self._pendentes, {}
+            vigentes = [
+                (ao_quadro, quadro)
+                for dono, (estado, versao, ao_quadro, quadro) in pendentes.items()
+                if self._estados.get(dono) is estado and estado.versao == versao
+            ]
+        for ao_quadro, quadro in vigentes:
             try:
-                ao_quadro(*args)
+                ao_quadro(*quadro)
             except Exception:  # noqa: BLE001 - uma capa não derruba as outras
                 logging.exception("Erro ao aplicar o quadro da capa")
+        return False  # o GLib repetiria o callback que devolvesse um valor verdadeiro
+
+    def _ocioso(self) -> bool:
+        """Se o próximo passo não teria nada a fazer. Chamar com a trava.
+
+        Suspenso, só as pausadas (que ainda fecham) e as cópias por fechar
+        dão trabalho; o resto espera o ``suspender(False)``.
+        """
+        if self._suspenso:
+            return all(
+                e.pausado_em is None and e.imagem is None
+                for e in self._estados.values()
+            )
+        return not self._estados
 
     def _rodar(self) -> None:
         while True:
@@ -333,7 +401,7 @@ class Tocador:
             # ``clear`` deixa o evento ligado e o ``wait`` não dorme.
             self._acordar.clear()
             with self._trava:
-                ocioso = not self._estados
+                ocioso = self._ocioso()
             if ocioso:
                 self._acordar.wait()
             inicio = time.monotonic()

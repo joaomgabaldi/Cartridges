@@ -125,8 +125,7 @@ def test_um_pacote_por_tick(banca, tmp_path):
     banca.tocador.passo()
 
     assert len(recebidos) == 3
-    assert len(banca.entregas) == 1
-    assert len(banca.entregas[0][1][0]) == 3
+    assert len(banca.entregas) == 1, "as 3 capas numa entrega só"
 
 
 def test_tick_sem_nada_a_mostrar_nao_entrega(banca, tmp_path):
@@ -550,3 +549,165 @@ def test_esquecer_durante_a_abertura_e_parar_nao_guarda_o_arquivo_velho(
     banca.tocador.passo()
 
     assert banca.tocador._estados[dono].imagem is None
+
+
+# --- Suspensão: janela fora da tela ou coberta pela sessão --------------------
+
+
+def test_suspenso_nao_decodifica_e_fecha_a_copia_de_quem_toca(banca, tmp_path):
+    """Uma sessão de jogo de horas não pode seguir decodificando a capa dos
+    detalhes por baixo do bloqueador nem segurar a cópia aberta."""
+    copia = criar_webp(tmp_path / "a.webp", [100, 100, 100])
+    dono = object()
+    quadro, quadros, falhar, _ = banca.captura()
+    banca.tocador.tocar(dono, copia, quadro, falhar)
+    banca.tocador.passo()
+    banca.relogio.t = 0.1
+    banca.tocador.passo()
+    assert quadros == [0, 1]
+
+    banca.tocador.suspender(True)
+    for t in (0.2, 0.5, 5.0):
+        banca.relogio.t = t
+        banca.tocador.passo()
+
+    assert quadros == [0, 1]
+    assert banca.tocador._estados[dono].imagem is None
+    assert banca.tocador._ocioso(), "suspenso e sem nada aberto, a thread dorme"
+
+
+def test_retomar_continua_do_mesmo_instante(banca, tmp_path):
+    copia = criar_webp(tmp_path / "a.webp", [100, 100, 100])
+    dono = object()
+    quadro, quadros, falhar, _ = banca.captura()
+    banca.tocador.tocar(dono, copia, quadro, falhar)
+    banca.tocador.passo()
+    banca.relogio.t = 0.1
+    banca.tocador.passo()
+    banca.tocador.suspender(True)
+    banca.relogio.t = 60.0
+    banca.tocador.passo()
+
+    banca.tocador.suspender(False)
+    banca.tocador.passo()
+    banca.relogio.t = 60.1
+    banca.tocador.passo()
+
+    # Reabre no quadro que estava na tela e segue dali, sem voltar ao início.
+    assert quadros == [0, 1, 1, 2]
+
+
+def test_retomar_nao_religa_quem_estava_parado(banca, tmp_path):
+    copia = criar_webp(tmp_path / "a.webp", [100, 100])
+    tocando, parado = object(), object()
+    quadro, quadros, falhar, _ = banca.captura()
+    para_o_parado = []
+    banca.tocador.tocar(tocando, copia, quadro, falhar)
+    banca.tocador.tocar(parado, copia, lambda *a: para_o_parado.append(a), falhar)
+    banca.tocador.passo()
+    banca.tocador.parar(parado)
+
+    banca.tocador.suspender(True)
+    banca.tocador.suspender(False)
+    banca.relogio.t = 1.0
+    banca.tocador.passo()
+
+    assert len(para_o_parado) == 1, "só o quadro de antes da pausa"
+    assert len(quadros) == 2
+
+
+def test_tocar_durante_a_suspensao_so_comeca_ao_retomar(banca, tmp_path):
+    copia = criar_webp(tmp_path / "a.webp", [100, 100])
+    quadro, quadros, falhar, _ = banca.captura()
+    banca.tocador.suspender(True)
+    banca.tocador.tocar(object(), copia, quadro, falhar)
+    banca.tocador.passo()
+    assert quadros == []
+
+    banca.tocador.suspender(False)
+    banca.tocador.passo()
+    assert quadros == [0]
+
+
+# --- Thread principal ocupada: só o último quadro de cada capa espera ----------
+
+
+class _Principal:
+    """A thread principal parada: guarda o que o tocador agenda, sem rodar."""
+
+    def __init__(self):
+        self.agendados = []
+
+    def __call__(self, func, *args):
+        self.agendados.append((func, args))
+
+    def rodar(self):
+        agendados, self.agendados = self.agendados, []
+        for func, args in agendados:
+            func(*args)
+
+
+def _tocador_com_a_principal_parada():
+    relogio, principal = Relogio(), _Principal()
+    return relogio, principal, Tocador(
+        agora=relogio, entregar=principal, iniciar_thread=False
+    )
+
+
+def test_principal_ocupada_guarda_so_o_ultimo_quadro_de_cada_capa(tmp_path):
+    """Sem isto, cada tick deixava um lote RGBA na fila do GLib: 1 s de tela
+    travada com 20 capas segurava ~130 MB e despejava a rajada depois."""
+    copia = criar_webp(tmp_path / "a.webp", [100, 100, 100, 100])
+    relogio, principal, tocador = _tocador_com_a_principal_parada()
+    recebidos = {}
+    donos = [object() for _ in range(3)]
+    for dono in donos:
+        tocador.tocar(
+            dono, copia,
+            lambda dados, *_a, d=dono: recebidos.setdefault(d, []).append(_indice(dados)),
+            lambda: None,
+        )  # fmt: skip
+
+    for k in range(4):  # quatro ticks com quadro novo, a principal sem rodar
+        relogio.t = 0.1 * k
+        tocador.passo()
+
+    assert len(principal.agendados) == 1, "um só callback na fila"
+    assert len(tocador._pendentes) == 3, "um quadro por capa, não um lote por tick"
+    principal.rodar()
+    assert recebidos == {dono: [3] for dono in donos}, "só o mais novo é aplicado"
+    assert tocador._pendentes == {}
+
+
+def test_quadro_novo_depois_da_aplicacao_agenda_de_novo(tmp_path):
+    copia = criar_webp(tmp_path / "a.webp", [100, 100])
+    relogio, principal, tocador = _tocador_com_a_principal_parada()
+    quadros = []
+    tocador.tocar(object(), copia, lambda dados, *_: quadros.append(_indice(dados)), lambda: None)
+
+    tocador.passo()
+    principal.rodar()
+    relogio.t = 0.1
+    tocador.passo()
+
+    assert len(principal.agendados) == 1, "a fila esvaziou: o quadro novo agenda outro"
+    principal.rodar()
+    assert quadros == [0, 1]
+
+
+def test_quadro_pendente_de_copia_esquecida_ou_capa_largada_e_descartado(tmp_path):
+    copia = criar_webp(tmp_path / "a.webp", [100, 100])
+    outra = criar_webp(tmp_path / "b.webp", [100, 100])
+    _relogio, principal, tocador = _tocador_com_a_principal_parada()
+    esquecida, falhou, trocou = object(), object(), object()
+    recebidos = []
+    for dono in (esquecida, falhou, trocou):
+        tocador.tocar(dono, copia, lambda *_a, d=dono: recebidos.append(d), lambda: None)
+    tocador.passo()
+
+    tocador.esquecer(copia)  # regravada: o quadro na fila é do arquivo velho
+    del tocador._estados[falhou]  # o tocador desistiu dela (ou fechou)
+    tocador.tocar(trocou, outra, lambda *_a: recebidos.append(trocou), lambda: None)
+    principal.rodar()
+
+    assert recebidos == []

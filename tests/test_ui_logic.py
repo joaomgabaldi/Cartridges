@@ -3069,6 +3069,68 @@ def test_pagina_por_cima_da_biblioteca_para_as_capas_dela(
         real_window.destroy()
 
 
+def test_sessao_e_janela_fora_da_tela_suspendem_ate_a_capa_dos_detalhes(
+    real_window, store, gif, monkeypatch
+):
+    """Jogar a partir dos detalhes cobre a janela (ou a minimiza) com a capa
+    deles ainda ligada: sem a suspensão, ela decodificava a partida inteira."""
+    from types import SimpleNamespace
+
+    from cartridges.game_cover import GameCover
+    from cartridges.utils import copias_animadas, tocador_capas
+    from cartridges.utils.tocador_capas import Tocador
+
+    relogio = SimpleNamespace(t=0.0)
+    tocador = Tocador(
+        agora=lambda: relogio.t, entregar=lambda f, *a: f(*a), iniciar_thread=False
+    )
+    monkeypatch.setattr(tocador_capas, "tocador", tocador)
+    for tamanho in copias_animadas.tamanhos():
+        copia = copias_animadas.caminho_para(gif, tamanho)
+        assert copias_animadas.gerar(gif, copia, tamanho)
+    picture = Gtk.Picture()
+    cover = GameCover({picture}, gif)
+    cover.set_details_animation(True)
+    trocas = []
+    picture.connect("notify::paintable", lambda *_: trocas.append(1))
+
+    def toca():
+        antes = len(trocas)
+        relogio.t += 1.0
+        tocador.passo()
+        return len(trocas) > antes
+
+    real_window.set_default_size(1000, 700)
+    real_window.present()
+    try:
+        _iterar(500)
+        assert toca(), "janela à vista: os detalhes tocam"
+
+        real_window.session_blocker.set_visible(True)
+        _iterar(500)
+        assert not toca(), "coberta pela sessão: nada decodifica"
+        assert tocador._estados[cover].imagem is None, "e a cópia fecha"
+
+        real_window.session_blocker.set_visible(False)
+        _iterar(500)
+        assert toca(), "fim da sessão: volta a tocar"
+
+        real_window.set_visible(False)
+        _iterar(500)
+        assert not toca(), "janela escondida"
+        real_window.present()
+        _iterar(500)
+        assert toca(), "janela de volta"
+
+        minimizada = SimpleNamespace(get_state=lambda: Gdk.ToplevelState.MINIMIZED)
+        monkeypatch.setattr(real_window, "get_surface", lambda: minimizada)
+        real_window._aplicar_autoplay()
+        assert not toca(), "janela minimizada"
+        assert cover.active, "o motivo da capa segue ligado para a volta"
+    finally:
+        real_window.destroy()
+
+
 def _ao_mudar_autoplay(schema):
     """O que a janela ligou a ``changed::cover-autoplay`` (uma só ligação)."""
     ligados = [f for sinal, f in schema.handlers if sinal == "changed::cover-autoplay"]

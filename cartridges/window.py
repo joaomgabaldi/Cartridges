@@ -60,6 +60,7 @@ from cartridges.utils import (
     session_log,
     session_wallpaper,
     tarefas,
+    tocador_capas,
     window_geometry,
 )
 from cartridges.utils.relative_date import relative_date
@@ -499,6 +500,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
         if self._autoplay_id is not None:
             GLib.source_remove(self._autoplay_id)
             self._autoplay_id = None
+        # A suspensão é desta janela; sem ela, ninguém a desfaria.
+        tocador_capas.tocador.suspender(False)
 
     def block_dialog_backdrop_drag(self, *_args: Any) -> None:
         if (dialog := self.get_visible_dialog()) is not None:
@@ -1336,11 +1339,21 @@ class CartridgesWindow(Adw.ApplicationWindow):
         seletor de capas cuidam do próprio motivo."""
         self._autoplay_id = None
         superficie = self.get_surface()
+        minimizada = bool(
+            superficie and superficie.get_state() & Gdk.ToplevelState.MINIMIZED
+        )
+        em_sessao = self.session_blocker.get_visible()
+        # Vale para toda capa, por qualquer motivo (hover, detalhes, edição,
+        # prévias): com a janela fora da tela ou coberta pela sessão de jogo,
+        # nenhuma aparece. Os motivos de cada uma ficam como estão para a volta.
+        tocador_capas.tocador.suspender(
+            minimizada or em_sessao or not self.get_visible()
+        )
         ligado = deve_tocar(
             shared.schema.get_boolean("cover-autoplay"),
             Gtk.Settings.get_default().props.gtk_enable_animations,
-            bool(superficie and superficie.get_state() & Gdk.ToplevelState.MINIMIZED),
-            self.session_blocker.get_visible(),
+            minimizada,
+            em_sessao,
         )
         for cover in self.game_covers.values():
             if cover.animada:

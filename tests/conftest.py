@@ -672,6 +672,9 @@ def capas_falsas(monkeypatch):
         def esquecer(self, _copia):
             pass
 
+        def suspender(self, suspenso):
+            self.suspenso = suspenso
+
     tocador = TocadorFalso()
     pedidos = []
     abandonadas = []
