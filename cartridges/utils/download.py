@@ -105,6 +105,7 @@ def read_capped(
     """
     buffer = bytearray()
     ultima: Optional[float] = None
+    informado = 0
     for chunk in response.iter_content(chunk_size=64 * 1024):
         buffer.extend(chunk)
         if len(buffer) > max_bytes:
@@ -113,7 +114,12 @@ def read_capped(
             agora = time.monotonic()
             if ultima is None or agora - ultima >= INTERVALO_DO_PROGRESSO:
                 ultima = agora
-                ao_progredir(len(buffer))
+                informado = len(buffer)
+                ao_progredir(informado)
+    # O fim sempre chega a quem mostra o progresso: sem isto, a barra parava
+    # nos últimos MB enquanto a imagem ainda era convertida.
+    if ao_progredir is not None and informado != len(buffer):
+        ao_progredir(len(buffer))
     return bytes(buffer)
 
 

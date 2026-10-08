@@ -159,13 +159,13 @@ def test_progresso_traz_recebido_e_total(monkeypatch):
     assert chamadas == [(2, 4), (4, 4)]
 
 
-def test_progresso_limitado_a_dez_por_segundo(monkeypatch):
+def test_progresso_limitado_a_dez_por_segundo_e_termina_no_total(monkeypatch):
     resposta = _Baixando([b"a"] * 4, {"Content-Length": "4"})
     monkeypatch.setattr(download, "_get", lambda *_a, **_k: resposta)
     _relogio(monkeypatch, [0.0, 0.05, 0.12, 0.13])
     chamadas = []
     download.download_bytes("http://x/", ao_progredir=lambda r, _t: chamadas.append(r))
-    assert chamadas == [1, 3]
+    assert chamadas == [1, 3, 4]
 
 
 @pytest.mark.parametrize(
