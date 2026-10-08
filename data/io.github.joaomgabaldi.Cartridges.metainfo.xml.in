@@ -28,6 +28,19 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.08" date="2026-10-08">
+      <description translate="no">
+        <ul>
+          <li>Agora as capas animadas podem ser reproduzidas automaticamente na biblioteca, com a opção em Preferências</li>
+          <li>As capas animadas passaram a usar muito menos memória</li>
+          <li>As capas animadas em PNG agora são reproduzidas, e capas animadas maiores podem ser baixadas</li>
+          <li>O diálogo de conquistas agora mostra a logo do jogo no topo</li>
+          <li>A lista de conquistas ficou alinhada, com os ícones do mesmo tamanho</li>
+          <li>As conquistas bloqueadas aparecem antes das ocultas</li>
+          <li>Arrastar um texto selecionado não deixa mais uma cópia dele parada na tela</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.10.07" date="2026-10-07">
       <description translate="no">
         <p>GRANDE ATUALIZAÇÃO!</p>
