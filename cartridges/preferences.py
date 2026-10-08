@@ -107,6 +107,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     sgdb_switch: Adw.SwitchRow = Gtk.Template.Child()
     sgdb_prefer_switch: Adw.SwitchRow = Gtk.Template.Child()
     sgdb_animated_switch: Adw.SwitchRow = Gtk.Template.Child()
+    cover_autoplay_switch: Adw.SwitchRow = Gtk.Template.Child()
     sgdb_fetch_button: Gtk.Button = Gtk.Template.Child()
     sgdb_stack: Gtk.Stack = Gtk.Template.Child()
     sgdb_spinner: Adw.Spinner = Gtk.Template.Child()
@@ -336,6 +337,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 "sgdb",
                 "sgdb-prefer",
                 "sgdb-animated",
+                "cover-autoplay",
             }
         )
 

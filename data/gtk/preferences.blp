@@ -93,6 +93,15 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
       }
     }
 
+    Adw.PreferencesGroup {
+      title: _("Biblioteca");
+
+      Adw.SwitchRow cover_autoplay_switch {
+        title: _("Reproduzir capas animadas automaticamente");
+        subtitle: _("As capas animadas são reproduzidas na biblioteca automaticamente e em loop.");
+      }
+    }
+
     Adw.PreferencesGroup session_monitor_group {
       title: _("Ao iniciar um jogo");
       description: _("Move o Cartridges para outro monitor (se disponível) em vez de minimizá-lo para a barra de tarefas.");

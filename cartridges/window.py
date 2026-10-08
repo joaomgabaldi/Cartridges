@@ -81,6 +81,28 @@ def can_edit_notes(game: Game) -> bool:
     return game.status == "playing" or bool((game.notes or "").strip())
 
 
+def _na_vista(picture: Gtk.Picture) -> bool:
+    """``picture`` está mapeada e ao menos em parte dentro da área rolável."""
+    if not picture.get_mapped():
+        return False
+    rolagem = picture.get_ancestor(Gtk.ScrolledWindow)
+    if rolagem is None:
+        return False
+    ok, caixa = picture.compute_bounds(rolagem)
+    return (
+        ok
+        and caixa.get_y() + caixa.get_height() > 0
+        and caixa.get_y() < rolagem.get_height()
+    )
+
+
+def deve_tocar(
+    opcao: bool, animacoes_do_sistema: bool, minimizada: bool, em_sessao: bool
+) -> bool:
+    """Se as capas animadas à vista podem tocar sozinhas agora."""
+    return opcao and animacoes_do_sistema and not minimizada and not em_sessao
+
+
 @Gtk.Template(resource_path=shared.PREFIX + "/gtk/window.ui")
 class CartridgesWindow(Adw.ApplicationWindow):
     __gtype_name__ = "CartridgesWindow"
@@ -322,6 +344,38 @@ class CartridgesWindow(Adw.ApplicationWindow):
         ]
         self.connect("destroy", self.detach_global_handlers)
 
+        # Reavalia quais capas animadas estão à vista quando algo pode ter
+        # mudado isso. A chave e as animações do sistema vivem o processo
+        # inteiro: entram em `_global_handler_ids` pelo mesmo motivo das outras.
+        self._autoplay_id: Optional[int] = None
+        for rolagem in (self.scrolledwindow, self.zerados_scrolledwindow):
+            ajuste = rolagem.get_vadjustment()
+            ajuste.connect("value-changed", self.agendar_autoplay)
+            ajuste.connect("changed", self.agendar_autoplay)
+        self.navigation_view.connect("notify::visible-page", self.agendar_autoplay)
+        self.session_blocker.connect("notify::visible", self.agendar_autoplay)
+        self.connect(
+            "realize",
+            lambda *_: self.get_surface().connect(
+                "notify::state", self.agendar_autoplay
+            ),
+        )
+        self._global_handler_ids.append(
+            (
+                shared.schema,
+                shared.schema.connect("changed::cover-autoplay", self.agendar_autoplay),
+            )
+        )
+        configuracoes = Gtk.Settings.get_default()
+        self._global_handler_ids.append(
+            (
+                configuracoes,
+                configuracoes.connect(
+                    "notify::gtk-enable-animations", self.agendar_autoplay
+                ),
+            )
+        )
+
         # O botão das tarefas em andamento fica por cima das duas bibliotecas,
         # no canto inferior esquerdo. O quadro de tarefas vive o processo
         # inteiro: a ligação entra em `_global_handler_ids` pelo mesmo motivo
@@ -428,6 +482,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
             if obj.handler_is_connected(handler_id):
                 obj.disconnect(handler_id)
         self._global_handler_ids = []
+        if self._autoplay_id is not None:
+            GLib.source_remove(self._autoplay_id)
+            self._autoplay_id = None
 
     def block_dialog_backdrop_drag(self, *_args: Any) -> None:
         if (dialog := self.get_visible_dialog()) is not None:
@@ -1239,6 +1296,49 @@ class CartridgesWindow(Adw.ApplicationWindow):
                 return False
 
             GLib.timeout_add(16, put_back)
+
+    def agendar_autoplay(self, *_args: Any) -> None:
+        """Reavalia o autoplay quando a rolagem parar por 200 ms.
+
+        Esperar a rolagem parar é o que impede que as capas que só passaram
+        pela tela entrem na fila de geração.
+        """
+        if self._autoplay_id is not None:
+            GLib.source_remove(self._autoplay_id)
+        self._autoplay_id = GLib.timeout_add(200, self._aplicar_autoplay)
+
+    def _aplicar_autoplay(self) -> bool:
+        """Liga o motivo "à vista" das capas animadas da biblioteca que estão
+        na tela e desliga o das outras. Só as de ``game_covers``: as prévias do
+        seletor de capas cuidam do próprio motivo."""
+        self._autoplay_id = None
+        superficie = self.get_surface()
+        ligado = deve_tocar(
+            shared.schema.get_boolean("cover-autoplay"),
+            Gtk.Settings.get_default().props.gtk_enable_animations,
+            bool(superficie and superficie.get_state() & Gdk.ToplevelState.MINIMIZED),
+            self.session_blocker.get_visible(),
+        )
+        for cover in self.game_covers.values():
+            if cover.animada:
+                cover.set_visible_animation(
+                    ligado and any(_na_vista(p) for p in cover.pictures)
+                )
+        return False
+
+    def capas_na_ordem(self) -> list[tuple[str, Path]]:
+        """``(game_id, caminho da capa)`` dos jogos com capa animada, na ordem
+        da grade (a biblioteca, depois os zerados), filtrados inclusive."""
+        capas = []
+        for grade in (self.library, self.zerados_library):
+            indice = 0
+            while (filho := grade.get_child_at_index(indice)) is not None:
+                indice += 1
+                game_id = filho.get_child().game_id
+                cover = self.game_covers.get(game_id)
+                if cover is not None and cover.animada:
+                    capas.append((game_id, cover.path))
+        return capas
 
     def show_details_page(self, game: Game) -> None:
         self.active_game = game

@@ -187,6 +187,11 @@ class GameCover:
         self.set_texture(self.texture)
         self._reconcile_animation()
 
+        # Uma capa animada nova (ou trocada) pode estar à vista: a janela
+        # reavalia. As prévias do seletor e os testes não têm janela.
+        if self._animated_path is not None and hasattr(shared.win, "agendar_autoplay"):
+            shared.win.agendar_autoplay()
+
         # Página de detalhes aberta neste jogo: recomeça o desfoque já. Toda
         # chamada do lado da janela roda ANTES deste new_cover (o save_cover o
         # adia por idle), então nenhum pedido novo viria — era o buraco que

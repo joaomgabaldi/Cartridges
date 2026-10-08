@@ -2728,3 +2728,146 @@ def test_the_manual_session_clock_survives_the_minute_flush(monkeypatch):
     agora[0] = 1070.0
 
     assert CartridgesWindow.session_elapsed(None) == 70
+
+
+# ---------------------------------------------------------------------------
+# Autoplay das capas animadas na janela
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "opcao, animacoes, minimizada, em_sessao, esperado",
+    [
+        (True, True, False, False, True),
+        (False, True, False, False, False),
+        (True, False, False, False, False),
+        (True, True, True, False, False),
+        (True, True, False, True, False),
+    ],
+)
+def test_deve_tocar(opcao, animacoes, minimizada, em_sessao, esperado):
+    from cartridges.window import deve_tocar
+
+    assert deve_tocar(opcao, animacoes, minimizada, em_sessao) is esperado
+
+
+def test_na_vista():
+    """Uma rolagem de 100 px sobre pictures de 60 px, de verdade: a janela
+    apresentada resolve o layout, e é ele que diz o que está dentro."""
+    from cartridges.window import _na_vista
+
+    caixa = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    pictures = [Gtk.Picture() for _ in range(3)]
+    for picture in pictures:
+        picture.set_size_request(60, 60)
+        caixa.append(picture)
+    rolagem = Gtk.ScrolledWindow(
+        min_content_height=100, max_content_height=100, child=caixa
+    )
+    janela = Gtk.Window(child=rolagem)
+    janela.present()
+    contexto = GLib.MainContext.default()
+    for _ in range(300):
+        contexto.iteration(False)
+    try:
+        assert _na_vista(pictures[0])
+        assert _na_vista(pictures[1]), "metade dentro já conta"
+        assert not _na_vista(pictures[2])
+        pictures[0].set_visible(False)
+        for _ in range(100):
+            contexto.iteration(False)
+        assert not _na_vista(pictures[0])
+    finally:
+        janela.destroy()
+
+
+def _capa_na_grade(window, grade, game_id, name, gif, capas_falsas):
+    """Um jogo com capa animada na grade dada (``window.library`` ou os zerados)."""
+    from cartridges.game import Game
+    from cartridges.game_cover import GameCover
+
+    game = Game(
+        {
+            "source": "imported",
+            "game_id": game_id,
+            "name": name,
+            "executable": "x.exe",
+            "added": 0,
+        }
+    )
+    grade.append(game)
+    cover = GameCover({Gtk.Picture()}, gif)
+    window.game_covers[game_id] = cover
+    return cover
+
+
+def test_capas_na_ordem_percorre_a_biblioteca_e_depois_os_zerados(
+    real_window, store, gif, capas_falsas
+):
+    from cartridges.game import Game
+    from cartridges.game_cover import GameCover
+
+    _capa_na_grade(real_window, real_window.library, "imported_b", "B", gif, capas_falsas)
+    _capa_na_grade(real_window, real_window.library, "imported_a", "A", gif, capas_falsas)
+    _capa_na_grade(
+        real_window, real_window.zerados_library, "imported_z", "Z", gif, capas_falsas
+    )
+    # Sem capa animada (estática, e sem capa nenhuma): fora da lista.
+    real_window.library.append(
+        Game(
+            {
+                "source": "imported",
+                "game_id": "imported_s",
+                "name": "C",
+                "executable": "x.exe",
+                "added": 0,
+            }
+        )
+    )
+    real_window.game_covers["imported_s"] = GameCover({Gtk.Picture()}, None)
+    # Um jogo filtrado pela busca continua na ordem.
+    real_window.search_entry.set_text("zzz")
+
+    assert real_window.capas_na_ordem() == [
+        ("imported_a", gif),
+        ("imported_b", gif),
+        ("imported_z", gif),
+    ]
+
+
+def test_aplicar_autoplay_liga_e_desliga_so_as_capas_da_janela(
+    real_window, store, gif, capas_falsas, schema, monkeypatch
+):
+    from cartridges import window as window_module
+    from cartridges.game_cover import GameCover
+
+    cover = _capa_na_grade(
+        real_window, real_window.library, "imported_a", "A", gif, capas_falsas
+    )
+    de_fora = GameCover({Gtk.Picture()}, gif)  # como as prévias do seletor
+    de_fora.set_visible_animation(True)
+    monkeypatch.setattr(window_module, "_na_vista", lambda _p: True)
+
+    schema.set_boolean("cover-autoplay", True)
+    real_window._aplicar_autoplay()
+    assert cover.active
+
+    real_window.session_blocker.set_visible(True)
+    real_window._aplicar_autoplay()
+    assert not cover.active
+
+    real_window.session_blocker.set_visible(False)
+    schema.set_boolean("cover-autoplay", False)
+    real_window._aplicar_autoplay()
+    assert not cover.active
+    assert de_fora.active, "a janela só cuida das capas da biblioteca"
+
+
+def test_agendar_autoplay_reinicia_o_prazo_e_nao_deixa_tempo_ao_fechar(real_window):
+    real_window.agendar_autoplay()
+    primeiro = real_window._autoplay_id
+    real_window.agendar_autoplay()
+    assert real_window._autoplay_id not in (None, primeiro)
+
+    real_window.detach_global_handlers()
+    assert real_window._autoplay_id is None

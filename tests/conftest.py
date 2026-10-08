@@ -77,6 +77,7 @@ Adw.init()
 # the schema changes underneath it, instead of quietly following it.
 _SCHEMA_DEFAULTS = {
     "auto-import": False,
+    "cover-autoplay": False,
     "minimize-after-launch": False,
     "playtime-tracking": True,
     "process-tracking-grace": 5,
@@ -178,6 +179,12 @@ class FakeSchema:
         return len(self.handlers)
 
     def bind(self, *_args, **_kwargs) -> None:
+        return None
+
+    def handler_is_connected(self, _handler_id) -> bool:
+        return True
+
+    def disconnect(self, _handler_id) -> None:
         return None
 
 
