@@ -56,6 +56,7 @@ wallpapers_dir: Path
 fitas_dir: Path
 conquistas_dir: Path
 conquistas_cache_dir: Path
+capas_animadas_dir: Path
 contas_dir: Path
 fitas_arquivo: Path
 log_dir: Path

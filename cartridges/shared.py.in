@@ -77,6 +77,10 @@ conquistas_dir = app_dir / "conquistas"
 # Catálogos e ícones das conquistas: refeitos da rede, fora do backup.
 conquistas_cache_dir = app_dir / "cache" / "conquistas"
 
+# Cópias reduzidas das capas animadas, uma por tamanho de exibição
+# (`utils/copias_animadas.py`): refeitas da capa, fora do backup.
+capas_animadas_dir = app_dir / "cache" / "capas_animadas"
+
 # Contas de lojas (conta Microsoft das conquistas do Xbox), com a chave de
 # renovação cifrada pelo DPAPI: presa a este PC e a este usuário do Windows,
 # então fica fora do backup (`utils/backup.py`).
