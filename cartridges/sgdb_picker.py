@@ -186,6 +186,9 @@ class SgdbPicker(BuscaDoSeletor, Adw.Dialog):
                 logging.warning("SGDB picker: preview download failed (%s)", error)
                 continue
             suffix = Path(urlparse(preview_url).path).suffix or ".png"
+            # O SteamGridDB serve APNG como .png; é a extensão que faz a prévia tocar.
+            if animated and suffix.lower() == ".png":
+                suffix = ".apng"
             preview_path = self._temp_dir / f"{grid.get('id', id(grid))}{suffix}"
             try:
                 preview_path.write_bytes(content)
