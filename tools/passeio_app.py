@@ -131,6 +131,12 @@ def preparar(saida: Path) -> dict[str, list]:
     shared.fitas_dir = biblioteca / "fitas"
     shared.fitas_arquivo = biblioteca / "fitas.json"
     shared.tuya_conta_arquivo = biblioteca / "tuya_conta.json"
+    shared.conquistas_dir = biblioteca / "conquistas"
+    shared.conquistas_cache_dir = biblioteca / "cache" / "conquistas"
+    # O `limpar` da inicialização apaga cópias órfãs daqui: sem apontar para a
+    # cópia da biblioteca, ele mexeria no cache real.
+    shared.capas_animadas_dir = biblioteca / "cache" / "capas_animadas"
+    shared.contas_dir = biblioteca / "contas"
     shared.log_dir = biblioteca / "logs"
 
     chamadas: dict[str, list] = {"iniciar": [], "luzes": [], "papel": []}
