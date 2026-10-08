@@ -346,15 +346,16 @@ class Store:
 
     def cleanup_game(self, game: Game, apagar_sessoes: bool = True) -> None:
         """Remove a game's files, dismiss any loose toasts"""
-        # Covers may be a still .tiff or an animated .gif/.webp
+        # Covers may be a still .tiff or an animated .gif/.webp/.apng
         # The session wallpaper and the LED strip colour are filed by id too,
         # and ids are stable: left behind, a reinstalled game would inherit the
         # removed one's locked choices.
         for path in (
             shared.games_dir / f"{game.game_id}.json",
-            shared.covers_dir / f"{game.game_id}.tiff",
-            shared.covers_dir / f"{game.game_id}.gif",
-            shared.covers_dir / f"{game.game_id}.webp",
+            *(
+                shared.covers_dir / f"{game.game_id}{suffix}"
+                for suffix in (*ANIMATED_SUFFIXES, ".tiff")
+            ),
             shared.wallpapers_dir / f"{game.game_id}.json",
             *(
                 shared.wallpapers_dir / f"{game.game_id}{suffix}"

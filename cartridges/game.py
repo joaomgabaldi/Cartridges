@@ -28,6 +28,7 @@ from cartridges import shared
 from cartridges.game_cover import GameCover
 from cartridges.utils.process_monitor import install_dir_from_command
 from cartridges.utils.run_executable import aumid_from_command, run_executable
+from cartridges.utils.save_cover import ANIMATED_SUFFIXES
 
 # Everything written to a game's JSON record. Lives here, not in FileManager
 # (who writes it), because it is also the list of what `update_values` accepts:
@@ -486,7 +487,7 @@ class Game(Gtk.Box):
     def get_cover_path(self) -> Optional[Path]:
         # Animated covers (kept in their original format) take precedence,
         # then the still TIFF cover.
-        for suffix in (".gif", ".webp", ".tiff"):
+        for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
             cover_path = shared.covers_dir / f"{self.game_id}{suffix}"
             if cover_path.is_file():
                 return cover_path  # type: ignore

@@ -512,7 +512,9 @@ class FakeGame:
     def get_cover_path(self) -> Path | None:
         # Duck-types Game.get_cover_path: the backup exporter calls this on
         # whatever `shared.store` holds, real Game or this fake.
-        for suffix in (".gif", ".webp", ".tiff"):
+        from cartridges.utils.save_cover import ANIMATED_SUFFIXES  # noqa: PLC0415
+
+        for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
             cover_path = shared.covers_dir / f"{self.game_id}{suffix}"
             if cover_path.is_file():
                 return cover_path

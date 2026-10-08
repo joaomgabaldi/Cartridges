@@ -39,6 +39,14 @@ def _duracoes(caminho):
         return resultado
 
 
+def test_origem_apng_gera_a_copia(tmp_path):
+    origem = _animada(tmp_path / "g1.apng", [100, 100], formato="PNG")
+    destino = tmp_path / "g1_200x300.webp"
+
+    assert copias_animadas.gerar(origem, destino, (200, 300)) is True
+    assert _duracoes(destino) == [100, 100]
+
+
 def test_quadros_curtos_sao_fundidos(tmp_path):
     origem = _animada(tmp_path / "a.webp", [16] * 6 + [100])
     destino = tmp_path / "copia.webp"

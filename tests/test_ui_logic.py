@@ -1029,6 +1029,19 @@ def gif(app_dirs):
     return path
 
 
+@pytest.fixture
+def apng(app_dirs):
+    """Uma capa animada da biblioteca em APNG, de dois quadros."""
+    from PIL import Image
+
+    path = app_dirs.covers / "imported_2.apng"
+    quadros = [Image.new("RGB", (60, 90), cor) for cor in ("red", "blue")]
+    quadros[0].save(
+        path, "PNG", save_all=True, append_images=quadros[1:], duration=100
+    )
+    return path
+
+
 def _copias(origem):
     """(grade, detalhes): onde ficam as duas cópias de ``origem``."""
     from cartridges.utils import copias_animadas
@@ -1293,6 +1306,37 @@ def test_capa_estatica_nao_e_animada(cover_file, capas_falsas):
 
     assert not cover.animada
     assert capas_falsas.pedidos == [] and capas_falsas.tocador.tocados == []
+
+
+def test_capa_apng_e_animada(apng, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    cover = GameCover({Gtk.Picture()}, apng)
+
+    assert cover.animada
+
+
+def test_apng_nao_entra_na_pre_decodificacao_das_paradas(apng, cover_file):
+    from cartridges.game_cover import GameCover
+
+    with GameCover.pre_decodificadas([apng, cover_file]):
+        assert set(GameCover._pre_decodificadas) == {cover_file}
+
+
+def test_get_cover_path_acha_a_capa_apng(apng):
+    from cartridges.game import Game
+
+    game = Game(
+        {
+            "game_id": "imported_2",
+            "name": "Probe",
+            "source": "imported",
+            "executable": "x.exe",
+            "added": 0,
+        }
+    )
+
+    assert game.get_cover_path() == apng
 
 
 def test_capa_animada_de_verdade_toca_na_picture(app_dirs, monkeypatch):

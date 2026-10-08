@@ -33,6 +33,7 @@ from cartridges import shared
 from cartridges.utils import copias_animadas, tocador_capas
 from cartridges.utils.copias_animadas import Resultado
 from cartridges.utils.na_tela import entregar_na_tela
+from cartridges.utils.save_cover import ANIMATED_SUFFIXES
 
 
 def texture_from_pixbuf(pixbuf: GdkPixbuf.Pixbuf) -> Gdk.Texture:
@@ -140,7 +141,7 @@ class GameCover:
 
         estaticas = [
             path for path in caminhos
-            if path and path.suffix.lower() not in (".gif", ".webp")
+            if path and path.suffix.lower() not in ANIMATED_SUFFIXES
         ]
         with ThreadPoolExecutor() as executor:
             prontas = zip(estaticas, executor.map(decodificar, estaticas))
@@ -181,7 +182,7 @@ class GameCover:
         self._details_texture = None
 
         if path:
-            if path.suffix.lower() in (".gif", ".webp"):
+            if path.suffix.lower() in ANIMATED_SUFFIXES:
                 # Só o primeiro quadro agora; a animação toca pela cópia
                 # reduzida quando algum motivo pedir (`_reconcile_animation`).
                 self._animated_path = path
@@ -450,7 +451,7 @@ class GameCover:
 
     @property
     def animada(self) -> bool:
-        """Se a capa é animada (GIF/WebP de mais de um quadro, até onde se sabe)."""
+        """Se a capa é animada (GIF/WebP/APNG de mais de um quadro, até onde se sabe)."""
         return self._animated_path is not None
 
     def set_hover_animation(self, playing: bool) -> None:

@@ -31,8 +31,14 @@ from cartridges import shared
 from cartridges.utils import copias_animadas
 from cartridges.utils.na_tela import entregar_na_tela
 
-# Cover formats that hold an animation and are stored in their original form
-ANIMATED_SUFFIXES = (".gif", ".webp")
+# Cover formats that hold an animation and are stored in their original form.
+# O APNG usa a extensão .png das imagens paradas; guardado, vira .apng, e é a
+# extensão que diz ao resto do app que a capa é animada. A ordem é a
+# precedência de ``Game.get_cover_path``.
+ANIMATED_SUFFIXES = (".gif", ".webp", ".apng")
+
+# Formato do Pillow -> sufixo com que a capa animada é guardada.
+_SUFIXO_ANIMADO = {"GIF": ".gif", "WEBP": ".webp", "PNG": ".apng"}
 
 
 def convert_cover(
@@ -81,19 +87,18 @@ def _convert_readable_cover(cover_path: Path, resize: bool) -> Optional[Path]:
             animated = getattr(image, "is_animated", False)
             fmt = (image.format or "").upper()
 
-            # GIF and animated WebP animate natively and are stored verbatim at
-            # their original resolution. Re-encoding an animated cover into a
-            # 256-colour GIF caused banding, washed-out colours and, for some
-            # formats (e.g. APNG), outright save failures.
-            if animated and fmt in ("GIF", "WEBP"):
-                suffix = ".gif" if fmt == "GIF" else ".webp"
+            # GIF, animated WebP and APNG are stored verbatim at their original
+            # resolution: the library plays reduced copies made by Pillow
+            # (``copias_animadas``), never the original. Re-encoding an animated
+            # cover into a 256-colour GIF caused banding, washed-out colours
+            # and, for APNG, outright save failures.
+            if animated and (suffix := _SUFIXO_ANIMADO.get(fmt)):
                 tmp_path = Path(Gio.File.new_tmp(f"XXXXXX{suffix}")[0].get_path())
                 copyfile(cover_path, tmp_path)
                 return tmp_path
 
-            # Any other animated format (e.g. APNG) cannot be animated by
-            # GdkPixbuf anyway, so fall back to a clean full-colour still of the
-            # first frame instead of a fragile, lossy GIF.
+            # Any other animated format has no copy pipeline, so fall back to a
+            # clean full-colour still of the first frame.
             if animated:
                 image.seek(0)
 

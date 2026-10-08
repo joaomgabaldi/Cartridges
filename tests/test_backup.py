@@ -125,6 +125,14 @@ def _exportar(tmp_path):
     return destino
 
 
+def test_exportar_leva_a_capa_apng(tmp_path):
+    _encher_pasta_do_app()
+    (shared.covers_dir / "imported_1.apng").write_bytes(b"capa animada")
+
+    with zipfile.ZipFile(_exportar(tmp_path)) as arquivo:
+        assert "covers/imported_1.apng" in arquivo.namelist()
+
+
 def test_exportar_leva_a_pasta_do_app_e_as_configuracoes(tmp_path):
     _encher_pasta_do_app()
     destino = _exportar(tmp_path)

@@ -70,6 +70,17 @@ def test_cleanup_game_apaga_as_copias(store, make_game):
     assert [p.name for p in shared.capas_animadas_dir.iterdir()] == ["outro_200x300.webp"]
 
 
+def test_cleanup_game_apaga_a_capa_apng(store, make_game):
+    game = make_game(game_id=OLD_ID)
+    capa = shared.covers_dir / f"{OLD_ID}.apng"
+    capa.parent.mkdir(parents=True, exist_ok=True)
+    capa.write_bytes(b"c")
+
+    store.cleanup_game(game)
+
+    assert not capa.exists()
+
+
 def test_b14_rekey_leva_a_capa_ao_arquivo_novo(store, make_game, win, flush_idle):
     store.add_game(make_game(game_id=OLD_ID, shortcut_path=LNK), {})
     trocas = []

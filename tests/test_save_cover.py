@@ -116,6 +116,50 @@ def test_capa_animada_nova_prepara_as_copias(tmp_path, schema, entregas):
     ]
 
 
+def _apng(caminho):
+    """Um PNG animado (APNG) de dois quadros, como os do SteamGridDB."""
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    quadros = [Image.new("RGB", (60, 90), cor) for cor in ("red", "blue")]
+    quadros[0].save(
+        caminho, "PNG", save_all=True, append_images=quadros[1:], duration=100
+    )
+    return caminho
+
+
+def test_apng_vira_apng_com_todos_os_quadros(tmp_path):
+    from cartridges.utils.save_cover import convert_cover
+
+    origem = _apng(tmp_path / "capa.png")
+
+    convertida = convert_cover(origem)
+
+    assert convertida.suffix == ".apng"
+    assert convertida.read_bytes() == origem.read_bytes()
+
+
+def test_png_de_um_quadro_continua_tiff(tmp_path):
+    from cartridges.utils.save_cover import convert_cover
+
+    assert convert_cover(make_image(tmp_path / "capa.png")).suffix == ".tiff"
+
+
+def test_capa_apng_prepara_as_copias(tmp_path, schema, entregas):
+    from cartridges.utils import copias_animadas
+
+    save_cover("g1", _apng(tmp_path / "nova.apng"))
+
+    assert entregas == [
+        (copias_animadas.preparar, ([("g1", shared.covers_dir / "g1.apng")],))
+    ]
+
+
+def test_trocar_apng_por_gif_nao_deixa_as_duas(tmp_path, schema, entregas):
+    save_cover("g1", _apng(tmp_path / "a.apng"))
+    save_cover("g1", _gif(tmp_path / "b.gif"))
+
+    assert sorted(p.name for p in shared.covers_dir.glob("g1.*")) == ["g1.gif"]
+
+
 def test_pedido_no_meio_da_troca_nao_deixa_copia_da_capa_velha(tmp_path, monkeypatch):
     """A capa na tela ainda é a velha até o ``new_cover`` (por idle) e pode pedir
     a cópia durante a troca: o que for gerado da velha não sobrevive a ela."""
