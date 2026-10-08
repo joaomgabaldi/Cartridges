@@ -61,6 +61,39 @@ class _Estado:
     proximo: int = 0
     falhas: int = 0
     pausado_em: float | None = None
+    # O próximo quadro é o primeiro depois de abrir, posicionar ou retomar: o
+    # prazo dele conta de agora, não do prazo do quadro anterior.
+    recomecou: bool = True
+    # Sobe a cada ``esquecer``: uma abertura que estava em andamento na thread
+    # do tocador sabe, ao terminar, que leu o arquivo antigo.
+    versao: int = 0
+
+
+def _duracoes_do_container(dados: bytes) -> list[int] | None:
+    """Durações dos quadros lidas do contêiner RIFF/WebP, sem decodificar.
+
+    Cada quadro de um WebP animado é um bloco ``ANMF``; a duração (24 bits,
+    little-endian) fica no deslocamento 12 do conteúdo. Devolve ``None`` se o
+    contêiner não for o esperado, para quem chama cair na leitura quadro a
+    quadro.
+    """
+    if dados[:4] != b"RIFF" or dados[8:12] != b"WEBP":
+        return None
+    duracoes = []
+    pos = 12
+    while pos + 8 <= len(dados):
+        tamanho = int.from_bytes(dados[pos + 4 : pos + 8], "little")
+        fim = pos + 8 + tamanho
+        if fim > len(dados):
+            return None
+        if dados[pos : pos + 4] == b"ANMF":
+            if tamanho < 16:
+                return None
+            duracoes.append(
+                int.from_bytes(dados[pos + 20 : pos + 23], "little")
+            )
+        pos = fim + (tamanho & 1)
+    return duracoes or None
 
 
 def _abrir(estado: _Estado) -> None:
@@ -68,16 +101,24 @@ def _abrir(estado: _Estado) -> None:
 
     Lê os bytes do arquivo e abre a imagem sobre a memória: no Windows um
     arquivo aberto não pode ser apagado nem substituído, e o app apaga e
-    regenera cópias enquanto elas tocam. Ler todas as durações de uma vez é o
-    que dá a duração total e o início de cada quadro; as cópias são pequenas.
+    regenera cópias enquanto elas tocam. A duração total e o início de cada
+    quadro saem do contêiner, sem decodificar: uma cópia tem centenas de
+    quadros, e decodificar todos só para somar durações parava as outras capas
+    a cada abertura.
     """
-    imagem = Image.open(io.BytesIO(estado.copia.read_bytes()))
-    duracoes = []
-    for n in range(getattr(imagem, "n_frames", 1)):
-        imagem.seek(n)
-        # No WebP, ``info["duration"]`` só é preenchido depois do ``load``.
-        imagem.load()
-        duracoes.append(max(1, int(imagem.info.get("duration") or 1)))
+    dados = estado.copia.read_bytes()
+    imagem = Image.open(io.BytesIO(dados))
+    n_frames = getattr(imagem, "n_frames", 1)
+    duracoes = _duracoes_do_container(dados)
+    if duracoes is None or len(duracoes) != n_frames:
+        # Contêiner fora do esperado: lê quadro a quadro. No WebP,
+        # ``info["duration"]`` só é preenchido depois do ``load``.
+        duracoes = []
+        for n in range(n_frames):
+            imagem.seek(n)
+            imagem.load()
+            duracoes.append(int(imagem.info.get("duration") or 1))
+    duracoes = [max(1, d) for d in duracoes]
     inicios = [sum(duracoes[:n]) for n in range(len(duracoes))]
     estado.imagem = imagem
     estado.duracoes = duracoes
@@ -129,6 +170,7 @@ class Tocador:
                 if estado.pausado_em is not None:
                     estado.pausado_em = None
                     estado.prazo = agora
+                    estado.recomecou = True
             else:
                 self._estados[dono] = _Estado(
                     copia=copia,
@@ -153,6 +195,28 @@ class Tocador:
             if estado is not None and estado.pausado_em is None:
                 estado.pausado_em = agora
 
+    def esquecer(self, copia: Path) -> None:
+        """A cópia em ``copia`` foi apagada ou regravada: larga o que tem dela.
+
+        O caminho de uma cópia é estável, então a regravada tem o mesmo nome da
+        anterior; sem isto, quem ainda a tem registrada seguiria tocando a
+        antiga. Quem toca reabre o arquivo no próximo passo, do quadro 0; quem
+        está pausado é fechado. Não chama callbacks.
+        """
+        with self._trava:
+            for dono, estado in list(self._estados.items()):
+                if estado.copia != copia:
+                    continue
+                if estado.pausado_em is not None:
+                    del self._estados[dono]
+                    continue
+                estado.imagem = None
+                estado.inicial_ms = 0
+                estado.posicao = 0
+                estado.falhas = 0
+                estado.recomecou = True
+                estado.versao += 1
+
     def posicao_ms(self, dono: object) -> int:
         """Instante do loop em que começa o quadro mostrado agora."""
         with self._trava:
@@ -176,43 +240,60 @@ class Tocador:
             ]:
                 del self._estados[dono]
             devidos = [
-                (dono, estado)
+                (dono, estado, estado.versao)
                 for dono, estado in self._estados.items()
                 if estado.pausado_em is None and estado.prazo <= agora
             ]
 
         lido = []
-        for dono, estado in devidos:
+        for dono, estado, versao in devidos:
             try:
                 if estado.imagem is None:
                     _abrir(estado)
                 n = estado.proximo
                 estado.imagem.seek(n)
                 rgba = estado.imagem.convert("RGBA")
-                lido.append((dono, estado, n, (rgba.tobytes(), *rgba.size)))
+                lido.append((dono, estado, versao, n, (rgba.tobytes(), *rgba.size)))
             except Exception as erro:  # noqa: BLE001 - a thread não pode morrer
                 logging.warning("Capa animada ilegível (%s): %s", estado.copia, erro)
-                lido.append((dono, estado, -1, None))
+                lido.append((dono, estado, versao, -1, None))
 
         lote = []
         avisos = []
         with self._trava:
-            for dono, estado, n, quadro in lido:
+            for dono, estado, versao, n, quadro in lido:
                 if (
                     self._estados.get(dono) is not estado
                     or estado.pausado_em is not None
                 ):
                     continue
+                if estado.versao != versao:
+                    # ``esquecer`` chegou no meio: o que foi lido é do arquivo
+                    # antigo. Descarta e reabre no próximo passo.
+                    estado.imagem = None
+                    continue
                 if quadro is not None:
                     estado.falhas = 0
                     estado.posicao = estado.inicios[n]
                     estado.proximo = (n + 1) % len(estado.duracoes)
-                    estado.prazo = agora + estado.duracoes[n] / 1000
+                    # O prazo avança pela duração do quadro, não a partir do
+                    # tick: com ticks de 33 ms, contar do tick faria todo
+                    # quadro durar um número inteiro de ticks (um de 34 ms
+                    # tocaria na metade da velocidade). Se já passou do prazo
+                    # (a tela travou), recomeça de agora, sem rajada para
+                    # alcançar o atraso.
+                    duracao = estado.duracoes[n] / 1000
+                    base = agora if estado.recomecou else estado.prazo
+                    estado.recomecou = False
+                    estado.prazo = base + duracao
+                    if estado.prazo <= agora:
+                        estado.prazo = agora + duracao
                     lote.append((estado.ao_quadro, *quadro))
                     continue
                 # Degrau 1: fecha e reabre no próximo tick, do quadro 0.
                 estado.imagem = None
                 estado.inicial_ms = 0
+                estado.recomecou = True
                 estado.falhas += 1
                 if estado.falhas >= FALHAS_ATE_CORROMPIDA:
                     del self._estados[dono]

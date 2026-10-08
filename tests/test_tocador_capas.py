@@ -11,6 +11,7 @@ import threading
 
 import pytest
 from PIL import Image
+from PIL.WebPImagePlugin import WebPImageFile
 
 from cartridges.utils import tocador_capas
 from cartridges.utils.tocador_capas import Tocador
@@ -406,3 +407,104 @@ def test_o_modulo_expoe_a_instancia_e_as_constantes():
     assert tocador_capas.TICK == pytest.approx(1 / 30)
     assert tocador_capas.FECHAR_APOS == 30.0
     assert tocador_capas.FALHAS_ATE_CORROMPIDA == 3
+
+
+def test_cadencia_de_quadros_curtos(banca, tmp_path):
+    """Quadros de 40 ms (25 fps) em ticks de 1/30 s têm de tocar a 25 fps."""
+    copia = criar_webp(tmp_path / "a.webp", [40, 40, 40, 40])
+    quadro, quadros, falhar, _ = banca.captura()
+    banca.tocador.tocar(object(), copia, quadro, falhar)
+    for k in range(30):
+        banca.relogio.t = k * tocador_capas.TICK
+        banca.tocador.passo()
+    assert 24 <= len(quadros) <= 26
+
+
+def test_durações_do_container_batem_com_as_do_pillow(tmp_path):
+    duracoes = [100, 50, 70, 33]
+    copia = criar_webp(tmp_path / "a.webp", duracoes)
+    dados = copia.read_bytes()
+    assert tocador_capas._duracoes_do_container(dados) == duracoes
+    with Image.open(copia) as imagem:
+        reais = []
+        for n in range(imagem.n_frames):
+            imagem.seek(n)
+            imagem.load()
+            reais.append(imagem.info["duration"])
+    assert reais == duracoes
+
+
+def test_abrir_nao_decodifica_os_outros_quadros(banca, tmp_path, monkeypatch):
+    copia = criar_webp(tmp_path / "a.webp", [100, 100, 100, 100])
+    chamadas = []
+    original = WebPImageFile.seek
+
+    def seek(self, frame):
+        chamadas.append(frame)
+        return original(self, frame)
+
+    monkeypatch.setattr(WebPImageFile, "seek", seek)
+    quadro, quadros, falhar, _ = banca.captura()
+    banca.tocador.tocar(object(), copia, quadro, falhar, posicao_inicial_ms=250)
+    banca.tocador.passo()
+
+    assert quadros == [2]
+    assert set(chamadas) <= {2}
+
+
+def test_container_malformado_cai_na_leitura_quadro_a_quadro(banca, tmp_path):
+    # Um WebP estático não tem blocos ANMF: nada a ler no contêiner.
+    estatico = tmp_path / "estatico.webp"
+    Image.new("RGB", (LARGURA, ALTURA), _cor(0)).save(estatico, lossless=True)
+    assert tocador_capas._duracoes_do_container(estatico.read_bytes()) is None
+    assert tocador_capas._duracoes_do_container(b"") is None
+    assert tocador_capas._duracoes_do_container(b"RIFF\0\0\0\0WEBPANMF") is None
+    animado = criar_webp(tmp_path / "a.webp", [100, 100]).read_bytes()
+    assert tocador_capas._duracoes_do_container(animado[:-10]) is None
+
+    quadro, quadros, falhar, falhas = banca.captura()
+    banca.tocador.tocar(object(), estatico, quadro, falhar)
+    banca.tocador.passo()
+    assert quadros == [0]
+    assert falhas == []
+
+
+def test_esquecer_a_copia_regravada_toca_o_conteudo_novo(banca, tmp_path):
+    copia = criar_webp(tmp_path / "a.webp", [100, 100, 100])
+    dono = object()
+    quadro, quadros, falhar, falhas = banca.captura()
+    banca.tocador.tocar(dono, copia, quadro, falhar)
+    banca.tocador.passo()
+    banca.relogio.t = 0.1
+    banca.tocador.passo()
+    assert quadros == [0, 1]
+
+    # Mesmo caminho, outras cores (a capa foi trocada e a cópia regenerada).
+    novos = [Image.new("RGB", (LARGURA, ALTURA), _cor(i + 5)) for i in range(2)]
+    novos[0].save(
+        copia, save_all=True, append_images=novos[1:], duration=[100, 100], lossless=True
+    )
+    banca.tocador.esquecer(copia)
+    assert banca.tocador.posicao_ms(dono) == 0
+    banca.relogio.t = 0.2
+    banca.tocador.passo()
+    assert quadros == [0, 1, 5]  # quadro 0 do conteúdo novo
+    assert falhas == []
+
+
+def test_esquecer_fecha_a_pausada_e_ignora_outras_copias(banca, tmp_path):
+    a = criar_webp(tmp_path / "a.webp", [100, 100])
+    b = criar_webp(tmp_path / "b.webp", [100, 100])
+    pausada, outra = object(), object()
+    quadro, quadros, falhar, _ = banca.captura()
+    banca.tocador.tocar(pausada, a, quadro, falhar)
+    banca.tocador.tocar(outra, b, quadro, falhar)
+    banca.tocador.passo()
+    banca.relogio.t = 0.1
+    banca.tocador.passo()
+    banca.tocador.parar(pausada)
+
+    banca.tocador.esquecer(a)
+
+    assert banca.tocador.posicao_ms(pausada) == 0
+    assert banca.tocador.posicao_ms(outra) == 100
