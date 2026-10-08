@@ -2922,6 +2922,50 @@ def test_filtrar_com_a_grade_cabendo_na_tela_reavalia_o_autoplay(
         real_window.destroy()
 
 
+def test_pagina_por_cima_da_biblioteca_para_as_capas_dela(
+    real_window, store, gif, capas_falsas, schema
+):
+    """O ``notify::visible-page`` sai no começo da transição, com a biblioteca
+    ainda mapeada: sem reavaliar quando ela some de fato, as capas seguiam
+    tocando por baixo dos detalhes ou dos zerados."""
+    from cartridges.game import Game
+    from cartridges.game_cover import GameCover
+
+    schema.set_boolean("cover-autoplay", True)
+    game = Game(
+        {
+            "source": "imported",
+            "game_id": "imported_p",
+            "name": "Zelda",
+            "executable": "x.exe",
+            "added": 0,
+        }
+    )
+    real_window.library.append(game)
+    cover = GameCover({game.cover}, gif)
+    real_window.game_covers[game.game_id] = cover
+
+    real_window.set_default_size(1000, 700)
+    real_window.present()
+    try:
+        _iterar(500)
+        assert cover._visible_active, "à vista: toca"
+
+        real_window.navigation_view.push(real_window.zerados_library_page)
+        _iterar(800)
+        assert not cover._visible_active, "coberta por outra página: para"
+
+        real_window.navigation_view.pop()
+        _iterar(800)
+        assert cover._visible_active, "de volta à biblioteca: toca de novo"
+
+        real_window.set_visible(False)
+        _iterar(500)
+        assert not cover._visible_active, "janela escondida: para"
+    finally:
+        real_window.destroy()
+
+
 def _ao_mudar_autoplay(schema):
     """O que a janela ligou a ``changed::cover-autoplay`` (uma só ligação)."""
     ligados = [f for sinal, f in schema.handlers if sinal == "changed::cover-autoplay"]

@@ -358,6 +358,14 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.library.ao_realocar = self.agendar_autoplay
         self.zerados_library.ao_realocar = self.agendar_autoplay
         self.navigation_view.connect("notify::visible-page", self.agendar_autoplay)
+        # O ``notify::visible-page`` sai no começo da transição, com a página
+        # que sai ainda mapeada: o debounce cairia antes de ela sumir. O
+        # ``hidden``/``shown`` sai depois da transição. A janela escondida (ao
+        # fechar com tarefas rodando) também desmapeia tudo sem rolar nada.
+        for pagina in (self.library_page, self.zerados_library_page):
+            pagina.connect("hidden", self.agendar_autoplay)
+            pagina.connect("shown", self.agendar_autoplay)
+        self.connect("notify::visible", self.agendar_autoplay)
         self.session_blocker.connect("notify::visible", self.agendar_autoplay)
         self.connect(
             "realize",
