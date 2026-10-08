@@ -75,7 +75,8 @@ def gerar(
 
     Devolve False, sem gravar nada, se a origem não é animada (menos de 2
     quadros, contados depois da fusão) ou se ``vigente()`` diz, no fim, que a
-    capa mudou no meio da geração. Se a origem não abre, o erro de leitura
+    capa mudou ou o app fechou no meio da geração (``vigente`` é consultada a
+    cada quadro lido e antes da troca final). Se a origem não abre, o erro de leitura
     (``OSError``, ``ValueError``, ``Image.DecompressionBombError``) sobe para
     quem chamou decidir o que mostrar. Se é a gravação que falha, sobe
     ``GravacaoFalhou``, sem deixar ``.tmp`` para trás.
@@ -94,6 +95,10 @@ def gerar(
     # um quadro por vez, se o pico incomodar.
     with Image.open(origem) as imagem:
         for quadro in ImageSequence.Iterator(imagem):
+            # Uma capa com centenas de quadros leva segundos: se a capa mudou
+            # ou o app está fechando, para já em vez de ler o resto.
+            if not vigente():
+                return False
             # No WebP o Pillow só preenche info["duration"] ao decodificar o
             # quadro; lida antes, sai vazia e todo quadro valeria 100 ms.
             quadro.load()
@@ -116,9 +121,15 @@ def gerar(
             temporario, "WEBP", save_all=True, append_images=quadros[1:],
             duration=duracoes, loop=0, quality=90, method=4,
         )  # fmt: skip
-        if not vigente():
-            return False
-        temporario.replace(destino)
+        # A checagem e a troca formam um passo só em relação ao ``apagar``,
+        # que invalida e apaga com a mesma trava: o rename cai antes da
+        # invalidação (e o glob do ``apagar`` o remove) ou depois (e é pulado).
+        # Sem isto a cópia da capa velha podia aparecer depois da troca.
+        # ``vigente`` não pode pegar a trava, ou travaria aqui.
+        with _trava:
+            if not vigente():
+                return False
+            temporario.replace(destino)
         return True
     except OSError as erro:
         raise GravacaoFalhou(destino) from erro
@@ -140,8 +151,8 @@ class _Trabalho:
 # Trocado pelos testes. Dois trabalhos por vez: cada um segura todos os quadros
 # de uma capa em memória.
 _executor = ThreadPoolExecutor(max_workers=2)
-# Guarda ``_trabalhos`` e os campos de cada ``_Trabalho``. Nunca é segurada ao
-# chamar ``gerar`` ou um ``pronto``.
+# Guarda ``_trabalhos`` e os campos de cada ``_Trabalho``. ``gerar`` a pega só
+# na checagem final e no rename; nunca durante a geração nem num ``pronto``.
 _trava = threading.Lock()
 _trabalhos: dict[Path, _Trabalho] = {}  # destino -> trabalho pendente ou rodando
 
@@ -218,6 +229,19 @@ def apagar(game_id: str) -> None:
             arquivo.unlink(missing_ok=True)
         except OSError:
             logging.warning("Não foi possível apagar a cópia animada %s", arquivo.name)
+
+
+def encerrar() -> None:
+    """Invalida todos os trabalhos, pendentes e em andamento. Para fechar o app.
+
+    O executor não é daemon: sem isto o interpretador esperaria a geração em
+    curso (segundos numa capa grande) e todo trabalho ainda na fila. Os
+    pendentes saem sem gerar e os em andamento param no próximo quadro.
+    """
+    with _trava:
+        for trabalho in _trabalhos.values():
+            trabalho.invalido = True
+        _trabalhos.clear()
 
 
 def cancelar_pendentes() -> None:

@@ -6,6 +6,8 @@
 
 """Cópias reduzidas das capas animadas (`utils/copias_animadas.py`)."""
 
+import threading
+
 import pytest
 from PIL import Image
 
@@ -361,3 +363,90 @@ def test_apagar_remove_todos_os_tamanhos():
 
 def test_apagar_sem_pasta_nao_levanta():
     copias_animadas.apagar("g1")
+
+
+# --- Troca atômica com a invalidação e encerramento --------------------------
+
+
+def test_apagar_entre_a_checagem_e_a_troca_nao_deixa_a_copia_velha(
+    fila, tmp_path, monkeypatch
+):
+    origem = _animada(tmp_path / "g1.webp", [100, 100])
+    destino = shared.capas_animadas_dir / "g1_200x300.webp"
+    recebidos = []
+    trocar = copias_animadas.Path.replace
+    apagador = []
+
+    def trocar_com_apagar_em_paralelo(self, alvo):
+        # A capa muda exatamente aqui: depois de vigente() dar True e antes do
+        # rename. O apagar tem de esperar o rename acabar para depois apagá-lo.
+        apagador.append(threading.Thread(target=copias_animadas.apagar, args=("g1",)))
+        apagador[0].start()
+        apagador[0].join(0.3)
+        assert apagador[0].is_alive()  # preso na trava, não passou na frente
+        return trocar(self, alvo)
+
+    monkeypatch.setattr(copias_animadas.Path, "replace", trocar_com_apagar_em_paralelo)
+    copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
+    fila.rodar_tudo()
+    apagador[0].join(5)
+
+    assert not apagador[0].is_alive()
+    assert not destino.exists()
+    assert list(destino.parent.glob("*.tmp")) == []
+    assert recebidos == []
+
+
+def test_gerar_para_de_ler_quando_deixa_de_ser_vigente(tmp_path):
+    origem = _animada(tmp_path / "a.webp", [100] * 20)
+    destino = tmp_path / "copia.webp"
+    chamadas = []
+
+    def vigente():
+        chamadas.append(1)
+        return len(chamadas) <= 3
+
+    assert copias_animadas.gerar(origem, destino, (200, 300), vigente) is False
+    assert len(chamadas) == 4  # parou no 4º quadro, dos 20
+    assert not destino.exists()
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_encerrar_nao_deixa_trabalho_pendente_rodar(fila, tmp_path, monkeypatch):
+    origem, destino = _pedido(tmp_path)
+    recebidos, geradas = [], []
+    monkeypatch.setattr(
+        copias_animadas, "gerar", lambda *a, **k: geradas.append(1) or True
+    )
+    copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
+
+    copias_animadas.encerrar()
+    fila.rodar_tudo()
+
+    assert geradas == []
+    assert recebidos == []
+
+
+def test_encerrar_aborta_o_trabalho_em_andamento(fila, tmp_path, monkeypatch):
+    origem = _animada(tmp_path / "g1.webp", [100] * 20)
+    destino = tmp_path / "g1_200x300.webp"
+    recebidos, chamadas = [], []
+    original = copias_animadas.gerar
+
+    def gerar_e_encerrar(origem, destino, tamanho, vigente):
+        def contando():
+            chamadas.append(1)
+            if len(chamadas) == 3:
+                copias_animadas.encerrar()  # o app fecha no meio da leitura
+            return vigente()
+
+        return original(origem, destino, tamanho, contando)
+
+    monkeypatch.setattr(copias_animadas, "gerar", gerar_e_encerrar)
+    copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
+    fila.rodar_tudo()
+
+    assert len(chamadas) == 3
+    assert not destino.exists()
+    assert list(tmp_path.glob("*.tmp")) == []
+    assert recebidos == []
