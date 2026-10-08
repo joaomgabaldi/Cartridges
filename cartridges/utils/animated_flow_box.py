@@ -48,7 +48,7 @@ recentro da grade no instante do refluxo pertence ao pai (halign: center no
 capa dentro da grade.
 """
 
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from gi.repository import Adw, Graphene, Gsk, Gtk
 
@@ -106,6 +106,9 @@ class AnimatedFlowBox(Gtk.FlowBox):
         # progresso. Guardá-la evita recriar o objeto a cada refluxo.
         self._animation: Optional[Adw.SpringAnimation] = None
         self._allocating = False
+        # Chamado a cada alocação da grade: filtrar, ordenar, entrar ou sair
+        # jogo e redimensionar passam todos por aqui sem rolar nada.
+        self.ao_realocar: Optional[Callable[[], None]] = None
 
     def do_size_allocate(self, width: int, height: int, baseline: int) -> None:
         # O GtkFlowBox resolve a grade de verdade primeiro. Daqui para baixo é
@@ -119,6 +122,9 @@ class AnimatedFlowBox(Gtk.FlowBox):
             self._animate(width, height)
         finally:
             self._allocating = False
+
+        if self.ao_realocar is not None:
+            self.ao_realocar()
 
     def _animate(self, width: int, height: int) -> None:
         children = self._visible_children()

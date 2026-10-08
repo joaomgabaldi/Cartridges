@@ -352,6 +352,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
             ajuste = rolagem.get_vadjustment()
             ajuste.connect("value-changed", self.agendar_autoplay)
             ajuste.connect("changed", self.agendar_autoplay)
+        # Filtrar, ordenar e mudar o conteúdo de uma grade que cabe na tela não
+        # rola nada: o sinal é a grade ser realocada.
+        self.library.ao_realocar = self.agendar_autoplay
+        self.zerados_library.ao_realocar = self.agendar_autoplay
         self.navigation_view.connect("notify::visible-page", self.agendar_autoplay)
         self.session_blocker.connect("notify::visible", self.agendar_autoplay)
         self.connect(
@@ -482,6 +486,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
             if obj.handler_is_connected(handler_id):
                 obj.disconnect(handler_id)
         self._global_handler_ids = []
+        self.library.ao_realocar = self.zerados_library.ao_realocar = None
         if self._autoplay_id is not None:
             GLib.source_remove(self._autoplay_id)
             self._autoplay_id = None

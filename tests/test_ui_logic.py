@@ -2871,3 +2871,52 @@ def test_agendar_autoplay_reinicia_o_prazo_e_nao_deixa_tempo_ao_fechar(real_wind
 
     real_window.detach_global_handlers()
     assert real_window._autoplay_id is None
+
+
+def _iterar(janela_ms):
+    """Roda o laço principal por ``janela_ms`` (o debounce usa tempo real)."""
+    from time import monotonic
+
+    contexto = GLib.MainContext.default()
+    fim = monotonic() + janela_ms / 1000
+    while monotonic() < fim:
+        contexto.iteration(False)
+
+
+def test_filtrar_com_a_grade_cabendo_na_tela_reavalia_o_autoplay(
+    real_window, store, gif, capas_falsas, schema
+):
+    """Filtrar não rola nada: sem este gatilho, a capa filtrada seguia tocando
+    e a que voltava com a busca limpa ficava parada até a próxima rolagem."""
+    from cartridges.game import Game
+    from cartridges.game_cover import GameCover
+
+    schema.set_boolean("cover-autoplay", True)
+    game = Game(
+        {
+            "source": "imported",
+            "game_id": "imported_f",
+            "name": "Zelda",
+            "executable": "x.exe",
+            "added": 0,
+        }
+    )
+    real_window.library.append(game)
+    cover = GameCover({game.cover}, gif)
+    real_window.game_covers[game.game_id] = cover
+
+    real_window.set_default_size(1000, 700)
+    real_window.present()
+    try:
+        _iterar(500)
+        assert cover.active, "à vista e com a opção ligada: toca"
+
+        real_window.search_entry.set_text("halo")
+        _iterar(500)
+        assert not cover.active, "filtrada pela busca: para"
+
+        real_window.search_entry.set_text("")
+        _iterar(500)
+        assert cover.active, "de volta com a busca limpa: toca de novo"
+    finally:
+        real_window.destroy()
