@@ -50,6 +50,78 @@ def test_quadros_curtos_sao_fundidos(tmp_path):
         assert image.n_frames == 4
 
 
+def _vermelhos(caminho):
+    """O vermelho do primeiro pixel de cada quadro."""
+    with Image.open(caminho) as image:
+        resultado = []
+        for i in range(image.n_frames):
+            image.seek(i)
+            resultado.append(image.convert("RGBA").getpixel((0, 0))[0])
+        return resultado
+
+
+def test_quadro_curto_cede_a_imagem_ao_quadro_seguinte(tmp_path):
+    # O quadro de 16 ms é fundido ao de 500 ms: quem aparece pelos 516 ms é o
+    # de 500, não o relance de 16 ms esticado por meio segundo.
+    origem = _animada(tmp_path / "a.webp", [100, 16, 500], tons=[0, 120, 240])
+    destino = tmp_path / "copia.webp"
+
+    assert copias_animadas.gerar(origem, destino, (200, 300)) is True
+
+    assert _duracoes(destino) == [100, 516]
+    zero, fundido = _vermelhos(destino)
+    assert zero < 10
+    assert abs(fundido - 240) < 10
+
+
+def test_cancelar_no_meio_nao_codifica_o_resto(tmp_path, monkeypatch):
+    origem = _animada(tmp_path / "a.webp", [100] * 20)
+    destino = tmp_path / "copia.webp"
+    adicionados = []
+    original = copias_animadas._webp.WebPAnimEncoder
+
+    class Contando:
+        def __init__(self, *args):
+            self._enc = original(*args)
+
+        def add(self, quadro, *args):
+            adicionados.append(quadro is not None)
+            return self._enc.add(quadro, *args)
+
+        def assemble(self, *args):
+            return self._enc.assemble(*args)
+
+    monkeypatch.setattr(copias_animadas._webp, "WebPAnimEncoder", Contando)
+    chamadas = []
+
+    def vigente():
+        chamadas.append(1)
+        return len(chamadas) <= 5
+
+    assert copias_animadas.gerar(origem, destino, (200, 300), vigente) is False
+    # Parou no 6º quadro lido: só os já fechados foram codificados.
+    assert adicionados == [True] * 4
+    assert not destino.exists()
+
+
+def test_sem_o_codificador_quadro_a_quadro_grava_pelo_caminho_da_lista(
+    tmp_path, monkeypatch
+):
+    # A API do codificador é privada do Pillow: se sumir ou mudar, a cópia
+    # ainda sai, pelo ``save`` público.
+    monkeypatch.setattr(copias_animadas, "_webp", None)
+    monkeypatch.setattr(copias_animadas, "_sem_codificador", False)
+    origem = _animada(tmp_path / "a.webp", [100, 16, 500], tons=[0, 120, 240])
+    destino = tmp_path / "copia.webp"
+
+    assert copias_animadas.gerar(origem, destino, (200, 300)) is True
+
+    assert _duracoes(destino) == [100, 516]
+    assert abs(_vermelhos(destino)[1] - 240) < 10
+    with Image.open(destino) as image:
+        assert image.size == (200, 300)
+
+
 def test_grade_e_detalhes_tem_a_mesma_duracao_total(tmp_path):
     # Quadros repetidos e quase iguais: o libwebp os funde em um só, e com
     # perda isso depende dos pixels, ou seja, do tamanho. A contagem de quadros

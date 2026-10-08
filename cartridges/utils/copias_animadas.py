@@ -12,6 +12,7 @@ com os quadros curtos fundidos, então o player só decodifica o que mostra.
 """
 
 import contextlib
+import io
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -22,6 +23,11 @@ from typing import Callable, Literal
 from uuid import uuid4
 
 from PIL import Image, ImageSequence
+
+try:
+    from PIL import _webp
+except ImportError:  # Pillow sem WebP: ``_PorQuadro`` cai no caminho da lista
+    _webp = None  # pylint: disable=invalid-name
 
 from cartridges import shared
 from cartridges.utils import tarefas, tocador_capas
@@ -67,6 +73,128 @@ def caminho_para(origem: Path, tamanho: tuple[int, int]) -> Path:
     return origem.with_name(nome)
 
 
+class _CodificadorIndisponivel(Exception):
+    """O ``_webp.WebPAnimEncoder`` do Pillow sumiu ou mudou de assinatura."""
+
+
+# Vira True na primeira vez que o codificador quadro a quadro falha: daí em
+# diante toda cópia vai direto pelo caminho da lista, e o aviso sai uma vez só.
+_sem_codificador = False
+
+
+class _PorQuadro:
+    """Codifica cada quadro assim que ele chega, sem guardar a animação.
+
+    Usa a API privada do Pillow (``_webp.WebPAnimEncoder``), na mesma ordem
+    do ``WebPImagePlugin._save_all``: o ``save`` público só aceita a lista de
+    todos os quadros, e uma cópia de detalhes inteira em RAM chegava a 600 MB.
+    Qualquer ``AttributeError``/``TypeError`` vindo dela vira
+    ``_CodificadorIndisponivel``, e ``gerar`` refaz pela lista.
+    """
+
+    def __init__(self, tamanho: tuple[int, int]) -> None:
+        self._instante = 0
+        try:
+            # tamanho, fundo, loop, minimize_size, kmin, kmax, allow_mixed,
+            # verbose; kmin/kmax são os padrões do Pillow para com perda.
+            self._enc = _webp.WebPAnimEncoder(tamanho, 0, 0, False, 3, 5, False, False)
+        except (AttributeError, TypeError) as erro:
+            raise _CodificadorIndisponivel(erro) from erro
+
+    def add(self, quadro: Image.Image, duracao: int) -> None:
+        # lossless, quality, alpha_quality, method: os mesmos quality=90 e
+        # method=4 do caminho da lista.
+        try:
+            self._enc.add(quadro.getim(), self._instante, False, 90.0, 100.0, 4)
+        except (AttributeError, TypeError) as erro:
+            raise _CodificadorIndisponivel(erro) from erro
+        self._instante += duracao
+
+    def dados(self) -> bytes:
+        try:
+            # O quadro vazio fecha a animação: o instante dele dá a duração do
+            # último quadro.
+            self._enc.add(None, self._instante, False, 90.0, 100.0, 0)
+            dados = self._enc.assemble(b"", b"", b"")  # ICC, EXIF, XMP
+        except (AttributeError, TypeError) as erro:
+            raise _CodificadorIndisponivel(erro) from erro
+        if dados is None:
+            raise OSError("o codificador WebP não devolveu nada")
+        return dados
+
+
+class _EmLista:
+    """O caminho público do Pillow: todos os quadros na memória até o fim.
+
+    ponytail: só para o caso de a API privada do ``_PorQuadro`` mudar; o pico
+    aqui é a animação inteira reduzida (até ~600 MB numa cópia de detalhes).
+    """
+
+    def __init__(self) -> None:
+        self._quadros: list[Image.Image] = []
+        self._duracoes: list[int] = []
+
+    def add(self, quadro: Image.Image, duracao: int) -> None:
+        self._quadros.append(quadro)
+        self._duracoes.append(duracao)
+
+    def dados(self) -> bytes:
+        saida = io.BytesIO()
+        self._quadros[0].save(
+            saida, "WEBP", save_all=True, append_images=self._quadros[1:],
+            duration=self._duracoes, loop=0, quality=90, method=4,
+        )  # fmt: skip
+        return saida.getvalue()
+
+
+def _codificar(
+    dados: bytes,
+    tamanho: tuple[int, int],
+    vigente: Callable[[], bool],
+    saida: "_PorQuadro | _EmLista",
+) -> bytes | None:
+    """O WebP da cópia, ou None se não é animada ou deixou de ser vigente."""
+    # O quadro reduzido que ainda espera: a duração dele só é final quando o
+    # seguinte chega (um curto absorve o seguinte).
+    pendente: Image.Image | None = None
+    duracao_pendente = 0
+    entregues = 0
+    with Image.open(io.BytesIO(dados)) as imagem:
+        for quadro in ImageSequence.Iterator(imagem):
+            # Uma capa com centenas de quadros leva segundos: se a capa mudou
+            # ou o app está fechando, para já. Como cada quadro é codificado
+            # aqui mesmo, isto vale também para a codificação.
+            if not vigente():
+                return None
+            # No WebP o Pillow só preenche info["duration"] ao decodificar o
+            # quadro; lida antes, sai vazia e todo quadro valeria 100 ms.
+            quadro.load()
+            duracao = int(quadro.info.get("duration", 100)) or 100
+            reduzido = quadro.convert("RGBA").resize(tamanho, Image.LANCZOS)
+            if pendente is not None and duracao_pendente < QUADRO_MINIMO_MS:
+                # O curto some e cede o tempo ao seguinte, que é o que aparece:
+                # mostrar o relance curto pela duração do longo seria pior.
+                pendente = reduzido
+                duracao_pendente += duracao
+                continue
+            if pendente is not None:
+                saida.add(pendente, duracao_pendente)
+                entregues += 1
+            pendente, duracao_pendente = reduzido, duracao
+    if pendente is not None:
+        if not vigente():
+            return None
+        saida.add(pendente, duracao_pendente)
+        entregues += 1
+    if entregues < 2:
+        return None
+    try:
+        return saida.dados()
+    except OSError as erro:
+        # Falha de codificação não é origem ilegível.
+        raise GravacaoFalhou() from erro
+
+
 def gerar(
     origem: Path,
     destino: Path,
@@ -80,8 +208,8 @@ def gerar(
     capa mudou ou o app fechou no meio da geração (``vigente`` é consultada a
     cada quadro lido e antes da troca final). Se a origem não abre, o erro de leitura
     (``OSError``, ``ValueError``, ``Image.DecompressionBombError``) sobe para
-    quem chamou decidir o que mostrar. Se é a gravação que falha, sobe
-    ``GravacaoFalhou``, sem deixar ``.tmp`` para trás.
+    quem chamou decidir o que mostrar. Se é a codificação ou a gravação que
+    falha, sobe ``GravacaoFalhou``, sem deixar ``.tmp`` para trás.
 
     A fusão acima depende só da origem, mas o libwebp também funde quadros
     repetidos ou quase iguais ao gravar, e com perda isso depende dos pixels,
@@ -89,28 +217,18 @@ def gerar(
     detalhes pode divergir; a duração total, que a fusão preserva, não. Quem
     troca de uma cópia para a outra continua pelo tempo, não pelo quadro.
     """
-    quadros: list[Image.Image] = []
-    duracoes: list[int] = []
-    # ponytail: todos os quadros reduzidos ficam em RAM até o save (pico de
-    # ~216 MB na capa de 901 quadros, uma vez por capa); o Pillow só grava WebP
-    # animado a partir de uma lista. Alimentar o _webp.WebPAnimEncoder direto,
-    # um quadro por vez, se o pico incomodar.
-    with Image.open(origem) as imagem:
-        for quadro in ImageSequence.Iterator(imagem):
-            # Uma capa com centenas de quadros leva segundos: se a capa mudou
-            # ou o app está fechando, para já em vez de ler o resto.
-            if not vigente():
-                return False
-            # No WebP o Pillow só preenche info["duration"] ao decodificar o
-            # quadro; lida antes, sai vazia e todo quadro valeria 100 ms.
-            quadro.load()
-            duracao = int(quadro.info.get("duration", 100)) or 100
-            if duracoes and duracoes[-1] < QUADRO_MINIMO_MS:
-                duracoes[-1] += duracao
-                continue
-            quadros.append(quadro.convert("RGBA").resize(tamanho, Image.LANCZOS))
-            duracoes.append(duracao)
-    if len(quadros) < 2:
+    global _sem_codificador  # pylint: disable=global-statement
+    dados = origem.read_bytes()
+    webp: bytes | None = None
+    if not _sem_codificador:
+        try:
+            webp = _codificar(dados, tamanho, vigente, _PorQuadro(tamanho))
+        except _CodificadorIndisponivel as erro:
+            _sem_codificador = True
+            logging.debug("Cópias animadas sem o codificador quadro a quadro: %s", erro)
+    if _sem_codificador:
+        webp = _codificar(dados, tamanho, vigente, _EmLista())
+    if webp is None:
         return False
 
     # Grava ao lado e troca de nome no fim: quem vê o destino nunca pega uma
@@ -119,10 +237,7 @@ def gerar(
     temporario = destino.with_name(f"{destino.name}.{uuid4().hex}.tmp")
     try:
         destino.parent.mkdir(parents=True, exist_ok=True)
-        quadros[0].save(
-            temporario, "WEBP", save_all=True, append_images=quadros[1:],
-            duration=duracoes, loop=0, quality=90, method=4,
-        )  # fmt: skip
+        temporario.write_bytes(webp)
         # A checagem e a troca formam um passo só em relação ao ``apagar``,
         # que invalida e apaga com a mesma trava: o rename cai antes da
         # invalidação (e o glob do ``apagar`` o remove) ou depois (e é pulado).
@@ -150,8 +265,8 @@ class _Trabalho:
     invalido: bool = False
 
 
-# Trocado pelos testes. Dois trabalhos por vez: cada um segura todos os quadros
-# de uma capa em memória.
+# Trocado pelos testes. Dois trabalhos por vez: a geração é quase toda CPU, e
+# cada trabalho segura só a origem e um ou dois quadros reduzidos.
 _executor = ThreadPoolExecutor(max_workers=2)
 # Guarda ``_trabalhos`` e os campos de cada ``_Trabalho``. ``gerar`` a pega só
 # na checagem final e no rename; nunca durante a geração nem num ``pronto``.
