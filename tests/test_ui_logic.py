@@ -1013,6 +1013,310 @@ def test_editing_the_cover_refreshes_the_open_details_page(cover_file, app_dirs)
     ) == shared.details_size
 
 
+# ---------------------------------------------------------------------------
+# Capas animadas tocam pelas cópias e pelo tocador
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def gif(app_dirs):
+    """Uma capa animada da biblioteca, de dois quadros."""
+    from PIL import Image
+
+    path = app_dirs.covers / "imported_1.gif"
+    quadros = [Image.new("RGB", (60, 90), cor) for cor in ("red", "blue")]
+    quadros[0].save(path, save_all=True, append_images=quadros[1:], duration=100)
+    return path
+
+
+def _copias(origem):
+    """(grade, detalhes): onde ficam as duas cópias de ``origem``."""
+    from cartridges.utils import copias_animadas
+
+    grade, detalhes = copias_animadas.tamanhos()
+    return (
+        copias_animadas.caminho_para(origem, grade),
+        copias_animadas.caminho_para(origem, detalhes),
+    )
+
+
+def _gravar(*copias):
+    for copia in copias:
+        copia.parent.mkdir(parents=True, exist_ok=True)
+        copia.write_bytes(b"copia")  # o tocador falso nem abre
+
+
+def test_copia_ausente_mostra_o_quadro_parado_e_pede(gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    picture = Gtk.Picture()
+    cover = GameCover({picture}, gif)
+    cover.set_hover_animation(True)
+
+    assert [p.destino for p in capas_falsas.pedidos] == [_copias(gif)[0]]
+    assert capas_falsas.tocador.tocados == []
+    assert picture.get_paintable() is cover.texture is not None
+
+
+def test_copia_pronta_comeca_a_tocar(gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    cover = GameCover({Gtk.Picture()}, gif)
+    cover.set_hover_animation(True)
+    _gravar(_copias(gif)[0])
+    capas_falsas.pedidos[0].pronto("pronta")
+
+    assert [t.copia for t in capas_falsas.tocador.tocados] == [_copias(gif)[0]]
+
+
+def test_detalhes_trocam_de_copia_no_mesmo_instante(gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    grade, detalhes = _copias(gif)
+    _gravar(grade, detalhes)
+    cover = GameCover({Gtk.Picture()}, gif)
+    cover.set_hover_animation(True)
+    capas_falsas.tocador.posicao = 500
+    cover.set_details_animation(True)
+
+    ultimo = capas_falsas.tocador.tocados[-1]
+    assert (ultimo.copia, ultimo.inicio) == (detalhes, 500)
+
+
+def test_os_detalhes_tocam_a_grade_enquanto_a_copia_deles_sai(gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    grade, detalhes = _copias(gif)
+    _gravar(grade)
+    cover = GameCover({Gtk.Picture()}, gif)
+    cover.set_details_animation(True)
+
+    assert [p.destino for p in capas_falsas.pedidos] == [detalhes]
+    assert capas_falsas.tocador.tocados[-1].copia == grade
+
+    _gravar(detalhes)
+    capas_falsas.tocador.posicao = 700
+    capas_falsas.pedidos[0].pronto("pronta")
+    ultimo = capas_falsas.tocador.tocados[-1]
+    assert (ultimo.copia, ultimo.inicio) == (detalhes, 700)
+
+
+def test_origem_estatica_nao_pede_de_novo(gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    cover = GameCover({Gtk.Picture()}, gif)
+    cover.set_hover_animation(True)
+    capas_falsas.pedidos[0].pronto("estatica")
+    cover.set_hover_animation(False)
+    cover.set_hover_animation(True)
+
+    assert len(capas_falsas.pedidos) == 1
+    assert not cover.animada
+
+
+def test_origem_ilegivel_mostra_a_capa_padrao(gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    picture = Gtk.Picture()
+    cover = GameCover({picture}, gif)
+    cover.set_hover_animation(True)
+    capas_falsas.pedidos[0].pronto("ilegivel")
+
+    assert picture.get_paintable() is GameCover.placeholder
+    assert not cover.animada
+
+
+def test_gravacao_falha_fica_animada_sem_pedir_em_loop(gif, capas_falsas):
+    """Disco cheio: o quadro parado fica, e só o próximo reconcile pede de novo."""
+    from cartridges.game_cover import GameCover
+
+    cover = GameCover({Gtk.Picture()}, gif)
+    cover.set_hover_animation(True)
+    capas_falsas.pedidos[0].pronto("falhou")
+
+    assert len(capas_falsas.pedidos) == 1
+    assert cover.animada
+
+    cover.set_hover_animation(False)
+    cover.set_hover_animation(True)
+    assert len(capas_falsas.pedidos) == 2
+
+
+def test_copia_corrompida_e_regerada(gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    grade = _copias(gif)[0]
+    _gravar(grade)
+    cover = GameCover({Gtk.Picture()}, gif)
+    cover.set_hover_animation(True)
+    capas_falsas.tocador.tocados[-1].ao_falhar()
+
+    assert not grade.exists()
+    assert [p.destino for p in capas_falsas.pedidos] == [grade]
+
+
+def test_quadro_entregue_vira_a_textura_da_capa(gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    _gravar(_copias(gif)[0])
+    picture = Gtk.Picture()
+    cover = GameCover({picture}, gif)
+    cover.set_hover_animation(True)
+    capas_falsas.tocador.tocados[-1].ao_quadro(bytes(8 * 12 * 4), 8, 12)
+
+    textura = picture.get_paintable()
+    assert (textura.get_width(), textura.get_height()) == (8, 12)
+    assert cover.get_texture() is textura
+
+
+def test_nova_capa_para_e_descarta_os_quadros_da_antiga(gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    _gravar(_copias(gif)[0])
+    picture = Gtk.Picture()
+    cover = GameCover({picture}, gif)
+    cover.set_hover_animation(True)
+    capas_falsas.tocador.tocados[-1].ao_quadro(bytes(8 * 12 * 4), 8, 12)
+    ao_quadro = capas_falsas.tocador.tocados[-1].ao_quadro
+    capas_falsas.tocador.parados.clear()
+
+    cover.new_cover(gif)
+    assert cover in capas_falsas.tocador.parados
+    ao_quadro(bytes(8 * 12 * 4), 8, 12)  # já estava a caminho
+
+    assert cover.get_texture() is cover.texture
+    assert picture.get_paintable() is cover.texture
+
+
+def test_capa_sem_picture_para_de_tocar(gif, capas_falsas):
+    """Quem solta a última picture não precisa lembrar de desligar os motivos."""
+    from cartridges.game_cover import GameCover
+
+    _gravar(_copias(gif)[0])
+    picture = Gtk.Picture()
+    cover = GameCover({picture}, gif)
+    cover.set_visible_animation(True)
+    cover.release_picture(picture)
+    capas_falsas.tocador.tocados[-1].ao_quadro(bytes(8 * 12 * 4), 8, 12)
+    assert capas_falsas.tocador.parados[-1] is cover
+
+    tocados = len(capas_falsas.tocador.tocados)
+    cover.add_picture(Gtk.Picture())
+    assert len(capas_falsas.tocador.tocados) == tocados + 1
+
+
+def test_visivel_e_um_motivo_barato_e_idempotente(gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    _gravar(_copias(gif)[0])
+    cover = GameCover({Gtk.Picture()}, gif)
+    assert cover.animada and not cover.active
+
+    cover.set_visible_animation(True)
+    assert cover.active
+    cover.set_visible_animation(True)
+    assert len(capas_falsas.tocador.tocados) == 1
+
+    capas_falsas.tocador.parados.clear()
+    cover.set_visible_animation(False)
+    cover.set_visible_animation(False)
+    assert capas_falsas.tocador.parados == [cover]
+
+
+def test_capa_estatica_nao_e_animada(cover_file, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    cover = GameCover({Gtk.Picture()}, cover_file)
+    cover.set_hover_animation(True)
+
+    assert not cover.animada
+    assert capas_falsas.pedidos == [] and capas_falsas.tocador.tocados == []
+
+
+def test_capa_animada_de_verdade_toca_na_picture(app_dirs, monkeypatch):
+    """Ponta a ponta: cópia gerada de verdade, tocador de verdade, picture real.
+
+    O tocador é um novo, sem thread (ela viveria até o fim do processo), com o
+    ``passo`` rodando num timer do laço principal.
+    """
+    import time as time_mod
+
+    from PIL import Image
+    from cartridges.game_cover import GameCover
+    from cartridges.utils import tocador_capas
+    from cartridges.utils.tocador_capas import Tocador
+
+    path = app_dirs.covers / "imported_1.webp"
+    quadros = [Image.new("RGB", (60, 90), (40 * i, 0, 0)) for i in range(5)]
+    quadros[0].save(path, save_all=True, append_images=quadros[1:], duration=60)
+    tocador = Tocador(iniciar_thread=False)
+    monkeypatch.setattr(tocador_capas, "tocador", tocador)
+
+    picture = Gtk.Picture()
+    cover = GameCover({picture}, path)
+    trocas = []
+    picture.connect("notify::paintable", lambda p, _: trocas.append(p.get_paintable()))
+    cover.set_hover_animation(True)
+
+    timer = GLib.timeout_add(33, lambda: tocador.passo() or True)
+    try:
+        context = GLib.MainContext.default()
+        deadline = time_mod.monotonic() + 2.5
+        while time_mod.monotonic() < deadline and len(trocas) < 5:
+            context.iteration(False)
+            time_mod.sleep(0.005)
+    finally:
+        GLib.source_remove(timer)
+        cover.set_hover_animation(False)
+
+    assert len(trocas) >= 5, "a capa não trocou de quadro"
+
+
+def _jogo_com_capa_animada(game_id, origem):
+    import shutil
+
+    from cartridges import shared
+    from cartridges.game import Game
+
+    shutil.copyfile(origem, shared.covers_dir / f"{game_id}.gif")
+    return Game(
+        {
+            "game_id": game_id,
+            "name": "Probe",
+            "source": "imported",
+            "executable": "x.exe",
+            "added": 0,
+        }
+    )
+
+
+def test_fechar_a_edicao_sem_aplicar_para_a_capa_dela(
+    real_window, store, gif, capas_falsas
+):
+    from cartridges.details_dialog import DetailsDialog
+
+    dialog = DetailsDialog(_jogo_com_capa_animada("imported_11", gif))
+    assert dialog.game_cover.active
+
+    dialog.emit("closed")
+    assert not dialog.game_cover.active
+
+
+def test_aplicar_a_edicao_deixa_a_capa_sem_o_motivo_da_edicao(
+    real_window, store, gif, capas_falsas
+):
+    """A capa do diálogo vira a da grade; os detalhes dela eram do diálogo."""
+    from cartridges import shared
+    from cartridges.details_dialog import DetailsDialog
+
+    game = _jogo_com_capa_animada("imported_12", gif)
+    dialog = DetailsDialog(game)
+    dialog.apply_preferences()
+
+    assert shared.win.game_covers[game.game_id] is dialog.game_cover
+    assert not dialog.game_cover.active
+
+
 def test_an_unchanged_apply_keeps_the_computed_blur(real_window, store, app_dirs):
     """Apply replaces the game's GameCover with the dialog's own object; when
     the cover file did not change, the computed backdrop must ride along —

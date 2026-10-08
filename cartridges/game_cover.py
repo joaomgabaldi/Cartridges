@@ -21,14 +21,17 @@ import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from functools import partial
 from io import BytesIO
 from pathlib import Path
 from typing import Callable, Iterable, Iterator, Optional
 
 from gi.repository import Gdk, GdkPixbuf, GLib, Gtk
-from PIL import Image, ImageFilter, ImageSequence, ImageStat
+from PIL import Image, ImageFilter, ImageStat
 
 from cartridges import shared
+from cartridges.utils import copias_animadas, tocador_capas
+from cartridges.utils.copias_animadas import Resultado
 from cartridges.utils.na_tela import entregar_na_tela
 
 
@@ -57,12 +60,13 @@ class GameCover:
     luminance: Optional[tuple[float, float]] = None
     path: Optional[Path] = None
 
-    # Independent reasons to play the animation; it runs while either is set.
-    # Hover (library grid) and the details page are tracked separately so that
-    # leaving the grid cover does not stop an animation shown in the details view.
+    # Independent reasons to play the animation; it runs while any is set.
+    # Hover (library grid), the details page and being in view (autoplay) are
+    # tracked separately so that leaving the grid cover does not stop an
+    # animation shown in the details view.
     _hover_active: bool = False
     _details_active: bool = False
-    _anim_source_id: Optional[int] = None
+    _visible_active: bool = False
 
     # The details page draws the cover 1.4x larger than the grid does, so the
     # texture decoded for the grid comes out visibly soft there. This is the
@@ -78,29 +82,20 @@ class GameCover:
     # vez, fora do thread principal (decodificar o master 600x900 custa dezenas
     # de ms — era o engasgo da primeira abertura de cada jogo). A geração
     # invalida um cômputo em voo quando a capa troca no meio — o do desfoque e
-    # o dos quadros da animação; o callback é um só porque a página de
-    # detalhes só mostra um jogo por vez.
+    # os avisos da animação (cópia pronta, quadro, cópia corrompida); o
+    # callback do desfoque é um só porque a página de detalhes só mostra um
+    # jogo por vez.
     _blur_generation: int = 0
     _blur_loading: bool = False
     _blur_callback: Optional[Callable] = None
 
-    # An animated cover is shown as a still first frame until it actually needs
-    # to play. The frames are then decoded with Pillow off the main thread (which
-    # releases the GIL, unlike GdkPixbuf) into ready-to-draw textures.
+    # Uma capa animada aparece como o primeiro quadro parado até precisar
+    # tocar. Aí toca pela cópia reduzida em disco (`copias_animadas`), no
+    # tocador único (`tocador_capas`), que entrega um quadro por vez: nenhuma
+    # capa guarda a animação inteira na memória. `_frame_texture` é só o
+    # último quadro recebido.
     _animated_path: Optional[Path] = None
-    _animation_loading: bool = False
-    _frames: Optional[list[Gdk.Texture]] = None
-    _frame_durations: Optional[list[int]] = None
-    _frame_index: int = 0
-    _release_source_id: Optional[int] = None
-
-    # How long a paused animation keeps its decoded frames before they are
-    # dropped. A full frame set is width × height × 4 bytes per frame and the
-    # window's `game_covers` map never evicts, so without this every animated
-    # cover the pointer has ever crossed stays resident — tens of megabytes on
-    # a library with a handful of GIFs. The delay is what stops that from
-    # turning into a re-decode every time the pointer sweeps across the grid.
-    _FRAME_RELEASE_DELAY_SECONDS = 30
+    _frame_texture: Optional[Gdk.Texture] = None
 
     # Capas da abertura já decodificadas no tamanho da grade; ver
     # `pre_decodificadas`. Cada uma é usada uma vez.
@@ -155,23 +150,19 @@ class GameCover:
         self.new_cover(path)
 
     def new_cover(self, path: Optional[Path] = None) -> None:
-        # Cancel any timer still running for the previous cover
-        if self._anim_source_id is not None:
-            GLib.source_remove(self._anim_source_id)
-            self._anim_source_id = None
-        self._cancel_frame_release()
+        # A animação da imagem antiga para aqui; os quadros e avisos dela ainda
+        # a caminho são descartados pela geração, logo abaixo.
+        tocador_capas.tocador.parar(self)
         self._animated_path = None
-        self._animation_loading = False
-        self._frames = None
-        self._frame_durations = None
-        self._frame_index = 0
+        self._frame_texture = None
         self.texture = None
         self.blurred = None
         self.luminance = None
         # Um desfoque ainda sendo computado é da imagem antiga: a geração nova
-        # faz o resultado dele ser jogado fora quando aterrissar. O callback
-        # fica de pé — quem o registrou (a página de detalhes) não deixou de
-        # querer o fundo porque a imagem trocou; quer o da nova.
+        # faz o resultado dele ser jogado fora quando aterrissar (e o mesmo
+        # vale para os avisos da animação). O callback fica de pé — quem o
+        # registrou (a página de detalhes) não deixou de querer o fundo porque
+        # a imagem trocou; quer o da nova.
         self._blur_generation += 1
         self._blur_loading = False
         self.path = path
@@ -182,9 +173,8 @@ class GameCover:
 
         if path:
             if path.suffix.lower() in (".gif", ".webp"):
-                # Decoding a whole animation is expensive (seconds for a large
-                # WebP), so only show the first frame now and decode the rest
-                # lazily, in the background, when it needs to play.
+                # Só o primeiro quadro agora; a animação toca pela cópia
+                # reduzida quando algum motivo pedir (`_reconcile_animation`).
                 self._animated_path = path
                 self.texture = self._load_first_frame(path)
             else:
@@ -215,77 +205,6 @@ class GameCover:
                 return Gdk.Texture.new_from_bytes(GLib.Bytes.new(buffer.getvalue()))
         except (OSError, GLib.Error):
             return self._load_display_texture(path)
-
-    def _begin_loading_animation(self) -> None:
-        """Decode every frame off the main thread.
-
-        Pillow releases the GIL while decoding, so (unlike GdkPixbuf) this does
-        not freeze the UI. Frames are downscaled to the on-screen size and the
-        raw pixels handed back to the main thread to become textures.
-        """
-        self._animation_loading = True
-        path = self._animated_path
-        # A geração, e não o caminho, diz se a capa ainda é a mesma: trocar
-        # uma capa animada por outra do mesmo jogo regrava o MESMO arquivo, e
-        # comparar caminhos instalaria os quadros da antiga.
-        generation = self._blur_generation
-        width, height = (int(value) for value in shared.display_size)
-
-        def worker() -> None:
-            frames: list[bytes] = []
-            durations: list[int] = []
-            try:
-                with Image.open(path) as image:
-                    for frame in ImageSequence.Iterator(image):
-                        durations.append(int(frame.info.get("duration", 100)))
-                        rgba = frame.convert("RGBA").resize((width, height))
-                        frames.append(rgba.tobytes())
-            except (OSError, ValueError):
-                frames, durations = [], []
-            entregar_na_tela(
-                self._frames_decoded, generation, frames, durations, width, height
-            )
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _frames_decoded(
-        self,
-        generation: int,
-        frames: list[bytes],
-        durations: list[int],
-        width: int,
-        height: int,
-    ) -> bool:
-        # The cover may have been replaced while the animation was decoding.
-        # Clearing the flag unconditionally was a race: `new_cover` had already
-        # cleared it and a decode for the *new* path could be running, so this
-        # stale callback declared that second worker finished. The next hover
-        # then saw "no frames, not loading" and started a third thread decoding
-        # the same file.
-        if generation != self._blur_generation:
-            return False
-
-        self._animation_loading = False
-        if len(frames) < 2:
-            self._animated_path = None  # Not actually animated; keep the still
-            return False
-
-        stride = width * 4
-        self._frames = [
-            Gdk.MemoryTexture.new(
-                width,
-                height,
-                Gdk.MemoryFormat.R8G8B8A8,
-                GLib.Bytes.new(raw),
-                stride,
-            )
-            for raw in frames
-        ]
-        self._frame_durations = durations
-        self._frame_index = 0
-        if self.active and self._anim_source_id is None:
-            self._schedule_frame()
-        return False
 
     def _load_display_texture(
         self, path: Path, size: Optional[tuple] = None
@@ -330,9 +249,7 @@ class GameCover:
             return None
 
     def get_texture(self) -> Gdk.Texture:
-        if self._frames:
-            return self._frames[self._frame_index]
-        return self.texture
+        return self._frame_texture or self.texture
 
     @staticmethod
     def _compute_blur(
@@ -441,15 +358,17 @@ class GameCover:
         self.pictures.add(picture)
         picture.set_paintable(self._paintable_for(picture))
         picture.queue_draw()
+        # Sem picture a animação para sozinha (`_quadro`); com uma de volta,
+        # retoma se algum motivo segue ligado.
+        self._reconcile_animation()
 
     def add_details_picture(self, picture: Gtk.Picture) -> None:
         """Drive ``picture`` as the details page's cover, at its own size.
 
         Only still covers get their own texture. An animated one is about to
-        start playing from frames decoded at the grid's size, so a sharper
-        still would show for an instant and then be replaced — and decoding a
-        whole second frame set at this size is the cost this design exists to
-        avoid paying.
+        start playing, and the copy it plays already comes at this size (or,
+        while that copy is being made, the grid's one stretched), so a sharper
+        still would only show for an instant before being replaced.
         """
         self._details_picture = picture
         if self._details_texture is None and self.path and not self._animated_path:
@@ -477,15 +396,10 @@ class GameCover:
     def _paintable_for(self, picture: Gtk.Picture) -> Gdk.Paintable:
         """What ``picture`` should be showing right now.
 
-        The details picture gets the sharper texture, but only while a still is
-        on screen: once the animation frames exist they are what everything
-        draws, so the two views stay on the same frame.
+        The details picture gets the sharper texture. Only still covers have
+        one, so an animated cover draws the same frame in every picture.
         """
-        if (
-            picture is self._details_picture
-            and self._details_texture is not None
-            and not self._frames
-        ):
+        if picture is self._details_picture and self._details_texture is not None:
             return self._details_texture
         return self.get_texture() or self.placeholder
 
@@ -493,10 +407,10 @@ class GameCover:
         """Stop driving ``picture``; another cover has taken it over.
 
         Handing a picture to a new cover is not enough on its own: this one goes
-        on repainting every picture it still lists, and `_release_frames` does
-        exactly that half a minute after it was paused — long after a cover swap
-        looked finished, the library thumbnail would quietly revert to the old
-        artwork's first frame.
+        on repainting every picture it still lists whenever a frame of its
+        animation arrives (one already on its way when it was paused, or any
+        after it plays again) — long after a cover swap looked finished, the
+        library thumbnail would quietly revert to the old artwork.
 
         `discard`, because the caller cannot always know whether this cover ever
         held the picture (a game edited twice, a details page rebuilt in
@@ -518,7 +432,12 @@ class GameCover:
     @property
     def active(self) -> bool:
         """Whether the animation should currently be playing"""
-        return self._hover_active or self._details_active
+        return self._hover_active or self._details_active or self._visible_active
+
+    @property
+    def animada(self) -> bool:
+        """Se a capa é animada (GIF/WebP de mais de um quadro, até onde se sabe)."""
+        return self._animated_path is not None
 
     def set_hover_animation(self, playing: bool) -> None:
         """Play while the pointer hovers the cover in the library grid"""
@@ -530,71 +449,107 @@ class GameCover:
         self._details_active = playing
         self._reconcile_animation()
 
+    def set_visible_animation(self, playing: bool) -> None:
+        """Toca enquanto a capa está à vista na grade (reprodução automática).
+
+        A janela chama isto em toda parada de rolagem, para cada capa animada:
+        sem mudança, não faz nada.
+        """
+        if playing == self._visible_active:
+            return
+        self._visible_active = playing
+        self._reconcile_animation()
+
     def _reconcile_animation(self) -> None:
-        """Start or pause playback to match the current active state"""
-        if not self.active:
-            self._pause_animation()
+        """Toca ou pausa conforme os motivos.
+
+        Com algum motivo ligado, toca a cópia do tamanho em que a capa aparece
+        (a dos detalhes com a página de detalhes, senão a da grade). A troca de
+        uma cópia para a outra segue do mesmo instante: as duas têm a mesma
+        duração total, mas não necessariamente os mesmos quadros. A cópia que
+        falta é pedida a cada reconcile: a fila junta os pedidos repetidos, e um
+        pedido cancelado não avisa ninguém, então um "pedido em andamento"
+        guardado aqui poderia nunca mais deixar pedir.
+        """
+        tocador = tocador_capas.tocador
+        if not (self.active and self._animated_path):
+            tocador.parar(self)
             return
 
-        # Playing again: the frames are needed, so call off their release.
-        self._cancel_frame_release()
-
-        if self._frames is not None:
-            if self._anim_source_id is None:
-                self._schedule_frame()
-        elif self._animated_path is not None and not self._animation_loading:
-            # First time this cover needs to animate: decode it in the background
-            self._begin_loading_animation()
-
-    def _pause_animation(self) -> None:
-        """Stop playback, leaving the current frame on screen."""
-        if self._anim_source_id is not None:
-            GLib.source_remove(self._anim_source_id)
-            self._anim_source_id = None
-
-        # Nothing is watching this cover any more, so its decoded frames are
-        # dead weight — but only after a grace period, so sweeping the pointer
-        # back over the same cover does not pay for a full re-decode.
-        if self._frames is not None and self._release_source_id is None:
-            self._release_source_id = GLib.timeout_add_seconds(
-                self._FRAME_RELEASE_DELAY_SECONDS, self._release_frames
+        origem = self._animated_path
+        geracao = self._blur_generation
+        grade, detalhes = copias_animadas.tamanhos()
+        tamanho = detalhes if self._details_active else grade
+        copia = copias_animadas.caminho_para(origem, tamanho)
+        if not copia.is_file():
+            copias_animadas.pedir(
+                origem, copia, tamanho, partial(self._copia_pronta, geracao)
             )
+            # Os detalhes tocam a cópia da grade, ampliada, até a deles sair.
+            copia = copias_animadas.caminho_para(origem, grade)
+            if not copia.is_file():
+                tocador.parar(self)
+                self._frame_texture = None
+                self.set_texture(self.texture)
+                return
 
-    def _cancel_frame_release(self) -> None:
-        if self._release_source_id is not None:
-            GLib.source_remove(self._release_source_id)
-            self._release_source_id = None
+        tocador.tocar(
+            self,
+            copia,
+            ao_quadro=partial(self._quadro, geracao),
+            ao_falhar=partial(self._copia_falhou, geracao, copia),
+            posicao_inicial_ms=tocador.posicao_ms(self),
+        )
 
-    def _release_frames(self) -> bool:
-        """Drop the decoded frame set, leaving the still first frame on screen."""
-        self._release_source_id = None
-        if self.active:  # started playing again while the timer was pending
-            return False
+    def _copia_pronta(self, geracao: int, resultado: Resultado) -> None:
+        """O fim de um pedido de cópia. Thread principal."""
+        if geracao != self._blur_generation:
+            return  # pedido da imagem anterior
+        if resultado == "pronta":
+            self._reconcile_animation()
+        elif resultado in ("estatica", "ilegivel"):
+            # Um quadro só, ou nem abre: deixa de ser animada. A ilegível
+            # mostra a capa padrão, como um jogo sem capa.
+            self._animated_path = None
+            tocador_capas.tocador.parar(self)
+            self._frame_texture = None
+            if resultado == "ilegivel":
+                self.texture = None
+            self.set_texture(self.texture)
+        # "falhou" (disco cheio, sem permissão): fica como está e continua
+        # animada; o próximo reconcile pede de novo. Pedir daqui seria um loop.
 
-        self._frames = None
-        self._frame_durations = None
-        self._frame_index = 0
-        # `texture` is the cheap first frame decoded in `new_cover`; putting it
-        # back keeps the cover looking identical to how the animation left it
-        # rather than blanking to the placeholder.
-        self.set_texture(self.texture)
-        return False
+    def _quadro(self, geracao: int, dados: bytes, largura: int, altura: int) -> None:
+        """Um quadro do tocador, em RGBA. Thread principal."""
+        if geracao != self._blur_generation or self._animated_path is None:
+            return  # quadro da imagem anterior, já a caminho quando ela trocou
+        if not self.pictures:
+            # Ninguém mostra mais esta capa: quem a soltou não precisa lembrar
+            # de desligar cada motivo. `add_picture` retoma.
+            tocador_capas.tocador.parar(self)
+            return
+        self._frame_texture = Gdk.MemoryTexture.new(
+            largura,
+            altura,
+            Gdk.MemoryFormat.R8G8B8A8,
+            GLib.Bytes.new(dados),
+            largura * 4,
+        )
+        self.set_texture(self._frame_texture)
 
-    def _schedule_frame(self) -> None:
-        delay = 100
-        if self._frame_durations:
-            delay = self._frame_durations[self._frame_index]
-        self._anim_source_id = GLib.timeout_add(max(20, delay), self._advance_frame)
+    def _copia_falhou(self, geracao: int, copia: Path) -> None:
+        """O tocador desistiu da cópia (três leituras seguidas falharam).
 
-    def _advance_frame(self) -> bool:
-        self._anim_source_id = None
-        if not (self._frames and self.active and self.pictures):
-            # Playback can also stop here — a cover whose last Gtk.Picture was
-            # taken away never goes through `_reconcile_animation`. Route it
-            # through the same pause so its frames are released too.
-            self._pause_animation()
-            return False
-        self._frame_index = (self._frame_index + 1) % len(self._frames)
-        self.set_texture(self._frames[self._frame_index])
-        self._schedule_frame()
-        return False
+        A cópia está corrompida: apaga e reconcilia, que a pede de novo. Se já
+        não existe (a capa acabou de trocar e as cópias foram apagadas), não é
+        corrupção, e o reconcile basta.
+        """
+        if geracao == self._blur_generation:
+            try:
+                copia.unlink(missing_ok=True)
+            except OSError as erro:
+                # Presa: reconciliar tocaria a mesma cópia e falharia de novo,
+                # em loop. Fica no último quadro até o próximo motivo.
+                logging.warning("Cópia animada %s não apagada: %s", copia.name, erro)
+                return
+        self._reconcile_animation()

@@ -512,6 +512,11 @@ class DetailsDialog(Adw.Dialog):
 
     def _on_closed(self, *_args: Any) -> None:
         self._closed = True
+        # Fechado sem aplicar, a capa deste diálogo não vai para lugar nenhum:
+        # o tocador a seguraria tocando sem ninguém ver. Aplicada, ela já
+        # passou para a biblioteca (e soltou a picture do diálogo).
+        if self.cover in self.game_cover.pictures:
+            self.game_cover.set_details_animation(False)
         self.discard_wallpaper_tmp()
         self._discard_tmp("_logo_tmp")
         self._discard_tmp("_cover_tmp")
@@ -694,9 +699,9 @@ class DetailsDialog(Adw.Dialog):
             old_cover.set_details_animation(False)
             # Pausing it is not enough: the grid's Gtk.Picture is about to be
             # driven by the new cover, but the old one still lists it and
-            # `_release_frames` repaints everything it lists half a minute after
-            # being paused. The library thumbnail would flip back to the previous
-            # artwork's first frame long after the edit looked applied.
+            # repaints everything it lists whenever a frame of its animation
+            # arrives. The library thumbnail would flip back to the previous
+            # artwork long after the edit looked applied.
             old_cover.release_picture(self.game.cover)
 
             # Capa inalterada: o desfoque já computado vale para o objeto novo.
@@ -777,6 +782,9 @@ class DetailsDialog(Adw.Dialog):
         # discard (not remove): a double activation (Enter + click racing the
         # dialog close) must not raise KeyError on the second pass
         self.game_cover.pictures.discard(self.cover)
+        # A capa agora é a da biblioteca: tocar nos detalhes era deste diálogo.
+        # A página de detalhes, se for mostrada abaixo, liga de novo.
+        self.game_cover.set_details_animation(False)
 
         # Only jump to the game's details page if that's where the edit was
         # opened from; otherwise stay on the current screen (e.g. the library).

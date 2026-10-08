@@ -626,3 +626,55 @@ def _quadro_de_tarefas_limpo():
             break
         contexto.iteration(False)
     tarefas.lista.remove_all()
+
+
+@pytest.fixture
+def capas_falsas(monkeypatch):
+    """O tocador e a fila das cópias animadas, falsos, para testar o GameCover.
+
+    O tocador de verdade sobe uma thread que vive até o fim do processo, e a
+    fila gera cópias em segundo plano. Aqui o tocador só anota o que pediram e
+    ``pedir`` guarda os pedidos, com o ``pronto`` de cada um para o teste
+    chamar quando quiser.
+    """
+    from cartridges.utils import copias_animadas, tocador_capas  # noqa: PLC0415
+
+    class TocadorFalso:
+        def __init__(self):
+            self.tocados = []
+            self.parados = []
+            self.posicao = 0
+
+        def tocar(self, dono, copia, ao_quadro, ao_falhar, posicao_inicial_ms=0):
+            self.tocados.append(
+                types.SimpleNamespace(
+                    dono=dono,
+                    copia=copia,
+                    ao_quadro=ao_quadro,
+                    ao_falhar=ao_falhar,
+                    inicio=posicao_inicial_ms,
+                )
+            )
+
+        def parar(self, dono):
+            self.parados.append(dono)
+
+        def posicao_ms(self, _dono):
+            return self.posicao
+
+        def esquecer(self, _copia):
+            pass
+
+    tocador = TocadorFalso()
+    pedidos = []
+    monkeypatch.setattr(tocador_capas, "tocador", tocador)
+    monkeypatch.setattr(
+        copias_animadas,
+        "pedir",
+        lambda origem, destino, tamanho, pronto: pedidos.append(
+            types.SimpleNamespace(
+                origem=origem, destino=destino, tamanho=tamanho, pronto=pronto
+            )
+        ),
+    )
+    return types.SimpleNamespace(tocador=tocador, pedidos=pedidos)

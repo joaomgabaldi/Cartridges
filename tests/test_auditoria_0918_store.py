@@ -231,33 +231,27 @@ def test_b9_bomba_nao_recursa_no_convert_cover(monkeypatch, tmp_path):
     assert convert_cover(arquivo) is None
 
 
-def test_b13_quadros_da_capa_antiga_nao_entram(monkeypatch, tmp_path):
+def test_b13_copia_da_capa_antiga_nao_toca(tmp_path, capas_falsas):
     from cartridges import game_cover  # noqa: PLC0415
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
 
     gif = tmp_path / "capa.gif"
     quadros = [Image.new("RGB", (8, 12), cor) for cor in ("red", "blue")]
     quadros[0].save(gif, save_all=True, append_images=quadros[1:], duration=50)
 
-    fila = []
-    monkeypatch.setattr(
-        game_cover.threading,
-        "Thread",
-        lambda target, daemon: SimpleNamespace(start=target),
-    )
-    monkeypatch.setattr(
-        game_cover.GLib,
-        "idle_add",
-        lambda funcao, *args, **_kw: fila.append((funcao, args)),
-    )
-
     capa = game_cover.GameCover(set(), gif)
-    capa._begin_loading_animation()
+    capa.set_hover_animation(True)
     # A capa troca por outra do mesmo jogo: mesmo arquivo, imagem nova.
     capa.new_cover(gif)
-    for funcao, args in fila:
-        funcao(*args)
+    antigo, novo = capas_falsas.pedidos
+    copia = copias_animadas.caminho_para(gif, copias_animadas.tamanhos()[0])
+    copia.write_bytes(b"copia")
 
-    assert capa._frames is None
+    antigo.pronto("pronta")
+    assert capas_falsas.tocador.tocados == []
+
+    novo.pronto("pronta")
+    assert [t.copia for t in capas_falsas.tocador.tocados] == [copia]
 
 
 def _stub_sgdb(store):
