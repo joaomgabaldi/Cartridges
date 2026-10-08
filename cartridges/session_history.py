@@ -295,6 +295,56 @@ HEADER_LOGO_MAX_WIDTH = DIALOG_WIDTH - 2 * MARGIN
 TABLE_MAX_HEIGHT = 440
 
 
+def cabecalho_do_jogo(
+    game: Game, max_width: int, max_height: int
+) -> tuple[Gtk.Widget, Optional[Gtk.Picture], Optional[Gtk.Label]]:
+    """O logo do jogo, ou o nome escrito quando não há logo, no topo de um
+    diálogo. Devolve o widget a pôr na tela, o logo e o nome (um dos dois é
+    ``None``).
+
+    Só o que já está em disco: a busca no SteamGridDB é da tela de detalhes,
+    de onde os diálogos são abertos. O logo *é* o título quando existe, então
+    os dois nunca aparecem juntos.
+
+    Só a largura é imposta, pelo clamp: a altura sai de height-for-width, e
+    a proporção do logo é preservada por construção. Um ``set_size_request``
+    no Picture não serve — ele é um piso, não um teto, e o widget receberia
+    a largura inteira da caixa, crescendo junto na altura.
+    """
+    path = cached_logo_path(game)
+    loaded = load_logo(path, max_width, max_height) if path else None
+    if not loaded:
+        nome = Gtk.Label(
+            label=game.name,
+            halign=Gtk.Align.CENTER,
+            wrap=True,
+            justify=Gtk.Justification.CENTER,
+        )
+        nome.add_css_class("title-1")
+        return nome, None, nome
+
+    texture, width = loaded
+    logo = Gtk.Picture(
+        paintable=texture,
+        content_fit=Gtk.ContentFit.CONTAIN,
+        can_shrink=True,
+        # Com `can_shrink` a altura mínima é zero, e uma página que rola dá a
+        # cada bloco só o mínimo: o logo sumia. O piso é a altura na largura
+        # pedida, a mesma que o height-for-width daria (que arredonda para cima).
+        height_request=math.ceil(width * texture.get_height() / texture.get_width()),
+    )
+    clamp = Adw.Clamp(
+        unit=Adw.LengthUnit.PX,
+        # Os dois no mesmo valor para o clamp parar de interpolar entre uma
+        # largura "apertada" e a cheia, e simplesmente alocar a pedida.
+        maximum_size=width,
+        tightening_threshold=width,
+        halign=Gtk.Align.CENTER,
+        child=logo,
+    )
+    return clamp, logo, None
+
+
 class SessionHistoryDialog(Adw.Dialog):
     """As sessões de um jogo, com a opção de apagar uma que contou errado.
 
@@ -343,51 +393,10 @@ class SessionHistoryDialog(Adw.Dialog):
         self.rebuild()
 
     def _build_header(self) -> Gtk.Widget:
-        """O logo do jogo, ou o nome escrito quando não há logo.
-
-        Só o que já está em disco: a busca no SteamGridDB é da tela de detalhes,
-        de onde esta aqui é aberta. O logo *é* o título quando existe, então os
-        dois nunca aparecem juntos.
-
-        Só a largura é imposta, pelo clamp: a altura sai de height-for-width, e
-        a proporção do logo é preservada por construção. Um ``set_size_request``
-        no Picture não serve — ele é um piso, não um teto, e o widget receberia
-        a largura inteira da caixa, crescendo junto na altura.
-        """
-        self.logo: Optional[Gtk.Picture] = None
-        self.name_label: Optional[Gtk.Label] = None
-
-        path = cached_logo_path(self.game)
-        loaded = (
-            load_logo(path, HEADER_LOGO_MAX_WIDTH, HEADER_LOGO_MAX_HEIGHT)
-            if path
-            else None
+        cabecalho, self.logo, self.name_label = cabecalho_do_jogo(
+            self.game, HEADER_LOGO_MAX_WIDTH, HEADER_LOGO_MAX_HEIGHT
         )
-        if not loaded:
-            self.name_label = Gtk.Label(
-                label=self.game.name,
-                halign=Gtk.Align.CENTER,
-                wrap=True,
-                justify=Gtk.Justification.CENTER,
-            )
-            self.name_label.add_css_class("title-1")
-            return self.name_label
-
-        texture, width = loaded
-        self.logo = Gtk.Picture(
-            paintable=texture,
-            content_fit=Gtk.ContentFit.CONTAIN,
-            can_shrink=True,
-        )
-        return Adw.Clamp(
-            unit=Adw.LengthUnit.PX,
-            # Os dois no mesmo valor para o clamp parar de interpolar entre uma
-            # largura "apertada" e a cheia, e simplesmente alocar a pedida.
-            maximum_size=width,
-            tightening_threshold=width,
-            halign=Gtk.Align.CENTER,
-            child=self.logo,
-        )
+        return cabecalho
 
     def _build_table(self) -> Gtk.Widget:
         """A lista de sessões, rolando a partir de ``TABLE_MAX_HEIGHT``.

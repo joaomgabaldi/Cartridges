@@ -56,14 +56,6 @@ class Progresso:
     def completo(self) -> bool:
         return self.total > 0 and self.feitas == self.total
 
-    @property
-    def em_ordem_da_sessao(self) -> tuple[Linha, ...]:
-        """A fila da tela de sessão: as desbloqueadas (mais recente primeiro),
-        depois as bloqueadas que se pode ver e, por último, as ocultas."""
-        visiveis = tuple(linha for linha in self.bloqueadas if not linha.info.oculta)
-        ocultas = tuple(linha for linha in self.bloqueadas if linha.info.oculta)
-        return self.desbloqueadas + visiveis + ocultas
-
 
 def montar(cat: Optional[Catalogo], hist: Optional[dict[str, int]]) -> Optional[Progresso]:
     if cat is None or not cat.conquistas:
@@ -78,6 +70,8 @@ def montar(cat: Optional[Catalogo], hist: Optional[dict[str, int]]) -> Optional[
     # Mais recente primeiro. `sort` é estável, então as sem data (0) ficam no
     # fim, na ordem do catálogo.
     feitas.sort(key=lambda linha: linha.quando or 0, reverse=True)
+    # As que se pode ver antes das ocultas, cada grupo na ordem do catálogo.
+    faltam.sort(key=lambda linha: linha.info.oculta)
     return Progresso(tuple(feitas), tuple(faltam))
 
 

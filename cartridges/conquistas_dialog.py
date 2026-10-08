@@ -15,9 +15,14 @@ from cartridges import shared
 from cartridges.conquistas import progresso
 from cartridges.conquistas.progresso import Linha, aparencia
 from cartridges.conquistas_sessao import imagem
+from cartridges.session_history import cabecalho_do_jogo
 from cartridges.utils.relative_date import relative_date
 
 _TAMANHO_ICONE = 36
+# A largura útil da caixa (520 menos as margens da página) e uma altura que
+# não empurra a lista para baixo da dobra.
+_LOGO_LARGURA = 472
+_LOGO_ALTURA = 96
 
 
 def _data(quando: int) -> Optional[str]:
@@ -49,18 +54,21 @@ class ConquistasDialog(Adw.Dialog):
         atual = progresso.do_jogo(game)
         mostrar_ocultas = shared.schema.get_boolean("conquistas-mostrar-ocultas")
 
-        titulo = Adw.WindowTitle(title=_("Conquistas"))
-        if atual is not None:
-            # A primeira variável é o nome do jogo; as outras, desbloqueadas e total
-            titulo.set_subtitle(
-                _("{} · {} de {}").format(game.name, atual.feitas, atual.total)
-            )
-        cabecalho = Adw.HeaderBar(title_widget=titulo)
+        # Como no histórico de sessões: o logo (ou o nome) abre o diálogo, e a
+        # barra fica sem título para não colar nele.
+        cabecalho = Adw.HeaderBar(show_title=False)
 
         pagina = Adw.PreferencesPage()
         if atual is not None:
             topo = Adw.PreferencesGroup()
-            topo.add(Gtk.ProgressBar(fraction=atual.fracao))
+            caixa = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+            caixa.append(cabecalho_do_jogo(game, _LOGO_LARGURA, _LOGO_ALTURA)[0])
+            # A primeira variável é quantas foram desbloqueadas; a segunda, o total
+            resumo = Gtk.Label(label=_("{} de {} conquistas desbloqueadas").format(atual.feitas, atual.total))
+            resumo.add_css_class("dim-label")
+            caixa.append(resumo)
+            caixa.append(Gtk.ProgressBar(fraction=atual.fracao))
+            topo.add(caixa)
             pagina.add(topo)
 
             for titulo_do_grupo, linhas, fileiras in (

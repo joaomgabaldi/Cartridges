@@ -23,7 +23,9 @@ def _ladrilho(tamanho: int, conteudo: Gtk.Widget) -> Gtk.Widget:
     conteudo.set_halign(Gtk.Align.CENTER)
     conteudo.set_valign(Gtk.Align.CENTER)
     conteudo.set_hexpand(True)
-    caixa = Gtk.Box(css_classes=["conquistas-ladrilho"])
+    # O `hexpand` do conteúdo subiria até a fileira da lista e empurraria o
+    # título para o meio; o ladrilho fica no seu quadrado.
+    caixa = Gtk.Box(css_classes=["conquistas-ladrilho"], hexpand=False, valign=Gtk.Align.CENTER)
     caixa.set_size_request(tamanho, tamanho)
     caixa.append(conteudo)
     return caixa
@@ -48,7 +50,8 @@ def imagem(visual: Aparencia, tamanho: int, interrogacao: int) -> Gtk.Widget:
     if visual.cinza:
         # O Xbox manda um ícone só: a bloqueada usa o mesmo, em cinza.
         figura.add_css_class("conquistas-icone-bloqueada")
-    pilha = Gtk.Stack()
+    # Centrada: o Gtk.Image estica a figura até a altura que receber.
+    pilha = Gtk.Stack(valign=Gtk.Align.CENTER)
     pilha.add_child(_ladrilho(tamanho, generico))
     pilha.add_child(figura)
 
@@ -120,7 +123,7 @@ class CartaoDaSessao(Gtk.Box):
         self.porcentagem.set_label(f"{atual.porcentagem}%")
         self.barra.set_fraction(atual.fracao)
         mostrar_ocultas = shared.schema.get_boolean("conquistas-mostrar-ocultas")
-        for linha in atual.em_ordem_da_sessao:
+        for linha in atual.desbloqueadas + atual.bloqueadas:
             self.icones.append(self._icone(linha, mostrar_ocultas))
 
     def _esvaziar(self) -> None:

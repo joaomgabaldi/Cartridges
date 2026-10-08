@@ -247,6 +247,9 @@ def test_the_logo_takes_the_place_of_the_title(real_window, store, source, shown
     assert isinstance(clamp, Adw.Clamp)
     assert clamp.get_maximum_size() == shown[0]
     assert dialog.logo.measure(Gtk.Orientation.VERTICAL, shown[0])[1] == shown[1]
+    # O mínimo também: uma página que rola (a do diálogo Conquistas) dá a cada
+    # bloco só a altura mínima, e com mínimo zero o logo sumia.
+    assert dialog.logo.measure(Gtk.Orientation.VERTICAL, shown[0])[0] == shown[1]
 
 
 def test_without_a_cached_logo_the_name_is_the_title(real_window, store):

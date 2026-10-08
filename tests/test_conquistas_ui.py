@@ -294,6 +294,15 @@ def test_oculta_desbloqueada_aparece_sempre(real_window, com_conquistas):
     assert dialogo.linhas_bloqueadas == []
 
 
+@pytest.mark.parametrize("oculta", [False, True])
+def test_icone_nao_estica_a_linha(real_window, oculta):
+    """O ícone fica no seu quadrado: se ele pedir a sobra da linha, o título é
+    empurrado para o meio e a imagem estica junto com a altura da linha."""
+    figura = conquistas_sessao.imagem(Aparencia("x.png", False, oculta), 36, 24)
+    assert not figura.compute_expand(Gtk.Orientation.HORIZONTAL)
+    assert figura.get_valign() == Gtk.Align.CENTER
+
+
 def _rotulos(widget):
     """Os textos de todos os Gtk.Label dentro de ``widget``."""
     textos = []
