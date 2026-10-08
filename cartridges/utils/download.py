@@ -27,7 +27,8 @@ bound size: it limits silence between bytes, not the total.
 """
 
 import threading
-from typing import Any
+import time
+from typing import Any, Callable, Optional
 
 import requests
 
@@ -45,7 +46,19 @@ MAX_WALLPAPER_BYTES = 50 * 1024 * 1024
 # largest real one — a HowLongToBeat /game/<id> page, ~1–2 MiB.
 MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 
+# Quem mostra o progresso redesenha a tela a cada chamada: dez por segundo já
+# fazem a barra andar, e um arquivo de 200 MB tem mais de três mil pedaços.
+INTERVALO_DO_PROGRESSO = 0.1
+
 _local = threading.local()
+
+
+class DownloadCancelado(Exception):
+    """Levantada pelo ``ao_progredir`` para interromper o download.
+
+    Não é ``requests.RequestException``: quem cancela não quer o aviso de
+    falha nem a tela de erro que os seletores mostram para uma falha de rede.
+    """
 
 
 class ResponseTooLargeError(requests.RequestException):
@@ -78,15 +91,29 @@ def _get(url: str, **kwargs: Any) -> requests.Response:
         session.cookies.clear()
 
 
-def read_capped(response: requests.Response, max_bytes: int) -> bytes:
+def read_capped(
+    response: requests.Response,
+    max_bytes: int,
+    ao_progredir: Optional[Callable[[int], None]] = None,
+) -> bytes:
     """Read a streamed body, raising :class:`ResponseTooLargeError` past
     ``max_bytes``. The request must have been made with ``stream=True``, or the
-    whole body is already in memory before this runs."""
+    whole body is already in memory before this runs.
+
+    ``ao_progredir`` recebe os bytes lidos até ali: no primeiro pedaço e depois
+    no máximo a cada :data:`INTERVALO_DO_PROGRESSO`. O que ele levantar sobe.
+    """
     buffer = bytearray()
+    ultima: Optional[float] = None
     for chunk in response.iter_content(chunk_size=64 * 1024):
         buffer.extend(chunk)
         if len(buffer) > max_bytes:
             raise ResponseTooLargeError(f"body exceeded {max_bytes} bytes")
+        if ao_progredir is not None:
+            agora = time.monotonic()
+            if ultima is None or agora - ultima >= INTERVALO_DO_PROGRESSO:
+                ultima = agora
+                ao_progredir(len(buffer))
     return bytes(buffer)
 
 
@@ -128,9 +155,17 @@ def request_capped(
 
 
 def download_bytes(
-    url: str, timeout: float = 10, max_bytes: int = MAX_IMAGE_BYTES
+    url: str,
+    timeout: float = 10,
+    max_bytes: int = MAX_IMAGE_BYTES,
+    ao_progredir: Optional[Callable[[int, Optional[int]], None]] = None,
 ) -> bytes:
     """Download ``url`` into memory, aborting if it exceeds ``max_bytes``.
+
+    ``ao_progredir(recebido, total)`` roda nesta thread (ver
+    :func:`read_capped`); ``total`` é o ``Content-Length``, ou ``None`` quando
+    o servidor não o informa. Para cancelar, ele levanta
+    :class:`DownloadCancelado`.
 
     :raises requests.HTTPError: on a 4xx/5xx response
     :raises ResponseTooLargeError: if the payload exceeds ``max_bytes``
@@ -140,12 +175,20 @@ def download_bytes(
 
         # Trust a declared length when it's clearly too big (fail fast), but
         # always enforce the cap while streaming since the header can be wrong.
+        total: Optional[int] = None
         declared = response.headers.get("Content-Length")
         if declared is not None:
             try:
-                if int(declared) > max_bytes:
-                    raise ResponseTooLargeError(url)
+                total = int(declared)
             except ValueError:
                 pass
+        if total is not None and total > max_bytes:
+            raise ResponseTooLargeError(url)
+        if total is not None and total <= 0:
+            total = None
 
-        return read_capped(response, max_bytes)
+        if ao_progredir is None:
+            return read_capped(response, max_bytes)
+        return read_capped(
+            response, max_bytes, lambda recebido: ao_progredir(recebido, total)
+        )
