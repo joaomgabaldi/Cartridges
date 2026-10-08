@@ -13,12 +13,13 @@ from cartridges import shared
 from cartridges.utils import copias_animadas
 
 
-def _animada(caminho, duracoes, formato="WEBP"):
-    """Grava uma capa animada pequena, com um quadro por duração."""
-    quadros = [
-        Image.new("RGBA", (8, 12), (i * 30 % 256, 0, 0, 255))
-        for i in range(len(duracoes))
-    ]
+def _animada(caminho, duracoes, formato="WEBP", tons=None):
+    """Grava uma capa animada pequena, com um quadro por duração.
+
+    ``tons`` dá o vermelho de cada quadro; por padrão, todos diferentes.
+    """
+    tons = tons or [i * 30 % 256 for i in range(len(duracoes))]
+    quadros = [Image.new("RGBA", (8, 12), (tom, 0, 0, 255)) for tom in tons]
     quadros[0].save(
         caminho, formato, save_all=True, append_images=quadros[1:],
         duration=duracoes, loop=0, lossless=True,
@@ -47,16 +48,20 @@ def test_quadros_curtos_sao_fundidos(tmp_path):
         assert image.n_frames == 4
 
 
-def test_grade_e_detalhes_tem_a_mesma_contagem(tmp_path):
-    origem = _animada(tmp_path / "a.webp", [16] * 6 + [100, 50])
+def test_grade_e_detalhes_tem_a_mesma_duracao_total(tmp_path):
+    # Quadros repetidos e quase iguais: o libwebp os funde em um só, e com
+    # perda isso depende dos pixels, ou seja, do tamanho. A contagem de quadros
+    # das duas cópias pode divergir; a duração total, não.
+    tons = [0, 0, 0, 2, 2, 200, 200, 202]
+    origem = _animada(tmp_path / "a.webp", [40] * 8, tons=tons)
     grade = tmp_path / "grade.webp"
     detalhes = tmp_path / "detalhes.webp"
 
     assert copias_animadas.gerar(origem, grade, (200, 300))
     assert copias_animadas.gerar(origem, detalhes, (280, 420))
 
+    assert sum(_duracoes(grade)) == sum(_duracoes(detalhes)) == 40 * 8
     with Image.open(grade) as g, Image.open(detalhes) as d:
-        assert g.n_frames == d.n_frames
         assert g.size == (200, 300)
         assert d.size == (280, 420)
 

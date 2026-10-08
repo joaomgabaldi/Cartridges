@@ -59,9 +59,11 @@ def gerar(
     (``OSError``, ``ValueError``, ``Image.DecompressionBombError``) sobe para
     quem chamou decidir o que mostrar.
 
-    A fusão depende só da origem, não do tamanho: a cópia da grade e a dos
-    detalhes têm a mesma contagem de quadros, e trocar de uma para a outra
-    pode continuar do mesmo quadro.
+    A fusão acima depende só da origem, mas o libwebp também funde quadros
+    repetidos ou quase iguais ao gravar, e com perda isso depende dos pixels,
+    ou seja, do tamanho. A contagem de quadros das cópias da grade e dos
+    detalhes pode divergir; a duração total, que a fusão preserva, não. Quem
+    troca de uma cópia para a outra continua pelo tempo, não pelo quadro.
     """
     quadros: list[Image.Image] = []
     duracoes: list[int] = []
