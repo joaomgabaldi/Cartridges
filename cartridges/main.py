@@ -327,8 +327,8 @@ def sanitize_game_fields(data: dict, record_name: str) -> dict:
 
 
 def limpar_e_preparar_capas_animadas() -> None:
-    """Limpa a pasta das cópias animadas e, se a opção está ligada, prepara as
-    que faltam.
+    """Limpa a pasta das cópias animadas e prepara as que faltam, com o
+    autoplay ligado ou não: quem liga a opção encontra as cópias prontas.
 
     A limpeza apaga todo ``.tmp`` da pasta, então precisa terminar antes de
     qualquer ``preparar``: ela roda numa thread de segundo plano, e só depois
@@ -351,7 +351,7 @@ def limpar_e_preparar_capas_animadas() -> None:
 
 
 def _preparar_capas_apos_a_limpeza() -> bool:
-    if shared.win is not None and shared.schema.get_boolean("cover-autoplay"):
+    if shared.win is not None:
         copias_animadas.preparar(shared.win.capas_na_ordem())
     return False  # o GLib repetiria o callback que devolvesse um valor verdadeiro
 

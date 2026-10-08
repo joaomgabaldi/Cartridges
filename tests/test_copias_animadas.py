@@ -222,7 +222,7 @@ def fila(monkeypatch):
     )
     yield executor
     # Nenhum estado da fila vaza para o teste seguinte.
-    copias_animadas.cancelar_pendentes()
+    copias_animadas.encerrar()
 
 
 def _pedido(tmp_path, nome="g1", animada=True):
@@ -316,25 +316,12 @@ def test_apagar_de_outro_jogo_nao_atrapalha(fila, tmp_path):
     assert recebidos == ["pronta"]
 
 
-def test_cancelar_pendentes(fila, tmp_path):
-    recebidos = []
-    for nome in ("g1", "g2"):
-        origem, destino = _pedido(tmp_path, nome)
-        copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
-
-    copias_animadas.cancelar_pendentes()
-    fila.rodar_tudo()
-
-    assert recebidos == []
-    assert list(tmp_path.glob("*_200x300.webp")) == []
-
-
-def test_pedido_depois_de_cancelar_roda(fila, tmp_path):
+def test_pedido_depois_de_encerrar_roda(fila, tmp_path):
     origem, destino = _pedido(tmp_path)
     recebidos = []
     copias_animadas.pedir(origem, destino, (200, 300), lambda _r: None)
 
-    copias_animadas.cancelar_pendentes()
+    copias_animadas.encerrar()
     copias_animadas.pedir(origem, destino, (200, 300), recebidos.append)
     fila.rodar_tudo()
 
@@ -892,16 +879,6 @@ def test_estatica_e_falhou_tambem_contam_como_feitos(
     ]
 
 
-def test_cancelar_termina_a_tarefa(fila, tarefas_criadas, geradas):
-    copias_animadas.preparar([_capa("a"), _capa("b")])
-
-    copias_animadas.cancelar_pendentes()
-    fila.rodar_tudo()
-
-    assert geradas == []
-    assert tarefas_criadas[0].eventos == [("terminar",)]
-
-
 def test_encerrar_termina_a_tarefa(fila, tarefas_criadas, geradas):
     copias_animadas.preparar([_capa("a")])
 
@@ -912,34 +889,15 @@ def test_encerrar_termina_a_tarefa(fila, tarefas_criadas, geradas):
     assert tarefas_criadas[0].eventos == [("terminar",)]
 
 
-def test_cancelar_sem_tarefa_nao_faz_nada(fila, tarefas_criadas):
-    copias_animadas.cancelar_pendentes()
+def test_encerrar_sem_tarefa_nao_faz_nada(fila, tarefas_criadas):
     copias_animadas.encerrar()
 
     assert tarefas_criadas == []
 
 
-def test_pronto_tardio_depois_de_cancelar_e_inofensivo(
-    fila, tarefas_criadas, monkeypatch, tocador_falso
-):
-    def gerar_e_cancelar(origem, destino, tamanho, vigente):
-        # O trabalho já roda quando o usuário desliga a opção: ele termina,
-        # mas a tarefa já se encerrou.
-        copias_animadas.cancelar_pendentes()
-        return True
-
-    monkeypatch.setattr(copias_animadas, "gerar", gerar_e_cancelar)
+def test_preparar_depois_de_encerrar_abre_tarefa_nova(fila, tarefas_criadas, geradas):
     copias_animadas.preparar([_capa("a")])
-
-    fila.rodar_tudo()
-
-    (tarefa,) = tarefas_criadas
-    assert tarefa.eventos == [("terminar",)]
-
-
-def test_preparar_depois_de_cancelar_abre_tarefa_nova(fila, tarefas_criadas, geradas):
-    copias_animadas.preparar([_capa("a")])
-    copias_animadas.cancelar_pendentes()
+    copias_animadas.encerrar()
 
     copias_animadas.preparar([_capa("a")])
     fila.rodar_tudo()

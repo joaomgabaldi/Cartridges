@@ -3193,40 +3193,23 @@ def _ao_mudar_autoplay(schema):
     return ligados[0]
 
 
-def test_ligar_o_autoplay_prepara_as_capas_na_ordem_da_grade(
-    real_window, store, gif, capas_falsas, schema, monkeypatch
+@pytest.mark.parametrize("ligado", [True, False])
+def test_mudar_o_autoplay_so_reavalia_o_que_toca(
+    real_window, store, schema, monkeypatch, ligado
 ):
+    """As cópias são preparadas com a opção ligada ou não: o toggle não mexe
+    na tarefa "Capas animadas", só no que toca."""
     from cartridges.utils import copias_animadas
 
     chamadas = []
-    monkeypatch.setattr(copias_animadas, "preparar", lambda c: chamadas.append(c))
-    monkeypatch.setattr(
-        copias_animadas, "cancelar_pendentes", lambda: chamadas.append("cancelar")
-    )
-    _capa_na_grade(real_window, real_window.library, "imported_a", "A", gif, capas_falsas)
+    monkeypatch.setattr(copias_animadas, "preparar", chamadas.append)
+    monkeypatch.setattr(copias_animadas, "encerrar", lambda: chamadas.append("x"))
 
-    schema.set_boolean("cover-autoplay", True)
+    schema.set_boolean("cover-autoplay", ligado)
     _ao_mudar_autoplay(schema)(schema, "cover-autoplay")
 
-    assert chamadas == [[("imported_a", gif)]]
-    assert real_window._autoplay_id is not None, "e a reavaliação continua agendada"
-
-
-def test_desligar_o_autoplay_cancela_o_que_esta_na_fila(
-    real_window, store, schema, monkeypatch
-):
-    from cartridges.utils import copias_animadas
-
-    chamadas = []
-    monkeypatch.setattr(copias_animadas, "preparar", lambda c: chamadas.append(c))
-    monkeypatch.setattr(
-        copias_animadas, "cancelar_pendentes", lambda: chamadas.append("cancelar")
-    )
-
-    schema.set_boolean("cover-autoplay", False)
-    _ao_mudar_autoplay(schema)(schema, "cover-autoplay")
-
-    assert chamadas == ["cancelar"]
+    assert chamadas == []
+    assert real_window._autoplay_id is not None
 
 
 def test_a_ligacao_do_autoplay_e_desfeita_ao_destruir_a_janela(real_window, schema):

@@ -61,7 +61,6 @@ def _jogos(store, *ids):
 
 def test_limpa_numa_thread_de_fundo_e_depois_prepara(abertura, store, schema):
     _jogos(store, "g1", "g2")
-    schema.set_boolean("cover-autoplay", True)
 
     main_module.limpar_e_preparar_capas_animadas()
 
@@ -87,17 +86,7 @@ def test_os_ids_sao_coletados_antes_da_thread_comecar(abertura, store, schema):
     assert abertura.eventos[0] == ("limpar", {"g1"})
 
 
-def test_com_a_opcao_desligada_so_limpa(abertura, store, schema):
-    _jogos(store, "g1")
-
-    main_module.limpar_e_preparar_capas_animadas()
-    _ThreadFalsa.criadas[0].target()
-
-    assert abertura.eventos == [("limpar", {"g1"})]
-
-
 def test_sem_janela_nao_prepara_nem_levanta(abertura, store, schema, monkeypatch):
-    schema.set_boolean("cover-autoplay", True)
     monkeypatch.setattr(shared, "win", None)
 
     main_module.limpar_e_preparar_capas_animadas()

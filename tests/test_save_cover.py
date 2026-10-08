@@ -103,12 +103,10 @@ def _gif(caminho):
     return caminho
 
 
-def test_capa_animada_nova_com_a_opcao_ligada_prepara_as_copias(
-    tmp_path, schema, entregas
-):
+def test_capa_animada_nova_prepara_as_copias(tmp_path, schema, entregas):
+    """Com o autoplay desligado (o padrão) também: quem liga a opção depois
+    encontra as cópias prontas."""
     from cartridges.utils import copias_animadas
-
-    schema.set_boolean("cover-autoplay", True)
 
     save_cover("g1", _gif(tmp_path / "nova.gif"))
 
@@ -116,14 +114,6 @@ def test_capa_animada_nova_com_a_opcao_ligada_prepara_as_copias(
     assert entregas == [
         (copias_animadas.preparar, ([("g1", shared.covers_dir / "g1.gif")],))
     ]
-
-
-def test_capa_animada_nova_com_a_opcao_desligada_nao_prepara(
-    tmp_path, schema, entregas
-):
-    save_cover("g1", _gif(tmp_path / "nova.gif"))
-
-    assert entregas == []
 
 
 def test_pedido_no_meio_da_troca_nao_deixa_copia_da_capa_velha(tmp_path, monkeypatch):
@@ -169,8 +159,6 @@ def test_pedido_no_meio_da_troca_nao_deixa_copia_da_capa_velha(tmp_path, monkeyp
 
 
 def test_capa_estatica_ou_removida_nao_prepara(tmp_path, schema, entregas):
-    schema.set_boolean("cover-autoplay", True)
-
     save_cover("g1", make_image(tmp_path / "nova.tiff"))
     save_cover("g1", None)
 

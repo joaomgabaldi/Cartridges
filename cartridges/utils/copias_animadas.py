@@ -266,7 +266,6 @@ def gerar(
 class _Trabalho:
     chave: str  # game_id: o que ``apagar`` usa para invalidar
     prontos: list[Callable[[Resultado], None]] = field(default_factory=list)
-    iniciado: bool = False
     # Vira True quando a capa muda ou o pedido é cancelado; o trabalho que já
     # rodava vê isso em ``vigente`` e descarta o resultado.
     invalido: bool = False
@@ -309,7 +308,6 @@ def _rodar(
     with _trava:
         if trabalho.invalido:
             return
-        trabalho.iniciado = True
     resultado: Resultado | None = None
     try:
         gravada = gerar(
@@ -463,20 +461,6 @@ def encerrar() -> None:
     _encerrar_lote()
 
 
-def cancelar_pendentes() -> None:
-    """Descarta o que ainda não começou; o que já roda segue até o fim.
-
-    Quem cancela não vai receber o aviso dos pedidos descartados, então a tarefa
-    "Capas animadas" também termina aqui. Sempre na thread principal.
-    """
-    with _trava:
-        for destino, trabalho in list(_trabalhos.items()):
-            if not trabalho.iniciado:
-                trabalho.invalido = True
-                del _trabalhos[destino]
-    _encerrar_lote()
-
-
 # --- A tarefa "Capas animadas" -------------------------------------------------
 
 
@@ -500,7 +484,7 @@ def preparar(capas: list[tuple[str, Path]]) -> None:
 
     Sempre na thread principal. Mostra uma só tarefa "Capas animadas" nas
     tarefas em andamento, que termina quando todo pedido voltou (``estatica``,
-    ``ilegivel`` e ``falhou`` também contam) ou quando é cancelada. Sem nada a
+    ``ilegivel`` e ``falhou`` também contam) ou quando o app fecha. Sem nada a
     gerar, não mostra tarefa nenhuma. Chamada durante uma tarefa em andamento,
     acrescenta as cópias novas a ela; cópia já esperada não conta duas vezes.
     """

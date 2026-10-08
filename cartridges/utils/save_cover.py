@@ -231,11 +231,12 @@ def save_cover(game_id: str, cover_path: Path) -> None:
 
     copias_animadas.apagar(game_id)
 
-    # Capa animada nova: as cópias reduzidas dela são geradas em segundo plano.
+    # Capa animada nova: as cópias reduzidas dela são geradas em segundo plano,
+    # com o autoplay ligado ou não.
     # Pela mesma entrega do ``apagar`` logo acima (que avisa a tarefa para não
     # esperar as cópias da capa velha): as duas chegam à thread principal na
     # ordem das chamadas, e a tarefa é dela.
-    if dest.suffix in ANIMATED_SUFFIXES and shared.schema.get_boolean("cover-autoplay"):
+    if dest.suffix in ANIMATED_SUFFIXES:
         entregar_na_tela(copias_animadas.preparar, [(game_id, dest)])
 
     # save_cover can be called from a worker thread (e.g. the async SgdbManager),
