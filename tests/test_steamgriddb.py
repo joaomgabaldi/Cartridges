@@ -12,6 +12,7 @@ then reported as a generic failure, so the one dialog that would have told them
 what to fix was the one they never saw.
 """
 
+import contextlib
 import json
 
 import pytest
@@ -162,3 +163,47 @@ def test_busca_automatica_animada_200_e_parada_25(make_game, schema, monkeypatch
         sgdb.SgdbHelper().conditionaly_update_cover(make_game())
 
     assert limites == [download.MAX_ANIMATED_IMAGE_BYTES, download.MAX_IMAGE_BYTES]
+
+
+def test_no_maximo_duas_capas_animadas_baixando_ao_mesmo_tempo(
+    make_game, schema, monkeypatch
+):
+    """A importação busca a capa de cada jogo numa thread própria, todas de uma
+    vez: sem teto, dez APNGs de 66 MB seguravam mais de 1 GB ao mesmo tempo."""
+    import threading
+    import time
+
+    trava = threading.Lock()
+    liberar = threading.Event()
+    estado = {"agora": 0, "pico": 0}
+
+    def baixar(_url, timeout=10, max_bytes=download.MAX_IMAGE_BYTES):
+        if max_bytes == download.MAX_ANIMATED_IMAGE_BYTES:
+            with trava:
+                estado["agora"] += 1
+                estado["pico"] = max(estado["pico"], estado["agora"])
+            liberar.wait(5)
+            with trava:
+                estado["agora"] -= 1
+        raise requests.RequestException("x")
+
+    schema["sgdb"] = True
+    schema["sgdb-animated"] = True
+    monkeypatch.setattr(sgdb.SgdbHelper, "get_game_id", lambda *_a: 1)
+    monkeypatch.setattr(sgdb.SgdbHelper, "get_image_uri", lambda *_a, **_k: "https://x/a.png")
+    monkeypatch.setattr(sgdb, "download_bytes", baixar)
+
+    def buscar(game_id):
+        with contextlib.suppress(sgdb.SgdbNoImageFound):
+            sgdb.SgdbHelper().conditionaly_update_cover(make_game(game_id=game_id))
+
+    threads = [threading.Thread(target=buscar, args=(f"g{i}",)) for i in range(3)]
+    for thread in threads:
+        thread.start()
+    time.sleep(0.3)  # tempo para a terceira entrar, se nada a segurar
+    pico = estado["pico"]
+    liberar.set()
+    for thread in threads:
+        thread.join(5)
+
+    assert pico == 2

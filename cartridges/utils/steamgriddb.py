@@ -18,7 +18,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import contextlib
 import logging
+import threading
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote
@@ -38,6 +40,10 @@ from cartridges.utils.download import (
 from cartridges.utils.name_cleaner import clean_for_search
 from cartridges.utils.save_cover import ANIMATED_SUFFIXES, convert_cover, save_cover
 from cartridges.utils.title_match import rank_candidates
+
+
+# Ver ``conditionaly_update_cover``.
+_downloads_animados = threading.BoundedSemaphore(2)
 
 
 class SgdbError(Exception):
@@ -266,39 +272,47 @@ class SgdbHelper:
         for uri_kwargs in image_uri_kwargs_sets:
             try:
                 uri = self.get_image_uri(sgdb_id, **uri_kwargs)
-                # download_bytes streams with a size cap and raises on HTTP
-                # errors, so an error page is never saved as a cover image
-                content = download_bytes(
-                    uri,
-                    timeout=10,
-                    max_bytes=MAX_ANIMATED_IMAGE_BYTES
+                # Só duas capas animadas por vez em toda a importação: cada jogo
+                # busca numa thread própria, todas de uma vez, e uma animada pode
+                # ter 200 MB (o dobro na RAM durante o download).
+                with (
+                    _downloads_animados
                     if uri_kwargs["animated"]
-                    else MAX_IMAGE_BYTES,
-                )
-                tmp_file_path = Path(Gio.File.new_tmp()[0].get_path())
-                converted = None
-                try:
-                    tmp_file_path.write_bytes(content)
-                    # `convert_cover` takes a Path (it reads `.suffix`); it used
-                    # to be handed the raw str and only survived because the
-                    # resize branch short-circuits before that attribute.
-                    converted = convert_cover(tmp_file_path)
-                    # A failed conversion returns None, and `save_cover` deletes
-                    # every existing cover for the game *before* it checks its
-                    # argument (passing None is how the details dialog clears a
-                    # cover). Handing the failure straight through therefore
-                    # destroyed the cover the game already had — a bad download
-                    # left it worse off than not trying at all.
-                    if converted is None:
-                        raise SgdbNoImageFound()
-                    save_cover(game.game_id, converted)
-                finally:
-                    # Remove the raw download and whatever temp the conversion
-                    # produced. Nothing downstream owns them: `save_cover`
-                    # copies, so both were being left in %TEMP% forever.
-                    tmp_file_path.unlink(missing_ok=True)
-                    if converted is not None and converted != tmp_file_path:
-                        converted.unlink(missing_ok=True)
+                    else contextlib.nullcontext()
+                ):
+                    # download_bytes streams with a size cap and raises on HTTP
+                    # errors, so an error page is never saved as a cover image
+                    content = download_bytes(
+                        uri,
+                        timeout=10,
+                        max_bytes=MAX_ANIMATED_IMAGE_BYTES
+                        if uri_kwargs["animated"]
+                        else MAX_IMAGE_BYTES,
+                    )
+                    tmp_file_path = Path(Gio.File.new_tmp()[0].get_path())
+                    converted = None
+                    try:
+                        tmp_file_path.write_bytes(content)
+                        # `convert_cover` takes a Path (it reads `.suffix`); it used
+                        # to be handed the raw str and only survived because the
+                        # resize branch short-circuits before that attribute.
+                        converted = convert_cover(tmp_file_path)
+                        # A failed conversion returns None, and `save_cover` deletes
+                        # every existing cover for the game *before* it checks its
+                        # argument (passing None is how the details dialog clears a
+                        # cover). Handing the failure straight through therefore
+                        # destroyed the cover the game already had — a bad download
+                        # left it worse off than not trying at all.
+                        if converted is None:
+                            raise SgdbNoImageFound()
+                        save_cover(game.game_id, converted)
+                    finally:
+                        # Remove the raw download and whatever temp the conversion
+                        # produced. Nothing downstream owns them: `save_cover`
+                        # copies, so both were being left in %TEMP% forever.
+                        tmp_file_path.unlink(missing_ok=True)
+                        if converted is not None and converted != tmp_file_path:
+                            converted.unlink(missing_ok=True)
             except SgdbAuthError as error:
                 # Let caller handle auth errors
                 raise error
