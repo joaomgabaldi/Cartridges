@@ -336,10 +336,10 @@ def limpar_e_preparar_capas_animadas() -> None:
     antes de a thread começar. Os tamanhos das cópias já são os finais: saem de
     ``shared``, preenchido na importação do módulo.
 
-    Janela mínima aceita: o hover numa capa pode pedir uma cópia antes de a
-    limpeza acabar, e ela pode apagar o ``.tmp`` dessa geração. O ``rename``
-    falha, o resultado é ``falhou``, a capa fica parada e tenta de novo no
-    próximo hover.
+    Janela aceita, quase impossível na prática: o hover numa capa pode pedir
+    uma cópia antes de a limpeza acabar, e ela pode apagar o ``.tmp`` dessa
+    geração. O ``replace`` falha, o resultado é ``falhou`` e a capa fica
+    parada até mudar ou até o app abrir de novo.
     """
     ids = {game.game_id for game in shared.store}
 

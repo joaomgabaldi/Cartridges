@@ -48,15 +48,19 @@ FALHAS_ATE_CORROMPIDA = 3
 class _Estado:
     """O que o tocador guarda de cada dono.
 
-    ``imagem`` e as listas de durações só são tocadas pela thread do tocador
-    (dentro de ``passo``). ``tocar`` nunca mexe nelas: troca de cópia criando
-    um estado novo. Assim a decodificação roda fora da trava sem disputar a
-    imagem com a thread principal.
+    A decodificação (``passo``) lê ``imagem`` e as listas de durações fora da
+    trava. ``tocar`` nunca mexe nelas: troca de cópia criando um estado novo.
+    ``esquecer`` zera ``imagem`` de outra thread, mas sob a trava e subindo a
+    ``versao``: o passo que estava lendo a imagem antiga (ou que estourou ao
+    achá-la vazia) descarta o resultado ao conferir a versão, sem contar falha.
     """
 
     copia: Path
     ao_quadro: Callable[[bytes, int, int], None]
     ao_falhar: Callable[[], None]
+    # A cópia fechou com a capa parada (30 s, excesso de paradas, ``esquecer``):
+    # o próximo ``tocar`` recomeça do arquivo. Opcional.
+    ao_fechar: Callable[[], None] | None
     # Instante do loop em que a cópia deve ser posicionada ao (re)abrir.
     inicial_ms: int
     prazo: float
@@ -170,6 +174,7 @@ class Tocador:
         ao_quadro: Callable[[bytes, int, int], None],
         ao_falhar: Callable[[], None],
         posicao_inicial_ms: int = 0,
+        ao_fechar: Callable[[], None] | None = None,
     ) -> None:
         """Começa (ou retoma) a capa ``dono``; o 1º quadro sai no próximo passo.
 
@@ -184,6 +189,7 @@ class Tocador:
                 # Mesma cópia ainda aberta: segue de onde parou.
                 estado.ao_quadro = ao_quadro
                 estado.ao_falhar = ao_falhar
+                estado.ao_fechar = ao_fechar
                 if estado.pausado_em is not None:
                     estado.pausado_em = None
                     estado.prazo = agora
@@ -193,6 +199,7 @@ class Tocador:
                     copia=copia,
                     ao_quadro=ao_quadro,
                     ao_falhar=ao_falhar,
+                    ao_fechar=ao_fechar,
                     inicial_ms=posicao_inicial_ms,
                     posicao=posicao_inicial_ms,
                     prazo=agora,
@@ -218,14 +225,16 @@ class Tocador:
         O caminho de uma cópia é estável, então a regravada tem o mesmo nome da
         anterior; sem isto, quem ainda a tem registrada seguiria tocando a
         antiga. Quem toca reabre o arquivo no próximo passo, do quadro 0; quem
-        está pausado é fechado. Não chama callbacks.
+        está pausado é fechado e recebe o ``ao_fechar``.
         """
+        fechadas = []
         with self._trava:
             for dono, estado in list(self._estados.items()):
                 if estado.copia != copia:
                     continue
                 if estado.pausado_em is not None:
                     del self._estados[dono]
+                    fechadas.append((dono, estado.ao_fechar))
                     continue
                 estado.imagem = None
                 estado.inicial_ms = 0
@@ -233,6 +242,7 @@ class Tocador:
                 estado.falhas = 0
                 estado.recomecou = True
                 estado.versao += 1
+        self._avisar_fechadas(fechadas)
 
     def suspender(self, suspenso: bool) -> None:
         """Suspende (True) ou retoma (False) todas as capas de uma vez.
@@ -270,6 +280,7 @@ class Tocador:
         o quadro é descartado e nada avança.
         """
         agora = self._agora()
+        fechadas = []
         with self._trava:
             pausadas = sorted(
                 (d for d, e in self._estados.items() if e.pausado_em is not None),
@@ -280,7 +291,7 @@ class Tocador:
             for dono in pausadas:
                 parada_ha = agora - self._estados[dono].pausado_em
                 if dono in excesso or parada_ha > FECHAR_APOS:
-                    del self._estados[dono]
+                    fechadas.append((dono, self._estados.pop(dono).ao_fechar))
             if self._suspenso:
                 # Uma sessão de jogo dura horas: a cópia fecha e, ao retomar,
                 # reabre no quadro que estava na tela. A versão nova descarta
@@ -361,6 +372,25 @@ class Tocador:
             self._entregar(self._aplicar)
         for ao_falhar in avisos:
             self._entregar(ao_falhar)
+        self._avisar_fechadas(fechadas)
+
+    def _avisar_fechadas(self, fechadas: list) -> None:
+        """Entrega o ``ao_fechar`` de cada (dono, ao_fechar). Fora da trava."""
+        for dono, ao_fechar in fechadas:
+            if ao_fechar is not None:
+                self._entregar(self._fechou, dono, ao_fechar)
+
+    def _fechou(self, dono: object, ao_fechar: Callable[[], None]) -> bool:
+        """Avisa que a cópia do dono fechou. Thread principal.
+
+        Não avisa quem voltou a tocar depois do fechamento: a capa já está
+        recebendo os quadros do estado novo.
+        """
+        with self._trava:
+            retomou = dono in self._estados
+        if not retomou:
+            ao_fechar()
+        return False  # o GLib repetiria o callback que devolvesse um valor verdadeiro
 
     def _aplicar(self) -> bool:
         """Aplica o quadro mais novo de cada dono. Thread principal.

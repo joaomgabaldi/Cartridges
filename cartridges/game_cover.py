@@ -93,13 +93,16 @@ class GameCover:
     # tocar. Aí toca pela cópia reduzida em disco (`copias_animadas`), no
     # tocador único (`tocador_capas`), que entrega um quadro por vez: nenhuma
     # capa guarda a animação inteira na memória. `_frame_texture` é só o
-    # último quadro recebido.
+    # último quadro recebido, solto quando o tocador fecha a cópia.
     _animated_path: Optional[Path] = None
     _frame_texture: Optional[Gdk.Texture] = None
     # Uma cópia desta capa terminou em "falhou" (disco cheio, falta de
     # memória): não se pede outra até a capa mudar, ou cada reconcile
-    # refaria de 10 a 25 s de geração para falhar de novo.
+    # refaria de 10 a 25 s de geração para falhar de novo. Vale também para a
+    # segunda cópia que o tocador não conseguiu ler: gerar a mesma origem do
+    # mesmo jeito daria o mesmo arquivo.
     _gravacao_falhou: bool = False
+    _copias_corrompidas: int = 0
 
     # Capas da abertura já decodificadas no tamanho da grade; ver
     # `pre_decodificadas`. Cada uma é usada uma vez.
@@ -160,6 +163,7 @@ class GameCover:
         self._animated_path = None
         self._frame_texture = None
         self._gravacao_falhou = False
+        self._copias_corrompidas = 0
         self.texture = None
         self.blurred = None
         self.luminance = None
@@ -517,6 +521,7 @@ class GameCover:
             ao_quadro=partial(self._quadro, geracao),
             ao_falhar=partial(self._copia_falhou, geracao, copia),
             posicao_inicial_ms=tocador.posicao_ms(self),
+            ao_fechar=partial(self._copia_fechada, geracao),
         )
 
     def _copia_pronta(self, geracao: int, resultado: Resultado) -> None:
@@ -558,19 +563,36 @@ class GameCover:
         )
         self.set_texture(self._frame_texture)
 
+    def _copia_fechada(self, geracao: int) -> None:
+        """O tocador fechou a cópia desta capa parada. Thread principal.
+
+        Volta ao primeiro quadro, que é de onde a animação recomeça, e solta
+        a textura do último quadro recebido.
+        """
+        if geracao != self._blur_generation or self._frame_texture is None:
+            return
+        self._frame_texture = None
+        self.set_texture(self.texture)
+
     def _copia_falhou(self, geracao: int, copia: Path) -> None:
         """O tocador desistiu da cópia (três leituras seguidas falharam).
 
-        A cópia está corrompida: apaga e reconcilia, que a pede de novo. Se já
-        não existe (a capa acabou de trocar e as cópias foram apagadas), não é
-        corrupção, e o reconcile basta.
+        A cópia está corrompida: apaga e reconcilia, que a pede de novo, uma
+        vez só por capa. Se já não existe (a capa acabou de trocar e as cópias
+        foram apagadas), não é corrupção, e o reconcile basta.
         """
         if geracao == self._blur_generation:
             try:
-                copia.unlink(missing_ok=True)
+                copia.unlink()
+            except FileNotFoundError:
+                pass
             except OSError as erro:
                 # Presa: reconciliar tocaria a mesma cópia e falharia de novo,
                 # em loop. Fica no último quadro até o próximo motivo.
                 logging.warning("Cópia animada %s não apagada: %s", copia.name, erro)
                 return
+            else:
+                self._copias_corrompidas += 1
+                if self._copias_corrompidas >= 2:
+                    self._gravacao_falhou = True
         self._reconcile_animation()

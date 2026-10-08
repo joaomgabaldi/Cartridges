@@ -711,3 +711,46 @@ def test_quadro_pendente_de_copia_esquecida_ou_capa_largada_e_descartado(tmp_pat
     principal.rodar()
 
     assert recebidos == []
+
+
+# --- Aviso de cópia fechada ---------------------------------------------------
+
+
+def test_fechar_a_parada_avisa_o_dono(banca, tmp_path):
+    """A capa solta a textura do último quadro e volta ao primeiro."""
+    a = criar_webp(tmp_path / "a.webp", [100, 100])
+    b = criar_webp(tmp_path / "b.webp", [100, 100])
+    velha, esquecida, tocando = object(), object(), object()
+    quadro, _, falhar, _ = banca.captura()
+    fechadas = []
+    for dono, copia in ((velha, a), (esquecida, b), (tocando, b)):
+        banca.tocador.tocar(
+            dono, copia, quadro, falhar, ao_fechar=lambda d=dono: fechadas.append(d)
+        )
+    banca.tocador.passo()
+    banca.tocador.parar(velha)
+    banca.tocador.parar(esquecida)
+
+    banca.tocador.esquecer(b)
+    assert fechadas == [esquecida], "quem toca reabre: não fecha"
+    banca.relogio.t = 31
+    banca.tocador.passo()
+    assert fechadas == [esquecida, velha]
+
+
+def test_quem_volta_a_tocar_antes_do_aviso_nao_e_avisado(tmp_path):
+    copia = criar_webp(tmp_path / "a.webp", [100, 100])
+    relogio, principal, tocador = _tocador_com_a_principal_parada()
+    dono, fechadas = object(), []
+    tocar = lambda: tocador.tocar(  # noqa: E731
+        dono, copia, lambda *_: None, lambda: None, ao_fechar=lambda: fechadas.append(1)
+    )
+    tocar()
+    tocador.passo()
+    tocador.parar(dono)
+    relogio.t = 31
+    tocador.passo()
+
+    tocar()  # a thread principal retoma antes de o aviso rodar
+    principal.rodar()
+    assert fechadas == []

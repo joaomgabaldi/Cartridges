@@ -652,7 +652,15 @@ def capas_falsas(monkeypatch):
             self.parados = []
             self.posicao = 0
 
-        def tocar(self, dono, copia, ao_quadro, ao_falhar, posicao_inicial_ms=0):
+        def tocar(
+            self,
+            dono,
+            copia,
+            ao_quadro,
+            ao_falhar,
+            posicao_inicial_ms=0,
+            ao_fechar=None,
+        ):
             self.tocados.append(
                 types.SimpleNamespace(
                     dono=dono,
@@ -660,6 +668,7 @@ def capas_falsas(monkeypatch):
                     ao_quadro=ao_quadro,
                     ao_falhar=ao_falhar,
                     inicio=posicao_inicial_ms,
+                    ao_fechar=ao_fechar,
                 )
             )
 

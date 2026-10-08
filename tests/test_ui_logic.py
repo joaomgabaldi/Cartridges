@@ -1162,6 +1162,61 @@ def test_copia_corrompida_e_regerada(gif, capas_falsas):
     assert [p.destino for p in capas_falsas.pedidos] == [grade]
 
 
+def test_segunda_copia_corrompida_nao_e_regerada(gif, capas_falsas):
+    """Gerar a mesma origem do mesmo jeito daria o mesmo arquivo: cada volta
+    custaria de 10 a 25 s de CPU enquanto a capa estivesse à vista."""
+    from cartridges.game_cover import GameCover
+
+    grade = _copias(gif)[0]
+    _gravar(grade)
+    cover = GameCover({Gtk.Picture()}, gif)
+    cover.set_hover_animation(True)
+    capas_falsas.tocador.tocados[-1].ao_falhar()
+    _gravar(grade)
+    capas_falsas.pedidos[0].pronto("pronta")
+    capas_falsas.tocador.tocados[-1].ao_falhar()
+
+    assert not grade.exists()
+    assert len(capas_falsas.pedidos) == 1
+
+    cover.new_cover(gif)
+    assert len(capas_falsas.pedidos) == 2, "capa nova: pede de novo"
+
+
+def test_copia_que_sumiu_nao_conta_como_corrompida(gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    grade = _copias(gif)[0]
+    _gravar(grade)
+    cover = GameCover({Gtk.Picture()}, gif)
+    cover.set_hover_animation(True)
+    for _ in range(2):
+        grade.unlink()  # apagada por fora (troca de capa, limpeza)
+        capas_falsas.tocador.tocados[-1].ao_falhar()
+        _gravar(grade)
+        capas_falsas.pedidos[-1].pronto("pronta")
+    capas_falsas.tocador.tocados[-1].ao_falhar()  # a primeira corrompida
+
+    assert len(capas_falsas.pedidos) == 3
+
+
+def test_copia_fechada_volta_ao_primeiro_quadro(gif, capas_falsas):
+    from cartridges.game_cover import GameCover
+
+    _gravar(_copias(gif)[0])
+    picture = Gtk.Picture()
+    cover = GameCover({picture}, gif)
+    cover.set_hover_animation(True)
+    tocado = capas_falsas.tocador.tocados[-1]
+    tocado.ao_quadro(bytes(8 * 12 * 4), 8, 12)
+    cover.set_hover_animation(False)
+
+    tocado.ao_fechar()
+
+    assert cover.get_texture() is cover.texture
+    assert picture.get_paintable() is cover.texture
+
+
 def test_quadro_entregue_vira_a_textura_da_capa(gif, capas_falsas):
     from cartridges.game_cover import GameCover
 
