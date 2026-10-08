@@ -47,7 +47,11 @@ from PIL import Image, UnidentifiedImageError
 
 from cartridges import shared
 from cartridges.utils.busca_do_seletor import BuscaDoSeletor
-from cartridges.utils.download import MAX_WALLPAPER_BYTES, download_bytes
+from cartridges.utils.download import (
+    MAX_WALLPAPER_BYTES,
+    DownloadCancelado,
+    download_bytes,
+)
 from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.name_cleaner import clean_game_name
 from cartridges.utils.session_wallpaper import (
@@ -356,7 +360,7 @@ class WallpaperPicker(BuscaDoSeletor, Adw.Dialog):
     ) -> None:
         if not (item := self._results.get(child)):
             return
-        self.stack.set_visible_child_name("loading")
+        self._mostrar_download()
         threading.Thread(
             target=self._open_thread, args=(item, self._generation), daemon=True
         ).start()
@@ -364,7 +368,14 @@ class WallpaperPicker(BuscaDoSeletor, Adw.Dialog):
     def _open_thread(self, item: dict[str, Any], generation: int) -> None:
         url = str(item["path"])
         try:
-            conteudo = download_bytes(url, timeout=45, max_bytes=MAX_WALLPAPER_BYTES)
+            conteudo = download_bytes(
+                url,
+                timeout=45,
+                max_bytes=MAX_WALLPAPER_BYTES,
+                ao_progredir=self._ao_progredir,
+            )
+        except DownloadCancelado:
+            return
         except requests.RequestException as error:
             logging.warning("Não foi possível baixar o papel de parede: %s", error)
             entregar_na_tela(

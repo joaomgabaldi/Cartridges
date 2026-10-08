@@ -31,6 +31,7 @@
     <release version="2026.10.08" date="2026-10-08">
       <description translate="no">
         <ul>
+          <li>Ao escolher uma capa, um logo ou um papel de parede, agora aparece o andamento do download</li>
           <li>Agora as capas animadas podem ser reproduzidas automaticamente na biblioteca, com a opção em Preferências</li>
           <li>As capas animadas passaram a usar muito menos memória</li>
           <li>As capas animadas em PNG agora são reproduzidas, e capas animadas maiores podem ser baixadas</li>

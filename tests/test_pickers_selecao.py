@@ -47,7 +47,7 @@ def test_previa_atrasada_nao_tira_o_carregamento_da_escolha(criar, previa, monke
     picker._on_child_activated(picker.flowbox, filho)
     adicionar(picker, previa, geracao_da_busca)
 
-    assert picker.stack.get_visible_child_name() == "loading"
+    assert picker.stack.get_visible_child_name() == "downloading"
     assert picker.flowbox.get_child_at_index(1) is None
 
 
@@ -141,7 +141,7 @@ def _anotar_limites(monkeypatch, erro=None, conteudo=b""):
 
     limites = []
 
-    def baixar(_url, timeout=10, max_bytes=MAX_IMAGE_BYTES):
+    def baixar(_url, timeout=10, max_bytes=MAX_IMAGE_BYTES, ao_progredir=None):
         limites.append(max_bytes)
         if erro is not None:
             raise erro
@@ -208,6 +208,84 @@ def test_log_da_capa_escolhida_traz_o_tipo_do_erro(monkeypatch, caplog):
     picker._select_thread("https://x/7.png", True)
 
     assert "ResponseTooLargeError" in caplog.text
+
+
+# endregion
+
+
+# region Tela de download da escolha
+
+
+def _modulo(picker):
+    import sys  # noqa: PLC0415
+
+    return sys.modules[type(picker).__module__]
+
+
+def _baixar_falso(monkeypatch, picker, erro):
+    """Troca o download do seletor: anota o ``ao_progredir`` e levanta ``erro``.
+    Devolve a lista dos ``ao_progredir`` e a das entregas à thread principal."""
+    modulo = _modulo(picker)
+    recebidos, entregas = [], []
+
+    def baixar(_url, timeout=10, max_bytes=0, ao_progredir=None):
+        recebidos.append(ao_progredir)
+        raise erro
+
+    monkeypatch.setattr(modulo, "download_bytes", baixar)
+    monkeypatch.setattr(
+        modulo, "entregar_na_tela", lambda func, *args: entregas.append((func, args))
+    )
+    return recebidos, entregas
+
+
+@pytest.mark.parametrize("criar", [logo_picker, sgdb_picker])
+def test_escolha_baixa_com_progresso(criar, monkeypatch):
+    import requests  # noqa: PLC0415
+
+    picker = criar()
+    recebidos, _entregas = _baixar_falso(monkeypatch, picker, requests.RequestException("x"))
+
+    picker._select_thread("https://x/7.png")
+
+    assert recebidos == [picker._ao_progredir]
+
+
+@pytest.mark.parametrize("criar", [logo_picker, sgdb_picker])
+def test_download_cancelado_encerra_em_silencio(criar, monkeypatch, caplog):
+    from cartridges.utils.download import DownloadCancelado  # noqa: PLC0415
+
+    picker = criar()
+    _recebidos, entregas = _baixar_falso(monkeypatch, picker, DownloadCancelado())
+
+    picker._select_thread("https://x/7.png")
+
+    assert entregas == []
+    assert "Could not" not in caplog.text
+
+
+@pytest.mark.parametrize("criar", [logo_picker, sgdb_picker])
+def test_progresso_cancela_depois_de_fechar(criar):
+    from cartridges.utils.download import DownloadCancelado  # noqa: PLC0415
+
+    picker = criar()
+    picker._mostrar_download()
+    assert picker.stack.get_visible_child_name() == "downloading"
+
+    picker._on_closed()
+
+    with pytest.raises(DownloadCancelado):
+        picker._ao_progredir(1, 2)
+
+
+def test_mostrar_download_de_novo_zera_a_tela():
+    picker = logo_picker()
+    picker._mostrar_download()
+    picker._tela_de_download.atualizar(5, 10)
+
+    picker._mostrar_download()
+
+    assert picker._tela_de_download.barra.get_fraction() == 0.0
 
 
 # endregion

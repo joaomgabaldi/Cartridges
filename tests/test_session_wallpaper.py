@@ -711,7 +711,7 @@ class TestLimiteDoPapelDeParede:
 
         limites = []
 
-        def baixar(_url, timeout=10, max_bytes=MAX_IMAGE_BYTES):
+        def baixar(_url, timeout=10, max_bytes=MAX_IMAGE_BYTES, ao_progredir=None):
             limites.append(max_bytes)
             raise requests.RequestException("x")
 
@@ -753,6 +753,45 @@ class TestLimiteDoPapelDeParede:
         picker._miniatura({"thumb": "https://x/t.jpg", "id": 1}, picker._generation)
 
         assert limites == [MAX_IMAGE_BYTES]
+        picker.close()
+
+    def test_papel_de_parede_escolhido_mostra_progresso(self, win, monkeypatch) -> None:
+        import requests  # noqa: PLC0415
+
+        from cartridges import wallpaper_picker  # noqa: PLC0415
+
+        picker = self._picker(monkeypatch)
+        recebidos = []
+
+        def baixar(_url, timeout=10, max_bytes=0, ao_progredir=None):
+            recebidos.append(ao_progredir)
+            raise requests.RequestException("x")
+
+        monkeypatch.setattr(wallpaper_picker, "download_bytes", baixar)
+
+        picker._open_thread({"path": "https://x/p.jpg"}, picker._generation)
+
+        assert recebidos == [picker._ao_progredir]
+        picker.close()
+
+    def test_papel_de_parede_cancelado_encerra_em_silencio(self, win, monkeypatch) -> None:
+        from cartridges import wallpaper_picker  # noqa: PLC0415
+        from cartridges.utils.download import DownloadCancelado  # noqa: PLC0415
+
+        picker = self._picker(monkeypatch)
+        entregas = []
+
+        def baixar(*_a, **_k):
+            raise DownloadCancelado
+
+        monkeypatch.setattr(wallpaper_picker, "download_bytes", baixar)
+        monkeypatch.setattr(
+            wallpaper_picker, "entregar_na_tela", lambda *a: entregas.append(a)
+        )
+
+        picker._open_thread({"path": "https://x/p.jpg"}, picker._generation)
+
+        assert entregas == []
         picker.close()
 
     def test_busca_automatica_usa_50_mb(self, monkeypatch) -> None:

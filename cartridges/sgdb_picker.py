@@ -43,6 +43,7 @@ from cartridges.utils.busca_do_seletor import BuscaDoSeletor
 from cartridges.utils.download import (
     MAX_ANIMATED_IMAGE_BYTES,
     MAX_IMAGE_BYTES,
+    DownloadCancelado,
     download_bytes,
 )
 from cartridges.utils.na_tela import entregar_na_tela
@@ -281,7 +282,7 @@ class SgdbPicker(BuscaDoSeletor, Adw.Dialog):
         # depois trazia a grade de volta por cima do carregamento, e parecia
         # que o clique tinha buscado tudo de novo.
         self._generation += 1
-        self.stack.set_visible_child_name("loading")
+        self._mostrar_download()
         # O botão não muda sem uma busca nova, que limpa os resultados: ainda
         # diz de que tipo de busca este veio.
         animated = self.animated_button.get_active()
@@ -292,7 +293,14 @@ class SgdbPicker(BuscaDoSeletor, Adw.Dialog):
     def _select_thread(self, full_url: str, animated: bool = False) -> None:
         max_bytes = MAX_ANIMATED_IMAGE_BYTES if animated else MAX_IMAGE_BYTES
         try:
-            content = download_bytes(full_url, timeout=15, max_bytes=max_bytes)
+            content = download_bytes(
+                full_url,
+                timeout=15,
+                max_bytes=max_bytes,
+                ao_progredir=self._ao_progredir,
+            )
+        except DownloadCancelado:
+            return
         except requests.RequestException as error:
             logging.warning(
                 "Could not download chosen cover: %s: %s", type(error).__name__, error

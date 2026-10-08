@@ -44,7 +44,7 @@ from gi.repository import Adw, GdkPixbuf, Gio, GLib, Gtk
 from cartridges import shared
 from cartridges.game_cover import texture_from_pixbuf
 from cartridges.utils.busca_do_seletor import BuscaDoSeletor
-from cartridges.utils.download import download_bytes
+from cartridges.utils.download import DownloadCancelado, download_bytes
 from cartridges.utils.game_logo import IMAGE_SUFFIXES, pick_logo
 from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.name_cleaner import clean_game_name
@@ -292,14 +292,18 @@ class LogoPicker(BuscaDoSeletor, Adw.Dialog):
         # depois trazia a grade de volta por cima do carregamento, e parecia
         # que o clique tinha buscado tudo de novo.
         self._generation += 1
-        self.stack.set_visible_child_name("loading")
+        self._mostrar_download()
         threading.Thread(
             target=self._select_thread, args=(full_url,), daemon=True
         ).start()
 
     def _select_thread(self, full_url: str) -> None:
         try:
-            content = download_bytes(full_url, timeout=15)
+            content = download_bytes(
+                full_url, timeout=15, ao_progredir=self._ao_progredir
+            )
+        except DownloadCancelado:
+            return
         except requests.RequestException as error:
             logging.warning("Could not download the chosen logo: %s", error)
             entregar_na_tela(

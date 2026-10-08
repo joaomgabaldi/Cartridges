@@ -5,21 +5,28 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """O que os seletores com busca (logo, capa, papel de parede, Steam) fazem igual:
-esperar a pessoa parar de digitar e mostrar a página vazia com o motivo.
+esperar a pessoa parar de digitar, mostrar a página vazia com o motivo e, nos
+que baixam a imagem escolhida, a tela "Baixando…".
 
 Quem herda tem ``search_entry``, ``status_page``, ``stack`` (com a página
-``"empty"``), ``search()`` e os atributos ``_debounce_id``, ``_last_query`` e
-``_generation``. Vem antes de ``Adw.Dialog`` na lista de bases.
+``"empty"``), ``search()`` e os atributos ``_debounce_id``, ``_last_query``,
+``_generation`` e ``_closed``. Vem antes de ``Adw.Dialog`` na lista de bases.
 """
 
 from typing import Any, Optional
 
 from gi.repository import GLib
 
+from cartridges.utils.download import DownloadCancelado
+from cartridges.utils.na_tela import entregar_na_tela
+from cartridges.utils.tela_de_download import TelaDeDownload
+
 
 class BuscaDoSeletor:
     # Quanto esperar depois da última tecla antes de buscar.
     atraso_da_busca_ms = 500
+
+    _tela_de_download: Optional[TelaDeDownload] = None
 
     def _on_search_changed(self, *_args: Any) -> None:
         if self._debounce_id:
@@ -47,3 +54,22 @@ class BuscaDoSeletor:
         self.status_page.set_description(descricao)
         self.stack.set_visible_child_name("empty")
         return False
+
+    def _mostrar_download(self) -> None:
+        """Troca a grade pela tela "Baixando…", zerada. Na thread principal,
+        antes de a thread do download começar."""
+        if self._tela_de_download is None:
+            self._tela_de_download = TelaDeDownload()
+            self.stack.add_named(self._tela_de_download, "downloading")
+        self._tela_de_download.zerar()
+        self.stack.set_visible_child_name("downloading")
+
+    def _ao_progredir(self, recebido: int, total: Optional[int]) -> None:
+        """O ``ao_progredir`` do ``download_bytes`` da imagem escolhida.
+
+        Roda na thread do download. Com o seletor fechado, interrompe: sem
+        isso, uma capa animada de 200 MB seguia baixando escondida até o fim.
+        """
+        if self._closed:
+            raise DownloadCancelado
+        entregar_na_tela(self._tela_de_download.atualizar, recebido, total)
