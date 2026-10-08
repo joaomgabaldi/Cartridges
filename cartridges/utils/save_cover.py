@@ -28,6 +28,7 @@ from gi.repository import Gdk, GdkPixbuf, Gio, GLib
 from PIL import Image, UnidentifiedImageError
 
 from cartridges import shared
+from cartridges.utils import copias_animadas
 
 # Cover formats that hold an animation and are stored in their original form
 ANIMATED_SUFFIXES = (".gif", ".webp")
@@ -190,6 +191,10 @@ def composite_cover(image_path: Path) -> GdkPixbuf.Pixbuf:
 
 def save_cover(game_id: str, cover_path: Path) -> None:
     shared.covers_dir.mkdir(parents=True, exist_ok=True)
+
+    # As cópias reduzidas são da capa de agora: apagadas antes de a nova entrar,
+    # para ninguém tocar a velha por cima dela.
+    copias_animadas.apagar(game_id)
 
     if not cover_path:
         # Remoção explícita: aqui sim toda forma anterior cai, e não há nada

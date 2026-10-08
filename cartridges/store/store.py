@@ -31,7 +31,7 @@ from cartridges.conquistas import historico
 from cartridges.game import Game
 from cartridges.store.managers.manager import Manager
 from cartridges.store.pipeline import Pipeline
-from cartridges.utils import session_log
+from cartridges.utils import copias_animadas, session_log
 from cartridges.utils.game_logo import IMAGE_SUFFIXES, remove_logo
 from cartridges.utils.run_executable import aumid_from_command
 from cartridges.utils.save_cover import ANIMATED_SUFFIXES
@@ -124,6 +124,7 @@ def _migrate_game_files(old_id: str, new_id: str) -> None:
     moves.append(
         (shared.fitas_dir / f"{old_id}.json", shared.fitas_dir / f"{new_id}.json")
     )
+    moves.extend(copias_animadas.pares_de_migracao(old_id, new_id))
 
     for source, dest in moves:
         try:
@@ -365,6 +366,9 @@ class Store:
 
         # The cached details-page logo and the record of its lookup
         remove_logo(game.game_id)
+
+        # As cópias reduzidas da capa animada, e o que ainda estiver sendo gerado
+        copias_animadas.apagar(game.game_id)
 
         # E o histórico: um jogo reinstalado com o mesmo id não pode herdar as
         # sessões do que foi apagado. `apagar_sessoes=False` é a ligação de

@@ -148,6 +148,32 @@ def test_exportar_leva_a_pasta_do_app_e_as_configuracoes(tmp_path):
     assert manifesto["state"] == {"sort-mode": "a-z"}
 
 
+def test_backup_leva_as_copias(tmp_path):
+    _encher_pasta_do_app()
+    shared.capas_animadas_dir.mkdir(parents=True)
+    (shared.capas_animadas_dir / "g1_200x300.webp").write_bytes(b"copia")
+    (shared.capas_animadas_dir / "g1_200x300.webp.tmp").write_bytes(b"sobra")
+
+    destino = _exportar(tmp_path)
+
+    with zipfile.ZipFile(destino) as arquivo:
+        nomes = arquivo.namelist()
+    assert "cache/capas_animadas/g1_200x300.webp" in nomes
+    assert not any(nome.endswith(".tmp") for nome in nomes)
+    # E o que `exportar` grava, `validar` aceita: uma pasta aninhada não pode
+    # tornar o próprio backup inválido.
+    assert backup.validar(destino)["version"] == backup.VERSAO
+
+
+def test_restaurar_traz_as_copias_de_volta(tmp_path, monkeypatch):
+    aplicadas = _preparar_restauracao(tmp_path, monkeypatch, com_copias=True)
+
+    assert backup.aplicar_pendente() is True
+
+    assert aplicadas
+    assert (shared.capas_animadas_dir / "g1_200x300.webp").read_bytes() == b"copia"
+
+
 def test_exportar_deixa_de_fora_o_agendado_e_as_pendencias(tmp_path):
     _encher_pasta_do_app()
     (shared.app_dir / "restaurar.zip").write_bytes(b"zip")
@@ -178,7 +204,9 @@ _MANIFESTO = json.dumps({"version": 5, "settings": {}, "state": {}})
 @pytest.mark.parametrize(
     "nome",
     ["../fora.json", "/games/x.json", "games/../x.json", "games\\..\\x.json", "C:x.json",
-     "games/x.exe", "outra/x.json", "games/sub/x.json", "logs/cartridges.log"],
+     "games/x.exe", "outra/x.json", "games/sub/x.json", "logs/cartridges.log",
+     "cache/x.webp", "cache/capas_animadas/x.exe", "cache/capas_animadas/sub/x.webp",
+     "cache/capas_animadas/../x.webp"],
 )
 def test_validar_recusa_nome_inesperado(tmp_path, nome):
     caminho = _zip(tmp_path / "b.zip", {"configuracoes.json": _MANIFESTO, nome: "x"})
@@ -226,7 +254,7 @@ def test_aplicar_pendente_sem_nada_agendado():
     assert backup.aplicar_pendente() is None
 
 
-def _preparar_restauracao(tmp_path, monkeypatch):
+def _preparar_restauracao(tmp_path, monkeypatch, com_copias=False):
     """Exporta um backup, troca a pasta do app por outra biblioteca e agenda."""
     aplicadas = []
     monkeypatch.setattr(backup, "aplicar_configuracoes", aplicadas.append)
@@ -234,7 +262,12 @@ def _preparar_restauracao(tmp_path, monkeypatch):
         backup, "ler_configuracoes", lambda: {"settings": {"antes": 1}, "state": {}}
     )
     _encher_pasta_do_app()
+    if com_copias:
+        shared.capas_animadas_dir.mkdir(parents=True)
+        (shared.capas_animadas_dir / "g1_200x300.webp").write_bytes(b"copia")
     destino = _exportar(tmp_path)
+    if com_copias:
+        (shared.capas_animadas_dir / "g1_200x300.webp").unlink()
     for arquivo in shared.games_dir.iterdir():
         arquivo.unlink()
     (shared.games_dir / "atual.json").write_text("{}", encoding="utf-8")

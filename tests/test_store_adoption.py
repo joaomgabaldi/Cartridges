@@ -185,6 +185,21 @@ def test_migrates_every_cover_format(
     assert (shared.covers_dir / f"{NEW_ID}{suffix}").exists()
 
 
+def test_migracao_leva_as_copias(store, make_game, seed):
+    """As cópias animadas da capa são nomeadas pelo id e seguem o jogo."""
+    seed(make_game(game_id=OLD_ID, shortcut_path=LNK))
+    shared.capas_animadas_dir.mkdir(parents=True)
+    for tamanho in ("200x300", "280x420"):
+        (shared.capas_animadas_dir / f"{OLD_ID}_{tamanho}.webp").write_bytes(b"c")
+
+    store.adopt_legacy_game(make_game(game_id=NEW_ID, shortcut_path=LNK))
+
+    assert sorted(p.name for p in shared.capas_animadas_dir.iterdir()) == [
+        f"{NEW_ID}_200x300.webp",
+        f"{NEW_ID}_280x420.webp",
+    ]
+
+
 def test_restamps_the_game_id_inside_the_record(
     store, make_game, seed, write_record
 ):

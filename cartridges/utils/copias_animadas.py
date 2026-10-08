@@ -23,6 +23,7 @@ from uuid import uuid4
 from PIL import Image, ImageSequence
 
 from cartridges import shared
+from cartridges.utils import tocador_capas
 from cartridges.utils.na_tela import entregar_na_tela
 
 # Como terminou um pedido. ``ilegivel`` é só a origem que não abre; ``falhou``
@@ -206,6 +207,10 @@ def _rodar(
             descartado = trabalho.invalido
     if resultado is None or descartado:
         return
+    if resultado == "pronta":
+        # O caminho da cópia é estável: quem já toca a anterior tem de largá-la
+        # antes de receber o aviso. Fora da ``_trava``: o tocador tem a dele.
+        tocador_capas.tocador.esquecer(destino)
     for pronto in prontos:
         entregar_na_tela(_entregar, pronto, resultado)
 
@@ -224,11 +229,64 @@ def apagar(game_id: str) -> None:
                 # Fora do dicionário: um pedido novo para este destino (a capa
                 # nova) não pode herdar um trabalho que vai descartar o resultado.
                 del _trabalhos[destino]
-    for arquivo in shared.capas_animadas_dir.glob(f"{game_id}_*.webp"):
+    for arquivo in _copias_de(game_id):
         try:
             arquivo.unlink(missing_ok=True)
         except OSError:
             logging.warning("Não foi possível apagar a cópia animada %s", arquivo.name)
+            continue
+        # Fora da ``_trava``, pelo mesmo motivo do ``_rodar``.
+        tocador_capas.tocador.esquecer(arquivo)
+
+
+def _dono_e_tamanho(arquivo: Path) -> tuple[str, str]:
+    """(id, ``{L}x{A}``) do nome ``{id}_{L}x{A}.webp``; o id pode ter ``_``."""
+    dono, _, tamanho = arquivo.stem.rpartition("_")
+    return dono, tamanho
+
+
+def _copias_de(game_id: str) -> list[Path]:
+    """As cópias do jogo ``game_id``, de todos os tamanhos.
+
+    O id é o que vem antes do último ``_``: o glob ``{id}_*`` também pegaria as
+    cópias de um jogo cujo id começa igual (``x`` e ``x_y``).
+    """
+    return [
+        arquivo
+        for arquivo in shared.capas_animadas_dir.glob("*.webp")
+        if _dono_e_tamanho(arquivo)[0] == game_id
+    ]
+
+
+def pares_de_migracao(antigo: str, novo: str) -> list[tuple[Path, Path]]:
+    """(cópia atual, cópia com o id novo) de cada cópia do jogo ``antigo``."""
+    return [
+        (arquivo, arquivo.with_name(f"{novo}_{_dono_e_tamanho(arquivo)[1]}.webp"))
+        for arquivo in _copias_de(antigo)
+    ]
+
+
+def limpar(ids: set[str]) -> None:
+    """Apaga o que sobrou na pasta das cópias: de jogo que não existe mais, de
+    tamanho que nenhuma tela usa e todo temporário de gravação interrompida.
+
+    Roda numa thread de segundo plano na abertura, sem tocar o GTK. Só olha os
+    arquivos da própria pasta; um que sumiu ou está preso fica para a próxima.
+    """
+    validos = {f"{largura}x{altura}" for largura, altura in tamanhos()}
+    for arquivo in list(shared.capas_animadas_dir.glob("*")):
+        try:
+            if not arquivo.is_file():
+                continue
+            if arquivo.suffix == ".webp":
+                dono, tamanho = _dono_e_tamanho(arquivo)
+                if dono in ids and tamanho in validos:
+                    continue
+            elif arquivo.suffix != ".tmp":
+                continue
+            arquivo.unlink()
+        except OSError as erro:
+            logging.debug("Cópia animada %s não apagada: %s", arquivo.name, erro)
 
 
 def encerrar() -> None:

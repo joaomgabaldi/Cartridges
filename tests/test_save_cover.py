@@ -61,6 +61,29 @@ def test_passing_none_still_clears_every_format():
     assert not (shared.covers_dir / "g1.tiff").exists()
 
 
+def _copias(*nomes):
+    shared.capas_animadas_dir.mkdir(parents=True, exist_ok=True)
+    for nome in nomes:
+        (shared.capas_animadas_dir / nome).write_bytes(b"x")
+
+
+def test_salvar_capa_apaga_as_copias(tmp_path):
+    _copias("g1_200x300.webp", "g1_280x420.webp", "g2_200x300.webp")
+    nova = make_image(tmp_path / "novo.tiff", "green")
+
+    save_cover("g1", nova)
+
+    assert [p.name for p in shared.capas_animadas_dir.iterdir()] == ["g2_200x300.webp"]
+
+
+def test_remover_capa_apaga_as_copias():
+    _copias("g1_200x300.webp", "g1_280x420.webp", "g2_200x300.webp")
+
+    save_cover("g1", None)
+
+    assert [p.name for p in shared.capas_animadas_dir.iterdir()] == ["g2_200x300.webp"]
+
+
 # region Montagem da capa a partir de uma imagem qualquer
 
 

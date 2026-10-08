@@ -12,7 +12,7 @@ import pytest
 from PIL import Image
 
 from cartridges import shared
-from cartridges.utils import copias_animadas
+from cartridges.utils import copias_animadas, tocador_capas
 
 
 def _animada(caminho, duracoes, formato="WEBP", tons=None):
@@ -450,3 +450,163 @@ def test_encerrar_aborta_o_trabalho_em_andamento(fila, tmp_path, monkeypatch):
     assert not destino.exists()
     assert list(tmp_path.glob("*.tmp")) == []
     assert recebidos == []
+
+
+# --- As cópias acompanham a capa, o jogo e o backup ---------------------------
+
+
+class _TocadorFalso:
+    """Só registra o que o ``esquecer`` recebeu; nenhuma thread."""
+
+    def __init__(self):
+        self.eventos = []
+
+    def esquecer(self, copia):
+        self.eventos.append(("esquecer", copia))
+
+
+@pytest.fixture
+def tocador_falso(monkeypatch):
+    falso = _TocadorFalso()
+    monkeypatch.setattr(tocador_capas, "tocador", falso)
+    return falso
+
+
+def test_copia_pronta_e_esquecida_antes_de_avisar(fila, tmp_path, tocador_falso):
+    origem, destino = _pedido(tmp_path)
+
+    copias_animadas.pedir(
+        origem, destino, (200, 300), lambda r: tocador_falso.eventos.append((r,))
+    )
+    fila.rodar_tudo()
+
+    assert tocador_falso.eventos == [("esquecer", destino), ("pronta",)]
+
+
+def test_copia_estatica_nao_e_esquecida(fila, tmp_path, tocador_falso):
+    origem, destino = _pedido(tmp_path, animada=False)
+
+    copias_animadas.pedir(origem, destino, (200, 300), lambda _r: None)
+    fila.rodar_tudo()
+
+    assert tocador_falso.eventos == []
+
+
+def test_apagar_esquece_cada_copia_apagada(tocador_falso):
+    pasta = shared.capas_animadas_dir
+    pasta.mkdir(parents=True, exist_ok=True)
+    for nome in ("g1_200x300.webp", "g1_280x420.webp", "g2_200x300.webp"):
+        (pasta / nome).write_bytes(b"x")
+
+    copias_animadas.apagar("g1")
+
+    assert sorted(copia.name for _, copia in tocador_falso.eventos) == [
+        "g1_200x300.webp",
+        "g1_280x420.webp",
+    ]
+
+
+def test_apagar_nao_leva_as_copias_de_um_id_que_comeca_igual():
+    pasta = shared.capas_animadas_dir
+    pasta.mkdir(parents=True, exist_ok=True)
+    for nome in ("x_200x300.webp", "x_280x420.webp", "x_y_200x300.webp", "x_y_280x420.webp"):
+        (pasta / nome).write_bytes(b"x")
+
+    copias_animadas.apagar("x")
+
+    assert sorted(p.name for p in pasta.iterdir()) == [
+        "x_y_200x300.webp",
+        "x_y_280x420.webp",
+    ]
+
+
+def test_pares_de_migracao_troca_so_o_prefixo():
+    pasta = shared.capas_animadas_dir
+    pasta.mkdir(parents=True, exist_ok=True)
+    for nome in ("velho_200x300.webp", "velho_280x420.webp", "velho_y_200x300.webp"):
+        (pasta / nome).write_bytes(b"x")
+
+    pares = copias_animadas.pares_de_migracao("velho", "novo")
+
+    assert sorted(pares) == [
+        (pasta / "velho_200x300.webp", pasta / "novo_200x300.webp"),
+        (pasta / "velho_280x420.webp", pasta / "novo_280x420.webp"),
+    ]
+
+
+def test_pares_de_migracao_sem_pasta_ou_sem_copias():
+    assert copias_animadas.pares_de_migracao("velho", "novo") == []
+
+
+def test_limpar():
+    pasta = shared.capas_animadas_dir
+    pasta.mkdir(parents=True, exist_ok=True)
+    nomes = [
+        "g1_200x300.webp",
+        "g1_280x420.webp",
+        "g1_400x600.webp",  # tamanho que nenhuma tela usa mais
+        "morto_200x300.webp",  # jogo que não existe mais
+        "g1_200x300.webp.tmp",
+        "g1_200x300.webp.0123abcd.tmp",  # o temporário que ``gerar`` grava
+        "estranho.webp",  # não é do formato {id}_{L}x{A}
+        "g1_axb.webp",
+    ]
+    for nome in nomes:
+        (pasta / nome).write_bytes(b"x")
+
+    copias_animadas.limpar({"g1"})
+
+    assert sorted(p.name for p in pasta.iterdir()) == [
+        "g1_200x300.webp",
+        "g1_280x420.webp",
+    ]
+
+
+def test_limpar_respeita_ids_com_sublinhado():
+    pasta = shared.capas_animadas_dir
+    pasta.mkdir(parents=True, exist_ok=True)
+    (pasta / "steam_123_200x300.webp").write_bytes(b"x")
+
+    copias_animadas.limpar({"steam_123"})
+
+    assert [p.name for p in pasta.iterdir()] == ["steam_123_200x300.webp"]
+
+
+def test_limpar_nao_apaga_pastas_nem_o_que_nao_e_dele(tmp_path):
+    pasta = shared.capas_animadas_dir
+    (pasta / "sub.tmp").mkdir(parents=True)
+    (pasta / "sub.tmp" / "dentro.tmp").write_bytes(b"x")
+    (pasta / "notas.txt").write_bytes(b"x")
+    fora = tmp_path / "fora_200x300.webp"
+    fora.write_bytes(b"x")
+    fora_tmp = tmp_path / "fora.tmp"
+    fora_tmp.write_bytes(b"x")
+
+    copias_animadas.limpar(set())
+
+    assert (pasta / "sub.tmp" / "dentro.tmp").exists()
+    assert (pasta / "notas.txt").exists()
+    assert fora.exists() and fora_tmp.exists()
+
+
+def test_limpar_sem_pasta_nao_levanta():
+    copias_animadas.limpar({"g1"})
+
+
+def test_limpar_segue_adiante_quando_um_arquivo_resiste(monkeypatch):
+    pasta = shared.capas_animadas_dir
+    pasta.mkdir(parents=True, exist_ok=True)
+    for nome in ("a_200x300.webp", "b_200x300.webp"):
+        (pasta / nome).write_bytes(b"x")
+    original = copias_animadas.Path.unlink
+
+    def negar_a(self, *args, **kwargs):
+        if self.name.startswith("a_"):
+            raise PermissionError("preso")
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(copias_animadas.Path, "unlink", negar_a)
+
+    copias_animadas.limpar(set())
+
+    assert [p.name for p in pasta.iterdir()] == ["a_200x300.webp"]

@@ -72,6 +72,9 @@ def _extensoes() -> dict[str, tuple[str, ...]]:
         "wallpapers": (".json", *session_wallpaper.IMAGE_SUFFIXES),
         "fitas": (".json",),
         "conquistas": (".json",),
+        # Aninhada, de um cache: dá menos trabalho levar as cópias prontas do
+        # que regerá-las, uma a uma, na primeira abertura depois de restaurar.
+        "cache/capas_animadas": (".webp",),
     }
 
 
@@ -221,15 +224,17 @@ def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
 def _nome_valido(nome: str, extensoes_por_pasta: dict[str, tuple[str, ...]]) -> bool:
     """Só o que `exportar` grava: o manifesto, um arquivo solto conhecido, ou
     ``<pasta conhecida>/<arquivo com extensão conhecida>``. Nada absoluto,
-    nada com ``..``, nada em subpasta."""
+    nada com ``..``, nada em subpasta que `_extensoes` não liste."""
     if nome in (_CONFIGURACOES, *_SOLTOS):
         return True
     if "\\" in nome or ":" in nome:
         return False
     partes = PurePosixPath(nome).parts
-    if len(partes) != 2:
+    if len(partes) < 2:
         return False
-    pasta, arquivo = partes
+    # A pasta pode ser aninhada ("cache/capas_animadas"): vale o que
+    # `_extensoes` lista, inteiro.
+    pasta, arquivo = "/".join(partes[:-1]), partes[-1]
     extensoes = extensoes_por_pasta.get(pasta)
     if extensoes is None or arquivo.startswith("."):
         return False

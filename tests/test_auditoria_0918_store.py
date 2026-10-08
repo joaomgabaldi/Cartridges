@@ -59,6 +59,17 @@ def test_m9_cleanup_game_apaga_parede_e_fita(store, make_game, fitas_dir):
     assert not fita.exists()
 
 
+def test_cleanup_game_apaga_as_copias(store, make_game):
+    game = make_game(game_id=OLD_ID)
+    shared.capas_animadas_dir.mkdir(parents=True)
+    for nome in (f"{OLD_ID}_200x300.webp", f"{OLD_ID}_280x420.webp", "outro_200x300.webp"):
+        (shared.capas_animadas_dir / nome).write_bytes(b"c")
+
+    store.cleanup_game(game)
+
+    assert [p.name for p in shared.capas_animadas_dir.iterdir()] == ["outro_200x300.webp"]
+
+
 def test_b14_rekey_leva_a_capa_ao_arquivo_novo(store, make_game, win, flush_idle):
     store.add_game(make_game(game_id=OLD_ID, shortcut_path=LNK), {})
     trocas = []
