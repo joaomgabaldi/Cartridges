@@ -40,7 +40,11 @@ from cartridges import shared
 from cartridges.game_cover import GameCover
 from cartridges.utils import copias_animadas
 from cartridges.utils.busca_do_seletor import BuscaDoSeletor
-from cartridges.utils.download import download_bytes
+from cartridges.utils.download import (
+    MAX_ANIMATED_IMAGE_BYTES,
+    MAX_IMAGE_BYTES,
+    download_bytes,
+)
 from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.name_cleaner import clean_game_name
 from cartridges.utils.save_cover import convert_cover
@@ -170,6 +174,7 @@ class SgdbPicker(BuscaDoSeletor, Adw.Dialog):
 
         # Animated previews download the full image, so keep the count modest
         limit = 12 if animated else MAX_RESULTS
+        max_bytes = MAX_ANIMATED_IMAGE_BYTES if animated else MAX_IMAGE_BYTES
         for grid in grids[:limit]:
             if generation != self._generation:
                 return
@@ -181,9 +186,13 @@ class SgdbPicker(BuscaDoSeletor, Adw.Dialog):
             # image) URL; still grids keep using the lightweight thumbnail.
             preview_url = full_url if animated else (grid.get("thumb") or full_url)
             try:
-                content = download_bytes(preview_url, timeout=15)
+                content = download_bytes(preview_url, timeout=15, max_bytes=max_bytes)
             except requests.RequestException as error:
-                logging.warning("SGDB picker: preview download failed (%s)", error)
+                logging.warning(
+                    "SGDB picker: preview download failed (%s: %s)",
+                    type(error).__name__,
+                    error,
+                )
                 continue
             suffix = Path(urlparse(preview_url).path).suffix or ".png"
             # O SteamGridDB serve APNG como .png; é a extensão que faz a prévia tocar.
@@ -273,15 +282,21 @@ class SgdbPicker(BuscaDoSeletor, Adw.Dialog):
         # que o clique tinha buscado tudo de novo.
         self._generation += 1
         self.stack.set_visible_child_name("loading")
+        # O botão não muda sem uma busca nova, que limpa os resultados: ainda
+        # diz de que tipo de busca este veio.
+        animated = self.animated_button.get_active()
         threading.Thread(
-            target=self._select_thread, args=(full_url,), daemon=True
+            target=self._select_thread, args=(full_url, animated), daemon=True
         ).start()
 
-    def _select_thread(self, full_url: str) -> None:
+    def _select_thread(self, full_url: str, animated: bool = False) -> None:
+        max_bytes = MAX_ANIMATED_IMAGE_BYTES if animated else MAX_IMAGE_BYTES
         try:
-            content = download_bytes(full_url, timeout=15)
+            content = download_bytes(full_url, timeout=15, max_bytes=max_bytes)
         except requests.RequestException as error:
-            logging.warning("Could not download chosen cover: %s", error)
+            logging.warning(
+                "Could not download chosen cover: %s: %s", type(error).__name__, error
+            )
             entregar_na_tela(
                 self._show_empty,
                 _("Não foi possível baixar a capa"),

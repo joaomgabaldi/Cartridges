@@ -31,9 +31,15 @@ from typing import Any
 
 import requests
 
-# 25 MiB is generous for any cover, animated included, while still bounding the
-# worst case.
+# 25 MiB is generous for any still image while still bounding the worst case.
 MAX_IMAGE_BYTES = 25 * 1024 * 1024
+
+# Capas animadas do SteamGridDB passam de 60 MB (APNG). A biblioteca toca as
+# cópias reduzidas (``copias_animadas``), nunca o arquivo baixado.
+MAX_ANIMATED_IMAGE_BYTES = 200 * 1024 * 1024
+
+# Papel de parede em resolução de monitor grande.
+MAX_WALLPAPER_BYTES = 50 * 1024 * 1024
 
 # For API answers (JSON, HTML pages). 10 MiB covers with room to spare the
 # largest real one — a HowLongToBeat /game/<id> page, ~1–2 MiB.

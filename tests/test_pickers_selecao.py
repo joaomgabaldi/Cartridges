@@ -39,7 +39,7 @@ def adicionar(picker, previa, geracao):
 def test_previa_atrasada_nao_tira_o_carregamento_da_escolha(criar, previa, monkeypatch):
     picker = criar()
     # O download do escolhido não sai: o teste é sobre o que acontece enquanto ele corre.
-    monkeypatch.setattr(picker, "_select_thread", lambda _url: None)
+    monkeypatch.setattr(picker, "_select_thread", lambda _url, _animated=False: None)
     geracao_da_busca = picker._generation
     adicionar(picker, previa, geracao_da_busca)
     filho = picker.flowbox.get_child_at_index(0)
@@ -117,6 +117,97 @@ def test_apng_de_um_quadro_termina_parado(tmp_path, capas_falsas):
 
     assert not cover.animada
     assert picker.stack.get_visible_child_name() == "results"
+
+
+# endregion
+
+
+# region Limites de download do seletor de capas
+
+
+class _ThreadNaHora:
+    """Roda o alvo já no ``start``: o teste vê o download sem esperar thread."""
+
+    def __init__(self, target, args=(), daemon=None):
+        self._target, self._args = target, args
+
+    def start(self):
+        self._target(*self._args)
+
+
+def _anotar_limites(monkeypatch, erro=None, conteudo=b""):
+    from cartridges import sgdb_picker as modulo  # noqa: PLC0415
+    from cartridges.utils.download import MAX_IMAGE_BYTES  # noqa: PLC0415
+
+    limites = []
+
+    def baixar(_url, timeout=10, max_bytes=MAX_IMAGE_BYTES):
+        limites.append(max_bytes)
+        if erro is not None:
+            raise erro
+        return conteudo
+
+    monkeypatch.setattr(modulo, "download_bytes", baixar)
+    return limites
+
+
+@pytest.mark.parametrize("animated", [True, False])
+def test_previa_usa_o_limite_do_tipo(busca_sgdb, monkeypatch, animated):
+    from cartridges.utils.download import (  # noqa: PLC0415
+        MAX_ANIMATED_IMAGE_BYTES,
+        MAX_IMAGE_BYTES,
+    )
+
+    limites = _anotar_limites(monkeypatch, conteudo=_apng_bytes())
+
+    busca_sgdb._search_thread("Jogo", animated, busca_sgdb._generation)
+
+    assert limites == [MAX_ANIMATED_IMAGE_BYTES if animated else MAX_IMAGE_BYTES]
+
+
+@pytest.mark.parametrize("ativo", [True, False])
+def test_capa_escolhida_usa_o_limite_do_botao(previa, monkeypatch, ativo):
+    import requests  # noqa: PLC0415
+
+    from cartridges import sgdb_picker as modulo  # noqa: PLC0415
+    from cartridges.utils.download import (  # noqa: PLC0415
+        MAX_ANIMATED_IMAGE_BYTES,
+        MAX_IMAGE_BYTES,
+    )
+
+    picker = sgdb_picker()
+    picker.animated_button.set_active(ativo)  # sem chave da API: a busca nem sai
+    picker._add_result(previa, "https://x/7.png", ativo, picker._generation)
+    limites = _anotar_limites(monkeypatch, erro=requests.RequestException("x"))
+    monkeypatch.setattr(modulo.threading, "Thread", _ThreadNaHora)
+    monkeypatch.setattr(modulo, "entregar_na_tela", lambda *_a: None)
+
+    picker._on_child_activated(picker.flowbox, picker.flowbox.get_child_at_index(0))
+
+    assert limites == [MAX_ANIMATED_IMAGE_BYTES if ativo else MAX_IMAGE_BYTES]
+
+
+def test_log_da_previa_traz_o_tipo_do_erro(busca_sgdb, monkeypatch, caplog):
+    from cartridges.utils.download import ResponseTooLargeError  # noqa: PLC0415
+
+    _anotar_limites(monkeypatch, erro=ResponseTooLargeError("https://x/7.png"))
+
+    busca_sgdb._search_thread("Jogo", True, busca_sgdb._generation)
+
+    assert "ResponseTooLargeError" in caplog.text
+
+
+def test_log_da_capa_escolhida_traz_o_tipo_do_erro(monkeypatch, caplog):
+    from cartridges import sgdb_picker as modulo  # noqa: PLC0415
+    from cartridges.utils.download import ResponseTooLargeError  # noqa: PLC0415
+
+    picker = sgdb_picker()
+    _anotar_limites(monkeypatch, erro=ResponseTooLargeError("https://x/7.png"))
+    monkeypatch.setattr(modulo, "entregar_na_tela", lambda *_a: None)
+
+    picker._select_thread("https://x/7.png", True)
+
+    assert "ResponseTooLargeError" in caplog.text
 
 
 # endregion

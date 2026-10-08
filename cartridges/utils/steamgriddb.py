@@ -29,7 +29,12 @@ from requests.exceptions import HTTPError, RequestException
 
 from cartridges import shared
 from cartridges.game import Game
-from cartridges.utils.download import download_bytes, get_capped
+from cartridges.utils.download import (
+    MAX_ANIMATED_IMAGE_BYTES,
+    MAX_IMAGE_BYTES,
+    download_bytes,
+    get_capped,
+)
 from cartridges.utils.name_cleaner import clean_for_search
 from cartridges.utils.save_cover import ANIMATED_SUFFIXES, convert_cover, save_cover
 from cartridges.utils.title_match import rank_candidates
@@ -263,7 +268,13 @@ class SgdbHelper:
                 uri = self.get_image_uri(sgdb_id, **uri_kwargs)
                 # download_bytes streams with a size cap and raises on HTTP
                 # errors, so an error page is never saved as a cover image
-                content = download_bytes(uri, timeout=10)
+                content = download_bytes(
+                    uri,
+                    timeout=10,
+                    max_bytes=MAX_ANIMATED_IMAGE_BYTES
+                    if uri_kwargs["animated"]
+                    else MAX_IMAGE_BYTES,
+                )
                 tmp_file_path = Path(Gio.File.new_tmp()[0].get_path())
                 converted = None
                 try:

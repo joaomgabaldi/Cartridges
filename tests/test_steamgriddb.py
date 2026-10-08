@@ -141,3 +141,24 @@ def test_a_200_whose_items_lack_ids_is_a_sgdb_error(responses, make_game):
 
     with pytest.raises(sgdb.SgdbBadRequest):
         sgdb.SgdbHelper().get_game_id(make_game(name="Celeste"))
+
+
+def test_busca_automatica_animada_200_e_parada_25(make_game, schema, monkeypatch):
+    """A tentativa animada aceita até 200 MB; a parada, que vem se ela falhar,
+    continua em 25 MB."""
+    limites = []
+
+    def baixar(_url, timeout=10, max_bytes=download.MAX_IMAGE_BYTES):
+        limites.append(max_bytes)
+        raise requests.RequestException("x")
+
+    schema["sgdb"] = True
+    schema["sgdb-animated"] = True
+    monkeypatch.setattr(sgdb.SgdbHelper, "get_game_id", lambda *_a: 1)
+    monkeypatch.setattr(sgdb.SgdbHelper, "get_image_uri", lambda *_a, **_k: "https://x/a.png")
+    monkeypatch.setattr(sgdb, "download_bytes", baixar)
+
+    with pytest.raises(sgdb.SgdbNoImageFound):
+        sgdb.SgdbHelper().conditionaly_update_cover(make_game())
+
+    assert limites == [download.MAX_ANIMATED_IMAGE_BYTES, download.MAX_IMAGE_BYTES]

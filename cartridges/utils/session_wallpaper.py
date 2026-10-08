@@ -55,7 +55,7 @@ from PIL import Image, ImageFilter, ImageOps
 
 from cartridges import shared
 from cartridges.utils import window_geometry
-from cartridges.utils.download import download_bytes
+from cartridges.utils.download import MAX_WALLPAPER_BYTES, download_bytes
 from cartridges.utils.ler_json import ler_json
 from cartridges.utils.wallhaven import IMAGE_SUFFIXES, melhor_para
 
@@ -575,7 +575,9 @@ def _fonte(
 
     if achado := melhor_para(game.name, largura, altura, formato):
         try:
-            conteudo = download_bytes(str(achado["path"]), timeout=30)
+            conteudo = download_bytes(
+                str(achado["path"]), timeout=30, max_bytes=MAX_WALLPAPER_BYTES
+            )
             sufixo = Path(str(achado["path"])).suffix.lower()
             if sufixo not in IMAGE_SUFFIXES:
                 sufixo = ".jpg"

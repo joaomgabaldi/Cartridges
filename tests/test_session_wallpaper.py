@@ -698,3 +698,72 @@ class TestTelaDeEscolha:
         monkeypatch.setattr(picker, "close", lambda: fechou.append(True))
         picker.adjust_back.emit("clicked")
         assert fechou == [True]
+
+
+class TestLimiteDoPapelDeParede:
+    """Papel de parede baixa até 50 MB; a miniatura do seletor, até 25 MB."""
+
+    @staticmethod
+    def _anotar(monkeypatch, modulo):
+        import requests  # noqa: PLC0415
+
+        from cartridges.utils.download import MAX_IMAGE_BYTES  # noqa: PLC0415
+
+        limites = []
+
+        def baixar(_url, timeout=10, max_bytes=MAX_IMAGE_BYTES):
+            limites.append(max_bytes)
+            raise requests.RequestException("x")
+
+        monkeypatch.setattr(modulo, "download_bytes", baixar)
+        return limites
+
+    @staticmethod
+    def _picker(monkeypatch):
+        from cartridges import wallpaper_picker  # noqa: PLC0415
+
+        monkeypatch.setattr(wallpaper_picker, "buscar", lambda *a, **k: [])
+        monkeypatch.setattr(
+            wallpaper_picker,
+            "formatos_ligados",
+            lambda: session_wallpaper.Formatos((1080, 1920), None),
+        )
+        monkeypatch.setattr(wallpaper_picker, "entregar_na_tela", lambda *_a: None)
+        return wallpaper_picker.WallpaperPicker("Halo", lambda *_: None, lambda: None)
+
+    def test_papel_de_parede_escolhido_usa_50_mb(self, win, monkeypatch) -> None:
+        from cartridges import wallpaper_picker  # noqa: PLC0415
+        from cartridges.utils.download import MAX_WALLPAPER_BYTES  # noqa: PLC0415
+
+        picker = self._picker(monkeypatch)
+        limites = self._anotar(monkeypatch, wallpaper_picker)
+
+        picker._open_thread({"path": "https://x/p.jpg"}, picker._generation)
+
+        assert limites == [MAX_WALLPAPER_BYTES]
+        picker.close()
+
+    def test_miniatura_segue_25_mb(self, win, monkeypatch) -> None:
+        from cartridges import wallpaper_picker  # noqa: PLC0415
+        from cartridges.utils.download import MAX_IMAGE_BYTES  # noqa: PLC0415
+
+        picker = self._picker(monkeypatch)
+        limites = self._anotar(monkeypatch, wallpaper_picker)
+
+        picker._miniatura({"thumb": "https://x/t.jpg", "id": 1}, picker._generation)
+
+        assert limites == [MAX_IMAGE_BYTES]
+        picker.close()
+
+    def test_busca_automatica_usa_50_mb(self, monkeypatch) -> None:
+        from cartridges.utils.download import MAX_WALLPAPER_BYTES  # noqa: PLC0415
+
+        limites = self._anotar(monkeypatch, session_wallpaper)
+        monkeypatch.setattr(
+            session_wallpaper, "melhor_para", lambda *_a: {"path": "https://x/p.jpg"}
+        )
+        game = SimpleNamespace(game_id="g1", name="Halo", get_cover_path=lambda: None)
+
+        session_wallpaper._fonte(game, 1920, 1080, "deitado")
+
+        assert limites == [MAX_WALLPAPER_BYTES]
