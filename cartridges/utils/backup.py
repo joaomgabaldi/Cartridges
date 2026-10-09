@@ -81,7 +81,7 @@ _CHAVES_DE_ESTADO = ("sort-mode",)
 
 # O que o backup leva de cada pasta de jogo dos saves, além dos .zip: o mapa do
 # Ludusavi.
-_MAPA_DOS_SAVES = "mapping.yaml"
+_MAPA_DOS_SAVES = pasta_dos_saves.MAPA
 
 
 def _extensoes() -> dict[str, tuple[str, ...]]:
@@ -208,14 +208,11 @@ def _nome_dos_saves() -> str:
 
 def _entradas_dos_saves() -> list[tuple[Path, str]]:
     """Os saves da pasta configurada (a padrão ou a escolhida), sempre como
-    ``saves/<jogo>/<arquivo>``. Pasta que sumiu: backup sem saves."""
-    raiz = pasta_dos_saves.atual()
-    if not raiz.is_dir():
-        return []
+    ``saves/<jogo>/<arquivo>``. Só as pastas de jogo do Ludusavi: a escolhida pode
+    ser a raiz do OneDrive, e o resto dela não é do app. Pasta que sumiu: backup
+    sem saves."""
     entradas = []
-    for jogo in sorted(raiz.iterdir()):
-        if not jogo.is_dir():
-            continue
+    for jogo in pasta_dos_saves.saves_em(pasta_dos_saves.atual()):
         for caminho in sorted(jogo.iterdir()):
             if caminho.is_file() and _arquivo_de_save_valido(caminho.name):
                 entradas.append((caminho, f"{_nome_dos_saves()}/{jogo.name}/{caminho.name}"))

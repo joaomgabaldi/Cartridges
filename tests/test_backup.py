@@ -296,6 +296,19 @@ def test_exporta_so_o_que_validar_aceita_dos_saves(tmp_path):
     assert backup.validar(destino)["version"] == backup.VERSAO
 
 
+def test_exporta_so_as_pastas_de_jogo_com_mapping(tmp_path):
+    """A pasta dos saves pode ser a raiz do OneDrive: subpasta sem `mapping.yaml`
+    não é save e não vai para o backup, mesmo com um .zip dentro."""
+    fora = tmp_path / "OneDrive"
+    _guardar_saves(fora)
+    (fora / "Fotos").mkdir()
+    (fora / "Fotos" / "ferias.zip").write_bytes(b"x")
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    with zipfile.ZipFile(_exportar(tmp_path)) as arquivo:
+        saves_no_zip = {n for n in arquivo.namelist() if n.startswith("saves/")}
+    assert saves_no_zip == {"saves/X/mapping.yaml", "saves/X/backup-1.zip"}
+
+
 def test_pasta_dos_saves_sumiu_exporta_sem_saves(tmp_path):
     _encher_pasta_do_app()
     shared.schema.set_string("pasta-dos-saves", str(tmp_path / "apagada"))
