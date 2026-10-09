@@ -48,7 +48,7 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
 
     Adw.PreferencesGroup {
       title: _("Backup da sua biblioteca");
-      description: _("Salve em um arquivo .zip a biblioteca completa e todas as configurações. A restauração substitui a biblioteca e as configurações atuais pelas do backup.");
+      description: _("Salve em um arquivo .zip a biblioteca completa, os saves dos jogos e todas as configurações. A restauração substitui a biblioteca e as configurações atuais pelas do backup.");
       separate-rows: true;
 
       Adw.ButtonRow export_backup_button_row {
@@ -57,6 +57,26 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
 
       Adw.ButtonRow import_backup_button_row {
         title: _("Importar de arquivo");
+      }
+
+      Adw.ActionRow pasta_dos_saves_row {
+        title: _("Pasta dos saves");
+
+        [suffix]
+        Gtk.Button pasta_dos_saves_padrao_botao {
+          label: _("Usar a padrão");
+          valign: center;
+        }
+
+        [suffix]
+        Gtk.Button pasta_dos_saves_botao {
+          label: _("Escolher");
+          valign: center;
+        }
+      }
+
+      Adw.ButtonRow restaurar_saves_button_row {
+        title: _("Restaurar saves de todos os jogos");
       }
     }
 

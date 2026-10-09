@@ -35,6 +35,7 @@ from cartridges.conquistas.epic import janela as epic_janela
 from cartridges.conquistas.xbox import conta, login
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.metadata_refresh import get_metadata_refresh
+from cartridges.saves import backup_de_saves, pasta
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.utils import (
     backup,
@@ -134,6 +135,10 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
     export_backup_button_row = Gtk.Template.Child()
     import_backup_button_row = Gtk.Template.Child()
+    pasta_dos_saves_row = Gtk.Template.Child()
+    pasta_dos_saves_botao = Gtk.Template.Child()
+    pasta_dos_saves_padrao_botao = Gtk.Template.Child()
+    restaurar_saves_button_row = Gtk.Template.Child()
 
     danger_zone_group = Gtk.Template.Child()
     remove_all_games_button_row = Gtk.Template.Child()
@@ -159,6 +164,21 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.remove_all_games_button_row.connect("activated", self.remove_all_games)
         self.export_backup_button_row.connect("activated", self.export_backup)
         self.import_backup_button_row.connect("activated", self.import_backup)
+
+        # Saves dos jogos: sem o Ludusavi no pacote, não há o que configurar.
+        saves_disponivel = backup_de_saves.disponivel()
+        self.pasta_dos_saves_row.set_visible(saves_disponivel)
+        self.restaurar_saves_button_row.set_visible(saves_disponivel)
+        self._atualizar_pasta_dos_saves()
+        self.pasta_dos_saves_botao.connect(
+            "clicked", self.choose_folder, self._escolheu_pasta_dos_saves
+        )
+        self.pasta_dos_saves_padrao_botao.connect(
+            "clicked", lambda *_: self._trocar_pasta_dos_saves(pasta.padrao())
+        )
+        self.restaurar_saves_button_row.connect(
+            "activated", lambda *_: self.restaurar_todos_os_saves()
+        )
 
         # Shortcuts source settings
         shared.schema.bind(
@@ -1311,6 +1331,65 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         # Plain priority, like every other toast now: HIGH is what interrupted
         # whatever was on screen and pushed it back into the queue to replay.
         self.add_toast(Adw.Toast.new(_("Todos os jogos foram removidos")))
+
+    def _atualizar_pasta_dos_saves(self) -> None:
+        """Mostra a pasta atual no subtítulo; "Usar a padrão" só serve fora dela."""
+        self.pasta_dos_saves_row.set_subtitle(str(pasta.atual()))
+        self.pasta_dos_saves_padrao_botao.set_sensitive(pasta.atual() != pasta.padrao())
+
+    def _escolheu_pasta_dos_saves(self, dialog: Gtk.FileDialog, result: Gio.Task, *_args: Any) -> None:
+        try:
+            escolhida = dialog.select_folder_finish(result).get_path()
+        except GLib.Error:
+            return
+        self._trocar_pasta_dos_saves(Path(escolhida))
+
+    def _trocar_pasta_dos_saves(self, nova: Path) -> None:
+        """A troca espera a trava dos saves e copia arquivos: fora da tela."""
+        self.pasta_dos_saves_row.set_sensitive(False)
+
+        def work() -> None:
+            try:
+                backup_de_saves.trocar_pasta(nova)
+            except pasta.TrocaRecusada:
+                entregar_na_tela(
+                    self._troca_da_pasta_acabou,
+                    _("Escolha uma pasta fora da pasta atual dos saves."),
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.exception("Não foi possível trocar a pasta dos saves")
+                entregar_na_tela(
+                    self._troca_da_pasta_acabou,
+                    _("Não foi possível trocar a pasta dos saves."),
+                )
+            else:
+                entregar_na_tela(self._troca_da_pasta_acabou, None)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _troca_da_pasta_acabou(self, aviso: Optional[str]) -> bool:
+        self.pasta_dos_saves_row.set_sensitive(True)
+        self._atualizar_pasta_dos_saves()
+        if aviso:
+            self.add_toast(Adw.Toast.new(aviso))
+        return False
+
+    def restaurar_todos_os_saves(self) -> None:
+        def on_response(_dialog: Any, response: str) -> None:
+            if response == "restaurar":
+                backup_de_saves.restaurar_todos()
+
+        create_dialog(
+            self,
+            _("Restaurar os saves de todos os jogos?"),
+            _(
+                "Tem certeza que deseja restaurar os saves de todos os jogos? "
+                "Os saves atuais serão substituídos pela versão mais recente de cada um."
+            ),
+            "restaurar",
+            _("Restaurar"),
+            destructive=True,
+        ).connect("response", on_response)
 
     def _backup_filters(self) -> Gio.ListStore:
         backup_filter = Gtk.FileFilter(name=_("Backup do Cartridges"))

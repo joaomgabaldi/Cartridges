@@ -455,6 +455,19 @@ def sem_ubisoft_no_registro(monkeypatch):
     monkeypatch.setattr(locais, "_do_registro", lambda: {})
 
 
+@pytest.fixture(autouse=True)
+def sem_ludusavi(request, monkeypatch):
+    """O Ludusavi desta máquina (se houver um ao lado do Python) não roda nos testes:
+    o fim de uma sessão dispararia um backup de verdade. Os testes dos saves montam o
+    seu próprio executor e ficam de fora; os demais que precisem dele disponível
+    trocam `backup_de_saves.disponivel`."""
+    if request.module.__name__.startswith("test_saves_"):
+        return
+    from cartridges.saves import backup_de_saves  # noqa: PLC0415
+
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: False)
+
+
 @pytest.fixture
 def flush_idle():
     """Drain everything ``GLib.idle_add`` has queued.

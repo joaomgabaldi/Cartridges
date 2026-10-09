@@ -68,6 +68,7 @@ from cartridges.importer.importer import Importer  # yo dawg
 from cartridges.importer.shortcuts_source import ShortcutsSource
 from cartridges.logging.setup import log_system_info, setup_logging
 from cartridges.preferences import CartridgesPreferences
+from cartridges.saves import backup_de_saves, dialogo
 from cartridges.store.managers.display_manager import DisplayManager
 from cartridges.store.managers.file_manager import FileManager
 from cartridges.store.managers.sgdb_manager import SgdbManager
@@ -591,6 +592,7 @@ class CartridgesApplication(Adw.Application):
                 ("add_game",),
                 ("import",),
                 ("remove_game",),
+                ("restore_save",),
                 ("igdb_search",),
                 ("sgdb_search",),
                 ("pcgw_search",),
@@ -600,6 +602,9 @@ class CartridgesApplication(Adw.Application):
                 ("toggle_search", shared.win),
             }
         )
+
+        # Habilitada pelo menu de cada jogo, só para quem tem backup dos saves.
+        self.lookup_action("restore_save").set_enabled(False)
 
         sort_action = Gio.SimpleAction.new_stateful(
             "sort_by",
@@ -652,6 +657,10 @@ class CartridgesApplication(Adw.Application):
         # depois da importação, pulando o que já foi medido nesta semana.
         self.install_size_sweep = InstallSizeSweep()
         self.install_size_sweep.start()
+
+        # Lê os backups dos saves que já existem, para o menu de cada jogo saber
+        # quem tem o que restaurar. Em segundo plano, depois da biblioteca carregada.
+        backup_de_saves.atualizar_cache()
 
         # Lê as conquistas de cada jogo e guarda o que achar, inclusive o que
         # foi jogado por fora do app desde a última abertura. Uma vez por
@@ -1030,6 +1039,11 @@ class CartridgesApplication(Adw.Application):
         if shared.win.active_game.zerado:
             return
         shared.win.active_game.remove_game()
+
+    def on_restore_save_action(self, *_args: Any) -> None:
+        game = shared.win.active_game
+        if backup_de_saves.versoes_do_jogo(game):
+            dialogo.DialogoDeVersoes(game).present(shared.win)
 
     def search(self, uri: str) -> None:
         open_uri(f"{uri}{quote(shared.win.active_game.name)}")

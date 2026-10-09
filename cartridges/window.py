@@ -35,6 +35,7 @@ from cartridges.conquistas import sessao as sessao_conquistas
 from cartridges.conquistas_sessao import CartaoDaSessao
 from cartridges.game import Game, STATUS_LABELS, status_label
 from cartridges.game_cover import GameCover
+from cartridges.saves import backup_de_saves
 from cartridges.utils.animated_flow_box import AnimatedFlowBox
 from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.dialog_backdrop import block_window_drag
@@ -517,7 +518,11 @@ class CartridgesWindow(Adw.ApplicationWindow):
         tela de detalhes, que é para onde ele leva. Sem isso, ele abriria uma
         tela sem nada em que clicar. É aqui que a anotação costuma nascer: no
         fim da sessão você acabou de ver onde parou, e o balão já abre aberto.
+
+        É também o fim de sessão comum aos dois modos, então é aqui que o backup
+        dos saves do jogo é disparado (em segundo plano, sem esperar).
         """
+        backup_de_saves.no_fim_da_sessao(game)
         toast = Adw.Toast.new(
             # The variables are the game's title and the session length
             _("{}: {} de jogo").format(game.name, format_playtime(seconds))
@@ -1257,6 +1262,11 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
     def set_active_game(self, _widget: Any, _pspec: Any, game: Game) -> None:
         self.active_game = game
+        # O menu é um só para todos os cards: "Restaurar save" só vale para o jogo
+        # que tem backup, e some do menu (hidden-when) quando a ação está desativada.
+        self.get_application().lookup_action("restore_save").set_enabled(
+            backup_de_saves.tem_backup(game)
+        )
 
     def store_library_scroll(self) -> None:
         """Remember where each grid is scrolled to.

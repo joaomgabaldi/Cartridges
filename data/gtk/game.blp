@@ -101,4 +101,12 @@ menu game_options {
     item (_("Editar"), "app.edit_game")
     item (_("Remover"), "app.remove_game")
   }
+
+  section {
+    item {
+      label: _("Restaurar save");
+      action: "app.restore_save";
+      hidden-when: "action-disabled";
+    }
+  }
 }
