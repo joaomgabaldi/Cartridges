@@ -95,7 +95,45 @@ Etapa 'Montando a pasta do app'
 & (Join-Path $prefix 'bin\python.exe') (Join-Path $PSScriptRoot 'montar_app.py') $prefix (Join-Path $repo '_build\app')
 if ($LASTEXITCODE -ne 0) { Falha 'A montagem da pasta do app falhou. Veja a saida acima.' }
 
-# ── 4. Empacotar ──────────────────────────────────────────────────────────
+# ── 4. Incluir o Ludusavi ─────────────────────────────────────────────────
+#
+# O backup dos saves chama o ludusavi.exe que fica em bin\, ao lado do Python.
+# Vai depois da montagem porque o montar_app.py apaga a pasta do app a cada
+# execucao; os zips ficam em _build\ludusavi e so sao baixados uma vez.
+
+Etapa 'Incluindo o Ludusavi'
+
+$ludusaviVersao = 'v0.31.0'
+$ludusaviBase   = "https://github.com/mtkennerly/ludusavi/releases/download/$ludusaviVersao"
+$ludusaviZips   = @{
+    "ludusavi-$ludusaviVersao-win64.zip" = 'f47a8ad8c708f01d2eb124704973beffab205e292f5287a10fc4a101f8d68706'
+    "ludusavi-$ludusaviVersao-legal.zip" = '9fce11fc44942efdd5969928d89b106c229f9a041d7a713c424a6da981660ebf'
+}
+$cache = Join-Path $repo '_build\ludusavi'
+$app   = Join-Path $repo '_build\app'
+New-Item -ItemType Directory -Force $cache | Out-Null
+
+foreach ($nome in $ludusaviZips.Keys) {
+    $zip = Join-Path $cache $nome
+    if (-not (Test-Path $zip)) {
+        & curl.exe -fsSL -o $zip "$ludusaviBase/$nome"
+        if ($LASTEXITCODE -ne 0) { Remove-Item $zip -ErrorAction SilentlyContinue; Falha "Nao consegui baixar $nome." }
+    }
+    if ((Get-FileHash $zip -Algorithm SHA256).Hash -ne $ludusaviZips[$nome]) {
+        Remove-Item $zip
+        Falha "O SHA-256 de $nome nao confere com o esperado. O arquivo foi apagado do cache."
+    }
+}
+
+Expand-Archive (Join-Path $cache "ludusavi-$ludusaviVersao-win64.zip") (Join-Path $app 'bin') -Force
+$licencas = Join-Path $app 'share\licenses\ludusavi'
+New-Item -ItemType Directory -Force $licencas | Out-Null
+Expand-Archive (Join-Path $cache "ludusavi-$ludusaviVersao-legal.zip") $licencas -Force
+
+if (-not (Test-Path (Join-Path $app 'bin\ludusavi.exe'))) { Falha 'O zip do Ludusavi nao trouxe o ludusavi.exe.' }
+Write-Host "OK - Ludusavi $ludusaviVersao em bin\." -ForegroundColor Green
+
+# ── 5. Empacotar ──────────────────────────────────────────────────────────
 #
 # Tem que ser o .iss do diretorio de build, nao o instalado no prefixo: os
 # caminhos relativos dele (..\..\..\LICENSE) so fecham a partir dali.
@@ -109,7 +147,7 @@ if (-not $iscc) { Falha 'Nao achei o ISCC do Inno Setup 7 nem do 6.' }
 & $iscc "/O$dist" $iss | Select-Object -Last 3
 if ($LASTEXITCODE -ne 0) { Falha 'O Inno Setup falhou.' }
 
-# ── 5. Abrir ──────────────────────────────────────────────────────────────
+# ── 6. Abrir ──────────────────────────────────────────────────────────────
 
 $exe = Join-Path $dist 'Cartridges Windows.exe'
 if (-not (Test-Path $exe)) { Falha "O instalador nao apareceu em $exe." }
