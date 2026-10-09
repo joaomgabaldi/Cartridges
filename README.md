@@ -131,6 +131,17 @@ Todos estes recursos ficam na aba Personalização das Preferências e vêm desa
 - A conta da Tuya vai no backup, mas só é lida no mesmo computador e na mesma conta do Windows;
   em outro, o assistente da iluminação inteligente pede os códigos novamente.
 
+#### Saves dos jogos
+
+- Ao fim de cada sessão, o aplicativo faz o backup dos saves do jogo, guardando as 5 versões mais
+  recentes de cada um. Também entram os saves e os arquivos de conquistas dos emuladores.
+- Os saves ficam em uma pasta dentro da pasta do aplicativo, que pode ser trocada em Preferências,
+  por exemplo, para uma pasta do OneDrive.
+- "Restaurar save", no menu do jogo, permite escolher a versão a devolver. Em Preferências, a opção
+  "Restaurar saves de todos os jogos" devolve a versão mais recente de cada um.
+- O backup `.zip` da biblioteca também leva os saves. Ao restaurá-lo, eles voltam para a pasta
+  padrão; um backup sem saves mantém os saves atuais.
+
 ### Integração com o Windows
 
 - Tema claro e escuro e cor de destaque acompanham as configurações do Windows na hora.
