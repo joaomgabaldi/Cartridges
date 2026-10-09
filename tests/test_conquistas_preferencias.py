@@ -116,6 +116,14 @@ def test_posicao_so_responde_com_o_aviso_ligado(monkeypatch):
     assert preferencias.conquistas_posicao_row.get_sensitive() is False
 
 
+def test_som_so_responde_com_o_aviso_ligado(monkeypatch):
+    preferencias = _preferencias(monkeypatch)
+    preferencias.conquistas_aviso_switch.set_active(True)
+    assert preferencias.conquistas_aviso_som_switch.get_sensitive() is True
+    preferencias.conquistas_aviso_switch.set_active(False)
+    assert preferencias.conquistas_aviso_som_switch.get_sensitive() is False
+
+
 def test_textos_do_grupo_durante_o_jogo(monkeypatch):
     from gi.repository import Adw  # noqa: PLC0415
 
@@ -131,9 +139,13 @@ def test_textos_do_grupo_durante_o_jogo(monkeypatch):
     assert iluminacao.get_subtitle() == (
         "Os dispositivos piscam ao desbloquear uma conquista"
     )
+    som = preferencias.conquistas_aviso_som_switch
+    assert som.get_title() == "Tocar som com o aviso"
+    assert som.get_subtitle() == "Reproduz um som quando o aviso aparece"
     grupo = aviso.get_ancestor(Adw.PreferencesGroup)
     assert grupo.get_title() == "Durante o jogo"
     assert not grupo.get_description()
+    assert som.get_ancestor(Adw.PreferencesGroup) is grupo
 
 
 # A conta Microsoft

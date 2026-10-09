@@ -31,6 +31,7 @@
     <release version="2026.10.09" date="2026-10-09">
       <description translate="no">
         <ul>
+          <li>Agora as conquistas desbloqueadas tocam um som junto com o aviso durante o jogo</li>
           <li>Agora os saves dos jogos têm backup automático ao fim de cada sessão e podem ser restaurados pelo menu do jogo e pelas Preferências</li>
           <li>O backup da biblioteca agora também guarda as cópias dos saves dos jogos</li>
           <li>"Editar" e "Remover", no menu de três pontinhos de cada jogo, agora agem sempre sobre o jogo escolhido</li>

@@ -117,6 +117,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     conquistas_chave_row: Adw.EntryRow = Gtk.Template.Child()
     conquistas_ocultas_switch: Adw.SwitchRow = Gtk.Template.Child()
     conquistas_aviso_switch: Adw.SwitchRow = Gtk.Template.Child()
+    conquistas_aviso_som_switch: Adw.SwitchRow = Gtk.Template.Child()
     conquistas_posicao_row: Adw.ComboRow = Gtk.Template.Child()
     conquistas_iluminacao_switch: Adw.SwitchRow = Gtk.Template.Child()
     conquistas_pulso_cor_row: Adw.ActionRow = Gtk.Template.Child()
@@ -239,6 +240,12 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             Gio.SettingsBindFlags.DEFAULT,
         )
         shared.schema.bind(
+            "conquistas-aviso-som",
+            self.conquistas_aviso_som_switch,
+            "active",
+            Gio.SettingsBindFlags.DEFAULT,
+        )
+        shared.schema.bind(
             "conquistas-iluminacao",
             self.conquistas_iluminacao_switch,
             "active",
@@ -267,12 +274,10 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.session_fita_switch.connect(
             "notify::active", lambda *_: self._atualizar_linhas_do_pulso()
         )
-        self.conquistas_aviso_switch.bind_property(
-            "active",
-            self.conquistas_posicao_row,
-            "sensitive",
-            GObject.BindingFlags.SYNC_CREATE,
-        )
+        for linha in (self.conquistas_aviso_som_switch, self.conquistas_posicao_row):
+            self.conquistas_aviso_switch.bind_property(
+                "active", linha, "sensitive", GObject.BindingFlags.SYNC_CREATE
+            )
 
         self._conquistas_posicao_id = self.conquistas_posicao_row.connect(
             "notify::selected", self._gravar_posicao_do_aviso
