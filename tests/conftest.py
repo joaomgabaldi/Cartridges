@@ -30,6 +30,8 @@ its ``Gtk.Template`` reads the .ui out of it at class-creation time.
 
 import builtins
 import json
+import shutil
+import subprocess
 import sys
 import types
 from enum import IntEnum, auto
@@ -396,6 +398,33 @@ def state_schema(monkeypatch):
     fake = FakeSchema(_STATE_DEFAULTS)
     monkeypatch.setattr(shared, "state_schema", fake, raising=False)
     return fake
+
+
+@pytest.fixture
+def settings(tmp_path, monkeypatch):
+    """GSettings de verdade, com backend em memória.
+
+    O backup lê e grava GVariant, e é o tipo de cada chave no schema que
+    decide o que um valor do arquivo vira — um dicionário no lugar dele não
+    testaria nada disso.
+    """
+    schemas = tmp_path / "_schemas"
+    schemas.mkdir()
+    shutil.copy(ROOT / "_build" / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml", schemas)
+    # Fora do PATH, o do mesmo ucrt64/bin do Python que roda os testes.
+    compiler = shutil.which("glib-compile-schemas") or str(
+        Path(sys.executable).with_name("glib-compile-schemas.exe")
+    )
+    subprocess.run([compiler, str(schemas)], check=True)
+    source = Gio.SettingsSchemaSource.new_from_directory(str(schemas), None, False)
+    memory = Gio.memory_settings_backend_new()
+    main = Gio.Settings.new_full(source.lookup("io.github.joaomgabaldi.Cartridges", False), memory, None)
+    state = Gio.Settings.new_full(
+        source.lookup("io.github.joaomgabaldi.Cartridges.State", False), memory, None
+    )
+    monkeypatch.setattr(shared, "schema", main)
+    monkeypatch.setattr(shared, "state_schema", state)
+    return main, state
 
 
 @pytest.fixture(autouse=True)

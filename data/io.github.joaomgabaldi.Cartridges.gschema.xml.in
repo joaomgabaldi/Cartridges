@@ -159,6 +159,12 @@
     <key name="show-news-button" type="b">
       <default>false</default>
     </key>
+    <!-- Onde ficam os backups dos saves dos jogos. Vazio quer dizer a pasta
+         padrão, dentro dos dados do app; qualquer outro valor é o caminho
+         escolhido pelo usuário. -->
+    <key name="pasta-dos-saves" type="s">
+      <default>""</default>
+    </key>
   </schema>
 
   <schema id="@APP_ID@.State" path="@PREFIX@/State/">
