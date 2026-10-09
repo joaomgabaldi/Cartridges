@@ -6,6 +6,7 @@ as pastas de emulador e da pasta do jogo de cada título); rodá-lo é de `ludus
 """
 
 import json
+import re
 import winreg
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +28,11 @@ _LAUNCHER_DA_UBISOFT = (
     r"SOFTWARE\WOW6432Node\Ubisoft\Launcher",
     "InstallDir",
 )
+
+
+# O Ludusavi lê cada entrada de `files` como glob: `[`, `]`, `*` e `?` da pasta do
+# jogo (`Jogo [Repack]`) precisam ser literais, como em `glob::Pattern::escape`.
+_CURINGAS = re.compile(r"[\[\]*?]")
 
 
 @dataclass(frozen=True)
@@ -53,7 +59,7 @@ def na_pasta_do_jogo(executavel: str, appid: str) -> list[str]:
     """Os lugares de save que moram ao lado do executável, com `/` e absolutos."""
     caminhos = []
     for base in arquivos.bases_do_jogo(executavel):
-        raiz = base.as_posix()
+        raiz = _CURINGAS.sub(lambda m: f"[{m.group()}]", base.as_posix())
         caminhos += [
             f"{raiz}/steam_settings/{appid}",
             f"{raiz}/coldclient/steam_settings/{appid}",
@@ -76,7 +82,8 @@ def raizes(jogos: list[JogoNoConfig]) -> list[tuple[str, Path]]:
     vistas = set()
     for jogo in jogos:
         bases = arquivos.bases_do_jogo(jogo.executavel)
-        if not bases or (pai := bases[-1].parent) == bases[-1] or str(pai).casefold() in vistas:
+        # Pai que é a raiz do disco (jogo em `C:\X`) pegaria todo jogo instalado nele.
+        if not bases or (pai := bases[-1].parent).parent == pai or str(pai).casefold() in vistas:
             continue
         vistas.add(str(pai).casefold())
         achadas.append(("otherWindows", pai))

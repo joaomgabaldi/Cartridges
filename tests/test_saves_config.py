@@ -19,7 +19,7 @@ def test_dezessete_pastas_de_emulador():
     assert "<winLocalAppData>/SKIDROW/3669870" in pastas
     assert "<winDocuments>/Player/3669870" in pastas
     assert "<winProgramData>/Steam/dodi/3669870" in pastas
-    assert not any("achievements" in p.lower() or "achiev" in p.lower() for p in pastas)
+    assert not any("achiev" in p.lower() for p in pastas)
     assert all(p.endswith("3669870") for p in pastas)
 
 
@@ -42,6 +42,19 @@ def test_na_pasta_do_jogo_com_subida(monkeypatch):
     assert "C:/Jogos/X/bin/steam_settings/9" in caminhos
     assert "C:/Jogos/X/steam_settings/9" in caminhos
     assert "C:/Jogos/X/Profile/*" in caminhos
+
+
+def test_na_pasta_do_jogo_escapa_os_curingas_da_pasta(monkeypatch):
+    monkeypatch.setattr(
+        config.arquivos, "bases_do_jogo", lambda exe: [Path("D:/Jogos/Elden Ring [FitGirl] *?")]
+    )
+    assert config.na_pasta_do_jogo("x", "9") == [
+        "D:/Jogos/Elden Ring [[]FitGirl[]] [*][?]/steam_settings/9",
+        "D:/Jogos/Elden Ring [[]FitGirl[]] [*][?]/coldclient/steam_settings/9",
+        "D:/Jogos/Elden Ring [[]FitGirl[]] [*][?]/SteamData/user_stats.ini",
+        "D:/Jogos/Elden Ring [[]FitGirl[]] [*][?]/3DMGAME/*",
+        "D:/Jogos/Elden Ring [[]FitGirl[]] [*][?]/Profile/*",
+    ]
 
 
 def test_extend_quando_no_manifesto(monkeypatch):
@@ -86,7 +99,14 @@ def test_raizes_sem_repeticao(monkeypatch):
     assert config.raizes(jogos) == [("otherWindows", Path("D:/Jogos"))]
 
 
-def test_raizes_com_steam_e_ubisoft(monkeypatch, tmp_path):
+def test_raizes_sem_pai_na_raiz_do_disco(monkeypatch):
+    monkeypatch.setattr(config.arquivos, "pasta_da_steam", lambda: None)
+    monkeypatch.setattr(config.arquivos, "_valor_do_registro", lambda *a: None)
+    monkeypatch.setattr(config.arquivos, "bases_do_jogo", lambda exe: [Path("C:/X")])
+    assert config.raizes([jogo(executavel="C:/X/x.exe")]) == []
+
+
+def test_raizes_com_steam_e_ubisoft(monkeypatch):
     monkeypatch.setattr(config.arquivos, "pasta_da_steam", lambda: Path("C:/Steam"))
     monkeypatch.setattr(config.arquivos, "_valor_do_registro", lambda *a: "C:/Ubi/")
     assert config.raizes([]) == [("steam", Path("C:/Steam")), ("uplay", Path("C:/Ubi/"))]
