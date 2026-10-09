@@ -40,6 +40,7 @@
           <li>As conquistas bloqueadas aparecem antes das ocultas</li>
           <li>Arrastar um texto selecionado não deixa mais uma cópia dele parada na tela</li>
           <li>Ao trocar a capa de um jogo, a cor da iluminação inteligente já acompanha a capa nova</li>
+          <li>Ao iniciar um jogo, o Cartridges volta a ser movido para o outro monitor, e "Identificar monitores" mostra novamente o número em cada tela</li>
         </ul>
       </description>
     </release>

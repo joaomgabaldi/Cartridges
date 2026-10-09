@@ -44,6 +44,16 @@ gi.require_version("Adw", "1")
 # pylint: disable=wrong-import-position
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
+# Carregado antes de qualquer janela existir, mesmo sem uso aqui: uma superfície
+# embrulhada antes dele ganha uma classe genérica, sem `get_handle`, e daí em
+# diante nenhuma janela pode ser posicionada pelo Win32 (`window_geometry`).
+# Sem o typelib o app abre do mesmo jeito, só sem posicionar janelas.
+try:
+    gi.require_version("GdkWin32", "4.0")
+    from gi.repository import GdkWin32  # noqa: F401  pylint: disable=unused-import
+except (ValueError, ImportError) as erro:
+    logging.warning("GdkWin32 indisponível: %s", erro)
+
 from cartridges import restauracao_dialogs, shared
 from cartridges.conquistas import icones
 from cartridges.conquistas import sessao as sessao_conquistas
