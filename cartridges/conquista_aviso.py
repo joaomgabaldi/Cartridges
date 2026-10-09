@@ -4,14 +4,17 @@
 desbloqueadas" na que fecha 100%, com "★ Rara" quando for o caso), título e
 descrição. Fica 5 s na tela; várias de uma vez entram em fila e aparecem uma
 depois da outra. A janela nunca pega o foco (`utils/janela_por_cima.py`).
+Cada cartão toca um som ao entrar, se "Tocar som com o aviso" estiver ligado.
 """
 
 import logging
+import threading
+import winsound
 from collections import deque
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from gi.repository import Adw, GLib, Gtk
+from gi.repository import Adw, Gio, GLib, Gtk
 
 from cartridges import shared
 from cartridges.conquistas import icones, progresso
@@ -24,6 +27,31 @@ _LIMITE_DA_SAIDA = 1  # segundos até a saída ser dada por terminada, com ou se
 
 def _agendar(segundos: int, funcao: Callable[[], Any]) -> int:
     return GLib.timeout_add_seconds(segundos, funcao)
+
+
+def _em_segundo_plano(funcao: Callable[..., Any], *args: Any) -> None:
+    threading.Thread(target=funcao, args=args, daemon=True).start()
+
+
+def _tocar_som() -> None:
+    """Toca o som do aviso sem travar a tela. Nunca levanta: sem som, o cartão aparece igual."""
+    try:
+        if not shared.schema.get_boolean("conquistas-aviso-som"):
+            return
+        dados = Gio.resources_lookup_data(
+            shared.PREFIX + "/sons/conquista.wav", Gio.ResourceLookupFlags.NONE
+        ).get_data()
+        _em_segundo_plano(_reproduzir, dados)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.warning("Não foi possível tocar o som do aviso de conquista", exc_info=True)
+
+
+def _reproduzir(dados: bytes) -> None:
+    # SND_MEMORY não aceita SND_ASYNC: por isso a thread.
+    try:
+        winsound.PlaySound(dados, winsound.SND_MEMORY)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.warning("Falha ao tocar o som do aviso de conquista", exc_info=True)
 
 
 @dataclass(frozen=True)
@@ -171,6 +199,7 @@ def _proximo() -> bool:
         janela = _JanelaDoAviso(aviso)
         janela.entrar(shared.schema.get_string("conquistas-aviso-posicao"))
         _atual = janela
+        _tocar_som()
         _agendar(DURACAO, lambda: _esconder(vez))
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning("Não foi possível mostrar o aviso de conquista", exc_info=True)

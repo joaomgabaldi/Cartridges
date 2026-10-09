@@ -47,6 +47,9 @@
     <key name="conquistas-aviso" type="b">
       <default>true</default>
     </key>
+    <key name="conquistas-aviso-som" type="b">
+      <default>true</default>
+    </key>
     <key name="conquistas-iluminacao" type="b">
       <default>true</default>
     </key>

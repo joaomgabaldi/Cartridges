@@ -1,9 +1,11 @@
 """O cartão do aviso de conquista."""
 
+import logging
 import time
+import winsound
 
 import pytest
-from gi.repository import GLib
+from gi.repository import Gio, GLib
 
 from cartridges import conquista_aviso
 from cartridges.conquistas import icones, progresso
@@ -253,3 +255,67 @@ def test_animacao_de_saida_de_verdade_termina_e_destroi(monkeypatch, sem_efeitos
         time.sleep(0.01)
     assert conquista_aviso.na_tela() == "Dois"
     assert janela._destruida
+
+
+# O som
+
+
+@pytest.fixture
+def sons(monkeypatch, sem_som):
+    """A thread do som roda na hora, para o teste ver o que tocou."""
+    monkeypatch.setattr(conquista_aviso, "_em_segundo_plano", lambda funcao, *args: funcao(*args))
+    return sem_som
+
+
+def test_som_toca_quando_o_cartao_entra(sons):
+    conquista_aviso.mostrar(_aviso("Um"))
+    assert len(sons) == 1
+    dados, flags = sons[0]
+    assert dados[:4] == b"RIFF" and dados[8:12] == b"WAVE"
+    assert flags == winsound.SND_MEMORY
+
+
+def test_som_desligado_nao_toca(sons, schema):
+    schema.set_boolean("conquistas-aviso-som", False)
+    conquista_aviso.mostrar(_aviso("Um"))
+    assert sons == []
+    assert conquista_aviso.na_tela() == "Um"
+
+
+def test_cada_cartao_da_fila_toca_quando_entra(sons, sem_efeitos):
+    conquista_aviso.mostrar(_aviso("Um"))
+    conquista_aviso.mostrar(_aviso("Dois"))
+    assert len(sons) == 1
+    sem_efeitos[-1][1]()
+    assert conquista_aviso.na_tela() == "Dois"
+    assert len(sons) == 2
+
+
+def test_cartao_que_nao_entra_nao_toca(sons, monkeypatch):
+    monkeypatch.setattr(janela_por_cima, "preparar", lambda _j: False)
+    conquista_aviso.mostrar(_aviso("Um"))
+    assert conquista_aviso.na_tela() is None
+    assert sons == []
+
+
+def test_falha_do_som_nao_impede_o_cartao(sons, monkeypatch, caplog):
+    def sem_audio(_dados, _flags):
+        raise RuntimeError("Failed to play sound")
+
+    monkeypatch.setattr(winsound, "PlaySound", sem_audio)
+    with caplog.at_level(logging.WARNING):
+        conquista_aviso.mostrar(_aviso("Um"))
+    assert conquista_aviso.na_tela() == "Um"
+    assert any("som" in r.getMessage() for r in caplog.records)
+
+
+def test_recurso_ausente_nao_impede_o_cartao(sons, monkeypatch, caplog):
+    def ausente(_caminho, _flags):
+        raise GLib.Error("recurso inexistente")
+
+    monkeypatch.setattr(Gio, "resources_lookup_data", ausente)
+    with caplog.at_level(logging.WARNING):
+        conquista_aviso.mostrar(_aviso("Um"))
+    assert conquista_aviso.na_tela() == "Um"
+    assert sons == []
+    assert any("som" in r.getMessage() for r in caplog.records)

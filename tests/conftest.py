@@ -34,6 +34,7 @@ import shutil
 import subprocess
 import sys
 import types
+import winsound
 from enum import IntEnum, auto
 from pathlib import Path
 
@@ -104,6 +105,7 @@ _SCHEMA_DEFAULTS = {
     "conquistas-mostrar-ocultas": False,
     "conquistas-aviso-posicao": "inferior-direito",
     "conquistas-aviso": True,
+    "conquistas-aviso-som": True,
     "conquistas-iluminacao": True,
     "conquistas-pulso-matiz": 45,
     "conquistas-pulso-saturacao": 1000,
@@ -399,6 +401,14 @@ def state_schema(monkeypatch):
     fake = FakeSchema(_STATE_DEFAULTS)
     monkeypatch.setattr(shared, "state_schema", fake, raising=False)
     return fake
+
+
+@pytest.fixture(autouse=True)
+def sem_som(monkeypatch):
+    """Nenhum teste toca som de verdade: cada `PlaySound` vira um `(dados, flags)` nesta lista."""
+    tocados = []
+    monkeypatch.setattr(winsound, "PlaySound", lambda dados, flags: tocados.append((dados, flags)))
+    return tocados
 
 
 @pytest.fixture
