@@ -1343,7 +1343,11 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
     def _atualizar_pasta_dos_saves(self) -> None:
         """Mostra a pasta atual no subtítulo; "Usar a padrão" só serve fora dela."""
-        self.pasta_dos_saves_row.set_subtitle(str(pasta.atual()))
+        # Como em `update_shortcuts_location_subtitle`: o subtítulo é markup (um
+        # `&` no nome da pasta o deixaria em branco) e o `os.sep` deste Python é "/".
+        self.pasta_dos_saves_row.set_subtitle(
+            GLib.markup_escape_text(str(pasta.atual()).replace("/", "\\"))
+        )
         self.pasta_dos_saves_padrao_botao.set_sensitive(pasta.atual() != pasta.padrao())
 
     def _escolheu_pasta_dos_saves(self, dialog: Gtk.FileDialog, result: Gio.Task, *_args: Any) -> None:

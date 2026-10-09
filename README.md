@@ -135,12 +135,14 @@ Todos estes recursos ficam na aba Personalização das Preferências e vêm desa
 
 - Ao fim de cada sessão, o aplicativo faz o backup dos saves do jogo, guardando as 5 versões mais
   recentes de cada um. Também entram os saves e os arquivos de conquistas dos emuladores.
-- Os saves ficam em uma pasta dentro da pasta do aplicativo, que pode ser trocada em Preferências,
-  por exemplo, para uma pasta do OneDrive.
+- As cópias dos saves ficam em uma pasta dentro da pasta do aplicativo, que pode ser trocada em
+  Preferências, por exemplo, para uma pasta do OneDrive. Ao trocar, só as cópias dos saves mudam de
+  lugar; o restante da pasta não é alterado.
 - "Restaurar save", no menu do jogo, permite escolher a versão a devolver. Em Preferências, a opção
   "Restaurar saves de todos os jogos" devolve a versão mais recente de cada um.
-- O backup `.zip` da biblioteca também leva os saves. Ao restaurá-lo, eles voltam para a pasta
-  padrão; um backup sem saves mantém os saves atuais.
+- O backup `.zip` da biblioteca também leva as cópias dos saves. Ao restaurá-lo, elas voltam para a
+  pasta padrão; um backup sem saves mantém as cópias atuais. Para devolver os saves aos jogos (por
+  exemplo, depois de formatar o computador), use "Restaurar saves de todos os jogos".
 
 ### Integração com o Windows
 

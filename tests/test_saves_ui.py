@@ -160,15 +160,25 @@ def test_preferencias_com_ludusavi_mostram_as_linhas(monkeypatch):
     preferencias = _preferencias(monkeypatch)
     assert preferencias.pasta_dos_saves_row.get_visible() is True
     assert preferencias.restaurar_saves_button_row.get_visible() is True
-    assert preferencias.pasta_dos_saves_row.get_subtitle() == str(pasta.atual())
+    assert preferencias.pasta_dos_saves_row.get_subtitle() == str(pasta.atual()).replace("/", "\\")
+
+
+def test_subtitulo_da_pasta_dos_saves_no_formato_do_windows_e_com_e_comercial(monkeypatch, schema):
+    """O subtítulo é markup: um `&` cru o deixaria em branco; e `/` não é como o
+    Windows mostra uma pasta."""
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
+    schema.set_string("pasta-dos-saves", "D:/Jogos & Saves/Cartridges")
+    preferencias = _preferencias(monkeypatch)
+    assert preferencias.pasta_dos_saves_row.get_subtitle() == r"D:\Jogos &amp; Saves\Cartridges"
 
 
 def test_descricao_do_backup_menciona_os_saves_so_com_ludusavi(monkeypatch):
     monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
     assert _preferencias(monkeypatch).backup_group.get_description() == (
-        "Salve em um arquivo .zip a biblioteca completa, os saves dos jogos e todas as "
-        "configurações. A restauração substitui a biblioteca, os saves e as configurações "
-        "atuais pelas do backup."
+        "Salve em um arquivo .zip a biblioteca completa, as cópias dos saves dos jogos e "
+        "todas as configurações. A restauração substitui a biblioteca, as configurações e as "
+        "cópias dos saves pelas do backup. Para devolver os saves aos jogos, use "
+        "“Restaurar saves de todos os jogos”."
     )
     monkeypatch.setattr(backup_de_saves, "disponivel", lambda: False)
     assert _preferencias(monkeypatch).backup_group.get_description() == (
@@ -209,11 +219,11 @@ def test_troca_da_pasta_roda_fora_da_tela_e_atualiza_o_subtitulo(
     schema.set_string("pasta-dos-saves", "X:/nova")  # o que o trocar_pasta de verdade faria
 
     thread = _esperar_troca(preferencias, monkeypatch, None)
-    _drenar(flush_idle, lambda: preferencias.pasta_dos_saves_row.get_subtitle() == str(pasta.atual()))
+    _drenar(flush_idle, lambda: preferencias.pasta_dos_saves_row.get_subtitle() == r"X:\nova")
 
     assert thread is not threading.main_thread()
     assert avisos == []
-    assert preferencias.pasta_dos_saves_row.get_subtitle() == str(Path("X:/nova"))
+    assert preferencias.pasta_dos_saves_row.get_subtitle() == r"X:\nova"
 
 
 @pytest.mark.parametrize(
@@ -222,6 +232,7 @@ def test_troca_da_pasta_roda_fora_da_tela_e_atualiza_o_subtitulo(
         "Escolha uma pasta fora da pasta atual dos saves.",
         "Escolha uma pasta que não contenha a pasta atual dos saves.",
         "A pasta escolhida já tem arquivos com os mesmos nomes dos saves. Escolha outra pasta.",
+        "Escolha uma pasta fora da pasta de dados do Cartridges.",
     ],
 )
 def test_troca_recusada_mostra_a_mensagem_de_cada_motivo(monkeypatch, flush_idle, mensagem):

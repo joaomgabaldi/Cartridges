@@ -194,8 +194,11 @@ begin
     // Accented, like every other string here. The compiler reads this file as
     // UTF-8 whether or not it carries a byte order mark — compiling the same
     // script with and without one produces byte-identical installers.
+    // A pasta dos saves só sai se for a padrão (dentro de {localappdata}); uma
+    // pasta escolhida em Preferências fica onde está, e o texto diz isso.
     if MsgBox('Remover também a biblioteca do Cartridges (lista de jogos, capas, ' +
-              'histórico de sessões) e as configurações? Os jogos instalados no ' +
+              'histórico de sessões e os backups dos saves dos jogos guardados na ' +
+              'pasta padrão) e as configurações? Os jogos instalados no ' +
               'computador não serão afetados.',
               mbConfirmation, MB_YESNO) = IDYES then
     begin
