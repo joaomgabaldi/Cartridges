@@ -91,6 +91,12 @@ _user32.MonitorFromRect.argtypes = [ctypes.POINTER(wintypes.RECT), wintypes.DWOR
 _user32.MonitorFromRect.restype = wintypes.HANDLE
 _user32.IsIconic.argtypes = [wintypes.HWND]
 _user32.IsIconic.restype = wintypes.BOOL
+_user32.IsZoomed.argtypes = [wintypes.HWND]
+_user32.IsZoomed.restype = wintypes.BOOL
+_user32.GetForegroundWindow.argtypes = []
+_user32.GetForegroundWindow.restype = wintypes.HWND
+_user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+_user32.GetWindowTextW.restype = ctypes.c_int
 
 
 class _MONITORINFOEXW(ctypes.Structure):
@@ -387,6 +393,65 @@ def apply_placement(window: Gtk.Window, geometry: Geometry) -> None:
 _before_session: Optional[Geometry] = None
 _before_placement: "Optional[_WINDOWPLACEMENT]" = None
 
+# ponytail: diagnóstico temporário. A janela estacionada encolhe sozinha no meio
+# da sessão (maximizada para o Windows, mas com a altura salva). Enquanto ela
+# estiver lá, cada mudança no que o Windows e o GTK dizem dela vai para o log.
+# Sair quando a causa for achada.
+_vigia_id = 0
+_vigia_ultimo: Optional[str] = None
+
+
+def _estado_da_janela(window: Gtk.Window) -> Optional[str]:
+    if (hwnd := _hwnd(window)) is None:
+        return None
+    rect = wintypes.RECT()
+    _user32.GetWindowRect(hwnd, ctypes.byref(rect))
+    placement = _get_placement(hwnd)
+    normal = placement.rcNormalPosition if placement else wintypes.RECT()
+    frente = _user32.GetForegroundWindow()
+    titulo = ctypes.create_unicode_buffer(128)
+    _user32.GetWindowTextW(frente, titulo, 128)
+    surface = window.get_surface()
+    return (
+        f"rect={rect.left},{rect.top} {rect.right - rect.left}x{rect.bottom - rect.top}"
+        f" zoomed={bool(_user32.IsZoomed(hwnd))}"
+        f" show={placement.showCmd if placement else '?'}"
+        f" normal={normal.left},{normal.top} "
+        f"{normal.right - normal.left}x{normal.bottom - normal.top}"
+        f" gtk={window.get_width()}x{window.get_height()}"
+        f" gtk_max={window.is_maximized()}"
+        f" surface={surface.get_width()}x{surface.get_height()}"
+        f" state={int(surface.get_state()) if surface else '?'}"
+        f" frente={'app' if frente == hwnd else repr(titulo.value)}"
+    )
+
+
+def _vigiar(window: Gtk.Window) -> bool:
+    global _vigia_ultimo  # pylint: disable=global-statement
+    try:
+        estado = _estado_da_janela(window)
+    except Exception as error:  # pylint: disable=broad-exception-caught
+        estado = f"erro ao ler: {error}"
+    if estado != _vigia_ultimo:
+        logging.info("Janela na sessão: %s", estado)
+        _vigia_ultimo = estado
+    return GLib.SOURCE_CONTINUE
+
+
+def _vigiar_comecar(window: Gtk.Window) -> None:
+    global _vigia_id, _vigia_ultimo  # pylint: disable=global-statement
+    _vigiar_parar()
+    _vigia_ultimo = None
+    _vigiar(window)
+    _vigia_id = GLib.timeout_add(250, _vigiar, window)
+
+
+def _vigiar_parar() -> None:
+    global _vigia_id  # pylint: disable=global-statement
+    if _vigia_id:
+        GLib.source_remove(_vigia_id)
+        _vigia_id = 0
+
 
 def session_geometry() -> Optional[Geometry]:
     """Where the window would be if no game were running, or None if none is.
@@ -451,6 +516,7 @@ def move_to_monitor(window: Gtk.Window, device: str) -> bool:
 
     _before_session, _before_placement = current, placement
     logging.info("Window parked on %s for the session", device)
+    _vigiar_comecar(window)
     return True
 
 
@@ -470,6 +536,7 @@ def restore_from_monitor(window: Gtk.Window) -> None:
 
     placement = _before_placement
     _before_session, _before_placement = None, None
+    _vigiar_parar()
 
     if placement is None or (hwnd := _hwnd(window)) is None:
         return
