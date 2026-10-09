@@ -1,0 +1,26 @@
+{
+  "overall": {
+    "totalGames": 1,
+    "totalBytes": 9,
+    "processedGames": 1,
+    "processedBytes": 9,
+    "changedGames": {
+      "new": 0,
+      "different": 1,
+      "same": 0
+    }
+  },
+  "games": {
+    "Teste Cartridges": {
+      "decision": "Processed",
+      "change": "Different",
+      "files": {
+        "C:/Temp/cartridges/fake/fake-save": {
+          "change": "Different",
+          "bytes": 9
+        }
+      },
+      "registry": {}
+    }
+  }
+}

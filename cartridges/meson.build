@@ -26,6 +26,7 @@ install_subdir(
   exclude_directories: ['__pycache__', 'managers/__pycache__'],
 )
 install_subdir('logging', install_dir: moduledir, exclude_directories: '__pycache__')
+install_subdir('saves', install_dir: moduledir, exclude_directories: '__pycache__')
 install_subdir('errors', install_dir: moduledir, exclude_directories: '__pycache__')
 install_subdir(
   'conquistas',

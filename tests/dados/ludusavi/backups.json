@@ -1,0 +1,27 @@
+{
+  "games": {
+    "Teste Cartridges": {
+      "backupPath": "C:/Temp/cartridges/bk2/Teste Cartridges",
+      "backups": [
+        {
+          "name": "backup-20261009T154638Z",
+          "when": "2026-10-09T15:46:38.971055700Z",
+          "os": "windows",
+          "locked": false
+        },
+        {
+          "name": "backup-20261009T154641Z",
+          "when": "2026-10-09T15:46:41.594421800Z",
+          "os": "windows",
+          "locked": false
+        },
+        {
+          "name": "backup-20261009T154644Z",
+          "when": "2026-10-09T15:46:44.168796800Z",
+          "os": "windows",
+          "locked": false
+        }
+      ]
+    }
+  }
+}
