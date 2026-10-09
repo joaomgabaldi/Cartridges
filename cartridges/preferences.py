@@ -133,6 +133,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     conquistas_epic_row: Adw.ActionRow = Gtk.Template.Child()
     conquistas_epic_botao: Gtk.Button = Gtk.Template.Child()
 
+    backup_group = Gtk.Template.Child()
     export_backup_button_row = Gtk.Template.Child()
     import_backup_button_row = Gtk.Template.Child()
     pasta_dos_saves_row = Gtk.Template.Child()
@@ -170,6 +171,14 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.pasta_dos_saves_row.set_visible(saves_disponivel)
         self.restaurar_saves_button_row.set_visible(saves_disponivel)
         self._atualizar_pasta_dos_saves()
+        if not saves_disponivel:
+            # Sem o Ludusavi o .zip não leva saves, e a descrição não pode prometê-los.
+            self.backup_group.set_description(
+                _(
+                    "Salve em um arquivo .zip a biblioteca completa e todas as configurações. "
+                    "A restauração substitui a biblioteca e as configurações atuais pelas do backup."
+                )
+            )
         self.pasta_dos_saves_botao.connect(
             "clicked", self.choose_folder, self._escolheu_pasta_dos_saves
         )
@@ -1351,11 +1360,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         def work() -> None:
             try:
                 backup_de_saves.trocar_pasta(nova)
-            except pasta.TrocaRecusada:
-                entregar_na_tela(
-                    self._troca_da_pasta_acabou,
-                    _("Escolha uma pasta fora da pasta atual dos saves."),
-                )
+            except pasta.TrocaRecusada as recusa:
+                entregar_na_tela(self._troca_da_pasta_acabou, str(recusa))
             except Exception:  # pylint: disable=broad-exception-caught
                 logging.exception("Não foi possível trocar a pasta dos saves")
                 entregar_na_tela(

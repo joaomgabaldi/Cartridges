@@ -520,9 +520,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
         fim da sessão você acabou de ver onde parou, e o balão já abre aberto.
 
         É também o fim de sessão comum aos dois modos, então é aqui que o backup
-        dos saves do jogo é disparado (em segundo plano, sem esperar).
+        dos saves do jogo é disparado (em segundo plano, sem esperar), depois do aviso.
         """
-        backup_de_saves.no_fim_da_sessao(game)
         toast = Adw.Toast.new(
             # The variables are the game's title and the session length
             _("{}: {} de jogo").format(game.name, format_playtime(seconds))
@@ -534,6 +533,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
             toast.set_button_label(_("Anotar"))
             toast.connect("button-clicked", self.on_session_toast_notes, game)
         self.toast_queue.add(toast)
+        # Por último: uma falha ao iniciar o backup não pode levar o aviso junto.
+        backup_de_saves.no_fim_da_sessao(game)
 
     def on_session_toast_notes(self, _toast: Adw.Toast, game: Game) -> None:
         """Abre o jogo com o balão da anotação já aberto.

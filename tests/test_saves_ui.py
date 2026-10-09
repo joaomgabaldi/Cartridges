@@ -5,6 +5,8 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from cartridges.saves import backup_de_saves, pasta
 from cartridges.saves.ludusavi import Versao
 
@@ -22,6 +24,16 @@ def test_fim_de_sessao_dispara_backup(monkeypatch, win, make_game):
     jogo = make_game()
     win.session_toast(jogo, 60)
     assert chamados == [jogo]
+
+
+def test_falha_ao_iniciar_o_backup_nao_perde_o_aviso(monkeypatch, win, make_game):
+    def explode(_jogo):
+        raise RuntimeError("falhou")
+
+    monkeypatch.setattr(backup_de_saves, "no_fim_da_sessao", explode)
+    with pytest.raises(RuntimeError):
+        win.session_toast(make_game(), 60)
+    assert len(win.toast_queue.added) == 1
 
 
 # -- menu do jogo --------------------------------------------------------------
@@ -47,9 +59,9 @@ def test_restore_save_esta_registrada_e_no_menu():
     texto = (Path(__file__).resolve().parent.parent / "data" / "gtk" / "game.blp").read_text(
         encoding="utf-8"
     )
-    assert 'item (_("Restaurar save"), "app.restore_save")' in texto or (
-        'label: _("Restaurar save")' in texto and 'hidden-when: "action-disabled"' in texto
-    )
+    assert 'label: _("Restaurar save");' in texto
+    assert 'action: "app.restore_save";' in texto
+    assert 'hidden-when: "action-disabled";' in texto
     principal = (Path(__file__).resolve().parent.parent / "cartridges" / "main.py").read_text(
         encoding="utf-8"
     )
@@ -76,7 +88,7 @@ def test_dialogo_lista_versoes_mais_recente_primeiro(monkeypatch, make_game):
     titulos = [linha.get_title() for linha in caixa.linhas]
     assert titulos[0] == esperado
     assert len(titulos) == 2
-    assert titulos[1] != titulos[0]
+    assert titulos[1] == dialogo.formatar(velha.quando)
 
 
 def test_data_local_no_formato_da_spec(monkeypatch):
@@ -151,6 +163,20 @@ def test_preferencias_com_ludusavi_mostram_as_linhas(monkeypatch):
     assert preferencias.pasta_dos_saves_row.get_subtitle() == str(pasta.atual())
 
 
+def test_descricao_do_backup_menciona_os_saves_so_com_ludusavi(monkeypatch):
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
+    assert _preferencias(monkeypatch).backup_group.get_description() == (
+        "Salve em um arquivo .zip a biblioteca completa, os saves dos jogos e todas as "
+        "configurações. A restauração substitui a biblioteca, os saves e as configurações "
+        "atuais pelas do backup."
+    )
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: False)
+    assert _preferencias(monkeypatch).backup_group.get_description() == (
+        "Salve em um arquivo .zip a biblioteca completa e todas as configurações. "
+        "A restauração substitui a biblioteca e as configurações atuais pelas do backup."
+    )
+
+
 def _toasts(preferencias, monkeypatch):
     avisos = []
     monkeypatch.setattr(preferencias, "add_toast", lambda toast: avisos.append(toast.get_title()))
@@ -190,15 +216,23 @@ def test_troca_da_pasta_roda_fora_da_tela_e_atualiza_o_subtitulo(
     assert preferencias.pasta_dos_saves_row.get_subtitle() == str(Path("X:/nova"))
 
 
-def test_troca_recusada_vira_o_aviso_da_spec(monkeypatch, flush_idle):
+@pytest.mark.parametrize(
+    "mensagem",
+    [
+        "Escolha uma pasta fora da pasta atual dos saves.",
+        "Escolha uma pasta que não contenha a pasta atual dos saves.",
+        "A pasta escolhida já tem arquivos com os mesmos nomes dos saves. Escolha outra pasta.",
+    ],
+)
+def test_troca_recusada_mostra_a_mensagem_de_cada_motivo(monkeypatch, flush_idle, mensagem):
     monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
     preferencias = _preferencias(monkeypatch)
     avisos = _toasts(preferencias, monkeypatch)
 
-    _esperar_troca(preferencias, monkeypatch, pasta.TrocaRecusada("x"))
+    _esperar_troca(preferencias, monkeypatch, pasta.TrocaRecusada(mensagem))
     _drenar(flush_idle, lambda: avisos)
 
-    assert avisos == ["Escolha uma pasta fora da pasta atual dos saves."]
+    assert avisos == [mensagem]
 
 
 def test_troca_que_falha_avisa(monkeypatch, flush_idle):

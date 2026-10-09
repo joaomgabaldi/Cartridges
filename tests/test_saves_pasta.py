@@ -54,8 +54,9 @@ def test_recusa_a_mesma_e_subpasta(settings) -> None:
     _guarda_save(atual, "X")
 
     for nova in (atual, atual / "SUB", atual / "X"):
-        with pytest.raises(pasta.TrocaRecusada):
+        with pytest.raises(pasta.TrocaRecusada) as recusa:
             pasta.trocar(nova)
+        assert str(recusa.value) == "Escolha uma pasta fora da pasta atual dos saves."
 
     assert sorted(p.name for p in atual.iterdir()) == ["X"]
     assert [p.name for p in (atual / "X").iterdir()] == ["save.dat"]
@@ -98,8 +99,9 @@ def test_recusa_uma_pasta_que_contem_a_atual(settings) -> None:
     atual = pasta.padrao()
     _guarda_save(atual, "X")
 
-    with pytest.raises(pasta.TrocaRecusada):
+    with pytest.raises(pasta.TrocaRecusada) as recusa:
         pasta.trocar(shared.app_dir)
+    assert str(recusa.value) == "Escolha uma pasta que não contenha a pasta atual dos saves."
 
     assert (atual / "X" / "save.dat").is_file()
     assert shared.schema.get_string("pasta-dos-saves") == ""
@@ -118,8 +120,11 @@ def test_recusa_se_a_nova_tem_um_arquivo_com_o_nome_de_um_item(settings, tmp_pat
     nova.mkdir()
     (nova / "X").write_text("meu")  # arquivo, não subpasta: a nova segue "sem saves"
 
-    with pytest.raises(pasta.TrocaRecusada):
+    with pytest.raises(pasta.TrocaRecusada) as recusa:
         pasta.trocar(nova)
+    assert str(recusa.value) == (
+        "A pasta escolhida já tem arquivos com os mesmos nomes dos saves. Escolha outra pasta."
+    )
 
     assert (pasta.padrao() / "X" / "save.dat").is_file()
     assert (nova / "X").read_text() == "meu"

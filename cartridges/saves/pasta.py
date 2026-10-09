@@ -16,7 +16,7 @@ _CHAVE = "pasta-dos-saves"
 
 
 class TrocaRecusada(ValueError):
-    """A pasta nova é a atual ou fica dentro dela."""
+    """A troca não vale. A mensagem (`str(erro)`) já é o aviso que o usuário lê."""
 
 
 def padrao() -> Path:
@@ -68,7 +68,9 @@ def _levar(antiga: Path, nova: Path) -> list[Path]:
     """
     itens = list(antiga.iterdir())
     if any((nova / item.name).exists() for item in itens):
-        raise TrocaRecusada(str(nova))
+        raise TrocaRecusada(
+            _("A pasta escolhida já tem arquivos com os mesmos nomes dos saves. Escolha outra pasta.")
+        )
     nova.mkdir(parents=True, exist_ok=True)
     copiados: list[Path] = []
     try:
@@ -93,8 +95,10 @@ def trocar(nova: Path) -> None:
     que precisaria receber.
     """
     antiga = atual()
-    if _dentro(nova, antiga) or _dentro(antiga, nova):
-        raise TrocaRecusada(str(nova))
+    if _dentro(nova, antiga):
+        raise TrocaRecusada(_("Escolha uma pasta fora da pasta atual dos saves."))
+    if _dentro(antiga, nova):
+        raise TrocaRecusada(_("Escolha uma pasta que não contenha a pasta atual dos saves."))
 
     originais: list[Path] = []
     if antiga.is_dir() and not _tem_saves(nova):
