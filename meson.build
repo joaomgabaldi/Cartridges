@@ -3,7 +3,7 @@ project(
   # Versionamento por data da build: AAAA.MM.DD
   # Atualize esta linha (e a <release> em data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in)
   # sempre que fizer uma alteracao que exija rebuildar o projeto.
-  version: '2026.10.08',
+  version: '2026.10.09',
   meson_version: '>= 0.59.0',
   default_options: [
     'warning_level=2',
