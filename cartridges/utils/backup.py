@@ -7,15 +7,19 @@
 """O backup: um retrato completo do app num .zip.
 
 Leva a pasta do app inteira (jogos, capas, logos, papéis de parede, cores das
-fitas, lista de fitas, conta da Tuya e histórico de sessões) e as configurações
-do registro. Fica fora só o que não pode ser restaurado com sentido: os logs, o
-caminho de volta de uma sessão em andamento e o estado da janela.
+fitas, lista de fitas, conta da Tuya e histórico de sessões), os backups dos
+saves (a pasta configurada, onde quer que esteja, entra como `saves/`) e as
+configurações do registro. Fica fora só o que não pode ser restaurado com
+sentido: os logs, a pasta de configuração do Ludusavi, o caminho de volta de uma
+sessão em andamento, a pasta dos saves escolhida e o estado da janela. Os saves
+não têm limite de tamanho: um jogo pode guardar gigabytes.
 
 Restaurar substitui tudo, com o app fechado: `agendar` copia o .zip para a
 pasta do app e Preferências reinicia o app; `aplicar_pendente`, na abertura,
 antes de qualquer leitura, troca a pasta e as configurações e cria as
-pendências da restauração (`utils/restauracao.py`). Se algo falhar, tudo volta
-como estava.
+pendências da restauração (`utils/restauracao.py`). Os saves voltam para a pasta
+padrão, dentro da mesma troca, e a escolha de outra pasta é desfeita; a pasta
+de fora nunca é tocada. Se algo falhar, tudo volta como estava.
 """
 
 import json
@@ -29,18 +33,24 @@ from typing import Any, Iterable, Optional
 from gi.repository import Gio, GLib
 
 from cartridges import shared
+from cartridges.saves import pasta as pasta_dos_saves
 from cartridges.utils import game_logo, restauracao, save_cover, session_wallpaper
 
-VERSAO = 5
+VERSAO = 6
+# Versões de backup que `validar` ainda aceita: a 5 só não tinha os saves.
+_VERSOES_ACEITAS = (5, VERSAO)
 
 _CONFIGURACOES = "configuracoes.json"
+_CHAVE_DA_PASTA_DOS_SAVES = "pasta-dos-saves"
+_SAVES = "saves"
 _AGENDADO = "restaurar.zip"
 # Arquivos soltos na raiz da pasta do app que vão no backup.
 _SOLTOS = ("fitas.json", "sessions.jsonl", "tuya_conta.json")
 # O que fica na pasta do app durante a troca: os logs são desta máquina e desta
 # execução, e o .zip agendado é a própria fonte da troca. A pasta `contas` também
-# é desta máquina e deste usuário do Windows (o DPAPI não abre em outro PC).
-_FICAM = frozenset({"logs", "contas", _AGENDADO})
+# é desta máquina e deste usuário do Windows (o DPAPI não abre em outro PC), e
+# `ludusavi` guarda a configuração do Ludusavi desta máquina.
+_FICAM = frozenset({"logs", "contas", "ludusavi", _AGENDADO})
 # Marca, dentro de `.anterior`, que todos os dados de antes já saíram da pasta
 # do app: a partir dali, o que estiver nela veio do backup.
 _COMPLETO = ".completo"
@@ -51,16 +61,19 @@ _CONCLUIDO = ".concluido"
 
 # O caminho de volta de uma sessão em andamento nesta máquina: as telas e as
 # fitas como estavam antes do jogo. Restaurado depois, "desfaria" uma troca
-# que nunca aconteceu.
-_CHAVES_DE_SESSAO = frozenset({"session-wallpaper-saved", "fita-estado-anterior"})
+# que nunca aconteceu. Fica aqui também a pasta dos saves: ela é desta máquina,
+# e a restauração a zera (`aplicar_pendente`) em vez de copiá-la.
+_CHAVES_DE_SESSAO = frozenset(
+    {"session-wallpaper-saved", "fita-estado-anterior", _CHAVE_DA_PASTA_DOS_SAVES}
+)
 
 # Do schema de estado, só a ordenação é escolha de alguém. Tamanho e posição da
 # janela, o balde do limitador da Steam e a última novidade vista são da máquina.
 _CHAVES_DE_ESTADO = ("sort-mode",)
 
-# Nenhum arquivo do app chega perto disso; acima é zip malicioso ou corrompido.
-_TAMANHO_MAXIMO_POR_ENTRADA = 500 * 1024 * 1024
-_TAMANHO_MAXIMO_TOTAL = 4 * 1024 * 1024 * 1024
+# O que o backup leva de cada pasta de jogo dos saves, além dos .zip: o mapa do
+# Ludusavi.
+_MAPA_DOS_SAVES = "mapping.yaml"
 
 
 def _extensoes() -> dict[str, tuple[str, ...]]:
@@ -172,14 +185,39 @@ def _entradas() -> list[tuple[Path, str]]:
         for caminho in sorted(diretorio.iterdir()):
             if caminho.is_file() and caminho.suffix.lower() in extensoes:
                 entradas.append((caminho, f"{pasta}/{caminho.name}"))
+    entradas.extend(_entradas_dos_saves())
     return entradas
 
 
+def _entradas_dos_saves() -> list[tuple[Path, str]]:
+    """Os saves da pasta configurada (a padrão ou a escolhida), sempre como
+    ``saves/<jogo>/<arquivo>``. Pasta que sumiu: backup sem saves."""
+    raiz = pasta_dos_saves.atual()
+    if not raiz.is_dir():
+        return []
+    entradas = []
+    for jogo in sorted(raiz.iterdir()):
+        if not jogo.is_dir():
+            continue
+        for caminho in sorted(jogo.iterdir()):
+            if caminho.is_file() and _arquivo_de_save_valido(caminho.name):
+                entradas.append((caminho, f"{_SAVES}/{jogo.name}/{caminho.name}"))
+    return entradas
+
+
+def _arquivo_de_save_valido(nome: str) -> bool:
+    return nome == _MAPA_DOS_SAVES or (
+        not nome.startswith(".") and PurePosixPath(nome).suffix.lower() == ".zip"
+    )
+
+
 def _incluir(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
-    # As imagens já vêm comprimidas: passar deflate nelas custa segundos e não
-    # ganha nada. Só o texto é comprimido.
+    # As imagens e os backups dos saves (.zip) já vêm comprimidos: passar
+    # deflate neles custa segundos e não ganha nada. Só o texto é comprimido.
     compressao = (
-        zipfile.ZIP_DEFLATED if caminho.suffix in (".json", ".jsonl") else zipfile.ZIP_STORED
+        zipfile.ZIP_DEFLATED
+        if caminho.suffix in (".json", ".jsonl", ".yaml")
+        else zipfile.ZIP_STORED
     )
     try:
         arquivo.write(caminho, nome, compress_type=compressao)
@@ -223,9 +261,10 @@ def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
 
 
 def _nome_valido(nome: str, extensoes_por_pasta: dict[str, tuple[str, ...]]) -> bool:
-    """Só o que `exportar` grava: o manifesto, um arquivo solto conhecido, ou
-    ``<pasta conhecida>/<arquivo com extensão conhecida>``. Nada absoluto,
-    nada com ``..``, nada em subpasta que `_extensoes` não liste."""
+    """Só o que `exportar` grava: o manifesto, um arquivo solto conhecido,
+    ``<pasta conhecida>/<arquivo com extensão conhecida>`` ou
+    ``saves/<jogo>/<mapping.yaml ou .zip>``. Nada absoluto, nada com ``..``,
+    nada em subpasta que `_extensoes` não liste."""
     if nome in (_CONFIGURACOES, *_SOLTOS):
         return True
     if "\\" in nome or ":" in nome:
@@ -233,6 +272,13 @@ def _nome_valido(nome: str, extensoes_por_pasta: dict[str, tuple[str, ...]]) -> 
     partes = PurePosixPath(nome).parts
     if len(partes) < 2:
         return False
+    if partes[0] == _SAVES:
+        # Exatamente saves/<jogo>/<arquivo>; um nível só, como `exportar` grava.
+        return (
+            len(partes) == 3
+            and partes[1] not in (".", "..")
+            and _arquivo_de_save_valido(partes[2])
+        )
     # A pasta pode ser aninhada ("cache/capas_animadas"): vale o que
     # `_extensoes` lista, inteiro.
     pasta, arquivo = "/".join(partes[:-1]), partes[-1]
@@ -246,16 +292,12 @@ def validar(caminho: Path) -> dict[str, Any]:
     """O manifesto de um backup. ``BackupInvalido`` se não for um."""
     try:
         with zipfile.ZipFile(caminho) as arquivo:
-            total = 0
             extensoes = _extensoes()
             for info in arquivo.infolist():
                 if not _nome_valido(info.filename, extensoes):
                     raise BackupInvalido(f"entrada inesperada no backup: {info.filename}")
-                if info.file_size > _TAMANHO_MAXIMO_POR_ENTRADA:
-                    raise BackupInvalido(f"entrada grande demais no backup: {info.filename}")
-                total += info.file_size
-                if total > _TAMANHO_MAXIMO_TOTAL:
-                    raise BackupInvalido("backup grande demais")
+            # Sem limite de tamanho: os saves de um jogo chegam a gigabytes. O
+            # nome e o CRC já pegam o zip que não é nosso.
             # O CRC de cada entrada: um byte trocado numa capa passaria daqui e
             # só estouraria no meio da troca.
             if (corrompida := arquivo.testzip()) is not None:
@@ -266,7 +308,7 @@ def validar(caminho: Path) -> dict[str, Any]:
     except Exception as erro:  # pylint: disable=broad-exception-caught
         raise BackupInvalido(str(erro)) from erro
 
-    if not isinstance(manifesto, dict) or manifesto.get("version") != VERSAO:
+    if not isinstance(manifesto, dict) or manifesto.get("version") not in _VERSOES_ACEITAS:
         raise BackupInvalido("o arquivo não é um backup desta versão")
     if not isinstance(manifesto.get("settings"), dict):
         raise BackupInvalido("backup sem o bloco de configurações")
@@ -386,6 +428,9 @@ def aplicar_pendente() -> Optional[bool]:
             restauracao.ids_que_dependem_de_atalho(shared.games_dir), int(time())
         )
         aplicar_configuracoes(manifesto)
+        # Os saves do backup entraram na pasta padrão, na troca acima.
+        shared.schema.reset(_CHAVE_DA_PASTA_DOS_SAVES)
+        Gio.Settings.sync()
     except Exception:  # pylint: disable=broad-exception-caught
         logging.exception("Não foi possível restaurar o backup")
         try:

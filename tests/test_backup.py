@@ -250,6 +250,154 @@ def test_validar_aceita_o_que_exportar_grava(tmp_path):
 
 
 # --------------------------------------------------------------------------
+# Os saves no backup
+# --------------------------------------------------------------------------
+
+
+def _guardar_saves(raiz, jogo="X", mapping="mapping", backup_1="save"):
+    (raiz / jogo).mkdir(parents=True, exist_ok=True)
+    (raiz / jogo / "mapping.yaml").write_text(mapping, encoding="utf-8")
+    (raiz / jogo / "backup-1.zip").write_bytes(backup_1.encode())
+
+
+def test_exporta_saves_da_pasta_padrao(tmp_path):
+    _guardar_saves(shared.app_dir / "saves")
+    with zipfile.ZipFile(_exportar(tmp_path)) as arquivo:
+        nomes = set(arquivo.namelist())
+    assert {"saves/X/mapping.yaml", "saves/X/backup-1.zip"} <= nomes
+
+
+def test_exporta_saves_de_pasta_fora(tmp_path):
+    fora = tmp_path / "meus_saves"
+    _guardar_saves(fora)
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    with zipfile.ZipFile(_exportar(tmp_path)) as arquivo:
+        nomes = set(arquivo.namelist())
+    assert {"saves/X/mapping.yaml", "saves/X/backup-1.zip"} <= nomes
+
+
+def test_exporta_so_o_que_validar_aceita_dos_saves(tmp_path):
+    saves = shared.app_dir / "saves"
+    _guardar_saves(saves)
+    (saves / "X" / "lixo.txt").write_text("x", encoding="utf-8")
+    (saves / "X" / "sub").mkdir()
+    (saves / "X" / "sub" / "a.zip").write_bytes(b"x")
+    (saves / "solto.zip").write_bytes(b"x")
+    destino = _exportar(tmp_path)
+    with zipfile.ZipFile(destino) as arquivo:
+        saves_no_zip = {n for n in arquivo.namelist() if n.startswith("saves/")}
+        compressao = {i.filename: i.compress_type for i in arquivo.infolist()}
+    assert saves_no_zip == {"saves/X/mapping.yaml", "saves/X/backup-1.zip"}
+    # O .zip já vem comprimido; o texto do mapping, não.
+    assert compressao["saves/X/backup-1.zip"] == zipfile.ZIP_STORED
+    assert compressao["saves/X/mapping.yaml"] == zipfile.ZIP_DEFLATED
+    assert backup.validar(destino)["version"] == backup.VERSAO
+
+
+def test_pasta_dos_saves_sumiu_exporta_sem_saves(tmp_path):
+    _encher_pasta_do_app()
+    shared.schema.set_string("pasta-dos-saves", str(tmp_path / "apagada"))
+    destino = _exportar(tmp_path)
+    with zipfile.ZipFile(destino) as arquivo:
+        assert not any(n.startswith("saves/") for n in arquivo.namelist())
+    assert backup.validar(destino)["version"] == backup.VERSAO
+
+
+@pytest.mark.parametrize("nome", ["saves/X/mapping.yaml", "saves/X/a.zip", "saves/X/A.ZIP"])
+def test_valida_nomes_de_saves(tmp_path, nome):
+    caminho = _zip(tmp_path / "b.zip", {"configuracoes.json": _MANIFESTO, nome: "x"})
+    assert backup.validar(caminho)["version"] == backup.VERSAO
+
+
+@pytest.mark.parametrize(
+    "nome",
+    ["saves/a.zip", "saves/mapping.yaml", "saves/X/Y/a.zip", "saves/X/a.exe",
+     "saves/../a.zip", "saves/X/outro.yaml", "saves/X/.a.zip", "saves/X/",
+     "/saves/X/a.zip", "saves2/X/a.zip"],
+)
+def test_recusa_nomes_de_saves_inesperados(tmp_path, nome):
+    caminho = _zip(tmp_path / "b.zip", {"configuracoes.json": _MANIFESTO, nome: "x"})
+    with pytest.raises(backup.BackupInvalido):
+        backup.validar(caminho)
+
+
+def test_sem_limite_de_tamanho(tmp_path):
+    """Um save de jogo pode ter gigabytes: o tamanho não invalida o backup."""
+    caminho = tmp_path / "b.zip"
+    with zipfile.ZipFile(caminho, "w") as arquivo:
+        arquivo.writestr("configuracoes.json", _MANIFESTO)
+        arquivo.writestr("saves/X/a.zip", "x")
+        # Declarada no cabeçalho com 600 MB, sem escrever os 600 MB.
+        arquivo.filelist[-1].file_size = 600 * 1024 * 1024
+    assert backup.validar(caminho)["version"] == backup.VERSAO
+
+
+def test_aceita_versao_5(tmp_path):
+    antigo = json.dumps({"version": 5, "settings": {}, "state": {}})
+    assert backup.validar(_zip(tmp_path / "b.zip", {"configuracoes.json": antigo}))["version"] == 5
+
+
+def test_recusa_versao_futura(tmp_path):
+    futuro = json.dumps({"version": backup.VERSAO + 1, "settings": {}, "state": {}})
+    with pytest.raises(backup.BackupInvalido):
+        backup.validar(_zip(tmp_path / "b.zip", {"configuracoes.json": futuro}))
+
+
+def test_pasta_dos_saves_nao_vai_nas_configuracoes():
+    assert backup._filtrar_chaves(["pasta-dos-saves", "sgdb"]) == ["sgdb"]
+    assert "pasta-dos-saves" not in backup.ler_configuracoes()["settings"]
+
+
+def test_restaura_saves_na_padrao_e_zera_a_chave(tmp_path, monkeypatch):
+    fora = tmp_path / "meus_saves"
+    _guardar_saves(fora, mapping="do backup")
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    _preparar_restauracao(tmp_path, monkeypatch)
+    # Depois do backup, a pasta de fora muda: a restauração não pode tocá-la.
+    (fora / "X" / "mapping.yaml").write_text("de depois", encoding="utf-8")
+    (fora / "Y").mkdir()
+
+    assert backup.aplicar_pendente() is True
+
+    padrao = shared.app_dir / "saves"
+    assert (padrao / "X" / "mapping.yaml").read_text("utf-8") == "do backup"
+    assert (padrao / "X" / "backup-1.zip").read_bytes() == b"save"
+    assert shared.schema.get_string("pasta-dos-saves") == ""
+    assert (fora / "X" / "mapping.yaml").read_text("utf-8") == "de depois"
+    assert (fora / "Y").is_dir()
+
+
+def test_restauracao_que_falha_nao_mexe_na_pasta_dos_saves(tmp_path, monkeypatch):
+    fora = tmp_path / "meus_saves"
+    _guardar_saves(fora)
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    aplicadas = _preparar_restauracao(tmp_path, monkeypatch)
+    _guardar_saves(shared.app_dir / "saves", mapping="de antes")
+
+    def aplicar(configuracoes):
+        aplicadas.append(configuracoes)
+        if configuracoes["settings"] != {"antes": 1}:
+            raise OSError("registro travado")
+
+    monkeypatch.setattr(backup, "aplicar_configuracoes", aplicar)
+
+    assert backup.aplicar_pendente() is False
+
+    assert shared.schema.get_string("pasta-dos-saves") == str(fora)
+    assert (shared.app_dir / "saves" / "X" / "mapping.yaml").read_text("utf-8") == "de antes"
+
+
+def test_pasta_ludusavi_fica(tmp_path, monkeypatch):
+    _preparar_restauracao(tmp_path, monkeypatch)
+    (shared.app_dir / "ludusavi").mkdir()
+    (shared.app_dir / "ludusavi" / "config.yaml").write_text("config", encoding="utf-8")
+
+    assert backup.aplicar_pendente() is True
+
+    assert (shared.app_dir / "ludusavi" / "config.yaml").read_text("utf-8") == "config"
+
+
+# --------------------------------------------------------------------------
 # Restaurar
 # --------------------------------------------------------------------------
 

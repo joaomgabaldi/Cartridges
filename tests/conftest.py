@@ -118,6 +118,7 @@ _SCHEMA_DEFAULTS = {
     "news-check-interval": 6,
     "show-news-button": False,
     "sort-mode": "last_played",
+    "pasta-dos-saves": "",
 }
 
 _STATE_DEFAULTS = {
