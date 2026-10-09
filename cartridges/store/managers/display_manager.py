@@ -79,8 +79,6 @@ class DisplayManager(Manager):
         return False  # one-shot
 
     def main(self, game: Game, _additional_data: dict) -> None:
-        game.menu_button.set_menu_model(game.game_options)
-
         game.title.set_label(game.name)
 
         # Gold glow around the cover when a patch is waiting for this game,
@@ -94,10 +92,15 @@ class DisplayManager(Manager):
         else:
             game.cover_button.remove_css_class("update-available")
 
-        # Connect only once: main() runs on every game update, and reconnecting
-        # here would pile up duplicate handlers on the same popover
+        # Uma vez só por card: main() roda em toda atualização do jogo. O modelo
+        # do menu entra aqui dentro porque cada `set_menu_model` cria um popover
+        # novo; feito a cada atualização, ele deixava as conexões abaixo no
+        # popover antigo, e o menu novo não dizia mais qual era o jogo ativo
+        # ("Editar" e "Remover" agiam sobre o último jogo aberto). O modelo de
+        # cada card nunca muda, então basta defini-lo uma vez.
         if not getattr(game, "popover_connected", False):
             game.popover_connected = True
+            game.menu_button.set_menu_model(game.game_options)
             game.menu_button.get_popover().connect(
                 "notify::visible", game.toggle_play, None
             )
