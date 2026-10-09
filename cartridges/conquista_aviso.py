@@ -47,9 +47,10 @@ def _tocar_som() -> None:
 
 
 def _reproduzir(dados: bytes) -> None:
-    # SND_MEMORY não aceita SND_ASYNC: por isso a thread.
+    # SND_MEMORY não aceita SND_ASYNC: por isso a thread. SND_NODEFAULT: se não
+    # der para tocar, silêncio, e não o som padrão do Windows por cima do jogo.
     try:
-        winsound.PlaySound(dados, winsound.SND_MEMORY)
+        winsound.PlaySound(dados, winsound.SND_MEMORY | winsound.SND_NODEFAULT)
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning("Falha ao tocar o som do aviso de conquista", exc_info=True)
 

@@ -272,7 +272,7 @@ def test_som_toca_quando_o_cartao_entra(sons):
     assert len(sons) == 1
     dados, flags = sons[0]
     assert dados[:4] == b"RIFF" and dados[8:12] == b"WAVE"
-    assert flags == winsound.SND_MEMORY
+    assert flags == winsound.SND_MEMORY | winsound.SND_NODEFAULT  # falha não vira o "ding" do Windows
 
 
 def test_som_desligado_nao_toca(sons, schema):
