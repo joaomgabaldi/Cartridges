@@ -404,9 +404,10 @@ def state_schema(monkeypatch):
 def settings(tmp_path, monkeypatch):
     """GSettings de verdade, com backend em memória.
 
-    O backup lê e grava GVariant, e é o tipo de cada chave no schema que
-    decide o que um valor do arquivo vira — um dicionário no lugar dele não
-    testaria nada disso.
+    Instala em `shared.schema` e `shared.state_schema` os schemas compilados de
+    `_build/data` (com as chaves e os tipos reais), sobre um backend que não
+    toca no registro do usuário, e devolve o par `(principal, estado)`. Serve a
+    quem depende do tipo GVariant de cada chave — o `FakeSchema` não o tem.
     """
     schemas = tmp_path / "_schemas"
     schemas.mkdir()
