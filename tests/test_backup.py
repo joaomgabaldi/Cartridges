@@ -7,12 +7,14 @@ num .zip, restaurado com o app fechado (`agendar` + `aplicar_pendente`)."""
 
 import json
 import shutil
+import threading
 import zipfile
 from pathlib import Path
 
 import pytest
 
 from cartridges import shared
+from cartridges.saves import backup_de_saves
 from cartridges.utils import backup
 
 _PASTAS_DO_APP = (
@@ -387,6 +389,118 @@ def test_restauracao_que_falha_nao_mexe_na_pasta_dos_saves(tmp_path, monkeypatch
     assert (shared.app_dir / "saves" / "X" / "mapping.yaml").read_text("utf-8") == "de antes"
 
 
+def _backup_sem_saves(tmp_path, versao):
+    """Um backup agendado sem nenhuma entrada `saves/` (todo o da versão 5)."""
+    manifesto = json.dumps({"version": versao, "settings": {"sgdb": True}, "state": {}})
+    origem = _zip(
+        tmp_path / "sem_saves.zip",
+        {"configuracoes.json": manifesto, "games/shortcuts_1.json": "{}"},
+    )
+    backup.agendar(origem)
+
+
+@pytest.mark.parametrize("versao", [5, 6])
+def test_backup_sem_saves_deixa_os_saves_atuais(tmp_path, monkeypatch, versao):
+    monkeypatch.setattr(backup, "aplicar_configuracoes", lambda _c: None)
+    monkeypatch.setattr(backup, "ler_configuracoes", lambda: {"settings": {}, "state": {}})
+    _guardar_saves(shared.app_dir / "saves", mapping="atual")
+    _backup_sem_saves(tmp_path, versao)
+
+    assert backup.aplicar_pendente() is True
+
+    assert (shared.app_dir / "saves" / "X" / "mapping.yaml").read_text("utf-8") == "atual"
+    assert [p.name for p in shared.games_dir.iterdir()] == ["shortcuts_1.json"]
+    # Nada do mecanismo da troca sobra na pasta do app.
+    assert not (shared.app_dir / backup._SAVES_FICAM).exists()
+
+
+def test_backup_sem_saves_mantem_a_pasta_escolhida(tmp_path, monkeypatch):
+    monkeypatch.setattr(backup, "aplicar_configuracoes", lambda _c: None)
+    monkeypatch.setattr(backup, "ler_configuracoes", lambda: {"settings": {}, "state": {}})
+    fora = tmp_path / "meus_saves"
+    _guardar_saves(fora)
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    _backup_sem_saves(tmp_path, 5)
+
+    assert backup.aplicar_pendente() is True
+
+    assert shared.schema.get_string("pasta-dos-saves") == str(fora)
+    assert (fora / "X" / "mapping.yaml").is_file()
+
+
+def test_backup_com_saves_continua_substituindo_a_pasta_padrao(tmp_path, monkeypatch):
+    _guardar_saves(shared.app_dir / "saves", mapping="do backup")
+    _preparar_restauracao(tmp_path, monkeypatch)
+    _guardar_saves(shared.app_dir / "saves", jogo="Z")
+    (shared.app_dir / "saves" / "X" / "mapping.yaml").write_text("de depois", encoding="utf-8")
+
+    assert backup.aplicar_pendente() is True
+
+    saves = shared.app_dir / "saves"
+    assert sorted(p.name for p in saves.iterdir()) == ["X"]
+    assert (saves / "X" / "mapping.yaml").read_text("utf-8") == "do backup"
+
+
+def test_falha_na_restauracao_sem_saves_no_backup_mantem_os_saves(tmp_path, monkeypatch):
+    aplicadas = []
+    monkeypatch.setattr(backup, "ler_configuracoes", lambda: {"settings": {"antes": 1}, "state": {}})
+
+    def aplicar(configuracoes):
+        aplicadas.append(configuracoes)
+        if configuracoes["settings"] != {"antes": 1}:
+            raise OSError("registro travado")
+
+    monkeypatch.setattr(backup, "aplicar_configuracoes", aplicar)
+    _guardar_saves(shared.app_dir / "saves", mapping="atual")
+    (shared.games_dir / "atual.json").write_text("{}", encoding="utf-8")
+    _backup_sem_saves(tmp_path, 5)
+
+    assert backup.aplicar_pendente() is False
+
+    assert (shared.app_dir / "saves" / "X" / "mapping.yaml").read_text("utf-8") == "atual"
+    assert [p.name for p in shared.games_dir.iterdir()] == ["atual.json"]
+    assert aplicadas[-1] == {"settings": {"antes": 1}, "state": {}}
+    assert not (shared.app_dir / backup._SAVES_FICAM).exists()
+
+
+def test_queda_no_meio_da_troca_sem_saves_no_backup_nao_apaga_os_saves(tmp_path, monkeypatch):
+    """Depois da marca de que tudo saiu, a limpeza apaga o que veio do backup;
+    os saves nunca saíram, então ficam."""
+    _preparar_restauracao(tmp_path, monkeypatch)
+    anterior = shared.app_dir.with_name(shared.app_dir.name + ".anterior")
+    anterior.mkdir()
+    shared.games_dir.replace(anterior / "games")
+    (anterior / ".completo").write_text("", encoding="utf-8")
+    (anterior / backup._SAVES_FICAM).write_text("", encoding="utf-8")
+    (shared.app_dir / "games").mkdir()
+    (shared.app_dir / "games" / "do_backup.json").write_text("{}", encoding="utf-8")
+    _guardar_saves(shared.app_dir / "saves", mapping="atual")
+    (shared.app_dir / "restaurar.zip").unlink()
+
+    assert backup.aplicar_pendente() is None
+
+    assert (shared.app_dir / "saves" / "X" / "mapping.yaml").read_text("utf-8") == "atual"
+    assert [p.name for p in shared.games_dir.iterdir()] == ["atual.json"]
+    assert not (shared.app_dir / backup._SAVES_FICAM).exists()
+
+
+def test_exportar_espera_a_trava_dos_saves(tmp_path):
+    """Um backup de save em andamento não pode entrar pela metade no backup do app."""
+    _guardar_saves(shared.app_dir / "saves")
+    terminou = threading.Event()
+
+    def exportar():
+        _exportar(tmp_path)
+        terminou.set()
+
+    with backup_de_saves.trava_dos_saves():
+        thread = threading.Thread(target=exportar, daemon=True)
+        thread.start()
+        assert not terminou.wait(0.5)
+    assert terminou.wait(10)
+    thread.join()
+
+
 def test_pasta_ludusavi_fica(tmp_path, monkeypatch):
     _preparar_restauracao(tmp_path, monkeypatch)
     (shared.app_dir / "ludusavi").mkdir()
@@ -527,6 +641,29 @@ def test_falha_ao_apagar_a_pasta_anterior_nao_apaga_o_que_voltou(tmp_path, monke
         travado.setattr(shutil, "rmtree", rmtree_que_trava)
         travado.setattr(backup, "sleep", lambda _s: None)
         assert backup.aplicar_pendente() is False
+
+    # Mesmo sem conseguir apagar `.anterior`, as configurações de antes voltam.
+    assert aplicadas[-1] == {"settings": {"antes": 1}, "state": {}}
+    assert backup.aplicar_pendente() is None
+    assert [p.name for p in shared.games_dir.iterdir()] == ["atual.json"]
+
+
+def test_falha_ao_apagar_a_pasta_anterior_na_abertura_so_registra(tmp_path, monkeypatch):
+    """Os dados já voltaram: a pasta vazia que sobrou não derruba a abertura."""
+    _preparar_restauracao(tmp_path, monkeypatch)
+    anterior = shared.app_dir.with_name(shared.app_dir.name + ".anterior")
+    anterior.mkdir()
+    shared.games_dir.replace(anterior / "games")
+    (shared.app_dir / "restaurar.zip").unlink()
+    rmtree_original = shutil.rmtree
+
+    def rmtree_que_trava(caminho, *args, **kwargs):
+        if str(caminho).endswith(".anterior"):
+            raise OSError("arquivo em uso")
+        return rmtree_original(caminho, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "rmtree", rmtree_que_trava)
+    monkeypatch.setattr(backup, "sleep", lambda _s: None)
 
     assert backup.aplicar_pendente() is None
     assert [p.name for p in shared.games_dir.iterdir()] == ["atual.json"]

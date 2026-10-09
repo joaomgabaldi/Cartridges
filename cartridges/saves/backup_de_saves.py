@@ -36,6 +36,12 @@ _trava = threading.Lock()
 _cache: dict[str, list[Versao]] = {}
 
 
+def trava_dos_saves() -> threading.Lock:
+    """A trava que cobre o Ludusavi e a pasta dos saves, para quem precisa de uma
+    pasta dos saves estável (o backup do app): ``with trava_dos_saves(): ...``."""
+    return _trava
+
+
 def disponivel() -> bool:
     return ludusavi.executavel() is not None
 

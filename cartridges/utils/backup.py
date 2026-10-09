@@ -17,9 +17,11 @@ não têm limite de tamanho: um jogo pode guardar gigabytes.
 Restaurar substitui tudo, com o app fechado: `agendar` copia o .zip para a
 pasta do app e Preferências reinicia o app; `aplicar_pendente`, na abertura,
 antes de qualquer leitura, troca a pasta e as configurações e cria as
-pendências da restauração (`utils/restauracao.py`). Os saves voltam para a pasta
-padrão, dentro da mesma troca, e a escolha de outra pasta é desfeita; a pasta
-de fora nunca é tocada. Se algo falhar, tudo volta como estava.
+pendências da restauração (`utils/restauracao.py`). Se o backup traz saves, eles
+voltam para a pasta padrão, dentro da mesma troca, e a escolha de outra pasta
+é desfeita; se não traz (todo o da versão 5), os saves de agora e a escolha
+ficam como estão. A pasta de fora nunca é tocada. Se algo falhar, tudo volta
+como estava.
 """
 
 import json
@@ -33,6 +35,7 @@ from typing import Any, Iterable, Optional
 from gi.repository import Gio, GLib
 
 from cartridges import shared
+from cartridges.saves import backup_de_saves
 from cartridges.saves import pasta as pasta_dos_saves
 from cartridges.utils import game_logo, restauracao, save_cover, session_wallpaper
 
@@ -42,7 +45,6 @@ _VERSOES_ACEITAS = (5, VERSAO)
 
 _CONFIGURACOES = "configuracoes.json"
 _CHAVE_DA_PASTA_DOS_SAVES = "pasta-dos-saves"
-_SAVES = "saves"
 _AGENDADO = "restaurar.zip"
 # Arquivos soltos na raiz da pasta do app que vão no backup.
 _SOLTOS = ("fitas.json", "sessions.jsonl", "tuya_conta.json")
@@ -55,17 +57,23 @@ _FICAM = frozenset({"logs", "contas", "ludusavi", _AGENDADO})
 # do app: a partir dali, o que estiver nela veio do backup.
 _COMPLETO = ".completo"
 _TENTATIVAS_DE_APAGAR = 5
+# Marca, dentro de `.anterior`, que os saves da pasta padrão não saíram da
+# pasta do app nesta troca (o backup não tinha saves): a limpeza de `_devolver`
+# não pode apagá-los.
+_SAVES_FICAM = ".saves-ficam"
 # Marca, dentro de `.anterior`, que a troca deu certo: o que sobrar da pasta
 # (um arquivo que o antivírus segurou) é descarte, nunca dado a devolver.
 _CONCLUIDO = ".concluido"
 
 # O caminho de volta de uma sessão em andamento nesta máquina: as telas e as
 # fitas como estavam antes do jogo. Restaurado depois, "desfaria" uma troca
-# que nunca aconteceu. Fica aqui também a pasta dos saves: ela é desta máquina,
-# e a restauração a zera (`aplicar_pendente`) em vez de copiá-la.
-_CHAVES_DE_SESSAO = frozenset(
-    {"session-wallpaper-saved", "fita-estado-anterior", _CHAVE_DA_PASTA_DOS_SAVES}
-)
+# que nunca aconteceu.
+_CHAVES_DE_SESSAO = frozenset({"session-wallpaper-saved", "fita-estado-anterior"})
+
+# Escolhas desta máquina, que um backup não leva nem traz: a pasta dos saves
+# fica onde está (a restauração só a zera, em `aplicar_pendente`, quando o
+# backup traz saves, que então ficam na pasta padrão).
+_CHAVES_DESTA_MAQUINA = frozenset({_CHAVE_DA_PASTA_DOS_SAVES})
 
 # Do schema de estado, só a ordenação é escolha de alguém. Tamanho e posição da
 # janela, o balde do limitador da Steam e a última novidade vista são da máquina.
@@ -100,9 +108,13 @@ class BackupInvalido(ValueError):
 
 
 def _filtrar_chaves(chaves: Iterable[str]) -> list[str]:
-    """``chaves`` sem as de sessão em andamento. Separada de `_chaves_do_app`
+    """``chaves`` sem as de sessão em andamento e as desta máquina. Separada de `_chaves_do_app`
     para poder ser testada sem um `Gio.Settings` de verdade."""
-    return [chave for chave in chaves if chave not in _CHAVES_DE_SESSAO]
+    return [
+        chave
+        for chave in chaves
+        if chave not in _CHAVES_DE_SESSAO and chave not in _CHAVES_DESTA_MAQUINA
+    ]
 
 
 def _chaves_do_app() -> list[str]:
@@ -185,8 +197,13 @@ def _entradas() -> list[tuple[Path, str]]:
         for caminho in sorted(diretorio.iterdir()):
             if caminho.is_file() and caminho.suffix.lower() in extensoes:
                 entradas.append((caminho, f"{pasta}/{caminho.name}"))
-    entradas.extend(_entradas_dos_saves())
     return entradas
+
+
+def _nome_dos_saves() -> str:
+    """A pasta dos saves no zip: a mesma da pasta padrão, onde a restauração os
+    põe (um item da pasta do app, trocado junto com os outros)."""
+    return pasta_dos_saves.padrao().name
 
 
 def _entradas_dos_saves() -> list[tuple[Path, str]]:
@@ -201,7 +218,7 @@ def _entradas_dos_saves() -> list[tuple[Path, str]]:
             continue
         for caminho in sorted(jogo.iterdir()):
             if caminho.is_file() and _arquivo_de_save_valido(caminho.name):
-                entradas.append((caminho, f"{_SAVES}/{jogo.name}/{caminho.name}"))
+                entradas.append((caminho, f"{_nome_dos_saves()}/{jogo.name}/{caminho.name}"))
     return entradas
 
 
@@ -250,6 +267,11 @@ def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
             )
             for caminho, nome in _entradas():
                 _incluir(arquivo, caminho, nome)
+            # Com a trava do Ludusavi: um backup de save em andamento não pode
+            # entrar aqui pela metade.
+            with backup_de_saves.trava_dos_saves():
+                for caminho, nome in _entradas_dos_saves():
+                    _incluir(arquivo, caminho, nome)
         temporario.replace(destino)
     finally:
         temporario.unlink(missing_ok=True)
@@ -272,7 +294,7 @@ def _nome_valido(nome: str, extensoes_por_pasta: dict[str, tuple[str, ...]]) -> 
     partes = PurePosixPath(nome).parts
     if len(partes) < 2:
         return False
-    if partes[0] == _SAVES:
+    if partes[0] == _nome_dos_saves():
         # Exatamente saves/<jogo>/<arquivo>; um nível só, como `exportar` grava.
         return (
             len(partes) == 3
@@ -366,9 +388,12 @@ def _devolver(anterior: Path) -> None:
         # restaurada e tudo o que veio depois dela.
         shutil.rmtree(anterior, ignore_errors=True)
         return
+    ficam = _FICAM
+    if (anterior / _SAVES_FICAM).exists():
+        ficam = ficam | {_nome_dos_saves()}
     if (anterior / _COMPLETO).exists():
         for item in list(shared.app_dir.iterdir()):
-            if item.name in _FICAM:
+            if item.name in ficam:
                 continue
             if item.is_dir():
                 shutil.rmtree(item)
@@ -379,13 +404,20 @@ def _devolver(anterior: Path) -> None:
         # apagar de novo, junto, o que já voltou.
         (anterior / _COMPLETO).unlink()
     for item in list(anterior.iterdir()):
+        if item.name == _SAVES_FICAM:
+            continue  # sai com a pasta
         try:
             item.replace(shared.app_dir / item.name)
         except FileNotFoundError:
             # Sumiu entre a listagem e a troca (um temporário que o antivírus
             # criou ali e já apagou): não há o que devolver.
             logging.warning("%s sumiu durante a recuperação do backup", item)
-    _apagar_pasta(anterior)
+    try:
+        _apagar_pasta(anterior)
+    except OSError:
+        # Os dados já voltaram; o que sobrou é descarte, e a abertura seguinte
+        # tenta de novo.
+        logging.warning("Não foi possível apagar %s", anterior, exc_info=True)
 
 
 def aplicar_pendente() -> Optional[bool]:
@@ -416,9 +448,15 @@ def aplicar_pendente() -> Optional[bool]:
             arquivo.extractall(extraido)
         (extraido / _CONFIGURACOES).unlink()
 
+        # Sem `saves/` no backup (todo o da versão 5), os saves de agora ficam
+        # onde estão, e a pasta escolhida continua valendo.
+        traz_saves = (extraido / _nome_dos_saves()).is_dir()
+        ficam = _FICAM if traz_saves else _FICAM | {_nome_dos_saves()}
         anterior.mkdir()
+        if not traz_saves:
+            (anterior / _SAVES_FICAM).touch()
         for item in list(shared.app_dir.iterdir()):
-            if item.name not in _FICAM:
+            if item.name not in ficam:
                 item.replace(anterior / item.name)
         (anterior / _COMPLETO).touch()
         for item in list(extraido.iterdir()):
@@ -428,16 +466,22 @@ def aplicar_pendente() -> Optional[bool]:
             restauracao.ids_que_dependem_de_atalho(shared.games_dir), int(time())
         )
         aplicar_configuracoes(manifesto)
-        # Os saves do backup entraram na pasta padrão, na troca acima.
-        shared.schema.reset(_CHAVE_DA_PASTA_DOS_SAVES)
-        Gio.Settings.sync()
+        if traz_saves:
+            # Os saves do backup entraram na pasta padrão, na troca acima.
+            shared.schema.reset(_CHAVE_DA_PASTA_DOS_SAVES)
+            Gio.Settings.sync()
     except Exception:  # pylint: disable=broad-exception-caught
         logging.exception("Não foi possível restaurar o backup")
+        # Em passos separados: se os dados não voltam, as configurações de antes
+        # ainda precisam voltar.
         try:
             _devolver(anterior)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.exception("Não foi possível devolver os dados de antes da restauração")
+        try:
             aplicar_configuracoes(configuracoes_antes)
         except Exception:  # pylint: disable=broad-exception-caught
-            logging.exception("Não foi possível desfazer a restauração do backup")
+            logging.exception("Não foi possível desfazer as configurações da restauração")
         resultado = False
     else:
         # Marcada e renomeada antes de apagar: uma queda no meio do rmtree, ou
