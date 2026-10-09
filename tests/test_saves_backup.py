@@ -33,6 +33,7 @@ class LudusaviFalso:
         self.achados: dict[tuple[str, str], str] = {}  # ("appid"|"titulo", valor) -> nome
         self.versoes: dict[str, list[str]] = {}  # nome -> ids, do mais novo ao mais velho
         self.falhas: dict[str, dict] = {}  # comando -> resposta no lugar da normal
+        self.codigo_de: dict[str, int] = {}  # comando -> código de saída no lugar do 0
         self.demora = 0.0
         self.explode: Exception | None = None
         self._trava = threading.Lock()
@@ -61,7 +62,7 @@ class LudusaviFalso:
     def _responder(self, args, comando):
         nome = comando[0]
         if nome in self.falhas:
-            saida, codigo = self.falhas[nome], 0
+            saida, codigo = self.falhas[nome], self.codigo_de.get(nome, 0)
         elif nome == "find":
             chave = ("appid", comando[2]) if comando[1] == "--steam-id" else ("titulo", comando[1])
             achado = self.achados.get(chave)
@@ -178,6 +179,7 @@ def test_appid_sem_entrada_usa_entrada_propria(store, make_game, falso, esperar,
     assert [c[:2] for c in falso.chamou("find")] == [["find", "--steam-id"], ["find", "Jogo Raro"]]
     entrada = falso.configs["backup"]["customGames"][0]
     assert (entrada["name"], entrada["integration"]) == ("Jogo Raro", "override")
+    assert "<winPublic>/Documents/Steam/RUNE/42" in entrada["files"]
     assert jogo.ludusavi_nome == "Jogo Raro"
     assert falso.chamou("backup") == [["backup", "Jogo Raro", "--force"]]
 
@@ -353,6 +355,30 @@ def test_restaurar_todos_so_os_da_biblioteca(store, make_game, falso, esperar, m
     assert vistas == [("Restaurando os saves", 1)]
     assert toasts() == []
     assert tarefas.lista.get_n_items() == 0
+
+
+def test_restaurar_todos_sem_conseguir_ler_os_backups_avisa_uma_vez(store, make_game, falso, esperar):
+    falso.falhas["backups"] = {}  # saída vazia: o Ludusavi não devolveu nada útil
+    falso.codigo_de["backups"] = 1
+    na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+
+    backup_de_saves.restaurar_todos()
+    esperar()
+
+    assert falso.chamou("restore") == []
+    assert [t.get_title() for t in toasts()] == ["Não foi possível restaurar os saves."]
+    assert toasts()[0].get_use_markup() is False
+    assert tarefas.lista.get_n_items() == 0
+
+
+def test_restaurar_todos_relê_o_cache_no_fim(store, make_game, falso, esperar):
+    falso.versoes = {"A": ["v1"]}
+    na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+
+    backup_de_saves.restaurar_todos()
+    esperar()
+
+    assert [c[0] for c in falso.comandos].count("backups") == 2  # antes e depois
 
 
 def test_restaurar_todos_avisa_de_cada_falha_e_segue(store, make_game, falso, esperar):

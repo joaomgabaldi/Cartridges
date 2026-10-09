@@ -45,8 +45,9 @@ def _pasta_config() -> Path:
 
 
 def _biblioteca() -> list[Game]:
-    """Os jogos da biblioteca, tirados na thread da tela: as threads de trabalho
-    não percorrem o store, que muda a cada importação."""
+    """Os jogos da biblioteca. Quem chama na thread da tela tira o instantâneo antes de
+    abrir a thread de trabalho, que então só lê atributos; o store itera sobre uma
+    cópia protegida por trava, então chamar de outra thread também é seguro."""
     return [jogo for jogo in shared.store if not jogo.removed and not jogo.blacklisted]
 
 
@@ -55,8 +56,10 @@ def _em_segundo_plano(alvo, *argumentos) -> None:
 
 
 def _no_config(game: Game, no_manifesto: bool = True) -> config.JogoNoConfig:
-    # "extend" serve ao nome que o manifesto conhece e ao que não conhece (conferido
-    # no Ludusavi 0.31.0), então um nome já guardado não precisa lembrar de onde veio.
+    # Todo nome guardado vai como "extend". O Ludusavi 0.31 trata "extend" de um nome
+    # que o manifesto não conhece como uma entrada própria (conferido), e se o manifesto
+    # ganhar esse nome mais tarde, juntar os caminhos dele é o desejado. Por isso o
+    # config não precisa lembrar se o nome veio do manifesto ou foi criado aqui.
     return config.JogoNoConfig(game.ludusavi_nome, game.steam_appid, game.executable, no_manifesto)
 
 
@@ -75,14 +78,17 @@ def _preparar(biblioteca: list[Game], atual: Optional[config.JogoNoConfig] = Non
     config.gravar(config.montar(lista, escolhida, config.raizes(lista)), _pasta_config())
 
 
-def _ler_versoes(biblioteca: list[Game]) -> None:
-    """Relê as versões de todos os jogos. Sob a trava. Falhar só deixa o cache como estava."""
+def _ler_versoes(biblioteca: list[Game]) -> bool:
+    """Relê as versões de todos os jogos. Sob a trava. Diz se conseguiu; falhar deixa
+    o cache como estava."""
     global _cache  # noqa: PLW0603
     try:
         _preparar(biblioteca)
         _cache = ludusavi.versoes(_pasta_config(), executor)
     except Exception:  # pylint: disable=broad-exception-caught
         logging.exception("Não foi possível ler os backups dos saves")
+        return False
+    return True
 
 
 def _mostrar_aviso(texto: str) -> bool:
@@ -211,24 +217,31 @@ def restaurar_todos() -> None:
 
 def _restaurar_todos(biblioteca: list[Game]) -> None:
     with _trava:
-        # O cache pode estar vazio (nada o encheu ainda) ou velho: relê antes.
-        _ler_versoes(biblioteca)
+        # O cache pode estar vazio (nada o encheu ainda) ou velho: relê antes. Sem
+        # conseguir ler, não há como saber o que restaurar, e o usuário precisa saber.
+        if not _ler_versoes(biblioteca):
+            _avisar(_("Não foi possível restaurar os saves."))
+            return
         jogos = {jogo.ludusavi_nome: jogo for jogo in biblioteca if jogo.ludusavi_nome}
         alvos = [nome for nome in jogos if _cache.get(nome)]
         if not alvos:
             return
         tarefa = tarefas.comecar(_("Restaurando os saves"), len(alvos))
         try:
+            _preparar(biblioteca)
             for feitos, nome in enumerate(alvos):
                 tarefa.atualizar(feitos)
                 try:
-                    _preparar(biblioteca)
                     ludusavi.restaurar(nome, _pasta_config(), None, executor)
                 except Exception:  # pylint: disable=broad-exception-caught
                     logging.exception("Restauração do save de %s falhou", jogos[nome].name)
                     _avisar(_("Não foi possível restaurar o save de {}.").format(jogos[nome].name))
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.exception("Restauração dos saves falhou")
+            _avisar(_("Não foi possível restaurar os saves."))
         finally:
             tarefa.terminar()
+        _ler_versoes(biblioteca)
 
 
 # -- pasta dos saves ---------------------------------------------------------
