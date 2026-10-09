@@ -19,6 +19,8 @@ Executor = Callable[..., "subprocess.CompletedProcess[str]"]
 # Backup de save grande é lento, mas o Ludusavi também trava (atualização do
 # manifesto sem rede): sem limite, a thread de backup ficaria presa para sempre.
 LIMITE_DE_TEMPO = 10 * 60
+# A restauração morta no meio deixaria o save do jogo pela metade: ela tem mais folga.
+LIMITE_DA_RESTAURACAO = 60 * 60
 
 
 class LudusaviFalhou(Exception):
@@ -44,6 +46,7 @@ def rodar(
     executor: Executor = subprocess.run,
     *,
     codigos_ok: tuple[int, ...] = (0,),
+    limite_de_tempo: float = LIMITE_DE_TEMPO,
 ) -> dict:
     """Roda `ludusavi --config <pasta> --try-manifest-update <argumentos> --api`.
 
@@ -62,7 +65,7 @@ def rodar(
             stdin=subprocess.DEVNULL,
             encoding="utf-8",
             creationflags=subprocess.CREATE_NO_WINDOW,
-            timeout=LIMITE_DE_TEMPO,
+            timeout=limite_de_tempo,
         )
     except subprocess.TimeoutExpired as erro:
         raise LudusaviFalhou("o Ludusavi demorou demais e foi interrompido") from erro
@@ -141,4 +144,4 @@ def restaurar(
     argumentos = ["restore", nome, "--force"]
     if versao:
         argumentos += ["--backup", versao]
-    _verificar(rodar(argumentos, pasta_config, executor))
+    _verificar(rodar(argumentos, pasta_config, executor, limite_de_tempo=LIMITE_DA_RESTAURACAO))

@@ -233,6 +233,7 @@ def _restaurar_todos(biblioteca: list[Game]) -> None:
         if not alvos:
             return
         tarefa = tarefas.comecar(_("Restaurando os saves"), len(alvos))
+        falhou = False
         try:
             _preparar(biblioteca)
             for feitos, nome in enumerate(alvos):
@@ -241,12 +242,15 @@ def _restaurar_todos(biblioteca: list[Game]) -> None:
                     ludusavi.restaurar(nome, _pasta_config(), None, executor)
                 except Exception:  # pylint: disable=broad-exception-caught
                     logging.exception("Restauração do save de %s falhou", jogos[nome].name)
-                    _avisar(_("Não foi possível restaurar o save de {}.").format(jogos[nome].name))
+                    falhou = True
         except Exception:  # pylint: disable=broad-exception-caught
             logging.exception("Restauração dos saves falhou")
-            _avisar(_("Não foi possível restaurar os saves."))
+            falhou = True
         finally:
             tarefa.terminar()
+        # Um aviso só, no fim: uma falha por jogo viraria uma fila de avisos.
+        if falhou:
+            _avisar(_("Não foi possível restaurar os saves."))
         _ler_versoes(biblioteca)
 
 

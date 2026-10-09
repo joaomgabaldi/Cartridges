@@ -155,3 +155,18 @@ def test_jogo_sem_conquistas_nao_e_varrido_ao_editar_o_executavel(store, real_wi
     game = jogo(store, 32, executable="x.exe", conquistas=False)
     _aplicar(game, executavel="y.exe")
     assert varredura.pedidos == []
+
+
+def test_corrigir_o_appid_esquece_o_nome_no_ludusavi(store, real_window, varredura):
+    """O nome no Ludusavi saiu do appID antigo: o próximo backup o procura de novo."""
+    _stub_sgdb(store)
+    game = jogo(store, 30, executable="x.exe", steam_appid="10", ludusavi_nome="Jogo Errado")
+    _aplicar(game, fetched_steam_appid="20")
+    assert game.ludusavi_nome == ""
+
+
+def test_editar_sem_mudar_o_appid_mantem_o_nome_no_ludusavi(store, real_window, varredura):
+    _stub_sgdb(store)
+    game = jogo(store, 31, executable="x.exe", steam_appid="10", ludusavi_nome="Jogo")
+    _aplicar(game, fetched_steam_appid="10", executavel="y.exe")
+    assert game.ludusavi_nome == "Jogo"

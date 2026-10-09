@@ -381,7 +381,7 @@ def test_restaurar_todos_relê_o_cache_no_fim(store, make_game, falso, esperar):
     assert [c[0] for c in falso.comandos].count("backups") == 2  # antes e depois
 
 
-def test_restaurar_todos_avisa_de_cada_falha_e_segue(store, make_game, falso, esperar):
+def test_restaurar_todos_segue_depois_de_uma_falha_e_avisa_uma_vez(store, make_game, falso, esperar):
     falso.versoes = {"A": ["v1"], "B": ["v1"]}
     na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
     na_biblioteca(store, make_game, game_id="b", name="Jogo B", steam_appid="2", ludusavi_nome="B")
@@ -391,10 +391,7 @@ def test_restaurar_todos_avisa_de_cada_falha_e_segue(store, make_game, falso, es
     esperar()
 
     assert len(falso.chamou("restore")) == 2
-    assert sorted(t.get_title() for t in toasts()) == [
-        "Não foi possível restaurar o save de Jogo A.",
-        "Não foi possível restaurar o save de Jogo B.",
-    ]
+    assert [t.get_title() for t in toasts()] == ["Não foi possível restaurar os saves."]
 
 
 def test_trocar_pasta_segura_a_trava(store, falso, esperar, monkeypatch, tmp_path):

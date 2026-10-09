@@ -677,6 +677,11 @@ class DetailsDialog(Adw.Dialog):
             # stamp, a game the user fixed by hand would keep coming back in
             # "only what is missing" to be told the same thing again.
             self.game.steam_checked = STEAM_METADATA_VERSION
+            if str(self.game.steam_appid or "") != str(appid_anterior or ""):
+                # O nome no Ludusavi foi achado pelo appID antigo: o próximo backup
+                # o procura de novo. O executável não entra aqui: o config dos saves
+                # já o relê do jogo a cada vez.
+                self.game.ludusavi_nome = ""
         if self.fetched_hltb:
             # update_values only carries the keys the lookup actually returned,
             # so a game with only a main-story estimate keeps whatever the

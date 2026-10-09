@@ -227,3 +227,11 @@ def test_executavel_ausente(tmp_path, monkeypatch):
 
 def test_executavel_presente(exe_ao_lado_do_python):
     assert ludusavi.executavel() == exe_ao_lado_do_python
+
+
+def test_restaurar_tem_um_limite_de_tempo_maior(tmp_path):
+    """Restauração morta no meio deixa o save pela metade: ela ganha uma hora."""
+    executor = ExecutorFalso(amostra("restore_ok"))
+    ludusavi.restaurar("Teste Cartridges", tmp_path, executor=executor)
+    assert executor.chamadas[0][1]["timeout"] == 60 * 60
+    assert ludusavi.LIMITE_DE_TEMPO == 10 * 60  # o resto continua com 10 minutos
