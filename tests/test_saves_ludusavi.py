@@ -110,6 +110,20 @@ def test_falha_ao_iniciar_o_processo_vira_ludusavi_falhou(tmp_path):
         ludusavi.rodar(["backups"], tmp_path, executor)
 
 
+def test_travou_vira_ludusavi_falhou(tmp_path):
+    def executor(args, **kwargs):
+        raise subprocess.TimeoutExpired(args, kwargs["timeout"])
+
+    with pytest.raises(LudusaviFalhou):
+        ludusavi.rodar(["backups"], tmp_path, executor)
+
+
+def test_rodar_passa_um_limite_de_tempo(tmp_path):
+    executor = ExecutorFalso(amostra("backups"))
+    ludusavi.rodar(["backups"], tmp_path, executor)
+    assert executor.chamadas[0][1]["timeout"] == ludusavi.LIMITE_DE_TEMPO
+
+
 def test_backup_com_jogo_falho_falha(tmp_path):
     saida = json.loads(amostra("backup_ok"))
     saida["errors"] = {"someGamesFailed": True}

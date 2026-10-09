@@ -78,6 +78,7 @@ PERSISTED_ATTRS = (
     "update_dismissed_ts",
     "update_url",
     "conquistas",
+    "ludusavi_nome",
 )
 
 _KNOWN_KEYS = frozenset(PERSISTED_ATTRS)
@@ -232,6 +233,9 @@ class Game(Gtk.Box):
     # fase 2, aviso e iluminação. Ligado por padrão; desligar não apaga o que
     # já foi guardado, e religar traz tudo de volta.
     conquistas: bool = True
+    # O nome deste jogo no Ludusavi (o do manifesto, ou o do próprio jogo quando
+    # o manifesto não o conhece). "" até o primeiro backup resolvê-lo.
+    ludusavi_nome: str = ""
 
     def __init__(self, data: dict[str, Any], **kwargs: Any) -> None:
         super().__init__(**kwargs)

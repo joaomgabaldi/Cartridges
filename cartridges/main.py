@@ -272,6 +272,7 @@ _GAME_FIELD_TYPES: dict[str, Any] = {
             "shortcut_path",
             "process_executable",
             "update_url",
+            "ludusavi_nome",
         ),
         str,
     ),

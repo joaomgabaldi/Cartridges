@@ -771,7 +771,7 @@ def test_a_manual_edit_without_a_fetch_keeps_the_recommendation(real_window, sto
 
 
 # Fields the record keeps that say nothing about the game itself: identity,
-# bookkeeping and the update-notice state. They are exempt from the guard
+# bookkeeping, the Ludusavi name and the update-notice state. They are exempt from the guard
 # above because the edit dialog has no business preserving them.
 NOT_GAME_METADATA = {
     "added",
@@ -779,6 +779,7 @@ NOT_GAME_METADATA = {
     "executable",
     "game_id",
     "last_played",
+    "ludusavi_nome",
     "name",
     "playtime",
     "removed",

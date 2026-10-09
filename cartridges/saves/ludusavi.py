@@ -16,6 +16,10 @@ from typing import Callable, Optional
 
 Executor = Callable[..., "subprocess.CompletedProcess[str]"]
 
+# Backup de save grande é lento, mas o Ludusavi também trava (atualização do
+# manifesto sem rede): sem limite, a thread de backup ficaria presa para sempre.
+LIMITE_DE_TEMPO = 10 * 60
+
 
 class LudusaviFalhou(Exception):
     """O Ludusavi não rodou, saiu com erro ou devolveu algo que não se entende."""
@@ -58,7 +62,10 @@ def rodar(
             stdin=subprocess.DEVNULL,
             encoding="utf-8",
             creationflags=subprocess.CREATE_NO_WINDOW,
+            timeout=LIMITE_DE_TEMPO,
         )
+    except subprocess.TimeoutExpired as erro:
+        raise LudusaviFalhou("o Ludusavi demorou demais e foi interrompido") from erro
     except OSError as erro:
         raise LudusaviFalhou(f"não foi possível iniciar o Ludusavi: {erro}") from erro
     if processo.stderr:
