@@ -15,6 +15,33 @@ import pytest
 from cartridges import shared
 from cartridges.utils import backup
 
+_PASTAS_DO_APP = (
+    "app_dir", "games_dir", "covers_dir", "logos_dir", "wallpapers_dir", "log_dir",
+    "fitas_dir", "conquistas_dir", "conquistas_cache_dir", "capas_animadas_dir",
+    "contas_dir", "fitas_arquivo", "tuya_conta_arquivo",
+)
+
+
+@pytest.fixture(autouse=True)
+def _app_isolado(tmp_path, monkeypatch, app_dirs, settings):
+    """A pasta do app dentro de ``tmp_path/app``, com as configurações de verdade.
+
+    O conftest põe ``app_dir`` no próprio ``tmp_path``, e a restauração cria
+    irmãs dele (``.anterior``, ``.restaurando``, ``.lixo``) em ``tmp_path.parent``:
+    a pasta de base do pytest, compartilhada por todos os testes da sessão.
+    Um nível a mais e as irmãs ficam na pasta deste teste, só dele; e a troca
+    deixa de varrer junto o que o teste guarda ao lado (o backup exportado, os
+    schemas).
+    """
+    raiz = tmp_path / "app"
+    for nome in _PASTAS_DO_APP:
+        monkeypatch.setattr(shared, nome, raiz / getattr(shared, nome).relative_to(tmp_path))
+    for pasta in (shared.games_dir, shared.covers_dir, shared.logos_dir,
+                  shared.wallpapers_dir, shared.log_dir):
+        pasta.mkdir(parents=True)
+        # As do conftest, vazias e agora fora do app.
+        (tmp_path / pasta.name).rmdir()
+
 
 # --------------------------------------------------------------------------
 # Backup completo (.zip)
@@ -63,6 +90,14 @@ def test_a_setting_removed_from_the_schema_is_ignored(settings) -> None:
 # --------------------------------------------------------------------------
 # Exportar e validar
 # --------------------------------------------------------------------------
+
+
+def _sobrou(pasta):
+    """Se ``pasta`` ainda guarda alguma coisa. No Windows, o antivírus ou o
+    indexador seguram uma pasta ou um arquivo recém-gravado por alguns
+    milissegundos, e a remoção deixa para trás a pasta, já vazia: o que importa
+    à restauração é que não sobre dado nela (a abertura seguinte a descarta)."""
+    return pasta.exists() and any(pasta.iterdir())
 
 
 def _encher_pasta_do_app():
@@ -174,7 +209,7 @@ def _zip(caminho, entradas):
     return caminho
 
 
-_MANIFESTO = json.dumps({"version": 5, "settings": {}, "state": {}})
+_MANIFESTO = json.dumps({"version": backup.VERSAO, "settings": {}, "state": {}})
 
 
 @pytest.mark.parametrize(
@@ -264,8 +299,8 @@ def test_aplicar_pendente_troca_tudo_e_cria_as_pendencias(tmp_path, monkeypatch)
     assert (shared.log_dir / "cartridges.log").read_text("utf-8") == "log"
     assert not (shared.app_dir / "restaurar.zip").exists()
     assert not (shared.app_dir / "configuracoes.json").exists()
-    assert not shared.app_dir.with_name(shared.app_dir.name + ".anterior").exists()
-    assert not shared.app_dir.with_name(shared.app_dir.name + ".restaurando").exists()
+    assert not _sobrou(shared.app_dir.with_name(shared.app_dir.name + ".anterior"))
+    assert not _sobrou(shared.app_dir.with_name(shared.app_dir.name + ".restaurando"))
     assert aplicadas[-1]["settings"] == {"sgdb": True}
     assert restauracao.ids() == frozenset({"shortcuts_1"})
 
@@ -299,7 +334,7 @@ def test_aplicar_pendente_que_falha_devolve_tudo(tmp_path, monkeypatch):
     assert [p.name for p in shared.games_dir.iterdir()] == ["atual.json"]
     assert not (shared.app_dir / "restauracao_pendente.json").exists()
     assert not (shared.app_dir / "restaurar.zip").exists()
-    assert not shared.app_dir.with_name(shared.app_dir.name + ".anterior").exists()
+    assert not _sobrou(shared.app_dir.with_name(shared.app_dir.name + ".anterior"))
     # As configurações de antes voltam ao registro.
     assert aplicadas[-1] == {"settings": {"antes": 1}, "state": {}}
 
@@ -317,6 +352,62 @@ def test_queda_no_meio_da_troca_e_recuperada(tmp_path, monkeypatch):
 
     assert backup.aplicar_pendente() is None
 
+    assert [p.name for p in shared.games_dir.iterdir()] == ["atual.json"]
+    assert not _sobrou(anterior)
+
+
+def test_falha_ao_apagar_a_pasta_anterior_nao_apaga_o_que_voltou(tmp_path, monkeypatch):
+    """A volta atrás devolve os dados e, ao apagar `.anterior`, o antivírus
+    segura um arquivo. Na abertura seguinte, o que voltou não pode ser tomado
+    por dado do backup e apagado."""
+    aplicadas = _preparar_restauracao(tmp_path, monkeypatch)
+
+    def aplicar(configuracoes):
+        aplicadas.append(configuracoes)
+        if configuracoes["settings"] != {"antes": 1}:
+            raise OSError("registro travado")
+
+    monkeypatch.setattr(backup, "aplicar_configuracoes", aplicar)
+    rmtree_original = shutil.rmtree
+
+    def rmtree_que_trava(caminho, *args, **kwargs):
+        if str(caminho).endswith(".anterior"):
+            raise OSError("arquivo em uso")
+        return rmtree_original(caminho, *args, **kwargs)
+
+    with monkeypatch.context() as travado:
+        travado.setattr(shutil, "rmtree", rmtree_que_trava)
+        travado.setattr(backup, "sleep", lambda _s: None)
+        assert backup.aplicar_pendente() is False
+
+    assert backup.aplicar_pendente() is None
+    assert [p.name for p in shared.games_dir.iterdir()] == ["atual.json"]
+
+
+def test_pasta_anterior_que_demora_a_esvaziar_e_apagada_na_segunda_tentativa(
+    tmp_path, monkeypatch
+):
+    """O antivírus segura um arquivo por instantes: a remoção insiste."""
+    _preparar_restauracao(tmp_path, monkeypatch)
+    rmtree_original = shutil.rmtree
+    recusas = []
+
+    def rmtree_que_recusa_uma_vez(caminho, *args, **kwargs):
+        if str(caminho).endswith(".anterior") and not recusas:
+            recusas.append(caminho)
+            raise OSError("A pasta não está vazia")
+        return rmtree_original(caminho, *args, **kwargs)
+
+    anterior = shared.app_dir.with_name(shared.app_dir.name + ".anterior")
+    anterior.mkdir()
+    shared.games_dir.replace(anterior / "games")
+    (shared.app_dir / "restaurar.zip").unlink()
+    monkeypatch.setattr(shutil, "rmtree", rmtree_que_recusa_uma_vez)
+    monkeypatch.setattr(backup, "sleep", lambda _s: None)
+
+    assert backup.aplicar_pendente() is None
+
+    assert recusas
     assert [p.name for p in shared.games_dir.iterdir()] == ["atual.json"]
     assert not anterior.exists()
 
@@ -352,4 +443,4 @@ def test_restauracao_concluida_nao_e_desfeita_se_a_pasta_antiga_nao_sai(tmp_path
     assert sorted(p.name for p in shared.games_dir.iterdir()) == [
         "imported_1.json", "jogado_depois.json", "shortcuts_1.json"
     ]
-    assert not shared.app_dir.with_name(shared.app_dir.name + ".anterior").exists()
+    assert not _sobrou(shared.app_dir.with_name(shared.app_dir.name + ".anterior"))

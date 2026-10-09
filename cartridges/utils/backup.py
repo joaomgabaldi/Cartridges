@@ -23,7 +23,7 @@ import logging
 import shutil
 import zipfile
 from pathlib import Path, PurePosixPath
-from time import time
+from time import sleep, time
 from typing import Any, Iterable, Optional
 
 from gi.repository import Gio, GLib
@@ -44,6 +44,7 @@ _FICAM = frozenset({"logs", "contas", _AGENDADO})
 # Marca, dentro de `.anterior`, que todos os dados de antes já saíram da pasta
 # do app: a partir dali, o que estiver nela veio do backup.
 _COMPLETO = ".completo"
+_TENTATIVAS_DE_APAGAR = 5
 # Marca, dentro de `.anterior`, que a troca deu certo: o que sobrar da pasta
 # (um arquivo que o antivírus segurou) é descarte, nunca dado a devolver.
 _CONCLUIDO = ".concluido"
@@ -293,6 +294,22 @@ def _irma(sufixo: str) -> Path:
     return shared.app_dir.with_name(shared.app_dir.name + sufixo)
 
 
+def _apagar_pasta(pasta: Path) -> None:
+    """`shutil.rmtree` que insiste um pouco. No Windows, o antivírus e o indexador
+    seguram por alguns milissegundos o que acabou de ser movido ou gravado, e a
+    pasta recusa a remoção ("não está vazia") logo depois de esvaziada."""
+    for tentativa in range(_TENTATIVAS_DE_APAGAR):
+        try:
+            shutil.rmtree(pasta)
+            return
+        except FileNotFoundError:
+            return
+        except OSError:
+            if tentativa == _TENTATIVAS_DE_APAGAR - 1:
+                raise
+            sleep(0.2)
+
+
 def _devolver(anterior: Path) -> None:
     """Põe de volta na pasta do app os dados que a troca tirou dela.
 
@@ -315,10 +332,18 @@ def _devolver(anterior: Path) -> None:
                 shutil.rmtree(item)
             else:
                 item.unlink()
+        # Feita a limpeza, a marca não vale mais: uma queda (ou um arquivo
+        # preso ao apagar `.anterior`) dali em diante faria a próxima abertura
+        # apagar de novo, junto, o que já voltou.
+        (anterior / _COMPLETO).unlink()
     for item in list(anterior.iterdir()):
-        if item.name != _COMPLETO:
+        try:
             item.replace(shared.app_dir / item.name)
-    shutil.rmtree(anterior)
+        except FileNotFoundError:
+            # Sumiu entre a listagem e a troca (um temporário que o antivírus
+            # criou ali e já apagou): não há o que devolver.
+            logging.warning("%s sumiu durante a recuperação do backup", item)
+    _apagar_pasta(anterior)
 
 
 def aplicar_pendente() -> Optional[bool]:
