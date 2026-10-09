@@ -233,15 +233,9 @@ def na_fita(cor: Cor, fita: Fita, teto: Optional[int] = None) -> Cor:
     return cor._replace(brilho=max(BRILHO_MINIMO, round(cor.brilho * teto / 100)))
 
 
-def cor_do_jogo(game: "Game", ignorar_escolha: bool = False) -> Cor:
-    """A cor que este jogo veste: a escolhida, a da capa, ou o roxo do app.
-
-    ``ignorar_escolha`` pula o sidecar e devolve o automático mesmo havendo
-    escolha gravada. É o que a tela de detalhes precisa mostrar depois do clique
-    em "voltar ao automático": ali a escolha ainda está em disco, e só o Aplicar
-    a apaga.
-    """
-    dados = None if ignorar_escolha else _ler_sidecar(game.game_id)
+def cor_do_jogo(game: "Game") -> Cor:
+    """A cor que este jogo veste: a escolhida, a da capa, ou o roxo do app."""
+    dados = _ler_sidecar(game.game_id)
     if dados and dados.get("locked"):
         # Sidecar mexido à mão com tipo errado (``"matiz": null``) não pode
         # levantar aqui: isto roda na thread de UI, abrindo os detalhes. Vale o
@@ -255,7 +249,15 @@ def cor_do_jogo(game: "Game", ignorar_escolha: bool = False) -> Cor:
         except (TypeError, ValueError):
             logging.warning("Cor da fita de %s ilegível; vale a automática", game.game_id)
 
-    capa = game.get_cover_path()
+    return cor_da_capa(game.get_cover_path())
+
+
+def cor_da_capa(capa: Optional[Path]) -> Cor:
+    """A cor automática desta capa, ou o roxo do app sem capa ou sem cor útil.
+
+    Separada de ``cor_do_jogo`` para a tela de detalhes, que mostra a capa
+    ainda não aplicada e não a gravada no disco.
+    """
     da_capa = dominante(capa) if capa else None
     matiz, saturacao = da_capa if da_capa else tom_do_app()
     return Cor(matiz, saturacao, brilho_padrao())

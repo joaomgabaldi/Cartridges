@@ -225,6 +225,10 @@ class DetailsDialog(Adw.Dialog):
     # Se a prévia ao vivo chegou a pintar alguma fita nesta abertura da tela.
     _fita_previa_usada: bool = False
 
+    # A linha está sendo repintada porque a capa mudou: a prévia na parede é
+    # para quem mexe na cor, não na capa.
+    _fita_sem_previa: bool = False
+
     def __init__(self, game: Optional[Game] = None, **kwargs: Any):
         super().__init__(**kwargs)
 
@@ -540,6 +544,7 @@ class DetailsDialog(Adw.Dialog):
         self.game_cover.new_cover(new_path)
         self.cover_button_delete_revealer.set_reveal_child(True)
         self.cover_changed = True
+        self.fita_segue_capa()
 
     def delete_pixbuf(self, *_args: Any) -> None:
         self.game_cover.new_cover()
@@ -547,6 +552,7 @@ class DetailsDialog(Adw.Dialog):
 
         self.cover_button_delete_revealer.set_reveal_child(False)
         self.cover_changed = True
+        self.fita_segue_capa()
 
     def apply_preferences(self, *_args: Any) -> None:
         # Enter nas linhas de executável/processo chega aqui direto, sem passar
@@ -1190,13 +1196,17 @@ class DetailsDialog(Adw.Dialog):
         disco: a escolha só será apagada no Aplicar, mas a tela já tem de
         mostrar o que o Aplicar vai deixar valendo.
 
-        Jogo novo ainda não existe em disco nem tem capa de onde tirar cor: o
-        que sobra é o roxo do app, que é o mesmo que ele receberia depois de
-        criado e sem capa.
+        O automático sai da capa que a tela mostra, e não da gravada no disco:
+        a capa trocada e ainda não aplicada é a que o jogo vai ter. Jogo novo
+        sem capa fica com o roxo do app, como ficaria depois de criado.
         """
-        if self.game:
-            return session_fita.cor_do_jogo(self.game, self._fita_redefinir)
-        return session_fita.cor_do_app()
+        if (
+            self.game
+            and not self._fita_redefinir
+            and session_fita.escolhida(self.game.game_id)
+        ):
+            return session_fita.cor_do_jogo(self.game)
+        return session_fita.cor_da_capa(self.game_cover.path)
 
     def atualizar_fita(self) -> None:
         """Mostra a cor que vale hoje: a escolhida ou a que sai da capa."""
@@ -1228,6 +1238,28 @@ class DetailsDialog(Adw.Dialog):
             _("Escolhida manualmente") if manual else _("Extraída da capa")
         )
 
+    def fita_segue_capa(self) -> None:
+        """A capa mudou: a linha da cor acompanha, se ninguém mexeu nela.
+
+        Uma cor ou um brilho mexidos e ainda não aplicados são escolha de
+        gente, e trocar a capa depois não os desfaz.
+        """
+        if self._fita_mostrada is None or not _mesma_cor(
+            self._cor_na_tela(), self._fita_mostrada
+        ):
+            return
+        self._fita_sem_previa = True
+        try:
+            self.atualizar_fita()
+        finally:
+            self._fita_sem_previa = False
+
+    def _cor_na_tela(self) -> session_fita.Cor:
+        return session_fita.rgba_para_cor(
+            self.fita_color_button.props.rgba,
+            session_fita.de_por_cento(self.fita_brilho_row.get_value()),
+        )
+
     def desenhar_amostra(self, _area: Any, contexto: Any, largura: int, altura: int) -> None:
         """A bolinha no botão da cor: a cor que está escolhida agora."""
         cor = self.fita_color_button.props.rgba
@@ -1238,15 +1270,10 @@ class DetailsDialog(Adw.Dialog):
 
     def previa_da_fita(self, *_args: Any) -> None:
         """Mostra nas fitas a cor e o brilho que estão na tela agora."""
-        if self._fita_mostrada is None:
+        if self._fita_mostrada is None or self._fita_sem_previa:
             return
         self._fita_previa_usada = True
-        session_fita.previa(
-            session_fita.rgba_para_cor(
-                self.fita_color_button.props.rgba,
-                session_fita.de_por_cento(self.fita_brilho_row.get_value()),
-            )
-        )
+        session_fita.previa(self._cor_na_tela())
 
     def encerrar_previa(self) -> None:
         """Devolve as fitas ao roxo do app depois de a tela sumir.
@@ -1279,10 +1306,7 @@ class DetailsDialog(Adw.Dialog):
         if self._fita_mostrada is None and not self._fita_redefinir:
             return
 
-        na_tela = session_fita.rgba_para_cor(
-            self.fita_color_button.props.rgba,
-            session_fita.de_por_cento(self.fita_brilho_row.get_value()),
-        )
+        na_tela = self._cor_na_tela()
         # Contra o que a linha mostrou, e não contra o automático de agora: um
         # jogo novo ganha a capa neste mesmo Aplicar, e o automático mudaria
         # debaixo da comparação sem que ninguém tivesse mexido na cor.

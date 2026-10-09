@@ -175,7 +175,9 @@ def test_b15_sidecar_com_tipo_errado_vale_o_automatico(tmp_path, schema):
         json.dumps({"locked": True, "matiz": None}), encoding="utf-8"
     )
 
-    assert session_fita.cor_do_jogo(jogo) == session_fita.cor_do_jogo(jogo, True)
+    assert session_fita.cor_do_jogo(jogo) == session_fita.cor_da_capa(
+        jogo.get_cover_path()
+    )
 
 
 # region Preferências

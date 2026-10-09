@@ -39,6 +39,7 @@
           <li>A lista de conquistas ficou alinhada, com os ícones do mesmo tamanho</li>
           <li>As conquistas bloqueadas aparecem antes das ocultas</li>
           <li>Arrastar um texto selecionado não deixa mais uma cópia dele parada na tela</li>
+          <li>Ao trocar a capa de um jogo, a cor da iluminação inteligente já acompanha a capa nova</li>
         </ul>
       </description>
     </release>

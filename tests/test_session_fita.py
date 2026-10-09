@@ -1233,6 +1233,118 @@ def test_sem_fita_o_aplicar_nao_apaga_a_escolha_que_o_jogo_tinha(write_record, w
     assert session_fita.cor_do_jogo(jogo) == guardada
 
 
+def _capa_verde(tmp_path):
+    """Uma capa provisória verde, longe da emenda do vermelho no círculo."""
+    caminho = tmp_path / "provisoria.tiff"
+    Image.new("RGB", (60, 90), (20, 200, 20)).save(caminho)
+    return caminho
+
+
+def test_capa_provisoria_muda_a_cor_da_linha(tela, tmp_path):
+    """A linha diz "Extraída da capa": tem de ser a capa que a tela mostra.
+
+    Antes ela seguia a capa gravada no disco até a tela ser reaberta.
+    """
+    dialog, jogo = tela
+
+    dialog._stage_cover(_capa_verde(tmp_path))
+
+    assert abs(dialog._cor_na_tela().matiz - 120) <= 2
+    assert dialog.fita_row.get_subtitle() == "Extraída da capa"
+    # Só a capa mudou: o Aplicar não transforma a cor da capa em escolha.
+    dialog.aplicar_fita(jogo)
+    assert session_fita.escolhida(jogo.game_id) is False
+
+
+def test_jogo_novo_com_capa_provisoria_mostra_a_cor_dela(tmp_path, write_record, win):
+    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
+    dialog = DetailsDialog()
+
+    dialog._stage_cover(_capa_verde(tmp_path))
+
+    assert abs(dialog._cor_na_tela().matiz - 120) <= 2
+
+
+def test_capa_removida_volta_a_cor_do_app(write_record, app_dirs, win):
+    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+    from cartridges.game import Game  # noqa: PLC0415
+
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
+    write_record("jogo-verde", name="Jogo")
+    Image.new("RGB", (60, 90), (20, 200, 20)).save(app_dirs.covers / "jogo-verde.tiff")
+    jogo = Game(
+        {
+            "game_id": "jogo-verde",
+            "name": "Jogo",
+            "source": "shortcuts",
+            "executable": r'start "" "C:\g\jogo.exe"',
+        }
+    )
+    dialog = DetailsDialog(jogo)
+    assert abs(dialog._cor_na_tela().matiz - 120) <= 2
+
+    dialog.delete_pixbuf()
+
+    assert dialog._cor_na_tela() == session_fita.cor_do_app()
+
+
+def test_cor_escolhida_nao_segue_a_capa_provisoria(tela, tmp_path):
+    dialog, jogo = tela
+    escolha = _com_escolha(dialog, jogo)
+
+    dialog._stage_cover(_capa_verde(tmp_path))
+
+    assert abs(dialog._cor_na_tela().matiz - escolha.matiz) <= 2
+    assert dialog.fita_row.get_subtitle() == "Escolhida manualmente"
+
+
+def test_voltar_ao_automatico_e_trocar_a_capa_segue_a_capa_nova(tela, tmp_path):
+    dialog, jogo = tela
+    _com_escolha(dialog, jogo)
+    dialog.redefinir_fita()
+
+    dialog._stage_cover(_capa_verde(tmp_path))
+
+    assert abs(dialog._cor_na_tela().matiz - 120) <= 2
+    # A redefinição continua de pé: o Aplicar apaga a escolha.
+    dialog.aplicar_fita(jogo)
+    assert not session_fita.escolhida(jogo.game_id)
+
+
+@pytest.mark.parametrize("mexida", ["cor", "brilho"])
+def test_cor_mexida_e_nao_aplicada_sobrevive_a_troca_de_capa(tela, tmp_path, mexida):
+    """Quem escolheu uma cor e depois trocou a capa não pediu para perdê-la."""
+    dialog, _jogo = tela
+    if mexida == "cor":
+        dialog.fita_color_button.set_property(
+            "rgba", session_fita.cor_para_rgba(session_fita.Cor(240, 900, 0))
+        )
+    else:
+        dialog.fita_brilho_row.set_value(session_fita.por_cento(1000) // 2)
+    antes = dialog._cor_na_tela()
+
+    dialog._stage_cover(_capa_verde(tmp_path))
+
+    assert dialog._cor_na_tela() == antes
+
+
+def test_trocar_capa_nao_acende_a_fita(tela, tmp_path, monkeypatch):
+    """A prévia na parede é para quem mexe na cor, não na capa."""
+    dialog, _jogo = tela
+    # Uma lista, e não `pytest.fail`: a prévia roda num sinal do GTK, e o
+    # PyGObject engole a exceção levantada dentro dele.
+    previas = []
+    monkeypatch.setattr(session_fita, "previa", lambda *a, **_k: previas.append(a))
+
+    dialog._stage_cover(_capa_verde(tmp_path))
+    dialog.delete_pixbuf()
+
+    assert previas == []
+    assert not dialog._fita_previa_usada
+
+
 # endregion
 
 
