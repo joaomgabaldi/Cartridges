@@ -116,3 +116,20 @@ def test_gravar_eh_json(tmp_path):
     cfg = config.montar([], Path("C:/saves"), [])
     config.gravar(cfg, tmp_path / "ludusavi")
     assert json.loads((tmp_path / "ludusavi" / "config.yaml").read_text(encoding="utf-8")) == cfg
+
+
+def test_montar_com_redirecionamentos():
+    redirecionamentos = [
+        ("C:/Users/Antigo", "C:/Users/João"),
+        ("D:/JogoA", "E:/JogoB"),
+    ]
+    cfg = config.montar([], Path("C:/saves"), [], redirecionamentos)
+    assert cfg["redirects"] == [
+        {"kind": "restore", "source": "C:/Users/Antigo", "target": "C:/Users/João"},
+        {"kind": "restore", "source": "D:/JogoA", "target": "E:/JogoB"},
+    ]
+
+
+def test_montar_sem_redirecionamentos_nao_tem_a_chave():
+    assert "redirects" not in config.montar([], Path("C:/saves"), [])
+    assert "redirects" not in config.montar([], Path("C:/saves"), [], [])

@@ -118,10 +118,10 @@ def test_recusa_uma_pasta_que_contem_a_atual(settings) -> None:
 
 
 def test_a_raiz_de_um_disco_contem_o_que_esta_nela() -> None:
-    assert pasta._dentro(Path("E:/Saves"), Path("E:/"))
-    assert pasta._dentro(Path("E:/"), Path("E:/"))
-    assert not pasta._dentro(Path("E:/"), Path("E:/Saves"))
-    assert not pasta._dentro(Path("D:/Saves"), Path("E:/"))
+    assert pasta.dentro(Path("E:/Saves"), Path("E:/"))
+    assert pasta.dentro(Path("E:/"), Path("E:/"))
+    assert not pasta.dentro(Path("E:/"), Path("E:/Saves"))
+    assert not pasta.dentro(Path("D:/Saves"), Path("E:/"))
 
 
 def test_recusa_se_a_nova_tem_um_arquivo_com_o_nome_de_um_item(settings, tmp_path) -> None:

@@ -8,6 +8,7 @@ as pastas de emulador e da pasta do jogo de cada título); rodá-lo é de `ludus
 import json
 import re
 import winreg
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -90,8 +91,16 @@ def raizes(jogos: list[JogoNoConfig]) -> list[tuple[str, Path]]:
     return achadas
 
 
-def montar(jogos: list[JogoNoConfig], pasta_dos_saves: Path, raizes: list[tuple[str, Path]]) -> dict:
-    """O config completo. Jogo sem appID não tem como ser achado: fica de fora."""
+def montar(
+    jogos: list[JogoNoConfig],
+    pasta_dos_saves: Path,
+    raizes: list[tuple[str, Path]],
+    redirecionamentos: Sequence[tuple[str, str]] = (),
+) -> dict:
+    """O config completo. Jogo sem appID não tem como ser achado: fica de fora.
+
+    `redirecionamentos` (origem, destino) valem só na restauração; sem nenhum, o
+    config não tem a chave `redirects`."""
     customizados = [
         {
             "name": jogo.nome,
@@ -101,7 +110,7 @@ def montar(jogos: list[JogoNoConfig], pasta_dos_saves: Path, raizes: list[tuple[
         for jogo in jogos
         if jogo.appid is not None and arquivos.appid_valido(jogo.appid)
     ]
-    return {
+    resultado: dict = {
         "release": {"check": False},
         "backup": {
             "path": str(pasta_dos_saves),
@@ -112,6 +121,12 @@ def montar(jogos: list[JogoNoConfig], pasta_dos_saves: Path, raizes: list[tuple[
         "roots": [{"store": loja, "path": str(pasta)} for loja, pasta in raizes],
         "customGames": customizados,
     }
+    if redirecionamentos:
+        resultado["redirects"] = [
+            {"kind": "restore", "source": origem, "target": destino}
+            for origem, destino in redirecionamentos
+        ]
+    return resultado
 
 
 def gravar(config: dict, pasta_config: Path) -> None:

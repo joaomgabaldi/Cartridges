@@ -49,7 +49,7 @@ def _chave(caminho: Path) -> str:
     return os.path.normcase(os.path.abspath(caminho))
 
 
-def _dentro(caminho: Path, pasta: Path) -> bool:
+def dentro(caminho: Path, pasta: Path) -> bool:
     """Se `caminho` é `pasta` ou está dentro dela. `commonpath` e não prefixo de
     texto: a raiz de um disco já termina no separador."""
     try:
@@ -116,14 +116,14 @@ def trocar(nova: Path) -> None:
     precisaria receber.
     """
     antiga = atual()
-    if _dentro(nova, antiga):
+    if dentro(nova, antiga):
         raise TrocaRecusada(_("Escolha uma pasta fora da pasta atual dos saves."))
-    if _dentro(antiga, nova):
+    if dentro(antiga, nova):
         raise TrocaRecusada(_("Escolha uma pasta que não contenha a pasta atual dos saves."))
     # A restauração de um backup do app troca a pasta de dados inteira (o que há
     # nela vai para `.anterior` e é apagado): só a padrão sobrevive a isso.
     e_padrao = _chave(nova) == _chave(padrao())
-    if not e_padrao and (_dentro(nova, shared.app_dir) or _dentro(shared.app_dir, nova)):
+    if not e_padrao and (dentro(nova, shared.app_dir) or dentro(shared.app_dir, nova)):
         raise TrocaRecusada(_("Escolha uma pasta fora da pasta de dados do Cartridges."))
 
     originais: list[Path] = []
