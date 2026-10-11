@@ -15,20 +15,27 @@ sua entrada.
 import logging
 import subprocess
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from gi.repository import Adw
 
 from cartridges import shared
+from cartridges.conquistas import arquivos
 from cartridges.game import Game
-from cartridges.saves import config, ludusavi, pasta
+from cartridges.saves import conferencia, config, ludusavi, pasta
 from cartridges.saves.ludusavi import LudusaviFalhou, Versao
 from cartridges.utils import tarefas
 from cartridges.utils.na_tela import entregar_na_tela
 
 # Os testes trocam por um executor falso; é o que `ludusavi.rodar` recebe.
 executor = subprocess.run
+
+# As marcas que o app grava nas versões (comentários do Ludusavi): a versão que um
+# backup com falha deixou pela metade, e a cópia dos saves feita antes de uma restauração.
+INCOMPLETA = "cartridges:incompleta"
+ANTES_DE_RESTAURAR = "cartridges:antes-de-restaurar"
 
 _trava = threading.Lock()
 # Nome no Ludusavi -> versões, da mais nova para a mais velha. Lido pela tela
@@ -69,8 +76,13 @@ def _no_config(game: Game, no_manifesto: bool = True) -> config.JogoNoConfig:
     return config.JogoNoConfig(game.ludusavi_nome, game.steam_appid, game.executable, no_manifesto)
 
 
-def _preparar(biblioteca: list[Game], atual: Optional[config.JogoNoConfig] = None) -> None:
-    """Grava o `config.yaml` desta chamada. Sempre sob a trava."""
+def _preparar(
+    biblioteca: list[Game],
+    atual: config.JogoNoConfig | None = None,
+    redirecionamentos: list[tuple[str, str]] | None = None,
+) -> None:
+    """Grava o `config.yaml` desta chamada. Sempre sob a trava. Os `redirecionamentos`
+    são os da restauração que vem a seguir."""
     escolhida = pasta.atual()
     # Uma pasta configurada que sumiu (disco externo, OneDrive desconectado) não
     # pode virar uma pasta nova e vazia: os backups antigos ficariam para trás sem aviso.
@@ -81,7 +93,10 @@ def _preparar(biblioteca: list[Game], atual: Optional[config.JogoNoConfig] = Non
     if atual is not None:
         jogos[atual.nome] = atual
     lista = list(jogos.values())
-    config.gravar(config.montar(lista, escolhida, config.raizes(lista)), _pasta_config())
+    config.gravar(
+        config.montar(lista, escolhida, config.raizes(lista), redirecionamentos or ()),
+        _pasta_config(),
+    )
 
 
 def _ler_versoes(biblioteca: list[Game]) -> bool:
@@ -108,6 +123,18 @@ def _mostrar_aviso(texto: str) -> bool:
 
 def _avisar(texto: str) -> None:
     entregar_na_tela(_mostrar_aviso, texto)
+
+
+def _marcar_nova(nome: str, inicio: datetime, comentario: str) -> None:
+    """Grava ``comentario`` na versão mais nova do jogo, só se ela foi criada depois de
+    ``inicio``: um backup sem mudança não cria versão, e uma versão antiga nunca leva a
+    marca de outra operação. Sob a trava. Nunca levanta: a falha vai para o log."""
+    try:
+        lista = ludusavi.versoes(_pasta_config(), executor).get(nome)
+        if lista and lista[0].quando >= inicio:
+            ludusavi.marcar(nome, lista[0].id, comentario, _pasta_config(), executor)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.exception("Não foi possível marcar a versão nova dos saves de %s", nome)
 
 
 def _salvar(game: Game) -> bool:
@@ -194,29 +221,92 @@ def _atualizar_cache(biblioteca: list[Game]) -> None:
 # -- restauração -------------------------------------------------------------
 
 
-def restaurar(game: Game, versao: Optional[str]) -> None:
-    """Devolve os saves do jogo; sem ``versao``, os da mais recente."""
+def _restaurar_um(game: Game, versao: Versao, biblioteca: list[Game]) -> str | None:
+    """Restaura ``versao`` sem arriscar o save atual. Sob a trava. None se restaurou;
+    senão, o aviso para o usuário.
+
+    Nesta ordem, e qualquer falha interrompe tudo antes do `restore`: o zip da versão
+    tem de estar inteiro (o Ludusavi grava uma versão danificada por cima do save e só
+    depois acusa o erro); os saves atuais viram uma versão nova; os caminhos do zip são
+    levados ao usuário e à pasta do jogo de hoje; e a prévia só pode gravar em pastas
+    de save.
+    """
+    nome = game.ludusavi_nome
+    jogo = _no_config(game)
+    try:
+        arquivo = versao.arquivo
+        if arquivo is None or not conferencia.integra(arquivo):
+            logging.warning(
+                "O zip da versão %s dos saves de %s está danificado ou sumiu", versao.id, game.name
+            )
+            return _(
+                "A versão escolhida dos saves de {} está danificada e não foi restaurada."
+            ).format(game.name)
+        inicio = datetime.now(timezone.utc)
+        try:
+            # Uma cópia a mais que as guardadas: no limite normal, a cópia apagaria a
+            # mais antiga, que pode ser a escolhida.
+            limite = min(len(_cache.get(nome, [])) + 1, 255)
+            ludusavi.fazer_backup(nome, _pasta_config(), executor, limite)
+        except LudusaviFalhou:
+            logging.exception("A cópia dos saves atuais de %s falhou", game.name)
+            _marcar_nova(nome, inicio, INCOMPLETA)
+            return _(
+                "Não foi possível guardar os saves atuais de {} antes da restauração. "
+                "Verifique se o jogo está fechado e tente novamente."
+            ).format(game.name)
+        _marcar_nova(nome, inicio, ANTES_DE_RESTAURAR)
+        bases = arquivos.bases_do_jogo(game.executable)
+        caminhos = conferencia.caminhos_no_zip(arquivo)
+        # O mesmo config na prévia e no `restore`: o que foi conferido é o que se grava.
+        _preparar(biblioteca, jogo, conferencia.redirecionamentos(caminhos, Path.home(), bases))
+        previa = ludusavi.previa(nome, _pasta_config(), versao.id, executor)
+        extras = [raiz for _loja, raiz in config.raizes([jogo])] + bases
+        limites = conferencia.raizes(arquivos.pastas_do_sistema(), Path.home(), extras)
+        if (recusado := conferencia.recusado(previa, limites)) is not None:
+            logging.warning(
+                "A restauração dos saves de %s gravaria em %r: recusada", game.name, recusado
+            )
+            return _(
+                "O backup dos saves de {} contém arquivos fora das pastas de save "
+                "e não foi restaurado."
+            ).format(game.name)
+        ludusavi.restaurar(nome, _pasta_config(), versao.id, executor)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.exception("Restauração do save de %s falhou", game.name)
+        return _("Não foi possível restaurar o save de {}.").format(game.name)
+    return None
+
+
+def restaurar(game: Game, versao: str) -> None:
+    """Devolve os saves do jogo aos da versão ``versao`` (o `id`), guardando os atuais antes."""
     if disponivel() and game.ludusavi_nome:
         _em_segundo_plano(_restaurar, game, versao, _biblioteca())
 
 
-def _restaurar(game: Game, versao: Optional[str], biblioteca: list[Game]) -> None:
+def _restaurar(game: Game, versao: str, biblioteca: list[Game]) -> None:
     with _trava:
         tarefa = tarefas.comecar(_("Restaurando o save de {}").format(game.name), 1)
         try:
-            _preparar(biblioteca, _no_config(game))
-            ludusavi.restaurar(game.ludusavi_nome, _pasta_config(), versao, executor)
-        except Exception:  # pylint: disable=broad-exception-caught
-            logging.exception("Restauração do save de %s falhou", game.name)
-            _avisar(_("Não foi possível restaurar o save de {}.").format(game.name))
-        else:
+            # Relidas agora: o zip e o número de versões (o limite da cópia) são os de hoje.
+            achada = None
+            if _ler_versoes(biblioteca):
+                versoes = _cache.get(game.ludusavi_nome, [])
+                achada = next((v for v in versoes if v.id == versao), None)
+            if achada is None:
+                logging.warning("A versão %s dos saves de %s não foi encontrada", versao, game.name)
+                aviso = _("Não foi possível restaurar o save de {}.").format(game.name)
+            else:
+                aviso = _restaurar_um(game, achada, biblioteca)
+            if aviso is not None:
+                _avisar(aviso)
             _ler_versoes(biblioteca)
         finally:
             tarefa.terminar()
 
 
 def restaurar_todos() -> None:
-    """Restaura a versão mais recente de cada jogo da biblioteca que tem backup."""
+    """Restaura a versão completa mais recente de cada jogo da biblioteca que tem backup."""
     if disponivel():
         _em_segundo_plano(_restaurar_todos, _biblioteca())
 
@@ -233,24 +323,27 @@ def _restaurar_todos(biblioteca: list[Game]) -> None:
         if not alvos:
             return
         tarefa = tarefas.comecar(_("Restaurando os saves"), len(alvos))
-        falhou = False
+        falhas = 0
         try:
-            _preparar(biblioteca)
             for feitos, nome in enumerate(alvos):
                 tarefa.atualizar(feitos)
-                try:
-                    ludusavi.restaurar(nome, _pasta_config(), None, executor)
-                except Exception:  # pylint: disable=broad-exception-caught
-                    logging.exception("Restauração do save de %s falhou", jogos[nome].name)
-                    falhou = True
-        except Exception:  # pylint: disable=broad-exception-caught
-            logging.exception("Restauração dos saves falhou")
-            falhou = True
+                # A completa: restaurar uma incompleta deixaria o save misturado.
+                versao = next((v for v in _cache[nome] if v.comentario != INCOMPLETA), None)
+                if versao is None:
+                    logging.warning("Os saves de %s só têm versões incompletas", jogos[nome].name)
+                if versao is None or _restaurar_um(jogos[nome], versao, biblioteca) is not None:
+                    falhas += 1
         finally:
             tarefa.terminar()
         # Um aviso só, no fim: uma falha por jogo viraria uma fila de avisos.
-        if falhou:
-            _avisar(_("Não foi possível restaurar os saves."))
+        if falhas:
+            _avisar(
+                ngettext(
+                    "Não foi possível restaurar os saves de {} jogo.",
+                    "Não foi possível restaurar os saves de {} jogos.",
+                    falhas,
+                ).format(falhas)
+            )
         _ler_versoes(biblioteca)
 
 
