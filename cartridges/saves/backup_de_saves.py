@@ -147,8 +147,8 @@ def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
 
     A primeira vez procura o nome no manifesto (pelo appID, depois pelo título) e
     guarda; as seguintes usam o guardado. Com appID e sem entrada no manifesto, o
-    jogo ganha uma entrada própria com o nome dele, mas só se o manifesto existe: sem
-    ele "não achado" não quer dizer nada, então levanta e nada é guardado.
+    jogo ganha uma entrada própria com o nome dele. Sem o manifesto baixado, "não
+    achado" não quer dizer nada (com ou sem appID): levanta e nada é guardado.
     """
     if game.ludusavi_nome:
         return _no_config(game)
@@ -160,11 +160,12 @@ def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
         nome = ludusavi.nome_por_titulo(game.name, pasta_config, executor)
     if nome is not None:
         jogo = config.JogoNoConfig(nome, game.steam_appid, game.executable, True)
-    elif game.steam_appid:
+    elif not (pasta_config / "manifest.yaml").is_file():
         # Sem o manifesto o `find` também não acha nada. Guardar o nome do jogo agora
-        # dividiria as versões em duas pastas se ele mudasse depois.
-        if not (pasta_config / "manifest.yaml").is_file():
-            raise LudusaviFalhou("o manifesto do Ludusavi ainda não foi baixado")
+        # dividiria as versões em duas pastas se ele mudasse depois; e sem appID, o
+        # jogo ficaria sem backup em silêncio.
+        raise LudusaviFalhou("o manifesto do Ludusavi ainda não foi baixado")
+    elif game.steam_appid:
         jogo = config.JogoNoConfig(game.name, game.steam_appid, game.executable, False)
     else:
         return None  # sem appID e fora do manifesto não há o que copiar

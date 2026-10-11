@@ -265,7 +265,8 @@ def test_sem_manifesto_nao_guarda_o_nome(store, make_game, falso, esperar):
     assert tarefas.lista.get_n_items() == 0
 
 
-def test_sem_appid_e_sem_entrada_nao_faz_nada(store, make_game, falso, esperar):
+def test_sem_appid_e_sem_entrada_nao_faz_nada(store, make_game, falso, esperar, tmp_path):
+    _com_manifesto(tmp_path)  # "fora do manifesto" pressupõe que há um manifesto
     jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo Sem Nada")
 
     backup_de_saves.no_fim_da_sessao(jogo)
@@ -274,6 +275,19 @@ def test_sem_appid_e_sem_entrada_nao_faz_nada(store, make_game, falso, esperar):
     assert falso.chamou("backup") == []
     assert jogo.ludusavi_nome == ""
     assert toasts() == []
+    assert tarefas.lista.get_n_items() == 0
+
+
+def test_sem_appid_sem_manifesto_avisa(store, make_game, falso, esperar):
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo Sem Nada")
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    esperar()
+
+    assert [c[:2] for c in falso.chamou("find")] == [["find", "Jogo Sem Nada"]]
+    assert falso.chamou("backup") == []
+    assert jogo.ludusavi_nome == ""  # a próxima sessão procura de novo
+    assert titulos() == ["Não foi possível fazer o backup dos saves de Jogo Sem Nada."]
     assert tarefas.lista.get_n_items() == 0
 
 
