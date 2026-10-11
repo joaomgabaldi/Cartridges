@@ -322,6 +322,24 @@ def test_backup_que_falha_marca_a_versao_nova(store, make_game, falso, esperar):
     assert titulos() == ["Não foi possível fazer o backup dos saves de Meu Jogo."]
 
 
+def test_backup_que_falha_relê_o_cache(store, make_game, falso, esperar):
+    falso.falhas["backup"] = FALHOU
+    falso.versoes["X"] = ["v1"]
+    falso.cria_versao["X"] = True
+    jogo = na_biblioteca(
+        store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X"
+    )
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    esperar()
+
+    # O diálogo de versões vê a versão incompleta, já marcada, sem esperar outra leitura.
+    versoes = backup_de_saves.versoes_do_jogo(jogo)
+    assert [v.id for v in versoes] == ["nova1", "v1"]
+    assert versoes[0].comentario == "cartridges:incompleta"
+    assert titulos() == ["Não foi possível fazer o backup dos saves de Meu Jogo."]
+
+
 def test_backup_que_falha_sem_versao_nova_nao_marca(store, make_game, falso, esperar):
     falso.falhas["backup"] = FALHOU
     falso.versoes["X"] = ["v1"]  # a boa de antes: nunca leva a marca

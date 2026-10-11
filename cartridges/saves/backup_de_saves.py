@@ -197,8 +197,11 @@ def _backup(game: Game, biblioteca: list[Game]) -> None:
                 ludusavi.fazer_backup(jogo.nome, _pasta_config(), executor)
             except LudusaviFalhou:
                 # O Ludusavi cria a versão mesmo quando um arquivo falha; só a falha do
-                # próprio backup deixa uma versão nova, então só ela é marcada.
+                # próprio backup deixa uma versão nova, então só ela é marcada. Relê as
+                # versões: a lista mostra a incompleta e não oferece o que a retenção
+                # do Ludusavi apagou nessa rodada.
                 _marcar_nova(jogo.nome, inicio, INCOMPLETA)
+                _ler_versoes(biblioteca)
                 raise
         except Exception:  # pylint: disable=broad-exception-caught
             logging.exception("Backup dos saves de %s falhou", game.name)
