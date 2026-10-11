@@ -1,6 +1,7 @@
 """Onde cada emulador grava as conquistas de um jogo."""
 
 import winreg
+from pathlib import Path
 
 import pytest
 
@@ -65,6 +66,22 @@ def test_pastas_de_perfil_do_3dm_e_do_ali213(tmp_path, pastas):
     assert (tres.name, formatos.TRES_DM) in achados
     assert (ali.name, formatos.ALI213) in achados
     assert (local.name, formatos.GOLDBERG) in achados
+
+
+def test_bases_da_pasta_sobe_so_pelas_pastas_de_binarios():
+    assert arquivos.bases_da_pasta(Path("D:/Jogos/X/Binaries/Win64")) == [
+        Path("D:/Jogos/X/Binaries/Win64"),
+        Path("D:/Jogos/X/Binaries"),
+        Path("D:/Jogos/X"),
+    ]
+    assert arquivos.bases_da_pasta(Path("D:/Jogos/X")) == [Path("D:/Jogos/X")]
+    assert arquivos.bases_da_pasta(Path("D:/Jogos/X/bin/Dados")) == [Path("D:/Jogos/X/bin/Dados")]
+    assert arquivos.bases_da_pasta(Path("D:/")) == [Path("D:/")]
+
+
+def test_bases_da_pasta_sobe_no_maximo_tres_vezes():
+    pasta = Path("D:/Jogos/bin/bin/bin/bin")
+    assert arquivos.bases_da_pasta(pasta) == [pasta, pasta.parent, pasta.parent.parent, pasta.parents[2]]
 
 
 def test_jogo_sem_pasta_so_usa_os_caminhos_fixos(pastas):

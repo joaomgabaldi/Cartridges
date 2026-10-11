@@ -30,8 +30,17 @@ def integra(arquivo: Path | None) -> bool:
     try:
         with zipfile.ZipFile(arquivo) as zip_:
             return zip_.testzip() is None
-    # Tudo o que o `zipfile` levanta ao ler um zip ausente, truncado ou estragado.
-    except (OSError, zipfile.BadZipFile, zlib.error, EOFError, NotImplementedError, RuntimeError):
+    # Tudo o que o `zipfile` levanta ao ler um zip ausente, truncado ou estragado
+    # (`ValueError` inclui o `UnicodeDecodeError` de um nome de arquivo danificado).
+    except (
+        OSError,
+        ValueError,
+        zipfile.BadZipFile,
+        zlib.error,
+        EOFError,
+        NotImplementedError,
+        RuntimeError,
+    ):
         return False
 
 
@@ -63,40 +72,50 @@ def redirecionamentos(
     """Os (origem, destino) que levam os saves da versão ao lugar de hoje, sem repetição.
 
     Primeiro os usuários: `X:/Users/<nome>`, que não é a pasta de `casa` e não existe,
-    vai para `casa`. Depois a pasta do jogo: as pastas de jogo (antes de um marcador)
-    que não existem mais e não são as atuais viram um redirecionamento só, da mais alta
-    para a mais alta de `bases_atuais` (a lista de `arquivos.bases_do_jogo`, que cobre
-    as pastas de dentro).
+    vai para `casa`. Depois a pasta do jogo: das pastas de jogo (antes de um marcador)
+    que não existem mais e não são as atuais, a mais alta dá a raiz antiga (subindo pelas
+    pastas de binários, como `arquivos.bases_da_pasta`), e um redirecionamento só leva
+    essa raiz à raiz atual (a última de `bases_atuais`): a estrutura de dentro se mantém.
+    A origem fica com o texto do zip: o Ludusavi a compara sem trocar maiúsculas.
     """
     usuarios: dict[str, None] = {}
     antigas: list[Path] = []
     for caminho in caminhos:
-        usuario = _USUARIO.match(caminho)
-        if usuario and not dentro(Path(usuario[0]), casa) and not Path(usuario[0]).exists():
-            usuarios[usuario[0]] = None
+        if usuario := _USUARIO.match(caminho):
+            if not dentro(Path(usuario[0]), casa) and not Path(usuario[0]).exists():
+                usuarios[usuario[0]] = None
+            # ponytail: um jogo instalado dentro do perfil de um usuário não ganha
+            # redirecionamento da pasta do jogo — o do usuário já leva o caminho (o
+            # Ludusavi encadeia dois sobre o mesmo caminho). Para tratar, o do jogo
+            # teria de substituir o do usuário.
+            continue
         if (marcador := _MARCADOR.search(caminho)) and bases_atuais:
             pasta = Path(caminho[: marcador.start()])
             if pasta not in bases_atuais and not pasta.exists():
                 antigas.append(pasta)
     achados = [(origem, casa.as_posix()) for origem in usuarios]
     if antigas:
-        mais_alta = min(antigas, key=lambda pasta: len(pasta.parts))
-        achados.append((mais_alta.as_posix(), bases_atuais[-1].as_posix()))
+        antiga = arquivos.bases_da_pasta(min(antigas, key=lambda pasta: len(pasta.parts)))[-1]
+        if antiga != bases_atuais[-1] and not antiga.exists():
+            achados.append((antiga.as_posix(), bases_atuais[-1].as_posix()))
     return achados
 
 
 @dataclass(frozen=True)
 class Raizes:
-    """Onde uma restauração pode gravar e as pastas, dentro disso, onde nunca grava."""
+    """Onde uma restauração pode gravar, as pastas dentro disso onde nunca grava, e a
+    pasta do usuário (`casa`), onde nenhum arquivo solto pode ser gravado."""
 
     permitidas: tuple[Path, ...]
     proibidas: tuple[Path, ...]
+    casa: Path
 
 
 def raizes(pastas: arquivos.Pastas, casa: Path, extras: list[Path]) -> Raizes:
     """As pastas do usuário e do sistema onde um jogo guarda o save, mais as `extras`
     (a Steam, o Ubisoft Connect, a pasta do jogo). Documentos entra como o Windows o
-    informa: pode estar em outro disco. As proibidas são onde um arquivo vira programa."""
+    informa: pode estar em outro disco. As proibidas são onde um arquivo vira programa
+    ou credencial."""
     return Raizes(
         permitidas=(
             casa,
@@ -113,7 +132,9 @@ def raizes(pastas: arquivos.Pastas, casa: Path, extras: list[Path]) -> Raizes:
             pastas.programdata / "Microsoft",
             pastas.documentos / "WindowsPowerShell",
             pastas.documentos / "PowerShell",
+            casa / ".ssh",
         ),
+        casa=casa,
     )
 
 
@@ -122,6 +143,9 @@ EXTENSOES_PROIBIDAS = frozenset(
         ".exe", ".dll", ".sys", ".drv", ".ocx", ".cpl", ".scr", ".com", ".pif", ".bat", ".cmd",
         ".ps1", ".psm1", ".psd1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta", ".msi",
         ".msp", ".lnk", ".url", ".reg", ".jar", ".py", ".pyw",
+        # carregados por outro programa: complementos, módulos nativos, ajuda e atalhos
+        ".asi", ".node", ".pyd", ".xll", ".xla", ".xlam", ".chm", ".msc", ".appref-ms",
+        ".asar", ".scf", ".inf",
     }
 )
 
@@ -136,17 +160,29 @@ _CHAVES_PERMITIDAS = "hkey_current_user/software/"
 _BARRAS = re.compile(r"[\\/]+")
 
 
-def _arquivo_recusado(arquivo: str, limites: Raizes) -> bool:
-    if not Path(arquivo).is_absolute():
+def _resolvido(caminho: str | Path) -> Path:
+    """O caminho como o Windows o enxerga: sem `..`, sem pontos e espaços no fim dos
+    nomes, e com as junções, os links simbólicos e os nomes curtos (`MICROS~1`) trocados
+    pelo que de fato são. O que ainda não existe fica como está."""
+    return Path(os.path.realpath(os.path.abspath(caminho)))
+
+
+def _arquivo_recusado(arquivo: str, reais: Raizes) -> bool:
+    """`reais` são as raízes já resolvidas (`_resolvido`): o destino é comparado com elas
+    pelo que é no disco, e não pelo texto."""
+    # Pelo texto, antes de o disco ser consultado: olhar um caminho de rede já faria
+    # o Windows conectar na máquina e mandar as credenciais do usuário.
+    if arquivos.eh_caminho_de_rede(arquivo) or not Path(arquivo).is_absolute():
         return True
-    # `abspath` tira os `..` e os pontos e espaços do fim de cada nome, como o
-    # Windows faz ao criar o arquivo (`x.exe.` vira `x.exe`).
-    caminho = Path(os.path.abspath(arquivo))
+    # Fora o da unidade, `:` só aparece em fluxo alternativo do NTFS: `x.exe::$DATA`
+    # cria `x.exe`, e `Microsoft::$INDEX_ALLOCATION` é a própria pasta `Microsoft`.
+    if ":" in os.path.splitdrive(arquivo)[1]:
+        return True
+    caminho = _resolvido(arquivo)
     return (
-        not any(dentro(caminho, raiz) for raiz in limites.permitidas)
-        or any(dentro(caminho, raiz) for raiz in limites.proibidas)
-        # `x.exe::$DATA` cria `x.exe`; nome de save de verdade não tem `:`.
-        or ":" in caminho.name
+        not any(dentro(caminho, raiz) for raiz in reais.permitidas)
+        or any(dentro(caminho, raiz) for raiz in reais.proibidas)
+        or caminho.parent == reais.casa
         or caminho.suffix.casefold() in EXTENSOES_PROIBIDAS
     )
 
@@ -160,7 +196,12 @@ def _chave_recusada(chave: str) -> bool:
 def recusado(previa: Previa, limites: Raizes) -> str | None:
     """O primeiro arquivo (e só depois a primeira chave de registro) da prévia que a
     restauração não pode tocar, ou `None` se todos podem. Pode ser `""`: compare com `None`."""
-    achado = next((a for a in previa.arquivos if _arquivo_recusado(a, limites)), None)
+    reais = Raizes(
+        tuple(map(_resolvido, limites.permitidas)),
+        tuple(map(_resolvido, limites.proibidas)),
+        _resolvido(limites.casa),
+    )
+    achado = next((a for a in previa.arquivos if _arquivo_recusado(a, reais)), None)
     if achado is None:
         achado = next((c for c in previa.chaves if _chave_recusada(c)), None)
     return achado

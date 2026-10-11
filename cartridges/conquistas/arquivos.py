@@ -167,19 +167,22 @@ def da_instalacao_mais_funda(pastas: list[Path], raizes: Iterable[tuple[Path, T]
     return melhor[1] if melhor is not None else None
 
 
+def bases_da_pasta(pasta: Path) -> list[Path]:
+    """`pasta` e as pastas-pai que ainda são do jogo: sobe enquanto o nome for o de uma
+    pasta de binários, até `_SUBIDAS` vezes. A última é a raiz do jogo."""
+    bases = [pasta]
+    for _subida in range(_SUBIDAS):
+        if pasta.name.casefold() not in _PASTAS_DE_BINARIOS or pasta.parent == pasta:
+            break
+        pasta = pasta.parent
+        bases.append(pasta)
+    return bases
+
+
 def bases_do_jogo(executavel: str) -> list[Path]:
     """A pasta do executável e as pastas-pai que ainda são do jogo."""
     pasta = game_folder(executavel or "")
-    if not pasta:
-        return []
-    atual = Path(pasta)
-    bases = [atual]
-    for _subida in range(_SUBIDAS):
-        if atual.name.casefold() not in _PASTAS_DE_BINARIOS or atual.parent == atual:
-            break
-        atual = atual.parent
-        bases.append(atual)
-    return bases
+    return bases_da_pasta(Path(pasta)) if pasta else []
 
 
 # Os caminhos fixos de cada emulador, na ordem de preferência (entre dois caminhos

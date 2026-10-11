@@ -1,6 +1,9 @@
 """As decisões puras antes de restaurar: a versão está inteira, quais caminhos
 trocar e onde o Ludusavi pode gravar."""
 
+import _winapi
+import ctypes
+import os
 import random
 import zipfile
 import zlib
@@ -18,6 +21,9 @@ from cartridges.saves.conferencia import (
 from cartridges.saves.ludusavi import Previa
 
 CASA = Path("C:/Users/João")
+# Pastas de jogo que não existem e não estão no perfil de nenhum usuário.
+VELHO = Path("C:/NaoExiste123/JogoA")
+NOVO = Path("C:/NaoExiste123/JogoB")
 
 
 def _zip(caminho: Path, entradas: dict[str, bytes], compressao=zipfile.ZIP_DEFLATED) -> Path:
@@ -58,6 +64,17 @@ def test_integra_dado_comprimido_estragado(tmp_path):
 
     with pytest.raises(zlib.error), zipfile.ZipFile(arquivo) as zip_:
         zip_.testzip()  # o defeito é esse mesmo, e não um zip ilegível
+    assert conferencia.integra(arquivo) is False
+
+
+def test_integra_nome_ilegivel_no_cabecalho_local(tmp_path):
+    arquivo = _zip(tmp_path / "v.zip", {"drive-C/Users/João/a.sav": b"abc"})
+    bruto = bytearray(arquivo.read_bytes())
+    bruto[bruto.index("ã".encode())] = 0xFF  # o primeiro é o do cabeçalho local
+    arquivo.write_bytes(bruto)
+
+    with pytest.raises(UnicodeDecodeError), zipfile.ZipFile(arquivo) as zip_:
+        zip_.testzip()  # o defeito é esse mesmo
     assert conferencia.integra(arquivo) is False
 
 
@@ -124,77 +141,124 @@ def test_redireciona_cada_usuario_uma_vez():
     ]
 
 
-def test_redireciona_a_pasta_do_jogo_movida(tmp_path):
-    velho = tmp_path / "JogoA"
+def test_redireciona_a_pasta_do_jogo_movida():
     caminhos = [
-        f"{velho.as_posix()}/steam_settings/480/a.ini",
-        f"{velho.as_posix()}/bin/steam_settings/480/b.ini",
+        f"{VELHO.as_posix()}/steam_settings/480/a.ini",
+        f"{VELHO.as_posix()}/bin/steam_settings/480/b.ini",
     ]
-    atuais = [tmp_path / "JogoB" / "bin", tmp_path / "JogoB"]
+    atuais = [NOVO / "bin", NOVO]
 
-    assert conferencia.redirecionamentos(caminhos, tmp_path / "casa", atuais) == [
-        (velho.as_posix(), (tmp_path / "JogoB").as_posix())
+    assert conferencia.redirecionamentos(caminhos, CASA, atuais) == [
+        (VELHO.as_posix(), NOVO.as_posix())
     ]
 
 
 @pytest.mark.parametrize("marcador", MARCADORES)
-def test_cada_marcador_acha_a_pasta_do_jogo(tmp_path, marcador):
-    velho = tmp_path / "JogoA"
-    caminho = velho.as_posix() + marcador + ("a.ini" if marcador.endswith("/") else "")
-    atuais = [tmp_path / "JogoB"]
+def test_cada_marcador_acha_a_pasta_do_jogo(marcador):
+    caminho = VELHO.as_posix() + marcador + ("a.ini" if marcador.endswith("/") else "")
 
-    assert conferencia.redirecionamentos([caminho], tmp_path / "casa", atuais) == [
-        (velho.as_posix(), (tmp_path / "JogoB").as_posix())
+    assert conferencia.redirecionamentos([caminho], CASA, [NOVO]) == [
+        (VELHO.as_posix(), NOVO.as_posix())
     ]
 
 
-def test_marcador_sem_diferenca_de_maiusculas(tmp_path):
-    velho = tmp_path / "JogoA"
-    caminho = f"{velho.as_posix()}/STEAM_SETTINGS/480/a.ini"
+def test_marcador_sem_diferenca_de_maiusculas():
+    caminho = f"{VELHO.as_posix()}/STEAM_SETTINGS/480/a.ini"
 
-    assert conferencia.redirecionamentos([caminho], tmp_path / "casa", [tmp_path / "JogoB"]) == [
-        (velho.as_posix(), (tmp_path / "JogoB").as_posix())
+    assert conferencia.redirecionamentos([caminho], CASA, [NOVO]) == [
+        (VELHO.as_posix(), NOVO.as_posix())
     ]
 
 
-def test_pasta_do_jogo_sem_marcador_nao_redireciona(tmp_path):
-    velho = tmp_path / "JogoA"
-    caminhos = [f"{velho.as_posix()}/save/a.sav"]
+def test_a_origem_mantem_a_caixa_do_zip():
+    # O Ludusavi compara a origem do redirecionamento sem trocar maiúsculas por minúsculas.
+    caminho = "C:/NaoExiste123/JoGoA/steam_settings/480/a.ini"
 
-    assert conferencia.redirecionamentos(caminhos, tmp_path / "casa", [tmp_path / "JogoB"]) == []
-
-
-def test_pasta_do_jogo_que_existe_nao_redireciona(tmp_path):
-    velho = tmp_path / "JogoA"
-    velho.mkdir()
-    caminhos = [f"{velho.as_posix()}/steam_settings/480/a.ini"]
-
-    assert conferencia.redirecionamentos(caminhos, tmp_path / "casa", [tmp_path / "JogoB"]) == []
+    assert conferencia.redirecionamentos([caminho], CASA, [NOVO]) == [
+        ("C:/NaoExiste123/JoGoA", NOVO.as_posix())
+    ]
 
 
-def test_pasta_do_jogo_igual_a_atual_nao_redireciona(tmp_path):
-    atual = tmp_path / "JogoA"  # nem existe: o que vale é ser a mesma pasta
-    caminhos = [f"{atual.as_posix()}/steam_settings/480/a.ini"]
+@pytest.mark.parametrize(
+    ("subpasta", "atuais"),
+    [
+        ("Binaries/Win64", [NOVO / "Binaries" / "Win64", NOVO / "Binaries", NOVO]),
+        ("bin", [NOVO / "bin", NOVO]),
+        ("bin", [NOVO]),  # a instalação nova é plana: a raiz continua sendo a raiz
+    ],
+)
+def test_redireciona_de_raiz_para_raiz(subpasta, atuais):
+    # O save ao lado do executável: o que se leva é a raiz, e a estrutura de dentro fica.
+    caminho = f"{VELHO.as_posix()}/{subpasta}/steam_settings/480/a.ini"
 
-    assert conferencia.redirecionamentos(caminhos, tmp_path / "casa", [atual]) == []
+    assert conferencia.redirecionamentos([caminho], CASA, atuais) == [
+        (VELHO.as_posix(), NOVO.as_posix())
+    ]
 
 
-def test_sem_pasta_atual_do_jogo_nao_redireciona(tmp_path):
-    caminhos = [f"{(tmp_path / 'JogoA').as_posix()}/steam_settings/480/a.ini"]
+def test_pasta_do_jogo_sem_marcador_nao_redireciona():
+    caminhos = [f"{VELHO.as_posix()}/save/a.sav"]
 
-    assert conferencia.redirecionamentos(caminhos, tmp_path / "casa", []) == []
+    assert conferencia.redirecionamentos(caminhos, CASA, [NOVO]) == []
 
 
-def test_usuarios_vem_antes_da_pasta_do_jogo(tmp_path):
-    velho = tmp_path / "JogoA"
+def test_pasta_do_jogo_que_existe_nao_redireciona():
+    windows = Path(os.environ.get("SystemRoot", "C:/Windows"))
+    caminhos = [f"{windows.as_posix()}/steam_settings/480/a.ini"]
+
+    assert conferencia.redirecionamentos(caminhos, CASA, [NOVO]) == []
+
+
+def test_raiz_antiga_que_existe_nao_redireciona():
+    windows = Path(os.environ.get("SystemRoot", "C:/Windows"))
+    caminhos = [f"{windows.as_posix()}/Win64/steam_settings/480/a.ini"]
+
+    assert conferencia.redirecionamentos(caminhos, CASA, [NOVO]) == []
+
+
+def test_pasta_do_jogo_igual_a_atual_nao_redireciona():
+    # Nem existe: o que vale é ser a mesma pasta.
+    caminhos = [f"{NOVO.as_posix()}/steam_settings/480/a.ini"]
+
+    assert conferencia.redirecionamentos(caminhos, CASA, [NOVO]) == []
+
+
+def test_raiz_antiga_igual_a_atual_nao_redireciona():
+    caminhos = [f"{NOVO.as_posix()}/bin/steam_settings/480/a.ini"]
+
+    assert conferencia.redirecionamentos(caminhos, CASA, [NOVO / "bin", NOVO]) == []
+
+
+def test_sem_pasta_atual_do_jogo_nao_redireciona():
+    caminhos = [f"{VELHO.as_posix()}/steam_settings/480/a.ini"]
+
+    assert conferencia.redirecionamentos(caminhos, CASA, []) == []
+
+
+def test_pasta_do_jogo_dentro_do_perfil_de_um_usuario_nao_redireciona():
+    # O redirecionamento do usuário já leva essa pasta; dois sobre o mesmo caminho se encadeiam.
+    caminho = "C:/Users/Public/Documents/My Games/NaoExisteJogo123/Profile/save.dat"
+
+    assert conferencia.redirecionamentos([caminho], CASA, [NOVO]) == []
+
+
+def test_jogo_no_perfil_de_usuario_antigo_so_leva_o_redirecionamento_do_usuario():
+    caminho = "C:/Users/NaoExiste123/Documents/My Games/NaoExisteJogo123/Profile/save.dat"
+
+    assert conferencia.redirecionamentos([caminho], CASA, [NOVO]) == [
+        ("C:/Users/NaoExiste123", "C:/Users/João")
+    ]
+
+
+def test_usuarios_vem_antes_da_pasta_do_jogo():
     caminhos = [
-        f"{velho.as_posix()}/Profile/a.sav",
+        f"{VELHO.as_posix()}/Profile/a.sav",
         "C:/Users/NaoExiste123/AppData/b.sav",
     ]
 
-    assert conferencia.redirecionamentos(caminhos, CASA, [tmp_path / "JogoB"]) == [
+    assert conferencia.redirecionamentos(caminhos, CASA, [NOVO]) == [
         ("C:/Users/NaoExiste123", "C:/Users/João"),
-        (velho.as_posix(), (tmp_path / "JogoB").as_posix()),
+        (VELHO.as_posix(), NOVO.as_posix()),
     ]
 
 
@@ -234,7 +298,9 @@ def test_raizes():
         Path("C:/ProgramData/Microsoft"),
         Path("C:/Users/João/Documents/WindowsPowerShell"),
         Path("C:/Users/João/Documents/PowerShell"),
+        Path("C:/Users/João/.ssh"),
     )
+    assert r.casa == CASA
 
 
 @pytest.mark.parametrize(
@@ -322,6 +388,113 @@ def test_devolve_o_primeiro_recusado_e_arquivos_vem_antes_das_chaves():
 
 def test_previa_vazia_nao_e_recusada():
     assert _recusado() is None
+
+
+# Destinos que o texto não entrega: o disco decide onde o arquivo vai parar.
+
+
+def _pastas_em(raiz: Path) -> Pastas:
+    return Pastas(
+        appdata=raiz / "AppData" / "Roaming",
+        localappdata=raiz / "AppData" / "Local",
+        documentos=raiz / "Documents",
+        documentos_publicos=raiz / "Public" / "Documents",
+        programdata=raiz / "ProgramData",
+    )
+
+
+def _recusado_em(raiz: Path, arquivo: Path):
+    permitidas = conferencia.raizes(_pastas_em(raiz), raiz / "casa", [])
+    return conferencia.recusado(Previa((arquivo.as_posix(),), ()), permitidas)
+
+
+def _nome_curto(pasta: Path) -> str:
+    """O nome 8.3 de uma pasta que existe (o próprio nome, se o volume não os guarda)."""
+    buffer = ctypes.create_unicode_buffer(1024)
+    ctypes.windll.kernel32.GetShortPathNameW(str(pasta), buffer, len(buffer))
+    return Path(buffer.value).name
+
+
+def test_recusa_o_nome_curto_de_uma_pasta_proibida(tmp_path):
+    proibida = _pastas_em(tmp_path).appdata / "Microsoft"
+    proibida.mkdir(parents=True)
+    curto = _nome_curto(proibida)
+    if curto.casefold() == proibida.name.casefold():
+        pytest.skip("o volume dos testes não guarda nomes curtos (8.3)")
+
+    assert _recusado_em(tmp_path, proibida.parent / curto / "Excel" / "XLSTART" / "x.sav")
+
+
+def test_recusa_a_juncao_que_leva_a_uma_pasta_proibida(tmp_path):
+    destino = _pastas_em(tmp_path).appdata / "Microsoft" / "Windows" / "SendTo"
+    destino.mkdir(parents=True)
+    (tmp_path / "casa").mkdir()
+    _winapi.CreateJunction(str(destino), str(tmp_path / "casa" / "SendTo"))
+
+    assert _recusado_em(tmp_path, tmp_path / "casa" / "SendTo" / "x.sav")
+
+
+def test_aceita_a_juncao_que_leva_a_uma_pasta_permitida(tmp_path):
+    destino = _pastas_em(tmp_path).appdata / "Jogo"
+    destino.mkdir(parents=True)
+    (tmp_path / "casa").mkdir()
+    _winapi.CreateJunction(str(destino), str(tmp_path / "casa" / "Application Data"))
+
+    assert _recusado_em(tmp_path, tmp_path / "casa" / "Application Data" / "x.sav") is None
+
+
+def test_recusa_fluxo_do_ntfs_numa_pasta_do_caminho():
+    arquivo = "C:/Users/João/AppData/Roaming/Microsoft::$INDEX_ALLOCATION/Excel/XLSTART/x.sav"
+
+    assert _recusado(arquivo) == arquivo
+
+
+@pytest.mark.parametrize(
+    "arquivo",
+    ["//servidor/pasta/x.sav", r"\servidor\pasta\x.sav", r"\?\UNC\servidor\pasta\x.sav"],
+)
+def test_caminho_de_rede_e_recusado_sem_tocar_no_disco(arquivo, monkeypatch):
+    consultados = []
+    real = os.path.realpath
+
+    def espia(caminho, *args, **kwargs):
+        consultados.append(os.fspath(caminho))
+        return real(caminho, *args, **kwargs)
+
+    monkeypatch.setattr(conferencia.os.path, "realpath", espia)
+
+    assert _recusado(arquivo) == arquivo
+    assert not any("servidor" in consultado for consultado in consultados)
+
+
+@pytest.mark.parametrize("nome", [".gitconfig", ".bashrc", "notas.txt"])
+def test_recusa_arquivo_solto_na_pasta_do_usuario(nome):
+    arquivo = f"C:/Users/João/{nome}"
+
+    assert _recusado(arquivo) == arquivo
+
+
+def test_aceita_arquivo_numa_subpasta_da_pasta_do_usuario():
+    assert _recusado("C:/Users/João/Saved Games/Jogo/slot1.sav") is None
+
+
+def test_recusa_a_pasta_ssh():
+    arquivo = "C:/Users/João/.ssh/authorized_keys"
+
+    assert _recusado(arquivo) == arquivo
+
+
+@pytest.mark.parametrize(
+    "extensao",
+    [
+        ".asi", ".node", ".pyd", ".xll", ".xla", ".xlam",
+        ".chm", ".msc", ".appref-ms", ".asar", ".scf", ".inf",
+    ],
+)
+def test_recusa_extensao_que_carrega_codigo(extensao):
+    arquivo = f"C:/Users/João/AppData/Local/Jogo/x{extensao}"
+
+    assert _recusado(arquivo) == arquivo
 
 
 # --- chaves do registro ------------------------------------------------------
