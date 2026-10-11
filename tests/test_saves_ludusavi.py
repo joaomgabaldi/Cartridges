@@ -8,10 +8,20 @@ Amostras reais do Ludusavi 0.31.0 em `tests/dados/ludusavi/`. Campos confirmados
 * `backup "<nome>" --force --api`: `games.<nome>.{decision, change, files}`. Um jogo
   desconhecido sai com código 1 e `errors.unknownGames`; `errors.someGamesFailed`
   (true) é como o Ludusavi avisa que o jogo existe mas a cópia falhou.
-* `backups --api`: `games.<nome>.backups[] = {name, when, os, locked}`. `name` é o
-  que `restore --backup` pede (`backup-20261009T154638Z`, ou `.` quando a retenção
-  guarda uma única cópia); `when` é UTC, ISO 8601, com 9 casas decimais e `Z`.
+* `backups --api`: `games.<nome>.{backupPath, backups[]}`, com `backups[] = {name, when,
+  os, locked}` e, só nas versões marcadas, `comment`. `backupPath` é a pasta do jogo
+  dentro da pasta de saves; `name` é o que `restore --backup` pede
+  (`backup-20261009T154638Z`, ou `.` quando a retenção guarda uma única cópia) e,
+  junto de `backupPath`, dá o zip da versão; `when` é UTC, ISO 8601, com 9 casas
+  decimais e `Z`.
+* `backups edit "<nome>" --backup <name> --comment <texto>`: NÃO aceita `--api`
+  (erro "unexpected argument '--api'"); no sucesso sai com 0 e stdout vazio.
+* `backup ... --full-limit N`: aceito.
 * `restore "<nome>" [--backup <name>] --force --api`: o mesmo formato do `backup`.
+* `restore "<nome>" --force --preview --api [--backup <name>]`: o mesmo formato, sem
+  copiar nada. `games.<nome>.files` tem por chave o caminho final (e `originalPath`
+  quando o Ludusavi o redirecionou); `games.<nome>.registry` tem por chave a chave de
+  registro (`HKEY_CURRENT_USER/...`).
 """
 
 import json
@@ -23,7 +33,7 @@ from pathlib import Path
 import pytest
 
 from cartridges.saves import ludusavi
-from cartridges.saves.ludusavi import LudusaviFalhou, Versao
+from cartridges.saves.ludusavi import LudusaviFalhou, Previa, Versao
 
 DADOS = Path(__file__).parent / "dados" / "ludusavi"
 
@@ -176,11 +186,30 @@ def test_o_achado_de_maior_pontuacao_vence(tmp_path):
 def test_versoes_por_jogo(tmp_path):
     por_jogo = ludusavi.versoes(tmp_path, ExecutorFalso(amostra("backups")))
     assert list(por_jogo) == ["Teste Cartridges"]
+    pasta = Path("C:/Temp/cartridges/bk2/Teste Cartridges")
+    utc = timezone.utc
     assert por_jogo["Teste Cartridges"] == [
-        Versao("backup-20261009T154644Z", datetime(2026, 10, 9, 15, 46, 44, 168796, tzinfo=timezone.utc)),
-        Versao("backup-20261009T154641Z", datetime(2026, 10, 9, 15, 46, 41, 594421, tzinfo=timezone.utc)),
-        Versao("backup-20261009T154638Z", datetime(2026, 10, 9, 15, 46, 38, 971055, tzinfo=timezone.utc)),
+        Versao("backup-20261009T154644Z", datetime(2026, 10, 9, 15, 46, 44, 168796, tzinfo=utc), "", pasta / "backup-20261009T154644Z"),
+        Versao("backup-20261009T154641Z", datetime(2026, 10, 9, 15, 46, 41, 594421, tzinfo=utc), "", pasta / "backup-20261009T154641Z"),
+        Versao("backup-20261009T154638Z", datetime(2026, 10, 9, 15, 46, 38, 971055, tzinfo=utc), "", pasta / "backup-20261009T154638Z"),
     ]  # fmt: skip
+
+
+def test_versoes_trazem_comentario_e_arquivo(tmp_path):
+    jogo = 'Jogo "Ação" & Cia'
+    nova, velha = ludusavi.versoes(tmp_path, ExecutorFalso(amostra("backups_com_comentario")))[jogo]
+    assert nova.comentario == "cartridges:incompleta"
+    assert nova.arquivo == Path("C:/Saves/Jogo _Ação_ & Cia/backup-20261011T100000Z.zip")
+    assert velha.comentario == ""
+    assert velha.arquivo == Path("C:/Saves/Jogo _Ação_ & Cia/backup-20261010T100000Z.zip")
+
+
+def test_versoes_sem_backup_path_ficam_sem_arquivo(tmp_path):
+    saida = json.loads(amostra("backups"))
+    del saida["games"]["Teste Cartridges"]["backupPath"]
+    por_jogo = ludusavi.versoes(tmp_path, ExecutorFalso(json.dumps(saida)))
+    versoes = por_jogo["Teste Cartridges"]
+    assert versoes and all(v.arquivo is None for v in versoes)
 
 
 def test_versoes_ignora_o_que_nao_tem_data_legivel(tmp_path):
@@ -235,3 +264,61 @@ def test_restaurar_tem_um_limite_de_tempo_maior(tmp_path):
     ludusavi.restaurar("Teste Cartridges", tmp_path, executor=executor)
     assert executor.chamadas[0][1]["timeout"] == 60 * 60
     assert ludusavi.LIMITE_DE_TEMPO == 10 * 60  # o resto continua com 10 minutos
+
+
+def test_marcar_sem_api(tmp_path):
+    """`backups edit` não aceita `--api` e sai sem stdout: só o código de saída conta."""
+    executor = ExecutorFalso("", returncode=0)
+    assert ludusavi.marcar("J", "v1", "x", tmp_path, executor) is None
+    args = executor.chamadas[0][0]
+    assert args[args.index("--try-manifest-update") + 1 :] == [
+        "backups", "edit", "J", "--backup", "v1", "--comment", "x",
+    ]  # fmt: skip
+    assert "--api" not in args
+
+
+def test_marcar_que_falha_levanta(tmp_path):
+    with pytest.raises(LudusaviFalhou):
+        ludusavi.marcar("J", "v1", "x", tmp_path, ExecutorFalso("", returncode=2, stderr="erro"))
+
+
+def test_fazer_backup_com_limite(tmp_path):
+    com = ExecutorFalso(amostra("backup_ok"))
+    ludusavi.fazer_backup("J", tmp_path, com, limite=6)
+    assert com.chamadas[0][0][-6:] == ["backup", "J", "--force", "--full-limit", "6", "--api"]
+
+    sem = ExecutorFalso(amostra("backup_ok"))
+    ludusavi.fazer_backup("J", tmp_path, sem)
+    assert "--full-limit" not in sem.chamadas[0][0]
+
+
+def test_previa_redirecionada(tmp_path):
+    executor = ExecutorFalso(amostra("previa_redirecionada"))
+    esperada = Previa(("C:/Users/Atual/AppData/Jogo/s.sav",), ())
+    assert ludusavi.previa("J", tmp_path, "v1", executor) == esperada
+    args = executor.chamadas[0][0]
+    assert args[args.index("restore") :] == ["restore", "J", "--force", "--preview", "--backup", "v1", "--api"]
+
+
+def test_previa_sem_versao_nao_pede_backup(tmp_path):
+    executor = ExecutorFalso(amostra("previa_redirecionada"))
+    ludusavi.previa("J", tmp_path, executor=executor)
+    args = executor.chamadas[0][0]
+    assert args[args.index("restore") :] == ["restore", "J", "--force", "--preview", "--api"]
+
+
+def test_previa_com_registro(tmp_path):
+    executor = ExecutorFalso(amostra("previa_com_registro"))
+    esperada = Previa((), ("HKEY_CURRENT_USER/Console/%%Startup",))
+    assert ludusavi.previa("J", tmp_path, executor=executor) == esperada
+
+
+def test_previa_de_jogo_ausente_e_vazia(tmp_path):
+    assert ludusavi.previa("J", tmp_path, executor=ExecutorFalso('{"games": {}}')) == Previa((), ())
+
+
+def test_previa_com_jogo_falho_falha(tmp_path):
+    saida = json.loads(amostra("previa_redirecionada"))
+    saida["errors"] = {"someGamesFailed": True}
+    with pytest.raises(LudusaviFalhou):
+        ludusavi.previa("J", tmp_path, executor=ExecutorFalso(json.dumps(saida)))

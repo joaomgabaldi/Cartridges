@@ -29,10 +29,24 @@ class LudusaviFalhou(Exception):
 
 @dataclass(frozen=True)
 class Versao:
-    """Uma cópia guardada de um jogo: ``id`` é o que `restore --backup` pede."""
+    """Uma cópia guardada de um jogo: ``id`` é o que `restore --backup` pede.
+
+    ``comentario`` é a marca que o app grava com `marcar` ("" sem marca); ``arquivo``
+    é o zip da versão, ou None quando o Ludusavi não informou a pasta do jogo.
+    """
 
     id: str
     quando: datetime  # UTC
+    comentario: str = ""
+    arquivo: Path | None = None
+
+
+@dataclass(frozen=True)
+class Previa:
+    """O que uma restauração tocaria: caminhos finais dos arquivos e chaves do registro."""
+
+    arquivos: tuple[str, ...]
+    chaves: tuple[str, ...]
 
 
 def executavel() -> Optional[Path]:
@@ -40,26 +54,32 @@ def executavel() -> Optional[Path]:
     return exe if exe.is_file() else None
 
 
-def rodar(
+def rodar(  # pylint: disable=too-many-arguments
     argumentos: list[str],
     pasta_config: Path,
     executor: Executor = subprocess.run,
     *,
     codigos_ok: tuple[int, ...] = (0,),
     limite_de_tempo: float = LIMITE_DE_TEMPO,
+    api: bool = True,
 ) -> dict:
     """Roda `ludusavi --config <pasta> --try-manifest-update <argumentos> --api`.
 
     ``codigos_ok`` existe porque o `find` sai com 1 quando não conhece o jogo e,
     mesmo assim, entrega um JSON válido: ali "não achado" não é defeito.
+    ``api=False`` é para o que não aceita `--api` (o `backups edit`): sem a opção e
+    sem JSON, só o código de saída conta, e o resultado é sempre ``{}``.
     """
     exe = executavel()
     if exe is None:
         raise LudusaviFalhou("ludusavi.exe não encontrado")
+    # Lista, nunca texto: o nome do jogo (aspas, `&`, acento) vai como um item só.
+    comando = [str(exe), "--config", str(pasta_config), "--try-manifest-update", *argumentos]
+    if api:
+        comando.append("--api")
     try:
-        # Lista, nunca texto: o nome do jogo (aspas, `&`, acento) vai como um item só.
         processo = executor(
-            [str(exe), "--config", str(pasta_config), "--try-manifest-update", *argumentos, "--api"],
+            comando,
             capture_output=True,
             # Sem isto o Ludusavi herda a entrada do app e fica esperando nela para sempre.
             stdin=subprocess.DEVNULL,
@@ -75,6 +95,8 @@ def rodar(
         logging.warning("Ludusavi: %s", processo.stderr.strip())
     if processo.returncode not in codigos_ok:
         raise LudusaviFalhou(f"o Ludusavi saiu com o código {processo.returncode}")
+    if not api:
+        return {}
     if not (processo.stdout or "").strip():
         raise LudusaviFalhou("o Ludusavi não devolveu nada")
     try:
@@ -107,8 +129,33 @@ def _verificar(saida: dict) -> None:
         raise LudusaviFalhou("o Ludusavi não conseguiu copiar os arquivos do jogo")
 
 
-def fazer_backup(nome: str, pasta_config: Path, executor: Executor = subprocess.run) -> None:
-    _verificar(rodar(["backup", nome, "--force"], pasta_config, executor))
+def fazer_backup(
+    nome: str,
+    pasta_config: Path,
+    executor: Executor = subprocess.run,
+    limite: int | None = None,
+) -> None:
+    """Guarda uma versão nova; ``limite`` é quantas cópias completas o Ludusavi mantém."""
+    argumentos = ["backup", nome, "--force"]
+    if limite is not None:
+        argumentos += ["--full-limit", str(limite)]
+    _verificar(rodar(argumentos, pasta_config, executor))
+
+
+def marcar(
+    nome: str,
+    versao: str,
+    comentario: str,
+    pasta_config: Path,
+    executor: Executor = subprocess.run,
+) -> None:
+    """Grava ``comentario`` na versão ``versao`` do jogo ``nome``."""
+    rodar(
+        ["backups", "edit", nome, "--backup", versao, "--comment", comentario],
+        pasta_config,
+        executor,
+        api=False,
+    )
 
 
 def _quando(texto: object) -> Optional[datetime]:
@@ -125,11 +172,14 @@ def versoes(pasta_config: Path, executor: Executor = subprocess.run) -> dict[str
     jogos = rodar(["backups"], pasta_config, executor).get("games")
     por_jogo: dict[str, list[Versao]] = {}
     for nome, dados in (jogos if isinstance(jogos, dict) else {}).items():
+        dados = dados or {}
+        pasta = dados.get("backupPath")
         lista = []
-        for copia in (dados or {}).get("backups") or []:
+        for copia in dados.get("backups") or []:
             quando = _quando(copia.get("when"))
             if copia.get("name") and quando:
-                lista.append(Versao(copia["name"], quando))
+                arquivo = Path(pasta) / copia["name"] if pasta else None
+                lista.append(Versao(copia["name"], quando, copia.get("comment") or "", arquivo))
         por_jogo[nome] = sorted(lista, key=lambda v: v.quando, reverse=True)
     return por_jogo
 
@@ -145,3 +195,20 @@ def restaurar(
     if versao:
         argumentos += ["--backup", versao]
     _verificar(rodar(argumentos, pasta_config, executor, limite_de_tempo=LIMITE_DA_RESTAURACAO))
+
+
+def previa(
+    nome: str,
+    pasta_config: Path,
+    versao: str | None = None,
+    executor: Executor = subprocess.run,
+) -> Previa:
+    """O que `restaurar` tocaria, sem copiar nada; sem ``versao``, a mais recente."""
+    argumentos = ["restore", nome, "--force", "--preview"]
+    if versao:
+        argumentos += ["--backup", versao]
+    saida = rodar(argumentos, pasta_config, executor)
+    _verificar(saida)
+    jogos = saida.get("games")
+    jogo = (jogos.get(nome) if isinstance(jogos, dict) else None) or {}
+    return Previa(tuple(jogo.get("files") or {}), tuple(jogo.get("registry") or {}))

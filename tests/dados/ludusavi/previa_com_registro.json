@@ -1,0 +1,30 @@
+{
+  "overall": {
+    "totalGames": 1,
+    "totalBytes": 0,
+    "processedGames": 1,
+    "processedBytes": 0,
+    "changedGames": {
+      "new": 0,
+      "different": 0,
+      "same": 1
+    }
+  },
+  "games": {
+    "J": {
+      "decision": "Processed",
+      "change": "Same",
+      "files": {},
+      "registry": {
+        "HKEY_CURRENT_USER/Console/%%Startup": {
+          "change": "Same",
+          "values": {
+            "DelegationConsole": {
+              "change": "Same"
+            }
+          }
+        }
+      }
+    }
+  }
+}

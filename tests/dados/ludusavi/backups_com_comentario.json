@@ -1,0 +1,22 @@
+{
+  "games": {
+    "Jogo \"Ação\" & Cia": {
+      "backupPath": "C:/Saves/Jogo _Ação_ & Cia",
+      "backups": [
+        {
+          "name": "backup-20261011T100000Z.zip",
+          "when": "2026-10-11T10:00:00.000000000Z",
+          "os": "windows",
+          "comment": "cartridges:incompleta",
+          "locked": false
+        },
+        {
+          "name": "backup-20261010T100000Z.zip",
+          "when": "2026-10-10T10:00:00.000000000Z",
+          "os": "windows",
+          "locked": false
+        }
+      ]
+    }
+  }
+}

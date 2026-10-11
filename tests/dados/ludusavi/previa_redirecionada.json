@@ -1,0 +1,27 @@
+{
+  "overall": {
+    "totalGames": 1,
+    "totalBytes": 4,
+    "processedGames": 1,
+    "processedBytes": 4,
+    "changedGames": {
+      "new": 0,
+      "different": 1,
+      "same": 0
+    }
+  },
+  "games": {
+    "J": {
+      "decision": "Processed",
+      "change": "Different",
+      "files": {
+        "C:/Users/Atual/AppData/Jogo/s.sav": {
+          "change": "New",
+          "bytes": 4,
+          "originalPath": "C:/Users/Velho/AppData/Jogo/s.sav"
+        }
+      },
+      "registry": {}
+    }
+  }
+}
