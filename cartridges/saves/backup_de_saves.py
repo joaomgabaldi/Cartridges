@@ -147,7 +147,8 @@ def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
 
     A primeira vez procura o nome no manifesto (pelo appID, depois pelo título) e
     guarda; as seguintes usam o guardado. Com appID e sem entrada no manifesto, o
-    jogo ganha uma entrada própria com o nome dele.
+    jogo ganha uma entrada própria com o nome dele, mas só se o manifesto existe: sem
+    ele "não achado" não quer dizer nada, então levanta e nada é guardado.
     """
     if game.ludusavi_nome:
         return _no_config(game)
@@ -160,6 +161,10 @@ def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
     if nome is not None:
         jogo = config.JogoNoConfig(nome, game.steam_appid, game.executable, True)
     elif game.steam_appid:
+        # Sem o manifesto o `find` também não acha nada. Guardar o nome do jogo agora
+        # dividiria as versões em duas pastas se ele mudasse depois.
+        if not (pasta_config / "manifest.yaml").is_file():
+            raise LudusaviFalhou("o manifesto do Ludusavi ainda não foi baixado")
         jogo = config.JogoNoConfig(game.name, game.steam_appid, game.executable, False)
     else:
         return None  # sem appID e fora do manifesto não há o que copiar
@@ -186,7 +191,14 @@ def _backup(game: Game, biblioteca: list[Game]) -> None:
                 return
             tarefa = tarefas.comecar(_("Backup dos saves de {}").format(game.name), 1)
             _preparar(biblioteca, jogo)
-            ludusavi.fazer_backup(jogo.nome, _pasta_config(), executor)
+            inicio = datetime.now(timezone.utc)
+            try:
+                ludusavi.fazer_backup(jogo.nome, _pasta_config(), executor)
+            except LudusaviFalhou:
+                # O Ludusavi cria a versão mesmo quando um arquivo falha; só a falha do
+                # próprio backup deixa uma versão nova, então só ela é marcada.
+                _marcar_nova(jogo.nome, inicio, INCOMPLETA)
+                raise
         except Exception:  # pylint: disable=broad-exception-caught
             logging.exception("Backup dos saves de %s falhou", game.name)
             _avisar(_("Não foi possível fazer o backup dos saves de {}.").format(game.name))

@@ -219,7 +219,14 @@ def test_resolve_por_titulo_sem_appid(store, make_game, falso, esperar, tmp_path
     assert falso.configs["backup"]["customGames"] == []  # sem appID não há o que acrescentar
 
 
+def _com_manifesto(tmp_path) -> None:
+    """O manifesto que o Ludusavi baixa para a pasta de configuração dele."""
+    (tmp_path / "ludusavi").mkdir(exist_ok=True)
+    (tmp_path / "ludusavi" / "manifest.yaml").write_text("{}", "utf-8")
+
+
 def test_appid_sem_entrada_usa_entrada_propria(store, make_game, falso, esperar, tmp_path):
+    _com_manifesto(tmp_path)
     jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo Raro", steam_appid="42")
 
     backup_de_saves.no_fim_da_sessao(jogo)
@@ -231,6 +238,31 @@ def test_appid_sem_entrada_usa_entrada_propria(store, make_game, falso, esperar,
     assert "<winPublic>/Documents/Steam/RUNE/42" in entrada["files"]
     assert jogo.ludusavi_nome == "Jogo Raro"
     assert falso.chamou("backup") == [["backup", "Jogo Raro", "--force"]]
+
+
+def test_com_manifesto_guarda_a_entrada_propria(store, make_game, falso, esperar, tmp_path):
+    _com_manifesto(tmp_path)
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo Raro", steam_appid="42")
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    esperar()
+
+    assert jogo.ludusavi_nome == "Jogo Raro"
+    assert falso.chamou("backup") == [["backup", "Jogo Raro", "--force"]]
+    assert toasts() == []
+
+
+def test_sem_manifesto_nao_guarda_o_nome(store, make_game, falso, esperar):
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo Raro", steam_appid="42")
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    esperar()
+
+    assert [c[:2] for c in falso.chamou("find")] == [["find", "--steam-id"], ["find", "Jogo Raro"]]
+    assert jogo.ludusavi_nome == ""  # a próxima sessão procura de novo
+    assert falso.chamou("backup") == []
+    assert titulos() == ["Não foi possível fazer o backup dos saves de Jogo Raro."]
+    assert tarefas.lista.get_n_items() == 0
 
 
 def test_sem_appid_e_sem_entrada_nao_faz_nada(store, make_game, falso, esperar):
@@ -257,6 +289,53 @@ def test_falha_vira_toast(store, make_game, falso, esperar):
     assert len(toasts()) == 1
     assert toasts()[0].get_title() == "Não foi possível fazer o backup dos saves de Tom & <b>Jerry</b>."
     assert toasts()[0].get_use_markup() is False
+
+
+def test_backup_que_falha_marca_a_versao_nova(store, make_game, falso, esperar):
+    falso.falhas["backup"] = FALHOU
+    falso.versoes["X"] = ["v1"]
+    falso.cria_versao["X"] = True  # o arquivo travado deixa a versão pela metade
+    jogo = na_biblioteca(
+        store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X"
+    )
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    esperar()
+
+    assert falso.marcas() == [
+        ["backups", "edit", "X", "--backup", "nova1", "--comment", "cartridges:incompleta"]
+    ]
+    assert titulos() == ["Não foi possível fazer o backup dos saves de Meu Jogo."]
+
+
+def test_backup_que_falha_sem_versao_nova_nao_marca(store, make_game, falso, esperar):
+    falso.falhas["backup"] = FALHOU
+    falso.versoes["X"] = ["v1"]  # a boa de antes: nunca leva a marca
+    jogo = na_biblioteca(
+        store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X"
+    )
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    esperar()
+
+    assert falso.marcas() == []
+    assert titulos() == ["Não foi possível fazer o backup dos saves de Meu Jogo."]
+
+
+def test_falha_antes_do_backup_nao_marca(store, make_game, falso, esperar, tmp_path):
+    # Sem a pasta dos saves o Ludusavi nem é chamado: não há versão nova a marcar.
+    shared.schema.set_string("pasta-dos-saves", str(tmp_path / "disco-desconectado" / "saves"))
+    falso.versoes["X"] = ["v1"]
+    jogo = na_biblioteca(
+        store, make_game, game_id="a", name="Jogo", steam_appid="7", ludusavi_nome="X"
+    )
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    esperar()
+
+    assert falso.marcas() == []
+    assert falso.chamou("backups") == []
+    assert len(toasts()) == 1
 
 
 def test_pasta_sumiu_vira_toast(store, make_game, falso, esperar, tmp_path):
