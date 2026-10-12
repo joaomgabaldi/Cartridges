@@ -27,6 +27,7 @@ como estava.
 import json
 import logging
 import shutil
+import stat
 import zipfile
 from contextlib import ExitStack
 from pathlib import Path, PurePosixPath
@@ -220,15 +221,26 @@ def _nome_dos_saves() -> str:
     return pasta_dos_saves.padrao().name
 
 
+def _e_arquivo(caminho: Path) -> bool:
+    """Se ``caminho`` é um arquivo comum. Só "não existe" (ou o que vem antes não é
+    pasta) é "não"; qualquer outro erro de leitura sobe como `OSError`. `Path.is_file`
+    engole todos, e um save de fora, sem aviso, seria um backup incompleto."""
+    try:
+        return stat.S_ISREG(caminho.stat().st_mode)
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+
+
 def _entradas_dos_saves(pasta: Path) -> list[tuple[Path, str]]:
-    """Os saves de ``pasta`` (a configurada: a padrão ou a escolhida), sempre como
-    ``saves/<jogo>/<arquivo>``. Só as pastas de jogo do Ludusavi: a escolhida pode
-    ser a raiz do OneDrive, e o resto dela não é do app. Pasta que sumiu: backup
-    sem saves."""
+    """Os saves de ``pasta`` (a configurada: a padrão ou a escolhida, que existe),
+    sempre como ``saves/<jogo>/<arquivo>``. Só as pastas de jogo do Ludusavi: a
+    escolhida pode ser a raiz do OneDrive, e o resto dela não é do app. Não ser um
+    save é não existir o `mapping.yaml` ou o arquivo; qualquer outro erro de leitura
+    levanta `OSError`, e a exportação falha em vez de deixar um save de fora."""
     entradas = []
-    for jogo in pasta_dos_saves.saves_em(pasta):
+    for jogo in pasta_dos_saves.saves_em(pasta, _e_arquivo):
         for caminho in sorted(jogo.iterdir()):
-            if caminho.is_file() and _arquivo_de_save_valido(caminho.name):
+            if _arquivo_de_save_valido(caminho.name) and _e_arquivo(caminho):
                 entradas.append((caminho, f"{_nome_dos_saves()}/{jogo.name}/{caminho.name}"))
     return entradas
 
@@ -329,7 +341,9 @@ def exportar(
                     if not existe:
                         aviso = "ausente"
                     elif not entradas:
-                        aviso = "vazia"
+                        # A pasta pode ter sumido entre a leitura e a listagem: fora de
+                        # alcance não é "sem saves".
+                        aviso = "vazia" if pasta.is_dir() else "ausente"
                 for caminho, nome in entradas:
                     _incluir_save(arquivo, caminho, nome)
         temporario.replace(destino)

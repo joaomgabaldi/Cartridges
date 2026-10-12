@@ -313,6 +313,7 @@ def test_exporta_so_as_pastas_de_jogo_com_mapping(tmp_path):
     _guardar_saves(fora)
     (fora / "Fotos").mkdir()
     (fora / "Fotos" / "ferias.zip").write_bytes(b"x")
+    (fora / "notas.txt").write_text("x", encoding="utf-8")
     shared.schema.set_string("pasta-dos-saves", str(fora))
     with zipfile.ZipFile(_exportar(tmp_path)) as arquivo:
         saves_no_zip = {n for n in arquivo.namelist() if n.startswith("saves/")}
@@ -362,20 +363,66 @@ def test_exportar_com_pasta_padrao_sem_saves_nao_avisa(tmp_path):
 
 
 def test_pasta_que_aparece_depois_da_checagem_nao_entra_pela_metade(tmp_path, monkeypatch):
-    """O aviso e o conteúdo do .zip contam a mesma história: ausente na checagem é
-    "ausente" e sem saves, mesmo que a pasta apareça logo em seguida."""
+    """O aviso e o conteúdo do .zip contam a mesma história: a pasta é lida uma vez, e
+    ausente nessa leitura é "ausente" e sem saves, mesmo que ela apareça logo em seguida
+    (nem a listagem nem o aviso podem lê-la de novo)."""
     fora = tmp_path / "meus_saves"
     shared.schema.set_string("pasta-dos-saves", str(fora))
-    listar = backup.pasta_dos_saves.saves_em
+    is_dir = Path.is_dir
+    criada = []
 
-    def aparece(raiz):
-        _guardar_saves(fora)
-        return listar(raiz)
+    def aparece_depois(self):
+        resultado = is_dir(self)
+        if self == fora and not criada:
+            criada.append(True)
+            _guardar_saves(fora)
+        return resultado
 
-    monkeypatch.setattr(backup.pasta_dos_saves, "saves_em", aparece)
+    monkeypatch.setattr(Path, "is_dir", aparece_depois)
     destino, aviso = _exportar_e_avisar(tmp_path)
     assert aviso == "ausente"
     _sem_saves_no_zip(destino)
+
+
+def test_pasta_que_some_depois_da_checagem_e_ausente_e_nao_vazia(tmp_path, monkeypatch):
+    """Existia na checagem e sumiu antes da listagem: fora de alcance é "ausente"."""
+    fora = tmp_path / "meus_saves"
+    fora.mkdir()
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    is_dir = Path.is_dir
+
+    def some_depois(self):
+        resultado = is_dir(self)
+        if self == fora and resultado:
+            shutil.rmtree(fora)
+        return resultado
+
+    monkeypatch.setattr(Path, "is_dir", some_depois)
+    destino, aviso = _exportar_e_avisar(tmp_path)
+    assert aviso == "ausente"
+    _sem_saves_no_zip(destino)
+
+
+@pytest.mark.parametrize("nome", ["mapping.yaml", "backup-1.zip"], ids=["mapping", "arquivo"])
+def test_exportar_com_leitura_que_falha_num_save_nao_o_deixa_de_fora(tmp_path, monkeypatch, nome):
+    """Um erro de leitura (rede, acesso negado) ao olhar um save não é "isto não é um
+    save": a exportação falha, em vez de sair sem ele com "Backup exportado"."""
+    saves = shared.app_dir / "saves"
+    _guardar_saves(saves, "A")
+    _guardar_saves(saves, "B")
+    stat = Path.stat
+
+    def stat_(self, *args, **kwargs):
+        if self.name == nome and self.parent.name == "B":
+            raise PermissionError(13, "Acesso negado")
+        return stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", stat_)
+
+    erro = _exportar_que_falha(tmp_path)
+
+    assert isinstance(erro, backup.SavesInacessiveis)
+    assert isinstance(erro.__cause__, PermissionError)
 
 
 def test_exportar_com_a_pasta_que_some_no_meio_falha(tmp_path, monkeypatch):
@@ -510,8 +557,8 @@ def test_exportar_com_pasta_de_jogo_que_some_na_listagem_falha(tmp_path, monkeyp
     _guardar_saves(saves)
     listar = backup.pasta_dos_saves.saves_em
 
-    def lista_e_apaga(raiz):
-        jogos = listar(raiz)
+    def lista_e_apaga(raiz, *args):
+        jogos = listar(raiz, *args)
         shutil.rmtree(saves / "X")
         return jogos
 

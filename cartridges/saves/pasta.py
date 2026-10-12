@@ -13,6 +13,7 @@ import logging
 import os
 import shutil
 import threading
+from collections.abc import Callable
 from pathlib import Path
 
 from cartridges import shared
@@ -45,16 +46,20 @@ def atual() -> Path:
     return Path(escolhida) if escolhida else padrao()
 
 
-def saves_em(raiz: Path) -> list[Path]:
+def saves_em(raiz: Path, e_arquivo: Callable[[Path], bool] = Path.is_file) -> list[Path]:
     """As pastas de jogo do Ludusavi dentro de `raiz`, em ordem; o resto fica de fora,
     inclusive a cópia (`.copiando`, em qualquer caixa) que uma troca de pasta
-    interrompida deixou pela metade."""
+    interrompida deixou pela metade.
+
+    `e_arquivo` diz se o `mapping.yaml` de uma pasta existe. O padrão trata qualquer erro
+    de leitura como "não é um jogo"; quem não pode deixar um save de fora sem saber (a
+    exportação) passa uma função que deixa o erro subir."""
     if not raiz.is_dir():
         return []
     return sorted(
         item
         for item in raiz.iterdir()
-        if not item.name.lower().endswith(_COPIANDO) and (item / MAPA).is_file()
+        if not item.name.lower().endswith(_COPIANDO) and e_arquivo(item / MAPA)
     )
 
 
