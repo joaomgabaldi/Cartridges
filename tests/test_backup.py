@@ -5,6 +5,7 @@
 """O backup como retrato completo do app: a pasta de dados e as configurações
 num .zip, restaurado com o app fechado (`agendar` + `aplicar_pendente`)."""
 
+import _winapi
 import builtins
 import errno
 import json
@@ -355,6 +356,35 @@ def test_exportar_com_pasta_escolhida_sem_saves_avisa(tmp_path):
     destino, aviso = _exportar_e_avisar(tmp_path)
     assert aviso == "vazia"
     _sem_saves_no_zip(destino)
+
+
+def test_exportar_pula_a_juncao_da_pasta_escolhida(tmp_path, monkeypatch):
+    """A raiz escolhida pode ser Documentos, cujas junções antigas ("Minhas Músicas"…) negam
+    acesso: junção não é jogo do Ludusavi e nem é consultada, então o save de verdade sai."""
+    fora = tmp_path / "Documentos"
+    _guardar_saves(fora)
+    alvo = tmp_path / "Musicas"
+    alvo.mkdir()
+    juncao = fora / "Minhas Músicas"
+    _winapi.CreateJunction(str(alvo), str(juncao))
+    assert juncao.is_junction()
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    stat = Path.stat
+
+    def stat_(self, *args, **kwargs):
+        if self.parent == juncao:
+            raise PermissionError(13, "Acesso negado")
+        return stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", stat_)
+
+    destino, aviso = _exportar_e_avisar(tmp_path)
+
+    assert aviso is None
+    with zipfile.ZipFile(destino) as arquivo:
+        saves_no_zip = {n for n in arquivo.namelist() if n.startswith("saves/")}
+    assert saves_no_zip == {"saves/X/mapping.yaml", "saves/X/backup-1.zip"}
+    juncao.rmdir()
 
 
 def test_exportar_com_pasta_padrao_sem_saves_nao_avisa(tmp_path):

@@ -231,6 +231,15 @@ def _e_arquivo(caminho: Path) -> bool:
         return False
 
 
+def _mapa_de_jogo(mapa: Path) -> bool:
+    """Se ``mapa`` (o `mapping.yaml` de uma subpasta de `pasta`) existe, como `_e_arquivo`.
+    Subpasta que é junção ou atalho não é jogo do Ludusavi, que não grava assim, e nem é
+    consultada: as junções antigas de Documentos ("Minhas Músicas"…) negam acesso, e a
+    raiz escolhida pode ser essa pasta."""
+    jogo = mapa.parent
+    return not (jogo.is_symlink() or jogo.is_junction()) and _e_arquivo(mapa)
+
+
 def _entradas_dos_saves(pasta: Path) -> list[tuple[Path, str]]:
     """Os saves de ``pasta`` (a configurada: a padrão ou a escolhida, que existe),
     sempre como ``saves/<jogo>/<arquivo>``. Só as pastas de jogo do Ludusavi: a
@@ -238,7 +247,7 @@ def _entradas_dos_saves(pasta: Path) -> list[tuple[Path, str]]:
     save é não existir o `mapping.yaml` ou o arquivo; qualquer outro erro de leitura
     levanta `OSError`, e a exportação falha em vez de deixar um save de fora."""
     entradas = []
-    for jogo in pasta_dos_saves.saves_em(pasta, _e_arquivo):
+    for jogo in pasta_dos_saves.saves_em(pasta, _mapa_de_jogo):
         for caminho in sorted(jogo.iterdir()):
             if _arquivo_de_save_valido(caminho.name) and _e_arquivo(caminho):
                 entradas.append((caminho, f"{_nome_dos_saves()}/{jogo.name}/{caminho.name}"))
