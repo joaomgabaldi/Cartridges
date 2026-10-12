@@ -1399,7 +1399,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             _("Restaurar os saves de todos os jogos?"),
             _(
                 "Tem certeza que deseja restaurar os saves de todos os jogos? "
-                "Os saves atuais serão substituídos pela versão mais recente de cada um."
+                "Os saves atuais de cada jogo serão guardados como uma nova versão antes da "
+                "restauração."
             ),
             "restaurar",
             _("Restaurar"),

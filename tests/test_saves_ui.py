@@ -9,12 +9,12 @@ from types import SimpleNamespace
 import pytest
 
 from cartridges.game import Game
-from cartridges.saves import backup_de_saves, pasta
+from cartridges.saves import backup_de_saves, dialogo, pasta
 from cartridges.saves.ludusavi import Versao
 
 
-def _versao(id_: str, quando: datetime) -> Versao:
-    return Versao(id_, quando.replace(tzinfo=timezone.utc))
+def _versao(id_: str, quando: datetime, comentario: str = "") -> Versao:
+    return Versao(id_, quando.replace(tzinfo=timezone.utc), comentario)
 
 
 # -- fim da sessão -------------------------------------------------------------
@@ -93,8 +93,6 @@ def test_restore_save_esta_registrada_e_no_menu():
 
 
 def test_dialogo_lista_versoes_mais_recente_primeiro(monkeypatch, make_game):
-    from cartridges.saves import dialogo  # noqa: PLC0415
-
     jogo = make_game(ludusavi_nome="A")
     # 00:14 UTC: no fuso local o dia pode mudar, então o esperado sai da mesma conversão.
     velha = _versao("v1", datetime(2026, 10, 8, 12, 0))
@@ -111,9 +109,33 @@ def test_dialogo_lista_versoes_mais_recente_primeiro(monkeypatch, make_game):
     assert titulos[1] == dialogo.formatar(velha.quando)
 
 
-def test_data_local_no_formato_da_spec(monkeypatch):
-    from cartridges.saves import dialogo  # noqa: PLC0415
+def test_subtitulos_das_versoes(monkeypatch, make_game):
+    jogo = make_game(ludusavi_nome="A")
+    # Da mais nova para a mais antiga, que é a ordem das linhas; o último é um comentário
+    # qualquer, que nunca aparece na tela.
+    comentarios = [
+        backup_de_saves.INCOMPLETA,
+        backup_de_saves.ANTES_DE_RESTAURAR,
+        "",
+        "comentario do usuario",
+    ]
+    versoes = [
+        _versao(f"v{i}", datetime(2026, 10, 9 - i, 10, 0, tzinfo=timezone.utc), comentario)
+        for i, comentario in enumerate(comentarios)
+    ]
+    monkeypatch.setattr(backup_de_saves, "versoes_do_jogo", lambda _jogo: versoes)
 
+    caixa = dialogo.DialogoDeVersoes(jogo)
+
+    assert [linha.get_subtitle() for linha in caixa.linhas] == [
+        "Incompleta: alguns arquivos não puderam ser copiados",
+        "Guardada antes de uma restauração",
+        "",
+        "",
+    ]
+
+
+def test_data_local_no_formato_da_spec(monkeypatch):
     quando = datetime(2026, 10, 9, 21, 14, tzinfo=timezone.utc)
     local = quando.astimezone()
     assert dialogo.formatar(quando) == f"{local:%d/%m/%Y} às {local:%H:%M}"
@@ -121,8 +143,6 @@ def test_data_local_no_formato_da_spec(monkeypatch):
 
 
 def test_confirmacao_tem_o_texto_da_spec(monkeypatch, make_game):
-    from cartridges.saves import dialogo  # noqa: PLC0415
-
     jogo = make_game(ludusavi_nome="A")
     versao = _versao("v1", datetime(2026, 10, 9, 21, 14))
     criados = []
@@ -144,7 +164,7 @@ def test_confirmacao_tem_o_texto_da_spec(monkeypatch, make_game):
     local = versao.quando.astimezone()
     assert corpo == (
         f"Tem certeza que deseja restaurar o save de {local:%d/%m/%Y} às {local:%H:%M}? "
-        "Os saves atuais deste jogo serão substituídos."
+        "Os saves atuais deste jogo serão guardados como uma nova versão antes da restauração."
     )
     assert opcoes == {"destructive": True}
     assert rotulo == "Restaurar"
@@ -155,6 +175,28 @@ def test_confirmacao_tem_o_texto_da_spec(monkeypatch, make_game):
     assert restaurados == []
     funcao(None, resposta)
     assert restaurados == [(jogo, "v1")]
+
+
+def test_confirmacao_de_versao_incompleta(monkeypatch, make_game):
+    jogo = make_game(ludusavi_nome="A")
+    quando = datetime(2026, 10, 9, 21, 14, tzinfo=timezone.utc)
+    versao = _versao("v1", quando, backup_de_saves.INCOMPLETA)
+    argumentos = []
+    monkeypatch.setattr(
+        dialogo,
+        "create_dialog",
+        lambda *a, **k: argumentos.append((a, k)) or SimpleNamespace(connect=lambda *_a: None),
+    )
+
+    dialogo.confirmar(None, jogo, versao)
+
+    (_janela, _titulo, corpo, _resposta, _rotulo), _opcoes = argumentos[0]
+    local = quando.astimezone()
+    assert corpo == (
+        f"Tem certeza que deseja restaurar o save de {local:%d/%m/%Y} às {local:%H:%M}? "
+        "Os saves atuais deste jogo serão guardados como uma nova versão antes da restauração. "
+        "Esta versão está incompleta: alguns arquivos não foram copiados."
+    )
 
 
 # -- Preferências --------------------------------------------------------------
@@ -302,7 +344,7 @@ def test_restaurar_todos_pede_confirmacao_com_o_texto_da_spec(monkeypatch):
     (_janela, _titulo, corpo, resposta, _rotulo), opcoes = argumentos[0]
     assert corpo == (
         "Tem certeza que deseja restaurar os saves de todos os jogos? "
-        "Os saves atuais serão substituídos pela versão mais recente de cada um."
+        "Os saves atuais de cada jogo serão guardados como uma nova versão antes da restauração."
     )
     assert opcoes == {"destructive": True}
     sinais[0][1](None, "dismiss")

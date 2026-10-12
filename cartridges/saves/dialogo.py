@@ -34,8 +34,18 @@ def formatar(quando: datetime) -> str:
     return f"{data} às {hora}"
 
 
+def subtitulo(versao: Versao) -> str:
+    """O que a marca da versão significa para o usuário; o comentário cru nunca aparece."""
+    if versao.comentario == backup_de_saves.INCOMPLETA:
+        return _("Incompleta: alguns arquivos não puderam ser copiados")
+    if versao.comentario == backup_de_saves.ANTES_DE_RESTAURAR:
+        return _("Guardada antes de uma restauração")
+    return ""
+
+
 def confirmar(janela: Any, game: Game, versao: Versao) -> None:
-    """Pergunta se o usuário quer mesmo trocar os saves atuais por esta versão."""
+    """Pergunta se o usuário quer mesmo restaurar esta versão; os saves atuais são
+    guardados como uma nova versão antes."""
 
     def ao_responder(_dialogo: Any, resposta: str) -> None:
         if resposta == "restaurar":
@@ -44,13 +54,16 @@ def confirmar(janela: Any, game: Game, versao: Versao) -> None:
                 janela.close()
 
     data, hora = _data_e_hora(versao.quando)
+    corpo = _(
+        "Tem certeza que deseja restaurar o save de {data} às {hora}? "
+        "Os saves atuais deste jogo serão guardados como uma nova versão antes da restauração."
+    ).format(data=data, hora=hora)
+    if versao.comentario == backup_de_saves.INCOMPLETA:
+        corpo += " " + _("Esta versão está incompleta: alguns arquivos não foram copiados.")
     create_dialog(
         janela,
         _("Restaurar este save?"),
-        _(
-            "Tem certeza que deseja restaurar o save de {data} às {hora}? "
-            "Os saves atuais deste jogo serão substituídos."
-        ).format(data=data, hora=hora),
+        corpo,
         "restaurar",
         _("Restaurar"),
         destructive=True,
@@ -72,7 +85,9 @@ class DialogoDeVersoes(Adw.Dialog):
             backup_de_saves.versoes_do_jogo(game), key=lambda v: v.quando, reverse=True
         )
         for versao in versoes:
-            linha = Adw.ActionRow(title=formatar(versao.quando), activatable=True)
+            linha = Adw.ActionRow(
+                title=formatar(versao.quando), subtitle=subtitulo(versao), activatable=True
+            )
             linha.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
             linha.connect("activated", lambda _linha, v=versao: confirmar(self, game, v))
             self.lista.append(linha)
