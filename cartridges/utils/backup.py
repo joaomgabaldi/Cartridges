@@ -31,7 +31,7 @@ import zipfile
 from contextlib import ExitStack
 from pathlib import Path, PurePosixPath
 from time import sleep, time
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Literal, Optional
 
 from gi.repository import Gio, GLib
 
@@ -220,13 +220,13 @@ def _nome_dos_saves() -> str:
     return pasta_dos_saves.padrao().name
 
 
-def _entradas_dos_saves() -> list[tuple[Path, str]]:
-    """Os saves da pasta configurada (a padrão ou a escolhida), sempre como
+def _entradas_dos_saves(pasta: Path) -> list[tuple[Path, str]]:
+    """Os saves de ``pasta`` (a configurada: a padrão ou a escolhida), sempre como
     ``saves/<jogo>/<arquivo>``. Só as pastas de jogo do Ludusavi: a escolhida pode
     ser a raiz do OneDrive, e o resto dela não é do app. Pasta que sumiu: backup
     sem saves."""
     entradas = []
-    for jogo in pasta_dos_saves.saves_em(pasta_dos_saves.atual()):
+    for jogo in pasta_dos_saves.saves_em(pasta):
         for caminho in sorted(jogo.iterdir()):
             if caminho.is_file() and _arquivo_de_save_valido(caminho.name):
                 entradas.append((caminho, f"{_nome_dos_saves()}/{jogo.name}/{caminho.name}"))
@@ -260,17 +260,15 @@ def _incluir(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
 
 def _incluir_save(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
     """Como `_incluir`, para um arquivo da pasta dos saves, que pode estar num
-    OneDrive sem conexão: só o erro de LER vira `SavesInacessiveis`. O de gravar
-    no destino (disco cheio, rede caindo) segue como veio e mantém a mensagem
-    do destino; por isso a leitura e a gravação não são feitas por
-    `ZipFile.write`, que não deixa separá-las."""
+    OneDrive sem conexão: só o erro de LER vira `SavesInacessiveis`, inclusive o
+    arquivo que sumiu (com a trava dos saves, nada some de forma legítima: é a pasta
+    que ficou fora de alcance). O de gravar no destino (disco cheio, rede caindo)
+    segue como veio e mantém a mensagem do destino; por isso a leitura e a
+    gravação não são feitas por `ZipFile.write`, que não deixa separá-las."""
     with ExitStack() as pilha:
         try:
             info = zipfile.ZipInfo.from_file(caminho, nome, strict_timestamps=False)
             origem = pilha.enter_context(open(caminho, "rb"))
-        except FileNotFoundError:
-            logging.debug("%s sumiu durante o backup", caminho)
-            return
         except OSError as erro:
             raise SavesInacessiveis(str(erro)) from erro
         info.compress_type = _compressao(caminho)
@@ -285,13 +283,16 @@ def _incluir_save(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
             destino.write(bloco)
 
 
-def exportar(destino: Path, configuracoes: dict[str, Any]) -> bool:
+def exportar(
+    destino: Path, configuracoes: dict[str, Any]
+) -> Literal["ausente", "vazia"] | None:
     """Grava o backup em ``destino``. Pode rodar fora da thread principal;
     ``configuracoes`` vem de `ler_configuracoes`, lida na principal.
 
-    Devolve ``True`` quando a pasta dos saves escolhida não existe ou não está
-    acessível: o .zip sai sem saves e quem chamou precisa avisar. A pasta padrão
-    ausente não conta (ainda não houve backup de save)."""
+    Devolve ``"ausente"`` se a pasta dos saves escolhida não existe ou não pode ser
+    alcançada, e ``"vazia"`` se existe mas não tem nenhuma cópia de save: nos dois o
+    .zip é gerado sem saves e quem chamou precisa avisar. Em todo o resto, ``None``;
+    a pasta padrão ausente ou vazia não conta (ainda não houve backup de save)."""
     manifesto = {
         "version": VERSAO,
         "app_version": shared.VERSION,
@@ -301,6 +302,7 @@ def exportar(destino: Path, configuracoes: dict[str, Any]) -> bool:
     # Temporário + troca: exportar por cima de um backup antigo e cair no meio
     # deixaria o antigo perdido e o novo ilegível.
     temporario = destino.with_name(destino.name + ".tmp")
+    aviso: Literal["ausente", "vazia"] | None = None
     try:
         # strict_timestamps=False: um arquivo com data anterior a 1980 (que o
         # formato zip não representa) entra com 1980, em vez de abortar tudo.
@@ -315,24 +317,29 @@ def exportar(destino: Path, configuracoes: dict[str, Any]) -> bool:
             # Com a trava do Ludusavi: um backup de save em andamento não pode
             # entrar aqui pela metade.
             with backup_de_saves.trava_dos_saves():
+                # A pasta é lida uma vez, antes da listagem: o aviso e o que entra no
+                # .zip partem da mesma leitura, mesmo que ela apareça ou suma depois.
+                pasta = pasta_dos_saves.atual()
+                existe = pasta.is_dir()
                 try:
-                    entradas = _entradas_dos_saves()
+                    entradas = _entradas_dos_saves(pasta) if existe else []
                 except FileNotFoundError:
                     # Uma pasta de jogo que sumiu no meio da listagem não está
                     # inacessível: segue o erro de sempre.
                     raise
                 except OSError as erro:
                     raise SavesInacessiveis(str(erro)) from erro
-                pasta_ausente = (
-                    pasta_dos_saves.atual() != pasta_dos_saves.padrao()
-                    and not pasta_dos_saves.atual().is_dir()
-                )
+                if pasta != pasta_dos_saves.padrao():
+                    if not existe:
+                        aviso = "ausente"
+                    elif not entradas:
+                        aviso = "vazia"
                 for caminho, nome in entradas:
                     _incluir_save(arquivo, caminho, nome)
         temporario.replace(destino)
     finally:
         temporario.unlink(missing_ok=True)
-    return pasta_ausente
+    return aviso
 
 
 # endregion

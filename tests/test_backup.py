@@ -126,11 +126,18 @@ def _encher_pasta_do_app():
     (shared.log_dir / "cartridges.log").write_text("log", encoding="utf-8")
 
 
-def _exportar(tmp_path):
+def _exportar_e_avisar(tmp_path):
+    """Exporta e devolve o destino e o aviso de `exportar`."""
     destino = tmp_path / "saida" / "backup.zip"
     destino.parent.mkdir()
-    backup.exportar(destino, {"settings": {"sgdb": True}, "state": {"sort-mode": "a-z"}})
-    return destino
+    aviso = backup.exportar(
+        destino, {"settings": {"sgdb": True}, "state": {"sort-mode": "a-z"}}
+    )
+    return destino, aviso
+
+
+def _exportar(tmp_path):
+    return _exportar_e_avisar(tmp_path)[0]
 
 
 def test_exportar_leva_a_capa_apng(tmp_path):
@@ -312,44 +319,83 @@ def test_exporta_so_as_pastas_de_jogo_com_mapping(tmp_path):
     assert saves_no_zip == {"saves/X/mapping.yaml", "saves/X/backup-1.zip"}
 
 
+def _sem_saves_no_zip(destino):
+    with zipfile.ZipFile(destino) as arquivo:
+        assert not any(n.startswith("saves/") for n in arquivo.namelist())
+    assert backup.validar(destino)["version"] == backup.VERSAO
+
+
 def test_pasta_dos_saves_sumiu_exporta_sem_saves(tmp_path):
     _encher_pasta_do_app()
     shared.schema.set_string("pasta-dos-saves", str(tmp_path / "apagada"))
-    destino = _exportar(tmp_path)
-    with zipfile.ZipFile(destino) as arquivo:
-        assert not any(n.startswith("saves/") for n in arquivo.namelist())
-    assert backup.validar(destino)["version"] == backup.VERSAO
-
-
-def _exportar_e_avisar(tmp_path):
-    """Como `_exportar`, mas devolve também o aviso de `exportar`."""
-    destino = tmp_path / "saida" / "backup.zip"
-    destino.parent.mkdir()
-    aviso = backup.exportar(destino, {"settings": {}, "state": {}})
-    return destino, aviso
-
-
-def test_exportar_com_pasta_escolhida_ausente_avisa(tmp_path):
-    shared.schema.set_string("pasta-dos-saves", str(tmp_path / "apagada"))
     destino, aviso = _exportar_e_avisar(tmp_path)
-    assert aviso is True
-    with zipfile.ZipFile(destino) as arquivo:
-        assert not any(n.startswith("saves/") for n in arquivo.namelist())
-    assert backup.validar(destino)["version"] == backup.VERSAO
+    assert aviso == "ausente"
+    _sem_saves_no_zip(destino)
 
 
 def test_exportar_com_pasta_padrao_ausente_nao_avisa(tmp_path):
     assert not (shared.app_dir / "saves").exists()
-    _destino, aviso = _exportar_e_avisar(tmp_path)
-    assert aviso is False
+    assert _exportar_e_avisar(tmp_path)[1] is None
 
 
 def test_exportar_com_saves_nao_avisa(tmp_path):
     fora = tmp_path / "meus_saves"
     _guardar_saves(fora)
     shared.schema.set_string("pasta-dos-saves", str(fora))
-    _destino, aviso = _exportar_e_avisar(tmp_path)
-    assert aviso is False
+    assert _exportar_e_avisar(tmp_path)[1] is None
+
+
+def test_exportar_com_pasta_escolhida_sem_saves_avisa(tmp_path):
+    """Existe, mas não tem nenhuma pasta de jogo do Ludusavi (só o que não é do app)."""
+    fora = tmp_path / "OneDrive"
+    (fora / "Fotos").mkdir(parents=True)
+    (fora / "Fotos" / "ferias.zip").write_bytes(b"x")
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    destino, aviso = _exportar_e_avisar(tmp_path)
+    assert aviso == "vazia"
+    _sem_saves_no_zip(destino)
+
+
+def test_exportar_com_pasta_padrao_sem_saves_nao_avisa(tmp_path):
+    (shared.app_dir / "saves").mkdir(parents=True)
+    assert _exportar_e_avisar(tmp_path)[1] is None
+
+
+def test_pasta_que_aparece_depois_da_checagem_nao_entra_pela_metade(tmp_path, monkeypatch):
+    """O aviso e o conteúdo do .zip contam a mesma história: ausente na checagem é
+    "ausente" e sem saves, mesmo que a pasta apareça logo em seguida."""
+    fora = tmp_path / "meus_saves"
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    listar = backup.pasta_dos_saves.saves_em
+
+    def aparece(raiz):
+        _guardar_saves(fora)
+        return listar(raiz)
+
+    monkeypatch.setattr(backup.pasta_dos_saves, "saves_em", aparece)
+    destino, aviso = _exportar_e_avisar(tmp_path)
+    assert aviso == "ausente"
+    _sem_saves_no_zip(destino)
+
+
+def test_exportar_com_a_pasta_que_some_no_meio_falha(tmp_path, monkeypatch):
+    """A pasta escolhida some (pen drive, rede) depois da checagem: nenhum .zip pela
+    metade sai com "Backup exportado"."""
+    fora = tmp_path / "meus_saves"
+    _guardar_saves(fora)
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    copiar = backup._incluir_save
+
+    def some_e_copia(arquivo, caminho, nome):
+        shutil.rmtree(fora)
+        copiar(arquivo, caminho, nome)
+
+    monkeypatch.setattr(backup, "_incluir_save", some_e_copia)
+
+    erro = _exportar_que_falha(tmp_path)
+
+    assert isinstance(erro, backup.SavesInacessiveis)
+    assert isinstance(erro.__cause__, FileNotFoundError)
 
 
 def _abrir_save_que_falha(monkeypatch, erro, ao_ler=False):
@@ -426,9 +472,10 @@ def test_exportar_com_save_ilegivel_levanta_saves_inacessiveis(tmp_path, monkeyp
 
 def test_exportar_com_pasta_dos_saves_ilegivel_levanta_saves_inacessiveis(tmp_path, monkeypatch):
     """Listar a pasta (um OneDrive sem conexão) também conta, não só ler um arquivo."""
-    def listar():
+    def listar(_pasta):
         raise PermissionError(13, "Acesso negado")
 
+    (shared.app_dir / "saves").mkdir(parents=True)
     monkeypatch.setattr(backup, "_entradas_dos_saves", listar)
 
     assert isinstance(_exportar_que_falha(tmp_path), backup.SavesInacessiveis)
@@ -456,15 +503,24 @@ def test_exportar_com_outro_erro_de_gravacao_nao_culpa_os_saves(tmp_path, monkey
     assert erro.errno == errno.EIO
 
 
-def test_exportar_ignora_o_save_que_sumiu(tmp_path, monkeypatch):
-    """Apagado entre a listagem e a leitura: o backup sai sem ele."""
-    sumiu = shared.app_dir / "saves" / "X" / "sumiu.zip"
-    monkeypatch.setattr(backup, "_entradas_dos_saves", lambda: [(sumiu, "saves/X/sumiu.zip")])
+def test_exportar_com_save_que_sumiu_no_meio_falha(tmp_path, monkeypatch):
+    """Apagado entre a listagem e a leitura: com a trava dos saves nada some de forma
+    legítima, então o backup não sai sem ele em silêncio."""
+    saves = shared.app_dir / "saves"
+    _guardar_saves(saves)
+    listar = backup._entradas_dos_saves
 
-    destino = _exportar(tmp_path)
+    def lista_e_apaga(pasta):
+        entradas = listar(pasta)
+        (saves / "X" / "backup-1.zip").unlink()
+        return entradas
 
-    with zipfile.ZipFile(destino) as arquivo:
-        assert not any(n.startswith("saves/") for n in arquivo.namelist())
+    monkeypatch.setattr(backup, "_entradas_dos_saves", lista_e_apaga)
+
+    erro = _exportar_que_falha(tmp_path)
+
+    assert isinstance(erro, backup.SavesInacessiveis)
+    assert isinstance(erro.__cause__, FileNotFoundError)
 
 
 def test_exporta_save_com_data_anterior_a_1980(tmp_path):

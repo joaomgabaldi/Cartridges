@@ -346,7 +346,7 @@ def test_exportar_com_outro_erro_mantem_o_texto_do_destino(monkeypatch, flush_id
 
 
 def test_exportar_sem_os_saves_mostra_o_aviso(monkeypatch, flush_idle):
-    dialogos, avisos = _exportar_com(monkeypatch, flush_idle, True)
+    dialogos, avisos = _exportar_com(monkeypatch, flush_idle, "ausente")
 
     assert [(titulo, corpo) for _janela, titulo, corpo in dialogos] == [
         (
@@ -360,8 +360,23 @@ def test_exportar_sem_os_saves_mostra_o_aviso(monkeypatch, flush_idle):
     assert "Backup exportado" not in avisos
 
 
+def test_exportar_com_pasta_sem_saves_mostra_o_aviso(monkeypatch, flush_idle):
+    dialogos, avisos = _exportar_com(monkeypatch, flush_idle, "vazia")
+
+    assert [(titulo, corpo) for _janela, titulo, corpo in dialogos] == [
+        (
+            "Backup exportado sem os saves",
+            (
+                "A pasta dos saves escolhida não tem nenhuma cópia de save, então nenhuma foi "
+                "incluída no backup. Verifique se a pasta escolhida em Preferências é a correta."
+            ),
+        )
+    ]
+    assert "Backup exportado" not in avisos
+
+
 def test_exportar_com_os_saves_mostra_o_toast(monkeypatch, flush_idle):
-    dialogos, avisos = _exportar_com(monkeypatch, flush_idle, False)
+    dialogos, avisos = _exportar_com(monkeypatch, flush_idle, None)
 
     assert dialogos == []
     assert "Backup exportado" in avisos

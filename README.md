@@ -142,9 +142,10 @@ Todos estes recursos ficam na aba Personalização das Preferências e vêm desa
 - "Restaurar save", no menu do jogo, permite escolher a versão a devolver. Em Preferências, a opção
   "Restaurar saves de todos os jogos" devolve a versão mais recente de cada um.
 - O backup `.zip` da biblioteca também leva as cópias dos saves. Se a pasta dos saves escolhida não
-  for encontrada, o `.zip` sai sem elas e o aplicativo avisa. Ao restaurá-lo, elas voltam para a
-  pasta padrão; um backup sem saves mantém as cópias atuais. Para devolver os saves aos jogos (por
-  exemplo, depois de formatar o computador), use "Restaurar saves de todos os jogos".
+  for encontrada, ou se não tiver nenhuma cópia de save, o `.zip` é gerado sem elas e o aplicativo
+  avisa. Ao restaurá-lo, elas voltam para a pasta padrão; um backup sem saves mantém as cópias
+  atuais. Para devolver os saves aos jogos (por exemplo, depois de formatar o computador), use
+  "Restaurar saves de todos os jogos".
 
 ### Integração com o Windows
 

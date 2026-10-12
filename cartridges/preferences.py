@@ -1447,7 +1447,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                     sem_saves = backup.exportar(path, settings)
                 except Exception as error:  # pylint: disable=broad-exception-caught
                     logging.exception("Não foi possível exportar o backup")
-                    entregar_na_tela(self._export_done, progress, error, False)
+                    entregar_na_tela(self._export_done, progress, error, None)
                 else:
                     entregar_na_tela(self._export_done, progress, None, sem_saves)
 
@@ -1456,7 +1456,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         dialog.save(shared.win, None, finish)
 
     def _export_done(
-        self, progress: Adw.Toast, error: Optional[Exception], sem_saves: bool
+        self, progress: Adw.Toast, error: Optional[Exception], sem_saves: str | None
     ) -> bool:
         progress.dismiss()
         if isinstance(error, backup.SavesInacessiveis):
@@ -1477,7 +1477,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                     "de destino está acessível e se há espaço livre em disco."
                 ),
             )
-        elif sem_saves:
+        elif sem_saves == "ausente":
             create_dialog(
                 self,
                 _("Backup exportado sem os saves"),
@@ -1485,6 +1485,16 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                     "A pasta dos saves não foi encontrada, então as cópias dos saves "
                     "não foram incluídas no backup. Verifique se a pasta está "
                     "acessível e exporte novamente."
+                ),
+            )
+        elif sem_saves == "vazia":
+            create_dialog(
+                self,
+                _("Backup exportado sem os saves"),
+                _(
+                    "A pasta dos saves escolhida não tem nenhuma cópia de save, então "
+                    "nenhuma foi incluída no backup. Verifique se a pasta escolhida "
+                    "em Preferências é a correta."
                 ),
             )
         else:
