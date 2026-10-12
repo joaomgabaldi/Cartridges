@@ -31,19 +31,53 @@ from pathlib import Path
 
 import pytest
 
-from cartridges.saves import backup_de_saves, config
+from cartridges.saves import backup_de_saves, conferencia, config
 from cartridges.saves.pasta import dentro
 
 # Lido no import, antes de qualquer monkeypatch do `sys.executable`.
 EXE = Path(sys.executable).parent / "ludusavi.exe"
 pytestmark = [
     pytest.mark.skipif(not EXE.is_file(), reason=f"{EXE} não existe"),
-    # O opt-in que tira a guarda de sessão do conftest, só nestes testes.
-    pytest.mark.usefixtures("settings", "ludusavi_real_da_maquina"),
+    pytest.mark.usefixtures("settings"),
 ]
 
 NOME = "Jogo Real"
 APPID = "2999999"
+
+
+def _no_teste(caminho: str, raiz: Path) -> bool:
+    # Absoluto antes: `dentro` completaria um relativo com a pasta atual do processo.
+    return Path(caminho).is_absolute() and dentro(Path(caminho), raiz)
+
+
+def _problemas(dados: dict, raiz: Path) -> list[str]:
+    """O que, no config, poderia levar o Ludusavi para fora de ``raiz`` ou para a rede. Só
+    as chaves que `config.montar` grava hoje passam: uma nova (`registry`, `installDir`,
+    `toggledPaths`, `manifest`) faz a guarda falhar até ser conferida aqui."""
+    secoes = [
+        ("config", dados, {"release", "backup", "restore", "roots", "customGames", "redirects"}),
+        ("release", dados["release"], {"check"}),
+        ("backup", dados["backup"], {"path", "format", "retention"}),
+        ("backup.format", dados["backup"]["format"], {"chosen"}),
+        ("backup.retention", dados["backup"]["retention"], {"full", "differential"}),
+        ("restore", dados["restore"], {"path"}),
+        *(("roots[]", item, {"store", "path"}) for item in dados["roots"]),
+        *(("customGames[]", j, {"name", "integration", "files"}) for j in dados["customGames"]),
+        *(("redirects[]", r, {"kind", "source", "target"}) for r in dados.get("redirects", [])),
+    ]
+    problemas = [
+        f"{onde}.{chave}" for onde, secao, aceitas in secoes for chave in set(secao) - aceitas
+    ]
+    if dados["release"]["check"] is not False:
+        problemas.append("release.check")
+    caminhos = [
+        dados["backup"]["path"],
+        dados["restore"]["path"],
+        *(item["path"] for item in dados["roots"]),
+        *(caminho for jogo in dados["customGames"] for caminho in jogo["files"]),
+        *(c for r in dados.get("redirects", []) for c in (r["source"], r["target"])),
+    ]
+    return problemas + [caminho for caminho in caminhos if not _no_teste(caminho, raiz)]
 
 
 def _executor(raiz: Path):
@@ -53,21 +87,19 @@ def _executor(raiz: Path):
 
     def rodar(args, **kwargs):
         nonlocal ultimo_backup
-        pasta_config = Path(args[args.index("--config") + 1])
-        arquivo = pasta_config / "config.yaml"
-        # `pytest.fail` não é `Exception`: o `except` do app não o engole.
-        if not (dentro(pasta_config, raiz) and arquivo.is_file()):
-            pytest.fail(f"o Ludusavi rodaria sem o config do teste: {args}")
-        dados = json.loads(arquivo.read_text("utf-8"))
-        caminhos = [
-            dados["backup"]["path"],
-            dados["restore"]["path"],
-            *(raiz_["path"] for raiz_ in dados["roots"]),
-            *(caminho for jogo in dados["customGames"] for caminho in jogo["files"]),
-            *(c for r in dados.get("redirects", []) for c in (r["source"], r["target"])),
-        ]
-        if fora := [caminho for caminho in caminhos if not dentro(Path(caminho), raiz)]:
-            pytest.fail(f"o config levaria o Ludusavi para fora do tmp_path: {fora}")
+        # `pytest.fail` não é `Exception`: o `except` do app não o engole. Qualquer outro
+        # erro aqui (config ilegível, chave que falta) também falha o teste, sem rodar o exe.
+        try:
+            pasta_config = Path(args[args.index("--config") + 1])
+            arquivo = pasta_config / "config.yaml"
+            if not (_no_teste(str(pasta_config), raiz) and arquivo.is_file()):
+                problemas = [f"sem o config do teste: {args}"]
+            else:
+                problemas = _problemas(json.loads(arquivo.read_text("utf-8")), raiz)
+        except Exception as erro:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            problemas = [f"config ilegível: {erro!r}"]
+        if problemas:
+            pytest.fail(f"o Ludusavi não roda com este config: {problemas}")
         comando = ["--no-manifest-update" if a == "--try-manifest-update" else a for a in args]
         eh_backup = args[args.index("--try-manifest-update") + 1] == "backup"
         if eh_backup:
@@ -83,8 +115,10 @@ def _executor(raiz: Path):
 
 
 @pytest.fixture(name="jogo")
-def fixture_jogo(tmp_path, monkeypatch, store, make_game):
-    """O jogo na biblioteca, com a pasta de saves dele (`steam_settings/<appid>`) vazia."""
+def fixture_jogo(request, tmp_path, monkeypatch, store, make_game):
+    """O jogo na biblioteca, com a pasta de saves dele (`steam_settings/<appid>`) vazia.
+
+    O exe de verdade só é liberado no fim, com o executor e a guarda já no lugar."""
     (tmp_path / "ludusavi").mkdir()
     (tmp_path / "ludusavi" / "manifest.yaml").write_text("{}", encoding="utf-8")
     # As pastas de emulador ficam no %APPDATA% e no Público de verdade.
@@ -102,6 +136,8 @@ def fixture_jogo(tmp_path, monkeypatch, store, make_game):
         game_id="real", name=NOME, steam_appid=APPID, executable=str(exe), ludusavi_nome=NOME
     )
     store.add_game(jogo, {})
+    # O opt-in que tira a guarda de sessão do conftest, só nestes testes e só agora.
+    request.getfixturevalue("ludusavi_real_da_maquina")
     return jogo
 
 
@@ -208,8 +244,8 @@ def test_real_backup_com_arquivo_travado_fica_marcado(jogo, flush_idle, win):
     assert nova.comentario == backup_de_saves.INCOMPLETA
     assert anterior.comentario == ""
     assert no_zip(nova.arquivo, "a.sav") == b"a2"
-    # O travado entra vazio: restaurar essa versão apagaria o `b.sav`.
-    assert no_zip(nova.arquivo, "b.sav") == b""
+    # O travado não entra (o Ludusavi 0.31 o deixa vazio): restaurá-la estragaria o `b.sav`.
+    assert no_zip(nova.arquivo, "b.sav") in (b"", None)
     aviso = "Não foi possível fazer o backup dos saves de Jogo Real."
     assert titulos(win) == [aviso]
 
@@ -223,7 +259,7 @@ def test_real_backup_com_arquivo_travado_fica_marcado(jogo, flush_idle, win):
 
 
 def test_real_pasta_do_jogo_movida(jogo, flush_idle, win, tmp_path):
-    if len(tmp_path.parts) > 2 and tmp_path.parts[1].casefold() == "users":
+    if conferencia._USUARIO.match(tmp_path.as_posix()):
         pytest.skip(
             "tmp_path está num perfil (X:/Users/<nome>): ali a pasta do jogo não ganha "
             "redirecionamento (o do usuário cobre); rode com --basetemp fora do perfil"
