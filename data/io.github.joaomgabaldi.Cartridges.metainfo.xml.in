@@ -28,6 +28,17 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.12" date="2026-10-12">
+      <description translate="no">
+        <ul>
+          <li>Agora, antes de restaurar um save, os saves atuais são guardados como uma nova versão, e cópias danificadas não são restauradas</li>
+          <li>Os saves restaurados com outro usuário do Windows ou com o jogo em outra pasta agora voltam para os lugares certos</li>
+          <li>As versões incompletas dos saves agora aparecem identificadas na restauração</li>
+          <li>Agora o aplicativo avisa quando não consegue fazer o backup dos saves de um jogo e quando o backup da biblioteca sai sem as cópias dos saves</li>
+          <li>O jogo não abre enquanto os saves dele estão sendo restaurados, e o aplicativo espera o backup dos saves terminar antes de fechar</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.10.09" date="2026-10-09">
       <description translate="no">
         <ul>
