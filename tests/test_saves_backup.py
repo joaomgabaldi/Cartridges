@@ -141,6 +141,7 @@ def ambiente(settings, tmp_path, monkeypatch, ludusavi_de_verdade):
     (tmp_path / "ludusavi.exe").touch()
     monkeypatch.setattr(backup_de_saves, "_cache", {})
     monkeypatch.setattr(backup_de_saves, "_restaurando", Counter())
+    monkeypatch.setattr(backup_de_saves, "_jogos_restaurando", Counter())
     monkeypatch.setattr(backup_de_saves, "_restaurando_todos", 0)
 
 
@@ -618,6 +619,46 @@ def test_restaurar_todos_bloqueia_todos_mesmo_com_cache_vazio(store, make_game, 
     assert backup_de_saves.restaurando(sem_nome) is False
     esperar()
     assert backup_de_saves.restaurando(com_nome) is False
+
+
+@pytest.mark.parametrize("quebra", ["_em_segundo_plano", "_biblioteca"])
+@pytest.mark.parametrize("pedido", ["um", "todos"])
+def test_pedido_que_nao_chega_a_abrir_a_thread_nao_deixa_marca(
+    store, make_game, falso, monkeypatch, quebra, pedido
+):
+    def explode(*_args):
+        raise RuntimeError("não abriu")
+
+    monkeypatch.setattr(backup_de_saves, quebra, explode)
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
+
+    with pytest.raises(RuntimeError):
+        if pedido == "um":
+            backup_de_saves.restaurar(jogo, "v1")
+        else:
+            backup_de_saves.restaurar_todos()
+
+    assert backup_de_saves.restaurando(jogo) is False
+    assert not backup_de_saves._restaurando
+    assert not backup_de_saves._jogos_restaurando
+    assert backup_de_saves._restaurando_todos == 0
+
+
+def test_restaurando_acompanha_o_nome_capturado_se_o_nome_mudar(store, make_game, falso, esperar):
+    falso.versoes["X"] = ["v1"]
+    falso.demora = 0.1
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
+
+    backup_de_saves.restaurar(jogo, "v1")
+    jogo.ludusavi_nome = ""  # o diálogo de detalhes faz isto ao corrigir o appID, no meio da restauração
+
+    assert backup_de_saves.restaurando(jogo) is True
+    esperar()
+
+    assert falso.restauracoes() == [["restore", "X", "--force", "--backup", "v1"]]  # o nome de quando pediu
+    assert backup_de_saves.restaurando(jogo) is False
+    assert not backup_de_saves._restaurando
+    assert not backup_de_saves._jogos_restaurando
 
 
 @pytest.fixture

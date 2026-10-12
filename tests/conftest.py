@@ -336,20 +336,28 @@ def _install_shared() -> types.ModuleType:
 shared = _install_shared()
 
 
-def _nenhum_ludusavi() -> None:
-    return None
-
-
-# O `ludusavi.exe` de verdade nunca roda fora de um teste que o pede. O corte é na sessão
-# toda, e não num monkeypatch por teste: uma thread de backup que sobrevive ao seu teste
-# acorda com `sys.executable` e `shared.app_dir` já desfeitos, acharia o Ludusavi desta
-# máquina e o rodaria sobre a pasta de lugar nenhum. (Foi o que aconteceu em 11/10/2026:
-# ele baixou o manifesto de 17 MB para `tests/_unset` e criou `~/ludusavi-backup`.)
-# Quem precisa dele "presente" pede a fixture `ludusavi_de_verdade`.
+# O `ludusavi.exe` desta máquina nunca roda nos testes. O corte é na sessão toda, e não num
+# monkeypatch por teste: uma thread de backup que sobrevive ao seu teste acorda com
+# `sys.executable` e `shared.app_dir` já desfeitos, acharia o Ludusavi daqui e o rodaria
+# sobre a pasta de lugar nenhum. (Foi o que aconteceu em 11/10/2026: ele baixou o manifesto
+# de 17 MB para `tests/_unset` e criou `~/ludusavi-backup`.) Por isso `ludusavi.executavel`
+# vira um embrulho que só devolve um exe que mora dentro do basetemp do pytest, seja qual for
+# o `sys.executable`. Quem quer um exe "presente" pede `ludusavi_de_verdade` (um de mentira,
+# em `tmp_path`); só o teste de integração de propósito usa `ludusavi_real_da_maquina`.
 from cartridges.saves import ludusavi as _ludusavi
 
 EXECUTAVEL_DE_VERDADE = _ludusavi.executavel
-_ludusavi.executavel = _nenhum_ludusavi
+_basetemp: Path | None = None  # preenchido no início da sessão por `basetemp_do_ludusavi`
+
+
+def _executavel_so_no_basetemp() -> Path | None:
+    exe = EXECUTAVEL_DE_VERDADE()
+    if exe is not None and _basetemp is not None and _basetemp in exe.resolve().parents:
+        return exe
+    return None
+
+
+_ludusavi.executavel = _executavel_so_no_basetemp
 
 
 # --------------------------------------------------------------------------
@@ -495,11 +503,27 @@ def sem_ludusavi(request, monkeypatch):
     monkeypatch.setattr(backup_de_saves, "disponivel", lambda: False)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def basetemp_do_ludusavi(tmp_path_factory):
+    """Diz à guarda de `ludusavi.executavel` onde fica o basetemp; fora da sessão, nada passa."""
+    global _basetemp  # pylint: disable=global-statement
+    _basetemp = tmp_path_factory.getbasetemp().resolve()
+    yield
+    _basetemp = None
+
+
 @pytest.fixture
 def ludusavi_de_verdade(tmp_path, monkeypatch):
-    """O `ludusavi.executavel` real, olhando só para `tmp_path` (o Python de mentira dele):
-    quem pede a fixture põe, ou não, um `ludusavi.exe` lá. Nunca enxerga o desta máquina."""
+    """Um Python de mentira em `tmp_path`: o `ludusavi.executavel` (a função real, atrás da
+    guarda) olha só para lá, e quem pede a fixture põe, ou não, um `ludusavi.exe` ao lado."""
     monkeypatch.setattr(sys, "executable", str(tmp_path / "python.exe"))
+
+
+@pytest.fixture
+def ludusavi_real_da_maquina(monkeypatch):
+    """OPT-IN DE PROPÓSITO (Task 10, teste de integração): tira a guarda e deixa
+    `ludusavi.executavel` achar o `ludusavi.exe` verdadeiro desta máquina. Nenhum outro
+    teste deve pedir; quem pede só pode rodá-lo sobre `tmp_path` (config e backups)."""
     monkeypatch.setattr(_ludusavi, "executavel", EXECUTAVEL_DE_VERDADE)
 
 

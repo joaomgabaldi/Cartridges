@@ -42,13 +42,15 @@ _trava = threading.Lock()
 # Nome no Ludusavi -> versões, da mais nova para a mais velha. Lido pela tela
 # (`tem_backup`) sem esperar a trava: a tela nunca fica parada atrás de um backup.
 _cache: dict[str, list[Versao]] = {}
-# Quantas restaurações pendentes cada jogo tem (nome no Ludusavi) e quantas de "Restaurar
-# todos", para o jogo não abrir no meio. Contadores, e não um conjunto e uma marca: com
-# dois pedidos seguidos, o fim do primeiro não pode soltar o jogo enquanto o segundo, na
-# fila da trava, ainda vai gravar. Só a thread da tela os muda: a restauração soma antes
-# de abrir a thread de trabalho, e o fim subtrai com `entregar_na_tela`. Por isso não
-# precisam de trava, e a tela os lê sem esperar um backup.
+# Quantas restaurações pendentes cada jogo tem (nome no Ludusavi, e também o objeto `Game`,
+# para o caso de o nome mudar no meio) e quantas de "Restaurar todos", para o jogo não
+# abrir no meio. Contadores, e não um conjunto e uma marca: com dois pedidos seguidos, o
+# fim do primeiro não pode soltar o jogo enquanto o segundo, na fila da trava, ainda vai
+# gravar. Só a thread da tela os muda: a restauração soma logo antes de abrir a thread de
+# trabalho, e o fim subtrai com `entregar_na_tela`. Por isso não precisam de trava, e a
+# tela os lê sem esperar um backup.
 _restaurando: Counter[str] = Counter()
+_jogos_restaurando: Counter[int] = Counter()  # id do `Game`; vivo enquanto a thread o segura
 _restaurando_todos = 0  # pylint: disable=invalid-name
 
 
@@ -77,12 +79,17 @@ def _em_segundo_plano(alvo, *argumentos) -> None:
     threading.Thread(target=alvo, args=argumentos, daemon=True).start()
 
 
-def _no_config(game: Game, no_manifesto: bool = True) -> config.JogoNoConfig:
+def _no_config(
+    game: Game, no_manifesto: bool = True, nome: str | None = None
+) -> config.JogoNoConfig:
     # Todo nome guardado vai como "extend". O Ludusavi 0.31 trata "extend" de um nome
     # que o manifesto não conhece como uma entrada própria (conferido), e se o manifesto
     # ganhar esse nome mais tarde, juntar os caminhos dele é o desejado. Por isso o
     # config não precisa lembrar se o nome veio do manifesto ou foi criado aqui.
-    return config.JogoNoConfig(game.ludusavi_nome, game.steam_appid, game.executable, no_manifesto)
+    # ``nome``: o de quando a operação foi pedida, que o diálogo de detalhes pode ter limpado.
+    return config.JogoNoConfig(
+        nome or game.ludusavi_nome, game.steam_appid, game.executable, no_manifesto
+    )
 
 
 def _preparar(
@@ -246,9 +253,11 @@ def _atualizar_cache(biblioteca: list[Game]) -> None:
 # -- restauração -------------------------------------------------------------
 
 
-def _restaurar_um(game: Game, versao: Versao, biblioteca: list[Game]) -> str | None:
-    """Restaura ``versao`` sem arriscar o save atual. Sob a trava. None se restaurou;
-    senão, o aviso para o usuário.
+def _restaurar_um(
+    game: Game, nome: str, versao: Versao, biblioteca: list[Game]
+) -> str | None:
+    """Restaura ``versao`` (do jogo ``nome`` no Ludusavi) sem arriscar o save atual. Sob a
+    trava. None se restaurou; senão, o aviso para o usuário.
 
     Nesta ordem, e qualquer falha interrompe tudo antes do `restore`: o zip da versão
     tem de estar inteiro (o Ludusavi grava uma versão danificada por cima do save e só
@@ -256,8 +265,7 @@ def _restaurar_um(game: Game, versao: Versao, biblioteca: list[Game]) -> str | N
     levados ao usuário e à pasta do jogo de hoje; e a prévia só pode gravar em pastas
     de save.
     """
-    nome = game.ludusavi_nome
-    jogo = _no_config(game)
+    jogo = _no_config(game, nome=nome)
     try:
         arquivo = versao.arquivo
         if arquivo is None or not conferencia.integra(arquivo):
@@ -307,31 +315,56 @@ def restaurando(game: Game) -> bool:
     """Os saves do jogo estão sendo restaurados (sozinhos ou em "Restaurar todos"). Só
     na thread da tela."""
     nome = game.ludusavi_nome
-    return bool(nome) and (_restaurando_todos > 0 or nome in _restaurando)
+    # Pelo objeto também: o nome pode ter sido limpado no meio da restauração.
+    return id(game) in _jogos_restaurando or (
+        bool(nome) and (_restaurando_todos > 0 or nome in _restaurando)
+    )
 
 
-def _desmarcar(nome: str | None) -> bool:
-    """Fim de uma restauração: tira um pedido de ``nome`` (None: de "Restaurar todos"). O
-    jogo só volta a poder abrir quando o último pedido acaba."""
+def _marcar(nome: str, jogo: int, passo: int) -> None:
+    """Soma ``passo`` (1 ou -1) à marca de um pedido de restauração: a de ``nome`` e a do
+    objeto ``jogo``. Zerada, a chave sai. Só na thread da tela."""
+    _restaurando[nome] += passo
+    if _restaurando[nome] <= 0:
+        del _restaurando[nome]
+    _jogos_restaurando[jogo] += passo
+    if _jogos_restaurando[jogo] <= 0:
+        del _jogos_restaurando[jogo]
+
+
+def _marcar_todos(passo: int) -> None:
+    """O mesmo para "Restaurar todos"."""
     global _restaurando_todos  # pylint: disable=global-statement
-    if nome is None:
-        _restaurando_todos -= 1
-    else:
-        _restaurando[nome] -= 1
-        if _restaurando[nome] <= 0:
-            del _restaurando[nome]
+    _restaurando_todos += passo
+
+
+def _desmarcar(nome: str, jogo: int) -> bool:
+    """Fim de uma restauração (callback da tela). O jogo só volta a poder abrir quando o
+    último pedido acaba."""
+    _marcar(nome, jogo, -1)
+    return False
+
+
+def _desmarcar_todos() -> bool:
+    _marcar_todos(-1)
     return False
 
 
 def restaurar(game: Game, versao: str) -> None:
     """Devolve os saves do jogo aos da versão ``versao`` (o `id`), guardando os atuais antes."""
-    if disponivel() and game.ludusavi_nome:
-        _restaurando[game.ludusavi_nome] += 1
-        _em_segundo_plano(_restaurar, game, versao, _biblioteca())
-
-
-def _restaurar(game: Game, versao: str, biblioteca: list[Game]) -> None:
     nome = game.ludusavi_nome
+    if disponivel() and nome:
+        biblioteca = _biblioteca()
+        # Marca só agora, colada na thread: se ela não abrir, ninguém desmarcaria.
+        _marcar(nome, id(game), 1)
+        try:
+            _em_segundo_plano(_restaurar, game, nome, versao, biblioteca)
+        except Exception:
+            _marcar(nome, id(game), -1)
+            raise
+
+
+def _restaurar(game: Game, nome: str, versao: str, biblioteca: list[Game]) -> None:
     try:
         with _trava:
             tarefa = tarefas.comecar(_("Restaurando o save de {}").format(game.name), 1)
@@ -347,22 +380,26 @@ def _restaurar(game: Game, versao: str, biblioteca: list[Game]) -> None:
                     )
                     aviso = _("Não foi possível restaurar o save de {}.").format(game.name)
                 else:
-                    aviso = _restaurar_um(game, achada, biblioteca)
+                    aviso = _restaurar_um(game, nome, achada, biblioteca)
                 if aviso is not None:
                     _avisar(aviso)
                 _ler_versoes(biblioteca)
             finally:
                 tarefa.terminar()
     finally:
-        entregar_na_tela(_desmarcar, nome)
+        entregar_na_tela(_desmarcar, nome, id(game))
 
 
 def restaurar_todos() -> None:
     """Restaura a versão completa mais recente de cada jogo da biblioteca que tem backup."""
-    global _restaurando_todos  # pylint: disable=global-statement
     if disponivel():
-        _restaurando_todos += 1
-        _em_segundo_plano(_restaurar_todos, _biblioteca())
+        biblioteca = _biblioteca()
+        _marcar_todos(1)
+        try:
+            _em_segundo_plano(_restaurar_todos, biblioteca)
+        except Exception:
+            _marcar_todos(-1)
+            raise
 
 
 def _restaurar_todos(biblioteca: list[Game]) -> None:
@@ -388,7 +425,10 @@ def _restaurar_todos(biblioteca: list[Game]) -> None:
                         logging.warning(
                             "Os saves de %s só têm versões incompletas", jogos[nome].name
                         )
-                    if versao is None or _restaurar_um(jogos[nome], versao, biblioteca) is not None:
+                    if (
+                        versao is None
+                        or _restaurar_um(jogos[nome], nome, versao, biblioteca) is not None
+                    ):
                         falhas += 1
             finally:
                 tarefa.terminar()
@@ -403,7 +443,7 @@ def _restaurar_todos(biblioteca: list[Game]) -> None:
                 )
             _ler_versoes(biblioteca)
     finally:
-        entregar_na_tela(_desmarcar, None)
+        entregar_na_tela(_desmarcar_todos)
 
 
 # -- pasta dos saves ---------------------------------------------------------

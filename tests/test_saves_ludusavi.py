@@ -25,8 +25,10 @@ Amostras reais do Ludusavi 0.31.0 em `tests/dados/ludusavi/`. Campos confirmados
 """
 
 import json
+import shutil
 import subprocess
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -255,6 +257,24 @@ def test_executavel_ausente(tmp_path, monkeypatch):
 
 def test_executavel_presente(exe_ao_lado_do_python):
     assert ludusavi.executavel() == exe_ao_lado_do_python
+
+
+def test_a_guarda_da_sessao_so_devolve_exe_dentro_do_basetemp(tmp_path_factory, monkeypatch):
+    """Mesmo com um `ludusavi.exe` ao lado do Python, o que está fora do basetemp do pytest
+    (como o desta máquina) nunca é devolvido."""
+    fora = tmp_path_factory.getbasetemp().parent / f"fora-{uuid.uuid4().hex}"
+    fora.mkdir()
+    try:
+        (fora / "ludusavi.exe").touch()
+        monkeypatch.setattr(sys, "executable", str(fora / "python.exe"))
+        assert ludusavi.executavel() is None
+    finally:
+        shutil.rmtree(fora)
+
+
+def test_o_ponto_de_optin_do_exe_real_tira_a_guarda(ludusavi_real_da_maquina):
+    """Só confere que a fixture existe e destrava a função real; não a chama."""
+    assert ludusavi.executavel.__name__ == "executavel"
 
 
 def test_restaurar_tem_um_limite_de_tempo_maior(tmp_path):
