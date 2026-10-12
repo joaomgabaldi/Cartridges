@@ -33,6 +33,19 @@ def avisar_falha() -> None:
     )
 
 
+def avisar_pasta_dos_saves(pasta: str) -> None:
+    """O backup trouxe as cópias dos saves e elas ficaram na pasta padrão: a
+    pasta escolhida antes (``pasta``) deixou de valer."""
+    create_dialog(
+        shared.win,
+        _("Cópias dos saves na pasta padrão"),
+        _(
+            "As cópias dos saves do backup foram para a pasta padrão. "
+            "Para voltar a usar {}, escolha-a novamente em Preferências."
+        ).format(pasta.replace("/", "\\")),
+    )
+
+
 def _avisar_concluida() -> None:
     """O fim da restauração: nenhum jogo restaurado ficou sem atalho."""
     shared.win.toast_queue.add(Adw.Toast.new(_("Restauração concluída")))

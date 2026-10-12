@@ -685,6 +685,9 @@ class CartridgesApplication(Adw.Application):
         if self.restauracao_falhou:
             restauracao_dialogs.avisar_falha()
 
+        if backup.pasta_dos_saves_desfeita:
+            restauracao_dialogs.avisar_pasta_dos_saves(backup.pasta_dos_saves_desfeita)
+
         if restauracao.existe():
             self.continuar_restauracao()
         elif shared.schema.get_boolean("auto-import"):

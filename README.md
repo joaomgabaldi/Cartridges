@@ -135,6 +135,7 @@ Todos estes recursos ficam na aba Personalização das Preferências e vêm desa
 
 - Ao fim de cada sessão, o aplicativo faz o backup dos saves do jogo, guardando as 5 versões mais
   recentes de cada um. Também entram os saves e os arquivos de conquistas dos emuladores.
+- O backup dos saves acontece ao fim de cada sessão e depende da opção “Contar horas de jogo”.
 - As cópias dos saves ficam em uma pasta dentro da pasta do aplicativo, que pode ser trocada em
   Preferências, por exemplo, para uma pasta do OneDrive. Ao trocar, só as cópias dos saves mudam de
   lugar; o restante da pasta não é alterado.

@@ -249,6 +249,100 @@ def test_descricao_do_backup_menciona_os_saves_so_com_ludusavi(monkeypatch):
     )
 
 
+def test_subtitulo_de_contar_horas_com_ludusavi(monkeypatch):
+    """O backup dos saves só acontece ao fim de uma sessão, e sessão só existe com a contagem."""
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
+    assert _preferencias(monkeypatch).playtime_tracking_switch.get_subtitle() == (
+        "Registra o tempo de cada sessão e faz o backup dos saves ao fim dela; quando o jogo "
+        "não pode ser acompanhado automaticamente, abre uma janela compacta para encerrar a sessão"
+    )
+
+
+def test_subtitulo_de_contar_horas_sem_ludusavi(monkeypatch):
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: False)
+    assert _preferencias(monkeypatch).playtime_tracking_switch.get_subtitle() == (
+        "Registra o tempo de cada sessão; quando o jogo não pode ser acompanhado "
+        "automaticamente, abre uma janela compacta para encerrar a sessão"
+    )
+
+
+def _exportar_com_erro(monkeypatch, flush_idle, erro):
+    """O caminho inteiro de "Exportar backup" com `exportar` falhando; devolve os
+    argumentos de `create_dialog` e os toasts."""
+    import cartridges.preferences as preferences_module
+
+    class Resultado:
+        def get_path(self):
+            return "X:/backup.zip"
+
+    class Seletor:
+        def set_initial_name(self, _nome):
+            pass
+
+        def set_filters(self, _filtros):
+            pass
+
+        def save(self, _janela, _cancelavel, resposta):
+            resposta(self, None)
+
+        def save_finish(self, _resultado):
+            return Resultado()
+
+    def exportar(_destino, _configuracoes):
+        raise erro
+
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
+    preferencias = _preferencias(monkeypatch)
+    avisos = _toasts(preferencias, monkeypatch)
+    dialogos = []
+    monkeypatch.setattr(preferences_module.Gtk, "FileDialog", Seletor)
+    monkeypatch.setattr(preferences_module.backup, "exportar", exportar)
+    monkeypatch.setattr(
+        preferences_module.backup, "ler_configuracoes", lambda: {"settings": {}, "state": {}}
+    )
+    monkeypatch.setattr(
+        preferences_module, "create_dialog", lambda *a, **k: dialogos.append(a)
+    )
+
+    preferencias.export_backup()
+    _drenar(flush_idle, lambda: dialogos)
+    return dialogos, avisos
+
+
+def test_exportar_com_saves_inacessiveis_mostra_o_texto(monkeypatch, flush_idle):
+    from cartridges.utils import backup
+
+    dialogos, avisos = _exportar_com_erro(
+        monkeypatch, flush_idle, backup.SavesInacessiveis("Acesso negado")
+    )
+
+    assert [(titulo, corpo) for _janela, titulo, corpo in dialogos] == [
+        (
+            "Não foi possível exportar",
+            (
+                "Não foi possível ler as cópias dos saves. Verifique se a pasta dos saves está "
+                "acessível e tente novamente."
+            ),
+        )
+    ]
+    assert "Backup exportado" not in avisos
+
+
+def test_exportar_com_outro_erro_mantem_o_texto_do_destino(monkeypatch, flush_idle):
+    dialogos, avisos = _exportar_com_erro(monkeypatch, flush_idle, OSError("disco cheio"))
+
+    assert [(titulo, corpo) for _janela, titulo, corpo in dialogos] == [
+        (
+            "Não foi possível exportar",
+            (
+                "Não foi possível gravar o arquivo. Verifique se a pasta de destino está "
+                "acessível e se há espaço livre em disco."
+            ),
+        )
+    ]
+    assert "Backup exportado" not in avisos
+
+
 def _toasts(preferencias, monkeypatch):
     avisos = []
     monkeypatch.setattr(preferencias, "add_toast", lambda toast: avisos.append(toast.get_title()))
@@ -465,3 +559,14 @@ def test_main_atualiza_o_cache_na_abertura():
         encoding="utf-8"
     )
     assert "backup_de_saves.atualizar_cache()" in texto
+
+
+def test_main_avisa_da_pasta_dos_saves_logo_depois_do_aviso_de_falha():
+    texto = (Path(__file__).resolve().parent.parent / "cartridges" / "main.py").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "            restauracao_dialogs.avisar_falha()\n\n"
+        "        if backup.pasta_dos_saves_desfeita:\n"
+        "            restauracao_dialogs.avisar_pasta_dos_saves(backup.pasta_dos_saves_desfeita)\n"
+    ) in texto

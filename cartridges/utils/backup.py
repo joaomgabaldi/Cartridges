@@ -24,6 +24,7 @@ ficam como estão. A pasta de fora nunca é tocada. Se algo falhar, tudo volta
 como estava.
 """
 
+import errno
 import json
 import logging
 import shutil
@@ -102,6 +103,17 @@ def _extensoes() -> dict[str, tuple[str, ...]]:
 
 class BackupInvalido(ValueError):
     """O arquivo não é um backup válido do Cartridges (ou está corrompido)."""
+
+
+class SavesInacessiveis(Exception):
+    """`exportar` não conseguiu ler a pasta dos saves (um OneDrive sem conexão,
+    por exemplo): o erro não é do destino."""
+
+
+# A pasta dos saves escolhida que a última `aplicar_pendente` desfez (o backup
+# trouxe saves, que voltaram para a pasta padrão), para a janela avisar depois
+# de aberta. Fora o caso, ``None``.
+pasta_dos_saves_desfeita: Optional[str] = None  # pylint: disable=invalid-name
 
 
 # region Configurações
@@ -266,9 +278,16 @@ def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
                 _incluir(arquivo, caminho, nome)
             # Com a trava do Ludusavi: um backup de save em andamento não pode
             # entrar aqui pela metade.
-            with backup_de_saves.trava_dos_saves():
-                for caminho, nome in _entradas_dos_saves():
-                    _incluir(arquivo, caminho, nome)
+            try:
+                with backup_de_saves.trava_dos_saves():
+                    for caminho, nome in _entradas_dos_saves():
+                        _incluir(arquivo, caminho, nome)
+            except OSError as erro:
+                # Sumiu (já tratado em `_incluir`) e disco cheio (erro de gravação
+                # no destino) seguem com a mensagem de sempre.
+                if isinstance(erro, FileNotFoundError) or erro.errno == errno.ENOSPC:
+                    raise
+                raise SavesInacessiveis(str(erro)) from erro
         temporario.replace(destino)
     finally:
         temporario.unlink(missing_ok=True)
@@ -428,6 +447,8 @@ def aplicar_pendente() -> Optional[bool]:
     ``None``: nada agendado. ``True``: restaurado. ``False``: falhou, e os
     dados e as configurações de antes voltaram ao lugar.
     """
+    global pasta_dos_saves_desfeita  # pylint: disable=global-statement
+    pasta_dos_saves_desfeita = None
     anterior, extraido, lixo = _irma(".anterior"), _irma(".restaurando"), _irma(".lixo")
     shutil.rmtree(lixo, ignore_errors=True)
     # Uma troca que caiu no meio (app morto, PC desligado) deixa `.anterior`:
@@ -470,8 +491,12 @@ def aplicar_pendente() -> Optional[bool]:
         aplicar_configuracoes(manifesto)
         if traz_saves:
             # Os saves do backup entraram na pasta padrão, na troca acima.
+            escolhida = shared.schema.get_string(_CHAVE_DA_PASTA_DOS_SAVES)
             shared.schema.reset(_CHAVE_DA_PASTA_DOS_SAVES)
             Gio.Settings.sync()
+            # Só depois de zerada: uma falha antes daqui devolve tudo, a escolha
+            # inclusive, e não há o que avisar.
+            pasta_dos_saves_desfeita = escolhida or None
     except Exception:  # pylint: disable=broad-exception-caught
         logging.exception("Não foi possível restaurar o backup")
         # Em passos separados: se os dados não voltam, as configurações de antes

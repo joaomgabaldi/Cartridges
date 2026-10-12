@@ -25,6 +25,23 @@ def test_pedir_pasta_sem_pasta_anterior_so_pede_a_escolha(schema):
     assert tela.texto.get_label() == "Selecione a pasta onde estão os atalhos dos jogos."
 
 
+def test_aviso_da_pasta_dos_saves(monkeypatch):
+    dialogos = []
+    monkeypatch.setattr(telas, "create_dialog", lambda *a, **k: dialogos.append(a))
+
+    telas.avisar_pasta_dos_saves("D:/Saves")
+
+    assert [(titulo, corpo) for _janela, titulo, corpo in dialogos] == [
+        (
+            "Cópias dos saves na pasta padrão",
+            (
+                "As cópias dos saves do backup foram para a pasta padrão. "
+                "Para voltar a usar D:\\Saves, escolha-a novamente em Preferências."
+            ),
+        )
+    ]
+
+
 def test_escolher_atalho_sem_candidatos_abre_direto_o_seletor(make_game, monkeypatch):
     monkeypatch.setattr(restauracao, "candidatos", lambda _jogo: [])
     tela = telas.EscolherAtalho(make_game(game_id="gt", name="Gran Turismo 7"), lambda: None)

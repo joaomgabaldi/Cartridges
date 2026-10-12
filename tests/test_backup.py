@@ -5,6 +5,7 @@
 """O backup como retrato completo do app: a pasta de dados e as configurações
 num .zip, restaurado com o app fechado (`agendar` + `aplicar_pendente`)."""
 
+import errno
 import json
 import shutil
 import threading
@@ -318,6 +319,68 @@ def test_pasta_dos_saves_sumiu_exporta_sem_saves(tmp_path):
     assert backup.validar(destino)["version"] == backup.VERSAO
 
 
+def _write_que_falha_nos_saves(monkeypatch, erro):
+    """`ZipFile.write` levanta ``erro`` só para os arquivos de `saves/`."""
+    escrever = zipfile.ZipFile.write
+
+    def write(self, filename, arcname=None, *args, **kwargs):
+        if str(arcname).startswith("saves/"):
+            raise erro
+        return escrever(self, filename, arcname, *args, **kwargs)
+
+    monkeypatch.setattr(zipfile.ZipFile, "write", write)
+
+
+def _exportar_que_falha(tmp_path):
+    """A pasta de destino fica sem o backup e sem o `.tmp`."""
+    destino = tmp_path / "saida" / "backup.zip"
+    destino.parent.mkdir()
+    with pytest.raises(Exception) as excecao:
+        backup.exportar(destino, {"settings": {}, "state": {}})
+    assert list(destino.parent.iterdir()) == []
+    return excecao.value
+
+
+def test_exportar_com_save_ilegivel_levanta_saves_inacessiveis(tmp_path, monkeypatch):
+    _encher_pasta_do_app()
+    _guardar_saves(shared.app_dir / "saves")
+    _write_que_falha_nos_saves(monkeypatch, PermissionError(13, "Acesso negado"))
+
+    erro = _exportar_que_falha(tmp_path)
+
+    assert isinstance(erro, backup.SavesInacessiveis)
+    assert isinstance(erro.__cause__, PermissionError)
+
+
+def test_exportar_com_pasta_dos_saves_ilegivel_levanta_saves_inacessiveis(tmp_path, monkeypatch):
+    """Listar a pasta (um OneDrive sem conexão) também conta, não só ler um arquivo."""
+    def listar():
+        raise PermissionError(13, "Acesso negado")
+
+    monkeypatch.setattr(backup, "_entradas_dos_saves", listar)
+
+    assert isinstance(_exportar_que_falha(tmp_path), backup.SavesInacessiveis)
+
+
+def test_exportar_com_disco_cheio_nao_culpa_os_saves(tmp_path, monkeypatch):
+    """Falta de espaço no destino é erro de gravação: a mensagem de antes, do destino."""
+    _guardar_saves(shared.app_dir / "saves")
+    _write_que_falha_nos_saves(monkeypatch, OSError(errno.ENOSPC, "Sem espaço"))
+
+    assert not isinstance(_exportar_que_falha(tmp_path), backup.SavesInacessiveis)
+
+
+def test_exportar_ignora_o_save_que_sumiu(tmp_path, monkeypatch):
+    """Apagado entre a listagem e a leitura: o backup sai sem ele."""
+    _guardar_saves(shared.app_dir / "saves")
+    _write_que_falha_nos_saves(monkeypatch, FileNotFoundError(2, "Não encontrado"))
+
+    destino = _exportar(tmp_path)
+
+    with zipfile.ZipFile(destino) as arquivo:
+        assert not any(n.startswith("saves/") for n in arquivo.namelist())
+
+
 @pytest.mark.parametrize("nome", ["saves/X/mapping.yaml", "saves/X/a.zip", "saves/X/A.ZIP"])
 def test_valida_nomes_de_saves(tmp_path, nome):
     caminho = _zip(tmp_path / "b.zip", {"configuracoes.json": _MANIFESTO, nome: "x"})
@@ -380,6 +443,66 @@ def test_restaura_saves_na_padrao_e_zera_a_chave(tmp_path, monkeypatch):
     assert shared.schema.get_string("pasta-dos-saves") == ""
     assert (fora / "X" / "mapping.yaml").read_text("utf-8") == "de depois"
     assert (fora / "Y").is_dir()
+
+
+def test_restaurar_com_saves_e_pasta_fora_guarda_a_pasta_desfeita(tmp_path, monkeypatch):
+    monkeypatch.setattr(backup, "pasta_dos_saves_desfeita", None)
+    fora = tmp_path / "meus_saves"
+    _guardar_saves(fora)
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    _preparar_restauracao(tmp_path, monkeypatch)
+
+    assert backup.aplicar_pendente() is True
+
+    assert shared.schema.get_string("pasta-dos-saves") == ""
+    assert backup.pasta_dos_saves_desfeita == str(fora)
+
+
+def test_restaurar_com_saves_sem_pasta_escolhida_nao_guarda_pasta_desfeita(tmp_path, monkeypatch):
+    monkeypatch.setattr(backup, "pasta_dos_saves_desfeita", None)
+    _guardar_saves(shared.app_dir / "saves")
+    _preparar_restauracao(tmp_path, monkeypatch)
+
+    assert backup.aplicar_pendente() is True
+
+    assert backup.pasta_dos_saves_desfeita is None
+
+
+def test_restaurar_sem_saves_no_backup_nao_guarda_pasta_desfeita(tmp_path, monkeypatch):
+    """A pasta escolhida continua valendo: não há o que avisar."""
+    monkeypatch.setattr(backup, "pasta_dos_saves_desfeita", None)
+    monkeypatch.setattr(backup, "aplicar_configuracoes", lambda _c: None)
+    monkeypatch.setattr(backup, "ler_configuracoes", lambda: {"settings": {}, "state": {}})
+    fora = tmp_path / "meus_saves"
+    _guardar_saves(fora)
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    _backup_sem_saves(tmp_path, 5)
+
+    assert backup.aplicar_pendente() is True
+
+    assert backup.pasta_dos_saves_desfeita is None
+
+
+def test_restauracao_que_falha_nao_guarda_pasta_desfeita(tmp_path, monkeypatch):
+    monkeypatch.setattr(backup, "pasta_dos_saves_desfeita", None)
+    fora = tmp_path / "meus_saves"
+    _guardar_saves(fora)
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    _preparar_restauracao(tmp_path, monkeypatch)
+    monkeypatch.setattr(backup, "aplicar_configuracoes", lambda _c: 1 / 0)
+
+    assert backup.aplicar_pendente() is False
+
+    assert shared.schema.get_string("pasta-dos-saves") == str(fora)
+    assert backup.pasta_dos_saves_desfeita is None
+
+
+def test_pasta_desfeita_de_uma_restauracao_nao_vale_na_seguinte(monkeypatch):
+    monkeypatch.setattr(backup, "pasta_dos_saves_desfeita", "D:/Velha")
+
+    assert backup.aplicar_pendente() is None
+
+    assert backup.pasta_dos_saves_desfeita is None
 
 
 def test_restauracao_que_falha_nao_mexe_na_pasta_dos_saves(tmp_path, monkeypatch):

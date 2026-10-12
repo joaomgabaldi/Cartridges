@@ -172,7 +172,17 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.pasta_dos_saves_row.set_visible(saves_disponivel)
         self.restaurar_saves_button_row.set_visible(saves_disponivel)
         self._atualizar_pasta_dos_saves()
-        if not saves_disponivel:
+        if saves_disponivel:
+            # O backup dos saves acontece ao fim de uma sessão, e sessão só existe
+            # com a contagem de horas ligada.
+            self.playtime_tracking_switch.set_subtitle(
+                _(
+                    "Registra o tempo de cada sessão e faz o backup dos saves ao fim dela; "
+                    "quando o jogo não pode ser acompanhado automaticamente, abre uma janela "
+                    "compacta para encerrar a sessão"
+                )
+            )
+        else:
             # Sem o Ludusavi o .zip não leva saves, e a descrição não pode prometê-los.
             self.backup_group.set_description(
                 _(
@@ -1437,7 +1447,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                     backup.exportar(path, settings)
                 except Exception as error:  # pylint: disable=broad-exception-caught
                     logging.exception("Não foi possível exportar o backup")
-                    entregar_na_tela(self._export_done, progress, str(error))
+                    entregar_na_tela(self._export_done, progress, error)
                 else:
                     entregar_na_tela(self._export_done, progress, None)
 
@@ -1445,9 +1455,18 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
         dialog.save(shared.win, None, finish)
 
-    def _export_done(self, progress: Adw.Toast, error: Optional[str]) -> bool:
+    def _export_done(self, progress: Adw.Toast, error: Optional[Exception]) -> bool:
         progress.dismiss()
-        if error:
+        if isinstance(error, backup.SavesInacessiveis):
+            create_dialog(
+                self,
+                _("Não foi possível exportar"),
+                _(
+                    "Não foi possível ler as cópias dos saves. Verifique se a pasta "
+                    "dos saves está acessível e tente novamente."
+                ),
+            )
+        elif error is not None:
             create_dialog(
                 self,
                 _("Não foi possível exportar"),
