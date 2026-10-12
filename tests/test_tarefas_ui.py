@@ -410,6 +410,31 @@ def test_fechar_com_saves_em_andamento_esconde_e_mostra_as_tarefas(monkeypatch):
     assert mostradas == [principal]
 
 
+def test_fechar_logo_depois_de_pedir_o_backup_dos_saves_esconde(monkeypatch):
+    """O backup conta desde o pedido: fechar o app antes de a thread chegar ao Ludusavi
+    (a busca do nome, a espera pela trava) também não o perde."""
+    from cartridges.main import CartridgesApplication
+    from cartridges.saves import backup_de_saves
+    from cartridges.tarefas_janela import TarefasJanela
+
+    monkeypatch.setattr(backup_de_saves, "_tarefas_abertas", 0)
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
+    monkeypatch.setattr(backup_de_saves, "_biblioteca", list)
+    monkeypatch.setattr(backup_de_saves, "_em_segundo_plano", lambda *_args: None)  # nem roda
+    monkeypatch.setattr(TarefasJanela, "aberta", None)
+    mostradas = []
+    monkeypatch.setattr(TarefasJanela, "mostrar", mostradas.append)
+    escondidas = []
+    principal = SimpleNamespace(set_visible=escondidas.append)
+
+    backup_de_saves.no_fim_da_sessao(SimpleNamespace(name="Meu Jogo"))
+    devolvido = CartridgesApplication.on_win_close_request(None, principal)
+
+    assert devolvido is True
+    assert escondidas == [False]
+    assert mostradas == [principal]
+
+
 def test_posicao_acima_do_botao_com_os_numeros_do_prototipo():
     from cartridges.utils import window_geometry  # noqa: PLC0415
 

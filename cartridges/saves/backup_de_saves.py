@@ -53,7 +53,7 @@ _restaurando: Counter[str] = Counter()
 _jogos_restaurando: Counter[int] = Counter()  # id do `Game`; vivo enquanto a thread o segura
 _restaurando_todos = 0  # pylint: disable=invalid-name
 # Quantas tarefas visíveis de backup ou restauração estão de pé. Ao contrário dos de cima,
-# sobe e desce nas threads de trabalho, por isso a trava própria.
+# sobe na thread da tela e desce nas threads de trabalho, por isso a trava própria.
 _tarefas_abertas = 0  # pylint: disable=invalid-name
 _trava_tarefas = threading.Lock()
 
@@ -69,9 +69,9 @@ def disponivel() -> bool:
 
 
 def em_andamento() -> bool:
-    """Há um backup ou uma restauração com tarefa visível. Fechar o app agora deixaria o
-    `ludusavi.exe` órfão, sem ninguém para ouvir o resultado. A busca do nome, que vem
-    antes da tarefa, não conta: interrompê-la não perde nada."""
+    """Há um backup ou uma restauração pedidos e ainda não terminados. Conta desde o
+    pedido, quando a tarefa visível nasce: fechar o app na busca do nome ou na espera pela
+    trava perderia a operação sem aviso, e no meio dela deixaria o `ludusavi.exe` órfão."""
     with _trava_tarefas:
         return _tarefas_abertas > 0
 
@@ -230,19 +230,24 @@ def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
 
 
 def no_fim_da_sessao(game: Game) -> None:
-    """Dispara o backup do jogo e volta na hora."""
+    """Dispara o backup do jogo e volta na hora. A tarefa nasce aqui (ver `em_andamento`)
+    e a thread de trabalho a termina."""
     if disponivel():
-        _em_segundo_plano(_backup, game, _biblioteca())
+        biblioteca = _biblioteca()
+        tarefa = _comecar_tarefa(_("Backup dos saves de {}").format(game.name), 1)
+        try:
+            _em_segundo_plano(_backup, game, biblioteca, tarefa)
+        except Exception:
+            _terminar_tarefa(tarefa)
+            raise
 
 
-def _backup(game: Game, biblioteca: list[Game]) -> None:
-    tarefa = None
+def _backup(game: Game, biblioteca: list[Game], tarefa: tarefas.Tarefa) -> None:
     with _trava:
         try:
             jogo = _resolver(game)
             if jogo is None:
-                return
-            tarefa = _comecar_tarefa(_("Backup dos saves de {}").format(game.name), 1)
+                return  # sem o que copiar: a tarefa some sem aviso
             _preparar(biblioteca, jogo)
             inicio = datetime.now(timezone.utc)
             try:
@@ -261,8 +266,7 @@ def _backup(game: Game, biblioteca: list[Game]) -> None:
         else:
             _ler_versoes(biblioteca)
         finally:
-            if tarefa is not None:
-                _terminar_tarefa(tarefa)
+            _terminar_tarefa(tarefa)
 
 
 # -- versões -----------------------------------------------------------------
@@ -409,38 +413,38 @@ def restaurar(game: Game, versao: str) -> None:
     nome = game.ludusavi_nome
     if disponivel() and nome:
         biblioteca = _biblioteca()
-        # Marca só agora, colada na thread: se ela não abrir, ninguém desmarcaria.
+        # A tarefa (ver `em_andamento`) e a marca nascem só agora, coladas na thread: se
+        # ela não abrir, ninguém as desfaria.
+        tarefa = _comecar_tarefa(_("Restaurando o save de {}").format(game.name), 1)
         _marcar(nome, id(game), 1)
         try:
-            _em_segundo_plano(_restaurar, game, nome, versao, biblioteca)
+            _em_segundo_plano(_restaurar, game, nome, versao, biblioteca, tarefa)
         except Exception:
             _marcar(nome, id(game), -1)
+            _terminar_tarefa(tarefa)
             raise
 
 
-def _restaurar(game: Game, nome: str, versao: str, biblioteca: list[Game]) -> None:
+def _restaurar(
+    game: Game, nome: str, versao: str, biblioteca: list[Game], tarefa: tarefas.Tarefa
+) -> None:
     try:
         with _trava:
-            tarefa = _comecar_tarefa(_("Restaurando o save de {}").format(game.name), 1)
-            try:
-                # Relidas agora: o zip e o número de versões (o limite da cópia) são os de hoje.
-                achada = None
-                if _ler_versoes(biblioteca):
-                    versoes = _cache.get(nome, [])
-                    achada = next((v for v in versoes if v.id == versao), None)
-                if achada is None:
-                    logging.warning(
-                        "A versão %s dos saves de %s não foi encontrada", versao, game.name
-                    )
-                    aviso = _("Não foi possível restaurar o save de {}.").format(game.name)
-                else:
-                    aviso = _restaurar_um(game, nome, achada, biblioteca)
-                if aviso is not None:
-                    _avisar(aviso)
-                _ler_versoes(biblioteca)
-            finally:
-                _terminar_tarefa(tarefa)
+            # Relidas agora: o zip e o número de versões (o limite da cópia) são os de hoje.
+            achada = None
+            if _ler_versoes(biblioteca):
+                versoes = _cache.get(nome, [])
+                achada = next((v for v in versoes if v.id == versao), None)
+            if achada is None:
+                logging.warning("A versão %s dos saves de %s não foi encontrada", versao, game.name)
+                aviso = _("Não foi possível restaurar o save de {}.").format(game.name)
+            else:
+                aviso = _restaurar_um(game, nome, achada, biblioteca)
+            if aviso is not None:
+                _avisar(aviso)
+            _ler_versoes(biblioteca)
     finally:
+        _terminar_tarefa(tarefa)
         entregar_na_tela(_desmarcar, nome, id(game))
 
 
@@ -449,15 +453,18 @@ def restaurar_todos() -> None:
     if disponivel():
         biblioteca = _biblioteca()
         marcados = [id(jogo) for jogo in biblioteca if jogo.ludusavi_nome]
+        # Total provisório: a thread de trabalho o acerta quando souber quem tem backup.
+        tarefa = _comecar_tarefa(_("Restaurando os saves"), len(marcados))
         _marcar_todos(1, marcados)
         try:
-            _em_segundo_plano(_restaurar_todos, biblioteca, marcados)
+            _em_segundo_plano(_restaurar_todos, biblioteca, marcados, tarefa)
         except Exception:
             _marcar_todos(-1, marcados)
+            _terminar_tarefa(tarefa)
             raise
 
 
-def _restaurar_todos(biblioteca: list[Game], marcados: list[int]) -> None:
+def _restaurar_todos(biblioteca: list[Game], marcados: list[int], tarefa: tarefas.Tarefa) -> None:
     try:
         with _trava:
             # O cache pode estar vazio (nada o encheu ainda) ou velho: relê antes. Sem
@@ -469,24 +476,18 @@ def _restaurar_todos(biblioteca: list[Game], marcados: list[int]) -> None:
             alvos = [nome for nome in jogos if _cache.get(nome)]
             if not alvos:
                 return
-            tarefa = _comecar_tarefa(_("Restaurando os saves"), len(alvos))
             falhas = 0
-            try:
-                for feitos, nome in enumerate(alvos):
-                    tarefa.atualizar(feitos)
-                    # A completa: restaurar uma incompleta deixaria o save misturado.
-                    versao = next((v for v in _cache[nome] if v.comentario != INCOMPLETA), None)
-                    if versao is None:
-                        logging.warning(
-                            "Os saves de %s só têm versões incompletas", jogos[nome].name
-                        )
-                    if (
-                        versao is None
-                        or _restaurar_um(jogos[nome], nome, versao, biblioteca) is not None
-                    ):
-                        falhas += 1
-            finally:
-                _terminar_tarefa(tarefa)
+            for feitos, nome in enumerate(alvos):
+                tarefa.atualizar(feitos, len(alvos))
+                # A completa: restaurar uma incompleta deixaria o save misturado.
+                versao = next((v for v in _cache[nome] if v.comentario != INCOMPLETA), None)
+                if versao is None:
+                    logging.warning("Os saves de %s só têm versões incompletas", jogos[nome].name)
+                if (
+                    versao is None
+                    or _restaurar_um(jogos[nome], nome, versao, biblioteca) is not None
+                ):
+                    falhas += 1
             # Um aviso só, no fim: uma falha por jogo viraria uma fila de avisos.
             if falhas:
                 _avisar(
@@ -498,6 +499,7 @@ def _restaurar_todos(biblioteca: list[Game], marcados: list[int]) -> None:
                 )
             _ler_versoes(biblioteca)
     finally:
+        _terminar_tarefa(tarefa)
         entregar_na_tela(_desmarcar_todos, marcados)
 
 

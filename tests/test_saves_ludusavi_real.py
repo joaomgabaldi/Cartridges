@@ -146,12 +146,14 @@ def saves_de(jogo) -> Path:
 
 
 def backup(jogo, flush_idle) -> None:
-    backup_de_saves._backup(jogo, backup_de_saves._biblioteca())
+    tarefa = backup_de_saves._comecar_tarefa("Backup", 1)  # como no pedido
+    backup_de_saves._backup(jogo, backup_de_saves._biblioteca(), tarefa)
     flush_idle()
 
 
 def restaurar(jogo, versao: str, flush_idle) -> None:
-    backup_de_saves._restaurar(jogo, NOME, versao, backup_de_saves._biblioteca())
+    tarefa = backup_de_saves._comecar_tarefa("Restaurando", 1)
+    backup_de_saves._restaurar(jogo, NOME, versao, backup_de_saves._biblioteca(), tarefa)
     flush_idle()
 
 
@@ -249,7 +251,8 @@ def test_real_backup_com_arquivo_travado_fica_marcado(jogo, flush_idle, win):
     aviso = "Não foi possível fazer o backup dos saves de Jogo Real."
     assert titulos(win) == [aviso]
 
-    backup_de_saves._restaurar_todos(backup_de_saves._biblioteca(), [id(jogo)])
+    tarefa = backup_de_saves._comecar_tarefa("Restaurando", 1)
+    backup_de_saves._restaurar_todos(backup_de_saves._biblioteca(), [id(jogo)], tarefa)
     flush_idle()
 
     # A anterior, completa: a incompleta deixaria `a.sav` de uma e `b.sav` de outra.

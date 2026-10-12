@@ -272,13 +272,18 @@ def test_sem_manifesto_nao_guarda_o_nome(store, make_game, falso, esperar):
     assert tarefas.lista.get_n_items() == 0
 
 
-def test_sem_appid_e_sem_entrada_nao_faz_nada(store, make_game, falso, esperar, tmp_path):
+def test_sem_appid_e_sem_entrada_nao_faz_nada(store, make_game, falso, esperar, monkeypatch, tmp_path):
     _com_manifesto(tmp_path)  # "fora do manifesto" pressupõe que há um manifesto
+    vistas = []
+    comecar = tarefas.comecar
+    monkeypatch.setattr(tarefas, "comecar", lambda nome, total: vistas.append((nome, total)) or comecar(nome, total))
     jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo Sem Nada")
 
     backup_de_saves.no_fim_da_sessao(jogo)
     esperar()
 
+    # A tarefa nasce no pedido, antes da busca do nome, e some quando não há o que copiar.
+    assert vistas == [("Backup dos saves de Jogo Sem Nada", 1)]
     assert falso.chamou("backup") == []
     assert jogo.ludusavi_nome == ""
     assert toasts() == []
@@ -439,7 +444,7 @@ def _espiar_em_andamento(monkeypatch, falso):
     return vistos
 
 
-def test_em_andamento_so_com_tarefa(store, make_game, falso, esperar, monkeypatch, tmp_path):
+def test_em_andamento_do_pedido_ao_fim(store, make_game, falso, esperar, monkeypatch, tmp_path):
     _com_manifesto(tmp_path)
     vistos = _espiar_em_andamento(monkeypatch, falso)
     sem_nada = na_biblioteca(store, make_game, game_id="s", name="Jogo Sem Nada")
@@ -450,8 +455,8 @@ def test_em_andamento_so_com_tarefa(store, make_game, falso, esperar, monkeypatc
 
     backup_de_saves.no_fim_da_sessao(sem_nada)
     esperar()
-    # Só a busca do nome, antes de qualquer tarefa: interrompê-la não perde nada.
-    assert vistos == [("find", False)]
+    # A busca do nome já conta: fechar o app nela perderia o backup sem aviso.
+    assert vistos == [("find", True)]
     assert backup_de_saves.em_andamento() is False
 
     vistos.clear()
@@ -486,11 +491,12 @@ def test_tarefa_que_nao_abre_nao_deixa_a_contagem_subir(store, make_game, falso,
         store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X"
     )
 
-    backup_de_saves.no_fim_da_sessao(jogo)
+    # A tarefa nasce no pedido: a falha sobe para quem pediu, como a de abrir a thread.
+    with pytest.raises(RuntimeError):
+        backup_de_saves.no_fim_da_sessao(jogo)
     esperar()
 
     assert falso.comandos == []  # o backup nem começou
-    assert titulos() == ["Não foi possível fazer o backup dos saves de Meu Jogo."]
     assert backup_de_saves.em_andamento() is False
 
 
@@ -517,11 +523,96 @@ def test_em_andamento_em_restaurar_todos(store, make_game, falso, esperar, monke
     backup_de_saves.restaurar_todos()
     esperar()
 
-    # A primeira leitura das versões vem antes da tarefa (ainda não se sabe o que restaurar).
-    assert vistos[0] == ("backups", False)
+    # Tudo com a tarefa à vista, até a primeira leitura das versões (que diz o que restaurar).
+    assert vistos[0] == ("backups", True)
     assert ("restore", True) in vistos
-    # A cópia dos saves atuais e a restauração rodam com a tarefa à vista.
-    assert all(visto for comando, visto in vistos if comando in ("backup", "restore"))
+    assert all(visto for _comando, visto in vistos)
+    assert backup_de_saves.em_andamento() is False
+
+
+def _nomes_das_tarefas() -> list[str]:
+    return [tarefas.lista.get_item(i).nome for i in range(tarefas.lista.get_n_items())]
+
+
+def test_fim_de_sessao_ja_conta_durante_a_busca_do_nome(
+    store, make_game, falso, esperar, flush_idle, monkeypatch
+):
+    """O `find` pode levar segundos: fechar o app nele perderia o backup sem aviso."""
+    falso.achados[("titulo", "Meu Jogo")] = "X"
+    na_busca, seguir = threading.Event(), threading.Event()
+    vistos = []
+
+    def espia(args, **kwargs):
+        if args[args.index("--try-manifest-update") + 1] == "find":
+            vistos.append(backup_de_saves.em_andamento())
+            na_busca.set()
+            seguir.wait(10)
+        return falso(args, **kwargs)
+
+    monkeypatch.setattr(backup_de_saves, "executor", espia)
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo")
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    try:
+        assert na_busca.wait(10)
+        flush_idle()
+        assert _nomes_das_tarefas() == ["Backup dos saves de Meu Jogo"]
+    finally:
+        seguir.set()
+    esperar()
+
+    assert vistos == [True]
+    assert falso.chamou("backup") == [["backup", "X", "--force"]]
+    assert tarefas.lista.get_n_items() == 0
+    assert backup_de_saves.em_andamento() is False
+
+
+@pytest.mark.parametrize("pedido", ["um", "todos"])
+def test_restauracao_na_fila_ja_conta(store, make_game, falso, esperar, flush_idle, pedido):
+    falso.versoes["X"] = ["v1"]
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
+
+    # Um backup lento segura a trava (o do app, por exemplo, que não tem tarefa dos saves).
+    with backup_de_saves.trava_dos_saves():
+        if pedido == "um":
+            backup_de_saves.restaurar(jogo, "v1")
+        else:
+            backup_de_saves.restaurar_todos()
+        flush_idle()
+        # A restauração ainda espera a trava, mas fechar o app agora a perderia.
+        assert backup_de_saves.em_andamento() is True
+        assert _nomes_das_tarefas() == [
+            "Restaurando o save de Meu Jogo" if pedido == "um" else "Restaurando os saves"
+        ]
+    esperar()
+
+    assert len(falso.restauracoes()) == 1
+    assert tarefas.lista.get_n_items() == 0
+    assert backup_de_saves.em_andamento() is False
+
+
+@pytest.mark.parametrize("pedido", ["backup", "um", "todos"])
+def test_falha_ao_abrir_a_thread_desfaz_a_tarefa(store, make_game, falso, flush_idle, monkeypatch, pedido):
+    def nao_abre(*_args):
+        raise RuntimeError("não abriu")
+
+    vistas = []
+    comecar = tarefas.comecar
+    monkeypatch.setattr(tarefas, "comecar", lambda nome, total: vistas.append(nome) or comecar(nome, total))
+    monkeypatch.setattr(backup_de_saves, "_em_segundo_plano", nao_abre)
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
+    pedir = {
+        "backup": lambda: backup_de_saves.no_fim_da_sessao(jogo),
+        "um": lambda: backup_de_saves.restaurar(jogo, "v1"),
+        "todos": backup_de_saves.restaurar_todos,
+    }[pedido]
+
+    with pytest.raises(RuntimeError):
+        pedir()
+    flush_idle()
+
+    assert len(vistas) == 1  # a tarefa nasceu no pedido...
+    assert tarefas.lista.get_n_items() == 0  # ...e saiu com a falha
     assert backup_de_saves.em_andamento() is False
 
 
@@ -610,9 +701,9 @@ def test_restaurar_falha_vira_toast(store, make_game, falso, esperar):
 
 
 def test_restaurar_todos_so_os_da_biblioteca(store, make_game, falso, esperar, monkeypatch):
-    vistas = []
+    criadas = []
     comecar = tarefas.comecar
-    monkeypatch.setattr(tarefas, "comecar", lambda nome, total: vistas.append((nome, total)) or comecar(nome, total))
+    monkeypatch.setattr(tarefas, "comecar", lambda nome, total: criadas.append(comecar(nome, total)) or criadas[-1])
     falso.versoes = {"A": ["v1"], "Z": ["v1"]}
     na_biblioteca(store, make_game, game_id="a", name="A", steam_appid="1", ludusavi_nome="A")
     na_biblioteca(store, make_game, game_id="b", name="B", steam_appid="2", ludusavi_nome="B")  # sem backup
@@ -621,7 +712,8 @@ def test_restaurar_todos_so_os_da_biblioteca(store, make_game, falso, esperar, m
     esperar()
 
     assert falso.restauracoes() == [["restore", "A", "--force", "--backup", "v1"]]
-    assert vistas == [("Restaurando os saves", 1)]
+    # Nasce no pedido com os dois jogos com nome; o total vira 1 quando se sabe quem tem backup.
+    assert [(t.nome, t.total) for t in criadas] == [("Restaurando os saves", 1)]
     assert toasts() == []
     assert tarefas.lista.get_n_items() == 0
 
@@ -695,7 +787,7 @@ def test_restaurando_se_desfaz_quando_a_thread_levanta(store, make_game, falso, 
         raise RuntimeError("levantou")
 
     monkeypatch.setattr(threading, "excepthook", lambda _args: None)  # a thread vai morrer de propósito
-    monkeypatch.setattr(tarefas, "comecar", explode)
+    monkeypatch.setattr(backup_de_saves, "_ler_versoes", explode)
     falso.versoes = {"X": ["v1"]}
     jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
 
@@ -705,6 +797,8 @@ def test_restaurando_se_desfaz_quando_a_thread_levanta(store, make_game, falso, 
 
     assert backup_de_saves.restaurando(jogo) is False
     assert not backup_de_saves._trava.locked()
+    assert backup_de_saves.em_andamento() is False
+    assert tarefas.lista.get_n_items() == 0
 
 
 def test_restaurar_todos_bloqueia_todos_mesmo_com_cache_vazio(store, make_game, falso, esperar):
@@ -721,7 +815,7 @@ def test_restaurar_todos_bloqueia_todos_mesmo_com_cache_vazio(store, make_game, 
     assert backup_de_saves.restaurando(com_nome) is False
 
 
-@pytest.mark.parametrize("quebra", ["_em_segundo_plano", "_biblioteca"])
+@pytest.mark.parametrize("quebra", ["_em_segundo_plano", "_biblioteca", "_comecar_tarefa"])
 @pytest.mark.parametrize("pedido", ["um", "todos"])
 def test_pedido_que_nao_chega_a_abrir_a_thread_nao_deixa_marca(
     store, make_game, falso, monkeypatch, quebra, pedido
@@ -742,6 +836,7 @@ def test_pedido_que_nao_chega_a_abrir_a_thread_nao_deixa_marca(
     assert not backup_de_saves._restaurando
     assert not backup_de_saves._jogos_restaurando
     assert backup_de_saves._restaurando_todos == 0
+    assert backup_de_saves.em_andamento() is False
 
 
 def _sem_marcas():
