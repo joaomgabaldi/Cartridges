@@ -44,6 +44,7 @@ import requests
 from gi.repository import Adw, GLib, Gtk
 
 from cartridges import shared
+from cartridges.saves import backup_de_saves
 from cartridges.utils.na_tela import entregar_na_tela
 
 RELEASES_URL = "https://api.github.com/repos/joaomgabaldi/Cartridges/releases/latest"
@@ -297,8 +298,12 @@ class AppUpdater:
 
         # Com um jogo aberto, o Sim fecharia o app no meio da sessão, e o app
         # reaberto pelo instalador não volta a rastrear o jogo. A pergunta
-        # espera a sessão acabar.
-        if SessionWindow.active is not None or ProcessSession.active is not None:
+        # espera a sessão acabar, e também o backup ou a restauração dos saves.
+        if (
+            SessionWindow.active is not None
+            or ProcessSession.active is not None
+            or backup_de_saves.em_andamento()
+        ):
             GLib.timeout_add_seconds(ASK_RETRY_SECONDS, self._ask, release)
             return False
 

@@ -295,3 +295,30 @@ def test_finish_after_cancel_neither_installs_nor_quits(tmp_path, monkeypatch):
 
     # O FakeApplication não tem quit(): chegar nele levanta AttributeError.
     assert updater._finish(object(), tmp_path / "x.exe") is False  # pylint: disable=protected-access
+
+
+def test_pergunta_espera_os_saves(monkeypatch):
+    """Atualizar fecha o app: com o backup ou a restauração dos saves em curso, a
+    pergunta espera, como espera a sessão."""
+    from cartridges.process_session import ProcessSession  # noqa: PLC0415
+    from cartridges.saves import backup_de_saves  # noqa: PLC0415
+    from cartridges.session_window import SessionWindow  # noqa: PLC0415
+
+    adiadas = []
+    monkeypatch.setattr(
+        app_updater.GLib,
+        "timeout_add_seconds",
+        lambda _s, fn, *args: adiadas.append((fn, args)),
+    )
+    monkeypatch.setattr(
+        app_updater.Adw,
+        "AlertDialog",
+        lambda **_kw: pytest.fail("perguntou com os saves em andamento"),
+    )
+    monkeypatch.setattr(ProcessSession, "active", None)
+    monkeypatch.setattr(SessionWindow, "active", None)
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: True)
+    release = Release("2026.09.30", "", "https://x", 1, "ab")
+
+    assert AppUpdater()._ask(release) is False
+    assert len(adiadas) == 1 and adiadas[0][1] == (release,)

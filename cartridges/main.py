@@ -740,7 +740,15 @@ class CartridgesApplication(Adw.Application):
         tarefas à vista (fechá-la, então, encerra o app). Sem tarefa rodando,
         fecha como sempre, e leva junto a janela das tarefas, que senão manteria
         o app vivo sozinha. Devolve True para impedir o fechamento.
+
+        Com um backup ou uma restauração dos saves em andamento, a janela das
+        tarefas abre sozinha: fechar o app agora deixaria o Ludusavi órfão, com
+        ninguém para ouvir o resultado.
         """
+        if backup_de_saves.em_andamento():
+            TarefasJanela.mostrar(win)
+            win.set_visible(False)
+            return True
         if (janela := TarefasJanela.aberta) is None:
             return False
         if tarefas.lista.get_n_items() > 0:

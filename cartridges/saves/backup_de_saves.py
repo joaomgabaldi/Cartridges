@@ -52,6 +52,10 @@ _cache: dict[str, list[Versao]] = {}
 _restaurando: Counter[str] = Counter()
 _jogos_restaurando: Counter[int] = Counter()  # id do `Game`; vivo enquanto a thread o segura
 _restaurando_todos = 0  # pylint: disable=invalid-name
+# Quantas tarefas visíveis de backup ou restauração estão de pé. Ao contrário dos de cima,
+# sobe e desce nas threads de trabalho, por isso a trava própria.
+_tarefas_abertas = 0  # pylint: disable=invalid-name
+_trava_tarefas = threading.Lock()
 
 
 def trava_dos_saves() -> threading.Lock:
@@ -62,6 +66,38 @@ def trava_dos_saves() -> threading.Lock:
 
 def disponivel() -> bool:
     return ludusavi.executavel() is not None
+
+
+def em_andamento() -> bool:
+    """Há um backup ou uma restauração com tarefa visível. Fechar o app agora deixaria o
+    `ludusavi.exe` órfão, sem ninguém para ouvir o resultado. A busca do nome, que vem
+    antes da tarefa, não conta: interrompê-la não perde nada."""
+    with _trava_tarefas:
+        return _tarefas_abertas > 0
+
+
+def _somar_tarefa(passo: int) -> None:
+    global _tarefas_abertas  # pylint: disable=global-statement
+    with _trava_tarefas:
+        _tarefas_abertas += passo
+
+
+def _comecar_tarefa(nome: str, total: int) -> tarefas.Tarefa:
+    """`tarefas.comecar`, contada em `em_andamento`. Soma antes: a tarefa nunca fica
+    à vista sem a contagem."""
+    _somar_tarefa(1)
+    try:
+        return tarefas.comecar(nome, total)
+    except BaseException:
+        _somar_tarefa(-1)
+        raise
+
+
+def _terminar_tarefa(tarefa: tarefas.Tarefa) -> None:
+    try:
+        tarefa.terminar()
+    finally:
+        _somar_tarefa(-1)
 
 
 def _pasta_config() -> Path:
@@ -206,7 +242,7 @@ def _backup(game: Game, biblioteca: list[Game]) -> None:
             jogo = _resolver(game)
             if jogo is None:
                 return
-            tarefa = tarefas.comecar(_("Backup dos saves de {}").format(game.name), 1)
+            tarefa = _comecar_tarefa(_("Backup dos saves de {}").format(game.name), 1)
             _preparar(biblioteca, jogo)
             inicio = datetime.now(timezone.utc)
             try:
@@ -226,7 +262,7 @@ def _backup(game: Game, biblioteca: list[Game]) -> None:
             _ler_versoes(biblioteca)
         finally:
             if tarefa is not None:
-                tarefa.terminar()
+                _terminar_tarefa(tarefa)
 
 
 # -- versões -----------------------------------------------------------------
@@ -385,7 +421,7 @@ def restaurar(game: Game, versao: str) -> None:
 def _restaurar(game: Game, nome: str, versao: str, biblioteca: list[Game]) -> None:
     try:
         with _trava:
-            tarefa = tarefas.comecar(_("Restaurando o save de {}").format(game.name), 1)
+            tarefa = _comecar_tarefa(_("Restaurando o save de {}").format(game.name), 1)
             try:
                 # Relidas agora: o zip e o número de versões (o limite da cópia) são os de hoje.
                 achada = None
@@ -403,7 +439,7 @@ def _restaurar(game: Game, nome: str, versao: str, biblioteca: list[Game]) -> No
                     _avisar(aviso)
                 _ler_versoes(biblioteca)
             finally:
-                tarefa.terminar()
+                _terminar_tarefa(tarefa)
     finally:
         entregar_na_tela(_desmarcar, nome, id(game))
 
@@ -433,7 +469,7 @@ def _restaurar_todos(biblioteca: list[Game], marcados: list[int]) -> None:
             alvos = [nome for nome in jogos if _cache.get(nome)]
             if not alvos:
                 return
-            tarefa = tarefas.comecar(_("Restaurando os saves"), len(alvos))
+            tarefa = _comecar_tarefa(_("Restaurando os saves"), len(alvos))
             falhas = 0
             try:
                 for feitos, nome in enumerate(alvos):
@@ -450,7 +486,7 @@ def _restaurar_todos(biblioteca: list[Game], marcados: list[int]) -> None:
                     ):
                         falhas += 1
             finally:
-                tarefa.terminar()
+                _terminar_tarefa(tarefa)
             # Um aviso só, no fim: uma falha por jogo viraria uma fila de avisos.
             if falhas:
                 _avisar(

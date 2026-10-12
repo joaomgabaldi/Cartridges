@@ -1473,6 +1473,16 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         dialog.open(shared.win, None, finish)
 
     def _restore_backup(self, path: Path) -> None:
+        # A restauração fecha o app e troca a pasta dos saves: não pode cair no meio de
+        # um backup ou de uma restauração dos saves.
+        if backup_de_saves.em_andamento():
+            self.add_toast(
+                Adw.Toast.new(
+                    _("Aguarde o fim do backup ou da restauração dos saves e tente novamente.")
+                )
+            )
+            return
+
         def on_response(_dialog: Any, response: str) -> None:
             if response == "restore":
                 self._schedule_restore(path)

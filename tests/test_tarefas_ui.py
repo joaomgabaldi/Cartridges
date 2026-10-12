@@ -389,6 +389,27 @@ def test_fechar_a_principal_com_tarefa_sem_janela_fecha_tudo(monkeypatch, flush_
     assert escondidas == []
 
 
+def test_fechar_com_saves_em_andamento_esconde_e_mostra_as_tarefas(monkeypatch):
+    """O backup ou a restauração dos saves em curso não pode ficar órfão: o app não
+    fecha, mas some da tela e abre a janela das tarefas, que o encerra ao ser fechada."""
+    from cartridges.main import CartridgesApplication  # noqa: PLC0415
+    from cartridges.saves import backup_de_saves  # noqa: PLC0415
+    from cartridges.tarefas_janela import TarefasJanela  # noqa: PLC0415
+
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: True)
+    monkeypatch.setattr(TarefasJanela, "aberta", None)
+    mostradas = []
+    monkeypatch.setattr(TarefasJanela, "mostrar", mostradas.append)
+    escondidas = []
+    principal = SimpleNamespace(set_visible=escondidas.append)
+
+    devolvido = CartridgesApplication.on_win_close_request(None, principal)
+
+    assert devolvido is True
+    assert escondidas == [False]
+    assert mostradas == [principal]
+
+
 def test_posicao_acima_do_botao_com_os_numeros_do_prototipo():
     from cartridges.utils import window_geometry  # noqa: PLC0415
 

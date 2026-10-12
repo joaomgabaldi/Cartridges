@@ -143,6 +143,7 @@ def ambiente(settings, tmp_path, monkeypatch, ludusavi_de_verdade):
     monkeypatch.setattr(backup_de_saves, "_restaurando", Counter())
     monkeypatch.setattr(backup_de_saves, "_jogos_restaurando", Counter())
     monkeypatch.setattr(backup_de_saves, "_restaurando_todos", 0)
+    monkeypatch.setattr(backup_de_saves, "_tarefas_abertas", 0)
 
 
 @pytest.fixture
@@ -423,6 +424,86 @@ def test_tarefa_aparece_e_some(store, make_game, falso, esperar, monkeypatch):
 
     assert vistas == [("Backup dos saves de Meu Jogo", 1)]
     assert tarefas.lista.get_n_items() == 0
+
+
+def _espiar_em_andamento(monkeypatch, falso):
+    """Anota o que `em_andamento()` diz em cada comando do Ludusavi: [(comando, bool)]."""
+    vistos = []
+
+    def espia(args, **kwargs):
+        comando = args[args.index("--try-manifest-update") + 1]
+        vistos.append((comando, backup_de_saves.em_andamento()))
+        return falso(args, **kwargs)
+
+    monkeypatch.setattr(backup_de_saves, "executor", espia)
+    return vistos
+
+
+def test_em_andamento_so_com_tarefa(store, make_game, falso, esperar, monkeypatch, tmp_path):
+    _com_manifesto(tmp_path)
+    vistos = _espiar_em_andamento(monkeypatch, falso)
+    sem_nada = na_biblioteca(store, make_game, game_id="s", name="Jogo Sem Nada")
+    com_saves = na_biblioteca(
+        store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X"
+    )
+    assert backup_de_saves.em_andamento() is False
+
+    backup_de_saves.no_fim_da_sessao(sem_nada)
+    esperar()
+    # Só a busca do nome, antes de qualquer tarefa: interrompê-la não perde nada.
+    assert vistos == [("find", False)]
+    assert backup_de_saves.em_andamento() is False
+
+    vistos.clear()
+    backup_de_saves.no_fim_da_sessao(com_saves)
+    esperar()
+    assert vistos == [("backup", True), ("backups", True)]
+    assert backup_de_saves.em_andamento() is False
+
+
+def test_em_andamento_desce_quando_o_backup_falha(store, make_game, falso, esperar, monkeypatch):
+    falso.falhas["backup"] = FALHOU
+    vistos = _espiar_em_andamento(monkeypatch, falso)
+    jogo = na_biblioteca(
+        store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X"
+    )
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    esperar()
+
+    assert ("backup", True) in vistos
+    assert backup_de_saves.em_andamento() is False
+
+
+def test_em_andamento_na_restauracao_de_um_jogo(store, make_game, falso, esperar, monkeypatch):
+    falso.versoes["X"] = ["v1"]
+    vistos = _espiar_em_andamento(monkeypatch, falso)
+    jogo = na_biblioteca(
+        store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X"
+    )
+
+    backup_de_saves.restaurar(jogo, "v1")
+    esperar()
+
+    assert ("restore", True) in vistos
+    assert all(visto for _comando, visto in vistos)  # a leitura das versões já é da tarefa
+    assert backup_de_saves.em_andamento() is False
+
+
+def test_em_andamento_em_restaurar_todos(store, make_game, falso, esperar, monkeypatch):
+    falso.versoes = {"A": ["v1"]}
+    vistos = _espiar_em_andamento(monkeypatch, falso)
+    na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+
+    backup_de_saves.restaurar_todos()
+    esperar()
+
+    # A primeira leitura das versões vem antes da tarefa (ainda não se sabe o que restaurar).
+    assert vistos[0] == ("backups", False)
+    assert ("restore", True) in vistos
+    # A cópia dos saves atuais e a restauração rodam com a tarefa à vista.
+    assert all(visto for comando, visto in vistos if comando in ("backup", "restore"))
+    assert backup_de_saves.em_andamento() is False
 
 
 def test_sem_executavel_nada_roda(store, make_game, falso, esperar, tmp_path):

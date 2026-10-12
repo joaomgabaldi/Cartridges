@@ -311,6 +311,24 @@ def test_restaurar_todos_pede_confirmacao_com_o_texto_da_spec(monkeypatch):
     assert restaurados == [1]
 
 
+def test_restaurar_backup_com_saves_em_andamento_avisa(monkeypatch):
+    import cartridges.preferences as preferences_module  # noqa: PLC0415
+
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
+    preferencias = _preferencias(monkeypatch)
+    avisos = _toasts(preferencias, monkeypatch)
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: True)
+    monkeypatch.setattr(
+        preferences_module,
+        "create_dialog",
+        lambda *_a, **_k: pytest.fail("confirmou a restauração com os saves em andamento"),
+    )
+
+    preferencias._restore_backup(Path("X:/backup.zip"))  # noqa: SLF001
+
+    assert avisos == ["Aguarde o fim do backup ou da restauração dos saves e tente novamente."]
+
+
 def _drenar(flush_idle, pronto):
     import time  # noqa: PLC0415
 
