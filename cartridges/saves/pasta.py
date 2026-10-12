@@ -83,29 +83,48 @@ def _sobra_do_app(parcial: Path) -> bool:
     )
 
 
-def _apagar_sobras(saves: list[Path], nova: Path) -> None:
-    """Apaga de `nova` as sobras `<nome>.copiando` do app, de uma troca interrompida,
-    dos saves que vão ser levados. O que não tem a marca do app não é apagado: quando
-    ocupa o nome, a cópia daquele save falha adiante (`mkdir` sem `exist_ok`)."""
-    for save in saves:
-        parcial = nova / (save.name + _COPIANDO)
-        if not _sobra_do_app(parcial):
+def _apagar_copia(copia: Path) -> None:
+    """Apaga uma pasta que o app criou, em uma ordem que deixa um tropeço no meio sem
+    deixar rastro de save: primeiro o `mapping.yaml` (o Ludusavi acha a pasta de um jogo
+    pelo nome que há nele, não pelo da pasta), depois o resto, e a marca por último, que
+    é o que faz a próxima troca reconhecer a sobra como do app. Levanta `OSError`."""
+    (copia / MAPA).unlink(missing_ok=True)
+    for item in list(copia.iterdir()):
+        if item.name.lower() == MARCA_COPIANDO:
             continue
-        try:
-            shutil.rmtree(parcial)
-        except OSError:
-            logging.warning("Cópia incompleta não removida de %s", parcial, exc_info=True)
+        if item.is_dir() and not item.is_symlink():
+            shutil.rmtree(item)
+        else:
+            item.unlink()
+    (copia / MARCA_COPIANDO).unlink(missing_ok=True)
+    copia.rmdir()
+
+
+def _apagar_sobras(raiz: Path) -> None:
+    """Apaga de `raiz` as sobras `*.copiando` (qualquer caixa) do app, de uma troca
+    interrompida, qualquer que seja o jogo. Só as que têm a marca dele: o que não tem
+    é do usuário e fica; se ocupa o nome de um save a levar, a cópia dele falha adiante
+    (`mkdir` sem `exist_ok`)."""
+    if not raiz.is_dir():
+        return
+    for item in list(raiz.iterdir()):
+        if item.name.lower().endswith(_COPIANDO) and _sobra_do_app(item):
+            try:
+                _apagar_copia(item)
+            except OSError:
+                logging.warning("Cópia incompleta não removida de %s", item, exc_info=True)
 
 
 def _levar(antiga: Path, nova: Path) -> list[Path]:
     """Copia os saves de `antiga` para `nova` e devolve os que foram copiados.
 
     Todos vão primeiro para `<nome>.copiando` (com a marca do app dentro desde o início)
-    e só depois que o último terminou cada um é renomeado para `<nome>`: um app fechado
-    no meio nunca deixa uma pasta com cara de save e outra faltando, nem uma cópia pela
-    metade que a próxima troca adote. As sobras do app de uma interrupção anterior são
-    apagadas antes. Se algo falhar, apaga só o que esta chamada criou em `nova` (os
-    originais nunca foram tocados) e relança o erro.
+    e só depois que o último terminou cada um é renomeado para `<nome>`. Assim, um app
+    fechado durante as cópias, que são quase todo o tempo, não deixa pasta com cara de
+    save nem uma cópia pela metade que a próxima troca adote; só uma queda nas
+    renomeações do fim (milissegundos) ainda pode deixar uma mistura. Se algo falhar,
+    apaga só o que esta chamada criou em `nova` (os originais nunca foram tocados) e
+    relança o erro.
     """
     saves = saves_em(antiga)
     if any((nova / save.name).exists() for save in saves):
@@ -113,7 +132,6 @@ def _levar(antiga: Path, nova: Path) -> list[Path]:
             _("A pasta escolhida já tem arquivos com os mesmos nomes dos saves. Escolha outra pasta.")
         )
     nova.mkdir(parents=True, exist_ok=True)
-    _apagar_sobras(saves, nova)
     criados: list[Path] = []  # só entra aqui o que esta chamada criou
     try:
         for save in saves:
@@ -131,7 +149,10 @@ def _levar(antiga: Path, nova: Path) -> list[Path]:
             criados[indice] = nova / save.name
     except BaseException:
         for criado in criados:
-            shutil.rmtree(criado, ignore_errors=True)
+            try:
+                _apagar_copia(criado)
+            except OSError:
+                logging.warning("Cópia não removida de %s", criado, exc_info=True)
         raise
     return saves
 
@@ -164,10 +185,10 @@ def _gravar_escolha(valor: str) -> None:
 def trocar(nova: Path) -> None:
     """Passa a guardar os saves em `nova`.
 
-    Levanta `TrocaRecusada`, sem mexer em nada, se `nova` é a pasta atual, está
-    dentro dela, é uma pasta que a contém, está dentro da pasta de dados do app
-    (fora a padrão) ou a contém, ou já tem algo com o nome de um save que
-    precisaria receber.
+    Levanta `TrocaRecusada`, sem mexer em nada (a não ser nas sobras `.copiando` que o
+    próprio app deixou em `nova`), se `nova` é a pasta atual, está dentro dela, é uma
+    pasta que a contém, está dentro da pasta de dados do app (fora a padrão) ou a
+    contém, ou já tem algo com o nome de um save que precisaria receber.
     """
     antiga = atual()
     if dentro(nova, antiga):
@@ -180,6 +201,8 @@ def trocar(nova: Path) -> None:
     if not e_padrao and (dentro(nova, shared.app_dir) or dentro(shared.app_dir, nova)):
         raise TrocaRecusada(_("Escolha uma pasta fora da pasta de dados do Cartridges."))
 
+    # Antes de decidir: uma sobra do app na pasta que vai valer seria usada pelo Ludusavi.
+    _apagar_sobras(nova)
     originais: list[Path] = []
     if not saves_em(nova):
         originais = _levar(antiga, nova)

@@ -216,7 +216,8 @@ def test_sobra_copiando_e_apagada(settings, tmp_path) -> None:
 
 
 def test_so_o_que_o_app_criou_e_apagado(settings, tmp_path) -> None:
-    """Na pasta nova só a sobra marcada de um save levado; na antiga e no resto, nada."""
+    """Na pasta nova, só as sobras com a marca do app (qualquer save, qualquer caixa);
+    na antiga e no resto, nada."""
     antiga = pasta.padrao()
     _guarda_save(antiga, "X")
     _guarda_save(antiga, "Z.copiando")  # não é save: não vai, não some
@@ -224,15 +225,36 @@ def test_so_o_que_o_app_criou_e_apagado(settings, tmp_path) -> None:
     (nova / "Fotos.copiando").mkdir(parents=True)  # do usuário, nome de cópia sem ser nossa
     (nova / "Fotos.copiando" / "praia.jpg").write_text("foto")
     (nova / "nota.copiando").write_text("arquivo, não pasta")
-    _sobra(nova, "Y")  # nossa, mas de um save que esta troca não leva
+    _guarda_save(nova, "W.copiando")  # com cara de sobra, mas sem a marca: do usuário
+    _sobra(nova, "Y")  # nossa, de um jogo que esta troca não leva
+    _sobra(nova, "Q")
+    (nova / "Q.copiando").rename(nova / "Q.COPIANDO")  # nossa, em outra caixa
 
     pasta.trocar(nova)
 
     nomes = sorted(p.name for p in nova.iterdir())
-    assert nomes == ["Fotos.copiando", "X", "Y.copiando", "nota.copiando"]
+    assert nomes == ["Fotos.copiando", "W.copiando", "X", "nota.copiando"]
     assert (nova / "Fotos.copiando" / "praia.jpg").read_text() == "foto"
+    assert (nova / "W.copiando" / "save.dat").is_file()
     assert (antiga / "Z.copiando" / "save.dat").is_file()
     assert not (nova / "Z.copiando").exists()
+
+
+def test_sobra_marcada_sai_tambem_antes_de_adotar(settings, tmp_path) -> None:
+    """Uma pasta nova com saves é adotada, mas a sobra do app nela não fica: o Ludusavi
+    acha a pasta de um jogo pelo nome dentro do `mapping.yaml`, não pelo da pasta."""
+    antiga = pasta.padrao()
+    _guarda_save(antiga, "X")
+    nova = tmp_path / "outra"
+    _guarda_save(nova, "Y")
+    _sobra(nova, "Z")  # de um jogo que nem está na antiga
+    _guarda_save(nova, "W.copiando")  # sem a marca: do usuário
+
+    pasta.trocar(nova)
+
+    assert sorted(p.name for p in nova.iterdir()) == ["W.copiando", "Y"]
+    assert (antiga / "X" / "save.dat").is_file()  # adotada: nada foi levado
+    assert pasta.atual() == nova
 
 
 @pytest.mark.parametrize("nome", ["X.copiando", "X.COPIANDO"])
@@ -277,40 +299,56 @@ def test_copiando_que_e_atalho_nao_e_seguido(settings, tmp_path) -> None:
     assert shared.schema.get_string("pasta-dos-saves") == ""
 
 
-def test_sobra_que_nao_sai_avisa_no_log_e_a_troca_falha(
+def test_sobra_que_nao_sai_avisa_no_log_e_deixa_a_marca_para_a_proxima(
     settings, tmp_path, monkeypatch, caplog
 ) -> None:
     antiga = pasta.padrao()
-    _guarda_save(antiga, "X")
+    _guarda_save(antiga, "X", conteudo="a")
     nova = tmp_path / "outra"
     _sobra(nova, "X")
+    apagar = Path.unlink
 
-    def rmtree_travado(*_a, **_k):
-        raise PermissionError("em uso")
+    def unlink_travado(self, *a, **k):
+        if self.name == "save.dat":
+            raise PermissionError("em uso")
+        return apagar(self, *a, **k)
 
-    monkeypatch.setattr(shutil, "rmtree", rmtree_travado)
-
-    with pytest.raises(OSError):
-        pasta.trocar(nova)
+    with monkeypatch.context() as travado:
+        travado.setattr(Path, "unlink", unlink_travado)
+        with pytest.raises(OSError):  # a pasta do nome segue ocupada
+            pasta.trocar(nova)
 
     assert any("X.copiando" in registro.getMessage() for registro in caplog.records)
+    sobra = nova / "X.copiando"
+    assert (sobra / "save.dat").is_file()
+    assert (sobra / pasta.MARCA_COPIANDO).is_file()  # a marca sai por último
+    assert not (sobra / pasta.MAPA).exists()  # e o que a faria parecer um save, primeiro
     assert (antiga / "X" / "save.dat").is_file()
     assert shared.schema.get_string("pasta-dos-saves") == ""
 
+    pasta.trocar(nova)  # a próxima troca limpa e leva
 
-def test_recusa_nao_apaga_a_sobra(settings, tmp_path) -> None:
-    """Quem recusa a troca não mexe em nada, nem na sobra."""
+    assert sorted(p.name for p in nova.iterdir()) == ["X"]
+    assert (nova / "X" / "save.dat").read_text() == "a"
+    assert pasta.atual() == nova
+
+
+def test_recusa_por_conflito_nao_toca_no_que_e_do_usuario(settings, tmp_path) -> None:
     _guarda_save(pasta.padrao(), "X")
     nova = tmp_path / "outra"
     (nova / "X").mkdir(parents=True)
     (nova / "X" / "meu.txt").write_text("meu")
-    _sobra(nova, "X")
+    _guarda_save(nova, "Y.copiando")  # sem a marca: do usuário
+    _sobra(nova, "Z")  # a do app sai antes de a troca decidir
 
     with pytest.raises(pasta.TrocaRecusada):
         pasta.trocar(nova)
 
-    assert (nova / "X.copiando" / "save.dat").is_file()
     assert (nova / "X" / "meu.txt").read_text() == "meu"
+    assert (nova / "Y.copiando" / "save.dat").is_file()
+    assert not (nova / "Z.copiando").exists()
+    assert (pasta.padrao() / "X" / "save.dat").is_file()
+    assert shared.schema.get_string("pasta-dos-saves") == ""
 
 
 def test_todos_sao_copiados_antes_de_algum_ser_renomeado(settings, tmp_path, monkeypatch) -> None:
@@ -369,7 +407,10 @@ def test_morto_no_meio_da_copia_nao_e_adotado_e_a_nova_tentativa_completa(
 
     with monkeypatch.context() as morte:
         morte.setattr(shutil, "copytree", copytree_que_morre_na_segunda)
-        morte.setattr(shutil, "rmtree", lambda *_a, **_k: None)  # morto não desfaz nada
+        # morto não desfaz nada
+        morte.setattr(shutil, "rmtree", lambda *_a, **_k: None)
+        morte.setattr(Path, "unlink", lambda *_a, **_k: None)
+        morte.setattr(Path, "rmdir", lambda *_a, **_k: None)
         with pytest.raises(OSError):
             pasta.trocar(nova)
 
@@ -411,6 +452,40 @@ def test_falha_ao_renomear_desfaz_tambem_o_ja_renomeado(settings, tmp_path, monk
     assert not list(nova.iterdir())  # nem "A" (já renomeado) nem "B.copiando"
     assert (antiga / "A" / "save.dat").is_file()
     assert (antiga / "B" / "save.dat").is_file()
+    assert shared.schema.get_string("pasta-dos-saves") == ""
+
+
+def test_desfazer_tira_o_mapping_do_renomeado_primeiro(settings, tmp_path, monkeypatch) -> None:
+    """Mesmo que apagar o resto falhe, o que foi renomeado não fica com cara de save."""
+    antiga = pasta.padrao()
+    _guarda_save(antiga, "A")
+    _guarda_save(antiga, "B")
+    nova = tmp_path / "outra"
+    renomear = Path.replace
+    apagar = Path.unlink
+    chamadas = []
+
+    def replace_que_falha_na_segunda(self, destino):
+        chamadas.append(self)
+        if len(chamadas) == 2:
+            raise OSError("em uso")
+        return renomear(self, destino)
+
+    def unlink_travado(self, *a, **k):
+        if self.name == "save.dat":
+            raise PermissionError("em uso")
+        return apagar(self, *a, **k)
+
+    monkeypatch.setattr(Path, "replace", replace_que_falha_na_segunda)
+    monkeypatch.setattr(Path, "unlink", unlink_travado)
+    monkeypatch.setattr(shutil, "rmtree", lambda *_a, **_k: None)  # o resto não sai
+
+    with pytest.raises(OSError, match="em uso"):
+        pasta.trocar(nova)
+
+    assert (nova / "A" / "save.dat").is_file()  # o resto ficou
+    assert not (nova / "A" / pasta.MAPA).exists()
+    assert pasta.saves_em(nova) == []
     assert shared.schema.get_string("pasta-dos-saves") == ""
 
 
