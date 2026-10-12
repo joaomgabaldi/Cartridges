@@ -974,6 +974,80 @@ def test_restaurar_todos_aborta_o_jogo_cujo_nome_mudou_no_meio(store, make_game,
     _sem_marcas()
 
 
+def test_restaurar_todos_conta_o_jogo_que_perdeu_o_nome_antes_da_lista(store, make_game, falso, esperar):
+    falso.versoes = {"A": ["v1"], "B": ["v1"]}
+    na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+    b = na_biblioteca(store, make_game, game_id="b", name="Jogo B", steam_appid="2", ludusavi_nome="B")
+
+    with backup_de_saves.trava_dos_saves():  # a restauração espera na fila...
+        backup_de_saves.restaurar_todos()
+        b.ludusavi_nome = ""  # ...e o diálogo de detalhes limpa o nome de B antes da lista
+    esperar()
+
+    assert [c[1] for c in falso.chamou("backup")] == ["A"]
+    assert [c[1] for c in falso.restauracoes()] == ["A"]
+    assert titulos() == ["Não foi possível restaurar os saves de 1 jogo."]
+    _sem_marcas()
+
+
+def test_restaurar_todos_em_que_todos_perderam_o_nome_avisa_a_falha(
+    store, make_game, falso, esperar, dialogos, totais
+):
+    falso.versoes = {"A": ["v1"], "B": ["v1"]}
+    a = na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+    b = na_biblioteca(store, make_game, game_id="b", name="Jogo B", steam_appid="2", ludusavi_nome="B")
+
+    with backup_de_saves.trava_dos_saves():
+        backup_de_saves.restaurar_todos()
+        a.ludusavi_nome = b.ludusavi_nome = ""
+    esperar()
+
+    # As cópias continuam lá: os jogos não foram restaurados, o que é falha, não "nada a restaurar".
+    assert dialogos == []
+    assert titulos() == ["Não foi possível restaurar os saves de 2 jogos."]
+    assert falso.chamou("backup") == []
+    assert falso.restauracoes() == []
+    assert 0 not in totais
+    assert tarefas.lista.get_n_items() == 0
+    assert backup_de_saves.em_andamento() is False
+    _sem_marcas()
+
+
+def test_restaurar_todos_sem_copias_avisa_que_nada_ha_mesmo_com_nome_limpo(
+    store, make_game, falso, esperar, dialogos
+):
+    na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+    b = na_biblioteca(store, make_game, game_id="b", name="Jogo B", steam_appid="2", ludusavi_nome="B")
+
+    with backup_de_saves.trava_dos_saves():
+        backup_de_saves.restaurar_todos()
+        b.ludusavi_nome = ""
+    esperar()
+
+    # Nenhum dos dois tinha cópia: perder o nome não faz de B uma falha.
+    assert [a[1:] for a in dialogos] == [NADA_PARA_RESTAURAR]
+    assert toasts() == []
+    assert falso.restauracoes() == []
+    _sem_marcas()
+
+
+def test_restaurar_todos_usa_o_outro_jogo_com_o_mesmo_nome(store, make_game, falso, esperar):
+    falso.versoes = {"X": ["v1"]}
+    # O mesmo jogo em três lojas: um nome só no Ludusavi.
+    a = na_biblioteca(store, make_game, game_id="a", name="Jogo", steam_appid="1", ludusavi_nome="X")
+    na_biblioteca(store, make_game, game_id="b", name="Jogo", steam_appid="1", ludusavi_nome="X")
+    c = na_biblioteca(store, make_game, game_id="c", name="Jogo", steam_appid="1", ludusavi_nome="X")
+
+    with backup_de_saves.trava_dos_saves():
+        backup_de_saves.restaurar_todos()
+        a.ludusavi_nome = c.ludusavi_nome = ""  # o primeiro e o último; o do meio segue com o nome
+    esperar()
+
+    assert falso.restauracoes() == [["restore", "X", "--force", "--backup", "v1"]]
+    assert toasts() == []
+    _sem_marcas()
+
+
 def test_restaurar_todos_marca_o_objeto_mesmo_se_o_nome_for_limpo(store, make_game, falso, esperar):
     falso.versoes["A"] = ["v1"]
     falso.demora = 0.1

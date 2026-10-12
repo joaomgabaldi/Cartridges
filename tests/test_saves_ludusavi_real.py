@@ -252,7 +252,9 @@ def test_real_backup_com_arquivo_travado_fica_marcado(jogo, flush_idle, win):
     assert titulos(win) == [aviso]
 
     tarefa = backup_de_saves._comecar_tarefa("Restaurando", 1)
-    backup_de_saves._restaurar_todos(backup_de_saves._biblioteca(), [id(jogo)], tarefa)
+    backup_de_saves._restaurar_todos(
+        backup_de_saves._biblioteca(), [(jogo, jogo.ludusavi_nome)], tarefa
+    )
     flush_idle()
 
     # A anterior, completa: a incompleta deixaria `a.sav` de uma e `b.sav` de outra.

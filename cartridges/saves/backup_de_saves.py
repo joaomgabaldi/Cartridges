@@ -478,21 +478,27 @@ def restaurar_todos() -> None:
     tarefa = None
     try:
         biblioteca = _biblioteca()
-        marcados = [id(jogo) for jogo in biblioteca if jogo.ludusavi_nome]
-        if not marcados:  # sem nome no Ludusavi, nenhum jogo tem backup
+        pedidos = [(jogo, jogo.ludusavi_nome) for jogo in biblioteca if jogo.ludusavi_nome]
+        if not pedidos:  # sem nome no Ludusavi, nenhum jogo tem backup
             entregar_na_tela(_nada_para_restaurar)
             return
         # Total provisório (nunca 0): a thread de trabalho o acerta quando souber quem tem backup.
-        tarefa = _comecar_tarefa(_("Restaurando os saves"), len(marcados))
-        _em_segundo_plano(_restaurar_todos, biblioteca, marcados, tarefa)
+        tarefa = _comecar_tarefa(_("Restaurando os saves"), len(pedidos))
+        _em_segundo_plano(_restaurar_todos, biblioteca, pedidos, tarefa)
     except Exception:  # pylint: disable=broad-exception-caught
         logging.exception("A restauração dos saves não chegou a começar")
         _nao_abriu(tarefa, _("Não foi possível restaurar os saves."))
         return
-    _marcar_todos(1, marcados)  # depois da thread aberta (ver `_restaurando`)
+    # Depois da thread aberta (ver `_restaurando`).
+    _marcar_todos(1, [id(jogo) for jogo, _nome in pedidos])
 
 
-def _restaurar_todos(biblioteca: list[Game], marcados: list[int], tarefa: tarefas.Tarefa) -> None:
+def _restaurar_todos(
+    biblioteca: list[Game], pedidos: list[tuple[Game, str]], tarefa: tarefas.Tarefa
+) -> None:
+    """``pedidos``: cada jogo com o nome que tinha no pedido. Os alvos saem deles, e não dos
+    nomes de agora: um jogo cujo nome foi limpo na fila (o diálogo de detalhes, ao corrigir
+    o appID) continua com cópias e, sem poder ser restaurado, entra no aviso de falha."""
     try:
         with _trava:
             # O cache pode estar vazio (nada o encheu ainda) ou velho: relê antes. Sem
@@ -500,7 +506,10 @@ def _restaurar_todos(biblioteca: list[Game], marcados: list[int], tarefa: tarefa
             if not _ler_versoes(biblioteca):
                 _avisar(_("Não foi possível restaurar os saves."))
                 return
-            jogos = {jogo.ludusavi_nome: jogo for jogo in biblioteca if jogo.ludusavi_nome}
+            # Por nome, como no config: o mesmo jogo em duas lojas tem um nome só no Ludusavi.
+            jogos: dict[str, list[Game]] = {}
+            for jogo, nome in pedidos:
+                jogos.setdefault(nome, []).append(jogo)
             alvos = [nome for nome in jogos if _cache.get(nome)]
             if not alvos:
                 entregar_na_tela(_nada_para_restaurar)
@@ -508,14 +517,13 @@ def _restaurar_todos(biblioteca: list[Game], marcados: list[int], tarefa: tarefa
             falhas = 0
             for feitos, nome in enumerate(alvos):
                 tarefa.atualizar(feitos, len(alvos))
+                # Um que ainda tenha o nome do pedido; sem nenhum, `_restaurar_um` aborta (falha).
+                jogo = next((j for j in jogos[nome] if j.ludusavi_nome == nome), jogos[nome][0])
                 # A completa: restaurar uma incompleta deixaria o save misturado.
                 versao = next((v for v in _cache[nome] if v.comentario != INCOMPLETA), None)
                 if versao is None:
-                    logging.warning("Os saves de %s só têm versões incompletas", jogos[nome].name)
-                if (
-                    versao is None
-                    or _restaurar_um(jogos[nome], nome, versao, biblioteca) is not None
-                ):
+                    logging.warning("Os saves de %s só têm versões incompletas", jogo.name)
+                if versao is None or _restaurar_um(jogo, nome, versao, biblioteca) is not None:
                     falhas += 1
             # Um aviso só, no fim: uma falha por jogo viraria uma fila de avisos.
             if falhas:
@@ -529,7 +537,7 @@ def _restaurar_todos(biblioteca: list[Game], marcados: list[int], tarefa: tarefa
             _ler_versoes(biblioteca)
     finally:
         _terminar_tarefa(tarefa)
-        entregar_na_tela(_desmarcar_todos, marcados)
+        entregar_na_tela(_desmarcar_todos, [id(jogo) for jogo, _nome in pedidos])
 
 
 # -- pasta dos saves ---------------------------------------------------------
