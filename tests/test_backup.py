@@ -5,8 +5,10 @@
 """O backup como retrato completo do app: a pasta de dados e as configurações
 num .zip, restaurado com o app fechado (`agendar` + `aplicar_pendente`)."""
 
+import builtins
 import errno
 import json
+import os
 import shutil
 import threading
 import zipfile
@@ -319,16 +321,54 @@ def test_pasta_dos_saves_sumiu_exporta_sem_saves(tmp_path):
     assert backup.validar(destino)["version"] == backup.VERSAO
 
 
-def _write_que_falha_nos_saves(monkeypatch, erro):
-    """`ZipFile.write` levanta ``erro`` só para os arquivos de `saves/`."""
-    escrever = zipfile.ZipFile.write
+def _abrir_save_que_falha(monkeypatch, erro, ao_ler=False):
+    """Ler um arquivo de `saves/` falha com ``erro``: ao abrir ou, com ``ao_ler``, no meio da leitura."""
+    abrir = builtins.open
+    saves = shared.app_dir / "saves"
 
-    def write(self, filename, arcname=None, *args, **kwargs):
-        if str(arcname).startswith("saves/"):
+    class Leitura:
+        def __init__(self, real):
+            self.real = real
+
+        def read(self, *_args):
             raise erro
-        return escrever(self, filename, arcname, *args, **kwargs)
 
-    monkeypatch.setattr(zipfile.ZipFile, "write", write)
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.real.close()
+
+    def open_(arquivo, modo="r", *args, **kwargs):
+        if isinstance(arquivo, (str, os.PathLike)) and Path(arquivo).parent.parent == saves:
+            if not ao_ler:
+                raise erro
+            return Leitura(abrir(arquivo, modo, *args, **kwargs))
+        return abrir(arquivo, modo, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", open_)
+
+
+def _gravacao_dos_saves_que_falha(monkeypatch, erro):
+    """Gravar um arquivo de `saves/` no .zip de destino falha com ``erro``."""
+    abrir = zipfile.ZipFile.open
+
+    class Gravacao:
+        def write(self, _bloco):
+            raise erro
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    def open_(self, name, mode="r", *args, **kwargs):
+        if mode == "w" and str(getattr(name, "filename", name)).startswith("saves/"):
+            return Gravacao()
+        return abrir(self, name, mode, *args, **kwargs)
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", open_)
 
 
 def _exportar_que_falha(tmp_path):
@@ -341,10 +381,11 @@ def _exportar_que_falha(tmp_path):
     return excecao.value
 
 
-def test_exportar_com_save_ilegivel_levanta_saves_inacessiveis(tmp_path, monkeypatch):
+@pytest.mark.parametrize("ao_ler", [False, True], ids=["ao_abrir", "no_meio_da_leitura"])
+def test_exportar_com_save_ilegivel_levanta_saves_inacessiveis(tmp_path, monkeypatch, ao_ler):
     _encher_pasta_do_app()
     _guardar_saves(shared.app_dir / "saves")
-    _write_que_falha_nos_saves(monkeypatch, PermissionError(13, "Acesso negado"))
+    _abrir_save_que_falha(monkeypatch, PermissionError(13, "Acesso negado"), ao_ler)
 
     erro = _exportar_que_falha(tmp_path)
 
@@ -365,20 +406,43 @@ def test_exportar_com_pasta_dos_saves_ilegivel_levanta_saves_inacessiveis(tmp_pa
 def test_exportar_com_disco_cheio_nao_culpa_os_saves(tmp_path, monkeypatch):
     """Falta de espaço no destino é erro de gravação: a mensagem de antes, do destino."""
     _guardar_saves(shared.app_dir / "saves")
-    _write_que_falha_nos_saves(monkeypatch, OSError(errno.ENOSPC, "Sem espaço"))
+    _gravacao_dos_saves_que_falha(monkeypatch, OSError(errno.ENOSPC, "Sem espaço"))
 
-    assert not isinstance(_exportar_que_falha(tmp_path), backup.SavesInacessiveis)
+    erro = _exportar_que_falha(tmp_path)
+
+    assert not isinstance(erro, backup.SavesInacessiveis)
+    assert erro.errno == errno.ENOSPC
+
+
+def test_exportar_com_outro_erro_de_gravacao_nao_culpa_os_saves(tmp_path, monkeypatch):
+    """Rede caindo no meio da gravação do destino, por exemplo: o erro não é dos saves."""
+    _guardar_saves(shared.app_dir / "saves")
+    _gravacao_dos_saves_que_falha(monkeypatch, OSError(errno.EIO, "Erro de E/S"))
+
+    erro = _exportar_que_falha(tmp_path)
+
+    assert not isinstance(erro, backup.SavesInacessiveis)
+    assert erro.errno == errno.EIO
 
 
 def test_exportar_ignora_o_save_que_sumiu(tmp_path, monkeypatch):
     """Apagado entre a listagem e a leitura: o backup sai sem ele."""
-    _guardar_saves(shared.app_dir / "saves")
-    _write_que_falha_nos_saves(monkeypatch, FileNotFoundError(2, "Não encontrado"))
+    sumiu = shared.app_dir / "saves" / "X" / "sumiu.zip"
+    monkeypatch.setattr(backup, "_entradas_dos_saves", lambda: [(sumiu, "saves/X/sumiu.zip")])
 
     destino = _exportar(tmp_path)
 
     with zipfile.ZipFile(destino) as arquivo:
         assert not any(n.startswith("saves/") for n in arquivo.namelist())
+
+
+def test_exporta_save_com_data_anterior_a_1980(tmp_path):
+    """O formato zip não representa a data: o arquivo entra com 1980, em vez de abortar tudo."""
+    _guardar_saves(shared.app_dir / "saves")
+    os.utime(shared.app_dir / "saves" / "X" / "backup-1.zip", (0, 0))
+
+    with zipfile.ZipFile(_exportar(tmp_path)) as arquivo:
+        assert arquivo.getinfo("saves/X/backup-1.zip").date_time == (1980, 1, 1, 0, 0, 0)
 
 
 @pytest.mark.parametrize("nome", ["saves/X/mapping.yaml", "saves/X/a.zip", "saves/X/A.ZIP"])

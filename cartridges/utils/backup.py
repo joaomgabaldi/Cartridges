@@ -24,11 +24,11 @@ ficam como estão. A pasta de fora nunca é tocada. Se algo falhar, tudo volta
 como estava.
 """
 
-import errno
 import json
 import logging
 import shutil
 import zipfile
+from contextlib import ExitStack
 from pathlib import Path, PurePosixPath
 from time import sleep, time
 from typing import Any, Iterable, Optional
@@ -58,6 +58,8 @@ _FICAM = frozenset({"logs", "contas", "ludusavi", _AGENDADO})
 # do app: a partir dali, o que estiver nela veio do backup.
 _COMPLETO = ".completo"
 _TENTATIVAS_DE_APAGAR = 5
+# Quanto de um save é lido por vez ao copiá-lo para o backup.
+_BLOCO = 1024 * 1024
 # Marca, dentro de `.anterior`, que os saves da pasta padrão não saíram da
 # pasta do app nesta troca (o backup não tinha saves): a limpeza de `_devolver`
 # não pode apagá-los.
@@ -113,7 +115,7 @@ class SavesInacessiveis(Exception):
 # A pasta dos saves escolhida que a última `aplicar_pendente` desfez (o backup
 # trouxe saves, que voltaram para a pasta padrão), para a janela avisar depois
 # de aberta. Fora o caso, ``None``.
-pasta_dos_saves_desfeita: Optional[str] = None  # pylint: disable=invalid-name
+pasta_dos_saves_desfeita: str | None = None  # pylint: disable=invalid-name
 
 
 # region Configurações
@@ -237,20 +239,50 @@ def _arquivo_de_save_valido(nome: str) -> bool:
     )
 
 
-def _incluir(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
+def _compressao(caminho: Path) -> int:
     # As imagens e os backups dos saves (.zip) já vêm comprimidos: passar
     # deflate neles custa segundos e não ganha nada. Só o texto é comprimido.
-    compressao = (
+    return (
         zipfile.ZIP_DEFLATED
         if caminho.suffix in (".json", ".jsonl", ".yaml")
         else zipfile.ZIP_STORED
     )
+
+
+def _incluir(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
     try:
-        arquivo.write(caminho, nome, compress_type=compressao)
+        arquivo.write(caminho, nome, compress_type=_compressao(caminho))
     except FileNotFoundError:
         # Apagado entre a listagem e a leitura (uma capa trocada agora): o
         # backup sai sem ele, em vez de não sair.
         logging.debug("%s sumiu durante o backup", caminho)
+
+
+def _incluir_save(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
+    """Como `_incluir`, para um arquivo da pasta dos saves, que pode estar num
+    OneDrive sem conexão: só o erro de LER vira `SavesInacessiveis`. O de gravar
+    no destino (disco cheio, rede caindo) segue como veio e mantém a mensagem
+    do destino; por isso a leitura e a gravação não são feitas por
+    `ZipFile.write`, que não deixa separá-las."""
+    with ExitStack() as pilha:
+        try:
+            info = zipfile.ZipInfo.from_file(caminho, nome, strict_timestamps=False)
+            origem = pilha.enter_context(open(caminho, "rb"))
+        except FileNotFoundError:
+            logging.debug("%s sumiu durante o backup", caminho)
+            return
+        except OSError as erro:
+            raise SavesInacessiveis(str(erro)) from erro
+        info.compress_type = _compressao(caminho)
+        destino = pilha.enter_context(arquivo.open(info, "w"))
+        while True:
+            try:
+                bloco = origem.read(_BLOCO)
+            except OSError as erro:
+                raise SavesInacessiveis(str(erro)) from erro
+            if not bloco:
+                break
+            destino.write(bloco)
 
 
 def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
@@ -278,16 +310,17 @@ def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
                 _incluir(arquivo, caminho, nome)
             # Com a trava do Ludusavi: um backup de save em andamento não pode
             # entrar aqui pela metade.
-            try:
-                with backup_de_saves.trava_dos_saves():
-                    for caminho, nome in _entradas_dos_saves():
-                        _incluir(arquivo, caminho, nome)
-            except OSError as erro:
-                # Sumiu (já tratado em `_incluir`) e disco cheio (erro de gravação
-                # no destino) seguem com a mensagem de sempre.
-                if isinstance(erro, FileNotFoundError) or erro.errno == errno.ENOSPC:
+            with backup_de_saves.trava_dos_saves():
+                try:
+                    entradas = _entradas_dos_saves()
+                except FileNotFoundError:
+                    # Uma pasta de jogo que sumiu no meio da listagem não está
+                    # inacessível: segue o erro de sempre.
                     raise
-                raise SavesInacessiveis(str(erro)) from erro
+                except OSError as erro:
+                    raise SavesInacessiveis(str(erro)) from erro
+                for caminho, nome in entradas:
+                    _incluir_save(arquivo, caminho, nome)
         temporario.replace(destino)
     finally:
         temporario.unlink(missing_ok=True)
