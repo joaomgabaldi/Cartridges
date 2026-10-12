@@ -33,6 +33,7 @@ import json
 import shutil
 import subprocess
 import sys
+import threading
 import types
 import winsound
 from enum import IntEnum, auto
@@ -335,6 +336,22 @@ def _install_shared() -> types.ModuleType:
 shared = _install_shared()
 
 
+def _nenhum_ludusavi() -> None:
+    return None
+
+
+# O `ludusavi.exe` de verdade nunca roda fora de um teste que o pede. O corte é na sessão
+# toda, e não num monkeypatch por teste: uma thread de backup que sobrevive ao seu teste
+# acorda com `sys.executable` e `shared.app_dir` já desfeitos, acharia o Ludusavi desta
+# máquina e o rodaria sobre a pasta de lugar nenhum. (Foi o que aconteceu em 11/10/2026:
+# ele baixou o manifesto de 17 MB para `tests/_unset` e criou `~/ludusavi-backup`.)
+# Quem precisa dele "presente" pede a fixture `ludusavi_de_verdade`.
+from cartridges.saves import ludusavi as _ludusavi
+
+EXECUTAVEL_DE_VERDADE = _ludusavi.executavel
+_ludusavi.executavel = _nenhum_ludusavi
+
+
 # --------------------------------------------------------------------------
 # Fixtures
 # --------------------------------------------------------------------------
@@ -476,6 +493,29 @@ def sem_ludusavi(request, monkeypatch):
     from cartridges.saves import backup_de_saves  # noqa: PLC0415
 
     monkeypatch.setattr(backup_de_saves, "disponivel", lambda: False)
+
+
+@pytest.fixture
+def ludusavi_de_verdade(tmp_path, monkeypatch):
+    """O `ludusavi.executavel` real, olhando só para `tmp_path` (o Python de mentira dele):
+    quem pede a fixture põe, ou não, um `ludusavi.exe` lá. Nunca enxerga o desta máquina."""
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "python.exe"))
+    monkeypatch.setattr(_ludusavi, "executavel", EXECUTAVEL_DE_VERDADE)
+
+
+@pytest.fixture(autouse=True)
+def sem_thread_de_backup_sobrando():
+    """Uma thread de trabalho dos saves que sobra depois do teste roda com o ambiente
+    já desfeito: o teste que a abriu tem de esperá-la (`esperar`)."""
+    yield
+    sobraram = [
+        thread.name
+        for thread in threading.enumerate()
+        if thread.is_alive()
+        and getattr(getattr(thread, "_target", None), "__module__", "")
+        == "cartridges.saves.backup_de_saves"
+    ]
+    assert not sobraram, f"threads de backup_de_saves ainda vivas depois do teste: {sobraram}"
 
 
 @pytest.fixture

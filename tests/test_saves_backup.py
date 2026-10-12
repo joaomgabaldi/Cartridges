@@ -11,7 +11,6 @@ teste espera por todas (`esperar`) antes de olhar a tela.
 
 import json
 import subprocess
-import sys
 import threading
 import time
 import zipfile
@@ -136,11 +135,10 @@ class LudusaviFalso:
 
 
 @pytest.fixture(autouse=True)
-def ambiente(settings, tmp_path, monkeypatch):
-    """O `ludusavi.exe` ao lado do Python, GSettings de verdade (a pasta dos saves
-    lê dele) e o cache em memória zerado."""
+def ambiente(settings, tmp_path, monkeypatch, ludusavi_de_verdade):
+    """Um `ludusavi.exe` (de mentira) ao lado do Python, GSettings de verdade (a pasta
+    dos saves lê dele) e o cache em memória zerado."""
     (tmp_path / "ludusavi.exe").touch()
-    monkeypatch.setattr(sys, "executable", str(tmp_path / "python.exe"))
     monkeypatch.setattr(backup_de_saves, "_cache", {})
     monkeypatch.setattr(backup_de_saves, "_restaurando", Counter())
     monkeypatch.setattr(backup_de_saves, "_restaurando_todos", 0)
@@ -172,7 +170,11 @@ def esperar(monkeypatch, flush_idle):
             assert not thread.is_alive()
         flush_idle()
 
-    return aguardar
+    yield aguardar
+    # Também quando o teste falha antes de chamar `aguardar`: a thread não pode sobreviver
+    # ao teste, porque acordaria com o executor falso, o `tmp_path` e o `sys.executable` já desfeitos.
+    for thread in criadas:
+        thread.join(10)
 
 
 def toasts() -> list:
@@ -629,7 +631,9 @@ def threads(monkeypatch):
         thread.start()
 
     monkeypatch.setattr(backup_de_saves, "_em_segundo_plano", abrir)
-    return abertas
+    yield abertas
+    for thread in abertas:  # mesmo que o teste falhe antes de esperar (ver `esperar`)
+        thread.join(10)
 
 
 def _espera_a_primeira_terminar(abertas, flush_idle):

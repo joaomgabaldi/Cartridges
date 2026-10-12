@@ -55,9 +55,8 @@ class ExecutorFalso:
 
 
 @pytest.fixture(autouse=True)
-def exe_ao_lado_do_python(tmp_path, monkeypatch):
+def exe_ao_lado_do_python(tmp_path, ludusavi_de_verdade):
     (tmp_path / "ludusavi.exe").touch()
-    monkeypatch.setattr(sys, "executable", str(tmp_path / "python.exe"))
     return tmp_path / "ludusavi.exe"
 
 
