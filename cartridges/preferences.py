@@ -1476,11 +1476,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         # A restauração fecha o app e troca a pasta dos saves: não pode cair no meio de
         # um backup ou de uma restauração dos saves.
         if backup_de_saves.em_andamento():
-            self.add_toast(
-                Adw.Toast.new(
-                    _("Aguarde o fim do backup ou da restauração dos saves e tente novamente.")
-                )
-            )
+            self._avisar_saves_em_andamento()
             return
 
         def on_response(_dialog: Any, response: str) -> None:
@@ -1512,7 +1508,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 logging.exception("Não foi possível agendar a restauração do backup")
                 entregar_na_tela(self._restore_failed, progress)
             else:
-                entregar_na_tela(self._restart_to_restore)
+                entregar_na_tela(self._restart_to_restore, progress)
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -1534,7 +1530,26 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         )
         return False
 
-    def _restart_to_restore(self) -> bool:
+    def _avisar_saves_em_andamento(self) -> None:
+        self.add_toast(
+            Adw.Toast.new(
+                _("Aguarde o fim do backup ou da restauração dos saves e tente novamente.")
+            )
+        )
+
+    def _restart_to_restore(self, progress: Adw.Toast) -> bool:
+        # Confere de novo: a preparação leva segundos, com o diálogo ainda em uso, e o
+        # usuário pode ter começado um backup ou uma restauração dos saves nesse meio
+        # tempo. O backup já copiado é desfeito, para não ser aplicado por surpresa numa
+        # abertura futura; quem tentar de novo o agenda outra vez.
+        if backup_de_saves.em_andamento():
+            progress.dismiss()
+            try:
+                backup.cancelar_agendado()
+            except OSError:
+                logging.exception("Não foi possível desfazer o agendamento da restauração")
+            self._avisar_saves_em_andamento()
+            return False
         app = shared.win.get_application()
         app.reiniciar = True
         app.quit()

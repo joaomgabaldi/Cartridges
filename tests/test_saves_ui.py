@@ -329,6 +329,81 @@ def test_restaurar_backup_com_saves_em_andamento_avisa(monkeypatch):
     assert avisos == ["Aguarde o fim do backup ou da restauração dos saves e tente novamente."]
 
 
+def _com_backup_agendado(monkeypatch, tmp_path):
+    """Preferências com um backup já copiado para a pasta do app e o `quit` do app anotado."""
+    from cartridges import shared  # noqa: PLC0415
+    from cartridges.utils import backup  # noqa: PLC0415
+
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
+    preferencias = _preferencias(monkeypatch)
+    origem = tmp_path / "origem.zip"
+    origem.write_bytes(b"zip")
+    backup.agendar(origem)
+    saidas = []
+    monkeypatch.setattr(shared.win.application, "quit", lambda: saidas.append(1), raising=False)
+    return preferencias, origem, shared.app_dir / "restaurar.zip", saidas
+
+
+def test_reiniciar_para_restaurar_com_saves_em_andamento_desiste_e_desagenda(monkeypatch, tmp_path):
+    """O aviso ao pedir "Restaurar backup" vale só naquele instante: durante a preparação
+    (alguns segundos) o usuário pode iniciar um backup ou uma restauração dos saves, e
+    fechar o app agora deixaria o Ludusavi órfão."""
+    preferencias, _origem, agendado, saidas = _com_backup_agendado(monkeypatch, tmp_path)
+    avisos = _toasts(preferencias, monkeypatch)
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: True)
+    dispensados = []
+    progresso = SimpleNamespace(dismiss=lambda: dispensados.append(1))
+    assert agendado.is_file()
+
+    assert preferencias._restart_to_restore(progresso) is False  # noqa: SLF001
+
+    assert saidas == []
+    assert dispensados == [1]
+    assert avisos == ["Aguarde o fim do backup ou da restauração dos saves e tente novamente."]
+    # Nada é aplicado por surpresa numa abertura futura; tentar de novo agenda outra vez.
+    assert not agendado.exists()
+
+
+def test_reiniciar_para_restaurar_sem_saves_em_andamento_sai_e_mantem_o_agendado(
+    monkeypatch, tmp_path
+):
+    from cartridges import shared  # noqa: PLC0415
+
+    preferencias, _origem, agendado, saidas = _com_backup_agendado(monkeypatch, tmp_path)
+    avisos = _toasts(preferencias, monkeypatch)
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: False)
+
+    assert preferencias._restart_to_restore(SimpleNamespace(dismiss=lambda: None)) is False  # noqa: SLF001
+
+    assert saidas == [1]
+    assert shared.win.application.reiniciar is True
+    assert avisos == []
+    assert agendado.is_file()
+
+
+def test_restaurar_backup_que_ganha_saves_em_andamento_na_preparacao_nao_sai(
+    monkeypatch, tmp_path, flush_idle
+):
+    """O caminho inteiro: a verificação do começo passou, os saves começaram no meio."""
+    import cartridges.preferences as preferences_module  # noqa: PLC0415
+
+    preferencias, origem, agendado, saidas = _com_backup_agendado(monkeypatch, tmp_path)
+    agendado.unlink()  # `_schedule_restore` é quem agenda aqui
+    avisos = _toasts(preferencias, monkeypatch)
+    monkeypatch.setattr(preferences_module.backup, "validar", lambda _caminho: None)
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: True)
+
+    preferencias._schedule_restore(origem)  # noqa: SLF001
+    _drenar(flush_idle, lambda: len(avisos) == 2)
+
+    assert avisos == [
+        "Preparando a restauração…",
+        "Aguarde o fim do backup ou da restauração dos saves e tente novamente.",
+    ]
+    assert saidas == []
+    assert not agendado.exists()
+
+
 def _drenar(flush_idle, pronto):
     import time  # noqa: PLC0415
 

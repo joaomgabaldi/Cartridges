@@ -536,6 +536,14 @@ def test_agendar_copia_para_a_pasta_do_app(tmp_path):
     assert origem.is_file()
 
 
+def test_cancelar_agendado_desfaz_o_agendamento(tmp_path):
+    backup.cancelar_agendado()  # sem nada agendado, não faz nada
+    backup.agendar(_zip(tmp_path / "b.zip", {"configuracoes.json": _MANIFESTO}))
+    backup.cancelar_agendado()
+    assert not (shared.app_dir / "restaurar.zip").exists()
+    assert backup.aplicar_pendente() is None
+
+
 def test_aplicar_pendente_sem_nada_agendado():
     assert backup.aplicar_pendente() is None
 

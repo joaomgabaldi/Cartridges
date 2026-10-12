@@ -475,6 +475,25 @@ def test_em_andamento_desce_quando_o_backup_falha(store, make_game, falso, esper
     assert backup_de_saves.em_andamento() is False
 
 
+def test_tarefa_que_nao_abre_nao_deixa_a_contagem_subir(store, make_game, falso, esperar, monkeypatch):
+    """`tarefas.comecar` que levanta: a contagem sobe antes dele e tem de voltar."""
+
+    def nao_abre(_nome, _total):
+        raise RuntimeError("sem tela")
+
+    monkeypatch.setattr(tarefas, "comecar", nao_abre)
+    jogo = na_biblioteca(
+        store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X"
+    )
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    esperar()
+
+    assert falso.comandos == []  # o backup nem começou
+    assert titulos() == ["Não foi possível fazer o backup dos saves de Meu Jogo."]
+    assert backup_de_saves.em_andamento() is False
+
+
 def test_em_andamento_na_restauracao_de_um_jogo(store, make_game, falso, esperar, monkeypatch):
     falso.versoes["X"] = ["v1"]
     vistos = _espiar_em_andamento(monkeypatch, falso)

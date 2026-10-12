@@ -351,6 +351,11 @@ def agendar(origem: Path) -> None:
         temporario.unlink(missing_ok=True)
 
 
+def cancelar_agendado() -> None:
+    """Desfaz `agendar`: nada é aplicado na próxima abertura."""
+    (shared.app_dir / _AGENDADO).unlink(missing_ok=True)
+
+
 def _irma(sufixo: str) -> Path:
     return shared.app_dir.with_name(shared.app_dir.name + sufixo)
 
