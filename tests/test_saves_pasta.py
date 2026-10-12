@@ -168,6 +168,118 @@ def test_falha_no_meio_nao_deixa_saves_pela_metade(settings, tmp_path, monkeypat
     assert pasta.atual() == antiga
 
 
+def test_copia_pela_metade_nao_e_adotada(settings, tmp_path) -> None:
+    """A sobra de uma troca interrompida (app fechado no meio) não vale como save."""
+    antiga = pasta.padrao()
+    _guarda_save(antiga, "X", conteudo="a")
+    nova = tmp_path / "outra"
+    _guarda_save(nova, "X.copiando", conteudo="pela metade")
+
+    assert pasta.saves_em(nova) == []
+
+    pasta.trocar(nova)
+
+    assert (nova / "X" / "save.dat").read_text() == "a"  # os saves foram junto
+    assert not (antiga / "X").exists()
+    assert pasta.atual() == nova
+
+
+def test_sobra_copiando_e_apagada(settings, tmp_path) -> None:
+    _guarda_save(pasta.padrao(), "X")
+    nova = tmp_path / "outra"
+    _guarda_save(nova, "X.copiando")
+    _guarda_save(nova, "Y.copiando")
+
+    pasta.trocar(nova)
+
+    assert sorted(p.name for p in nova.iterdir()) == ["X"]
+
+
+def test_so_a_sobra_copiando_da_pasta_nova_e_apagada(settings, tmp_path) -> None:
+    """Na pasta nova, só pastas `*.copiando`; na antiga e no resto, nada."""
+    antiga = pasta.padrao()
+    _guarda_save(antiga, "X")
+    _guarda_save(antiga, "Z.copiando")
+    nova = tmp_path / "outra"
+    (nova / "Fotos").mkdir(parents=True)
+    (nova / "Fotos" / "praia.jpg").write_text("foto")
+    (nova / "nota.copiando").write_text("arquivo, não pasta")
+    _guarda_save(nova, "Y.copiando")
+
+    pasta.trocar(nova)
+
+    assert sorted(p.name for p in nova.iterdir()) == ["Fotos", "X", "nota.copiando"]
+    assert (nova / "Fotos" / "praia.jpg").read_text() == "foto"
+    assert (antiga / "Z.copiando" / "save.dat").is_file()
+    assert not (nova / "Z.copiando").exists()
+
+
+def test_recusa_nao_apaga_a_sobra(settings, tmp_path) -> None:
+    """Quem recusa a troca não mexe em nada, nem na sobra."""
+    _guarda_save(pasta.padrao(), "X")
+    nova = tmp_path / "outra"
+    (nova / "X").mkdir(parents=True)
+    (nova / "X" / "meu.txt").write_text("meu")
+    _guarda_save(nova, "Y.copiando")
+
+    with pytest.raises(pasta.TrocaRecusada):
+        pasta.trocar(nova)
+
+    assert (nova / "Y.copiando" / "save.dat").is_file()
+    assert (nova / "X" / "meu.txt").read_text() == "meu"
+
+
+def test_cada_save_e_renomeado_so_no_fim(settings, tmp_path, monkeypatch) -> None:
+    antiga = pasta.padrao()
+    _guarda_save(antiga, "A")
+    _guarda_save(antiga, "B")
+    nova = tmp_path / "outra"
+    copiar = shutil.copytree
+    destinos = []
+
+    def copytree_que_registra(origem, destino, *a, **k):
+        destinos.append(Path(destino))
+        return copiar(origem, destino, *a, **k)
+
+    monkeypatch.setattr(shutil, "copytree", copytree_que_registra)
+
+    pasta.trocar(nova)
+
+    assert [d.name for d in destinos] == ["A.copiando", "B.copiando"]
+    assert all(d.parent == nova for d in destinos)
+    assert sorted(p.name for p in nova.iterdir()) == ["A", "B"]
+    assert (nova / "A" / "save.dat").is_file()
+    assert (nova / "B" / "save.dat").is_file()
+
+
+def test_falha_depois_de_renomear_um_desfaz_tambem_o_renomeado(
+    settings, tmp_path, monkeypatch
+) -> None:
+    antiga = pasta.padrao()
+    _guarda_save(antiga, "A")
+    _guarda_save(antiga, "B")
+    nova = tmp_path / "outra"
+    copiar = shutil.copytree
+    chamadas = []
+
+    def copytree_que_falha_na_segunda(origem, destino, *a, **k):
+        chamadas.append(origem)
+        if len(chamadas) == 2:
+            assert Path(destino).name == "B.copiando"
+            Path(destino).mkdir()  # cópia pela metade
+            raise OSError("disco cheio")
+        return copiar(origem, destino, *a, **k)
+
+    monkeypatch.setattr(shutil, "copytree", copytree_que_falha_na_segunda)
+
+    with pytest.raises(OSError):
+        pasta.trocar(nova)
+
+    assert list(nova.iterdir()) == []  # nem "A" (já renomeado) nem "B.copiando"
+    assert (antiga / "A" / "save.dat").is_file()
+    assert (antiga / "B" / "save.dat").is_file()
+
+
 def test_original_que_nao_sai_nao_desfaz_a_troca(settings, tmp_path, monkeypatch) -> None:
     antiga = pasta.padrao()
     _guarda_save(antiga, "X")

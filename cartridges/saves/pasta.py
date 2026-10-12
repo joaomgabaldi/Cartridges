@@ -23,6 +23,9 @@ _CHAVE = "pasta-dos-saves"
 # O que o Ludusavi grava em cada pasta de jogo, e só nela.
 MAPA = "mapping.yaml"
 
+# Cada save é copiado para `<nome>.copiando` e só ganha o nome definitivo quando está inteiro.
+_COPIANDO = ".copiando"
+
 
 class TrocaRecusada(ValueError):
     """A troca não vale. A mensagem (`str(erro)`) já é o aviso que o usuário lê."""
@@ -38,10 +41,15 @@ def atual() -> Path:
 
 
 def saves_em(raiz: Path) -> list[Path]:
-    """As pastas de jogo do Ludusavi dentro de `raiz`, em ordem; o resto fica de fora."""
+    """As pastas de jogo do Ludusavi dentro de `raiz`, em ordem; o resto fica de fora,
+    inclusive a cópia que uma troca de pasta interrompida deixou pela metade."""
     if not raiz.is_dir():
         return []
-    return sorted(item for item in raiz.iterdir() if (item / MAPA).is_file())
+    return sorted(
+        item
+        for item in raiz.iterdir()
+        if not item.name.endswith(_COPIANDO) and (item / MAPA).is_file()
+    )
 
 
 def _chave(caminho: Path) -> str:
@@ -58,9 +66,27 @@ def dentro(caminho: Path, pasta: Path) -> bool:
         return False
 
 
+def _apagar_sobras(raiz: Path) -> None:
+    """Apaga de `raiz` as cópias `*.copiando` que uma troca interrompida deixou.
+
+    Só pastas de verdade com esse sufixo: arquivos, atalhos e o resto não são do app.
+    """
+    for item in raiz.iterdir():
+        if (
+            item.name.endswith(_COPIANDO)
+            and item.is_dir()
+            and not item.is_symlink()
+            and not item.is_junction()
+        ):
+            shutil.rmtree(item, ignore_errors=True)
+
+
 def _levar(antiga: Path, nova: Path) -> list[Path]:
     """Copia os saves de `antiga` para `nova` e devolve os que foram copiados.
 
+    Cada save vai para `<nome>.copiando` e só é renomeado para `<nome>` quando está
+    inteiro: um app fechado no meio não deixa uma cópia pela metade com cara de save.
+    As sobras `.copiando` de uma interrupção anterior, na `nova`, são apagadas antes.
     Se qualquer cópia falhar, apaga só o que esta chamada já copiou para `nova`
     (os originais nunca foram tocados) e relança o erro.
     """
@@ -70,11 +96,16 @@ def _levar(antiga: Path, nova: Path) -> list[Path]:
             _("A pasta escolhida já tem arquivos com os mesmos nomes dos saves. Escolha outra pasta.")
         )
     nova.mkdir(parents=True, exist_ok=True)
+    _apagar_sobras(nova)
     copiados: list[Path] = []
     try:
         for save in saves:
-            copiados.append(nova / save.name)  # antes, para limpar uma cópia pela metade
-            shutil.copytree(save, nova / save.name)
+            destino = nova / save.name
+            parcial = nova / (save.name + _COPIANDO)
+            copiados.append(parcial)  # antes, para limpar uma cópia pela metade
+            shutil.copytree(save, parcial)
+            parcial.replace(destino)
+            copiados[-1] = destino
     except BaseException:
         for copiado in copiados:
             shutil.rmtree(copiado, ignore_errors=True)
