@@ -286,6 +286,7 @@ _GAME_FIELD_TYPES: dict[str, Any] = {
             "track_process",
             "track_updates",
             "conquistas",
+            "saves_local_desconhecido_avisado",
         ),
         bool,
     ),

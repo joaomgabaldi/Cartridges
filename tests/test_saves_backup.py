@@ -10,6 +10,7 @@ teste espera por todas (`esperar`) antes de olhar a tela.
 """
 
 import json
+import logging
 import subprocess
 import threading
 import time
@@ -298,21 +299,47 @@ def test_sem_manifesto_nao_guarda_o_nome(store, make_game, falso, esperar):
     assert tarefas.lista.get_n_items() == 0
 
 
-def test_sem_appid_e_sem_entrada_nao_faz_nada(store, make_game, falso, esperar, monkeypatch, tmp_path):
+def test_local_desconhecido_avisa_na_primeira_vez(store, make_game, falso, esperar, monkeypatch, tmp_path):
     _com_manifesto(tmp_path)  # "fora do manifesto" pressupõe que há um manifesto
     vistas = []
     comecar = tarefas.comecar
     monkeypatch.setattr(tarefas, "comecar", lambda nome, total: vistas.append((nome, total)) or comecar(nome, total))
-    jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo Sem Nada")
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Tom & <b>Jerry</b>")
 
     backup_de_saves.no_fim_da_sessao(jogo)
     esperar()
 
     # A tarefa nasce no pedido, antes da busca do nome, e some quando não há o que copiar.
-    assert vistas == [("Backup dos saves de Jogo Sem Nada", 1)]
+    assert vistas == [("Backup dos saves de Tom & <b>Jerry</b>", 1)]
     assert falso.chamou("backup") == []
     assert jogo.ludusavi_nome == ""
+    aviso = (
+        "Não foi possível fazer o backup dos saves de Tom & <b>Jerry</b>: "
+        "o local dos saves deste jogo é desconhecido."
+    )
+    assert titulos() == [aviso]
+    assert toasts()[0].get_use_markup() is False
+    assert jogo.saves_local_desconhecido_avisado is True
+    assert jogo.saves == 1  # o campo foi gravado pelo caminho normal de salvar
+    assert tarefas.lista.get_n_items() == 0
+
+
+def test_local_desconhecido_so_registra_depois(store, make_game, falso, esperar, tmp_path, caplog):
+    _com_manifesto(tmp_path)
+    jogo = na_biblioteca(
+        store, make_game, game_id="a", name="Jogo Sem Nada", saves_local_desconhecido_avisado=True
+    )
+
+    with caplog.at_level(logging.INFO):  # o arquivo de log do app grava a partir do DEBUG
+        backup_de_saves.no_fim_da_sessao(jogo)
+        esperar()
+
     assert toasts() == []
+    assert falso.chamou("backup") == []
+    assert jogo.saves == 0  # nada novo a gravar
+    assert [r.getMessage() for r in caplog.records if "Jogo Sem Nada" in r.getMessage()] == [
+        "O local dos saves de Jogo Sem Nada é desconhecido: sem backup"
+    ]
     assert tarefas.lista.get_n_items() == 0
 
 
@@ -326,6 +353,9 @@ def test_sem_appid_sem_manifesto_avisa(store, make_game, falso, esperar):
     assert falso.chamou("backup") == []
     assert jogo.ludusavi_nome == ""  # a próxima sessão procura de novo
     assert titulos() == ["Não foi possível fazer o backup dos saves de Jogo Sem Nada."]
+    # Sem o manifesto "não achado" não quer dizer nada: o campo do aviso fica como estava.
+    assert jogo.saves_local_desconhecido_avisado is False
+    assert jogo.saves == 0
     assert tarefas.lista.get_n_items() == 0
 
 

@@ -600,6 +600,7 @@ class FakeGame:
         self.steam_appid = overrides.pop("steam_appid", None)
         self.conquistas = overrides.pop("conquistas", True)
         self.ludusavi_nome = overrides.pop("ludusavi_nome", "")
+        self.saves_local_desconhecido_avisado = overrides.pop("saves_local_desconhecido_avisado", False)
         for key, value in overrides.items():
             setattr(self, key, value)
         # Derived exactly the way Game.__init__ derives it.

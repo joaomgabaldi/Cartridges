@@ -241,10 +241,26 @@ def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
     elif game.steam_appid:
         jogo = config.JogoNoConfig(game.name, game.steam_appid, game.executable, False)
     else:
-        return None  # sem appID e fora do manifesto não há o que copiar
+        return None  # sem appID e fora do manifesto não há o que copiar (ver `_local_desconhecido`)
     game.ludusavi_nome = jogo.nome
     entregar_na_tela(_salvar, game)
     return jogo
+
+
+def _local_desconhecido(game: Game) -> None:
+    """Sem appID e fora do manifesto, o jogo nunca terá backup. O usuário é avisado na
+    primeira vez (e a marca é gravada no jogo); nas sessões seguintes, só o log. Sob a trava."""
+    logging.info("O local dos saves de %s é desconhecido: sem backup", game.name)
+    if game.saves_local_desconhecido_avisado:
+        return
+    game.saves_local_desconhecido_avisado = True
+    entregar_na_tela(_salvar, game)
+    _avisar(
+        _(
+            "Não foi possível fazer o backup dos saves de {}: "
+            "o local dos saves deste jogo é desconhecido."
+        ).format(game.name)
+    )
 
 
 # -- backup ------------------------------------------------------------------
@@ -270,7 +286,8 @@ def _backup(game: Game, biblioteca: list[Game], tarefa: tarefas.Tarefa) -> None:
         try:
             jogo = _resolver(game)
             if jogo is None:
-                return  # sem o que copiar: a tarefa some sem aviso
+                _local_desconhecido(game)
+                return  # sem o que copiar: o `finally` desfaz a tarefa
             _preparar(biblioteca, jogo)
             inicio = datetime.now(timezone.utc)
             try:

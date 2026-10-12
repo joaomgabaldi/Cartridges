@@ -79,6 +79,7 @@ PERSISTED_ATTRS = (
     "update_url",
     "conquistas",
     "ludusavi_nome",
+    "saves_local_desconhecido_avisado",
 )
 
 _KNOWN_KEYS = frozenset(PERSISTED_ATTRS)
@@ -236,6 +237,9 @@ class Game(Gtk.Box):
     # O nome deste jogo no Ludusavi (o do manifesto, ou o do próprio jogo quando
     # o manifesto não o conhece). "" até o primeiro backup resolvê-lo.
     ludusavi_nome: str = ""
+    # O usuário já foi avisado de que o local dos saves deste jogo é desconhecido (sem
+    # appID e fora do manifesto, não há backup): as próximas sessões só vão para o log.
+    saves_local_desconhecido_avisado: bool = False
 
     def __init__(self, data: dict[str, Any], **kwargs: Any) -> None:
         super().__init__(**kwargs)

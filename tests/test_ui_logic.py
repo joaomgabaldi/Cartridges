@@ -771,7 +771,8 @@ def test_a_manual_edit_without_a_fetch_keeps_the_recommendation(real_window, sto
 
 
 # Fields the record keeps that say nothing about the game itself: identity,
-# bookkeeping, the Ludusavi name and the update-notice state. They are exempt from the guard
+# bookkeeping, the Ludusavi name, the unknown-saves-location warning flag and the
+# update-notice state. They are exempt from the guard
 # above because the edit dialog has no business preserving them.
 NOT_GAME_METADATA = {
     "added",
@@ -784,6 +785,7 @@ NOT_GAME_METADATA = {
     "playtime",
     "removed",
     "run_as_admin",
+    "saves_local_desconhecido_avisado",
     "shortcut_mtime",
     "install_size",
     "install_size_ts",
@@ -2810,6 +2812,19 @@ def test_campo_conquistas_de_tipo_errado_cai_no_saneador():
 
     assert sanitize_game_fields({"conquistas": False}, "p.json")["conquistas"] is False
     assert sanitize_game_fields({"conquistas": True}, "p.json")["conquistas"] is True
+
+
+def test_campo_do_aviso_dos_saves_de_tipo_errado_cai_no_saneador():
+    """Um texto qualquer em `saves_local_desconhecido_avisado` contaria como "já avisado"."""
+    from cartridges.main import sanitize_game_fields
+
+    for ruim in ("false", None, 0, "sim"):
+        limpo = sanitize_game_fields({"saves_local_desconhecido_avisado": ruim}, "p.json")
+        assert "saves_local_desconhecido_avisado" not in limpo, ruim
+
+    assert sanitize_game_fields({"saves_local_desconhecido_avisado": True}, "p.json") == {
+        "saves_local_desconhecido_avisado": True
+    }
 
 
 def test_enter_cannot_apply_mid_fetch(real_window, store):

@@ -170,3 +170,20 @@ def test_editar_sem_mudar_o_appid_mantem_o_nome_no_ludusavi(store, real_window, 
     game = jogo(store, 31, executable="x.exe", steam_appid="10", ludusavi_nome="Jogo")
     _aplicar(game, fetched_steam_appid="10", executavel="y.exe")
     assert game.ludusavi_nome == "Jogo"
+
+
+def test_trocar_o_appid_zera_o_aviso(store, real_window, varredura):
+    """Com o appID novo o jogo pode ser achado: se o local voltar a ser desconhecido,
+    o aviso aparece de novo."""
+    _stub_sgdb(store)
+    game = jogo(store, 32, executable="x.exe", steam_appid="10", saves_local_desconhecido_avisado=True)
+    assert game.saves_local_desconhecido_avisado is True  # o campo é persistido e carrega
+    _aplicar(game, fetched_steam_appid="20")
+    assert game.saves_local_desconhecido_avisado is False
+
+
+def test_editar_sem_mudar_o_appid_mantem_o_aviso(store, real_window, varredura):
+    _stub_sgdb(store)
+    game = jogo(store, 33, executable="x.exe", steam_appid="10", saves_local_desconhecido_avisado=True)
+    _aplicar(game, fetched_steam_appid="10", executavel="y.exe")
+    assert game.saves_local_desconhecido_avisado is True

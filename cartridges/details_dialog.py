@@ -680,8 +680,10 @@ class DetailsDialog(Adw.Dialog):
             if str(self.game.steam_appid or "") != str(appid_anterior or ""):
                 # O nome no Ludusavi foi achado pelo appID antigo: o próximo backup
                 # o procura de novo. O executável não entra aqui: o config dos saves
-                # já o relê do jogo a cada vez.
+                # já o relê do jogo a cada vez. Com o appID novo o jogo pode ser achado:
+                # se o local voltar a ser desconhecido, o aviso merece aparecer de novo.
                 self.game.ludusavi_nome = ""
+                self.game.saves_local_desconhecido_avisado = False
         if self.fetched_hltb:
             # update_values only carries the keys the lookup actually returned,
             # so a game with only a main-story estimate keeps whatever the
