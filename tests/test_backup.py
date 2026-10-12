@@ -321,6 +321,37 @@ def test_pasta_dos_saves_sumiu_exporta_sem_saves(tmp_path):
     assert backup.validar(destino)["version"] == backup.VERSAO
 
 
+def _exportar_e_avisar(tmp_path):
+    """Como `_exportar`, mas devolve também o aviso de `exportar`."""
+    destino = tmp_path / "saida" / "backup.zip"
+    destino.parent.mkdir()
+    aviso = backup.exportar(destino, {"settings": {}, "state": {}})
+    return destino, aviso
+
+
+def test_exportar_com_pasta_escolhida_ausente_avisa(tmp_path):
+    shared.schema.set_string("pasta-dos-saves", str(tmp_path / "apagada"))
+    destino, aviso = _exportar_e_avisar(tmp_path)
+    assert aviso is True
+    with zipfile.ZipFile(destino) as arquivo:
+        assert not any(n.startswith("saves/") for n in arquivo.namelist())
+    assert backup.validar(destino)["version"] == backup.VERSAO
+
+
+def test_exportar_com_pasta_padrao_ausente_nao_avisa(tmp_path):
+    assert not (shared.app_dir / "saves").exists()
+    _destino, aviso = _exportar_e_avisar(tmp_path)
+    assert aviso is False
+
+
+def test_exportar_com_saves_nao_avisa(tmp_path):
+    fora = tmp_path / "meus_saves"
+    _guardar_saves(fora)
+    shared.schema.set_string("pasta-dos-saves", str(fora))
+    _destino, aviso = _exportar_e_avisar(tmp_path)
+    assert aviso is False
+
+
 def _abrir_save_que_falha(monkeypatch, erro, ao_ler=False):
     """Ler um arquivo de `saves/` falha com ``erro``: ao abrir ou, com ``ao_ler``, no meio da leitura."""
     abrir = builtins.open

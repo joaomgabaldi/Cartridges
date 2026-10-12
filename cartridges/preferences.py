@@ -1444,18 +1444,20 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 # Qualquer erro volta para a tela: o toast de progresso não
                 # pode ficar pendurado para sempre.
                 try:
-                    backup.exportar(path, settings)
+                    sem_saves = backup.exportar(path, settings)
                 except Exception as error:  # pylint: disable=broad-exception-caught
                     logging.exception("Não foi possível exportar o backup")
-                    entregar_na_tela(self._export_done, progress, error)
+                    entregar_na_tela(self._export_done, progress, error, False)
                 else:
-                    entregar_na_tela(self._export_done, progress, None)
+                    entregar_na_tela(self._export_done, progress, None, sem_saves)
 
             threading.Thread(target=work, daemon=True).start()
 
         dialog.save(shared.win, None, finish)
 
-    def _export_done(self, progress: Adw.Toast, error: Optional[Exception]) -> bool:
+    def _export_done(
+        self, progress: Adw.Toast, error: Optional[Exception], sem_saves: bool
+    ) -> bool:
         progress.dismiss()
         if isinstance(error, backup.SavesInacessiveis):
             create_dialog(
@@ -1473,6 +1475,16 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 _(
                     "Não foi possível gravar o arquivo. Verifique se a pasta "
                     "de destino está acessível e se há espaço livre em disco."
+                ),
+            )
+        elif sem_saves:
+            create_dialog(
+                self,
+                _("Backup exportado sem os saves"),
+                _(
+                    "A pasta dos saves não foi encontrada, então as cópias dos saves "
+                    "não foram incluídas no backup. Verifique se a pasta está "
+                    "acessível e exporte novamente."
                 ),
             )
         else:

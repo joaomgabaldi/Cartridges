@@ -266,9 +266,9 @@ def test_subtitulo_de_contar_horas_sem_ludusavi(monkeypatch):
     )
 
 
-def _exportar_com_erro(monkeypatch, flush_idle, erro):
-    """O caminho inteiro de "Exportar backup" com `exportar` falhando; devolve os
-    argumentos de `create_dialog` e os toasts."""
+def _exportar_com(monkeypatch, flush_idle, resultado):
+    """O caminho inteiro de "Exportar backup" com `exportar` devolvendo `resultado` (ou
+    levantando, se for uma exceção); devolve os argumentos de `create_dialog` e os toasts."""
     import cartridges.preferences as preferences_module
 
     class Resultado:
@@ -289,7 +289,9 @@ def _exportar_com_erro(monkeypatch, flush_idle, erro):
             return Resultado()
 
     def exportar(_destino, _configuracoes):
-        raise erro
+        if isinstance(resultado, Exception):
+            raise resultado
+        return resultado
 
     monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
     preferencias = _preferencias(monkeypatch)
@@ -305,14 +307,14 @@ def _exportar_com_erro(monkeypatch, flush_idle, erro):
     )
 
     preferencias.export_backup()
-    _drenar(flush_idle, lambda: dialogos)
+    _drenar(flush_idle, lambda: dialogos or "Backup exportado" in avisos)
     return dialogos, avisos
 
 
 def test_exportar_com_saves_inacessiveis_mostra_o_texto(monkeypatch, flush_idle):
     from cartridges.utils import backup
 
-    dialogos, avisos = _exportar_com_erro(
+    dialogos, avisos = _exportar_com(
         monkeypatch, flush_idle, backup.SavesInacessiveis("Acesso negado")
     )
 
@@ -329,7 +331,7 @@ def test_exportar_com_saves_inacessiveis_mostra_o_texto(monkeypatch, flush_idle)
 
 
 def test_exportar_com_outro_erro_mantem_o_texto_do_destino(monkeypatch, flush_idle):
-    dialogos, avisos = _exportar_com_erro(monkeypatch, flush_idle, OSError("disco cheio"))
+    dialogos, avisos = _exportar_com(monkeypatch, flush_idle, OSError("disco cheio"))
 
     assert [(titulo, corpo) for _janela, titulo, corpo in dialogos] == [
         (
@@ -341,6 +343,28 @@ def test_exportar_com_outro_erro_mantem_o_texto_do_destino(monkeypatch, flush_id
         )
     ]
     assert "Backup exportado" not in avisos
+
+
+def test_exportar_sem_os_saves_mostra_o_aviso(monkeypatch, flush_idle):
+    dialogos, avisos = _exportar_com(monkeypatch, flush_idle, True)
+
+    assert [(titulo, corpo) for _janela, titulo, corpo in dialogos] == [
+        (
+            "Backup exportado sem os saves",
+            (
+                "A pasta dos saves não foi encontrada, então as cópias dos saves não foram "
+                "incluídas no backup. Verifique se a pasta está acessível e exporte novamente."
+            ),
+        )
+    ]
+    assert "Backup exportado" not in avisos
+
+
+def test_exportar_com_os_saves_mostra_o_toast(monkeypatch, flush_idle):
+    dialogos, avisos = _exportar_com(monkeypatch, flush_idle, False)
+
+    assert dialogos == []
+    assert "Backup exportado" in avisos
 
 
 def _toasts(preferencias, monkeypatch):

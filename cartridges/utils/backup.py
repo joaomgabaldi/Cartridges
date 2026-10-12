@@ -285,9 +285,13 @@ def _incluir_save(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
             destino.write(bloco)
 
 
-def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
+def exportar(destino: Path, configuracoes: dict[str, Any]) -> bool:
     """Grava o backup em ``destino``. Pode rodar fora da thread principal;
-    ``configuracoes`` vem de `ler_configuracoes`, lida na principal."""
+    ``configuracoes`` vem de `ler_configuracoes`, lida na principal.
+
+    Devolve ``True`` quando a pasta dos saves escolhida não existe ou não está
+    acessível: o .zip sai sem saves e quem chamou precisa avisar. A pasta padrão
+    ausente não conta (ainda não houve backup de save)."""
     manifesto = {
         "version": VERSAO,
         "app_version": shared.VERSION,
@@ -319,11 +323,16 @@ def exportar(destino: Path, configuracoes: dict[str, Any]) -> None:
                     raise
                 except OSError as erro:
                     raise SavesInacessiveis(str(erro)) from erro
+                pasta_ausente = (
+                    pasta_dos_saves.atual() != pasta_dos_saves.padrao()
+                    and not pasta_dos_saves.atual().is_dir()
+                )
                 for caminho, nome in entradas:
                     _incluir_save(arquivo, caminho, nome)
         temporario.replace(destino)
     finally:
         temporario.unlink(missing_ok=True)
+    return pasta_ausente
 
 
 # endregion
