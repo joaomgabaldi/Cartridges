@@ -23,8 +23,13 @@ _CHAVE = "pasta-dos-saves"
 # O que o Ludusavi grava em cada pasta de jogo, e só nela.
 MAPA = "mapping.yaml"
 
-# Cada save é copiado para `<nome>.copiando` e só ganha o nome definitivo quando está inteiro.
+# Cada save é copiado para `<nome>.copiando`; todos só ganham o nome definitivo depois
+# que a última cópia terminou.
 _COPIANDO = ".copiando"
+
+# Dentro de cada `<nome>.copiando` que o app cria, desde o primeiro instante: é o que o
+# distingue de uma pasta do usuário com o mesmo nome. Sai antes do renomeio final.
+MARCA_COPIANDO = ".cartridges-copiando"
 
 
 class TrocaRecusada(ValueError):
@@ -42,13 +47,14 @@ def atual() -> Path:
 
 def saves_em(raiz: Path) -> list[Path]:
     """As pastas de jogo do Ludusavi dentro de `raiz`, em ordem; o resto fica de fora,
-    inclusive a cópia que uma troca de pasta interrompida deixou pela metade."""
+    inclusive a cópia (`.copiando`, em qualquer caixa) que uma troca de pasta
+    interrompida deixou pela metade."""
     if not raiz.is_dir():
         return []
     return sorted(
         item
         for item in raiz.iterdir()
-        if not item.name.endswith(_COPIANDO) and (item / MAPA).is_file()
+        if not item.name.lower().endswith(_COPIANDO) and (item / MAPA).is_file()
     )
 
 
@@ -66,29 +72,40 @@ def dentro(caminho: Path, pasta: Path) -> bool:
         return False
 
 
-def _apagar_sobras(raiz: Path) -> None:
-    """Apaga de `raiz` as cópias `*.copiando` que uma troca interrompida deixou.
+def _sobra_do_app(parcial: Path) -> bool:
+    """Se `parcial` é uma cópia que o app começou: pasta de verdade (nem atalho nem
+    junção) com a marca dele dentro. Qualquer outra coisa com esse nome é do usuário."""
+    return (
+        not parcial.is_symlink()
+        and not parcial.is_junction()
+        and parcial.is_dir()
+        and (parcial / MARCA_COPIANDO).is_file()
+    )
 
-    Só pastas de verdade com esse sufixo: arquivos, atalhos e o resto não são do app.
-    """
-    for item in raiz.iterdir():
-        if (
-            item.name.endswith(_COPIANDO)
-            and item.is_dir()
-            and not item.is_symlink()
-            and not item.is_junction()
-        ):
-            shutil.rmtree(item, ignore_errors=True)
+
+def _apagar_sobras(saves: list[Path], nova: Path) -> None:
+    """Apaga de `nova` as sobras `<nome>.copiando` do app, de uma troca interrompida,
+    dos saves que vão ser levados. O que não tem a marca do app não é apagado: quando
+    ocupa o nome, a cópia daquele save falha adiante (`mkdir` sem `exist_ok`)."""
+    for save in saves:
+        parcial = nova / (save.name + _COPIANDO)
+        if not _sobra_do_app(parcial):
+            continue
+        try:
+            shutil.rmtree(parcial)
+        except OSError:
+            logging.warning("Cópia incompleta não removida de %s", parcial, exc_info=True)
 
 
 def _levar(antiga: Path, nova: Path) -> list[Path]:
     """Copia os saves de `antiga` para `nova` e devolve os que foram copiados.
 
-    Cada save vai para `<nome>.copiando` e só é renomeado para `<nome>` quando está
-    inteiro: um app fechado no meio não deixa uma cópia pela metade com cara de save.
-    As sobras `.copiando` de uma interrupção anterior, na `nova`, são apagadas antes.
-    Se qualquer cópia falhar, apaga só o que esta chamada já copiou para `nova`
-    (os originais nunca foram tocados) e relança o erro.
+    Todos vão primeiro para `<nome>.copiando` (com a marca do app dentro desde o início)
+    e só depois que o último terminou cada um é renomeado para `<nome>`: um app fechado
+    no meio nunca deixa uma pasta com cara de save e outra faltando, nem uma cópia pela
+    metade que a próxima troca adote. As sobras do app de uma interrupção anterior são
+    apagadas antes. Se algo falhar, apaga só o que esta chamada criou em `nova` (os
+    originais nunca foram tocados) e relança o erro.
     """
     saves = saves_em(antiga)
     if any((nova / save.name).exists() for save in saves):
@@ -96,19 +113,25 @@ def _levar(antiga: Path, nova: Path) -> list[Path]:
             _("A pasta escolhida já tem arquivos com os mesmos nomes dos saves. Escolha outra pasta.")
         )
     nova.mkdir(parents=True, exist_ok=True)
-    _apagar_sobras(nova)
-    copiados: list[Path] = []
+    _apagar_sobras(saves, nova)
+    criados: list[Path] = []  # só entra aqui o que esta chamada criou
     try:
         for save in saves:
-            destino = nova / save.name
             parcial = nova / (save.name + _COPIANDO)
-            copiados.append(parcial)  # antes, para limpar uma cópia pela metade
-            shutil.copytree(save, parcial)
-            parcial.replace(destino)
-            copiados[-1] = destino
+            parcial.mkdir()  # sem `exist_ok`: o que já está lá não é nosso
+            criados.append(parcial)
+            (parcial / MARCA_COPIANDO).touch()
+            shutil.copytree(save, parcial, dirs_exist_ok=True)
+        # ponytail: uma queda no meio deste laço (milissegundos) ainda pode deixar uma
+        # mistura; fechar essa janela pediria um registro da troca, só se acontecer.
+        for indice, save in enumerate(saves):
+            parcial = criados[indice]
+            (parcial / MARCA_COPIANDO).unlink()
+            parcial.replace(nova / save.name)
+            criados[indice] = nova / save.name
     except BaseException:
-        for copiado in copiados:
-            shutil.rmtree(copiado, ignore_errors=True)
+        for criado in criados:
+            shutil.rmtree(criado, ignore_errors=True)
         raise
     return saves
 

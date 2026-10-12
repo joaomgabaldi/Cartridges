@@ -152,7 +152,7 @@ def test_falha_no_meio_nao_deixa_saves_pela_metade(settings, tmp_path, monkeypat
     def copytree_que_falha_na_segunda(origem, destino, *a, **k):
         chamadas.append(origem)
         if len(chamadas) == 2:
-            Path(destino).mkdir()  # cópia pela metade
+            (Path(destino) / "metade.dat").write_text("x")  # cópia pela metade
             raise OSError("disco cheio")
         return copiar(origem, destino, *a, **k)
 
@@ -168,12 +168,26 @@ def test_falha_no_meio_nao_deixa_saves_pela_metade(settings, tmp_path, monkeypat
     assert pasta.atual() == antiga
 
 
+def _sobra(raiz, jogo, conteudo="pela metade"):
+    """Uma cópia que o app começou e deixou no meio: `<jogo>.copiando` com a marca dele."""
+    _guarda_save(raiz, jogo + ".copiando", conteudo=conteudo)
+    (raiz / (jogo + ".copiando") / pasta.MARCA_COPIANDO).touch()
+
+
+@pytest.mark.parametrize("nome", ["X.copiando", "X.COPIANDO", "X.Copiando"])
+def test_saves_em_ignora_copiando_em_qualquer_caixa(tmp_path, nome) -> None:
+    _guarda_save(tmp_path, nome)
+    _guarda_save(tmp_path, "Y")
+
+    assert [p.name for p in pasta.saves_em(tmp_path)] == ["Y"]
+
+
 def test_copia_pela_metade_nao_e_adotada(settings, tmp_path) -> None:
     """A sobra de uma troca interrompida (app fechado no meio) não vale como save."""
     antiga = pasta.padrao()
     _guarda_save(antiga, "X", conteudo="a")
     nova = tmp_path / "outra"
-    _guarda_save(nova, "X.copiando", conteudo="pela metade")
+    _sobra(nova, "X")
 
     assert pasta.saves_em(nova) == []
 
@@ -185,33 +199,103 @@ def test_copia_pela_metade_nao_e_adotada(settings, tmp_path) -> None:
 
 
 def test_sobra_copiando_e_apagada(settings, tmp_path) -> None:
-    _guarda_save(pasta.padrao(), "X")
+    """A sobra do app, de um save que vai ser levado, sai; o save chega sem a marca."""
+    antiga = pasta.padrao()
+    _guarda_save(antiga, "X", conteudo="a")
+    _guarda_save(antiga, "Y", conteudo="b")
     nova = tmp_path / "outra"
-    _guarda_save(nova, "X.copiando")
-    _guarda_save(nova, "Y.copiando")
+    _sobra(nova, "X")
+    _sobra(nova, "Y")
 
     pasta.trocar(nova)
 
-    assert sorted(p.name for p in nova.iterdir()) == ["X"]
+    assert sorted(p.name for p in nova.iterdir()) == ["X", "Y"]
+    assert (nova / "X" / "save.dat").read_text() == "a"
+    assert (nova / "Y" / "save.dat").read_text() == "b"
+    assert not (nova / "X" / pasta.MARCA_COPIANDO).exists()
 
 
-def test_so_a_sobra_copiando_da_pasta_nova_e_apagada(settings, tmp_path) -> None:
-    """Na pasta nova, só pastas `*.copiando`; na antiga e no resto, nada."""
+def test_so_o_que_o_app_criou_e_apagado(settings, tmp_path) -> None:
+    """Na pasta nova só a sobra marcada de um save levado; na antiga e no resto, nada."""
     antiga = pasta.padrao()
     _guarda_save(antiga, "X")
-    _guarda_save(antiga, "Z.copiando")
+    _guarda_save(antiga, "Z.copiando")  # não é save: não vai, não some
     nova = tmp_path / "outra"
-    (nova / "Fotos").mkdir(parents=True)
-    (nova / "Fotos" / "praia.jpg").write_text("foto")
+    (nova / "Fotos.copiando").mkdir(parents=True)  # do usuário, nome de cópia sem ser nossa
+    (nova / "Fotos.copiando" / "praia.jpg").write_text("foto")
     (nova / "nota.copiando").write_text("arquivo, não pasta")
-    _guarda_save(nova, "Y.copiando")
+    _sobra(nova, "Y")  # nossa, mas de um save que esta troca não leva
 
     pasta.trocar(nova)
 
-    assert sorted(p.name for p in nova.iterdir()) == ["Fotos", "X", "nota.copiando"]
-    assert (nova / "Fotos" / "praia.jpg").read_text() == "foto"
+    nomes = sorted(p.name for p in nova.iterdir())
+    assert nomes == ["Fotos.copiando", "X", "Y.copiando", "nota.copiando"]
+    assert (nova / "Fotos.copiando" / "praia.jpg").read_text() == "foto"
     assert (antiga / "Z.copiando" / "save.dat").is_file()
     assert not (nova / "Z.copiando").exists()
+
+
+@pytest.mark.parametrize("nome", ["X.copiando", "X.COPIANDO"])
+def test_pasta_do_usuario_com_nome_de_copia_barra_a_troca(settings, tmp_path, nome) -> None:
+    """Uma pasta do usuário que já ocupa o `<nome>.copiando` (em qualquer caixa) não é
+    apagada nem usada: a troca falha e o que ela já tinha criado desaparece."""
+    antiga = pasta.padrao()
+    _guarda_save(antiga, "A")
+    _guarda_save(antiga, "X")
+    nova = tmp_path / "outra"
+    (nova / nome).mkdir(parents=True)
+    (nova / nome / "meu.txt").write_text("meu")
+
+    with pytest.raises(OSError):
+        pasta.trocar(nova)
+
+    assert [p.name for p in nova.iterdir()] == [nome]
+    assert (nova / nome / "meu.txt").read_text() == "meu"
+    assert (antiga / "A" / "save.dat").is_file()
+    assert (antiga / "X" / "save.dat").is_file()
+    assert shared.schema.get_string("pasta-dos-saves") == ""
+
+
+def test_copiando_que_e_atalho_nao_e_seguido(settings, tmp_path) -> None:
+    """Uma junção `X.copiando` para fora, mesmo com a marca no destino dela, não é apagada."""
+    winapi = pytest.importorskip("_winapi")
+    _guarda_save(pasta.padrao(), "X")
+    fora = tmp_path / "fora"
+    fora.mkdir()
+    (fora / "importante.txt").write_text("meu")
+    (fora / pasta.MARCA_COPIANDO).touch()
+    nova = tmp_path / "outra"
+    nova.mkdir()
+    winapi.CreateJunction(str(fora), str(nova / "X.copiando"))
+
+    with pytest.raises(OSError):
+        pasta.trocar(nova)
+
+    assert (fora / "importante.txt").read_text() == "meu"
+    assert (nova / "X.copiando").is_junction()
+    assert not (nova / "X").exists()
+    assert shared.schema.get_string("pasta-dos-saves") == ""
+
+
+def test_sobra_que_nao_sai_avisa_no_log_e_a_troca_falha(
+    settings, tmp_path, monkeypatch, caplog
+) -> None:
+    antiga = pasta.padrao()
+    _guarda_save(antiga, "X")
+    nova = tmp_path / "outra"
+    _sobra(nova, "X")
+
+    def rmtree_travado(*_a, **_k):
+        raise PermissionError("em uso")
+
+    monkeypatch.setattr(shutil, "rmtree", rmtree_travado)
+
+    with pytest.raises(OSError):
+        pasta.trocar(nova)
+
+    assert any("X.copiando" in registro.getMessage() for registro in caplog.records)
+    assert (antiga / "X" / "save.dat").is_file()
+    assert shared.schema.get_string("pasta-dos-saves") == ""
 
 
 def test_recusa_nao_apaga_a_sobra(settings, tmp_path) -> None:
@@ -220,64 +304,114 @@ def test_recusa_nao_apaga_a_sobra(settings, tmp_path) -> None:
     nova = tmp_path / "outra"
     (nova / "X").mkdir(parents=True)
     (nova / "X" / "meu.txt").write_text("meu")
-    _guarda_save(nova, "Y.copiando")
+    _sobra(nova, "X")
 
     with pytest.raises(pasta.TrocaRecusada):
         pasta.trocar(nova)
 
-    assert (nova / "Y.copiando" / "save.dat").is_file()
+    assert (nova / "X.copiando" / "save.dat").is_file()
     assert (nova / "X" / "meu.txt").read_text() == "meu"
 
 
-def test_cada_save_e_renomeado_so_no_fim(settings, tmp_path, monkeypatch) -> None:
+def test_todos_sao_copiados_antes_de_algum_ser_renomeado(settings, tmp_path, monkeypatch) -> None:
     antiga = pasta.padrao()
     _guarda_save(antiga, "A")
     _guarda_save(antiga, "B")
     nova = tmp_path / "outra"
     copiar = shutil.copytree
-    destinos = []
+    vistos = []
 
     def copytree_que_registra(origem, destino, *a, **k):
-        destinos.append(Path(destino))
+        destino = Path(destino)
+        vistos.append(
+            (
+                destino,
+                k.get("dirs_exist_ok"),
+                (destino / pasta.MARCA_COPIANDO).is_file(),  # a marca entra antes da cópia
+                sorted(p.name for p in nova.iterdir()),
+            )
+        )
         return copiar(origem, destino, *a, **k)
 
     monkeypatch.setattr(shutil, "copytree", copytree_que_registra)
 
     pasta.trocar(nova)
 
-    assert [d.name for d in destinos] == ["A.copiando", "B.copiando"]
-    assert all(d.parent == nova for d in destinos)
+    assert [(v[0].name, v[1], v[2]) for v in vistos] == [
+        ("A.copiando", True, True),
+        ("B.copiando", True, True),
+    ]
+    assert vistos[0][3] == ["A.copiando"]
+    assert vistos[1][3] == ["A.copiando", "B.copiando"]  # nenhum renomeado ainda
     assert sorted(p.name for p in nova.iterdir()) == ["A", "B"]
     assert (nova / "A" / "save.dat").is_file()
     assert (nova / "B" / "save.dat").is_file()
+    assert not (nova / "A" / pasta.MARCA_COPIANDO).exists()
+    assert not (nova / "B" / pasta.MARCA_COPIANDO).exists()
 
 
-def test_falha_depois_de_renomear_um_desfaz_tambem_o_renomeado(
+def test_morto_no_meio_da_copia_nao_e_adotado_e_a_nova_tentativa_completa(
     settings, tmp_path, monkeypatch
 ) -> None:
+    """O app morre copiando o segundo save: nada foi renomeado, então a pasta não vale
+    como adotada e a nova tentativa leva os dois."""
+    antiga = pasta.padrao()
+    _guarda_save(antiga, "A", conteudo="a")
+    _guarda_save(antiga, "B", conteudo="b")
+    nova = tmp_path / "outra"
+    copiar = shutil.copytree
+
+    def copytree_que_morre_na_segunda(origem, destino, *a, **k):
+        if Path(destino).name == "B.copiando":
+            (Path(destino) / "metade.dat").write_text("x")
+            raise OSError("morto")
+        return copiar(origem, destino, *a, **k)
+
+    with monkeypatch.context() as morte:
+        morte.setattr(shutil, "copytree", copytree_que_morre_na_segunda)
+        morte.setattr(shutil, "rmtree", lambda *_a, **_k: None)  # morto não desfaz nada
+        with pytest.raises(OSError):
+            pasta.trocar(nova)
+
+    assert sorted(p.name for p in nova.iterdir()) == ["A.copiando", "B.copiando"]
+    assert pasta.saves_em(nova) == []
+    assert shared.schema.get_string("pasta-dos-saves") == ""
+
+    pasta.trocar(nova)  # a nova tentativa
+
+    assert sorted(p.name for p in nova.iterdir()) == ["A", "B"]
+    assert (nova / "A" / "save.dat").read_text() == "a"
+    assert (nova / "B" / "save.dat").read_text() == "b"
+    assert not (nova / "B" / "metade.dat").exists()
+    assert not (antiga / "A").exists()
+    assert not (antiga / "B").exists()
+    assert pasta.atual() == nova
+
+
+def test_falha_ao_renomear_desfaz_tambem_o_ja_renomeado(settings, tmp_path, monkeypatch) -> None:
     antiga = pasta.padrao()
     _guarda_save(antiga, "A")
     _guarda_save(antiga, "B")
     nova = tmp_path / "outra"
-    copiar = shutil.copytree
+    renomear = Path.replace
     chamadas = []
 
-    def copytree_que_falha_na_segunda(origem, destino, *a, **k):
-        chamadas.append(origem)
+    def replace_que_falha_na_segunda(self, destino):
+        chamadas.append(self)
         if len(chamadas) == 2:
-            assert Path(destino).name == "B.copiando"
-            Path(destino).mkdir()  # cópia pela metade
-            raise OSError("disco cheio")
-        return copiar(origem, destino, *a, **k)
+            raise OSError("em uso")
+        return renomear(self, destino)
 
-    monkeypatch.setattr(shutil, "copytree", copytree_que_falha_na_segunda)
+    monkeypatch.setattr(Path, "replace", replace_que_falha_na_segunda)
 
     with pytest.raises(OSError):
         pasta.trocar(nova)
 
-    assert list(nova.iterdir()) == []  # nem "A" (já renomeado) nem "B.copiando"
+    assert chamadas[0].name == "A.copiando"
+    assert not list(nova.iterdir())  # nem "A" (já renomeado) nem "B.copiando"
     assert (antiga / "A" / "save.dat").is_file()
     assert (antiga / "B" / "save.dat").is_file()
+    assert shared.schema.get_string("pasta-dos-saves") == ""
 
 
 def test_original_que_nao_sai_nao_desfaz_a_troca(settings, tmp_path, monkeypatch) -> None:
