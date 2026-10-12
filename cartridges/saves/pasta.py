@@ -104,7 +104,11 @@ def _apagar_sobras(raiz: Path) -> None:
     """Apaga de `raiz` as sobras `*.copiando` (qualquer caixa) do app, de uma troca
     interrompida, qualquer que seja o jogo. Só as que têm a marca dele: o que não tem
     é do usuário e fica; se ocupa o nome de um save a levar, a cópia dele falha adiante
-    (`mkdir` sem `exist_ok`)."""
+    (`mkdir` sem `exist_ok`).
+
+    Se uma sobra não sai e o `mapping.yaml` dela continua lá, o Ludusavi ainda a acharia
+    na pasta que vai valer e gravaria backups nela: o erro é relançado e a troca falha.
+    Sem o `mapping.yaml` a pasta não parece mais um jogo, e o erro só vai para o log."""
     if not raiz.is_dir():
         return
     for item in list(raiz.iterdir()):
@@ -112,6 +116,8 @@ def _apagar_sobras(raiz: Path) -> None:
             try:
                 _apagar_copia(item)
             except OSError:
+                if (item / MAPA).exists():
+                    raise
                 logging.warning("Cópia incompleta não removida de %s", item, exc_info=True)
 
 
@@ -185,10 +191,12 @@ def _gravar_escolha(valor: str) -> None:
 def trocar(nova: Path) -> None:
     """Passa a guardar os saves em `nova`.
 
-    Levanta `TrocaRecusada`, sem mexer em nada (a não ser nas sobras `.copiando` que o
-    próprio app deixou em `nova`), se `nova` é a pasta atual, está dentro dela, é uma
-    pasta que a contém, está dentro da pasta de dados do app (fora a padrão) ou a
-    contém, ou já tem algo com o nome de um save que precisaria receber.
+    Levanta `TrocaRecusada`, sem mexer em nada, se `nova` é a pasta atual, está dentro
+    dela, é uma pasta que a contém, ou está dentro da pasta de dados do app (fora a
+    padrão) ou a contém. Também a levanta se `nova` já tem algo com o nome de um save que
+    precisaria receber; essa recusa vem depois de apagar de `nova` as sobras `.copiando`
+    que o próprio app deixou. Se uma dessas sobras não puder sair e o Ludusavi ainda a
+    reconheceria, levanta o `OSError` e nada muda.
     """
     antiga = atual()
     if dentro(nova, antiga):

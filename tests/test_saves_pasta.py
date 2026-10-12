@@ -333,6 +333,80 @@ def test_sobra_que_nao_sai_avisa_no_log_e_deixa_a_marca_para_a_proxima(
     assert pasta.atual() == nova
 
 
+def test_sobra_com_mapping_que_nao_sai_barra_a_troca(settings, tmp_path, monkeypatch) -> None:
+    """Uma sobra do app que o Ludusavi ainda reconheceria não pode ficar na pasta que vai
+    valer: a troca falha e nada muda."""
+    antiga = pasta.padrao()
+    _guarda_save(antiga, "X")
+    nova = tmp_path / "outra"
+    _sobra(nova, "Z")  # de um jogo que nem está na antiga
+    apagar = Path.unlink
+
+    def unlink_travado(self, *a, **k):
+        if self.name == pasta.MAPA:
+            raise PermissionError("em uso")
+        return apagar(self, *a, **k)
+
+    monkeypatch.setattr(Path, "unlink", unlink_travado)
+
+    with pytest.raises(PermissionError):
+        pasta.trocar(nova)
+
+    assert (nova / "Z.copiando" / pasta.MAPA).is_file()
+    assert (nova / "Z.copiando" / pasta.MARCA_COPIANDO).is_file()
+    assert (antiga / "X" / "save.dat").is_file()
+    assert not (nova / "X").exists()
+    assert shared.schema.get_string("pasta-dos-saves") == ""
+
+
+def test_sobra_sem_mapping_que_nao_sai_so_avisa_e_a_troca_segue(
+    settings, tmp_path, monkeypatch, caplog
+) -> None:
+    """Sem o `mapping.yaml` a pasta não parece mais um jogo para o Ludusavi."""
+    _guarda_save(pasta.padrao(), "X")
+    nova = tmp_path / "outra"
+    _sobra(nova, "Z")
+    apagar = Path.unlink
+
+    def unlink_travado(self, *a, **k):
+        if self.name == "save.dat":
+            raise PermissionError("em uso")
+        return apagar(self, *a, **k)
+
+    monkeypatch.setattr(Path, "unlink", unlink_travado)
+
+    pasta.trocar(nova)  # não levanta
+
+    assert any("Z.copiando" in registro.getMessage() for registro in caplog.records)
+    assert not (nova / "Z.copiando" / pasta.MAPA).exists()
+    assert (nova / "X" / "save.dat").is_file()
+    assert pasta.atual() == nova
+
+
+@pytest.mark.parametrize("caso", ["a_atual", "dentro_da_atual", "contem_a_atual", "dentro_do_app"])
+def test_recusas_do_comeco_deixam_a_sobra_onde_esta(settings, tmp_path, caso) -> None:
+    """As três primeiras recusas não mexem em nada, nem na sobra do app."""
+    if caso == "dentro_do_app":
+        pasta.trocar(tmp_path / "fora")  # a atual fora do app, para só esta regra recusar
+    atual = pasta.atual()
+    nova = {
+        "a_atual": atual,
+        "dentro_da_atual": atual / "SUB",
+        "contem_a_atual": shared.app_dir,
+        "dentro_do_app": shared.app_dir / "MeusSaves",
+    }[caso]
+    _sobra(nova, "Z")
+    escolha = shared.schema.get_string("pasta-dos-saves")
+
+    with pytest.raises(pasta.TrocaRecusada):
+        pasta.trocar(nova)
+
+    assert (nova / "Z.copiando" / pasta.MAPA).is_file()
+    assert (nova / "Z.copiando" / "save.dat").is_file()
+    assert (nova / "Z.copiando" / pasta.MARCA_COPIANDO).is_file()
+    assert shared.schema.get_string("pasta-dos-saves") == escolha
+
+
 def test_recusa_por_conflito_nao_toca_no_que_e_do_usuario(settings, tmp_path) -> None:
     _guarda_save(pasta.padrao(), "X")
     nova = tmp_path / "outra"
