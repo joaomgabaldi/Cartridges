@@ -146,6 +146,32 @@ def ambiente(settings, tmp_path, monkeypatch, ludusavi_de_verdade):
     monkeypatch.setattr(backup_de_saves, "_tarefas_abertas", 0)
 
 
+@pytest.fixture(autouse=True)
+def dialogos(monkeypatch) -> list:
+    """Os diálogos que o módulo abriria: [(janela, título, texto)]."""
+    abertos: list = []
+    monkeypatch.setattr(backup_de_saves, "create_dialog", lambda *a, **_k: abertos.append(a))
+    return abertos
+
+
+NADA_PARA_RESTAURAR = ("Nada para restaurar", "Nenhum jogo tem cópias dos saves para restaurar.")
+# O aviso de falha de cada pedido, com o jogo "Meu Jogo".
+AVISO_DO_PEDIDO = {
+    "backup": "Não foi possível fazer o backup dos saves de Meu Jogo.",
+    "um": "Não foi possível restaurar o save de Meu Jogo.",
+    "todos": "Não foi possível restaurar os saves.",
+}
+
+
+def pedir(pedido: str, jogo) -> None:
+    if pedido == "backup":
+        backup_de_saves.no_fim_da_sessao(jogo)
+    elif pedido == "um":
+        backup_de_saves.restaurar(jogo, "v1")
+    else:
+        backup_de_saves.restaurar_todos()
+
+
 @pytest.fixture
 def falso(monkeypatch, tmp_path):
     falso = LudusaviFalso(tmp_path / "zips")
@@ -491,12 +517,11 @@ def test_tarefa_que_nao_abre_nao_deixa_a_contagem_subir(store, make_game, falso,
         store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X"
     )
 
-    # A tarefa nasce no pedido: a falha sobe para quem pediu, como a de abrir a thread.
-    with pytest.raises(RuntimeError):
-        backup_de_saves.no_fim_da_sessao(jogo)
+    backup_de_saves.no_fim_da_sessao(jogo)  # não levanta: quem pede é a tela
     esperar()
 
     assert falso.comandos == []  # o backup nem começou
+    assert titulos() == ["Não foi possível fazer o backup dos saves de Meu Jogo."]
     assert backup_de_saves.em_andamento() is False
 
 
@@ -601,19 +626,79 @@ def test_falha_ao_abrir_a_thread_desfaz_a_tarefa(store, make_game, falso, flush_
     monkeypatch.setattr(tarefas, "comecar", lambda nome, total: vistas.append(nome) or comecar(nome, total))
     monkeypatch.setattr(backup_de_saves, "_em_segundo_plano", nao_abre)
     jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
-    pedir = {
-        "backup": lambda: backup_de_saves.no_fim_da_sessao(jogo),
-        "um": lambda: backup_de_saves.restaurar(jogo, "v1"),
-        "todos": backup_de_saves.restaurar_todos,
-    }[pedido]
 
-    with pytest.raises(RuntimeError):
-        pedir()
+    pedir(pedido, jogo)  # não levanta: quem pede é a tela
     flush_idle()
 
     assert len(vistas) == 1  # a tarefa nasceu no pedido...
     assert tarefas.lista.get_n_items() == 0  # ...e saiu com a falha
+    assert titulos() == [AVISO_DO_PEDIDO[pedido]]
     assert backup_de_saves.em_andamento() is False
+
+
+@pytest.fixture
+def totais(monkeypatch) -> list[int]:
+    """Cada total que uma tarefa mostrou na lista: ao entrar e a cada atualização (a saída
+    vem sempre depois, na mesma fila da tela)."""
+    vistos: list[int] = []
+    adicionar, atualizar = tarefas._adicionar, tarefas.Tarefa._atualizar
+
+    def ao_adicionar(tarefa):
+        vistos.append(tarefa.total)
+        return adicionar(tarefa)
+
+    def ao_atualizar(tarefa, feitos, total):
+        resultado = atualizar(tarefa, feitos, total)
+        vistos.append(tarefa.total)
+        return resultado
+
+    monkeypatch.setattr(tarefas, "_adicionar", ao_adicionar)
+    monkeypatch.setattr(tarefas.Tarefa, "_atualizar", ao_atualizar)
+    return vistos
+
+
+def test_restaurar_todos_sem_jogo_com_nome_avisa_que_nada_ha(
+    store, make_game, falso, esperar, dialogos, totais
+):
+    na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1")  # sem nome
+
+    backup_de_saves.restaurar_todos()
+    esperar()
+
+    assert [a[1:] for a in dialogos] == [NADA_PARA_RESTAURAR]
+    assert dialogos[0][0] is shared.win
+    assert totais == []  # nenhuma tarefa entrou na lista
+    assert falso.comandos == []  # nem thread
+    assert toasts() == []
+    assert backup_de_saves.em_andamento() is False
+
+
+def test_restaurar_todos_sem_backup_avisa_que_nada_ha(store, make_game, falso, esperar, dialogos, totais):
+    na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+
+    backup_de_saves.restaurar_todos()
+    esperar()
+
+    assert [a[1:] for a in dialogos] == [NADA_PARA_RESTAURAR]
+    assert falso.restauracoes() == []
+    assert toasts() == []
+    assert totais and 0 not in totais  # a tarefa existiu durante a leitura, nunca "0 de 0"
+    assert tarefas.lista.get_n_items() == 0
+    assert backup_de_saves.em_andamento() is False
+
+
+def test_restaurar_todos_nunca_mostra_total_zero(store, make_game, falso, esperar, dialogos, totais):
+    falso.versoes = {"A": ["v1"]}
+    na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+    na_biblioteca(store, make_game, game_id="b", name="Jogo B", steam_appid="2", ludusavi_nome="B")
+
+    backup_de_saves.restaurar_todos()
+    esperar()
+
+    assert totais[0] == 2  # os jogos com nome, enquanto não se sabe quem tem backup
+    assert totais[-1] == 1
+    assert 0 not in totais
+    assert dialogos == []
 
 
 def test_sem_executavel_nada_roda(store, make_game, falso, esperar, tmp_path):
@@ -816,9 +901,9 @@ def test_restaurar_todos_bloqueia_todos_mesmo_com_cache_vazio(store, make_game, 
 
 
 @pytest.mark.parametrize("quebra", ["_em_segundo_plano", "_biblioteca", "_comecar_tarefa"])
-@pytest.mark.parametrize("pedido", ["um", "todos"])
+@pytest.mark.parametrize("pedido", ["backup", "um", "todos"])
 def test_pedido_que_nao_chega_a_abrir_a_thread_nao_deixa_marca(
-    store, make_game, falso, monkeypatch, quebra, pedido
+    store, make_game, falso, monkeypatch, flush_idle, quebra, pedido
 ):
     def explode(*_args):
         raise RuntimeError("não abriu")
@@ -826,12 +911,11 @@ def test_pedido_que_nao_chega_a_abrir_a_thread_nao_deixa_marca(
     monkeypatch.setattr(backup_de_saves, quebra, explode)
     jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
 
-    with pytest.raises(RuntimeError):
-        if pedido == "um":
-            backup_de_saves.restaurar(jogo, "v1")
-        else:
-            backup_de_saves.restaurar_todos()
+    pedir(pedido, jogo)  # não levanta: o usuário é avisado
+    flush_idle()
 
+    assert titulos() == [AVISO_DO_PEDIDO[pedido]]
+    assert tarefas.lista.get_n_items() == 0
     assert backup_de_saves.restaurando(jogo) is False
     assert not backup_de_saves._restaurando
     assert not backup_de_saves._jogos_restaurando

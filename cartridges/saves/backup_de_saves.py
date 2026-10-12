@@ -2,8 +2,9 @@
 
 É o que a interface chama: o fim de uma sessão dispara o backup, o menu do jogo
 lista as versões e restaura uma, as Preferências restauram todas e trocam a pasta.
-Cada operação roda numa thread, aparece como tarefa na janela de tarefas e só
-fala com o usuário quando falha (um aviso); sucesso é silencioso.
+Cada operação roda numa thread, aparece como tarefa na janela de tarefas desde o
+pedido e só fala com o usuário quando falha (um aviso) ou quando "Restaurar todos"
+não acha nada a restaurar; sucesso é silencioso.
 
 Uma trava única cobre gravar o `config.yaml` e rodar o Ludusavi: duas sessões que
 terminam em sequência esperam uma pela outra, e a troca da pasta dos saves nunca
@@ -28,6 +29,7 @@ from cartridges.game import Game
 from cartridges.saves import conferencia, config, ludusavi, pasta
 from cartridges.saves.ludusavi import LudusaviFalhou, Versao
 from cartridges.utils import tarefas
+from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.na_tela import entregar_na_tela
 
 # Os testes trocam por um executor falso; é o que `ludusavi.rodar` recebe.
@@ -46,9 +48,10 @@ _cache: dict[str, list[Versao]] = {}
 # para o caso de o nome mudar no meio) e quantas de "Restaurar todos", para o jogo não
 # abrir no meio. Contadores, e não um conjunto e uma marca: com dois pedidos seguidos, o
 # fim do primeiro não pode soltar o jogo enquanto o segundo, na fila da trava, ainda vai
-# gravar. Só a thread da tela os muda: a restauração soma logo antes de abrir a thread de
-# trabalho, e o fim subtrai com `entregar_na_tela`. Por isso não precisam de trava, e a
-# tela os lê sem esperar um backup.
+# gravar. Só a thread da tela os muda: a restauração soma logo depois de abrir a thread de
+# trabalho, e o fim subtrai com `entregar_na_tela` (que só roda depois, quando a tela está
+# livre). Por isso não precisam de trava, a tela os lê sem esperar um backup, e um pedido
+# que não chega a abrir a thread não deixa marca.
 _restaurando: Counter[str] = Counter()
 _jogos_restaurando: Counter[int] = Counter()  # id do `Game`; vivo enquanto a thread o segura
 _restaurando_todos = 0  # pylint: disable=invalid-name
@@ -177,6 +180,24 @@ def _avisar(texto: str) -> None:
     entregar_na_tela(_mostrar_aviso, texto)
 
 
+def _nao_abriu(tarefa: tarefas.Tarefa | None, aviso: str) -> None:
+    """O pedido não chegou a abrir a thread de trabalho: desfaz a tarefa e avisa o usuário.
+    Quem chama registra a exceção; nada sobe para a tela que pediu."""
+    if tarefa is not None:
+        _terminar_tarefa(tarefa)
+    _avisar(aviso)
+
+
+def _nada_para_restaurar() -> bool:
+    if shared.win is not None:
+        create_dialog(
+            shared.win,
+            _("Nada para restaurar"),
+            _("Nenhum jogo tem cópias dos saves para restaurar."),
+        )
+    return False
+
+
 def _marcar_nova(nome: str, inicio: datetime, comentario: str) -> None:
     """Grava ``comentario`` na versão mais nova do jogo, só se ela foi criada depois de
     ``inicio``: um backup sem mudança não cria versão, e uma versão antiga nunca leva a
@@ -232,14 +253,16 @@ def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
 def no_fim_da_sessao(game: Game) -> None:
     """Dispara o backup do jogo e volta na hora. A tarefa nasce aqui (ver `em_andamento`)
     e a thread de trabalho a termina."""
-    if disponivel():
+    if not disponivel():
+        return
+    tarefa = None
+    try:
         biblioteca = _biblioteca()
         tarefa = _comecar_tarefa(_("Backup dos saves de {}").format(game.name), 1)
-        try:
-            _em_segundo_plano(_backup, game, biblioteca, tarefa)
-        except Exception:
-            _terminar_tarefa(tarefa)
-            raise
+        _em_segundo_plano(_backup, game, biblioteca, tarefa)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.exception("O backup dos saves de %s não chegou a começar", game.name)
+        _nao_abriu(tarefa, _("Não foi possível fazer o backup dos saves de {}.").format(game.name))
 
 
 def _backup(game: Game, biblioteca: list[Game], tarefa: tarefas.Tarefa) -> None:
@@ -411,18 +434,18 @@ def _desmarcar_todos(jogos: list[int]) -> bool:
 def restaurar(game: Game, versao: str) -> None:
     """Devolve os saves do jogo aos da versão ``versao`` (o `id`), guardando os atuais antes."""
     nome = game.ludusavi_nome
-    if disponivel() and nome:
+    if not (disponivel() and nome):
+        return
+    tarefa = None
+    try:
         biblioteca = _biblioteca()
-        # A tarefa (ver `em_andamento`) e a marca nascem só agora, coladas na thread: se
-        # ela não abrir, ninguém as desfaria.
         tarefa = _comecar_tarefa(_("Restaurando o save de {}").format(game.name), 1)
-        _marcar(nome, id(game), 1)
-        try:
-            _em_segundo_plano(_restaurar, game, nome, versao, biblioteca, tarefa)
-        except Exception:
-            _marcar(nome, id(game), -1)
-            _terminar_tarefa(tarefa)
-            raise
+        _em_segundo_plano(_restaurar, game, nome, versao, biblioteca, tarefa)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.exception("A restauração do save de %s não chegou a começar", game.name)
+        _nao_abriu(tarefa, _("Não foi possível restaurar o save de {}.").format(game.name))
+        return
+    _marcar(nome, id(game), 1)  # depois da thread aberta (ver `_restaurando`)
 
 
 def _restaurar(
@@ -450,18 +473,23 @@ def _restaurar(
 
 def restaurar_todos() -> None:
     """Restaura a versão completa mais recente de cada jogo da biblioteca que tem backup."""
-    if disponivel():
+    if not disponivel():
+        return
+    tarefa = None
+    try:
         biblioteca = _biblioteca()
         marcados = [id(jogo) for jogo in biblioteca if jogo.ludusavi_nome]
-        # Total provisório: a thread de trabalho o acerta quando souber quem tem backup.
+        if not marcados:  # sem nome no Ludusavi, nenhum jogo tem backup
+            entregar_na_tela(_nada_para_restaurar)
+            return
+        # Total provisório (nunca 0): a thread de trabalho o acerta quando souber quem tem backup.
         tarefa = _comecar_tarefa(_("Restaurando os saves"), len(marcados))
-        _marcar_todos(1, marcados)
-        try:
-            _em_segundo_plano(_restaurar_todos, biblioteca, marcados, tarefa)
-        except Exception:
-            _marcar_todos(-1, marcados)
-            _terminar_tarefa(tarefa)
-            raise
+        _em_segundo_plano(_restaurar_todos, biblioteca, marcados, tarefa)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.exception("A restauração dos saves não chegou a começar")
+        _nao_abriu(tarefa, _("Não foi possível restaurar os saves."))
+        return
+    _marcar_todos(1, marcados)  # depois da thread aberta (ver `_restaurando`)
 
 
 def _restaurar_todos(biblioteca: list[Game], marcados: list[int], tarefa: tarefas.Tarefa) -> None:
@@ -475,6 +503,7 @@ def _restaurar_todos(biblioteca: list[Game], marcados: list[int], tarefa: tarefa
             jogos = {jogo.ludusavi_nome: jogo for jogo in biblioteca if jogo.ludusavi_nome}
             alvos = [nome for nome in jogos if _cache.get(nome)]
             if not alvos:
+                entregar_na_tela(_nada_para_restaurar)
                 return
             falhas = 0
             for feitos, nome in enumerate(alvos):
