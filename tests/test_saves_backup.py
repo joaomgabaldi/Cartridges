@@ -15,6 +15,7 @@ import sys
 import threading
 import time
 import zipfile
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -141,8 +142,8 @@ def ambiente(settings, tmp_path, monkeypatch):
     (tmp_path / "ludusavi.exe").touch()
     monkeypatch.setattr(sys, "executable", str(tmp_path / "python.exe"))
     monkeypatch.setattr(backup_de_saves, "_cache", {})
-    monkeypatch.setattr(backup_de_saves, "_restaurando", set())
-    monkeypatch.setattr(backup_de_saves, "_restaurando_todos", False)
+    monkeypatch.setattr(backup_de_saves, "_restaurando", Counter())
+    monkeypatch.setattr(backup_de_saves, "_restaurando_todos", 0)
 
 
 @pytest.fixture
@@ -615,6 +616,58 @@ def test_restaurar_todos_bloqueia_todos_mesmo_com_cache_vazio(store, make_game, 
     assert backup_de_saves.restaurando(sem_nome) is False
     esperar()
     assert backup_de_saves.restaurando(com_nome) is False
+
+
+@pytest.fixture
+def threads(monkeypatch):
+    """As threads de trabalho que o módulo abre, para o teste esperar só por uma delas."""
+    abertas: list[threading.Thread] = []
+
+    def abrir(alvo, *argumentos):
+        thread = threading.Thread(target=alvo, args=argumentos, daemon=True)
+        abertas.append(thread)
+        thread.start()
+
+    monkeypatch.setattr(backup_de_saves, "_em_segundo_plano", abrir)
+    return abertas
+
+
+def _espera_a_primeira_terminar(abertas, flush_idle):
+    """Espera uma das threads acabar e entrega à tela o que ela deixou; a outra segue na vez."""
+    limite = time.monotonic() + 10
+    while all(thread.is_alive() for thread in abertas):
+        assert time.monotonic() < limite
+        time.sleep(0.01)
+    flush_idle()
+    assert [thread.is_alive() for thread in abertas].count(True) == 1
+
+
+def test_duas_restauracoes_seguidas_seguram_a_marca(store, make_game, falso, esperar, flush_idle, threads):
+    falso.versoes["X"] = ["v1"]
+    falso.demora = 0.1
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
+
+    backup_de_saves.restaurar(jogo, "v1")
+    backup_de_saves.restaurar(jogo, "v1")  # na fila, atrás da trava da primeira
+    _espera_a_primeira_terminar(threads, flush_idle)
+
+    assert backup_de_saves.restaurando(jogo) is True
+    esperar()
+    assert backup_de_saves.restaurando(jogo) is False
+
+
+def test_dois_restaurar_todos_seguidos_seguram_a_marca(store, make_game, falso, esperar, flush_idle, threads):
+    falso.versoes["A"] = ["v1"]
+    falso.demora = 0.1
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+
+    backup_de_saves.restaurar_todos()
+    backup_de_saves.restaurar_todos()
+    _espera_a_primeira_terminar(threads, flush_idle)
+
+    assert backup_de_saves.restaurando(jogo) is True
+    esperar()
+    assert backup_de_saves.restaurando(jogo) is False
 
 
 def test_trocar_pasta_segura_a_trava(store, falso, esperar, monkeypatch, tmp_path):

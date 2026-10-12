@@ -15,6 +15,7 @@ sua entrada.
 import logging
 import subprocess
 import threading
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -41,12 +42,14 @@ _trava = threading.Lock()
 # Nome no Ludusavi -> versões, da mais nova para a mais velha. Lido pela tela
 # (`tem_backup`) sem esperar a trava: a tela nunca fica parada atrás de um backup.
 _cache: dict[str, list[Versao]] = {}
-# Os jogos cujos saves estão sendo restaurados (nome no Ludusavi) e a marca de "Restaurar
-# todos", para o jogo não abrir no meio. Só a thread da tela os muda: a restauração marca
-# antes de abrir a thread de trabalho, e o fim desmarca com `entregar_na_tela`. Por isso
-# não precisam de trava, e a tela os lê sem esperar um backup.
-_restaurando: set[str] = set()
-_restaurando_todos = False  # pylint: disable=invalid-name
+# Quantas restaurações pendentes cada jogo tem (nome no Ludusavi) e quantas de "Restaurar
+# todos", para o jogo não abrir no meio. Contadores, e não um conjunto e uma marca: com
+# dois pedidos seguidos, o fim do primeiro não pode soltar o jogo enquanto o segundo, na
+# fila da trava, ainda vai gravar. Só a thread da tela os muda: a restauração soma antes
+# de abrir a thread de trabalho, e o fim subtrai com `entregar_na_tela`. Por isso não
+# precisam de trava, e a tela os lê sem esperar um backup.
+_restaurando: Counter[str] = Counter()
+_restaurando_todos = 0  # pylint: disable=invalid-name
 
 
 def trava_dos_saves() -> threading.Lock:
@@ -303,23 +306,27 @@ def _restaurar_um(game: Game, versao: Versao, biblioteca: list[Game]) -> str | N
 def restaurando(game: Game) -> bool:
     """Os saves do jogo estão sendo restaurados (sozinhos ou em "Restaurar todos"). Só
     na thread da tela."""
-    return bool(game.ludusavi_nome) and (_restaurando_todos or game.ludusavi_nome in _restaurando)
+    nome = game.ludusavi_nome
+    return bool(nome) and (_restaurando_todos > 0 or nome in _restaurando)
 
 
 def _desmarcar(nome: str | None) -> bool:
-    """Fim da restauração: ``nome`` volta a poder abrir; None desfaz a marca de todos."""
+    """Fim de uma restauração: tira um pedido de ``nome`` (None: de "Restaurar todos"). O
+    jogo só volta a poder abrir quando o último pedido acaba."""
     global _restaurando_todos  # pylint: disable=global-statement
     if nome is None:
-        _restaurando_todos = False
+        _restaurando_todos -= 1
     else:
-        _restaurando.discard(nome)
+        _restaurando[nome] -= 1
+        if _restaurando[nome] <= 0:
+            del _restaurando[nome]
     return False
 
 
 def restaurar(game: Game, versao: str) -> None:
     """Devolve os saves do jogo aos da versão ``versao`` (o `id`), guardando os atuais antes."""
     if disponivel() and game.ludusavi_nome:
-        _restaurando.add(game.ludusavi_nome)
+        _restaurando[game.ludusavi_nome] += 1
         _em_segundo_plano(_restaurar, game, versao, _biblioteca())
 
 
@@ -354,7 +361,7 @@ def restaurar_todos() -> None:
     """Restaura a versão completa mais recente de cada jogo da biblioteca que tem backup."""
     global _restaurando_todos  # pylint: disable=global-statement
     if disponivel():
-        _restaurando_todos = True
+        _restaurando_todos += 1
         _em_segundo_plano(_restaurar_todos, _biblioteca())
 
 
