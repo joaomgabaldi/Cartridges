@@ -4,9 +4,11 @@ Preferências."""
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from cartridges.game import Game
 from cartridges.saves import backup_de_saves, pasta
 from cartridges.saves.ludusavi import Versao
 
@@ -34,6 +36,24 @@ def test_falha_ao_iniciar_o_backup_nao_perde_o_aviso(monkeypatch, win, make_game
     with pytest.raises(RuntimeError):
         win.session_toast(make_game(), 60)
     assert len(win.toast_queue.added) == 1
+
+
+# -- abrir o jogo --------------------------------------------------------------
+
+
+def test_launch_durante_a_restauracao_avisa_e_nao_abre(monkeypatch):
+    def nao_abre(*_args):
+        pytest.fail("o jogo não pode abrir durante a restauração dos saves dele")
+
+    monkeypatch.setattr(backup_de_saves, "restaurando", lambda _jogo: True)
+    monkeypatch.setattr("cartridges.game.run_executable", nao_abre)
+    avisos = []
+    falso = SimpleNamespace(ludusavi_nome="A", last_played=0, create_toast=avisos.append)
+
+    Game.launch(falso)  # type: ignore[arg-type]  # só precisa dos três atributos acima
+
+    assert avisos == ["Aguarde o fim da restauração dos saves de {}."]
+    assert falso.last_played == 0
 
 
 # -- menu do jogo --------------------------------------------------------------

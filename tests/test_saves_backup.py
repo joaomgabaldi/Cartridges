@@ -141,6 +141,8 @@ def ambiente(settings, tmp_path, monkeypatch):
     (tmp_path / "ludusavi.exe").touch()
     monkeypatch.setattr(sys, "executable", str(tmp_path / "python.exe"))
     monkeypatch.setattr(backup_de_saves, "_cache", {})
+    monkeypatch.setattr(backup_de_saves, "_restaurando", set())
+    monkeypatch.setattr(backup_de_saves, "_restaurando_todos", False)
 
 
 @pytest.fixture
@@ -556,6 +558,63 @@ def test_restaurar_todos_segue_depois_de_uma_falha_e_avisa_uma_vez(store, make_g
 
     assert len(falso.restauracoes()) == 2
     assert titulos() == ["Não foi possível restaurar os saves de 2 jogos."]
+
+
+def test_restaurando_durante_e_depois(store, make_game, falso, esperar):
+    falso.versoes["X"] = ["v1"]
+    falso.demora = 0.2
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
+    outro = na_biblioteca(store, make_game, game_id="b", name="Outro", steam_appid="8", ludusavi_nome="Y")
+
+    backup_de_saves.restaurar(jogo, "v1")
+
+    assert backup_de_saves.restaurando(jogo) is True
+    assert backup_de_saves.restaurando(outro) is False
+    esperar()
+    assert backup_de_saves.restaurando(jogo) is False
+
+
+def test_restaurando_se_desfaz_quando_a_restauracao_falha(store, make_game, falso, esperar):
+    falso.versoes["X"] = ["v1"]
+    falso.explode = RuntimeError("ludusavi quebrou")
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
+
+    backup_de_saves.restaurar(jogo, "v1")
+    assert backup_de_saves.restaurando(jogo) is True
+    esperar()
+
+    assert backup_de_saves.restaurando(jogo) is False
+
+
+def test_restaurando_se_desfaz_quando_a_thread_levanta(store, make_game, falso, esperar, monkeypatch):
+    def explode(*_args):
+        raise RuntimeError("levantou")
+
+    monkeypatch.setattr(threading, "excepthook", lambda _args: None)  # a thread vai morrer de propósito
+    monkeypatch.setattr(tarefas, "comecar", explode)
+    falso.versoes = {"X": ["v1"]}
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
+
+    backup_de_saves.restaurar(jogo, "v1")
+    backup_de_saves.restaurar_todos()
+    esperar()
+
+    assert backup_de_saves.restaurando(jogo) is False
+    assert not backup_de_saves._trava.locked()
+
+
+def test_restaurar_todos_bloqueia_todos_mesmo_com_cache_vazio(store, make_game, falso, esperar):
+    falso.demora = 0.2
+    com_nome = na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+    sem_nome = na_biblioteca(store, make_game, game_id="b", name="Jogo B", steam_appid="2")
+    assert not backup_de_saves._cache
+
+    backup_de_saves.restaurar_todos()
+
+    assert backup_de_saves.restaurando(com_nome) is True
+    assert backup_de_saves.restaurando(sem_nome) is False
+    esperar()
+    assert backup_de_saves.restaurando(com_nome) is False
 
 
 def test_trocar_pasta_segura_a_trava(store, falso, esperar, monkeypatch, tmp_path):

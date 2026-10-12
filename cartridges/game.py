@@ -392,6 +392,15 @@ class Game(Gtk.Box):
         shared.win.toast_queue.add(toast)
 
     def launch(self) -> None:
+        # avoid import cycles
+        from cartridges.saves import backup_de_saves  # pylint: disable=import-outside-toplevel
+
+        # Os saves dele estão sendo regravados: o jogo aberto agora leria arquivos pela
+        # metade e travaria os que a restauração precisa gravar.
+        if backup_de_saves.restaurando(self):
+            self.create_toast(_("Aguarde o fim da restauração dos saves de {}."))
+            return
+
         self.last_played = int(time())
         self.save()
         self.update()
