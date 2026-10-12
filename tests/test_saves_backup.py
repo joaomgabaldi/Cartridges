@@ -644,7 +644,13 @@ def test_pedido_que_nao_chega_a_abrir_a_thread_nao_deixa_marca(
     assert backup_de_saves._restaurando_todos == 0
 
 
-def test_restaurando_acompanha_o_nome_capturado_se_o_nome_mudar(store, make_game, falso, esperar):
+def _sem_marcas():
+    assert not backup_de_saves._restaurando
+    assert not backup_de_saves._jogos_restaurando
+    assert backup_de_saves._restaurando_todos == 0
+
+
+def test_restauracao_aborta_se_o_nome_mudou_no_meio(store, make_game, falso, esperar):
     falso.versoes["X"] = ["v1"]
     falso.demora = 0.1
     jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
@@ -652,13 +658,56 @@ def test_restaurando_acompanha_o_nome_capturado_se_o_nome_mudar(store, make_game
     backup_de_saves.restaurar(jogo, "v1")
     jogo.ludusavi_nome = ""  # o diálogo de detalhes faz isto ao corrigir o appID, no meio da restauração
 
+    assert backup_de_saves.restaurando(jogo) is True  # a marca acompanha o jogo, não só o nome
+    esperar()
+
+    # O config já não leva o que o nome de quando pediu precisava: nada é copiado nem gravado.
+    assert falso.chamou("backup") == []
+    assert falso.restauracoes() == []
+    assert titulos() == ["Não foi possível restaurar o save de Meu Jogo."]
+    assert backup_de_saves.restaurando(jogo) is False
+    _sem_marcas()
+
+
+def test_restaurar_todos_aborta_o_jogo_cujo_nome_mudou_no_meio(store, make_game, falso, esperar, monkeypatch):
+    falso.versoes = {"A": ["v1"], "B": ["v1"]}
+    a = na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+    b = na_biblioteca(store, make_game, game_id="b", name="Jogo B", steam_appid="2", ludusavi_nome="B")
+    limpados = []
+
+    def executor(args, **kwargs):
+        resultado = falso(args, **kwargs)
+        if "backup" in args and not limpados:
+            # A cópia do primeiro acabou de rodar: o nome do outro some antes da vez dele.
+            feito = args[args.index("backup") + 1]
+            limpados.extend(j for j in (a, b) if j.ludusavi_nome != feito)
+            limpados[0].ludusavi_nome = ""
+        return resultado
+
+    monkeypatch.setattr(backup_de_saves, "executor", executor)
+
+    backup_de_saves.restaurar_todos()
+    esperar()
+
+    assert len(falso.chamou("backup")) == 1  # só o do jogo que ficou
+    assert len(falso.restauracoes()) == 1
+    assert titulos() == ["Não foi possível restaurar os saves de 1 jogo."]
+    _sem_marcas()
+
+
+def test_restaurar_todos_marca_o_objeto_mesmo_se_o_nome_for_limpo(store, make_game, falso, esperar):
+    falso.versoes["A"] = ["v1"]
+    falso.demora = 0.1
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+
+    backup_de_saves.restaurar_todos()
+    jogo.ludusavi_nome = ""
+
     assert backup_de_saves.restaurando(jogo) is True
     esperar()
 
-    assert falso.restauracoes() == [["restore", "X", "--force", "--backup", "v1"]]  # o nome de quando pediu
     assert backup_de_saves.restaurando(jogo) is False
-    assert not backup_de_saves._restaurando
-    assert not backup_de_saves._jogos_restaurando
+    _sem_marcas()
 
 
 @pytest.fixture

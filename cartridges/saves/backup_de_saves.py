@@ -265,6 +265,17 @@ def _restaurar_um(
     levados ao usuário e à pasta do jogo de hoje; e a prévia só pode gravar em pastas
     de save.
     """
+    if game.ludusavi_nome != nome:
+        # O nome mudou depois do pedido (o diálogo de detalhes limpa o nome ao corrigir o
+        # appID): o config de agora já não leva o que `nome` precisava (emulador, pasta do
+        # jogo), e a cópia dos saves atuais sairia incompleta. Nada é copiado nem gravado.
+        logging.warning(
+            "O nome de %s no Ludusavi mudou de %r para %r durante a restauração: abortada",
+            game.name,
+            nome,
+            game.ludusavi_nome,
+        )
+        return _("Não foi possível restaurar o save de {}.").format(game.name)
     jogo = _no_config(game, nome=nome)
     try:
         arquivo = versao.arquivo
@@ -321,21 +332,28 @@ def restaurando(game: Game) -> bool:
     )
 
 
+def _marcar_jogo(jogo: int, passo: int) -> None:
+    _jogos_restaurando[jogo] += passo
+    if _jogos_restaurando[jogo] <= 0:
+        del _jogos_restaurando[jogo]
+
+
 def _marcar(nome: str, jogo: int, passo: int) -> None:
     """Soma ``passo`` (1 ou -1) à marca de um pedido de restauração: a de ``nome`` e a do
     objeto ``jogo``. Zerada, a chave sai. Só na thread da tela."""
     _restaurando[nome] += passo
     if _restaurando[nome] <= 0:
         del _restaurando[nome]
-    _jogos_restaurando[jogo] += passo
-    if _jogos_restaurando[jogo] <= 0:
-        del _jogos_restaurando[jogo]
+    _marcar_jogo(jogo, passo)
 
 
-def _marcar_todos(passo: int) -> None:
-    """O mesmo para "Restaurar todos"."""
+def _marcar_todos(passo: int, jogos: list[int]) -> None:
+    """O mesmo para "Restaurar todos": a marca geral e a de cada objeto ``jogos`` (os que
+    tinham nome ao pedir; o nome de um deles pode ser limpo durante a execução)."""
     global _restaurando_todos  # pylint: disable=global-statement
     _restaurando_todos += passo
+    for jogo in jogos:
+        _marcar_jogo(jogo, passo)
 
 
 def _desmarcar(nome: str, jogo: int) -> bool:
@@ -345,8 +363,8 @@ def _desmarcar(nome: str, jogo: int) -> bool:
     return False
 
 
-def _desmarcar_todos() -> bool:
-    _marcar_todos(-1)
+def _desmarcar_todos(jogos: list[int]) -> bool:
+    _marcar_todos(-1, jogos)
     return False
 
 
@@ -394,15 +412,16 @@ def restaurar_todos() -> None:
     """Restaura a versão completa mais recente de cada jogo da biblioteca que tem backup."""
     if disponivel():
         biblioteca = _biblioteca()
-        _marcar_todos(1)
+        marcados = [id(jogo) for jogo in biblioteca if jogo.ludusavi_nome]
+        _marcar_todos(1, marcados)
         try:
-            _em_segundo_plano(_restaurar_todos, biblioteca)
+            _em_segundo_plano(_restaurar_todos, biblioteca, marcados)
         except Exception:
-            _marcar_todos(-1)
+            _marcar_todos(-1, marcados)
             raise
 
 
-def _restaurar_todos(biblioteca: list[Game]) -> None:
+def _restaurar_todos(biblioteca: list[Game], marcados: list[int]) -> None:
     try:
         with _trava:
             # O cache pode estar vazio (nada o encheu ainda) ou velho: relê antes. Sem
@@ -443,7 +462,7 @@ def _restaurar_todos(biblioteca: list[Game]) -> None:
                 )
             _ler_versoes(biblioteca)
     finally:
-        entregar_na_tela(_desmarcar_todos)
+        entregar_na_tela(_desmarcar_todos, marcados)
 
 
 # -- pasta dos saves ---------------------------------------------------------
