@@ -323,10 +323,6 @@ def exportar(
                 existe = pasta.is_dir()
                 try:
                     entradas = _entradas_dos_saves(pasta) if existe else []
-                except FileNotFoundError:
-                    # Uma pasta de jogo que sumiu no meio da listagem não está
-                    # inacessível: segue o erro de sempre.
-                    raise
                 except OSError as erro:
                     raise SavesInacessiveis(str(erro)) from erro
                 if pasta != pasta_dos_saves.padrao():

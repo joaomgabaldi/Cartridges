@@ -503,6 +503,26 @@ def test_exportar_com_outro_erro_de_gravacao_nao_culpa_os_saves(tmp_path, monkey
     assert erro.errno == errno.EIO
 
 
+def test_exportar_com_pasta_de_jogo_que_some_na_listagem_falha(tmp_path, monkeypatch):
+    """A pasta de um jogo some entre `saves_em` e a leitura dela: a pasta dos saves ficou
+    fora de alcance, não o destino."""
+    saves = shared.app_dir / "saves"
+    _guardar_saves(saves)
+    listar = backup.pasta_dos_saves.saves_em
+
+    def lista_e_apaga(raiz):
+        jogos = listar(raiz)
+        shutil.rmtree(saves / "X")
+        return jogos
+
+    monkeypatch.setattr(backup.pasta_dos_saves, "saves_em", lista_e_apaga)
+
+    erro = _exportar_que_falha(tmp_path)
+
+    assert isinstance(erro, backup.SavesInacessiveis)
+    assert isinstance(erro.__cause__, FileNotFoundError)
+
+
 def test_exportar_com_save_que_sumiu_no_meio_falha(tmp_path, monkeypatch):
     """Apagado entre a listagem e a leitura: com a trava dos saves nada some de forma
     legítima, então o backup não sai sem ele em silêncio."""
