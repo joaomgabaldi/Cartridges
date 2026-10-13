@@ -28,6 +28,13 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.13" date="2026-10-13">
+      <description translate="no">
+        <ul>
+          <li>O botão "Adicionar jogo" voltou a funcionar</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.10.12" date="2026-10-12">
       <description translate="no">
         <ul>

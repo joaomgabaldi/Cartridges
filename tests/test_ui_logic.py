@@ -573,7 +573,7 @@ def test_apply_writes_both_rows_to_the_game(real_window, store):
     from cartridges.store.managers.sgdb_manager import SgdbManager
 
     class StubSgdb:
-        signals: set = set()
+        signals = frozenset()
 
         def reset_cancellable(self):
             pass
@@ -653,7 +653,7 @@ def _stub_sgdb(store):
     from cartridges.store.managers.sgdb_manager import SgdbManager
 
     class StubSgdb:
-        signals: set = set()
+        signals = frozenset()
 
         def reset_cancellable(self):
             pass
@@ -3284,7 +3284,7 @@ def test_adicionar_jogo_pelo_dialogo_grava_o_jogo(real_window, store, app_dirs):
     from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
 
     class _SemSgdb:  # sem rede: a busca da capa é de outro teste
-        signals: set = set()
+        signals = frozenset()
 
         def reset_cancellable(self):
             pass
