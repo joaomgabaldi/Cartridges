@@ -472,23 +472,105 @@ def test_an_inverted_range_has_no_days():
     assert session_log.daily_seconds([], date(2026, 9, 10), date(2026, 9, 9)) == []
 
 
-def test_the_periods_end_today_and_all_starts_at_the_first_session():
+def test_the_periods_end_on_the_last_day_played_and_all_starts_at_the_first_session():
+    """Depois do último dia jogado só há dias vazios: num jogo zerado eles
+    cresceriam para sempre."""
     from datetime import date
 
     from cartridges.session_history import period_range
 
-    today = date(2026, 9, 19)
+    today = date(2026, 10, 13)
+    last = date(2026, 9, 18)
     sessions = [
         {"end": local_ts(2026, 9, 18, 20), "seconds": 60},
         {"end": local_ts(2026, 3, 2, 1), "seconds": 7200},  # começou dia 1º
     ]
 
-    assert period_range(sessions, "week", today) == (date(2026, 9, 13), today)
-    assert period_range(sessions, "month", today) == (date(2026, 8, 21), today)
-    assert period_range(sessions, "all", today) == (date(2026, 3, 1), today)
-    # Relógio adiantado não inverte a faixa
+    assert period_range(sessions, "week", today) == (date(2026, 9, 12), last)
+    assert period_range(sessions, "month", today) == (date(2026, 8, 20), last)
+    assert period_range(sessions, "all", today) == (date(2026, 3, 1), last)
+    # Relógio adiantado não inverte a faixa nem passa de hoje
     future = [{"end": local_ts(2027, 1, 1), "seconds": 60}]
     assert period_range(future, "all", today) == (today, today)
+
+
+def test_a_session_ending_at_midnight_does_not_add_an_empty_day():
+    from datetime import date
+
+    from cartridges.session_history import period_range
+
+    sessions = [{"end": local_ts(2026, 9, 19), "seconds": 3600}]  # 23h → 0h
+    assert period_range(sessions, "all", date(2026, 10, 13)) == (
+        date(2026, 9, 18),
+        date(2026, 9, 18),
+    )
+
+
+def test_a_long_pause_becomes_a_break_and_a_short_one_stays():
+    from datetime import date, timedelta
+
+    from cartridges.session_history import LACUNA_MAXIMA, sem_lacunas_longas
+
+    inicio = date(2025, 10, 1)
+
+    def dias(*jogados):
+        total = max(jogados) + 1
+        return [(inicio + timedelta(days=i), 60 if i in jogados else 0) for i in range(total)]
+
+    # Uma pausa curta (até LACUNA_MAXIMA dias vazios) fica inteira.
+    curta = dias(0, LACUNA_MAXIMA + 1)
+    assert sem_lacunas_longas(curta) == (curta, frozenset())
+
+    # Um ano parado: ficam o primeiro e o último dia vazio, com a quebra entre eles.
+    longa = dias(0, 1, 366)
+    resultado, quebras = sem_lacunas_longas(longa)
+    assert resultado == [longa[0], longa[1], longa[2], longa[365], longa[366]]
+    assert quebras == frozenset({2})
+    assert sum(s for _d, s in resultado) == sum(s for _d, s in longa)
+
+
+def test_the_chart_keeps_breaks_apart_and_labels_the_month_after_one():
+    from datetime import date, timedelta
+
+    from cartridges.session_history import PlaytimeChart, sem_lacunas_longas
+
+    jogados = {0, 1, 40, 41, 400}
+    inicio = date(2025, 9, 15)
+    dias = [(inicio + timedelta(days=i), 60 if i in jogados else 0) for i in range(401)]
+    chart = PlaytimeChart()
+    chart.set_days(*sem_lacunas_longas(dias))
+
+    # Cada quebra ocupa mais que um dia comum no eixo.
+    xs = [chart._x(i, 600) for i in range(len(chart.days))]
+    passo = xs[1] - xs[0]
+    for i in chart.quebras:
+        assert xs[i + 1] - xs[i] > 1.5 * passo
+    assert xs == sorted(xs)
+
+    # Mais de dois meses: rótulo por mês, um por mês, inclusive o que só sobrou
+    # depois de uma quebra (o dia 1º dele foi cortado).
+    labels = [chart._label_for(chart.days[i][0]) for i in chart.labeled_indices()]
+    assert len(labels) == len(set(labels))
+    assert "out 26" in labels
+
+
+def test_the_months_on_both_sides_of_a_break_do_not_overlap():
+    """Parado de out/25 a set/26: o último dia vazio antes da volta é 30/09 e
+    o primeiro jogado, 1º/10 — dois meses a um passo, e os rótulos se
+    sobrepunham. Fica o do dia 1º."""
+    from datetime import date, timedelta
+
+    from cartridges.session_history import PlaytimeChart, sem_lacunas_longas
+
+    inicio = date(2025, 10, 1)
+    volta = (date(2026, 10, 1) - inicio).days
+    jogados = set(range(0, 20, 2)) | set(range(volta, volta + 12))
+    dias = [(inicio + timedelta(days=i), 60 if i in jogados else 0) for i in range(volta + 12)]
+    chart = PlaytimeChart()
+    chart.set_days(*sem_lacunas_longas(dias))
+
+    labels = [chart._label_for(chart.days[i][0]) for i in chart.labeled_indices()]
+    assert labels == ["out 25", "out 26"]
 
 
 def test_week_and_month_do_not_reach_before_the_first_session():
@@ -499,7 +581,10 @@ def test_week_and_month_do_not_reach_before_the_first_session():
     from cartridges.session_history import period_range
 
     today = date(2026, 9, 19)
-    sessions = [{"end": local_ts(2026, 9, 17, 12), "seconds": 60}]
+    sessions = [
+        {"end": local_ts(2026, 9, 17, 12), "seconds": 60},
+        {"end": local_ts(2026, 9, 19, 12), "seconds": 60},
+    ]
 
     assert period_range(sessions, "week", today) == (date(2026, 9, 17), today)
     assert period_range(sessions, "month", today) == (date(2026, 9, 17), today)
@@ -613,3 +698,30 @@ def test_the_playtime_is_underlined_only_when_it_opens_something(real_window, st
     session_log.record(game.game_id, 5400, end=1_700_000_000)
     real_window.update_playtime_label(game)
     assert real_window.details_view_playtime.has_css_class("playtime-clickable")
+
+
+def test_the_dialog_chart_ends_on_the_last_day_and_cuts_long_pauses_only_in_all(real_window, store):
+    """O jogo zerado em 29/09 não ganha um dia vazio por dia que passa, e
+    "Todo o período" corta a pausa de um ano; "Mês" mostra os dias como são."""
+    from datetime import date, datetime, timedelta
+
+    from cartridges.session_history import SessionHistoryDialog
+
+    game = history_game(store)
+    ultimo = date.today() - timedelta(days=14)
+    for dia in (ultimo - timedelta(days=400), ultimo - timedelta(days=399), ultimo):
+        fim = int(datetime.combine(dia, datetime.min.time()).timestamp()) + 20 * 3600
+        session_log.record(game.game_id, 3600, end=fim)
+
+    dialog = SessionHistoryDialog(game)
+
+    dialog.period.set_active_name("all")
+    assert dialog.chart.days[-1][0] == ultimo
+    assert len(dialog.chart.quebras) == 1
+    assert len(dialog.chart.days) < 10
+    assert dialog.chart_total.get_label() == "3 horas no período"
+
+    dialog.period.set_active_name("month")
+    assert dialog.chart.days[-1][0] == ultimo
+    assert dialog.chart.quebras == frozenset()
+    assert len(dialog.chart.days) == 30

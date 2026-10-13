@@ -14,7 +14,9 @@ entrada no gresource.
 """
 
 import math
+from bisect import bisect_left
 from datetime import date, datetime, timedelta
+from itertools import accumulate
 from typing import Any, Optional
 
 from gi.repository import Adw, Gtk, PangoCairo
@@ -48,28 +50,71 @@ def period_range(
 ) -> tuple[date, date]:
     """O primeiro e o último dia que o gráfico mostra para ``period``.
 
-    Termina sempre hoje, mesmo sem sessão hoje: um gráfico que acaba no último
-    dia jogado esconde justamente os dias parados, que são metade da resposta.
-    O início nunca é anterior à primeira sessão já registrada — um histórico
-    que só começou há 2 dias não ganha 28 dias vazios só porque o período
-    escolhido é "mês".
+    Termina no último dia com sessão, e não hoje: depois dele só há dias
+    vazios, que num jogo zerado (ou parado há meses) cresceriam para sempre e
+    empurrariam o que foi jogado para um canto. "Semana" e "Mês" são a última
+    semana e o último mês com sessões. O início nunca é anterior à primeira
+    sessão já registrada — um histórico que só começou há 2 dias não ganha 28
+    dias vazios só porque o período escolhido é "mês".
     """
     first = min(
         (max(0, entry["end"] - entry["seconds"]) for entry in sessions),
         default=None,
     )
+    # O dia do último segundo jogado: uma sessão que termina à meia-noite em
+    # ponto não abre um dia vazio a mais.
+    last = max(
+        (max(0, entry["end"] - (1 if entry["seconds"] else 0)) for entry in sessions),
+        default=None,
+    )
     # Uma sessão "no futuro" (relógio adiantado, arquivo editado) não pode
-    # inverter a faixa.
+    # inverter a faixa nem passar de hoje.
+    last_date = min(datetime.fromtimestamp(last).date(), today) if last is not None else today
     first_date = None
     if first is not None:
-        first_date = min(datetime.fromtimestamp(first).date(), today)
+        first_date = min(datetime.fromtimestamp(first).date(), last_date)
 
     days = PERIODS[period]
     if days is None:
-        return first_date or today, today
+        return first_date or last_date, last_date
 
-    start = today - timedelta(days=days - 1)
-    return (max(start, first_date) if first_date else start), today
+    start = last_date - timedelta(days=days - 1)
+    return (max(start, first_date) if first_date else start), last_date
+
+
+# Uma pausa de mais de duas semanas sem jogar vira uma quebra no gráfico de
+# "Todo o período", em vez de um dia vazio por ponto: um ano parado seriam 365.
+LACUNA_MAXIMA = 14
+
+
+def sem_lacunas_longas(
+    days: list[tuple[date, int]],
+) -> tuple[list[tuple[date, int]], frozenset[int]]:
+    """``days`` sem o miolo das pausas longas, e onde ficaram as quebras.
+
+    De cada sequência de mais de ``LACUNA_MAXIMA`` dias vazios entre dois dias
+    jogados ficam só o primeiro e o último, para a linha ainda descer a zero
+    dos dois lados; a quebra ``i`` fica entre ``dias[i]`` e ``dias[i + 1]``.
+    """
+    dias: list[tuple[date, int]] = []
+    quebras: set[int] = set()
+    i = 0
+    while i < len(days):
+        if days[i][1]:
+            dias.append(days[i])
+            i += 1
+            continue
+        fim = i
+        while fim < len(days) and not days[fim][1]:
+            fim += 1
+        if fim - i > LACUNA_MAXIMA and i > 0 and fim < len(days):
+            dias.append(days[i])
+            quebras.add(len(dias) - 1)
+            dias.append(days[fim - 1])
+        else:
+            dias.extend(days[i:fim])
+        i = fim
+    return dias, frozenset(quebras)
 
 
 def nice_step(max_hours: float) -> float:
@@ -91,8 +136,9 @@ PAGINA = 100
 def resumo_dos_ultimos_dias(sessions: list[dict[str, Any]], today: date) -> tuple[int, int]:
     """Segundos jogados nos últimos 7 e 30 dias de calendário, hoje incluído.
 
-    A mesma conta do gráfico (``session_log.daily_seconds``), para que o resumo
-    e o período "Semana"/"Mês" nunca discordem.
+    A mesma conta do gráfico (``session_log.daily_seconds``), mas até hoje: o
+    gráfico termina no último dia jogado e mostra o ritmo das sessões; o resumo
+    diz quanto se jogou nos últimos dias de calendário, mesmo que seja nada.
     """
 
     def soma(dias: int) -> int:
@@ -121,24 +167,45 @@ class PlaytimeChart(Gtk.DrawingArea):
     MARGIN_TOP = 8
     MARGIN_RIGHT = 12
 
+    # Quanto uma quebra (ver `sem_lacunas_longas`) ocupa no eixo X, em dias:
+    # o dobro de um intervalo comum, para a linha tracejada ter onde ficar.
+    LARGURA_DA_QUEBRA = 2
+
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.days: list[tuple[date, int]] = []
+        self.quebras: frozenset[int] = frozenset()
+        # A posição de cada dia no eixo X, em intervalos desde o primeiro.
+        self._posicoes: list[int] = []
         self.add_css_class("accent")
         self.add_css_class("caption")
         self.set_draw_func(self.draw)
         self.set_has_tooltip(True)
         self.connect("query-tooltip", self.on_query_tooltip)
 
-    def set_days(self, days: list[tuple[date, int]]) -> None:
+    def set_days(
+        self, days: list[tuple[date, int]], quebras: frozenset[int] = frozenset()
+    ) -> None:
+        """``quebras``: os índices ``i`` com uma pausa longa cortada entre
+        ``days[i]`` e ``days[i + 1]``."""
         self.days = days
+        self.quebras = quebras
+        self._posicoes = list(
+            accumulate(
+                (self.LARGURA_DA_QUEBRA if i - 1 in quebras else 1 for i in range(1, len(days))),
+                initial=0,
+            )
+        )
         self.queue_draw()
 
-    def _x(self, index: int, width: int) -> float:
+    def _x_da_posicao(self, posicao: float, width: int) -> float:
         plot = width - self.MARGIN_LEFT - self.MARGIN_RIGHT
         if len(self.days) == 1:
             return self.MARGIN_LEFT + plot / 2
-        return self.MARGIN_LEFT + plot * index / (len(self.days) - 1)
+        return self.MARGIN_LEFT + plot * posicao / self._posicoes[-1]
+
+    def _x(self, index: int, width: int) -> float:
+        return self._x_da_posicao(self._posicoes[index], width)
 
     def _by_month(self) -> bool:
         # Mais de dois meses na tela e "12/09" vira ruído que não diz o ano;
@@ -165,6 +232,22 @@ class PlaytimeChart(Gtk.DrawingArea):
         cr.move_to(left, y - height / 2)
         PangoCairo.show_layout(cr, layout)
 
+    def _sem_encostar(self, indices: list[int]) -> list[int]:
+        """Tira o rótulo que ficaria colado no anterior: os dois lados de uma
+        quebra podem ser meses diferentes a um passo de distância. Dos dois,
+        fica o do dia 1º."""
+        if not self._posicoes:
+            return indices
+        minimo = self._posicoes[-1] / 10
+        ficam: list[int] = []
+        for i in indices:
+            if ficam and self._posicoes[i] - self._posicoes[ficam[-1]] < minimo:
+                if self.days[i][0].day == 1 and self.days[ficam[-1]][0].day != 1:
+                    ficam[-1] = i
+                continue
+            ficam.append(i)
+        return ficam
+
     def labeled_indices(self) -> list[int]:
         """Os dias que ganham rótulo no eixo X, no máximo uns 6.
 
@@ -174,8 +257,19 @@ class PlaytimeChart(Gtk.DrawingArea):
         ponto de encostar.
         """
         if self._by_month():
-            starts = [i for i, (day, _s) in enumerate(self.days) if day.day == 1]
-            return starts[:: max(1, math.ceil(len(starts) / 6))]
+            # O dia 1º pode ter caído no miolo de uma pausa cortada: aí o mês
+            # é rotulado no primeiro dia dele que sobrou depois da quebra.
+            starts = [
+                i
+                for i, (day, _s) in enumerate(self.days)
+                if day.day == 1
+                or (
+                    i - 1 in self.quebras
+                    and (self.days[i - 1][0].year, self.days[i - 1][0].month)
+                    != (day.year, day.month)
+                )
+            ]
+            return self._sem_encostar(starts[:: max(1, math.ceil(len(starts) / 6))])
 
         count = len(self.days)
         every = max(1, math.ceil(count / 6))
@@ -234,12 +328,43 @@ class PlaytimeChart(Gtk.DrawingArea):
 
         points = [(self._x(i, width), y_of(h)) for i, h in enumerate(hours)]
 
-        if count > 1:
-            # Área sob a linha, bem clara, para o volume ser lido de relance.
-            cr.move_to(points[0][0], bottom_y)
+        self._desenhar_linha(cr, points, bottom_y, fg, accent)
+
+        # Pontos só enquanto cabem: num período de anos eles viram uma faixa.
+        plot_w = width - self.MARGIN_LEFT - self.MARGIN_RIGHT
+        if count == 1 or plot_w / (self._posicoes[-1] + 1) >= 8:
+            cr.set_source_rgba(accent.red, accent.green, accent.blue, 1)
             for x, y in points:
+                cr.arc(x, y, 3, 0, 2 * math.pi)
+                cr.fill()
+
+    def _desenhar_linha(
+        self, cr: Any, points: list[tuple[float, float]], bottom_y: float, fg: Any, accent: Any
+    ) -> None:
+        """A linha das horas e a área sob ela, em trechos separados pelas quebras."""
+        # Cada pausa cortada: uma linha tracejada no meio do vão, e a linha do
+        # gráfico não o atravessa, para ninguém ler o vão como dias seguidos.
+        cr.set_source_rgba(fg.red, fg.green, fg.blue, 0.35)
+        cr.set_line_width(1)
+        cr.set_dash([4, 4])
+        for i in self.quebras:
+            x = round((points[i][0] + points[i + 1][0]) / 2) + 0.5
+            cr.move_to(x, self.MARGIN_TOP)
+            cr.line_to(x, bottom_y)
+            cr.stroke()
+        cr.set_dash([])
+
+        count = len(points)
+        inicios = [0] + [i + 1 for i in sorted(self.quebras)]
+        fins = [i + 1 for i in sorted(self.quebras)] + [count]
+        for trecho in (points[a:b] for a, b in zip(inicios, fins)):
+            if len(trecho) < 2:
+                continue
+            # Área sob a linha, bem clara, para o volume ser lido de relance.
+            cr.move_to(trecho[0][0], bottom_y)
+            for x, y in trecho:
                 cr.line_to(x, y)
-            cr.line_to(points[-1][0], bottom_y)
+            cr.line_to(trecho[-1][0], bottom_y)
             cr.close_path()
             cr.set_source_rgba(accent.red, accent.green, accent.blue, 0.15)
             cr.fill()
@@ -247,18 +372,10 @@ class PlaytimeChart(Gtk.DrawingArea):
             cr.set_source_rgba(accent.red, accent.green, accent.blue, 1)
             cr.set_line_width(2)
             cr.set_line_join(1)  # cairo.LINE_JOIN_ROUND
-            cr.move_to(*points[0])
-            for x, y in points[1:]:
+            cr.move_to(*trecho[0])
+            for x, y in trecho[1:]:
                 cr.line_to(x, y)
             cr.stroke()
-
-        # Pontos só enquanto cabem: num período de anos eles viram uma faixa.
-        plot_w = width - self.MARGIN_LEFT - self.MARGIN_RIGHT
-        if count == 1 or plot_w / count >= 8:
-            cr.set_source_rgba(accent.red, accent.green, accent.blue, 1)
-            for x, y in points:
-                cr.arc(x, y, 3, 0, 2 * math.pi)
-                cr.fill()
 
     def on_query_tooltip(
         self, _widget: Any, x: int, _y: int, _keyboard: bool, tooltip: Gtk.Tooltip
@@ -267,13 +384,19 @@ class PlaytimeChart(Gtk.DrawingArea):
         grandeza."""
         if not self.days:
             return False
-        # O inverso de `_x`, que é linear: sem varrer todos os dias a cada
-        # movimento do mouse, o que em anos de histórico são milhares.
+        # O inverso de `_x`, por busca binária nas posições: sem varrer todos
+        # os dias a cada movimento do mouse, o que em anos de histórico são
+        # milhares.
         plot = self.get_width() - self.MARGIN_LEFT - self.MARGIN_RIGHT
         last = len(self.days) - 1
         index = 0
         if last > 0 and plot > 0:
-            index = min(max(round((x - self.MARGIN_LEFT) / plot * last), 0), last)
+            posicao = (x - self.MARGIN_LEFT) / plot * self._posicoes[-1]
+            depois = min(max(bisect_left(self._posicoes, posicao), 1), last)
+            # O mais perto dos dois vizinhos.
+            antes = depois - 1
+            meio = (self._posicoes[antes] + self._posicoes[depois]) / 2
+            index = antes if posicao < meio else depois
         day, seconds = self.days[index]
         stamp = int(datetime.combine(day, datetime.min.time()).timestamp())
         tooltip.set_text(f"{format_session_date(stamp)}: {tempo_ou_nenhuma(seconds)}")
@@ -467,7 +590,10 @@ class SessionHistoryDialog(Adw.Dialog):
             self._sessions, self.period.get_active_name(), date.today()
         )
         days = session_log.daily_seconds(self._sessions, first, last)
-        self.chart.set_days(days)
+        if self.period.get_active_name() == "all":
+            self.chart.set_days(*sem_lacunas_longas(days))
+        else:
+            self.chart.set_days(days)
         # A variável é o tempo jogado no período escolhido
         self.chart_total.set_label(
             _("{} no período").format(
