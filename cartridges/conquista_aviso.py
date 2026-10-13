@@ -67,7 +67,7 @@ def _no_volume(dados: bytes, volume: int) -> bytes:
     fator = volume / 100  # nunca acima de 1: o resultado cabe em 16 bits
     amostras = array.array("h", (round(amostra * fator) for amostra in amostras))
     saida = io.BytesIO()
-    with wave.open(saida, "wb") as escrita:
+    with wave.Wave_write(saida) as escrita:
         escrita.setparams(parametros)
         escrita.writeframes(amostras.tobytes())
     return saida.getvalue()

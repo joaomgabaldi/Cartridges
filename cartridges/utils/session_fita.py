@@ -1431,7 +1431,7 @@ _tipo_em_curso: Optional[str] = None
 
 def _limpar_fila_de_pulsos() -> None:
     """Nada esperando, nada em curso. Chamar com ``_TRAVA_PULSO`` na mão."""
-    global _tipo_em_curso  # noqa: PLW0603
+    global _tipo_em_curso  # noqa: PLW0603  # pylint: disable=global-statement
     _fila_de_pulsos.clear()
     _tipo_em_curso = None
 
