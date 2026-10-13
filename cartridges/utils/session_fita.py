@@ -1313,7 +1313,7 @@ def comecar(game: "Game") -> None:
     with _TRAVA_PULSO:
         _jogo_da_sessao = game
         _teste_do_pulso = None
-        _fila_de_pulsos.clear()
+        _limpar_fila_de_pulsos()
         geracoes = _reservar(alvos) if alvos is not None else {}
     if alvos is None:
         return
@@ -1411,10 +1411,13 @@ def estilo_do_pulso() -> str:
 # Da mais fraca à mais forte: o pedido que espera a vez sobe para o maior.
 FORCA_DOS_PULSOS = ("normal", "rara", "completo")
 
-# Uma thread só serve os pulsos. Durante um pulso fica no máximo UM pedido
-# esperando: um pedido de conquista só o promove ao tipo mais forte, já um
-# teste novo toma o lugar da fila inteira. Esta trava guarda a sessão, o teste
-# do pulso, a fila e a vez de cada fita: quem confere o dono do pulso e quem
+# Uma thread só serve os pulsos. Uma rajada de conquistas é um pulso só: o
+# pedido que chega durante um pulso é absorvido, menos o "completo" (100%), que
+# espera e toca logo depois — a não ser que o pulso em curso já seja o
+# "completo". Fica no máximo UM pedido esperando: um pedido de conquista só o
+# promove ao tipo mais forte, já um teste novo toma o lugar da fila inteira.
+# Esta trava guarda a sessão, o teste do pulso, a fila, o tipo em curso e a vez
+# de cada fita: quem confere o dono do pulso e quem
 # encerra a sessão ou o teste tiram a vez das fitas dentro dela, e nenhum passo
 # de pulso reserva depois de o dono perder a validade. Dentro dela só entram a
 # conferência, a reserva (``_TRAVA_DAS_TRAVAS``, nunca o contrário) e a fila —
@@ -1422,6 +1425,15 @@ FORCA_DOS_PULSOS = ("normal", "rara", "completo")
 _TRAVA_PULSO = threading.Lock()
 _fila_de_pulsos: list[tuple[object, str]] = []
 _pulsando = False
+# O tipo do pulso que a thread está tocando agora, ou None.
+_tipo_em_curso: Optional[str] = None
+
+
+def _limpar_fila_de_pulsos() -> None:
+    """Nada esperando, nada em curso. Chamar com ``_TRAVA_PULSO`` na mão."""
+    global _tipo_em_curso  # noqa: PLW0603
+    _fila_de_pulsos.clear()
+    _tipo_em_curso = None
 
 
 def _encerrar_pulsos(alvos: Optional[list[Fita]] = None) -> Optional[dict[str, int]]:
@@ -1432,7 +1444,7 @@ def _encerrar_pulsos(alvos: Optional[list[Fita]] = None) -> Optional[dict[str, i
     with _TRAVA_PULSO:
         _jogo_da_sessao = None
         _teste_do_pulso = None
-        _fila_de_pulsos.clear()
+        _limpar_fila_de_pulsos()
         return _reservar(alvos) if alvos is not None else None
 
 
@@ -1447,7 +1459,8 @@ def pulsar_conquista(tipo: str) -> None:
     """Uma conquista saiu: as fitas piscam na cor do pulso e voltam à cor do jogo.
 
     Chamar da thread de UI. Não faz nada fora de sessão, com o recurso
-    desligado ou com um tipo que não está em ``FORCA_DOS_PULSOS``.
+    desligado ou com um tipo que não está em ``FORCA_DOS_PULSOS``. Durante um
+    pulso, só o "completo" espera a vez (ver ``_TRAVA_PULSO``).
     """
     global _pulsando  # noqa: PLW0603
     jogo = _jogo_da_sessao
@@ -1460,6 +1473,8 @@ def pulsar_conquista(tipo: str) -> None:
             esperando = _fila_de_pulsos[0][1]
             if FORCA_DOS_PULSOS.index(tipo) > FORCA_DOS_PULSOS.index(esperando):
                 _fila_de_pulsos[0] = (jogo, tipo)
+        elif _pulsando and (tipo != "completo" or _tipo_em_curso == "completo"):
+            return  # a mesma rajada: o pulso em curso basta
         else:
             _fila_de_pulsos.append((jogo, tipo))
         if _pulsando:
@@ -1478,17 +1493,19 @@ def _servir_em_thread(mensagem_de_falha: str) -> None:
         logging.warning(mensagem_de_falha, exc_info=True)
         with _TRAVA_PULSO:
             _pulsando = False
-            _fila_de_pulsos.clear()
+            _limpar_fila_de_pulsos()
 
 
 def _servir_pulsos() -> None:
-    global _pulsando  # noqa: PLW0603
+    global _pulsando, _tipo_em_curso  # noqa: PLW0603
     while True:
         with _TRAVA_PULSO:
             if not _fila_de_pulsos:
                 _pulsando = False
+                _tipo_em_curso = None
                 return
             dono, tipo = _fila_de_pulsos.pop(0)
+            _tipo_em_curso = tipo
         try:
             _pulsar(dono, tipo)
         except Exception:  # pylint: disable=broad-exception-caught

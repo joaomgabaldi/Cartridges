@@ -127,9 +127,10 @@ def _avisar(desbloqueadas: list[Desbloqueada]) -> None:
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning("Falha ao mostrar o aviso de conquista", exc_info=True)
     try:
-        if shared.schema.get_boolean("conquistas-iluminacao"):
-            for desbloqueada in desbloqueadas:
-                session_fita.pulsar_conquista(tipo_do_pulso(desbloqueada))
+        if shared.schema.get_boolean("conquistas-iluminacao") and desbloqueadas:
+            # Um lote é uma rajada: um pulso só, do tipo mais forte.
+            tipos = [tipo_do_pulso(desbloqueada) for desbloqueada in desbloqueadas]
+            session_fita.pulsar_conquista(max(tipos, key=session_fita.FORCA_DOS_PULSOS.index))
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning("Falha ao pulsar a iluminação pela conquista", exc_info=True)
     try:

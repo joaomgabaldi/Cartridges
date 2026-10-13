@@ -2065,14 +2065,48 @@ def _pedir_durante_o_pulso(monkeypatch, *tipos):
     monkeypatch.setattr(session_fita.time, "sleep", dormir)
 
 
-def test_pulsos_pedidos_juntos_entram_em_fila(pulso, monkeypatch):
+def test_pedidos_comuns_durante_um_pulso_sao_absorvidos(pulso, monkeypatch):
     _pedir_durante_o_pulso(monkeypatch, "rara", "normal")
     session_fita.pulsar_conquista("normal")
     assert len(pulso.tarefas) == 1  # uma thread serve a fila
     pulso.tarefas.pop(0)()
-    # O normal que tocava, e um só pedido à espera: a rara.
-    assert _cores(pulso.modulo).count(_ouro()) == 1 + 2
+    # Só o normal que tocava: a rajada é um pulso só.
+    assert _cores(pulso.modulo).count(_ouro()) == 1
+    assert session_fita._fila_de_pulsos == [] and session_fita._pulsando is False
     assert len(pulso.tarefas) == 0
+
+
+def test_completo_durante_um_completo_e_absorvido(pulso, monkeypatch):
+    _pedir_durante_o_pulso(monkeypatch, "completo")
+    session_fita.pulsar_conquista("completo")
+    pulso.tarefas.pop(0)()
+    assert _cores(pulso.modulo).count(_ouro()) == 4
+
+
+def test_pedido_antes_de_o_pulso_comecar_ainda_promove(pulso):
+    session_fita.pulsar_conquista("normal")
+    session_fita.pulsar_conquista("rara")  # a thread ainda não tirou o "normal" da fila
+    pulso.tarefas.pop(0)()
+    assert _cores(pulso.modulo).count(_ouro()) == 2
+
+
+def test_completo_esperando_nao_pulsa_depois_do_fim_da_sessao(pulso, monkeypatch):
+    chamadas = {"n": 0}
+    dormir_de_verdade = session_fita.time.sleep
+
+    def dormir(segundos):
+        chamadas["n"] += 1
+        if chamadas["n"] == 1:
+            session_fita.pulsar_conquista("completo")
+            session_fita.voltar()
+            pulso.tarefas.pop()()  # a volta à cor do app roda já
+        dormir_de_verdade(0)
+
+    monkeypatch.setattr(session_fita.time, "sleep", dormir)
+    session_fita.pulsar_conquista("normal")
+    pulso.tarefas.pop(0)()
+    assert _cores(pulso.modulo).count(_ouro()) == 1
+    assert session_fita._tipo_em_curso is None
 
 
 def test_pedidos_durante_um_pulso_viram_um_so_do_tipo_mais_forte(pulso, monkeypatch):

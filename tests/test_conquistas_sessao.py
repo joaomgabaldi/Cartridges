@@ -70,6 +70,22 @@ def test_conquista_nova_mostra_cartao_e_pulsa(make_game, isolar):
     assert pulsos == ["rara"]
 
 
+def test_lote_pede_um_pulso_do_tipo_mais_forte(make_game, isolar):
+    _mostrados, pulsos = isolar
+    sessao.comecar(make_game())
+    _VigiaFalso.criados[0].avisar(
+        [Desbloqueada("A", _info(), False), Desbloqueada("B", _info(rara=True), True)]
+    )
+    assert pulsos == ["completo"]
+
+
+def test_lote_de_comuns_pede_um_pulso(make_game, isolar):
+    _mostrados, pulsos = isolar
+    sessao.comecar(make_game())
+    _VigiaFalso.criados[0].avisar([Desbloqueada(n, _info(), False) for n in "ABC"])
+    assert pulsos == ["normal"]
+
+
 def test_sem_catalogo_pulsa_sem_cartao(make_game, isolar):
     mostrados, pulsos = isolar
     sessao.comecar(make_game())
