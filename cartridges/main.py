@@ -556,9 +556,13 @@ class CartridgesApplication(Adw.Application):
         janela, self._restaurando = self._restaurando, None
         # A principal nasce antes de a da restauração sair: o app sem nenhuma
         # janela, nem por um instante, poderia encerrar.
-        self._abrir()
-        if janela is not None:
-            janela.terminar()
+        try:
+            self._abrir()
+        finally:
+            # Mesmo com a abertura quebrada: uma janela sem fechar, presa em
+            # 100%, só sairia pelo Gerenciador de Tarefas.
+            if janela is not None:
+                janela.terminar()
         return False
 
     def _abrir(self) -> None:
@@ -580,8 +584,9 @@ class CartridgesApplication(Adw.Application):
         self.apply_windows_theme()
         self.watch_windows_theme()
 
-        # Create the main window. A second activation returned early above, so
-        # there is never an existing window here.
+        # Create the main window. A second activation returns early in
+        # `do_activate`, so there is never another main window here (only, after
+        # a restore, the "Restaurando…" one, which goes away right after).
         shared.win = CartridgesWindow(application=self)
 
         # Restore the window's geometry, and save it back on the way out. This

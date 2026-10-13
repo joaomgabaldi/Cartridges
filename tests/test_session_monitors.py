@@ -208,8 +208,19 @@ class TestNumeracao:
 
         assert [tela.device for tela in telas] == ["\\\\.\\DISPLAY2", "\\\\.\\DISPLAY10"]
 
+
 def test_sem_a_sonda_da_janela():
     from cartridges.utils import window_geometry  # noqa: PLC0415
 
     for nome in ("_vigiar", "_vigiar_comecar", "_vigiar_parar", "_estado_da_janela", "_vigia_id"):
         assert not hasattr(window_geometry, nome)
+
+
+def test_nada_le_as_janelas_de_outros_programas():
+    """A sonda gravava no log o título da janela em primeiro plano de outros programas."""
+    import inspect  # noqa: PLC0415
+
+    from cartridges.utils import window_geometry  # noqa: PLC0415
+
+    fonte = inspect.getsource(window_geometry)
+    assert "GetForegroundWindow" not in fonte and "GetWindowTextW" not in fonte

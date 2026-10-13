@@ -91,12 +91,6 @@ _user32.MonitorFromRect.argtypes = [ctypes.POINTER(wintypes.RECT), wintypes.DWOR
 _user32.MonitorFromRect.restype = wintypes.HANDLE
 _user32.IsIconic.argtypes = [wintypes.HWND]
 _user32.IsIconic.restype = wintypes.BOOL
-_user32.IsZoomed.argtypes = [wintypes.HWND]
-_user32.IsZoomed.restype = wintypes.BOOL
-_user32.GetForegroundWindow.argtypes = []
-_user32.GetForegroundWindow.restype = wintypes.HWND
-_user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
-_user32.GetWindowTextW.restype = ctypes.c_int
 
 
 class _MONITORINFOEXW(ctypes.Structure):

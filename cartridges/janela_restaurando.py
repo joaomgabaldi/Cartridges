@@ -26,7 +26,7 @@ class JanelaRestaurando(Adw.Window):
         caixa = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
             spacing=12,
-            margin_top=24,
+            margin_top=12,
             margin_bottom=24,
             margin_start=24,
             margin_end=24,
@@ -40,7 +40,13 @@ class JanelaRestaurando(Adw.Window):
         self.barra = Gtk.ProgressBar(show_text=True, text="0%")
         for filho in (self.titulo, self.texto, self.barra):
             caixa.append(filho)
-        self.set_content(caixa)
+
+        # Para arrastar e minimizar durante a espera; fechar, não.
+        self.cabecalho = Adw.HeaderBar(decoration_layout=":minimize")
+        barra_de_titulo = Adw.ToolbarView()
+        barra_de_titulo.add_top_bar(self.cabecalho)
+        barra_de_titulo.set_content(caixa)
+        self.set_content(barra_de_titulo)
 
     def _ao_fechar(self, *_args: Any) -> bool:
         return not self._pode_fechar

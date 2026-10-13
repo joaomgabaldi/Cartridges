@@ -25,3 +25,9 @@ def test_nao_fecha_antes_de_terminar():
     janela = JanelaRestaurando()
     assert janela.emit("close-request") is True
     janela.terminar()
+
+
+def test_tem_barra_de_titulo_so_com_minimizar():
+    janela = JanelaRestaurando()
+    assert janela.cabecalho.get_decoration_layout() == ":minimize"
+    janela.terminar()

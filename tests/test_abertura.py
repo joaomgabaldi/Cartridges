@@ -47,7 +47,7 @@ def test_com_backup_agendado_a_abertura_espera_a_restauracao(app, monkeypatch):
     aplicacao, tarefas, aberturas = app
     monkeypatch.setattr(main_module.backup, "ha_pendente", lambda: True)
     monkeypatch.setattr(
-        main_module.backup, "aplicar_pendente", lambda progresso=None: progresso(0.5) or True
+        main_module.backup, "aplicar_pendente", lambda progresso: progresso(0.5) or True
     )
     aplicacao.do_activate()
     (janela,) = _criadas
@@ -85,3 +85,18 @@ def test_sem_backup_agendado_abre_na_hora(app, monkeypatch):
     monkeypatch.setattr(main_module.backup, "aplicar_pendente", lambda progresso=None: None)
     aplicacao.do_activate()
     assert _criadas == [] and tarefas == [] and aberturas == [False]
+
+
+def test_falha_na_abertura_ainda_tira_a_janela_da_restauracao(app, monkeypatch):
+    aplicacao, tarefas, _aberturas = app
+    monkeypatch.setattr(main_module.backup, "ha_pendente", lambda: True)
+    monkeypatch.setattr(main_module.backup, "aplicar_pendente", lambda progresso: True)
+
+    def quebra():
+        raise RuntimeError("falha de teste")
+
+    monkeypatch.setattr(aplicacao, "_abrir", quebra)
+    aplicacao.do_activate()
+    with pytest.raises(RuntimeError):
+        tarefas.pop()()
+    assert _criadas[0].passos == ["terminou"]
