@@ -198,6 +198,22 @@ def _nada_para_restaurar() -> bool:
     return False
 
 
+def _restauracao_incompleta(falhas: int) -> bool:
+    """O fim de "Restaurar todos" com falhas. Diálogo, e não aviso: o pedido vem das
+    Preferências, e um aviso ficaria escondido atrás delas."""
+    if shared.win is not None:
+        create_dialog(
+            shared.win,
+            _("Restauração incompleta"),
+            ngettext(
+                "Não foi possível restaurar os saves de {} jogo.",
+                "Não foi possível restaurar os saves de {} jogos.",
+                falhas,
+            ).format(falhas),
+        )
+    return False
+
+
 def _marcar_nova(nome: str, inicio: datetime, comentario: str) -> None:
     """Grava ``comentario`` na versão mais nova do jogo, só se ela foi criada depois de
     ``inicio``: um backup sem mudança não cria versão, e uma versão antiga nunca leva a
@@ -573,13 +589,7 @@ def _restaurar_todos(
                     falhas += 1
             # Um aviso só, no fim: uma falha por jogo viraria uma fila de avisos.
             if falhas:
-                _avisar(
-                    ngettext(
-                        "Não foi possível restaurar os saves de {} jogo.",
-                        "Não foi possível restaurar os saves de {} jogos.",
-                        falhas,
-                    ).format(falhas)
-                )
+                entregar_na_tela(_restauracao_incompleta, falhas)
             _ler_versoes(biblioteca)
     finally:
         _terminar_tarefa(tarefa)

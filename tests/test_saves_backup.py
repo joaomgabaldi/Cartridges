@@ -888,7 +888,7 @@ def test_restaurar_todos_relê_o_cache_no_fim(store, make_game, falso, esperar):
     assert falso.comandos[-1] == ["backups"]  # e depois
 
 
-def test_restaurar_todos_segue_depois_de_uma_falha_e_avisa_uma_vez(store, make_game, falso, esperar):
+def test_restaurar_todos_segue_depois_de_uma_falha_e_avisa_uma_vez(store, make_game, falso, esperar, dialogos):
     falso.versoes = {"A": ["v1"], "B": ["v1"]}
     na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
     na_biblioteca(store, make_game, game_id="b", name="Jogo B", steam_appid="2", ludusavi_nome="B")
@@ -898,7 +898,9 @@ def test_restaurar_todos_segue_depois_de_uma_falha_e_avisa_uma_vez(store, make_g
     esperar()
 
     assert len(falso.restauracoes()) == 2
-    assert titulos() == ["Não foi possível restaurar os saves de 2 jogos."]
+    assert [a[1:] for a in dialogos] == [("Restauração incompleta", "Não foi possível restaurar os saves de 2 jogos.")]
+    assert dialogos[0][0] is shared.win  # a janela principal, como "Nada para restaurar"
+    assert toasts() == []
 
 
 def test_restaurando_durante_e_depois(store, make_game, falso, esperar):
@@ -1008,7 +1010,7 @@ def test_restauracao_aborta_se_o_nome_mudou_no_meio(store, make_game, falso, esp
     _sem_marcas()
 
 
-def test_restaurar_todos_aborta_o_jogo_cujo_nome_mudou_no_meio(store, make_game, falso, esperar, monkeypatch):
+def test_restaurar_todos_aborta_o_jogo_cujo_nome_mudou_no_meio(store, make_game, falso, esperar, monkeypatch, dialogos):
     falso.versoes = {"A": ["v1"], "B": ["v1"]}
     a = na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
     b = na_biblioteca(store, make_game, game_id="b", name="Jogo B", steam_appid="2", ludusavi_nome="B")
@@ -1030,11 +1032,12 @@ def test_restaurar_todos_aborta_o_jogo_cujo_nome_mudou_no_meio(store, make_game,
 
     assert len(falso.chamou("backup")) == 1  # só o do jogo que ficou
     assert len(falso.restauracoes()) == 1
-    assert titulos() == ["Não foi possível restaurar os saves de 1 jogo."]
+    assert [a[1:] for a in dialogos] == [("Restauração incompleta", "Não foi possível restaurar os saves de 1 jogo.")]
+    assert toasts() == []
     _sem_marcas()
 
 
-def test_restaurar_todos_conta_o_jogo_que_perdeu_o_nome_antes_da_lista(store, make_game, falso, esperar):
+def test_restaurar_todos_conta_o_jogo_que_perdeu_o_nome_antes_da_lista(store, make_game, falso, esperar, dialogos):
     falso.versoes = {"A": ["v1"], "B": ["v1"]}
     na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
     b = na_biblioteca(store, make_game, game_id="b", name="Jogo B", steam_appid="2", ludusavi_nome="B")
@@ -1046,7 +1049,8 @@ def test_restaurar_todos_conta_o_jogo_que_perdeu_o_nome_antes_da_lista(store, ma
 
     assert [c[1] for c in falso.chamou("backup")] == ["A"]
     assert [c[1] for c in falso.restauracoes()] == ["A"]
-    assert titulos() == ["Não foi possível restaurar os saves de 1 jogo."]
+    assert [a[1:] for a in dialogos] == [("Restauração incompleta", "Não foi possível restaurar os saves de 1 jogo.")]
+    assert toasts() == []
     _sem_marcas()
 
 
@@ -1063,8 +1067,8 @@ def test_restaurar_todos_em_que_todos_perderam_o_nome_avisa_a_falha(
     esperar()
 
     # As cópias continuam lá: os jogos não foram restaurados, o que é falha, não "nada a restaurar".
-    assert dialogos == []
-    assert titulos() == ["Não foi possível restaurar os saves de 2 jogos."]
+    assert [a[1:] for a in dialogos] == [("Restauração incompleta", "Não foi possível restaurar os saves de 2 jogos.")]
+    assert toasts() == []
     assert falso.chamou("backup") == []
     assert falso.restauracoes() == []
     assert 0 not in totais
@@ -1442,7 +1446,7 @@ def test_previa_e_restore_veem_o_mesmo_config(store, make_game, falso, esperar):
     assert vistos[0]["redirects"]  # o redirecionamento do usuário, nos dois
 
 
-def test_restaurar_todos_pula_incompleta(store, make_game, falso, esperar):
+def test_restaurar_todos_pula_incompleta(store, make_game, falso, esperar, dialogos):
     falso.versoes = {"A": ["v3", "v2"], "B": ["w1"]}
     falso.comentarios[("A", "v3")] = "cartridges:incompleta"
     falso.comentarios[("B", "w1")] = "cartridges:incompleta"
@@ -1454,4 +1458,5 @@ def test_restaurar_todos_pula_incompleta(store, make_game, falso, esperar):
 
     assert [c[1] for c in falso.chamou("backup")] == ["A"]  # B nem ganha cópia
     assert falso.restauracoes() == [["restore", "A", "--force", "--backup", "v2"]]
-    assert titulos() == ["Não foi possível restaurar os saves de 1 jogo."]
+    assert [a[1:] for a in dialogos] == [("Restauração incompleta", "Não foi possível restaurar os saves de 1 jogo.")]
+    assert toasts() == []
