@@ -94,11 +94,14 @@
     <key name="session-move-window" type="b">
       <default>false</default>
     </key>
-    <!-- Which monitor to send it to, as the Win32 device name the desktop
-         numbering uses ("\\.\DISPLAY2"). Empty, the primary monitor, or a
-         monitor that is no longer attached, means the window stays where it
-         is. Not an index: unplugging a screen renumbers the list, and an index
-         would then name a different monitor rather than none. -->
+    <!-- Which monitor to send it to, as the monitor's device interface path
+         ("\\?\DISPLAY#DEL4123#5&...#{e6f07b5f-...}"), which names the screen
+         and the port it is plugged into. Older versions stored the Win32 device
+         name ("\\.\DISPLAY2"), which Windows swaps between screens; it is still
+         accepted and rewritten when the preferences open. Empty, the primary
+         monitor, or a monitor that is no longer attached, means the window stays
+         where it is. Not an index: unplugging a screen renumbers the list, and an
+         index would then name a different monitor rather than none. -->
     <key name="session-monitor" type="s">
       <default>""</default>
     </key>

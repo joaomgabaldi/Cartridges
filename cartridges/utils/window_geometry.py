@@ -142,6 +142,28 @@ _user32.EnumDisplayMonitors.restype = wintypes.BOOL
 _user32.GetMonitorInfoW.argtypes = [wintypes.HMONITOR, ctypes.POINTER(_MONITORINFOEXW)]
 _user32.GetMonitorInfoW.restype = wintypes.BOOL
 
+
+class _DISPLAY_DEVICEW(ctypes.Structure):
+    _fields_ = [
+        ("cb", wintypes.DWORD),
+        ("DeviceName", wintypes.WCHAR * 32),
+        ("DeviceString", wintypes.WCHAR * 128),
+        ("StateFlags", wintypes.DWORD),
+        ("DeviceID", wintypes.WCHAR * 128),
+        ("DeviceKey", wintypes.WCHAR * 128),
+    ]
+
+
+_user32.EnumDisplayDevicesW.argtypes = [
+    wintypes.LPCWSTR,
+    wintypes.DWORD,
+    ctypes.POINTER(_DISPLAY_DEVICEW),
+    wintypes.DWORD,
+]
+_user32.EnumDisplayDevicesW.restype = wintypes.BOOL
+_EDD_GET_DEVICE_INTERFACE_NAME = 0x00000001
+_DISPLAY_DEVICE_ACTIVE = 0x00000001
+
 # What the schema holds until a window has been closed once. Not 0, which is a
 # perfectly real coordinate, and not -1, which a second monitor placed above the
 # primary genuinely produces: this desktop's portrait screen starts at y=-476.
@@ -189,6 +211,30 @@ class Monitor(NamedTuple):
     height: int
     primary: bool
     ordinal: int = 0  # 1-based place in :func:`monitors`; 0 when built by hand
+    # O caminho do monitor (``\\\\?\\DISPLAY#DEL4123#5&...#{e6f07b5f-...}``): o
+    # modelo e a saída de vídeo em que ele está ligado. Vazio quando o Windows
+    # não o informa, e então vale o ``device``.
+    path: str = ""
+
+    @property
+    def key(self) -> str:
+        """O que a preferência ``session-monitor`` guarda para esta tela.
+
+        Não o ``device``: o Windows troca os nomes ``DISPLAYn`` entre as telas
+        quando elas dormem e acordam, são religadas em outra ordem ou o driver
+        reinicia, e a tela escolhida passava a ser a outra. O caminho é do
+        monitor e da porta em que ele está, e só muda se o cabo mudar de porta.
+        """
+        return self.path or self.device
+
+    def is_stored(self, stored: str) -> bool:
+        """Se ``stored`` (o valor da preferência) aponta para esta tela.
+
+        Aceita também o ``device``, que é o que as versões anteriores gravavam:
+        a escolha antiga continua valendo até a tela de preferências gravar o
+        caminho no lugar dele.
+        """
+        return bool(stored) and stored in (self.path, self.device)
 
     @property
     def number(self) -> str:
@@ -210,12 +256,38 @@ def _device_order(monitor: Monitor) -> tuple[int, str]:
     return (int(digits) if digits.isdigit() else 0, monitor.device)
 
 
+def _place_order(monitor: Monitor) -> tuple[bool, int, int, tuple[int, str]]:
+    """O principal primeiro; os outros da esquerda para a direita, depois de
+    cima para baixo. O nome só desempata telas na mesma posição."""
+    return (not monitor.primary, monitor.x, monitor.y, _device_order(monitor))
+
+
 def numbered(found: list[Monitor]) -> list[Monitor]:
-    """The monitors in device order, each told its place (1, 2, 3...)."""
+    """The monitors in place order, each told its place (1, 2, 3...).
+
+    Pela posição na área de trabalho, e não pela ordem dos nomes ``DISPLAYn``:
+    o Windows troca esses nomes entre as telas (veja :attr:`Monitor.key`), e a
+    tela da esquerda virava o "Monitor 3" de uma sessão para a outra. A
+    posição só muda quando o usuário rearranja as telas.
+    """
     return [
         monitor._replace(ordinal=place)
-        for place, monitor in enumerate(sorted(found, key=_device_order), 1)
+        for place, monitor in enumerate(sorted(found, key=_place_order), 1)
     ]
+
+
+def _monitor_path(device: str) -> str:
+    """O caminho do monitor ligado em ``device``, ou "" se o Windows não diz."""
+    for index in range(4):  # mais de uma só em telas espelhadas
+        info = _DISPLAY_DEVICEW()
+        info.cb = ctypes.sizeof(_DISPLAY_DEVICEW)
+        if not _user32.EnumDisplayDevicesW(
+            device, index, ctypes.byref(info), _EDD_GET_DEVICE_INTERFACE_NAME
+        ):
+            break
+        if info.StateFlags & _DISPLAY_DEVICE_ACTIVE and info.DeviceID:
+            return info.DeviceID
+    return ""
 
 
 def monitors() -> list[Monitor]:
@@ -239,6 +311,7 @@ def monitors() -> list[Monitor]:
                     area.right - area.left,
                     area.bottom - area.top,
                     bool(info.dwFlags & _MONITORINFOF_PRIMARY),
+                    path=_monitor_path(info.szDevice),
                 )
             )
         return True
@@ -249,7 +322,7 @@ def monitors() -> list[Monitor]:
         logging.warning("Could not list the monitors: %s", error)
         return []
 
-    # Sorted by name, not by the order the callback fired in: the enumeration
+    # Sorted by place, not by the order the callback fired in: the enumeration
     # order is whatever the driver hands over, and a list that reshuffles
     # between runs would make "Monitor 2" mean a different screen each time.
     return numbered(found)
@@ -397,8 +470,11 @@ def session_geometry() -> Optional[Geometry]:
     return _before_session
 
 
-def move_to_monitor(window: Gtk.Window, device: str) -> bool:
-    """Park ``window`` maximized on ``device``. Says whether it went.
+def move_to_monitor(window: Gtk.Window, stored: str) -> bool:
+    """Park ``window`` maximized on the monitor ``stored`` names. Says whether it went.
+
+    ``stored`` is the ``session-monitor`` preference: a :attr:`Monitor.key`,
+    or the device name older versions saved (:meth:`Monitor.is_stored`).
 
     False for every reason there is not to move — no such monitor attached, the
     monitor is the primary one (where the game runs, which the window would then
@@ -422,12 +498,12 @@ def move_to_monitor(window: Gtk.Window, device: str) -> bool:
     """
     global _before_session, _before_placement  # pylint: disable=global-statement
 
-    target = next((m for m in monitors() if m.device == device), None)
+    target = next((m for m in monitors() if m.is_stored(stored)), None)
     if target is None:
-        logging.info("Monitor %s is not attached; leaving the window alone", device)
+        logging.info("Monitor %s is not attached; leaving the window alone", stored)
         return False
     if target.primary:
-        logging.info("Monitor %s is the primary one; leaving the window alone", device)
+        logging.info("Monitor %s is the primary one; leaving the window alone", stored)
         return False
 
     if (hwnd := _hwnd(window)) is None or (current := read(window)) is None:
@@ -449,7 +525,7 @@ def move_to_monitor(window: Gtk.Window, device: str) -> bool:
     _set_placement(hwnd, placement, _SW_SHOWMAXIMIZED, target)
 
     _before_session, _before_placement = current, placement
-    logging.info("Window parked on %s for the session", device)
+    logging.info("Window parked on %s (%s) for the session", target.device, target.number)
     return True
 
 

@@ -762,9 +762,11 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         opções que dependem de um ficam bloqueadas e desligadas
         (:meth:`block_session_monitor_options`).
 
-        O que está guardado é o nome do dispositivo (``\\\\.\\DISPLAY2``), e não
-        a posição na lista, então desligar um monitor não faz a escolha passar
-        a apontar para outro. Em compensação, abrir esta tela com o monitor
+        O que está guardado é o caminho do monitor (:attr:`Monitor.key`), e não
+        a posição na lista nem o nome ``DISPLAYn``, que o Windows troca entre as
+        telas: desligar um monitor, ou o Windows renomear as telas, não faz a
+        escolha passar a apontar para outro. Uma escolha antiga, gravada pelo
+        nome, é regravada com o caminho ao abrir esta tela. Em compensação, abrir esta tela com o monitor
         escolhido desligado (ou com o principal guardado, de antes de ele sair
         da lista) troca a escolha pelo primeiro da lista e grava: é a única
         forma de a lista mostrar o que vai acontecer de verdade.
@@ -807,7 +809,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             (
                 index
                 for index, monitor in enumerate(self.session_monitors)
-                if monitor.device == stored
+                if monitor.is_stored(stored)
             ),
             0,
         )
@@ -837,7 +839,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         selected = self.session_monitor_row.get_selected()
         if selected < len(self.session_monitors):
             shared.schema.set_string(
-                "session-monitor", self.session_monitors[selected].device
+                "session-monitor", self.session_monitors[selected].key
             )
 
     # region Fitas de LED

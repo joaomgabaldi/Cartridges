@@ -105,6 +105,28 @@ class TestPreferencias:
         assert schema.get_string("session-monitor") == SEGUNDO.device
 
 
+    def test_grava_o_caminho_do_monitor_e_nao_o_nome(self, schema, ligados, monkeypatch):
+        segundo = SEGUNDO._replace(path="\\\\?\\DISPLAY#AAA0001#5&1&UID1#{e6f07b5f}")
+        terceiro = TERCEIRO._replace(path="\\\\?\\DISPLAY#AAA0001#5&1&UID2#{e6f07b5f}")
+        schema["session-monitor"] = terceiro.path
+        ligados(PRINCIPAL, segundo, terceiro)
+
+        dialog = _preferencias(monkeypatch)
+
+        assert dialog.session_monitor_row.get_selected() == 1
+        assert schema.get_string("session-monitor") == terceiro.path
+
+    def test_escolha_antiga_pelo_nome_vira_o_caminho(self, schema, ligados, monkeypatch):
+        terceiro = TERCEIRO._replace(path="\\\\?\\DISPLAY#AAA0001#5&1&UID2#{e6f07b5f}")
+        schema["session-monitor"] = TERCEIRO.device
+        ligados(PRINCIPAL, SEGUNDO, terceiro)
+
+        dialog = _preferencias(monkeypatch)
+
+        assert dialog.session_monitor_row.get_selected() == 1
+        assert schema.get_string("session-monitor") == terceiro.path
+
+
 class TestTelaDeEdicao:
     def test_sem_segundo_monitor_a_linha_fica_bloqueada(self, ligados, win):
         from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
@@ -197,6 +219,17 @@ class TestNumeracao:
             ("\\\\.\\DISPLAY23", "2"),
             ("\\\\.\\DISPLAY24", "3"),
         ]
+
+    def test_nomes_trocados_entre_as_telas_nao_trocam_os_numeros(self):
+        """O Windows troca os nomes DISPLAYn entre as telas (ao acordar, ao
+        religar, quando o driver reinicia); a da esquerda continua sendo a 2."""
+        esquerda = window_geometry.Monitor("\\\\.\\DISPLAY24", -1080, -573, 1080, 1920, False)
+        direita = window_geometry.Monitor("\\\\.\\DISPLAY23", 2560, -573, 1080, 1920, False)
+        principal = window_geometry.Monitor("\\\\.\\DISPLAY22", 0, 0, 2560, 1080, True)
+
+        telas = window_geometry.numbered([direita, principal, esquerda])
+
+        assert [(tela.x, tela.number) for tela in telas] == [(0, "1"), (-1080, "2"), (2560, "3")]
 
     def test_display10_vem_depois_do_display2(self):
         telas = window_geometry.numbered(
