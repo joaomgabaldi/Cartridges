@@ -497,6 +497,17 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         subtitle: _("Reproduz um som quando o aviso aparece");
       }
 
+      Adw.SpinRow conquistas_aviso_volume_row {
+        title: _("Volume do som (%)");
+
+        adjustment: Adjustment {
+          lower: 10;
+          upper: 100;
+          step-increment: 5;
+          page-increment: 10;
+        };
+      }
+
       Adw.ComboRow conquistas_posicao_row {
         title: _("Posição do aviso");
 

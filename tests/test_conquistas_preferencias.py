@@ -124,6 +124,30 @@ def test_som_so_responde_com_o_aviso_ligado(monkeypatch):
     assert preferencias.conquistas_aviso_som_switch.get_sensitive() is False
 
 
+def test_volume_so_responde_com_aviso_e_som_ligados(monkeypatch):
+    preferencias = _preferencias(monkeypatch)
+    volume = preferencias.conquistas_aviso_volume_row
+    preferencias.conquistas_aviso_switch.set_active(True)
+    preferencias.conquistas_aviso_som_switch.set_active(True)
+    assert volume.get_sensitive() is True
+    preferencias.conquistas_aviso_som_switch.set_active(False)
+    assert volume.get_sensitive() is False
+    preferencias.conquistas_aviso_som_switch.set_active(True)
+    preferencias.conquistas_aviso_switch.set_active(False)
+    assert volume.get_sensitive() is False
+
+
+def test_volume_vai_para_o_schema(monkeypatch, settings):
+    principal, _estado = settings
+    preferencias = _preferencias(monkeypatch)
+    volume = preferencias.conquistas_aviso_volume_row
+    assert volume.get_value() == 100
+    volume.set_value(35)
+    assert principal.get_int("conquistas-aviso-som-volume") == 35
+    ajuste = volume.get_adjustment()
+    assert (ajuste.get_lower(), ajuste.get_upper(), ajuste.get_step_increment()) == (10, 100, 5)
+
+
 def test_textos_do_grupo_durante_o_jogo(monkeypatch):
     from gi.repository import Adw  # noqa: PLC0415
 
@@ -146,6 +170,10 @@ def test_textos_do_grupo_durante_o_jogo(monkeypatch):
     assert grupo.get_title() == "Durante o jogo"
     assert not grupo.get_description()
     assert som.get_ancestor(Adw.PreferencesGroup) is grupo
+    volume = preferencias.conquistas_aviso_volume_row
+    assert volume.get_title() == "Volume do som (%)"
+    assert not volume.get_subtitle()
+    assert volume.get_ancestor(Adw.PreferencesGroup) is grupo
 
 
 # A conta Microsoft

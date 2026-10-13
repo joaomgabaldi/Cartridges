@@ -118,6 +118,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     conquistas_ocultas_switch: Adw.SwitchRow = Gtk.Template.Child()
     conquistas_aviso_switch: Adw.SwitchRow = Gtk.Template.Child()
     conquistas_aviso_som_switch: Adw.SwitchRow = Gtk.Template.Child()
+    conquistas_aviso_volume_row: Adw.SpinRow = Gtk.Template.Child()
     conquistas_posicao_row: Adw.ComboRow = Gtk.Template.Child()
     conquistas_iluminacao_switch: Adw.SwitchRow = Gtk.Template.Child()
     conquistas_pulso_cor_row: Adw.ActionRow = Gtk.Template.Child()
@@ -256,6 +257,12 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             Gio.SettingsBindFlags.DEFAULT,
         )
         shared.schema.bind(
+            "conquistas-aviso-som-volume",
+            self.conquistas_aviso_volume_row,
+            "value",
+            Gio.SettingsBindFlags.DEFAULT,
+        )
+        shared.schema.bind(
             "conquistas-iluminacao",
             self.conquistas_iluminacao_switch,
             "active",
@@ -288,6 +295,10 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             self.conquistas_aviso_switch.bind_property(
                 "active", linha, "sensitive", GObject.BindingFlags.SYNC_CREATE
             )
+        # O volume só vale com o aviso e o som ligados.
+        for interruptor in (self.conquistas_aviso_switch, self.conquistas_aviso_som_switch):
+            interruptor.connect("notify::active", lambda *_: self._atualizar_linha_do_volume())
+        self._atualizar_linha_do_volume()
 
         self._conquistas_posicao_id = self.conquistas_posicao_row.connect(
             "notify::selected", self._gravar_posicao_do_aviso
@@ -507,6 +518,12 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         indice = row.get_selected()
         if indice < len(ESTILOS_NA_TELA):
             shared.schema.set_string("conquistas-pulso-estilo", ESTILOS_NA_TELA[indice])
+
+    def _atualizar_linha_do_volume(self) -> None:
+        self.conquistas_aviso_volume_row.set_sensitive(
+            self.conquistas_aviso_switch.get_active()
+            and self.conquistas_aviso_som_switch.get_active()
+        )
 
     def _mostrar_aviso_de_exemplo(self, *_args: Any) -> None:
         # Cliques repetidos não enfileiram vários exemplos: o anterior sai.
