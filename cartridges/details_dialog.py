@@ -587,52 +587,25 @@ class DetailsDialog(Adw.Dialog):
         final_status = self.get_status()
         final_executable = self.executable.get_text()
 
-        if not self.game:
-            if final_name == "":
-                create_dialog(
-                    self, _("Não foi possível adicionar o jogo"), _("O título do jogo não pode ficar vazio.")
-                )
-                return
+        adicionando = not self.game
+        falhou = (
+            _("Não foi possível adicionar o jogo")
+            if adicionando
+            else _("Não foi possível aplicar as alterações")
+        )
+        if final_name == "":
+            create_dialog(self, falhou, _("O título do jogo não pode ficar vazio."))
+            return
 
-            if final_executable == "":
-                create_dialog(
-                    self, _("Não foi possível adicionar o jogo"), _("O executável não pode ficar vazio.")
-                )
-                return
-
-            self.game = Game(
-                {
-                    "game_id": shared.store.proximo_id_importado(),
-                    "source": "imported",
-                    "added": int(time()),
-                    # Campo de identidade, sem padrão na classe: mais abaixo o
-                    # executável de antes é lido para saber se mudou.
-                    "executable": "",
-                }
-            )
-
-        else:
-            if final_name == "":
-                create_dialog(
-                    self,
-                    _("Não foi possível aplicar as alterações"),
-                    _("O título do jogo não pode ficar vazio."),
-                )
-                return
-
-            # Um zerado não tem linha de executável na tela.
-            if final_executable == "" and not self.game.removed:
-                create_dialog(
-                    self,
-                    _("Não foi possível aplicar as alterações"),
-                    _("O executável não pode ficar vazio."),
-                )
-                return
+        # Um zerado não tem linha de executável na tela.
+        if final_executable == "" and (adicionando or not self.game.removed):
+            create_dialog(self, falhou, _("O executável não pode ficar vazio."))
+            return
 
         if typed_release_date and not final_release_date:
             create_dialog(
                 self,
-                _("Não foi possível aplicar as alterações"),
+                falhou,
                 _("A data de lançamento informada é inválida. Utilize o formato 2/set./2026."),
             )
             return
@@ -649,10 +622,24 @@ class DetailsDialog(Adw.Dialog):
         if track_process and not final_process_executable:
             create_dialog(
                 self,
-                _("Não foi possível aplicar as alterações"),
+                falhou,
                 _("Informe o nome do executável para rastrear o tempo de jogo."),
             )
             return
+
+        # Só depois de todas as validações: uma que falhasse com o jogo novo já criado
+        # o deixaria pela metade (sem título), e o clique seguinte o trataria como edição.
+        if adicionando:
+            self.game = Game(
+                {
+                    "game_id": shared.store.proximo_id_importado(),
+                    "source": "imported",
+                    "added": int(time()),
+                    # Campo de identidade, sem padrão na classe: mais abaixo o
+                    # executável de antes é lido para saber se mudou.
+                    "executable": "",
+                }
+            )
 
         self.game.name = final_name
         self.game.developer = final_developer or None

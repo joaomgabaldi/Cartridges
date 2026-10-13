@@ -3301,3 +3301,31 @@ def test_adicionar_jogo_pelo_dialogo_grava_o_jogo(real_window, store, app_dirs):
     details_dialog.apply_preferences()
     (jogo,) = [g for g in store if g.name == "Jogo novo"]
     assert jogo.executable == "cmd /c exit"
+
+
+@pytest.mark.parametrize(
+    ("data", "rastrear", "aviso"),
+    [
+        ("31/13/2026", False, "A data de lançamento informada é inválida. Utilize o formato 2/set./2026."),
+        ("", True, "Informe o nome do executável para rastrear o tempo de jogo."),
+    ],
+)
+def test_adicionar_jogo_recusado_nao_cria_o_jogo(real_window, store, app_dirs, monkeypatch, data, rastrear, aviso):
+    """Uma validação que falha no "Adicionar" não deixa um jogo novo pela metade: o
+    clique seguinte continua sendo de "Adicionar", com o mesmo título nos avisos."""
+    from cartridges import details_dialog as modulo  # noqa: PLC0415
+
+    vistos = []
+    monkeypatch.setattr(modulo, "create_dialog", lambda *args, **_kw: vistos.append(args[1:]))
+
+    dialogo = modulo.DetailsDialog()
+    dialogo.name.set_text("Jogo novo")
+    dialogo.executable.set_text("cmd /c exit")
+    dialogo.release_date.set_text(data)
+    dialogo.track_process_switch.set_active(rastrear)
+    dialogo.process_executable.set_text("")
+    dialogo.apply_preferences()
+
+    assert vistos == [("Não foi possível adicionar o jogo", aviso)]
+    assert dialogo.game is None
+    assert [g for g in store if g.name == "Jogo novo"] == []
