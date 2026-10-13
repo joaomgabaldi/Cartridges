@@ -236,16 +236,11 @@ template $CartridgesWindow: Adw.ApplicationWindow {
           margin-start: 24;
           margin-end: 24;
 
-          Label session_blocker_label {
-            halign: center;
-            wrap: true;
-            wrap-mode: word_char;
-            natural-wrap-mode: word;
-            justify: center;
-
-            styles [
-              "title-1",
-            ]
+          // O logo do jogo (ou o nome, sem logo em disco), como no topo do
+          // histórico de sessões; preenchido em Python a cada sessão. O
+          // respiro embaixo afasta o logo do relógio, que é texto grande também.
+          Adw.Bin session_blocker_cabecalho {
+            margin-bottom: 12;
           }
 
           // Só aparece com a mudança de monitor ligada: é lá que a tela fica

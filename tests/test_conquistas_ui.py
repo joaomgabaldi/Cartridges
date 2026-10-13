@@ -535,6 +535,33 @@ def test_com_157_conquistas_o_cartao_rola_e_o_botao_continua_na_janela(real_wind
     assert limites.get_y() + limites.get_height() <= real_window.get_height()
 
 
+def test_com_logo_alto_e_157_conquistas_o_botao_continua_na_janela(
+    real_window, store, sessao_sem_efeitos, app_dirs, monkeypatch
+):
+    """O logo no topo da tela da sessão é bem mais alto que o título que havia
+    ali: no teto de altura, ele não pode empurrar o botão para fora da janela."""
+    from PIL import Image  # noqa: PLC0415
+
+    from cartridges import session_history  # noqa: PLC0415
+
+    logo = app_dirs.covers / "logo.png"
+    logo.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGBA", (300, 400), (255, 0, 0, 255)).save(logo)  # mais alto que largo
+    monkeypatch.setattr(session_history, "cached_logo_path", lambda _game: logo)
+    catalogo.guardar("570", _catalogo_de(157))
+    game = jogo(store, 1, steam_appid="570")
+    com_fonte(game, "steam:570")
+    _apresentar_e_mostrar(real_window, game)
+
+    ok, limites = real_window.session_blocker_button.compute_bounds(real_window)
+    assert ok
+    assert limites.get_y() >= 0
+    assert limites.get_y() + limites.get_height() <= real_window.get_height()
+    ok, cartao = _cartao(real_window).compute_bounds(real_window)
+    assert ok
+    assert cartao.get_y() + cartao.get_height() <= real_window.get_height()
+
+
 def test_falha_no_cartao_nao_derruba_o_bloqueador(real_window, com_conquistas, sessao_sem_efeitos, monkeypatch):
     def quebrar(_self, _game):
         raise RuntimeError("falha de teste")

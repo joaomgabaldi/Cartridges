@@ -31,6 +31,7 @@
     <release version="2026.10.13" date="2026-10-13">
       <description translate="no">
         <ul>
+          <li>Durante o jogo, a tela do Cartridges agora mostra o logo do jogo em destaque</li>
           <li>O botão "Adicionar jogo" voltou a funcionar</li>
           <li>Quando os saves de algum jogo não podem ser restaurados, o aviso agora informa quais jogos foram afetados e o que fazer</li>
         </ul>

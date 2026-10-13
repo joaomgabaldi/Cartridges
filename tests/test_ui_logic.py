@@ -2327,6 +2327,46 @@ def test_the_notes_button_follows_the_status_or_the_note(real_window, store):
     assert real_window.details_view_notes.get_label() == "Cofre: 8815"
 
 
+def test_a_tela_da_sessao_mostra_o_logo_do_jogo(real_window, store, app_dirs, monkeypatch):
+    """O logo do jogo é a manchete da tela da sessão, como no histórico de
+    sessões, e sai junto com ela."""
+    from gi.repository import Adw  # noqa: PLC0415
+    from PIL import Image  # noqa: PLC0415
+
+    from cartridges import session_history  # noqa: PLC0415
+
+    logo = app_dirs.covers / "logo.png"
+    logo.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGBA", (800, 200), (255, 0, 0, 255)).save(logo)
+    monkeypatch.setattr(session_history, "cached_logo_path", lambda _game: logo)
+    jogo = library_game(store, 1, status="playing")
+
+    real_window.show_session_blocker(jogo)
+
+    cabecalho = real_window.session_blocker_cabecalho.get_child()
+    assert isinstance(cabecalho, Adw.Clamp)
+    assert isinstance(cabecalho.get_child(), Gtk.Picture)
+    # 800×200 no teto de 640×140: a altura manda, e a proporção fica.
+    assert cabecalho.get_maximum_size() == 560
+
+    real_window.hide_session_blocker()
+    assert real_window.session_blocker_cabecalho.get_child() is None
+
+
+def test_sem_logo_a_tela_da_sessao_mostra_o_nome(real_window, store, monkeypatch):
+    from cartridges import session_history  # noqa: PLC0415
+
+    monkeypatch.setattr(session_history, "cached_logo_path", lambda _game: None)
+    jogo = library_game(store, 1, status="playing", name="CONTROL Resonant")
+
+    real_window.show_session_blocker(jogo)
+
+    nome = real_window.session_blocker_cabecalho.get_child()
+    assert isinstance(nome, Gtk.Label)
+    assert nome.get_label() == "CONTROL Resonant"  # sem o "em execução"
+    real_window.hide_session_blocker()
+
+
 def test_a_note_written_during_a_session_goes_to_the_game_being_played(
     real_window, store
 ):

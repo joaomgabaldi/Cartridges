@@ -53,7 +53,7 @@ from cartridges.utils.install_size import format_size
 from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.news_feed import NewsPost
 from cartridges.utils.open_uri import open_uri
-from cartridges.session_history import SessionHistoryDialog
+from cartridges.session_history import SessionHistoryDialog, cabecalho_do_jogo
 from cartridges.utils import (
     restauracao,
     session_fita,
@@ -68,6 +68,12 @@ from cartridges.utils.spring_scroll import attach as attach_spring_scroll
 from cartridges.utils.steam import format_release_date, parse_release_date
 from cartridges.utils.toast_queue import ToastQueue
 from cartridges.zerados_picker import ZeradosPicker
+
+# O logo no topo da tela da sessão: um pouco maior que o do histórico de sessões
+# (120), porque aqui ele está sozinho sobre o fundo escuro, e mais estreito, para
+# um logo largo não atravessar a janela inteira.
+SESSION_LOGO_MAX_HEIGHT = 140
+SESSION_LOGO_MAX_WIDTH = 640
 
 
 def can_edit_notes(game: Game) -> bool:
@@ -113,7 +119,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
     toast_overlay: Adw.ToastOverlay = Gtk.Template.Child()
     session_overlay: Gtk.Overlay = Gtk.Template.Child()
     session_blocker: Gtk.Box = Gtk.Template.Child()
-    session_blocker_label: Gtk.Label = Gtk.Template.Child()
+    session_blocker_cabecalho: Adw.Bin = Gtk.Template.Child()
     session_blocker_button: Gtk.Button = Gtk.Template.Child()
     session_blocker_conquistas: Gtk.Box = Gtk.Template.Child()
     session_blocker_notes_button: Gtk.MenuButton = Gtk.Template.Child()
@@ -596,8 +602,11 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # nele, e é o único jogo que o bloqueador tem para oferecer.
         self.session_game = game
         self.botao_tarefas.reavaliar()
-        # The variable is the name of the game currently being played
-        self.session_blocker_label.set_label(_("{} em execução").format(game.name))
+        # O logo é a manchete da tela: refeito a cada sessão, porque pode ter
+        # mudado (ou chegado) desde a última. Sem logo em disco, o nome.
+        self.session_blocker_cabecalho.set_child(
+            cabecalho_do_jogo(game, SESSION_LOGO_MAX_WIDTH, SESSION_LOGO_MAX_HEIGHT)[0]
+        )
         self.update_conquistas_sessao(game)
         # The opaque overlay covers the whole window content (including the
         # header bar) so "Jogar" can't start a second session; the window can
@@ -660,6 +669,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # Primeiro esconder, depois esquecer o jogo: esconder fecha um balão de
         # anotação que esteja aberto, e é esse fechamento que a grava.
         self.session_blocker.set_visible(False)
+        self.session_blocker_cabecalho.set_child(None)  # solta a textura do logo
         jogo_da_sessao = self.session_game
         self.session_game = None
         self.cartao_da_sessao.limpar()
