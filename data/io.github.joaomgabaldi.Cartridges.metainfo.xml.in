@@ -32,6 +32,7 @@
       <description translate="no">
         <ul>
           <li>O botão "Adicionar jogo" voltou a funcionar</li>
+          <li>Quando os saves de algum jogo não podem ser restaurados, o aviso agora informa quais jogos foram afetados e o que fazer</li>
         </ul>
       </description>
     </release>
