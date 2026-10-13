@@ -43,10 +43,13 @@ class Versao:
 
 @dataclass(frozen=True)
 class Previa:
-    """O que uma restauração tocaria: caminhos finais dos arquivos e chaves do registro."""
+    """O que uma restauração tocaria: caminhos finais dos arquivos e chaves do registro.
+    ``sobrescritos``: os arquivos que já existem (`change` diferente de "New"), que a
+    restauração grava por cima."""
 
     arquivos: tuple[str, ...]
     chaves: tuple[str, ...]
+    sobrescritos: tuple[str, ...] = ()
 
 
 def executavel() -> Optional[Path]:
@@ -129,17 +132,30 @@ def _verificar(saida: dict) -> None:
         raise LudusaviFalhou("o Ludusavi não conseguiu copiar os arquivos do jogo")
 
 
+def _do_jogo(saida: dict, nome: str) -> dict:
+    jogos = saida.get("games")
+    jogo = jogos.get(nome) if isinstance(jogos, dict) else None
+    return jogo if isinstance(jogo, dict) else {}
+
+
 def fazer_backup(
     nome: str,
     pasta_config: Path,
     executor: Executor = subprocess.run,
     limite: int | None = None,
-) -> None:
-    """Guarda uma versão nova; ``limite`` é quantas cópias completas o Ludusavi mantém."""
+) -> tuple[str, ...]:
+    """Guarda uma versão nova; ``limite`` é quantas cópias completas o Ludusavi mantém.
+
+    Devolve os arquivos que o backup conferiu, mudados ou não (sem mudança, o Ludusavi
+    não cria versão, mas a última já os tem). Fica de fora o "Removed": arquivo da versão
+    anterior que o backup de agora não achou."""
     argumentos = ["backup", nome, "--force"]
     if limite is not None:
         argumentos += ["--full-limit", str(limite)]
-    _verificar(rodar(argumentos, pasta_config, executor))
+    saida = rodar(argumentos, pasta_config, executor)
+    _verificar(saida)
+    arquivos = _do_jogo(saida, nome).get("files") or {}
+    return tuple(c for c, dados in arquivos.items() if (dados or {}).get("change") != "Removed")
 
 
 def marcar(
@@ -209,6 +225,9 @@ def previa(
         argumentos += ["--backup", versao]
     saida = rodar(argumentos, pasta_config, executor)
     _verificar(saida)
-    jogos = saida.get("games")
-    jogo = (jogos.get(nome) if isinstance(jogos, dict) else None) or {}
-    return Previa(tuple(jogo.get("files") or {}), tuple(jogo.get("registry") or {}))
+    jogo = _do_jogo(saida, nome)
+    arquivos = jogo.get("files") or {}
+    sobrescritos = (
+        caminho for caminho, dados in arquivos.items() if (dados or {}).get("change") != "New"
+    )
+    return Previa(tuple(arquivos), tuple(jogo.get("registry") or {}), tuple(sobrescritos))

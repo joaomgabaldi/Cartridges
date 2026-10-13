@@ -322,3 +322,28 @@ def test_real_copia_nao_apaga_a_escolhida(jogo, flush_idle, win):
     assert copia.comentario == backup_de_saves.ANTES_DE_RESTAURAR
     assert no_zip(copia.arquivo, "save.sav") == b"atual"
     assert titulos(win) == []
+
+
+@pytest.mark.parametrize("manifesto", ["ausente", "sem o jogo"])
+def test_real_save_fora_da_copia_nao_e_sobrescrito(jogo, flush_idle, win, tmp_path, manifesto):
+    # A versão leva o save que o manifesto aponta; depois o manifesto some (ou perde o
+    # jogo), a cópia dos saves atuais não o guardaria e restaurar o perderia de vez.
+    vivo = tmp_path / "Vivo" / "s.sav"
+    vivo.parent.mkdir()
+    vivo.write_bytes(b"v1")
+    arquivo = tmp_path / "ludusavi" / "manifest.yaml"
+    arquivo.write_text(json.dumps({NOME: {"files": {vivo.as_posix(): {}}}}), encoding="utf-8")
+    (saves_de(jogo) / "x.sav").write_bytes(b"v1")
+    backup(jogo, flush_idle)
+    (versao,) = backup_de_saves.versoes_do_jogo(jogo)
+    assert no_zip(versao.arquivo, "s.sav") == b"v1"
+    if manifesto == "ausente":
+        arquivo.unlink()
+    else:
+        arquivo.write_text("{}", encoding="utf-8")
+    vivo.write_bytes(b"atual")
+
+    restaurar(jogo, versao.id, flush_idle)
+
+    assert vivo.read_bytes() == b"atual"
+    assert titulos(win) == ["Não foi possível restaurar o save de Jogo Real."]

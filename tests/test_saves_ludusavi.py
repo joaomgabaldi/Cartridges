@@ -142,9 +142,9 @@ def test_backup_com_jogo_falho_falha(tmp_path):
         ludusavi.fazer_backup("Teste Cartridges", tmp_path, ExecutorFalso(json.dumps(saida)))
 
 
-def test_backup_com_sucesso_nao_devolve_nada(tmp_path):
+def test_backup_com_sucesso(tmp_path):
     executor = ExecutorFalso(amostra("backup_ok"))
-    assert ludusavi.fazer_backup("Teste Cartridges", tmp_path, executor) is None
+    ludusavi.fazer_backup("Teste Cartridges", tmp_path, executor)
     assert executor.chamadas[0][0][-4:] == ["backup", "Teste Cartridges", "--force", "--api"]
 
 
@@ -309,6 +309,29 @@ def test_fazer_backup_com_limite(tmp_path):
     sem = ExecutorFalso(amostra("backup_ok"))
     ludusavi.fazer_backup("J", tmp_path, sem)
     assert "--full-limit" not in sem.chamadas[0][0]
+
+
+def test_fazer_backup_devolve_os_arquivos_conferidos(tmp_path):
+    # Todo arquivo que o backup olhou, mudado ou não (`change` New, Same ou Different). O
+    # "Removed" é da versão anterior e o backup de agora não achou (conferido no 0.31).
+    saida = json.loads(amostra("backup_ok"))
+    saida["games"]["Teste Cartridges"]["files"]["C:/Temp/sumiu.sav"] = {"change": "Removed", "bytes": 0}
+    executor = ExecutorFalso(json.dumps(saida))
+    assert ludusavi.fazer_backup("Teste Cartridges", tmp_path, executor) == (
+        "C:/Temp/cartridges/fake/fake-save",
+    )
+    assert ludusavi.fazer_backup("Outro", tmp_path, ExecutorFalso(amostra("backup_ok"))) == ()
+
+
+def test_previa_separa_o_que_grava_por_cima(tmp_path):
+    saida = json.loads(amostra("previa_redirecionada"))
+    arquivos = saida["games"]["J"]["files"]
+    arquivos["C:/Users/Atual/AppData/Jogo/b.sav"] = {"change": "Different", "bytes": 1}
+    arquivos["C:/Users/Atual/AppData/Jogo/c.sav"] = {"change": "Same", "bytes": 1}
+
+    previa = ludusavi.previa("J", tmp_path, executor=ExecutorFalso(json.dumps(saida)))
+
+    assert previa.sobrescritos == ("C:/Users/Atual/AppData/Jogo/b.sav", "C:/Users/Atual/AppData/Jogo/c.sav")
 
 
 def test_previa_redirecionada(tmp_path):

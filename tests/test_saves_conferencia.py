@@ -540,6 +540,26 @@ def test_recusa_extensao_que_carrega_codigo(extensao):
     assert _recusado(arquivo) == arquivo
 
 
+# --- o que a cópia dos saves atuais guardou ------------------------------------
+
+
+def test_fora_da_copia_acha_o_save_que_seria_perdido():
+    previa = Previa(("C:/a/s.sav", "C:/a/novo.sav"), (), sobrescritos=("C:/a/s.sav",))
+
+    assert conferencia.fora_da_copia(previa, ("C:/a/outro.sav",)) == "C:/a/s.sav"
+
+
+def test_fora_da_copia_compara_sem_maiusculas_nem_tipo_de_barra():
+    previa = Previa(("C:/Jogo/S.sav",), (), sobrescritos=("C:/Jogo/S.sav",))
+
+    assert conferencia.fora_da_copia(previa, (r"c:\jogo\s.SAV",)) is None
+
+
+def test_fora_da_copia_ignora_o_que_e_novo():
+    # Um arquivo que ainda não existe não tem o que perder.
+    assert conferencia.fora_da_copia(Previa(("C:/a/novo.sav",), ()), ()) is None
+
+
 # --- chaves do registro ------------------------------------------------------
 
 

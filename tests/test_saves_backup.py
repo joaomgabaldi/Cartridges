@@ -52,6 +52,7 @@ class LudusaviFalso:
         self.configs_por_chamada: list[tuple[list[str], dict | None]] = []  # na ordem
         self.comentarios: dict[tuple[str, str], str] = {}  # (jogo, id) -> marca
         self.previas: dict[str, dict] = {}  # jogo -> "files" da prévia
+        self.conferidos: dict[str, dict] = {}  # jogo -> "files" da saída do `backup`
         self.registros: dict[str, dict] = {}  # jogo -> "registry" da prévia
         self.cria_versao: dict[str, bool] = {}  # jogo -> o `backup` cria uma versão nova
         self.no_zip: dict[str, list[str]] = {}  # id -> nomes dentro do zip da versão
@@ -108,6 +109,8 @@ class LudusaviFalso:
         elif nome == "backups":
             saida = {"games": {jogo: self._jogo(jogo, ids) for jogo, ids in self.versoes.items()}}
             codigo = 0
+        elif nome == "backup" and comando[1] in self.conferidos:
+            saida, codigo = {"games": {comando[1]: {"files": self.conferidos[comando[1]]}}}, 0
         else:
             saida, codigo = {"games": {}}, 0
         return subprocess.CompletedProcess(args, codigo, json.dumps(saida), "")
@@ -1378,6 +1381,40 @@ def test_sem_manifesto_nao_restaura(store, make_game, falso, esperar, tmp_path, 
     # A falha é do app, e não do jogo aberto: o aviso genérico, e o motivo no log.
     assert titulos() == ["Não foi possível restaurar o save de Meu Jogo."]
     assert "manifesto" in caplog.text
+
+
+# Onde um jogo grava o save: a prévia só passa com destinos dentro das pastas do usuário.
+SAVE_VIVO = (Path.home() / "AppData" / "Local" / "NaoExiste123" / "s.sav").as_posix()
+
+
+def test_save_que_a_copia_nao_guardou_nao_e_sobrescrito(store, make_game, falso, esperar, caplog):
+    # O config de agora não cobre o caminho (o manifesto perdeu o jogo, a pasta antiga do
+    # jogo ainda existe): a cópia dos saves atuais não o tem, e restaurar o perderia.
+    jogo = _jogo_x(store, make_game, ["v1"], falso)
+    falso.previas["X"] = {SAVE_VIVO: {"change": "Different", "bytes": 1}}
+    falso.conferidos["X"] = {"C:/Jogos/X/steam_settings/1/outro.ini": {"change": "Same", "bytes": 1}}
+
+    backup_de_saves.restaurar(jogo, "v1")
+    esperar()
+
+    assert falso.restauracoes() == []
+    assert titulos() == ["Não foi possível restaurar o save de Meu Jogo."]
+    assert SAVE_VIVO in caplog.text  # o caminho só no log
+
+
+def test_save_que_a_copia_guardou_e_restaurado(store, make_game, falso, esperar):
+    jogo = _jogo_x(store, make_game, ["v1"], falso)
+    falso.previas["X"] = {
+        SAVE_VIVO: {"change": "Different", "bytes": 1},
+        SAVE_VIVO + ".novo": {"change": "New", "bytes": 1},  # não existe: nada a perder
+    }
+    falso.conferidos["X"] = {SAVE_VIVO.upper().replace("/", "\\"): {"change": "Same", "bytes": 1}}
+
+    backup_de_saves.restaurar(jogo, "v1")
+    esperar()
+
+    assert falso.restauracoes() == [["restore", "X", "--force", "--backup", "v1"]]
+    assert toasts() == []
 
 
 def test_previa_que_falha_nao_restaura(store, make_game, falso, esperar):

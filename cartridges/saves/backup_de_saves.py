@@ -351,8 +351,8 @@ def _restaurar_um(
     Nesta ordem, e qualquer falha interrompe tudo antes do `restore`: o zip da versão
     tem de estar inteiro (o Ludusavi grava uma versão danificada por cima do save e só
     depois acusa o erro); os saves atuais viram uma versão nova; os caminhos do zip são
-    levados ao usuário e à pasta do jogo de hoje; e a prévia só pode gravar em pastas
-    de save.
+    levados ao usuário e à pasta do jogo de hoje; a prévia só pode gravar em pastas
+    de save, e só por cima do que a cópia dos saves atuais guardou.
     """
     if game.ludusavi_nome != nome:
         # O nome mudou depois do pedido (o diálogo de detalhes limpa o nome ao corrigir o
@@ -381,7 +381,7 @@ def _restaurar_um(
             # Uma cópia a mais que as guardadas: no limite normal, a cópia apagaria a
             # mais antiga, que pode ser a escolhida.
             limite = min(len(_cache.get(nome, [])) + 1, 255)
-            ludusavi.fazer_backup(nome, _pasta_config(), executor, limite)
+            copiados = ludusavi.fazer_backup(nome, _pasta_config(), executor, limite)
         except LudusaviFalhou:
             logging.exception("A cópia dos saves atuais de %s falhou", game.name)
             _marcar_nova(nome, inicio, INCOMPLETA)
@@ -414,6 +414,16 @@ def _restaurar_um(
                 "O backup dos saves de {} contém arquivos fora das pastas de save "
                 "e não foi restaurado."
             ).format(game.name)
+        # Um save de hoje que a cópia não guardou (o config de agora não cobre o caminho dele)
+        # seria perdido de vez: a restauração só grava por cima do que está na cópia.
+        if (perdido := conferencia.fora_da_copia(previa, copiados)) is not None:
+            logging.warning(
+                "A restauração dos saves de %s gravaria por cima de %r, que a cópia dos saves "
+                "atuais não guardou: recusada",
+                game.name,
+                perdido,
+            )
+            return _("Não foi possível restaurar o save de {}.").format(game.name)
         ludusavi.restaurar(nome, _pasta_config(), versao.id, executor)
     except Exception:  # pylint: disable=broad-exception-caught
         logging.exception("Restauração do save de %s falhou", game.name)

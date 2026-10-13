@@ -217,3 +217,15 @@ def recusado(previa: Previa, limites: Raizes) -> str | None:
     if achado is None:
         achado = next((c for c in previa.chaves if _chave_recusada(c)), None)
     return achado
+
+
+def _comparavel(caminho: str) -> str:
+    return _BARRAS.sub("/", caminho).casefold()
+
+
+def fora_da_copia(previa: Previa, copiados: tuple[str, ...]) -> str | None:
+    """O primeiro arquivo que a restauração gravaria por cima sem estar entre os
+    ``copiados`` pela cópia dos saves atuais (um caminho que o config de agora não cobre:
+    o manifesto sem o jogo, a pasta antiga do jogo que ainda existe), ou `None`."""
+    guardados = set(map(_comparavel, copiados))
+    return next((a for a in previa.sobrescritos if _comparavel(a) not in guardados), None)
