@@ -37,8 +37,13 @@ class JanelaRestaurando(Adw.Window):
             wrap=True,
             css_classes=["dim-label"],
         )
-        self.barra = Gtk.ProgressBar(show_text=True, text="0%")
-        for filho in (self.titulo, self.texto, self.barra):
+        # A porcentagem num rótulo próprio: o texto da própria barra fica colado nela.
+        self.porcentagem = Gtk.Label(label="0%", css_classes=["caption", "numeric"])
+        self.barra = Gtk.ProgressBar()
+        andamento = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        andamento.append(self.porcentagem)
+        andamento.append(self.barra)
+        for filho in (self.titulo, self.texto, andamento):
             caixa.append(filho)
 
         # Para arrastar e minimizar durante a espera; fechar, não.
@@ -57,7 +62,7 @@ class JanelaRestaurando(Adw.Window):
         if porcentagem != self._porcentagem:
             self._porcentagem = porcentagem
             self.barra.set_fraction(porcentagem / 100)
-            self.barra.set_text(f"{porcentagem}%")
+            self.porcentagem.set_label(f"{porcentagem}%")
         return False  # chamada por `GLib.idle_add`: uma vez só
 
     def terminar(self) -> None:

@@ -8,7 +8,8 @@ def test_textos():
     assert janela.get_title() == "Cartridges"
     assert janela.titulo.get_label() == "Restaurando o backup"
     assert janela.texto.get_label() == "O aplicativo será aberto quando a restauração terminar."
-    assert janela.barra.get_text() == "0%"
+    assert janela.porcentagem.get_label() == "0%"
+    assert janela.barra.get_show_text() is False  # o texto colado na barra ficava feio
     assert not janela.get_deletable() and not janela.get_resizable()
     janela.terminar()
 
@@ -16,7 +17,7 @@ def test_textos():
 def test_avancar_mostra_a_porcentagem():
     janela = JanelaRestaurando()
     janela.avancar(0.425)
-    assert janela.barra.get_text() == "42%"
+    assert janela.porcentagem.get_label() == "42%"
     assert abs(janela.barra.get_fraction() - 0.42) < 1e-9
     janela.terminar()
 
