@@ -38,6 +38,7 @@
           <li>O jogo não abre enquanto os saves dele estão sendo restaurados, e o aplicativo espera o backup dos saves terminar antes de fechar</li>
           <li>Quando várias conquistas são desbloqueadas de uma vez, o som toca e a iluminação pisca uma única vez</li>
           <li>Agora é possível ajustar o volume do som do aviso de conquista nas Preferências</li>
+          <li>A restauração de um backup agora mostra o andamento na abertura do aplicativo e ficou mais rápida</li>
         </ul>
       </description>
     </release>
