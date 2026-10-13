@@ -198,19 +198,21 @@ def _nada_para_restaurar() -> bool:
     return False
 
 
-def _restauracao_incompleta(falhas: int) -> bool:
-    """O fim de "Restaurar todos" com falhas. Diálogo, e não aviso: o pedido vem das
-    Preferências, e um aviso ficaria escondido atrás delas."""
-    if shared.win is not None:
-        create_dialog(
-            shared.win,
-            _("Restauração incompleta"),
-            ngettext(
-                "Não foi possível restaurar os saves de {} jogo.",
-                "Não foi possível restaurar os saves de {} jogos.",
-                falhas,
-            ).format(falhas),
-        )
+def _restauracao_incompleta(falhas: list[tuple[str, str]]) -> bool:
+    """O fim de "Restaurar todos" com falhas; ``falhas``: (nome do jogo, aviso) de cada
+    jogo que não foi restaurado. Diálogo, e não aviso: o pedido vem das Preferências, e um
+    aviso ficaria escondido atrás delas. Uma falha mostra o aviso dela, que diz o que
+    fazer; várias, os nomes dos jogos."""
+    if shared.win is None:
+        return False
+    if len(falhas) == 1:
+        corpo = falhas[0][1]
+    else:
+        # O mesmo jogo em duas lojas aparece uma vez.
+        nomes = list(dict.fromkeys(nome for nome, _aviso in falhas))
+        juntos = ", ".join(nomes[:-1]) + _(" e ") + nomes[-1] if len(nomes) > 1 else nomes[0]
+        corpo = _("Não foi possível restaurar os saves dos seguintes jogos: {}.").format(juntos)
+    create_dialog(shared.win, _("Restauração incompleta"), corpo)
     return False
 
 
@@ -273,19 +275,58 @@ def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
 
 def _local_desconhecido(game: Game) -> None:
     """Sem appID e fora do manifesto, o jogo não tem backup enquanto o local dos saves for
-    desconhecido. O usuário é avisado na primeira vez (e a marca é gravada no jogo); nas
-    sessões seguintes, só o log. Sob a trava."""
+    desconhecido. O usuário é avisado num diálogo até responder a ele (e então a marca é
+    gravada no jogo); nas sessões seguintes, só o log. Sob a trava."""
     logging.info("O local dos saves de %s é desconhecido: sem backup", game.name)
-    if game.saves_local_desconhecido_avisado:
-        return
-    game.saves_local_desconhecido_avisado = True
-    entregar_na_tela(_salvar, game)
-    _avisar(
+    if not game.saves_local_desconhecido_avisado:
+        entregar_na_tela(_avisar_local_desconhecido, game)
+
+
+# Os jogos (`id` do objeto) com o diálogo de `_avisar_local_desconhecido` na tela: duas
+# sessões seguidas não abrem dois. Só a thread da tela o usa.
+_local_desconhecido_na_tela: set[int] = set()
+
+
+def _avisar_local_desconhecido(game: Game) -> bool:
+    """Diálogo, e não aviso: o jogo fica sem backup dos saves até ser identificado, e um
+    aviso que passasse despercebido (ou que o app fechasse antes de mostrar) não voltaria.
+    A marca só é gravada quando o usuário responde: fechado o app antes disso, o diálogo
+    volta no fim da próxima sessão."""
+    if (
+        shared.win is None
+        or game.saves_local_desconhecido_avisado
+        or id(game) in _local_desconhecido_na_tela
+    ):
+        return False
+    _local_desconhecido_na_tela.add(id(game))
+    create_dialog(
+        shared.win,
+        _("Saves sem backup"),
         _(
-            "Não foi possível fazer o backup dos saves de {}: "
-            "o local dos saves deste jogo é desconhecido."
-        ).format(game.name)
+            "Não foi possível fazer o backup dos saves de {}, pois o local dos saves deste "
+            "jogo é desconhecido. Para que os saves passem a ter backup, edite o jogo e "
+            "busque os dados dele na Steam."
+        ).format(game.name),
+        "editar",
+        _("Editar jogo"),
+    ).connect("response", _ao_responder_local_desconhecido, game)
+    return False
+
+
+def _ao_responder_local_desconhecido(_dialogo, resposta: str, game: Game) -> None:
+    _local_desconhecido_na_tela.discard(id(game))
+    game.saves_local_desconhecido_avisado = True
+    game.save()
+    if resposta != "editar" or game.removed:
+        return
+    # Aqui, e não no topo: o diálogo de detalhes puxa a interface inteira (seletores,
+    # Pillow), que o backup em si não usa.
+    from cartridges.details_dialog import (  # pylint: disable=import-outside-toplevel
+        DetailsDialog,
     )
+
+    if not DetailsDialog.is_open:
+        DetailsDialog(game).present(shared.win)
 
 
 # -- backup ------------------------------------------------------------------
@@ -306,6 +347,17 @@ def no_fim_da_sessao(game: Game) -> None:
         _nao_abriu(tarefa, _("Não foi possível fazer o backup dos saves de {}.").format(game.name))
 
 
+def _limite_do_backup(nome: str) -> int | None:
+    """O ``limite`` do backup normal: as cópias guardadas mais as incompletas do jogo. A
+    retenção do Ludusavi conta as incompletas como versões completas; sem esta folga,
+    cada backup que falha empurraria para fora uma versão boa, e uma sequência de falhas
+    deixaria só incompletas. None (a retenção do config) quando não há incompleta."""
+    incompletas = sum(1 for v in _cache.get(nome, []) if v.comentario == INCOMPLETA)
+    if not incompletas:
+        return None
+    return min(config.COPIAS_GUARDADAS + incompletas, 255)
+
+
 def _backup(game: Game, biblioteca: list[Game], tarefa: tarefas.Tarefa) -> None:
     with _trava:
         try:
@@ -317,7 +369,8 @@ def _backup(game: Game, biblioteca: list[Game], tarefa: tarefas.Tarefa) -> None:
             _exigir_manifesto()
             inicio = datetime.now(timezone.utc)
             try:
-                ludusavi.fazer_backup(jogo.nome, _pasta_config(), executor)
+                limite = _limite_do_backup(jogo.nome)
+                ludusavi.fazer_backup(jogo.nome, _pasta_config(), executor, limite)
             except LudusaviFalhou:
                 # O Ludusavi cria a versão mesmo quando um arquivo falha; só a falha do
                 # próprio backup deixa uma versão nova, então só ela é marcada. Relê as
@@ -597,7 +650,7 @@ def _restaurar_todos(
             if not alvos:
                 entregar_na_tela(_nada_para_restaurar)
                 return
-            falhas = 0
+            falhas: list[tuple[str, str]] = []  # (nome do jogo, aviso)
             for feitos, nome in enumerate(alvos):
                 tarefa.atualizar(feitos, len(alvos))
                 # Um que ainda tenha o nome do pedido; sem nenhum, `_restaurar_um` aborta (falha).
@@ -606,8 +659,14 @@ def _restaurar_todos(
                 versao = next((v for v in _cache[nome] if v.comentario != INCOMPLETA), None)
                 if versao is None:
                     logging.warning("Os saves de %s só têm versões incompletas", jogo.name)
-                if versao is None or _restaurar_um(jogo, nome, versao, biblioteca) is not None:
-                    falhas += 1
+                    aviso = _(
+                        "Não foi possível restaurar os saves de {}: "
+                        "todas as cópias deste jogo estão incompletas."
+                    ).format(jogo.name)
+                else:
+                    aviso = _restaurar_um(jogo, nome, versao, biblioteca)
+                if aviso is not None:
+                    falhas.append((jogo.name, aviso))
             # Um aviso só, no fim: uma falha por jogo viraria uma fila de avisos.
             if falhas:
                 entregar_na_tela(_restauracao_incompleta, falhas)

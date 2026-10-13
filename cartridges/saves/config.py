@@ -16,6 +16,9 @@ from typing import Optional
 from cartridges.conquistas import arquivos
 from cartridges.utils.gravar_atomico import gravar_atomico
 
+# Quantas versões completas o Ludusavi guarda de cada jogo (a retenção do config).
+COPIAS_GUARDADAS = 5
+
 # A pasta do sistema (atributo de `arquivos.Pastas`) e o seu nome no Ludusavi.
 _PLACEHOLDERS = {
     "appdata": "<winAppData>",
@@ -115,7 +118,7 @@ def montar(
         "backup": {
             "path": str(pasta_dos_saves),
             "format": {"chosen": "zip"},
-            "retention": {"full": 5, "differential": 0},
+            "retention": {"full": COPIAS_GUARDADAS, "differential": 0},
         },
         "restore": {"path": str(pasta_dos_saves)},
         "roots": [{"store": loja, "path": str(pasta)} for loja, pasta in raizes],
