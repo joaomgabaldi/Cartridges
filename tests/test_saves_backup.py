@@ -40,14 +40,16 @@ class LudusaviFalso:
         self.comandos: list[list[str]] = []
         self.achados: dict[tuple[str, str], str] = {}  # ("appid"|"titulo", valor) -> nome
         self.versoes: dict[str, list[str]] = {}  # nome -> ids, do mais novo ao mais velho
-        self.falhas: dict[str, dict] = {}  # comando -> resposta no lugar da normal
+        # comando -> resposta no lugar da normal; a prévia é "restore --preview"
+        self.falhas: dict[str, dict] = {}
         self.codigo_de: dict[str, int] = {}  # comando -> código de saída no lugar do 0
         self.demora = 0.0
         self.explode: Exception | None = None
         self._trava = threading.Lock()
         self.ativos = 0
         self.max_ativos = 0
-        self.configs: dict[str, dict | None] = {}  # o config.yaml visto por cada comando
+        self.configs: dict[str, dict | None] = {}  # o config.yaml que cada comando viu por último
+        self.configs_por_chamada: list[tuple[list[str], dict | None]] = []  # na ordem
         self.comentarios: dict[tuple[str, str], str] = {}  # (jogo, id) -> marca
         self.previas: dict[str, dict] = {}  # jogo -> "files" da prévia
         self.registros: dict[str, dict] = {}  # jogo -> "registry" da prévia
@@ -70,7 +72,9 @@ class LudusaviFalso:
             if self.explode is not None:
                 raise self.explode
             arquivo = pasta_config / "config.yaml"
-            self.configs[comando[0]] = json.loads(arquivo.read_text("utf-8")) if arquivo.is_file() else None
+            visto = json.loads(arquivo.read_text("utf-8")) if arquivo.is_file() else None
+            self.configs[comando[0]] = visto
+            self.configs_por_chamada.append((comando, visto))
             time.sleep(self.demora)
             return self._responder(args, comando)
         finally:
@@ -87,7 +91,9 @@ class LudusaviFalso:
         if comando[:2] == ["backups", "edit"]:
             self.comentarios[(comando[2], comando[4])] = comando[6]
             return subprocess.CompletedProcess(args, 0, "", "")
-        if "--preview" in comando:
+        if "--preview" in comando and "restore --preview" in self.falhas:
+            saida, codigo = self.falhas["restore --preview"], self.codigo_de.get("restore --preview", 0)
+        elif "--preview" in comando:
             jogo = comando[1]
             arquivos = self.previas.get(jogo, {})
             saida = {"games": {jogo: {"files": arquivos, "registry": self.registros.get(jogo, {})}}}
@@ -1338,6 +1344,31 @@ def test_save_do_programdata_nao_vai_para_a_pasta_do_jogo(store, make_game, fals
     esperar()
 
     assert falso.configs["restore"].get("redirects", []) == []
+
+
+def test_previa_que_falha_nao_restaura(store, make_game, falso, esperar):
+    jogo = _jogo_x(store, make_game, ["v1"], falso)
+    falso.falhas["restore --preview"] = FALHOU
+
+    backup_de_saves.restaurar(jogo, "v1")
+    esperar()
+
+    assert len(falso.chamou("restore")) == 1  # só a prévia
+    assert falso.restauracoes() == []
+    assert titulos() == ["Não foi possível restaurar o save de Meu Jogo."]
+
+
+def test_previa_e_restore_veem_o_mesmo_config(store, make_game, falso, esperar):
+    jogo = _jogo_x(store, make_game, ["v1"], falso)
+    falso.no_zip["v1"] = ["drive-C/Users/NaoExiste123/AppData/a.sav"]
+
+    backup_de_saves.restaurar(jogo, "v1")
+    esperar()
+
+    vistos = [config for comando, config in falso.configs_por_chamada if comando[0] == "restore"]
+    assert len(vistos) == 2  # a prévia e o `restore`
+    assert vistos[0] == vistos[1]
+    assert vistos[0]["redirects"]  # o redirecionamento do usuário, nos dois
 
 
 def test_restaurar_todos_pula_incompleta(store, make_game, falso, esperar):
