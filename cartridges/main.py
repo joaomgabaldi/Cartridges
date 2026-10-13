@@ -536,12 +536,14 @@ class CartridgesApplication(Adw.Application):
             def restaurar() -> None:
                 try:
                     resultado = backup.aplicar_pendente(
-                        lambda fracao: GLib.idle_add(janela.avancar, fracao)
+                        lambda fracao: entregar_na_tela(janela.avancar, fracao)
                     )
                 except Exception:  # pylint: disable=broad-exception-caught
                     logging.exception("Falha inesperada ao restaurar o backup")
                     resultado = False
-                GLib.idle_add(self._restauracao_terminou, resultado)
+                # Pela mesma entrega do progresso: prioridades diferentes não
+                # rodam na ordem, e o fim tem de vir depois da última fração.
+                entregar_na_tela(self._restauracao_terminou, resultado)
 
             _em_thread(restaurar)
             return

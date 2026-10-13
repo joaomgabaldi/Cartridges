@@ -7,6 +7,8 @@ from cartridges import shared
 
 
 _criadas: list["_JanelaFalsa"] = []
+# O que a thread da restauração entregou à thread principal, na ordem.
+entregas: list = []
 
 
 class _JanelaFalsa:
@@ -31,7 +33,13 @@ def app(monkeypatch):
     monkeypatch.setattr(main_module, "JanelaRestaurando", _JanelaFalsa)
     monkeypatch.setattr(main_module, "setup_logging", lambda: None)
     monkeypatch.setattr(main_module, "log_system_info", lambda: None)
-    monkeypatch.setattr(main_module.GLib, "idle_add", lambda funcao, *args: funcao(*args))
+    entregas.clear()
+
+    def entregar(funcao, *args):
+        entregas.append(getattr(funcao, "__name__", funcao))
+        return funcao(*args)
+
+    monkeypatch.setattr(main_module, "entregar_na_tela", entregar)
     tarefas = []
     monkeypatch.setattr(main_module, "_em_thread", tarefas.append)
     aplicacao = main_module.CartridgesApplication()
@@ -55,6 +63,8 @@ def test_com_backup_agendado_a_abertura_espera_a_restauracao(app, monkeypatch):
     tarefas.pop()()
     assert janela.passos == [0.5, "terminou"]
     assert aberturas == [False]
+    # Pela entrega à frente do redesenho, e o fim depois do progresso.
+    assert entregas == ["avancar", "_restauracao_terminou"]
 
 
 def test_segunda_ativacao_durante_a_restauracao_traz_a_janela(app, monkeypatch):
