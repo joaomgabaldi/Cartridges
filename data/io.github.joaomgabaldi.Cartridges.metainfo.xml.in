@@ -36,6 +36,8 @@
           <li>As versões incompletas dos saves agora aparecem identificadas na restauração</li>
           <li>Agora o aplicativo avisa quando não consegue fazer o backup dos saves de um jogo e quando o backup da biblioteca sai sem as cópias dos saves</li>
           <li>O jogo não abre enquanto os saves dele estão sendo restaurados, e o aplicativo espera o backup dos saves terminar antes de fechar</li>
+          <li>Quando várias conquistas são desbloqueadas de uma vez, o som toca e a iluminação pisca uma única vez</li>
+          <li>Agora é possível ajustar o volume do som do aviso de conquista nas Preferências</li>
         </ul>
       </description>
     </release>
