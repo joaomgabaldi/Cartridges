@@ -97,12 +97,14 @@ def test_cliques_repetidos_no_exemplo_nao_enfileiram(monkeypatch):
     from cartridges import conquista_aviso  # noqa: PLC0415
 
     # Sem janela de verdade: só a fila importa.
-    monkeypatch.setattr(conquista_aviso, "_proximo", lambda: False)
+    proximos = []
+    monkeypatch.setattr(conquista_aviso, "_proximo", lambda com_som=True: proximos.append(com_som) or False)
     preferencias = _preferencias(monkeypatch)
     try:
         for _clique in range(3):
             preferencias.conquistas_exemplo_row.emit("activated")
         assert len(conquista_aviso._fila) == 1
+        assert len(proximos) == 3  # cada clique chegou a pedir o cartão, sem levantar
     finally:
         conquista_aviso.fechar()
 

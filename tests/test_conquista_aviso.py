@@ -25,6 +25,7 @@ _SAIR_REAL = conquista_aviso._JanelaDoAviso.sair
 def sem_efeitos(monkeypatch):
     """Sem ícone de rede, sem Win32, saída sem animação e com o relógio na mão do teste."""
     monkeypatch.setattr(icones, "carregar", lambda _o, _e: None)
+    monkeypatch.setattr(conquista_aviso, "_som_escalado", None)  # o volume de um teste não vaza
     monkeypatch.setattr(janela_por_cima, "preparar", lambda _j: True)
     monkeypatch.setattr(janela_por_cima, "por_no_canto", lambda _j, _c, margem=24: True)
     monkeypatch.setattr(
