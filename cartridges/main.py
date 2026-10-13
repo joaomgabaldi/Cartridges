@@ -66,6 +66,7 @@ from cartridges.game_cover import GameCover
 from cartridges.gamepad import GamepadManager
 from cartridges.importer.importer import Importer  # yo dawg
 from cartridges.importer.shortcuts_source import ShortcutsSource
+from cartridges.janela_restaurando import JanelaRestaurando
 from cartridges.logging.setup import log_system_info, setup_logging
 from cartridges.preferences import CartridgesPreferences
 from cartridges.saves import backup_de_saves, dialogo
@@ -339,6 +340,10 @@ def sanitize_game_fields(data: dict, record_name: str) -> dict:
     return data
 
 
+def _em_thread(funcao: Callable[[], None]) -> None:
+    threading.Thread(target=funcao, daemon=True).start()
+
+
 def limpar_e_preparar_capas_animadas() -> None:
     """Limpa a pasta das cópias animadas e prepara as que faltam, com o
     autoplay ligado ou não: quem liga a opção encontra as cópias prontas.
@@ -384,6 +389,8 @@ class CartridgesApplication(Adw.Application):
     reiniciar = False
     # A restauração agendada falhou nesta abertura; o aviso espera a janela.
     restauracao_falhou = False
+    # A janela "Restaurando…" enquanto um backup agendado é aplicado na abertura.
+    _restaurando: Optional[JanelaRestaurando] = None
     # O provider da cor de destaque, guardado para o watcher do registro poder
     # reescrever o CSS no lugar em vez de empilhar um provider por mudança.
     _accent_provider: Optional[Gtk.CssProvider] = None
@@ -490,6 +497,12 @@ class CartridgesApplication(Adw.Application):
 
     def do_activate(self) -> None:  # pylint: disable=arguments-differ
         """Called on app creation"""
+        # Uma ativação no meio da restauração (o atalho aberto de novo): a
+        # janela principal ainda não existe, a da restauração vem para a frente.
+        if self._restaurando is not None:
+            self._restaurando.present()
+            return
+
         # A second activation (e.g. launching the app again while it's running)
         # must not re-run the whole startup: it would duplicate managers,
         # reload games and clobber the app state mid-import
@@ -512,9 +525,44 @@ class CartridgesApplication(Adw.Application):
 
         # Um backup agendado por Preferências é aplicado aqui, antes de
         # qualquer leitura de dados: fitas, papéis de parede e a biblioteca
-        # abaixo já nascem do backup. O aviso de falha espera a janela.
-        self.restauracao_falhou = backup.aplicar_pendente() is False
+        # (`_abrir`) já nascem do backup. O aviso de falha espera a janela.
+        # Um backup grande leva minutos: roda numa thread, com a janela
+        # "Restaurando…" na tela, e a abertura continua quando ele termina.
+        if backup.ha_pendente():
+            self.apply_windows_theme()  # a janela da restauração já nasce no tema
+            janela = self._restaurando = JanelaRestaurando(application=self)
+            janela.present()
 
+            def restaurar() -> None:
+                try:
+                    resultado = backup.aplicar_pendente(
+                        lambda fracao: GLib.idle_add(janela.avancar, fracao)
+                    )
+                except Exception:  # pylint: disable=broad-exception-caught
+                    logging.exception("Falha inesperada ao restaurar o backup")
+                    resultado = False
+                GLib.idle_add(self._restauracao_terminou, resultado)
+
+            _em_thread(restaurar)
+            return
+
+        # Sem backup agendado, só a recuperação de uma troca interrompida, que
+        # apenas renomeia pastas.
+        self.restauracao_falhou = backup.aplicar_pendente() is False
+        self._abrir()
+
+    def _restauracao_terminou(self, resultado: Optional[bool]) -> bool:
+        self.restauracao_falhou = resultado is False
+        janela, self._restaurando = self._restaurando, None
+        # A principal nasce antes de a da restauração sair: o app sem nenhuma
+        # janela, nem por um instante, poderia encerrar.
+        self._abrir()
+        if janela is not None:
+            janela.terminar()
+        return False
+
+    def _abrir(self) -> None:
+        """A abertura depois da restauração: fitas, tema, janela, biblioteca."""
         # Uma sessão anterior pode ter deixado os monitores vestidos: o app
         # morto (ou a máquina desligada) no meio dela não passa por
         # `hide_session_blocker` nem por `do_shutdown`. A marca fica no
