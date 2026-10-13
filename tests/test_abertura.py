@@ -6,12 +6,13 @@ from cartridges import main as main_module
 from cartridges import shared
 
 
-class _JanelaFalsa:
-    criadas: list["_JanelaFalsa"] = []
+_criadas: list["_JanelaFalsa"] = []
 
+
+class _JanelaFalsa:
     def __init__(self, application=None):
         self.passos, self.apresentada = [], 0
-        _JanelaFalsa.criadas.append(self)
+        _criadas.append(self)
 
     def present(self):
         self.apresentada += 1
@@ -26,7 +27,7 @@ class _JanelaFalsa:
 @pytest.fixture
 def app(monkeypatch):
     monkeypatch.setattr(shared, "store", None, raising=False)  # o __init__ troca a store
-    _JanelaFalsa.criadas = []
+    _criadas.clear()
     monkeypatch.setattr(main_module, "JanelaRestaurando", _JanelaFalsa)
     monkeypatch.setattr(main_module, "setup_logging", lambda: None)
     monkeypatch.setattr(main_module, "log_system_info", lambda: None)
@@ -49,7 +50,7 @@ def test_com_backup_agendado_a_abertura_espera_a_restauracao(app, monkeypatch):
         main_module.backup, "aplicar_pendente", lambda progresso=None: progresso(0.5) or True
     )
     aplicacao.do_activate()
-    (janela,) = _JanelaFalsa.criadas
+    (janela,) = _criadas
     assert janela.apresentada == 1 and aberturas == []
     tarefas.pop()()
     assert janela.passos == [0.5, "terminou"]
@@ -62,7 +63,7 @@ def test_segunda_ativacao_durante_a_restauracao_traz_a_janela(app, monkeypatch):
     monkeypatch.setattr(main_module.backup, "aplicar_pendente", lambda progresso=None: True)
     aplicacao.do_activate()
     aplicacao.do_activate()
-    assert _JanelaFalsa.criadas[0].apresentada == 2 and len(_JanelaFalsa.criadas) == 1
+    assert _criadas[0].apresentada == 2 and len(_criadas) == 1
     assert len(tarefas) == 1 and aberturas == []
 
 
@@ -83,4 +84,4 @@ def test_sem_backup_agendado_abre_na_hora(app, monkeypatch):
     monkeypatch.setattr(main_module.backup, "ha_pendente", lambda: False)
     monkeypatch.setattr(main_module.backup, "aplicar_pendente", lambda progresso=None: None)
     aplicacao.do_activate()
-    assert _JanelaFalsa.criadas == [] and tarefas == [] and aberturas == [False]
+    assert _criadas == [] and tarefas == [] and aberturas == [False]
