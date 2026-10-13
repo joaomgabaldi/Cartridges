@@ -273,7 +273,8 @@ def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
 
 def _local_desconhecido(game: Game) -> None:
     """Sem appID e fora do manifesto, o jogo não tem backup enquanto o local dos saves for
-    desconhecido. O usuário é avisado na primeira vez (e a marca é gravada no jogo); nas sessões seguintes, só o log. Sob a trava."""
+    desconhecido. O usuário é avisado na primeira vez (e a marca é gravada no jogo); nas
+    sessões seguintes, só o log. Sob a trava."""
     logging.info("O local dos saves de %s é desconhecido: sem backup", game.name)
     if game.saves_local_desconhecido_avisado:
         return
@@ -409,40 +410,57 @@ def _restaurar_um(
         bases = arquivos.bases_do_jogo(game.executable)
         caminhos = conferencia.caminhos_no_zip(arquivo)
         pastas = arquivos.pastas_do_sistema()
-        sistema = (
-            pastas.appdata,
-            pastas.localappdata,
-            pastas.documentos,
-            pastas.documentos_publicos.parent,
-            pastas.programdata,
-        )
         # O mesmo config na prévia e no `restore`: o que foi conferido é o que se grava.
-        redirecionamentos = conferencia.redirecionamentos(caminhos, Path.home(), bases, sistema)
-        _preparar(biblioteca, jogo, redirecionamentos)
+        _preparar(
+            biblioteca,
+            jogo,
+            conferencia.redirecionamentos(caminhos, Path.home(), bases, _do_sistema(pastas)),
+        )
         previa = ludusavi.previa(nome, _pasta_config(), versao.id, executor)
-        extras = [raiz for _loja, raiz in config.raizes([jogo])] + bases
-        limites = conferencia.raizes(pastas, Path.home(), extras)
-        if (recusado := conferencia.recusado(previa, limites)) is not None:
-            logging.warning(
-                "A restauração dos saves de %s gravaria em %r: recusada", game.name, recusado
-            )
-            return _(
-                "O backup dos saves de {} contém arquivos fora das pastas de save "
-                "e não foi restaurado."
-            ).format(game.name)
-        # Um save de hoje que a cópia não guardou (o config de agora não cobre o caminho dele)
-        # seria perdido de vez: a restauração só grava por cima do que está na cópia.
-        if (perdido := conferencia.fora_da_copia(previa, copiados)) is not None:
-            logging.warning(
-                "A restauração dos saves de %s gravaria por cima de %r, que a cópia dos saves "
-                "atuais não guardou: recusada",
-                game.name,
-                perdido,
-            )
-            return _("Não foi possível restaurar o save de {}.").format(game.name)
+        limites = conferencia.raizes(
+            pastas, Path.home(), [raiz for _loja, raiz in config.raizes([jogo])] + bases
+        )
+        if (aviso := _conferir_previa(game, previa, limites, copiados)) is not None:
+            return aviso
         ludusavi.restaurar(nome, _pasta_config(), versao.id, executor)
     except Exception:  # pylint: disable=broad-exception-caught
         logging.exception("Restauração do save de %s falhou", game.name)
+        return _("Não foi possível restaurar o save de {}.").format(game.name)
+    return None
+
+
+def _do_sistema(pastas: arquivos.Pastas) -> tuple[Path, ...]:
+    """As pastas do Windows onde um save comum mora (nunca a pasta de um jogo)."""
+    return (
+        pastas.appdata,
+        pastas.localappdata,
+        pastas.documentos,
+        pastas.documentos_publicos.parent,
+        pastas.programdata,
+    )
+
+
+def _conferir_previa(
+    game: Game, previa: ludusavi.Previa, limites: conferencia.Raizes, copiados: tuple[str, ...]
+) -> str | None:
+    """O aviso para o usuário se a prévia não pode virar restauração, senão None: um destino
+    fora das pastas de save, ou um save de hoje que a cópia dos saves atuais não guardou (o
+    config de agora não cobre o caminho dele), que a restauração perderia de vez."""
+    if (recusado := conferencia.recusado(previa, limites)) is not None:
+        logging.warning(
+            "A restauração dos saves de %s gravaria em %r: recusada", game.name, recusado
+        )
+        return _(
+            "O backup dos saves de {} contém arquivos fora das pastas de save "
+            "e não foi restaurado."
+        ).format(game.name)
+    if (perdido := conferencia.fora_da_copia(previa, copiados)) is not None:
+        logging.warning(
+            "A restauração dos saves de %s gravaria por cima de %r, que a cópia dos saves "
+            "atuais não guardou: recusada",
+            game.name,
+            perdido,
+        )
         return _("Não foi possível restaurar o save de {}.").format(game.name)
     return None
 

@@ -312,15 +312,16 @@ def test_fazer_backup_com_limite(tmp_path):
 
 
 def test_fazer_backup_devolve_os_arquivos_conferidos(tmp_path):
-    # Todo arquivo que o backup olhou, mudado ou não (`change` New, Same ou Different). O
+    # Cada arquivo que o backup olhou, mudado ou não (`change` New, Same ou Different). O
     # "Removed" é da versão anterior e o backup de agora não achou (conferido no 0.31).
     saida = json.loads(amostra("backup_ok"))
-    saida["games"]["Teste Cartridges"]["files"]["C:/Temp/sumiu.sav"] = {"change": "Removed", "bytes": 0}
+    arquivos = saida["games"]["Teste Cartridges"]["files"]
+    arquivos["C:/Temp/sumiu.sav"] = {"change": "Removed", "bytes": 0}
     executor = ExecutorFalso(json.dumps(saida))
     assert ludusavi.fazer_backup("Teste Cartridges", tmp_path, executor) == (
         "C:/Temp/cartridges/fake/fake-save",
     )
-    assert ludusavi.fazer_backup("Outro", tmp_path, ExecutorFalso(amostra("backup_ok"))) == ()
+    assert not ludusavi.fazer_backup("Outro", tmp_path, ExecutorFalso(amostra("backup_ok")))
 
 
 def test_previa_separa_o_que_grava_por_cima(tmp_path):
@@ -331,7 +332,10 @@ def test_previa_separa_o_que_grava_por_cima(tmp_path):
 
     previa = ludusavi.previa("J", tmp_path, executor=ExecutorFalso(json.dumps(saida)))
 
-    assert previa.sobrescritos == ("C:/Users/Atual/AppData/Jogo/b.sav", "C:/Users/Atual/AppData/Jogo/c.sav")
+    assert previa.sobrescritos == (
+        "C:/Users/Atual/AppData/Jogo/b.sav",
+        "C:/Users/Atual/AppData/Jogo/c.sav",
+    )
 
 
 def test_previa_redirecionada(tmp_path):

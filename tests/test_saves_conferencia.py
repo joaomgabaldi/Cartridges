@@ -251,7 +251,8 @@ def test_jogo_no_perfil_de_usuario_antigo_so_leva_o_redirecionamento_do_usuario(
 
 
 @pytest.mark.parametrize(
-    "caminho", ["C:/ProgramData/NaoExiste123/Jogo/Profile/x.sav", "D:/Docs/NaoExiste123/Profile/x.sav"]
+    "caminho",
+    ["C:/ProgramData/NaoExiste123/Jogo/Profile/x.sav", "D:/Docs/NaoExiste123/Profile/x.sav"],
 )
 def test_pasta_do_sistema_nunca_vira_a_pasta_do_jogo(caminho):
     # Um save do ProgramData (ou dos Documentos em outro disco) com `/Profile/` no caminho
