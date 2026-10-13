@@ -3276,3 +3276,28 @@ def test_a_ligacao_do_autoplay_e_desfeita_ao_destruir_a_janela(real_window, sche
     ligacoes = [h for objeto, h in real_window._global_handler_ids if objeto is schema]
 
     assert len(ligacoes) == 1
+
+
+def test_adicionar_jogo_pelo_dialogo_grava_o_jogo(real_window, store, app_dirs):
+    """O "+" > Adicionar jogo: o jogo novo nasce sem executável, e ler o antigo
+    para comparar quebrava o "Adicionar" a cada clique."""
+    from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
+
+    class _SemSgdb:  # sem rede: a busca da capa é de outro teste
+        signals: set = set()
+
+        def reset_cancellable(self):
+            pass
+
+        def process_game(self, _game, _data, _callback):
+            pass
+
+    store.managers[SgdbManager] = _SemSgdb()
+    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+
+    details_dialog = DetailsDialog()
+    details_dialog.name.set_text("Jogo novo")
+    details_dialog.executable.set_text("cmd /c exit")
+    details_dialog.apply_preferences()
+    (jogo,) = [g for g in store if g.name == "Jogo novo"]
+    assert jogo.executable == "cmd /c exit"

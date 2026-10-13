@@ -605,6 +605,9 @@ class DetailsDialog(Adw.Dialog):
                     "game_id": shared.store.proximo_id_importado(),
                     "source": "imported",
                     "added": int(time()),
+                    # Campo de identidade, sem padrão na classe: mais abaixo o
+                    # executável de antes é lido para saber se mudou.
+                    "executable": "",
                 }
             )
 
