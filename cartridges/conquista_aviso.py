@@ -8,8 +8,11 @@ Só o primeiro cartão de uma fila toca o som, se "Tocar som com o aviso"
 estiver ligado; os seguintes entram em silêncio.
 """
 
+import array
+import io
 import logging
 import threading
+import wave
 import winsound
 from collections import deque
 from dataclasses import dataclass
@@ -39,15 +42,56 @@ def _tocar_som() -> None:
     try:
         if not shared.schema.get_boolean("conquistas-aviso-som"):
             return
+        volume = shared.schema.get_int("conquistas-aviso-som-volume")
         dados = Gio.resources_lookup_data(
             shared.PREFIX + "/sons/conquista.wav", Gio.ResourceLookupFlags.NONE
         ).get_data()
-        _em_segundo_plano(_reproduzir, dados)
+        _em_segundo_plano(_reproduzir, dados, volume)
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning("Não foi possível tocar o som do aviso de conquista", exc_info=True)
 
 
-def _reproduzir(dados: bytes) -> None:
+def _no_volume(dados: bytes, volume: int) -> bytes:
+    """O WAV (PCM 16-bit) com as amostras escaladas a ``volume`` por cento.
+
+    ``PlaySound`` não tem volume: o som tocado já vem mais baixo. Outro formato
+    levanta ``ValueError``.
+    """
+    if volume >= 100:
+        return dados
+    with wave.open(io.BytesIO(dados)) as entrada:
+        if entrada.getsampwidth() != 2:
+            raise ValueError("o som não é PCM de 16 bits")
+        parametros = entrada.getparams()
+        amostras = array.array("h", entrada.readframes(entrada.getnframes()))
+    fator = volume / 100  # nunca acima de 1: o resultado cabe em 16 bits
+    amostras = array.array("h", (round(amostra * fator) for amostra in amostras))
+    saida = io.BytesIO()
+    with wave.open(saida, "wb") as escrita:
+        escrita.setparams(parametros)
+        escrita.writeframes(amostras.tobytes())
+    return saida.getvalue()
+
+
+# O som no último volume tocado: refeito só quando o volume muda.
+_som_escalado: Optional[tuple[int, bytes]] = None
+
+
+def _no_volume_guardado(dados: bytes, volume: int) -> bytes:
+    global _som_escalado  # pylint: disable=global-statement
+    guardado = _som_escalado
+    if guardado is not None and guardado[0] == volume:
+        return guardado[1]
+    escalado = _no_volume(dados, volume)
+    _som_escalado = (volume, escalado)
+    return escalado
+
+
+def _reproduzir(dados: bytes, volume: int) -> None:
+    try:
+        dados = _no_volume_guardado(dados, volume)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.warning("Não foi possível ajustar o volume do aviso de conquista", exc_info=True)
     # SND_MEMORY não aceita SND_ASYNC: por isso a thread. SND_NODEFAULT: se não
     # der para tocar, silêncio, e não o som padrão do Windows por cima do jogo.
     try:

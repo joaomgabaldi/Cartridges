@@ -50,6 +50,10 @@
     <key name="conquistas-aviso-som" type="b">
       <default>true</default>
     </key>
+    <key name="conquistas-aviso-som-volume" type="i">
+      <range min="10" max="100"/>
+      <default>100</default>
+    </key>
     <key name="conquistas-iluminacao" type="b">
       <default>true</default>
     </key>

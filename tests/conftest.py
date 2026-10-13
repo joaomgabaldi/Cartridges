@@ -107,6 +107,7 @@ _SCHEMA_DEFAULTS = {
     "conquistas-aviso-posicao": "inferior-direito",
     "conquistas-aviso": True,
     "conquistas-aviso-som": True,
+    "conquistas-aviso-som-volume": 100,
     "conquistas-iluminacao": True,
     "conquistas-pulso-matiz": 45,
     "conquistas-pulso-saturacao": 1000,

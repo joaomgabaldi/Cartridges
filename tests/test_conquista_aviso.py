@@ -1,7 +1,10 @@
 """O cartão do aviso de conquista."""
 
+import array
+import io
 import logging
 import time
+import wave
 import winsound
 
 import pytest
@@ -359,3 +362,58 @@ def test_recurso_ausente_nao_impede_o_cartao(sons, monkeypatch, caplog):
     assert conquista_aviso.na_tela() == "Um"
     assert sons == []
     assert any("som" in r.getMessage() for r in caplog.records)
+
+
+# O volume
+
+
+def _wav(amostras, canais=2, largura=2, taxa=48000):
+    saida = io.BytesIO()
+    with wave.open(saida, "wb") as arquivo:
+        arquivo.setnchannels(canais)
+        arquivo.setsampwidth(largura)
+        arquivo.setframerate(taxa)
+        arquivo.writeframes(array.array("h", amostras).tobytes() if largura == 2 else bytes(amostras))
+    return saida.getvalue()
+
+
+def _amostras(dados):
+    with wave.open(io.BytesIO(dados)) as arquivo:
+        return (
+            arquivo.getnchannels(),
+            arquivo.getframerate(),
+            arquivo.getnframes(),
+            list(array.array("h", arquivo.readframes(arquivo.getnframes()))),
+        )
+
+
+def test_volume_pela_metade():
+    escalado = conquista_aviso._no_volume(_wav([1000, -1000, 3, 0]), 50)
+    assert _amostras(escalado) == (2, 48000, 2, [500, -500, 2, 0])
+
+
+def test_volume_cheio_devolve_o_original():
+    dados = _wav([1000, -1000])
+    assert conquista_aviso._no_volume(dados, 100) is dados
+
+
+def test_amostra_no_extremo_cabe_em_16_bits():
+    assert _amostras(conquista_aviso._no_volume(_wav([-32768, 32767]), 10))[3] == [-3277, 3277]
+
+
+def test_wav_de_8_bits_toca_o_original(sons, caplog):
+    dados = _wav([128, 200], canais=1, largura=1)
+    with caplog.at_level(logging.WARNING):
+        conquista_aviso._reproduzir(dados, 50)
+    assert sons[-1][0] == dados
+    assert any("volume" in r.getMessage() for r in caplog.records)
+
+
+def test_volume_lido_a_cada_som(sons, schema, sem_efeitos):
+    maiores = []
+    for volume in (50, 100, 50):
+        schema.set_int("conquistas-aviso-som-volume", volume)
+        conquista_aviso.fechar()
+        conquista_aviso.mostrar(_aviso("Um"))
+        maiores.append(max(abs(a) for a in _amostras(sons[-1][0])[3]))
+    assert maiores[0] == maiores[2] < maiores[1]
