@@ -456,6 +456,22 @@ def test_abandonar_no_meio_da_geracao_descarta(fila, tmp_path, monkeypatch, toca
     assert list(tmp_path.glob("*.tmp")) == []
 
 
+def test_adotar_copia_so_as_copias_prontas(tmp_path, tocador_falso):
+    provisoria = _animada(tmp_path / "provisoria.webp", [100, 100])
+    shared.covers_dir.mkdir(parents=True, exist_ok=True)
+    capa = _animada(shared.covers_dir / "g1.webp", [100, 100])
+    grade, detalhes = _destinos(provisoria)
+    grade.write_bytes(b"grade")
+
+    copias_animadas.adotar(provisoria, capa)
+
+    grade_do_jogo, detalhes_do_jogo = _destinos(capa)
+    assert grade_do_jogo.read_bytes() == b"grade"
+    assert not detalhes_do_jogo.exists()
+    assert grade.exists(), "a da prévia fica: quem a apaga é o diálogo"
+    assert ("esquecer", grade_do_jogo) in tocador_falso.eventos
+
+
 def test_gerar_nao_recria_a_pasta_que_sumiu(tmp_path):
     origem = _animada(tmp_path / "a.webp", [100, 100])
     pasta = tmp_path / "cartridges_sgdb_x"  # o seletor já a apagou

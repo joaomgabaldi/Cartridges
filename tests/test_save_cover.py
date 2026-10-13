@@ -116,6 +116,23 @@ def test_capa_animada_nova_prepara_as_copias(tmp_path, schema, entregas):
     ]
 
 
+def test_capa_provisoria_entrega_as_copias_que_ja_tem(tmp_path, schema, entregas):
+    """As cópias que a prévia da edição já gerou (as de um vídeo saem junto com
+    ele) passam a ser as do jogo, e o ``preparar`` não as gera de novo."""
+    from cartridges.utils import copias_animadas
+
+    provisoria = _gif(tmp_path / "provisoria.gif")
+    grade, detalhes = copias_animadas.tamanhos()
+    copias_animadas.caminho_para(provisoria, grade).write_bytes(b"grade")
+
+    save_cover("g1", provisoria)
+
+    capa = shared.covers_dir / "g1.gif"
+    assert copias_animadas.caminho_para(capa, grade).read_bytes() == b"grade"
+    assert not copias_animadas.caminho_para(capa, detalhes).exists()
+    assert list(shared.capas_animadas_dir.glob("*.tmp")) == []
+
+
 def _apng(caminho):
     """Um PNG animado (APNG) de dois quadros, como os do SteamGridDB."""
     caminho.parent.mkdir(parents=True, exist_ok=True)

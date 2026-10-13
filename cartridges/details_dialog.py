@@ -964,7 +964,9 @@ class DetailsDialog(Adw.Dialog):
                     new_path.unlink(missing_ok=True)
                 return False
             if new_path:
-                self._stage_cover(new_path)
+                # Como a escolhida no SteamGridDB (`set_cover_from_path`): sem
+                # isto, a prévia de um jogo sendo adicionado não tocava.
+                self.set_cover_from_path(new_path)
 
             self.end_loading(cover=True)
             if video_error:
@@ -976,7 +978,16 @@ class DetailsDialog(Adw.Dialog):
 
             if capa_video.eh_video(Path(path)):
                 try:
-                    entregar_na_tela(finish, capa_video.converter(Path(path)))
+                    # As cópias da grade e dos detalhes saem junto: a prévia
+                    # toca assim que a capa aparece.
+                    capa = capa_video.converter(
+                        Path(path),
+                        lambda destino: [
+                            (copias_animadas.caminho_para(destino, tamanho), tamanho)
+                            for tamanho in copias_animadas.tamanhos()
+                        ],
+                    )
+                    entregar_na_tela(finish, capa)
                 except capa_video.VideoFalhou as error:
                     entregar_na_tela(finish, None, str(error))
                 except Exception:  # pylint: disable=broad-exception-caught

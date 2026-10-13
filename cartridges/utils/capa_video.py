@@ -24,7 +24,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Iterable, Optional
 
 from PIL import Image, UnidentifiedImageError
 
@@ -126,8 +126,28 @@ def _tamanho(video: Path) -> tuple[int, int]:
         raise VideoFalhou(_("O arquivo não pôde ser lido como vídeo.")) from erro
 
 
-def converter(video: Path) -> Path:
+# Onde gravar as cópias reduzidas de uma capa e em que tamanho: o
+# ``copias_animadas.caminho_para`` de cada ``copias_animadas.tamanhos()``.
+# Chega por parâmetro para este módulo não depender do GTK.
+Copias = Callable[[Path], Iterable[tuple[Path, tuple[int, int]]]]
+
+
+def _saida_webp(rotulo: str, destino: Path, qualidade: int) -> list[str]:
+    # Com perda, como as capas animadas do SteamGridDB; o nível 2 de compressão
+    # custa ~10% a mais de arquivo que o 4 e codifica ~25% mais rápido, e é a
+    # codificação que domina o tempo da conversão.
+    return ["-map", f"[{rotulo}]", "-c:v", "libwebp_anim", "-lossless", "0",
+            "-quality", str(qualidade), "-compression_level", "2", "-loop", "0",
+            "-f", "webp", str(destino)]  # fmt: skip
+
+
+def converter(video: Path, copias: Copias = lambda _capa: ()) -> Path:
     """Um WebP animado, em %TEMP%, com o começo de ``video`` como capa.
+
+    As cópias reduzidas que ``copias`` pedir saem do mesmo ffmpeg, ao lado da
+    capa: a prévia da edição toca assim que a capa aparece, em vez de esperar a
+    geração delas pelo Pillow (dezenas de segundos para centenas de quadros), e
+    o Aplicar as reaproveita (``copias_animadas.adotar``).
 
     Roda fora da thread principal: o ffmpeg leva segundos. Levanta
     ``VideoFalhou`` com uma mensagem para o usuário.
@@ -136,21 +156,26 @@ def converter(video: Path) -> Path:
     descritor, nome = tempfile.mkstemp(suffix=".webp")
     os.close(descritor)
     destino = Path(nome)
+    reduzidas = list(copias(destino))
+    # Um ramo do filtro por saída: a capa e cada cópia, reduzida da capa com o
+    # mesmo Lanczos de ``copias_animadas``.
+    grafo = f"[0:v:0]{filtro(largura, altura, shared.image_size)},split={1 + len(reduzidas)}[capa]"
+    grafo += "".join(f"[r{indice}]" for indice in range(len(reduzidas)))
+    saidas = _saida_webp("capa", destino, 85)
+    for indice, (caminho, (largura_copia, altura_copia)) in enumerate(reduzidas):
+        grafo += f";[r{indice}]scale={largura_copia}:{altura_copia}:flags=lanczos[c{indice}]"
+        # A mesma qualidade das cópias do Pillow
+        saidas += _saida_webp(f"c{indice}", caminho, 90)
     try:
         _rodar(
             ["-y", "-t", str(DURACAO_MAXIMA_S), "-i", str(video),
-             "-map", "0:v:0", "-an", "-sn", "-dn",
-             "-vf", filtro(largura, altura, shared.image_size),
-             # Com perda, como as capas animadas do SteamGridDB; o nível 2 de
-             # compressão custa ~10% a mais de arquivo que o 4 e codifica ~25%
-             # mais rápido, e é a codificação que domina o tempo da conversão.
-             "-c:v", "libwebp_anim", "-lossless", "0", "-quality", "85",
-             "-compression_level", "2", "-loop", "0",
-             "-f", "webp", str(destino)]
+             "-filter_complex", grafo, *saidas]
         )  # fmt: skip
         if destino.stat().st_size == 0:
             raise VideoFalhou(_("O arquivo não pôde ser lido como vídeo."))
     except BaseException:
         destino.unlink(missing_ok=True)
+        for caminho, _tamanho_copia in reduzidas:
+            caminho.unlink(missing_ok=True)
         raise
     return destino

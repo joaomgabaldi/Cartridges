@@ -14,6 +14,7 @@ com os quadros curtos fundidos, então o player só decodifica o que mostra.
 import contextlib
 import io
 import logging
+import shutil
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -394,6 +395,34 @@ def abandonar(origem: Path) -> None:
         except OSError:
             logging.warning("Não foi possível apagar a cópia animada %s", destino.name)
             continue
+        tocador_capas.tocador.esquecer(destino)
+
+
+def adotar(origem: Path, capa: Path) -> None:
+    """Copia para a capa ``capa`` as cópias prontas de ``origem``.
+
+    Para a capa provisória da edição que vira a capa do jogo: as cópias que a
+    prévia já tem (as do vídeo saem junto com ele, ``capa_video``) não são
+    geradas de novo pelo ``preparar``, que só pede as que faltam. Vem depois
+    do ``apagar`` da capa velha e antes do ``preparar``. Uma cópia que não
+    copia é só gerada de novo.
+    """
+    for tamanho in tamanhos():
+        fonte, destino = caminho_para(origem, tamanho), caminho_para(capa, tamanho)
+        # ``gerar`` só põe a cópia no lugar inteira: existindo, está pronta.
+        if fonte == destino or not fonte.is_file():
+            continue
+        temporario = destino.with_name(f"{destino.name}.{uuid4().hex}.tmp")
+        try:
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(fonte, temporario)
+            temporario.replace(destino)
+        except OSError as erro:
+            logging.warning("Não foi possível aproveitar a cópia animada %s: %s", fonte.name, erro)
+            continue
+        finally:
+            with contextlib.suppress(OSError):
+                temporario.unlink(missing_ok=True)
         tocador_capas.tocador.esquecer(destino)
 
 

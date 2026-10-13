@@ -231,6 +231,10 @@ def save_cover(game_id: str, cover_path: Path) -> None:
             (shared.covers_dir / f"{game_id}{suffix}").unlink(missing_ok=True)
 
     copias_animadas.apagar(game_id)
+    if dest.suffix in ANIMATED_SUFFIXES:
+        # A prévia da edição pode já ter as cópias desta capa: o ``preparar``
+        # abaixo só gera as que faltarem.
+        copias_animadas.adotar(cover_path, dest)
 
     # Capa animada nova: as cópias reduzidas dela são geradas em segundo plano,
     # com o autoplay ligado ou não.

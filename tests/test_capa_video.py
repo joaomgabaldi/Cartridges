@@ -104,3 +104,32 @@ def test_so_o_comeco_do_video_vira_capa_a_no_maximo_30_quadros(tmp_path):
         assert quadros <= capa_video.DURACAO_MAXIMA_S * capa_video.QUADROS_POR_SEGUNDO + 1
     finally:
         capa.unlink()
+
+
+@precisa_do_ffmpeg
+def test_as_copias_reduzidas_saem_junto_com_a_capa(tmp_path):
+    tamanhos = [(200, 300), (420, 630)]
+
+    def copias(capa):
+        return [(capa.with_name(f"{capa.stem}_{l}x{a}.webp"), (l, a)) for l, a in tamanhos]
+
+    capa = capa_video.converter(fazer_video(tmp_path / "largo.mp4", "320x180"), copias)
+    reduzidas = [caminho for caminho, _tamanho in copias(capa)]
+    try:
+        for caminho, tamanho in zip(reduzidas, tamanhos):
+            with Image.open(caminho) as imagem:
+                assert imagem.is_animated and imagem.size == tamanho
+        assert all(quadros_e_duracao(capa)[1] == _duracao(caminho) for caminho in reduzidas)
+    finally:
+        for caminho in (capa, *reduzidas):
+            caminho.unlink(missing_ok=True)
+
+
+def _duracao(caminho: Path) -> int:
+    with Image.open(caminho) as imagem:
+        total = 0
+        for indice in range(imagem.n_frames):
+            imagem.seek(indice)
+            imagem.load()
+            total += imagem.info.get("duration", 0)
+        return total
