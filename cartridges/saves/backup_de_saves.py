@@ -210,6 +210,14 @@ def _marcar_nova(nome: str, inicio: datetime, comentario: str) -> None:
         logging.exception("Não foi possível marcar a versão nova dos saves de %s", nome)
 
 
+def _exigir_manifesto() -> None:
+    """Antes de todo `ludusavi.fazer_backup`. Sem o manifesto, o Ludusavi copia só os
+    caminhos do config (emulador, pasta do jogo) e sai com 0: a versão ficaria sem o save
+    que o manifesto aponta, e sem marca de incompleta."""
+    if not (_pasta_config() / "manifest.yaml").is_file():
+        raise LudusaviFalhou("o manifesto do Ludusavi não foi baixado")
+
+
 def _salvar(game: Game) -> bool:
     game.save()
     return False
@@ -289,6 +297,7 @@ def _backup(game: Game, biblioteca: list[Game], tarefa: tarefas.Tarefa) -> None:
                 _local_desconhecido(game)
                 return  # sem o que copiar: o `finally` desfaz a tarefa
             _preparar(biblioteca, jogo)
+            _exigir_manifesto()
             inicio = datetime.now(timezone.utc)
             try:
                 ludusavi.fazer_backup(jogo.nome, _pasta_config(), executor)
@@ -366,6 +375,7 @@ def _restaurar_um(
             return _(
                 "A versão escolhida dos saves de {} está danificada e não foi restaurada."
             ).format(game.name)
+        _exigir_manifesto()  # fora do `try` de baixo: não é o jogo aberto
         inicio = datetime.now(timezone.utc)
         try:
             # Uma cópia a mais que as guardadas: no limite normal, a cópia apagaria a

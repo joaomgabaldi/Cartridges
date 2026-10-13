@@ -141,11 +141,18 @@ class LudusaviFalso:
         return [c for c in self.chamou("backups") if c[1:2] == ["edit"]]
 
 
+def _com_manifesto(tmp_path) -> None:
+    """O manifesto que o Ludusavi baixa para a pasta de configuração dele."""
+    (tmp_path / "ludusavi").mkdir(exist_ok=True)
+    (tmp_path / "ludusavi" / "manifest.yaml").write_text("{}", "utf-8")
+
+
 @pytest.fixture(autouse=True)
 def ambiente(settings, tmp_path, monkeypatch, ludusavi_de_verdade):
     """Um `ludusavi.exe` (de mentira) ao lado do Python, GSettings de verdade (a pasta
     dos saves lê dele) e o cache em memória zerado."""
     (tmp_path / "ludusavi.exe").touch()
+    _com_manifesto(tmp_path)  # o normal depois da primeira busca; quem testa a falta o apaga
     monkeypatch.setattr(backup_de_saves, "_cache", {})
     monkeypatch.setattr(backup_de_saves, "_restaurando", Counter())
     monkeypatch.setattr(backup_de_saves, "_jogos_restaurando", Counter())
@@ -259,10 +266,8 @@ def test_resolve_por_titulo_sem_appid(store, make_game, falso, esperar, tmp_path
     assert falso.configs["backup"]["customGames"] == []  # sem appID não há o que acrescentar
 
 
-def _com_manifesto(tmp_path) -> None:
-    """O manifesto que o Ludusavi baixa para a pasta de configuração dele."""
-    (tmp_path / "ludusavi").mkdir(exist_ok=True)
-    (tmp_path / "ludusavi" / "manifest.yaml").write_text("{}", "utf-8")
+def _sem_manifesto(tmp_path) -> None:
+    (tmp_path / "ludusavi" / "manifest.yaml").unlink()
 
 
 def test_appid_sem_entrada_usa_entrada_propria(store, make_game, falso, esperar, tmp_path):
@@ -292,7 +297,8 @@ def test_com_manifesto_guarda_a_entrada_propria(store, make_game, falso, esperar
     assert toasts() == []
 
 
-def test_sem_manifesto_nao_guarda_o_nome(store, make_game, falso, esperar):
+def test_sem_manifesto_nao_guarda_o_nome(store, make_game, falso, esperar, tmp_path):
+    _sem_manifesto(tmp_path)
     jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo Raro", steam_appid="42")
 
     backup_de_saves.no_fim_da_sessao(jogo)
@@ -349,7 +355,8 @@ def test_local_desconhecido_so_registra_depois(store, make_game, falso, esperar,
     assert tarefas.lista.get_n_items() == 0
 
 
-def test_sem_appid_sem_manifesto_avisa(store, make_game, falso, esperar):
+def test_sem_appid_sem_manifesto_avisa(store, make_game, falso, esperar, tmp_path):
+    _sem_manifesto(tmp_path)
     jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo Sem Nada")
 
     backup_de_saves.no_fim_da_sessao(jogo)
@@ -362,6 +369,20 @@ def test_sem_appid_sem_manifesto_avisa(store, make_game, falso, esperar):
     # Sem o manifesto "não achado" não quer dizer nada: o campo do aviso fica como estava.
     assert jogo.saves_local_desconhecido_avisado is False
     assert jogo.saves == 0
+    assert tarefas.lista.get_n_items() == 0
+
+
+def test_sem_manifesto_nao_faz_backup_de_jogo_com_nome(store, make_game, falso, esperar, tmp_path):
+    # Sem o manifesto o Ludusavi copia só os caminhos do config e sai com 0: a versão
+    # ficaria sem o save que o manifesto aponta, e sem marca de incompleta.
+    _sem_manifesto(tmp_path)
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    esperar()
+
+    assert falso.chamou("backup") == []
+    assert titulos() == ["Não foi possível fazer o backup dos saves de Meu Jogo."]
     assert tarefas.lista.get_n_items() == 0
 
 
@@ -1344,6 +1365,19 @@ def test_save_do_programdata_nao_vai_para_a_pasta_do_jogo(store, make_game, fals
     esperar()
 
     assert falso.configs["restore"].get("redirects", []) == []
+
+
+def test_sem_manifesto_nao_restaura(store, make_game, falso, esperar, tmp_path, caplog):
+    jogo = _jogo_x(store, make_game, ["v1"], falso)
+    _sem_manifesto(tmp_path)
+
+    backup_de_saves.restaurar(jogo, "v1")
+    esperar()
+
+    _nada_foi_tocado(falso)
+    # A falha é do app, e não do jogo aberto: o aviso genérico, e o motivo no log.
+    assert titulos() == ["Não foi possível restaurar o save de Meu Jogo."]
+    assert "manifesto" in caplog.text
 
 
 def test_previa_que_falha_nao_restaura(store, make_game, falso, esperar):
