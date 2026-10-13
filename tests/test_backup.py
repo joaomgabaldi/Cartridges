@@ -1199,3 +1199,28 @@ def test_entrada_que_sai_da_pasta_e_recusada(tmp_path, monkeypatch):
     )
     assert backup.aplicar_pendente() is False
     assert not (shared.app_dir.parent / "fora.json").exists()
+
+
+def test_sobra_de_restaurando_que_resiste_uma_vez_nao_impede(tmp_path, monkeypatch):
+    """Uma queda deixou `.restaurando`, e o antivírus segura um arquivo dela por
+    um instante: a restauração tenta de novo em vez de falhar na hora."""
+    _preparar_restauracao(tmp_path, monkeypatch)
+    sobra = shared.app_dir.with_name(shared.app_dir.name + ".restaurando")
+    (sobra / "games").mkdir(parents=True)
+    (sobra / "games" / "velho.json").write_text("{}", encoding="utf-8")
+    apagar = shutil.rmtree
+    recusas = []
+
+    def rmtree(caminho, *args, **kwargs):
+        if Path(caminho) == sobra and not recusas:
+            recusas.append(caminho)
+            if not kwargs.get("ignore_errors"):
+                raise OSError("arquivo em uso")
+            return None
+        return apagar(caminho, *args, **kwargs)
+
+    monkeypatch.setattr(backup.shutil, "rmtree", rmtree)
+    monkeypatch.setattr(backup, "sleep", lambda _s: None)
+    assert backup.aplicar_pendente() is True
+    assert recusas
+    assert not (shared.games_dir / "velho.json").exists()

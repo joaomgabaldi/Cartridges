@@ -583,7 +583,9 @@ def aplicar_pendente(progresso: Optional[Callable[[float], None]] = None) -> Opt
 
     configuracoes_antes = ler_configuracoes()
     try:
-        shutil.rmtree(extraido, ignore_errors=True)
+        # A sobra de uma queda, com as tentativas contra o antivírus: misturada
+        # à extração nova, traria de volta arquivos que o backup não tem.
+        _apagar_pasta(extraido)
         # Uma leitura só: os nomes e o manifesto antes, e o CRC de cada entrada
         # na própria extração — com vários GB de saves, ler duas vezes era
         # dobrar a espera.
