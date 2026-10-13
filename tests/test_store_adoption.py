@@ -541,7 +541,7 @@ def test_atalho_apontado_a_mao_e_adotado_na_varredura(store, make_game, seed):
     """A escolha manual da janela de pendências da restauração
     (`Store.apontar_atalho`) é o que a âncora encontra na varredura seguinte."""
     restaurado = seed(
-        make_game(game_id=OLD_ID, playtime=900, shortcut_path="C:\Velho\Halo.lnk")
+        make_game(game_id=OLD_ID, playtime=900, shortcut_path=r"C:\Velho\Halo.lnk")
     )
     store.apontar_atalho(restaurado, LNK)
 

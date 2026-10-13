@@ -207,3 +207,9 @@ class TestNumeracao:
         )
 
         assert [tela.device for tela in telas] == ["\\\\.\\DISPLAY2", "\\\\.\\DISPLAY10"]
+
+def test_sem_a_sonda_da_janela():
+    from cartridges.utils import window_geometry  # noqa: PLC0415
+
+    for nome in ("_vigiar", "_vigiar_comecar", "_vigiar_parar", "_estado_da_janela", "_vigia_id"):
+        assert not hasattr(window_geometry, nome)
