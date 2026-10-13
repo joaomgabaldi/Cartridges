@@ -397,7 +397,8 @@ class Game(Gtk.Box):
 
     def launch(self) -> None:
         # avoid import cycles
-        from cartridges.saves import backup_de_saves  # pylint: disable=import-outside-toplevel
+        # pylint: disable-next=import-outside-toplevel
+        from cartridges.saves import backup_de_saves
 
         # Os saves dele estão sendo regravados: o jogo aberto agora leria arquivos pela
         # metade e travaria os que a restauração precisa gravar.

@@ -300,9 +300,9 @@ def test_finish_after_cancel_neither_installs_nor_quits(tmp_path, monkeypatch):
 def test_pergunta_espera_os_saves(monkeypatch):
     """Atualizar fecha o app: com o backup ou a restauração dos saves em curso, a
     pergunta espera, como espera a sessão."""
-    from cartridges.process_session import ProcessSession  # noqa: PLC0415
-    from cartridges.saves import backup_de_saves  # noqa: PLC0415
-    from cartridges.session_window import SessionWindow  # noqa: PLC0415
+    from cartridges.process_session import ProcessSession
+    from cartridges.saves import backup_de_saves
+    from cartridges.session_window import SessionWindow
 
     adiadas = []
     monkeypatch.setattr(

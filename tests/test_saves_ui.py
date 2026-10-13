@@ -203,7 +203,7 @@ def test_confirmacao_de_versao_incompleta(monkeypatch, make_game):
 
 
 def _preferencias(monkeypatch):
-    import cartridges.preferences as preferences_module  # noqa: PLC0415
+    import cartridges.preferences as preferences_module
     from cartridges.metadata_refresh import MetadataRefresh  # noqa: PLC0415
 
     monkeypatch.setattr(preferences_module, "get_metadata_refresh", MetadataRefresh)
@@ -453,7 +453,7 @@ def test_troca_que_falha_avisa(monkeypatch, flush_idle):
 
 
 def test_restaurar_todos_pede_confirmacao_com_o_texto_da_spec(monkeypatch):
-    import cartridges.preferences as preferences_module  # noqa: PLC0415
+    import cartridges.preferences as preferences_module
 
     monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
     preferencias = _preferencias(monkeypatch)
@@ -487,7 +487,7 @@ def test_restaurar_todos_pede_confirmacao_com_o_texto_da_spec(monkeypatch):
 
 
 def test_restaurar_backup_com_saves_em_andamento_avisa(monkeypatch):
-    import cartridges.preferences as preferences_module  # noqa: PLC0415
+    import cartridges.preferences as preferences_module
 
     monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
     preferencias = _preferencias(monkeypatch)
@@ -499,15 +499,15 @@ def test_restaurar_backup_com_saves_em_andamento_avisa(monkeypatch):
         lambda *_a, **_k: pytest.fail("confirmou a restauração com os saves em andamento"),
     )
 
-    preferencias._restore_backup(Path("X:/backup.zip"))  # noqa: SLF001
+    preferencias._restore_backup(Path("X:/backup.zip"))
 
     assert avisos == ["Aguarde o fim do backup ou da restauração dos saves e tente novamente."]
 
 
 def _com_backup_agendado(monkeypatch, tmp_path):
     """Preferências com um backup já copiado para a pasta do app e o `quit` do app anotado."""
-    from cartridges import shared  # noqa: PLC0415
-    from cartridges.utils import backup  # noqa: PLC0415
+    from cartridges import shared
+    from cartridges.utils import backup
 
     monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
     preferencias = _preferencias(monkeypatch)
@@ -530,7 +530,7 @@ def test_reiniciar_para_restaurar_com_saves_em_andamento_desiste_e_desagenda(mon
     progresso = SimpleNamespace(dismiss=lambda: dispensados.append(1))
     assert agendado.is_file()
 
-    assert preferencias._restart_to_restore(progresso) is False  # noqa: SLF001
+    assert preferencias._restart_to_restore(progresso) is False
 
     assert saidas == []
     assert dispensados == [1]
@@ -542,13 +542,13 @@ def test_reiniciar_para_restaurar_com_saves_em_andamento_desiste_e_desagenda(mon
 def test_reiniciar_para_restaurar_sem_saves_em_andamento_sai_e_mantem_o_agendado(
     monkeypatch, tmp_path
 ):
-    from cartridges import shared  # noqa: PLC0415
+    from cartridges import shared
 
     preferencias, _origem, agendado, saidas = _com_backup_agendado(monkeypatch, tmp_path)
     avisos = _toasts(preferencias, monkeypatch)
     monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: False)
 
-    assert preferencias._restart_to_restore(SimpleNamespace(dismiss=lambda: None)) is False  # noqa: SLF001
+    assert preferencias._restart_to_restore(SimpleNamespace(dismiss=lambda: None)) is False
 
     assert saidas == [1]
     assert shared.win.application.reiniciar is True
@@ -560,7 +560,7 @@ def test_restaurar_backup_que_ganha_saves_em_andamento_na_preparacao_nao_sai(
     monkeypatch, tmp_path, flush_idle
 ):
     """O caminho inteiro: a verificação do começo passou, os saves começaram no meio."""
-    import cartridges.preferences as preferences_module  # noqa: PLC0415
+    import cartridges.preferences as preferences_module
 
     preferencias, origem, agendado, saidas = _com_backup_agendado(monkeypatch, tmp_path)
     agendado.unlink()  # `_schedule_restore` é quem agenda aqui
@@ -568,7 +568,7 @@ def test_restaurar_backup_que_ganha_saves_em_andamento_na_preparacao_nao_sai(
     monkeypatch.setattr(preferences_module.backup, "validar", lambda _caminho: None)
     monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: True)
 
-    preferencias._schedule_restore(origem)  # noqa: SLF001
+    preferencias._schedule_restore(origem)
     _drenar(flush_idle, lambda: len(avisos) == 2)
 
     assert avisos == [

@@ -21,7 +21,7 @@ def _textos(dialogo):
 
 
 def test_janela_mostra_cada_tarefa_e_acompanha(flush_idle):
-    from cartridges.tarefas_janela import TarefasJanela  # noqa: PLC0415
+    from cartridges.tarefas_janela import TarefasJanela
 
     importacao = tarefas.comecar("Importação", 30)
     tarefas.comecar("HowLongToBeat", 4)
@@ -37,7 +37,7 @@ def test_janela_mostra_cada_tarefa_e_acompanha(flush_idle):
 
 
 def test_janela_vazia_avisa(flush_idle):
-    from cartridges.tarefas_janela import TarefasJanela  # noqa: PLC0415
+    from cartridges.tarefas_janela import TarefasJanela
 
     tarefa = tarefas.comecar("Metadados", 2)
     flush_idle()
@@ -264,7 +264,7 @@ def test_tarefa_que_comeca_com_o_mouse_parado_no_canto_nao_recua(
 @pytest.fixture
 def sem_tela(monkeypatch):
     """`present` só conta: a janela não chega a ir para a tela nos testes."""
-    from cartridges.tarefas_janela import TarefasJanela  # noqa: PLC0415
+    from cartridges.tarefas_janela import TarefasJanela
 
     chamadas = []
     monkeypatch.setattr(TarefasJanela, "present", lambda self: chamadas.append(self))
@@ -273,7 +273,7 @@ def sem_tela(monkeypatch):
 
 
 def test_mostrar_duas_vezes_e_a_mesma_janela(real_window, flush_idle, sem_tela):
-    from cartridges.tarefas_janela import TarefasJanela  # noqa: PLC0415
+    from cartridges.tarefas_janela import TarefasJanela
 
     TarefasJanela.mostrar(real_window)
     primeira = TarefasJanela.aberta
@@ -287,7 +287,7 @@ def test_mostrar_duas_vezes_e_a_mesma_janela(real_window, flush_idle, sem_tela):
 
 
 def test_janela_solta_nao_e_transiente_nem_modal_nem_redimensionavel():
-    from cartridges.tarefas_janela import TarefasJanela  # noqa: PLC0415
+    from cartridges.tarefas_janela import TarefasJanela
 
     janela = TarefasJanela()
     assert janela.get_transient_for() is None
@@ -298,7 +298,7 @@ def test_janela_solta_nao_e_transiente_nem_modal_nem_redimensionavel():
 
 
 def test_esc_fecha_a_janela():
-    from cartridges.tarefas_janela import TarefasJanela  # noqa: PLC0415
+    from cartridges.tarefas_janela import TarefasJanela
 
     janela = TarefasJanela()
     controladores = janela.observe_controllers()
@@ -325,7 +325,7 @@ def _principal(visivel, sair):
 
 def test_fechar_a_janela_com_a_principal_escondida_encerra_o_app(monkeypatch):
     from cartridges import shared  # noqa: PLC0415
-    from cartridges.tarefas_janela import TarefasJanela  # noqa: PLC0415
+    from cartridges.tarefas_janela import TarefasJanela
 
     saidas = []
     monkeypatch.setattr(shared, "win", _principal(False, lambda: saidas.append(1)))
@@ -336,7 +336,7 @@ def test_fechar_a_janela_com_a_principal_escondida_encerra_o_app(monkeypatch):
 
 def test_fechar_a_janela_com_a_principal_visivel_so_a_fecha(monkeypatch):
     from cartridges import shared  # noqa: PLC0415
-    from cartridges.tarefas_janela import TarefasJanela  # noqa: PLC0415
+    from cartridges.tarefas_janela import TarefasJanela
 
     saidas = []
     monkeypatch.setattr(shared, "win", _principal(True, lambda: saidas.append(1)))
@@ -354,8 +354,8 @@ class _JanelaFalsa:
 
 
 def _fechar_principal(monkeypatch, com_janela):
-    from cartridges.main import CartridgesApplication  # noqa: PLC0415
-    from cartridges.tarefas_janela import TarefasJanela  # noqa: PLC0415
+    from cartridges.main import CartridgesApplication
+    from cartridges.tarefas_janela import TarefasJanela
 
     janela = _JanelaFalsa() if com_janela else None
     monkeypatch.setattr(TarefasJanela, "aberta", janela)
@@ -392,9 +392,9 @@ def test_fechar_a_principal_com_tarefa_sem_janela_fecha_tudo(monkeypatch, flush_
 def test_fechar_com_saves_em_andamento_esconde_e_mostra_as_tarefas(monkeypatch):
     """O backup ou a restauração dos saves em curso não pode ficar órfão: o app não
     fecha, mas some da tela e abre a janela das tarefas, que o encerra ao ser fechada."""
-    from cartridges.main import CartridgesApplication  # noqa: PLC0415
-    from cartridges.saves import backup_de_saves  # noqa: PLC0415
-    from cartridges.tarefas_janela import TarefasJanela  # noqa: PLC0415
+    from cartridges.main import CartridgesApplication
+    from cartridges.saves import backup_de_saves
+    from cartridges.tarefas_janela import TarefasJanela
 
     monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: True)
     monkeypatch.setattr(TarefasJanela, "aberta", None)
@@ -489,7 +489,7 @@ def test_segunda_copia_do_app_acorda_a_primeira(monkeypatch):
 
 def test_segunda_abertura_mostra_a_principal_escondida(monkeypatch):
     from cartridges import shared  # noqa: PLC0415
-    from cartridges.main import CartridgesApplication  # noqa: PLC0415
+    from cartridges.main import CartridgesApplication
 
     chamadas = []
     monkeypatch.setattr(shared, "win", SimpleNamespace(present=lambda: chamadas.append(1)))
@@ -553,7 +553,7 @@ def test_falha_ao_acordar_a_primeira_copia_nao_pula_o_realce(monkeypatch):
 
 
 def test_barra_de_cada_tarefa_aceita_o_nome_acessivel(flush_idle):
-    from cartridges.tarefas_janela import TarefasJanela  # noqa: PLC0415
+    from cartridges.tarefas_janela import TarefasJanela
 
     tarefas.comecar("Importação", 3)
     flush_idle()
