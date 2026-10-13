@@ -4,7 +4,8 @@
 desbloqueadas" na que fecha 100%, com "★ Rara" quando for o caso), título e
 descrição. Fica 5 s na tela; várias de uma vez entram em fila e aparecem uma
 depois da outra. A janela nunca pega o foco (`utils/janela_por_cima.py`).
-Cada cartão toca um som ao entrar, se "Tocar som com o aviso" estiver ligado.
+Só o primeiro cartão de uma fila toca o som, se "Tocar som com o aviso"
+estiver ligado; os seguintes entram em silêncio.
 """
 
 import logging
@@ -185,10 +186,11 @@ def mostrar(aviso: Aviso) -> None:
     """Põe o aviso na fila; aparece já se não houver outro na tela."""
     _fila.append(aviso)
     if _atual is None:
-        _proximo()
+        _proximo(com_som=True)
 
 
-def _proximo() -> bool:
+def _proximo(com_som: bool = True) -> bool:
+    """Mostra o próximo da fila. ``com_som``: só o que abre a fila toca o som."""
     global _atual, _vez  # pylint: disable=global-statement
     if _atual is not None or not _fila:
         return False
@@ -200,15 +202,17 @@ def _proximo() -> bool:
         janela = _JanelaDoAviso(aviso)
         janela.entrar(shared.schema.get_string("conquistas-aviso-posicao"))
         _atual = janela
-        _tocar_som()
+        if com_som:
+            _tocar_som()
         _agendar(DURACAO, lambda: _esconder(vez))
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning("Não foi possível mostrar o aviso de conquista", exc_info=True)
         _atual = None
         _destruir(janela)
         if _fila:
-            # Fora desta chamada, para uma falha repetida não empilhar recursão
-            GLib.idle_add(_proximo)
+            # Fora desta chamada, para uma falha repetida não empilhar recursão.
+            # Quem falhou não tocou nada: o seguinte herda a vez do som.
+            GLib.idle_add(_proximo, com_som)
     return False
 
 
@@ -252,7 +256,7 @@ def _saiu(vez: int, janela: _JanelaDoAviso) -> None:
             return  # `fechar` (ou outra troca) já cuidou desta janela
         _atual = None
         _destruir(janela)
-        _proximo()
+        _proximo(com_som=False)  # emendado na fila: em silêncio
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning("Falha ao fechar o aviso de conquista", exc_info=True)
 

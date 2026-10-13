@@ -114,7 +114,7 @@ def test_falha_ao_mostrar_passa_para_o_proximo(monkeypatch, sem_efeitos):
     """Um cartão que falha no meio da fila não trava a fila: o idle de recuperação
     segue com o próximo, e um idle que sobra não duplica o que já está na tela."""
     idle = []
-    monkeypatch.setattr(conquista_aviso.GLib, "idle_add", lambda funcao: idle.append(funcao) or 1)
+    monkeypatch.setattr(conquista_aviso.GLib, "idle_add", lambda funcao, *args: idle.append(lambda: funcao(*args)) or 1)
 
     def quebra_no_dois(janela, canto, margem=24):
         if janela.titulo == "Dois":
@@ -138,7 +138,7 @@ def test_falha_ao_mostrar_passa_para_o_proximo(monkeypatch, sem_efeitos):
 
 def test_idle_de_recuperacao_mostra_o_proximo_quando_ninguem_chegou(monkeypatch, sem_efeitos):
     idle = []
-    monkeypatch.setattr(conquista_aviso.GLib, "idle_add", lambda funcao: idle.append(funcao) or 1)
+    monkeypatch.setattr(conquista_aviso.GLib, "idle_add", lambda funcao, *args: idle.append(lambda: funcao(*args)) or 1)
     monkeypatch.setattr(
         janela_por_cima, "preparar", lambda janela: janela.titulo != "Dois"
     )
@@ -282,12 +282,52 @@ def test_som_desligado_nao_toca(sons, schema):
     assert conquista_aviso.na_tela() == "Um"
 
 
-def test_cada_cartao_da_fila_toca_quando_entra(sons, sem_efeitos):
-    conquista_aviso.mostrar(_aviso("Um"))
-    conquista_aviso.mostrar(_aviso("Dois"))
-    assert len(sons) == 1
+def test_so_o_primeiro_cartao_da_fila_toca(sons, sem_efeitos):
+    for titulo in ("Um", "Dois", "Tres"):
+        conquista_aviso.mostrar(_aviso(titulo))
     sem_efeitos[-1][1]()
     assert conquista_aviso.na_tela() == "Dois"
+    sem_efeitos[-1][1]()
+    assert conquista_aviso.na_tela() == "Tres"
+    assert len(sons) == 1
+
+
+def test_conquista_depois_da_fila_vazia_toca_de_novo(sons, sem_efeitos):
+    conquista_aviso.mostrar(_aviso("Um"))
+    sem_efeitos[-1][1]()
+    assert conquista_aviso.na_tela() is None
+    conquista_aviso.mostrar(_aviso("Dois"))
+    assert len(sons) == 2
+
+
+def test_cartao_que_falha_no_meio_da_fila_nao_faz_o_seguinte_tocar(sons, sem_efeitos, monkeypatch):
+    idle = []
+    monkeypatch.setattr(
+        conquista_aviso.GLib, "idle_add", lambda funcao, *args: idle.append((funcao, args)) or 1
+    )
+    monkeypatch.setattr(janela_por_cima, "preparar", lambda janela: janela.titulo != "Um")
+    for titulo in ("Zero", "Um", "Dois"):
+        conquista_aviso.mostrar(_aviso(titulo))
+    sem_efeitos[-1][1]()  # "Zero" sai; "Um" falha e a recuperação fica para o idle
+    funcao, args = idle.pop()
+    funcao(*args)
+    assert conquista_aviso.na_tela() == "Dois"
+    assert len(sons) == 1
+
+
+def test_primeiro_que_falha_nao_cala_a_conquista_seguinte(sons, monkeypatch):
+    monkeypatch.setattr(janela_por_cima, "preparar", lambda janela: janela.titulo != "Um")
+    conquista_aviso.mostrar(_aviso("Um"))
+    conquista_aviso.mostrar(_aviso("Dois"))
+    assert conquista_aviso.na_tela() == "Dois"
+    assert len(sons) == 1
+
+
+def test_exemplo_toca_mesmo_com_fila(sons, sem_efeitos):
+    conquista_aviso.mostrar(_aviso("Um"))
+    conquista_aviso.mostrar(_aviso("Dois"))
+    conquista_aviso.fechar()
+    conquista_aviso.mostrar(conquista_aviso.Aviso.exemplo())
     assert len(sons) == 2
 
 
