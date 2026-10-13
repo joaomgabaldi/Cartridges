@@ -2518,3 +2518,49 @@ def test_fita_que_nao_responde_nao_atrasa_a_previa_das_outras(monkeypatch, schem
         _esperar_que(lambda: pintadas == [10, 20])
     finally:
         solta.set()
+
+
+def test_conquista_da_sessao_nova_nao_e_engolida_pelo_pulso_velho(pulso, monkeypatch, tmp_path):
+    """O pulso da sessão que acabou ainda dorme num passo: a conquista da sessão
+    seguinte não pode ser absorvida por ele."""
+    novo = _jogo(tmp_path, game_id="jogo-2", cor=(20, 20, 220))
+    na_fila = []
+    chamadas = {"n": 0}
+    dormir_de_verdade = session_fita.time.sleep
+
+    def dormir(segundos):
+        chamadas["n"] += 1
+        if chamadas["n"] == 1:
+            session_fita.voltar()
+            pulso.tarefas.pop()()  # a volta à cor do app
+            session_fita.comecar(novo)
+            pulso.tarefas.pop()()  # veste a cor do jogo novo
+            session_fita.pulsar_conquista("rara")
+            na_fila.extend(session_fita._fila_de_pulsos)
+        dormir_de_verdade(0)
+
+    monkeypatch.setattr(session_fita.time, "sleep", dormir)
+    session_fita.pulsar_conquista("normal")
+    pulso.tarefas.pop(0)()
+    assert na_fila == [(novo, "rara")]
+    assert _cores(pulso.modulo).count(_ouro()) == 1 + 2
+
+
+def test_esperar_para_quando_o_dono_perde_a_validade(pulso, monkeypatch):
+    fatias = []
+
+    def dormir(segundos):
+        fatias.append(segundos)
+        if len(fatias) == 2:
+            session_fita.voltar()
+
+    monkeypatch.setattr(session_fita.time, "sleep", dormir)
+    assert session_fita._esperar_o_passo(pulso.jogo, 5) is False
+    assert len(fatias) <= 3
+
+
+def test_esperar_ate_o_fim_com_o_dono_valido(pulso, monkeypatch):
+    fatias = []
+    monkeypatch.setattr(session_fita.time, "sleep", fatias.append)
+    assert session_fita._esperar_o_passo(pulso.jogo, 0.25) is True
+    assert abs(sum(fatias) - 0.25) < 1e-9 and max(fatias) <= 0.1

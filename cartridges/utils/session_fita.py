@@ -1425,15 +1425,21 @@ FORCA_DOS_PULSOS = ("normal", "rara", "completo")
 _TRAVA_PULSO = threading.Lock()
 _fila_de_pulsos: list[tuple[object, str]] = []
 _pulsando = False
-# O tipo do pulso que a thread está tocando agora, ou None.
+# O tipo e o dono do pulso que a thread está tocando agora, ou None. O dono
+# conta para a absorção: o pulso de uma sessão que acabou (ainda dormindo num
+# passo) não fala pela sessão seguinte.
 _tipo_em_curso: Optional[str] = None
+_dono_em_curso: object = None
+# Quanto o pulso dorme de cada vez num passo: o de uma sessão que acabou para
+# logo, em vez de segurar a fila até o fim do passo (8 s no "Brilho longo").
+_FATIA = 0.1
 
 
 def _limpar_fila_de_pulsos() -> None:
     """Nada esperando, nada em curso. Chamar com ``_TRAVA_PULSO`` na mão."""
-    global _tipo_em_curso  # noqa: PLW0603  # pylint: disable=global-statement
+    global _tipo_em_curso, _dono_em_curso  # noqa: PLW0603  # pylint: disable=global-statement
     _fila_de_pulsos.clear()
-    _tipo_em_curso = None
+    _tipo_em_curso = _dono_em_curso = None
 
 
 def _encerrar_pulsos(alvos: Optional[list[Fita]] = None) -> Optional[dict[str, int]]:
@@ -1473,7 +1479,11 @@ def pulsar_conquista(tipo: str) -> None:
             esperando = _fila_de_pulsos[0][1]
             if FORCA_DOS_PULSOS.index(tipo) > FORCA_DOS_PULSOS.index(esperando):
                 _fila_de_pulsos[0] = (jogo, tipo)
-        elif _pulsando and (tipo != "completo" or _tipo_em_curso == "completo"):
+        elif (
+            _pulsando
+            and _dono_vale(_dono_em_curso)
+            and (tipo != "completo" or _tipo_em_curso == "completo")
+        ):
             return  # a mesma rajada: o pulso em curso basta
         else:
             _fila_de_pulsos.append((jogo, tipo))
@@ -1497,15 +1507,15 @@ def _servir_em_thread(mensagem_de_falha: str) -> None:
 
 
 def _servir_pulsos() -> None:
-    global _pulsando, _tipo_em_curso  # noqa: PLW0603
+    global _pulsando, _tipo_em_curso, _dono_em_curso  # noqa: PLW0603
     while True:
         with _TRAVA_PULSO:
             if not _fila_de_pulsos:
                 _pulsando = False
-                _tipo_em_curso = None
+                _tipo_em_curso = _dono_em_curso = None
                 return
             dono, tipo = _fila_de_pulsos.pop(0)
-            _tipo_em_curso = tipo
+            _tipo_em_curso, _dono_em_curso = tipo, dono
         try:
             _pulsar(dono, tipo)
         except Exception:  # pylint: disable=broad-exception-caught
@@ -1559,6 +1569,20 @@ def _vez_do_pulso(dono: object, alvos: list[Fita]) -> Optional[dict[str, int]]:
         return _reservar(alvos)
 
 
+def _esperar_o_passo(dono: object, segundos: float) -> bool:
+    """Dorme o passo em fatias; ``False`` assim que o dono perde a validade."""
+    restante = segundos
+    while True:
+        fatia = min(_FATIA, restante)
+        time.sleep(fatia)
+        restante -= fatia
+        with _TRAVA_PULSO:
+            if not _dono_vale(dono):
+                return False
+        if restante <= 0:
+            return True
+
+
 def _base_do_pulso(dono: object) -> Cor:
     """A cor de antes do pulso: a do app no teste, a do jogo na sessão."""
     return cor_do_app() if isinstance(dono, _TesteDoPulso) else cor_do_jogo(dono)
@@ -1582,7 +1606,8 @@ def _pulsar(dono: object, tipo: str) -> None:
             )
         else:
             _em_paralelo(alvos, lambda fita, c=cor, g=geracoes: _tingir(fita, c, g[fita.id]))
-        time.sleep(passo.segura)
+        if not _esperar_o_passo(dono, passo.segura):
+            return
     geracoes = _vez_do_pulso(dono, alvos)
     if geracoes is None:
         return
