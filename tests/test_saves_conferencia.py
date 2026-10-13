@@ -299,6 +299,8 @@ def test_raizes():
         Path("C:/Users/João/Documents/WindowsPowerShell"),
         Path("C:/Users/João/Documents/PowerShell"),
         Path("C:/Users/João/.ssh"),
+        Path("C:/Users/João/.local"),
+        Path("C:/Users/João/.config/git"),
     )
     assert r.casa == CASA
 
@@ -480,6 +482,36 @@ def test_aceita_arquivo_numa_subpasta_da_pasta_do_usuario():
 
 def test_recusa_a_pasta_ssh():
     arquivo = "C:/Users/João/.ssh/authorized_keys"
+
+    assert _recusado(arquivo) == arquivo
+
+
+@pytest.mark.parametrize(
+    "arquivo",
+    [
+        # o site-packages do usuário, que o Python do app lê ao abrir
+        "C:/Users/João/.local/lib/python3.14-mingw_x86_64_ucrt_gnu/site-packages/x.txt",
+        "C:/Users/João/.config/git/config",  # o `core.fsmonitor` roda um programa
+    ],
+)
+def test_recusa_as_pastas_de_configuracao_que_rodam_codigo(arquivo):
+    assert _recusado(arquivo) == arquivo
+
+
+@pytest.mark.parametrize(
+    "extensao",
+    [
+        # Python: o `.pth` roda a linha `import`; os compilados rodam sem o fonte
+        ".pth", ".pyc", ".pyo", ".pyz", ".pyzw",
+        # scripts e atalhos do Windows
+        ".wsc", ".sct", ".settingcontent-ms", ".library-ms", ".searchconnector-ms",
+        ".search-ms", ".ps1xml",
+        # instaladores de aplicativo
+        ".application", ".appinstaller", ".msix", ".msixbundle", ".appx", ".appxbundle",
+    ],
+)
+def test_recusa_extensao_que_instala_ou_roda_codigo(extensao):
+    arquivo = f"C:/Users/João/AppData/Local/Jogo/x{extensao}"
 
     assert _recusado(arquivo) == arquivo
 

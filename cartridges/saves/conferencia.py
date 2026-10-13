@@ -133,6 +133,8 @@ def raizes(pastas: arquivos.Pastas, casa: Path, extras: list[Path]) -> Raizes:
             pastas.documentos / "WindowsPowerShell",
             pastas.documentos / "PowerShell",
             casa / ".ssh",
+            casa / ".local",  # o site-packages do usuário: o Python do app o lê ao abrir
+            casa / ".config" / "git",  # o `core.fsmonitor` roda um programa
         ),
         casa=casa,
     )
@@ -146,6 +148,13 @@ EXTENSOES_PROIBIDAS = frozenset(
         # carregados por outro programa: complementos, módulos nativos, ajuda e atalhos
         ".asi", ".node", ".pyd", ".xll", ".xla", ".xlam", ".chm", ".msc", ".appref-ms",
         ".asar", ".scf", ".inf",
+        # Python: o `.pth` roda a linha `import`; os compilados rodam sem o fonte
+        ".pth", ".pyc", ".pyo", ".pyz", ".pyzw",
+        # scripts e atalhos do Windows
+        ".wsc", ".sct", ".settingcontent-ms", ".library-ms", ".searchconnector-ms",
+        ".search-ms", ".ps1xml",
+        # instaladores de aplicativo
+        ".application", ".appinstaller", ".msix", ".msixbundle", ".appx", ".appxbundle",
     }
 )
 
