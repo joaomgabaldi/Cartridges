@@ -544,8 +544,11 @@ def restaurar_todos() -> None:
         if not pedidos:  # sem nome no Ludusavi, nenhum jogo tem backup
             entregar_na_tela(_nada_para_restaurar)
             return
-        # Total provisório (nunca 0): a thread de trabalho o acerta quando souber quem tem backup.
-        tarefa = _comecar_tarefa(_("Restaurando os saves"), len(pedidos))
+        # Total provisório (nunca 0): os nomes com cópias no cache, ou todos os nomes se o
+        # cache ainda está vazio. A thread de trabalho o acerta quando souber quem tem backup.
+        nomes = {nome for _jogo, nome in pedidos}
+        provisorio = sum(1 for nome in nomes if _cache.get(nome)) or len(nomes)
+        tarefa = _comecar_tarefa(_("Restaurando os saves"), provisorio)
         _em_segundo_plano(_restaurar_todos, biblioteca, pedidos, tarefa)
     except Exception:  # pylint: disable=broad-exception-caught
         logging.exception("A restauração dos saves não chegou a começar")

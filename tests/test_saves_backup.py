@@ -761,6 +761,34 @@ def test_restaurar_todos_nunca_mostra_total_zero(store, make_game, falso, espera
     assert dialogos == []
 
 
+def test_restaurar_todos_total_provisorio_conta_o_nome_uma_vez(store, make_game, falso, esperar, totais):
+    falso.versoes = {"A": ["v1"]}
+    # O mesmo jogo em duas lojas: um nome só no Ludusavi, uma restauração só.
+    na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+    na_biblioteca(store, make_game, game_id="b", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+
+    backup_de_saves.restaurar_todos()
+    esperar()
+
+    assert totais[0] == 1
+
+
+def test_restaurar_todos_total_provisorio_so_conta_quem_tem_backup(
+    store, make_game, falso, esperar, monkeypatch, totais
+):
+    falso.versoes = {"A": ["v1"]}
+    monkeypatch.setattr(
+        backup_de_saves, "_cache", {"A": [Versao("v1", datetime.now(timezone.utc))]}
+    )
+    na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+    na_biblioteca(store, make_game, game_id="b", name="Jogo B", steam_appid="2", ludusavi_nome="B")
+
+    backup_de_saves.restaurar_todos()
+    esperar()
+
+    assert totais[0] == 1  # o B não tem cópias no cache
+
+
 def test_sem_executavel_nada_roda(store, make_game, falso, esperar, tmp_path):
     (tmp_path / "ludusavi.exe").unlink()
     jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo", steam_appid="7", ludusavi_nome="X")
