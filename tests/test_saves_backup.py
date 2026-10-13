@@ -1324,6 +1324,22 @@ def test_redirecionamento_vai_no_config(store, make_game, falso, esperar):
     ]
 
 
+def test_save_do_programdata_nao_vai_para_a_pasta_do_jogo(store, make_game, falso, esperar, tmp_path):
+    exe = tmp_path / "JogoB" / "jogo.exe"
+    exe.parent.mkdir()
+    exe.touch()
+    falso.versoes["X"] = ["v1"]
+    jogo = na_biblioteca(
+        store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X", executable=str(exe)
+    )
+    falso.no_zip["v1"] = ["drive-C/ProgramData/NaoExiste123/Jogo/Profile/x.sav"]
+
+    backup_de_saves.restaurar(jogo, "v1")
+    esperar()
+
+    assert falso.configs["restore"].get("redirects", []) == []
+
+
 def test_restaurar_todos_pula_incompleta(store, make_game, falso, esperar):
     falso.versoes = {"A": ["v3", "v2"], "B": ["w1"]}
     falso.comentarios[("A", "v3")] = "cartridges:incompleta"

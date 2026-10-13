@@ -248,8 +248,8 @@ def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
 
 
 def _local_desconhecido(game: Game) -> None:
-    """Sem appID e fora do manifesto, o jogo nunca terá backup. O usuário é avisado na
-    primeira vez (e a marca é gravada no jogo); nas sessões seguintes, só o log. Sob a trava."""
+    """Sem appID e fora do manifesto, o jogo não tem backup enquanto o local dos saves for
+    desconhecido. O usuário é avisado na primeira vez (e a marca é gravada no jogo); nas sessões seguintes, só o log. Sob a trava."""
     logging.info("O local dos saves de %s é desconhecido: sem backup", game.name)
     if game.saves_local_desconhecido_avisado:
         return
@@ -382,11 +382,20 @@ def _restaurar_um(
         _marcar_nova(nome, inicio, ANTES_DE_RESTAURAR)
         bases = arquivos.bases_do_jogo(game.executable)
         caminhos = conferencia.caminhos_no_zip(arquivo)
+        pastas = arquivos.pastas_do_sistema()
+        sistema = (
+            pastas.appdata,
+            pastas.localappdata,
+            pastas.documentos,
+            pastas.documentos_publicos.parent,
+            pastas.programdata,
+        )
         # O mesmo config na prévia e no `restore`: o que foi conferido é o que se grava.
-        _preparar(biblioteca, jogo, conferencia.redirecionamentos(caminhos, Path.home(), bases))
+        redirecionamentos = conferencia.redirecionamentos(caminhos, Path.home(), bases, sistema)
+        _preparar(biblioteca, jogo, redirecionamentos)
         previa = ludusavi.previa(nome, _pasta_config(), versao.id, executor)
         extras = [raiz for _loja, raiz in config.raizes([jogo])] + bases
-        limites = conferencia.raizes(arquivos.pastas_do_sistema(), Path.home(), extras)
+        limites = conferencia.raizes(pastas, Path.home(), extras)
         if (recusado := conferencia.recusado(previa, limites)) is not None:
             logging.warning(
                 "A restauração dos saves de %s gravaria em %r: recusada", game.name, recusado

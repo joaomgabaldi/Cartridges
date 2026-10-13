@@ -67,7 +67,7 @@ _MARCADOR = re.compile("|".join(map(re.escape, MARCADORES)), re.IGNORECASE)
 
 
 def redirecionamentos(
-    caminhos: list[str], casa: Path, bases_atuais: list[Path]
+    caminhos: list[str], casa: Path, bases_atuais: list[Path], sistema: tuple[Path, ...] = ()
 ) -> list[tuple[str, str]]:
     """Os (origem, destino) que levam os saves da versão ao lugar de hoje, sem repetição.
 
@@ -76,6 +76,8 @@ def redirecionamentos(
     que não existem mais e não são as atuais, a mais alta dá a raiz antiga (subindo pelas
     pastas de binários, como `arquivos.bases_da_pasta`), e um redirecionamento só leva
     essa raiz à raiz atual (a última de `bases_atuais`): a estrutura de dentro se mantém.
+    O que está numa pasta do `sistema` (AppData, Documentos, Público, ProgramData) nunca é
+    pasta de jogo: um `/Profile/` ali é save comum, e não de emulador.
     A origem fica com o texto do zip: o Ludusavi a compara sem trocar maiúsculas.
     """
     usuarios: dict[str, None] = {}
@@ -91,7 +93,8 @@ def redirecionamentos(
             continue
         if (marcador := _MARCADOR.search(caminho)) and bases_atuais:
             pasta = Path(caminho[: marcador.start()])
-            if pasta not in bases_atuais and not pasta.exists():
+            no_sistema = any(dentro(pasta, raiz) for raiz in sistema)
+            if pasta not in bases_atuais and not no_sistema and not pasta.exists():
                 antigas.append(pasta)
     achados = [(origem, casa.as_posix()) for origem in usuarios]
     if antigas:
