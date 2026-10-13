@@ -1121,3 +1121,81 @@ def test_restauracao_concluida_nao_e_desfeita_se_a_pasta_antiga_nao_sai(tmp_path
         "imported_1.json", "jogado_depois.json", "shortcuts_1.json"
     ]
     assert not _sobrou(shared.app_dir.with_name(shared.app_dir.name + ".anterior"))
+
+
+# --------------------------------------------------------------------------
+# A restauração na abertura: uma passada pelo zip, com progresso
+# --------------------------------------------------------------------------
+
+
+def test_ha_pendente(tmp_path, monkeypatch):
+    assert backup.ha_pendente() is False
+    _preparar_restauracao(tmp_path, monkeypatch)
+    assert backup.ha_pendente() is True
+
+
+def test_progresso_da_restauracao_so_cresce_e_termina_em_um(tmp_path, monkeypatch):
+    _preparar_restauracao(tmp_path, monkeypatch)
+    fracoes = []
+    assert backup.aplicar_pendente(fracoes.append) is True
+    assert fracoes == sorted(fracoes) and fracoes[-1] == 1.0
+
+
+def test_progresso_anda_dentro_de_uma_entrada_grande(tmp_path, monkeypatch):
+    _encher_pasta_do_app()
+    (shared.games_dir / "grande.json").write_bytes(b"x" * (3 * 1024 * 1024))
+    destino = _exportar(tmp_path)
+    monkeypatch.setattr(backup, "aplicar_configuracoes", lambda _c: None)
+    backup.agendar(destino)
+    fracoes = []
+    assert backup.aplicar_pendente(fracoes.append) is True
+    assert len([f for f in fracoes if f < 1.0]) >= 2  # mesmo se a grande for a última entrada
+
+
+def test_backup_so_com_o_manifesto_vai_a_um(tmp_path, monkeypatch):
+    monkeypatch.setattr(backup, "aplicar_configuracoes", lambda _c: None)
+    backup.agendar(_zip(tmp_path / "b.zip", {"configuracoes.json": _MANIFESTO}))
+    fracoes = []
+    assert backup.aplicar_pendente(fracoes.append) is True
+    assert fracoes == [1.0]
+
+
+def test_restauracao_le_cada_entrada_uma_vez_e_sem_testzip(tmp_path, monkeypatch):
+    _preparar_restauracao(tmp_path, monkeypatch)
+    abertas = []
+    abrir = zipfile.ZipFile.open
+
+    def contar(self, nome, *args, **kwargs):
+        abertas.append(getattr(nome, "filename", nome))
+        return abrir(self, nome, *args, **kwargs)
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", contar)
+    monkeypatch.setattr(zipfile.ZipFile, "testzip", lambda self: pytest.fail("testzip na abertura"))
+    assert backup.aplicar_pendente() is True
+    assert abertas and len(abertas) == len(set(abertas))
+
+
+def test_byte_trocado_na_restauracao_nao_muda_nada(tmp_path, monkeypatch):
+    monkeypatch.setattr(backup, "aplicar_configuracoes", lambda _c: None)
+    _encher_pasta_do_app()
+    destino = _exportar(tmp_path)
+    dados = bytearray(destino.read_bytes())
+    dados[dados.find(b"capa")] ^= 0xFF
+    destino.write_bytes(bytes(dados))
+    for arquivo in shared.games_dir.iterdir():
+        arquivo.unlink()
+    (shared.games_dir / "atual.json").write_text("{}", encoding="utf-8")
+    backup.agendar(destino)
+    assert backup.aplicar_pendente() is False
+    assert [p.name for p in shared.games_dir.iterdir()] == ["atual.json"]
+    assert not _sobrou(shared.app_dir.with_name(shared.app_dir.name + ".restaurando"))
+
+
+def test_entrada_que_sai_da_pasta_e_recusada(tmp_path, monkeypatch):
+    monkeypatch.setattr(backup, "aplicar_configuracoes", lambda _c: None)
+    monkeypatch.setattr(backup, "_nome_valido", lambda _n, _e: True)
+    backup.agendar(
+        _zip(tmp_path / "b.zip", {"configuracoes.json": _MANIFESTO, "../fora.json": "x"})
+    )
+    assert backup.aplicar_pendente() is False
+    assert not (shared.app_dir.parent / "fora.json").exists()

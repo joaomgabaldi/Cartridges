@@ -32,7 +32,7 @@ import zipfile
 from contextlib import ExitStack
 from pathlib import Path, PurePosixPath
 from time import sleep, time
-from typing import Any, Iterable, Literal, Optional
+from typing import Any, Callable, Iterable, Literal, Optional
 
 from gi.repository import Gio, GLib
 
@@ -58,6 +58,8 @@ _FICAM = frozenset({"logs", "contas", "ludusavi", _AGENDADO})
 # Marca, dentro de `.anterior`, que todos os dados de antes já saíram da pasta
 # do app: a partir dali, o que estiver nela veio do backup.
 _COMPLETO = ".completo"
+# Quanto da restauração se lê de uma vez: o progresso anda a cada pedaço.
+_PEDACO = 1024 * 1024
 _TENTATIVAS_DE_APAGAR = 5
 # Quanto de um save é lido por vez ao copiá-lo para o backup.
 _BLOCO = 1024 * 1024
@@ -394,21 +396,15 @@ def _nome_valido(nome: str, extensoes_por_pasta: dict[str, tuple[str, ...]]) -> 
     return PurePosixPath(arquivo).suffix.lower() in extensoes
 
 
-def validar(caminho: Path) -> dict[str, Any]:
-    """O manifesto de um backup. ``BackupInvalido`` se não for um."""
+def _conferir(arquivo: zipfile.ZipFile) -> dict[str, Any]:
+    """Os nomes e o manifesto de um backup aberto, sem ler o resto.
+    ``BackupInvalido`` se não for um."""
     try:
-        with zipfile.ZipFile(caminho) as arquivo:
-            extensoes = _extensoes()
-            for info in arquivo.infolist():
-                if not _nome_valido(info.filename, extensoes):
-                    raise BackupInvalido(f"entrada inesperada no backup: {info.filename}")
-            # Sem limite de tamanho: os saves de um jogo chegam a gigabytes. O
-            # nome e o CRC já pegam o zip que não é nosso.
-            # O CRC de cada entrada: um byte trocado numa capa passaria daqui e
-            # só estouraria no meio da troca.
-            if (corrompida := arquivo.testzip()) is not None:
-                raise BackupInvalido(f"entrada corrompida no backup: {corrompida}")
-            manifesto = json.loads(arquivo.read(_CONFIGURACOES).decode("utf-8"))
+        extensoes = _extensoes()
+        for info in arquivo.infolist():
+            if not _nome_valido(info.filename, extensoes):
+                raise BackupInvalido(f"entrada inesperada no backup: {info.filename}")
+        manifesto = json.loads(arquivo.read(_CONFIGURACOES).decode("utf-8"))
     except BackupInvalido:
         raise
     except Exception as erro:  # pylint: disable=broad-exception-caught
@@ -419,6 +415,54 @@ def validar(caminho: Path) -> dict[str, Any]:
     if not isinstance(manifesto.get("settings"), dict):
         raise BackupInvalido("backup sem o bloco de configurações")
     return manifesto
+
+
+def validar(caminho: Path) -> dict[str, Any]:
+    """O manifesto de um backup. ``BackupInvalido`` se não for um."""
+    try:
+        with zipfile.ZipFile(caminho) as arquivo:
+            manifesto = _conferir(arquivo)
+            # Sem limite de tamanho: os saves de um jogo chegam a gigabytes. O
+            # nome e o CRC já pegam o zip que não é nosso.
+            # O CRC de cada entrada: um byte trocado numa capa passaria daqui e
+            # só estouraria no meio da troca.
+            if (corrompida := arquivo.testzip()) is not None:
+                raise BackupInvalido(f"entrada corrompida no backup: {corrompida}")
+    except BackupInvalido:
+        raise
+    except Exception as erro:  # pylint: disable=broad-exception-caught
+        raise BackupInvalido(str(erro)) from erro
+    return manifesto
+
+
+def _extrair(
+    arquivo: zipfile.ZipFile, destino: Path, progresso: Callable[[float], None]
+) -> None:
+    """Grava as entradas (menos o manifesto) em ``destino``, aos pedaços.
+
+    O ``zipfile`` confere o CRC de cada entrada no fim da leitura: um byte
+    trocado levanta aqui, antes de qualquer dado do app sair do lugar.
+    ``progresso`` recebe a fração dos bytes já gravados.
+    """
+    raiz = destino.resolve()
+    entradas = [
+        info
+        for info in arquivo.infolist()
+        if info.filename != _CONFIGURACOES and not info.is_dir()
+    ]
+    total = sum(info.file_size for info in entradas)
+    gravados = 0
+    for info in entradas:
+        alvo = (destino / info.filename).resolve()
+        if not alvo.is_relative_to(raiz):
+            raise BackupInvalido(f"entrada fora da pasta do backup: {info.filename}")
+        alvo.parent.mkdir(parents=True, exist_ok=True)
+        with arquivo.open(info) as origem, open(alvo, "wb") as saida:
+            while pedaco := origem.read(_PEDACO):
+                saida.write(pedaco)
+                gravados += len(pedaco)
+                progresso(gravados / total)
+    progresso(1.0)
 
 
 # endregion
@@ -436,6 +480,11 @@ def agendar(origem: Path) -> None:
         temporario.replace(destino)
     finally:
         temporario.unlink(missing_ok=True)
+
+
+def ha_pendente() -> bool:
+    """Há um backup agendado para a próxima abertura."""
+    return (shared.app_dir / _AGENDADO).is_file()
 
 
 def cancelar_agendado() -> None:
@@ -509,11 +558,12 @@ def _devolver(anterior: Path) -> None:
         logging.warning("Não foi possível apagar %s", anterior, exc_info=True)
 
 
-def aplicar_pendente() -> Optional[bool]:
+def aplicar_pendente(progresso: Optional[Callable[[float], None]] = None) -> Optional[bool]:
     """Na abertura, antes de carregar a biblioteca: aplica o backup agendado.
 
     ``None``: nada agendado. ``True``: restaurado. ``False``: falhou, e os
-    dados e as configurações de antes voltaram ao lugar.
+    dados e as configurações de antes voltaram ao lugar. ``progresso`` recebe a
+    fração extraída do backup (de 0 a 1), da thread que chama.
     """
     global pasta_dos_saves_desfeita  # pylint: disable=global-statement
     pasta_dos_saves_desfeita = None
@@ -533,11 +583,14 @@ def aplicar_pendente() -> Optional[bool]:
 
     configuracoes_antes = ler_configuracoes()
     try:
-        manifesto = validar(agendado)
         shutil.rmtree(extraido, ignore_errors=True)
+        # Uma leitura só: os nomes e o manifesto antes, e o CRC de cada entrada
+        # na própria extração — com vários GB de saves, ler duas vezes era
+        # dobrar a espera.
         with zipfile.ZipFile(agendado) as arquivo:
-            arquivo.extractall(extraido)
-        (extraido / _CONFIGURACOES).unlink()
+            manifesto = _conferir(arquivo)
+            extraido.mkdir()
+            _extrair(arquivo, extraido, progresso or (lambda _fracao: None))
 
         # Sem `saves/` no backup (todo o da versão 5), os saves de agora ficam
         # onde estão, e a pasta escolhida continua valendo.
