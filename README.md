@@ -50,7 +50,8 @@ A interface é inteiramente em português do Brasil.
 - "Atualizar metadados" e "Atualizar capas" para a biblioteca já importada, buscando só o que
   falta ou relendo tudo, com andamento e cancelamento.
 - Campos editados manualmente não são sobrescritos pela busca automática.
-- Capa e logo também podem vir de um arquivo do computador.
+- Capa e logo também podem vir de um arquivo do computador. Um vídeo (mp4, webm, mkv...) vira capa
+  animada: os primeiros 15 segundos, sem áudio, convertidos pelo `ffmpeg`.
 - Atalhos para buscar o jogo no IGDB, no SteamGridDB, no PCGamingWiki e no HowLongToBeat.
 
 ### Tela de detalhes
@@ -191,13 +192,14 @@ pacman -S mingw-w64-ucrt-x86_64-gtk4 mingw-w64-ucrt-x86_64-libadwaita \
   mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-python-gobject \
   mingw-w64-ucrt-x86_64-python-requests mingw-w64-ucrt-x86_64-python-pillow \
   mingw-w64-ucrt-x86_64-python-cryptography mingw-w64-ucrt-x86_64-python-pip \
-  mingw-w64-ucrt-x86_64-meson mingw-w64-ucrt-x86_64-ninja
+  mingw-w64-ucrt-x86_64-ffmpeg mingw-w64-ucrt-x86_64-meson mingw-w64-ucrt-x86_64-ninja
 /ucrt64/bin/python.exe -m pip install --break-system-packages tinytuya
 ```
 
 O `blueprint-compiler` é baixado pelo Meson na primeira configuração.
 
 O `tinytuya` conversa com a iluminação inteligente, e o `python-cryptography` é necessário para ele.
+O `ffmpeg` converte o vídeo escolhido como capa e vai junto no instalador.
 Para gerar o instalador, também é preciso o [Inno Setup 6](https://jrsoftware.org/isinfo.php).
 
 O aplicativo depende de uma correção no GTK que ainda não está no projeto oficial. Sem ela, a

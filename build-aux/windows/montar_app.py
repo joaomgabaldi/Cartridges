@@ -36,6 +36,8 @@ EXECUTAVEIS = (
     "gdbus.exe",
     "gspawn-win64-helper.exe",
     "gspawn-win64-helper-console.exe",
+    # Converte o vídeo escolhido como capa num WebP animado (capa_video.py)
+    "ffmpeg.exe",
 )
 
 # Os namespaces que o app importa de gi.repository, mais os dois que o GLib
@@ -236,6 +238,22 @@ GdkPixbuf.Pixbuf.new_from_file(svg)
 import ssl, certifi, requests
 ssl.create_default_context(cafile=certifi.where())
 requests.Session().close()
+
+# Um vídeo de teste vira capa pelo ffmpeg.exe montado, com o caminho do app
+import subprocess
+from pathlib import Path
+from cartridges.utils import capa_video
+assert capa_video.executavel() == Path(destino, "bin", "ffmpeg.exe"), capa_video.executavel()
+video = os.path.join(pasta, "teste.mp4")
+subprocess.run(
+    [str(capa_video.executavel()), "-loglevel", "error", "-f", "lavfi", "-i",
+     "testsrc2=size=320x180:rate=10", "-t", "1", "-c:v", "mpeg4", video],
+    check=True,
+)
+capa = capa_video.converter(Path(video))
+with Image.open(capa) as imagem:
+    assert imagem.is_animated and imagem.size == (600, 900), (imagem.size, imagem.n_frames)
+capa.unlink()
 
 import tinytuya
 assert tinytuya.AESCipher.CRYPTOLIB == "pyca/cryptography", tinytuya.AESCipher.CRYPTOLIB

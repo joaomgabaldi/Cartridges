@@ -42,7 +42,7 @@ from cartridges.steam_picker import SteamPicker
 from cartridges.store.managers.hltb_manager import shared_helper as shared_hltb_helper
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
-from cartridges.utils import copias_animadas, session_fita, window_geometry
+from cartridges.utils import capa_video, copias_animadas, session_fita, window_geometry
 from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.game_folder import game_folder, open_folder
 from cartridges.utils.game_logo import (
@@ -318,13 +318,17 @@ class DetailsDialog(Adw.Dialog):
         self.update_wallpaper_row()
         self.atualizar_fita()
 
-        image_filter = Gtk.FileFilter(name=_("Imagens"))
+        image_filter = Gtk.FileFilter(name=_("Imagens e vídeos"))
 
         # .palm and .pdf are write-only
         for extension in set(Image.registered_extensions()) - {".palm", ".pdf"}:
             image_filter.add_suffix(extension[1:])
 
         image_filter.add_suffix("svg")  # Gdk.Texture supports .svg but PIL doesn't
+
+        # Um vídeo vira capa animada pelo ffmpeg (`capa_video`)
+        for suffix in capa_video.SUFIXOS:
+            image_filter.add_suffix(suffix[1:])
 
         image_filters = Gio.ListStore.new(Gtk.FileFilter)
         image_filters.append(image_filter)
@@ -950,16 +954,37 @@ class DetailsDialog(Adw.Dialog):
         except GLib.Error:
             return
 
-        def finish(new_path: Optional[Path]) -> bool:
+        def finish(new_path: Optional[Path], video_error: Optional[str] = None) -> bool:
             # Runs on the main thread: GTK widgets are not thread-safe
+            if self._closed:
+                # Um vídeo leva segundos para converter, tempo de sobra para
+                # fechar o diálogo: a capa pronta não tem mais onde entrar, e
+                # o `_on_closed` que limparia a temporária já passou.
+                if new_path:
+                    new_path.unlink(missing_ok=True)
+                return False
             if new_path:
                 self._stage_cover(new_path)
 
             self.end_loading(cover=True)
+            if video_error:
+                create_dialog(self, _("Não foi possível usar o vídeo"), video_error)
             return False
 
         def thread_func() -> None:
             new_path = None
+
+            if capa_video.eh_video(Path(path)):
+                try:
+                    entregar_na_tela(finish, capa_video.converter(Path(path)))
+                except capa_video.VideoFalhou as error:
+                    entregar_na_tela(finish, None, str(error))
+                except Exception:  # pylint: disable=broad-exception-caught
+                    # Pelo mesmo motivo do `except` largo abaixo: só esta
+                    # thread devolve o contador de carregamento.
+                    logging.exception("Could not convert the chosen video")
+                    entregar_na_tela(finish, None, _("O arquivo não pôde ser lido como vídeo."))
+                return
 
             try:
                 try:
