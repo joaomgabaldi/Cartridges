@@ -138,8 +138,10 @@ def com_enderecos(
             or fita.ip
             or getattr(configuradas.get(fita.id), "ip", ""),
             versao=versoes.get(fita.id) or fita.versao,
-            # A nuvem não sabe do brilho por dispositivo: ele é daqui.
+            # A nuvem não sabe do brilho por dispositivo nem da calibração:
+            # eles são daqui.
             brilho=getattr(configuradas.get(fita.id), "brilho", fita.brilho),
+            calibracao=getattr(configuradas.get(fita.id), "calibracao", fita.calibracao),
         )
         for fita in encontradas
     ]

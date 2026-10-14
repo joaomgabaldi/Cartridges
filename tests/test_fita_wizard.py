@@ -320,3 +320,19 @@ def test_so_fitas_e_lampadas_entram_na_lista():
         "Fita Monitor Centro",
         "Abajur",
     ]
+
+
+def test_rodar_o_assistente_de_novo_mantem_a_calibracao(monkeypatch, tmp_path):
+    from cartridges import shared
+    from cartridges.fita_wizard import com_enderecos
+    from cartridges.utils.session_fita import gravar_fitas
+
+    calibracao = {"cores": [[-8, 1.0]] + [[0, 1.0]] * 5, "branco": [30, 150]}
+    monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
+    gravar_fitas([Fita("Centro", "eb1", "192.168.0.150", "k", "3.3", 40, calibracao)])
+
+    antiga, nova = com_enderecos(
+        [Fita("Centro", "eb1", "", "k"), Fita("Nova", "eb2", "", "k")], {}
+    )
+
+    assert (antiga.calibracao, nova.calibracao) == (calibracao, None)

@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 
 from cartridges import shared
+from cartridges.utils import calibracao as calibracao_mod
 from cartridges.utils import tela_do_jogo
 from cartridges.utils.cor_da_capa import dominante
 from cartridges.utils.ler_json import ler_json
@@ -64,6 +65,9 @@ class Fita(NamedTuple):
     # O teto deste dispositivo, em porcentagem: o brilho do app e o de cada
     # jogo valem sobre ele. Um brilho de 50% num dispositivo em 50 acende a 25.
     brilho: int = 100
+    # A correção de cor do assistente de calibração, como fica no arquivo (ver
+    # ``calibracao.para_json``). ``None``: nunca calibrado.
+    calibracao: Optional[dict[str, Any]] = None
 
 
 class Cor(NamedTuple):
@@ -116,6 +120,7 @@ def fitas() -> list[Fita]:
                     str(item["key"]),
                     str(item.get("versao", "3.3")),
                     _teto(item.get("brilho")),
+                    item.get("calibracao") if isinstance(item.get("calibracao"), dict) else None,
                 )
             )
         except (KeyError, TypeError):
@@ -276,13 +281,24 @@ def brilho_padrao() -> int:
     return shared.schema.get_int("fita-brilho-padrao")
 
 
-def na_fita(cor: Cor, fita: Fita, teto: Optional[int] = None) -> Cor:
-    """A cor com o brilho proporcional ao teto do dispositivo.
+def na_fita(
+    cor: Cor,
+    fita: Fita,
+    teto: Optional[int] = None,
+    calibracao: Optional[calibracao_mod.Calibracao] = None,
+) -> Cor:
+    """A cor que este dispositivo recebe: corrigida pela calibração dele e com
+    o brilho proporcional ao teto. Toda cor que vai a uma fita passa por aqui.
 
-    ``teto`` troca o do arquivo, para a prévia da janela de brilho por
-    dispositivo mostrar o que ainda não foi salvo.
+    ``teto`` e ``calibracao`` trocam os do arquivo, para a prévia das janelas
+    de brilho por dispositivo e de calibração mostrar o que ainda não foi
+    salvo.
     """
     teto = fita.brilho if teto is None else teto
+    if calibracao is None and fita.calibracao is not None:
+        calibracao = calibracao_mod.de_json(fita.calibracao)
+    if calibracao is not None:
+        cor = calibracao_mod.corrigir(cor, calibracao)
     return cor._replace(brilho=max(BRILHO_MINIMO, round(cor.brilho * teto / 100)))
 
 
@@ -1111,9 +1127,16 @@ def _vestir(
     )
 
 
-def _pintar_fita(fita: Fita, cor: Cor, tetos: Optional[dict[str, int]] = None) -> None:
+def _pintar_fita(
+    fita: Fita,
+    cor: Cor,
+    tetos: Optional[dict[str, int]] = None,
+    calibracoes: Optional[dict[str, calibracao_mod.Calibracao]] = None,
+) -> None:
     """Só a cor, sem mexer no liga/desliga e sem fade. Para a prévia ao vivo."""
-    cor_hex = hsv_hex(na_fita(cor, fita, (tetos or {}).get(fita.id)))
+    cor_hex = hsv_hex(
+        na_fita(cor, fita, (tetos or {}).get(fita.id), (calibracoes or {}).get(fita.id))
+    )
     if _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex}) and fita.id in _mostrada:
         _mostrada[fita.id] = (_mostrada[fita.id][0], cor_hex)
 
@@ -1125,21 +1148,51 @@ def _pintar_fita(fita: Fita, cor: Cor, tetos: Optional[dict[str, int]] = None) -
 # anterior. Os passos do meio se perdem, que é exatamente o que se quer — o olho
 # só precisa ver onde o controle parou. Uma thread por fita: uma fita que não
 # responde leva segundos para desistir, e as outras não podem esperar por ela.
-_previa_alvos: dict[str, tuple[Cor, Optional[dict[str, int]]]] = {}
+_previa_alvos: dict[str, tuple[Cor, Optional[dict[str, int]], Optional[dict[str, Any]]]] = {}
 _previa_vivas: set[str] = set()
 _PREVIA = threading.Lock()
 
 
-def previa(cor: Cor, tetos: Optional[dict[str, int]] = None) -> None:
+def previa(
+    cor: Cor,
+    tetos: Optional[dict[str, int]] = None,
+    calibracoes: Optional[dict[str, calibracao_mod.Calibracao]] = None,
+) -> None:
     """Mostra esta cor nas fitas agora. Chamar da thread de UI, à vontade.
 
-    ``tetos`` troca o brilho por dispositivo do arquivo (id → porcentagem).
+    ``tetos`` troca o brilho por dispositivo do arquivo (id → porcentagem), e
+    ``calibracoes`` a calibração (id → ``Calibracao`` em edição).
     """
+    _previa_em({fita.id: cor for fita in fitas()}, tetos, calibracoes)
+
+
+def previa_calibracao(
+    id_da_fita: str, cor: Cor, calibracoes: dict[str, calibracao_mod.Calibracao]
+) -> None:
+    """A prévia do assistente de calibração: só este dispositivo acende na
+    cor, com a calibração em edição; os outros ficam no brilho mínimo, para
+    a luz deles não contaminar a comparação. Sem desligar ninguém: o
+    liga/desliga é do ciclo do app. Chamar da thread de UI."""
+    apagada = Cor(cor.matiz, 0, BRILHO_MINIMO)
+    _previa_em(
+        {fita.id: cor if fita.id == id_da_fita else apagada for fita in fitas()},
+        None,
+        calibracoes,
+    )
+
+
+def _previa_em(
+    cores: dict[str, Cor],
+    tetos: Optional[dict[str, int]],
+    calibracoes: Optional[dict[str, calibracao_mod.Calibracao]],
+) -> None:
     if not ligada():
         return
     with _PREVIA:
         for fita in fitas():
-            _previa_alvos[fita.id] = (cor, tetos)
+            if fita.id not in cores:
+                continue
+            _previa_alvos[fita.id] = (cores[fita.id], tetos, calibracoes)
             if fita.id not in _previa_vivas:
                 _previa_vivas.add(fita.id)
                 _em_thread(lambda fita=fita: _servir_previa(fita))

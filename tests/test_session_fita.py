@@ -2509,7 +2509,7 @@ def test_fita_que_nao_responde_nao_atrasa_a_previa_das_outras(monkeypatch, schem
     solta = threading.Event()
     pintadas = []
 
-    def pintar(fita, cor, _tetos=None):
+    def pintar(fita, cor, *_resto):
         if fita.id == "morta":
             solta.wait(5)
         else:
@@ -3422,6 +3422,62 @@ def test_log_separa_candidata_de_confirmada_esperando(na_tela, caplog, monkeypat
     linhas = [r.getMessage() for r in caplog.records if "Tela:" in r.getMessage()]
     assert "candidata" in linhas[0]
     assert "aguardando o intervalo" in linhas[1]
+
+
+# endregion
+
+
+# region Calibração
+
+
+from cartridges.utils import calibracao as calibracao_mod  # noqa: E402
+
+VERMELHO_PUXADO = calibracao_mod.Calibracao(
+    ((-8, 1.0),) + ((0, 1.0),) * 5, (0, 0)
+)
+
+
+def test_calibracao_vai_e_volta_no_arquivo():
+    dados = calibracao_mod.para_json(VERMELHO_PUXADO)
+    session_fita.gravar_fitas([session_fita.Fita("A", "eb0", "1.2.3.4", "k", calibracao=dados)])
+    assert session_fita.fitas()[0].calibracao == dados
+
+
+def test_calibracao_ilegivel_no_arquivo_vira_nada():
+    shared.fitas_arquivo.write_text(
+        json.dumps({"fitas": [{"nome": "A", "id": "eb0", "ip": "1", "key": "k", "calibracao": "x"}]}),
+        encoding="utf-8",
+    )
+    assert session_fita.fitas()[0].calibracao is None
+
+
+def test_na_fita_aplica_a_calibracao_do_dispositivo():
+    fita = session_fita.Fita(
+        "A", "eb0", "1.2.3.4", "k", calibracao=calibracao_mod.para_json(VERMELHO_PUXADO)
+    )
+    assert session_fita.na_fita(session_fita.Cor(0, 1000, 500), fita) == session_fita.Cor(
+        352, 1000, 500
+    )
+
+
+def test_na_fita_com_calibracao_em_edicao_vence_a_gravada():
+    fita = session_fita.Fita("A", "eb0", "1.2.3.4", "k")
+    assert session_fita.na_fita(
+        session_fita.Cor(0, 1000, 500), fita, calibracao=VERMELHO_PUXADO
+    ) == session_fita.Cor(352, 1000, 500)
+
+
+def test_previa_da_calibracao_acende_so_a_escolhida(falsas, monkeypatch, schema):
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False, False)
+    tarefas = []
+    monkeypatch.setattr(session_fita, "_em_thread", tarefas.append)
+    cor = session_fita.Cor(0, 1000, 500)
+    session_fita.previa_calibracao("eb0", cor, {"eb0": VERMELHO_PUXADO})
+    for tarefa in list(tarefas):  # fora da trava da prévia, como numa thread
+        tarefa()
+    assert session_fita.cor_de_hex(cor_mandada(modulos["eb0"])).matiz == 352
+    assert session_fita.cor_de_hex(cor_mandada(modulos["eb1"])).brilho == session_fita.BRILHO_MINIMO
 
 
 # endregion
