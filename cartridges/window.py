@@ -708,6 +708,20 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # De volta ao roxo do app, que é a cor de quando não há jogo correndo.
         session_fita.voltar()
 
+        # A cor não acompanhou a tela porque a captura veio bloqueada a sessão
+        # inteira. Avisado agora, e não durante o jogo: no meio da partida o
+        # aviso chamaria a atenção que a luz calma existe para não chamar.
+        # Curto de propósito: o toast corta o que passa de uma linha.
+        if jogo_da_sessao is not None and session_fita.captura_bloqueada():
+            self.toast_queue.add(
+                Adw.Toast.new(
+                    _(
+                        "A iluminação não acompanhou a tela de {}. "
+                        "Use o modo janela sem bordas."
+                    ).format(jogo_da_sessao.name)
+                )
+            )
+
         # Session over: bring gamepad navigation back.
         from cartridges.gamepad import GamepadManager  # avoid import cycle
 

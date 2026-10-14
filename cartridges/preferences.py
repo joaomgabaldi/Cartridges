@@ -77,6 +77,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     wallhaven_key_entry_row: Adw.EntryRow = Gtk.Template.Child()
     session_identify_button_row = Gtk.Template.Child()
     session_fita_switch: Adw.SwitchRow = Gtk.Template.Child()
+    fita_acompanha_tela_switch: Adw.SwitchRow = Gtk.Template.Child()
     fita_brilho_row: Adw.SpinRow = Gtk.Template.Child()
     fita_brilho_individual_button: Gtk.Button = Gtk.Template.Child()
     fita_cor_app_reset: Gtk.Button = Gtk.Template.Child()
@@ -383,6 +384,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 "session-move-window",
                 "session-wallpaper",
                 "session-fita",
+                "fita-acompanha-tela",
                 "gamepad",
                 "gamepad-rumble",
                 "auto-import",

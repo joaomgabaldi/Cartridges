@@ -2785,3 +2785,48 @@ def test_sem_acompanhamento_nao_avisa(na_tela, schema):
 
 # endregion
 
+
+
+# region Cor da tela: interruptor e aviso
+
+AVISO_DA_TELA = "A iluminação não acompanhou a tela de Hollow Knight. Use o modo janela sem bordas."
+
+
+def test_interruptor_da_tela_segue_o_da_iluminacao(monkeypatch, schema):
+    _com_fita()
+    monkeypatch.setattr(session_fita, "reacender", lambda: None)
+    preferencias = _preferencias(monkeypatch)
+    linha = preferencias.fita_acompanha_tela_switch
+    assert linha.get_title() == "Cor acompanha a tela do jogo"
+    assert linha.get_subtitle() == (
+        "A cor da iluminação acompanha, devagar, a cor predominante do jogo. "
+        "Jogos com cor escolhida manualmente mantêm a cor fixa."
+    )
+    preferencias.session_fita_switch.set_active(False)
+    assert linha.get_sensitive() is False
+    preferencias.session_fita_switch.set_active(True)
+    assert linha.get_sensitive() is True
+
+
+def _sessao_na_janela(real_window, monkeypatch, make_game, bloqueada):
+    import cartridges.window as window_module  # noqa: PLC0415
+
+    monkeypatch.setattr(window_module.session_fita, "comecar", lambda _jogo: None)
+    monkeypatch.setattr(window_module.session_fita, "voltar", lambda: None)
+    monkeypatch.setattr(window_module.session_fita, "captura_bloqueada", lambda: bloqueada)
+    avisos = []
+    monkeypatch.setattr(real_window.toast_queue, "add", avisos.append)
+    real_window.show_session_blocker(make_game(name="Hollow Knight"))
+    real_window.hide_session_blocker()
+    return [aviso.get_title() for aviso in avisos]
+
+
+def test_fim_da_sessao_bloqueada_mostra_o_aviso(real_window, monkeypatch, make_game):
+    assert AVISO_DA_TELA in _sessao_na_janela(real_window, monkeypatch, make_game, True)
+
+
+def test_fim_da_sessao_normal_nao_avisa(real_window, monkeypatch, make_game):
+    assert AVISO_DA_TELA not in _sessao_na_janela(real_window, monkeypatch, make_game, False)
+
+
+# endregion

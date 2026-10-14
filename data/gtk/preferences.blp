@@ -204,6 +204,13 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         }
       }
 
+      // Experimento: na sessão, a cor acompanha devagar a tela do jogo.
+      Adw.SwitchRow fita_acompanha_tela_switch {
+        title: _("Cor acompanha a tela do jogo");
+        subtitle: _("A cor da iluminação acompanha, devagar, a cor predominante do jogo. Jogos com cor escolhida manualmente mantêm a cor fixa.");
+        sensitive: bind session_fita_switch.active;
+      }
+
       // A cor das fitas quando não há jogo correndo. Mesmo seletor em balão da
       // tela do jogo, pelo mesmo motivo: cada tentativa aparece na parede na
       // hora, sem confirmar nada.

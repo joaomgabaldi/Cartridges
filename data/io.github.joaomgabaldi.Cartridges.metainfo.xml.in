@@ -34,6 +34,7 @@
           <li>Agora um vídeo do computador pode virar a capa animada de um jogo: os primeiros 15 segundos, sem áudio</li>
           <li>Na edição do jogo, o botão que escolhe a capa de um arquivo agora tem o ícone de pasta, como os do logo e do papel de parede</li>
           <li>Ao iniciar um jogo, o Cartridges agora vai sempre para o monitor escolhido, e a numeração dos monitores não muda mais de uma tela para outra</li>
+          <li>Experimento: a iluminação inteligente pode acompanhar, devagar, a cor predominante do jogo na tela</li>
         </ul>
       </description>
     </release>
