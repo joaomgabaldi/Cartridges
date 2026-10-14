@@ -47,8 +47,9 @@ NOMES_DAS_ETAPAS = (
 )
 ETAPA_DO_BRANCO = len(REFERENCIAS)
 
-# A escolha "Todos os dispositivos" na lista do início: cada ajuste vale para
-# todos ao mesmo tempo, com todos acesos, para nenhum ficar diferente do outro.
+# A escolha "Todos os dispositivos" na lista do início: todos acesos ao mesmo
+# tempo, cada um com os seus controles e a sua calibração, para comparar um com
+# o outro e com a tela enquanto se ajusta.
 TODOS = "__todos__"
 
 # De quanto em quanto tempo o teste final troca de cor.
@@ -93,6 +94,7 @@ class AssistenteDeCalibracao(Adw.Dialog):
         self._pilha = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
         self._pilha.add_named(self._montar_inicio(), "inicio")
         self._pilha.add_named(self._montar_etapa(), "etapa")
+        self._pilha.add_named(self._montar_etapa_de_todos(), "etapa_todos")
         self._pilha.add_named(self._montar_fim(), "fim")
         self._pilha.add_named(self._montar_teste(), "teste")
 
@@ -107,9 +109,9 @@ class AssistenteDeCalibracao(Adw.Dialog):
 
     # region Montagem
 
-    def _amostra(self) -> Gtk.DrawingArea:
-        """O quadro grande com a cor de referência."""
-        area = Gtk.DrawingArea(vexpand=True, hexpand=True, content_height=240)
+    def _amostra(self, altura: int = 240, expande: bool = True) -> Gtk.DrawingArea:
+        """O quadro com a cor de referência."""
+        area = Gtk.DrawingArea(vexpand=expande, hexpand=True, content_height=altura)
         area.set_draw_func(self._desenhar)
         return area
 
@@ -190,52 +192,87 @@ class AssistenteDeCalibracao(Adw.Dialog):
         escala.connect("value-changed", lambda escala: ao_mudar(escala.get_value()))
         return escala
 
-    def _montar_etapa(self) -> Gtk.Widget:
-        self._titulo_da_etapa = Gtk.Label(css_classes=["title-2"], xalign=0)
-        self._amostra_da_etapa = self._amostra()
-
-        self._tom = self._escala(
+    def _controles(self, id_da_fita: Optional[str]) -> tuple[Gtk.Grid, dict[str, Any]]:
+        """Tom, Intensidade e Temperatura de um dispositivo (``None``: o que
+        estiver em edição no modo de um dispositivo só)."""
+        tom = self._escala(
             -calibracao.TOM_MAXIMO, calibracao.TOM_MAXIMO, 1,
-            lambda valor: self._ao_ajustar(lambda: self.mudar_tom(round(valor))),
+            lambda valor: self._ao_ajustar(lambda: self.mudar_tom(round(valor), id_da_fita)),
         )
-        self._intensidade = self._escala(
+        intensidade = self._escala(
             calibracao.FATOR_MINIMO * 100, calibracao.FATOR_MAXIMO * 100, 1,
-            lambda valor: self._ao_ajustar(lambda: self.mudar_intensidade(valor / 100)),
+            lambda valor: self._ao_ajustar(
+                lambda: self.mudar_intensidade(valor / 100, id_da_fita)
+            ),
         )
-        self._temperatura = self._escala(
+        temperatura = self._escala(
             -100, 100, 1,
-            lambda valor: self._ao_ajustar(lambda: self.mudar_temperatura(valor / 100)),
+            lambda valor: self._ao_ajustar(
+                lambda: self.mudar_temperatura(valor / 100, id_da_fita)
+            ),
         )
         # O ponto sem ajuste de cada controle, marcado: é para onde o
         # Restaurar leva.
-        self._tom.add_mark(0, Gtk.PositionType.BOTTOM, None)
-        self._intensidade.add_mark(100, Gtk.PositionType.BOTTOM, None)
-        self._temperatura.add_mark(0, Gtk.PositionType.BOTTOM, None)
+        tom.add_mark(0, Gtk.PositionType.BOTTOM, None)
+        intensidade.add_mark(100, Gtk.PositionType.BOTTOM, None)
+        temperatura.add_mark(0, Gtk.PositionType.BOTTOM, None)
         # As pontas da Temperatura em rótulos próprios, e não nas marcas: a
         # marca centraliza o texto na ponta, e "Mais frio" passava da margem.
         pontas = Gtk.Box()
         pontas.append(Gtk.Label(label=_("Mais quente"), hexpand=True, xalign=0, css_classes=["dim-label"]))
         pontas.append(Gtk.Label(label=_("Mais frio"), hexpand=True, xalign=1, css_classes=["dim-label"]))
 
-        self._linhas_de_cor = []
-        controles = Gtk.Grid(column_spacing=12, row_spacing=6)
+        grade = Gtk.Grid(column_spacing=12, row_spacing=6)
+        linhas = []
         for linha, (rotulo, escala) in enumerate(
-            ((_("Tom"), self._tom), (_("Intensidade"), self._intensidade),
-             (_("Temperatura"), self._temperatura))
+            ((_("Tom"), tom), (_("Intensidade"), intensidade), (_("Temperatura"), temperatura))
         ):
             nome = Gtk.Label(label=rotulo, xalign=0)
-            controles.attach(nome, 0, linha, 1, 1)
-            controles.attach(escala, 1, linha, 1, 1)
-            self._linhas_de_cor.append((nome, escala))
-        controles.attach(pontas, 1, 3, 1, 1)
-        self._pontas_da_temperatura = pontas
+            grade.attach(nome, 0, linha, 1, 1)
+            grade.attach(escala, 1, linha, 1, 1)
+            linhas.append((nome, escala))
+        grade.attach(pontas, 1, 3, 1, 1)
+        return grade, {
+            "tom": tom,
+            "intensidade": intensidade,
+            "temperatura": temperatura,
+            "pontas": pontas,
+            "linhas": linhas,
+        }
 
+    def _montar_etapa(self) -> Gtk.Widget:
+        self._titulo_da_etapa = Gtk.Label(css_classes=["title-2"], xalign=0)
+        self._amostra_da_etapa = self._amostra()
+        controles, self._controles_de_um = self._controles(None)
         botoes = self._linha_de_botoes(
             self._botao(_("Restaurar"), self.restaurar),
             self._botao(_("Voltar"), self.anterior),
             self._botao(_("Próximo"), self.proxima, sugerido=True),
         )
         return self._pagina(self._titulo_da_etapa, self._amostra_da_etapa, controles, botoes)
+
+    def _montar_etapa_de_todos(self) -> Gtk.Widget:
+        """A etapa com todos os dispositivos: a cor numa faixa menor e, embaixo,
+        um grupo de controles por dispositivo, numa área que rola."""
+        self._titulo_de_todos = Gtk.Label(css_classes=["title-2"], xalign=0)
+        self._amostra_de_todos = self._amostra(altura=72, expande=False)
+        grupos = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        self._controles_por_fita: dict[str, dict[str, Any]] = {}
+        for fita in self.fitas:
+            grade, controles = self._controles(fita.id)
+            grupo = Adw.PreferencesGroup(title=fita.nome)
+            grupo.add(grade)
+            grupos.append(grupo)
+            self._controles_por_fita[fita.id] = controles
+        rolagem = Gtk.ScrolledWindow(
+            child=grupos, vexpand=True, hscrollbar_policy=Gtk.PolicyType.NEVER
+        )
+        botoes = self._linha_de_botoes(
+            self._botao(_("Restaurar"), self.restaurar),
+            self._botao(_("Voltar"), self.anterior),
+            self._botao(_("Próximo"), self.proxima, sugerido=True),
+        )
+        return self._pagina(self._titulo_de_todos, self._amostra_de_todos, rolagem, botoes)
 
     def _montar_fim(self) -> Gtk.Widget:
         self._grupo_do_fim = Adw.PreferencesGroup(title=_("Aplicar esta calibração também a"))
@@ -281,14 +318,15 @@ class AssistenteDeCalibracao(Adw.Dialog):
     def _calibracao_atual(self) -> Calibracao:
         return self.calibracoes[self._em_edicao()[0]]
 
-    def _gravar_atual(self, nova: Calibracao) -> None:
-        for id_ in self._em_edicao():
-            self.calibracoes[id_] = nova
+    def _alvo(self, id_da_fita: Optional[str]) -> str:
+        """O dispositivo de um ajuste: o do controle, ou o que está em edição."""
+        return id_da_fita if id_da_fita is not None else self._em_edicao()[0]
 
-    def _trocar_cor(self, tom: int, fator: float) -> None:
-        cores = list(self._calibracao_atual().cores)
+    def _trocar_cor(self, tom: int, fator: float, id_da_fita: str) -> None:
+        atual = self.calibracoes[id_da_fita]
+        cores = list(atual.cores)
         cores[self.etapa] = (tom, fator)
-        self._gravar_atual(self._calibracao_atual()._replace(cores=tuple(cores)))
+        self.calibracoes[id_da_fita] = atual._replace(cores=tuple(cores))
 
     def _ao_ajustar(self, acao: Any) -> None:
         if not self._carregando:
@@ -300,41 +338,45 @@ class AssistenteDeCalibracao(Adw.Dialog):
     def escolher(self, id_da_fita: str) -> None:
         self.id_atual = id_da_fita
         self.etapa = 0
-        if id_da_fita == TODOS:
-            # Todos partem da mesma calibração: a que já têm, se for igual em
-            # todos, ou a neutra — partir da de um faria os outros pularem
-            # para ela sem ninguém ver.
-            atuais = {self.calibracoes[fita.id] for fita in self.fitas}
-            comum = atuais.pop() if len(atuais) == 1 else NEUTRA
-            for fita in self.fitas:
-                self.calibracoes[fita.id] = comum
-        self._pilha.set_visible_child_name("etapa")
+        self._pilha.set_visible_child_name("etapa_todos" if id_da_fita == TODOS else "etapa")
         self._mostrar_etapa()
 
     def _mostrar_etapa(self) -> None:
-        branco = self.etapa == ETAPA_DO_BRANCO
-        self._titulo_da_etapa.set_label(
+        todos = self.id_atual == TODOS
+        titulo = self._titulo_de_todos if todos else self._titulo_da_etapa
+        titulo.set_label(
             _("{} ({} de {})").format(NOMES_DAS_ETAPAS[self.etapa], self.etapa + 1, len(NOMES_DAS_ETAPAS))
         )
-        for indice, (nome, escala) in enumerate(self._linhas_de_cor):
-            visivel = branco if indice == 2 else not branco
-            nome.set_visible(visivel)
-            escala.set_visible(visivel)
-        self._pontas_da_temperatura.set_visible(branco)
-        atual = self._calibracao_atual()
+        if todos:
+            pares = [(self._controles_por_fita[id_], id_) for id_ in self._em_edicao()]
+        else:
+            pares = [(self._controles_de_um, self.id_atual)]
         self._carregando = True
         try:
-            if branco:
-                self._temperatura.set_value(calibracao.temperatura_do_branco(atual.branco) * 100)
-            else:
-                tom, fator = atual.cores[self.etapa]
-                self._tom.set_value(tom)
-                self._intensidade.set_value(fator * 100)
+            for controles, id_ in pares:
+                self._carregar(controles, self.calibracoes[id_])
         finally:
             self._carregando = False
         self._cor_na_tela = _cor_da_etapa(self.etapa)
-        self._amostra_da_etapa.queue_draw()
+        (self._amostra_de_todos if todos else self._amostra_da_etapa).queue_draw()
         self._mostrar_previa()
+
+    def _carregar(self, controles: dict[str, Any], atual: Calibracao) -> None:
+        """Põe nos controles de um dispositivo os valores desta etapa."""
+        branco = self.etapa == ETAPA_DO_BRANCO
+        for indice, (nome, escala) in enumerate(controles["linhas"]):
+            visivel = branco if indice == 2 else not branco
+            nome.set_visible(visivel)
+            escala.set_visible(visivel)
+        controles["pontas"].set_visible(branco)
+        if branco:
+            controles["temperatura"].set_value(
+                calibracao.temperatura_do_branco(atual.branco) * 100
+            )
+        else:
+            tom, fator = atual.cores[self.etapa]
+            controles["tom"].set_value(tom)
+            controles["intensidade"].set_value(fator * 100)
 
     def _mostrar_previa(self) -> None:
         if self.id_atual == TODOS:
@@ -344,27 +386,30 @@ class AssistenteDeCalibracao(Adw.Dialog):
                 self.id_atual, _cor_da_etapa(self.etapa), self.calibracoes
             )
 
-    def mudar_tom(self, graus: int) -> None:
-        self._trocar_cor(graus, self._calibracao_atual().cores[self.etapa][1])
+    def mudar_tom(self, graus: int, id_da_fita: Optional[str] = None) -> None:
+        alvo = self._alvo(id_da_fita)
+        self._trocar_cor(graus, self.calibracoes[alvo].cores[self.etapa][1], alvo)
         self._mostrar_previa()
 
-    def mudar_intensidade(self, fator: float) -> None:
-        self._trocar_cor(self._calibracao_atual().cores[self.etapa][0], round(fator, 2))
+    def mudar_intensidade(self, fator: float, id_da_fita: Optional[str] = None) -> None:
+        alvo = self._alvo(id_da_fita)
+        self._trocar_cor(self.calibracoes[alvo].cores[self.etapa][0], round(fator, 2), alvo)
         self._mostrar_previa()
 
-    def mudar_temperatura(self, temperatura: float) -> None:
-        self._gravar_atual(
-            self._calibracao_atual()._replace(
-                branco=calibracao.branco_da_temperatura(temperatura)
-            )
+    def mudar_temperatura(self, temperatura: float, id_da_fita: Optional[str] = None) -> None:
+        alvo = self._alvo(id_da_fita)
+        self.calibracoes[alvo] = self.calibracoes[alvo]._replace(
+            branco=calibracao.branco_da_temperatura(temperatura)
         )
         self._mostrar_previa()
 
     def restaurar(self) -> None:
-        if self.etapa == ETAPA_DO_BRANCO:
-            self._gravar_atual(self._calibracao_atual()._replace(branco=NEUTRA.branco))
-        else:
-            self._trocar_cor(*NEUTRA.cores[self.etapa])
+        """Devolve esta etapa ao neutro — de todos, no modo de todos."""
+        for id_ in self._em_edicao():
+            if self.etapa == ETAPA_DO_BRANCO:
+                self.calibracoes[id_] = self.calibracoes[id_]._replace(branco=NEUTRA.branco)
+            else:
+                self._trocar_cor(*NEUTRA.cores[self.etapa], id_)
         self._mostrar_etapa()
 
     def proxima(self) -> None:
@@ -372,7 +417,7 @@ class AssistenteDeCalibracao(Adw.Dialog):
             self.etapa += 1
             self._mostrar_etapa()
         elif self.id_atual == TODOS:
-            # Todos já receberam: não há a quem aplicar também.
+            # Cada um já tem a sua: não há a quem aplicar também.
             self._calibrados.update(self._em_edicao())
             self.testar()
         else:
