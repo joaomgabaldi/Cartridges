@@ -361,6 +361,8 @@ _suspensas: set[str] = set()
 # ficou fora do ar na sessão em curso (ver ``fitas_fora_do_ar``).
 _suspensa_em: dict[str, float] = {}
 _fora_do_ar: dict[str, float] = {}
+# As fitas que a sessão em curso pinta: só elas entram no aviso do fim dela.
+_fitas_da_sessao: set[str] = set()
 _TRAVA_CONEXOES = threading.Lock()
 
 
@@ -1327,6 +1329,7 @@ def comecar(game: "Game") -> None:
     # pulso que vê a sessão antiga não reserva depois desta troca. Um teste do
     # pulso em curso também acaba: a sessão é dona das fitas.
     global _acompanhamento, _cor_ambiente, _teto_da_sessao, _amostras_validas, _amostras_bloqueadas  # noqa: PLW0603
+    global _fitas_da_sessao  # noqa: PLW0603
     with _TRAVA_PULSO:
         _jogo_da_sessao = game
         _teste_do_pulso = None
@@ -1339,6 +1342,7 @@ def comecar(game: "Game") -> None:
         # A conta do tempo fora do ar é da sessão: a fita que já estava
         # suspensa começa a contar agora.
         _fora_do_ar.clear()
+        _fitas_da_sessao = {fita.id for fita in alvos} if alvos is not None else set()
         for identificador in list(_suspensa_em):
             _suspensa_em[identificador] = _agora()
         _cor_ambiente = _teto_da_sessao = None
@@ -1525,7 +1529,10 @@ def _uma_amostra(sessao: object, alvos: list[Fita]) -> None:
         nova = None
         if _cor_ambiente is not None and _teto_da_sessao is not None and not _pulsando:
             nova = _proxima_cor(_cor_ambiente, amostra, _teto_da_sessao)
-        _registrar(amostra, nova, _pulsando)
+        brilho = None
+        if amostra.luz is not None and _teto_da_sessao is not None:
+            brilho = _brilho_da_cena(amostra.luz, _teto_da_sessao)
+        _registrar(amostra, nova, _pulsando, brilho)
         if nova is None:
             return
         _cor_ambiente = nova
@@ -1535,7 +1542,9 @@ def _uma_amostra(sessao: object, alvos: list[Fita]) -> None:
     )
 
 
-def _registrar(amostra: "tela_do_jogo.Amostra", nova: Optional[Cor], pulsando: bool) -> None:
+def _registrar(
+    amostra: "tela_do_jogo.Amostra", nova: Optional[Cor], pulsando: bool, brilho: Optional[int]
+) -> None:
     """Uma linha por amostra, para calibrar os números acima jogando: o que a
     tela deu, o que a luz fez e quanto a captura custou."""
     if amostra.tipo == "ignorada":
@@ -1545,10 +1554,11 @@ def _registrar(amostra: "tela_do_jogo.Amostra", nova: Optional[Cor], pulsando: b
     else:
         decisao = "manteve (pulso)" if pulsando else "manteve"
     logging.info(
-        "Tela: %s cor=%s luz=%s, %s (%s ms)",
+        "Tela: %s cor=%s luz=%s brilho=%s, %s (%s ms)",
         amostra.tipo,
         amostra.cor,
         "-" if amostra.luz is None else f"{amostra.luz:.2f}",
+        "-" if brilho is None else brilho,
         decisao,
         amostra.ms,
     )
@@ -1595,31 +1605,40 @@ def _vigiar_fitas(sessao: object) -> None:
 
 
 def _retentar_suspensas(sessao: object) -> bool:
-    """Uma rodada: cada fita suspensa recebe a cor ambiente, direto. A que não
-    responder volta à suspensão na hora, sem esperar três falhas novas — senão
-    cada troca de cor esperaria por ela outra vez. ``False`` quando a sessão
-    acabou ou a iluminação foi desligada."""
+    """Uma rodada: cada fita suspensa volta à cor ambiente, acesa — a fita que
+    voltou da tomada pode ter voltado apagada. A que não responder volta à
+    suspensão na hora, sem esperar três falhas novas, senão cada troca de cor
+    esperaria por ela outra vez. ``False`` quando a sessão acabou ou a
+    iluminação foi desligada.
+
+    Com um pulso tocando, a rodada fica para a próxima: a tentativa numa fita
+    muda segura a fita pela espera inteira, e o pulso pararia esperando por ela.
+    """
     if not ligada():
         return False
+    candidatas = [fita for fita in _guardadas() if fita.id in _suspensas]
     with _TRAVA_PULSO:
         if _acompanhamento is not sessao:
             return False
-        suspensas = [fita for fita in _guardadas() if fita.id in _suspensas]
         cor = _cor_ambiente
-        if not suspensas or cor is None:
+        if not candidatas or cor is None or _pulsando:
             return True
-        geracoes = _reservar(suspensas)
-    retomar({fita.id for fita in suspensas})
+        geracoes = _reservar(candidatas)
+    # O relógio é lido antes: o tempo da tentativa que falhar também foi fora
+    # do ar, e a conta não pode ganhar um buraco a cada rodada.
+    inicio = _agora()
+    retomar({fita.id for fita in candidatas})
 
     def tentar(fita: Fita) -> None:
-        _tingir(fita, cor, geracoes[fita.id])
-        if _falhas.get(fita.id):
-            _suspensas.add(fita.id)
-            _suspensa_em[fita.id] = _agora()
-        else:
+        if _transitar(fita, True, hsv_hex(na_fita(cor, fita)), geracoes[fita.id]):
             logging.info("Fita %s voltou a responder", fita.nome)
+            return
+        # Falhou, ou outra troca tomou a vez no meio: não se sabe se a fita
+        # responde, e ela espera a rodada seguinte suspensa.
+        _suspensas.add(fita.id)
+        _suspensa_em[fita.id] = inicio
 
-    _em_paralelo(suspensas, tentar)
+    _em_paralelo(candidatas, tentar)
     return True
 
 
@@ -1636,7 +1655,9 @@ def fitas_fora_do_ar() -> list[str]:
     return [
         nomes[identificador]
         for identificador, segundos in total.items()
-        if segundos > FORA_DO_AR_PARA_AVISAR and identificador in nomes
+        if segundos > FORA_DO_AR_PARA_AVISAR
+        and identificador in nomes
+        and identificador in _fitas_da_sessao
     ]
 
 

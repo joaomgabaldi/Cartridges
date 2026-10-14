@@ -2746,7 +2746,7 @@ def test_cada_amostra_vai_para_o_log(na_tela, caplog):
     linhas = [r.getMessage() for r in caplog.records if "Tela:" in r.getMessage()]
     assert len(linhas) == 2
     assert "37 ms" in linhas[0] and "luz" in linhas[0] and "trocou" in linhas[0]
-    assert "41 ms" in linhas[1] and "manteve" in linhas[1]
+    assert "41 ms" in linhas[1] and "manteve" in linhas[1] and "brilho" in linhas[1]
 
 def test_pulso_tocando_pula_a_amostra(na_tela):
     acompanhar = _comecar_com_tela(na_tela)
@@ -3017,6 +3017,64 @@ def test_fora_do_ar_por_pouco_nao_avisa(pulso, relogio):
     assert session_fita.fitas_fora_do_ar() == []
 
 
+def test_iluminacao_desligada_nao_conta_fora_do_ar(pulso, relogio, schema):
+    _suspender("eb0")
+    session_fita.voltar()
+    schema.set_boolean("session-fita", False)
+    session_fita.comecar(pulso.jogo)
+    relogio["t"] += 120
+    session_fita.voltar()
+    assert session_fita.fitas_fora_do_ar() == []
+
+
+def test_fita_que_o_app_nao_pinta_nao_conta_fora_do_ar(pulso, relogio, schema):
+    # Sem estado de antes guardado, a fita não é pintada na sessão.
+    schema.set_string(session_fita.CHAVE_ESTADO, "")
+    session_fita.comecar(pulso.jogo)
+    _suspender("eb0")
+    relogio["t"] += 120
+    session_fita.voltar()
+    assert session_fita.fitas_fora_do_ar() == []
+
+
+def test_fita_que_volta_e_ligada(pulso, relogio):
+    """Fita que voltou da tomada pode voltar apagada: a cor sozinha não a
+    acende."""
+    _suspender("eb0")
+    pulso.modulo.dps["20"] = False
+    session_fita._retentar_suspensas(session_fita._acompanhamento)
+    assert estado_mandado(pulso.modulo) is True
+    assert "eb0" not in session_fita._suspensas
+
+
+def test_retentativa_nao_atropela_o_pulso(pulso, relogio):
+    _suspender("eb0")
+    session_fita._pulsando = True
+    assert session_fita._retentar_suspensas(session_fita._acompanhamento) is True
+    assert "eb0" in session_fita._suspensas
+    assert pulso.modulo.recebidos == []
+
+
+def test_tentativa_que_falha_conta_como_fora_do_ar(pulso, relogio, monkeypatch):
+    """A tentativa que falha leva o tempo da espera da fita, e esse tempo
+    também foi fora do ar."""
+    monkeypatch.setattr(session_fita, "FORA_DO_AR_PARA_AVISAR", 22)
+    transitar_de_verdade = session_fita._transitar
+
+    def transitar_demorado(*args):
+        relogio["t"] += 5  # a espera da fita que não responde
+        return transitar_de_verdade(*args)
+
+    monkeypatch.setattr(session_fita, "_transitar", transitar_demorado)
+    _suspender("eb0")
+    pulso.modulo.quebrada = True
+    relogio["t"] += 15
+    session_fita._retentar_suspensas(session_fita._acompanhamento)
+    relogio["t"] += 5
+    session_fita.voltar()
+    assert session_fita.fitas_fora_do_ar() == ["Fita 0"]  # 25 s, e não 20
+
+
 def test_sessao_nova_comeca_a_conta_do_zero(pulso, relogio):
     _suspender("eb0")
     relogio["t"] += 120
@@ -3079,6 +3137,17 @@ def test_cor_escolhida_nao_e_automatica(tela, schema):
     assert dialog.fita_row.get_subtitle() == "Escolhida manualmente"
     assert dialog._fita_automatica() is False
     assert dialog.fita_button_reset.get_tooltip_text() == "Voltar ao automático"
+
+
+def test_mexer_no_brilho_redesenha_a_amostra(tela, schema):
+    schema.set_boolean("fita-acompanha-tela", True)
+    dialog, _jogo = tela
+    dialog.atualizar_fita()
+    desenhos = []
+    dialog.fita_amostra.queue_draw = lambda: desenhos.append(1)
+    dialog.fita_brilho_row.set_value(dialog.fita_brilho_row.get_value() - 5)
+    assert desenhos
+    assert dialog._fita_automatica() is False
 
 
 def test_cor_mexida_e_nao_aplicada_mostra_a_bolinha(tela, schema):

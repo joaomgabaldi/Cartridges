@@ -384,6 +384,11 @@ class DetailsDialog(Adw.Dialog):
         self.fita_color_button.connect(
             "notify::rgba", lambda *_: self.fita_amostra.queue_draw()
         )
+        # O brilho também decide se a amostra é a roda do automático: mexido,
+        # ele é escolha de gente, e a roda vira a bolinha da cor.
+        self.fita_brilho_row.connect(
+            "notify::value", lambda *_: self.fita_amostra.queue_draw()
+        )
         self.fita_amostra.set_draw_func(self.desenhar_amostra)
         self.fita_brilho_row.connect("notify::value", self.previa_da_fita)
         # Fechar sem aplicar desfaz a prévia: o que vale fora desta tela é o
