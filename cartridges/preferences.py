@@ -29,6 +29,7 @@ from typing import Any, Callable, Optional
 from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
 from cartridges import conquista_aviso, shared
+from cartridges.calibracao_janela import AssistenteDeCalibracao
 from cartridges.conquistas import fontes
 from cartridges.conquistas.epic import conta as epic_conta
 from cartridges.conquistas.epic import janela as epic_janela
@@ -80,6 +81,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     fita_acompanha_tela_switch: Adw.SwitchRow = Gtk.Template.Child()
     fita_brilho_row: Adw.SpinRow = Gtk.Template.Child()
     fita_brilho_individual_button: Gtk.Button = Gtk.Template.Child()
+    fita_calibrar_row: Adw.ActionRow = Gtk.Template.Child()
+    fita_calibrar_button: Gtk.Button = Gtk.Template.Child()
     fita_cor_app_reset: Gtk.Button = Gtk.Template.Child()
     fita_cor_app_amostra: Gtk.DrawingArea = Gtk.Template.Child()
     # Obsoleto desde o GTK 4.10 e mantido até o GTK 5; é o único seletor com
@@ -861,6 +864,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.fita_brilho_individual_button.connect(
             "clicked", self.brilho_por_dispositivo
         )
+        self.fita_calibrar_button.connect("clicked", self.calibrar_cores)
         self.fita_configurar_button.connect("clicked", self.configurar_fitas)
         self.fita_testar_button.connect("clicked", self.testar_fitas)
 
@@ -995,6 +999,10 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         dialogo.connect("closed", lambda *_: session_fita.previa(session_fita.cor_do_app()))
         dialogo.present(self)
         mostrar()
+
+    def calibrar_cores(self, *_args: Any) -> None:
+        """Abre o assistente de calibração das cores (``calibracao_janela``)."""
+        AssistenteDeCalibracao(session_fita.fitas()).present(self)
 
     def desenhar_cor_app(
         self, _area: Any, contexto: Any, largura: int, altura: int

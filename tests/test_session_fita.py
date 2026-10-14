@@ -3481,3 +3481,42 @@ def test_previa_da_calibracao_acende_so_a_escolhida(falsas, monkeypatch, schema)
 
 
 # endregion
+
+
+# region Calibração nas Preferências
+
+
+def test_linha_da_calibracao_segue_o_interruptor_da_iluminacao(monkeypatch, schema):
+    _com_fita()
+    monkeypatch.setattr(session_fita, "reacender", lambda: None)
+    preferencias = _preferencias(monkeypatch)
+    linha = preferencias.fita_calibrar_row
+    assert linha.get_title() == "Calibrar as cores"
+    assert linha.get_subtitle() == "Ajusta cada dispositivo para reproduzir as cores como a tela"
+    preferencias.session_fita_switch.set_active(False)
+    assert linha.get_sensitive() is False
+    preferencias.session_fita_switch.set_active(True)
+    assert linha.get_sensitive() is True
+
+
+def test_botao_da_calibracao_abre_o_assistente(monkeypatch, schema):
+    import cartridges.preferences as preferences_module  # noqa: PLC0415
+
+    _com_fita()
+    monkeypatch.setattr(session_fita, "reacender", lambda: None)
+    preferencias = _preferencias(monkeypatch)
+    abertos = []
+
+    class Espiao:
+        def __init__(self, configuradas):
+            abertos.append([fita.id for fita in configuradas])
+
+        def present(self, _pai):
+            abertos.append("apresentado")
+
+    monkeypatch.setattr(preferences_module, "AssistenteDeCalibracao", Espiao)
+    preferencias.fita_calibrar_button.emit("clicked")
+    assert abertos == [["eb0"], "apresentado"]
+
+
+# endregion

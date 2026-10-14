@@ -211,6 +211,25 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         sensitive: bind session_fita_switch.active;
       }
 
+      // O assistente de calibração, montado em `calibracao_janela.py`.
+      Adw.ActionRow fita_calibrar_row {
+        title: _("Calibrar as cores");
+        subtitle: _("Ajusta cada dispositivo para reproduzir as cores como a tela");
+        sensitive: bind session_fita_switch.active;
+        activatable-widget: fita_calibrar_button;
+
+        [suffix]
+        Button fita_calibrar_button {
+          valign: center;
+          icon-name: "go-next-symbolic";
+          tooltip-text: _("Abrir o assistente de calibração");
+
+          styles [
+            "flat"
+          ]
+        }
+      }
+
       // A cor das fitas quando não há jogo correndo. Mesmo seletor em balão da
       // tela do jogo, pelo mesmo motivo: cada tentativa aparece na parede na
       // hora, sem confirmar nada.
