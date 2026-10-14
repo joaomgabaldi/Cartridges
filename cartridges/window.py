@@ -722,6 +722,22 @@ class CartridgesWindow(Adw.ApplicationWindow):
                 )
             )
 
+        # Dispositivo que passou parte da sessão sem responder: a cor voltou
+        # sozinha quando ele voltou, mas a luz faltou nesse meio-tempo.
+        fora_do_ar = session_fita.fitas_fora_do_ar()
+        if len(fora_do_ar) == 1:
+            self.toast_queue.add(
+                Adw.Toast.new(
+                    _("O dispositivo {} não respondeu durante parte da sessão.").format(
+                        fora_do_ar[0]
+                    )
+                )
+            )
+        elif fora_do_ar:
+            self.toast_queue.add(
+                Adw.Toast.new(_("Alguns dispositivos não responderam durante parte da sessão."))
+            )
+
         # Session over: bring gamepad navigation back.
         from cartridges.gamepad import GamepadManager  # avoid import cycle
 

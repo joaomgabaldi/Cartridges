@@ -2894,12 +2894,13 @@ def test_interruptor_da_tela_segue_o_da_iluminacao(monkeypatch, schema):
     assert linha.get_sensitive() is True
 
 
-def _sessao_na_janela(real_window, monkeypatch, make_game, bloqueada):
+def _sessao_na_janela(real_window, monkeypatch, make_game, bloqueada, fora_do_ar=()):
     import cartridges.window as window_module  # noqa: PLC0415
 
     monkeypatch.setattr(window_module.session_fita, "comecar", lambda _jogo: None)
     monkeypatch.setattr(window_module.session_fita, "voltar", lambda: None)
     monkeypatch.setattr(window_module.session_fita, "captura_bloqueada", lambda: bloqueada)
+    monkeypatch.setattr(window_module.session_fita, "fitas_fora_do_ar", lambda: list(fora_do_ar))
     avisos = []
     monkeypatch.setattr(real_window.toast_queue, "add", avisos.append)
     real_window.show_session_blocker(make_game(name="Hollow Knight"))
@@ -2912,7 +2913,21 @@ def test_fim_da_sessao_bloqueada_mostra_o_aviso(real_window, monkeypatch, make_g
 
 
 def test_fim_da_sessao_normal_nao_avisa(real_window, monkeypatch, make_game):
-    assert AVISO_DA_TELA not in _sessao_na_janela(real_window, monkeypatch, make_game, False)
+    assert _sessao_na_janela(real_window, monkeypatch, make_game, False) == []
+
+
+def test_um_dispositivo_fora_do_ar_e_avisado_pelo_nome(real_window, monkeypatch, make_game):
+    avisos = _sessao_na_janela(
+        real_window, monkeypatch, make_game, False, ["Fita Monitor Direito"]
+    )
+    assert avisos == [
+        "O dispositivo Fita Monitor Direito não respondeu durante parte da sessão."
+    ]
+
+
+def test_varios_dispositivos_fora_do_ar_viram_um_aviso(real_window, monkeypatch, make_game):
+    avisos = _sessao_na_janela(real_window, monkeypatch, make_game, False, ["A", "B"])
+    assert avisos == ["Alguns dispositivos não responderam durante parte da sessão."]
 
 
 # endregion
