@@ -50,7 +50,7 @@ def test_imagem_colorida_da_a_cor(tela):
 
 def test_imagem_cinza_e_sem_cor(tela):
     tela["imagem"] = Image.new("RGB", (64, 36), (90, 90, 90))
-    assert tela_do_jogo.cor_da_tela() == Amostra("sem_cor")
+    assert tela_do_jogo.cor_da_tela().tipo == "sem_cor"
 
 
 def test_imagem_toda_preta_e_bloqueada(tela):
@@ -62,7 +62,7 @@ def test_quase_preta_nao_e_bloqueio(tela):
     imagem = Image.new("RGB", (64, 36), (0, 0, 0))
     imagem.putpixel((10, 10), (3, 3, 3))
     tela["imagem"] = imagem
-    assert tela_do_jogo.cor_da_tela() == Amostra("sem_cor")
+    assert tela_do_jogo.cor_da_tela().tipo == "sem_cor"
 
 
 def test_captura_que_levanta_e_bloqueada(tela):
@@ -81,3 +81,22 @@ def test_captura_so_o_monitor_principal(monkeypatch):
     )
     tela_do_jogo._capturar()
     assert pedidos == [{}]
+
+
+def test_a_amostra_traz_a_luz_da_cena(tela):
+    tela["imagem"] = Image.new("RGB", (64, 36), (255, 255, 255))
+    assert tela_do_jogo.cor_da_tela().luz > 0.9
+    tela["imagem"] = Image.new("RGB", (64, 36), (60, 60, 60))
+    assert abs(tela_do_jogo.cor_da_tela().luz - 60 / 255) < 0.02
+
+
+def test_a_amostra_traz_o_tempo_da_captura(tela):
+    ms = tela_do_jogo.cor_da_tela().ms
+    assert isinstance(ms, int) and ms >= 0
+
+
+def test_cena_escura_com_cor_ainda_da_cor(tela):
+    tela["imagem"] = Image.new("RGB", (64, 36), (8, 8, 30))
+    amostra = tela_do_jogo.cor_da_tela()
+    assert amostra.tipo == "cor"
+    assert 225 < amostra.cor[0] < 255

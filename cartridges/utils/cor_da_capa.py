@@ -67,11 +67,18 @@ def dominante(capa: Path) -> Optional[tuple[int, int]]:
         return None
 
 
-def dominante_da_imagem(imagem: Image.Image) -> Optional[tuple[int, int]]:
+def dominante_da_imagem(
+    imagem: Image.Image, cores: int = CORES, min_valor: float = MIN_VALOR
+) -> Optional[tuple[int, int]]:
     """A mesma conta de ``dominante``, para uma imagem já aberta: o print da
-    tela do jogo não passa por arquivo."""
+    tela do jogo não passa por arquivo.
+
+    A tela pede mais cores e um valor mínimo menor que a capa: numa cena, o
+    amarelo forte não pode se fundir ao branco do lado, e o corredor
+    azul-escuro ainda tem cor para dar.
+    """
     amostra = imagem.convert("RGB").resize(AMOSTRA)
-    paleta = amostra.quantize(colors=CORES, method=Image.Quantize.FASTOCTREE)
+    paleta = amostra.quantize(colors=cores, method=Image.Quantize.FASTOCTREE)
     contagens = paleta.convert("RGB").getcolors(AMOSTRA[0] * AMOSTRA[1]) or []
 
     melhor: Optional[tuple[float, float]] = None
@@ -80,7 +87,7 @@ def dominante_da_imagem(imagem: Image.Image) -> Optional[tuple[int, int]]:
         matiz, saturacao, valor = colorsys.rgb_to_hsv(
             vermelho / 255, verde / 255, azul / 255
         )
-        if saturacao < MIN_SATURACAO or valor < MIN_VALOR:
+        if saturacao < MIN_SATURACAO or valor < min_valor:
             continue
         peso = quantidade * saturacao
         if peso > melhor_peso:

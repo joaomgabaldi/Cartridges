@@ -67,4 +67,25 @@ def test_imagem_rgba_tambem_serve():
     assert dominante_da_imagem(Image.new("RGBA", (50, 50), (20, 20, 220, 255))) is not None
 
 
+
+def test_cor_escura_so_conta_com_o_valor_minimo_baixo():
+    escura = Image.new("RGB", (64, 64), (8, 8, 30))
+    assert dominante_da_imagem(escura) is None
+    assert dominante_da_imagem(escura, min_valor=0.06) is not None
+
+
+def test_amarelo_forte_nao_se_mistura_ao_branco_com_mais_cores():
+    """Degradê de amarelo a branco com uma mancha azul: em 8 cores o amarelo
+    se funde ao branco e sai lavado (saturação ~0,63, que na fita parece
+    branco); em 16 ele se mantém."""
+    imagem = Image.new("RGB", (160, 90))
+    for x in range(160):
+        t = x / 159
+        cor = (255, round(190 + 65 * t), round(255 * t))
+        imagem.paste(Image.new("RGB", (1, 90), cor), (x, 0))
+    imagem.paste(Image.new("RGB", (30, 30), (30, 60, 200)), (10, 10))
+    matiz, saturacao = dominante_da_imagem(imagem, cores=16)
+    assert 40 <= matiz <= 50
+    assert saturacao > 800
+
 # endregion

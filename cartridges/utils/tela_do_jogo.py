@@ -34,12 +34,19 @@ acompanha a sessão avisa o usuário no fim dela.
 import ctypes
 import logging
 import os
+import time
 from ctypes import wintypes
 from typing import Any, NamedTuple, Optional
 
-from PIL import Image, ImageGrab
+from PIL import Image, ImageGrab, ImageStat
 
 from cartridges.utils.cor_da_capa import dominante_da_imagem
+
+
+# A tela reduzida a mais cores que a capa, e cores escuras ainda contam: ver
+# ``dominante_da_imagem``.
+CORES_DA_TELA = 16
+MIN_VALOR_DA_TELA = 0.06
 
 
 class Amostra(NamedTuple):
@@ -49,10 +56,15 @@ class Amostra(NamedTuple):
     ``"sem_cor"`` (a imagem veio, mas sem cor útil), ``"ignorada"`` (nada foi
     capturado: nenhuma janela na frente, ou a janela é do próprio app) ou
     ``"bloqueada"`` (a captura falhou ou veio toda preta).
+
+    Com imagem (``"cor"`` e ``"sem_cor"``), ``luz`` é a luminosidade média da
+    cena, de 0 a 1, e ``ms`` quanto a captura levou.
     """
 
     tipo: str
     cor: Optional[tuple[int, int]] = None
+    luz: Optional[float] = None
+    ms: Optional[int] = None
 
 
 _user32: Optional[Any] = None
@@ -98,7 +110,9 @@ def cor_da_tela() -> Amostra:
         # como captura que funcionou nem como bloqueio.
         if not hwnd or _processo_da(hwnd) == os.getpid():
             return Amostra("ignorada")
+        inicio = time.perf_counter()
         imagem = _capturar()
+        ms = round((time.perf_counter() - inicio) * 1000)
     # Larga como a da capa: o GDI e a Pillow reclamam de jeitos diferentes
     # (monitor desligado no meio, sessão bloqueada do Windows), e todos querem
     # dizer a mesma coisa — não deu para ver a tela.
@@ -108,5 +122,6 @@ def cor_da_tela() -> Amostra:
 
     if imagem.getbbox() is None:
         return Amostra("bloqueada")
-    cor = dominante_da_imagem(imagem)
-    return Amostra("cor", cor) if cor else Amostra("sem_cor")
+    luz = ImageStat.Stat(imagem.convert("L").resize((64, 36))).mean[0] / 255
+    cor = dominante_da_imagem(imagem, CORES_DA_TELA, MIN_VALOR_DA_TELA)
+    return Amostra("cor" if cor else "sem_cor", cor, luz, ms)
