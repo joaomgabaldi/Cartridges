@@ -512,6 +512,21 @@ def _apagar_pasta(pasta: Path) -> None:
             sleep(0.2)
 
 
+def _sumiu(item: Path, erro: FileNotFoundError) -> None:
+    """Para o `FileNotFoundError` de quem percorre uma pasta: se ``item``
+    sumiu entre a listagem e a operação (um temporário que o antivírus criou
+    ali e já apagou, como ``RESTAURAR.ZIP.tmp``), não há o que mover nem
+    apagar. Se ainda existe, o erro é outro (no Windows, um caminho longo
+    demais também dá `FileNotFoundError`) e ``erro`` sobe: seguir adiante
+    apagaria dados que não saíram do lugar."""
+    try:
+        item.lstat()
+    except FileNotFoundError:
+        logging.warning("%s sumiu durante a restauração do backup", item)
+        return
+    raise erro
+
+
 def _devolver(anterior: Path) -> None:
     """Põe de volta na pasta do app os dados que a troca tirou dela.
 
@@ -533,10 +548,13 @@ def _devolver(anterior: Path) -> None:
         for item in list(shared.app_dir.iterdir()):
             if item.name in ficam:
                 continue
-            if item.is_dir():
-                shutil.rmtree(item)
-            else:
-                item.unlink()
+            try:
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
+            except FileNotFoundError as erro:
+                _sumiu(item, erro)
         # Feita a limpeza, a marca não vale mais: uma queda (ou um arquivo
         # preso ao apagar `.anterior`) dali em diante faria a próxima abertura
         # apagar de novo, junto, o que já voltou.
@@ -546,10 +564,8 @@ def _devolver(anterior: Path) -> None:
             continue  # sai com a pasta
         try:
             item.replace(shared.app_dir / item.name)
-        except FileNotFoundError:
-            # Sumiu entre a listagem e a troca (um temporário que o antivírus
-            # criou ali e já apagou): não há o que devolver.
-            logging.warning("%s sumiu durante a recuperação do backup", item)
+        except FileNotFoundError as erro:
+            _sumiu(item, erro)
     try:
         _apagar_pasta(anterior)
     except OSError:
@@ -603,10 +619,16 @@ def aplicar_pendente(progresso: Optional[Callable[[float], None]] = None) -> Opt
             (anterior / _SAVES_FICAM).touch()
         for item in list(shared.app_dir.iterdir()):
             if item.name not in ficam:
-                item.replace(anterior / item.name)
+                try:
+                    item.replace(anterior / item.name)
+                except FileNotFoundError as erro:
+                    _sumiu(item, erro)
         (anterior / _COMPLETO).touch()
         for item in list(extraido.iterdir()):
-            item.replace(shared.app_dir / item.name)
+            try:
+                item.replace(shared.app_dir / item.name)
+            except FileNotFoundError as erro:
+                _sumiu(item, erro)
 
         restauracao.gravar(
             restauracao.ids_que_dependem_de_atalho(shared.games_dir), int(time())

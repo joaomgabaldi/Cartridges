@@ -868,6 +868,62 @@ def test_queda_no_meio_da_troca_sem_saves_no_backup_nao_apaga_os_saves(tmp_path,
     assert not (shared.app_dir / backup._SAVES_FICAM).exists()
 
 
+def _temporario_que_some(monkeypatch):
+    """Na listagem da pasta do app, um temporário que já sumiu ao ser tocado —
+    como o ``RESTAURAR.ZIP.tmp`` que o antivírus cria e apaga logo depois."""
+    listar = Path.iterdir
+
+    def iterdir(pasta):
+        yield from listar(pasta)
+        if pasta == shared.app_dir:
+            yield pasta / "RESTAURAR.ZIP.tmp"
+
+    monkeypatch.setattr(type(shared.app_dir), "iterdir", iterdir)
+
+
+def test_queda_no_meio_da_troca_com_temporario_que_some_recupera(tmp_path, monkeypatch):
+    _preparar_restauracao(tmp_path, monkeypatch)
+    anterior = shared.app_dir.with_name(shared.app_dir.name + ".anterior")
+    anterior.mkdir()
+    shared.games_dir.replace(anterior / "games")
+    (anterior / ".completo").write_text("", encoding="utf-8")
+    (shared.app_dir / "games").mkdir()
+    (shared.app_dir / "games" / "do_backup.json").write_text("{}", encoding="utf-8")
+    (shared.app_dir / "restaurar.zip").unlink()
+    _temporario_que_some(monkeypatch)
+
+    assert backup.aplicar_pendente() is None
+
+    assert [p.name for p in shared.games_dir.iterdir()] == ["atual.json"]
+
+
+def test_aplicar_pendente_com_temporario_que_some_restaura(tmp_path, monkeypatch):
+    _preparar_restauracao(tmp_path, monkeypatch)
+    _temporario_que_some(monkeypatch)
+
+    assert backup.aplicar_pendente() is True
+
+    assert sorted(p.name for p in shared.games_dir.iterdir()) == ["imported_1.json", "shortcuts_1.json"]
+
+
+def test_aplicar_pendente_com_falha_ao_mover_dado_que_ficou_nao_o_apaga(tmp_path, monkeypatch):
+    """`FileNotFoundError` com o item ainda no lugar (no Windows, um caminho
+    longo demais) não é um temporário que sumiu: a troca para antes de apagar."""
+    _preparar_restauracao(tmp_path, monkeypatch)
+    mover = Path.replace
+
+    def replace(origem, destino):
+        if origem.name == "games" and destino.parent.name.endswith(".anterior"):
+            raise FileNotFoundError(3, "caminho não encontrado", str(destino))
+        return mover(origem, destino)
+
+    monkeypatch.setattr(type(shared.app_dir), "replace", replace)
+
+    assert backup.aplicar_pendente() is False
+
+    assert [p.name for p in shared.games_dir.iterdir()] == ["atual.json"]
+
+
 def test_exportar_espera_a_trava_dos_saves(tmp_path):
     """Um backup de save em andamento não pode entrar pela metade no backup do app."""
     _guardar_saves(shared.app_dir / "saves")
