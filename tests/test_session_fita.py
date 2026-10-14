@@ -46,6 +46,7 @@ def _esquecer_conexoes():
     # O acompanhamento da tela também.
     session_fita._acompanhamento = None
     session_fita._cor_ambiente = session_fita._teto_da_sessao = None
+    session_fita._candidata = session_fita._ultima_troca = None
     session_fita._amostras_validas = session_fita._amostras_bloqueadas = 0
     session_fita._suspensa_em.clear()
     session_fita._fora_do_ar.clear()
@@ -2583,7 +2584,7 @@ def test_esperar_ate_o_fim_com_o_dono_valido(pulso, monkeypatch):
 
 from cartridges.utils.tela_do_jogo import Amostra  # noqa: E402
 
-ATUAL = session_fita.Cor(100, 800, 1000)
+ATUAL = session_fita.Cor(100, 1000, 1000)
 TETO = 1000
 
 
@@ -2592,8 +2593,8 @@ def _da_tela(matiz, saturacao, luz=1.0):
 
 
 def test_saturacao_da_tela_e_reforcada_para_a_luz():
-    assert session_fita._saturacao_da_luz(250) == 600
-    assert session_fita._saturacao_da_luz(625) == 800
+    assert session_fita._saturacao_da_luz(250) == 850
+    assert session_fita._saturacao_da_luz(625) == 925
     assert session_fita._saturacao_da_luz(1000) == 1000
 
 
@@ -2609,25 +2610,25 @@ def test_brilho_da_cena_nunca_apaga_a_fita():
 
 
 def test_matiz_perto_nao_troca():
-    assert session_fita._proxima_cor(ATUAL, _da_tela(110, 625), TETO) is None
+    assert session_fita._proxima_cor(ATUAL, _da_tela(110, 1000), TETO) is None
 
 
 def test_matiz_longe_troca():
     assert session_fita._proxima_cor(ATUAL, _da_tela(130, 625), TETO) == session_fita.Cor(
-        130, 800, 1000
+        130, 925, 1000
     )
 
 
 def test_matiz_mede_pelo_lado_curto_do_circulo():
     atual = session_fita.Cor(350, 800, 1000)
-    assert session_fita._proxima_cor(atual, _da_tela(5, 625), TETO) is None
+    assert session_fita._proxima_cor(atual, _da_tela(5, 1000), TETO) is None
 
 
-def test_saturacao_longe_troca():
+def test_saturacao_da_tela_sozinha_nao_troca_a_luz():
+    """Com o piso em 850, a saturação da luz anda no máximo 150: o limiar de
+    250 nunca dispara só por ela."""
     atual = session_fita.Cor(100, 1000, 1000)
-    assert session_fita._proxima_cor(atual, _da_tela(100, 250), TETO) == session_fita.Cor(
-        100, 600, 1000
-    )
+    assert session_fita._proxima_cor(atual, _da_tela(100, 250), TETO) is None
 
 
 def test_saturacao_perto_nao_troca():
@@ -2635,21 +2636,50 @@ def test_saturacao_perto_nao_troca():
 
 
 def test_brilho_perto_nao_troca():
-    # Luz que dá 950: 5% do teto, abaixo dos 10% do limiar.
-    assert session_fita._proxima_cor(ATUAL, _da_tela(100, 625, 0.3208), TETO) is None
+    # Luz que dá 880: 12% do teto, abaixo dos 15% do limiar.
+    assert session_fita._proxima_cor(ATUAL, _da_tela(100, 1000, 0.2858), TETO) is None
 
 
 def test_cena_escura_troca_so_o_brilho():
-    assert session_fita._proxima_cor(ATUAL, _da_tela(100, 625, 0.0), TETO) == session_fita.Cor(
-        100, 800, 400
+    assert session_fita._proxima_cor(ATUAL, _da_tela(100, 1000, 0.0), TETO) == session_fita.Cor(
+        100, 1000, 400
     )
 
 
 def test_cena_sem_cor_mexe_so_no_brilho():
     escura = Amostra("sem_cor", None, 0.0)
     clara = Amostra("sem_cor", None, 1.0)
-    assert session_fita._proxima_cor(ATUAL, escura, TETO) == session_fita.Cor(100, 800, 400)
+    assert session_fita._proxima_cor(ATUAL, escura, TETO) == session_fita.Cor(100, 1000, 400)
     assert session_fita._proxima_cor(ATUAL, clara, TETO) is None
+
+
+
+def _decidir_com(relogio, *pedidas, teto=1000):
+    return [session_fita._decidir(pedida, teto) for pedida in pedidas]
+
+
+AZUL = session_fita.Cor(200, 1000, 1000)
+VERMELHO = session_fita.Cor(10, 1000, 1000)
+
+
+def test_troca_so_com_a_segunda_amostra_concordando(relogio):
+    assert _decidir_com(relogio, AZUL, AZUL._replace(matiz=205)) == [None, AZUL._replace(matiz=205)]
+
+
+def test_amostra_que_discorda_vira_a_nova_candidata(relogio):
+    assert _decidir_com(relogio, AZUL, VERMELHO, VERMELHO) == [None, None, VERMELHO]
+
+
+def test_amostra_sem_troca_descarta_a_candidata(relogio):
+    assert _decidir_com(relogio, AZUL, None, AZUL) == [None, None, None]
+
+
+def test_troca_espera_o_intervalo_minimo(relogio):
+    assert _decidir_com(relogio, AZUL, AZUL) == [None, AZUL]
+    relogio["t"] += 10
+    assert _decidir_com(relogio, VERMELHO, VERMELHO) == [None, None]
+    relogio["t"] += 21
+    assert _decidir_com(relogio, VERMELHO) == [VERMELHO]
 
 
 @pytest.fixture
@@ -2716,7 +2746,7 @@ def test_jogo_com_cor_manual_nao_acompanha(na_tela):
 
 def test_cor_nova_da_tela_desliza_ate_ela(na_tela):
     acompanhar = _comecar_com_tela(na_tela)
-    na_tela.fila.append(Amostra("cor", (130, 900)))
+    na_tela.fila.extend([Amostra("cor", (130, 900))] * 2)  # confirmada
     acompanhar()
     assert cor_mandada(na_tela.modulo) == _na_fita(_verde())
     assert session_fita._cor_ambiente == _verde()
@@ -2740,13 +2770,16 @@ def test_sem_cor_e_ignorada_mantem_a_luz(na_tela):
 
 def test_cada_amostra_vai_para_o_log(na_tela, caplog):
     acompanhar = _comecar_com_tela(na_tela)
-    na_tela.fila.extend([Amostra("cor", (130, 900), 0.5, 37), Amostra("sem_cor", None, 0.5, 41)])
+    na_tela.fila.extend(
+        [Amostra("cor", (130, 900), 0.5, 37)] * 2 + [Amostra("sem_cor", None, 0.5, 41)]
+    )
     with caplog.at_level("INFO"):
         acompanhar()
     linhas = [r.getMessage() for r in caplog.records if "Tela:" in r.getMessage()]
-    assert len(linhas) == 2
-    assert "37 ms" in linhas[0] and "luz" in linhas[0] and "trocou" in linhas[0]
-    assert "41 ms" in linhas[1] and "manteve" in linhas[1] and "brilho" in linhas[1]
+    assert len(linhas) == 3
+    assert "37 ms" in linhas[0] and "luz" in linhas[0] and "candidata" in linhas[0]
+    assert "trocou" in linhas[1]
+    assert "41 ms" in linhas[2] and "manteve" in linhas[2] and "brilho" in linhas[2]
 
 def test_pulso_tocando_pula_a_amostra(na_tela):
     acompanhar = _comecar_com_tela(na_tela)
@@ -2760,7 +2793,7 @@ def test_pulso_tocando_pula_a_amostra(na_tela):
 
 def test_o_pulso_volta_a_cor_da_tela(na_tela):
     acompanhar = _comecar_com_tela(na_tela)
-    na_tela.fila.append(Amostra("cor", (130, 900)))
+    na_tela.fila.extend([Amostra("cor", (130, 900))] * 2)  # confirmada
     acompanhar()
     session_fita.pulsar_conquista("normal")
     na_tela.tarefas.pop(0)()
@@ -2805,7 +2838,7 @@ def test_fim_da_sessao_vence_o_fade_da_tela(na_tela, monkeypatch):
         na_tela.tarefas.pop()()  # a volta à cor do app roda já
 
     _antes_do_fade(monkeypatch, encerrar)
-    na_tela.fila.append(Amostra("cor", (130, 900)))
+    na_tela.fila.extend([Amostra("cor", (130, 900))] * 2)  # confirmada
     acompanhar()
     cores = _cores(na_tela.modulo)
     assert _na_fita(_verde()) not in cores
@@ -2820,7 +2853,7 @@ def test_conquista_vence_o_fade_da_tela(na_tela, monkeypatch):
         na_tela.tarefas.pop()()  # o pulso toca já
 
     _antes_do_fade(monkeypatch, conquistar)
-    na_tela.fila.append(Amostra("cor", (130, 900)))
+    na_tela.fila.extend([Amostra("cor", (130, 900))] * 2)  # confirmada
     acompanhar()
     cores = _cores(na_tela.modulo)
     assert _ouro() in cores

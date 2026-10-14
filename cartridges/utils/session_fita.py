@@ -1329,7 +1329,7 @@ def comecar(game: "Game") -> None:
     # pulso que vê a sessão antiga não reserva depois desta troca. Um teste do
     # pulso em curso também acaba: a sessão é dona das fitas.
     global _acompanhamento, _cor_ambiente, _teto_da_sessao, _amostras_validas, _amostras_bloqueadas  # noqa: PLW0603
-    global _fitas_da_sessao  # noqa: PLW0603
+    global _fitas_da_sessao, _candidata, _ultima_troca  # noqa: PLW0603
     with _TRAVA_PULSO:
         _jogo_da_sessao = game
         _teste_do_pulso = None
@@ -1345,7 +1345,7 @@ def comecar(game: "Game") -> None:
         _fitas_da_sessao = {fita.id for fita in alvos} if alvos is not None else set()
         for identificador in list(_suspensa_em):
             _suspensa_em[identificador] = _agora()
-        _cor_ambiente = _teto_da_sessao = None
+        _cor_ambiente = _teto_da_sessao = _candidata = _ultima_troca = None
         _amostras_validas = _amostras_bloqueadas = 0
     if alvos is None:
         return
@@ -1389,14 +1389,23 @@ def voltar() -> None:
 # o tempo de cada uma vai para o log para medir o efeito no jogo.
 INTERVALO_DA_TELA = 6
 
-# O fade da troca, uma vez e meia o do resto do app: a cor nova chega sem que
-# se perceba o momento em que ela começou, e termina antes da amostra seguinte.
-FADE_DA_TELA = 3
+# O fade da troca, três vezes o do resto do app: a cor nova chega sem que se
+# perceba o momento em que ela começou. No segundo teste, 3 s com troca a cada
+# 10 s deram dor de cabeça.
+FADE_DA_TELA = 6
+
+# A troca só vale quando duas amostras seguidas concordam (ver ``_decidir``), e
+# no máximo uma a cada 30 s: no segundo teste a luz trocou umas 50 vezes em 12
+# minutos, pulando entre o vermelho e o azul da mesma cena e seguindo quadros
+# de transição que 10 s depois já tinham passado.
+INTERVALO_MINIMO_ENTRE_TROCAS = 30
 
 # A saturação mínima da luz. Na tela, cor com saturação média já é cor; numa
 # fita de LED ela parece branca — no primeiro teste, um amarelo forte na tela
-# virou luz branca. A faixa aceita da tela (de 0,25 a 1) vai para 600–1000.
-SATURACAO_MINIMA_DA_TELA = 600
+# virou luz branca. Com o piso em 60%, no segundo, vermelho virou rosa (e o
+# rosa, na fita, parece roxo). A faixa aceita da tela (de 0,25 a 1) vai para
+# 850–1000.
+SATURACAO_MINIMA_DA_TELA = 850
 
 # O brilho acompanha a cena: o do jogo é o teto, e a cena escura o reduz até
 # 40% dele. Cena com luminosidade média a partir de 35% já ganha o teto — uma
@@ -1409,9 +1418,9 @@ LUZ_PLENA = 0.35
 # Matiz em graus, pelo lado curto do círculo; saturação de 0 a 1000.
 LIMIAR_MATIZ = 20
 LIMIAR_SATURACAO = 250
-# O brilho, em fração do teto: abaixo de 10%, a fita ficaria oscilando com
+# O brilho, em fração do teto: abaixo de 15%, a fita ficaria oscilando com
 # cada nuvem que passa.
-LIMIAR_BRILHO = 0.10
+LIMIAR_BRILHO = 0.15
 
 # Quantas amostras bloqueadas, sem nenhuma boa, fazem o aviso do fim da
 # sessão. Uma só pode ser a tela preta de carregamento numa sessão curta, e o
@@ -1425,6 +1434,10 @@ _acompanhamento: Optional[object] = None
 _cor_ambiente: Optional[Cor] = None
 # O brilho do jogo, que é o teto do brilho da cena.
 _teto_da_sessao: Optional[int] = None
+# A troca que a última amostra pediu e ainda espera confirmação, e quando foi a
+# última troca da sessão (no relógio de ``_agora``).
+_candidata: Optional[Cor] = None
+_ultima_troca: Optional[float] = None
 _amostras_validas = 0
 _amostras_bloqueadas = 0
 
@@ -1460,14 +1473,41 @@ def _proxima_cor(atual: Cor, amostra: "tela_do_jogo.Amostra", teto: int) -> Opti
         matiz, saturacao = atual.matiz, atual.saturacao
     else:
         return None
-    distancia = abs((matiz - atual.matiz + 180) % 360 - 180)
-    if (
+    nova = Cor(matiz, saturacao, brilho)
+    return nova if _difere(atual, nova, teto) else None
+
+
+def _difere(uma: Cor, outra: Cor, teto: int) -> bool:
+    """Se duas cores da luz são diferentes de verdade, pelos limiares."""
+    distancia = abs((outra.matiz - uma.matiz + 180) % 360 - 180)
+    return (
         distancia > LIMIAR_MATIZ
-        or abs(saturacao - atual.saturacao) > LIMIAR_SATURACAO
-        or abs(brilho - atual.brilho) > LIMIAR_BRILHO * teto
-    ):
-        return Cor(matiz, saturacao, brilho)
-    return None
+        or abs(outra.saturacao - uma.saturacao) > LIMIAR_SATURACAO
+        or abs(outra.brilho - uma.brilho) > LIMIAR_BRILHO * teto
+    )
+
+
+def _decidir(pedida: Optional[Cor], teto: int) -> Optional[Cor]:
+    """A troca que vale agora, ou ``None``. Chamar com ``_TRAVA_PULSO``.
+
+    ``pedida`` é a troca que esta amostra pede (``None``: a cena segue com a
+    luz de agora, e a candidata vai fora). A troca vale quando a amostra
+    concorda com a candidata da anterior e já passou o intervalo mínimo desde
+    a última; vai para a cor desta amostra, a mais recente.
+    """
+    global _candidata, _ultima_troca  # noqa: PLW0603
+    if pedida is None:
+        _candidata = None
+        return None
+    confirmada = _candidata is not None and not _difere(_candidata, pedida, teto)
+    _candidata = pedida
+    if not confirmada:
+        return None
+    if _ultima_troca is not None and _agora() - _ultima_troca < INTERVALO_MINIMO_ENTRE_TROCAS:
+        return None
+    _candidata = None
+    _ultima_troca = _agora()
+    return pedida
 
 
 def _segue(sessao: object) -> bool:
@@ -1526,13 +1566,19 @@ def _uma_amostra(sessao: object, alvos: list[Fita]) -> None:
             _amostras_validas += 1
         elif amostra.tipo == "bloqueada":
             _amostras_bloqueadas += 1
-        nova = None
-        if _cor_ambiente is not None and _teto_da_sessao is not None and not _pulsando:
-            nova = _proxima_cor(_cor_ambiente, amostra, _teto_da_sessao)
+        pedida = nova = None
+        if (
+            amostra.tipo in ("cor", "sem_cor")
+            and _cor_ambiente is not None
+            and _teto_da_sessao is not None
+            and not _pulsando
+        ):
+            pedida = _proxima_cor(_cor_ambiente, amostra, _teto_da_sessao)
+            nova = _decidir(pedida, _teto_da_sessao)
         brilho = None
         if amostra.luz is not None and _teto_da_sessao is not None:
             brilho = _brilho_da_cena(amostra.luz, _teto_da_sessao)
-        _registrar(amostra, nova, _pulsando, brilho)
+        _registrar(amostra, pedida, nova, _pulsando, brilho)
         if nova is None:
             return
         _cor_ambiente = nova
@@ -1543,7 +1589,11 @@ def _uma_amostra(sessao: object, alvos: list[Fita]) -> None:
 
 
 def _registrar(
-    amostra: "tela_do_jogo.Amostra", nova: Optional[Cor], pulsando: bool, brilho: Optional[int]
+    amostra: "tela_do_jogo.Amostra",
+    pedida: Optional[Cor],
+    nova: Optional[Cor],
+    pulsando: bool,
+    brilho: Optional[int],
 ) -> None:
     """Uma linha por amostra, para calibrar os números acima jogando: o que a
     tela deu, o que a luz fez e quanto a captura custou."""
@@ -1551,6 +1601,8 @@ def _registrar(
         return
     if nova is not None:
         decisao = f"trocou para {nova.matiz}/{nova.saturacao}/{nova.brilho}"
+    elif pedida is not None:
+        decisao = f"candidata {pedida.matiz}/{pedida.saturacao}/{pedida.brilho}"
     else:
         decisao = "manteve (pulso)" if pulsando else "manteve"
     logging.info(
@@ -1777,11 +1829,12 @@ def _encerrar_pulsos(alvos: Optional[list[Fita]] = None) -> Optional[dict[str, i
     passo e a fila vai fora. Com ``alvos``, devolve a vez de cada um deles,
     tirada na mesma trava."""
     global _jogo_da_sessao, _teste_do_pulso, _acompanhamento, _cor_ambiente, _teto_da_sessao  # noqa: PLW0603
+    global _candidata, _ultima_troca  # noqa: PLW0603
     with _TRAVA_PULSO:
         _jogo_da_sessao = None
         _teste_do_pulso = None
         # Os contadores das amostras ficam: ``captura_bloqueada`` os lê depois.
-        _acompanhamento = _cor_ambiente = _teto_da_sessao = None
+        _acompanhamento = _cor_ambiente = _teto_da_sessao = _candidata = _ultima_troca = None
         _limpar_fila_de_pulsos()
         return _reservar(alvos) if alvos is not None else None
 
