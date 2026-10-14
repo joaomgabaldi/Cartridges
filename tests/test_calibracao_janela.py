@@ -157,3 +157,40 @@ def test_intensidade_acima_de_100_muda_a_referencia(assistente):
     assistente.mudar_intensidade(1.3)
     corrigida = calibracao.corrigir(referencia, assistente.calibracoes["eb0"])
     assert corrigida.saturacao > referencia.saturacao
+
+
+def test_voltar_aos_ajustes_para_o_teste_e_guarda_os_ajustes(assistente):
+    assistente.escolher("eb0")
+    assistente.mudar_tom(-8)
+    assistente.testar()
+    assistente.voltar_aos_ajustes()
+    assert assistente.pagina() == "inicio"
+    assert assistente._temporizador == 0
+    assert assistente.calibracoes["eb0"].cores[0] == (-8, 1.0)
+    assert all(fita.calibracao is None for fita in session_fita.fitas())  # nada gravado
+
+
+def test_escolher_depois_do_teste_abre_na_cor_que_estava_na_tela(assistente):
+    assistente.escolher("eb0")
+    assistente.testar()
+    assistente.avancar_teste()
+    assistente.avancar_teste()  # verde
+    assistente.voltar_aos_ajustes()
+    assistente.escolher("eb1")
+    assert assistente.etapa == 2
+    # Só a primeira escolha depois do teste: a seguinte começa do início.
+    assistente.anterior()
+    assistente.anterior()
+    assistente.anterior()  # de volta à lista
+    assistente.escolher("eb0")
+    assert assistente.etapa == 0
+
+
+def test_voltar_do_fim_leva_ao_branco(assistente):
+    assistente.escolher("eb0")
+    for _ in range(7):
+        assistente.proxima()
+    assert assistente.pagina() == "fim"
+    assistente.voltar_do_fim()
+    assert assistente.pagina() == "etapa"
+    assert assistente.etapa == 6

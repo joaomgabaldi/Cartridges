@@ -77,6 +77,9 @@ class AssistenteDeCalibracao(Adw.Dialog):
         self.id_atual: Optional[str] = None
         self.etapa = 0
         self._indice_do_teste = 0
+        # A cor que estava na tela quando se voltou do teste: a próxima
+        # escolha de dispositivo abre direto nela.
+        self._etapa_de_retorno: Optional[int] = None
         self._temporizador = 0
         self._encerrado = False
         # Enquanto a etapa carrega os controles, mexer neles não é ajuste.
@@ -223,6 +226,7 @@ class AssistenteDeCalibracao(Adw.Dialog):
         self._grupo_do_fim = Adw.PreferencesGroup(title=_("Aplicar esta calibração também a"))
         self._marcadas: dict[str, Adw.SwitchRow] = {}
         botoes = self._linha_de_botoes(
+            self._botao(_("Voltar"), self.voltar_do_fim),
             self._botao(_("Calibrar outro dispositivo"), self.calibrar_outro),
             self._botao(_("Testar calibração"), self.testar, sugerido=True),
         )
@@ -233,6 +237,7 @@ class AssistenteDeCalibracao(Adw.Dialog):
         self._amostra_do_teste = self._amostra()
         self._pausar = self._botao(_("Pausar"), self.pausar)
         botoes = self._linha_de_botoes(
+            self._botao(_("Voltar aos ajustes"), self.voltar_aos_ajustes),
             self._pausar,
             self._botao(_("Avançar"), self.avancar_teste),
             self._botao(_("Concluir"), self.concluir, sugerido=True),
@@ -270,7 +275,8 @@ class AssistenteDeCalibracao(Adw.Dialog):
 
     def escolher(self, id_da_fita: str) -> None:
         self.id_atual = id_da_fita
-        self.etapa = 0
+        self.etapa = self._etapa_de_retorno if self._etapa_de_retorno is not None else 0
+        self._etapa_de_retorno = None
         self._pilha.set_visible_child_name("etapa")
         self._mostrar_etapa()
 
@@ -356,6 +362,12 @@ class AssistenteDeCalibracao(Adw.Dialog):
         self._grupo_do_fim.set_visible(bool(self._marcadas))
         self._pilha.set_visible_child_name("fim")
 
+    def voltar_do_fim(self) -> None:
+        """Do "Aplicar também a" de volta à última etapa, a do branco."""
+        self.etapa = ETAPA_DO_BRANCO
+        self._pilha.set_visible_child_name("etapa")
+        self._mostrar_etapa()
+
     def aplicar_tambem(self, ids: set[str]) -> None:
         for id_ in ids:
             self.calibracoes[id_] = self._calibracao_atual()
@@ -396,6 +408,15 @@ class AssistenteDeCalibracao(Adw.Dialog):
         self._cor_na_tela = cor
         self._amostra_do_teste.queue_draw()
         session_fita.previa(cor, None, self.calibracoes)
+
+    def voltar_aos_ajustes(self) -> None:
+        """Sai do teste sem perder nada: os ajustes seguem em memória até o
+        Concluir, e o dispositivo escolhido em seguida abre na cor que estava
+        na tela — a que pareceu errada."""
+        self._parar_temporizador()
+        self._etapa_de_retorno = self._indice_do_teste
+        self._atualizar_inicio()
+        self._pilha.set_visible_child_name("inicio")
 
     def avancar_teste(self) -> None:
         self._indice_do_teste = (self._indice_do_teste + 1) % len(NOMES_DAS_ETAPAS)
