@@ -170,19 +170,13 @@ def test_voltar_aos_ajustes_para_o_teste_e_guarda_os_ajustes(assistente):
     assert all(fita.calibracao is None for fita in session_fita.fitas())  # nada gravado
 
 
-def test_escolher_depois_do_teste_abre_na_cor_que_estava_na_tela(assistente):
+def test_escolher_depois_do_teste_comeca_do_inicio(assistente):
     assistente.escolher("eb0")
     assistente.testar()
     assistente.avancar_teste()
-    assistente.avancar_teste()  # verde
+    assistente.avancar_teste()
     assistente.voltar_aos_ajustes()
     assistente.escolher("eb1")
-    assert assistente.etapa == 2
-    # Só a primeira escolha depois do teste: a seguinte começa do início.
-    assistente.anterior()
-    assistente.anterior()
-    assistente.anterior()  # de volta à lista
-    assistente.escolher("eb0")
     assert assistente.etapa == 0
 
 
@@ -194,3 +188,55 @@ def test_voltar_do_fim_leva_ao_branco(assistente):
     assistente.voltar_do_fim()
     assert assistente.pagina() == "etapa"
     assert assistente.etapa == 6
+
+
+def test_todos_juntos_acende_todas_e_ajusta_todas(assistente):
+    from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
+
+    assistente.escolher(TODOS)
+    assert assistente.previas[-1][0] == "todas"
+    assistente.mudar_tom(-8)
+    assert assistente.calibracoes["eb0"].cores[0] == (-8, 1.0)
+    assert assistente.calibracoes["eb1"].cores[0] == (-8, 1.0)
+    assert assistente.previas[-1][0] == "todas"
+
+
+def test_todos_juntos_vai_do_branco_direto_ao_teste(assistente):
+    from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
+
+    assistente.escolher(TODOS)
+    for _ in range(7):
+        assistente.proxima()
+    assert assistente.pagina() == "teste"
+
+
+def test_todos_juntos_parte_da_calibracao_comum_ou_do_neutro(assistente):
+    from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
+
+    puxada = calibracao.Calibracao(((-8, 1.0),) + ((0, 1.0),) * 5, (0, 0))
+    assistente.calibracoes = {"eb0": puxada, "eb1": puxada}
+    assistente.escolher(TODOS)
+    assert assistente.calibracoes["eb1"] == puxada
+    assistente.anterior()
+    assistente.calibracoes = {"eb0": puxada, "eb1": NEUTRA}
+    assistente.escolher(TODOS)
+    assert assistente.calibracoes == {"eb0": NEUTRA, "eb1": NEUTRA}
+
+
+def test_aplicar_tambem_nao_oferece_a_ja_calibrada_na_sessao(assistente):
+    assistente.escolher("eb0")
+    for _ in range(7):
+        assistente.proxima()
+    assert set(assistente._marcadas) == {"eb1"}
+    assistente.calibrar_outro()
+    assistente.escolher("eb1")
+    for _ in range(7):
+        assistente.proxima()
+    assert assistente._marcadas == {}
+    assert not assistente._grupo_do_fim.get_visible()
+
+
+def test_lista_comeca_com_todos_os_dispositivos(assistente):
+    from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
+
+    assert TODOS in assistente._linhas_do_inicio

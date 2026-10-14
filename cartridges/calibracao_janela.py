@@ -47,6 +47,10 @@ NOMES_DAS_ETAPAS = (
 )
 ETAPA_DO_BRANCO = len(REFERENCIAS)
 
+# A escolha "Todos os dispositivos" na lista do início: cada ajuste vale para
+# todos ao mesmo tempo, com todos acesos, para nenhum ficar diferente do outro.
+TODOS = "__todos__"
+
 # De quanto em quanto tempo o teste final troca de cor.
 INTERVALO_DO_TESTE = 3
 
@@ -77,9 +81,9 @@ class AssistenteDeCalibracao(Adw.Dialog):
         self.id_atual: Optional[str] = None
         self.etapa = 0
         self._indice_do_teste = 0
-        # A cor que estava na tela quando se voltou do teste: a próxima
-        # escolha de dispositivo abre direto nela.
-        self._etapa_de_retorno: Optional[int] = None
+        # Os dispositivos já calibrados nesta abertura do assistente: o
+        # "Aplicar também a" não os oferece de novo.
+        self._calibrados: set[str] = set()
         self._temporizador = 0
         self._encerrado = False
         # Enquanto a etapa carrega os controles, mexer neles não é ajuste.
@@ -160,6 +164,17 @@ class AssistenteDeCalibracao(Adw.Dialog):
         )
         self._lista = Gtk.ListBox(css_classes=["boxed-list"], selection_mode=Gtk.SelectionMode.NONE)
         self._linhas_do_inicio: dict[str, Adw.ActionRow] = {}
+        opcoes = [(TODOS, _("Todos os dispositivos"))] if len(self.fitas) > 1 else []
+        for id_, nome in opcoes:
+            linha = Adw.ActionRow(
+                title=nome,
+                subtitle=_("Ajusta todos ao mesmo tempo, para nenhum ficar diferente"),
+                activatable=True,
+            )
+            linha.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
+            linha.connect("activated", lambda _linha, id_=id_: self.escolher(id_))
+            self._lista.append(linha)
+            self._linhas_do_inicio[id_] = linha
         for fita in self.fitas:
             linha = Adw.ActionRow(title=fita.nome, activatable=True)
             linha.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
@@ -255,16 +270,25 @@ class AssistenteDeCalibracao(Adw.Dialog):
 
     def _atualizar_inicio(self) -> None:
         for id_, linha in self._linhas_do_inicio.items():
-            linha.set_subtitle(self.subtitulo_de(id_))
+            if id_ != TODOS:
+                linha.set_subtitle(self.subtitulo_de(id_))
+
+    def _em_edicao(self) -> list[str]:
+        """Os dispositivos que o ajuste de agora alcança."""
+        assert self.id_atual is not None
+        return [fita.id for fita in self.fitas] if self.id_atual == TODOS else [self.id_atual]
 
     def _calibracao_atual(self) -> Calibracao:
-        assert self.id_atual is not None
-        return self.calibracoes[self.id_atual]
+        return self.calibracoes[self._em_edicao()[0]]
+
+    def _gravar_atual(self, nova: Calibracao) -> None:
+        for id_ in self._em_edicao():
+            self.calibracoes[id_] = nova
 
     def _trocar_cor(self, tom: int, fator: float) -> None:
         cores = list(self._calibracao_atual().cores)
         cores[self.etapa] = (tom, fator)
-        self.calibracoes[self.id_atual] = self._calibracao_atual()._replace(cores=tuple(cores))
+        self._gravar_atual(self._calibracao_atual()._replace(cores=tuple(cores)))
 
     def _ao_ajustar(self, acao: Any) -> None:
         if not self._carregando:
@@ -275,8 +299,15 @@ class AssistenteDeCalibracao(Adw.Dialog):
 
     def escolher(self, id_da_fita: str) -> None:
         self.id_atual = id_da_fita
-        self.etapa = self._etapa_de_retorno if self._etapa_de_retorno is not None else 0
-        self._etapa_de_retorno = None
+        self.etapa = 0
+        if id_da_fita == TODOS:
+            # Todos partem da mesma calibração: a que já têm, se for igual em
+            # todos, ou a neutra — partir da de um faria os outros pularem
+            # para ela sem ninguém ver.
+            atuais = {self.calibracoes[fita.id] for fita in self.fitas}
+            comum = atuais.pop() if len(atuais) == 1 else NEUTRA
+            for fita in self.fitas:
+                self.calibracoes[fita.id] = comum
         self._pilha.set_visible_child_name("etapa")
         self._mostrar_etapa()
 
@@ -306,7 +337,12 @@ class AssistenteDeCalibracao(Adw.Dialog):
         self._mostrar_previa()
 
     def _mostrar_previa(self) -> None:
-        session_fita.previa_calibracao(self.id_atual, _cor_da_etapa(self.etapa), self.calibracoes)
+        if self.id_atual == TODOS:
+            session_fita.previa(_cor_da_etapa(self.etapa), None, self.calibracoes)
+        else:
+            session_fita.previa_calibracao(
+                self.id_atual, _cor_da_etapa(self.etapa), self.calibracoes
+            )
 
     def mudar_tom(self, graus: int) -> None:
         self._trocar_cor(graus, self._calibracao_atual().cores[self.etapa][1])
@@ -317,16 +353,16 @@ class AssistenteDeCalibracao(Adw.Dialog):
         self._mostrar_previa()
 
     def mudar_temperatura(self, temperatura: float) -> None:
-        self.calibracoes[self.id_atual] = self._calibracao_atual()._replace(
-            branco=calibracao.branco_da_temperatura(temperatura)
+        self._gravar_atual(
+            self._calibracao_atual()._replace(
+                branco=calibracao.branco_da_temperatura(temperatura)
+            )
         )
         self._mostrar_previa()
 
     def restaurar(self) -> None:
         if self.etapa == ETAPA_DO_BRANCO:
-            self.calibracoes[self.id_atual] = self._calibracao_atual()._replace(
-                branco=NEUTRA.branco
-            )
+            self._gravar_atual(self._calibracao_atual()._replace(branco=NEUTRA.branco))
         else:
             self._trocar_cor(*NEUTRA.cores[self.etapa])
         self._mostrar_etapa()
@@ -335,6 +371,10 @@ class AssistenteDeCalibracao(Adw.Dialog):
         if self.etapa < ETAPA_DO_BRANCO:
             self.etapa += 1
             self._mostrar_etapa()
+        elif self.id_atual == TODOS:
+            # Todos já receberam: não há a quem aplicar também.
+            self._calibrados.update(self._em_edicao())
+            self.testar()
         else:
             self._ir_para_o_fim()
 
@@ -350,11 +390,12 @@ class AssistenteDeCalibracao(Adw.Dialog):
     # region Fim e teste
 
     def _ir_para_o_fim(self) -> None:
+        self._calibrados.add(self.id_atual)
         for linha in self._marcadas.values():
             self._grupo_do_fim.remove(linha)
         self._marcadas = {}
         for fita in self.fitas:
-            if fita.id == self.id_atual:
+            if fita.id in self._calibrados:
                 continue
             linha = Adw.SwitchRow(title=fita.nome)
             self._grupo_do_fim.add(linha)
@@ -371,9 +412,10 @@ class AssistenteDeCalibracao(Adw.Dialog):
     def aplicar_tambem(self, ids: set[str]) -> None:
         for id_ in ids:
             self.calibracoes[id_] = self._calibracao_atual()
+        self._calibrados.update(ids)
 
     def _aplicar_marcadas(self) -> None:
-        if self.id_atual is not None:
+        if self.id_atual not in (None, TODOS):
             self.aplicar_tambem({id_ for id_, linha in self._marcadas.items() if linha.get_active()})
 
     def calibrar_outro(self) -> None:
@@ -411,10 +453,8 @@ class AssistenteDeCalibracao(Adw.Dialog):
 
     def voltar_aos_ajustes(self) -> None:
         """Sai do teste sem perder nada: os ajustes seguem em memória até o
-        Concluir, e o dispositivo escolhido em seguida abre na cor que estava
-        na tela — a que pareceu errada."""
+        Concluir."""
         self._parar_temporizador()
-        self._etapa_de_retorno = self._indice_do_teste
         self._atualizar_inicio()
         self._pilha.set_visible_child_name("inicio")
 
