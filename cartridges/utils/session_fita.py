@@ -1470,11 +1470,9 @@ INTERVALO_MINIMO_ENTRE_TROCAS = 30
 # final a fazia pular até a cor.
 RITMO_DA_TELA = 15
 
-# Troca de matiz maior que esta passa pelo escuro: a cor de agora apaga até o
-# mínimo, e a nova acende dali. Pelo lado curto do círculo, de azul a vermelho
-# a luz atravessaria o roxo — no segundo teste, vermelho na tela e roxo na
-# parede.
-SALTO_PELO_ESCURO = 90
+# A troca grande de matiz desliza direto, pelo lado curto do círculo, como a
+# pequena: no terceiro teste, passar pelo escuro (apagar a cor de agora e
+# acender a nova) chamou mais atenção que o roxo no meio do caminho.
 
 # A saturação mínima da luz. Na tela, cor com saturação média já é cor; numa
 # fita de LED ela parece branca — no primeiro teste, um amarelo forte na tela
@@ -2035,14 +2033,11 @@ def _rajada_da_tela(fita: Fita, degraus: list[tuple[int, str]], geracao: int) ->
 
 
 def _deslizar_da_tela(fita: Fita, cor: Cor, geracao: int) -> None:
-    """A troca da cor da tela: ``FADE_DA_TELA`` a ``RITMO_DA_TELA``, e a troca
-    grande de matiz pelo escuro (ver ``SALTO_PELO_ESCURO``).
+    """A troca da cor da tela: ``FADE_DA_TELA`` a ``RITMO_DA_TELA``.
 
-    Uma rajada só para as duas metades: a espera do fim da rajada (ver
-    ``_rajada``) entre elas deixaria a fita parada no escuro. Cada degrau sai
-    no momento do passo dele, e não no ritmo dos que sobraram: uma troca de
-    25° no mesmo brilho tem uns 25 degraus distintos, e a 15 por segundo o
-    fade de 6 s duraria menos de 2.
+    Cada degrau sai no momento do passo dele, e não no ritmo dos que sobraram:
+    uma troca de 25° no mesmo brilho tem uns 25 degraus distintos, e a 15 por
+    segundo o fade de 6 s duraria menos de 2.
     """
     with _trava_da(fita):
         if not _vigente(fita, geracao):
@@ -2051,27 +2046,7 @@ def _deslizar_da_tela(fita: Fita, cor: Cor, geracao: int) -> None:
         antes = _mostrada.get(fita.id)
         origem = cor_de_hex(antes[1]) if antes is not None and antes[0] else None
         passos = round(FADE_DA_TELA * RITMO_DA_TELA)
-        salto = origem is not None and (
-            abs((destino.matiz - origem.matiz + 180) % 360 - 180) > SALTO_PELO_ESCURO
-        )
-        if not passos or origem is None or origem == destino:
-            pass
-        elif salto:
-            apagada = origem._replace(brilho=BRILHO_MINIMO)
-            acesa_no_escuro = destino._replace(brilho=BRILHO_MINIMO)
-            metade = passos // 2
-            degraus = (
-                _degraus_no_passo(origem, apagada, metade)
-                + [(metade, hsv_hex(acesa_no_escuro))]
-                + [
-                    (metade + passo, cor_hex)
-                    for passo, cor_hex in _degraus_no_passo(
-                        acesa_no_escuro, destino, passos - metade
-                    )
-                ]
-            )
-            _rajada_da_tela(fita, degraus, geracao)
-        else:
+        if passos and origem is not None and origem != destino:
             _rajada_da_tela(fita, _degraus_no_passo(origem, destino, passos), geracao)
         _tingir(fita, cor, geracao)
 

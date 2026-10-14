@@ -3222,27 +3222,30 @@ def test_troca_pequena_desliza_direto_a_15_por_segundo(fade_da_tela):
     assert min(brilho for _, brilho in passos) > session_fita.BRILHO_MINIMO
 
 
-def test_troca_grande_passa_pelo_escuro_sem_atravessar_cores(fade_da_tela):
-    acompanhar = _comecar_com_tela(fade_da_tela)
+def test_troca_grande_desliza_direto_sem_apagar(fade_da_tela):
+    """No terceiro teste, a troca grande pelo escuro (a luz apagando e
+    acendendo atrás do monitor) chamou mais atenção que qualquer cor: a troca
+    grande desliza direto, como a pequena."""
+    acompanhar = _comecar_com_tela(fade_da_tela)  # capa vermelha: matiz 0
     fade_da_tela.fila.extend([Amostra("cor", (200, 1000))] * 2)
     acompanhar()
     passos = _matizes_e_brilhos(fade_da_tela.modulo)
-    # Só a cor de partida e a de chegada: nada do roxo do caminho curto.
-    assert {matiz for matiz, _ in passos} == {0, 200}
-    assert min(brilho for _, brilho in passos) == session_fita.BRILHO_MINIMO
+    assert min(brilho for _, brilho in passos) > session_fita.BRILHO_MINIMO
+    # Pelo lado curto do círculo: de 0 a 200 descendo por 359, 300, 250...
+    assert all(matiz == 0 or matiz >= 200 for matiz, _ in passos)
     assert passos[-1][0] == 200
 
 
-def test_fim_da_sessao_no_escuro_nao_acende_a_cor_nova(fade_da_tela, monkeypatch):
+def test_fim_da_sessao_no_meio_do_fade_para_a_troca(fade_da_tela):
     acompanhar = _comecar_com_tela(fade_da_tela)
     modulo = fade_da_tela.modulo
     mandar_de_verdade = modulo.set_multiple_values
+    mandados = {"n": 0}
 
     def mandar(valores, nowait=False):
-        cor = session_fita.cor_de_hex(str(valores.get("24", "")))
-        if cor is not None and cor.brilho == session_fita.BRILHO_MINIMO:
-            if session_fita._jogo_da_sessao is not None:
-                session_fita.voltar()
+        mandados["n"] += 1
+        if mandados["n"] == 10 and session_fita._jogo_da_sessao is not None:
+            session_fita.voltar()
         return mandar_de_verdade(valores, nowait)
 
     modulo.set_multiple_values = mandar
