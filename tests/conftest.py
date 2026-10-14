@@ -93,6 +93,7 @@ _SCHEMA_DEFAULTS = {
     "fita-matiz-app": 284,
     "fita-saturacao-app": 620,
     "session-fita": False,
+    "fita-acompanha-tela": False,
     "fita-estado-anterior": "",
     "wallhaven-key": "",
     "remove-missing": True,

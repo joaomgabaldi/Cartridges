@@ -138,6 +138,12 @@
     <key name="session-fita" type="b">
       <default>false</default>
     </key>
+    <!-- Experimento: durante a sessão, a cor das fitas acompanha devagar a cor
+         predominante do monitor do jogo, em vez de ficar na cor fixa dele.
+         Jogo com cor escolhida à mão continua fixo. -->
+    <key name="fita-acompanha-tela" type="b">
+      <default>false</default>
+    </key>
     <!-- O estado de cada fita antes de o app mexer, em JSON, para o caminho de
          volta. Em disco e não em memória porque o app morto no meio da sessão
          deixaria as fitas vestidas de um jogo que já acabou; vazio quer dizer

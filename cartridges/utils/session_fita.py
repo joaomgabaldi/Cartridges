@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 
 from cartridges import shared
+from cartridges.utils import tela_do_jogo
 from cartridges.utils.cor_da_capa import dominante
 from cartridges.utils.ler_json import ler_json
 
@@ -1310,14 +1311,35 @@ def comecar(game: "Game") -> None:
     # A sessão e a vez de cada fita mudam juntas, sob a trava do pulso: um
     # pulso que vê a sessão antiga não reserva depois desta troca. Um teste do
     # pulso em curso também acaba: a sessão é dona das fitas.
+    global _acompanhamento, _cor_ambiente, _amostras_validas, _amostras_bloqueadas  # noqa: PLW0603
     with _TRAVA_PULSO:
         _jogo_da_sessao = game
         _teste_do_pulso = None
         _limpar_fila_de_pulsos()
         geracoes = _reservar(alvos) if alvos is not None else {}
+        # Um marcador novo por sessão: o acompanhamento de uma sessão que
+        # acabou (ainda dormindo a fatia dele) nunca fala pela seguinte, nem
+        # quando ela é do mesmo jogo.
+        _acompanhamento = sessao = object()
+        _cor_ambiente = None
+        _amostras_validas = _amostras_bloqueadas = 0
     if alvos is None:
         return
-    _em_thread(lambda: _vestir(cor_do_jogo(game), alvos, geracoes))
+    _em_thread(lambda: _vestir_o_jogo(game, alvos, geracoes, sessao))
+    if acompanha_tela() and not escolhida(game.game_id):
+        _em_thread(lambda: _acompanhar(sessao, alvos))
+
+
+def _vestir_o_jogo(
+    game: "Game", alvos: list[Fita], geracoes: dict[str, int], sessao: object
+) -> None:
+    """A cor do jogo, que é também o ponto de partida da cor ambiente."""
+    global _cor_ambiente  # noqa: PLW0603
+    cor = cor_do_jogo(game)
+    with _TRAVA_PULSO:
+        if _acompanhamento is sessao:
+            _cor_ambiente = cor
+    _vestir(cor, alvos, geracoes)
 
 
 def voltar() -> None:
@@ -1332,6 +1354,112 @@ def voltar() -> None:
         return
     _em_thread(lambda: _vestir(cor_do_app(), alvos, geracoes or {}))
 
+
+# region Cor da tela
+
+# A cada quantos segundos a tela é amostrada. Devagar de propósito: a luz
+# acompanha a cena, não a ação — uma explosão não pode virar um clarão na
+# parede. Cada amostra custa uns 50 ms de captura, nada para o jogo.
+INTERVALO_DA_TELA = 12
+
+# O fade da troca, três vezes o do resto do app: a cor nova chega sem que se
+# perceba o momento em que ela começou.
+FADE_DA_TELA = 6
+
+# Quanto a cor nova precisa se afastar da atual para a luz mudar. Abaixo disso
+# é a mesma cena com outra luz, e trocar só chamaria atenção para a parede.
+# Matiz em graus, pelo lado curto do círculo; saturação de 0 a 1000.
+LIMIAR_MATIZ = 20
+LIMIAR_SATURACAO = 250
+
+# O marcador da sessão que está sendo acompanhada (ver ``comecar``), a cor que
+# as fitas vestem agora nela, e quantas amostras da sessão vieram com imagem
+# e quantas bloqueadas. Escritos sob ``_TRAVA_PULSO``.
+_acompanhamento: Optional[object] = None
+_cor_ambiente: Optional[Cor] = None
+_amostras_validas = 0
+_amostras_bloqueadas = 0
+
+
+def acompanha_tela() -> bool:
+    """Se a cor da sessão acompanha a tela do jogo (Preferências)."""
+    return shared.schema.get_boolean("fita-acompanha-tela")
+
+
+def _proxima_cor(atual: Cor, amostra: tuple[int, int]) -> Optional[Cor]:
+    """A cor nova, no brilho de ``atual``, se ela for diferente de verdade;
+    senão ``None``."""
+    matiz, saturacao = amostra
+    distancia = abs((matiz - atual.matiz + 180) % 360 - 180)
+    if distancia > LIMIAR_MATIZ or abs(saturacao - atual.saturacao) > LIMIAR_SATURACAO:
+        return Cor(matiz, saturacao, atual.brilho)
+    return None
+
+
+def _segue(sessao: object) -> bool:
+    return _acompanhamento is sessao and acompanha_tela()
+
+
+def _dormir_na_sessao(sessao: object) -> bool:
+    """Dorme o intervalo em fatias; ``False`` assim que a sessão acaba ou o
+    interruptor desliga."""
+    limite = time.monotonic() + INTERVALO_DA_TELA
+    while True:
+        if not _segue(sessao):
+            return False
+        falta = limite - time.monotonic()
+        if falta <= 0:
+            return True
+        time.sleep(min(_FATIA, falta))
+
+
+def _acompanhar(sessao: object, alvos: list[Fita]) -> None:
+    """A thread da sessão: amostra a tela a cada intervalo e desliza até a
+    cor nova quando ela muda de verdade. Nunca levanta."""
+    while _dormir_na_sessao(sessao):
+        try:
+            _uma_amostra(sessao, alvos)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Falha ao acompanhar a cor da tela", exc_info=True)
+
+
+def _uma_amostra(sessao: object, alvos: list[Fita]) -> None:
+    global _cor_ambiente, _amostras_validas, _amostras_bloqueadas  # noqa: PLW0603
+    amostra = tela_do_jogo.cor_da_tela()
+    # A conferência da sessão, a do pulso e a reserva são uma coisa só, sob a
+    # trava: o fim da sessão ou uma conquista não cabem entre elas. Pulso
+    # tocando, a amostra fica para a rodada seguinte — o pulso volta à cor
+    # ambiente, e uma troca no meio dele seria atropelada.
+    with _TRAVA_PULSO:
+        if _acompanhamento is not sessao:
+            return
+        if amostra.tipo in ("cor", "sem_cor"):
+            _amostras_validas += 1
+        elif amostra.tipo == "bloqueada":
+            _amostras_bloqueadas += 1
+        if amostra.tipo != "cor" or _cor_ambiente is None or _pulsando:
+            return
+        nova = _proxima_cor(_cor_ambiente, amostra.cor)
+        if nova is None:
+            return
+        _cor_ambiente = nova
+        geracoes = _reservar(alvos)
+    _em_paralelo(
+        alvos, lambda fita: _deslizar(fita, nova, FADE_DA_TELA, geracoes[fita.id])
+    )
+
+
+def captura_bloqueada() -> bool:
+    """Se a sessão que acabou tentou acompanhar a tela e não viu imagem
+    nenhuma: tela cheia exclusiva. Zera a contagem — o aviso é um só."""
+    global _amostras_validas, _amostras_bloqueadas  # noqa: PLW0603
+    with _TRAVA_PULSO:
+        bloqueada = _amostras_bloqueadas > 0 and _amostras_validas == 0
+        _amostras_validas = _amostras_bloqueadas = 0
+    return bloqueada
+
+
+# endregion
 
 # region Pulso de conquista
 
@@ -1446,10 +1574,12 @@ def _encerrar_pulsos(alvos: Optional[list[Fita]] = None) -> Optional[dict[str, i
     """A sessão acabou (ou o app vai fechar): o pulso em curso para no próximo
     passo e a fila vai fora. Com ``alvos``, devolve a vez de cada um deles,
     tirada na mesma trava."""
-    global _jogo_da_sessao, _teste_do_pulso  # noqa: PLW0603
+    global _jogo_da_sessao, _teste_do_pulso, _acompanhamento, _cor_ambiente  # noqa: PLW0603
     with _TRAVA_PULSO:
         _jogo_da_sessao = None
         _teste_do_pulso = None
+        # Os contadores das amostras ficam: ``captura_bloqueada`` os lê depois.
+        _acompanhamento = _cor_ambiente = None
         _limpar_fila_de_pulsos()
         return _reservar(alvos) if alvos is not None else None
 
@@ -1584,8 +1714,11 @@ def _esperar_o_passo(dono: object, segundos: float) -> bool:
 
 
 def _base_do_pulso(dono: object) -> Cor:
-    """A cor de antes do pulso: a do app no teste, a do jogo na sessão."""
-    return cor_do_app() if isinstance(dono, _TesteDoPulso) else cor_do_jogo(dono)
+    """A cor de antes do pulso: a do app no teste; na sessão, a que a tela
+    deu por último, ou a do jogo."""
+    if isinstance(dono, _TesteDoPulso):
+        return cor_do_app()
+    return _cor_ambiente or cor_do_jogo(dono)
 
 
 def _pulsar(dono: object, tipo: str) -> None:

@@ -43,6 +43,10 @@ def _esquecer_conexoes():
     session_fita._fila_de_pulsos.clear()
     session_fita._pulsando = False
     session_fita._teste_do_pulso = None
+    # O acompanhamento da tela também.
+    session_fita._acompanhamento = None
+    session_fita._cor_ambiente = None
+    session_fita._amostras_validas = session_fita._amostras_bloqueadas = 0
 
 
 @pytest.fixture(autouse=True)
@@ -2564,3 +2568,220 @@ def test_esperar_ate_o_fim_com_o_dono_valido(pulso, monkeypatch):
     monkeypatch.setattr(session_fita.time, "sleep", fatias.append)
     assert session_fita._esperar_o_passo(pulso.jogo, 0.25) is True
     assert abs(sum(fatias) - 0.25) < 1e-9 and max(fatias) <= 0.1
+
+
+# region Cor da tela
+
+from cartridges.utils.tela_do_jogo import Amostra  # noqa: E402
+
+ATUAL = session_fita.Cor(100, 800, 180)
+
+
+def test_matiz_perto_nao_troca():
+    assert session_fita._proxima_cor(ATUAL, (110, 800)) is None
+
+
+def test_matiz_longe_troca_mantendo_o_brilho():
+    assert session_fita._proxima_cor(ATUAL, (130, 800)) == session_fita.Cor(130, 800, 180)
+
+
+def test_matiz_mede_pelo_lado_curto_do_circulo():
+    assert session_fita._proxima_cor(session_fita.Cor(350, 800, 180), (5, 800)) is None
+
+
+def test_saturacao_longe_troca():
+    assert session_fita._proxima_cor(ATUAL, (100, 500)) == session_fita.Cor(100, 500, 180)
+
+
+def test_saturacao_perto_nao_troca():
+    assert session_fita._proxima_cor(ATUAL, (100, 600)) is None
+
+
+@pytest.fixture
+def na_tela(fora_de_sessao, monkeypatch, schema, tmp_path):
+    """Uma sessão com o acompanhamento ligado e a tela trocada por uma fila de
+    amostras. Esgotada a fila, o interruptor desliga e o laço sai."""
+    schema.set_boolean("fita-acompanha-tela", True)
+    monkeypatch.setattr(session_fita, "INTERVALO_DA_TELA", 0)
+    monkeypatch.setattr(session_fita, "FADE_DA_TELA", 0)
+    fila = []
+    chamadas = {"n": 0}
+
+    def cor_da_tela():
+        chamadas["n"] += 1
+        if not fila:
+            schema.set_boolean("fita-acompanha-tela", False)
+            return Amostra("ignorada")
+        return fila.pop(0)
+
+    monkeypatch.setattr(session_fita.tela_do_jogo, "cor_da_tela", cor_da_tela)
+    jogo = _jogo(tmp_path)  # capa vermelha: matiz ~0
+    return SimpleNamespace(
+        modulo=fora_de_sessao.modulo,
+        tarefas=fora_de_sessao.tarefas,
+        jogo=jogo,
+        fila=fila,
+        chamadas=chamadas,
+    )
+
+
+def _comecar_com_tela(na_tela):
+    """Começa a sessão e veste a cor do jogo; devolve a tarefa do acompanhamento."""
+    session_fita.comecar(na_tela.jogo)
+    assert len(na_tela.tarefas) == 2
+    na_tela.tarefas.pop(0)()  # veste a cor do jogo
+    acompanhar = na_tela.tarefas.pop(0)
+    # Abrir a conexão agendou o batimento: ele não pode rodar aqui.
+    na_tela.tarefas.clear()
+    na_tela.modulo.recebidos.clear()
+    return acompanhar
+
+
+def _na_fita(cor):
+    return session_fita.hsv_hex(session_fita.na_fita(cor, session_fita.fitas()[0]))
+
+
+def _verde():
+    return session_fita.Cor(130, 900, session_fita.brilho_padrao())
+
+
+def test_sem_o_interruptor_nao_acompanha(na_tela, schema):
+    schema.set_boolean("fita-acompanha-tela", False)
+    session_fita.comecar(na_tela.jogo)
+    assert len(na_tela.tarefas) == 1
+
+
+def test_jogo_com_cor_manual_nao_acompanha(na_tela):
+    session_fita.salvar_cor(na_tela.jogo.game_id, "Jogo", session_fita.Cor(200, 900, 300))
+    session_fita.comecar(na_tela.jogo)
+    assert len(na_tela.tarefas) == 1
+
+
+def test_cor_nova_da_tela_desliza_ate_ela(na_tela):
+    acompanhar = _comecar_com_tela(na_tela)
+    na_tela.fila.append(Amostra("cor", (130, 900)))
+    acompanhar()
+    assert cor_mandada(na_tela.modulo) == _na_fita(_verde())
+    assert session_fita._cor_ambiente == _verde()
+
+
+def test_cor_parecida_nao_muda_a_luz(na_tela):
+    acompanhar = _comecar_com_tela(na_tela)
+    matiz, saturacao, _ = session_fita.cor_do_jogo(na_tela.jogo)
+    na_tela.fila.append(Amostra("cor", ((matiz + 10) % 360, saturacao)))
+    acompanhar()
+    assert na_tela.modulo.recebidos == []
+
+
+def test_sem_cor_e_ignorada_mantem_a_luz(na_tela):
+    acompanhar = _comecar_com_tela(na_tela)
+    na_tela.fila.extend([Amostra("sem_cor"), Amostra("ignorada")])
+    acompanhar()
+    assert na_tela.modulo.recebidos == []
+
+
+def test_pulso_tocando_pula_a_amostra(na_tela):
+    acompanhar = _comecar_com_tela(na_tela)
+    antes = session_fita._cor_ambiente
+    session_fita._pulsando = True
+    na_tela.fila.append(Amostra("cor", (130, 900)))
+    acompanhar()
+    assert na_tela.modulo.recebidos == []
+    assert session_fita._cor_ambiente == antes
+
+
+def test_o_pulso_volta_a_cor_da_tela(na_tela):
+    acompanhar = _comecar_com_tela(na_tela)
+    na_tela.fila.append(Amostra("cor", (130, 900)))
+    acompanhar()
+    session_fita.pulsar_conquista("normal")
+    na_tela.tarefas.pop(0)()
+    cores = _cores(na_tela.modulo)
+    assert _ouro() in cores
+    assert cores[-1] == _na_fita(_verde())
+
+
+def test_fim_da_sessao_para_o_acompanhamento(na_tela):
+    acompanhar = _comecar_com_tela(na_tela)
+    session_fita.voltar()
+    acompanhar()
+    assert na_tela.chamadas["n"] == 0
+
+
+def test_desligar_o_interruptor_para_o_acompanhamento(na_tela, schema):
+    acompanhar = _comecar_com_tela(na_tela)
+    schema.set_boolean("fita-acompanha-tela", False)
+    acompanhar()
+    assert na_tela.chamadas["n"] == 0
+
+
+def _antes_do_fade(monkeypatch, acao):
+    """Roda ``acao`` depois de a amostra reservar a vez e antes do fade."""
+    deslizar_de_verdade = session_fita._deslizar
+    feito = {"n": 0}
+
+    def deslizar(*args):
+        if not feito["n"]:
+            feito["n"] = 1
+            acao()
+        return deslizar_de_verdade(*args)
+
+    monkeypatch.setattr(session_fita, "_deslizar", deslizar)
+
+
+def test_fim_da_sessao_vence_o_fade_da_tela(na_tela, monkeypatch):
+    acompanhar = _comecar_com_tela(na_tela)
+
+    def encerrar():
+        session_fita.voltar()
+        na_tela.tarefas.pop()()  # a volta à cor do app roda já
+
+    _antes_do_fade(monkeypatch, encerrar)
+    na_tela.fila.append(Amostra("cor", (130, 900)))
+    acompanhar()
+    cores = _cores(na_tela.modulo)
+    assert _na_fita(_verde()) not in cores
+    assert cores[-1] == _na_fita(session_fita.cor_do_app())
+
+
+def test_conquista_vence_o_fade_da_tela(na_tela, monkeypatch):
+    acompanhar = _comecar_com_tela(na_tela)
+
+    def conquistar():
+        session_fita.pulsar_conquista("normal")
+        na_tela.tarefas.pop()()  # o pulso toca já
+
+    _antes_do_fade(monkeypatch, conquistar)
+    na_tela.fila.append(Amostra("cor", (130, 900)))
+    acompanhar()
+    cores = _cores(na_tela.modulo)
+    assert _ouro() in cores
+    assert cores[-1] == _na_fita(_verde())
+
+
+def test_sessao_toda_bloqueada_avisa(na_tela):
+    acompanhar = _comecar_com_tela(na_tela)
+    na_tela.fila.extend([Amostra("bloqueada"), Amostra("ignorada"), Amostra("bloqueada")])
+    acompanhar()
+    session_fita.voltar()
+    assert session_fita.captura_bloqueada() is True
+    assert session_fita.captura_bloqueada() is False
+
+
+def test_uma_amostra_valida_nao_avisa(na_tela):
+    acompanhar = _comecar_com_tela(na_tela)
+    na_tela.fila.extend([Amostra("bloqueada"), Amostra("sem_cor")])
+    acompanhar()
+    session_fita.voltar()
+    assert session_fita.captura_bloqueada() is False
+
+
+def test_sem_acompanhamento_nao_avisa(na_tela, schema):
+    schema.set_boolean("fita-acompanha-tela", False)
+    session_fita.comecar(na_tela.jogo)
+    session_fita.voltar()
+    assert session_fita.captura_bloqueada() is False
+
+
+# endregion
+
