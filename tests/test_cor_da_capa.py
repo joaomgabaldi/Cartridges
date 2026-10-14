@@ -6,7 +6,7 @@
 
 from PIL import Image
 
-from cartridges.utils.cor_da_capa import dominante
+from cartridges.utils.cor_da_capa import dominante, dominante_da_imagem
 
 
 def _capa(tmp_path, cor, detalhe=None):
@@ -48,3 +48,23 @@ def test_imagem_que_explode_ao_abrir_nao_levanta(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ImagemPIL, "open", explodir)
     assert dominante(tmp_path / "qualquer.png") is None
+
+
+# region Imagem já aberta (o print da tela)
+
+
+def test_imagem_vermelha_da_matiz_vermelha():
+    matiz, saturacao = dominante_da_imagem(Image.new("RGB", (200, 100), (220, 20, 20)))
+    assert matiz <= 5 or matiz >= 355
+    assert saturacao > 800
+
+
+def test_imagem_cinza_nao_tem_cor():
+    assert dominante_da_imagem(Image.new("RGB", (200, 100), (128, 128, 128))) is None
+
+
+def test_imagem_rgba_tambem_serve():
+    assert dominante_da_imagem(Image.new("RGBA", (50, 50), (20, 20, 220, 255))) is not None
+
+
+# endregion

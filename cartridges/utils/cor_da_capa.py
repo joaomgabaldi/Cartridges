@@ -17,7 +17,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A cor que resume a capa de um jogo, para vestir as fitas de LED.
+"""A cor que resume uma imagem — a capa de um jogo, ou a tela dele durante a
+sessão —, para vestir as fitas de LED.
 
 Dominante aqui não é "a que ocupa mais pixels": numa capa a cor mais comum
 costuma ser o preto do fundo ou o cinza de uma moldura, e nenhum dos dois diz
@@ -54,7 +55,7 @@ def dominante(capa: Path) -> Optional[tuple[int, int]]:
     """
     try:
         with Image.open(capa) as imagem:
-            amostra = imagem.convert("RGB").resize(AMOSTRA)
+            return dominante_da_imagem(imagem)
     # A captura é larga de propósito. As capas vêm de fora — download da
     # SteamGridDB, da Wallhaven, arquivo que o usuário escolheu — e a Pillow
     # tem um jeito diferente de reclamar de cada defeito: arquivo truncado,
@@ -65,6 +66,11 @@ def dominante(capa: Path) -> Optional[tuple[int, int]]:
         logging.info("Capa sem cor legível (%s): %s", capa.name, erro)
         return None
 
+
+def dominante_da_imagem(imagem: Image.Image) -> Optional[tuple[int, int]]:
+    """A mesma conta de ``dominante``, para uma imagem já aberta: o print da
+    tela do jogo não passa por arquivo."""
+    amostra = imagem.convert("RGB").resize(AMOSTRA)
     paleta = amostra.quantize(colors=CORES, method=Image.Quantize.FASTOCTREE)
     contagens = paleta.convert("RGB").getcolors(AMOSTRA[0] * AMOSTRA[1]) or []
 
