@@ -3230,6 +3230,7 @@ def test_troca_grande_desliza_direto_sem_apagar(fade_da_tela):
     fade_da_tela.fila.extend([Amostra("cor", (200, 1000))] * 2)
     acompanhar()
     passos = _matizes_e_brilhos(fade_da_tela.modulo)
+    assert 80 <= len(passos) <= 95  # um fade de verdade, e não um salto
     assert min(brilho for _, brilho in passos) > session_fita.BRILHO_MINIMO
     # Pelo lado curto do círculo: de 0 a 200 descendo por 359, 300, 250...
     assert all(matiz == 0 or matiz >= 200 for matiz, _ in passos)
