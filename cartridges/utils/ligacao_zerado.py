@@ -77,6 +77,13 @@ def _mover_escolhas(zerado: Game, jogo: Game) -> None:
         session_fita.escolhida(jogo.game_id)
     ):
         session_fita.salvar_cor(jogo.game_id, jogo.name, cor)
+    elif (
+        (brilho := session_fita.brilho_escolhido(zerado.game_id)) is not None
+        and session_fita.brilho_gravado(jogo.game_id) is None
+    ):
+        # Só o brilho próprio: também é escolha do zerado, e o arquivo dele
+        # vai embora com a ligação.
+        session_fita.salvar_brilho(jogo.game_id, jogo.name, brilho)
 
 
 def ligar_zerado(jogo: Game) -> bool:

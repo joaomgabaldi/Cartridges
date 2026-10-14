@@ -3539,3 +3539,98 @@ def test_previa_em_curso_pinta_com_a_calibracao_gravada_depois(falsas, monkeypat
     finally:
         session_fita._previa_vivas.discard(velha.id)
     assert session_fita.cor_de_hex(cor_mandada(modulos["eb0"])).matiz == 352
+
+
+# region Fade direto e pendências da iluminação
+
+
+def test_fade_entre_cores_quase_opostas_passa_por_um_tom_apagado():
+    """Misturadas (e não giradas pela roda), cores quase opostas — azul
+    esverdeado e laranja, os pares do CONTROL no quinto teste — se dissolvem
+    por um tom de pouca saturação. (Entre azul puro e vermelho, a mistura das
+    duas luzes é roxa, e o caminho fica igual ao da roda.)"""
+    origem = session_fita.Cor(200, 1000, 1000)
+    destino = session_fita.Cor(10, 1000, 1000)
+    for cor_hex in session_fita._degraus(origem, destino, 60):
+        cor = session_fita.cor_de_hex(cor_hex)
+        longe = min(
+            abs((cor.matiz - 200 + 180) % 360 - 180), abs((cor.matiz - 10 + 180) % 360 - 180)
+        ) > 25
+        if longe:
+            assert cor.saturacao < 600, cor
+
+
+def test_fade_direto_nao_escurece_no_meio():
+    origem = session_fita.Cor(200, 1000, 800)
+    destino = session_fita.Cor(10, 1000, 800)
+    brilhos = [session_fita.cor_de_hex(c).brilho for c in session_fita._degraus(origem, destino, 60)]
+    assert min(brilhos) >= 790
+
+
+def test_fade_entre_tons_vizinhos_continua_entre_eles():
+    origem = session_fita.Cor(0, 1000, 500)
+    destino = session_fita.Cor(30, 1000, 500)
+    for cor_hex in session_fita._degraus(origem, destino, 30):
+        assert 0 <= session_fita.cor_de_hex(cor_hex).matiz <= 30
+
+
+def test_cada_fade_da_fita_vai_para_o_log(fade_da_tela, caplog):
+    acompanhar = _comecar_com_tela(fade_da_tela)
+    fade_da_tela.fila.extend([Amostra("cor", (200, 1000))] * 2)
+    with caplog.at_level("INFO"):
+        acompanhar()
+    linhas = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Fade de")]
+    assert linhas and "Fita 0" in linhas[0]
+    assert "degraus" in linhas[0] and "confirmou" in linhas[0]
+
+
+def test_fade_interrompido_espera_pouco_pela_fita(falsas, monkeypatch, schema):
+    """Um pulso que toma a vez no meio de um fade não espera os até 3 s da
+    confirmação do último degrau — só um instante, para a fita aplicar o que
+    já recebeu antes do comando dele."""
+    modulos = falsas(False)
+    fita = session_fita.fitas()[0]
+    esperas = []
+    monkeypatch.setattr(
+        session_fita, "_alcancou", lambda modulo, valores, prazo=None: esperas.append((valores, prazo)) or True
+    )
+    monkeypatch.setattr(session_fita.time, "sleep", lambda _s: None)
+    vez = session_fita._reservar([fita])[fita.id]
+    mandar_de_verdade = modulos["eb0"].set_multiple_values
+
+    def mandar(valores, nowait=False):
+        session_fita._reservar([fita])  # outra troca toma a vez no meio
+        return mandar_de_verdade(valores, nowait)
+
+    modulos["eb0"].set_multiple_values = mandar
+    caminho = session_fita._degraus(session_fita.Cor(0, 1000, 500), session_fita.Cor(200, 1000, 500), 30)
+    session_fita._rajada(fita, caminho, vez)
+    # Uma espera curta, e não a inteira: sem ela o comando do pulso chegava
+    # antes de a fita aplicar os degraus que já tinha recebido, e falhava.
+    assert len(esperas) == 1
+    assert esperas[0][1] == session_fita.ESPERA_NA_INTERRUPCAO
+
+
+def test_voltar_ao_automatico_com_so_brilho_proprio_mantem_o_brilho(tmp_path, schema):
+    jogo = _jogo(tmp_path)
+    session_fita.salvar_brilho(jogo.game_id, jogo.name, 300)
+    session_fita.redefinir(jogo.game_id)
+    assert session_fita.brilho_escolhido(jogo.game_id) == 300
+
+
+def test_retentativa_atropelada_por_outra_troca_nao_volta_a_suspensao(pulso, relogio, monkeypatch):
+    """Outra troca tomou a vez no meio da nova tentativa: a fita não falhou,
+    e não pode voltar à suspensão por isso."""
+    _suspender("eb0")
+    fita = session_fita.fitas()[0]
+
+    def transitar_atropelado(*_args):
+        session_fita._reservar([fita])
+        return False
+
+    monkeypatch.setattr(session_fita, "_transitar", transitar_atropelado)
+    session_fita._retentar_suspensas(session_fita._acompanhamento)
+    assert "eb0" not in session_fita._suspensas
+
+
+# endregion

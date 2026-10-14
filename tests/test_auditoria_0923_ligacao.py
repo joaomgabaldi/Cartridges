@@ -346,3 +346,15 @@ def test_apply_fecha_sem_salvar_se_o_zerado_sumiu_da_store(store, real_window, m
     assert salvou == []
     assert fechou == [1]
     assert store.get(zerado.game_id) is None
+
+
+def test_brilho_proprio_do_zerado_vai_para_o_jogo(store, ligar):
+    from cartridges.utils import session_fita  # noqa: PLC0415
+
+    zerado = jogo(store, 1, removed=True, status="beaten", steam_appid="570")
+    vivo = jogo(store, 2, steam_appid="570")
+    session_fita.salvar_brilho(zerado.game_id, zerado.name, 300)
+
+    assert ligar(vivo) is True
+    assert session_fita.brilho_escolhido(vivo.game_id) == 300
+    assert not session_fita.escolhida(vivo.game_id)

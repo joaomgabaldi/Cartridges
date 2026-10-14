@@ -202,7 +202,9 @@ def redefinir(game_id: str) -> None:
     """Devolve o jogo à cor automática. O brilho da escolha fica, como brilho
     próprio: "voltar ao automático" é sobre a cor."""
     dados = _ler_sidecar(game_id)
-    brilho = _brilho_de(dados) if dados and dados.get("locked") else None
+    if dados and not dados.get("locked"):
+        return  # só brilho próprio: não há cor escolhida a desfazer
+    brilho = _brilho_de(dados) if dados else None
     if brilho is not None and brilho != brilho_padrao():
         salvar_brilho(game_id, str(dados.get("name", "")), brilho)
         return
@@ -786,8 +788,15 @@ _geracoes: dict[str, int] = {}
 def _degraus(origem: Cor, destino: Cor, passos: int) -> list[str]:
     """As cores do caminho, sem a origem e com o destino, em hexadecimal.
 
-    A matiz vai pelo lado mais curto do círculo: do vermelho ao roxo passa pelo
-    magenta, e não dá a volta pelo verde e pelo azul.
+    O caminho é a mistura das duas cores, como duas luzes que se dissolvem uma
+    na outra, e não um giro pela roda de cores. No quinto teste, as trocas
+    entre o azul (~200°) e o vermelho ou laranja (~10–30°) do CONTROL passavam
+    pela roda por roxo, magenta e rosa vivos — as "cores aleatórias" do meio.
+    Entre cores quase opostas como essas, a mistura passa por um tom de pouca
+    saturação. Entre cores mais próximas (azul puro e vermelho, a uns 120°) a
+    mistura das duas luzes é de fato roxa, e o caminho fica como o da roda.
+    O brilho vai em linha reta de uma ponta à outra: a mistura sozinha
+    escureceria o meio.
     """
     return [cor_hex for _passo, cor_hex in _degraus_no_passo(origem, destino, passos)]
 
@@ -796,15 +805,18 @@ def _degraus_no_passo(origem: Cor, destino: Cor, passos: int) -> list[tuple[int,
     """Os degraus de ``_degraus`` com o número do passo de cada um (1 a
     ``passos``): sem os repetidos, um fade que muda pouco tem poucos degraus,
     e quem quer a duração inteira agenda cada um pelo passo dele."""
-    matiz = (destino.matiz - origem.matiz + 180) % 360 - 180
+    de_rgb = colorsys.hsv_to_rgb(origem.matiz / 360, origem.saturacao / 1000, 1)
+    para_rgb = colorsys.hsv_to_rgb(destino.matiz / 360, destino.saturacao / 1000, 1)
     caminho = []
     anterior = hsv_hex(origem)
     for passo in range(1, passos + 1):
         andado = passo / passos
+        misturada = [a + (b - a) * andado for a, b in zip(de_rgb, para_rgb)]
+        matiz, saturacao, _valor = colorsys.rgb_to_hsv(*misturada)
         cor_hex = hsv_hex(
             Cor(
-                round(origem.matiz + matiz * andado) % 360,
-                round(origem.saturacao + (destino.saturacao - origem.saturacao) * andado),
+                round(matiz * 360) % 360,
+                round(saturacao * 1000),
                 round(origem.brilho + (destino.brilho - origem.brilho) * andado),
             )
         )
@@ -820,6 +832,12 @@ def _degraus_no_passo(origem: Cor, destino: Cor, passos: int) -> list[tuple[int,
 def _vigente(fita: Fita, geracao: int) -> bool:
     return _geracoes.get(fita.id) == geracao
 
+
+# Quanto o fade interrompido ainda espera a fita: a espera inteira
+# (ESPERA_AVISO) segurava o pulso que o interrompeu por até 3 s; sem espera
+# nenhuma, o comando do pulso chegava antes de a fita aplicar os degraus que já
+# tinha recebido, e a confirmação dele podia estourar o prazo.
+ESPERA_NA_INTERRUPCAO = 0.6
 
 # Os códigos das mensagens da fita no protocolo Tuya que importam aqui: o
 # aviso de estado, que ela manda depois de aplicar um comando (o ``STATUS`` da
@@ -908,20 +926,39 @@ def _rajada(
     def degraus(modulo: Any) -> Any:
         inicio = time.monotonic()
         ultimo = None
+        enviados = 0
         for indice, cor_hex in enumerate(caminho):
             if not _vigente(fita, geracao):
-                break
+                # Outra troca tomou a vez: só um instante para a fita aplicar
+                # o que já recebeu (ver ESPERA_NA_INTERRUPCAO).
+                if ultimo is not None:
+                    _alcancou(modulo, {DP_COR: ultimo}, ESPERA_NA_INTERRUPCAO)
+                logging.info(
+                    "Fade de %s interrompido depois de %s de %s degraus",
+                    fita.nome, enviados, len(caminho),
+                )
+                return True
             resposta = modulo.set_multiple_values({DP_COR: cor_hex}, nowait=True)
             if isinstance(resposta, dict) and resposta.get("Error"):
                 return resposta
             ultimo = cor_hex
+            enviados += 1
             _mostrada[fita.id] = (True, cor_hex)
             momento = momentos[indice] if momentos else (indice + 1) / RITMO_FADE
             falta = inicio + momento - time.monotonic()
             if falta > 0:
                 time.sleep(falta)
-        if ultimo is not None:
-            _alcancou(modulo, {DP_COR: ultimo})
+        confirmou = ultimo is not None and _alcancou(modulo, {DP_COR: ultimo})
+        # Uma linha por fita e por fade, para investigar a perda de
+        # sincronismo entre elas: quando cada uma começou e terminou, e se
+        # avisou que chegou ao último degrau.
+        logging.info(
+            "Fade de %s: %s degraus em %.1f s, %s",
+            fita.nome,
+            enviados,
+            time.monotonic() - inicio,
+            "confirmou" if confirmou else "não confirmou o último degrau",
+        )
         return True
 
     _conversar(fita, degraus)
@@ -1837,8 +1874,12 @@ def _retentar_suspensas(sessao: object) -> bool:
         if _transitar(fita, True, hsv_hex(na_fita(cor, fita)), geracoes[fita.id]):
             logging.info("Fita %s voltou a responder", fita.nome)
             return
-        # Falhou, ou outra troca tomou a vez no meio: não se sabe se a fita
-        # responde, e ela espera a rodada seguinte suspensa.
+        if not _falhas.get(fita.id) and not _vigente(fita, geracoes[fita.id]):
+            # Outra troca tomou a vez no meio, e a fita não falhou: ela fica
+            # fora da suspensão, e a troca que venceu fala com ela. Devolvê-la
+            # à suspensão aqui, a cada coincidência, somava tempo fora do ar
+            # que não houve — e o aviso falso no fim da sessão.
+            return
         _suspensas.add(fita.id)
         _suspensa_em[fita.id] = inicio
 
