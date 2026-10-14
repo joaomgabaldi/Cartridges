@@ -1327,7 +1327,7 @@ def comecar(game: "Game") -> None:
         return
     _em_thread(lambda: _vestir_o_jogo(game, alvos, geracoes, sessao))
     if acompanha_tela() and not escolhida(game.game_id):
-        _em_thread(lambda: _acompanhar(sessao, alvos))
+        _em_thread(lambda: _acompanhar(sessao))
 
 
 def _vestir_o_jogo(
@@ -1372,6 +1372,11 @@ FADE_DA_TELA = 6
 LIMIAR_MATIZ = 20
 LIMIAR_SATURACAO = 250
 
+# Quantas amostras bloqueadas, sem nenhuma boa, fazem o aviso do fim da
+# sessão. Uma só pode ser a tela preta de carregamento numa sessão curta, e o
+# aviso mandaria para o modo janela quem já está nele.
+BLOQUEADAS_PARA_AVISAR = 2
+
 # O marcador da sessão que está sendo acompanhada (ver ``comecar``), a cor que
 # as fitas vestem agora nela, e quantas amostras da sessão vieram com imagem
 # e quantas bloqueadas. Escritos sob ``_TRAVA_PULSO``.
@@ -1413,10 +1418,20 @@ def _dormir_na_sessao(sessao: object) -> bool:
         time.sleep(min(_FATIA, falta))
 
 
-def _acompanhar(sessao: object, alvos: list[Fita]) -> None:
+def _acompanhar(sessao: object) -> None:
     """A thread da sessão: amostra a tela a cada intervalo e desliza até a
-    cor nova quando ela muda de verdade. Nunca levanta."""
+    cor nova quando ela muda de verdade. Nunca levanta.
+
+    A iluminação desligada no meio da sessão encerra o acompanhamento, como
+    encerra o pulso. As fitas são relidas a cada amostra, e não guardadas do
+    começo: a removida no assistente já foi devolvida e não pode ser pintada.
+    Conferido aqui, uma vez por intervalo, e não em ``_dormir_na_sessao``:
+    ``ligada`` lê o arquivo das fitas, e o sono confere dez vezes por segundo.
+    """
     while _dormir_na_sessao(sessao):
+        alvos = _guardadas() if ligada() else []
+        if not alvos:
+            return
         try:
             _uma_amostra(sessao, alvos)
         except Exception:  # pylint: disable=broad-exception-caught
@@ -1454,7 +1469,7 @@ def captura_bloqueada() -> bool:
     nenhuma: tela cheia exclusiva. Zera a contagem — o aviso é um só."""
     global _amostras_validas, _amostras_bloqueadas  # noqa: PLW0603
     with _TRAVA_PULSO:
-        bloqueada = _amostras_bloqueadas > 0 and _amostras_validas == 0
+        bloqueada = _amostras_bloqueadas >= BLOQUEADAS_PARA_AVISAR and _amostras_validas == 0
         _amostras_validas = _amostras_bloqueadas = 0
     return bloqueada
 

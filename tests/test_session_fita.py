@@ -2768,6 +2768,24 @@ def test_sessao_toda_bloqueada_avisa(na_tela):
     assert session_fita.captura_bloqueada() is False
 
 
+
+def test_uma_so_amostra_preta_nao_avisa(na_tela):
+    """Sessão curta com uma única amostra preta pode ser só a tela de
+    carregamento: não basta para dizer que a captura foi bloqueada."""
+    acompanhar = _comecar_com_tela(na_tela)
+    na_tela.fila.append(Amostra("bloqueada"))
+    acompanhar()
+    session_fita.voltar()
+    assert session_fita.captura_bloqueada() is False
+
+
+def test_iluminacao_desligada_na_sessao_para_de_acompanhar(na_tela, schema):
+    acompanhar = _comecar_com_tela(na_tela)
+    schema.set_boolean("session-fita", False)
+    na_tela.fila.append(Amostra("cor", (130, 900)))
+    acompanhar()
+    assert na_tela.modulo.recebidos == []
+
 def test_uma_amostra_valida_nao_avisa(na_tela):
     acompanhar = _comecar_com_tela(na_tela)
     na_tela.fila.extend([Amostra("bloqueada"), Amostra("sem_cor")])
