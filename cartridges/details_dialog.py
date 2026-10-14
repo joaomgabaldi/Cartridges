@@ -87,7 +87,13 @@ FOLGA_SATURACAO = 10
 
 
 def _mesma_cor(uma: session_fita.Cor, outra: session_fita.Cor) -> bool:
-    """Se duas cores são a mesma cor aos olhos — não ao bit.
+    """Se duas cores são a mesma cor aos olhos — não ao bit."""
+    return _mesmo_tom(uma, outra) and uma.brilho == outra.brilho
+
+
+def _mesmo_tom(uma: session_fita.Cor, outra: session_fita.Cor) -> bool:
+    """Matiz e saturação, sem o brilho: o brilho de cada jogo é separado da
+    escolha de cor.
 
     A distância de matiz é circular: 359 e 0 são vizinhos, e um vermelho de
     capa cai bem em cima dessa emenda.
@@ -96,7 +102,6 @@ def _mesma_cor(uma: session_fita.Cor, outra: session_fita.Cor) -> bool:
     return (
         min(distancia, 360 - distancia) <= FOLGA_MATIZ
         and abs(uma.saturacao - outra.saturacao) <= FOLGA_SATURACAO
-        and uma.brilho == outra.brilho
     )
 
 
@@ -1246,7 +1251,10 @@ class DetailsDialog(Adw.Dialog):
             and session_fita.escolhida(self.game.game_id)
         ):
             return session_fita.cor_do_jogo(self.game)
-        return session_fita.cor_da_capa(self.game_cover.path)
+        # O brilho do jogo fica, inclusive o de uma escolha que vai ser
+        # desfeita: "voltar ao automático" é sobre a cor.
+        brilho = session_fita.cor_do_jogo(self.game).brilho if self.game else None
+        return session_fita.cor_da_capa(self.game_cover.path, brilho)
 
     def atualizar_fita(self) -> None:
         """Mostra a cor que vale hoje: a escolhida ou a que sai da capa."""
@@ -1297,7 +1305,7 @@ class DetailsDialog(Adw.Dialog):
             session_fita.acompanha_tela()
             and self._fita_mostrada is not None
             and not self._fita_manual()
-            and _mesma_cor(self._cor_na_tela(), self._fita_mostrada)
+            and _mesmo_tom(self._cor_na_tela(), self._fita_mostrada)
         )
 
     def fita_segue_capa(self) -> None:
@@ -1391,7 +1399,10 @@ class DetailsDialog(Adw.Dialog):
         # jogo novo ganha a capa neste mesmo Aplicar, e o automático mudaria
         # debaixo da comparação sem que ninguém tivesse mexido na cor.
         mostrada = self._fita_mostrada
-        escolha_nova = mostrada is not None and not _mesma_cor(na_tela, mostrada)
+        # Cor e brilho separados: mexer só no brilho não é escolher cor, e o
+        # jogo segue na cor automática com um brilho próprio.
+        escolha_nova = mostrada is not None and not _mesmo_tom(na_tela, mostrada)
+        brilho_novo = mostrada is not None and na_tela.brilho != mostrada.brilho
 
         if escolha_nova:
             # Uma cor escolhida depois do clique em "voltar ao automático"
@@ -1399,10 +1410,14 @@ class DetailsDialog(Adw.Dialog):
             session_fita.salvar_cor(game.game_id, game.name, na_tela)
         elif self._fita_redefinir:
             session_fita.redefinir(game.game_id)
+            if brilho_novo:
+                session_fita.salvar_brilho(game.game_id, game.name, na_tela.brilho)
         elif session_fita.escolhida(game.game_id):
             # Nada mudou, mas a escolha é regravada: como a do papel de parede,
             # ela guarda o nome do jogo, e o que vale é o nome deste Aplicar.
             session_fita.salvar_cor(game.game_id, game.name, na_tela)
+        elif brilho_novo:
+            session_fita.salvar_brilho(game.game_id, game.name, na_tela.brilho)
 
         self._fita_redefinir = False
 

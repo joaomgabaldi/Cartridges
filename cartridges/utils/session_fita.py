@@ -194,11 +194,55 @@ def salvar_cor(game_id: str, name: str, cor: Cor) -> None:
 
 
 def redefinir(game_id: str) -> None:
-    """Devolve o jogo à cor automática."""
+    """Devolve o jogo à cor automática. O brilho da escolha fica, como brilho
+    próprio: "voltar ao automático" é sobre a cor."""
+    dados = _ler_sidecar(game_id)
+    brilho = _brilho_de(dados) if dados and dados.get("locked") else None
+    if brilho is not None and brilho != brilho_padrao():
+        salvar_brilho(game_id, str(dados.get("name", "")), brilho)
+        return
+    _apagar_sidecar(game_id)
+
+
+def _apagar_sidecar(game_id: str) -> None:
     try:
         _sidecar(game_id).unlink(missing_ok=True)
     except OSError as erro:
         logging.warning("Não foi possível apagar a cor da fita: %s", erro)
+
+
+def _brilho_de(dados: dict[str, Any]) -> Optional[int]:
+    """O brilho gravado, ou ``None`` se ele não estiver lá ou for ilegível
+    (sidecar mexido à mão)."""
+    try:
+        return max(BRILHO_MINIMO, min(BRILHO_CHEIO, int(dados["brilho"])))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def brilho_escolhido(game_id: str) -> Optional[int]:
+    """O brilho próprio de um jogo com cor automática, ou ``None``.
+
+    O brilho é separado da cor: mexer só nele não tira o jogo da cor
+    automática (da capa, ou da tela). Jogo com cor escolhida à mão tem o
+    brilho dentro da escolha, e aqui volta ``None``.
+    """
+    dados = _ler_sidecar(game_id)
+    if not dados or dados.get("locked"):
+        return None
+    return _brilho_de(dados)
+
+
+def salvar_brilho(game_id: str, name: str, brilho: int) -> None:
+    """Guarda o brilho próprio de um jogo com cor automática. O brilho padrão
+    não é guardado: o jogo segue o padrão, e mudar o padrão o alcança."""
+    if brilho == brilho_padrao():
+        _apagar_sidecar(game_id)
+        return
+    _gravar_json(
+        _sidecar(game_id),
+        {"name": name, "brilho": brilho, "locked": False, "timestamp": int(time.time())},
+    )
 
 
 # O módulo conta o brilho de 0 a 1000; gente conta de 0 a 100. A conversão mora
@@ -250,18 +294,20 @@ def cor_do_jogo(game: "Game") -> Cor:
         except (TypeError, ValueError):
             logging.warning("Cor da fita de %s ilegível; vale a automática", game.game_id)
 
-    return cor_da_capa(game.get_cover_path())
+    brilho = _brilho_de(dados) if dados and not dados.get("locked") else None
+    return cor_da_capa(game.get_cover_path(), brilho)
 
 
-def cor_da_capa(capa: Optional[Path]) -> Cor:
-    """A cor automática desta capa, ou o roxo do app sem capa ou sem cor útil.
+def cor_da_capa(capa: Optional[Path], brilho: Optional[int] = None) -> Cor:
+    """A cor automática desta capa, ou o roxo do app sem capa ou sem cor útil,
+    no brilho próprio do jogo (``brilho``) ou no padrão.
 
     Separada de ``cor_do_jogo`` para a tela de detalhes, que mostra a capa
     ainda não aplicada e não a gravada no disco.
     """
     da_capa = dominante(capa) if capa else None
     matiz, saturacao = da_capa if da_capa else tom_do_app()
-    return Cor(matiz, saturacao, brilho_padrao())
+    return Cor(matiz, saturacao, brilho_padrao() if brilho is None else brilho)
 
 
 def cor_para_rgba(cor: Cor) -> Any:

@@ -3172,7 +3172,8 @@ def test_cor_escolhida_nao_e_automatica(tela, schema):
     assert dialog.fita_button_reset.get_tooltip_text() == "Voltar ao automático"
 
 
-def test_mexer_no_brilho_redesenha_a_amostra(tela, schema):
+def test_mexer_no_brilho_mantem_a_cor_automatica(tela, schema):
+    """O brilho é separado da cor: mexido, a roda continua."""
     schema.set_boolean("fita-acompanha-tela", True)
     dialog, _jogo = tela
     dialog.atualizar_fita()
@@ -3180,7 +3181,7 @@ def test_mexer_no_brilho_redesenha_a_amostra(tela, schema):
     dialog.fita_amostra.queue_draw = lambda: desenhos.append(1)
     dialog.fita_brilho_row.set_value(dialog.fita_brilho_row.get_value() - 5)
     assert desenhos
-    assert dialog._fita_automatica() is False
+    assert dialog._fita_automatica() is True
 
 
 def test_cor_mexida_e_nao_aplicada_mostra_a_bolinha(tela, schema):
@@ -3250,6 +3251,89 @@ def test_fim_da_sessao_no_escuro_nao_acende_a_cor_nova(fade_da_tela, monkeypatch
     fade_da_tela.fila.extend([Amostra("cor", (200, 1000))] * 2)
     acompanhar()
     assert 200 not in {matiz for matiz, _ in _matizes_e_brilhos(modulo)}
+
+
+# endregion
+
+
+
+# region Brilho por jogo
+
+
+def test_brilho_proprio_nao_e_cor_escolhida(tmp_path, schema):
+    jogo = _jogo(tmp_path)
+    session_fita.salvar_brilho(jogo.game_id, jogo.name, 300)
+    assert not session_fita.escolhida(jogo.game_id)
+    assert session_fita.cor_escolhida(jogo.game_id) is None
+    assert session_fita.brilho_escolhido(jogo.game_id) == 300
+    automatica = session_fita.cor_da_capa(jogo.get_cover_path())
+    assert session_fita.cor_do_jogo(jogo) == automatica._replace(brilho=300)
+
+
+def test_brilho_igual_ao_padrao_nao_e_gravado(tmp_path, schema):
+    jogo = _jogo(tmp_path)
+    session_fita.salvar_brilho(jogo.game_id, jogo.name, 300)
+    session_fita.salvar_brilho(jogo.game_id, jogo.name, session_fita.brilho_padrao())
+    assert session_fita.brilho_escolhido(jogo.game_id) is None
+    assert not session_fita._sidecar(jogo.game_id).exists()
+
+
+def test_voltar_ao_automatico_mantem_o_brilho(tmp_path, schema):
+    jogo = _jogo(tmp_path)
+    session_fita.salvar_cor(jogo.game_id, jogo.name, session_fita.Cor(200, 900, 300))
+    session_fita.redefinir(jogo.game_id)
+    assert not session_fita.escolhida(jogo.game_id)
+    assert session_fita.brilho_escolhido(jogo.game_id) == 300
+
+
+def test_voltar_ao_automatico_com_o_brilho_padrao_apaga_tudo(tmp_path, schema):
+    jogo = _jogo(tmp_path)
+    cor = session_fita.Cor(200, 900, session_fita.brilho_padrao())
+    session_fita.salvar_cor(jogo.game_id, jogo.name, cor)
+    session_fita.redefinir(jogo.game_id)
+    assert not session_fita._sidecar(jogo.game_id).exists()
+
+
+def test_brilho_ilegivel_vale_o_padrao(tmp_path, schema):
+    jogo = _jogo(tmp_path)
+    session_fita._sidecar(jogo.game_id).parent.mkdir(parents=True, exist_ok=True)
+    session_fita._sidecar(jogo.game_id).write_text(
+        '{"name": "Jogo", "brilho": null, "locked": false}', encoding="utf-8"
+    )
+    assert session_fita.brilho_escolhido(jogo.game_id) is None
+    assert session_fita.cor_do_jogo(jogo).brilho == session_fita.brilho_padrao()
+
+
+def test_aplicar_so_o_brilho_mantem_o_automatico(tela, schema):
+    schema.set_boolean("fita-acompanha-tela", True)
+    dialog, jogo = tela
+    dialog.atualizar_fita()
+    dialog.fita_brilho_row.set_value(40)
+    dialog.aplicar_fita(jogo)
+    assert not session_fita.escolhida(jogo.game_id)
+    assert session_fita.brilho_escolhido(jogo.game_id) == session_fita.de_por_cento(40)
+    dialog.atualizar_fita()
+    assert dialog.fita_row.get_subtitle() == "Automático"
+    assert dialog.fita_brilho_row.get_value() == 40
+
+
+def test_aplicar_o_brilho_de_volta_ao_padrao_apaga_o_proprio(tela, schema):
+    dialog, jogo = tela
+    session_fita.salvar_brilho(jogo.game_id, jogo.name, 400)
+    dialog.atualizar_fita()
+    dialog.fita_brilho_row.set_value(session_fita.por_cento(session_fita.brilho_padrao()))
+    dialog.aplicar_fita(jogo)
+    assert session_fita.brilho_escolhido(jogo.game_id) is None
+
+
+def test_aplicar_a_cor_continua_sendo_escolha_manual(tela, schema):
+    dialog, jogo = tela
+    dialog.atualizar_fita()
+    dialog.fita_color_button.set_property(
+        "rgba", session_fita.cor_para_rgba(session_fita.Cor(120, 1000, 0))
+    )
+    dialog.aplicar_fita(jogo)
+    assert session_fita.escolhida(jogo.game_id)
 
 
 # endregion
