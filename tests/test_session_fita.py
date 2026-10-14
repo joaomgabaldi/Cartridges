@@ -47,6 +47,15 @@ def _esquecer_conexoes():
     session_fita._acompanhamento = None
     session_fita._cor_ambiente = session_fita._teto_da_sessao = None
     session_fita._amostras_validas = session_fita._amostras_bloqueadas = 0
+    session_fita._suspensa_em.clear()
+    session_fita._fora_do_ar.clear()
+
+
+@pytest.fixture(autouse=True)
+def sem_vigia(monkeypatch):
+    """A vigia das fitas fora do ar roda em laço a sessão inteira: nos testes
+    ela não sobe sozinha. Os dela chamam uma rodada de cada vez."""
+    monkeypatch.setattr(session_fita, "_comecar_vigia", lambda _sessao: None)
 
 
 @pytest.fixture(autouse=True)
@@ -2904,6 +2913,102 @@ def test_fim_da_sessao_bloqueada_mostra_o_aviso(real_window, monkeypatch, make_g
 
 def test_fim_da_sessao_normal_nao_avisa(real_window, monkeypatch, make_game):
     assert AVISO_DA_TELA not in _sessao_na_janela(real_window, monkeypatch, make_game, False)
+
+
+# endregion
+
+
+
+# region Fitas fora do ar na sessão
+
+
+@pytest.fixture
+def relogio(monkeypatch):
+    agora = {"t": 1000.0}
+    monkeypatch.setattr(session_fita, "_agora", lambda: agora["t"])
+    return agora
+
+
+def _suspender(fita_id):
+    fita = next(f for f in session_fita.fitas() if f.id == fita_id)
+    for _ in range(session_fita.FALHAS_PARA_SUSPENDER):
+        session_fita._contar_falha(fita)
+    assert fita_id in session_fita._suspensas
+
+
+def test_comecar_sobe_a_vigia_mesmo_sem_a_tela(pulso, monkeypatch, schema):
+    sessoes = []
+    monkeypatch.setattr(session_fita, "_comecar_vigia", sessoes.append)
+    session_fita.comecar(pulso.jogo)
+    assert sessoes == [session_fita._acompanhamento]
+
+
+def test_fita_suspensa_volta_na_retentativa(pulso, relogio):
+    _suspender("eb0")
+    sessao = session_fita._acompanhamento
+    assert session_fita._retentar_suspensas(sessao) is True
+    assert "eb0" not in session_fita._suspensas
+    cor_do_jogo = session_fita.cor_do_jogo(pulso.jogo)
+    assert cor_mandada(pulso.modulo) == session_fita.hsv_hex(
+        session_fita.na_fita(cor_do_jogo, session_fita.fitas()[0])
+    )
+
+
+def test_fita_que_falha_na_retentativa_volta_a_ser_suspensa(pulso, relogio):
+    _suspender("eb0")
+    pulso.modulo.quebrada = True
+    session_fita._retentar_suspensas(session_fita._acompanhamento)
+    assert "eb0" in session_fita._suspensas
+    assert session_fita._falhas["eb0"] == 1  # uma tentativa só, e não três
+
+
+def test_retentativa_para_no_fim_da_sessao(pulso, relogio):
+    _suspender("eb0")
+    sessao = session_fita._acompanhamento
+    session_fita.voltar()
+    assert session_fita._retentar_suspensas(sessao) is False
+    assert pulso.modulo.recebidos == []
+
+
+def test_vigia_sai_quando_a_sessao_acaba(pulso, monkeypatch):
+    monkeypatch.setattr(session_fita, "RETENTATIVA", 0)
+    sessao = session_fita._acompanhamento
+    session_fita.voltar()
+    session_fita._vigiar_fitas(sessao)  # volta, e não fica em laço
+
+
+def test_fora_do_ar_mais_de_um_minuto_avisa(pulso, relogio):
+    _suspender("eb0")
+    relogio["t"] += 61
+    session_fita.voltar()
+    assert session_fita.fitas_fora_do_ar() == ["Fita 0"]
+    assert session_fita.fitas_fora_do_ar() == []
+
+
+def test_fora_do_ar_soma_as_vezes_da_sessao(pulso, relogio):
+    _suspender("eb0")
+    relogio["t"] += 40
+    session_fita._retentar_suspensas(session_fita._acompanhamento)  # volta
+    _suspender("eb0")
+    relogio["t"] += 30
+    session_fita.voltar()
+    assert session_fita.fitas_fora_do_ar() == ["Fita 0"]
+
+
+def test_fora_do_ar_por_pouco_nao_avisa(pulso, relogio):
+    _suspender("eb0")
+    relogio["t"] += 30
+    session_fita.voltar()
+    assert session_fita.fitas_fora_do_ar() == []
+
+
+def test_sessao_nova_comeca_a_conta_do_zero(pulso, relogio):
+    _suspender("eb0")
+    relogio["t"] += 120
+    session_fita.comecar(pulso.jogo)
+    relogio["t"] += 10
+    session_fita.voltar()
+    assert session_fita.fitas_fora_do_ar() == []
 
 
 # endregion

@@ -357,7 +357,16 @@ FALHAS_PARA_SUSPENDER = 3
 _conexoes: dict[str, tuple[str, Any]] = {}
 _falhas: dict[str, int] = {}
 _suspensas: set[str] = set()
+# Desde quando cada fita suspensa está fora do ar, e quanto tempo cada uma
+# ficou fora do ar na sessão em curso (ver ``fitas_fora_do_ar``).
+_suspensa_em: dict[str, float] = {}
+_fora_do_ar: dict[str, float] = {}
 _TRAVA_CONEXOES = threading.Lock()
+
+
+def _agora() -> float:
+    """O relógio da conta do tempo fora do ar. Trocado nos testes."""
+    return time.monotonic()
 
 # Cada leva de conexões tem um número. O batimento de uma leva morre sozinho
 # quando o número muda — é assim que fechar tudo desliga também o batimento, sem
@@ -508,6 +517,7 @@ def _contar_falha(fita: Fita) -> None:
     _falhas[fita.id] = _falhas.get(fita.id, 0) + 1
     if _falhas[fita.id] >= FALHAS_PARA_SUSPENDER and fita.id not in _suspensas:
         _suspensas.add(fita.id)
+        _suspensa_em[fita.id] = _agora()
         logging.info(
             "Fita %s suspensa depois de %s falhas seguidas", fita.nome, _falhas[fita.id]
         )
@@ -524,6 +534,11 @@ def retomar(ids: Optional[set[str]] = None) -> None:
     for identificador in alvo:
         _suspensas.discard(identificador)
         _falhas.pop(identificador, None)
+        desde = _suspensa_em.pop(identificador, None)
+        if desde is not None:
+            _fora_do_ar[identificador] = (
+                _fora_do_ar.get(identificador, 0.0) + _agora() - desde
+            )
 
 
 def _bater(geracao: int) -> None:
@@ -1321,11 +1336,17 @@ def comecar(game: "Game") -> None:
         # acabou (ainda dormindo a fatia dele) nunca fala pela seguinte, nem
         # quando ela é do mesmo jogo.
         _acompanhamento = sessao = object()
+        # A conta do tempo fora do ar é da sessão: a fita que já estava
+        # suspensa começa a contar agora.
+        _fora_do_ar.clear()
+        for identificador in list(_suspensa_em):
+            _suspensa_em[identificador] = _agora()
         _cor_ambiente = _teto_da_sessao = None
         _amostras_validas = _amostras_bloqueadas = 0
     if alvos is None:
         return
     _em_thread(lambda: _vestir_o_jogo(game, alvos, geracoes, sessao))
+    _comecar_vigia(sessao)
     if acompanha_tela() and not escolhida(game.game_id):
         _em_thread(lambda: _acompanhar(sessao))
 
@@ -1449,17 +1470,22 @@ def _segue(sessao: object) -> bool:
     return _acompanhamento is sessao and acompanha_tela()
 
 
-def _dormir_na_sessao(sessao: object) -> bool:
-    """Dorme o intervalo em fatias; ``False`` assim que a sessão acaba ou o
-    interruptor desliga."""
-    limite = time.monotonic() + INTERVALO_DA_TELA
+def _dormir(segundos: float, continua: Any) -> bool:
+    """Dorme em fatias; ``False`` assim que ``continua()`` deixa de valer."""
+    limite = time.monotonic() + segundos
     while True:
-        if not _segue(sessao):
+        if not continua():
             return False
         falta = limite - time.monotonic()
         if falta <= 0:
             return True
         time.sleep(min(_FATIA, falta))
+
+
+def _dormir_na_sessao(sessao: object) -> bool:
+    """Dorme o intervalo; ``False`` assim que a sessão acaba ou o interruptor
+    desliga."""
+    return _dormir(INTERVALO_DA_TELA, lambda: _segue(sessao))
 
 
 def _acompanhar(sessao: object) -> None:
@@ -1536,6 +1562,82 @@ def captura_bloqueada() -> bool:
         bloqueada = _amostras_bloqueadas >= BLOQUEADAS_PARA_AVISAR and _amostras_validas == 0
         _amostras_validas = _amostras_bloqueadas = 0
     return bloqueada
+
+
+# endregion
+
+
+# region Fitas fora do ar na sessão
+
+# A cada quantos segundos a fita suspensa é tentada de novo na sessão. A
+# suspensão poupa a espera de uma fita fora da tomada em cada troca de cor; mas
+# no primeiro teste um soluço do Wi-Fi suspendeu uma fita por 40 minutos de
+# jogo. Fora de sessão a suspensão segue como era.
+RETENTATIVA = 15
+
+# Quanto tempo fora do ar, somado na sessão, faz o aviso do fim dela.
+FORA_DO_AR_PARA_AVISAR = 60
+
+
+def _comecar_vigia(sessao: object) -> None:
+    """Sobe a vigia desta sessão. Separada para os testes a desligarem."""
+    _em_thread(lambda: _vigiar_fitas(sessao))
+
+
+def _vigiar_fitas(sessao: object) -> None:
+    """Enquanto a sessão durar, tenta de novo as fitas suspensas."""
+    while _dormir(RETENTATIVA, lambda: _acompanhamento is sessao):
+        try:
+            if not _retentar_suspensas(sessao):
+                return
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Falha ao tentar de novo as fitas suspensas", exc_info=True)
+
+
+def _retentar_suspensas(sessao: object) -> bool:
+    """Uma rodada: cada fita suspensa recebe a cor ambiente, direto. A que não
+    responder volta à suspensão na hora, sem esperar três falhas novas — senão
+    cada troca de cor esperaria por ela outra vez. ``False`` quando a sessão
+    acabou ou a iluminação foi desligada."""
+    if not ligada():
+        return False
+    with _TRAVA_PULSO:
+        if _acompanhamento is not sessao:
+            return False
+        suspensas = [fita for fita in _guardadas() if fita.id in _suspensas]
+        cor = _cor_ambiente
+        if not suspensas or cor is None:
+            return True
+        geracoes = _reservar(suspensas)
+    retomar({fita.id for fita in suspensas})
+
+    def tentar(fita: Fita) -> None:
+        _tingir(fita, cor, geracoes[fita.id])
+        if _falhas.get(fita.id):
+            _suspensas.add(fita.id)
+            _suspensa_em[fita.id] = _agora()
+        else:
+            logging.info("Fita %s voltou a responder", fita.nome)
+
+    _em_paralelo(suspensas, tentar)
+    return True
+
+
+def fitas_fora_do_ar() -> list[str]:
+    """Os nomes das fitas que ficaram mais de ``FORA_DO_AR_PARA_AVISAR``
+    segundos fora do ar na sessão que acabou. Zera a conta — o aviso é um só."""
+    agora = _agora()
+    total = dict(_fora_do_ar)
+    for identificador, desde in list(_suspensa_em.items()):
+        total[identificador] = total.get(identificador, 0.0) + agora - desde
+        _suspensa_em[identificador] = agora
+    _fora_do_ar.clear()
+    nomes = {fita.id: fita.nome for fita in fitas()}
+    return [
+        nomes[identificador]
+        for identificador, segundos in total.items()
+        if segundos > FORA_DO_AR_PARA_AVISAR and identificador in nomes
+    ]
 
 
 # endregion
