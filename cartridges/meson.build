@@ -53,6 +53,7 @@ install_data(
     'wallpaper_picker.py',
     'steam_picker.py',
     'fita_wizard.py',
+    'calibracao_janela.py',
     'session_window.py',
     'session_history.py',
     'zerados_picker.py',
