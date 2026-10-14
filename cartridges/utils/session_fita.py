@@ -1448,11 +1448,14 @@ def voltar() -> None:
 # region Cor da tela
 
 # A cada quantos segundos a tela é amostrada. A luz acompanha a cena, não a
-# ação: uma explosão não pode virar um clarão na parede — quem segura isso é a
-# confirmação (ver ``_decidir``), e não o intervalo. No quarto teste, com 6 s
-# de amostra, 6 de confirmação e 6 de fade, a cor nova chegava uns 20 s depois
-# da cena. Cada amostra custa uns 30 ms de captura (medido nos testes), e o
-# tempo de cada uma vai para o log.
+# ação: uma explosão não pode virar um clarão na parede. A confirmação (ver
+# ``_decidir``) exige duas amostras seguidas, então é este intervalo que diz
+# quanto uma cena precisa durar para trocar a luz: com 3 s, uma cena de uns 3
+# a 6 s já passa. É a troca escolhida no quarto teste, em que com 6 s de
+# amostra, 6 de confirmação e 6 de fade a cor nova chegava uns 20 s depois da
+# cena; se a agitação do segundo teste voltar, é aqui que se mexe. Cada
+# amostra custa uns 30 ms de captura (medido nos testes), e o tempo de cada
+# uma vai para o log.
 INTERVALO_DA_TELA = 3
 
 # O fade da troca, o dobro do resto do app: a cor nova chega sem que se
@@ -1465,11 +1468,12 @@ FADE_DA_TELA = 4
 # no máximo uma a cada 15 s: no segundo teste, sem isso, a luz trocou umas 50
 # vezes em 12 minutos, pulando entre o vermelho e o azul da mesma cena e
 # seguindo quadros de transição. No terceiro, com 30 s, a espera do intervalo
-# somava atraso à cor nova.
+# somava atraso à cor nova. Contado da decisão, não do fim do fade: entre o fim
+# de um fade e o começo do seguinte ficam uns 10 s.
 INTERVALO_MINIMO_ENTRE_TROCAS = 15
 
 # Os degraus por segundo do fade da tela, metade dos do resto do app. Num fade
-# de 6 s, 15 por segundo ainda são degraus que o olho não separa, e metade do
+# de 4 s, 15 por segundo ainda são degraus que o olho não separa, e metade do
 # tráfego: a 30/s, no segundo teste, a fita perdia o fim da rajada e o comando
 # final a fazia pular até a cor.
 RITMO_DA_TELA = 15
@@ -2041,7 +2045,7 @@ def _deslizar_da_tela(fita: Fita, cor: Cor, geracao: int) -> None:
 
     Cada degrau sai no momento do passo dele, e não no ritmo dos que sobraram:
     uma troca de 25° no mesmo brilho tem uns 25 degraus distintos, e a 15 por
-    segundo o fade de 6 s duraria menos de 2.
+    segundo o fade de 4 s duraria menos de 2.
     """
     with _trava_da(fita):
         if not _vigente(fita, geracao):
