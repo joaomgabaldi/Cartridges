@@ -19,6 +19,7 @@
 
 # pyright: reportAssignmentType=none
 
+import colorsys
 import logging
 import math
 import re
@@ -27,6 +28,7 @@ from pathlib import Path
 from time import time
 from typing import Any, Optional
 
+import cairo
 from gi.repository import Adw, Gio, GLib, Gtk
 from PIL import Image, UnidentifiedImageError
 
@@ -1261,14 +1263,36 @@ class DetailsDialog(Adw.Dialog):
         self.fita_color_button.set_property("rgba", session_fita.cor_para_rgba(cor))
         self.fita_brilho_row.set_value(session_fita.por_cento(cor.brilho))
 
-        manual = (
+        manual = self._fita_manual()
+        self.fita_button_reset.set_visible(manual)
+        # Com a cor acompanhando a tela, o automático não é mais a cor da capa:
+        # ela é só o ponto de partida de cada sessão.
+        tela = session_fita.acompanha_tela()
+        if manual:
+            self.fita_row.set_subtitle(_("Escolhida manualmente"))
+        else:
+            self.fita_row.set_subtitle(_("Automático") if tela else _("Extraída da capa"))
+        self.fita_button_reset.set_tooltip_text(
+            _("Voltar ao automático") if tela else _("Voltar a escolher a cor a partir da capa")
+        )
+        self.fita_amostra.queue_draw()
+
+    def _fita_manual(self) -> bool:
+        """Se vale a cor escolhida à mão (e não um "voltar ao automático" pedido)."""
+        return (
             bool(self.game)
             and not self._fita_redefinir
             and session_fita.escolhida(self.game.game_id)
         )
-        self.fita_button_reset.set_visible(manual)
-        self.fita_row.set_subtitle(
-            _("Escolhida manualmente") if manual else _("Extraída da capa")
+
+    def _fita_automatica(self) -> bool:
+        """Se a amostra mostra a roda de cores: a cor acompanha a tela, não há
+        escolha à mão, e ninguém mexeu na cor desde que a tela a mostrou."""
+        return (
+            session_fita.acompanha_tela()
+            and self._fita_mostrada is not None
+            and not self._fita_manual()
+            and _mesma_cor(self._cor_na_tela(), self._fita_mostrada)
         )
 
     def fita_segue_capa(self) -> None:
@@ -1294,11 +1318,29 @@ class DetailsDialog(Adw.Dialog):
         )
 
     def desenhar_amostra(self, _area: Any, contexto: Any, largura: int, altura: int) -> None:
-        """A bolinha no botão da cor: a cor que está escolhida agora."""
-        cor = self.fita_color_button.props.rgba
-        contexto.set_source_rgb(cor.red, cor.green, cor.blue)
+        """A bolinha no botão da cor: a cor que está escolhida agora. No
+        automático, uma roda de cores — a cor é a da tela, e muda no jogo."""
         raio = min(largura, altura) / 2
-        contexto.arc(largura / 2, altura / 2, raio, 0, 2 * math.pi)
+        centro_x, centro_y = largura / 2, altura / 2
+        if not self._fita_automatica():
+            cor = self.fita_color_button.props.rgba
+            contexto.set_source_rgb(cor.red, cor.green, cor.blue)
+            contexto.arc(centro_x, centro_y, raio, 0, 2 * math.pi)
+            contexto.fill()
+            return
+
+        fatias = 36
+        for fatia in range(fatias):
+            inicio = 2 * math.pi * fatia / fatias - math.pi / 2
+            contexto.set_source_rgb(*colorsys.hsv_to_rgb(fatia / fatias, 1, 1))
+            contexto.move_to(centro_x, centro_y)
+            # Um pouco além da fatia, para não sobrar fresta entre elas.
+            contexto.arc(centro_x, centro_y, raio, inicio, inicio + 2 * math.pi / fatias + 0.02)
+            contexto.close_path()
+            contexto.fill()
+        # O furo do meio, como numa roda de cores.
+        contexto.set_operator(cairo.Operator.CLEAR)
+        contexto.arc(centro_x, centro_y, raio * 0.35, 0, 2 * math.pi)
         contexto.fill()
 
     def previa_da_fita(self, *_args: Any) -> None:

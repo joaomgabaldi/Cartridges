@@ -3027,3 +3027,69 @@ def test_sessao_nova_comeca_a_conta_do_zero(pulso, relogio):
 
 
 # endregion
+
+
+
+# region Edição do jogo: "Automático"
+
+
+def _matizes_da_amostra(dialog):
+    """Os matizes distintos que ``desenhar_amostra`` pinta num quadrado 22×22."""
+    import cairo  # noqa: PLC0415
+    import colorsys  # noqa: PLC0415
+
+    superficie = cairo.ImageSurface(cairo.FORMAT_ARGB32, 22, 22)
+    dialog.desenhar_amostra(None, cairo.Context(superficie), 22, 22)
+    dados = bytes(superficie.get_data())
+    matizes = set()
+    for i in range(0, len(dados), 4):
+        azul, verde, vermelho, alfa = dados[i : i + 4]
+        if alfa < 250:
+            continue
+        matiz, saturacao, _valor = colorsys.rgb_to_hsv(vermelho / 255, verde / 255, azul / 255)
+        if saturacao > 0.5:
+            matizes.add(round(matiz * 36))
+    return matizes
+
+
+def test_com_a_tela_ligada_a_cor_e_automatica(tela, schema):
+    schema.set_boolean("fita-acompanha-tela", True)
+    dialog, _jogo = tela
+    dialog.atualizar_fita()
+    assert dialog.fita_row.get_subtitle() == "Automático"
+    assert dialog._fita_automatica() is True
+    assert len(_matizes_da_amostra(dialog)) > 30
+
+
+def test_com_a_tela_desligada_fica_a_cor_da_capa(tela, schema):
+    dialog, _jogo = tela
+    dialog.atualizar_fita()
+    assert dialog.fita_row.get_subtitle() == "Extraída da capa"
+    assert dialog._fita_automatica() is False
+    assert len(_matizes_da_amostra(dialog)) <= 1
+    assert dialog.fita_button_reset.get_tooltip_text() == (
+        "Voltar a escolher a cor a partir da capa"
+    )
+
+
+def test_cor_escolhida_nao_e_automatica(tela, schema):
+    schema.set_boolean("fita-acompanha-tela", True)
+    dialog, jogo = tela
+    _com_escolha(dialog, jogo)
+    assert dialog.fita_row.get_subtitle() == "Escolhida manualmente"
+    assert dialog._fita_automatica() is False
+    assert dialog.fita_button_reset.get_tooltip_text() == "Voltar ao automático"
+
+
+def test_cor_mexida_e_nao_aplicada_mostra_a_bolinha(tela, schema):
+    schema.set_boolean("fita-acompanha-tela", True)
+    dialog, _jogo = tela
+    dialog.atualizar_fita()
+    dialog.fita_color_button.set_property(
+        "rgba", session_fita.cor_para_rgba(session_fita.Cor(200, 1000, 500))
+    )
+    assert dialog._fita_automatica() is False
+    assert len(_matizes_da_amostra(dialog)) <= 1
+
+
+# endregion
