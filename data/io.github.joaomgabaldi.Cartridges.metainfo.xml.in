@@ -28,17 +28,23 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.15" date="2026-10-15">
+      <description translate="no">
+        <ul>
+          <li>Experimento: a iluminação inteligente pode acompanhar a cor predominante do jogo na tela, com cores vivas e brilho menor nas cenas escuras</li>
+          <li>Quando um dispositivo da iluminação para de responder durante o jogo, o Cartridges volta a tentar sozinho</li>
+          <li>Na edição do jogo, a cor da iluminação aparece como Automático quando acompanha a tela</li>
+          <li>Na edição do jogo, o brilho da iluminação pode ser ajustado sem trocar a cor automática</li>
+          <li>Novo assistente para calibrar as cores da iluminação inteligente, dispositivo por dispositivo</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.10.14" date="2026-10-14">
       <description translate="no">
         <ul>
           <li>Agora um vídeo do computador pode virar a capa animada de um jogo: os primeiros 15 segundos, sem áudio</li>
           <li>Na edição do jogo, o botão que escolhe a capa de um arquivo agora tem o ícone de pasta, como os do logo e do papel de parede</li>
           <li>Ao iniciar um jogo, o Cartridges agora vai sempre para o monitor escolhido, e a numeração dos monitores não muda mais de uma tela para outra</li>
-          <li>Experimento: a iluminação inteligente pode acompanhar a cor predominante do jogo na tela, com cores vivas e brilho menor nas cenas escuras</li>
-          <li>Quando um dispositivo da iluminação para de responder durante o jogo, o Cartridges volta a tentar sozinho</li>
-          <li>Na edição do jogo, a cor da iluminação aparece como Automático quando acompanha a tela</li>
-          <li>Na edição do jogo, o brilho da iluminação pode ser ajustado sem trocar a cor automática</li>
-          <li>Novo assistente para calibrar as cores da iluminação inteligente, dispositivo por dispositivo</li>
         </ul>
       </description>
     </release>
