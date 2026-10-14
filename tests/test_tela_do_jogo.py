@@ -12,24 +12,20 @@ from PIL import Image
 from cartridges.utils import tela_do_jogo
 from cartridges.utils.tela_do_jogo import Amostra
 
-MONITOR = (1920, 0, 3840, 1080)
-
 
 @pytest.fixture
 def tela(monkeypatch):
-    """Uma janela de outro processo na frente, num monitor conhecido, e o print
-    trocável pelo teste."""
-    estado = {"imagem": Image.new("RGB", (64, 36), (220, 20, 20)), "bbox": None}
+    """Uma janela de outro processo na frente, e o print trocável pelo teste."""
+    estado = {"imagem": Image.new("RGB", (64, 36), (220, 20, 20)), "capturas": 0}
 
-    def capturar(bbox):
-        estado["bbox"] = bbox
+    def capturar():
+        estado["capturas"] += 1
         if isinstance(estado["imagem"], Exception):
             raise estado["imagem"]
         return estado["imagem"]
 
     monkeypatch.setattr(tela_do_jogo, "_janela_da_frente", lambda: 1234)
     monkeypatch.setattr(tela_do_jogo, "_processo_da", lambda _hwnd: os.getpid() + 1)
-    monkeypatch.setattr(tela_do_jogo, "_retangulo_do_monitor", lambda: MONITOR)
     monkeypatch.setattr(tela_do_jogo, "_capturar", capturar)
     return estado
 
@@ -37,13 +33,13 @@ def tela(monkeypatch):
 def test_sem_janela_na_frente_e_ignorada(tela, monkeypatch):
     monkeypatch.setattr(tela_do_jogo, "_janela_da_frente", lambda: 0)
     assert tela_do_jogo.cor_da_tela() == Amostra("ignorada")
-    assert tela["bbox"] is None
+    assert tela["capturas"] == 0
 
 
 def test_janela_do_proprio_app_e_ignorada(tela, monkeypatch):
     monkeypatch.setattr(tela_do_jogo, "_processo_da", lambda _hwnd: os.getpid())
     assert tela_do_jogo.cor_da_tela() == Amostra("ignorada")
-    assert tela["bbox"] is None
+    assert tela["capturas"] == 0
 
 
 def test_imagem_colorida_da_a_cor(tela):
@@ -74,14 +70,14 @@ def test_captura_que_levanta_e_bloqueada(tela):
     assert tela_do_jogo.cor_da_tela() == Amostra("bloqueada")
 
 
-def test_monitor_que_nao_responde_e_bloqueada(tela, monkeypatch):
-    def falhar():
-        raise OSError("GetMonitorInfoW falhou")
-
-    monkeypatch.setattr(tela_do_jogo, "_retangulo_do_monitor", falhar)
-    assert tela_do_jogo.cor_da_tela() == Amostra("bloqueada")
-
-
-def test_a_captura_recorta_o_monitor_da_janela(tela):
-    tela_do_jogo.cor_da_tela()
-    assert tela["bbox"] == MONITOR
+def test_captura_so_o_monitor_principal(monkeypatch):
+    """O jogo roda no monitor principal: os outros não entram no print, e o
+    custo da captura é o de uma tela só."""
+    pedidos = []
+    monkeypatch.setattr(
+        tela_do_jogo.ImageGrab,
+        "grab",
+        lambda **kwargs: pedidos.append(kwargs) or Image.new("RGB", (8, 8)),
+    )
+    tela_do_jogo._capturar()
+    assert pedidos == [{}]

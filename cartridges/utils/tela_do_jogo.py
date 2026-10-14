@@ -19,8 +19,10 @@
 
 """A cor predominante do monitor do jogo, para a iluminação acompanhar a tela.
 
-O monitor é o da janela em primeiro plano: durante a sessão, é o jogo. A cor
-sai da mesma conta da capa (``dominante_da_imagem``), então pretos, cinzas e
+O jogo roda sempre no monitor principal, e é só ele que entra no print: a
+Pillow, pedida a área de todos os monitores, captura todos e só depois
+recorta — com três monitores, o triplo do custo a cada amostra. A cor sai da
+mesma conta da capa (``dominante_da_imagem``), então pretos, cinzas e
 brancos não viram luz.
 
 O print é o da Pillow (GDI), que pega janela e tela cheia sem bordas. Jogo em
@@ -37,7 +39,6 @@ from typing import Any, NamedTuple, Optional
 
 from PIL import Image, ImageGrab
 
-from cartridges.utils import janela_por_cima
 from cartridges.utils.cor_da_capa import dominante_da_imagem
 
 
@@ -82,16 +83,9 @@ def _processo_da(hwnd: int) -> int:
     return processo.value
 
 
-def _retangulo_do_monitor() -> tuple[int, int, int, int]:
-    """O monitor inteiro da janela em primeiro plano. Levanta se o Windows
-    não responder."""
-    return janela_por_cima._monitor_em_uso()  # pylint: disable=protected-access
-
-
-def _capturar(bbox: tuple[int, int, int, int]) -> Image.Image:
-    # `all_screens`: sem ele, a Pillow só enxerga o monitor principal, e o
-    # recorte de um monitor à direita viria vazio.
-    return ImageGrab.grab(bbox=bbox, all_screens=True)
+def _capturar() -> Image.Image:
+    """O monitor principal inteiro, que é onde o jogo roda."""
+    return ImageGrab.grab()
 
 
 def cor_da_tela() -> Amostra:
@@ -104,7 +98,7 @@ def cor_da_tela() -> Amostra:
         # como captura que funcionou nem como bloqueio.
         if not hwnd or _processo_da(hwnd) == os.getpid():
             return Amostra("ignorada")
-        imagem = _capturar(_retangulo_do_monitor())
+        imagem = _capturar()
     # Larga como a da capa: o GDI e a Pillow reclamam de jeitos diferentes
     # (monitor desligado no meio, sessão bloqueada do Windows), e todos querem
     # dizer a mesma coisa — não deu para ver a tela.
