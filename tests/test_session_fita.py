@@ -1327,16 +1327,14 @@ def test_voltar_ao_automatico_e_trocar_a_capa_segue_a_capa_nova(tela, tmp_path):
     assert not session_fita.escolhida(jogo.game_id)
 
 
-@pytest.mark.parametrize("mexida", ["cor", "brilho"])
-def test_cor_mexida_e_nao_aplicada_sobrevive_a_troca_de_capa(tela, tmp_path, mexida):
-    """Quem escolheu uma cor e depois trocou a capa não pediu para perdê-la."""
+def test_cor_mexida_e_nao_aplicada_sobrevive_a_troca_de_capa(tela, tmp_path):
+    """Quem escolheu uma cor e depois trocou a capa não pediu para perdê-la.
+    (O brilho mexido é separado da cor: ver
+    ``test_brilho_mexido_e_capa_trocada_segue_a_capa_nova``.)"""
     dialog, _jogo = tela
-    if mexida == "cor":
-        dialog.fita_color_button.set_property(
-            "rgba", session_fita.cor_para_rgba(session_fita.Cor(240, 900, 0))
-        )
-    else:
-        dialog.fita_brilho_row.set_value(session_fita.por_cento(1000) // 2)
+    dialog.fita_color_button.set_property(
+        "rgba", session_fita.cor_para_rgba(session_fita.Cor(240, 900, 0))
+    )
     antes = dialog._cor_na_tela()
 
     dialog._stage_cover(_capa_verde(tmp_path))
@@ -3334,6 +3332,92 @@ def test_aplicar_a_cor_continua_sendo_escolha_manual(tela, schema):
     )
     dialog.aplicar_fita(jogo)
     assert session_fita.escolhida(jogo.game_id)
+
+
+# endregion
+
+
+# region Revisão da luz calma
+
+
+@pytest.fixture
+def relogio_do_fade(fade_da_tela, monkeypatch):
+    """O fade de verdade num relógio falso: dormir anda o relógio."""
+    agora = {"t": 0.0}
+    monkeypatch.setattr(session_fita.time, "monotonic", lambda: agora["t"])
+    monkeypatch.setattr(
+        session_fita.time, "sleep", lambda s: agora.__setitem__("t", agora["t"] + max(0.0, s))
+    )
+    momentos = []
+    modulo = fade_da_tela.modulo
+    mandar_de_verdade = modulo.set_multiple_values
+
+    def mandar(valores, nowait=False):
+        if "24" in valores:
+            momentos.append(agora["t"])
+        return mandar_de_verdade(valores, nowait)
+
+    modulo.set_multiple_values = mandar
+    fade_da_tela.momentos = momentos
+    return fade_da_tela
+
+
+def test_troca_so_de_matiz_tambem_leva_o_fade_inteiro(relogio_do_fade):
+    """25° de matiz no mesmo brilho dão poucos degraus distintos: o fade tem
+    de durar os 6 s mesmo assim, e não o número de degraus a 15 por segundo."""
+    acompanhar = _comecar_com_tela(relogio_do_fade)  # capa vermelha: matiz 0
+    _matiz, saturacao, _brilho = session_fita.cor_do_jogo(relogio_do_fade.jogo)
+    # A saturação da tela que, reforçada, dá exatamente a do jogo: só a matiz anda.
+    da_tela = 250 + (saturacao - session_fita.SATURACAO_MINIMA_DA_TELA) * 5
+    assert session_fita._saturacao_da_luz(da_tela) == saturacao
+    relogio_do_fade.fila.extend([Amostra("cor", (25, da_tela))] * 2)
+    acompanhar()
+    momentos = relogio_do_fade.momentos
+    assert momentos[-1] - momentos[0] >= session_fita.FADE_DA_TELA - 1
+
+
+def test_abrir_a_edicao_calcula_a_cor_da_capa_uma_vez(write_record, app_dirs, win, monkeypatch):
+    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+    from cartridges.game import Game  # noqa: PLC0415
+
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
+    write_record("jogo-capa", name="Jogo")
+    Image.new("RGB", (60, 90), (220, 20, 20)).save(app_dirs.covers / "jogo-capa.webp")
+    chamadas = []
+    dominante_de_verdade = session_fita.dominante
+    monkeypatch.setattr(
+        session_fita, "dominante", lambda capa: chamadas.append(capa) or dominante_de_verdade(capa)
+    )
+    jogo = Game(
+        {
+            "game_id": "jogo-capa",
+            "name": "Jogo",
+            "source": "shortcuts",
+            "executable": r'start "" "C:\g\jogo.exe"',
+        }
+    )
+    DetailsDialog(jogo)
+    assert len(chamadas) == 1
+
+
+def test_brilho_mexido_e_capa_trocada_segue_a_capa_nova(tela, tmp_path):
+    dialog, _jogo = tela
+    dialog.atualizar_fita()
+    dialog.fita_brilho_row.set_value(40)
+    dialog._stage_cover(_capa_verde(tmp_path))
+    assert abs(dialog._cor_na_tela().matiz - 120) <= 2
+    assert dialog.fita_brilho_row.get_value() == 40
+
+
+def test_log_separa_candidata_de_confirmada_esperando(na_tela, caplog, monkeypatch):
+    acompanhar = _comecar_com_tela(na_tela)
+    session_fita._ultima_troca = session_fita._agora()  # acabou de trocar
+    na_tela.fila.extend([Amostra("cor", (130, 900))] * 2)
+    with caplog.at_level("INFO"):
+        acompanhar()
+    linhas = [r.getMessage() for r in caplog.records if "Tela:" in r.getMessage()]
+    assert "candidata" in linhas[0]
+    assert "aguardando o intervalo" in linhas[1]
 
 
 # endregion

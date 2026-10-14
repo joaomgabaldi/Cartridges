@@ -220,6 +220,14 @@ def _brilho_de(dados: dict[str, Any]) -> Optional[int]:
         return None
 
 
+def brilho_gravado(game_id: str) -> Optional[int]:
+    """O brilho no arquivo do jogo, seja da cor escolhida ou o próprio, sem
+    tocar na capa: a tela de edição precisa dele para mostrar o automático, e
+    tirar a cor da capa ali custaria uma segunda leitura da imagem."""
+    dados = _ler_sidecar(game_id)
+    return _brilho_de(dados) if dados else None
+
+
 def brilho_escolhido(game_id: str) -> Optional[int]:
     """O brilho próprio de um jogo com cor automática, ou ``None``.
 
@@ -765,6 +773,13 @@ def _degraus(origem: Cor, destino: Cor, passos: int) -> list[str]:
     A matiz vai pelo lado mais curto do círculo: do vermelho ao roxo passa pelo
     magenta, e não dá a volta pelo verde e pelo azul.
     """
+    return [cor_hex for _passo, cor_hex in _degraus_no_passo(origem, destino, passos)]
+
+
+def _degraus_no_passo(origem: Cor, destino: Cor, passos: int) -> list[tuple[int, str]]:
+    """Os degraus de ``_degraus`` com o número do passo de cada um (1 a
+    ``passos``): sem os repetidos, um fade que muda pouco tem poucos degraus,
+    e quem quer a duração inteira agenda cada um pelo passo dele."""
     matiz = (destino.matiz - origem.matiz + 180) % 360 - 180
     caminho = []
     anterior = hsv_hex(origem)
@@ -781,7 +796,7 @@ def _degraus(origem: Cor, destino: Cor, passos: int) -> list[str]:
         # reconhecido pelo aviso do último degrau: repetido, o aviso da
         # primeira cópia pareceria o do fim.
         if cor_hex != anterior:
-            caminho.append(cor_hex)
+            caminho.append((passo, cor_hex))
             anterior = cor_hex
     return caminho
 
@@ -858,7 +873,9 @@ def _alcancou(
     return _esperar(modulo, aceita, prazo) is not None
 
 
-def _rajada(fita: Fita, caminho: list[str], geracao: int, ritmo: int = RITMO_FADE) -> None:
+def _rajada(
+    fita: Fita, caminho: list[str], geracao: int, momentos: Optional[list[float]] = None
+) -> None:
     """Manda os degraus no ritmo do fade, sem esperar resposta de nenhum.
 
     No fim espera a fita alcançar o último degrau: ela aplica mais devagar do
@@ -883,7 +900,8 @@ def _rajada(fita: Fita, caminho: list[str], geracao: int, ritmo: int = RITMO_FAD
                 return resposta
             ultimo = cor_hex
             _mostrada[fita.id] = (True, cor_hex)
-            falta = inicio + (indice + 1) / ritmo - time.monotonic()
+            momento = momentos[indice] if momentos else (indice + 1) / RITMO_FADE
+            falta = inicio + momento - time.monotonic()
             if falta > 0:
                 time.sleep(falta)
         if ultimo is not None:
@@ -1625,6 +1643,7 @@ def _uma_amostra(sessao: object, alvos: list[Fita]) -> None:
         elif amostra.tipo == "bloqueada":
             _amostras_bloqueadas += 1
         pedida = nova = None
+        confirmada = False
         if (
             amostra.tipo in ("cor", "sem_cor")
             and _cor_ambiente is not None
@@ -1632,11 +1651,16 @@ def _uma_amostra(sessao: object, alvos: list[Fita]) -> None:
             and not _pulsando
         ):
             pedida = _proxima_cor(_cor_ambiente, amostra, _teto_da_sessao)
+            confirmada = (
+                pedida is not None
+                and _candidata is not None
+                and not _difere(_candidata, pedida, _teto_da_sessao)
+            )
             nova = _decidir(pedida, _teto_da_sessao)
         brilho = None
         if amostra.luz is not None and _teto_da_sessao is not None:
             brilho = _brilho_da_cena(amostra.luz, _teto_da_sessao)
-        _registrar(amostra, pedida, nova, _pulsando, brilho)
+        _registrar(amostra, pedida, nova, _pulsando, brilho, confirmada)
         if nova is None:
             return
         _cor_ambiente = nova
@@ -1652,6 +1676,7 @@ def _registrar(
     nova: Optional[Cor],
     pulsando: bool,
     brilho: Optional[int],
+    confirmada: bool = False,
 ) -> None:
     """Uma linha por amostra, para calibrar os números acima jogando: o que a
     tela deu, o que a luz fez e quanto a captura custou."""
@@ -1659,6 +1684,11 @@ def _registrar(
         return
     if nova is not None:
         decisao = f"trocou para {nova.matiz}/{nova.saturacao}/{nova.brilho}"
+    elif pedida is not None and confirmada:
+        decisao = (
+            f"confirmada {pedida.matiz}/{pedida.saturacao}/{pedida.brilho}, "
+            "aguardando o intervalo"
+        )
     elif pedida is not None:
         decisao = f"candidata {pedida.matiz}/{pedida.saturacao}/{pedida.brilho}"
     else:
@@ -1978,9 +2008,7 @@ def _tingir(fita: Fita, cor: Cor, geracao: int) -> None:
             _mostrada.pop(fita.id, None)
 
 
-def _deslizar(
-    fita: Fita, cor: Cor, segundos: float, geracao: int, ritmo: int = RITMO_FADE
-) -> None:
+def _deslizar(fita: Fita, cor: Cor, segundos: float, geracao: int) -> None:
     """A cor chegando aos poucos, no ritmo do fade, e o comando direto no fim.
 
     Fita sem cor conhecida (``_mostrada``) não tem de onde deslizar: vai direto.
@@ -1991,10 +2019,19 @@ def _deslizar(
         destino = na_fita(cor, fita)
         antes = _mostrada.get(fita.id)
         origem = cor_de_hex(antes[1]) if antes is not None and antes[0] else None
-        passos = round(segundos * ritmo)
+        passos = round(segundos * RITMO_FADE)
         if passos and origem is not None and origem != destino:
-            _rajada(fita, _degraus(origem, destino, passos), geracao, ritmo)
+            _rajada(fita, _degraus(origem, destino, passos), geracao)
         _tingir(fita, cor, geracao)
+
+
+def _rajada_da_tela(fita: Fita, degraus: list[tuple[int, str]], geracao: int) -> None:
+    _rajada(
+        fita,
+        [cor_hex for _passo, cor_hex in degraus],
+        geracao,
+        [passo / RITMO_DA_TELA for passo, _cor_hex in degraus],
+    )
 
 
 def _deslizar_da_tela(fita: Fita, cor: Cor, geracao: int) -> None:
@@ -2002,7 +2039,10 @@ def _deslizar_da_tela(fita: Fita, cor: Cor, geracao: int) -> None:
     grande de matiz pelo escuro (ver ``SALTO_PELO_ESCURO``).
 
     Uma rajada só para as duas metades: a espera do fim da rajada (ver
-    ``_rajada``) entre elas deixaria a fita parada no escuro.
+    ``_rajada``) entre elas deixaria a fita parada no escuro. Cada degrau sai
+    no momento do passo dele, e não no ritmo dos que sobraram: uma troca de
+    25° no mesmo brilho tem uns 25 degraus distintos, e a 15 por segundo o
+    fade de 6 s duraria menos de 2.
     """
     with _trava_da(fita):
         if not _vigente(fita, geracao):
@@ -2020,14 +2060,19 @@ def _deslizar_da_tela(fita: Fita, cor: Cor, geracao: int) -> None:
             apagada = origem._replace(brilho=BRILHO_MINIMO)
             acesa_no_escuro = destino._replace(brilho=BRILHO_MINIMO)
             metade = passos // 2
-            caminho = (
-                _degraus(origem, apagada, metade)
-                + [hsv_hex(acesa_no_escuro)]
-                + _degraus(acesa_no_escuro, destino, passos - metade)
+            degraus = (
+                _degraus_no_passo(origem, apagada, metade)
+                + [(metade, hsv_hex(acesa_no_escuro))]
+                + [
+                    (metade + passo, cor_hex)
+                    for passo, cor_hex in _degraus_no_passo(
+                        acesa_no_escuro, destino, passos - metade
+                    )
+                ]
             )
-            _rajada(fita, caminho, geracao, RITMO_DA_TELA)
+            _rajada_da_tela(fita, degraus, geracao)
         else:
-            _rajada(fita, _degraus(origem, destino, passos), geracao, RITMO_DA_TELA)
+            _rajada_da_tela(fita, _degraus_no_passo(origem, destino, passos), geracao)
         _tingir(fita, cor, geracao)
 
 

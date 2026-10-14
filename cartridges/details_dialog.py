@@ -1253,7 +1253,7 @@ class DetailsDialog(Adw.Dialog):
             return session_fita.cor_do_jogo(self.game)
         # O brilho do jogo fica, inclusive o de uma escolha que vai ser
         # desfeita: "voltar ao automático" é sobre a cor.
-        brilho = session_fita.cor_do_jogo(self.game).brilho if self.game else None
+        brilho = session_fita.brilho_gravado(self.game.game_id) if self.game else None
         return session_fita.cor_da_capa(self.game_cover.path, brilho)
 
     def atualizar_fita(self) -> None:
@@ -1309,18 +1309,21 @@ class DetailsDialog(Adw.Dialog):
         )
 
     def fita_segue_capa(self) -> None:
-        """A capa mudou: a linha da cor acompanha, se ninguém mexeu nela.
+        """A capa mudou: a linha da cor acompanha, se ninguém mexeu na cor.
 
-        Uma cor ou um brilho mexidos e ainda não aplicados são escolha de
-        gente, e trocar a capa depois não os desfaz.
+        Uma cor mexida e ainda não aplicada é escolha de gente, e trocar a
+        capa depois não a desfaz. O brilho é separado da cor: mexido, ele fica
+        como está, e a cor segue a capa nova.
         """
-        if self._fita_mostrada is None or not _mesma_cor(
+        if self._fita_mostrada is None or not _mesmo_tom(
             self._cor_na_tela(), self._fita_mostrada
         ):
             return
+        brilho = self.fita_brilho_row.get_value()
         self._fita_sem_previa = True
         try:
             self.atualizar_fita()
+            self.fita_brilho_row.set_value(brilho)
         finally:
             self._fita_sem_previa = False
 
