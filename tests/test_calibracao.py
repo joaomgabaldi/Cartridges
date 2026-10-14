@@ -81,3 +81,18 @@ def test_temperatura_vai_do_quente_ao_frio():
     assert calibracao.branco_da_temperatura(0)[1] == 0
     assert calibracao.temperatura_do_branco((30, 150)) == -0.5
     assert calibracao.temperatura_do_branco((210, 300)) == 1.0
+
+
+@pytest.mark.parametrize(
+    "dados",
+    [
+        {"cores": [[0, 1.0]] * 6, "branco": [float("inf"), 100]},
+        {"cores": [[0, 1.0]] * 6, "branco": [float("nan"), 0]},
+        {"cores": [[10**400, 1.0]] + [[0, 1.0]] * 5, "branco": [0, 0]},
+        {"cores": [[float("nan"), 1.0]] + [[0, 1.0]] * 5, "branco": [0, 0]},
+    ],
+)
+def test_json_com_numero_absurdo_vale_neutra(dados):
+    """Roda em toda troca de cor: número infinito, enorme ou NaN vira neutra,
+    e não uma exceção na thread que pinta a fita."""
+    assert calibracao.de_json(dados) == NEUTRA

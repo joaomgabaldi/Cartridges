@@ -9,6 +9,7 @@ import pytest
 
 from cartridges import shared
 from cartridges.utils import calibracao, session_fita
+from cartridges.calibracao_janela import SATURACAO_DA_REFERENCIA
 from cartridges.utils.calibracao import NEUTRA
 
 
@@ -46,7 +47,7 @@ def test_escolher_acende_so_a_fita_na_primeira_referencia(assistente):
     assistente.escolher("eb0")
     tipo, id_, cor, _calibracoes = assistente.previas[-1]
     assert (tipo, id_) == ("so", "eb0")
-    assert (cor.matiz, cor.saturacao) == (0, 1000)
+    assert (cor.matiz, cor.saturacao) == (0, SATURACAO_DA_REFERENCIA)
     assert assistente.etapa == 0
 
 
@@ -119,7 +120,7 @@ def test_testar_passa_pelas_cores_em_todas_e_para_ao_fechar(assistente):
     assistente.mudar_tom(-8)
     assistente.testar()
     tipo, cor, calibracoes = assistente.previas[-1]
-    assert tipo == "todas" and (cor.matiz, cor.saturacao) == (0, 1000)
+    assert tipo == "todas" and (cor.matiz, cor.saturacao) == (0, SATURACAO_DA_REFERENCIA)
     assert calibracoes["eb0"].cores[0] == (-8, 1.0)
     assistente.avancar_teste()
     assert assistente.previas[-1][1].matiz == 60
@@ -144,3 +145,15 @@ def test_fita_calibrada_aparece_como_calibrada(tmp_path, monkeypatch, schema):
     janela = AssistenteDeCalibracao(session_fita.fitas())
     assert janela.subtitulo_de("eb0") == "Calibrado"
     assert janela.subtitulo_de("eb1") == ""
+
+
+def test_intensidade_acima_de_100_muda_a_referencia(assistente):
+    """A referência não pode estar no máximo de saturação: aí aumentar a
+    intensidade não muda nada na parede, e o valor é gravado sem ser visto."""
+    from cartridges.calibracao_janela import _cor_da_etapa  # noqa: PLC0415
+
+    referencia = _cor_da_etapa(0)
+    assistente.escolher("eb0")
+    assistente.mudar_intensidade(1.3)
+    corrigida = calibracao.corrigir(referencia, assistente.calibracoes["eb0"])
+    assert corrigida.saturacao > referencia.saturacao

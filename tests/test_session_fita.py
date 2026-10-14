@@ -3520,3 +3520,22 @@ def test_botao_da_calibracao_abre_o_assistente(monkeypatch, schema):
 
 
 # endregion
+
+
+def test_previa_em_curso_pinta_com_a_calibracao_gravada_depois(falsas, monkeypatch, schema):
+    """A thread da prévia que já estava servindo uma fita usa a fita de quando
+    o pedido chegou, e não a de quando ela começou: senão o Concluir do
+    assistente deixava a fita na cor do app sem a correção nova."""
+    schema.set_boolean("session-fita", True)
+    modulos = falsas(False)
+    velha = session_fita.fitas()[0]
+    session_fita.gravar_fitas(
+        [velha._replace(calibracao=calibracao_mod.para_json(VERMELHO_PUXADO))]
+    )
+    session_fita._previa_vivas.add(velha.id)  # uma thread já servindo esta fita
+    try:
+        session_fita.previa(session_fita.Cor(0, 1000, 500))
+        session_fita._servir_previa(velha)
+    finally:
+        session_fita._previa_vivas.discard(velha.id)
+    assert session_fita.cor_de_hex(cor_mandada(modulos["eb0"])).matiz == 352

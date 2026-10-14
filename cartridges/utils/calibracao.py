@@ -97,6 +97,15 @@ def _limitar(valor: float, minimo: float, maximo: float) -> float:
     return max(minimo, min(maximo, valor))
 
 
+def _numero(valor: Any) -> float:
+    """Um número de verdade do arquivo: infinito e NaN não são, e um inteiro
+    enorme demais para virar ``float`` também não."""
+    numero = float(valor)
+    if not math.isfinite(numero):
+        raise ValueError(valor)
+    return numero
+
+
 def de_json(dados: Any) -> Calibracao:
     """A calibração gravada no ``fitas.json``. Arquivo mexido à mão (tipo
     errado, lista curta) vale como neutra, e número fora dos limites é
@@ -104,17 +113,17 @@ def de_json(dados: Any) -> Calibracao:
     try:
         cores = tuple(
             (
-                round(_limitar(float(tom), -TOM_MAXIMO, TOM_MAXIMO)),
-                _limitar(float(fator), FATOR_MINIMO, FATOR_MAXIMO),
+                round(_limitar(_numero(tom), -TOM_MAXIMO, TOM_MAXIMO)),
+                _limitar(_numero(fator), FATOR_MINIMO, FATOR_MAXIMO),
             )
             for tom, fator in dados["cores"]
         )
         matiz_b, saturacao_b = dados["branco"]
         branco = (
-            round(float(matiz_b)) % 360,
-            round(_limitar(float(saturacao_b), 0, SATURACAO_DO_BRANCO)),
+            round(_numero(matiz_b)) % 360,
+            round(_limitar(_numero(saturacao_b), 0, SATURACAO_DO_BRANCO)),
         )
-    except (KeyError, TypeError, ValueError):
+    except (KeyError, TypeError, ValueError, OverflowError):
         return NEUTRA
     if len(cores) != len(REFERENCIAS):
         return NEUTRA

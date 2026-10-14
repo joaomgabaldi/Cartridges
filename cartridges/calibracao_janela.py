@@ -50,12 +50,18 @@ ETAPA_DO_BRANCO = len(REFERENCIAS)
 # De quanto em quanto tempo o teste final troca de cor.
 INTERVALO_DO_TESTE = 3
 
+# A saturação das referências, na tela e na fita. No máximo (100%), aumentar a
+# Intensidade não mudaria nada na parede — a saturação já não tem para onde
+# subir —, e o valor seria gravado sem ser visto. A 70%, a faixa inteira do
+# controle (50% a 150%) aparece.
+SATURACAO_DA_REFERENCIA = 700
+
 
 def _cor_da_etapa(etapa: int) -> Cor:
     """A cor de referência de uma etapa, no brilho padrão do app."""
     if etapa == ETAPA_DO_BRANCO:
         return Cor(0, 0, session_fita.brilho_padrao())
-    return Cor(REFERENCIAS[etapa], session_fita.BRILHO_CHEIO, session_fita.brilho_padrao())
+    return Cor(REFERENCIAS[etapa], SATURACAO_DA_REFERENCIA, session_fita.brilho_padrao())
 
 
 class AssistenteDeCalibracao(Adw.Dialog):

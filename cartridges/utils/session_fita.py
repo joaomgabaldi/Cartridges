@@ -1148,7 +1148,12 @@ def _pintar_fita(
 # anterior. Os passos do meio se perdem, que é exatamente o que se quer — o olho
 # só precisa ver onde o controle parou. Uma thread por fita: uma fita que não
 # responde leva segundos para desistir, e as outras não podem esperar por ela.
-_previa_alvos: dict[str, tuple[Cor, Optional[dict[str, int]], Optional[dict[str, Any]]]] = {}
+# A fita vai junto do pedido, e não fica a da thread: a thread que já estava
+# servindo uma fita guardou a fita de quando começou, e pintaria com a
+# calibração (e o brilho máximo) de antes do Concluir do assistente.
+_previa_alvos: dict[
+    str, tuple[Fita, Cor, Optional[dict[str, int]], Optional[dict[str, Any]]]
+] = {}
 _previa_vivas: set[str] = set()
 _PREVIA = threading.Lock()
 
@@ -1192,7 +1197,7 @@ def _previa_em(
         for fita in fitas():
             if fita.id not in cores:
                 continue
-            _previa_alvos[fita.id] = (cores[fita.id], tetos, calibracoes)
+            _previa_alvos[fita.id] = (fita, cores[fita.id], tetos, calibracoes)
             if fita.id not in _previa_vivas:
                 _previa_vivas.add(fita.id)
                 _em_thread(lambda fita=fita: _servir_previa(fita))
@@ -1206,7 +1211,7 @@ def _servir_previa(fita: Fita) -> None:
             if alvo is None:
                 _previa_vivas.discard(fita.id)
                 return
-        _pintar_fita(fita, *alvo)
+        _pintar_fita(*alvo)
 
 
 def tom_do_app() -> tuple[int, int]:
