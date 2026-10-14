@@ -2818,7 +2818,7 @@ def test_desligar_o_interruptor_para_o_acompanhamento(na_tela, schema):
 
 def _antes_do_fade(monkeypatch, acao):
     """Roda ``acao`` depois de a amostra reservar a vez e antes do fade."""
-    deslizar_de_verdade = session_fita._deslizar
+    deslizar_de_verdade = session_fita._deslizar_da_tela
     feito = {"n": 0}
 
     def deslizar(*args):
@@ -2827,7 +2827,7 @@ def _antes_do_fade(monkeypatch, acao):
             acao()
         return deslizar_de_verdade(*args)
 
-    monkeypatch.setattr(session_fita, "_deslizar", deslizar)
+    monkeypatch.setattr(session_fita, "_deslizar_da_tela", deslizar)
 
 
 def test_fim_da_sessao_vence_o_fade_da_tela(na_tela, monkeypatch):
@@ -3192,6 +3192,64 @@ def test_cor_mexida_e_nao_aplicada_mostra_a_bolinha(tela, schema):
     )
     assert dialog._fita_automatica() is False
     assert len(_matizes_da_amostra(dialog)) <= 1
+
+
+# endregion
+
+
+# region Fade da tela
+
+
+@pytest.fixture
+def fade_da_tela(na_tela, monkeypatch):
+    """A sessão de ``na_tela`` com o fade de verdade, sem dormir."""
+    monkeypatch.setattr(session_fita, "FADE_DA_TELA", 6)
+    monkeypatch.setattr(session_fita.time, "sleep", lambda _segundos: None)
+    return na_tela
+
+
+def _matizes_e_brilhos(modulo):
+    cores = [session_fita.cor_de_hex(c) for c in _cores(modulo)]
+    return [(c.matiz, c.brilho) for c in cores if c is not None]
+
+
+def test_troca_pequena_desliza_direto_a_15_por_segundo(fade_da_tela):
+    acompanhar = _comecar_com_tela(fade_da_tela)  # capa vermelha: matiz 0
+    fade_da_tela.fila.extend([Amostra("cor", (30, 1000))] * 2)
+    acompanhar()
+    passos = _matizes_e_brilhos(fade_da_tela.modulo)
+    assert all(0 <= matiz <= 30 for matiz, _ in passos)
+    assert 80 <= len(passos) <= 95  # 6 s a 15/s, mais o comando final
+    assert min(brilho for _, brilho in passos) > session_fita.BRILHO_MINIMO
+
+
+def test_troca_grande_passa_pelo_escuro_sem_atravessar_cores(fade_da_tela):
+    acompanhar = _comecar_com_tela(fade_da_tela)
+    fade_da_tela.fila.extend([Amostra("cor", (200, 1000))] * 2)
+    acompanhar()
+    passos = _matizes_e_brilhos(fade_da_tela.modulo)
+    # Só a cor de partida e a de chegada: nada do roxo do caminho curto.
+    assert {matiz for matiz, _ in passos} == {0, 200}
+    assert min(brilho for _, brilho in passos) == session_fita.BRILHO_MINIMO
+    assert passos[-1][0] == 200
+
+
+def test_fim_da_sessao_no_escuro_nao_acende_a_cor_nova(fade_da_tela, monkeypatch):
+    acompanhar = _comecar_com_tela(fade_da_tela)
+    modulo = fade_da_tela.modulo
+    mandar_de_verdade = modulo.set_multiple_values
+
+    def mandar(valores, nowait=False):
+        cor = session_fita.cor_de_hex(str(valores.get("24", "")))
+        if cor is not None and cor.brilho == session_fita.BRILHO_MINIMO:
+            if session_fita._jogo_da_sessao is not None:
+                session_fita.voltar()
+        return mandar_de_verdade(valores, nowait)
+
+    modulo.set_multiple_values = mandar
+    fade_da_tela.fila.extend([Amostra("cor", (200, 1000))] * 2)
+    acompanhar()
+    assert 200 not in {matiz for matiz, _ in _matizes_e_brilhos(modulo)}
 
 
 # endregion

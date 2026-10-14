@@ -812,7 +812,7 @@ def _alcancou(
     return _esperar(modulo, aceita, prazo) is not None
 
 
-def _rajada(fita: Fita, caminho: list[str], geracao: int) -> None:
+def _rajada(fita: Fita, caminho: list[str], geracao: int, ritmo: int = RITMO_FADE) -> None:
     """Manda os degraus no ritmo do fade, sem esperar resposta de nenhum.
 
     No fim espera a fita alcançar o último degrau: ela aplica mais devagar do
@@ -837,7 +837,7 @@ def _rajada(fita: Fita, caminho: list[str], geracao: int) -> None:
                 return resposta
             ultimo = cor_hex
             _mostrada[fita.id] = (True, cor_hex)
-            falta = inicio + (indice + 1) / RITMO_FADE - time.monotonic()
+            falta = inicio + (indice + 1) / ritmo - time.monotonic()
             if falta > 0:
                 time.sleep(falta)
         if ultimo is not None:
@@ -1400,6 +1400,18 @@ FADE_DA_TELA = 6
 # de transição que 10 s depois já tinham passado.
 INTERVALO_MINIMO_ENTRE_TROCAS = 30
 
+# Os degraus por segundo do fade da tela, metade dos do resto do app. Num fade
+# de 6 s, 15 por segundo ainda são degraus que o olho não separa, e metade do
+# tráfego: a 30/s, no segundo teste, a fita perdia o fim da rajada e o comando
+# final a fazia pular até a cor.
+RITMO_DA_TELA = 15
+
+# Troca de matiz maior que esta passa pelo escuro: a cor de agora apaga até o
+# mínimo, e a nova acende dali. Pelo lado curto do círculo, de azul a vermelho
+# a luz atravessaria o roxo — no segundo teste, vermelho na tela e roxo na
+# parede.
+SALTO_PELO_ESCURO = 90
+
 # A saturação mínima da luz. Na tela, cor com saturação média já é cor; numa
 # fita de LED ela parece branca — no primeiro teste, um amarelo forte na tela
 # virou luz branca. Com o piso em 60%, no segundo, vermelho virou rosa (e o
@@ -1584,7 +1596,7 @@ def _uma_amostra(sessao: object, alvos: list[Fita]) -> None:
         _cor_ambiente = nova
         geracoes = _reservar(alvos)
     _em_paralelo(
-        alvos, lambda fita: _deslizar(fita, nova, FADE_DA_TELA, geracoes[fita.id])
+        alvos, lambda fita: _deslizar_da_tela(fita, nova, geracoes[fita.id])
     )
 
 
@@ -1920,7 +1932,9 @@ def _tingir(fita: Fita, cor: Cor, geracao: int) -> None:
             _mostrada.pop(fita.id, None)
 
 
-def _deslizar(fita: Fita, cor: Cor, segundos: float, geracao: int) -> None:
+def _deslizar(
+    fita: Fita, cor: Cor, segundos: float, geracao: int, ritmo: int = RITMO_FADE
+) -> None:
     """A cor chegando aos poucos, no ritmo do fade, e o comando direto no fim.
 
     Fita sem cor conhecida (``_mostrada``) não tem de onde deslizar: vai direto.
@@ -1931,9 +1945,43 @@ def _deslizar(fita: Fita, cor: Cor, segundos: float, geracao: int) -> None:
         destino = na_fita(cor, fita)
         antes = _mostrada.get(fita.id)
         origem = cor_de_hex(antes[1]) if antes is not None and antes[0] else None
-        passos = round(segundos * RITMO_FADE)
+        passos = round(segundos * ritmo)
         if passos and origem is not None and origem != destino:
-            _rajada(fita, _degraus(origem, destino, passos), geracao)
+            _rajada(fita, _degraus(origem, destino, passos), geracao, ritmo)
+        _tingir(fita, cor, geracao)
+
+
+def _deslizar_da_tela(fita: Fita, cor: Cor, geracao: int) -> None:
+    """A troca da cor da tela: ``FADE_DA_TELA`` a ``RITMO_DA_TELA``, e a troca
+    grande de matiz pelo escuro (ver ``SALTO_PELO_ESCURO``).
+
+    Uma rajada só para as duas metades: a espera do fim da rajada (ver
+    ``_rajada``) entre elas deixaria a fita parada no escuro.
+    """
+    with _trava_da(fita):
+        if not _vigente(fita, geracao):
+            return
+        destino = na_fita(cor, fita)
+        antes = _mostrada.get(fita.id)
+        origem = cor_de_hex(antes[1]) if antes is not None and antes[0] else None
+        passos = round(FADE_DA_TELA * RITMO_DA_TELA)
+        salto = origem is not None and (
+            abs((destino.matiz - origem.matiz + 180) % 360 - 180) > SALTO_PELO_ESCURO
+        )
+        if not passos or origem is None or origem == destino:
+            pass
+        elif salto:
+            apagada = origem._replace(brilho=BRILHO_MINIMO)
+            acesa_no_escuro = destino._replace(brilho=BRILHO_MINIMO)
+            metade = passos // 2
+            caminho = (
+                _degraus(origem, apagada, metade)
+                + [hsv_hex(acesa_no_escuro)]
+                + _degraus(acesa_no_escuro, destino, passos - metade)
+            )
+            _rajada(fita, caminho, geracao, RITMO_DA_TELA)
+        else:
+            _rajada(fita, _degraus(origem, destino, passos), geracao, RITMO_DA_TELA)
         _tingir(fita, cor, geracao)
 
 
