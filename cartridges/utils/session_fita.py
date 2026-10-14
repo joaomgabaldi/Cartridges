@@ -1448,21 +1448,25 @@ def voltar() -> None:
 # region Cor da tela
 
 # A cada quantos segundos a tela é amostrada. A luz acompanha a cena, não a
-# ação: uma explosão não pode virar um clarão na parede. Com 12 s, no primeiro
-# teste, a luz parecia atrasada; cada amostra custa uns 35–50 ms de captura, e
-# o tempo de cada uma vai para o log para medir o efeito no jogo.
-INTERVALO_DA_TELA = 6
+# ação: uma explosão não pode virar um clarão na parede — quem segura isso é a
+# confirmação (ver ``_decidir``), e não o intervalo. No quarto teste, com 6 s
+# de amostra, 6 de confirmação e 6 de fade, a cor nova chegava uns 20 s depois
+# da cena. Cada amostra custa uns 30 ms de captura (medido nos testes), e o
+# tempo de cada uma vai para o log.
+INTERVALO_DA_TELA = 3
 
-# O fade da troca, três vezes o do resto do app: a cor nova chega sem que se
+# O fade da troca, o dobro do resto do app: a cor nova chega sem que se
 # perceba o momento em que ela começou. No segundo teste, 3 s com troca a cada
-# 10 s deram dor de cabeça.
-FADE_DA_TELA = 6
+# 10 s deram dor de cabeça; no quarto, 6 s com confirmação deixavam a cor
+# atrasada. Com a confirmação e o intervalo mínimo, 4 s.
+FADE_DA_TELA = 4
 
 # A troca só vale quando duas amostras seguidas concordam (ver ``_decidir``), e
-# no máximo uma a cada 30 s: no segundo teste a luz trocou umas 50 vezes em 12
-# minutos, pulando entre o vermelho e o azul da mesma cena e seguindo quadros
-# de transição que 10 s depois já tinham passado.
-INTERVALO_MINIMO_ENTRE_TROCAS = 30
+# no máximo uma a cada 15 s: no segundo teste, sem isso, a luz trocou umas 50
+# vezes em 12 minutos, pulando entre o vermelho e o azul da mesma cena e
+# seguindo quadros de transição. No terceiro, com 30 s, a espera do intervalo
+# somava atraso à cor nova.
+INTERVALO_MINIMO_ENTRE_TROCAS = 15
 
 # Os degraus por segundo do fade da tela, metade dos do resto do app. Num fade
 # de 6 s, 15 por segundo ainda são degraus que o olho não separa, e metade do

@@ -2676,7 +2676,7 @@ def test_troca_espera_o_intervalo_minimo(relogio):
     assert _decidir_com(relogio, AZUL, AZUL) == [None, AZUL]
     relogio["t"] += 10
     assert _decidir_com(relogio, VERMELHO, VERMELHO) == [None, None]
-    relogio["t"] += 21
+    relogio["t"] += 6  # 16 s depois da troca: passou dos 15
     assert _decidir_com(relogio, VERMELHO) == [VERMELHO]
 
 
