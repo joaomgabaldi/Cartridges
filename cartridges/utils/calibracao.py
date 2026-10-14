@@ -127,6 +127,10 @@ def de_json(dados: Any) -> Calibracao:
         return NEUTRA
     if len(cores) != len(REFERENCIAS):
         return NEUTRA
+    if not branco[1]:
+        # Sem saturação, o tom de branco é o neutro, qualquer que seja a matiz
+        # gravada (a Temperatura no centro gravava 210 antes da correção).
+        branco = NEUTRA.branco
     return Calibracao(cores, branco)
 
 
@@ -141,8 +145,12 @@ def branco_da_temperatura(temperatura: float) -> tuple[int, int]:
     """O tom de branco de uma posição da Temperatura: −1 o mais quente, 0
     neutro, +1 o mais frio."""
     temperatura = _limitar(temperatura, -1, 1)
-    matiz = MATIZ_QUENTE if temperatura < 0 else MATIZ_FRIO
-    return matiz, round(abs(temperatura) * SATURACAO_DO_BRANCO)
+    saturacao = round(abs(temperatura) * SATURACAO_DO_BRANCO)
+    # O centro do controle é o branco neutro, igual ao da calibração neutra:
+    # voltar a ele desfaz o ajuste, e o dispositivo não conta como calibrado.
+    if not saturacao:
+        return NEUTRA.branco
+    return (MATIZ_QUENTE if temperatura < 0 else MATIZ_FRIO), saturacao
 
 
 def temperatura_do_branco(branco: tuple[int, int]) -> float:

@@ -77,21 +77,17 @@ def test_restaurar_volta_a_etapa_ao_neutro(assistente):
     assert assistente.calibracoes["eb0"] == NEUTRA
 
 
-def test_navegacao_vai_do_inicio_ao_fim(assistente):
+def test_navegacao_vai_do_inicio_ao_teste(assistente):
+    """Depois do Branco vem o teste, direto: não há mais "Aplicar esta
+    calibração também a" — para fitas iguais, há "Todos os dispositivos"."""
     assistente.escolher("eb0")
     assistente.anterior()
     assert assistente.pagina() == "inicio"
     assistente.escolher("eb0")
     for _ in range(7):
         assistente.proxima()
-    assert assistente.pagina() == "fim"
-
-
-def test_aplicar_tambem_copia_a_calibracao(assistente):
-    assistente.escolher("eb0")
-    assistente.mudar_tom(-8)
-    assistente.aplicar_tambem({"eb1"})
-    assert assistente.calibracoes["eb1"] == assistente.calibracoes["eb0"]
+    assert assistente.pagina() == "teste"
+    assert assistente._pilha.get_child_by_name("fim") is None
 
 
 def test_concluir_grava_a_calibracao_de_cada_fita(assistente):
@@ -180,16 +176,6 @@ def test_escolher_depois_do_teste_comeca_do_inicio(assistente):
     assert assistente.etapa == 0
 
 
-def test_voltar_do_fim_leva_ao_branco(assistente):
-    assistente.escolher("eb0")
-    for _ in range(7):
-        assistente.proxima()
-    assert assistente.pagina() == "fim"
-    assistente.voltar_do_fim()
-    assert assistente.pagina() == "etapa"
-    assert assistente.etapa == 6
-
-
 def test_todos_juntos_acende_todas_e_ajusta_cada_uma(assistente):
     from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
 
@@ -247,20 +233,73 @@ def test_todos_juntos_vai_do_branco_direto_ao_teste(assistente):
     assert assistente.pagina() == "teste"
 
 
-def test_aplicar_tambem_nao_oferece_a_ja_calibrada_na_sessao(assistente):
-    assistente.escolher("eb0")
-    for _ in range(7):
-        assistente.proxima()
-    assert set(assistente._marcadas) == {"eb1"}
-    assistente.calibrar_outro()
-    assistente.escolher("eb1")
-    for _ in range(7):
-        assistente.proxima()
-    assert assistente._marcadas == {}
-    assert not assistente._grupo_do_fim.get_visible()
-
-
 def test_lista_comeca_com_todos_os_dispositivos(assistente):
     from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
 
     assert TODOS in assistente._linhas_do_inicio
+
+
+def test_temperatura_de_volta_ao_centro_nao_conta_como_calibrada(assistente):
+    assistente.escolher("eb0")
+    for _ in range(6):
+        assistente.proxima()  # Branco
+    assistente.mudar_temperatura(-0.2)
+    assistente.mudar_temperatura(0)
+    assert assistente.calibracoes["eb0"] == NEUTRA
+    assert assistente.subtitulo_de("eb0") == ""
+
+
+def test_um_dispositivo_sozinho_e_depois_todos_grava_tudo(assistente):
+    from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
+
+    assistente.escolher("eb0")
+    assistente.mudar_tom(-8)
+    for _ in range(7):
+        assistente.proxima()
+    assistente.voltar_aos_ajustes()
+    assistente.escolher(TODOS)
+    assistente.mudar_tom(5, "eb1")
+    for _ in range(7):
+        assistente.proxima()
+    assistente.concluir()
+    gravadas = {fita.id: calibracao.de_json(fita.calibracao) for fita in session_fita.fitas()}
+    assert gravadas["eb0"].cores[0] == (-8, 1.0)
+    assert gravadas["eb1"].cores[0] == (5, 1.0)
+
+
+def test_com_um_dispositivo_so_nao_ha_todos(tmp_path, monkeypatch, schema):
+    from cartridges.calibracao_janela import TODOS, AssistenteDeCalibracao  # noqa: PLC0415
+
+    monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
+    session_fita.gravar_fitas([session_fita.Fita("A", "eb0", "1", "k")])
+    janela = AssistenteDeCalibracao(session_fita.fitas())
+    assert TODOS not in janela._linhas_do_inicio
+
+
+def test_avancar_no_teste_reinicia_o_tempo(assistente):
+    assistente.escolher("eb0")
+    assistente.testar()
+    antes = assistente._temporizador
+    assistente.avancar_teste()
+    assert assistente._temporizador and assistente._temporizador != antes
+
+
+def test_da_lista_da_para_ir_direto_ao_teste(assistente):
+    assistente.escolher("eb0")
+    assistente.mudar_tom(-8)
+    assistente.anterior()  # de volta à lista
+    assert assistente.pagina() == "inicio"
+    assistente._testar_da_lista.emit("clicked")
+    assert assistente.pagina() == "teste"
+    assert assistente.previas[-1][2]["eb0"].cores[0] == (-8, 1.0)
+
+
+def test_voltar_a_lista_devolve_as_fitas_a_cor_do_app(assistente):
+    assistente.escolher("eb0")
+    assistente.testar()
+    assistente.voltar_aos_ajustes()
+    tipo, cor, _calibracoes = assistente.previas[-1]
+    assert tipo == "todas" and cor == session_fita.cor_do_app()
+    assistente.escolher("eb0")
+    assistente.anterior()
+    assert assistente.previas[-1][1] == session_fita.cor_do_app()

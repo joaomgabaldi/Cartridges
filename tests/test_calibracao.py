@@ -96,3 +96,17 @@ def test_json_com_numero_absurdo_vale_neutra(dados):
     """Roda em toda troca de cor: número infinito, enorme ou NaN vira neutra,
     e não uma exceção na thread que pinta a fita."""
     assert calibracao.de_json(dados) == NEUTRA
+
+
+def test_temperatura_no_centro_e_o_branco_neutro():
+    """O controle tem uma marca no centro, e voltar a ela é desfazer o ajuste:
+    tem de dar exatamente o branco da calibração neutra."""
+    assert calibracao.branco_da_temperatura(0) == NEUTRA.branco
+    assert calibracao.branco_da_temperatura(0.001) == NEUTRA.branco
+
+
+def test_branco_sem_saturacao_gravado_antes_vale_neutro():
+    """Calibração gravada com a Temperatura no centro antes da correção:
+    (210, 0) é o branco neutro, e o dispositivo não conta como calibrado."""
+    dados = {"cores": [[0, 1.0]] * 6, "branco": [210, 0]}
+    assert calibracao.de_json(dados) == NEUTRA
