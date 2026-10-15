@@ -9,10 +9,10 @@
 Este é um fork da versão para Windows do [Cartridges](https://codeberg.org/kramo/cartridges), o launcher
 criado por kramo para o GNOME. O projeto original (abandonado) reúne jogos de vários launchers do Linux; esta
 versão reúne os jogos de um PC com Windows a partir de uma pasta de atalhos e acrescenta novas funções como:
-acompanhamento de tempo de jogo por sessão, registro pessoal de cada jogo,
-metadados da Steam e do HowLongToBeat, navegação por controle Xbox, papel de parede,
-busca por capas e logos da Steam e controle de iluminação inteligente
-que acompanham o jogo aberto, além de backup completo e atualização automática.
+acompanhamento de tempo de jogo por sessão, conquistas das lojas Steam, Epic, Ubisoft e Xbox,
+registro pessoal de cada jogo, metadados da Steam e do HowLongToBeat, navegação por controle Xbox,
+papel de parede, busca por capas e logos e controle de iluminação inteligente que acompanham o
+jogo aberto, além de backup completo, backup dos saves e atualização automática.
 
 A interface é inteiramente em português do Brasil.
 
@@ -37,6 +37,11 @@ A interface é inteiramente em português do Brasil.
 - Filtros por gênero, ano de lançamento e status, combináveis entre si e com a busca.
 - Grade com número de colunas acompanhando a largura da janela, e capas que deslizam até a nova
   posição quando a grade se reorganiza.
+- Capas animadas reproduzidas ao passar o mouse ou, se preferir, o tempo todo na biblioteca.
+- **Tarefas em andamento**: importações, atualizações de metadados e outras tarefas em segundo
+  plano aparecem num botão no canto da biblioteca, que abre uma janela com o progresso de cada
+  uma. A janela pode ficar aberta ao lado do aplicativo, e o trabalho continua mesmo com a janela
+  principal fechada.
 - Navegação suave e agradável.
 
 ### Metadados e imagens
@@ -57,6 +62,7 @@ A interface é inteiramente em português do Brasil.
 ### Tela de detalhes
 
 - Capa, logo, fundo desfocado, datas, tempo de jogo e tamanho no disco.
+- Os tempos do HowLongToBeat e o andamento das conquistas, com as últimas desbloqueadas.
 - Botão para abrir a pasta de instalação do jogo, quando ela pode ser determinada.
 
 ![Tela de detalhes de um jogo](data/screenshots/detalhes.jpg)
@@ -73,6 +79,24 @@ A interface é inteiramente em português do Brasil.
   somente pelo nome.
 
 ![Jogos Zerados](data/screenshots/zerados.jpg)
+
+### Conquistas
+
+- As conquistas desbloqueadas são acompanhadas enquanto você joga, nas lojas Steam, Epic Games,
+  Ubisoft Connect e Xbox (incluindo o Game Pass), e em alguns jogos 🏴‍☠️.
+- Para o Xbox e a Epic, basta entrar na conta na aba Conquistas das Preferências. Para os jogos
+  🏴‍☠️, uma chave da Steam Web API traz o nome e a descrição das conquistas em português.
+- A janela de conquistas de cada jogo mostra o progresso, as desbloqueadas (com a data e a
+  porcentagem de jogadores que também a têm), as bloqueadas e as ocultas.
+- Ao abrir o aplicativo, um aviso informa quantas conquistas foram desbloqueadas desde a última
+  vez.
+- **Durante o jogo**: quando a loja não mostra o próprio aviso, o Cartridges mostra um no canto da
+  tela, com som (volume ajustável) e posição à escolha. A iluminação inteligente pisca na cor e no
+  estilo escolhidos. Várias conquistas de uma vez viram um único som e um único pulso.
+
+![Conquistas de um jogo](data/screenshots/conquistas.jpg)
+
+<p align="center"><img src="data/screenshots/conquistas-preferencias.png" width="480" alt="Opções das conquistas durante o jogo"></p>
 
 ### Tempo de jogo e sessões
 
@@ -92,18 +116,41 @@ A interface é inteiramente em português do Brasil.
 
 Todos estes recursos ficam na aba Personalização das Preferências e vêm desativados por padrão.
 
-- **Outro monitor**: ao iniciar um jogo, a janela pode ir maximizada para outro monitor, com um
-  relógio contando o tempo da sessão. Ao final, ela volta ao monitor e ao tamanho de antes.
+- **Outro monitor**: ao iniciar um jogo, a janela pode ir maximizada para o monitor escolhido, com
+  o logo do jogo em destaque, um relógio contando o tempo da sessão e as conquistas do jogo (a
+  descrição de cada uma aparece ao passar o mouse). Ao final, ela volta ao monitor e ao tamanho de
+  antes.
 - **Papel de parede**: os monitores além do principal podem exibir a arte do jogo, buscada no
   [wallhaven](https://wallhaven.cc) ou escolhida manualmente, com ajuste de enquadramento para
   monitores em retrato e em paisagem. Ao final da sessão, cada monitor volta ao papel de parede
   que tinha.
-- **Iluminação inteligente Tuya**: a iluminação inteligente fica na cor do aplicativo enquanto ele
-  está aberto e passa para a cor do jogo durante a sessão. A cor é extraída da capa ou escolhida
-  manualmente, com brilho próprio. As trocas acontecem em degradê, e ao fechar o aplicativo a
-  iluminação inteligente volta ao estado anterior.
-
 <p align="center"><img src="data/screenshots/personalizacao.png" width="480" alt="Aba Personalização das Preferências"></p>
+
+### Iluminação inteligente
+
+Fitas de LED e lâmpadas inteligentes da Tuya, configuradas uma vez por um assistente que busca os
+dispositivos na sua conta; depois disso, o aplicativo conversa com eles direto pela rede de casa.
+
+- A iluminação fica na cor do aplicativo enquanto ele está aberto e passa para a cor do jogo
+  durante a sessão. Ao fechar o aplicativo, ela volta exatamente ao estado anterior.
+- A cor de cada jogo é automática (extraída da capa) ou escolhida manualmente, e o brilho de cada
+  jogo pode ser ajustado sem trocar a cor automática.
+- **Cor acompanha a tela do jogo** (experimento): durante a sessão, a cor acompanha devagar a cor
+  predominante do jogo na tela, com cores vivas e brilho menor nas cenas escuras. Na edição do
+  jogo, a cor aparece como "Automático".
+- **Brilho máximo por dispositivo**, aplicado proporcionalmente sobre o brilho geral e o de cada
+  jogo.
+- **Calibrar as cores**: um assistente, no estilo da calibração de HDR do Windows, ajusta cada
+  dispositivo para reproduzir as cores como a tela, em seis cores de referência e no branco. Dá
+  para calibrar um dispositivo por vez ou todos juntos, cada um com os seus controles, e testar o
+  resultado antes de salvar.
+- As trocas de cor acontecem em degradê. Um dispositivo que para de responder durante o jogo é
+  procurado de novo sozinho, e um aviso no fim da sessão informa se ele ficou muito tempo sem
+  responder.
+
+<p align="center"><img src="data/screenshots/iluminacao.png" width="480" alt="Opções da iluminação inteligente"></p>
+
+<p align="center"><img src="data/screenshots/calibracao.png" width="420" alt="Assistente de calibração das cores"></p>
 
 ### Controle Xbox
 
