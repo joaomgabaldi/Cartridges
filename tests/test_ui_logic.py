@@ -1319,11 +1319,30 @@ def test_capa_apng_e_animada(apng, capas_falsas):
     assert cover.animada
 
 
-def test_apng_nao_entra_na_pre_decodificacao_das_paradas(apng, cover_file):
+def test_o_primeiro_quadro_da_capa_animada_vem_pronto_da_abertura(apng, cover_file, monkeypatch):
+    """Em threads com as paradas: uma por vez na thread da tela, as 22 capas
+    animadas de uma biblioteca real somavam ~0,5 s antes de a janela aparecer."""
+    from gi.repository import Gdk, GdkPixbuf
+    from cartridges import game_cover, shared
     from cartridges.game_cover import GameCover
 
-    with GameCover.pre_decodificadas([apng, cover_file]):
+    def decodificar_de_novo(*_args, **_kwargs):
+        raise AssertionError("a capa foi decodificada de novo")
+
+    # A segunda animada a grade não usa: sai descartada no fim do bloco.
+    outra = apng.with_name("imported_3.apng")
+    outra.write_bytes(apng.read_bytes())
+
+    with GameCover.pre_decodificadas([apng, outra, cover_file]):
         assert set(GameCover._pre_decodificadas) == {cover_file}
+        assert set(GameCover._primeiros_quadros) == {apng, outra}
+        monkeypatch.setattr(game_cover.Image, "open", decodificar_de_novo)
+        monkeypatch.setattr(GdkPixbuf.Pixbuf, "new_from_file_at_scale", decodificar_de_novo)
+        monkeypatch.setattr(Gdk.Texture, "new_from_filename", decodificar_de_novo)
+        texture = GameCover(set(), apng).get_texture()
+
+    assert (texture.get_width(), texture.get_height()) == shared.display_size
+    assert GameCover._primeiros_quadros == {}
 
 
 def test_get_cover_path_acha_a_capa_apng(apng):

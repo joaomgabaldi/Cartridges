@@ -292,10 +292,15 @@ def compilar(destino: Path) -> None:
     De propósito, e não como efeito colateral da verificação: numa instalação
     para todos os usuários, {app}\\lib não é gravável, e sem .pyc cada abertura
     do app recompila tudo (medido em 23/09: 1,2 s com cache, 2,8 s sem).
+
+    Por hash, não por data: o instalador sai da CI, em UTC, e o Inno Setup
+    repõe a data dos arquivos como hora local, então em UTC-3 cada fonte chega
+    3 h adiantada e nenhum .pyc por data confere (medido em 15/10/2026: a
+    janela levava 3,9 s para aparecer, 2,5 s com o cache valendo).
     """
     resultado = subprocess.run(
         [str(destino / "bin" / "python.exe"), "-m", "compileall", "-q", "-j", "0",
-         str(destino / "lib")],
+         "--invalidation-mode", "unchecked-hash", str(destino / "lib")],
         cwd=destino,
         capture_output=True,
         text=True,

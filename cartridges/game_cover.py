@@ -36,6 +36,19 @@ from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.save_cover import ANIMATED_SUFFIXES
 
 
+def _primeiro_quadro(path: Path) -> bytes:
+    """O primeiro quadro de uma capa animada, no tamanho da grade, em TIFF.
+
+    Só PIL e bytes, sem GTK: roda nas threads de `GameCover.pre_decodificadas`.
+    """
+    width, height = shared.display_size
+    with Image.open(path) as image:
+        frame = image.convert("RGB").resize((int(width), int(height)))
+        buffer = BytesIO()
+        frame.save(buffer, "tiff", compression=None)
+        return buffer.getvalue()
+
+
 def texture_from_pixbuf(pixbuf: GdkPixbuf.Pixbuf) -> Gdk.Texture:
     """O substituto documentado do Gdk.Texture.new_for_pixbuf, depreciado.
 
@@ -108,6 +121,8 @@ class GameCover:
     # Capas da abertura já decodificadas no tamanho da grade; ver
     # `pre_decodificadas`. Cada uma é usada uma vez.
     _pre_decodificadas: dict[Path, GdkPixbuf.Pixbuf] = {}
+    # O mesmo para o primeiro quadro das animadas, já codificado para a textura.
+    _primeiros_quadros: dict[Path, bytes] = {}
 
     placeholder = Gdk.Texture.new_from_resource(
         shared.PREFIX + "/library_placeholder.svg"
@@ -128,7 +143,12 @@ class GameCover:
         principal, em `_load_display_texture`. A capa que falhar aqui fica de
         fora e segue o caminho normal de lá, com os mesmos substitutos. Ao sair
         do bloco, as que a grade não usou são descartadas.
+
+        As animadas também, pelo primeiro quadro (`_primeiro_quadro`): uma por
+        vez, as 22 de uma biblioteca real levavam ~0,55 s; em threads, ~0,25 s
+        (medido em 15/10/2026).
         """
+        caminhos = list(caminhos)
         width, height = (int(value) for value in shared.display_size)
 
         def decodificar(path: Path) -> Optional[GdkPixbuf.Pixbuf]:
@@ -143,15 +163,37 @@ class GameCover:
             path for path in caminhos
             if path and path.suffix.lower() not in ANIMATED_SUFFIXES
         ]
+
+        def primeiro_quadro(path: Path) -> Optional[bytes]:
+            # Qualquer falha: a capa fica de fora e `_load_first_frame` a
+            # decodifica de novo na thread da tela, com os mesmos substitutos e
+            # o erro chegando ao manager daquele jogo. Subir daqui derrubaria a
+            # abertura da biblioteca inteira por causa de uma capa.
+            try:
+                return _primeiro_quadro(path)
+            except Exception:  # pylint: disable=broad-exception-caught
+                return None
+
+        animadas = [
+            path for path in caminhos
+            if path and path.suffix.lower() in ANIMATED_SUFFIXES
+        ]
         with ThreadPoolExecutor() as executor:
+            quadros = executor.map(primeiro_quadro, animadas)
             prontas = zip(estaticas, executor.map(decodificar, estaticas))
             cls._pre_decodificadas = {
                 path: pixbuf for path, pixbuf in prontas if pixbuf is not None
+            }
+            cls._primeiros_quadros = {
+                path: quadro
+                for path, quadro in zip(animadas, quadros)
+                if quadro is not None
             }
         try:
             yield
         finally:
             cls._pre_decodificadas = {}
+            cls._primeiros_quadros = {}
 
     def __init__(self, pictures: set[Gtk.Picture], path: Optional[Path] = None) -> None:
         self.pictures = pictures
@@ -211,13 +253,11 @@ class GameCover:
 
     def _load_first_frame(self, path: Path) -> Optional[Gdk.Texture]:
         """Quickly decode just the first frame of an animation for display."""
-        width, height = shared.display_size
+        quadro = GameCover._primeiros_quadros.pop(path, None)
         try:
-            with Image.open(path) as image:
-                frame = image.convert("RGB").resize((int(width), int(height)))
-                buffer = BytesIO()
-                frame.save(buffer, "tiff", compression=None)
-                return Gdk.Texture.new_from_bytes(GLib.Bytes.new(buffer.getvalue()))
+            if quadro is None:
+                quadro = _primeiro_quadro(path)
+            return Gdk.Texture.new_from_bytes(GLib.Bytes.new(quadro))
         except (OSError, GLib.Error):
             return self._load_display_texture(path)
 
