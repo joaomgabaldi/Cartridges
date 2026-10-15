@@ -28,6 +28,13 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.16" date="2026-10-16">
+      <description translate="no">
+        <ul>
+          <li>O aplicativo agora abre mais rápido</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.10.15" date="2026-10-15">
       <description translate="no">
         <ul>
@@ -36,7 +43,6 @@
           <li>Na edição do jogo, a cor da iluminação aparece como Automático quando acompanha a tela</li>
           <li>Na edição do jogo, o brilho da iluminação pode ser ajustado sem trocar a cor automática</li>
           <li>Novo assistente para calibrar as cores da iluminação inteligente, dispositivo por dispositivo</li>
-          <li>O aplicativo agora abre mais rápido</li>
         </ul>
       </description>
     </release>
