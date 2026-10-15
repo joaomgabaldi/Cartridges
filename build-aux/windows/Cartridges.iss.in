@@ -161,7 +161,10 @@ begin
   // page, and a Next that is disabled until the box is ticked aborts the whole
   // install with "Failed to proceed to next wizard page". Whoever updates has
   // already seen the notice on the first install.
-  if WizardSilent or not HasNvidiaGpu then
+  // O instalador rodado à mão por cima de uma instalação que existe também
+  // pula: o aviso já foi visto. Volta depois de desinstalar (o registro da
+  // instalação anterior some) ou se a pasta tiver sido apagada à mão.
+  if WizardSilent or not HasNvidiaGpu or DirExists(WizardForm.PrevAppDir) then
     Exit;
   NvidiaPage := CreateInputOptionPage(wpLicense,
     'Placa de vídeo NVIDIA',
