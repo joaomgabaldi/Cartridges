@@ -7,14 +7,14 @@ Entram os jogos da biblioteca e os de Jogos Zerados — as pastas do AppData
 sobrevivem à desinstalação, então um zerado antigo ainda recupera o que tinha.
 
 A leitura roda numa thread, em duas passadas. A primeira decide a fonte das
-conquistas de cada jogo (`fontes.do_jogo`: a conta de uma loja — Xbox, Epic;
+conquistas de cada jogo (`fontes.do_jogo`: a conta de uma loja — Xbox, Epic, EA;
 ver `contas.py` —, Steam/emulador, Ubisoft ou nenhuma) e lê o que está no disco:
 os arquivos dos emuladores e os da Ubisoft Connect (`.spool` e o catálogo do ZIP); a gravação do histórico, com a fonte (ou o esquecimento
 dela, para o jogo sem fonte), volta para a thread principal, onde dá para
 conferir que o jogo ainda está na store. Sem essa conferência, um jogo
 excluído no meio da passada ganharia de volta o arquivo que o Excluir acabou
 de apagar. A segunda vai à rede: renova o catálogo dos jogos da Steam e lê as
-contas das lojas (Xbox, Epic) dos jogos que vêm delas. Quando um pedido falha
+contas das lojas (Xbox, Epic, EA) dos jogos que vêm delas. Quando um pedido falha
 por rede, os jogos seguintes (de qualquer fonte) ficam só com o cache e o
 arquivo do jogo. Jogo sem fonte não vai à rede.
 
@@ -284,7 +284,7 @@ class VarreduraConquistas(PassadaAgendada):
     ) -> None:
         """Duas passadas. A dos arquivos vem primeiro e só toca o disco: o
         histórico é gravado e o aviso de conquistas novas sai sem esperar a
-        Steam. A da rede (catálogo da Steam, contas das lojas: Xbox, Epic) vem depois."""
+        Steam. A da rede (catálogo da Steam, contas das lojas: Xbox, Epic, EA) vem depois."""
         tarefa = None
         concluiu = False
         try:

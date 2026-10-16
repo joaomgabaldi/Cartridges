@@ -1,4 +1,4 @@
-"""As lojas em que as conquistas vêm de uma conta do usuário (Xbox, Epic).
+"""As lojas em que as conquistas vêm de uma conta do usuário (Xbox, Epic, EA).
 
 O que é igual entre elas — o vigia por consulta (`vigia_da_conta.py`) e o ramo
 da rede da varredura — fala só com a "loja": um módulo com os nomes de
@@ -29,7 +29,7 @@ class LojaComConta(Protocol):  # pragma: no cover - só documenta os nomes
 
     def conectada(self) -> bool: ...
 
-    # XUID no Xbox, account_id na Epic.
+    # XUID no Xbox, account_id na Epic, persona na EA.
     def id_da_conta(self) -> Optional[str]: ...
 
     # Em thread, com rede: completa a fonte pendente (id ""). "" = sabidamente
@@ -51,10 +51,11 @@ _lojas: Optional[dict[str, ModuleType]] = None
 def lojas() -> dict[str, ModuleType]:
     global _lojas  # pylint: disable=global-statement
     if _lojas is None:
+        from cartridges.conquistas.ea import loja as ea  # noqa: PLC0415
         from cartridges.conquistas.epic import loja as epic  # noqa: PLC0415
         from cartridges.conquistas.xbox import loja as xbox  # noqa: PLC0415
 
-        _lojas = {xbox.TIPO: xbox, epic.TIPO: epic}
+        _lojas = {xbox.TIPO: xbox, epic.TIPO: epic, ea.TIPO: ea}
     return _lojas
 
 

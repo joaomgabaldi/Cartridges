@@ -68,7 +68,14 @@ def acompanha(game: Any) -> bool:
         and fontes.pfn(game) is None
         and not fontes.url_da_epic(game)
         and not fontes.url_da_ubisoft(game)
+        and not _gravada_da_ea(game)
     )
+
+
+def _gravada_da_ea(game: Any) -> bool:
+    """Jogo da EA, pela fonte gravada no histórico (nunca o disco do jogo)."""
+    fonte = fontes.gravada(game)
+    return fonte is not None and fonte.tipo == fontes.EA
 
 
 def completou(antes: Optional[progresso.Progresso], depois: Optional[progresso.Progresso]) -> bool:

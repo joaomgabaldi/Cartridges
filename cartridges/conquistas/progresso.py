@@ -77,7 +77,7 @@ def montar(cat: Optional[Catalogo], hist: Optional[dict[str, int]]) -> Optional[
 
 def do_jogo(game: Any) -> Optional[Progresso]:
     """O progresso do cartão, ou None (cartão oculto): interruptor desligado,
-    sem fonte gravada, conta Xbox desconectada ou sem catálogo."""
+    sem fonte gravada, conta da loja desconectada ou sem catálogo."""
     if not getattr(game, "conquistas", True):
         return None
     fonte = fontes.gravada(game)

@@ -1,11 +1,12 @@
 """De onde vêm as conquistas de cada jogo — ou de lugar nenhum, e o cartão some.
 
-Quatro respostas: a conta de uma loja (Xbox ou Epic; ver `contas.py`; jogo do
-Xbox/Game Pass com a conta Microsoft conectada, ou jogo da Epic com a conta Epic
-conectada), os arquivos locais da Ubisoft Connect (atalho `uplay://` ou pasta de
+Quatro respostas: a conta de uma loja (Xbox, Epic ou EA; ver `contas.py`; jogo do
+Xbox/Game Pass com a conta Microsoft conectada, jogo da Epic com a conta Epic
+conectada, ou jogo da EA, reconhecido pela chave `EA Games` do registro, com a conta
+EA conectada), os arquivos locais da Ubisoft Connect (atalho `uplay://` ou pasta de
 instalação do launcher; ver `ubisoft/`), a Steam ou um emulador (appID e onde ler o
 progresso: atalho `steam://`, arquivo de emulador, ou sinal de emulador na pasta do
-jogo), ou nenhuma. Jogo do Xbox ou da Epic sem conta não cai para a Steam: o catálogo
+jogo), ou nenhuma. Jogo do Xbox, da Epic ou da EA sem conta não cai para a Steam: o catálogo
 da Steam ficaria parado em "0 de N", que é justamente o que esta regra acaba.
 
 `do_jogo` olha o disco e roda em thread (varredura, vigia). A página do jogo
@@ -24,6 +25,7 @@ from typing import Any, Optional
 
 from cartridges.conquistas import arquivos, contas, historico
 from cartridges.conquistas.cache_de_leitura import CacheDeLeitura, assinatura
+from cartridges.conquistas.ea import api as ea_api, conta as ea_conta, jogo as ea_jogo
 from cartridges.conquistas.epic import api as epic_api, conta as epic_conta
 from cartridges.conquistas.ubisoft import loja as ubisoft_loja, pacote as ubisoft_pacote
 from cartridges.conquistas.xbox import api, conta
@@ -33,6 +35,7 @@ XBOX = "xbox"
 STEAM = "steam"
 EPIC = "epic"
 UBISOFT = "ubisoft"
+EA = "ea"
 _NAMESPACE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 # `com.epicgames.launcher://apps/<ns>%3A<item>%3A<AppName>?action=launch` (Playnite
 # `EpicLauncher.cs`) ou, nos atalhos antigos, `.../apps/<AppName>?...`.
@@ -71,6 +74,8 @@ class Fonte:
         tipo, id_ = texto.split(":")
         if tipo == EPIC:
             valido = _NAMESPACE.fullmatch(id_) is not None
+        elif tipo == EA:
+            valido = ea_api.conjunto_valido(id_)
         else:
             valido = tipo in (XBOX, STEAM, UBISOFT) and arquivos.appid_valido(id_)
         return Fonte(tipo, id_) if valido else None
@@ -233,6 +238,31 @@ def eh_da_epic(game: Any) -> bool:
         return False
 
 
+def _eh_copia_da_steam(game: Any, pastas: list[Path]) -> bool:
+    """Jogo da EA comprado na Steam segue com as conquistas da Steam."""
+    if arquivos.eh_jogo_da_steam(getattr(game, "executable", "") or ""):
+        return True
+    return any(parte.casefold() == "steamapps" for pasta in pastas for parte in pasta.parts)
+
+
+def candidato_da_ea(game: Any) -> Optional[ea_jogo.Candidato]:
+    """O jogo da EA (chave `EA Games` do registro aponta para a pasta dele). Olha o disco:
+    só em thread. Sinal de emulador na pasta vence: o fluxo da Steam segue."""
+    pastas = bases(game)
+    # O registro primeiro: sem chave casando, nem se olha a pasta atrás de emulador.
+    achado = ea_jogo.candidato(pastas, ea_jogo.chaves_do_registro)  # procurado na hora: os testes o trocam
+    if achado is None or _tem_sinal(pastas) or _eh_copia_da_steam(game, pastas):
+        return None
+    return achado
+
+
+def eh_da_ea(game: Any) -> bool:
+    try:
+        return candidato_da_ea(game) is not None
+    except OSError:
+        return False
+
+
 def do_jogo(game: Any) -> Optional[Fonte]:
     """A fonte do jogo, olhando o disco. Roda em thread e nunca levanta."""
     try:
@@ -249,6 +279,15 @@ def do_jogo(game: Any) -> Optional[Fonte]:
         if epic is not None:
             # Jogo da Epic sem conta não cai para a Steam (cartão oculto).
             return Fonte(EPIC, epic[0]) if epic_conta.conectada() else None
+        candidato = candidato_da_ea(game)
+        if candidato is not None:
+            # Como a Epic: sem conta, nenhuma fonte (não cai para a Steam).
+            if not ea_conta.conectada():
+                return None
+            guardado = ea_api.conjunto_guardado(candidato.pasta)
+            if guardado is None:
+                return Fonte(EA, "")  # pendente: a segunda passada resolve pela biblioteca
+            return Fonte(EA, guardado) if guardado else None
         produto = ubisoft_loja.do_jogo(game)
         if produto is not None:
             # Arquivos locais, sem conta: a fonte vale mesmo antes de o jogo rodar neste PC.

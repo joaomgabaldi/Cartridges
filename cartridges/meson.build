@@ -33,6 +33,7 @@ install_subdir(
   install_dir: moduledir,
   exclude_directories: [
     '__pycache__',
+    'ea/__pycache__',
     'epic/__pycache__',
     'ubisoft/__pycache__',
     'xbox/__pycache__',

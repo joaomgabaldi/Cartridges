@@ -8,6 +8,7 @@ import pytest
 from cartridges.conquistas import arquivos, catalogo, fontes, historico, vigia
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.formatos import Desbloqueio
+from cartridges.conquistas.fontes import Fonte
 from tests.apoio_conquistas import com_fonte, criar, kv_bytes, pastas, schema_de_teste  # noqa: F401
 
 CAT = Catalogo(
@@ -719,6 +720,15 @@ def test_bin_cortado_no_inicio_e_depois_valido_entra_em_silencio(
 def test_jogo_da_epic_nao_e_do_vigia_de_arquivos(make_game):
     url = 'start "" "com.epicgames.launcher://apps/Sugar?action=launch"'
     assert not vigia.acompanha(make_game(executable=url, steam_appid="570"))
+
+
+def test_acompanha_ignora_fonte_gravada_da_ea(make_game, monkeypatch):
+    game = make_game(steam_appid="570")
+    assert vigia.acompanha(game)
+    monkeypatch.setattr(fontes, "gravada", lambda _game: Fonte("ea", "x"))
+    assert not vigia.acompanha(game)
+    monkeypatch.setattr(fontes, "gravada", lambda _game: Fonte("steam", "570"))
+    assert vigia.acompanha(game)
 
 
 def test_vigia_de_arquivos_nao_acompanha_uplay(make_game):

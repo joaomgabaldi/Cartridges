@@ -1,4 +1,4 @@
-"""Saneadores dos dados que vêm da rede das lojas (Xbox, Epic): data, texto, ícone."""
+"""Saneadores dos dados que vêm da rede das lojas (Xbox, Epic, EA): data, texto, ícone."""
 
 import calendar
 import datetime

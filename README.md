@@ -9,7 +9,7 @@
 Este é um fork da versão para Windows do [Cartridges](https://codeberg.org/kramo/cartridges), o launcher
 criado por kramo para o GNOME. O projeto original (abandonado) reúne jogos de vários launchers do Linux; esta
 versão reúne os jogos de um PC com Windows a partir de uma pasta de atalhos e acrescenta novas funções como:
-acompanhamento de tempo de jogo por sessão, conquistas das lojas Steam, Epic, Ubisoft e Xbox,
+acompanhamento de tempo de jogo por sessão, conquistas das lojas Steam, Epic, Ubisoft, Xbox e EA,
 registro pessoal de cada jogo, metadados da Steam e do HowLongToBeat, navegação por controle Xbox,
 papel de parede, busca por capas e logos e controle de iluminação inteligente que acompanham o
 jogo aberto, além de backup completo, backup dos saves e atualização automática.
@@ -83,8 +83,8 @@ A interface é inteiramente em português do Brasil.
 ### Conquistas
 
 - As conquistas desbloqueadas são acompanhadas enquanto você joga, nas lojas Steam, Epic Games,
-  Ubisoft Connect e Xbox (incluindo o Game Pass), e em alguns jogos 🏴‍☠️.
-- Para o Xbox e a Epic, basta entrar na conta na aba Conquistas das Preferências. Para os jogos
+  Ubisoft Connect, Xbox (incluindo o Game Pass) e EA app, e em alguns jogos 🏴‍☠️.
+- Para o Xbox, a Epic e a EA, basta entrar na conta na aba Conquistas das Preferências. Para os jogos
   🏴‍☠️, uma chave da Steam Web API traz o nome e a descrição das conquistas em português.
 - A janela de conquistas de cada jogo mostra o progresso, as desbloqueadas (com a data e a
   porcentagem de jogadores que também a têm), as bloqueadas e as ocultas.

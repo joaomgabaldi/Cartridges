@@ -4,6 +4,8 @@ import pytest
 
 from cartridges import shared
 from cartridges.conquistas import fontes
+from cartridges.conquistas.ea import conta as ea_conta
+from cartridges.conquistas.ea import janela as ea_janela
 from cartridges.conquistas.epic import conta as epic_conta
 from cartridges.conquistas.epic import janela as epic_janela
 from cartridges.conquistas.xbox import conta, login
@@ -426,7 +428,7 @@ def test_descricao_do_grupo_das_contas(monkeypatch):
     dialogo = _preferencias(monkeypatch)
     assert dialogo.conquistas_contas_group.get_description() == (
         "Entre com as contas das lojas para acompanhar as conquistas dos jogos do Xbox, "
-        "do Game Pass e da Epic Games Store."
+        "do Game Pass, da Epic Games Store e do EA app."
     )
 
 
@@ -524,5 +526,89 @@ def test_fechar_as_preferencias_fecha_a_janela_e_solta_o_ouvinte(monkeypatch):
     monkeypatch.setattr(epic_janela, "JanelaDeLogin", _LoginEpicFalso)
     dialogo = _preferencias(monkeypatch)
     dialogo.conquistas_epic_botao.emit("clicked")
+    dialogo.emit("closed")
+    assert _LoginEpicFalso.criados[0].fechada and removidos == [1]
+
+
+# --- A conta EA -----------------------------------------------------------
+
+
+def test_conta_ea_desconectada(monkeypatch):
+    monkeypatch.setattr(ea_conta, "conectada", lambda: False)
+    dialogo = _preferencias(monkeypatch)
+    assert dialogo.conquistas_ea_row.get_title() == "Conta EA"
+    assert dialogo.conquistas_ea_row.get_subtitle() == "Não conectada"
+    assert dialogo.conquistas_ea_botao.get_label() == "Entrar"
+
+
+def test_conta_ea_conectada_mostra_o_nome(monkeypatch):
+    monkeypatch.setattr(ea_conta, "conectada", lambda: True)
+    monkeypatch.setattr(ea_conta, "nome", lambda: "Jogador")
+    dialogo = _preferencias(monkeypatch)
+    assert dialogo.conquistas_ea_row.get_subtitle() == "Jogador"
+    assert dialogo.conquistas_ea_botao.get_label() == "Sair"
+
+
+def test_entrar_abre_a_janela_e_o_sucesso_varre_os_jogos_da_ea(monkeypatch, store):
+    _LoginEpicFalso.criados = []
+    monkeypatch.setattr(ea_conta, "conectada", lambda: False)
+    monkeypatch.setattr(ea_janela, "JanelaDeLogin", _LoginEpicFalso)
+    pedidos = []
+    _varredura_falsa(monkeypatch, [], pedidos)
+    dialogo = _preferencias(monkeypatch)
+    dialogo.conquistas_ea_botao.emit("clicked")
+    (janela_,) = _LoginEpicFalso.criados
+    assert janela_.mostrada is dialogo
+    janela_.ao_conectar()
+    assert [filtro for _games, filtro in pedidos] == [fontes.eh_da_ea]
+
+
+def test_janela_da_ea_que_falha_ao_mostrar_avisa_com_toast(monkeypatch):
+    class _LoginQueFalha(_LoginEpicFalso):
+        def mostrar(self, pai):
+            raise RuntimeError("falha ao apresentar")
+
+    _LoginEpicFalso.criados = []
+    monkeypatch.setattr(ea_conta, "conectada", lambda: False)
+    monkeypatch.setattr(ea_janela, "JanelaDeLogin", _LoginQueFalha)
+    dialogo = _preferencias(monkeypatch)
+    avisos = []
+    monkeypatch.setattr(dialogo, "add_toast", lambda toast: avisos.append(toast.get_title()))
+    dialogo.conquistas_ea_botao.emit("clicked")
+    assert avisos == ["Não foi possível abrir a janela de login da EA."]
+    dialogo.conquistas_ea_botao.emit("clicked")
+    assert len(_LoginEpicFalso.criados) == 2
+
+
+def test_sair_da_ea(monkeypatch):
+    estado = {"conectada": True}
+    monkeypatch.setattr(ea_conta, "conectada", lambda: estado["conectada"])
+    monkeypatch.setattr(ea_conta, "nome", lambda: "Jogador")
+    monkeypatch.setattr(ea_conta, "sair", lambda: estado.update(conectada=False))
+    dialogo = _preferencias(monkeypatch)
+    dialogo.conquistas_ea_botao.emit("clicked")
+    assert dialogo.conquistas_ea_row.get_subtitle() == "Não conectada"
+
+
+def test_conta_ea_que_muda_atualiza_a_linha(monkeypatch):
+    estado = {"conectada": False}
+    ouvintes = []
+    monkeypatch.setattr(ea_conta, "conectada", lambda: estado["conectada"])
+    monkeypatch.setattr(ea_conta, "nome", lambda: "Jogador")
+    monkeypatch.setattr(ea_conta, "ao_mudar", lambda ouvinte: ouvintes.append(ouvinte) or (lambda: None))
+    dialogo = _preferencias(monkeypatch)
+    estado["conectada"] = True
+    ouvintes[0]()
+    assert dialogo.conquistas_ea_row.get_subtitle() == "Jogador"
+
+
+def test_fechar_as_preferencias_fecha_a_janela_da_ea_e_solta_o_ouvinte(monkeypatch):
+    _LoginEpicFalso.criados = []
+    removidos = []
+    monkeypatch.setattr(ea_conta, "conectada", lambda: False)
+    monkeypatch.setattr(ea_conta, "ao_mudar", lambda _o: lambda: removidos.append(1))
+    monkeypatch.setattr(ea_janela, "JanelaDeLogin", _LoginEpicFalso)
+    dialogo = _preferencias(monkeypatch)
+    dialogo.conquistas_ea_botao.emit("clicked")
     dialogo.emit("closed")
     assert _LoginEpicFalso.criados[0].fechada and removidos == [1]

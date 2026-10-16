@@ -423,6 +423,32 @@ def test_jogo_da_epic_sem_conta_nao_e_acompanhado(make_game, epic, monkeypatch):
 
 
 @pytest.fixture
+def ea(monkeypatch):
+    from cartridges.conquistas.ea import conta, vigia as vigia_ea  # noqa: PLC0415
+
+    _VigiaXboxFalso.criados = []
+    monkeypatch.setattr(vigia_ea, "Vigia", _VigiaXboxFalso)
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    return conta
+
+
+def test_jogo_da_ea_usa_o_vigia_da_ea_e_so_pulsa(make_game, ea, isolar):
+    mostrados, pulsos = isolar
+    game = make_game(steam_appid="570")  # appID da Steam nos metadados: a EA vence
+    historico.registrar(game.game_id, [], fonte="ea:75158_1_2")
+    sessao.comecar(game)
+    assert _VigiaFalso.criados == []  # nada do vigia de arquivos
+    (vigia_,) = _VigiaXboxFalso.criados
+    assert vigia_.game is game and vigia_.ativo and sessao.acompanhando(game)
+    assert sessao._so_pulso(game)
+    vigia_.avisar([Desbloqueada("A", _info(rara=True), False)])
+    assert mostrados == []  # o overlay da EA já mostra o aviso
+    assert pulsos == ["rara"]
+    sessao.parar()
+    assert not vigia_.ativo
+
+
+@pytest.fixture
 def ubisoft(monkeypatch):
     from cartridges.conquistas.ubisoft import vigia as vigia_ubisoft  # noqa: PLC0415
 

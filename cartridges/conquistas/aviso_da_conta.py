@@ -1,4 +1,4 @@
-"""O que as contas das lojas (Xbox, Epic) fazem igual quando conectam ou desconectam:
+"""O que as contas das lojas (Xbox, Epic, EA) fazem igual quando conectam ou desconectam:
 a lista de ouvintes, o aviso de desconexão (uma vez) e o cartão do jogo aberto.
 
 O estado (a lista e o "já avisou") fica em cada `conta.py`, que os testes trocam.

@@ -1,11 +1,11 @@
-"""O vigia da sessão para os jogos cujas conquistas vêm de uma conta (Xbox, Epic).
+"""O vigia da sessão para os jogos cujas conquistas vêm de uma conta (Xbox, Epic, EA).
 
 Não há arquivo local: a cada `INTERVALO` segundos, uma consulta às conquistas
 desbloqueadas da conta (`loja.desbloqueadas`), numa thread, com o resultado
 aplicado na thread principal. O primeiro resultado é a base (silêncio); depois,
 o que entra no histórico é novidade — salvo o que tem hora anterior ao início
 da sessão, que veio de outro aparelho e entra em silêncio, com a mesma margem
-da Steam. Só pulso: a Xbox Game Bar e o overlay da Epic já mostram o aviso deles.
+da Steam. Só pulso: a Xbox Game Bar e os overlays da Epic e da EA já mostram o aviso deles.
 
 Não há leitura final aqui: o fim da sessão já chama a varredura do jogo, que lê
 a conta de novo (`varredura.varrer_jogo`).
@@ -67,7 +67,7 @@ class Vigia:
         # A hora em que a sessão começou; None antes de `iniciar`.
         self._inicio: Optional[float] = None
         self._fonte_glib = 0
-        # O titleId (Xbox) ou namespace (Epic) da fonte gravada.
+        # O titleId (Xbox), namespace (Epic) ou conjunto (EA) da fonte gravada.
         self._id = ""
         # Enquanto a base não foi gravada, o que chega entra em silêncio.
         self._base_feita = False

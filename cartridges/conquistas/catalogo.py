@@ -348,7 +348,8 @@ def em_cache(appid: str) -> Optional[Catalogo]:
 
 
 def guardar(appid: str, cat: Catalogo) -> None:
-    """Grava o catálogo no cache. A chave é o appID da Steam ou `xbox-<titleId>`."""
+    """Grava o catálogo no cache. A chave é o appID da Steam, `xbox-<titleId>`,
+    `epic-<namespace>` ou `ea-<conjunto>`."""
     # A varredura e a varredura de um jogo podem gravar o mesmo appID ao mesmo tempo.
     gravar_atomico(
         _arquivo_do_cache(appid),

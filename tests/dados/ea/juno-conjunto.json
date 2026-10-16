@@ -1,0 +1,32 @@
+{
+  "data": {
+    "achievements": [
+      {
+        "id": "75158_193864_50844",
+        "achievements": [
+          {
+            "id": "9",
+            "name": "Sob Céus Encobertos",
+            "description": "Conclua a missão \"Sob Céus Encobertos\".",
+            "awardCount": 1,
+            "date": "2021-05-05T02:26:19.000Z"
+          },
+          {
+            "id": "8",
+            "name": "Emergência Geral",
+            "description": "Conclua a missão \"Emergência Geral\".",
+            "awardCount": 1,
+            "date": "2021-05-04T00:03:50.000Z"
+          },
+          {
+            "id": "31",
+            "name": "Ignore seus instintos por seu próprio risco",
+            "description": "Destrua 25 objetivos nos mapas de Ataque com Caças Estelares.",
+            "awardCount": 1,
+            "date": "2020-10-08T22:04:57.000Z"
+          }
+        ]
+      }
+    ]
+  }
+}

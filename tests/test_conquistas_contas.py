@@ -54,6 +54,17 @@ def test_epic_esta_no_registro():
     assert contas.lojas()["epic"] is loja and loja.TIPO == "epic"
 
 
+def test_ea_esta_no_registro(monkeypatch):
+    from cartridges.conquistas.ea import conta, loja  # noqa: PLC0415
+
+    assert contas.lojas()["ea"] is loja and loja.TIPO == "ea"
+    assert contas.da_fonte(Fonte("ea", "x")) is loja
+    monkeypatch.setattr(conta, "conectada", lambda: False)
+    assert not fontes.ativa(Fonte("ea", "x"))
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    assert fontes.ativa(Fonte("ea", "x"))
+
+
 def test_historico_guarda_conta_de_toda_loja_do_registro():
     from cartridges.conquistas import historico  # noqa: PLC0415
 

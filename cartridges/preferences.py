@@ -31,6 +31,8 @@ from gi.repository import Adw, Gio, GLib, GObject, Gtk
 from cartridges import conquista_aviso, shared
 from cartridges.calibracao_janela import AssistenteDeCalibracao
 from cartridges.conquistas import fontes
+from cartridges.conquistas.ea import conta as ea_conta
+from cartridges.conquistas.ea import janela as ea_janela
 from cartridges.conquistas.epic import conta as epic_conta
 from cartridges.conquistas.epic import janela as epic_janela
 from cartridges.conquistas.xbox import conta, login
@@ -138,6 +140,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     conquistas_contas_group: Adw.PreferencesGroup = Gtk.Template.Child()
     conquistas_epic_row: Adw.ActionRow = Gtk.Template.Child()
     conquistas_epic_botao: Gtk.Button = Gtk.Template.Child()
+    conquistas_ea_row: Adw.ActionRow = Gtk.Template.Child()
+    conquistas_ea_botao: Gtk.Button = Gtk.Template.Child()
 
     backup_group = Gtk.Template.Child()
     export_backup_button_row = Gtk.Template.Child()
@@ -324,6 +328,13 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self._remover_ouvinte_da_epic = epic_conta.ao_mudar(self._atualizar_conta_epic)
         self.connect("closed", self._ao_fechar_conta_epic)
         self._atualizar_conta_epic()
+
+        # Conta EA: igual à Epic.
+        self._janela_ea = None
+        self.conquistas_ea_botao.connect("clicked", self._on_conta_ea_clicked)
+        self._remover_ouvinte_da_ea = ea_conta.ao_mudar(self._atualizar_conta_ea)
+        self.connect("closed", self._ao_fechar_conta_ea)
+        self._atualizar_conta_ea()
 
         def update_sgdb(*_args: Any) -> None:
             counter = 0
@@ -652,6 +663,48 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                     "Falha ao fechar a janela de login da Epic", exc_info=True
                 )
         self._remover_ouvinte_da_epic()
+
+    def _atualizar_conta_ea(self) -> None:
+        if ea_conta.conectada():
+            subtitulo, rotulo = ea_conta.nome() or _("Conta EA"), _("Sair")
+        else:
+            subtitulo, rotulo = _("Não conectada"), _("Entrar")
+        self.conquistas_ea_row.set_subtitle(subtitulo)
+        self.conquistas_ea_botao.set_label(rotulo)
+
+    def _on_conta_ea_clicked(self, *_args: Any) -> None:
+        try:
+            if ea_conta.conectada():
+                ea_conta.sair()
+                self._atualizar_conta_ea()
+                return
+            if self._janela_ea is not None:
+                return
+            janela = ea_janela.JanelaDeLogin(self._varrer_jogos_da_ea)
+            janela.connect("closed", self._ao_fechar_janela_ea)
+            self._janela_ea = janela
+            janela.mostrar(self)
+        except Exception as erro:  # pylint: disable=broad-exception-caught
+            self._janela_ea = None
+            logging.warning("Falha ao abrir o login da conta EA: %s", type(erro).__name__)
+            self.add_toast(Adw.Toast.new(_("Não foi possível abrir a janela de login da EA.")))
+
+    def _ao_fechar_janela_ea(self, *_args: Any) -> None:
+        self._janela_ea = None
+        self._atualizar_conta_ea()
+
+    def _varrer_jogos_da_ea(self) -> None:
+        """Lê na hora as conquistas dos jogos da EA, sem aviso de novas."""
+        self._varrer_jogos_da_loja(fontes.eh_da_ea, "EA")
+
+    def _ao_fechar_conta_ea(self, *_args: Any) -> None:
+        janela, self._janela_ea = self._janela_ea, None
+        if janela is not None:
+            try:
+                janela.force_close()
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.warning("Falha ao fechar a janela de login da EA", exc_info=True)
+        self._remover_ouvinte_da_ea()
 
     def reler_do_schema(self) -> None:
         """Preenche as linhas que não usam ``bind``. Chamado no fim do

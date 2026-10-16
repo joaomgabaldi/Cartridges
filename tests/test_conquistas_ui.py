@@ -239,6 +239,24 @@ def test_arquivo_local_ilegivel_nao_e_apagado(tmp_path):
     assert arquivo.exists()
 
 
+def _png(caminho, largura, altura):
+    from gi.repository import GdkPixbuf
+
+    GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, largura, altura).savev(
+        str(caminho), "png", [], []
+    )
+    return str(caminho)
+
+
+@pytest.mark.parametrize(
+    "largura, altura, lado",
+    [(208, 117, 117), (208, 208, 208), (117, 208, 117)],
+)
+def test_icone_nao_quadrado_e_cortado_no_centro(tmp_path, largura, altura, lado):
+    textura = icones._textura(_png(tmp_path / "i.png", largura, altura))
+    assert (textura.get_width(), textura.get_height()) == (lado, lado)
+
+
 def test_carregar_depois_de_encerrar_nao_faz_nada(executor_proprio, monkeypatch):
     baixou = []
     monkeypatch.setattr(

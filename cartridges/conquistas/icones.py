@@ -11,11 +11,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
 
-from gi.repository import Gdk, GLib
+from gi.repository import Gdk, GdkPixbuf, GLib
 from requests.exceptions import RequestException
 
 from cartridges import shared
 from cartridges.conquistas import arquivos
+from cartridges.game_cover import texture_from_pixbuf
 from cartridges.utils.download import download_bytes
 from cartridges.utils.gravar_atomico import gravar_atomico
 
@@ -86,13 +87,29 @@ def arquivo_local(origem: str) -> Optional[Path]:
     return _resolver(origem)[0]
 
 
+def _quadrada(caminho: Path) -> Optional[Gdk.Texture]:
+    """O quadrado central de um ícone retangular (a EA serve muitos em 16:9, com
+    o emblema no meio). ``None`` se já for quadrado ou se o GdkPixbuf não o ler."""
+    try:
+        pixbuf = GdkPixbuf.Pixbuf.new_from_file(str(caminho))
+    except GLib.Error:
+        return None
+    largura, altura = pixbuf.get_width(), pixbuf.get_height()
+    if largura == altura:
+        return None
+    lado = min(largura, altura)
+    return texture_from_pixbuf(
+        pixbuf.new_subpixbuf((largura - lado) // 2, (altura - lado) // 2, lado, lado)
+    )
+
+
 def _textura(origem: str) -> Optional[Gdk.Texture]:
     """Resolve e decodifica o ícone. Nunca levanta."""
     caminho, do_cache = _resolver(origem)
     if caminho is None:
         return None
     try:
-        return Gdk.Texture.new_from_filename(str(caminho))
+        return _quadrada(caminho) or Gdk.Texture.new_from_filename(str(caminho))
     except Exception as erro:  # noqa: BLE001 - GLib.Error e o que mais vier
         _registrar_falha("Ícone de conquista ilegível", origem, erro)
         if do_cache:

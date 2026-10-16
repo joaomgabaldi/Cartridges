@@ -11,8 +11,8 @@ dos dados por id: Jogos Zerados (o id não muda), troca de id e Excluir
 (`store.py`), ligação de zerado (`transferir`) e backup.
 
 O arquivo também guarda de onde vêm as conquistas do jogo (`"fonte"`, como
-`"xbox:123"` ou `"steam:570"`; ver `fontes.py`) e, na fonte do Xbox ou da Epic,
-de qual conta (`"conta"`, o XUID ou o `account_id`): o `xbox:<titleId>` não
+`"xbox:123"` ou `"steam:570"`; ver `fontes.py`) e, nas fontes de conta (Xbox, Epic, EA),
+de qual conta (`"conta"`, o XUID, o `account_id` ou a persona): o `xbox:<titleId>` não
 distingue duas contas, e trocar de conta traz conquistas que o histórico não
 conhecia. A regra de só somar vale
 para as desbloqueadas; fonte e conta são só dados do jogo e podem trocar.
@@ -38,7 +38,7 @@ _trava = threading.Lock()
 # Fontes cuja conta é guardada junto: as lojas com conta (`contas.lojas()`) e a Ubisoft
 # (a pasta da conta no `.spool`). "Primeira leitura" = fonte ou conta diferente da
 # gravada. Sem importar `contas`, que fecharia um ciclo (um teste confere que batem).
-_FONTES_COM_CONTA_GUARDADA = ("xbox:", "epic:", "ubisoft:")
+_FONTES_COM_CONTA_GUARDADA = ("xbox:", "epic:", "ea:", "ubisoft:")
 
 
 def caminho(game_id: str) -> Path:
@@ -191,7 +191,7 @@ def registrar(
     """Funde ``novos`` no que está guardado e grava.
 
     Com ``fonte``, grava também de onde vêm as conquistas (mesmo que nada novo
-    tenha entrado) e, só para as fontes de loja com conta (Xbox, Epic) e da Ubisoft,
+    tenha entrado) e, só para as fontes de loja com conta (Xbox, Epic, EA) e da Ubisoft,
     a ``conta``; sem fonte, a que já estava guardada (e a conta dela) fica.
 
     Devolve ``(as que entraram agora, se era a primeira vez)``.

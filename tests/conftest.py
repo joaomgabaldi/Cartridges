@@ -493,6 +493,15 @@ def sem_ubisoft_no_registro(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def sem_ea_no_registro(monkeypatch):
+    """Os jogos da EA instalados nesta máquina (se houver) não entram nos testes:
+    quem precisa de instalações troca `ea.jogo.chaves_do_registro`."""
+    from cartridges.conquistas.ea import jogo  # noqa: PLC0415
+
+    monkeypatch.setattr(jogo, "chaves_do_registro", lambda: [])
+
+
+@pytest.fixture(autouse=True)
 def sem_ludusavi(request, monkeypatch):
     """O Ludusavi desta máquina (se houver um ao lado do Python) não roda nos testes:
     o fim de uma sessão dispararia um backup de verdade. Os testes dos saves montam o

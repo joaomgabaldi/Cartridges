@@ -1,0 +1,180 @@
+{
+  "platform": "PC Origin",
+  "expansions": [],
+  "achievements": {
+    "31": {
+      "icons": {
+        "416": "https://achievements.gameservices.ea.com/achievements/icons/75158_193864_50844-31-416.png",
+        "208": "https://achievements.gameservices.ea.com/achievements/icons/75158_193864_50844-31-208.png",
+        "40": "https://achievements.gameservices.ea.com/achievements/icons/75158_193864_50844-31-40.png"
+      },
+      "complete": true,
+      "requirements": [],
+      "conditions": [],
+      "tn": [],
+      "xp_t": "15",
+      "rp_t": "0",
+      "s": -1,
+      "hidden": false,
+      "d": "UNKNOWN",
+      "e": -1,
+      "pt": -1,
+      "p": 1,
+      "t": 1,
+      "state": {
+        "a_st": "COMPLETED"
+      },
+      "u": 1602194697,
+      "cnt": 1,
+      "xp": 15,
+      "rp": 0,
+      "up": 1,
+      "tt": 0,
+      "tc": -1,
+      "achievedPercentage": "3.23",
+      "stateModifiers": [],
+      "name": "Ignore seus instintos por seu próprio risco",
+      "desc": "Destrua 25 objetivos nos mapas de Ataque com Caças Estelares.",
+      "img": "31"
+    },
+    "36": {
+      "icons": {
+        "416": "https://achievements.gameservices.ea.com/achievements/icons/75158_193864_50844-36-416.png",
+        "208": "https://achievements.gameservices.ea.com/achievements/icons/75158_193864_50844-36-208.png",
+        "40": "https://achievements.gameservices.ea.com/achievements/icons/75158_193864_50844-36-40.png"
+      },
+      "complete": true,
+      "requirements": [],
+      "conditions": [],
+      "tn": [],
+      "xp_t": "40",
+      "rp_t": "0",
+      "s": -1,
+      "hidden": false,
+      "d": "UNKNOWN",
+      "e": -1,
+      "pt": -1,
+      "p": 1,
+      "t": 1,
+      "state": {
+        "a_st": "COMPLETED"
+      },
+      "u": 1590515623,
+      "cnt": 1,
+      "xp": 40,
+      "rp": 0,
+      "up": 1,
+      "tt": 0,
+      "tc": -1,
+      "achievedPercentage": "49.73",
+      "stateModifiers": [],
+      "name": "Ataque rápido",
+      "desc": "Seja o primeiro a derrotar um inimigo em uma partida Multiplayer.",
+      "img": "36"
+    },
+    "22": {
+      "icons": {
+        "416": "https://achievements.gameservices.ea.com/achievements/icons/75158_193864_50844-22-416.png",
+        "208": "https://achievements.gameservices.ea.com/achievements/icons/75158_193864_50844-22-208.png",
+        "40": "https://achievements.gameservices.ea.com/achievements/icons/75158_193864_50844-22-40.png"
+      },
+      "complete": false,
+      "requirements": [],
+      "conditions": [],
+      "tn": [],
+      "xp_t": "15",
+      "rp_t": "0",
+      "s": -1,
+      "hidden": false,
+      "e": -1,
+      "pt": -1,
+      "p": 0,
+      "t": 1,
+      "state": {
+        "a_st": "ACTIVE"
+      },
+      "u": 1792106796,
+      "cnt": 0,
+      "xp": 15,
+      "rp": 0,
+      "up": 0,
+      "tt": 0,
+      "tc": -1,
+      "achievedPercentage": "6.31",
+      "stateModifiers": [],
+      "name": "Nem todos erram",
+      "desc": "Derrote 3 inimigos durante um uso da habilidade Vanguarda, 5 vezes, no Multiplayer.",
+      "img": "22"
+    },
+    "23": {
+      "icons": {
+        "416": "https://achievements.gameservices.ea.com/achievements/icons/75158_193864_50844-23-416.png",
+        "208": "https://achievements.gameservices.ea.com/achievements/icons/75158_193864_50844-23-208.png",
+        "40": "https://achievements.gameservices.ea.com/achievements/icons/75158_193864_50844-23-40.png"
+      },
+      "complete": false,
+      "requirements": [],
+      "conditions": [],
+      "tn": [],
+      "xp_t": "15",
+      "rp_t": "0",
+      "s": -1,
+      "hidden": false,
+      "e": -1,
+      "pt": -1,
+      "p": 0,
+      "t": 1,
+      "state": {
+        "a_st": "ACTIVE"
+      },
+      "u": 1792106796,
+      "cnt": 0,
+      "xp": 15,
+      "rp": 0,
+      "up": 0,
+      "tt": 0,
+      "tc": -1,
+      "achievedPercentage": "abc",
+      "stateModifiers": [],
+      "name": "Uma presença dominante",
+      "desc": "Melhore 100 aliados com Comandos ddo Oficial no Multiplayer.",
+      "img": "23"
+    },
+    "10": {
+      "icons": {
+        "416": "https://achievements.gameservices.ea.com/achievements/icons/global-hidden-416.png",
+        "208": "https://achievements.gameservices.ea.com/achievements/icons/global-hidden-208.png",
+        "40": "https://achievements.gameservices.ea.com/achievements/icons/global-hidden-40.png"
+      },
+      "complete": false,
+      "requirements": [],
+      "conditions": [],
+      "tn": [],
+      "xp_t": "--",
+      "rp_t": "--",
+      "s": -1,
+      "hidden": true,
+      "e": -1,
+      "pt": -1,
+      "p": 0,
+      "t": 1,
+      "state": {
+        "a_st": "ACTIVE"
+      },
+      "u": 1792106796,
+      "cnt": 0,
+      "xp": 15,
+      "rp": 0,
+      "up": 0,
+      "tt": 0,
+      "tc": -1,
+      "achievedPercentage": "28.59",
+      "stateModifiers": [],
+      "name": "Conquista Escondida",
+      "desc": "",
+      "howto": "Continue procurando essa conquista escondida.",
+      "img": "hidden"
+    }
+  },
+  "name": "STAR WARS™ Battlefront™ II"
+}

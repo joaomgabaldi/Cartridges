@@ -1,10 +1,12 @@
 """A fonte de cada jogo: de onde vêm as conquistas, ou nenhuma (cartão oculto)."""
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
 from cartridges.conquistas import fontes, historico
+from cartridges.conquistas.ea import api as ea_api, conta as ea_conta, jogo as ea_jogo
 from cartridges.conquistas.epic import api as epic_api, conta as epic_conta
 from cartridges.conquistas.fontes import Fonte
 from cartridges.conquistas.ubisoft import locais
@@ -31,7 +33,7 @@ def test_texto_ida_e_volta():
 
 @pytest.mark.parametrize(
     "texto",
-    [None, "", "xbox:", "outra:1", "epic:", "epic:a b", "epic:" + "a" * 65, "steam:12a", "xbox", "xbox:1:2"],
+    [None, "", "xbox:", "outra:1", "epic:", "epic:a b", "epic:" + "a" * 65, "steam:12a", "xbox", "xbox:1:2", "ea:", "ea:OFB-EAST:1"],
 )
 def test_texto_estranho_e_none(texto):
     assert Fonte.de_texto(texto) is None
@@ -206,6 +208,109 @@ def test_xbox_vem_antes_da_epic(make_game, conectada, epic_conectada, monkeypatc
 
 def test_chave_do_catalogo_da_epic():
     assert fontes.chave_do_catalogo(Fonte("epic", "fn")) == "epic-fn"
+
+
+# -- A EA ----------------------------------------------------------------------------
+
+_CONJUNTO = "75158_193864_50844"
+
+
+@pytest.fixture
+def ea(monkeypatch, tmp_path):
+    """Conta EA conectada, registro com a chave `EA Games` do jogo e nada guardado."""
+    estado = SimpleNamespace(guardado=None, conectada=True)
+    pasta = tmp_path / "EA" / "Jogo"
+    pasta.mkdir(parents=True)
+    monkeypatch.setattr(ea_jogo, "chaves_do_registro", lambda: [("Jogo", str(pasta))])
+    monkeypatch.setattr(ea_conta, "conectada", lambda: estado.conectada)
+    monkeypatch.setattr(ea_api, "conjunto_guardado", lambda _pasta: estado.guardado)
+    estado.pasta = pasta
+    return estado
+
+
+def _exe_ea(ea_, nome="jogo.exe"):
+    return f'"{criar(ea_.pasta / nome)}"'
+
+
+def test_ea_com_conjunto_guardado(make_game, ea, pastas):  # noqa: F811
+    ea.guardado = _CONJUNTO
+    assert fontes.do_jogo(make_game(executable=_exe_ea(ea))) == Fonte("ea", _CONJUNTO)
+
+
+def test_ea_pendente_sem_cache(make_game, ea, pastas):  # noqa: F811
+    assert fontes.do_jogo(make_game(executable=_exe_ea(ea))) == Fonte("ea", "")
+
+
+def test_ea_sabidamente_sem_fonte(make_game, ea, pastas):  # noqa: F811
+    ea.guardado = ""
+    assert fontes.do_jogo(make_game(executable=_exe_ea(ea))) is None
+
+
+def test_ea_sem_chave_nao_e_ea(make_game, ea, monkeypatch, tmp_path, pastas):  # noqa: F811
+    monkeypatch.setattr(ea_jogo, "chaves_do_registro", lambda: [])
+    game = make_game(executable=_exe_ea(ea), steam_appid="570")
+    assert fontes.candidato_da_ea(game) is None and not fontes.eh_da_ea(game)
+
+
+def test_ea_sem_chave_nem_olha_a_pasta(make_game, ea, monkeypatch, pastas):  # noqa: F811
+    def nao_deveria(_pastas):
+        raise AssertionError("olhou a pasta sem chave casando")
+
+    monkeypatch.setattr(ea_jogo, "chaves_do_registro", lambda: [])
+    monkeypatch.setattr(fontes, "_tem_sinal", nao_deveria)
+    assert fontes.candidato_da_ea(make_game(executable=_exe_ea(ea))) is None
+
+
+def test_ea_sem_conta_nenhuma_fonte_mesmo_com_appid(make_game, ea, monkeypatch, pastas):  # noqa: F811
+    ea.conectada = False
+    ea.guardado = _CONJUNTO
+    monkeypatch.setattr(fontes, "_da_steam", lambda _game: Fonte("steam", "570"))  # cairia para ela
+    assert fontes.do_jogo(make_game(executable=_exe_ea(ea), steam_appid="570")) is None
+
+
+def test_copia_da_steam_nao_e_da_ea(make_game, ea, monkeypatch, tmp_path, pastas):  # noqa: F811
+    ea.guardado = _CONJUNTO
+    pasta = tmp_path / "Steam" / "steamapps" / "common" / "X"
+    pasta.mkdir(parents=True)
+    monkeypatch.setattr(ea_jogo, "chaves_do_registro", lambda: [("X", str(pasta)), ("Jogo", str(ea.pasta))])
+    exe = criar(pasta / "x.exe")
+    game = make_game(executable=f'"{exe}"', steam_appid="570")
+    assert fontes.candidato_da_ea(game) is None
+    assert fontes.do_jogo(game) != Fonte("ea", _CONJUNTO)
+    # O atalho steam:// também é cópia da Steam.
+    assert fontes.candidato_da_ea(make_game(executable="steam://rungameid/570")) is None
+    # Instalação normal da EA continua candidata.
+    assert fontes.candidato_da_ea(make_game(executable=_exe_ea(ea))) is not None
+
+
+def test_ea_emulador_ganha_da_ea(make_game, ea, pastas):  # noqa: F811
+    ea.guardado = _CONJUNTO
+    (ea.pasta / "steam_settings").mkdir()
+    game = make_game(executable=_exe_ea(ea), steam_appid="570")
+    assert fontes.candidato_da_ea(game) is None
+    assert fontes.do_jogo(game) == Fonte("steam", "570")
+
+
+def test_ordem_xbox_epic_ea_ubisoft_steam(make_game, ea, epic_conectada, monkeypatch, pastas):  # noqa: F811
+    ea.guardado = _CONJUNTO
+    exe = _exe_ea(ea)
+    assert fontes.do_jogo(make_game(executable=exe, steam_appid="570")) == Fonte("ea", _CONJUNTO)
+    # Chave EA e atalho da Ubisoft: a EA vence.
+    monkeypatch.setattr(fontes.ubisoft_loja, "do_jogo", lambda _game: "65043")
+    assert fontes.do_jogo(make_game(executable=exe)) == Fonte("ea", _CONJUNTO)
+    monkeypatch.setattr(fontes, "da_epic", lambda _game: (_NS, "x"))
+    assert fontes.do_jogo(make_game(executable=exe)) == Fonte("epic", _NS)
+
+
+def test_de_texto_ea():
+    assert Fonte.de_texto(f"ea:{_CONJUNTO}") == Fonte("ea", _CONJUNTO)
+    assert Fonte.de_texto("ea:OFB-EAST:1") is None
+    assert Fonte.de_texto("ea:") is None
+    assert Fonte.de_texto("ea:a b") is None
+
+
+def test_chave_do_catalogo_da_ea():
+    assert fontes.chave_do_catalogo(Fonte("ea", "75158_1_2")) == ea_api.chave_do_catalogo("75158_1_2")
 
 
 def test_manifest_com_raiz_do_disco_nao_pega_todo_jogo(make_game, epic_conectada, tmp_path, pastas):  # noqa: F811

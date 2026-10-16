@@ -1160,6 +1160,60 @@ def test_outra_conta_epic_e_primeira_leitura(store, make_game, pastas, win, flus
     assert _avisos(win) == [] and historico.conta(game.game_id) == "c2"
 
 
+# -- A EA ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def ea(monkeypatch):
+    """Conta EA conectada, jogo candidato e uma API falsa que devolve o que o teste puser."""
+    from cartridges.conquistas import fontes  # noqa: PLC0415
+    from cartridges.conquistas.ea import api, conta, jogo  # noqa: PLC0415
+
+    estado = SimpleNamespace(desbloqueios=[], chamadas=0, persona="p1", guardado=None, conjunto="1_2_3")
+    monkeypatch.setattr(conta, "conectada", lambda: True)
+    monkeypatch.setattr(conta, "persona", lambda: estado.persona)
+    monkeypatch.setattr(fontes, "candidato_da_ea", lambda _game: jogo.Candidato(pasta="c:\\ea\\jogo", titulo="Jogo"))
+    monkeypatch.setattr(api, "conjunto_guardado", lambda _pasta: estado.guardado)
+    monkeypatch.setattr(api, "guardar_conjunto", lambda _pasta, conjunto: setattr(estado, "guardado", conjunto))
+    monkeypatch.setattr(api, "ofertas", lambda _titulo: ["o1"])
+    monkeypatch.setattr(api, "conjunto_da_oferta", lambda _oferta: estado.conjunto)
+
+    def ler(conjunto):
+        estado.chamadas += 1
+        cat = catalogo.Catalogo(
+            tuple(catalogo.ConquistaInfo(f"EA:{n}", "T", "", "", "", False) for n in range(1, 4)), 0, False
+        )
+        catalogo.guardar(f"ea-{conjunto}", cat)
+        return api.Leitura(cat, list(estado.desbloqueios))
+
+    monkeypatch.setattr(api, "ler", ler)
+    return estado
+
+
+def test_pendente_da_ea_resolvido_na_rede(store, make_game, pastas, flush_idle, ea):
+    ea.desbloqueios = [Desbloqueio("EA:1", 100)]
+    game = _registrado(store, make_game, 1)
+    _rodar([game], flush_idle)
+    assert historico.fonte(game.game_id) == "ea:1_2_3"
+    assert historico.conta(game.game_id) == "p1"
+    assert historico.ler(game.game_id) == {"EA:1": 100}
+
+
+def test_aviso_soma_xbox_epic_e_ea_num_so(store, make_game, pastas, win, flush_idle, xbox, epic, ea):
+    jogo_x = _registrado(store, make_game, 1, executable=_AUMID)
+    jogo_e = _registrado(store, make_game, 2, executable=_URL_EPIC)
+    jogo_a = _registrado(store, make_game, 3)
+    historico.registrar(jogo_x.game_id, [], fonte="xbox:7", conta="111")
+    historico.registrar(jogo_e.game_id, [], fonte="epic:ns1", conta="c1")
+    historico.registrar(jogo_a.game_id, [], fonte="ea:1_2_3", conta="p1")
+    ea.guardado = "1_2_3"
+    xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
+    epic.desbloqueios = [Desbloqueio("EPIC:1", 100)]
+    ea.desbloqueios = [Desbloqueio("EA:1", 100)]
+    _rodar([jogo_x, jogo_e, jogo_a], flush_idle)
+    assert _avisos(win) == ["3 novas conquistas em 3 jogos"]
+
+
 # -- A Ubisoft ----------------------------------------------------------------------
 
 

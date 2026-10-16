@@ -1,0 +1,54 @@
+{
+  "data": {
+    "me": {
+      "ownedGameProducts": {
+        "items": [
+          {
+            "originOfferId": "Origin.OFR.50.0005511",
+            "product": {
+              "id": "pt-br_glacier-pc-ww_VideoGameProduct_br_pc",
+              "name": "Battlefield™ 6",
+              "gameSlug": "glacier"
+            }
+          },
+          {
+            "originOfferId": "OFB-EAST:109552316",
+            "product": {
+              "id": "pt-br_battlefield-4-premium-edition-pc-row-juno-odc-3pdd_VideoGameProduct_br_pc",
+              "name": "Battlefield 4",
+              "gameSlug": "battlefield-4"
+            }
+          },
+          {
+            "originOfferId": "Origin.OFR.50.0001108",
+            "product": {
+              "id": "pt-br_dragon-age-inquisition-game-of-the-year-pcdd-br-juno_VideoGameProduct_br_pc",
+              "name": "Dragon Age: Inquisition",
+              "gameSlug": "dragon-age-inquisition"
+            }
+          },
+          {
+            "originOfferId": "Origin.OFR.50.0002148",
+            "product": {
+              "id": "pt-br_star-wars-battlefront-ii-standard-edition-pc-na-and-latam-juno_VideoGameProduct_br_pc",
+              "name": "Star Wars: Battlefront II",
+              "gameSlug": "star-wars-battlefront-2"
+            }
+          },
+          {
+            "originOfferId": "OFB-EAST:109552155",
+            "product": {
+              "id": "pt-br_battlefield-4-standard-edition-pc-jp-juno-odc-3pdd_VideoGameProduct_br_pc",
+              "name": "Battlefield 4",
+              "gameSlug": "battlefield-4"
+            }
+          },
+          {
+            "originOfferId": "Origin.OFR.50.0005607",
+            "product": null
+          }
+        ]
+      }
+    }
+  }
+}
