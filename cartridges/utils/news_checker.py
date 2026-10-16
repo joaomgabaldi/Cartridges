@@ -48,7 +48,7 @@ import requests
 from gi.repository import GLib, GObject
 
 from cartridges import shared
-from cartridges.utils.news_feed import NewsPost, fetch_news
+from cartridges.utils.news_feed import NEWS_SOURCES, NewsPost, fetch_news
 
 # Hours between background polls. 0 turns the recurring poll (and with it the
 # badge) off; the page still fetches on demand when opened.
@@ -57,6 +57,14 @@ _INTERVAL_KEY = "news-check-interval"
 # Newest pubDate the user has already seen, in the State schema because it is
 # window state, not a preference.
 _LAST_SEEN_KEY = "news-last-seen-ts"
+
+# Which site the page reads (see `news_feed.NEWS_SOURCES`).
+_SOURCE_KEY = "news-source"
+
+# The site `_LAST_SEEN_KEY` was recorded on. A date from one site means nothing
+# on another, and the site can change without `on_source_changed` running (a
+# backup restored at startup), so the mark carries its site with it.
+_LAST_SEEN_SOURCE_KEY = "news-last-seen-source"
 
 
 class NewsChecker(GObject.Object):
@@ -160,8 +168,11 @@ class NewsChecker(GObject.Object):
 
     def _poll_thread(self) -> None:
         posts: Optional[list[NewsPost]] = None
+        # Read once and carried to `_apply`, so a switch of site while this
+        # request is on the wire can be told apart from its answer.
+        source = shared.schema.get_string(_SOURCE_KEY)
         try:
-            posts = fetch_news()
+            posts = fetch_news(NEWS_SOURCES[source])
         except requests.RequestException as error:
             # A failed poll is a non-event: the cached posts (if any) stay up
             # and the badge does not change. Info level because a flaky network
@@ -170,11 +181,11 @@ class NewsChecker(GObject.Object):
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Unexpected error polling repack news feed", exc_info=True)
         finally:
-            GLib.idle_add(self._apply, posts)
+            GLib.idle_add(self._apply, posts, source)
 
     # -- applying results (main thread) --------------------------------------
 
-    def _apply(self, posts: Optional[list[NewsPost]]) -> bool:
+    def _apply(self, posts: Optional[list[NewsPost]], source: str) -> bool:
         """Fold a finished poll into the cached state. Runs on the main thread."""
         with self._lock:
             self._running = False
@@ -182,6 +193,13 @@ class NewsChecker(GObject.Object):
         # Every listener on these signals is a widget of a window that shutdown
         # is in the middle of tearing down. Nothing to announce to it.
         if self._stopped:
+            return False
+
+        # The site was switched while this poll was in flight: its posts belong
+        # to the old site and would become the new one's "already seen"
+        # baseline. Drop them and ask the right site instead.
+        if source != shared.schema.get_string(_SOURCE_KEY):
+            self.check_async()
             return False
 
         if not posts:
@@ -213,11 +231,16 @@ class NewsChecker(GObject.Object):
         """Recompute the unread flag and announce it if it moved."""
         newest = self._newest_timestamp()
         last_seen = shared.state_schema.get_int64(_LAST_SEEN_KEY)
+        source = shared.schema.get_string(_SOURCE_KEY)
 
-        # First run ever: adopt the feed as the baseline instead of claiming
-        # every existing post is news (see the module docstring).
-        if last_seen == 0 and newest:
-            shared.state_schema.set_int64(_LAST_SEEN_KEY, newest)
+        # First run ever, or first run on this site: adopt the feed as the
+        # baseline instead of claiming every existing post is news (see the
+        # module docstring).
+        if newest and (
+            last_seen == 0
+            or shared.state_schema.get_string(_LAST_SEEN_SOURCE_KEY) != source
+        ):
+            self._set_last_seen(newest)
             last_seen = newest
 
         self._set_unseen(newest > last_seen)
@@ -229,9 +252,32 @@ class NewsChecker(GObject.Object):
         logging.debug("News badge %s", "raised" if unseen else "cleared")
         self.emit("unseen-changed", unseen)
 
+    def on_source_changed(self, *_args: object) -> None:
+        """Start over on the newly chosen site.
+
+        The cached posts are the old site's, so they go. The last-seen mark goes
+        too: it is a date from the old site, and the new site's first poll must
+        be a silent baseline (see the module docstring), not a badge for every
+        post newer than whatever the old site last showed.
+        """
+        self._posts = ()
+        shared.state_schema.set_int64(_LAST_SEEN_KEY, 0)
+        self._set_unseen(False)
+        # The poll goes out before the window hears about the empty list, so it
+        # finds one in flight and shows the spinner instead of "Sem novidades".
+        self.check_async()
+        self.emit("posts-changed")
+
     def mark_seen(self) -> None:
         """Acknowledge every cached post; called when the page is opened."""
         newest = self._newest_timestamp()
         if newest > shared.state_schema.get_int64(_LAST_SEEN_KEY):
-            shared.state_schema.set_int64(_LAST_SEEN_KEY, newest)
+            self._set_last_seen(newest)
         self._set_unseen(False)
+
+    @staticmethod
+    def _set_last_seen(timestamp: int) -> None:
+        shared.state_schema.set_int64(_LAST_SEEN_KEY, timestamp)
+        shared.state_schema.set_string(
+            _LAST_SEEN_SOURCE_KEY, shared.schema.get_string(_SOURCE_KEY)
+        )
