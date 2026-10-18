@@ -19,21 +19,22 @@ $dist    = Join-Path $repo '_dist'
 function Etapa($texto) { Write-Host "`n=== $texto ===" -ForegroundColor Cyan }
 function Falha($texto) { Write-Host "`nERRO: $texto" -ForegroundColor Red; exit 1 }
 
-# ── 1. A libgtk corrigida ─────────────────────────────────────────────────
+# ── 1. GTK e libadwaita corrigidos ────────────────────────────────────────
 #
 # A pasta do app é montada a partir de C:\msys64\ucrt64\bin, então ela leva
-# junto a libgtk que estiver instalada ali. Se um `pacman -Syu` sobrescrever a
-# build corrigida, o instalador sai com o bug do monitor de volta — e sem
-# nenhum aviso, porque tudo compila e empacota normalmente. Daí esta checagem.
-# O pacote corrigido sai do workflow "Compilar GTK corrigido" (gtk-patches\README.md).
+# junto as bibliotecas que estiverem instaladas ali. Se um `pacman -Syu`
+# sobrescrever uma build corrigida, o instalador sai com o defeito de volta — e
+# sem nenhum aviso, porque tudo compila e empacota normalmente. Daí esta
+# checagem. A libgtk corrige o desenho em monitores maiores que o principal; a
+# libadwaita faz os avisos (toasts) entrarem com fade em vez de subir.
+# Os pacotes corrigidos saem do workflow "Compilar GTK corrigido" (gtk-patches\README.md).
 
-Etapa 'Conferindo a libgtk corrigida'
+Etapa 'Conferindo GTK e libadwaita corrigidos'
 
 $estado = Join-Path $patches 'patched-gtk.txt'
-$dll    = Join-Path $prefix 'bin\libgtk-4-1.dll'
 
 if (-not (Test-Path $estado)) {
-    Falha "Falta $estado. Sem ele não dá para saber se a libgtk instalada tem a correção."
+    Falha "Falta $estado. Sem ele não dá para saber se as bibliotecas instaladas têm as correções."
 }
 
 $esperado = @{}
@@ -41,30 +42,42 @@ Get-Content $estado | ForEach-Object {
     if ($_ -match '^\s*(\w+)\s*=\s*(.+)$') { $esperado[$Matches[1]] = $Matches[2].Trim() }
 }
 
-$versaoAtual = ((& (Join-Path $msys 'usr\bin\pacman.exe') -Q mingw-w64-ucrt-x86_64-gtk4 2>$null) -replace '^\S+\s+','').Trim()
-$pacote = "mingw-w64-ucrt-x86_64-gtk4-$($esperado['gtk4_package_version'])-any.pkg.tar.zst"
-$link   = "https://github.com/joaomgabaldi/Cartridges/releases/download/gtk-corrigido/$pacote"
+$corrigidas = @(
+    @{ Pacote = 'gtk4';       Dll = 'libgtk-4-1.dll';     Versao = 'gtk4_package_version';       Hash = 'libgtk_sha256' },
+    @{ Pacote = 'libadwaita'; Dll = 'libadwaita-1-0.dll'; Versao = 'libadwaita_package_version'; Hash = 'libadwaita_sha256' }
+)
 
-if ($versaoAtual -ne $esperado['gtk4_package_version']) {
-    Falha @"
-O pacote gtk4 instalado é $versaoAtual, mas a trava está em $($esperado['gtk4_package_version']).
+foreach ($c in $corrigidas) {
+    $trava = $esperado[$c.Versao]
+    if (-not $trava -or -not $esperado[$c.Hash]) {
+        Falha "Faltam $($c.Versao) e $($c.Hash) em $estado."
+    }
+
+    $versaoAtual = ((& (Join-Path $msys 'usr\bin\pacman.exe') -Q "mingw-w64-ucrt-x86_64-$($c.Pacote)" 2>$null) -replace '^\S+\s+','').Trim()
+    $pacote = "mingw-w64-ucrt-x86_64-$($c.Pacote)-$trava-any.pkg.tar.zst"
+    $link   = "https://github.com/joaomgabaldi/Cartridges/releases/download/gtk-corrigido/$pacote"
+
+    if ($versaoAtual -ne $trava) {
+        Falha @"
+O pacote $($c.Pacote) instalado é $versaoAtual, mas a trava está em $trava.
 
 Para passar a usar a versão nova: execute o workflow "Compilar GTK corrigido" no
 GitHub, instale o pacote gerado neste PC, teste, e atualize patched-gtk.txt com
-as duas linhas mostradas no resumo do workflow.
+as linhas mostradas no resumo do workflow.
 Passo a passo em $patches\README.md
 "@
-}
+    }
 
-if ((Get-FileHash $dll -Algorithm SHA256).Hash -ne $esperado['libgtk_sha256']) {
-    Falha @"
-A libgtk instalada não é a corrigida (o pacman provavelmente reinstalou a oficial).
+    if ((Get-FileHash (Join-Path $prefix "bin\$($c.Dll)") -Algorithm SHA256).Hash -ne $esperado[$c.Hash]) {
+        Falha @"
+A $($c.Dll) instalada não é a corrigida (o pacman provavelmente reinstalou a oficial).
 Instale a corrigida no terminal UCRT64 do MSYS2:
   curl -fLO $link && pacman -U --noconfirm $pacote
 "@
-}
+    }
 
-Write-Host "OK - gtk4 $versaoAtual com a correcao aplicada." -ForegroundColor Green
+    Write-Host "OK - $($c.Pacote) $versaoAtual com a correcao aplicada." -ForegroundColor Green
+}
 
 # ── 2. Compilar e instalar no prefixo ─────────────────────────────────────
 

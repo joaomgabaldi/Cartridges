@@ -35,6 +35,7 @@
           <li>Ao abrir o aplicativo, a iluminação de LED agora acende suavemente, assim como apaga ao fechar</li>
           <li>A anotação "Onde eu parei" agora fica apenas no botão, e a caixa dela pode ser redimensionada</li>
           <li>Agora é possível buscar atualizações do aplicativo a qualquer momento, nas Preferências</li>
+          <li>Os avisos na parte inferior da tela agora surgem e desaparecem suavemente</li>
         </ul>
       </description>
     </release>

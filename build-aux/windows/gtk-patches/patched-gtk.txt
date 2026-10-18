@@ -1,4 +1,6 @@
-﻿# Estado da libgtk corrigida instalada.
-# O build-installer confere estas duas linhas antes de empacotar.
+﻿# Estado das bibliotecas corrigidas instaladas.
+# O build-installer confere estas linhas antes de empacotar.
 gtk4_package_version=4.24.1-1
-libgtk_sha256=A6BD26034157C573D7EEE5C729BD6CF3AFDA61F66838533C61E5E83C54394CD6
+libgtk_sha256=0E24D52C7F42C31AE7DB6B7EA3A5A6FEBEE46963292CF3DDCC8D259AABA4FA03
+libadwaita_package_version=1.10.0-2
+libadwaita_sha256=4B9B03950EBA06D3C86278CA5E075AD926FC3BD8736D323B53A7E4A4DE14CC76

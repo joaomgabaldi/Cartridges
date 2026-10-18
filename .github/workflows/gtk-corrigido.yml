@@ -10,6 +10,26 @@ jobs:
   gtk:
     runs-on: windows-latest
     timeout-minutes: 240
+    strategy:
+      # Um de cada vez: os dois publicam na mesma pré-release, e a primeira
+      # execução é quem a cria.
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        include:
+          - pacote: gtk4
+            fonte: gtk
+            patch: gtk-dcomp-render-window-origin.patch
+            dll: libgtk-4-1.dll
+            trava: gtk4_package_version
+            trava_hash: libgtk_sha256
+          - pacote: libadwaita
+            fonte: libadwaita
+            patch: libadwaita-toast-fade.patch
+            dll: libadwaita-1-0.dll
+            trava: libadwaita_package_version
+            trava_hash: libadwaita_sha256
+    name: ${{ matrix.pacote }}
     steps:
       # O patch precisa chegar com LF: o `patch` do MSYS2 não casa CRLF com a árvore do tarball.
       - run: git config --global core.autocrlf false
@@ -20,7 +40,7 @@ jobs:
         with:
           repository: msys2/MINGW-packages
           path: MINGW-packages
-          sparse-checkout: mingw-w64-gtk4
+          sparse-checkout: mingw-w64-${{ matrix.pacote }}
 
       # release: false usa o C:\msys64 do runner, os mesmos caminhos do PC.
       - uses: msys2/setup-msys2@v2
@@ -31,64 +51,88 @@ jobs:
           install: base-devel mingw-w64-ucrt-x86_64-toolchain
 
       - name: Conferir a receita contra o MSYS2
+        id: receita
         shell: msys2 {0}
         run: |
-          cd MINGW-packages/mingw-w64-gtk4
+          cd MINGW-packages/mingw-w64-${{ matrix.pacote }}
           receita="$(sed -n 's/^pkgver=//p' PKGBUILD)-$(sed -n 's/^pkgrel=//p' PKGBUILD)"
-          oferecida="$(pacman -Si mingw-w64-ucrt-x86_64-gtk4 | awk '/^Version/ {print $3}')"
+          oferecida="$(pacman -Si mingw-w64-ucrt-x86_64-${{ matrix.pacote }} | awk '/^Version/ {print $3}')"
           echo "Receita: $receita. MSYS2: $oferecida."
           if [ "$receita" != "$oferecida" ]; then
-            echo "::error::A receita do gtk4 ($receita) difere do pacote publicado no MSYS2 ($oferecida). Aguarde o MSYS2 publicar o pacote e execute novamente."
+            echo "::error::A receita do ${{ matrix.pacote }} ($receita) difere do pacote publicado no MSYS2 ($oferecida). Aguarde o MSYS2 publicar o pacote e execute novamente."
             exit 1
+          fi
+          echo "versao=$receita" >> "$GITHUB_OUTPUT"
+
+      # A compilação não sai byte a byte igual: refazer um pacote já publicado
+      # muda o hash da DLL e quebra a trava de quem já o instalou. A versão que
+      # já está na pré-release fica como está; para republicar a mesma versão
+      # (o patch mudou), apague antes o anexo dela na pré-release.
+      - name: Pular o que já está publicado
+        id: publicar
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          anexo="mingw-w64-ucrt-x86_64-${{ matrix.pacote }}-${{ steps.receita.outputs.versao }}-any.pkg.tar.zst"
+          if gh release view gtk-corrigido --json assets --jq '.assets[].name' 2>/dev/null | grep -qxF "$anexo"; then
+            echo "::notice::$anexo já está na pré-release gtk-corrigido; nada a compilar."
+            echo "sim=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "sim=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Acrescentar o patch à receita
+        if: steps.publicar.outputs.sim == 'true'
         shell: msys2 {0}
         run: |
-          cd MINGW-packages/mingw-w64-gtk4
-          cp ../../build-aux/windows/gtk-patches/gtk-dcomp-render-window-origin.patch .
+          cd MINGW-packages/mingw-w64-${{ matrix.pacote }}
+          cp ../../build-aux/windows/gtk-patches/${{ matrix.patch }} .
           cat >> PKGBUILD <<'EOF'
 
           # Cartridges: build-aux/windows/gtk-patches
-          source+=("gtk-dcomp-render-window-origin.patch")
+          source+=("${{ matrix.patch }}")
           sha256sums+=('SKIP')
           eval "_prepare_msys2() $(declare -f prepare | tail -n +2)"
           prepare() {
             _prepare_msys2
-            cd "${srcdir}/gtk-${pkgver}"
-            patch -Np1 -i "${srcdir}/gtk-dcomp-render-window-origin.patch"
+            cd "${srcdir}/${{ matrix.fonte }}-${pkgver}"
+            patch -Np1 -i "${srcdir}/${{ matrix.patch }}"
           }
           EOF
 
       - name: Compilar o pacote
+        if: steps.publicar.outputs.sim == 'true'
         shell: msys2 {0}
         run: |
-          cd MINGW-packages/mingw-w64-gtk4
+          cd MINGW-packages/mingw-w64-${{ matrix.pacote }}
           MINGW_ARCH=ucrt64 makepkg-mingw --syncdeps --noconfirm --skippgpcheck --nocheck --cleanbuild
 
-      - name: Hash da libgtk
+      - name: Hash da biblioteca
+        if: steps.publicar.outputs.sim == 'true'
         shell: msys2 {0}
         run: |
-          cd MINGW-packages/mingw-w64-gtk4
-          pacote=$(ls mingw-w64-ucrt-x86_64-gtk4-[0-9]*-any.pkg.tar.zst)
-          bsdtar -xOf "$pacote" ucrt64/bin/libgtk-4-1.dll | sha256sum | cut -d' ' -f1 | tr a-f A-F > ../../libgtk.sha256
+          cd MINGW-packages/mingw-w64-${{ matrix.pacote }}
+          pacote=$(ls mingw-w64-ucrt-x86_64-${{ matrix.pacote }}-[0-9]*-any.pkg.tar.zst)
+          bsdtar -xOf "$pacote" ucrt64/bin/${{ matrix.dll }} | sha256sum | cut -d' ' -f1 | tr a-f A-F > ../../dll.sha256
           echo "$pacote" > ../../pacote.txt
 
       - name: Publicar na pré-release gtk-corrigido
+        if: steps.publicar.outputs.sim == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           pacote=$(cat pacote.txt)
-          versao=${pacote#mingw-w64-ucrt-x86_64-gtk4-}; versao=${versao%-any.pkg.tar.zst}
+          versao=${pacote#mingw-w64-ucrt-x86_64-${{ matrix.pacote }}-}; versao=${versao%-any.pkg.tar.zst}
           gh release view gtk-corrigido >/dev/null 2>&1 || gh release create gtk-corrigido \
             --prerelease --latest=false --title "GTK corrigido" \
-            --notes "Biblioteca GTK 4 com a correção de desenho em monitores maiores que o principal, usada na geração do instalador. Não é uma versão do aplicativo."
-          gh release upload gtk-corrigido "MINGW-packages/mingw-w64-gtk4/$pacote" --clobber
+            --notes "Bibliotecas GTK 4 e libadwaita corrigidas, usadas na geração do instalador. Não é uma versão do aplicativo."
+          gh release upload gtk-corrigido "MINGW-packages/mingw-w64-${{ matrix.pacote }}/$pacote"
           {
-            echo "Trava para build-aux/windows/gtk-patches/patched-gtk.txt:"
+            echo "Trava do ${{ matrix.pacote }} para build-aux/windows/gtk-patches/patched-gtk.txt:"
             echo '```'
-            echo "gtk4_package_version=$versao"
-            echo "libgtk_sha256=$(cat libgtk.sha256)"
+            echo "${{ matrix.trava }}=$versao"
+            echo "${{ matrix.trava_hash }}=$(cat dll.sha256)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

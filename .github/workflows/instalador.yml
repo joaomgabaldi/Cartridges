@@ -43,15 +43,17 @@ jobs:
       - name: GTK corrigido, tinytuya e meson setup
         shell: msys2 {0}
         run: |
-          trava=$(sed -n 's/^gtk4_package_version=//p' build-aux/windows/gtk-patches/patched-gtk.txt | tr -d '\r')
-          atual=$(pacman -Q mingw-w64-ucrt-x86_64-gtk4 | cut -d' ' -f2)
-          if [ "$atual" != "$trava" ]; then
-            echo "::error::O MSYS2 publicou o gtk4 $atual, mas a trava está em $trava. Execute 'Compilar GTK corrigido', teste a versão nova no PC e atualize a trava (build-aux/windows/gtk-patches/README.md)."
-            exit 1
-          fi
-          pacote="mingw-w64-ucrt-x86_64-gtk4-$trava-any.pkg.tar.zst"
-          curl -fsSLO "https://github.com/$GITHUB_REPOSITORY/releases/download/gtk-corrigido/$pacote"
-          pacman -U --noconfirm "$pacote"
+          for nome in gtk4 libadwaita; do
+            trava=$(sed -n "s/^${nome}_package_version=//p" build-aux/windows/gtk-patches/patched-gtk.txt | tr -d '\r')
+            atual=$(pacman -Q mingw-w64-ucrt-x86_64-$nome | cut -d' ' -f2)
+            if [ "$atual" != "$trava" ]; then
+              echo "::error::O MSYS2 publicou o $nome $atual, mas a trava está em $trava. Execute 'Compilar GTK corrigido', teste a versão nova no PC e atualize a trava (build-aux/windows/gtk-patches/README.md)."
+              exit 1
+            fi
+            pacote="mingw-w64-ucrt-x86_64-$nome-$trava-any.pkg.tar.zst"
+            curl -fsSLO "https://github.com/$GITHUB_REPOSITORY/releases/download/gtk-corrigido/$pacote"
+            pacman -U --noconfirm "$pacote"
+          done
           python -m pip install --break-system-packages tinytuya==1.20.0
           meson setup _build
 
