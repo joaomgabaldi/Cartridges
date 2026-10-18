@@ -173,6 +173,21 @@ def download_dir() -> Path:
     return Path(tempfile.gettempdir()) / "Cartridges-update"
 
 
+def _buscar_release() -> Optional[Release]:
+    """Pergunta ao GitHub qual é a última release.
+
+    :raises requests.RequestException: falha de rede ou HTTP
+    :raises ValueError: resposta que não é JSON
+    """
+    response = requests.get(
+        RELEASES_URL,
+        timeout=10,
+        headers={"Accept": "application/vnd.github+json"},
+    )
+    response.raise_for_status()
+    return parse_release(response.json())
+
+
 class DownloadCancelled(Exception):
     """A pessoa apertou Cancelar, ou o app fechou, no meio do download."""
 
@@ -242,6 +257,11 @@ class AppUpdater:
         # próximo pedaço e um resultado que chegue depois é descartado.
         self._cancel = threading.Event()
         self._stopped = False
+        # A pergunta (ou o download que ela abriu) está na tela: a checagem da
+        # abertura adiada e o botão das Preferências não abrem uma segunda.
+        self._perguntando = False
+        # Uma busca do botão no caminho; reabrir as Preferências devolve o botão.
+        self._buscando = False
 
     def start(self) -> None:
         """Checa uma vez, fora da thread principal. Só no app instalado."""
@@ -254,6 +274,46 @@ class AppUpdater:
         self._stopped = True
         self._cancel.set()
 
+    def buscar_agora(self, responder: Callable[[Optional[str]], None]) -> None:
+        """Checagem pedida pelo botão das Preferências.
+
+        Diferente da checagem da abertura, toda resposta chega à pessoa: versão
+        nova vira a pergunta de sempre e ``responder(None)``; o resto vira
+        ``responder(texto)`` para um aviso. Sempre na thread principal, uma vez.
+        """
+        if installed_root() is None:
+            responder(_("A busca de atualizações só funciona no aplicativo instalado."))
+            return
+        if self._buscando:
+            responder(_("A busca de atualizações já está em andamento."))
+            return
+        self._buscando = True
+
+        def work() -> None:
+            try:
+                release = _buscar_release()
+            except Exception as error:  # pylint: disable=broad-exception-caught
+                logging.info("Busca de versão nova falhou: %s", error)
+                entregar_na_tela(
+                    self._responder_busca,
+                    responder,
+                    _(
+                        "Não foi possível buscar atualizações. Verifique a conexão "
+                        "com a internet."
+                    ),
+                )
+                return
+            if release is None or not is_newer(release.version, shared.VERSION):
+                entregar_na_tela(
+                    self._responder_busca,
+                    responder,
+                    _("O Cartridges já está na versão mais recente."),
+                )
+                return
+            entregar_na_tela(self._perguntar_agora, release, responder)
+
+        threading.Thread(target=work, daemon=True).start()
+
     # -- thread de checagem --------------------------------------------------
 
     def _check_thread(self) -> None:
@@ -262,13 +322,7 @@ class AppUpdater:
         shutil.rmtree(download_dir(), ignore_errors=True)
 
         try:
-            response = requests.get(
-                RELEASES_URL,
-                timeout=10,
-                headers={"Accept": "application/vnd.github+json"},
-            )
-            response.raise_for_status()
-            release = parse_release(response.json())
+            release = _buscar_release()
         except (requests.RequestException, ValueError) as error:
             # Sem rede não é erro: o app abre como sempre, e a pergunta fica
             # para a próxima abertura.
@@ -289,21 +343,11 @@ class AppUpdater:
     # -- thread principal ----------------------------------------------------
 
     def _ask(self, release: Release) -> bool:
-        if self._stopped or shared.win is None:
+        if self._stopped or shared.win is None or self._perguntando:
             return False
 
-        # avoid import cycles
-        from cartridges.process_session import ProcessSession
-        from cartridges.session_window import SessionWindow
-
-        # Com um jogo aberto, o Sim fecharia o app no meio da sessão, e o app
-        # reaberto pelo instalador não volta a rastrear o jogo. A pergunta
-        # espera a sessão acabar, e também o backup ou a restauração dos saves.
-        if (
-            SessionWindow.active is not None
-            or ProcessSession.active is not None
-            or backup_de_saves.em_andamento()
-        ):
+        # A pergunta espera a sessão acabar (veja `_ocupado`).
+        if self._ocupado():
             GLib.timeout_add_seconds(ASK_RETRY_SECONDS, self._ask, release)
             return False
 
@@ -336,7 +380,46 @@ class AppUpdater:
         dialog.set_close_response("no")
         dialog.connect("response", self._on_answer, release)
         dialog.present(shared.win)
+        self._perguntando = True
         return False
+
+    @staticmethod
+    def _ocupado() -> bool:
+        """Com um jogo aberto, o Sim fecharia o app no meio da sessão, e o app
+        reaberto pelo instalador não volta a rastrear o jogo. Vale também para o
+        backup ou a restauração dos saves."""
+        # avoid import cycles
+        from cartridges.process_session import ProcessSession
+        from cartridges.session_window import SessionWindow
+
+        return (
+            SessionWindow.active is not None
+            or ProcessSession.active is not None
+            or backup_de_saves.em_andamento()
+        )
+
+    def _responder_busca(
+        self, responder: Callable[[Optional[str]], None], texto: Optional[str]
+    ) -> None:
+        self._buscando = False
+        responder(texto)
+
+    def _perguntar_agora(
+        self, release: Release, responder: Callable[[Optional[str]], None]
+    ) -> None:
+        self._buscando = False
+        # Pedida pelo botão, a pergunta não espera em silêncio: a pessoa clicou
+        # e precisa de uma resposta agora.
+        if self._ocupado():
+            responder(
+                _(
+                    "Versão {} disponível. Conclua o jogo, o backup ou a restauração "
+                    "dos saves em andamento para atualizar."
+                ).format(release.version)
+            )
+            return
+        self._ask(release)
+        responder(None)
 
     def _on_answer(
         self, _dialog: Adw.AlertDialog, response: str, release: Release
@@ -344,13 +427,17 @@ class AppUpdater:
         # "Agora não" não grava nada: na próxima abertura, a pergunta volta.
         if response == "yes":
             self._download(release)
+        else:
+            self._perguntando = False
 
     def _download(self, release: Release) -> None:
+        # Um Cancelar de antes, na mesma sessão, não pode parar este download.
+        self._cancel.clear()
         bar = Gtk.ProgressBar(show_text=True)
         dialog = Adw.AlertDialog(heading=_("Baixando atualização…"), extra_child=bar)
         dialog.add_response("cancel", _("Cancelar"))
         dialog.set_close_response("cancel")
-        dialog.connect("response", lambda *_args: self._cancel.set())
+        dialog.connect("response", lambda *_args: self._cancelar())
         # Modal, como a pergunta: não dá para iniciar um jogo com o app prestes
         # a fechar para instalar.
         dialog.present(shared.win)
@@ -372,6 +459,10 @@ class AppUpdater:
             entregar_na_tela(self._finish, dialog, target)
 
         threading.Thread(target=work, daemon=True).start()
+
+    def _cancelar(self) -> None:
+        self._cancel.set()
+        self._perguntando = False
 
     def _finish(self, dialog: Adw.AlertDialog, target: Optional[Path]) -> bool:
         # Cancelar apertado no último instante, ou o app fechando: o resultado
@@ -399,6 +490,7 @@ class AppUpdater:
                 shared.win.get_application().quit()
                 return False
 
+        self._perguntando = False
         dialog.force_close()
         shared.win.toast_queue.add(Adw.Toast.new(message))
         return False

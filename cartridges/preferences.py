@@ -151,6 +151,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     pasta_dos_saves_padrao_botao = Gtk.Template.Child()
     restaurar_saves_button_row = Gtk.Template.Child()
 
+    atualizacoes_row: Adw.ActionRow = Gtk.Template.Child()
+    buscar_atualizacoes_botao: Gtk.Button = Gtk.Template.Child()
     danger_zone_group = Gtk.Template.Child()
     remove_all_games_button_row = Gtk.Template.Child()
 
@@ -173,6 +175,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
         # General
         self.remove_all_games_button_row.connect("activated", self.remove_all_games)
+        self.atualizacoes_row.set_subtitle(_("Versão atual: {}").format(shared.VERSION))
+        self.buscar_atualizacoes_botao.connect("clicked", self.buscar_atualizacoes)
         self.export_backup_button_row.connect("activated", self.export_backup)
         self.import_backup_button_row.connect("activated", self.import_backup)
 
@@ -597,6 +601,29 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             return
         if resultado is login.Resultado.OK:
             self._varrer_jogos_do_xbox()
+
+    def buscar_atualizacoes(self, *_args: Any) -> None:
+        """Pergunta ao GitHub se saiu versão nova, sem esperar a próxima abertura."""
+        app = shared.win.get_application() if shared.win is not None else None
+        updater = getattr(app, "app_updater", None)
+        if updater is None:
+            self.add_toast(Adw.Toast.new(_("Não foi possível buscar atualizações")))
+            return
+
+        # Um clique por vez: o botão volta junto com a resposta.
+        self.buscar_atualizacoes_botao.set_sensitive(False)
+
+        def responder(texto: Optional[str]) -> None:
+            self.buscar_atualizacoes_botao.set_sensitive(True)
+            if texto is None:
+                return
+            # Preferências fechadas antes da resposta: o aviso vai para a janela.
+            if self.get_root() is not None:
+                self.add_toast(Adw.Toast.new(texto))
+            elif shared.win is not None:
+                shared.win.toast_queue.add(Adw.Toast.new(texto))
+
+        updater.buscar_agora(responder)
 
     def _varrer_jogos_do_xbox(self) -> None:
         """Lê na hora as conquistas dos jogos do Xbox, sem esperar a próxima abertura."""

@@ -322,3 +322,116 @@ def test_pergunta_espera_os_saves(monkeypatch):
 
     assert AppUpdater()._ask(release) is False
     assert len(adiadas) == 1 and adiadas[0][1] == (release,)
+
+
+# -- busca pedida nas Preferências --------------------------------------------
+
+
+@pytest.fixture
+def busca(tmp_path, monkeypatch):
+    """Instalado, versão 2026.09.01, GitHub respondendo ``_API`` e o que iria para
+    a tela entregue na hora."""
+    monkeypatch.setattr(app_updater, "installed_root", lambda: tmp_path)
+    monkeypatch.setattr(app_updater.shared, "VERSION", "2026.09.01")
+    response = types.SimpleNamespace(raise_for_status=lambda: None, json=lambda: _API)
+    monkeypatch.setattr(app_updater.requests, "get", lambda _url, **_kw: response)
+    monkeypatch.setattr(app_updater, "entregar_na_tela", lambda fn, *args: fn(*args))
+    monkeypatch.setattr(
+        app_updater.threading,
+        "Thread",
+        lambda target, **_kw: types.SimpleNamespace(start=target),
+    )
+    avisos: list[str] = []
+    perguntas: list[Release] = []
+    monkeypatch.setattr(AppUpdater, "_ask", lambda _self, release: perguntas.append(release))
+    monkeypatch.setattr(AppUpdater, "_ocupado", staticmethod(lambda: False))
+    return types.SimpleNamespace(avisos=avisos, perguntas=perguntas)
+
+
+def test_busca_com_versao_nova_faz_a_pergunta(busca):
+    AppUpdater().buscar_agora(busca.avisos.append)
+
+    assert [r.version for r in busca.perguntas] == ["2026.09.10"]
+    # O None devolve o botão: a resposta é a própria pergunta.
+    assert busca.avisos == [None]
+
+
+def test_busca_sem_versao_nova_avisa(busca, monkeypatch):
+    monkeypatch.setattr(app_updater.shared, "VERSION", "2026.09.10")
+
+    AppUpdater().buscar_agora(busca.avisos.append)
+
+    assert busca.perguntas == []
+    assert busca.avisos == ["O Cartridges já está na versão mais recente."]
+
+
+def test_busca_sem_rede_avisa(busca, monkeypatch):
+    def get(_url, **_kw):
+        raise app_updater.requests.ConnectionError("sem rede")
+
+    monkeypatch.setattr(app_updater.requests, "get", get)
+
+    AppUpdater().buscar_agora(busca.avisos.append)
+
+    assert busca.perguntas == []
+    assert busca.avisos == [
+        "Não foi possível buscar atualizações. Verifique a conexão com a internet."
+    ]
+
+
+def test_busca_com_jogo_aberto_avisa_em_vez_de_perguntar(busca, monkeypatch):
+    monkeypatch.setattr(AppUpdater, "_ocupado", staticmethod(lambda: True))
+
+    AppUpdater().buscar_agora(busca.avisos.append)
+
+    assert busca.perguntas == []
+    assert busca.avisos == [
+        "Versão 2026.09.10 disponível. Conclua o jogo, o backup ou a restauração "
+        "dos saves em andamento para atualizar."
+    ]
+
+
+def test_busca_fora_da_instalacao_avisa(busca, monkeypatch):
+    monkeypatch.setattr(app_updater, "installed_root", lambda: None)
+
+    AppUpdater().buscar_agora(busca.avisos.append)
+
+    assert busca.perguntas == []
+    assert busca.avisos == ["A busca de atualizações só funciona no aplicativo instalado."]
+
+
+def test_segunda_busca_no_caminho_avisa(busca, monkeypatch):
+    """Reabrir as Preferências devolve o botão; a segunda busca não sai."""
+    pendentes: list = []
+    monkeypatch.setattr(
+        app_updater.threading,
+        "Thread",
+        lambda target, **_kw: types.SimpleNamespace(
+            start=lambda: pendentes.append(target)
+        ),
+    )
+    updater = AppUpdater()
+    updater.buscar_agora(busca.avisos.append)
+    updater.buscar_agora(busca.avisos.append)
+
+    assert len(pendentes) == 1
+    assert busca.avisos == ["A busca de atualizações já está em andamento."]
+
+    pendentes[0]()
+    updater.buscar_agora(busca.avisos.append)
+    assert len(pendentes) == 2
+
+
+def test_pergunta_na_tela_nao_abre_outra(monkeypatch):
+    """A checagem da abertura adiada não abre uma segunda pergunta por cima."""
+    monkeypatch.setattr(app_updater.shared, "win", object())
+    monkeypatch.setattr(
+        app_updater.Adw,
+        "AlertDialog",
+        lambda **_kw: pytest.fail("abriu uma segunda pergunta"),
+    )
+    updater = AppUpdater()
+    updater._perguntando = True  # pylint: disable=protected-access
+    release = Release("2026.09.30", "", "https://x", 1, "ab")
+
+    assert updater._ask(release) is False  # pylint: disable=protected-access

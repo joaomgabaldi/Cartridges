@@ -80,6 +80,20 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
       }
     }
 
+    Adw.PreferencesGroup {
+      title: _("Atualizações");
+
+      Adw.ActionRow atualizacoes_row {
+        title: _("Buscar atualizações");
+
+        [suffix]
+        Gtk.Button buscar_atualizacoes_botao {
+          label: _("Buscar");
+          valign: center;
+        }
+      }
+    }
+
     Adw.PreferencesGroup danger_zone_group {
       title: _("Zona de perigo");
       separate-rows: true;
