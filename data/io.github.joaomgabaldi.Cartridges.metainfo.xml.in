@@ -28,10 +28,9 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
-    <release version="2026.10.17" date="2026-10-17">
+    <release version="2026.10.18" date="2026-10-18">
       <description translate="no">
         <ul>
-          <li>Agora é possível escolher, nas Preferências, o site das Novidades: FitGirl Repacks ou IGN Brasil</li>
           <li>Os ícones das conquistas agora são exibidos com os cantos arredondados</li>
           <li>Ao abrir o aplicativo, a iluminação de LED agora acende suavemente, assim como apaga ao fechar</li>
         </ul>
