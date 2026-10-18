@@ -458,12 +458,22 @@ def test_excluir_confirmado_tira_da_grade_e_da_store(real_window, store, flush_i
 def test_anotacao_de_um_zerado_e_so_leitura(real_window, store):
     zerado = jogo(store, 38, removed=True, status="beaten", notes="x")
     real_window.update_notes_block(zerado)
-    assert real_window.details_view_notes_button.get_visible() is False
-    assert real_window.details_view_notes_box.get_visible() is True
+    # O texto se lê pelo botão, numa caixa que não aceita edição, e a dica
+    # do botão não promete anotar.
+    assert real_window.details_view_notes_button.get_visible() is True
+    assert real_window.details_view_notes_view.get_editable() is False
+    assert real_window.details_view_notes_button.get_tooltip_text() == (
+        "Ver onde você parou neste jogo"
+    )
 
+    # O jogo seguinte não herda a caixa travada nem a dica.
     jogando = jogo(store, 39, status="playing")
     real_window.update_notes_block(jogando)
     assert real_window.details_view_notes_button.get_visible() is True
+    assert real_window.details_view_notes_view.get_editable() is True
+    assert real_window.details_view_notes_button.get_tooltip_text() == (
+        "Anotar onde você parou neste jogo"
+    )
 
 
 # -- Seletor "Adicionar" -------------------------------------------------------
@@ -521,3 +531,17 @@ def test_escolher_linha_velha_so_tira_da_lista(store, como):
     assert game.status == ""
     assert picker.lista.get_row_at_index(0) is None
     assert picker.pilha.get_visible_child_name() == "vazio"
+
+
+def test_caixa_de_um_zerado_nao_grava_ao_fechar(real_window, store):
+    """Só leitura: mexer no texto e fechar o balão não muda a anotação."""
+    zerado = jogo(store, 41, removed=True, status="beaten", notes="Final secreto no capítulo 9")
+    real_window.active_game = zerado
+    real_window.update_notes_block(zerado)
+    vista = real_window.details_view_notes_view
+    real_window.on_notes_popover_toggled(SimpleNamespace(get_visible=lambda: True), None)
+
+    vista.get_buffer().set_text("apagado sem querer")
+    real_window.on_notes_popover_toggled(SimpleNamespace(get_visible=lambda: False), None)
+
+    assert zerado.notes == "Final secreto no capítulo 9"

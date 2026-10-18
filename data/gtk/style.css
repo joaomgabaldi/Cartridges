@@ -236,3 +236,20 @@ window.conquista-aviso-opaco .conquista-aviso-cartao {
 .conquista-aviso-rotulo {
   opacity: 0.75;
 }
+
+/* O puxador do canto da caixa do "Onde eu parei": um triângulo de listras
+   finas, o desenho de sempre de um canto que se arrasta. */
+.puxador-de-tamanho {
+  margin: 2px;
+  background-image: linear-gradient(
+    135deg,
+    transparent 45%,
+    alpha(currentColor, 0.35) 45%,
+    alpha(currentColor, 0.35) 55%,
+    transparent 55%,
+    transparent 70%,
+    alpha(currentColor, 0.35) 70%,
+    alpha(currentColor, 0.35) 80%,
+    transparent 80%
+  );
+}

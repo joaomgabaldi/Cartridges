@@ -745,57 +745,6 @@ Adw.NavigationPage details_page {
               ]
             }
 
-            // O seu recado sobre o jogo, acima do texto da Steam pelo mesmo
-            // motivo da nota acima do Metacritic: o que é seu vem antes do que
-            // é dos outros. Este é o único bloco da página com um título
-            // próprio — os demais são frases que se explicam ("Metacritic:
-            // 88"), e um parágrafo solto acima da sinopse não teria como dizer
-            // de quem ele é.
-            Box details_view_notes_box {
-              orientation: vertical;
-              margin-top: 18;
-              hexpand: true;
-              halign: start;
-              visible: false;
-
-              Label {
-                halign: start;
-                xalign: 0;
-                label: _("Onde eu parei");
-
-                styles [
-                  "caption-heading",
-                  "dim-label",
-                ]
-              }
-
-              // O texto vai como o usuário escreveu, com as quebras de linha
-              // que ele pôs: é um bloco de anotações, e uma lista de três
-              // coisas vira um parágrafo só se as quebras forem descartadas.
-              //
-              // Três linhas e reticências: a anotação de uma ou duas linhas,
-              // que é a comum, aparece inteira aqui e não custa clique nenhum;
-              // a que virou um capítulo vira chamada, e o resto se lê no botão
-              // ao lado. Sem o teto, uma anotação longa empurrava a sinopse, o
-              // HowLongToBeat e o próprio botão de Jogar para fora da tela.
-              Label details_view_notes {
-                margin-top: 3;
-                hexpand: true;
-                halign: start;
-                xalign: 0;
-                max-width-chars: 72;
-                wrap: true;
-                wrap-mode: word_char;
-                natural-wrap-mode: word;
-                lines: 3;
-                ellipsize: end;
-
-                styles [
-                  "dim-label",
-                ]
-              }
-            }
-
             // Steam's own pitch, between the facts about the product and how
             // long it takes to finish. The wider top margin is what separates
             // prose from the list of one-line facts above it.
@@ -1097,11 +1046,11 @@ Adw.NavigationPage details_page {
                 ]
               }
 
-              // Só aparece com o jogo em "Jogando", que é a única situação em
-              // que a anotação serve para alguma coisa: um jogo zerado ou na
-              // fila não tem onde se parou. O texto continua sendo o mesmo
-              // campo da tela de edição — este botão é um atalho para ele, e
-              // não um segundo lugar onde escrever.
+              // O único lugar onde a anotação se lê e se edita (o bloco de
+              // leitura no meio das informações saiu em 18/10/2026). Aparece
+              // em "Jogando" e em qualquer jogo com anotação; num zerado, só
+              // com anotação, e a caixa abre só para leitura. A regra e a dica
+              // são postas em `update_notes_block`.
               MenuButton details_view_notes_button {
                 visible: false;
                 label: _("Onde eu parei");

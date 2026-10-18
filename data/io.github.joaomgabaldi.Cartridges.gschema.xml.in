@@ -228,6 +228,15 @@
     <key name="news-last-seen-ts" type="x">
       <default>0</default>
     </key>
+    <!-- Tamanho, em pixels, em que o usuário deixou a caixa do "Onde eu parei"
+         (a da tela do jogo e a da tela de sessão compartilham). O mínimo é o
+         tamanho de sempre, 320x120. -->
+    <key name="notas-largura" type="i">
+      <default>320</default>
+    </key>
+    <key name="notas-altura" type="i">
+      <default>120</default>
+    </key>
     <!-- Quando (epoch seconds) começou a última varredura de conquistas da
          abertura que leu os arquivos de todos os jogos até o fim. Num jogo da
          Steam, conquista com data anterior a isso não conta como nova no aviso:

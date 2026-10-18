@@ -33,6 +33,7 @@
         <ul>
           <li>Os ícones das conquistas agora são exibidos com os cantos arredondados</li>
           <li>Ao abrir o aplicativo, a iluminação de LED agora acende suavemente, assim como apaga ao fechar</li>
+          <li>A anotação "Onde eu parei" agora fica apenas no botão, e a caixa dela pode ser redimensionada</li>
         </ul>
       </description>
     </release>

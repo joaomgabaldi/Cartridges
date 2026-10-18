@@ -36,6 +36,7 @@ from cartridges.conquistas_sessao import CartaoDaSessao
 from cartridges.game import Game, STATUS_LABELS, status_label
 from cartridges.game_cover import GameCover
 from cartridges.saves import backup_de_saves
+from cartridges.utils import caixa_redimensionavel
 from cartridges.utils.animated_flow_box import AnimatedFlowBox
 from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.dialog_backdrop import block_window_drag
@@ -172,8 +173,6 @@ class CartridgesWindow(Adw.ApplicationWindow):
     details_view_controller_support: Gtk.Label = Gtk.Template.Child()
     details_view_gamepad_recommended: Gtk.Label = Gtk.Template.Child()
     details_view_description: Gtk.Label = Gtk.Template.Child()
-    details_view_notes_box: Gtk.Box = Gtk.Template.Child()
-    details_view_notes: Gtk.Label = Gtk.Template.Child()
     details_view_conquistas_box: Gtk.Box = Gtk.Template.Child()
     details_view_conquistas_card: Gtk.Button = Gtk.Template.Child()
     details_view_conquistas_count: Gtk.Label = Gtk.Template.Child()
@@ -435,6 +434,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.session_blocker_notes_popover.connect(
             "notify::visible", self.on_session_notes_popover_toggled
         )
+        # As duas caixas mudam de tamanho pelo puxador do canto, e dividem o
+        # tamanho que o usuário deixou.
+        for vista in (self.details_view_notes_view, self.session_blocker_notes_view):
+            caixa_redimensionavel.ligar(vista.get_parent())
 
         # O histórico abre pelo próprio "Tempo de jogo", que é o que ele detalha
         # — ver `update_playtime_label`. Um clique sobre um Label comum, e não um
@@ -1048,20 +1051,29 @@ class CartridgesWindow(Adw.ApplicationWindow):
         )
 
     def update_notes_block(self, game: Game) -> None:
-        """A anotação na tela: o texto quando existe, o botão quando cabe.
+        """O botão da anotação, quando cabe: é só por ele que ela se lê.
 
-        O bloco de leitura aparece sempre que há algo escrito — inclusive num
-        jogo zerado, onde a anotação vira lembrança do que se achou dele. O
-        botão de editar aparece em "Jogando", o único status em que a pergunta
-        "onde eu parei?" tem resposta, e também em qualquer jogo que já tenha
-        anotação: este é o único lugar onde ela se edita, e um texto à mostra
-        sem como apagar seria uma anotação presa na tela para sempre. A exceção
-        é Jogos Zerados, onde o texto fica e o botão some.
+        Antes havia também um bloco com o texto no meio das informações do
+        jogo; saiu a pedido do usuário (18/10/2026).
+
+        O botão aparece em "Jogando", o único status em que a pergunta "onde
+        eu parei?" tem resposta, e em qualquer jogo que já tenha anotação: é o
+        único lugar onde ela se lê e se edita, e uma anotação sem botão ficaria
+        presa para sempre. Num zerado (Jogos Zerados), a anotação é a
+        lembrança do que se achou dele: o botão aparece só quando há texto, e a
+        caixa abre só para leitura, com uma dica que não promete anotar.
         """
         notes = (game.notes or "").strip()
-        self.details_view_notes.set_label(notes)
-        self.details_view_notes_box.set_visible(bool(notes))
-        self.details_view_notes_button.set_visible(can_edit_notes(game))
+        self.details_view_notes_button.set_visible(
+            can_edit_notes(game) or (game.zerado and bool(notes))
+        )
+        self.details_view_notes_view.set_editable(not game.zerado)
+        self.details_view_notes_view.set_cursor_visible(not game.zerado)
+        self.details_view_notes_button.set_tooltip_text(
+            _("Ver onde você parou neste jogo")
+            if game.zerado
+            else _("Anotar onde você parou neste jogo")
+        )
 
     def on_notes_popover_toggled(self, popover: Gtk.Popover, _pspec: Any) -> None:
         """O balão da tela de detalhes edita o jogo que ela está mostrando."""
@@ -1092,6 +1104,10 @@ class CartridgesWindow(Adw.ApplicationWindow):
         buffer = view.get_buffer()
         if popover.get_visible():
             buffer.set_text(game.notes or "")
+            return
+
+        # A caixa de um zerado é só leitura: fechar não grava nada.
+        if not view.get_editable():
             return
 
         # Mesmo tratamento de antes: as quebras do meio ficam (são o que separa

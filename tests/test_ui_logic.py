@@ -2332,7 +2332,6 @@ def test_the_notes_button_follows_the_status_or_the_note(real_window, store):
 
     real_window.update_notes_block(game)
     assert real_window.details_view_notes_button.get_visible() is True
-    assert real_window.details_view_notes_box.get_visible() is False
 
     real_window.lookup_action("set_status").activate(GLib.Variant("s", "beaten"))
     assert real_window.details_view_notes_button.get_visible() is False
@@ -2340,10 +2339,15 @@ def test_the_notes_button_follows_the_status_or_the_note(real_window, store):
     game.notes = "Cofre: 8815"
     real_window.update_notes_block(game)
 
-    # Zerado, mas com anotação: o texto à mostra e o botão junto dele.
+    # Zerado, mas com anotação: o botão volta, e é por ele que o texto se lê.
     assert real_window.details_view_notes_button.get_visible() is True
-    assert real_window.details_view_notes_box.get_visible() is True
-    assert real_window.details_view_notes.get_label() == "Cofre: 8815"
+
+
+def test_a_anotacao_nao_aparece_no_meio_das_informacoes(real_window):
+    """A anotação se lê só no balão do botão: o bloco com o texto no meio das
+    informações do jogo saiu (pedido do usuário, 18/10/2026)."""
+    assert not hasattr(real_window, "details_view_notes_box")
+    assert not hasattr(real_window, "details_view_notes")
 
 
 def test_a_tela_da_sessao_mostra_o_logo_do_jogo(real_window, store, app_dirs, monkeypatch):
@@ -2433,16 +2437,12 @@ def test_closing_the_notes_popover_saves_the_text(real_window, store):
     real_window.on_notes_popover_toggled(closing, None)
 
     assert game.notes == "Parei no capítulo 4.\nCofre: 8815"
-    assert real_window.details_view_notes.get_label() == (
-        "Parei no capítulo 4.\nCofre: 8815"
-    )
 
     real_window.on_notes_popover_toggled(opening, None)
     buffer.set_text("\n\n")
     real_window.on_notes_popover_toggled(closing, None)
 
     assert game.notes == ""
-    assert real_window.details_view_notes_box.get_visible() is False
 
 
 def test_a_hand_edited_status_reads_as_none(real_window, store):
