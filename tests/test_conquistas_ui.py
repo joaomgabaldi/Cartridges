@@ -669,3 +669,26 @@ def test_oculta_e_um_quadrado_igual_aos_outros():
     oculta = conquistas_sessao.imagem(Aparencia("", False, True), 48, 24)
     assert oculta.has_css_class("conquistas-ladrilho")
     assert oculta.get_size_request() == (48, 48)
+
+
+def test_icones_de_conquista_cortam_os_cantos(real_window, com_conquistas):
+    """O canto arredondado do ícone vem do widget: o CSS do GTK 4 não tem
+    ``overflow``. Vale nos três lugares que mostram o ícone."""
+    from cartridges import conquista_aviso  # noqa: PLC0415
+
+    real_window.update_conquistas_block(com_conquistas)
+    no_cartao = real_window.details_view_conquistas_icons.get_first_child()
+    assert no_cartao.get_overflow() == Gtk.Overflow.HIDDEN
+
+    pilha = conquistas_sessao.imagem(Aparencia("a.png", False, False), 48, 24)
+    na_sessao = pilha.get_last_child()
+    assert na_sessao.has_css_class("conquistas-icone")
+    assert na_sessao.get_overflow() == Gtk.Overflow.HIDDEN
+
+    janela = conquista_aviso._JanelaDoAviso(  # noqa: SLF001
+        conquista_aviso.Aviso("Conquista desbloqueada", "Um", "", "")
+    )
+    try:
+        assert janela._imagem.get_overflow() == Gtk.Overflow.HIDDEN  # noqa: SLF001
+    finally:
+        janela.destroy()

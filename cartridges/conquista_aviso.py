@@ -147,7 +147,9 @@ class _JanelaDoAviso(Gtk.Window):
         self._animacao: Optional[Adw.TimedAnimation] = None
 
         cartao = Gtk.Box(spacing=12, css_classes=["conquista-aviso-cartao"])
-        self._imagem = Gtk.Image(pixel_size=48, css_classes=["conquistas-icone"])
+        self._imagem = Gtk.Image(
+            pixel_size=48, css_classes=["conquistas-icone"], overflow=Gtk.Overflow.HIDDEN
+        )
         if aviso.icone:
             icones.carregar(aviso.icone, self._icone_chegou)
         else:

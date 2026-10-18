@@ -46,7 +46,9 @@ def imagem(visual: Aparencia, tamanho: int, interrogacao: int) -> Gtk.Widget:
 
     generico = Gtk.Image.new_from_icon_name("starred-symbolic")
     generico.set_pixel_size(tamanho // 2)
-    figura = Gtk.Image(pixel_size=tamanho, css_classes=["conquistas-icone"])
+    figura = Gtk.Image(
+        pixel_size=tamanho, css_classes=["conquistas-icone"], overflow=Gtk.Overflow.HIDDEN
+    )
     if visual.cinza:
         # O Xbox manda um ícone só: a bloqueada usa o mesmo, em cinza.
         figura.add_css_class("conquistas-icone-bloqueada")

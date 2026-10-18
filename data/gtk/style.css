@@ -96,9 +96,10 @@
   min-width: 260px;
 }
 
+/* O corte no canto vem do widget (`overflow=Gtk.Overflow.HIDDEN` onde o ícone
+   é criado): o CSS do GTK 4 não tem a propriedade `overflow`. */
 .conquistas-icone {
   border-radius: 6px;
-  overflow: hidden;
 }
 
 /* Lugar de um ícone de conquista que não há (oculta) ou não chegou: o mesmo
