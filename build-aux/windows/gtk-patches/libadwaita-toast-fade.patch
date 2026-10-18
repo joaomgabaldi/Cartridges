@@ -1,51 +1,72 @@
 --- a/src/adw-toast-overlay.c
 +++ b/src/adw-toast-overlay.c
-@@ -78,6 +78,8 @@
+@@ -78,6 +78,10 @@
  
    AdwAnimation *show_animation;
    AdwAnimation *hide_animation;
-+  /* Cartridges: opacidade de onde a saída parte (a entrada pode não ter acabado). */
-+  double hide_from;
++  /* Cartridges: até onde a entrada chegou (1 quando acabou), e de onde a
++   * saída parte, para não saltar quando ela começa no meio da entrada. */
++  float shown;
++  float hide_from;
  
    gulong shown_id;
    gulong dismissed_id;
-@@ -142,7 +144,7 @@
+@@ -141,8 +145,8 @@
+ hide_value_cb (double     value,
                 ToastInfo *info)
  {
-   value = adw_easing_ease (ADW_EASE_OUT_CUBIC, value);
+-  value = adw_easing_ease (ADW_EASE_OUT_CUBIC, value);
 -  gtk_widget_set_opacity (info->widget, value);
-+  gtk_widget_set_opacity (info->widget, value * info->hide_from);
++  gtk_widget_set_opacity (info->widget,
++                          adw_easing_ease (ADW_EASE_OUT_CUBIC, value * info->hide_from));
  
    gtk_widget_queue_allocate (GTK_WIDGET (info->overlay));
  }
-@@ -172,6 +174,10 @@
+@@ -172,6 +176,11 @@
  show_done_cb (ToastInfo *info)
  {
    g_clear_object (&info->show_animation);
 +
 +  /* Cartridges: o fim da entrada; a alocação seguinte já não vê a animação. */
++  info->shown = 1;
 +  if (info->widget && !info->hide_animation)
 +    gtk_widget_set_opacity (info->widget, 1);
  }
  
  static void show_toast (AdwToastOverlay *self,
-@@ -188,6 +194,7 @@
+@@ -188,6 +197,7 @@
  
    gtk_widget_set_can_target (GTK_WIDGET (info->widget), FALSE);
    gtk_widget_set_can_focus (GTK_WIDGET (info->widget), FALSE);
-+  info->hide_from = gtk_widget_get_opacity (info->widget);
++  info->hide_from = info->shown;
  
    target = adw_callback_animation_target_new ((AdwAnimationTargetFunc)
                                                hide_value_cb,
-@@ -262,6 +269,7 @@
+@@ -262,17 +272,19 @@
    self->current_toast = info;
  
    info->widget = adw_toast_widget_new (info->toast);
++  info->shown = 0;
 +  gtk_widget_set_opacity (info->widget, 0);
    gtk_widget_insert_before (info->widget, GTK_WIDGET (self), NULL);
  
    target = adw_callback_animation_target_new ((AdwAnimationTargetFunc)
-@@ -427,13 +435,10 @@
+                                               show_toast_animation_cb,
+                                               self, NULL);
+   info->show_animation =
+-    adw_timed_animation_new (GTK_WIDGET (self), 0, 1,
+-                             self->hiding_toasts ? REPLACE_DURATION : SHOW_DURATION,
+-                             target);
++    adw_timed_animation_new (GTK_WIDGET (self), 0, 1, HIDE_DURATION, target);
+ 
+-  adw_timed_animation_set_easing (ADW_TIMED_ANIMATION (info->show_animation), ADW_EASE);
++  /* Cartridges: linear de propósito; a curva da saída é aplicada ao contrário
++   * em allocate_toast(). */
++  adw_timed_animation_set_easing (ADW_TIMED_ANIMATION (info->show_animation), ADW_LINEAR);
+ 
+   info->shown_id = g_signal_connect_swapped (info->show_animation, "done",
+                                              G_CALLBACK (show_done_cb), info);
+@@ -427,16 +439,22 @@
    y = height - size.height;
    transform = gsk_transform_translate (NULL, &GRAPHENE_POINT_INIT (x, y));
  
@@ -56,10 +77,25 @@
 -    transform = gsk_transform_translate (transform,
 -                                         &GRAPHENE_POINT_INIT (0, offset));
 -  }
-+  /* Cartridges: o toast entra com fade, sem subir da borda. */
-+  if (info->show_animation && !info->hide_animation)
-+    gtk_widget_set_opacity (info->widget,
-+                            adw_animation_get_value (info->show_animation));
+-
+-  if (info->hide_animation) {
+-    float value = adw_animation_get_value (info->hide_animation);
++  /* Cartridges: a entrada é a saída de trás para frente. Num instante t da
++   * entrada, o toast fica como estaria no instante 1 - t da saída: mesma
++   * curva de opacidade e o mesmo leve crescimento, sem subir da borda. */
++  if (info->show_animation || info->hide_animation) {
++    float value;
++
++    if (info->hide_animation) {
++      value = adw_animation_get_value (info->hide_animation) * info->hide_from;
++    } else {
++      float t = adw_animation_get_value (info->show_animation);
++
++      value = 1 - adw_easing_ease (ADW_EASE, 1 - t);
++      info->shown = value;
++      gtk_widget_set_opacity (info->widget,
++                              adw_easing_ease (ADW_EASE_OUT_CUBIC, value));
++    }
  
-   if (info->hide_animation) {
-     float value = adw_animation_get_value (info->hide_animation);
+     x = size.width / 2.0f;
+     y = size.height / 2.0f;
