@@ -772,6 +772,13 @@ def _mandar(fita: Fita, valores: dict[str, Any]) -> bool:
 # perder é o fim, e por isso o fim vai sempre num comando que espera resposta.
 RITMO_FADE = 30
 DURACAO_FADE = 2
+# O brilho do fade de entrada sobe por esta curva (o andado elevado a ela), e
+# não em linha reta. O olho nota muito a diferença entre 1% e 10% e quase nada
+# entre 60% e 100%: em linha reta, a fita parecia acesa em meio segundo e o
+# resto da subida passava despercebido, e o fade de entrada parecia mais curto
+# que o de saída, embora levasse o mesmo tempo (medido nos logs, 17/10/2026).
+# O de saída fica em linha reta: nele a parte que o olho nota já cai no fim.
+CURVA_DA_ENTRADA = 2.2
 
 # O que cada fita está mostrando agora, por id: se está acesa, e a cor em
 # hexadecimal. Sem isso o fade não tem de onde partir — e ler a fita antes de
@@ -801,10 +808,13 @@ def _degraus(origem: Cor, destino: Cor, passos: int) -> list[str]:
     return [cor_hex for _passo, cor_hex in _degraus_no_passo(origem, destino, passos)]
 
 
-def _degraus_no_passo(origem: Cor, destino: Cor, passos: int) -> list[tuple[int, str]]:
+def _degraus_no_passo(
+    origem: Cor, destino: Cor, passos: int, curva: float = 1.0
+) -> list[tuple[int, str]]:
     """Os degraus de ``_degraus`` com o número do passo de cada um (1 a
     ``passos``): sem os repetidos, um fade que muda pouco tem poucos degraus,
-    e quem quer a duração inteira agenda cada um pelo passo dele."""
+    e quem quer a duração inteira agenda cada um pelo passo dele. ``curva``
+    entorta só o brilho (ver ``CURVA_DA_ENTRADA``)."""
     de_rgb = colorsys.hsv_to_rgb(origem.matiz / 360, origem.saturacao / 1000, 1)
     para_rgb = colorsys.hsv_to_rgb(destino.matiz / 360, destino.saturacao / 1000, 1)
     caminho = []
@@ -817,7 +827,7 @@ def _degraus_no_passo(origem: Cor, destino: Cor, passos: int) -> list[tuple[int,
             Cor(
                 round(matiz * 360) % 360,
                 round(saturacao * 1000),
-                round(origem.brilho + (destino.brilho - origem.brilho) * andado),
+                round(origem.brilho + (destino.brilho - origem.brilho) * andado**curva),
             )
         )
         # Degrau igual ao anterior não muda nada na fita, e o fim do fade é
@@ -996,11 +1006,36 @@ def _transitar(
         passos = round(DURACAO_FADE * RITMO_FADE)
         antes = _mostrada.get(fita.id)
         alvo = cor_de_hex(cor_hex)
-        # Só fita acesa desliza. A apagada acende direto, a cor antes do liga:
-        # acender do escuro com fade deixava fita apagada no teste com as fitas
-        # de verdade.
         origem = cor_de_hex(antes[1]) if antes is not None and antes[0] else None
-        if passos and origem is not None:
+        # Acender do escuro é o espelho do apagar: liga já na cor de destino,
+        # no brilho mínimo, e só com a fita acesa e confirmada o brilho sobe. A
+        # primeira tentativa de fade de entrada deixava a fita apagada no teste
+        # com as fitas de verdade; a hipótese (ADR 0001) é que os degraus iam
+        # com ela ainda desligada. Se o liga no mínimo não pega, nenhum degrau
+        # vai, mas a cor final ainda é tentada: desistir deixaria a fita
+        # apagada, ou acesa a 1%. Fita de estado desconhecido continua
+        # acendendo direto: não se sabe se está apagada.
+        if (
+            passos
+            and ligada
+            and antes is not None
+            and not antes[0]
+            and alvo is not None
+            and alvo.brilho > BRILHO_MINIMO
+        ):
+            inicio = alvo._replace(brilho=BRILHO_MINIMO)
+            if aplicar(fita, True, hsv_hex(inicio)) and _vigente(fita, geracao):
+                # Cada degrau no momento do passo dele: com a curva, os
+                # primeiros se repetem e caem fora, e agendar pela posição na
+                # lista encurtaria o fade.
+                no_passo = _degraus_no_passo(inicio, alvo, passos, CURVA_DA_ENTRADA)
+                _rajada(
+                    fita,
+                    [cor for _passo, cor in no_passo],
+                    geracao,
+                    [passo / RITMO_FADE for passo, _cor in no_passo],
+                )
+        elif passos and origem is not None:
             # Apagar é escurecer até o mínimo e só então desligar.
             destino = alvo if ligada else origem._replace(brilho=BRILHO_MINIMO)
             if destino is not None and destino != origem:

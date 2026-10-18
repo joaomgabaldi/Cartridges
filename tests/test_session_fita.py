@@ -1681,17 +1681,88 @@ def test_sem_saber_de_onde_a_fita_parte_nao_ha_fade(com_fila, com_fade):
     assert modulo.recebidos == [{"21": "colour", "24": "007803e80064"}, {"20": True}]
 
 
-def test_fita_apagada_acende_direto_sem_fade(com_fila, com_fade):
-    """Acender do escuro com fade deixava fita apagada no teste com as fitas
-    de verdade; o usuário preferiu acender direto, a cor antes do liga."""
+def test_fita_apagada_acende_no_minimo_e_sobe(com_fila, com_fade):
+    """O espelho do fechamento: a fita liga já na cor de destino, no brilho
+    mínimo, e só com ela acesa e confirmada o brilho sobe. A primeira tentativa
+    de fade de entrada deixava a fita apagada no teste com as fitas de verdade;
+    a hipótese (ADR 0001) é que os degraus iam com ela ainda desligada."""
     fita, modulo = com_fila
     session_fita.aplicar(fita, False, "000003e80064")
     modulo.recebidos.clear()
 
     session_fita._vestir(session_fita.Cor(120, 1000, 500))
 
-    assert modulo.recebidos == [{"21": "colour", "24": "007803e801f4"}, {"20": True}]
+    minimo = session_fita.hsv_hex(session_fita.Cor(120, 1000, session_fita.BRILHO_MINIMO))
+    cor_no_minimo, liga, *degraus, cor_final, liga_final = modulo.recebidos
+    # Nenhum degrau antes do liga: o liga no mínimo vem primeiro, a cor antes.
+    assert cor_no_minimo == {"21": "colour", "24": minimo}
+    assert liga == {"20": True}
+    brilhos = [session_fita.cor_de_hex(degrau["24"]).brilho for degrau in degraus]
+    assert len(brilhos) > 1
+    assert brilhos == sorted(brilhos)
+    assert brilhos[-1] == 500
+    assert {session_fita.cor_de_hex(degrau["24"]).matiz for degrau in degraus} == {120}
+    assert cor_final == {"21": "colour", "24": "007803e801f4"}
+    assert liga_final == {"20": True}
 
+
+def test_fade_de_entrada_sobe_devagar_no_comeco_sem_encurtar(com_fila, com_fade, monkeypatch):
+    """O olho nota muito a diferença entre 1% e 10% e quase nada entre 60% e
+    100%: em linha reta, a fita parecia acesa em meio segundo e o resto do fade
+    passava despercebido. A curva segura o começo, e cada degrau leva o próprio
+    momento, para os repetidos que caem fora não encurtarem o fade."""
+    fita, _modulo = com_fila
+    session_fita.aplicar(fita, False, "000003e80064")
+    rajadas = []
+    monkeypatch.setattr(
+        session_fita, "_rajada", lambda _f, caminho, _g, momentos=None: rajadas.append((caminho, momentos))
+    )
+
+    session_fita._transitar(fita, True, session_fita.hsv_hex(session_fita.Cor(120, 1000, 1000)))
+
+    (caminho, momentos), = rajadas
+    duracao = session_fita.DURACAO_FADE
+    assert momentos is not None and len(momentos) == len(caminho)
+    assert momentos == sorted(momentos)
+    assert momentos[-1] == pytest.approx(duracao)
+    brilhos = [session_fita.cor_de_hex(cor).brilho for cor in caminho]
+    na_metade = max(b for b, m in zip(brilhos, momentos) if m <= duracao / 2)
+    # Em linha reta, na metade do tempo o brilho estaria em ~50%.
+    assert na_metade < 300
+    assert brilhos[-1] == 1000
+
+
+def test_fita_apagada_que_nao_liga_no_minimo_acende_direto(com_fila, com_fade, monkeypatch):
+    """Se o liga no mínimo não pega, nenhum degrau vai (degraus para uma fita
+    desligada podem ser o que a deixava apagada), mas a cor final ainda é
+    tentada: desistir deixaria a fita apagada, ou acesa a 1%."""
+    fita, _modulo = com_fila
+    session_fita.aplicar(fita, False, "000003e80064")
+    chamadas = []
+    rajadas = []
+    monkeypatch.setattr(
+        session_fita, "aplicar", lambda *args: chamadas.append(args[1:]) or False
+    )
+    monkeypatch.setattr(session_fita, "_rajada", lambda *args: rajadas.append(args))
+
+    session_fita._transitar(fita, True, "007803e801f4")
+
+    minimo = session_fita.hsv_hex(session_fita.Cor(120, 1000, session_fita.BRILHO_MINIMO))
+    assert chamadas == [(True, minimo), (True, "007803e801f4")]
+    assert rajadas == []
+
+
+def test_abertura_com_fita_apagada_acende_no_minimo(falsas, schema, com_fade):
+    """O caminho real da abertura chega ao fade de entrada: a leitura do estado
+    diz que a fita está apagada, e o primeiro liga é no brilho mínimo."""
+    schema.set_boolean("session-fita", True)
+    modulo = falsas(False)["eb0"]
+
+    session_fita._guardar_e_vestir()
+
+    cor, liga = modulo.recebidos[0], modulo.recebidos[1]
+    assert session_fita.cor_de_hex(cor["24"]).brilho == session_fita.BRILHO_MINIMO
+    assert liga == {"20": True}
 
 def test_apagar_desce_o_brilho_antes_de_desligar(com_fila, com_fade):
     """O fechamento que devolve a fita apagada: ela escurece, e só então desliga."""
