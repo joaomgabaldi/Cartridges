@@ -106,23 +106,10 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
     icon-name: "video-joined-displays-symbolic";
 
     Adw.PreferencesGroup {
-      title: _("Novidades");
+      title: _("Barra superior");
 
       Adw.SwitchRow show_news_button_switch {
         title: _("Mostrar o botão Novidades");
-      }
-
-      // A ordem é a de `news_feed.NEWS_SOURCES`.
-      Adw.ComboRow news_source_row {
-        title: _("Site das novidades");
-        sensitive: bind show_news_button_switch.active;
-
-        model: StringList {
-          strings [
-            "FitGirl Repacks",
-            "IGN Brasil",
-          ]
-        };
       }
     }
 

@@ -693,7 +693,6 @@ class CartridgesApplication(Adw.Application):
         # Com o botão Novidades oculto, ninguém vê as notícias: o feed nem é
         # consultado.
         shared.schema.connect("changed::show-news-button", self.on_show_news_changed)
-        shared.schema.connect("changed::news-source", self.news_checker.on_source_changed)
         self.on_show_news_changed()
 
         # Catch up the games that predate the HowLongToBeat lookup (or whose

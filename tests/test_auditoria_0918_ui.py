@@ -336,7 +336,7 @@ def test_b26_busca_que_falhou_nao_diz_atualizadas():
     resultados = []
     checker.connect("poll-finished", lambda _c, ok: resultados.append(ok))
 
-    checker._apply(None, "fitgirl")
+    checker._apply(None)
 
     assert resultados == [False]
     assert checker._posts, "o cache fica"

@@ -50,7 +50,6 @@ from cartridges.utils import (
 )
 from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.na_tela import entregar_na_tela
-from cartridges.utils.news_feed import NEWS_SOURCES
 
 
 # A ordem da lista "Estilo do alerta" na tela.
@@ -68,7 +67,6 @@ class CartridgesPreferences(Adw.PreferencesDialog):
 
     minimize_after_launch_switch: Adw.SwitchRow = Gtk.Template.Child()
     show_news_button_switch: Adw.SwitchRow = Gtk.Template.Child()
-    news_source_row: Adw.ComboRow = Gtk.Template.Child()
     playtime_tracking_switch: Adw.SwitchRow = Gtk.Template.Child()
     gamepad_switch: Adw.SwitchRow = Gtk.Template.Child()
     gamepad_rumble_switch: Adw.SwitchRow = Gtk.Template.Child()
@@ -289,9 +287,6 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self._pulso_balao_aberto = False
         self.conquistas_pulso_cor_balao.connect("show", self._abrir_balao_do_pulso)
         self.conquistas_pulso_cor_balao.connect("closed", self._fechar_balao_do_pulso)
-        self._news_source_id = self.news_source_row.connect(
-            "notify::selected", self._gravar_site_das_novidades
-        )
         self._pulso_estilo_id = self.conquistas_pulso_estilo_row.connect(
             "notify::selected", self._gravar_estilo_do_pulso
         )
@@ -535,11 +530,6 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         session_fita.redefinir_tom_do_pulso()
         self.conquistas_pulso_cor_reset.set_visible(False)
 
-    def _gravar_site_das_novidades(self, row: Adw.ComboRow, *_args: Any) -> None:
-        indice = row.get_selected()
-        if indice < len(NEWS_SOURCES):
-            shared.schema.set_string("news-source", tuple(NEWS_SOURCES)[indice])
-
     def _gravar_estilo_do_pulso(self, row: Adw.ComboRow, *_args: Any) -> None:
         indice = row.get_selected()
         if indice < len(ESTILOS_NA_TELA):
@@ -744,14 +734,6 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             self.conquistas_chave_row.handler_unblock(
                 self._conquistas_chave_changed_id
             )
-
-        self.news_source_row.handler_block(self._news_source_id)
-        try:
-            self.news_source_row.set_selected(
-                tuple(NEWS_SOURCES).index(shared.schema.get_string("news-source"))
-            )
-        finally:
-            self.news_source_row.handler_unblock(self._news_source_id)
 
         canto = shared.schema.get_string("conquistas-aviso-posicao")
         if canto not in janela_por_cima.CANTOS:

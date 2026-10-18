@@ -55,23 +55,15 @@ from cartridges.utils.updates_feed import (
     parse_xml,
 )
 
-# The sites the Novidades page can read, keyed by the `news-source` setting.
-# Only this page follows the setting: the per-game update notice always reads
-# FEED_URL, whose digest format it depends on.
-NEWS_SOURCES = {
-    "fitgirl": FEED_URL,
-    "ign-br": "https://br.ign.com/feed.xml",
-}
-
 # WordPress serves the short summary in <description> and the full post body in
 # this RSS extension element. The summary is preferred: it is already an
 # excerpt, so it needs far less trimming than the full body.
 _CONTENT_NS = "{http://purl.org/rss/1.0/modules/content/}encoded"
 
-# Ceiling on the excerpt. Some sites (IGN Brasil) ship the whole article in
-# <description>; the page shows a summary and the link, never another site's
-# full article. The repack site's excerpts stay well under it.
-_SUMMARY_MAX_CHARS = 600
+# Hard ceiling on the excerpt. Rows are expanders that show the whole text, so
+# this is not a display choice — it is a sanity guard for the case where a post
+# ships its entire body in <description> instead of a summary.
+_SUMMARY_MAX_CHARS = 4000
 
 # WordPress appends a "read the rest" teaser to the excerpt. It is a link in the
 # markup, so it survives tag stripping as a dangling sentence; cut it off.
@@ -83,12 +75,6 @@ _WHITESPACE_RE = re.compile(r"\s+")
 
 # Tags whose text content is markup plumbing, never prose.
 _SKIPPED_TAGS = frozenset({"script", "style"})
-
-# Tags that end a paragraph. Without a break their texts run together
-# ("Preparem-seA Activision…").
-_BLOCK_TAGS = frozenset(
-    {"p", "div", "br", "li", "ul", "ol", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6"}
-)
 
 # Ceiling on how many rows one feed may produce. The page is a list of recent
 # posts; a document claiming a hundred thousand of them is not one.
@@ -122,20 +108,14 @@ class _TextExtractor(HTMLParser):
     def handle_starttag(self, tag: str, attrs: list) -> None:
         if tag in _SKIPPED_TAGS:
             self._skip_depth += 1
-        elif tag in _BLOCK_TAGS:
-            self.chunks.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
         if tag in _SKIPPED_TAGS and self._skip_depth:
             self._skip_depth -= 1
-        elif tag in _BLOCK_TAGS:
-            self.chunks.append("\n")
 
     def handle_data(self, data: str) -> None:
-        # A line break in the source is just whitespace; only block tags end
-        # a paragraph.
         if not self._skip_depth:
-            self.chunks.append(_WHITESPACE_RE.sub(" ", data))
+            self.chunks.append(data)
 
 
 def strip_html(fragment: str) -> str:
@@ -151,13 +131,7 @@ def strip_html(fragment: str) -> str:
     except Exception:  # pylint: disable=broad-exception-caught
         logging.debug("Failed to parse a news post summary", exc_info=True)
 
-    # Whitespace collapses inside a paragraph; paragraphs are kept apart by a
-    # blank line, which the expanded row shows as-is.
-    paragraphs = (
-        _WHITESPACE_RE.sub(" ", chunk).strip()
-        for chunk in "".join(parser.chunks).split("\n")
-    )
-    return "\n\n".join(paragraph for paragraph in paragraphs if paragraph)
+    return _WHITESPACE_RE.sub(" ", "".join(parser.chunks)).strip()
 
 
 def summarize(fragment: str, max_chars: int = _SUMMARY_MAX_CHARS) -> str:

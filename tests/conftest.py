@@ -122,7 +122,6 @@ _SCHEMA_DEFAULTS = {
     "updates-check-interval": 12,
     "news-check-interval": 6,
     "show-news-button": False,
-    "news-source": "fitgirl",
     "sort-mode": "last_played",
     "pasta-dos-saves": "",
 }
@@ -135,7 +134,6 @@ _STATE_DEFAULTS = {
     "y": -2147483648,
     "steam-limiter-tokens-history": "[]",
     "news-last-seen-ts": 0,
-    "news-last-seen-source": "fitgirl",
     "conquistas-ultima-varredura": 0,
 }
 

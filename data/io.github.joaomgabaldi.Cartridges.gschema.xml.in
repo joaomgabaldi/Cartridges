@@ -175,15 +175,6 @@
     <key name="show-news-button" type="b">
       <default>false</default>
     </key>
-    <!-- Site lido pela página Novidades. O aviso de atualização por jogo lê
-         sempre a FitGirl, qualquer que seja o valor aqui. -->
-    <key name="news-source" type="s">
-      <choices>
-        <choice value="fitgirl" />
-        <choice value="ign-br" />
-      </choices>
-      <default>"fitgirl"</default>
-    </key>
     <!-- Onde ficam os backups dos saves dos jogos. Vazio quer dizer a pasta
          padrão, dentro dos dados do app; qualquer outro valor é o caminho
          escolhido pelo usuário. -->
@@ -236,11 +227,6 @@
          badge. Stored as int64 because it is a timestamp. -->
     <key name="news-last-seen-ts" type="x">
       <default>0</default>
-    </key>
-    <!-- O site (news-source) em que news-last-seen-ts foi gravado. Com outro
-         site escolhido, a data não vale e a próxima leitura vira referência. -->
-    <key name="news-last-seen-source" type="s">
-      <default>"fitgirl"</default>
     </key>
     <!-- Quando (epoch seconds) começou a última varredura de conquistas da
          abertura que leu os arquivos de todos os jogos até o fim. Num jogo da
