@@ -873,6 +873,14 @@ class CartridgesApplication(Adw.Application):
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Falha ao cancelar o login pendente", exc_info=True)
 
+        # O `remid` novo da conta EA que não coube no disco na renovação: última
+        # tentativa. Falhando, a próxima abertura desconecta a conta com aviso; aqui
+        # não se bloqueia o fechamento (a falha já fica no log).
+        try:
+            ea_conta.gravar_pendente()
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Falha ao gravar a conta EA", exc_info=True)
+
         # A sessão que estava correndo acaba aqui, e as telas vestidas não podem
         # ficar com a arte do jogo depois que o app sumir. Síncrono e antes de
         # tudo o mais deste método, salvo a parada do vigia acima (rápida e que

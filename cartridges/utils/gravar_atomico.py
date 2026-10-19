@@ -13,9 +13,16 @@ a varredura de um jogo, dois downloads do mesmo ícone). Uma queda no meio deixa
 só um ``.tmp`` órfão; o destino fica como estava.
 """
 
+import time
 import uuid
 from pathlib import Path
 from typing import Union
+
+# No Windows o `replace` falha com PermissionError enquanto outro programa
+# (antivírus, indexador) segura o destino aberto, e só por um instante. A espera
+# total, no pior caso, fica abaixo de meio segundo.
+_TENTATIVAS = 5
+_PAUSA = 0.08
 
 
 def gravar_atomico(destino: Path, conteudo: Union[str, bytes], outro_igual_basta: bool = False) -> None:
@@ -33,11 +40,17 @@ def gravar_atomico(destino: Path, conteudo: Union[str, bytes], outro_igual_basta
             temporario.write_bytes(conteudo)
         else:
             temporario.write_text(conteudo, encoding="utf-8")
-        try:
-            temporario.replace(destino)
-        except OSError:
-            if not (outro_igual_basta and destino.is_file()):
-                raise
+        for tentativa in range(_TENTATIVAS):
+            try:
+                temporario.replace(destino)
+                break
+            except OSError as erro:
+                if outro_igual_basta and destino.is_file():
+                    break
+                # Só o bloqueio passageiro merece nova tentativa; disco cheio e afins falham na hora.
+                if not isinstance(erro, PermissionError) or tentativa == _TENTATIVAS - 1:
+                    raise
+                time.sleep(_PAUSA)
     finally:
         try:
             temporario.unlink(missing_ok=True)

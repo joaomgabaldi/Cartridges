@@ -22,6 +22,7 @@ def limpa(monkeypatch):
     monkeypatch.setattr(conta, "_avisou", False)
     monkeypatch.setattr(conta, "_ouvintes", [])
     monkeypatch.setattr(conta, "_pendente", None)
+    monkeypatch.setattr(conta, "_sem_gravar", False)
 
 
 class _Resp(Resposta):
@@ -233,6 +234,62 @@ def test_renovacao_grava_o_remid_novo_antes_do_token(monkeypatch):
     assert conta.autorizacao(forcar=True) == "TOK2"
     ordem.append("devolveu")
     assert ordem == [("salvou", "R3", "TOK1"), "devolveu"]
+    assert _guardado()[1]["remid"] == "R3"
+
+
+def _disco_falha(monkeypatch):
+    """Faz o `gravar_atomico` da conta falhar; `estado["falha"] = False` volta ao normal."""
+    estado = {"falha": True}
+    original = conta.gravar_atomico
+
+    def gravar(destino, conteudo, **kw):
+        if estado["falha"]:
+            raise PermissionError("em uso")
+        return original(destino, conteudo, **kw)
+
+    monkeypatch.setattr(conta, "gravar_atomico", gravar)
+    return estado
+
+
+def test_renovacao_que_nao_grava_mantem_o_remid_novo_na_sessao(monkeypatch):
+    _login(monkeypatch)
+    estado = _disco_falha(monkeypatch)
+    rede_falsa(monkeypatch, conta, {conta.TOKEN: [_token(acesso="TOK2", remid="R3")]}, nome="_pedir")
+    assert conta.autorizacao(forcar=True) == "TOK2"
+    assert conta.conectada() and conta._sessao.remid == "R3" and conta._sem_gravar
+    assert _guardado()[1]["remid"] == "R2"
+
+
+def test_renovacao_seguinte_grava_e_limpa_a_marca(monkeypatch):
+    _login(monkeypatch)
+    estado = _disco_falha(monkeypatch)
+    rede_falsa(
+        monkeypatch, conta,
+        {conta.TOKEN: [_token(acesso="TOK2", remid="R3"), _token(acesso="TOK3", remid=None)]},
+        nome="_pedir",
+    )
+    conta.autorizacao(forcar=True)
+    estado["falha"] = False
+    assert conta.autorizacao(forcar=True) == "TOK3"
+    assert not conta._sem_gravar and _guardado()[1]["remid"] == "R3"
+
+
+def test_gravar_pendente_grava_no_encerramento(monkeypatch):
+    _login(monkeypatch)
+    estado = _disco_falha(monkeypatch)
+    rede_falsa(monkeypatch, conta, {conta.TOKEN: [_token(acesso="TOK2", remid="R3")]}, nome="_pedir")
+    conta.autorizacao(forcar=True)
+    assert conta.gravar_pendente() is False and conta._sem_gravar
+    estado["falha"] = False
+    assert conta.gravar_pendente() is True
+    assert not conta._sem_gravar and _guardado()[1]["remid"] == "R3"
+
+
+def test_gravacao_ok_nao_marca_nada(monkeypatch):
+    _login(monkeypatch)
+    rede_falsa(monkeypatch, conta, {conta.TOKEN: [_token(acesso="TOK2", remid="R3")]}, nome="_pedir")
+    conta.autorizacao(forcar=True)
+    assert not conta._sem_gravar and conta.gravar_pendente() is True
     assert _guardado()[1]["remid"] == "R3"
 
 

@@ -90,6 +90,9 @@ _avisou = False
 # depois de renovar, a nova tentativa com o mesmo texto parte dos cookies novos.
 _pendente: Optional[tuple[str, Cookies]] = None
 _ouvintes: list[Callable[[], None]] = []
+# O `remid` da sessão é mais novo que o do disco (a gravação falhou). Regravado na
+# próxima renovação e ao fechar o app; se nunca der, a próxima abertura desconecta com aviso.
+_sem_gravar = False
 
 
 def _arquivo():
@@ -236,6 +239,17 @@ def carregar() -> None:
         _sessao = sessao
 
 
+def gravar_pendente() -> bool:
+    """Tenta de novo a gravação que falhou. ``True`` se não há nada pendente ou gravou."""
+    global _sem_gravar  # pylint: disable=global-statement
+    with _trava:
+        if _sem_gravar and _sessao is not None:
+            _sem_gravar = not _salvar(_sessao)
+            if _sem_gravar:
+                logging.warning("Conta EA: o remid novo não foi gravado")
+        return not _sem_gravar
+
+
 def conectada() -> bool:
     return _sessao is not None
 
@@ -265,8 +279,9 @@ def _notificar(avisar: bool) -> bool:
 
 def _desconectar(avisar: bool) -> None:
     """Chamar com `_trava` tomada."""
-    global _sessao  # pylint: disable=global-statement
+    global _sessao, _sem_gravar  # pylint: disable=global-statement
     _sessao = None
+    _sem_gravar = False
     try:
         _arquivo().unlink(missing_ok=True)
     except OSError as erro:
@@ -281,7 +296,7 @@ def conectar(texto: str) -> None:
     ``KeyError`` ou ``OSError`` (não gravou: sem isso a conta sumiria na próxima
     abertura): quem chama é a janela de login, que mostra o que aconteceu.
     """
-    global _sessao, _avisou  # pylint: disable=global-statement
+    global _sessao, _avisou, _sem_gravar  # pylint: disable=global-statement
     cookies = extrair(texto)
     if cookies is None:
         raise ValueError("faltam os cookies no texto colado")
@@ -303,6 +318,7 @@ def conectar(texto: str) -> None:
         _sessao = sessao
         _avisou = False
         _pendente = None
+        _sem_gravar = False
     GLib.idle_add(_notificar, False)
 
 
@@ -315,6 +331,7 @@ def autorizacao(forcar: bool = False, recusado: Optional[str] = None) -> Optiona
     Roda em thread. ``None``: sem conta, falha (logada) ou renovação recusada
     (a conta já foi desconectada e o usuário avisado).
     """
+    global _sem_gravar  # pylint: disable=global-statement
     # Rede fora de `_trava`; `_renovando` serializa as renovações; a publicação
     # confere que a sessão ainda é a mesma.
     with _renovando:
@@ -336,7 +353,10 @@ def autorizacao(forcar: bool = False, recusado: Optional[str] = None) -> Optiona
                 # O `remid` usado já não vale: o novo é gravado antes de o token ser publicado.
                 if novo != sessao.remid:
                     sessao.remid = novo
-                    _salvar(sessao)
+                    _sem_gravar = True
+                if _sem_gravar:
+                    # Falhando, a conta segue na sessão e a gravação é refeita depois (`gravar_pendente`).
+                    _sem_gravar = not _salvar(sessao)
                 sessao.acesso = acesso
         except LoginRecusado:
             with _trava:
