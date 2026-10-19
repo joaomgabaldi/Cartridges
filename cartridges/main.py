@@ -67,7 +67,7 @@ from cartridges.game_cover import GameCover
 from cartridges.gamepad import GamepadManager
 from cartridges.importer.importer import Importer  # yo dawg
 from cartridges.importer.shortcuts_source import ShortcutsSource
-from cartridges.janela_restaurando import JanelaRestaurando
+from cartridges.janela_restaurando import JanelaRestaurando, entregar_so_ao_mudar
 from cartridges.logging.setup import log_system_info, setup_logging
 from cartridges.preferences import CartridgesPreferences
 from cartridges.saves import backup_de_saves, dialogo
@@ -537,7 +537,7 @@ class CartridgesApplication(Adw.Application):
             def restaurar() -> None:
                 try:
                     resultado = backup.aplicar_pendente(
-                        lambda fracao: entregar_na_tela(janela.avancar, fracao)
+                        entregar_so_ao_mudar(lambda fracao: entregar_na_tela(janela.avancar, fracao))
                     )
                 except Exception:  # pylint: disable=broad-exception-caught
                     logging.exception("Falha inesperada ao restaurar o backup")

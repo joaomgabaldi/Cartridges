@@ -5,9 +5,25 @@ que não tinha aberto. Mostra o andamento e não fecha: a restauração foi pedi
 confirmada nas Preferências, e no fim o app abre sozinho (`main.py`).
 """
 
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from gi.repository import Adw, Gtk
+
+
+def entregar_so_ao_mudar(entregar: Callable[[float], Any]) -> Callable[[float], None]:
+    """Embrulha ``entregar`` (a entrega à tela, chamada pela thread de trabalho) para só
+    passar adiante quando a porcentagem inteira muda: o trabalho avisa a cada pedaço de
+    1 MB e a cada arquivo pequeno, e cada entrega agendada custa um `GLib.idle_add`."""
+    ultima = -1
+
+    def avancar(fracao: float) -> None:
+        nonlocal ultima
+        porcentagem = int(fracao * 100)
+        if porcentagem != ultima:
+            ultima = porcentagem
+            entregar(fracao)
+
+    return avancar
 
 
 class JanelaRestaurando(Adw.Window):

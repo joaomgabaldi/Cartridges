@@ -32,3 +32,14 @@ def test_tem_barra_de_titulo_so_com_minimizar():
     janela = JanelaRestaurando()
     assert janela.cabecalho.get_decoration_layout() == ":minimize"
     janela.terminar()
+
+
+def test_so_entrega_quando_a_porcentagem_inteira_muda():
+    from cartridges.janela_restaurando import entregar_so_ao_mudar
+
+    entregas = []
+    avancar = entregar_so_ao_mudar(lambda fracao: entregas.append(fracao))
+    for i in range(1, 100_001):  # milhares de pedaços minúsculos
+        avancar(i / 100_000)
+    assert len(entregas) <= 101
+    assert entregas[-1] == 1.0
