@@ -53,6 +53,7 @@ install_data(
     'logo_picker.py',
     'wallpaper_picker.py',
     'steam_picker.py',
+    'seletor_do_ludusavi.py',
     'fita_wizard.py',
     'calibracao_janela.py',
     'session_window.py',

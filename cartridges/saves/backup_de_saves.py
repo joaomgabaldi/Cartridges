@@ -232,7 +232,7 @@ def _exigir_manifesto() -> None:
     """Antes de todo `ludusavi.fazer_backup`. Sem o manifesto, o Ludusavi copia só os
     caminhos do config (emulador, pasta do jogo) e sai com 0: a versão ficaria sem o save
     que o manifesto aponta, e sem marca de incompleta."""
-    if not (_pasta_config() / "manifest.yaml").is_file():
+    if not ludusavi.manifesto_baixado(_pasta_config()):
         raise LudusaviFalhou("o manifesto do Ludusavi não foi baixado")
 
 
@@ -244,38 +244,33 @@ def _salvar(game: Game) -> bool:
 def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
     """O jogo como o Ludusavi o conhece, ou None se não há como backupear. Sob a trava.
 
-    A primeira vez procura o nome no manifesto (pelo appID, depois pelo título) e
-    guarda; as seguintes usam o guardado. Com appID e sem entrada no manifesto, o
-    jogo ganha uma entrada própria com o nome dele. Sem o manifesto baixado, "não
-    achado" não quer dizer nada (com ou sem appID): levanta e nada é guardado.
+    A primeira vez só liga o jogo sozinho se o manifesto tem o appID dele (e guarda o
+    nome); as seguintes usam o guardado. Qualquer outro caso (sem appID, ou appID fora
+    do manifesto) fica sem backup até o usuário indicar o jogo nas opções avançadas:
+    nada de palpite pelo título nem de entrada própria. Sem o manifesto baixado, "não
+    achado" não quer dizer nada: levanta e nada é guardado.
     """
+    if game.backup_dos_saves_desligado:
+        logging.info("O backup dos saves de %s está desligado", game.name)
+        return None
     if game.ludusavi_nome:
         return _no_config(game)
     pasta_config = _pasta_config()
-    nome = None
-    if game.steam_appid:
-        nome = ludusavi.nome_por_appid(game.steam_appid, pasta_config, executor)
-    if nome is None:
-        nome = ludusavi.nome_por_titulo(game.name, pasta_config, executor)
-    if nome is not None:
-        jogo = config.JogoNoConfig(nome, game.steam_appid, game.executable, True)
-    elif not (pasta_config / "manifest.yaml").is_file():
-        # Sem o manifesto o `find` também não acha nada. Guardar o nome do jogo agora
-        # dividiria as versões em duas pastas se ele mudasse depois; e sem appID, o
-        # jogo ficaria sem backup em silêncio.
+    if not ludusavi.manifesto_baixado(pasta_config):
+        # Sem o manifesto o `find` também não acha nada, e o jogo ficaria sem backup em silêncio.
         raise LudusaviFalhou("o manifesto do Ludusavi ainda não foi baixado")
-    elif game.steam_appid:
-        jogo = config.JogoNoConfig(game.name, game.steam_appid, game.executable, False)
-    else:
-        return None  # sem appID e fora do manifesto não há o que copiar (ver `_local_desconhecido`)
-    game.ludusavi_nome = jogo.nome
+    nome = ludusavi.nome_por_appid(game.steam_appid, pasta_config, executor) if game.steam_appid else None
+    if nome is None:
+        return None  # ver `_local_desconhecido`
+    jogo = config.JogoNoConfig(nome, game.steam_appid, game.executable, True)
+    game.ludusavi_nome = nome
     entregar_na_tela(_salvar, game)
     return jogo
 
 
 def _local_desconhecido(game: Game) -> None:
-    """Sem appID e fora do manifesto, o jogo não tem backup enquanto o local dos saves for
-    desconhecido. O usuário é avisado num diálogo até responder a ele (e então a marca é
+    """Sem o appID no manifesto e sem jogo escolhido nas opções avançadas, o jogo não
+    tem backup. O usuário é avisado num diálogo até responder a ele (e então a marca é
     gravada no jogo); nas sessões seguintes, só o log. Sob a trava."""
     logging.info("O local dos saves de %s é desconhecido: sem backup", game.name)
     if not game.saves_local_desconhecido_avisado:
@@ -303,9 +298,8 @@ def _avisar_local_desconhecido(game: Game) -> bool:
         shared.win,
         _("Saves sem backup"),
         _(
-            "Não foi possível fazer o backup dos saves de {}, pois o local dos saves deste "
-            "jogo é desconhecido. Para que os saves passem a ter backup, edite o jogo e "
-            "busque os dados dele na Steam."
+            "Não foi possível identificar os saves de {}. Indique o jogo nas opções "
+            "avançadas para que o backup seja feito."
         ).format(game.name),
         "editar",
         _("Editar jogo"),
@@ -326,7 +320,7 @@ def _ao_responder_local_desconhecido(_dialogo, resposta: str, game: Game) -> Non
     )
 
     if not DetailsDialog.is_open:
-        DetailsDialog(game).present(shared.win)
+        DetailsDialog(game, avancadas_abertas=True).present(shared.win)
 
 
 # -- backup ------------------------------------------------------------------
@@ -363,7 +357,8 @@ def _backup(game: Game, biblioteca: list[Game], tarefa: tarefas.Tarefa) -> None:
         try:
             jogo = _resolver(game)
             if jogo is None:
-                _local_desconhecido(game)
+                if not game.backup_dos_saves_desligado:
+                    _local_desconhecido(game)
                 return  # sem o que copiar: o `finally` desfaz a tarefa
             _preparar(biblioteca, jogo)
             _exigir_manifesto()

@@ -278,7 +278,7 @@ def test_edicao_troca_appid_e_liga(store, real_window, avisos):
     vivo = jogo(store, 15, executable="x.exe")
 
     dialog = DetailsDialog(vivo)
-    dialog.fetched_steam_appid = "640"
+    dialog._fetch_metadata_done({"_": 1}, None, "640")
     dialog.apply_preferences()
 
     assert vivo.steam_appid == "640"

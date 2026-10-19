@@ -123,8 +123,37 @@ def nome_por_appid(appid: str, pasta_config: Path, executor: Executor = subproce
     return _nome_achado(["--steam-id", appid], pasta_config, executor)
 
 
-def nome_por_titulo(titulo: str, pasta_config: Path, executor: Executor = subprocess.run) -> Optional[str]:
-    return _nome_achado([titulo], pasta_config, executor)
+def manifesto_baixado(pasta_config: Path) -> bool:
+    return (pasta_config / "manifest.yaml").is_file()
+
+
+def nomes_do_manifesto(pasta_config: Path) -> list[str]:
+    """Os nomes dos jogos do `manifest.yaml`, sem repetição, em ordem alfabética (sem
+    diferenciar maiúsculas). Levanta `OSError` se o arquivo não abre e `ValueError` se não
+    tem nenhuma chave de topo. Lê linha a linha: não há PyYAML no ambiente."""
+    nomes = set()
+    descartadas = 0
+    texto = (pasta_config / "manifest.yaml").read_text(encoding="utf-8")
+    for linha in texto.splitlines():
+        linha = linha.rstrip()
+        if not linha.endswith(":") or linha[0] in " \t#-":
+            continue
+        chave = linha[:-1]
+        if chave.startswith('"') and chave.endswith('"') and len(chave) > 1:
+            try:
+                chave = json.loads(chave)
+            except ValueError:
+                descartadas += 1
+                continue
+        elif chave.startswith("'") and chave.endswith("'") and len(chave) > 1:
+            chave = chave[1:-1].replace("''", "'")
+        if chave:
+            nomes.add(chave)
+    if descartadas:
+        logging.info("Manifesto do Ludusavi: %d chaves com escape inválido descartadas", descartadas)
+    if not nomes:
+        raise ValueError("o manifesto do Ludusavi não tem nenhum jogo")
+    return sorted(nomes, key=str.casefold)
 
 
 def _verificar(saida: dict) -> None:

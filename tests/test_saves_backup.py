@@ -299,48 +299,57 @@ def test_resolve_por_appid_e_guarda(store, make_game, falso, esperar, tmp_path):
     assert len(falso.chamou("backup")) == 2
 
 
-def test_resolve_por_titulo_sem_appid(store, make_game, falso, esperar, tmp_path):
+def test_sem_appid_nao_procura_pelo_titulo(store, make_game, falso, esperar, tmp_path, dialogos):
     falso.achados[("titulo", "Alien: Isolation")] = "Alien: Isolation"
     jogo = na_biblioteca(store, make_game, game_id="a", name="Alien: Isolation")
 
     backup_de_saves.no_fim_da_sessao(jogo)
     esperar()
 
-    assert jogo.ludusavi_nome == "Alien: Isolation"
-    assert falso.chamou("find") == [["find", "Alien: Isolation"]]
-    assert falso.chamou("backup") == [["backup", "Alien: Isolation", "--force"]]
-    assert falso.configs["backup"]["customGames"] == []  # sem appID não há o que acrescentar
+    assert falso.chamou("find") == []
+    assert falso.chamou("backup") == []
+    assert jogo.ludusavi_nome == ""
+    assert [a[1:] for a in dialogos] == [_aviso_sem_backup("Alien: Isolation")]
+
+
+def test_backup_desligado_nao_procura_nao_copia_e_nao_avisa(
+    store, make_game, falso, esperar, dialogos, caplog
+):
+    falso.achados[("appid", "3669870")] = "Nome do Manifesto"
+    jogo = na_biblioteca(
+        store, make_game, game_id="a", name="Meu Jogo", steam_appid="3669870", backup_dos_saves_desligado=True
+    )
+
+    with caplog.at_level("INFO"):
+        backup_de_saves.no_fim_da_sessao(jogo)
+        esperar()
+
+    assert falso.chamou("find") == []
+    assert falso.chamou("backup") == []
+    assert jogo.ludusavi_nome == ""
+    assert list(dialogos) == []
+    assert toasts() == []
+    assert "desligado" in caplog.text
 
 
 def _sem_manifesto(tmp_path) -> None:
     (tmp_path / "ludusavi" / "manifest.yaml").unlink()
 
 
-def test_appid_sem_entrada_usa_entrada_propria(store, make_game, falso, esperar, tmp_path):
+def test_appid_fora_do_manifesto_fica_sem_backup_e_avisa(
+    store, make_game, falso, esperar, tmp_path, dialogos
+):
     _com_manifesto(tmp_path)
     jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo Raro", steam_appid="42")
 
     backup_de_saves.no_fim_da_sessao(jogo)
     esperar()
 
-    assert [c[:2] for c in falso.chamou("find")] == [["find", "--steam-id"], ["find", "Jogo Raro"]]
-    entrada = falso.configs["backup"]["customGames"][0]
-    assert (entrada["name"], entrada["integration"]) == ("Jogo Raro", "override")
-    assert "<winPublic>/Documents/Steam/RUNE/42" in entrada["files"]
-    assert jogo.ludusavi_nome == "Jogo Raro"
-    assert falso.chamou("backup") == [["backup", "Jogo Raro", "--force"]]
-
-
-def test_com_manifesto_guarda_a_entrada_propria(store, make_game, falso, esperar, tmp_path):
-    _com_manifesto(tmp_path)
-    jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo Raro", steam_appid="42")
-
-    backup_de_saves.no_fim_da_sessao(jogo)
-    esperar()
-
-    assert jogo.ludusavi_nome == "Jogo Raro"
-    assert falso.chamou("backup") == [["backup", "Jogo Raro", "--force"]]
+    assert [c[:2] for c in falso.chamou("find")] == [["find", "--steam-id"]]
+    assert falso.chamou("backup") == []
+    assert jogo.ludusavi_nome == ""  # sem entrada própria
     assert toasts() == []
+    assert [a[1:] for a in dialogos] == [_aviso_sem_backup("Jogo Raro")]
 
 
 def test_sem_manifesto_nao_guarda_o_nome(store, make_game, falso, esperar, tmp_path):
@@ -350,21 +359,24 @@ def test_sem_manifesto_nao_guarda_o_nome(store, make_game, falso, esperar, tmp_p
     backup_de_saves.no_fim_da_sessao(jogo)
     esperar()
 
-    assert [c[:2] for c in falso.chamou("find")] == [["find", "--steam-id"], ["find", "Jogo Raro"]]
+    assert falso.chamou("find") == []  # sem manifesto o `find` não diria nada
     assert jogo.ludusavi_nome == ""  # a próxima sessão procura de novo
     assert falso.chamou("backup") == []
     assert titulos() == ["Não foi possível fazer o backup dos saves de Jogo Raro."]
     assert tarefas.lista.get_n_items() == 0
 
 
-LOCAL_DESCONHECIDO = (
-    "Saves sem backup",
-    "Não foi possível fazer o backup dos saves de Tom & <b>Jerry</b>, pois o local dos saves "
-    "deste jogo é desconhecido. Para que os saves passem a ter backup, edite o jogo e busque "
-    "os dados dele na Steam.",
-    "editar",
-    "Editar jogo",
-)
+def _aviso_sem_backup(nome: str) -> tuple[str, str, str, str]:
+    return (
+        "Saves sem backup",
+        f"Não foi possível identificar os saves de {nome}. Indique o jogo nas opções avançadas "
+        "para que o backup seja feito.",
+        "editar",
+        "Editar jogo",
+    )
+
+
+LOCAL_DESCONHECIDO = _aviso_sem_backup("Tom & <b>Jerry</b>")
 
 
 def test_local_desconhecido_avisa_num_dialogo(
@@ -424,11 +436,11 @@ def test_local_desconhecido_editar_abre_o_jogo(store, make_game, falso, esperar,
     class DetalhesFalso:
         is_open = False
 
-        def __init__(self, game):
-            self.game = game
+        def __init__(self, game, avancadas_abertas=False):
+            self.game, self.avancadas_abertas = game, avancadas_abertas
 
         def present(self, janela):
-            abertos.append((self.game, janela))
+            abertos.append((self.game, self.avancadas_abertas, janela))
 
     monkeypatch.setattr(details_dialog, "DetailsDialog", DetalhesFalso)
     _com_manifesto(tmp_path)
@@ -438,7 +450,7 @@ def test_local_desconhecido_editar_abre_o_jogo(store, make_game, falso, esperar,
     esperar()
     dialogos.objetos[0].responder("editar")
 
-    assert abertos == [(jogo, shared.win)]
+    assert abertos == [(jogo, True, shared.win)]
     assert jogo.saves_local_desconhecido_avisado is True
 
 
@@ -450,7 +462,7 @@ def test_local_desconhecido_editar_com_detalhes_ja_abertos(
     class DetalhesAbertos:
         is_open = True
 
-        def __init__(self, _game):
+        def __init__(self, _game, **_nomeados):
             raise AssertionError("um segundo diálogo de detalhes")
 
     monkeypatch.setattr(details_dialog, "DetailsDialog", DetalhesAbertos)
@@ -491,7 +503,7 @@ def test_sem_appid_sem_manifesto_avisa(store, make_game, falso, esperar, tmp_pat
     backup_de_saves.no_fim_da_sessao(jogo)
     esperar()
 
-    assert [c[:2] for c in falso.chamou("find")] == [["find", "Jogo Sem Nada"]]
+    assert falso.chamou("find") == []
     assert falso.chamou("backup") == []
     assert jogo.ludusavi_nome == ""  # a próxima sessão procura de novo
     assert titulos() == ["Não foi possível fazer o backup dos saves de Jogo Sem Nada."]
@@ -659,7 +671,7 @@ def _espiar_em_andamento(monkeypatch, falso):
 def test_em_andamento_do_pedido_ao_fim(store, make_game, falso, esperar, monkeypatch, tmp_path):
     _com_manifesto(tmp_path)
     vistos = _espiar_em_andamento(monkeypatch, falso)
-    sem_nada = na_biblioteca(store, make_game, game_id="s", name="Jogo Sem Nada")
+    sem_nada = na_biblioteca(store, make_game, game_id="s", name="Jogo Sem Nada", steam_appid="9")
     com_saves = na_biblioteca(
         store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X"
     )
@@ -749,7 +761,7 @@ def test_fim_de_sessao_ja_conta_durante_a_busca_do_nome(
     store, make_game, falso, esperar, flush_idle, monkeypatch
 ):
     """O `find` pode levar segundos: fechar o app nele perderia o backup sem aviso."""
-    falso.achados[("titulo", "Meu Jogo")] = "X"
+    falso.achados[("appid", "7")] = "X"
     na_busca, seguir = threading.Event(), threading.Event()
     vistos = []
 
@@ -761,7 +773,7 @@ def test_fim_de_sessao_ja_conta_durante_a_busca_do_nome(
         return falso(args, **kwargs)
 
     monkeypatch.setattr(backup_de_saves, "executor", espia)
-    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo")
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7")
 
     backup_de_saves.no_fim_da_sessao(jogo)
     try:
@@ -1713,3 +1725,13 @@ def test_restaurar_todos_com_varias_falhas_nomeia_os_jogos(store, make_game, fal
 
     assert [a[1:] for a in dialogos] == [incompleta_de("Jogo A", "Jogo B", "Jogo C")]
     assert toasts() == []
+
+
+def test_sem_appid_com_nome_gravado_continua_com_backup(store, make_game, falso, esperar):
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", ludusavi_nome="X")
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    esperar()
+
+    assert falso.chamou("find") == []
+    assert len(falso.chamou("backup")) == 1

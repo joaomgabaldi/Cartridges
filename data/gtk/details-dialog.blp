@@ -389,6 +389,39 @@ template $DetailsDialog: Adw.Dialog {
           subtitle: _("Acompanha as conquistas deste jogo e mostra o progresso na página do jogo");
         }
       }
+
+      Adw.PreferencesGroup {
+        Adw.ExpanderRow avancadas_row {
+          title: _("Opções avançadas");
+
+          Adw.EntryRow appid_row {
+            title: _("AppID da Steam");
+            input-purpose: digits;
+
+            [suffix]
+            Button appid_buscar_button {
+              valign: center;
+              icon-name: "edit-find-symbolic";
+              tooltip-text: _("Buscar na Steam");
+
+              styles [
+                "flat",
+              ]
+            }
+          }
+
+          Adw.ActionRow ludusavi_row {
+            title: _("Jogo no Ludusavi");
+            use-markup: false;
+            activatable: true;
+
+            [suffix]
+            Image {
+              icon-name: "go-next-symbolic";
+            }
+          }
+        }
+      }
     }
   }
 }

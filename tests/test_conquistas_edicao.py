@@ -36,6 +36,9 @@ def _aplicar(game, **mudancas):
             dialogo.conquistas_switch.set_active(valor)
         elif nome == "executavel":
             dialogo.executable.set_text(valor)
+        elif nome == "fetched_steam_appid":
+            # Como a busca de verdade: ela também preenche o campo do appID.
+            dialogo._fetch_metadata_done({"_": 1}, None, valor)
         else:
             setattr(dialogo, nome, valor)
     dialogo.apply_preferences()

@@ -80,6 +80,7 @@ PERSISTED_ATTRS = (
     "conquistas",
     "ludusavi_nome",
     "saves_local_desconhecido_avisado",
+    "backup_dos_saves_desligado",
 )
 
 _KNOWN_KEYS = frozenset(PERSISTED_ATTRS)
@@ -240,6 +241,9 @@ class Game(Gtk.Box):
     # O usuário já foi avisado de que o local dos saves deste jogo é desconhecido (sem
     # appID e fora do manifesto, não há backup): as próximas sessões só vão para o log.
     saves_local_desconhecido_avisado: bool = False
+    # O usuário escolheu "Nenhum" no Jogo no Ludusavi: sem backup deste jogo, e o appID
+    # não o religa sozinho. Só uma escolha explícita nas opções avançadas o desfaz.
+    backup_dos_saves_desligado: bool = False
 
     def __init__(self, data: dict[str, Any], **kwargs: Any) -> None:
         super().__init__(**kwargs)

@@ -166,22 +166,9 @@ def test_nome_por_appid_com_falha_de_verdade_falha(tmp_path):
         ludusavi.nome_por_appid("1", tmp_path, ExecutorFalso("", returncode=1))
 
 
-def test_nome_por_titulo_achado_e_nao_achado(tmp_path):
-    assert (
-        ludusavi.nome_por_titulo("Alien: Isolation", tmp_path, ExecutorFalso(amostra("find_titulo")))
-        == "Alien: Isolation"
-    )
-    assert (
-        ludusavi.nome_por_titulo(
-            "Nada", tmp_path, ExecutorFalso(amostra("find_nao_achado"), returncode=1)
-        )
-        is None
-    )
-
-
 def test_o_achado_de_maior_pontuacao_vence(tmp_path):
     saida = json.dumps({"games": {"A": {"score": 0.4}, "B": {"score": 0.9}, "C": {"score": 0.6}}})
-    assert ludusavi.nome_por_titulo("x", tmp_path, ExecutorFalso(saida)) == "B"
+    assert ludusavi.nome_por_appid("1", tmp_path, ExecutorFalso(saida)) == "B"
 
 
 def test_versoes_por_jogo(tmp_path):
@@ -368,3 +355,53 @@ def test_previa_com_jogo_falho_falha(tmp_path):
     saida["errors"] = {"someGamesFailed": True}
     with pytest.raises(LudusaviFalhou):
         ludusavi.previa("J", tmp_path, executor=ExecutorFalso(json.dumps(saida)))
+
+
+MANIFESTO = "\n".join(
+    [
+        "# comentário",
+        "Simples:",
+        "  files:",
+        "    <base>/x: {}",
+        '"Alien: Isolation":',
+        "  files: {}",
+        "'Baldur''s Gate':",
+        "  alias: x",
+        r'"Jogo \"Citado\"":',
+        "  files: {}",
+        "- item",
+        "zebra:",
+        "  files: {}",
+        "Simples:",
+        "  files: {}",
+        "",
+    ]
+)
+
+
+def test_nomes_do_manifesto_le_as_chaves_de_topo(tmp_path):
+    (tmp_path / "manifest.yaml").write_text(MANIFESTO, encoding="utf-8")
+    assert ludusavi.nomes_do_manifesto(tmp_path) == [
+        "Alien: Isolation",
+        "Baldur's Gate",
+        'Jogo "Citado"',
+        "Simples",
+        "zebra",
+    ]
+
+
+def test_nomes_do_manifesto_ausente_levanta_oserror(tmp_path):
+    with pytest.raises(OSError):
+        ludusavi.nomes_do_manifesto(tmp_path)
+
+
+def test_nomes_do_manifesto_sem_chave_levanta_valueerror(tmp_path):
+    (tmp_path / "manifest.yaml").write_text("# nada\n  files: {}\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        ludusavi.nomes_do_manifesto(tmp_path)
+
+
+def test_manifesto_baixado(tmp_path):
+    assert ludusavi.manifesto_baixado(tmp_path) is False
+    (tmp_path / "manifest.yaml").write_text("{}", encoding="utf-8")
+    assert ludusavi.manifesto_baixado(tmp_path) is True

@@ -786,6 +786,7 @@ NOT_GAME_METADATA = {
     "removed",
     "run_as_admin",
     "saves_local_desconhecido_avisado",
+    "backup_dos_saves_desligado",
     "shortcut_mtime",
     "install_size",
     "install_size_ts",
@@ -2884,6 +2885,28 @@ def test_campo_do_aviso_dos_saves_de_tipo_errado_cai_no_saneador():
     assert sanitize_game_fields({"saves_local_desconhecido_avisado": True}, "p.json") == {
         "saves_local_desconhecido_avisado": True
     }
+
+
+def test_campo_do_backup_desligado_persiste_e_tipo_errado_cai_no_saneador(app_dirs):
+    import json  # noqa: PLC0415
+
+    from cartridges import shared  # noqa: PLC0415
+    from cartridges.game import Game  # noqa: PLC0415
+    from cartridges.main import sanitize_game_fields  # noqa: PLC0415
+    from cartridges.store.managers.file_manager import FileManager  # noqa: PLC0415
+
+    dados = {"source": "shortcuts", "game_id": "shortcuts_d", "name": "D", "executable": "x", "added": 0}
+    jogo = Game({**dados, "backup_dos_saves_desligado": True})
+    FileManager().main(jogo, {})
+    gravado = json.loads((shared.games_dir / "shortcuts_d.json").read_text(encoding="utf-8"))
+    assert gravado["backup_dos_saves_desligado"] is True
+    assert Game({**dados, **gravado}).backup_dos_saves_desligado is True
+    assert Game(dados).backup_dos_saves_desligado is False
+
+    for ruim in ("false", None, 0, "sim"):
+        assert "backup_dos_saves_desligado" not in sanitize_game_fields(
+            {"backup_dos_saves_desligado": ruim}, "p.json"
+        ), ruim
 
 
 def test_enter_cannot_apply_mid_fetch(real_window, store):

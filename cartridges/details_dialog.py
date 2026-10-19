@@ -40,6 +40,9 @@ from cartridges.game_cover import GameCover
 from cartridges.logo_picker import LogoPicker
 from cartridges.wallpaper_picker import WallpaperPicker
 from cartridges.sgdb_picker import SgdbPicker
+from cartridges.saves import ludusavi
+from cartridges.saves.backup_de_saves import _pasta_config
+from cartridges.seletor_do_ludusavi import SeletorDoLudusavi
 from cartridges.steam_picker import SteamPicker
 from cartridges.store.managers.hltb_manager import shared_helper as shared_hltb_helper
 from cartridges.store.managers.sgdb_manager import SgdbManager
@@ -156,6 +159,10 @@ class DetailsDialog(Adw.Dialog):
     process_executable: Adw.EntryRow = Gtk.Template.Child()
     track_updates_switch: Adw.SwitchRow = Gtk.Template.Child()
     conquistas_switch: Adw.SwitchRow = Gtk.Template.Child()
+    avancadas_row: Adw.ExpanderRow = Gtk.Template.Child()
+    appid_row: Adw.EntryRow = Gtk.Template.Child()
+    appid_buscar_button: Gtk.Button = Gtk.Template.Child()
+    ludusavi_row: Adw.ActionRow = Gtk.Template.Child()
     executable_group: Adw.PreferencesGroup = Gtk.Template.Child()
     updates_group: Adw.PreferencesGroup = Gtk.Template.Child()
 
@@ -236,7 +243,12 @@ class DetailsDialog(Adw.Dialog):
     # para quem mexe na cor, não na capa.
     _fita_sem_previa: bool = False
 
-    def __init__(self, game: Optional[Game] = None, **kwargs: Any):
+    def __init__(
+        self,
+        game: Optional[Game] = None,
+        avancadas_abertas: bool = False,
+        **kwargs: Any,
+    ):
         super().__init__(**kwargs)
 
         # Make it so only one dialog can be open at a time
@@ -251,6 +263,11 @@ class DetailsDialog(Adw.Dialog):
         self.connect("closed", self._on_closed)
 
         self.game: Optional[Game] = game
+        # O appID do campo é a palavra final; o jogo do Ludusavi escolhido fica
+        # pendente (None = não mexeu) até o Aplicar, para o Cancelar não gravar nada.
+        self._appid_inicial = str(game.steam_appid or "") if game else ""
+        self._appid_valido = True
+        self._ludusavi_escolhido: Optional[str] = None
         self.game_cover: GameCover = GameCover({self.cover})
 
         # "Sem status" e depois os status na ordem de STATUS_LABELS. Montado
@@ -313,6 +330,26 @@ class DetailsDialog(Adw.Dialog):
             self.set_title(_("Adicionar novo jogo"))
             self.apply_button.set_label(_("Adicionar"))
             self.conquistas_switch.set_active(True)
+
+        self.avancadas_row.set_expanded(avancadas_abertas)
+        self.appid_row.set_text(self._appid_inicial)
+        self.appid_row.connect("changed", self._ao_mudar_appid)
+        self.appid_buscar_button.connect("clicked", self._buscar_appid)
+        self.appid_buscar_button.set_sensitive(bool(self.name.get_text().strip()))
+        self.name.connect(
+            "changed",
+            lambda *_: self.appid_buscar_button.set_sensitive(
+                bool(self.name.get_text().strip())
+            ),
+        )
+        self.ludusavi_row.connect("activated", self._escolher_jogo_no_ludusavi)
+        if ludusavi.manifesto_baixado(_pasta_config()):
+            self._mostrar_jogo_no_ludusavi()
+        else:
+            self.ludusavi_row.set_sensitive(False)
+            self.ludusavi_row.set_subtitle(
+                _("A lista de jogos do Ludusavi ainda não foi baixada.")
+            )
 
         # Lido uma vez, ao abrir: é hardware, e a linha do papel de parede só
         # tem o que escolher com algum monitor além do principal.
@@ -626,6 +663,12 @@ class DetailsDialog(Adw.Dialog):
             )
             return
 
+        appid_digitado = self.appid_row.get_text().strip()
+        if not self._appid_aceito(appid_digitado):
+            self.avancadas_row.set_expanded(True)
+            create_dialog(self, falhou, _("O AppID da Steam deve conter apenas números."))
+            return
+
         # Forced off for a packaged game: its rows are hidden, so an old value
         # left over from before must not trip the validation below over a switch
         # the user can no longer see.
@@ -676,13 +719,22 @@ class DetailsDialog(Adw.Dialog):
         if self.fetched_steam_review is not None:
             self.game.steam_review = self.fetched_steam_review
         appid_anterior = self.game.steam_appid
-        if self.fetched_steam_appid is not None:
-            self.game.steam_appid = self.fetched_steam_appid
-            # The fetch here goes through the same lookup the importer uses, so
-            # it leaves the game as up to date as a refresh would. Without the
-            # stamp, a game the user fixed by hand would keep coming back in
-            # "only what is missing" to be told the same thing again.
-            self.game.steam_checked = STEAM_METADATA_VERSION
+        # O campo manda: a busca na Steam sempre o preenche, então depois dela o que
+        # está nele (inclusive de volta ao antigo, ou vazio) é a palavra final.
+        appid_final = (
+            appid_digitado
+            if appid_digitado != self._appid_inicial
+            or self.fetched_steam_appid is not None
+            else None
+        )
+        if appid_final is not None:
+            self.game.steam_appid = appid_final or None
+            if self.fetched_steam_appid == appid_final:
+                # The fetch here goes through the same lookup the importer uses, so
+                # it leaves the game as up to date as a refresh would. Without the
+                # stamp, a game the user fixed by hand would keep coming back in
+                # "only what is missing" to be told the same thing again.
+                self.game.steam_checked = STEAM_METADATA_VERSION
             if str(self.game.steam_appid or "") != str(appid_anterior or ""):
                 # O nome no Ludusavi foi achado pelo appID antigo: o próximo backup
                 # o procura de novo. O executável não entra aqui: o config dos saves
@@ -690,6 +742,10 @@ class DetailsDialog(Adw.Dialog):
                 # se o local voltar a ser desconhecido, o aviso merece aparecer de novo.
                 self.game.ludusavi_nome = ""
                 self.game.saves_local_desconhecido_avisado = False
+        # Depois do appID: o jogo escolhido à mão ganha do zeramento causado por ele.
+        if self._ludusavi_escolhido is not None:
+            self.game.ludusavi_nome = self._ludusavi_escolhido
+            self.game.backup_dos_saves_desligado = not self._ludusavi_escolhido
         if self.fetched_hltb:
             # update_values only carries the keys the lookup actually returned,
             # so a game with only a main-story estimate keeps whatever the
@@ -918,6 +974,72 @@ class DetailsDialog(Adw.Dialog):
                 "starred-symbolic" if index <= self._rating else "non-starred-symbolic"
             )
 
+    @staticmethod
+    def _steam_helper() -> SteamAPIHelper:
+        manager = shared.store.managers.get(SteamAPIManager)
+        return (
+            manager.steam_api_helper
+            if manager
+            else SteamAPIHelper(SteamRateLimiter())
+        )
+
+    @staticmethod
+    def _appid_aceito(texto: str) -> bool:
+        return texto == "" or (texto.isascii() and texto.isdigit())
+
+    def _appid_para_buscar(self) -> str:
+        """O appID digitado nas opções avançadas, se é número e difere do gravado."""
+        texto = self.appid_row.get_text().strip()
+        if texto and texto != self._appid_inicial and self._appid_aceito(texto):
+            return texto
+        return ""
+
+    def _atualizar_aplicar(self) -> None:
+        self.apply_button.set_sensitive(self._loading_ops == 0 and self._appid_valido)
+
+    def _ao_mudar_appid(self, *_args: Any) -> None:
+        self._appid_valido = self._appid_aceito(self.appid_row.get_text().strip())
+        if self._appid_valido:
+            self.appid_row.remove_css_class("error")
+        else:
+            self.appid_row.add_css_class("error")
+        self._mostrar_jogo_no_ludusavi()
+        self._atualizar_aplicar()
+
+    def _buscar_appid(self, *_args: Any) -> None:
+        SteamPicker(
+            self.name.get_text().strip(), self._steam_helper(), self._appid_escolhido
+        ).present(self)
+
+    def _appid_escolhido(self, appid: str, _data: dict) -> None:
+        self.appid_row.set_text(appid)
+
+    def _mostrar_jogo_no_ludusavi(self) -> None:
+        nome = self.game.ludusavi_nome if self.game else ""
+        desligado = bool(self.game and self.game.backup_dos_saves_desligado)
+        if self._ludusavi_escolhido is not None:
+            nome = self._ludusavi_escolhido
+            desligado = not nome
+        if nome:
+            subtitulo = nome
+        elif desligado:
+            subtitulo = _("Backup desligado")
+        elif self.appid_row.get_text().strip():
+            subtitulo = _("Automático pelo AppID")
+        else:
+            subtitulo = _("Nenhum")
+        self.ludusavi_row.set_subtitle(subtitulo)
+
+    def _escolher_jogo_no_ludusavi(self, *_args: Any) -> None:
+        atual = self._ludusavi_escolhido
+        if atual is None:
+            atual = self.game.ludusavi_nome if self.game else ""
+        SeletorDoLudusavi(atual, self._jogo_no_ludusavi_escolhido).present(self)
+
+    def _jogo_no_ludusavi_escolhido(self, nome: str) -> None:
+        self._ludusavi_escolhido = nome
+        self._mostrar_jogo_no_ludusavi()
+
     def invalidate_fetched_scores(self, *_args: Any) -> None:
         """Drop the last Steam fetch (called when the title changes).
 
@@ -925,6 +1047,11 @@ class DetailsDialog(Adw.Dialog):
         different game, so keeping the old one would pin the next fetch to what
         they just corrected away from.
         """
+        if (
+            self.fetched_steam_appid is not None
+            and self.appid_row.get_text().strip() == self.fetched_steam_appid
+        ):
+            self.appid_row.set_text(self._appid_inicial)
         self.fetched_metacritic = None
         self.fetched_steam_review = None
         self.fetched_gamepad_recommended = None
@@ -955,7 +1082,7 @@ class DetailsDialog(Adw.Dialog):
     def end_loading(self, cover: bool = False) -> None:
         """Give one operation back; Apply returns once the last one is done."""
         self._loading_ops = max(0, self._loading_ops - 1)
-        self.apply_button.set_sensitive(self._loading_ops == 0)
+        self._atualizar_aplicar()
         if cover:
             self.spinner.set_visible(False)
             self.cover_overlay.set_opacity(1)
@@ -1450,19 +1577,16 @@ class DetailsDialog(Adw.Dialog):
         # makes the dialog actually behave that way.
         self.begin_loading()
         threading.Thread(
-            target=self._fetch_metadata_thread, args=(name,), daemon=True
+            target=self._fetch_metadata_thread,
+            args=(name, self._appid_para_buscar()),
+            daemon=True,
         ).start()
 
-    def _fetch_metadata_thread(self, name: str) -> None:
+    def _fetch_metadata_thread(self, name: str, appid_digitado: str = "") -> None:
         # Reuse the app-wide helper: creating a SteamRateLimiter per fetch would
         # leak its refill thread (it never exits) and race the shared token
         # history stored in the schema.
-        manager = shared.store.managers.get(SteamAPIManager)
-        helper = (
-            manager.steam_api_helper
-            if manager
-            else SteamAPIHelper(SteamRateLimiter())
-        )
+        helper = self._steam_helper()
         # An appid already tied to this game wins over searching the name
         # again: it is either what a previous fetch resolved or what the user
         # picked by hand, and a fresh search could quietly undo that. The saved
@@ -1473,7 +1597,7 @@ class DetailsDialog(Adw.Dialog):
             if self.game and name.strip() == (self.game.name or "").strip()
             else None
         )
-        appid = self.fetched_steam_appid or saved_appid
+        appid = appid_digitado or self.fetched_steam_appid or saved_appid
         try:
             if appid:
                 data = helper.get_api_data(str(appid))
@@ -1536,6 +1660,7 @@ class DetailsDialog(Adw.Dialog):
             self.name.set_text(clean_game_name(data["name"]))
         if appid:
             self.fetched_steam_appid = appid
+            self.appid_row.set_text(appid)
         if data.get("developer"):
             self.developer.set_text(data["developer"])
         if data.get("publisher"):
