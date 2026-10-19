@@ -50,13 +50,14 @@ class _SemLimite:
 @pytest.fixture
 def rede(monkeypatch):
     """Cada pedido devolve o próximo item de `respostas` (uma exceção é levantada)."""
-    estado = {"respostas": [], "pedidos": [], "forcou": 0}
+    estado = {"respostas": [], "pedidos": [], "forcou": 0, "recusados": []}
     monkeypatch.setattr(conta, "conectada", lambda: True)
     monkeypatch.setattr(conta, "persona", lambda: _PERSONA)
 
-    def autorizacao(forcar=False):
+    def autorizacao(forcar=False, recusado=None):
         if forcar:
             estado["forcou"] += 1
+            estado["recusados"].append(recusado)
             return "A2"
         return _TOKEN
 
@@ -224,13 +225,22 @@ def test_segundo_401_so_loga(rede, caplog):
     rede["respostas"] = [Resposta(401), Resposta(403)]
     assert api.ler(_CONJUNTO) is None
     assert rede["forcou"] == 1 and conta.conectada()
-    assert len(rede["pedidos"]) == 2
+    # o segundo pedido foi com o token renovado, e a recusa dele só foi para o log
+    assert [p[2]["headers"]["AuthToken"] for p in rede["pedidos"]] == [_TOKEN, "A2"]
+    assert "EA: acesso recusado duas vezes" in caplog.text
+    assert not any(r.levelname in ("WARNING", "ERROR") for r in caplog.records)
+
+
+def test_renovacao_forcada_informa_o_token_recusado(rede):
+    rede["respostas"] = [Resposta(401), Resposta(200, _dado("conjunto-swbf2.json"))]
+    api.ler(_CONJUNTO)
+    assert rede["recusados"] == [_TOKEN]
 
 
 def test_recusa_persistente_forca_so_uma_renovacao(rede, monkeypatch):
     atual = {"token": _TOKEN}
 
-    def autorizacao(forcar=False):
+    def autorizacao(forcar=False, recusado=None):
         if forcar:
             rede["forcou"] += 1
             atual["token"] = f"F{rede['forcou']}"
@@ -245,13 +255,13 @@ def test_recusa_persistente_forca_so_uma_renovacao(rede, monkeypatch):
 
 
 def test_sem_token_com_conta_e_falha_de_rede(rede, monkeypatch):
-    monkeypatch.setattr(conta, "autorizacao", lambda forcar=False: None)
+    monkeypatch.setattr(conta, "autorizacao", lambda forcar=False, recusado=None: None)
     with pytest.raises(api.FalhaDeRede):
         api.ler("conj")
 
 
 def test_sem_token_sem_conta_e_none(rede, monkeypatch):
-    monkeypatch.setattr(conta, "autorizacao", lambda forcar=False: None)
+    monkeypatch.setattr(conta, "autorizacao", lambda forcar=False, recusado=None: None)
     monkeypatch.setattr(conta, "conectada", lambda: False)
     assert api.ler("conj") is None
 
@@ -383,7 +393,7 @@ def test_ofertas_rebusca_e_ainda_faltando_e_lista_vazia(rede):
 
 
 def test_ofertas_sem_conta_none(rede, monkeypatch):
-    monkeypatch.setattr(conta, "autorizacao", lambda forcar=False: None)
+    monkeypatch.setattr(conta, "autorizacao", lambda forcar=False, recusado=None: None)
     monkeypatch.setattr(conta, "conectada", lambda: False)
     assert api.ofertas("jogo") is None
 

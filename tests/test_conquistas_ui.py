@@ -248,13 +248,52 @@ def _png(caminho, largura, altura):
     return str(caminho)
 
 
+def _png_em_faixas(caminho, largura, altura):
+    """Vermelho, verde e azul ao longo do lado maior; o verde cobre o miolo quadrado
+    (com 1 px de folga de cada lado, pois o arredondamento do corte pode variar)."""
+    from gi.repository import GdkPixbuf
+
+    pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, largura, altura)
+    longo, curto = max(largura, altura), min(largura, altura)
+    inicio = max(0, (longo - curto) // 2 - 1)
+    fim = min(longo, inicio + curto + 3)
+    for de, ate, cor in ((0, inicio, 0xFF0000FF), (inicio, fim, 0x00FF00FF), (fim, longo, 0x0000FFFF)):
+        if ate <= de:
+            continue
+        if largura >= altura:
+            pixbuf.new_subpixbuf(de, 0, ate - de, altura).fill(cor)
+        else:
+            pixbuf.new_subpixbuf(0, de, largura, ate - de).fill(cor)
+    pixbuf.savev(str(caminho), "png", [], [])
+    return str(caminho)
+
+
+def _cores_dos_cantos(textura):
+    """As cores (r, g, b) dos quatro cantos da textura."""
+    from gi.repository import GdkPixbuf
+
+    carregador = GdkPixbuf.PixbufLoader.new_with_type("png")
+    carregador.write_bytes(textura.save_to_png_bytes())
+    carregador.close()
+    pixbuf = carregador.get_pixbuf()
+    pixels, passo, canais = pixbuf.get_pixels(), pixbuf.get_rowstride(), pixbuf.get_n_channels()
+    ultimo_x, ultimo_y = pixbuf.get_width() - 1, pixbuf.get_height() - 1
+    return [
+        tuple(pixels[y * passo + x * canais : y * passo + x * canais + 3])
+        for x, y in ((0, 0), (ultimo_x, 0), (0, ultimo_y), (ultimo_x, ultimo_y))
+    ]
+
+
 @pytest.mark.parametrize(
     "largura, altura, lado",
     [(208, 117, 117), (208, 208, 208), (117, 208, 117)],
 )
 def test_icone_nao_quadrado_e_cortado_no_centro(tmp_path, largura, altura, lado):
-    textura = icones._textura(_png(tmp_path / "i.png", largura, altura))
+    textura = icones._textura(_png_em_faixas(tmp_path / "i.png", largura, altura))
     assert (textura.get_width(), textura.get_height()) == (lado, lado)
+    if largura != altura:
+        # Cortado no miolo: as faixas vermelha e azul das pontas ficam de fora.
+        assert _cores_dos_cantos(textura) == [(0, 255, 0)] * 4
 
 
 def test_carregar_depois_de_encerrar_nao_faz_nada(executor_proprio, monkeypatch):

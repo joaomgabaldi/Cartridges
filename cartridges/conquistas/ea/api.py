@@ -137,8 +137,9 @@ def _autorizado(metodo: str, url: str, cabecalhos: Callable[[str], dict], **kwar
     """O JSON de um pedido com o token; 401/403 renova uma vez. A segunda recusa só vai
     para o log (``None``): a conta continua conectada, só a recusa do ``remid`` a desconecta."""
     global _acesso_ja_renovado  # pylint: disable=global-statement
+    recusado = None
     for forcar in (False, True):
-        acesso = conta.autorizacao(forcar=forcar)
+        acesso = conta.autorizacao(forcar=forcar, recusado=recusado)
         if acesso is None:
             # Sem conta é None; conta ainda conectada é a renovação que falhou por rede.
             if conta.conectada():
@@ -151,6 +152,7 @@ def _autorizado(metodo: str, url: str, cabecalhos: Callable[[str], dict], **kwar
         resposta = _pedir(metodo, url, headers=cabecalhos(acesso), **kwargs)
         if resposta.status_code not in (401, 403):
             return _json(resposta)
+        recusado = acesso
         with _trava_do_acesso:
             ja_renovado = not forcar and acesso == _acesso_ja_renovado
         if ja_renovado:

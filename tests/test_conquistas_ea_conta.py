@@ -21,6 +21,7 @@ def limpa(monkeypatch):
     monkeypatch.setattr(conta, "_sessao", None)
     monkeypatch.setattr(conta, "_avisou", False)
     monkeypatch.setattr(conta, "_ouvintes", [])
+    monkeypatch.setattr(conta, "_pendente", None)
 
 
 class _Resp(Resposta):
@@ -131,6 +132,48 @@ def test_conectar_que_nao_grava_levanta_oserror(monkeypatch):
     assert not conta.conectada()
 
 
+def test_conectar_que_falha_depois_da_renovacao_reaproveita_o_remid_novo(monkeypatch):
+    # O R1 colado foi gasto na renovação; a falha em pids/me não pode perder o R2.
+    rede_falsa(monkeypatch, conta, {
+        conta.TOKEN: [_token(acesso="TOK1", remid="R2")],
+        conta.IDENTIDADE + "/pids/me": [Resposta(500)],
+    }, nome="_pedir")
+    with pytest.raises(requests.RequestException):
+        conta.conectar("remid=R1; _nx_mpcid=N1")
+    assert not conta.conectada()
+    # O usuário tenta de novo com o mesmo texto colado (o R1, já gasto).
+    fila = {conta.TOKEN: [_token(acesso="TOK2", remid="R3")], **_identidade()}
+    chamadas = rede_falsa(monkeypatch, conta, fila, nome="_pedir")
+    conta.conectar("remid=R1; _nx_mpcid=N1")
+    assert chamadas[0][1]["headers"]["Cookie"] == "remid=R2; _nx_mpcid=N1"
+    assert conta.conectada() and _guardado()[1]["remid"] == "R3"
+
+
+def test_conectar_que_nao_grava_reaproveita_o_remid_novo(monkeypatch):
+    def falha(*_a):
+        raise OSError("disco")
+
+    with monkeypatch.context() as parcial:
+        parcial.setattr(conta, "gravar_atomico", falha)
+        with pytest.raises(OSError):
+            _login(parcial, _token(acesso="TOK1", remid="R2"))
+    fila = {conta.TOKEN: [_token(acesso="TOK2", remid="R3")], **_identidade()}
+    chamadas = rede_falsa(monkeypatch, conta, fila, nome="_pedir")
+    conta.conectar("remid=R1; _nx_mpcid=N1")
+    assert chamadas[0][1]["headers"]["Cookie"] == "remid=R2; _nx_mpcid=N1"
+
+
+def test_conectar_com_outro_remid_nao_usa_o_pendente(monkeypatch):
+    rede_falsa(monkeypatch, conta, {
+        conta.TOKEN: [_token(remid="R2")], conta.IDENTIDADE + "/pids/me": [Resposta(500)],
+    }, nome="_pedir")
+    with pytest.raises(requests.RequestException):
+        conta.conectar("remid=R1; _nx_mpcid=N1")
+    chamadas = rede_falsa(monkeypatch, conta, {conta.TOKEN: [_token(remid="R9")], **_identidade()}, nome="_pedir")
+    conta.conectar("remid=NOVO; _nx_mpcid=N7")
+    assert chamadas[0][1]["headers"]["Cookie"] == "remid=NOVO; _nx_mpcid=N7"
+
+
 def test_conectar_texto_sem_cookies_levanta_value_error():
     with pytest.raises(ValueError):
         conta.conectar("nada de cookies")
@@ -233,6 +276,50 @@ def test_duas_renovacoes_simultaneas_usam_o_cookie_uma_vez(monkeypatch):
     for linha in linhas:
         linha.join(5)
     assert usados == ["remid=R2", "remid=R3"]
+
+
+def test_403_simultaneos_com_o_mesmo_token_renovam_uma_vez(monkeypatch):
+    _login(monkeypatch)  # o token vigente é TOK1
+    usados = []
+    portao = threading.Event()
+
+    def pedir(_metodo, _url, **kwargs):
+        usados.append(kwargs["headers"]["Cookie"].split(";")[0])
+        portao.wait(2)
+        return _token(acesso="TOK2", remid="R3")
+
+    monkeypatch.setattr(conta, "_pedir", pedir)
+    resultados = []
+    linhas = [
+        threading.Thread(target=lambda: resultados.append(conta.autorizacao(True, recusado="TOK1")))
+        for _ in range(2)
+    ]
+    linhas[0].start()
+    for _ in range(300):
+        if usados:
+            break
+        time.sleep(0.01)
+    # a primeira já está na rede, com a trava de renovação
+    linhas[1].start()
+    time.sleep(0.1)  # a segunda espera a trava
+    portao.set()
+    for linha in linhas:
+        linha.join(5)
+    assert usados == ["remid=R2"]
+    assert resultados == ["TOK2", "TOK2"]
+
+
+def test_recusado_diferente_do_vigente_nao_renova(monkeypatch):
+    chamadas = _login(monkeypatch)
+    antes = len(chamadas)
+    assert conta.autorizacao(True, recusado="TOK-ANTIGO") == "TOK1"
+    assert len(chamadas) == antes
+
+
+def test_recusado_igual_ao_vigente_renova(monkeypatch):
+    _login(monkeypatch)
+    rede_falsa(monkeypatch, conta, {conta.TOKEN: [_token(acesso="TOK2", remid="R3")]}, nome="_pedir")
+    assert conta.autorizacao(True, recusado="TOK1") == "TOK2"
 
 
 def test_login_required_na_renovacao_desconecta_e_avisa_uma_vez(monkeypatch, flush_idle, win):

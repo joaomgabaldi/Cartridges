@@ -60,9 +60,16 @@ def test_resolver_fora_da_biblioteca(ea):
     assert ea.guardado == [("c:\\ea\\jogo", "")]
 
 
-def test_resolver_tenta_as_ofertas_em_ordem(ea):
-    ea.ofertas = ["o0", "o1"]  # o0 não tem conquistas
+def test_resolver_tenta_as_ofertas_em_ordem(ea, monkeypatch):
+    ea.ofertas = ["o0", "o1", "o2"]  # o0 não tem conquistas; o1 e o2 têm, e o1 vem antes
+    ea.conjuntos = {"o0": "", "o1": "1_2_3", "o2": "9_9_9"}
+    consultadas = []
+    monkeypatch.setattr(
+        api, "conjunto_da_oferta", lambda oferta: consultadas.append(oferta) or ea.conjuntos[oferta]
+    )
     assert loja.resolver(object(), Fonte("ea", "")) == "1_2_3"
+    assert consultadas == ["o0", "o1"]  # na ordem, e para na primeira que dá conjunto
+    assert ea.guardado == [("c:\\ea\\jogo", "1_2_3")]
 
 
 def test_resolver_sem_ofertas_com_conquistas_guarda_vazio(ea):

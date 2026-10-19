@@ -86,6 +86,9 @@ _renovando = threading.Lock()
 _sessao: Optional[_Sessao] = None
 # Um aviso de desconexão por execução (volta a valer depois de um login).
 _avisou = False
+# (`remid` colado e já gasto, cookies que a renovação devolveu): se o `conectar` falha
+# depois de renovar, a nova tentativa com o mesmo texto parte dos cookies novos.
+_pendente: Optional[tuple[str, Cookies]] = None
 _ouvintes: list[Callable[[], None]] = []
 
 
@@ -282,7 +285,16 @@ def conectar(texto: str) -> None:
     cookies = extrair(texto)
     if cookies is None:
         raise ValueError("faltam os cookies no texto colado")
+    global _pendente  # pylint: disable=global-statement
+    colado = cookies.remid
+    with _trava:
+        if _pendente is not None and _pendente[0] == colado:
+            cookies = _pendente[1]
     acesso, remid = _renovar(*cookies)
+    if remid != cookies.remid:
+        # O `remid` usado já não vale: se o resto falhar, o novo é o que o usuário ainda tem.
+        with _trava:
+            _pendente = (colado, Cookies(remid, cookies.nx_mpcid))
     nome_, persona_ = _identidade(acesso.valor)
     sessao = _Sessao(remid, cookies.nx_mpcid, nome_, persona_, acesso)
     if not _salvar(sessao):
@@ -290,11 +302,15 @@ def conectar(texto: str) -> None:
     with _trava:
         _sessao = sessao
         _avisou = False
+        _pendente = None
     GLib.idle_add(_notificar, False)
 
 
-def autorizacao(forcar: bool = False) -> Optional[str]:
+def autorizacao(forcar: bool = False, recusado: Optional[str] = None) -> Optional[str]:
     """O token de acesso para a API da EA, renovando se venceu.
+
+    ``forcar`` renova mesmo sem vencer; ``recusado`` é o token que a EA recusou: se outra
+    thread já o trocou enquanto esta esperava a vez, vale o token novo (sem gastar outro ``remid``).
 
     Roda em thread. ``None``: sem conta, falha (logada) ou renovação recusada
     (a conta já foi desconectada e o usuário avisado).
@@ -307,7 +323,10 @@ def autorizacao(forcar: bool = False) -> Optional[str]:
             if sessao is None:
                 return None
             acesso, remid, nx_mpcid = sessao.acesso, sessao.remid, sessao.nx_mpcid
-        if not forcar and acesso is not None and acesso.vence - time.time() >= _MARGEM:
+        if acesso is not None and (
+            (not forcar and acesso.vence - time.time() >= _MARGEM)
+            or (recusado is not None and acesso.valor != recusado)
+        ):
             return acesso.valor
         try:
             acesso, novo = _renovar(remid, nx_mpcid)
