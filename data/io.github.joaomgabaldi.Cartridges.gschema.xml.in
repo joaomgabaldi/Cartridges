@@ -244,5 +244,13 @@
     <key name="conquistas-ultima-varredura" type="x">
       <default>0</default>
     </key>
+    <!-- A última conta Steam (o número da pasta de userdata) que o ActiveUser
+         do registro trouxe, para ler as conquistas certas com a Steam fechada.
+         Vazio = a Steam nunca esteve aberta numa leitura; valem todas as contas.
+         Nunca sai do loginusers.vdf: ler esse arquivo faz o antivírus tomar o
+         app por ladrão de conta Steam (conquistas/arquivos.py). -->
+    <key name="conquistas-ultima-conta-steam" type="s">
+      <default>""</default>
+    </key>
   </schema>
 </schemalist>

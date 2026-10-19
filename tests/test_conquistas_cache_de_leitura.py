@@ -1,11 +1,11 @@
-"""O cache de leituras de disco e quem o usa: manifests da Epic e `loginusers.vdf`."""
+"""O cache de leituras de disco e quem o usa: os manifests da Epic."""
 
 import json
 import os
 
 import pytest
 
-from cartridges.conquistas import arquivos, fontes
+from cartridges.conquistas import fontes
 from cartridges.conquistas.cache_de_leitura import CacheDeLeitura, assinatura
 from tests.apoio_conquistas import criar, pastas  # noqa: F401
 
@@ -91,30 +91,3 @@ def test_manifest_novo_entra_sem_esperar(tmp_path, pastas, leituras_de_manifest)
     assert fontes._da_pasta([tmp_path / "B"]) is None
     _manifest(pastas, "b", {"AppName": "B", "CatalogNamespace": "nsB", "InstallLocation": str(tmp_path / "B")})
     assert fontes._da_pasta([tmp_path / "B"]) == ("nsB", "B")
-
-
-# -- loginusers.vdf --------------------------------------------------------------------
-
-
-def test_loginusers_lido_uma_vez_por_mudanca(tmp_path, monkeypatch):
-    arquivos._cache_do_loginusers.clear()
-    vdf = criar(
-        tmp_path / "config" / "loginusers.vdf",
-        '"users" { "76561197960265851" { "MostRecent" "1" "Timestamp" "10" } }',
-    )
-    lidos = []
-    original = arquivos.keyvalues.ler_texto
-    monkeypatch.setattr(arquivos.keyvalues, "ler_texto", lambda c: lidos.append(c) or original(c))
-    for _jogo in range(4):
-        assert arquivos._conta_mais_recente(tmp_path) == "123"
-    assert len(lidos) == 1
-    vdf.write_text('"users" { "76561197960266184" { "MostRecent" "1" "Timestamp" "20" } }')
-    mtime = vdf.stat().st_mtime_ns + 10**9
-    os.utime(vdf, ns=(mtime, mtime))
-    assert arquivos._conta_mais_recente(tmp_path) == "456"
-    assert len(lidos) == 2
-    arquivos._cache_do_loginusers.clear()
-
-
-def test_sem_loginusers_nao_ha_conta(tmp_path):
-    assert arquivos._conta_mais_recente(tmp_path) is None

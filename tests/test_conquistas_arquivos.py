@@ -213,9 +213,17 @@ def test_da_steam_esperados_sem_steam():
     assert arquivos.da_steam_esperados("570", "steam://rungameid/570") == []
 
 
-# --- a conta Steam do usuário: a conectada, a última que entrou, ou todas ---
+# --- a conta Steam do usuário: a conectada, a última conectada, ou todas ---
 
 _BASE_STEAMID64 = 76561197960265728
+_GUARDADA = "conquistas-ultima-conta-steam"
+
+
+@pytest.fixture(autouse=True)
+def _sem_gravacao_pendente(monkeypatch, flush_idle):  # noqa: ARG001
+    """Cada teste começa sem conta enfileirada e não deixa gravação para o próximo
+    (o ``flush_idle`` esvazia a fila no fim)."""
+    monkeypatch.setattr(arquivos, "_conta_enfileirada", None)
 
 
 def _conta_ativa(monkeypatch, conta):
@@ -230,19 +238,12 @@ def _conta_ativa(monkeypatch, conta):
     return chamadas
 
 
-def _loginusers(steam, *usuarios):
-    """``usuarios``: (conta, mais_recente, timestamp); o arquivo traz o steamid64."""
-    blocos = []
-    for conta, recente, carimbo in usuarios:
-        campos = f'\t\t"AccountName"\t\t"nome{conta}"\n\t\t"PersonaName"\t\t"Pessoa \\"{conta}\\""\n'
-        if recente is not None:
-            campos += f'\t\t"MostRecent"\t\t"{recente}"\n'
-        if carimbo is not None:
-            campos += f'\t\t"Timestamp"\t\t"{carimbo}"\n'
-        blocos.append(f'\t"{int(conta) + _BASE_STEAMID64}"\n\t{{\n{campos}\t}}\n')
+def _loginusers(steam, conta):
+    """Um ``loginusers.vdf`` com ``conta`` marcada como a mais recente."""
     destino = steam / "config" / "loginusers.vdf"
     destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_text('"users"\n{\n' + "".join(blocos) + "}\n", encoding="utf-8")
+    steamid64 = int(conta) + _BASE_STEAMID64
+    destino.write_text(f'"users" {{ "{steamid64}" {{ "MostRecent" "1" }} }}', encoding="utf-8")
     return destino
 
 
@@ -250,12 +251,15 @@ def _caminhos_do_stats(arquivos_achados):
     return [a.caminho.name for a in arquivos_achados if a.formato == formatos.STEAM_STATS]
 
 
-def test_conta_conectada_agora_vence(tmp_path, monkeypatch):
-    steam = _steam_com_contas(tmp_path, monkeypatch, "123", "456")
-    _loginusers(steam, ("123", 1, 100), ("456", 0, 50))
+def _esperados():
+    return _caminhos_do_stats(arquivos.da_steam_esperados("570", "steam://rungameid/570"))
+
+
+def test_conta_conectada_agora_vence(tmp_path, monkeypatch, state_schema):
+    _steam_com_contas(tmp_path, monkeypatch, "123", "456")
+    state_schema.set_string(_GUARDADA, "123")
     chamadas = _conta_ativa(monkeypatch, 456)
-    esperados = arquivos.da_steam_esperados("570", "steam://rungameid/570")
-    assert [a.caminho.name for a in esperados] == ["UserGameStats_456_570.bin"]
+    assert _esperados() == ["UserGameStats_456_570.bin"]
     assert chamadas == [
         (winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam\ActiveProcess", "ActiveUser")
     ]
@@ -276,82 +280,83 @@ def test_arquivos_do_jogo_seguem_a_conta_conectada(tmp_path, pastas, monkeypatch
     assert cache_123.exists()
 
 
-def test_steam_fechada_usa_a_conta_mais_recente_do_loginusers(tmp_path, monkeypatch):
-    steam = _steam_com_contas(tmp_path, monkeypatch, "123", "456")
-    # A de maior Timestamp não é a marcada: o que vale é o MostRecent.
-    _loginusers(steam, ("123", 1, 100), ("456", 0, 999))
-    _conta_ativa(monkeypatch, 0)
-    assert _caminhos_do_stats(arquivos.da_steam_esperados("570", "steam://rungameid/570")) == [
-        "UserGameStats_123_570.bin"
-    ]
-
-
-def test_sem_most_recent_vale_o_maior_timestamp(tmp_path, monkeypatch):
-    steam = _steam_com_contas(tmp_path, monkeypatch, "123", "456", "789")
-    _loginusers(steam, ("123", None, 100), ("456", 0, 900), ("789", None, 300))
-    _conta_ativa(monkeypatch, None)
-    assert _caminhos_do_stats(arquivos.da_steam_esperados("570", "steam://rungameid/570")) == [
-        "UserGameStats_456_570.bin"
-    ]
-
-
-def test_conta_achada_sem_pasta_em_userdata_cai_para_todas(tmp_path, monkeypatch):
-    steam = _steam_com_contas(tmp_path, monkeypatch, "123", "456")
-    _loginusers(steam, ("999", 1, 100))
-    _conta_ativa(monkeypatch, None)
-    assert len(arquivos.da_steam_esperados("570", "steam://rungameid/570")) == 2
-    _conta_ativa(monkeypatch, 888)  # a conectada também não tem pasta
-    assert len(arquivos.da_steam_esperados("570", "steam://rungameid/570")) == 2
-
-
-@pytest.mark.parametrize(
-    "conteudo",
-    [
-        b"\x00\xff\xfe nao e vdf \x80",
-        b'"users" { "7656119" ',  # cortado
-        b'"users" } } {',
-        b'"users" { "76561197960265851" { "MostRecent" "1" ',
-        b"",
-        # Válido (a conta 123), mas além de 1 MB: ilegível.
-        b'"users" {' + b" " * (1024 * 1024) + b'"76561197960265851" { "MostRecent" "1" } }',
-    ],
-    ids=["binario", "cortado", "chaves_soltas", "sem_fechar", "vazio", "maior_que_1MB"],
-)
-def test_loginusers_ilegivel_cai_para_todas(tmp_path, monkeypatch, conteudo):
-    steam = _steam_com_contas(tmp_path, monkeypatch, "123", "456")
-    (steam / "config").mkdir()
-    (steam / "config" / "loginusers.vdf").write_bytes(conteudo)
-    _conta_ativa(monkeypatch, None)
-    assert len(arquivos.da_steam_esperados("570", "steam://rungameid/570")) == 2
-
-
-def test_loginusers_com_steamid_estranho_cai_para_todas(tmp_path, monkeypatch):
-    steam = _steam_com_contas(tmp_path, monkeypatch, "123", "456")
-    (steam / "config").mkdir()
-    (steam / "config" / "loginusers.vdf").write_text(
-        '"users" { "abc" { "MostRecent" "1" } "5" { "MostRecent" "1" } '
-        '"76561197960265728" { "MostRecent" "1" } }',
-        encoding="utf-8",
-    )
-    _conta_ativa(monkeypatch, None)
-    assert len(arquivos.da_steam_esperados("570", "steam://rungameid/570")) == 2
-
-
-def test_sem_loginusers_nem_conta_ativa_vale_todas(tmp_path, monkeypatch):
+def test_conta_conectada_fica_guardada_na_thread_principal(tmp_path, monkeypatch, state_schema, flush_idle):
     _steam_com_contas(tmp_path, monkeypatch, "123", "456")
-    assert len(arquivos.da_steam_esperados("570", "steam://rungameid/570")) == 2
+    _conta_ativa(monkeypatch, 456)
+    _esperados()
+    # A varredura roda numa thread: a gravação espera a thread principal.
+    assert state_schema.get_string(_GUARDADA) == ""
+    flush_idle()
+    assert state_schema.get_string(_GUARDADA) == "456"
 
 
-def test_nada_do_loginusers_vai_ao_log(tmp_path, monkeypatch, caplog):
-    import logging  # noqa: PLC0415
+def test_conta_ja_guardada_nao_e_regravada(tmp_path, monkeypatch, state_schema, flush_idle):
+    _steam_com_contas(tmp_path, monkeypatch, "123", "456")
+    state_schema.set_string(_GUARDADA, "456")
+    gravadas = []
+    monkeypatch.setattr(state_schema, "set_string", lambda chave, valor: gravadas.append((chave, valor)))
+    _conta_ativa(monkeypatch, 456)
+    _esperados()
+    flush_idle()
+    assert gravadas == []
+
+
+def test_varios_jogos_da_varredura_enfileiram_uma_gravacao(tmp_path, monkeypatch, state_schema):
+    _steam_com_contas(tmp_path, monkeypatch, "123", "456")
+    enfileiradas = []
+    monkeypatch.setattr(arquivos.GLib, "idle_add", lambda funcao, *args: enfileiradas.append(args))
+    _conta_ativa(monkeypatch, 456)
+    for _jogo in range(3):
+        _esperados()
+    assert enfileiradas == [("456",)]
+
+
+def test_steam_fechada_usa_a_ultima_conta_conectada(tmp_path, monkeypatch, state_schema):
+    _steam_com_contas(tmp_path, monkeypatch, "123", "456")
+    state_schema.set_string(_GUARDADA, "123")
+    _conta_ativa(monkeypatch, 0)
+    assert _esperados() == ["UserGameStats_123_570.bin"]
+    _conta_ativa(monkeypatch, None)  # sem a chave ActiveProcess
+    assert _esperados() == ["UserGameStats_123_570.bin"]
+
+
+def test_conta_achada_sem_pasta_em_userdata_cai_para_todas(tmp_path, monkeypatch, state_schema):
+    _steam_com_contas(tmp_path, monkeypatch, "123", "456")
+    state_schema.set_string(_GUARDADA, "999")
+    _conta_ativa(monkeypatch, None)
+    assert len(_esperados()) == 2
+    _conta_ativa(monkeypatch, 888)  # a conectada também não tem pasta
+    assert len(_esperados()) == 2
+
+
+def test_sem_conta_ativa_nem_guardada_vale_todas(tmp_path, monkeypatch, state_schema):
+    _steam_com_contas(tmp_path, monkeypatch, "123", "456")
+    _conta_ativa(monkeypatch, 0)
+    assert len(_esperados()) == 2
+
+
+def test_loginusers_nunca_e_aberto(tmp_path, monkeypatch, state_schema):
+    """Abrir o ``config\\loginusers.vdf`` é o que ladrão de conta Steam faz: o
+    Kaspersky derrubava o app por isso (PDM:Trojan.Win32.Generic, 19/10/2026)."""
+    import builtins  # noqa: PLC0415
+    import io  # noqa: PLC0415
+    import os  # noqa: PLC0415
 
     steam = _steam_com_contas(tmp_path, monkeypatch, "123", "456")
-    _loginusers(steam, ("123", 1, 100))
-    (steam / "config" / "loginusers.vdf").write_text('"users" { "nome_secreto"', encoding="utf-8")
-    _conta_ativa(monkeypatch, None)
-    with caplog.at_level(logging.DEBUG):
-        arquivos.da_steam_esperados("570", "steam://rungameid/570")
-    assert "nome_secreto" not in caplog.text
+    _loginusers(steam, "123")
+    _conta_ativa(monkeypatch, 0)
+    abertos = []
+    for modulo in (builtins, io, os):
+        original = modulo.open
+
+        def vigiado(arquivo, *args, _original=original, **kwargs):
+            abertos.append(str(arquivo))
+            return _original(arquivo, *args, **kwargs)
+
+        monkeypatch.setattr(modulo, "open", vigiado)
+    assert len(_esperados()) == 2
+    arquivos.arquivos_do_jogo("570", "steam://rungameid/570")
+    assert not [caminho for caminho in abertos if "loginusers" in caminho.casefold()]
 
 
 def test_inteiro_do_registro_nunca_levanta(monkeypatch):

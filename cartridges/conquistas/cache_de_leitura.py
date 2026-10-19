@@ -1,7 +1,7 @@
 """O resultado de uma leitura cara de disco, guardado enquanto o que ela leu não muda.
 
 A varredura passa por todos os jogos da biblioteca, e alguns arquivos são os mesmos
-para todos eles (os manifests da Epic, o `loginusers.vdf` da Steam) ou para cada
+para todos eles (os manifests da Epic) ou para cada
 abertura do estado de um jogo (o schema da Steam). A chave de cada leitura é a
 assinatura do que ela lê (`assinatura`: caminho, mtime e tamanho): o arquivo
 regravado tem outra assinatura e é lido de novo, então o cache nunca devolve um

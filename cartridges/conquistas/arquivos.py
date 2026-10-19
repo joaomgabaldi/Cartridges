@@ -16,8 +16,8 @@ from typing import Iterable, Optional, TypeVar
 
 from gi.repository import GLib
 
-from cartridges.conquistas import formatos, keyvalues
-from cartridges.conquistas.cache_de_leitura import CacheDeLeitura, assinatura
+from cartridges import shared
+from cartridges.conquistas import formatos
 from cartridges.importer.shortcuts_source import steam_appid_from_url
 from cartridges.utils.game_folder import game_folder
 
@@ -90,8 +90,8 @@ _CHAVE_DA_CONTA_ATIVA = (
     r"Software\Valve\Steam\ActiveProcess",
     "ActiveUser",
 )
-# O steamid64 de uma conta é este valor mais o número da conta (a pasta de `userdata`).
-_STEAMID64_BASE = 76561197960265728
+# A última conta que o `ActiveUser` trouxe, para quando a Steam estiver fechada.
+_CONTA_GUARDADA = "conquistas-ultima-conta-steam"
 
 
 def _inteiro_do_registro(raiz: int, caminho: str, nome: str) -> Optional[int]:
@@ -241,56 +241,51 @@ def _na_pasta_do_jogo(bases: list[Path], appid: str) -> list[ArquivoDeConquista]
     return achados
 
 
-def _numero(texto: object) -> Optional[int]:
-    """Um inteiro de até 20 dígitos ASCII; o resto (e arquivo de 1 MB de dígitos) é None."""
-    if not isinstance(texto, str) or len(texto) > 20 or not appid_valido(texto):
-        return None
-    return int(texto)
-
-
 def _conta_conectada() -> Optional[str]:
     """A conta com a Steam aberta agora (``ActiveUser``; 0 com a Steam fechada)."""
     ativa = _inteiro_do_registro(*_CHAVE_DA_CONTA_ATIVA)
     return str(ativa) if ativa is not None and ativa > 0 else None
 
 
-_cache_do_loginusers = CacheDeLeitura()
+_conta_enfileirada: Optional[str] = None
 
 
-def _conta_mais_recente(steam: Path) -> Optional[str]:
-    """A última conta que entrou na Steam, pelo `config\\loginusers.vdf`: a marcada
-    com ``MostRecent`` ou, sem marca, a de maior ``Timestamp``. Ilegível: None."""
-    arquivo = steam / "config" / "loginusers.vdf"
-    marca = assinatura(arquivo)
-    # Lido uma vez por mudança, não uma vez por jogo da Steam na varredura.
-    dados = _cache_do_loginusers.obter(marca, lambda: keyvalues.ler_texto(arquivo)) if marca else None
-    usuarios = dados.get("users") if dados else None
-    if not isinstance(usuarios, dict):
-        return None
-    candidatos: list[tuple[bool, int, str]] = []
-    for steamid64, campos in usuarios.items():
-        numero = _numero(steamid64)
-        if numero is None or not isinstance(campos, dict):
-            continue
-        conta = numero - _STEAMID64_BASE
-        if conta <= 0:
-            continue
-        carimbo = _numero(campos.get("Timestamp")) or 0
-        candidatos.append((campos.get("MostRecent") == "1", carimbo, str(conta)))
-    # Marcada vence; entre as marcadas (ou entre todas, sem marca), a mais nova.
-    return max(candidatos)[2] if candidatos else None
+def _guardar_conta(conta: str) -> bool:
+    shared.state_schema.set_string(_CONTA_GUARDADA, conta)
+    return False  # o GLib repetiria o callback que devolvesse um valor verdadeiro
+
+
+def _conta_do_usuario() -> Optional[str]:
+    """A conectada agora ou, com a Steam fechada, a última que o app viu conectada.
+
+    Nunca pelo `config\\loginusers.vdf`, que diria a última que entrou: ler esse
+    arquivo é o que ladrão de conta Steam faz, e o Kaspersky derrubava o app por
+    isso (PDM:Trojan.Win32.Generic, 19/10/2026). Quem chama roda numa thread: a
+    gravação vai para a thread principal, e só quando a conta muda.
+    """
+    global _conta_enfileirada  # pylint: disable=global-statement
+    guardada = shared.state_schema.get_string(_CONTA_GUARDADA) or None
+    conectada = _conta_conectada()
+    if conectada is None:
+        return guardada
+    # Uma gravação só, e não uma por jogo da varredura antes de a principal rodar.
+    if conectada not in (guardada, _conta_enfileirada):
+        _conta_enfileirada = conectada
+        GLib.idle_add(_guardar_conta, conectada)
+    return conectada
 
 
 def _contas(steam: Path) -> list[Path]:
     """As contas da Steam deste PC cujos arquivos valem.
 
     Uma só, quando dá para saber qual é: a conectada agora ou, com a Steam
-    fechada, a última que entrou. O histórico só soma, então misturar as contas
-    de quem divide o PC misturaria as conquistas. Sem saber (ou se a conta achada
-    não tem pasta em `userdata`), todas: as pastas com nome só de dígitos.
+    fechada, a última que o app viu conectada. O histórico só soma, então
+    misturar as contas de quem divide o PC misturaria as conquistas. Sem saber
+    (a Steam nunca esteve aberta com o app aberto, ou a conta achada não tem
+    pasta em `userdata`), todas: as pastas com nome só de dígitos.
     """
     todas = [conta for conta in _subpastas(steam / "userdata") if appid_valido(conta.name)]
-    achada = _conta_conectada() or _conta_mais_recente(steam)
+    achada = _conta_do_usuario()
     if achada is None:
         return todas
     return [conta for conta in todas if conta.name == achada] or todas

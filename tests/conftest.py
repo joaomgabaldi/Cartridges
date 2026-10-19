@@ -144,6 +144,7 @@ _STATE_DEFAULTS = {
     "notas-largura": 320,
     "notas-altura": 120,
     "conquistas-ultima-varredura": 0,
+    "conquistas-ultima-conta-steam": "",
 }
 
 
