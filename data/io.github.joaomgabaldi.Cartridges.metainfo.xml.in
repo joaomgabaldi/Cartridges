@@ -34,6 +34,8 @@
           <li>Quando algo dá errado de forma inesperada, o aplicativo agora avisa, em vez de falhar em silêncio</li>
           <li>Os logins da Epic e da conta Microsoft agora avisam quando o navegador não abre ou o login expira</li>
           <li>A conexão com a conta EA ficou mais estável e não pede um novo login depois de uma falha passageira</li>
+          <li>Agora é possível indicar, nas opções avançadas do jogo, o AppID da Steam e o jogo usado no backup dos saves</li>
+          <li>O backup dos saves não liga mais um jogo a outro de nome parecido</li>
         </ul>
       </description>
     </release>
