@@ -50,6 +50,11 @@ def _esquecer_conexoes():
     session_fita._amostras_validas = session_fita._amostras_bloqueadas = 0
     session_fita._suspensa_em.clear()
     session_fita._fora_do_ar.clear()
+    # A prévia também: um id que ficou em "_previa_vivas" (uma thread de outro
+    # teste ainda servindo, ou uma tarefa espionada que ninguém rodou) faz o
+    # pedido seguinte achar que já há quem pinte e não agendar nada.
+    session_fita._previa_vivas.clear()
+    session_fita._previa_alvos.clear()
 
 
 @pytest.fixture(autouse=True)

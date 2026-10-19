@@ -40,7 +40,13 @@ def assistente(tmp_path, monkeypatch, schema):
     )
     janela = AssistenteDeCalibracao(session_fita.fitas())
     janela.previas = previas
-    return janela
+    yield janela
+    # O assistente que sobra deixa o temporizador do teste vivo no GLib: ele
+    # dispararia nos testes seguintes, já sem a prévia espionada, e a prévia
+    # de verdade ficaria "em andamento" no estado global do session_fita.
+    # Encerrar aqui, com a espionagem ainda no lugar, para o temporizador e
+    # manda a última prévia para o espião.
+    janela._encerrar()
 
 
 def test_escolher_acende_so_a_fita_na_primeira_referencia(assistente):

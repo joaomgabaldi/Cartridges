@@ -75,6 +75,13 @@ from gi.repository import Adw, Gtk  # noqa: E402
 Gtk.init()
 Adw.init()
 
+# O main.py carrega o GdkWin32 antes de qualquer janela existir: uma superfície
+# embrulhada antes dele ganha uma classe genérica, sem `get_handle`. Os testes
+# precisam da mesma ordem, senão o primeiro que realiza uma janela (ex.:
+# test_conquistas_ui) tira o HWND de todos os seguintes no processo.
+gi.require_version("GdkWin32", "4.0")
+from gi.repository import GdkWin32  # noqa: E402,F401  pylint: disable=unused-import
+
 
 # Defaults copied from data/io.github.joaomgabaldi.Cartridges.gschema.xml.in. Copied rather
 # than parsed so a test that depends on one of these values fails loudly when
