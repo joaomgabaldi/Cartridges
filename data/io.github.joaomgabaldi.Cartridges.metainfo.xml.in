@@ -28,6 +28,15 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.19" date="2026-10-19">
+      <description translate="no">
+        <ul>
+          <li>Quando algo dá errado de forma inesperada, o aplicativo agora avisa, em vez de falhar em silêncio</li>
+          <li>Os logins da Epic e da conta Microsoft agora avisam quando o navegador não abre ou o login expira</li>
+          <li>A conexão com a conta EA ficou mais estável e não pede um novo login depois de uma falha passageira</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.10.18" date="2026-10-18">
       <description translate="no">
         <ul>
