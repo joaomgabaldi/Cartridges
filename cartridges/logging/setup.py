@@ -154,6 +154,9 @@ def setup_logging() -> None:
 def registrar_excecoes_nao_tratadas() -> None:
     """Grava no log todo erro não tratado, do thread principal ou de outro.
 
+    Depois de gravar, avisa o usuário num diálogo (o `unraisablehook` não: erro
+    num `__del__` não é uma ação do usuário que falhou).
+
     O padrão do Python só escreve no stderr, e o app instalado roda no
     pythonw, sem console: um erro num callback do GTK (abrir a tela de edição,
     salvar) sumia sem deixar rastro no `cartridges.log`. O PyGObject entrega
@@ -162,11 +165,22 @@ def registrar_excecoes_nao_tratadas() -> None:
 
     def registrar(tipo, valor, rastro) -> None:  # type: ignore
         logging.critical("Erro não tratado", exc_info=(tipo, valor, rastro))
+        try:
+            # Import tardio: o módulo de logging não depende da tela no import.
+            from cartridges.utils import erro_inesperado  # pylint: disable=import-outside-toplevel
+
+            erro_inesperado.avisar(tipo, rastro)
+        except Exception:  # pylint: disable=broad-exception-caught
+            # No encerramento do interpretador o import pode falhar.
+            pass
+
+    def da_thread(args) -> None:  # type: ignore
+        # Como o padrão do Python: o SystemExit de uma thread é só o fim dela.
+        if args.exc_type is not SystemExit:
+            registrar(args.exc_type, args.exc_value, args.exc_traceback)
 
     sys.excepthook = registrar
-    threading.excepthook = lambda args: registrar(
-        args.exc_type, args.exc_value, args.exc_traceback
-    )
+    threading.excepthook = da_thread
     # Erros que não sobem para ninguém (num __del__, na coleta de lixo): o
     # Python os entrega a este gancho, que por padrão também só usa o stderr.
     sys.unraisablehook = lambda u: logging.critical(
