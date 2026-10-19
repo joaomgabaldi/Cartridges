@@ -277,6 +277,11 @@ def test_entrar_que_levanta_vira_aviso_e_nao_escapa(monkeypatch):
             "Esta conta precisa de permissão de um responsável para usar o Xbox.",
         ),
         ("FALHOU", "Não foi possível entrar na conta Microsoft."),
+        (
+            "SEM_NAVEGADOR",
+            "Não foi possível abrir o navegador. Verifique o navegador padrão do Windows.",
+        ),
+        ("PRAZO_ESGOTADO", "O login da conta Microsoft expirou. Tente novamente."),
         ("CANCELADO", None),
     ],
 )
@@ -494,6 +499,40 @@ def test_entrar_com_janela_que_falha_ao_mostrar_deixa_tentar_de_novo(monkeypatch
     dialogo.conquistas_epic_botao.emit("clicked")
     # O segundo clique não fica morto: cria outra janela.
     assert len(_LoginEpicFalso.criados) == 2
+
+
+def test_janela_da_epic_que_falha_ao_mostrar_avisa_com_toast(monkeypatch):
+    class _LoginQueFalha(_LoginEpicFalso):
+        def mostrar(self, pai):
+            raise RuntimeError("falha ao apresentar")
+
+    _LoginEpicFalso.criados = []
+    monkeypatch.setattr(epic_conta, "conectada", lambda: False)
+    monkeypatch.setattr(epic_janela, "JanelaDeLogin", _LoginQueFalha)
+    dialogo = _preferencias(monkeypatch)
+    avisos = []
+    monkeypatch.setattr(dialogo, "add_toast", lambda toast: avisos.append(toast.get_title()))
+    dialogo.conquistas_epic_botao.emit("clicked")
+    assert avisos == ["Não foi possível abrir a janela de login da Epic."]
+
+
+@pytest.mark.parametrize("modulo, botao, texto", [
+    (epic_conta, "conquistas_epic_botao", "Não foi possível sair da conta Epic."),
+    (ea_conta, "conquistas_ea_botao", "Não foi possível sair da conta EA."),
+])
+def test_sair_que_falha_avisa_so_do_sair(monkeypatch, modulo, botao, texto):
+    monkeypatch.setattr(modulo, "conectada", lambda: True)
+    monkeypatch.setattr(modulo, "nome", lambda: "Jogador")
+
+    def quebra():
+        raise OSError("cofre")
+
+    monkeypatch.setattr(modulo, "sair", quebra)
+    dialogo = _preferencias(monkeypatch)
+    avisos = []
+    monkeypatch.setattr(dialogo, "add_toast", lambda toast: avisos.append(toast.get_title()))
+    getattr(dialogo, botao).emit("clicked")
+    assert avisos == [texto]
 
 
 def test_sair_da_epic(monkeypatch):

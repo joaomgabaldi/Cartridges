@@ -593,6 +593,12 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 "Esta conta precisa de permissão de um responsável para usar o Xbox."
             ),
             login.Resultado.FALHOU: _("Não foi possível entrar na conta Microsoft."),
+            login.Resultado.SEM_NAVEGADOR: _(
+                "Não foi possível abrir o navegador. Verifique o navegador padrão do Windows."
+            ),
+            login.Resultado.PRAZO_ESGOTADO: _(
+                "O login da conta Microsoft expirou. Tente novamente."
+            ),
         }
         if resultado in textos:
             toast = Adw.Toast.new(textos[resultado])
@@ -654,13 +660,17 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.conquistas_epic_botao.set_label(rotulo)
 
     def _on_conta_epic_clicked(self, *_args: Any) -> None:
-        try:
-            if epic_conta.conectada():
+        if epic_conta.conectada():
+            try:
                 epic_conta.sair()
-                self._atualizar_conta_epic()
-                return
-            if self._janela_epic is not None:
-                return
+            except Exception as erro:  # pylint: disable=broad-exception-caught
+                logging.warning("Falha ao sair da conta Epic: %s", type(erro).__name__)
+                self.add_toast(Adw.Toast.new(_("Não foi possível sair da conta Epic.")))
+            self._atualizar_conta_epic()
+            return
+        if self._janela_epic is not None:
+            return
+        try:
             janela = epic_janela.JanelaDeLogin(self._varrer_jogos_da_epic)
             janela.connect("closed", self._ao_fechar_janela_epic)
             self._janela_epic = janela
@@ -671,6 +681,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             logging.warning(
                 "Falha ao abrir o login da conta Epic: %s", type(erro).__name__
             )
+            self.add_toast(Adw.Toast.new(_("Não foi possível abrir a janela de login da Epic.")))
 
     def _ao_fechar_janela_epic(self, *_args: Any) -> None:
         self._janela_epic = None
@@ -700,13 +711,17 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.conquistas_ea_botao.set_label(rotulo)
 
     def _on_conta_ea_clicked(self, *_args: Any) -> None:
-        try:
-            if ea_conta.conectada():
+        if ea_conta.conectada():
+            try:
                 ea_conta.sair()
-                self._atualizar_conta_ea()
-                return
-            if self._janela_ea is not None:
-                return
+            except Exception as erro:  # pylint: disable=broad-exception-caught
+                logging.warning("Falha ao sair da conta EA: %s", type(erro).__name__)
+                self.add_toast(Adw.Toast.new(_("Não foi possível sair da conta EA.")))
+            self._atualizar_conta_ea()
+            return
+        if self._janela_ea is not None:
+            return
+        try:
             janela = ea_janela.JanelaDeLogin(self._varrer_jogos_da_ea)
             janela.connect("closed", self._ao_fechar_janela_ea)
             self._janela_ea = janela

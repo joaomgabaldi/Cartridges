@@ -12,7 +12,7 @@ import logging
 import os
 from typing import Any, Callable, Optional
 
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gtk, Pango
 
 from cartridges.conquistas.epic import conta
 from cartridges.conquistas.vigia_da_conta import _em_thread
@@ -57,6 +57,12 @@ class JanelaDeLogin(Adw.Dialog):
         grupo.add(self.campo)
         self.erro = Gtk.Label(wrap=True, xalign=0, visible=False)
         self.erro.add_css_class("error")
+        # Sem navegador, o código só aparece na página de redirecionamento: o
+        # endereço dela fica à mostra para o usuário levá-lo ao navegador.
+        self.endereco = Gtk.Label(
+            label=conta.PAGINA_DE_LOGIN, wrap=True, wrap_mode=Pango.WrapMode.CHAR,
+            selectable=True, xalign=0, visible=False,
+        )
 
         self.botao_abrir = Gtk.Button(label=_("Abrir a página novamente"))
         self.botao_cancelar = Gtk.Button(label=_("Cancelar"))
@@ -75,7 +81,7 @@ class JanelaDeLogin(Adw.Dialog):
             margin_start=24,
             margin_end=24,
         )
-        for widget in (passos, grupo, self.erro, botoes):
+        for widget in (passos, grupo, self.erro, self.endereco, botoes):
             corpo.append(widget)
         vista = Adw.ToolbarView(content=corpo)
         vista.add_top_bar(Adw.HeaderBar())
@@ -93,10 +99,19 @@ class JanelaDeLogin(Adw.Dialog):
         self._abrir_pagina()
 
     def _abrir_pagina(self) -> None:
+        aviso = _("Não foi possível abrir o navegador. Copie o endereço abaixo e abra-o no navegador.")
         try:
             self._abrir(conta.PAGINA_DE_LOGIN)
         except Exception as erro:  # pylint: disable=broad-exception-caught
             logging.warning("Falha ao abrir a página de login da Epic: %s", type(erro).__name__)
+            self.erro.set_label(aviso)
+            self.erro.set_visible(True)
+            self.endereco.set_visible(True)
+        else:
+            self.endereco.set_visible(False)
+            # Só o aviso do navegador some; um erro de login anterior continua.
+            if self.erro.get_label() == aviso:
+                self.erro.set_visible(False)
 
     def _ao_fechar(self, *_args: Any) -> None:
         self._fechada = True
@@ -116,6 +131,7 @@ class JanelaDeLogin(Adw.Dialog):
         if codigo is None or not self.botao_conectar.get_sensitive():
             return
         self.erro.set_visible(False)
+        self.endereco.set_visible(False)
         self._ocupada(True)
 
         def trabalho() -> str:

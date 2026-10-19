@@ -151,3 +151,73 @@ def test_resultado_none_vira_falha_generica(abertas):
     j.botao_conectar.emit("clicked")
     assert j.erro.get_visible() and j.erro.get_label() == "Não foi possível entrar na conta Epic."
     assert j.botao_conectar.get_sensitive() and "fechou" not in abertas
+
+
+_SEM_NAVEGADOR = "Não foi possível abrir o navegador. Copie o endereço abaixo e abra-o no navegador."
+
+
+def _sem_navegador(_url):
+    raise OSError("sem navegador")
+
+
+def test_navegador_que_nao_abre_ao_abrir_a_janela_avisa():
+    j = janela.JanelaDeLogin(lambda: None, abrir=_sem_navegador, em_thread=_sincrono)
+    j.present = lambda _pai: None
+    j.mostrar(None)
+    assert j.erro.get_visible() and j.erro.get_label() == _SEM_NAVEGADOR
+
+
+def test_navegador_que_nao_abre_pelo_botao_avisa():
+    j = janela.JanelaDeLogin(lambda: None, abrir=_sem_navegador, em_thread=_sincrono)
+    j.botao_abrir.emit("clicked")
+    assert j.erro.get_visible() and j.erro.get_label() == _SEM_NAVEGADOR
+
+
+def test_aviso_do_navegador_some_quando_a_pagina_abre_depois():
+    chamadas = []
+
+    def abrir(_url):
+        chamadas.append(_url)
+        if len(chamadas) == 1:
+            raise OSError("sem navegador")
+
+    j = janela.JanelaDeLogin(lambda: None, abrir=abrir, em_thread=_sincrono)
+    j.present = lambda _pai: None
+    j.mostrar(None)
+    assert j.erro.get_visible()
+    j.botao_abrir.emit("clicked")
+    assert not j.erro.get_visible()
+
+
+def test_erro_de_login_permanece_quando_a_pagina_abre(abertas, monkeypatch):
+    def recusa(_codigo):
+        raise conta.CodigoRecusado()
+
+    monkeypatch.setattr(conta, "conectar", recusa)
+    j = _janela(abertas)
+    j.campo.set_text(f'{{"authorizationCode": "{_COD}"}}')
+    j.botao_conectar.emit("clicked")
+    j.botao_abrir.emit("clicked")
+    assert j.erro.get_visible()
+
+
+def test_sem_navegador_mostra_o_endereco_para_copiar():
+    j = janela.JanelaDeLogin(lambda: None, abrir=_sem_navegador, em_thread=_sincrono)
+    assert not j.endereco.get_visible()
+    j.botao_abrir.emit("clicked")
+    assert j.endereco.get_visible() and j.endereco.get_text() == conta.PAGINA_DE_LOGIN
+    assert j.endereco.get_selectable()
+
+
+def test_endereco_some_quando_a_pagina_abre_depois():
+    chamadas = []
+
+    def abrir(url):
+        chamadas.append(url)
+        if len(chamadas) == 1:
+            raise OSError("sem navegador")
+
+    j = janela.JanelaDeLogin(lambda: None, abrir=abrir, em_thread=_sincrono)
+    j.botao_abrir.emit("clicked")
+    j.botao_abrir.emit("clicked")
+    assert not j.endereco.get_visible()

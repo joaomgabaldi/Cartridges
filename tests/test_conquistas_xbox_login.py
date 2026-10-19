@@ -103,10 +103,10 @@ def test_falha_na_troca(monkeypatch, navegador, flush_idle, erro, esperado):
     assert _esperar(pedido, resultados, flush_idle) == [esperado]
 
 
-def test_prazo_esgotado_cancela_e_fecha(navegador, flush_idle):
+def test_prazo_esgotado_avisa_e_fecha(navegador, flush_idle):
     resultados = []
     pedido = login.entrar(resultados.append, abrir=navegador.append, prazo=0.3)
-    assert _esperar(pedido, resultados, flush_idle) == [login.Resultado.CANCELADO]
+    assert _esperar(pedido, resultados, flush_idle) == [login.Resultado.PRAZO_ESGOTADO]
     with pytest.raises(OSError):
         urllib.request.urlopen(f"http://127.0.0.1:{pedido.porta}/", timeout=1)
 
@@ -115,7 +115,7 @@ def test_conexao_ociosa_nao_impede_o_prazo(navegador, flush_idle):
     resultados = []
     pedido = login.entrar(resultados.append, abrir=navegador.append, prazo=0.5)
     with socket.create_connection(("127.0.0.1", pedido.porta), timeout=5):
-        assert _esperar(pedido, resultados, flush_idle, tempo=3.0) == [login.Resultado.CANCELADO]
+        assert _esperar(pedido, resultados, flush_idle, tempo=3.0) == [login.Resultado.PRAZO_ESGOTADO]
         with pytest.raises(OSError):
             urllib.request.urlopen(f"http://127.0.0.1:{pedido.porta}/", timeout=1)
 
@@ -160,4 +160,15 @@ def test_navegador_que_nao_abre_falha(flush_idle):
 
     resultados = []
     pedido = login.entrar(resultados.append, abrir=quebra)
+    assert _esperar(pedido, resultados, flush_idle) == [login.Resultado.SEM_NAVEGADOR]
+
+
+def test_servidor_de_retorno_que_quebra_falha_em_vez_de_cancelar(monkeypatch, navegador, flush_idle):
+    # Falha no próprio servidor não é o usuário cancelando: tem de avisar.
+    def quebra(self):
+        raise OSError("socket morto")
+
+    monkeypatch.setattr(login.http.server.ThreadingHTTPServer, "handle_request", quebra)
+    resultados = []
+    pedido = login.entrar(resultados.append, abrir=navegador.append)
     assert _esperar(pedido, resultados, flush_idle) == [login.Resultado.FALHOU]

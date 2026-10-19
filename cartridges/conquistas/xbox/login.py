@@ -41,6 +41,8 @@ class Resultado(enum.Enum):
     SEM_PERFIL_XBOX = enum.auto()
     CONTA_INFANTIL = enum.auto()
     FALHOU = enum.auto()
+    SEM_NAVEGADOR = enum.auto()
+    PRAZO_ESGOTADO = enum.auto()
 
 
 def _abrir_navegador(url: str) -> None:
@@ -120,10 +122,14 @@ class Pedido:
         try:
             while not self._terminou.is_set() and time.monotonic() < self._prazo:
                 self._servidor.handle_request()
+            # Saiu do laço sem cancelar nem concluir: o prazo acabou. (`_terminar`
+            # não faz nada se o pedido já terminou.)
+            self._terminar(Resultado.PRAZO_ESGOTADO)
         except Exception:  # pylint: disable=broad-exception-caught
             # Cancelar fecha o servidor por baixo da espera: não é falha.
             if not self._terminou.is_set():
                 logging.warning("Falha no retorno do login da conta Microsoft", exc_info=True)
+                self._terminar(Resultado.FALHOU)
         finally:
             self._terminar(Resultado.CANCELADO)
 
@@ -215,7 +221,7 @@ def entrar(
         abrir(pedido.url())
     except Exception as erro:  # pylint: disable=broad-exception-caught
         logging.info("Navegador não abriu para o login (%s)", type(erro).__name__)
-        pedido._terminar(Resultado.FALHOU)  # pylint: disable=protected-access
+        pedido._terminar(Resultado.SEM_NAVEGADOR)  # pylint: disable=protected-access
     return pedido
 
 
