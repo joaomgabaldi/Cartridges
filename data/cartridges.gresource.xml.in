@@ -17,6 +17,8 @@
     <!-- "successful", de Kastenfrosch (https://freesound.org/s/162473/), CC0 —
          aparado no início e com fade no fim. -->
     <file>sons/conquista.wav</file>
+    <!-- Tique ao trocar de capa no Big Picture: sintetizado, sem material de terceiros. -->
+    <file>sons/tique.wav</file>
   </gresource>
   <gresource prefix="@PREFIX@/icons/scalable/categories/">
   <file alias="shortcuts-source-symbolic.svg">icons/sources/shortcuts-source-symbolic.svg</file>

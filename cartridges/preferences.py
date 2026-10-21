@@ -28,7 +28,7 @@ from typing import Any, Callable, Optional
 
 from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
-from cartridges import conquista_aviso, shared
+from cartridges import big_picture, conquista_aviso, shared
 from cartridges.calibracao_janela import AssistenteDeCalibracao
 from cartridges.conquistas import fontes
 from cartridges.conquistas.ea import conta as ea_conta
@@ -70,6 +70,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     playtime_tracking_switch: Adw.SwitchRow = Gtk.Template.Child()
     gamepad_switch: Adw.SwitchRow = Gtk.Template.Child()
     gamepad_rumble_switch: Adw.SwitchRow = Gtk.Template.Child()
+    big_picture_ao_conectar_switch: Adw.SwitchRow = Gtk.Template.Child()
+    big_picture_som_switch: Adw.SwitchRow = Gtk.Template.Child()
     process_grace_spin_row: Adw.SpinRow = Gtk.Template.Child()
 
     session_monitor_group: Adw.PreferencesGroup = Gtk.Template.Child()
@@ -405,6 +407,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 "fita-acompanha-tela",
                 "gamepad",
                 "gamepad-rumble",
+                "big-picture-ao-conectar",
+                "big-picture-som",
                 "auto-import",
                 "remove-missing",
                 "steam-metadata",
@@ -440,12 +444,25 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         sync_minimize_lock()
 
         # Rumble is meaningless with the controller turned off, so the row
-        # greys out along with it rather than sitting there doing nothing
-        def sync_rumble_sensitive(*_args: Any) -> None:
-            self.gamepad_rumble_switch.set_sensitive(self.gamepad_switch.get_active())
+        # greys out along with it rather than sitting there doing nothing.
+        # O Big Picture ao conectar também: além do controle, exige renderizador 3D.
+        tem_3d = big_picture.tem_3d(shared.win)
+        if not tem_3d:
+            self.big_picture_ao_conectar_switch.set_subtitle(
+                _("Requer uma placa de vídeo com suporte a Vulkan.")
+            )
+            self.big_picture_som_switch.set_subtitle(
+                _("Requer uma placa de vídeo com suporte a Vulkan.")
+            )
+            self.big_picture_som_switch.set_sensitive(False)
 
-        self.gamepad_switch.connect("notify::active", sync_rumble_sensitive)
-        sync_rumble_sensitive()
+        def sync_gamepad_sensitive(*_args: Any) -> None:
+            ligado = self.gamepad_switch.get_active()
+            self.gamepad_rumble_switch.set_sensitive(ligado)
+            self.big_picture_ao_conectar_switch.set_sensitive(ligado and tem_3d)
+
+        self.gamepad_switch.connect("notify::active", sync_gamepad_sensitive)
+        sync_gamepad_sensitive()
 
         self.setup_session_monitor_row()
 

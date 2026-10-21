@@ -19,6 +19,8 @@
 
 # pyright: reportAssignmentType=none
 
+import ctypes
+import ctypes.wintypes
 import logging
 import threading
 import unicodedata
@@ -28,7 +30,7 @@ from typing import Any, Optional
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
-from cartridges import shared
+from cartridges import big_picture, shared
 from cartridges.botao_tarefas import BotaoTarefas
 from cartridges.conquistas import icones, progresso
 from cartridges.conquistas import sessao as sessao_conquistas
@@ -90,6 +92,17 @@ def can_edit_notes(game: Game) -> bool:
     return game.status == "playing" or bool((game.notes or "").strip())
 
 
+def _posicao_do_ponteiro() -> Optional[tuple[int, int]]:
+    """Posição do mouse na tela (Win32), ou None se não der para ler."""
+    try:
+        ponto = ctypes.wintypes.POINT()
+        if not ctypes.windll.user32.GetCursorPos(ctypes.byref(ponto)):
+            return None
+        return ponto.x, ponto.y
+    except (AttributeError, OSError):
+        return None
+
+
 def _na_vista(picture: Gtk.Picture) -> bool:
     """``picture`` está mapeada e ao menos em parte dentro da área rolável."""
     if not picture.get_mapped():
@@ -139,6 +152,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
     search_bar: Gtk.SearchBar = Gtk.Template.Child()
     search_entry: Gtk.SearchEntry = Gtk.Template.Child()
     search_button: Gtk.ToggleButton = Gtk.Template.Child()
+    big_picture_button: Gtk.Button = Gtk.Template.Child()
     news_button: Gtk.Button = Gtk.Template.Child()
     news_badge: Gtk.Box = Gtk.Template.Child()
 
@@ -282,6 +296,16 @@ class CartridgesWindow(Adw.ApplicationWindow):
 
         self.library.set_sort_func(self.sort_func)
         self.zerados_library.set_sort_func(self.sort_func)
+
+        # Antes do primeiro `set_library_child`, que a consulta.
+        self.pagina_big_picture = big_picture.PaginaBigPicture(self)
+
+        self._ponteiro_escondido = False
+        self._ultima_posicao_ponteiro = None
+        movimento = Gtk.EventControllerMotion()
+        movimento.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        movimento.connect("motion", self._ao_mover_ponteiro)
+        self.add_controller(movimento)
 
         self.set_library_child()
 
@@ -690,6 +714,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # a janela reaparecer já no lugar certo em vez de aparecer no monitor
         # do jogo e pular.
         window_geometry.restore_from_monitor(self)
+
+        if self.pagina_big_picture.visivel:
+            self.pagina_big_picture.voltou_do_jogo()
 
         # De volta ao papel de parede de cada monitor. Síncrono, ao contrário
         # da ida: são alguns milissegundos de COM, e uma thread aqui correria
@@ -1244,6 +1271,55 @@ class CartridgesWindow(Adw.ApplicationWindow):
                 remove_from_overlay(notice)
         if zerados_child:
             self.zerados_library_overlay.add_overlay(zerados_child)
+
+        if self.pagina_big_picture.visivel:
+            self.pagina_big_picture.atualizar()
+
+    def on_big_picture_action(self, *_args: Any) -> None:
+        self.pagina_big_picture.entrar()
+
+    def esconder_ponteiro(self) -> None:
+        """Esconde o ponteiro do mouse enquanto o controle está em uso."""
+        if self._ponteiro_escondido:
+            return
+        self._ponteiro_escondido = True
+        # (sem a posição de tela, fica a última local, guardada no `motion`)
+        self._ultima_posicao_ponteiro = (
+            _posicao_do_ponteiro() or self._ultima_posicao_ponteiro
+        )
+        self.set_cursor_from_name("none")
+
+    def _ao_mover_ponteiro(self, _controlador: Any, x: float, y: float) -> None:
+        """Devolve o ponteiro no primeiro movimento real do mouse.
+
+        O GTK reemite `motion` sem o mouse ter andado (ao esconder o ponteiro,
+        ao trocar de página); só mais de 1 px em x ou y conta.
+        """
+        # Posição de tela: as coordenadas locais mudam com a origem da janela
+        # (tela cheia) sem o mouse andar. Sem ela, cai nas locais.
+        atual = _posicao_do_ponteiro() or (x, y)
+        ultima, self._ultima_posicao_ponteiro = self._ultima_posicao_ponteiro, atual
+        if not self._ponteiro_escondido:
+            return
+        if ultima is None or abs(atual[0] - ultima[0]) > 1 or abs(atual[1] - ultima[1]) > 1:
+            self._ponteiro_escondido = False
+            self.set_cursor(None)
+
+    def on_controle_conectado(self) -> None:
+        """Abre o Big Picture sozinho, se a preferência e o momento permitirem."""
+        grade_a_vista = (
+            self.navigation_view.get_visible_page() is self.library_page
+            and self.get_visible_dialog() is None
+            and not self.session_blocker.get_visible()
+        )
+        if big_picture.pode_entrar_sozinho(
+            preferencia=shared.schema.get_boolean("big-picture-ao-conectar"),
+            controle_ligado=shared.schema.get_boolean("gamepad"),
+            tem_3d=big_picture.tem_3d(self),
+            grade_a_vista=grade_a_vista,
+            ja_saiu=self.pagina_big_picture.ja_saiu,
+        ):
+            self.pagina_big_picture.entrar()
 
     def filter_func(self, child: Gtk.Widget) -> bool:
         game = child.get_child()

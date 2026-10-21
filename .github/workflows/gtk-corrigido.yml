@@ -19,13 +19,13 @@ jobs:
         include:
           - pacote: gtk4
             fonte: gtk
-            patch: gtk-dcomp-render-window-origin.patch
+            patches: gtk-dcomp-render-window-origin.patch gtk-gpu-clip-projetivo.patch
             dll: libgtk-4-1.dll
             trava: gtk4_package_version
             trava_hash: libgtk_sha256
           - pacote: libadwaita
             fonte: libadwaita
-            patch: libadwaita-toast-fade.patch
+            patches: libadwaita-toast-fade.patch
             dll: libadwaita-1-0.dll
             trava: libadwaita_package_version
             trava_hash: libadwaita_sha256
@@ -82,22 +82,24 @@ jobs:
             echo "sim=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Acrescentar o patch à receita
+      - name: Acrescentar os patches à receita
         if: steps.publicar.outputs.sim == 'true'
         shell: msys2 {0}
         run: |
           cd MINGW-packages/mingw-w64-${{ matrix.pacote }}
-          cp ../../build-aux/windows/gtk-patches/${{ matrix.patch }} .
+          printf '\n# Cartridges: build-aux/windows/gtk-patches\n' >> PKGBUILD
+          for p in ${{ matrix.patches }}; do
+            cp ../../build-aux/windows/gtk-patches/$p .
+            printf 'source+=("%s")\nsha256sums+=(%s)\n' "$p" "'SKIP'" >> PKGBUILD
+          done
           cat >> PKGBUILD <<'EOF'
-
-          # Cartridges: build-aux/windows/gtk-patches
-          source+=("${{ matrix.patch }}")
-          sha256sums+=('SKIP')
           eval "_prepare_msys2() $(declare -f prepare | tail -n +2)"
           prepare() {
             _prepare_msys2
             cd "${srcdir}/${{ matrix.fonte }}-${pkgver}"
-            patch -Np1 -i "${srcdir}/${{ matrix.patch }}"
+            for p in ${{ matrix.patches }}; do
+              patch -Np1 -i "${srcdir}/$p"
+            done
           }
           EOF
 

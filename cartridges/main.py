@@ -54,7 +54,7 @@ try:
 except (ValueError, ImportError) as erro:
     logging.warning("GdkWin32 indisponível: %s", erro)
 
-from cartridges import restauracao_dialogs, shared
+from cartridges import big_picture, restauracao_dialogs, shared
 from cartridges.conquistas import icones
 from cartridges.conquistas import sessao as sessao_conquistas
 from cartridges.conquistas.ea import conta as ea_conta
@@ -658,6 +658,7 @@ class CartridgesApplication(Adw.Application):
                 ("show_zerados", shared.win),
                 ("show_news", shared.win),
                 ("toggle_search", shared.win),
+                ("big_picture", shared.win),
             }
         )
 
@@ -678,6 +679,8 @@ class CartridgesApplication(Adw.Application):
         # only polls while the window has focus, so it costs nothing when the
         # setting is off or the app is in the background.
         self.gamepad = GamepadManager()
+        self.gamepad.ao_conectar = shared.win.on_controle_conectado
+        self.gamepad.ao_usar = shared.win.esconder_ponteiro
         self.gamepad.attach(shared.win)
 
         # Watch the repack feed for patches to opted-in games. Kicks off one poll
@@ -732,6 +735,14 @@ class CartridgesApplication(Adw.Application):
 
         shared.win.present()
 
+        # O renderizador só existe depois de a janela ser realizada.
+        sem_3d = not big_picture.tem_3d(shared.win)
+        shared.win.lookup_action("big_picture").set_enabled(not sem_3d)
+        if sem_3d:
+            shared.win.big_picture_button.set_tooltip_text(
+                _("Requer uma placa de vídeo com suporte a Vulkan.")
+            )
+
         # Uma segunda cópia do app pede a esta que se mostre: é o que traz de volta
         # a janela principal escondida (veja `on_win_close_request`).
         watch_second_launch(lambda: entregar_na_tela(self.on_second_launch))
@@ -774,6 +785,11 @@ class CartridgesApplication(Adw.Application):
         window close: a true return would stop it and the app would never quit.
         """
         if shared.win is None:
+            return False
+
+        # Em tela cheia (Big Picture) o retângulo é o da tela, não o da janela:
+        # vale a geometria gravada antes.
+        if shared.win.is_fullscreen():
             return False
 
         # Fechar o app no meio de uma sessão: a janela está estacionada no

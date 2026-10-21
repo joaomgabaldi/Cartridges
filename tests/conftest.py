@@ -126,6 +126,8 @@ _SCHEMA_DEFAULTS = {
     "library-rows": 0,
     "gamepad": False,
     "gamepad-rumble": True,
+    "big-picture-ao-conectar": False,
+    "big-picture-som": True,
     "updates-check-interval": 12,
     "news-check-interval": 6,
     "show-news-button": False,
@@ -431,6 +433,18 @@ def schema(monkeypatch):
     fake = FakeSchema(_SCHEMA_DEFAULTS)
     monkeypatch.setattr(shared, "schema", fake, raising=False)
     return fake
+
+
+@pytest.fixture(autouse=True)
+def com_3d(request, monkeypatch):
+    """As janelas falsas não têm renderizador: as Preferências veem 3D disponível.
+
+    ``tests/test_big_picture.py`` testa o ``tem_3d`` de verdade e fica de fora."""
+    if request.module.__name__.endswith("test_big_picture"):
+        return
+    from cartridges import big_picture  # noqa: PLC0415
+
+    monkeypatch.setattr(big_picture, "tem_3d", lambda _janela: True)
 
 
 @pytest.fixture(autouse=True)

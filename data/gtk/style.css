@@ -253,3 +253,13 @@ window.conquista-aviso-opaco .conquista-aviso-cartao {
     transparent 80%
   );
 }
+
+/* Big Picture: fundo preto (o degradê pontilhado é desenhado pelo CoverFlow) e textos claros. */
+.big-picture {
+  background-color: #000000;
+  color: #ffffff;
+}
+
+.big-picture label {
+  color: #ffffff;
+}

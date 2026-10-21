@@ -46,11 +46,15 @@ back only once the session ends. See :meth:`GamepadManager.suspend`.
 import ctypes
 import logging
 from ctypes import wintypes
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from gi.repository import Adw, GLib, Gtk
 
 from cartridges import shared
+from cartridges.big_picture import intervalo_de_repeticao_us
+
+if TYPE_CHECKING:
+    from cartridges.big_picture import PaginaBigPicture
 
 # How often the pad is read while the window has focus. 30 Hz is well past the
 # rate a person can navigate a grid at, and halves the wakeups of a 60 Hz loop.
@@ -99,6 +103,13 @@ RUMBLE_EDGE = (0.6, 0.2, 70)
 # it confirms an action that takes over the whole screen, and it is the last
 # thing the app says before the window minimises and gets out of the way.
 RUMBLE_LAUNCH = (0.85, 0.85, 400)
+# Salto de dez jogos no Big Picture (LB/RB): só o motor leve, mais longo que o
+# tique de um passo, para soar como um deslize e não como um clique.
+RUMBLE_PULO = (0.0, 0.35, 25)
+# Troca de capa no Big Picture: o toque da grade (12 ms a 14%) é curto demais
+# para o motor girar. Sai no máximo um por duração + 60 ms, para os toques
+# ficarem distintos em vez de emendarem num zumbido.
+RUMBLE_CAPA = (0.5, 1.0, 90)
 
 # XInput button masks
 XINPUT_DPAD_UP = 0x0001
@@ -212,6 +223,16 @@ class GamepadManager:
         self._slot: Optional[int] = None  # connected controller, if any
         self._last_scan = 0
 
+        # Chamado quando o controle é detectado pela primeira vez (ou volta
+        # depois de desconectado). Ligado em main.py à janela.
+        self.ao_conectar: Optional[Callable[[], None]] = None
+        # Chamado a cada comando tratado (esconde o ponteiro do mouse).
+        self.ao_usar: Optional[Callable[[], None]] = None
+        self._ultimo_toque_capa_us = 0
+        # True depois de _release: o controle "reaparece" ao fim de um jogo, e
+        # isso não é uma conexão nova.
+        self._redescoberta = False
+
         # While a game's session is being tracked the pad belongs entirely to
         # the game, so the whole integration is torn down: polling stops and the
         # XInput DLL is handed back (``self.xinput`` dropped to None). This flag
@@ -241,6 +262,7 @@ class GamepadManager:
 
         self._direction: Optional[Gtk.DirectionType] = None
         self._direction_since = 0
+        self._ultimo_passo_us = 0
         self._repeats = 0
 
         # A direction found already held by a resync is the baseline, not a
@@ -365,6 +387,7 @@ class GamepadManager:
             return GLib.SOURCE_REMOVE
         self.rumble()  # final guarantee the motors are at rest before we let go
         self._slot = None  # forget the slot; resume rescans from scratch
+        self._redescoberta = True
         self.xinput = None  # ctypes frees the library once nothing references it
         logging.debug("Gamepad DLL released for the duration of the session")
         return GLib.SOURCE_REMOVE
@@ -414,8 +437,18 @@ class GamepadManager:
                 self._resync = True
                 self._engaged = False
                 logging.debug("Gamepad connected in slot %s", slot)
+                # Falha aqui é de log: a entrada automática é conveniência, e
+                # uma exceção sairia do timeout do GLib, que removeria a fonte.
+                if not self._redescoberta and self.ao_conectar is not None:
+                    try:
+                        self.ao_conectar()
+                    except Exception:  # pylint: disable=broad-except
+                        logging.exception("Falha ao avisar a conexão do controle")
+                self._redescoberta = False
                 return state.Gamepad
 
+        # Sem controle nesta varredura: a próxima conexão é de verdade.
+        self._redescoberta = False
         return None
 
     def _poll(self) -> bool:
@@ -449,6 +482,7 @@ class GamepadManager:
             # is released or swapped for another direction.
             self._direction_latched = self._direction is not None
             self._direction_since = GLib.get_monotonic_time()
+            self._ultimo_passo_us = self._direction_since
             self._repeats = 0
             self._show_selection()
             return GLib.SOURCE_CONTINUE
@@ -475,6 +509,10 @@ class GamepadManager:
 
         window.set_focus_visible(True)
 
+        # O Big Picture tem o próprio foco; a grade escondida não o recebe.
+        if self._big_picture() is not None:
+            return
+
         # A menu or dialog is already holding the focus for a reason
         if self._focus_scope() is not window:
             return
@@ -489,6 +527,22 @@ class GamepadManager:
 
         if self._focused_flowbox_child(library) is None:
             self._focus_first()
+
+    @staticmethod
+    def _big_picture() -> "Optional[PaginaBigPicture]":
+        """A página do Big Picture, se estiver à vista e sem diálogo por cima."""
+        # Com um diálogo aberto, o caminho normal (`_focus_scope`) é quem manda.
+        dialogo = getattr(shared.win, "get_visible_dialog", lambda: None)()
+        if dialogo is not None:
+            return None
+        pagina = getattr(shared.win, "pagina_big_picture", None)
+        return pagina if pagina is not None and pagina.visivel else None
+
+    @staticmethod
+    def _big_picture_ocupada() -> bool:
+        """A página está em fade ou animação, mesmo antes de ir à vista (escuro da entrada)."""
+        pagina = getattr(shared.win, "pagina_big_picture", None)
+        return pagina is not None and pagina.ocupada
 
     @staticmethod
     def _blocked() -> bool:
@@ -553,6 +607,7 @@ class GamepadManager:
         if direction != self._direction:
             self._direction = direction
             self._direction_since = now
+            self._ultimo_passo_us = now
             self._repeats = 0
             # The direction changed, so whatever was held across the resync is
             # over: either it was released (direction is None now) or it was
@@ -572,13 +627,60 @@ class GamepadManager:
         if self._direction_latched:
             return
 
+        if self._big_picture() is not None:
+            # A primeira repetição espera o atraso; as seguintes aceleram
+            # quanto mais tempo a direção fica pressionada.
+            if self._repeats == 0:
+                devido = now - self._direction_since >= REPEAT_DELAY_US
+            else:
+                intervalo = intervalo_de_repeticao_us(now - self._direction_since)
+                devido = now - self._ultimo_passo_us >= intervalo
+            if devido:
+                self._repeats += 1
+                self._ultimo_passo_us = now
+                self._move(direction)
+            return
+
         # First repeat waits out the delay, the rest come at a steady interval
         due = REPEAT_DELAY_US + REPEAT_INTERVAL_US * self._repeats
         if now - self._direction_since >= due:
             self._repeats += 1
             self._move(direction)
 
+    def _move_big_picture(
+        self, pagina: "PaginaBigPicture", direction: Gtk.DirectionType
+    ) -> None:
+        if pagina.ocupada:
+            return
+        if direction == Gtk.DirectionType.LEFT:
+            moveu = pagina.mover(-1)
+        elif direction == Gtk.DirectionType.RIGHT:
+            moveu = pagina.mover(1)
+        else:
+            return
+        if not moveu:
+            self._rumble(RUMBLE_EDGE)
+            return
+        agora = GLib.get_monotonic_time()
+        if agora - self._ultimo_toque_capa_us >= (RUMBLE_CAPA[2] + 60) * 1000:
+            self._ultimo_toque_capa_us = agora
+            self._rumble(RUMBLE_CAPA)
+
+    def _avisar_uso(self) -> None:
+        if self.ao_usar is not None:
+            try:
+                self.ao_usar()
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.exception("Falha ao avisar o uso do controle")
+
     def _move(self, direction: Gtk.DirectionType) -> None:
+        self._avisar_uso()
+        if (pagina := self._big_picture()) is not None:
+            self._move_big_picture(pagina, direction)
+            return
+        if self._big_picture_ocupada():
+            return  # a entrada ainda não chegou à vista: a grade não recebe
+
         window = self.window
         if window is None:
             return
@@ -864,6 +966,13 @@ class GamepadManager:
         # the tick that engages, and a face button acts on its first press
         # rather than being swallowed as a mere unlock.
         self._engaged = True
+        self._avisar_uso()
+
+        if (pagina := self._big_picture()) is not None:
+            self._botao_big_picture(pagina, pressed)
+            return
+        if self._big_picture_ocupada():
+            return
 
         if pressed & XINPUT_A:
             self._activate()
@@ -875,6 +984,17 @@ class GamepadManager:
             self._open_game_menu()
         elif pressed & XINPUT_BACK:
             shared.win.on_toggle_search_action()
+
+    def _botao_big_picture(self, pagina: "PaginaBigPicture", pressed: int) -> None:
+        if pagina.ocupada:
+            return
+        if pressed & XINPUT_A:
+            pagina.abrir_jogo()
+        elif pressed & XINPUT_B:
+            pagina.sair()
+        elif pressed & (XINPUT_LEFT_SHOULDER | XINPUT_RIGHT_SHOULDER):
+            delta = -10 if pressed & XINPUT_LEFT_SHOULDER else 10
+            self._rumble(RUMBLE_PULO if pagina.pular(delta) else RUMBLE_EDGE)
 
     def _activate(self) -> None:
         """Press whatever is focused, exactly as a click or Enter would.

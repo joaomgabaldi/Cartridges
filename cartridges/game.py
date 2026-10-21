@@ -399,7 +399,7 @@ class Game(Gtk.Box):
 
         shared.win.toast_queue.add(toast)
 
-    def launch(self) -> None:
+    def launch(self) -> bool:
         # avoid import cycles
         # pylint: disable-next=import-outside-toplevel
         from cartridges.saves import backup_de_saves
@@ -408,7 +408,7 @@ class Game(Gtk.Box):
         # metade e travaria os que a restauração precisa gravar.
         if backup_de_saves.restaurando(self):
             self.create_toast(_("Aguarde o fim da restauração dos saves de {}."))
-            return
+            return False
 
         self.last_played = int(time())
         self.save()
@@ -481,6 +481,7 @@ class Game(Gtk.Box):
 
         # The variable is the title of the game
         self.create_toast(_("{} iniciado"))
+        return True
 
     def remove_game(self) -> None:
         # Add "removed=True" to the game properties so it can be deleted on next init

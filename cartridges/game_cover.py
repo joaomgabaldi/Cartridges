@@ -81,6 +81,7 @@ class GameCover:
     _hover_active: bool = False
     _details_active: bool = False
     _visible_active: bool = False
+    _big_picture_active: bool = False
 
     # The details page draws the cover 1.4x larger than the grid does, so the
     # texture decoded for the grid comes out visibly soft there. This is the
@@ -91,6 +92,15 @@ class GameCover:
     # thumbnail in the library at once.
     _details_picture: Optional[Gtk.Picture] = None
     _details_texture: Optional[Gdk.Texture] = None
+
+    # A capa central do Big Picture é desenhada ~2x maior que a da grade; esta
+    # é a mesma imagem no tamanho dos detalhes, viva só enquanto ela é a
+    # central (`textura_grande` / `soltar_textura_grande`). Fora de
+    # `_details_texture` para não conflitar com a página de detalhes.
+    _textura_grande: Optional[Gdk.Texture] = None
+    # Decodificação falhou (arquivo ilegível): não tenta de novo a cada
+    # redesenho até a capa mudar (`new_cover`).
+    _textura_grande_falhou = False
 
     # O desfoque do fundo dos detalhes é computado sob demanda e, na primeira
     # vez, fora do thread principal (decodificar o master 600x900 custa dezenas
@@ -222,6 +232,8 @@ class GameCover:
         # rather than just dropped, because the details page may be open on
         # this very game — editing its cover shows the result immediately.
         self._details_texture = None
+        self._textura_grande = None
+        self._textura_grande_falhou = False
 
         if path:
             if path.suffix.lower() in ANIMATED_SUFFIXES:
@@ -432,6 +444,23 @@ class GameCover:
             )
         self.add_picture(picture)
 
+    def textura_grande(self) -> Optional[Gdk.Texture]:
+        """A textura no tamanho dos detalhes, só para capa estática (síncrono)."""
+        if (
+            self._textura_grande is None
+            and self.path
+            and not self._animated_path
+            and not self._textura_grande_falhou
+        ):
+            self._textura_grande = self._load_display_texture(
+                self.path, shared.details_size
+            )
+            self._textura_grande_falhou = self._textura_grande is None
+        return self._textura_grande
+
+    def soltar_textura_grande(self) -> None:
+        self._textura_grande = None
+
     def release_details_picture(self, picture: Gtk.Picture) -> None:
         """Stop driving the details cover and drop its texture.
 
@@ -487,7 +516,12 @@ class GameCover:
     @property
     def active(self) -> bool:
         """Whether the animation should currently be playing"""
-        return self._hover_active or self._details_active or self._visible_active
+        return (
+            self._hover_active
+            or self._details_active
+            or self._visible_active
+            or self._big_picture_active
+        )
 
     @property
     def animada(self) -> bool:
@@ -515,11 +549,17 @@ class GameCover:
         self._visible_active = playing
         self._reconcile_animation()
 
+    def set_big_picture_animation(self, playing: bool) -> None:
+        """Toca enquanto a capa é a central do Cover Flow do Big Picture."""
+        self._big_picture_active = playing
+        self._reconcile_animation()
+
     def desligar_animacao(self) -> None:
         """Desliga todos os motivos de uma vez. Para quem solta a capa de vez:
         o tocador a seguraria tocando sem ninguém ver por qualquer motivo
         esquecido ligado."""
         self._hover_active = self._details_active = self._visible_active = False
+        self._big_picture_active = False
         self._reconcile_animation()
 
     def _reconcile_animation(self) -> None:

@@ -33,6 +33,16 @@ template $CartridgesPreferences: Adw.PreferencesDialog {
         subtitle: _("Vibra ao mover a seleção, ao chegar ao fim da lista e ao iniciar um jogo");
       }
 
+      Adw.SwitchRow big_picture_ao_conectar_switch {
+        title: _("Abrir o Big Picture ao usar um controle");
+        subtitle: _("Abre o Big Picture ao iniciar o aplicativo com um controle conectado ou ao conectar um controle na biblioteca");
+      }
+
+      Adw.SwitchRow big_picture_som_switch {
+        title: _("Som ao trocar de capa");
+        subtitle: _("Toca um clique curto a cada capa no Big Picture");
+      }
+
       Adw.SpinRow process_grace_spin_row {
         title: _("Tempo de espera ao fechar o jogo");
         subtitle: _("Segundos de espera após o jogo fechar antes de encerrar a sessão, para que um reinício do jogo não divida a sessão");

@@ -28,6 +28,17 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.20" date="2026-10-20">
+      <description translate="no">
+        <ul>
+          <li>Novo modo Big Picture: navegue pela biblioteca em tela cheia, com as capas no estilo Cover Flow, pelo controle, teclado ou mouse.</li>
+          <li>Nas Preferências, o Big Picture pode abrir sozinho ao usar um controle.</li>
+          <li>Ao entrar e sair do Big Picture, a tela escurece suavemente e as capas passam em fila.</li>
+          <li>No Big Picture, cada troca de capa tem um clique e uma vibração; o som pode ser desligado nas Preferências.</li>
+          <li>Ao usar o controle, o ponteiro do mouse fica oculto até o mouse ser movido.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.10.19" date="2026-10-19">
       <description translate="no">
         <ul>

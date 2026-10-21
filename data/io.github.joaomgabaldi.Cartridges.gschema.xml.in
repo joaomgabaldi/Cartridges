@@ -89,6 +89,12 @@
     <key name="gamepad-rumble" type="b">
       <default>true</default>
     </key>
+    <key name="big-picture-ao-conectar" type="b">
+      <default>false</default>
+    </key>
+    <key name="big-picture-som" type="b">
+      <default>true</default>
+    </key>
     <!-- Send the main window to another monitor, maximized, while a game runs,
          instead of minimizing it. Off means today's behaviour, unchanged. -->
     <key name="session-move-window" type="b">

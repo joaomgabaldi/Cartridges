@@ -205,6 +205,11 @@ def _dono_oculto() -> Optional[int]:
     return _dono
 
 
+def dono_oculto() -> Optional[int]:
+    """O dono oculto compartilhado (para outras janelas que ficam fora da barra)."""
+    return _dono_oculto()
+
+
 def _amarrar_ao_dono(hwnd: int) -> None:
     """Dá um dono à janela: janela com dono não tem botão na barra de tarefas."""
     u = _api()
