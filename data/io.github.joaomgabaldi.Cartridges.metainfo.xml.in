@@ -28,6 +28,13 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.21" date="2026-10-21">
+      <description translate="no">
+        <ul>
+          <li>A opção de rastrear o processo do jogo agora aparece apenas nos jogos em que ela é necessária.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.10.20" date="2026-10-20">
       <description translate="no">
         <ul>

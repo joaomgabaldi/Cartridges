@@ -66,6 +66,7 @@ from cartridges.utils.session_wallpaper import (
     salvar_escolha,
 )
 from cartridges.utils.na_tela import entregar_na_tela
+from cartridges.utils.process_monitor import install_dir_from_command
 from cartridges.utils.name_cleaner import clean_for_search, clean_game_name
 from cartridges.utils.run_executable import aumid_from_command
 from cartridges.utils.save_cover import composite_cover, convert_cover, save_cover
@@ -493,16 +494,28 @@ class DetailsDialog(Adw.Dialog):
         """
         return bool(aumid_from_command(self.executable.get_text()))
 
-    def update_process_rows(self, *_args: Any) -> None:
-        """Match the process-tracking rows to the command currently entered.
+    def acompanha_sem_nome(self) -> bool:
+        """O jogo já é acompanhado sem o nome do executável?
 
-        A packaged game tracks its playtime from the package identity, so the
-        manual process-watching rows have nothing to offer it and are hidden.
+        Pela identidade do pacote (Store / Game Pass) ou pela pasta de
+        instalação que o comando revela. Nos dois casos o rastreio pelo nome
+        não muda nada: a sessão já é automática. Só o jogo lançado por URI de
+        loja (Steam, Epic, Ubisoft), ou numa pasta que o app não reconhece,
+        cairia na sessão manual — e é só para ele que o switch aparece.
+
+        Lê o disco (a subida até a raiz do jogo) a cada tecla, a mesma troca
+        aceita em `update_open_folder_button`.
         """
-        packaged = self.is_packaged()
-        self.track_process_switch.set_visible(not packaged)
+        return self.is_packaged() or bool(
+            install_dir_from_command(self.executable.get_text())
+        )
+
+    def update_process_rows(self, *_args: Any) -> None:
+        """Match the process-tracking rows to the command currently entered."""
+        oculto = self.acompanha_sem_nome()
+        self.track_process_switch.set_visible(not oculto)
         self.process_executable.set_visible(
-            self.track_process_switch.get_active() and not packaged
+            self.track_process_switch.get_active() and not oculto
         )
 
     def update_open_folder_button(self, *_args: Any) -> None:
@@ -669,11 +682,11 @@ class DetailsDialog(Adw.Dialog):
             create_dialog(self, falhou, _("O AppID da Steam deve conter apenas números."))
             return
 
-        # Forced off for a packaged game: its rows are hidden, so an old value
-        # left over from before must not trip the validation below over a switch
-        # the user can no longer see.
+        # Forced off whenever the rows are hidden: an old value left over from
+        # before must not trip the validation below over a switch the user can
+        # no longer see.
         track_process = (
-            self.track_process_switch.get_active() and not self.is_packaged()
+            self.track_process_switch.get_active() and not self.acompanha_sem_nome()
         )
         final_process_executable = self.process_executable.get_text().strip()
 

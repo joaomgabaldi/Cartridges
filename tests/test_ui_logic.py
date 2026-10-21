@@ -3411,3 +3411,87 @@ def test_adicionar_jogo_recusado_nao_cria_o_jogo(real_window, store, app_dirs, m
     assert vistos == [("Não foi possível adicionar o jogo", aviso)]
     assert dialogo.game is None
     assert [g for g in store if g.name == "Jogo novo"] == []
+
+
+def _pasta_de_jogo(tmp_path):
+    """Pasta que o app reconhece como a de um jogo só: tem desinstalador."""
+    pasta = tmp_path / "Jogo"
+    pasta.mkdir()
+    (pasta / "unins000.exe").write_bytes(b"")
+    (pasta / "jogo.exe").write_bytes(b"")
+    return f'"{pasta / "jogo.exe"}"'
+
+
+def test_rastrear_processo_some_quando_a_pasta_do_jogo_e_reconhecida(real_window, tmp_path):
+    """Com a pasta reconhecida o tempo já é contado por ela: ligar o rastreio
+    pelo nome não mudaria nada, então a opção não aparece."""
+    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+
+    dialogo = DetailsDialog()
+    dialogo.executable.set_text(_pasta_de_jogo(tmp_path))
+    dialogo.track_process_switch.set_active(True)
+
+    assert not dialogo.track_process_switch.get_visible()
+    assert not dialogo.process_executable.get_visible()
+
+
+def test_rastrear_processo_aparece_para_jogo_lancado_pela_loja(real_window):
+    """Um steam:// não diz onde o jogo mora: sem o nome do executável, a sessão
+    seria manual."""
+    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+
+    dialogo = DetailsDialog()
+    dialogo.executable.set_text("steam://rungameid/620")
+
+    assert dialogo.track_process_switch.get_visible()
+
+
+def test_rastrear_processo_escondido_grava_desligado(real_window, store, app_dirs, tmp_path):
+    """O switch escondido não trava o Aplicar nem deixa o rastreio ligado."""
+    from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
+
+    class _SemSgdb:
+        signals = frozenset()
+
+        def reset_cancellable(self):
+            pass
+
+        def process_game(self, _game, _data, _callback):
+            pass
+
+    store.managers[SgdbManager] = _SemSgdb()
+    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+
+    dialogo = DetailsDialog()
+    dialogo.name.set_text("Jogo com pasta")
+    dialogo.executable.set_text(_pasta_de_jogo(tmp_path))
+    dialogo.track_process_switch.set_active(True)
+    dialogo.process_executable.set_text("")
+    dialogo.apply_preferences()
+
+    (jogo,) = [g for g in store if g.name == "Jogo com pasta"]
+    assert jogo.track_process is False
+
+
+def test_rastrear_processo_ja_abre_escondido_para_jogo_com_pasta(real_window, tmp_path):
+    """Ao abrir um jogo existente não há sinal "changed": a visibilidade inicial
+    vem da chamada explícita depois de preencher os campos."""
+    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
+    from cartridges.game import Game  # noqa: PLC0415
+
+    jogo = Game(
+        {
+            "game_id": "imported_1",
+            "name": "Com pasta",
+            "source": "imported",
+            "executable": _pasta_de_jogo(tmp_path),
+            "track_process": True,
+            "process_executable": "jogo.exe",
+            "hidden": False,
+            "added": 0,
+        }
+    )
+    dialogo = DetailsDialog(jogo)
+
+    assert not dialogo.track_process_switch.get_visible()
+    assert not dialogo.process_executable.get_visible()
