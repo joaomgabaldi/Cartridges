@@ -70,7 +70,9 @@ jobs:
         run: |
           versao=$(sed -n "s/^  version: '\(.*\)',\$/\1/p" meson.build)
           tag="v$versao"
-          C:/msys64/ucrt64/bin/python.exe build-aux/windows/notas_release.py data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in "$versao" > notas.md
+          # Última versão final publicada: as notas juntam as que vieram depois dela.
+          anterior=$(gh release list --exclude-pre-releases --exclude-drafts -L 1 --json tagName --jq '.[0].tagName // ""')
+          C:/msys64/ucrt64/bin/python.exe build-aux/windows/notas_release.py data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in "$versao" "${anterior#v}" > notas.md
           cp "_dist/Cartridges Windows.exe" Cartridges.Windows.exe
           if pre=$(gh release view "$tag" --json isPrerelease --jq .isPrerelease 2>/dev/null); then
             if [ "$pre" != "true" ]; then
