@@ -80,6 +80,10 @@
     <key name="cover-autoplay" type="b">
       <default>false</default>
     </key>
+    <!-- O assistente de primeira abertura já foi concluído (ou pulado) e não volta a aparecer. -->
+    <key name="assistente-concluido" type="b">
+      <default>false</default>
+    </key>
     <key name="library-rows" type="u">
       <default>0</default>
     </key>

@@ -30,13 +30,8 @@ from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
 from cartridges import big_picture, conquista_aviso, shared
 from cartridges.calibracao_janela import AssistenteDeCalibracao
-from cartridges.conquistas import fontes
-from cartridges.conquistas.ea import conta as ea_conta
-from cartridges.conquistas.ea import janela as ea_janela
-from cartridges.conquistas.epic import conta as epic_conta
-from cartridges.conquistas.epic import janela as epic_janela
-from cartridges.conquistas.xbox import conta, login
 from cartridges.errors.friendly_error import FriendlyError
+from cartridges.grupo_das_contas import GrupoDasContas  # registra o GType antes do template
 from cartridges.metadata_refresh import get_metadata_refresh
 from cartridges.saves import backup_de_saves, pasta
 from cartridges.store.managers.sgdb_manager import SgdbManager
@@ -137,13 +132,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     conquistas_pulso_estilo_row: Adw.ComboRow = Gtk.Template.Child()
     conquistas_pulso_testar_row: Adw.ButtonRow = Gtk.Template.Child()
     conquistas_exemplo_row: Adw.ButtonRow = Gtk.Template.Child()
-    conquistas_conta_row: Adw.ActionRow = Gtk.Template.Child()
-    conquistas_conta_botao: Gtk.Button = Gtk.Template.Child()
-    conquistas_contas_group: Adw.PreferencesGroup = Gtk.Template.Child()
-    conquistas_epic_row: Adw.ActionRow = Gtk.Template.Child()
-    conquistas_epic_botao: Gtk.Button = Gtk.Template.Child()
-    conquistas_ea_row: Adw.ActionRow = Gtk.Template.Child()
-    conquistas_ea_botao: Gtk.Button = Gtk.Template.Child()
+    grupo_das_contas: GrupoDasContas = Gtk.Template.Child()
 
     backup_group = Gtk.Template.Child()
     export_backup_button_row = Gtk.Template.Child()
@@ -319,28 +308,8 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         )
         self.conquistas_exemplo_row.connect("activated", self._mostrar_aviso_de_exemplo)
 
-        # Conta Microsoft: o ouvinte da conta e o login pendente morrem com o
-        # diálogo.
-        self._pedido_de_login = None
-        self.conquistas_conta_botao.connect("clicked", self._on_conta_clicked)
-        self._remover_ouvinte_da_conta = conta.ao_mudar(self._atualizar_conta)
-        self.connect("closed", self._ao_fechar_conta)
-        self._atualizar_conta()
-
-        # Conta Epic: a janela de login e o ouvinte da conta morrem com o
-        # diálogo.
-        self._janela_epic = None
-        self.conquistas_epic_botao.connect("clicked", self._on_conta_epic_clicked)
-        self._remover_ouvinte_da_epic = epic_conta.ao_mudar(self._atualizar_conta_epic)
-        self.connect("closed", self._ao_fechar_conta_epic)
-        self._atualizar_conta_epic()
-
-        # Conta EA: igual à Epic.
-        self._janela_ea = None
-        self.conquistas_ea_botao.connect("clicked", self._on_conta_ea_clicked)
-        self._remover_ouvinte_da_ea = ea_conta.ao_mudar(self._atualizar_conta_ea)
-        self.connect("closed", self._ao_fechar_conta_ea)
-        self._atualizar_conta_ea()
+        # As contas das lojas ficam no GrupoDasContas; ele morre junto com o diálogo.
+        self.connect("closed", lambda *_: self.grupo_das_contas.fechar())
 
         def update_sgdb(*_args: Any) -> None:
             counter = 0
@@ -567,64 +536,6 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         conquista_aviso.fechar()
         conquista_aviso.mostrar(conquista_aviso.Aviso.exemplo())
 
-    def _atualizar_conta(self) -> None:
-        if self._pedido_de_login is not None:
-            subtitulo, rotulo = _("Aguardando o login no navegador…"), _("Cancelar")
-        elif conta.conectada():
-            subtitulo, rotulo = conta.gamertag() or _("Conta Microsoft"), _("Sair")
-        else:
-            subtitulo, rotulo = _("Não conectada"), _("Entrar")
-        self.conquistas_conta_row.set_subtitle(subtitulo)
-        self.conquistas_conta_botao.set_label(rotulo)
-
-    def _on_conta_clicked(self, *_args: Any) -> None:
-        if self._pedido_de_login is not None:
-            self._pedido_de_login.cancelar()
-            return
-        if conta.conectada():
-            conta.sair()
-            self._atualizar_conta()
-            return
-        try:
-            self._pedido_de_login = login.entrar(self._ao_entrar)
-        except Exception as erro:  # pylint: disable=broad-exception-caught
-            # Porta local bloqueada, limite de handles, falha ao criar a thread:
-            # o handler de GTK não levanta e o usuário vê o aviso.
-            logging.warning("Falha ao iniciar o login da conta Microsoft: %s", type(erro).__name__)
-            self._ao_entrar(login.Resultado.FALHOU)
-            return
-        self._atualizar_conta()
-
-    def _ao_entrar(self, resultado: "login.Resultado") -> None:
-        self._pedido_de_login = None
-        self._atualizar_conta()
-        # Cancelar durante a troca de código pode deixar a conta conectada: o
-        # que vale é o estado da conta, não o resultado que chegou.
-        if resultado is login.Resultado.CANCELADO and conta.conectada():
-            resultado = login.Resultado.OK
-        textos = {
-            login.Resultado.SEM_PERFIL_XBOX: _(
-                "Esta conta Microsoft não tem um perfil Xbox."
-            ),
-            login.Resultado.CONTA_INFANTIL: _(
-                "Esta conta precisa de permissão de um responsável para usar o Xbox."
-            ),
-            login.Resultado.FALHOU: _("Não foi possível entrar na conta Microsoft."),
-            login.Resultado.SEM_NAVEGADOR: _(
-                "Não foi possível abrir o navegador. Verifique o navegador padrão do Windows."
-            ),
-            login.Resultado.PRAZO_ESGOTADO: _(
-                "O login da conta Microsoft expirou. Tente novamente."
-            ),
-        }
-        if resultado in textos:
-            toast = Adw.Toast.new(textos[resultado])
-            toast.set_use_markup(False)
-            self.add_toast(toast)
-            return
-        if resultado is login.Resultado.OK:
-            self._varrer_jogos_do_xbox()
-
     def buscar_atualizacoes(self, *_args: Any) -> None:
         """Pergunta ao GitHub se saiu versão nova, sem esperar a próxima abertura."""
         app = shared.win.get_application() if shared.win is not None else None
@@ -647,123 +558,6 @@ class CartridgesPreferences(Adw.PreferencesDialog):
                 shared.win.toast_queue.add(Adw.Toast.new(texto))
 
         updater.buscar_agora(responder)
-
-    def _varrer_jogos_do_xbox(self) -> None:
-        """Lê na hora as conquistas dos jogos do Xbox, sem esperar a próxima abertura."""
-        self._varrer_jogos_da_loja(fontes.eh_do_xbox, "Xbox")
-
-    @staticmethod
-    def _varrer_jogos_da_loja(filtro: Any, loja: str) -> None:
-        """Depois do login: lê as conquistas dos jogos da loja, sem aviso de novas."""
-        try:
-            app = shared.win.get_application() if shared.win is not None else None
-            varredura = getattr(app, "varredura_conquistas", None)
-            if varredura is not None:
-                # O filtro lê o disco do jogo: quem o aplica é a thread da varredura.
-                varredura.varrer_jogos(list(shared.store), filtro=filtro)
-        except Exception:  # pylint: disable=broad-exception-caught
-            logging.warning("Falha ao ler as conquistas da conta %s depois do login", loja, exc_info=True)
-
-    def _ao_fechar_conta(self, *_args: Any) -> None:
-        login.cancelar_pendente()
-        self._remover_ouvinte_da_conta()
-
-    def _atualizar_conta_epic(self) -> None:
-        if epic_conta.conectada():
-            subtitulo, rotulo = epic_conta.nome() or _("Conta Epic"), _("Sair")
-        else:
-            subtitulo, rotulo = _("Não conectada"), _("Entrar")
-        self.conquistas_epic_row.set_subtitle(subtitulo)
-        self.conquistas_epic_botao.set_label(rotulo)
-
-    def _on_conta_epic_clicked(self, *_args: Any) -> None:
-        if epic_conta.conectada():
-            try:
-                epic_conta.sair()
-            except Exception as erro:  # pylint: disable=broad-exception-caught
-                logging.warning("Falha ao sair da conta Epic: %s", type(erro).__name__)
-                self.add_toast(Adw.Toast.new(_("Não foi possível sair da conta Epic.")))
-            self._atualizar_conta_epic()
-            return
-        if self._janela_epic is not None:
-            return
-        try:
-            janela = epic_janela.JanelaDeLogin(self._varrer_jogos_da_epic)
-            janela.connect("closed", self._ao_fechar_janela_epic)
-            self._janela_epic = janela
-            janela.mostrar(self)
-        except Exception as erro:  # pylint: disable=broad-exception-caught
-            # O handler de GTK não levanta. Sem soltar a janela, "Entrar" ficaria morto.
-            self._janela_epic = None
-            logging.warning(
-                "Falha ao abrir o login da conta Epic: %s", type(erro).__name__
-            )
-            self.add_toast(Adw.Toast.new(_("Não foi possível abrir a janela de login da Epic.")))
-
-    def _ao_fechar_janela_epic(self, *_args: Any) -> None:
-        self._janela_epic = None
-        self._atualizar_conta_epic()
-
-    def _varrer_jogos_da_epic(self) -> None:
-        """Lê na hora as conquistas dos jogos da Epic, sem aviso de novas."""
-        self._varrer_jogos_da_loja(fontes.eh_da_epic, "Epic")
-
-    def _ao_fechar_conta_epic(self, *_args: Any) -> None:
-        janela, self._janela_epic = self._janela_epic, None
-        if janela is not None:
-            try:
-                janela.force_close()
-            except Exception:  # pylint: disable=broad-exception-caught
-                logging.warning(
-                    "Falha ao fechar a janela de login da Epic", exc_info=True
-                )
-        self._remover_ouvinte_da_epic()
-
-    def _atualizar_conta_ea(self) -> None:
-        if ea_conta.conectada():
-            subtitulo, rotulo = ea_conta.nome() or _("Conta EA"), _("Sair")
-        else:
-            subtitulo, rotulo = _("Não conectada"), _("Entrar")
-        self.conquistas_ea_row.set_subtitle(subtitulo)
-        self.conquistas_ea_botao.set_label(rotulo)
-
-    def _on_conta_ea_clicked(self, *_args: Any) -> None:
-        if ea_conta.conectada():
-            try:
-                ea_conta.sair()
-            except Exception as erro:  # pylint: disable=broad-exception-caught
-                logging.warning("Falha ao sair da conta EA: %s", type(erro).__name__)
-                self.add_toast(Adw.Toast.new(_("Não foi possível sair da conta EA.")))
-            self._atualizar_conta_ea()
-            return
-        if self._janela_ea is not None:
-            return
-        try:
-            janela = ea_janela.JanelaDeLogin(self._varrer_jogos_da_ea)
-            janela.connect("closed", self._ao_fechar_janela_ea)
-            self._janela_ea = janela
-            janela.mostrar(self)
-        except Exception as erro:  # pylint: disable=broad-exception-caught
-            self._janela_ea = None
-            logging.warning("Falha ao abrir o login da conta EA: %s", type(erro).__name__)
-            self.add_toast(Adw.Toast.new(_("Não foi possível abrir a janela de login da EA.")))
-
-    def _ao_fechar_janela_ea(self, *_args: Any) -> None:
-        self._janela_ea = None
-        self._atualizar_conta_ea()
-
-    def _varrer_jogos_da_ea(self) -> None:
-        """Lê na hora as conquistas dos jogos da EA, sem aviso de novas."""
-        self._varrer_jogos_da_loja(fontes.eh_da_ea, "EA")
-
-    def _ao_fechar_conta_ea(self, *_args: Any) -> None:
-        janela, self._janela_ea = self._janela_ea, None
-        if janela is not None:
-            try:
-                janela.force_close()
-            except Exception:  # pylint: disable=broad-exception-caught
-                logging.warning("Falha ao fechar a janela de login da EA", exc_info=True)
-        self._remover_ouvinte_da_ea()
 
     def reler_do_schema(self) -> None:
         """Preenche as linhas que não usam ``bind``. Chamado no fim do
@@ -877,24 +671,15 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         O principal fica fora da lista: é onde o jogo roda, e a janela
         maximizada ali ficaria na frente dele. Sem outro monitor, as duas
         opções que dependem de um ficam bloqueadas e desligadas
-        (:meth:`block_session_monitor_options`).
-
-        O que está guardado é o caminho do monitor (:attr:`Monitor.key`), e não
-        a posição na lista nem o nome ``DISPLAYn``, que o Windows troca entre as
-        telas: desligar um monitor, ou o Windows renomear as telas, não faz a
-        escolha passar a apontar para outro. Uma escolha antiga, gravada pelo
-        nome, é regravada com o caminho ao abrir esta tela. Em compensação, abrir esta tela com o monitor
-        escolhido desligado (ou com o principal guardado, de antes de ele sair
-        da lista) troca a escolha pelo primeiro da lista e grava: é a única
-        forma de a lista mostrar o que vai acontecer de verdade.
+        (:meth:`block_session_monitor_options`). A escolha e a gravação são de
+        :func:`window_geometry.preencher_escolha_de_monitor`, que o assistente
+        de primeira abertura também usa.
         """
         self.session_identify_button_row.connect(
             "activated", lambda *_: window_geometry.identify_monitors()
         )
 
-        self.session_monitors = [
-            monitor for monitor in window_geometry.monitors() if not monitor.primary
-        ]
+        self.session_monitors = window_geometry.monitores_da_sessao()
         if not self.session_monitors:
             self.block_session_monitor_options()
             return
@@ -909,33 +694,9 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             GObject.BindingFlags.SYNC_CREATE,
         )
 
-        # Só o número, porque só o número tem resposta: resolução e posição
-        # empatam entre telas iguais, e é o botão "Identificar monitores" que
-        # diz qual é qual — na própria tela, que é onde se olha.
-        self.session_monitor_row.set_model(
-            Gtk.StringList.new(
-                [
-                    _("Monitor {}").format(monitor.number)
-                    for monitor in self.session_monitors
-                ]
-            )
+        window_geometry.preencher_escolha_de_monitor(
+            self.session_monitor_row, self.session_monitors
         )
-
-        stored = shared.schema.get_string("session-monitor")
-        selected = next(
-            (
-                index
-                for index, monitor in enumerate(self.session_monitors)
-                if monitor.is_stored(stored)
-            ),
-            0,
-        )
-        self.session_monitor_row.set_selected(selected)
-        self.session_monitor_row.connect("notify::selected", self.set_session_monitor)
-        # Gravado à mão porque `set_selected` acima só avisa quando muda de
-        # valor, e o caso que precisa gravar — nada escolhido ainda, palpite
-        # caindo no índice 0 — é justamente um que não muda nada.
-        self.set_session_monitor()
 
     def block_session_monitor_options(self) -> None:
         """Sem monitor além do principal, as duas opções não têm onde agir.
@@ -951,13 +712,6 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.session_wallpaper_switch.set_subtitle(subtitle)
         self.session_monitor_group.set_sensitive(False)
         self.session_wallpaper_switch.set_sensitive(False)
-
-    def set_session_monitor(self, *_args: Any) -> None:
-        selected = self.session_monitor_row.get_selected()
-        if selected < len(self.session_monitors):
-            shared.schema.set_string(
-                "session-monitor", self.session_monitors[selected].key
-            )
 
     # region Fitas de LED
 

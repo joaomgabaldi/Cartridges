@@ -125,15 +125,53 @@ class Aviso:
         return cls(rotulo, info.titulo, info.descricao, info.icone)
 
     @classmethod
-    def exemplo(cls) -> "Aviso":
+    def exemplo(cls, porcentagem: float = 4.1) -> "Aviso":
         return cls(
             _("Conquista desbloqueada")
             + " · "
-            + _("★ Rara, {}").format(progresso.porcentagem_em_texto(4.1)),
+            + _("★ Rara, {}").format(progresso.porcentagem_em_texto(porcentagem)),
             _("Conquista de exemplo"),
             _("Assim o aviso aparece durante o jogo."),
             "",
         )
+
+
+def montar_cartao(aviso: Aviso, icone_recurso: str = "") -> tuple[Gtk.Box, Gtk.Image]:
+    """O cartão do aviso: ícone, rótulo, título e descrição.
+
+    Serve à janela do aviso e ao assistente, que mostra o mesmo cartão. O
+    ícone do ``aviso`` chega depois (``icones.carregar``, a cargo de quem
+    chama, que recebe a imagem); ``icone_recurso`` é um ícone já embutido no
+    app, usado no lugar dele. Sem nenhum dos dois, uma estrela.
+    """
+    cartao = Gtk.Box(spacing=12, css_classes=["conquista-aviso-cartao"])
+    imagem = Gtk.Image(
+        pixel_size=48, css_classes=["conquistas-icone"], overflow=Gtk.Overflow.HIDDEN
+    )
+    if icone_recurso:
+        imagem.set_from_resource(icone_recurso)
+    elif not aviso.icone:
+        imagem.set_from_icon_name("starred-symbolic")
+    cartao.append(imagem)
+
+    textos = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, valign=Gtk.Align.CENTER)
+    for texto, classes in (
+        (aviso.rotulo, ["caption", "conquista-aviso-rotulo"]),
+        (aviso.titulo, ["heading"]),
+        (aviso.descricao, ["caption", "dim-label"]),
+    ):
+        if texto:
+            rotulo = Gtk.Label(
+                label=texto,
+                xalign=0,
+                wrap=True,
+                max_width_chars=36,
+                use_markup=False,
+                css_classes=classes,
+            )
+            textos.append(rotulo)
+    cartao.append(textos)
+    return cartao, imagem
 
 
 class _JanelaDoAviso(Gtk.Window):
@@ -146,33 +184,9 @@ class _JanelaDoAviso(Gtk.Window):
         self._destruida = False
         self._animacao: Optional[Adw.TimedAnimation] = None
 
-        cartao = Gtk.Box(spacing=12, css_classes=["conquista-aviso-cartao"])
-        self._imagem = Gtk.Image(
-            pixel_size=48, css_classes=["conquistas-icone"], overflow=Gtk.Overflow.HIDDEN
-        )
+        cartao, self._imagem = montar_cartao(aviso)
         if aviso.icone:
             icones.carregar(aviso.icone, self._icone_chegou)
-        else:
-            self._imagem.set_from_icon_name("starred-symbolic")
-        cartao.append(self._imagem)
-
-        textos = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, valign=Gtk.Align.CENTER)
-        for texto, classes in (
-            (aviso.rotulo, ["caption", "conquista-aviso-rotulo"]),
-            (aviso.titulo, ["heading"]),
-            (aviso.descricao, ["caption", "dim-label"]),
-        ):
-            if texto:
-                rotulo = Gtk.Label(
-                    label=texto,
-                    xalign=0,
-                    wrap=True,
-                    max_width_chars=36,
-                    use_markup=False,
-                    css_classes=classes,
-                )
-                textos.append(rotulo)
-        cartao.append(textos)
         self.cartao = cartao
         self.set_child(cartao)
 

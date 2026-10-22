@@ -28,6 +28,13 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.22" date="2026-10-22">
+      <description translate="no">
+        <ul>
+          <li>Na primeira abertura, um assistente ajuda a configurar o aplicativo: a pasta dos jogos, as capas, as contas das lojas e a iluminação inteligente.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.10.21" date="2026-10-21">
       <description translate="no">
         <ul>

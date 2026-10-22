@@ -339,6 +339,56 @@ def has_secondary_monitor() -> bool:
     return any(not monitor.primary for monitor in monitors())
 
 
+def monitores_da_sessao() -> list[Monitor]:
+    """Os monitores que a sessão pode usar: todos menos o principal.
+
+    O principal fica fora: é onde o jogo roda, e a janela maximizada ali
+    ficaria na frente dele.
+    """
+    return [monitor for monitor in monitors() if not monitor.primary]
+
+
+def preencher_escolha_de_monitor(row: Gtk.Widget, monitores: list[Monitor]) -> None:
+    """Enche a linha ``row`` (um ``Adw.ComboRow``) com ``monitores`` e grava a escolha.
+
+    O que está guardado é o caminho do monitor (:attr:`Monitor.key`), e não a
+    posição na lista nem o nome ``DISPLAYn``, que o Windows troca entre as
+    telas: desligar um monitor, ou o Windows renomear as telas, não faz a
+    escolha passar a apontar para outro. Uma escolha antiga, gravada pelo
+    nome, é regravada com o caminho. Em compensação, se o monitor escolhido
+    estiver desligado (ou for o principal, guardado de antes de ele sair da
+    lista), a escolha vira o primeiro da lista e é gravada: é a única forma de
+    a lista mostrar o que vai acontecer de verdade.
+
+    ``row`` é anotada como ``Gtk.Widget`` porque este módulo só importa ``Gtk``.
+    """
+    from cartridges import shared  # noqa: PLC0415
+
+    # Só o número, porque só o número tem resposta: resolução e posição
+    # empatam entre telas iguais, e é o botão "Identificar monitores" que
+    # diz qual é qual — na própria tela, que é onde se olha.
+    row.set_model(
+        Gtk.StringList.new([_("Monitor {}").format(m.number) for m in monitores])
+    )
+
+    stored = shared.schema.get_string("session-monitor")
+    selected = next(
+        (index for index, m in enumerate(monitores) if m.is_stored(stored)), 0
+    )
+    row.set_selected(selected)
+
+    def gravar(*_args: Any) -> None:
+        escolhido = row.get_selected()
+        if escolhido < len(monitores):
+            shared.schema.set_string("session-monitor", monitores[escolhido].key)
+
+    row.connect("notify::selected", gravar)
+    # Gravado à mão porque `set_selected` acima só avisa quando muda de
+    # valor, e o caso que precisa gravar — nada escolhido ainda, palpite
+    # caindo no índice 0 — é justamente um que não muda nada.
+    gravar()
+
+
 def identify_monitors(seconds: int = 3) -> None:
     """Pisca o número de cada monitor sobre ele, como as configurações do Windows.
 

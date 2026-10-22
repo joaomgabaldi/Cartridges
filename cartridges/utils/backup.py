@@ -79,7 +79,9 @@ _CHAVES_DE_SESSAO = frozenset({"session-wallpaper-saved", "fita-estado-anterior"
 # Escolhas desta máquina, que um backup não leva nem traz: a pasta dos saves
 # fica onde está (a restauração só a zera, em `aplicar_pendente`, quando o
 # backup traz saves, que então ficam na pasta padrão).
-_CHAVES_DESTA_MAQUINA = frozenset({_CHAVE_DA_PASTA_DOS_SAVES})
+# A marca do assistente de primeira abertura também: um backup antigo, sem ela,
+# a zeraria na restauração e o assistente reapareceria numa biblioteca vazia.
+_CHAVES_DESTA_MAQUINA = frozenset({_CHAVE_DA_PASTA_DOS_SAVES, "assistente-concluido"})
 
 # Do schema de estado, só a ordenação é escolha de alguém. Tamanho e posição da
 # janela, o balde do limitador da Steam e a última novidade vista são da máquina.
@@ -472,7 +474,8 @@ def _extrair(
 
 def agendar(origem: Path) -> None:
     """Copia ``origem`` para a pasta do app. A troca acontece na próxima
-    abertura (`aplicar_pendente`); quem chama reinicia o app."""
+    abertura (`aplicar_pendente`); Preferências reinicia o app e o assistente de
+    primeira abertura segue direto para a restauração."""
     destino = shared.app_dir / _AGENDADO
     temporario = destino.with_name(destino.name + ".tmp")
     try:

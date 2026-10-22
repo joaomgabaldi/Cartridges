@@ -1,0 +1,311 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $JanelaDoAssistente: Adw.ApplicationWindow {
+  title: "Cartridges";
+  default-width: 640;
+  default-height: 640;
+  resizable: false;
+
+  content: Adw.ToastOverlay toasts {
+    Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {}
+
+      // O rodapé fica no conteúdo, e não em [bottom]: o AdwToolbarView trata as
+      // barras de cima e de baixo como alça de arrastar a janela, e arrastar
+      // sobre os botões moveria a janela.
+      content: Box {
+        orientation: vertical;
+
+        Adw.Carousel carrossel {
+          interactive: false;
+          allow-scroll-wheel: false;
+          vexpand: true;
+
+          Adw.StatusPage pagina_boas_vindas {
+            hexpand: true;
+            icon-name: "io.github.joaomgabaldi.Cartridges";
+            title: _("Boas-vindas ao Cartridges");
+            description: _("Reúna os seus jogos em uma única biblioteca, com capas, tempo de jogo e conquistas. Configure o essencial em poucos passos.");
+
+            child: Box {
+              orientation: vertical;
+              spacing: 12;
+              halign: center;
+
+              Button comecar_botao {
+                label: _("Começar");
+                halign: center;
+
+                styles [
+                  "suggested-action",
+                  "pill",
+                ]
+              }
+
+              Button restaurar_botao {
+                label: _("Restaurar um backup");
+                halign: center;
+
+                styles [
+                  "pill",
+                ]
+              }
+
+              Button pular_configuracao_botao {
+                label: _("Pular configuração");
+                halign: center;
+
+                styles [
+                  "flat",
+                ]
+              }
+            };
+          }
+
+          Adw.StatusPage pagina_jogos {
+            hexpand: true;
+            icon-name: "folder-symbolic";
+            title: _("Seus jogos");
+            description: _("O Cartridges adiciona à biblioteca os jogos cujos atalhos estão em uma pasta. Escolha a pasta onde estão, ou onde ficarão, os atalhos dos seus jogos. Novos atalhos colocados nela aparecem na biblioteca sempre que o aplicativo é aberto.");
+
+            child: Adw.Clamp {
+              maximum-size: 440;
+              tightening-threshold: 440;
+              margin-start: 24;
+              margin-end: 24;
+
+              ListBox {
+                selection-mode: none;
+
+                styles [
+                  "boxed-list",
+                ]
+
+                Adw.ActionRow pasta_row {
+                  title: _("Pasta");
+                  subtitle: _("Nenhuma pasta selecionada");
+
+                  [suffix]
+                  Button escolher_pasta_botao {
+                    label: _("Escolher");
+                    valign: center;
+                  }
+                }
+              }
+            };
+          }
+
+          Adw.StatusPage pagina_capas {
+            hexpand: true;
+            title: _("Capas e logos");
+            description: _("O SteamGridDB fornece capas e logos para os seus jogos. Para usá-lo, informe uma chave da API.");
+
+            child: Adw.Clamp {
+              maximum-size: 440;
+              tightening-threshold: 440;
+              margin-start: 24;
+              margin-end: 24;
+
+              Box {
+                orientation: vertical;
+                spacing: 12;
+
+                // A animação da capa ocupa o lugar do ícone da página.
+                $PalcoDasCapas palco_das_capas {
+                  halign: center;
+                }
+
+                Adw.PreferencesGroup chave_sgdb_grupo {
+                  Adw.EntryRow chave_sgdb_row {
+                    title: _("Chave da API");
+                  }
+
+                  Adw.SwitchRow capas_animadas_switch {
+                    title: _("Capas animadas");
+                    visible: false;
+                  }
+                }
+              }
+            };
+          }
+
+          Adw.StatusPage pagina_conquistas {
+            hexpand: true;
+            title: _("Conquistas");
+            description: _("Entre com as contas das lojas para acompanhar as conquistas dos seus jogos.");
+
+            // Compacta: com as contas e a chave da Steam, a página não cabe em 640 px.
+            styles [
+              "compact",
+            ]
+
+            child: Adw.Clamp {
+              maximum-size: 440;
+              tightening-threshold: 440;
+              margin-start: 24;
+              margin-end: 24;
+
+              Box {
+                orientation: vertical;
+                spacing: 12;
+
+                // O cartão do aviso de conquista, no lugar do ícone da página.
+                Box lugar_do_cartao {
+                  halign: center;
+                }
+
+                $GrupoDasContas grupo_das_contas {}
+
+                Adw.PreferencesGroup chave_steam_grupo {
+                  title: _("Steam Web API");
+
+                  Adw.EntryRow chave_steam_row {
+                    title: _("Chave da API");
+                  }
+                }
+              }
+            };
+          }
+
+          Adw.StatusPage pagina_iluminacao {
+            hexpand: true;
+            icon-name: "display-brightness-symbolic";
+            title: _("Iluminação inteligente");
+            description: _("O Cartridges pode mudar a cor dos seus dispositivos de iluminação compatíveis com a Tuya de acordo com o jogo em execução.");
+
+            child: Button configurar_iluminacao_botao {
+              label: _("Configurar");
+              halign: center;
+
+              styles [
+                "pill",
+              ]
+            };
+          }
+
+          Adw.StatusPage pagina_controle {
+            hexpand: true;
+            icon-name: "input-gaming-symbolic";
+            title: _("Controle");
+            description: _("O Cartridges pode abrir o Big Picture automaticamente quando um controle é conectado.");
+
+            child: Adw.Clamp {
+              maximum-size: 440;
+              tightening-threshold: 440;
+              margin-start: 24;
+              margin-end: 24;
+
+              ListBox {
+                selection-mode: none;
+
+                styles [
+                  "boxed-list",
+                ]
+
+                Adw.SwitchRow big_picture_switch {
+                  title: _("Abrir o Big Picture ao conectar um controle");
+                  subtitle: _("Abre o Big Picture ao iniciar o aplicativo com um controle conectado ou ao conectar um controle na biblioteca");
+                }
+              }
+            };
+          }
+
+          Adw.StatusPage pagina_monitores {
+            hexpand: true;
+            icon-name: "video-joined-displays-symbolic";
+            title: _("Outros monitores");
+            description: _("Escolha o que o Cartridges faz com os demais monitores ao iniciar um jogo.");
+
+            child: Adw.Clamp {
+              maximum-size: 440;
+              tightening-threshold: 440;
+              margin-start: 24;
+              margin-end: 24;
+
+              ListBox {
+                selection-mode: none;
+
+                styles [
+                  "boxed-list",
+                ]
+
+                Adw.SwitchRow mover_switch {
+                  title: _("Mover o aplicativo para outro monitor ao iniciar um jogo");
+                }
+
+                Adw.ComboRow monitor_row {
+                  title: _("Monitor");
+                  sensitive: bind mover_switch.active;
+                }
+
+                Adw.ButtonRow identificar_row {
+                  title: _("Identificar monitores");
+                }
+
+                Adw.SwitchRow papel_de_parede_switch {
+                  title: _("Trocar o papel de parede dos outros monitores");
+                }
+              }
+            };
+          }
+
+          Adw.StatusPage pagina_pronto {
+            hexpand: true;
+            icon-name: "object-select-symbolic";
+            title: _("Tudo pronto");
+            description: _("Você pode alterar estas opções a qualquer momento em Preferências.");
+
+            child: Button abrir_biblioteca_botao {
+              label: _("Abrir a biblioteca");
+              halign: center;
+
+              styles [
+                "suggested-action",
+                "pill",
+              ]
+            };
+          }
+        }
+
+        Box rodape {
+          orientation: vertical;
+          spacing: 12;
+          margin-top: 12;
+          margin-bottom: 12;
+          margin-start: 12;
+          margin-end: 12;
+
+          Adw.CarouselIndicatorDots {
+            carousel: carrossel;
+          }
+
+          CenterBox botoes {
+            [start]
+            Button voltar_botao {
+              label: _("Voltar");
+            }
+
+            [end]
+            Box {
+              spacing: 6;
+
+              Button pular_botao {
+                label: _("Pular");
+              }
+
+              Button continuar_botao {
+                label: _("Continuar");
+
+                styles [
+                  "suggested-action",
+                ]
+              }
+            }
+          }
+        }
+      };
+    }
+  };
+}

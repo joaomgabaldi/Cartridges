@@ -2,6 +2,7 @@
 <gresources>
   <gresource prefix="@PREFIX@">
     <file preprocess="xml-stripblanks">@APP_ID@.metainfo.xml</file>
+    <file preprocess="xml-stripblanks">gtk/assistente.ui</file>
     <file preprocess="xml-stripblanks">gtk/details-dialog.ui</file>
     <file preprocess="xml-stripblanks">gtk/fita-wizard.ui</file>
     <file preprocess="xml-stripblanks">gtk/game.ui</file>
@@ -14,6 +15,9 @@
     <file alias="style.css">gtk/style.css</file>
     <file>library_placeholder.svg</file>
     <file>library_placeholder_small.svg</file>
+    <!-- Arte própria, de um jogo fictício: o assistente de primeira abertura. -->
+    <file>capa_de_exemplo.svg</file>
+    <file>conquista_de_exemplo.svg</file>
     <!-- "successful", de Kastenfrosch (https://freesound.org/s/162473/), CC0 —
          aparado no início e com fade no fim. -->
     <file>sons/conquista.wav</file>
@@ -26,6 +30,9 @@
   <!-- GtkApplication adds <resource_base_path>/icons to the icon theme search
        path automatically, so anything dropped here is reachable by plain
        icon-name from the .blp files. -->
+  <gresource prefix="@PREFIX@/icons/scalable/apps/">
+  <file alias="@APP_ID@.svg">icons/hicolor/scalable/apps/@APP_ID@.svg</file>
+  </gresource>
   <gresource prefix="@PREFIX@/icons/scalable/actions/">
   <file alias="novidades-symbolic.svg">icons/actions/novidades-symbolic.svg</file>
   <file alias="trofeu-symbolic.svg">icons/actions/trofeu-symbolic.svg</file>

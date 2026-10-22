@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="fundo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b1480"/>
+      <stop offset="1" stop-color="#12062b"/>
+    </linearGradient>
+    <linearGradient id="ouro" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff6a8"/>
+      <stop offset="0.5" stop-color="#ffc233"/>
+      <stop offset="1" stop-color="#ff7a2f"/>
+    </linearGradient>
+    <radialGradient id="aura" cx="0.5" cy="0.45" r="0.5">
+      <stop offset="0" stop-color="#ff2f8e" stop-opacity="0.65"/>
+      <stop offset="1" stop-color="#ff2f8e" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" fill="url(#fundo)"/>
+  <rect width="64" height="64" fill="url(#aura)"/>
+  <path d="M0 58H64" stroke="#19f3ff" stroke-width="1" opacity="0.5"/>
+  <!-- alças -->
+  <path d="M19 15H12C11 25 14 31 22 33" fill="none" stroke="url(#ouro)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M45 15H52C53 25 50 31 42 33" fill="none" stroke="url(#ouro)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- taça -->
+  <path d="M19 10H45V24C45 33 39 38 32 38C25 38 19 33 19 24Z" fill="url(#ouro)"/>
+  <path d="M23 12H27V25C27 30 29 34 31 36C26 35 23 31 23 25Z" fill="#fff" opacity="0.35"/>
+  <!-- haste e base -->
+  <path d="M29 38H35V46H29Z" fill="url(#ouro)"/>
+  <path d="M21 46H43L45 53H19Z" fill="url(#ouro)"/>
+  <path d="M19 53H45V56H19Z" fill="#ff7a2f"/>
+  <!-- estrela -->
+  <path d="M32 15L34.4 20.2L40 20.9L35.9 24.7L37 30.3L32 27.5L27 30.3L28.1 24.7L24 20.9L29.6 20.2Z" fill="#12062b" opacity="0.85"/>
+  <!-- brilhos -->
+  <path d="M52 6V12M49 9H55" stroke="#7df9ff" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M10 38V42M8 40H12" stroke="#ff8ad8" stroke-width="1.4" stroke-linecap="round"/>
+</svg>

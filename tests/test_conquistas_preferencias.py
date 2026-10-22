@@ -19,6 +19,15 @@ def _preferencias(monkeypatch):
     return preferences_module.CartridgesPreferences()
 
 
+def _sobreposicao_de_avisos(dialogo):
+    """Onde os toasts do grupo caem: o diálogo não é ancestral do grupo enquanto
+    não está na tela, mas o ToastOverlay dele é (e é para onde o diálogo
+    encaminha os próprios toasts)."""
+    from gi.repository import Adw  # noqa: PLC0415
+
+    return dialogo.grupo_das_contas.get_ancestor(Adw.ToastOverlay)
+
+
 def test_chave_digitada_vai_para_o_schema(monkeypatch, schema):
     preferencias = _preferencias(monkeypatch)
     preferencias.conquistas_chave_row.set_text("  abc123  ")
@@ -212,23 +221,23 @@ def _varredura_falsa(monkeypatch, varridos, pedidos=None):
 def test_conta_desconectada(monkeypatch):
     monkeypatch.setattr(conta, "conectada", lambda: False)
     dialogo = _preferencias(monkeypatch)
-    assert dialogo.conquistas_conta_row.get_subtitle() == "Não conectada"
-    assert dialogo.conquistas_conta_botao.get_label() == "Entrar"
+    assert dialogo.grupo_das_contas.conquistas_conta_row.get_subtitle() == "Não conectada"
+    assert dialogo.grupo_das_contas.conquistas_conta_botao.get_label() == "Entrar"
 
 
 def test_conta_conectada_mostra_o_gamertag(monkeypatch):
     monkeypatch.setattr(conta, "conectada", lambda: True)
     monkeypatch.setattr(conta, "gamertag", lambda: "Jogador")
     dialogo = _preferencias(monkeypatch)
-    assert dialogo.conquistas_conta_row.get_subtitle() == "Jogador"
-    assert dialogo.conquistas_conta_botao.get_label() == "Sair"
+    assert dialogo.grupo_das_contas.conquistas_conta_row.get_subtitle() == "Jogador"
+    assert dialogo.grupo_das_contas.conquistas_conta_botao.get_label() == "Sair"
 
 
 def test_conta_conectada_sem_gamertag_mostra_o_nome_da_conta(monkeypatch):
     monkeypatch.setattr(conta, "conectada", lambda: True)
     monkeypatch.setattr(conta, "gamertag", lambda: None)
     dialogo = _preferencias(monkeypatch)
-    assert dialogo.conquistas_conta_row.get_subtitle() == "Conta Microsoft"
+    assert dialogo.grupo_das_contas.conquistas_conta_row.get_subtitle() == "Conta Microsoft"
 
 
 def test_entrar_espera_e_cancelar(monkeypatch):
@@ -243,10 +252,10 @@ def test_entrar_espera_e_cancelar(monkeypatch):
         login, "entrar", lambda ao_terminar, **_k: pedidos.append(ao_terminar) or Pedido()
     )
     dialogo = _preferencias(monkeypatch)
-    dialogo.conquistas_conta_botao.emit("clicked")
-    assert dialogo.conquistas_conta_row.get_subtitle() == "Aguardando o login no navegador…"
-    assert dialogo.conquistas_conta_botao.get_label() == "Cancelar"
-    dialogo.conquistas_conta_botao.emit("clicked")
+    dialogo.grupo_das_contas.conquistas_conta_botao.emit("clicked")
+    assert dialogo.grupo_das_contas.conquistas_conta_row.get_subtitle() == "Aguardando o login no navegador…"
+    assert dialogo.grupo_das_contas.conquistas_conta_botao.get_label() == "Cancelar"
+    dialogo.grupo_das_contas.conquistas_conta_botao.emit("clicked")
     assert pedidos[-1] == "cancelado"
 
 
@@ -261,11 +270,11 @@ def test_entrar_que_levanta_vira_aviso_e_nao_escapa(monkeypatch):
     monkeypatch.setattr(login, "entrar", entrar)
     dialogo = _preferencias(monkeypatch)
     avisos = []
-    monkeypatch.setattr(dialogo, "add_toast", lambda toast: avisos.append(toast.get_title()))
-    dialogo.conquistas_conta_botao.emit("clicked")
+    monkeypatch.setattr(_sobreposicao_de_avisos(dialogo), "add_toast", lambda toast: avisos.append(toast.get_title()))
+    dialogo.grupo_das_contas.conquistas_conta_botao.emit("clicked")
     assert avisos == ["Não foi possível entrar na conta Microsoft."]
-    assert dialogo.conquistas_conta_row.get_subtitle() == "Não conectada"
-    assert dialogo.conquistas_conta_botao.get_label() == "Entrar"
+    assert dialogo.grupo_das_contas.conquistas_conta_row.get_subtitle() == "Não conectada"
+    assert dialogo.grupo_das_contas.conquistas_conta_botao.get_label() == "Entrar"
 
 
 @pytest.mark.parametrize(
@@ -289,10 +298,10 @@ def test_resultado_do_login(monkeypatch, nome, aviso):
     monkeypatch.setattr(conta, "conectada", lambda: False)
     dialogo = _preferencias(monkeypatch)
     avisos = []
-    monkeypatch.setattr(dialogo, "add_toast", lambda toast: avisos.append(toast.get_title()))
-    dialogo._ao_entrar(login.Resultado[nome])
+    monkeypatch.setattr(_sobreposicao_de_avisos(dialogo), "add_toast", lambda toast: avisos.append(toast.get_title()))
+    dialogo.grupo_das_contas._ao_entrar(login.Resultado[nome])
     assert avisos == ([aviso] if aviso else [])
-    assert dialogo.conquistas_conta_botao.get_label() == "Entrar"
+    assert dialogo.grupo_das_contas.conquistas_conta_botao.get_label() == "Entrar"
 
 
 def test_login_ok_varre_os_jogos_do_xbox(monkeypatch, store, make_game):
@@ -307,9 +316,9 @@ def test_login_ok_varre_os_jogos_do_xbox(monkeypatch, store, make_game):
     varridos = []
     _varredura_falsa(monkeypatch, varridos)
     dialogo = _preferencias(monkeypatch)
-    dialogo._ao_entrar(login.Resultado.OK)
+    dialogo.grupo_das_contas._ao_entrar(login.Resultado.OK)
     assert varridos == [xbox]
-    assert dialogo.conquistas_conta_row.get_subtitle() == "Jogador"
+    assert dialogo.grupo_das_contas.conquistas_conta_row.get_subtitle() == "Jogador"
 
 
 def test_login_ok_nao_olha_o_disco_dos_jogos_na_thread_principal(
@@ -332,7 +341,7 @@ def test_login_ok_nao_olha_o_disco_dos_jogos_na_thread_principal(
     pedidos = []
     _varredura_falsa(monkeypatch, [], pedidos)
     dialogo = _preferencias(monkeypatch)
-    dialogo._ao_entrar(login.Resultado.OK)
+    dialogo.grupo_das_contas._ao_entrar(login.Resultado.OK)
     ((jogos, filtro),) = pedidos
     assert set(jogos) == {xbox, outro}
     assert consultados == []
@@ -354,11 +363,11 @@ def test_cancelar_na_troca_com_a_conta_conectada_conta_como_ok(
     _varredura_falsa(monkeypatch, varridos)
     dialogo = _preferencias(monkeypatch)
     avisos = []
-    monkeypatch.setattr(dialogo, "add_toast", lambda toast: avisos.append(toast))
-    dialogo._ao_entrar(login.Resultado.CANCELADO)
+    monkeypatch.setattr(_sobreposicao_de_avisos(dialogo), "add_toast", lambda toast: avisos.append(toast))
+    dialogo.grupo_das_contas._ao_entrar(login.Resultado.CANCELADO)
     assert varridos == [xbox]
     assert avisos == []
-    assert dialogo.conquistas_conta_botao.get_label() == "Sair"
+    assert dialogo.grupo_das_contas.conquistas_conta_botao.get_label() == "Sair"
 
 
 def test_falha_com_a_conta_conectada_nao_varre(monkeypatch, store, make_game):
@@ -367,10 +376,10 @@ def test_falha_com_a_conta_conectada_nao_varre(monkeypatch, store, make_game):
     varridos = []
     _varredura_falsa(monkeypatch, varridos)
     dialogo = _preferencias(monkeypatch)
-    monkeypatch.setattr(dialogo, "add_toast", lambda toast: None)
-    dialogo._ao_entrar(login.Resultado.FALHOU)
+    monkeypatch.setattr(_sobreposicao_de_avisos(dialogo), "add_toast", lambda toast: None)
+    dialogo.grupo_das_contas._ao_entrar(login.Resultado.FALHOU)
     assert varridos == []
-    assert dialogo.conquistas_conta_botao.get_label() == "Sair"
+    assert dialogo.grupo_das_contas.conquistas_conta_botao.get_label() == "Sair"
 
 
 def test_varredura_do_xbox_que_falha_nao_levanta(monkeypatch, store, make_game):
@@ -387,7 +396,7 @@ def test_varredura_do_xbox_que_falha_nao_levanta(monkeypatch, store, make_game):
     )
     store.add_game(xbox, {}, run_pipeline=False)
     dialogo = _preferencias(monkeypatch)
-    dialogo._ao_entrar(login.Resultado.OK)
+    dialogo.grupo_das_contas._ao_entrar(login.Resultado.OK)
 
 
 def test_sair(monkeypatch):
@@ -396,9 +405,9 @@ def test_sair(monkeypatch):
     monkeypatch.setattr(conta, "gamertag", lambda: "Jogador")
     monkeypatch.setattr(conta, "sair", lambda: estado.update(conectada=False))
     dialogo = _preferencias(monkeypatch)
-    dialogo.conquistas_conta_botao.emit("clicked")
-    assert dialogo.conquistas_conta_row.get_subtitle() == "Não conectada"
-    assert dialogo.conquistas_conta_botao.get_label() == "Entrar"
+    dialogo.grupo_das_contas.conquistas_conta_botao.emit("clicked")
+    assert dialogo.grupo_das_contas.conquistas_conta_row.get_subtitle() == "Não conectada"
+    assert dialogo.grupo_das_contas.conquistas_conta_botao.get_label() == "Entrar"
 
 
 def test_conta_que_muda_atualiza_a_linha(monkeypatch):
@@ -412,7 +421,7 @@ def test_conta_que_muda_atualiza_a_linha(monkeypatch):
     dialogo = _preferencias(monkeypatch)
     estado["conectada"] = True
     ouvintes[0]()
-    assert dialogo.conquistas_conta_row.get_subtitle() == "Jogador"
+    assert dialogo.grupo_das_contas.conquistas_conta_row.get_subtitle() == "Jogador"
 
 
 def test_fechar_cancela_o_login_e_solta_o_ouvinte(monkeypatch):
@@ -431,7 +440,7 @@ def test_fechar_cancela_o_login_e_solta_o_ouvinte(monkeypatch):
 
 def test_descricao_do_grupo_das_contas(monkeypatch):
     dialogo = _preferencias(monkeypatch)
-    assert dialogo.conquistas_contas_group.get_description() == (
+    assert dialogo.grupo_das_contas.get_description() == (
         "Entre com as contas das lojas para acompanhar as conquistas dos jogos do Xbox, "
         "do Game Pass, da Epic Games Store e do EA app."
     )
@@ -440,16 +449,16 @@ def test_descricao_do_grupo_das_contas(monkeypatch):
 def test_conta_epic_desconectada(monkeypatch):
     monkeypatch.setattr(epic_conta, "conectada", lambda: False)
     dialogo = _preferencias(monkeypatch)
-    assert dialogo.conquistas_epic_row.get_subtitle() == "Não conectada"
-    assert dialogo.conquistas_epic_botao.get_label() == "Entrar"
+    assert dialogo.grupo_das_contas.conquistas_epic_row.get_subtitle() == "Não conectada"
+    assert dialogo.grupo_das_contas.conquistas_epic_botao.get_label() == "Entrar"
 
 
 def test_conta_epic_conectada_mostra_o_nome(monkeypatch):
     monkeypatch.setattr(epic_conta, "conectada", lambda: True)
     monkeypatch.setattr(epic_conta, "nome", lambda: "Jogador")
     dialogo = _preferencias(monkeypatch)
-    assert dialogo.conquistas_epic_row.get_subtitle() == "Jogador"
-    assert dialogo.conquistas_epic_botao.get_label() == "Sair"
+    assert dialogo.grupo_das_contas.conquistas_epic_row.get_subtitle() == "Jogador"
+    assert dialogo.grupo_das_contas.conquistas_epic_botao.get_label() == "Sair"
 
 
 class _LoginEpicFalso:
@@ -479,9 +488,9 @@ def test_entrar_abre_a_janela_e_o_sucesso_varre_os_jogos_da_epic(monkeypatch, st
     pedidos = []
     _varredura_falsa(monkeypatch, [], pedidos)
     dialogo = _preferencias(monkeypatch)
-    dialogo.conquistas_epic_botao.emit("clicked")
+    dialogo.grupo_das_contas.conquistas_epic_botao.emit("clicked")
     (janela_,) = _LoginEpicFalso.criados
-    assert janela_.mostrada is dialogo
+    assert janela_.mostrada is dialogo.grupo_das_contas
     janela_.ao_conectar()
     assert [filtro for _games, filtro in pedidos] == [fontes.eh_da_epic]
 
@@ -495,8 +504,8 @@ def test_entrar_com_janela_que_falha_ao_mostrar_deixa_tentar_de_novo(monkeypatch
     monkeypatch.setattr(epic_conta, "conectada", lambda: False)
     monkeypatch.setattr(epic_janela, "JanelaDeLogin", _LoginQueFalha)
     dialogo = _preferencias(monkeypatch)
-    dialogo.conquistas_epic_botao.emit("clicked")
-    dialogo.conquistas_epic_botao.emit("clicked")
+    dialogo.grupo_das_contas.conquistas_epic_botao.emit("clicked")
+    dialogo.grupo_das_contas.conquistas_epic_botao.emit("clicked")
     # O segundo clique não fica morto: cria outra janela.
     assert len(_LoginEpicFalso.criados) == 2
 
@@ -511,8 +520,8 @@ def test_janela_da_epic_que_falha_ao_mostrar_avisa_com_toast(monkeypatch):
     monkeypatch.setattr(epic_janela, "JanelaDeLogin", _LoginQueFalha)
     dialogo = _preferencias(monkeypatch)
     avisos = []
-    monkeypatch.setattr(dialogo, "add_toast", lambda toast: avisos.append(toast.get_title()))
-    dialogo.conquistas_epic_botao.emit("clicked")
+    monkeypatch.setattr(_sobreposicao_de_avisos(dialogo), "add_toast", lambda toast: avisos.append(toast.get_title()))
+    dialogo.grupo_das_contas.conquistas_epic_botao.emit("clicked")
     assert avisos == ["Não foi possível abrir a janela de login da Epic."]
 
 
@@ -530,8 +539,8 @@ def test_sair_que_falha_avisa_so_do_sair(monkeypatch, modulo, botao, texto):
     monkeypatch.setattr(modulo, "sair", quebra)
     dialogo = _preferencias(monkeypatch)
     avisos = []
-    monkeypatch.setattr(dialogo, "add_toast", lambda toast: avisos.append(toast.get_title()))
-    getattr(dialogo, botao).emit("clicked")
+    monkeypatch.setattr(_sobreposicao_de_avisos(dialogo), "add_toast", lambda toast: avisos.append(toast.get_title()))
+    getattr(dialogo.grupo_das_contas, botao).emit("clicked")
     assert avisos == [texto]
 
 
@@ -541,8 +550,8 @@ def test_sair_da_epic(monkeypatch):
     monkeypatch.setattr(epic_conta, "nome", lambda: "Jogador")
     monkeypatch.setattr(epic_conta, "sair", lambda: estado.update(conectada=False))
     dialogo = _preferencias(monkeypatch)
-    dialogo.conquistas_epic_botao.emit("clicked")
-    assert dialogo.conquistas_epic_row.get_subtitle() == "Não conectada"
+    dialogo.grupo_das_contas.conquistas_epic_botao.emit("clicked")
+    assert dialogo.grupo_das_contas.conquistas_epic_row.get_subtitle() == "Não conectada"
 
 
 def test_conta_epic_que_muda_atualiza_a_linha(monkeypatch):
@@ -554,7 +563,7 @@ def test_conta_epic_que_muda_atualiza_a_linha(monkeypatch):
     dialogo = _preferencias(monkeypatch)
     estado["conectada"] = True
     ouvintes[0]()
-    assert dialogo.conquistas_epic_row.get_subtitle() == "Jogador"
+    assert dialogo.grupo_das_contas.conquistas_epic_row.get_subtitle() == "Jogador"
 
 
 def test_fechar_as_preferencias_fecha_a_janela_e_solta_o_ouvinte(monkeypatch):
@@ -564,7 +573,7 @@ def test_fechar_as_preferencias_fecha_a_janela_e_solta_o_ouvinte(monkeypatch):
     monkeypatch.setattr(epic_conta, "ao_mudar", lambda _o: lambda: removidos.append(1))
     monkeypatch.setattr(epic_janela, "JanelaDeLogin", _LoginEpicFalso)
     dialogo = _preferencias(monkeypatch)
-    dialogo.conquistas_epic_botao.emit("clicked")
+    dialogo.grupo_das_contas.conquistas_epic_botao.emit("clicked")
     dialogo.emit("closed")
     assert _LoginEpicFalso.criados[0].fechada and removidos == [1]
 
@@ -575,17 +584,17 @@ def test_fechar_as_preferencias_fecha_a_janela_e_solta_o_ouvinte(monkeypatch):
 def test_conta_ea_desconectada(monkeypatch):
     monkeypatch.setattr(ea_conta, "conectada", lambda: False)
     dialogo = _preferencias(monkeypatch)
-    assert dialogo.conquistas_ea_row.get_title() == "Conta EA"
-    assert dialogo.conquistas_ea_row.get_subtitle() == "Não conectada"
-    assert dialogo.conquistas_ea_botao.get_label() == "Entrar"
+    assert dialogo.grupo_das_contas.conquistas_ea_row.get_title() == "Conta EA"
+    assert dialogo.grupo_das_contas.conquistas_ea_row.get_subtitle() == "Não conectada"
+    assert dialogo.grupo_das_contas.conquistas_ea_botao.get_label() == "Entrar"
 
 
 def test_conta_ea_conectada_mostra_o_nome(monkeypatch):
     monkeypatch.setattr(ea_conta, "conectada", lambda: True)
     monkeypatch.setattr(ea_conta, "nome", lambda: "Jogador")
     dialogo = _preferencias(monkeypatch)
-    assert dialogo.conquistas_ea_row.get_subtitle() == "Jogador"
-    assert dialogo.conquistas_ea_botao.get_label() == "Sair"
+    assert dialogo.grupo_das_contas.conquistas_ea_row.get_subtitle() == "Jogador"
+    assert dialogo.grupo_das_contas.conquistas_ea_botao.get_label() == "Sair"
 
 
 def test_entrar_abre_a_janela_e_o_sucesso_varre_os_jogos_da_ea(monkeypatch, store):
@@ -595,9 +604,9 @@ def test_entrar_abre_a_janela_e_o_sucesso_varre_os_jogos_da_ea(monkeypatch, stor
     pedidos = []
     _varredura_falsa(monkeypatch, [], pedidos)
     dialogo = _preferencias(monkeypatch)
-    dialogo.conquistas_ea_botao.emit("clicked")
+    dialogo.grupo_das_contas.conquistas_ea_botao.emit("clicked")
     (janela_,) = _LoginEpicFalso.criados
-    assert janela_.mostrada is dialogo
+    assert janela_.mostrada is dialogo.grupo_das_contas
     janela_.ao_conectar()
     assert [filtro for _games, filtro in pedidos] == [fontes.eh_da_ea]
 
@@ -612,10 +621,10 @@ def test_janela_da_ea_que_falha_ao_mostrar_avisa_com_toast(monkeypatch):
     monkeypatch.setattr(ea_janela, "JanelaDeLogin", _LoginQueFalha)
     dialogo = _preferencias(monkeypatch)
     avisos = []
-    monkeypatch.setattr(dialogo, "add_toast", lambda toast: avisos.append(toast.get_title()))
-    dialogo.conquistas_ea_botao.emit("clicked")
+    monkeypatch.setattr(_sobreposicao_de_avisos(dialogo), "add_toast", lambda toast: avisos.append(toast.get_title()))
+    dialogo.grupo_das_contas.conquistas_ea_botao.emit("clicked")
     assert avisos == ["Não foi possível abrir a janela de login da EA."]
-    dialogo.conquistas_ea_botao.emit("clicked")
+    dialogo.grupo_das_contas.conquistas_ea_botao.emit("clicked")
     assert len(_LoginEpicFalso.criados) == 2
 
 
@@ -625,8 +634,8 @@ def test_sair_da_ea(monkeypatch):
     monkeypatch.setattr(ea_conta, "nome", lambda: "Jogador")
     monkeypatch.setattr(ea_conta, "sair", lambda: estado.update(conectada=False))
     dialogo = _preferencias(monkeypatch)
-    dialogo.conquistas_ea_botao.emit("clicked")
-    assert dialogo.conquistas_ea_row.get_subtitle() == "Não conectada"
+    dialogo.grupo_das_contas.conquistas_ea_botao.emit("clicked")
+    assert dialogo.grupo_das_contas.conquistas_ea_row.get_subtitle() == "Não conectada"
 
 
 def test_conta_ea_que_muda_atualiza_a_linha(monkeypatch):
@@ -638,7 +647,7 @@ def test_conta_ea_que_muda_atualiza_a_linha(monkeypatch):
     dialogo = _preferencias(monkeypatch)
     estado["conectada"] = True
     ouvintes[0]()
-    assert dialogo.conquistas_ea_row.get_subtitle() == "Jogador"
+    assert dialogo.grupo_das_contas.conquistas_ea_row.get_subtitle() == "Jogador"
 
 
 def test_fechar_as_preferencias_fecha_a_janela_da_ea_e_solta_o_ouvinte(monkeypatch):
@@ -648,6 +657,29 @@ def test_fechar_as_preferencias_fecha_a_janela_da_ea_e_solta_o_ouvinte(monkeypat
     monkeypatch.setattr(ea_conta, "ao_mudar", lambda _o: lambda: removidos.append(1))
     monkeypatch.setattr(ea_janela, "JanelaDeLogin", _LoginEpicFalso)
     dialogo = _preferencias(monkeypatch)
-    dialogo.conquistas_ea_botao.emit("clicked")
+    dialogo.grupo_das_contas.conquistas_ea_botao.emit("clicked")
     dialogo.emit("closed")
     assert _LoginEpicFalso.criados[0].fechada and removidos == [1]
+
+
+# --- O GrupoDasContas dentro das Preferências -----------------------------
+
+
+def test_fechar_as_preferencias_fecha_o_grupo_das_contas(monkeypatch):
+    preferencias = _preferencias(monkeypatch)
+    fechados = []
+    monkeypatch.setattr(preferencias.grupo_das_contas, "fechar", lambda: fechados.append(1))
+    preferencias.emit("closed")
+    assert fechados == [1]
+
+
+def test_aviso_do_grupo_vai_para_o_toast_overlay(monkeypatch):
+    from gi.repository import Adw
+    from cartridges.grupo_das_contas import GrupoDasContas
+
+    overlay, grupo = Adw.ToastOverlay(), GrupoDasContas()
+    overlay.set_child(grupo)
+    recebidos = []
+    monkeypatch.setattr(overlay, "add_toast", lambda toast: recebidos.append(toast.get_title()))
+    grupo._avisar("Não foi possível entrar na conta Microsoft.")
+    assert recebidos == ["Não foi possível entrar na conta Microsoft."]

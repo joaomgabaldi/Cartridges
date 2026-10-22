@@ -87,6 +87,7 @@ from gi.repository import GdkWin32  # noqa: E402,F401  pylint: disable=unused-im
 # than parsed so a test that depends on one of these values fails loudly when
 # the schema changes underneath it, instead of quietly following it.
 _SCHEMA_DEFAULTS = {
+    "assistente-concluido": False,
     "auto-import": False,
     "cover-autoplay": False,
     "minimize-after-launch": False,

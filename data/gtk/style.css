@@ -263,3 +263,14 @@ window.conquista-aviso-opaco .conquista-aviso-cartao {
 .big-picture label {
   color: #ffffff;
 }
+
+/* A capa de exemplo (e o placeholder) da animação do assistente. */
+.capa-de-exemplo {
+  border-radius: 6px;
+}
+
+/* O cartão de conquista embutido numa página do assistente: sem o jogo por
+   trás, um contorno o separa do fundo escuro da janela. */
+.conquista-aviso-cartao-embutido {
+  box-shadow: 0 0 0 1px alpha(white, 0.14), 0 2px 8px rgba(0, 0, 0, 0.35);
+}

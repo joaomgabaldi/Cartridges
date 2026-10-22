@@ -418,3 +418,32 @@ def test_volume_lido_a_cada_som(sons, schema, sem_efeitos):
         conquista_aviso.mostrar(_aviso("Um"))
         maiores.append(max(abs(a) for a in _amostras(sons[-1][0])[3]))
     assert maiores[0] == maiores[2] < maiores[1]
+
+
+def _rotulos(widget):
+    achados = []
+    filho = widget.get_first_child()
+    while filho:
+        if isinstance(filho, conquista_aviso.Gtk.Label):
+            achados.append(filho.get_label())
+        achados += _rotulos(filho)
+        filho = filho.get_next_sibling()
+    return achados
+
+
+def test_montar_cartao_e_o_mesmo_do_aviso_real(sem_efeitos):
+    aviso = conquista_aviso.Aviso("Rótulo", "Título", "Descrição", "")
+    cartao, imagem = conquista_aviso.montar_cartao(aviso)
+    assert cartao.has_css_class("conquista-aviso-cartao")
+    assert imagem.get_icon_name() == "starred-symbolic"
+    janela = conquista_aviso._JanelaDoAviso(aviso)
+    try:
+        assert janela.cartao.has_css_class("conquista-aviso-cartao")
+        assert janela._imagem.get_icon_name() == "starred-symbolic"
+        assert _rotulos(janela.cartao) == _rotulos(cartao) == ["Rótulo", "Título", "Descrição"]
+    finally:
+        janela.fechar()
+
+
+def test_exemplo_aceita_a_porcentagem():
+    assert conquista_aviso.Aviso.exemplo(2.3).rotulo == "Conquista desbloqueada · ★ Rara, 2,3%"

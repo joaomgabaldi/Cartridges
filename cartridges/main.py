@@ -54,7 +54,8 @@ try:
 except (ValueError, ImportError) as erro:
     logging.warning("GdkWin32 indisponível: %s", erro)
 
-from cartridges import big_picture, restauracao_dialogs, shared
+from cartridges import assistente, big_picture, restauracao_dialogs, shared
+from cartridges.assistente import JanelaDoAssistente
 from cartridges.conquistas import icones
 from cartridges.conquistas import sessao as sessao_conquistas
 from cartridges.conquistas.ea import conta as ea_conta
@@ -393,6 +394,7 @@ class CartridgesApplication(Adw.Application):
     restauracao_falhou = False
     # A janela "Restaurando…" enquanto um backup agendado é aplicado na abertura.
     _restaurando: Optional[JanelaRestaurando] = None
+    _assistente: Optional[JanelaDoAssistente] = None
     # O provider da cor de destaque, guardado para o watcher do registro poder
     # reescrever o CSS no lugar em vez de empilhar um provider por mudança.
     _accent_provider: Optional[Gtk.CssProvider] = None
@@ -505,6 +507,12 @@ class CartridgesApplication(Adw.Application):
             self._restaurando.present()
             return
 
+        # Idem para o assistente de primeira abertura: ainda não há janela
+        # principal, e `active_window` seria o próprio assistente.
+        if self._assistente is not None:
+            self._assistente.present()
+            return
+
         # A second activation (e.g. launching the app again while it's running)
         # must not re-run the whole startup: it would duplicate managers,
         # reload games and clobber the app state mid-import
@@ -531,29 +539,58 @@ class CartridgesApplication(Adw.Application):
         # Um backup grande leva minutos: roda numa thread, com a janela
         # "Restaurando…" na tela, e a abertura continua quando ele termina.
         if backup.ha_pendente():
-            self.apply_windows_theme()  # a janela da restauração já nasce no tema
-            janela = self._restaurando = JanelaRestaurando(application=self)
-            janela.present()
-
-            def restaurar() -> None:
-                try:
-                    resultado = backup.aplicar_pendente(
-                        entregar_so_ao_mudar(lambda fracao: entregar_na_tela(janela.avancar, fracao))
-                    )
-                except Exception:  # pylint: disable=broad-exception-caught
-                    logging.exception("Falha inesperada ao restaurar o backup")
-                    resultado = False
-                # Pela mesma entrega do progresso: prioridades diferentes não
-                # rodam na ordem, e o fim tem de vir depois da última fração.
-                entregar_na_tela(self._restauracao_terminou, resultado)
-
-            _em_thread(restaurar)
+            self._restaurar_e_abrir()
             return
 
         # Sem backup agendado, só a recuperação de uma troca interrompida, que
         # apenas renomeia pastas.
         self.restauracao_falhou = backup.aplicar_pendente() is False
+
+        # Primeira abertura: o assistente vem antes da biblioteca. Terminar
+        # abre o app; restaurar um backup (já agendado) segue direto para a
+        # restauração, sem reiniciar.
+        if assistente.precisa_mostrar():
+            self.apply_windows_theme()  # a janela do assistente já nasce no tema
+            self._assistente = JanelaDoAssistente(
+                ao_terminar=self._ao_sair_do_assistente(self._abrir),
+                ao_restaurar=self._ao_sair_do_assistente(self._restaurar_e_abrir),
+                application=self,
+            )
+            self._assistente.present()
+            return
+
         self._abrir()
+
+    def _ao_sair_do_assistente(self, seguinte: Callable[[], None]) -> Callable[[], None]:
+        """Embrulha o passo seguinte: o assistente deixa de existir para o app
+        antes dele rodar (a janela se destrói logo depois de a chamada voltar)."""
+
+        def sair() -> None:
+            self._assistente = None
+            seguinte()
+
+        return sair
+
+    def _restaurar_e_abrir(self) -> None:
+        """Aplica o backup agendado com a janela "Restaurando…" na tela; a
+        abertura continua quando ele termina (`_restauracao_terminou`)."""
+        self.apply_windows_theme()  # a janela da restauração já nasce no tema
+        janela = self._restaurando = JanelaRestaurando(application=self)
+        janela.present()
+
+        def restaurar() -> None:
+            try:
+                resultado = backup.aplicar_pendente(
+                    entregar_so_ao_mudar(lambda fracao: entregar_na_tela(janela.avancar, fracao))
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.exception("Falha inesperada ao restaurar o backup")
+                resultado = False
+            # Pela mesma entrega do progresso: prioridades diferentes não
+            # rodam na ordem, e o fim tem de vir depois da última fração.
+            entregar_na_tela(self._restauracao_terminou, resultado)
+
+        _em_thread(restaurar)
 
     def _restauracao_terminou(self, resultado: Optional[bool]) -> bool:
         self.restauracao_falhou = resultado is False

@@ -7,6 +7,7 @@ from cartridges import shared
 
 
 _criadas: list["_JanelaFalsa"] = []
+_assistentes: list["_AssistenteFalso"] = []
 # O que a thread da restauração entregou à thread principal, na ordem.
 entregas: list = []
 
@@ -26,11 +27,24 @@ class _JanelaFalsa:
         self.passos.append("terminou")
 
 
+class _AssistenteFalso:
+    def __init__(self, ao_terminar, ao_restaurar, application=None):
+        self.ao_terminar, self.ao_restaurar = ao_terminar, ao_restaurar
+        self.apresentada = 0
+        _assistentes.append(self)
+
+    def present(self):
+        self.apresentada += 1
+
+
 @pytest.fixture
 def app(monkeypatch):
     monkeypatch.setattr(shared, "store", None, raising=False)  # o __init__ troca a store
     _criadas.clear()
+    _assistentes.clear()
     monkeypatch.setattr(main_module, "JanelaRestaurando", _JanelaFalsa)
+    monkeypatch.setattr(main_module, "JanelaDoAssistente", _AssistenteFalso)
+    monkeypatch.setattr(main_module.assistente, "precisa_mostrar", lambda: False)
     monkeypatch.setattr(main_module, "setup_logging", lambda: None)
     monkeypatch.setattr(main_module, "log_system_info", lambda: None)
     entregas.clear()
@@ -110,3 +124,44 @@ def test_falha_na_abertura_ainda_tira_a_janela_da_restauracao(app, monkeypatch):
     with pytest.raises(RuntimeError):
         tarefas.pop()()
     assert _criadas[0].passos == ["terminou"]
+
+
+def test_primeira_abertura_mostra_o_assistente_e_nao_abre(app, monkeypatch):
+    aplicacao, _, aberturas = app
+    monkeypatch.setattr(main_module.assistente, "precisa_mostrar", lambda: True)
+    vistos = []
+    monkeypatch.setattr(aplicacao, "_abrir", lambda: vistos.append(aplicacao._assistente))
+    aplicacao.do_activate()
+    (assistente,) = _assistentes
+    assert assistente.apresentada == 1 and vistos == []
+    assistente.ao_terminar()
+    assert vistos == [None]  # já zerado quando o passo seguinte roda
+    assert aplicacao._assistente is None
+
+
+def test_segunda_ativacao_com_o_assistente_traz_o_assistente(app, monkeypatch):
+    aplicacao, _, aberturas = app
+    monkeypatch.setattr(main_module.assistente, "precisa_mostrar", lambda: True)
+    aplicacao.do_activate()
+    aplicacao.do_activate()
+    assert _assistentes[0].apresentada == 2 and len(_assistentes) == 1 and aberturas == []
+
+
+def test_restaurar_pelo_assistente_segue_a_restauracao(app, monkeypatch):
+    aplicacao, tarefas, aberturas = app
+    monkeypatch.setattr(main_module.assistente, "precisa_mostrar", lambda: True)
+    monkeypatch.setattr(main_module.backup, "aplicar_pendente", lambda progresso=None: True)
+    aplicacao.do_activate()
+    _assistentes[0].ao_restaurar()
+    # A janela "Restaurando…" já está na tela quando o assistente se destrói.
+    assert _criadas and _criadas[0].apresentada == 1 and aplicacao._assistente is None
+    tarefas.pop()()
+    assert aberturas == [False]
+
+
+def test_backup_pendente_vem_antes_do_assistente(app, monkeypatch):
+    aplicacao, _, _ = app
+    monkeypatch.setattr(main_module.backup, "ha_pendente", lambda: True)
+    monkeypatch.setattr(main_module.assistente, "precisa_mostrar", lambda: True)
+    aplicacao.do_activate()
+    assert _criadas and not _assistentes

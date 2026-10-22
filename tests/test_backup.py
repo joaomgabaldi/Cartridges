@@ -669,6 +669,10 @@ def test_recusa_versao_futura(tmp_path):
         backup.validar(_zip(tmp_path / "b.zip", {"configuracoes.json": futuro}))
 
 
+def test_marca_do_assistente_fica_fora_do_backup():
+    assert backup._filtrar_chaves(["assistente-concluido", "sgdb"]) == ["sgdb"]
+
+
 def test_pasta_dos_saves_nao_vai_nas_configuracoes():
     assert backup._filtrar_chaves(["pasta-dos-saves", "sgdb"]) == ["sgdb"]
     assert "pasta-dos-saves" not in backup.ler_configuracoes()["settings"]

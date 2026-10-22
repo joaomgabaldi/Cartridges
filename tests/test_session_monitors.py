@@ -127,6 +127,20 @@ class TestPreferencias:
         assert schema.get_string("session-monitor") == terceiro.path
 
 
+def test_preencher_escolha_de_monitor_grava_o_guardado_ou_o_primeiro(schema, ligados):
+    from gi.repository import Adw  # noqa: PLC0415
+
+    ligados(PRINCIPAL, SEGUNDO, TERCEIRO)
+    monitores = window_geometry.monitores_da_sessao()
+    assert monitores == [SEGUNDO, TERCEIRO]
+
+    linha = Adw.ComboRow()
+    window_geometry.preencher_escolha_de_monitor(linha, monitores)
+    assert schema.get_string("session-monitor") == monitores[0].key
+    linha.set_selected(len(monitores) - 1)
+    assert schema.get_string("session-monitor") == monitores[-1].key
+
+
 class TestTelaDeEdicao:
     def test_sem_segundo_monitor_a_linha_fica_bloqueada(self, ligados, win):
         from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
