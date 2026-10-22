@@ -4,6 +4,9 @@
 
 """Test harness for the parts of Cartridges that need the app's own runtime.
 
+The suite runs on a hidden Windows desktop (no window shows up on the user's
+screen); set ``CARTRIDGES_TESTES_NA_TELA=1`` to see the windows while debugging.
+
 Runs against the **real** GTK stack from MSYS2 (``C:\\msys64\\ucrt64``), not a
 stub. That was a choice between two costs: a stub of ``gi`` runs anywhere and is
 fast, but it has to reimplement GObject signals, ``Gtk.Template`` and the GLib
@@ -43,6 +46,12 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+# Before anything imports GTK/Gdk: afterwards the thread has windows and the
+# desktop switch is refused.
+from tests import area_de_trabalho_oculta  # noqa: E402
+
+area_de_trabalho_oculta.entrar()
 
 # The UI is hardcoded in pt-BR and `cartridges.in` installs these as builtins;
 # module bodies call `_()` at class-definition time, so they must exist first.

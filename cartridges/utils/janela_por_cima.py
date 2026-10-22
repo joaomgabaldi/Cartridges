@@ -21,6 +21,11 @@ de aparecer (janela com dono não ganha botão na barra). A janela principal nã
 serve de dono: fica minimizada durante a sessão, e o Windows esconde as janelas
 de um dono minimizado.
 
+O WS_EX_NOACTIVATE não basta quando o processo do Cartridges já está em primeiro
+plano (a janela principal ou as preferências em uso): o Windows só deixa ativar
+janela de um processo que está na frente, e o GTK a ativa ao mostrá-la.
+`mostrar_sem_tomar_o_foco` mostra a janela e devolve o foco a quem o tinha.
+
 Não aparece sobre jogo em tela cheia exclusiva (o mesmo limite do Hydra); a
 iluminação cobre esse caso. O mesmo jeito de falar com o Win32 que
 `session_window.position_bottom_right` já usa.
@@ -104,6 +109,7 @@ def _api() -> Any:
         u.GetWindow.argtypes = [wintypes.HWND, ctypes.c_uint]
         u.IsWindow.argtypes = [wintypes.HWND]
         u.IsIconic.argtypes = [wintypes.HWND]
+        u.SetForegroundWindow.argtypes = [wintypes.HWND]
         u.CreateWindowExW.restype = wintypes.HWND
         u.CreateWindowExW.argtypes = [
             wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
@@ -253,6 +259,30 @@ def preparar(janela: Any) -> bool:
         # Sem dono o WS_EX_NOACTIVATE ainda a mantém fora da barra de tarefas.
         logging.warning("Não foi possível dar um dono à janela do aviso", exc_info=True)
     return True
+
+
+def mostrar_sem_tomar_o_foco(janela: Any) -> None:
+    """Mostra a janela e, se ela tomou o foco, o devolve a quem o tinha.
+
+    Com o processo já em primeiro plano o GTK ativa a janela ao mostrá-la, apesar
+    do WS_EX_NOACTIVATE. Falha do Win32 não levanta: o cartão aparece do mesmo jeito.
+    """
+    anterior = None
+    try:
+        anterior = _api().GetForegroundWindow()
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.warning("Não foi possível ler a janela em primeiro plano", exc_info=True)
+    janela.set_visible(True)
+    if not anterior:
+        return
+    try:
+        u = _api()
+        atual = u.GetForegroundWindow()
+        if atual and atual in (handle(janela), dono_de(janela)) and u.IsWindow(anterior):
+            if not u.SetForegroundWindow(anterior):
+                logging.warning("O Windows recusou devolver o foco após mostrar o aviso")
+    except Exception:  # pylint: disable=broad-exception-caught
+        logging.warning("Não foi possível devolver o foco após mostrar o aviso", exc_info=True)
 
 
 def posicao(

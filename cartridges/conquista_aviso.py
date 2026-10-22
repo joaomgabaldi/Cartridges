@@ -202,7 +202,7 @@ class _JanelaDoAviso(Gtk.Window):
             # quem chama descarta a janela, que nunca chegou a ser mostrada.
             raise RuntimeError("a janela do aviso não pôde ser preparada")
         self.cartao.set_opacity(0)
-        self.set_visible(True)
+        janela_por_cima.mostrar_sem_tomar_o_foco(self)
         janela_por_cima.por_no_canto(self, canto)
         self._animar(0, 1)
 

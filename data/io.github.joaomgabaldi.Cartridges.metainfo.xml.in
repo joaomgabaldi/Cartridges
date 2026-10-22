@@ -32,6 +32,7 @@
       <description translate="no">
         <ul>
           <li>Na primeira abertura, um assistente ajuda a configurar o aplicativo: a pasta dos jogos, as capas, as contas das lojas e a iluminação inteligente.</li>
+          <li>O aviso de conquista não tira mais o foco do aplicativo quando aparece com o Cartridges em uso.</li>
         </ul>
       </description>
     </release>

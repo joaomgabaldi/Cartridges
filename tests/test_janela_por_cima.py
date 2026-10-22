@@ -7,6 +7,7 @@ import pytest
 from gi.repository import GLib, Gtk
 
 from cartridges.utils import janela_por_cima as jpc
+from tests import area_de_trabalho_oculta
 
 MONITOR = (0, 0, 1920, 1080)
 
@@ -91,15 +92,14 @@ def _bombear(segundos=0.6):
 
 def test_cartao_mostrado_nao_tem_botao_na_barra_de_tarefas():
     """O GTK tira o WS_EX_TOOLWINDOW ao mostrar a janela; o que a tira da barra e
-    do Alt+Tab é o dono (e o WS_EX_NOACTIVATE), sem tomar o foco."""
+    do Alt+Tab é o dono (e o WS_EX_NOACTIVATE)."""
     u = jpc._api()
-    primeiro_plano = u.GetForegroundWindow()
     janela = Gtk.Window(decorated=False, resizable=False, title="teste-cartao")
     janela.set_child(Gtk.Label(label="Conquista desbloqueada"))
     janela.realize()
     try:
         assert jpc.preparar(janela) is True
-        janela.set_visible(True)
+        jpc.mostrar_sem_tomar_o_foco(janela)
         assert jpc.por_no_canto(janela, "inferior-direito") is True
         _bombear()
         hwnd = jpc.handle(janela)
@@ -110,7 +110,32 @@ def test_cartao_mostrado_nao_tem_botao_na_barra_de_tarefas():
         dono = jpc.dono_de(janela)
         assert estilos & jpc.WS_EX_TOOLWINDOW or (dono and not u.IsIconic(dono))
         assert dono and not u.IsIconic(dono)
-        assert u.GetForegroundWindow() == primeiro_plano  # e sem pegar o foco
+    finally:
+        janela.destroy()
+
+
+def test_cartao_mostrado_com_o_app_na_frente_nao_toma_o_foco():
+    """Com um primeiro plano real (fora da área oculta), o cartão o devolve.
+
+    Só prova o caso "app na frente" quando o processo dos testes está em
+    primeiro plano (ex.: a janela de um teste anterior com o foco); com o
+    terminal na frente, o Windows nem deixa o GTK ativar o cartão e o teste
+    passa sem exercitar a devolução. Esse caminho é coberto, sempre, pelos
+    testes com o Win32 simulado acima."""
+    if area_de_trabalho_oculta.ativa():
+        pytest.skip(
+            "o primeiro plano não existe na área de trabalho oculta; "
+            "rode com CARTRIDGES_TESTES_NA_TELA=1"
+        )
+    u = jpc._api()
+    janela = Gtk.Window(decorated=False, resizable=False, title="teste-cartao-foco")
+    janela.set_child(Gtk.Label(label="Conquista desbloqueada"))
+    janela.realize()
+    try:
+        assert jpc.preparar(janela) is True
+        jpc.mostrar_sem_tomar_o_foco(janela)
+        _bombear()
+        assert u.GetForegroundWindow() not in (jpc.handle(janela), jpc.dono_de(janela))
     finally:
         janela.destroy()
 
@@ -225,3 +250,73 @@ def test_handle_e_estilos_nao_levantam_com_janela_estranha():
     assert jpc.estilos_de(SemSuperficie()) == 0
     assert jpc.preparar(SemSuperficie()) is False
     assert jpc.por_no_canto(SemSuperficie(), "inferior-direito") is False
+
+
+class _JanelaFalsa:
+    """Só o que `mostrar_sem_tomar_o_foco` usa; mostrar muda o primeiro plano."""
+
+    def __init__(self, ao_mostrar):
+        self._ao_mostrar = ao_mostrar
+
+    def set_visible(self, visivel):
+        assert visivel is True
+        self._ao_mostrar()
+
+
+def _mostrar_com(monkeypatch, antes, depois, set_foreground=None, existe=True, retorno=1):
+    """Mostra uma janela falsa (hwnd 100, dono 200) com o primeiro plano indo de
+    ``antes`` a ``depois``. Devolve os pedidos de ``SetForegroundWindow``."""
+    estado = {"primeiro_plano": antes}
+    pedidos = []
+
+    def definir(hwnd):
+        pedidos.append(hwnd)
+        if set_foreground:
+            set_foreground(hwnd)
+        return retorno
+
+    api = _Win32ComFalha(
+        jpc._api(),
+        GetForegroundWindow=lambda: estado["primeiro_plano"],
+        SetForegroundWindow=definir,
+        IsWindow=lambda hwnd: int(existe and hwnd != 0),
+    )
+    monkeypatch.setattr(jpc, "_api", lambda: api)
+    monkeypatch.setattr(jpc, "handle", lambda _janela: 100)
+    monkeypatch.setattr(jpc, "dono_de", lambda _janela: 200)
+    janela = _JanelaFalsa(lambda: estado.update(primeiro_plano=depois))
+    jpc.mostrar_sem_tomar_o_foco(janela)
+    return pedidos
+
+
+@pytest.mark.parametrize("depois", [100, 200], ids=["o-cartao", "o-dono"])
+def test_mostrar_devolve_o_foco_a_quem_o_tinha(monkeypatch, depois):
+    assert _mostrar_com(monkeypatch, antes=50, depois=depois) == [50]
+
+
+def test_mostrar_nao_mexe_no_foco_se_o_cartao_nao_o_tomou(monkeypatch):
+    assert _mostrar_com(monkeypatch, antes=50, depois=50) == []
+    assert _mostrar_com(monkeypatch, antes=50, depois=77) == []
+
+
+def test_mostrar_sem_janela_anterior_nao_devolve_foco(monkeypatch):
+    assert _mostrar_com(monkeypatch, antes=0, depois=100) == []
+
+
+def test_mostrar_nao_devolve_foco_a_janela_que_nao_existe_mais(monkeypatch):
+    assert _mostrar_com(monkeypatch, antes=50, depois=100, existe=False) == []
+
+
+def test_mostrar_avisa_se_o_windows_recusa_devolver_o_foco(monkeypatch, caplog):
+    with caplog.at_level("WARNING"):
+        assert _mostrar_com(monkeypatch, antes=50, depois=100, retorno=0) == [50]
+    assert "recusou" in caplog.text
+
+
+def test_mostrar_nao_levanta_se_o_win32_falhar(monkeypatch, caplog):
+    def explode(_hwnd):
+        raise OSError("negado")
+
+    with caplog.at_level("WARNING"):
+        assert _mostrar_com(monkeypatch, antes=50, depois=100, set_foreground=explode) == [50]
+    assert "foco" in caplog.text
