@@ -1210,8 +1210,10 @@ class CartridgesApplication(Adw.Application):
 
 def relancar() -> None:
     """Abre o app de novo, desacoplado deste processo, que já está saindo."""
+    # O Cartridges.exe já acrescenta o script sozinho
+    argv = sys.argv[1:] if Path(sys.executable).stem.lower() == "cartridges" else sys.argv
     subprocess.Popen(  # pylint: disable=consider-using-with
-        [sys.executable, *sys.argv],
+        [sys.executable, *argv],
         creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
         close_fds=True,
     )

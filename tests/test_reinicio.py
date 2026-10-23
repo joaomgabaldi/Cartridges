@@ -23,6 +23,18 @@ def test_relancar_abre_o_mesmo_comando_desacoplado(monkeypatch):
     assert kw["close_fds"] is True
 
 
+def test_relancar_pelo_cartridges_exe_nao_repete_o_script(monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(
+        main_module.subprocess, "Popen", lambda args, **kw: chamadas.append(args)
+    )
+    exe = r"C:\Program Files\Cartridges Revamped\bin\Cartridges.exe"
+    monkeypatch.setattr(sys, "executable", exe)
+    monkeypatch.setattr(sys, "argv", [r"C:\Program Files\Cartridges Revamped\bin\cartridges", "x"])
+    main_module.relancar()
+    assert chamadas == [[exe, "x"]]
+
+
 def test_main_so_relanca_quando_pedido(monkeypatch):
     eventos = []
 

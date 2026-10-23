@@ -196,6 +196,48 @@ def montar(prefixo: Path, destino: Path) -> None:
         copiar(bin_dir / exe, destino / "bin" / exe)
 
 
+def compilar_lancador(prefixo: Path, destino: Path) -> None:
+    """Gera bin\\Cartridges.exe, que roda o Python do app já com o script bin\\cartridges.
+
+    Liga com a libpython do prefixo, então acompanha a versão do Python sozinho.
+    """
+    fonte = Path(__file__).parent / "lancador"
+    destino = destino.resolve()
+    recurso = destino.parent / "cartridges_rc.o"
+    shared = destino / "lib" / PYTHON / "site-packages" / "cartridges" / "shared.py"
+    achada = re.search(r'^VERSION = "([\d.]+)"', shared.read_text(encoding="utf-8"), re.M)
+    if not achada:
+        sys.exit(f"Não achei VERSION em {shared}.")
+    versao = achada[1]
+    faltando = [exe for exe in ("windres.exe", "gcc.exe") if not (prefixo / "bin" / exe).exists()]
+    if faltando:
+        sys.exit(f"Faltam {faltando} no MSYS2: pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-binutils")
+    for comando in (
+        [
+            prefixo / "bin" / "windres.exe", f"-DVERSAO={versao}",
+            f"-DVERSAO_NUM={versao.replace('.', ',')},0",
+            "-i", fonte / "cartridges.rc", "-o", recurso,
+        ],
+        [
+            prefixo / "bin" / "gcc.exe", "-O2", "-s", "-municode", "-mwindows",
+            fonte / "cartridges.c", recurso, f"-L{prefixo / 'lib'}", f"-l{PYTHON}",
+            "-o", destino / "bin" / "Cartridges.exe",
+        ],
+    ):
+        resultado = subprocess.run(
+            [str(parte) for parte in comando],
+            cwd=fonte,
+            # O windres chama o gcc pelo PATH
+            env={**os.environ, "PATH": f"{prefixo / 'bin'}{os.pathsep}{os.environ['PATH']}"},
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
+        )
+        if resultado.returncode != 0:
+            sys.exit(f"{Path(comando[0]).name} falhou:\n{resultado.stdout}{resultado.stderr}")
+
+
 VERIFICACAO = r"""
 import builtins, importlib, os, pkgutil, sys, tempfile
 
@@ -314,6 +356,7 @@ def compilar(destino: Path) -> None:
 def main() -> None:
     prefixo, destino = Path(sys.argv[1]), Path(sys.argv[2])
     montar(prefixo, destino)
+    compilar_lancador(prefixo, destino)
     verificar(destino)
     compilar(destino)
     arquivos = [arquivo for arquivo in destino.rglob("*") if arquivo.is_file()]

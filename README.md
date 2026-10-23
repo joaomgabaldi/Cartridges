@@ -219,7 +219,7 @@ Depois de instalado, o aplicativo se atualiza sozinho.
 
 **Placa de vídeo NVIDIA:** no modo padrão, o driver da NVIDIA desenha uma moldura preta em volta da
 janela. No Painel de Controle NVIDIA, em *Gerenciar as configurações 3D*, crie um perfil para o
-`pythonw.exe` do Cartridges e defina o *método de apresentação Vulkan/OpenGL* como *Preferir
+`Cartridges.exe` (pasta `bin` da instalação) e defina o *método de apresentação Vulkan/OpenGL* como *Preferir
 nativo*. O instalador mostra esse passo a passo em computadores com NVIDIA.
 
 Ao desinstalar, o instalador pergunta se deve remover também a biblioteca e as configurações.
@@ -239,7 +239,8 @@ pacman -S mingw-w64-ucrt-x86_64-gtk4 mingw-w64-ucrt-x86_64-libadwaita \
   mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-python-gobject \
   mingw-w64-ucrt-x86_64-python-requests mingw-w64-ucrt-x86_64-python-pillow \
   mingw-w64-ucrt-x86_64-python-cryptography mingw-w64-ucrt-x86_64-python-pip \
-  mingw-w64-ucrt-x86_64-ffmpeg mingw-w64-ucrt-x86_64-meson mingw-w64-ucrt-x86_64-ninja
+  mingw-w64-ucrt-x86_64-ffmpeg mingw-w64-ucrt-x86_64-meson mingw-w64-ucrt-x86_64-ninja \
+  mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-binutils
 /ucrt64/bin/python.exe -m pip install --break-system-packages tinytuya
 ```
 

@@ -2,7 +2,7 @@
 #define MyAppVersion "@VERSION@"
 #define MyAppPublisher "joaomgabaldi"
 #define MyAppURL "https://github.com/joaomgabaldi/Cartridges"
-#define MyAppExeName "pythonw.exe"
+#define MyAppExeName "Cartridges.exe"
 
 [Setup]
 AppId={{88FC7AF8-9F74-40EC-AAED-FA6356261CBB}
@@ -12,6 +12,11 @@ AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
+AppCopyright=Copyright © 2026 {#MyAppPublisher}. Licenciado sob a GPL-3.0-or-later.
+VersionInfoVersion={#MyAppVersion}
+VersionInfoTextVersion={#MyAppVersion}
+VersionInfoDescription=Instalador do {#MyAppName}
+VersionInfoOriginalFileName=Cartridges Windows.exe
 DefaultDirName={autopf64}\Cartridges Revamped
 DisableProgramGroupPage=yes
 LicenseFile=..\..\..\LICENSE
@@ -106,11 +111,11 @@ Source: "..\..\app\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 Source: "..\..\..\build-aux\windows\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; Parameters: """{app}\bin\cartridges"""; IconFilename: "{app}\icon.ico"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; Parameters: """{app}\bin\cartridges"""; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\bin\{#MyAppExeName}"; Parameters: """{app}\bin\cartridges"""; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall
+Filename: "{app}\bin\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall
 
 [Code]
 // NVIDIA driver notice, right after the licence page, on machines with an
@@ -171,7 +176,7 @@ begin
     'Evita a moldura preta ao redor da janela',
     'Após a instalação, faça o seguinte ajuste:' + #13#10 + #13#10 +
     '1. Abra o Painel de Controle NVIDIA e acesse Gerenciar as configurações 3D.' + #13#10 +
-    '2. Na aba Configurações de programa, adicione o pythonw.exe da pasta bin da ' +
+    '2. Na aba Configurações de programa, adicione o Cartridges.exe da pasta bin da ' +
     'instalação (por padrão, C:\Program Files\Cartridges Revamped\bin).' + #13#10 +
     '3. No método de apresentação Vulkan/OpenGL ("Vulkan/OpenGL present method"), ' +
     'escolha "Preferir nativo" ("Prefer native") e aplique.',

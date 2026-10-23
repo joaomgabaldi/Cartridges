@@ -1,0 +1,33 @@
+1 ICON "../icon.ico"
+
+/* VERSAO e VERSAO_NUM vêm do montar_app.py. Sem o bloco fixo (FILEVERSION),
+   o Windows ignora os textos e o Gerenciador de Tarefas não mostra o nome.
+   VERSAO chega sem aspas: a linha de comando do Windows as perde no caminho. */
+#define TEXTO_(x) #x
+#define TEXTO(x) TEXTO_(x)
+1 VERSIONINFO
+FILEVERSION VERSAO_NUM
+PRODUCTVERSION VERSAO_NUM
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "041604B0"
+    BEGIN
+      VALUE "CompanyName", "joaomgabaldi"
+      VALUE "FileDescription", "Cartridges"
+      VALUE "FileVersion", TEXTO(VERSAO)
+      VALUE "InternalName", "Cartridges"
+      VALUE "LegalCopyright", "Copyright \251 2026 joaomgabaldi. Licenciado sob a GPL-3.0-or-later."
+      VALUE "OriginalFilename", "Cartridges.exe"
+      VALUE "ProductName", "Cartridges"
+      VALUE "ProductVersion", TEXTO(VERSAO)
+      VALUE "Comments", "Seus jogos em um s\363 lugar"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0416, 1200
+  END
+END

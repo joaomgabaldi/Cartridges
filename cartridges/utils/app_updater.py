@@ -160,7 +160,7 @@ def notes_to_markup(notes: str) -> str:
 def installed_root() -> Optional[Path]:
     """Pasta da instalação, ou None quando o app roda do código-fonte.
 
-    O app instalado roda de ``{app}\\bin\\pythonw.exe`` e o Inno Setup deixa o
+    O app instalado roda de ``{app}\\bin\\Cartridges.exe`` e o Inno Setup deixa o
     ``unins000.exe`` em ``{app}``. No MSYS2 o pai de ``bin`` é ``ucrt64``, que
     não tem desinstalador, e o app nunca tenta se atualizar.
     """
