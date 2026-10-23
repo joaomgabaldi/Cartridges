@@ -61,7 +61,9 @@ int wmain(int argc, wchar_t **argv)
         return PERFIL_SEM_NVAPI;
     }
 
-    dll = LoadLibraryW(L"nvapi64.dll");
+    /* Só do System32, onde o driver a instala: o processo roda elevado, e uma
+       nvapi64.dll posta na pasta do exe seria carregada antes */
+    dll = LoadLibraryExW(L"nvapi64.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
     query = dll ? (QueryInterface)(void *)GetProcAddress(dll, "nvapi_QueryInterface") : NULL;
     if (!query) {
         fputs("nvapi64.dll ausente\n", stderr);

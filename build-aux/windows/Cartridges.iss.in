@@ -176,19 +176,6 @@ begin
     'escolha "Preferir nativo" ("Prefer native") e aplique.');
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  Codigo: Integer;
-begin
-  if (CurStep = ssPostInstall) and HasNvidiaGpu then
-  begin
-    // 0 funcionou; 3 o exe já está num perfil de outra pessoa ou programa, que
-    // fica como está; 1 e 2 (e -1, não rodou) pedem o passo a passo manual.
-    Codigo := AjustarNvidia('aplicar');
-    NvidiaFalhou := (Codigo <> 0) and (Codigo <> 3);
-  end;
-end;
-
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := (PageID = NvidiaPage.ID) and not NvidiaFalhou;
@@ -197,11 +184,14 @@ end;
 // Migração de uma instalação antiga "só para mim" (%LOCALAPPDATA%\Programs),
 // de quando o instalador ainda oferecia esse modo. O instalador elevado não a
 // enxerga e criaria uma segunda cópia. O desinstalador dela não serve: o código
-// antigo pergunta se apaga a biblioteca e, sem ninguém para responder, pode
-// apagar. A limpeza é feita aqui, só na pasta da instalação, nos atalhos dela e
-// na chave de desinstalação; a biblioteca e as configurações ficam fora da
-// pasta e não são tocadas. O app não grava mais nada por usuário que aponte
-// para a pasta (sem "abrir com o Windows").
+// antigo pergunta se apaga a biblioteca, e numa atualização silenciosa ninguém
+// responde. A limpeza é feita aqui, depois de a instalação nova dar certo (se
+// ela falhar, a antiga continua de pé), e só no que o instalador antigo criou:
+// a pasta pode ter sido escolhida pela pessoa e ter outros arquivos, que ficam.
+// A biblioteca e as configurações estão fora da pasta e não são tocadas; o app
+// não grava mais nada por usuário que aponte para ela (sem "abrir com o
+// Windows"). Fixados na barra de tarefas que apontavam para o exe antigo param
+// de funcionar e precisam ser refeitos.
 // Limite conhecido: com o UAC respondido por outra conta, o HKCU é o dela e a
 // instalação antiga não aparece; fica a cópia duplicada, sem perda de dados.
 const
@@ -230,43 +220,85 @@ begin
     Log('Migração: atalho mantido (aponta para outro lugar): ' + Atalho);
 end;
 
+// Um item que o instalador antigo criou. True se ele não existe mais.
+function ApagarItem(const Caminho: String): Boolean;
+begin
+  if DirExists(Caminho) then
+    Result := DelTree(Caminho, True, True, True)
+  else if FileExists(Caminho) then
+    Result := DeleteFile(Caminho)
+  else
+    Result := True;
+  if not Result then
+    Log('Migração: não foi possível apagar ' + Caminho);
+end;
+
+// O que o instalador antigo pôs na pasta ([Files]: o conteúdo de _build\app e o
+// icon.ico; o Inno acrescenta o unins000). O unins000.exe sai por último e só se
+// todo o resto saiu: enquanto ele existir, a próxima instalação tenta de novo.
+function ApagarInstalacaoAntiga(const Pasta: String): Boolean;
+begin
+  Result := ApagarItem(Pasta + 'bin');
+  Result := ApagarItem(Pasta + 'etc') and Result;
+  Result := ApagarItem(Pasta + 'lib') and Result;
+  Result := ApagarItem(Pasta + 'share') and Result;
+  Result := ApagarItem(Pasta + 'icon.ico') and Result;
+  Result := ApagarItem(Pasta + 'unins000.dat') and Result;
+  if Result then
+    Result := ApagarItem(Pasta + 'unins000.exe');
+  // Só sai se tiver ficado vazia: o que a pessoa guardou ali fica
+  RemoveDir(RemoveBackslash(Pasta));
+end;
+
 procedure MigrarInstalacaoDoUsuario;
 var
-  Pasta, Dados: String;
+  Pasta, Dados, Destino: String;
 begin
   if not RegQueryStringValue(HKCU, ChaveDoUsuario, 'InstallLocation', Pasta) then
     Exit;
   Pasta := Normalizar(Pasta);
   Dados := Normalizar(ExpandConstant('{localappdata}\io.github.joaomgabaldi.Cartridges'));
+  Destino := Normalizar(ExpandConstant('{app}'));
   Log('Migração: instalação só para o usuário em ' + Pasta);
   if not DirExists(Pasta) or not FileExists(Pasta + 'unins000.exe') then
   begin
     Log('Migração: pasta ausente ou sem unins000.exe; nada apagado');
     Exit;
   end;
-  if (Pasta = Normalizar(ExpandConstant('{app}'))) or (Pos(Pasta, Dados) = 1) or (Pos(Dados, Pasta) = 1) then
+  if (Pos(Pasta, Destino) = 1) or (Pos(Destino, Pasta) = 1) or (Pos(Pasta, Dados) = 1) or (Pos(Dados, Pasta) = 1) then
   begin
-    Log('Migração: a pasta é a de destino ou a dos dados; nada apagado');
+    Log('Migração: a pasta contém ou está dentro do destino ou dos dados; nada apagado');
     Exit;
   end;
   try
     ApagarAtalhoAntigo(ExpandConstant('{userprograms}\{#MyAppName}.lnk'), Pasta);
     ApagarAtalhoAntigo(ExpandConstant('{userdesktop}\{#MyAppName}.lnk'), Pasta);
-    if DelTree(Pasta, True, True, True) then
-      Log('Migração: pasta apagada')
+    if ApagarInstalacaoAntiga(Pasta) then
+    begin
+      RegDeleteKeyIncludingSubkeys(HKCU, ChaveDoUsuario);
+      Log('Migração: instalação antiga removida');
+    end
     else
-      Log('Migração: a pasta não foi apagada por inteiro');
-    RegDeleteKeyIncludingSubkeys(HKCU, ChaveDoUsuario);
-    Log('Migração: chave de desinstalação apagada');
+      Log('Migração: incompleta; a chave de desinstalação fica para a próxima tentativa');
   except
     Log('Migração interrompida: ' + GetExceptionMessage);
   end;
 end;
 
-function PrepareToInstall(var NeedsRestart: Boolean): String;
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Codigo: Integer;
 begin
+  if CurStep <> ssPostInstall then
+    Exit;
   MigrarInstalacaoDoUsuario;
-  Result := '';
+  if HasNvidiaGpu then
+  begin
+    // 0 funcionou; 3 o exe já está num perfil de outra pessoa ou programa, que
+    // fica como está; 1 e 2 (e -1, não rodou) pedem o passo a passo manual.
+    Codigo := AjustarNvidia('aplicar');
+    NvidiaFalhou := (Codigo <> 0) and (Codigo <> 3);
+  end;
 end;
 
 // Offer to remove the user's library and settings on uninstall. They live
