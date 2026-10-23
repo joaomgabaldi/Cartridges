@@ -80,6 +80,7 @@ from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.store.store import Store
 from cartridges.tarefas_janela import TarefasJanela
 from cartridges.utils.app_updater import AppUpdater
+from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.hltb_backfill import HLTBBackfill
 from cartridges.utils.install_size import InstallSizeSweep
 from cartridges.utils.na_tela import entregar_na_tela
@@ -95,6 +96,7 @@ from cartridges.utils.updates_checker import UpdatesChecker
 from cartridges.utils import (
     backup,
     copias_animadas,
+    redefinir,
     restauracao,
     session_fita,
     session_log,
@@ -520,6 +522,10 @@ class CartridgesApplication(Adw.Application):
             shared.win.present()
             return
 
+        # "Redefinir Cartridges", agendado por Preferências: antes do log, que
+        # mora na pasta do app e a travaria.
+        redefinido = redefinir.aplicar_pendente()
+
         try:
             setup_logging()
         except ValueError:
@@ -532,6 +538,10 @@ class CartridgesApplication(Adw.Application):
             logging.exception("Não foi possível configurar o log em arquivo")
 
         log_system_info()
+        if redefinido:
+            logging.info("Cartridges redefinido")
+        elif redefinido is False:
+            logging.error("Não foi possível redefinir o Cartridges", exc_info=redefinir.falha)
 
         # Um backup agendado por Preferências é aplicado aqui, antes de
         # qualquer leitura de dados: fitas, papéis de parede e a biblioteca
@@ -794,6 +804,13 @@ class CartridgesApplication(Adw.Application):
 
         if backup.pasta_dos_saves_desfeita:
             restauracao_dialogs.avisar_pasta_dos_saves(backup.pasta_dos_saves_desfeita)
+
+        if redefinir.falha is not None:
+            create_dialog(
+                shared.win,
+                _("Não foi possível redefinir"),
+                _("Não foi possível concluir a redefinição do Cartridges. Tente novamente."),
+            )
 
         if restauracao.existe():
             self.continuar_restauracao()

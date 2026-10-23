@@ -427,8 +427,7 @@ class Importer(ErrorProducer):
         dialog.present(shared.win)
 
     def undo_import(self, *_args: Any) -> None:
-        # Games may have vanished since the import (e.g. "Remover todos os
-        # jogos"),
+        # Games may have vanished since the import (e.g. removed by hand),
         # so missing ids are skipped instead of crashing the undo
         for game_id in self.imported_game_ids:
             if game := shared.store.get(game_id):

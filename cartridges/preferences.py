@@ -37,9 +37,8 @@ from cartridges.saves import backup_de_saves, pasta
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.utils import (
     backup,
-    copias_animadas,
     janela_por_cima,
-    restauracao,
+    redefinir,
     session_fita,
     window_geometry,
 )
@@ -145,7 +144,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     atualizacoes_row: Adw.ActionRow = Gtk.Template.Child()
     buscar_atualizacoes_botao: Gtk.Button = Gtk.Template.Child()
     danger_zone_group = Gtk.Template.Child()
-    remove_all_games_button_row = Gtk.Template.Child()
+    redefinir_button_row = Gtk.Template.Child()
 
     is_open = False
 
@@ -165,7 +164,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         self.file_chooser = Gtk.FileDialog()
 
         # General
-        self.remove_all_games_button_row.connect("activated", self.remove_all_games)
+        self.redefinir_button_row.connect("activated", self.redefinir_cartridges)
         self.atualizacoes_row.set_subtitle(_("Versão atual: {}").format(shared.VERSION))
         self.buscar_atualizacoes_botao.connect("clicked", self.buscar_atualizacoes)
         self.export_backup_button_row.connect("activated", self.export_backup)
@@ -1119,137 +1118,42 @@ class CartridgesPreferences(Adw.PreferencesDialog):
     ) -> None:
         self.file_chooser.select_folder(shared.win, None, callback, callback_data)
 
-    def remove_all_games(self, *_args: Any) -> None:
-        """Ask for confirmation, then wipe the whole library (irreversible)."""
+    def redefinir_cartridges(self, *_args: Any) -> None:
+        """Pede confirmação e reinicia o app como recém-instalado (irreversível)."""
         dialog = Adw.AlertDialog.new(
-            _("Remover todos os jogos?"),
+            _("Redefinir o Cartridges?"),
             _(
-                "Tem certeza que deseja remover todos os jogos da biblioteca? "
-                "Esta ação é irreversível."
+                "Tem certeza que deseja redefinir o Cartridges? Todos os jogos, "
+                "configurações, contas conectadas e cópias dos saves armazenadas "
+                "na pasta do aplicativo serão excluídos, e o aplicativo será "
+                "reiniciado. Esta ação é irreversível."
             ),
         )
         dialog.add_response("cancel", _("Cancelar"))
-        dialog.add_response("reset", _("Remover"))
+        dialog.add_response("reset", _("Redefinir"))
         dialog.set_response_appearance("reset", Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.set_default_response("cancel")
         dialog.set_close_response("cancel")
-        dialog.connect("response", self.reset_response)
+        dialog.connect("response", self._redefinir_respondido)
         dialog.present(self)
 
-    def reset_response(self, _dialog: Any, response: str) -> None:
-        if response == "reset":
-            self.reset_app_data()
-
-    def reset_app_data(self) -> None:
-        """Delete every stored game and cover and forget the shortcuts folder."""
-        # End any play session first: its periodic save would otherwise
-        # re-create the game's JSON right after the wipe
-        # (avoid import cycles)
-        from cartridges.process_session import ProcessSession
-        from cartridges.session_window import SessionWindow
-
-        if SessionWindow.active is not None:
-            SessionWindow.active.close()
-        if ProcessSession.active is not None:
-            # Don't record: the game is about to be wiped, and saving it would
-            # write its JSON back to disk after the reset
-            ProcessSession.active.stop(record=False)
-
-        # Same reason, and the refresh is the longest-running of the three: it
-        # walks its own list of games for minutes and saves each one as it
-        # finishes. The queue stops here; the game already in flight is caught
-        # by the store check in `MetadataRefresh._run_queue`.
-        get_metadata_refresh().cancel()
-
-        # Os dois sweeps de fundo (HLTB e tamanho em disco) andam por snapshots
-        # próprios e também regravariam JSONs depois do wipe — o guard de
-        # identidade nos `_apply` deles é a rede de segurança, mas parar a
-        # passada atual poupa lookups e disco gastos numa biblioteca que já
-        # era. `start()` re-arma: uma importação nova depois do reset volta a
-        # ser varrida normalmente.
-        app = Gio.Application.get_default()
-        for sweep_name in ("hltb_backfill", "install_size_sweep"):
-            sweep = getattr(app, sweep_name, None)
-            if sweep is not None:
-                sweep.stop()
-                sweep.start()
-
-        # Um lote de capas do SGDB em voo gravaria arquivos em covers_dir
-        # depois da limpeza; o worker consulta o cancellable entre um jogo e
-        # outro. O reset em seguida deixa os managers prontos para a próxima
-        # importação.
-        for manager in shared.store.managers.values():
-            if hasattr(manager, "cancel_tasks"):
-                manager.cancel_tasks()
-                manager.reset_cancellable()
-
-        # O mesmo com as cópias das capas animadas: a geração em curso para
-        # sem gravar e a fila larga o resto. Ela segue de pé para depois.
-        copias_animadas.encerrar()
-
-        # Drop pending undo toasts; their games are about to be deleted and
-        # clicking "Desfazer" later would resurrect one on disk
-        for toast in list(shared.win.toasts.values()):
-            shared.win.toast_queue.dismiss(toast)
-        shared.win.toasts = {}
-
-        # Forget the last import's undo data for the same reason ("Desfazer"
-        # on its summary would otherwise look up games that no longer exist)
-        if shared.importer:
-            shared.importer.imported_game_ids = set()
-            shared.importer.removed_game_ids = set()
-
-        if shared.win.navigation_view.get_visible_page() == shared.win.details_page:
-            shared.win.navigation_view.pop()
-
-        # Clear the UI and in-memory store
-        shared.win.library.remove_all()
-        shared.win.zerados_library.remove_all()
-        shared.store.clear()
-        for cover in shared.win.game_covers.values():
-            cover.desligar_animacao()
-        shared.win.game_covers = {}
-
-        # Delete the files on disk (games + covers)
-        if shared.games_dir.is_dir():
-            for path in shared.games_dir.glob("*.json"):
-                path.unlink(missing_ok=True)
-        # Papel de parede, cor da fita e conquistas de cada jogo também: os ids
-        # são estáveis, e o jogo reimportado herdaria a escolha (ou as
-        # conquistas) do apagado. Só os arquivos do topo — a pasta `cache` dos
-        # papéis de parede não é de jogo nenhum, e o `fitas.json` (a
-        # configuração das fitas) mora fora de `fitas_dir`.
-        for directory in (
-            shared.covers_dir,
-            shared.logos_dir,
-            shared.wallpapers_dir,
-            shared.fitas_dir,
-            shared.conquistas_dir,
-            shared.capas_animadas_dir,
-        ):
-            if directory.is_dir():
-                for path in directory.iterdir():
-                    if path.is_file():
-                        path.unlink(missing_ok=True)
-
-        # O histórico de sessões também: os ids de atalho são estáveis, e os
-        # jogos reimportados herdariam as sessões dos apagados.
-        (shared.app_dir / "sessions.jsonl").unlink(missing_ok=True)
-
-        # Uma restauração pendente também acaba aqui: os jogos dela foram
-        # apagados, e a abertura seguinte exigiria a pasta de atalhos esvaziada
-        # logo abaixo para procurar atalhos de jogos que não existem mais.
-        restauracao.gravar([], 0)
-
-        # Forget the configured shortcuts folder
-        shared.schema.set_string("shortcuts-location", "")
-        self.update_shortcuts_location_subtitle()
-
-        shared.win.set_library_child()
-
-        # Plain priority, like every other toast now: HIGH is what interrupted
-        # whatever was on screen and pushed it back into the queue to replay.
-        self.add_toast(Adw.Toast.new(_("Todos os jogos foram removidos")))
+    def _redefinir_respondido(self, _dialog: Any, response: str) -> None:
+        if response != "reset":
+            return
+        # A limpeza é na abertura seguinte (`utils/redefinir.py`); um backup dos
+        # saves no meio gravaria na pasta que ela vai apagar.
+        if backup_de_saves.em_andamento():
+            self._avisar_saves_em_andamento()
+            return
+        try:
+            redefinir.agendar()
+        except OSError:
+            logging.exception("Não foi possível agendar a redefinição")
+            self.add_toast(Adw.Toast.new(_("Não foi possível redefinir o Cartridges")))
+            return
+        app = shared.win.get_application()
+        app.reiniciar = True
+        app.quit()
 
     def _atualizar_pasta_dos_saves(self) -> None:
         """Mostra a pasta atual no subtítulo; "Usar a padrão" só serve fora dela."""

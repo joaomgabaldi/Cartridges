@@ -33,6 +33,7 @@
         <ul>
           <li>O Cartridges agora aparece com o próprio nome e ícone no Gerenciador de Tarefas e nas configurações de vídeo do Windows. Os atalhos fixados na barra de tarefas continuam funcionando depois da atualização.</li>
           <li>A placa de vídeo NVIDIA agora é configurada automaticamente durante a instalação, sem nenhum ajuste manual.</li>
+          <li>"Remover todos os jogos" agora se chama "Redefinir Cartridges" e devolve o aplicativo ao estado de recém-instalado, com as configurações originais.</li>
         </ul>
       </description>
     </release>
