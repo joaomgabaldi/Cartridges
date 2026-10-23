@@ -20,7 +20,10 @@ VersionInfoOriginalFileName=Cartridges Windows.exe
 DefaultDirName={autopf64}\Cartridges Revamped
 DisableProgramGroupPage=yes
 LicenseFile=..\..\..\LICENSE
-PrivilegesRequiredOverridesAllowed=dialog
+; Sempre como administrador: o ajuste da NVIDIA grava no driver. A migração de
+; uma instalação antiga "só para mim" lê {userprograms}/{userdesktop}.
+PrivilegesRequired=admin
+UsedUserAreasWarning=no
 OutputBaseFilename=Cartridges Windows
 SetupIconFile=..\..\..\build-aux\windows\icon.ico
 Compression=lzma
@@ -44,15 +47,6 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 [Messages]
 brazilianportuguese.WelcomeLabel1=Bem-vindo ao instalador do [name]
 brazilianportuguese.WelcomeLabel2=O [name/ver] será instalado no seu computador.%n%nRecomendamos fechar os outros aplicativos antes de continuar.
-
-brazilianportuguese.PrivilegesRequiredOverrideTitle=Modo de instalação
-brazilianportuguese.PrivilegesRequiredOverrideInstruction=Escolha como instalar
-brazilianportuguese.PrivilegesRequiredOverrideText1=O %1 pode ser instalado para todos os usuários, o que exige privilégios de administrador, ou apenas para você.
-brazilianportuguese.PrivilegesRequiredOverrideText2=O %1 pode ser instalado apenas para você ou para todos os usuários, o que exige privilégios de administrador.
-brazilianportuguese.PrivilegesRequiredOverrideAllUsers=Instalar para &todos os usuários
-brazilianportuguese.PrivilegesRequiredOverrideAllUsersRecommended=Instalar para &todos os usuários (recomendado)
-brazilianportuguese.PrivilegesRequiredOverrideCurrentUser=Instalar apenas para &mim
-brazilianportuguese.PrivilegesRequiredOverrideCurrentUserRecommended=Instalar apenas para &mim (recomendado)
 
 brazilianportuguese.WizardLicense=Acordo de licença
 brazilianportuguese.LicenseLabel=O [name] é software livre, distribuído sob a licença GPL-3.0.
@@ -118,24 +112,27 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; IconF
 Filename: "{app}\bin\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall
 
 [Code]
-// NVIDIA driver notice, right after the licence page, on machines with an
-// NVIDIA card only. In its default present method the NVIDIA Vulkan driver
-// drops the alpha of the window's shadow margin, which then shows as a black
-// frame; a per-program "Prefer native" fixes it, and that is a driver setting
-// the installer cannot make. Like the licence page, Next stays disabled until
-// the box is ticked.
+// Ajuste da NVIDIA. No método de apresentação padrão, o driver Vulkan da NVIDIA
+// descarta o alfa da margem da sombra da janela, que aparece como uma moldura
+// preta; "Preferir nativo" no perfil do programa resolve. Depois de copiar os
+// arquivos, em toda instalação e atualização (interativa ou silenciosa), o
+// nvidia-perfil.exe grava esse ajuste no driver pela NVAPI, num perfil
+// "Cartridges" só com o Cartridges.exe. Se ele não conseguir (driver ausente ou
+// antigo, erro da NVAPI), a instalação interativa mostra o passo a passo manual
+// numa página depois da instalação; a silenciosa só registra no log.
 const
   DisplayClassKey = 'SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}';
 
 var
-  NvidiaPage: TInputOptionWizardPage;
+  NvidiaPage: TOutputMsgWizardPage;
+  NvidiaFalhou: Boolean;
 
 // Whether any display adapter Windows knows about is NVIDIA's. Each one has a
 // subkey under the display class with the vendor in ProviderName, readable
 // without elevation. All of them are checked: the NVIDIA card need not be the
 // first, and a virtual display adapter (Parsec, for one) is enough to push it
-// down. A card that was swapped out can leave its subkey behind, which only
-// shows the notice to someone who no longer needs it.
+// down. A card that was swapped out can leave its subkey behind; the utility
+// then finds no NVAPI and the manual page shows to someone who has no NVIDIA.
 function HasNvidiaGpu: Boolean;
 var
   Adapters: TArrayOfString;
@@ -154,42 +151,47 @@ begin
       end;
 end;
 
-procedure NvidiaPageCheckClick(Sender: TObject);
+// Roda o nvidia-perfil.exe escondido e devolve o código de saída (-1 se ele
+// nem chegou a rodar). O código vai para o log do instalador.
+function AjustarNvidia(const Acao: String): Integer;
 begin
-  WizardForm.NextButton.Enabled := NvidiaPage.Values[0];
+  if not Exec(ExpandConstant('{app}\bin\nvidia-perfil.exe'),
+              Acao + ' "' + ExpandConstant('{app}\bin\{#MyAppExeName}') + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Result) then
+    Result := -1;
+  Log('nvidia-perfil ' + Acao + ': ' + IntToStr(Result));
 end;
 
 procedure InitializeWizard;
 begin
-  // No NVIDIA card, no page: the wizard goes straight on. Silent installs (the
-  // in-app updater runs /SILENT) skip it too: silent mode presses Next on every
-  // page, and a Next that is disabled until the box is ticked aborts the whole
-  // install with "Failed to proceed to next wizard page". Whoever updates has
-  // already seen the notice on the first install.
-  // O instalador rodado à mão por cima de uma instalação que existe também
-  // pula: o aviso já foi visto. Volta depois de desinstalar (o registro da
-  // instalação anterior some) ou se a pasta tiver sido apagada à mão.
-  if WizardSilent or not HasNvidiaGpu or DirExists(WizardForm.PrevAppDir) then
-    Exit;
-  NvidiaPage := CreateInputOptionPage(wpLicense,
+  NvidiaPage := CreateOutputMsgPage(wpInstalling,
     'Placa de vídeo NVIDIA',
     'Evita a moldura preta ao redor da janela',
-    'Após a instalação, faça o seguinte ajuste:' + #13#10 + #13#10 +
+    'Não foi possível configurar a placa de vídeo automaticamente. Para evitar a ' +
+    'moldura preta, faça o seguinte ajuste:' + #13#10 + #13#10 +
     '1. Abra o Painel de Controle NVIDIA e acesse Gerenciar as configurações 3D.' + #13#10 +
     '2. Na aba Configurações de programa, adicione o Cartridges.exe da pasta bin da ' +
     'instalação (por padrão, C:\Program Files\Cartridges Revamped\bin).' + #13#10 +
     '3. No método de apresentação Vulkan/OpenGL ("Vulkan/OpenGL present method"), ' +
-    'escolha "Preferir nativo" ("Prefer native") e aplique.',
-    False, False);
-  NvidiaPage.Add('Estou ciente de que este ajuste deve ser feito após a instalação');
-  NvidiaPage.CheckListBox.OnClickCheck := @NvidiaPageCheckClick;
+    'escolha "Preferir nativo" ("Prefer native") e aplique.');
 end;
 
-procedure CurPageChanged(CurPageID: Integer);
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Codigo: Integer;
 begin
-  if NvidiaPage <> nil then
-    if CurPageID = NvidiaPage.ID then
-      WizardForm.NextButton.Enabled := NvidiaPage.Values[0];
+  if (CurStep = ssPostInstall) and HasNvidiaGpu then
+  begin
+    // 0 funcionou; 3 o exe já está num perfil de outra pessoa ou programa, que
+    // fica como está; 1 e 2 (e -1, não rodou) pedem o passo a passo manual.
+    Codigo := AjustarNvidia('aplicar');
+    NvidiaFalhou := (Codigo <> 0) and (Codigo <> 3);
+  end;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = NvidiaPage.ID) and not NvidiaFalhou;
 end;
 
 // Offer to remove the user's library and settings on uninstall. They live
@@ -197,6 +199,10 @@ end;
 // default uninstall would otherwise leave them behind.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
+  // Antes de apagar os arquivos, enquanto o utilitário ainda existe: desfaz o
+  // perfil "Cartridges" no driver. Uma falha só vai para o log.
+  if (CurUninstallStep = usUninstall) and FileExists(ExpandConstant('{app}\bin\nvidia-perfil.exe')) then
+    AjustarNvidia('remover');
   if CurUninstallStep = usPostUninstall then
   begin
     // Accented, like every other string here. The compiler reads this file as
