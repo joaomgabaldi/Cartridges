@@ -208,12 +208,15 @@ end;
 procedure ApagarAtalhoAntigo(const Atalho, PastaAntiga: String);
 var
   Shell, Lnk: Variant;
+  Alvo: String;
 begin
   if not FileExists(Atalho) then
     Exit;
   Shell := CreateOleObject('WScript.Shell');
   Lnk := Shell.CreateShortcut(Atalho);
-  if Pos(PastaAntiga, Lowercase(Lnk.TargetPath)) = 1 then
+  // Numa String antes do Lowercase: o Inno 6 (o da CI) não aceita o Variant
+  Alvo := Lnk.TargetPath;
+  if Pos(PastaAntiga, Lowercase(Alvo)) = 1 then
   begin
     DeleteFile(Atalho);
     Log('Migração: atalho apagado: ' + Atalho);
@@ -319,7 +322,8 @@ begin
       // Um atalho com problema não impede os outros
       try
         Lnk := Shell.CreateShortcut(Pasta + Busca.Name);
-        Alvo := Lowercase(Lnk.TargetPath);
+        Alvo := Lnk.TargetPath;
+        Alvo := Lowercase(Alvo);
         if (Alvo = Pythonw) or (Alvo = PythonwX86) or ((PastaAntiga <> '') and (Pos(PastaAntiga, Alvo) = 1)) then
         begin
           CreateShellLink(Pasta + Busca.Name, '{#MyAppName}', ExpandConstant('{app}\bin\{#MyAppExeName}'),

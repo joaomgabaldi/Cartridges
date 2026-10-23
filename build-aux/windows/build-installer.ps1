@@ -9,10 +9,9 @@ $repo    = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $patches = Join-Path $PSScriptRoot 'gtk-patches'
 $msys    = 'C:\msys64'
 $prefix  = Join-Path $msys 'ucrt64'
-# Inno Setup 7 no PC, 6 na CI (o que o runner traz ou o choco instala).
+# Inno Setup 7 no PC e na CI: o 6 compila o [Code] de outro jeito.
 $iscc    = @(
-    (Join-Path ${env:ProgramFiles} 'Inno Setup 7\ISCC.exe'),
-    (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe')
+    (Join-Path ${env:ProgramFiles} 'Inno Setup 7\ISCC.exe')
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 $dist    = Join-Path $repo '_dist'
 
@@ -155,7 +154,7 @@ Etapa 'Empacotando com o Inno Setup'
 
 $iss = Join-Path $repo '_build\build-aux\windows\Cartridges.iss'
 if (-not (Test-Path $iss)) { Falha "Nao achei $iss. O meson gerou o build?" }
-if (-not $iscc) { Falha 'Nao achei o ISCC do Inno Setup 7 nem do 6.' }
+if (-not $iscc) { Falha 'Nao achei o ISCC do Inno Setup 7 (o 6 nao serve).' }
 
 & $iscc "/O$dist" $iss | Select-Object -Last 3
 if ($LASTEXITCODE -ne 0) { Falha 'O Inno Setup falhou.' }

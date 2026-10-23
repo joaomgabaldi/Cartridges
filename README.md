@@ -250,7 +250,7 @@ O `blueprint-compiler` é baixado pelo Meson na primeira configuração.
 
 O `tinytuya` conversa com a iluminação inteligente, e o `python-cryptography` é necessário para ele.
 O `ffmpeg` converte o vídeo escolhido como capa e vai junto no instalador.
-Para gerar o instalador, também é preciso o [Inno Setup 6](https://jrsoftware.org/isinfo.php).
+Para gerar o instalador, também é preciso o [Inno Setup 7](https://jrsoftware.org/isinfo.php) (o 6 não serve).
 
 O aplicativo depende de uma correção no GTK que ainda não está no projeto oficial. Sem ela, a
 janela é desenhada pela metade em monitores maiores que o principal. A correção e o procedimento
