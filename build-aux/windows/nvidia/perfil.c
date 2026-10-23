@@ -129,6 +129,17 @@ static int com_sessao(const Nvapi *api, const wchar_t *exe, int aplicando)
     return r;
 }
 
+int perfil_inicio(int tem_dll, int tem_funcoes, NvAPI_Status inicio)
+{
+    if (!tem_dll)
+        return PERFIL_SEM_PLACA;
+    if (!tem_funcoes)
+        return PERFIL_SEM_NVAPI;
+    if (inicio == NVAPI_NVIDIA_DEVICE_NOT_FOUND)
+        return PERFIL_SEM_PLACA;
+    return inicio == NVAPI_OK ? PERFIL_OK : PERFIL_SEM_NVAPI;
+}
+
 int perfil_aplicar(const Nvapi *api, const wchar_t *exe)
 {
     return com_sessao(api, exe, 1);

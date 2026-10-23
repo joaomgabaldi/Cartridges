@@ -233,8 +233,20 @@ static void teste_remover_sem_perfil(void)
     sessao_fechada();
 }
 
+/* Sem driver NVIDIA não há Vulkan da NVIDIA nem moldura: 4, sem página. Driver
+   sem as funções ou Initialize com outro erro: 1, com página. */
+static void teste_inicio(void)
+{
+    assert(perfil_inicio(0, 0, NVAPI_OK) == PERFIL_SEM_PLACA);
+    assert(perfil_inicio(1, 0, NVAPI_OK) == PERFIL_SEM_NVAPI);
+    assert(perfil_inicio(1, 1, NVAPI_NVIDIA_DEVICE_NOT_FOUND) == PERFIL_SEM_PLACA);
+    assert(perfil_inicio(1, 1, NVAPI_ERROR) == PERFIL_SEM_NVAPI);
+    assert(perfil_inicio(1, 1, NVAPI_OK) == PERFIL_OK);
+}
+
 int main(void)
 {
+    teste_inicio();
     teste_aplicar_ja_no_nosso_perfil();
     teste_aplicar_sem_perfil_algum();
     teste_aplicar_reaproveita_perfil();

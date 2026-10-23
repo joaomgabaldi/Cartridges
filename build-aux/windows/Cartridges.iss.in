@@ -152,12 +152,14 @@ begin
 end;
 
 // Roda o nvidia-perfil.exe escondido e devolve o código de saída (-1 se ele
-// nem chegou a rodar). O código vai para o log do instalador.
+// nem chegou a rodar). O código e o que ele escreve (a etapa e a mensagem da
+// NVAPI, quando falha) vão para o log do instalador. O próprio utilitário
+// desiste em 30 s se a NVAPI travar.
 function AjustarNvidia(const Acao: String): Integer;
 begin
-  if not Exec(ExpandConstant('{app}\bin\nvidia-perfil.exe'),
+  if not ExecAndLogOutput(ExpandConstant('{app}\bin\nvidia-perfil.exe'),
               Acao + ' "' + ExpandConstant('{app}\bin\{#MyAppExeName}') + '"',
-              '', SW_HIDE, ewWaitUntilTerminated, Result) then
+              '', SW_HIDE, ewWaitUntilTerminated, Result, nil) then
     Result := -1;
   Log('nvidia-perfil ' + Acao + ': ' + IntToStr(Result));
 end;
@@ -250,10 +252,13 @@ begin
   RemoveDir(RemoveBackslash(Pasta));
 end;
 
-procedure MigrarInstalacaoDoUsuario;
+// Devolve a pasta da instalação antiga (normalizada) quando ela é válida, para
+// os fixados na barra de tarefas serem corrigidos; '' quando não há.
+function MigrarInstalacaoDoUsuario: String;
 var
   Pasta, Dados, Destino: String;
 begin
+  Result := '';
   if not RegQueryStringValue(HKCU, ChaveDoUsuario, 'InstallLocation', Pasta) then
     Exit;
   Pasta := Normalizar(Pasta);
@@ -270,6 +275,7 @@ begin
     Log('Migração: a pasta contém ou está dentro do destino ou dos dados; nada apagado');
     Exit;
   end;
+  Result := Pasta;
   try
     ApagarAtalhoAntigo(ExpandConstant('{userprograms}\{#MyAppName}.lnk'), Pasta);
     ApagarAtalhoAntigo(ExpandConstant('{userdesktop}\{#MyAppName}.lnk'), Pasta);
@@ -285,19 +291,63 @@ begin
   end;
 end;
 
+// Fixados na barra de tarefas do usuário que abrem o app pelo caminho antigo:
+// o pythonw.exe desta instalação (de antes do Cartridges.exe) ou o exe da
+// instalação "só para mim" que acabou de sair. Passam a abrir o Cartridges.exe,
+// e a janela volta a se agrupar com o fixado. Os do menu Iniciar ficam num
+// arquivo sem formato documentado e não são tocados.
+// O instalador é de 32 bits: nele, o WScript.Shell lê "C:\Program Files" como
+// "C:\Program Files (x86)", então as duas formas valem. A regravação usa o
+// CreateShellLink do Inno (o mesmo do [Icons]), que grava o caminho certo.
+procedure CorrigirFixados(const PastaAntiga: String);
+var
+  Pasta, Alvo, Pythonw, PythonwX86, Pf64: String;
+  Busca: TFindRec;
+  Shell, Lnk: Variant;
+begin
+  Pasta := ExpandConstant('{userappdata}\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\');
+  Pythonw := Lowercase(ExpandConstant('{app}\bin\pythonw.exe'));
+  PythonwX86 := Pythonw;
+  Pf64 := Normalizar(ExpandConstant('{commonpf64}'));
+  if Pos(Pf64, Pythonw) = 1 then
+    PythonwX86 := Normalizar(ExpandConstant('{commonpf32}')) + Copy(Pythonw, Length(Pf64) + 1, Length(Pythonw));
+  if not FindFirst(Pasta + '*.lnk', Busca) then
+    Exit;
+  try
+    Shell := CreateOleObject('WScript.Shell');
+    repeat
+      Lnk := Shell.CreateShortcut(Pasta + Busca.Name);
+      Alvo := Lowercase(Lnk.TargetPath);
+      if (Alvo = Pythonw) or (Alvo = PythonwX86) or ((PastaAntiga <> '') and (Pos(PastaAntiga, Alvo) = 1)) then
+      begin
+        CreateShellLink(Pasta + Busca.Name, '{#MyAppName}', ExpandConstant('{app}\bin\{#MyAppExeName}'),
+          '', ExpandConstant('{app}\bin'), ExpandConstant('{app}\icon.ico'), 0, SW_SHOWNORMAL);
+        Log('Fixado corrigido: ' + Busca.Name);
+      end;
+    until not FindNext(Busca);
+  except
+    Log('Fixados: ' + GetExceptionMessage);
+  end;
+  FindClose(Busca);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   Codigo: Integer;
 begin
   if CurStep <> ssPostInstall then
     Exit;
-  MigrarInstalacaoDoUsuario;
+  CorrigirFixados(MigrarInstalacaoDoUsuario);
   if HasNvidiaGpu then
   begin
     // 0 funcionou; 3 o exe já está num perfil de outra pessoa ou programa, que
-    // fica como está; 1 e 2 (e -1, não rodou) pedem o passo a passo manual.
+    // fica como está; 4 sem driver ou placa NVIDIA (a chave no registro sobrou
+    // de uma placa trocada), sem moldura para evitar; 1 e 2 (e -1, não rodou)
+    // pedem o passo a passo manual.
     Codigo := AjustarNvidia('aplicar');
-    NvidiaFalhou := (Codigo <> 0) and (Codigo <> 3);
+    NvidiaFalhou := (Codigo <> 0) and (Codigo <> 3) and (Codigo <> 4);
+    if NvidiaFalhou then
+      Log('nvidia: a página com o ajuste manual vai aparecer');
   end;
 end;
 

@@ -16,7 +16,10 @@
 
 #include "nvapi_drs.h"
 
-enum { PERFIL_OK = 0, PERFIL_SEM_NVAPI = 1, PERFIL_ERRO = 2, PERFIL_DE_TERCEIROS = 3 };
+/* SEM_NVAPI: driver antigo ou NVAPI com erro (o instalador mostra o passo a
+   passo manual). SEM_PLACA: sem driver ou sem placa NVIDIA, então sem moldura
+   (nenhuma página). */
+enum { PERFIL_OK = 0, PERFIL_SEM_NVAPI = 1, PERFIL_ERRO = 2, PERFIL_DE_TERCEIROS = 3, PERFIL_SEM_PLACA = 4 };
 
 typedef struct {
     NvAPI_Status (*criar_sessao)(NvDRSSessionHandle *);
@@ -31,6 +34,11 @@ typedef struct {
     NvAPI_Status (*apagar_perfil)(NvDRSSessionHandle, NvDRSProfileHandle);
     NvAPI_Status (*mensagem)(NvAPI_Status, NvAPI_ShortString);
 } Nvapi;
+
+/* Se dá para seguir depois de carregar a NVAPI: PERFIL_OK ou o código de saída.
+   tem_dll: a nvapi64.dll e o nvapi_QueryInterface existem; tem_funcoes: todas
+   as funções usadas existem; inicio: o status do NvAPI_Initialize. */
+int perfil_inicio(int tem_dll, int tem_funcoes, NvAPI_Status inicio);
 
 /* Grava "Preferir nativo" para o exe no perfil "Cartridges". Devolve PERFIL_*. */
 int perfil_aplicar(const Nvapi *api, const wchar_t *exe);

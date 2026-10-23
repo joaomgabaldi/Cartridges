@@ -50,6 +50,7 @@ typedef struct NvDRSProfileHandle__ *NvDRSProfileHandle;
 /* Status (nvapi_lite_common.h) */
 #define NVAPI_OK 0
 #define NVAPI_ERROR (-1)
+#define NVAPI_NVIDIA_DEVICE_NOT_FOUND (-6)
 #define NVAPI_PROFILE_NOT_FOUND (-163)
 #define NVAPI_EXECUTABLE_NOT_FOUND (-166)
 
