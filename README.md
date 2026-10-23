@@ -215,12 +215,14 @@ dispositivos na sua conta; depois disso, o aplicativo conversa com eles direto p
 1. Baixe e instale através do instalador `Cartridges.Windows.exe` da versão mais recente em
    [Releases](https://github.com/joaomgabaldi/Cartridges/releases).
 
-Depois de instalado, o aplicativo se atualiza sozinho.
+O instalador pede permissão de administrador e instala para todos os usuários. Depois de instalado,
+o aplicativo se atualiza sozinho.
 
 **Placa de vídeo NVIDIA:** no modo padrão, o driver da NVIDIA desenha uma moldura preta em volta da
-janela. No Painel de Controle NVIDIA, em *Gerenciar as configurações 3D*, crie um perfil para o
-`Cartridges.exe` (pasta `bin` da instalação) e defina o *método de apresentação Vulkan/OpenGL* como *Preferir
-nativo*. O instalador mostra esse passo a passo em computadores com NVIDIA.
+janela. O instalador evita isso sozinho: grava no driver um perfil "Cartridges" com o *método de
+apresentação Vulkan/OpenGL* em *Preferir nativo*. Se não conseguir, ele mostra no fim da
+instalação o passo a passo para fazer o ajuste no Painel de Controle NVIDIA. A desinstalação
+remove o perfil.
 
 Ao desinstalar, o instalador pergunta se deve remover também a biblioteca e as configurações.
 

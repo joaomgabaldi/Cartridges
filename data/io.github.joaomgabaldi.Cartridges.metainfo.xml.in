@@ -31,7 +31,8 @@
     <release version="2026.10.23" date="2026-10-23">
       <description translate="no">
         <ul>
-          <li>O Cartridges agora aparece com o próprio nome e ícone no Gerenciador de Tarefas e nas configurações de vídeo do Windows. Se você configurou o Painel de Controle NVIDIA para o Cartridges, refaça o ajuste para o Cartridges.exe.</li>
+          <li>O Cartridges agora aparece com o próprio nome e ícone no Gerenciador de Tarefas e nas configurações de vídeo do Windows.</li>
+          <li>A placa de vídeo NVIDIA agora é configurada automaticamente durante a instalação, sem nenhum ajuste manual.</li>
         </ul>
       </description>
     </release>
