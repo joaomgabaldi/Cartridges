@@ -194,6 +194,81 @@ begin
   Result := (PageID = NvidiaPage.ID) and not NvidiaFalhou;
 end;
 
+// Migração de uma instalação antiga "só para mim" (%LOCALAPPDATA%\Programs),
+// de quando o instalador ainda oferecia esse modo. O instalador elevado não a
+// enxerga e criaria uma segunda cópia. O desinstalador dela não serve: o código
+// antigo pergunta se apaga a biblioteca e, sem ninguém para responder, pode
+// apagar. A limpeza é feita aqui, só na pasta da instalação, nos atalhos dela e
+// na chave de desinstalação; a biblioteca e as configurações ficam fora da
+// pasta e não são tocadas. O app não grava mais nada por usuário que aponte
+// para a pasta (sem "abrir com o Windows").
+// Limite conhecido: com o UAC respondido por outra conta, o HKCU é o dela e a
+// instalação antiga não aparece; fica a cópia duplicada, sem perda de dados.
+const
+  ChaveDoUsuario = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{88FC7AF8-9F74-40EC-AAED-FA6356261CBB}_is1';
+
+function Normalizar(const Pasta: String): String;
+begin
+  Result := AddBackslash(Lowercase(Pasta));
+end;
+
+// Apaga o atalho só se ele apontar para dentro da pasta antiga
+procedure ApagarAtalhoAntigo(const Atalho, PastaAntiga: String);
+var
+  Shell, Lnk: Variant;
+begin
+  if not FileExists(Atalho) then
+    Exit;
+  Shell := CreateOleObject('WScript.Shell');
+  Lnk := Shell.CreateShortcut(Atalho);
+  if Pos(PastaAntiga, Lowercase(Lnk.TargetPath)) = 1 then
+  begin
+    DeleteFile(Atalho);
+    Log('Migração: atalho apagado: ' + Atalho);
+  end
+  else
+    Log('Migração: atalho mantido (aponta para outro lugar): ' + Atalho);
+end;
+
+procedure MigrarInstalacaoDoUsuario;
+var
+  Pasta, Dados: String;
+begin
+  if not RegQueryStringValue(HKCU, ChaveDoUsuario, 'InstallLocation', Pasta) then
+    Exit;
+  Pasta := Normalizar(Pasta);
+  Dados := Normalizar(ExpandConstant('{localappdata}\io.github.joaomgabaldi.Cartridges'));
+  Log('Migração: instalação só para o usuário em ' + Pasta);
+  if not DirExists(Pasta) or not FileExists(Pasta + 'unins000.exe') then
+  begin
+    Log('Migração: pasta ausente ou sem unins000.exe; nada apagado');
+    Exit;
+  end;
+  if (Pasta = Normalizar(ExpandConstant('{app}'))) or (Pos(Pasta, Dados) = 1) or (Pos(Dados, Pasta) = 1) then
+  begin
+    Log('Migração: a pasta é a de destino ou a dos dados; nada apagado');
+    Exit;
+  end;
+  try
+    ApagarAtalhoAntigo(ExpandConstant('{userprograms}\{#MyAppName}.lnk'), Pasta);
+    ApagarAtalhoAntigo(ExpandConstant('{userdesktop}\{#MyAppName}.lnk'), Pasta);
+    if DelTree(Pasta, True, True, True) then
+      Log('Migração: pasta apagada')
+    else
+      Log('Migração: a pasta não foi apagada por inteiro');
+    RegDeleteKeyIncludingSubkeys(HKCU, ChaveDoUsuario);
+    Log('Migração: chave de desinstalação apagada');
+  except
+    Log('Migração interrompida: ' + GetExceptionMessage);
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  MigrarInstalacaoDoUsuario;
+  Result := '';
+end;
+
 // Offer to remove the user's library and settings on uninstall. They live
 // outside the install folder (LocalAppData + GSettings in the registry), so the
 // default uninstall would otherwise leave them behind.
