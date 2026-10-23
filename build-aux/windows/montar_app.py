@@ -209,33 +209,61 @@ def compilar_lancador(prefixo: Path, destino: Path) -> None:
     if not achada:
         sys.exit(f"Não achei VERSION em {shared}.")
     versao = achada[1]
+    exigir_gcc(prefixo)
+    rodar(prefixo, fonte, [
+        prefixo / "bin" / "windres.exe", f"-DVERSAO={versao}",
+        f"-DVERSAO_NUM={versao.replace('.', ',')},0",
+        "-i", fonte / "cartridges.rc", "-o", recurso,
+    ])
+    rodar(prefixo, fonte, [
+        prefixo / "bin" / "gcc.exe", "-O2", "-s", "-municode", "-mwindows",
+        fonte / "cartridges.c", recurso, f"-L{prefixo / 'lib'}", f"-l{PYTHON}",
+        "-o", destino / "bin" / "Cartridges.exe",
+    ])
+
+
+def compilar_nvidia(prefixo: Path, destino: Path) -> None:
+    """Gera bin\\nvidia-perfil.exe, que o instalador usa para ajustar o driver da NVIDIA.
+
+    Antes compila e roda o teste da lógica contra uma NVAPI falsa; teste
+    falhando para o build.
+    """
+    fonte = Path(__file__).parent / "nvidia"
+    destino = destino.resolve()
+    teste = destino.parent / "teste_perfil.exe"
+    exigir_gcc(prefixo)
+    gcc = [prefixo / "bin" / "gcc.exe", "-Wall", "-Wextra", "-Werror"]
+    rodar(prefixo, fonte, [*gcc, "teste_perfil.c", "perfil.c", "-o", teste])
+    resultado = rodar(prefixo, fonte, [teste], parar=False)
+    if resultado.returncode != 0 or resultado.stdout.strip() != "ok":
+        sys.exit(f"O teste do utilitário NVIDIA falhou:\n{resultado.stdout}{resultado.stderr}")
+    rodar(prefixo, fonte, [
+        *gcc, "-O2", "-s", "-municode", "nvidia_perfil.c", "perfil.c",
+        "-o", destino / "bin" / "nvidia-perfil.exe",
+    ])
+
+
+def exigir_gcc(prefixo: Path) -> None:
     faltando = [exe for exe in ("windres.exe", "gcc.exe") if not (prefixo / "bin" / exe).exists()]
     if faltando:
         sys.exit(f"Faltam {faltando} no MSYS2: pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-binutils")
-    for comando in (
-        [
-            prefixo / "bin" / "windres.exe", f"-DVERSAO={versao}",
-            f"-DVERSAO_NUM={versao.replace('.', ',')},0",
-            "-i", fonte / "cartridges.rc", "-o", recurso,
-        ],
-        [
-            prefixo / "bin" / "gcc.exe", "-O2", "-s", "-municode", "-mwindows",
-            fonte / "cartridges.c", recurso, f"-L{prefixo / 'lib'}", f"-l{PYTHON}",
-            "-o", destino / "bin" / "Cartridges.exe",
-        ],
-    ):
-        resultado = subprocess.run(
-            [str(parte) for parte in comando],
-            cwd=fonte,
-            # O windres chama o gcc pelo PATH
-            env={**os.environ, "PATH": f"{prefixo / 'bin'}{os.pathsep}{os.environ['PATH']}"},
-            capture_output=True,
-            text=True,
-            errors="replace",
-            check=False,
-        )
-        if resultado.returncode != 0:
-            sys.exit(f"{Path(comando[0]).name} falhou:\n{resultado.stdout}{resultado.stderr}")
+
+
+def rodar(prefixo: Path, cwd: Path, comando: list, parar: bool = True) -> subprocess.CompletedProcess:
+    """Roda um comando do MSYS2; com `parar`, uma falha encerra o build com a saída dele."""
+    resultado = subprocess.run(
+        [str(parte) for parte in comando],
+        cwd=cwd,
+        # O windres chama o gcc pelo PATH
+        env={**os.environ, "PATH": f"{prefixo / 'bin'}{os.pathsep}{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        errors="replace",
+        check=False,
+    )
+    if parar and resultado.returncode != 0:
+        sys.exit(f"{Path(comando[0]).name} falhou:\n{resultado.stdout}{resultado.stderr}")
+    return resultado
 
 
 VERIFICACAO = r"""
@@ -357,6 +385,7 @@ def main() -> None:
     prefixo, destino = Path(sys.argv[1]), Path(sys.argv[2])
     montar(prefixo, destino)
     compilar_lancador(prefixo, destino)
+    compilar_nvidia(prefixo, destino)
     verificar(destino)
     compilar(destino)
     arquivos = [arquivo for arquivo in destino.rglob("*") if arquivo.is_file()]
