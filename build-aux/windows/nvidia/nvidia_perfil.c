@@ -28,7 +28,9 @@ static DWORD WINAPI vigiar(LPVOID prazo)
     Sleep((DWORD)(UINT_PTR)prazo * 1000);
     fputs("tempo esgotado esperando a NVAPI\n", stderr);
     fflush(stderr);
-    ExitProcess(PERFIL_ERRO);
+    /* TerminateProcess, e não ExitProcess: este rodaria a finalização das DLLs,
+       e a da NVAPI pode esperar justamente pela thread que travou */
+    TerminateProcess(GetCurrentProcess(), PERFIL_ERRO);
     return 0;
 }
 
@@ -47,6 +49,7 @@ int wmain(int argc, wchar_t **argv)
     HMODULE dll;
     Nvapi api;
     int aplicando, r, completa;
+    NvAPI_Status inicio;
     UINT_PTR prazo = PRAZO_EM_SEGUNDOS;
 
     if (argc != 3)
@@ -65,13 +68,12 @@ int wmain(int argc, wchar_t **argv)
         fputs("falha simulada\n", stderr);
         return _wtoi(trava) == PERFIL_SEM_PLACA ? PERFIL_SEM_PLACA : PERFIL_SEM_NVAPI;
     }
-    /* Só para testar o vigia: trava de propósito, com o prazo em segundos */
+    /* Só para testar o vigia: trava de propósito (depois de carregar a NVAPI,
+       como num travamento de verdade), com o prazo em segundos */
     trava = _wgetenv(L"CARTRIDGES_NVIDIA_SIMULAR_TRAVA");
     if (trava)
         prazo = (UINT_PTR)_wtoi(trava);
     CloseHandle(CreateThread(NULL, 0, vigiar, (LPVOID)prazo, 0, NULL));
-    if (trava)
-        Sleep(INFINITE);
 
     /* Só do System32, onde o driver a instala: o processo roda elevado, e uma
        nvapi64.dll posta na pasta do exe seria carregada antes */
@@ -97,13 +99,20 @@ int wmain(int argc, wchar_t **argv)
         && BUSCAR(api.apagar_perfil, NVAPI_ID_DRS_DELETE_PROFILE)
         && BUSCAR(api.mensagem, NVAPI_ID_GET_ERROR_MESSAGE);
 #undef BUSCAR
+    if (trava)
+        Sleep(INFINITE);
 
-    r = perfil_inicio(query != NULL, completa, completa ? inicializar() : NVAPI_ERROR);
+    inicio = completa ? inicializar() : NVAPI_ERROR;
+    r = perfil_inicio(dll != NULL, completa, inicio);
     if (r == PERFIL_OK) {
         r = aplicando ? perfil_aplicar(&api, argv[2]) : perfil_remover(&api, argv[2]);
         descarregar();
+    } else if (!dll) {
+        fputs("nvapi64.dll ausente: sem driver NVIDIA\n", stderr);
+    } else if (!completa) {
+        fputs("o driver nao tem as funcoes da NVAPI DRS\n", stderr);
     } else {
-        fprintf(stderr, "NVAPI indisponivel (codigo %d)\n", r);
+        fprintf(stderr, "NvAPI_Initialize: status %d\n", inicio);
     }
     if (dll)
         FreeLibrary(dll);

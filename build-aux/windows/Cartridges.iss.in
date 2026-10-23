@@ -192,8 +192,8 @@ end;
 // a pasta pode ter sido escolhida pela pessoa e ter outros arquivos, que ficam.
 // A biblioteca e as configurações estão fora da pasta e não são tocadas; o app
 // não grava mais nada por usuário que aponte para ela (sem "abrir com o
-// Windows"). Fixados na barra de tarefas que apontavam para o exe antigo param
-// de funcionar e precisam ser refeitos.
+// Windows"). Os fixados na barra de tarefas que apontavam para o exe antigo
+// são corrigidos por CorrigirFixados.
 // Limite conhecido: com o UAC respondido por outra conta, o HKCU é o dela e a
 // instalação antiga não aparece; fica a cópia duplicada, sem perda de dados.
 const
@@ -316,13 +316,18 @@ begin
   try
     Shell := CreateOleObject('WScript.Shell');
     repeat
-      Lnk := Shell.CreateShortcut(Pasta + Busca.Name);
-      Alvo := Lowercase(Lnk.TargetPath);
-      if (Alvo = Pythonw) or (Alvo = PythonwX86) or ((PastaAntiga <> '') and (Pos(PastaAntiga, Alvo) = 1)) then
-      begin
-        CreateShellLink(Pasta + Busca.Name, '{#MyAppName}', ExpandConstant('{app}\bin\{#MyAppExeName}'),
-          '', ExpandConstant('{app}\bin'), ExpandConstant('{app}\icon.ico'), 0, SW_SHOWNORMAL);
-        Log('Fixado corrigido: ' + Busca.Name);
+      // Um atalho com problema não impede os outros
+      try
+        Lnk := Shell.CreateShortcut(Pasta + Busca.Name);
+        Alvo := Lowercase(Lnk.TargetPath);
+        if (Alvo = Pythonw) or (Alvo = PythonwX86) or ((PastaAntiga <> '') and (Pos(PastaAntiga, Alvo) = 1)) then
+        begin
+          CreateShellLink(Pasta + Busca.Name, '{#MyAppName}', ExpandConstant('{app}\bin\{#MyAppExeName}'),
+            '', ExpandConstant('{app}\bin'), ExpandConstant('{app}\icon.ico'), 0, SW_SHOWNORMAL);
+          Log('Fixado corrigido: ' + Busca.Name);
+        end;
+      except
+        Log('Fixado ' + Busca.Name + ': ' + GetExceptionMessage);
       end;
     until not FindNext(Busca);
   except

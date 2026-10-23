@@ -36,7 +36,7 @@ typedef struct {
 } Nvapi;
 
 /* Se dá para seguir depois de carregar a NVAPI: PERFIL_OK ou o código de saída.
-   tem_dll: a nvapi64.dll e o nvapi_QueryInterface existem; tem_funcoes: todas
+   tem_dll: a nvapi64.dll existe; tem_funcoes: o nvapi_QueryInterface e todas
    as funções usadas existem; inicio: o status do NvAPI_Initialize. */
 int perfil_inicio(int tem_dll, int tem_funcoes, NvAPI_Status inicio);
 
