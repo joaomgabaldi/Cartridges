@@ -19,6 +19,39 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      # A versão é a data do dia em Brasília (UTC-3 o ano todo desde 2019). A <release>
+      # do topo do metainfo passa a essa data; se ela já saiu como final, os itens
+      # acrescentados depois vão para uma <release> nova. O commit volta para o branch.
+      - name: Versão do dia
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          metainfo=data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in
+          versao=$(date -u -d '-3 hours' +%Y.%m.%d)
+          anterior=$(gh release list --exclude-pre-releases --exclude-drafts -L 1 --json tagName --jq '.[0].tagName // ""')
+          if [ "$anterior" = "v$versao" ]; then
+            echo "::error::A release v$versao já foi publicada hoje como versão final. Gere o próximo instalador amanhã."
+            exit 1
+          fi
+          # Ponta atual do branch: num Re-run o checkout volta ao commit de antes do "Versão AAAA.MM.DD".
+          git fetch -q --depth=1 origin "$GITHUB_REF_NAME"
+          git reset -q --hard FETCH_HEAD
+          publicado=()
+          if [ -n "$anterior" ]; then
+            git fetch -q --depth=1 origin "refs/tags/$anterior:refs/tags/$anterior"
+            git show "$anterior:$metainfo" > "$RUNNER_TEMP/publicado.xml"
+            publicado=("$RUNNER_TEMP/publicado.xml")
+          fi
+          python build-aux/windows/versao_do_dia.py "$metainfo" "$versao" "${publicado[@]}"
+          sed -i "s/^  version: '.*',\$/  version: '$versao',/" meson.build
+          if ! git diff --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -am "Versão $versao"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
+
       # release: false usa o C:\msys64 do runner, o caminho que o build-installer.ps1 espera.
       - uses: msys2/setup-msys2@v2
         with:
@@ -88,7 +121,7 @@ jobs:
           cp "_dist/Cartridges Windows.exe" Cartridges.Windows.exe
           if pre=$(gh release view "$tag" --json isPrerelease --jq .isPrerelease 2>/dev/null); then
             if [ "$pre" != "true" ]; then
-              echo "::error::A release $tag já foi publicada como versão final. Atualize a versão no meson.build e no metainfo antes de gerar outro instalador."
+              echo "::error::A release $tag já foi publicada hoje como versão final. Gere o próximo instalador amanhã."
               exit 1
             fi
             git tag -f "$tag"
@@ -97,5 +130,5 @@ jobs:
             gh release upload "$tag" Cartridges.Windows.exe --clobber
           else
             gh release create "$tag" Cartridges.Windows.exe --prerelease --latest=false \
-              --target "$GITHUB_SHA" --title "Cartridges $versao" --notes-file notas.md
+              --target "$(git rev-parse HEAD)" --title "Cartridges $versao" --notes-file notas.md
           fi
