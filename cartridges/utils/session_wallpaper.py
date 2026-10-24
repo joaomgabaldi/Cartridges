@@ -472,9 +472,12 @@ def _gravar_sidecar(
 
 
 def _arquivo_do_sidecar(dados: Optional[dict[str, Any]]) -> Optional[Path]:
-    if not dados or not dados.get("file"):
+    nome = str((dados or {}).get("file") or "")
+    # Só um nome solto: um caminho absoluto ou de rede vindo de um backup
+    # faria o app abrir arquivos fora da pasta (e conectar noutra máquina).
+    if not nome or Path(nome).name != nome:
         return None
-    caminho = shared.wallpapers_dir / str(dados["file"])
+    caminho = shared.wallpapers_dir / nome
     return caminho if caminho.is_file() else None
 
 

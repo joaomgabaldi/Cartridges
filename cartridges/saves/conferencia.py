@@ -14,6 +14,7 @@ import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
+from cartridges import shared
 from cartridges.conquistas import arquivos
 from cartridges.saves.ludusavi import Previa
 from cartridges.saves.pasta import dentro
@@ -138,6 +139,7 @@ def raizes(pastas: arquivos.Pastas, casa: Path, extras: list[Path]) -> Raizes:
             casa / ".ssh",
             casa / ".local",  # o site-packages do usuário: o Python do app o lê ao abrir
             casa / ".config" / "git",  # o `core.fsmonitor` roda um programa
+            shared.app_dir,  # os jogos e seus comandos, e o config do Ludusavi
         ),
         casa=casa,
     )

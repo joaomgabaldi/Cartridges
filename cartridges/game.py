@@ -20,12 +20,13 @@
 import logging
 from pathlib import Path
 from time import time
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from gi.repository import Adw, GObject, Gtk
 
 from cartridges import shared
 from cartridges.game_cover import GameCover
+from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.process_monitor import install_dir_from_command
 from cartridges.utils.run_executable import aumid_from_command, run_executable
 from cartridges.utils.save_cover import ANIMATED_SUFFIXES
@@ -81,6 +82,7 @@ PERSISTED_ATTRS = (
     "ludusavi_nome",
     "saves_local_desconhecido_avisado",
     "backup_dos_saves_desligado",
+    "comando_a_conferir",
 )
 
 _KNOWN_KEYS = frozenset(PERSISTED_ATTRS)
@@ -244,6 +246,10 @@ class Game(Gtk.Box):
     # O usuário escolheu "Nenhum" no Jogo no Ludusavi: sem backup deste jogo, e o appID
     # não o religa sozinho. Só uma escolha explícita nas opções avançadas o desfaz.
     backup_dos_saves_desligado: bool = False
+    # Veio de um backup restaurado: o comando pode ter sido escrito por outra
+    # pessoa, e roda num shell (ou como administrador). O primeiro lançamento o
+    # mostra e só segue com a confirmação do usuário.
+    comando_a_conferir: bool = False
 
     def __init__(self, data: dict[str, Any], **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -399,7 +405,32 @@ class Game(Gtk.Box):
 
         shared.win.toast_queue.add(toast)
 
-    def launch(self) -> bool:
+    def _conferir_comando(self, lancar: Callable[[], Any]) -> None:
+        # Invisíveis (quebra de linha, U+202E que inverte o texto) aparecem como
+        # código: escondidos, deixariam parte do comando fora da vista.
+        comando = "".join(c if c.isprintable() else f"<U+{ord(c):04X}>" for c in self.executable)
+        corpo = _(
+            "Este jogo foi restaurado de um backup. Antes de iniciá-lo pela "
+            "primeira vez, confira se o comando abaixo é o esperado:"
+        ) + f"\n\n{comando}"
+        if self.run_as_admin:
+            corpo += "\n\n" + _("O jogo será executado como administrador.")
+
+        def resposta(_dialogo: Adw.AlertDialog, escolha: str) -> None:
+            if escolha == "launch":
+                self.comando_a_conferir = False
+                self.save()
+                lancar()
+
+        janela = shared.win.get_application().get_active_window() or shared.win
+        # A variável é o nome do jogo
+        create_dialog(
+            janela, _("Iniciar {}?").format(self.name), corpo, "launch", _("Iniciar")
+        ).connect("response", resposta)
+
+    def launch(self, ao_confirmar: Optional[Callable[[], Any]] = None) -> bool:
+        """``ao_confirmar`` é como relançar depois da confirmação do comando de um
+        jogo restaurado; sem ele, é este mesmo ``launch``."""
         # avoid import cycles
         # pylint: disable-next=import-outside-toplevel
         from cartridges.saves import backup_de_saves
@@ -408,6 +439,10 @@ class Game(Gtk.Box):
         # metade e travaria os que a restauração precisa gravar.
         if backup_de_saves.restaurando(self):
             self.create_toast(_("Aguarde o fim da restauração dos saves de {}."))
+            return False
+
+        if self.comando_a_conferir:
+            self._conferir_comando(ao_confirmar or self.launch)
             return False
 
         self.last_played = int(time())

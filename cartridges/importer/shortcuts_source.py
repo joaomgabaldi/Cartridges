@@ -51,8 +51,13 @@ _STEAM_APPID_RE = re.compile(r"steam://(?:rungameid|run)/(\d+)", re.IGNORECASE)
 
 # Characters that must never reach a double-quoted cmd.exe argument: a quote
 # would close the quoting and let metacharacters (&, |, >) inject commands; the
-# same goes for control characters (new lines split commands).
-_UNSAFE_CMD_CHARS_RE = re.compile(r'["\x00-\x1f]')
+# same goes for control characters (new lines split commands). `%` expands
+# variables even inside quotes, and `%CMDCMDLINE:~-1%` is a `"`: only the
+# percent-encoding of printable ASCII (`%3A`, `%20`) passes, since a variable
+# name starting with a digit is one no Windows variable has (the Epic URLs need
+# it). `!` stays allowed: delayed expansion is off unless turned on, and real
+# paths carry it ("Overcooked! 2"), whose shortcuts would vanish from the library.
+_UNSAFE_CMD_CHARS_RE = re.compile(r'["\x00-\x1f]|%(?![2-7][0-9A-Fa-f])')
 
 # Characters cmd.exe acts on when they appear outside quotes: command chaining
 # and grouping (`&`, `|`, `(`, `)`), redirection (`<`, `>`) and the escape
@@ -509,13 +514,17 @@ class ShortcutsSourceIterable(SourceIterable):
         # again when the drive came back. Only a missing path is caught here: an
         # existing folder target keeps the branch it always had, and a packaged
         # app's target (WindowsApps, unreadable) still goes to the AUMID branch.
+        # A UNC target is never looked at on disk: checking it makes Windows
+        # connect to that machine and send the user's credentials, during a scan
+        # nobody asked to touch the network. It takes the missing-path branch.
         is_path = target and Path(target).suffix.lower() != ".lnk"
+        de_rede = target[:1] in ("\\", "/") and target[1:2] in ("\\", "/")
         if is_path and (
-            Path(target).is_file()
+            (not de_rede and Path(target).is_file())
             or (
                 not aumid
                 and _ABSOLUTE_PATH_RE.match(target)
-                and not Path(target).exists()
+                and (de_rede or not Path(target).exists())
             )
         ):
             # Classic executable target

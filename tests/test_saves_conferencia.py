@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from cartridges import shared
 from cartridges.conquistas.arquivos import Pastas
 from cartridges.saves import conferencia
 from cartridges.saves.conferencia import (
@@ -24,6 +25,13 @@ CASA = Path("C:/Users/João")
 # Pastas de jogo que não existem e não estão no perfil de nenhum usuário.
 VELHO = Path("C:/NaoExiste123/JogoA")
 NOVO = Path("C:/NaoExiste123/JogoB")
+
+
+@pytest.fixture(autouse=True)
+def _pasta_do_app_a_parte(tmp_path, monkeypatch):
+    """O conftest põe a pasta do app no próprio `tmp_path`, onde estes testes montam
+    as pastas permitidas; proibida, ela recusaria todas."""
+    monkeypatch.setattr(shared, "app_dir", tmp_path / "app")
 
 
 def _zip(caminho: Path, entradas: dict[str, bytes], compressao=zipfile.ZIP_DEFLATED) -> Path:
@@ -313,6 +321,7 @@ def test_raizes():
         Path("C:/Users/João/.ssh"),
         Path("C:/Users/João/.local"),
         Path("C:/Users/João/.config/git"),
+        shared.app_dir,
     )
     assert r.casa == CASA
 

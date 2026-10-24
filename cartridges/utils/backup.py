@@ -37,9 +37,11 @@ from typing import Any, Callable, Iterable, Literal, Optional
 from gi.repository import Gio, GLib
 
 from cartridges import shared
+from cartridges.conquistas import arquivos
 from cartridges.saves import backup_de_saves
 from cartridges.saves import pasta as pasta_dos_saves
 from cartridges.utils import game_logo, restauracao, save_cover, session_wallpaper
+from cartridges.utils.gravar_atomico import gravar_atomico
 
 VERSAO = 6
 # Versões de backup que `validar` ainda aceita: a 5 só não tinha os saves.
@@ -178,7 +180,11 @@ def _aplicar(settings: Any, valores: Any, chaves: Iterable[str]) -> None:
     schema = settings.props.settings_schema
     for chave in chaves:
         variante = None
-        if chave in valores:
+        if chave == "shortcuts-location" and arquivos.eh_caminho_de_rede(valores.get(chave)):
+            # Uma pasta de rede vinda de um backup alheio faria a importação
+            # conectar naquela máquina e trazer atalhos de lá.
+            logging.warning("Configuração %s ignorada no backup: pasta de rede", chave)
+        elif chave in valores:
             variante = _variante(schema.get_key(chave), valores[chave])
             if variante is None:
                 logging.warning("Configuração %s ignorada no backup: valor inválido", chave)
@@ -577,6 +583,23 @@ def _devolver(anterior: Path) -> None:
         logging.warning("Não foi possível apagar %s", anterior, exc_info=True)
 
 
+def _marcar_comandos_a_conferir() -> None:
+    """Marca cada jogo restaurado para o primeiro lançamento mostrar o comando.
+
+    O backup pode ter vindo de outra pessoa, e o comando roda num shell: o
+    zip conferido só garante os nomes das entradas, não o que vai dentro delas.
+    Um registro ilegível fica como está; o carregamento já o descarta.
+    """
+    for arquivo in shared.games_dir.glob("*.json"):
+        try:
+            dados = json.loads(arquivo.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        if isinstance(dados, dict) and dados.get("executable"):
+            dados["comando_a_conferir"] = True
+            gravar_atomico(arquivo, json.dumps(dados, indent=4, sort_keys=True))
+
+
 def aplicar_pendente(progresso: Optional[Callable[[float], None]] = None) -> Optional[bool]:
     """Na abertura, antes de carregar a biblioteca: aplica o backup agendado.
 
@@ -633,6 +656,7 @@ def aplicar_pendente(progresso: Optional[Callable[[float], None]] = None) -> Opt
             except FileNotFoundError as erro:
                 _sumiu(item, erro)
 
+        _marcar_comandos_a_conferir()
         restauracao.gravar(
             restauracao.ids_que_dependem_de_atalho(shared.games_dir), int(time())
         )

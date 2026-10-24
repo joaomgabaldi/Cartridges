@@ -1019,6 +1019,25 @@ def test_aplicar_pendente_troca_tudo_e_cria_as_pendencias(tmp_path, monkeypatch)
     assert restauracao.ids() == frozenset({"shortcuts_1"})
 
 
+def test_restaurar_marca_os_comandos_a_conferir(tmp_path, monkeypatch):
+    """O comando de um jogo do backup pode ter sido escrito por outra pessoa."""
+    monkeypatch.setattr(backup, "aplicar_configuracoes", lambda _c: None)
+    _encher_pasta_do_app()
+    (shared.games_dir / "imported_1.json").write_text(
+        json.dumps({"game_id": "imported_1", "source": "imported", "name": "M", "executable": "x"}),
+        encoding="utf-8",
+    )
+    destino = _exportar(tmp_path)
+    for arquivo in shared.games_dir.iterdir():
+        arquivo.unlink()
+    backup.agendar(destino)
+
+    assert backup.aplicar_pendente() is True
+
+    dados = json.loads((shared.games_dir / "imported_1.json").read_text("utf-8"))
+    assert dados["comando_a_conferir"] is True
+
+
 def test_restaurar_mantem_a_conta_microsoft_deste_pc(tmp_path, monkeypatch):
     """A pasta `contas` é desta máquina e deste usuário do Windows (o DPAPI não
     abre em outro PC): restaurar um backup não a leva nem a apaga."""

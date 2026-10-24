@@ -96,7 +96,7 @@ def _previas(picker):
 def test_previa_png_de_busca_animada_vira_apng(busca_sgdb):
     busca_sgdb._search_thread("Jogo", True, busca_sgdb._generation)
 
-    assert [p.name for p in _previas(busca_sgdb)] == ["7.apng"]
+    assert [p.suffix for p in _previas(busca_sgdb)] == [".apng"]
 
 
 def test_previa_png_de_busca_parada_segue_png(busca_sgdb):

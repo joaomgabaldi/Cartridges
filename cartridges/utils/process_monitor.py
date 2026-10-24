@@ -424,7 +424,12 @@ def install_dir_from_command(executable: str) -> str:
 
     # Last match, like the launch command itself: the game's executable comes
     # after any working-directory or launcher argument in front of it.
-    directory = _game_root(os.path.dirname(candidates[-1]))
+    caminho = candidates[-1]
+    # A UNC path is never listed: that makes Windows connect to the machine and
+    # send the user's credentials, from a sweep nobody started.
+    if caminho[:1] in ("\\", "/") and caminho[1:2] in ("\\", "/"):
+        return ""
+    directory = _game_root(os.path.dirname(caminho))
     return directory if _is_watchable_dir(directory) else ""
 
 

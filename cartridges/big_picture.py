@@ -876,8 +876,11 @@ class PaginaBigPicture(Adw.NavigationPage):
         animacao.play()
 
     def abrir_jogo(self) -> None:
-        jogo = self._jogo_central()
-        if self.ocupada or jogo is None:
+        if (jogo := self._jogo_central()) is not None:
+            self._abrir(jogo)
+
+    def _abrir(self, jogo) -> None:
+        if self.ocupada:
             return
         self.ocupada = True
         self._jogo_aberto = jogo.game_id
@@ -886,7 +889,8 @@ class PaginaBigPicture(Adw.NavigationPage):
     def _lancar(self, jogo) -> None:
         self.janela.unfullscreen()
         try:
-            aberto = jogo.launch()
+            # Confirmado o comando de um jogo restaurado, abre pelo mesmo caminho.
+            aberto = jogo.launch(lambda: self._abrir(jogo))
         except Exception:
             self._animar_abertura(1, 0)
             self.janela.fullscreen()

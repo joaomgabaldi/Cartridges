@@ -37,6 +37,7 @@ import threading
 from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.parse import urlparse
+from uuid import uuid4
 
 import requests
 from gi.repository import Adw, GdkPixbuf, Gio, GLib, Gtk
@@ -186,8 +187,11 @@ class LogoPicker(BuscaDoSeletor, Adw.Dialog):
             except requests.RequestException as error:
                 logging.warning("Logo picker: preview download failed (%s)", error)
                 continue
-            suffix = Path(urlparse(preview_url).path).suffix or ".png"
-            preview_path = self._temp_dir / f"{logo.get('id', id(logo))}{suffix}"
+            suffix = Path(urlparse(preview_url).path).suffix.lower()
+            if suffix not in IMAGE_SUFFIXES:
+                suffix = ".png"
+            # O nome nunca sai da resposta da API: um id "..\x" gravava fora da pasta.
+            preview_path = self._temp_dir / f"{uuid4().hex}{suffix}"
             try:
                 preview_path.write_bytes(content)
             except OSError:

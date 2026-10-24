@@ -32,6 +32,7 @@ import threading
 from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.parse import urlparse
+from uuid import uuid4
 
 import requests
 from gi.repository import Adw, GLib, Gtk
@@ -53,6 +54,9 @@ from cartridges.utils.steamgriddb import SgdbAuthError, SgdbError, SgdbHelper
 
 # Cap how many previews we load so the dialog stays light, even when animating
 MAX_RESULTS = 30
+
+# The extensions a preview may be saved under; anything else in the URL is ".png".
+_PREVIEW_SUFFIXES = (".png", ".apng", ".jpg", ".jpeg", ".webp", ".gif")
 
 # Portrait cover dimensions on SteamGridDB. Without this filter the API also
 # returns horizontal capsules; restricting to 600x900 alone drops most animated
@@ -195,11 +199,14 @@ class SgdbPicker(BuscaDoSeletor, Adw.Dialog):
                     error,
                 )
                 continue
-            suffix = Path(urlparse(preview_url).path).suffix or ".png"
+            suffix = Path(urlparse(preview_url).path).suffix.lower()
+            if suffix not in _PREVIEW_SUFFIXES:
+                suffix = ".png"
             # O SteamGridDB serve APNG como .png; é a extensão que faz a prévia tocar.
-            if animated and suffix.lower() == ".png":
+            if animated and suffix == ".png":
                 suffix = ".apng"
-            preview_path = self._temp_dir / f"{grid.get('id', id(grid))}{suffix}"
+            # O nome nunca sai da resposta da API: um id "..\x" gravava fora da pasta.
+            preview_path = self._temp_dir / f"{uuid4().hex}{suffix}"
             try:
                 preview_path.write_bytes(content)
             except OSError:
@@ -312,7 +319,9 @@ class SgdbPicker(BuscaDoSeletor, Adw.Dialog):
             )
             return
 
-        suffix = Path(urlparse(full_url).path).suffix or ".png"
+        suffix = Path(urlparse(full_url).path).suffix.lower()
+        if suffix not in _PREVIEW_SUFFIXES:
+            suffix = ".png"
         raw_path = self._temp_dir / f"selected{suffix}"
         try:
             raw_path.write_bytes(content)

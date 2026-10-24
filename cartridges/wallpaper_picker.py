@@ -40,6 +40,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, NamedTuple, Optional
 from urllib.parse import urlparse
+from uuid import uuid4
 
 import requests
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
@@ -285,7 +286,8 @@ class WallpaperPicker(BuscaDoSeletor, Adw.Dialog):
         except requests.RequestException as error:
             logging.info("Miniatura não baixou (%s)", error)
             return None
-        caminho = self._temp_dir / f"{item['id']}.img"
+        # O nome nunca sai da resposta da API: um id "..\x" gravava fora da pasta.
+        caminho = self._temp_dir / f"{uuid4().hex}.img"
         try:
             caminho.write_bytes(miniatura)
             with Image.open(caminho) as arquivo:

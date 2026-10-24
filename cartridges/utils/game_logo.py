@@ -235,11 +235,13 @@ def _cached_file(sidecar: Optional[dict[str, Any]]) -> Optional[Path]:
     if not sidecar:
         return None
 
-    filename = sidecar.get("file")
-    if not filename:
+    filename = str(sidecar.get("file") or "")
+    # Só um nome solto: um caminho absoluto ou de rede vindo de um backup
+    # faria o app abrir arquivos fora da pasta (e conectar noutra máquina).
+    if not filename or Path(filename).name != filename:
         return None
 
-    path = shared.logos_dir / str(filename)
+    path = shared.logos_dir / filename
     return path if path.is_file() else None
 
 

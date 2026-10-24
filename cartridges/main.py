@@ -21,6 +21,7 @@ import json
 import logging
 import lzma
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -241,6 +242,9 @@ def _translate_about_dialog(widget: Gtk.Widget) -> None:
 # identidade (conferidos em `load_games_from_disk`). `rating` e `status` têm
 # guarda própria na exibição; os demais eram aplicados por setattr sem checagem.
 _NUMBER = (int, float)
+# Todo id que o app gera: `imported_12`, `shortcuts_<hash>`.
+_GAME_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
+
 _GAME_FIELD_TYPES: dict[str, Any] = {
     **dict.fromkeys(
         (
@@ -293,6 +297,7 @@ _GAME_FIELD_TYPES: dict[str, Any] = {
             "conquistas",
             "saves_local_desconhecido_avisado",
             "backup_dos_saves_desligado",
+            "comando_a_conferir",
         ),
         bool,
     ),
@@ -1026,13 +1031,16 @@ class CartridgesApplication(Adw.Application):
                 # above, so a single corrupt file stopped the app from opening
                 # at all rather than costing one game. O executável pode ser
                 # vazio só numa tumba: um zerado recriado pelo backup nunca
-                # teve instalação neste PC.
+                # teve instalação neste PC. O game_id vira nome de arquivo (capa,
+                # logo, exclusão): um "..\x" de um backup alheio apontava para fora
+                # da pasta do app.
                 if (
                     not isinstance(data, dict)
                     or not all(
                         isinstance(data.get(key), str) and data[key]
                         for key in ("source", "game_id", "name")
                     )
+                    or not _GAME_ID_RE.fullmatch(data["game_id"])
                     or not isinstance(data.get("executable"), str)
                     or not (data["executable"] or data.get("removed") is True)
                 ):

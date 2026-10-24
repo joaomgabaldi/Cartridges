@@ -777,6 +777,7 @@ def test_a_manual_edit_without_a_fetch_keeps_the_recommendation(real_window, sto
 NOT_GAME_METADATA = {
     "added",
     "blacklisted",
+    "comando_a_conferir",
     "executable",
     "game_id",
     "last_played",
