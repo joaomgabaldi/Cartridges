@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 from cartridges import shared
-from cartridges.saves import backup_de_saves, conferencia, pasta
+from cartridges.saves import backup_de_saves, conferencia, ludusavi, pasta
 from cartridges.saves.ludusavi import Versao
 from cartridges.utils import tarefas
 
@@ -56,6 +56,7 @@ class LudusaviFalso:
         self.registros: dict[str, dict] = {}  # jogo -> "registry" da prévia
         self.cria_versao: dict[str, bool] = {}  # jogo -> o `backup` cria uma versão nova
         self.no_zip: dict[str, list[str]] = {}  # id -> nomes dentro do zip da versão
+        self.baixa_manifesto = False  # o `manifest update` grava o manifest.yaml (há rede)
         self._agora = datetime.now(timezone.utc)
         self._quando: dict[tuple[str, str], datetime] = {}  # as criadas pelo `backup`
         self._zipadas: set[tuple[str, str]] = set()
@@ -77,6 +78,10 @@ class LudusaviFalso:
             self.configs[comando[0]] = visto
             self.configs_por_chamada.append((comando, visto))
             time.sleep(self.demora)
+            if comando[:2] == ["manifest", "update"]:
+                if self.baixa_manifesto:
+                    (pasta_config / "manifest.yaml").write_text("{}", "utf-8")
+                return subprocess.CompletedProcess(args, 0, "", "")
             return self._responder(args, comando)
         finally:
             with self._trava:
@@ -162,6 +167,7 @@ def ambiente(settings, tmp_path, monkeypatch, ludusavi_de_verdade):
     monkeypatch.setattr(backup_de_saves, "_jogos_restaurando", Counter())
     monkeypatch.setattr(backup_de_saves, "_restaurando_todos", 0)
     monkeypatch.setattr(backup_de_saves, "_tarefas_abertas", 0)
+    monkeypatch.setattr(backup_de_saves, "_manifesto_falhou_em", None)
 
 
 class DialogoFalso:
@@ -1564,9 +1570,101 @@ def test_sem_manifesto_nao_restaura(store, make_game, falso, esperar, tmp_path, 
     esperar()
 
     _nada_foi_tocado(falso)
+    # Tentou baixar; sem rede o manifesto não veio.
+    assert falso.chamou("manifest") == [["manifest", "update", "--force"]]
     # A falha é do app, e não do jogo aberto: o aviso genérico, e o motivo no log.
     assert titulos() == ["Não foi possível restaurar o save de Meu Jogo."]
     assert "manifesto" in caplog.text
+
+
+def test_sem_manifesto_baixa_e_restaura(store, make_game, falso, esperar, tmp_path):
+    # Instalação nova (ou PC formatado): o backup do app não leva a pasta do Ludusavi.
+    jogo = _jogo_x(store, make_game, ["v1"], falso)
+    _sem_manifesto(tmp_path)
+    falso.baixa_manifesto = True
+
+    backup_de_saves.restaurar(jogo, "v1")
+    esperar()
+
+    assert falso.chamou("manifest") == [["manifest", "update", "--force"]]
+    assert len(falso.restauracoes()) == 1
+    assert titulos() == []
+
+
+def test_sem_manifesto_baixa_e_faz_backup(store, make_game, falso, esperar, tmp_path):
+    _sem_manifesto(tmp_path)
+    falso.baixa_manifesto = True
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Meu Jogo", steam_appid="7", ludusavi_nome="X")
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    esperar()
+
+    assert len(falso.chamou("backup")) == 1
+    assert titulos() == []
+
+
+def test_sem_manifesto_e_sem_rede_restaurar_todos_tenta_baixar_uma_vez(
+    store, make_game, falso, esperar, tmp_path, dialogos
+):
+    # Sem rede o Ludusavi pode ficar parado até o limite, com a trava dos saves presa:
+    # uma tentativa por jogo multiplicaria a espera.
+    falso.versoes = {"A": ["v1"], "B": ["v1"]}
+    na_biblioteca(store, make_game, game_id="a", name="Jogo A", steam_appid="1", ludusavi_nome="A")
+    na_biblioteca(store, make_game, game_id="b", name="Jogo B", steam_appid="2", ludusavi_nome="B")
+    _sem_manifesto(tmp_path)
+
+    backup_de_saves.restaurar_todos()
+    esperar()
+
+    assert len(falso.chamou("manifest")) == 1
+    assert falso.restauracoes() == []
+    assert [a[1:] for a in dialogos] == [incompleta_de("Jogo A", "Jogo B")]
+
+
+def test_sem_manifesto_tenta_baixar_de_novo_depois_da_pausa(
+    store, make_game, falso, esperar, tmp_path, monkeypatch
+):
+    jogo = _jogo_x(store, make_game, ["v1"], falso)
+    _sem_manifesto(tmp_path)
+    backup_de_saves.restaurar(jogo, "v1")
+    esperar()
+    # A rede voltou e a pausa passou.
+    falso.baixa_manifesto = True
+    monkeypatch.setattr(
+        backup_de_saves, "_manifesto_falhou_em", time.monotonic() - backup_de_saves.PAUSA_DO_MANIFESTO
+    )
+
+    backup_de_saves.restaurar(jogo, "v1")
+    esperar()
+
+    assert len(falso.chamou("manifest")) == 2
+    assert len(falso.restauracoes()) == 1
+
+
+def test_baixar_manifesto_tem_limite_de_tempo_curto(tmp_path):
+    limites = []
+
+    def executor(args, **kwargs):
+        limites.append(kwargs["timeout"])
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    ludusavi.baixar_manifesto(tmp_path / "ludusavi", executor)
+
+    assert limites and limites[0] < ludusavi.LIMITE_DE_TEMPO
+
+
+def test_sem_manifesto_baixa_e_procura_o_nome(store, make_game, falso, esperar, tmp_path):
+    _sem_manifesto(tmp_path)
+    falso.baixa_manifesto = True
+    falso.achados[("appid", "42")] = "Jogo Raro"
+    jogo = na_biblioteca(store, make_game, game_id="a", name="Jogo Raro", steam_appid="42")
+
+    backup_de_saves.no_fim_da_sessao(jogo)
+    esperar()
+
+    assert [c[:2] for c in falso.chamou("find")] == [["find", "--steam-id"]]
+    assert jogo.ludusavi_nome == "Jogo Raro"
+    assert len(falso.chamou("backup")) == 1
 
 
 # Onde um jogo grava o save: a prévia só passa com destinos dentro das pastas do usuário.

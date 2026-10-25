@@ -28,6 +28,13 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.25" date="2026-10-25">
+      <description translate="no">
+        <ul>
+          <li>Foi corrigido o erro que impedia o backup e a restauração dos saves depois de uma instalação nova do aplicativo.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.10.24" date="2026-10-24">
       <description translate="no">
         <ul>

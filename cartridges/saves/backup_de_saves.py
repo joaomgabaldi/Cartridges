@@ -16,6 +16,7 @@ sua entrada.
 import logging
 import subprocess
 import threading
+import time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +35,12 @@ from cartridges.utils.na_tela import entregar_na_tela
 
 # Os testes trocam por um executor falso; é o que `ludusavi.rodar` recebe.
 executor = subprocess.run
+
+# Quanto esperar, depois de uma tentativa falha de baixar o manifesto, antes da próxima.
+# Curta: só precisa cobrir o resto de um "Restaurar todos", e não segurar quem tenta de
+# novo depois que a rede volta.
+PAUSA_DO_MANIFESTO = 60
+_manifesto_falhou_em: float | None = None  # `time.monotonic()` da última falha
 
 # As marcas que o app grava nas versões (comentários do Ludusavi): a versão que um
 # backup com falha deixou pela metade, e a cópia dos saves feita antes de uma restauração.
@@ -232,8 +239,28 @@ def _exigir_manifesto() -> None:
     """Antes de todo `ludusavi.fazer_backup`. Sem o manifesto, o Ludusavi copia só os
     caminhos do config (emulador, pasta do jogo) e sai com 0: a versão ficaria sem o save
     que o manifesto aponta, e sem marca de incompleta."""
-    if not ludusavi.manifesto_baixado(_pasta_config()):
+    if not _garantir_manifesto(_pasta_config()):
         raise LudusaviFalhou("o manifesto do Ludusavi não foi baixado")
+
+
+def _garantir_manifesto(pasta_config: Path) -> bool:
+    """O manifesto está baixado, baixando-o agora se falta (instalação nova, ou a pasta do
+    Ludusavi, que fica fora do backup do app, perdida numa formatação). Sob a trava."""
+    global _manifesto_falhou_em  # pylint: disable=global-statement
+    if ludusavi.manifesto_baixado(pasta_config):
+        return True
+    # Logo depois de uma falha, não tenta de novo: "Restaurar todos" pede o manifesto uma
+    # vez por jogo, e cada tentativa sem rede pode esperar o limite inteiro.
+    if _manifesto_falhou_em is not None and time.monotonic() - _manifesto_falhou_em < PAUSA_DO_MANIFESTO:
+        return False
+    try:
+        ludusavi.baixar_manifesto(pasta_config, executor)
+    except LudusaviFalhou as erro:
+        logging.warning("Não foi possível baixar o manifesto do Ludusavi: %s", erro)
+    if ludusavi.manifesto_baixado(pasta_config):
+        return True
+    _manifesto_falhou_em = time.monotonic()
+    return False
 
 
 def _salvar(game: Game) -> bool:
@@ -256,7 +283,7 @@ def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
     if game.ludusavi_nome:
         return _no_config(game)
     pasta_config = _pasta_config()
-    if not ludusavi.manifesto_baixado(pasta_config):
+    if not _garantir_manifesto(pasta_config):
         # Sem o manifesto o `find` também não acha nada, e o jogo ficaria sem backup em silêncio.
         raise LudusaviFalhou("o manifesto do Ludusavi ainda não foi baixado")
     nome = ludusavi.nome_por_appid(game.steam_appid, pasta_config, executor) if game.steam_appid else None

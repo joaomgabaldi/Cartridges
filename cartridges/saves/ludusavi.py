@@ -127,6 +127,14 @@ def manifesto_baixado(pasta_config: Path) -> bool:
     return (pasta_config / "manifest.yaml").is_file()
 
 
+def baixar_manifesto(pasta_config: Path, executor: Executor = subprocess.run) -> None:
+    """Baixa o `manifest.yaml`. O `--try-manifest-update` dos outros comandos não basta: o
+    `backups` não baixa, e o app só roda o `find` e o `backup` com o manifesto já baixado.
+    `--force` porque o cache pode dizer que a última busca foi há menos de 24 h. O limite
+    é curto porque, sem rede, o Ludusavi pode ficar parado com a trava dos saves presa."""
+    rodar(["manifest", "update", "--force"], pasta_config, executor, api=False, limite_de_tempo=3 * 60)
+
+
 def nomes_do_manifesto(pasta_config: Path) -> list[str]:
     """Os nomes dos jogos do `manifest.yaml`, sem repetição, em ordem alfabética (sem
     diferenciar maiúsculas). Levanta `OSError` se o arquivo não abre e `ValueError` se não
