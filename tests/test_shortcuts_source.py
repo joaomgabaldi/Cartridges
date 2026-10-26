@@ -476,3 +476,43 @@ def test_atalhos_da_pasta_so_lnk_e_url(tmp_path, schema):
     assert sorted(p.name for p in atalhos_da_pasta()) == ["a.lnk", "b.URL"]
     schema["shortcuts-recursive"] = True
     assert sorted(p.name for p in atalhos_da_pasta()) == ["a.lnk", "b.URL", "d.lnk"]
+
+
+# ---------------------------------------------------------------------------
+# Alvo: o que liga um jogo adicionado à mão ao atalho dele
+# ---------------------------------------------------------------------------
+
+
+def test_lnk_classico_informa_o_alvo(scan, tmp_path):
+    exe = tmp_path / "game.exe"
+    exe.write_text("x", encoding="utf-8")
+    result = only_game(
+        scan({"Halo.lnk": "x"}, {"Halo.lnk": {"Target": str(exe), "Arguments": "-a"}})
+    )
+
+    assert result[1]["alvo"] == str(exe)
+
+
+def test_lnk_uri_informa_o_alvo(scan):
+    result = only_game(
+        scan({"Tf2.lnk": "x"}, {"Tf2.lnk": {"Target": "steam://rungameid/10"}})
+    )
+
+    assert result[1]["alvo"] == "steam://rungameid/10"
+
+
+def test_url_informa_o_alvo(scan):
+    result = only_game(
+        scan({"Tf2.url": "[InternetShortcut]\nURL=steam://rungameid/10\n"})
+    )
+
+    assert result[1]["alvo"] == "steam://rungameid/10"
+
+
+def test_lnk_aumid_nao_informa_alvo(scan):
+    result = only_game(
+        scan({"Halo.lnk": "x"}, {"Halo.lnk": {"Aumid": REAL_AUMID}},
+             start_apps=[("Halo", REAL_AUMID)])
+    )
+
+    assert "alvo" not in result[1]

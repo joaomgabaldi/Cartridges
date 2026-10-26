@@ -459,6 +459,7 @@ class ShortcutsSourceIterable(SourceIterable):
         # shortcut rewritten with a new catalog id, renames the game exactly the
         # way a patched target does.
         additional_data["identity_anchor"] = str(entry)
+        additional_data["alvo"] = url
 
         return (
             self._make_game(
@@ -535,6 +536,7 @@ class ShortcutsSourceIterable(SourceIterable):
             if arguments:
                 executable += f" {arguments}"
             identity = f"{target}|{arguments}"
+            additional_data["alvo"] = target
             if appid := (
                 steam_appid_from_url(arguments) or steam_appid_from_url(target)
             ):
@@ -587,6 +589,7 @@ class ShortcutsSourceIterable(SourceIterable):
                 return None
             executable = f'start "" "{target}"'
             identity = target
+            additional_data["alvo"] = target
             if appid := steam_appid_from_url(target):
                 additional_data["steam_appid"] = appid
 
