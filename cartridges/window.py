@@ -602,12 +602,20 @@ class CartridgesWindow(Adw.ApplicationWindow):
         app = self.get_application()
         importando = not app.lookup_action("import").get_enabled()
         avisos, importar = soltar_atalhos.ao_soltar(caminhos, importando)
+        if importar:
+            # A varredura leva alguns segundos e só avisa no fim; até lá, este
+            # fica na tela. Os outros avisos esperam atrás dele, na fila.
+            aguarde = Adw.Toast.new(_("Importando atalhos…"))
+            aguarde.set_timeout(0)
+            self.toast_queue.add(aguarde)
+            app.on_import_action(
+                varrer_atalhos=True,
+                ao_terminar=lambda: self.toast_queue.dismiss(aguarde),
+            )
         for texto in avisos:
             toast = Adw.Toast.new(texto)
             toast.set_use_markup(False)
             self.toast_queue.add(toast)
-        if importar:
-            app.on_import_action(varrer_atalhos=True)
         return True
 
     def block_dialog_backdrop_drag(self, *_args: Any) -> None:

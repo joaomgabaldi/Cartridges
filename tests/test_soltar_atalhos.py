@@ -192,7 +192,8 @@ def test_janela_copia_e_importa_ao_soltar(real_window, monkeypatch, tmp_path, sc
     real_window._ao_soltar(None, lista_de_arquivos(arquivo(fora, "Doom.lnk")), 0, 0)
 
     assert (pasta / "Doom.lnk").is_file()
-    assert app.importacoes == [{"varrer_atalhos": True}]
+    assert len(app.importacoes) == 1
+    assert app.importacoes[0]["varrer_atalhos"] is True
     assert not real_window.aviso_de_soltar.get_visible()
 
 
@@ -238,3 +239,30 @@ def test_aviso_aparece_opaco_e_some_ao_sair(real_window):
     real_window._ao_sair_arrasto()
     assert real_window.aviso_de_soltar.get_opacity() == 0
     assert not real_window.aviso_de_soltar.get_visible()
+
+
+class FilaFalsa:
+    def __init__(self):
+        self.na_tela = []
+
+    def add(self, toast):
+        self.na_tela.append(toast)
+
+    def dismiss(self, toast):
+        self.na_tela.remove(toast)
+
+
+def test_janela_avisa_que_esta_importando_ate_terminar(real_window, monkeypatch, tmp_path, schema):
+    pasta_de_atalhos(tmp_path, schema)
+    fora = tmp_path / "Downloads"
+    fora.mkdir()
+    app = AppFalso()
+    fila = FilaFalsa()
+    monkeypatch.setattr(real_window, "get_application", lambda: app)
+    monkeypatch.setattr(real_window, "toast_queue", fila)
+
+    real_window._ao_soltar(None, lista_de_arquivos(arquivo(fora, "Doom.lnk")), 0, 0)
+
+    assert [t.get_title() for t in fila.na_tela] == ["Importando atalhos…"]
+    app.importacoes[0]["ao_terminar"]()
+    assert fila.na_tela == []

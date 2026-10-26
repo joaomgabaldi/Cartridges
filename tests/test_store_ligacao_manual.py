@@ -256,3 +256,46 @@ def test_jogo_manual_continua_fora_da_remocao(store, make_game, seed):
     importer.remove_games()
 
     assert jogo.removed is False
+
+
+def tumba(store, make_game, **kw):
+    """O atalho que já foi um jogo e foi excluído, como no disco do usuário."""
+    morto = escaneado(make_game, removed=True, **kw)
+    store.add_game(morto, {})
+    return morto
+
+
+def test_liga_manual_quando_o_atalho_e_de_um_jogo_excluido(store, make_game, seed):
+    """O caso real: o mesmo .lnk, com a mesma data, já era um jogo excluído."""
+    tumba(store, make_game)
+    jogo = seed(manual(make_game, playtime=77))
+
+    store.add_game(escaneado(make_game), dados())
+
+    assert store.get(NOVO) is jogo
+    assert jogo.removed is False
+    assert jogo.source == "shortcuts"
+    assert jogo.playtime == 77
+    assert store.get(MANUAL) is None
+    assert len(store) == 1
+
+
+@pytest.mark.parametrize("campos", [{"blacklisted": True}, {"status": "beaten"}])
+def test_nao_troca_tumba_escondida_ou_zerada(store, make_game, seed, campos):
+    morto = tumba(store, make_game, **campos)
+    jogo = seed(manual(make_game))
+
+    store.add_game(escaneado(make_game), dados())
+
+    assert store.get(NOVO) is morto
+    assert store.get(MANUAL) is jogo
+    assert jogo.source == "imported"
+
+
+def test_tumba_sem_manual_continua_ignorada(store, make_game):
+    morto = tumba(store, make_game)
+
+    store.add_game(escaneado(make_game), dados())
+
+    assert store.get(NOVO) is morto
+    assert morto.removed is True

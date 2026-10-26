@@ -627,6 +627,11 @@ class Store:
         quando ele é o único com esse alvo: dois candidatos é um chute, e a
         adoção move histórico de um id para outro.
         """
+        candidato = self._candidato_manual(game, alvo)
+        return self._adotar(candidato, game) if candidato is not None else None
+
+    def _candidato_manual(self, game: Game, alvo: str) -> Optional[Game]:
+        """O único jogo da biblioteca adicionado à mão que abre ``alvo``."""
         chave = _path_key(alvo)
         # Argumentos no atalho escolhem o que o alvo abre: o atalho de um jogo
         # de RetroArch não é o RetroArch que a pessoa adicionou à mão.
@@ -642,9 +647,7 @@ class Store:
                 and _path_key(alvo_do_jogo) == chave
                 and argumentos in ("", argumentos_do_comando(jogo.executable))
             ]
-        if len(candidatos) != 1:
-            return None
-        return self._adotar(candidatos[0], game)
+        return candidatos[0] if len(candidatos) == 1 else None
 
     def _adotar(self, legacy: Game, game: Game) -> Game:
         """Re-file ``legacy`` under ``game``'s id, source and shortcut."""
@@ -730,6 +733,20 @@ class Store:
             and additional_data.get("alvo")
         ):
             stored_game = self.adotar_manual(game, additional_data["alvo"])
+        # O id cai num jogo excluído do mesmo atalho (o arquivo, com a mesma
+        # data, volta a ser só ignorado). Se a pessoa já o adicionou à mão de
+        # novo, é esse que vale: o excluído sai, como na reinstalação.
+        elif (
+            stored_game is not None
+            and stored_game.removed
+            and not stored_game.blacklisted
+            and not stored_game.zerado
+            and additional_data.get("identity_anchor")
+            and additional_data.get("alvo")
+            and (candidato := self._candidato_manual(game, additional_data["alvo"]))
+        ):
+            self.cleanup_game(stored_game)
+            stored_game = self._adotar(candidato, game)
 
         # A removed game loaded from disk is kept as a "tombstone": it stays in
         # the store (so later scans know it was removed) but is never run
