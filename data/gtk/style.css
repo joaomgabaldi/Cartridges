@@ -274,3 +274,9 @@ window.conquista-aviso-opaco .conquista-aviso-cartao {
 .conquista-aviso-cartao-embutido {
   box-shadow: 0 0 0 1px alpha(white, 0.14), 0 2px 8px rgba(0, 0, 0, 0.35);
 }
+
+/* A camada "Solte aqui para importar", por cima da biblioteca enquanto um
+   arquivo é arrastado sobre a janela. */
+.aviso-de-soltar {
+  background-color: alpha(@window_bg_color, 0.9);
+}

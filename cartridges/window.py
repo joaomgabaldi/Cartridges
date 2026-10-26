@@ -39,6 +39,7 @@ from cartridges.game import Game, STATUS_LABELS, status_label
 from cartridges.game_cover import GameCover
 from cartridges.saves import backup_de_saves
 from cartridges.utils import caixa_redimensionavel
+from cartridges.utils import soltar_atalhos
 from cartridges.utils.animated_flow_box import AnimatedFlowBox
 from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.dialog_backdrop import block_window_drag
@@ -425,6 +426,21 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # das outras daquela lista.
         self.botao_tarefas = BotaoTarefas(self)
         self.session_overlay.add_overlay(self.botao_tarefas)
+
+        # Atalhos arrastados de fora (Explorer, área de trabalho) para importar.
+        self.aviso_de_soltar = Adw.StatusPage(
+            icon_name="folder-download-symbolic",
+            title=_("Solte aqui para importar"),
+            visible=False,
+            can_target=False,
+        )
+        self.aviso_de_soltar.add_css_class("aviso-de-soltar")
+        self.session_overlay.add_overlay(self.aviso_de_soltar)
+        alvo_de_soltar = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
+        alvo_de_soltar.connect("enter", self._ao_entrar_arrasto)
+        alvo_de_soltar.connect("leave", self._ao_sair_arrasto)
+        alvo_de_soltar.connect("drop", self._ao_soltar)
+        self.add_controller(alvo_de_soltar)
         self._global_handler_ids.append(
             (
                 tarefas.lista,
@@ -535,6 +551,32 @@ class CartridgesWindow(Adw.ApplicationWindow):
             self._autoplay_id = None
         # A suspensão é desta janela; sem ela, ninguém a desfaria.
         tocador_capas.tocador.suspender(False)
+
+    def _ao_entrar_arrasto(self, *_args: Any) -> Gdk.DragAction:
+        self.aviso_de_soltar.set_visible(True)
+        return Gdk.DragAction.COPY
+
+    def _ao_sair_arrasto(self, *_args: Any) -> None:
+        self.aviso_de_soltar.set_visible(False)
+
+    def _ao_soltar(
+        self, _alvo: Gtk.DropTarget, arquivos: Gdk.FileList, _x: float, _y: float
+    ) -> bool:
+        self.aviso_de_soltar.set_visible(False)
+        caminhos = [
+            Path(caminho) if (caminho := arquivo.get_path()) else None
+            for arquivo in arquivos.get_files()
+        ]
+        app = self.get_application()
+        importando = not app.lookup_action("import").get_enabled()
+        avisos, importar = soltar_atalhos.ao_soltar(caminhos, importando)
+        for texto in avisos:
+            toast = Adw.Toast.new(texto)
+            toast.set_use_markup(False)
+            self.toast_queue.add(toast)
+        if importar:
+            app.on_import_action(varrer_atalhos=True)
+        return True
 
     def block_dialog_backdrop_drag(self, *_args: Any) -> None:
         if (dialog := self.get_visible_dialog()) is not None:

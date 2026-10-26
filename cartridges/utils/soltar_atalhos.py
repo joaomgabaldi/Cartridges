@@ -76,3 +76,40 @@ def copiar(caminhos: list[Optional[Path]]) -> Resultado:
 def pasta_configurada() -> bool:
     local = shared.schema.get_string("shortcuts-location")
     return bool(local) and Path(local).expanduser().is_dir()
+
+
+def ao_soltar(
+    caminhos: list[Optional[Path]], importando: bool
+) -> tuple[list[str], bool]:
+    """Os avisos a mostrar, em ordem, e se a importação deve rodar."""
+    # A varredura em andamento pode já ter passado pela pasta, e não veria
+    # os atalhos copiados agora.
+    if importando:
+        return [_("Aguarde o fim da importação em andamento.")], False
+    if not pasta_configurada():
+        return [
+            _("Escolha uma pasta de atalhos em Preferências para importar atalhos.")
+        ], False
+
+    resultado = copiar(caminhos)
+    if resultado.copiados + resultado.ja_existiam == 0:
+        return [_("Nenhum atalho para importar.")], False
+
+    avisos = []
+    if resultado.ja_existiam:
+        avisos.append(
+            ngettext(
+                "{} atalho já estava na pasta de atalhos.",
+                "{} atalhos já estavam na pasta de atalhos.",
+                resultado.ja_existiam,
+            ).format(resultado.ja_existiam)
+        )
+    if resultado.ignorados:
+        avisos.append(
+            ngettext(
+                "{} arquivo foi ignorado.",
+                "{} arquivos foram ignorados.",
+                resultado.ignorados,
+            ).format(resultado.ignorados)
+        )
+    return avisos, True

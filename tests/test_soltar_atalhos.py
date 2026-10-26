@@ -83,3 +83,127 @@ def test_pasta_configurada(tmp_path, schema):
     assert soltar_atalhos.pasta_configurada() is False
     schema["shortcuts-location"] = str(tmp_path)
     assert soltar_atalhos.pasta_configurada() is True
+
+
+# ---------------------------------------------------------------------------
+# O que acontece ao soltar
+# ---------------------------------------------------------------------------
+
+
+def test_soltar_durante_importacao_nao_copia(tmp_path, schema):
+    pasta = pasta_de_atalhos(tmp_path, schema)
+    fora = tmp_path / "Downloads"
+    fora.mkdir()
+
+    avisos, importar = soltar_atalhos.ao_soltar([arquivo(fora, "Doom.lnk")], True)
+
+    assert avisos == ["Aguarde o fim da importação em andamento."]
+    assert importar is False
+    assert list(pasta.iterdir()) == []
+
+
+def test_soltar_sem_pasta(tmp_path, schema):
+    avisos, importar = soltar_atalhos.ao_soltar([arquivo(tmp_path, "Doom.lnk")], False)
+
+    assert avisos == [
+        "Escolha uma pasta de atalhos em Preferências para importar atalhos."
+    ]
+    assert importar is False
+
+
+def test_soltar_sem_atalhos(tmp_path, schema):
+    pasta_de_atalhos(tmp_path, schema)
+
+    avisos, importar = soltar_atalhos.ao_soltar([arquivo(tmp_path, "x.exe")], False)
+
+    assert avisos == ["Nenhum atalho para importar."]
+    assert importar is False
+
+
+def test_soltar_importa_e_avisa_ignorados(tmp_path, schema):
+    pasta = pasta_de_atalhos(tmp_path, schema)
+    fora = tmp_path / "Downloads"
+    fora.mkdir()
+
+    avisos, importar = soltar_atalhos.ao_soltar(
+        [arquivo(fora, "Doom.lnk"), arquivo(fora, "doom.exe")], False
+    )
+
+    assert importar is True
+    assert avisos == ["1 arquivo foi ignorado."]
+    assert (pasta / "Doom.lnk").is_file()
+
+
+def test_soltar_atalho_repetido_importa_e_avisa(tmp_path, schema):
+    pasta = pasta_de_atalhos(tmp_path, schema)
+    arquivo(pasta, "Doom.lnk")
+    fora = tmp_path / "Downloads"
+    fora.mkdir()
+
+    avisos, importar = soltar_atalhos.ao_soltar([arquivo(fora, "Doom.lnk")], False)
+
+    assert importar is True
+    assert avisos == ["1 atalho já estava na pasta de atalhos."]
+
+
+# ---------------------------------------------------------------------------
+# A janela
+# ---------------------------------------------------------------------------
+
+
+class AppFalso:
+    def __init__(self, importando=False):
+        from gi.repository import Gio  # noqa: PLC0415
+
+        self.acao = Gio.SimpleAction.new("import", None)
+        self.acao.set_enabled(not importando)
+        self.importacoes = []
+
+    def lookup_action(self, nome):
+        assert nome == "import"
+        return self.acao
+
+    def on_import_action(self, **kwargs):
+        self.importacoes.append(kwargs)
+
+
+def lista_de_arquivos(*caminhos):
+    from gi.repository import Gdk, Gio  # noqa: PLC0415
+
+    return Gdk.FileList.new_from_list([Gio.File.new_for_path(str(c)) for c in caminhos])
+
+
+def test_janela_mostra_e_esconde_o_aviso(real_window):
+    real_window._ao_entrar_arrasto()
+    assert real_window.aviso_de_soltar.get_visible()
+
+    real_window._ao_sair_arrasto()
+    assert not real_window.aviso_de_soltar.get_visible()
+
+
+def test_janela_copia_e_importa_ao_soltar(real_window, monkeypatch, tmp_path, schema):
+    pasta = pasta_de_atalhos(tmp_path, schema)
+    fora = tmp_path / "Downloads"
+    fora.mkdir()
+    app = AppFalso()
+    monkeypatch.setattr(real_window, "get_application", lambda: app)
+    real_window._ao_entrar_arrasto()
+
+    real_window._ao_soltar(None, lista_de_arquivos(arquivo(fora, "Doom.lnk")), 0, 0)
+
+    assert (pasta / "Doom.lnk").is_file()
+    assert app.importacoes == [{"varrer_atalhos": True}]
+    assert not real_window.aviso_de_soltar.get_visible()
+
+
+def test_janela_nao_importa_durante_importacao(real_window, monkeypatch, tmp_path, schema):
+    pasta = pasta_de_atalhos(tmp_path, schema)
+    fora = tmp_path / "Downloads"
+    fora.mkdir()
+    app = AppFalso(importando=True)
+    monkeypatch.setattr(real_window, "get_application", lambda: app)
+
+    real_window._ao_soltar(None, lista_de_arquivos(arquivo(fora, "Doom.lnk")), 0, 0)
+
+    assert app.importacoes == []
+    assert list(pasta.iterdir()) == []
