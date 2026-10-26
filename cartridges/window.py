@@ -553,6 +553,9 @@ class CartridgesWindow(Adw.ApplicationWindow):
         tocador_capas.tocador.suspender(False)
 
     def _ao_entrar_arrasto(self, *_args: Any) -> Gdk.DragAction:
+        # Com um diálogo aberto o aviso ficaria escondido atrás dele.
+        if self.get_visible_dialog() is not None:
+            return Gdk.DragAction(0)
         self.aviso_de_soltar.set_visible(True)
         return Gdk.DragAction.COPY
 
@@ -563,6 +566,8 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self, _alvo: Gtk.DropTarget, arquivos: Gdk.FileList, _x: float, _y: float
     ) -> bool:
         self.aviso_de_soltar.set_visible(False)
+        if self.get_visible_dialog() is not None:
+            return False
         caminhos = [
             Path(caminho) if (caminho := arquivo.get_path()) else None
             for arquivo in arquivos.get_files()

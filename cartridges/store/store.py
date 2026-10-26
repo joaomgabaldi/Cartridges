@@ -66,11 +66,22 @@ def alvo_do_comando(comando: str) -> Optional[str]:
     para o mesmo executável. ``None`` quando não há alvo legível: nesse caso
     o jogo nunca é ligado a atalho nenhum.
     """
+    return _partes_do_comando(comando)[0]
+
+
+def argumentos_do_comando(comando: str) -> str:
+    """O que vem depois do alvo, com os espaços normalizados ("" sem nada)."""
+    return _partes_do_comando(comando)[1]
+
+
+def _partes_do_comando(comando: str) -> tuple[Optional[str], str]:
     resto = _PREFIXO_START.sub("", comando.strip(), count=1)
     if resto.startswith('"'):
         fim = resto.find('"', 1)
-        return resto[1:fim] or None if fim > 0 else None
-    return resto or None
+        if fim <= 0:
+            return None, ""
+        return resto[1:fim] or None, " ".join(resto[fim + 1 :].split())
+    return resto or None, ""
 
 
 def _is_derived_command(game: Game) -> bool:
@@ -617,6 +628,9 @@ class Store:
         adoção move histórico de um id para outro.
         """
         chave = _path_key(alvo)
+        # Argumentos no atalho escolhem o que o alvo abre: o atalho de um jogo
+        # de RetroArch não é o RetroArch que a pessoa adicionou à mão.
+        argumentos = argumentos_do_comando(game.executable)
         with self._lock:
             candidatos = [
                 jogo
@@ -626,6 +640,7 @@ class Store:
                 and not jogo.blacklisted
                 and (alvo_do_jogo := alvo_do_comando(jogo.executable))
                 and _path_key(alvo_do_jogo) == chave
+                and argumentos in ("", argumentos_do_comando(jogo.executable))
             ]
         if len(candidatos) != 1:
             return None

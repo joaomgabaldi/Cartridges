@@ -70,9 +70,8 @@ def manual(make_game, **kw):
 def escaneado(make_game, **kw):
     kw.setdefault("game_id", NOVO)
     kw.setdefault("shortcut_path", LNK)
-    return make_game(
-        source="shortcuts", shortcut_mtime=50, executable=COMANDO_DO_ATALHO, **kw
-    )
+    kw.setdefault("executable", COMANDO_DO_ATALHO)
+    return make_game(source="shortcuts", shortcut_mtime=50, **kw)
 
 
 def dados(alvo=EXE, ancora=LNK):
@@ -108,13 +107,46 @@ def test_liga_ignorando_caixa_e_barras(store, make_game, seed):
     assert store.get(NOVO) is jogo
 
 
-def test_liga_com_argumentos_diferentes(store, make_game, seed):
+def test_liga_manual_com_argumentos_a_atalho_sem_argumentos(store, make_game, seed):
     jogo = seed(manual(make_game, executable=f'"{EXE}" -windowed'))
 
     store.add_game(escaneado(make_game), dados())
 
     assert store.get(NOVO) is jogo
     assert jogo.executable == COMANDO_DO_ATALHO
+
+
+def test_liga_com_os_mesmos_argumentos(store, make_game, seed):
+    jogo = seed(manual(make_game, executable=f'"{EXE}"  -dx11'))
+
+    store.add_game(
+        escaneado(make_game, executable=f'start "" /D "C:\\Jogos\\Halo" "{EXE}" -dx11'),
+        dados(),
+    )
+
+    assert store.get(NOVO) is jogo
+
+
+def test_nao_liga_launcher_a_atalho_de_conteudo(store, make_game, seed):
+    """Um RetroArch adicionado à mão não vira o atalho de um jogo que ele abre."""
+    jogo = seed(manual(make_game))
+
+    store.add_game(
+        escaneado(make_game, executable=f'start "" "{EXE}" -L snes.dll smw.sfc'), dados()
+    )
+
+    assert store.get(MANUAL) is jogo
+    assert jogo.source == "imported"
+    assert len(store) == 2
+
+
+def test_nao_liga_com_argumentos_diferentes(store, make_game, seed):
+    jogo = seed(manual(make_game, executable=f'"{EXE}" -windowed'))
+
+    store.add_game(escaneado(make_game, executable=f'start "" "{EXE}" -dx11'), dados())
+
+    assert store.get(MANUAL) is jogo
+    assert len(store) == 2
 
 
 def test_migra_arquivos_e_sessoes(store, make_game, seed):

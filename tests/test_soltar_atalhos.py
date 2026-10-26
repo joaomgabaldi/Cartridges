@@ -207,3 +207,19 @@ def test_janela_nao_importa_durante_importacao(real_window, monkeypatch, tmp_pat
 
     assert app.importacoes == []
     assert list(pasta.iterdir()) == []
+
+
+def test_janela_recusa_soltar_com_dialogo_aberto(real_window, monkeypatch, tmp_path, schema):
+    pasta = pasta_de_atalhos(tmp_path, schema)
+    fora = tmp_path / "Downloads"
+    fora.mkdir()
+    app = AppFalso()
+    monkeypatch.setattr(real_window, "get_application", lambda: app)
+    monkeypatch.setattr(real_window, "get_visible_dialog", lambda: object())
+
+    assert not real_window._ao_entrar_arrasto()
+    assert not real_window.aviso_de_soltar.get_visible()
+    assert real_window._ao_soltar(None, lista_de_arquivos(arquivo(fora, "Doom.lnk")), 0, 0) is False
+
+    assert app.importacoes == []
+    assert list(pasta.iterdir()) == []
