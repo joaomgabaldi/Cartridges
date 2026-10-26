@@ -77,6 +77,19 @@ def test_janela_lista_os_pendentes(store, make_game):
     assert janela.lista.get_row_at_index(1) is None
 
 
+def test_janela_recomenda_escolher_o_atalho_por_ela(store, make_game):
+    store.add_game(make_game(game_id="a", name="Alan Wake"), {}, run_pipeline=False)
+    restauracao.gravar(["a"], 1)
+
+    janela = telas.JanelaPendentes()
+
+    assert janela.recomendacao.get_label() == (
+        "Escolha o atalho de cada jogo por esta janela. Um atalho importado de "
+        "outra forma, como ao arrastá-lo para o aplicativo, pode entrar como um "
+        "jogo novo, sem o tempo de jogo e o histórico de sessões do backup."
+    )
+
+
 def test_conflito_textos_e_botoes(make_game):
     restaurado = make_game(
         game_id="gt", name="Gran Turismo 7", playtime=36000, last_played=1_700_000_050

@@ -175,7 +175,25 @@ class JanelaPendentes:
         self.depois = Gtk.Button(label=_("Lembrar mais tarde"), halign=Gtk.Align.CENTER)
         self.depois.add_css_class("pill")
         self.depois.connect("clicked", lambda *_a: self.dialogo.close())
+        # O atalho escolhido aqui leva o jogo do backup junto; o que entra por
+        # outro caminho (arrastado, copiado para a pasta) só se acha sozinho
+        # quando aponta para o mesmo executável de antes.
+        self.recomendacao = Gtk.Label(
+            label=_(
+                "Escolha o atalho de cada jogo por esta janela. Um atalho importado "
+                "de outra forma, como ao arrastá-lo para o aplicativo, pode entrar "
+                "como um jogo novo, sem o tempo de jogo e o histórico de sessões "
+                "do backup."
+            ),
+            wrap=True,
+            xalign=0,
+            hexpand=True,
+        )
+        nota = Gtk.Box(spacing=10, css_classes=["dim-label"])
+        nota.append(Gtk.Image(icon_name="dialog-information-symbolic", valign=Gtk.Align.START))
+        nota.append(self.recomendacao)
         caixa.append(self.texto)
+        caixa.append(nota)
         caixa.append(_rolagem(self.lista, 420))
         caixa.append(self.depois)
 
