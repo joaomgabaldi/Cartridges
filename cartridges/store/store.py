@@ -605,6 +605,36 @@ class Store:
                 logging.debug("Ignoring a stale anchor for %s", legacy_id)
                 return None
 
+        return self._adotar(legacy, game)
+
+    def adotar_manual(self, game: Game, alvo: str) -> Optional[Game]:
+        """Faz o atalho que a varredura achou assumir o jogo adicionado à mão
+        que abre o mesmo alvo, com tudo o que ele tem, em vez de importá-lo
+        como um segundo jogo ao lado do manual.
+
+        Só um jogo da biblioteca (não removido, fora da lista negra) e só
+        quando ele é o único com esse alvo: dois candidatos é um chute, e a
+        adoção move histórico de um id para outro.
+        """
+        chave = _path_key(alvo)
+        with self._lock:
+            candidatos = [
+                jogo
+                for jogo in self.games_by_id.values()
+                if jogo.source == "imported"
+                and not jogo.removed
+                and not jogo.blacklisted
+                and (alvo_do_jogo := alvo_do_comando(jogo.executable))
+                and _path_key(alvo_do_jogo) == chave
+            ]
+        if len(candidatos) != 1:
+            return None
+        return self._adotar(candidatos[0], game)
+
+    def _adotar(self, legacy: Game, game: Game) -> Game:
+        """Re-file ``legacy`` under ``game``'s id, source and shortcut."""
+        legacy_id = legacy.game_id
+
         # Deliberately outside the lock: this is a dozen file operations, and
         # the main thread blocks on this lock to lay out the library. Nothing
         # here touches the mappings, and no other thread can be adopting the
@@ -615,7 +645,7 @@ class Store:
         with self._lock:
             if (mapping := self.source_games.get(legacy.base_source)) is not None:
                 mapping.pop(legacy_id, None)
-                mapping[game.game_id] = legacy
+            self.source_games.setdefault(game.base_source, {})[game.game_id] = legacy
             self.games_by_id.pop(legacy_id, None)
             self.games_by_id[game.game_id] = legacy
 
@@ -624,6 +654,12 @@ class Store:
             # disk. Set before the id, so nothing can observe the new id on a
             # record still holding the stale command.
             legacy.executable = game.executable
+            # Um jogo adicionado à mão passa a ser do atalho. A adoção pela
+            # âncora nunca chega aqui (a fonte é a mesma) e não toca no mtime.
+            if legacy.source != game.source:
+                legacy.source = game.source
+                legacy.base_source = game.base_source
+                legacy.shortcut_mtime = game.shortcut_mtime
             legacy.game_id = game.game_id
             # Retires the old key as it goes. Leaving one behind would leave the
             # index naming a path this game no longer has, and the anchor grants
@@ -671,6 +707,14 @@ class Store:
         # a duplicate beside an original that `remove_games` would then delete.
         if stored_game is None and additional_data.get("identity_anchor"):
             stored_game = self.adopt_legacy_game(game)
+        # Nem pelo id nem pela âncora: pode ser o atalho de um jogo que a
+        # pessoa adicionou à mão antes.
+        if (
+            stored_game is None
+            and additional_data.get("identity_anchor")
+            and additional_data.get("alvo")
+        ):
+            stored_game = self.adotar_manual(game, additional_data["alvo"])
 
         # A removed game loaded from disk is kept as a "tombstone": it stays in
         # the store (so later scans know it was removed) but is never run
