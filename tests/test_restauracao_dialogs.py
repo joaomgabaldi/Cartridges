@@ -85,8 +85,8 @@ def test_janela_recomenda_escolher_o_atalho_por_ela(store, make_game):
 
     assert janela.recomendacao.get_label() == (
         "Escolha o atalho de cada jogo por esta janela. Um atalho importado de "
-        "outra forma, como ao arrastá-lo para o aplicativo, pode entrar como um "
-        "jogo novo, sem o tempo de jogo e o histórico de sessões do backup."
+        "outra forma pode entrar como um jogo novo, sem o tempo de jogo e o "
+        "histórico de sessões do backup."
     )
 
 

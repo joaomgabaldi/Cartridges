@@ -181,9 +181,8 @@ class JanelaPendentes:
         self.recomendacao = Gtk.Label(
             label=_(
                 "Escolha o atalho de cada jogo por esta janela. Um atalho importado "
-                "de outra forma, como ao arrastá-lo para o aplicativo, pode entrar "
-                "como um jogo novo, sem o tempo de jogo e o histórico de sessões "
-                "do backup."
+                "de outra forma pode entrar como um jogo novo, sem o tempo de jogo "
+                "e o histórico de sessões do backup."
             ),
             wrap=True,
             xalign=0,
