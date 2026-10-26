@@ -19,6 +19,7 @@
 
 import json
 import logging
+import re
 from pathlib import Path
 from threading import RLock
 from typing import Any, Generator, MutableMapping, Optional
@@ -52,6 +53,24 @@ def _path_key(path: str) -> str:
     folder with a different capitalisation is enough.
     """
     return path.replace("/", "\\").casefold()
+
+
+# O `start ""` (e o `/D "pasta"`) que a varredura de atalhos põe na frente do alvo.
+_PREFIXO_START = re.compile(r'^start ""(?:\s+/D "[^"]*")?\s*', re.IGNORECASE)
+
+
+def alvo_do_comando(comando: str) -> Optional[str]:
+    """O caminho ou URI que um comando de abrir executa, sem argumentos.
+
+    É por ele que um jogo adicionado à mão é reconhecido no atalho que aponta
+    para o mesmo executável. ``None`` quando não há alvo legível: nesse caso
+    o jogo nunca é ligado a atalho nenhum.
+    """
+    resto = _PREFIXO_START.sub("", comando.strip(), count=1)
+    if resto.startswith('"'):
+        fim = resto.find('"', 1)
+        return resto[1:fim] or None if fim > 0 else None
+    return resto or None
 
 
 def _is_derived_command(game: Game) -> bool:
