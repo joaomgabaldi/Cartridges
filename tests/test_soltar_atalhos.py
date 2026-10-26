@@ -223,3 +223,18 @@ def test_janela_recusa_soltar_com_dialogo_aberto(real_window, monkeypatch, tmp_p
 
     assert app.importacoes == []
     assert list(pasta.iterdir()) == []
+
+
+def test_aviso_tem_moldura_tracejada(real_window):
+    moldura = real_window.aviso_de_soltar.get_first_child()
+
+    assert moldura.has_css_class("moldura-de-soltar")
+
+
+def test_aviso_aparece_opaco_e_some_ao_sair(real_window):
+    real_window._ao_entrar_arrasto()
+    assert real_window.aviso_de_soltar.get_opacity() == 1
+
+    real_window._ao_sair_arrasto()
+    assert real_window.aviso_de_soltar.get_opacity() == 0
+    assert not real_window.aviso_de_soltar.get_visible()

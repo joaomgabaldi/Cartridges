@@ -428,14 +428,29 @@ class CartridgesWindow(Adw.ApplicationWindow):
         self.session_overlay.add_overlay(self.botao_tarefas)
 
         # Atalhos arrastados de fora (Explorer, área de trabalho) para importar.
-        self.aviso_de_soltar = Adw.StatusPage(
-            icon_name="folder-download-symbolic",
-            title=_("Solte aqui para importar"),
-            visible=False,
-            can_target=False,
+        moldura = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=14,
+            halign=Gtk.Align.CENTER,
+            valign=Gtk.Align.CENTER,
+            width_request=420,
         )
+        moldura.add_css_class("moldura-de-soltar")
+        moldura.append(Gtk.Image(icon_name="folder-download-symbolic", pixel_size=40))
+        moldura.append(Gtk.Label(label=_("Solte aqui para importar"), css_classes=["title-3"]))
+        self.aviso_de_soltar = Gtk.Box(visible=False, can_target=False, opacity=0)
         self.aviso_de_soltar.add_css_class("aviso-de-soltar")
+        self.aviso_de_soltar.append(moldura)
+        moldura.set_hexpand(True)
         self.session_overlay.add_overlay(self.aviso_de_soltar)
+        self._fade_de_soltar = Adw.TimedAnimation.new(
+            self.aviso_de_soltar,
+            0,
+            1,
+            150,
+            Adw.PropertyAnimationTarget.new(self.aviso_de_soltar, "opacity"),
+        )
+        self._fade_de_soltar.connect("done", self._ao_terminar_fade_de_soltar)
         alvo_de_soltar = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
         alvo_de_soltar.connect("enter", self._ao_entrar_arrasto)
         alvo_de_soltar.connect("leave", self._ao_sair_arrasto)
@@ -556,16 +571,28 @@ class CartridgesWindow(Adw.ApplicationWindow):
         # Com um diálogo aberto o aviso ficaria escondido atrás dele.
         if self.get_visible_dialog() is not None:
             return Gdk.DragAction(0)
-        self.aviso_de_soltar.set_visible(True)
+        self._fade_do_aviso_de_soltar(True)
         return Gdk.DragAction.COPY
 
     def _ao_sair_arrasto(self, *_args: Any) -> None:
-        self.aviso_de_soltar.set_visible(False)
+        self._fade_do_aviso_de_soltar(False)
+
+    def _fade_do_aviso_de_soltar(self, mostrar: bool) -> None:
+        # Parte da opacidade atual: entrar e sair seguidos não pisca.
+        self._fade_de_soltar.pause()
+        self.aviso_de_soltar.set_visible(True)
+        self._fade_de_soltar.set_value_from(self.aviso_de_soltar.get_opacity())
+        self._fade_de_soltar.set_value_to(1 if mostrar else 0)
+        self._fade_de_soltar.play()
+
+    def _ao_terminar_fade_de_soltar(self, *_args: Any) -> None:
+        if self.aviso_de_soltar.get_opacity() == 0:
+            self.aviso_de_soltar.set_visible(False)
 
     def _ao_soltar(
         self, _alvo: Gtk.DropTarget, arquivos: Gdk.FileList, _x: float, _y: float
     ) -> bool:
-        self.aviso_de_soltar.set_visible(False)
+        self._fade_do_aviso_de_soltar(False)
         if self.get_visible_dialog() is not None:
             return False
         caminhos = [

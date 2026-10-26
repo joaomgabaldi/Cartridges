@@ -278,5 +278,12 @@ window.conquista-aviso-opaco .conquista-aviso-cartao {
 /* A camada "Solte aqui para importar", por cima da biblioteca enquanto um
    arquivo é arrastado sobre a janela. */
 .aviso-de-soltar {
-  background-color: alpha(@window_bg_color, 0.9);
+  background-color: alpha(@window_bg_color, 0.88);
+}
+
+.moldura-de-soltar {
+  padding: 44px 32px;
+  border: 2px dashed alpha(@window_fg_color, 0.45);
+  border-radius: 16px;
+  color: alpha(@window_fg_color, 0.8);
 }
