@@ -12,11 +12,13 @@
 
 #define NOME_DO_PERFIL L"Cartridges"
 
-/* wchar_t e NvU16 têm 2 bytes no Windows */
+/* Por NvU16, não por wchar_t: o limite vale mesmo onde wchar_t tem 4 bytes */
 static void copiar(NvAPI_UnicodeString destino, const wchar_t *origem)
 {
-    wcsncpy((wchar_t *)destino, origem, NVAPI_UNICODE_STRING_MAX - 1);
-    destino[NVAPI_UNICODE_STRING_MAX - 1] = 0;
+    size_t i = 0;
+    for (; i < NVAPI_UNICODE_STRING_MAX - 1 && origem[i]; i++)
+        destino[i] = (NvU16)origem[i];
+    memset(destino + i, 0, (NVAPI_UNICODE_STRING_MAX - i) * sizeof *destino);
 }
 
 static int falhou(const Nvapi *api, const char *etapa, NvAPI_Status st)

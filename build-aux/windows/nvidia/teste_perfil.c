@@ -27,6 +27,7 @@ static struct {
     NvAPI_Status st_aplicativo, st_salvar;
     NvDRSProfileHandle perfil_do_exe; /* NULL: o exe não está em perfil nenhum */
     int perfil_existe;
+    const wchar_t *exe; /* o que achar_aplicativo deve receber */
     const char *chamadas[32];
     int n;
     NvU32 id_gravado, valor_gravado, tipo_gravado;
@@ -57,7 +58,8 @@ static NvAPI_Status achar_aplicativo(NvDRSSessionHandle s, NvAPI_UnicodeString n
 {
     (void)s;
     registrar("achar_aplicativo");
-    assert(wcscmp((wchar_t *)nome, EXE) == 0);
+    assert(wcsncmp((wchar_t *)nome, f.exe, NVAPI_UNICODE_STRING_MAX - 1) == 0);
+    assert(nome[NVAPI_UNICODE_STRING_MAX - 1] == 0);
     assert(app->version == NVDRS_APPLICATION_VER);
     if (f.st_aplicativo != NVAPI_OK)
         return f.st_aplicativo;
@@ -136,6 +138,7 @@ static void zerar(void)
     memset(&f, 0, sizeof f);
     f.st_aplicativo = NVAPI_OK;
     f.st_salvar = NVAPI_OK;
+    f.exe = EXE;
     f.id_gravado = f.valor_gravado = 0xFFFFFFFFu;
 }
 
@@ -233,6 +236,19 @@ static void teste_remover_sem_perfil(void)
     sessao_fechada();
 }
 
+/* Caminho maior que a NvAPI_UnicodeString: corta no limite e termina em zero */
+static void teste_caminho_longo(void)
+{
+    static wchar_t longo[NVAPI_UNICODE_STRING_MAX + 100];
+    wmemset(longo, L'a', NVAPI_UNICODE_STRING_MAX + 99);
+    zerar();
+    f.exe = longo;
+    f.st_aplicativo = NVAPI_ERROR;
+    assert(perfil_aplicar(&API, longo) == PERFIL_ERRO);
+    assert(chamou("achar_aplicativo"));
+    sessao_fechada();
+}
+
 /* Sem driver NVIDIA não há Vulkan da NVIDIA nem moldura: 4, sem página. Driver
    sem as funções ou Initialize com outro erro: 1, com página. */
 static void teste_inicio(void)
@@ -255,6 +271,7 @@ int main(void)
     teste_aplicar_erro_ao_salvar();
     teste_remover_com_perfil();
     teste_remover_sem_perfil();
+    teste_caminho_longo();
     puts("ok");
     return 0;
 }
