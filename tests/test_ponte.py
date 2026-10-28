@@ -32,7 +32,7 @@ def _rodar_ate(condicao, limite=5.0):
 
 def test_ligar_duas_vezes_avisa_uma(app_qt):
     ponte, jogo, avisos = Ponte(), _jogo(), []
-    ponte.avisoRecebido.connect(avisos.append)
+    ponte.fila.adicionar = lambda texto, *_a, **_k: avisos.append(texto)
     ponte.ligar(jogo)
     ponte.ligar(jogo)
     jogo.aviso.emit("oi", "")
@@ -65,7 +65,7 @@ def test_ligar_fora_da_principal_levanta(app_qt):
 
 def test_jogo_importado_depois_fica_ligado(app_qt):
     ponte, jogo, avisos = Ponte(), _jogo(), []
-    ponte.avisoRecebido.connect(avisos.append)
+    ponte.fila.adicionar = lambda texto, *_a, **_k: avisos.append(texto)
     gerente = ExibicaoManager(ModeloDaBiblioteca(), ponte.ligar)
     thread = threading.Thread(target=gerente.main, args=(jogo, {}))
     thread.start()
@@ -73,3 +73,13 @@ def test_jogo_importado_depois_fica_ligado(app_qt):
     assert _rodar_ate(lambda: jogo.game_id in ponte._ligados)  # noqa: SLF001
     jogo.aviso.emit("x", "")
     assert avisos == ["x"]
+
+
+def test_jogo_nao_prende_a_ponte(app_qt):
+    jogo, ponte = _jogo(), Ponte()
+    ref = weakref.ref(ponte)
+    ponte.ligar(jogo)
+    del ponte
+    gc.collect()
+    assert ref() is None
+    jogo.aviso.emit("oi", "")  # a ponte já se foi: nada acontece

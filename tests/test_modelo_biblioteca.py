@@ -47,6 +47,18 @@ def _rodar_ate(condicao, limite=5.0):
     return condicao()
 
 
+def test_remover_chama_remove_game(app_qt):
+    modelo, chamados = ModeloDaBiblioteca(), []
+    jogo = _jogo("a", "Alfa")
+    jogo.remove_game = lambda: chamados.append("a")
+    modelo.atualizar(jogo)
+    modelo.remover("a")
+    modelo.remover("inexistente")  # sem jogo: nada a fazer
+    pagina, _ = _pagina(modelo)
+    pagina.remover("a")
+    assert chamados == ["a", "a"]
+
+
 def test_entram_so_os_visiveis(app_qt):
     modelo = ModeloDaBiblioteca()
     modelo.atualizar(_jogo("a", "A"))

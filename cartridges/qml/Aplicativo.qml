@@ -106,6 +106,7 @@ Principal {
     Avisos {
         anchors.fill: parent
         ponte: janela.ligacao
+        fila: aplicativo.avisos
     }
 
     Connections {

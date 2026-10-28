@@ -164,6 +164,12 @@ class ModeloDaBiblioteca(QAbstractListModel):
         if (jogo := self._jogos.get(jogoId)) is not None:
             jogo.launch()
 
+    @Slot(str)
+    def remover(self, jogoId: str) -> None:  # noqa: N803
+        """"Remover" do menu do jogo: o aviso com "Desfazer" sai do próprio `remove_game`."""
+        if (jogo := self._jogos.get(jogoId)) is not None:
+            jogo.remove_game()
+
 
 class FiltrosDaBiblioteca(QObject):
     """Gênero, ano, status e modo de ordenação: um só estado para as duas páginas, só da sessão."""
@@ -335,6 +341,10 @@ class FiltroDaPagina(QSortFilterProxyModel):
     @Slot(str)
     def iniciar(self, jogoId: str) -> None:  # noqa: N803
         self._fonte.iniciar(jogoId)
+
+    @Slot(str)
+    def remover(self, jogoId: str) -> None:  # noqa: N803
+        self._fonte.remover(jogoId)
 
     def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex | QPersistentModelIndex) -> bool:  # noqa: ARG002, N802
         linha = self._fonte.linha(source_row)

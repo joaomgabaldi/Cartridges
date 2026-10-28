@@ -1,88 +1,168 @@
 import QtQuick
+import QtQuick.Controls.Basic
+import QtQuick.Effects
 import QtQuick.Window
 
-// Um jogo da grade: capa 200x300 lógicos, nome embaixo e, ao passar o mouse, o botão de jogar.
-Item {
+// Um jogo da grade, no desenho da versão anterior: a capa e o nome dentro do mesmo cartão arredondado.
+// Ao passar o mouse (ou com o foco do teclado na grade): jogar no canto superior esquerdo e "Mais opções" no direito.
+Rectangle {
     id: cartao
 
     required property string jogoId
     required property string nome
     required property string capa
     required property bool zerado
+    required property bool carregando
+    // O cartão sob o foco do teclado na grade (o delegate liga).
+    property bool focado: false
     // O modelo da biblioteca: só `iniciar` é chamado nele; o QML nunca vê um Jogo.
     property QtObject modelo
 
+    // A capa e o clique direito levam aos detalhes; quem recebe é o plano 3.
+    signal abrirDetalhes(string jogoId)
+    // O clique direito no cartão (na `main` abria o diálogo Editar).
+    signal editar(string jogoId)
+    // O botão "Mais opções" (ou a tecla de menu) pede o menu do jogo, ancorado no item.
+    signal menuPedido(string jogoId, Item ancora)
+
     readonly property int larguraDaCapa: 200
     readonly property int alturaDaCapa: 300
+    readonly property int alturaDoNome: 50
+    readonly property bool mostrarBotoes: !zerado && (passagem.hovered || focado || menuAberto)
+    // O menu do jogo está aberto a partir deste cartão: os botões ficam à vista enquanto ele durar.
+    property bool menuAberto: false
+    readonly property string nomeAcessivel: Accessible.name
+    readonly property string papelAcessivel: Accessible.role === Accessible.Button ? "Button" : ""
+
+    function abrirMenu() {
+        if (!zerado) menuPedido(jogoId, carregadorDosBotoes.item ? carregadorDosBotoes.item.ancoraDoMenu : cartao)
+    }
 
     width: larguraDaCapa
-    height: alturaDaCapa + legenda.height + 8
+    height: alturaDaCapa + alturaDoNome
+    radius: 12
+    color: Tema.superficie
+    border { width: focado ? 2 : 0; color: Tema.destaque }
+
+    Accessible.role: Accessible.Button
+    Accessible.name: nome
+    Accessible.onPressAction: abrirDetalhes(jogoId)
 
     HoverHandler { id: passagem }
 
-    Rectangle {
-        id: moldura
+    // Clique na capa: detalhes. Clique direito: Editar (como na `main`).
+    // shortcut: os dois sinais ficam sem receptor até o plano 3; lá `editar` abre o diálogo Editar.
+    TapHandler {
+        onTapped: cartao.abrirDetalhes(cartao.jogoId)
+    }
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        onTapped: cartao.editar(cartao.jogoId)
+    }
+
+    Item {
+        id: mascara
         width: cartao.larguraDaCapa
         height: cartao.alturaDaCapa
-        radius: 8
-        color: Tema.botaoSobre
-        clip: true
+        visible: false
+        layer.enabled: true
+        // Cantos de cima arredondados, os de baixo retos: o retângulo passa do fim para o raio sumir embaixo.
+        Rectangle { width: parent.width; height: parent.height + cartao.radius; radius: cartao.radius }
+    }
 
-        Image {
-            anchors.fill: parent
-            source: cartao.capa !== "" ? cartao.capa : (cartao.modelo ? cartao.modelo.placeholder : "")
-            fillMode: Image.PreserveAspectCrop
-            asynchronous: true
-            // Na resolução real da tela, para a capa não ficar borrada em DPI alto.
-            sourceSize: Qt.size(cartao.larguraDaCapa * Screen.devicePixelRatio,
-                                cartao.alturaDaCapa * Screen.devicePixelRatio)
-        }
-
-        Rectangle {
-            id: botao
-            anchors.centerIn: parent
-            width: rotulo.implicitWidth + 40
-            height: 40
-            radius: height / 2
-            color: Tema.destaque
-            opacity: passagem.hovered ? 1 : 0
-            visible: opacity > 0
-            Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta } }
-
-            Row {
-                anchors.centerIn: parent
-                spacing: 8
-                Text {
-                    text: "▶"
-                    color: "white"
-                    font.family: "Segoe UI Symbol"
-                    font.pixelSize: 14
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-                Text {
-                    id: rotulo
-                    text: "Jogar"
-                    color: "white"
-                    font.family: Tema.fonte
-                    font.pixelSize: 14
-                    font.weight: Font.DemiBold
-                }
-            }
-
-            TapHandler {
-                onTapped: if (cartao.modelo) cartao.modelo.iniciar(cartao.jogoId)
-            }
+    Image {
+        id: imagem
+        width: cartao.larguraDaCapa
+        height: cartao.alturaDaCapa
+        source: cartao.capa !== "" ? cartao.capa : (cartao.modelo ? cartao.modelo.placeholder : "")
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        // Na resolução real da tela, para a capa não ficar borrada em DPI alto.
+        sourceSize: Qt.size(cartao.larguraDaCapa * Screen.devicePixelRatio,
+                            cartao.alturaDaCapa * Screen.devicePixelRatio)
+        layer.enabled: true
+        layer.effect: MultiEffect {
+            maskEnabled: true
+            maskSource: mascara
+            maskThresholdMin: 0.5  // borda suave nos cantos arredondados
+            maskSpreadAtMin: 1.0
         }
     }
 
+    BusyIndicator {
+        objectName: "carregando"
+        anchors { horizontalCenter: imagem.horizontalCenter; verticalCenter: imagem.verticalCenter }
+        running: cartao.carregando
+        visible: cartao.carregando
+        palette.dark: Tema.destaque
+    }
+
     Text {
-        id: legenda
-        anchors { top: moldura.bottom; topMargin: 8; left: moldura.left; right: moldura.right }
+        anchors { left: parent.left; right: parent.right; bottom: parent.bottom; leftMargin: 12; rightMargin: 12 }
+        height: cartao.alturaDoNome
+        verticalAlignment: Text.AlignVCenter
         text: cartao.nome
+        textFormat: Text.PlainText
         color: Tema.texto
-        font.family: Tema.fonte
-        font.pixelSize: 14
+        font { family: Tema.fonte; pixelSize: 14 }
         elide: Text.ElideRight
-        horizontalAlignment: Text.AlignHCenter
+    }
+
+    // Os botões só existem fora de um zerado (que não joga nem tem menu).
+    Loader {
+        id: carregadorDosBotoes
+        anchors.fill: parent
+        active: !cartao.zerado
+        sourceComponent: Item {
+            readonly property Item ancoraDoMenu: botaoMais
+            opacity: cartao.mostrarBotoes ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta } }
+
+            component BotaoRedondo: Rectangle {
+                id: botao
+                property string glifo
+                property string dica
+                signal clicado()
+                width: 36; height: width; radius: width / 2
+                color: pressao.pressed ? "#cc000000" : (pressao.containsMouse ? "#b3000000" : "#99000000")
+                Accessible.role: Accessible.Button
+                Accessible.name: dica
+                Text {
+                    anchors.centerIn: parent
+                    text: botao.glifo
+                    color: "white"
+                    font { family: Tema.fonteDeIcones; pixelSize: 16 }
+                }
+                // MouseArea, não TapHandler: o clique no botão não pode chegar ao cartão.
+                MouseArea {
+                    id: pressao
+                    anchors.fill: parent
+                    enabled: cartao.mostrarBotoes
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: botao.clicado()
+                }
+                ToolTip.visible: pressao.containsMouse && ToolTip.text !== ""
+                ToolTip.delay: 600
+                ToolTip.text: dica
+            }
+
+            BotaoRedondo {
+                id: botaoJogar
+                objectName: "botaoJogar"
+                x: 6; y: 6
+                glifo: ""
+                dica: "Jogar"
+                onClicado: if (cartao.modelo) cartao.modelo.iniciar(cartao.jogoId)
+            }
+            BotaoRedondo {
+                id: botaoMais
+                objectName: "botaoMais"
+                x: cartao.larguraDaCapa - width - 6; y: 6
+                glifo: ""
+                dica: "Mais opções"
+                onClicado: cartao.abrirMenu()
+            }
+        }
     }
 }

@@ -1,20 +1,16 @@
 import QtQuick
 
-// O aviso simples na parte de baixo e a confirmação do comando de um jogo restaurado.
+// O aviso (um por vez, com botão opcional) na parte de baixo e a confirmação do comando de um jogo restaurado.
 // Os textos vão sempre em PlainText: nome de jogo e comando não são marcação.
 Item {
     id: camada
 
-    // Ponte (cartridges/app.py)
+    // Ponte e FilaDeAvisos (cartridges/app.py)
     property QtObject ponte
+    property QtObject fila
 
     Connections {
         target: camada.ponte
-        function onAvisoRecebido(texto) {
-            textoDoAviso.text = texto
-            aviso.opacity = 1
-            relogio.restart()
-        }
         function onConfirmacaoPedida(titulo, corpo) {
             tituloDaConfirmacao.text = titulo
             corpoDaConfirmacao.text = corpo
@@ -25,20 +21,30 @@ Item {
     Rectangle {
         id: aviso
         anchors { bottom: parent.bottom; bottomMargin: 24; horizontalCenter: parent.horizontalCenter }
-        width: Math.min(textoDoAviso.implicitWidth + 40, parent.width - 48)
+        objectName: "aviso"
+        width: Math.min(textoDoAviso.implicitWidth + 40 + (botaoDoAviso.visible ? botaoDoAviso.width + 8 : 0), parent.width - 48)
         height: 44
         radius: height / 2
         color: Tema.barra
         border.color: Tema.botaoSobre
-        opacity: 0
+        opacity: camada.fila && camada.fila.visivel ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta } }
 
+        // O corpo do aviso não deixa o clique passar para a grade por baixo.
+        MouseArea { anchors.fill: parent; enabled: aviso.visible }
+
         Text {
             id: textoDoAviso
-            anchors { fill: parent; leftMargin: 20; rightMargin: 20 }
+            objectName: "textoDoAviso"
+            anchors {
+                left: parent.left; leftMargin: 20; top: parent.top; bottom: parent.bottom
+                right: botaoDoAviso.visible ? botaoDoAviso.left : parent.right
+                rightMargin: botaoDoAviso.visible ? 8 : 20
+            }
+            text: camada.fila ? camada.fila.texto : ""
             verticalAlignment: Text.AlignVCenter
-            horizontalAlignment: Text.AlignHCenter
+            horizontalAlignment: botaoDoAviso.visible ? Text.AlignLeft : Text.AlignHCenter
             textFormat: Text.PlainText
             elide: Text.ElideRight
             color: Tema.texto
@@ -46,7 +52,21 @@ Item {
             font.pixelSize: 14
         }
 
-        Timer { id: relogio; interval: 4000; onTriggered: aviso.opacity = 0 }
+        Text {
+            id: botaoDoAviso
+            objectName: "botaoDoAviso"
+            anchors { right: parent.right; rightMargin: 16; verticalCenter: parent.verticalCenter }
+            visible: camada.fila && camada.fila.botao !== ""
+            text: camada.fila ? camada.fila.botao : ""
+            textFormat: Text.PlainText
+            color: Tema.destaque
+            font { family: Tema.fonte; pixelSize: 14; weight: Font.DemiBold }
+            padding: 6
+            Accessible.role: Accessible.Button
+            Accessible.name: text
+            // Só o botão recebe o toque; o resto do aviso não esconde a grade por baixo.
+            TapHandler { onTapped: camada.fila.clicar() }
+        }
     }
 
     Rectangle {

@@ -106,12 +106,10 @@ def test_aviso_chega_como_texto(app_qt):
     from cartridges.ponte import Ponte  # noqa: PLC0415
 
     ponte = Ponte()
-    avisos = []
-    ponte.avisoRecebido.connect(avisos.append)
     jogo = Jogo({"game_id": "a", "source": "imported", "name": "<b>Alfa</b>"})
     ponte.ligar(jogo)
     jogo.aviso.emit("<b>Alfa</b> iniciado", "")
-    assert avisos == ["<b>Alfa</b> iniciado"]
+    assert ponte.fila.texto == "<b>Alfa</b> iniciado"
 
 
 def test_iniciar_roda_o_executavel_do_jogo(app_qt, monkeypatch):

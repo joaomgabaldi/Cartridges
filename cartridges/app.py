@@ -24,6 +24,7 @@ from cartridges import shared
 from cartridges.aplicativo import Aplicativo
 from cartridges.carga import carregar_jogos_do_disco
 from cartridges.logging.session_file_handler import SessionFileHandler
+from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.ponte import Ponte
 from cartridges.store.managers import async_manager
@@ -72,7 +73,9 @@ def main(argv: list[str]) -> int:
     pagina_zerados = FiltroDaPagina(modelo, filtros, "zerados")
     shared.store = Store()
     shared.store.add_manager(FileManager(), False)
-    ponte = Ponte()
+    avisos = FilaDeAvisos()
+    ponte = Ponte(avisos)
+    ponte.ligar_store(shared.store)
     shared.store.add_manager(ExibicaoManager(modelo, ao_ver=ponte.ligar))
     modelo.ligar_store(shared.store)
     shared.store.toggle_manager_in_pipelines(FileManager, True)
@@ -89,7 +92,7 @@ def main(argv: list[str]) -> int:
     QQuickStyle.setStyle("Basic")
     motor = QQmlApplicationEngine()
     qwk.registrar(motor)
-    aplicativo = Aplicativo()
+    aplicativo = Aplicativo(avisos)
     contexto = motor.rootContext()
     for nome, valor in (
         ("filtros", filtros), ("paginaTodos", pagina_biblioteca), ("paginaZerados", pagina_zerados),

@@ -10,14 +10,16 @@ import weakref
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from cartridges import shared
+from cartridges.modelos.avisos import FilaDeAvisos
 
 
 class Aplicativo(QObject):
     importandoChanged = Signal()  # noqa: N815
     colunasMaximasChanged = Signal()  # noqa: N815
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(self, avisos: FilaDeAvisos | None = None, parent: QObject | None = None) -> None:
         super().__init__(parent)
+        self._avisos = avisos if avisos is not None else FilaDeAvisos(self)
         self._importando = False
         self._colunas = shared.schema.get_uint("library-rows")
         # A `Configuracoes` entrega o aviso na thread principal; a referência fraca não prende o objeto.
@@ -29,6 +31,11 @@ class Aplicativo(QObject):
         if colunas != self._colunas:
             self._colunas = colunas
             self.colunasMaximasChanged.emit()
+
+    @Property(QObject, constant=True)
+    def avisos(self) -> FilaDeAvisos:
+        """A fila única de avisos do app (a mesma da `Ponte`)."""
+        return self._avisos
 
     @Property(bool, notify=importandoChanged)
     def importando(self) -> bool:

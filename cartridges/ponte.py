@@ -7,21 +7,28 @@
 import weakref
 from typing import Any, Callable
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Qt, Signal, Slot
 
+from cartridges import shared
 from cartridges.jogo import Jogo
-from cartridges.utils.thread_principal import eh_thread_principal
+from cartridges.modelos.avisos import FilaDeAvisos
+from cartridges.utils.thread_principal import eh_thread_principal, na_thread_principal
+
+
+def _ainda_existe(jogo: Jogo) -> bool:
+    loja = shared.store
+    return loja is not None and loja.get(jogo.game_id) is jogo and (shared.games_dir / f"{jogo.game_id}.json").exists()
 
 
 class Ponte(QObject):
     """Os textos seguem como texto puro (o QML os mostra em PlainText)."""
 
-    avisoRecebido = Signal(str)
     confirmacaoPedida = Signal(str, str)
     sairDaFrente = Signal()
 
-    def __init__(self) -> None:
+    def __init__(self, fila: FilaDeAvisos | None = None) -> None:
         super().__init__()
+        self.fila = fila if fila is not None else FilaDeAvisos(self)
         self._pendente: Callable[[], Any] | None = None
         self._ligados: dict[str, weakref.ref] = {}
 
@@ -35,11 +42,14 @@ class Ponte(QObject):
         self._ligados[jogo.game_id] = weakref.ref(jogo)
         ponte, ref_jogo = weakref.ref(self), weakref.ref(jogo)
 
-        def aviso(texto: str, _acao: str) -> None:
-            # O `aviso` pode sair de uma thread de trabalho; o sinal da ponte, de um
-            # QObject da principal, chega enfileirado ao QML.
-            if (p := ponte()) is not None:
-                p.avisoRecebido.emit(texto)
+        def aviso(texto: str, acao: str) -> None:
+            # O `aviso` pode sair de uma thread de trabalho; a fila é só da principal.
+            if (p := ponte()) is None:
+                return
+            if eh_thread_principal():
+                p._avisar(ref_jogo, texto, acao)  # noqa: SLF001
+            else:
+                na_thread_principal(p._avisar, ref_jogo, texto, acao)  # noqa: SLF001
 
         def confirmar(lancar: Callable[[], Any]) -> None:
             if (p := ponte()) is not None and (j := ref_jogo()) is not None:
@@ -48,6 +58,30 @@ class Ponte(QObject):
         jogo.aviso.connect(aviso)
         jogo.sair_da_frente.connect(self.sairDaFrente)
         jogo.confirmar_comando.connect(confirmar)
+
+    def ligar_store(self, store: Any) -> None:
+        """`jogo_excluido` sai de threads do importador: a conexão enfileirada leva à principal."""
+        store.jogo_excluido.connect(self.dispensar_desfazer, Qt.ConnectionType.QueuedConnection)
+
+    @Slot(str)
+    def dispensar_desfazer(self, game_id: str) -> None:
+        """Um jogo excluído não tem o que desfazer."""
+        self.fila.dispensar_chave((game_id, "remove"))
+
+    def _avisar(self, ref_jogo: "weakref.ref[Jogo]", texto: str, acao: str) -> None:
+        if acao != "remove" or (jogo := ref_jogo()) is None:
+            self.fila.adicionar(texto)
+            return
+
+        def desfazer() -> None:
+            # O que `on_undo_action` fazia na janela GTK. O jogo pode ter saído enquanto o aviso estava na tela.
+            # Excluído da store (ou sem a ficha em disco) enquanto o aviso esperava: gravar o ressuscitaria.
+            if (j := ref_jogo()) is not None and _ainda_existe(j):
+                j.removed = False
+                j.save()
+                j.update()
+
+        self.fila.adicionar(texto, "Desfazer", desfazer, chave=(jogo.game_id, acao))
 
     def _pedir(self, jogo: Jogo, lancar: Callable[[], Any]) -> None:
         self._pendente = lancar

@@ -12,6 +12,7 @@ from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 
+from cartridges import shared
 from cartridges.aplicativo import Aplicativo
 from cartridges.jogo import Jogo
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
@@ -61,8 +62,8 @@ class _App:
         self.filtros.modo = "a-z"
         self.todos = FiltroDaPagina(self.modelo, self.filtros, "biblioteca")
         self.zerados = FiltroDaPagina(self.modelo, self.filtros, "zerados")
-        self.aplicativo = Aplicativo()
         self.ponte = Ponte()
+        self.aplicativo = Aplicativo(self.ponte.fila)
         self.motor = QQmlEngine()
         contexto = self.motor.rootContext()
         for nome, valor in (
@@ -225,4 +226,95 @@ def test_foco_vai_para_zerados_e_volta(app_qt):
     QMetaObject.invokeMethod(app.achar("botaoVoltar"), "click", Qt.ConnectionType.DirectConnection)
     _esperar(lambda: foco_dentro_de("pagina"))
     assert foco_dentro_de("pagina")
+    app.fechar()
+
+
+def _cartoes(grade):
+    return [item.childItems()[0] for item in grade.property("contentItem").childItems() if item.property("jogoId")]
+
+
+def test_cartao_tem_nome_acessivel(app_qt):
+    app = _App(_tres())
+    cartao = next(c for c in _cartoes(app.achar("grade")) if c.property("nome") == "Beta")
+    assert cartao.property("nome") == "Beta"
+    # Accessible.name / role não são propriedades do item: lê-se pelo atributo anexado via o próprio QML.
+    assert cartao.property("nomeAcessivel") == "Beta"
+    assert cartao.property("papelAcessivel") == "Button"
+    app.fechar()
+
+
+def test_zerado_sem_botoes(app_qt):
+    app = _App(_jogos((1, "Alfa", {}), (2, "Zero", {"removed": True, "status": "beaten"})))
+    comum = _cartoes(app.achar("grade"))[0]
+    assert _achar(comum, "botaoJogar") is not None and _achar(comum, "botaoMais") is not None
+    QMetaObject.invokeMethod(app.achar("botaoZerados"), "click", Qt.ConnectionType.DirectConnection)
+    _esperar(lambda: app.janela.property("paginaAtual") == "zerados")
+    zerado = _cartoes(app.achar("gradeDeZerados"))[0]
+    assert zerado.property("nome") == "Zero"
+    assert _achar(zerado, "botaoJogar") is None and _achar(zerado, "botaoMais") is None
+    app.fechar()
+
+
+def test_remover_pelo_menu_do_jogo(app_qt):
+    app = _App(_tres())
+    chamados = []
+    app.modelo._jogos["imported_2"].remove_game = lambda: chamados.append("imported_2")  # noqa: SLF001
+    menu = app.achar("menuDoJogo")
+    menu.setProperty("jogoId", "imported_2")
+    QMetaObject.invokeMethod(app.achar("itemRemover"), "click", Qt.ConnectionType.DirectConnection)
+    assert chamados == ["imported_2"]
+    app.fechar()
+
+
+def test_aviso_aparece_na_tela_e_desfaz(app_qt):
+    app = _App(_tres())
+    jogo = app.modelo._jogos["imported_1"]  # noqa: SLF001
+    jogo.save = lambda: None
+    shared.store = {jogo.game_id: jogo}  # a Store que o desfazer consulta
+    shared.games_dir.mkdir(parents=True, exist_ok=True)
+    (shared.games_dir / f"{jogo.game_id}.json").write_text("{}")
+    app.ponte.ligar(jogo)
+    jogo.remove_game()
+    aviso = app.achar("aviso")
+    _esperar(lambda: aviso.property("opacity") == 1)
+    assert aviso.property("opacity") == 1
+    assert app.achar("textoDoAviso").property("text") == "Alfa removido"
+    assert app.achar("botaoDoAviso").property("text") == "Desfazer"
+    app.ponte.fila.clicar()
+    assert jogo.removed is False
+    app.fechar()
+
+
+def test_menu_do_cartao_aponta_para_o_jogo_dele(app_qt):
+    # Do test_menu_do_card.py: o menu continua ligado ao jogo do cartão em que foi aberto.
+    app = _App(_tres())
+    cartoes = {c.property("nome"): c for c in _cartoes(app.achar("grade"))}
+    menu = app.achar("menuDoJogo")
+    for nome, jogo_id in (("Gama", "imported_3"), ("Alfa", "imported_1")):
+        QMetaObject.invokeMethod(cartoes[nome], "abrirMenu", Qt.ConnectionType.DirectConnection)
+        _esperar(lambda: menu.property("jogoId") == jogo_id)
+        assert menu.property("jogoId") == jogo_id
+        assert menu.property("visible") is True
+        menu.close()
+    app.fechar()
+
+
+def test_anel_e_botoes_so_por_teclado(app_qt):
+    from PySide6.QtCore import QCoreApplication, QEvent  # noqa: PLC0415
+    from PySide6.QtGui import QKeyEvent  # noqa: PLC0415
+
+    app = _App(_tres())
+    grade = app.achar("grade")
+    grade.forceActiveFocus()
+    _esperar()
+    primeiro = _cartoes(grade)
+    primeiro = next(c for c in primeiro if c.property("nome") == "Alfa")
+    assert grade.property("porTeclado") is False
+    assert primeiro.property("focado") is False  # o foco da grade sozinho não acende o cartão
+    assert primeiro.property("mostrarBotoes") is False
+    for tipo in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
+        QCoreApplication.sendEvent(app.janela, QKeyEvent(tipo, Qt.Key.Key_Right, Qt.KeyboardModifier.NoModifier))
+    _esperar(lambda: grade.property("porTeclado") is True)
+    atual = next(c for c in _cartoes(grade) if c.property("focado"))
+    assert atual.property("nome") == "Beta" and atual.property("mostrarBotoes") is True
     app.fechar()
