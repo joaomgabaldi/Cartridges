@@ -22,3 +22,6 @@ __pycache__/
 # Ambiente de desenvolvimento Qt
 /.venv/
 /capturas/
+
+# Gravado so pelo montar_app_qt.py
+cartridges/instalacao.json

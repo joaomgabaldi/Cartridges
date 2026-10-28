@@ -20,7 +20,6 @@ import types
 import uuid
 import winreg
 import winsound
-from enum import IntEnum, auto
 from pathlib import Path
 from typing import Any
 
@@ -391,62 +390,15 @@ class FakeWindow:
         self.presented += 1
 
 
-class AppState(IntEnum):
-    DEFAULT = auto()
-    LOAD_FROM_DISK = auto()
-    IMPORT = auto()
+from cartridges import shared  # noqa: E402
 
+AppState = shared.AppState
 
-def _install_shared() -> types.ModuleType:
-    """Put a synthetic ``cartridges.shared`` in place before anything imports it."""
-    import cartridges  # noqa: PLC0415
-
-    shared = types.ModuleType("cartridges.shared")
-    shared.AppState = AppState
-    shared.APP_ID = "io.github.joaomgabaldi.Cartridges"
-    shared.VERSION = "0000.00.00"
-    # Must match the real build: `game_cover` resolves gresource paths off it,
-    # and a wrong value aborts the process with a Gdk-ERROR on import.
-    shared.PREFIX = "/io/github/joaomgabaldi/Cartridges"
-    shared.SPEC_VERSION = 1.6
-    shared.APP_DIR_NAME = "Cartridges"
-    shared.image_size = (600, 900)
-    shared.scale_factor = 1
-    shared.display_size = (200, 300)
-    shared.details_size = (280, 420)
-    # Repointed per test by the `app_dirs` fixture. Deliberately left as a path
-    # that does not exist, so a test that skips the fixture and writes anyway
-    # fails instead of touching the real library.
-    placeholder = Path(__file__).resolve().parent / "_unset"
-    shared.home = placeholder
-    shared.data_dir = placeholder
-    shared.app_dir = placeholder / "Cartridges"
-    shared.games_dir = placeholder / "games"
-    shared.covers_dir = placeholder / "covers"
-    shared.logos_dir = placeholder / "logos"
-    shared.wallpapers_dir = placeholder / "wallpapers"
-    shared.fitas_dir = placeholder / "fitas"
-    shared.conquistas_dir = placeholder / "conquistas"
-    shared.conquistas_cache_dir = placeholder / "cache" / "conquistas"
-    shared.capas_animadas_dir = placeholder / "cache" / "capas_animadas"
-    shared.contas_dir = placeholder / "contas"
-    shared.fitas_arquivo = placeholder / "fitas.json"
-    shared.tuya_conta_arquivo = placeholder / "tuya_conta.json"
-    shared.log_dir = placeholder / "logs"
-    shared.schema = FakeSchema(_SCHEMA_DEFAULTS)
-    shared.state_schema = FakeSchema(_STATE_DEFAULTS)
-    shared.win = None
-    shared.importer = None
-    shared.import_time = 1_700_000_000
-    shared.store = None
-    shared.log_files = []
-
-    sys.modules["cartridges.shared"] = shared
-    cartridges.shared = shared  # type: ignore[attr-defined]
-    return shared
-
-
-shared = _install_shared()
+# Ainda sem equivalente real: `schema` e `state_schema` (preferências no registro) chegam na
+# Task 3; até lá os testes usam o duplo em dicionário. `import_time` fixo, como antes.
+shared.schema = FakeSchema(_SCHEMA_DEFAULTS)
+shared.state_schema = FakeSchema(_STATE_DEFAULTS)
+shared.import_time = 1_700_000_000
 
 
 # O `ludusavi.exe` desta máquina nunca roda nos testes. O corte é na sessão toda, e não num

@@ -1,4 +1,4 @@
-# shared.py.in
+# shared.py
 #
 # Copyright 2022-2023 kramo
 #
@@ -17,10 +17,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import json
+import os
 from enum import IntEnum, auto
 from pathlib import Path
-
-from gi.repository import Gdk, Gio, GLib
+from typing import Literal
 
 
 class AppState(IntEnum):
@@ -29,26 +30,62 @@ class AppState(IntEnum):
     IMPORT = auto()
 
 
-APP_ID = "@APP_ID@"
-VERSION = "@VERSION@"
-PREFIX = "@PREFIX@"
+APP_ID = "io.github.joaomgabaldi.Cartridges"
+VERSION = "2.0.0"
+PREFIX = "/io/github/joaomgabaldi/Cartridges"
 # The version of the game_id.json spec. Deliberately NOT bumped for the
 # HowLongToBeat fields: they are nullable additions that an older Cartridges
 # ignores harmlessly, whereas a bump makes `Store.add_game` reject every file
 # as "from a newer version" and hide the user's whole library on a downgrade.
 SPEC_VERSION = 1.6
 
-schema = Gio.Settings.new(APP_ID)
-state_schema = Gio.Settings.new(APP_ID + ".State")
+_INSTALACAO = Path(__file__).resolve().parent / "instalacao.json"
+
+
+def canal() -> Literal["desenvolvimento", "final"]:
+    """O canal desta instalação, gravado em `instalacao.json` só pelo `montar_app_qt.py`.
+
+    Sem o arquivo é uma execução a partir do código-fonte: `desenvolvimento`, que usa
+    pasta e chave de registro próprias (sufixo `-dev`) e nunca encosta nos dados reais.
+    """
+    try:
+        texto = _INSTALACAO.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return "desenvolvimento"
+    except (OSError, UnicodeDecodeError):
+        texto = None
+    try:
+        valor = json.loads(texto)["canal"]
+    except (TypeError, ValueError, KeyError):
+        valor = None
+    if valor not in ("final", "desenvolvimento"):
+        raise SystemExit(
+            "A instalação do Cartridges está danificada. Reinstale o aplicativo."
+        )
+    return valor
+
+
+_sufixo = "" if canal() == "final" else "-dev"
 
 home = Path.home()
 
-data_dir = Path(GLib.get_user_data_dir())
+# Só calcula caminhos: pastas e chaves de registro são criadas por quem grava.
+# `CARTRIDGES_DADOS` e `CARTRIDGES_REGISTRO` (os testes) valem em qualquer canal.
+data_dir = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
 
 # Name of the app's own folder inside the data/config dirs.
-APP_DIR_NAME = APP_ID
+APP_DIR_NAME = APP_ID + _sufixo
 
-app_dir = data_dir / APP_DIR_NAME
+app_dir = (
+    Path(os.environ["CARTRIDGES_DADOS"])
+    if os.environ.get("CARTRIDGES_DADOS")
+    else data_dir / APP_DIR_NAME
+)
+
+# Subchave sob HKCU onde ficam as preferências.
+chave_do_registro = os.environ.get("CARTRIDGES_REGISTRO") or (
+    r"Software\GSettings\io\github\joaomgabaldi\Cartridges" + _sufixo
+)
 
 games_dir = app_dir / "games"
 covers_dir = app_dir / "covers"
@@ -108,8 +145,8 @@ log_dir = app_dir / "logs"
 # derived from the monitor scale to keep memory and drawing cost reasonable.
 image_size = (600, 900)
 
-# Sensible defaults so these names always exist, even when there is no display
-# yet (e.g. shared.py imported before the window exists) or no monitors attached.
+# Padrões sempre presentes. O `app.py` refaz `scale_factor`, `display_size` e
+# `details_size` a partir dos monitores do Qt, depois de criar a QGuiApplication.
 scale_factor = 1
 display_size = (200, 300)
 
@@ -123,19 +160,6 @@ display_size = (200, 300)
 # the cover on screen right now is decoded at this size — see
 # `GameCover.add_details_picture`.
 details_size = (420, 630)
-
-try:
-    scale_factor = max(
-        monitor.get_scale_factor()
-        for monitor in Gdk.Display.get_default().get_monitors()
-    )
-except (AttributeError, ValueError):
-    # AttributeError: no display (get_default() is None), e.g. the search
-    # provider. ValueError: max() over zero monitors. Keep the defaults.
-    pass
-else:
-    display_size = (200 * scale_factor, 300 * scale_factor)
-    details_size = (420 * scale_factor, 630 * scale_factor)
 
 # pylint: disable=invalid-name
 win = None

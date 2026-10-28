@@ -70,7 +70,6 @@ install_data(
     'game.py',
     'game_cover.py',
     'gamepad.py',
-    configure_file(input: 'shared.py.in', output: 'shared.py', configuration: conf),
   ],
   install_dir: moduledir,
 )
