@@ -5,8 +5,8 @@
 """O controle do Xbox na grade: lê o XInput e entrega sinais que o QML liga à interface.
 
 Só lê enquanto a janela está ativa e a preferência `gamepad` está ligada; com a janela inativa o
-`QTimer` para e a DLL é solta (um jogo aberto fica com o controle só para ele). Tudo roda na
-thread principal. A lógica de direção e botões é a do `gamepad.py` da `main`.
+`QTimer` para; a DLL continua carregada e só é solta durante uma sessão de jogo (plano 5), para o
+jogo ficar com o controle só para ele. Tudo roda na thread principal. A lógica de direção e botões é a do `gamepad.py` da `main`.
 """
 
 import weakref

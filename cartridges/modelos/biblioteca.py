@@ -11,6 +11,8 @@ Um modelo-fonte (`ModeloDaBiblioteca`) guarda uma `Linha` por jogo, sem ordem pr
 `atualizar` e `iniciar`.
 """
 
+import weakref
+from dataclasses import replace
 from enum import IntEnum
 from pathlib import Path
 from typing import Any, Literal
@@ -19,6 +21,8 @@ from PySide6.QtCore import (
     Property,
     QAbstractListModel,
     QByteArray,
+    QCoreApplication,
+    QEvent,
     QModelIndex,
     QObject,
     QPersistentModelIndex,
@@ -162,6 +166,9 @@ class ModeloDaBiblioteca(QAbstractListModel):
         """Libera o pedido das cópias animadas (a pasta já foi limpa) e pede as que faltam. Só na principal."""
         self._copias_ativas = True
         copias_animadas.ao_terminar_copia = self.copia_terminou
+        # Referência fraca: o gancho é global e o modelo pode morrer antes (nos testes, por exemplo).
+        fraca = weakref.ref(self)
+        copias_animadas.soltar_do_jogo = lambda game_id: (m := fraca()) and m.soltar_copia(game_id)
         capas = [(linha.jogo_id, caminho) for linha in self._linhas if (caminho := self._capa_animada_sem_copia(linha))]
         if capas:
             copias_animadas.preparar(capas)
@@ -173,6 +180,14 @@ class ModeloDaBiblioteca(QAbstractListModel):
         jogo = self._jogos.get(linha.jogo_id)
         caminho = jogo.get_cover_path() if jogo is not None else None
         return caminho if caminho is not None and caminho.suffix in ANIMATED_SUFFIXES else None
+
+    def soltar_copia(self, game_id: str) -> None:
+        """Esvazia a cópia animada do jogo na grade, e o ``AnimatedImage`` larga o arquivo. Só na principal."""
+        if (i := self._linha_de(game_id)) >= 0 and self._linhas[i].capa_animada:
+            self._linhas[i] = replace(self._linhas[i], capa_animada="")
+            self.dataChanged.emit(self.index(i), self.index(i), [self.Papel.CapaAnimada])
+            # O ``AnimatedImage`` só larga o arquivo quando destrói o filme, num ``deleteLater``.
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def copia_terminou(self, game_id: str, resultado: str) -> None:
         """Uma cópia ficou pronta (ou não saiu): atualiza a linha. Só na thread principal."""

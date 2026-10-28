@@ -12,7 +12,8 @@ Uso::
 
 Copia ``%LOCALAPPDATA%\io.github.joaomgabaldi.Cartridges`` e a chave
 ``HKCU\Software\GSettings\io\github\joaomgabaldi\Cartridges`` (com a subchave ``State``)
-para as versões ``-dev``, com os mesmos tipos de valor. Os originais são abertos só para
+para as versões ``-dev``, com os mesmos tipos de valor (menos ``shortcuts-location``,
+``auto-import`` e ``remove-missing``, forçados por ``isolar_dev``). Os originais são abertos só para
 leitura. Se o destino já existe, pede ``--substituir``, que apaga apenas o destino.
 """
 
@@ -32,6 +33,24 @@ RAIZ = winreg.HKEY_CURRENT_USER
 # Sem eles, o app -dev usa o padrão, dentro da própria pasta -dev (o ludusavi regrava os dois).
 IGNORAR_VALORES = frozenset({"pasta-dos-saves"})
 IGNORAR_ARQUIVOS = frozenset({"ludusavi/config.yaml", "ludusavi/cache.yaml"})
+
+REPO = Path(__file__).resolve().parent.parent
+ATALHOS_DE_TESTE = REPO / "_dev" / "atalhos-teste"
+
+
+def isolar_dev(chave_destino: str, pasta_atalhos: Path = ATALHOS_DE_TESTE) -> None:
+    r"""Desliga na chave -dev o que faria o app do código-fonte mexer nos dados reais.
+
+    O lugar único dessa regra, aplicado depois da cópia e só na chave -dev. Por quê: soltar um
+    ``.lnk`` no app -dev o copia para ``shortcuts-location``; se fosse a ``Documents\Atalhos`` real, o
+    app GTK de uso diário o importaria para a biblioteca real. E com ``remove-missing`` ligado, uma
+    importação -dev numa pasta diferente da real marcaria jogos como removidos.
+    """
+    pasta_atalhos.mkdir(parents=True, exist_ok=True)
+    with winreg.CreateKeyEx(RAIZ, chave_destino, 0, winreg.KEY_WRITE) as chave:
+        winreg.SetValueEx(chave, "shortcuts-location", 0, winreg.REG_SZ, str(pasta_atalhos))
+        winreg.SetValueEx(chave, "auto-import", 0, winreg.REG_DWORD, 0)
+        winreg.SetValueEx(chave, "remove-missing", 0, winreg.REG_DWORD, 0)
 
 
 def pasta_real() -> Path:
@@ -121,9 +140,11 @@ def main(argv: list[str] | None = None) -> int:
     origem = pasta_real()
     destino = origem.with_name(origem.name + "-dev")
     arquivos, valores = copiar(origem, destino, CHAVE, CHAVE + "-dev", args.substituir)
+    isolar_dev(CHAVE + "-dev")
     jogos = len(list((destino / "games").glob("*.json")))
     print(f"Copiados {arquivos} arquivos ({jogos} jogos) para {destino}")
     print(f"Copiados {valores} valores do registro para HKCU\\{CHAVE}-dev")
+    print(f"Na -dev: shortcuts-location={ATALHOS_DE_TESTE}, auto-import=0, remove-missing=0")
     return 0
 
 

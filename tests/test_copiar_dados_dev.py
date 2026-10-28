@@ -100,3 +100,29 @@ def test_nao_herda_caminhos_para_os_dados_reais(chaves, tmp_path):
     assert sorted(p.name for p in (tmp_path / "destino" / "ludusavi").iterdir()) == ["manifest.yaml"]
     assert (tmp_path / "destino" / "config.yaml").read_text(encoding="utf-8") == "fica"
     assert arquivos == 2
+
+
+def test_isolar_dev_forca_so_os_tres_valores(chaves, tmp_path):
+    origem, destino = chaves
+    with winreg.OpenKeyEx(cd.RAIZ, origem, 0, winreg.KEY_WRITE) as k:
+        winreg.SetValueEx(k, "shortcuts-location", 0, winreg.REG_SZ, r"C:\real\Atalhos")
+        winreg.SetValueEx(k, "auto-import", 0, winreg.REG_DWORD, 1)
+        winreg.SetValueEx(k, "remove-missing", 0, winreg.REG_DWORD, 1)
+    pasta = tmp_path / "origem"
+    pasta.mkdir()
+    cd.copiar(pasta, tmp_path / "destino", origem, destino)
+    atalhos = tmp_path / "criada" / "atalhos-teste"
+    antes_da_origem = _ler(origem)
+
+    cd.isolar_dev(destino, atalhos)
+
+    assert atalhos.is_dir()
+    copiado = _ler(destino)
+    assert copiado.pop("shortcuts-location") == (str(atalhos), winreg.REG_SZ)
+    assert copiado.pop("auto-import") == (0, winreg.REG_DWORD)
+    assert copiado.pop("remove-missing") == (0, winreg.REG_DWORD)
+    esperado = dict(antes_da_origem)
+    for nome in ("shortcuts-location", "auto-import", "remove-missing"):
+        esperado.pop(nome)
+    assert copiado == esperado  # o resto segue copiado sem mudança
+    assert _ler(origem) == antes_da_origem  # a origem nunca é tocada

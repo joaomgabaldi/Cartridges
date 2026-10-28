@@ -160,16 +160,14 @@ def save_cover(game_id: str, cover_path: Path) -> None:
     shared.covers_dir.mkdir(parents=True, exist_ok=True)
 
     # As cópias reduzidas são apagadas só com a capa nova já no lugar (aqui e
-    # no fim): até lá a tela ainda mostra a velha e pode pedir a cópia dela. O
-    # ``apagar`` invalida todo pedido que já existe, então o que leu a velha
-    # não sobrevive, e o que vier depois só acha a nova.
+    # no fim): até lá a tela ainda mostra a velha e pode pedir a cópia dela.
 
     if not cover_path:
         # Remoção explícita: aqui sim toda forma anterior cai, e não há nada
         # novo para proteger.
         for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
             (shared.covers_dir / f"{game_id}{suffix}").unlink(missing_ok=True)
-        copias_animadas.apagar(game_id)
+        entregar_na_tela(_refazer_copias, game_id, None, None)
         return
 
     # Animated covers keep their own extension; everything else is a TIFF still
@@ -195,24 +193,28 @@ def save_cover(game_id: str, cover_path: Path) -> None:
         if suffix != dest.suffix:
             (shared.covers_dir / f"{game_id}{suffix}").unlink(missing_ok=True)
 
-    copias_animadas.apagar(game_id)
-    if dest.suffix in ANIMATED_SUFFIXES:
-        # A prévia da edição pode já ter as cópias desta capa: o ``preparar``
-        # abaixo só gera as que faltarem.
-        copias_animadas.adotar(cover_path, dest)
-
-    # Capa animada nova: as cópias reduzidas dela são geradas em segundo plano,
-    # com o autoplay ligado ou não.
-    # Pela mesma entrega do ``apagar`` logo acima (que avisa a tarefa para não
-    # esperar as cópias da capa velha): as duas chegam à thread principal na
-    # ordem das chamadas, e a tarefa é dela.
-    if dest.suffix in ANIMATED_SUFFIXES:
-        entregar_na_tela(copias_animadas.preparar, [(game_id, dest)])
+    # Apagar, adotar e preparar as cópias numa entrega só, na principal: a tela
+    # segura o arquivo da cópia velha aberto, e só ela o larga (``soltar``).
+    entregar_na_tela(_refazer_copias, game_id, dest, cover_path)
 
     # save_cover can be called from a worker thread (e.g. the async SgdbManager),
     # but the grid is refreshed by the game's `update()`, which belongs to the main
     # thread. A URL com `?v=<mtime_ns>` da grade troca a capa sozinha.
     na_thread_principal(_atualizar_jogo, game_id)
+
+
+def _refazer_copias(game_id: str, dest: Optional[Path], cover_path: Optional[Path]) -> None:
+    """Troca as cópias reduzidas do jogo pelas da capa nova (``dest``; ``None`` se a capa saiu).
+
+    Sempre na thread principal. O ``apagar`` invalida todo pedido que já existe, então o que
+    leu a capa velha não sobrevive, e o que vier depois só acha a nova.
+    """
+    copias_animadas.apagar(game_id)
+    if dest is not None and dest.suffix in ANIMATED_SUFFIXES:
+        # A prévia da edição pode já ter as cópias desta capa: o ``preparar``
+        # só gera as que faltarem, com o autoplay ligado ou não.
+        copias_animadas.adotar(cover_path, dest)
+        copias_animadas.preparar([(game_id, dest)])
 
 
 def _atualizar_jogo(game_id: str) -> None:

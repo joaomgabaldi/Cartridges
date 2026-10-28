@@ -32,6 +32,7 @@ except ImportError:  # Pillow sem WebP: ``_PorQuadro`` cai no caminho da lista
 
 from cartridges import shared
 from cartridges.utils.na_tela import entregar_na_tela
+from cartridges.utils.thread_principal import eh_thread_principal
 
 # Como terminou um pedido. ``ilegivel`` é só a origem que não abre; ``falhou``
 # é a cópia que não pôde ser gravada (disco cheio, permissão negada): nada foi
@@ -342,8 +343,25 @@ def _entregar(pronto: Callable[[Resultado], None], resultado: Resultado) -> bool
     return False  # o GLib repetiria o callback que devolvesse um valor verdadeiro
 
 
+# Quem larga os arquivos de cópia que a tela segura abertos (o modelo da biblioteca): o
+# ``AnimatedImage`` mantém o ``.webp`` aberto sem compartilhar a exclusão, e o Windows não deixa
+# apagar nem regravar um arquivo assim (WinError 32). Chamado com o id do jogo, na thread principal.
+soltar_do_jogo: Callable[[str], None] | None = None
+
+
+def soltar(game_id: str) -> None:
+    """Pede à tela que largue as cópias do jogo, antes de apagá-las ou regravá-las.
+
+    Só a thread principal toca a tela; de outra thread não faz nada (a cópia presa fica para a
+    limpeza da próxima abertura, que a apaga se o jogo deixou de existir).
+    """
+    if soltar_do_jogo is not None and eh_thread_principal():
+        soltar_do_jogo(game_id)
+
+
 def apagar(game_id: str) -> None:
     """Apaga as cópias do jogo e invalida os trabalhos dele, pendentes ou não."""
+    soltar(game_id)
     # Os trabalhos invalidados abaixo nunca avisam: a tarefa precisa saber que
     # não deve mais esperá-los. Pode vir de uma thread de segundo plano, e a
     # tarefa é da thread principal. Quem pediu as cópias de novo (a capa nova)
@@ -399,6 +417,7 @@ def adotar(origem: Path, capa: Path) -> None:
     do ``apagar`` da capa velha e antes do ``preparar``. Uma cópia que não
     copia é só gerada de novo.
     """
+    soltar(capa.stem)
     for tamanho in tamanhos():
         fonte, destino = caminho_para(origem, tamanho), caminho_para(capa, tamanho)
         # ``gerar`` só põe a cópia no lugar inteira: existindo, está pronta.
@@ -499,6 +518,22 @@ class _Lote:
 _lote: _Lote | None = None
 
 
+def _em_dia(origem: Path, destino: Path, game_id: str) -> bool:
+    """A cópia existe e não é mais velha que a capa; uma velha é largada pela tela para ser refeita.
+
+    Cinto de segurança: a capa trocada com a cópia antiga presa manteria a animação velha na grade.
+    """
+    try:
+        if not destino.exists():
+            return False
+        if destino.stat().st_mtime_ns >= origem.stat().st_mtime_ns:
+            return True
+    except OSError:
+        return True  # a capa sumiu ou a cópia está ilegível: não há o que refazer aqui
+    soltar(game_id)
+    return False
+
+
 def preparar(capas: list[tuple[str, Path]]) -> None:
     """Gera, em segundo plano, as cópias que faltam das capas (na ordem dada).
 
@@ -513,7 +548,7 @@ def preparar(capas: list[tuple[str, Path]]) -> None:
     for game_id, origem in capas:
         for tamanho in tamanhos():
             destino = caminho_para(origem, tamanho)
-            if destino.exists() or (_lote and destino in _lote.pendentes):
+            if (_lote and destino in _lote.pendentes) or _em_dia(origem, destino, game_id):
                 continue
             novos.setdefault(destino, (game_id, origem, tamanho))
     if not novos:

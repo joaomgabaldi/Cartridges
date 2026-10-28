@@ -365,6 +365,7 @@ def _jogo_com_capa_animada():
 
 
 def test_animacao_so_com_autoplay(app_qt, monkeypatch):
+    monkeypatch.setattr(aplicativo_modulo, "_animacoes_do_sistema", lambda: True)  # não depende do ajuste do Windows
     shared.schema.set_boolean("cover-autoplay", False)
     app = _App(_jogo_com_capa_animada())
     cartao, animada = _cartao_animado(app)
@@ -395,7 +396,8 @@ def test_sem_efeitos_de_animacao_do_sistema_nada_anima(app_qt, monkeypatch):
     app.fechar()
 
 
-def test_grade_coberta_pelos_zerados_para(app_qt):
+def test_grade_coberta_pelos_zerados_para(app_qt, monkeypatch):
+    monkeypatch.setattr(aplicativo_modulo, "_animacoes_do_sistema", lambda: True)  # não depende do ajuste do Windows
     shared.schema.set_boolean("cover-autoplay", True)
     app = _App(_jogo_com_capa_animada())
     cartao, animada = _cartao_animado(app)
@@ -537,4 +539,49 @@ def test_controle_esconde_o_ponteiro(app_qt):
     assert app.janela.property("ponteiroEscondido") is False
     app.controle.usado.emit()
     assert app.janela.property("ponteiroEscondido") is True
+    app.fechar()
+
+
+def test_copia_animada_a_vista_e_largada_antes_de_apagar_e_refeita_se_velha(app_qt, monkeypatch):
+    """O `AnimatedImage` segura o `.webp` aberto (WinError 32): `soltar` o larga, e uma cópia mais velha que a capa é refeita."""
+    import os  # noqa: PLC0415
+
+    import pytest  # noqa: PLC0415
+    from PIL import Image  # noqa: PLC0415
+
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    monkeypatch.setattr(aplicativo_modulo, "_animacoes_do_sistema", lambda: True)
+    monkeypatch.setattr(copias_animadas, "ao_terminar_copia", None)
+    monkeypatch.setattr(copias_animadas, "soltar_do_jogo", None)
+    shared.schema.set_boolean("cover-autoplay", True)
+    app = _App(_jogo_com_capa_animada())
+    app.modelo.ativar_copias()
+    capa = shared.covers_dir / "imported_1.webp"
+    copia = copias_animadas.caminho_para(capa, copias_animadas.tamanhos()[0])
+    cartao, animada = _cartao_animado(app)
+    assert _esperar(lambda: animada.property("playing") is True and animada.property("visible"))
+    with pytest.raises(PermissionError):
+        copia.unlink()  # a premissa: com a animação à vista, o arquivo está preso
+
+    copias_animadas.soltar("imported_1")
+
+    assert animada.property("source").toString() == "" and cartao.property("capaAnimada") == ""
+    os.rename(copia, f"{copia}.x")  # largado na hora, sem esperar o laço de eventos
+    os.rename(f"{copia}.x", copia)
+    # Uma capa nova, e a cópia velha (mais velha que ela) volta a tocar, agora com a cópia refeita.
+    antigo = copia.read_bytes()
+    app.modelo.atualizar(app.modelo._jogos["imported_1"])  # noqa: SLF001  # a cópia ainda existe: reaparece
+    assert _esperar(lambda: animada.property("visible"))
+    quadros = [Image.new("RGBA", (8, 12), (0, tom, 0, 255)) for tom in (0, 200)]
+    quadros[0].save(capa, "WEBP", save_all=True, append_images=quadros[1:], duration=[100, 100], loop=0, lossless=True)
+    agora = time.time()
+    os.utime(copia, (agora - 100, agora - 100))
+    os.utime(capa, (agora - 50, agora - 50))
+    copias_animadas.preparar([("imported_1", capa)])
+    assert _esperar(lambda: copia.stat().st_mtime > agora - 10 and copia.read_bytes() != antigo)
+    assert _esperar(lambda: animada.property("visible") and cartao.property("capaAnimada").startswith("file:///"))
+    copias_animadas.soltar("imported_1")
+    copia.unlink()  # solta de novo, e apaga
+    shared.schema.reset("cover-autoplay")
     app.fechar()

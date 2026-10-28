@@ -67,6 +67,7 @@ def test_salvar_capa_apaga_as_copias(tmp_path):
     nova = make_image(tmp_path / "novo.tiff", "green")
 
     save_cover("g1", nova)
+    _rodar()  # a troca das cópias corre na thread principal
 
     assert [p.name for p in shared.capas_animadas_dir.iterdir()] == ["g2_200x300.webp"]
 
@@ -75,6 +76,7 @@ def test_remover_capa_apaga_as_copias():
     _copias("g1_200x300.webp", "g1_280x420.webp", "g2_200x300.webp")
 
     save_cover("g1", None)
+    _rodar()
 
     assert [p.name for p in shared.capas_animadas_dir.iterdir()] == ["g2_200x300.webp"]
 
@@ -101,17 +103,16 @@ def _gif(caminho):
 def test_capa_animada_nova_prepara_as_copias(tmp_path, schema, entregas):
     """Com o autoplay desligado (o padrão) também: quem liga a opção depois
     encontra as cópias prontas."""
-    from cartridges.utils import copias_animadas
+    from cartridges.utils import save_cover as modulo
 
-    save_cover("g1", _gif(tmp_path / "nova.gif"))
+    nova = _gif(tmp_path / "nova.gif")
+    save_cover("g1", nova)
 
-    # Pela mesma entrega do ``apagar``: a ordem entre as duas é a das chamadas.
-    assert entregas == [
-        (copias_animadas.preparar, ([("g1", shared.covers_dir / "g1.gif")],))
-    ]
+    # Apagar, adotar e preparar numa entrega só, na thread principal.
+    assert entregas == [(modulo._refazer_copias, ("g1", shared.covers_dir / "g1.gif", nova))]
 
 
-def test_capa_provisoria_entrega_as_copias_que_ja_tem(tmp_path, schema, entregas):
+def test_capa_provisoria_entrega_as_copias_que_ja_tem(tmp_path, schema, entregas, monkeypatch):
     """As cópias que a prévia da edição já gerou (as de um vídeo saem junto com
     ele) passam a ser as do jogo, e o ``preparar`` não as gera de novo."""
     from cartridges.utils import copias_animadas
@@ -119,8 +120,11 @@ def test_capa_provisoria_entrega_as_copias_que_ja_tem(tmp_path, schema, entregas
     provisoria = _gif(tmp_path / "provisoria.gif")
     grade, detalhes = copias_animadas.tamanhos()
     copias_animadas.caminho_para(provisoria, grade).write_bytes(b"grade")
+    monkeypatch.setattr(copias_animadas, "preparar", lambda *_a: None)  # só a adoção é o assunto
 
     save_cover("g1", provisoria)
+    for func, args in entregas:
+        func(*args)
 
     capa = shared.covers_dir / "g1.gif"
     assert copias_animadas.caminho_para(capa, grade).read_bytes() == b"grade"
@@ -156,13 +160,12 @@ def test_png_de_um_quadro_continua_tiff(tmp_path):
 
 
 def test_capa_apng_prepara_as_copias(tmp_path, schema, entregas):
-    from cartridges.utils import copias_animadas
+    from cartridges.utils import save_cover as modulo
 
-    save_cover("g1", _apng(tmp_path / "nova.apng"))
+    nova = _apng(tmp_path / "nova.apng")
+    save_cover("g1", nova)
 
-    assert entregas == [
-        (copias_animadas.preparar, ([("g1", shared.covers_dir / "g1.apng")],))
-    ]
+    assert entregas == [(modulo._refazer_copias, ("g1", shared.covers_dir / "g1.apng", nova))]
 
 
 def test_trocar_apng_por_gif_nao_deixa_as_duas(tmp_path, schema, entregas):
@@ -204,12 +207,18 @@ def test_pedido_no_meio_da_troca_nao_deixa_copia_da_capa_velha(tmp_path, monkeyp
 
     monkeypatch.setattr(modulo, "copyfile", copiar_com_pedidos)
     save_cover("g1", nova)
+    _rodar()  # a troca das cópias (apagar) corre na thread principal
     while fila:
         fila.pop(0)()
     for func, args in avisos:
         func(*args)
 
-    assert [c for c in copias if c.exists()] == []
+    # As cópias que existem agora são as da capa nova (verde), geradas depois do ``apagar``.
+    assert all(c.exists() for c in copias)
+    for c in copias:
+        with Image.open(c) as copia:
+            r, g, _b = copia.convert("RGB").getpixel((copia.width // 2, copia.height // 2))
+        assert g > r
     # Só o que terminou antes da troca avisou; o pendente foi invalidado.
     assert recebidos == ["pronta"]
 
@@ -218,7 +227,8 @@ def test_capa_estatica_ou_removida_nao_prepara(tmp_path, schema, entregas):
     save_cover("g1", make_image(tmp_path / "nova.tiff"))
     save_cover("g1", None)
 
-    assert entregas == []
+    # Só apagar as cópias velhas: nenhuma capa animada para preparar.
+    assert [args[1] for _func, args in entregas] == [shared.covers_dir / "g1.tiff", None]
 
 
 # region Montagem da capa a partir de uma imagem qualquer
