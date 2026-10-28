@@ -40,11 +40,10 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 import requests
-from gi.repository import Gdk, GdkPixbuf, GLib
+from PIL import Image
 
 from cartridges import shared
-from cartridges.game import Game
-from cartridges.game_cover import texture_from_pixbuf
+from cartridges.jogo import Jogo as Game
 from cartridges.utils.download import download_bytes
 from cartridges.utils.ler_json import ler_json
 from cartridges.utils.logo_arquivos import IMAGE_SUFFIXES, remove_logo  # noqa: F401  (reexportados)
@@ -121,47 +120,31 @@ def logo_display_size(
 
 
 def _intrinsic_size(path: Path) -> Optional[tuple[int, int]]:
-    """The stored logo's real pixel size, read without decoding it if possible."""
+    """The stored logo's real pixel size, read from the header without decoding."""
     try:
-        image_format, width, height = GdkPixbuf.Pixbuf.get_file_info(str(path))
-    except (GLib.Error, TypeError, ValueError):
-        image_format = None
-        width = height = 0
-
-    if image_format is not None and width and height:
-        return (width, height)
-
-    # A format GdkPixbuf has no loader for (a .webp on some installs) can still
-    # go through the texture loader, which reports the same dimensions.
-    try:
-        texture = Gdk.Texture.new_from_filename(str(path))
-    except GLib.Error:
+        with Image.open(path) as image:
+            return image.size
+    except (OSError, ValueError, Image.DecompressionBombError):
         return None
-    return (texture.get_intrinsic_width(), texture.get_intrinsic_height())
 
 
 def load_logo(
     path: Path, max_width: int = LOGO_MAX_WIDTH, max_height: int = LOGO_MAX_HEIGHT
-) -> Optional[tuple[Gdk.Texture, int]]:
-    """Load a cached logo ready to be drawn as the header.
+) -> Optional[tuple[Path, int]]:
+    """Check a cached logo and size it for the header.
 
-    Returns the texture and the width, in logical pixels, it should be given —
-    its height is deliberately not returned, because the widget derives that
-    from the width and the image's own proportions, which is what guarantees
-    the logo is never stretched.
-
-    The texture is decoded at the display's pixel density rather than at the
-    source resolution: a logo is a wordmark whose fine strokes have to stay
-    crisp, but a 3000px asset scaled down at draw time costs megabytes for
-    a header that is 72 pixels tall.
+    Returns the path (the QML ``Image`` decodes it, scaled to the width) and
+    the width, in logical pixels, it should be given — its height is
+    deliberately not returned, because the page derives that from the width
+    and the image's own proportions, which is what guarantees the logo is
+    never stretched.
     """
     size = _intrinsic_size(path)
     if not size:
         return None
     # O mesmo teto do fetch, para o arquivo local escolhido à mão: as
-    # dimensões vêm do get_file_info, sem decodificar — recusar aqui custa
-    # nada e evita a decodificação gigante na main thread. O cabeçalho volta
-    # ao título em texto.
+    # dimensões vêm do cabeçalho, sem decodificar — recusar aqui custa nada e
+    # evita a decodificação gigante. O cabeçalho volta ao título em texto.
     if max(size) > MAX_SOURCE_DIMENSION:
         logging.debug("Logo %s excede %d px, ignorado", path, MAX_SOURCE_DIMENSION)
         return None
@@ -169,22 +152,7 @@ def load_logo(
     width, height = logo_display_size(*size, max_width, max_height)
     if not (width and height):
         return None
-
-    scale = max(1, int(shared.scale_factor))
-    try:
-        texture = texture_from_pixbuf(
-            GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                str(path), width * scale, height * scale, True
-            )
-        )
-    except GLib.Error:
-        try:
-            texture = Gdk.Texture.new_from_filename(str(path))
-        except GLib.Error as error:
-            logging.debug("Could not load logo %s: %s", path, error)
-            return None
-
-    return (texture, width)
+    return (path, width)
 
 
 def _read_sidecar(game_id: str) -> Optional[dict[str, Any]]:

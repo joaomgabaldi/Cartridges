@@ -120,7 +120,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_conquistas_xbox_vigia.py",
     "test_estilo_css.py",
     "test_fita_wizard.py",
-    "test_game_logo.py",
     "test_hwnd_ordem_import.py",
     "test_install_size.py",
     "test_janela_por_cima.py",

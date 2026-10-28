@@ -51,6 +51,7 @@ from gi.repository import GLib
 from cartridges import shared
 from cartridges.game import Game
 from cartridges.modelos import tarefas
+from cartridges.utils.format_playtime import format_size  # noqa: F401  (reexportado)
 from cartridges.utils.game_folder import game_folder
 from cartridges.utils.passada_agendada import PassadaAgendada
 from cartridges.utils.process_monitor import install_dir_from_command
@@ -152,33 +153,6 @@ def folder_size(directory: str) -> int:
         except OSError:
             continue
     return total
-
-
-# Base 1024 com os rótulos curtos, que é o que o Explorer mostra: o número aqui
-# existe para ser comparado com o de lá, e uma medida em base 1000 mostraria
-# 94 GB onde o Windows mostra 87.
-_UNITS = ("B", "KB", "MB", "GB", "TB")
-
-
-def format_size(size: int) -> str:
-    """Tamanho legível, com vírgula decimal ("87,4 GB")."""
-    if size <= 0:
-        return ""
-
-    value = float(size)
-    unit = 0
-    while value >= 1024 and unit < len(_UNITS) - 1:
-        value /= 1024
-        unit += 1
-
-    # Uma casa decimal só a partir de MB: "1,4 KB" é precisão que ninguém pediu,
-    # e em bytes a fração não existe.
-    if unit < 2:
-        return f"{round(value)} {_UNITS[unit]}"
-
-    rounded = round(value, 1)
-    text = str(int(rounded)) if rounded.is_integer() else str(rounded).replace(".", ",")
-    return f"{text} {_UNITS[unit]}"
 
 
 class InstallSizeSweep(PassadaAgendada):

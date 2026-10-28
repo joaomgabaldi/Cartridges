@@ -28,6 +28,7 @@ from cartridges.logging.session_file_handler import SessionFileHandler
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.modelos.controle import ControleDaGrade
+from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.ponte import Ponte
 from cartridges.store.managers import async_manager
 from cartridges.store.managers.exibicao_manager import ExibicaoManager
@@ -132,10 +133,12 @@ def main(argv: list[str]) -> int:
     qwk.registrar(motor)
     aplicativo = Aplicativo(avisos)
     controle = ControleDaGrade()
+    detalhes = DetalhesDoJogo(shared.store)
+    motor.addImageProvider("desfoque", detalhes.provedor)
     contexto = motor.rootContext()
     for nome, valor in (
         ("filtros", filtros), ("paginaTodos", pagina_biblioteca), ("paginaZerados", pagina_zerados),
-        ("aplicativo", aplicativo), ("ponte", ponte), ("controle", controle),
+        ("aplicativo", aplicativo), ("ponte", ponte), ("controle", controle), ("detalhes", detalhes),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))

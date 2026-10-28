@@ -207,3 +207,33 @@ def test_an_oversized_cached_file_is_not_loaded():
     Image.new("RGB", (game_logo.MAX_SOURCE_DIMENSION + 1, 10), "white").save(path)
 
     assert game_logo.load_logo(path) is None
+
+
+def test_load_logo_devolve_caminho_e_largura():
+    from PIL import Image
+
+    shared.logos_dir.mkdir(parents=True, exist_ok=True)
+    path = shared.logos_dir / "wide.png"
+    Image.new("RGBA", (400, 100), "white").save(path)
+
+    assert game_logo.load_logo(path) == (path, 288)
+    assert game_logo.load_logo(shared.logos_dir / "ausente.png") is None
+
+
+def test_load_logo_arquivo_ilegivel(tmp_path):
+    ruim = tmp_path / "ruim.png"
+    ruim.write_bytes(b"nao e imagem")
+    assert game_logo.load_logo(ruim) is None
+
+
+def test_game_logo_sem_gi():
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    codigo = (
+        "import builtins, sys; builtins._ = lambda m: m; "
+        "import cartridges.utils.game_logo, cartridges.utils.desfoque; "
+        "assert 'gi' not in sys.modules"
+    )
+    subprocess.run([sys.executable, "-c", codigo], check=True, cwd=Path(__file__).resolve().parent.parent)
