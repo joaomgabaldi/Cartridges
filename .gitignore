@@ -25,3 +25,7 @@ __pycache__/
 
 # Gravado so pelo montar_app_qt.py
 cartridges/instalacao.json
+
+# QWindowKit: dependencias baixadas e a DLL compilada
+/build-aux/windows/qwk/_deps/
+/cartridges/janela/*.dll
