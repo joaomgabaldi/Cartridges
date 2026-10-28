@@ -31,7 +31,7 @@ except ImportError:  # Pillow sem WebP: ``_PorQuadro`` cai no caminho da lista
     _webp = None  # pylint: disable=invalid-name
 
 from cartridges import shared
-from cartridges.utils import tarefas, tocador_capas
+from cartridges.utils import tocador_capas
 from cartridges.utils.na_tela import entregar_na_tela
 
 # Como terminou um pedido. ``ilegivel`` é só a origem que não abre; ``falhou``
@@ -496,7 +496,7 @@ def encerrar() -> None:
 class _Lote:
     """O que a tarefa "Capas animadas" em andamento ainda espera."""
 
-    def __init__(self, tarefa: tarefas.Tarefa, total: int) -> None:
+    def __init__(self, tarefa: "tarefas.Tarefa", total: int) -> None:
         self.tarefa = tarefa
         self.total = total
         self.feitos = 0
@@ -531,6 +531,10 @@ def preparar(capas: list[tuple[str, Path]]) -> None:
     # O lote e as pendências ficam prontos antes do primeiro ``pedir``: um aviso
     # nunca chega a um lote que ainda acha que terminou.
     if _lote is None:
+        # Aqui e não no topo: `tarefas` ainda depende do gi, e a store importa
+        # este módulo só para apagar e migrar cópias.
+        from cartridges.utils import tarefas  # pylint: disable=import-outside-toplevel
+
         _lote = _Lote(tarefas.comecar(_("Capas animadas"), len(novos)), len(novos))
     else:
         _lote.total += len(novos)

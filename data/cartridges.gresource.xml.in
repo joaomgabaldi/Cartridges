@@ -5,7 +5,6 @@
     <file preprocess="xml-stripblanks">gtk/assistente.ui</file>
     <file preprocess="xml-stripblanks">gtk/details-dialog.ui</file>
     <file preprocess="xml-stripblanks">gtk/fita-wizard.ui</file>
-    <file preprocess="xml-stripblanks">gtk/game.ui</file>
     <file preprocess="xml-stripblanks">gtk/logo-picker.ui</file>
     <file preprocess="xml-stripblanks">gtk/preferences.ui</file>
     <file preprocess="xml-stripblanks">gtk/sgdb-picker.ui</file>

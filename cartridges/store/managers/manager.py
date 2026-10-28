@@ -26,7 +26,7 @@ from cartridges.errors.error_producer import ErrorProducer
 from cartridges.errors.friendly_error import FriendlyError
 
 if TYPE_CHECKING:
-    from cartridges.game import Game
+    from cartridges.jogo import Jogo
 
 
 class Manager(ErrorProducer):
@@ -52,7 +52,7 @@ class Manager(ErrorProducer):
         return type(self).__name__
 
     @abstractmethod
-    def main(self, game: "Game", additional_data: dict) -> None:
+    def main(self, game: "Jogo", additional_data: dict) -> None:
         """
         Manager specific logic triggered by the run method
         * Implemented by final child classes
@@ -61,7 +61,7 @@ class Manager(ErrorProducer):
         * May raise other exceptions that will be reported
         """
 
-    def run(self, game: "Game", additional_data: dict) -> None:
+    def run(self, game: "Jogo", additional_data: dict) -> None:
         """Handle errors (retry, ignore or raise) that occur in the manager logic"""
 
         # Keep track of the number of tries
@@ -120,7 +120,7 @@ class Manager(ErrorProducer):
         try_manager_logic()
 
     def process_game(
-        self, game: "Game", additional_data: dict, callback: Callable[["Manager"], Any]
+        self, game: "Jogo", additional_data: dict, callback: Callable[["Manager"], Any]
     ) -> None:
         """Pass the game through the manager"""
         self.run(game, additional_data)

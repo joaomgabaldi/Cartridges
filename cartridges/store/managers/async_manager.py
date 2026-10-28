@@ -26,7 +26,7 @@ from cartridges.store.managers.manager import Manager
 from cartridges.utils.thread_principal import na_thread_principal
 
 if TYPE_CHECKING:
-    from cartridges.game import Game
+    from cartridges.jogo import Jogo
 
 _executor = ThreadPoolExecutor(thread_name_prefix="manager")
 
@@ -56,7 +56,7 @@ class AsyncManager(Manager):
         self.cancellable = threading.Event()
 
     def process_game(
-        self, game: "Game", additional_data: dict, callback: Callable[["Manager"], Any]
+        self, game: "Jogo", additional_data: dict, callback: Callable[["Manager"], Any]
     ) -> None:
         """Create a task to process the game in a separate thread"""
         # Capturado aqui: um reset troca o evento, e a tarefa já enfileirada

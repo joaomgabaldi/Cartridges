@@ -23,11 +23,11 @@ from uuid import uuid4
 from cartridges import shared
 
 # Re-exported so tests (and this module's own writer below) keep one name for
-# "everything a record persists". The tuple itself lives beside Game because it
-# is also the whitelist of what `Game.update_values` accepts — the two lists
+# "everything a record persists". The tuple itself lives beside Jogo because it
+# is also the whitelist of what `Jogo.update_values` accepts — the two lists
 # drifting apart is how a field could be saved but never loadable, or vice
 # versa. The edit-dialog guard in the tests asserts against this import path.
-from cartridges.game import Game, PERSISTED_ATTRS
+from cartridges.jogo import PERSISTED_ATTRS, Jogo
 from cartridges.store.managers.async_manager import AsyncManager
 from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
@@ -40,9 +40,9 @@ class FileManager(AsyncManager):
     # game without the metadata that is about to arrive, and the next launch
     # would show it as permanently missing.
     run_after = (SteamAPIManager, HLTBManager)
-    signals = {"save-ready"}
+    signals = {"salvar"}
 
-    def main(self, game: Game, additional_data: dict) -> None:
+    def main(self, game: Jogo, additional_data: dict) -> None:
         if additional_data.get("skip_save"):  # Skip saving when loading games from disk
             return
 

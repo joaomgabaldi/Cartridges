@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Optional
 
 from cartridges import shared
-from cartridges.game import Game
+from cartridges.jogo import Jogo
 from cartridges.importer.source import Source, SourceIterable, SourceScanError
 from cartridges.utils.name_cleaner import clean_game_name
 
@@ -665,16 +665,11 @@ class ShortcutsSourceIterable(SourceIterable):
         identity: str,
         mtime: int = 0,
         shortcut_path: str = "",
-    ) -> Game:
-        """Create a Game with a stable id derived from its launch identity"""
-        # Risco arquitetural aceito, herdado do upstream: isto roda na worker
-        # thread do import, e Game é um Gtk.Box — o __init__ instancia template
-        # e controllers fora da main thread. Verificado no runtime real que o
-        # GtkBuilder preserva o __init__ e que a construção fora da thread é
-        # tolerada; o widget só é PARENTEADO na main (DisplayManager marshalla).
-        # Mover a construção para a main custaria refazer o fluxo do importer
-        # inteiro por um defeito nunca observado — fica registrado, não refeito.
-        return Game(
+    ) -> Jogo:
+        """Create a game with a stable id derived from its launch identity"""
+        # Roda na thread do import: o Jogo é um QObject sem interface, e quem
+        # o desenha conecta os sinais dele à thread principal.
+        return Jogo(
             {
                 "source": self.source.source_id,
                 "added": shared.import_time,

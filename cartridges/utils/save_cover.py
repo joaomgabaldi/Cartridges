@@ -28,15 +28,11 @@ from gi.repository import Gdk, GdkPixbuf, Gio, GLib
 from PIL import Image, UnidentifiedImageError
 
 from cartridges import shared
+from cartridges.jogo import ANIMATED_SUFFIXES  # reexportado: mora ao lado de get_cover_path
 from cartridges.utils import copias_animadas
 from cartridges.utils.enquadramento import escala_sobre_fundo
 from cartridges.utils.na_tela import entregar_na_tela
 
-# Cover formats that hold an animation and are stored in their original form.
-# O APNG usa a extensão .png das imagens paradas; guardado, vira .apng, e é a
-# extensão que diz ao resto do app que a capa é animada. A ordem é a
-# precedência de ``Game.get_cover_path``.
-ANIMATED_SUFFIXES = (".gif", ".webp", ".apng")
 
 # Formato do Pillow -> sufixo com que a capa animada é guardada.
 _SUFIXO_ANIMADO = {"GIF": ".gif", "WEBP": ".webp", "PNG": ".apng"}

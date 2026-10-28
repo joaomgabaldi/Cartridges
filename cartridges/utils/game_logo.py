@@ -47,6 +47,8 @@ from cartridges.game import Game
 from cartridges.game_cover import texture_from_pixbuf
 from cartridges.utils.download import download_bytes
 from cartridges.utils.ler_json import ler_json
+from cartridges.utils.logo_arquivos import IMAGE_SUFFIXES, remove_logo  # noqa: F401  (reexportados)
+from cartridges.utils.logo_arquivos import sidecar_path as _sidecar_path
 from cartridges.utils.steamgriddb import SgdbAuthError, SgdbError, SgdbHelper
 
 # On-screen bounds for the header. The height is the primary control (a logo
@@ -86,8 +88,6 @@ STYLE_RANK = {"official": 3, "white": 2, "custom": 1, "black": -2}
 # (o GdkPixbuf do MSYS2 não tem o loader), `.webp` não entra aqui — `_usable`
 # já descarta esses candidatos antes de chegar a este critério.
 TRANSPARENT_SUFFIXES = (".png",)
-
-IMAGE_SUFFIXES = (".png", ".webp", ".jpg", ".jpeg")
 
 # How long a "this game has no logo" answer is trusted. Long enough that
 # browsing the library is not a stream of requests, short enough that art
@@ -185,10 +185,6 @@ def load_logo(
             return None
 
     return (texture, width)
-
-
-def _sidecar_path(game_id: str) -> Path:
-    return shared.logos_dir / f"{game_id}.json"
 
 
 def _read_sidecar(game_id: str) -> Optional[dict[str, Any]]:
@@ -551,14 +547,3 @@ def fetch_logo(game: Game) -> Optional[Path]:
 
     _write_sidecar(game.game_id, game.name, filename)
     return path
-
-
-def remove_logo(game_id: str, keep: Optional[str] = None) -> None:
-    """Delete ``game_id``'s cached logo files (except ``keep``, if given)."""
-    for suffix in IMAGE_SUFFIXES:
-        path = shared.logos_dir / f"{game_id}{suffix}"
-        if path.name != keep:
-            path.unlink(missing_ok=True)
-
-    if keep is None:
-        _sidecar_path(game_id).unlink(missing_ok=True)

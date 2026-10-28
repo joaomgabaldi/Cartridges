@@ -26,7 +26,7 @@ from PySide6.QtCore import QObject, Signal
 from cartridges.store.managers.manager import Manager
 
 if TYPE_CHECKING:
-    from cartridges.game import Game
+    from cartridges.jogo import Jogo
 
 
 class Pipeline(QObject):
@@ -41,7 +41,7 @@ class Pipeline(QObject):
 
     advanced = Signal()
 
-    game: "Game"
+    game: "Jogo"
     additional_data: dict
 
     waiting: set[Manager]
@@ -49,7 +49,7 @@ class Pipeline(QObject):
     done: set[Manager]
 
     def __init__(
-        self, game: "Game", additional_data: dict, managers: Iterable[Manager]
+        self, game: "Jogo", additional_data: dict, managers: Iterable[Manager]
     ) -> None:
         super().__init__()
         self.game = game

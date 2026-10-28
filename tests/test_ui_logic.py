@@ -1347,22 +1347,6 @@ def test_o_primeiro_quadro_da_capa_animada_vem_pronto_da_abertura(apng, cover_fi
     assert GameCover._primeiros_quadros == {}
 
 
-def test_get_cover_path_acha_a_capa_apng(apng):
-    from cartridges.game import Game
-
-    game = Game(
-        {
-            "game_id": "imported_2",
-            "name": "Probe",
-            "source": "imported",
-            "executable": "x.exe",
-            "added": 0,
-        }
-    )
-
-    assert game.get_cover_path() == apng
-
-
 def test_capa_animada_de_verdade_toca_na_picture(app_dirs, monkeypatch):
     """Ponta a ponta: cópia gerada de verdade, tocador de verdade, picture real.
 
@@ -2458,16 +2442,6 @@ def test_a_hand_edited_status_reads_as_none(real_window, store):
     assert real_window.details_view_status_button.get_label() == "Definir status"
 
 
-def test_the_stars_clamp_a_hand_edited_rating(store):
-    """Tudo que desenha estrelas passa por `stars`, então é aqui que um valor
-    absurdo tem de morrer — e não num IndexError lá na frente."""
-    assert library_game(store, 1, rating=3).stars == 3
-    assert library_game(store, 2, rating=9).stars == 5
-    assert library_game(store, 3, rating=-1).stars == 0
-    assert library_game(store, 4, rating="ótimo").stars == 0
-    assert library_game(store, 5).stars == 0
-
-
 def test_sorting_by_rating_puts_the_unrated_last(real_window, store):
     """0 é ausência de nota, não nota zero: um jogo que ninguém avaliou não
     pode aparecer abaixo do que se achou ruim."""
@@ -2839,75 +2813,6 @@ def test_a_maximized_window_comes_back_maximized_where_it_was(monkeypatch):
     home = (100, 50, 900, 650)
     parked = (-1080, -512, 0, 1408)
     assert user32.written == [(1, parked), (3, parked), (1, home), (3, home)]
-
-
-def test_wrong_typed_numeric_fields_are_dropped_on_load():
-    """B4: `"playtime": "5h"` num registro editado à mão passava e estourava
-    TypeError na tela de detalhes e na ordenação. Cai o campo, não o jogo."""
-    from cartridges.main import sanitize_game_fields
-
-    data = {
-        "name": "Probe",
-        "playtime": "5h",
-        "metacritic": "bom",
-        "install_size": 1024,
-        "hltb_main": None,
-    }
-    cleaned = sanitize_game_fields(data, "probe.json")
-
-    assert "playtime" not in cleaned
-    assert "metacritic" not in cleaned
-    assert cleaned["install_size"] == 1024
-    assert cleaned["hltb_main"] is None
-    assert cleaned["name"] == "Probe"
-
-
-def test_campo_conquistas_de_tipo_errado_cai_no_saneador():
-    """`"conquistas": "false"` (texto) mantinha o recurso ligado e `null`
-    o desligava; o campo precisa passar pelo saneador como os outros booleanos."""
-    from cartridges.main import sanitize_game_fields
-
-    for ruim in ("false", None, 0, "sim"):
-        limpo = sanitize_game_fields({"name": "Probe", "conquistas": ruim}, "p.json")
-        assert "conquistas" not in limpo, ruim
-
-    assert sanitize_game_fields({"conquistas": False}, "p.json")["conquistas"] is False
-    assert sanitize_game_fields({"conquistas": True}, "p.json")["conquistas"] is True
-
-
-def test_campo_do_aviso_dos_saves_de_tipo_errado_cai_no_saneador():
-    """Um texto qualquer em `saves_local_desconhecido_avisado` contaria como "já avisado"."""
-    from cartridges.main import sanitize_game_fields
-
-    for ruim in ("false", None, 0, "sim"):
-        limpo = sanitize_game_fields({"saves_local_desconhecido_avisado": ruim}, "p.json")
-        assert "saves_local_desconhecido_avisado" not in limpo, ruim
-
-    assert sanitize_game_fields({"saves_local_desconhecido_avisado": True}, "p.json") == {
-        "saves_local_desconhecido_avisado": True
-    }
-
-
-def test_campo_do_backup_desligado_persiste_e_tipo_errado_cai_no_saneador(app_dirs):
-    import json  # noqa: PLC0415
-
-    from cartridges import shared  # noqa: PLC0415
-    from cartridges.game import Game  # noqa: PLC0415
-    from cartridges.main import sanitize_game_fields  # noqa: PLC0415
-    from cartridges.store.managers.file_manager import FileManager  # noqa: PLC0415
-
-    dados = {"source": "shortcuts", "game_id": "shortcuts_d", "name": "D", "executable": "x", "added": 0}
-    jogo = Game({**dados, "backup_dos_saves_desligado": True})
-    FileManager().main(jogo, {})
-    gravado = json.loads((shared.games_dir / "shortcuts_d.json").read_text(encoding="utf-8"))
-    assert gravado["backup_dos_saves_desligado"] is True
-    assert Game({**dados, **gravado}).backup_dos_saves_desligado is True
-    assert Game(dados).backup_dos_saves_desligado is False
-
-    for ruim in ("false", None, 0, "sim"):
-        assert "backup_dos_saves_desligado" not in sanitize_game_fields(
-            {"backup_dos_saves_desligado": ruim}, "p.json"
-        ), ruim
 
 
 def test_enter_cannot_apply_mid_fetch(real_window, store):

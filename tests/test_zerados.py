@@ -142,11 +142,11 @@ def test_pagina_vazia_mostra_o_aviso(real_window, store):
 
 @pytest.fixture
 def espiao(store):
-    """Um manager que só escuta os dois sinais, como File/DisplayManager."""
+    """Um manager que só escuta os dois sinais do `Jogo`."""
     from cartridges.store.managers.manager import Manager  # noqa: PLC0415
 
     class Espiao(Manager):
-        signals = {"update-ready", "save-ready"}
+        signals = {"atualizado", "salvar"}
 
         def main(self, game, additional_data):
             pass
@@ -160,8 +160,8 @@ def test_tumbas_carregadas_ficam_conectadas(store, espiao, make_game):
     store.add_game(zerado, {"skip_save": True})
     store.add_game(comum, {"skip_save": True})
 
-    assert {sinal for sinal, _ in zerado.signals} == {"update-ready", "save-ready"}
-    assert {sinal for sinal, _ in comum.signals} == {"update-ready", "save-ready"}
+    assert {sinal for sinal, _ in zerado.signals} == {"atualizado", "salvar"}
+    assert {sinal for sinal, _ in comum.signals} == {"atualizado", "salvar"}
     assert zerado.updates == 1, "o zerado vai para a tela na carga"
     assert comum.updates == 0, "o desinstalado comum continua fora de tela"
 

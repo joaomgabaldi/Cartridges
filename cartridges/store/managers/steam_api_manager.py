@@ -24,7 +24,7 @@ from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import HTTPError, SSLError, Timeout
 
 from cartridges import shared
-from cartridges.game import Game
+from cartridges.jogo import Jogo
 from cartridges.store.managers.async_manager import AsyncManager
 from cartridges.utils.name_cleaner import clean_for_search
 from cartridges.utils.steam import (
@@ -44,7 +44,7 @@ from cartridges.utils.steam import (
 _USER_EDITED_KEYS = ("name", "developer", "publisher", "release_date", "genre")
 
 
-def _keep_user_edits(game: Game, online_data: dict, additional_data: dict) -> dict:
+def _keep_user_edits(game: Jogo, online_data: dict, additional_data: dict) -> dict:
     """No modo "só o que falta", um campo editável só preenche o que está vazio.
 
     O modo escolhia quais *jogos* entravam na fila, mas aplicava o dict
@@ -105,7 +105,7 @@ class SteamAPIManager(AsyncManager):
         tag_ids = bulk.get(appid)
         return tag_ids, tag_ids is None
 
-    def main(self, game: Game, additional_data: dict) -> None:
+    def main(self, game: Jogo, additional_data: dict) -> None:
         # Tumba não é processada, exceto o zerado adicionado à mão
         # (`zerado_manual`), que só existe como tumba e precisa dos dados.
         if game.blacklisted or (
@@ -170,7 +170,7 @@ class SteamAPIManager(AsyncManager):
         self._marcar_ligacao(game, anterior, additional_data)
 
     @staticmethod
-    def _marcar_ligacao(game: Game, anterior: Optional[str], additional_data: dict) -> None:
+    def _marcar_ligacao(game: Jogo, anterior: Optional[str], additional_data: dict) -> None:
         """Se o appID mudou, marca que ``game`` pode ligar com um zerado (Q2).
 
         Só marca — não liga na hora. Rodando dentro de um pipeline (import,

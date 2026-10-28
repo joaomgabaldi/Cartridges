@@ -67,7 +67,6 @@ install_data(
     'grupo_das_contas.py',
     'process_session.py',
     'metadata_refresh.py',
-    'game.py',
     'game_cover.py',
     'gamepad.py',
   ],

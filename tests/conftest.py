@@ -156,16 +156,12 @@ TESTES_AINDA_GTK: list[str] = [
     "test_session_wallpaper.py",
     "test_shortcuts_source.py",
     "test_soltar_atalhos.py",
-    "test_steam_genre.py",
     "test_steamgriddb.py",
-    "test_store_adoption.py",
-    "test_store_index.py",
     "test_store_ligacao_manual.py",
     "test_tarefas.py",
     "test_tarefas_trabalhos.py",
     "test_tarefas_ui.py",
     "test_tela_de_download.py",
-    "test_tocador_capas.py",
     "test_ui_logic.py",
     "test_zerados.py",
     "test_zerados_manuais.py",
@@ -480,14 +476,22 @@ def sem_thread_de_backup_sobrando():
     assert not sobraram, f"threads de backup_de_saves ainda vivas depois do teste: {sobraram}"
 
 
-class FakeGame:
-    """Duck-type standing in for ``Game`` in store tests.
+class _FakeSinal:
+    """Um sinal do `Jogo` que só anota quem a store ligou nele."""
 
-    A real ``Game`` is a ``Gtk.Template`` widget that reaches for
-    ``shared.win.get_application()`` in its constructor. The store never needs
-    any of that — it reads a handful of fields and calls ``save``/``update`` —
-    so the fake keeps these tests about the store rather than about widget
-    construction. ``saves`` is a counter because several tests are precisely
+    def __init__(self, nome: str, ligacoes: list) -> None:
+        self.nome = nome
+        self.ligacoes = ligacoes
+
+    def connect(self, callback, _tipo=None) -> None:
+        self.ligacoes.append((self.nome, callback))
+
+
+class FakeGame:
+    """Duck-type standing in for ``Jogo`` in store tests.
+
+    The store never needs a real ``Jogo`` — it reads a handful of fields and
+    calls ``save``/``update`` — so the fake keeps these tests about the store. ``saves`` is a counter because several tests are precisely
     about how *many* times a scan writes a record.
     """
 
@@ -519,11 +523,13 @@ class FakeGame:
         self.backup_dos_saves_desligado = overrides.pop("backup_dos_saves_desligado", False)
         for key, value in overrides.items():
             setattr(self, key, value)
-        # Derived exactly the way Game.__init__ derives it.
+        # Derived exactly the way Jogo.__init__ derives it.
         self.base_source = self.source.split("_")[0]
         self.saves = 0
         self.updates = 0
         self.signals: list = []
+        self.salvar = _FakeSinal("salvar", self.signals)
+        self.atualizado = _FakeSinal("atualizado", self.signals)
 
     def save(self) -> None:
         self.saves += 1
@@ -532,22 +538,19 @@ class FakeGame:
         self.updates += 1
 
     def update_values(self, data: dict) -> None:
-        # Duck-types Game.update_values (plain setattr, no _KNOWN_KEYS
+        # Duck-types Jogo.update_values (plain setattr, no _KNOWN_KEYS
         # filtering).
         for key, value in data.items():
             setattr(self, key, value)
 
     @property
     def zerado(self) -> bool:
-        # A mesma regra de Game.zerado.
+        # A mesma regra de Jogo.zerado.
         return self.removed and not self.blacklisted and self.status == "beaten"
 
-    def connect(self, signal, callback) -> None:
-        self.signals.append((signal, callback))
-
     def get_cover_path(self) -> Path | None:
-        # Duck-types Game.get_cover_path: the backup exporter calls this on
-        # whatever `shared.store` holds, real Game or this fake.
+        # Duck-types Jogo.get_cover_path: the backup exporter calls this on
+        # whatever `shared.store` holds, real Jogo or this fake.
         from cartridges.utils.save_cover import ANIMATED_SUFFIXES  # noqa: PLC0415
 
         for suffix in (*ANIMATED_SUFFIXES, ".tiff"):

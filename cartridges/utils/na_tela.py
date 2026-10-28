@@ -8,10 +8,10 @@
 
 from typing import Any, Callable
 
-from gi.repository import GLib
+from cartridges.utils.thread_principal import na_thread_principal
 
 
-def entregar_na_tela(func: Callable[..., Any], *args: Any) -> int:
+def entregar_na_tela(func: Callable[..., Any], *args: Any) -> None:
     """Agenda ``func(*args)`` na thread principal, à frente do redesenho.
 
     Para o resultado que o usuário espera olhando um spinner ou uma barra. O
@@ -26,4 +26,6 @@ def entregar_na_tela(func: Callable[..., Any], *args: Any) -> int:
     fundo, que ninguém espera, e adiamento feito na própria thread principal
     continuam no ``GLib.idle_add`` comum.
     """
-    return GLib.idle_add(func, *args, priority=GLib.PRIORITY_DEFAULT)
+    # No Qt, a fila de `na_thread_principal` já roda na ordem e não espera o
+    # redesenho; o valor que a função devolve é ignorado (era o "repetir" do GLib).
+    na_thread_principal(func, *args)

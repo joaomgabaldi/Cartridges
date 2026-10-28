@@ -24,7 +24,7 @@ from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import HTTPError, SSLError, Timeout
 
 from cartridges.errors.friendly_error import FriendlyError
-from cartridges.game import Game
+from cartridges.jogo import Jogo
 from cartridges.store.managers.async_manager import AsyncManager
 from cartridges.store.managers.manager import Manager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
@@ -55,7 +55,7 @@ class SgdbManager(AsyncManager):
     continue_on = (SgdbGameNotFound, SgdbNoImageFound)
 
     def process_game(
-        self, game: Game, additional_data: dict, callback: Callable[[Manager], Any]
+        self, game: Jogo, additional_data: dict, callback: Callable[[Manager], Any]
     ) -> None:
         # The cancellable is captured here, when the task is queued: a reset
         # cancels the current one and swaps in a fresh one right away, and a
@@ -65,7 +65,7 @@ class SgdbManager(AsyncManager):
             game, {**additional_data, _CANCELLABLE: self.cancellable}, callback
         )
 
-    def main(self, game: Game, additional_data: dict) -> None:
+    def main(self, game: Jogo, additional_data: dict) -> None:
         cancellable = additional_data.get(_CANCELLABLE) or self.cancellable
         # The cancellation has to be honoured here, by hand, because nothing
         # else will honour it: AsyncManager.process_game builds its Gio.Task

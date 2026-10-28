@@ -17,7 +17,7 @@ def test_campo_novo_vem_ligado_e_e_gravado(store):
     game = jogo(store, 1)
     assert game.conquistas is True
     game.conquistas = False
-    # `save()` só emite "save-ready"; quem escreve o arquivo é o FileManager.
+    # `save()` só emite `salvar`; quem escreve o arquivo é o FileManager.
     FileManager().main(game, {})
     gravado = json.loads(
         (shared.games_dir / f"{game.game_id}.json").read_text(encoding="utf-8")

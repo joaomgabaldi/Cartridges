@@ -1,4 +1,4 @@
-# game.py
+# jogo.py
 #
 # Copyright 2022-2023 kramo
 #
@@ -17,19 +17,30 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""O jogo da biblioteca, separado do widget que o desenhava (o antigo `Game`).
+
+Os sinais trocam o que o widget fazia direto na janela: quem desenha (o modelo
+da grade, a janela) se conecta a eles. Um `Jogo` nasce e emite também nas
+threads do importador; quem mexe em interface conecta com `na_thread_principal`
+ou com conexão enfileirada.
+"""
+
 import logging
 from pathlib import Path
 from time import time
 from typing import Any, Callable, Optional
 
-from gi.repository import Adw, GObject, Gtk
+from PySide6.QtCore import QObject, Signal
 
 from cartridges import shared
-from cartridges.game_cover import GameCover
-from cartridges.utils.create_dialog import create_dialog
-from cartridges.utils.process_monitor import install_dir_from_command
-from cartridges.utils.run_executable import aumid_from_command, run_executable
-from cartridges.utils.save_cover import ANIMATED_SUFFIXES
+from cartridges.utils.run_executable import run_executable
+
+# Cover formats that hold an animation and are stored in their original form.
+# O APNG usa a extensão .png das imagens paradas; guardado, vira .apng, e é a
+# extensão que diz ao resto do app que a capa é animada. A ordem é a
+# precedência de ``Jogo.get_cover_path``. Mora aqui, e não em `save_cover`
+# (que o reexporta), porque aquele ainda depende do gi.
+ANIMATED_SUFFIXES = (".gif", ".webp", ".apng")
 
 # Everything written to a game's JSON record. Lives here, not in FileManager
 # (who writes it), because it is also the list of what `update_values` accepts:
@@ -111,19 +122,18 @@ def status_label(status: str) -> str:
 
 
 # pylint: disable=too-many-instance-attributes
-@Gtk.Template(resource_path=shared.PREFIX + "/gtk/game.ui")
-class Game(Gtk.Box):
-    __gtype_name__ = "Game"
-
-    title = Gtk.Template.Child()
-    play_button = Gtk.Template.Child()
-    cover = Gtk.Template.Child()
-    spinner = Gtk.Template.Child()
-    cover_button = Gtk.Template.Child()
-    menu_button = Gtk.Template.Child()
-    play_revealer = Gtk.Template.Child()
-    menu_revealer = Gtk.Template.Child()
-    game_options = Gtk.Template.Child()
+class Jogo(QObject):
+    # Substitui o "update-ready": a tela precisa redesenhar o jogo.
+    atualizado = Signal()
+    # Substitui o "save-ready": o FileManager grava a ficha.
+    salvar = Signal()
+    # Substitui o `create_toast`: (texto já com o nome, ação de desfazer ou "").
+    aviso = Signal(str, str)
+    # Substitui o diálogo de `_conferir_comando`: leva a função que, chamada
+    # depois do "Iniciar" da pessoa, desmarca o comando e lança o jogo.
+    confirmar_comando = Signal(object)
+    # Substitui o `shared.win.minimize()` depois de lançar.
+    sair_da_frente = Signal()
 
     loading: int = 0
     filtered: bool = False
@@ -203,7 +213,9 @@ class Game(Gtk.Box):
     install_size_ts: int = 0
     removed: bool = False
     blacklisted: bool = False
-    game_cover: Optional[GameCover] = None
+    # A capa já decodificada para a grade (era o `GameCover` do GTK); quem
+    # desenha a preenche. Não é gravada.
+    game_cover: Optional[Any] = None
     version: int = 0
     # Modification time of the shortcut this game came from. Kept on removed
     # games (as a tombstone) so a still-present shortcut doesn't re-add a game
@@ -251,31 +263,13 @@ class Game(Gtk.Box):
     # mostra e só segue com a confirmação do usuário.
     comando_a_conferir: bool = False
 
-    def __init__(self, data: dict[str, Any], **kwargs: Any) -> None:
-        super().__init__(**kwargs)
+    def __init__(self, data: dict[str, Any], parent: Optional[QObject] = None) -> None:
+        super().__init__(parent)
 
-        self.app = shared.win.get_application()
         self.version = shared.SPEC_VERSION
 
         self.update_values(data)
         self.base_source = self.source.split("_")[0]
-
-        self.event_controller_motion = Gtk.EventControllerMotion.new()
-        self.add_controller(self.event_controller_motion)
-        self.event_controller_motion.connect("enter", self.toggle_play, False)
-        self.event_controller_motion.connect("leave", self.toggle_play, None, None)
-        self.cover_button.connect("clicked", self.main_button_clicked, False)
-        self.play_button.connect("clicked", self.main_button_clicked, True)
-
-        # Right-clicking a game opens its edit dialog directly
-        right_click = Gtk.GestureClick.new()
-        right_click.set_button(3)  # secondary (right) mouse button
-        right_click.connect("pressed", self.edit_on_right_click)
-        self.add_controller(right_click)
-
-    def edit_on_right_click(self, *_args: Any) -> None:
-        shared.win.active_game = self
-        self.app.activate_action("edit_game", None)
 
     @property
     def has_update(self) -> bool:
@@ -374,73 +368,40 @@ class Game(Gtk.Box):
             setattr(self, key, value)
 
     def update(self) -> None:
-        self.emit("update-ready", {})
+        self.atualizado.emit()
 
     def save(self) -> None:
-        self.emit("save-ready", {})
+        self.salvar.emit()
 
-    def create_toast(self, title: str, action: Optional[str] = None) -> None:
-        """Show a toast. ``title`` is a template where {} is the game's name."""
-        toast = Adw.Toast.new(title.format(self.name))
-        toast.set_use_markup(False)
+    def _avisar(self, title: str, action: str = "") -> None:
+        """``title`` is a template where {} is the game's name."""
+        self.aviso.emit(title.format(self.name), action)
 
-        if action:
-            toast.set_button_label(_("Desfazer"))
-            toast.connect("button-clicked", shared.win.on_undo_action, self, action)
-            # Forget the toast once it goes away so the dict doesn't grow forever
-            toast.connect(
-                "dismissed",
-                lambda dismissed: (
-                    shared.win.toasts.pop((self, action), None)
-                    if shared.win.toasts.get((self, action)) is dismissed
-                    else None
-                ),
-            )
+    @property
+    def comando_visivel(self) -> str:
+        """O comando como o diálogo de conferência o mostra.
 
-            if old_toast := shared.win.toasts.get((self, action)):
-                # Dismiss the toast if there already is one
-                shared.win.toast_queue.dismiss(old_toast)
-
-            shared.win.toasts[(self, action)] = toast
-
-        shared.win.toast_queue.add(toast)
+        Invisíveis (quebra de linha, U+202E que inverte o texto) aparecem como
+        código: escondidos, deixariam parte do comando fora da vista.
+        """
+        return "".join(
+            c if c.isprintable() else f"<U+{ord(c):04X}>" for c in self.executable
+        )
 
     def _conferir_comando(self, lancar: Callable[[], Any]) -> None:
-        # Invisíveis (quebra de linha, U+202E que inverte o texto) aparecem como
-        # código: escondidos, deixariam parte do comando fora da vista.
-        comando = "".join(c if c.isprintable() else f"<U+{ord(c):04X}>" for c in self.executable)
-        corpo = _(
-            "Este jogo foi restaurado de um backup. Antes de iniciá-lo pela "
-            "primeira vez, confira se o comando abaixo é o esperado:"
-        ) + f"\n\n{comando}"
-        if self.run_as_admin:
-            corpo += "\n\n" + _("O jogo será executado como administrador.")
+        def confirmar() -> None:
+            self.comando_a_conferir = False
+            self.save()
+            lancar()
 
-        def resposta(_dialogo: Adw.AlertDialog, escolha: str) -> None:
-            if escolha == "launch":
-                self.comando_a_conferir = False
-                self.save()
-                lancar()
-
-        janela = shared.win.get_application().get_active_window() or shared.win
-        # A variável é o nome do jogo
-        create_dialog(
-            janela, _("Iniciar {}?").format(self.name), corpo, "launch", _("Iniciar")
-        ).connect("response", resposta)
+        self.confirmar_comando.emit(confirmar)
 
     def launch(self, ao_confirmar: Optional[Callable[[], Any]] = None) -> bool:
         """``ao_confirmar`` é como relançar depois da confirmação do comando de um
         jogo restaurado; sem ele, é este mesmo ``launch``."""
-        # avoid import cycles
-        # pylint: disable-next=import-outside-toplevel
-        from cartridges.saves import backup_de_saves
-
-        # Os saves dele estão sendo regravados: o jogo aberto agora leria arquivos pela
-        # metade e travaria os que a restauração precisa gravar.
-        if backup_de_saves.restaurando(self):
-            self.create_toast(_("Aguarde o fim da restauração dos saves de {}."))
-            return False
-
+        # shortcut: launch sem sessão/saves/controle na fase 0, plano 5 devolve
+        # (a espera da restauração dos saves, o monitor e a janela de sessão,
+        # a vibração do controle e a mudança de monitor).
         if self.comando_a_conferir:
             self._conferir_comando(ao_confirmar or self.launch)
             return False
@@ -449,98 +410,34 @@ class Game(Gtk.Box):
         self.save()
         self.update()
 
-        # Como esta sessão vai ser acompanhada. Decidido antes de lançar o jogo
-        # porque a janela sai da frente antes dele — veja `moved` logo abaixo.
-        # O que é acompanhável são três coisas, e só a primeira precisa ser
-        # configurada: as outras duas saem do próprio comando de lançamento,
-        # que já diz onde o jogo mora ou de que pacote ele é. Sobra o jogo
-        # lançado por URI de loja (Steam, Epic, Ubisoft), cujo comando nomeia
-        # um id e mais nada. A chave "playtime-tracking" desliga tudo.
-        tracking_enabled = shared.schema.get_boolean("playtime-tracking")
-        followable = (
-            (self.track_process and bool(self.process_executable.strip()))
-            or bool(aumid_from_command(self.executable))
-            or bool(install_dir_from_command(self.executable))
-        )
-
-        # Sair da frente *antes* de o jogo existir, e não depois. A janela muda
-        # de monitor e maximiza aqui, com o jogo ainda por lançar, de modo que
-        # quando ele criar a janela dele já não há mais nada se mexendo para
-        # roubar o foco de um jogo em tela cheia. Não custa espera nenhuma ao
-        # clique: `run_executable` não bloqueia (é um Popen, ou uma thread no
-        # caso do UAC) e nada chega a ser desenhado entre uma linha e outra.
-        #
-        # Só quando vai haver sessão: quem devolve a janela ao lugar de origem
-        # é o fim do bloqueador, e sem sessão ele nunca aparece — a janela
-        # ficaria morando no outro monitor.
-        moved = tracking_enabled and shared.win.move_to_session_monitor()
-
         run_executable(self.executable, self.run_as_admin)
 
-        # avoid import cycles
-        from cartridges.gamepad import GamepadManager
-        from cartridges.process_session import ProcessSession
-        from cartridges.session_window import SessionWindow
-
-        # Confirm the launch in the hand holding the controller. Fires before
-        # the window minimises, which is the last moment the pad is still ours
-        # to talk to.
-        GamepadManager.rumble_launch()
-
-        # End any session already in progress (records it) before starting a new
-        # one, so two trackers can't count at once
-        if SessionWindow.active is not None:
-            SessionWindow.active.close()
-        if ProcessSession.active is not None:
-            ProcessSession.active.stop(record=True)
-
-        # Get out of the way while playing. How the session ends depends on the
-        # game: anything we can follow is tracked automatically, and only what
-        # we can't needs the user to end the session manually.
-        #
-        # Sair da frente é minimizar, a não ser que a janela já tenha saído por
-        # cima — mudada para outro monitor logo acima. Minimizar depois disso
-        # mandaria para a barra de tarefas justamente a tela que a opção existe
-        # para deixar à vista.
-        if tracking_enabled and followable:
-            ProcessSession(self).start()
-            if not moved:
-                shared.win.minimize()
-        elif tracking_enabled:
-            # Clock the session in a small window and minimise the main one
-            SessionWindow(self).present()
-            if not moved:
-                shared.win.minimize()
-        elif shared.schema.get_boolean("minimize-after-launch"):
-            shared.win.minimize()
+        if shared.schema.get_boolean("minimize-after-launch"):
+            self.sair_da_frente.emit()
 
         # The variable is the title of the game
-        self.create_toast(_("{} iniciado"))
+        self._avisar(_("{} iniciado"))
         return True
 
     def remove_game(self) -> None:
         # Add "removed=True" to the game properties so it can be deleted on next init
         self.removed = True
         self.save()
+        # Quem mostra os detalhes deste jogo sai da página ao receber este sinal.
         self.update()
-
-        if shared.win.navigation_view.get_visible_page() == shared.win.details_page:
-            shared.win.navigation_view.pop()
 
         # The variable is the title of the game
         if self.zerado:
             # Instalado e marcado como Zerado: remover é mandar para a página dos
             # zerados, e o aviso diz para onde ele foi (decisão de 23/09).
-            self.create_toast(_("{} movido para Jogos Zerados"), "remove")
+            self._avisar(_("{} movido para Jogos Zerados"), "remove")
         else:
-            self.create_toast(_("{} removido"), "remove")
+            self._avisar(_("{} removido"), "remove")
 
     def set_loading(self, state: int) -> None:
+        # shortcut: só a contagem (o widget escondia a capa e mostrava o spinner);
+        # o indicador na tela volta com a grade QML, que lê `loading`.
         self.loading += state
-        loading = self.loading > 0
-
-        self.cover.set_opacity(int(not loading))
-        self.spinner.set_visible(loading)
 
     def get_cover_path(self) -> Optional[Path]:
         # Animated covers (kept in their original format) take precedence,
@@ -548,38 +445,6 @@ class Game(Gtk.Box):
         for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
             cover_path = shared.covers_dir / f"{self.game_id}{suffix}"
             if cover_path.is_file():
-                return cover_path  # type: ignore
+                return cover_path
 
         return None
-
-    def toggle_play(
-        self, _widget: Any, _prop1: Any, _prop2: Any, state: bool = True
-    ) -> None:
-        # O card de um zerado não joga nem tem menu. Escondidos sempre, e não só
-        # "não mexidos": um jogo que virou zerado com o ponteiro em cima
-        # levaria os botões revelados para a página de zerados.
-        if self.zerado:
-            self.play_revealer.set_reveal_child(False)
-            self.menu_revealer.set_reveal_child(False)
-        elif not self.menu_button.get_active():
-            self.play_revealer.set_reveal_child(not state)
-            self.menu_revealer.set_reveal_child(not state)
-
-        # Only animate the cover the pointer is hovering over
-        if self.game_cover:
-            self.game_cover.set_hover_animation(not state)
-
-    def main_button_clicked(self, _widget: Any, button: bool) -> None:
-        # A capa abre os detalhes, o botão inicia o jogo; um zerado não joga.
-        if button and not self.zerado:
-            self.launch()
-        else:
-            shared.win.show_details_page(self)
-
-    @GObject.Signal(name="update-ready", arg_types=[object])
-    def update_ready(self, _additional_data):  # type: ignore
-        """Signal emitted when the game needs updating"""
-
-    @GObject.Signal(name="save-ready", arg_types=[object])
-    def save_ready(self, _additional_data):  # type: ignore
-        """Signal emitted when the game needs saving"""

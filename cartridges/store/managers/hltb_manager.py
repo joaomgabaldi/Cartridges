@@ -20,7 +20,7 @@
 import logging
 
 from cartridges import shared
-from cartridges.game import Game
+from cartridges.jogo import Jogo
 from cartridges.store.managers.async_manager import AsyncManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.utils.hltb import (
@@ -56,7 +56,7 @@ class HLTBManager(AsyncManager):
         super().__init__()
         self.hltb_helper = HLTBHelper(HLTBRateLimiter())
 
-    def main(self, game: Game, additional_data: dict) -> None:
+    def main(self, game: Jogo, additional_data: dict) -> None:
         # Tumba não é processada, exceto o zerado adicionado à mão
         # (`zerado_manual`), que só existe como tumba e precisa dos dados.
         if game.blacklisted or (
@@ -89,7 +89,7 @@ class HLTBManager(AsyncManager):
 
         game.update_values(times)
 
-    def _fetch(self, game: Game) -> HLTBTimes:
+    def _fetch(self, game: Jogo) -> HLTBTimes:
         """Get ``game``'s times, id first and title search as the fallback."""
         return fetch_times(self.hltb_helper, game.name, game.hltb_id)
 

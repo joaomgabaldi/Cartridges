@@ -22,10 +22,10 @@ from collections.abc import Iterable
 from typing import Any, Generator, Optional
 
 from cartridges.errors.friendly_error import FriendlyError
-from cartridges.game import Game
+from cartridges.jogo import Jogo
 
 # Type of the data returned by iterating on a Source
-SourceIterationResult = Optional[Game | tuple[Game, tuple[Any]]]
+SourceIterationResult = Optional[Jogo | tuple[Jogo, tuple[Any]]]
 
 
 class SourceScanError(FriendlyError):
