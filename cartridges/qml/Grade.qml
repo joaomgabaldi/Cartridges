@@ -78,6 +78,30 @@ GridView {
         if (currentItem) grade.abrirDetalhes(currentItem.jogoId)
     }
 
+    readonly property bool menuAberto: menuDoJogo.visible
+
+    // O passo do controle: um cartão para o lado ou para cima/baixo, sem passar da borda.
+    // Devolve se o cartão atual mudou; na borda, quem chamou faz o controle vibrar (ou, em ↑ na primeira linha, vai à barra).
+    function moverSelecao(dx, dy) {
+        porTeclado = true
+        forceActiveFocus()
+        if (count === 0) return false
+        var i = currentIndex
+        var alvo = i
+        // ← e → seguem a ordem dos jogos: do fim de uma linha passam ao começo da outra.
+        if (dx < 0) alvo = i > 0 ? i - 1 : i
+        else if (dx > 0) alvo = i < count - 1 ? i + 1 : i
+        else if (dy < 0) alvo = i - colunas >= 0 ? i - colunas : i
+        else if (dy > 0)
+            // Embaixo de uma coluna sem cartão, a última linha para no último jogo.
+            alvo = i + colunas < count ? i + colunas
+                : (Math.floor(i / colunas) < Math.floor((count - 1) / colunas) ? count - 1 : i)
+        if (alvo === i) return false
+        currentIndex = alvo
+        positionViewAtIndex(alvo, GridView.Contain)
+        return true
+    }
+
     // Um menu para a grade toda; o cartão diz a que jogo ele se refere.
     MenuDoJogo {
         id: menuDoJogo

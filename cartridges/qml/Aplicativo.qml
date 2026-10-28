@@ -20,6 +20,7 @@ Principal {
 
     inicio: [
         BotaoDaBarra {
+            id: botaoAdicionar
             objectName: "botaoAdicionar"
             visible: janela.paginaAtual === "todos"
             glifo: ""
@@ -33,6 +34,7 @@ Principal {
             }
         },
         BotaoDaBarra {
+            id: botaoVoltar
             objectName: "botaoVoltar"
             visible: janela.paginaAtual === "zerados"
             glifo: ""
@@ -44,6 +46,7 @@ Principal {
     // Da direita para a esquerda: menu principal, Jogos Zerados e busca.
     fim: [
         BotaoDaBarra {
+            id: botaoMenu
             objectName: "botaoMenu"
             glifo: ""
             dica: "Menu principal"
@@ -57,6 +60,7 @@ Principal {
             }
         },
         BotaoDaBarra {
+            id: botaoZerados
             objectName: "botaoZerados"
             visible: janela.paginaAtual === "todos"
             trofeu: true
@@ -64,6 +68,7 @@ Principal {
             onClicked: pilha.push(zerados)
         },
         BotaoDaBarra {
+            id: botaoBusca
             objectName: "botaoBusca"
             visible: janela.paginaAtual === "todos"
             glifo: ""
@@ -154,5 +159,105 @@ Principal {
     Connections {
         target: janela.ligacao
         function onSairDaFrente() { janela.showMinimized() }
+    }
+
+    // --- Controle do Xbox -------------------------------------------------------------------------------
+    // A página à vista: "Todos os jogos" ou, por cima dela, "Jogos Zerados".
+    readonly property var paginaDoControle: pilha.depth === 0 ? todos : pilha.currentItem
+    // Menu ou diálogo na frente: o controle navega nele pelas teclas, como o teclado faria.
+    readonly property bool popupAberto: menuPrincipal.opened || camadaDeAvisos.dialogoAberto
+        || (paginaDoControle !== null && paginaDoControle.menuDoJogoAberto)
+    property bool ponteiroEscondido: false
+    property point posicaoDoPonteiro
+
+    // Os botões da barra que o controle alcança com ↑ na primeira linha.
+    readonly property var botoesDaBarra: [botaoAdicionar, botaoVoltar, botaoZerados, botaoBusca, botaoMenu]
+    function botaoFocado() {
+        for (var i = 0; i < botoesDaBarra.length; ++i)
+            if (botoesDaBarra[i].activeFocus) return botoesDaBarra[i]
+        return null
+    }
+    // O botão visível da barra mais próximo, na horizontal, de `x`; `exceto` não conta e, com `sentido`
+    // (-1 ou 1), só valem os que ficam desse lado.
+    function botaoPerto(x, exceto, sentido) {
+        var melhor = null, distancia = 1e9
+        for (var i = 0; i < botoesDaBarra.length; ++i) {
+            var b = botoesDaBarra[i]
+            if (!b.visible || !b.enabled || b === exceto) continue
+            var dx = b.mapToItem(null, b.width / 2, 0).x - x
+            if (sentido && dx * sentido <= 0) continue
+            var d = Math.abs(dx)
+            if (d < distancia) { distancia = d; melhor = b }
+        }
+        return melhor
+    }
+    function focarBotao(b) { b.forceActiveFocus(Qt.TabFocusReason) }
+
+    function teclaDoPasso(dx, dy) {
+        return dy < 0 ? Qt.Key_Up : dy > 0 ? Qt.Key_Down : dx < 0 ? Qt.Key_Left : Qt.Key_Right
+    }
+
+    Connections {
+        target: controle
+        function onMover(dx, dy) {
+            var focado = janela.botaoFocado()
+            if (janela.popupAberto) {
+                controle.teclar(janela.teclaDoPasso(dx, dy))
+            } else if (focado) {
+                // Na barra: ↓ volta à grade; ← e → vão ao botão vizinho.
+                var x = focado.mapToItem(null, focado.width / 2, 0).x
+                if (dy > 0) {
+                    janela.paginaDoControle.mostrarSelecao()
+                    janela.paginaDoControle.focarGrade()
+                } else if (dx !== 0) {
+                    var vizinho = janela.botaoPerto(x, focado, dx)
+                    if (vizinho) { janela.focarBotao(vizinho); controle.passar() }
+                    else controle.bater()
+                } else controle.bater()
+            } else if (janela.paginaDoControle) {
+                if (janela.paginaDoControle.moverSelecao(dx, dy)) {
+                    controle.passar()
+                } else if (dy < 0) {
+                    // ↑ na primeira linha: o botão da barra mais perto na horizontal.
+                    var botao = janela.botaoPerto(janela.paginaDoControle.xDoAtual(), null, 0)
+                    if (botao) janela.focarBotao(botao)
+                    else controle.bater()
+                } else controle.bater()
+            }
+        }
+        function onPresente() {
+            if (!janela.popupAberto && !janela.botaoFocado() && janela.paginaDoControle)
+                janela.paginaDoControle.mostrarSelecao()
+        }
+        function onAtivar() {
+            var focado = janela.botaoFocado()
+            if (janela.popupAberto) controle.teclar(Qt.Key_Return)
+            else if (focado) focado.click()
+            else if (janela.paginaDoControle) janela.paginaDoControle.abrirDetalhesDoAtual()
+        }
+        function onVoltar() {
+            if (janela.popupAberto) controle.teclar(Qt.Key_Escape)
+            else if (janela.paginaAtual === "zerados") pilha.clear(StackView.PopTransition)
+            else if (todos.buscaAberta) todos.buscaAberta = false
+        }
+        function onMenuPrincipal() { if (!janela.popupAberto) menuPrincipal.open() }
+        function onMenuDoJogo() { if (!janela.popupAberto && janela.paginaDoControle) janela.paginaDoControle.abrirMenuDoAtual() }
+        function onBuscar() { if (!janela.popupAberto && janela.paginaAtual === "todos") todos.alternarBusca() }
+        function onUsado() {
+            janela.posicaoDoPonteiro = ponteiro.point.position
+            janela.ponteiroEscondido = true
+        }
+    }
+
+    // O ponteiro some enquanto o controle está em uso e volta quando o mouse anda mais de 1 px.
+    HoverHandler {
+        id: ponteiro
+        cursorShape: janela.ponteiroEscondido ? Qt.BlankCursor : Qt.ArrowCursor
+        onPointChanged: {
+            if (!janela.ponteiroEscondido) return
+            var p = point.position
+            if (Math.abs(p.x - janela.posicaoDoPonteiro.x) > 1 || Math.abs(p.y - janela.posicaoDoPonteiro.y) > 1)
+                janela.ponteiroEscondido = false
+        }
     }
 }

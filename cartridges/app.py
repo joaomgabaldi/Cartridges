@@ -27,6 +27,7 @@ from cartridges.carga import carregar_jogos_do_disco
 from cartridges.logging.session_file_handler import SessionFileHandler
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
+from cartridges.modelos.controle import ControleDaGrade
 from cartridges.ponte import Ponte
 from cartridges.store.managers import async_manager
 from cartridges.store.managers.exibicao_manager import ExibicaoManager
@@ -130,10 +131,11 @@ def main(argv: list[str]) -> int:
     motor = QQmlApplicationEngine()
     qwk.registrar(motor)
     aplicativo = Aplicativo(avisos)
+    controle = ControleDaGrade()
     contexto = motor.rootContext()
     for nome, valor in (
         ("filtros", filtros), ("paginaTodos", pagina_biblioteca), ("paginaZerados", pagina_zerados),
-        ("aplicativo", aplicativo), ("ponte", ponte),
+        ("aplicativo", aplicativo), ("ponte", ponte), ("controle", controle),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))

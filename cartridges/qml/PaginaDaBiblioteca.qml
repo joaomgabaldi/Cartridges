@@ -18,6 +18,30 @@ Item {
     property string jogoEscolhido: ""
 
     function focarGrade() { grade.forceActiveFocus() }
+
+    // O controle do Xbox (Aplicativo.qml): o menu do jogo está aberto, e os comandos sobre o cartão atual.
+    readonly property bool menuDoJogoAberto: grade.menuAberto
+    function moverSelecao(dx, dy) { return grade.moverSelecao(dx, dy) }
+    // O x (na janela) do centro do cartão atual, para achar o botão da barra mais próximo.
+    function xDoAtual() {
+        return grade.currentItem ? grade.currentItem.mapToItem(null, grade.currentItem.width / 2, 0).x : 0
+    }
+    // Um controle apareceu: acende a seleção no cartão atual, sem tirar o foco de quem digita na busca.
+    function mostrarSelecao() {
+        if (buscaAberta) return
+        grade.porTeclado = true
+        grade.forceActiveFocus()
+    }
+    function abrirMenuDoAtual() {
+        grade.porTeclado = true
+        grade.forceActiveFocus()
+        if (grade.currentItem) grade.currentItem.abrirMenu()
+    }
+    function abrirDetalhesDoAtual() {
+        grade.porTeclado = true
+        grade.forceActiveFocus()
+        grade.abrirDoAtual()
+    }
     function alternarBusca() { buscaAberta = !buscaAberta }
 
     onBuscaAbertaChanged: {

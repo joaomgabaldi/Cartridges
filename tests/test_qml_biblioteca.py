@@ -17,6 +17,7 @@ from cartridges import shared
 from cartridges.aplicativo import Aplicativo
 from cartridges.jogo import Jogo
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
+from cartridges.modelos.controle import ControleDaGrade
 from cartridges.ponte import Ponte
 
 QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml"
@@ -54,6 +55,22 @@ def _jogos(*itens):
     return [Jogo({"game_id": f"imported_{n}", "source": "imported", "name": nome, **extra}) for n, nome, extra in itens]
 
 
+class _LeitorFalso:
+    disponivel = True
+
+    def __init__(self):
+        self.vibracoes = []
+
+    def ler(self):
+        return None
+
+    def vibrar(self, esquerdo=0.0, direito=0.0):
+        self.vibracoes.append((esquerdo, direito))
+
+    def soltar(self):
+        pass
+
+
 class _App:
     def __init__(self, jogos):
         self.modelo = ModeloDaBiblioteca()
@@ -65,11 +82,17 @@ class _App:
         self.zerados = FiltroDaPagina(self.modelo, self.filtros, "zerados")
         self.ponte = Ponte()
         self.aplicativo = Aplicativo(self.ponte.fila)
+        self.leitor = _LeitorFalso()
+        shared.schema.set_boolean("gamepad", True)
+        self.controle = ControleDaGrade(
+            fabrica_do_leitor=lambda: self.leitor,
+            estado_do_app=lambda: Qt.ApplicationState.ApplicationActive,
+        )
         self.motor = QQmlEngine()
         contexto = self.motor.rootContext()
         for nome, valor in (
             ("filtros", self.filtros), ("paginaTodos", self.todos), ("paginaZerados", self.zerados),
-            ("aplicativo", self.aplicativo), ("ponte", self.ponte),
+            ("aplicativo", self.aplicativo), ("ponte", self.ponte), ("controle", self.controle),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))
@@ -399,4 +422,119 @@ def test_capa_parada_nunca_anima(app_qt):
     app = _App(_jogos((1, "Alfa", {})))
     cartao, animada = _cartao_animado(app)
     assert cartao.property("capaAnimada") == "" and animada.property("playing") is False
+    app.fechar()
+
+
+# --- Controle do Xbox na interface -------------------------------------------------------------
+
+def test_controle_move_a_selecao_e_vibra_na_borda(app_qt):
+    app = _App(_tres())
+    grade = app.achar("grade")
+    colunas = grade.property("colunas")
+    assert colunas >= 1
+    app.controle.mover.emit(-1, 0)
+    assert grade.property("currentIndex") == 0, "na borda esquerda a seleção fica"
+    assert app.leitor.vibracoes == [(0.6, 0.2)], "e o controle vibra"
+    app.leitor.vibracoes.clear()
+    app.controle.mover.emit(1, 0)
+    if colunas > 1:
+        assert grade.property("currentIndex") == 1
+        assert grade.property("porTeclado") is True
+        assert app.leitor.vibracoes == [(0.0, 0.14)], "um cartão atravessado é um tique leve"
+    app.fechar()
+
+
+def test_controle_nao_passa_do_ultimo_jogo(app_qt):
+    app = _App(_tres())
+    grade = app.achar("grade")
+    for _ in range(5):
+        app.controle.mover.emit(0, 1)
+    assert grade.property("currentIndex") < 3
+    for _ in range(5):
+        app.controle.mover.emit(1, 0)
+    assert grade.property("currentIndex") == 2
+    app.leitor.vibracoes.clear()
+    app.controle.mover.emit(1, 0)
+    assert app.leitor.vibracoes == [(0.6, 0.2)], "no último jogo vibra"
+    app.fechar()
+
+
+def test_controle_esquerda_direita_passam_de_linha(app_qt):
+    shared.schema._gravar("library-rows", "u", 1)  # uma coluna: todo passo lateral muda de linha
+    app = _App(_tres())
+    grade = app.achar("grade")
+    assert grade.property("colunas") == 1
+    app.controle.mover.emit(1, 0)
+    assert grade.property("currentIndex") == 1
+    app.controle.mover.emit(-1, 0)
+    assert grade.property("currentIndex") == 0
+    app.fechar()
+
+
+def test_controle_sobe_da_primeira_linha_para_a_barra_e_desce(app_qt):
+    app = _App(_tres())
+    grade = app.achar("grade")
+    app.leitor.vibracoes.clear()
+    app.controle.mover.emit(0, -1)
+    botoes = ["botaoAdicionar", "botaoZerados", "botaoBusca", "botaoMenu"]
+    com_foco = [n for n in botoes if app.achar(n).property("activeFocus")]
+    assert len(com_foco) == 1, "um botão da barra recebe o foco"
+    assert app.leitor.vibracoes == [], "e o controle não vibra"
+    app.controle.mover.emit(0, 1)
+    assert grade.property("activeFocus") is True
+    app.fechar()
+
+
+def test_controle_presente_acende_a_selecao(app_qt):
+    app = _App(_tres())
+    grade = app.achar("grade")
+    assert grade.property("porTeclado") is False
+    app.controle.presente.emit()
+    assert grade.property("porTeclado") is True
+    assert grade.property("activeFocus") is True
+    app.fechar()
+
+
+def test_controle_ativa_o_cartao_atual(app_qt):
+    app = _App(_tres())
+    grade = app.achar("grade")
+    abertos = []
+    grade.abrirDetalhes.connect(abertos.append)
+    app.controle.ativar.emit()
+    assert abertos == ["imported_1"]
+    app.fechar()
+
+
+def test_controle_start_abre_o_menu_e_b_volta_de_zerados(app_qt):
+    app = _App(_jogos((1, "Alfa", {}), (2, "Zero", {"removed": True, "status": "beaten"})))
+    menu = app.achar("menuPrincipal")
+    app.controle.menuPrincipal.emit()
+    assert _esperar(lambda: menu.property("opened") is True)
+    menu.close()
+    assert _esperar(lambda: menu.property("opened") is False)
+    QMetaObject.invokeMethod(app.achar("botaoZerados"), "click", Qt.ConnectionType.DirectConnection)
+    assert _esperar(lambda: app.janela.property("paginaAtual") == "zerados")
+    app.controle.voltar.emit()
+    assert _esperar(lambda: app.janela.property("paginaAtual") == "todos")
+    app.fechar()
+
+
+def test_controle_alterna_a_busca(app_qt):
+    app = _App(_tres())
+    pagina = app.achar("pagina")
+    app.controle.buscar.emit()
+    assert pagina.property("buscaAberta") is True
+    app.controle.buscar.emit()
+    assert pagina.property("buscaAberta") is False
+    app.controle.buscar.emit()
+    app.controle.voltar.emit()
+    assert pagina.property("buscaAberta") is False, "B fecha a busca"
+    app.fechar()
+
+
+def test_controle_esconde_o_ponteiro(app_qt):
+    app = _App(_tres())
+    assert app.janela.property("ponteiroEscondido") is False
+    app.controle.usado.emit()
+    assert app.janela.property("ponteiroEscondido") is True
     app.fechar()

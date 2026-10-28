@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QEventLoop, QMetaObject, QTimer, QUrl
+from PySide6.QtCore import QEventLoop, QMetaObject, Qt, QTimer, QUrl
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -20,6 +20,7 @@ from cartridges.importer.source import SourceScanError
 from cartridges.jogo import Jogo
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
+from cartridges.modelos.controle import ControleDaGrade
 from cartridges.ponte import Ponte
 from cartridges.store.managers.exibicao_manager import ExibicaoManager
 from cartridges.utils import restauracao, soltar_atalhos
@@ -381,6 +382,7 @@ class _Janela:
             ("paginaZerados", FiltroDaPagina(self.modelo, self.filtros, "zerados")),
             ("aplicativo", self.aplicativo),
             ("ponte", self.ponte),
+            ("controle", ControleDaGrade(estado_do_app=lambda: Qt.ApplicationState.ApplicationInactive)),
         ):
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

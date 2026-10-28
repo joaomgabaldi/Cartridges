@@ -23,14 +23,12 @@ from cartridges import shared
 from cartridges.game_cover import GameCover
 from cartridges.utils import janela_por_cima, restauracao
 from cartridges.utils.cortina_monitor import CortinaMonitor
+from cartridges.xinput import ACELERAR_APOS_US, INTERVALO_ACELERADO_US, INTERVALO_NORMAL_US, intervalo_de_repeticao_us  # noqa: F401
 
 DURACAO_ABERTURA_MS = 400
 DURACAO_FILA_ENTRADA_MS = 1700
 DURACAO_FILA_SAIDA_MS = 1100
 JOGOS_NA_FILA = 30
-INTERVALO_NORMAL_US = 120_000
-ACELERAR_APOS_US = 1_000_000
-INTERVALO_ACELERADO_US = 40_000
 
 # Calibração do Cover Flow (ajustar no app real). Distâncias em múltiplos da
 # largura da capa, exceto a profundidade, em pixels.
@@ -118,12 +116,6 @@ def tem_3d(janela) -> bool:
     return renderizador is not None and not isinstance(
         renderizador, Gsk.CairoRenderer
     )
-
-
-def intervalo_de_repeticao_us(segurando_us: int) -> int:
-    if segurando_us >= ACELERAR_APOS_US:
-        return INTERVALO_ACELERADO_US
-    return INTERVALO_NORMAL_US
 
 
 def _limitar(x: float) -> float:
