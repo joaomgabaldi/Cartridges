@@ -23,6 +23,8 @@ from enum import IntEnum, auto
 from pathlib import Path
 from typing import Literal
 
+from cartridges.configuracoes import Configuracoes
+
 
 class AppState(IntEnum):
     DEFAULT = auto()
@@ -86,6 +88,10 @@ app_dir = (
 chave_do_registro = os.environ.get("CARTRIDGES_REGISTRO") or (
     r"Software\GSettings\io\github\joaomgabaldi\Cartridges" + _sufixo
 )
+
+# Preferências no registro; só leem ao pedir um valor, nada é tocado na importação.
+schema = Configuracoes(chave_do_registro, "@APP_ID@")
+state_schema = Configuracoes(chave_do_registro + r"\State", "@APP_ID@.State")
 
 games_dir = app_dir / "games"
 covers_dir = app_dir / "covers"

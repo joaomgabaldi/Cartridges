@@ -180,132 +180,6 @@ builtins.ngettext = (  # type: ignore[attr-defined]
 )
 
 
-# Defaults copied from data/io.github.joaomgabaldi.Cartridges.gschema.xml.in. Copied rather
-# than parsed so a test that depends on one of these values fails loudly when
-# the schema changes underneath it, instead of quietly following it.
-_SCHEMA_DEFAULTS = {
-    "assistente-concluido": False,
-    "auto-import": False,
-    "cover-autoplay": False,
-    "minimize-after-launch": False,
-    "playtime-tracking": True,
-    "process-tracking-grace": 5,
-    "session-move-window": False,
-    "session-monitor": "",
-    "session-wallpaper": False,
-    "session-wallpaper-saved": "",
-    "fita-brilho-padrao": 180,
-    "fita-matiz-app": 284,
-    "fita-saturacao-app": 620,
-    "session-fita": False,
-    "fita-acompanha-tela": False,
-    "fita-estado-anterior": "",
-    "wallhaven-key": "",
-    "remove-missing": True,
-    "shortcuts": True,
-    "shortcuts-location": "",
-    "shortcuts-recursive": True,
-    "steam-metadata": True,
-    "hltb-metadata": True,
-    "sgdb-key": "",
-    "conquistas-chave-steam": "",
-    "conquistas-mostrar-ocultas": False,
-    "conquistas-aviso-posicao": "inferior-direito",
-    "conquistas-aviso": True,
-    "conquistas-aviso-som": True,
-    "conquistas-aviso-som-volume": 100,
-    "conquistas-iluminacao": True,
-    "conquistas-pulso-matiz": 45,
-    "conquistas-pulso-saturacao": 1000,
-    "conquistas-pulso-estilo": "respirar",
-    "sgdb": False,
-    "sgdb-prefer": False,
-    "sgdb-animated": False,
-    "library-rows": 0,
-    "gamepad": False,
-    "gamepad-rumble": True,
-    "big-picture-ao-conectar": False,
-    "big-picture-som": True,
-    "updates-check-interval": 12,
-    "news-check-interval": 6,
-    "show-news-button": False,
-    "sort-mode": "last_played",
-    "pasta-dos-saves": "",
-}
-
-_STATE_DEFAULTS = {
-    "width": 1170,
-    "height": 795,
-    "is-maximized": False,
-    "x": -2147483648,
-    "y": -2147483648,
-    "steam-limiter-tokens-history": "[]",
-    "news-last-seen-ts": 0,
-    "notas-largura": 320,
-    "notas-altura": 120,
-    "conquistas-ultima-varredura": 0,
-    "conquistas-ultima-conta-steam": "",
-}
-
-
-class FakeSchema:
-    """Dict-backed stand-in for ``Gio.Settings``.
-
-    Typed getters are kept separate (rather than one ``get``) so a test that
-    asks for the wrong type fails here instead of somewhere downstream.
-    """
-
-    def __init__(self, values: dict) -> None:
-        self._values = dict(values)
-        self.handlers: list[tuple[str, object]] = []
-
-    def list_keys(self) -> list[str]:
-        return list(self._values)
-
-    def get_boolean(self, key: str) -> bool:
-        return bool(self._values[key])
-
-    def get_int(self, key: str) -> int:
-        return int(self._values[key])
-
-    def get_uint(self, key: str) -> int:
-        return int(self._values[key])
-
-    def get_int64(self, key: str) -> int:
-        return int(self._values[key])
-
-    def get_string(self, key: str) -> str:
-        return str(self._values[key])
-
-    def set_boolean(self, key: str, value: bool) -> None:
-        self._values[key] = bool(value)
-
-    def set_int(self, key: str, value: int) -> None:
-        self._values[key] = int(value)
-
-    def set_int64(self, key: str, value: int) -> None:
-        self._values[key] = int(value)
-
-    def set_string(self, key: str, value: str) -> None:
-        self._values[key] = str(value)
-
-    def __setitem__(self, key: str, value) -> None:
-        self._values[key] = value
-
-    def connect(self, signal: str, callback) -> int:
-        self.handlers.append((signal, callback))
-        return len(self.handlers)
-
-    def bind(self, *_args, **_kwargs) -> None:
-        return None
-
-    def handler_is_connected(self, _handler_id) -> bool:
-        return True
-
-    def disconnect(self, _handler_id) -> None:
-        return None
-
-
 class FakeToastQueue:
     def __init__(self) -> None:
         self.added: list = []
@@ -391,13 +265,11 @@ class FakeWindow:
 
 
 from cartridges import shared  # noqa: E402
+from cartridges.configuracoes import Configuracoes  # noqa: E402
 
 AppState = shared.AppState
 
-# Ainda sem equivalente real: `schema` e `state_schema` (preferências no registro) chegam na
-# Task 3; até lá os testes usam o duplo em dicionário. `import_time` fixo, como antes.
-shared.schema = FakeSchema(_SCHEMA_DEFAULTS)
-shared.state_schema = FakeSchema(_STATE_DEFAULTS)
+# `import_time` fixo, como antes.
 shared.import_time = 1_700_000_000
 
 
@@ -479,18 +351,26 @@ def app_dirs(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def schema(monkeypatch):
-    """A schema reset to the shipped defaults for each test."""
-    fake = FakeSchema(_SCHEMA_DEFAULTS)
-    monkeypatch.setattr(shared, "schema", fake, raising=False)
-    return fake
+def chave_do_registro(monkeypatch):
+    """Uma subchave de registro nova por teste, dentro da da sessão (apagada no fim dela)."""
+    chave = _REGISTRO_DA_SESSAO + "\\" + uuid.uuid4().hex
+    monkeypatch.setattr(shared, "chave_do_registro", chave, raising=False)
+    return chave
 
 
 @pytest.fixture(autouse=True)
-def state_schema(monkeypatch):
-    fake = FakeSchema(_STATE_DEFAULTS)
-    monkeypatch.setattr(shared, "state_schema", fake, raising=False)
-    return fake
+def schema(monkeypatch, chave_do_registro):
+    """Preferências nos padrões do gschema, numa subchave temporária própria do teste."""
+    real = Configuracoes(chave_do_registro, "@APP_ID@")
+    monkeypatch.setattr(shared, "schema", real, raising=False)
+    return real
+
+
+@pytest.fixture(autouse=True)
+def state_schema(monkeypatch, chave_do_registro):
+    real = Configuracoes(chave_do_registro + r"\State", "@APP_ID@.State")
+    monkeypatch.setattr(shared, "state_schema", real, raising=False)
+    return real
 
 
 @pytest.fixture(autouse=True)
