@@ -83,15 +83,30 @@ class ModeloDaBiblioteca(QAbstractListModel):
         # Por id, e não pela chave: o nome pode ter mudado desde que a linha entrou.
         return next((i for i, linha in enumerate(self._linhas) if linha.jogo_id == jogo_id), -1)
 
+    @Slot(str)
+    def retirar(self, game_id: str) -> None:
+        """Tira o jogo da grade. Só na thread principal."""
+        if (i := self._linha_de(game_id)) >= 0:
+            self.beginRemoveRows(QModelIndex(), i, i)
+            del self._linhas[i]
+            self.endRemoveRows()
+        self._jogos.pop(game_id, None)
+
+    @Slot(str, str)
+    def trocar_id(self, antigo: str, novo: str) -> None:  # noqa: ARG002
+        """Um jogo adotado mudou de id: sai a linha do antigo; a do novo entra pelo `atualizar` normal."""
+        self.retirar(antigo)
+
+    def ligar_store(self, store: Any) -> None:
+        """Os dois sinais saem de threads do importador: a conexão enfileirada leva à principal."""
+        store.jogo_excluido.connect(self.retirar, Qt.ConnectionType.QueuedConnection)
+        store.capa_trocou_de_id.connect(self.trocar_id, Qt.ConnectionType.QueuedConnection)
+
     def atualizar(self, jogo: Jogo) -> None:
         """Insere, atualiza ou tira o jogo da grade. Só na thread principal."""
         antiga = self._linha_de(jogo.game_id)
         if jogo.removed or jogo.blacklisted:
-            if antiga >= 0:
-                self.beginRemoveRows(QModelIndex(), antiga, antiga)
-                del self._linhas[antiga]
-                self.endRemoveRows()
-            self._jogos.pop(jogo.game_id, None)
+            self.retirar(jogo.game_id)
             return
 
         capa = jogo.get_cover_path()

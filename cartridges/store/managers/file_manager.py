@@ -41,6 +41,7 @@ class FileManager(AsyncManager):
     # would show it as permanently missing.
     run_after = (SteamAPIManager, HLTBManager)
     signals = {"salvar"}
+    executor = "gravacao"
 
     def main(self, game: Jogo, additional_data: dict) -> None:
         if additional_data.get("skip_save"):  # Skip saving when loading games from disk

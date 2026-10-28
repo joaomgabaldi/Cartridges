@@ -2,13 +2,17 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import threading
+import time
 import uuid
 import winreg
 
 import pytest
+from PySide6.QtCore import QEventLoop, QTimer
 
 from cartridges import shared
 from cartridges.configuracoes import Configuracoes
+from cartridges.utils.thread_principal import eh_thread_principal
 
 
 @pytest.fixture
@@ -165,3 +169,17 @@ def test_le_o_registro_gravado_pela_versao_gtk(conf, estado, subchave):
 
 def test_padrao_de_int_negativo_do_esquema(estado):
     assert estado.get_int("x") == -2147483648
+
+
+def test_changed_de_outra_thread_chega_na_principal(conf, app_qt):
+    vistos = []
+    conf.connect("changed", lambda c, k: vistos.append(eh_thread_principal()))
+    thread = threading.Thread(target=conf.set_boolean, args=("auto-import", True))
+    thread.start()
+    thread.join()
+    fim = time.monotonic() + 5
+    while not vistos and time.monotonic() < fim:
+        laco = QEventLoop()
+        QTimer.singleShot(10, laco.quit)
+        laco.exec()
+    assert vistos == [True]

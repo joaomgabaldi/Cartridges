@@ -80,7 +80,7 @@ def test_a_grade_cria_um_cartao_por_jogo(app_qt):
 
 
 def test_dialogo_de_confirmacao_usa_o_texto_aprovado(app_qt):
-    from cartridges.app import Ponte  # noqa: PLC0415
+    from cartridges.ponte import Ponte  # noqa: PLC0415
 
     ponte = Ponte()
     pedidos = []
@@ -103,7 +103,7 @@ def test_dialogo_de_confirmacao_usa_o_texto_aprovado(app_qt):
 
 
 def test_aviso_chega_como_texto(app_qt):
-    from cartridges.app import Ponte  # noqa: PLC0415
+    from cartridges.ponte import Ponte  # noqa: PLC0415
 
     ponte = Ponte()
     avisos = []

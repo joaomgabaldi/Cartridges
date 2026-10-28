@@ -129,15 +129,12 @@ def test_excecao_na_tarefa_e_registrada_e_callback_chega(app_qt, caplog):
     assert "Erro inesperado" in caplog.text
 
 
-def test_encerrar_descarta_sem_quebrar_quem_chama(app_qt):
+def test_encerrar_descarta_sem_quebrar_quem_chama(app_qt, monkeypatch):
     from cartridges.store.managers import async_manager  # noqa: PLC0415
 
+    monkeypatch.setattr(async_manager, "_rede", async_manager._PoolDaemon(1, "teste"))  # noqa: SLF001
+    monkeypatch.setattr(async_manager, "_gravacao", async_manager.ThreadPoolExecutor(max_workers=1))
     async_manager.encerrar()
-    try:
-        entregas = []
-        _Gerente().process_game("a", {}, entregas.append)  # não levanta
-        assert entregas == []
-    finally:
-        async_manager._executor = async_manager.ThreadPoolExecutor(  # noqa: SLF001
-            thread_name_prefix="manager"
-        )
+    entregas = []
+    _Gerente().process_game("a", {}, entregas.append)  # não levanta
+    assert entregas == []

@@ -137,3 +137,29 @@ def test_grade_carrega_no_qml(app_qt):
     componente = QQmlComponent(motor, QUrl.fromLocalFile(str(qml / "Grade.qml")))
     objeto = componente.createWithInitialProperties({"biblioteca": modelo})
     assert objeto is not None, componente.errorString()
+
+
+def test_jogo_excluido_sai_da_grade(app_qt, store):
+    modelo = ModeloDaBiblioteca()
+    modelo.ligar_store(store)
+    modelo.atualizar(_jogo("a", "A"))
+    modelo.atualizar(_jogo("b", "B"))
+    vistos = []
+    modelo.rowsRemoved.connect(lambda *_: vistos.append(eh_thread_principal()))
+    thread = threading.Thread(target=store.jogo_excluido.emit, args=("a",))
+    thread.start()
+    thread.join()
+    assert _nomes(modelo) == ["A", "B"]  # enfileirado, não síncrono
+    assert _rodar_ate(lambda: vistos)
+    assert vistos == [True]
+    assert _nomes(modelo) == ["B"]
+
+
+def test_troca_de_id_tira_o_antigo(app_qt, store):
+    modelo = ModeloDaBiblioteca()
+    modelo.ligar_store(store)
+    modelo.atualizar(_jogo("a", "A"))
+    store.capa_trocou_de_id.emit("a", "b")
+    assert _rodar_ate(lambda: modelo.rowCount() == 0)
+    assert modelo.rowCount() == 0
+    assert "a" not in modelo._jogos  # noqa: SLF001

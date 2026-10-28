@@ -17,6 +17,9 @@ from collections.abc import Callable
 from functools import cache
 from pathlib import Path
 
+from PySide6.QtCore import QCoreApplication
+
+from cartridges.utils.thread_principal import eh_thread_principal, na_thread_principal
 
 # `cartridges` é um pacote sem `__init__` (sem `__file__`): parte deste arquivo.
 _GSCHEMA = (
@@ -114,7 +117,11 @@ class Configuracoes:
             return
         for sinal, callback in list(self._ligacoes.values()):
             if sinal in ("changed", f"changed::{chave}"):
-                callback(self, chave)
+                # O callback mexe na tela: sempre na thread principal.
+                if eh_thread_principal() or QCoreApplication.instance() is None:
+                    callback(self, chave)
+                else:
+                    na_thread_principal(callback, self, chave)
 
     def get_boolean(self, chave: str) -> bool:
         return self._ler(chave, "b")
