@@ -29,3 +29,6 @@ cartridges/instalacao.json
 # QWindowKit: dependencias baixadas e a DLL compilada
 /build-aux/windows/qwk/_deps/
 /cartridges/janela/*.dll
+
+# Pastas de teste manual (atalhos de mentira)
+/_dev/

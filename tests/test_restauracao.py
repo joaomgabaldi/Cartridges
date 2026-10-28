@@ -121,21 +121,24 @@ def test_resolver_pendencias_so_depois_de_varrer_os_atalhos(store, make_game):
     assert restauracao.existe() is False
 
 
-def test_biblioteca_esconde_pendente(real_window, store):
-    from cartridges.game import Game  # noqa: PLC0415
+def test_biblioteca_esconde_pendente(app_qt):
+    from cartridges.jogo import Jogo  # noqa: PLC0415
+    from cartridges.modelos.biblioteca import ModeloDaBiblioteca  # noqa: PLC0415
 
-    jogos = {}
-    for game_id in ("pendente", "normal"):
-        jogo = Game(
-            {"source": "shortcuts", "game_id": game_id, "name": game_id,
-             "executable": "x", "added": 0}
-        )
-        real_window.library.append(jogo)
-        jogos[game_id] = jogo
+    modelo = ModeloDaBiblioteca()
     restauracao.gravar(["pendente"], 1)
+    jogos = {
+        game_id: Jogo({"source": "shortcuts", "game_id": game_id, "name": game_id, "executable": "x", "added": 0})
+        for game_id in ("pendente", "normal")
+    }
+    for jogo in jogos.values():
+        modelo.atualizar(jogo)
+    assert [linha.jogo_id for linha in modelo.linhas()] == ["normal"]
 
-    assert real_window.filter_func(jogos["pendente"].get_parent()) is False
-    assert real_window.filter_func(jogos["normal"].get_parent()) is True
+    # Resolvida a pendência, o jogo volta à grade quando passa de novo pelo modelo.
+    restauracao.gravar([], 1)
+    modelo.atualizar(jogos["pendente"])
+    assert sorted(linha.jogo_id for linha in modelo.linhas()) == ["normal", "pendente"]
 
 
 # --------------------------------------------------------------------------
@@ -344,12 +347,15 @@ def test_excluir_pendente_apaga_de_vez(store, make_game, retirados):
 
 
 def test_importacao_da_restauracao_varre_atalhos_mesmo_com_a_fonte_desligada(schema, monkeypatch):
-    from cartridges import main as main_module  # noqa: PLC0415
+    from cartridges import aplicativo as aplicativo_module  # noqa: PLC0415
 
     fontes = []
 
     class ImporterFalso:
         ao_terminar = None
+
+        def __init__(self, _aplicativo):
+            pass
 
         def add_source(self, fonte):
             fontes.append(type(fonte).__name__)
@@ -357,14 +363,14 @@ def test_importacao_da_restauracao_varre_atalhos_mesmo_com_a_fonte_desligada(sch
         def run(self):
             pass
 
-    monkeypatch.setattr(main_module, "Importer", ImporterFalso)
+    monkeypatch.setattr(aplicativo_module, "Importer", ImporterFalso)
     schema["shortcuts"] = False
-    app = main_module.CartridgesApplication.__new__(main_module.CartridgesApplication)
+    app = aplicativo_module.Aplicativo()
 
-    main_module.CartridgesApplication.on_import_action(app)
+    app.importar()
     assert fontes == []
 
-    main_module.CartridgesApplication.on_import_action(app, varrer_atalhos=True)
+    app.importar(varrer_atalhos=True)
     assert fontes == ["ShortcutsSource"]
 
 

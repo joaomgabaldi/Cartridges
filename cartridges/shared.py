@@ -169,6 +169,8 @@ details_size = (420, 630)
 
 # pylint: disable=invalid-name
 win = None
+# O `Aplicativo` do app Qt (importando, avisos); None nos testes que não o criam.
+aplicativo = None
 importer = None
 import_time = None
 store = None

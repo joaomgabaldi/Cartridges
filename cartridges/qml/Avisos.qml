@@ -5,9 +5,12 @@ import QtQuick
 Item {
     id: camada
 
-    // Ponte e FilaDeAvisos (cartridges/app.py)
+    // Ponte, FilaDeAvisos e Aplicativo (cartridges/app.py)
     property QtObject ponte
     property QtObject fila
+    property QtObject app
+    // Com uma confirmação na tela, a janela não aceita atalhos arrastados.
+    readonly property bool dialogoAberto: confirmacao.visible || dialogoDeErros.visible
 
     Connections {
         target: camada.ponte
@@ -16,6 +19,11 @@ Item {
             corpoDaConfirmacao.text = corpo
             confirmacao.visible = true
         }
+    }
+
+    Connections {
+        target: camada.app
+        function onDialogoPedido(titulo, corpo, itens) { dialogoDeErros.abrir(titulo, corpo, itens) }
     }
 
     Rectangle {
@@ -142,5 +150,11 @@ Item {
                 }
             }
         }
+    }
+
+    DialogoDeAviso {
+        id: dialogoDeErros
+        objectName: "dialogoDeErros"
+        onDispensado: camada.app.dialogoFechado()
     }
 }

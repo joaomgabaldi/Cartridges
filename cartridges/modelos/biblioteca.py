@@ -33,25 +33,15 @@ from cartridges import shared
 from cartridges.jogo import STATUS_LABELS, Jogo
 from cartridges.modelos import ordem
 from cartridges.modelos.ordem import Linha
+from cartridges.utils import restauracao
 
 # Como em `configuracoes.py`: `cartridges` não tem `__init__`, a partir deste arquivo.
 _PLACEHOLDER = Path(__file__).resolve().parent.parent.parent / "data" / "library_placeholder.svg"
 
-_restauracao: Any = None
-
 
 def _pendente(game_id: str) -> bool:
     """Jogo restaurado cujo atalho não foi achado: só existe na janela de pendências."""
-    global _restauracao  # noqa: PLW0603
-    if _restauracao is None:
-        try:
-            from cartridges.utils import restauracao  # noqa: PLC0415
-        except ImportError:
-            # shortcut: sem pendências enquanto utils/restauracao ainda importa o gi; sai na Task 6.
-            _restauracao = False
-        else:
-            _restauracao = restauracao
-    return bool(_restauracao) and _restauracao.e_pendente(game_id)
+    return restauracao.e_pendente(game_id)
 
 
 def _paginas_de(linha: Linha) -> tuple[str, ...]:

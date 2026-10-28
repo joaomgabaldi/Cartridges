@@ -29,7 +29,7 @@ Principal {
             MenuDoTema {
                 id: menuDeAdicionar
                 y: janela.baseDaBarra(parent)
-                ItemDoMenu { text: "Importar"; onTriggered: aplicativo.importar() }
+                ItemDoMenu { text: "Importar"; enabled: !aplicativo.importando; onTriggered: aplicativo.importar() }
             }
         },
         BotaoDaBarra {
@@ -104,9 +104,50 @@ Principal {
     }
 
     Avisos {
+        id: camadaDeAvisos
+        objectName: "camadaDeAvisos"
         anchors.fill: parent
         ponte: janela.ligacao
         fila: aplicativo.avisos
+        app: aplicativo
+    }
+
+    // Atalhos arrastados do Explorer: só com a janela livre de diálogos.
+    DropArea {
+        id: alvoDeSoltar
+        objectName: "alvoDeSoltar"
+        anchors.fill: parent
+        enabled: !camadaDeAvisos.dialogoAberto
+        onEntered: (arrasto) => arrasto.accepted = arrasto.hasUrls
+        onDropped: (soltou) => {
+            if (soltou.hasUrls) aplicativo.soltar(soltou.urls)
+        }
+    }
+
+    Rectangle {
+        id: avisoDeSoltar
+        objectName: "avisoDeSoltar"
+        anchors.fill: parent
+        color: "#99000000"
+        opacity: alvoDeSoltar.containsDrag ? 1 : 0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: 150 } }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(420, avisoDeSoltar.width - 48)
+            height: 140
+            radius: 12
+            color: Tema.fundo
+            border { color: Tema.destaque; width: 2 }
+            Text {
+                anchors.centerIn: parent
+                text: "Solte aqui para importar"
+                textFormat: Text.PlainText
+                color: Tema.texto
+                font { family: Tema.fonte; pixelSize: 20; weight: Font.DemiBold }
+            }
+        }
     }
 
     Connections {

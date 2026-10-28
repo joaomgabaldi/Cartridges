@@ -153,6 +153,10 @@ class Configuracoes:
     def set_string(self, chave: str, valor: str) -> None:
         self._gravar(chave, "s", valor)
 
+    def __setitem__(self, chave: str, valor: bool | int | str) -> None:
+        """``schema[chave] = valor``, como no ``Gio.Settings`` do PyGObject: o tipo é o da chave."""
+        self._gravar(chave, self._definicao(chave)[0], valor)
+
     def reset(self, chave: str) -> None:
         self._definicao(chave)
         antes = self._ler(chave)

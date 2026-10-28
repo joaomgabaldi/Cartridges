@@ -73,10 +73,7 @@ class PassadaAgendada:
 
     @staticmethod
     def _importando() -> bool:
-        # shortcut: lê o estado da janela (duplo nos testes); a importação do plano 2 passa a
-        # marcá-lo no Aplicativo, e este teste muda junto com ela.
-        app = shared.win.get_application() if shared.win is not None else None
-        return app is not None and app.state == shared.AppState.IMPORT
+        return shared.aplicativo is not None and shared.aplicativo.importando
 
     def _on_timer(self, armacao: int) -> None:
         if self._stopped or armacao != self._armacao:

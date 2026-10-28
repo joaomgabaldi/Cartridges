@@ -15,7 +15,7 @@ builtins._ = lambda message: message  # type: ignore[attr-defined]
 builtins.ngettext = lambda singular, plural, n: singular if n == 1 else plural  # type: ignore[attr-defined]
 
 # pylint: disable=wrong-import-position
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -34,6 +34,7 @@ from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.store.store import Store
+from cartridges.utils import restauracao
 from cartridges.utils.hltb_backfill import HLTBBackfill
 
 _RAIZ = Path(__file__).resolve().parent
@@ -119,4 +120,9 @@ def main(argv: list[str]) -> int:
     if not motor.rootObjects():
         return 1
     varredura_hltb.start()
+    shared.aplicativo = aplicativo
+    # Depois de a janela aparecer. Com restauração pendente a importação é outra (plano 8).
+    # shortcut: sem `continuar_restauracao`, a abertura com restauração pendente não importa; entra no plano 8.
+    if not restauracao.existe() and shared.schema.get_boolean("auto-import"):
+        QTimer.singleShot(0, lambda: aplicativo.importar(silenciosa=True))
     return app.exec()

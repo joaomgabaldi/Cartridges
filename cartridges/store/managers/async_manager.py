@@ -73,6 +73,11 @@ _rede = _PoolDaemon(min(32, (os.cpu_count() or 1) + 4), "rede")
 _gravacao = ThreadPoolExecutor(max_workers=4, thread_name_prefix="gravacao")
 
 
+def rodar_na_rede(funcao: Callable[..., Any], *args: Any) -> None:
+    """Roda `funcao` numa thread daemon do pool de rede (a importação roda as fontes aqui)."""
+    _rede.submit(funcao, *args)
+
+
 def encerrar() -> None:
     """Fim do app: descarta a fila de rede e espera a de gravação terminar."""
     _rede.encerrar()

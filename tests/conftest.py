@@ -124,7 +124,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_fita_wizard.py",
     "test_game_logo.py",
     "test_hwnd_ordem_import.py",
-    "test_importer.py",
     "test_install_size.py",
     "test_janela_por_cima.py",
     "test_janela_restaurando.py",
@@ -140,7 +139,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_process_session.py",
     "test_redefinir.py",
     "test_reinicio.py",
-    "test_restauracao.py",
     "test_restauracao_dialogs.py",
     "test_saves_backup.py",
     "test_saves_conferencia.py",
@@ -153,8 +151,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_session_log.py",
     "test_session_monitors.py",
     "test_session_wallpaper.py",
-    "test_shortcuts_source.py",
-    "test_soltar_atalhos.py",
     "test_store_ligacao_manual.py",
     "test_tarefas_trabalhos.py",
     "test_tarefas_ui.py",
@@ -264,6 +260,12 @@ AppState = shared.AppState
 
 # `import_time` fixo, como antes.
 shared.import_time = 1_700_000_000
+
+
+@pytest.fixture(autouse=True)
+def import_time_fixo(monkeypatch):
+    """Um `Importer` grava `shared.import_time` com a hora de agora; o teste seguinte não pode herdá-la."""
+    monkeypatch.setattr(shared, "import_time", 1_700_000_000, raising=False)
 
 
 # O `ludusavi.exe` desta máquina nunca roda nos testes. O corte é na sessão toda, e não num
