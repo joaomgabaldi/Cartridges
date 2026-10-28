@@ -2,94 +2,183 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Test harness for the parts of Cartridges that need the app's own runtime.
+r"""Harness de testes do Cartridges (PySide6 + QML).
 
-The suite runs on a hidden Windows desktop (no window shows up on the user's
-screen); set ``CARTRIDGES_TESTES_NA_TELA=1`` to see the windows while debugging.
-
-Runs against the **real** GTK stack from MSYS2 (``C:\\msys64\\ucrt64``), not a
-stub. That was a choice between two costs: a stub of ``gi`` runs anywhere and is
-fast, but it has to reimplement GObject signals, ``Gtk.Template`` and the GLib
-main loop well enough that a test failure means something — and everything the
-stub gets subtly wrong turns into a test that passes while the app breaks. The
-real stack is already installed here (it is what the app runs on), so the stub
-would be inventing a second, worse copy of something we have.
-
-Two things still have to be faked, and both for the same reason: they are
-generated at build time and would otherwise point at the user's real data.
-
-* ``cartridges.shared`` is produced by meson from ``shared.py.in`` and does not
-  exist in the source tree. It is synthesised here instead of being read from
-  ``_build``, because the real one calls ``Gio.Settings.new`` (which aborts the
-  process when the schema is not installed) and resolves ``games_dir`` to the
-  live library. A test that deletes a game must never be able to delete a real
-  one.
-* ``shared.win`` is the application window. Only the two mappings the store
-  touches are provided; anything else is a test reaching further than it should.
-
-The gresource has to be registered before ``cartridges.game`` is imported —
-its ``Gtk.Template`` reads the .ui out of it at class-creation time.
+Nenhum teste lê ou grava os dados reais do usuário: a fixture ``dados_temporarios``
+aponta ``CARTRIDGES_DADOS`` para uma pasta temporária e ``CARTRIDGES_REGISTRO`` para
+uma subchave temporária de ``HKCU\Software\CartridgesTestes``.
 """
 
 import builtins
 import json
+import os
 import shutil
-import subprocess
 import sys
+import tempfile
 import threading
 import types
+import uuid
+import winreg
 import winsound
 from enum import IntEnum, auto
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-# Before anything imports GTK/Gdk: afterwards the thread has windows and the
-# desktop switch is refused.
-from tests import area_de_trabalho_oculta  # noqa: E402
+_RAIZ_REGISTRO = r"Software\CartridgesTestes"
+# Referências guardadas na importação: um teste que troca `winreg.OpenKey` ainda
+# está com o monkeypatch ativo quando a limpeza abaixo roda.
+_abrir_chave, _enum_chave, _apagar = winreg.OpenKey, winreg.EnumKey, winreg.DeleteKey
 
-area_de_trabalho_oculta.entrar()
 
-# The UI is hardcoded in pt-BR and `cartridges.in` installs these as builtins;
-# module bodies call `_()` at class-definition time, so they must exist first.
+def _apagar_chave(raiz: int, caminho: str) -> None:
+    try:
+        with _abrir_chave(raiz, caminho, 0, winreg.KEY_ALL_ACCESS) as chave:
+            while True:
+                try:
+                    filha = _enum_chave(chave, 0)
+                except OSError:
+                    break
+                _apagar_chave(raiz, f"{caminho}\\{filha}")
+    except FileNotFoundError:
+        return
+    _apagar(raiz, caminho)
+
+
+# Antes de qualquer `import cartridges`: o `shared` real calcula os caminhos ao ser importado,
+# e sem isso cairia nos dados reais do usuário. Cada teste ganha a sua própria pasta e subchave
+# (`dados_temporarios`); estas valem para o que roda na importação e entre testes.
+_DADOS_DA_SESSAO = tempfile.mkdtemp(prefix="cartridges-testes-")
+_REGISTRO_DA_SESSAO = f"{_RAIZ_REGISTRO}\\sessao-{uuid.uuid4()}"
+os.environ["CARTRIDGES_DADOS"] = _DADOS_DA_SESSAO
+os.environ["CARTRIDGES_REGISTRO"] = _REGISTRO_DA_SESSAO
+
+
+def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
+    _apagar_chave(winreg.HKEY_CURRENT_USER, _REGISTRO_DA_SESSAO)
+    shutil.rmtree(_DADOS_DA_SESSAO, ignore_errors=True)
+
+
+# Testes que ainda dependem do `gi` (direta ou indiretamente), em ordem alfabética.
+# Cada plano que porta o módulo tira o teste daqui; a fase final exige a lista vazia.
+TESTES_AINDA_GTK: list[str] = [
+    "test_abertura.py",
+    "test_app_updater.py",
+    "test_area_de_trabalho_oculta.py",
+    "test_assistente.py",
+    "test_auditoria_0918_fitas.py",
+    "test_auditoria_0918_importadores.py",
+    "test_auditoria_0918_store.py",
+    "test_auditoria_0918_ui.py",
+    "test_auditoria_0923_ligacao.py",
+    "test_auditoria_0923_resto.py",
+    "test_auditoria_0923_sessoes.py",
+    "test_auditoria_0923_zerados.py",
+    "test_auditoria_1023_seguranca.py",
+    "test_backup.py",
+    "test_big_picture.py",
+    "test_big_picture_controle.py",
+    "test_botao_novidades.py",
+    "test_buscar_atualizacoes_ui.py",
+    "test_caixa_redimensionavel.py",
+    "test_calibracao_janela.py",
+    "test_conquista_aviso.py",
+    "test_conquistas_arquivos.py",
+    "test_conquistas_cache_de_leitura.py",
+    "test_conquistas_catalogo.py",
+    "test_conquistas_ciclo.py",
+    "test_conquistas_contas.py",
+    "test_conquistas_ea_api.py",
+    "test_conquistas_ea_conta.py",
+    "test_conquistas_ea_janela.py",
+    "test_conquistas_ea_loja.py",
+    "test_conquistas_edicao.py",
+    "test_conquistas_epic_api.py",
+    "test_conquistas_epic_conta.py",
+    "test_conquistas_epic_janela.py",
+    "test_conquistas_epic_vigia.py",
+    "test_conquistas_fontes.py",
+    "test_conquistas_formatos.py",
+    "test_conquistas_keyvalues.py",
+    "test_conquistas_preferencias.py",
+    "test_conquistas_progresso.py",
+    "test_conquistas_sessao.py",
+    "test_conquistas_ubisoft_locais.py",
+    "test_conquistas_ubisoft_loja.py",
+    "test_conquistas_ubisoft_pacote.py",
+    "test_conquistas_ubisoft_spool.py",
+    "test_conquistas_ubisoft_vigia.py",
+    "test_conquistas_ui.py",
+    "test_conquistas_varredura.py",
+    "test_conquistas_vigia.py",
+    "test_conquistas_xbox_api.py",
+    "test_conquistas_xbox_conta.py",
+    "test_conquistas_xbox_login.py",
+    "test_conquistas_xbox_vigia.py",
+    "test_copias_animadas.py",
+    "test_copias_animadas_boot.py",
+    "test_estilo_css.py",
+    "test_fita_wizard.py",
+    "test_game_logo.py",
+    "test_hwnd_ordem_import.py",
+    "test_importer.py",
+    "test_install_size.py",
+    "test_janela_por_cima.py",
+    "test_janela_restaurando.py",
+    "test_ler_json.py",
+    "test_log_engolidos.py",
+    "test_log_excecoes.py",
+    "test_menu_do_card.py",
+    "test_metadata_refresh.py",
+    "test_na_tela.py",
+    "test_opcoes_avancadas.py",
+    "test_pickers_selecao.py",
+    "test_preferencias_big_picture.py",
+    "test_process_session.py",
+    "test_redefinir.py",
+    "test_reinicio.py",
+    "test_restauracao.py",
+    "test_restauracao_dialogs.py",
+    "test_save_cover.py",
+    "test_saves_backup.py",
+    "test_saves_conferencia.py",
+    "test_saves_config.py",
+    "test_saves_ludusavi_real.py",
+    "test_saves_pasta.py",
+    "test_saves_ui.py",
+    "test_seletor_do_ludusavi.py",
+    "test_session_fita.py",
+    "test_session_log.py",
+    "test_session_monitors.py",
+    "test_session_wallpaper.py",
+    "test_shortcuts_source.py",
+    "test_soltar_atalhos.py",
+    "test_steam_genre.py",
+    "test_steamgriddb.py",
+    "test_store_adoption.py",
+    "test_store_index.py",
+    "test_store_ligacao_manual.py",
+    "test_tarefas.py",
+    "test_tarefas_trabalhos.py",
+    "test_tarefas_ui.py",
+    "test_tela_de_download.py",
+    "test_tocador_capas.py",
+    "test_ui_logic.py",
+    "test_zerados.py",
+    "test_zerados_manuais.py",
+]
+
+collect_ignore = TESTES_AINDA_GTK
+
+# Como em `cartridges.in`: o texto da interface passa por `_()` já na definição das classes.
 builtins._ = lambda message: message  # type: ignore[attr-defined]
 builtins.ngettext = (  # type: ignore[attr-defined]
     lambda singular, plural, n: singular if n == 1 else plural
 )
-
-import gi  # noqa: E402
-
-gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
-
-from gi.repository import Gio, GLib  # noqa: E402
-
-_GRESOURCE = ROOT / "_build" / "data" / "cartridges.gresource"
-if not _GRESOURCE.is_file():  # pragma: no cover - environment guard
-    raise RuntimeError(
-        f"{_GRESOURCE} is missing. Build once with `meson setup _build && "
-        "ninja -C _build` so the templates can be loaded."
-    )
-Gio.Resource.load(str(_GRESOURCE))._register()  # pylint: disable=protected-access
-
-# Both are needed before any template class is *instantiated*: the .ui files
-# name Adwaita types, and a GType that has not been registered yet makes
-# Gtk.Builder fail with "Invalid object type 'AdwClamp'" — which surfaces much
-# later as an attribute being None, not as the template error it really is.
-from gi.repository import Adw, Gtk  # noqa: E402
-
-Gtk.init()
-Adw.init()
-
-# O main.py carrega o GdkWin32 antes de qualquer janela existir: uma superfície
-# embrulhada antes dele ganha uma classe genérica, sem `get_handle`. Os testes
-# precisam da mesma ordem, senão o primeiro que realiza uma janela (ex.:
-# test_conquistas_ui) tira o HWND de todos os seguintes no processo.
-gi.require_version("GdkWin32", "4.0")
-from gi.repository import GdkWin32  # noqa: E402,F401  pylint: disable=unused-import
 
 
 # Defaults copied from data/io.github.joaomgabaldi.Cartridges.gschema.xml.in. Copied rather
@@ -446,18 +535,6 @@ def schema(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def com_3d(request, monkeypatch):
-    """As janelas falsas não têm renderizador: as Preferências veem 3D disponível.
-
-    ``tests/test_big_picture.py`` testa o ``tem_3d`` de verdade e fica de fora."""
-    if request.module.__name__.endswith("test_big_picture"):
-        return
-    from cartridges import big_picture  # noqa: PLC0415
-
-    monkeypatch.setattr(big_picture, "tem_3d", lambda _janela: True)
-
-
-@pytest.fixture(autouse=True)
 def state_schema(monkeypatch):
     fake = FakeSchema(_STATE_DEFAULTS)
     monkeypatch.setattr(shared, "state_schema", fake, raising=False)
@@ -472,34 +549,6 @@ def sem_som(monkeypatch):
     return tocados
 
 
-@pytest.fixture
-def settings(tmp_path, monkeypatch):
-    """GSettings de verdade, com backend em memória.
-
-    Instala em `shared.schema` e `shared.state_schema` os schemas compilados de
-    `_build/data` (com as chaves e os tipos reais), sobre um backend que não
-    toca no registro do usuário, e devolve o par `(principal, estado)`. Serve a
-    quem depende do tipo GVariant de cada chave — o `FakeSchema` não o tem.
-    """
-    schemas = tmp_path / "_schemas"
-    schemas.mkdir()
-    shutil.copy(ROOT / "_build" / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml", schemas)
-    # Fora do PATH, o do mesmo ucrt64/bin do Python que roda os testes.
-    compiler = shutil.which("glib-compile-schemas") or str(
-        Path(sys.executable).with_name("glib-compile-schemas.exe")
-    )
-    subprocess.run([compiler, str(schemas)], check=True)
-    source = Gio.SettingsSchemaSource.new_from_directory(str(schemas), None, False)
-    memory = Gio.memory_settings_backend_new()
-    main = Gio.Settings.new_full(source.lookup("io.github.joaomgabaldi.Cartridges", False), memory, None)
-    state = Gio.Settings.new_full(
-        source.lookup("io.github.joaomgabaldi.Cartridges.State", False), memory, None
-    )
-    monkeypatch.setattr(shared, "schema", main)
-    monkeypatch.setattr(shared, "state_schema", state)
-    return main, state
-
-
 @pytest.fixture(autouse=True)
 def win(monkeypatch):
     fake = FakeWindow()
@@ -511,7 +560,10 @@ def win(monkeypatch):
 def sem_steam_no_registro(monkeypatch):
     """A Steam desta máquina (se houver) não entra nos testes: quem precisa de
     uma Steam monta a sua em ``tmp_path``."""
-    from cartridges.conquistas import arquivos  # noqa: PLC0415
+    try:
+        from cartridges.conquistas import arquivos  # noqa: PLC0415
+    except ImportError:  # ainda depende do gi
+        return
 
     monkeypatch.setattr(arquivos, "_valor_do_registro", lambda *_a: None)
     monkeypatch.setattr(arquivos, "_inteiro_do_registro", lambda *_a: None)
@@ -521,7 +573,10 @@ def sem_steam_no_registro(monkeypatch):
 def sem_ubisoft_no_registro(monkeypatch):
     """Os jogos da Ubisoft instalados nesta máquina (se houver) não entram nos testes:
     quem precisa de instalações troca `locais._do_registro`."""
-    from cartridges.conquistas.ubisoft import locais  # noqa: PLC0415
+    try:
+        from cartridges.conquistas.ubisoft import locais  # noqa: PLC0415
+    except ImportError:  # ainda depende do gi
+        return
 
     monkeypatch.setattr(locais, "_do_registro", lambda: {})
 
@@ -530,7 +585,10 @@ def sem_ubisoft_no_registro(monkeypatch):
 def sem_ea_no_registro(monkeypatch):
     """Os jogos da EA instalados nesta máquina (se houver) não entram nos testes:
     quem precisa de instalações troca `ea.jogo.chaves_do_registro`."""
-    from cartridges.conquistas.ea import jogo  # noqa: PLC0415
+    try:
+        from cartridges.conquistas.ea import jogo  # noqa: PLC0415
+    except ImportError:  # ainda depende do gi
+        return
 
     monkeypatch.setattr(jogo, "chaves_do_registro", lambda: [])
 
@@ -543,7 +601,10 @@ def sem_ludusavi(request, monkeypatch):
     trocam `backup_de_saves.disponivel`."""
     if request.module.__name__.startswith("test_saves_"):
         return
-    from cartridges.saves import backup_de_saves  # noqa: PLC0415
+    try:
+        from cartridges.saves import backup_de_saves  # noqa: PLC0415
+    except ImportError:  # ainda depende do gi
+        return
 
     monkeypatch.setattr(backup_de_saves, "disponivel", lambda: False)
 
@@ -585,29 +646,6 @@ def sem_thread_de_backup_sobrando():
         == "cartridges.saves.backup_de_saves"
     ]
     assert not sobraram, f"threads de backup_de_saves ainda vivas depois do teste: {sobraram}"
-
-
-@pytest.fixture
-def flush_idle():
-    """Drain everything ``GLib.idle_add`` has queued.
-
-    The store defers work that touches widgets (re-keying ``game_covers``) to
-    the main loop. Under test there is no loop running, so the callbacks sit in
-    the default context until something iterates it — which is exactly what
-    lets a test assert that the work was deferred rather than done inline.
-    """
-
-    def drain(limit: int = 1000) -> int:
-        context = GLib.MainContext.default()
-        iterations = 0
-        while context.pending() and iterations < limit:
-            context.iteration(False)
-            iterations += 1
-        return iterations
-
-    yield drain
-    # Leftover sources would otherwise fire during an unrelated later test.
-    drain()
 
 
 class FakeGame:
@@ -716,33 +754,6 @@ def store():
 
 
 @pytest.fixture
-def real_window(store, monkeypatch):
-    """A genuine ``CartridgesWindow``, widgets and all.
-
-    Used where the thing under test *is* the widget wiring — which grid a
-    filter reads its search box from, for instance. Building it is cheap enough
-    (no display is presented, only realised) that faking it would cost more
-    fidelity than it saves.
-    """
-    from cartridges.window import CartridgesWindow  # noqa: PLC0415
-
-    instance = CartridgesWindow()
-    monkeypatch.setattr(shared, "win", instance, raising=False)
-    yield instance
-    # A janela nunca é destruída aqui; sem soltar o que ela ligou nos singletons
-    # (o quadro de tarefas, por exemplo), ela seguiria ouvindo os testes seguintes.
-    instance.detach_global_handlers()
-
-
-@pytest.fixture
-def details_dialog(win):
-    """A ``DetailsDialog`` for the Apply-button bookkeeping."""
-    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
-
-    return DetailsDialog()
-
-
-@pytest.fixture
 def write_record(app_dirs):
     """Write a game's JSON record the way ``FileManager`` would."""
 
@@ -768,104 +779,21 @@ def write_asset(app_dirs):
     return writer
 
 
-@pytest.fixture
-def sessao_sem_efeitos(monkeypatch):
-    """O bloqueador da janela de verdade, sem parede, fita nem controle."""
-    import cartridges.window as window_module  # noqa: PLC0415
-
-    vestidas = []
-    monkeypatch.setattr(window_module.session_fita, "comecar", vestidas.append)
-    monkeypatch.setattr(window_module.session_fita, "voltar", lambda: None)
-    monkeypatch.setattr(window_module.session_wallpaper, "comecar", lambda _g: None)
-    monkeypatch.setattr(window_module.session_wallpaper, "restaurar", lambda: None)
-    monkeypatch.setattr(
-        window_module.window_geometry, "restore_from_monitor", lambda _w: None
-    )
-    # O vigia de conquistas é global ao processo: um teste que mostra o
-    # bloqueador sem escondê-lo o deixaria vivo para o teste seguinte.
-    monkeypatch.setattr(window_module.sessao_conquistas, "comecar", lambda _g: None)
-    monkeypatch.setattr(window_module.sessao_conquistas, "parar", lambda: None)
-    return vestidas
-
-
 @pytest.fixture(autouse=True)
-def _quadro_de_tarefas_limpo():
-    """O quadro de tarefas é global ao processo: entregas que ficaram na fila e
-    tarefas que ninguém terminou passariam de um teste para o seguinte."""
-    yield
-    from cartridges.utils import tarefas  # noqa: PLC0415
-
-    contexto = GLib.MainContext.default()
-    for _ in range(1000):
-        if not contexto.pending():
-            break
-        contexto.iteration(False)
-    tarefas.lista.remove_all()
+def dados_temporarios(tmp_path, monkeypatch):
+    """Pasta e subchave de registro próprias de cada teste (as da sessão ficam no topo do arquivo)."""
+    registro = f"{_RAIZ_REGISTRO}\\{uuid.uuid4()}"
+    monkeypatch.setenv("CARTRIDGES_DADOS", str(tmp_path))
+    monkeypatch.setenv("CARTRIDGES_REGISTRO", registro)
+    yield tmp_path
+    _apagar_chave(winreg.HKEY_CURRENT_USER, registro)
 
 
-@pytest.fixture
-def capas_falsas(monkeypatch):
-    """O tocador e a fila das cópias animadas, falsos, para testar o GameCover.
+@pytest.fixture(scope="session", autouse=True)
+def app_qt():
+    """Uma única `QGuiApplication` para a sessão toda, sem janela na tela."""
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PySide6.QtGui import QGuiApplication  # noqa: PLC0415
 
-    O tocador de verdade sobe uma thread que vive até o fim do processo, e a
-    fila gera cópias em segundo plano. Aqui o tocador só anota o que pediram e
-    ``pedir`` guarda os pedidos, com o ``pronto`` de cada um para o teste
-    chamar quando quiser.
-    """
-    from cartridges.utils import copias_animadas, tocador_capas  # noqa: PLC0415
-
-    class TocadorFalso:
-        def __init__(self):
-            self.tocados = []
-            self.parados = []
-            self.posicao = 0
-
-        def tocar(
-            self,
-            dono,
-            copia,
-            ao_quadro,
-            ao_falhar,
-            posicao_inicial_ms=0,
-            ao_fechar=None,
-        ):
-            self.tocados.append(
-                types.SimpleNamespace(
-                    dono=dono,
-                    copia=copia,
-                    ao_quadro=ao_quadro,
-                    ao_falhar=ao_falhar,
-                    inicio=posicao_inicial_ms,
-                    ao_fechar=ao_fechar,
-                )
-            )
-
-        def parar(self, dono):
-            self.parados.append(dono)
-
-        def posicao_ms(self, _dono):
-            return self.posicao
-
-        def esquecer(self, _copia):
-            pass
-
-        def suspender(self, suspenso):
-            self.suspenso = suspenso
-
-    tocador = TocadorFalso()
-    pedidos = []
-    abandonadas = []
-    monkeypatch.setattr(tocador_capas, "tocador", tocador)
-    monkeypatch.setattr(copias_animadas, "abandonar", abandonadas.append)
-    monkeypatch.setattr(
-        copias_animadas,
-        "pedir",
-        lambda origem, destino, tamanho, pronto: pedidos.append(
-            types.SimpleNamespace(
-                origem=origem, destino=destino, tamanho=tamanho, pronto=pronto
-            )
-        ),
-    )
-    return types.SimpleNamespace(
-        tocador=tocador, pedidos=pedidos, abandonadas=abandonadas
-    )
+    app = QGuiApplication.instance() or QGuiApplication([])
+    yield app

@@ -18,3 +18,7 @@ __pycache__/
 /CLAUDE.md
 /CONTEXT.md
 /RESTAURAR.md
+
+# Ambiente de desenvolvimento Qt
+/.venv/
+/capturas/
