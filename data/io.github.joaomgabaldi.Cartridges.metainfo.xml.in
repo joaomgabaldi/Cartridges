@@ -28,12 +28,18 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2026.10.28" date="2026-10-28">
+      <description translate="no">
+        <ul>
+          <li>Foi realizada uma correção de segurança.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.10.26" date="2026-10-26">
       <description translate="no">
         <ul>
           <li>Agora é possível arrastar atalhos de jogos para a janela do aplicativo para importá-los.</li>
           <li>Um jogo adicionado manualmente passa a ser reconhecido quando o atalho dele é colocado na pasta de atalhos, sem duplicar o jogo na biblioteca.</li>
-          <li>Foi realizada uma correção de segurança.</li>
         </ul>
       </description>
     </release>
