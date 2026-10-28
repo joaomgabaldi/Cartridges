@@ -33,6 +33,7 @@
         <ul>
           <li>Agora é possível arrastar atalhos de jogos para a janela do aplicativo para importá-los.</li>
           <li>Um jogo adicionado manualmente passa a ser reconhecido quando o atalho dele é colocado na pasta de atalhos, sem duplicar o jogo na biblioteca.</li>
+          <li>Foi realizada uma correção de segurança.</li>
         </ul>
       </description>
     </release>
