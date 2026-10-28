@@ -434,6 +434,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
             halign=Gtk.Align.CENTER,
             valign=Gtk.Align.CENTER,
             width_request=420,
+            can_target=False,
         )
         moldura.add_css_class("moldura-de-soltar")
         moldura.append(Gtk.Image(icon_name="folder-download-symbolic", pixel_size=40))
@@ -580,6 +581,11 @@ class CartridgesWindow(Adw.ApplicationWindow):
     def _fade_do_aviso_de_soltar(self, mostrar: bool) -> None:
         # Parte da opacidade atual: entrar e sair seguidos não pisca.
         self._fade_de_soltar.pause()
+        # Enquanto aparece, o aviso fica com o mouse: sem ele, cada borda entre
+        # capas por baixo é uma troca de widget, e no Windows o GTK responde
+        # "recusado" ao sistema nesse instante (gdk_win32_drop_status zera as
+        # ações do drop). Soltar parado numa dessas bordas não importava.
+        self.aviso_de_soltar.set_can_target(mostrar)
         self.aviso_de_soltar.set_visible(True)
         self._fade_de_soltar.set_value_from(self.aviso_de_soltar.get_opacity())
         self._fade_de_soltar.set_value_to(1 if mostrar else 0)
