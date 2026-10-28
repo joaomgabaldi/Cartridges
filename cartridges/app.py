@@ -18,8 +18,10 @@ builtins.ngettext = lambda singular, plural, n: singular if n == 1 else plural  
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuickControls2 import QQuickStyle
 
 from cartridges import shared
+from cartridges.aplicativo import Aplicativo
 from cartridges.carga import carregar_jogos_do_disco
 from cartridges.logging.session_file_handler import SessionFileHandler
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
@@ -67,6 +69,7 @@ def main(argv: list[str]) -> int:
     modelo = ModeloDaBiblioteca()
     filtros = FiltrosDaBiblioteca(modelo)
     pagina_biblioteca = FiltroDaPagina(modelo, filtros, "biblioteca")
+    pagina_zerados = FiltroDaPagina(modelo, filtros, "zerados")
     shared.store = Store()
     shared.store.add_manager(FileManager(), False)
     ponte = Ponte()
@@ -82,10 +85,17 @@ def main(argv: list[str]) -> int:
 
     from cartridges.janela import qwk  # noqa: PLC0415
 
+    # Controls no estilo Basic, redesenhado pelo Tema.qml (D38); antes de criar o motor.
+    QQuickStyle.setStyle("Basic")
     motor = QQmlApplicationEngine()
     qwk.registrar(motor)
-    motor.rootContext().setContextProperty("biblioteca", pagina_biblioteca)
-    motor.rootContext().setContextProperty("ponte", ponte)
+    aplicativo = Aplicativo()
+    contexto = motor.rootContext()
+    for nome, valor in (
+        ("filtros", filtros), ("paginaTodos", pagina_biblioteca), ("paginaZerados", pagina_zerados),
+        ("aplicativo", aplicativo), ("ponte", ponte),
+    ):  # fmt: skip
+        contexto.setContextProperty(nome, valor)
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))
     if not motor.rootObjects():
         return 1

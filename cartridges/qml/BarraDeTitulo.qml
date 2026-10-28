@@ -1,5 +1,4 @@
 import QtQuick
-import QWindowKit
 
 // Barra de título própria, com os botões de sistema que o QWindowKit liga ao Windows
 // (snap layouts no maximizar, hit-test de borda). `janela` e `agente` vêm de Principal.qml.
@@ -7,15 +6,32 @@ Rectangle {
     id: barra
 
     required property Window janela
-    required property WindowAgent agente
+    // O WindowAgent; nulo nos testes, que rodam sem a ponte do QWindowKit.
+    property QtObject agente
     property string titulo: ""
+    // Os botões da página: `inicio` à esquerda do título, `fim` à direita, antes dos botões do sistema.
+    default property alias inicio: areaDoInicio.data
+    property alias fim: areaDoFim.data
 
     readonly property int altura: 46
     readonly property int larguraDoBotao: 46
 
     height: altura
     color: janela.active ? Tema.barra : Tema.barraInativa
-    Component.onCompleted: agente.setTitleBar(barra)
+
+    // Chamado pela Principal depois do setup do agente.
+    function ligarAgente() {
+        agente.setTitleBar(barra)
+        agente.botaoDeSistema("minimizar", minimizar)
+        agente.botaoDeSistema("maximizar", maximizar)
+        agente.botaoDeSistema("fechar", fechar)
+    }
+
+    Row {
+        id: areaDoInicio
+        anchors { left: parent.left; leftMargin: 6; verticalCenter: parent.verticalCenter }
+        spacing: 2
+    }
 
     Text {
         anchors.centerIn: parent
@@ -27,18 +43,24 @@ Rectangle {
     }
 
     Row {
+        id: areaDoFim
+        anchors { right: sistema.left; rightMargin: 6; verticalCenter: parent.verticalCenter }
+        spacing: 2
+        layoutDirection: Qt.RightToLeft
+    }
+
+    Row {
+        id: sistema
         anchors { top: parent.top; right: parent.right; bottom: parent.bottom }
         Botao {
             id: minimizar
             glifo: "\uE921"
             onClicked: barra.janela.showMinimized()
-            Component.onCompleted: barra.agente.setSystemButton(WindowAgent.Minimize, minimizar)
         }
         Botao {
             id: maximizar
             glifo: barra.janela.visibility === Window.Maximized ? "\uE923" : "\uE922"
             onClicked: barra.janela.visibility === Window.Maximized ? barra.janela.showNormal() : barra.janela.showMaximized()
-            Component.onCompleted: barra.agente.setSystemButton(WindowAgent.Maximize, maximizar)
         }
         Botao {
             id: fechar
@@ -46,7 +68,6 @@ Rectangle {
             ehFechar: true
             corDoFoco: Tema.botaoFechar
             onClicked: barra.janela.close()
-            Component.onCompleted: barra.agente.setSystemButton(WindowAgent.Close, fechar)
         }
     }
 
@@ -62,8 +83,7 @@ Rectangle {
         Text {
             anchors.centerIn: parent
             text: botao.glifo
-            // Mesmos códigos nas duas fontes; a Fluent só existe no Windows 11.
-            font.family: Qt.fontFamilies().includes("Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets"
+            font.family: Tema.fonteDeIcones
             font.pixelSize: 10
             color: botao.ehFechar && area.containsMouse ? "white" : Tema.texto
         }

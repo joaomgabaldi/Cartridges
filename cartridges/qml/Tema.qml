@@ -17,6 +17,12 @@ QtObject {
     readonly property color barraInativa: escuro ? "#2a2a2a" : "#f3f3f3"
     readonly property color botaoSobre: escuro ? "#3d3d3d" : "#dcdcdc"
     readonly property color botaoFechar: "#c42b1c"
+    readonly property color pressionado: escuro ? "#4a4a4a" : "#cccccc"
+    readonly property color superficie: escuro ? "#2b2b2b" : "#ffffff"
+    readonly property color borda: escuro ? "#454545" : "#d4d4d4"
+
+    // Mesmos códigos nas duas fontes; a Fluent só existe no Windows 11.
+    readonly property string fonteDeIcones: Qt.fontFamilies().includes("Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets"
 
     // Ritmo das animações do Windows 11, em ms.
     readonly property int duracaoCurta: 167
