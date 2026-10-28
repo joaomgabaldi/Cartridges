@@ -17,46 +17,66 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Callable, Optional
+import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING, Any, Callable
 
-from gi.repository import Gio
-
-from cartridges.game import Game
 from cartridges.store.managers.manager import Manager
+from cartridges.utils.thread_principal import na_thread_principal
+
+if TYPE_CHECKING:
+    from cartridges.game import Game
+
+_executor = ThreadPoolExecutor(thread_name_prefix="manager")
+
+
+def encerrar() -> None:
+    """Descarta o que está na fila para o interpretador poder sair (chamado ao fechar o app)."""
+    _executor.shutdown(wait=False, cancel_futures=True)
 
 
 class AsyncManager(Manager):
     """Manager that can run asynchronously"""
 
     blocking = False
-    cancellable: Optional[Gio.Cancellable] = None
+    cancellable: threading.Event
 
     def __init__(self) -> None:
         super().__init__()
-        self.cancellable = Gio.Cancellable()
+        self.cancellable = threading.Event()
 
     def cancel_tasks(self):
         """Cancel all tasks for this manager"""
-        self.cancellable.cancel()
+        self.cancellable.set()
 
     def reset_cancellable(self):
         """Reset the cancellable for this manager.
         Already scheduled Tasks will no longer be cancellable."""
-        self.cancellable = Gio.Cancellable()
+        self.cancellable = threading.Event()
 
     def process_game(
-        self, game: Game, additional_data: dict, callback: Callable[["Manager"], Any]
+        self, game: "Game", additional_data: dict, callback: Callable[["Manager"], Any]
     ) -> None:
         """Create a task to process the game in a separate thread"""
-        task = Gio.Task.new(None, self.cancellable, self._task_callback, (callback,))
-        task.run_in_thread(lambda *_: self._task_thread_func((game, additional_data)))
+        # Capturado aqui: um reset troca o evento, e a tarefa já enfileirada
+        # continua vendo o cancelamento do seu lote.
+        cancellable = self.cancellable
+        try:
+            _executor.submit(
+                self._task_thread_func, game, additional_data, callback, cancellable
+            )
+        except RuntimeError:  # depois de encerrar(): o app está fechando
+            logging.debug("%s: tarefa descartada, app encerrando", self.name)
 
-    def _task_thread_func(self, data):
+    def _task_thread_func(self, game, additional_data, callback, cancellable):
         """Task thread entry point"""
-        game, additional_data, *_rest = data
-        self.run(game, additional_data)
-
-    def _task_callback(self, _source_object, _result, data):
-        """Method run after the task is done"""
-        callback, *_rest = data
-        callback(self)
+        # Como o Gio.Task: cancelada, a tarefa não roda, mas a conclusão ainda é
+        # entregue; sem ela o pipeline nunca termina e a importação não acaba.
+        try:
+            if not cancellable.is_set():
+                self.run(game, additional_data)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.exception("Erro inesperado em %s", self.name)
+        finally:
+            na_thread_principal(callback, self)

@@ -77,7 +77,7 @@ class SgdbManager(AsyncManager):
         # library meant 300 identical 401s, 300 identical FriendlyErrors queued
         # for the user and 300 pointless round trips to steamgriddb.com.
         # Checking on the way in is what turns that into one error and stops.
-        if cancellable.is_cancelled():
+        if cancellable.is_set():
             return
 
         try:
@@ -85,7 +85,7 @@ class SgdbManager(AsyncManager):
             sgdb.conditionaly_update_cover(game, additional_data)
         except SgdbAuthError as error:
             # If invalid auth, cancel all SGDBManager tasks of this batch
-            cancellable.cancel()
+            cancellable.set()
             raise FriendlyError(
                 _("Não foi possível autenticar no SteamGridDB"),
                 _("Verifique sua chave da API nas preferências."),

@@ -24,7 +24,7 @@ from gi.repository import Adw, GLib
 from cartridges import shared
 from cartridges.conquistas import historico
 from cartridges.game import Game
-from cartridges.store.managers.display_manager import is_main_thread
+from cartridges.utils.thread_principal import eh_thread_principal
 from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper
 from cartridges.utils.save_cover import save_cover
 
@@ -88,7 +88,7 @@ def _mover_escolhas(zerado: Game, jogo: Game) -> None:
 
 def ligar_zerado(jogo: Game) -> bool:
     """Liga ``jogo`` ao zerado de mesmo appID. True: ligou."""
-    assert is_main_thread(), "ligar_zerado toca a store e widgets"
+    assert eh_thread_principal(), "ligar_zerado toca a store e widgets"
     appid = getattr(jogo, "steam_appid", None)
     if not appid or jogo.removed or jogo.blacklisted:
         return False

@@ -26,6 +26,7 @@ from typing import Any, Generator, MutableMapping, Optional
 from uuid import uuid4
 
 from gi.repository import GLib
+from PySide6.QtCore import Qt
 
 from cartridges import shared
 from cartridges.conquistas import historico
@@ -913,7 +914,13 @@ class Store:
         # realmente espere (ex.: nos testes, sem managers registrados) pode
         # terminar dentro da própria chamada de `advance()`, e conectar depois
         # perderia esse "advanced".
-        pipeline.connect("advanced", self._ao_avancar_pipeline)
+        # Direta: o receptor oculto da lambda tem a afinidade da thread que conecta
+        # (às vezes um worker, sem laço de eventos), e a conexão automática
+        # enfileiraria a chamada nela para sempre.
+        pipeline.advanced.connect(
+            lambda: self._ao_avancar_pipeline(pipeline),
+            Qt.ConnectionType.DirectConnection,
+        )
         pipeline.advance()
         return pipeline
 

@@ -19,15 +19,17 @@
 
 import logging
 import threading
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
-from gi.repository import GObject
+from PySide6.QtCore import QObject, Signal
 
-from cartridges.game import Game
 from cartridges.store.managers.manager import Manager
 
+if TYPE_CHECKING:
+    from cartridges.game import Game
 
-class Pipeline(GObject.Object):
+
+class Pipeline(QObject):
     """Class representing a set of managers for a game.
 
     Thread safety: ``advance``/``manager_callback`` are reached both from the
@@ -37,7 +39,9 @@ class Pipeline(GObject.Object):
     ``manager_callback`` (→ ``advance``) synchronously from within ``advance``.
     """
 
-    game: Game
+    advanced = Signal()
+
+    game: "Game"
     additional_data: dict
 
     waiting: set[Manager]
@@ -45,7 +49,7 @@ class Pipeline(GObject.Object):
     done: set[Manager]
 
     def __init__(
-        self, game: Game, additional_data: dict, managers: Iterable[Manager]
+        self, game: "Game", additional_data: dict, managers: Iterable[Manager]
     ) -> None:
         super().__init__()
         self.game = game
@@ -111,9 +115,5 @@ class Pipeline(GObject.Object):
         with self._lock:
             self.running.discard(manager)
             self.done.add(manager)
-        self.emit("advanced")
+        self.advanced.emit()
         self.advance()
-
-    @GObject.Signal(name="advanced")
-    def advanced(self):  # type: ignore
-        """Signal emitted when the pipeline has advanced"""
