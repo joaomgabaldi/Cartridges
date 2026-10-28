@@ -1,11 +1,24 @@
+; DESENVOLVIMENTO (ISCC /DDESENVOLVIMENTO /DRepo=... /DPastaApp=...): o app Qt da migração, que convive
+; com o instalado (outro AppId e outra pasta), usa só os dados "-dev" e não leva o ajuste da NVIDIA.
+#ifdef DESENVOLVIMENTO
+#ifndef Repo
+#error Passe /DRepo=<raiz do repositório> e /DPastaApp=<pasta que o montar_app_qt.py montou>.
+#endif
+#define MyAppName "Cartridges Qt (desenvolvimento)"
+#else
 #define MyAppName "Cartridges"
+#endif
 #define MyAppVersion "@VERSION@"
 #define MyAppPublisher "joaomgabaldi"
 #define MyAppURL "https://github.com/joaomgabaldi/Cartridges"
 #define MyAppExeName "Cartridges.exe"
 
 [Setup]
+#ifdef DESENVOLVIMENTO
+AppId={{3C2D6B0E-5F71-4A8B-9E24-7D1A0C9B6F35}
+#else
 AppId={{88FC7AF8-9F74-40EC-AAED-FA6356261CBB}
+#endif
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
@@ -17,15 +30,28 @@ VersionInfoVersion={#MyAppVersion}
 VersionInfoTextVersion={#MyAppVersion}
 VersionInfoDescription=Instalador do {#MyAppName}
 VersionInfoOriginalFileName=Cartridges Windows.exe
+#ifdef DESENVOLVIMENTO
+DefaultDirName={autopf64}\Cartridges Qt (desenvolvimento)
+#else
 DefaultDirName={autopf64}\Cartridges Revamped
+#endif
 DisableProgramGroupPage=yes
+#ifdef DESENVOLVIMENTO
+LicenseFile={#Repo}\LICENSE
+#else
 LicenseFile=..\..\..\LICENSE
+#endif
 ; Sempre como administrador: o ajuste da NVIDIA grava no driver. A migração de
 ; uma instalação antiga "só para mim" lê {userprograms}/{userdesktop}.
 PrivilegesRequired=admin
 UsedUserAreasWarning=no
+#ifdef DESENVOLVIMENTO
+OutputBaseFilename=Cartridges Qt desenvolvimento
+SetupIconFile={#Repo}\build-aux\windows\icon.ico
+#else
 OutputBaseFilename=Cartridges Windows
 SetupIconFile=..\..\..\build-aux\windows\icon.ico
+#endif
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -94,15 +120,27 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; modulo removido do repositorio e, na primeira atualizacao depois da 2026.09.22,
 ; os ~4.000 arquivos do MSYS2 que o instalador levava sem o app usar. As pastas
 ; saem inteiras e voltam do pacote.
+#ifdef DESENVOLVIMENTO
+Type: filesandordirs; Name: "{app}\bin"
+Type: filesandordirs; Name: "{app}\python"
+Type: filesandordirs; Name: "{app}\lib"
+Type: filesandordirs; Name: "{app}\app"
+#else
 Type: filesandordirs; Name: "{app}\bin"
 Type: filesandordirs; Name: "{app}\etc"
 Type: filesandordirs; Name: "{app}\lib"
 Type: filesandordirs; Name: "{app}\share"
+#endif
 
 [Files]
 ; A pasta que o build-installer.ps1 monta com o montar_app.py: so o que o app usa.
+#ifdef DESENVOLVIMENTO
+Source: "{#PastaApp}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+Source: "{#Repo}\build-aux\windows\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+#else
 Source: "..\..\app\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 Source: "..\..\..\build-aux\windows\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+#endif
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"
@@ -346,6 +384,9 @@ var
 begin
   if CurStep <> ssPostInstall then
     Exit;
+#ifdef DESENVOLVIMENTO
+  Exit; // sem migração da instalação antiga nem o ajuste da NVIDIA
+#endif
   CorrigirFixados(MigrarInstalacaoDoUsuario);
   if HasNvidiaGpu then
   begin
@@ -385,8 +426,14 @@ begin
       // Limite conhecido: numa instalacao para todos os usuarios o desinstalador
       // roda elevado, e se o UAC for respondido com outra conta, {localappdata}
       // e HKCU sao os dessa conta, nao os de quem usa o app.
+#ifdef DESENVOLVIMENTO
+      // A cópia de desenvolvimento só usa os dados "-dev"; os do app instalado não são tocados.
+      DelTree(ExpandConstant('{localappdata}\io.github.joaomgabaldi.Cartridges-dev'), True, True, True);
+      RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\GSettings\io\github\joaomgabaldi\Cartridges-dev');
+#else
       DelTree(ExpandConstant('{localappdata}\io.github.joaomgabaldi.Cartridges'), True, True, True);
       RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\GSettings\io\github\joaomgabaldi\Cartridges');
+#endif
       RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\io\github\joaomgabaldi');
       RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\io\github');
       RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\io');

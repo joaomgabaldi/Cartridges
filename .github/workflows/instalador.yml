@@ -12,6 +12,8 @@ env:
 
 jobs:
   instalador:
+    # O build GTK neste branch é obsoleto (o lançador novo não serve a ele); o plano 9 o substitui.
+    if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
