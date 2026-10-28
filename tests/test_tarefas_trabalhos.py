@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from tests.test_metadata_refresh import FakeManager, FakeStore, make_game
 
-from cartridges.utils import tarefas
+from cartridges.modelos import tarefas
 
 
 def _thread_em_linha(modulo, monkeypatch):

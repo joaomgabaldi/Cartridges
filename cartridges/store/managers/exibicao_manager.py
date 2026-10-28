@@ -7,14 +7,9 @@ from typing import Callable
 from cartridges.jogo import Jogo
 from cartridges.modelos.biblioteca import ModeloDaBiblioteca
 from cartridges.store.managers.manager import Manager
+from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.utils.thread_principal import na_thread_principal
-
-
-try:
-    from cartridges.store.managers.sgdb_manager import SgdbManager
-except ImportError:  # shortcut: o SgdbManager ainda depende do gi; sai quando ele for portado
-    SgdbManager = SteamAPIManager
 
 
 class ExibicaoManager(Manager):

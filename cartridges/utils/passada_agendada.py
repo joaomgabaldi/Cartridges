@@ -15,9 +15,8 @@ trabalhador, que confere ``_deve_parar`` entre um jogo e outro.
 import threading
 from typing import Optional
 
-from gi.repository import GLib
-
 from cartridges import shared
+from cartridges.utils.thread_principal import na_thread_principal
 
 
 class PassadaAgendada:
@@ -29,8 +28,11 @@ class PassadaAgendada:
     espera_da_importacao = 30
 
     def __init__(self) -> None:
-        # Id do GLib da partida pendente: cancelável no encerramento e nunca armada duas vezes.
-        self._timeout_id: Optional[int] = None
+        # Temporizador da partida pendente: cancelável no encerramento e nunca armado duas vezes.
+        self._timer: Optional[threading.Timer] = None
+        # Sobe a cada armação e a cada `stop()`: a partida que já disparou mas ainda
+        # espera na fila da thread principal confere o número e se descarta.
+        self._armacao = 0
         # Uma passada por vez: `run_async` é alcançável pelo temporizador e por quem pede.
         self._lock = threading.Lock()
         self._running = False
@@ -46,28 +48,44 @@ class PassadaAgendada:
     def start(self) -> None:
         """Arma a passada. Chamada uma vez, no início do app."""
         self._stopped = False
-        if self._timeout_id is not None:
-            GLib.source_remove(self._timeout_id)
-        self._timeout_id = GLib.timeout_add_seconds(self.atraso_inicial, self._on_timer)
+        self._armar(self.atraso_inicial)
+
+    def _armar(self, segundos: float) -> None:
+        if self._timer is not None:
+            self._timer.cancel()
+        self._armacao += 1
+        # O temporizador roda numa thread própria; a partida volta à principal, onde
+        # `run_async` tira o retrato da store.
+        self._timer = threading.Timer(
+            segundos, na_thread_principal, (self._on_timer, self._armacao)
+        )
+        self._timer.daemon = True
+        self._timer.start()
 
     def stop(self) -> None:
         """Cancela a passada pendente e desliga a que está em andamento."""
         self._stopped = True
         self._generation += 1
-        if self._timeout_id is not None:
-            GLib.source_remove(self._timeout_id)
-            self._timeout_id = None
+        self._armacao += 1
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
 
-    def _on_timer(self) -> bool:
-        self._timeout_id = None
-        if self._stopped:
-            return False
+    @staticmethod
+    def _importando() -> bool:
+        # shortcut: lê o estado da janela (duplo nos testes); a importação do plano 2 passa a
+        # marcá-lo no Aplicativo, e este teste muda junto com ela.
         app = shared.win.get_application() if shared.win is not None else None
-        if app is not None and app.state == shared.AppState.IMPORT:
-            self._timeout_id = GLib.timeout_add_seconds(self.espera_da_importacao, self._on_timer)
-            return False
+        return app is not None and app.state == shared.AppState.IMPORT
+
+    def _on_timer(self, armacao: int) -> None:
+        if self._stopped or armacao != self._armacao:
+            return
+        self._timer = None
+        if self._importando():
+            self._armar(self.espera_da_importacao)
+            return
         self.run_async()
-        return False
 
     def run_async(self) -> None:
         raise NotImplementedError

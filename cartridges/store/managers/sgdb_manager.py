@@ -68,9 +68,9 @@ class SgdbManager(AsyncManager):
     def main(self, game: Jogo, additional_data: dict) -> None:
         cancellable = additional_data.get(_CANCELLABLE) or self.cancellable
         # The cancellation has to be honoured here, by hand, because nothing
-        # else will honour it: AsyncManager.process_game builds its Gio.Task
-        # with return_on_cancel left at FALSE, so cancelling a task still lets
-        # its thread function run to the end, and SgdbHelper never looks at a
+        # else will honour it: AsyncManager.process_game only checks the
+        # cancellable before it runs a task, so cancelling still lets a task that
+        # already started run to the end, and SgdbHelper never looks at a
         # cancellable of any kind. Cancelling therefore only ever stopped tasks
         # that had not been created yet — of which, in an import, there are
         # none: they are all queued up front. So a wrong API key in a 300-game

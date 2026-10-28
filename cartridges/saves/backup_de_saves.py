@@ -29,7 +29,7 @@ from cartridges.conquistas import arquivos
 from cartridges.game import Game
 from cartridges.saves import conferencia, config, ludusavi, pasta
 from cartridges.saves.ludusavi import LudusaviFalhou, Versao
-from cartridges.utils import tarefas
+from cartridges.modelos import tarefas
 from cartridges.utils.create_dialog import create_dialog
 from cartridges.utils.na_tela import entregar_na_tela
 

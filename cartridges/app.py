@@ -30,7 +30,11 @@ from cartridges.ponte import Ponte
 from cartridges.store.managers import async_manager
 from cartridges.store.managers.exibicao_manager import ExibicaoManager
 from cartridges.store.managers.file_manager import FileManager
+from cartridges.store.managers.hltb_manager import HLTBManager
+from cartridges.store.managers.sgdb_manager import SgdbManager
+from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.store.store import Store
+from cartridges.utils.hltb_backfill import HLTBBackfill
 
 _RAIZ = Path(__file__).resolve().parent
 _ICONE = _RAIZ.parent / "data" / "icons" / "hicolor" / "scalable" / "apps" / f"{shared.APP_ID}.svg"
@@ -63,7 +67,14 @@ def main(argv: list[str]) -> int:
     app.setApplicationDisplayName("Cartridges")
     app.setWindowIcon(QIcon(str(_ICONE)))
     # A ponte para a thread principal nasce quando `thread_principal` é importado, aqui na principal.
-    app.aboutToQuit.connect(async_manager.encerrar)
+    # O `stop()` da varredura vem antes do `encerrar()`: o que ela ainda entregaria não tem para onde ir.
+    varredura_hltb = HLTBBackfill()
+
+    def encerrar() -> None:
+        varredura_hltb.stop()
+        async_manager.encerrar()
+
+    app.aboutToQuit.connect(encerrar)
     _configurar_log()
     _medidas_da_tela(app)
 
@@ -78,8 +89,13 @@ def main(argv: list[str]) -> int:
     ponte.ligar_store(shared.store)
     shared.store.add_manager(ExibicaoManager(modelo, ao_ver=ponte.ligar))
     modelo.ligar_store(shared.store)
-    shared.store.toggle_manager_in_pipelines(FileManager, True)
     carregados = carregar_jogos_do_disco(shared.store)
+
+    # Os managers das importações entram depois da carga: ela não consulta a rede.
+    shared.store.add_manager(SteamAPIManager())
+    shared.store.add_manager(HLTBManager())
+    shared.store.add_manager(SgdbManager())
+    shared.store.toggle_manager_in_pipelines(FileManager, True)
 
     if "--sair-apos-carregar" in argv:
         if sys.stdout is not None:
@@ -102,4 +118,5 @@ def main(argv: list[str]) -> int:
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))
     if not motor.rootObjects():
         return 1
+    varredura_hltb.start()
     return app.exec()

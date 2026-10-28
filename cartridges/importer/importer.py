@@ -32,7 +32,8 @@ from cartridges.game import Game
 from cartridges.importer.source import Source, SourceScanError
 from cartridges.store.managers.async_manager import AsyncManager
 from cartridges.store.pipeline import Pipeline
-from cartridges.utils import restauracao, tarefas
+from cartridges.modelos import tarefas
+from cartridges.utils import restauracao
 
 
 # pylint: disable=too-many-instance-attributes

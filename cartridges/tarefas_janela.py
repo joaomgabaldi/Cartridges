@@ -19,7 +19,7 @@
 
 """A janela "Tarefas em andamento": um bloco por tarefa, ao vivo.
 
-Só lê o quadro (`utils/tarefas.py`). É uma janela de topo do app, e não um
+Só lê o quadro (`modelos/tarefas.py`). É uma janela de topo do app, e não um
 diálogo preso à janela principal: pode ser arrastada, ir para trás da
 biblioteca e ficar aberta enquanto o usuário segue usando o resto. Fica aberta
 quando a última tarefa termina, com o aviso de que não há nada rodando: fechar
@@ -34,7 +34,8 @@ from typing import Any, Optional
 from gi.repository import Adw, GLib, Gtk
 
 from cartridges import shared
-from cartridges.utils import tarefas, window_geometry
+from cartridges.modelos import tarefas
+from cartridges.utils import window_geometry
 
 # Espera entre o "map" e o posicionamento: a superfície e a altura da janela só
 # existem depois dele.
@@ -91,6 +92,7 @@ class TarefasJanela(Adw.Window):
         # (objeto, id) de cada ligação: o quadro e as tarefas vivem mais que a
         # janela, e uma ligação esquecida seguraria os widgets depois de fechada.
         self._ligacoes: list[tuple[Any, int]] = []
+        # shortcut: API do Gio.ListStore; a lista agora é um QAbstractListModel (rowCount/data), o plano 8 refaz este uso.
         self._id_lista = tarefas.lista.connect("items-changed", self._redesenhar)
         self.connect("close-request", self._ao_fechar)
         self._redesenhar()
@@ -124,6 +126,7 @@ class TarefasJanela(Adw.Window):
         while (filho := self.caixa.get_first_child()) is not None:
             self.caixa.remove(filho)
 
+        # shortcut: API do Gio.ListStore; a lista agora é um QAbstractListModel (rowCount/data), o plano 8 refaz este uso.
         for posicao in range(tarefas.lista.get_n_items()):
             self.caixa.append(self._bloco(tarefas.lista.get_item(posicao)))
         self.vazio.set_visible(tarefas.lista.get_n_items() == 0)

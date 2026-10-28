@@ -102,9 +102,9 @@ from cartridges.utils import (
     session_fita,
     session_log,
     session_wallpaper,
-    tarefas,
     window_geometry,
 )
+from cartridges.modelos import tarefas
 from cartridges.window import CartridgesWindow
 
 # Titulo da secao de agradecimentos nos creditos. Fica numa constante porque
@@ -888,6 +888,7 @@ class CartridgesApplication(Adw.Application):
             return True
         if (janela := TarefasJanela.aberta) is None:
             return False
+        # shortcut: API do Gio.ListStore; a lista agora é um QAbstractListModel (rowCount/data), o plano 8 refaz este uso.
         if tarefas.lista.get_n_items() > 0:
             win.set_visible(False)
             return True

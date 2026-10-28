@@ -31,7 +31,7 @@ from typing import Any
 from gi.repository import GLib, Gtk
 
 from cartridges.tarefas_janela import TarefasJanela
-from cartridges.utils import tarefas
+from cartridges.modelos import tarefas
 
 _ENTRADA_MS = 10000
 _SAIDA_MS = 5000
@@ -40,6 +40,7 @@ _FAIXA = 16  # largura, junto à borda, que chama o botão escondido
 
 
 def pode_mostrar(win: Any) -> bool:
+    # shortcut: API do Gio.ListStore; a lista agora é um QAbstractListModel (rowCount/data), o plano 8 refaz este uso.
     return (
         tarefas.lista.get_n_items() > 0
         and win.navigation_view.get_visible_page()
@@ -124,6 +125,7 @@ class BotaoTarefas(Gtk.Box):
         dentro = x < largura and y > altura - _CANTO
         # Sem tarefas não há o que mostrar, mas o canto continua anotado: uma
         # tarefa que começa com o mouse parado ali não recua debaixo dele.
+        # shortcut: API do Gio.ListStore; a lista agora é um QAbstractListModel (rowCount/data), o plano 8 refaz este uso.
         if tarefas.lista.get_n_items() == 0:
             self._no_canto = dentro
             return

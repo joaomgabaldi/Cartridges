@@ -24,7 +24,7 @@ import pytest
 from cartridges import shared
 from cartridges.saves import backup_de_saves, conferencia, ludusavi, pasta
 from cartridges.saves.ludusavi import Versao
-from cartridges.utils import tarefas
+from cartridges.modelos import tarefas
 
 NAO_ACHADO = {"errors": {"unknownGames": ["x"]}, "games": {}}
 FALHOU = {"errors": {"someGamesFailed": True}, "games": {}}

@@ -19,12 +19,13 @@
 
 
 import logging
+import os
+import tempfile
 from pathlib import Path
 from shutil import copyfile
 from typing import Optional
 from uuid import uuid4
 
-from gi.repository import Gdk, GdkPixbuf, Gio, GLib
 from PIL import Image, UnidentifiedImageError
 
 from cartridges import shared
@@ -32,47 +33,32 @@ from cartridges.jogo import ANIMATED_SUFFIXES  # reexportado: mora ao lado de ge
 from cartridges.utils import copias_animadas
 from cartridges.utils.enquadramento import escala_sobre_fundo
 from cartridges.utils.na_tela import entregar_na_tela
+from cartridges.utils.thread_principal import na_thread_principal
 
 
 # Formato do Pillow -> sufixo com que a capa animada é guardada.
 _SUFIXO_ANIMADO = {"GIF": ".gif", "WEBP": ".webp", "PNG": ".apng"}
 
 
-def convert_cover(
-    cover_path: Optional[Path] = None,
-    pixbuf: Optional[GdkPixbuf.Pixbuf] = None,
-    resize: bool = True,
-) -> Optional[Path]:
-    if not cover_path and not pixbuf:
+def _temporario(sufixo: str) -> Path:
+    """Um arquivo temporário novo e vazio, que quem chama apaga."""
+    descritor, caminho = tempfile.mkstemp(suffix=sufixo)
+    os.close(descritor)
+    return Path(caminho)
+
+
+def convert_cover(cover_path: Optional[Path] = None, resize: bool = True) -> Optional[Path]:
+    if not cover_path:
         return None
 
-    pixbuf_extensions = set()
-    for pixbuf_format in GdkPixbuf.Pixbuf.get_formats():
-        for pixbuf_extension in pixbuf_format.get_extensions():
-            pixbuf_extensions.add(pixbuf_extension)
-
-    if not resize and cover_path and cover_path.suffix.lower()[1:] in pixbuf_extensions:
+    if not resize and cover_path.suffix.lower() in Image.registered_extensions():
         return cover_path
 
-    pixbuf_temp: Optional[Path] = None
-    if pixbuf:
-        # Este TIFF é só a entrada do bloco Pillow abaixo, que grava um temp
-        # próprio e devolve esse — o intermediário nunca é o retorno. Sem o
-        # unlink no finally lá embaixo, cada capa escolhida à mão deixava este
-        # arquivo órfão em %TEMP% para sempre: o mesmo vazamento que o ramo de
-        # fallback já conserta, com o mesmo comentário, no finally dele.
-        pixbuf_temp = Path(Gio.File.new_tmp("XXXXXX.tiff")[0].get_path())
-        pixbuf.savev(str(pixbuf_temp), "tiff")
-        cover_path = pixbuf_temp
-
-    try:
-        return _convert_readable_cover(cover_path, resize)
-    finally:
-        if pixbuf_temp is not None:
-            pixbuf_temp.unlink(missing_ok=True)
+    return _convert_readable_cover(cover_path, resize)
 
 
 def _convert_readable_cover(cover_path: Path, resize: bool) -> Optional[Path]:
+    tmp_path: Optional[Path] = None
     try:
         with Image.open(cover_path) as image:
             # A cover can come straight off the network (SteamGridDB) or from a
@@ -90,7 +76,7 @@ def _convert_readable_cover(cover_path: Path, resize: bool) -> Optional[Path]:
             # cover into a 256-colour GIF caused banding, washed-out colours
             # and, for APNG, outright save failures.
             if animated and (suffix := _SUFIXO_ANIMADO.get(fmt)):
-                tmp_path = Path(Gio.File.new_tmp(f"XXXXXX{suffix}")[0].get_path())
+                tmp_path = _temporario(suffix)
                 copyfile(cover_path, tmp_path)
                 return tmp_path
 
@@ -104,7 +90,7 @@ def _convert_readable_cover(cover_path: Path, resize: bool) -> Optional[Path]:
             if image.mode not in ("RGB", "RGBA"):
                 image = image.convert("RGBA")
 
-            tmp_path = Path(Gio.File.new_tmp("XXXXXX.tiff")[0].get_path())
+            tmp_path = _temporario(".tiff")
             # Covers are always stored losslessly at high resolution
             (image.resize(shared.image_size) if resize else image).save(
                 tmp_path,
@@ -116,54 +102,40 @@ def _convert_readable_cover(cover_path: Path, resize: bool) -> Optional[Path]:
         # fim, com um TIFF enorme a mais em %TEMP% a cada nível.
         logging.warning("Cover refused, image too large: %s", Path(cover_path).name)
         return None
-    except (UnidentifiedImageError, OSError, ValueError):
-        intermediate: Optional[Path] = None
-        result: Optional[Path] = None
-        try:
-            Gdk.Texture.new_from_filename(str(cover_path)).save_to_tiff(
-                tmp_path := Gio.File.new_tmp("XXXXXX.tiff")[0].get_path()
-            )
-            # Gio.File.get_path() returns a str; convert_cover indexes
-            # cover_path.suffix, so it must be handed a Path or the fallback
-            # raises AttributeError instead of producing the still cover.
-            intermediate = Path(tmp_path)
-            result = convert_cover(intermediate)
-            return result
-        except (GLib.Error, OSError) as error:
-            logging.warning("Could not convert cover %s: %s", Path(cover_path).name, error)
-            return None
-        finally:
-            # The re-encoded scratch file is only an input to the recursive
-            # call, which writes a temp of its own. Leaving it behind put a
-            # second stray TIFF in %TEMP% for every cover taking this path.
-            # Guarded by identity because `convert_cover` is allowed to hand
-            # its input straight back — deleting it then would return the
-            # caller a path to a file that no longer exists.
-            if intermediate is not None and result is not intermediate:
-                intermediate.unlink(missing_ok=True)
+    except (UnidentifiedImageError, OSError, ValueError) as error:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        logging.warning("Could not convert cover %s: %s", Path(cover_path).name, error)
+        return None
+    except BaseException:
+        # Qualquer outra falha: sem o temporário que ficou pela metade, e quem chamou decide.
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        raise
 
     return tmp_path
 
 
 class UnreadableCoverError(Exception):
-    """The candidate cover could not be decoded by Pillow or GdkPixbuf."""
+    """The candidate cover could not be decoded by Pillow."""
 
 
-def composite_cover(image_path: Path) -> GdkPixbuf.Pixbuf:
+def composite_cover(image_path: Path) -> Image.Image:
     """``image_path`` shaped as a cover, for a cover picked from a file.
 
     An image taller than a cover, or wider by at most
     `enquadramento.MAX_STRETCH`, is just stretched later; anything wider is
     fitted in the middle over a blurred, stretched copy of itself.
     """
-    # `convert_cover` returns None for anything neither Pillow nor GdkPixbuf
-    # can read; `str(None)` used to turn that into a literal "None" filename.
+    # `convert_cover` returns None for anything Pillow cannot read; `str(None)`
+    # used to turn that into a literal "None" filename.
     converted = convert_cover(image_path, resize=False)
     if converted is None:
         raise UnreadableCoverError(image_path)
     try:
-        source = GdkPixbuf.Pixbuf.new_from_file(str(converted))
-    except GLib.Error as error:
+        with Image.open(converted) as aberta:
+            source = aberta.convert("RGBA")
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as error:
         raise UnreadableCoverError(image_path) from error
     finally:
         # `convert_cover` may hand back the input untouched; only a temp it
@@ -171,19 +143,16 @@ def composite_cover(image_path: Path) -> GdkPixbuf.Pixbuf:
         if converted != image_path:
             converted.unlink(missing_ok=True)
 
-    width, height = source.get_width(), source.get_height()
+    width, height = source.size
     cover_width, cover_height = shared.image_size
     scale = escala_sobre_fundo(width, height, shared.image_size)
     if scale is None:
         return source
 
-    interp = GdkPixbuf.InterpType.BILINEAR
-    cover = source.scale_simple(2, 2, interp).scale_simple(cover_width, cover_height, interp)
+    interp = Image.Resampling.BILINEAR
+    cover = source.resize((2, 2), interp).resize((cover_width, cover_height), interp)
     x, y = (cover_width - width * scale) / 2, (cover_height - height * scale) / 2
-    source.composite(
-        cover, int(x), int(y), int(width * scale), int(height * scale),
-        x, y, scale, scale, interp, 255,
-    )  # fmt: skip
+    cover.alpha_composite(source.resize((int(width * scale), int(height * scale)), interp), (int(x), int(y)))
     return cover
 
 
@@ -241,8 +210,12 @@ def save_cover(game_id: str, cover_path: Path) -> None:
         entregar_na_tela(copias_animadas.preparar, [(game_id, dest)])
 
     # save_cover can be called from a worker thread (e.g. the async SgdbManager),
-    # but refreshing the on-screen cover touches GTK widgets, which must happen
-    # on the main thread. Marshal it there; .get() avoids a check-then-index race
-    # if the entry is removed concurrently.
-    if (game_cover := shared.win.game_covers.get(game_id)) is not None:
-        GLib.idle_add(game_cover.new_cover, dest)
+    # but the grid is refreshed by the game's `update()`, which belongs to the main
+    # thread. A URL com `?v=<mtime_ns>` da grade troca a capa sozinha.
+    na_thread_principal(_atualizar_jogo, game_id)
+
+
+def _atualizar_jogo(game_id: str) -> None:
+    store = getattr(shared, "store", None)
+    if store is not None and (jogo := store.get(game_id)) is not None:
+        jogo.update()

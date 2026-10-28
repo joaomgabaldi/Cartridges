@@ -531,9 +531,10 @@ def preparar(capas: list[tuple[str, Path]]) -> None:
     # O lote e as pendências ficam prontos antes do primeiro ``pedir``: um aviso
     # nunca chega a um lote que ainda acha que terminou.
     if _lote is None:
-        # Aqui e não no topo: `tarefas` ainda depende do gi, e a store importa
-        # este módulo só para apagar e migrar cópias.
-        from cartridges.utils import tarefas  # pylint: disable=import-outside-toplevel
+        # Aqui e não no topo: a lista de `tarefas` é um QObject e nasce na thread que
+        # importa o módulo (a principal, no app); a store importa este módulo só para
+        # apagar e migrar cópias.
+        from cartridges.modelos import tarefas  # pylint: disable=import-outside-toplevel
 
         _lote = _Lote(tarefas.comecar(_("Capas animadas"), len(novos)), len(novos))
     else:

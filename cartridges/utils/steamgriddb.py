@@ -20,17 +20,18 @@
 
 import contextlib
 import logging
+import os
+import tempfile
 import threading
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote
 
 import requests
-from gi.repository import Gio
 from requests.exceptions import HTTPError, RequestException
 
 from cartridges import shared
-from cartridges.game import Game
+from cartridges.jogo import Jogo
 from cartridges.utils.download import (
     MAX_ANIMATED_IMAGE_BYTES,
     MAX_IMAGE_BYTES,
@@ -113,7 +114,7 @@ class SgdbHelper:
         headers = {"Authorization": f"Bearer {key}"}
         return headers
 
-    def get_game_id(self, game: Game) -> Any:
+    def get_game_id(self, game: Jogo) -> Any:
         """Get the best matching SGDB game id for a game. Can raise an exception."""
         # The query is a path segment, so it must be URL-encoded — otherwise
         # spaces and characters like ':', '&', "'" or accents break the request.
@@ -233,7 +234,7 @@ class SgdbHelper:
                 raise SgdbBadRequest(res.status_code)
 
     def conditionaly_update_cover(
-        self, game: Game, additional_data: Optional[dict] = None
+        self, game: Jogo, additional_data: Optional[dict] = None
     ) -> None:
         """Update the game's cover if appropriate"""
 
@@ -289,7 +290,9 @@ class SgdbHelper:
                         if uri_kwargs["animated"]
                         else MAX_IMAGE_BYTES,
                     )
-                    tmp_file_path = Path(Gio.File.new_tmp()[0].get_path())
+                    descritor, nome = tempfile.mkstemp()
+                    os.close(descritor)
+                    tmp_file_path = Path(nome)
                     converted = None
                     try:
                         tmp_file_path.write_bytes(content)

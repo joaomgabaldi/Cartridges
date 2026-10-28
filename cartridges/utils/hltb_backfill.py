@@ -38,12 +38,10 @@ whatever was already found.
 import logging
 import threading
 
-from gi.repository import GLib
-
 from cartridges import shared
-from cartridges.game import Game
+from cartridges.jogo import Jogo
 from cartridges.store.managers.hltb_manager import shared_helper
-from cartridges.utils import tarefas
+from cartridges.modelos import tarefas
 from cartridges.utils.passada_agendada import PassadaAgendada
 from cartridges.utils.hltb import (
     HLTBError,
@@ -52,6 +50,7 @@ from cartridges.utils.hltb import (
     fetch_times,
     has_times,
 )
+from cartridges.utils.thread_principal import na_thread_principal
 
 # Startup is busy (window, disk load, and usually an auto-import right after),
 # and the auto-import's own HowLongToBeat lookups share this rate limiter. Wait
@@ -95,7 +94,7 @@ class HLTBBackfill(PassadaAgendada):
             target=self._worker, args=(games, self._generation), daemon=True
         ).start()
 
-    def _worker(self, games: list[Game], generation: int) -> None:
+    def _worker(self, games: list[Jogo], generation: int) -> None:
         found = 0
         # Jogo que o site não conhece volta a cada abertura, e de propósito
         # aparece nas tarefas toda vez: é o sinal de que vale conferir o nome.
@@ -139,7 +138,7 @@ class HLTBBackfill(PassadaAgendada):
                 if not has_times(times):
                     continue
                 found += 1
-                GLib.idle_add(self._apply, game, times)
+                na_thread_principal(self._apply, game, times)
         finally:
             tarefa.terminar()
             self._liberar()
@@ -151,14 +150,14 @@ class HLTBBackfill(PassadaAgendada):
 
     # -- applying results (main thread) ---------------------------------------
 
-    def _apply(self, game: Game, times: HLTBTimes) -> bool:
+    def _apply(self, game: Jogo, times: HLTBTimes) -> None:
         """Write one game's times and repaint it. Runs on the main thread."""
         # `has_hltb_times` again, not just in the worker: the fetch button in
         # the details may have answered while this lookup was in flight, and
         # the sweep only ever fills what is missing — it must not overwrite a
         # correction the user just made.
         if self._stopped or game.removed or game.has_hltb_times:
-            return False
+            return
         # Identidade no store, não só o snapshot: um reset apaga a biblioteca
         # e os arquivos enquanto o worker ainda anda pela lista dele, e o
         # `save()` abaixo regravaria o JSON de um jogo que o usuário acabou de
@@ -166,7 +165,7 @@ class HLTBBackfill(PassadaAgendada):
         # idioma do `_in_library` do MetadataRefresh.
         store = getattr(shared, "store", None)
         if store is None or store.get(game.game_id) is not game:
-            return False
+            return
 
         # update_values only carries the keys the lookup returned, so a game
         # with only a main-story estimate keeps whatever the other two held.
@@ -184,4 +183,3 @@ class HLTBBackfill(PassadaAgendada):
             and win.navigation_view.get_visible_page() == win.details_page
         ):
             win.update_hltb_block(game)
-        return False

@@ -1158,6 +1158,7 @@ class DetailsDialog(Adw.Dialog):
                     pass
 
                 if not new_path:
+                    # shortcut: `convert_cover` perdeu o `pixbuf` (e `composite_cover` devolve PIL.Image); o plano 3 grava a imagem num temporário e passa o caminho.
                     new_path = convert_cover(pixbuf=composite_cover(Path(path)))
             except Exception:  # pylint: disable=broad-exception-caught
                 # `composite_cover` raises UnreadableCoverError for a truncated

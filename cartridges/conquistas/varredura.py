@@ -50,7 +50,7 @@ from cartridges.conquistas import arquivos, catalogo, contas, fontes, formatos, 
 from cartridges.conquistas.fontes import Fonte
 from cartridges.conquistas.ubisoft import locais as ubisoft_locais, pacote as ubisoft_pacote, spool as ubisoft_spool
 from cartridges.conquistas.vigia import MARGEM_DA_STEAM
-from cartridges.utils import tarefas
+from cartridges.modelos import tarefas
 from cartridges.utils.passada_agendada import PassadaAgendada
 
 _ULTIMA_VARREDURA = "conquistas-ultima-varredura"

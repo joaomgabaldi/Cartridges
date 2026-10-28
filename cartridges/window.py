@@ -63,10 +63,10 @@ from cartridges.utils import (
     session_fita,
     session_log,
     session_wallpaper,
-    tarefas,
     tocador_capas,
     window_geometry,
 )
+from cartridges.modelos import tarefas
 from cartridges.utils.relative_date import relative_date
 from cartridges.utils.spring_scroll import attach as attach_spring_scroll
 from cartridges.utils.steam import format_release_date, parse_release_date
@@ -457,6 +457,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         alvo_de_soltar.connect("leave", self._ao_sair_arrasto)
         alvo_de_soltar.connect("drop", self._ao_soltar)
         self.add_controller(alvo_de_soltar)
+        # shortcut: API do Gio.ListStore ("items-changed"); a lista agora é um QAbstractListModel, o plano 8 refaz este uso.
         self._global_handler_ids.append(
             (
                 tarefas.lista,

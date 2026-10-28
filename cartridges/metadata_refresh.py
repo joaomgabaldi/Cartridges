@@ -39,7 +39,7 @@ from cartridges.errors.friendly_error import FriendlyError
 from cartridges.game import Game
 from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
-from cartridges.utils import tarefas
+from cartridges.modelos import tarefas
 from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.steam import STEAM_METADATA_VERSION
 

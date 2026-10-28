@@ -6,7 +6,7 @@ import pytest
 
 from gi.repository import Gtk
 
-from cartridges.utils import tarefas
+from cartridges.modelos import tarefas
 
 
 def _textos(dialogo):

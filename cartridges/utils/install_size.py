@@ -50,7 +50,7 @@ from gi.repository import GLib
 
 from cartridges import shared
 from cartridges.game import Game
-from cartridges.utils import tarefas
+from cartridges.modelos import tarefas
 from cartridges.utils.game_folder import game_folder
 from cartridges.utils.passada_agendada import PassadaAgendada
 from cartridges.utils.process_monitor import install_dir_from_command

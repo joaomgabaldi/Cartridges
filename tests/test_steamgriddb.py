@@ -40,7 +40,7 @@ class FakeResponse:
 
 @pytest.fixture(autouse=True)
 def key(schema):
-    schema["sgdb-key"] = "test-key"
+    schema.set_string("sgdb-key", "test-key")
     return schema
 
 
@@ -153,8 +153,8 @@ def test_busca_automatica_animada_200_e_parada_25(make_game, schema, monkeypatch
         limites.append(max_bytes)
         raise requests.RequestException("x")
 
-    schema["sgdb"] = True
-    schema["sgdb-animated"] = True
+    schema.set_boolean("sgdb", True)
+    schema.set_boolean("sgdb-animated", True)
     monkeypatch.setattr(sgdb.SgdbHelper, "get_game_id", lambda *_a: 1)
     monkeypatch.setattr(sgdb.SgdbHelper, "get_image_uri", lambda *_a, **_k: "https://x/a.png")
     monkeypatch.setattr(sgdb, "download_bytes", baixar)
@@ -187,8 +187,8 @@ def test_no_maximo_duas_capas_animadas_baixando_ao_mesmo_tempo(
                 estado["agora"] -= 1
         raise requests.RequestException("x")
 
-    schema["sgdb"] = True
-    schema["sgdb-animated"] = True
+    schema.set_boolean("sgdb", True)
+    schema.set_boolean("sgdb-animated", True)
     monkeypatch.setattr(sgdb.SgdbHelper, "get_game_id", lambda *_a: 1)
     monkeypatch.setattr(sgdb.SgdbHelper, "get_image_uri", lambda *_a, **_k: "https://x/a.png")
     monkeypatch.setattr(sgdb, "download_bytes", baixar)
@@ -207,3 +207,26 @@ def test_no_maximo_duas_capas_animadas_baixando_ao_mesmo_tempo(
         thread.join(5)
 
     assert pico == 2
+
+
+def test_capa_baixada_vira_tiff_e_nao_deixa_temporario(make_game, schema, monkeypatch, tmp_path):
+    import io  # noqa: PLC0415
+
+    from PIL import Image  # noqa: PLC0415
+
+    from cartridges import shared  # noqa: PLC0415
+
+    temporarios = tmp_path / "temporarios"
+    temporarios.mkdir()
+    monkeypatch.setattr("tempfile.tempdir", str(temporarios))
+    png = io.BytesIO()
+    Image.new("RGB", (60, 90), "blue").save(png, "PNG")
+    schema.set_boolean("sgdb", True)
+    monkeypatch.setattr(sgdb.SgdbHelper, "get_game_id", lambda *_a: 1)
+    monkeypatch.setattr(sgdb.SgdbHelper, "get_image_uri", lambda *_a, **_k: "https://x/a.png")
+    monkeypatch.setattr(sgdb, "download_bytes", lambda *_a, **_k: png.getvalue())
+
+    sgdb.SgdbHelper().conditionaly_update_cover(make_game(game_id="g1"))
+
+    assert (shared.covers_dir / "g1.tiff").is_file()
+    assert list(temporarios.iterdir()) == []
