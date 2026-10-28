@@ -79,3 +79,24 @@ def test_destino_existente_pede_substituir(chaves, tmp_path):
 
     assert not (tmp_path / "destino" / "sobra.txt").exists()
     assert _ler(origem) == antes
+
+
+def test_nao_herda_caminhos_para_os_dados_reais(chaves, tmp_path):
+    origem, destino = chaves
+    with winreg.OpenKeyEx(cd.RAIZ, origem, 0, winreg.KEY_WRITE) as k:
+        winreg.SetValueEx(k, "pasta-dos-saves", 0, winreg.REG_SZ, "C:/real/saves")
+    pasta = tmp_path / "origem"
+    (pasta / "ludusavi").mkdir(parents=True)
+    for nome in ("config.yaml", "cache.yaml", "manifest.yaml"):
+        (pasta / "ludusavi" / nome).write_text("x", encoding="utf-8")
+    (pasta / "config.yaml").write_text("fica", encoding="utf-8")
+
+    arquivos, valores = cd.copiar(pasta, tmp_path / "destino", origem, destino)
+
+    copiado = _ler(destino)
+    assert "pasta-dos-saves" not in copiado
+    assert copiado["texto"] == ("olá", winreg.REG_SZ) and copiado["grande"][1] == winreg.REG_QWORD
+    assert valores == 4
+    assert sorted(p.name for p in (tmp_path / "destino" / "ludusavi").iterdir()) == ["manifest.yaml"]
+    assert (tmp_path / "destino" / "config.yaml").read_text(encoding="utf-8") == "fica"
+    assert arquivos == 2

@@ -27,6 +27,12 @@ APP_ID = "io.github.joaomgabaldi.Cartridges"
 CHAVE = r"Software\GSettings\io\github\joaomgabaldi\Cartridges"
 RAIZ = winreg.HKEY_CURRENT_USER
 
+# O que a cópia -dev NÃO herda: valores e arquivos que guardam caminho absoluto para a pasta dos
+# dados reais. Copiados, o app -dev faria backup/restauração dos saves na pasta real.
+# Sem eles, o app -dev usa o padrão, dentro da própria pasta -dev (o ludusavi regrava os dois).
+IGNORAR_VALORES = frozenset({"pasta-dos-saves"})
+IGNORAR_ARQUIVOS = frozenset({"ludusavi/config.yaml", "ludusavi/cache.yaml"})
+
 
 def pasta_real() -> Path:
     return Path(os.environ["LOCALAPPDATA"]) / APP_ID
@@ -55,9 +61,11 @@ def copiar_chave(origem: str, destino: str) -> int:
                     nome, dado, tipo = winreg.EnumValue(de, indice)
                 except OSError:
                     break
+                indice += 1
+                if nome in IGNORAR_VALORES:
+                    continue
                 winreg.SetValueEx(para, nome, 0, tipo, dado)
                 copiados += 1
-                indice += 1
         indice = 0
         while True:
             try:
@@ -95,7 +103,13 @@ def copiar(
         shutil.rmtree(pasta_destino, ignore_errors=True)
         if _chave_existe(chave_destino):
             apagar_chave(chave_destino)
-    shutil.copytree(pasta_origem, pasta_destino)
+    shutil.copytree(
+        pasta_origem,
+        pasta_destino,
+        ignore=lambda pasta, nomes: [
+            n for n in nomes if (Path(pasta) / n).relative_to(pasta_origem).as_posix() in IGNORAR_ARQUIVOS
+        ],
+    )
     arquivos = sum(1 for p in pasta_destino.rglob("*") if p.is_file())
     return arquivos, copiar_chave(chave_origem, chave_destino)
 
