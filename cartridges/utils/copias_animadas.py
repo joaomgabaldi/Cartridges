@@ -31,7 +31,6 @@ except ImportError:  # Pillow sem WebP: ``_PorQuadro`` cai no caminho da lista
     _webp = None  # pylint: disable=invalid-name
 
 from cartridges import shared
-from cartridges.utils import tocador_capas
 from cartridges.utils.na_tela import entregar_na_tela
 
 # Como terminou um pedido. ``ilegivel`` é só a origem que não abre; ``falhou``
@@ -334,10 +333,6 @@ def _rodar(
             descartado = trabalho.invalido
     if resultado is None or descartado:
         return
-    if resultado == "pronta":
-        # O caminho da cópia é estável: quem já toca a anterior tem de largá-la
-        # antes de receber o aviso. Fora da ``_trava``: o tocador tem a dele.
-        tocador_capas.tocador.esquecer(destino)
     for pronto in prontos:
         entregar_na_tela(_entregar, pronto, resultado)
 
@@ -370,8 +365,6 @@ def apagar(game_id: str) -> None:
         except OSError:
             logging.warning("Não foi possível apagar a cópia animada %s", arquivo.name)
             continue
-        # Fora da ``_trava``, pelo mesmo motivo do ``_rodar``.
-        tocador_capas.tocador.esquecer(arquivo)
 
 
 def abandonar(origem: Path) -> None:
@@ -395,7 +388,6 @@ def abandonar(origem: Path) -> None:
         except OSError:
             logging.warning("Não foi possível apagar a cópia animada %s", destino.name)
             continue
-        tocador_capas.tocador.esquecer(destino)
 
 
 def adotar(origem: Path, capa: Path) -> None:
@@ -423,7 +415,6 @@ def adotar(origem: Path, capa: Path) -> None:
         finally:
             with contextlib.suppress(OSError):
                 temporario.unlink(missing_ok=True)
-        tocador_capas.tocador.esquecer(destino)
 
 
 def _dono_e_tamanho(arquivo: Path) -> tuple[str, str]:
@@ -547,12 +538,19 @@ def preparar(capas: list[tuple[str, Path]]) -> None:
         pedir(origem, destino, tamanho, partial(_voltou, lote, destino))
 
 
-def _voltou(lote: _Lote, destino: Path, _resultado: Resultado) -> None:
+# Quem quer saber de cada cópia que termina (o modelo da biblioteca): (game_id, resultado), na
+# thread principal. Um só, e global: o pedido pode ter vindo de outro lugar (``save_cover``).
+ao_terminar_copia: Callable[[str, Resultado], None] | None = None
+
+
+def _voltou(lote: _Lote, destino: Path, resultado: Resultado) -> None:
     # Um aviso tardio de lote que já terminou ou foi cancelado, ou de cópia que
     # a tarefa já deixou de esperar, não conta nem reabre nada.
     if lote is not _lote or destino not in lote.pendentes:
         return
-    del lote.pendentes[destino]
+    game_id = lote.pendentes.pop(destino)
+    if ao_terminar_copia is not None:
+        ao_terminar_copia(game_id, resultado)
     lote.feitos += 1
     lote.tarefa.atualizar(lote.feitos)
     if not lote.pendentes:

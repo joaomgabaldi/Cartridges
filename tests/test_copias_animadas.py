@@ -12,7 +12,8 @@ import pytest
 from PIL import Image
 
 from cartridges import shared
-from cartridges.utils import copias_animadas, tocador_capas
+from cartridges.modelos import tarefas
+from cartridges.utils import copias_animadas
 
 
 def _animada(caminho, duracoes, formato="WEBP", tons=None):
@@ -421,7 +422,7 @@ def _destinos(origem):
     return [copias_animadas.caminho_para(origem, t) for t in copias_animadas.tamanhos()]
 
 
-def test_abandonar_cancela_o_pendente_e_apaga_as_copias(fila, tmp_path, tocador_falso):
+def test_abandonar_cancela_o_pendente_e_apaga_as_copias(fila, tmp_path):
     # Uma prévia do seletor: as cópias moram ao lado dela.
     origem = _animada(tmp_path / "previa.webp", [100, 100])
     grade, detalhes = _destinos(origem)
@@ -434,10 +435,9 @@ def test_abandonar_cancela_o_pendente_e_apaga_as_copias(fila, tmp_path, tocador_
 
     assert recebidos == []
     assert not grade.exists() and not detalhes.exists()
-    assert ("esquecer", detalhes) in tocador_falso.eventos
 
 
-def test_abandonar_no_meio_da_geracao_descarta(fila, tmp_path, monkeypatch, tocador_falso):
+def test_abandonar_no_meio_da_geracao_descarta(fila, tmp_path, monkeypatch):
     origem = _animada(tmp_path / "previa.webp", [100] * 5)
     grade = _destinos(origem)[0]
     recebidos = []
@@ -456,7 +456,7 @@ def test_abandonar_no_meio_da_geracao_descarta(fila, tmp_path, monkeypatch, toca
     assert list(tmp_path.glob("*.tmp")) == []
 
 
-def test_adotar_copia_so_as_copias_prontas(tmp_path, tocador_falso):
+def test_adotar_copia_so_as_copias_prontas(tmp_path):
     provisoria = _animada(tmp_path / "provisoria.webp", [100, 100])
     shared.covers_dir.mkdir(parents=True, exist_ok=True)
     capa = _animada(shared.covers_dir / "g1.webp", [100, 100])
@@ -469,7 +469,6 @@ def test_adotar_copia_so_as_copias_prontas(tmp_path, tocador_falso):
     assert grade_do_jogo.read_bytes() == b"grade"
     assert not detalhes_do_jogo.exists()
     assert grade.exists(), "a da prévia fica: quem a apaga é o diálogo"
-    assert ("esquecer", grade_do_jogo) in tocador_falso.eventos
 
 
 def test_gerar_nao_recria_a_pasta_que_sumiu(tmp_path):
@@ -609,57 +608,6 @@ def test_encerrar_aborta_o_trabalho_em_andamento(fila, tmp_path, monkeypatch):
 # --- As cópias acompanham a capa, o jogo e o backup ---------------------------
 
 
-class _TocadorFalso:
-    """Só registra o que o ``esquecer`` recebeu; nenhuma thread."""
-
-    def __init__(self):
-        self.eventos = []
-
-    def esquecer(self, copia):
-        self.eventos.append(("esquecer", copia))
-
-
-@pytest.fixture
-def tocador_falso(monkeypatch):
-    falso = _TocadorFalso()
-    monkeypatch.setattr(tocador_capas, "tocador", falso)
-    return falso
-
-
-def test_copia_pronta_e_esquecida_antes_de_avisar(fila, tmp_path, tocador_falso):
-    origem, destino = _pedido(tmp_path)
-
-    copias_animadas.pedir(
-        origem, destino, (200, 300), lambda r: tocador_falso.eventos.append((r,))
-    )
-    fila.rodar_tudo()
-
-    assert tocador_falso.eventos == [("esquecer", destino), ("pronta",)]
-
-
-def test_copia_estatica_nao_e_esquecida(fila, tmp_path, tocador_falso):
-    origem, destino = _pedido(tmp_path, animada=False)
-
-    copias_animadas.pedir(origem, destino, (200, 300), lambda _r: None)
-    fila.rodar_tudo()
-
-    assert tocador_falso.eventos == []
-
-
-def test_apagar_esquece_cada_copia_apagada(tocador_falso):
-    pasta = shared.capas_animadas_dir
-    pasta.mkdir(parents=True, exist_ok=True)
-    for nome in ("g1_200x300.webp", "g1_280x420.webp", "g2_200x300.webp"):
-        (pasta / nome).write_bytes(b"x")
-
-    copias_animadas.apagar("g1")
-
-    assert sorted(copia.name for _, copia in tocador_falso.eventos) == [
-        "g1_200x300.webp",
-        "g1_280x420.webp",
-    ]
-
-
 def test_apagar_nao_leva_as_copias_de_um_id_que_comeca_igual():
     pasta = shared.capas_animadas_dir
     pasta.mkdir(parents=True, exist_ok=True)
@@ -697,7 +645,7 @@ def test_limpar():
     pasta.mkdir(parents=True, exist_ok=True)
     nomes = [
         "g1_200x300.webp",
-        "g1_280x420.webp",
+        "g1_420x630.webp",
         "g1_400x600.webp",  # tamanho que nenhuma tela usa mais
         "morto_200x300.webp",  # jogo que não existe mais
         "g1_200x300.webp.tmp",
@@ -712,7 +660,7 @@ def test_limpar():
 
     assert sorted(p.name for p in pasta.iterdir()) == [
         "g1_200x300.webp",
-        "g1_280x420.webp",
+        "g1_420x630.webp",
     ]
 
 
@@ -798,12 +746,12 @@ def tarefas_criadas(monkeypatch):
         criadas.append(_TarefaFalsa(nome, total))
         return criadas[-1]
 
-    monkeypatch.setattr(copias_animadas.tarefas, "comecar", comecar)
+    monkeypatch.setattr(tarefas, "comecar", comecar)
     return criadas
 
 
 @pytest.fixture
-def geradas(monkeypatch, tocador_falso):
+def geradas(monkeypatch):
     """Troca o ``gerar``: anota o destino de cada trabalho que rodou."""
     nomes = []
 
@@ -865,7 +813,7 @@ def test_sem_trabalho_sem_tarefa(fila, tarefas_criadas, geradas):
     assert tarefas_criadas == []
 
 
-def test_tarefa_termina_mesmo_com_ilegivel(fila, tarefas_criadas, tocador_falso):
+def test_tarefa_termina_mesmo_com_ilegivel(fila, tarefas_criadas):
     shared.covers_dir.mkdir(parents=True, exist_ok=True)
     _animada(shared.covers_dir / "a.webp", [100, 100])
     (shared.covers_dir / "b.webp").write_bytes(b"isto nao e uma imagem")
@@ -881,7 +829,7 @@ def test_tarefa_termina_mesmo_com_ilegivel(fila, tarefas_criadas, tocador_falso)
 
 
 def test_estatica_e_falhou_tambem_contam_como_feitos(
-    fila, tarefas_criadas, monkeypatch, tocador_falso
+    fila, tarefas_criadas, monkeypatch
 ):
     resultados = iter([False, copias_animadas.GravacaoFalhou()])
 
@@ -1016,7 +964,7 @@ def test_apagar_e_preparar_de_novo_conta_a_capa_nova(fila, tarefas_criadas, gera
 
 
 def test_erro_inesperado_resulta_falhou_e_a_tarefa_termina(
-    fila, tarefas_criadas, monkeypatch, tocador_falso, caplog
+    fila, tarefas_criadas, monkeypatch, caplog
 ):
     def gerar(origem, destino, tamanho, vigente):
         raise RuntimeError("ninguém previu")

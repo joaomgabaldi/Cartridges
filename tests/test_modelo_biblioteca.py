@@ -5,6 +5,8 @@
 """O modelo da grade da biblioteca e o manager que o alimenta."""
 
 import threading
+
+import pytest
 import time
 
 from PySide6.QtCore import QEventLoop, QTimer
@@ -358,3 +360,93 @@ def test_papel_carregando(app_qt):
     modelo.atualizar(jogo)
     assert modelo.data(modelo.index(0), ModeloDaBiblioteca.Papel.Carregando) is True
     assert modelo.linha(0).jogo_id == "a" and len(modelo.linhas()) == 1
+
+
+# --- Capas animadas ----------------------------------------------------------
+
+
+def _capa_animada(game_id, com_copia=True, sufixo=".webp"):
+    """Grava uma capa animada pequena em `covers_dir` e, se pedido, a cópia no tamanho da grade."""
+    from PIL import Image
+
+    from cartridges.utils import copias_animadas
+
+    caminho = shared.covers_dir / f"{game_id}{sufixo}"
+    quadros = [Image.new("RGBA", (8, 12), (tom, 0, 0, 255)) for tom in (0, 90)]
+    quadros[0].save(caminho, "WEBP", save_all=True, append_images=quadros[1:], duration=[100, 100], loop=0, lossless=True)
+    copia = copias_animadas.caminho_para(caminho, copias_animadas.tamanhos()[0])
+    if com_copia:
+        assert copias_animadas.gerar(caminho, copia, copias_animadas.tamanhos()[0])
+    return caminho, copia
+
+
+def _animada_de(modelo, linha=0):
+    return modelo.data(modelo.index(linha), ModeloDaBiblioteca.Papel.CapaAnimada)
+
+
+def test_capa_animada_aponta_para_a_copia(app_qt):
+    _, copia = _capa_animada("a")
+    modelo = ModeloDaBiblioteca()
+    modelo.atualizar(_jogo("a", "A"))
+    url = _animada_de(modelo)
+    assert url.startswith("file:///") and f"/{copia.name}?v=" in url
+    assert modelo.data(modelo.index(0), ModeloDaBiblioteca.Papel.Capa).startswith("file:///")
+
+
+def test_sem_copia_papel_vazio(app_qt):
+    _capa_animada("a", com_copia=False)
+    (shared.covers_dir / "b.tiff").write_bytes(b"x")
+    modelo = ModeloDaBiblioteca()
+    modelo.atualizar(_jogo("a", "A"))
+    modelo.atualizar(_jogo("b", "B"))
+    assert [_animada_de(modelo, 0), _animada_de(modelo, 1)] == ["", ""]
+
+
+@pytest.fixture
+def pedidos(monkeypatch):
+    from cartridges.utils import copias_animadas
+
+    feitos = []
+    monkeypatch.setattr(copias_animadas, "preparar", lambda capas: feitos.append(capas))
+    monkeypatch.setattr(copias_animadas, "ao_terminar_copia", None)
+    return feitos
+
+
+def test_copias_so_sao_pedidas_depois_de_ativar(app_qt, pedidos):
+    caminho, _ = _capa_animada("a", com_copia=False)
+    (shared.covers_dir / "b.tiff").write_bytes(b"x")
+    modelo = ModeloDaBiblioteca()
+    modelo.atualizar(_jogo("a", "A"))
+    modelo.atualizar(_jogo("b", "B"))
+    assert pedidos == [], "a limpeza da pasta vem antes"
+    modelo.ativar_copias()
+    assert pedidos == [[("a", caminho)]], "a capa parada não gera cópia"
+    caminho_c, _ = _capa_animada("c", com_copia=False)
+    modelo.atualizar(_jogo("c", "C"))  # capa animada nova depois da carga
+    assert pedidos[-1] == [("c", caminho_c)]
+
+
+def test_copia_pronta_atualiza_a_linha(app_qt, pedidos):
+    caminho, copia = _capa_animada("a", com_copia=False)
+    modelo = ModeloDaBiblioteca()
+    modelo.atualizar(_jogo("a", "A"))
+    modelo.ativar_copias()
+    mudancas = []
+    modelo.dataChanged.connect(lambda *_: mudancas.append(1))
+    from cartridges.utils import copias_animadas
+
+    copias_animadas.gerar(caminho, copia, copias_animadas.tamanhos()[0])
+    copias_animadas.ao_terminar_copia("a", "pronta")
+    assert _animada_de(modelo).startswith("file:///") and mudancas
+
+
+def test_copia_que_nao_saiu_nao_e_pedida_de_novo(app_qt, pedidos):
+    _capa_animada("a", com_copia=False)
+    modelo = ModeloDaBiblioteca()
+    jogo = _jogo("a", "A")
+    modelo.atualizar(jogo)
+    modelo.ativar_copias()
+    modelo.copia_terminou("a", "falhou")
+    modelo.atualizar(jogo)
+    assert len(pedidos) == 1
+    assert _animada_de(modelo) == ""

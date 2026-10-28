@@ -4,6 +4,7 @@
 
 """O `Aplicativo`: o que o QML pede ao app (importar) e as preferências que ele acompanha."""
 
+import ctypes
 import weakref
 from collections.abc import Callable
 from pathlib import Path
@@ -17,9 +18,18 @@ from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.utils import soltar_atalhos
 
 
+def _animacoes_do_sistema() -> bool:
+    """"Efeitos de animação" do Windows (SPI_GETCLIENTAREAANIMATION), o que o GTK da `main` seguia."""
+    ligado = ctypes.c_int(1)
+    if not ctypes.windll.user32.SystemParametersInfoW(0x1042, 0, ctypes.pointer(ligado), 0):
+        return True
+    return bool(ligado.value)
+
+
 class Aplicativo(QObject):
     importandoChanged = Signal()  # noqa: N815
     colunasMaximasChanged = Signal()  # noqa: N815
+    tocarSempreChanged = Signal()  # noqa: N815
     # Diálogo de erros da importação: título, corpo e a lista [{titulo, subtitulo}] (texto puro).
     dialogoPedido = Signal(str, str, list)  # noqa: N815
 
@@ -29,9 +39,19 @@ class Aplicativo(QObject):
         self._importando = False
         self._ao_fechar_dialogo: Callable[[], None] | None = None
         self._colunas = shared.schema.get_uint("library-rows")
+        self._tocar_sempre = shared.schema.get_boolean("cover-autoplay")
+        # shortcut: lido uma vez na abertura; a `main` religava no WM_SETTINGCHANGE. Sai se alguém mudar o ajuste com o app aberto e reclamar.
+        self._animacoes_do_sistema = _animacoes_do_sistema()
         # A `Configuracoes` entrega o aviso na thread principal; a referência fraca não prende o objeto.
         eu = weakref.ref(self)
         shared.schema.connect("changed::library-rows", lambda *_: (a := eu()) and a._ler_colunas())
+        shared.schema.connect("changed::cover-autoplay", lambda *_: (a := eu()) and a._ler_tocar_sempre())
+
+    def _ler_tocar_sempre(self) -> None:
+        tocar = shared.schema.get_boolean("cover-autoplay")
+        if tocar != self._tocar_sempre:
+            self._tocar_sempre = tocar
+            self.tocarSempreChanged.emit()
 
     def _ler_colunas(self) -> None:
         colunas = shared.schema.get_uint("library-rows")
@@ -52,6 +72,16 @@ class Aplicativo(QObject):
     def colunasMaximas(self) -> int:  # noqa: N802
         """`library-rows`: 0 deixa as colunas acompanharem a largura da janela."""
         return self._colunas
+
+    @Property(bool, notify=tocarSempreChanged)
+    def tocarSempre(self) -> bool:  # noqa: N802
+        """`cover-autoplay` ("Animar capas"): as capas animadas à vista tocam sem o mouse."""
+        return self._tocar_sempre
+
+    @Property(bool, constant=True)
+    def animacoesDoSistema(self) -> bool:  # noqa: N802
+        """Os efeitos de animação do Windows estão ligados; desligados, nenhuma capa anima."""
+        return self._animacoes_do_sistema
 
     def definir_importando(self, importando: bool) -> None:
         if importando != self._importando:

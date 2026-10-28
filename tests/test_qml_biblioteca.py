@@ -12,6 +12,7 @@ from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 
+from cartridges import aplicativo as aplicativo_modulo
 from cartridges import shared
 from cartridges.aplicativo import Aplicativo
 from cartridges.jogo import Jogo
@@ -317,4 +318,85 @@ def test_anel_e_botoes_so_por_teclado(app_qt):
     _esperar(lambda: grade.property("porTeclado") is True)
     atual = next(c for c in _cartoes(grade) if c.property("focado"))
     assert atual.property("nome") == "Beta" and atual.property("mostrarBotoes") is True
+    app.fechar()
+
+
+def _cartao_animado(app):
+    grade = app.achar("grade")
+    delegados = [item for item in grade.property("contentItem").childItems() if item.property("jogoId")]
+    cartao = delegados[0].childItems()[0]
+    return cartao, _achar(cartao, "capaAnimada")
+
+
+def _jogo_com_capa_animada():
+    from PIL import Image
+
+    from cartridges.utils import copias_animadas
+
+    caminho = shared.covers_dir / "imported_1.webp"
+    quadros = [Image.new("RGBA", (8, 12), (tom, 0, 0, 255)) for tom in (0, 90)]
+    quadros[0].save(caminho, "WEBP", save_all=True, append_images=quadros[1:], duration=[100, 100], loop=0, lossless=True)
+    tamanho = copias_animadas.tamanhos()[0]
+    assert copias_animadas.gerar(caminho, copias_animadas.caminho_para(caminho, tamanho), tamanho)
+    return _jogos((1, "Alfa", {}))
+
+
+def test_animacao_so_com_autoplay(app_qt, monkeypatch):
+    shared.schema.set_boolean("cover-autoplay", False)
+    app = _App(_jogo_com_capa_animada())
+    cartao, animada = _cartao_animado(app)
+    assert cartao.property("capaAnimada").startswith("file:///")
+    # "Animar capas" desligado: nada anima, nem com o mouse em cima (a `main` também não), e o arquivo nem é aberto.
+    assert animada.property("playing") is False and animada.property("source").toString() == ""
+    # Ligado: toca.
+    shared.schema.set_boolean("cover-autoplay", True)
+    assert _esperar(lambda: app.aplicativo.tocarSempre)
+    assert _esperar(lambda: animada.property("playing") is True)
+    assert animada.property("source").toString() == cartao.property("capaAnimada")
+    assert _esperar(lambda: animada.property("visible"))  # a animação carregou e cobre a capa parada
+    # Fora da vista da grade, nada toca nem segura o arquivo.
+    cartao.setProperty("naVista", False)
+    assert animada.property("playing") is False and animada.property("source").toString() == ""
+    shared.schema.reset("cover-autoplay")
+    app.fechar()
+
+
+def test_sem_efeitos_de_animacao_do_sistema_nada_anima(app_qt, monkeypatch):
+    monkeypatch.setattr(aplicativo_modulo, "_animacoes_do_sistema", lambda: False)
+    shared.schema.set_boolean("cover-autoplay", True)
+    app = _App(_jogo_com_capa_animada())
+    cartao, animada = _cartao_animado(app)
+    assert app.aplicativo.tocarSempre is True and app.aplicativo.animacoesDoSistema is False
+    assert cartao.property("tocarSempre") is False and animada.property("playing") is False
+    shared.schema.reset("cover-autoplay")
+    app.fechar()
+
+
+def test_grade_coberta_pelos_zerados_para(app_qt):
+    shared.schema.set_boolean("cover-autoplay", True)
+    app = _App(_jogo_com_capa_animada())
+    cartao, animada = _cartao_animado(app)
+    assert _esperar(lambda: animada.property("playing") is True)
+    QMetaObject.invokeMethod(app.achar("botaoZerados"), "click", Qt.ConnectionType.DirectConnection)
+    assert _esperar(lambda: app.janela.property("paginaAtual") == "zerados")
+    assert _esperar(lambda: animada.property("playing") is False)
+    assert animada.property("source").toString() == ""
+    shared.schema.reset("cover-autoplay")
+    app.fechar()
+
+
+def test_rolagem_so_vale_depois_de_assentar(app_qt):
+    app = _App(_jogo_com_capa_animada())
+    grade = app.achar("grade")
+    antes = grade.property("contentYParado")
+    grade.setProperty("contentY", antes + 500)
+    assert grade.property("contentYParado") == antes, "durante a rolagem os cartões não mudam"
+    assert _esperar(lambda: grade.property("contentYParado") == antes + 500)
+    app.fechar()
+
+
+def test_capa_parada_nunca_anima(app_qt):
+    app = _App(_jogos((1, "Alfa", {})))
+    cartao, animada = _cartao_animado(app)
+    assert cartao.property("capaAnimada") == "" and animada.property("playing") is False
     app.fechar()

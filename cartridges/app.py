@@ -7,6 +7,7 @@
 import builtins
 import logging
 import sys
+import threading
 from pathlib import Path
 
 # A interface é hardcoded em pt-BR (como em `cartridges.in`). Antes de importar
@@ -34,8 +35,9 @@ from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.store.store import Store
-from cartridges.utils import restauracao
+from cartridges.utils import copias_animadas, restauracao
 from cartridges.utils.hltb_backfill import HLTBBackfill
+from cartridges.utils.thread_principal import na_thread_principal
 
 _RAIZ = Path(__file__).resolve().parent
 _ICONE = _RAIZ.parent / "data" / "icons" / "hicolor" / "scalable" / "apps" / f"{shared.APP_ID}.svg"
@@ -62,6 +64,21 @@ def _medidas_da_tela(app: QGuiApplication) -> None:
     shared.details_size = (round(420 * escala), round(630 * escala))
 
 
+def _limpar_e_ativar_copias(modelo: ModeloDaBiblioteca) -> None:
+    """Limpa a pasta das cópias animadas numa thread e, só depois, libera o modelo a pedir as que faltam.
+
+    A limpeza apaga todo `.tmp` da pasta, então nenhuma geração pode começar antes dela terminar.
+    Os ids saem da loja aqui, na principal, antes de a thread começar.
+    """
+    ids = {jogo.game_id for jogo in shared.store}
+
+    def limpar() -> None:
+        copias_animadas.limpar(ids)
+        na_thread_principal(modelo.ativar_copias)
+
+    threading.Thread(target=limpar, daemon=True).start()
+
+
 def main(argv: list[str]) -> int:
     app = QGuiApplication(argv)
     app.setApplicationName("Cartridges")
@@ -74,6 +91,7 @@ def main(argv: list[str]) -> int:
     def encerrar() -> None:
         varredura_hltb.stop()
         async_manager.encerrar()
+        copias_animadas.encerrar()
 
     app.aboutToQuit.connect(encerrar)
     _configurar_log()
@@ -102,6 +120,8 @@ def main(argv: list[str]) -> int:
         if sys.stdout is not None:
             print(f"jogos carregados: {carregados}", flush=True)
         return 0
+
+    _limpar_e_ativar_copias(modelo)
 
     from cartridges.janela import qwk  # noqa: PLC0415
 

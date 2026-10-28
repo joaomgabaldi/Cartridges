@@ -11,6 +11,8 @@ Item {
     property QtObject pagina
     property bool comBusca: false
     property bool buscaAberta: false
+    // A página que está por cima na pilha; a coberta não anima capas.
+    property bool ativa: true
     // O jogo que o Enter da busca escolheu; a tela de detalhes (plano 3) o abre.
     // shortcut: só guardado, a tela de detalhes ainda não existe; sai com o plano 3.
     property string jogoEscolhido: ""
@@ -74,6 +76,9 @@ Item {
         anchors { top: barraDeBusca.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         biblioteca: raiz.pagina
         colunasMaximas: aplicativo.colunasMaximas
+        // Só com "Animar capas" e os efeitos de animação do Windows ligados (como na `main`).
+        tocarSempre: aplicativo.tocarSempre && aplicativo.animacoesDoSistema
+        ativa: raiz.ativa
         visible: !aviso.visible
 
         // Digitar com a grade em foco abre a busca, como o `key-capture-widget` da versão anterior.

@@ -13,6 +13,17 @@ Rectangle {
     required property string capa
     required property bool zerado
     required property bool carregando
+    // A cópia WebP animada no tamanho da grade; "" se a capa é parada ou a cópia ainda não saiu.
+    property string capaAnimada: ""
+    // O cartão está dentro da janela visível da grade (o delegate liga).
+    property bool naVista: true
+    // "Animar capas" (com os efeitos de animação do Windows ligados): a única forma de a capa animar.
+    // Animar ao passar o mouse não existe na `main`; fica como proposta, aguardando a aprovação do usuário.
+    property bool tocarSempre: false
+    // Sem animação o cartão mostra a capa parada; fora da vista, janela minimizada ou oculta, nada toca
+    // e o arquivo da cópia é largado.
+    readonly property bool animando: capaAnimada !== "" && naVista && tocarSempre
+        && Window.visibility !== Window.Minimized && Window.visibility !== Window.Hidden
     // O cartão sob o foco do teclado na grade (o delegate liga).
     property bool focado: false
     // O modelo da biblioteca: só `iniciar` é chamado nele; o QML nunca vê um Jogo.
@@ -70,16 +81,11 @@ Rectangle {
         Rectangle { width: parent.width; height: parent.height + cartao.radius; radius: cartao.radius }
     }
 
-    Image {
-        id: imagem
+    // A capa parada e, por cima dela, a animada; os cantos arredondados valem para as duas.
+    Item {
+        id: capa
         width: cartao.larguraDaCapa
         height: cartao.alturaDaCapa
-        source: cartao.capa !== "" ? cartao.capa : (cartao.modelo ? cartao.modelo.placeholder : "")
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
-        // Na resolução real da tela, para a capa não ficar borrada em DPI alto.
-        sourceSize: Qt.size(cartao.larguraDaCapa * Screen.devicePixelRatio,
-                            cartao.alturaDaCapa * Screen.devicePixelRatio)
         layer.enabled: true
         layer.effect: MultiEffect {
             maskEnabled: true
@@ -87,11 +93,34 @@ Rectangle {
             maskThresholdMin: 0.5  // borda suave nos cantos arredondados
             maskSpreadAtMin: 1.0
         }
+
+        Image {
+            id: imagem
+            anchors.fill: parent
+            source: cartao.capa !== "" ? cartao.capa : (cartao.modelo ? cartao.modelo.placeholder : "")
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            // Na resolução real da tela, para a capa não ficar borrada em DPI alto.
+            sourceSize: Qt.size(cartao.larguraDaCapa * Screen.devicePixelRatio,
+                                cartao.alturaDaCapa * Screen.devicePixelRatio)
+        }
+
+        AnimatedImage {
+            id: animada
+            objectName: "capaAnimada"
+            anchors.fill: parent
+            source: cartao.animando ? cartao.capaAnimada : ""
+            playing: cartao.animando
+            visible: status === AnimatedImage.Ready
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            cache: false
+        }
     }
 
     BusyIndicator {
         objectName: "carregando"
-        anchors { horizontalCenter: imagem.horizontalCenter; verticalCenter: imagem.verticalCenter }
+        anchors { horizontalCenter: capa.horizontalCenter; verticalCenter: capa.verticalCenter }
         running: cartao.carregando
         visible: cartao.carregando
         palette.dark: Tema.destaque

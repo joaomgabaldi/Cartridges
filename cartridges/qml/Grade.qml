@@ -10,6 +10,21 @@ GridView {
     property QtObject biblioteca
     // `library-rows`: 0 deixa as colunas acompanharem a largura da janela.
     property int colunasMaximas: 0
+    // `cover-autoplay`: as capas animadas à vista tocam sem o mouse.
+    property bool tocarSempre: false
+    // A página da grade está por cima (a coberta pelos Jogos Zerados não anima).
+    property bool ativa: true
+    // Onde a rolagem parou: os cartões só ligam ou desligam a animação 200 ms depois dela,
+    // como na `main`, para os que só cruzam a tela não abrirem a cópia.
+    property real contentYParado: 0
+    onContentYChanged: assentarRolagem.restart()
+    Component.onCompleted: contentYParado = contentY
+    Timer {
+        id: assentarRolagem
+        interval: 200
+        onTriggered: grade.contentYParado = grade.contentY
+    }
+    // shortcut: a `main` também parava as capas durante uma sessão de jogo; volta com a sessão, no plano 5.
 
     // O jogo que o clique na capa, o clique direito ou o Enter abrem; o receptor é do plano 3.
     signal abrirDetalhes(string jogoId)
@@ -77,6 +92,7 @@ GridView {
         required property string capa
         required property bool zerado
         required property bool carregando
+        required property string capaAnimada
         width: grade.cellWidth
         height: grade.cellHeight
 
@@ -91,6 +107,11 @@ GridView {
             capa: parent.capa
             zerado: parent.zerado
             carregando: parent.carregando
+            capaAnimada: parent.capaAnimada
+            // Só o que cruza a janela da grade toca; o GridView ainda guarda cartões além das bordas.
+            naVista: grade.ativa && grade.visible
+                && parent.y + parent.height > grade.contentYParado && parent.y < grade.contentYParado + grade.height
+            tocarSempre: grade.tocarSempre
             focado: grade.activeFocus && grade.porTeclado && parent.GridView.isCurrentItem
             menuAberto: menuDoJogo.visible && menuDoJogo.jogoId === jogoId
             onAbrirDetalhes: id => grade.abrirDetalhes(id)

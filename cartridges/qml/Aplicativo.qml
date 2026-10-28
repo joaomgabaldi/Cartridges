@@ -83,6 +83,7 @@ Principal {
         anchors.fill: parent
         pagina: paginaTodos
         comBusca: true
+        ativa: pilha.depth === 0
     }
 
     // Vazia, a pilha mostra "Todos os jogos"; "Jogos Zerados" entra por cima.

@@ -46,6 +46,7 @@ def insumos(tmp_path):
     _tocar(lib / "PySide6" / "Qt6WebEngineCore.dll")
     _tocar(lib / "PySide6" / "QtWebEngineCore.pyd")
     _tocar(lib / "PySide6" / "designer.exe")
+    _tocar(lib / "PySide6" / "plugins" / "imageformats" / "qwebp.dll")
     _tocar(lib / "PySide6" / "translations" / "qt_pt.qm")
     _tocar(lib / "PySide6" / "resources" / "icudtl.dat")
     lancador = _tocar(tmp_path / "Cartridges.exe")
@@ -92,6 +93,8 @@ def test_tira_os_modulos_do_qt_que_o_app_nao_usa(insumos, tmp_path):
     assert (pyside / "QtCore.pyd").is_file()
     for sobrou in ("Qt6WebEngineCore.dll", "QtWebEngineCore.pyd", "designer.exe", "translations", "resources"):
         assert not (pyside / sobrou).exists(), sobrou
+    # As capas animadas (AnimatedImage) dependem do plugin de WebP.
+    assert (pyside / "plugins" / "imageformats" / "qwebp.dll").is_file()
 
 
 @pytest.mark.parametrize("faltando", ["data/io.github.joaomgabaldi.Cartridges.gschema.xml.in",

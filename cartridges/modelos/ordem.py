@@ -16,7 +16,8 @@ from typing import Any, Iterable
 
 from PySide6.QtCore import QUrl
 
-from cartridges.jogo import Jogo
+from cartridges.jogo import ANIMATED_SUFFIXES, Jogo
+from cartridges.utils import copias_animadas
 from cartridges.utils.steam import parse_release_date
 
 MODOS = (
@@ -44,6 +45,8 @@ class Linha:
     tamanho: int
     estrelas: int
     carregando: bool
+    # URL da cópia WebP animada no tamanho da grade, quando já existe; senão "".
+    capa_animada: str = ""
 
     @classmethod
     def de(cls, jogo: Jogo) -> "Linha":
@@ -65,7 +68,15 @@ class Linha:
             jogo.install_size,
             jogo.stars,
             jogo.loading > 0,
+            _url_da_copia(jogo.get_cover_path()),
         )
+
+
+def _url_da_copia(caminho: Path | None) -> str:
+    """URL da cópia animada da capa, no tamanho da grade, ou "" se a capa é parada ou a cópia não existe."""
+    if caminho is None or caminho.suffix not in ANIMATED_SUFFIXES:
+        return ""
+    return _url_da_capa(copias_animadas.caminho_para(caminho, copias_animadas.tamanhos()[0]))
 
 
 def _url_da_capa(caminho: Path | None) -> str:

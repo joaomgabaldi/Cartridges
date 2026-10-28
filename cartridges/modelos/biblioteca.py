@@ -30,10 +30,10 @@ from PySide6.QtCore import (
 )
 
 from cartridges import shared
-from cartridges.jogo import STATUS_LABELS, Jogo
+from cartridges.jogo import ANIMATED_SUFFIXES, STATUS_LABELS, Jogo
 from cartridges.modelos import ordem
 from cartridges.modelos.ordem import Linha
-from cartridges.utils import restauracao
+from cartridges.utils import copias_animadas, restauracao
 
 # Como em `configuracoes.py`: `cartridges` não tem `__init__`, a partir deste arquivo.
 _PLACEHOLDER = Path(__file__).resolve().parent.parent.parent / "data" / "library_placeholder.svg"
@@ -55,12 +55,17 @@ class ModeloDaBiblioteca(QAbstractListModel):
         Capa = Qt.ItemDataRole.UserRole + 3
         Zerado = Qt.ItemDataRole.UserRole + 4
         Carregando = Qt.ItemDataRole.UserRole + 5
+        CapaAnimada = Qt.ItemDataRole.UserRole + 6
 
     def __init__(self, parent: Any = None) -> None:
         super().__init__(parent)
         self._linhas: list[Linha] = []
         self._jogos: dict[str, Jogo] = {}
         self._contagem = {"biblioteca": 0, "zerados": 0}
+        # Só depois da limpeza da pasta das cópias (`ativar_copias`): ela apaga todo `.tmp`.
+        self._copias_ativas = False
+        # (jogo, capa) cuja cópia terminou sem sair (capa parada, ilegível, disco): não pede de novo.
+        self._sem_copia: set[tuple[str, str]] = set()
 
     def roleNames(self) -> dict[int, QByteArray]:
         return {
@@ -69,6 +74,7 @@ class ModeloDaBiblioteca(QAbstractListModel):
             self.Papel.Capa: QByteArray(b"capa"),
             self.Papel.Zerado: QByteArray(b"zerado"),
             self.Papel.Carregando: QByteArray(b"carregando"),
+            self.Papel.CapaAnimada: QByteArray(b"capaAnimada"),
         }
 
     def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:  # noqa: B008
@@ -84,6 +90,7 @@ class ModeloDaBiblioteca(QAbstractListModel):
             self.Papel.Capa: linha.capa,
             self.Papel.Zerado: linha.zerado,
             self.Papel.Carregando: linha.carregando,
+            self.Papel.CapaAnimada: linha.capa_animada,
         }.get(role)
 
     def linha(self, i: int) -> Linha:
@@ -138,6 +145,8 @@ class ModeloDaBiblioteca(QAbstractListModel):
             return
         nova = Linha.de(jogo)
         self._jogos[jogo.game_id] = jogo
+        if self._copias_ativas and (caminho := self._capa_animada_sem_copia(nova)):
+            copias_animadas.preparar([(jogo.game_id, caminho)])
         if (i := self._linha_de(jogo.game_id)) < 0:
             self.beginInsertRows(QModelIndex(), len(self._linhas), len(self._linhas))
             self._linhas.append(nova)
@@ -148,6 +157,31 @@ class ModeloDaBiblioteca(QAbstractListModel):
             self._linhas[i] = nova
             self._contar(nova, 1)
             self.dataChanged.emit(self.index(i), self.index(i))
+
+    def ativar_copias(self) -> None:
+        """Libera o pedido das cópias animadas (a pasta já foi limpa) e pede as que faltam. Só na principal."""
+        self._copias_ativas = True
+        copias_animadas.ao_terminar_copia = self.copia_terminou
+        capas = [(linha.jogo_id, caminho) for linha in self._linhas if (caminho := self._capa_animada_sem_copia(linha))]
+        if capas:
+            copias_animadas.preparar(capas)
+
+    def _capa_animada_sem_copia(self, linha: Linha) -> Path | None:
+        """O arquivo da capa, se ela é animada e a cópia da grade falta (e não falhou antes)."""
+        if linha.capa_animada or (linha.jogo_id, linha.capa) in self._sem_copia:
+            return None
+        jogo = self._jogos.get(linha.jogo_id)
+        caminho = jogo.get_cover_path() if jogo is not None else None
+        return caminho if caminho is not None and caminho.suffix in ANIMATED_SUFFIXES else None
+
+    def copia_terminou(self, game_id: str, resultado: str) -> None:
+        """Uma cópia ficou pronta (ou não saiu): atualiza a linha. Só na thread principal."""
+        jogo = self._jogos.get(game_id)
+        if jogo is None:
+            return
+        if resultado != "pronta" and (i := self._linha_de(game_id)) >= 0:
+            self._sem_copia.add((game_id, self._linhas[i].capa))
+        self.atualizar(jogo)
 
     @Slot(str)
     def iniciar(self, jogoId: str) -> None:  # noqa: N803

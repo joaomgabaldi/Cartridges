@@ -118,8 +118,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_conquistas_xbox_conta.py",
     "test_conquistas_xbox_login.py",
     "test_conquistas_xbox_vigia.py",
-    "test_copias_animadas.py",
-    "test_copias_animadas_boot.py",
     "test_estilo_css.py",
     "test_fita_wizard.py",
     "test_game_logo.py",
