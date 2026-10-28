@@ -22,7 +22,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 from cartridges import shared
 from cartridges.carga import carregar_jogos_do_disco
 from cartridges.logging.session_file_handler import SessionFileHandler
-from cartridges.modelos.biblioteca import ModeloDaBiblioteca
+from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.ponte import Ponte
 from cartridges.store.managers import async_manager
 from cartridges.store.managers.exibicao_manager import ExibicaoManager
@@ -65,6 +65,8 @@ def main(argv: list[str]) -> int:
     _medidas_da_tela(app)
 
     modelo = ModeloDaBiblioteca()
+    filtros = FiltrosDaBiblioteca(modelo)
+    pagina_biblioteca = FiltroDaPagina(modelo, filtros, "biblioteca")
     shared.store = Store()
     shared.store.add_manager(FileManager(), False)
     ponte = Ponte()
@@ -82,7 +84,7 @@ def main(argv: list[str]) -> int:
 
     motor = QQmlApplicationEngine()
     qwk.registrar(motor)
-    motor.rootContext().setContextProperty("biblioteca", modelo)
+    motor.rootContext().setContextProperty("biblioteca", pagina_biblioteca)
     motor.rootContext().setContextProperty("ponte", ponte)
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))
     if not motor.rootObjects():

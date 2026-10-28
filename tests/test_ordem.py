@@ -1,0 +1,149 @@
+# test_ordem.py
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+"""Regras puras de ordenação, filtro e opções da biblioteca (sem Qt)."""
+
+from cartridges.jogo import Jogo
+from cartridges.modelos import ordem
+from cartridges.modelos.ordem import Linha
+
+
+def _linha(jogo_id, nome="X", **campos):
+    base = {
+        "jogo_id": jogo_id, "nome": nome, "capa": "", "zerado": False, "removido": False,
+        "status": "", "genero": "", "desenvolvedora": "", "publicadora": "", "anotacoes": "",
+        "lancamento": "", "adicionado": 0, "jogado_em": 0, "tempo_de_jogo": 0, "tamanho": 0,
+        "estrelas": 0, "carregando": False,
+    }  # fmt: skip
+    return Linha(**{**base, **campos})
+
+
+def _ordenar(linhas, modo):
+    return [linha.jogo_id for linha in sorted(linhas, key=lambda x: ordem.chave(x, modo))]
+
+
+def _jogo(game_id, nome, **extra):
+    return Jogo({"game_id": game_id, "source": "imported", "name": nome, **extra})
+
+
+def test_linha_le_o_jogo():
+    jogo = _jogo("a", "Alfa", genre="RPG", developer="D", publisher="P", notes="n", rating=3, playtime=7)
+    jogo.loading = 2
+    linha = Linha.de(jogo)
+    assert (linha.jogo_id, linha.nome, linha.genero, linha.desenvolvedora) == ("a", "Alfa", "RPG", "D")
+    assert (linha.publicadora, linha.anotacoes, linha.estrelas, linha.tempo_de_jogo) == ("P", "n", 3, 7)
+    assert linha.carregando is True
+    assert linha.capa == ""
+
+
+def test_jogados_recentemente_primeiro():
+    linhas = [_linha("a", jogado_em=1), _linha("b", jogado_em=30), _linha("c", jogado_em=2)]
+    assert _ordenar(linhas, "last_played") == ["b", "c", "a"]
+
+
+def test_az_e_za_com_desempate_por_id():
+    linhas = [_linha("2", "Halo"), _linha("1", "Halo"), _linha("3", "alien")]
+    assert _ordenar(linhas, "a-z") == ["3", "1", "2"]
+    assert _ordenar(linhas, "z-a") == ["2", "1", "3"]
+
+
+def test_az_ignora_a_caixa():
+    assert _ordenar([_linha("1", "halo"), _linha("2", "Alien")], "a-z") == ["2", "1"]
+
+
+def test_ordem_e_total_e_estavel():
+    linhas = [_linha("1", "Halo"), _linha("2", "Halo"), _linha("3", "halo")]
+    for modo in ordem.MODOS:
+        assert _ordenar(linhas, modo) == _ordenar(list(reversed(linhas)), modo)
+
+
+def test_sem_data_vai_para_o_fim_nos_dois_sentidos():
+    linhas = [_linha("n", "A"), _linha("v", lancamento="2020"), _linha("o", lancamento="2010")]
+    assert _ordenar(linhas, "released_newest") == ["v", "o", "n"]
+    assert _ordenar(linhas, "released_oldest") == ["o", "v", "n"]
+
+
+def test_data_parcial_ordena():
+    linhas = [_linha("c", lancamento="2/set./2012"), _linha("p", lancamento="2012")]
+    assert _ordenar(linhas, "released_oldest") == ["p", "c"]
+    assert _ordenar(linhas, "released_newest") == ["c", "p"]
+
+
+def test_mesma_data_desempata_pelo_nome():
+    linhas = [_linha("1", "B", lancamento="2012"), _linha("2", "A", lancamento="2012")]
+    assert _ordenar(linhas, "released_newest") == ["2", "1"]
+
+
+def test_sem_nota_vai_para_o_fim():
+    linhas = [
+        Linha.de(_jogo("a", "A", rating=9)),
+        Linha.de(_jogo("b", "B", rating="ótimo")),
+        Linha.de(_jogo("c", "C", rating=2)),
+    ]
+    assert [x.estrelas for x in linhas] == [5, 0, 2]
+    assert _ordenar(linhas, "rating") == ["a", "c", "b"]
+
+
+def test_newest_e_oldest():
+    linhas = [_linha("a", adicionado=5), _linha("b", adicionado=100), _linha("c", adicionado=7)]
+    assert _ordenar(linhas, "newest") == ["b", "c", "a"]
+    assert _ordenar(linhas, "oldest") == ["a", "c", "b"]
+
+
+def test_tempo_de_jogo_numerico_e_nao_textual():
+    linhas = [_linha("a", tempo_de_jogo=9), _linha("b", tempo_de_jogo=100)]
+    assert _ordenar(linhas, "playtime") == ["b", "a"]
+
+
+def test_tamanho_zero_no_fim():
+    linhas = [_linha("z", tamanho=0), _linha("g", tamanho=5), _linha("m", tamanho=2)]
+    assert _ordenar(linhas, "install_size") == ["g", "m", "z"]
+
+
+def test_modo_desconhecido_vale_last_played():
+    linhas = [_linha("a", jogado_em=1), _linha("b", jogado_em=9)]
+    assert _ordenar(linhas, "inventado") == _ordenar(linhas, "last_played") == ["b", "a"]
+
+
+def test_busca_acha_anotacao_e_publicadora():
+    linha = _linha("a", "Hollow", publicadora="Team Cherry", anotacoes="senha do cofre: 8815")
+    assert ordem.passa(linha, "cherry", "", "", "")
+    assert ordem.passa(linha, "8815", "", "", "")
+    assert ordem.passa(linha, "hollow", "", "", "")
+    assert not ordem.passa(linha, "zelda", "", "", "")
+
+
+def test_busca_acha_desenvolvedora():
+    assert ordem.passa(_linha("a", desenvolvedora="Nintendo"), "ninten", "", "", "")
+
+
+def test_busca_ignora_caixa():
+    assert ordem.passa(_linha("a", "Zelda"), "ZELDA", "", "", "")
+
+
+def test_genero_ausente_so_em_todos():
+    sem = _linha("a")
+    assert ordem.passa(sem, "", "", "", "")
+    assert not ordem.passa(sem, "", "RPG", "", "")
+    assert not ordem.passa(sem, "", "", "2020", "")
+    assert not ordem.passa(sem, "", "", "", "beaten")
+
+
+def test_filtros_somam():
+    linha = _linha("a", "Zelda", genero="RPG", lancamento="2020", status="beaten")
+    assert ordem.passa(linha, "zel", "RPG", "2020", "beaten")
+    assert not ordem.passa(linha, "zel", "RPG", "2019", "beaten")
+    assert not ordem.passa(linha, "zel", "RPG", "2020", "playing")
+    assert not ordem.passa(linha, "mario", "RPG", "2020", "beaten")
+
+
+def test_opcoes_ordenam_acentos():
+    generos, _ = ordem.opcoes([_linha("a", genero="Aventura"), _linha("b", genero="Ação"), _linha("c")])
+    assert generos == ["Ação", "Aventura"]
+
+
+def test_anos_decrescentes():
+    linhas = [_linha("a", lancamento="2010"), _linha("b", lancamento="17/set./2020"), _linha("c", lancamento="Em breve")]
+    assert ordem.opcoes(linhas)[1] == ["2020", "2010"]
+
