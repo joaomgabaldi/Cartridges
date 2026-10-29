@@ -27,6 +27,8 @@ Principal {
     // O `y` de um menu aberto por um botão da barra: abaixo dos 46 px dela, fora da área de arrasto do QWindowKit.
     function baseDaBarra(botao) { return botao.height + (alturaDaBarra - botao.height) / 2 }
 
+    telaCheia: bigPicture.visivel
+
     tituloDaBarra: paginaAtual === "todos" ? "Todos os jogos" : paginaAtual === "zerados" ? "Jogos Zerados" : detalhes.nome
 
     // Depois do setup do QWindowKit (Principal.qml), que roda no onCompleted da base.
@@ -89,6 +91,16 @@ Principal {
             onClicked: pilha.push(zerados)
         },
         BotaoDaBarra {
+            id: botaoBigPicture
+            enabled: !edicao.aberto
+            indisponivel: !bigPicture.disponivel
+            objectName: "botaoBigPicture"
+            visible: janela.paginaAtual === "todos"
+            glifo: ""
+            dica: bigPicture.disponivel ? "Big Picture" : "Requer uma placa de vídeo com aceleração 3D."
+            onClicked: bigPicture.entrar()
+        },
+        BotaoDaBarra {
             id: botaoBusca
             enabled: !edicao.aberto
             objectName: "botaoBusca"
@@ -110,9 +122,9 @@ Principal {
         anchors.fill: parent
         pagina: paginaTodos
         comBusca: true
-        ativa: pilha.depth === 0
-        // Com o diálogo de edição aberto, nada de trás recebe o mouse nem o Tab.
-        enabled: !edicao.aberto
+        ativa: pilha.depth === 0 && !bigPicture.visivel
+        // Com o diálogo de edição ou o Big Picture à frente, nada de trás recebe o mouse nem o Tab.
+        enabled: !edicao.aberto && !bigPicture.visivel
         onAbrirDetalhes: id => janela.abrirDetalhes(id)
         onEditar: id => edicao.abrir(id)
     }
@@ -122,7 +134,7 @@ Principal {
         id: pilha
         anchors.fill: parent
         visible: depth > 0
-        enabled: !edicao.aberto
+        enabled: !edicao.aberto && !bigPicture.visivel
     }
 
     Component {
@@ -131,7 +143,7 @@ Principal {
             objectName: "paginaDeZerados"
             pagina: paginaZerados
             // Coberta pelos detalhes, ela não anima capas.
-            ativa: StackView.status !== StackView.Inactive
+            ativa: StackView.status !== StackView.Inactive && !bigPicture.visivel
             onAbrirDetalhes: id => janela.abrirDetalhes(id)
             onEditar: id => edicao.abrir(id)
             StackView.onActivated: focarGrade()
@@ -211,6 +223,22 @@ Principal {
         onRetornoPerdido: dialogoDeEdicao.devolverFoco()
     }
 
+    // Acima das páginas e abaixo dos avisos. A entrada e a saída são do `bigPicture` (Python).
+    BigPicture {
+        id: camadaDoBigPicture
+        anchors.fill: parent
+        visible: bigPicture.visivel
+        animarPasso: bigPicture.animacoes
+        onVisibleChanged: if (visible) forceActiveFocus()
+        onSair: bigPicture.sair()
+    }
+
+    // De volta à grade, o foco fica no cartão do jogo que estava no centro.
+    Connections {
+        target: bigPicture
+        function onSaiu(jogoId) { todos.focarJogo(jogoId) }
+    }
+
     Avisos {
         id: camadaDeAvisos
         objectName: "camadaDeAvisos"
@@ -225,7 +253,7 @@ Principal {
         id: alvoDeSoltar
         objectName: "alvoDeSoltar"
         anchors.fill: parent
-        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto
+        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !bigPicture.visivel
         onEntered: (arrasto) => arrasto.accepted = arrasto.hasUrls
         onDropped: (soltou) => {
             if (soltou.hasUrls) aplicativo.soltar(soltou.urls)
@@ -273,7 +301,7 @@ Principal {
     property point posicaoDoPonteiro
 
     // Os botões da barra que o controle alcança com ↑ na primeira linha.
-    readonly property var botoesDaBarra: [botaoAdicionar, botaoVoltar, botaoZerados, botaoBusca, botaoMenu]
+    readonly property var botoesDaBarra: [botaoAdicionar, botaoVoltar, botaoZerados, botaoBigPicture, botaoBusca, botaoMenu]
     function botaoFocado() {
         for (var i = 0; i < botoesDaBarra.length; ++i)
             if (botoesDaBarra[i].activeFocus) return botoesDaBarra[i]
@@ -285,7 +313,7 @@ Principal {
         var melhor = null, distancia = 1e9
         for (var i = 0; i < botoesDaBarra.length; ++i) {
             var b = botoesDaBarra[i]
-            if (!b.visible || !b.enabled || b === exceto) continue
+            if (!b.visible || !b.enabled || b.indisponivel === true || b === exceto) continue
             var dx = b.mapToItem(null, b.width / 2, 0).x - x
             if (sentido && dx * sentido <= 0) continue
             var d = Math.abs(dx)
@@ -302,6 +330,7 @@ Principal {
     Connections {
         target: controle
         function onMover(dx, dy) {
+            if (bigPicture.visivel) return  // shortcut: o controle não faz nada no Big Picture (nem sai), entra na Task 6 do plano 4
             var focado = janela.botaoFocado()
             if (janela.popupAberto) {
                 controle.teclar(janela.teclaDoPasso(dx, dy))
@@ -328,23 +357,26 @@ Principal {
             }
         }
         function onPresente() {
+            if (bigPicture.visivel) return
             if (!janela.popupAberto && !janela.botaoFocado() && janela.paginaDoControle)
                 janela.paginaDoControle.mostrarSelecao()
         }
         function onAtivar() {
+            if (bigPicture.visivel) return  // shortcut: o controle não faz nada no Big Picture (nem sai), entra na Task 6 do plano 4
             var focado = janela.botaoFocado()
             if (janela.popupAberto) controle.teclar(Qt.Key_Return)
             else if (focado) focado.click()
             else if (janela.paginaDoControle) janela.paginaDoControle.abrirDetalhesDoAtual()
         }
         function onVoltar() {
+            if (bigPicture.visivel) return  // shortcut: o controle não faz nada no Big Picture (nem sai), entra na Task 6 do plano 4
             if (janela.popupAberto) controle.teclar(Qt.Key_Escape)
             else if (janela.paginaAtual !== "todos") janela.voltar()
             else if (todos.buscaAberta) todos.buscaAberta = false
         }
-        function onMenuPrincipal() { if (!janela.popupAberto) menuPrincipal.open() }
-        function onMenuDoJogo() { if (!janela.popupAberto && janela.paginaDoControle) janela.paginaDoControle.abrirMenuDoAtual() }
-        function onBuscar() { if (!janela.popupAberto && janela.paginaAtual === "todos") todos.alternarBusca() }
+        function onMenuPrincipal() { if (!bigPicture.visivel && !janela.popupAberto) menuPrincipal.open() }
+        function onMenuDoJogo() { if (!bigPicture.visivel && !janela.popupAberto && janela.paginaDoControle) janela.paginaDoControle.abrirMenuDoAtual() }
+        function onBuscar() { if (!bigPicture.visivel && !janela.popupAberto && janela.paginaAtual === "todos") todos.alternarBusca() }
         function onUsado() {
             janela.posicaoDoPonteiro = ponteiro.point.position
             janela.ponteiroEscondido = true

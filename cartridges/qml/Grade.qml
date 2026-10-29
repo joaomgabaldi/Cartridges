@@ -78,6 +78,14 @@ GridView {
         if (currentItem) grade.abrirDetalhes(currentItem.jogoId)
     }
 
+    // O foco volta ao cartão do jogo (ao sair do Big Picture), ou ao primeiro se ele não está na página.
+    function focarJogo(jogoId) {
+        var i = biblioteca.indiceDe(jogoId)
+        currentIndex = i >= 0 ? i : 0
+        positionViewAtIndex(currentIndex, GridView.Contain)
+        forceActiveFocus()
+    }
+
     readonly property bool menuAberto: menuDoJogo.visible
 
     // O passo do controle: um cartão para o lado ou para cima/baixo, sem passar da borda.

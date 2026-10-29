@@ -19,6 +19,7 @@ from cartridges.aplicativo import Aplicativo
 from cartridges.importer.source import SourceScanError
 from cartridges.jogo import Jogo
 from cartridges.modelos.avisos import FilaDeAvisos
+from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.edicao import ModeloDaEdicao
@@ -376,7 +377,9 @@ class _Janela:
         self.ponte = Ponte()
         self.aplicativo = Aplicativo(self.ponte.fila)
         self.edicao = ModeloDaEdicao(self.aplicativo)
+        self.big_picture = BigPicture(self.modelo)
         self.motor = QQmlEngine()
+        self.motor.addImageProvider("fundo", ProvedorDoFundo())
         contexto = self.motor.rootContext()
         for nome, valor in (
             ("filtros", self.filtros),
@@ -386,6 +389,7 @@ class _Janela:
             ("ponte", self.ponte),
             ("controle", ControleDaGrade(estado_do_app=lambda: Qt.ApplicationState.ApplicationInactive)),
             ("edicao", self.edicao),
+            ("bigPicture", self.big_picture),
         ):
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

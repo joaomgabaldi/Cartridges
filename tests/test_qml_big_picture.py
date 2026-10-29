@@ -9,7 +9,7 @@ import math
 import pytest
 from PIL import Image
 from PySide6.QtCore import QCoreApplication, QPoint, QPointF, Qt, QUrl
-from PySide6.QtGui import QWheelEvent
+from PySide6.QtGui import QWheelEvent, QWindow
 from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtTest import QTest
@@ -49,6 +49,8 @@ class _Tela:
                 )
             )  # fmt: skip
         self.bp = BigPicture(self.modelo)
+        self.bp.entrar()  # antes do QML existir: a lista só acompanha a biblioteca visível, e sem fila
+        self.bp.filaTerminou()
         self.motor = QQmlEngine()
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         self.motor.rootContext().setContextProperty("bigPicture", self.bp)
@@ -517,3 +519,215 @@ def test_lista_refeita_com_passo_em_curso_termina_no_indice_certo(app_qt):
     _esperar()
     assert tela.tela.property("posicao") == 2
     tela.fechar()
+
+
+# --- entrar e sair (Aplicativo inteiro) ------------------------------------------------------------
+
+
+def _aberto_com(monkeypatch, animacoes=True, quantidade=4):
+    """O Aplicativo com o Big Picture disponível (o offscreen não tem renderizador 3D) e `quantidade` jogos."""
+    from PySide6.QtCore import QMetaObject  # noqa: PLC0415
+
+    from cartridges.modelos import big_picture as modulo  # noqa: PLC0415
+    from tests.test_qml_biblioteca import _App, _jogos  # noqa: PLC0415
+
+    monkeypatch.setattr(modulo, "tem_3d", lambda _janela: True)
+    jogos = _jogos(*((n, f"Jogo {n}", {"last_played": 100 - n}) for n in range(quantidade)))
+    app = _App(jogos, animacoes=animacoes)
+    app.big_picture.definir_janela(app.janela)
+    app.clicar = lambda nome: QMetaObject.invokeMethod(app.achar(nome), "click", Qt.ConnectionType.DirectConnection)
+    return app
+
+
+def _entrar(app):
+    app.clicar("botaoBigPicture")
+    assert app.big_picture.visivel
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=5)
+
+
+def test_botao_abre_o_big_picture(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch)
+    botao = app.achar("botaoBigPicture")
+    assert botao.property("dica") == "Big Picture"
+    assert botao.property("enabled") is True and botao.property("visible") is True
+    assert app.achar("bigPicture").property("visible") is False
+    app.clicar("botaoBigPicture")
+    assert app.big_picture.visivel and app.big_picture.ocupada
+    assert app.achar("bigPicture").property("visible") is True
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=5)
+    assert app.achar("bigPicture").property("activeFocus") is True
+    assert app.janela.visibility() == QWindow.Visibility.FullScreen
+    app.fechar()
+
+
+def test_esc_sai_e_devolve_o_foco_ao_cartao_central(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch)
+    _entrar(app)
+    app.big_picture.irPara(2)
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: not app.big_picture.visivel, limite=5)
+    assert app.big_picture.jaSaiu
+    grade = app.achar("grade")
+    assert _esperar(lambda: grade.property("activeFocus") is True)
+    assert grade.property("currentIndex") == 2
+    assert app.achar("bigPicture").property("visible") is False
+    app.fechar()
+
+
+def test_botao_indisponivel_sem_3d(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch)
+    monkeypatch.setattr("cartridges.modelos.big_picture.tem_3d", lambda _janela: False)
+    app.big_picture._rever_3d()  # noqa: SLF001
+    botao = app.achar("botaoBigPicture")
+    assert botao.property("indisponivel") is True
+    assert botao.property("dica") == "Requer uma placa de vídeo com aceleração 3D."
+    app.fechar()
+
+
+def test_botao_some_fora_de_todos_e_com_a_edicao_aberta(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch)
+    app.clicar("botaoZerados")
+    assert _esperar(lambda: app.achar("botaoBigPicture").property("visible") is False)
+    app.clicar("botaoVoltar")
+    assert _esperar(lambda: app.achar("botaoBigPicture").property("visible") is True)
+    app.edicao.adicionar()
+    _esperar()
+    assert app.achar("botaoBigPicture").property("enabled") is False
+    app.fechar()
+
+
+def test_tela_cheia_esconde_a_barra(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch)
+    barra, area = app.achar("barraDeTitulo"), app.achar("areaDaJanela")
+    assert barra.property("visible") is True and area.property("y") == barra.property("height") > 0
+    _entrar(app)
+    assert app.janela.property("telaCheia") is True
+    assert barra.property("visible") is False
+    assert area.property("y") == 0
+    # Os botões da barra saem do foco: o Tab não os alcança, fica no Big Picture.
+    QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+    assert app.achar("bigPicture").property("activeFocus") is True
+    assert not any(b.property("activeFocus") for b in app.janela.property("botoesDaBarra").toVariant())
+    app.big_picture.sair()
+    assert _esperar(lambda: not app.big_picture.visivel, limite=5)
+    assert barra.property("visible") is True and area.property("y") == barra.property("height")
+    app.fechar()
+
+
+def test_fila_termina_no_estado_normal(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch)
+    _entrar(app)
+    tela = app.achar("bigPicture")
+    assert (tela.property("posicao"), tela.property("virada")) == (0, 1)
+    assert (tela.property("opacidadeCapas"), tela.property("opacidadeDoRodape")) == (1, 1)
+    assert tela.property("naFila") is False
+    app.big_picture.sair()
+    assert _esperar(lambda: not app.big_picture.visivel, limite=5)
+    assert (tela.property("posicao"), tela.property("virada")) == (0, 1)
+    assert (tela.property("opacidadeCapas"), tela.property("opacidadeDoRodape")) == (1, 1)
+    app.fechar()
+
+
+def test_fila_comeca_longe_e_corre(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch, quantidade=6)
+    app.clicar("botaoBigPicture")
+    tela = app.achar("bigPicture")
+    assert tela.property("naFila") is True
+    assert tela.property("posicao") == pytest.approx(5)  # n = jogos - 1: parte da cauda
+    assert tela.property("opacidadeCapas") == 0 and tela.property("opacidadeDoRodape") == 0
+    assert _esperar(lambda: tela.property("posicao") < 4.9, limite=2)
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=5)
+    app.fechar()
+
+
+def test_saida_parte_da_posicao_visual(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch, quantidade=6)
+    _entrar(app)
+    tela = app.achar("bigPicture")
+    app.big_picture.irPara(3)  # o passo desliza; a saída o interrompe onde está
+    assert _esperar(lambda: 0.2 < tela.property("posicao") < 2.9, limite=1)
+    visual = tela.property("posicao")
+    app.big_picture.sair()
+    assert tela.property("baseDaFila") == pytest.approx(visual)
+    assert tela.property("naFila") is True
+    assert tela.property("posicao") == pytest.approx(visual)  # o quadro 1 da saída é a capa onde estava
+    assert _esperar(lambda: not app.big_picture.visivel, limite=5)
+    app.fechar()
+
+
+def test_quadro_da_fila_em_js_igual_ao_python(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch)
+    _entrar(app)
+    tela = app.achar("bigPicture")
+    for t in (0, 0.3, 0.7, 0.9, 1):
+        esperado = regras.quadro_da_fila(t, 7, 2.5)
+        obtido = _avaliar(tela, f"quadroDaFila({t}, 7, 2.5)")
+        assert obtido == pytest.approx(list(esperado)), t
+    app.fechar()
+
+
+def test_grade_para_de_animar_com_o_big_picture(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch)
+    pagina, grade = app.achar("pagina"), app.achar("grade")
+    assert pagina.property("ativa") is True and grade.property("ativa") is True
+    _entrar(app)
+    assert pagina.property("ativa") is False and grade.property("ativa") is False
+    assert pagina.property("enabled") is False  # nem mouse nem Tab chegam à grade
+    app.big_picture.sair()
+    assert _esperar(lambda: not app.big_picture.visivel, limite=5)
+    assert pagina.property("ativa") is True and pagina.property("enabled") is True
+    app.fechar()
+
+
+def test_avisos_ficam_na_frente(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch)
+    _entrar(app)
+    tela, avisos = app.achar("bigPicture"), app.achar("camadaDeAvisos")
+    irmaos = list(tela.parentItem().childItems())
+    assert tela.parentItem() is avisos.parentItem()
+    assert irmaos.index(avisos) > irmaos.index(tela)
+    app.fechar()
+
+
+def test_sem_animacoes_do_sistema_vai_direto_ao_fim(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch, animacoes=False)
+    app.clicar("botaoBigPicture")
+    # Sem animação, a fila acaba na própria chamada.
+    assert (app.big_picture.visivel, app.big_picture.ocupada) == (True, False)
+    tela = app.achar("bigPicture")
+    assert (tela.property("posicao"), tela.property("virada"), tela.property("opacidadeCapas")) == (0, 1, 1)
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert (app.big_picture.visivel, app.big_picture.jaSaiu) == (False, True)
+    app.fechar()
+
+
+def test_animada_nao_toca_escondida(app_qt, tmp_path):
+    tela = _Tela(quantidade=3)
+    gif = tmp_path / "capa.gif"
+    Image.new("P", (50, 75)).save(gif, save_all=True, append_images=[Image.new("P", (50, 75), 1)], duration=100, loop=0)
+    tela.bp._jogos[0]["capaAnimada"] = QUrl.fromLocalFile(str(gif)).toString()  # noqa: SLF001
+    tela.bp._animar_central = True  # noqa: SLF001
+    tela.bp.jogosMudaram.emit()
+    tela.bp.animarCentralMudou.emit()
+    assert _esperar(lambda: any(_achar(c, "capaAnimada").property("source").toString() for c in _itens(tela.tela, lambda i: i.objectName() == "capaDoBigPicture")))
+    tela.bp._visivel = False  # noqa: SLF001
+    tela.bp.alterado.emit()
+    assert _esperar(lambda: not any(_achar(c, "capaAnimada").property("source").toString() for c in _itens(tela.tela, lambda i: i.objectName() == "capaDoBigPicture")))
+    tela.fechar()
+
+
+def test_dica_aparece_no_botao_indisponivel(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch)
+    monkeypatch.setattr("cartridges.modelos.big_picture.tem_3d", lambda _janela: False)
+    app.big_picture._rever_3d()  # noqa: SLF001
+    botao = app.achar("botaoBigPicture")
+    assert botao.property("indisponivel") is True and botao.property("enabled") is True
+    app.clicar("botaoBigPicture")
+    assert not app.big_picture.visivel  # o clique é ignorado
+    botao.setProperty("hoverEnabled", True)  # o offscreen não tem efeitos de hover; no Windows já vem ligado
+    centro = botao.mapToScene(QPointF(botao.width() / 2, botao.height() / 2)).toPoint()
+    QTest.mouseMove(app.janela, centro)
+    QTest.mouseMove(app.janela, centro + QPoint(1, 0))
+    assert _esperar(lambda: _avaliar(botao, "ToolTip.visible") is True, limite=5)
+    assert _avaliar(botao, "ToolTip.text") == "Requer uma placa de vídeo com aceleração 3D."
+    app.fechar()

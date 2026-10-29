@@ -12,9 +12,9 @@ chama os slots de navegação. `ProvedorDoFundo` entrega o degradê pontilhado e
 import logging
 import weakref
 
-from PySide6.QtCore import Property, QModelIndex, QObject, QSize, QTimer, Signal, Slot
-from PySide6.QtGui import QColor, QImage
-from PySide6.QtQuick import QQuickImageProvider
+from PySide6.QtCore import Property, QModelIndex, QObject, QSize, Qt, QTimer, Signal, Slot
+from PySide6.QtGui import QColor, QImage, QWindow
+from PySide6.QtQuick import QQuickImageProvider, QSGRendererInterface
 
 from cartridges import shared
 from cartridges.modelos import regras_do_big_picture as regras
@@ -44,6 +44,12 @@ class ProvedorDoFundo(QQuickImageProvider):
         return imagem
 
 
+def tem_3d(janela: QWindow) -> bool:
+    """Sem renderizador, ou com o de software, o Cover Flow não roda bem."""
+    renderizador = janela.rendererInterface()
+    return renderizador is not None and renderizador.graphicsApi() != QSGRendererInterface.GraphicsApi.Software
+
+
 def _dados(linha: Linha) -> dict[str, str]:
     return {
         "jogoId": linha.jogo_id,
@@ -60,6 +66,8 @@ class BigPicture(QObject):
     alterado = Signal()  # índice, rótulos, vazia, ocupada
     jogosMudaram = Signal()  # noqa: N815  # só a lista (um passo do carrossel não a notifica)
     animarCentralMudou = Signal()  # noqa: N815
+    filaPedida = Signal(bool)  # noqa: N815  # True: a fila de entrada; False: a de saída (o QML a anima)
+    saiu = Signal(str)  # o jogo central na saída: o foco volta ao cartão dele na grade
 
     def __init__(
         self, modelo: ModeloDaBiblioteca, parent: QObject | None = None, *, animacoes_do_sistema: bool = True
@@ -74,12 +82,19 @@ class BigPicture(QObject):
         self._carrossel = regras.Carrossel([])
         self._jogos: list[dict[str, str]] = []
         self._agendado = False
-        self._ocupada = False  # a fila de entrada e saída (Task 3) liga isto
+        self._ocupada = False  # a fila de entrada e saída
+        self._visivel = False
+        self._saindo = False
+        self._ja_saiu = False
+        self._disponivel = True
+        self._janela: QWindow | None = None
+        self._estava_maximizada = False
+        self._pendente = False
+        self._centro_pendente = ""
         modelo.rowsInserted.connect(self._agendar)
         modelo.rowsRemoved.connect(self._agendar)
         modelo.modelReset.connect(self._agendar)
         modelo.dataChanged.connect(self._dados_mudaram)
-        self.atualizar()
 
     # --- propriedades ---
     @Property("QVariantList", notify=jogosMudaram)
@@ -109,6 +124,28 @@ class BigPicture(QObject):
     def ocupada(self) -> bool:
         return self._ocupada
 
+    @Property(int, constant=True)
+    def jogosNaFila(self) -> int:  # noqa: N802
+        return regras.JOGOS_NA_FILA
+
+    @Property(bool, constant=True)
+    def animacoes(self) -> bool:
+        """As animações do Windows estão ativas: sem elas a fila e o passo vão direto ao fim."""
+        return self._animacoes_do_sistema
+
+    @Property(bool, notify=alterado)
+    def visivel(self) -> bool:
+        return self._visivel
+
+    @Property(bool, notify=alterado)
+    def disponivel(self) -> bool:
+        return self._disponivel
+
+    @Property(bool, notify=alterado)
+    def jaSaiu(self) -> bool:  # noqa: N802
+        """O usuário saiu do Big Picture nesta sessão: a entrada automática não volta."""
+        return self._ja_saiu
+
     def _ler_animar_central(self) -> bool:
         return self._animacoes_do_sistema and shared.schema.get_boolean("cover-autoplay")
 
@@ -124,19 +161,31 @@ class BigPicture(QObject):
         return self._animar_central
 
     # --- a lista segue o modelo ---
-    @Slot()
-    @Slot(str)
-    def atualizar(self, centro: str = "") -> None:
-        """Refaz a lista mantendo o jogo central (ou `centro`); se ele sumiu, fica o vizinho."""
+    def _refazer(self, centro: str = "") -> None:
         linhas = regras.jogos_da_biblioteca(self._modelo.linhas())
         self._carrossel.trocar_lista([linha.jogo_id for linha in linhas], centro or None)
         self._jogos = [_dados(linha) for linha in linhas]
         self.jogosMudaram.emit()
         self.alterado.emit()
 
+    @Slot()
+    @Slot(str)
+    def atualizar(self, centro: str = "") -> None:
+        """Refaz a lista mantendo o jogo central (ou `centro`); se ele sumiu, fica o vizinho.
+
+        Só vale visível e fora da saída; durante a fila fica pendente (só o centro mais recente) e
+        roda no `filaTerminou`.
+        """
+        if not self._visivel or self._saindo:
+            return
+        if self._ocupada:
+            self._pendente, self._centro_pendente = True, centro
+            return
+        self._refazer(centro)
+
     def _agendar(self, *_args: object) -> None:
         """Várias mudanças seguidas (uma importação) viram um só `atualizar` no próximo ciclo."""
-        if not self._agendado:
+        if self._visivel and not self._agendado:
             self._agendado = True
             QTimer.singleShot(0, self, self._rodar_agendado)
 
@@ -179,3 +228,79 @@ class BigPicture(QObject):
     @Slot(result=bool)
     def fim(self) -> bool:
         return not self._ocupada and self._foi_para(self._carrossel.fim())
+
+    # --- entrar e sair ---
+    def definir_janela(self, janela: QWindow) -> None:
+        """A janela que vai à tela cheia; o Big Picture só fica disponível com renderizador 3D."""
+        self._janela = janela
+        self._rever_3d()
+        sinal = getattr(janela, "sceneGraphInitialized", None)
+        if sinal is not None:  # o renderizador só existe depois do primeiro quadro (na thread de render)
+            sinal.connect(self._rever_3d, Qt.ConnectionType.QueuedConnection)
+
+    @Slot()
+    def _rever_3d(self) -> None:
+        janela = self._janela
+        if janela is None or janela.rendererInterface() is None:  # ainda sem renderizador: segue disponível
+            return
+        disponivel = tem_3d(janela)
+        if disponivel != self._disponivel:
+            self._disponivel = disponivel
+            self.alterado.emit()
+
+    @Slot()
+    def entrar(self) -> None:
+        if self._visivel or self._ocupada or not self._disponivel:
+            return
+        self._carrossel = regras.Carrossel([])  # sem centro a manter
+        self._refazer()  # o jogado mais recentemente no centro
+        self._visivel = True
+        self._pendente = False
+        if self._janela is not None:
+            self._estava_maximizada = self._janela.visibility() == QWindow.Visibility.Maximized
+            self._janela.showFullScreen()  # o Windows não devolve o estado maximizado sozinho (na saída)
+        self._ocupada = bool(self._jogos)
+        self.alterado.emit()
+        if self._ocupada:
+            self.filaPedida.emit(True)  # noqa: FBT003
+
+    @Slot()
+    def sair(self) -> None:
+        if self._ocupada or not self._visivel:
+            return
+        self._saindo = True
+        self._ocupada = bool(self._jogos)
+        self.alterado.emit()
+        if self._ocupada:
+            self.filaPedida.emit(False)  # noqa: FBT003
+        else:
+            self._concluir_saida()
+
+    @Slot()
+    def filaTerminou(self) -> None:  # noqa: N802
+        """O QML avisa que a fila (de entrada ou de saída) chegou ao fim."""
+        if not self._ocupada:
+            return
+        if self._saindo:
+            self._concluir_saida()
+            return
+        self._ocupada = False
+        pendente, centro = self._pendente, self._centro_pendente
+        self._pendente = False
+        self.alterado.emit()
+        if pendente:
+            self.atualizar(centro)
+
+    def _concluir_saida(self) -> None:
+        jogo = (self._central() or {}).get("jogoId", "")
+        self._saindo = self._ocupada = self._visivel = self._pendente = False
+        self._ja_saiu = True
+        self._carrossel, self._jogos = regras.Carrossel([]), []  # fora da tela nada decodifica capa (D39)
+        if self._janela is not None:
+            if self._estava_maximizada:
+                self._janela.showMaximized()
+            else:
+                self._janela.showNormal()
+        self.jogosMudaram.emit()
+        self.alterado.emit()
+        self.saiu.emit(jogo)

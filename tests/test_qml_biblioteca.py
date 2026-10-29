@@ -16,6 +16,7 @@ from cartridges import aplicativo as aplicativo_modulo
 from cartridges import shared
 from cartridges.aplicativo import Aplicativo
 from cartridges.jogo import Jogo
+from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
@@ -87,7 +88,7 @@ class _LojaFalsa(QObject):
 
 
 class _App:
-    def __init__(self, jogos):
+    def __init__(self, jogos, animacoes=True):
         self.jogos = jogos
         self.loja = _LojaFalsa(jogos)
         self.detalhes = DetalhesDoJogo(self.loja)
@@ -101,6 +102,7 @@ class _App:
         self.ponte = Ponte()
         self.aplicativo = Aplicativo(self.ponte.fila)
         self.edicao = ModeloDaEdicao(self.aplicativo)
+        self.big_picture = BigPicture(self.modelo, animacoes_do_sistema=animacoes)
         self.leitor = _LeitorFalso()
         leitor = self.leitor  # o lambda não captura `self`: senão `_App` <-> controle é um ciclo
         shared.schema.set_boolean("gamepad", True)
@@ -110,11 +112,12 @@ class _App:
         )
         self.motor = QQmlEngine()
         self.motor.addImageProvider("desfoque", self.detalhes.provedor)
+        self.motor.addImageProvider("fundo", ProvedorDoFundo())
         contexto = self.motor.rootContext()
         for nome, valor in (
             ("filtros", self.filtros), ("paginaTodos", self.todos), ("paginaZerados", self.zerados),
             ("aplicativo", self.aplicativo), ("ponte", self.ponte), ("controle", self.controle),
-            ("detalhes", self.detalhes), ("edicao", self.edicao),
+            ("detalhes", self.detalhes), ("edicao", self.edicao), ("bigPicture", self.big_picture),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

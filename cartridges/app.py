@@ -144,7 +144,6 @@ def main(argv: list[str]) -> int:
     controle = ControleDaGrade()
     detalhes = DetalhesDoJogo(shared.store, avisos=avisos)
     edicao = ModeloDaEdicao(aplicativo)
-    # shortcut: a lista se refaz a cada mudança da biblioteca mesmo invisível; a Task 3 só a atualiza visível.
     big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     motor.addImageProvider("desfoque", detalhes.provedor)
     motor.addImageProvider("fundo", ProvedorDoFundo())
@@ -158,6 +157,7 @@ def main(argv: list[str]) -> int:
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))
     if not motor.rootObjects():
         return 1
+    big_picture.definir_janela(motor.rootObjects()[0])  # a janela que vai à tela cheia
     shared.aplicativo = aplicativo
     aplicativo.verificador_de_atualizacoes = verificador  # a tela de preferências chama `check_async()` ao ligar o aviso
     # Na ordem da `main`: atualizações, HowLongToBeat, tamanho em disco.

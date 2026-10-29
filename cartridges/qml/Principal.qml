@@ -22,6 +22,8 @@ Window {
     readonly property QtObject agente: carga.item
     // Só depois do `setup`: o QWindowKit falha ao registrar itens antes dele.
     property bool agentePronto: false
+    // Tela cheia (Big Picture): a barra some e a área começa no topo.
+    property bool telaCheia: false
 
     color: usarMica ? "transparent" : Tema.fundo
     title: "Cartridges"
@@ -55,6 +57,8 @@ Window {
 
     BarraDeTitulo {
         id: barra
+        objectName: "barraDeTitulo"
+        visible: !janela.telaCheia
         anchors { top: parent.top; left: parent.left; right: parent.right }
         janela: janela
         agente: janela.agente
@@ -63,6 +67,7 @@ Window {
 
     Item {
         id: area
-        anchors { top: barra.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
+        objectName: "areaDaJanela"
+        anchors { top: janela.telaCheia ? parent.top : barra.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
     }
 }

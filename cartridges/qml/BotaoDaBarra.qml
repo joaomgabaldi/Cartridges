@@ -14,12 +14,15 @@ ToolButton {
     property string dica
     // O menu deste botão está aberto: a dica sairia por cima dele.
     property bool menuAberto: false
+    // Apagado e fora do foco, mas habilitado: um botão desabilitado não recebe hover e a dica (o porquê) não abriria.
+    property bool indisponivel: false
     // O WindowAgent da Principal, depois do setup (nulo nos testes).
     readonly property QtObject agente: Window.window && Window.window.agentePronto ? Window.window.agente : null
 
     implicitWidth: 38
     implicitHeight: 34
-    focusPolicy: Qt.TabFocus
+    focusPolicy: indisponivel ? Qt.NoFocus : Qt.TabFocus
+    opacity: indisponivel ? 0.4 : 1
     Accessible.name: dica
     ToolTip.visible: hovered && dica !== "" && !menuAberto
     ToolTip.text: dica

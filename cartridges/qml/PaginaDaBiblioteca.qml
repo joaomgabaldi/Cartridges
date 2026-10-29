@@ -18,6 +18,7 @@ Item {
     signal editar(string jogoId)
 
     function focarGrade() { grade.forceActiveFocus() }
+    function focarJogo(jogoId) { grade.focarJogo(jogoId) }
 
     // O controle do Xbox (Aplicativo.qml): o menu do jogo está aberto, e os comandos sobre o cartão atual.
     readonly property bool menuDoJogoAberto: grade.menuAberto

@@ -55,7 +55,69 @@ Item {
     }
     Behavior on posicao {
         enabled: tela.animarPasso && !tela.saltando
-        NumberAnimation { duration: tela.duracaoDoPasso; easing.type: Easing.OutCubic }
+        NumberAnimation { id: passo; duration: tela.duracaoDoPasso; easing.type: Easing.OutCubic }
+    }
+
+    // --- A fila indiana de entrada e saída (a conta é a `quadro_da_fila` de regras_do_big_picture.py) ---
+    property real t: 0
+    property real baseDaFila: 0
+    property bool entrando: true
+    property bool naFila: false
+
+    function limitar(x) { return Math.max(0, Math.min(1, x)) }
+    function quadroDaFila(t, n, base) {
+        const corrida = 1 - Math.pow(1 - limitar(t / 0.7), 3)
+        const x = limitar((t - 0.65) / 0.35)
+        const c1 = 1.4
+        const viradaDoQuadro = x > 0 ? 1 + (c1 + 1) * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2) : 0
+        return [base + n * (1 - corrida), viradaDoQuadro, Math.min(1, 5 * t), limitar((t - 0.8) / 0.2)]
+    }
+    function aplicarQuadro(instante) {
+        const [p, v, capas, rodape] = quadroDaFila(instante, Math.min(bigPicture.jogosNaFila, Math.max(0, jogos.length - 1)), baseDaFila)
+        irDireto(p)
+        virada = v
+        opacidadeCapas = capas
+        opacidadeDoRodape = rodape
+    }
+    // O estado de repouso: em cima da capa central, sem fila.
+    function reporQuadro() {
+        irDireto(indice)
+        virada = 1
+        opacidadeCapas = 1
+        opacidadeDoRodape = 1
+    }
+    function iniciarFila(entrar) {
+        passo.stop()  // o passo em curso para onde está: a saída parte da posição visual
+        entrando = entrar
+        baseDaFila = entrar ? 0 : posicao
+        naFila = true
+        aplicarQuadro(entrar ? 0 : 1)
+        if (!bigPicture.animacoes) {
+            terminarFila()
+            return
+        }
+        fila.from = entrar ? 0 : 1
+        fila.to = entrar ? 1 : 0
+        fila.duration = entrar ? 1700 : 1100
+        fila.restart()
+    }
+    function terminarFila() {
+        naFila = false
+        if (entrando) reporQuadro()
+        bigPicture.filaTerminou()
+        if (!entrando) reporQuadro()  // só depois de sair: antes o carrossel ficaria visível no escuro
+    }
+    NumberAnimation {
+        id: fila
+        target: tela
+        property: "t"
+        easing.type: Easing.Linear
+        onFinished: tela.terminarFila()
+    }
+    onTChanged: if (naFila) aplicarQuadro(t)
+    Connections {
+        target: bigPicture
+        function onFilaPedida(entrar) { tela.iniciarFila(entrar) }
     }
 
     focus: true
@@ -199,7 +261,7 @@ Item {
                     opacidadeDoReflexo: tela.reflexoOpacidade
                     // Só no fim do passo: segurando a tecla nenhuma capa de passagem carrega a cópia em alta.
                     central: vaga.i === tela.indice && Math.abs(tela.posicao - vaga.i) < 0.001
-                    animar: bigPicture.animarCentral
+                    animar: bigPicture.animarCentral && bigPicture.visivel
                     opacity: (1 - tela.progressoAbertura) * tela.opacidadeCapas
                     transform: Matrix4x4 { matrix: tela.transformacao(vaga.i) }
                 }

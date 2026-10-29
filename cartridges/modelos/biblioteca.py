@@ -377,6 +377,12 @@ class FiltroDaPagina(QSortFilterProxyModel):
         """O `jogoId` da primeira linha, para o Enter da busca."""
         return self.data(self.index(0, 0), ModeloDaBiblioteca.Papel.JogoId) or ""
 
+    @Slot(str, result=int)
+    def indiceDe(self, jogoId: str) -> int:  # noqa: N802, N803
+        """A linha do jogo nesta página, ou -1 (o foco volta a ele ao sair do Big Picture)."""
+        achados = self.match(self.index(0, 0), ModeloDaBiblioteca.Papel.JogoId, jogoId, 1, Qt.MatchFlag.MatchExactly)
+        return achados[0].row() if achados else -1
+
     @Slot(str)
     def iniciar(self, jogoId: str) -> None:  # noqa: N803
         self._fonte.iniciar(jogoId)
