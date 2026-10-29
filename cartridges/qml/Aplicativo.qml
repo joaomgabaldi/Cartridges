@@ -229,7 +229,11 @@ Principal {
         anchors.fill: parent
         visible: bigPicture.visivel
         animarPasso: bigPicture.animacoes
+        // Com a confirmação do comando na frente a camada não recebe teclas nem toques; ao fechar, retoma o foco.
+        enabled: !camadaDeAvisos.dialogoAberto
         onVisibleChanged: if (visible) forceActiveFocus()
+        onEnabledChanged: if (enabled && visible) forceActiveFocus()
+        onAbrir: bigPicture.abrirJogo()
         onSair: bigPicture.sair()
     }
 

@@ -20,6 +20,7 @@ Item {
     readonly property int capasDeCadaLado: 8
     readonly property int duracaoDoPasso: 350
     readonly property real escalaNaAbertura: 1.6
+    readonly property int duracaoDaAbertura: 400  // DURACAO_ABERTURA_MS
     readonly property real reflexoAlcance: 0.55
     readonly property real reflexoOpacidade: 0.35
 
@@ -111,6 +112,8 @@ Item {
     }
     // Na saída o quadro só volta com a camada já escondida, no escuro: antes o carrossel reapareceria.
     onVisibleChanged: if (!visible) {
+        abertura.stop()
+        progressoAbertura = 0
         reporQuadro()
         soltarPreparo()
     }
@@ -122,8 +125,32 @@ Item {
         onFinished: tela.terminarFila()
     }
     onTChanged: if (naFila) aplicarQuadro(t)
+
+    // --- Abrir o jogo: a central cresce e as outras esmaecem; no fim da ida o Python inicia o jogo ---
+    function animarAbertura(de, para) {
+        abertura.stop()
+        progressoAbertura = de
+        if (!bigPicture.animacoes) {
+            progressoAbertura = para
+            bigPicture.aberturaTerminou()
+            return
+        }
+        abertura.from = de
+        abertura.to = para
+        abertura.start()
+    }
+    NumberAnimation {
+        id: abertura
+        target: tela
+        property: "progressoAbertura"
+        duration: tela.duracaoDaAbertura
+        easing.type: Easing.OutCubic
+        onFinished: bigPicture.aberturaTerminou()
+    }
     Connections {
         target: bigPicture
+        function onAberturaPedida(de, para) { tela.animarAbertura(de, para) }
+        function onFocoPedido() { tela.forceActiveFocus() }
         function onFilaPedida(entrar) { tela.iniciarFila(entrar) }
         function onPrepararCapas() { tela.preparar() }
     }

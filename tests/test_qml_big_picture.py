@@ -5,6 +5,7 @@
 """A tela do cover flow do Big Picture: geometria, vagas, teclado, mouse e capas (QML offscreen)."""
 
 import math
+import os
 
 import pytest
 from PIL import Image
@@ -875,4 +876,115 @@ def test_entrada_com_fade_no_app(app_qt, monkeypatch):
     tela = app.achar("bigPicture")
     assert (tela.property("posicao"), tela.property("virada"), tela.property("opacidadeCapas")) == (0, 1, 1)
     app.big_picture.encerrar()
+    app.fechar()
+
+
+# --- abrir o jogo (Aplicativo inteiro; nenhum jogo é iniciado: o `launch` é falso) ------------------
+
+
+class _LaunchQueAnota:
+    """Conta as chamadas e guarda o estado da tela no instante em que o jogo seria iniciado."""
+
+    def __init__(self, app, jogo):
+        self.app, self.jogo = app, jogo
+        self.chamadas = 0
+        self.no_instante = None
+
+    def __call__(self, ao_confirmar=None):
+        if self.jogo.comando_a_conferir:
+            self.jogo._conferir_comando(ao_confirmar or self)  # noqa: SLF001  # o pedido de confirmação de verdade
+            return False
+        self.chamadas += 1
+        self.no_instante = (self.app.achar("bigPicture").property("progressoAbertura"), self.app.janela.visibility())
+        return True
+
+
+def _com_launch_falso(app, monkeypatch, indice=0):
+    monkeypatch.setattr(shared, "store", app.loja)
+    monkeypatch.setattr(shared.schema, "get_boolean", lambda chave: False if chave == "minimize-after-launch" else True)  # noqa: FBT003
+    jogo = app.jogos[indice]
+    jogo.launch = _LaunchQueAnota(app, jogo)
+    return jogo
+
+
+def test_abertura_cresce_a_central_e_esmaece_as_outras(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch)
+    jogo = _com_launch_falso(app, monkeypatch)
+    _entrar(app)
+    tela = app.achar("bigPicture")
+    largura_antes = {i: _largura(tela, i) for i in (0, 1)}
+    app.big_picture.abrirJogo()
+    assert app.big_picture.ocupada
+    assert _esperar(lambda: tela.property("progressoAbertura") > 0.4, limite=3)
+    if os.environ.get("CARTRIDGES_CAPTURA"):  # a captura do lote 4 (fora do git)
+        app.janela.grabWindow().save(os.environ["CARTRIDGES_CAPTURA"])
+    assert _esperar(lambda: tela.property("progressoAbertura") > 0.9, limite=3)
+    progresso = tela.property("progressoAbertura")
+    fator = 1 + (regras.ESCALA_NA_ABERTURA - 1) * progresso
+    assert _largura(tela, 0) == pytest.approx(largura_antes[0] * fator, rel=0.01)  # a central cresce
+    assert _largura(tela, 1) == pytest.approx(largura_antes[1], rel=0.01)  # as outras ficam
+    capas = _itens(tela, lambda i: i.objectName() == "capaDoBigPicture")
+    assert capas and all(c.property("opacity") < 0.2 for c in capas)  # tudo esmaece junto
+    assert _esperar(lambda: jogo.launch.chamadas == 1, limite=3)
+    progresso_no_launch, visibilidade = jogo.launch.no_instante
+    assert progresso_no_launch == 1 and visibilidade != QWindow.Visibility.FullScreen  # saiu da tela cheia antes
+    assert _esperar(lambda: not app.big_picture.ocupada and tela.property("progressoAbertura") == 0, limite=3)
+    assert app.janela.visibility() == QWindow.Visibility.FullScreen and tela.property("activeFocus") is True
+    app.fechar()
+
+
+def _largura(tela, i):
+    cantos = _cantos_de(tela, i)
+    return max(x for x, _ in cantos) - min(x for x, _ in cantos)
+
+
+def _cantos_de(tela, i):
+    achados = _avaliar(
+        tela,
+        f"(function(){{const m=transformacao({i}); return [[0,0],[larguraCapa,0],[larguraCapa,alturaCapa],[0,alturaCapa]]"
+        ".map(([x,y])=>{const v=m.times(Qt.vector4d(x,y,0,1)); return [v.x/v.w, v.y/v.w]})})()",
+    )
+    return [tuple(p) for p in achados]
+
+
+def _clicar_no_texto(app, texto):
+    alvo = next(
+        i for i in _itens(app.janela.contentItem(), lambda i: i.metaObject().className().startswith("QQuickText"))
+        if i.property("text") == texto and i.isVisible()
+    )  # fmt: skip
+    centro = alvo.mapToScene(QPointF(alvo.width() / 2, alvo.height() / 2))
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, centro.toPoint())
+
+
+def test_confirmacao_do_comando_na_frente_e_cancelar_volta(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch)
+    jogo = _com_launch_falso(app, monkeypatch)
+    jogo.executable, jogo.comando_a_conferir = "jogo.exe", True
+    app.ponte.ligar(jogo)
+    _entrar(app)
+    tela, avisos = app.achar("bigPicture"), app.achar("camadaDeAvisos")
+    app.big_picture.abrirJogo()
+    assert _esperar(lambda: avisos.property("dialogoAberto") is True, limite=3)
+    # A camada do Big Picture volta à tela cheia e fica atrás do diálogo, sem receber teclas nem toques.
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
+    assert app.janela.visibility() == QWindow.Visibility.FullScreen
+    irmaos = list(tela.parentItem().childItems())
+    assert irmaos.index(avisos) > irmaos.index(tela)
+    assert tela.property("enabled") is False and tela.property("activeFocus") is False
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert not app.big_picture.ocupada and jogo.launch.chamadas == 0
+    # Cancelar: o carrossel segue em tela cheia, o jogo não é iniciado e o teclado volta a ele.
+    _clicar_no_texto(app, "Cancelar")
+    assert avisos.property("dialogoAberto") is False
+    assert _esperar(lambda: tela.property("activeFocus") is True, limite=3)
+    assert app.big_picture.visivel and not app.big_picture.ocupada and jogo.launch.chamadas == 0
+    assert app.janela.visibility() == QWindow.Visibility.FullScreen
+    # Iniciar: o mesmo caminho da abertura, e o jogo é iniciado uma única vez.
+    jogo.comando_a_conferir = True
+    app.big_picture.abrirJogo()
+    assert _esperar(lambda: avisos.property("dialogoAberto") is True, limite=3)
+    _clicar_no_texto(app, "Iniciar")
+    assert _esperar(lambda: jogo.launch.chamadas == 1, limite=3)
+    assert _esperar(lambda: not app.big_picture.ocupada and tela.property("progressoAbertura") == 0, limite=3)
+    assert jogo.launch.chamadas == 1
     app.fechar()

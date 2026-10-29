@@ -228,16 +228,25 @@ class _JanelaFalsa(QObject):
     """Registra as trocas de tela cheia; `rendererInterface` devolve o gráfico pedido."""
 
     sceneGraphInitialized = Signal()  # noqa: N815
+    activeChanged = Signal()  # noqa: N815
 
     def __init__(self, maximizada=False, api=QSGRendererInterface.GraphicsApi.Direct3D11, hwnd=0):
         super().__init__()
         self.chamadas = []
+        self._ativa = True
         self.maximizada = maximizada
         self.api = api
         self.hwnd = hwnd  # 0: sem HWND, a troca é direta (sem fade)
 
     def winId(self):  # noqa: N802
         return self.hwnd
+
+    def isActive(self):  # noqa: N802
+        return self._ativa
+
+    def ativar(self, ativa):
+        self._ativa = ativa
+        self.activeChanged.emit()
 
     def visibility(self):
         return QWindow.Visibility.Maximized if self.maximizada else QWindow.Visibility.Windowed
@@ -805,3 +814,241 @@ def test_mudanca_da_biblioteca_no_escuro_fica_pendente(fade):
     concluir_cortina(bp)
     bp.filaTerminou()
     assert _ids(bp) == ["n", "a", "b", "c"] and bp.nome == "A"
+
+
+# --- abrir o jogo ---------------------------------------------------------------------------------
+
+
+class _Launch:
+    """O `launch` de mentira: nenhum jogo é iniciado. Como o de verdade, `last_played` sobe e o modelo é avisado."""
+
+    def __init__(self, modelo, jogo, devolve=True, efeito=None):
+        self.modelo, self.jogo, self.devolve, self.efeito = modelo, jogo, devolve, efeito
+        self.chamadas = 0
+        self.ao_confirmar = None
+
+    def __call__(self, ao_confirmar=None):
+        self.chamadas += 1
+        self.ao_confirmar = ao_confirmar
+        if self.efeito is not None:
+            self.efeito()
+        if self.devolve:
+            self.jogo.last_played = 99
+            self.modelo.atualizar(self.jogo)
+        return self.devolve
+
+
+@pytest.fixture
+def abrivel(app_qt, tiques, monkeypatch):
+    """a, b e c com o Big Picture aberto e o `launch` falso; `shared.store` os acha pelo id."""
+    jogos = {j.game_id: j for j in (_jogo("a", 30), _jogo("b", 20), _jogo("c", 10))}
+    modelo, bp, janela, pedidos = _com_janela(*jogos.values())
+    monkeypatch.setattr(modulo.shared, "store", SimpleNamespace(get=jogos.get))
+    for jogo in jogos.values():
+        jogo.launch = _Launch(modelo, jogo)
+    aberturas, focos = [], []
+    bp.aberturaPedida.connect(lambda de, para: aberturas.append((de, para)))
+    bp.focoPedido.connect(lambda: focos.append(1))
+    bp.entrar()
+    bp.filaTerminou()
+    return SimpleNamespace(jogos=jogos, modelo=modelo, bp=bp, janela=janela, aberturas=aberturas, focos=focos)
+
+
+def _ida(a, jogo_id="b"):
+    a.bp.atualizar(jogo_id)
+    a.bp.abrirJogo()
+    a.bp.aberturaTerminou()
+
+
+def test_abrir_jogo_pede_a_abertura_e_so_lanca_no_fim_dela(abrivel):
+    a = abrivel
+    a.bp.atualizar("b")
+    a.bp.abrirJogo()
+    assert a.bp.ocupada and a.aberturas == [(0.0, 1.0)]
+    assert a.jogos["b"].launch.chamadas == 0 and a.janela.chamadas == ["tela cheia"]
+    a.bp.aberturaTerminou()
+    assert a.jogos["b"].launch.chamadas == 1
+    assert a.janela.chamadas[:2] == ["tela cheia", "normal"]  # saiu da tela cheia antes de lançar
+
+
+def test_dois_a_seguidos_abrem_o_jogo_uma_vez(abrivel):
+    a = abrivel
+    a.bp.atualizar("b")
+    a.bp.abrirJogo()
+    a.bp.abrirJogo()
+    a.bp.aberturaTerminou()
+    a.bp.aberturaTerminou()  # o fim da volta (ou um segundo aviso) não lança de novo
+    assert a.jogos["b"].launch.chamadas == 1 and a.aberturas[0] == (0.0, 1.0)
+
+
+def test_abrir_sem_jogos_nao_faz_nada(app_qt, tiques):
+    _, bp, _, _ = _com_janela()
+    avisos = []
+    bp.aberturaPedida.connect(lambda *_: avisos.append(1))
+    bp.entrar()
+    bp.abrirJogo()
+    assert (bp.ocupada, avisos) == (False, [])
+
+
+def test_launch_recusado_volta_ao_normal(abrivel):
+    a = abrivel
+    a.jogos["b"].launch.devolve = False
+    _ida(a)
+    assert not a.bp.ocupada and a.aberturas == [(0.0, 1.0), (1.0, 0.0)]
+    assert a.janela.chamadas == ["tela cheia", "normal", "tela cheia"]
+    assert a.bp.indice == 1
+
+
+def test_confirmar_o_comando_abre_pelo_mesmo_caminho(abrivel):
+    a = abrivel
+    launch = a.jogos["b"].launch
+    launch.devolve = False
+    _ida(a)
+    confirmar, launch.devolve = launch.ao_confirmar, True  # o jogo restaurado teve o comando confirmado
+    confirmar()
+    assert a.bp.ocupada and a.aberturas[-1] == (0.0, 1.0)
+    a.bp.aberturaTerminou()
+    assert launch.chamadas == 2
+
+
+def test_confirmar_depois_de_sair_nao_abre(abrivel):
+    a = abrivel
+    a.jogos["b"].launch.devolve = False
+    _ida(a)
+    confirmar = a.jogos["b"].launch.ao_confirmar
+    a.bp.sair()
+    a.bp.filaTerminou()
+    confirmar()
+    assert not a.bp.ocupada and len(a.aberturas) == 2
+
+
+def test_launch_que_levanta_volta_ao_normal_e_propaga(abrivel):
+    a = abrivel
+
+    def estoura():
+        raise RuntimeError("falhou")
+
+    a.jogos["b"].launch.efeito = estoura
+    a.bp.atualizar("b")
+    a.bp.abrirJogo()
+    with pytest.raises(RuntimeError):
+        a.bp.aberturaTerminou()
+    assert not a.bp.ocupada and a.aberturas[-1] == (1.0, 0.0)
+    assert a.janela.chamadas == ["tela cheia", "normal", "tela cheia"]
+
+
+def test_jogo_que_sumiu_da_loja_volta_ao_normal(abrivel, monkeypatch):
+    a = abrivel
+    a.bp.abrirJogo()
+    monkeypatch.setattr(modulo.shared, "store", SimpleNamespace(get=lambda _id: None))
+    a.bp.aberturaTerminou()
+    assert not a.bp.ocupada and a.janela.chamadas[-1] == "tela cheia"
+
+
+def test_sem_sessao_volta_sozinho(abrivel, schema):
+    a = abrivel
+    schema.set_boolean("minimize-after-launch", False)
+    _ida(a)
+    assert not a.bp.ocupada and a.janela.chamadas.count("tela cheia") == 2
+    assert a.aberturas == [(0.0, 1.0), (1.0, 0.0)] and a.focos == [1]
+
+
+def test_sem_sessao_sem_minimizar_poe_tela_cheia_na_hora(abrivel, schema):
+    a = abrivel
+    schema.set_boolean("minimize-after-launch", False)
+    _ida(a)
+    assert a.janela.chamadas == ["tela cheia", "normal", "tela cheia"]
+
+
+def test_sem_sessao_minimizando_espera_a_janela_ativar(abrivel, schema):
+    # `isActive` ainda diz True (o evento de ativação não foi processado): não vale.
+    a = abrivel
+    schema.set_boolean("minimize-after-launch", True)
+    _ida(a)
+    assert not a.bp.ocupada and a.aberturas[-1] == (1.0, 0.0)
+    assert a.janela.chamadas == ["tela cheia", "normal"]
+
+
+def test_sem_sessao_tela_cheia_volta_quando_a_janela_fica_ativa(abrivel, schema):
+    a = abrivel
+    schema.set_boolean("minimize-after-launch", True)
+    _ida(a)
+    a.janela.ativar(False)
+    assert a.janela.chamadas.count("tela cheia") == 1
+    a.janela.ativar(True)
+    assert a.janela.chamadas.count("tela cheia") == 2
+    a.janela.ativar(False)
+    a.janela.ativar(True)
+    assert a.janela.chamadas.count("tela cheia") == 2  # desconectou
+
+
+def test_pagina_fora_da_tela_nao_ganha_tela_cheia_ao_ativar(abrivel, schema):
+    a = abrivel
+    schema.set_boolean("minimize-after-launch", True)
+    _ida(a)
+    a.bp.sair()
+    a.bp.filaTerminou()
+    a.janela.ativar(False)
+    a.janela.ativar(True)
+    assert a.janela.chamadas.count("tela cheia") == 1
+
+
+def test_duas_aberturas_sem_ativacao_dao_uma_tela_cheia(abrivel, schema):
+    a = abrivel
+    schema.set_boolean("minimize-after-launch", True)
+    _ida(a)
+    _ida(a)  # a janela segue minimizada: a segunda abertura não liga outra espera
+    a.janela.ativar(False)
+    a.janela.ativar(True)
+    assert a.janela.chamadas.count("tela cheia") == 2  # a entrada e a única volta
+
+
+def test_maximizada_com_ida_e_volta_de_jogo_maximiza_a_cada_saida_da_tela_cheia(app_qt, tiques, monkeypatch):
+    jogos = {"a": _jogo("a", 30)}
+    modelo, bp, janela, _ = _com_janela(*jogos.values(), maximizada=True)
+    monkeypatch.setattr(modulo.shared, "store", SimpleNamespace(get=jogos.get))
+    jogos["a"].launch = _Launch(modelo, jogos["a"])
+    bp.entrar()
+    bp.filaTerminou()
+    janela.maximizada = False  # em tela cheia a janela não conta como maximizada
+    bp.abrirJogo()
+    bp.aberturaTerminou()
+    bp.sair()
+    bp.filaTerminou()
+    assert janela.chamadas.count("maximizada") == 2  # a ida do jogo e a saída; "normal" nunca
+    assert "normal" not in janela.chamadas
+
+
+def test_voltou_do_jogo_sem_estar_ocupada_nao_faz_nada(abrivel):
+    a = abrivel
+    a.bp.voltouDoJogo()
+    assert a.janela.chamadas == ["tela cheia"] and a.aberturas == [] and a.focos == []
+
+
+def test_voltou_do_jogo_reabre_com_o_jogo_no_centro(abrivel):
+    a = abrivel
+    a.bp.atualizar("b")
+    a.bp.abrirJogo()  # ocupada, como com uma sessão em curso (o plano 5 liga o fim dela)
+    a.bp.voltouDoJogo()
+    assert not a.bp.ocupada and a.aberturas[-1] == (1.0, 0.0)
+    assert a.janela.chamadas[-1] == "tela cheia" and a.focos == [1]
+    assert (a.bp.indice, a.bp.nome) == (1, "B")
+
+
+def test_abrir_volta_com_o_jogo_aberto_no_centro(abrivel, schema):
+    # O `launch` falso muda `last_played`: o jogo aberto passa ao índice 0 e fica no centro.
+    a = abrivel
+    schema.set_boolean("minimize-after-launch", False)
+    _ida(a, "c")
+    assert _ids(a.bp)[0] == "c" and (a.bp.indice, a.bp.nome) == (0, "C")
+
+
+def test_lista_refeita_durante_a_abertura_fica_para_a_volta(abrivel):
+    a = abrivel
+    a.bp.atualizar("b")
+    a.bp.abrirJogo()
+    a.modelo.atualizar(_jogo("n", 99))
+    _esperar()
+    assert _ids(a.bp) == ["a", "b", "c"]  # ocupada: pendente
+    a.bp.voltouDoJogo()
+    assert _ids(a.bp) == ["n", "a", "b", "c"] and a.bp.nome == "B"

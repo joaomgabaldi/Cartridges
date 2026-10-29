@@ -83,6 +83,8 @@ class BigPicture(QObject):
     filaPedida = Signal(bool)  # noqa: N815  # True: a fila de entrada; False: a de saída (o QML a anima)
     saiu = Signal(str)  # o jogo central na saída: o foco volta ao cartão dele na grade
     prepararCapas = Signal()  # noqa: N815  # P1: o QML decodifica as capas da fila e responde `capasProntas`
+    aberturaPedida = Signal(float, float)  # noqa: N815  # (de, para): o QML anima `progressoAbertura` e responde `aberturaTerminou`
+    focoPedido = Signal()  # noqa: N815  # o bloqueio do jogo levou o foco: a camada o retoma
 
     def __init__(
         self,
@@ -126,6 +128,9 @@ class BigPicture(QObject):
         self._estava_maximizada = False
         self._pendente = False
         self._centro_pendente = ""
+        self._jogo_aberto = ""  # o jogo que a abertura em curso inicia
+        self._indo = False  # a animação de ida (a volta não lança nada)
+        self._esperando_ativacao = False
         modelo.rowsInserted.connect(self._agendar)
         modelo.rowsRemoved.connect(self._agendar)
         modelo.modelReset.connect(self._agendar)
@@ -368,6 +373,94 @@ class BigPicture(QObject):
     def _fim_da_saida(self) -> None:
         self._saindo = self._ocupada = self._pendente = False
         self.alterado.emit()
+
+    # --- abrir o jogo ---
+    @Slot()
+    def abrirJogo(self) -> None:  # noqa: N802
+        if (central := self._central()) is not None:
+            self._abrir(central["jogoId"])
+
+    def _abrir(self, jogo_id: str) -> None:
+        if self._ocupada or not self._visivel:
+            return
+        self._ocupada = self._indo = True
+        self._jogo_aberto = jogo_id
+        self.alterado.emit()
+        self.aberturaPedida.emit(0.0, 1.0)
+
+    def _janela_normal(self) -> None:
+        if self._janela is None:
+            return
+        if self._estava_maximizada:
+            self._janela.showMaximized()
+        else:
+            self._janela.showNormal()
+
+    def _voltar_a_tela_cheia(self) -> None:
+        if self._janela is not None:
+            self._janela.showFullScreen()
+
+    @Slot()
+    def aberturaTerminou(self) -> None:  # noqa: N802
+        """O QML avisa que a capa terminou de crescer: sai da tela cheia e inicia o jogo."""
+        if not self._indo:
+            return  # o fim da volta
+        self._indo = False
+        self._janela_normal()
+        jogo = shared.store.get(self._jogo_aberto) if shared.store is not None else None
+        try:
+            # Confirmado o comando de um jogo restaurado, abre pelo mesmo caminho. Referência fraca: o
+            # callback fica na ponte, que sobrevive a este objeto.
+            eu, jogo_id = weakref.ref(self), self._jogo_aberto
+            aberto = jogo is not None and jogo.launch(ao_confirmar=lambda: (b := eu()) and b._abrir(jogo_id))
+        except Exception:
+            self._desistir_da_abertura()
+            raise
+        if not aberto:
+            self._desistir_da_abertura()
+        else:
+            # shortcut: sempre "sem sessão" até o plano 5 (a sessão), que escolhe aqui e liga o fim dela a `voltouDoJogo`.
+            self._voltar_sem_sessao()
+
+    def _desistir_da_abertura(self) -> None:
+        """O jogo não abriu (comando a conferir, erro, sumiu): a capa volta e a tela cheia também."""
+        self.aberturaPedida.emit(1.0, 0.0)
+        self._voltar_a_tela_cheia()
+        self._destravar()
+
+    def _reabrir(self) -> None:
+        self._pendente, self._centro_pendente = True, self._jogo_aberto  # o jogado agora vai ao centro
+        self.aberturaPedida.emit(1.0, 0.0)
+        self._destravar()
+        self.focoPedido.emit()  # o bloqueio do jogo levou o foco; sem ele o teclado não chega aqui
+
+    @Slot()
+    def voltouDoJogo(self) -> None:  # noqa: N802
+        # shortcut: ninguém chama até o plano 5 (a sessão), que liga o fim da sessão a este slot.
+        if not self._ocupada:
+            return
+        self._voltar_a_tela_cheia()
+        self._reabrir()
+
+    def _voltar_sem_sessao(self) -> None:
+        # Com "minimizar ao abrir" o `launch` acabou de minimizar a janela, e `isActive` só muda no
+        # ciclo seguinte: não dá para decidir pelo foco. Põe a tela cheia quando ela voltar a ficar ativa.
+        self._reabrir()
+        if not shared.schema.get_boolean("minimize-after-launch"):
+            self._voltar_a_tela_cheia()
+        elif self._janela is not None and not self._esperando_ativacao:
+            self._esperando_ativacao = True
+            self._janela.activeChanged.connect(self._ao_ativar)
+
+    @Slot()
+    def _ao_ativar(self) -> None:
+        janela = self._janela
+        if janela is None or not janela.isActive():
+            return
+        janela.activeChanged.disconnect(self._ao_ativar)
+        self._esperando_ativacao = False
+        if self._visivel:
+            self._voltar_a_tela_cheia()
 
     # --- fade do monitor (ADR 0003) ---
     def _hwnd(self) -> int:
