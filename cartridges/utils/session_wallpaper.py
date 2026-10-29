@@ -50,11 +50,9 @@ from pathlib import Path
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 from uuid import uuid4
 
-from gi.repository import GLib
 from PIL import Image, ImageFilter, ImageOps
 
 from cartridges import shared
-from cartridges.utils import window_geometry
 from cartridges.utils.download import MAX_WALLPAPER_BYTES, download_bytes
 from cartridges.utils.ler_json import ler_json
 from cartridges.utils.wallhaven import IMAGE_SUFFIXES, melhor_para
@@ -634,6 +632,10 @@ def comecar(game: "Game") -> None:
     tela para vestir, e quando um segundo monitor voltar quem religa é o
     usuário, nas Preferências.
     """
+    # shortcut: a sessão (comecar/aplicar/_vestir) ainda usa o GLib e o window_geometry do GTK,
+    # importados só aqui para a escolha da parede (edição, ligação de zerados) carregar sem o gi; plano 5.
+    from cartridges.utils import window_geometry  # noqa: PLC0415
+
     if not window_geometry.has_secondary_monitor():
         shared.schema.set_boolean("session-wallpaper", False)
         return
@@ -692,6 +694,8 @@ def aplicar(game: "Game", sessao: int) -> None:
         logging.warning("Não foi possível preparar a arte da sessão: %s", erro)
         return
 
+    from gi.repository import GLib  # noqa: PLC0415  (ver o shortcut em `comecar`)
+
     GLib.idle_add(_vestir, sessao, quadros)
 
 
@@ -708,7 +712,7 @@ def _vestir(sessao: int, quadros: list[tuple[str, Path]]) -> bool:
                 arquivo.unlink(missing_ok=True)
             except OSError:
                 pass
-        return GLib.SOURCE_REMOVE
+        return False  # GLib.SOURCE_REMOVE
 
     try:
         originais = json.loads(shared.schema.get_string(_CHAVE_ORIGINAIS) or "{}")
@@ -729,7 +733,7 @@ def _vestir(sessao: int, quadros: list[tuple[str, Path]]) -> bool:
                     if (atual := area.papel(monitor)) is not None:
                         originais[monitor] = atual
             if not originais:
-                return GLib.SOURCE_REMOVE
+                return False  # GLib.SOURCE_REMOVE
             shared.schema.set_string(_CHAVE_ORIGINAIS, json.dumps(originais))
 
             for monitor, arquivo in quadros:
@@ -738,7 +742,7 @@ def _vestir(sessao: int, quadros: list[tuple[str, Path]]) -> bool:
                     area.vestir(monitor, str(arquivo))
     except Exception as erro:  # pylint: disable=broad-except
         logging.warning("Não foi possível vestir os monitores: %s", erro)
-    return GLib.SOURCE_REMOVE
+    return False  # GLib.SOURCE_REMOVE
 
 
 def restaurar() -> None:

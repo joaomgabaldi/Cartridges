@@ -19,31 +19,24 @@ no log — escolher às cegas estragaria dados.
 
 import logging
 
-from gi.repository import Adw, GLib
-
 from cartridges import shared
 from cartridges.conquistas import historico
-from cartridges.game import Game
-from cartridges.utils.thread_principal import eh_thread_principal
+from cartridges.jogo import Jogo
+from cartridges.utils.thread_principal import eh_thread_principal, na_thread_principal
 from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper
 from cartridges.utils.save_cover import save_cover
 
 
-def agendar(jogo: Game) -> None:
+def agendar(jogo: Jogo) -> None:
     """Pede a ligação na thread principal. Seguro de qualquer thread."""
-
-    def _tick() -> bool:
-        ligar_zerado(jogo)
-        return False
-
-    GLib.idle_add(_tick)
+    na_thread_principal(ligar_zerado, jogo)
 
 
 def _vazio(valor) -> bool:
     return valor in (None, "", 0) or (isinstance(valor, str) and not valor.strip())
 
 
-def _mover_capa(zerado: Game, jogo: Game) -> None:
+def _mover_capa(zerado: Jogo, jogo: Jogo) -> None:
     # Pela troca de capa de sempre: ela invalida as cópias animadas da capa
     # anterior (o nome delas é só o id) e atualiza a capa na tela.
     origem = zerado.get_cover_path()
@@ -51,7 +44,7 @@ def _mover_capa(zerado: Game, jogo: Game) -> None:
         save_cover(jogo.game_id, origem)
 
 
-def _mover_escolhas(zerado: Game, jogo: Game) -> None:
+def _mover_escolhas(zerado: Jogo, jogo: Jogo) -> None:
     """Leva a escolha manual do zerado, só se o jogo não tiver uma própria.
 
     "Escolha própria" é qualquer decisão travada do jogo, não só a presença de
@@ -86,9 +79,9 @@ def _mover_escolhas(zerado: Game, jogo: Game) -> None:
         session_fita.salvar_brilho(jogo.game_id, jogo.name, brilho)
 
 
-def ligar_zerado(jogo: Game) -> bool:
+def ligar_zerado(jogo: Jogo) -> bool:
     """Liga ``jogo`` ao zerado de mesmo appID. True: ligou."""
-    assert eh_thread_principal(), "ligar_zerado toca a store e widgets"
+    assert eh_thread_principal(), "ligar_zerado toca a store e a fila de avisos"
     appid = getattr(jogo, "steam_appid", None)
     if not appid or jogo.removed or jogo.blacklisted:
         return False
@@ -131,31 +124,19 @@ def ligar_zerado(jogo: Game) -> bool:
     jogo.save()
     jogo.update()
 
-    shared.win.retirar_da_grade(zerado)
+    # O `jogo_excluido` da store tira o zerado da grade e, se a página de
+    # detalhes dele estiver aberta, sai dela (`DetalhesDoJogo._excluido`) — do
+    # contrário ela seguiria um jogo que não existe mais na store, e qualquer
+    # ação ali (mudar status, editar) reviveria o arquivo apagado, contando o
+    # tempo em dobro numa próxima ligação. Mesmo caminho do Excluir.
     shared.store.excluir(zerado, apagar_sessoes=False)
 
-    # Se a tela de detalhes do zerado ainda estiver aberta, sai dela — do
-    # contrário `active_game` continua apontando para um jogo que não existe
-    # mais na store, e qualquer ação ali (mudar status, editar) reviveria o
-    # arquivo apagado, contando o tempo em dobro numa próxima ligação. Mesmo
-    # caminho do Excluir.
-    if (
-        getattr(shared.win, "active_game", None) is zerado
-        and shared.win.navigation_view.get_visible_page() == shared.win.details_page
-    ):
-        shared.win.navigation_view.pop()
-
-    shared.win.library.invalidate_sort()
-    shared.win.library.invalidate_filter()
-    shared.win.zerados_library.invalidate_filter()
-    shared.win.set_library_child()
-
-    # A variável é o nome do jogo
-    toast = Adw.Toast.new(
-        _("Os dados de {} em Jogos Zerados foram transferidos para a biblioteca").format(
-            jogo.name
+    if shared.aplicativo is not None:
+        # Texto puro: a fila de avisos não interpreta markup.
+        # A variável é o nome do jogo
+        shared.aplicativo.avisos.adicionar(
+            _("Os dados de {} em Jogos Zerados foram transferidos para a biblioteca").format(
+                jogo.name
+            )
         )
-    )
-    toast.set_use_markup(False)
-    shared.win.toast_queue.add(toast)
     return True
