@@ -216,8 +216,9 @@ Rectangle {
         color: Tema.fundo
         border.color: Tema.botaoSobre
         clip: true
-        // Com um seletor do SteamGridDB aberto por cima, nada daqui recebe o mouse nem o Tab.
+        // Com um seletor aberto por cima, nada daqui recebe o mouse nem o Tab.
         enabled: !edicao.seletorDeCapa.aberto && !edicao.seletorDeLogo.aberto
+            && !edicao.seletorDaSteam.aberto && !edicao.seletorDoLudusavi.aberto
 
         Flickable {
             id: rolagem
@@ -349,6 +350,22 @@ Rectangle {
                         text: edicao.nome
                         onEditado: edicao.nome = text
                         onConfirmado: campoExecutavel.forceActiveFocus(Qt.TabFocusReason)
+                        BotaoDeLinha {
+                            objectName: "botaoBuscarMetadados"
+                            visible: !edicao.buscandoMetadados
+                            enabled: edicao.nome.trim() !== ""
+                            glifo: "\uE896"  // baixar
+                            dica: "Buscar dados na Steam pelo título"
+                            onClicked: edicao.buscarMetadados()
+                        }
+                        BusyIndicator {
+                            objectName: "carregandoMetadados"
+                            visible: edicao.buscandoMetadados
+                            running: visible
+                            implicitWidth: 34
+                            implicitHeight: 34
+                            Accessible.name: "Buscando dados na Steam"
+                        }
                     }
                     LinhaDeTexto {
                         objectName: "campoDesenvolvedora"
@@ -548,9 +565,6 @@ Rectangle {
                             }
                         }
                     }
-                    // shortcut: o botão "Buscar na Steam" desta linha, o "Buscar dados na Steam pelo título" da
-                    // linha do título e o seletor da linha do Ludusavi entram com a tarefa 9; até lá a linha
-                    // só mostra o AppID e o jogo escolhido.
                     LinhaDeTexto {
                         id: campoAppid
                         objectName: "campoAppid"
@@ -561,6 +575,13 @@ Rectangle {
                         text: edicao.appid
                         onEditado: edicao.appid = text
                         onConfirmado: if (!edicao.ocupado) edicao.aplicar()
+                        BotaoDeLinha {
+                            objectName: "botaoBuscarAppid"
+                            enabled: edicao.nome.trim() !== ""
+                            glifo: "\uE721"  // buscar
+                            dica: "Buscar na Steam"
+                            onClicked: edicao.buscarAppid()
+                        }
                     }
                     Item {
                         id: linhaDoLudusavi
@@ -569,8 +590,35 @@ Rectangle {
                         width: parent.width
                         implicitHeight: 58
                         Rectangle { width: parent.width; height: 1; color: Tema.borda; visible: linhaDoLudusavi.y > 0 }
+                        // A linha inteira é o botão que abre o seletor; sem a lista baixada, ela fica desabilitada.
+                        Button {
+                            id: botaoDoLudusavi
+                            objectName: "botaoJogoNoLudusavi"
+                            anchors.fill: parent
+                            enabled: edicao.ludusaviDisponivel
+                            focusPolicy: Qt.StrongFocus
+                            Accessible.name: "Jogo no Ludusavi: " + edicao.ludusaviSubtitulo
+                            Accessible.role: Accessible.Button
+                            Keys.onReturnPressed: click()
+                            Keys.onEnterPressed: click()
+                            onClicked: edicao.escolherJogoNoLudusavi()
+                            contentItem: Item {}
+                            background: Rectangle {
+                                radius: 8
+                                color: botaoDoLudusavi.down ? Tema.pressionado : botaoDoLudusavi.hovered ? Tema.botaoSobre : "transparent"
+                                border { width: botaoDoLudusavi.visualFocus ? 2 : 0; color: Tema.destaque }
+                            }
+                        }
+                        Text {
+                            anchors { right: parent.right; rightMargin: 16; verticalCenter: parent.verticalCenter }
+                            visible: edicao.ludusaviDisponivel
+                            text: "\uE76C"  // seta para a direita
+                            textFormat: Text.PlainText
+                            color: Tema.textoSecundario
+                            font { family: Tema.fonteDeIcones; pixelSize: 12 }
+                        }
                         Column {
-                            anchors { left: parent.left; leftMargin: 16; right: parent.right; rightMargin: 16; verticalCenter: parent.verticalCenter }
+                            anchors { left: parent.left; leftMargin: 16; right: parent.right; rightMargin: 36; verticalCenter: parent.verticalCenter }
                             Text {
                                 width: parent.width
                                 text: "Jogo no Ludusavi"

@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Os seletores de capa e de logo do SteamGridDB (D41, camada 2; o desenho é `SeletorDeImagens.qml`).
+"""Os seletores do diálogo de edição (D41, camada 2): capa e logo do SteamGridDB (`SeletorDeImagens.qml`),
+jogo da Steam (`SeletorDaSteam.qml`) e jogo do Ludusavi (`SeletorDoLudusavi.qml`).
 
 Cada um é uma lista de miniaturas: a busca devolve os endereços, as linhas aparecem "carregando" e as
 miniaturas chegam uma a uma. Escolher baixa a imagem original e a entrega ao diálogo de edição
@@ -42,6 +43,8 @@ from PySide6.QtCore import (
 )
 
 from cartridges import shared
+from cartridges.saves import ludusavi
+from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.utils import game_logo
 from cartridges.utils.busca_do_seletor import BuscaDoSeletor, tamanho_baixado
 from cartridges.utils.download import (
@@ -51,7 +54,8 @@ from cartridges.utils.download import (
     download_bytes,
 )
 from cartridges.utils.logo_arquivos import IMAGE_SUFFIXES
-from cartridges.utils.name_cleaner import clean_game_name
+from cartridges.utils.name_cleaner import clean_for_search, clean_game_name
+from cartridges.utils.steam import SteamAPIHelper, SteamGameNotFoundError, SteamNotAGameError, SteamRateLimiter
 from cartridges.utils.steamgriddb import SgdbAuthError, SgdbError, SgdbHelper
 from cartridges.utils.thread_principal import na_thread_principal
 
@@ -615,3 +619,419 @@ class SeletorDeLogo(_SeletorDoSteamGridDB):
 
     def _entregar(self, arquivo: Path) -> None:
         self._destino.entregar_logo_baixado(arquivo)
+
+
+class SeletorDaSteam(BuscaDoSeletor, QAbstractListModel):
+    """Qual jogo da Steam é este: a lista de candidatos da loja para o título digitado.
+
+    Serve à linha "AppID da Steam" (escolher só preenche o campo) e ao "Buscar dados na Steam pelo título"
+    quando nenhum candidato é confiável (escolher continua a busca de metadados). Escolher baixa os dados
+    do jogo e os entrega ao diálogo de edição (`steam_escolhida`). Só na thread principal; o que as threads
+    entregam a um seletor que já fechou, ou que já buscou outra coisa, é descartado.
+    """
+
+    class Papel(IntEnum):
+        Nome = Qt.ItemDataRole.UserRole + 1
+        Appid = Qt.ItemDataRole.UserRole + 2
+        Ano = Qt.ItemDataRole.UserRole + 3
+
+    abertoChanged = Signal()  # noqa: N815
+    buscaChanged = Signal()  # noqa: N815
+    estadoChanged = Signal()  # noqa: N815
+
+    # Mais que nos outros seletores: cada pausa na digitação é um pedido à loja da Steam, que limita a frequência.
+    atraso_da_busca_ms = 700
+
+    def __init__(self, destino: Any, parent: Any = None) -> None:
+        super().__init__(parent)
+        # Referência fraca, como nos seletores do SteamGridDB (ver `_SeletorDoSteamGridDB`).
+        self._destino_fraco = weakref.ref(destino)
+        # O `SteamAPIHelper` do app (ou um próprio, na falta dele); os testes põem um falso aqui.
+        self.helper: Optional[SteamAPIHelper] = None
+        self._linhas: list[dict[str, str]] = []
+        self._aberto = False
+        self._generation = 0
+        self._closed = True
+        self._last_query: Optional[str] = None
+        self._busca = ""
+        self._buscando = False
+        self._vazio = False
+        self._erro = False
+        self._titulo = ""
+        self._descricao = ""
+        self._para_metadados = False
+
+    @property
+    def _destino(self) -> Any:
+        return self._destino_fraco()
+
+    def helper_da_steam(self) -> SteamAPIHelper:
+        # O mesmo limitador do app inteiro: um por busca vazaria a thread de reposição dele.
+        if self.helper is None:
+            gerente = shared.store.managers.get(SteamAPIManager) if shared.store is not None else None
+            self.helper = gerente.steam_api_helper if gerente else SteamAPIHelper(SteamRateLimiter())
+        return self.helper
+
+    # -- o modelo --------------------------------------------------------------------------------
+
+    def roleNames(self) -> dict[int, QByteArray]:  # noqa: N802
+        return {
+            self.Papel.Nome: QByteArray(b"nome"),
+            self.Papel.Appid: QByteArray(b"appid"),
+            self.Papel.Ano: QByteArray(b"ano"),
+        }
+
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:  # noqa: B008, N802
+        return 0 if parent.isValid() else len(self._linhas)
+
+    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+        if not index.isValid() or not 0 <= index.row() < len(self._linhas):
+            return None
+        linha = self._linhas[index.row()]
+        match role:
+            case self.Papel.Nome:
+                return linha["nome"]
+            case self.Papel.Appid:
+                return linha["appid"]
+            case self.Papel.Ano:
+                return linha["ano"]
+        return None
+
+    # -- propriedades ----------------------------------------------------------------------------
+
+    @Property(bool, notify=abertoChanged)
+    def aberto(self) -> bool:
+        return self._aberto
+
+    @Property(str, notify=buscaChanged)
+    def busca(self) -> str:
+        return self._busca
+
+    @busca.setter
+    def busca(self, texto: str) -> None:
+        if self._aberto and texto != self._busca:
+            self._busca = texto
+            self.buscaChanged.emit()
+            self._on_search_changed()
+
+    @Property(bool, notify=estadoChanged)
+    def buscando(self) -> bool:
+        """A busca da lista, ou a dos dados do jogo escolhido, ainda corre."""
+        return self._buscando
+
+    @Property(bool, notify=estadoChanged)
+    def vazio(self) -> bool:
+        return self._vazio
+
+    @Property(bool, notify=estadoChanged)
+    def erro(self) -> bool:
+        return self._erro
+
+    @Property(str, notify=estadoChanged)
+    def tituloDoEstado(self) -> str:  # noqa: N802
+        return self._titulo
+
+    @Property(str, notify=estadoChanged)
+    def descricaoDoEstado(self) -> str:  # noqa: N802
+        return self._descricao
+
+    # -- buscar ----------------------------------------------------------------------------------
+
+    @Slot(str)
+    def abrir(self, nome: str) -> None:
+        """Pela linha do AppID: escolher só preenche o campo."""
+        self._abrir(nome, False)
+
+    def abrir_para_metadados(self, nome: str) -> None:
+        """Pela busca de metadados: escolher continua a busca com o jogo escolhido."""
+        self._abrir(nome, True)
+
+    def _abrir(self, nome: str, para_metadados: bool) -> None:
+        if self._aberto:
+            self.fechar()
+        self._closed = False
+        self._aberto = True
+        self._para_metadados = para_metadados
+        self._busca = clean_game_name(nome)
+        self.abertoChanged.emit()
+        self.buscaChanged.emit()
+        self.search()
+
+    @Slot()
+    def buscarAgora(self) -> None:  # noqa: N802
+        """Enter no campo: busca já, sem esperar o atraso."""
+        if self._aberto:
+            self.search()
+
+    def search(self) -> None:
+        self._generation += 1
+        geracao = self._generation
+        self._cancelar_debounce()
+        self._limpar()
+        consulta = self._busca.strip()
+        self._last_query = consulta
+        if not consulta:
+            self._show_empty(_("Digite o nome de um jogo"))
+            return
+        self._vazio = self._erro = False
+        self._buscando = True
+        self.estadoChanged.emit()
+        threading.Thread(
+            target=self._thread_da_busca, args=(consulta, geracao, self.helper_da_steam()), daemon=True
+        ).start()
+
+    def _show_empty(self, titulo: str, descricao: str = "", generation: Optional[int] = None, erro: bool = False) -> None:
+        if generation is not None and (generation != self._generation or self._closed):
+            return
+        self._titulo, self._descricao = titulo, descricao
+        self._vazio, self._erro, self._buscando = True, erro, False
+        self.estadoChanged.emit()
+
+    def _thread_da_busca(self, consulta: str, geracao: int, helper: SteamAPIHelper) -> None:
+        try:
+            candidatos = helper.find_candidates(clean_for_search(consulta))
+        except SteamGameNotFoundError:
+            na_thread_principal(self._show_empty, _("Nenhum jogo encontrado"), _("Tente buscar por outro nome."), geracao)
+            return
+        except Exception:  # noqa: BLE001  (a tela "carregando" não pode ficar presa por uma resposta inesperada)
+            logging.warning("Steam picker search failed", exc_info=True)
+            na_thread_principal(
+                self._show_empty,
+                _("Não foi possível concluir a busca"),
+                _("Verifique a conexão e tente novamente."),
+                geracao,
+                True,
+            )
+            return
+        na_thread_principal(self._receber, geracao, candidatos)
+
+    def _limpar(self) -> None:
+        if self._linhas:
+            self.beginResetModel()
+            self._linhas = []
+            self.endResetModel()
+
+    def _receber(self, geracao: int, candidatos: list[tuple[dict, Any]]) -> None:
+        if geracao != self._generation or self._closed:
+            return
+        linhas = [
+            # shortcut: a busca da loja não traz o ano de lançamento; o papel `ano` fica vazio; só preenche se a busca passar a consultar o appdetails de cada candidato.
+            {"nome": str(candidato.get("name", "")), "appid": str(candidato.get("id", "")), "ano": ""}
+            for candidato, _combina in candidatos
+            if candidato.get("id")
+        ]
+        if not linhas:
+            self._show_empty(_("Nenhum jogo encontrado"), _("Tente buscar por outro nome."), geracao)
+            return
+        self.beginResetModel()
+        self._linhas = linhas
+        self.endResetModel()
+        self._buscando = False
+        self.estadoChanged.emit()
+
+    # -- escolher --------------------------------------------------------------------------------
+
+    @Slot(int)
+    def escolher(self, indice: int) -> None:
+        if not self._aberto or self._buscando or not 0 <= indice < len(self._linhas):
+            return
+        # Invalida a busca da lista e qualquer escolha anterior: só vale a resposta desta.
+        self._generation += 1
+        self._cancelar_debounce()
+        self._buscando = True
+        self.estadoChanged.emit()
+        args = (self._linhas[indice]["appid"], self._generation, self.helper_da_steam())
+        threading.Thread(target=self._thread_da_escolha, args=args, daemon=True).start()
+
+    def _thread_da_escolha(self, appid: str, geracao: int, helper: SteamAPIHelper) -> None:
+        try:
+            dados = helper.get_api_data(appid)
+        except SteamNotAGameError:
+            na_thread_principal(self._show_empty, _("Este item não é um jogo"), _("Escolha outro resultado."), geracao, True)
+            return
+        except Exception:  # noqa: BLE001
+            logging.warning("Steam picker fetch failed", exc_info=True)
+            na_thread_principal(
+                self._show_empty,
+                _("Não foi possível obter os dados"),
+                _("Verifique a conexão e tente novamente."),
+                geracao,
+                True,
+            )
+            return
+        na_thread_principal(self._escolhido, geracao, appid, dados)
+
+    def _escolhido(self, geracao: int, appid: str, dados: dict) -> None:
+        if geracao != self._generation or self._closed:
+            return
+        destino, para_metadados = self._destino, self._para_metadados
+        self.fechar()
+        if destino is not None:
+            destino.steam_escolhida(appid, dados, para_metadados)
+
+    @Slot()
+    def fechar(self) -> None:
+        """Cancela a busca pendente; o que as threads ainda entregam é descartado."""
+        self._closed = True
+        self._generation += 1
+        self._cancelar_debounce()
+        self._aberto = self._buscando = self._vazio = self._erro = False
+        self._limpar()
+        self.abertoChanged.emit()
+        self.estadoChanged.emit()
+
+
+def pasta_do_ludusavi() -> Path:
+    # shortcut: a mesma conta do `backup_de_saves._pasta_config`, que ainda importa o gi; plano 6 volta a usar aquela.
+    return shared.app_dir / "ludusavi"
+
+
+class SeletorDoLudusavi(QAbstractListModel):
+    """Escolher, na lista de jogos do Ludusavi, o jogo cujos saves entram no backup.
+
+    O nome certo só quem conhece o jogo sabe dizer; o app apenas oferece a lista do `manifest.yaml`
+    (dezenas de milhares de nomes), lida fora da thread principal e filtrada enquanto se digita. A opção
+    "Nenhum (desliga o backup)" não é uma linha da lista: a tela a desenha acima dela (`escolherNenhum`).
+    """
+
+    class Papel(IntEnum):
+        Nome = Qt.ItemDataRole.UserRole + 1
+
+    abertoChanged = Signal()  # noqa: N815
+    buscaChanged = Signal()  # noqa: N815
+    estadoChanged = Signal()  # noqa: N815
+
+    def __init__(self, destino: Any, parent: Any = None) -> None:
+        super().__init__(parent)
+        self._destino_fraco = weakref.ref(destino)
+        self._todos: list[str] = []
+        self._chaves: list[str] = []
+        self._filtrados: list[str] = []
+        self._aberto = False
+        self._geracao = 0
+        self._busca = ""
+        self._atual = ""
+        self._carregando = False
+        self._erro = False
+
+    @property
+    def _destino(self) -> Any:
+        return self._destino_fraco()
+
+    def roleNames(self) -> dict[int, QByteArray]:  # noqa: N802
+        return {self.Papel.Nome: QByteArray(b"nome")}
+
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:  # noqa: B008, N802
+        return 0 if parent.isValid() else len(self._filtrados)
+
+    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+        if index.isValid() and 0 <= index.row() < len(self._filtrados) and role == self.Papel.Nome:
+            return self._filtrados[index.row()]
+        return None
+
+    @Property(bool, notify=abertoChanged)
+    def aberto(self) -> bool:
+        return self._aberto
+
+    @Property(str, notify=buscaChanged)
+    def busca(self) -> str:
+        return self._busca
+
+    @busca.setter
+    def busca(self, texto: str) -> None:
+        if self._aberto and texto != self._busca:
+            self._busca = texto
+            self.buscaChanged.emit()
+            self._filtrar()
+
+    @Property(bool, notify=estadoChanged)
+    def carregando(self) -> bool:
+        return self._carregando
+
+    @Property(bool, notify=estadoChanged)
+    def erro(self) -> bool:
+        return self._erro
+
+    @Property(bool, notify=estadoChanged)
+    def vazio(self) -> bool:
+        """A lista foi lida e o filtro não deixou nada."""
+        return self._aberto and not self._carregando and not self._erro and not self._filtrados
+
+    @Property(str, notify=estadoChanged)
+    def tituloDoEstado(self) -> str:  # noqa: N802
+        return _("Não foi possível ler a lista de jogos do Ludusavi.") if self._erro else _("Nenhum jogo encontrado")
+
+    @Property(int, notify=estadoChanged)
+    def indiceAtual(self) -> int:  # noqa: N802
+        """A posição, na lista filtrada, do jogo que já estava escolhido (-1 se não está)."""
+        try:
+            return self._filtrados.index(self._atual) if self._atual else -1
+        except ValueError:
+            return -1
+
+    @Slot(str)
+    def abrir(self, atual: str) -> None:
+        if self._aberto:
+            self.fechar()
+        self._aberto = True
+        self._geracao += 1
+        self._atual, self._busca = atual, ""
+        self._carregando, self._erro = True, False
+        self.abertoChanged.emit()
+        self.buscaChanged.emit()
+        self.estadoChanged.emit()
+        threading.Thread(target=self._ler, args=(self._geracao, pasta_do_ludusavi()), daemon=True).start()
+
+    def _ler(self, geracao: int, pasta: Path) -> None:
+        try:
+            nomes = ludusavi.nomes_do_manifesto(pasta)
+        except Exception as erro:  # noqa: BLE001  (OSError, ValueError e qualquer outra: a tela não fica carregando)
+            logging.warning("Não foi possível ler a lista de jogos do Ludusavi: %s", erro)
+            na_thread_principal(self._mostrar_erro, geracao)
+            return
+        na_thread_principal(self._mostrar, geracao, nomes, [nome.casefold() for nome in nomes])
+
+    def _mostrar_erro(self, geracao: int) -> None:
+        if geracao == self._geracao and self._aberto:
+            self._carregando, self._erro = False, True
+            self.estadoChanged.emit()
+
+    def _mostrar(self, geracao: int, nomes: list[str], chaves: list[str]) -> None:
+        if geracao != self._geracao or not self._aberto:
+            return
+        self._todos, self._chaves = nomes, chaves
+        self._carregando = False
+        self._filtrar()
+
+    def _filtrar(self) -> None:
+        termo = self._busca.strip().casefold()
+        self.beginResetModel()
+        self._filtrados = [n for n, c in zip(self._todos, self._chaves, strict=True) if termo in c]
+        self.endResetModel()
+        self.estadoChanged.emit()
+
+    @Slot(int)
+    def escolher(self, indice: int) -> None:
+        if self._aberto and 0 <= indice < len(self._filtrados):
+            self._entregar(self._filtrados[indice])
+
+    @Slot()
+    def escolherNenhum(self) -> None:  # noqa: N802
+        if self._aberto:
+            self._entregar("")
+
+    def _entregar(self, nome: str) -> None:
+        destino = self._destino
+        self.fechar()
+        if destino is not None:
+            destino.ludusavi_escolhido(nome)
+
+    @Slot()
+    def fechar(self) -> None:
+        self._geracao += 1
+        self._aberto = self._carregando = self._erro = False
+        self.beginResetModel()
+        self._todos, self._chaves, self._filtrados = [], [], []
+        self.endResetModel()
+        self.abertoChanged.emit()
+        self.estadoChanged.emit()

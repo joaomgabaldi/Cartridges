@@ -138,7 +138,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_saves_ludusavi_real.py",
     "test_saves_pasta.py",
     "test_saves_ui.py",
-    "test_seletor_do_ludusavi.py",
     "test_session_fita.py",
     "test_session_log.py",
     "test_session_monitors.py",

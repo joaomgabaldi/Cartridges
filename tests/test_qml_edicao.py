@@ -708,3 +708,174 @@ def test_save_cover_fora_do_aplicar_limpa_a_capa_da_sessao(app, tmp_path):
     assert jogo_.get_cover_path() == shared.covers_dir / "shortcuts_z2.tiff"
     app.modelo.atualizar(jogo_)  # o que a ponte do app faz com o `atualizado`
     assert "shortcuts_z2.tiff" in _papel_do_modelo(app, "shortcuts_z2", app.modelo.Papel.Capa)
+
+
+# -- Steam, HowLongToBeat e Ludusavi (tarefa 9) -----------------------------------------------------
+
+
+@pytest.fixture
+def steam(app, monkeypatch):
+    """A Steam e o HowLongToBeat falsos; nada fala com a rede."""
+    from cartridges.modelos import edicao as modulo  # noqa: PLC0415
+    from tests.apoio_seletores import HltbFalso, SteamFalsa  # noqa: PLC0415
+
+    falsa = SteamFalsa()
+    app.edicao.seletorDaSteam.helper = falsa
+    app.edicao.seletorDaSteam.atraso_da_busca_ms = 40
+    monkeypatch.setattr(modulo, "shared_hltb_helper", lambda: object())
+    monkeypatch.setattr(modulo, "fetch_times", HltbFalso())
+    return falsa
+
+
+def _abrir_avancadas(app):
+    _clique(app, "cabecalhoDasAvancadas")
+    assert _esperar(lambda: _visivel(app, "campoAppid"))
+
+
+def test_seletor_da_steam_pelo_appid_e_modal_e_preenche_o_campo(app, steam):
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_avancadas(app)
+    app.achar("botaoBuscarAppid").forceActiveFocus()
+    _clique(app, "botaoBuscarAppid")
+    assert _esperar(lambda: _visivel(app, "seletorDaSteam") and _visivel(app, "seletorDaSteamLinha1"))
+    assert app.achar("seletorDaSteamTitulo").property("text") == "Escolher jogo na Steam"
+    assert app.achar("seletorDaSteamCampo").property("text") == "Alfa"
+    assert app.achar("seletorDaSteamCampo").property("placeholderText") == "Buscar jogo…"
+    assert app.achar("dialogoDeEdicao").property("visible") is True
+    for _ in range(12):
+        QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+        assert _foco_dentro_de(app, "seletorDaSteam")
+    # Esc fecha só o seletor e o foco volta ao botão que o abriu.
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: not _visivel(app, "seletorDaSteam"))
+    assert app.edicao.aberto is True and _esperar(lambda: _foco_dentro_de(app, "botaoBuscarAppid"))
+    _clique(app, "botaoBuscarAppid")
+    assert _esperar(lambda: _visivel(app, "seletorDaSteamLinha0"))
+    app.achar("seletorDaSteamLinha0").forceActiveFocus()
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert _esperar(lambda: app.achar("campoAppid").property("text") == "400")
+    assert _esperar(lambda: not _visivel(app, "seletorDaSteam"))
+    assert _esperar(lambda: _foco_dentro_de(app, "botaoBuscarAppid"))
+
+
+def test_buscar_metadados_pelo_botao_do_titulo(app, steam):
+    app.edicao.abrir("shortcuts_z1")
+    app.edicao.nome = "Portal"
+    botao = app.achar("botaoBuscarMetadados")
+    assert botao.property("dica") == "Buscar dados na Steam pelo título"
+    steam.soltar.clear()
+    _clique(app, "botaoBuscarMetadados")
+    assert _esperar(lambda: app.achar("carregandoMetadados").property("visible") is True)
+    assert app.achar("botaoAplicarDaEdicao").property("enabled") is False
+    steam.soltar.set()
+    assert _esperar(lambda: not app.edicao.ocupado)
+    assert app.achar("campoDesenvolvedora").property("text") == "Valve"
+    assert app.achar("campoGenero").property("text") == "Puzzle"
+    assert _visivel(app, "botaoBuscarMetadados")
+    assert app.edicao.appid == "400"
+
+
+def test_buscar_metadados_com_varios_candidatos_abre_o_seletor(app, steam):
+    from cartridges.utils.steam import SteamGameNotFoundError  # noqa: PLC0415
+
+    steam.erro_do_resolve = SteamGameNotFoundError()
+    app.edicao.abrir("shortcuts_z1")
+    app.edicao.nome = "Portal"
+    app.achar("botaoBuscarMetadados").forceActiveFocus()
+    _clique(app, "botaoBuscarMetadados")
+    assert _esperar(lambda: _visivel(app, "seletorDaSteam") and _visivel(app, "seletorDaSteamLinha1"))
+    app.achar("seletorDaSteamLinha1").forceActiveFocus()
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert _esperar(lambda: not app.edicao.ocupado and app.achar("campoDesenvolvedora").property("text") == "Valve")
+    assert app.edicao.appid == "620"
+
+
+def test_aviso_de_busca_sem_resultado_no_seletor_da_steam(app, steam):
+    steam.candidatos = []
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_avancadas(app)
+    _clique(app, "botaoBuscarAppid")
+    vazio = app.achar("seletorDaSteamVazio")
+    assert _esperar(lambda: vazio.property("visible") is True)
+    assert vazio.property("titulo") == "Nenhum jogo encontrado"
+    assert vazio.property("descricao") == "Tente buscar por outro nome."
+
+
+def test_botoes_da_steam_desligados_sem_titulo(app, steam):
+    app.edicao.adicionar()
+    _abrir_avancadas(app)
+    assert app.achar("botaoBuscarMetadados").property("enabled") is False
+    assert app.achar("botaoBuscarAppid").property("enabled") is False
+    app.edicao.nome = "Portal"
+    assert app.achar("botaoBuscarMetadados").property("enabled") is True
+
+
+def _manifesto():
+    pasta = shared.app_dir / "ludusavi"
+    pasta.mkdir(parents=True, exist_ok=True)
+    texto = 'Zelda:\n  files: {}\n"Alien: Isolation":\n  files: {}\nPortal:\n  files: {}\n'
+    (pasta / "manifest.yaml").write_text(texto, encoding="utf-8")
+
+
+def test_linha_do_ludusavi_desligada_sem_a_lista_baixada(app):
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_avancadas(app)
+    assert app.achar("botaoJogoNoLudusavi").property("enabled") is False
+    assert app.achar("subtituloDoLudusavi").property("text") == "A lista de jogos do Ludusavi ainda não foi baixada."
+
+
+def test_seletor_do_ludusavi_escolhe_e_o_subtitulo_muda(app):
+    _manifesto()
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_avancadas(app)
+    assert app.achar("subtituloDoLudusavi").property("text") == "Nenhum"
+    app.achar("botaoJogoNoLudusavi").forceActiveFocus()
+    _clique(app, "botaoJogoNoLudusavi")
+    assert _esperar(lambda: _visivel(app, "seletorDoLudusavi") and _visivel(app, "seletorDoLudusaviLinha2"))
+    assert app.achar("seletorDoLudusaviTitulo").property("text") == "Jogo no Ludusavi"
+    assert app.achar("seletorDoLudusaviNenhum").property("text") == "Nenhum (desliga o backup)"
+    assert app.achar("seletorDoLudusaviCampo").property("placeholderText") == "Buscar jogo"
+    for _ in range(12):
+        QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+        assert _foco_dentro_de(app, "seletorDoLudusavi")
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: not _visivel(app, "seletorDoLudusavi"))
+    assert _esperar(lambda: _foco_dentro_de(app, "botaoJogoNoLudusavi"))
+    _clique(app, "botaoJogoNoLudusavi")
+    assert _esperar(lambda: _visivel(app, "seletorDoLudusaviLinha1"))
+    app.achar("seletorDoLudusaviLinha1").forceActiveFocus()
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert _esperar(lambda: app.achar("subtituloDoLudusavi").property("text") == "Portal")
+    _clique(app, "botaoJogoNoLudusavi")
+    assert _esperar(lambda: _visivel(app, "seletorDoLudusaviNenhum"))
+    _clique(app, "seletorDoLudusaviNenhum")
+    assert _esperar(lambda: app.achar("subtituloDoLudusavi").property("text") == "Backup desligado")
+
+
+def test_textos_dos_seletores_novos_em_texto_puro(app, steam):
+    _manifesto()
+    app.edicao.abrir("shortcuts_z1")
+    app.edicao.seletorDaSteam.abrir("Portal")
+    assert _esperar(lambda: _visivel(app, "seletorDaSteamLinha0"))
+    da_steam = _formatos(app.achar("seletorDaSteam"))
+    app.edicao.seletorDaSteam.fechar()
+    app.edicao.seletorDoLudusavi.abrir("")
+    assert _esperar(lambda: _visivel(app, "seletorDoLudusaviLinha0"))
+    do_ludusavi = _formatos(app.achar("seletorDoLudusavi"))
+    app.edicao.seletorDoLudusavi.fechar()
+    for formatos in (da_steam, do_ludusavi):
+        assert len(formatos) >= 3
+        assert all(formato == 0 for _texto, formato in formatos), formatos  # Text.PlainText
+
+
+def _formatos(raiz):
+    """O `(texto, textFormat)` de todo `Text` sob `raiz`, lido com a tela aberta (as linhas somem ao fechar)."""
+    textos, pilha = [], [raiz]
+    while pilha:
+        atual = pilha.pop()
+        if atual.metaObject().className().startswith("QQuickText"):
+            textos.append((atual.property("text"), _avaliar(atual, "textFormat")))
+        if isinstance(atual, QQuickItem):
+            pilha.extend(atual.childItems())
+        pilha.extend(atual.children())
+    return textos

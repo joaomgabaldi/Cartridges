@@ -173,3 +173,65 @@ def urls(seletor):
 
 def vazio_de(pasta):
     return sorted(p.name for p in pasta.iterdir())
+
+
+DADOS = {
+    "name": "Portal",
+    "developer": "Valve",
+    "publisher": "Valve Corp",
+    "release_date": "10/out./2007",
+    "metacritic": 90,
+    "steam_review": "Muito positivas",
+    "genre": "Puzzle",
+    "controller_support": "full",
+    "gamepad_recommended": True,
+    "description": "Um jogo de portais.",
+}
+
+
+class SteamFalsa:
+    """No lugar do `SteamAPIHelper`: anota os pedidos e responde sem rede."""
+
+    def __init__(self):
+        self.candidatos = [({"id": 400, "name": "Portal"}, None), ({"id": 620, "name": "Portal 2"}, None)]
+        self.resolvido = ("400", dict(DADOS))
+        self.erro_do_resolve = None
+        self.erro_do_get = None
+        self.dados = None
+        self.consultas: list[str] = []
+        self.appids: list[str] = []
+        self.soltar = threading.Event()
+        self.soltar.set()
+
+    def find_candidates(self, nome):
+        self.consultas.append(nome)
+        return list(self.candidatos)
+
+    def get_api_data(self, appid):
+        self.appids.append(appid)
+        if self.erro_do_get is not None:
+            raise self.erro_do_get
+        return dict(self.dados or DADOS)
+
+    def resolve(self, nome):
+        self.consultas.append(nome)
+        assert self.soltar.wait(5)
+        if self.erro_do_resolve is not None:
+            raise self.erro_do_resolve
+        return self.resolvido
+
+
+class HltbFalso:
+    def __init__(self):
+        self.pedidos: list[tuple] = []
+        self.resposta = {"hltb_id": 7, "hltb_main": 18000}
+        self.erro = None
+        self.soltar = threading.Event()
+        self.soltar.set()
+
+    def __call__(self, _helper, nome, hltb_id=None):
+        self.pedidos.append((nome, hltb_id))
+        assert self.soltar.wait(5)
+        if self.erro is not None:
+            raise self.erro
+        return dict(self.resposta)

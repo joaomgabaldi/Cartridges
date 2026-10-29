@@ -25,9 +25,20 @@ from cartridges import edicao, shared
 from cartridges.edicao import Escolha, Formulario
 from cartridges.jogo import STATUS_LABELS, Jogo
 from cartridges.modelos.ordem import _url_da_capa  # noqa: PLC2701
-from cartridges.modelos.seletores import SeletorDeLogo, SeletorDoSgdb
+from cartridges.modelos.seletores import (
+    SeletorDaSteam,
+    SeletorDeLogo,
+    SeletorDoLudusavi,
+    SeletorDoSgdb,
+    pasta_do_ludusavi,
+)
+from cartridges.saves import ludusavi
+from cartridges.store.managers.hltb_manager import shared_helper as shared_hltb_helper
 from cartridges.utils import capa_video, game_logo, session_wallpaper
 from cartridges.utils.game_folder import game_folder, open_folder
+from cartridges.utils.hltb import fetch_times, has_times
+from cartridges.utils.name_cleaner import clean_for_search, clean_game_name
+from cartridges.utils.steam import SteamGameNotFoundError
 from cartridges.utils.thread_principal import na_thread_principal
 
 
@@ -93,6 +104,7 @@ class ModeloDaEdicao(QObject):
     focoDevolvido = Signal()  # noqa: N815
     capaChanged = Signal()  # noqa: N815
     imagensChanged = Signal()  # noqa: N815
+    buscandoMetadadosChanged = Signal()  # noqa: N815
 
     def __init__(self, aplicativo: Any, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -113,6 +125,11 @@ class ModeloDaEdicao(QObject):
         # Os seletores do SteamGridDB entregam aqui (`entregar_*`, `usar_titulo_no_logo`).
         self._seletor_de_capa = SeletorDoSgdb(self, self)
         self._seletor_de_logo = SeletorDeLogo(self, self)
+        self._seletor_da_steam = SeletorDaSteam(self, self)
+        self._seletor_do_ludusavi = SeletorDoLudusavi(self, self)
+        self._buscando_metadados = False
+        # A lista de jogos do Ludusavi (o `manifest.yaml`) já foi baixada? Lido ao abrir.
+        self._ludusavi_disponivel = True
 
     # -- campos do formulário --------------------------------------------------------------------
 
@@ -224,8 +241,14 @@ class ModeloDaEdicao(QObject):
     def podeAbrirPasta(self) -> bool:  # noqa: N802
         return bool(self._pasta)
 
+    @Property(bool, notify=ludusaviChanged)
+    def ludusaviDisponivel(self) -> bool:  # noqa: N802
+        return self._ludusavi_disponivel
+
     @Property(str, notify=ludusaviChanged)
     def ludusaviSubtitulo(self) -> str:  # noqa: N802
+        if not self._ludusavi_disponivel:
+            return _("A lista de jogos do Ludusavi ainda não foi baixada.")
         jogo, form = self._jogo, self._form
         nome = jogo.ludusavi_nome if jogo else ""
         desligado = bool(jogo and jogo.backup_dos_saves_desligado)
@@ -236,6 +259,183 @@ class ModeloDaEdicao(QObject):
         if desligado:
             return _("Backup desligado")
         return _("Automático pelo AppID") if form.appid.strip() else _("Nenhum")
+
+    # -- Steam, HowLongToBeat e Ludusavi ---------------------------------------------------------
+
+    seletorDaSteam = Property(QObject, lambda self: self._seletor_da_steam, constant=True)  # noqa: N815
+    seletorDoLudusavi = Property(QObject, lambda self: self._seletor_do_ludusavi, constant=True)  # noqa: N815
+
+    @Property(bool, notify=buscandoMetadadosChanged)
+    def buscandoMetadados(self) -> bool:  # noqa: N802
+        """O botão ao lado do título gira enquanto a Steam e o HowLongToBeat respondem."""
+        return self._buscando_metadados
+
+    @Slot()
+    def buscarAppid(self) -> None:  # noqa: N802
+        if self._aberto and (nome := self._form.nome.strip()):
+            self._seletor_da_steam.abrir(nome)
+
+    @Slot()
+    def escolherJogoNoLudusavi(self) -> None:  # noqa: N802
+        if not self._aberto or not self._ludusavi_disponivel:
+            return
+        atual = self._form.ludusavi_escolhido
+        if atual is None:
+            atual = self._jogo.ludusavi_nome if self._jogo else ""
+        self._seletor_do_ludusavi.abrir(atual)
+
+    def ludusavi_escolhido(self, nome: str) -> None:
+        """O jogo que o seletor do Ludusavi entregou ("" desliga o backup dos saves)."""
+        if self._aberto:
+            self._form.ludusavi_escolhido = nome
+            self.ludusaviChanged.emit()
+
+    def _appid_para_buscar(self) -> str:
+        """O AppID digitado nas opções avançadas, se é número e difere do gravado."""
+        texto = self._form.appid.strip()
+        return texto if texto and texto != self._appid_inicial and edicao.appid_aceito(texto) else ""
+
+    def _definir_buscando_metadados(self, valor: bool) -> None:
+        if valor != self._buscando_metadados:
+            self._buscando_metadados = valor
+            self.buscandoMetadadosChanged.emit()
+
+    @Slot()
+    def buscarMetadados(self) -> None:  # noqa: N802
+        """Procura o título na Steam e, com o nome que ela confirmou, no HowLongToBeat.
+
+        Nada é gravado aqui: o que chega só preenche o formulário, para a pessoa conferir antes do Aplicar.
+        Até terminar, o Aplicar fica bloqueado (gravar no meio perderia o que ainda está a caminho).
+        """
+        nome = self._form.nome.strip()
+        if not self._aberto or not nome or self._buscando_metadados:
+            return
+        self._definir_buscando_metadados(True)
+        self.iniciar_operacao()
+        # Um AppID já ligado a este jogo vale mais que buscar o nome de novo: é o que a busca anterior
+        # resolveu ou o que a pessoa escolheu à mão. O gravado só vale com o título intacto.
+        gravado = self._jogo.steam_appid if self._jogo and nome == (self._jogo.name or "").strip() else None
+        appid = self._appid_para_buscar() or self._form.buscado.get("steam_appid") or gravado
+        args = (self._geracao, nome, appid, self._seletor_da_steam.helper_da_steam())
+        threading.Thread(target=self._thread_dos_metadados, args=args, daemon=True).start()
+
+    def _thread_dos_metadados(self, geracao: int, nome: str, appid: Any, helper: Any) -> None:
+        try:
+            if appid:
+                dados = helper.get_api_data(str(appid))
+            else:
+                appid, dados = helper.resolve(clean_for_search(nome))
+        except SteamGameNotFoundError:
+            # Nada em que o comparador confie: em vez de adotar o mais parecido (para "The Outer Worlds",
+            # a continuação), a pessoa diz qual é o jogo.
+            na_thread_principal(self._metadados_escolher, geracao, nome)
+            return
+        except Exception:  # noqa: BLE001  # a tela diz só "não encontrado"; sem isto a thread morreria com o Aplicar bloqueado
+            logging.warning("Steam lookup failed for %s", nome, exc_info=True)
+            na_thread_principal(self._metadados_chegaram, geracao, None, str(appid or ""))
+            return
+        na_thread_principal(self._metadados_chegaram, geracao, dados, str(appid))
+
+    def _metadados_escolher(self, geracao: int, nome: str) -> None:
+        if geracao != self._geracao or not self._aberto:
+            return
+        # Para a busca, a busca acabou: o seletor é modal sobre o diálogo, e o Esc nele nunca chamaria de volta.
+        self.terminar_operacao()
+        self._definir_buscando_metadados(False)
+        self._seletor_da_steam.abrir_para_metadados(nome)
+
+    def steam_escolhida(self, appid: str, dados: dict, para_metadados: bool) -> None:
+        """O jogo que o seletor da Steam entregou: só o AppID, ou a continuação da busca de metadados."""
+        if not self._aberto:
+            return
+        if not para_metadados:
+            self.appid = appid
+            return
+        # Retoma a busca que `_metadados_escolher` largou: a perna do HowLongToBeat vem a seguir.
+        self._definir_buscando_metadados(True)
+        self.iniciar_operacao()
+        self._metadados_chegaram(self._geracao, dados, appid)
+
+    def _metadados_chegaram(self, geracao: int, dados: Optional[dict], appid: str) -> None:
+        if geracao != self._geracao or not self._aberto:
+            return  # o diálogo fechou (ou é de outro jogo)
+        if not dados:
+            self.terminar_operacao()
+            self._definir_buscando_metadados(False)
+            self._aplicativo.pedir_dialogo(
+                _("Jogo não encontrado na Steam"),
+                _("Confira o título e tente novamente."),
+                [],
+                self.focoDevolvido.emit,
+            )
+            return
+        form = self._form
+        # Outro jogo: o que a busca anterior trouxe não é dele (como o `invalidate_fetched_scores` da `main`,
+        # que o `set_text` do título disparava). O AppID não volta: é sobrescrito logo abaixo.
+        if dados.get("name") and clean_game_name(dados["name"]) != form.nome.strip():
+            form.buscado = {}
+        buscado = form.buscado
+        # Direto no formulário, sem o setter: mudar o título pelo setter descartaria o que acabou de chegar.
+        if dados.get("name"):
+            form.nome = clean_game_name(dados["name"])
+        if appid:
+            buscado["steam_appid"] = appid
+            form.appid = appid
+        for campo, chave in (
+            ("desenvolvedora", "developer"), ("publicadora", "publisher"), ("lancamento", "release_date"), ("genero", "genre"),
+        ):  # fmt: skip
+            if dados.get(chave):
+                setattr(form, campo, dados[chave])
+        if dados.get("controller_support") in ("full", "partial"):
+            form.controle = dados["controller_support"]
+        for chave in ("metacritic", "gamepad_recommended"):
+            if dados.get(chave) is not None:
+                buscado[chave] = dados[chave]
+        for chave in ("steam_review", "description"):
+            if dados.get(chave):
+                buscado[chave] = dados[chave]
+        for sinal in (
+            self.nomeChanged, self.appidChanged, self.desenvolvedoraChanged, self.publicadoraChanged,
+            self.lancamentoChanged, self.generoChanged, self.controleIndiceChanged, self.ludusaviChanged,
+        ):  # fmt: skip
+            sinal.emit()
+        # Com o título que a Steam acabou de confirmar: é ele que faz o HowLongToBeat achar o jogo.
+        nome = form.nome.strip()
+        # O gravado só vale com o título intacto; lido aqui, na principal, e não na thread.
+        gravado = self._jogo.hltb_id if self._jogo and nome == (self._jogo.name or "").strip() else None
+        threading.Thread(target=self._thread_do_hltb, args=(geracao, nome, gravado), daemon=True).start()
+
+    def _thread_do_hltb(self, geracao: int, nome: str, gravado: Any) -> None:
+        """Fora da thread principal. Um erro aqui é silêncio: os dados da Steam, que a pessoa pediu, já chegaram."""
+        tempos = None
+        try:
+            tempos = fetch_times(shared_hltb_helper(), nome, gravado)
+        except Exception:  # noqa: BLE001  # `int(hltb_id)` de uma ficha editada à mão levanta ValueError: sem isto o Aplicar não desbloqueia
+            logging.exception("Could not fetch HowLongToBeat times")
+        na_thread_principal(self._hltb_chegou, geracao, tempos, nome)
+
+    def _hltb_chegou(self, geracao: int, tempos: Optional[dict], nome: str) -> None:
+        if geracao != self._geracao or not self._aberto:
+            return
+        self.terminar_operacao()
+        self._definir_buscando_metadados(False)
+        # O título mudou no meio do caminho: a pessoa disse que é outro jogo, e a resposta é do antigo.
+        if nome != self._form.nome.strip():
+            return
+        if tempos and has_times(tempos):
+            self._form.buscado["hltb"] = tempos
+        else:
+            logging.info("No HowLongToBeat times found for %s", nome)
+
+    def _invalidar_buscado(self) -> None:
+        """O título mudou: o que a última busca trouxe era de outro jogo, e o AppID dela também.
+
+        A pessoa disse que é outro jogo; manter o AppID prenderia a próxima busca ao que ela acabou de
+        corrigir. Se ela mexeu no AppID depois da busca, o que digitou fica.
+        """
+        buscado, self._form.buscado = self._form.buscado, {}
+        if buscado.get("steam_appid") is not None and self._form.appid.strip() == buscado["steam_appid"]:
+            self.appid = self._appid_inicial
 
     # -- capa, logo e papel de parede ------------------------------------------------------------
 
@@ -415,6 +615,8 @@ class ModeloDaEdicao(QObject):
                 self.executavelDoProcesso = edicao.exe_name_from_command(self._form.executavel)
         elif atributo == "appid":
             self.ludusaviChanged.emit()
+        elif atributo == "nome":
+            self._invalidar_buscado()
 
     def _recalcular(self) -> None:
         # Lê o disco a cada mudança do comando, como a `main`: no disco local custa microssegundos.
@@ -460,6 +662,8 @@ class ModeloDaEdicao(QObject):
         self._ocupacoes = 0
         self._capas_em_voo = 0
         self._geracao += 1
+        self._buscando_metadados = False
+        self._ludusavi_disponivel = ludusavi.manifesto_baixado(pasta_do_ludusavi())
         self._segundo_monitor = _segundo_monitor()
         self._aberto = True
         self._recalcular()
@@ -469,12 +673,15 @@ class ModeloDaEdicao(QObject):
             self.executavelDoProcessoChanged, self.notificarAtualizacoesChanged, self.conquistasChanged,
             self.appidChanged, self.notaChanged, self.controleIndiceChanged, self.statusIndiceChanged,
             self.ludusaviChanged, self.ocupadoChanged, self.abertoChanged, self.capaChanged, self.imagensChanged,
+            self.buscandoMetadadosChanged,
         ):  # fmt: skip
             sinal.emit()
 
     def _fechar(self, descartar: bool = True) -> None:
         """Fecha o diálogo. ``descartar``: as provisórias da tela saem (no Aplicar, são do `aplicar`)."""
-        for seletor in (self._seletor_de_capa, self._seletor_de_logo):
+        for seletor in (
+            self._seletor_de_capa, self._seletor_de_logo, self._seletor_da_steam, self._seletor_do_ludusavi
+        ):
             seletor.fechar()
         provisoria = self._provisoria()
         escolhas = [e for e in (self._form.logo, self._form.papel_de_parede) if e is not None]
@@ -482,9 +689,11 @@ class ModeloDaEdicao(QObject):
         self._jogo = None
         self._ocupacoes = 0
         self._capas_em_voo = 0
+        self._buscando_metadados = False
         self._form = Formulario()
         self.abertoChanged.emit()
         self.ocupadoChanged.emit()
+        self.buscandoMetadadosChanged.emit()
         # A prévia larga o arquivo (o da capa animada) antes de ele sair, ou de o `aplicar` o apagar.
         self.capaChanged.emit()
         self.imagensChanged.emit()

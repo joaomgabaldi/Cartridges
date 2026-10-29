@@ -102,9 +102,10 @@ class _App:
         self.aplicativo = Aplicativo(self.ponte.fila)
         self.edicao = ModeloDaEdicao(self.aplicativo)
         self.leitor = _LeitorFalso()
+        leitor = self.leitor  # o lambda não captura `self`: senão `_App` <-> controle é um ciclo
         shared.schema.set_boolean("gamepad", True)
         self.controle = ControleDaGrade(
-            fabrica_do_leitor=lambda: self.leitor,
+            fabrica_do_leitor=lambda: leitor,
             estado_do_app=lambda: Qt.ApplicationState.ApplicationActive,
         )
         self.motor = QQmlEngine()

@@ -191,6 +191,19 @@ Principal {
         onRetornoPerdido: dialogoDeEdicao.devolverFoco()
     }
 
+    SeletorDaSteam {
+        id: seletorDaSteam
+        objectName: "seletorDaSteam"
+        seletor: edicao.seletorDaSteam
+        onRetornoPerdido: dialogoDeEdicao.devolverFoco()
+    }
+    SeletorDoLudusavi {
+        id: seletorDoLudusavi
+        objectName: "seletorDoLudusavi"
+        seletor: edicao.seletorDoLudusavi
+        onRetornoPerdido: dialogoDeEdicao.devolverFoco()
+    }
+
     Avisos {
         id: camadaDeAvisos
         objectName: "camadaDeAvisos"
