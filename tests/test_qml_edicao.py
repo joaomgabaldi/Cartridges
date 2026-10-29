@@ -257,8 +257,8 @@ def test_tab_gira_dentro_do_dialogo(app):
             dentro = dentro or item is dialogo
             item = item.parentItem()
         assert dentro
-    # Shift+Tab a partir do primeiro campo cai no último botão, sem sair do diálogo.
-    app.achar("campoNome").forceActiveFocus()
+    # Shift+Tab a partir do primeiro item (o botão da capa) cai no último botão, sem sair do diálogo.
+    app.achar("botaoEscolherCapa").forceActiveFocus()
     QTest.keyClick(app.janela, Qt.Key.Key_Backtab, Qt.KeyboardModifier.ShiftModifier)
     assert _esperar(lambda: _foco_dentro_de(app, "botaoAplicarDaEdicao"))
 
@@ -327,3 +327,237 @@ def test_zerado_virado_desinstalado_comum_sai_dos_detalhes(app, store):
     app.edicao.aplicar()
     assert zerado.zerado is False
     assert _esperar(lambda: app.janela.property("paginaAtual") != "jogo")
+
+
+# -- capa, logo e papel de parede (tarefa 7) -----------------------------------------------------
+
+
+def _imagem(caminho, tamanho=(120, 180), cor="red"):
+    from PIL import Image  # noqa: PLC0415
+
+    Image.new("RGB", tamanho, cor).save(caminho)
+    return caminho
+
+
+def _url(caminho):
+    from PySide6.QtCore import QUrl  # noqa: PLC0415
+
+    return QUrl.fromLocalFile(str(caminho))
+
+
+def _escolher_capa(app, caminho):
+    app.edicao.escolherCapa(_url(caminho))
+    assert _esperar(lambda: not app.edicao.ocupado, 10)
+
+
+def _provisoria(app):
+    return app.edicao._form.capa  # noqa: SLF001
+
+
+def _papel_do_modelo(app, game_id, papel):
+    modelo = app.modelo
+    for i in range(modelo.rowCount()):
+        if modelo.data(modelo.index(i, 0), modelo.Papel.JogoId) == game_id:
+            return modelo.data(modelo.index(i, 0), papel)
+    raise AssertionError(game_id)
+
+
+def test_filtro_de_capa_sem_svg(app):
+    filtro = app.edicao.filtroDaCapa
+    assert filtro.startswith("Imagens e vídeos (")
+    assert "*.svg" not in filtro
+    assert "*.png" in filtro and "*.mp4" in filtro and "*.webm" in filtro
+    assert app.edicao.filtroDoLogo.startswith("Imagens de logo (") and "*.png" in app.edicao.filtroDoLogo
+
+
+def test_escolher_imagem_converte_por_temporario(app, tmp_path, monkeypatch):
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    monkeypatch.setattr("tempfile.tempdir", str(temp))
+    app.edicao.abrir("shortcuts_z2")
+    _escolher_capa(app, _imagem(tmp_path / "escolhida.png"))
+    provisoria = _provisoria(app)
+    # Só a capa pronta (um TIFF do tamanho das capas) fica em %TEMP%: a intermediária foi apagada.
+    assert provisoria is not None and provisoria.suffix == ".tiff" and provisoria.parent == temp
+    assert list(temp.iterdir()) == [provisoria]
+    assert app.edicao.temCapa is True and app.edicao.capa.startswith("file:")
+    assert app.edicao.ocupado is False
+    assert (tmp_path / "escolhida.png").exists(), "a imagem da pessoa não é apagada"
+
+
+def test_cancelar_apaga_as_provisorias(app, tmp_path):
+    app.edicao.abrir("shortcuts_z2")
+    _escolher_capa(app, _imagem(tmp_path / "a.png"))
+    provisoria = _provisoria(app)
+    assert provisoria.is_file()
+    app.edicao.cancelar()
+    assert not provisoria.exists()
+    assert app.edicao.capa == ""
+
+
+def test_segunda_escolha_apaga_a_primeira(app, tmp_path):
+    app.edicao.abrir("shortcuts_z2")
+    _escolher_capa(app, _imagem(tmp_path / "a.png", cor="red"))
+    primeira = _provisoria(app)
+    _escolher_capa(app, _imagem(tmp_path / "b.png", cor="blue"))
+    segunda = _provisoria(app)
+    assert segunda != primeira and segunda.is_file()
+    assert not primeira.exists()
+    app.edicao.cancelar()
+    assert not segunda.exists()
+
+
+def test_resultado_atrasado_de_um_dialogo_fechado_e_descartado(app, tmp_path, monkeypatch):
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    monkeypatch.setattr("tempfile.tempdir", str(temp))
+    app.edicao.abrir("shortcuts_z2")
+    app.edicao.escolherCapa(_url(_imagem(tmp_path / "a.png")))
+    app.edicao.cancelar()
+    app.edicao.abrir("shortcuts_z3")
+    # A conversão do jogo anterior chega depois: não entra neste diálogo e não deixa temporário.
+    assert _esperar(lambda: False, 1) is False
+    assert app.edicao.temCapa is False and app.edicao.ocupado is False
+    assert list(temp.iterdir()) == []
+
+
+def test_aplicar_grava_a_capa_e_a_provisoria_sai_depois(app, tmp_path):
+    app.edicao.abrir("shortcuts_z2")
+    _escolher_capa(app, _imagem(tmp_path / "a.png"))
+    provisoria = _provisoria(app)
+    app.edicao.aplicar()
+    assert app.edicao.aberto is False
+    assert (shared.covers_dir / "shortcuts_z2.tiff").is_file()
+    assert _esperar(lambda: not provisoria.exists())
+    app.modelo.atualizar(shared.store.get("shortcuts_z2"))  # o que a ponte do app faz com o `atualizado`
+    assert _papel_do_modelo(app, "shortcuts_z2", app.modelo.Papel.Capa) != ""
+
+
+def test_capa_presa_nao_aborta_o_aplicar(app, tmp_path, monkeypatch):
+    from cartridges import edicao as regra  # noqa: PLC0415
+
+    def presa(*_args):
+        raise PermissionError(5, "Acesso negado")
+
+    monkeypatch.setattr(regra, "save_cover", presa)
+    app.edicao.abrir("shortcuts_z2")
+    _escolher_capa(app, _imagem(tmp_path / "a.png"))
+    provisoria = _provisoria(app)
+    app.edicao.nome = "Beta Novo"
+    app.edicao.aplicar()
+    jogo_ = shared.store.get("shortcuts_z2")
+    assert app.edicao.aberto is False
+    assert jogo_.name == "Beta Novo", "o resto da edição é gravado"
+    # A provisória é a capa desta sessão: fica no disco e é a que a grade e a página mostram.
+    assert _esperar(lambda: provisoria.is_file())
+    assert jogo_.get_cover_path() == provisoria
+    app.modelo.atualizar(jogo_)  # o que a ponte do app faz com o `atualizado`
+    assert provisoria.name in _papel_do_modelo(app, "shortcuts_z2", app.modelo.Papel.Capa)
+    app.detalhes.mostrar("shortcuts_z2")
+    assert provisoria.name in app.detalhes.capa
+
+
+def test_apagar_capa_volta_ao_placeholder(app, tmp_path):
+    _imagem(shared.covers_dir / "shortcuts_z2.tiff")
+    app.edicao.abrir("shortcuts_z2")
+    assert app.edicao.temCapa is True
+    assert _esperar(lambda: app.achar("botaoExcluirCapa").property("visible") is True)
+    _clique(app, "botaoExcluirCapa")
+    assert app.edicao.capa == "" and app.edicao.temCapa is False
+    assert _esperar(lambda: app.achar("botaoExcluirCapa").property("visible") is False)
+    # Sem capa, a prévia mostra o placeholder da biblioteca.
+    assert _esperar(lambda: app.achar("previaDaCapa").property("source").toString().endswith("library_placeholder.svg"))
+    app.edicao.aplicar()
+    assert shared.store.get("shortcuts_z2").get_cover_path() is None
+
+
+def test_logo_titulo_e_restaurar(app):
+    from cartridges.edicao import Escolha  # noqa: PLC0415
+
+    app.edicao.abrir("shortcuts_z2")
+    assert app.edicao.logoSubtitulo == "Automático (SteamGridDB)" and app.edicao.logoRestauravel is False
+    assert _esperar(lambda: app.achar("botaoRestaurarLogo").property("visible") is False)
+    app.edicao._form.logo = Escolha("title")  # noqa: SLF001  # o "título" vem do seletor do SteamGridDB (tarefa 8)
+    app.edicao.imagensChanged.emit()
+    assert app.edicao.logoSubtitulo == "Sem logo; o título é exibido"
+    assert _esperar(lambda: app.achar("botaoRestaurarLogo").property("visible") is True)
+    assert app.achar("botaoRestaurarLogo").property("dica") == "Voltar a escolher o logo automaticamente"
+    app.edicao.escolherLogo(_url("C:/qualquer/logo.png"))
+    assert app.edicao.logoSubtitulo == "Escolhido manualmente"
+    _clique(app, "botaoRestaurarLogo")
+    assert app.edicao.logoSubtitulo == "Automático (SteamGridDB)"
+    assert app.edicao._form.logo.modo == "auto"  # noqa: SLF001
+    assert app.achar("botaoEscolherLogo").property("dica") == "Escolher logo de um arquivo"
+
+
+def test_logo_de_arquivo_e_gravado_no_aplicar(app, tmp_path):
+    from cartridges.utils import game_logo  # noqa: PLC0415
+
+    arquivo = _imagem(tmp_path / "logo.png")
+    app.edicao.abrir("shortcuts_z2")
+    app.edicao.escolherLogo(_url(arquivo))
+    app.edicao.aplicar()
+    assert game_logo.logo_choice(shared.store.get("shortcuts_z2")) == "manual"
+    assert arquivo.exists(), "o arquivo da pessoa não é apagado"
+
+
+def test_papel_de_parede_desabilitado_com_um_monitor(app, monkeypatch):
+    from cartridges.modelos import edicao as modelo  # noqa: PLC0415
+
+    monkeypatch.setattr(modelo, "_segundo_monitor", lambda: False)
+    app.edicao.abrir("shortcuts_z2")
+    assert app.edicao.papelSubtitulo == "Requer um segundo monitor"
+    assert _esperar(lambda: app.achar("linhaDoPapel").property("enabled") is False)
+    app.edicao.cancelar()
+    monkeypatch.setattr(modelo, "_segundo_monitor", lambda: True)
+    app.edicao.abrir("shortcuts_z2")
+    assert app.edicao.papelSubtitulo == "Automático (wallhaven)"
+    assert _esperar(lambda: app.achar("linhaDoPapel").property("enabled") is True)
+    app.edicao.escolherPapel(_url("C:/qualquer/parede.jpg"))
+    assert app.edicao.papelSubtitulo == "Escolhido manualmente" and app.edicao.papelRestauravel is True
+    app.edicao.restaurarPapel()
+    assert app.edicao.papelSubtitulo == "Automático (wallhaven)"
+
+
+def test_video_sem_ffmpeg_mostra_o_erro(app, tmp_path, monkeypatch):
+    from cartridges.utils import capa_video  # noqa: PLC0415
+
+    monkeypatch.setattr(capa_video, "executavel", lambda: None)
+    pedidos = []
+    app.aplicativo.dialogoPedido.connect(lambda *a: pedidos.append(a))
+    video = tmp_path / "clipe.mp4"
+    video.write_bytes(b"nao e um video")
+    app.edicao.abrir("shortcuts_z2")
+    _escolher_capa(app, video)
+    assert _esperar(lambda: bool(pedidos))
+    assert tuple(pedidos[0][:2]) == ("Não foi possível usar o vídeo", "O arquivo não pôde ser lido como vídeo.")
+    assert app.edicao.temCapa is False and app.edicao.ocupado is False
+
+
+def test_a_grade_e_a_pagina_largam_a_copia_animada_antes_de_gravar_a_capa(app, tmp_path, monkeypatch):
+    from cartridges import edicao as regra  # noqa: PLC0415
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    capa = shared.covers_dir / "shortcuts_z2.gif"
+    _imagem(capa)
+    copia = copias_animadas.caminho_para(capa, copias_animadas.tamanhos()[0])
+    copia.parent.mkdir(parents=True, exist_ok=True)
+    _imagem(copia)
+    monkeypatch.setattr(copias_animadas, "soltar_do_jogo", app.modelo.soltar_copia)
+    app.modelo.atualizar(shared.store.get("shortcuts_z2"))
+    app.detalhes.mostrar("shortcuts_z2")
+    assert _papel_do_modelo(app, "shortcuts_z2", app.modelo.Papel.CapaAnimada) != ""
+    assert app.detalhes.capaAnimada != ""
+
+    vistos = []
+    real = regra.save_cover
+
+    def espiao(game_id, caminho):
+        vistos.append((_papel_do_modelo(app, game_id, app.modelo.Papel.CapaAnimada), app.detalhes.capaAnimada))
+        real(game_id, caminho)
+
+    monkeypatch.setattr(regra, "save_cover", espiao)
+    app.edicao.abrir("shortcuts_z2")
+    _escolher_capa(app, _imagem(tmp_path / "nova.png"))
+    app.edicao.aplicar()
+    assert vistos == [("", "")]

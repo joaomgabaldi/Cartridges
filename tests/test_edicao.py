@@ -614,3 +614,72 @@ def test_edicao_sem_gi():
     )
     subprocess.run([sys.executable, "-c", codigo], check=True, cwd=Path(__file__).resolve().parent.parent)
 
+
+
+# region Capa preparada e capa presa
+
+
+def test_preparar_capa_de_imagem_parada_deixa_so_um_tiff(edicao, tmp_path, monkeypatch):
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    monkeypatch.setattr("tempfile.tempdir", str(temp))
+    origem = tmp_path / "larga.png"
+    Image.new("RGB", (300, 100), "red").save(origem)
+    capa = edicao.preparar_capa(origem)
+    assert capa is not None and capa.suffix == ".tiff" and list(temp.iterdir()) == [capa]
+    with Image.open(capa) as pronta:
+        assert pronta.size == shared.image_size
+
+
+def test_preparar_capa_animada_segue_como_esta(edicao, tmp_path):
+    origem = tmp_path / "anim.gif"
+    quadros = [Image.new("RGB", (40, 60), cor) for cor in ("red", "blue")]
+    quadros[0].save(origem, save_all=True, append_images=quadros[1:], duration=50, loop=0)
+    capa = edicao.preparar_capa(origem)
+    assert capa is not None and capa.suffix == ".gif"
+    capa.unlink()
+
+
+def test_preparar_capa_ilegivel_devolve_none_sem_deixar_temporario(edicao, tmp_path, monkeypatch):
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    monkeypatch.setattr("tempfile.tempdir", str(temp))
+    origem = tmp_path / "quebrada.png"
+    origem.write_bytes(b"nao e uma imagem")
+    assert edicao.preparar_capa(origem) is None
+    assert list(temp.iterdir()) == []
+
+
+def test_capa_presa_fica_como_a_da_sessao_e_um_aplicar_bom_a_solta(edicao, store, sgdb, app_dirs, tmp_path, monkeypatch):
+    game = jogo(store, 88)
+    provisoria = tmp_path / "p.tiff"
+    Image.new("RGB", (60, 90), "green").save(provisoria)
+    real = edicao.save_cover
+
+    def recusa(*_args):
+        raise PermissionError(5, "Acesso negado")
+
+    monkeypatch.setattr(edicao, "save_cover", recusa)
+    resultado = _aplicar(edicao, game, capa=provisoria, capa_mudou=True)
+    girar()
+    assert resultado.capa_presa is True
+    assert game.get_cover_path() == provisoria and provisoria.exists()
+
+    monkeypatch.setattr(edicao, "save_cover", real)
+    outra = tmp_path / "o.tiff"
+    Image.new("RGB", (60, 90), "blue").save(outra)
+    assert _aplicar(edicao, game, capa=outra, capa_mudou=True).capa_presa is False
+    girar()
+    assert game.get_cover_path() == app_dirs.covers / f"{game.game_id}.tiff"
+
+
+def test_estado_do_logo_e_do_papel(edicao, store):
+    game = jogo(store, 89)
+    form = edicao.Formulario.do_jogo(game)
+    assert (edicao.estado_do_logo(form, game), edicao.estado_do_papel(form, game)) == ("auto", "auto")
+    form.logo, form.papel_de_parede = edicao.Escolha("title"), edicao.Escolha("none")
+    assert (edicao.estado_do_logo(form, game), edicao.estado_do_papel(form, game)) == ("title", "none")
+    assert edicao.estado_do_logo(edicao.Formulario(), None) == "auto"
+
+
+# endregion

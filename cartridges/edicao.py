@@ -15,22 +15,26 @@ formulário e mostra o resultado. Tudo aqui roda na thread principal.
 """
 
 import logging
+import os
 import re
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import time
 from typing import Any, Literal, Optional
+
+from PIL import Image, UnidentifiedImageError
 
 from cartridges import shared
 from cartridges.conquistas import historico
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.jogo import STATUS_LABELS, Jogo
 from cartridges.store.managers.sgdb_manager import SgdbManager
-from cartridges.utils import copias_animadas, game_logo, session_wallpaper
+from cartridges.utils import capa_video, copias_animadas, game_logo, session_wallpaper
 from cartridges.utils.ligacao_zerado import ligar_zerado
 from cartridges.utils.process_monitor import install_dir_from_command
 from cartridges.utils.run_executable import aumid_from_command
-from cartridges.utils.save_cover import save_cover
+from cartridges.utils.save_cover import composite_cover, convert_cover, save_cover
 from cartridges.utils.steam import STEAM_METADATA_VERSION, format_release_date
 from cartridges.utils.thread_principal import na_thread_principal
 
@@ -128,6 +132,8 @@ class Resultado:
     fechar_sem_gravar: bool = False
     # Era zerado e virou um desinstalado comum: não há mais página de detalhes dele.
     sair_dos_detalhes: bool = False
+    # A capa nova não foi gravada (arquivo preso): a provisória é a capa desta sessão e não pode ser apagada.
+    capa_presa: bool = False
 
 
 def exe_name_from_command(command: str) -> str:
@@ -205,11 +211,79 @@ def _descartar(caminho: Path) -> None:
         logging.info("Could not remove the staged file %s: %s", caminho, error)
 
 
-def _descartar_provisoria(caminho: Path) -> None:
+def descartar_provisoria(caminho: Path) -> None:
     # Abandona antes: uma provisória presa (antivírus) não pode deixar a
     # geração das cópias dela na fila.
     copias_animadas.abandonar(caminho)
     _descartar(caminho)
+
+
+def _temporario(sufixo: str) -> Path:
+    descritor, nome = tempfile.mkstemp(suffix=sufixo)
+    os.close(descritor)
+    return Path(nome)
+
+
+def preparar_capa(arquivo: Path) -> Optional[Path]:
+    """Uma imagem escolhida vira a provisória da capa: um temporário em %TEMP%, ou None se ilegível.
+
+    Fora da thread principal. Uma capa animada segue como está; uma parada é enquadrada
+    (`composite_cover`) e reduzida ao tamanho das capas (`convert_cover`).
+    """
+    try:
+        with Image.open(arquivo) as imagem:
+            if getattr(imagem, "is_animated", False):
+                return convert_cover(arquivo)
+    except UnidentifiedImageError:
+        pass
+    except Exception:  # noqa: BLE001  # um arquivo truncado ou grande demais cai no `composite_cover` abaixo
+        logging.info("Could not probe the chosen cover", exc_info=True)
+    intermediaria = _temporario(".png")
+    try:
+        composite_cover(arquivo).save(intermediaria, "PNG")
+        return convert_cover(intermediaria)
+    except Exception:  # noqa: BLE001  # só esta thread devolve o contador de ocupado: não pode morrer
+        logging.exception("Could not prepare the chosen cover")
+        return None
+    finally:
+        intermediaria.unlink(missing_ok=True)
+
+
+def preparar_capa_de_video(arquivo: Path) -> tuple[Optional[Path], str]:
+    """O vídeo escolhido vira a provisória (um WebP animado) e as cópias dela; ou ``(None, erro)``.
+
+    Fora da thread principal. O ffmpeg só existe no instalador (ou no PATH): sem ele, o vídeo não é lido.
+    """
+    if capa_video.executavel() is None:
+        return None, _("O arquivo não pôde ser lido como vídeo.")
+    try:
+        # As cópias da grade e dos detalhes saem junto: a prévia toca assim que a capa aparece.
+        capa = capa_video.converter(
+            arquivo,
+            lambda destino: [
+                (copias_animadas.caminho_para(destino, tamanho), tamanho) for tamanho in copias_animadas.tamanhos()
+            ],
+        )
+    except capa_video.VideoFalhou as erro:
+        return None, str(erro)
+    except Exception:  # noqa: BLE001
+        logging.exception("Could not convert the chosen video")
+        return None, _("O arquivo não pôde ser lido como vídeo.")
+    return capa, ""
+
+
+def estado_do_logo(form: Formulario, jogo: Optional[Jogo]) -> str:
+    """``auto``, ``manual`` ou ``title``: a escolha da tela, ou a gravada."""
+    if form.logo is not None:
+        return form.logo.modo
+    return game_logo.logo_choice(jogo) if jogo else "auto"
+
+
+def estado_do_papel(form: Formulario, jogo: Optional[Jogo]) -> str:
+    """``auto``, ``manual`` ou ``none``: a escolha da tela, ou a gravada."""
+    if form.papel_de_parede is not None:
+        return form.papel_de_parede.modo
+    return session_wallpaper.escolha(jogo) if jogo else "auto"
 
 
 def _aplicar_logo(jogo: Jogo, escolha: Optional[Escolha]) -> None:
@@ -356,7 +430,10 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
     jogo.track_updates = form.notificar_atualizacoes
     jogo.conquistas = form.conquistas
 
+    capa_presa = False
     if form.capa_mudou:
+        # As cópias animadas que a tela segura abertas (grade e página de detalhes) travariam o `replace`.
+        copias_animadas.soltar(jogo.game_id)
         try:
             save_cover(jogo.game_id, form.capa)
         except OSError as error:
@@ -364,11 +441,14 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
             # (WinError 5). O resto da edição é salvo, em vez de o Aplicar
             # abortar no meio; a provisória fica, é a capa nova desta sessão.
             logging.warning("Could not save the cover: %s", error)
+            capa_presa = form.capa is not None
+            jogo.capa_da_sessao = form.capa
         else:
+            jogo.capa_da_sessao = None
             if form.capa is not None:
                 # Depois da recarga que o `save_cover` agenda (a mesma fila, que
                 # roda na ordem): até lá a capa ainda é lida da provisória.
-                na_thread_principal(_descartar_provisoria, form.capa)
+                na_thread_principal(descartar_provisoria, form.capa)
 
     _aplicar_logo(jogo, form.logo)
     _aplicar_papel_de_parede(jogo, form.papel_de_parede)
@@ -400,4 +480,4 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
         sgdb.reset_cancellable()
         sgdb.process_game(jogo, {}, lambda manager: _capa_do_sgdb_chegou(jogo, manager))
 
-    return Resultado(jogo, sair_dos_detalhes=era_zerado and jogo.removed and not jogo.zerado)
+    return Resultado(jogo, sair_dos_detalhes=era_zerado and jogo.removed and not jogo.zerado, capa_presa=capa_presa)

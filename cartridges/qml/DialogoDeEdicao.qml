@@ -6,7 +6,7 @@ import QtQuick.Window
 // O diálogo de editar um jogo e o de adicionar um novo. Só desenha: o que ele edita é o `edicao`
 // (cartridges/modelos/edicao.py) e a regra de validar e gravar é de cartridges/edicao.py.
 // Modal para o mouse, o teclado e o controle; o foco volta a quem o abriu.
-// Ainda sem os grupos de capa, logo e papel de parede (tarefa 7) e o de iluminação inteligente (plano 5).
+// Ainda sem o grupo de iluminação inteligente (plano 5).
 Rectangle {
     id: dialogo
     objectName: "dialogoDeEdicao"
@@ -15,6 +15,8 @@ Rectangle {
     property Item retorno: null
     property Item ultimoFoco: null
     property bool avancadasAbertas: false
+    // O que o seletor de arquivo aberto escolhe: "executavel", "capa", "logo" ou "papel".
+    property string alvoDoSeletor: "executavel"
 
     function dentro(item) {
         for (var p = item; p; p = p.parentItem)
@@ -125,16 +127,84 @@ Rectangle {
         }
     }
 
-    // Criado só ao clicar: o seletor nativo não precisa existir antes.
+    // Criado só ao clicar: o seletor nativo não precisa existir antes. Um só serve aos quatro usos.
+    function abrirSeletor(alvo) {
+        alvoDoSeletor = alvo
+        // O `Loader` é síncrono: ao ativar, o `onLoaded` já abre o seletor.
+        if (cargaDoSeletor.item) cargaDoSeletor.item.open(); else cargaDoSeletor.active = true
+    }
     Loader {
         id: cargaDoSeletor
         active: false
         sourceComponent: FileDialog {
-            title: "Selecionar arquivo"
-            nameFilters: ["Executáveis (*.exe *.bat *.cmd *.lnk *.url)"]
-            onAccepted: edicao.escolherExecutavel(selectedFile)
+            title: dialogo.alvoDoSeletor === "capa" ? "Escolher capa de um arquivo"
+                : dialogo.alvoDoSeletor === "logo" ? "Escolher logo de um arquivo"
+                : dialogo.alvoDoSeletor === "papel" ? "Escolher papel de parede de um arquivo" : "Selecionar arquivo"
+            nameFilters: dialogo.alvoDoSeletor === "capa" ? [edicao.filtroDaCapa]
+                : dialogo.alvoDoSeletor === "logo" ? [edicao.filtroDoLogo]
+                : dialogo.alvoDoSeletor === "papel" ? [edicao.filtroDoPapel]
+                : ["Executáveis (*.exe *.bat *.cmd *.lnk *.url)"]
+            onAccepted: {
+                if (dialogo.alvoDoSeletor === "capa") edicao.escolherCapa(selectedFile)
+                else if (dialogo.alvoDoSeletor === "logo") edicao.escolherLogo(selectedFile)
+                else if (dialogo.alvoDoSeletor === "papel") edicao.escolherPapel(selectedFile)
+                else edicao.escolherExecutavel(selectedFile)
+            }
         }
         onLoaded: item.open()
+    }
+
+    component BotaoDaCapa: BotaoDeLinha {
+        id: botaoDaCapa
+        contentItem: Text {
+            text: botaoDaCapa.glifo
+            textFormat: Text.PlainText
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            color: "white"
+            font { family: Tema.fonteDeIcones; pixelSize: 16 }
+        }
+        background: Rectangle {
+            radius: 17
+            color: botaoDaCapa.down ? "#e6000000" : botaoDaCapa.hovered ? "#cc000000" : "#99000000"
+            border { width: botaoDaCapa.visualFocus ? 2 : 0; color: Tema.destaque }
+        }
+    }
+
+    // Uma linha do logo ou do papel de parede: o título, o estado em texto e os botões à direita.
+    component LinhaDeArte: Item {
+        id: linhaDeArte
+        property string titulo
+        property string subtitulo
+        default property alias botoes: lado.data
+        width: parent.width
+        implicitHeight: 58
+        Rectangle { width: parent.width; height: 1; color: Tema.borda; visible: linhaDeArte.y > 0 }
+        Column {
+            anchors { left: parent.left; leftMargin: 16; right: lado.left; rightMargin: 8; verticalCenter: parent.verticalCenter }
+            Text {
+                width: parent.width
+                text: linhaDeArte.titulo
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                color: Tema.texto
+                font { family: Tema.fonte; pixelSize: 15 }
+            }
+            Text {
+                objectName: linhaDeArte.objectName + "Subtitulo"
+                width: parent.width
+                text: linhaDeArte.subtitulo
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                color: Tema.textoSecundario
+                font { family: Tema.fonte; pixelSize: 12 }
+            }
+        }
+        Row {
+            id: lado
+            anchors { right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }
+            spacing: 4
+        }
     }
 
     Rectangle {
@@ -162,6 +232,99 @@ Rectangle {
                 y: 8
                 width: rolagem.width - 32
                 spacing: 16
+
+                // A capa 200x300 com os botões sobre ela, como na tela de detalhes do jogo.
+                Item {
+                    width: parent.width
+                    height: 300
+                    Rectangle {
+                        id: moldura
+                        objectName: "capaDaEdicao"
+                        x: (parent.width - width) / 2
+                        width: 200
+                        height: 300
+                        radius: 8
+                        color: Tema.superficie
+                        border.color: Tema.borda
+                        clip: true
+                        AnimatedImage {
+                            id: previa
+                            objectName: "previaDaCapa"
+                            anchors.fill: parent
+                            source: edicao.capa !== "" ? edicao.capa : paginaTodos.placeholder
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            cache: false
+                            opacity: edicao.convertendoCapa ? 0.3 : 1
+                        }
+                        BusyIndicator {
+                            anchors.centerIn: parent
+                            running: edicao.convertendoCapa
+                            visible: running
+                        }
+                        Row {
+                            anchors { right: parent.right; bottom: parent.bottom; rightMargin: 6; bottomMargin: 6 }
+                            spacing: 6
+                            // shortcut: o botão "Escolher capa no SteamGridDB" entra com a tarefa 8.
+                            BotaoDaCapa {
+                                objectName: "botaoExcluirCapa"
+                                visible: edicao.temCapa
+                                glifo: "\uE74D"  // lixeira
+                                dica: "Excluir capa"
+                                onClicked: edicao.excluirCapa()
+                            }
+                            BotaoDaCapa {
+                                objectName: "botaoEscolherCapa"
+                                glifo: "\uE8E5"  // abrir arquivo
+                                dica: "Escolher capa de um arquivo"
+                                onClicked: dialogo.abrirSeletor("capa")
+                            }
+                        }
+                    }
+                }
+
+                GrupoDeLinhas {
+                    width: parent.width
+                    LinhaDeArte {
+                        objectName: "linhaDoLogo"
+                        titulo: "Logo"
+                        subtitulo: edicao.logoSubtitulo
+                        BotaoDeLinha {
+                            objectName: "botaoRestaurarLogo"
+                            visible: edicao.logoRestauravel
+                            glifo: "\uE7A7"  // desfazer
+                            dica: "Voltar a escolher o logo automaticamente"
+                            onClicked: edicao.restaurarLogo()
+                        }
+                        // shortcut: o botão "Escolher logo no SteamGridDB" entra com a tarefa 8.
+                        BotaoDeLinha {
+                            objectName: "botaoEscolherLogo"
+                            glifo: "\uE8E5"  // abrir arquivo
+                            dica: "Escolher logo de um arquivo"
+                            onClicked: dialogo.abrirSeletor("logo")
+                        }
+                    }
+                    LinhaDeArte {
+                        objectName: "linhaDoPapel"
+                        titulo: "Papel de parede da sessão"
+                        subtitulo: edicao.papelSubtitulo
+                        enabled: edicao.papelDisponivel
+                        BotaoDeLinha {
+                            objectName: "botaoRestaurarPapel"
+                            visible: edicao.papelRestauravel
+                            glifo: "\uE7A7"  // desfazer
+                            dica: "Voltar a escolher o papel de parede automaticamente"
+                            onClicked: edicao.restaurarPapel()
+                        }
+                        // shortcut: o botão "Escolher papel de parede no wallhaven" entra com a tarefa 10.
+                        BotaoDeLinha {
+                            objectName: "botaoEscolherPapel"
+                            glifo: "\uE8E5"  // abrir arquivo
+                            dica: "Escolher papel de parede de um arquivo"
+                            onClicked: dialogo.abrirSeletor("papel")
+                        }
+                    }
+                }
 
                 GrupoDeLinhas {
                     width: parent.width
@@ -276,8 +439,7 @@ Rectangle {
                             objectName: "botaoSelecionarExecutavel"
                             glifo: ""  // abrir arquivo
                             dica: "Selecionar arquivo"
-                            // O `Loader` é síncrono: ao ativar, o `onLoaded` já abre o seletor.
-                            onClicked: { if (cargaDoSeletor.item) cargaDoSeletor.item.open(); else cargaDoSeletor.active = true }
+                            onClicked: dialogo.abrirSeletor("executavel")
                         }
                         BotaoDeLinha {
                             objectName: "botaoAbrirPasta"

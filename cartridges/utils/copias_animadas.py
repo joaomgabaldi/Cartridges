@@ -347,6 +347,8 @@ def _entregar(pronto: Callable[[Resultado], None], resultado: Resultado) -> bool
 # ``AnimatedImage`` mantém o ``.webp`` aberto sem compartilhar a exclusão, e o Windows não deixa
 # apagar nem regravar um arquivo assim (WinError 32). Chamado com o id do jogo, na thread principal.
 soltar_do_jogo: Callable[[str], None] | None = None
+# O mesmo pedido, para a cópia grande que a página de detalhes toca.
+soltar_da_pagina: Callable[[str], None] | None = None
 
 
 def soltar(game_id: str) -> None:
@@ -355,8 +357,10 @@ def soltar(game_id: str) -> None:
     Só a thread principal toca a tela; de outra thread não faz nada (a cópia presa fica para a
     limpeza da próxima abertura, que a apaga se o jogo deixou de existir).
     """
-    if soltar_do_jogo is not None and eh_thread_principal():
-        soltar_do_jogo(game_id)
+    if eh_thread_principal():
+        for gancho in (soltar_do_jogo, soltar_da_pagina):
+            if gancho is not None:
+                gancho(game_id)
 
 
 def apagar(game_id: str) -> None:

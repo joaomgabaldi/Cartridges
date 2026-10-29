@@ -10,16 +10,44 @@ operação em voo) e para falar com a pessoa (o erro, a pasta que não abriu). S
 """
 
 import dataclasses
+import logging
 import os
+import threading
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, Optional
 
-from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
+from PIL import Image
+from PySide6.QtCore import Property, QCoreApplication, QEvent, QObject, QUrl, Signal, Slot
+from PySide6.QtGui import QGuiApplication
 
 from cartridges import edicao, shared
-from cartridges.edicao import Formulario
+from cartridges.edicao import Escolha, Formulario
 from cartridges.jogo import STATUS_LABELS, Jogo
+from cartridges.modelos.ordem import _url_da_capa  # noqa: PLC2701
+from cartridges.utils import capa_video, game_logo, session_wallpaper
 from cartridges.utils.game_folder import game_folder, open_folder
+from cartridges.utils.thread_principal import na_thread_principal
+
+
+def _filtro(nome: str, sufixos: list[str] | tuple[str, ...]) -> str:
+    return f"{nome} ({' '.join('*' + s for s in sorted(sufixos))})"
+
+
+def filtro_de_capa() -> str:
+    """As imagens que o Pillow lê e os vídeos que o ffmpeg converte. Sem SVG: o Pillow não o rasteriza."""
+    # `.palm` e `.pdf` só o Pillow escreve.
+    imagens = set(Image.registered_extensions()) - {".palm", ".pdf", ".svg"}
+    return _filtro(_("Imagens e vídeos"), [*imagens, *capa_video.SUFIXOS])
+
+
+def _segundo_monitor() -> bool:
+    return len(QGuiApplication.screens()) >= 2
+
+
+def _largar_arquivos_abertos() -> None:
+    # O ``AnimatedImage`` só larga o arquivo quando destrói o filme, num ``deleteLater``.
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def _ler(atributo: str) -> Callable[[Any], Any]:
@@ -62,6 +90,8 @@ class ModeloDaEdicao(QObject):
     avancadasPedidas = Signal()  # noqa: N815
     # O diálogo de erro fechou: o foco volta ao diálogo de edição.
     focoDevolvido = Signal()  # noqa: N815
+    capaChanged = Signal()  # noqa: N815
+    imagensChanged = Signal()  # noqa: N815
 
     def __init__(self, aplicativo: Any, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -74,6 +104,11 @@ class ModeloDaEdicao(QObject):
         self._acompanha = False
         self._pasta = ""
         self._empacotado = False
+        # Cada abertura é uma geração: o que uma thread entrega a uma anterior é descartado.
+        self._geracao = 0
+        self._pedido_da_capa = 0
+        self._capas_em_voo = 0
+        self._segundo_monitor = False
 
     # -- campos do formulário --------------------------------------------------------------------
 
@@ -198,6 +233,151 @@ class ModeloDaEdicao(QObject):
             return _("Backup desligado")
         return _("Automático pelo AppID") if form.appid.strip() else _("Nenhum")
 
+    # -- capa, logo e papel de parede ------------------------------------------------------------
+
+    filtroDaCapa = Property(str, lambda self: filtro_de_capa(), constant=True)  # noqa: N815
+    filtroDoLogo = Property(  # noqa: N815
+        str, lambda self: _filtro(_("Imagens de logo"), game_logo.IMAGE_SUFFIXES), constant=True
+    )
+    filtroDoPapel = Property(  # noqa: N815
+        str, lambda self: _filtro(_("Imagens"), session_wallpaper.IMAGE_SUFFIXES), constant=True
+    )
+
+    @Property(str, notify=capaChanged)
+    def capa(self) -> str:
+        """A URL da capa que a tela mostra ("" sem capa)."""
+        return _url_da_capa(self._form.capa)
+
+    @Property(bool, notify=capaChanged)
+    def temCapa(self) -> bool:  # noqa: N802
+        return self._form.capa is not None
+
+    @Property(bool, notify=capaChanged)
+    def convertendoCapa(self) -> bool:  # noqa: N802
+        return self._capas_em_voo > 0
+
+    @Property(str, notify=imagensChanged)
+    def logoSubtitulo(self) -> str:  # noqa: N802
+        return {
+            "manual": _("Escolhido manualmente"),
+            "title": _("Sem logo; o título é exibido"),
+        }.get(edicao.estado_do_logo(self._form, self._jogo), _("Automático (SteamGridDB)"))
+
+    @Property(bool, notify=imagensChanged)
+    def logoRestauravel(self) -> bool:  # noqa: N802
+        return edicao.estado_do_logo(self._form, self._jogo) != "auto"
+
+    @Property(bool, notify=imagensChanged)
+    def papelDisponivel(self) -> bool:  # noqa: N802
+        return self._segundo_monitor
+
+    @Property(str, notify=imagensChanged)
+    def papelSubtitulo(self) -> str:  # noqa: N802
+        if not self._segundo_monitor:
+            return _("Requer um segundo monitor")
+        return {
+            "manual": _("Escolhido manualmente"),
+            "none": _("Não trocar o papel de parede"),
+        }.get(edicao.estado_do_papel(self._form, self._jogo), _("Automático (wallhaven)"))
+
+    @Property(bool, notify=imagensChanged)
+    def papelRestauravel(self) -> bool:  # noqa: N802
+        return self._segundo_monitor and edicao.estado_do_papel(self._form, self._jogo) != "auto"
+
+    def _provisoria(self) -> Optional[Path]:
+        """A capa que a tela criou e ainda é dela (a do disco não é)."""
+        return self._form.capa if self._form.capa_mudou else None
+
+    def _trocar_capa(self, nova: Optional[Path]) -> None:
+        antiga = self._provisoria()
+        self._form.capa, self._form.capa_mudou = nova, True
+        self.capaChanged.emit()
+        if antiga is not None:
+            # A prévia animada segura o arquivo aberto: ela larga antes, senão o Windows recusa apagar.
+            _largar_arquivos_abertos()
+            edicao.descartar_provisoria(antiga)
+
+    def _trocar_escolha(self, atributo: str, nova: Optional[Escolha]) -> None:
+        antiga = getattr(self._form, atributo)
+        setattr(self._form, atributo, nova)
+        if antiga is not None and antiga.temporario and antiga.arquivo:
+            edicao.descartar_provisoria(antiga.arquivo)
+        self.imagensChanged.emit()
+
+    @Slot(QUrl)
+    def escolherCapa(self, url: QUrl) -> None:  # noqa: N802
+        """Converte a imagem (ou o vídeo) fora da thread principal; o Aplicar espera."""
+        if not self._aberto or not (caminho := url.toLocalFile()):
+            return
+        arquivo, geracao = Path(caminho), self._geracao
+        self._pedido_da_capa += 1
+        pedido = self._pedido_da_capa
+        self._capas_em_voo += 1
+        self.iniciar_operacao()
+        self.capaChanged.emit()
+
+        def trabalhar() -> None:
+            nova, erro = None, ""
+            try:
+                if capa_video.eh_video(arquivo):
+                    nova, erro = edicao.preparar_capa_de_video(arquivo)
+                else:
+                    nova = edicao.preparar_capa(arquivo)
+            except Exception:  # noqa: BLE001  # só esta thread devolve o contador de ocupado
+                logging.exception("Could not prepare the chosen cover")
+            na_thread_principal(self._capa_pronta, geracao, pedido, nova, erro)
+
+        threading.Thread(target=trabalhar, daemon=True).start()
+
+    def _capa_pronta(self, geracao: int, pedido: int, nova: Optional[Path], erro: str) -> None:
+        if geracao != self._geracao or not self._aberto:
+            # O diálogo fechou (ou é de outro jogo): a capa pronta não tem onde entrar.
+            if nova is not None:
+                edicao.descartar_provisoria(nova)
+            return
+        self._capas_em_voo -= 1
+        self.terminar_operacao()
+        if pedido != self._pedido_da_capa:
+            # Uma escolha mais nova foi pedida depois desta: vale a última.
+            if nova is not None:
+                edicao.descartar_provisoria(nova)
+            self.capaChanged.emit()
+            return
+        if nova is not None:
+            self._trocar_capa(nova)
+        else:
+            self.capaChanged.emit()
+        if erro:
+            self._aplicativo.pedir_dialogo(_("Não foi possível usar o vídeo"), erro, [], self.focoDevolvido.emit)
+
+    @Slot()
+    def excluirCapa(self) -> None:  # noqa: N802
+        if self._aberto and self._form.capa is not None:
+            # Uma conversão a caminho perde para a exclusão pedida depois dela.
+            self._pedido_da_capa += 1
+            self._trocar_capa(None)
+
+    @Slot(QUrl)
+    def escolherLogo(self, url: QUrl) -> None:  # noqa: N802
+        if self._aberto and (caminho := url.toLocalFile()):
+            self._trocar_escolha("logo", Escolha("manual", Path(caminho)))
+
+    @Slot()
+    def restaurarLogo(self) -> None:  # noqa: N802
+        if self._aberto:
+            self._trocar_escolha("logo", Escolha("auto"))
+
+    @Slot(QUrl)
+    def escolherPapel(self, url: QUrl) -> None:  # noqa: N802
+        # shortcut: o arquivo entra com o corte centralizado; a tela de ajuste da faixa vem com a tarefa 10.
+        if self._aberto and (caminho := url.toLocalFile()):
+            self._trocar_escolha("papel_de_parede", Escolha("manual", Path(caminho)))
+
+    @Slot()
+    def restaurarPapel(self) -> None:  # noqa: N802
+        if self._aberto:
+            self._trocar_escolha("papel_de_parede", Escolha("auto"))
+
     def _ao_mudar(self, atributo: str) -> None:
         if atributo == "executavel":
             self._recalcular()
@@ -250,6 +430,9 @@ class ModeloDaEdicao(QObject):
         # O AppID que o campo mostrava ao abrir: é com ele que `aplicar` vê se a pessoa o mexeu.
         self._appid_inicial = self._form.appid
         self._ocupacoes = 0
+        self._capas_em_voo = 0
+        self._geracao += 1
+        self._segundo_monitor = _segundo_monitor()
         self._aberto = True
         self._recalcular()
         for sinal in (
@@ -257,16 +440,32 @@ class ModeloDaEdicao(QObject):
             self.generoChanged, self.executavelChanged, self.adminChanged, self.rastrearProcessoChanged,
             self.executavelDoProcessoChanged, self.notificarAtualizacoesChanged, self.conquistasChanged,
             self.appidChanged, self.notaChanged, self.controleIndiceChanged, self.statusIndiceChanged,
-            self.ludusaviChanged, self.ocupadoChanged, self.abertoChanged,
+            self.ludusaviChanged, self.ocupadoChanged, self.abertoChanged, self.capaChanged, self.imagensChanged,
         ):  # fmt: skip
             sinal.emit()
 
-    def _fechar(self) -> None:
+    def _fechar(self, descartar: bool = True) -> None:
+        """Fecha o diálogo. ``descartar``: as provisórias da tela saem (no Aplicar, são do `aplicar`)."""
+        provisoria = self._provisoria()
+        escolhas = [e for e in (self._form.logo, self._form.papel_de_parede) if e is not None]
         self._aberto = False
         self._jogo = None
         self._ocupacoes = 0
+        self._capas_em_voo = 0
+        self._form = Formulario()
         self.abertoChanged.emit()
         self.ocupadoChanged.emit()
+        # A prévia larga o arquivo (o da capa animada) antes de ele sair, ou de o `aplicar` o apagar.
+        self.capaChanged.emit()
+        self.imagensChanged.emit()
+        _largar_arquivos_abertos()
+        if not descartar:
+            return
+        if provisoria is not None:
+            edicao.descartar_provisoria(provisoria)
+        for escolha in escolhas:
+            if escolha.temporario and escolha.arquivo:
+                edicao.descartar_provisoria(escolha.arquivo)
 
     @Slot()
     def cancelar(self) -> None:
@@ -315,4 +514,5 @@ class ModeloDaEdicao(QObject):
             return
         # A página de detalhes, se aberta, segue o jogo pelo `atualizado`: mostra o novo ou sai sozinha.
         edicao.aplicar(form, jogo, self._appid_inicial)
-        self._fechar()
+        # A capa nova é do `aplicar` (ele a apaga depois da recarga, ou a guarda como a da sessão).
+        self._fechar(descartar=False)

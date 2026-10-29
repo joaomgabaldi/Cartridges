@@ -19,13 +19,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, unquote
 
-from PySide6.QtCore import Property, QObject, Qt, Signal, Slot
+from PySide6.QtCore import Property, QCoreApplication, QEvent, QObject, Qt, Signal, Slot
 from PySide6.QtGui import QGuiApplication, QImage
 from PySide6.QtQuick import QQuickImageProvider
 
 from cartridges.jogo import STATUS_LABELS, Jogo, status_label
 from cartridges.modelos.ordem import Linha, _url_da_capa  # noqa: PLC2701
-from cartridges.utils import desfoque, game_logo
+from cartridges.utils import copias_animadas, desfoque, game_logo
 from cartridges.utils.format_playtime import format_playtime, format_size
 from cartridges.utils.hltb import format_hltb_time
 from cartridges.utils.open_uri import abrir_url
@@ -277,6 +277,9 @@ class DetalhesDoJogo(QObject):
         self._buscas_de_logo: set[str] = set()
         # O `jogo_excluido` sai de threads do importador: a conexão enfileirada leva à principal.
         store.jogo_excluido.connect(self._excluido, Qt.ConnectionType.QueuedConnection)
+        # Referência fraca: o gancho é global e o modelo pode morrer antes (como o da grade).
+        fraca = weakref.ref(self)
+        copias_animadas.soltar_da_pagina = lambda game_id: (m := fraca()) and m.soltar_copia(game_id)
         QGuiApplication.styleHints().colorSchemeChanged.connect(self._tema_mudou)
         # O alto contraste não tem sinal próprio no Qt 6.12; ligá-lo troca a paleta, e é por ela que reavaliamos.
         QGuiApplication.instance().paletteChanged.connect(self._tema_mudou)
@@ -309,6 +312,13 @@ class DetalhesDoJogo(QObject):
         self._atual = ""
         # Um desfoque a caminho não pode travar o fundo se o mesmo jogo voltar a ser mostrado.
         self._chave_do_fundo = ""
+
+    def soltar_copia(self, game_id: str) -> None:
+        """Esvazia a cópia animada da página, e o ``AnimatedImage`` larga o arquivo. Só na principal."""
+        if game_id == self._atual and self._v["capaAnimada"]:
+            self._mesclar({"capaAnimada": ""})
+            # O ``AnimatedImage`` só larga o arquivo quando destrói o filme, num ``deleteLater``.
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     @Slot()
     def esquecer(self) -> None:

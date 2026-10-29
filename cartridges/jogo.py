@@ -439,7 +439,12 @@ class Jogo(QObject):
         # o indicador na tela volta com a grade QML, que lê `loading`.
         self.loading += state
 
+    # A capa que não coube em disco (arquivo preso): vale até fechar o app (`edicao.aplicar`).
+    capa_da_sessao: Optional[Path] = None
+
     def get_cover_path(self) -> Optional[Path]:
+        if self.capa_da_sessao is not None and self.capa_da_sessao.is_file():
+            return self.capa_da_sessao
         # Animated covers (kept in their original format) take precedence,
         # then the still TIFF cover.
         for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
