@@ -10,11 +10,13 @@ chama os slots de navegação. `ProvedorDoFundo` entrega o degradê pontilhado e
 """
 
 import logging
+import weakref
 
 from PySide6.QtCore import Property, QModelIndex, QObject, QSize, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtQuick import QQuickImageProvider
 
+from cartridges import shared
 from cartridges.modelos import regras_do_big_picture as regras
 from cartridges.modelos.biblioteca import ModeloDaBiblioteca
 from cartridges.modelos.ordem import Linha
@@ -57,9 +59,17 @@ class BigPicture(QObject):
 
     alterado = Signal()  # índice, rótulos, vazia, ocupada
     jogosMudaram = Signal()  # noqa: N815  # só a lista (um passo do carrossel não a notifica)
+    animarCentralMudou = Signal()  # noqa: N815
 
-    def __init__(self, modelo: ModeloDaBiblioteca, parent: QObject | None = None) -> None:
+    def __init__(
+        self, modelo: ModeloDaBiblioteca, parent: QObject | None = None, *, animacoes_do_sistema: bool = True
+    ) -> None:
         super().__init__(parent)
+        # shortcut: as animações do Windows são lidas uma vez pelo `Aplicativo`; sai junto com a releitura dele.
+        self._animacoes_do_sistema = animacoes_do_sistema
+        self._animar_central = self._ler_animar_central()
+        eu = weakref.ref(self)
+        shared.schema.connect("changed::cover-autoplay", lambda *_: (b := eu()) and b._religar_animar_central())
         self._modelo = modelo
         self._carrossel = regras.Carrossel([])
         self._jogos: list[dict[str, str]] = []
@@ -98,6 +108,20 @@ class BigPicture(QObject):
     @Property(bool, notify=alterado)
     def ocupada(self) -> bool:
         return self._ocupada
+
+    def _ler_animar_central(self) -> bool:
+        return self._animacoes_do_sistema and shared.schema.get_boolean("cover-autoplay")
+
+    def _religar_animar_central(self) -> None:
+        animar = self._ler_animar_central()
+        if animar != self._animar_central:
+            self._animar_central = animar
+            self.animarCentralMudou.emit()
+
+    @Property(bool, notify=animarCentralMudou)
+    def animarCentral(self) -> bool:  # noqa: N802
+        """A capa animada do jogo central toca: `cover-autoplay` ligado e animações do Windows ativas."""
+        return self._animar_central
 
     # --- a lista segue o modelo ---
     @Slot()

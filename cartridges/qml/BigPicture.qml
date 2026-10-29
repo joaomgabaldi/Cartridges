@@ -1,0 +1,286 @@
+import QtQuick
+import QtQuick.Window
+
+// O Cover Flow do Big Picture. Calibração copiada de cartridges/big_picture.py (valores da `main`);
+// o estado vem do `bigPicture` (Python). A geometria é a do protótipo (D6).
+Item {
+    id: tela
+    objectName: "bigPicture"
+
+    signal abrir()
+    signal sair()
+
+    readonly property var jogos: bigPicture.jogos
+    readonly property int indice: bigPicture.indice
+    readonly property int perspectiva: 900
+    readonly property real anguloLateral: 65
+    readonly property real espacoCentral: 1.15
+    readonly property real espacoLateral: 0.45
+    readonly property real profundidadeLateral: 220
+    readonly property int capasDeCadaLado: 8
+    readonly property int duracaoDoPasso: 350
+    readonly property real escalaNaAbertura: 1.6
+    readonly property real reflexoAlcance: 0.55
+    readonly property real reflexoOpacidade: 0.35
+
+    // As quatro que a entrada e a saída (Task 3) animam; em repouso valem 1/0/0/1.
+    property real posicao: 0  // segue o índice (`onIndiceChanged`); a fila da entrada e da saída a escreve quadro a quadro
+    property real virada: 1
+    property real opacidadeCapas: 1
+    property real progressoAbertura: 0
+    property real opacidadeDoRodape: 1
+    property bool animarPasso: true
+
+    property real escala: Screen.devicePixelRatio  // pixels reais por pixel lógico
+    property real alturaCapa: height * 0.55
+    property real larguraCapa: alturaCapa * 2 / 3
+
+    // Pôr a posição sem animar (lista refeita, valor inicial): só um passo do carrossel desliza.
+    property bool saltando: false
+    function irDireto(valor) {
+        saltando = true
+        posicao = valor
+        saltando = false
+    }
+    Component.onCompleted: irDireto(indice)
+    onIndiceChanged: posicao = indice
+
+    // Lista refeita com o centro em outro índice: pula direto, como o `definir_jogos` da `main`.
+    // Vem antes do `alterado`, então `indice` ainda é o antigo; mudança só de capa não passa por aqui.
+    Connections {
+        target: bigPicture
+        function onJogosMudaram() {
+            if (bigPicture.indice !== tela.indice) tela.irDireto(bigPicture.indice)
+        }
+    }
+    Behavior on posicao {
+        enabled: tela.animarPasso && !tela.saltando
+        NumberAnimation { duration: tela.duracaoDoPasso; easing.type: Easing.OutCubic }
+    }
+
+    focus: true
+
+    // (x, ângulo, profundidade, afastamento) da capa `i`: a mistura, por `virada`, da fila e do normal.
+    function arranjo(i) {
+        const d = i - posicao
+        const a = Math.min(Math.abs(d), 1)
+        const lado = d < 0 ? -1 : 1
+        const x = Math.abs(d) <= 1
+            ? d * larguraCapa * espacoCentral
+            : lado * (larguraCapa * espacoCentral + (Math.abs(d) - 1) * larguraCapa * espacoLateral)
+        const angulo = -lado * a * anguloLateral
+        const prof = -a * profundidadeLateral
+        if (virada === 1)
+            return [x, angulo, prof, a]
+        const xFila = d * larguraCapa * espacoLateral * 1.6
+        return [xFila + (x - xFila) * virada,
+                -anguloLateral + (angulo + anguloLateral) * virada,
+                -profundidadeLateral + (prof + profundidadeLateral) * virada, a]
+    }
+
+    function translacao(x, y, z) {
+        return Qt.matrix4x4(1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z, 0, 0, 0, 1)
+    }
+
+    // Do espaço da capa (0,0 a largura,altura) ao da tela: o mesmo encadeamento do Gsk.Transform
+    // do app. A projeção zera o z para nada ser recortado em profundidade.
+    function transformacao(i) {
+        const [x, angulo, prof, a] = arranjo(i)
+        const fator = 1 + (escalaNaAbertura - 1) * progressoAbertura * (1 - a)
+        const r = angulo * Math.PI / 180
+        const c = Math.cos(r), s = Math.sin(r)
+        const projecao = Qt.matrix4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, -1 / perspectiva, 1)
+        const giro = Qt.matrix4x4(c, 0, s, 0, 0, 1, 0, 0, -s, 0, c, 0, 0, 0, 0, 1)
+        const tamanho = Qt.matrix4x4(fator, 0, 0, 0, 0, fator, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+        return translacao(width / 2, height * 0.40, 0)
+            .times(projecao)
+            .times(translacao(x, 0, prof))
+            .times(giro)
+            .times(tamanho)
+            .times(translacao(-larguraCapa / 2, -alturaCapa / 2, 0))
+    }
+
+    // O toque do Qt Quick acerta a capa errada sob a projeção (ADR 0005, D44): projeta os cantos e
+    // testa o quadrilátero, da capa mais próxima do centro à mais distante.
+    function capaEm(px, py) {
+        const visiveis = []
+        for (let i = Math.max(0, Math.floor(posicao - capasDeCadaLado) + 1);
+             i < Math.min(jogos.length, Math.ceil(posicao + capasDeCadaLado)); i++)
+            visiveis.push(i)
+        visiveis.sort((a, b) => Math.abs(a - posicao) - Math.abs(b - posicao))
+        for (const i of visiveis) {
+            const m = transformacao(i)
+            const cantos = [[0, 0], [larguraCapa, 0], [larguraCapa, alturaCapa], [0, alturaCapa]]
+                .map(([x, y]) => { const v = m.times(Qt.vector4d(x, y, 0, 1)); return [v.x / v.w, v.y / v.w] })
+            // Dentro do quadrilátero convexo: o mesmo lado de todas as arestas.
+            let positivos = 0, negativos = 0
+            for (let k = 0; k < 4; k++) {
+                const [ax, ay] = cantos[k], [bx, by] = cantos[(k + 1) % 4]
+                const lado = (bx - ax) * (py - ay) - (by - ay) * (px - ax)
+                if (lado < 0) negativos++
+                if (lado > 0) positivos++
+            }
+            if (positivos === 0 || negativos === 0) return i
+        }
+        return -1
+    }
+
+    Keys.onPressed: (evento) => {
+        const acoes = {
+            [Qt.Key_Left]: () => bigPicture.mover(-1),
+            [Qt.Key_Right]: () => bigPicture.mover(1),
+            [Qt.Key_PageUp]: () => bigPicture.mover(-10),
+            [Qt.Key_PageDown]: () => bigPicture.mover(10),
+            [Qt.Key_Home]: () => bigPicture.inicio(),
+            [Qt.Key_End]: () => bigPicture.fim(),
+            [Qt.Key_Return]: () => tela.abrir(),
+            [Qt.Key_Enter]: () => tela.abrir(),
+            [Qt.Key_Space]: () => tela.abrir(),
+            [Qt.Key_Escape]: () => tela.sair(),
+        }
+        const acao = acoes[evento.key]
+        if (!acao) return
+        evento.accepted = true  // consome a tecla mesmo ocupada, como a `main`
+        if (!bigPicture.ocupada) acao()
+    }
+
+    Rectangle { anchors.fill: parent; color: "black" }
+
+    // Em pixels reais do monitor da janela (Review Focus 4).
+    Image {
+        objectName: "fundo"
+        anchors.fill: parent
+        source: "image://fundo/" + Math.max(1, Math.round(tela.width * tela.escala))
+                + "x" + Math.max(1, Math.round(tela.height * tela.escala))
+        smooth: false
+        cache: false
+        asynchronous: true
+    }
+
+    // Máscara do reflexo, compartilhada: transparente até 55% da capa e
+    // opaca na base (espelhada pelo reflexo, fica opaca junto da capa).
+    Rectangle {
+        id: mascaraDoReflexo
+        visible: false
+        width: tela.larguraCapa
+        height: tela.alturaCapa
+        layer.enabled: true
+        gradient: Gradient {
+            GradientStop { position: tela.reflexoAlcance; color: "transparent" }
+            GradientStop { position: 1.0; color: "white" }
+        }
+    }
+
+    Item {
+        id: palco
+        anchors.fill: parent
+
+        // 17 vagas fixas em anel, não uma por jogo: a vaga `index` mostra o jogo da
+        // janela [base, base+16] com i ≡ index (mod 17). Ao andar uma capa, só uma vaga troca.
+        readonly property int vagas: 2 * tela.capasDeCadaLado + 1
+        readonly property int base: Math.floor(tela.posicao) - tela.capasDeCadaLado
+        Repeater {
+            model: palco.vagas
+            delegate: Loader {
+                id: vaga
+                required property int index
+                readonly property int i: palco.base + ((index - palco.base) % palco.vagas + palco.vagas) % palco.vagas
+                active: i >= 0 && i < tela.jogos.length
+                        && Math.abs(i - tela.posicao) < tela.capasDeCadaLado
+                z: -Math.abs(i - tela.posicao)
+                sourceComponent: CapaDoBigPicture {
+                    jogo: tela.jogos[vaga.i]
+                    indice: vaga.i
+                    mascara: mascaraDoReflexo
+                    largura: tela.larguraCapa
+                    altura: tela.alturaCapa
+                    escala: tela.escala
+                    escalaDaCentral: tela.escalaNaAbertura
+                    opacidadeDoReflexo: tela.reflexoOpacidade
+                    // Só no fim do passo: segurando a tecla nenhuma capa de passagem carrega a cópia em alta.
+                    central: vaga.i === tela.indice && Math.abs(tela.posicao - vaga.i) < 0.001
+                    animar: bigPicture.animarCentral
+                    opacity: (1 - tela.progressoAbertura) * tela.opacidadeCapas
+                    transform: Matrix4x4 { matrix: tela.transformacao(vaga.i) }
+                }
+            }
+        }
+
+        TapHandler {
+            enabled: !bigPicture.ocupada
+            onTapped: (ponto) => {
+                const i = tela.capaEm(ponto.position.x, ponto.position.y)
+                if (i === tela.indice) tela.abrir()
+                else if (i >= 0) bigPicture.irPara(i)
+            }
+        }
+
+        WheelHandler {
+            enabled: !bigPicture.ocupada
+            acceptedDevices: PointerDevice.Mouse
+            // Um passo por entalhe (120), como o DISCRETE da `main`; roda horizontal não move.
+            property int acumulado: 0
+            onEnabledChanged: acumulado = 0  // ocupada: o resto não vale para depois
+            onWheel: (evento) => {
+                if (evento.angleDelta.y === 0) return
+                if (acumulado * evento.angleDelta.y < 0) acumulado = 0  // mudou de sentido
+                acumulado += evento.angleDelta.y
+                while (Math.abs(acumulado) >= 120) {
+                    const lado = acumulado < 0 ? 1 : -1
+                    bigPicture.mover(lado)
+                    acumulado += lado * 120
+                }
+            }
+        }
+
+        DragHandler {
+            enabled: !bigPicture.ocupada
+            target: null
+            property int passos: 0
+            onActiveChanged: passos = 0
+            onTranslationChanged: {
+                const alvo = -Math.trunc(translation.x / (tela.espacoLateral * tela.larguraCapa))
+                if (alvo !== passos) { bigPicture.mover(alvo - passos); passos = alvo }
+            }
+        }
+    }
+
+    Column {
+        objectName: "rodape"
+        visible: !bigPicture.vazia
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 48
+        spacing: 6
+        opacity: tela.opacidadeDoRodape
+        Text {
+            objectName: "nomeDoRodape"
+            width: tela.width * 0.8
+            text: bigPicture.nome
+            textFormat: Text.PlainText
+            color: "white"
+            font { family: Tema.fonte; pixelSize: 27; weight: Font.ExtraBold }
+            wrapMode: Text.Wrap
+            horizontalAlignment: Text.AlignHCenter
+        }
+        Text {
+            width: tela.width * 0.8
+            text: bigPicture.desenvolvedora
+            textFormat: Text.PlainText
+            color: "white"
+            opacity: 0.55
+            font { family: Tema.fonte; pixelSize: 15 }
+            horizontalAlignment: Text.AlignHCenter
+        }
+    }
+
+    EstadoVazio {
+        objectName: "estadoVazioDoBigPicture"
+        visible: bigPicture.vazia
+        anchors.fill: parent
+        titulo: "Nenhum jogo"
+        descricao: "Pressione B ou Esc para voltar à biblioteca."
+        corDoTitulo: "white"
+        corDaDescricao: "white"
+    }
+}

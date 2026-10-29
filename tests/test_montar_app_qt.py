@@ -129,3 +129,18 @@ def test_remonta_por_cima_do_que_ele_mesmo_montou(insumos, tmp_path):
     montar_app_qt.montar(destino, "desenvolvimento", **insumos)
     assert not (destino / "resto.txt").exists()
     assert (destino / "bin" / "Cartridges.exe").is_file()
+
+
+def test_montar_mantem_o_qt5compat(insumos, tmp_path):
+    # O reflexo do Big Picture usa o OpacityMask do Qt5Compat.GraphicalEffects.
+    efeitos = insumos["lib"] / "PySide6" / "qml" / "Qt5Compat" / "GraphicalEffects"
+    arquivos = (
+        "qmldir", "OpacityMask.qml", "qtgraphicaleffectsplugin.dll", "private/qtgraphicaleffectsprivateplugin.dll",
+    )  # fmt: skip
+    for nome in arquivos:
+        _tocar(efeitos / nome)
+    destino = tmp_path / "saida"
+    montar_app_qt.montar(destino, "final", **insumos)
+
+    for nome in arquivos:
+        assert (destino / "lib" / "PySide6" / "qml" / "Qt5Compat" / "GraphicalEffects" / nome).is_file(), nome

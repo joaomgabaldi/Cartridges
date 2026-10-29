@@ -27,6 +27,7 @@ from cartridges.carga import carregar_jogos_do_disco
 from cartridges.logging.session_file_handler import SessionFileHandler
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
+from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.edicao import ModeloDaEdicao
@@ -143,12 +144,15 @@ def main(argv: list[str]) -> int:
     controle = ControleDaGrade()
     detalhes = DetalhesDoJogo(shared.store, avisos=avisos)
     edicao = ModeloDaEdicao(aplicativo)
+    # shortcut: a lista se refaz a cada mudança da biblioteca mesmo invisível; a Task 3 só a atualiza visível.
+    big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     motor.addImageProvider("desfoque", detalhes.provedor)
+    motor.addImageProvider("fundo", ProvedorDoFundo())
     contexto = motor.rootContext()
     for nome, valor in (
         ("filtros", filtros), ("paginaTodos", pagina_biblioteca), ("paginaZerados", pagina_zerados),
         ("aplicativo", aplicativo), ("ponte", ponte), ("controle", controle), ("detalhes", detalhes),
-        ("edicao", edicao),
+        ("edicao", edicao), ("bigPicture", big_picture),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))

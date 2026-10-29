@@ -15,6 +15,9 @@ Item {
     // Sem texto, não há botão.
     property string rotuloDoBotao
     property bool botaoHabilitado: true
+    // O Big Picture usa o aviso em branco sobre o fundo preto.
+    property color corDoTitulo: Tema.texto
+    property color corDaDescricao: Tema.textoSecundario
     signal botaoClicado()
 
     Column {
@@ -55,7 +58,7 @@ Item {
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
             text: estado.titulo
-            color: Tema.texto
+            color: estado.corDoTitulo
             font { family: Tema.fonte; pixelSize: 26; weight: Font.Bold }
         }
         Text {
@@ -64,7 +67,7 @@ Item {
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
             text: estado.descricao
-            color: Tema.textoSecundario
+            color: estado.corDaDescricao
             font { family: Tema.fonte; pixelSize: 15 }
         }
         Button {
