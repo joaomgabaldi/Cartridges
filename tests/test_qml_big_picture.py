@@ -973,8 +973,8 @@ def test_confirmacao_do_comando_na_frente_e_cancelar_volta(app_qt, monkeypatch):
     assert tela.property("enabled") is False and tela.property("activeFocus") is False
     QTest.keyClick(app.janela, Qt.Key.Key_Right)  # as teclas do carrossel não passam pela confirmação
     assert not app.big_picture.ocupada and jogo.launch.chamadas == 0 and app.big_picture.indice == 0
-    # Cancelar: o carrossel segue em tela cheia, o jogo não é iniciado e o teclado volta a ele.
-    _clicar_no_texto(app, "Cancelar")
+    # Dispensar: o carrossel segue em tela cheia, o jogo não é iniciado e o teclado volta a ele.
+    _clicar_no_texto(app, "Dispensar")
     assert avisos.property("dialogoAberto") is False
     assert _esperar(lambda: tela.property("activeFocus") is True, limite=3)
     assert app.big_picture.visivel and not app.big_picture.ocupada and jogo.launch.chamadas == 0
@@ -1017,7 +1017,7 @@ def test_confirmacao_pelo_teclado_cancela_com_esc_e_devolve_o_foco(app_qt, monke
 @pytest.mark.parametrize("tecla", [Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space])
 def test_confirmacao_pelo_teclado_inicia_com_enter_ou_espaco_depois_de_escolher(app_qt, monkeypatch, tecla):
     app, jogo, avisos = _com_confirmacao_aberta(monkeypatch)
-    QTest.keyClick(app.janela, Qt.Key.Key_Right)  # de "Cancelar" (o padrão) para "Iniciar"
+    QTest.keyClick(app.janela, Qt.Key.Key_Right)  # de "Dispensar" (o padrão) para "Iniciar"
     QTest.keyClick(app.janela, tecla)
     assert avisos.property("dialogoAberto") is False
     assert _esperar(lambda: jogo.launch.chamadas == 1, limite=3)
@@ -1054,7 +1054,7 @@ def test_confirmacao_reaberta_ainda_devolve_o_foco_a_camada(app_qt, monkeypatch)
 def test_confirmacao_setas_trocam_o_botao_em_foco(app_qt, monkeypatch):
     app, jogo, avisos = _com_confirmacao_aberta(monkeypatch)
     QTest.keyClick(app.janela, Qt.Key.Key_Right)  # para "Iniciar"
-    QTest.keyClick(app.janela, Qt.Key.Key_Left)  # e de volta a "Cancelar"
+    QTest.keyClick(app.janela, Qt.Key.Key_Left)  # e de volta a "Dispensar"
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
     assert avisos.property("dialogoAberto") is False and jogo.launch.chamadas == 0
     app.fechar()

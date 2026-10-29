@@ -700,6 +700,25 @@ def test_sair_repoe_o_quadro_mesmo_se_a_troca_falhar(fade, monkeypatch):
     assert not bp.visivel and bp.jogos == [] and bp.jaSaiu
 
 
+def test_sair_emite_saiu_mesmo_se_a_troca_falhar(fade, monkeypatch):
+    # O foco volta à grade mesmo com a janela falhando ao sair da tela cheia.
+    bp = fade.bp
+    _entrar_inteiro(fade)
+    emitidos = []
+    bp.saiu.connect(emitidos.append)
+    bp.sair()
+    bp.filaTerminou()
+
+    def quebra():
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(fade.janela, "showNormal", quebra)
+    monkeypatch.setattr(fade.janela, "showMaximized", quebra)
+    erros = _erros_do_laco(monkeypatch)
+    concluir_cortina(bp)
+    assert erros == [RuntimeError] and len(emitidos) == 1
+
+
 def test_encerrar_no_meio_do_fade_fecha_a_cortina(fade):
     bp = fade.bp
     bp.entrar()

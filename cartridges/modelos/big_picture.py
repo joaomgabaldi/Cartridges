@@ -368,7 +368,7 @@ class BigPicture(QObject):
             self._carrossel, self._jogos = regras.Carrossel([]), []  # fora da tela nada decodifica capa (D39)
             self.jogosMudaram.emit()
             self.alterado.emit()
-        self.saiu.emit(jogo)
+            self.saiu.emit(jogo)  # o foco volta à grade mesmo se a troca levantou
 
     def _fim_da_saida(self) -> None:
         self._saindo = self._ocupada = self._pendente = False

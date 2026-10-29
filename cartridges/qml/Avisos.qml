@@ -83,7 +83,7 @@ Item {
         visible: false
         color: "#80000000"
 
-        // 0 = Cancelar (o padrão), 1 = Iniciar. Teclado e controle acionam o botão em foco; Esc cancela.
+        // 0 = Dispensar (o padrão), 1 = Iniciar. Teclado e controle acionam o botão em foco; Esc cancela.
         property int foco: 0
         property Item focoAnterior: null
 
@@ -150,7 +150,7 @@ Item {
                     anchors.right: parent.right
 
                     Repeater {
-                        model: [{ rotulo: "Cancelar", principal: false }, { rotulo: "Iniciar", principal: true }]
+                        model: [{ rotulo: "Dispensar", principal: false }, { rotulo: "Iniciar", principal: true }]
                         delegate: Rectangle {
                             id: botao
                             required property var modelData

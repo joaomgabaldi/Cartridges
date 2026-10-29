@@ -97,11 +97,11 @@ def main(argv: list[str]) -> int:
     varredura_tamanho = InstallSizeSweep()
 
     def encerrar() -> None:
+        big_picture.encerrar()  # a cortina preta do fade nunca fica no monitor (ADR 0003)
         verificador.stop()
         varredura_hltb.stop()
         varredura_tamanho.stop()
         edicao.cancelar()  # apaga os temporários de um editor ainda aberto
-        big_picture.encerrar()  # a cortina preta do fade nunca fica no monitor (ADR 0003)
         async_manager.encerrar()
         copias_animadas.encerrar()
 
