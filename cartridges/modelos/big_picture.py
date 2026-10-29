@@ -374,6 +374,19 @@ class BigPicture(QObject):
         self._saindo = self._ocupada = self._pendente = False
         self.alterado.emit()
 
+    # --- entrada automática ---
+    @Slot(bool)
+    def controleConectado(self, grade_a_vista: bool) -> None:  # noqa: FBT001, N802
+        """Um controle foi conectado: entra sozinho se a preferência e o momento permitirem."""
+        if regras.pode_entrar_sozinho(
+            preferencia=shared.schema.get_boolean("big-picture-ao-conectar"),
+            controle_ligado=shared.schema.get_boolean("gamepad"),
+            tem_3d=self._disponivel,
+            grade_a_vista=grade_a_vista,
+            ja_saiu=self._ja_saiu,
+        ):
+            self.entrar()
+
     # --- abrir o jogo ---
     @Slot()
     def abrirJogo(self) -> None:  # noqa: N802

@@ -331,14 +331,24 @@ Principal {
         return dy < 0 ? Qt.Key_Up : dy > 0 ? Qt.Key_Down : dx < 0 ? Qt.Key_Left : Qt.Key_Right
     }
 
+    // O Big Picture manda no controle desde o escuro da entrada até o fim da saída: a grade escondida não recebe nada.
+    readonly property bool bigPictureNaFrente: bigPicture.visivel || bigPicture.ocupada
+
+    Binding { target: controle; property: "modoBigPicture"; value: bigPicture.visivel && !janela.popupAberto }  // com diálogo na frente vale a repetição da grade
+
     Connections {
         target: controle
         function onMover(dx, dy) {
-            if (bigPicture.visivel) return  // shortcut: o controle não faz nada no Big Picture (nem sai), entra na Task 6 do plano 4
+            if (janela.popupAberto) { controle.teclar(janela.teclaDoPasso(dx, dy)); return }
+            if (janela.bigPictureNaFrente) {
+                // Só ← e →; ocupada, a página não anda e o toque não vibra.
+                if (bigPicture.ocupada || dx === 0) return
+                if (bigPicture.mover(dx)) controle.trocarCapa()
+                else controle.bater()
+                return
+            }
             var focado = janela.botaoFocado()
-            if (janela.popupAberto) {
-                controle.teclar(janela.teclaDoPasso(dx, dy))
-            } else if (focado) {
+            if (focado) {
                 // Na barra: ↓ volta à grade; ← e → vão ao botão vizinho.
                 var x = focado.mapToItem(null, focado.width / 2, 0).x
                 if (dy > 0) {
@@ -360,27 +370,35 @@ Principal {
                 } else controle.bater()
             }
         }
+        function onPular(delta) {
+            if (janela.popupAberto || !janela.bigPictureNaFrente || bigPicture.ocupada) return
+            if (bigPicture.mover(delta)) controle.saltar()
+            else controle.bater()
+        }
+        function onConectado() {
+            bigPicture.controleConectado(janela.paginaAtual === "todos" && !janela.popupAberto)
+        }
         function onPresente() {
-            if (bigPicture.visivel) return
+            if (janela.bigPictureNaFrente) return
             if (!janela.popupAberto && !janela.botaoFocado() && janela.paginaDoControle)
                 janela.paginaDoControle.mostrarSelecao()
         }
         function onAtivar() {
-            if (bigPicture.visivel) return  // shortcut: o controle não faz nada no Big Picture (nem sai), entra na Task 6 do plano 4
+            if (janela.popupAberto) { controle.teclar(Qt.Key_Return); return }
+            if (janela.bigPictureNaFrente) { if (!bigPicture.ocupada) bigPicture.abrirJogo(); return }
             var focado = janela.botaoFocado()
-            if (janela.popupAberto) controle.teclar(Qt.Key_Return)
-            else if (focado) focado.click()
+            if (focado) focado.click()
             else if (janela.paginaDoControle) janela.paginaDoControle.abrirDetalhesDoAtual()
         }
         function onVoltar() {
-            if (bigPicture.visivel) return  // shortcut: o controle não faz nada no Big Picture (nem sai), entra na Task 6 do plano 4
-            if (janela.popupAberto) controle.teclar(Qt.Key_Escape)
-            else if (janela.paginaAtual !== "todos") janela.voltar()
+            if (janela.popupAberto) { controle.teclar(Qt.Key_Escape); return }
+            if (janela.bigPictureNaFrente) { if (!bigPicture.ocupada) bigPicture.sair(); return }
+            if (janela.paginaAtual !== "todos") janela.voltar()
             else if (todos.buscaAberta) todos.buscaAberta = false
         }
-        function onMenuPrincipal() { if (!bigPicture.visivel && !janela.popupAberto) menuPrincipal.open() }
-        function onMenuDoJogo() { if (!bigPicture.visivel && !janela.popupAberto && janela.paginaDoControle) janela.paginaDoControle.abrirMenuDoAtual() }
-        function onBuscar() { if (!bigPicture.visivel && !janela.popupAberto && janela.paginaAtual === "todos") todos.alternarBusca() }
+        function onMenuPrincipal() { if (!janela.bigPictureNaFrente && !janela.popupAberto) menuPrincipal.open() }
+        function onMenuDoJogo() { if (!janela.bigPictureNaFrente && !janela.popupAberto && janela.paginaDoControle) janela.paginaDoControle.abrirMenuDoAtual() }
+        function onBuscar() { if (!janela.bigPictureNaFrente && !janela.popupAberto && janela.paginaAtual === "todos") todos.alternarBusca() }
         function onUsado() {
             janela.posicaoDoPonteiro = ponteiro.point.position
             janela.ponteiroEscondido = true

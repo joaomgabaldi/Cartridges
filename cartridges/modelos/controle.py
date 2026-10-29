@@ -12,7 +12,7 @@ jogo ficar com o controle só para ele. Tudo roda na thread principal. A lógica
 import weakref
 from collections.abc import Callable
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import Property, QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QGuiApplication, QKeyEvent
 
 from cartridges import shared
@@ -20,8 +20,10 @@ from cartridges.xinput import (
     POLL_INTERVAL_MS,
     REPEAT_DELAY_US,
     REPEAT_INTERVAL_US,
+    RUMBLE_CAPA,
     RUMBLE_EDGE,
     RUMBLE_MOVE,
+    RUMBLE_PULO,
     THUMB_PRESS,
     THUMB_RELEASE,
     THUMB_WAKE,
@@ -32,10 +34,13 @@ from cartridges.xinput import (
     XINPUT_DPAD_LEFT,
     XINPUT_DPAD_RIGHT,
     XINPUT_DPAD_UP,
+    XINPUT_LEFT_SHOULDER,
+    XINPUT_RIGHT_SHOULDER,
     XINPUT_START,
     XINPUT_Y,
     LeitorXInput,
     agora_us,
+    intervalo_de_repeticao_us,
 )
 
 Direcao = tuple[int, int]  # (dx, dy), com y para baixo
@@ -54,6 +59,9 @@ class ControleDaGrade(QObject):
     buscar = Signal()  # Back
     usado = Signal()  # qualquer comando: o QML esconde o ponteiro do mouse
     presente = Signal()  # um controle apareceu (ou o foco voltou): o QML acende a seleção
+    pular = Signal(int)  # LB (-10) e RB (+10): só o Big Picture usa
+    conectado = Signal()  # um controle lido depois de uma leitura sem controle, ou o primeiro; não o foco de volta
+    modoBigPictureMudou = Signal()  # noqa: N815
 
     def __init__(
         self,
@@ -71,13 +79,27 @@ class ControleDaGrade(QObject):
         self._timer.setInterval(POLL_INTERVAL_MS)
         self._timer.timeout.connect(self._ler)
         self._botoes = 0
+        self._modo_big_picture = False
+        self._sem_controle = True  # a última leitura (ou o início) não tinha controle: o próximo é uma conexão
+        self._ultimo_toque_capa_us: int | None = None
         self._ajustar_base()
         self._geracao_de_vibracao = 0
-        # shortcut: sem suspender/retomar enquanto um jogo é rastreado (sessões, plano 5) nem entrada automática no Big Picture ao conectar (plano 4).
+        # shortcut: sem suspender/retomar enquanto um jogo é rastreado (sessões, plano 5).
         eu = weakref.ref(self)
         shared.schema.connect("changed::gamepad", lambda *_: (c := eu()) and c.sincronizar())
         QGuiApplication.instance().applicationStateChanged.connect(lambda *_: (c := eu()) and c.sincronizar())
         self.sincronizar()
+
+    @Property(bool, notify=modoBigPictureMudou)
+    def modoBigPicture(self) -> bool:  # noqa: N802
+        """Com o Big Picture à vista a repetição do direcional acelera; sem ele, a da grade não muda."""
+        return self._modo_big_picture
+
+    @modoBigPicture.setter
+    def modoBigPicture(self, valor: bool) -> None:  # noqa: N802
+        if valor != self._modo_big_picture:
+            self._modo_big_picture = valor
+            self.modoBigPictureMudou.emit()
 
     @property
     def lendo(self) -> bool:
@@ -90,6 +112,7 @@ class ControleDaGrade(QObject):
         self._direcao: Direcao | None = None
         self._desde = 0
         self._repeticoes = 0
+        self._ultimo_passo = 0
         self._travada = False
 
     @Slot()
@@ -116,6 +139,7 @@ class ControleDaGrade(QObject):
         pad = self._leitor.ler()
         if pad is None:
             # Sem controle: o próximo é uma conexão nova, com base refeita e analógico dormindo.
+            self._sem_controle = True
             self._ajustar_base()
             return
         if self._ressincronizar:
@@ -126,7 +150,11 @@ class ControleDaGrade(QObject):
             self._travada = self._direcao is not None
             self._desde = self._relogio()
             self._repeticoes = 0
+            self._ultimo_passo = self._desde
             self.presente.emit()
+            if self._sem_controle:
+                self._sem_controle = False
+                self.conectado.emit()
             return
         self._tratar_direcao(pad)
         self._tratar_botoes(pad)
@@ -166,7 +194,7 @@ class ControleDaGrade(QObject):
         agora = self._relogio()
         if direcao != self._direcao:
             self._direcao = direcao
-            self._desde = agora
+            self._desde = self._ultimo_passo = agora
             self._repeticoes = 0
             self._travada = False
             if direcao is not None:
@@ -174,9 +202,18 @@ class ControleDaGrade(QObject):
             return
         if direcao is None or self._travada:
             return
-        # A primeira repetição espera o atraso; as outras vêm em ritmo constante.
-        if agora - self._desde >= REPEAT_DELAY_US + REPEAT_INTERVAL_US * self._repeticoes:
+        if self._modo_big_picture:
+            # A primeira repetição espera o atraso; as outras aceleram quanto mais tempo se segura.
+            if self._repeticoes == 0:
+                devido = agora - self._desde >= REPEAT_DELAY_US
+            else:
+                devido = agora - self._ultimo_passo >= intervalo_de_repeticao_us(agora - self._desde)
+        else:
+            # A primeira repetição espera o atraso; as outras vêm em ritmo constante.
+            devido = agora - self._desde >= REPEAT_DELAY_US + REPEAT_INTERVAL_US * self._repeticoes
+        if devido:
             self._repeticoes += 1
+            self._ultimo_passo = agora
             self._mover(direcao)
 
     def _mover(self, direcao: Direcao) -> None:
@@ -200,6 +237,8 @@ class ControleDaGrade(QObject):
             self.menuDoJogo.emit()
         elif apertados & XINPUT_BACK:
             self.buscar.emit()
+        elif apertados & (XINPUT_LEFT_SHOULDER | XINPUT_RIGHT_SHOULDER):
+            self.pular.emit(-10 if apertados & XINPUT_LEFT_SHOULDER else 10)
 
     @Slot(int)
     def teclar(self, tecla: int) -> None:
@@ -222,9 +261,23 @@ class ControleDaGrade(QObject):
         """Um cartão atravessado: o tique leve."""
         self._vibrar(RUMBLE_MOVE)
 
-    def _vibrar(self, preset: tuple[float, float, int]) -> None:
-        if self._leitor is None or not shared.schema.get_boolean("gamepad-rumble"):
+    @Slot()
+    def trocarCapa(self) -> None:  # noqa: N802
+        """A capa central mudou no Big Picture; no máximo um toque por duração + 60 ms, para ficarem distintos."""
+        agora = self._relogio()
+        if self._ultimo_toque_capa_us is not None and agora - self._ultimo_toque_capa_us < (RUMBLE_CAPA[2] + 60) * 1000:
             return
+        if self._vibrar(RUMBLE_CAPA):  # um toque que não vibrou não ocupa a vez do próximo
+            self._ultimo_toque_capa_us = agora
+
+    @Slot()
+    def saltar(self) -> None:
+        """Um salto de dez jogos (LB/RB) no Big Picture."""
+        self._vibrar(RUMBLE_PULO)
+
+    def _vibrar(self, preset: tuple[float, float, int]) -> bool:
+        if self._leitor is None or not shared.schema.get_boolean("gamepad-rumble"):
+            return False
         esquerdo, direito, duracao_ms = preset
         self._leitor.vibrar(esquerdo, direito)
         self._geracao_de_vibracao += 1
@@ -238,3 +291,4 @@ class ControleDaGrade(QObject):
                 controle._leitor.vibrar()
 
         QTimer.singleShot(duracao_ms, parar)
+        return True

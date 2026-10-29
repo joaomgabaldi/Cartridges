@@ -971,8 +971,8 @@ def test_confirmacao_do_comando_na_frente_e_cancelar_volta(app_qt, monkeypatch):
     irmaos = list(tela.parentItem().childItems())
     assert irmaos.index(avisos) > irmaos.index(tela)
     assert tela.property("enabled") is False and tela.property("activeFocus") is False
-    QTest.keyClick(app.janela, Qt.Key.Key_Return)
-    assert not app.big_picture.ocupada and jogo.launch.chamadas == 0
+    QTest.keyClick(app.janela, Qt.Key.Key_Right)  # as teclas do carrossel não passam pela confirmação
+    assert not app.big_picture.ocupada and jogo.launch.chamadas == 0 and app.big_picture.indice == 0
     # Cancelar: o carrossel segue em tela cheia, o jogo não é iniciado e o teclado volta a ele.
     _clicar_no_texto(app, "Cancelar")
     assert avisos.property("dialogoAberto") is False
@@ -987,4 +987,101 @@ def test_confirmacao_do_comando_na_frente_e_cancelar_volta(app_qt, monkeypatch):
     assert _esperar(lambda: jogo.launch.chamadas == 1, limite=3)
     assert _esperar(lambda: not app.big_picture.ocupada and tela.property("progressoAbertura") == 0, limite=3)
     assert jogo.launch.chamadas == 1
+    app.fechar()
+
+
+def _com_confirmacao_aberta(monkeypatch):
+    app = _aberto_com(monkeypatch)
+    jogo = _com_launch_falso(app, monkeypatch)
+    jogo.executable, jogo.comando_a_conferir = "jogo.exe", True
+    app.ponte.ligar(jogo)
+    _entrar(app)
+    app.janela.requestActivate()
+    app.big_picture.abrirJogo()
+    avisos = app.achar("camadaDeAvisos")
+    assert _esperar(lambda: avisos.property("dialogoAberto") is True, limite=3)
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
+    return app, jogo, avisos
+
+
+def test_confirmacao_pelo_teclado_cancela_com_esc_e_devolve_o_foco(app_qt, monkeypatch):
+    app, jogo, avisos = _com_confirmacao_aberta(monkeypatch)
+    tela = app.achar("bigPicture")
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert avisos.property("dialogoAberto") is False and jogo.launch.chamadas == 0
+    assert _esperar(lambda: tela.property("activeFocus") is True, limite=3)
+    assert app.big_picture.visivel and not app.big_picture.ocupada
+    app.fechar()
+
+
+@pytest.mark.parametrize("tecla", [Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space])
+def test_confirmacao_pelo_teclado_inicia_com_enter_ou_espaco_depois_de_escolher(app_qt, monkeypatch, tecla):
+    app, jogo, avisos = _com_confirmacao_aberta(monkeypatch)
+    QTest.keyClick(app.janela, Qt.Key.Key_Right)  # de "Cancelar" (o padrão) para "Iniciar"
+    QTest.keyClick(app.janela, tecla)
+    assert avisos.property("dialogoAberto") is False
+    assert _esperar(lambda: jogo.launch.chamadas == 1, limite=3)
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
+    app.fechar()
+
+
+@pytest.mark.parametrize("tecla", [Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space])
+def test_confirmacao_enter_logo_ao_abrir_nao_inicia(app_qt, monkeypatch, tecla):
+    app, jogo, avisos = _com_confirmacao_aberta(monkeypatch)
+    QTest.keyClick(app.janela, tecla)
+    assert avisos.property("dialogoAberto") is False and jogo.launch.chamadas == 0
+    app.fechar()
+
+
+def test_confirmacao_a_duas_vezes_logo_ao_abrir_nao_inicia(app_qt, monkeypatch):
+    app, jogo, avisos = _com_confirmacao_aberta(monkeypatch)
+    app.controle.ativar.emit()
+    app.controle.ativar.emit()
+    assert avisos.property("dialogoAberto") is False and jogo.launch.chamadas == 0
+    app.fechar()
+
+
+def test_confirmacao_reaberta_ainda_devolve_o_foco_a_camada(app_qt, monkeypatch):
+    app, jogo, avisos = _com_confirmacao_aberta(monkeypatch)
+    tela = app.achar("bigPicture")
+    app.ponte.confirmacaoPedida.emit("Iniciar Jogo?", "comando")  # com o diálogo já aberto
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert avisos.property("dialogoAberto") is False
+    assert _esperar(lambda: tela.property("activeFocus") is True, limite=3)
+    app.fechar()
+
+
+def test_confirmacao_setas_trocam_o_botao_em_foco(app_qt, monkeypatch):
+    app, jogo, avisos = _com_confirmacao_aberta(monkeypatch)
+    QTest.keyClick(app.janela, Qt.Key.Key_Right)  # para "Iniciar"
+    QTest.keyClick(app.janela, Qt.Key.Key_Left)  # e de volta a "Cancelar"
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert avisos.property("dialogoAberto") is False and jogo.launch.chamadas == 0
+    app.fechar()
+
+
+def test_confirmacao_pelo_controle_b_cancela_e_a_inicia(app_qt, monkeypatch):
+    app, jogo, avisos = _com_confirmacao_aberta(monkeypatch)
+    tela = app.achar("bigPicture")
+    app.controle.voltar.emit()  # B
+    assert avisos.property("dialogoAberto") is False and jogo.launch.chamadas == 0
+    assert _esperar(lambda: tela.property("activeFocus") is True, limite=3)
+    assert app.big_picture.visivel and app.big_picture.indice == 0
+    jogo.comando_a_conferir = True
+    app.big_picture.abrirJogo()
+    assert _esperar(lambda: avisos.property("dialogoAberto") is True, limite=3)
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
+    app.controle.mover.emit(1, 0)  # → vai a "Iniciar"
+    app.controle.ativar.emit()  # A
+    assert avisos.property("dialogoAberto") is False
+    assert _esperar(lambda: jogo.launch.chamadas == 1, limite=3)
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
+    app.fechar()
+
+
+def test_modo_big_picture_do_controle_so_sem_dialogo_na_frente(app_qt, monkeypatch):
+    app, jogo, avisos = _com_confirmacao_aberta(monkeypatch)
+    assert app.controle.modoBigPicture is False, "com o diálogo na frente vale a repetição da grade"
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert app.controle.modoBigPicture is True
     app.fechar()

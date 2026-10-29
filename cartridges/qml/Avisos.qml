@@ -17,7 +17,7 @@ Item {
         function onConfirmacaoPedida(titulo, corpo) {
             tituloDaConfirmacao.text = titulo
             corpoDaConfirmacao.text = corpo
-            confirmacao.visible = true
+            confirmacao.abrir()
         }
     }
 
@@ -83,6 +83,34 @@ Item {
         visible: false
         color: "#80000000"
 
+        // 0 = Cancelar (o padrão), 1 = Iniciar. Teclado e controle acionam o botão em foco; Esc cancela.
+        property int foco: 0
+        property Item focoAnterior: null
+
+        function abrir() {
+            // Reaberto com o diálogo já à vista, o foco atual é o dele: o anterior continua valendo.
+            if (!visible) focoAnterior = Window.window ? Window.window.activeFocusItem : null
+            foco = 0  // barreira de segurança: Enter ou A logo ao abrir cancelam, nunca iniciam
+            visible = true
+            forceActiveFocus()
+        }
+        function acionar(indice) {
+            visible = false
+            // O que tinha o foco antes (a camada do Big Picture, um cartão) o retoma.
+            if (focoAnterior && focoAnterior.visible && focoAnterior.enabled) focoAnterior.forceActiveFocus()
+            focoAnterior = null
+            if (indice === 1) camada.ponte.confirmar()
+            else camada.ponte.cancelar()
+        }
+
+        focus: visible
+        Keys.onLeftPressed: foco = 0
+        Keys.onRightPressed: foco = 1
+        Keys.onReturnPressed: acionar(foco)
+        Keys.onEnterPressed: acionar(foco)
+        Keys.onSpacePressed: acionar(foco)
+        Keys.onEscapePressed: acionar(0)
+
         MouseArea { anchors.fill: parent } // a grade embaixo não recebe cliques
 
         Rectangle {
@@ -126,10 +154,14 @@ Item {
                         delegate: Rectangle {
                             id: botao
                             required property var modelData
+                            required property int index
                             width: rotulo.implicitWidth + 40
                             height: 36
                             radius: 6
                             color: modelData.principal ? Tema.destaque : Tema.botaoSobre
+                            border { width: 2; color: confirmacao.foco === botao.index ? Tema.texto : "transparent" }
+                            Accessible.role: Accessible.Button
+                            Accessible.name: modelData.rotulo
                             Text {
                                 id: rotulo
                                 anchors.centerIn: parent
@@ -138,13 +170,7 @@ Item {
                                 font.family: Tema.fonte
                                 font.pixelSize: 14
                             }
-                            TapHandler {
-                                onTapped: {
-                                    confirmacao.visible = false
-                                    if (botao.modelData.principal) camada.ponte.confirmar()
-                                    else camada.ponte.cancelar()
-                                }
-                            }
+                            TapHandler { onTapped: confirmacao.acionar(botao.index) }
                         }
                     }
                 }
