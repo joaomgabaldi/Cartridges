@@ -83,7 +83,13 @@ Item {
     Keys.onEnterPressed: abrirDetalhesDoAtual()
 
     // Depois do foco que a própria StackView dá à página ao ativá-la.
-    StackView.onActivated: Qt.callLater(focarInicial)
+    StackView.onActivated: Qt.callLater(() => {
+        focarInicial()
+        if (anotarAoEntrar) abrirAnotacao()
+    })
+    // O "Anotar" do aviso do fim da sessão abre a página já com o balão.
+    property bool anotarAoEntrar: false
+    function abrirAnotacao() { if (botaoAnotacao.visible) balaoDaAnotacao.open() }
 
     // Cobre a biblioteca por baixo durante a transição.
     Rectangle { anchors.fill: parent; color: Tema.fundo; z: -2 }
@@ -209,11 +215,11 @@ Item {
                         sourceSize: Qt.size(raiz.larguraDaCapa * Screen.devicePixelRatio,
                                             raiz.alturaDaCapa * Screen.devicePixelRatio)
                     }
-                    // Sempre toca aqui, a menos que a janela não esteja à vista.
+                    // Sempre toca aqui, a menos que a janela não esteja à vista ou haja uma sessão de jogo (a camada a cobre).
                     AnimatedImage {
                         objectName: "capaAnimadaDaPagina"
                         readonly property bool aVista: Window.visibility !== Window.Minimized
-                            && Window.visibility !== Window.Hidden
+                            && Window.visibility !== Window.Hidden && !sessao.emAndamento
                         anchors.fill: parent
                         source: detalhes.capaAnimada !== "" && aVista ? detalhes.capaAnimada : ""
                         playing: aVista
@@ -450,35 +456,13 @@ Item {
                         dica: detalhes.dicaDaAnotacao
                         onClicked: balaoDaAnotacao.opened ? balaoDaAnotacao.close() : balaoDaAnotacao.open()
                         // O balão carrega a anotação ao abrir e a grava ao fechar (num zerado, só leitura).
-                        Popup {
+                        BalaoDaAnotacao {
                             id: balaoDaAnotacao
                             objectName: "balaoDaAnotacao"
                             y: parent.height + 4
-                            width: 320
-                            padding: 8
-                            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                            onAboutToShow: campoDaAnotacao.text = detalhes.anotacao
-                            onOpened: campoDaAnotacao.forceActiveFocus()
-                            onClosed: if (detalhes.anotacaoEditavel) detalhes.gravarAnotacao(campoDaAnotacao.text)
-                            background: Rectangle {
-                                color: Tema.superficie
-                                border.color: Tema.borda
-                                radius: 8
-                            }
-                            contentItem: ScrollView {
-                                implicitHeight: 120
-                                TextArea {
-                                    id: campoDaAnotacao
-                                    objectName: "campoDaAnotacao"
-                                    readOnly: !detalhes.anotacaoEditavel
-                                    wrapMode: TextEdit.Wrap
-                                    textFormat: TextEdit.PlainText
-                                    color: Tema.texto
-                                    selectionColor: Tema.destaque
-                                    font { family: Tema.fonte; pixelSize: 14 }
-                                    Accessible.name: "Onde eu parei"
-                                }
-                            }
+                            texto: detalhes.anotacao
+                            editavel: detalhes.anotacaoEditavel
+                            onGravar: texto => detalhes.gravarAnotacao(texto)
                         }
                     }
                 }

@@ -13,9 +13,10 @@ Principal {
         : (pilha.currentItem && pilha.currentItem.objectName === "paginaDoJogo" ? "jogo" : "zerados")
 
     // Abre a página de detalhes do jogo; o foco inicial é dela (StackView.onActivated).
-    function abrirDetalhes(jogoId) {
+    function abrirDetalhes(jogoId) { abrirDetalhesDe(jogoId, false) }
+    function abrirDetalhesDe(jogoId, anotar) {
         if (paginaAtual === "jogo") return
-        if (detalhes.mostrar(jogoId)) pilha.push(paginaDoJogo)
+        if (detalhes.mostrar(jogoId)) pilha.push(paginaDoJogo, { anotarAoEntrar: anotar })
     }
     // Fecha a página de detalhes, ou sai de Jogos Zerados; o foco volta ao cartão de onde se saiu.
     function voltar() {
@@ -27,7 +28,7 @@ Principal {
     // O `y` de um menu aberto por um botão da barra: abaixo dos 46 px dela, fora da área de arrasto do QWindowKit.
     function baseDaBarra(botao) { return botao.height + (alturaDaBarra - botao.height) / 2 }
 
-    telaCheia: bigPicture.visivel
+    telaCheia: bigPicture.visivel || sessao.emAndamento
 
     tituloDaBarra: paginaAtual === "todos" ? "Todos os jogos" : paginaAtual === "zerados" ? "Jogos Zerados" : detalhes.nome
 
@@ -122,9 +123,9 @@ Principal {
         anchors.fill: parent
         pagina: paginaTodos
         comBusca: true
-        ativa: pilha.depth === 0 && !bigPicture.visivel
-        // Com o diálogo de edição ou o Big Picture à frente, nada de trás recebe o mouse nem o Tab.
-        enabled: !edicao.aberto && !bigPicture.visivel
+        ativa: pilha.depth === 0 && !bigPicture.visivel && !sessao.emAndamento
+        // Com o diálogo de edição, o Big Picture ou a sessão à frente, nada de trás recebe o mouse nem o Tab.
+        enabled: !edicao.aberto && !bigPicture.visivel && !sessao.emAndamento
         onAbrirDetalhes: id => janela.abrirDetalhes(id)
         onEditar: id => edicao.abrir(id)
     }
@@ -134,7 +135,7 @@ Principal {
         id: pilha
         anchors.fill: parent
         visible: depth > 0
-        enabled: !edicao.aberto && !bigPicture.visivel
+        enabled: !edicao.aberto && !bigPicture.visivel && !sessao.emAndamento
     }
 
     Component {
@@ -143,7 +144,7 @@ Principal {
             objectName: "paginaDeZerados"
             pagina: paginaZerados
             // Coberta pelos detalhes, ela não anima capas.
-            ativa: StackView.status !== StackView.Inactive && !bigPicture.visivel
+            ativa: StackView.status !== StackView.Inactive && !bigPicture.visivel && !sessao.emAndamento
             onAbrirDetalhes: id => janela.abrirDetalhes(id)
             onEditar: id => edicao.abrir(id)
             StackView.onActivated: focarGrade()
@@ -229,8 +230,9 @@ Principal {
         anchors.fill: parent
         visible: bigPicture.visivel
         animarPasso: bigPicture.animacoes
+        sessaoEmAndamento: sessao.emAndamento
         // Com a confirmação do comando na frente a camada não recebe teclas nem toques; ao fechar, retoma o foco.
-        enabled: !camadaDeAvisos.dialogoAberto
+        enabled: !camadaDeAvisos.dialogoAberto && !sessao.emAndamento
         onVisibleChanged: if (visible) forceActiveFocus()
         onEnabledChanged: if (enabled && visible) forceActiveFocus()
         onAbrir: bigPicture.abrirJogo()
@@ -241,6 +243,13 @@ Principal {
     Connections {
         target: bigPicture
         function onSaiu(jogoId) { todos.focarJogo(jogoId) }
+    }
+
+    // Acima do Big Picture e abaixo dos avisos (D49).
+    CamadaDaSessao {
+        id: camadaDaSessao
+        anchors.fill: parent
+        visible: sessao.emAndamento
     }
 
     Avisos {
@@ -257,7 +266,7 @@ Principal {
         id: alvoDeSoltar
         objectName: "alvoDeSoltar"
         anchors.fill: parent
-        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !bigPicture.visivel
+        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !bigPicture.visivel && !sessao.emAndamento
         onEntered: (arrasto) => arrasto.accepted = arrasto.hasUrls
         onDropped: (soltou) => {
             if (soltou.hasUrls) aplicativo.soltar(soltou.urls)
@@ -290,10 +299,15 @@ Principal {
         }
     }
 
-    // O botão "Anotar" do aviso do fim da sessão abre os detalhes do jogo (o balão abre na Task 2).
+    // O botão "Anotar" do aviso do fim da sessão abre os detalhes do jogo, já com o balão.
     Connections {
         target: sessao
-        function onAnotarPedido(jogoId) { janela.abrirDetalhes(jogoId) }
+        function onAnotarPedido(jogoId) {
+            // Outro jogo nos detalhes: sai dele antes de abrir o da sessão.
+            if (janela.paginaAtual === "jogo" && detalhes.jogoId !== jogoId) janela.voltar()
+            if (janela.paginaAtual === "jogo") pilha.currentItem.abrirAnotacao()
+            else janela.abrirDetalhesDe(jogoId, true)
+        }
     }
 
     Connections {
@@ -342,8 +356,10 @@ Principal {
 
     Binding { target: controle; property: "modoBigPicture"; value: bigPicture.visivel && !janela.popupAberto }  // com diálogo na frente vale a repetição da grade
 
+    // Com a camada da sessão à vista o controle não age por baixo dela (a Task 6 suspende a leitura).
     Connections {
         target: controle
+        enabled: !sessao.emAndamento
         function onMover(dx, dy) {
             if (janela.popupAberto) { controle.teclar(janela.teclaDoPasso(dx, dy)); return }
             if (janela.bigPictureNaFrente) {

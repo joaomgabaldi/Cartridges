@@ -24,7 +24,6 @@ GridView {
         interval: 200
         onTriggered: grade.contentYParado = grade.contentY
     }
-    // shortcut: a `main` também parava as capas durante uma sessão de jogo; volta com a sessão, no plano 5.
 
     // O jogo que o clique na capa, o Enter ou o A do controle abrem.
     signal abrirDetalhes(string jogoId)

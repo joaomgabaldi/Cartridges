@@ -16,9 +16,10 @@ from PySide6.QtCore import Property, QObject, Qt, Signal, Slot
 from PySide6.QtGui import QWindow
 
 from cartridges.modelos.avisos import FilaDeAvisos
+from cartridges.modelos.ordem import _url_da_capa  # noqa: PLC2701
 from cartridges.process_session import ProcessSession
 from cartridges.session_window import SessionWindow
-from cartridges.utils import session_log
+from cartridges.utils import game_logo, session_log
 from cartridges.utils.format_playtime import format_playtime, format_stopwatch
 
 
@@ -43,6 +44,12 @@ class ModeloDaSessao(QObject):
         self._jogo: Any = None  # o jogo da sessão; None sem sessão (camada escondida)
         self._manual: SessionWindow | None = None
         self._janela: QWindow | None = None
+        # O jogo cuja anotação o balão da camada edita: fica depois do fim da sessão, para o que foi
+        # digitado com o balão aberto ainda chegar a ele ao fechar.
+        self._anotando: Any = None
+        self._logo = ""
+        self._largura_do_logo = 0
+        self._anotacao = ""
 
     def definir_janela(self, janela: QWindow) -> None:
         self._janela = janela
@@ -60,6 +67,18 @@ class ModeloDaSessao(QObject):
     @Property(str, notify=alterado)
     def nome(self) -> str:
         return self._jogo.name if self._jogo is not None else ""
+
+    @Property(str, notify=alterado)
+    def logo(self) -> str:
+        return self._logo
+
+    @Property(int, notify=alterado)
+    def larguraDoLogo(self) -> int:  # noqa: N802
+        return self._largura_do_logo
+
+    @Property(str, notify=alterado)
+    def anotacao(self) -> str:
+        return self._anotacao
 
     @Property(str, notify=alterado)
     def relogio(self) -> str:
@@ -86,7 +105,11 @@ class ModeloDaSessao(QObject):
         # janela manual): o jogo segue aberto e tudo o que veste a sessão já está vestido.
         if self._jogo is game:
             return
-        self._jogo = game
+        self._jogo = self._anotando = game
+        self._logo, self._largura_do_logo = "", 0
+        if (caminho := game_logo.cached_logo_path(game)) and (carregado := game_logo.load_logo(caminho, 640, 140)):
+            self._logo, self._largura_do_logo = _url_da_capa(carregado[0]), carregado[1]
+        self._anotacao = game.notes or ""
         self.alterado.emit()
 
     def hide_session_blocker(self) -> None:
@@ -158,6 +181,21 @@ class ModeloDaSessao(QObject):
             SessionWindow.active.close()
         if ProcessSession.active is not None:
             ProcessSession.active.stop(record=True)
+
+    @Slot(str)
+    def gravarAnotacao(self, texto: str) -> None:  # noqa: N802
+        """A anotação do balão da camada, com a regra do `DetalhesDoJogo.gravarAnotacao`."""
+        jogo = self._anotando
+        if jogo is None or jogo.zerado:
+            return
+        texto = texto.strip()
+        if texto == (jogo.notes or ""):
+            return
+        jogo.notes = texto
+        jogo.save()
+        jogo.update()
+        self._anotacao = texto
+        self.alterado.emit()
 
     @Slot()
     def janelaManualFechada(self) -> None:

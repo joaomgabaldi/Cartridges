@@ -31,6 +31,8 @@ Item {
     property real progressoAbertura: 0
     property real opacidadeDoRodape: 1
     property bool animarPasso: true
+    // Com a camada da sessão por cima, a capa animada não toca (`Aplicativo.qml` liga).
+    property bool sessaoEmAndamento: false
 
     property real escala: Screen.devicePixelRatio  // pixels reais por pixel lógico
     property real alturaCapa: height * 0.55
@@ -352,7 +354,7 @@ Item {
                     opacidadeDoReflexo: tela.reflexoOpacidade
                     // Só no fim do passo: segurando a tecla nenhuma capa de passagem carrega a cópia em alta.
                     central: vaga.i === tela.indice && Math.abs(tela.posicao - vaga.i) < 0.001
-                    animar: bigPicture.animarCentral && bigPicture.visivel
+                    animar: bigPicture.animarCentral && bigPicture.visivel && !tela.sessaoEmAndamento
                     opacity: (1 - tela.progressoAbertura) * tela.opacidadeCapas
                     transform: Matrix4x4 { matrix: tela.transformacao(vaga.i) }
                 }
