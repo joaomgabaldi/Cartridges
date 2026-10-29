@@ -410,6 +410,19 @@ def test_fundo_em_pixels_reais(app_qt):
     tela.fechar()
 
 
+def test_fundo_na_thread_principal_e_so_com_o_big_picture_visivel(app_qt):
+    # Provedor Python na thread de imagens trava: ela espera o GIL segurando o mutex do cache.
+    tela = _Tela()
+    fundo = tela.achar("fundo")
+    assert fundo.property("asynchronous") is False
+    assert fundo.property("source").toString().startswith("image://fundo/")
+    tela.bp.sair()  # sem janela, sem HWND: troca sem fade
+    tela.bp.filaTerminou()
+    assert _esperar(lambda: not tela.bp.visivel)
+    assert fundo.property("source").toString() == ""
+    tela.fechar()
+
+
 def test_vazio_mostra_o_aviso(app_qt):
     tela = _Tela(0)
     vazio = tela.achar("estadoVazioDoBigPicture")
@@ -730,4 +743,136 @@ def test_dica_aparece_no_botao_indisponivel(app_qt, monkeypatch):
     QTest.mouseMove(app.janela, centro + QPoint(1, 0))
     assert _esperar(lambda: _avaliar(botao, "ToolTip.visible") is True, limite=5)
     assert _avaliar(botao, "ToolTip.text") == "Requer uma placa de vídeo com aceleração 3D."
+    app.fechar()
+
+
+# --- capas prontas antes da fila (P1) -------------------------------------------------------------
+
+
+def _preparos(tela):
+    return _itens(tela.tela, lambda i: i.objectName() in ("preparoDaCapa", "preparoDaCentral"))
+
+
+_PREPARO_EM_125 = r"""
+import builtins, json, sys, tempfile
+from pathlib import Path
+builtins._ = lambda m: m
+sys.path.insert(0, sys.argv[1])
+from PySide6.QtGui import QGuiApplication
+app = QGuiApplication([])
+from PIL import Image
+from PySide6.QtCore import QUrl
+from tests.test_qml_big_picture import _Tela, _avaliar, _achar, _itens, _esperar
+pasta = Path(tempfile.mkdtemp())
+tela = _Tela(3)
+for n, jogo in enumerate(tela.bp._jogos):
+    png = pasta / f"{n}.png"
+    Image.new("RGB", (200, 300), "red").save(png)
+    jogo["capa"] = QUrl.fromLocalFile(str(png)).toString()
+tela.bp.jogosMudaram.emit()
+tela.janela.showFullScreen()
+_esperar()
+tela.tela.setProperty("width", tela.janela.width())
+tela.tela.setProperty("height", tela.janela.height())  # em tela cheia, como no app
+tela.bp.prepararCapas.emit()
+_esperar()
+def campos(i):
+    return [_avaliar(i, "sourceSize.height"), _avaliar(i, "fillMode"), _avaliar(i, "autoTransform"), _avaliar(i, "cache")]
+capas = _itens(tela.tela, lambda i: i.objectName() == "capaDoBigPicture")
+print(json.dumps({
+    "dpr": _avaliar(tela.tela, "Screen.devicePixelRatio"),
+    "telaCheia": [tela.janela.height(), _avaliar(tela.tela, "Screen.height")],
+    "vagas": sorted({json.dumps(campos(_achar(c, "capa"))) for c in capas}),
+    "central": [campos(_achar(c, "capaEmAlta")) for c in capas if c.property("central")],
+    "preparo": sorted({json.dumps(campos(i)) for i in _itens(tela.tela, lambda i: i.objectName() == "preparoDaCapa")}),
+    "preparoCentral": [campos(i) for i in _itens(tela.tela, lambda i: i.objectName() == "preparoDaCentral")],
+}))
+"""
+
+
+def test_preparo_usa_o_mesmo_tamanho_das_capas():
+    # O cache do Qt Quick só acerta com a mesma URL, `sourceSize` e opções: senão a fila decodifica de novo (P1).
+    import json  # noqa: PLC0415
+    import os  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    raiz = Path(__file__).resolve().parent.parent
+    ambiente = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_SCALE_FACTOR": "1.25"}
+    saida = subprocess.run(
+        [sys.executable, "-c", _PREPARO_EM_125, str(raiz)], cwd=raiz, env=ambiente,
+        capture_output=True, text=True, check=False, timeout=120,
+    )  # fmt: skip
+    assert saida.returncode == 0, saida.stderr
+    dados = json.loads(saida.stdout.strip().splitlines()[-1])
+    assert dados["dpr"] == pytest.approx(1.25)
+    assert dados["telaCheia"][0] == dados["telaCheia"][1]
+    assert len(dados["vagas"]) == 1 and dados["vagas"] == dados["preparo"]
+    altura = json.loads(dados["vagas"][0])[0]
+    assert altura == round(dados["telaCheia"][1] * 0.55 * 1.25)
+    assert len(dados["central"]) == 1 and dados["central"] == dados["preparoCentral"]
+
+
+def test_preparo_avisa_com_capa_ilegivel_e_sem_capa(app_qt, tmp_path):
+    tela = _Tela(3)
+    png, lixo = tmp_path / "boa.png", tmp_path / "ilegivel.png"
+    Image.new("RGB", (200, 300), "red").save(png)
+    lixo.write_bytes(b"isto nao e uma imagem")
+    for jogo, capa in zip(tela.bp._jogos, (png, lixo, None), strict=True):  # noqa: SLF001
+        jogo["capa"] = QUrl.fromLocalFile(str(capa)).toString() if capa else ""
+    tela.bp.jogosMudaram.emit()
+    tela.bp._capas_prontas = False  # noqa: SLF001
+    tela.bp.prepararCapas.emit()
+    assert _esperar(lambda: tela.bp._capas_prontas)  # noqa: SLF001
+    assert len([i for i in _preparos(tela) if i.objectName() == "preparoDaCapa"]) == 3
+    estados = [_avaliar(i, "status") for i in _preparos(tela) if i.objectName() == "preparoDaCapa"]
+    assert sorted(estados) == [0, 1, 3]  # sem capa (Null), pronta (Ready) e ilegível (Error)
+    tela.js("(entrando = true, terminarFila())")  # o fim da fila de entrada solta o preparo
+    _esperar()
+    assert _preparos(tela) == [] or all(i.property("source").toString() == "" for i in _preparos(tela))
+    tela.fechar()
+
+
+def test_preparo_so_das_primeiras_da_fila(app_qt):
+    tela = _Tela(60)
+    tela.bp.prepararCapas.emit()
+    _esperar()
+    prontos = [i for i in _preparos(tela) if i.objectName() == "preparoDaCapa"]
+    assert len(prontos) == regras.JOGOS_NA_FILA + regras.CAPAS_DE_CADA_LADO + 1 == 39
+    tela.fechar()
+
+
+class _CortinaQueAnota:
+    def __init__(self, hwnd):
+        self.hwnd = hwnd
+
+    def alfa(self, valor):
+        pass
+
+    def fechar(self):
+        pass
+
+
+def test_entrada_com_fade_no_app(app_qt, monkeypatch):
+    # O caminho inteiro com a cortina falsa: o QML prepara as capas, a troca acontece no escuro e a fila corre.
+    from PySide6.QtCore import QMetaObject  # noqa: PLC0415
+
+    from cartridges.modelos import big_picture as modulo  # noqa: PLC0415
+    from tests.test_qml_biblioteca import _App, _jogos  # noqa: PLC0415
+
+    monkeypatch.setattr(modulo, "tem_3d", lambda _janela: True)
+    app = _App(_jogos(*((n, f"Jogo {n}", {}) for n in range(4))), cortina=_CortinaQueAnota)
+    app.big_picture.definir_janela(app.janela)
+    QMetaObject.invokeMethod(app.achar("botaoBigPicture"), "click", Qt.ConnectionType.DirectConnection)
+    assert not app.big_picture.visivel and app.big_picture._cortina is not None  # noqa: SLF001
+    assert _esperar(lambda: app.big_picture.visivel, limite=3)
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=5)
+    assert app.big_picture._cortina is None  # noqa: SLF001
+    app.big_picture.sair()
+    assert _esperar(lambda: not app.big_picture.visivel, limite=5)
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
+    tela = app.achar("bigPicture")
+    assert (tela.property("posicao"), tela.property("virada"), tela.property("opacidadeCapas")) == (0, 1, 1)
+    app.big_picture.encerrar()
     app.fechar()

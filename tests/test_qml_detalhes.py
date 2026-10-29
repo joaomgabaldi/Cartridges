@@ -122,6 +122,14 @@ def test_logo_esconde_o_titulo(app_qt, tmp_path):
     app.fechar()
 
 
+def test_fundo_desfocado_carrega_na_thread_principal(app_qt):
+    # Provedor Python na thread de imagens trava: ela espera o GIL segurando o mutex do cache.
+    app = _App(_tres())
+    pagina = _abrir_pelo_cartao(app)
+    assert _achar(pagina, "fundoDesfocado").property("asynchronous") is False
+    app.fechar()
+
+
 def test_logo_grande_e_decodificado_na_escala_da_tela(app_qt, tmp_path):
     app = _App(_tres())
     pagina = _abrir_pelo_cartao(app)

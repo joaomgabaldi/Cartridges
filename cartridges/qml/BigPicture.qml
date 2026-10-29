@@ -103,9 +103,16 @@ Item {
     }
     function terminarFila() {
         naFila = false
-        if (entrando) reporQuadro()
+        if (entrando) {
+            reporQuadro()
+            soltarPreparo()
+        }
         bigPicture.filaTerminou()
-        if (!entrando) reporQuadro()  // só depois de sair: antes o carrossel ficaria visível no escuro
+    }
+    // Na saída o quadro só volta com a camada já escondida, no escuro: antes o carrossel reapareceria.
+    onVisibleChanged: if (!visible) {
+        reporQuadro()
+        soltarPreparo()
     }
     NumberAnimation {
         id: fila
@@ -118,6 +125,60 @@ Item {
     Connections {
         target: bigPicture
         function onFilaPedida(entrar) { tela.iniciarFila(entrar) }
+        function onPrepararCapas() { tela.preparar() }
+    }
+
+    // --- P1: as capas da fila decodificadas antes de escurecer ---
+    // No tamanho das vagas em tela cheia no monitor da janela (Review Focus 4): o cache do Qt Quick
+    // só acerta com a mesma URL, `sourceSize` e `fillMode`. Vivem até o fim da fila de entrada.
+    readonly property real alturaEmTelaCheia: Screen.height * 0.55
+    property var preparo: []
+    property bool preparoAvisado: true
+    function preparar() {
+        preparo = jogos.slice(0, bigPicture.jogosNaFila + capasDeCadaLado + 1).map(j => j.capa)
+        preparoAvisado = false
+        Qt.callLater(conferirPreparo)
+    }
+    function soltarPreparo() {
+        preparo = []
+        preparoAvisado = true
+    }
+    // Pronta, ilegível ou sem capa contam: só a que ainda carrega segura a troca.
+    function conferirPreparo() {
+        if (preparoAvisado || repetidorDoPreparo.count < preparo.length || preparoDaCentral.status === Image.Loading)
+            return
+        for (let k = 0; k < repetidorDoPreparo.count; k++) {
+            const imagem = repetidorDoPreparo.itemAt(k)
+            if (!imagem || imagem.status === Image.Loading) return
+        }
+        preparoAvisado = true
+        bigPicture.capasProntas()
+    }
+    Item {
+        visible: false  // fora da tela: só decodifica e prende o cache
+        Repeater {
+            id: repetidorDoPreparo
+            model: tela.preparo
+            delegate: Image {
+                required property string modelData
+                objectName: "preparoDaCapa"
+                source: modelData
+                asynchronous: true
+                fillMode: Image.PreserveAspectCrop
+                sourceSize.height: Math.round(tela.alturaEmTelaCheia * tela.escala)
+                onStatusChanged: Qt.callLater(tela.conferirPreparo)
+            }
+        }
+        // A central em alta do índice 0, como a `capaEmAlta` da CapaDoBigPicture.qml.
+        Image {
+            id: preparoDaCentral
+            objectName: "preparoDaCentral"
+            source: tela.preparo.length > 0 && tela.jogos.length > 0 && tela.jogos[0].capaAnimada === "" ? tela.preparo[0] : ""
+            asynchronous: true
+            fillMode: Image.PreserveAspectCrop
+            sourceSize.height: Math.round(tela.alturaEmTelaCheia * tela.escalaNaAbertura * tela.escala)
+            onStatusChanged: Qt.callLater(tela.conferirPreparo)
+        }
     }
 
     focus: true
@@ -212,11 +273,13 @@ Item {
     Image {
         objectName: "fundo"
         anchors.fill: parent
-        source: "image://fundo/" + Math.max(1, Math.round(tela.width * tela.escala))
-                + "x" + Math.max(1, Math.round(tela.height * tela.escala))
+        // Só com o Big Picture à vista: escondido, o degradê não é gerado (nem na abertura do app).
+        source: !bigPicture.visivel ? ""
+                : "image://fundo/" + Math.max(1, Math.round(tela.width * tela.escala))
+                  + "x" + Math.max(1, Math.round(tela.height * tela.escala))
         smooth: false
         cache: false
-        asynchronous: true
+        asynchronous: false  // provedor Python na thread de imagens trava: ela espera o GIL segurando o mutex do cache
     }
 
     // Máscara do reflexo, compartilhada: transparente até 55% da capa e
@@ -247,7 +310,8 @@ Item {
                 id: vaga
                 required property int index
                 readonly property int i: palco.base + ((index - palco.base) % palco.vagas + palco.vagas) % palco.vagas
-                active: i >= 0 && i < tela.jogos.length
+                // Só à vista: na entrada a lista nasce antes da tela cheia, e no tamanho da janela a vaga decodificaria à toa.
+                active: bigPicture.visivel && i >= 0 && i < tela.jogos.length
                         && Math.abs(i - tela.posicao) < tela.capasDeCadaLado
                 z: -Math.abs(i - tela.posicao)
                 sourceComponent: CapaDoBigPicture {

@@ -88,7 +88,7 @@ class _LojaFalsa(QObject):
 
 
 class _App:
-    def __init__(self, jogos, animacoes=True):
+    def __init__(self, jogos, animacoes=True, cortina=None):
         self.jogos = jogos
         self.loja = _LojaFalsa(jogos)
         self.detalhes = DetalhesDoJogo(self.loja)
@@ -102,7 +102,10 @@ class _App:
         self.ponte = Ponte()
         self.aplicativo = Aplicativo(self.ponte.fila)
         self.edicao = ModeloDaEdicao(self.aplicativo)
-        self.big_picture = BigPicture(self.modelo, animacoes_do_sistema=animacoes)
+        # Sem `cortina`, a fábrica não cria nenhuma: a troca é direta (o offscreen tem HWND falso).
+        self.big_picture = BigPicture(
+            self.modelo, fabrica_da_cortina=cortina or (lambda _hwnd: None), animacoes_do_sistema=animacoes
+        )
         self.leitor = _LeitorFalso()
         leitor = self.leitor  # o lambda não captura `self`: senão `_App` <-> controle é um ciclo
         shared.schema.set_boolean("gamepad", True)

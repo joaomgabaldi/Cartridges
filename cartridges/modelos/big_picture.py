@@ -12,7 +12,11 @@ chama os slots de navegação. `ProvedorDoFundo` entrega o degradê pontilhado e
 import logging
 import weakref
 
-from PySide6.QtCore import Property, QModelIndex, QObject, QSize, Qt, QTimer, Signal, Slot
+from collections.abc import Callable
+
+from PySide6.QtCore import (
+    Property, QEasingCurve, QModelIndex, QObject, QSize, Qt, QTimer, QVariantAnimation, Signal, Slot,
+)  # fmt: skip
 from PySide6.QtGui import QColor, QImage, QWindow
 from PySide6.QtQuick import QQuickImageProvider, QSGRendererInterface
 
@@ -20,8 +24,18 @@ from cartridges import shared
 from cartridges.modelos import regras_do_big_picture as regras
 from cartridges.modelos.biblioteca import ModeloDaBiblioteca
 from cartridges.modelos.ordem import Linha
+from cartridges.utils.cortina_monitor import CortinaMonitor
 
 _SO_CAPA = {ModeloDaBiblioteca.Papel.Capa, ModeloDaBiblioteca.Papel.CapaAnimada}
+
+# Fade do monitor (valores da `main`): escurece em 300 ms (entrada) ou 250 ms (saída), troca no
+# escuro, espera 120 ms e clareia em 350 ms, InOutCubic.
+ESCURECER_ENTRADA_MS = 300
+ESCURECER_SAIDA_MS = 250
+PAUSA_NO_ESCURO_MS = 120
+CLAREAR_MS = 350
+# P1: no escuro, a troca espera as capas da fila decodificadas, mas não mais que isto.
+ESPERA_MAXIMA_DAS_CAPAS_MS = 700
 
 
 class ProvedorDoFundo(QQuickImageProvider):
@@ -68,11 +82,31 @@ class BigPicture(QObject):
     animarCentralMudou = Signal()  # noqa: N815
     filaPedida = Signal(bool)  # noqa: N815  # True: a fila de entrada; False: a de saída (o QML a anima)
     saiu = Signal(str)  # o jogo central na saída: o foco volta ao cartão dele na grade
+    prepararCapas = Signal()  # noqa: N815  # P1: o QML decodifica as capas da fila e responde `capasProntas`
 
     def __init__(
-        self, modelo: ModeloDaBiblioteca, parent: QObject | None = None, *, animacoes_do_sistema: bool = True
+        self,
+        modelo: ModeloDaBiblioteca,
+        parent: QObject | None = None,
+        *,
+        animacoes_do_sistema: bool = True,
+        fabrica_da_cortina: Callable[[int], CortinaMonitor | None] = CortinaMonitor,
     ) -> None:
         super().__init__(parent)
+        # Fade do monitor (ADR 0003): a cortina, a animação do alfa, a etapa e a troca em curso.
+        self._fabrica_da_cortina = fabrica_da_cortina
+        self._cortina: CortinaMonitor | None = None
+        self._animacao_cortina: QVariantAnimation | None = None
+        self._etapa = ""  # "escurecendo", "esperando capas", "trocando", "pausa", "clareando"
+        self._trocar: Callable[[], None] | None = None
+        self._depois: Callable[[], None] | None = None
+        self._em_fade = False
+        self._na_fila = False
+        self._capas_prontas = True
+        self._pausa = QTimer(self, singleShot=True, interval=PAUSA_NO_ESCURO_MS)
+        self._pausa.timeout.connect(self._clarear)
+        self._espera_das_capas = QTimer(self, singleShot=True, interval=ESPERA_MAXIMA_DAS_CAPAS_MS)
+        self._espera_das_capas.timeout.connect(self._trocar_agora)
         # shortcut: as animações do Windows são lidas uma vez pelo `Aplicativo`; sai junto com a releitura dele.
         self._animacoes_do_sistema = animacoes_do_sistema
         self._animar_central = self._ler_animar_central()
@@ -84,6 +118,7 @@ class BigPicture(QObject):
         self._agendado = False
         self._ocupada = False  # a fila de entrada e saída
         self._visivel = False
+        self._montada = False  # a lista existe: da entrada (antes de escurecer) ao fim da saída
         self._saindo = False
         self._ja_saiu = False
         self._disponivel = True
@@ -173,10 +208,10 @@ class BigPicture(QObject):
     def atualizar(self, centro: str = "") -> None:
         """Refaz a lista mantendo o jogo central (ou `centro`); se ele sumiu, fica o vizinho.
 
-        Só vale visível e fora da saída; durante a fila fica pendente (só o centro mais recente) e
-        roda no `filaTerminou`.
+        Só vale com a lista montada e fora da saída; durante a fila e o fade fica pendente (só o
+        centro mais recente) e roda quando a página destrava.
         """
-        if not self._visivel or self._saindo:
+        if not self._montada or self._saindo:
             return
         if self._ocupada:
             self._pendente, self._centro_pendente = True, centro
@@ -185,7 +220,7 @@ class BigPicture(QObject):
 
     def _agendar(self, *_args: object) -> None:
         """Várias mudanças seguidas (uma importação) viram um só `atualizar` no próximo ciclo."""
-        if self._visivel and not self._agendado:
+        if self._montada and not self._agendado:
             self._agendado = True
             QTimer.singleShot(0, self, self._rodar_agendado)
 
@@ -248,41 +283,39 @@ class BigPicture(QObject):
             self._disponivel = disponivel
             self.alterado.emit()
 
+
     @Slot()
     def entrar(self) -> None:
         if self._visivel or self._ocupada or not self._disponivel:
             return
         self._carrossel = regras.Carrossel([])  # sem centro a manter
+        self._montada = True
         self._refazer()  # o jogado mais recentemente no centro
-        self._visivel = True
         self._pendente = False
+        self._ocupada = self._em_fade = True
+        self._capas_prontas = not self._jogos
+        self.alterado.emit()
+        if self._jogos:
+            self.prepararCapas.emit()  # antes de escurecer: o QML decodifica enquanto a cortina desce (P1)
+        self._trocar_no_escuro(self._entrar_de_fato, ESCURECER_ENTRADA_MS, self._fim_da_entrada)
+
+    def _entrar_de_fato(self) -> None:
+        self._visivel = True
         if self._janela is not None:
             self._estava_maximizada = self._janela.visibility() == QWindow.Visibility.Maximized
             self._janela.showFullScreen()  # o Windows não devolve o estado maximizado sozinho (na saída)
-        self._ocupada = bool(self._jogos)
+        self._na_fila = bool(self._jogos)
         self.alterado.emit()
-        if self._ocupada:
-            self.filaPedida.emit(True)  # noqa: FBT003
+        if self._na_fila:
+            self.filaPedida.emit(True)  # noqa: FBT003  # corre no escuro e enquanto clareia
 
-    @Slot()
-    def sair(self) -> None:
-        if self._ocupada or not self._visivel:
-            return
-        self._saindo = True
-        self._ocupada = bool(self._jogos)
-        self.alterado.emit()
-        if self._ocupada:
-            self.filaPedida.emit(False)  # noqa: FBT003
-        else:
-            self._concluir_saida()
+    def _fim_da_entrada(self) -> None:
+        self._em_fade = False
+        self._destravar()
 
-    @Slot()
-    def filaTerminou(self) -> None:  # noqa: N802
-        """O QML avisa que a fila (de entrada ou de saída) chegou ao fim."""
-        if not self._ocupada:
-            return
-        if self._saindo:
-            self._concluir_saida()
+    def _destravar(self) -> None:
+        """Fila e fade acabaram: a página volta a aceitar entrada e aplica o `atualizar` pendente."""
+        if self._na_fila or self._em_fade:
             return
         self._ocupada = False
         pendente, centro = self._pendente, self._centro_pendente
@@ -291,16 +324,166 @@ class BigPicture(QObject):
         if pendente:
             self.atualizar(centro)
 
-    def _concluir_saida(self) -> None:
-        jogo = (self._central() or {}).get("jogoId", "")
-        self._saindo = self._ocupada = self._visivel = self._pendente = False
-        self._ja_saiu = True
-        self._carrossel, self._jogos = regras.Carrossel([]), []  # fora da tela nada decodifica capa (D39)
-        if self._janela is not None:
-            if self._estava_maximizada:
-                self._janela.showMaximized()
-            else:
-                self._janela.showNormal()
-        self.jogosMudaram.emit()
+    @Slot()
+    def sair(self) -> None:
+        if self._ocupada or not self._visivel:
+            return
+        self._saindo = self._ocupada = True
+        self._capas_prontas = True  # a saída não espera capas
+        self._na_fila = bool(self._jogos)
         self.alterado.emit()
+        if self._na_fila:
+            self.filaPedida.emit(False)  # noqa: FBT003
+        else:
+            self._trocar_no_escuro(self._sair_de_fato, ESCURECER_SAIDA_MS, self._fim_da_saida)
+
+    @Slot()
+    def filaTerminou(self) -> None:  # noqa: N802
+        """O QML avisa que a fila (de entrada ou de saída) chegou ao fim."""
+        if not self._na_fila:
+            return
+        self._na_fila = False
+        if self._saindo:
+            self._trocar_no_escuro(self._sair_de_fato, ESCURECER_SAIDA_MS, self._fim_da_saida)
+        else:
+            self._destravar()
+
+    def _sair_de_fato(self) -> None:
+        jogo = (self._central() or {}).get("jogoId", "")
+        try:
+            if self._janela is not None:
+                if self._estava_maximizada:
+                    self._janela.showMaximized()
+                else:
+                    self._janela.showNormal()
+        finally:
+            # Mesmo com a troca falhando a camada some: o QML repõe o quadro ao esconder.
+            self._visivel = self._montada = False
+            self._ja_saiu = True
+            self._carrossel, self._jogos = regras.Carrossel([]), []  # fora da tela nada decodifica capa (D39)
+            self.jogosMudaram.emit()
+            self.alterado.emit()
         self.saiu.emit(jogo)
+
+    def _fim_da_saida(self) -> None:
+        self._saindo = self._ocupada = self._pendente = False
+        self.alterado.emit()
+
+    # --- fade do monitor (ADR 0003) ---
+    def _hwnd(self) -> int:
+        return int(self._janela.winId()) if self._janela is not None else 0
+
+    def _trocar_no_escuro(
+        self, trocar: Callable[[], None], ms_escurecer: int, depois: Callable[[], None] | None
+    ) -> None:
+        """Escurece o monitor, troca, espera um instante e clareia. Sem cortina, só troca.
+
+        Na entrada, a troca no escuro espera `capasProntas` (ou `ESPERA_MAXIMA_DAS_CAPAS_MS`).
+        """
+        self._fechar_cortina()  # nunca deixa uma cortina anterior órfã
+        cortina = None
+        hwnd = self._hwnd()
+        if hwnd:
+            try:
+                cortina = self._fabrica_da_cortina(hwnd)
+            except Exception:
+                logging.warning("Não foi possível criar a cortina do monitor", exc_info=True)
+        if cortina is None:
+            try:
+                trocar()
+            finally:
+                if depois is not None:
+                    depois()
+            return
+        self._cortina, self._trocar, self._depois = cortina, trocar, depois
+        self._animar_cortina(0.0, 1.0, ms_escurecer, "escurecendo")
+
+    def _animar_cortina(self, de: float, para: float, ms: int, etapa: str) -> None:
+        self._etapa = etapa
+        if not self._animacoes_do_sistema:  # direto ao fim, como a `Adw.TimedAnimation`
+            self._alfa_cortina(para)
+            self._animacao_terminou()
+            return
+        animacao = QVariantAnimation(self)
+        animacao.setStartValue(de)
+        animacao.setEndValue(para)
+        animacao.setDuration(ms)
+        animacao.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        animacao.valueChanged.connect(self._alfa_cortina)
+        animacao.finished.connect(self._animacao_terminou)
+        self._animacao_cortina = animacao
+        self._alfa_cortina(de)
+        animacao.start()
+
+    def _animacao_terminou(self) -> None:
+        animacao, self._animacao_cortina = self._animacao_cortina, None
+        if animacao is not None:
+            animacao.deleteLater()
+        if self._etapa == "escurecendo":
+            if self._capas_prontas:
+                self._trocar_agora()
+            else:
+                self._etapa = "esperando capas"
+                self._espera_das_capas.start()
+        elif self._etapa == "clareando":
+            depois = self._depois
+            self._fechar_cortina()
+            if depois is not None:
+                depois()
+
+    @Slot()
+    def capasProntas(self) -> None:  # noqa: N802
+        """O QML decodificou as capas da fila (ou não tinha o que decodificar)."""
+        self._capas_prontas = True
+        if self._etapa == "esperando capas":
+            self._trocar_agora()
+
+    def _trocar_agora(self) -> None:
+        if self._etapa not in {"escurecendo", "esperando capas"}:
+            return  # a espera venceu depois de a sequência acabar
+        self._espera_das_capas.stop()
+        self._etapa = "trocando"
+        trocar, self._trocar = self._trocar, None
+        try:
+            if trocar is not None:
+                trocar()
+        except BaseException:
+            # A cortina preta não pode ficar no monitor nem a página travada (Review Focus 1).
+            depois = self._depois
+            self._fechar_cortina()
+            if depois is not None:
+                depois()
+            raise
+        self._etapa = "pausa"
+        self._pausa.start()
+
+    def _clarear(self) -> None:
+        if self._etapa == "pausa":
+            self._animar_cortina(1.0, 0.0, CLAREAR_MS, "clareando")
+
+    def _alfa_cortina(self, valor: object) -> None:
+        if self._cortina is None:
+            return
+        try:
+            self._cortina.alfa(float(valor))
+        except OSError:
+            logging.warning("Não foi possível mudar a cortina do monitor", exc_info=True)
+
+    def _fechar_cortina(self) -> None:
+        self._pausa.stop()
+        self._espera_das_capas.stop()
+        animacao, self._animacao_cortina = self._animacao_cortina, None
+        if animacao is not None:
+            animacao.stop()  # parar antes do fim não emite `finished`
+            animacao.deleteLater()
+        self._etapa = ""
+        self._trocar = self._depois = None
+        cortina, self._cortina = self._cortina, None
+        if cortina is not None:
+            cortina.fechar()
+
+    @Slot()
+    def encerrar(self) -> None:
+        """O app fecha (`aboutToQuit`): nenhuma cortina fica no monitor, em qualquer etapa do fade."""
+        self._fechar_cortina()
+        self._em_fade = False

@@ -96,7 +96,7 @@ Item {
         z: -1
         source: detalhes.fundo
         fillMode: Image.Stretch
-        asynchronous: true
+        asynchronous: false  // provedor Python na thread de imagens trava: ela espera o GIL segurando o mutex do cache
         opacity: detalhes.opacidadeDoFundo
         visible: detalhes.fundo !== ""
     }

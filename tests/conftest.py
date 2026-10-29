@@ -368,6 +368,17 @@ def sem_som(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def sem_cortina_de_verdade(monkeypatch):
+    """Nenhum teste abre a janela preta TOPMOST do fade: sem a fábrica falsa, a cortina falha ao criar."""
+    from cartridges.utils import cortina_monitor  # noqa: PLC0415
+
+    def recusa():
+        raise OSError("cortina de verdade nos testes")
+
+    monkeypatch.setattr(cortina_monitor, "_api", recusa)
+
+
+@pytest.fixture(autouse=True)
 def win(monkeypatch):
     fake = FakeWindow()
     monkeypatch.setattr(shared, "win", fake, raising=False)

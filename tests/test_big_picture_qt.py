@@ -4,10 +4,12 @@
 
 """A lista do Big Picture sobre o `ModeloDaBiblioteca`: centro, rótulos, tique e fundo."""
 
+import sys
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QEventLoop, QObject, QSize, QTimer, Signal
+from PySide6.QtCore import QEasingCurve, QEventLoop, QObject, QSize, QTimer, Signal
 from PySide6.QtGui import QImage, QWindow
 from PySide6.QtQuick import QSGRendererInterface
 
@@ -227,11 +229,15 @@ class _JanelaFalsa(QObject):
 
     sceneGraphInitialized = Signal()  # noqa: N815
 
-    def __init__(self, maximizada=False, api=QSGRendererInterface.GraphicsApi.Direct3D11):
+    def __init__(self, maximizada=False, api=QSGRendererInterface.GraphicsApi.Direct3D11, hwnd=0):
         super().__init__()
         self.chamadas = []
         self.maximizada = maximizada
         self.api = api
+        self.hwnd = hwnd  # 0: sem HWND, a troca é direta (sem fade)
+
+    def winId(self):  # noqa: N802
+        return self.hwnd
 
     def visibility(self):
         return QWindow.Visibility.Maximized if self.maximizada else QWindow.Visibility.Windowed
@@ -474,3 +480,328 @@ def test_sair_esvazia_a_lista(tres):
 
 def test_fila_do_qml_usa_a_constante_das_regras(app_qt):
     assert BigPicture(ModeloDaBiblioteca()).jogosNaFila == regras.JOGOS_NA_FILA
+
+
+# --- fade do monitor (cortina) --------------------------------------------------------------------
+
+
+class _CortinaFalsa:
+    """Registra a sequência do fade numa lista compartilhada; nenhuma janela Win32 de verdade."""
+
+    registro: list = []
+    falha = False
+
+    def __init__(self, hwnd):
+        if _CortinaFalsa.falha:
+            raise OSError("sem cortina")
+        _CortinaFalsa.registro.append(f"abriu {hwnd}")
+
+    def alfa(self, valor):
+        texto = f"alfa {round(valor)}"
+        if _CortinaFalsa.registro[-1:] != [texto]:  # os quadros do meio não importam aqui
+            _CortinaFalsa.registro.append(texto)
+
+    def fechar(self):
+        _CortinaFalsa.registro.append("fechou")
+
+
+def _com_fade(*jogos, fabrica=_CortinaFalsa):
+    modelo = ModeloDaBiblioteca()
+    for jogo in jogos:
+        modelo.atualizar(jogo)
+    bp = BigPicture(modelo, fabrica_da_cortina=fabrica)
+    janela = _JanelaFalsa(hwnd=42)
+    bp.definir_janela(janela)
+    pedidos = []
+    bp.filaPedida.connect(pedidos.append)
+    return SimpleNamespace(modelo=modelo, bp=bp, janela=janela, pedidos=pedidos, registro=_CortinaFalsa.registro)
+
+
+@pytest.fixture
+def fade(app_qt, tiques):
+    """Três jogos, a cortina falsa e um HWND falso; animações e pausas disparadas à mão."""
+    _CortinaFalsa.registro = []
+    _CortinaFalsa.falha = False
+    f = _com_fade(_jogo("a", 30), _jogo("b", 20), _jogo("c", 10))
+    yield f
+    f.bp.encerrar()
+
+
+def _animacao(bp):
+    animacao = bp._animacao_cortina  # noqa: SLF001
+    assert animacao is not None, "sem animação da cortina"
+    return animacao
+
+
+def concluir_cortina(bp, ms=None):
+    animacao = _animacao(bp)
+    if ms is not None:
+        assert animacao.duration() == ms
+    assert animacao.easingCurve().type() == QEasingCurve.Type.InOutCubic
+    animacao.setCurrentTime(animacao.duration())  # chega ao fim: `finished`
+
+
+def concluir_pausa(bp):
+    pausa = bp._pausa  # noqa: SLF001
+    assert pausa.isActive() and pausa.interval() == 120
+    pausa.stop()
+    pausa.timeout.emit()
+
+
+def _erros_do_laco(monkeypatch):
+    """A exceção de um slot chamado pelo Qt (o fim da animação) chega ao `sys.excepthook`, não a quem chamou."""
+    erros = []
+    monkeypatch.setattr(sys, "excepthook", lambda tipo, *_: erros.append(tipo))
+    return erros
+
+
+def _entrar_inteiro(f):
+    f.bp.entrar()
+    f.bp.capasProntas()
+    concluir_cortina(f.bp)
+    concluir_pausa(f.bp)
+    concluir_cortina(f.bp)
+    f.bp.filaTerminou()
+
+
+def test_entrar_escurece_troca_e_clareia(fade):
+    bp = fade.bp
+    bp.entrar()
+    assert fade.registro == ["abriu 42", "alfa 0"] and bp.ocupada
+    assert not bp.visivel and fade.janela.chamadas == []
+    bp.capasProntas()
+    concluir_cortina(bp, 300)
+    assert bp.visivel and fade.registro[-1] == "alfa 1" and fade.janela.chamadas == ["tela cheia"]
+    assert fade.pedidos == [True]  # a fila corre no escuro e enquanto clareia
+    concluir_pausa(bp)
+    concluir_cortina(bp, 350)
+    assert fade.registro[-2:] == ["alfa 0", "fechou"] and bp._cortina is None  # noqa: SLF001
+    assert bp.ocupada  # a fila ainda corre
+    bp.filaTerminou()
+    assert not bp.ocupada
+
+
+def test_entrar_fica_ocupada_ate_o_fim_do_fade_sem_fila(app_qt, tiques):
+    _CortinaFalsa.registro = []
+    f = _com_fade()
+    f.bp.entrar()
+    concluir_cortina(f.bp)  # sem jogos: nada a esperar
+    assert f.bp.ocupada and f.bp.visivel
+    concluir_pausa(f.bp)
+    concluir_cortina(f.bp)
+    assert not f.bp.ocupada and f.pedidos == []
+
+
+def test_entrar_com_a_pagina_visivel_nao_faz_nada(fade):
+    _entrar_inteiro(fade)
+    antes = list(fade.registro)
+    fade.bp.entrar()
+    assert fade.registro == antes and fade.janela.chamadas == ["tela cheia"]
+
+
+def test_sair_faz_a_fila_e_depois_o_fade(fade):
+    bp = fade.bp
+    _entrar_inteiro(fade)
+    fade.registro.clear()
+    saidas = []
+    bp.saiu.connect(saidas.append)
+    bp.sair()
+    assert fade.registro == [] and bp.ocupada and fade.pedidos[-1] is False  # primeiro a fila
+    bp.filaTerminou()
+    assert fade.registro == ["abriu 42", "alfa 0"] and bp.visivel  # escurecendo: o QML só repõe o quadro ao esconder
+    assert bp.ocupada and not bp.mover(1)
+    concluir_cortina(bp, 250)  # a saída não espera capas
+    assert not bp.visivel and fade.janela.chamadas[-1] == "normal" and bp.ocupada
+    assert saidas == ["a"] and bp.jogos == []
+    concluir_pausa(bp)
+    concluir_cortina(bp, 350)
+    assert fade.registro[-1] == "fechou" and not bp.ocupada and bp.jaSaiu
+
+
+def test_sem_hwnd_troca_sem_fade(fade):
+    fade.janela.hwnd = 0
+    fade.bp.entrar()
+    assert fade.bp.visivel and fade.registro == []
+    fade.bp.filaTerminou()
+    fade.bp.sair()
+    fade.bp.filaTerminou()
+    assert not fade.bp.visivel and not fade.bp.ocupada and fade.registro == []
+
+
+def test_cortina_que_falha_troca_sem_fade(fade):
+    _CortinaFalsa.falha = True
+    fade.bp.entrar()
+    assert fade.bp.visivel and fade.bp._cortina is None  # noqa: SLF001
+    fade.bp.filaTerminou()
+    fade.bp.sair()
+    fade.bp.filaTerminou()
+    assert not fade.bp.visivel and not fade.bp.ocupada
+
+
+def test_cortina_que_levanta_qualquer_erro_troca_sem_fade(app_qt, tiques):
+    def explode(_hwnd):
+        raise RuntimeError("x")
+
+    f = _com_fade(_jogo("a", 30), fabrica=explode)
+    f.bp.entrar()
+    assert f.bp.visivel and f.pedidos == [True]
+
+
+def test_entrar_durante_a_pausa_da_saida_nao_cria_outra_cortina(fade):
+    bp = fade.bp
+    _entrar_inteiro(fade)
+    bp.sair()
+    bp.filaTerminou()
+    concluir_cortina(bp)
+    assert bp._pausa.isActive()  # noqa: SLF001  # na pausa de 120 ms, já fora do Big Picture
+    abertas = fade.registro.count("abriu 42")
+    bp.entrar()
+    assert fade.registro.count("abriu 42") == abertas and not bp.visivel
+    concluir_pausa(bp)
+    concluir_cortina(bp)
+    assert fade.registro[-1] == "fechou" and not bp.ocupada
+
+
+def test_entrar_duas_vezes_no_escurecimento_cria_uma_cortina(fade):
+    fade.bp.entrar()
+    fade.bp.entrar()
+    assert fade.registro.count("abriu 42") == 1
+
+
+def test_nova_sequencia_fecha_a_cortina_anterior(fade):
+    fade.bp.entrar()
+    fade.bp._trocar_no_escuro(lambda: None, 100, None)  # noqa: SLF001
+    assert fade.registro.count("fechou") == 1 and fade.registro.count("abriu 42") == 2
+
+
+def test_sair_repoe_o_quadro_mesmo_se_a_troca_falhar(fade, monkeypatch):
+    # O QML repõe o quadro quando a camada some: a troca que falha ainda esconde o Big Picture.
+    bp = fade.bp
+    _entrar_inteiro(fade)
+    bp.sair()
+    bp.filaTerminou()
+
+    def quebra():
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(fade.janela, "showNormal", quebra)
+    erros = _erros_do_laco(monkeypatch)
+    concluir_cortina(bp)
+    assert erros == [RuntimeError]  # propagada até o laço de eventos (o log de exceções do app)
+    assert not bp.visivel and bp.jogos == [] and bp.jaSaiu
+
+
+def test_encerrar_no_meio_do_fade_fecha_a_cortina(fade):
+    bp = fade.bp
+    bp.entrar()
+    bp.encerrar()  # escurecendo
+    assert fade.registro[-1] == "fechou" and bp._cortina is None and bp._animacao_cortina is None  # noqa: SLF001
+    bp2 = _com_fade(_jogo("a", 30)).bp
+    bp2.entrar()
+    concluir_cortina(bp2)  # escuro, esperando as capas
+    assert bp2._espera_das_capas.isActive()  # noqa: SLF001
+    bp2.encerrar()
+    assert fade.registro[-1] == "fechou" and not bp2._espera_das_capas.isActive()  # noqa: SLF001
+    bp2.capasProntas()  # a resposta tardia do QML não troca nada
+    assert not bp2.visivel
+    bp3 = _com_fade(_jogo("a", 30)).bp
+    bp3.entrar()
+    bp3.capasProntas()
+    concluir_cortina(bp3)
+    assert bp3._pausa.isActive()  # noqa: SLF001  # na pausa
+    bp3.encerrar()
+    assert fade.registro[-1] == "fechou" and not bp3._pausa.isActive()  # noqa: SLF001
+    assert fade.registro.count("abriu 42") == fade.registro.count("fechou") == 3
+
+
+def test_troca_que_levanta_fecha_a_cortina_e_destrava(fade, monkeypatch):
+    bp = fade.bp
+
+    def quebra():
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(fade.janela, "showFullScreen", quebra)
+    bp.entrar()
+    bp.capasProntas()
+    erros = _erros_do_laco(monkeypatch)
+    concluir_cortina(bp)
+    assert erros == [RuntimeError]
+    assert fade.registro[-1] == "fechou" and bp._cortina is None  # noqa: SLF001
+    assert not bp.ocupada and not bp._em_fade  # noqa: SLF001
+    assert not bp._pausa.isActive()  # noqa: SLF001
+    bp.sair()  # destravada: a saída anda
+    bp.filaTerminou()
+    concluir_cortina(bp)
+    concluir_pausa(bp)
+    concluir_cortina(bp)
+    assert not bp.visivel and not bp.ocupada
+
+
+def test_troca_que_levanta_sem_cortina_destrava(fade):
+    fade.janela.hwnd = 0
+    depois = []
+
+    def quebra():
+        raise RuntimeError("x")
+
+    with pytest.raises(RuntimeError):
+        fade.bp._trocar_no_escuro(quebra, 300, lambda: depois.append(1))  # noqa: SLF001
+    assert depois == [1]
+
+
+def test_troca_espera_as_capas(fade):
+    bp = fade.bp
+    preparos = []
+    bp.prepararCapas.connect(lambda: preparos.append(list(bp.jogos)))
+    bp.entrar()
+    assert [j["jogoId"] for j in preparos[0]] == ["a", "b", "c"]  # a lista já existe antes de escurecer
+    concluir_cortina(bp)
+    assert not bp.visivel and fade.registro[-1] == "alfa 1"  # escuro, esperando as capas
+    espera = bp._espera_das_capas  # noqa: SLF001
+    assert espera.isActive() and espera.interval() == modulo.ESPERA_MAXIMA_DAS_CAPAS_MS == 700
+    bp.capasProntas()
+    assert bp.visivel and not espera.isActive() and bp._pausa.isActive()  # noqa: SLF001
+
+
+def test_troca_nao_espera_mais_que_o_limite(fade):
+    bp = fade.bp
+    bp.entrar()
+    concluir_cortina(bp)
+    espera = bp._espera_das_capas  # noqa: SLF001
+    espera.stop()
+    espera.timeout.emit()  # 700 ms sem resposta do QML
+    assert bp.visivel and fade.pedidos == [True]
+    bp.capasProntas()  # tardia: não troca de novo
+    assert fade.janela.chamadas == ["tela cheia"]
+
+
+def test_capas_prontas_antes_do_escuro_nao_atrasam(fade):
+    bp = fade.bp
+    bp.entrar()
+    bp.capasProntas()  # o QML terminou durante o escurecimento
+    concluir_cortina(bp)
+    assert bp.visivel and not bp._espera_das_capas.isActive()  # noqa: SLF001
+
+
+def test_sem_animacoes_do_sistema_o_fade_vai_direto_ao_fim(app_qt, tiques):
+    _CortinaFalsa.registro = []
+    bp = BigPicture(ModeloDaBiblioteca(), fabrica_da_cortina=_CortinaFalsa, animacoes_do_sistema=False)
+    bp.definir_janela(_JanelaFalsa(hwnd=42))
+    bp.entrar()  # sem jogos: nada a esperar
+    assert bp.visivel and _CortinaFalsa.registro == ["abriu 42", "alfa 1"]
+    concluir_pausa(bp)
+    assert _CortinaFalsa.registro[-1] == "fechou" and not bp.ocupada
+
+
+def test_mudanca_da_biblioteca_no_escuro_fica_pendente(fade):
+    bp = fade.bp
+    bp.entrar()
+    fade.modelo.atualizar(_jogo("n", 99))
+    _esperar()
+    assert _ids(bp) == ["a", "b", "c"]  # a lista da entrada não muda no meio da troca
+    bp.capasProntas()
+    concluir_cortina(bp)
+    concluir_pausa(bp)
+    concluir_cortina(bp)
+    bp.filaTerminou()
+    assert _ids(bp) == ["n", "a", "b", "c"] and bp.nome == "A"
