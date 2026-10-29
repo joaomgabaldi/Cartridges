@@ -125,6 +125,10 @@ def test_toques_dentro_do_intervalo_vibram_uma_vez(m):
     assert m.leitor.vibracoes == [RUMBLE_CAPA[:2]] * 2
 
 
+def test_toque_da_capa_tem_o_valor_calibrado():
+    assert RUMBLE_CAPA == (0.5, 1.0, 90)
+
+
 def test_toque_sem_vibrar_nao_consome_a_vez(m):
     shared.schema.set_boolean("gamepad-rumble", False)
     m.controle.trocarCapa()

@@ -78,8 +78,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_auditoria_0923_zerados.py",
     "test_auditoria_1023_seguranca.py",
     "test_backup.py",
-    "test_big_picture.py",
-    "test_big_picture_controle.py",
     "test_botao_novidades.py",
     "test_buscar_atualizacoes_ui.py",
     "test_caixa_redimensionavel.py",

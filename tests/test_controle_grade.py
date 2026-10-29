@@ -16,6 +16,7 @@ from cartridges.modelos.controle import ControleDaGrade
 from cartridges.xinput import (
     REPEAT_DELAY_US,
     REPEAT_INTERVAL_US,
+    RUMBLE_MOVE,
     THUMB_PRESS,
     THUMB_WAKE,
     XINPUT_A,
@@ -229,6 +230,16 @@ def test_vibra_na_borda_so_com_a_preferencia(m):
     m.leitor.vibracoes.clear()
     shared.schema.set_boolean("gamepad-rumble", False)
     m.controle.bater()
+    assert m.leitor.vibracoes == []
+
+
+def test_passar_vibra_o_tique_leve_so_com_a_preferencia(m):
+    shared.schema.set_boolean("gamepad-rumble", True)
+    m.controle.passar()
+    assert m.leitor.vibracoes == [RUMBLE_MOVE[:2]]
+    m.leitor.vibracoes.clear()
+    shared.schema.set_boolean("gamepad-rumble", False)
+    m.controle.passar()
     assert m.leitor.vibracoes == []
 
 
