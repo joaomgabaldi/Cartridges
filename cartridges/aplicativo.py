@@ -37,6 +37,8 @@ class Aplicativo(QObject):
         super().__init__(parent)
         self._avisos = avisos if avisos is not None else FilaDeAvisos(self)
         self._importando = False
+        # Posto por `app.py`; a tela de preferências chama `check_async()` nele.
+        self.verificador_de_atualizacoes = None
         self._ao_fechar_dialogo: Callable[[], None] | None = None
         self._colunas = shared.schema.get_uint("library-rows")
         self._tocar_sempre = shared.schema.get_boolean("cover-autoplay")

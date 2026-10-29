@@ -121,7 +121,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_estilo_css.py",
     "test_fita_wizard.py",
     "test_hwnd_ordem_import.py",
-    "test_install_size.py",
     "test_janela_por_cima.py",
     "test_janela_restaurando.py",
     "test_ler_json.py",

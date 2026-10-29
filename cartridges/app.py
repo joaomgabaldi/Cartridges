@@ -39,7 +39,9 @@ from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.store.store import Store
 from cartridges.utils import copias_animadas, restauracao
 from cartridges.utils.hltb_backfill import HLTBBackfill
+from cartridges.utils.install_size import InstallSizeSweep
 from cartridges.utils.thread_principal import na_thread_principal
+from cartridges.utils.updates_checker import UpdatesChecker
 
 _RAIZ = Path(__file__).resolve().parent
 _ICONE = _RAIZ.parent / "data" / "icons" / "hicolor" / "scalable" / "apps" / f"{shared.APP_ID}.svg"
@@ -87,11 +89,15 @@ def main(argv: list[str]) -> int:
     app.setApplicationDisplayName("Cartridges")
     app.setWindowIcon(QIcon(str(_ICONE)))
     # A ponte para a thread principal nasce quando `thread_principal` é importado, aqui na principal.
-    # O `stop()` da varredura vem antes do `encerrar()`: o que ela ainda entregaria não tem para onde ir.
+    # O `stop()` de cada um vem antes do `encerrar()`: o que ainda entregariam não tem para onde ir.
+    verificador = UpdatesChecker()
     varredura_hltb = HLTBBackfill()
+    varredura_tamanho = InstallSizeSweep()
 
     def encerrar() -> None:
+        verificador.stop()
         varredura_hltb.stop()
+        varredura_tamanho.stop()
         async_manager.encerrar()
         copias_animadas.encerrar()
 
@@ -144,8 +150,12 @@ def main(argv: list[str]) -> int:
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))
     if not motor.rootObjects():
         return 1
-    varredura_hltb.start()
     shared.aplicativo = aplicativo
+    aplicativo.verificador_de_atualizacoes = verificador  # a tela de preferências chama `check_async()` ao ligar o aviso
+    # Na ordem da `main`: atualizações, HowLongToBeat, tamanho em disco.
+    verificador.start()
+    varredura_hltb.start()
+    varredura_tamanho.start()
     # Depois de a janela aparecer. Com restauração pendente a importação é outra (plano 8).
     # shortcut: sem `continuar_restauracao`, a abertura com restauração pendente não importa; entra no plano 8.
     if not restauracao.existe() and shared.schema.get_boolean("auto-import"):
