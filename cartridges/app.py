@@ -133,7 +133,7 @@ def main(argv: list[str]) -> int:
     qwk.registrar(motor)
     aplicativo = Aplicativo(avisos)
     controle = ControleDaGrade()
-    detalhes = DetalhesDoJogo(shared.store)
+    detalhes = DetalhesDoJogo(shared.store, avisos=avisos)
     motor.addImageProvider("desfoque", detalhes.provedor)
     contexto = motor.rootContext()
     for nome, valor in (

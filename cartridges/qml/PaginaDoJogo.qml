@@ -14,13 +14,18 @@ Item {
     property string placeholder: ""
 
     signal voltar()
+    // Os botões só emitem; Aplicativo.qml os liga ao `detalhes`. O `excluir` sai depois da confirmação.
     signal jogar()
+    // shortcut: sem receptor até a edição (plano 3, tarefa 6).
     signal editar()
     signal remover()
     signal excluir()
+    signal atualizacaoConfirmada()
 
     // O que o controle do Xbox e a janela esperam de qualquer página (ver Aplicativo.qml).
-    readonly property bool menuDoJogoAberto: false
+    // Menu, balão ou diálogo na frente: o controle navega nele pelas teclas.
+    readonly property bool menuDoJogoAberto: menuDeStatus.opened || menuDeBuscas.opened || balaoDaAnotacao.opened
+        || dialogoExcluir.visible || dialogoAtualizacao.visible
     readonly property bool compacta: width < 1000
     readonly property int larguraDaCapa: compacta ? 280 : 420
     readonly property int alturaDaCapa: larguraDaCapa * 3 / 2
@@ -410,24 +415,73 @@ Item {
                 Row {
                     Layout.topMargin: 9
                     spacing: 6
-                    // shortcut: só o rótulo e a dica; o menu de status entra com o plano 3 (tarefa 3).
                     BotaoDeTexto {
                         id: botaoStatus
                         objectName: "botaoStatus"
                         text: detalhes.rotuloDoStatus
                         dica: "Status deste jogo na biblioteca"
+                        onClicked: menuDeStatus.open()
+                        MenuDoTema {
+                            id: menuDeStatus
+                            objectName: "menuDeStatus"
+                            y: parent.height
+                            Repeater {
+                                model: detalhes.statusOpcoes
+                                delegate: ItemDoMenu {
+                                    required property var modelData
+                                    text: modelData[1]
+                                    onTriggered: detalhes.definirStatus(modelData[0])
+                                }
+                            }
+                            MenuSeparator {}
+                            ItemDoMenu {
+                                objectName: "itemSemStatus"
+                                text: "Sem status"
+                                onTriggered: detalhes.definirStatus("")
+                            }
+                        }
                     }
-                    // shortcut: sem a caixa de anotação, ela entra com a tarefa 3.
                     BotaoDeTexto {
                         id: botaoAnotacao
                         objectName: "botaoAnotacao"
                         visible: detalhes.mostraAnotacao
                         text: "Onde eu parei"
                         dica: detalhes.dicaDaAnotacao
+                        onClicked: balaoDaAnotacao.opened ? balaoDaAnotacao.close() : balaoDaAnotacao.open()
+                        // O balão carrega a anotação ao abrir e a grava ao fechar (num zerado, só leitura).
+                        Popup {
+                            id: balaoDaAnotacao
+                            objectName: "balaoDaAnotacao"
+                            y: parent.height + 4
+                            width: 320
+                            padding: 8
+                            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                            onAboutToShow: campoDaAnotacao.text = detalhes.anotacao
+                            onOpened: campoDaAnotacao.forceActiveFocus()
+                            onClosed: if (detalhes.anotacaoEditavel) detalhes.gravarAnotacao(campoDaAnotacao.text)
+                            background: Rectangle {
+                                color: Tema.superficie
+                                border.color: Tema.borda
+                                radius: 8
+                            }
+                            contentItem: ScrollView {
+                                implicitHeight: 120
+                                TextArea {
+                                    id: campoDaAnotacao
+                                    objectName: "campoDaAnotacao"
+                                    readOnly: !detalhes.anotacaoEditavel
+                                    wrapMode: TextEdit.Wrap
+                                    textFormat: TextEdit.PlainText
+                                    color: Tema.texto
+                                    selectionColor: Tema.destaque
+                                    font { family: Tema.fonte; pixelSize: 14 }
+                                    Accessible.name: "Onde eu parei"
+                                }
+                            }
+                        }
                     }
                 }
 
-                // shortcut: sem ação ainda; abre a página da atualização na tarefa 3.
                 BotaoDeTexto {
                     id: avisoDeAtualizacao
                     objectName: "avisoDeAtualizacao"
@@ -436,6 +490,10 @@ Item {
                     text: "Atualização disponível"
                     dica: "Abrir a página da atualização"
                     font.weight: Font.DemiBold
+                    onClicked: {
+                        detalhes.abrirAtualizacao()
+                        dialogoAtualizacao.abrir()
+                    }
                 }
 
                 RowLayout {
@@ -480,7 +538,7 @@ Item {
                         visible: detalhes.zerado
                         glifo: ""
                         dica: "Excluir"
-                        onClicked: raiz.excluir()
+                        onClicked: dialogoExcluir.abrir()
                     }
                     BotaoRedondo {
                         id: botaoRemover
@@ -490,16 +548,49 @@ Item {
                         dica: "Remover"
                         onClicked: raiz.remover()
                     }
-                    // shortcut: sem o menu de buscas, ele entra com a tarefa 3.
                     BotaoRedondo {
                         id: botaoBuscar
                         objectName: "botaoBuscarDaPagina"
                         visible: !detalhes.zerado
                         glifo: ""
                         dica: "Buscar"
+                        onClicked: menuDeBuscas.open()
+                        MenuDoTema {
+                            id: menuDeBuscas
+                            objectName: "menuDeBuscas"
+                            y: parent.height
+                            // O título da seção, como no menu da `main`: sem ação.
+                            ItemDoMenu { objectName: "tituloDoMenuDeBuscas"; text: "Buscar em…"; enabled: false }
+                            ItemDoMenu { text: "IGDB"; onTriggered: detalhes.buscarEm("igdb") }
+                            ItemDoMenu { text: "SteamGridDB"; onTriggered: detalhes.buscarEm("sgdb") }
+                            ItemDoMenu { text: "PCGamingWiki"; onTriggered: detalhes.buscarEm("pcgw") }
+                            ItemDoMenu { text: "HowLongToBeat"; onTriggered: detalhes.buscarEm("hltb") }
+                        }
                     }
                 }
             }
         }
+    }
+
+    DialogoDeConfirmacao {
+        id: dialogoExcluir
+        objectName: "dialogoExcluir"
+        titulo: "Excluir %1?".arg(detalhes.nome)
+        corpo: "Tem certeza que deseja excluir este jogo? Esta ação é irreversível."
+        rotuloConfirmar: "Excluir"
+        rotuloCancelar: "Cancelar"
+        destrutivo: true
+        onConfirmado: raiz.excluir()
+        onVisibleChanged: if (!visible) raiz.forceActiveFocus()
+    }
+    DialogoDeConfirmacao {
+        id: dialogoAtualizacao
+        objectName: "dialogoAtualizacao"
+        titulo: "Você instalou a atualização?"
+        corpo: "A página da atualização foi aberta no navegador. Confirme após instalá-la para ocultar o aviso."
+        rotuloConfirmar: "Já instalei"
+        rotuloCancelar: "Ainda não"
+        onConfirmado: raiz.atualizacaoConfirmada()
+        onVisibleChanged: if (!visible) raiz.forceActiveFocus()
     }
 }

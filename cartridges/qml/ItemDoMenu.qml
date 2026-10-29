@@ -13,6 +13,7 @@ MenuItem {
     contentItem: Text {
         leftPadding: item.checkable ? 22 : 0  // lugar da marca
         text: item.text
+        textFormat: Text.PlainText
         color: Tema.texto
         opacity: item.enabled ? 1 : 0.5
         verticalAlignment: Text.AlignVCenter
@@ -20,6 +21,7 @@ MenuItem {
     }
     indicator: Text {
         visible: item.checked
+        textFormat: Text.PlainText
         x: 8
         anchors.verticalCenter: parent.verticalCenter
         text: ""  // marca de seleção
@@ -28,6 +30,7 @@ MenuItem {
     }
     arrow: Text {
         visible: item.subMenu
+        textFormat: Text.PlainText
         x: parent.width - width - 10
         anchors.verticalCenter: parent.verticalCenter
         text: ""  // seta para a direita

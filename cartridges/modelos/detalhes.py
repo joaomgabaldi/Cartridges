@@ -23,11 +23,12 @@ from PySide6.QtCore import Property, QObject, Qt, Signal, Slot
 from PySide6.QtGui import QGuiApplication, QImage
 from PySide6.QtQuick import QQuickImageProvider
 
-from cartridges.jogo import Jogo, status_label
+from cartridges.jogo import STATUS_LABELS, Jogo, status_label
 from cartridges.modelos.ordem import Linha, _url_da_capa  # noqa: PLC2701
 from cartridges.utils import desfoque, game_logo
 from cartridges.utils.format_playtime import format_playtime, format_size
 from cartridges.utils.hltb import format_hltb_time
+from cartridges.utils.open_uri import abrir_url
 from cartridges.utils.relative_date import relative_date
 from cartridges.utils.steam import format_release_date
 from cartridges.utils.thread_principal import na_thread_principal
@@ -35,6 +36,12 @@ from cartridges.utils.thread_principal import na_thread_principal
 _COLUNAS_HLTB = (_("História"), _("Extras"), _("Completista"))
 _CHAVES_HLTB = ("hltb_main", "hltb_main_extra", "hltb_completionist")
 _RESERVA = desfoque.LUMINANCIA_RESERVA
+_BUSCAS = {
+    "igdb": "https://www.igdb.com/search?type=1&q=",
+    "sgdb": "https://www.steamgriddb.com/search/grids?term=",
+    "pcgw": "https://www.pcgamingwiki.com/w/index.php?search=",
+    "hltb": "https://howlongtobeat.com/?q=",
+}
 
 
 # -- regras puras ------------------------------------------------------------------------------
@@ -250,9 +257,12 @@ class DetalhesDoJogo(QObject):
     fundo = _p(str, "fundo")
     opacidadeDoFundo = _p(float, "opacidadeDoFundo")  # noqa: N815
     del _p
+    # Os status do menu, [valor, rótulo]: uma só fonte, a do `jogo`.
+    statusOpcoes = Property("QVariantList", lambda self: [[k, v] for k, v in STATUS_LABELS.items()], constant=True)  # noqa: N815
 
-    def __init__(self, store: Any, parent: QObject | None = None) -> None:
+    def __init__(self, store: Any, parent: QObject | None = None, avisos: Any = None) -> None:
         super().__init__(parent)
+        self._avisos = avisos  # a FilaDeAvisos, para o "excluído"
         self.provedor = ProvedorDeDesfoque()
         self._store = store
         self._v: dict[str, Any] = dict(_PADRAO)
@@ -359,6 +369,78 @@ class DetalhesDoJogo(QObject):
 
     def _tema_mudou(self, *_args: Any) -> None:
         self._mesclar({})
+
+    # -- ações -----------------------------------------------------------------------------------
+
+    def _mostrado(self) -> Jogo | None:
+        return self._jogo() if self._jogo else None
+
+    @Slot()
+    def jogar(self) -> None:
+        # O botão some na tela de um zerado; isto cobre o que chega por outro caminho.
+        if (jogo := self._mostrado()) is not None and not jogo.zerado:
+            jogo.launch()
+
+    @Slot()
+    def remover(self) -> None:
+        # Um zerado já saiu da biblioteca: o "Desfazer" o traria de volta desinstalado.
+        if (jogo := self._mostrado()) is not None and not jogo.zerado:
+            jogo.remove_game()  # o `atualizado` dele fecha a página (`sair`)
+
+    @Slot()
+    def excluir(self) -> None:
+        # De novo o `zerado`: a pergunta ficou na tela e o jogo pode ter mudado.
+        if (jogo := self._mostrado()) is None or not jogo.zerado:
+            return
+        nome = jogo.name
+        self._store.excluir(jogo)  # o `jogo_excluido` dela fecha a página (`sair`)
+        if self._avisos is not None:
+            # A variável é o nome do jogo
+            self._avisos.adicionar(_("{} excluído").format(nome))
+
+    @Slot(str)
+    def definirStatus(self, valor: str) -> None:  # noqa: N802
+        if (jogo := self._mostrado()) is None:
+            return
+        # O `atualizado` do `update` decide: zerado desinstalado e fora dos zerados fecha a página
+        # (`sair`); zerado reinstalado volta à biblioteca e a página só troca de modo.
+        jogo.definir_status(valor)
+        jogo.save()
+        jogo.update()
+
+    @Slot(str)
+    def buscarEm(self, site: str) -> None:  # noqa: N802
+        if (jogo := self._mostrado()) is None:
+            return
+        if site == "hltb" and jogo.hltb_id:
+            # Quem já tem o id do HowLongToBeat vai direto à página do jogo.
+            abrir_url(f"https://howlongtobeat.com/game/{jogo.hltb_id}")
+        elif prefixo := _BUSCAS.get(site):
+            abrir_url(prefixo + quote(jogo.name))
+
+    @Slot(str)
+    def gravarAnotacao(self, texto: str) -> None:  # noqa: N802
+        jogo = self._mostrado()
+        # A caixa de um zerado é só leitura: fechar não grava nada.
+        if jogo is None or jogo.zerado:
+            return
+        texto = texto.strip()
+        if texto == (jogo.notes or ""):
+            return
+        jogo.notes = texto
+        jogo.save()
+        jogo.update()
+
+    @Slot()
+    def abrirAtualizacao(self) -> None:
+        if (jogo := self._mostrado()) is not None and jogo.has_update and not jogo.zerado:
+            # A URL vem de um feed de terceiros: o esquema é conferido em `abrir_url`.
+            abrir_url(jogo.update_url)
+
+    @Slot()
+    def confirmarAtualizacao(self) -> None:
+        if (jogo := self._mostrado()) is not None:
+            jogo.dismiss_update()
 
     # -- logo ------------------------------------------------------------------------------------
 

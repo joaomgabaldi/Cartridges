@@ -4,13 +4,21 @@
 
 """A página de detalhes na tela e a navegação até ela (QML offscreen, sem a ponte do QWindowKit)."""
 
+import pytest
 from PIL import Image
 from PySide6.QtCore import Q_ARG, QMetaObject, QPoint, Qt, QUrl
 from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
+from cartridges.jogo import Jogo
 from tests.test_qml_biblioteca import _achar, _App, _esperar, _jogos, _tres
+
+
+@pytest.fixture(autouse=True)
+def _sem_jogo_de_verdade(monkeypatch):
+    """Os botões agora agem no `Jogo`: nenhum clique de teste inicia um programa."""
+    monkeypatch.setattr(Jogo, "launch", lambda self, *a: True)
 
 
 def _foco_dentro_de(app, nome):
@@ -260,7 +268,7 @@ def test_controle_a_abre_a_pagina_e_ativa_o_botao_focado(app_qt):
     app.fechar()
 
 
-def test_jogar_e_excluir_emitem_sinais(app_qt):
+def test_jogar_emite_o_sinal_e_excluir_so_pergunta(app_qt):
     app = _App(_jogos((1, "Alfa", {}), (2, "Zero", {"removed": True, "status": "beaten"})))
     pagina = _abrir_pelo_cartao(app)
     recebidos = []
@@ -277,5 +285,94 @@ def test_jogar_e_excluir_emitem_sinais(app_qt):
     pagina = app.achar("paginaDoJogo")
     pagina.excluir.connect(lambda: recebidos.append("excluir"))
     QMetaObject.invokeMethod(_achar(pagina, "botaoExcluir"), "click", Qt.ConnectionType.DirectConnection)
-    assert recebidos == ["jogar", "excluir"]
+    # O botão só pergunta; o sinal sai depois da confirmação.
+    assert recebidos == ["jogar"]
+    app.fechar()
+
+
+def test_excluir_pede_confirmacao(app_qt):
+    zero = {"removed": True, "status": "beaten", "executable": ""}
+    app = _App(_jogos((1, "Zero", zero)))
+    excluidos = []
+    app.loja.excluir = lambda jogo: excluidos.append(jogo)
+    app.detalhes.mostrar("imported_1")
+    QMetaObject.invokeMethod(app.janela, "abrirDetalhes", Qt.ConnectionType.DirectConnection, Q_ARG("QVariant", "imported_1"))
+    _esperar()
+    pagina = app.achar("paginaDoJogo")
+    dialogo = _achar(pagina, "dialogoExcluir")
+    assert dialogo.property("visible") is False
+    QMetaObject.invokeMethod(_achar(pagina, "botaoExcluir"), "click", Qt.ConnectionType.DirectConnection)
+    assert dialogo.property("visible") is True
+    assert dialogo.property("titulo") == "Excluir Zero?"
+    assert dialogo.property("corpo") == "Tem certeza que deseja excluir este jogo? Esta ação é irreversível."
+    assert dialogo.property("destrutivo") is True
+    # Cancelar (Esc) não exclui.
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert dialogo.property("visible") is False and excluidos == []
+    QMetaObject.invokeMethod(_achar(pagina, "botaoExcluir"), "click", Qt.ConnectionType.DirectConnection)
+    QMetaObject.invokeMethod(_achar(dialogo, "botaoConfirmarDoDialogo"), "click", Qt.ConnectionType.DirectConnection)
+    assert len(excluidos) == 1
+    app.fechar()
+
+
+def _abrir_excluir(app):
+    app.detalhes.mostrar("imported_1")
+    QMetaObject.invokeMethod(app.janela, "abrirDetalhes", Qt.ConnectionType.DirectConnection, Q_ARG("QVariant", "imported_1"))
+    _esperar()
+    pagina = app.achar("paginaDoJogo")
+    botao = _achar(pagina, "botaoExcluir")
+    botao.forceActiveFocus()
+    QMetaObject.invokeMethod(botao, "click", Qt.ConnectionType.DirectConnection)
+    return pagina, _achar(pagina, "dialogoExcluir"), botao
+
+
+def test_dialogo_destrutivo_e_modal_para_teclado_e_controle(app_qt):
+    app = _App(_jogos((1, "Zero", {"removed": True, "status": "beaten", "executable": ""})))
+    pagina, dialogo, botao = _abrir_excluir(app)
+    # Foco inicial no Cancelar (a ação é destrutiva).
+    assert _foco_dentro_de(app, "botaoCancelarDoDialogo")
+    cliques = []
+    for nome in ("botaoEditar", "botaoExcluir", "botaoStatus"):
+        _achar(pagina, nome).clicked.connect(lambda n=nome: cliques.append(n))
+    for tecla in (Qt.Key.Key_Left, Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Tab, Qt.Key.Key_Tab, Qt.Key.Key_Tab):
+        QTest.keyClick(app.janela, tecla)
+        assert dialogo.property("visible") is True
+        assert _foco_dentro_de(app, "botaoCancelarDoDialogo") or _foco_dentro_de(app, "botaoConfirmarDoDialogo")
+    # Seis teclas deixaram o foco no Cancelar; esquerda e direita alternam entre os dois botões.
+    assert _foco_dentro_de(app, "botaoCancelarDoDialogo")
+    QTest.keyClick(app.janela, Qt.Key.Key_Right)
+    assert _foco_dentro_de(app, "botaoConfirmarDoDialogo")
+    QTest.keyClick(app.janela, Qt.Key.Key_Left)
+    assert _foco_dentro_de(app, "botaoCancelarDoDialogo")
+    # O A do controle só aperta o botão do diálogo: Cancelar.
+    app.controle.mover.emit(1, 0)
+    assert _foco_dentro_de(app, "botaoConfirmarDoDialogo")
+    app.controle.mover.emit(-1, 0)
+    assert _foco_dentro_de(app, "botaoCancelarDoDialogo")
+    app.controle.ativar.emit()
+    assert dialogo.property("visible") is False and cliques == []
+    # Ao fechar, o foco volta ao botão que abriu.
+    assert _foco_dentro_de(app, "botaoExcluir")
+    app.fechar()
+
+
+def test_balao_e_menus_nao_vazam_o_foco_para_a_pagina(app_qt):
+    app = _App(_jogos((1, "Alfa", {"status": "playing"})))
+    pagina = _abrir_pelo_cartao(app)
+    for botao, popup in (("botaoStatus", "menuDeStatus"), ("botaoBuscarDaPagina", "menuDeBuscas"), ("botaoAnotacao", "balaoDaAnotacao")):
+        QMetaObject.invokeMethod(_achar(pagina, botao), "click", Qt.ConnectionType.DirectConnection)
+        _esperar()
+        aberto = _achar(pagina, popup)
+        assert aberto.property("opened") is True
+        for tecla in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Tab, Qt.Key.Key_Up):
+            QTest.keyClick(app.janela, tecla)
+            assert aberto.property("opened") is True, (popup, tecla)
+        item = app.janela.property("activeFocusItem")
+        dentro = False
+        while item is not None:
+            dentro = dentro or item == aberto or item.parentItem() == aberto.property("contentItem") or item == aberto.property("contentItem")
+            item = item.parentItem()
+        assert dentro or popup != "balaoDaAnotacao", popup
+        aberto.close()
+        _esperar()
     app.fechar()

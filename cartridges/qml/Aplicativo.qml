@@ -133,6 +133,10 @@ Principal {
             objectName: "paginaDoJogo"
             placeholder: paginaTodos.placeholder
             onVoltar: janela.voltar()
+            onJogar: detalhes.jogar()
+            onRemover: detalhes.remover()
+            onExcluir: detalhes.excluir()
+            onAtualizacaoConfirmada: detalhes.confirmarAtualizacao()
         }
     }
 

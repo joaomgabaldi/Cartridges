@@ -35,22 +35,42 @@ accepts the window the click came from, which is what the platform expects.
 """
 
 import logging
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from gi.repository import Gtk
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
 
-from cartridges import shared
+if TYPE_CHECKING:
+    from gi.repository import Gtk
 
 _ALLOWED_SCHEMES = ("http://", "https://")
 
 
-def open_uri(uri: str, parent: Optional[Gtk.Window] = None) -> bool:
+def abrir_url(url: str) -> bool:
+    """Abre ``url`` no navegador padrão (Qt, sem gi); só ``http``/``https``, o resto é recusado.
+
+    :returns: False quando a URL veio vazia ou com outro esquema: nada é aberto.
+    """
+    url = (url or "").strip()
+    if not url.lower().startswith(_ALLOWED_SCHEMES):
+        if url:
+            logging.warning("Refusing to open URI with unexpected scheme: %r", url)
+        return False
+    return QDesktopServices.openUrl(QUrl(url))
+
+
+# shortcut: o nome antigo, com Gtk, só para os chamadores GTK; sai com eles na troca da main.
+def open_uri(uri: str, parent: Optional["Gtk.Window"] = None) -> bool:
     """Open ``uri`` in the default browser.
 
     :param parent: window the click came from; defaults to the main window.
     :returns: False when the URL was empty or carried an unexpected scheme, in
         which case nothing was launched.
     """
+    from gi.repository import Gtk  # noqa: PLC0415
+
+    from cartridges import shared  # noqa: PLC0415
+
     uri = (uri or "").strip()
     if not uri.startswith(_ALLOWED_SCHEMES):
         if uri:
