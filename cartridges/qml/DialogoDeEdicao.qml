@@ -217,7 +217,7 @@ Rectangle {
         border.color: Tema.botaoSobre
         clip: true
         // Com um seletor aberto por cima, nada daqui recebe o mouse nem o Tab.
-        enabled: !edicao.seletorDeCapa.aberto && !edicao.seletorDeLogo.aberto
+        enabled: !edicao.seletorDeCapa.aberto && !edicao.seletorDeLogo.aberto && !edicao.seletorDePapelDeParede.aberto
             && !edicao.seletorDaSteam.aberto && !edicao.seletorDoLudusavi.aberto
 
         Flickable {
@@ -331,7 +331,13 @@ Rectangle {
                             dica: "Voltar a escolher o papel de parede automaticamente"
                             onClicked: edicao.restaurarPapel()
                         }
-                        // shortcut: o botão "Escolher papel de parede no wallhaven" entra com a tarefa 10.
+                        BotaoDeLinha {
+                            id: botaoWallhavenDoPapel
+                            objectName: "botaoEscolherPapelWallhaven"
+                            glifo: ""  // buscar
+                            dica: "Escolher papel de parede no wallhaven"
+                            onClicked: edicao.seletorDePapelDeParede.abrir(edicao.nome)
+                        }
                         BotaoDeLinha {
                             objectName: "botaoEscolherPapel"
                             glifo: "\uE8E5"  // abrir arquivo

@@ -78,6 +78,7 @@ class DownloadFalso:
         self.comecou = threading.Event()
         self.cancelado = threading.Event()
         self.falhar: Exception | None = None
+        self.conteudo = png_bytes()
 
     def __call__(self, url, timeout=10, max_bytes=0, ao_progredir=None):
         self.urls.append(url)
@@ -96,7 +97,7 @@ class DownloadFalso:
                     raise
         if ao_progredir is not None:
             ao_progredir(10, 10)
-        return png_bytes()
+        return self.conteudo
 
 
 def esperar(ate, limite=5.0):
@@ -235,3 +236,22 @@ class HltbFalso:
         if self.erro is not None:
             raise self.erro
         return dict(self.resposta)
+
+
+def lista_do_wallhaven(n=3):
+    return [{"id": f"w{i}", "path": f"https://w/full/{i}.jpg", "thumb": f"https://w/t/{i}.jpg"} for i in range(n)]
+
+
+class WallhavenFalso:
+    """No lugar do `buscar` do wallhaven: anota os pedidos e responde sem rede."""
+
+    def __init__(self, achados=None, erro=None):
+        self.achados = lista_do_wallhaven() if achados is None else achados
+        self.erro = erro
+        self.pedidos: list[tuple] = []
+
+    def __call__(self, consulta, largura, altura, formato=None, pagina=1, timeout=15):
+        self.pedidos.append((consulta, (largura, altura), formato))
+        if self.erro is not None:
+            raise self.erro
+        return list(self.achados)

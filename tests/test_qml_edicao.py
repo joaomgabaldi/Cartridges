@@ -513,8 +513,8 @@ def test_papel_de_parede_desabilitado_com_um_monitor(app, monkeypatch):
     app.edicao.abrir("shortcuts_z2")
     assert app.edicao.papelSubtitulo == "Automático (wallhaven)"
     assert _esperar(lambda: app.achar("linhaDoPapel").property("enabled") is True)
-    app.edicao.escolherPapel(_url("C:/qualquer/parede.jpg"))
-    assert app.edicao.papelSubtitulo == "Escolhido manualmente" and app.edicao.papelRestauravel is True
+    app.edicao.nao_trocar_papel()
+    assert app.edicao.papelSubtitulo == "Não trocar o papel de parede" and app.edicao.papelRestauravel is True
     app.edicao.restaurarPapel()
     assert app.edicao.papelSubtitulo == "Automático (wallhaven)"
 
@@ -879,3 +879,121 @@ def _formatos(raiz):
             pilha.extend(atual.childItems())
         pilha.extend(atual.children())
     return textos
+
+
+# -- seletor do papel de parede (tarefa 10) ----------------------------------------------------------
+
+
+@pytest.fixture
+def wallhaven(app, tmp_path, monkeypatch):
+    """O wallhaven, o download e os monitores falsos; %TEMP% de mentira; a edição com um segundo monitor."""
+    import io  # noqa: PLC0415
+
+    from PIL import Image  # noqa: PLC0415
+
+    from cartridges.modelos import edicao as modelo  # noqa: PLC0415
+    from cartridges.modelos import seletores  # noqa: PLC0415
+    from cartridges.utils.session_wallpaper import Monitor  # noqa: PLC0415
+    from tests.apoio_seletores import DownloadFalso, WallhavenFalso  # noqa: PLC0415
+
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    monkeypatch.setattr("tempfile.tempdir", str(temp))
+    monkeypatch.setattr(modelo, "_segundo_monitor", lambda: True)
+    imagem = Image.new("RGB", (160, 90), "red")
+    imagem.paste("blue", (80, 0, 160, 90))
+    saida = io.BytesIO()
+    imagem.save(saida, "PNG")
+    baixar = DownloadFalso()
+    baixar.conteudo = saida.getvalue()
+    monkeypatch.setattr(seletores, "download_bytes", baixar)
+    falso = WallhavenFalso()
+    monkeypatch.setattr(seletores, "buscar", falso)
+    app.edicao.seletorDePapelDeParede.monitores = lambda: [Monitor("1", 0, 0, 1920, 1080), Monitor("2", 1920, 0, 1080, 1920)]
+    app.temp = temp
+    return falso
+
+
+def test_seletor_de_papel_modal_esc_fecha_e_devolve_o_foco(app, wallhaven):
+    app.edicao.abrir("shortcuts_z1")
+    assert app.achar("botaoEscolherPapelWallhaven").property("glifo") == ""  # o ícone de buscar, como o da capa e o do logo
+    assert app.achar("botaoEscolherPapelWallhaven").property("dica") == "Escolher papel de parede no wallhaven"
+    _abrir_seletor(app, "botaoEscolherPapelWallhaven", "seletorDePapel")
+    assert app.achar("seletorDePapelTitulo").property("text") == "Escolher papel de parede"
+    assert app.achar("seletorDePapelCampo").property("text") == "Alfa"
+    assert app.achar("seletorDePapelCampo").property("placeholderText") == "Buscar no wallhaven…"
+    naotrocar = app.achar("seletorDePapelNaoTrocar")
+    assert naotrocar.property("text") == "Não trocar"
+    assert naotrocar.property("dica") == "Não alterar o papel de parede quando este jogo rodar"
+    for _ in range(40):
+        QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+        assert _foco_dentro_de(app, "seletorDePapel")
+    # Esc fecha o seletor inteiro (como na versão anterior); o diálogo de edição segue aberto.
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: not _visivel(app, "seletorDePapel"))
+    assert app.edicao.aberto is True and app.edicao.seletorDePapelDeParede.aberto is False
+    assert _esperar(lambda: _foco_dentro_de(app, "botaoEscolherPapelWallhaven"))
+    assert list(app.temp.iterdir()) == []
+
+
+def test_seletor_de_papel_escolhe_ajusta_e_o_aplicar_grava(app, wallhaven):
+    from cartridges.utils import session_wallpaper  # noqa: PLC0415
+
+    app.edicao.abrir("shortcuts_z2")
+    _abrir_seletor(app, "botaoEscolherPapelWallhaven", "seletorDePapel")
+    app.achar("seletorDePapelMiniatura1").forceActiveFocus()
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert _esperar(lambda: _visivel(app, "seletorDePapelUsar"))
+    assert _esperar(lambda: _foco_dentro_de(app, "seletorDePapelUsar"))
+    # A barra desliza a faixa do monitor em pé.
+    app.edicao.seletorDePapelDeParede.definirPosicao(0, 100)
+    assert _esperar(lambda: app.achar("seletorDePapelBarra0").property("value") == 100)
+    # "Voltar" volta à grade, e a escolha de novo leva ao ajuste.
+    _clique(app, "seletorDePapelVoltar")
+    assert _esperar(lambda: _visivel(app, "seletorDePapelMiniatura2") and not _visivel(app, "seletorDePapelUsar"))
+    app.achar("seletorDePapelMiniatura0").forceActiveFocus()
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert _esperar(lambda: _visivel(app, "seletorDePapelUsar"))
+    app.edicao.seletorDePapelDeParede.definirPosicao(0, 25)
+    _clique(app, "seletorDePapelUsar")
+    assert _esperar(lambda: not _visivel(app, "seletorDePapel"))
+    assert _esperar(lambda: _foco_dentro_de(app, "botaoEscolherPapelWallhaven"))
+    assert app.edicao.papelSubtitulo == "Escolhido manualmente"
+    entregue = app.edicao._form.papel_de_parede.arquivo  # noqa: SLF001
+    app.edicao.aplicar()
+    jogo_ = shared.store.get("shortcuts_z2")
+    assert session_wallpaper.escolha(jogo_) == "manual"
+    assert session_wallpaper.posicoes_escolhidas(jogo_.game_id).retrato == 0.25
+    assert _esperar(lambda: not entregue.exists()), "o temporário do seletor sai depois de gravado"
+
+
+def test_seletor_de_papel_nao_trocar(app, wallhaven):
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_seletor(app, "botaoEscolherPapelWallhaven", "seletorDePapel")
+    _clique(app, "seletorDePapelNaoTrocar")
+    assert _esperar(lambda: not _visivel(app, "seletorDePapel"))
+    assert app.edicao.papelSubtitulo == "Não trocar o papel de parede"
+    assert _esperar(lambda: _foco_dentro_de(app, "botaoEscolherPapelWallhaven"))
+
+
+def test_arquivo_do_disco_vai_ao_ajuste_sem_busca_nem_nao_trocar(app, wallhaven, tmp_path):
+    app.edicao.abrir("shortcuts_z1")
+    arquivo = _imagem(tmp_path / "parede.png", (160, 90))
+    app.edicao.escolherPapel(_url(arquivo))
+    assert _esperar(lambda: _visivel(app, "seletorDePapelUsar"))
+    assert not _visivel(app, "seletorDePapelCampo") and not _visivel(app, "seletorDePapelNaoTrocar")
+    assert wallhaven.pedidos == []
+    _clique(app, "seletorDePapelVoltar")  # desiste: não há grade para onde voltar
+    assert _esperar(lambda: not _visivel(app, "seletorDePapel"))
+    assert app.edicao.papelSubtitulo == "Automático (wallhaven)" and arquivo.exists()
+
+
+def test_aviso_de_busca_sem_resultado_no_seletor_de_papel(app, wallhaven):
+    wallhaven.achados = []
+    app.edicao.abrir("shortcuts_z1")
+    app.achar("botaoEscolherPapelWallhaven").forceActiveFocus()
+    _clique(app, "botaoEscolherPapelWallhaven")
+    vazio = app.achar("seletorDePapelVazio")
+    assert _esperar(lambda: vazio.property("visible") is True)
+    assert vazio.property("titulo") == "Nenhum papel de parede encontrado"
+    assert vazio.property("descricao") == "Tente buscar por outro nome."

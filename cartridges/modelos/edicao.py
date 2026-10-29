@@ -28,6 +28,7 @@ from cartridges.modelos.ordem import _url_da_capa  # noqa: PLC2701
 from cartridges.modelos.seletores import (
     SeletorDaSteam,
     SeletorDeLogo,
+    SeletorDePapelDeParede,
     SeletorDoLudusavi,
     SeletorDoSgdb,
     pasta_do_ludusavi,
@@ -125,6 +126,7 @@ class ModeloDaEdicao(QObject):
         # Os seletores do SteamGridDB entregam aqui (`entregar_*`, `usar_titulo_no_logo`).
         self._seletor_de_capa = SeletorDoSgdb(self, self)
         self._seletor_de_logo = SeletorDeLogo(self, self)
+        self._seletor_de_papel = SeletorDePapelDeParede(self, self)
         self._seletor_da_steam = SeletorDaSteam(self, self)
         self._seletor_do_ludusavi = SeletorDoLudusavi(self, self)
         self._buscando_metadados = False
@@ -441,6 +443,7 @@ class ModeloDaEdicao(QObject):
 
     seletorDeCapa = Property(QObject, lambda self: self._seletor_de_capa, constant=True)  # noqa: N815
     seletorDeLogo = Property(QObject, lambda self: self._seletor_de_logo, constant=True)  # noqa: N815
+    seletorDePapelDeParede = Property(QObject, lambda self: self._seletor_de_papel, constant=True)  # noqa: N815
     filtroDaCapa = Property(str, lambda self: filtro_de_capa(), constant=True)  # noqa: N815
     filtroDoLogo = Property(  # noqa: N815
         str, lambda self: _filtro(_("Imagens de logo"), game_logo.IMAGE_SUFFIXES), constant=True
@@ -597,9 +600,20 @@ class ModeloDaEdicao(QObject):
 
     @Slot(QUrl)
     def escolherPapel(self, url: QUrl) -> None:  # noqa: N802
-        # shortcut: o arquivo entra com o corte centralizado; a tela de ajuste da faixa vem com a tarefa 10.
-        if self._aberto and (caminho := url.toLocalFile()):
-            self._trocar_escolha("papel_de_parede", Escolha("manual", Path(caminho)))
+        """Como na `main`, o arquivo do disco vai à etapa de ajuste da faixa, igual a uma imagem do wallhaven."""
+        if self._aberto and url.toLocalFile():
+            self._seletor_de_papel.abrirArquivo(url)
+
+    def entregar_papel_baixado(self, arquivo: Path, posicoes: session_wallpaper.Posicoes) -> None:
+        """O papel de parede que o seletor do wallhaven baixou, com a faixa escolhida: é da tela até o Aplicar."""
+        if self._aberto:
+            self._trocar_escolha("papel_de_parede", Escolha("manual", arquivo, posicoes, temporario=True))
+        else:
+            arquivo.unlink(missing_ok=True)
+
+    def nao_trocar_papel(self) -> None:
+        if self._aberto:
+            self._trocar_escolha("papel_de_parede", Escolha("none"))
 
     @Slot()
     def restaurarPapel(self) -> None:  # noqa: N802
@@ -680,7 +694,8 @@ class ModeloDaEdicao(QObject):
     def _fechar(self, descartar: bool = True) -> None:
         """Fecha o diálogo. ``descartar``: as provisórias da tela saem (no Aplicar, são do `aplicar`)."""
         for seletor in (
-            self._seletor_de_capa, self._seletor_de_logo, self._seletor_da_steam, self._seletor_do_ludusavi
+            self._seletor_de_capa, self._seletor_de_logo, self._seletor_de_papel, self._seletor_da_steam,
+            self._seletor_do_ludusavi,
         ):
             seletor.fechar()
         provisoria = self._provisoria()

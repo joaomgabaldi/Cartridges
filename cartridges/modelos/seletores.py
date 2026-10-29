@@ -15,12 +15,14 @@ Todo arquivo do seletor mora numa pasta própria em %TEMP%, apagada em `fechar`.
 fora dela: é de quem o recebe.
 """
 
+import io
 import logging
 import os
 import shutil
 import tempfile
 import threading
 import weakref
+from concurrent.futures import ThreadPoolExecutor
 from enum import IntEnum
 from pathlib import Path
 from typing import Any, Optional
@@ -28,6 +30,7 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 import requests
+from PIL import Image, UnidentifiedImageError
 from PySide6.QtCore import (
     Property,
     QAbstractListModel,
@@ -35,12 +38,14 @@ from PySide6.QtCore import (
     QCoreApplication,
     QEvent,
     QModelIndex,
+    QObject,
     QPersistentModelIndex,
     QUrl,
     Qt,
     Signal,
     Slot,
 )
+from PySide6.QtGui import QGuiApplication
 
 from cartridges import shared
 from cartridges.saves import ludusavi
@@ -50,14 +55,17 @@ from cartridges.utils.busca_do_seletor import BuscaDoSeletor, tamanho_baixado
 from cartridges.utils.download import (
     MAX_ANIMATED_IMAGE_BYTES,
     MAX_IMAGE_BYTES,
+    MAX_WALLPAPER_BYTES,
     DownloadCancelado,
     download_bytes,
 )
 from cartridges.utils.logo_arquivos import IMAGE_SUFFIXES
 from cartridges.utils.name_cleaner import clean_for_search, clean_game_name
 from cartridges.utils.steam import SteamAPIHelper, SteamGameNotFoundError, SteamNotAGameError, SteamRateLimiter
+from cartridges.utils.session_wallpaper import Formatos, Monitor, Posicoes, corta, eixo_do_corte, enquadrar, formatos
 from cartridges.utils.steamgriddb import SgdbAuthError, SgdbError, SgdbHelper
 from cartridges.utils.thread_principal import na_thread_principal
+from cartridges.utils.wallhaven import IMAGE_SUFFIXES as WALLHAVEN_SUFFIXES, WallhavenError, buscar
 
 # Quantas miniaturas carregar: a janela fica leve mesmo com muitos resultados.
 MAX_RESULTS = 30
@@ -101,6 +109,8 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
     _prefixo_da_pasta = "cartridges_sgdb_"
     _texto_de_nada = ""
     _texto_de_falha = ""
+    # O SteamGridDB não responde sem chave; o wallhaven (papel de parede) responde.
+    _exige_chave = True
 
     def __init__(self, destino: Any, parent: Any = None) -> None:
         super().__init__(parent)
@@ -263,7 +273,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         if not consulta:
             self._show_empty(_("Digite o nome de um jogo"))
             return
-        if not shared.schema.get_string("sgdb-key"):
+        if self._exige_chave and not shared.schema.get_string("sgdb-key"):
             self._show_empty(
                 _("Chave da API não configurada"),
                 # shortcut: sem o botão "Preferências" no aviso, a tela de preferências é do plano 7 (D42).
@@ -619,6 +629,427 @@ class SeletorDeLogo(_SeletorDoSteamGridDB):
 
     def _entregar(self, arquivo: Path) -> None:
         self._destino.entregar_logo_baixado(arquivo)
+
+
+# -- papel de parede (wallhaven) ---------------------------------------------------------------------
+
+# Uma página do site.
+MAX_PAPEIS = 24
+# O lado fixo da célula da grade, em pixels lógicos: a altura numa grade em pé, a largura numa deitada. O outro
+# lado sai da proporção do monitor, e a célula é a tela em miniatura (146x260 num 9:16, 260x146 num 16:9).
+LADO_DA_CELULA = 260
+# A caixa em que a prévia do ajuste cabe: com uma orientação só ela tem o diálogo inteiro; no arranjo misto as
+# duas dividem a largura, e a deitada fica com a maior parte.
+CAIXA_UNICA = (640, 360)
+CAIXA_DEITADA = (440, 250)
+CAIXA_EM_PE = (150, 250)
+
+
+def monitores_das_telas() -> list[Monitor]:
+    """Os monitores ligados agora, em pixels de verdade, como o Windows os entrega à sessão do jogo."""
+    monitores = []
+    for tela in QGuiApplication.screens():
+        retangulo, escala = tela.geometry(), tela.devicePixelRatio()
+        monitores.append(
+            Monitor(tela.name(), retangulo.x(), retangulo.y(), round(retangulo.width() * escala), round(retangulo.height() * escala))
+        )
+    return monitores
+
+
+def _celula(largura: int, altura: int) -> tuple[int, int]:
+    if altura > largura:
+        return max(1, round(LADO_DA_CELULA * largura / altura)), LADO_DA_CELULA
+    return LADO_DA_CELULA, max(1, round(LADO_DA_CELULA * altura / largura))
+
+
+def _caber(largura: int, altura: int, caixa: tuple[int, int]) -> tuple[int, int]:
+    escala = min(caixa[0] / largura, caixa[1] / altura)
+    return max(1, round(largura * escala)), max(1, round(altura * escala))
+
+
+class _CortesDoPapel(QAbstractListModel):
+    """Os cortes da segunda etapa: um por orientação dos monitores. Quem os preenche é o seletor."""
+
+    class Papel(IntEnum):
+        Previa = Qt.ItemDataRole.UserRole + 1
+        Posicao = Qt.ItemDataRole.UserRole + 2
+        Desliza = Qt.ItemDataRole.UserRole + 3
+        Dica = Qt.ItemDataRole.UserRole + 4
+        LarguraDaPrevia = Qt.ItemDataRole.UserRole + 5
+        AlturaDaPrevia = Qt.ItemDataRole.UserRole + 6
+        Orientacao = Qt.ItemDataRole.UserRole + 7
+
+    # papel -> (nome no QML, chave da linha)
+    _NOMES = {
+        Papel.Previa: (b"previa", "previa"), Papel.Posicao: (b"posicao", "posicao"),
+        Papel.Desliza: (b"desliza", "desliza"), Papel.Dica: (b"dica", "dica"),
+        Papel.LarguraDaPrevia: (b"larguraDaPrevia", "largura_da_previa"),
+        Papel.AlturaDaPrevia: (b"alturaDaPrevia", "altura_da_previa"),
+        Papel.Orientacao: (b"orientacao", "orientacao"),
+    }  # fmt: skip
+
+    def __init__(self, parent: Any = None) -> None:
+        super().__init__(parent)
+        self.linhas: list[dict[str, Any]] = []
+
+    def roleNames(self) -> dict[int, QByteArray]:  # noqa: N802
+        return {papel: QByteArray(nome) for papel, (nome, _chave) in self._NOMES.items()}
+
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:  # noqa: B008, N802
+        return 0 if parent.isValid() else len(self.linhas)
+
+    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+        if not index.isValid() or not 0 <= index.row() < len(self.linhas) or role not in self._NOMES:
+            return None
+        return self.linhas[index.row()][self._NOMES[role][1]]
+
+    def redefinir(self, linhas: list[dict[str, Any]]) -> None:
+        self.beginResetModel()
+        self.linhas = linhas
+        self.endResetModel()
+
+    def mudou(self, linha: int) -> None:
+        indice = self.index(linha, 0)
+        self.dataChanged.emit(indice, indice)
+
+
+class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
+    """O papel de parede da sessão, escolhido à mão no wallhaven em duas etapas.
+
+    Primeira: a grade de candidatos já cortados no formato dos monitores. Segunda: a imagem escolhida, baixada
+    inteira, com a barra que desliza a faixa de cada monitor. Toda a fidelidade vem de uma coisa só: a miniatura e
+    o arquivo final passam pela mesma `enquadrar`, e como ela corta em proporção o quadro de 146 px da grade e o de
+    1080 px do monitor são o mesmo quadro. "Usar esta imagem" entrega `(arquivo, Posicoes)` ao diálogo de edição;
+    "Não trocar" entrega a decisão de não mexer no papel de parede deste jogo. O que a busca, as miniaturas e o
+    download têm em comum com os seletores do SteamGridDB vem de `_SeletorDoSteamGridDB`.
+    """
+
+    ajustandoChanged = Signal()  # noqa: N815
+    formatoChanged = Signal()  # noqa: N815 (também o "só arquivo", que muda junto com a abertura)
+
+    _prefixo_da_pasta = "cartridges_wallpaper_"
+    _exige_chave = False
+    _texto_de_nada = _("Nenhum papel de parede encontrado")
+    _texto_de_falha = _("Não foi possível baixar a imagem")
+
+    def __init__(self, destino: Any, parent: Any = None) -> None:
+        super().__init__(destino, parent)
+        # Os testes põem monitores falsos aqui.
+        self.monitores = monitores_das_telas
+        self._formatos = Formatos(None, None)
+        self._escala = 1
+        self._ajustando = False
+        self._so_arquivo = False
+        self._cortes = _CortesDoPapel(self)
+        # A imagem aberta na segunda etapa: o original inteiro (que é o que vai ser gravado) e uma cópia pequena,
+        # de onde cada arrastada da barra recorta (recortar o 4K a cada pixel de arrasto travaria).
+        self._original: Optional[Path] = None
+        self._previa: Optional[Image.Image] = None
+
+    # -- propriedades ----------------------------------------------------------------------------
+
+    cortes = Property(QObject, lambda self: self._cortes, constant=True)
+
+    @Property(bool, notify=ajustandoChanged)
+    def ajustando(self) -> bool:
+        return self._ajustando
+
+    @Property(int, notify=formatoChanged)
+    def larguraDaCelula(self) -> int:  # noqa: N802
+        return _celula(*self._formatos.grade)[0]
+
+    @Property(int, notify=formatoChanged)
+    def alturaDaCelula(self) -> int:  # noqa: N802
+        return _celula(*self._formatos.grade)[1]
+
+    @Property(bool, notify=formatoChanged)
+    def soArquivo(self) -> bool:  # noqa: N802
+        """Aberto com um arquivo do disco: sem busca, sem "Não trocar", e "Voltar" desiste da escolha."""
+        return self._so_arquivo
+
+    # -- buscar ----------------------------------------------------------------------------------
+
+    def _abrir_mais(self) -> None:
+        self._so_arquivo = False
+        self._formatos = formatos(self.monitores())
+        tela = QGuiApplication.primaryScreen()
+        self._escala = max(1, int(tela.devicePixelRatio())) if tela is not None else 1
+        self._ajustando = False
+        self.formatoChanged.emit()
+        self.ajustandoChanged.emit()
+
+    def _sufixo(self, url: str) -> str:
+        sufixo = Path(urlparse(url).path).suffix.lower()
+        return sufixo if sufixo in WALLHAVEN_SUFFIXES else ".jpg"
+
+    @Slot(QUrl)
+    def abrirArquivo(self, url: QUrl) -> None:  # noqa: N802
+        """Leva um arquivo do disco direto à etapa de ajuste, como uma imagem da busca (como na `main`)."""
+        caminho = Path(url.toLocalFile())
+        if self._aberto:
+            self.fechar()
+        self._closed = False
+        self._aberto = True
+        self._pasta = Path(tempfile.mkdtemp(prefix=self._prefixo_da_pasta))
+        self._busca = ""
+        self._abrir_mais()
+        self._so_arquivo = True
+        self._generation += 1
+        self._last_query = ""
+        self._buscando, self._vazio, self._erro = True, False, False
+        for sinal in (self.abertoChanged, self.buscaChanged, self.formatoChanged, self.estadoChanged):
+            sinal.emit()
+        args = (caminho, self._generation, self._pasta)
+        threading.Thread(target=self._thread_do_arquivo, args=args, daemon=True).start()
+
+    def _thread_do_arquivo(self, caminho: Path, geracao: int, pasta: Optional[Path]) -> None:
+        try:
+            # Sem limite de tamanho, como na `main`.
+            conteudo = caminho.read_bytes()
+            sufixo = caminho.suffix.lower()
+            self._preparar(conteudo, sufixo if sufixo in WALLHAVEN_SUFFIXES else ".jpg", geracao, pasta)
+        except Exception:  # noqa: BLE001  (a tela "carregando" não pode ficar presa)
+            logging.exception("Wallpaper picker file open crashed")
+            na_thread_principal(self._show_empty, _("Não foi possível abrir a imagem"), _("Tente outra imagem."), geracao, True)
+
+    def _corpo_da_busca(self, consulta: str, animada: bool, geracao: int, pasta: Optional[Path]) -> None:
+        def cancelar(*_args: Any) -> None:
+            if self._closed or geracao != self._generation:
+                raise DownloadCancelado
+
+        alvo = self._formatos
+        try:
+            # O formato da grade primeiro e qualquer formato depois, na mesma grade: o que menos precisa de corte
+            # aparece na frente. O mínimo é o de todos os alvos, para nenhum corte esticar.
+            achados = buscar(consulta, *alvo.minimo, formato=alvo.ratio)
+            vistos = {item["id"] for item in achados}
+            achados += [item for item in buscar(consulta, *alvo.minimo) if item["id"] not in vistos]
+        except WallhavenError as erro:
+            logging.warning("Wallpaper picker search failed: %s", erro)
+            na_thread_principal(
+                self._show_empty, _("Não foi possível concluir a busca"), _("Verifique a conexão e tente novamente."), geracao, True
+            )
+            return
+        if not achados:
+            na_thread_principal(self._show_empty, self._texto_de_nada, _("Tente buscar por outro nome."), geracao)
+            return
+        itens = achados[:MAX_PAPEIS]
+        na_thread_principal(self._receber, geracao, [(str(item["path"]), False) for item in itens])
+        pixels = tuple(lado * self._escala for lado in _celula(*alvo.grade))
+        # Seis de cada vez, na ordem da busca: uma por vez, com 15 s de limite cada, uma rede ruim seguraria a grade.
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            arquivos = executor.map(lambda item: self._miniatura(str(item["thumb"]), pasta, pixels, cancelar), itens)
+            for numero, arquivo in enumerate(arquivos):
+                if self._closed or geracao != self._generation:
+                    executor.shutdown(wait=False, cancel_futures=True)  # o que está na fila nem começa
+                    return
+                na_thread_principal(self._previa_pronta, geracao, numero, arquivo)
+        na_thread_principal(self._fim_das_previas, geracao)
+
+    @staticmethod
+    def _miniatura(url: str, pasta: Optional[Path], pixels: tuple[int, ...], cancelar: Any) -> Optional[Path]:
+        """Na thread de miniaturas: o arquivo da miniatura já cortada, ou None quando não deu."""
+        try:
+            return SeletorDePapelDeParede._baixar_miniatura(url, pasta, pixels, cancelar)
+        except DownloadCancelado:
+            return None
+        except Exception:  # noqa: BLE001  (uma miniatura estranha não derruba a grade inteira)
+            logging.exception("Wallpaper picker: preview crashed")
+            return None
+
+    @staticmethod
+    def _baixar_miniatura(url: str, pasta: Optional[Path], pixels: tuple[int, ...], cancelar: Any) -> Optional[Path]:
+        if pasta is None:
+            return None
+        cancelar()  # fechado ou busca trocada: nem baixa
+        try:
+            conteudo = download_bytes(url, timeout=15, max_bytes=MAX_IMAGE_BYTES, ao_progredir=cancelar)
+        except DownloadCancelado:
+            return None
+        except requests.RequestException as erro:
+            logging.info("Wallpaper picker: preview download failed (%s)", erro)
+            return None
+        # O nome nunca sai da resposta da API: um id "..\x" gravava fora da pasta.
+        destino = pasta / f"{uuid4().hex}.png"
+        cancelar()  # depois do `rmtree` do `fechar`, nada é gravado numa pasta que sobrou
+        try:
+            with Image.open(io.BytesIO(conteudo)) as imagem:
+                enquadrar(imagem.convert("RGB"), *pixels).save(destino, "png", compress_level=1)
+        except (OSError, UnidentifiedImageError, ValueError, Image.DecompressionBombError):
+            destino.unlink(missing_ok=True)
+            return None
+        return destino
+
+    # -- escolher: a segunda etapa ---------------------------------------------------------------
+
+    def _corpo_do_download(self, url: str, animada: bool, geracao: int) -> None:
+        pasta = self._pasta
+        try:
+            conteudo = download_bytes(
+                url,
+                timeout=45,
+                max_bytes=MAX_WALLPAPER_BYTES,
+                ao_progredir=lambda recebido, total: self._progredir(geracao, recebido, total),
+            )
+        except DownloadCancelado:
+            return
+        except requests.RequestException as erro:
+            logging.warning("Could not download the wallpaper: %s: %s", type(erro).__name__, erro)
+            self._falhou(geracao)
+            return
+        self._preparar(conteudo, self._sufixo(url), geracao, pasta)
+
+    def _preparar(self, conteudo: bytes, sufixo: str, geracao: int, pasta: Optional[Path]) -> None:
+        """Na thread: guarda a imagem na pasta do seletor e entrega a cópia reduzida à etapa de ajuste."""
+        try:
+            if pasta is None:
+                raise OSError("seletor fechado")
+            arquivo = pasta / f"escolhida{sufixo}"
+            arquivo.write_bytes(conteudo)
+            with Image.open(arquivo) as imagem:
+                imagem = imagem.convert("RGB")
+                escala = min(1.0, 2 * CAIXA_UNICA[1] * self._escala / max(1, imagem.height))
+                previa = imagem.resize(
+                    (max(1, round(imagem.width * escala)), max(1, round(imagem.height * escala))), Image.LANCZOS
+                )
+        # `DecompressionBombError` não herda de `OSError`: sem ela aqui a tela ficaria "Baixando…" para sempre.
+        except (OSError, UnidentifiedImageError, ValueError, Image.DecompressionBombError) as erro:
+            logging.warning("The chosen wallpaper could not be read: %s", erro)
+            na_thread_principal(self._show_empty, _("Não foi possível abrir a imagem"), _("Tente outra imagem."), geracao, True)
+            return
+        na_thread_principal(self._ajuste_pronto, geracao, arquivo, previa)
+
+    def _ajuste_pronto(self, geracao: int, arquivo: Path, previa: Image.Image) -> None:
+        if geracao != self._generation or self._closed:
+            return  # a pasta inteira cai em `fechar`
+        self._original, self._previa = arquivo, previa
+        formato = self._formatos
+        alvos = [(tamanho, nome) for tamanho, nome in ((formato.paisagem, "paisagem"), (formato.retrato, "retrato")) if tamanho]
+        # Sem alvo nenhum (monitor desligado com a tela aberta), o formato da grade ainda precisa de um corte.
+        alvos = alvos or [(formato.grade, "paisagem")]
+        linhas = []
+        for (largura, altura), nome in alvos:
+            caixa = CAIXA_UNICA if len(alvos) == 1 else CAIXA_EM_PE if altura > largura else CAIXA_DEITADA
+            ver_largura, ver_altura = _caber(largura, altura, caixa)
+            # Qual eixo a barra move depende das duas proporções: arte larga é cortada nas laterais, arte alta demais
+            # em cima e embaixo. A barra só existe onde há o que deslizar: arte na proporção do monitor entra inteira.
+            dica = (
+                _("Arraste para escolher a faixa da imagem")
+                if eixo_do_corte(previa.width, previa.height, largura, altura)
+                else _("Arraste para escolher a altura da imagem")
+            )
+            linhas.append(
+                {"orientacao": nome, "posicao": 50.0, "desliza": corta(previa.width, previa.height, largura, altura),
+                 "dica": dica, "previa": "", "arquivo": None, "largura_da_previa": ver_largura, "altura_da_previa": ver_altura}
+            )  # fmt: skip
+        self._cortes.redefinir(linhas)
+        for numero in range(len(linhas)):
+            self._desenhar(numero)
+        self._baixando = self._buscando = False
+        self._ajustando = True
+        self.estadoChanged.emit()
+        self.baixandoChanged.emit()
+        self.ajustandoChanged.emit()
+
+    def _desenhar(self, numero: int) -> None:
+        """Recorta a prévia do corte `numero` na faixa dele; o arquivo anterior daquele corte sai."""
+        linha = self._cortes.linhas[numero]
+        if self._previa is None or self._pasta is None:
+            return
+        quadro = enquadrar(
+            self._previa, linha["largura_da_previa"] * self._escala, linha["altura_da_previa"] * self._escala, linha["posicao"] / 100
+        )
+        arquivo = self._pasta / f"{uuid4().hex}.png"
+        quadro.save(arquivo, "png", compress_level=1)
+        antigo, linha["arquivo"] = linha["arquivo"], arquivo
+        linha["previa"] = QUrl.fromLocalFile(str(arquivo)).toString()
+        if antigo is not None:
+            self._apagar(antigo)
+
+    @Slot(int, float)
+    def definirPosicao(self, numero: int, valor: float) -> None:  # noqa: N802
+        if self._ajustando and 0 <= numero < len(self._cortes.linhas):
+            self._cortes.linhas[numero]["posicao"] = min(100.0, max(0.0, valor))
+            self._desenhar(numero)
+            self._cortes.mudou(numero)
+
+    def _sair_do_ajuste(self) -> None:
+        """Larga a imagem aberta (são dezenas de MB de bitmap) e as prévias dos cortes."""
+        arquivos = [linha["arquivo"] for linha in self._cortes.linhas] + [self._original]
+        self._cortes.redefinir([])
+        self._original = self._previa = None
+        if self._ajustando:
+            self._ajustando = False
+            self.ajustandoChanged.emit()
+        # As prévias do ajuste soltam os arquivos abertos antes de saírem.
+        _largar_arquivos_abertos()
+        for arquivo in arquivos:
+            if arquivo is not None:
+                self._apagar(arquivo)
+
+    @Slot()
+    def voltar(self) -> None:
+        """Da segunda etapa para a grade. As miniaturas que a escolha interrompeu saem: não voltariam sozinhas."""
+        if self._so_arquivo:
+            self.fechar()  # um arquivo do disco não tem grade para onde voltar
+            return
+        if not self._ajustando:
+            return
+        self._sair_do_ajuste()
+        for numero in reversed(range(len(self._linhas))):
+            if self._linhas[numero]["carregando"]:
+                self.beginRemoveRows(QModelIndex(), numero, numero)
+                del self._linhas[numero]
+                self.endRemoveRows()
+        if self._linhas:
+            self.estadoChanged.emit()
+        else:
+            self._show_empty(_("Não foi possível carregar as pré-visualizações"), _("Tente novamente."), erro=True)
+
+    @Slot()
+    def usarEstaImagem(self) -> None:  # noqa: N802
+        if not self._ajustando or self._original is None:
+            return
+        # Fora da pasta do seletor, que cai em `fechar`: o arquivo é de quem o recebe, até o Aplicar ou o Cancelar.
+        copia: Optional[Path] = None
+        try:
+            descritor, nome = tempfile.mkstemp(prefix=self._prefixo_da_pasta, suffix=self._original.suffix)
+            os.close(descritor)
+            copia = Path(nome)
+            shutil.copyfile(self._original, copia)
+        except OSError as erro:
+            logging.warning("Could not store the chosen wallpaper: %s", erro)
+            if copia is not None:
+                copia.unlink(missing_ok=True)
+            self._sair_do_ajuste()
+            self._show_empty(_("Não foi possível salvar a imagem"), _("Tente novamente."), erro=True)
+            return
+        # A orientação que não existe neste arranjo nunca sai do meio.
+        faixas = {linha["orientacao"]: linha["posicao"] / 100 for linha in self._cortes.linhas}
+        padrao = Posicoes()
+        posicoes = Posicoes(retrato=faixas.get("retrato", padrao.retrato), paisagem=faixas.get("paisagem", padrao.paisagem))
+        if (destino := self._destino) is None:
+            copia.unlink(missing_ok=True)
+        else:
+            destino.entregar_papel_baixado(copia, posicoes)
+        self.fechar()
+
+    @Slot()
+    def naoTrocar(self) -> None:  # noqa: N802
+        if self._aberto:
+            if (destino := self._destino) is not None:
+                destino.nao_trocar_papel()
+            self.fechar()
+
+    @Slot()
+    def buscarAgora(self) -> None:  # noqa: N802
+        if not self._ajustando:
+            super().buscarAgora()
+
+    @Slot()
+    def fechar(self) -> None:
+        self._sair_do_ajuste()
+        super().fechar()
 
 
 class SeletorDaSteam(BuscaDoSeletor, QAbstractListModel):

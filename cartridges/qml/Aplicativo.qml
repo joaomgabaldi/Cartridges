@@ -191,6 +191,13 @@ Principal {
         onRetornoPerdido: dialogoDeEdicao.devolverFoco()
     }
 
+    SeletorDePapelDeParede {
+        id: seletorDePapel
+        objectName: "seletorDePapel"
+        seletor: edicao.seletorDePapelDeParede
+        onRetornoPerdido: dialogoDeEdicao.devolverFoco()
+    }
+
     SeletorDaSteam {
         id: seletorDaSteam
         objectName: "seletorDaSteam"
