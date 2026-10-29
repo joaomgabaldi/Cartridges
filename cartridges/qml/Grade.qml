@@ -107,6 +107,7 @@ GridView {
         id: menuDoJogo
         objectName: "menuDoJogo"
         modelo: grade.biblioteca
+        onEditar: id => grade.editar(id)
     }
 
     delegate: Item {

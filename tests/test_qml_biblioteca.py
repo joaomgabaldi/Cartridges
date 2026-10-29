@@ -19,6 +19,7 @@ from cartridges.jogo import Jogo
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
+from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.ponte import Ponte
 
 QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml"
@@ -99,6 +100,7 @@ class _App:
         self.zerados = FiltroDaPagina(self.modelo, self.filtros, "zerados")
         self.ponte = Ponte()
         self.aplicativo = Aplicativo(self.ponte.fila)
+        self.edicao = ModeloDaEdicao(self.aplicativo)
         self.leitor = _LeitorFalso()
         shared.schema.set_boolean("gamepad", True)
         self.controle = ControleDaGrade(
@@ -111,7 +113,7 @@ class _App:
         for nome, valor in (
             ("filtros", self.filtros), ("paginaTodos", self.todos), ("paginaZerados", self.zerados),
             ("aplicativo", self.aplicativo), ("ponte", self.ponte), ("controle", self.controle),
-            ("detalhes", self.detalhes),
+            ("detalhes", self.detalhes), ("edicao", self.edicao),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

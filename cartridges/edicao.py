@@ -38,6 +38,8 @@ from cartridges.utils.thread_principal import na_thread_principal
 STATUS_VALUES = ("", *STATUS_LABELS)
 # Os do suporte a controle: None é "não informado".
 CONTROLLER_VALUES = (None, "full", "partial")
+# Os rótulos do seletor, uma só fonte com a ordem acima.
+CONTROLLER_LABELS = {None: _("Não informada"), "full": _("Total"), "partial": _("Parcial")}
 
 # As fontes de conquistas em que o appID não é a fonte (`conquistas.fontes`).
 _FONTES_DE_CONTA = frozenset({"xbox", "epic", "ubisoft", "ea"})
@@ -165,7 +167,7 @@ def acompanha_sem_nome(executavel: str) -> bool:
     return empacotado(executavel) or bool(install_dir_from_command(executavel))
 
 
-def _appid_aceito(texto: str) -> bool:
+def appid_aceito(texto: str) -> bool:
     return texto == "" or (texto.isascii() and texto.isdigit())
 
 
@@ -189,7 +191,7 @@ def validar(form: Formulario, jogo: Optional[Jogo]) -> Optional[str]:
     lancamento = form.lancamento.strip()
     if lancamento and not format_release_date(lancamento):
         return _("A data de lançamento informada é inválida. Utilize o formato 2/set./2026.")
-    if not _appid_aceito(form.appid.strip()):
+    if not appid_aceito(form.appid.strip()):
         return _("O AppID da Steam deve conter apenas números.")
     if _rastrear(form) and not form.executavel_do_processo.strip():
         return _("Informe o nome do executável para rastrear o tempo de jogo.")
@@ -261,18 +263,25 @@ def _capa_do_sgdb_chegou(jogo: Jogo, manager: Any) -> None:
             shared.aplicativo.pedir_dialogo(error.title, error.subtitle, [], lambda: None)
 
 
+def saiu_da_store(jogo: Optional[Jogo]) -> bool:
+    """Um zerado que a store soltou com a tela aberta: aplicar não pode gravá-lo de novo.
+
+    Um jogo REMOVIDO (zerado) pode ter saído da store enquanto a tela estava aberta:
+    uma ligação de zerado por appID rodando por baixo, ou uma importação que apagou
+    a ficha. Aplicar a gravaria de novo e o tempo contaria em dobro numa fusão
+    futura. Um jogo vivo nunca é apagado da store por baixo assim, e um jogo novo
+    não está nela por design: o guarda é só do zerado. Vale antes da validação.
+    """
+    return jogo is not None and jogo.removed and shared.store.get(jogo.game_id) is not jogo
+
+
 def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resultado:
     """Grava o formulário no jogo (ou cria o jogo, com ``jogo=None``).
 
     ``appid_inicial`` é o AppID que o campo mostrava ao abrir. Quem chama já
     validou; um formulário inválido levanta `ValueError` sem gravar nada.
     """
-    # Um jogo REMOVIDO (zerado) pode ter saído da store enquanto a tela estava
-    # aberta: uma ligação de zerado por appID rodando por baixo, ou uma
-    # importação que apagou a ficha. Aplicar a gravaria de novo e o tempo
-    # contaria em dobro numa fusão futura. Um jogo vivo nunca é apagado da store
-    # por baixo assim, e um jogo novo não está nela por design: o guarda é só do zerado.
-    if jogo is not None and jogo.removed and shared.store.get(jogo.game_id) is not jogo:
+    if saiu_da_store(jogo):
         return Resultado(jogo, fechar_sem_gravar=True)
     if (erro := validar(form, jogo)) is not None:
         raise ValueError(erro)

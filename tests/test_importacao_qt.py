@@ -21,6 +21,7 @@ from cartridges.jogo import Jogo
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.modelos.controle import ControleDaGrade
+from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.ponte import Ponte
 from cartridges.store.managers.exibicao_manager import ExibicaoManager
 from cartridges.utils import restauracao, soltar_atalhos
@@ -374,6 +375,7 @@ class _Janela:
         self.filtros = FiltrosDaBiblioteca(self.modelo)
         self.ponte = Ponte()
         self.aplicativo = Aplicativo(self.ponte.fila)
+        self.edicao = ModeloDaEdicao(self.aplicativo)
         self.motor = QQmlEngine()
         contexto = self.motor.rootContext()
         for nome, valor in (
@@ -383,6 +385,7 @@ class _Janela:
             ("aplicativo", self.aplicativo),
             ("ponte", self.ponte),
             ("controle", ControleDaGrade(estado_do_app=lambda: Qt.ApplicationState.ApplicationInactive)),
+            ("edicao", self.edicao),
         ):
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

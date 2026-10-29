@@ -16,7 +16,6 @@ Item {
     signal voltar()
     // Os botões só emitem; Aplicativo.qml os liga ao `detalhes`. O `excluir` sai depois da confirmação.
     signal jogar()
-    // shortcut: sem receptor até a edição (plano 3, tarefa 6).
     signal editar()
     signal remover()
     signal excluir()

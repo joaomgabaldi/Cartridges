@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O menu de um jogo. "Editar" entra com o plano 3 e "Restaurar save" com o plano 8.
+// O menu de um jogo. "Restaurar save" entra com o plano 8.
 MenuDoTema {
     id: menu
 
@@ -10,6 +10,14 @@ MenuDoTema {
     // O modelo da biblioteca (ModeloDaBiblioteca ou o proxy da página).
     property QtObject modelo
 
+    // "Editar" só pede: quem abre o diálogo é a janela.
+    signal editar(string jogoId)
+
+    ItemDoMenu {
+        objectName: "itemEditar"
+        text: "Editar"
+        onTriggered: menu.editar(menu.jogoId)
+    }
     ItemDoMenu {
         objectName: "itemRemover"
         text: "Remover"

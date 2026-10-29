@@ -35,6 +35,7 @@ Principal {
     inicio: [
         BotaoDaBarra {
             id: botaoAdicionar
+            enabled: !edicao.aberto
             objectName: "botaoAdicionar"
             visible: janela.paginaAtual === "todos"
             glifo: ""
@@ -43,12 +44,16 @@ Principal {
             menuAberto: menuDeAdicionar.opened
             MenuDoTema {
                 id: menuDeAdicionar
+                objectName: "menuDeAdicionar"
                 y: janela.baseDaBarra(parent)
+                ItemDoMenu { objectName: "itemAdicionarJogo"; text: "Adicionar jogo"; onTriggered: edicao.adicionar() }
+                MenuSeparator {}
                 ItemDoMenu { text: "Importar"; enabled: !aplicativo.importando; onTriggered: aplicativo.importar() }
             }
         },
         BotaoDaBarra {
             id: botaoVoltar
+            enabled: !edicao.aberto
             objectName: "botaoVoltar"
             visible: janela.paginaAtual !== "todos"
             glifo: ""
@@ -61,6 +66,7 @@ Principal {
     fim: [
         BotaoDaBarra {
             id: botaoMenu
+            enabled: !edicao.aberto
             objectName: "botaoMenu"
             glifo: ""
             dica: "Menu principal"
@@ -75,6 +81,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoZerados
+            enabled: !edicao.aberto
             objectName: "botaoZerados"
             visible: janela.paginaAtual === "todos"
             trofeu: true
@@ -83,6 +90,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoBusca
+            enabled: !edicao.aberto
             objectName: "botaoBusca"
             visible: janela.paginaAtual === "todos"
             glifo: ""
@@ -103,7 +111,10 @@ Principal {
         pagina: paginaTodos
         comBusca: true
         ativa: pilha.depth === 0
+        // Com o diálogo de edição aberto, nada de trás recebe o mouse nem o Tab.
+        enabled: !edicao.aberto
         onAbrirDetalhes: id => janela.abrirDetalhes(id)
+        onEditar: id => edicao.abrir(id)
     }
 
     // Vazia, a pilha mostra "Todos os jogos"; "Jogos Zerados" entra por cima.
@@ -111,6 +122,7 @@ Principal {
         id: pilha
         anchors.fill: parent
         visible: depth > 0
+        enabled: !edicao.aberto
     }
 
     Component {
@@ -121,6 +133,7 @@ Principal {
             // Coberta pelos detalhes, ela não anima capas.
             ativa: StackView.status !== StackView.Inactive
             onAbrirDetalhes: id => janela.abrirDetalhes(id)
+            onEditar: id => edicao.abrir(id)
             StackView.onActivated: focarGrade()
             // O fundo cobre "Todos os jogos" durante a transição.
             Rectangle { anchors.fill: parent; color: Tema.fundo; z: -1 }
@@ -134,6 +147,7 @@ Principal {
             placeholder: paginaTodos.placeholder
             onVoltar: janela.voltar()
             onJogar: detalhes.jogar()
+            onEditar: edicao.abrir(detalhes.jogoId)
             onRemover: detalhes.remover()
             onExcluir: detalhes.excluir()
             onAtualizacaoConfirmada: detalhes.confirmarAtualizacao()
@@ -144,6 +158,13 @@ Principal {
     Connections {
         target: detalhes
         function onSair() { if (janela.paginaAtual === "jogo") janela.voltar() }
+    }
+
+    // Abaixo da camada de avisos: o erro de uma validação aparece na frente do diálogo.
+    DialogoDeEdicao {
+        id: dialogoDeEdicao
+        // Fechado a partir de um menu, o foco não tem para onde voltar: vai à página à vista.
+        onRetornoPerdido: janela.paginaDoControle.focarGrade()
     }
 
     Avisos {
@@ -160,7 +181,7 @@ Principal {
         id: alvoDeSoltar
         objectName: "alvoDeSoltar"
         anchors.fill: parent
-        enabled: !camadaDeAvisos.dialogoAberto
+        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto
         onEntered: (arrasto) => arrasto.accepted = arrasto.hasUrls
         onDropped: (soltou) => {
             if (soltou.hasUrls) aplicativo.soltar(soltou.urls)
@@ -202,7 +223,7 @@ Principal {
     // A página à vista: "Todos os jogos", "Jogos Zerados" ou a de detalhes.
     readonly property var paginaDoControle: pilha.depth === 0 ? todos : pilha.currentItem
     // Menu ou diálogo na frente: o controle navega nele pelas teclas, como o teclado faria.
-    readonly property bool popupAberto: menuPrincipal.opened || camadaDeAvisos.dialogoAberto
+    readonly property bool popupAberto: menuPrincipal.opened || camadaDeAvisos.dialogoAberto || edicao.aberto
         || (paginaDoControle !== null && paginaDoControle.menuDoJogoAberto)
     property bool ponteiroEscondido: false
     property point posicaoDoPonteiro

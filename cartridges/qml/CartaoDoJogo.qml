@@ -31,7 +31,7 @@ Rectangle {
 
     // O clique na capa abre os detalhes.
     signal abrirDetalhes(string jogoId)
-    // O clique direito no cartão abre o diálogo Editar (tarefa 6 do plano 3).
+    // O clique direito no cartão pede o diálogo Editar.
     signal editar(string jogoId)
     // O botão "Mais opções" (ou a tecla de menu) pede o menu do jogo, ancorado no item.
     signal menuPedido(string jogoId, Item ancora)
@@ -62,7 +62,6 @@ Rectangle {
     HoverHandler { id: passagem }
 
     // Clique na capa: detalhes. Clique direito: Editar (como na `main`).
-    // shortcut: `editar` fica sem receptor até a tarefa 6 do plano 3.
     TapHandler {
         onTapped: cartao.abrirDetalhes(cartao.jogoId)
     }
