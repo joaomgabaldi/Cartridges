@@ -127,7 +127,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_menu_do_card.py",
     "test_metadata_refresh.py",
     "test_na_tela.py",
-    "test_pickers_selecao.py",
     "test_preferencias_big_picture.py",
     "test_process_session.py",
     "test_redefinir.py",

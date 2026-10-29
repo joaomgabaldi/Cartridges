@@ -209,6 +209,10 @@ def _refazer_copias(game_id: str, dest: Optional[Path], cover_path: Optional[Pat
     Sempre na thread principal. O ``apagar`` invalida todo pedido que já existe, então o que
     leu a capa velha não sobrevive, e o que vier depois só acha a nova.
     """
+    # Uma capa gravada com sucesso vale mais que a provisória que ficou como a da sessão depois de uma
+    # gravação que falhou (`Jogo.capa_da_sessao`): vale para todo caminho, a edição e a importação.
+    if (store := getattr(shared, "store", None)) is not None and (jogo := store.get(game_id)) is not None:
+        jogo.capa_da_sessao = None
     copias_animadas.apagar(game_id)
     if dest is not None and dest.suffix in ANIMATED_SUFFIXES:
         # A prévia da edição pode já ter as cópias desta capa: o ``preparar``

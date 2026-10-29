@@ -167,6 +167,30 @@ Principal {
         onRetornoPerdido: janela.paginaDoControle.focarGrade()
     }
 
+    // Por cima do diálogo de edição, que os abre; o foco volta ao botão que abriu cada um.
+    SeletorDeImagens {
+        id: seletorDeCapa
+        objectName: "seletorDeCapa"
+        seletor: edicao.seletorDeCapa
+        titulo: "Escolher capa"
+        rotuloDoAtalho: "Animadas"
+        dicaDoAtalho: "Mostrar capas animadas"
+        atalhoAlterna: true
+        onAtalhoClicado: seletor.animadas = !seletor.animadas
+        onRetornoPerdido: dialogoDeEdicao.devolverFoco()
+    }
+    SeletorDeImagens {
+        id: seletorDeLogo
+        objectName: "seletorDeLogo"
+        seletor: edicao.seletorDeLogo
+        titulo: "Escolher logo"
+        rotuloDoAtalho: "Usar o título"
+        dicaDoAtalho: "Não usar logo neste jogo"
+        horizontal: true
+        onAtalhoClicado: seletor.usarTitulo()
+        onRetornoPerdido: dialogoDeEdicao.devolverFoco()
+    }
+
     Avisos {
         id: camadaDeAvisos
         objectName: "camadaDeAvisos"

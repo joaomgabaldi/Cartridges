@@ -5,64 +5,75 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """O que os seletores com busca (logo, capa, papel de parede, Steam) fazem igual:
-esperar a pessoa parar de digitar, mostrar a página vazia com o motivo e, nos
-que baixam a imagem escolhida, a tela "Baixando…".
+esperar a pessoa parar de digitar e interromper o download da imagem escolhida
+quando o seletor fecha ou a busca muda.
 
-Quem herda tem ``search_entry``, ``status_page``, ``stack`` (com a página
-``"empty"``), ``search()`` e os atributos ``_debounce_id``, ``_last_query``,
-``_generation`` e ``_closed``. Vem antes de ``Adw.Dialog`` na lista de bases.
+Quem usa é um modelo (um ``QObject``) com ``busca`` (o texto do campo), ``search()``
+e os atributos ``_generation``, ``_last_query`` e ``_closed``. O atraso corre numa
+``threading.Timer``; quem dispara é sempre a thread principal (``na_thread_principal``).
 """
 
+import threading
 from typing import Any, Optional
 
-from gi.repository import GLib
-
 from cartridges.utils.download import DownloadCancelado
-from cartridges.utils.na_tela import entregar_na_tela
-from cartridges.utils.tela_de_download import TelaDeDownload
+from cartridges.utils.thread_principal import na_thread_principal
+
+
+_MB = 1024 * 1024
+
+
+def _tamanho(n: int) -> str:
+    # MB de 1024², como os limites de download: o maior arquivo diz "200,0 MB".
+    # Para cima, como o Explorador de Arquivos: 300 bytes já são "1 KB",
+    # nunca "0 KB" com algo baixado. O que arredonda para 1024 KB já é MB.
+    kb = -(-n // 1024)
+    if kb < 1024:
+        return f"{kb} KB"
+    return f"{n / _MB:.1f} MB".replace(".", ",")
+
+
+def tamanho_baixado(recebido: int, total: Optional[int]) -> str:
+    """ "4,4 MB de 21,0 MB", ou só "4,4 MB" quando o total não é conhecido."""
+    if total is None:
+        return _tamanho(recebido)
+    return _("{recebido} de {total}").format(recebido=_tamanho(recebido), total=_tamanho(total))
 
 
 class BuscaDoSeletor:
     # Quanto esperar depois da última tecla antes de buscar.
     atraso_da_busca_ms = 500
 
-    _tela_de_download: Optional[TelaDeDownload] = None
+    _debounce_timer: Optional[threading.Timer] = None
+    # Cada tecla invalida o disparo anterior, mesmo que o ``Timer`` dele já tenha saído.
+    _debounce_id = 0
 
     def _on_search_changed(self, *_args: Any) -> None:
-        if self._debounce_id:
-            GLib.source_remove(self._debounce_id)
-        self._debounce_id = GLib.timeout_add(self.atraso_da_busca_ms, self._debounce_fire)
+        self._cancelar_debounce()
+        token = self._debounce_id
+        self._debounce_timer = threading.Timer(
+            self.atraso_da_busca_ms / 1000, na_thread_principal, (self._debounce_fire, token)
+        )
+        self._debounce_timer.daemon = True
+        self._debounce_timer.start()
 
-    def _debounce_fire(self) -> bool:
-        self._debounce_id = 0
-        # GtkSearchEntry emite um search-changed atrasado para o set_text
-        # programático do __init__, depois do connect: sem este guard, abrir o
-        # diálogo buscava duas vezes a mesma coisa — API e downloads em dobro,
-        # com a segunda passada varrendo os previews da primeira. Enter no
-        # campo continua repetindo a busca (caminho do "activate", não daqui).
-        if self.search_entry.get_text().strip() == self._last_query:
-            return False
+    def _cancelar_debounce(self) -> None:
+        """Na thread principal: o disparo pendente não acontece."""
+        self._debounce_id += 1
+        if self._debounce_timer is not None:
+            self._debounce_timer.cancel()
+            self._debounce_timer = None
+
+    def _debounce_fire(self, token: int) -> None:
+        if token != self._debounce_id or self._closed:
+            return
+        self._debounce_timer = None
+        # O texto programático do ``abrir`` já foi buscado: sem este guard, abrir o
+        # seletor buscava duas vezes a mesma coisa. Enter no campo continua repetindo
+        # a busca (caminho do ``buscarAgora``, não daqui).
+        if self.busca.strip() == self._last_query:
+            return
         self.search()
-        return False
-
-    def _show_empty(self, titulo: str, descricao: str = "", generation: Optional[int] = None) -> bool:
-        if generation is not None and generation != self._generation:
-            return False
-        # Título e descrição juntos: com o título fixo, uma busca que falhou
-        # dizia "Nenhum … encontrado".
-        self.status_page.set_title(titulo)
-        self.status_page.set_description(descricao)
-        self.stack.set_visible_child_name("empty")
-        return False
-
-    def _mostrar_download(self) -> None:
-        """Troca a grade pela tela "Baixando…", zerada. Na thread principal,
-        antes de a thread do download começar."""
-        if self._tela_de_download is None:
-            self._tela_de_download = TelaDeDownload()
-            self.stack.add_named(self._tela_de_download, "downloading")
-        self._tela_de_download.zerar()
-        self.stack.set_visible_child_name("downloading")
 
     def _ao_progredir(self, recebido: int, total: Optional[int]) -> None:
         """O ``ao_progredir`` do ``download_bytes`` da imagem escolhida.
@@ -72,4 +83,3 @@ class BuscaDoSeletor:
         """
         if self._closed:
             raise DownloadCancelado
-        entregar_na_tela(self._tela_de_download.atualizar, recebido, total)

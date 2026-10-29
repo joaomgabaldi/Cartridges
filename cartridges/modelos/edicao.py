@@ -25,6 +25,7 @@ from cartridges import edicao, shared
 from cartridges.edicao import Escolha, Formulario
 from cartridges.jogo import STATUS_LABELS, Jogo
 from cartridges.modelos.ordem import _url_da_capa  # noqa: PLC2701
+from cartridges.modelos.seletores import SeletorDeLogo, SeletorDoSgdb
 from cartridges.utils import capa_video, game_logo, session_wallpaper
 from cartridges.utils.game_folder import game_folder, open_folder
 from cartridges.utils.thread_principal import na_thread_principal
@@ -109,6 +110,9 @@ class ModeloDaEdicao(QObject):
         self._pedido_da_capa = 0
         self._capas_em_voo = 0
         self._segundo_monitor = False
+        # Os seletores do SteamGridDB entregam aqui (`entregar_*`, `usar_titulo_no_logo`).
+        self._seletor_de_capa = SeletorDoSgdb(self, self)
+        self._seletor_de_logo = SeletorDeLogo(self, self)
 
     # -- campos do formulário --------------------------------------------------------------------
 
@@ -235,6 +239,8 @@ class ModeloDaEdicao(QObject):
 
     # -- capa, logo e papel de parede ------------------------------------------------------------
 
+    seletorDeCapa = Property(QObject, lambda self: self._seletor_de_capa, constant=True)  # noqa: N815
+    seletorDeLogo = Property(QObject, lambda self: self._seletor_de_logo, constant=True)  # noqa: N815
     filtroDaCapa = Property(str, lambda self: filtro_de_capa(), constant=True)  # noqa: N815
     filtroDoLogo = Property(  # noqa: N815
         str, lambda self: _filtro(_("Imagens de logo"), game_logo.IMAGE_SUFFIXES), constant=True
@@ -307,9 +313,18 @@ class ModeloDaEdicao(QObject):
     @Slot(QUrl)
     def escolherCapa(self, url: QUrl) -> None:  # noqa: N802
         """Converte a imagem (ou o vídeo) fora da thread principal; o Aplicar espera."""
-        if not self._aberto or not (caminho := url.toLocalFile()):
-            return
-        arquivo, geracao = Path(caminho), self._geracao
+        if self._aberto and (caminho := url.toLocalFile()):
+            self._converter_capa(Path(caminho), apagar_origem=False)
+
+    def entregar_capa_baixada(self, arquivo: Path) -> None:
+        """A capa que o seletor do SteamGridDB baixou: vira provisória como a de um arquivo, e o original sai."""
+        if self._aberto:
+            self._converter_capa(arquivo, apagar_origem=True)
+        else:
+            arquivo.unlink(missing_ok=True)
+
+    def _converter_capa(self, arquivo: Path, apagar_origem: bool) -> None:
+        geracao = self._geracao
         self._pedido_da_capa += 1
         pedido = self._pedido_da_capa
         self._capas_em_voo += 1
@@ -325,6 +340,8 @@ class ModeloDaEdicao(QObject):
                     nova = edicao.preparar_capa(arquivo)
             except Exception:  # noqa: BLE001  # só esta thread devolve o contador de ocupado
                 logging.exception("Could not prepare the chosen cover")
+            if apagar_origem:
+                arquivo.unlink(missing_ok=True)
             na_thread_principal(self._capa_pronta, geracao, pedido, nova, erro)
 
         threading.Thread(target=trabalhar, daemon=True).start()
@@ -361,6 +378,17 @@ class ModeloDaEdicao(QObject):
     def escolherLogo(self, url: QUrl) -> None:  # noqa: N802
         if self._aberto and (caminho := url.toLocalFile()):
             self._trocar_escolha("logo", Escolha("manual", Path(caminho)))
+
+    def entregar_logo_baixado(self, arquivo: Path) -> None:
+        """O logo que o seletor do SteamGridDB baixou: é da tela até o Aplicar, que o apaga depois de gravado."""
+        if self._aberto:
+            self._trocar_escolha("logo", Escolha("manual", arquivo, temporario=True))
+        else:
+            arquivo.unlink(missing_ok=True)
+
+    def usar_titulo_no_logo(self) -> None:
+        if self._aberto:
+            self._trocar_escolha("logo", Escolha("title"))
 
     @Slot()
     def restaurarLogo(self) -> None:  # noqa: N802
@@ -446,6 +474,8 @@ class ModeloDaEdicao(QObject):
 
     def _fechar(self, descartar: bool = True) -> None:
         """Fecha o diálogo. ``descartar``: as provisórias da tela saem (no Aplicar, são do `aplicar`)."""
+        for seletor in (self._seletor_de_capa, self._seletor_de_logo):
+            seletor.fechar()
         provisoria = self._provisoria()
         escolhas = [e for e in (self._form.logo, self._form.papel_de_parede) if e is not None]
         self._aberto = False

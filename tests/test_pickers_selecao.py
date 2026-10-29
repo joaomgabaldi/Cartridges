@@ -2,290 +2,183 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Escolher um logo ou uma capa encerra a busca que ainda baixa prévias."""
+"""Escolher uma capa ou um logo encerra a busca que ainda baixa miniaturas, e como o download corre.
+
+Os seletores de capa e de logo do SteamGridDB (`cartridges.modelos.seletores`). O seletor de papel de
+parede (wallhaven) ainda é do GTK e entra com a tarefa 10 do plano 3.
+"""
+
+import logging
 
 import pytest
-from gi.repository import GdkPixbuf
-
-
-@pytest.fixture
-def previa(tmp_path):
-    caminho = tmp_path / "previa.png"
-    pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 4, 4)
-    pixbuf.fill(0xFFFFFFFF)
-    pixbuf.savev(str(caminho), "png", [], [])
-    return caminho
-
-
-def logo_picker():
-    from cartridges.logo_picker import LogoPicker  # noqa: PLC0415
-
-    return LogoPicker("Jogo", lambda _p: None, lambda: None)
-
-
-def sgdb_picker():
-    from cartridges.sgdb_picker import SgdbPicker  # noqa: PLC0415
-
-    return SgdbPicker("Jogo", lambda _p: None)
-
-
-def adicionar(picker, previa, geracao):
-    if hasattr(picker, "animated_button"):
-        return picker._add_result(previa, "https://x/y.png", False, geracao)
-    return picker._add_result(previa, "https://x/y.png", geracao)
-
-
-@pytest.mark.parametrize("criar", [logo_picker, sgdb_picker])
-def test_previa_atrasada_nao_tira_o_carregamento_da_escolha(criar, previa, monkeypatch):
-    picker = criar()
-    # O download do escolhido não sai: o teste é sobre o que acontece enquanto ele corre.
-    monkeypatch.setattr(picker, "_select_thread", lambda _url, _animated=False: None)
-    geracao_da_busca = picker._generation
-    adicionar(picker, previa, geracao_da_busca)
-    filho = picker.flowbox.get_child_at_index(0)
-
-    picker._on_child_activated(picker.flowbox, filho)
-    adicionar(picker, previa, geracao_da_busca)
-
-    assert picker.stack.get_visible_child_name() == "downloading"
-    assert picker.flowbox.get_child_at_index(1) is None
-
-
-# region Prévias do seletor de capas
-
-
-def _apng_bytes(quadros=2):
-    import io  # noqa: PLC0415
-
-    from PIL import Image  # noqa: PLC0415
-
-    imagens = [Image.new("RGB", (60, 90), cor) for cor in ("red", "blue")[:quadros]]
-    saida = io.BytesIO()
-    imagens[0].save(
-        saida, "PNG", save_all=True, append_images=imagens[1:], duration=100
-    )
-    return saida.getvalue()
-
-
-@pytest.fixture
-def busca_sgdb(monkeypatch):
-    """O seletor de capas com a rede trocada: uma grade ``.png`` cujo download
-    é um APNG, e as entregas à thread principal anotadas em vez de rodadas."""
-    from cartridges import sgdb_picker as modulo  # noqa: PLC0415
-
-    picker = sgdb_picker()
-    entregas = []
-    monkeypatch.setattr(picker.sgdb, "search_games", lambda _q: [{"id": 1}])
-    monkeypatch.setattr(
-        picker.sgdb,
-        "get_grids",
-        lambda *_a, **_k: [{"id": 7, "url": "https://x/7.png", "thumb": "https://x/t7.png"}],
-    )
-    monkeypatch.setattr(modulo, "download_bytes", lambda *_a, **_k: _apng_bytes())
-    monkeypatch.setattr(
-        modulo, "entregar_na_tela", lambda func, *args: entregas.append((func, args))
-    )
-    picker.entregas = entregas
-    return picker
-
-
-def _previas(picker):
-    return [args[0] for func, args in picker.entregas if func == picker._add_result]
-
-
-def test_previa_png_de_busca_animada_vira_apng(busca_sgdb):
-    busca_sgdb._search_thread("Jogo", True, busca_sgdb._generation)
-
-    assert [p.suffix for p in _previas(busca_sgdb)] == [".apng"]
-
-
-def test_previa_png_de_busca_parada_segue_png(busca_sgdb):
-    busca_sgdb._search_thread("Jogo", False, busca_sgdb._generation)
-
-    assert [p.suffix for p in _previas(busca_sgdb)] == [".png"]
-
-
-def test_apng_de_um_quadro_termina_parado(tmp_path, capas_falsas):
-    picker = sgdb_picker()
-    previa = tmp_path / "7.apng"
-    previa.write_bytes(_apng_bytes(quadros=1))
-
-    picker._add_result(previa, "https://x/7.png", True, picker._generation)
-    (cover,) = picker._covers
-    for pedido in capas_falsas.pedidos:
-        pedido.pronto("estatica")
-
-    assert not cover.animada
-    assert picker.stack.get_visible_child_name() == "results"
-
-
-# endregion
-
-
-# region Limites de download do seletor de capas
-
-
-class _ThreadNaHora:
-    """Roda o alvo já no ``start``: o teste vê o download sem esperar thread."""
-
-    def __init__(self, target, args=(), daemon=None):
-        self._target, self._args = target, args
-
-    def start(self):
-        self._target(*self._args)
-
-
-def _anotar_limites(monkeypatch, erro=None, conteudo=b""):
-    from cartridges import sgdb_picker as modulo  # noqa: PLC0415
-    from cartridges.utils.download import MAX_IMAGE_BYTES  # noqa: PLC0415
-
-    limites = []
-
-    def baixar(_url, timeout=10, max_bytes=MAX_IMAGE_BYTES, ao_progredir=None):
-        limites.append(max_bytes)
-        if erro is not None:
-            raise erro
-        return conteudo
-
-    monkeypatch.setattr(modulo, "download_bytes", baixar)
-    return limites
-
-
-@pytest.mark.parametrize("animated", [True, False])
-def test_previa_usa_o_limite_do_tipo(busca_sgdb, monkeypatch, animated):
-    from cartridges.utils.download import (  # noqa: PLC0415
-        MAX_ANIMATED_IMAGE_BYTES,
-        MAX_IMAGE_BYTES,
-    )
-
-    limites = _anotar_limites(monkeypatch, conteudo=_apng_bytes())
-
-    busca_sgdb._search_thread("Jogo", animated, busca_sgdb._generation)
-
-    assert limites == [MAX_ANIMATED_IMAGE_BYTES if animated else MAX_IMAGE_BYTES]
-
-
-@pytest.mark.parametrize("ativo", [True, False])
-def test_capa_escolhida_usa_o_limite_do_botao(previa, monkeypatch, ativo):
-    import requests  # noqa: PLC0415
-
-    from cartridges import sgdb_picker as modulo  # noqa: PLC0415
-    from cartridges.utils.download import (  # noqa: PLC0415
-        MAX_ANIMATED_IMAGE_BYTES,
-        MAX_IMAGE_BYTES,
-    )
-
-    picker = sgdb_picker()
-    picker.animated_button.set_active(ativo)  # sem chave da API: a busca nem sai
-    picker._add_result(previa, "https://x/7.png", ativo, picker._generation)
-    limites = _anotar_limites(monkeypatch, erro=requests.RequestException("x"))
-    monkeypatch.setattr(modulo.threading, "Thread", _ThreadNaHora)
-    monkeypatch.setattr(modulo, "entregar_na_tela", lambda *_a: None)
-
-    picker._on_child_activated(picker.flowbox, picker.flowbox.get_child_at_index(0))
-
-    assert limites == [MAX_ANIMATED_IMAGE_BYTES if ativo else MAX_IMAGE_BYTES]
-
-
-def test_log_da_previa_traz_o_tipo_do_erro(busca_sgdb, monkeypatch, caplog):
-    from cartridges.utils.download import ResponseTooLargeError  # noqa: PLC0415
-
-    _anotar_limites(monkeypatch, erro=ResponseTooLargeError("https://x/7.png"))
-
-    busca_sgdb._search_thread("Jogo", True, busca_sgdb._generation)
-
+import requests
+
+from cartridges.modelos import seletores
+from cartridges.utils.download import (
+    MAX_ANIMATED_IMAGE_BYTES,
+    MAX_IMAGE_BYTES,
+    DownloadCancelado,
+    ResponseTooLargeError,
+)
+from tests.apoio_seletores import (  # noqa: F401  (as fixtures vêm junto)
+    DownloadFalso,
+    SgdbFalso,
+    baixar,
+    chave,
+    criar,
+    esperar,
+    lista_de_grades,
+    prontos,
+    temp,
+    vazio_de,
+)
+
+
+@pytest.fixture(params=[seletores.SeletorDoSgdb, seletores.SeletorDeLogo], ids=["capa", "logo"])
+def classe(request):
+    return request.param
+
+
+def _miniatura(seletor, linha):
+    return seletor.data(seletor.index(linha, 0), seletor.Papel.Miniatura)
+
+
+def test_previa_atrasada_nao_tira_o_carregamento_da_escolha(classe, monkeypatch, temp):
+    class DepoisDaPrimeira(DownloadFalso):
+        def __call__(self, url, **kwargs):
+            if len(self.urls) == 1:  # a segunda miniatura fica presa: é a "atrasada"
+                self.soltar.clear()
+            return super().__call__(url, **kwargs)
+
+    baixar = DepoisDaPrimeira()
+    monkeypatch.setattr(seletores, "download_bytes", baixar)
+    seletor, destino = criar(classe)
+    seletor.abrir("Jogo")
+    assert esperar(lambda: _miniatura(seletor, 0) != "")
+    assert baixar.comecou.is_set()
+
+    seletor.escolher(0)
+    assert esperar(lambda: baixar.cancelado.is_set()), "a busca das miniaturas é encerrada pela escolha"
+    assert esperar(lambda: len(baixar.urls) == 3)  # o download da escolha, preso como o resto
+    # A miniatura atrasada não chega: a grade segue em "baixando", sem nada novo.
+    assert seletor.baixando is True and _miniatura(seletor, 1) == "" and _miniatura(seletor, 2) == ""
+    baixar.soltar.set()
+    assert esperar(lambda: destino.capas or destino.logos)
+    (entregue,) = destino.capas or destino.logos
+    assert vazio_de(temp) == [entregue.name]
+
+
+def test_previa_png_de_busca_animada_vira_apng_e_a_parada_segue_png(baixar, temp):
+    seletor, _ = criar(seletores.SeletorDoSgdb)
+    seletor.abrir("Jogo")
+    assert esperar(lambda: prontos(seletor, 3))
+    assert [_miniatura(seletor, i).rsplit(".", 1)[1] for i in range(3)] == ["png"] * 3
+    seletor.animadas = True
+    assert esperar(lambda: prontos(seletor, 3) and _miniatura(seletor, 0).endswith(".apng"))
+    assert [_miniatura(seletor, i).rsplit(".", 1)[1] for i in range(3)] == ["apng"] * 3
+    seletor.fechar()
+
+
+@pytest.mark.parametrize("animadas", [True, False])
+def test_previa_usa_o_limite_do_tipo(animadas, baixar, temp):
+    seletor, _ = criar(seletores.SeletorDoSgdb)
+    seletor.abrir("Jogo")
+    assert esperar(lambda: prontos(seletor, 3))
+    if animadas:
+        baixar.limites.clear()
+        seletor.animadas = True
+        assert esperar(lambda: prontos(seletor, 3) and len(baixar.limites) >= 3)
+    assert set(baixar.limites) == {MAX_ANIMATED_IMAGE_BYTES if animadas else MAX_IMAGE_BYTES}
+    seletor.fechar()
+
+
+@pytest.mark.parametrize("animadas", [True, False])
+def test_capa_escolhida_usa_o_limite_do_botao(animadas, baixar, temp):
+    seletor, _ = criar(seletores.SeletorDoSgdb)
+    seletor.abrir("Jogo")
+    assert esperar(lambda: prontos(seletor, 3))
+    if animadas:
+        seletor.animadas = True
+        assert esperar(lambda: prontos(seletor, 3) and _miniatura(seletor, 0).endswith(".apng"))
+    baixar.falhar = requests.RequestException("x")
+    baixar.limites.clear()
+    seletor.escolher(0)
+    assert esperar(lambda: seletor.erro)
+    assert baixar.limites == [MAX_ANIMATED_IMAGE_BYTES if animadas else MAX_IMAGE_BYTES]
+    seletor.fechar()
+
+
+def test_log_da_previa_traz_o_tipo_do_erro(baixar, temp, caplog):
+    baixar.falhar = ResponseTooLargeError("https://x/7.png")
+    seletor, _ = criar(seletores.SeletorDoSgdb)
+    with caplog.at_level(logging.WARNING):
+        seletor.abrir("Jogo")
+        # Toda miniatura falhando não deixa o seletor carregando para sempre.
+        assert esperar(lambda: seletor.vazio)
     assert "ResponseTooLargeError" in caplog.text
+    assert seletor.tituloDoEstado == "Não foi possível carregar as pré-visualizações"
+    assert seletor.descricaoDoEstado == "Tente novamente." and seletor.erro is True
+    seletor.fechar()
 
 
-def test_log_da_capa_escolhida_traz_o_tipo_do_erro(monkeypatch, caplog):
-    from cartridges import sgdb_picker as modulo  # noqa: PLC0415
-    from cartridges.utils.download import ResponseTooLargeError  # noqa: PLC0415
-
-    picker = sgdb_picker()
-    _anotar_limites(monkeypatch, erro=ResponseTooLargeError("https://x/7.png"))
-    monkeypatch.setattr(modulo, "entregar_na_tela", lambda *_a: None)
-
-    picker._select_thread("https://x/7.png", True)
-
+def test_log_da_capa_escolhida_traz_o_tipo_do_erro(baixar, temp, caplog):
+    seletor, _ = criar(seletores.SeletorDoSgdb)
+    seletor.abrir("Jogo")
+    assert esperar(lambda: prontos(seletor, 3))
+    baixar.falhar = ResponseTooLargeError("https://x/7.png")
+    with caplog.at_level(logging.WARNING):
+        seletor.escolher(0)
+        assert esperar(lambda: seletor.erro)
     assert "ResponseTooLargeError" in caplog.text
+    seletor.fechar()
 
 
-# endregion
+def test_escolha_baixa_com_progresso(classe, baixar, temp):
+    seletor, _ = criar(classe)
+    seletor.abrir("Jogo")
+    assert esperar(lambda: prontos(seletor, 3))
+    baixar.soltar.clear()
+    baixar.comecou.clear()
+    seletor.escolher(0)
+    assert esperar(lambda: seletor.baixando and seletor.textoDoProgresso != "")
+    # 1 de 10 bytes: "1 KB de 1 KB", uma barra em 10%.
+    assert seletor.textoDoProgresso == "1 KB de 1 KB" and seletor.progresso == pytest.approx(0.1)
+    baixar.soltar.set()
+    assert esperar(lambda: not seletor.aberto)
 
 
-# region Tela de download da escolha
-
-
-def _modulo(picker):
-    import sys  # noqa: PLC0415
-
-    return sys.modules[type(picker).__module__]
-
-
-def _baixar_falso(monkeypatch, picker, erro):
-    """Troca o download do seletor: anota o ``ao_progredir`` e levanta ``erro``.
-    Devolve a lista dos ``ao_progredir`` e a das entregas à thread principal."""
-    modulo = _modulo(picker)
-    recebidos, entregas = [], []
-
-    def baixar(_url, timeout=10, max_bytes=0, ao_progredir=None):
-        recebidos.append(ao_progredir)
-        raise erro
-
-    monkeypatch.setattr(modulo, "download_bytes", baixar)
-    monkeypatch.setattr(
-        modulo, "entregar_na_tela", lambda func, *args: entregas.append((func, args))
-    )
-    return recebidos, entregas
-
-
-@pytest.mark.parametrize("criar", [logo_picker, sgdb_picker])
-def test_escolha_baixa_com_progresso(criar, monkeypatch):
-    import requests  # noqa: PLC0415
-
-    picker = criar()
-    recebidos, _entregas = _baixar_falso(monkeypatch, picker, requests.RequestException("x"))
-
-    picker._select_thread("https://x/7.png")
-
-    assert recebidos == [picker._ao_progredir]
-
-
-@pytest.mark.parametrize("criar", [logo_picker, sgdb_picker])
-def test_download_cancelado_encerra_em_silencio(criar, monkeypatch, caplog):
-    from cartridges.utils.download import DownloadCancelado  # noqa: PLC0415
-
-    picker = criar()
-    _recebidos, entregas = _baixar_falso(monkeypatch, picker, DownloadCancelado())
-
-    picker._select_thread("https://x/7.png")
-
-    assert entregas == []
+def test_download_cancelado_encerra_em_silencio(classe, baixar, temp, caplog):
+    seletor, destino = criar(classe)
+    seletor.abrir("Jogo")
+    assert esperar(lambda: prontos(seletor, 3))
+    baixar.falhar = DownloadCancelado()
+    with caplog.at_level(logging.INFO):
+        seletor.escolher(0)
+        assert esperar(lambda: baixar.comecou.is_set())
+        assert esperar(lambda: False, 0.3) is False
+    assert seletor.erro is False and destino.capas == [] and destino.logos == []
     assert "Could not" not in caplog.text
+    seletor.fechar()
 
 
-@pytest.mark.parametrize("criar", [logo_picker, sgdb_picker])
-def test_progresso_cancela_depois_de_fechar(criar):
-    from cartridges.utils.download import DownloadCancelado  # noqa: PLC0415
-
-    picker = criar()
-    picker._mostrar_download()
-    assert picker.stack.get_visible_child_name() == "downloading"
-
-    picker._on_closed()
-
+def test_progresso_cancela_depois_de_fechar(classe, baixar, temp):
+    seletor, _ = criar(classe)
+    seletor.abrir("Jogo")
+    assert esperar(lambda: prontos(seletor, 3))
+    seletor.fechar()
     with pytest.raises(DownloadCancelado):
-        picker._ao_progredir(1, 2)
+        seletor._ao_progredir(1, 2)  # noqa: SLF001
 
 
-def test_mostrar_download_de_novo_zera_a_tela():
-    picker = logo_picker()
-    picker._mostrar_download()
-    picker._tela_de_download.atualizar(5, 10)
-
-    picker._mostrar_download()
-
-    assert picker._tela_de_download.barra.get_fraction() == 0.0
-
-
-# endregion
+def test_escolher_de_novo_zera_o_progresso(classe, baixar, temp):
+    seletor, _ = criar(classe, SgdbFalso(grids=lista_de_grades(3)))
+    seletor.abrir("Jogo")
+    assert esperar(lambda: prontos(seletor, 3))
+    baixar.soltar.clear()
+    seletor.escolher(0)
+    assert esperar(lambda: seletor.textoDoProgresso != "")
+    seletor.fechar()
+    seletor.abrir("Jogo")
+    assert seletor.textoDoProgresso == "" and seletor.baixando is False
+    seletor.fechar()
+    baixar.soltar.set()

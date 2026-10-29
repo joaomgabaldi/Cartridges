@@ -257,8 +257,8 @@ def test_tab_gira_dentro_do_dialogo(app):
             dentro = dentro or item is dialogo
             item = item.parentItem()
         assert dentro
-    # Shift+Tab a partir do primeiro item (o botão da capa) cai no último botão, sem sair do diálogo.
-    app.achar("botaoEscolherCapa").forceActiveFocus()
+    # Shift+Tab a partir do primeiro item (o botão do SteamGridDB, na capa) cai no último botão, sem sair do diálogo.
+    app.achar("botaoEscolherCapaSgdb").forceActiveFocus()
     QTest.keyClick(app.janela, Qt.Key.Key_Backtab, Qt.KeyboardModifier.ShiftModifier)
     assert _esperar(lambda: _foco_dentro_de(app, "botaoAplicarDaEdicao"))
 
@@ -561,3 +561,150 @@ def test_a_grade_e_a_pagina_largam_a_copia_animada_antes_de_gravar_a_capa(app, t
     _escolher_capa(app, _imagem(tmp_path / "nova.png"))
     app.edicao.aplicar()
     assert vistos == [("", "")]
+
+
+# -- seletores de capa e de logo do SteamGridDB (tarefa 8) ------------------------------------------
+
+
+@pytest.fixture
+def sgdb(app, tmp_path, monkeypatch, schema):
+    """O SteamGridDB e o download falsos nos dois seletores; %TEMP% de mentira."""
+    from cartridges.modelos import seletores  # noqa: PLC0415
+    from tests.apoio_seletores import DownloadFalso, SgdbFalso  # noqa: PLC0415
+
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    monkeypatch.setattr("tempfile.tempdir", str(temp))
+    schema.set_string("sgdb-key", "chave-de-teste")
+    monkeypatch.setattr(seletores, "download_bytes", DownloadFalso())
+    falsos = SgdbFalso()
+    app.edicao.seletorDeCapa.sgdb = app.edicao.seletorDeLogo.sgdb = falsos
+    app.temp = temp
+    return falsos
+
+
+def _visivel(app, nome):
+    return app.achar(nome).property("visible") is True
+
+
+def _abrir_seletor(app, botao, seletor):
+    app.achar(botao).forceActiveFocus()
+    _clique(app, botao)
+    assert _esperar(lambda: _visivel(app, seletor))
+    assert _esperar(lambda: _foco_dentro_de(app, seletor))
+    grade = app.achar(seletor + "Grade")
+    assert _esperar(lambda: grade.property("count") == 3 and _visivel(app, seletor + "Miniatura2"))
+
+
+def test_seletor_de_capa_modal_e_devolve_o_foco(app, sgdb):
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _foco_dentro_de(app, "campoNome"))
+    _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
+    assert app.achar("seletorDeCapaTitulo").property("text") == "Escolher capa"
+    assert app.achar("seletorDeCapaCampo").property("text") == "Alfa"
+    assert app.achar("seletorDeCapaCampo").property("placeholderText") == "Buscar jogo…"
+    assert app.achar("seletorDeCapaAtalho").property("text") == "Animadas"
+    for _ in range(40):
+        QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+        assert _foco_dentro_de(app, "seletorDeCapa")
+    # Esc fecha só o seletor: o diálogo de edição segue aberto e o foco volta ao botão que o abriu.
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: not _visivel(app, "seletorDeCapa"))
+    assert app.edicao.aberto is True and app.edicao.seletorDeCapa.aberto is False
+    assert _esperar(lambda: _foco_dentro_de(app, "botaoEscolherCapaSgdb"))
+    assert list(app.temp.iterdir()) == []
+
+
+def test_escolher_uma_capa_do_seletor_a_deixa_na_previa(app, sgdb):
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
+    app.achar("seletorDeCapaMiniatura1").forceActiveFocus()
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert _esperar(lambda: app.edicao.temCapa and not app.edicao.ocupado, 10)
+    assert _esperar(lambda: not _visivel(app, "seletorDeCapa"))
+    assert _esperar(lambda: _foco_dentro_de(app, "botaoEscolherCapaSgdb"))
+    provisoria = _provisoria(app)
+    assert provisoria.suffix == ".tiff" and [p.name for p in app.temp.iterdir()] == [provisoria.name]
+    app.edicao.cancelar()
+    assert list(app.temp.iterdir()) == []
+
+
+def test_animadas_pede_as_capas_animadas(app, sgdb):
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
+    _clique(app, "seletorDeCapaAtalho")
+    assert _esperar(lambda: sgdb.grids_pedidas[-1][1] is True)
+    assert app.achar("seletorDeCapaAtalho").property("checked") is True
+    assert app.achar("seletorDeCapaAtalho").property("dica") == "Mostrar capas animadas"
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: app.edicao.seletorDeCapa.aberto is False)
+
+
+def test_seletor_de_logo_usar_o_titulo(app, sgdb):
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_seletor(app, "botaoEscolherLogoSgdb", "seletorDeLogo")
+    assert app.achar("seletorDeLogoTitulo").property("text") == "Escolher logo"
+    assert app.achar("seletorDeLogoAtalho").property("text") == "Usar o título"
+    assert app.achar("seletorDeLogoAtalho").property("dica") == "Não usar logo neste jogo"
+    _clique(app, "seletorDeLogoAtalho")
+    assert _esperar(lambda: not _visivel(app, "seletorDeLogo"))
+    assert app.edicao.logoSubtitulo == "Sem logo; o título é exibido"
+    assert _esperar(lambda: _foco_dentro_de(app, "botaoEscolherLogoSgdb"))
+
+
+def test_seletor_de_logo_escolhe_e_o_aplicar_grava(app, sgdb):
+    from cartridges.utils import game_logo  # noqa: PLC0415
+
+    app.edicao.abrir("shortcuts_z2")
+    _abrir_seletor(app, "botaoEscolherLogoSgdb", "seletorDeLogo")
+    app.achar("seletorDeLogoMiniatura0").forceActiveFocus()
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert _esperar(lambda: app.edicao.logoSubtitulo == "Escolhido manualmente")
+    entregue = app.edicao._form.logo.arquivo  # noqa: SLF001
+    app.edicao.aplicar()
+    assert game_logo.logo_choice(shared.store.get("shortcuts_z2")) == "manual"
+    assert _esperar(lambda: not entregue.exists()), "o temporário do seletor sai depois de gravado"
+
+
+def test_aviso_de_busca_sem_resultado_no_seletor(app, sgdb):
+    sgdb.grids = []
+    app.edicao.abrir("shortcuts_z1")
+    app.achar("botaoEscolherCapaSgdb").forceActiveFocus()
+    _clique(app, "botaoEscolherCapaSgdb")
+    vazio = app.achar("seletorDeCapaVazio")
+    assert _esperar(lambda: vazio.property("visible") is True)
+    assert vazio.property("titulo") == "Nenhuma capa encontrada"
+    assert vazio.property("descricao") == "Tente buscar por outro nome."
+    assert app.achar("seletorDeCapaGrade").property("visible") is False
+
+
+def test_textos_do_seletor_em_texto_puro(app, sgdb):
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
+    textos, pilha = [], [app.achar("seletorDeCapa")]
+    while pilha:
+        atual = pilha.pop()
+        if atual.metaObject().className().startswith("QQuickText"):
+            textos.append(atual)
+        if isinstance(atual, QQuickItem):
+            pilha.extend(atual.childItems())
+        pilha.extend(atual.children())
+    assert len(textos) >= 5
+    for texto in textos:
+        assert _avaliar(texto, "textFormat") == 0, (texto.property("text"), texto.parentItem())  # Text.PlainText
+
+
+def test_save_cover_fora_do_aplicar_limpa_a_capa_da_sessao(app, tmp_path):
+    from cartridges.utils.save_cover import save_cover  # noqa: PLC0415
+
+    jogo_ = shared.store.get("shortcuts_z2")
+    provisoria = _imagem(tmp_path / "provisoria.png", (600, 900), "red")
+    jogo_.capa_da_sessao = provisoria
+    assert jogo_.get_cover_path() == provisoria
+    # O caminho da importação e do SteamGridDB: grava a capa sem passar pelo Aplicar.
+    nova = _imagem(tmp_path / "nova.png", (600, 900), "blue")
+    save_cover("shortcuts_z2", nova)
+    assert _esperar(lambda: jogo_.capa_da_sessao is None)
+    assert jogo_.get_cover_path() == shared.covers_dir / "shortcuts_z2.tiff"
+    app.modelo.atualizar(jogo_)  # o que a ponte do app faz com o `atualizado`
+    assert "shortcuts_z2.tiff" in _papel_do_modelo(app, "shortcuts_z2", app.modelo.Papel.Capa)

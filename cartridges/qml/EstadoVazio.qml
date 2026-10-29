@@ -44,6 +44,7 @@ Item {
             visible: estado.glifo !== "" && !estado.iconeDoApp
             anchors.horizontalCenter: parent.horizontalCenter
             text: estado.glifo
+            textFormat: Text.PlainText
             font.family: Tema.fonteDeIcones
             font.pixelSize: 64
             color: Tema.textoSecundario
@@ -78,6 +79,7 @@ Item {
             rightPadding: 28
             contentItem: Text {
                 text: botao.text
+                textFormat: Text.PlainText
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 color: "white"

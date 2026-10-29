@@ -216,6 +216,8 @@ Rectangle {
         color: Tema.fundo
         border.color: Tema.botaoSobre
         clip: true
+        // Com um seletor do SteamGridDB aberto por cima, nada daqui recebe o mouse nem o Tab.
+        enabled: !edicao.seletorDeCapa.aberto && !edicao.seletorDeLogo.aberto
 
         Flickable {
             id: rolagem
@@ -265,7 +267,13 @@ Rectangle {
                         Row {
                             anchors { right: parent.right; bottom: parent.bottom; rightMargin: 6; bottomMargin: 6 }
                             spacing: 6
-                            // shortcut: o botão "Escolher capa no SteamGridDB" entra com a tarefa 8.
+                            BotaoDaCapa {
+                                id: botaoSgdbDaCapa
+                                objectName: "botaoEscolherCapaSgdb"
+                                glifo: ""  // buscar
+                                dica: "Escolher capa no SteamGridDB"
+                                onClicked: edicao.seletorDeCapa.abrir(edicao.nome)
+                            }
                             BotaoDaCapa {
                                 objectName: "botaoExcluirCapa"
                                 visible: edicao.temCapa
@@ -296,7 +304,13 @@ Rectangle {
                             dica: "Voltar a escolher o logo automaticamente"
                             onClicked: edicao.restaurarLogo()
                         }
-                        // shortcut: o botão "Escolher logo no SteamGridDB" entra com a tarefa 8.
+                        BotaoDeLinha {
+                            id: botaoSgdbDoLogo
+                            objectName: "botaoEscolherLogoSgdb"
+                            glifo: ""  // buscar
+                            dica: "Escolher logo no SteamGridDB"
+                            onClicked: edicao.seletorDeLogo.abrir(edicao.nome)
+                        }
                         BotaoDeLinha {
                             objectName: "botaoEscolherLogo"
                             glifo: "\uE8E5"  // abrir arquivo

@@ -444,6 +444,7 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
             capa_presa = form.capa is not None
             jogo.capa_da_sessao = form.capa
         else:
+            # O `save_cover` também a limpa (na principal, para toda gravação); aqui já, para o `update` logo abaixo.
             jogo.capa_da_sessao = None
             if form.capa is not None:
                 # Depois da recarga que o `save_cover` agenda (a mesma fila, que
