@@ -61,6 +61,9 @@ class JanelaFalsa:
         self.estados = estados
         self.chamadas.append("estados")
 
+    def isVisible(self):  # noqa: N802
+        return True
+
     def raise_(self):
         self.chamadas.append("raise")
 

@@ -9,10 +9,13 @@ da sessão, avisar o fim e trazer a janela de volta. O QML só lê as propriedad
 Tudo na thread principal.
 """
 
+import ctypes
+import logging
 import weakref
+from ctypes import wintypes
 from typing import Any
 
-from PySide6.QtCore import Property, QObject, Qt, Signal, Slot
+from PySide6.QtCore import Property, QCoreApplication, QObject, Qt, Signal, Slot
 from PySide6.QtGui import QWindow
 
 from cartridges.modelos.avisos import FilaDeAvisos
@@ -21,6 +24,38 @@ from cartridges.process_session import ProcessSession
 from cartridges.session_window import SessionWindow
 from cartridges.utils import game_logo, session_log
 from cartridges.utils.format_playtime import format_playtime, format_stopwatch
+
+
+def canto_inferior_direito(area: tuple[int, int, int, int], largura: int, altura: int, margem: int = 12) -> tuple[int, int]:
+    """Onde a janela fica logo acima do relógio: o canto de baixo à direita da área de trabalho."""
+    return area[2] - largura - margem, area[3] - altura - margem
+
+
+def _user32() -> Any:
+    return ctypes.windll.user32  # type: ignore[attr-defined]
+
+
+def _area_de_trabalho() -> tuple[int, int, int, int]:
+    area = wintypes.RECT()
+    if not _user32().SystemParametersInfoW(0x0030, 0, ctypes.byref(area), 0):  # SPI_GETWORKAREA
+        raise ctypes.WinError()
+    return area.left, area.top, area.right, area.bottom
+
+
+def _retangulo_da_janela(hwnd: int) -> tuple[int, int, int, int]:
+    retangulo = wintypes.RECT()
+    user32 = _user32()
+    user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    if not user32.GetWindowRect(hwnd, ctypes.byref(retangulo)):
+        raise ctypes.WinError()
+    return retangulo.left, retangulo.top, retangulo.right, retangulo.bottom
+
+
+def _posicionar(hwnd: int, x: int, y: int) -> None:
+    user32 = _user32()
+    user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, *([ctypes.c_int] * 4), wintypes.UINT]
+    # SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE: não redimensiona, não muda a ordem e nunca rouba o foco.
+    user32.SetWindowPos(hwnd, 0, x, y, 0, 0, 0x0001 | 0x0004 | 0x0010)
 
 
 def pode_anotar(jogo: Any) -> bool:
@@ -50,6 +85,7 @@ class ModeloDaSessao(QObject):
         self._logo = ""
         self._largura_do_logo = 0
         self._anotacao = ""
+        self._sair = QCoreApplication.quit  # trocado nos testes: sair de verdade acabaria o laço do teste
 
     def definir_janela(self, janela: QWindow) -> None:
         self._janela = janela
@@ -148,6 +184,8 @@ class ModeloDaSessao(QObject):
         if janela is None:
             return
         janela.setWindowStates(janela.windowStates() & ~Qt.WindowState.WindowMinimized)
+        if not janela.isVisible():  # fechada com a janela manual ainda aberta
+            janela.show()
         janela.raise_()
         janela.requestActivate()
 
@@ -196,6 +234,26 @@ class ModeloDaSessao(QObject):
         jogo.update()
         self._anotacao = texto
         self.alterado.emit()
+
+    @Slot(QWindow)
+    def posicionarJanelaManual(self, janela: QWindow) -> None:  # noqa: N802
+        """Põe a janela "Jogando" acima do relógio. Qualquer falha a deixa onde está."""
+        try:
+            hwnd = int(janela.winId())
+            esquerda, topo, direita, base = _retangulo_da_janela(hwnd)
+            x, y = canto_inferior_direito(_area_de_trabalho(), direita - esquerda, base - topo)
+            _posicionar(hwnd, x, y)
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).exception("Não foi possível posicionar a janela Jogando")
+
+    @Slot()
+    def principalFechando(self) -> None:  # noqa: N802
+        """Fechar a principal com a janela manual aberta fecha o app, como na `main`.
+
+        Sem isto a manual, que também é janela, manteria o app vivo. O `aboutToQuit` grava a sessão.
+        """
+        if self._manual is not None:
+            self._sair()
 
     @Slot()
     def janelaManualFechada(self) -> None:

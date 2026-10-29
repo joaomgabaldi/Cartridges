@@ -252,6 +252,15 @@ Principal {
         visible: sessao.emAndamento
     }
 
+    onClosing: sessao.principalFechando()
+
+    // A janela "Jogando {nome}" da sessão manual: própria, fora desta (D50).
+    Loader {
+        objectName: "carregadorDaJanelaManual"
+        active: sessao.janelaManual
+        source: "JanelaDaSessao.qml"
+    }
+
     Avisos {
         id: camadaDeAvisos
         objectName: "camadaDeAvisos"

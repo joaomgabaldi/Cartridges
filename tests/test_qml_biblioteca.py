@@ -45,13 +45,16 @@ def _achar(raiz, nome):
     pilha = [raiz]
     while pilha:
         atual = pilha.pop()
-        if atual.objectName() == nome:
-            return atual
-        pilha.extend(atual.children())
-        if isinstance(atual, QQuickItem):
-            pilha.extend(atual.childItems())
-        elif isinstance(atual, QQuickWindow):
-            pilha.append(atual.contentItem())
+        try:  # um item já deletado (a janela solta da sessão, por exemplo) não derruba a busca
+            if atual.objectName() == nome:
+                return atual
+            pilha.extend(atual.children())
+            if isinstance(atual, QQuickItem):
+                pilha.extend(atual.childItems())
+            elif isinstance(atual, QQuickWindow) and atual is raiz:  # outra janela é outra árvore
+                pilha.append(atual.contentItem())
+        except RuntimeError:
+            continue
     return None
 
 
