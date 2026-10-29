@@ -273,11 +273,12 @@ class DetalhesDoJogo(QObject):
 
     # -- seguir o jogo ---------------------------------------------------------------------------
 
-    @Slot(str)
-    def mostrar(self, game_id: str) -> None:
+    @Slot(str, result=bool)
+    def mostrar(self, game_id: str) -> bool:
+        """Passa a seguir o jogo; `False` (sem mudar nada) se ele não está na loja."""
         jogo = self._store.get(game_id)
         if jogo is None:
-            return
+            return False
         self._desligar()
         trocou = self._v["jogoId"] != game_id
         self._jogo = weakref.ref(jogo)
@@ -286,6 +287,7 @@ class DetalhesDoJogo(QObject):
         # Conexão para o próprio QObject: o `atualizado` também sai de outras threads, e chega aqui na principal.
         jogo.atualizado.connect(self._ao_atualizar)
         self._atualizar(jogo, trocou)
+        return True
 
     def _desligar(self) -> None:
         if self._jogo is not None and (antigo := self._jogo()) is not None:
@@ -295,12 +297,13 @@ class DetalhesDoJogo(QObject):
                 pass
         self._jogo = None
         self._atual = ""
+        # Um desfoque a caminho não pode travar o fundo se o mesmo jogo voltar a ser mostrado.
+        self._chave_do_fundo = ""
 
     @Slot()
     def esquecer(self) -> None:
         """A página fechou: para de seguir o jogo e descarta o que ainda estiver a caminho."""
         self._desligar()
-        self._chave_do_fundo = ""
 
     @Slot()
     def _ao_atualizar(self) -> None:

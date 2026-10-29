@@ -29,9 +29,9 @@ Rectangle {
     // O modelo da biblioteca: só `iniciar` é chamado nele; o QML nunca vê um Jogo.
     property QtObject modelo
 
-    // A capa e o clique direito levam aos detalhes; quem recebe é o plano 3.
+    // O clique na capa abre os detalhes.
     signal abrirDetalhes(string jogoId)
-    // O clique direito no cartão (na `main` abria o diálogo Editar).
+    // O clique direito no cartão abre o diálogo Editar (tarefa 6 do plano 3).
     signal editar(string jogoId)
     // O botão "Mais opções" (ou a tecla de menu) pede o menu do jogo, ancorado no item.
     signal menuPedido(string jogoId, Item ancora)
@@ -62,7 +62,7 @@ Rectangle {
     HoverHandler { id: passagem }
 
     // Clique na capa: detalhes. Clique direito: Editar (como na `main`).
-    // shortcut: os dois sinais ficam sem receptor até o plano 3; lá `editar` abre o diálogo Editar.
+    // shortcut: `editar` fica sem receptor até a tarefa 6 do plano 3.
     TapHandler {
         onTapped: cartao.abrirDetalhes(cartao.jogoId)
     }

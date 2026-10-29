@@ -13,9 +13,9 @@ Item {
     property bool buscaAberta: false
     // A página que está por cima na pilha; a coberta não anima capas.
     property bool ativa: true
-    // O jogo que o Enter da busca escolheu; a tela de detalhes (plano 3) o abre.
-    // shortcut: só guardado, a tela de detalhes ainda não existe; sai com o plano 3.
-    property string jogoEscolhido: ""
+    // Um jogo foi escolhido (clique, Enter, A do controle ou Enter da busca) e a página dele deve abrir.
+    signal abrirDetalhes(string jogoId)
+    signal editar(string jogoId)
 
     function focarGrade() { grade.forceActiveFocus() }
 
@@ -76,7 +76,13 @@ Item {
             font { family: Tema.fonte; pixelSize: 14 }
             leftPadding: 34
             onTextChanged: if (raiz.pagina) raiz.pagina.busca = text
-            onAccepted: raiz.jogoEscolhido = raiz.pagina.primeiro()
+            onAccepted: {
+                var id = raiz.pagina.primeiro()
+                if (id === "") return
+                // O foco volta ao cartão aberto, o primeiro da lista filtrada.
+                grade.currentIndex = 0
+                raiz.abrirDetalhes(id)
+            }
             Keys.onEscapePressed: raiz.buscaAberta = false
 
             Text {
@@ -104,6 +110,8 @@ Item {
         tocarSempre: aplicativo.tocarSempre && aplicativo.animacoesDoSistema
         ativa: raiz.ativa
         visible: !aviso.visible
+        onAbrirDetalhes: id => raiz.abrirDetalhes(id)
+        onEditar: id => raiz.editar(id)
 
         // Digitar com a grade em foco abre a busca, como o `key-capture-widget` da versão anterior.
         Keys.onPressed: event => {

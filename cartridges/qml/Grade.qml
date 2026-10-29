@@ -26,9 +26,9 @@ GridView {
     }
     // shortcut: a `main` também parava as capas durante uma sessão de jogo; volta com a sessão, no plano 5.
 
-    // O jogo que o clique na capa, o clique direito ou o Enter abrem; o receptor é do plano 3.
+    // O jogo que o clique na capa, o Enter ou o A do controle abrem.
     signal abrirDetalhes(string jogoId)
-    // O clique direito num cartão: na `main`, o diálogo Editar (plano 3).
+    // O clique direito num cartão: na `main`, o diálogo Editar (tarefa 6 do plano 3).
     signal editar(string jogoId)
     // O foco do cartão (anel e botões) só aparece depois de uma tecla; o mouse o apaga.
     property bool porTeclado: false
@@ -138,7 +138,8 @@ GridView {
             tocarSempre: grade.tocarSempre
             focado: grade.activeFocus && grade.porTeclado && parent.GridView.isCurrentItem
             menuAberto: menuDoJogo.visible && menuDoJogo.jogoId === jogoId
-            onAbrirDetalhes: id => grade.abrirDetalhes(id)
+            // O índice vai junto: ao voltar, o foco é do cartão de onde a página saiu.
+            onAbrirDetalhes: id => { grade.currentIndex = index; grade.abrirDetalhes(id) }
             onEditar: id => grade.editar(id)
             onMenuPedido: (id, ancora) => {
                 grade.currentIndex = index

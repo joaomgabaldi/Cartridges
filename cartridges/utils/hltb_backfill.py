@@ -171,15 +171,5 @@ class HLTBBackfill(PassadaAgendada):
         # with only a main-story estimate keeps whatever the other two held.
         game.update_values(dict(times))
         game.save()
+        # The details page follows the game and refreshes itself on this update.
         game.update()
-
-        # The details page renders its times once, when it is shown; a game
-        # filled in while the user is looking at it would otherwise keep the
-        # empty row until they navigated away and back.
-        win = shared.win
-        if (
-            win is not None
-            and getattr(win, "active_game", None) is game
-            and win.navigation_view.get_visible_page() == win.details_page
-        ):
-            win.update_hltb_block(game)

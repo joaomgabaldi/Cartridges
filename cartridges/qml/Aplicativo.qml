@@ -8,12 +8,26 @@ Principal {
 
     // Lido aqui, fora dos Avisos, porque lá o nome da propriedade é o mesmo.
     readonly property QtObject ligacao: ponte
-    readonly property string paginaAtual: pilha.depth === 0 ? "todos" : "zerados"
+    // "todos", "zerados" ou "jogo" (a página de detalhes, por cima de uma das duas).
+    readonly property string paginaAtual: pilha.depth === 0 ? "todos"
+        : (pilha.currentItem && pilha.currentItem.objectName === "paginaDoJogo" ? "jogo" : "zerados")
+
+    // Abre a página de detalhes do jogo; o foco inicial é dela (StackView.onActivated).
+    function abrirDetalhes(jogoId) {
+        if (paginaAtual === "jogo") return
+        if (detalhes.mostrar(jogoId)) pilha.push(paginaDoJogo)
+    }
+    // Fecha a página de detalhes, ou sai de Jogos Zerados; o foco volta ao cartão de onde se saiu.
+    function voltar() {
+        if (paginaAtual === "jogo") detalhes.esquecer()
+        if (paginaAtual === "jogo" && pilha.depth > 1) pilha.pop()
+        else if (paginaAtual !== "todos") pilha.clear(StackView.PopTransition)
+    }
 
     // O `y` de um menu aberto por um botão da barra: abaixo dos 46 px dela, fora da área de arrasto do QWindowKit.
     function baseDaBarra(botao) { return botao.height + (alturaDaBarra - botao.height) / 2 }
 
-    tituloDaBarra: paginaAtual === "todos" ? "Todos os jogos" : "Jogos Zerados"
+    tituloDaBarra: paginaAtual === "todos" ? "Todos os jogos" : paginaAtual === "zerados" ? "Jogos Zerados" : detalhes.nome
 
     // Depois do setup do QWindowKit (Principal.qml), que roda no onCompleted da base.
     Component.onCompleted: visible = true
@@ -36,10 +50,10 @@ Principal {
         BotaoDaBarra {
             id: botaoVoltar
             objectName: "botaoVoltar"
-            visible: janela.paginaAtual === "zerados"
+            visible: janela.paginaAtual !== "todos"
             glifo: ""
             dica: "Voltar"
-            onClicked: pilha.clear(StackView.PopTransition)
+            onClicked: janela.voltar()
         }
     ]
 
@@ -89,6 +103,7 @@ Principal {
         pagina: paginaTodos
         comBusca: true
         ativa: pilha.depth === 0
+        onAbrirDetalhes: id => janela.abrirDetalhes(id)
     }
 
     // Vazia, a pilha mostra "Todos os jogos"; "Jogos Zerados" entra por cima.
@@ -103,10 +118,28 @@ Principal {
         PaginaDaBiblioteca {
             objectName: "paginaDeZerados"
             pagina: paginaZerados
+            // Coberta pelos detalhes, ela não anima capas.
+            ativa: StackView.status !== StackView.Inactive
+            onAbrirDetalhes: id => janela.abrirDetalhes(id)
             StackView.onActivated: focarGrade()
             // O fundo cobre "Todos os jogos" durante a transição.
             Rectangle { anchors.fill: parent; color: Tema.fundo; z: -1 }
         }
+    }
+
+    Component {
+        id: paginaDoJogo
+        PaginaDoJogo {
+            objectName: "paginaDoJogo"
+            placeholder: paginaTodos.placeholder
+            onVoltar: janela.voltar()
+        }
+    }
+
+    // O jogo mostrado foi excluído, removido ou saiu dos Jogos Zerados: a página fecha.
+    Connections {
+        target: detalhes
+        function onSair() { if (janela.paginaAtual === "jogo") janela.voltar() }
     }
 
     Avisos {
@@ -162,7 +195,7 @@ Principal {
     }
 
     // --- Controle do Xbox -------------------------------------------------------------------------------
-    // A página à vista: "Todos os jogos" ou, por cima dela, "Jogos Zerados".
+    // A página à vista: "Todos os jogos", "Jogos Zerados" ou a de detalhes.
     readonly property var paginaDoControle: pilha.depth === 0 ? todos : pilha.currentItem
     // Menu ou diálogo na frente: o controle navega nele pelas teclas, como o teclado faria.
     readonly property bool popupAberto: menuPrincipal.opened || camadaDeAvisos.dialogoAberto
@@ -237,7 +270,7 @@ Principal {
         }
         function onVoltar() {
             if (janela.popupAberto) controle.teclar(Qt.Key_Escape)
-            else if (janela.paginaAtual === "zerados") pilha.clear(StackView.PopTransition)
+            else if (janela.paginaAtual !== "todos") janela.voltar()
             else if (todos.buscaAberta) todos.buscaAberta = false
         }
         function onMenuPrincipal() { if (!janela.popupAberto) menuPrincipal.open() }

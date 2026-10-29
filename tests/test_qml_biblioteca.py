@@ -7,7 +7,7 @@
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QEventLoop, QMetaObject, QObject, Qt, QTimer, QUrl
+from PySide6.QtCore import QEventLoop, QMetaObject, QObject, Qt, QTimer, QUrl, Signal
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -18,6 +18,7 @@ from cartridges.aplicativo import Aplicativo
 from cartridges.jogo import Jogo
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.modelos.controle import ControleDaGrade
+from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.ponte import Ponte
 
 QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml"
@@ -71,8 +72,24 @@ class _LeitorFalso:
         pass
 
 
+class _LojaFalsa(QObject):
+    """O que o `DetalhesDoJogo` pede à `Store`: achar o jogo e saber das exclusões."""
+
+    jogo_excluido = Signal(str)
+
+    def __init__(self, jogos):
+        super().__init__()
+        self.por_id = {jogo.game_id: jogo for jogo in jogos}
+
+    def get(self, game_id):
+        return self.por_id.get(game_id)
+
+
 class _App:
     def __init__(self, jogos):
+        self.jogos = jogos
+        self.loja = _LojaFalsa(jogos)
+        self.detalhes = DetalhesDoJogo(self.loja)
         self.modelo = ModeloDaBiblioteca()
         for jogo in jogos:
             self.modelo.atualizar(jogo)
@@ -89,10 +106,12 @@ class _App:
             estado_do_app=lambda: Qt.ApplicationState.ApplicationActive,
         )
         self.motor = QQmlEngine()
+        self.motor.addImageProvider("desfoque", self.detalhes.provedor)
         contexto = self.motor.rootContext()
         for nome, valor in (
             ("filtros", self.filtros), ("paginaTodos", self.todos), ("paginaZerados", self.zerados),
             ("aplicativo", self.aplicativo), ("ponte", self.ponte), ("controle", self.controle),
+            ("detalhes", self.detalhes),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

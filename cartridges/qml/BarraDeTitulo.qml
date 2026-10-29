@@ -35,7 +35,12 @@ Rectangle {
 
     Text {
         anchors.centerIn: parent
+        objectName: "tituloDaBarraTexto"
+        // O nome do jogo é texto de terceiros e pode ser longo; deixa folga para os botões dos dois lados.
+        width: Math.min(implicitWidth, Math.max(0, parent.width - 320))
+        elide: Text.ElideRight
         text: barra.titulo
+        textFormat: Text.PlainText
         color: barra.janela.active ? Tema.texto : Tema.textoSecundario
         font.family: Tema.fonte
         font.pixelSize: 15

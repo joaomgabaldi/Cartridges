@@ -146,6 +146,28 @@ def test_opacidade_do_fundo(app_qt):
     assert modulo.opacidade_do_fundo((0.2, 0.6), True, True) == 0.3
 
 
+def test_opacidade_do_fundo_segue_o_esquema_de_cores(app_qt, store, monkeypatch):
+    from PySide6.QtCore import Qt  # noqa: PLC0415
+    from PySide6.QtGui import QGuiApplication  # noqa: PLC0415
+
+    monkeypatch.setattr(modulo, "_alto_contraste", lambda: False)
+    Image.new("RGB", (200, 300), (200, 40, 40)).save(shared.covers_dir / "a.tiff")
+    detalhes = _modelo(store, _jogo())
+    detalhes.mostrar("a")
+    assert _rodar_ate(lambda: detalhes.fundo)
+    luminancia = desfoque.calcular(shared.covers_dir / "a.tiff").luminancia
+    dicas = QGuiApplication.styleHints()
+    esperado = {
+        Qt.ColorScheme.Dark: 1 - luminancia[0],
+        Qt.ColorScheme.Light: luminancia[1],
+        Qt.ColorScheme.Unknown: 0.3,
+    }
+    for esquema, valor in esperado.items():
+        monkeypatch.setattr(dicas, "colorScheme", lambda e=esquema: e)
+        dicas.colorSchemeChanged.emit(esquema)  # o caminho público: o sistema trocou o tema
+        assert detalhes.opacidadeDoFundo == valor, esquema
+
+
 # -- o modelo --------------------------------------------------------------------------------------
 
 
@@ -356,6 +378,23 @@ def test_desfoque_de_outro_jogo_e_descartado(app_qt, store, monkeypatch):
     assert _rodar_ate(lambda: entregas)  # o resultado de "a" chegou, e foi descartado
     assert detalhes.jogoId == "b"
     assert detalhes.fundo == ""
+
+
+def test_desfoque_em_voo_entre_sair_e_mostrar_nao_trava_o_fundo(app_qt, store, monkeypatch):
+    Image.new("RGB", (200, 300), "red").save(shared.covers_dir / "a.tiff")
+    liberar, chamadas = _calcular_travado(monkeypatch)
+    detalhes = _modelo(store, _jogo())
+    detalhes.mostrar("a")
+    assert _rodar_ate(lambda: chamadas)
+    detalhes._excluido("a")  # noqa: SLF001  (o `sair`: o modelo para de seguir o jogo)
+    entregas = []
+    original = detalhes._fundo_chegou  # noqa: SLF001
+    monkeypatch.setattr(detalhes, "_fundo_chegou", lambda *a: (entregas.append(a), original(*a)))
+    liberar.set()
+    assert _rodar_ate(lambda: entregas)  # chegou sem página: descartado
+    assert detalhes.fundo == ""
+    detalhes.mostrar("a")
+    assert _rodar_ate(lambda: detalhes.fundo)
 
 
 def test_desfoque_que_falha_ainda_entrega(app_qt, store, monkeypatch):
