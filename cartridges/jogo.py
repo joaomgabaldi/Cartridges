@@ -33,7 +33,10 @@ from typing import Any, Callable, Optional
 from PySide6.QtCore import QObject, Signal
 
 from cartridges import shared
-from cartridges.utils.run_executable import run_executable
+from cartridges.process_session import ProcessSession
+from cartridges.session_window import SessionWindow
+from cartridges.utils.process_monitor import install_dir_from_command
+from cartridges.utils.run_executable import aumid_from_command, run_executable
 
 # Cover formats that hold an animation and are stored in their original form.
 # O APNG usa a extensão .png das imagens paradas; guardado, vira .apng, e é a
@@ -399,9 +402,8 @@ class Jogo(QObject):
     def launch(self, ao_confirmar: Optional[Callable[[], Any]] = None) -> bool:
         """``ao_confirmar`` é como relançar depois da confirmação do comando de um
         jogo restaurado; sem ele, é este mesmo ``launch``."""
-        # shortcut: launch sem sessão/saves/controle na fase 0, plano 5 devolve
-        # (a espera da restauração dos saves, o monitor e a janela de sessão,
-        # a vibração do controle e a mudança de monitor).
+        # shortcut: sem a espera da restauração dos saves ("Aguarde o fim da restauração dos saves de
+        # {}."), no plano que portar backup_de_saves (D52).
         if self.comando_a_conferir:
             self._conferir_comando(ao_confirmar or self.launch)
             return False
@@ -410,9 +412,40 @@ class Jogo(QObject):
         self.save()
         self.update()
 
-        run_executable(self.executable, self.run_as_admin)
+        # Como esta sessão vai ser acompanhada, decidido antes de lançar o jogo: o que é
+        # acompanhável sai do próprio comando (o nome do processo, o pacote ou a pasta de
+        # instalação). Sobra o jogo lançado por URI de loja. "playtime-tracking" desliga tudo.
+        tracking = shared.schema.get_boolean("playtime-tracking")
+        followable = (
+            (self.track_process and bool(self.process_executable.strip()))
+            or bool(aumid_from_command(self.executable))
+            or bool(install_dir_from_command(self.executable))
+        )
+        sessao = shared.sessao
+        # Sair da frente antes de o jogo existir: a janela muda de monitor aqui, com o jogo ainda
+        # por lançar. Só com sessão, que é quem devolve a janela ao lugar de origem.
+        moved = tracking and sessao is not None and sessao.move_to_session_monitor()
 
-        if shared.schema.get_boolean("minimize-after-launch"):
+        run_executable(self.executable, self.run_as_admin)
+        if sessao is not None:
+            sessao.vibrar_abertura()
+
+        # Encerra (com registro) a sessão em andamento antes de começar outra: dois rastreadores
+        # nunca contam ao mesmo tempo.
+        if SessionWindow.active is not None:
+            SessionWindow.active.close()
+        if ProcessSession.active is not None:
+            ProcessSession.active.stop(record=True)
+
+        if sessao is not None and tracking and followable:
+            ProcessSession(self).start()
+            if not moved:
+                self.sair_da_frente.emit()
+        elif sessao is not None and tracking:
+            SessionWindow(self).present()
+            if not moved:
+                self.sair_da_frente.emit()
+        elif shared.schema.get_boolean("minimize-after-launch"):
             self.sair_da_frente.emit()
 
         # The variable is the title of the game

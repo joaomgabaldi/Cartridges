@@ -126,7 +126,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_metadata_refresh.py",
     "test_na_tela.py",
     "test_preferencias_big_picture.py",
-    "test_process_session.py",
     "test_redefinir.py",
     "test_reinicio.py",
     "test_restauracao_dialogs.py",
@@ -381,6 +380,23 @@ def win(monkeypatch):
     fake = FakeWindow()
     monkeypatch.setattr(shared, "win", fake, raising=False)
     return fake
+
+
+@pytest.fixture(autouse=True)
+def sem_jogo_de_verdade(monkeypatch):
+    """Nenhum teste inicia um jogo: o `launch` que chegar ao `run_executable` falha alto.
+
+    Também zera a sessão: o `ModeloDaSessao` (`shared.sessao`) e os rastreadores ativos não passam de um teste ao outro.
+    """
+    from cartridges import jogo, process_session, session_window  # noqa: PLC0415
+
+    def recusa(*_args, **_kwargs):
+        raise AssertionError("run_executable: nenhum jogo é iniciado nos testes")
+
+    monkeypatch.setattr(jogo, "run_executable", recusa)
+    monkeypatch.setattr(shared, "sessao", None, raising=False)
+    monkeypatch.setattr(process_session.ProcessSession, "active", None)
+    monkeypatch.setattr(session_window.SessionWindow, "active", None)
 
 
 @pytest.fixture(autouse=True)

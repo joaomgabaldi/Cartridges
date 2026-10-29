@@ -32,7 +32,9 @@ RAIZ = winreg.HKEY_CURRENT_USER
 # dados reais. Copiados, o app -dev faria backup/restauração dos saves na pasta real.
 # Sem eles, o app -dev usa o padrão, dentro da própria pasta -dev (o ludusavi regrava os dois).
 IGNORAR_VALORES = frozenset({"pasta-dos-saves"})
-IGNORAR_ARQUIVOS = frozenset({"ludusavi/config.yaml", "ludusavi/cache.yaml"})
+# As fitas de LED e a conta Tuya levam as chaves locais dos aparelhos reais da casa: o app -dev
+# acende as fitas ao abrir e falaria com elas (D53).
+IGNORAR_ARQUIVOS = frozenset({"ludusavi/config.yaml", "ludusavi/cache.yaml", "fitas.json", "tuya_conta.json"})
 
 REPO = Path(__file__).resolve().parent.parent
 ATALHOS_DE_TESTE = REPO / "_dev" / "atalhos-teste"

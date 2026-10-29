@@ -31,6 +31,7 @@ from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.edicao import ModeloDaEdicao
+from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.ponte import Ponte
 from cartridges.store.managers import async_manager
 from cartridges.store.managers.exibicao_manager import ExibicaoManager
@@ -98,6 +99,7 @@ def main(argv: list[str]) -> int:
 
     def encerrar() -> None:
         big_picture.encerrar()  # a cortina preta do fade nunca fica no monitor (ADR 0003)
+        sessao.encerrar()  # o tempo da sessão em andamento vai ao jogo e ao histórico (sem interface)
         verificador.stop()
         varredura_hltb.stop()
         varredura_tamanho.stop()
@@ -146,19 +148,22 @@ def main(argv: list[str]) -> int:
     detalhes = DetalhesDoJogo(shared.store, avisos=avisos)
     edicao = ModeloDaEdicao(aplicativo)
     big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
+    sessao = ModeloDaSessao(avisos)
+    shared.sessao = sessao
     motor.addImageProvider("desfoque", detalhes.provedor)
     motor.addImageProvider("fundo", ProvedorDoFundo())
     contexto = motor.rootContext()
     for nome, valor in (
         ("filtros", filtros), ("paginaTodos", pagina_biblioteca), ("paginaZerados", pagina_zerados),
         ("aplicativo", aplicativo), ("ponte", ponte), ("controle", controle), ("detalhes", detalhes),
-        ("edicao", edicao), ("bigPicture", big_picture),
+        ("edicao", edicao), ("bigPicture", big_picture), ("sessao", sessao),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))
     if not motor.rootObjects():
         return 1
     big_picture.definir_janela(motor.rootObjects()[0])  # a janela que vai à tela cheia
+    sessao.definir_janela(motor.rootObjects()[0])  # a que volta da barra de tarefas no fim da sessão
     shared.aplicativo = aplicativo
     aplicativo.verificador_de_atualizacoes = verificador  # a tela de preferências chama `check_async()` ao ligar o aviso
     # Na ordem da `main`: atualizações, HowLongToBeat, tamanho em disco.

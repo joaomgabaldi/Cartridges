@@ -5,8 +5,8 @@
 """The automatic play session: what counts as running, and what gets written.
 
 Every test here drives ``_poll`` by hand against a controlled clock. Nothing
-starts a real GLib timer, because the thing being tested is the state machine,
-not GLib's ability to fire a callback.
+waits for a real timer, because the thing being tested is the state machine,
+not Qt's ability to fire a callback. ``shared.sessao`` is a recording fake.
 
 The clock is monotonic on purpose and the tests reflect that: an NTP correction,
 a manual clock change or a resume from sleep with a drifted RTC all move
@@ -17,7 +17,9 @@ never had.
 import pytest
 
 from cartridges import process_session as ps
+from cartridges import shared
 from cartridges.process_session import ProcessSession
+from tests.apoio_sessao import SessaoFalsa
 
 PACKAGED = "explorer.exe shell:AppsFolder\\Microsoft.Halo_8wekyb3d8bbwe!Game"
 CLASSIC = 'start "" "D:\\SteamLibrary\\steamapps\\common\\Halo\\halo.exe"'
@@ -71,6 +73,24 @@ def running(monkeypatch):
     monkeypatch.setattr(ps, "is_process_running", name)
     monkeypatch.setattr(ps, "is_process_running_under", folder)
     return answers
+
+
+@pytest.fixture(autouse=True)
+def sessao(monkeypatch):
+    falsa = SessaoFalsa()
+    monkeypatch.setattr(shared, "sessao", falsa, raising=False)
+    return falsa
+
+
+class TimerFalso:
+    def __init__(self):
+        self.parados = 0
+
+    def stop(self):
+        self.parados += 1
+
+    def deleteLater(self):
+        pass
 
 
 @pytest.fixture
@@ -219,7 +239,7 @@ def test_paused_time_is_not_counted(make_game, running, clock):
 
 
 def test_a_packaged_game_that_never_appeared_records_nothing(
-    make_game, running, clock, win, session_window
+    make_game, running, clock, sessao, session_window
 ):
     """T5.4 "No process of this package" is the game not having started.
 
@@ -227,7 +247,6 @@ def test_a_packaged_game_that_never_appeared_records_nothing(
     somebody closes it, and shutdown then writes hours the game never had.
     """
     session = make_session(make_game)
-    session.poll_id = 0
 
     for _ in range(session.PACKAGE_STARTUP_GRACE // session.POLL_INTERVAL):
         session._poll()
@@ -235,7 +254,7 @@ def test_a_packaged_game_that_never_appeared_records_nothing(
     assert session.game.playtime == 0
     assert session.game.saves == 0
     assert session_window == [], "must not fall back to the manual window"
-    assert len(win.toast_queue.added) == 1
+    assert sessao.avisos == ["Não foi possível detectar Test Game em execução"]
     assert ProcessSession.active is None
 
 
@@ -244,7 +263,6 @@ def test_a_classic_game_that_never_appeared_falls_back_to_the_manual_window(
 ):
     """T5.5 Here "never seen" really can mean "lost track of it"."""
     session = make_session(make_game, executable=CLASSIC)
-    session.poll_id = 0
 
     for _ in range(session.STARTUP_GRACE // session.POLL_INTERVAL):
         session._poll()
@@ -313,7 +331,7 @@ def test_a_game_that_relaunches_itself_keeps_its_session(
 
 
 def test_a_game_gone_past_the_grace_ends_and_records(
-    make_game, running, clock, schema, win
+    make_game, running, clock, schema, sessao
 ):
     """T5.7"""
     schema["process-tracking-grace"] = 5
@@ -334,7 +352,7 @@ def test_a_game_gone_past_the_grace_ends_and_records(
     assert ProcessSession.active is None
     assert session.game.playtime == 30
     assert session.game.saves >= 1
-    assert win.toast_queue.added
+    assert [seg for _jogo, seg in sessao.toasts] == [30]
 
 
 # ---------------------------------------------------------------------------
@@ -343,46 +361,30 @@ def test_a_game_gone_past_the_grace_ends_and_records(
 
 
 @pytest.mark.parametrize("packaged", [True, False])
-def test_the_glib_source_is_removed_exactly_once(
-    make_game, running, clock, monkeypatch, session_window, packaged
-):
-    """T5.8 Returning SOURCE_REMOVE already destroys the source.
+def test_o_timer_para_uma_vez_so(make_game, running, clock, session_window, packaged):
+    """T5.8 Desistir da espera para o timer, e o `stop` que vem logo depois não o para de novo."""
+    session = make_session(make_game, executable=PACKAGED if packaged else CLASSIC)
+    timer = session.timer = TimerFalso()
 
-    Both give-up paths zero ``poll_id`` before calling ``stop()``, or the source
-    would be removed a second time.
-    """
-    removals: list = []
-    monkeypatch.setattr(ps.GLib, "source_remove", lambda sid: removals.append(sid))
-
-    session = make_session(
-        make_game, executable=PACKAGED if packaged else CLASSIC
-    )
-    session.poll_id = 42
-
-    result = None
     for _ in range(session.startup_grace // session.POLL_INTERVAL):
-        result = session._poll()
+        session._poll()
 
-    assert result == ps.GLib.SOURCE_REMOVE
-    assert removals == [], "the source destroys itself by returning SOURCE_REMOVE"
-    assert session.poll_id == 0
+    assert timer.parados == 1
+    assert session.timer is None
 
 
-def test_stop_removes_a_live_source_once(make_game, running, clock, monkeypatch):
-    """T5.8 (the other direction) Stopping early does have to remove it."""
-    removals: list = []
-    monkeypatch.setattr(ps.GLib, "source_remove", lambda sid: removals.append(sid))
-
+def test_parar_com_o_timer_ligado_para_uma_vez(make_game, running, clock):
+    """T5.8 (o outro sentido) Parar antes da hora para o timer, e parar de novo não repete."""
     session = make_session(make_game)
-    session.poll_id = 7
+    timer = session.timer = TimerFalso()
     session.stop(record=False)
     session.stop(record=False)
 
-    assert removals == [7]
+    assert timer.parados == 1
 
 
 def test_flush_writes_the_current_stretch_and_touches_no_widget(
-    make_game, running, clock, win
+    make_game, running, clock, sessao
 ):
     """T5.9 Used on shutdown, when widgets may already be gone."""
     session = make_session(make_game)
@@ -394,8 +396,8 @@ def test_flush_writes_the_current_stretch_and_touches_no_widget(
 
     assert session.game.playtime == 25
     assert session.game.saves == 1
-    assert win.toast_queue.added == []
-    assert win.presented == 0
+    assert sessao.avisos == [] and sessao.toasts == []
+    assert sessao.presented == 0
 
 
 def test_flush_before_the_game_was_ever_seen_writes_nothing(
@@ -410,7 +412,7 @@ def test_flush_before_the_game_was_ever_seen_writes_nothing(
 
 
 def test_a_second_launch_ends_the_first_session_recording_it(
-    make_game, running, clock, win
+    make_game, running, clock, sessao
 ):
     """T5.10 Two trackers must never count at once."""
     first = make_session(make_game)
@@ -428,67 +430,24 @@ def test_a_second_launch_ends_the_first_session_recording_it(
     assert first.game.saves >= 1
 
 
-def test_the_session_toast_does_not_parse_the_title_as_markup(
-    make_game, running, clock, win
-):
-    """T5.11 An "&" in a game's name makes Pango drop the label."""
-    session = make_session(make_game, name="Sam & Max <Save the World>")
-    running.package = True
-    session._poll()
-    clock.advance(30)
-
-    session.stop(record=True)
-
-    toast = win.toast_queue.added[-1]
-    assert toast.get_use_markup() is False
-    assert "Sam & Max <Save the World>" in toast.get_title()
-
-
-def test_the_session_toast_offers_the_note_when_there_is_one_to_write(
-    make_game, running, clock, win
-):
-    """O botão leva para o balão da tela de detalhes, que não existe em jogo
-    nenhum: só naquele sendo jogado ou que já tem anotação. Oferecê-lo fora
-    disso abriria uma tela sem nada em que clicar."""
-    session = make_session(make_game, status="playing")
-    running.package = True
-    session._poll()
-    clock.advance(30)
-    session.stop(record=True)
-
-    assert win.toast_queue.added[-1].get_button_label() == "Anotar"
-
-    sem_status = make_session(make_game, status="")
-    running.package = True
-    sem_status._poll()
-    clock.advance(30)
-    sem_status.stop(record=True)
-
-    assert win.toast_queue.added[-1].get_button_label() is None
-
-
-def test_the_never_launched_toast_does_not_parse_the_title_as_markup(
-    make_game, running, clock, win
-):
-    """T5.11 The same applies to the "did not start" notice."""
+def test_the_never_launched_notice_carries_the_name_verbatim(make_game, running, clock, sessao):
+    """T5.11 O texto vai puro: o nome com "&" chega inteiro (a camada o mostra em PlainText)."""
     session = make_session(make_game, name="Sam & Max")
 
     session.stop(record=False, never_launched=True)
 
-    toast = win.toast_queue.added[-1]
-    assert toast.get_use_markup() is False
-    assert "Sam & Max" in toast.get_title()
+    assert sessao.avisos == ["Não foi possível detectar Sam & Max em execução"]
 
 
-def test_stopping_hides_the_session_blocker(make_game, running, clock, win):
+def test_stopping_hides_the_session_blocker(make_game, running, clock, sessao):
     """The main window is blocked for the length of a session and no longer."""
     session = make_session(make_game)
     session.stop(record=False)
 
-    assert None in win.session_blocker_shown
+    assert None in sessao.blocker
 
 
-def test_the_clock_shows_the_time_that_is_being_recorded(make_game, running, clock, win):
+def test_the_clock_shows_the_time_that_is_being_recorded(make_game, running, clock, sessao):
     """O relógio da tela de sessão anda com o tempo que vai ser gravado.
 
     Ele lê `elapsed`, e não `session_seconds`: este último só se mexe a cada

@@ -290,9 +290,15 @@ Principal {
         }
     }
 
+    // O botão "Anotar" do aviso do fim da sessão abre os detalhes do jogo (o balão abre na Task 2).
+    Connections {
+        target: sessao
+        function onAnotarPedido(jogoId) { janela.abrirDetalhes(jogoId) }
+    }
+
     Connections {
         target: janela.ligacao
-        function onSairDaFrente() { janela.showMinimized() }
+        function onSairDaFrente() { sessao.minimizar() }
     }
 
     // --- Controle do Xbox -------------------------------------------------------------------------------

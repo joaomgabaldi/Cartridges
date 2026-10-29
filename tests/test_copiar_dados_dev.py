@@ -126,3 +126,16 @@ def test_isolar_dev_forca_so_os_tres_valores(chaves, tmp_path):
         esperado.pop(nome)
     assert copiado == esperado  # o resto segue copiado sem mudança
     assert _ler(origem) == antes_da_origem  # a origem nunca é tocada
+
+
+def test_copia_dev_nao_leva_fitas_nem_conta_tuya(chaves, tmp_path):
+    """As chaves locais das fitas reais ficam fora: o app -dev acende fitas ao abrir (D53)."""
+    origem, destino = chaves
+    pasta = tmp_path / "origem"
+    pasta.mkdir()
+    for nome in ("fitas.json", "tuya_conta.json", "outro.json"):
+        (pasta / nome).write_text("{}", encoding="utf-8")
+
+    cd.copiar(pasta, tmp_path / "destino", origem, destino)
+
+    assert sorted(p.name for p in (tmp_path / "destino").iterdir()) == ["outro.json"]

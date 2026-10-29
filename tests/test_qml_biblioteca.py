@@ -21,6 +21,7 @@ from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, M
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.edicao import ModeloDaEdicao
+from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.ponte import Ponte
 
 QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml"
@@ -107,6 +108,7 @@ class _App:
             self.modelo, fabrica_da_cortina=cortina or (lambda _hwnd: None), animacoes_do_sistema=animacoes
         )
         self.leitor = _LeitorFalso()
+        self.sessao = ModeloDaSessao(self.ponte.fila)
         leitor = self.leitor  # o lambda não captura `self`: senão `_App` <-> controle é um ciclo
         shared.schema.set_boolean("gamepad", True)
         self.controle = ControleDaGrade(
@@ -121,6 +123,7 @@ class _App:
             ("filtros", self.filtros), ("paginaTodos", self.todos), ("paginaZerados", self.zerados),
             ("aplicativo", self.aplicativo), ("ponte", self.ponte), ("controle", self.controle),
             ("detalhes", self.detalhes), ("edicao", self.edicao), ("bigPicture", self.big_picture),
+            ("sessao", self.sessao),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))
@@ -612,4 +615,23 @@ def test_copia_animada_a_vista_e_largada_antes_de_apagar_e_refeita_se_velha(app_
     copias_animadas.soltar("imported_1")
     copia.unlink()  # solta de novo, e apaga
     shared.schema.reset("cover-autoplay")
+    app.fechar()
+
+
+def test_janela_maximizada_volta_maximizada_depois_de_sair_da_frente(app_qt):
+    """Review Focus 4, pelo caminho do app: `sair_da_frente` minimiza, `present()` devolve a janela maximizada."""
+    app = _App(_tres())
+    jogo = app.jogos[0]
+    app.ponte.ligar(jogo)
+    app.sessao.definir_janela(app.janela)
+    app.janela.showMaximized()
+    _esperar()
+    assert app.janela.windowStates() & Qt.WindowState.WindowMaximized
+
+    jogo.sair_da_frente.emit()
+    _esperar()
+    assert app.janela.windowStates() & Qt.WindowState.WindowMinimized
+    app.sessao.present()
+
+    assert app.janela.windowStates() == Qt.WindowState.WindowMaximized
     app.fechar()

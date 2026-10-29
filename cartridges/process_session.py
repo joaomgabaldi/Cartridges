@@ -39,12 +39,11 @@ game did not start rather than that we lost sight of it.
 
 import logging
 from time import monotonic
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from gi.repository import Adw, GLib
+from PySide6.QtCore import QTimer
 
 from cartridges import shared
-from cartridges.game import Game
 from cartridges.utils import session_log
 from cartridges.utils.process_monitor import (
     install_dir_from_command,
@@ -53,6 +52,9 @@ from cartridges.utils.process_monitor import (
     is_process_running_under,
 )
 from cartridges.utils.run_executable import aumid_from_command
+
+if TYPE_CHECKING:
+    from cartridges.jogo import Jogo
 
 
 class ProcessSession:
@@ -82,7 +84,7 @@ class ProcessSession:
     # waking. Such a gap is credited as a single poll interval.
     MAX_GAP = POLL_INTERVAL + 30
 
-    def __init__(self, game: Game) -> None:
+    def __init__(self, game: "Jogo") -> None:
         self.game = game
         # Only when the user asked for it. The field keeps its value while the
         # switch is off (the dialog pre-fills it from the launch command), and
@@ -120,7 +122,7 @@ class ProcessSession:
             self.PACKAGE_STARTUP_GRACE if self.package_family else self.STARTUP_GRACE
         )
         self.missing_since: Optional[float] = None  # when the process vanished
-        self.poll_id = 0
+        self.timer: Optional[QTimer] = None  # criado em `start`, parado uma vez só
 
     @property
     def elapsed(self) -> int:
@@ -171,10 +173,18 @@ class ProcessSession:
         ProcessSession.active = self
         self.last_persist = monotonic()
         # Block the main window so a second session can't be started from there
-        shared.win.show_session_blocker(self.game)
-        self.poll_id = GLib.timeout_add_seconds(self.POLL_INTERVAL, self._poll)
+        shared.sessao.show_session_blocker(self.game)
+        self.timer = QTimer()
+        self.timer.timeout.connect(self._poll)
+        self.timer.start(self.POLL_INTERVAL * 1000)
 
-    def _poll(self) -> bool:
+    def _parar_timer(self) -> None:
+        if self.timer is not None:
+            self.timer.stop()
+            self.timer.deleteLater()
+            self.timer = None
+
+    def _poll(self) -> None:
         running = self._is_running()
 
         if not self.started:
@@ -197,9 +207,7 @@ class ProcessSession:
             else:
                 self.waited += self.POLL_INTERVAL
                 if self.waited >= self.startup_grace:
-                    # Returning SOURCE_REMOVE already destroys this source, so
-                    # zero the id first to keep stop() from removing it again
-                    self.poll_id = 0
+                    self._parar_timer()
                     if self.package_family:
                         # A packaged game that never showed one process of its
                         # family did not start. The activation reached the
@@ -232,8 +240,8 @@ class ProcessSession:
                             self.game.name,
                         )
                         self.stop(record=False, fall_back=True)
-                    return GLib.SOURCE_REMOVE
-            return GLib.SOURCE_CONTINUE
+                    return
+            return
 
         if running:
             self.missing_since = None
@@ -253,12 +261,8 @@ class ProcessSession:
             if self.missing_since is None:
                 self.missing_since = monotonic()
             if monotonic() - self.missing_since >= self.grace:
-                # See the startup-grace path: avoid a double source removal
-                self.poll_id = 0
+                self._parar_timer()
                 self.stop(record=True)
-                return GLib.SOURCE_REMOVE
-
-        return GLib.SOURCE_CONTINUE
 
     def _accumulate(self) -> None:
         """Add the time since the last tick to the running totals.
@@ -325,9 +329,7 @@ class ProcessSession:
         session ends with no record at all and the user is told as much rather
         than left with a counter to notice. The two are mutually exclusive.
         """
-        if self.poll_id:
-            GLib.source_remove(self.poll_id)
-            self.poll_id = 0
+        self._parar_timer()
 
         if ProcessSession.active is self:
             ProcessSession.active = None
@@ -341,25 +343,17 @@ class ProcessSession:
             # suspended controller all stay as they are: `show_session_blocker`
             # recognises the same game and dresses nothing again.
             #
-            # Deliberately no `shared.win.present()`: the main window is out of
+            # Deliberately no `shared.sessao.present()`: the main window is out of
             # the way (minimised, or parked on the session monitor) and the game
             # may well be in the foreground.
             SessionWindow(self.game).present()
             return
 
-        shared.win.hide_session_blocker()
+        shared.sessao.hide_session_blocker()
 
         if never_launched:
-            toast = Adw.Toast.new(
-                # The variable is the game's title
-                _("Não foi possível detectar {} em execução").format(self.game.name)
-            )
-            # Same reason as the session toast below: the game's name is
-            # interpolated into a title Adw.Toast parses as Pango markup by
-            # default, and an "&" or "<" in it mangles the toast or makes Pango
-            # reject it and drop the label.
-            toast.set_use_markup(False)
-            shared.win.toast_queue.add(toast)
+            # A variável é o título do jogo; o aviso mostra texto puro.
+            shared.sessao.avisar(_("Não foi possível detectar {} em execução").format(self.game.name))
 
         if record and self.started:
             # Capture the final running stretch (a no-op if already paused)
@@ -369,7 +363,7 @@ class ProcessSession:
             session_log.record(self.game.game_id, self.session_seconds)
             self.game.save()
             self.game.update()
-            shared.win.session_toast(self.game, self.session_seconds)
+            shared.sessao.session_toast(self.game, self.session_seconds)
         elif record:
             # Pedimos para registrar, mas o processo nunca apareceu: encerrar a
             # sessão pelo botão da janela bloqueada durante a espera cai aqui.
@@ -385,7 +379,7 @@ class ProcessSession:
             )
 
         # Bring the main window back now that the session is over
-        shared.win.present()
+        shared.sessao.present()
 
     def close(self, *_args: Any) -> None:
         """Alias so callers can treat this like a SessionWindow."""

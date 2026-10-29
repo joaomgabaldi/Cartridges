@@ -23,6 +23,7 @@ from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.edicao import ModeloDaEdicao
+from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.ponte import Ponte
 from cartridges.store.managers.exibicao_manager import ExibicaoManager
 from cartridges.utils import restauracao, soltar_atalhos
@@ -378,6 +379,7 @@ class _Janela:
         self.aplicativo = Aplicativo(self.ponte.fila)
         self.edicao = ModeloDaEdicao(self.aplicativo)
         self.big_picture = BigPicture(self.modelo)
+        self.sessao = ModeloDaSessao(self.ponte.fila)
         self.motor = QQmlEngine()
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         contexto = self.motor.rootContext()
@@ -390,6 +392,7 @@ class _Janela:
             ("controle", ControleDaGrade(estado_do_app=lambda: Qt.ApplicationState.ApplicationInactive)),
             ("edicao", self.edicao),
             ("bigPicture", self.big_picture),
+            ("sessao", self.sessao),
         ):
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

@@ -287,6 +287,139 @@ def test_comando_restaurado_relanca_pelo_ao_confirmar(executados):
     assert executados == []
 
 
+# -- launch com sessão -------------------------------------------------------
+
+
+class _SessaoQueAnota:
+    def __init__(self, passos, moveu=False):
+        self.passos, self.moveu = passos, moveu
+
+    def move_to_session_monitor(self):
+        self.passos.append("mover")
+        return self.moveu
+
+    def vibrar_abertura(self):
+        self.passos.append("vibrar")
+
+
+@pytest.fixture
+def com_sessao(monkeypatch, schema):
+    """Um `shared.sessao` que anota a ordem e rastreadores que só anotam o que fariam."""
+    from cartridges import jogo as modulo  # noqa: PLC0415
+
+    passos = []
+    sessao = _SessaoQueAnota(passos)
+    monkeypatch.setattr(shared, "sessao", sessao, raising=False)
+    monkeypatch.setattr(modulo, "run_executable", lambda *args: passos.append("rodar"))
+
+    class Processo:
+        active = None
+
+        def __init__(self, jogo):
+            passos.append("processo")
+
+        def start(self):
+            passos.append("processo.start")
+
+    class Manual:
+        active = None
+
+        def __init__(self, jogo):
+            passos.append("manual")
+
+        def present(self):
+            passos.append("manual.present")
+
+    monkeypatch.setattr(modulo, "ProcessSession", Processo)
+    monkeypatch.setattr(modulo, "SessionWindow", Manual)
+    schema.set_boolean("playtime-tracking", True)
+    sessao.passos = passos
+    return sessao
+
+
+_POR_LOJA = 'start "" "steam://rungameid/1"'
+
+
+def test_launch_rastreavel_comeca_por_processo_e_sai_da_frente(com_sessao):
+    jogo = _jogo(track_process=True, process_executable="halo.exe")
+    saidas = _contar(jogo.sair_da_frente)
+
+    assert jogo.launch() is True
+
+    assert com_sessao.passos == ["mover", "rodar", "vibrar", "processo", "processo.start"]
+    assert len(saidas) == 1
+
+
+def test_launch_nao_rastreavel_abre_a_manual(com_sessao):
+    jogo = _jogo(executable=_POR_LOJA)
+    saidas = _contar(jogo.sair_da_frente)
+
+    jogo.launch()
+
+    assert com_sessao.passos[-2:] == ["manual", "manual.present"]
+    assert len(saidas) == 1
+
+
+def test_launch_que_moveu_a_janela_nao_minimiza(com_sessao):
+    com_sessao.moveu = True
+    jogo = _jogo(track_process=True, process_executable="halo.exe")
+    saidas = _contar(jogo.sair_da_frente)
+
+    jogo.launch()
+
+    assert saidas == [] and "processo.start" in com_sessao.passos
+
+
+@pytest.mark.parametrize("minimizar", [False, True])
+def test_launch_sem_rastreio_so_sai_da_frente_com_a_preferencia(com_sessao, schema, minimizar):
+    schema.set_boolean("playtime-tracking", False)
+    schema.set_boolean("minimize-after-launch", minimizar)
+    jogo = _jogo(track_process=True, process_executable="halo.exe")
+    saidas = _contar(jogo.sair_da_frente)
+
+    jogo.launch()
+
+    assert "processo" not in com_sessao.passos and "manual" not in com_sessao.passos
+    assert len(saidas) == (1 if minimizar else 0)
+
+
+def test_segundo_launch_encerra_o_primeiro(com_sessao):
+    """Review Focus 2: a sessão anterior é encerrada, com registro, antes de outra começar."""
+    from cartridges import jogo as modulo  # noqa: PLC0415
+
+    passos = com_sessao.passos
+
+    class Anterior:
+        def close(self):
+            passos.append("manual.close")
+
+        def stop(self, record):
+            passos.append(("processo.stop", record))
+
+    modulo.SessionWindow.active = Anterior()
+    modulo.ProcessSession.active = Anterior()
+
+    _jogo(track_process=True, process_executable="halo.exe").launch()
+
+    assert passos == [
+        "mover", "rodar", "vibrar", "manual.close", ("processo.stop", True), "processo", "processo.start",
+    ]  # fmt: skip
+
+
+def test_launch_sem_sessao_nao_rastreia(executados, schema):
+    """Sem `shared.sessao` (os testes antigos), o launch só lança e avisa."""
+    schema.set_boolean("playtime-tracking", True)
+    assert shared.sessao is None
+
+    assert _jogo(track_process=True, process_executable="halo.exe").launch() is True
+    assert len(executados) == 1
+
+
+def test_conftest_proibe_o_run_executable():
+    with pytest.raises(AssertionError, match="nenhum jogo"):
+        _jogo().launch()
+
+
 # -- Fronteira ----------------------------------------------------------------
 
 
