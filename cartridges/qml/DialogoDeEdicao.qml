@@ -358,7 +358,8 @@ Rectangle {
                         onConfirmado: campoExecutavel.forceActiveFocus(Qt.TabFocusReason)
                         BotaoDeLinha {
                             objectName: "botaoBuscarMetadados"
-                            visible: !edicao.buscandoMetadados
+                            // Fica no lugar durante a busca (o foco não se perde); o modelo ignora o segundo clique.
+                            opacity: edicao.buscandoMetadados ? 0.4 : 1
                             enabled: edicao.nome.trim() !== ""
                             glifo: "\uE896"  // baixar
                             dica: "Buscar dados na Steam pelo título"

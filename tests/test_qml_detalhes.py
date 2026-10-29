@@ -122,6 +122,17 @@ def test_logo_esconde_o_titulo(app_qt, tmp_path):
     app.fechar()
 
 
+def test_logo_grande_e_decodificado_na_escala_da_tela(app_qt, tmp_path):
+    app = _App(_tres())
+    pagina = _abrir_pelo_cartao(app)
+    logo = _achar(pagina, "logoDoJogo")
+    Image.new("RGBA", (3000, 900), "red").save(tmp_path / "grande.png")
+    app.detalhes._mesclar({"logo": QUrl.fromLocalFile(str(tmp_path / "grande.png")).toString(), "larguraDoLogo": 240})  # noqa: SLF001
+    assert _esperar(lambda: logo.property("visible") is True)
+    assert logo.property("implicitHeight") <= 72 * 4  # não os 900 px do arquivo
+    app.fechar()
+
+
 def test_logo_truncado_volta_ao_titulo(app_qt, tmp_path):
     app = _App(_tres())
     pagina = _abrir_pelo_cartao(app)
@@ -372,7 +383,7 @@ def test_balao_e_menus_nao_vazam_o_foco_para_a_pagina(app_qt):
         while item is not None:
             dentro = dentro or item == aberto or item.parentItem() == aberto.property("contentItem") or item == aberto.property("contentItem")
             item = item.parentItem()
-        assert dentro or popup != "balaoDaAnotacao", popup
+        assert dentro, popup
         aberto.close()
         _esperar()
     app.fechar()

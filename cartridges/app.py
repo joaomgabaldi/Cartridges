@@ -99,6 +99,7 @@ def main(argv: list[str]) -> int:
         verificador.stop()
         varredura_hltb.stop()
         varredura_tamanho.stop()
+        edicao.cancelar()  # apaga os temporários de um editor ainda aberto
         async_manager.encerrar()
         copias_animadas.encerrar()
 

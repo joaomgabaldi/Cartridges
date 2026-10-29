@@ -256,6 +256,8 @@ Item {
                         horizontalAlignment: Image.AlignLeft
                         verticalAlignment: Image.AlignBottom
                         asynchronous: false
+                        // Decodifica na escala da tela: o arquivo em cache pode ter 4096 px e o cabeçalho tem 72.
+                        sourceSize.height: 72 * Screen.devicePixelRatio
                     }
                     Text {
                         id: titulo
