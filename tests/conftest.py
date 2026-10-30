@@ -96,7 +96,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_menu_do_card.py",
     "test_metadata_refresh.py",
     "test_na_tela.py",
-    "test_preferencias_big_picture.py",
     "test_redefinir.py",
     "test_reinicio.py",
     "test_restauracao_dialogs.py",
@@ -471,6 +470,7 @@ def sem_jogo_de_verdade(monkeypatch):
     monkeypatch.setattr(jogo, "run_executable", recusa)
     monkeypatch.setattr(shared, "sessao", None, raising=False)
     monkeypatch.setattr(shared, "conquistas", None, raising=False)
+    monkeypatch.setattr(shared, "preferencias", None, raising=False)
     monkeypatch.setattr(process_session.ProcessSession, "active", None)
     monkeypatch.setattr(session_window.SessionWindow, "active", None)
     monkeypatch.setattr(sessao_conquistas, "_vigia", None)

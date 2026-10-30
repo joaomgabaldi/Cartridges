@@ -1,85 +1,73 @@
-"""A preferência "Abrir o Big Picture ao usar um controle"."""
+"""A preferência "Abrir o Big Picture ao usar um controle" e a do som, sobre o modelo das Preferências."""
 
-from cartridges import big_picture
+import pytest
 
-SUBTITULO = (
-    "Abre o Big Picture ao iniciar o aplicativo com um controle conectado "
-    "ou ao conectar um controle na biblioteca"
-)
-SEM_3D = "Requer uma placa de vídeo com suporte a Vulkan."
+from cartridges import shared
+from cartridges.modelos.preferencias import SEM_3D, Preferencias
 
 
-def _preferencias(monkeypatch, tem_3d=True):
-    import cartridges.preferences as preferences_module  # noqa: PLC0415
-    from cartridges.metadata_refresh import MetadataRefresh  # noqa: PLC0415
-
-    monkeypatch.setattr(preferences_module, "get_metadata_refresh", MetadataRefresh)
-    monkeypatch.setattr(big_picture, "tem_3d", lambda _janela: tem_3d)
-    return preferences_module.CartridgesPreferences()
+def _preferencias(tem_3d=True):
+    p = Preferencias(None, lambda: tem_3d)
+    assert p.abrir()
+    return p
 
 
-def test_preferencia_vai_para_o_schema(monkeypatch, schema):
-    # O FakeSchema não faz bind de verdade: confere que a chave é ligada à linha.
-    ligacoes = []
-    monkeypatch.setattr(
-        schema, "bind", lambda chave, widget, prop, _flags: ligacoes.append((chave, widget, prop))
-    )
-    p = _preferencias(monkeypatch)
-    assert ("big-picture-ao-conectar", p.big_picture_ao_conectar_switch, "active") in ligacoes
+@pytest.fixture
+def com_3d_falso(app_qt):  # noqa: ARG001
+    return _preferencias
 
 
-def test_textos_da_linha(monkeypatch, schema):
-    schema.set_boolean("gamepad", True)
-    p = _preferencias(monkeypatch)
-    linha = p.big_picture_ao_conectar_switch
-    assert linha.get_title() == "Abrir o Big Picture ao usar um controle"
-    assert linha.get_subtitle() == SUBTITULO
+def test_preferencia_vai_para_o_schema(com_3d_falso):
+    p = com_3d_falso()
+    p.definir("big-picture-ao-conectar", True)
+    assert shared.schema.get_boolean("big-picture-ao-conectar")
+    assert p.valores["big-picture-ao-conectar"] is True
 
 
-def test_cinza_sem_controle(monkeypatch, schema):
-    schema.set_boolean("gamepad", False)
-    p = _preferencias(monkeypatch)
-    assert not p.big_picture_ao_conectar_switch.get_sensitive()
-    p.gamepad_switch.set_active(True)
-    assert p.big_picture_ao_conectar_switch.get_sensitive()
-    p.gamepad_switch.set_active(False)
-    assert not p.big_picture_ao_conectar_switch.get_sensitive()
+def test_textos_da_linha(com_3d_falso):
+    # O texto fixo da linha vai ao QML (Task 2); aqui, que o modelo não põe o aviso de 3D quando há 3D.
+    p = com_3d_falso()
+    assert p.estado["subtituloSem3d"] == ""
 
 
-def test_cinza_e_explica_sem_3d(monkeypatch, schema):
-    schema.set_boolean("gamepad", True)
-    p = _preferencias(monkeypatch, tem_3d=False)
-    assert not p.big_picture_ao_conectar_switch.get_sensitive()
-    assert p.big_picture_ao_conectar_switch.get_subtitle() == SEM_3D
+def test_cinza_sem_controle(com_3d_falso):
+    shared.schema.set_boolean("gamepad", False)
+    p = com_3d_falso()
+    assert not p.estado["bigPictureAtivo"]
+    p.definir("gamepad", True)
+    assert p.estado["bigPictureAtivo"]
+    p.definir("gamepad", False)
+    assert not p.estado["bigPictureAtivo"]
+
+
+def test_cinza_e_explica_sem_3d(com_3d_falso):
+    shared.schema.set_boolean("gamepad", True)
+    p = com_3d_falso(tem_3d=False)
+    assert not p.estado["bigPictureAtivo"]
+    assert p.estado["subtituloSem3d"] == SEM_3D == "Requer uma placa de vídeo com aceleração 3D."
     # Ligar o controle não destrava uma linha que não tem como funcionar.
-    p.gamepad_switch.set_active(False)
-    p.gamepad_switch.set_active(True)
-    assert not p.big_picture_ao_conectar_switch.get_sensitive()
+    p.definir("gamepad", False)
+    p.definir("gamepad", True)
+    assert not p.estado["bigPictureAtivo"]
 
 
-def test_som_vai_para_o_schema(monkeypatch, schema):
-    ligacoes = []
-    monkeypatch.setattr(
-        schema, "bind", lambda chave, widget, prop, _flags: ligacoes.append((chave, widget, prop))
-    )
-    p = _preferencias(monkeypatch)
-    assert ("big-picture-som", p.big_picture_som_switch, "active") in ligacoes
+def test_som_vai_para_o_schema(com_3d_falso):
+    p = com_3d_falso()
+    p.definir("big-picture-som", False)
+    assert not shared.schema.get_boolean("big-picture-som")
 
 
-def test_textos_da_linha_do_som(monkeypatch, schema):
-    p = _preferencias(monkeypatch)
-    linha = p.big_picture_som_switch
-    assert linha.get_title() == "Som ao trocar de capa"
-    assert linha.get_subtitle() == "Toca um clique curto a cada capa no Big Picture"
+def test_textos_da_linha_do_som(com_3d_falso):
+    # Título e subtítulo fixos vão ao QML (Task 2); aqui, o som segue ativo com 3D.
+    assert com_3d_falso().estado["somDoBigPictureAtivo"]
 
 
-def test_som_nao_depende_do_controle(monkeypatch, schema):
-    schema.set_boolean("gamepad", False)
-    p = _preferencias(monkeypatch)
-    assert p.big_picture_som_switch.get_sensitive()
+def test_som_nao_depende_do_controle(com_3d_falso):
+    shared.schema.set_boolean("gamepad", False)
+    assert com_3d_falso().estado["somDoBigPictureAtivo"]
 
 
-def test_som_cinza_e_explica_sem_3d(monkeypatch, schema):
-    p = _preferencias(monkeypatch, tem_3d=False)
-    assert not p.big_picture_som_switch.get_sensitive()
-    assert p.big_picture_som_switch.get_subtitle() == SEM_3D
+def test_som_cinza_e_explica_sem_3d(com_3d_falso):
+    p = com_3d_falso(tem_3d=False)
+    assert not p.estado["somDoBigPictureAtivo"]
+    assert p.estado["subtituloSem3d"] == SEM_3D
