@@ -337,6 +337,8 @@ class ModeloDaSessao(QObject):
     @Slot()
     def encerrar(self) -> None:
         """O app fechando no meio da sessão: grava o tempo e o histórico, sem tocar na interface."""
+        # shortcut: aqui a janela não volta ao monitor de antes; o plano 8, ao gravar a geometria da janela ao
+        # fechar (`session_geometry`), tem de gravar o retângulo de antes da sessão, não o do monitor do jogo (D52).
         self._tique.stop()
         if (manual := SessionWindow.active) is not None:
             SessionWindow.active = None

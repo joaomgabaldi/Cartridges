@@ -411,6 +411,10 @@ class BigPicture(QObject):
 
     def _voltar_a_tela_cheia(self) -> None:
         if self._janela is not None:
+            # Minimizada pelo "Jogar", a janela precisa ser restaurada antes: pedir a tela cheia a uma janela
+            # minimizada a devolvia em modo janela, com o Big Picture aberto.
+            if self._janela.visibility() == QWindow.Visibility.Minimized:
+                self._janela.showNormal()
             self._janela.showFullScreen()
 
     @Slot()

@@ -174,6 +174,22 @@ def test_a_window_hidden_at_the_end_of_the_session_is_written_hidden(user32, mon
     assert falso.written[-1] == (1, (100, 50, 900, 650))
 
 
+def test_a_maximized_window_hidden_at_the_end_keeps_its_restore_rectangle(user32, monitores):
+    """Maximizada antes do jogo e escondida no fim: o retângulo de restauração é o de antes (não o do
+    monitor do jogo), gravado numa escrita só, escondida."""
+    falso = user32(show=3)
+    monitores(SEGUNDO)
+    janela = _janela_falsa()
+    assert window_geometry.move_to_monitor(janela, "\\\\.\\DISPLAY2") is True
+    falso.written.clear()
+
+    falso.visible = False
+    window_geometry.restore_from_monitor(janela)
+
+    assert falso.written == [(0, (100, 50, 900, 650))]
+    assert window_geometry.session_geometry() is None
+
+
 def test_a_maximized_window_comes_back_maximized_where_it_was(user32, monitores):
     """Maximizada antes do jogo, maximizada depois, no monitor de origem (D: a janela volta como estava)."""
     falso = user32(show=3)

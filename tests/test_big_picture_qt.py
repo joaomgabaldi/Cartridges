@@ -232,6 +232,7 @@ class _JanelaFalsa(QObject):
 
     def __init__(self, maximizada=False, api=QSGRendererInterface.GraphicsApi.Direct3D11, hwnd=0):
         super().__init__()
+        self.minimizada = False
         self.chamadas = []
         self._ativa = True
         self.maximizada = maximizada
@@ -249,15 +250,19 @@ class _JanelaFalsa(QObject):
         self.activeChanged.emit()
 
     def visibility(self):
+        if self.minimizada:
+            return QWindow.Visibility.Minimized
         return QWindow.Visibility.Maximized if self.maximizada else QWindow.Visibility.Windowed
 
     def showFullScreen(self):  # noqa: N802
+        self.minimizada = False
         self.chamadas.append("tela cheia")
 
     def showMaximized(self):  # noqa: N802
         self.chamadas.append("maximizada")
 
     def showNormal(self):  # noqa: N802
+        self.minimizada = False
         self.chamadas.append("normal")
 
     def rendererInterface(self):  # noqa: N802
@@ -1042,6 +1047,17 @@ def test_voltou_do_jogo_sem_estar_ocupada_nao_faz_nada(abrivel):
     a = abrivel
     a.bp.voltouDoJogo()
     assert a.janela.chamadas == ["tela cheia"] and a.aberturas == [] and a.focos == []
+
+
+def test_voltou_do_jogo_com_a_janela_minimizada_restaura_antes_da_tela_cheia(abrivel):
+    # Achado na conferência no app: o "Jogar" minimiza a janela e, sem restaurá-la antes, o Windows a devolvia em
+    # modo janela com o Big Picture aberto.
+    a = abrivel
+    a.bp.abrirJogo()
+    a.janela.minimizada = True
+    a.janela.chamadas.clear()
+    a.bp.voltouDoJogo()
+    assert a.janela.chamadas == ["normal", "tela cheia"]
 
 
 def test_voltou_do_jogo_reabre_com_o_jogo_no_centro(abrivel):
