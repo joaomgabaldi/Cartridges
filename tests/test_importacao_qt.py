@@ -6,6 +6,7 @@
 
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import QEventLoop, QMetaObject, Qt, QTimer, QUrl
@@ -23,6 +24,7 @@ from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.edicao import ModeloDaEdicao
+from cartridges.modelos.historico import HistoricoDeSessoes
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.ponte import Ponte
 from cartridges.store.managers.exibicao_manager import ExibicaoManager
@@ -378,6 +380,7 @@ class _Janela:
         self.ponte = Ponte()
         self.aplicativo = Aplicativo(self.ponte.fila)
         self.edicao = ModeloDaEdicao(self.aplicativo)
+        self.historico = HistoricoDeSessoes(SimpleNamespace(get=lambda _id: None))
         self.big_picture = BigPicture(self.modelo)
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.motor = QQmlEngine()
@@ -393,6 +396,7 @@ class _Janela:
             ("edicao", self.edicao),
             ("bigPicture", self.big_picture),
             ("sessao", self.sessao),
+            ("historico", self.historico),
         ):
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

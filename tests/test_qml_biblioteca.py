@@ -21,6 +21,7 @@ from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, M
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.edicao import ModeloDaEdicao
+from cartridges.modelos.historico import HistoricoDeSessoes
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.ponte import Ponte
 
@@ -106,6 +107,7 @@ class _App:
         self.ponte = Ponte()
         self.aplicativo = Aplicativo(self.ponte.fila)
         self.edicao = ModeloDaEdicao(self.aplicativo)
+        self.historico = HistoricoDeSessoes(self.loja)
         # Sem `cortina`, a fábrica não cria nenhuma: a troca é direta (o offscreen tem HWND falso).
         self.big_picture = BigPicture(
             self.modelo, fabrica_da_cortina=cortina or (lambda _hwnd: None), animacoes_do_sistema=animacoes
@@ -126,7 +128,7 @@ class _App:
             ("filtros", self.filtros), ("paginaTodos", self.todos), ("paginaZerados", self.zerados),
             ("aplicativo", self.aplicativo), ("ponte", self.ponte), ("controle", self.controle),
             ("detalhes", self.detalhes), ("edicao", self.edicao), ("bigPicture", self.big_picture),
-            ("sessao", self.sessao),
+            ("sessao", self.sessao), ("historico", self.historico),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

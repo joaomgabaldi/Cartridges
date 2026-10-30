@@ -20,6 +20,8 @@ Item {
     signal remover()
     signal excluir()
     signal atualizacaoConfirmada()
+    // O clique no tempo de jogo (só com sessões gravadas); Aplicativo.qml abre o histórico.
+    signal abrirHistorico()
 
     // O que o controle do Xbox e a janela esperam de qualquer página (ver Aplicativo.qml).
     // Menu, balão ou diálogo na frente: o controle navega nele pelas teclas.
@@ -113,6 +115,14 @@ Item {
         textFormat: Text.PlainText
         wrapMode: Text.Wrap
         color: Tema.textoSecundario
+        font { family: Tema.fonte; pixelSize: 14 }
+    }
+
+    // Uma linha de texto das datas, do tempo de jogo e do tamanho.
+    component Linha: Text {
+        visible: text !== ""
+        textFormat: Text.PlainText
+        color: Tema.texto
         font { family: Tema.fonte; pixelSize: 14 }
     }
 
@@ -406,17 +416,36 @@ Item {
                     Layout.fillWidth: true
                     Layout.topMargin: 12
                     spacing: 12
-                    Repeater {
-                        model: [detalhes.adicionado, detalhes.jogadoPorUltimo, detalhes.tempoDeJogo, detalhes.tamanho]
-                        delegate: Text {
-                            required property string modelData
-                            visible: modelData !== ""
-                            text: modelData
-                            textFormat: Text.PlainText
-                            color: Tema.texto
-                            font { family: Tema.fonte; pixelSize: 14 }
+                    Linha { text: detalhes.adicionado }
+                    Linha { text: detalhes.jogadoPorUltimo }
+                    // Com sessões gravadas o total abre o histórico: continua um rótulo comum (nem link, nem botão, que
+                    // destoariam das duas linhas ao lado); o sublinhado na cor do texto, o cursor de mão e a dica avisam.
+                    // shortcut: o total não recebe o foco do teclado nem do controle (como o rótulo da main), sai se pedirem.
+                    Linha {
+                        id: tempoDeJogo
+                        objectName: "tempoDeJogo"
+                        readonly property bool clicavel: detalhes.temSessoes
+                        readonly property string dica: clicavel ? "Ver o histórico de sessões" : ""
+                        text: detalhes.tempoDeJogo
+                        font.underline: clicavel
+                        Accessible.role: clicavel ? Accessible.Button : Accessible.StaticText
+                        Accessible.name: text
+                        Accessible.description: dica
+                        Accessible.onPressAction: if (clicavel) raiz.abrirHistorico()
+                        ToolTip.visible: areaDoTempo.containsMouse && clicavel
+                        ToolTip.text: dica
+                        ToolTip.delay: 600
+                        MouseArea {
+                            id: areaDoTempo
+                            objectName: "areaDoTempoDeJogo"
+                            anchors.fill: parent
+                            enabled: tempoDeJogo.clicavel
+                            hoverEnabled: true
+                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onClicked: raiz.abrirHistorico()
                         }
                     }
+                    Linha { text: detalhes.tamanho }
                 }
 
                 Row {

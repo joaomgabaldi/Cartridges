@@ -31,6 +31,7 @@ from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.edicao import ModeloDaEdicao
+from cartridges.modelos.historico import HistoricoDeSessoes
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.ponte import Ponte
 from cartridges.store.managers import async_manager
@@ -147,6 +148,7 @@ def main(argv: list[str]) -> int:
     controle = ControleDaGrade()
     detalhes = DetalhesDoJogo(shared.store, avisos=avisos)
     edicao = ModeloDaEdicao(aplicativo)
+    historico = HistoricoDeSessoes(shared.store)
     big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     sessao = ModeloDaSessao(avisos, controle=controle, big_picture=big_picture)
     shared.sessao = sessao
@@ -156,7 +158,7 @@ def main(argv: list[str]) -> int:
     for nome, valor in (
         ("filtros", filtros), ("paginaTodos", pagina_biblioteca), ("paginaZerados", pagina_zerados),
         ("aplicativo", aplicativo), ("ponte", ponte), ("controle", controle), ("detalhes", detalhes),
-        ("edicao", edicao), ("bigPicture", big_picture), ("sessao", sessao),
+        ("edicao", edicao), ("bigPicture", big_picture), ("sessao", sessao), ("historico", historico),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.

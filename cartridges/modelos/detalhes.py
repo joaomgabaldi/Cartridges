@@ -25,7 +25,7 @@ from PySide6.QtQuick import QQuickImageProvider
 
 from cartridges.jogo import STATUS_LABELS, Jogo, status_label
 from cartridges.modelos.ordem import Linha, _url_da_capa  # noqa: PLC2701
-from cartridges.utils import copias_animadas, desfoque, game_logo
+from cartridges.utils import copias_animadas, desfoque, game_logo, session_log
 from cartridges.utils.format_playtime import format_playtime, format_size
 from cartridges.utils.hltb import format_hltb_time
 from cartridges.utils.open_uri import abrir_url
@@ -203,7 +203,7 @@ _PADRAO: dict[str, Any] = {
         "",
     ),
     **dict.fromkeys(
-        ("controleRecomendado", "zerado", "carregando", "temAtualizacao", "mostraAnotacao", "anotacaoEditavel"),
+        ("controleRecomendado", "zerado", "carregando", "temAtualizacao", "mostraAnotacao", "anotacaoEditavel", "temSessoes"),
         False,
     ),
     "larguraDoLogo": 0,
@@ -254,6 +254,7 @@ class DetalhesDoJogo(QObject):
     dicaDaAnotacao = _p(str, "dicaDaAnotacao")  # noqa: N815
     anotacao = _p(str, "anotacao")
     anotacaoEditavel = _p(bool, "anotacaoEditavel")  # noqa: N815
+    temSessoes = _p(bool, "temSessoes")  # noqa: N815
     fundo = _p(str, "fundo")
     opacidadeDoFundo = _p(float, "opacidadeDoFundo")  # noqa: N815
     del _p
@@ -372,6 +373,9 @@ class DetalhesDoJogo(QObject):
         tema = QGuiApplication.styleHints().colorScheme()
         # Sem esquema de cores no sistema (Unknown) vale o 0.3 do alto contraste, como na janela GTK.
         fixo = _alto_contraste() or tema == Qt.ColorScheme.Unknown
+        # O total só abre a lista das sessões que o formaram se elas existem (o tempo restaurado de um backup é um
+        # total sem sessões); relido a cada mudança, e só de um jogo com tempo.
+        novo["temSessoes"] = bool(novo["tempoDeJogo"]) and bool(session_log.load(novo["jogoId"]))
         novo["opacidadeDoFundo"] = opacidade_do_fundo(self._luminancia, tema == Qt.ColorScheme.Dark, fixo)
         if novo != self._v:
             self._v = novo
