@@ -25,9 +25,8 @@ import time
 import urllib.parse
 from typing import Callable, Optional
 
-from gi.repository import GLib
-
 from cartridges.conquistas.xbox import conta
+from cartridges.utils.thread_principal import na_thread_principal
 
 TEXTO_OK = "Login concluído. Pode fechar esta aba e voltar ao Cartridges."
 TEXTO_FALHOU = "O login não foi concluído. Pode fechar esta aba."
@@ -188,9 +187,9 @@ class Pedido:
             self._terminou.set()
         if _pendente is self:
             _pendente = None
-        GLib.idle_add(self._entregar, resultado)
+        na_thread_principal(self._entregar, resultado)
 
-    def _entregar(self, resultado: Resultado) -> bool:
+    def _entregar(self, resultado: Resultado) -> None:
         """Na thread principal: fecha o servidor e avisa quem pediu."""
         try:
             self._servidor.server_close()
@@ -200,7 +199,6 @@ class Pedido:
             self._ao_terminar(resultado)
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Falha ao concluir o login da conta Microsoft", exc_info=True)
-        return False
 
     def cancelar(self) -> None:
         self._terminar(Resultado.CANCELADO)

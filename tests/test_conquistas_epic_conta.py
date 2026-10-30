@@ -170,7 +170,7 @@ def test_duas_renovacoes_simultaneas_usam_a_chave_uma_vez(monkeypatch):
     assert resultados == ["A2", "A2"]
 
 
-def test_renovacao_recusada_desconecta_e_avisa_uma_vez(monkeypatch, flush_idle, win):
+def test_renovacao_recusada_desconecta_e_avisa_uma_vez(monkeypatch, flush_idle, avisos):
     rede_falsa(
         monkeypatch, conta,
         {conta.TOKEN: [_token(), _recusa("errors.com.epicgames.account.auth_token.invalid_refresh_token")]},
@@ -182,7 +182,7 @@ def test_renovacao_recusada_desconecta_e_avisa_uma_vez(monkeypatch, flush_idle, 
     assert not conta.conectada() and not (shared.contas_dir / "epic.json").exists()
     conta.recusada()
     flush_idle()
-    textos = [t.get_title() for t in win.toast_queue.added]
+    textos = avisos.textos
     assert textos.count("A conta Epic foi desconectada. Entre novamente nas Preferências.") == 1
 
 

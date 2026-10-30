@@ -170,6 +170,7 @@ details_size = (420, 630)
 # pylint: disable=invalid-name
 win = None
 sessao = None  # o ModeloDaSessao (plano 5)
+conquistas = None  # o ConquistasDoJogo (plano 6)
 # O `Aplicativo` do app Qt (importando, avisos); None nos testes que não o criam.
 aplicativo = None
 importer = None

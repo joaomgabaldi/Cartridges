@@ -16,14 +16,17 @@ import shutil
 import sys
 import tempfile
 import threading
+import time
 import types
 import uuid
 import winreg
 import winsound
 from pathlib import Path
+from urllib.parse import urlsplit
 from typing import Any
 
 import pytest
+from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -82,36 +85,16 @@ TESTES_AINDA_GTK: list[str] = [
     "test_caixa_redimensionavel.py",
     "test_calibracao_janela.py",
     "test_conquista_aviso.py",
-    "test_conquistas_arquivos.py",
-    "test_conquistas_cache_de_leitura.py",
-    "test_conquistas_catalogo.py",
     "test_conquistas_ciclo.py",
-    "test_conquistas_contas.py",
-    "test_conquistas_ea_api.py",
-    "test_conquistas_ea_conta.py",
     "test_conquistas_ea_janela.py",
-    "test_conquistas_ea_loja.py",
-    "test_conquistas_epic_api.py",
-    "test_conquistas_epic_conta.py",
     "test_conquistas_epic_janela.py",
     "test_conquistas_epic_vigia.py",
-    "test_conquistas_fontes.py",
-    "test_conquistas_formatos.py",
-    "test_conquistas_keyvalues.py",
     "test_conquistas_preferencias.py",
-    "test_conquistas_progresso.py",
     "test_conquistas_sessao.py",
-    "test_conquistas_ubisoft_locais.py",
-    "test_conquistas_ubisoft_loja.py",
-    "test_conquistas_ubisoft_pacote.py",
-    "test_conquistas_ubisoft_spool.py",
     "test_conquistas_ubisoft_vigia.py",
     "test_conquistas_ui.py",
     "test_conquistas_varredura.py",
     "test_conquistas_vigia.py",
-    "test_conquistas_xbox_api.py",
-    "test_conquistas_xbox_conta.py",
-    "test_conquistas_xbox_login.py",
     "test_conquistas_xbox_vigia.py",
     "test_estilo_css.py",
     "test_fita_wizard.py",
@@ -391,8 +374,70 @@ def sem_jogo_de_verdade(monkeypatch):
 
     monkeypatch.setattr(jogo, "run_executable", recusa)
     monkeypatch.setattr(shared, "sessao", None, raising=False)
+    monkeypatch.setattr(shared, "conquistas", None, raising=False)
     monkeypatch.setattr(process_session.ProcessSession, "active", None)
     monkeypatch.setattr(session_window.SessionWindow, "active", None)
+
+
+@pytest.fixture(autouse=True)
+def sem_rede(monkeypatch):
+    """Nenhum teste fala com a rede (D57): tudo do app sai por `requests`, e o envio vira uma falha de conexão."""
+    import requests  # noqa: PLC0415
+
+    enviar = requests.sessions.Session.send
+
+    def recusa(self, requisicao, **kwargs):
+        # O laço local (servidor de teste em 127.0.0.1) não é rede.
+        if urlsplit(requisicao.url).hostname not in ("127.0.0.1", "localhost", "::1"):
+            raise requests.ConnectionError("rede bloqueada nos testes")
+        kwargs["proxies"] = {}  # nem um proxy de ambiente recebe o tráfego do laço local
+        return enviar(self, requisicao, **kwargs)
+
+    monkeypatch.setattr(requests.sessions.Session, "send", recusa)
+
+
+@pytest.fixture(autouse=True)
+def fila_da_principal_vazia(app_qt, app_dirs, schema):  # noqa: ARG001
+    """O que um teste deixou na fila da thread principal (`na_thread_principal`) acaba antes do teste seguinte."""
+    yield
+    QCoreApplication.processEvents()
+
+
+@pytest.fixture
+def flush_idle(app_qt):  # noqa: ARG001
+    """Gira o laço de eventos por um instante: o que foi enfileirado para a thread principal chega."""
+
+    def girar(limite=0.1):
+        fim = time.monotonic() + limite
+        while time.monotonic() < fim:
+            laco = QEventLoop()
+            QTimer.singleShot(10, laco.quit)
+            laco.exec()
+
+    return girar
+
+
+class AvisosAnotados:
+    """No lugar da `FilaDeAvisos`: guarda os textos e a última chamada inteira."""
+
+    def __init__(self) -> None:
+        self.textos: list[str] = []
+        self.ultima: dict | None = None
+
+    def adicionar(self, texto, botao="", ao_clicar=None, segundos=5, chave=None) -> int:
+        self.textos.append(texto)
+        self.ultima = {"texto": texto, "botao": botao, "ao_clicar": ao_clicar, "segundos": segundos, "chave": chave}
+        return len(self.textos)
+
+
+@pytest.fixture
+def avisos(monkeypatch):
+    """Os avisos que o app mostraria, em `shared.aplicativo` (sem varredura de conquistas)."""
+    anotados = AvisosAnotados()
+    monkeypatch.setattr(
+        shared, "aplicativo", types.SimpleNamespace(avisos=anotados, varredura_conquistas=None), raising=False
+    )
+    return anotados
 
 
 @pytest.fixture(autouse=True)

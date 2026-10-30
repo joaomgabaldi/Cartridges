@@ -14,12 +14,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Optional, TypeVar
 
-from gi.repository import GLib
+from PySide6.QtCore import QStandardPaths
 
 from cartridges import shared
 from cartridges.conquistas import formatos
 from cartridges.importer.shortcuts_source import steam_appid_from_url
 from cartridges.utils.game_folder import game_folder
+from cartridges.utils.thread_principal import na_thread_principal
 
 
 T = TypeVar("T")
@@ -51,7 +52,7 @@ _SUBIDAS = 3
 
 def pastas_do_sistema() -> Pastas:
     perfil = Path(os.environ.get("USERPROFILE", str(Path.home())))
-    documentos = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOCUMENTS)
+    documentos = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
     return Pastas(
         appdata=Path(os.environ.get("APPDATA", str(perfil / "AppData" / "Roaming"))),
         localappdata=Path(os.environ.get("LOCALAPPDATA", str(perfil / "AppData" / "Local"))),
@@ -250,9 +251,8 @@ def _conta_conectada() -> Optional[str]:
 _conta_enfileirada: Optional[str] = None
 
 
-def _guardar_conta(conta: str) -> bool:
+def _guardar_conta(conta: str) -> None:
     shared.state_schema.set_string(_CONTA_GUARDADA, conta)
-    return False  # o GLib repetiria o callback que devolvesse um valor verdadeiro
 
 
 def _conta_do_usuario() -> Optional[str]:
@@ -271,7 +271,7 @@ def _conta_do_usuario() -> Optional[str]:
     # Uma gravação só, e não uma por jogo da varredura antes de a principal rodar.
     if conectada not in (guardada, _conta_enfileirada):
         _conta_enfileirada = conectada
-        GLib.idle_add(_guardar_conta, conectada)
+        na_thread_principal(_guardar_conta, conectada)
     return conectada
 
 

@@ -17,10 +17,7 @@ looking successful. It cannot be inferred from how the loop ended; it needs its
 own flag.
 """
 
-import time
-
 import pytest
-from PySide6.QtCore import QEventLoop, QTimer
 
 from cartridges import shared
 from cartridges.aplicativo import Aplicativo
@@ -29,17 +26,8 @@ from cartridges.importer.importer import Importer
 from cartridges.importer.source import SourceScanError
 
 
-def flush_idle(limite=0.1):
-    """Gira o laço de eventos por um instante: o que foi enfileirado para a thread principal chega."""
-    fim = time.monotonic() + limite
-    while time.monotonic() < fim:
-        laco = QEventLoop()
-        QTimer.singleShot(10, laco.quit)
-        laco.exec()
-
-
 @pytest.fixture(autouse=True)
-def tarefas_vazias(app_qt):  # noqa: ARG001
+def tarefas_vazias(app_qt, flush_idle):  # noqa: ARG001
     from cartridges.modelos import tarefas  # noqa: PLC0415
 
     yield
@@ -284,7 +272,7 @@ def test_a_tombstone_is_not_removed_again(importer, make_game, store):
 # region Tarefas em andamento
 
 
-def test_importacao_sem_jogo_novo_nao_vira_tarefa(importer, monkeypatch):
+def test_importacao_sem_jogo_novo_nao_vira_tarefa(importer, monkeypatch, flush_idle):
     from cartridges.modelos import tarefas  # noqa: PLC0415
 
     monkeypatch.setattr(importer, "finish_import", lambda: None)
@@ -297,7 +285,7 @@ def test_importacao_sem_jogo_novo_nao_vira_tarefa(importer, monkeypatch):
     assert tarefas.lista.rowCount() == 0
 
 
-def test_jogo_novo_vira_tarefa_que_termina_com_a_importacao(importer, monkeypatch):
+def test_jogo_novo_vira_tarefa_que_termina_com_a_importacao(importer, monkeypatch, flush_idle):
     from cartridges.modelos import tarefas  # noqa: PLC0415
 
     monkeypatch.setattr(importer, "finish_import", lambda: None)
@@ -315,7 +303,7 @@ def test_jogo_novo_vira_tarefa_que_termina_com_a_importacao(importer, monkeypatc
     assert tarefas.lista.rowCount() == 0
 
 
-def test_monitor_so_atualiza_a_tarefa_quando_o_progresso_muda(importer, monkeypatch):
+def test_monitor_so_atualiza_a_tarefa_quando_o_progresso_muda(importer, monkeypatch, flush_idle):
     from cartridges.modelos import tarefas  # noqa: PLC0415
 
     monkeypatch.setattr(importer, "finish_import", lambda: None)

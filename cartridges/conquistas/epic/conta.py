@@ -28,12 +28,12 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 import requests
-from gi.repository import GLib
 
 from cartridges import shared
 from cartridges.conquistas import aviso_da_conta
 from cartridges.utils import download, dpapi
 from cartridges.utils.gravar_atomico import gravar_atomico
+from cartridges.utils.thread_principal import na_thread_principal
 
 # O client do Epic Games Launcher (segredo público; legendary `egs.py`).
 CLIENT_ID = "34a02cf8f4414e29b15921876da36f9a"
@@ -211,11 +211,10 @@ def ao_mudar(ouvinte: Callable[[], None]) -> Callable[[], None]:
     return aviso_da_conta.inscrever(_ouvintes, ouvinte)
 
 
-def _notificar(avisar: bool) -> bool:
+def _notificar(avisar: bool) -> None:
     """Na thread principal: aviso (uma vez), ouvintes e o cartão do jogo aberto."""
     global _avisou  # pylint: disable=global-statement
     _avisou = aviso_da_conta.notificar(avisar, _avisou, _ouvintes, _("A conta Epic foi desconectada. Entre novamente nas Preferências."), "Epic")
-    return False
 
 
 def _desconectar(avisar: bool) -> None:
@@ -226,7 +225,7 @@ def _desconectar(avisar: bool) -> None:
         _arquivo().unlink(missing_ok=True)
     except OSError as erro:
         logging.warning("Conta Epic não apagada: %s", type(erro).__name__)
-    GLib.idle_add(_notificar, avisar)
+    na_thread_principal(_notificar, avisar)
 
 
 def _esquecer_a_biblioteca() -> None:
@@ -263,7 +262,7 @@ def conectar(codigo: str) -> None:
     with _trava:
         _sessao = sessao
         _avisou = False
-    GLib.idle_add(_notificar, False)
+    na_thread_principal(_notificar, False)
 
 
 def autorizacao(forcar: bool = False) -> Optional[str]:

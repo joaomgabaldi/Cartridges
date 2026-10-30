@@ -1,5 +1,5 @@
 """Os ícones das conquistas: baixados uma vez, guardados no cache, entregues
-como textura na thread principal.
+como arquivo na thread principal.
 
 Uma lista de conquistas pode pedir dezenas de ícones de uma vez; quatro
 trabalhadores bastam e não disputam a rede com o resto do app.
@@ -11,14 +11,14 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
 
-from gi.repository import Gdk, GdkPixbuf, GLib
+from PySide6.QtGui import QImageReader
 from requests.exceptions import RequestException
 
 from cartridges import shared
 from cartridges.conquistas import arquivos
-from cartridges.game_cover import texture_from_pixbuf
 from cartridges.utils.download import download_bytes
 from cartridges.utils.gravar_atomico import gravar_atomico
+from cartridges.utils.thread_principal import na_thread_principal
 
 _MAX_BYTES = 512 * 1024
 _trabalhadores = ThreadPoolExecutor(
@@ -38,7 +38,7 @@ def _registrar_falha(o_que: str, origem: object, erro: BaseException) -> None:
     mensagem de uma falha de rede costuma trazer a URL inteira, com a chave.
     Qualquer outra coisa é defeito nosso e leva o traceback.
     """
-    if isinstance(erro, (RequestException, OSError, GLib.Error)):
+    if isinstance(erro, (RequestException, OSError)):
         logging.info(
             "%s (%s): %s", o_que, _sem_parametros(origem), type(erro).__name__
         )
@@ -87,58 +87,36 @@ def arquivo_local(origem: str) -> Optional[Path]:
     return _resolver(origem)[0]
 
 
-def _quadrada(caminho: Path) -> Optional[Gdk.Texture]:
-    """O quadrado central de um ícone retangular (a EA serve muitos em 16:9, com
-    o emblema no meio). ``None`` se já for quadrado ou se o GdkPixbuf não o ler."""
-    try:
-        pixbuf = GdkPixbuf.Pixbuf.new_from_file(str(caminho))
-    except GLib.Error:
-        return None
-    largura, altura = pixbuf.get_width(), pixbuf.get_height()
-    if largura == altura:
-        return None
-    lado = min(largura, altura)
-    return texture_from_pixbuf(
-        pixbuf.new_subpixbuf((largura - lado) // 2, (altura - lado) // 2, lado, lado)
-    )
+def _legivel(caminho: Path) -> bool:
+    return QImageReader(str(caminho)).canRead()
 
 
-def _textura(origem: str) -> Optional[Gdk.Texture]:
-    """Resolve e decodifica o ícone. Nunca levanta."""
-    caminho, do_cache = _resolver(origem)
-    if caminho is None:
-        return None
-    try:
-        return _quadrada(caminho) or Gdk.Texture.new_from_filename(str(caminho))
-    except Exception as erro:  # noqa: BLE001 - GLib.Error e o que mais vier
-        _registrar_falha("Ícone de conquista ilegível", origem, erro)
-        if do_cache:
-            # Um arquivo ruim no cache (a página de um portal de rede salva
-            # como imagem, por exemplo) ficaria ruim para sempre; apagado, o
-            # próximo pedido baixa de novo.
-            try:
-                caminho.unlink(missing_ok=True)
-            except OSError:
-                pass
-        return None
-
-
-def carregar(origem: str, entregar: Callable[[Gdk.Texture], None]) -> None:
-    """Carrega ``origem`` fora da tela e chama ``entregar`` na thread principal."""
+def carregar(origem: str, entregar: Callable[[Path], None]) -> None:
+    """Carrega ``origem`` fora da tela e chama ``entregar`` com o arquivo, na thread principal."""
 
     def trabalho() -> None:
-        textura = _textura(origem)
-        if textura is None:
+        caminho, do_cache = _resolver(origem)
+        if caminho is None:
+            return
+        if not _legivel(caminho):
+            logging.info("Ícone de conquista ilegível (%s)", _sem_parametros(origem))
+            if do_cache:
+                # Um arquivo ruim no cache (a página de um portal de rede salva
+                # como imagem, por exemplo) ficaria ruim para sempre; apagado, o
+                # próximo pedido baixa de novo.
+                try:
+                    caminho.unlink(missing_ok=True)
+                except OSError:
+                    pass
             return
 
-        def na_tela() -> bool:
+        def na_tela() -> None:
             try:
-                entregar(textura)
-            except Exception:  # noqa: BLE001 - o widget pode já ter saído
+                entregar(caminho)
+            except Exception:  # noqa: BLE001 - o destino pode já ter saído
                 logging.info("Ícone de conquista sem destino", exc_info=True)
-            return False
 
-        GLib.idle_add(na_tela)
+        na_thread_principal(na_tela)
 
     try:
         _trabalhadores.submit(trabalho)
