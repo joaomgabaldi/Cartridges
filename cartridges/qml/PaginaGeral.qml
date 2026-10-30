@@ -13,6 +13,7 @@ Column {
 
     component Interruptor: LinhaDeAlternancia {
         property string chave
+        buscavel: true
         objectName: "interruptor-" + chave
         checked: preferencias.valores[chave] === true
         onAlternado: preferencias.definir(chave, checked)
@@ -59,6 +60,7 @@ Column {
             enabled: preferencias.estado.somDoBigPictureAtivo === true
         }
         LinhaDeNumero {
+            buscavel: true
             objectName: "linhaDaEspera"
             titulo: "Tempo de espera ao fechar o jogo"
             subtitulo: "Segundos de espera após o jogo fechar antes de encerrar a sessão, para que um reinício do jogo não divida a sessão"

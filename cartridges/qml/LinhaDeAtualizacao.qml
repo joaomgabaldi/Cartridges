@@ -7,6 +7,15 @@ import QtQuick.Controls.Basic
 Item {
     id: linha
 
+    // `aparece` é a regra de cada linha (ex.: só com um interruptor ligado); a busca esconde mais, nunca mostra o que a regra esconde.
+    // O grupo conta por estas duas propriedades, não pelo `visible` efetivo (que depende do próprio grupo: laço, D58).
+    property bool aparece: true
+    // Só as linhas das Preferências são buscáveis (`buscavel: true`); as dos assistentes e do editor ignoram a busca.
+    // Nas Preferências use `aparece` para a regra da linha, nunca `visible` (um `visible:` de instância desliga o filtro).
+    property bool buscavel: false
+    readonly property bool passaNoFiltro: !buscavel || BuscaDasPreferencias.passa(linha.titulo, linha.subtitulo)
+    visible: aparece && passaNoFiltro
+
     property string titulo
     property string subtitulo
     property bool emAndamento: false

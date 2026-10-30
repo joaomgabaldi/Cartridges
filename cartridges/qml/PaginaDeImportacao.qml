@@ -13,6 +13,7 @@ Column {
 
     component Interruptor: LinhaDeAlternancia {
         property string chave
+        buscavel: true
         objectName: "interruptor-" + chave
         checked: preferencias.valores[chave] === true
         onAlternado: preferencias.definir(chave, checked)
@@ -54,6 +55,7 @@ Column {
         objectName: "grupoAtualizarMetadados"
 
         LinhaDeAtualizacao {
+            buscavel: true
             objectName: "linhaDosMetadados"
             titulo: "Atualizar metadados"
             subtitulo: "Busca dados para jogos já na biblioteca"
@@ -77,14 +79,15 @@ Column {
 
         Interruptor { chave: "shortcuts"; titulo: "Atalhos" }
         LinhaDeAcao {
+            buscavel: true
             objectName: "linhaDaPasta"
-            visible: pagina.comAtalhos
+            aparece: pagina.comAtalhos
             titulo: "Pasta"
             subtitulo: preferencias.estado.pastaDosAtalhos || ""
             glifo: ""  // pasta
             dica: "Selecionar pasta"
             onAcionada: pagina.escolherPasta()
         }
-        Interruptor { chave: "shortcuts-recursive"; titulo: "Buscar em subpastas"; visible: pagina.comAtalhos }
+        Interruptor { chave: "shortcuts-recursive"; titulo: "Buscar em subpastas"; aparece: pagina.comAtalhos }
     }
 }

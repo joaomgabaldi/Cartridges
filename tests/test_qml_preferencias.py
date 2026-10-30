@@ -971,3 +971,142 @@ def test_textos_do_assistente_de_calibracao(calibracao_aberta):
 
 # endregion
 
+
+
+# --- A busca (D69) ---
+
+
+def _buscar(app, texto):
+    app.achar("dialogoDePreferencias").setProperty("filtro", texto)
+    assert _esperar(lambda: app.achar("campoDeBuscaDasPreferencias").property("text") == texto)
+
+
+def _visivel(app, nome):
+    return app.achar(nome).property("visible") is True
+
+
+def test_buscar_brilho_mostra_as_linhas_das_duas_paginas(app):
+    _abrir(app)
+    _buscar(app, "brilho")
+    assert _esperar(lambda: _visivel(app, "linhaDoBrilhoDasFitas"))
+    assert _visivel(app, "linhaDoBrilhoPorDispositivo")
+    assert not _visivel(app, "interruptor-sgdb")
+    assert not _visivel(app, "abas")  # a barra de abas some
+
+
+def test_busca_sem_acento_acha_iluminacao(app):
+    _abrir(app)
+    _buscar(app, "ILUMINACAO")
+    assert _esperar(lambda: _visivel(app, "interruptor-session-fita"))
+    assert _visivel(app, "linhaConfigurarFitas")
+    assert not _visivel(app, "interruptor-gamepad")
+
+
+def test_busca_no_subtitulo(app):
+    _abrir(app)
+    _buscar(app, "segundos de espera")
+    assert _esperar(lambda: _visivel(app, "linhaDaEspera"))
+    assert not _visivel(app, "interruptor-gamepad")
+
+
+def test_grupo_sem_linhas_some_na_busca(app):
+    _abrir(app)
+    _buscar(app, "brilho")
+    assert _esperar(lambda: _visivel(app, "grupoIluminacao"))
+    assert not _visivel(app, "grupoComportamentoGeral")
+    assert not _visivel(app, "grupoBiblioteca")
+
+
+def test_linha_escondida_por_regra_continua_escondida_na_busca(app):
+    app.preferencias.definir("shortcuts", False)
+    _abrir(app)
+    _buscar(app, "pasta")
+    assert _esperar(lambda: _visivel(app, "grupoAtalhos") is False)
+    assert not _visivel(app, "linhaDaPasta")
+
+
+def test_nenhum_resultado(app):
+    _abrir(app)
+    assert not _visivel(app, "estadoSemResultadoDasPreferencias")
+    _buscar(app, "zzzzzz")
+    assert _esperar(lambda: _visivel(app, "estadoSemResultadoDasPreferencias"))
+    assert app.achar("estadoSemResultadoDasPreferencias").property("titulo") == "Nenhum resultado encontrado"
+    _buscar(app, "brilho")
+    assert _esperar(lambda: not _visivel(app, "estadoSemResultadoDasPreferencias"))
+
+
+def test_esc_limpa_a_busca_e_depois_fecha(app):
+    _abrir(app)
+    campo = app.achar("campoDeBuscaDasPreferencias")
+    campo.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    for tecla in (Qt.Key.Key_B, Qt.Key.Key_R, Qt.Key.Key_I):
+        QTest.keyClick(app.janela, tecla)
+    assert _esperar(lambda: campo.property("text") == "bri")
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: campo.property("text") == "")
+    assert app.preferencias.aberto
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: not app.preferencias.aberto)
+
+
+def test_limpar_volta_a_aba_de_antes(app):
+    _abrir(app, "import")
+    _buscar(app, "brilho")
+    assert _esperar(lambda: _visivel(app, "linhaDoBrilhoDasFitas"))
+    _buscar(app, "")
+    assert _esperar(lambda: not _visivel(app, "linhaDoBrilhoDasFitas"))
+    assert _visivel(app, "paginaDeImportacao")
+    assert app.achar("dialogoDePreferencias").property("aba") == "import"
+
+
+def test_ctrl_f_leva_ao_campo(app):
+    _abrir(app)
+    campo = app.achar("campoDeBuscaDasPreferencias")
+    app.achar("aba-general").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    assert campo.property("activeFocus") is not True
+    QTest.keyClick(app.janela, Qt.Key.Key_F, Qt.KeyboardModifier.ControlModifier)
+    assert _esperar(lambda: campo.property("activeFocus") is True)
+
+
+def test_filtro_nao_esvazia_os_assistentes_abertos_por_cima(app, fitas_espiadas, monkeypatch):
+    from cartridges.utils import session_fita  # noqa: PLC0415
+
+    monkeypatch.setattr(session_fita, "previa_calibracao", lambda *_a: None)
+    _abrir(app, "session")
+    _buscar(app, "brilho")
+    assert _esperar(lambda: _visivel(app, "linhaDoBrilhoDasFitas"))
+    app.preferencias.abrirBrilhoPorDispositivo()
+    assert _esperar(lambda: _visivel(app, "brilhoDoDispositivo-eb0"))
+    app.preferencias.abrirCalibracao()
+    assert _esperar(lambda: _visivel(app, "dispositivoDaCalibracao-eb0"))
+    _buscar(app, "fitas")
+    app.preferencias.abrirConfiguracaoDasFitas()
+    assert _esperar(lambda: _visivel(app, "campoDoAccessId"))
+    assert _visivel(app, "grupoDaContaDaTuya")
+
+
+def test_buscar_epic_mostra_a_linha_da_conta(app):
+    _abrir(app)
+    _buscar(app, "epic")
+    assert _esperar(lambda: _visivel(app, "botaoDaConta_epic"))
+    assert not _visivel(app, "botaoDaConta_microsoft")
+    assert not _visivel(app, "botaoDaConta_ea")
+
+
+def test_fechar_com_texto_e_reabrir_volta_com_campo_vazio_e_abas(app):
+    _abrir(app)
+    _buscar(app, "brilho")
+    assert not _visivel(app, "abas")
+    app.preferencias.fechar()
+    assert _esperar(lambda: not _visivel(app, "dialogoDePreferencias"))
+    _abrir(app)
+    assert app.achar("campoDeBuscaDasPreferencias").property("text") == ""
+    assert _visivel(app, "abas")
+
+
+def test_loader_das_contas_some_na_busca_sem_conta(app):
+    _abrir(app)
+    _buscar(app, "brilho")
+    assert _esperar(lambda: _visivel(app, "linhaDoBrilhoDasFitas"))
+    assert not _visivel(app, "carregadorDasContas")
+    assert _esperar(lambda: app.achar("paginaDasConquistas").property("implicitHeight") == 0)

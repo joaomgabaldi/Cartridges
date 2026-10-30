@@ -6,6 +6,7 @@ Rectangle {
     id: grupo
 
     default property alias linhas: coluna.data
+    readonly property alias itens: coluna.children
 
     implicitHeight: coluna.implicitHeight
     visible: coluna.implicitHeight > 0

@@ -10,6 +10,7 @@ Column {
 
     component Interruptor: LinhaDeAlternancia {
         property string chave
+        buscavel: true
         objectName: "interruptor-" + chave
         checked: preferencias.valores[chave] === true
         onAlternado: preferencias.definir(chave, checked)
@@ -26,7 +27,9 @@ Column {
         objectName: "carregadorDasContas"
         width: parent.width
         active: preferencias.contas !== null
-        visible: active
+        readonly property int linhasAMostrar: item ? item.linhasAMostrar : 0
+        // Sem conta que case, o Loader sai (senão guardaria a altura do grupo).
+        visible: active && linhasAMostrar > 0
         sourceComponent: GrupoDasContas { contas: preferencias.contas }
     }
 
@@ -39,6 +42,7 @@ Column {
         onLinkAcionado: endereco => preferencias.abrirEndereco(endereco)
 
         LinhaDeTexto {
+            buscavel: true
             objectName: "campoDaChaveDaSteam"
             titulo: "Chave da API"
             text: preferencias.valores["conquistas-chave-steam"] || ""
@@ -73,6 +77,7 @@ Column {
             enabled: preferencias.estado.avisoAtivo === true
         }
         LinhaDeNumero {
+            buscavel: true
             objectName: "linhaDoVolumeDoAviso"
             titulo: "Volume do som (%)"
             de: 10
@@ -84,6 +89,7 @@ Column {
             onAlterado: valor => preferencias.definir("conquistas-aviso-som-volume", valor)
         }
         LinhaDeEscolha {
+            buscavel: true
             objectName: "linhaDaPosicaoDoAviso"
             titulo: "Posição do aviso"
             // O texto mais longo inteiro, com o recuo e a seta da caixa (LinhaDeEscolha).
@@ -100,6 +106,7 @@ Column {
         }
         // Com o balão aberto, as fitas mostram a cor escolhida; ao fechar, voltam à cor do app.
         LinhaDeCor {
+            buscavel: true
             objectName: "linhaDaCorDoAlerta"
             titulo: "Cor do alerta"
             subtitulo: "A cor da iluminação inteligente ao desbloquear uma conquista"
@@ -113,6 +120,7 @@ Column {
             onVoltar: preferencias.fitas.voltarCorDoPulso()
         }
         LinhaDeEscolha {
+            buscavel: true
             objectName: "linhaDoEstiloDoAlerta"
             titulo: "Estilo do alerta"
             model: ["Piscar", "Respirar", "Piscar rápido", "Brilho longo"]
@@ -121,12 +129,14 @@ Column {
             onEscolhido: indice => preferencias.fitas.escolherEstiloDoPulso(indice)
         }
         LinhaDeBotao {
+            buscavel: true
             objectName: "linhaDoTesteDoAlerta"
             titulo: "Testar o alerta"
             enabled: preferencias.estado.alertaAtivo === true
             onAcionada: preferencias.fitas.testarAlerta()
         }
         LinhaDeBotao {
+            buscavel: true
             objectName: "linhaDoExemplo"
             titulo: "Mostrar um aviso de exemplo"
             onAcionada: preferencias.mostrarAvisoDeExemplo()

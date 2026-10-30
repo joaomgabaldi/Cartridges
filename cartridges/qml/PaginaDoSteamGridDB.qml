@@ -10,6 +10,7 @@ Column {
 
     component Interruptor: LinhaDeAlternancia {
         property string chave
+        buscavel: true
         objectName: "interruptor-" + chave
         checked: preferencias.valores[chave] === true
         onAlternado: preferencias.definir(chave, checked)
@@ -24,6 +25,7 @@ Column {
         onLinkAcionado: endereco => preferencias.abrirEndereco(endereco)
 
         LinhaDeTexto {
+            buscavel: true
             objectName: "campoDaChaveDoSgdb"
             titulo: "Chave da API"
             text: preferencias.valores["sgdb-key"] || ""
@@ -50,6 +52,7 @@ Column {
         objectName: "grupoAtualizarCapas"
 
         LinhaDeAtualizacao {
+            buscavel: true
             objectName: "linhaDasCapas"
             titulo: "Atualizar capas"
             subtitulo: "Busca capas para jogos já na biblioteca"

@@ -16,7 +16,23 @@ Column {
 
     width: parent ? parent.width : implicitWidth
     spacing: 8
-    visible: caixa.implicitHeight > 0
+    // Com linhas das Preferências, conta-as pela regra e pelo filtro (`aparece` e `passaNoFiltro`), nunca pelo `visible` ou pelo `implicitHeight`:
+    // estes dependem do próprio grupo e o deixavam sempre escondido (D58).
+    readonly property int linhasAMostrar: {
+        var n = 0
+        for (var i = 0; i < caixa.itens.length; ++i) {
+            var c = caixa.itens[i]
+            if (c.buscavel === true && c.aparece && c.passaNoFiltro) ++n
+        }
+        return n
+    }
+    // Sem linha buscável (os assistentes): vale a altura, como antes da busca.
+    readonly property bool soTemOutros: {
+        for (var i = 0; i < caixa.itens.length; ++i)
+            if (caixa.itens[i].buscavel === true) return false
+        return true
+    }
+    visible: soTemOutros ? caixa.implicitHeight > 0 : linhasAMostrar > 0
 
     // O título e, à direita dele, o que o grupo puser em `sufixo` (um botão-link, como o `header-suffix` do Adwaita).
     Item {

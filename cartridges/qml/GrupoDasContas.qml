@@ -10,6 +10,10 @@ Column {
     objectName: "grupoDasContas"
 
     property var contas
+    // Quantas contas passam na busca; o grupo some sem nenhuma (como `GrupoDePreferencias.linhasAMostrar`).
+    readonly property int linhasAMostrar: [contas.microsoft, contas.epic, contas.ea]
+        .filter(d => BuscaDasPreferencias.passa(d.titulo, d.subtitulo)).length
+    visible: linhasAMostrar > 0
 
     width: parent ? parent.width : implicitWidth
     spacing: 8
@@ -41,6 +45,7 @@ Column {
         id: linha
         property string chave
         property var dados
+        visible: BuscaDasPreferencias.passa(dados.titulo, dados.subtitulo)
         signal clicado()
 
         width: parent.width

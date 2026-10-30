@@ -1160,3 +1160,13 @@ def test_zerado_esconde_logo_papel_e_iluminacao(app, store, schema):
     assert _esperar(lambda: app.achar("linhaDaFita").property("visible") is True)
     for nome in ("linhaDoPapel", "linhaDaFita", "linhaDoBrilhoDaFita"):
         assert app.achar(nome).property("visible") is True, nome
+
+
+def test_busca_das_preferencias_nao_mexe_nas_linhas_do_editor_por_baixo(app):
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: app.achar("campoNome").property("visible") is True)
+    assert app.preferencias.abrir()
+    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("visible") is True)
+    app.achar("dialogoDePreferencias").setProperty("filtro", "zzzzzz")
+    assert _esperar(lambda: app.achar("estadoSemResultadoDasPreferencias").property("visible") is True)
+    assert app.achar("campoNome").property("visible") is True

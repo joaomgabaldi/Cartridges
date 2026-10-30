@@ -24,6 +24,25 @@ Rectangle {
     property string aba: "general"
     // Quem tinha o foco ao abrir.
     property Item retorno: null
+    // O texto da busca; com ele as abas somem e as cinco páginas aparecem juntas, só com as linhas que casam (D69).
+    property alias filtro: campoDeBusca.text
+    readonly property bool buscando: filtro !== ""
+    // (Um grupo `soTemOutros`, sem linha buscável, não conta: hoje nenhum grupo das cinco páginas é assim.)
+    // Quantos grupos têm linha à mostra (pela contagem de cada grupo, não pela altura: ela só se atualiza com o layout).
+    readonly property int gruposAMostrar: {
+        var n = 0
+        for (var i = 0; i < paginas.children.length; ++i)
+            for (var j = 0; j < paginas.children[i].children.length; ++j)
+                if (paginas.children[i].children[j].linhasAMostrar > 0) ++n
+        return n
+    }
+    // O texto vai ao singleton só depois de as páginas ficarem à vista: o `Column` só se reorganiza quando a
+    // visibilidade efetiva de um filho muda, e uma linha escondida enquanto a página ainda estava escondida deixaria
+    // a altura velha (rolagem com vazio no fim).
+    onFiltroChanged: {
+        rolagem.contentY = 0
+        Qt.callLater(() => BuscaDasPreferencias.texto = filtro)
+    }
 
     signal retornoPerdido()
 
@@ -58,11 +77,13 @@ Rectangle {
             retorno = Window.window ? Window.window.activeFocusItem : null
             aba = abas.some(a => a.id === preferencias.pagina) ? preferencias.pagina : "general"
             rolagem.contentY = 0
+            filtro = ""
             // O foco começa na aba à vista.
             for (var i = 0; i < abasLinha.children.length; ++i)
                 if (abasLinha.children[i].atual === true) abasLinha.children[i].forceActiveFocus(Qt.TabFocusReason)
         } else {
             confirmacaoDosMetadados.visible = false
+            filtro = ""
             Qt.callLater(devolverAoRetorno)
         }
     }
@@ -79,6 +100,13 @@ Rectangle {
         for (var p = item; p; p = p.parentItem)
             if (p === pai) return true
         return false
+    }
+
+    // Ctrl+F leva ao campo de busca (não com um modal por cima).
+    Shortcut {
+        sequence: StandardKey.Find
+        enabled: dialogo.visible && cartao.enabled && !confirmacaoDosMetadados.visible
+        onActivated: campoDeBusca.forceActiveFocus(Qt.ShortcutFocusReason)
     }
 
     MouseArea { anchors.fill: parent } // o que está embaixo não recebe cliques
@@ -135,11 +163,45 @@ Rectangle {
         Item {
             id: cabecalho
             width: parent.width
-            height: 56
+            // O campo de busca no alto; as abas abaixo dele, que somem durante a busca.
+            height: dialogo.buscando ? 56 : 104
+
+            TextField {
+                id: campoDeBusca
+                objectName: "campoDeBuscaDasPreferencias"
+                anchors { left: parent.left; leftMargin: 12; right: botaoFechar.left; rightMargin: 8; top: parent.top; topMargin: 11 }
+                height: 34
+                leftPadding: 34
+                placeholderText: "Buscar nas Preferências"
+                placeholderTextColor: Tema.textoSecundario
+                color: Tema.texto
+                selectByMouse: true
+                font { family: Tema.fonte; pixelSize: 14 }
+                Accessible.name: "Buscar nas Preferências"
+                // Esc com texto limpa a busca; sem texto, sobe ao diálogo e fecha.
+                Keys.onEscapePressed: event => {
+                    event.accepted = text !== ""
+                    if (event.accepted) text = ""
+                }
+                background: Rectangle {
+                    radius: 6
+                    color: Tema.superficie
+                    border { width: campoDeBusca.activeFocus ? 2 : 1; color: campoDeBusca.activeFocus ? Tema.destaque : Tema.borda }
+                }
+                Text {
+                    anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
+                    text: ""  // buscar
+                    textFormat: Text.PlainText
+                    color: Tema.textoSecundario
+                    font { family: Tema.fonteDeIcones; pixelSize: 14 }
+                }
+            }
 
             Row {
                 id: abasLinha
-                anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
+                objectName: "abas"
+                visible: !dialogo.buscando
+                anchors { left: parent.left; leftMargin: 12; top: parent.top; topMargin: 56 }
                 spacing: 4
                 Repeater {
                     model: dialogo.abas
@@ -157,7 +219,7 @@ Rectangle {
             Button {
                 id: botaoFechar
                 objectName: "botaoFecharPreferencias"
-                anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
+                anchors { right: parent.right; rightMargin: 12; top: parent.top; topMargin: 11 }
                 focusPolicy: Qt.StrongFocus
                 implicitWidth: 34
                 implicitHeight: 34
@@ -199,12 +261,21 @@ Rectangle {
                 y: 16
                 width: rolagem.width - 32
 
-                PaginaGeral { visible: dialogo.aba === "general" }
-                PaginaDePersonalizacao { visible: dialogo.aba === "session" }
-                PaginaDeImportacao { visible: dialogo.aba === "import" }
-                PaginaDoSteamGridDB { visible: dialogo.aba === "sgdb" }
-                PaginaDasConquistas { visible: dialogo.aba === "conquistas" }
+                PaginaGeral { visible: dialogo.buscando || dialogo.aba === "general" }
+                PaginaDePersonalizacao { visible: dialogo.buscando || dialogo.aba === "session" }
+                PaginaDeImportacao { visible: dialogo.buscando || dialogo.aba === "import" }
+                PaginaDoSteamGridDB { visible: dialogo.buscando || dialogo.aba === "sgdb" }
+                PaginaDasConquistas { visible: dialogo.buscando || dialogo.aba === "conquistas" }
             }
+        }
+
+        // Sem linha à vista, as páginas ficam com altura zero (cada grupo sem linha some).
+        EstadoVazio {
+            objectName: "estadoSemResultadoDasPreferencias"
+            anchors { left: parent.left; right: parent.right; top: cabecalho.bottom; bottom: parent.bottom }
+            visible: dialogo.buscando && dialogo.gruposAMostrar === 0
+            glifo: ""
+            titulo: "Nenhum resultado encontrado"
         }
     }
 

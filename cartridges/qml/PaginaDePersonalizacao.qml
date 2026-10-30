@@ -12,6 +12,7 @@ Column {
 
     component Interruptor: LinhaDeAlternancia {
         property string chave
+        buscavel: true
         objectName: "interruptor-" + chave
         checked: preferencias.valores[chave] === true
         onAlternado: preferencias.definir(chave, checked)
@@ -41,6 +42,7 @@ Column {
             enabled: preferencias.estado.moverAtivo === true
         }
         LinhaDeEscolha {
+            buscavel: true
             objectName: "linhaDoMonitor"
             titulo: "Monitor"
             model: preferencias.estado.monitores || []
@@ -50,6 +52,7 @@ Column {
         }
         // Sempre clicável: é olhando para as telas que se decide qual escolher.
         LinhaDeBotao {
+            buscavel: true
             objectName: "linhaIdentificarMonitores"
             titulo: "Identificar monitores"
             onAcionada: preferencias.identificarMonitores()
@@ -70,6 +73,7 @@ Column {
             enabled: preferencias.estado.papelDeParedeLigavel === true
         }
         LinhaDeTexto {
+            buscavel: true
             objectName: "campoDaChaveDoWallhaven"
             titulo: "Chave da API do wallhaven (opcional)"
             text: preferencias.valores["wallhaven-key"] || ""
@@ -95,6 +99,7 @@ Column {
             enabled: preferencias.fitas.configuradas > 0
         }
         LinhaDeNumero {
+            buscavel: true
             objectName: "linhaDoBrilhoDasFitas"
             titulo: "Brilho (%)"
             subtitulo: "Aplicado aos jogos sem brilho próprio definido"
@@ -107,6 +112,7 @@ Column {
             onAlterado: valor => preferencias.fitas.definirBrilho(valor)
         }
         LinhaDeAcao {
+            buscavel: true
             objectName: "linhaDoBrilhoPorDispositivo"
             titulo: "Brilho máximo por dispositivo"
             subtitulo: "Define o brilho máximo de cada dispositivo"
@@ -122,6 +128,7 @@ Column {
             enabled: grupoIluminacao.ligada
         }
         LinhaDeAcao {
+            buscavel: true
             objectName: "linhaCalibrarFitas"
             titulo: "Calibrar as cores"
             subtitulo: "Ajusta cada dispositivo para reproduzir as cores como a tela"
@@ -131,6 +138,7 @@ Column {
             onAcionada: preferencias.abrirCalibracao()
         }
         LinhaDeCor {
+            buscavel: true
             objectName: "linhaDaCorDoApp"
             titulo: "Cor do app"
             subtitulo: "A cor da iluminação inteligente com o aplicativo aberto e nenhum jogo em execução"
@@ -142,6 +150,7 @@ Column {
             onVoltar: preferencias.fitas.voltarCorDoApp()
         }
         LinhaDeAcao {
+            buscavel: true
             objectName: "linhaConfigurarFitas"
             titulo: "Configurar a iluminação inteligente"
             subtitulo: "Busca os dispositivos na sua conta da Tuya"
@@ -150,6 +159,7 @@ Column {
             onAcionada: preferencias.abrirConfiguracaoDasFitas()
         }
         LinhaDeAcao {
+            buscavel: true
             objectName: "linhaTestarFitas"
             titulo: "Testar"
             subtitulo: preferencias.fitas.resultadoDoTeste || "Acende cada dispositivo na cor do aplicativo"
