@@ -24,6 +24,11 @@ from PySide6.QtQuickControls2 import QQuickStyle
 from cartridges import shared
 from cartridges.aplicativo import Aplicativo
 from cartridges.carga import carregar_jogos_do_disco
+from cartridges.conquistas import icones
+from cartridges.conquistas.ea import conta as ea_conta
+from cartridges.conquistas.epic import conta as epic_conta
+from cartridges.conquistas.varredura import VarreduraConquistas
+from cartridges.conquistas.xbox import conta, login
 from cartridges.logging.session_file_handler import SessionFileHandler
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
@@ -112,6 +117,43 @@ def _encerrar_em_ordem(*passos) -> None:  # noqa: ANN002
             logging.getLogger(__name__).exception("Falha ao encerrar o app")
 
 
+def _carregar_contas() -> None:
+    """As contas Microsoft, Epic e EA são lidas do disco antes da interface, sem rede (nunca levantam)."""
+    conta.carregar()
+    epic_conta.carregar()
+    ea_conta.carregar()
+
+
+def _ligar_conquistas(aplicativo: Aplicativo) -> VarreduraConquistas:
+    """A varredura de conquistas da abertura, depois das outras (como na `main`): uma passada por execução."""
+    aplicativo.varredura_conquistas = VarreduraConquistas()
+    aplicativo.varredura_conquistas.start()
+    return aplicativo.varredura_conquistas
+
+
+def _parar_varredura_de_conquistas() -> None:
+    if shared.aplicativo is not None and shared.aplicativo.varredura_conquistas is not None:
+        shared.aplicativo.varredura_conquistas.stop()
+
+
+def _fechar(big_picture, sessao, verificador, varredura_hltb, varredura_tamanho, edicao) -> None:  # noqa: ANN001
+    """O `aboutToQuit`, na ordem da `main`; o `stop()` de cada um vem antes do `encerrar()`."""
+    _encerrar_em_ordem(
+        big_picture.encerrar,  # a cortina preta do fade nunca fica no monitor (ADR 0003)
+        sessao.encerrar,  # o tempo da sessão em andamento vai ao jogo e ao histórico (sem interface)
+        login.cancelar_pendente,  # um login da conta Microsoft esperando o navegador não sobrevive ao app
+        ea_conta.gravar_pendente,  # o `remid` novo da EA que não coube no disco: última tentativa
+        verificador.stop,
+        varredura_hltb.stop,
+        varredura_tamanho.stop,
+        _parar_varredura_de_conquistas,
+        edicao.cancelar,  # apaga os temporários de um editor ainda aberto
+        async_manager.encerrar,  # drena as gravações, a do tempo da sessão inclusive
+        copias_animadas.encerrar,
+        icones.encerrar,  # os ícones na fila não seguram o processo com a rede travada
+    )
+
+
 def main(argv: list[str]) -> int:
     app = AplicacaoQt(argv)
     app.setApplicationName("Cartridges")
@@ -124,16 +166,7 @@ def main(argv: list[str]) -> int:
     varredura_tamanho = InstallSizeSweep()
 
     def encerrar() -> None:
-        _encerrar_em_ordem(
-            big_picture.encerrar,  # a cortina preta do fade nunca fica no monitor (ADR 0003)
-            sessao.encerrar,  # o tempo da sessão em andamento vai ao jogo e ao histórico (sem interface)
-            verificador.stop,
-            varredura_hltb.stop,
-            varredura_tamanho.stop,
-            edicao.cancelar,  # apaga os temporários de um editor ainda aberto
-            async_manager.encerrar,  # drena as gravações, a do tempo da sessão inclusive
-            copias_animadas.encerrar,
-        )
+        _fechar(big_picture, sessao, verificador, varredura_hltb, varredura_tamanho, edicao)
 
     app.aboutToQuit.connect(encerrar)
     _configurar_log()
@@ -164,6 +197,7 @@ def main(argv: list[str]) -> int:
         return 0
 
     _limpar_e_ativar_copias(modelo)
+    _carregar_contas()
 
     from cartridges.janela import qwk  # noqa: PLC0415
 
@@ -207,6 +241,7 @@ def main(argv: list[str]) -> int:
     verificador.start()
     varredura_hltb.start()
     varredura_tamanho.start()
+    _ligar_conquistas(aplicativo)
     # Depois de a janela aparecer. Com restauração pendente a importação é outra (plano 8).
     # shortcut: sem `continuar_restauracao`, a abertura com restauração pendente não importa; entra no plano 8.
     if not restauracao.existe() and shared.schema.get_boolean("auto-import"):

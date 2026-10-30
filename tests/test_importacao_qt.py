@@ -322,6 +322,16 @@ def test_importado_fica_ligado_a_ponte(fonte, store, app_qt):
     assert _esperar(lambda: any(a[0] == "A iniciado" for a in fila.adicionados))
 
 
+def test_importados_sao_varridos_em_silencio(fonte, store, app_qt):
+    pedidos = []
+    varredura = SimpleNamespace(varrer_jogos=lambda jogos: pedidos.append([j.game_id for j in jogos]))
+    fonte.jogos = _jogos("V")
+    app = Aplicativo(FilaRegistrada())
+    app.varredura_conquistas = varredura
+    _importar(app)
+    assert pedidos == [["shortcuts_V"]]
+
+
 def test_pendente_resolvido_volta_a_grade(store, app_qt):
     """D37: o modelo só avalia a pendência em `atualizar`; resolvê-la na importação reapresenta o jogo."""
     from cartridges.importer.importer import Importer  # noqa: PLC0415

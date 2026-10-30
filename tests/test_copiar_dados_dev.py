@@ -139,3 +139,21 @@ def test_copia_dev_nao_leva_fitas_nem_conta_tuya(chaves, tmp_path):
     cd.copiar(pasta, tmp_path / "destino", origem, destino)
 
     assert sorted(p.name for p in (tmp_path / "destino").iterdir()) == ["outro.json"]
+
+
+def test_copia_dev_nao_leva_contas_nem_chave_da_steam(chaves, tmp_path):
+    """As contas das lojas (D57) e a chave da Steam ficam só nos dados reais: a -dev não as herda."""
+    origem, destino = chaves
+    with winreg.OpenKeyEx(cd.RAIZ, origem, 0, winreg.KEY_WRITE) as k:
+        winreg.SetValueEx(k, "conquistas-chave-steam", 0, winreg.REG_SZ, "valor-de-teste")
+    pasta = tmp_path / "origem"
+    (pasta / "contas").mkdir(parents=True)
+    (pasta / "contas" / "xbox.json").write_text("x", encoding="utf-8")
+    (pasta / "games").mkdir()
+    (pasta / "games" / "a.json").write_text("{}", encoding="utf-8")
+
+    cd.copiar(pasta, tmp_path / "destino", origem, destino)
+
+    assert not (tmp_path / "destino" / "contas").exists()
+    assert (tmp_path / "destino" / "games" / "a.json").exists()
+    assert "conquistas-chave-steam" not in _ler(destino)

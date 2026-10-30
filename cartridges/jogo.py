@@ -403,7 +403,7 @@ class Jogo(QObject):
         """``ao_confirmar`` é como relançar depois da confirmação do comando de um
         jogo restaurado; sem ele, é este mesmo ``launch``."""
         # shortcut: sem a espera da restauração dos saves ("Aguarde o fim da restauração dos saves de
-        # {}."), no plano que portar backup_de_saves (D52).
+        # {}."), no plano 8 com o backup_de_saves (D56).
         if self.comando_a_conferir:
             self._conferir_comando(ao_confirmar or self.launch)
             return False

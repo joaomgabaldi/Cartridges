@@ -222,7 +222,7 @@ class ModeloDaSessao(QObject):
     def session_toast(self, game: Any, seconds: int) -> None:
         """O aviso do fim da sessão, com atalho para a anotação quando há onde anotar."""
         texto = _("{}: {} de jogo").format(game.name, format_playtime(seconds))
-        # shortcut: sem o backup dos saves ao fim da sessão (backup_de_saves.no_fim_da_sessao), no plano que portar backup_de_saves (D52).
+        # shortcut: sem o backup dos saves ao fim da sessão (backup_de_saves.no_fim_da_sessao), no plano 8 com o backup_de_saves (D56).
         if not pode_anotar(game):
             self._avisos.adicionar(texto)
             return

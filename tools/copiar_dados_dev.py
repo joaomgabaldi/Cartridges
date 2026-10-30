@@ -31,10 +31,12 @@ RAIZ = winreg.HKEY_CURRENT_USER
 # O que a cópia -dev NÃO herda: valores e arquivos que guardam caminho absoluto para a pasta dos
 # dados reais. Copiados, o app -dev faria backup/restauração dos saves na pasta real.
 # Sem eles, o app -dev usa o padrão, dentro da própria pasta -dev (o ludusavi regrava os dois).
-IGNORAR_VALORES = frozenset({"pasta-dos-saves"})
+# As contas das lojas (pasta `contas`, as chaves de renovação) e a chave da Steam: com a varredura de
+# conquistas ligada, o app -dev falaria com Microsoft, Epic, EA e Steam como a conta real (D57).
+IGNORAR_VALORES = frozenset({"pasta-dos-saves", "conquistas-chave-steam"})
 # As fitas de LED e a conta Tuya levam as chaves locais dos aparelhos reais da casa: o app -dev
 # acende as fitas ao abrir e falaria com elas (D53).
-IGNORAR_ARQUIVOS = frozenset({"ludusavi/config.yaml", "ludusavi/cache.yaml", "fitas.json", "tuya_conta.json"})
+IGNORAR_ARQUIVOS = frozenset({"ludusavi/config.yaml", "ludusavi/cache.yaml", "fitas.json", "tuya_conta.json", "contas"})
 
 REPO = Path(__file__).resolve().parent.parent
 ATALHOS_DE_TESTE = REPO / "_dev" / "atalhos-teste"

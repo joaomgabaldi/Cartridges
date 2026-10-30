@@ -210,7 +210,6 @@ class Importer(ErrorProducer):
         levanta: nada aqui derruba o fim da importação.
         """
         try:
-            # shortcut: o Aplicativo ainda não tem `varredura_conquistas`, então isto não faz nada; entra no plano 6.
             varredura = getattr(self.aplicativo, "varredura_conquistas", None)
             if varredura is None:
                 return

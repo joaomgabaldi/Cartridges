@@ -1,12 +1,29 @@
-"""O interruptor de conquistas e a correção de appID na edição do jogo.
+"""O interruptor de conquistas, a correção de appID e a varredura depois do Aplicar na edição do jogo."""
 
-A varredura de conquistas depois do Aplicar volta no plano 6 (D42); até lá estes
-testes conferem só o que a edição grava e o histórico que ela apaga ou mantém.
-"""
+import types
 
+import pytest
+
+from cartridges import shared
 from cartridges.conquistas import historico
 from cartridges.conquistas.formatos import Desbloqueio
 from tests.apoio_edicao import jogo, stub_sgdb
+
+
+class _Varredura:
+    def __init__(self):
+        self.pedidos = []
+
+    def varrer_jogo(self, game):
+        self.pedidos.append(game.game_id)
+
+
+@pytest.fixture
+def varridos(monkeypatch):
+    """Os jogos que a varredura (falsa, em `shared.aplicativo`) recebeu."""
+    falsa = _Varredura()
+    monkeypatch.setattr(shared, "aplicativo", types.SimpleNamespace(varredura_conquistas=falsa), raising=False)
+    return falsa.pedidos
 
 
 def _aplicar(store, game, **mudancas):
@@ -48,12 +65,13 @@ def test_primeiro_appid_nao_descarta_nada(store):
     assert historico.ler(game.game_id) == {"A": 1}
 
 
-def test_desligar_mantem_o_historico(store):
+def test_desligar_mantem_o_historico(store, varridos):
     game = jogo(store, 25, executable="x.exe", steam_appid="570")
     historico.registrar(game.game_id, [Desbloqueio("A", 1)])
     _aplicar(store, game, conquistas=False)
     assert game.conquistas is False
     assert historico.ler(game.game_id) == {"A": 1}
+    assert not varridos
 
 
 def test_appid_que_liga_um_zerado_mantem_o_historico_dele(store):
@@ -122,3 +140,51 @@ def test_editar_sem_mudar_o_appid_mantem_o_aviso(store):
     game = jogo(store, 33, executable="x.exe", steam_appid="10", saves_local_desconhecido_avisado=True)
     _aplicar(store, game, appid_buscado="10", executavel="y.exe")
     assert game.saves_local_desconhecido_avisado is True
+
+
+def test_religar_pede_varredura(store, varridos):
+    game = jogo(store, 40, executable="x.exe", steam_appid="570", conquistas=False)
+    _aplicar(store, game, conquistas=True)
+    assert varridos == [game.game_id]
+
+
+def test_sem_mudanca_nao_varre(store, varridos):
+    game = jogo(store, 41, executable="x.exe", steam_appid="570")
+    _aplicar(store, game)
+    assert not varridos
+
+
+def test_religar_pede_varredura_sem_appid(store, varridos):
+    """Jogo do Xbox não tem appID: a varredura não pode depender dele."""
+    game = jogo(store, 42, executable="x.exe", conquistas=False)
+    _aplicar(store, game, conquistas=True)
+    assert varridos == [game.game_id]
+
+
+def test_jogo_sem_conquistas_nao_e_varrido_ao_editar_o_executavel(store, varridos):
+    game = jogo(store, 43, executable="x.exe", conquistas=False)
+    _aplicar(store, game, executavel="y.exe")
+    assert not varridos
+
+
+def test_editar_o_executavel_pede_varredura(store, varridos):
+    game = jogo(store, 44, executable="x.exe", steam_appid="570")
+    _aplicar(store, game, executavel="y.exe")
+    assert varridos == [game.game_id]
+
+
+def test_aplicar_corrige_o_appid_apaga_e_varre(store, varridos):
+    game = jogo(store, 45, executable="x.exe", steam_appid="10")
+    historico.registrar(game.game_id, [Desbloqueio("ERRADA", 1)])
+    _aplicar(store, game, appid_buscado="20")
+    assert historico.ler(game.game_id) is None
+    assert varridos == [game.game_id]
+
+
+def test_conta_com_fonte_invalida_apaga_como_a_main(store, varridos):
+    """Fonte guardada ilegível (`xbox:`): a `main` apaga, como com a Steam; só a fonte de conta válida mantém."""
+    game = jogo(store, 46, executable="x.exe", steam_appid="10")
+    historico.registrar(game.game_id, [Desbloqueio("A", 1)], fonte="xbox:", conta="111")
+    _aplicar(store, game, appid_buscado="20")
+    assert historico.ler(game.game_id) is None
+    assert varridos == [game.game_id]

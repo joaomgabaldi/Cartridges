@@ -39,6 +39,8 @@ class Aplicativo(QObject):
         self._importando = False
         # Posto por `app.py`; a tela de preferências chama `check_async()` nele.
         self.verificador_de_atualizacoes = None
+        # Posta por `app.py` depois das outras varreduras; a edição e a importação a chamam.
+        self.varredura_conquistas = None
         self._ao_fechar_dialogo: Callable[[], None] | None = None
         self._colunas = shared.schema.get_uint("library-rows")
         self._tocar_sempre = shared.schema.get_boolean("cover-autoplay")

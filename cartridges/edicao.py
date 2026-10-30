@@ -26,7 +26,7 @@ from typing import Any, Literal, Optional
 from PIL import Image, UnidentifiedImageError
 
 from cartridges import shared
-from cartridges.conquistas import historico
+from cartridges.conquistas import fontes, historico
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.jogo import STATUS_LABELS, Jogo
 from cartridges.store.managers.sgdb_manager import SgdbManager
@@ -44,9 +44,6 @@ STATUS_VALUES = ("", *STATUS_LABELS)
 CONTROLLER_VALUES = (None, "full", "partial")
 # Os rótulos do seletor, uma só fonte com a ordem acima.
 CONTROLLER_LABELS = {None: _("Não informada"), "full": _("Total"), "partial": _("Parcial")}
-
-# As fontes de conquistas em que o appID não é a fonte (`conquistas.fontes`).
-_FONTES_DE_CONTA = frozenset({"xbox", "epic", "ubisoft", "ea"})
 
 
 @dataclass
@@ -368,17 +365,13 @@ def _aplicar_papel_de_parede(jogo: Jogo, escolha: Optional[Escolha]) -> None:
         _descartar(escolha.arquivo)
 
 
-def _appid_era_a_fonte(game_id: str) -> bool:
+def _appid_era_a_fonte(jogo: Jogo) -> bool:
     """As conquistas guardadas vieram do appID (Steam, ou fonte nenhuma)?
 
     Nas lojas com conta e na Ubisoft elas são da conta ou dos arquivos do launcher.
     """
-    # shortcut: lê só o tipo da fonte, sem `fontes.gravada` (que ainda puxa o gi); uma fonte de
-    # conta com id inválido é mantida em vez de apagada. O plano 6 volta a usar `fontes.gravada`.
-    texto = historico.fonte(game_id)
-    if not isinstance(texto, str) or texto.count(":") != 1:
-        return True
-    return texto.split(":")[0] not in _FONTES_DE_CONTA
+    fonte = fontes.gravada(jogo)
+    return fonte is None or fonte.tipo == fontes.STEAM
 
 
 def _capa_do_sgdb_chegou(jogo: Jogo, manager: Any) -> None:
@@ -469,6 +462,7 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
         # Só as chaves que a busca devolveu: um jogo só com a história principal
         # mantém as outras duas estimativas.
         jogo.update_values(dict(hltb))
+    executavel_mudou = form.executavel != (jogo.executable or "")
     jogo.executable = form.executavel
     jogo.run_as_admin = form.admin
     jogo.track_process = _rastrear(form)
@@ -482,6 +476,7 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
         jogo.update_available_ts = 0
         jogo.update_url = ""
     jogo.track_updates = form.notificar_atualizacoes
+    conquistas_antes = jogo.conquistas
     jogo.conquistas = form.conquistas
 
     capa_presa = False
@@ -514,15 +509,16 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
     jogo.update()
 
     appid_mudou = str(jogo.steam_appid or "") != str(appid_anterior or "")
-    if appid_anterior and appid_mudou and _appid_era_a_fonte(jogo.game_id):
+    if appid_anterior and appid_mudou and _appid_era_a_fonte(jogo):
         # O appID antigo estava errado: as conquistas guardadas eram de outro jogo.
         historico.apagar(jogo.game_id)
 
     if jogo.steam_appid and str(jogo.steam_appid) != str(appid_anterior):
         ligar_zerado(jogo)
 
-    # shortcut: a varredura de conquistas depois do Aplicar não roda (a `main` varre com as
-    # conquistas ligadas e o appID ou o executável mudado, ou as conquistas recém-ligadas), plano 6.
+    if jogo.conquistas and (appid_mudou or executavel_mudou or not conquistas_antes):
+        if (varredura := getattr(shared.aplicativo, "varredura_conquistas", None)) is not None:
+            varredura.varrer_jogo(jogo)
 
     if acabou_de_ligar and shared.aplicativo is not None:
         if (verificador := getattr(shared.aplicativo, "verificador_de_atualizacoes", None)) is not None:

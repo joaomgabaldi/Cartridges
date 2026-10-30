@@ -1313,7 +1313,7 @@ class SeletorDaSteam(BuscaDoSeletor, QAbstractListModel):
 
 
 def pasta_do_ludusavi() -> Path:
-    # shortcut: a mesma conta do `backup_de_saves._pasta_config`, que ainda importa o gi; plano 6 volta a usar aquela.
+    # shortcut: a mesma conta do `backup_de_saves._pasta_config`, que ainda importa o gi; o plano 8 (D56) porta o backup_de_saves e volta a usar aquela.
     return shared.app_dir / "ludusavi"
 
 
