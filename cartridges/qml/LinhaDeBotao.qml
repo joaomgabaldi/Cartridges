@@ -22,6 +22,7 @@ Item {
 
     Button {
         id: botao
+        objectName: linha.objectName + "Botao"
         anchors.fill: parent
         focusPolicy: Qt.StrongFocus
         Accessible.name: linha.titulo

@@ -139,10 +139,15 @@ def _parar_varredura_de_conquistas() -> None:
         shared.aplicativo.varredura_conquistas.stop()
 
 
-def _fechar(big_picture, sessao, verificador, varredura_hltb, varredura_tamanho, edicao) -> None:  # noqa: ANN001
+def _fechar(  # noqa: ANN001
+    big_picture, sessao, verificador, varredura_hltb, varredura_tamanho, edicao, preferencias
+) -> None:
     """O `aboutToQuit`, na ordem da `main`; o `stop()` de cada um vem antes do `encerrar()`."""
     _encerrar_em_ordem(
         big_picture.encerrar,  # a cortina preta do fade nunca fica no monitor (ADR 0003)
+        # As Preferências com um modal aberto (calibração, assistente das fitas, brilho, contas): fecham antes de a
+        # sessão devolver as fitas (a prévia que saem não as acende de novo) e antes do login pendente.
+        preferencias.fechar,
         sessao.devolver,  # a parede e as fitas, com as janelas já fora da tela (grava antes se o `saindo` não veio)
         login.cancelar_pendente,  # um login da conta Microsoft esperando o navegador não sobrevive ao app
         ea_conta.gravar_pendente,  # o `remid` novo da EA que não coube no disco: última tentativa
@@ -169,7 +174,7 @@ def main(argv: list[str]) -> int:
     varredura_tamanho = InstallSizeSweep()
 
     def encerrar() -> None:
-        _fechar(big_picture, sessao, verificador, varredura_hltb, varredura_tamanho, edicao)
+        _fechar(big_picture, sessao, verificador, varredura_hltb, varredura_tamanho, edicao, preferencias)
 
     app.aboutToQuit.connect(encerrar)
     _configurar_log()

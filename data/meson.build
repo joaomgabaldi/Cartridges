@@ -4,7 +4,6 @@ blueprints = custom_target(
     'gtk/assistente.blp',
     'gtk/details-dialog.blp',
     'gtk/logo-picker.blp',
-    'gtk/preferences.blp',
     'gtk/sgdb-picker.blp',
     'gtk/steam-picker.blp',
     'gtk/wallpaper-picker.blp',

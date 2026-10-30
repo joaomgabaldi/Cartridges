@@ -52,6 +52,7 @@ LinhaDeAcao 1.0 LinhaDeAcao.qml
 LinhaDeBotao 1.0 LinhaDeBotao.qml
 LinhaDeAtualizacao 1.0 LinhaDeAtualizacao.qml
 PaginaDePersonalizacao 1.0 PaginaDePersonalizacao.qml
+PaginaDasConquistas 1.0 PaginaDasConquistas.qml
 PlacaDoMonitor 1.0 PlacaDoMonitor.qml
 LinhaDeCor 1.0 LinhaDeCor.qml
 BrilhoPorDispositivo 1.0 BrilhoPorDispositivo.qml

@@ -5,7 +5,6 @@
     <file preprocess="xml-stripblanks">gtk/assistente.ui</file>
     <file preprocess="xml-stripblanks">gtk/details-dialog.ui</file>
     <file preprocess="xml-stripblanks">gtk/logo-picker.ui</file>
-    <file preprocess="xml-stripblanks">gtk/preferences.ui</file>
     <file preprocess="xml-stripblanks">gtk/sgdb-picker.ui</file>
     <file preprocess="xml-stripblanks">gtk/steam-picker.ui</file>
     <file preprocess="xml-stripblanks">gtk/wallpaper-picker.ui</file>

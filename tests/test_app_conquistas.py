@@ -60,12 +60,13 @@ def _fechar(monkeypatch, falhar=()):
     app._fechar(  # noqa: SLF001
         _Gravador(passos, "bp", falhar), _Gravador(passos, "sessao", falhar), _Gravador(passos, "verificador", falhar),
         _Gravador(passos, "hltb", falhar), _Gravador(passos, "tamanho", falhar), _Gravador(passos, "edicao", falhar),
+        _Gravador(passos, "preferencias", falhar),
     )  # fmt: skip
     return passos
 
 
 _ORDEM = [
-    "bp.encerrar", "sessao.devolver", "login.cancelar_pendente", "ea.gravar_pendente", "verificador.stop",
+    "bp.encerrar", "preferencias.fechar", "sessao.devolver", "login.cancelar_pendente", "ea.gravar_pendente", "verificador.stop",
     "hltb.stop", "tamanho.stop", "varredura.stop", "edicao.cancelar", "async.encerrar", "copias.encerrar",
     "icones.encerrar",
 ]  # fmt: skip
@@ -75,7 +76,7 @@ def test_encerrar_cancela_o_login_e_os_icones(monkeypatch):
     assert _fechar(monkeypatch) == _ORDEM
 
 
-@pytest.mark.parametrize("falha", ["cancelar_pendente", "gravar_pendente", "stop", "encerrar", "cancelar"])
+@pytest.mark.parametrize("falha", ["cancelar_pendente", "gravar_pendente", "stop", "encerrar", "cancelar", "fechar"])
 def test_uma_falha_nao_impede_os_passos_seguintes(monkeypatch, falha):
     assert _fechar(monkeypatch, falhar=(falha,)) == _ORDEM
 

@@ -8,6 +8,8 @@ Item {
     property string titulo
     property alias model: caixa.model
     property alias currentIndex: caixa.currentIndex
+    // A largura da caixa; quem tem opções mais longas que o padrão a alarga.
+    property int larguraDaCaixa: 180
 
     // A pessoa escolheu uma opção (o índice).
     signal escolhido(int indice)
@@ -33,8 +35,9 @@ Item {
 
     ComboBox {
         id: caixa
+        objectName: linha.objectName + "Caixa"
         anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
-        implicitWidth: 180
+        implicitWidth: linha.larguraDaCaixa
         implicitHeight: 34
         focusPolicy: Qt.StrongFocus
         Accessible.name: linha.titulo

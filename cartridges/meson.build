@@ -44,7 +44,6 @@ install_data(
     'main.py',
     'window.py',
     'big_picture.py',
-    'preferences.py',
     'details_dialog.py',
     'conquista_aviso.py',
     'janela_restaurando.py',

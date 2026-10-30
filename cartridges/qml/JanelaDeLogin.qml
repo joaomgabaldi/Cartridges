@@ -20,8 +20,8 @@ Rectangle {
     visible: login !== null && login.aberto
     color: "#80000000"
     Keys.onEscapePressed: janela.login.fechar()
-    // Modal para o teclado: nenhuma tecla chega à tela de trás.
-    Keys.onPressed: event => event.accepted = true
+    // Modal para o teclado: nenhuma tecla chega à tela de trás. O Tab passa, para circular entre os campos e os botões.
+    Keys.onPressed: event => event.accepted = event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab
 
     onVisibleChanged: {
         if (visible) {

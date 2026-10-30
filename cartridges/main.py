@@ -71,6 +71,7 @@ from cartridges.importer.importer import Importer  # yo dawg
 from cartridges.importer.shortcuts_source import ShortcutsSource
 from cartridges.janela_restaurando import JanelaRestaurando, entregar_so_ao_mudar
 from cartridges.logging.setup import log_system_info, setup_logging
+# shortcut: esta importação quebra (cartridges/preferences.py saiu na Task 8 do plano 7; as Preferências são Qt); a main GTK sai na troca da main (plano 8).
 from cartridges.preferences import CartridgesPreferences
 from cartridges.saves import backup_de_saves, dialogo
 from cartridges.store.managers.display_manager import DisplayManager

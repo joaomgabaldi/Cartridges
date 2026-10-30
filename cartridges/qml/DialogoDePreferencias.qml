@@ -12,12 +12,12 @@ Rectangle {
     Accessible.role: Accessible.Dialog
     Accessible.name: "Preferências"
 
-    // shortcut: falta a aba "Conquistas" (Task 8 do plano 7); entra no fim, na ordem da `main`: Geral, Personalização, Importação, SteamGridDB, Conquistas. Sem página, a aba não aparece (nada de aba morta).
     readonly property var abas: [
         { id: "general", titulo: "Geral", glifo: "" },
         { id: "session", titulo: "Personalização", glifo: "" },
         { id: "import", titulo: "Importação", glifo: "" },
-        { id: "sgdb", titulo: "SteamGridDB", glifo: "" }
+        { id: "sgdb", titulo: "SteamGridDB", glifo: "" },
+        { id: "conquistas", titulo: "Conquistas", glifo: "\ue734" }
     ]
     readonly property var rotulosDasAbas: abas.map(a => a.titulo)
     // A aba à vista; abre na que o `preferencias` pediu, se ela existe.
@@ -89,8 +89,8 @@ Rectangle {
         property bool atual: false
         focusPolicy: Qt.StrongFocus
         implicitHeight: 34
-        leftPadding: 12
-        rightPadding: 12
+        leftPadding: 8
+        rightPadding: 8
         checkable: false
         Accessible.role: Accessible.PageTab
         Accessible.name: text
@@ -130,7 +130,7 @@ Rectangle {
         clip: true
         // Com o brilho por dispositivo ou o assistente das fitas por cima, o Tab não volta para cá.
         enabled: preferencias.brilhoPorDispositivo === null && preferencias.configuracaoDasFitas === null
-            && preferencias.calibracao === null
+            && preferencias.calibracao === null && !loginEpic.visible && !loginEa.visible
 
         Item {
             id: cabecalho
@@ -203,6 +203,7 @@ Rectangle {
                 PaginaDePersonalizacao { visible: dialogo.aba === "session" }
                 PaginaDeImportacao { visible: dialogo.aba === "import" }
                 PaginaDoSteamGridDB { visible: dialogo.aba === "sgdb" }
+                PaginaDasConquistas { visible: dialogo.aba === "conquistas" }
             }
         }
     }
@@ -220,6 +221,17 @@ Rectangle {
     BrilhoPorDispositivo {}
     ConfiguracaoDasFitas {}
     AssistenteDeCalibracao {}
+    // As janelas de login das contas, por cima das Preferências (que ficam apagadas enquanto uma está aberta).
+    JanelaDeLogin {
+        id: loginEpic
+        objectName: "janelaDeLoginEpic"
+        login: preferencias.contas ? preferencias.contas.loginEpic : null
+    }
+    JanelaDeLogin {
+        id: loginEa
+        objectName: "janelaDeLoginEa"
+        login: preferencias.contas ? preferencias.contas.loginEa : null
+    }
 
     Connections {
         target: preferencias.biblioteca

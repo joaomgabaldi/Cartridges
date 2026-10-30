@@ -22,12 +22,13 @@ import shiboken6
 from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 from PySide6.QtGui import QColor
 
-from cartridges import metadata_refresh, shared
+from cartridges import conquista_aviso, metadata_refresh, shared
 from cartridges.calibracao_janela import AssistenteDeCalibracao
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.fita_wizard import FitaWizard
 from cartridges.store.managers.sgdb_manager import SgdbManager
-from cartridges.utils import open_uri, session_fita, window_geometry
+from cartridges.modelos.contas import ContasDasLojas
+from cartridges.utils import janela_por_cima, open_uri, session_fita, window_geometry
 from cartridges.utils.thread_principal import na_thread_principal
 
 # As 19 de `bind_switches` da main (sem `show-news-button`, D64), mais as que ela ligava por widget próprio.
@@ -71,6 +72,8 @@ CHAVES_DA_TELA = (
 # Chaves inteiras: (mínimo, máximo), como no gschema. As demais de CHAVES_GRAVAVEIS são booleanas.
 _INTEIROS = {"process-tracking-grace": (0, 120), "conquistas-aviso-som-volume": (10, 100)}
 PAGINAS = ("general", "session", "import", "sgdb", "conquistas")
+# Os estilos do alerta na ordem da lista da tela (os rótulos ficam no QML).
+ESTILOS_NA_TELA = ("piscar", "respirar", "rapido", "longo")
 SEM_3D = "Requer uma placa de vídeo com aceleração 3D."
 
 _log = logging.getLogger(__name__)
@@ -255,6 +258,7 @@ class FitasDasPreferencias(QObject):
         self._configuradas = 0
         self._aberta = False
         self._houve_previa = False
+        self._balao_do_pulso = False
         self._parar: threading.Event | None = None
         self._resultado = ""
 
@@ -282,6 +286,18 @@ class FitasDasPreferencias(QObject):
     def corDoAppPadrao(self) -> bool:  # noqa: N802
         return session_fita.tom_do_app() == session_fita.ROXO_DO_APP
 
+    @Property(QColor, notify=alterado)
+    def corDoPulso(self) -> QColor:  # noqa: N802
+        return QColor.fromRgbF(*session_fita.cor_para_rgb(session_fita.cor_do_pulso()))
+
+    @Property(bool, notify=alterado)
+    def corDoPulsoPadrao(self) -> bool:  # noqa: N802
+        return session_fita.tom_do_pulso() == session_fita.TOM_DO_OURO
+
+    @Property(int, notify=alterado)
+    def estiloDoPulso(self) -> int:  # noqa: N802
+        return ESTILOS_NA_TELA.index(session_fita.estilo_do_pulso())
+
     @Property(bool, notify=alterado)
     def testando(self) -> bool:
         return self._parar is not None
@@ -300,6 +316,12 @@ class FitasDasPreferencias(QObject):
         self._aberta = True
         # A volta à cor do app no fechamento vale só para uma prévia feita nesta abertura.
         self._houve_previa = False
+        self._balao_do_pulso = False
+        self.recontar()
+
+    @Slot()
+    def recontar(self) -> None:
+        """Conta as fitas de novo, sem mexer nas prévias desta abertura (o assistente das fitas fechou)."""
         self._configuradas = len(session_fita.fitas())
         if not self._configuradas:
             # Desligada, e não só apagada: quando houver fita, quem religa é a pessoa.
@@ -332,6 +354,49 @@ class FitasDasPreferencias(QObject):
         session_fita.redefinir_tom_do_app()
         self._previa(session_fita.cor_do_app())
         self.alterado.emit()
+
+    @Slot()
+    def abrirCorDoPulso(self) -> None:  # noqa: N802
+        """O balão abriu: as fitas mostram a cor do alerta enquanto ele estiver aberto."""
+        self._balao_do_pulso = True
+        self._previa(session_fita.cor_do_pulso())
+
+    @Slot()
+    def fecharCorDoPulso(self) -> None:  # noqa: N802
+        """O balão fechou: as fitas voltam à cor do app. Sem balão aberto, não há o que devolver."""
+        if not self._balao_do_pulso:
+            return
+        self._balao_do_pulso = False
+        self._previa(session_fita.cor_do_app())
+
+    @Slot(QColor)
+    def escolherCorDoPulso(self, cor: QColor) -> None:  # noqa: N802
+        if not cor.isValid():
+            return
+        escolhida = session_fita.rgb_para_cor(cor.redF(), cor.greenF(), cor.blueF(), session_fita.BRILHO_CHEIO)
+        session_fita.salvar_tom_do_pulso(escolhida.matiz, escolhida.saturacao)
+        if self._balao_do_pulso:
+            self._previa(session_fita.cor_do_pulso())
+        self.alterado.emit()
+
+    @Slot()
+    def voltarCorDoPulso(self) -> None:  # noqa: N802
+        # O dourado exato: a ida e volta pela cor da tela pode arredondar uma unidade. O botão de voltar fica fora do
+        # balão: sem ele aberto, não há prévia a mostrar.
+        session_fita.redefinir_tom_do_pulso()
+        if self._balao_do_pulso:
+            self._previa(session_fita.cor_do_pulso())
+        self.alterado.emit()
+
+    @Slot(int)
+    def escolherEstiloDoPulso(self, indice: int) -> None:  # noqa: N802
+        if 0 <= indice < len(ESTILOS_NA_TELA):
+            shared.schema["conquistas-pulso-estilo"] = ESTILOS_NA_TELA[indice]
+            self.alterado.emit()
+
+    @Slot()
+    def testarAlerta(self) -> None:  # noqa: N802
+        session_fita.testar_pulso()
 
     @Slot()
     def testar(self) -> None:
@@ -387,6 +452,7 @@ class FitasDasPreferencias(QObject):
         """A tela fechou: depois de uma prévia nesta abertura, as fitas voltam à cor do app. Sem prévia, não toca nelas
         (numa sessão, pintar a cor do app por cima da do jogo seria errado)."""
         self._aberta = False
+        self._balao_do_pulso = False
         if self._houve_previa:
             self._houve_previa = False
             session_fita.previa(session_fita.cor_do_app())
@@ -462,6 +528,11 @@ class Preferencias(QObject):
         self._brilho: BrilhoPorDispositivo | None = None
         self._config: FitaWizard | None = None
         self._calibracao: AssistenteDeCalibracao | None = None
+        self._contas: ContasDasLojas | None = None
+
+    @Property(QObject, notify=alterado)
+    def contas(self) -> QObject | None:
+        return self._contas
 
     @Property(QObject, constant=True)
     def biblioteca(self) -> QObject:
@@ -510,7 +581,7 @@ class Preferencias(QObject):
         config, self._config = self._config, None
         if config is not None:
             config.deleteLater()  # filho daqui: o QML ainda pode estar no clique que o fechou
-        self._fitas.reler()
+        self._fitas.recontar()
         if session_fita.ligada():
             session_fita.reacender()
         self.alterado.emit()
@@ -557,6 +628,7 @@ class Preferencias(QObject):
         self._aberto = True
         self._pagina = pagina if pagina in PAGINAS else "general"
         self._biblioteca.seguir(True)
+        self._contas = ContasDasLojas(self._avisos, parent=self)
         self._ler_monitores()
         self._fitas.reler()
         eu = weakref.ref(self)
@@ -566,23 +638,39 @@ class Preferencias(QObject):
 
     @Slot()
     def fechar(self) -> None:
+        """Fecha tudo o que a tela abriu, cada passo no seu `try`: uma falha não deixa o resto aberto."""
         if not self._aberto:
             return
         self._aberto = False
-        self._biblioteca.seguir(False)
-        if self._brilho is not None:
-            self._brilho.cancelar()
-        # O assistente de calibração devolve as fitas à cor do app ao se encerrar.
-        if self._calibracao is not None:
-            self._calibracao.cancelar()
-        # Antes do `fitas.fechar()`: o fechamento do assistente relê as fitas.
-        if self._config is not None:
-            self._config.fechar()
-        self._fitas.fechar()
-        if self._ligacao is not None:
-            shared.schema.disconnect(self._ligacao)
-            self._ligacao = None
+        contas, self._contas = self._contas, None
+        calibracao, config, brilho = self._calibracao, self._config, self._brilho
+        passos = (
+            # O login pendente e as janelas de login.
+            lambda: contas is not None and contas.fechar(),
+            # O assistente de calibração devolve as fitas à cor do app ao se encerrar.
+            lambda: calibracao is not None and calibracao.cancelar(),
+            # Antes do `fitas.fechar()`: o fechamento do assistente relê as fitas.
+            lambda: config is not None and config.fechar(),
+            lambda: brilho is not None and brilho.cancelar(),
+            self._fitas.fecharCorDoPulso,
+            # Depois de uma prévia nesta abertura, as fitas voltam à cor do app.
+            self._fitas.fechar,
+            lambda: self._biblioteca.seguir(False),
+            self._soltar_ouvinte,
+        )
+        for passo in passos:
+            try:
+                passo()
+            except Exception:  # noqa: BLE001
+                _log.exception("Falha ao fechar as Preferências")
+        if contas is not None:
+            contas.deleteLater()  # filho daqui: o QML ainda pode estar no clique que o fechou
         self.alterado.emit()
+
+    def _soltar_ouvinte(self) -> None:
+        ligacao, self._ligacao = self._ligacao, None
+        if ligacao is not None:
+            shared.schema.disconnect(ligacao)
 
     @Slot(str, "QVariant")
     def definir(self, chave: str, valor: Any) -> None:
@@ -650,6 +738,18 @@ class Preferencias(QObject):
             return
         shared.schema["shortcuts-location"] = str(Path(url.toLocalFile()))
 
+    @Slot(int)
+    def escolherPosicaoDoAviso(self, indice: int) -> None:  # noqa: N802
+        """Um índice fora da lista (nenhuma opção escolhida) não grava."""
+        if 0 <= indice < len(janela_por_cima.CANTOS):
+            shared.schema["conquistas-aviso-posicao"] = janela_por_cima.CANTOS[indice]
+
+    @Slot()
+    def mostrarAvisoDeExemplo(self) -> None:  # noqa: N802
+        # Cliques repetidos não enfileiram vários exemplos: o anterior sai.
+        conquista_aviso.fechar()
+        conquista_aviso.mostrar(conquista_aviso.Aviso.exemplo())
+
     @Slot(str)
     def abrirEndereco(self, url: str) -> None:  # noqa: N802
         open_uri.abrir_url(url)
@@ -671,6 +771,10 @@ class Preferencias(QObject):
         rotulos, escolhido = window_geometry.escolha_de_monitor(
             self._monitores, shared.schema.get_string("session-monitor")
         )
+        canto = shared.schema.get_string("conquistas-aviso-posicao")
+        if canto not in janela_por_cima.CANTOS:
+            canto = "inferior-direito"
+        aviso = shared.schema.get_boolean("conquistas-aviso")
         self._estado = {
             "minimizarTravado": shared.schema.get_boolean("playtime-tracking"),
             "rumbleAtivo": gamepad,
@@ -688,6 +792,12 @@ class Preferencias(QObject):
             "papelDeParedeLigavel": contando and not sem_segundo,
             "chaveWallhavenAtiva": contando and shared.schema.get_boolean("session-wallpaper"),
             "sgdbAtivo": bool(shared.schema.get_string("sgdb-key")),
+            "posicaoDoAviso": janela_por_cima.CANTOS.index(canto),
+            # O som e a posição só valem com o aviso; o volume, com o aviso e o som.
+            "avisoAtivo": aviso,
+            "volumeDoAvisoAtivo": aviso and shared.schema.get_boolean("conquistas-aviso-som"),
+            # A cor, o estilo e o teste do alerta pedem a iluminação inteligente e o piscar das conquistas juntos.
+            "alertaAtivo": shared.schema.get_boolean("session-fita") and shared.schema.get_boolean("conquistas-iluminacao"),
             # O valor guardado já vem como o Windows escreve, menos a barra que o seletor às vezes devolve.
             "pastaDosAtalhos": shared.schema.get_string("shortcuts-location").replace("/", "\\")
             or "Nenhuma pasta selecionada",
