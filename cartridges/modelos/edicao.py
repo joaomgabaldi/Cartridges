@@ -19,7 +19,7 @@ from typing import Any, Optional
 
 from PIL import Image
 from PySide6.QtCore import Property, QCoreApplication, QEvent, QObject, QUrl, Signal, Slot
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QColor, QGuiApplication
 
 from cartridges import edicao, shared
 from cartridges.edicao import Escolha, Formulario
@@ -35,7 +35,7 @@ from cartridges.modelos.seletores import (
 )
 from cartridges.saves import ludusavi
 from cartridges.store.managers.hltb_manager import shared_helper as shared_hltb_helper
-from cartridges.utils import capa_video, game_logo, session_wallpaper
+from cartridges.utils import capa_video, game_logo, session_fita, session_wallpaper
 from cartridges.utils.game_folder import game_folder, open_folder
 from cartridges.utils.hltb import fetch_times, has_times
 from cartridges.utils.name_cleaner import clean_for_search, clean_game_name
@@ -106,6 +106,7 @@ class ModeloDaEdicao(QObject):
     capaChanged = Signal()  # noqa: N815
     imagensChanged = Signal()  # noqa: N815
     buscandoMetadadosChanged = Signal()  # noqa: N815
+    fitaChanged = Signal()  # noqa: N815
 
     def __init__(self, aplicativo: Any, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -132,6 +133,9 @@ class ModeloDaEdicao(QObject):
         self._buscando_metadados = False
         # A lista de jogos do Ludusavi (o `manifest.yaml`) já foi baixada? Lido ao abrir.
         self._ludusavi_disponivel = True
+        # A fita de LED: a prévia acesa nas fitas (que o fechar desfaz) e se há dispositivo configurado.
+        self._fita_previa_usada = False
+        self._fita_disponivel = False
 
     # -- campos do formulário --------------------------------------------------------------------
 
@@ -439,6 +443,153 @@ class ModeloDaEdicao(QObject):
         if buscado.get("steam_appid") is not None and self._form.appid.strip() == buscado["steam_appid"]:
             self.appid = self._appid_inicial
 
+    # -- iluminação inteligente (fitas de LED) ---------------------------------------------------
+
+    @Property(bool, notify=fitaChanged)
+    def fitaDisponivel(self) -> bool:  # noqa: N802
+        """Sem nenhum dispositivo configurado não há cor para escolher: as duas linhas ficam apagadas."""
+        return self._fita_disponivel
+
+    @Property(str, notify=fitaChanged)
+    def fitaSubtitulo(self) -> str:  # noqa: N802
+        if not self._fita_disponivel:
+            return _("Nenhum dispositivo configurado")
+        if self._fita_manual():
+            return _("Escolhida manualmente")
+        # Com a cor acompanhando a tela, o automático não é mais a cor da capa: ela é só o ponto de
+        # partida de cada sessão.
+        return _("Automático") if session_fita.acompanha_tela() else _("Extraída da capa")
+
+    @Property(QColor, notify=fitaChanged)
+    def fitaCor(self) -> QColor:  # noqa: N802
+        """A cor cheia (sem o brilho da fita), como o seletor a mostra."""
+        cor = self._form.fita_na_tela
+        return QColor.fromRgbF(*session_fita.cor_para_rgb(cor)) if cor is not None else QColor()
+
+    @Property(int, notify=fitaChanged)
+    def fitaBrilho(self) -> int:  # noqa: N802
+        cor = self._form.fita_na_tela
+        return session_fita.por_cento(cor.brilho) if cor is not None else 100
+
+    @Property(bool, notify=fitaChanged)
+    def fitaManual(self) -> bool:  # noqa: N802
+        return self._fita_disponivel and self._fita_manual()
+
+    @Property(bool, notify=fitaChanged)
+    def fitaAutomatica(self) -> bool:  # noqa: N802
+        """A amostra mostra a roda de cores: a cor acompanha a tela, não há escolha à mão, e ninguém
+        mexeu na cor desde que a tela a mostrou."""
+        form = self._form
+        return (
+            session_fita.acompanha_tela()
+            and form.fita_mostrada is not None
+            and form.fita_na_tela is not None
+            and not self._fita_manual()
+            and edicao.mesmo_tom(form.fita_na_tela, form.fita_mostrada)
+        )
+
+    @Property(str, notify=fitaChanged)
+    def dicaDeVoltar(self) -> str:  # noqa: N802
+        return (
+            _("Voltar ao automático") if session_fita.acompanha_tela() else _("Voltar a escolher a cor a partir da capa")
+        )
+
+    def _fita_manual(self) -> bool:
+        """Vale a cor escolhida à mão (e não um "voltar ao automático" pedido)."""
+        jogo = self._jogo
+        return jogo is not None and not self._form.fita_redefinir and session_fita.escolhida(jogo.game_id)
+
+    def _cor_automatica(self) -> session_fita.Cor:
+        """A cor que a linha deve mostrar agora.
+
+        Com a redefinição pedida é o automático, mesmo havendo escolha em disco: a escolha só será
+        apagada no Aplicar, mas a tela já mostra o que o Aplicar vai deixar valendo. O automático sai da
+        capa que a tela mostra, e não da gravada: a capa trocada e ainda não aplicada é a que o jogo vai
+        ter. Jogo novo sem capa fica com o roxo do app.
+        """
+        jogo = self._jogo
+        if self._fita_manual():
+            return session_fita.cor_do_jogo(jogo)
+        # O brilho do jogo fica, inclusive o de uma escolha que vai ser desfeita: "voltar ao
+        # automático" é sobre a cor.
+        brilho = session_fita.brilho_gravado(jogo.game_id) if jogo else None
+        return session_fita.cor_da_capa(self._form.capa, brilho)
+
+    def _atualizar_fita(self) -> None:
+        """Mostra a cor que vale hoje: a escolhida ou a que sai da capa."""
+        # Sem dispositivo não se calcula a cor: tirar a dominante da capa custa milissegundos na thread
+        # principal, e seriam gastos por uma fita que não existe.
+        self._fita_disponivel = bool(session_fita.fitas())
+        if not self._fita_disponivel:
+            self._form.fita_mostrada = self._form.fita_na_tela = None
+        else:
+            self._form.fita_mostrada = self._form.fita_na_tela = self._cor_automatica()
+        self.fitaChanged.emit()
+
+    def _fita_segue_capa(self) -> None:
+        """A capa mudou: a linha da cor acompanha, se ninguém mexeu na cor.
+
+        Uma cor mexida e ainda não aplicada é escolha de gente, e trocar a capa depois não a desfaz. O
+        brilho é separado da cor: mexido, ele fica como está, e a cor segue a capa nova. Não acende a
+        prévia: ela é para quem mexe na cor, não na capa.
+        """
+        form = self._form
+        if form.fita_mostrada is None or form.fita_na_tela is None:
+            return
+        if not edicao.mesmo_tom(form.fita_na_tela, form.fita_mostrada):
+            return
+        brilho = form.fita_na_tela.brilho
+        self._atualizar_fita()
+        form.fita_na_tela = form.fita_na_tela._replace(brilho=brilho)
+        self.fitaChanged.emit()
+
+    def _previa_da_fita(self) -> None:
+        """Mostra nas fitas a cor e o brilho que estão na tela agora (a conversa corre em threads)."""
+        cor = self._form.fita_na_tela
+        if self._form.fita_mostrada is None or cor is None:
+            return
+        self._fita_previa_usada = True
+        session_fita.previa(cor)
+
+    def _encerrar_previa_da_fita(self) -> None:
+        """Devolve as fitas à cor do app depois de a tela sumir. Só quando houve prévia: sem isso,
+        abrir e fechar a tela de um jogo qualquer repintaria as fitas à toa."""
+        if self._fita_previa_usada:
+            self._fita_previa_usada = False
+            session_fita.previa(session_fita.cor_do_app())
+
+    @Slot(QColor)
+    def escolherCorDaFita(self, cor: QColor) -> None:  # noqa: N802
+        atual = self._form.fita_na_tela
+        if not self._aberto or atual is None or not cor.isValid():
+            return
+        self._form.fita_na_tela = session_fita.rgb_para_cor(cor.redF(), cor.greenF(), cor.blueF(), atual.brilho)
+        self.fitaChanged.emit()
+        self._previa_da_fita()
+
+    @Slot(int)
+    def definirBrilhoDaFita(self, brilho: int) -> None:  # noqa: N802
+        atual = self._form.fita_na_tela
+        if not self._aberto or atual is None:
+            return
+        novo = session_fita.de_por_cento(max(1, min(100, brilho)))
+        if novo == atual.brilho:
+            return
+        self._form.fita_na_tela = atual._replace(brilho=novo)
+        self.fitaChanged.emit()
+        self._previa_da_fita()
+
+    @Slot()
+    def redefinirFita(self) -> None:  # noqa: N802
+        """Marca a intenção de voltar ao automático. Quem apaga é o Aplicar."""
+        if not self._aberto or self._jogo is None or self._form.fita_mostrada is None:
+            return
+        antes = self._form.fita_na_tela
+        self._form.fita_redefinir = True
+        self._atualizar_fita()
+        if self._form.fita_na_tela != antes:  # como o `notify::rgba` da main: sem mudança de cor, nada se repinta
+            self._previa_da_fita()
+
     # -- capa, logo e papel de parede ------------------------------------------------------------
 
     seletorDeCapa = Property(QObject, lambda self: self._seletor_de_capa, constant=True)  # noqa: N815
@@ -501,6 +652,7 @@ class ModeloDaEdicao(QObject):
         antiga = self._provisoria()
         self._form.capa, self._form.capa_mudou = nova, True
         self.capaChanged.emit()
+        self._fita_segue_capa()
         if antiga is not None:
             # A prévia animada segura o arquivo aberto: ela larga antes, senão o Windows recusa apagar.
             _largar_arquivos_abertos()
@@ -680,6 +832,8 @@ class ModeloDaEdicao(QObject):
         self._ludusavi_disponivel = ludusavi.manifesto_baixado(pasta_do_ludusavi())
         self._segundo_monitor = _segundo_monitor()
         self._aberto = True
+        self._fita_previa_usada = False
+        self._atualizar_fita()
         self._recalcular()
         for sinal in (
             self.nomeChanged, self.desenvolvedoraChanged, self.publicadoraChanged, self.lancamentoChanged,
@@ -700,6 +854,8 @@ class ModeloDaEdicao(QObject):
             seletor.fechar()
         provisoria = self._provisoria()
         escolhas = [e for e in (self._form.logo, self._form.papel_de_parede) if e is not None]
+        # Aplicar ou cancelar: as fitas voltam à cor do app (a do jogo só vale na sessão).
+        self._encerrar_previa_da_fita()
         self._aberto = False
         self._jogo = None
         self._ocupacoes = 0
@@ -709,6 +865,8 @@ class ModeloDaEdicao(QObject):
         self.abertoChanged.emit()
         self.ocupadoChanged.emit()
         self.buscandoMetadadosChanged.emit()
+        self._fita_disponivel = False
+        self.fitaChanged.emit()
         # A prévia larga o arquivo (o da capa animada) antes de ele sair, ou de o `aplicar` o apagar.
         self.capaChanged.emit()
         self.imagensChanged.emit()

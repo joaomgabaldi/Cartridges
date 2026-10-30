@@ -30,7 +30,7 @@ from cartridges.conquistas import historico
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.jogo import STATUS_LABELS, Jogo
 from cartridges.store.managers.sgdb_manager import SgdbManager
-from cartridges.utils import capa_video, copias_animadas, game_logo, session_wallpaper
+from cartridges.utils import capa_video, copias_animadas, game_logo, session_fita, session_wallpaper
 from cartridges.utils.ligacao_zerado import ligar_zerado
 from cartridges.utils.process_monitor import install_dir_from_command
 from cartridges.utils.run_executable import aumid_from_command
@@ -96,6 +96,12 @@ class Formulario:
     # None = não mexeu.
     logo: Optional[Escolha] = None
     papel_de_parede: Optional[Escolha] = None
+    # A cor da fita de LED (`session_fita.Cor`): a que a linha mostrou ao abrir (ou ao voltar ao
+    # automático) e a que está na tela agora. ``None`` em ``fita_mostrada``: sem fita configurada.
+    fita_mostrada: Optional[session_fita.Cor] = None
+    fita_na_tela: Optional[session_fita.Cor] = None
+    # "Voltar ao automático" pedido: só o Aplicar apaga a escolha gravada.
+    fita_redefinir: bool = False
 
     @classmethod
     def do_jogo(cls, jogo: Optional[Jogo]) -> "Formulario":
@@ -286,6 +292,54 @@ def estado_do_papel(form: Formulario, jogo: Optional[Jogo]) -> str:
     return session_wallpaper.escolha(jogo) if jogo else "auto"
 
 
+# O seletor devolve a cor com arredondamento: matiz e saturação que diferem por menos que isto são a
+# mesma cor, e `aplicar_fita` não pode ler a deriva como escolha de gente.
+FOLGA_MATIZ = 2
+FOLGA_SATURACAO = 10
+
+
+def mesmo_tom(uma: session_fita.Cor, outra: session_fita.Cor) -> bool:
+    """Matiz e saturação, sem o brilho: o brilho de cada jogo é separado da escolha de cor.
+
+    A distância de matiz é circular: 359 e 0 são vizinhos, e um vermelho de capa cai bem em cima
+    dessa emenda.
+    """
+    distancia = abs(uma.matiz - outra.matiz) % 360
+    return min(distancia, 360 - distancia) <= FOLGA_MATIZ and abs(uma.saturacao - outra.saturacao) <= FOLGA_SATURACAO
+
+
+def aplicar_fita(form: Formulario, jogo: Jogo) -> None:
+    """Grava a cor da fita, mas só quando ela é escolha de verdade.
+
+    Quem abriu a tela para renomear um jogo não pediu cor nenhuma, e gravar aqui marcaria esse jogo
+    como "cor escolhida à mão" para sempre: ele nunca mais acompanharia a capa.
+    """
+    # Sem fita configurada a linha nem chega a ser preenchida, e apagar a cor que o jogo já tem em
+    # disco seria perdê-la sem aviso. A redefinição pedida passa, porque apagar é o que ela quer.
+    mostrada, na_tela = form.fita_mostrada, form.fita_na_tela
+    if mostrada is None or na_tela is None:
+        if form.fita_redefinir:
+            session_fita.redefinir(jogo.game_id)
+        return
+    # Contra o que a linha mostrou, e não contra o automático de agora: um jogo novo ganha a capa neste
+    # mesmo Aplicar, e o automático mudaria debaixo da comparação sem que ninguém tivesse mexido na cor.
+    # Cor e brilho separados: mexer só no brilho não é escolher cor, e o jogo segue na cor automática.
+    escolha_nova = not mesmo_tom(na_tela, mostrada)
+    brilho_novo = na_tela.brilho != mostrada.brilho
+    if escolha_nova:
+        # Uma cor escolhida depois do "voltar ao automático" cancela a redefinição: vale a que está na tela.
+        session_fita.salvar_cor(jogo.game_id, jogo.name, na_tela)
+    elif form.fita_redefinir:
+        session_fita.redefinir(jogo.game_id)
+        if brilho_novo:
+            session_fita.salvar_brilho(jogo.game_id, jogo.name, na_tela.brilho)
+    elif session_fita.escolhida(jogo.game_id):
+        # Nada mudou, mas a escolha é regravada: ela guarda o nome do jogo, e o que vale é o deste Aplicar.
+        session_fita.salvar_cor(jogo.game_id, jogo.name, na_tela)
+    elif brilho_novo:
+        session_fita.salvar_brilho(jogo.game_id, jogo.name, na_tela.brilho)
+
+
 def _aplicar_logo(jogo: Jogo, escolha: Optional[Escolha]) -> None:
     """Grava a decisão do logo, presa ao nome final (o desta mesma gravação)."""
     if escolha is None:
@@ -453,8 +507,7 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
 
     _aplicar_logo(jogo, form.logo)
     _aplicar_papel_de_parede(jogo, form.papel_de_parede)
-    # shortcut: a cor e o brilho da fita (`aplicar_fita`) não são gravados, plano 5 com o
-    # grupo "Iluminação inteligente"; o que já está gravado fica como está.
+    aplicar_fita(form, jogo)
 
     shared.store.add_game(jogo, {}, run_pipeline=False)
     jogo.save()

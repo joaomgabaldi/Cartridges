@@ -40,7 +40,7 @@ from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.store.store import Store
-from cartridges.utils import copias_animadas, restauracao, session_wallpaper
+from cartridges.utils import copias_animadas, restauracao, session_fita, session_wallpaper
 from cartridges.utils.hltb_backfill import HLTBBackfill
 from cartridges.utils.install_size import InstallSizeSweep
 from cartridges.utils.thread_principal import na_thread_principal
@@ -161,6 +161,9 @@ def main(argv: list[str]) -> int:
         contexto.setContextProperty(nome, valor)
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.
     session_wallpaper.restaurar_orfaos()
+    # As fitas de LED: desfaz o que uma execução anterior deixou e acende na cor do app (numa thread). O `fechar()`
+    # delas está no fim do `ModeloDaSessao.encerrar()`.
+    session_fita.abrir()
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))
     if not motor.rootObjects():
         return 1

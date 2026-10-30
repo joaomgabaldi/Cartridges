@@ -23,7 +23,7 @@ from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.ordem import _url_da_capa  # noqa: PLC2701
 from cartridges.process_session import ProcessSession
 from cartridges.session_window import SessionWindow
-from cartridges.utils import game_logo, session_log, session_wallpaper, window_geometry
+from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper, window_geometry
 from cartridges.utils.format_playtime import format_playtime, format_stopwatch
 
 
@@ -160,8 +160,12 @@ class ModeloDaSessao(QObject):
         # A arte nos outros monitores prepara numa thread: nada espera por ela.
         if shared.schema.get_boolean("session-wallpaper"):
             session_wallpaper.comecar(game)
+        # As fitas de LED vestem a cor do jogo (a rede corre em threads). `comecar` volta sozinho com o recurso
+        # desligado ou sem fita configurada.
+        session_fita.comecar(game)
 
     def hide_session_blocker(self) -> None:
+        jogo = self._jogo
         self._tique.stop()
         self._relogio_visivel = False
         self._jogo = None
@@ -171,6 +175,32 @@ class ModeloDaSessao(QObject):
         # Sem efeito quando ela não saiu do lugar.
         window_geometry.restore_from_monitor(self._janela)
         session_wallpaper.restaurar()
+        self._devolver_as_fitas(jogo)
+
+    def _devolver_as_fitas(self, jogo: Any) -> None:
+        """De volta à cor do app, e os avisos do que faltou na sessão que acabou.
+
+        Os avisos vão agora, e não durante o jogo: no meio da partida chamariam a atenção que a luz calma
+        existe para não chamar. Uma falha aqui nunca impede a janela de voltar.
+        """
+        try:
+            session_fita.voltar()
+            # A cor não acompanhou a tela porque a captura veio bloqueada a sessão inteira.
+            if jogo is not None and session_fita.captura_bloqueada():
+                self._avisos.adicionar(
+                    _("A iluminação não acompanhou a tela de {}. Use o modo janela sem bordas.").format(jogo.name)
+                )
+            # Dispositivo que passou parte da sessão sem responder: a cor voltou sozinha quando ele voltou, mas
+            # a luz faltou nesse meio-tempo.
+            fora_do_ar = session_fita.fitas_fora_do_ar()
+            if len(fora_do_ar) == 1:
+                self._avisos.adicionar(
+                    _("O dispositivo {} não respondeu durante parte da sessão.").format(fora_do_ar[0])
+                )
+            elif fora_do_ar:
+                self._avisos.adicionar(_("Alguns dispositivos não responderam durante parte da sessão."))
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).exception("Não foi possível devolver as fitas de LED")
 
     def avisar(self, texto: str) -> None:
         self._avisos.adicionar(texto)
@@ -308,3 +338,6 @@ class ModeloDaSessao(QObject):
                 session_log.record(processo.game.game_id, processo.session_seconds)
         # Depois de gravar: é a última chance de desfazer a troca, sem processo para fazê-la depois.
         session_wallpaper.restaurar()
+        # As fitas voltam ao que eram quando o app abriu. Aqui se espera (com prazo): depois disto não há processo
+        # para desfazer nada, e o que não couber no prazo fica para o `abrir` do próximo arranque.
+        session_fita.fechar()

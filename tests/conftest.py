@@ -135,7 +135,7 @@ TESTES_AINDA_GTK: list[str] = [
     "test_saves_ludusavi_real.py",
     "test_saves_pasta.py",
     "test_saves_ui.py",
-    "test_session_fita.py",
+    "test_session_fita_preferencias.py",
     "test_session_log.py",
     "test_store_ligacao_manual.py",
     "test_tarefas_trabalhos.py",
@@ -640,6 +640,20 @@ def sem_area_de_trabalho(monkeypatch):
     from cartridges.utils import session_wallpaper  # noqa: PLC0415
 
     monkeypatch.setattr(session_wallpaper, "_AreaDeTrabalho", proibida)
+
+
+@pytest.fixture(autouse=True)
+def sem_fita_de_verdade(monkeypatch):
+    """Nenhum teste fala com uma fita de LED: o `_dispositivo` (a tinytuya, com rede) falha alto.
+
+    Quem prova a conversa troca `_dispositivo` por um módulo falso (`falsas`, de `tests/apoio_fita.py`).
+    """
+    from cartridges.utils import session_fita  # noqa: PLC0415
+
+    def proibido(*_args, **_kwargs):
+        raise AssertionError("o teste tentou falar com uma fita de verdade (tinytuya)")
+
+    monkeypatch.setattr(session_fita, "_dispositivo", proibido)
 
 
 @pytest.fixture(autouse=True)

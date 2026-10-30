@@ -11,64 +11,28 @@ import threading
 import time
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import NamedTuple, Optional
 
 import pytest
 from PIL import Image
 
 from cartridges import shared
 from cartridges.utils import session_fita
+from tests.apoio_fita import (  # noqa: F401
+    AVISO,
+    BATIMENTO,
+    CONSULTA,
+    FitaFalsa,
+    Msg,
+    cor_mandada,
+    estado_mandado,
+    falsas,
+    pastas,
+    sem_fade,
+    sem_vigia,
+)
 
-
-@pytest.fixture(autouse=True)
-def pastas(tmp_path, monkeypatch):
-    """Tudo o que o módulo grava vai para uma pasta descartável."""
-    monkeypatch.setattr(shared, "fitas_dir", tmp_path / "fitas")
-    monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
-    # As conexões abertas, a contagem de falhas e as suspensões também são
-    # estado de módulo: um teste que suspendeu uma fita não pode deixá-la
-    # suspensa para o seguinte.
-    _esquecer_conexoes()
-    yield tmp_path
-    _esquecer_conexoes()
-
-
-def _esquecer_conexoes():
-    session_fita.fechar_conexoes()
-    session_fita._falhas.clear()
-    session_fita._suspensas.clear()
-    session_fita._mostrada.clear()
-    # O pulso de conquista também: sessão e fila não passam para o teste seguinte.
-    session_fita._jogo_da_sessao = None
-    session_fita._fila_de_pulsos.clear()
-    session_fita._pulsando = False
-    session_fita._teste_do_pulso = None
-    # O acompanhamento da tela também.
-    session_fita._acompanhamento = None
-    session_fita._cor_ambiente = session_fita._teto_da_sessao = None
-    session_fita._candidata = session_fita._ultima_troca = None
-    session_fita._amostras_validas = session_fita._amostras_bloqueadas = 0
-    session_fita._suspensa_em.clear()
-    session_fita._fora_do_ar.clear()
-    # A prévia também: um id que ficou em "_previa_vivas" (uma thread de outro
-    # teste ainda servindo, ou uma tarefa espionada que ninguém rodou) faz o
-    # pedido seguinte achar que já há quem pinte e não agendar nada.
-    session_fita._previa_vivas.clear()
-    session_fita._previa_alvos.clear()
-
-
-@pytest.fixture(autouse=True)
-def sem_vigia(monkeypatch):
-    """A vigia das fitas fora do ar roda em laço a sessão inteira: nos testes
-    ela não sobe sozinha. Os dela chamam uma rodada de cada vez."""
-    monkeypatch.setattr(session_fita, "_comecar_vigia", lambda _sessao: None)
-
-
-@pytest.fixture(autouse=True)
-def sem_fade(monkeypatch):
-    """Fade de 1,5 s em todo teste deixaria a suíte lenta e mudaria o que os
-    testes antigos contam. Os testes do fade ligam de volta."""
-    monkeypatch.setattr(session_fita, "DURACAO_FADE", 0)
+# O conftest troca `_dispositivo` por um que levanta; um teste usa o de verdade, com a tinytuya falsa.
+_dispositivo_de_verdade = session_fita._dispositivo
 
 
 def _jogo(tmp_path, game_id="jogo-1", cor=(220, 20, 20)):
@@ -163,146 +127,37 @@ def test_sidecar_corrompido_volta_para_a_capa(tmp_path, schema):
     assert cor.matiz < 10 or cor.matiz > 350
 
 
-class Msg(NamedTuple):
-    """Uma mensagem da fita: o código do protocolo e o que veio dentro."""
-
-    cmd: int
-    payload: Optional[dict] = None
 
 
-RECEBI, AVISO, BATIMENTO, CONSULTA = 7, 8, 9, 10
 
 
-class SoqueteFalso:
-    """O que chegou da fita e ainda não foi lido, em ordem de chegada.
-
-    ``a_caminho`` são respostas que a fita ainda vai mandar: a fita aplica
-    mais devagar do que recebe, e só quem espera por elas as vê chegar.
-    """
-
-    def __init__(self):
-        self.fila = []
-        self.a_caminho = []
-        self.espera = session_fita.ESPERA
-
-    def chegar(self):
-        self.fila += self.a_caminho
-        self.a_caminho = []
-
-    def gettimeout(self):
-        return self.espera
-
-    def settimeout(self, segundos):
-        self.espera = segundos
-
-    def recv(self, _tamanho):
-        if not self.fila:
-            raise BlockingIOError("nada por ler")
-        self.fila.pop(0)
-        return b"mensagem"
 
 
-class FitaFalsa:
-    """Um módulo Tuya de mentira, que anota o que mandaram nele.
-
-    Como o de verdade, cada comando volta um "recebi" e depois um aviso com os
-    valores aplicados — menos o modo (21), que a fita nunca avisa.
-    """
-
-    def __init__(self, dps=None, quebrada=False, demora=0.0):
-        self.dps = dps or {"20": False, "21": "colour", "24": "000003e800b4"}
-        self.quebrada = quebrada
-        # Quanto cada comando custa. Serve para provar que as fitas falam ao
-        # mesmo tempo: em fila, três fitas de 0,1s levariam 0,3s.
-        self.demora = demora
-        self.recebidos = []
-        # Quantas conversas correram ao mesmo tempo NESTA fita. O módulo Tuya
-        # aceita uma sessão por vez, então este número não pode passar de um.
-        self.simultaneos = 0
-        self.pico = 0
-        self.socket = SoqueteFalso()
-        # A fita sobrecarregada às vezes não avisa: medido a 40 degraus/s.
-        self.sem_aviso = False
-        # Quantos dos próximos comandos a fita joga fora: chegam, ganham o
-        # "recebi" e não são aplicados nem avisados.
-        self.perder = 0
-
-    def status(self, nowait=False):
-        if self.quebrada:
-            return {"Error": "Network Error: Device Unreachable", "Err": "905"}
-        if nowait:
-            self.socket.a_caminho.append(Msg(CONSULTA, {"dps": dict(self.dps)}))
-            return None
-        return {"dps": dict(self.dps)}
-
-    def close(self):
-        self.fechada = True
-
-    def _receive(self):
-        self.socket.chegar()
-        if not self.socket.fila:
-            raise TimeoutError("a fita não respondeu")
-        return self.socket.fila.pop(0)
-
-    def _decode_payload(self, payload):
-        return payload
-
-    def set_multiple_values(self, valores, nowait=False):
-        self.simultaneos += 1
-        self.pico = max(self.pico, self.simultaneos)
-        try:
-            if self.demora:
-                time.sleep(self.demora)
-            if self.quebrada:
-                return {"Error": "Network Error: Device Unreachable", "Err": "905"}
-            if self.perder:
-                self.perder -= 1
-                self.socket.a_caminho.append(Msg(RECEBI))
-                return None
-            self.recebidos.append(dict(valores))
-            self.dps.update({str(k): v for k, v in valores.items()})
-            self.socket.a_caminho.append(Msg(RECEBI))
-            if not self.sem_aviso:
-                aviso = {chave: valor for chave, valor in valores.items() if chave != "21"}
-                self.socket.a_caminho.append(Msg(AVISO, {"dps": aviso}))
-            return None
-        finally:
-            self.simultaneos -= 1
 
 
-def cor_mandada(modulo):
-    """A última cor que chegou nesta fita, em qualquer um dos comandos.
-
-    Acender vai em dois passos, a cor antes do liga, para a fita não piscar na
-    cor de ontem — então o último comando recebido é o do liga, e quem quer
-    conferir a cor tem de procurá-la.
-    """
-    comandos = [comando for comando in modulo.recebidos if "24" in comando]
-    return comandos[-1]["24"] if comandos else None
 
 
-def estado_mandado(modulo):
-    """O último liga/desliga que chegou nesta fita."""
-    comandos = [comando for comando in modulo.recebidos if "20" in comando]
-    return comandos[-1]["20"] if comandos else None
 
 
-@pytest.fixture
-def falsas(monkeypatch):
-    """Troca as fitas de verdade por módulos de mentira, por id."""
-    modulos = {}
 
-    def montar(*fitas_falsas, demora=0.0):
-        lista = []
-        for indice, quebrada in enumerate(fitas_falsas):
-            fita = session_fita.Fita(f"Fita {indice}", f"eb{indice}", "1.2.3.4", "k")
-            modulos[fita.id] = FitaFalsa(quebrada=quebrada, demora=demora)
-            lista.append(fita)
-        session_fita.gravar_fitas(lista)
-        monkeypatch.setattr(session_fita, "_dispositivo", lambda f: modulos[f.id])
-        return modulos
 
-    return montar
+def test_cor_vai_e_volta_entre_o_seletor_e_o_modulo():
+    """O seletor do editor (QML) e o do módulo falam em RGB de 0 a 1, sem GTK."""
+    original = session_fita.Cor(340, 1000, 150)
+    vermelho, verde, azul = session_fita.cor_para_rgb(original)
+    # A cor cheia: o brilho da fita não escurece o quadradinho.
+    assert max(vermelho, verde, azul) == pytest.approx(1.0)
+
+    volta = session_fita.rgb_para_cor(vermelho, verde, azul, 150)
+    assert abs(volta.matiz - original.matiz) <= 2
+    assert abs(volta.saturacao - original.saturacao) <= 10
+    assert volta.brilho == 150
+
+
+def test_cinza_volta_sem_saturacao_e_vermelho_fecha_o_circulo():
+    assert session_fita.rgb_para_cor(0.5, 0.5, 0.5, 100) == session_fita.Cor(0, 0, 100)
+    assert session_fita.rgb_para_cor(1, 0, 0, 100).matiz == 0
+    assert session_fita.cor_para_rgb(session_fita.Cor(0, 1000, 1)) == (1.0, 0.0, 0.0)
 
 
 def test_cor_vira_hexadecimal_do_jeito_do_modulo():
@@ -381,7 +236,7 @@ def test_dispositivo_nao_insiste_com_fita_muda(monkeypatch):
     monkeypatch.setitem(sys.modules, "tinytuya", falso)
 
     fita = session_fita.Fita("Centro", "eb00", "192.168.0.150", "chave", "3.3")
-    assert isinstance(session_fita._dispositivo(fita), BulbFalso)
+    assert isinstance(_dispositivo_de_verdade(fita), BulbFalso)
 
     assert recebidos["args"] == (fita.id, fita.ip, fita.key)
     assert recebidos["kwargs"] == {
@@ -683,366 +538,54 @@ def test_fechar_nao_espera_alem_do_prazo(falsas, monkeypatch, schema):
 # region As Preferências
 
 
-def _preferencias(monkeypatch):
-    """A tela de Preferências de verdade, como em ``test_session_monitors``."""
-    import cartridges.preferences as preferences_module  # noqa: PLC0415
-    from cartridges.metadata_refresh import MetadataRefresh  # noqa: PLC0415
 
-    monkeypatch.setattr(preferences_module, "get_metadata_refresh", MetadataRefresh)
-    return preferences_module.CartridgesPreferences()
 
 
-def test_preferencias_bloqueiam_a_fita_sem_configuracao(monkeypatch, schema):
-    """Sem fita configurada não há o que ligar, e a tela diz isso."""
-    schema.set_boolean("session-fita", True)
 
-    preferencias = _preferencias(monkeypatch)
 
-    assert preferencias.session_fita_switch.get_sensitive() is False
-    assert preferencias.session_fita_switch.get_subtitle() == "Nenhum dispositivo configurado"
-    assert schema.get_boolean("session-fita") is False
 
 
-def test_preferencias_liberam_a_fita_e_contam_as_configuradas(monkeypatch, schema):
-    """Com fita gravada o interruptor responde, e o subtítulo diz quantas são."""
-    session_fita.gravar_fitas(
-        [
-            session_fita.Fita("Centro", "eb0", "192.168.0.150", "chave"),
-            session_fita.Fita("Direita", "eb1", "192.168.0.151", "chave"),
-        ]
-    )
-
-    preferencias = _preferencias(monkeypatch)
-
-    assert preferencias.session_fita_switch.get_sensitive() is True
-    assert preferencias.session_fita_switch.get_subtitle() == "2 dispositivos configurados"
-
-
-def test_ligar_o_interruptor_arranca_o_ciclo(monkeypatch, schema):
-    """Ligar com o app aberto tem de guardar o estado de antes na hora.
-
-    Sem isto, o ciclo só arrancaria no arranque seguinte: a chave
-    ``fita-estado-anterior`` ficaria vazia, a sessão seguinte vestiria a cor do
-    jogo e o fechamento não teria o que devolver.
-    """
-    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
-    chamadas = []
-    monkeypatch.setattr(session_fita, "reacender", lambda: chamadas.append("reacender"))
-
-    preferencias = _preferencias(monkeypatch)
-    assert chamadas == []
-
-    preferencias.session_fita_switch.set_active(True)
-    assert chamadas == ["reacender"]
-
-    # Desligar não desfaz nada aqui: quem devolve as fitas é o fechamento.
-    preferencias.session_fita_switch.set_active(False)
-    assert chamadas == ["reacender"]
-
-
-def test_abrir_a_tela_com_o_recurso_ligado_nao_arranca(monkeypatch, schema):
-    """Abrir as Preferências não é ligar o recurso: construir a tela não acende.
-
-    O ``bind`` do dublê de schema não faz nada, e é justamente ele que acende o
-    interruptor no meio do ``__init__``. Imitado aqui para que a construção
-    passe pelo mesmo ``notify::active`` do app de verdade — é o que torna este
-    teste capaz de pegar um handler ligado cedo demais.
-    """
-    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
-    schema.set_boolean("session-fita", True)
-    monkeypatch.setattr(
-        schema,
-        "bind",
-        lambda chave, widget, prop, _flags: widget.set_property(
-            prop, schema.get_boolean(chave)
-        ),
-    )
-    chamadas = []
-    monkeypatch.setattr(session_fita, "reacender", lambda: chamadas.append("reacender"))
-
-    preferencias = _preferencias(monkeypatch)
-
-    assert preferencias.session_fita_switch.get_active() is True
-    assert chamadas == []
-
-
-def test_ligar_grava_a_chave_antes_de_arrancar(monkeypatch, schema):
-    """A chave tem de estar gravada quando o ``reacender`` roda, e não depois.
-
-    ``reacender`` decide pela chave, via ``ligada()``, e não pelo widget. Deixar
-    isso por conta do ``bind`` do GSettings amarraria o recurso à ordem em que
-    os handlers foram conectados: invertida, o ciclo não armaria, em silêncio.
-    O dublê lê a chave no momento da chamada, que é o instante que importa.
-    """
-    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
-    vista = []
-    monkeypatch.setattr(
-        session_fita, "reacender", lambda: vista.append(schema.get_boolean("session-fita"))
-    )
-
-    preferencias = _preferencias(monkeypatch)
-    preferencias.session_fita_switch.set_active(True)
-
-    assert vista == [True]
-
-
-def test_o_teste_nao_escreve_em_tela_ja_fechada(monkeypatch, schema):
-    """O resultado do "Testar" volta pelo ``idle_add``, e a tela pode ter ido.
-
-    Com o diálogo fechado no meio da conversa com as fitas, o que volta não tem
-    onde escrever — e o subtítulo fica no "Testando…" que o clique deixou.
-
-    A thread e o ``idle_add`` são capturados em vez de rodados, como no
-    ``test_abrir_nao_faz_rede_na_thread_de_ui``: o que se prova aqui é o que a
-    volta faz, e rodar o laço principal de verdade não acrescentaria nada.
-    """
-    import cartridges.preferences as preferences_module  # noqa: PLC0415
-
-    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
-    monkeypatch.setattr(session_fita, "aplicar", lambda *_args: True)
-    monkeypatch.setattr(
-        preferences_module,
-        "threading",
-        # `Event` de verdade: é o sinal de parada do teste, e trocá-lo por um
-        # dublê esconderia justamente o botão que vira "parar".
-        SimpleNamespace(
-            Thread=lambda target, daemon: SimpleNamespace(start=target),
-            Event=threading.Event,
-        ),
-    )
-    agendadas = []
-    monkeypatch.setattr(
-        preferences_module.GLib,
-        "idle_add",
-        lambda funcao, *args, **_kw: agendadas.append((funcao, args)),
-    )
-    preferencias = _preferencias(monkeypatch)
-
-    preferencias.testar_fitas()
-    assert preferencias.fita_testar_row.get_subtitle() == "Testando…"
-    volta, argumentos = agendadas.pop()
-    volta(*argumentos)
-    assert preferencias.fita_testar_row.get_subtitle() == "Teste concluído"
-
-    preferencias.testar_fitas()
-    monkeypatch.setattr(preferences_module.CartridgesPreferences, "is_open", False)
-    volta, argumentos = agendadas.pop()
-
-    assert volta(*argumentos) is False
-    assert preferencias.fita_testar_row.get_subtitle() == "Testando…"
-
-
-def test_fechar_o_assistente_com_fita_nova_arranca_o_ciclo(monkeypatch, schema):
-    """Configurar a primeira fita com o recurso já ligado também arranca."""
-    schema.set_boolean("session-fita", True)
-    chamadas = []
-    monkeypatch.setattr(session_fita, "reacender", lambda: chamadas.append("reacender"))
-
-    preferencias = _preferencias(monkeypatch)
-    # Sem fita, `atualizar_fitas` desligou a chave: não há o que arrancar.
-    preferencias.fitas_configuradas()
-    assert chamadas == []
-
-    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
-    schema.set_boolean("session-fita", True)
-    preferencias.fitas_configuradas()
-
-    assert chamadas == ["reacender"]
-    assert preferencias.session_fita_switch.get_sensitive() is True
-
-
-def _com_fita():
-    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "192.168.0.150", "chave")])
-
-
-def _linhas_do_pulso(preferencias):
-    return (
-        preferencias.conquistas_pulso_cor_row,
-        preferencias.conquistas_pulso_estilo_row,
-        preferencias.conquistas_pulso_testar_row,
-    )
-
-
-def test_linhas_do_pulso_desativadas_sem_iluminacao(monkeypatch, schema):
-    """Com o piscar ligado, as linhas seguem o interruptor das fitas."""
-    _com_fita()
-    monkeypatch.setattr(session_fita, "reacender", lambda: None)
-    preferencias = _preferencias(monkeypatch)
-    # O `bind` do schema é falso nos testes: os interruptores se ligam à mão.
-    preferencias.conquistas_iluminacao_switch.set_active(True)
-    assert not preferencias.session_fita_switch.get_active()
-    assert [linha.get_sensitive() for linha in _linhas_do_pulso(preferencias)] == [False] * 3
-
-    preferencias.session_fita_switch.set_active(True)
-    assert [linha.get_sensitive() for linha in _linhas_do_pulso(preferencias)] == [True] * 3
-
-    preferencias.session_fita_switch.set_active(False)
-    assert [linha.get_sensitive() for linha in _linhas_do_pulso(preferencias)] == [False] * 3
-
-
-def test_linhas_do_pulso_desativadas_sem_piscar(monkeypatch, schema):
-    _com_fita()
-    schema.set_boolean("conquistas-iluminacao", False)
-    monkeypatch.setattr(session_fita, "reacender", lambda: None)
-    preferencias = _preferencias(monkeypatch)
-    # O `bind` do schema é falso nos testes e não preenche os interruptores:
-    # liga-se o das fitas à mão, como o usuário faria.
-    preferencias.session_fita_switch.set_active(True)
-    assert preferencias.conquistas_pulso_testar_row.get_sensitive() is False
-    preferencias.conquistas_iluminacao_switch.set_active(True)
-    assert preferencias.conquistas_pulso_testar_row.get_sensitive() is True
-
-
-def test_estilo_do_pulso_gravado_pela_lista(monkeypatch, schema):
-    _com_fita()
-    preferencias = _preferencias(monkeypatch)
-    assert preferencias.conquistas_pulso_estilo_row.get_selected() == 1  # Respirar, o padrão
-    preferencias.conquistas_pulso_estilo_row.set_selected(2)
-    assert schema.get_string("conquistas-pulso-estilo") == "rapido"
-
-
-def test_estilo_e_cor_gravados_sao_lidos_ao_abrir(monkeypatch, schema):
-    _com_fita()
-    schema.set_string("conquistas-pulso-estilo", "longo")
-    session_fita.salvar_tom_do_pulso(200, 800)
-    preferencias = _preferencias(monkeypatch)
-    assert preferencias.conquistas_pulso_estilo_row.get_selected() == 3
-    assert preferencias.conquistas_pulso_cor_reset.get_visible() is True
-    # Ler o que está gravado não regrava nada nem acende as fitas.
-    assert schema.get_string("conquistas-pulso-estilo") == "longo"
-    assert session_fita.tom_do_pulso() == (200, 800)
-
-
-def test_cor_do_pulso_gravada_e_voltar_ao_padrao(monkeypatch, schema):
-    _com_fita()
-    preferencias = _preferencias(monkeypatch)
-    assert preferencias.conquistas_pulso_cor_reset.get_visible() is False
-    preferencias.conquistas_pulso_cor_seletor.set_property(
-        "rgba", session_fita.cor_para_rgba(session_fita.Cor(200, 800, session_fita.BRILHO_CHEIO))
-    )
-    assert session_fita.tom_do_pulso() != session_fita.TOM_DO_OURO
-    assert preferencias.conquistas_pulso_cor_reset.get_visible() is True
-    preferencias.conquistas_pulso_cor_reset.emit("clicked")
-    assert session_fita.tom_do_pulso() == session_fita.TOM_DO_OURO
-    assert preferencias.conquistas_pulso_cor_reset.get_visible() is False
-
-
-def test_fechar_o_balao_volta_a_cor_do_app(monkeypatch, schema):
-    _com_fita()
-    previas = []
-    monkeypatch.setattr(session_fita, "previa", lambda cor, *_a: previas.append(cor))
-    preferencias = _preferencias(monkeypatch)
-    preferencias._abrir_balao_do_pulso()  # o "show" do Popover real precisa de janela
-    preferencias.conquistas_pulso_cor_seletor.set_property(
-        "rgba", session_fita.cor_para_rgba(session_fita.Cor(200, 800, session_fita.BRILHO_CHEIO))
-    )
-    assert previas[-1] == session_fita.cor_do_pulso()
-    preferencias.conquistas_pulso_cor_balao.emit("closed")
-    assert previas[-1] == session_fita.cor_do_app()
-
-
-def test_abrir_o_balao_mostra_a_cor_do_pulso_nas_fitas(monkeypatch, schema):
-    _com_fita()
-    session_fita.salvar_tom_do_pulso(200, 800)
-    previas = []
-    monkeypatch.setattr(session_fita, "previa", lambda cor, *_a: previas.append(cor))
-    preferencias = _preferencias(monkeypatch)
-    assert previas == []  # abrir as Preferências não acende fita nenhuma
-
-    preferencias._abrir_balao_do_pulso()  # o "show" do Popover real precisa de janela
-    assert previas == [session_fita.cor_do_pulso()]
-
-
-def test_voltar_ao_padrao_com_o_balao_fechado_nao_deixa_previa(monkeypatch, schema):
-    """O botão fica fora do balão: sem balão aberto, não há prévia a mostrar."""
-    _com_fita()
-    session_fita.salvar_tom_do_pulso(200, 800)
-    previas = []
-    monkeypatch.setattr(session_fita, "previa", lambda cor, *_a: previas.append(cor))
-    preferencias = _preferencias(monkeypatch)
-
-    preferencias.conquistas_pulso_cor_reset.emit("clicked")
-
-    assert session_fita.tom_do_pulso() == session_fita.TOM_DO_OURO
-    assert previas == []
-
-
-def test_testar_o_pulso_chama_o_teste(monkeypatch, schema):
-    _com_fita()
-    chamadas = []
-    monkeypatch.setattr(session_fita, "testar_pulso", lambda: chamadas.append("teste"))
-    preferencias = _preferencias(monkeypatch)
-    preferencias.conquistas_pulso_testar_row.emit("activated")
-    assert chamadas == ["teste"]
-
-
-def test_a_lista_de_estilos_da_tela_cobre_todos_os_estilos():
-    import cartridges.preferences as preferences_module  # noqa: PLC0415
-
-    assert set(preferences_module.ESTILOS_NA_TELA) == set(session_fita.ESTILOS_DO_PULSO)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # endregion
 # region A fiação: quem chama o ciclo
 
 
-def test_a_janela_e_o_app_falam_com_o_mesmo_modulo_de_fita():
-    """A fiação só vale se for ESTE módulo que os dois lados chamam.
-
-    Sem isto, um `import` para o lugar errado passaria despercebido: os testes
-    abaixo trocariam funções de um módulo que a janela não usa, e continuariam
-    verdes enquanto o app não acendia fita nenhuma.
-    """
-    import cartridges.main as main_module  # noqa: PLC0415
-    import cartridges.window as window_module  # noqa: PLC0415
-
-    assert window_module.session_fita is session_fita
-    assert main_module.session_fita is session_fita
 
 
-def test_a_sessao_veste_e_despe_as_fitas(real_window, make_game, monkeypatch):
-    """O bloqueador da sessão é quem manda vestir a cor do jogo, e quem despe.
-
-    Pela janela de verdade, e não por um dublê: o que se prova aqui é que as
-    duas chamadas estão mesmo nos dois métodos, e que o jogo que chega ao
-    `comecar` é o da sessão que acabou de abrir.
-    """
-    import cartridges.window as window_module  # noqa: PLC0415
-
-    chamadas = []
-    monkeypatch.setattr(window_module.session_fita, "comecar", chamadas.append)
-    monkeypatch.setattr(
-        window_module.session_fita, "voltar", lambda: chamadas.append("voltar")
-    )
-
-    jogo = make_game(name="Hollow Knight")
-    real_window.show_session_blocker(jogo)
-    assert chamadas == [jogo]
-
-    real_window.hide_session_blocker()
-    assert chamadas == [jogo, "voltar"]
 
 
-def test_o_fechamento_do_app_devolve_as_fitas(monkeypatch):
-    """`do_shutdown` é a última janela em que ainda há processo para desfazer.
-
-    Sem janela, `save_window_geometry` volta na primeira linha e o resto do
-    método é todo `is not None` — sobra exatamente o caminho que interessa.
-    """
-    import cartridges.main as main_module  # noqa: PLC0415
-
-    chamadas = []
-    monkeypatch.setattr(
-        main_module.session_fita, "fechar", lambda: chamadas.append("fechar")
-    )
-    monkeypatch.setattr(shared, "win", None)
-    # `CartridgesApplication.__init__` troca `shared.store` por um novo. O
-    # monkeypatch de agora não muda nada agora; ele é o que devolve o antigo no
-    # fim do teste, para a loja nova não vazar para o teste seguinte.
-    monkeypatch.setattr(shared, "store", shared.store)
-
-    assert main_module.CartridgesApplication().do_shutdown() is None
-    assert chamadas == ["fechar"]
 
 
 # endregion
@@ -1050,316 +593,42 @@ def test_o_fechamento_do_app_devolve_as_fitas(monkeypatch):
 # region A cor na tela do jogo
 
 
-def test_cor_vai_e_volta_entre_o_seletor_e_o_modulo():
-    from gi.repository import Gdk  # noqa: PLC0415
-
-    original = session_fita.Cor(340, 1000, 150)
-    rgba = session_fita.cor_para_rgba(original)
-    assert isinstance(rgba, Gdk.RGBA)
-
-    volta = session_fita.rgba_para_cor(rgba, 150)
-    # Matiz e saturação sobrevivem à ida e à volta, com folga de arredondamento.
-    assert abs(volta.matiz - original.matiz) <= 2
-    assert abs(volta.saturacao - original.saturacao) <= 10
-    assert volta.brilho == 150
-
-
-@pytest.fixture
-def tela(write_record, win):
-    """A tela de detalhes de um jogo que ainda não tem cor escolhida.
-
-    Com uma fita gravada: sem nenhuma, as duas linhas ficam insensíveis e a
-    tela não mostra cor nenhuma para escolher — ver
-    ``test_sem_fita_a_linha_fica_insensivel_e_nao_calcula_cor``.
-    """
-    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
-    from cartridges.game import Game  # noqa: PLC0415
-
-    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
-    write_record("jogo-fita", name="Jogo")
-    jogo = Game(
-        {
-            "game_id": "jogo-fita",
-            "name": "Jogo",
-            "source": "shortcuts",
-            "executable": r'start "" "C:\g\jogo.exe"',
-        }
-    )
-    return DetailsDialog(jogo), jogo
-
-
-def test_sem_fita_a_linha_fica_insensivel_e_nao_calcula_cor(
-    write_record, app_dirs, win, monkeypatch
-):
-    """Sem fita configurada não há cor para escolher — nem para calcular.
-
-    Como a linha do papel de parede sem um segundo monitor. E de quebra: tirar
-    a dominante da capa custa milissegundos na thread de UI em toda abertura da
-    tela, e aqui seriam gastos por uma fita que não existe — por isso o espião
-    na cor da capa, e não só a checagem das duas linhas.
-    """
-    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
-    from cartridges.game import Game  # noqa: PLC0415
-
-    write_record("jogo-sem-fita", name="Jogo")
-    # Com capa de verdade: sem ela, `cor_do_jogo` nem chegaria à dominante e o
-    # espião abaixo não provaria nada.
-    Image.new("RGB", (60, 90), (220, 20, 20)).save(
-        app_dirs.covers / "jogo-sem-fita.webp"
-    )
-    monkeypatch.setattr(
-        session_fita,
-        "dominante",
-        lambda *_a, **_k: pytest.fail("calculou a cor da capa sem fita configurada"),
-    )
-
-    jogo = Game(
-        {
-            "game_id": "jogo-sem-fita",
-            "name": "Jogo",
-            "source": "shortcuts",
-            "executable": r'start "" "C:\g\jogo.exe"',
-        }
-    )
-    dialog = DetailsDialog(jogo)
 
-    assert dialog.fita_row.get_sensitive() is False
-    assert dialog.fita_brilho_row.get_sensitive() is False
-    assert dialog.fita_row.get_subtitle() == "Nenhum dispositivo configurado"
-    assert dialog.fita_brilho_row.get_subtitle() == "Nenhum dispositivo configurado"
-    assert not dialog.fita_button_reset.get_visible()
-
-    # E o Aplicar não marca escolha nenhuma: não houve cor mostrada.
-    dialog.aplicar_fita(jogo)
-    assert session_fita.escolhida(jogo.game_id) is False
-
-
-def test_aplicar_sem_mexer_na_cor_nao_marca_escolha(tela):
-    """Quem abriu a tela para renomear o jogo não pediu cor nenhuma.
-
-    Gravar aqui tiraria o jogo da cor automática para sempre, e sem que
-    ninguém tivesse escolhido cor alguma.
-    """
-    dialog, jogo = tela
-
-    dialog.aplicar_fita(jogo)
-
-    assert session_fita.escolhida(jogo.game_id) is False
-
-
-def test_cor_trocada_na_tela_vira_escolha(tela):
-    dialog, jogo = tela
-
-    dialog.fita_color_button.set_property(
-        "rgba",
-        session_fita.cor_para_rgba(session_fita.Cor(120, 900, 0))
-    )
-    dialog.aplicar_fita(jogo)
 
-    assert session_fita.escolhida(jogo.game_id)
-    assert abs(session_fita.cor_do_jogo(jogo).matiz - 120) <= 2
 
 
-def _com_escolha(dialog, jogo, cor=session_fita.Cor(340, 1000, 150)):
-    """Deixa o jogo com cor escolhida e a tela mostrando essa escolha."""
-    session_fita.salvar_cor(jogo.game_id, jogo.name, cor)
-    dialog.atualizar_fita()
-    return cor
 
 
-def test_a_linha_mostra_a_escolha_e_o_botao_de_voltar(tela):
-    """De quebra, o único teste que constrói a linha inteira do .blp."""
-    dialog, jogo = tela
-    assert not dialog.fita_button_reset.get_visible()
 
-    _com_escolha(dialog, jogo)
 
-    assert dialog.fita_button_reset.get_visible()
-    assert dialog.fita_row.get_subtitle() == "Escolhida manualmente"
 
 
-def test_redefinir_sem_aplicar_nao_apaga_a_escolha(tela):
-    """Como o resto da tela: a intenção fica em memória até o Aplicar.
 
-    Quem clica em "voltar ao automático" e fecha a tela no X não pediu para
-    perder a cor que tinha escolhido.
-    """
-    dialog, jogo = tela
-    _com_escolha(dialog, jogo)
 
-    dialog.redefinir_fita()
 
-    assert session_fita.escolhida(jogo.game_id)
-    # A tela já mostra o automático, e o botão saiu junto com a escolha.
-    assert not dialog.fita_button_reset.get_visible()
-    assert dialog.fita_row.get_subtitle() == "Extraída da capa"
 
 
-def test_redefinir_e_aplicar_apaga_a_escolha(tela):
-    dialog, jogo = tela
-    _com_escolha(dialog, jogo)
 
-    dialog.redefinir_fita()
-    dialog.aplicar_fita(jogo)
 
-    assert not session_fita.escolhida(jogo.game_id)
 
 
-def test_cor_nova_depois_de_redefinir_vence_a_redefinicao(tela):
-    """O que vale é o que está na tela na hora do Aplicar."""
-    dialog, jogo = tela
-    _com_escolha(dialog, jogo)
 
-    dialog.redefinir_fita()
-    dialog.fita_color_button.set_property(
-        "rgba",
-        session_fita.cor_para_rgba(session_fita.Cor(120, 900, 0))
-    )
-    dialog.aplicar_fita(jogo)
 
-    assert session_fita.escolhida(jogo.game_id)
-    assert abs(session_fita.cor_do_jogo(jogo).matiz - 120) <= 2
 
 
-def test_sem_fita_o_aplicar_nao_apaga_a_escolha_que_o_jogo_tinha(write_record, win):
-    """Tirar as fitas da configuração não pode custar a cor já escolhida.
 
-    Sem fita a linha fica insensível e nunca é preenchida, então o que está no
-    seletor é o padrão do .blp. Quem abre a tela só para renomear o jogo e
-    clica em Aplicar veria a escolha de disco trocada por esse lixo, em
-    silêncio.
-    """
-    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
-    from cartridges.game import Game  # noqa: PLC0415
 
-    write_record("jogo-guardado", name="Jogo")
-    jogo = Game(
-        {
-            "game_id": "jogo-guardado",
-            "name": "Jogo",
-            "source": "shortcuts",
-            "executable": r'start "" "C:\g\jogo.exe"',
-        }
-    )
-    guardada = session_fita.Cor(340, 1000, 150)
-    session_fita.salvar_cor(jogo.game_id, jogo.name, guardada)
 
-    # Nenhuma fita configurada: `gravar_fitas` nunca foi chamado nesta pasta.
-    dialog = DetailsDialog(jogo)
-    dialog.aplicar_fita(jogo)
 
-    assert session_fita.escolhida(jogo.game_id) is True
-    assert session_fita.cor_do_jogo(jogo) == guardada
 
 
-def _capa_verde(tmp_path):
-    """Uma capa provisória verde, longe da emenda do vermelho no círculo."""
-    caminho = tmp_path / "provisoria.tiff"
-    Image.new("RGB", (60, 90), (20, 200, 20)).save(caminho)
-    return caminho
 
 
-def test_capa_provisoria_muda_a_cor_da_linha(tela, tmp_path):
-    """A linha diz "Extraída da capa": tem de ser a capa que a tela mostra.
 
-    Antes ela seguia a capa gravada no disco até a tela ser reaberta.
-    """
-    dialog, jogo = tela
 
-    dialog._stage_cover(_capa_verde(tmp_path))
 
-    assert abs(dialog._cor_na_tela().matiz - 120) <= 2
-    assert dialog.fita_row.get_subtitle() == "Extraída da capa"
-    # Só a capa mudou: o Aplicar não transforma a cor da capa em escolha.
-    dialog.aplicar_fita(jogo)
-    assert session_fita.escolhida(jogo.game_id) is False
 
 
-def test_jogo_novo_com_capa_provisoria_mostra_a_cor_dela(tmp_path, write_record, win):
-    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
-
-    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
-    dialog = DetailsDialog()
-
-    dialog._stage_cover(_capa_verde(tmp_path))
-
-    assert abs(dialog._cor_na_tela().matiz - 120) <= 2
-
-
-def test_capa_removida_volta_a_cor_do_app(write_record, app_dirs, win):
-    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
-    from cartridges.game import Game  # noqa: PLC0415
-
-    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
-    write_record("jogo-verde", name="Jogo")
-    Image.new("RGB", (60, 90), (20, 200, 20)).save(app_dirs.covers / "jogo-verde.tiff")
-    jogo = Game(
-        {
-            "game_id": "jogo-verde",
-            "name": "Jogo",
-            "source": "shortcuts",
-            "executable": r'start "" "C:\g\jogo.exe"',
-        }
-    )
-    dialog = DetailsDialog(jogo)
-    assert abs(dialog._cor_na_tela().matiz - 120) <= 2
-
-    dialog.delete_pixbuf()
-
-    assert dialog._cor_na_tela() == session_fita.cor_do_app()
-
-
-def test_cor_escolhida_nao_segue_a_capa_provisoria(tela, tmp_path):
-    dialog, jogo = tela
-    escolha = _com_escolha(dialog, jogo)
-
-    dialog._stage_cover(_capa_verde(tmp_path))
-
-    assert abs(dialog._cor_na_tela().matiz - escolha.matiz) <= 2
-    assert dialog.fita_row.get_subtitle() == "Escolhida manualmente"
-
-
-def test_voltar_ao_automatico_e_trocar_a_capa_segue_a_capa_nova(tela, tmp_path):
-    dialog, jogo = tela
-    _com_escolha(dialog, jogo)
-    dialog.redefinir_fita()
-
-    dialog._stage_cover(_capa_verde(tmp_path))
-
-    assert abs(dialog._cor_na_tela().matiz - 120) <= 2
-    # A redefinição continua de pé: o Aplicar apaga a escolha.
-    dialog.aplicar_fita(jogo)
-    assert not session_fita.escolhida(jogo.game_id)
-
-
-def test_cor_mexida_e_nao_aplicada_sobrevive_a_troca_de_capa(tela, tmp_path):
-    """Quem escolheu uma cor e depois trocou a capa não pediu para perdê-la.
-    (O brilho mexido é separado da cor: ver
-    ``test_brilho_mexido_e_capa_trocada_segue_a_capa_nova``.)"""
-    dialog, _jogo = tela
-    dialog.fita_color_button.set_property(
-        "rgba", session_fita.cor_para_rgba(session_fita.Cor(240, 900, 0))
-    )
-    antes = dialog._cor_na_tela()
-
-    dialog._stage_cover(_capa_verde(tmp_path))
-
-    assert dialog._cor_na_tela() == antes
-
-
-def test_trocar_capa_nao_acende_a_fita(tela, tmp_path, monkeypatch):
-    """A prévia na parede é para quem mexe na cor, não na capa."""
-    dialog, _jogo = tela
-    # Uma lista, e não `pytest.fail`: a prévia roda num sinal do GTK, e o
-    # PyGObject engole a exceção levantada dentro dele.
-    previas = []
-    monkeypatch.setattr(session_fita, "previa", lambda *a, **_k: previas.append(a))
-
-    dialog._stage_cover(_capa_verde(tmp_path))
-    dialog.delete_pixbuf()
-
-    assert previas == []
-    assert not dialog._fita_previa_usada
 
 
 # endregion
@@ -1978,24 +1247,6 @@ def test_fita_sem_endereco_nao_chega_a_abrir_conexao(monkeypatch, schema):
     assert fita.id not in session_fita._falhas
 
 
-def test_escolher_no_seletor_ja_acende_a_fita_sem_aplicar(tela, monkeypatch):
-    """Cada tentativa de cor aparece na parede na hora, ainda dentro do seletor.
-
-    Antes era preciso abrir o seletor, escolher, confirmar e só então ver — o
-    diálogo de cor do GTK só devolve a cor no "Selecionar".
-    """
-    dialog, jogo = tela
-    pedidas = []
-    monkeypatch.setattr(session_fita, "previa", pedidas.append)
-
-    dialog.fita_color_button.set_property(
-        "rgba", session_fita.cor_para_rgba(session_fita.Cor(200, 1000, 0))
-    )
-
-    assert pedidas
-    assert abs(pedidas[-1].matiz - 200) <= 2
-    # Prévia não é escolha: nada foi gravado sem o Aplicar.
-    assert not session_fita.escolhida(jogo.game_id)
 
 
 def test_a_cor_do_app_vem_de_fabrica_no_roxo(schema):
@@ -2029,35 +1280,6 @@ def test_jogo_sem_capa_usa_a_cor_escolhida_para_o_app(schema):
     assert (cor.matiz, cor.saturacao) == (210, 800)
 
 
-def test_escolher_a_cor_do_app_nas_preferencias_grava_e_mostra(monkeypatch, schema):
-    """Sem botão de aplicar: as Preferências gravam na hora, e a fita acompanha."""
-    import cartridges.preferences as preferences_module  # noqa: PLC0415
-    from cartridges.metadata_refresh import MetadataRefresh  # noqa: PLC0415
-
-    monkeypatch.setattr(preferences_module, "get_metadata_refresh", MetadataRefresh)
-    pedidas = []
-    monkeypatch.setattr(session_fita, "previa", pedidas.append)
-    preferencias = preferences_module.CartridgesPreferences()
-
-    # Abrir a tela não conta como escolha.
-    assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
-    assert not preferencias.fita_cor_app_reset.get_visible()
-    assert pedidas == []
-
-    preferencias.fita_cor_app_seletor.set_property(
-        "rgba", session_fita.cor_para_rgba(session_fita.Cor(210, 1000, 0))
-    )
-
-    matiz, saturacao = session_fita.tom_do_app()
-    assert abs(matiz - 210) <= 2
-    assert abs(saturacao - 1000) <= 10
-    assert preferencias.fita_cor_app_reset.get_visible()
-    assert pedidas
-
-    preferencias.voltar_ao_roxo()
-
-    assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
-    assert not preferencias.fita_cor_app_reset.get_visible()
 
 
 # region Pulso de conquista
@@ -2982,59 +2204,18 @@ def test_sem_acompanhamento_nao_avisa(na_tela, schema):
 
 # region Cor da tela: interruptor e aviso
 
-AVISO_DA_TELA = "A iluminação não acompanhou a tela de Hollow Knight. Use o modo janela sem bordas."
 
 
-def test_interruptor_da_tela_segue_o_da_iluminacao(monkeypatch, schema):
-    _com_fita()
-    monkeypatch.setattr(session_fita, "reacender", lambda: None)
-    preferencias = _preferencias(monkeypatch)
-    linha = preferencias.fita_acompanha_tela_switch
-    assert linha.get_title() == "Cor acompanha a tela do jogo"
-    assert linha.get_subtitle() == (
-        "A cor da iluminação acompanha, devagar, a cor predominante do jogo. "
-        "Jogos com cor escolhida manualmente mantêm a cor fixa."
-    )
-    preferencias.session_fita_switch.set_active(False)
-    assert linha.get_sensitive() is False
-    preferencias.session_fita_switch.set_active(True)
-    assert linha.get_sensitive() is True
 
 
-def _sessao_na_janela(real_window, monkeypatch, make_game, bloqueada, fora_do_ar=()):
-    import cartridges.window as window_module  # noqa: PLC0415
-
-    monkeypatch.setattr(window_module.session_fita, "comecar", lambda _jogo: None)
-    monkeypatch.setattr(window_module.session_fita, "voltar", lambda: None)
-    monkeypatch.setattr(window_module.session_fita, "captura_bloqueada", lambda: bloqueada)
-    monkeypatch.setattr(window_module.session_fita, "fitas_fora_do_ar", lambda: list(fora_do_ar))
-    avisos = []
-    monkeypatch.setattr(real_window.toast_queue, "add", avisos.append)
-    real_window.show_session_blocker(make_game(name="Hollow Knight"))
-    real_window.hide_session_blocker()
-    return [aviso.get_title() for aviso in avisos]
 
 
-def test_fim_da_sessao_bloqueada_mostra_o_aviso(real_window, monkeypatch, make_game):
-    assert AVISO_DA_TELA in _sessao_na_janela(real_window, monkeypatch, make_game, True)
 
 
-def test_fim_da_sessao_normal_nao_avisa(real_window, monkeypatch, make_game):
-    assert _sessao_na_janela(real_window, monkeypatch, make_game, False) == []
 
 
-def test_um_dispositivo_fora_do_ar_e_avisado_pelo_nome(real_window, monkeypatch, make_game):
-    avisos = _sessao_na_janela(
-        real_window, monkeypatch, make_game, False, ["Fita Monitor Direito"]
-    )
-    assert avisos == [
-        "O dispositivo Fita Monitor Direito não respondeu durante parte da sessão."
-    ]
 
 
-def test_varios_dispositivos_fora_do_ar_viram_um_aviso(real_window, monkeypatch, make_game):
-    avisos = _sessao_na_janela(real_window, monkeypatch, make_game, False, ["A", "B"])
-    assert avisos == ["Alguns dispositivos não responderam durante parte da sessão."]
 
 
 # endregion
@@ -3198,75 +2379,16 @@ def test_sessao_nova_comeca_a_conta_do_zero(pulso, relogio):
 # region Edição do jogo: "Automático"
 
 
-def _matizes_da_amostra(dialog):
-    """Os matizes distintos que ``desenhar_amostra`` pinta num quadrado 22×22."""
-    import cairo  # noqa: PLC0415
-    import colorsys  # noqa: PLC0415
-
-    superficie = cairo.ImageSurface(cairo.FORMAT_ARGB32, 22, 22)
-    dialog.desenhar_amostra(None, cairo.Context(superficie), 22, 22)
-    dados = bytes(superficie.get_data())
-    matizes = set()
-    for i in range(0, len(dados), 4):
-        azul, verde, vermelho, alfa = dados[i : i + 4]
-        if alfa < 250:
-            continue
-        matiz, saturacao, _valor = colorsys.rgb_to_hsv(vermelho / 255, verde / 255, azul / 255)
-        if saturacao > 0.5:
-            matizes.add(round(matiz * 36))
-    return matizes
 
 
-def test_com_a_tela_ligada_a_cor_e_automatica(tela, schema):
-    schema.set_boolean("fita-acompanha-tela", True)
-    dialog, _jogo = tela
-    dialog.atualizar_fita()
-    assert dialog.fita_row.get_subtitle() == "Automático"
-    assert dialog._fita_automatica() is True
-    assert len(_matizes_da_amostra(dialog)) > 30
 
 
-def test_com_a_tela_desligada_fica_a_cor_da_capa(tela, schema):
-    dialog, _jogo = tela
-    dialog.atualizar_fita()
-    assert dialog.fita_row.get_subtitle() == "Extraída da capa"
-    assert dialog._fita_automatica() is False
-    assert len(_matizes_da_amostra(dialog)) <= 1
-    assert dialog.fita_button_reset.get_tooltip_text() == (
-        "Voltar a escolher a cor a partir da capa"
-    )
 
 
-def test_cor_escolhida_nao_e_automatica(tela, schema):
-    schema.set_boolean("fita-acompanha-tela", True)
-    dialog, jogo = tela
-    _com_escolha(dialog, jogo)
-    assert dialog.fita_row.get_subtitle() == "Escolhida manualmente"
-    assert dialog._fita_automatica() is False
-    assert dialog.fita_button_reset.get_tooltip_text() == "Voltar ao automático"
 
 
-def test_mexer_no_brilho_mantem_a_cor_automatica(tela, schema):
-    """O brilho é separado da cor: mexido, a roda continua."""
-    schema.set_boolean("fita-acompanha-tela", True)
-    dialog, _jogo = tela
-    dialog.atualizar_fita()
-    desenhos = []
-    dialog.fita_amostra.queue_draw = lambda: desenhos.append(1)
-    dialog.fita_brilho_row.set_value(dialog.fita_brilho_row.get_value() - 5)
-    assert desenhos
-    assert dialog._fita_automatica() is True
 
 
-def test_cor_mexida_e_nao_aplicada_mostra_a_bolinha(tela, schema):
-    schema.set_boolean("fita-acompanha-tela", True)
-    dialog, _jogo = tela
-    dialog.atualizar_fita()
-    dialog.fita_color_button.set_property(
-        "rgba", session_fita.cor_para_rgba(session_fita.Cor(200, 1000, 500))
-    )
-    assert dialog._fita_automatica() is False
-    assert len(_matizes_da_amostra(dialog)) <= 1
 
 
 # endregion
@@ -3382,36 +2504,10 @@ def test_brilho_ilegivel_vale_o_padrao(tmp_path, schema):
     assert session_fita.cor_do_jogo(jogo).brilho == session_fita.brilho_padrao()
 
 
-def test_aplicar_so_o_brilho_mantem_o_automatico(tela, schema):
-    schema.set_boolean("fita-acompanha-tela", True)
-    dialog, jogo = tela
-    dialog.atualizar_fita()
-    dialog.fita_brilho_row.set_value(40)
-    dialog.aplicar_fita(jogo)
-    assert not session_fita.escolhida(jogo.game_id)
-    assert session_fita.brilho_escolhido(jogo.game_id) == session_fita.de_por_cento(40)
-    dialog.atualizar_fita()
-    assert dialog.fita_row.get_subtitle() == "Automático"
-    assert dialog.fita_brilho_row.get_value() == 40
 
 
-def test_aplicar_o_brilho_de_volta_ao_padrao_apaga_o_proprio(tela, schema):
-    dialog, jogo = tela
-    session_fita.salvar_brilho(jogo.game_id, jogo.name, 400)
-    dialog.atualizar_fita()
-    dialog.fita_brilho_row.set_value(session_fita.por_cento(session_fita.brilho_padrao()))
-    dialog.aplicar_fita(jogo)
-    assert session_fita.brilho_escolhido(jogo.game_id) is None
 
 
-def test_aplicar_a_cor_continua_sendo_escolha_manual(tela, schema):
-    dialog, jogo = tela
-    dialog.atualizar_fita()
-    dialog.fita_color_button.set_property(
-        "rgba", session_fita.cor_para_rgba(session_fita.Cor(120, 1000, 0))
-    )
-    dialog.aplicar_fita(jogo)
-    assert session_fita.escolhida(jogo.game_id)
 
 
 # endregion
@@ -3456,37 +2552,8 @@ def test_troca_so_de_matiz_tambem_leva_o_fade_inteiro(relogio_do_fade):
     assert momentos[-1] - momentos[0] >= session_fita.FADE_DA_TELA - 1
 
 
-def test_abrir_a_edicao_calcula_a_cor_da_capa_uma_vez(write_record, app_dirs, win, monkeypatch):
-    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
-    from cartridges.game import Game  # noqa: PLC0415
-
-    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
-    write_record("jogo-capa", name="Jogo")
-    Image.new("RGB", (60, 90), (220, 20, 20)).save(app_dirs.covers / "jogo-capa.webp")
-    chamadas = []
-    dominante_de_verdade = session_fita.dominante
-    monkeypatch.setattr(
-        session_fita, "dominante", lambda capa: chamadas.append(capa) or dominante_de_verdade(capa)
-    )
-    jogo = Game(
-        {
-            "game_id": "jogo-capa",
-            "name": "Jogo",
-            "source": "shortcuts",
-            "executable": r'start "" "C:\g\jogo.exe"',
-        }
-    )
-    DetailsDialog(jogo)
-    assert len(chamadas) == 1
 
 
-def test_brilho_mexido_e_capa_trocada_segue_a_capa_nova(tela, tmp_path):
-    dialog, _jogo = tela
-    dialog.atualizar_fita()
-    dialog.fita_brilho_row.set_value(40)
-    dialog._stage_cover(_capa_verde(tmp_path))
-    assert abs(dialog._cor_na_tela().matiz - 120) <= 2
-    assert dialog.fita_brilho_row.get_value() == 40
 
 
 def test_log_separa_candidata_de_confirmada_esperando(na_tela, caplog, monkeypatch):
@@ -3562,37 +2629,8 @@ def test_previa_da_calibracao_acende_so_a_escolhida(falsas, monkeypatch, schema)
 # region Calibração nas Preferências
 
 
-def test_linha_da_calibracao_segue_o_interruptor_da_iluminacao(monkeypatch, schema):
-    _com_fita()
-    monkeypatch.setattr(session_fita, "reacender", lambda: None)
-    preferencias = _preferencias(monkeypatch)
-    linha = preferencias.fita_calibrar_row
-    assert linha.get_title() == "Calibrar as cores"
-    assert linha.get_subtitle() == "Ajusta cada dispositivo para reproduzir as cores como a tela"
-    preferencias.session_fita_switch.set_active(False)
-    assert linha.get_sensitive() is False
-    preferencias.session_fita_switch.set_active(True)
-    assert linha.get_sensitive() is True
 
 
-def test_botao_da_calibracao_abre_o_assistente(monkeypatch, schema):
-    import cartridges.preferences as preferences_module  # noqa: PLC0415
-
-    _com_fita()
-    monkeypatch.setattr(session_fita, "reacender", lambda: None)
-    preferencias = _preferencias(monkeypatch)
-    abertos = []
-
-    class Espiao:
-        def __init__(self, configuradas):
-            abertos.append([fita.id for fita in configuradas])
-
-        def present(self, _pai):
-            abertos.append("apresentado")
-
-    monkeypatch.setattr(preferences_module, "AssistenteDeCalibracao", Espiao)
-    preferencias.fita_calibrar_button.emit("clicked")
-    assert abertos == [["eb0"], "apresentado"]
 
 
 # endregion

@@ -1,12 +1,12 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Dialogs
+import QtQuick.Shapes
 import QtQuick.Window
 
 // O diálogo de editar um jogo e o de adicionar um novo. Só desenha: o que ele edita é o `edicao`
 // (cartridges/modelos/edicao.py) e a regra de validar e gravar é de cartridges/edicao.py.
 // Modal para o mouse, o teclado e o controle; o foco volta a quem o abriu.
-// Ainda sem o grupo de iluminação inteligente (plano 5).
 Rectangle {
     id: dialogo
     objectName: "dialogoDeEdicao"
@@ -193,6 +193,7 @@ Rectangle {
             Text {
                 objectName: linhaDeArte.objectName + "Subtitulo"
                 width: parent.width
+                visible: text !== ""
                 text: linhaDeArte.subtitulo
                 textFormat: Text.PlainText
                 elide: Text.ElideRight
@@ -321,6 +322,7 @@ Rectangle {
                     }
                     LinhaDeArte {
                         objectName: "linhaDoPapel"
+                        visible: !edicao.zerado
                         titulo: "Papel de parede da sessão"
                         subtitulo: edicao.papelSubtitulo
                         enabled: edicao.papelDisponivel
@@ -343,6 +345,139 @@ Rectangle {
                             glifo: "\uE8E5"  // abrir arquivo
                             dica: "Escolher papel de parede de um arquivo"
                             onClicked: dialogo.abrirSeletor("papel")
+                        }
+                    }
+                    // A cor que as fitas de LED vestem enquanto este jogo corre. Sem escolha, ela sai da capa; por isso
+                    // o botão de voltar ao automático só aparece quando houve escolha. Cada movimento no seletor já
+                    // acende as fitas (a prévia); o Aplicar é que grava.
+                    LinhaDeArte {
+                        objectName: "linhaDaFita"
+                        visible: !edicao.zerado
+                        titulo: "Iluminação inteligente"
+                        subtitulo: edicao.fitaSubtitulo
+                        enabled: edicao.fitaDisponivel
+                        BotaoDeLinha {
+                            objectName: "botaoRestaurarFita"
+                            visible: edicao.fitaManual
+                            glifo: "\uE7A7"  // desfazer
+                            dica: edicao.dicaDeVoltar
+                            onClicked: edicao.redefinirFita()
+                        }
+                        BotaoDeLinha {
+                            id: botaoDaCorDaFita
+                            objectName: "botaoDaCorDaFita"
+                            dica: "Escolher a cor da iluminação inteligente"
+                            onClicked: balaoDaCorDaFita.opened ? balaoDaCorDaFita.close() : balaoDaCorDaFita.open()
+                            // A amostra de 22x22: a cor escolhida, ou uma roda de cores quando a cor acompanha a tela.
+                            Rectangle {
+                                objectName: "amostraDaCor"
+                                anchors.centerIn: parent
+                                width: 22
+                                height: 22
+                                radius: 11
+                                visible: !edicao.fitaAutomatica
+                                color: edicao.fitaCor
+                                border { width: 1; color: Tema.borda }
+                            }
+                            Shape {
+                                objectName: "amostraEmRoda"
+                                anchors.centerIn: parent
+                                width: 22
+                                height: 22
+                                visible: edicao.fitaAutomatica
+                                ShapePath {
+                                    strokeWidth: -1
+                                    fillGradient: ConicalGradient {
+                                        centerX: 11
+                                        centerY: 11
+                                        angle: 90
+                                        GradientStop { position: 0 / 6; color: "#ff0000" }
+                                        GradientStop { position: 1 / 6; color: "#ffff00" }
+                                        GradientStop { position: 2 / 6; color: "#00ff00" }
+                                        GradientStop { position: 3 / 6; color: "#00ffff" }
+                                        GradientStop { position: 4 / 6; color: "#0000ff" }
+                                        GradientStop { position: 5 / 6; color: "#ff00ff" }
+                                        GradientStop { position: 6 / 6; color: "#ff0000" }
+                                    }
+                                    PathAngleArc { centerX: 11; centerY: 11; radiusX: 11; radiusY: 11; startAngle: 0; sweepAngle: 360 }
+                                }
+                                // O furo do meio, como numa roda de cores.
+                                Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: Tema.superficie }
+                            }
+                            Popup {
+                                id: balaoDaCorDaFita
+                                objectName: "balaoDaCorDaFita"
+                                x: botaoDaCorDaFita.width - width
+                                y: botaoDaCorDaFita.height + 4
+                                padding: 12
+                                margins: 8  // o balão não sai da janela, mesmo com a linha no pé da rolagem
+                                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                                // O seletor parte da cor que a linha mostra agora; depois disso quem manda nele é a mão.
+                                onAboutToShow: {
+                                    var cor = edicao.fitaCor
+                                    seletorDeCor.matiz = Math.max(0, cor.hsvHue) * 360
+                                    seletorDeCor.saturacao = Math.round(cor.hsvSaturation * 1000)
+                                }
+                                onOpened: seletorDeCor.forceActiveFocus(Qt.TabFocusReason)
+                                onClosed: botaoDaCorDaFita.forceActiveFocus(Qt.TabFocusReason)
+                                background: Rectangle { color: Tema.superficie; border.color: Tema.borda; radius: 8 }
+                                contentItem: SeletorDeCor {
+                                    id: seletorDeCor
+                                    objectName: "seletorDeCor"
+                                    onEscolhida: cor => edicao.escolherCorDaFita(cor)
+                                }
+                            }
+                        }
+                    }
+                    LinhaDeArte {
+                        objectName: "linhaDoBrilhoDaFita"
+                        visible: !edicao.zerado
+                        titulo: "Brilho (%)"
+                        // Só diz alguma coisa quando está apagada.
+                        subtitulo: edicao.fitaDisponivel ? "" : edicao.fitaSubtitulo
+                        enabled: edicao.fitaDisponivel
+                        SpinBox {
+                            id: caixaDoBrilho
+                            objectName: "caixaDoBrilhoDaFita"
+                            from: 1
+                            to: 100
+                            value: edicao.fitaBrilho
+                            focusPolicy: Qt.StrongFocus
+                            Accessible.name: "Brilho (%)"
+                            onValueModified: edicao.definirBrilhoDaFita(value)
+                            contentItem: Text {
+                                text: caixaDoBrilho.value
+                                textFormat: Text.PlainText
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                color: Tema.texto
+                                font { family: Tema.fonte; pixelSize: 15 }
+                            }
+                            up.indicator: Text {
+                                x: caixaDoBrilho.width - width - 8
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "+"
+                                textFormat: Text.PlainText
+                                color: caixaDoBrilho.up.pressed ? Tema.destaque : Tema.texto
+                                opacity: caixaDoBrilho.enabled ? 1 : 0.4
+                                font { family: Tema.fonte; pixelSize: 18 }
+                            }
+                            down.indicator: Text {
+                                x: 8
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "\u2212"
+                                textFormat: Text.PlainText
+                                color: caixaDoBrilho.down.pressed ? Tema.destaque : Tema.texto
+                                opacity: caixaDoBrilho.enabled ? 1 : 0.4
+                                font { family: Tema.fonte; pixelSize: 18 }
+                            }
+                            background: Rectangle {
+                                implicitWidth: 104
+                                implicitHeight: 34
+                                radius: 6
+                                color: "transparent"
+                                border { width: caixaDoBrilho.visualFocus ? 2 : 1; color: caixaDoBrilho.visualFocus ? Tema.destaque : Tema.borda }
+                            }
                         }
                     }
                 }

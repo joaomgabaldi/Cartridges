@@ -5,14 +5,17 @@
 """O diálogo de edição e o "Adicionar jogo" (QML offscreen, sem a ponte do QWindowKit)."""
 
 import pytest
-from PySide6.QtCore import Q_ARG, QMetaObject, Qt
+from PySide6.QtCore import Q_ARG, QMetaObject, QPointF, Qt
+from PySide6.QtGui import QColor
 from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
 from cartridges import shared
 from cartridges.jogo import Jogo
+from cartridges.utils import session_fita
 from tests.apoio_edicao import jogo
+from tests.apoio_fita import pastas  # noqa: F401  # a pasta descartável das fitas (autouse)
 from tests.test_qml_biblioteca import _achar, _App, _esperar
 from tests.test_qml_detalhes import _abrir_pelo_cartao, _cartoes
 
@@ -997,3 +1000,153 @@ def test_aviso_de_busca_sem_resultado_no_seletor_de_papel(app, wallhaven):
     assert _esperar(lambda: vazio.property("visible") is True)
     assert vazio.property("titulo") == "Nenhum papel de parede encontrado"
     assert vazio.property("descricao") == "Tente buscar por outro nome."
+
+
+# -- Iluminação inteligente (fitas de LED, D51) -------------------------------------------------------
+
+
+@pytest.fixture
+def previas(monkeypatch):
+    """As prévias pedidas às fitas. Nenhuma fita de verdade acende."""
+    pedidas = []
+    monkeypatch.setattr(session_fita, "previa", lambda cor, *a, **k: pedidas.append(cor))
+    return pedidas
+
+
+def _com_fita():
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "192.0.2.10", "chave")])
+
+
+def _abrir_o_seletor_de_cor(app):
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
+    _clique(app, "botaoDaCorDaFita")
+    assert _esperar(lambda: app.achar("balaoDaCorDaFita").property("opened") is True)
+    return app.achar("seletorDeCor")
+
+
+def _ponto(seletor, fx, fy):
+    """O ponto da janela que fica na fração (fx, fy) do quadrado do seletor."""
+    return seletor.mapToScene(QPointF(seletor.width() * fx, seletor.height() * fy)).toPoint()
+
+
+def test_seletor_de_cor_matiz_e_saturacao(app, previas, schema):
+    _com_fita()
+    seletor = _abrir_o_seletor_de_cor(app)
+    assert _esperar(lambda: _foco_dentro_de(app, "seletorDeCor") or seletor.property("activeFocus") is True)
+    escolhidas = []
+    seletor.escolhida.connect(lambda cor: escolhidas.append(cor))
+
+    # O matiz vai na horizontal (um terço é o verde, 120 graus) e a saturação na vertical (cheia em cima).
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, _ponto(seletor, 1 / 3, 0.001))
+    assert abs(seletor.property("matiz") - 120) < 4
+    assert seletor.property("saturacao") > 980
+    assert escolhidas and abs(escolhidas[-1].hsvHueF() * 360 - 120) < 4
+    assert abs(previas[-1].matiz - 120) <= 4 and previas[-1].saturacao > 980
+
+    # Embaixo é branco: a saturação cai.
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, _ponto(seletor, 1 / 3, 0.99))
+    assert seletor.property("saturacao") < 20
+    assert previas[-1].saturacao < 20
+
+    # Arrastar acende a cada movimento, e sair do quadrado trava na borda.
+    total = len(previas)
+    QTest.mousePress(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, _ponto(seletor, 0.1, 0.5))
+    QTest.mouseMove(app.janela, _ponto(seletor, 0.5, 0.5))
+    QTest.mouseMove(app.janela, _ponto(seletor, 0.9, 0.2))
+    QTest.mouseRelease(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, _ponto(seletor, 0.9, 0.2))
+    assert len(previas) >= total + 3
+    assert abs(seletor.property("matiz") - 324) < 6
+
+    # Teclado: setas mexem no matiz e na saturação, em passos pequenos.
+    antes = seletor.property("matiz")
+    QTest.keyClick(app.janela, Qt.Key.Key_Right)
+    assert seletor.property("matiz") == pytest.approx(antes + 5)
+    saturacao = seletor.property("saturacao")
+    QTest.keyClick(app.janela, Qt.Key.Key_Down)
+    assert seletor.property("saturacao") == saturacao - 20
+    assert not session_fita.escolhida("shortcuts_z1")  # prévia não é escolha
+
+
+def test_o_seletor_parte_da_cor_da_linha(app, previas):
+    _com_fita()
+    session_fita.salvar_cor("shortcuts_z1", "Alfa", session_fita.Cor(200, 800, 500))
+    seletor = _abrir_o_seletor_de_cor(app)
+
+    assert abs(seletor.property("matiz") - 200) < 2
+    assert abs(seletor.property("saturacao") - 800) < 10
+    assert previas == []  # abrir o balão não acende nada
+
+
+def test_amostra_em_roda_no_automatico(app, schema, previas):
+    schema.set_boolean("fita-acompanha-tela", True)
+    _com_fita()
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
+    roda, cor = app.achar("amostraEmRoda"), app.achar("amostraDaCor")
+    assert _esperar(lambda: roda.property("visible") is True)
+    assert cor.property("visible") is False
+    assert app.achar("linhaDaFitaSubtitulo").property("text") == "Automático"
+
+    # Mexeu na cor: a roda dá lugar à cor escolhida.
+    app.edicao.escolherCorDaFita(QColor.fromHsvF(0.55, 1, 1))
+    assert _esperar(lambda: roda.property("visible") is False)
+    assert cor.property("visible") is True and cor.property("width") == 22 and cor.property("height") == 22
+
+    # Sem acompanhar a tela, a amostra é sempre a cor.
+    app.edicao.cancelar()
+    schema.set_boolean("fita-acompanha-tela", False)
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: app.achar("amostraEmRoda").property("visible") is False)
+
+
+def test_voltar_so_aparece_com_a_cor_escolhida(app, previas):
+    _com_fita()
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
+    assert not _visivel(app, "botaoRestaurarFita")
+    app.edicao.cancelar()
+
+    session_fita.salvar_cor("shortcuts_z1", "Alfa", session_fita.Cor(340, 1000, 150))
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _visivel(app, "botaoRestaurarFita"))
+    assert app.achar("botaoRestaurarFita").property("dica") == "Voltar a escolher a cor a partir da capa"
+    _clique(app, "botaoRestaurarFita")
+    assert _esperar(lambda: not _visivel(app, "botaoRestaurarFita"))
+    assert previas  # voltar ao automático também mostra a cor nas fitas
+
+
+def test_sem_fita_as_duas_linhas_ficam_apagadas_com_o_aviso(app):
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
+    for linha in ("linhaDaFita", "linhaDoBrilhoDaFita"):
+        assert app.achar(linha).property("enabled") is False
+        assert app.achar(linha + "Subtitulo").property("text") == "Nenhum dispositivo configurado"
+
+
+def test_o_brilho_da_fita_vai_a_edicao(app, previas):
+    _com_fita()
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
+    caixa = app.achar("caixaDoBrilhoDaFita")
+    assert caixa.property("from") == 1 and caixa.property("to") == 100
+    assert caixa.property("value") == app.edicao.fitaBrilho
+    assert app.achar("linhaDoBrilhoDaFitaSubtitulo").property("visible") is False
+    app.edicao.definirBrilhoDaFita(35)
+    assert _esperar(lambda: caixa.property("value") == 35)
+    assert previas[-1].brilho == session_fita.de_por_cento(35)
+
+
+def test_zerado_esconde_logo_papel_e_iluminacao(app, store, schema):
+    """Um zerado não é mais lançado: sem sessão, as linhas do logo, do papel e da fita não têm o que vestir."""
+    _com_fita()
+    zerado = jogo(store, 70, removed=True, status="beaten")
+    app.edicao.abrir(zerado.game_id)
+    assert _esperar(lambda: app.achar("campoNome").property("visible") is True)
+    for nome in ("linhaDoPapel", "linhaDaFita", "linhaDoBrilhoDaFita"):
+        assert app.achar(nome).property("visible") is False, nome
+    app.edicao.cancelar()
+    app.edicao.abrir("shortcuts_z1")  # um jogo comum mostra as três
+    assert _esperar(lambda: app.achar("linhaDaFita").property("visible") is True)
+    for nome in ("linhaDoPapel", "linhaDaFita", "linhaDoBrilhoDaFita"):
+        assert app.achar(nome).property("visible") is True, nome

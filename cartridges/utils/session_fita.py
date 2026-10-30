@@ -336,22 +336,36 @@ def cor_da_capa(capa: Optional[Path], brilho: Optional[int] = None) -> Cor:
     return Cor(matiz, saturacao, brilho_padrao() if brilho is None else brilho)
 
 
-def cor_para_rgba(cor: Cor) -> Any:
-    """A cor do módulo como o GTK mostra num seletor.
+def cor_para_rgb(cor: Cor) -> tuple[float, float, float]:
+    """A cor do módulo como um seletor a mostra: vermelho, verde e azul de 0 a 1.
 
     O seletor mostra a cor cheia, não a cor no brilho da fita: um roxo a 18%
     aparece quase preto no quadradinho, e ninguém escolhe cor assim.
     """
+    return colorsys.hsv_to_rgb(cor.matiz / 360, cor.saturacao / 1000, 1)
+
+
+def rgb_para_cor(vermelho: float, verde: float, azul: float, brilho: int) -> Cor:
+    """O caminho de volta, descartando o brilho que o seletor mostrou."""
+    matiz, saturacao, _valor = colorsys.rgb_to_hsv(vermelho, verde, azul)
+    return Cor(round(matiz * 360) % 360, round(saturacao * 1000), brilho)
+
+
+def cor_para_rgba(cor: Cor) -> Any:
+    """A cor do módulo como o GTK mostra num seletor.
+
+    Só as Preferências ainda usam o seletor do GTK (plano 7); o resto usa
+    ``cor_para_rgb``.
+    """
     from gi.repository import Gdk  # noqa: PLC0415
 
-    vermelho, verde, azul = colorsys.hsv_to_rgb(cor.matiz / 360, cor.saturacao / 1000, 1)
+    vermelho, verde, azul = cor_para_rgb(cor)
     return Gdk.RGBA(red=vermelho, green=verde, blue=azul, alpha=1.0)
 
 
 def rgba_para_cor(rgba: Any, brilho: int) -> Cor:
     """O caminho de volta, descartando o brilho que o seletor mostrou."""
-    matiz, saturacao, _valor = colorsys.rgb_to_hsv(rgba.red, rgba.green, rgba.blue)
-    return Cor(round(matiz * 360) % 360, round(saturacao * 1000), brilho)
+    return rgb_para_cor(rgba.red, rgba.green, rgba.blue, brilho)
 
 
 # endregion
