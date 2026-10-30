@@ -122,3 +122,58 @@ def test_iniciar_roda_o_executavel_do_jogo(app_qt, monkeypatch):
     modelo.atualizar(jogo)
     modelo.iniciar("a")
     assert lancados == [("fake.exe", False)]
+
+
+_QML_QUE_FALHA = r"""
+import json, sys
+from types import SimpleNamespace
+from cartridges import app as modulo_app
+
+chamadas = []
+modulo_app.session_fita = SimpleNamespace(abrir=lambda: chamadas.append("abrir"), fechar=lambda: chamadas.append("fechar"))
+modulo_app.session_wallpaper = SimpleNamespace(restaurar_orfaos=lambda: None)
+
+
+class MotorQueNaoCarrega(modulo_app.QQmlApplicationEngine):
+    def load(self, _url):  # o QML com erro: nenhuma janela
+        pass
+
+
+modulo_app.QQmlApplicationEngine = MotorQueNaoCarrega
+codigo = modulo_app.main(sys.argv[:1])
+print(json.dumps({"codigo": codigo, "fitas": chamadas}))
+"""
+
+
+def test_qml_que_nao_carrega_nao_deixa_as_fitas_acesas(tmp_path):
+    """Sem janela o `app.exec()` não roda e o `aboutToQuit` (que fecha as fitas) nunca vem."""
+    ambiente = {
+        **os.environ,
+        "CARTRIDGES_DADOS": str(tmp_path),
+        "CARTRIDGES_REGISTRO": rf"Software\CartridgesTestes\app-{uuid.uuid4()}",
+        "QT_QPA_PLATFORM": "offscreen",
+    }
+    resultado = subprocess.run(
+        [sys.executable, "-c", _QML_QUE_FALHA], cwd=RAIZ, env=ambiente, capture_output=True, text=True, timeout=60,
+        check=False,
+    )  # fmt: skip
+    assert resultado.returncode == 0, resultado.stderr
+    saida = json.loads(resultado.stdout.strip().splitlines()[-1])
+    assert saida["codigo"] == 1
+    assert saida["fitas"] == []
+
+
+def test_encerrar_roda_todo_passo_mesmo_com_um_que_falha(caplog):
+    """Uma falha num passo do fechamento não pula o drenar das gravações (o tempo da sessão no jogo)."""
+    from cartridges.app import _encerrar_em_ordem  # noqa: PLC0415
+
+    feitos = []
+
+    def quebra():
+        raise RuntimeError("falhou")
+
+    with caplog.at_level("ERROR"):
+        _encerrar_em_ordem(lambda: feitos.append("big_picture"), quebra, lambda: feitos.append("drenar"))
+
+    assert feitos == ["big_picture", "drenar"]
+    assert "falhou" in caplog.text

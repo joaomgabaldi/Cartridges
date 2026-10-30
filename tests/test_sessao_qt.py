@@ -14,7 +14,7 @@ from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.sessao import ModeloDaSessao, pode_anotar
 from cartridges.process_session import ProcessSession
 from cartridges.session_window import SessionWindow
-from cartridges.utils import session_log
+from cartridges.utils import session_fita, session_log, session_wallpaper
 
 CLASSICO = r'start "" "D:\Jogos\halo.exe"'
 
@@ -134,6 +134,34 @@ def test_encerrar_no_meio_da_sessao_grava_e_registra(modelo, make_game, relogio,
     assert [linha["seconds"] for linha in session_log.load("shortcuts_5")] == [30]
     assert SessionWindow.active is None and ProcessSession.active is None
     assert modelo.fila.visivel is False  # nenhum aviso: a interface já está indo embora
+
+
+def test_encerrar_e_idempotente_e_desarma_a_manual(modelo, make_game, relogio, monkeypatch):
+    """I1: o `closing` da janela "Jogando" que o Qt manda depois do `encerrar()` não roda o fim normal."""
+    modelo.definir_janela(JanelaQueNaoSeToca())
+    jogo = make_game(game_id="shortcuts_6", executable=CLASSICO)
+    manual = SessionWindow(jogo)
+    manual.present()
+    relogio.now += 30
+    chamadas = []
+    monkeypatch.setattr(session_wallpaper, "restaurar", lambda: chamadas.append("parede"))
+    monkeypatch.setattr(session_fita, "fechar", lambda: chamadas.append("fechar"))
+    monkeypatch.setattr(session_fita, "voltar", lambda: pytest.fail("as fitas voltaram à cor do app no fechamento"))
+    for nome in ("hide_session_blocker", "session_toast", "present"):
+        monkeypatch.setattr(modelo, nome, lambda *_a, nome=nome: pytest.fail(f"{nome} no fechamento"))
+    mudancas = []
+    modelo.alterado.connect(lambda: mudancas.append(1), Qt.ConnectionType.DirectConnection)
+
+    modelo.encerrar()
+    modelo.encerrar()  # o `aboutToQuit` depois do `QEvent.Quit`: sem efeito
+    modelo.janelaManualFechada()  # o `closing` da manual, que o Qt fecha depois
+    manual.close()
+
+    assert jogo.playtime == 30
+    assert [linha["seconds"] for linha in session_log.load("shortcuts_6")] == [30]
+    assert chamadas == ["parede", "fechar"]
+    assert mudancas == []  # nada de interface: o QML não é avisado
+    assert modelo.janelaManual is False
 
 
 def test_trazer_de_volta_nao_desmaximiza(modelo):

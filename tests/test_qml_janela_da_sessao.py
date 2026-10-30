@@ -4,6 +4,12 @@
 
 """A janela "Jogando {nome}" da sessão manual (D50): moldura nativa, 300x150, canto da área de trabalho."""
 
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 from PySide6.QtCore import QMetaObject, Qt
 
@@ -13,8 +19,10 @@ from cartridges.modelos import sessao as modulo
 from cartridges.modelos.sessao import canto_inferior_direito
 from cartridges.process_session import ProcessSession
 from cartridges.session_window import SessionWindow
-from cartridges.utils import session_log
+from cartridges.utils import session_fita, session_log
 from tests.test_qml_biblioteca import _achar, _App, _esperar, _jogos
+
+RAIZ = Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture(autouse=True)
@@ -145,14 +153,16 @@ def test_queda_para_a_manual_mantem_a_camada_e_um_relogio_so(app_qt, monkeypatch
 
 
 def test_fechar_a_principal_com_a_manual_aberta_sai_e_grava(app_qt, monkeypatch, isolado):
-    """Como na `main`: o app sai; o `aboutToQuit` (`encerrar`) grava o tempo no jogo e uma linha no histórico."""
+    """Como na `main`: o app sai; o `encerrar()` grava o tempo no jogo e uma linha no histórico.
+
+    O `quit()` de verdade está no teste `test_quit_real_com_a_manual_aberta_encerra_antes_de_fechar_as_janelas`."""
     monkeypatch.setattr(modulo, "_posicionar", lambda *a: None)
     app = _app(monkeypatch)
     jogo = app.jogos[0]
     app.janela.show()
     _abrir(app)
     saidas = []
-    # O que o `aboutToQuit` faz: `encerrar()`. O `quit` de verdade acabaria o laço de eventos dos testes.
+    # O que o `QEvent.Quit` faz (`AplicacaoQt.saindo`): `encerrar()`. O `quit` de verdade acabaria o laço dos testes.
     app.sessao._sair = lambda: (saidas.append(1), app.sessao.encerrar())  # noqa: SLF001
     SessionWindow.active.session_start -= 42  # 42 s jogados
     app.janela.close()
@@ -160,6 +170,106 @@ def test_fechar_a_principal_com_a_manual_aberta_sai_e_grava(app_qt, monkeypatch,
     assert jogo.playtime == 42
     assert isolado == [("imported_1", 42)]
     app.fechar()
+
+
+def test_closing_da_manual_depois_do_encerrar_nao_roda_o_fim_normal(app_qt, monkeypatch, isolado):
+    """I1: no `quit()` o Qt fecha a janela "Jogando" depois do `encerrar()`; o `closing` dela não faz nada."""
+    monkeypatch.setattr(modulo, "_posicionar", lambda *a: None)
+    # Registrados, e não `pytest.fail`: num slot chamado pelo QML a exceção é engolida.
+    chamadas = []
+    monkeypatch.setattr(session_fita, "voltar", lambda: chamadas.append("voltar"))
+    app = _app(monkeypatch)
+    jogo = app.jogos[0]
+    app.janela.show()
+    janela = _abrir(app)
+    for nome in ("hide_session_blocker", "session_toast", "present", "_sair"):
+        monkeypatch.setattr(app.sessao, nome, lambda *_a, nome=nome: chamadas.append(nome))
+    SessionWindow.active.session_start -= 42
+
+    app.sessao.encerrar()  # o `QEvent.Quit`, antes de as janelas fecharem
+    janela.close()  # o `closing` real da manual
+    app.janela.close()  # e o da principal
+    _esperar()
+
+    assert chamadas == []
+    assert jogo.playtime == 42
+    assert isolado == [("imported_1", 42)]
+    app.fechar()
+
+
+_SAIDA_REAL = r"""
+import json, sys
+from pathlib import Path
+from types import SimpleNamespace
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtQml import QQmlApplicationEngine
+from cartridges import app as modulo_app, shared
+from cartridges.modelos import sessao as modulo
+from cartridges.session_window import SessionWindow
+from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper, window_geometry
+
+ordem = []
+def anota(nome):
+    return lambda *_a: ordem.append(nome)
+# Nenhum dispositivo, papel de parede ou chamada Win32 de verdade.
+for alvo, nome in ((session_fita, "abrir"), (session_fita, "comecar"), (session_fita, "voltar"),
+                   (session_fita, "fechar"), (session_wallpaper, "comecar"), (session_wallpaper, "restaurar"),
+                   (window_geometry, "restore_from_monitor")):
+    setattr(alvo, nome, anota(nome))
+window_geometry.session_geometry = lambda: None
+game_logo.cached_logo_path = lambda _jogo: None
+session_log.record = lambda _id, segundos: ordem.append(["record", segundos])
+modulo._posicionar = lambda *_a: None
+modulo._retangulo_da_janela = lambda _h: (0, 0, 316, 189)
+modulo._area_de_trabalho = lambda: (0, 0, 1920, 1040)
+
+app = modulo_app.AplicacaoQt(sys.argv[:1])
+sessao = modulo.ModeloDaSessao(SimpleNamespace(adicionar=anota("aviso")))
+shared.sessao = sessao
+for nome in ("hide_session_blocker", "session_toast", "present"):
+    setattr(sessao, nome, anota(nome))
+# A ligação do `app.py`.
+app.saindo.connect(sessao.encerrar)
+app.aboutToQuit.connect(lambda: (ordem.append("aboutToQuit"), sessao.encerrar()))
+
+motor = QQmlApplicationEngine()
+motor.rootContext().setContextProperty("sessao", sessao)
+motor.loadData(b'''import QtQuick
+Window {
+    visible: true; width: 200; height: 100
+    onClosing: sessao.principalFechando()
+    Loader { active: sessao.janelaManual; source: "JanelaDaSessao.qml" }
+}''', QUrl.fromLocalFile(str(Path("cartridges/qml/_saida.qml").resolve())))
+principal = motor.rootObjects()[0]
+sessao.definir_janela(principal)
+jogo = SimpleNamespace(game_id="imported_1", name="Alfa", notes="", status="playing", zerado=False, playtime=0,
+                       save=lambda: None, update=lambda: None)
+SessionWindow(jogo).present()
+SessionWindow.active.session_start -= 42
+def fechar():
+    ordem.append("principal.close")
+    principal.close()
+QTimer.singleShot(500, fechar)
+QTimer.singleShot(15000, lambda: (ordem.append("prazo"), app.exit(2)))
+codigo = app.exec()
+print(json.dumps({"codigo": codigo, "ordem": ordem, "playtime": jogo.playtime}))
+"""
+
+
+def test_quit_real_com_a_manual_aberta_encerra_antes_de_fechar_as_janelas():
+    """I1: o `quit()` de verdade (Alt+F4 na principal). O Qt fecha as janelas dentro do `QEvent.Quit`, antes
+    do `aboutToQuit`; o `encerrar()` vem antes delas, e o fim normal da sessão não roda."""
+    ambiente = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
+    resultado = subprocess.run(
+        [sys.executable, "-c", _SAIDA_REAL], cwd=RAIZ, env=ambiente, capture_output=True, text=True, timeout=60,
+        check=False,
+    )  # fmt: skip
+    assert resultado.returncode == 0, resultado.stderr
+    saida = json.loads(resultado.stdout.strip().splitlines()[-1])
+    assert saida["codigo"] == 0
+    depois = saida["ordem"][saida["ordem"].index("principal.close") + 1 :]
+    assert depois == [["record", 42], "restaurar", "fechar", "aboutToQuit"]
+    assert saida["playtime"] == 42
 
 
 def test_fechar_a_principal_sem_sessao_nao_sai(app_qt, monkeypatch):

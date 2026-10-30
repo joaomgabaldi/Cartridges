@@ -96,6 +96,7 @@ class ModeloDaSessao(QObject):
         self._tique.setInterval(1000)
         self._tique.timeout.connect(self.alterado)
         self._sair = QCoreApplication.quit  # trocado nos testes: sair de verdade acabaria o laço do teste
+        self._encerrado = False
 
     def definir_janela(self, janela: QWindow) -> None:
         self._janela = janela
@@ -321,7 +322,8 @@ class ModeloDaSessao(QObject):
     def principalFechando(self) -> None:  # noqa: N802
         """Fechar a principal com a janela manual aberta fecha o app, como na `main`.
 
-        Sem isto a manual, que também é janela, manteria o app vivo. O `aboutToQuit` grava a sessão.
+        Sem isto a manual, que também é janela, manteria o app vivo. O `encerrar()` grava a sessão, no
+        `QEvent.Quit` (`AplicacaoQt.saindo`), antes de o Qt fechar a manual.
         """
         if self._manual is not None:
             self._sair()
@@ -336,12 +338,22 @@ class ModeloDaSessao(QObject):
 
     @Slot()
     def encerrar(self) -> None:
-        """O app fechando no meio da sessão: grava o tempo e o histórico, sem tocar na interface."""
+        """O app fechando no meio da sessão: grava o tempo e o histórico, sem tocar na interface.
+
+        Vem no `QEvent.Quit`, antes de o Qt fechar as janelas, e de novo no `aboutToQuit`: só a primeira
+        chamada faz algo. A janela "Jogando" fica desarmada, e o `closing` que o Qt manda a ela depois não
+        roda o fim normal da sessão (nem grava outra linha no histórico).
+        """
         # shortcut: aqui a janela não volta ao monitor de antes; o plano 8, ao gravar a geometria da janela ao
         # fechar (`session_geometry`), tem de gravar o retângulo de antes da sessão, não o do monitor do jogo (D52).
+        if self._encerrado:
+            return
+        self._encerrado = True
         self._tique.stop()
+        self._manual = None  # sem `alterado`: a interface já está indo embora
         if (manual := SessionWindow.active) is not None:
             SessionWindow.active = None
+            manual._fechada = True  # noqa: SLF001
             manual.timer.stop()
             manual.flush()
             session_log.record(manual.game.game_id, manual.session_seconds)

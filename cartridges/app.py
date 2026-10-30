@@ -16,7 +16,7 @@ builtins._ = lambda message: message  # type: ignore[attr-defined]
 builtins.ngettext = lambda singular, plural, n: singular if n == 1 else plural  # type: ignore[attr-defined]
 
 # pylint: disable=wrong-import-position
-from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtCore import QEvent, QTimer, QUrl, Signal
 from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -87,8 +87,33 @@ def _limpar_e_ativar_copias(modelo: ModeloDaBiblioteca) -> None:
     threading.Thread(target=limpar, daemon=True).start()
 
 
+class AplicacaoQt(QGuiApplication):
+    """O `QGuiApplication` do app, que avisa o `quit()` antes de o Qt fechar as janelas.
+
+    No Qt 6 o `quit()` manda o `QEvent.Quit`, e é nele que cada janela de topo recebe o `closing`, antes do
+    `aboutToQuit`. O `saindo` chega antes delas: a sessão é encerrada sem interface, e o `closing` da janela
+    "Jogando" que vem depois já não tem o que fazer.
+    """
+
+    saindo = Signal()
+
+    def event(self, evento: QEvent) -> bool:
+        if evento.type() == QEvent.Type.Quit:
+            self.saindo.emit()
+        return super().event(evento)
+
+
+def _encerrar_em_ordem(*passos) -> None:  # noqa: ANN002
+    """Cada passo do fechamento roda, mesmo com a falha de um anterior: o drenar das gravações vem perto do fim."""
+    for passo in passos:
+        try:
+            passo()
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).exception("Falha ao encerrar o app")
+
+
 def main(argv: list[str]) -> int:
-    app = QGuiApplication(argv)
+    app = AplicacaoQt(argv)
     app.setApplicationName("Cartridges")
     app.setApplicationDisplayName("Cartridges")
     app.setWindowIcon(QIcon(str(_ICONE)))
@@ -99,14 +124,16 @@ def main(argv: list[str]) -> int:
     varredura_tamanho = InstallSizeSweep()
 
     def encerrar() -> None:
-        big_picture.encerrar()  # a cortina preta do fade nunca fica no monitor (ADR 0003)
-        sessao.encerrar()  # o tempo da sessão em andamento vai ao jogo e ao histórico (sem interface)
-        verificador.stop()
-        varredura_hltb.stop()
-        varredura_tamanho.stop()
-        edicao.cancelar()  # apaga os temporários de um editor ainda aberto
-        async_manager.encerrar()
-        copias_animadas.encerrar()
+        _encerrar_em_ordem(
+            big_picture.encerrar,  # a cortina preta do fade nunca fica no monitor (ADR 0003)
+            sessao.encerrar,  # o tempo da sessão em andamento vai ao jogo e ao histórico (sem interface)
+            verificador.stop,
+            varredura_hltb.stop,
+            varredura_tamanho.stop,
+            edicao.cancelar,  # apaga os temporários de um editor ainda aberto
+            async_manager.encerrar,  # drena as gravações, a do tempo da sessão inclusive
+            copias_animadas.encerrar,
+        )
 
     app.aboutToQuit.connect(encerrar)
     _configurar_log()
@@ -152,6 +179,9 @@ def main(argv: list[str]) -> int:
     big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     sessao = ModeloDaSessao(avisos, controle=controle, big_picture=big_picture)
     shared.sessao = sessao
+    # Antes de o Qt fechar as janelas: sem isto a janela "Jogando" fecharia pelo fim normal da sessão, com interface.
+    # O desligar do Windows emite o `aboutToQuit` antes do `quit()`; lá o `encerrar()` também vem primeiro.
+    app.saindo.connect(sessao.encerrar)
     motor.addImageProvider("desfoque", detalhes.provedor)
     motor.addImageProvider("fundo", ProvedorDoFundo())
     contexto = motor.rootContext()
@@ -163,12 +193,12 @@ def main(argv: list[str]) -> int:
         contexto.setContextProperty(nome, valor)
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.
     session_wallpaper.restaurar_orfaos()
-    # As fitas de LED: desfaz o que uma execução anterior deixou e acende na cor do app (numa thread). O `fechar()`
-    # delas está no fim do `ModeloDaSessao.encerrar()`.
-    session_fita.abrir()
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))
     if not motor.rootObjects():
         return 1
+    # As fitas de LED: desfaz o que uma execução anterior deixou e acende na cor do app (numa thread). Depois da
+    # janela: sem ela não há `aboutToQuit`, e o `fechar()` (no fim do `ModeloDaSessao.encerrar()`) nunca viria.
+    session_fita.abrir()
     big_picture.definir_janela(motor.rootObjects()[0])  # a janela que vai à tela cheia
     sessao.definir_janela(motor.rootObjects()[0])  # a que volta da barra de tarefas no fim da sessão
     shared.aplicativo = aplicativo
