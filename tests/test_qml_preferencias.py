@@ -8,18 +8,22 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Q_ARG, QMetaObject, QPoint, Qt
-from PySide6.QtQml import QQmlEngine, QQmlExpression
+from PySide6.QtCore import QUrl
+from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
 from cartridges import shared
-from cartridges.utils import open_uri
+from cartridges.utils import open_uri, window_geometry
 from tests.test_qml_biblioteca import QML, _achar, _App, _esperar, _jogos
 from tests.test_qml_detalhes import _abrir_pelo_cartao, _cartoes, _clicar, _foco_dentro_de
 
 
 @pytest.fixture
-def app(app_qt):
+def app(app_qt, monkeypatch):
+    from tests.test_preferencias_qt import PRINCIPAL, SEGUNDO  # noqa: PLC0415
+
+    monkeypatch.setattr(window_geometry, "monitors", lambda: [PRINCIPAL, SEGUNDO])
     janela = _App(_jogos((1, "Alfa", {}), (2, "Beta", {})))
     yield janela
     janela.fechar()
@@ -73,7 +77,7 @@ def test_abas_na_ordem_da_main(app):
     # Personalização e Conquistas entram com as tasks delas (sem aba morta); a ordem é a da `main`.
     ordem = ["Geral", "Personalização", "Importação", "SteamGridDB", "Conquistas"]
     assert [r for r in ordem if r in rotulos] == rotulos
-    assert rotulos[:1] == ["Geral"] and "Importação" in rotulos and "SteamGridDB" in rotulos
+    assert rotulos[:2] == ["Geral", "Personalização"] and "Importação" in rotulos and "SteamGridDB" in rotulos
     assert rotulos.index("Importação") < rotulos.index("SteamGridDB")
 
 
@@ -523,3 +527,93 @@ def test_foco_levado_para_outro_controle_nao_e_roubado_ao_terminar(app, store, m
     refresh.progress.emit()
     _esperar()
     assert _foco_dentro_de(app, "aba-sgdb")
+
+
+# region Personalização (Task 4)
+
+
+def _enabled(app, nome):
+    return app.achar(nome).property("enabled") is True
+
+
+def test_textos_da_personalizacao(app):
+    _abrir(app, "session")
+    assert app.achar("paginaDePersonalizacao").property("visible") is True
+    assert app.achar("grupoBiblioteca").property("titulo") == "Biblioteca"
+    assert _linha(app, "interruptor-cover-autoplay") == (
+        "Reproduzir capas animadas automaticamente",
+        "As capas animadas são reproduzidas na biblioteca automaticamente e em loop.",
+    )
+    assert app.achar("grupoAoIniciarUmJogo").property("titulo") == "Ao iniciar um jogo"
+    assert app.achar("grupoAoIniciarUmJogo").property("descricao") == (
+        "Move o Cartridges para outro monitor (se disponível) em vez de minimizá-lo para a barra de tarefas."
+    )
+    assert _linha(app, "interruptor-session-move-window") == ("Mover para outro monitor", "")
+    assert app.achar("linhaDoMonitor").property("titulo") == "Monitor"
+    assert app.achar("linhaDoMonitor").property("model") == ["Monitor 2"]
+    assert app.achar("linhaIdentificarMonitores").property("titulo") == "Identificar monitores"
+    assert app.achar("grupoPapelDeParede").property("titulo") == "Papel de parede"
+    assert app.achar("grupoPapelDeParede").property("descricao") == (
+        "Durante a sessão, substitui temporariamente o papel de parede dos outros monitores por uma imagem "
+        "relacionada ao jogo."
+    )
+    assert _linha(app, "interruptor-session-wallpaper") == ("Trocar o papel de parede dos outros monitores", "")
+    assert app.achar("campoDaChaveDoWallhaven").property("titulo") == "Chave da API do wallhaven (opcional)"
+
+
+def test_monitor_apagado_com_o_interruptor_desligado_e_identificar_sempre_ativo(app):
+    shared.schema.set_boolean("playtime-tracking", True)
+    shared.schema.set_boolean("session-move-window", False)
+    _abrir(app, "session")
+    assert not _enabled(app, "linhaDoMonitor")
+    assert _enabled(app, "linhaIdentificarMonitores")
+    app.preferencias.definir("session-move-window", True)
+    assert _esperar(lambda: _enabled(app, "linhaDoMonitor"))
+    # Sem contar horas o grupo inteiro apaga, menos o "Identificar".
+    app.preferencias.definir("playtime-tracking", False)
+    assert _esperar(lambda: not _enabled(app, "linhaDoMonitor"))
+    assert not _enabled(app, "interruptor-session-move-window")
+    assert _enabled(app, "linhaIdentificarMonitores")
+
+
+def test_sem_segundo_monitor_o_grupo_apaga_e_explica(app, monkeypatch):
+    from tests.test_preferencias_qt import PRINCIPAL  # noqa: PLC0415
+
+    monkeypatch.setattr(window_geometry, "monitors", lambda: [PRINCIPAL])
+    _abrir(app, "session")
+    assert not _enabled(app, "linhaDoMonitor")
+    assert not _enabled(app, "interruptor-session-move-window")
+    assert not _enabled(app, "interruptor-session-wallpaper")
+    assert _enabled(app, "linhaIdentificarMonitores")
+    assert _linha(app, "interruptor-session-move-window")[1] == "Requer um segundo monitor"
+    assert _linha(app, "interruptor-session-wallpaper")[1] == "Requer um segundo monitor"
+
+
+def test_chave_do_wallhaven_apagada_sem_o_papel_de_parede(app):
+    shared.schema.set_boolean("playtime-tracking", True)
+    shared.schema.set_boolean("session-wallpaper", False)
+    _abrir(app, "session")
+    assert not _enabled(app, "campoDaChaveDoWallhaven")
+    app.preferencias.definir("session-wallpaper", True)
+    assert _esperar(lambda: _enabled(app, "campoDaChaveDoWallhaven"))
+    app.achar("campoDaChaveDoWallhaven").setProperty("text", "  abc ")
+    QMetaObject.invokeMethod(app.achar("campoDaChaveDoWallhaven"), "editado", Qt.ConnectionType.DirectConnection)
+    assert shared.schema.get_string("wallhaven-key") == "abc"
+
+
+def test_placa_mostra_o_numero(app_qt):
+    motor = QQmlEngine()
+    componente = QQmlComponent(motor, QUrl.fromLocalFile(str(QML / "PlacaDoMonitor.qml")))
+    placa = componente.createWithInitialProperties({"numero": "2"})
+    assert placa is not None, componente.errorString()
+    assert "2" in _textos(placa)
+
+
+def test_m14_sem_contar_horas_o_papel_de_parede_fica_apagado(app):
+    # A metade das fitas (seguem configuráveis sem contar horas) entra na Task 5.
+    shared.schema.set_boolean("playtime-tracking", False)
+    _abrir(app, "session")
+    assert not _enabled(app, "grupoPapelDeParede")
+    assert not _enabled(app, "interruptor-session-wallpaper")
+    app.preferencias.definir("playtime-tracking", True)
+    assert _esperar(lambda: _enabled(app, "grupoPapelDeParede") and _enabled(app, "interruptor-session-wallpaper"))

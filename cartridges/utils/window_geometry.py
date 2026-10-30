@@ -53,12 +53,17 @@ label a monitor with and nothing stable to store.
 from __future__ import annotations
 
 import ctypes
+import functools
 import logging
+import weakref
+from collections.abc import Callable
 from ctypes import wintypes
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
-# O GTK só entra dentro das funções que são dele (selo de monitor, tamanho e posição de uma
-# `Gtk.Window`): o resto, que a sessão do Qt usa, importa sem o `gi`.
+from PySide6.QtCore import QTimer
+
+# O GTK só entra dentro das funções que são dele (tamanho e posição de uma `Gtk.Window`): o resto, que a sessão do Qt usa, importa sem o `gi`.
 if TYPE_CHECKING:
     from gi.repository import Gtk
 
@@ -357,50 +362,82 @@ def monitores_da_sessao() -> list[Monitor]:
     return [monitor for monitor in monitors() if not monitor.primary]
 
 
-def preencher_escolha_de_monitor(row: "Gtk.Widget", monitores: list[Monitor]) -> None:
-    """Enche a linha ``row`` (um ``Adw.ComboRow``) com ``monitores`` e grava a escolha.
+def escolha_de_monitor(monitores: list[Monitor], gravado: str) -> tuple[list[str], int]:
+    """Os rótulos da lista de monitores e a posição do que está gravado.
 
-    O que está guardado é o caminho do monitor (:attr:`Monitor.key`), e não a
+    O que fica guardado é o caminho do monitor (:attr:`Monitor.key`), e não a
     posição na lista nem o nome ``DISPLAYn``, que o Windows troca entre as
     telas: desligar um monitor, ou o Windows renomear as telas, não faz a
     escolha passar a apontar para outro. Uma escolha antiga, gravada pelo
-    nome, é regravada com o caminho. Em compensação, se o monitor escolhido
-    estiver desligado (ou for o principal, guardado de antes de ele sair da
-    lista), a escolha vira o primeiro da lista e é gravada: é a única forma de
-    a lista mostrar o que vai acontecer de verdade.
+    nome, também é reconhecida (:meth:`Monitor.is_stored`). Se o monitor
+    gravado estiver desligado (ou for o principal, guardado de antes de ele sair
+    da lista), a posição é a do primeiro: quem chama grava essa escolha, que é a
+    única forma de a lista mostrar o que vai acontecer de verdade.
 
-    ``row`` é anotada como ``Gtk.Widget`` porque este módulo só importa ``Gtk``.
+    Só o número no rótulo, porque só o número tem resposta: resolução e posição
+    empatam entre telas iguais, e é o botão "Identificar monitores" que diz qual
+    é qual — na própria tela, que é onde se olha.
     """
-    from gi.repository import Gtk  # noqa: PLC0415
+    rotulos = [_("Monitor {}").format(m.number) for m in monitores]
+    escolhido = next((i for i, m in enumerate(monitores) if m.is_stored(gravado)), 0)
+    return rotulos, escolhido
 
-    from cartridges import shared  # noqa: PLC0415
 
-    # Só o número, porque só o número tem resposta: resolução e posição
-    # empatam entre telas iguais, e é o botão "Identificar monitores" que
-    # diz qual é qual — na própria tela, que é onde se olha.
-    row.set_model(
-        Gtk.StringList.new([_("Monitor {}").format(m.number) for m in monitores])
+# As placas na tela, seguradas aqui até fecharem: quem as pediu (as Preferências) pode já ter fechado.
+_placas: list[Any] = []
+_PLACA = Path(__file__).resolve().parent.parent / "qml" / "PlacaDoMonitor.qml"
+
+
+def _criar_placa(monitor: Monitor, lado: int) -> Any:
+    """A placa do ``monitor``: uma ``QQuickView`` sem moldura com o número, no centro da tela (D68)."""
+    from PySide6.QtCore import QUrl, Qt  # noqa: PLC0415
+    from PySide6.QtQuick import QQuickView  # noqa: PLC0415
+
+    placa = QQuickView()
+    placa.setFlags(
+        Qt.WindowType.Tool
+        | Qt.WindowType.FramelessWindowHint
+        | Qt.WindowType.WindowStaysOnTopHint
+        | Qt.WindowType.WindowDoesNotAcceptFocus
+        | Qt.WindowType.WindowTransparentForInput
     )
-
-    stored = shared.schema.get_string("session-monitor")
-    selected = next(
-        (index for index, m in enumerate(monitores) if m.is_stored(stored)), 0
+    placa.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
+    placa.setInitialProperties({"numero": monitor.number})
+    placa.setSource(QUrl.fromLocalFile(str(_PLACA)))
+    if placa.rootObject() is None:
+        erros = "; ".join(erro.toString() for erro in placa.errors())
+        placa.deleteLater()
+        raise RuntimeError(f"a placa do monitor não carregou: {erros}")
+    placa.resize(lado, lado)
+    placa.show()
+    # Depois do `show`: antes dele a janela ainda não tem lugar na área de trabalho.
+    _place(
+        placa,
+        Geometry(
+            monitor.x + (monitor.width - lado) // 2,
+            monitor.y + (monitor.height - lado) // 2,
+            lado,
+            lado,
+            False,
+        ),
     )
-    row.set_selected(selected)
-
-    def gravar(*_args: Any) -> None:
-        escolhido = row.get_selected()
-        if escolhido < len(monitores):
-            shared.schema.set_string("session-monitor", monitores[escolhido].key)
-
-    row.connect("notify::selected", gravar)
-    # Gravado à mão porque `set_selected` acima só avisa quando muda de
-    # valor, e o caso que precisa gravar — nada escolhido ainda, palpite
-    # caindo no índice 0 — é justamente um que não muda nada.
-    gravar()
+    return placa
 
 
-def identify_monitors(seconds: int = 3) -> None:
+def _fechar_placa(ref: Any) -> None:
+    placa = ref()
+    if placa is None:
+        return
+    if placa in _placas:
+        _placas.remove(placa)
+    try:
+        placa.close()
+        placa.deleteLater()
+    except RuntimeError:  # o objeto Qt já foi apagado
+        pass
+
+
+def identificar_monitores(segundos: int = 3, criar: Optional[Callable[[Monitor, int], Any]] = None) -> None:
     """Pisca o número de cada monitor sobre ele, como as configurações do Windows.
 
     A pergunta "qual deles é o 2?" não tem resposta em texto: dois monitores
@@ -410,41 +447,18 @@ def identify_monitors(seconds: int = 3) -> None:
 
     Mora aqui, e não junto da tela de preferências, porque é a mesma pergunta
     que o resto do arquivo responde: onde ficam os monitores, e como se põe uma
-    janela em cima de um deles.
+    janela em cima de um deles. Só na thread principal.
     """
-    from gi.repository import GLib, Gtk  # noqa: PLC0415
-
+    criar = criar or _criar_placa
     for monitor in monitors():
-        badge = Gtk.Window(decorated=False, resizable=False)
-        label = Gtk.Label()
-        label.set_markup(f'<span size="96pt" weight="bold">{monitor.number}</span>')
-        badge.set_child(label)
         # Um quarto do lado menor da tela, para o número sair do mesmo tamanho
         # relativo em telas de tamanhos diferentes.
-        side = max(200, min(monitor.width, monitor.height) // 4)
-        badge.set_default_size(side, side)
-        badge.connect("map", _center_badge, monitor, side)
-        badge.present()
-        GLib.timeout_add_seconds(seconds, _close_badge, badge)
-
-
-def _center_badge(badge: "Gtk.Window", monitor: Monitor, side: int) -> None:
-    """No "map", e não no "realize": veja :func:`apply_placement`."""
-    _place(
-        badge,
-        Geometry(
-            monitor.x + (monitor.width - side) // 2,
-            monitor.y + (monitor.height - side) // 2,
-            side,
-            side,
-            False,
-        ),
-    )
-
-
-def _close_badge(badge: "Gtk.Window") -> bool:
-    badge.close()
-    return False  # GLib.SOURCE_REMOVE
+        lado = max(200, min(monitor.width, monitor.height) // 4)
+        placa = criar(monitor, lado)
+        if placa is None:
+            continue
+        _placas.append(placa)
+        QTimer.singleShot(segundos * 1000, functools.partial(_fechar_placa, weakref.ref(placa)))
 
 
 def read(window: Any) -> Optional[Geometry]:

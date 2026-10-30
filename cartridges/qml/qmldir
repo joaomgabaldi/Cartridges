@@ -51,3 +51,5 @@ LinhaDeNumero 1.0 LinhaDeNumero.qml
 LinhaDeAcao 1.0 LinhaDeAcao.qml
 LinhaDeBotao 1.0 LinhaDeBotao.qml
 LinhaDeAtualizacao 1.0 LinhaDeAtualizacao.qml
+PaginaDePersonalizacao 1.0 PaginaDePersonalizacao.qml
+PlacaDoMonitor 1.0 PlacaDoMonitor.qml

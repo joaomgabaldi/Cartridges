@@ -674,6 +674,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
         :func:`window_geometry.preencher_escolha_de_monitor`, que o assistente
         de primeira abertura também usa.
         """
+        # shortcut: chama funções GTK apagadas no plano 7 (Task 4); sai com este arquivo na Task 8
         self.session_identify_button_row.connect(
             "activated", lambda *_: window_geometry.identify_monitors()
         )
@@ -693,6 +694,7 @@ class CartridgesPreferences(Adw.PreferencesDialog):
             GObject.BindingFlags.SYNC_CREATE,
         )
 
+        # shortcut: chama funções GTK apagadas no plano 7 (Task 4); sai com este arquivo na Task 8
         window_geometry.preencher_escolha_de_monitor(
             self.session_monitor_row, self.session_monitors
         )

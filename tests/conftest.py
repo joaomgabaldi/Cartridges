@@ -208,6 +208,9 @@ class FakeWindow:
 
 
 from cartridges import shared  # noqa: E402
+from cartridges.utils import window_geometry as _window_geometry  # noqa: E402
+
+_MONITORS_REAL = _window_geometry.monitors  # a enumeração de verdade (`monitors_de_verdade`)
 from cartridges.configuracoes import Configuracoes  # noqa: E402
 
 AppState = shared.AppState
@@ -352,6 +355,41 @@ def sem_janela_por_cima_de_verdade(monkeypatch):
 
     monkeypatch.setattr(janela_por_cima, "_api", recusa)
     monkeypatch.setattr(janela_por_cima, "_dono", None)
+
+
+@pytest.fixture(autouse=True)
+def sem_monitor_de_verdade(monkeypatch):
+    """Os testes não dependem de quantos monitores a máquina tem: `window_geometry.monitors` devolve um principal e
+    um segundo, falsos. Quem exercita a enumeração de verdade a restaura (`monitors_de_verdade`)."""
+    from cartridges.utils import window_geometry  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        window_geometry,
+        "monitors",
+        lambda: [
+            window_geometry.Monitor(r"\\.\DISPLAY1", 0, 0, 1920, 1080, True, 1, r"\\?\DISPLAY#FALSO#1"),
+            window_geometry.Monitor(r"\\.\DISPLAY2", 1920, 0, 1080, 1920, False, 2, r"\\?\DISPLAY#FALSO#2"),
+        ],
+    )
+
+
+@pytest.fixture
+def monitors_de_verdade(monkeypatch):
+    from cartridges.utils import window_geometry  # noqa: PLC0415
+
+    monkeypatch.setattr(window_geometry, "monitors", _MONITORS_REAL)
+
+
+@pytest.fixture(autouse=True)
+def sem_placa_de_verdade(monkeypatch):
+    """Nenhum teste põe a placa "Identificar monitores" numa tela de verdade: sem um `criar` falso, falha."""
+    from cartridges.utils import window_geometry  # noqa: PLC0415
+
+    def recusa(*_args, **_kwargs):
+        raise AssertionError("placa: nenhuma janela vai a um monitor nos testes")
+
+    monkeypatch.setattr(window_geometry, "_criar_placa", recusa)
+    monkeypatch.setattr(window_geometry, "_placas", [])
 
 
 class User32Falso:

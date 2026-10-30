@@ -6,10 +6,26 @@ import pytest
 
 from cartridges import shared
 from cartridges.modelos.preferencias import Preferencias
+from cartridges.utils import window_geometry
+from cartridges.utils.window_geometry import Monitor
+
+_CRIAR_PLACA_REAL = window_geometry._criar_placa  # antes da guarda `sem_placa_de_verdade`
+
+PRINCIPAL = Monitor(r"\\.\DISPLAY1", 0, 0, 1920, 1080, True, 1, r"\\?\DISPLAY#A#1")
+SEGUNDO = Monitor(r"\\.\DISPLAY2", 1920, 0, 800, 600, False, 2, r"\\?\DISPLAY#B#2")
+TERCEIRO = Monitor(r"\\.\DISPLAY3", -1920, 0, 1920, 1080, False, 3, r"\\?\DISPLAY#C#3")
 
 
 @pytest.fixture
-def p(app_qt):  # noqa: ARG001
+def monitores(monkeypatch):
+    """Os monitores que a máquina "tem": a lista que o teste mudar."""
+    lista = [PRINCIPAL, SEGUNDO, TERCEIRO]
+    monkeypatch.setattr(window_geometry, "monitors", lambda: lista)
+    return lista
+
+
+@pytest.fixture
+def p(app_qt, monitores):  # noqa: ARG001
     modelo = Preferencias(None, lambda: True)
     assert modelo.abrir()
     yield modelo
@@ -373,3 +389,129 @@ def test_fechar_as_preferencias_nao_cancela_os_metadados(app_qt, monkeypatch):
 
 
 # endregion
+
+
+# region Personalização: monitores, papel de parede (Task 4)
+
+
+def _abrir(stored=""):
+    shared.schema.set_string("session-monitor", stored)
+    modelo = Preferencias(None, lambda: True)
+    assert modelo.abrir()
+    return modelo
+
+
+def test_principal_nunca_entra_na_lista(p):
+    assert p.estado["monitores"] == ["Monitor 2", "Monitor 3"]
+    assert not p.estado["semSegundoMonitor"]
+
+
+def test_escolha_antiga_pelo_nome_e_regravada_pelo_caminho(app_qt, monitores):  # noqa: ARG001
+    modelo = _abrir(TERCEIRO.device)
+    try:
+        assert modelo.estado["monitorEscolhido"] == 1
+        assert shared.schema.get_string("session-monitor") == TERCEIRO.path
+    finally:
+        modelo.fechar()
+
+
+def test_monitor_escolhido_desligado_cai_no_primeiro_e_grava(app_qt, monitores):  # noqa: ARG001
+    modelo = _abrir(r"\\?\DISPLAY#SUMIU#9")
+    try:
+        assert modelo.estado["monitorEscolhido"] == 0
+        assert shared.schema.get_string("session-monitor") == SEGUNDO.path
+    finally:
+        modelo.fechar()
+
+
+def test_escolher_monitor_grava_o_caminho(p):
+    p.escolherMonitor(1)
+    assert shared.schema.get_string("session-monitor") == TERCEIRO.path
+    assert p.estado["monitorEscolhido"] == 1
+
+
+def test_escolha_fora_da_faixa_nao_grava(p):
+    antes = shared.schema.get_string("session-monitor")
+    for indice in (-1, 2, 99):
+        p.escolherMonitor(indice)
+    assert shared.schema.get_string("session-monitor") == antes
+
+
+def test_sem_segundo_monitor_desliga_as_duas_e_explica(app_qt, monitores):  # noqa: ARG001
+    shared.schema.set_boolean("session-move-window", True)
+    shared.schema.set_boolean("session-wallpaper", True)
+    monitores[:] = [PRINCIPAL]
+    modelo = _abrir()
+    try:
+        assert modelo.estado["semSegundoMonitor"] is True
+        assert modelo.estado["monitores"] == []
+        assert not shared.schema.get_boolean("session-move-window")
+        assert not shared.schema.get_boolean("session-wallpaper")
+        assert modelo.valores["session-move-window"] is False
+    finally:
+        modelo.fechar()
+
+
+def test_identificar_cria_uma_placa_por_monitor_no_centro(p, monkeypatch):
+    criadas = []
+    monkeypatch.setattr(window_geometry, "_criar_placa", lambda monitor, lado: criadas.append((monitor, lado)))
+    monkeypatch.setattr(window_geometry.QTimer, "singleShot", lambda *_a: None)
+    p.identificarMonitores()
+    assert criadas == [(PRINCIPAL, 270), (SEGUNDO, 200), (TERCEIRO, 270)]
+
+
+def test_placa_no_centro_do_monitor(app_qt, monkeypatch):  # noqa: ARG001
+    postas = []
+    monkeypatch.setattr(window_geometry, "_place", lambda _janela, geometria: postas.append(geometria) or True)
+    for monitor, lado, esperado in (
+        (PRINCIPAL, 270, window_geometry.Geometry(825, 405, 270, 270, False)),
+        (SEGUNDO, 200, window_geometry.Geometry(2220, 200, 200, 200, False)),
+        (TERCEIRO, 270, window_geometry.Geometry(-1095, 405, 270, 270, False)),
+    ):
+        placa = _CRIAR_PLACA_REAL(monitor, lado)
+        try:
+            assert postas[-1] == esperado
+            assert placa.rootObject().property("numero") == monitor.number
+        finally:
+            placa.close()
+            placa.deleteLater()
+
+
+def test_placas_fecham_sozinhas_mesmo_com_as_preferencias_fechadas(p, monkeypatch):
+    class Placa:
+        fechadas = 0
+
+        def close(self):
+            Placa.fechadas += 1
+
+        def deleteLater(self):  # noqa: N802
+            pass
+
+    fios = []
+    monkeypatch.setattr(window_geometry, "_criar_placa", lambda _m, _l: Placa())
+    monkeypatch.setattr(window_geometry.QTimer, "singleShot", lambda ms, f: fios.append((ms, f)))
+    p.identificarMonitores()
+    p.fechar()
+    assert Placa.fechadas == 0
+    assert len(window_geometry._placas) == 3  # noqa: SLF001 - seguradas até fechar
+    assert [ms for ms, _f in fios] == [3000] * 3
+    for _ms, fechar in fios:
+        fechar()
+    assert Placa.fechadas == 3
+    assert window_geometry._placas == []  # noqa: SLF001
+
+
+def test_window_geometry_sem_gtk_nas_funcoes_da_tela():
+    import inspect  # noqa: PLC0415
+
+    for nome in ("escolha_de_monitor", "identificar_monitores", "_criar_placa"):
+        fonte = inspect.getsource(getattr(window_geometry, nome))
+        assert "from gi" not in fonte
+        assert "Gtk" not in fonte
+    for velho in ("preencher_escolha_de_monitor", "identify_monitors", "_center_badge", "_close_badge"):
+        assert not hasattr(window_geometry, velho)
+
+
+def test_escolha_de_monitor_rotulos_e_indice():
+    assert window_geometry.escolha_de_monitor([SEGUNDO, TERCEIRO], TERCEIRO.path) == (["Monitor 2", "Monitor 3"], 1)
+    assert window_geometry.escolha_de_monitor([SEGUNDO, TERCEIRO], "nada") == (["Monitor 2", "Monitor 3"], 0)

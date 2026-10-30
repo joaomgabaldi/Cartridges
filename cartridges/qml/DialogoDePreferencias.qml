@@ -12,9 +12,10 @@ Rectangle {
     Accessible.role: Accessible.Dialog
     Accessible.name: "Preferências"
 
-    // shortcut: faltam as abas "Personalização" (Task 4 do plano 7) e "Conquistas" (Task 8); entram na ordem da `main`: Geral, Personalização, Importação, SteamGridDB, Conquistas. Sem página, a aba não aparece (nada de aba morta).
+    // shortcut: falta a aba "Conquistas" (Task 8 do plano 7); entra no fim, na ordem da `main`: Geral, Personalização, Importação, SteamGridDB, Conquistas. Sem página, a aba não aparece (nada de aba morta).
     readonly property var abas: [
         { id: "general", titulo: "Geral", glifo: "" },
+        { id: "session", titulo: "Personalização", glifo: "" },
         { id: "import", titulo: "Importação", glifo: "" },
         { id: "sgdb", titulo: "SteamGridDB", glifo: "" }
     ]
@@ -196,6 +197,7 @@ Rectangle {
                 width: rolagem.width - 32
 
                 PaginaGeral { visible: dialogo.aba === "general" }
+                PaginaDePersonalizacao { visible: dialogo.aba === "session" }
                 PaginaDeImportacao { visible: dialogo.aba === "import" }
                 PaginaDoSteamGridDB { visible: dialogo.aba === "sgdb" }
             }

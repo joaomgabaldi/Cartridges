@@ -155,7 +155,7 @@ def test_sem_user32_nao_ha_aviso_nem_excecao(janela, monkeypatch):
     assert jpc.por_no_canto(janela, "inferior-direito") is False
 
 
-def test_declarar_os_tipos_aqui_nao_estraga_o_user32_do_window_geometry(monkeypatch):
+def test_declarar_os_tipos_aqui_nao_estraga_o_user32_do_window_geometry(monkeypatch, monitors_de_verdade):  # noqa: ARG001
     """``ctypes.windll.user32`` é compartilhado: declarar o ``GetMonitorInfoW`` com a
     estrutura simples deixava ``window_geometry.monitors()`` sem nenhum monitor.
     Só declara os tipos e lê os monitores: nenhuma janela é tocada."""

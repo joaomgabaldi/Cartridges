@@ -22,7 +22,7 @@ from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 from cartridges import metadata_refresh, shared
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.store.managers.sgdb_manager import SgdbManager
-from cartridges.utils import open_uri
+from cartridges.utils import open_uri, window_geometry
 
 # As 19 de `bind_switches` da main (sem `show-news-button`, D64), mais as que ela ligava por widget próprio.
 CHAVES_GRAVAVEIS = frozenset(
@@ -246,6 +246,7 @@ class Preferencias(QObject):
         self._valores: dict[str, Any] = {}
         self._estado: dict[str, Any] = {}
         self._ligacao: int | None = None
+        self._monitores: list[window_geometry.Monitor] = []
         self._biblioteca = AtualizacoesDaBiblioteca(avisos, self)
 
     @Property(QObject, constant=True)
@@ -276,6 +277,7 @@ class Preferencias(QObject):
         self._aberto = True
         self._pagina = pagina if pagina in PAGINAS else "general"
         self._biblioteca.seguir(True)
+        self._ler_monitores()
         eu = weakref.ref(self)
         self._ligacao = shared.schema.connect("changed", lambda *_: (p := eu()) and p._reler())
         self._reler()
@@ -319,6 +321,34 @@ class Preferencias(QObject):
         if chave == "sgdb-key" and not texto:
             shared.schema["sgdb"] = False
 
+    def _ler_monitores(self) -> None:
+        """Os monitores ligados agora (o hardware é lido ao abrir) e o que as duas opções fazem com eles.
+
+        Sem nenhum além do principal, as duas opções não têm onde agir: ficam desligadas (e não só apagadas),
+        e quando um segundo monitor voltar quem religa é a pessoa. Com algum, a escolha que a lista mostra é
+        gravada (a antiga pelo nome vira o caminho; um monitor desligado cai no primeiro).
+        """
+        self._monitores = window_geometry.monitores_da_sessao()
+        if not self._monitores:
+            shared.schema["session-move-window"] = False
+            shared.schema["session-wallpaper"] = False
+            return
+        _rotulos, escolhido = window_geometry.escolha_de_monitor(
+            self._monitores, shared.schema.get_string("session-monitor")
+        )
+        chave = self._monitores[escolhido].key
+        if shared.schema.get_string("session-monitor") != chave:
+            shared.schema["session-monitor"] = chave
+
+    @Slot(int)
+    def escolherMonitor(self, indice: int) -> None:  # noqa: N802
+        if 0 <= indice < len(self._monitores):
+            shared.schema["session-monitor"] = self._monitores[indice].key
+
+    @Slot()
+    def identificarMonitores(self) -> None:  # noqa: N802
+        window_geometry.identificar_monitores()
+
     @Slot(QUrl)
     def escolherPastaDosAtalhos(self, url: QUrl) -> None:  # noqa: N802
         """A pasta do `FolderDialog`; uma escolha vazia (diálogo cancelado) não grava."""
@@ -342,12 +372,27 @@ class Preferencias(QObject):
         self._valores = {chave: shared.schema.get_value(chave) for chave in CHAVES_DA_TELA}
         gamepad = shared.schema.get_boolean("gamepad")
         com_3d = bool(self._tem_3d())
+        contando = shared.schema.get_boolean("playtime-tracking")
+        sem_segundo = not self._monitores
+        rotulos, escolhido = window_geometry.escolha_de_monitor(
+            self._monitores, shared.schema.get_string("session-monitor")
+        )
         self._estado = {
             "minimizarTravado": shared.schema.get_boolean("playtime-tracking"),
             "rumbleAtivo": gamepad,
             "bigPictureAtivo": gamepad and com_3d,
             "somDoBigPictureAtivo": com_3d,
             "subtituloSem3d": "" if com_3d else SEM_3D,
+            "monitores": rotulos,
+            "monitorEscolhido": escolhido,
+            "semSegundoMonitor": sem_segundo,
+            # Sem contar horas não há tela de sessão para levar a lugar nenhum: o monitor e o papel de parede
+            # acompanham a contagem. As fitas não (Task 5).
+            "moverAtivo": contando and not sem_segundo,
+            "monitorAtivo": contando and not sem_segundo and shared.schema.get_boolean("session-move-window"),
+            "papelDeParedeAtivo": contando,
+            "papelDeParedeLigavel": contando and not sem_segundo,
+            "chaveWallhavenAtiva": contando and shared.schema.get_boolean("session-wallpaper"),
             "sgdbAtivo": bool(shared.schema.get_string("sgdb-key")),
             # O valor guardado já vem como o Windows escreve, menos a barra que o seletor às vezes devolve.
             "pastaDosAtalhos": shared.schema.get_string("shortcuts-location").replace("/", "\\")

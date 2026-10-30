@@ -263,7 +263,9 @@ class JanelaDoAssistente(Adw.ApplicationWindow):
 
         monitores = window_geometry.monitores_da_sessao()
         if monitores:
+            # shortcut: chama funções GTK apagadas no plano 7 (Task 4), porta para escolha_de_monitor/identificar_monitores no plano 8
             window_geometry.preencher_escolha_de_monitor(self.monitor_row, monitores)
+            # shortcut: chama funções GTK apagadas no plano 7 (Task 4), porta para escolha_de_monitor/identificar_monitores no plano 8
             self.identificar_row.connect(
                 "activated", lambda *_: window_geometry.identify_monitors()
             )
