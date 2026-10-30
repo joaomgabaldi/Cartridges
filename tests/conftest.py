@@ -137,8 +137,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_saves_ui.py",
     "test_session_fita.py",
     "test_session_log.py",
-    "test_session_monitors.py",
-    "test_session_wallpaper.py",
     "test_store_ligacao_manual.py",
     "test_tarefas_trabalhos.py",
     "test_tarefas_ui.py",
@@ -627,6 +625,21 @@ def write_asset(app_dirs):
         return target
 
     return writer
+
+
+@pytest.fixture(autouse=True)
+def sem_area_de_trabalho(monkeypatch):
+    """O papel de parede de verdade da área de trabalho nunca é tocado: sem COM nos testes.
+
+    Quem precisa da `IDesktopWallpaper` troca `_AreaDeTrabalho` por um falso.
+    """
+
+    def proibida(*_args, **_kwargs):
+        raise AssertionError("o teste tentou abrir a área de trabalho de verdade (IDesktopWallpaper)")
+
+    from cartridges.utils import session_wallpaper  # noqa: PLC0415
+
+    monkeypatch.setattr(session_wallpaper, "_AreaDeTrabalho", proibida)
 
 
 @pytest.fixture(autouse=True)

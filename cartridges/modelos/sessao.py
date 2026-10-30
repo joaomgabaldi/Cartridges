@@ -15,14 +15,15 @@ import weakref
 from ctypes import wintypes
 from typing import Any
 
-from PySide6.QtCore import Property, QCoreApplication, QObject, Qt, Signal, Slot
+from PySide6.QtCore import Property, QCoreApplication, QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QWindow
 
+from cartridges import shared
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.ordem import _url_da_capa  # noqa: PLC2701
 from cartridges.process_session import ProcessSession
 from cartridges.session_window import SessionWindow
-from cartridges.utils import game_logo, session_log
+from cartridges.utils import game_logo, session_log, session_wallpaper, window_geometry
 from cartridges.utils.format_playtime import format_playtime, format_stopwatch
 
 
@@ -85,6 +86,11 @@ class ModeloDaSessao(QObject):
         self._logo = ""
         self._largura_do_logo = 0
         self._anotacao = ""
+        # O relógio só existe onde se vê: com a janela levada ao monitor da sessão (D49/Task 4).
+        self._relogio_visivel = False
+        self._tique = QTimer(self)
+        self._tique.setInterval(1000)
+        self._tique.timeout.connect(self.alterado)
         self._sair = QCoreApplication.quit  # trocado nos testes: sair de verdade acabaria o laço do teste
 
     def definir_janela(self, janela: QWindow) -> None:
@@ -118,13 +124,11 @@ class ModeloDaSessao(QObject):
 
     @Property(str, notify=alterado)
     def relogio(self) -> str:
-        # shortcut: lido na hora, sem tique de 1 s (o relógio fica escondido), a Task 4 liga o tique.
         return format_stopwatch(self.session_elapsed())
 
     @Property(bool, notify=alterado)
     def relogioVisivel(self) -> bool:
-        # shortcut: sempre falso, só a Task 4 (monitor da sessão) decide quando o relógio aparece.
-        return False
+        return self._relogio_visivel
 
     @Property(bool, notify=alterado)
     def janelaManual(self) -> bool:
@@ -146,12 +150,27 @@ class ModeloDaSessao(QObject):
         if (caminho := game_logo.cached_logo_path(game)) and (carregado := game_logo.load_logo(caminho, 640, 140)):
             self._logo, self._largura_do_logo = _url_da_capa(carregado[0]), carregado[1]
         self._anotacao = game.notes or ""
+        # O relógio só faz sentido onde pode ser visto: com a janela levada a outro monitor ela fica à
+        # vista a sessão inteira; senão está minimizada. A pergunta é se a mudança aconteceu, e não se a
+        # opção está ligada (com o monitor escolhido desligado a opção está ligada e a janela minimizou).
+        self._relogio_visivel = window_geometry.session_geometry() is not None
+        if self._relogio_visivel:
+            self._tique.start()
         self.alterado.emit()
+        # A arte nos outros monitores prepara numa thread: nada espera por ela.
+        if shared.schema.get_boolean("session-wallpaper"):
+            session_wallpaper.comecar(game)
 
     def hide_session_blocker(self) -> None:
+        self._tique.stop()
+        self._relogio_visivel = False
         self._jogo = None
         self._manual = None
         self.alterado.emit()
+        # Antes do `present()` de quem chamou: a janela reaparece já no lugar de origem, sem pular.
+        # Sem efeito quando ela não saiu do lugar.
+        window_geometry.restore_from_monitor(self._janela)
+        session_wallpaper.restaurar()
 
     def avisar(self, texto: str) -> None:
         self._avisos.adicionar(texto)
@@ -190,8 +209,17 @@ class ModeloDaSessao(QObject):
         janela.requestActivate()
 
     def move_to_session_monitor(self) -> bool:
-        # shortcut: nunca move a janela, a Task 4 leva ao monitor da sessão.
-        return False
+        """Leva a janela, maximizada, ao monitor da sessão. Diz se foi (senão quem chamou minimiza).
+
+        Sem monitor além do principal a opção é desligada aqui e fica desligada: se um segundo
+        monitor voltar, quem religa é o usuário, nas Preferências.
+        """
+        if self._janela is None or not shared.schema.get_boolean("session-move-window"):
+            return False
+        if not window_geometry.has_secondary_monitor():
+            shared.schema.set_boolean("session-move-window", False)
+            return False
+        return window_geometry.move_to_monitor(self._janela, shared.schema.get_string("session-monitor"))
 
     def vibrar_abertura(self) -> None:
         # shortcut: sem vibração do controle, a Task 6 confirma o lançamento na mão.
@@ -266,6 +294,7 @@ class ModeloDaSessao(QObject):
     @Slot()
     def encerrar(self) -> None:
         """O app fechando no meio da sessão: grava o tempo e o histórico, sem tocar na interface."""
+        self._tique.stop()
         if (manual := SessionWindow.active) is not None:
             SessionWindow.active = None
             manual.timer.stop()
@@ -277,3 +306,5 @@ class ModeloDaSessao(QObject):
             processo.flush()
             if processo.started:
                 session_log.record(processo.game.game_id, processo.session_seconds)
+        # Depois de gravar: é a última chance de desfazer a troca, sem processo para fazê-la depois.
+        session_wallpaper.restaurar()
