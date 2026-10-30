@@ -128,8 +128,8 @@ Rectangle {
         color: Tema.fundo
         border.color: Tema.botaoSobre
         clip: true
-        // Com o brilho por dispositivo por cima, o Tab não volta para cá.
-        enabled: preferencias.brilhoPorDispositivo === null
+        // Com o brilho por dispositivo ou o assistente das fitas por cima, o Tab não volta para cá.
+        enabled: preferencias.brilhoPorDispositivo === null && preferencias.configuracaoDasFitas === null
 
         Item {
             id: cabecalho
@@ -217,6 +217,7 @@ Rectangle {
         onAlternativo: preferencias.biblioteca.buscarMetadados(false)
     }
     BrilhoPorDispositivo {}
+    ConfiguracaoDasFitas {}
 
     Connections {
         target: preferencias.biblioteca

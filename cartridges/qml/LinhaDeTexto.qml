@@ -9,6 +9,8 @@ FocusScope {
     property string titulo
     property alias text: campo.text
     property alias inputMethodHints: campo.inputMethodHints
+    // Para o que não deve aparecer na tela (TextInput.Password).
+    property alias echoMode: campo.echoMode
     // O campo recusado pela validação aparece com o destaque de erro.
     property bool erro: false
     default property alias acessorios: lado.data

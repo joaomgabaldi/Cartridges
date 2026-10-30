@@ -133,7 +133,14 @@ Column {
             onEscolhida: cor => preferencias.fitas.escolherCorDoApp(cor)
             onVoltar: preferencias.fitas.voltarCorDoApp()
         }
-        // shortcut: falta "Configurar a iluminação inteligente" (Task 6 do plano 7, o assistente das fitas); entra aqui, sempre clicável.
+        LinhaDeAcao {
+            objectName: "linhaConfigurarFitas"
+            titulo: "Configurar a iluminação inteligente"
+            subtitulo: "Busca os dispositivos na sua conta da Tuya"
+            glifo: ""  // engrenagem
+            dica: "Abrir assistente"
+            onAcionada: preferencias.abrirConfiguracaoDasFitas()
+        }
         LinhaDeAcao {
             objectName: "linhaTestarFitas"
             titulo: "Testar"

@@ -1192,6 +1192,7 @@ def test_brilho_por_dispositivo_ilegivel_vale_100():
     assert session_fita.fitas()[0].brilho == 100
 
 
+@pytest.mark.varredura_real
 def test_duas_varreduras_ao_mesmo_tempo_viram_uma(monkeypatch):
     """Duas varreduras juntas brigam pelo mesmo soquete de broadcast.
 
@@ -1221,6 +1222,7 @@ def test_duas_varreduras_ao_mesmo_tempo_viram_uma(monkeypatch):
     assert max(pico) == 1
 
 
+@pytest.mark.varredura_real
 def test_varredura_que_falha_devolve_mapa_vazio(monkeypatch):
     def explodir(*_args, **_kwargs):
         raise OSError("rede fora")

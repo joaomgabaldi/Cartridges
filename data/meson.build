@@ -3,7 +3,6 @@ blueprints = custom_target(
   input: files(
     'gtk/assistente.blp',
     'gtk/details-dialog.blp',
-    'gtk/fita-wizard.blp',
     'gtk/logo-picker.blp',
     'gtk/preferences.blp',
     'gtk/sgdb-picker.blp',

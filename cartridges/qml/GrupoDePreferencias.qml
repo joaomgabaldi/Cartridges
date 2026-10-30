@@ -10,6 +10,7 @@ Column {
     property string descricao
     property bool descricaoRica: false
     default property alias linhas: caixa.linhas
+    property alias sufixo: sufixoDoTitulo.data
 
     signal linkAcionado(string endereco)
 
@@ -17,16 +18,28 @@ Column {
     spacing: 8
     visible: caixa.implicitHeight > 0
 
-    Text {
-        objectName: grupo.objectName + "Titulo"
+    // O título e, à direita dele, o que o grupo puser em `sufixo` (um botão-link, como o `header-suffix` do Adwaita).
+    Item {
         width: parent.width
-        visible: text !== ""
-        text: grupo.titulo
-        textFormat: Text.PlainText
-        wrapMode: Text.Wrap
-        color: Tema.texto
-        font { family: Tema.fonte; pixelSize: 15; weight: Font.DemiBold }
-        Accessible.role: Accessible.Heading
+        height: Math.max(tituloDoGrupo.implicitHeight, sufixoDoTitulo.implicitHeight)
+        visible: tituloDoGrupo.text !== ""
+
+        Text {
+            id: tituloDoGrupo
+            objectName: grupo.objectName + "Titulo"
+            width: parent.width - (sufixoDoTitulo.children.length > 0 ? sufixoDoTitulo.width + 8 : 0)
+            anchors.verticalCenter: parent.verticalCenter
+            text: grupo.titulo
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            color: Tema.texto
+            font { family: Tema.fonte; pixelSize: 15; weight: Font.DemiBold }
+            Accessible.role: Accessible.Heading
+        }
+        Row {
+            id: sufixoDoTitulo
+            anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+        }
     }
     Text {
         objectName: grupo.objectName + "Descricao"

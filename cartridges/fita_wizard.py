@@ -33,20 +33,18 @@ local, achada aqui e gravada à parte, em claro, no `fitas.json`.
 
 import logging
 import threading
+import weakref
 from typing import Any, Optional
 
-from gi.repository import Adw, Gtk
+import shiboken6
+from PySide6.QtCore import Property, QObject, Signal, Slot
 
-from cartridges import shared
-from cartridges.utils import tuya_conta
-from cartridges.utils.na_tela import entregar_na_tela
-from cartridges.utils.session_fita import (
-    Fita,
-    devolver_removidas,
-    enderecos_na_rede,
-    fitas,
-    gravar_fitas,
-)
+from cartridges.utils import open_uri, session_fita, tuya_conta
+from cartridges.utils.session_fita import Fita, devolver_removidas, fitas, gravar_fitas
+from cartridges.utils.thread_principal import na_thread_principal
+
+# O painel de desenvolvedor da Tuya, de onde saem o Access ID e o Access Secret.
+PAINEL_DA_TUYA = "https://auth.tuya.com/?from=https%3A%2F%2Fdeveloper.tuya.com%3Fredirect%3Dhttps%3A%2F%2Fplatform.tuya.com"
 
 # As regiões que a Tuya oferece, na mesma ordem da lista do `.blp`. As duas
 # listas precisam andar juntas: o índice escolhido na tela é o índice aqui.
@@ -147,127 +145,186 @@ def com_enderecos(
     ]
 
 
-@Gtk.Template(resource_path=shared.PREFIX + "/gtk/fita-wizard.ui")
-class FitaWizard(Adw.Dialog):
-    __gtype_name__ = "FitaWizard"
+def _nuvem(regiao: str, chave: str, segredo: str) -> Any:
+    """A fábrica da nuvem da Tuya: o único ponto que fala com ela (os testes trocam este)."""
+    import tinytuya  # noqa: PLC0415
 
-    stack: Adw.ViewStack = Gtk.Template.Child()
-    api_key_row: Adw.EntryRow = Gtk.Template.Child()
-    api_secret_row: Adw.PasswordEntryRow = Gtk.Template.Child()
-    regiao_row: Adw.ComboRow = Gtk.Template.Child()
-    buscar_button: Gtk.Button = Gtk.Template.Child()
-    aviso_label: Gtk.Label = Gtk.Template.Child()
-    dispositivos_group: Adw.PreferencesGroup = Gtk.Template.Child()
-    salvar_button: Gtk.Button = Gtk.Template.Child()
+    return tinytuya.Cloud(apiRegion=regiao, apiKey=chave, apiSecret=segredo)
 
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self._linhas: list[tuple[Adw.SwitchRow, Fita]] = []
-        # A busca corre numa thread e volta depois. Se o usuário fechou o
-        # assistente nesse meio-tempo, não há tela para pintar — é a mesma
-        # proteção que o sgdb_picker, o steam_picker e o logo_picker usam.
-        self._closed = False
-        self.buscar_button.connect("clicked", self.buscar)
-        self.salvar_button.connect("clicked", self.salvar)
-        self.connect("closed", self._on_closed)
+
+def _buscar(eu: "weakref.ref[FitaWizard]", busca: int, chave: str, segredo: str, regiao: str) -> None:
+    """A busca, numa thread: não toca no assistente, só devolve o resultado à principal por referência fraca."""
+    try:
+        # Dentro do try: sem a biblioteca instalada, um ImportError aqui deixaria a tela presa no "Buscando…".
+        nuvem = _nuvem(regiao, chave, segredo)
+        resposta = nuvem.getdevices()
+        # A tinytuya devolve lista vazia também quando o token é recusado (o erro fica em `nuvem.error`), então só a
+        # lista não prova que a credencial funcionou, e uma credencial que não funcionou não merece ficar salva.
+        if credencial_valida(nuvem, resposta):
+            tuya_conta.salvar(tuya_conta.Conta(chave, segredo, regiao))
+        encontrados = fitas_da_nuvem(resposta)
+    except Exception as erro:  # a tinytuya levanta de tudo aqui também
+        # O texto do erro pode trazer a requisição inteira: os dois códigos nunca vão ao log.
+        texto = str(erro).replace(segredo, "***").replace(chave, "***")
+        logging.warning("Busca na nuvem da Tuya falhou: %s", texto)
+        encontrados = []
+    na_thread_principal(_entregar, eu, busca, com_enderecos(encontrados, *session_fita.enderecos_na_rede()))
+
+
+def _entregar(eu: "weakref.ref[FitaWizard]", busca: int, encontrados: list[Fita]) -> None:
+    assistente = eu()
+    if assistente is not None and shiboken6.isValid(assistente) and assistente._busca == busca:  # noqa: SLF001
+        assistente._mostrar(encontrados)  # noqa: SLF001
+
+
+class FitaWizard(QObject):
+    """O assistente das fitas, sem tela: a tela (`ConfiguracaoDasFitas.qml`) lê e grava estas propriedades.
+
+    Só na thread principal. A busca vai à nuvem numa thread e volta por `na_thread_principal`; o resultado de uma
+    busca que o usuário já deixou para trás (fechou o assistente, ou pediu outra) é descartado.
+    """
+
+    alterado = Signal()
+    fechado = Signal()
+
+    def __init__(self, parent: Optional[QObject] = None) -> None:
+        super().__init__(parent)
+        self._pagina = "credenciais"
+        self._chave = ""
+        self._segredo = ""
+        self._regiao = 0
+        self._sem_resultado = False
+        self._encontradas: list[Fita] = []
+        self._marcadas: set[str] = set()
+        self._busca = 0
+        self._fechado = False
         self._preencher_credenciais()
-
-    def _on_closed(self, *_args: Any) -> None:
-        self._closed = True
 
     def _preencher_credenciais(self) -> None:
         """Pré-preenche com a conta salva da vez anterior, se houver."""
         conta = tuya_conta.carregar()
         if conta is None:
             return
-        self.api_key_row.set_text(conta.chave)
-        self.api_secret_row.set_text(conta.segredo)
+        self._chave = conta.chave
+        self._segredo = conta.segredo
         try:
-            indice = REGIOES.index(conta.regiao)
+            self._regiao = REGIOES.index(conta.regiao)
         except ValueError:
-            indice = 0
-        self.regiao_row.set_selected(indice)
+            self._regiao = 0
 
-    def buscar(self, *_args: Any) -> None:
+    @Property(str, notify=alterado)
+    def pagina(self) -> str:
+        return self._pagina
+
+    @Property(str, notify=alterado)
+    def chave(self) -> str:
+        return self._chave
+
+    @chave.setter
+    def chave(self, valor: str) -> None:
+        self._chave = valor
+        self.alterado.emit()
+
+    @Property(str, notify=alterado)
+    def segredo(self) -> str:
+        return self._segredo
+
+    @segredo.setter
+    def segredo(self, valor: str) -> None:
+        self._segredo = valor
+        self.alterado.emit()
+
+    @Property(int, notify=alterado)
+    def regiao(self) -> int:
+        return self._regiao
+
+    @regiao.setter
+    def regiao(self, valor: int) -> None:
+        self._regiao = max(0, min(len(REGIOES) - 1, int(valor)))
+        self.alterado.emit()
+
+    @Property(bool, notify=alterado)
+    def semResultado(self) -> bool:  # noqa: N802
+        return self._sem_resultado
+
+    @Property("QVariantList", notify=alterado)
+    def dispositivos(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": fita.id,
+                "nome": fita.nome,
+                "subtitulo": fita.ip or _("Não encontrado na rede. Verifique se o dispositivo está ligado."),
+                "ativo": bool(fita.ip),
+                "marcado": fita.id in self._marcadas,
+            }
+            for fita in self._encontradas
+        ]
+
+    @Slot()
+    def buscar(self) -> None:
         """Vai à nuvem numa thread; a Secret não sai desta chamada."""
-        chave = self.api_key_row.get_text().strip()
-        segredo = self.api_secret_row.get_text().strip()
-        escolhida = self.regiao_row.get_selected()
-        regiao = REGIOES[escolhida] if escolhida < len(REGIOES) else REGIOES[0]
-        if not chave or not segredo:
+        chave = self._chave.strip()
+        segredo = self._segredo.strip()
+        regiao = REGIOES[self._regiao] if self._regiao < len(REGIOES) else REGIOES[0]
+        if self._fechado or not chave or not segredo:
             return
 
-        self.stack.set_visible_child_name("buscando")
+        self._busca += 1
+        self._pagina = "buscando"
+        self.alterado.emit()
         threading.Thread(
-            target=self._buscar_na_nuvem, args=(chave, segredo, regiao), daemon=True
+            target=_buscar, args=(weakref.ref(self), self._busca, chave, segredo, regiao), daemon=True
         ).start()
 
-    def _buscar_na_nuvem(self, chave: str, segredo: str, regiao: str) -> None:
-        try:
-            # Dentro do try: sem a biblioteca instalada, um ImportError aqui
-            # deixaria a tela presa no "Buscando…" para sempre.
-            import tinytuya  # noqa: PLC0415
-
-            nuvem = tinytuya.Cloud(apiRegion=regiao, apiKey=chave, apiSecret=segredo)
-            resposta = nuvem.getdevices()
-            # A tinytuya devolve lista vazia também quando o token é recusado
-            # (o erro fica em `nuvem.error`), então só a lista não prova que a
-            # credencial funcionou — e uma credencial que não funcionou não
-            # merece ficar salva para a próxima vez.
-            if credencial_valida(nuvem, resposta):
-                tuya_conta.salvar(tuya_conta.Conta(chave, segredo, regiao))
-            encontrados = fitas_da_nuvem(resposta)
-        except Exception as erro:  # a tinytuya levanta de tudo aqui também
-            logging.warning("Busca na nuvem da Tuya falhou: %s", erro)
-            encontrados = []
-        entregar_na_tela(
-            self._mostrar, com_enderecos(encontrados, *enderecos_na_rede())
-        )
-
     def _mostrar(self, encontrados: list[Fita]) -> None:
-        if self._closed:
+        if self._fechado:
             return
 
-        for linha, _fita in self._linhas:
-            self.dispositivos_group.remove(linha)
-        self._linhas = []
-
-        # Busca vazia fica nas credenciais, com o aviso ali. A página dos
-        # dispositivos só tem o botão "Aplicar", e aplicar uma lista vazia
-        # apagaria as fitas já configuradas — num clique, e sem caminho de
-        # volta para corrigir a credencial errada.
+        # Busca vazia fica nas credenciais, com o aviso ali. A página dos dispositivos só tem o botão "Aplicar", e
+        # aplicar uma lista vazia apagaria as fitas já configuradas: num clique, e sem caminho de volta para corrigir
+        # a credencial errada.
         if not encontrados:
-            self.aviso_label.set_visible(True)
-            self.stack.set_visible_child_name("credenciais")
+            self._encontradas, self._marcadas = [], set()
+            self._sem_resultado = True
+            self._pagina = "credenciais"
+            self.alterado.emit()
             return
 
-        self.aviso_label.set_visible(False)
+        self._sem_resultado = False
         ja_configuradas = {fita.id for fita in fitas()}
-        for fita in encontrados:
-            linha = Adw.SwitchRow(
-                title=fita.nome,
-                subtitle=fita.ip or _("Não encontrado na rede. Verifique se o dispositivo está ligado."),
-            )
-            # Sem endereço não há como falar com a fita: marcá-la seria gravar
-            # uma fita que nunca acende.
-            linha.set_sensitive(bool(fita.ip))
-            linha.set_active(bool(fita.ip) and fita.id in ja_configuradas)
-            self.dispositivos_group.add(linha)
-            self._linhas.append((linha, fita))
+        self._encontradas = encontrados
+        # Sem endereço não há como falar com a fita: marcá-la seria gravar uma fita que nunca acende.
+        self._marcadas = {fita.id for fita in encontrados if fita.ip and fita.id in ja_configuradas}
+        self._pagina = "dispositivos"
+        self.alterado.emit()
 
-        self.stack.set_visible_child_name("dispositivos")
+    @Slot(str, bool)
+    def marcar(self, id_: str, marcado: bool) -> None:
+        fita = next((f for f in self._encontradas if f.id == id_), None)
+        if fita is None or not fita.ip:
+            return
+        (self._marcadas.add if marcado else self._marcadas.discard)(id_)
+        self.alterado.emit()
 
-    def salvar(self, *_args: Any) -> None:
-        escolhidas = [fita for linha, fita in self._linhas if linha.get_active()]
-        marcadas = {fita.id for fita in escolhidas}
-        # Quem sai da configuração sai antes de o arquivo mudar: depois da
-        # gravação o app não conhece mais essa fita, não tem como devolvê-la ao
-        # estado de antes, e ela ficaria na cor do Cartridges para sempre.
-        saindo = [fita for fita in fitas() if fita.id not in marcadas]
+    @Slot()
+    def salvar(self) -> None:
+        escolhidas = [fita for fita in self._encontradas if fita.id in self._marcadas]
+        # Quem sai da configuração sai antes de o arquivo mudar: depois da gravação o app não conhece mais essa fita,
+        # não tem como devolvê-la ao estado de antes, e ela ficaria na cor do Cartridges para sempre.
+        saindo = [fita for fita in fitas() if fita.id not in self._marcadas]
         gravar_fitas(escolhidas)
         if saindo:
             # Rede: fora da thread de UI, como todo o resto da conversa.
-            threading.Thread(
-                target=devolver_removidas, args=(saindo,), daemon=True
-            ).start()
-        self.close()
+            threading.Thread(target=devolver_removidas, args=(saindo,), daemon=True).start()
+        self.fechar()
+
+    @Slot()
+    def fechar(self) -> None:
+        if self._fechado:
+            return
+        self._fechado = True
+        self.fechado.emit()
+
+    @Slot()
+    def abrirPainel(self) -> None:  # noqa: N802
+        open_uri.abrir_url(PAINEL_DA_TUYA)

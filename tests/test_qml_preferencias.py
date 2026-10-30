@@ -728,3 +728,115 @@ def test_testar_troca_o_glifo_e_mostra_o_resultado(app, fitas_espiadas, monkeypa
 
 
 # endregion
+
+
+# region O assistente da iluminação inteligente
+
+
+@pytest.fixture(autouse=True)
+def conta_da_tuya(tmp_path, monkeypatch):
+    """A conta salva da Tuya vai para a pasta do teste: o assistente a lê ao abrir."""
+    monkeypatch.setattr(shared, "tuya_conta_arquivo", tmp_path / "tuya_conta.json")
+    monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
+
+
+def _abrir_o_assistente(app):
+    _abrir(app, "session")
+    assert app.achar("linhaConfigurarFitas").property("titulo") == "Configurar a iluminação inteligente"
+    assert app.achar("linhaConfigurarFitas").property("subtitulo") == "Busca os dispositivos na sua conta da Tuya"
+    assert _enabled(app, "linhaConfigurarFitas")
+    botao = app.achar("linhaConfigurarFitasBotao")
+    botao.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QMetaObject.invokeMethod(botao, "click", Qt.ConnectionType.DirectConnection)
+    dialogo = app.achar("dialogoDaConfiguracaoDasFitas")
+    assert _esperar(lambda: dialogo.property("visible") is True)
+    return dialogo, botao
+
+
+def test_configurar_abre_o_assistente_com_a_conta_salva(app):
+    from cartridges.utils import tuya_conta  # noqa: PLC0415
+
+    tuya_conta.salvar(tuya_conta.Conta("chave-salva", "segredo-salvo", "eu"))
+    dialogo, _botao = _abrir_o_assistente(app)
+    textos = _textos(dialogo)
+    for esperado in (
+        "Configurar a iluminação inteligente",
+        "Conta de desenvolvedor da Tuya",
+        "Abrir o painel da Tuya",
+        "Access ID (Client ID)",
+        "Access Secret (Client Secret)",
+        "Região",
+        "Buscar dispositivos",
+    ):
+        assert esperado in textos
+    assert app.achar("campoDoAccessId").property("text") == "chave-salva"
+    assert app.achar("campoDoAccessSecret").property("text") == "segredo-salvo"
+    # O segredo vai mascarado (TextInput.Password = 2).
+    assert _avaliar(app.achar("campoDoAccessSecret"), "echoMode") == 2
+    assert app.achar("regiaoDasFitas").property("currentIndex") == 1
+    assert app.achar("avisoSemResultado").property("visible") is False
+    assert app.preferencias.configuracaoDasFitas.pagina == "credenciais"
+
+
+def test_dispositivos_do_assistente_em_texto_puro(app):
+    """Review Focus 3: o nome do dispositivo vem da conta da Tuya e aparece como está."""
+    dialogo, _botao = _abrir_o_assistente(app)
+    nome = "<b>Sala</b> & Cia"
+    from cartridges.utils.session_fita import Fita  # noqa: PLC0415
+
+    app.preferencias.configuracaoDasFitas._mostrar([Fita(nome, "eb0", "192.0.2.10", "k")])  # noqa: SLF001
+    assert _esperar(lambda: app.achar("dispositivoDasFitas-eb0").property("visible") is True)
+    achados, pilha = [], [dialogo]
+    while pilha:
+        atual = pilha.pop()
+        texto = atual.property("text")
+        if isinstance(texto, str) and texto:
+            achados.append((texto, _avaliar(atual, "textFormat")))
+        pilha.extend(atual.childItems() if isinstance(atual, QQuickItem) else [])
+    assert (nome, 0) in achados  # 0 = Text.PlainText
+    assert ("Selecione os dispositivos", 0) in achados
+    assert ("192.0.2.10", 0) in achados
+    assert "Aplicar" in [t for t, _f in achados]
+
+
+def test_dispositivo_sem_endereco_apagado(app):
+    from cartridges.utils.session_fita import Fita  # noqa: PLC0415
+
+    _abrir_o_assistente(app)
+    app.preferencias.configuracaoDasFitas._mostrar([Fita("Sem IP", "eb1", "", "k"), Fita("Com IP", "eb2", "192.0.2.11", "k")])  # noqa: SLF001
+    assert _esperar(lambda: app.achar("dispositivoDasFitas-eb1").property("visible") is True)
+    assert app.achar("dispositivoDasFitas-eb1").property("enabled") is False
+    assert app.achar("dispositivoDasFitas-eb1").property("subtitulo") == (
+        "Não encontrado na rede. Verifique se o dispositivo está ligado."
+    )
+    assert app.achar("dispositivoDasFitas-eb2").property("enabled") is True
+    assert app.achar("dispositivoDasFitas-eb1Chave").property("checked") is False
+    # Marcar pela tela chega ao modelo.
+    QMetaObject.invokeMethod(app.achar("dispositivoDasFitas-eb2Chave"), "click", Qt.ConnectionType.DirectConnection)
+    marcado = {d["id"]: d["marcado"] for d in app.preferencias.configuracaoDasFitas.dispositivos}
+    assert marcado == {"eb1": False, "eb2": True}
+
+
+def test_aviso_de_busca_sem_resultado(app):
+    dialogo, _botao = _abrir_o_assistente(app)
+    app.preferencias.configuracaoDasFitas._mostrar([])  # noqa: SLF001
+    assert _esperar(lambda: app.achar("avisoSemResultado").property("visible") is True)
+    assert app.achar("avisoSemResultado").property("text") == "Nenhum dispositivo encontrado. Confira as credenciais e a região."
+    assert "Buscar dispositivos" in _textos(dialogo)
+
+
+def test_esc_fecha_o_assistente_e_volta_as_preferencias(app, flush_idle):
+    dialogo, botao = _abrir_o_assistente(app)
+    # O foco começa no primeiro campo.
+    assert _esperar(lambda: app.achar("campoDoAccessId").property("activeFocus") is True)
+    # O cartão das Preferências fica apagado por trás.
+    assert app.achar("cartaoDasPreferencias").property("enabled") is False
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: dialogo.property("visible") is False)
+    assert app.preferencias.configuracaoDasFitas is None
+    assert app.preferencias.aberto is True
+    assert app.achar("cartaoDasPreferencias").property("enabled") is True
+    assert _esperar(lambda: botao.hasActiveFocus())
+
+
+# endregion

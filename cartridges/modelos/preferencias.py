@@ -24,6 +24,7 @@ from PySide6.QtGui import QColor
 
 from cartridges import metadata_refresh, shared
 from cartridges.errors.friendly_error import FriendlyError
+from cartridges.fita_wizard import FitaWizard
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.utils import open_uri, session_fita, window_geometry
 from cartridges.utils.thread_principal import na_thread_principal
@@ -458,6 +459,7 @@ class Preferencias(QObject):
         self._biblioteca = AtualizacoesDaBiblioteca(avisos, self)
         self._fitas = FitasDasPreferencias(self)
         self._brilho: BrilhoPorDispositivo | None = None
+        self._config: FitaWizard | None = None
 
     @Property(QObject, constant=True)
     def biblioteca(self) -> QObject:
@@ -483,6 +485,32 @@ class Preferencias(QObject):
         brilho, self._brilho = self._brilho, None
         if brilho is not None:
             brilho.deleteLater()  # filho daqui: o QML ainda pode estar no clique que o fechou
+        self.alterado.emit()
+
+    @Property(QObject, notify=alterado)
+    def configuracaoDasFitas(self) -> QObject | None:  # noqa: N802
+        return self._config
+
+    @Slot()
+    def abrirConfiguracaoDasFitas(self) -> None:  # noqa: N802
+        if self._config is not None:
+            return
+        self._config = FitaWizard(self)
+        self._config.fechado.connect(self._config_fechou)
+        self.alterado.emit()
+
+    def _config_fechou(self) -> None:
+        """O assistente fechou: refaz a contagem e arranca, se houver o que arrancar.
+
+        Quem tinha o recurso ligado e acabou de configurar a primeira fita nunca teve o estado de antes guardado, e
+        sem este arranque o fechamento do app não teria o que devolver.
+        """
+        config, self._config = self._config, None
+        if config is not None:
+            config.deleteLater()  # filho daqui: o QML ainda pode estar no clique que o fechou
+        self._fitas.reler()
+        if session_fita.ligada():
+            session_fita.reacender()
         self.alterado.emit()
 
     @Property(bool, notify=alterado)
@@ -524,6 +552,9 @@ class Preferencias(QObject):
         self._biblioteca.seguir(False)
         if self._brilho is not None:
             self._brilho.cancelar()
+        # Antes do `fitas.fechar()`: o fechamento do assistente relê as fitas.
+        if self._config is not None:
+            self._config.fechar()
         self._fitas.fechar()
         if self._ligacao is not None:
             shared.schema.disconnect(self._ligacao)

@@ -25,7 +25,7 @@ from cartridges import shared
 from cartridges.modelos import preferencias as preferencias_mod
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.utils import session_fita
-from tests.apoio_fita import pastas, sem_fade, sem_vigia  # noqa: F401
+from tests.apoio_fita import falsas, pastas, sem_fade, sem_vigia  # noqa: F401
 from tests.test_qml_biblioteca import _App, _esperar, _jogos
 from tests.test_qml_preferencias import _avaliar
 
@@ -435,12 +435,13 @@ def test_interruptor_da_tela_segue_o_da_iluminacao(app):
 
 
 def test_m14_sem_contar_horas_as_fitas_seguem_configuraveis(app):
-    # A metade do papel de parede está em test_qml_preferencias.py; "Configurar" entra com a Task 6.
+    # A metade do papel de parede está em test_qml_preferencias.py.
     _com_fitas()
     shared.schema.set_boolean("playtime-tracking", False)
     _abrir(app)
     assert _enabled(app, "grupoIluminacao")
     assert _enabled(app, "interruptor-session-fita")
+    assert _enabled(app, "linhaConfigurarFitas")
     assert not _enabled(app, "grupoPapelDeParede")
 
 
@@ -538,3 +539,175 @@ def test_brilho_por_dispositivo_foco_no_salvar_tab_e_esc(app, flush_idle):
     assert _esperar(lambda: dialogo.property("visible") is False)
     assert app.preferencias.brilhoPorDispositivo is None
     assert _esperar(lambda: botao.hasActiveFocus())
+
+
+# region O assistente da iluminação inteligente
+
+
+@pytest.fixture(autouse=True)
+def conta_da_tuya(tmp_path, monkeypatch):
+    """A conta salva da Tuya vai para a pasta do teste: o assistente a lê ao abrir."""
+    monkeypatch.setattr(shared, "tuya_conta_arquivo", tmp_path / "tuya_conta.json")
+
+
+ANTES = {"ligada": False, "cor": "000003e800b4"}
+
+
+def test_fechar_o_assistente_com_fita_nova_arranca_o_ciclo(p, monkeypatch, schema):  # noqa: ARG001
+    """Configurar a primeira fita com o recurso já ligado também arranca."""
+    shared.schema.set_boolean("session-fita", True)
+    chamadas = []
+    monkeypatch.setattr(session_fita, "reacender", lambda: chamadas.append("reacender"))
+
+    p.abrirConfiguracaoDasFitas()
+    assert p.configuracaoDasFitas is not None
+    # Sem fita, `ligada()` é falso (e a releitura desliga a chave): não há o que arrancar.
+    p.configuracaoDasFitas.fechar()
+    assert chamadas == []
+    assert p.configuracaoDasFitas is None
+
+    p.abrirConfiguracaoDasFitas()
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
+    shared.schema.set_boolean("session-fita", True)
+    p.configuracaoDasFitas.fechar()
+
+    assert chamadas == ["reacender"]
+    assert p.fitas.configuradas == 1
+
+
+def test_a3_reacender_das_preferencias_nao_devolve_nem_perde_fita(p, falsas, monkeypatch, schema):  # noqa: ARG001
+    """Fechar o assistente com o app aberto não é arranque: sem piscar no estado de antes, e a fita que não
+    responde à releitura segue na chave."""
+    from tests.apoio_fita import estado_mandado  # noqa: PLC0415
+
+    shared.schema.set_boolean("session-fita", True)
+    modulos = falsas(False, False)
+    session_fita._guardar_e_vestir()  # noqa: SLF001
+    guardado = shared.schema.get_string(session_fita.CHAVE_ESTADO)
+    antes = [len(modulo.recebidos) for modulo in modulos.values()]
+
+    modulos["eb1"].quebrada = True
+    monkeypatch.setattr(session_fita, "_em_thread", lambda tarefa: tarefa())
+    p.abrirConfiguracaoDasFitas()
+    p.configuracaoDasFitas.fechar()
+
+    assert shared.schema.get_string(session_fita.CHAVE_ESTADO) == guardado
+    novos = modulos["eb0"].recebidos[antes[0] :]
+    assert ANTES["cor"] not in [c.get("24") for c in novos]
+    assert estado_mandado(modulos["eb0"]) is True
+
+
+def test_b4_versao_da_varredura_e_resposta_da_consulta_nova(monkeypatch, schema):  # noqa: ARG001
+    from cartridges.fita_wizard import com_enderecos  # noqa: PLC0415
+    from tests.apoio_fita import FitaFalsa, Msg  # noqa: PLC0415
+
+    achados = {"192.168.0.150": {"gwId": "eb0", "version": "3.4"}}
+    (fita,) = com_enderecos(
+        [session_fita.Fita("Centro", "eb0", "", "k")],
+        session_fita.ips_da_varredura(achados),
+        session_fita.versoes_da_varredura(achados),
+    )
+    assert fita.versao == "3.4"
+
+    class Fita34(FitaFalsa):
+        def status(self, nowait=False):  # noqa: ARG002
+            self.socket.a_caminho.append(Msg(16, {"dps": dict(self.dps)}))
+
+    session_fita.gravar_fitas([fita._replace(ip="192.168.0.150")])
+    monkeypatch.setattr(session_fita, "_dispositivo", lambda _fita: Fita34())
+    assert session_fita.ler_estado(session_fita.fitas()[0]) == ANTES
+
+
+def test_conftest_bloqueia_a_tuya():
+    from cartridges import fita_wizard  # noqa: PLC0415
+
+    mensagem = "tuya: nenhuma busca na nuvem nem na rede nos testes"
+    with pytest.raises(AssertionError, match=mensagem):
+        fita_wizard._nuvem("us", "chave", "segredo")  # noqa: SLF001
+    with pytest.raises(AssertionError, match=mensagem):
+        session_fita.enderecos_na_rede()
+
+
+def _thread_presa(monkeypatch):
+    """A thread da busca capturada: o teste a roda quando quiser."""
+    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
+
+    tarefas = []
+    monkeypatch.setattr(
+        wizard_module,
+        "threading",
+        SimpleNamespace(
+            Thread=lambda target, args=(), daemon=False: SimpleNamespace(  # noqa: ARG005
+                start=lambda: tarefas.append(lambda: target(*args))
+            )
+        ),
+    )
+    return tarefas
+
+
+def test_resultado_da_busca_depois_de_fechar_e_descartado(p, monkeypatch, flush_idle):
+    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
+
+    tarefas = _thread_presa(monkeypatch)
+    monkeypatch.setattr(
+        wizard_module,
+        "_nuvem",
+        lambda *_a: SimpleNamespace(
+            getdevices=lambda: [{"name": "Sala", "id": "eb9", "key": "k", "ip": "1.2.3.4"}], token="t", error=None
+        ),
+    )
+    monkeypatch.setattr(session_fita, "enderecos_na_rede", lambda: ({}, {}))
+    mostradas = []
+    monkeypatch.setattr(wizard_module.FitaWizard, "_mostrar", lambda _eu, achadas: mostradas.append(achadas))
+    p.abrirConfiguracaoDasFitas()
+    assistente = p.configuracaoDasFitas
+    assistente.chave, assistente.segredo = "c", "s"
+    assistente.buscar()
+    assert assistente.pagina == "buscando"
+    assert len(tarefas) == 1
+
+    assistente.fechar()
+    assert p.configuracaoDasFitas is None
+    tarefas[0]()
+    flush_idle()
+    # O assistente fechado não recebeu o resultado, e nenhuma fita foi gravada.
+    assert mostradas == []
+    assert session_fita.fitas() == []
+
+
+def test_segredo_nunca_vai_ao_log(p, monkeypatch, caplog, flush_idle):
+    import logging  # noqa: PLC0415
+
+    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
+
+    def nuvem(_regiao, chave, segredo):
+        raise RuntimeError(f"401 em https://api/?id={chave}&secret={segredo}")
+
+    monkeypatch.setattr(wizard_module, "_nuvem", nuvem)
+    monkeypatch.setattr(session_fita, "enderecos_na_rede", lambda: ({}, {}))
+    monkeypatch.setattr(
+        wizard_module,
+        "threading",
+        SimpleNamespace(Thread=lambda target, args=(), daemon=False: SimpleNamespace(start=lambda: target(*args))),  # noqa: ARG005
+    )
+    p.abrirConfiguracaoDasFitas()
+    assistente = p.configuracaoDasFitas
+    assistente.chave, assistente.segredo = "id-publico", "SEGREDO-DA-CONTA"
+    with caplog.at_level(logging.DEBUG):
+        assistente.buscar()
+        flush_idle()
+    assert "SEGREDO-DA-CONTA" not in caplog.text
+    assert any("Busca na nuvem da Tuya falhou" in r.getMessage() for r in caplog.records)
+    assert assistente.semResultado is True
+
+
+def test_fechar_as_preferencias_fecha_o_assistente(p, monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(session_fita, "reacender", lambda: chamadas.append(1))
+    p.abrirConfiguracaoDasFitas()
+    assert p.configuracaoDasFitas is not None
+    p.fechar()
+    assert p.configuracaoDasFitas is None
+
+
+# endregion

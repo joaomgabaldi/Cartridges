@@ -60,6 +60,10 @@ os.environ["CARTRIDGES_DADOS"] = _DADOS_DA_SESSAO
 os.environ["CARTRIDGES_REGISTRO"] = _REGISTRO_DA_SESSAO
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "varredura_real: o teste prova a `enderecos_na_rede` de verdade (com a tinytuya falsa)")
+
+
 def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
     _apagar_chave(winreg.HKEY_CURRENT_USER, _REGISTRO_DA_SESSAO)
     shutil.rmtree(_DADOS_DA_SESSAO, ignore_errors=True)
@@ -87,7 +91,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_conquistas_backup.py",  # plano 8 (D56): importa utils/backup (GTK)
     "test_conquistas_preferencias.py",  # as contas já têm o seu arquivo (test_grupo_das_contas_qt.py); o resto, no plano 7
     "test_estilo_css.py",
-    "test_fita_wizard.py",
     "test_hwnd_ordem_import.py",
     "test_janela_restaurando.py",
     "test_ler_json.py",
@@ -851,6 +854,24 @@ def sem_fita_de_verdade(monkeypatch):
         raise AssertionError("o teste tentou falar com uma fita de verdade (tinytuya)")
 
     monkeypatch.setattr(session_fita, "_dispositivo", proibido)
+
+
+@pytest.fixture(autouse=True)
+def sem_tuya_de_verdade(request, monkeypatch):
+    """Nenhum teste fala com a nuvem da Tuya nem varre a rede atrás de fitas: as duas portas falham alto.
+
+    Quem prova o assistente troca `fita_wizard._nuvem` e `session_fita.enderecos_na_rede` por falsos. Os que provam a
+    própria `enderecos_na_rede` (com a `tinytuya` falsa em `sys.modules`) levam a marca `varredura_real`.
+    """
+    from cartridges import fita_wizard  # noqa: PLC0415
+    from cartridges.utils import session_fita  # noqa: PLC0415
+
+    def proibido(*_args, **_kwargs):
+        raise AssertionError("tuya: nenhuma busca na nuvem nem na rede nos testes")
+
+    monkeypatch.setattr(fita_wizard, "_nuvem", proibido)
+    if request.node.get_closest_marker("varredura_real") is None:
+        monkeypatch.setattr(session_fita, "enderecos_na_rede", proibido)
 
 
 @pytest.fixture(autouse=True)
