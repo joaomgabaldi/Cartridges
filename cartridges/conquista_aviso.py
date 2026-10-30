@@ -3,7 +3,7 @@
 Ícone, rótulo ("Conquista desbloqueada", ou "Todas as conquistas
 desbloqueadas" na que fecha 100%, com "★ Rara" quando for o caso), título e
 descrição. Fica 5 s na tela; várias de uma vez entram em fila e aparecem uma
-depois da outra. A janela nunca pega o foco (`utils/janela_por_cima.py`).
+depois da outra. A janela (`janela_do_aviso.py`) nunca pega o foco.
 Só o primeiro cartão de uma fila toca o som, se "Tocar som com o aviso"
 estiver ligado; os seguintes entram em silêncio.
 """
@@ -18,19 +18,34 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from gi.repository import Adw, Gio, GLib, Gtk
+from pathlib import Path
+
+from PySide6.QtCore import QTimer
 
 from cartridges import shared
-from cartridges.conquistas import icones, progresso
-from cartridges.utils import janela_por_cima
+from cartridges.conquistas import progresso
+from cartridges.utils.thread_principal import na_thread_principal
 
 DURACAO = 5
 _ENTRADA_MS = 250
 _LIMITE_DA_SAIDA = 1  # segundos até a saída ser dada por terminada, com ou sem animação
 
 
-def _agendar(segundos: int, funcao: Callable[[], Any]) -> int:
-    return GLib.timeout_add_seconds(segundos, funcao)
+# `data/` fica ao lado do pacote `cartridges` (como o tique do Big Picture).
+_ARQUIVO_DO_SOM = Path(__file__).resolve().parent.parent / "data" / "sons" / "conquista.wav"
+_dados_do_som: Optional[bytes] = None
+
+
+def _agendar(segundos: int, funcao: Callable[[], Any]) -> None:
+    QTimer.singleShot(segundos * 1000, funcao)
+
+
+def _som() -> bytes:
+    """O WAV do aviso, lido uma vez; levanta se o arquivo faltar."""
+    global _dados_do_som  # pylint: disable=global-statement
+    if _dados_do_som is None:
+        _dados_do_som = _ARQUIVO_DO_SOM.read_bytes()
+    return _dados_do_som
 
 
 def _em_segundo_plano(funcao: Callable[..., Any], *args: Any) -> None:
@@ -43,10 +58,7 @@ def _tocar_som() -> None:
         if not shared.schema.get_boolean("conquistas-aviso-som"):
             return
         volume = shared.schema.get_int("conquistas-aviso-som-volume")
-        dados = Gio.resources_lookup_data(
-            shared.PREFIX + "/sons/conquista.wav", Gio.ResourceLookupFlags.NONE
-        ).get_data()
-        _em_segundo_plano(_reproduzir, dados, volume)
+        _em_segundo_plano(_reproduzir, _som(), volume)
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning("Não foi possível tocar o som do aviso de conquista", exc_info=True)
 
@@ -136,104 +148,15 @@ class Aviso:
         )
 
 
-def montar_cartao(aviso: Aviso, icone_recurso: str = "") -> tuple[Gtk.Box, Gtk.Image]:
-    """O cartão do aviso: ícone, rótulo, título e descrição.
+def _criar_janela(aviso: Aviso) -> Any:
+    """A janela do aviso (Task 4): `titulo`, `entrar(canto)`, `sair(ao_terminar)` e `fechar()`."""
+    from cartridges.janela_do_aviso import JanelaDoAviso  # noqa: PLC0415
 
-    Serve à janela do aviso e ao assistente, que mostra o mesmo cartão. O
-    ícone do ``aviso`` chega depois (``icones.carregar``, a cargo de quem
-    chama, que recebe a imagem); ``icone_recurso`` é um ícone já embutido no
-    app, usado no lugar dele. Sem nenhum dos dois, uma estrela.
-    """
-    cartao = Gtk.Box(spacing=12, css_classes=["conquista-aviso-cartao"])
-    imagem = Gtk.Image(
-        pixel_size=48, css_classes=["conquistas-icone"], overflow=Gtk.Overflow.HIDDEN
-    )
-    if icone_recurso:
-        imagem.set_from_resource(icone_recurso)
-    elif not aviso.icone:
-        imagem.set_from_icon_name("starred-symbolic")
-    cartao.append(imagem)
-
-    textos = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, valign=Gtk.Align.CENTER)
-    for texto, classes in (
-        (aviso.rotulo, ["caption", "conquista-aviso-rotulo"]),
-        (aviso.titulo, ["heading"]),
-        (aviso.descricao, ["caption", "dim-label"]),
-    ):
-        if texto:
-            rotulo = Gtk.Label(
-                label=texto,
-                xalign=0,
-                wrap=True,
-                max_width_chars=36,
-                use_markup=False,
-                css_classes=classes,
-            )
-            textos.append(rotulo)
-    cartao.append(textos)
-    return cartao, imagem
-
-
-class _JanelaDoAviso(Gtk.Window):
-    def __init__(self, aviso: Aviso) -> None:
-        super().__init__(decorated=False, resizable=False, title="Cartridges — aviso")
-        self.add_css_class("conquista-aviso")
-        if not janela_por_cima.FUNDO_TRANSPARENTE:
-            self.add_css_class("conquista-aviso-opaco")
-        self.titulo = aviso.titulo
-        self._destruida = False
-        self._animacao: Optional[Adw.TimedAnimation] = None
-
-        cartao, self._imagem = montar_cartao(aviso)
-        if aviso.icone:
-            icones.carregar(aviso.icone, self._icone_chegou)
-        self.cartao = cartao
-        self.set_child(cartao)
-
-    def _icone_chegou(self, textura: Any) -> None:
-        """O ícone chega depois, na thread principal; a janela pode já ter fechado."""
-        if not self._destruida:
-            self._imagem.set_from_paintable(textura)
-
-    def entrar(self, canto: str) -> None:
-        self.realize()
-        if not janela_por_cima.preparar(self):
-            # Sem os estilos o cartão ativaria e tiraria o jogo da tela cheia:
-            # quem chama descarta a janela, que nunca chegou a ser mostrada.
-            raise RuntimeError("a janela do aviso não pôde ser preparada")
-        self.cartao.set_opacity(0)
-        janela_por_cima.mostrar_sem_tomar_o_foco(self)
-        janela_por_cima.por_no_canto(self, canto)
-        self._animar(0, 1)
-
-    def sair(self, ao_terminar: Callable[[], None]) -> None:
-        """Some com o cartão (opacidade 1 → 0) e chama ``ao_terminar`` no fim."""
-        if not self._destruida:
-            self._animar(1, 0, ao_terminar)
-
-    def _animar(
-        self, de: float, para: float, ao_terminar: Optional[Callable[[], None]] = None
-    ) -> None:
-        animacao = Adw.TimedAnimation(
-            widget=self.cartao,
-            value_from=de,
-            value_to=para,
-            duration=_ENTRADA_MS,
-            target=Adw.PropertyAnimationTarget.new(self.cartao, "opacity"),
-        )
-        if ao_terminar is not None:
-            animacao.connect("done", lambda _a: None if self._destruida else ao_terminar())
-        self._animacao = animacao
-        animacao.play()
-
-    def fechar(self) -> None:
-        self._destruida = True
-        self._animacao = None
-        self.destroy()
+    return JanelaDoAviso(aviso)
 
 
 _fila: deque[Aviso] = deque()
-_atual: Optional[_JanelaDoAviso] = None
+_atual: Optional[Any] = None
 _vez = 0  # muda a cada aviso: o temporizador de um aviso já fechado não fecha o seguinte
 
 
@@ -257,9 +180,9 @@ def _proximo(com_som: bool = True) -> bool:
     aviso = _fila.popleft()
     _vez += 1
     vez = _vez
-    janela: Optional[_JanelaDoAviso] = None
+    janela: Optional[Any] = None
     try:
-        janela = _JanelaDoAviso(aviso)
+        janela = _criar_janela(aviso)
         janela.entrar(shared.schema.get_string("conquistas-aviso-posicao"))
         _atual = janela
         if com_som:
@@ -272,11 +195,11 @@ def _proximo(com_som: bool = True) -> bool:
         if _fila:
             # Fora desta chamada, para uma falha repetida não empilhar recursão.
             # Quem falhou não tocou nada: o seguinte herda a vez do som.
-            GLib.idle_add(_proximo, com_som)
+            na_thread_principal(_proximo, com_som)
     return False
 
 
-def _destruir(janela: Optional[_JanelaDoAviso]) -> None:
+def _destruir(janela: Optional[Any]) -> None:
     if janela is None:
         return
     try:
@@ -303,12 +226,12 @@ def _esconder(vez: int) -> bool:
     return False
 
 
-def _forcar_saida(vez: int, janela: _JanelaDoAviso) -> bool:
+def _forcar_saida(vez: int, janela: Any) -> bool:
     _saiu(vez, janela)
     return False
 
 
-def _saiu(vez: int, janela: _JanelaDoAviso) -> None:
+def _saiu(vez: int, janela: Any) -> None:
     """A saída terminou: a janela se vai e o próximo aviso entra."""
     global _atual  # pylint: disable=global-statement
     try:

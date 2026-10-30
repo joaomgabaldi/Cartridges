@@ -43,14 +43,13 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-from gi.repository import Adw, GLib
-
 from cartridges import shared
 from cartridges.conquistas import arquivos, catalogo, contas, fontes, formatos, historico, sessao
 from cartridges.conquistas.fontes import Fonte
 from cartridges.conquistas.ubisoft import locais as ubisoft_locais, pacote as ubisoft_pacote, spool as ubisoft_spool
 from cartridges.conquistas.vigia import MARGEM_DA_STEAM
 from cartridges.modelos import tarefas
+from cartridges.utils.thread_principal import na_thread_principal
 from cartridges.utils.passada_agendada import PassadaAgendada
 
 _ULTIMA_VARREDURA = "conquistas-ultima-varredura"
@@ -219,9 +218,8 @@ def mensagem(novas_por_jogo: list[tuple[str, int]]) -> Optional[str]:
 
 
 def _aviso(texto: str) -> None:
-    toast = Adw.Toast.new(texto)
-    toast.set_use_markup(False)
-    shared.win.toast_queue.add(toast)
+    if shared.aplicativo is not None:
+        shared.aplicativo.avisos.adicionar(texto)
 
 
 class VarreduraConquistas(PassadaAgendada):
@@ -292,15 +290,15 @@ class VarreduraConquistas(PassadaAgendada):
                 games = _filtrar(games, filtro)
             if avisar:
                 inicio = int(time.time())
-                # Na fila antes de qualquer `_entregar` desta passada: o
-                # GLib serve os callbacks ociosos na ordem em que entraram.
-                GLib.idle_add(self._comecar_aviso)
+                # Na fila antes de qualquer `_entregar` desta passada: a fila
+                # serve as chamadas na ordem em que entraram.
+                na_thread_principal(self._comecar_aviso)
                 tarefa = tarefas.comecar(_("Conquistas"), 2 * len(games))
             lidas: dict[str, tuple[Optional[Fonte], str]] = {}
             leu_tudo = self._passada_dos_arquivos(games, geracao, avisar, tarefa, lidas)
             if avisar:
                 concluiu = True
-                GLib.idle_add(self._concluir, inicio if leu_tudo else None)
+                na_thread_principal(self._concluir, inicio if leu_tudo else None)
             self._passada_da_rede(games, geracao, avisar, tarefa, lidas)
         finally:
             if tarefa is not None:
@@ -308,9 +306,9 @@ class VarreduraConquistas(PassadaAgendada):
             if avisar:
                 self._liberar()
                 if not concluiu:
-                    GLib.idle_add(self._concluir)
-                # Depois de todo `_entregar_da_conta` desta passada (ordem do GLib).
-                GLib.idle_add(self._concluir_da_conta)
+                    na_thread_principal(self._concluir)
+                # Depois de todo `_entregar_da_conta` desta passada (ordem da fila).
+                na_thread_principal(self._concluir_da_conta)
 
     def _passada_dos_arquivos(
         self,
@@ -336,7 +334,7 @@ class VarreduraConquistas(PassadaAgendada):
                 continue
             leitura.avisar = avisar
             lidas[game.game_id] = (leitura.fonte, leitura.executavel)
-            GLib.idle_add(self._entregar, leitura)
+            na_thread_principal(self._entregar, leitura)
         return True
 
     def _passada_da_rede(
@@ -379,7 +377,7 @@ class VarreduraConquistas(PassadaAgendada):
                 usar_chave = False
                 logging.info("Chave da Steam recusada; os demais jogos seguem sem ela")
             catalogacao.avisar = avisar
-            GLib.idle_add(self._entregar_catalogo, catalogacao)
+            na_thread_principal(self._entregar_catalogo, catalogacao)
 
     def _ler_da_conta(self, game: Any, fonte: Fonte, executavel: str, rede: bool, avisar: bool) -> bool:
         """Lê a conta da loja de um jogo. Devolve se a rede segue valendo."""
@@ -395,13 +393,13 @@ class VarreduraConquistas(PassadaAgendada):
             return False
         if leitura is not None:
             leitura.avisar = avisar
-            GLib.idle_add(self._entregar_da_conta, leitura)
+            na_thread_principal(self._entregar_da_conta, leitura)
         return rede
 
     # -- na thread principal --------------------------------------------------
 
     def _comecar_aviso(self) -> bool:
-        # Callback ocioso do GLib: nada pode escapar daqui.
+        # Chamada da fila: nada pode escapar daqui.
         try:
             self._desde = int(shared.state_schema.get_int64(_ULTIMA_VARREDURA))
         except Exception:  # pylint: disable=broad-exception-caught
@@ -427,7 +425,7 @@ class VarreduraConquistas(PassadaAgendada):
         return sum(1 for nome in entraram if not 0 < horas.get(nome, 0) < limite)
 
     def _entregar(self, leitura: Leitura) -> bool:
-        # Roda como callback ocioso do GLib: nada pode escapar daqui.
+        # Roda como chamada da fila: nada pode escapar daqui.
         try:
             if not self._stopped:
                 novas = self._gravar(leitura)
@@ -438,15 +436,13 @@ class VarreduraConquistas(PassadaAgendada):
         return False
 
     def _entregar_catalogo(self, catalogacao: Catalogacao) -> bool:
-        # Também callback ocioso do GLib: nada pode escapar daqui.
+        # Também chamada da fila: nada pode escapar daqui.
         try:
             if self._stopped:
                 return False
             game = catalogacao.game
-            if catalogacao.mudou and getattr(shared.win, "active_game", None) is game:
-                atualizar = getattr(shared.win, "update_conquistas_block", None)
-                if atualizar is not None:
-                    atualizar(game)
+            if catalogacao.mudou and shared.conquistas is not None:
+                shared.conquistas.mudou(game.game_id)
             if catalogacao.avisar and catalogacao.chave_recusada and not self._avisou_chave:
                 self._avisou_chave = True
                 _aviso(_("A chave da Steam Web API foi recusada. Verifique-a nas Preferências."))
@@ -518,13 +514,11 @@ class VarreduraConquistas(PassadaAgendada):
         return self._contam(entraram, leitura.desbloqueios, hora_confiavel=True)
 
     def _atualizar_pagina(self, game: Any, mudou: bool) -> None:
-        if mudou and getattr(shared.win, "active_game", None) is game:
-            atualizar = getattr(shared.win, "update_conquistas_block", None)
-            if atualizar is not None:
-                atualizar(game)
+        if mudou and shared.conquistas is not None:
+            shared.conquistas.mudou(game.game_id)
 
     def _entregar_da_conta(self, leitura: LeituraDaConta) -> bool:
-        # Também callback ocioso do GLib: nada pode escapar daqui.
+        # Também chamada da fila: nada pode escapar daqui.
         try:
             game = leitura.game
             if (
@@ -565,7 +559,7 @@ class VarreduraConquistas(PassadaAgendada):
         return False
 
     def _concluir_da_conta(self) -> bool:
-        """Callback ocioso do GLib: não levanta, e a lista sempre zera."""
+        """Chamada da fila: não levanta, e a lista sempre zera."""
         try:
             if not self._stopped and (texto := mensagem(self._novas_da_conta)):
                 _aviso(texto)
@@ -576,7 +570,7 @@ class VarreduraConquistas(PassadaAgendada):
         return False
 
     def _concluir(self, inicio: Optional[int] = None) -> bool:
-        """Também callback ocioso do GLib: não levanta, e a lista sempre zera.
+        """Também chamada da fila: não levanta, e a lista sempre zera.
 
         ``inicio``: quando começou esta passada, se ela leu os arquivos de todos
         os jogos; vira a "varredura anterior" da próxima abertura.

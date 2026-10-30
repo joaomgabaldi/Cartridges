@@ -6,7 +6,7 @@ vigia só existe enquanto a sessão de um jogo aberto pelo Cartridges está
 aberta, e o que já estava nos arquivos quando a sessão começou entra no
 histórico em silêncio — é a base, não novidade.
 
-Roda na thread principal (`GLib.timeout_add_seconds`), como manda o histórico:
+Roda na thread principal (`QTimer`), como manda o histórico:
 cada olhada é um punhado de `stat`, e a releitura é de arquivos pequenos. Um
 arquivo pode aparecer no meio da partida (a primeira conquista de um jogo
 novo), então a lista de arquivos é refeita a cada `REBUSCA` olhadas.
@@ -28,7 +28,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from gi.repository import GLib
+from PySide6.QtCore import QTimer
 
 from cartridges.conquistas import arquivos, catalogo, formatos, fontes, historico, progresso
 from cartridges.conquistas.arquivos import ArquivoDeConquista
@@ -115,6 +115,15 @@ def _mtime(caminho: Any) -> Optional[int]:
         return None
 
 
+def _repetir(segundos: int, funcao: Callable[[], Any]) -> QTimer:
+    """Um QTimer sem pai que chama ``funcao`` a cada ``segundos``, já iniciado (ponto que os testes trocam)."""
+    timer = QTimer()
+    timer.setInterval(segundos * 1000)
+    timer.timeout.connect(funcao)
+    timer.start()
+    return timer
+
+
 class Vigia:
     def __init__(
         self,
@@ -138,15 +147,15 @@ class Vigia:
         # Falhas seguidas por arquivo (leitura ou gravação). Passando de
         # `TENTATIVAS`, o arquivo só é tentado de novo a cada rebusca.
         self._falhas: dict[str, int] = {}
-        self._fonte = 0
+        self._fonte: Optional[QTimer] = None
         self._olhadas = 0
 
     @property
     def ativo(self) -> bool:
-        return bool(self._fonte)
+        return self._fonte is not None
 
     def iniciar(self) -> None:
-        if self._fonte or not self._acompanha():
+        if self._fonte is not None or not self._acompanha():
             return
         self._inicio = self._relogio()
         try:
@@ -162,12 +171,12 @@ class Vigia:
             self._pendentes.update(
                 str(a.caminho) for a in self._arquivos if str(a.caminho) not in self._mtimes
             )
-        self._fonte = GLib.timeout_add_seconds(INTERVALO, self._olhar)
+        self._fonte = _repetir(INTERVALO, self._olhar)
 
     def parar(self) -> None:
-        if self._fonte:
-            GLib.source_remove(self._fonte)
-            self._fonte = 0
+        if self._fonte is not None:
+            self._fonte.stop()
+            self._fonte = None
 
     # -- o que cada tipo de fonte troca (o vigia da Ubisoft é uma subclasse) ----------
 
@@ -263,7 +272,7 @@ class Vigia:
             self._mtimes[chave] = atual
 
     def _olhar(self) -> bool:
-        """Um tique. Sempre devolve True: o timer só para em `parar`."""
+        """Um tique. O timer só para em `parar`."""
         try:
             self._olhadas += 1
             rebusca = self._olhadas % REBUSCA == 0

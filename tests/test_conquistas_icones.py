@@ -264,6 +264,12 @@ def test_modulos_sem_gi():
         "cartridges.conquistas.epic.conta",
         "cartridges.conquistas.xbox.conta",
         "cartridges.conquistas.xbox.login",
+        "cartridges.conquistas.vigia",
+        "cartridges.conquistas.vigia_da_conta",
+        "cartridges.conquistas.ubisoft.vigia",
+        "cartridges.conquistas.varredura",
+        "cartridges.conquistas.sessao",
+        "cartridges.conquista_aviso",
     ]
     codigo = "import builtins, sys\nbuiltins._ = lambda m: m\n"
     codigo += "".join(f"import {m}\n" for m in modulos) + "assert 'gi' not in sys.modules\n"

@@ -135,16 +135,7 @@ def _avisar(desbloqueadas: list[Desbloqueada]) -> None:
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning("Falha ao pulsar a iluminação pela conquista", exc_info=True)
     try:
-        if game is not None and getattr(shared.win, "active_game", None) is game:
-            atualizar = getattr(shared.win, "update_conquistas_block", None)
-            if atualizar is not None:
-                atualizar(game)
+        if game is not None and shared.conquistas is not None:
+            shared.conquistas.mudou(game.game_id)
     except Exception:  # pylint: disable=broad-exception-caught
-        logging.warning("Falha ao atualizar a página de conquistas", exc_info=True)
-    try:
-        if game is not None and getattr(shared.win, "session_game", None) is game:
-            atualizar_sessao = getattr(shared.win, "update_conquistas_sessao", None)
-            if atualizar_sessao is not None:
-                atualizar_sessao(game)
-    except Exception:  # pylint: disable=broad-exception-caught
-        logging.warning("Falha ao atualizar as conquistas da tela de sessão", exc_info=True)
+        logging.warning("Falha ao atualizar as telas de conquistas", exc_info=True)
