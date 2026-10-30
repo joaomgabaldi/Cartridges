@@ -17,7 +17,7 @@ from cartridges.utils import session_fita
 from tests.apoio_edicao import jogo
 from tests.apoio_fita import pastas  # noqa: F401  # a pasta descartável das fitas (autouse)
 from tests.test_qml_biblioteca import _achar, _App, _esperar
-from tests.test_qml_detalhes import _abrir_pelo_cartao, _cartoes
+from tests.test_qml_detalhes import _abrir_pelo_cartao, _cartoes, _foco_dentro_de
 
 
 @pytest.fixture(autouse=True)
@@ -50,6 +50,16 @@ def _rotulos(menu):
 
 def _clique(app, nome):
     QMetaObject.invokeMethod(app.achar(nome), "click", Qt.ConnectionType.DirectConnection)
+
+
+def test_fechar_as_preferencias_com_o_editor_aberto_devolve_o_foco_ao_editor(app):
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: app.achar("dialogoDeEdicao").property("visible") is True)
+    app.janela.contentItem().forceActiveFocus(Qt.FocusReason.OtherFocusReason)  # nada a que voltar
+    assert app.preferencias.abrir()
+    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("visible") is True)
+    app.preferencias.fechar()
+    assert _esperar(lambda: _foco_dentro_de(app, "dialogoDeEdicao"))
 
 
 def test_editar_preenche_os_campos(app):

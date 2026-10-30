@@ -42,6 +42,8 @@ class Aplicativo(QObject):
         # Posta por `app.py` depois das outras varreduras; a edição e a importação a chamam.
         self.varredura_conquistas = None
         self._ao_fechar_dialogo: Callable[[], None] | None = None
+        # Página das Preferências que o diálogo oferece; None = sem o botão, "" = abre sem página.
+        self._preferencias_do_dialogo: str | None = None
         self._colunas = shared.schema.get_uint("library-rows")
         self._tocar_sempre = shared.schema.get_boolean("cover-autoplay")
         # shortcut: lido uma vez na abertura; a `main` religava no WM_SETTINGCHANGE. Quem mudar o ajuste com o app aberto só vê o efeito ao reabrir; entra no plano 8.
@@ -113,14 +115,46 @@ class Aplicativo(QObject):
             importador.add_source(ShortcutsSource())
         importador.run()
 
-    def pedir_dialogo(self, titulo: str, corpo: str, itens: list, ao_fechar: Callable[[], None]) -> None:
+    @Property(bool, notify=dialogoPedido)
+    def dialogoComPreferencias(self) -> bool:  # noqa: N802
+        """O diálogo pedido oferece o botão "Preferências"."""
+        return self._preferencias_do_dialogo is not None
+
+    def pedir_dialogo(
+        self,
+        titulo: str,
+        corpo: str,
+        itens: list,
+        ao_fechar: Callable[[], None],
+        preferencias: str | None = None,
+    ) -> None:
+        """``preferencias``: a página que o botão "Preferências" abre (``""`` = a primeira); None = sem o botão."""
         self._ao_fechar_dialogo = ao_fechar
+        self._preferencias_do_dialogo = preferencias
         self.dialogoPedido.emit(titulo, corpo, itens)
 
+    @Slot(bool)
     @Slot()
-    def dialogoFechado(self) -> None:  # noqa: N802
+    def dialogoFechado(self, abrir_preferencias: bool = False) -> None:  # noqa: N802
+        """``abrir_preferencias``: foi o botão "Preferências"; ``ao_fechar`` espera a tela fechar, se ela abriu."""
         ao_fechar, self._ao_fechar_dialogo = self._ao_fechar_dialogo, None
-        if ao_fechar is not None:
+        pagina, self._preferencias_do_dialogo = self._preferencias_do_dialogo, None
+        if ao_fechar is None:
+            return
+        preferencias = shared.preferencias
+        if abrir_preferencias and pagina is not None and preferencias is not None and preferencias.abrir(pagina):
+            # Como o `closed` da `main`: uma vez só, quando as Preferências fecham.
+            ligacao: list = []
+            fraco = weakref.ref(preferencias)  # a conexão vive no próprio objeto: referência forte formaria um ciclo
+
+            def fechou() -> None:
+                p = fraco()
+                if p is not None and not p.aberto:
+                    p.alterado.disconnect(ligacao[0])
+                    ao_fechar()
+
+            ligacao.append(preferencias.alterado.connect(fechou))
+        else:
             ao_fechar()
 
     @Slot("QVariantList")

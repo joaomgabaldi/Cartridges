@@ -10,15 +10,26 @@ Rectangle {
     // [{ titulo, subtitulo }]
     property var itens: []
     property string rotuloDoBotao: "Dispensar"
+    // O segundo botão (o padrão, como o `set_default_response` da `main`); vazio = escondido.
+    property string rotuloSecundario: ""
 
     signal dispensado()
+    signal secundario()
 
-    function abrir(novoTitulo, novoCorpo, novosItens) {
+    function abrir(novoTitulo, novoCorpo, novosItens, novoRotuloSecundario) {
         titulo = novoTitulo
         corpo = novoCorpo
         itens = novosItens
+        rotuloSecundario = novoRotuloSecundario || ""
         visible = true
-        forceActiveFocus()
+        var alvo = rotuloSecundario !== "" ? botaoSecundario : dialogo
+        alvo.forceActiveFocus()
+    }
+
+    function acionarSecundario() {
+        if (!visible) return
+        visible = false
+        secundario()
     }
 
     function fechar() {
@@ -133,26 +144,60 @@ Rectangle {
                 }
             }
 
-            Rectangle {
-                id: botao
-                objectName: "botaoDoDialogo"
+            Row {
                 anchors.right: parent.right
-                width: rotulo.implicitWidth + 40
-                height: 36
-                radius: 6
-                color: Tema.destaque
-                Accessible.role: Accessible.Button
-                Accessible.name: rotulo.text
-                Text {
-                    id: rotulo
-                    anchors.centerIn: parent
-                    text: dialogo.rotuloDoBotao
-                    textFormat: Text.PlainText
-                    color: "white"
-                    font.family: Tema.fonte
-                    font.pixelSize: 14
+                spacing: 8
+
+                Rectangle {
+                    id: botao
+                    objectName: "botaoDoDialogo"
+                    width: rotulo.implicitWidth + 40
+                    height: 36
+                    radius: 6
+                    color: dialogo.rotuloSecundario !== "" ? Tema.botaoSobre : Tema.destaque
+                    border { width: 2; color: activeFocus ? Tema.texto : "transparent" }
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: rotulo.text
+                    Keys.onReturnPressed: dialogo.fechar()
+                    Keys.onEnterPressed: dialogo.fechar()
+                    Text {
+                        id: rotulo
+                        anchors.centerIn: parent
+                        text: dialogo.rotuloDoBotao
+                        textFormat: Text.PlainText
+                        color: dialogo.rotuloSecundario !== "" ? Tema.texto : "white"
+                        font.family: Tema.fonte
+                        font.pixelSize: 14
+                    }
+                    TapHandler { onTapped: dialogo.fechar() }
                 }
-                TapHandler { onTapped: dialogo.fechar() }
+
+                Rectangle {
+                    id: botaoSecundario
+                    objectName: "botaoSecundarioDoDialogo"
+                    visible: dialogo.rotuloSecundario !== ""
+                    width: rotuloDoSecundario.implicitWidth + 40
+                    height: 36
+                    radius: 6
+                    color: Tema.botaoSobre
+                    border { width: 2; color: activeFocus ? Tema.texto : "transparent" }
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: rotuloDoSecundario.text
+                    Keys.onReturnPressed: dialogo.acionarSecundario()
+                    Keys.onEnterPressed: dialogo.acionarSecundario()
+                    Text {
+                        id: rotuloDoSecundario
+                        anchors.centerIn: parent
+                        text: dialogo.rotuloSecundario
+                        textFormat: Text.PlainText
+                        color: Tema.texto
+                        font.family: Tema.fonte
+                        font.pixelSize: 14
+                    }
+                    TapHandler { onTapped: dialogo.acionarSecundario() }
+                }
             }
         }
     }

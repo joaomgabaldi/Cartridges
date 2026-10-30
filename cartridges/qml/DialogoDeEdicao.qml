@@ -218,7 +218,7 @@ Rectangle {
         border.color: Tema.botaoSobre
         clip: true
         // Com um seletor aberto por cima, nada daqui recebe o mouse nem o Tab.
-        enabled: !edicao.seletorDeCapa.aberto && !edicao.seletorDeLogo.aberto && !edicao.seletorDePapelDeParede.aberto
+        enabled: !preferencias.aberto && !edicao.seletorDeCapa.aberto && !edicao.seletorDeLogo.aberto && !edicao.seletorDePapelDeParede.aberto
             && !edicao.seletorDaSteam.aberto && !edicao.seletorDoLudusavi.aberto
 
         Flickable {

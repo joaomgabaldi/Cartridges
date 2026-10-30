@@ -418,7 +418,6 @@ class Importer(ErrorProducer):
             self.timeout_toast()
             return
 
-        # shortcut: o botão "Preferências" do diálogo entra com a janela de preferências, no plano 7.
         # O QML mostra tudo em texto puro: o "&" de um caminho chega como está.
         if len(errors) == 1:
             titulo, corpo = errors[0]
@@ -427,7 +426,7 @@ class Importer(ErrorProducer):
             titulo = _("Aviso")
             corpo = _("Os seguintes erros ocorreram durante a importação:")
             itens = [{"titulo": t, "subtitulo": s} for t, s in errors]
-        self.aplicativo.pedir_dialogo(titulo, corpo, itens, self.timeout_toast)
+        self.aplicativo.pedir_dialogo(titulo, corpo, itens, self.timeout_toast, preferencias="")
 
     def undo_import(self, *_args: object) -> None:
         # Games may have vanished since the import (e.g. removed by hand),
@@ -498,13 +497,17 @@ class Importer(ErrorProducer):
         if parts:
             titulo, botao, ao_clicar = " · ".join(parts), _("Desfazer"), self.undo_import
         else:
-            # shortcut: o botão "Preferências" do resumo vazio entra com a janela de preferências, no plano 7.
-            titulo, botao, ao_clicar = _("Nenhum jogo novo encontrado"), "", None
+            titulo, botao, ao_clicar = _("Nenhum jogo novo encontrado"), _("Preferências"), self._abrir_preferencias
 
         if not parts and self.silenciosa:
             return None
         # segundos=0: quanto o resumo fica é decidido por `timeout_toast`, depois dos diálogos.
         return self.aplicativo.avisos.adicionar(titulo, botao, ao_clicar, segundos=0)
+
+    @staticmethod
+    def _abrir_preferencias() -> None:
+        if shared.preferencias is not None:
+            shared.preferencias.abrir("import")
 
     def timeout_toast(self, *_args: object) -> None:
         """Dá 5 segundos ao resumo depois que o usuário dispensou os avisos.

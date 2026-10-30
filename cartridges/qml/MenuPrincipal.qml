@@ -123,4 +123,13 @@ MenuDoTema {
             }
         }
     }
+
+    MenuSeparator {}
+    ItemDoMenu {
+        objectName: "itemPreferencias"
+        text: "Preferências"
+        // Como a `main`: a ação some durante a importação.
+        enabled: !aplicativo.importando
+        onTriggered: preferencias.abrir()
+    }
 }

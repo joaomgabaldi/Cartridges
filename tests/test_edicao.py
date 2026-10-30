@@ -40,12 +40,17 @@ def aplicativo(monkeypatch):
 
     verificacoes = []
     dialogos = []
+    paginas = []
     app = SimpleNamespace(
         avisos=FilaDeAvisos(),
         verificador_de_atualizacoes=SimpleNamespace(check_async=lambda: verificacoes.append(1)),
-        pedir_dialogo=lambda titulo, corpo, itens, ao_fechar: dialogos.append((titulo, corpo)),
+        pedir_dialogo=lambda titulo, corpo, itens, ao_fechar, preferencias=None: (
+            dialogos.append((titulo, corpo)),
+            paginas.append(preferencias),
+        ),
         verificacoes=verificacoes,
         dialogos=dialogos,
+        paginas=paginas,
     )
     monkeypatch.setattr(shared, "aplicativo", app, raising=False)
     return app
@@ -479,6 +484,14 @@ def test_erro_amigavel_do_sgdb_vira_dialogo(edicao, store, aplicativo):
     stub_sgdb(store, erros=[FriendlyError("Não foi possível autenticar no SteamGridDB", "Verifique a chave."), ValueError("x")])
     _aplicar(edicao, jogo(store, 82))
     assert aplicativo.dialogos == [("Não foi possível autenticar no SteamGridDB", "Verifique a chave.")]
+
+
+def test_erro_do_sgdb_oferece_as_preferencias_do_sgdb(edicao, store, aplicativo):
+    from cartridges.errors.friendly_error import FriendlyError  # noqa: PLC0415
+
+    stub_sgdb(store, erros=[FriendlyError("Não foi possível autenticar no SteamGridDB", "Verifique a chave.")])
+    _aplicar(edicao, jogo(store, 84))
+    assert aplicativo.paginas == ["sgdb"]
 
 
 def test_capa_que_nao_grava_nao_derruba_o_aplicar(edicao, store, sgdb, monkeypatch, tmp_path, caplog):

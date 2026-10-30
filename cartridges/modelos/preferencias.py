@@ -14,11 +14,13 @@ import math
 import unicodedata
 import weakref
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Property, QObject, Signal, Slot
+from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 
 from cartridges import shared
+from cartridges.utils import open_uri
 
 # As 19 de `bind_switches` da main (sem `show-news-button`, D64), mais as que ela ligava por widget próprio.
 CHAVES_GRAVAVEIS = frozenset(
@@ -144,6 +146,17 @@ class Preferencias(QObject):
         if chave == "sgdb-key" and not texto:
             shared.schema["sgdb"] = False
 
+    @Slot(QUrl)
+    def escolherPastaDosAtalhos(self, url: QUrl) -> None:  # noqa: N802
+        """A pasta do `FolderDialog`; uma escolha vazia (diálogo cancelado) não grava."""
+        if url.isEmpty() or not url.toLocalFile():
+            return
+        shared.schema["shortcuts-location"] = str(Path(url.toLocalFile()))
+
+    @Slot(str)
+    def abrirEndereco(self, url: str) -> None:  # noqa: N802
+        open_uri.abrir_url(url)
+
     @Slot(str, str, result=bool)
     def corresponde(self, texto: str, filtro: str) -> bool:
         return _normalizar(filtro) in _normalizar(texto)
@@ -163,6 +176,9 @@ class Preferencias(QObject):
             "somDoBigPictureAtivo": com_3d,
             "subtituloSem3d": "" if com_3d else SEM_3D,
             "sgdbAtivo": bool(shared.schema.get_string("sgdb-key")),
+            # O valor guardado já vem como o Windows escreve, menos a barra que o seletor às vezes devolve.
+            "pastaDosAtalhos": shared.schema.get_string("shortcuts-location").replace("/", "\\")
+            or "Nenhuma pasta selecionada",
         }
         self.alterado.emit()
 

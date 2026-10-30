@@ -4,7 +4,9 @@
 
 """A importação no app Qt: o botão, o resumo com "Desfazer", o diálogo de erros e os atalhos soltos."""
 
+import gc
 import time
+import weakref
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,6 +15,7 @@ from PySide6.QtCore import QEventLoop, QMetaObject, QObject, Qt, QTimer, QUrl, S
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
+from PySide6.QtTest import QTest
 
 from cartridges import aplicativo as modulo
 from cartridges import shared
@@ -26,6 +29,7 @@ from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.conquistas import ConquistasDoJogo
 from cartridges.modelos.historico import HistoricoDeSessoes
+from cartridges.modelos.preferencias import Preferencias
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.ponte import Ponte
 from cartridges.store.managers.exibicao_manager import ExibicaoManager
@@ -192,7 +196,7 @@ def test_importacao_pedida_sem_novos_avisa(fonte, app_qt):
     fila = FilaRegistrada()
     _importar(Aplicativo(fila))
     assert fila.texto == "Nenhum jogo novo encontrado"
-    assert fila.botao == ""
+    assert fila.botao == "Preferências"
 
 
 def test_nova_importacao_tira_o_resumo_anterior_da_tela(fonte, app_qt):
@@ -400,6 +404,7 @@ class _Janela:
         self.aplicativo = Aplicativo(self.ponte.fila)
         self.edicao = ModeloDaEdicao(self.aplicativo)
         self.historico = HistoricoDeSessoes(SimpleNamespace(get=lambda _id: None))
+        self.preferencias = shared.preferencias = Preferencias(self.ponte.fila, lambda: True)
         self.big_picture = BigPicture(self.modelo)
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(_DetalhesFalsos(), self.sessao)
@@ -418,6 +423,7 @@ class _Janela:
             ("sessao", self.sessao),
             ("historico", self.historico),
             ("conquistasDoJogo", self.conquistas),
+            ("preferencias", self.preferencias),
         ):
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))
@@ -467,6 +473,122 @@ def test_aviso_de_soltar_comeca_escondido(app_qt):
     assert aviso.property("visible") is False
     assert aviso.property("opacity") == 0
     janela.fechar()
+
+
+# region: o botão "Preferências" onde a `main` o tinha (D70)
+
+
+def _com_preferencias(monkeypatch, fila):
+    app = Aplicativo(fila)
+    preferencias = Preferencias(fila, lambda: True)
+    monkeypatch.setattr(shared, "preferencias", preferencias, raising=False)
+    monkeypatch.setattr(shared, "aplicativo", app, raising=False)
+    return app, preferencias
+
+
+def test_dialogo_de_erros_tem_o_botao_preferencias(app_qt):
+    janela = _Janela()
+    janela.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: None, preferencias="")
+    _esperar()
+    dialogo = janela.achar("dialogoDeErros")
+    secundario = janela.achar("botaoSecundarioDoDialogo")
+    assert dialogo.property("rotuloSecundario") == "Preferências"
+    assert secundario.property("visible") is True
+    assert secundario.property("activeFocus") is True  # o `set_default_response` da `main`
+    janela.fechar()
+
+
+def test_dialogo_de_erros_sem_preferencias_esconde_o_segundo_botao(app_qt):
+    janela = _Janela()
+    janela.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: None)
+    _esperar()
+    assert janela.achar("botaoSecundarioDoDialogo").property("visible") is False
+    janela.fechar()
+
+
+def test_botao_preferencias_do_dialogo_abre_a_tela(app_qt):
+    janela = _Janela()
+    fechados = []
+    janela.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: fechados.append(1), preferencias="")
+    _esperar()
+    botao = janela.achar("botaoSecundarioDoDialogo")
+    ponto = botao.mapToScene(botao.boundingRect().center()).toPoint()
+    QTest.mouseClick(janela.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
+    assert _esperar(lambda: janela.preferencias.aberto)
+    assert janela.preferencias.pagina == "general"
+    assert janela.achar("dialogoDeErros").property("visible") is False
+    assert fechados == []  # espera as Preferências fecharem
+    janela.fechar()
+
+
+def test_preferencias_do_dialogo_abre_e_o_resumo_espera_o_fechamento(fonte, app_qt, monkeypatch):
+    fonte.erro = SourceScanError("Erro", "Detalhe")
+    fila = FilaRegistrada()
+    app, preferencias = _com_preferencias(monkeypatch, fila)
+    _importar(app)
+    assert fila.depois == []
+    app.dialogoFechado(True)
+    assert preferencias.aberto is True and preferencias.pagina == "general"
+    assert fila.depois == []
+    preferencias.fechar()
+    assert fila.depois == [(1, 5)]
+    preferencias.abrir()
+    preferencias.fechar()  # só uma vez
+    assert len(fila.depois) == 1
+
+
+def test_preferencias_do_dialogo_ja_aberta_chama_o_timeout_toast(fonte, app_qt, monkeypatch):
+    fonte.erro = SourceScanError("Erro", "Detalhe")
+    fila = FilaRegistrada()
+    app, preferencias = _com_preferencias(monkeypatch, fila)
+    _importar(app)
+    assert preferencias.abrir()
+    app.dialogoFechado(True)  # `abrir` devolve False: o resumo não fica esperando
+    assert fila.depois == [(1, 5)]
+    preferencias.fechar()
+
+
+def test_espera_do_fechamento_nao_prende_as_preferencias(fonte, app_qt):
+    fonte.erro = SourceScanError("Erro", "Detalhe")
+    fila = FilaRegistrada()
+    app = Aplicativo(fila)
+    preferencias = Preferencias(fila, lambda: True)
+    shared.preferencias = preferencias  # sem monkeypatch, que guardaria o objeto; o conftest zera a cada teste
+    _importar(app)
+    app.dialogoFechado(True)
+    assert preferencias.aberto is True
+    fraco = weakref.ref(preferencias)
+    shared.preferencias = None
+    del preferencias
+    gc.collect()
+    assert fraco() is None  # a closure da conexão só guarda referência fraca
+
+
+def test_dispensar_chama_o_timeout_toast(fonte, app_qt, monkeypatch):
+    fonte.erro = SourceScanError("Erro", "Detalhe")
+    fila = FilaRegistrada()
+    app, preferencias = _com_preferencias(monkeypatch, fila)
+    _importar(app)
+    app.dialogoFechado(False)
+    assert fila.depois == [(1, 5)]
+    assert preferencias.aberto is False
+
+
+def test_resumo_vazio_tem_o_botao_preferencias_da_importacao(fonte, app_qt, monkeypatch):
+    fila = FilaRegistrada()
+    app, preferencias = _com_preferencias(monkeypatch, fila)
+    _importar(app)
+    assert fila.adicionados == [("Nenhum jogo novo encontrado", "Preferências", 0)]
+    fila.clicar()
+    assert preferencias.aberto is True and preferencias.pagina == "import"
+    preferencias.fechar()
+
+
+def test_resumo_vazio_silencioso_nao_aparece(fonte, app_qt, monkeypatch):
+    fila = FilaRegistrada()
+    app, _ = _com_preferencias(monkeypatch, fila)
+    _importar(app, silenciosa=True)
+    assert fila.adicionados == []
 
 
 # endregion

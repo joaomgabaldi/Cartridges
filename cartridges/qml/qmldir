@@ -42,3 +42,11 @@ DialogoDeConquistas 1.0 DialogoDeConquistas.qml
 ConquistasDaSessao 1.0 ConquistasDaSessao.qml
 GrupoDasContas 1.0 GrupoDasContas.qml
 JanelaDeLogin 1.0 JanelaDeLogin.qml
+DialogoDePreferencias 1.0 DialogoDePreferencias.qml
+PaginaGeral 1.0 PaginaGeral.qml
+PaginaDeImportacao 1.0 PaginaDeImportacao.qml
+PaginaDoSteamGridDB 1.0 PaginaDoSteamGridDB.qml
+GrupoDePreferencias 1.0 GrupoDePreferencias.qml
+LinhaDeNumero 1.0 LinhaDeNumero.qml
+LinhaDeAcao 1.0 LinhaDeAcao.qml
+LinhaDeBotao 1.0 LinhaDeBotao.qml

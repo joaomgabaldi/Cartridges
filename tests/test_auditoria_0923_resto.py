@@ -105,27 +105,6 @@ def test_b24_confirmacao_de_patch_diz_o_que_aconteceu():
     assert '_("Já instalei")' in texto
 
 
-def test_b25_subtitulos_de_preferencias_descrevem_o_comportamento():
-    from pathlib import Path  # noqa: PLC0415
-
-    texto = (Path(__file__).parent.parent / "data/gtk/preferences.blp").read_text(
-        encoding="utf-8"
-    )
-    assert (
-        '_("Minimiza a janela ao iniciar um jogo quando a contagem de horas '
-        'está desligada")'
-    ) in texto
-    assert (
-        '_("Registra o tempo de cada sessão; quando o jogo não pode ser '
-        'acompanhado automaticamente, abre uma janela compacta para encerrar '
-        'a sessão")'
-    ) in texto
-    assert (
-        '_("Busca na Steam título, desenvolvedora, publicadora, lançamento, '
-        'gênero, descrição, avaliações e compatibilidade com controle")'
-    ) in texto
-
-
 def test_b28_dialogo_de_atualizacao_diz_o_que_acontece():
     from pathlib import Path  # noqa: PLC0415
 

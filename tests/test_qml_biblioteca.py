@@ -23,6 +23,7 @@ from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.historico import HistoricoDeSessoes
+from cartridges.modelos.preferencias import Preferencias
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.ponte import Ponte
 
@@ -45,8 +46,12 @@ def _esperar(ate=None, limite=3.0):
 def _achar(raiz, nome):
     """O objeto de `objectName` igual a `nome`, descendo pelos itens visuais e pelos filhos QObject."""
     pilha = [raiz]
+    vistos = {}  # um item é filho QObject e filho visual: sem isto a árvore é percorrida 2^profundidade vezes
     while pilha:
         atual = pilha.pop()
+        if id(atual) in vistos:
+            continue
+        vistos[id(atual)] = atual  # guardar o objeto impede o reuso do id
         try:  # um item já deletado (a janela solta da sessão, por exemplo) não derruba a busca
             if atual.objectName() == nome:
                 return atual
@@ -109,6 +114,7 @@ class _App:
         self.aplicativo = Aplicativo(self.ponte.fila)
         self.edicao = ModeloDaEdicao(self.aplicativo)
         self.historico = HistoricoDeSessoes(self.loja)
+        self.preferencias = shared.preferencias = Preferencias(self.ponte.fila, lambda: True)
         # Sem `cortina`, a fábrica não cria nenhuma: a troca é direta (o offscreen tem HWND falso).
         self.big_picture = BigPicture(
             self.modelo, fabrica_da_cortina=cortina or (lambda _hwnd: None), animacoes_do_sistema=animacoes
@@ -131,7 +137,7 @@ class _App:
             ("aplicativo", self.aplicativo), ("ponte", self.ponte), ("controle", self.controle),
             ("detalhes", self.detalhes), ("edicao", self.edicao), ("bigPicture", self.big_picture),
             ("sessao", self.sessao), ("historico", self.historico),
-            ("conquistasDoJogo", self.conquistas),
+            ("conquistasDoJogo", self.conquistas), ("preferencias", self.preferencias),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

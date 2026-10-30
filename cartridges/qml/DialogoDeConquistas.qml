@@ -157,6 +157,8 @@ Rectangle {
         color: Tema.fundo
         border.color: Tema.botaoSobre
         clip: true
+        // Com as Preferências na frente, nada daqui recebe o mouse nem o Tab.
+        enabled: !preferencias.aberto
 
         // A faixa de cima: só o botão de fechar, à direita (o `Adw.HeaderBar(show_title=False)` da `main`).
         Item {

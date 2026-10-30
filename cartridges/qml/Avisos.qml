@@ -23,7 +23,9 @@ Item {
 
     Connections {
         target: camada.app
-        function onDialogoPedido(titulo, corpo, itens) { dialogoDeErros.abrir(titulo, corpo, itens) }
+        function onDialogoPedido(titulo, corpo, itens) {
+            dialogoDeErros.abrir(titulo, corpo, itens, camada.app.dialogoComPreferencias ? "Preferências" : "")
+        }
     }
 
     Rectangle {
@@ -181,6 +183,7 @@ Item {
     DialogoDeAviso {
         id: dialogoDeErros
         objectName: "dialogoDeErros"
-        onDispensado: camada.app.dialogoFechado()
+        onDispensado: camada.app.dialogoFechado(false)
+        onSecundario: camada.app.dialogoFechado(true)
     }
 }

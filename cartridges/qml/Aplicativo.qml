@@ -38,7 +38,7 @@ Principal {
     inicio: [
         BotaoDaBarra {
             id: botaoAdicionar
-            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto
+            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto
             objectName: "botaoAdicionar"
             visible: janela.paginaAtual === "todos"
             glifo: ""
@@ -56,7 +56,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoVoltar
-            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto
+            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto
             objectName: "botaoVoltar"
             visible: janela.paginaAtual !== "todos"
             glifo: ""
@@ -69,7 +69,7 @@ Principal {
     fim: [
         BotaoDaBarra {
             id: botaoMenu
-            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto
+            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto
             objectName: "botaoMenu"
             glifo: ""
             dica: "Menu principal"
@@ -84,7 +84,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoZerados
-            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto
+            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto
             objectName: "botaoZerados"
             visible: janela.paginaAtual === "todos"
             trofeu: true
@@ -93,7 +93,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoBigPicture
-            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto
+            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto
             indisponivel: !bigPicture.disponivel
             objectName: "botaoBigPicture"
             visible: janela.paginaAtual === "todos"
@@ -103,7 +103,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoBusca
-            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto
+            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto
             objectName: "botaoBusca"
             visible: janela.paginaAtual === "todos"
             glifo: ""
@@ -125,7 +125,7 @@ Principal {
         comBusca: true
         ativa: pilha.depth === 0 && !bigPicture.visivel && !sessao.emAndamento
         // Com o diálogo de edição, o Big Picture ou a sessão à frente, nada de trás recebe o mouse nem o Tab.
-        enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !bigPicture.visivel && !sessao.emAndamento
+        enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !bigPicture.visivel && !sessao.emAndamento
         onAbrirDetalhes: id => janela.abrirDetalhes(id)
         onEditar: id => edicao.abrir(id)
     }
@@ -136,7 +136,7 @@ Principal {
         objectName: "pilha"
         anchors.fill: parent
         visible: depth > 0
-        enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !bigPicture.visivel && !sessao.emAndamento
+        enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !bigPicture.visivel && !sessao.emAndamento
     }
 
     Component {
@@ -190,6 +190,13 @@ Principal {
     // A lista de conquistas, aberta pelo cartão da página de detalhes; abaixo da camada da sessão.
     DialogoDeConquistas {
         id: dialogoDeConquistas
+    }
+
+    // As Preferências: por cima da edição (o erro do SteamGridDB a deixa aberta) e abaixo da camada da sessão.
+    DialogoDePreferencias {
+        id: dialogoDePreferencias
+        // Fechado a partir de um menu, o foco não tem para onde voltar: vai ao editor, se aberto, ou à página à vista.
+        onRetornoPerdido: edicao.aberto ? dialogoDeEdicao.devolverFoco() : janela.paginaDoControle.focarGrade()
     }
 
     // Por cima do diálogo de edição, que os abre; o foco volta ao botão que abriu cada um.
@@ -287,7 +294,7 @@ Principal {
         id: alvoDeSoltar
         objectName: "alvoDeSoltar"
         anchors.fill: parent
-        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !bigPicture.visivel && !sessao.emAndamento
+        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !bigPicture.visivel && !sessao.emAndamento
         onEntered: (arrasto) => arrasto.accepted = arrasto.hasUrls
         onDropped: (soltou) => {
             if (soltou.hasUrls) aplicativo.soltar(soltou.urls)
@@ -340,7 +347,7 @@ Principal {
     // A página à vista: "Todos os jogos", "Jogos Zerados" ou a de detalhes.
     readonly property var paginaDoControle: pilha.depth === 0 ? todos : pilha.currentItem
     // Menu ou diálogo na frente: o controle navega nele pelas teclas, como o teclado faria.
-    readonly property bool popupAberto: menuPrincipal.opened || camadaDeAvisos.dialogoAberto || edicao.aberto || historico.aberto || conquistasDoJogo.aberto
+    readonly property bool popupAberto: menuPrincipal.opened || camadaDeAvisos.dialogoAberto || edicao.aberto || historico.aberto || conquistasDoJogo.aberto || preferencias.aberto
         || (paginaDoControle !== null && paginaDoControle.menuDoJogoAberto)
     property bool ponteiroEscondido: false
     property point posicaoDoPonteiro

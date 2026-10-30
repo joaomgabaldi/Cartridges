@@ -8,6 +8,7 @@ import builtins
 import logging
 import sys
 import threading
+import weakref
 from pathlib import Path
 
 # A interface é hardcoded em pt-BR (como em `cartridges.in`). Antes de importar
@@ -38,6 +39,7 @@ from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.historico import HistoricoDeSessoes
+from cartridges.modelos.preferencias import Preferencias
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.ponte import Ponte
 from cartridges.store.managers import async_manager
@@ -217,6 +219,10 @@ def main(argv: list[str]) -> int:
     # O domínio avisa por aqui quando o histórico, o catálogo ou uma conta das conquistas muda (D58).
     conquistas = ConquistasDoJogo(detalhes, sessao)
     shared.conquistas = conquistas
+    # O Big Picture diz se há 3D; a referência fraca não prende o objeto Qt numa função guardada.
+    big_picture_fraco = weakref.ref(big_picture)
+    preferencias = Preferencias(avisos, lambda: bool((b := big_picture_fraco()) and b.disponivel))
+    shared.preferencias = preferencias
     # Antes de o Qt fechar as janelas: sem isto a janela "Jogando" fecharia pelo fim normal da sessão, com interface.
     # Só o rápido (gravar, parar o vigia); a parede e as fitas vão ao `aboutToQuit` (`_fechar`, `sessao.devolver`).
     # O desligar do Windows emite o `aboutToQuit` antes do `quit()`; lá o `devolver()` grava primeiro.
@@ -228,7 +234,7 @@ def main(argv: list[str]) -> int:
         ("filtros", filtros), ("paginaTodos", pagina_biblioteca), ("paginaZerados", pagina_zerados),
         ("aplicativo", aplicativo), ("ponte", ponte), ("controle", controle), ("detalhes", detalhes),
         ("edicao", edicao), ("bigPicture", big_picture), ("sessao", sessao), ("historico", historico),
-        ("conquistasDoJogo", conquistas),
+        ("conquistasDoJogo", conquistas), ("preferencias", preferencias),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.

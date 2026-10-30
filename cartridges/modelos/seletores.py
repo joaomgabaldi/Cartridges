@@ -276,7 +276,6 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         if self._exige_chave and not shared.schema.get_string("sgdb-key"):
             self._show_empty(
                 _("Chave da API não configurada"),
-                # shortcut: sem o botão "Preferências" no aviso, a tela de preferências é do plano 7 (D42).
                 _("Configure a chave da API do SteamGridDB nas Preferências."),
             )
             return

@@ -197,7 +197,6 @@ Rectangle {
                 glifo: ""  // imagem
                 titulo: seletorDeImagens.seletor.tituloDoEstado
                 descricao: seletorDeImagens.seletor.descricaoDoEstado
-                // shortcut: o botão "Preferências" do aviso de chave ausente ou inválida entra com a tela de preferências (plano 7, D42).
             }
 
             // A tela "Baixando…" da imagem escolhida.

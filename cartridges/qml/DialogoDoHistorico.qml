@@ -135,8 +135,8 @@ Rectangle {
         color: Tema.fundo
         border.color: Tema.botaoSobre
         clip: true
-        // Com a confirmação na frente, nada daqui recebe o mouse nem o Tab.
-        enabled: !confirmacao.visible
+        // Com a confirmação ou as Preferências na frente, nada daqui recebe o mouse nem o Tab.
+        enabled: !confirmacao.visible && !preferencias.aberto
 
         Flickable {
             id: rolagem
