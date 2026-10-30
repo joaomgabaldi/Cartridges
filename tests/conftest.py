@@ -85,9 +85,7 @@ TESTES_AINDA_GTK: list[str] = [
     "test_caixa_redimensionavel.py",
     "test_calibracao_janela.py",
     "test_conquistas_ciclo.py",  # importa utils/backup (plano 8, D56) e tests.test_zerados (GTK)
-    "test_conquistas_ea_janela.py",
-    "test_conquistas_epic_janela.py",
-    "test_conquistas_preferencias.py",
+    "test_conquistas_preferencias.py",  # as contas já têm o seu arquivo (test_grupo_das_contas_qt.py); o resto, no plano 7
     "test_estilo_css.py",
     "test_fita_wizard.py",
     "test_hwnd_ordem_import.py",
@@ -476,6 +474,35 @@ def sem_jogo_de_verdade(monkeypatch):
     monkeypatch.setattr(process_session.ProcessSession, "active", None)
     monkeypatch.setattr(session_window.SessionWindow, "active", None)
     monkeypatch.setattr(sessao_conquistas, "_vigia", None)
+
+
+@pytest.fixture(autouse=True)
+def sem_navegador_de_verdade(monkeypatch):
+    """Nenhum login abre o navegador: o padrão de `LoginDaLoja` e o de `login.entrar` (Xbox) levantam, e o
+    teste falha ao fim se algum foi chamado (o login engole a exceção, como faria com um navegador ausente).
+
+    Devolve a lista das URLs pedidas; quem prova o guarda de propósito a esvazia.
+    """
+    from cartridges.conquistas.xbox import login as login_xbox  # noqa: PLC0415
+    from cartridges.modelos import contas as modelo_das_contas  # noqa: PLC0415
+
+    chamadas: list[str] = []
+
+    def recusa(url):
+        chamadas.append(url)
+        raise AssertionError("navegador: nenhum login abre nos testes")
+
+    monkeypatch.setattr(modelo_das_contas, "_abrir_navegador", recusa)
+    original = login_xbox._abrir_navegador  # noqa: SLF001
+    monkeypatch.setattr(login_xbox, "_abrir_navegador", recusa)
+    # O padrão de `entrar` foi fixado na definição: trocar o atributo do módulo não o alcança. Troca-se o primeiro
+    # padrão, e só se ele for mesmo o navegador (se a assinatura mudar, o teste avisa em vez de trocar o parâmetro errado).
+    assert login_xbox.entrar.__defaults__[0] is original, "o primeiro padrão de login.entrar já não é o navegador"
+    monkeypatch.setattr(login_xbox.entrar, "__defaults__", (recusa, *login_xbox.entrar.__defaults__[1:]))
+    # Os logins com a troca na rede não passam de um teste ao outro.
+    monkeypatch.setattr(modelo_das_contas, "_em_voo", set())
+    yield chamadas
+    assert not chamadas, f"o teste abriu o navegador: {chamadas}"
 
 
 @pytest.fixture(autouse=True)

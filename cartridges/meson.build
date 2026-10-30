@@ -62,7 +62,6 @@ install_data(
     'restauracao_dialogs.py',
     'tarefas_janela.py',
     'botao_tarefas.py',
-    'grupo_das_contas.py',
     'process_session.py',
     'metadata_refresh.py',
     'game_cover.py',

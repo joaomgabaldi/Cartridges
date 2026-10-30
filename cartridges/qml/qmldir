@@ -40,3 +40,5 @@ CabecalhoDoJogo 1.0 CabecalhoDoJogo.qml
 CartaoDeConquistas 1.0 CartaoDeConquistas.qml
 DialogoDeConquistas 1.0 DialogoDeConquistas.qml
 ConquistasDaSessao 1.0 ConquistasDaSessao.qml
+GrupoDasContas 1.0 GrupoDasContas.qml
+JanelaDeLogin 1.0 JanelaDeLogin.qml

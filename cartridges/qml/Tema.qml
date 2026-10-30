@@ -17,6 +17,8 @@ QtObject {
     readonly property color barraInativa: escuro ? "#2a2a2a" : "#f3f3f3"
     readonly property color botaoSobre: escuro ? "#3d3d3d" : "#dcdcdc"
     readonly property color botaoFechar: "#c42b1c"
+    // O texto de erro: legível (4,5:1 ou mais) sobre o fundo, nos dois temas.
+    readonly property color erro: escuro ? "#ff7b63" : "#c01c28"
     readonly property color pressionado: escuro ? "#4a4a4a" : "#cccccc"
     readonly property color superficie: escuro ? "#2b2b2b" : "#ffffff"
     readonly property color borda: escuro ? "#454545" : "#d4d4d4"
