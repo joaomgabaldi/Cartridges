@@ -50,7 +50,25 @@ Column {
         }
     }
 
-    // shortcut: falta o grupo "Atualizar metadados" (a linha com o botão "Atualizar" e a barra de progresso), da Task 3 do plano 7; entra aqui, entre "Comportamento" e "Atalhos".
+    GrupoDePreferencias {
+        objectName: "grupoAtualizarMetadados"
+
+        LinhaDeAtualizacao {
+            objectName: "linhaDosMetadados"
+            titulo: "Atualizar metadados"
+            subtitulo: "Busca dados para jogos já na biblioteca"
+            // Sem nenhuma das duas fontes ligadas a busca não faria nada.
+            enabled: preferencias.biblioteca.metadadosAtivos
+            emAndamento: preferencias.biblioteca.rodando
+            podeParar: true
+            paradaPedida: preferencias.biblioteca.cancelado
+            progressoVisivel: preferencias.biblioteca.rodando
+            fracao: preferencias.biblioteca.fracao
+            textoDoProgresso: preferencias.biblioteca.progresso
+            onAcionada: preferencias.biblioteca.atualizarMetadados()
+            onParada: preferencias.biblioteca.cancelarMetadados()
+        }
+    }
 
     GrupoDePreferencias {
         objectName: "grupoAtalhos"

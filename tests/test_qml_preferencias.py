@@ -341,3 +341,185 @@ def test_grupos_do_plano_8_nao_aparecem(app):
     todos = "\n".join(_textos(app.achar("dialogoDePreferencias")))
     for texto in ("Backup da sua biblioteca", "Atualizações", "Zona de perigo", "Barra superior", "Redefinir"):
         assert texto not in todos
+
+
+# region Atualizar metadados e capas (Task 3)
+
+
+def _com_refresh_falso(monkeypatch):
+    from cartridges import metadata_refresh  # noqa: PLC0415
+
+    chamadas = []
+
+    class Falso(metadata_refresh.MetadataRefresh):
+        def start(self, games, only_missing=False):
+            chamadas.append((games, only_missing))
+            return True
+
+    refresh = Falso()
+    monkeypatch.setattr(metadata_refresh, "get_metadata_refresh", lambda: refresh)
+    return refresh, chamadas
+
+
+def _clique_em(botao):
+    QMetaObject.invokeMethod(botao, "click", Qt.ConnectionType.DirectConnection)
+
+
+def test_escopo_dos_metadados_tem_tres_botoes_e_comeca_no_que_falta(app, store, make_game, monkeypatch):
+    _refresh, chamadas = _com_refresh_falso(monkeypatch)
+    jogo = make_game(game_id="a", has_hltb_times=False)
+    store.add_game(jogo, {})
+    _abrir(app, "import")
+    assert app.achar("linhaDosMetadados").property("titulo") == "Atualizar metadados"
+    assert app.achar("linhaDosMetadados").property("subtitulo") == "Busca dados para jogos já na biblioteca"
+    assert app.achar("linhaDosMetadadosBotao").property("text") == "Atualizar"
+
+    _clique(app, "linhaDosMetadadosBotao")
+    dialogo = app.achar("dialogoDosMetadados")
+    assert _esperar(lambda: dialogo.property("visible") is True)
+    assert dialogo.property("titulo") == "Atualizar metadados"
+    assert dialogo.property("corpo").startswith("Buscar o que falta atualiza 1 de 1 jogos")
+    nomes = ("botaoCancelarDoDialogo", "botaoConfirmarDoDialogo", "botaoAlternativoDoDialogo")
+    botoes = [_achar(dialogo, n) for n in nomes]
+    assert [b.property("text") for b in botoes] == ["Cancelar", "Buscar o que falta", "Buscar tudo"]
+    xs = [b.mapToScene(b.boundingRect().topLeft()).x() for b in botoes]
+    assert xs == sorted(xs)
+    assert _esperar(lambda: _foco_dentro_de(app, "botaoConfirmarDoDialogo"))
+
+    _clique_em(botoes[2])  # Buscar tudo
+    assert _esperar(lambda: dialogo.property("visible") is False)
+    assert chamadas == [([jogo], False)]
+
+
+def test_confirmar_o_escopo_busca_so_o_que_falta_e_cancelar_nao_busca(app, store, make_game, monkeypatch):
+    _refresh, chamadas = _com_refresh_falso(monkeypatch)
+    jogo = make_game(game_id="a", has_hltb_times=False)
+    store.add_game(jogo, {})
+    _abrir(app, "import")
+    dialogo = app.achar("dialogoDosMetadados")
+    _clique(app, "linhaDosMetadadosBotao")
+    assert _esperar(lambda: dialogo.property("visible") is True)
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)  # Esc vale como cancelar e não fecha as preferências
+    assert _esperar(lambda: dialogo.property("visible") is False)
+    assert app.preferencias.aberto is True and not chamadas
+
+    _clique(app, "linhaDosMetadadosBotao")
+    assert _esperar(lambda: dialogo.property("visible") is True)
+    _clique_em(_achar(dialogo, "botaoConfirmarDoDialogo"))
+    assert _esperar(lambda: chamadas == [([jogo], True)])
+
+
+def test_barra_de_progresso_so_durante_a_atualizacao(app, monkeypatch):
+    refresh, _ = _com_refresh_falso(monkeypatch)
+    _abrir(app, "import")
+    assert app.achar("linhaDosMetadadosBotao").property("visible") is True
+    assert app.achar("linhaDosMetadadosProgresso").property("visible") is False
+    assert app.achar("linhaDosMetadadosParar").property("visible") is False
+
+    refresh.running, refresh.done, refresh.total = True, 3, 12
+    refresh.progress.emit()
+    assert _esperar(lambda: app.achar("linhaDosMetadadosProgresso").property("visible") is True)
+    assert app.achar("linhaDosMetadadosProgresso").property("value") == pytest.approx(0.25)
+    assert app.achar("linhaDosMetadadosProgressoTexto").property("text") == "3 de 12"
+    assert app.achar("linhaDosMetadadosBotao").property("visible") is False
+    parar = app.achar("linhaDosMetadadosParar")
+    assert parar.property("visible") is True and parar.property("enabled") is True
+
+    _clique(app, "linhaDosMetadadosParar")
+    assert refresh.cancelled is True
+    assert _esperar(lambda: app.achar("linhaDosMetadadosParar").property("enabled") is False)
+
+    refresh.running = False
+    refresh.progress.emit()
+    assert _esperar(lambda: app.achar("linhaDosMetadadosProgresso").property("visible") is False)
+    assert app.achar("linhaDosMetadadosBotao").property("visible") is True
+
+
+def test_linha_dos_metadados_apagada_sem_as_duas_fontes(app):
+    shared.schema.set_boolean("steam-metadata", True)
+    _abrir(app, "import")
+    assert app.achar("linhaDosMetadados").property("enabled") is True
+    shared.schema.set_boolean("steam-metadata", False)
+    shared.schema.set_boolean("hltb-metadata", False)
+    assert _esperar(lambda: app.achar("linhaDosMetadados").property("enabled") is False)
+    shared.schema.set_boolean("hltb-metadata", True)
+    assert _esperar(lambda: app.achar("linhaDosMetadados").property("enabled") is True)
+
+
+def test_atualizar_capas_apagado_sem_sgdb(app, store, make_game):
+    from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
+    from tests.test_preferencias_qt import _ManagerDeCapas  # noqa: PLC0415
+
+    store.add_game(make_game(game_id="a"), {})
+    store.managers[SgdbManager] = gerente = _ManagerDeCapas()
+    shared.schema.set_boolean("sgdb", False)
+    _abrir(app, "sgdb")
+    linha = app.achar("linhaDasCapas")
+    assert linha.property("titulo") == "Atualizar capas"
+    assert linha.property("subtitulo") == "Busca capas para jogos já na biblioteca"
+    assert linha.property("enabled") is False
+
+    app.preferencias.definirTexto("sgdb-key", "abc")
+    app.preferencias.definir("sgdb", True)
+    assert _esperar(lambda: app.achar("linhaDasCapas").property("enabled") is True)
+    assert app.achar("linhaDasCapasOcupado").property("visible") is False
+
+    _clique(app, "linhaDasCapasBotao")
+    assert _esperar(lambda: app.achar("linhaDasCapasOcupado").property("visible") is True)
+    assert app.achar("linhaDasCapasBotao").property("visible") is False
+    for callback in gerente.callbacks:
+        callback(gerente)
+    assert _esperar(lambda: app.achar("linhaDasCapasBotao").property("visible") is True)
+    assert app.achar("linhaDasCapasOcupado").property("visible") is False
+
+
+# endregion
+
+
+def test_foco_acompanha_o_botao_dos_metadados(app, store, make_game, monkeypatch):
+    refresh, _ = _com_refresh_falso(monkeypatch)
+    store.add_game(make_game(game_id="a", has_hltb_times=False), {})
+    _abrir(app, "import")
+    app.achar("linhaDosMetadadosBotao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    refresh.running, refresh.done, refresh.total = True, 0, 1
+    refresh.progress.emit()
+    assert _esperar(lambda: _foco_dentro_de(app, "linhaDosMetadadosParar"))
+    refresh.running = False
+    refresh.progress.emit()
+    assert _esperar(lambda: _foco_dentro_de(app, "linhaDosMetadadosBotao"))
+
+
+def test_foco_das_capas_fica_no_dialogo_e_esc_fecha(app, store, make_game):
+    from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
+    from tests.test_preferencias_qt import _ManagerDeCapas  # noqa: PLC0415
+
+    store.add_game(make_game(game_id="a"), {})
+    store.managers[SgdbManager] = gerente = _ManagerDeCapas()
+    app.preferencias.definirTexto("sgdb-key", "abc")
+    app.preferencias.definir("sgdb", True)
+    _abrir(app, "sgdb")
+    app.achar("linhaDasCapasBotao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert _esperar(lambda: app.achar("linhaDasCapasOcupado").property("visible") is True)
+    assert _esperar(lambda: _foco_dentro_de(app, "linhaDasCapas"))
+    for callback in gerente.callbacks:
+        callback(gerente)
+    assert _esperar(lambda: _foco_dentro_de(app, "linhaDasCapasBotao"))
+    app.achar("linhaDasCapasBotao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: not app.preferencias.aberto)
+
+
+def test_foco_levado_para_outro_controle_nao_e_roubado_ao_terminar(app, store, make_game, monkeypatch):
+    refresh, _ = _com_refresh_falso(monkeypatch)
+    store.add_game(make_game(game_id="a", has_hltb_times=False), {})
+    _abrir(app, "import")
+    app.achar("linhaDosMetadadosBotao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    refresh.running, refresh.done, refresh.total = True, 0, 1
+    refresh.progress.emit()
+    assert _esperar(lambda: _foco_dentro_de(app, "linhaDosMetadadosParar"))
+    app.achar("aba-sgdb").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    refresh.running = False
+    refresh.progress.emit()
+    _esperar()
+    assert _foco_dentro_de(app, "aba-sgdb")

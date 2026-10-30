@@ -19,35 +19,36 @@
 
 """Refresh the metadata of games already in the library.
 
-Deliberately *not* owned by the preferences dialog. A whole-library refresh
-runs for minutes, and the dialog is a transient the user is free to close in
+Deliberately *not* owned by the preferences screen. A whole-library refresh
+runs for minutes, and the screen is a transient the user is free to close in
 the meantime — if it owned the queue, closing it would either abandon work
 halfway through or leave it running with no way to see or stop it. So the run
-lives here, for the lifetime of the process, and the dialog is only a view onto
-it: it reads the counters when it opens and follows the ``progress`` signal
-while it stays open.
+lives here, for the lifetime of the process, and the screen is only a view onto
+it (``AtualizacoesDaBiblioteca``): it reads the counters when it opens and
+follows the ``progress`` signal while it stays open.
 """
 
 import logging
 from threading import Thread
 from typing import Any, Optional
 
-from gi.repository import Adw, GLib, GObject
+from PySide6.QtCore import QObject, Signal
 
 from cartridges import shared
 from cartridges.errors.friendly_error import FriendlyError
-from cartridges.game import Game
+from cartridges.jogo import Jogo
 from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.modelos import tarefas
-from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.steam import STEAM_METADATA_VERSION
+from cartridges.utils.thread_principal import na_thread_principal
 
 
-class MetadataRefresh(GObject.Object):
+class MetadataRefresh(QObject):
     """A whole-library metadata refresh, running or idle."""
 
-    __gtype_name__ = "MetadataRefresh"
+    # Emitido quando um jogo termina, e quando a atualização começa ou termina.
+    progress = Signal()
 
     running: bool = False
     cancelled: bool = False
@@ -56,21 +57,17 @@ class MetadataRefresh(GObject.Object):
 
     def __init__(self) -> None:
         super().__init__()
-        self._queue: list[Game] = []
+        self._queue: list[Jogo] = []
         self._managers: list[Any] = []
         self._only_missing: bool = False
         self._tarefa: Optional[tarefas.Tarefa] = None
-
-    @GObject.Signal(name="progress")
-    def progress(self):  # type: ignore
-        """Emitted when a game finishes, and when the run starts or ends."""
 
     @property
     def fraction(self) -> float:
         return self.done / self.total if self.total else 0.0
 
     @staticmethod
-    def needs_steam(game: Game) -> bool:
+    def needs_steam(game: Jogo) -> bool:
         """Whether the Steam lookup has anything left to give this game.
 
         Judged on two things, because neither works alone.
@@ -104,7 +101,7 @@ class MetadataRefresh(GObject.Object):
         return not (game.developer and game.release_date and game.genre)
 
     @staticmethod
-    def needs_hltb(game: Game) -> bool:
+    def needs_hltb(game: Jogo) -> bool:
         """Whether HowLongToBeat has anything left to give this game.
 
         The same rule the manager applies to itself, so asking here can never
@@ -113,17 +110,17 @@ class MetadataRefresh(GObject.Object):
         return not game.has_hltb_times
 
     @classmethod
-    def is_incomplete(cls, game: Game) -> bool:
+    def is_incomplete(cls, game: Jogo) -> bool:
         """Whether any source still has something for this game."""
         return cls.needs_steam(game) or cls.needs_hltb(game)
 
     @staticmethod
-    def library() -> list[Game]:
+    def library() -> list[Jogo]:
         """The games a refresh would consider: everything the user can see."""
         return [game for game in shared.store if not (game.removed or game.blacklisted)]
 
     @staticmethod
-    def _in_library(game: Game) -> bool:
+    def _in_library(game: Jogo) -> bool:
         """Whether the store still holds this exact game under its id.
 
         Identity, not just the id: a game removed and re-imported while the
@@ -135,7 +132,7 @@ class MetadataRefresh(GObject.Object):
             return False
         return store.get(game.game_id) is game
 
-    def start(self, games: list[Game], only_missing: bool = False) -> bool:
+    def start(self, games: list[Jogo], only_missing: bool = False) -> bool:
         """Begin refreshing ``games``. Returns False when there is nothing to do.
 
         With ``only_missing`` each game is asked which sources still owe it
@@ -159,7 +156,7 @@ class MetadataRefresh(GObject.Object):
         self.cancelled = False
         self.done = 0
         self.total = len(games)
-        self.emit("progress")
+        self.progress.emit()
         self._tarefa = tarefas.comecar(_("Metadados"), self.total)
 
         # The tags of every game in one or two requests instead of one each.
@@ -195,7 +192,7 @@ class MetadataRefresh(GObject.Object):
                 # a failed bulk request produces — the run goes ahead and
                 # leaves every genre exactly as it is.
                 logging.exception("Metadata refresh: could not prefetch Steam tags")
-            entregar_na_tela(self._run_queue, tags)
+            na_thread_principal(self._run_queue, tags)
 
         Thread(target=prefetch, daemon=True).start()
         return True
@@ -209,7 +206,7 @@ class MetadataRefresh(GObject.Object):
         if self.running:
             self.cancelled = True
 
-    def managers_for(self, game: Game) -> list[Any]:
+    def managers_for(self, game: Jogo) -> list[Any]:
         """The sources to run for ``game`` on this run.
 
         Order is kept: the HowLongToBeat search goes second because the Steam
@@ -224,7 +221,7 @@ class MetadataRefresh(GObject.Object):
         wanted = (self.needs_steam(game), self.needs_hltb(game))
         return [manager for manager, needed in zip(self._managers, wanted) if needed]
 
-    def _run_queue(self, tags: dict[str, list[int]]) -> bool:
+    def _run_queue(self, tags: dict[str, list[int]]) -> None:
         """Walk the queue, one game and one manager at a time.
 
         Sequential on purpose. The Steam limiter spaces requests 1.5 s apart no
@@ -261,7 +258,7 @@ class MetadataRefresh(GObject.Object):
                 if index >= len(managers):
                     # Only if the game is still the one the library holds under
                     # that id. A reset wipes the store and the files on disk
-                    # while this queue is still walking its own list of Game
+                    # while this queue is still walking its own list of Jogo
                     # objects, and `save()` writes a record whether or not
                     # anything still refers to it — so the games the user had
                     # just deleted came back on disk and were loaded again on
@@ -287,7 +284,7 @@ class MetadataRefresh(GObject.Object):
                     self.done += 1
                     if self._tarefa is not None:
                         self._tarefa.atualizar(self.done)
-                    self.emit("progress")
+                    self.progress.emit()
                     next_game()
                     return
                 managers[index].process_game(
@@ -297,7 +294,6 @@ class MetadataRefresh(GObject.Object):
             next_manager(0)
 
         next_game()
-        return GLib.SOURCE_REMOVE
 
     def _finish(self) -> None:
         # O diálogo de erro amigável saiu daqui (B17); só o log fica, para não
@@ -314,7 +310,7 @@ class MetadataRefresh(GObject.Object):
         self.running = False
         self._queue = []
         self._managers = []
-        self.emit("progress")
+        self.progress.emit()
         self._announce(done, total, cancelled)
 
     @staticmethod
@@ -332,8 +328,9 @@ class MetadataRefresh(GObject.Object):
             message = ngettext(
                 "Metadados atualizados: {} jogo", "Metadados atualizados: {} jogos", done
             ).format(done)
-        if shared.win is not None:
-            shared.win.toast_queue.add(Adw.Toast.new(message))
+        aplicativo = getattr(shared, "aplicativo", None)
+        if aplicativo is not None:
+            aplicativo.avisos.adicionar(message)
 
 
 _refresh: Optional[MetadataRefresh] = None  # pylint: disable=invalid-name

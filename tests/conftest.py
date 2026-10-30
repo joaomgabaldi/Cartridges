@@ -94,7 +94,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_log_engolidos.py",
     "test_log_excecoes.py",
     "test_menu_do_card.py",
-    "test_metadata_refresh.py",
     "test_na_tela.py",
     "test_redefinir.py",
     "test_reinicio.py",

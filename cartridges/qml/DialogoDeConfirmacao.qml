@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Window
 
-// Uma pergunta com dois botões. O texto vai sempre em PlainText (nome de jogo e URL não são marcação).
+// Uma pergunta com dois botões (três, com `rotuloAlternativo`). O texto vai sempre em PlainText (nome de jogo e URL não são marcação).
 // Esc e fechar valem como cancelar; o foco inicial vai ao botão de confirmar, salvo se a ação é destrutiva.
 Rectangle {
     id: dialogo
@@ -11,10 +11,13 @@ Rectangle {
     property string corpo
     property string rotuloConfirmar: "Confirmar"
     property string rotuloCancelar: "Cancelar"
+    // Vazio = sem o terceiro botão. Com ele a ordem é Cancelar | confirmar | alternativo.
+    property string rotuloAlternativo: ""
     property bool destrutivo: false
 
     signal confirmado()
     signal cancelado()
+    signal alternativo()
 
     // Quem tinha o foco ao abrir: volta a tê-lo ao fechar.
     property Item retorno: null
@@ -24,13 +27,16 @@ Rectangle {
         visible = true;
         (destrutivo ? botaoCancelar : botaoConfirmar).forceActiveFocus(Qt.TabFocusReason)
     }
-    function resolver(confirmou) {
+    // `escolha`: "confirmar", "alternativo" ou qualquer outra coisa (cancelar).
+    function resolverComo(escolha) {
         if (!visible) return
         visible = false
         if (retorno) retorno.forceActiveFocus(Qt.TabFocusReason)
-        if (confirmou) confirmado()
+        if (escolha === "confirmar") confirmado()
+        else if (escolha === "alternativo") alternativo()
         else cancelado()
     }
+    function resolver(confirmou) { resolverComo(confirmou ? "confirmar" : "cancelar") }
 
     anchors.fill: parent
     z: 10
@@ -89,12 +95,13 @@ Rectangle {
                     implicitHeight: 36
                     leftPadding: 20
                     rightPadding: 20
-                    // Esquerda, direita e Tab ficam entre os dois botões.
-                    property Item outro
-                    Keys.onLeftPressed: outro.forceActiveFocus(Qt.TabFocusReason)
-                    Keys.onRightPressed: outro.forceActiveFocus(Qt.TabFocusReason)
-                    Keys.onTabPressed: outro.forceActiveFocus(Qt.TabFocusReason)
-                    Keys.onBacktabPressed: outro.forceActiveFocus(Qt.BacktabFocusReason)
+                    // Esquerda, direita e Tab circulam entre os botões (com dois, é sempre o outro).
+                    property Item anterior
+                    property Item proximo
+                    Keys.onLeftPressed: anterior.forceActiveFocus(Qt.TabFocusReason)
+                    Keys.onRightPressed: proximo.forceActiveFocus(Qt.TabFocusReason)
+                    Keys.onTabPressed: proximo.forceActiveFocus(Qt.TabFocusReason)
+                    Keys.onBacktabPressed: anterior.forceActiveFocus(Qt.BacktabFocusReason)
                     Keys.onReturnPressed: click()
                     Keys.onEnterPressed: click()
                     contentItem: Text {
@@ -115,19 +122,30 @@ Rectangle {
 
                 BotaoDoDialogo {
                     id: botaoCancelar
-                    outro: botaoConfirmar
+                    anterior: botaoAlternativo.visible ? botaoAlternativo : botaoConfirmar
+                    proximo: botaoConfirmar
                     objectName: "botaoCancelarDoDialogo"
                     text: dialogo.rotuloCancelar
                     onClicked: dialogo.resolver(false)
                 }
                 BotaoDoDialogo {
                     id: botaoConfirmar
-                    outro: botaoCancelar
+                    anterior: botaoCancelar
+                    proximo: botaoAlternativo.visible ? botaoAlternativo : botaoCancelar
                     objectName: "botaoConfirmarDoDialogo"
                     text: dialogo.rotuloConfirmar
                     cor: dialogo.destrutivo ? "#c01c28" : Tema.destaque
                     corDoTexto: "white"
                     onClicked: dialogo.resolver(true)
+                }
+                BotaoDoDialogo {
+                    id: botaoAlternativo
+                    anterior: botaoConfirmar
+                    proximo: botaoCancelar
+                    objectName: "botaoAlternativoDoDialogo"
+                    visible: dialogo.rotuloAlternativo !== ""
+                    text: dialogo.rotuloAlternativo
+                    onClicked: dialogo.resolverComo("alternativo")
                 }
             }
         }

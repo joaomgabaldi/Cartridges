@@ -165,3 +165,211 @@ def test_definir_texto_so_aceita_as_chaves_de_texto(p, caplog):
     assert shared.schema.get_string("shortcuts-location") != "C:/x"
     avisos = [r for r in caplog.records if r.name == "cartridges.modelos.preferencias"]
     assert len(avisos) == 2
+
+
+# region Atualizar metadados e capas (Task 3)
+
+
+class _FilaFalsa:
+    """No lugar da `FilaDeAvisos`: guarda o que entrou e o que foi dispensado."""
+
+    def __init__(self):
+        self.textos, self.chamadas, self.dispensados = [], [], []
+
+    def adicionar(self, texto, botao="", ao_clicar=None, segundos=5, chave=None):
+        self.textos.append(texto)
+        self.chamadas.append({"texto": texto, "segundos": segundos})
+        return len(self.textos)
+
+    def dispensar(self, id_):
+        self.dispensados.append(id_)
+
+
+class _ManagerDeCapas:
+    signals: set = set()
+
+    def __init__(self, erros=()):
+        self.callbacks, self.erros, self.resets = [], list(erros), 0
+
+    def reset_cancellable(self):
+        self.resets += 1
+
+    def collect_errors(self):
+        return self.erros
+
+    def process_game(self, _game, _data, callback):
+        self.callbacks.append(callback)
+
+
+def _capas(store, make_game, n=2, **manager):
+    from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
+
+    jogos = [make_game(game_id=f"j{i}") for i in range(n)]
+    for jogo in jogos:
+        store.add_game(jogo, {})
+    store.managers[SgdbManager] = gerente = _ManagerDeCapas(**manager)
+    return jogos, gerente
+
+
+def _modelo_de_atualizacoes(fila):
+    from cartridges.modelos.preferencias import AtualizacoesDaBiblioteca  # noqa: PLC0415
+
+    return AtualizacoesDaBiblioteca(fila)
+
+
+def test_m8_lote_de_capas_nao_repinta_jogo_apagado(app_qt, store, make_game):
+    jogos, gerente = _capas(store, make_game, n=1)
+    _modelo_de_atualizacoes(_FilaFalsa()).atualizarCapas()
+
+    store.clear()  # o reset chegou com o lote em voo
+    for callback in gerente.callbacks:
+        callback(gerente)
+
+    assert jogos[0].updates == 0
+
+
+def test_sem_jogos_avisa_e_nao_pergunta(app_qt, store):
+    fila, perguntas = _FilaFalsa(), []
+    modelo = _modelo_de_atualizacoes(fila)
+    modelo.perguntar.connect(perguntas.append)
+
+    modelo.atualizarMetadados()
+
+    assert fila.textos == ["Nenhum jogo na biblioteca"]
+    assert not perguntas
+
+
+def _completo(make_game, **extra):
+    from cartridges.utils.steam import STEAM_METADATA_VERSION  # noqa: PLC0415
+
+    return make_game(
+        steam_appid="1", steam_checked=STEAM_METADATA_VERSION, developer="D", release_date="2020", genre="G",
+        has_hltb_times=True, **extra,
+    )  # fmt: skip
+
+
+def test_pergunta_com_a_contagem_dos_incompletos(app_qt, store, make_game):
+    store.add_game(_completo(make_game, game_id="a"), {})
+    store.add_game(make_game(game_id="b", has_hltb_times=True), {})
+    store.add_game(make_game(game_id="c", has_hltb_times=False), {})
+    store.add_game(make_game(game_id="d", removed=True, has_hltb_times=False), {})  # fora da biblioteca
+    perguntas = []
+    modelo = _modelo_de_atualizacoes(_FilaFalsa())
+    modelo.perguntar.connect(perguntas.append)
+
+    modelo.atualizarMetadados()
+
+    assert perguntas == [
+        "Buscar o que falta atualiza 2 de 3 jogos, consultando somente os campos ausentes. "
+        "Buscar tudo preenche todos os campos, podendo levar mais tempo."
+    ]
+
+
+def test_recusa_por_ja_estar_rodando_avisa(app_qt, store, make_game, monkeypatch):
+    from cartridges import metadata_refresh  # noqa: PLC0415
+
+    store.add_game(make_game(game_id="b", has_hltb_times=False), {})
+    refresh = metadata_refresh.MetadataRefresh()
+    refresh.running = True
+    monkeypatch.setattr(metadata_refresh, "get_metadata_refresh", lambda: refresh)
+    fila = _FilaFalsa()
+
+    _modelo_de_atualizacoes(fila).buscarMetadados(True)
+
+    assert fila.textos == ["Uma atualização de metadados já está em andamento"]
+
+
+def test_recusa_por_nada_a_buscar_avisa(app_qt, store, make_game, monkeypatch):
+    from cartridges import metadata_refresh  # noqa: PLC0415
+
+    store.add_game(_completo(make_game, game_id="a"), {})
+    monkeypatch.setattr(metadata_refresh, "get_metadata_refresh", lambda: metadata_refresh.MetadataRefresh())
+    fila = _FilaFalsa()
+
+    _modelo_de_atualizacoes(fila).buscarMetadados(True)
+
+    assert fila.textos == ["Todos os jogos já estão com os metadados completos"]
+
+
+def test_buscar_metadados_comeca_pelos_jogos_certos(app_qt, store, make_game, monkeypatch):
+    from cartridges import metadata_refresh  # noqa: PLC0415
+
+    completo = _completo(make_game, game_id="a")
+    faltando = make_game(game_id="b", has_hltb_times=False)
+    store.add_game(completo, {})
+    store.add_game(faltando, {})
+    chamadas = []
+
+    class Falso(metadata_refresh.MetadataRefresh):
+        def start(self, games, only_missing=False):
+            chamadas.append((games, only_missing))
+            return True
+
+    falso = Falso()
+    monkeypatch.setattr(metadata_refresh, "get_metadata_refresh", lambda: falso)
+    modelo = _modelo_de_atualizacoes(_FilaFalsa())
+    modelo.buscarMetadados(True)
+    modelo.buscarMetadados(False)
+
+    assert chamadas == [([faltando], True), ([completo, faltando], False)]
+
+
+def test_capas_dispensam_o_baixando_e_avisam_o_fim(app_qt, store, make_game):
+    jogos, gerente = _capas(store, make_game)
+    fila = _FilaFalsa()
+    modelo = _modelo_de_atualizacoes(fila)
+
+    modelo.atualizarCapas()
+
+    assert gerente.resets == 1
+    assert fila.chamadas == [{"texto": "Baixando capas…", "segundos": 0}]
+    assert modelo.baixandoCapas is True
+    gerente.callbacks[0](gerente)
+    assert modelo.baixandoCapas is True and not fila.dispensados
+    gerente.callbacks[1](gerente)
+    assert fila.dispensados == [1]
+    assert fila.textos == ["Baixando capas…", "Capas atualizadas"]
+    assert modelo.baixandoCapas is False
+    assert [jogo.updates for jogo in jogos] == [1, 1]
+
+
+def test_erro_amigavel_das_capas_vira_dialogo_uma_vez(app_qt, store, make_game, monkeypatch):
+    from cartridges import shared  # noqa: PLC0415
+    from cartridges.errors.friendly_error import FriendlyError  # noqa: PLC0415
+
+    dialogos = []
+    monkeypatch.setattr(
+        shared, "aplicativo", types.SimpleNamespace(pedir_dialogo=lambda *a, **k: dialogos.append(a)), raising=False
+    )
+    erros = [FriendlyError("Título 1", "Corpo 1"), FriendlyError("Título 2", "Corpo 2")]
+    _, gerente = _capas(store, make_game, erros=erros)
+    _modelo_de_atualizacoes(_FilaFalsa()).atualizarCapas()
+
+    for callback in gerente.callbacks:
+        callback(gerente)
+
+    assert [d[:3] for d in dialogos] == [("Título 1", "Corpo 1", [])]
+
+
+def test_capas_sem_jogos_nao_faz_nada(app_qt, store):
+    fila = _FilaFalsa()
+    modelo = _modelo_de_atualizacoes(fila)
+    modelo.atualizarCapas()
+    assert not fila.textos and modelo.baixandoCapas is False
+
+
+def test_fechar_as_preferencias_nao_cancela_os_metadados(app_qt, monkeypatch):
+    from cartridges import metadata_refresh  # noqa: PLC0415
+
+    refresh = metadata_refresh.MetadataRefresh()
+    refresh.running = True
+    monkeypatch.setattr(metadata_refresh, "get_metadata_refresh", lambda: refresh)
+    modelo = Preferencias(None, lambda: True)
+    assert modelo.abrir()
+
+    modelo.fechar()
+
+    assert refresh.running is True and refresh.cancelled is False
+
+
+# endregion

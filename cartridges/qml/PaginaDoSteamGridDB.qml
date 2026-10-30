@@ -46,5 +46,16 @@ Column {
         Interruptor { chave: "sgdb-animated"; titulo: "Preferir imagens animadas" }
     }
 
-    // shortcut: falta o grupo "Atualizar capas" (a linha com o botão "Atualizar" e o indicador), da Task 3 do plano 7; entra aqui, depois de "Comportamento".
+    GrupoDePreferencias {
+        objectName: "grupoAtualizarCapas"
+
+        LinhaDeAtualizacao {
+            objectName: "linhaDasCapas"
+            titulo: "Atualizar capas"
+            subtitulo: "Busca capas para jogos já na biblioteca"
+            enabled: preferencias.valores["sgdb"] === true
+            emAndamento: preferencias.biblioteca.baixandoCapas
+            onAcionada: preferencias.biblioteca.atualizarCapas()
+        }
+    }
 }

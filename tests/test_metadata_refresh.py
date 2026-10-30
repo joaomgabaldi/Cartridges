@@ -13,6 +13,7 @@ when the state lived in the dialog::
     python3 -m pytest tests/test_metadata_refresh.py
 """
 
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -285,13 +286,17 @@ def test_a_reimported_game_is_not_overwritten(refresh) -> None:
     assert replacement.saved == 0
 
 
+def _esperar_a_prefetch(antes):
+    """Só a thread que o `start` criou: as do pool de rede do app ficam vivas pelo processo todo."""
+    for thread in set(threading.enumerate()) - antes:
+        thread.join(timeout=5)
+
+
 def test_prefetch_failure_does_not_wedge_the_run(refresh, monkeypatch) -> None:
     """The prefetch thread is the only thing that schedules the queue. Anything
     escaping it left `running` True with no queue behind it, and no refresh
     could ever be started again."""
-    from gi.repository import GLib  # noqa: PLC0415
-
-    from cartridges import shared  # noqa: PLC0415
+    from cartridges import metadata_refresh, shared  # noqa: PLC0415
     from cartridges.store.managers.hltb_manager import HLTBManager  # noqa: PLC0415
     from cartridges.store.managers.steam_api_manager import (  # noqa: PLC0415
         SteamAPIManager,
@@ -306,16 +311,15 @@ def test_prefetch_failure_does_not_wedge_the_run(refresh, monkeypatch) -> None:
             raise AttributeError("boom")
 
     scheduled: list = []
-    monkeypatch.setattr(GLib, "idle_add", lambda *args, **_kw: scheduled.append(args))
+    monkeypatch.setattr(metadata_refresh, "na_thread_principal", lambda *args: scheduled.append(args))
     shared.store.managers = {
         SteamAPIManager: Exploding(),
         HLTBManager: Exploding(),
     }
 
+    antes = set(threading.enumerate())
     assert refresh.start([make_game(appid="440")]) is True
-    for thread in list(threading.enumerate()):
-        if thread is not threading.current_thread() and thread.daemon:
-            thread.join(timeout=5)
+    _esperar_a_prefetch(antes)
 
     # The queue was scheduled anyway, with the same empty mapping a failed bulk
     # request produces — every genre left exactly as it is.
@@ -325,9 +329,7 @@ def test_prefetch_failure_does_not_wedge_the_run(refresh, monkeypatch) -> None:
 def test_prefetch_stringifies_a_numeric_appid(refresh, monkeypatch) -> None:
     """A hand-edited record can hold the appid unquoted, and the manager looks
     the tags up under `str(appid)`."""
-    from gi.repository import GLib  # noqa: PLC0415
-
-    from cartridges import shared  # noqa: PLC0415
+    from cartridges import metadata_refresh, shared  # noqa: PLC0415
     from cartridges.store.managers.hltb_manager import HLTBManager  # noqa: PLC0415
     from cartridges.store.managers.steam_api_manager import (  # noqa: PLC0415
         SteamAPIManager,
@@ -348,121 +350,169 @@ def test_prefetch_stringifies_a_numeric_appid(refresh, monkeypatch) -> None:
                 or {}
             )
 
-    monkeypatch.setattr(GLib, "idle_add", lambda *args, **_kw: None)
+    monkeypatch.setattr(metadata_refresh, "na_thread_principal", lambda *args: None)
     shared.store.managers = {
         SteamAPIManager: Recording(),
         HLTBManager: Recording(),
     }
 
+    antes = set(threading.enumerate())
     refresh.start([make_game(appid=440)])
-    for thread in list(threading.enumerate()):
-        if thread is not threading.current_thread() and thread.daemon:
-            thread.join(timeout=5)
+    _esperar_a_prefetch(antes)
 
     assert asked == [["440"]]
 
 
 # endregion
-# region The dialog as a view onto it
+# region The preferences as a view onto it
 
 
 @pytest.fixture
-def preferences(win, monkeypatch):
-    """The real preferences dialog, wired to a refresh under our control."""
-    import cartridges.preferences as preferences_module  # noqa: PLC0415
+def preferences(monkeypatch):
+    """The real preferences model, wired to a refresh under our control."""
+    from cartridges import metadata_refresh  # noqa: PLC0415
+    from cartridges.modelos.preferencias import Preferencias  # noqa: PLC0415
 
     instance = MetadataRefresh()
-    monkeypatch.setattr(
-        preferences_module, "get_metadata_refresh", lambda: instance, raising=True
-    )
-    dialog = preferences_module.CartridgesPreferences()
-    return dialog, instance
+    monkeypatch.setattr(metadata_refresh, "get_metadata_refresh", lambda: instance)
+    modelo = Preferencias(None, lambda: True)
+    assert modelo.abrir()
+    yield modelo, instance
+    modelo.fechar()
+
+
+def _contar(biblioteca):
+    avisos: list = []
+    biblioteca.alterado.connect(lambda: avisos.append(1))
+    return avisos
 
 
 def test_row_starts_idle(preferences) -> None:
-    dialog, _refresh = preferences
+    modelo, _refresh = preferences
+    biblioteca = modelo.biblioteca
 
-    assert dialog.metadata_stack.get_visible_child() is dialog.metadata_fetch_button
-    assert not dialog.metadata_progress_bar.get_visible()
+    assert biblioteca.rodando is False
+    assert biblioteca.fracao == pytest.approx(0)
+    assert biblioteca.baixandoCapas is False
 
 
 def test_dialog_opened_mid_run_shows_the_current_position(preferences) -> None:
     """The case this whole split exists for: close the dialog at game 12 of 47,
     reopen it, and the bar must still say 12 of 47."""
-    import cartridges.preferences as preferences_module  # noqa: PLC0415
+    from cartridges.modelos.preferencias import Preferencias  # noqa: PLC0415
 
-    _dialog, refresh = preferences
+    _modelo, refresh = preferences
     refresh.running = True
     refresh.done = 12
     refresh.total = 47
 
-    reopened = preferences_module.CartridgesPreferences()
-
-    assert reopened.metadata_stack.get_visible_child() is reopened.metadata_cancel_button
-    assert reopened.metadata_progress_bar.get_visible()
-    assert reopened.metadata_progress_bar.get_text() == "12 de 47"
-    assert reopened.metadata_progress_bar.get_fraction() == pytest.approx(12 / 47)
+    reaberto = Preferencias(None, lambda: True)
+    assert reaberto.abrir()
+    try:
+        assert reaberto.biblioteca.rodando is True
+        assert reaberto.biblioteca.progresso == "12 de 47"
+        assert reaberto.biblioteca.fracao == pytest.approx(12 / 47)
+    finally:
+        reaberto.fechar()
 
 
 def test_progress_signal_updates_an_open_dialog(preferences) -> None:
-    dialog, refresh = preferences
+    modelo, refresh = preferences
+    alterados = _contar(modelo.biblioteca)
     refresh.running = True
     refresh.done = 3
     refresh.total = 12
-    refresh.emit("progress")
+    refresh.progress.emit()
 
-    assert dialog.metadata_progress_bar.get_text() == "3 de 12"
-    assert dialog.metadata_progress_bar.get_fraction() == pytest.approx(0.25)
+    assert alterados
+    assert modelo.biblioteca.progresso == "3 de 12"
+    assert modelo.biblioteca.fracao == pytest.approx(0.25)
 
 
 def test_finishing_returns_the_row_to_idle(preferences) -> None:
-    dialog, refresh = preferences
+    modelo, refresh = preferences
+    alterados = _contar(modelo.biblioteca)
     refresh.running = True
     refresh.done = 12
     refresh.total = 12
-    refresh.emit("progress")
+    refresh.progress.emit()
+    assert modelo.biblioteca.rodando is True
     refresh.running = False
-    refresh.emit("progress")
+    refresh.progress.emit()
 
-    assert dialog.metadata_stack.get_visible_child() is dialog.metadata_fetch_button
-    assert not dialog.metadata_progress_bar.get_visible()
+    assert modelo.biblioteca.rodando is False
+    assert len(alterados) == 2
 
 
 def test_closed_dialog_stops_following_the_run(preferences) -> None:
-    """The handler holds the dialog alive, so it has to go on close — and a
-    stale dialog must not fight a live one over the same widgets."""
-    dialog, refresh = preferences
-    dialog.emit("closed")
+    """The handler holds the view alive, so it has to go on close — and a stale
+    view must not keep reacting to a run it no longer shows."""
+    modelo, refresh = preferences
+    modelo.fechar()
+    alterados = _contar(modelo.biblioteca)
     refresh.running = True
     refresh.done = 9
     refresh.total = 9
-    refresh.emit("progress")
+    refresh.progress.emit()
 
-    assert dialog.metadata_progress_bar.get_text() != "9 de 9"
+    assert not alterados
 
 
 def test_row_is_insensitive_when_both_sources_are_off(preferences) -> None:
     """Both managers no-op with their setting off, so the button would walk the
     whole library and change nothing."""
-    dialog, _refresh = preferences
-    dialog.steam_metadata_switch.set_active(False)
-    dialog.hltb_metadata_switch.set_active(False)
-    dialog.update_metadata_sensitive()
-    assert not dialog.metadata_update_row.get_sensitive()
+    from cartridges import shared  # noqa: PLC0415
 
-    dialog.hltb_metadata_switch.set_active(True)
-    dialog.update_metadata_sensitive()
-    assert dialog.metadata_update_row.get_sensitive()
+    modelo, _refresh = preferences
+    alterados = _contar(modelo.biblioteca)
+    shared.schema.set_boolean("steam-metadata", False)
+    shared.schema.set_boolean("hltb-metadata", False)
+    assert modelo.biblioteca.metadadosAtivos is False
+    assert alterados
+
+    shared.schema.set_boolean("hltb-metadata", True)
+    assert modelo.biblioteca.metadadosAtivos is True
 
 
 def test_cancel_button_greys_out_once_pressed(preferences) -> None:
-    dialog, refresh = preferences
+    modelo, refresh = preferences
     refresh.running = True
     refresh.total = 5
-    dialog.cancel_metadata_update()
+    assert modelo.biblioteca.cancelado is False
+    modelo.biblioteca.cancelarMetadados()
 
     assert refresh.cancelled
-    assert not dialog.metadata_cancel_button.get_sensitive()
+    assert modelo.biblioteca.cancelado is True
+
+
+def test_aviso_do_fim_vai_pela_fila_do_app(avisos) -> None:
+    MetadataRefresh._announce(3, 5, False)
+    MetadataRefresh._announce(1, 1, False)
+    MetadataRefresh._announce(3, 5, True)
+
+    assert avisos.textos == [
+        "Metadados atualizados: 3 jogos",
+        "Metadados atualizados: 1 jogo",
+        "Atualização cancelada após 3 de 5 jogos",
+    ]
+
+
+def test_aviso_do_fim_sem_aplicativo_nao_levanta(monkeypatch) -> None:
+    from cartridges import shared  # noqa: PLC0415
+
+    monkeypatch.setattr(shared, "aplicativo", None, raising=False)
+    MetadataRefresh._announce(2, 2, False)  # não levanta
+    assert shared.aplicativo is None
+
+
+def test_metadata_refresh_sem_gi() -> None:
+    codigo = (
+        "import builtins, sys; builtins._ = lambda m: m; "
+        "builtins.ngettext = lambda s, p, n: s if n == 1 else p; "
+        "import cartridges.metadata_refresh; "
+        "assert 'gi' not in sys.modules"
+    )
+    subprocess.run([sys.executable, "-c", codigo], check=True, cwd=Path(__file__).resolve().parent.parent, timeout=60)
 
 
 # endregion

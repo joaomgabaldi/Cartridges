@@ -61,6 +61,7 @@ Rectangle {
             for (var i = 0; i < abasLinha.children.length; ++i)
                 if (abasLinha.children[i].atual === true) abasLinha.children[i].forceActiveFocus(Qt.TabFocusReason)
         } else {
+            confirmacaoDosMetadados.visible = false
             Qt.callLater(devolverAoRetorno)
         }
     }
@@ -198,6 +199,24 @@ Rectangle {
                 PaginaDeImportacao { visible: dialogo.aba === "import" }
                 PaginaDoSteamGridDB { visible: dialogo.aba === "sgdb" }
             }
+        }
+    }
+
+    // O escopo da atualização de metadados: a pergunta chega do `preferencias.biblioteca`.
+    DialogoDeConfirmacao {
+        id: confirmacaoDosMetadados
+        objectName: "dialogoDosMetadados"
+        titulo: "Atualizar metadados"
+        rotuloConfirmar: "Buscar o que falta"
+        rotuloAlternativo: "Buscar tudo"
+        onConfirmado: preferencias.biblioteca.buscarMetadados(true)
+        onAlternativo: preferencias.biblioteca.buscarMetadados(false)
+    }
+    Connections {
+        target: preferencias.biblioteca
+        function onPerguntar(corpo) {
+            confirmacaoDosMetadados.corpo = corpo
+            confirmacaoDosMetadados.abrir()
         }
     }
 }
