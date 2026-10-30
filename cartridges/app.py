@@ -141,7 +141,7 @@ def _fechar(big_picture, sessao, verificador, varredura_hltb, varredura_tamanho,
     """O `aboutToQuit`, na ordem da `main`; o `stop()` de cada um vem antes do `encerrar()`."""
     _encerrar_em_ordem(
         big_picture.encerrar,  # a cortina preta do fade nunca fica no monitor (ADR 0003)
-        sessao.encerrar,  # o tempo da sessão em andamento vai ao jogo e ao histórico (sem interface)
+        sessao.devolver,  # a parede e as fitas, com as janelas já fora da tela (grava antes se o `saindo` não veio)
         login.cancelar_pendente,  # um login da conta Microsoft esperando o navegador não sobrevive ao app
         ea_conta.gravar_pendente,  # o `remid` novo da EA que não coube no disco: última tentativa
         verificador.stop,
@@ -218,7 +218,8 @@ def main(argv: list[str]) -> int:
     conquistas = ConquistasDoJogo(detalhes, sessao)
     shared.conquistas = conquistas
     # Antes de o Qt fechar as janelas: sem isto a janela "Jogando" fecharia pelo fim normal da sessão, com interface.
-    # O desligar do Windows emite o `aboutToQuit` antes do `quit()`; lá o `encerrar()` também vem primeiro.
+    # Só o rápido (gravar, parar o vigia); a parede e as fitas vão ao `aboutToQuit` (`_fechar`, `sessao.devolver`).
+    # O desligar do Windows emite o `aboutToQuit` antes do `quit()`; lá o `devolver()` grava primeiro.
     app.saindo.connect(sessao.encerrar)
     motor.addImageProvider("desfoque", detalhes.provedor)
     motor.addImageProvider("fundo", ProvedorDoFundo())
@@ -236,7 +237,7 @@ def main(argv: list[str]) -> int:
     if not motor.rootObjects():
         return 1
     # As fitas de LED: desfaz o que uma execução anterior deixou e acende na cor do app (numa thread). Depois da
-    # janela: sem ela não há `aboutToQuit`, e o `fechar()` (no fim do `ModeloDaSessao.encerrar()`) nunca viria.
+    # janela: sem ela não há `aboutToQuit`, e o `fechar()` (no fim do `ModeloDaSessao.devolver()`) nunca viria.
     session_fita.abrir()
     big_picture.definir_janela(motor.rootObjects()[0])  # a janela que vai à tela cheia
     sessao.definir_janela(motor.rootObjects()[0])  # a que volta da barra de tarefas no fim da sessão

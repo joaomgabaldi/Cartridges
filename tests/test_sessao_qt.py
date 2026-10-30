@@ -153,9 +153,11 @@ def test_encerrar_e_idempotente_e_desarma_a_manual(modelo, make_game, relogio, m
     modelo.alterado.connect(lambda: mudancas.append(1), Qt.ConnectionType.DirectConnection)
 
     modelo.encerrar()
-    modelo.encerrar()  # o `aboutToQuit` depois do `QEvent.Quit`: sem efeito
+    modelo.encerrar()  # de novo: sem efeito
+    assert chamadas == []  # R1: o `saindo` não espera a parede nem as fitas
     modelo.janelaManualFechada()  # o `closing` da manual, que o Qt fecha depois
     manual.close()
+    modelo.devolver()  # o `aboutToQuit`: o `encerrar()` de dentro não grava de novo
 
     assert jogo.playtime == 30
     assert [linha["seconds"] for linha in session_log.load("shortcuts_6")] == [30]

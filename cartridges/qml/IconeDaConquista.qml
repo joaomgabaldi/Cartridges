@@ -14,6 +14,7 @@ Item {
     property string url: ""
     property bool cinza: false
     property bool oculta: false
+    property color corDoLadrilho: Tema.texto  // a cor do texto em volta: branca na tela da sessão
 
     readonly property bool imagemPronta: !oculta && imagem.status === Image.Ready
 
@@ -26,13 +27,13 @@ Item {
         anchors.fill: parent
         visible: !icone.imagemPronta
         radius: 6
-        color: Qt.rgba(Tema.texto.r, Tema.texto.g, Tema.texto.b, 0.12)
+        color: Qt.rgba(icone.corDoLadrilho.r, icone.corDoLadrilho.g, icone.corDoLadrilho.b, 0.12)
 
         Text {
             anchors.centerIn: parent
             text: icone.oculta ? "?" : ""  // a estrela cheia (o starred-symbolic da `main`)
             textFormat: Text.PlainText
-            color: Qt.rgba(Tema.texto.r, Tema.texto.g, Tema.texto.b, 0.6)
+            color: Qt.rgba(icone.corDoLadrilho.r, icone.corDoLadrilho.g, icone.corDoLadrilho.b, 0.6)
             font {
                 family: icone.oculta ? Tema.fonte : Tema.fonteDeIcones
                 pixelSize: icone.oculta ? icone.interrogacao : icone.tamanho / 2

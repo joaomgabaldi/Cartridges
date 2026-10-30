@@ -140,13 +140,40 @@ class MotorQueNaoCarrega(modulo_app.QQmlApplicationEngine):
 
 
 modulo_app.QQmlApplicationEngine = MotorQueNaoCarrega
+# R2: o `AplicacaoQt` que o `main()` cria, guardado para conferir quem recebe o `saindo`.
+from PySide6.QtCore import SIGNAL
+from cartridges import shared
+from cartridges.utils import session_fita, session_wallpaper
+instancias = []
+
+
+class AppQueGuarda(modulo_app.AplicacaoQt):
+    def __init__(self, *argumentos):
+        super().__init__(*argumentos)
+        instancias.append(self)
+
+
+modulo_app.AplicacaoQt = AppQueGuarda
+# O `saindo` não fala com as fitas nem com a parede (R1): se falasse, ficaria anotado aqui.
+session_fita.fechar = lambda: chamadas.append("sessao.fechar")
+session_wallpaper.restaurar = lambda: chamadas.append("sessao.restaurar")
 codigo = modulo_app.main(sys.argv[:1])
-print(json.dumps({"codigo": codigo, "fitas": chamadas}))
+fitas = list(chamadas)
+app = instancias[0]
+receptores = app.receivers(SIGNAL("saindo()"))
+antes = shared.sessao._encerrado
+app.saindo.emit()
+print(json.dumps({"codigo": codigo, "fitas": fitas, "receptores": receptores, "antes": antes,
+                  "depois": shared.sessao._encerrado, "depois_do_saindo": chamadas[len(fitas):]}))
 """
 
 
-def test_qml_que_nao_carrega_nao_deixa_as_fitas_acesas(tmp_path):
-    """Sem janela o `app.exec()` não roda e o `aboutToQuit` (que fecha as fitas) nunca vem."""
+def test_qml_que_nao_carrega_nao_deixa_as_fitas_acesas_e_o_saindo_encerra_a_sessao(tmp_path):
+    """Sem janela o `app.exec()` não roda e o `aboutToQuit` (que fecha as fitas) nunca vem.
+
+    No mesmo `main()` de verdade (R2): o `saindo` tem um receptor só, o `encerrar()` da sessão, que não espera fita
+    nem parede (R1: elas ficam para o `aboutToQuit`).
+    """
     ambiente = {
         **os.environ,
         "CARTRIDGES_DADOS": str(tmp_path),
@@ -161,6 +188,9 @@ def test_qml_que_nao_carrega_nao_deixa_as_fitas_acesas(tmp_path):
     saida = json.loads(resultado.stdout.strip().splitlines()[-1])
     assert saida["codigo"] == 1
     assert saida["fitas"] == []
+    assert saida["receptores"] == 1
+    assert (saida["antes"], saida["depois"]) == (False, True)
+    assert saida["depois_do_saindo"] == []
 
 
 def test_encerrar_roda_todo_passo_mesmo_com_um_que_falha(caplog):

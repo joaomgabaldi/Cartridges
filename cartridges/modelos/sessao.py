@@ -19,6 +19,7 @@ from PySide6.QtCore import Property, QCoreApplication, QObject, Qt, QTimer, Sign
 from PySide6.QtGui import QWindow
 
 from cartridges import shared
+from cartridges.conquistas import sessao as sessao_conquistas
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.ordem import _url_da_capa  # noqa: PLC2701
 from cartridges.process_session import ProcessSession
@@ -168,6 +169,9 @@ class ModeloDaSessao(QObject):
         # As fitas de LED vestem a cor do jogo (a rede corre em threads). `comecar` volta sozinho com o recurso
         # desligado ou sem fita configurada.
         session_fita.comecar(game)
+        # E o vigia das conquistas: a partir daqui, uma conquista que sair no jogo aparece por cima dele e pisca a
+        # iluminação. Nunca levanta.
+        sessao_conquistas.comecar(game)
         # O controle fica todo com o jogo: nenhuma leitura e, depois da vibração de abertura, nem a DLL.
         if self._controle is not None:
             self._controle.suspender()
@@ -189,7 +193,24 @@ class ModeloDaSessao(QObject):
         if self._big_picture is not None and self._big_picture.visivel:
             self._big_picture.voltouDoJogo()
         session_wallpaper.restaurar()
+        # O vigia para antes de a iluminação voltar à cor do app: um pulso pedido depois disso não teria sessão.
+        sessao_conquistas.parar()
+        # Uma última leitura do jogo: o que saiu nos últimos instantes ainda não está no histórico (o vigia olha a
+        # cada poucos segundos). Só no fim da sessão, nunca no fechamento do app (`encerrar` não passa por aqui).
+        self._varrer_jogo_da_sessao(jogo)
         self._devolver_as_fitas(jogo)
+
+    @staticmethod
+    def _varrer_jogo_da_sessao(jogo: Any) -> None:
+        """Pede a leitura final das conquistas do jogo da sessão, em segundo plano. Nunca levanta."""
+        if jogo is None:
+            return
+        try:
+            varredura = getattr(shared.aplicativo, "varredura_conquistas", None)
+            if varredura is not None:
+                varredura.varrer_jogo(jogo)
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).warning("Falha ao ler as conquistas no fim da sessão", exc_info=True)
 
     def _devolver_as_fitas(self, jogo: Any) -> None:
         """De volta à cor do app, e os avisos do que faltou na sessão que acabou.
@@ -326,7 +347,9 @@ class ModeloDaSessao(QObject):
         `QEvent.Quit` (`AplicacaoQt.saindo`), antes de o Qt fechar a manual.
         """
         if self._manual is not None:
-            self._sair()
+            # Na volta do laço, com a principal já fora da tela: um `quit()` aqui dentro do `closing` emitiria o
+            # `aboutToQuit` (a parede e as fitas, que esperam) com ela ainda à vista, congelada.
+            QTimer.singleShot(0, self._sair)
 
     @Slot()
     def janelaManualFechada(self) -> None:
@@ -340,14 +363,17 @@ class ModeloDaSessao(QObject):
     def encerrar(self) -> None:
         """O app fechando no meio da sessão: grava o tempo e o histórico, sem tocar na interface.
 
-        Vem no `QEvent.Quit`, antes de o Qt fechar as janelas, e de novo no `aboutToQuit`: só a primeira
-        chamada faz algo. A janela "Jogando" fica desarmada, e o `closing` que o Qt manda a ela depois não
-        roda o fim normal da sessão (nem grava outra linha no histórico).
+        Vem no `QEvent.Quit` (`AplicacaoQt.saindo`), antes de o Qt fechar as janelas: só o que é rápido e tem de
+        vir antes delas. A janela "Jogando" fica desarmada, e o `closing` que o Qt manda a ela depois não roda o fim
+        normal da sessão (nem grava outra linha no histórico); o vigia das conquistas para e o aviso sai da tela. A
+        parede e as fitas, que podem demorar, ficam para o `devolver()`, com as janelas já fora da tela. Só a
+        primeira chamada faz algo.
         """
         # shortcut: aqui a janela não volta ao monitor de antes; o plano 8, ao gravar a geometria da janela ao
         # fechar (`session_geometry`), tem de gravar o retângulo de antes da sessão, não o do monitor do jogo (D52).
         if self._encerrado:
             return
+        # Só vai num sentido: um `quit()` cancelado deixaria a sessão encerrada (hoje nenhum `closing` recusa).
         self._encerrado = True
         self._tique.stop()
         self._manual = None  # sem `alterado`: a interface já está indo embora
@@ -363,6 +389,20 @@ class ModeloDaSessao(QObject):
             processo.flush()
             if processo.started:
                 session_log.record(processo.game.game_id, processo.session_seconds)
+        # Antes de a parede e as fitas voltarem (no `devolver`), como no `hide_session_blocker`; sem a leitura final,
+        # que é só do fim normal da sessão. Nunca levanta.
+        sessao_conquistas.parar()
+
+    def devolver(self) -> None:
+        """O `aboutToQuit`, depois do `big_picture.encerrar()`: a parede e as fitas voltam ao que eram.
+
+        Grava antes, se o `saindo` não veio (o desligar do Windows emite o `aboutToQuit` antes do `quit()`).
+        """
+        try:
+            self.encerrar()
+        except Exception:
+            # Uma falha ao gravar não deixa a parede trocada nem as fitas acesas.
+            logging.getLogger(__name__).exception("Não foi possível gravar a sessão ao fechar o app")
         # Depois de gravar: é a última chance de desfazer a troca, sem processo para fazê-la depois.
         session_wallpaper.restaurar()
         # As fitas voltam ao que eram quando o app abriu. Aqui se espera (com prazo): depois disto não há processo

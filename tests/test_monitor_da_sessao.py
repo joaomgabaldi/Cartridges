@@ -351,7 +351,9 @@ def test_parede_so_com_a_opcao_ligada(modelo, schema, make_game):
 
 
 def test_encerrar_devolve_a_parede(modelo):
-    modelo.encerrar()
+    modelo.encerrar()  # o `saindo`: as janelas ainda na tela, nada que espere (R1)
+    assert modelo.chamadas == []
+    modelo.devolver()  # o `aboutToQuit`
     assert modelo.chamadas == ["parede"]  # sem tocar na janela (D: nada de interface no encerramento)
 
 

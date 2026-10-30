@@ -65,7 +65,7 @@ def _fechar(monkeypatch, falhar=()):
 
 
 _ORDEM = [
-    "bp.encerrar", "sessao.encerrar", "login.cancelar_pendente", "ea.gravar_pendente", "verificador.stop",
+    "bp.encerrar", "sessao.devolver", "login.cancelar_pendente", "ea.gravar_pendente", "verificador.stop",
     "hltb.stop", "tamanho.stop", "varredura.stop", "edicao.cancelar", "async.encerrar", "copias.encerrar",
     "icones.encerrar",
 ]  # fmt: skip

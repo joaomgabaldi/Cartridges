@@ -88,7 +88,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_conquistas_ea_janela.py",
     "test_conquistas_epic_janela.py",
     "test_conquistas_preferencias.py",
-    "test_conquistas_ui.py",
     "test_estilo_css.py",
     "test_fita_wizard.py",
     "test_hwnd_ordem_import.py",
@@ -462,9 +461,11 @@ def win(monkeypatch):
 def sem_jogo_de_verdade(monkeypatch):
     """Nenhum teste inicia um jogo: o `launch` que chegar ao `run_executable` falha alto.
 
-    Também zera a sessão: o `ModeloDaSessao` (`shared.sessao`) e os rastreadores ativos não passam de um teste ao outro.
+    Também zera a sessão: o `ModeloDaSessao` (`shared.sessao`), os rastreadores ativos e o vigia das conquistas não
+    passam de um teste ao outro.
     """
     from cartridges import jogo, process_session, session_window  # noqa: PLC0415
+    from cartridges.conquistas import sessao as sessao_conquistas  # noqa: PLC0415
 
     def recusa(*_args, **_kwargs):
         raise AssertionError("run_executable: nenhum jogo é iniciado nos testes")
@@ -474,6 +475,7 @@ def sem_jogo_de_verdade(monkeypatch):
     monkeypatch.setattr(shared, "conquistas", None, raising=False)
     monkeypatch.setattr(process_session.ProcessSession, "active", None)
     monkeypatch.setattr(session_window.SessionWindow, "active", None)
+    monkeypatch.setattr(sessao_conquistas, "_vigia", None)
 
 
 @pytest.fixture(autouse=True)

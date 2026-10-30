@@ -2,10 +2,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O que a página do jogo e o diálogo das conquistas mostram (`conquistasDoJogo`, D58).
+"""O que a página do jogo, o diálogo das conquistas e a tela da sessão mostram (`conquistasDoJogo`, D58).
 
-As funções puras montam os dicionários que o QML lê (cartão, ícone, fileira); `ConquistasDoJogo` segue o jogo da
-página de detalhes e o do diálogo, refaz cada vista quando o domínio avisa (`mudou`) e pede os ícones fora da tela.
+As funções puras montam os dicionários que o QML lê (cartões, ícone, fileira); `ConquistasDoJogo` segue o jogo da
+página de detalhes, o do diálogo e o da sessão, refaz cada vista quando o domínio avisa (`mudou`) e pede os ícones
+fora da tela.
 O QML nunca recebe um `Jogo`: lê só estes dicionários. Só na thread principal.
 """
 
@@ -85,6 +86,20 @@ def cartao_da_pagina(atual: Optional[Progresso], urls: dict[str, str]) -> dict[s
     }
 
 
+def cartao_da_sessao(atual: Optional[Progresso], mostrar_ocultas: bool, urls: dict[str, str]) -> dict[str, Any]:
+    """O cartão da tela da sessão: o progresso e todas as conquistas, desbloqueadas e depois bloqueadas."""
+    if atual is None:
+        return {"visivel": False, "contagem": "", "porcentagem": "", "fracao": 0.0, "icones": []}
+    return {
+        "visivel": True,
+        # A primeira variável é quantas foram desbloqueadas; a segunda, o total
+        "contagem": _("{} de {}").format(atual.feitas, atual.total),
+        "porcentagem": f"{atual.porcentagem}%",
+        "fracao": atual.fracao,
+        "icones": [icone(linha, mostrar_ocultas, urls) for linha in atual.desbloqueadas + atual.bloqueadas],
+    }
+
+
 def fileira(linha: Linha, mostrar_ocultas: bool, urls: dict[str, str]) -> dict[str, Any]:
     info = linha.info
     oculta = progresso.aparencia(linha, mostrar_ocultas).oculta
@@ -110,12 +125,14 @@ def _origens(linhas: Any, mostrar_ocultas: bool) -> set[str]:
 # -- o modelo -----------------------------------------------------------------------------------
 
 _PAGINA_VAZIA = cartao_da_pagina(None, {})
+_SESSAO_VAZIA = cartao_da_sessao(None, False, {})
 _DIALOGO_FECHADO: dict[str, Any] = {
     "aberto": False, "nome": "", "logo": "", "larguraDoLogo": 0, "resumo": "", "fracao": 0.0,
     "desbloqueadas": [], "bloqueadas": [],
 }  # fmt: skip
 # O que cada vista mostra quando falha ou perde o jogo.
-_VAZIAS = {"pagina": {"pagina": _PAGINA_VAZIA}, "dialogo": _DIALOGO_FECHADO}
+_VAZIAS = {"pagina": {"pagina": _PAGINA_VAZIA}, "dialogo": _DIALOGO_FECHADO, "sessao": {"sessao": _SESSAO_VAZIA}}
+_VISTAS = ("pagina", "dialogo", "sessao")
 
 
 def _prop(tipo: Any, nome: str, notify: Any) -> Property:
@@ -127,6 +144,7 @@ class ConquistasDoJogo(QObject):
 
     _p = partial(_prop, notify=alterado)
     pagina = _p("QVariantMap", "pagina")
+    sessao = _p("QVariantMap", "sessao")
     aberto = _p(bool, "aberto")
     nome = _p(str, "nome")
     logo = _p(str, "logo")
@@ -141,15 +159,16 @@ class ConquistasDoJogo(QObject):
         super().__init__(parent)
         self._detalhes = detalhes
         self._loja = detalhes.loja
-        self._sessao = sessao  # a vista da tela da sessão é da Task 6
-        self._v: dict[str, Any] = {"pagina": _PAGINA_VAZIA, **_DIALOGO_FECHADO}
+        self._sessao = sessao
+        self._jogo_da_sessao = ""  # o jogo que a vista da sessão mostra ("" sem sessão)
+        self._v: dict[str, Any] = {"pagina": _PAGINA_VAZIA, "sessao": _SESSAO_VAZIA, **_DIALOGO_FECHADO}
         # O jogo do diálogo; o da página é o dos detalhes. Só o id: o `Jogo` vem da loja a cada montagem.
         self._dialogo = ""
         self._logo: tuple[str, int] = ("", 0)
         # Ícones: origem → URL `file:` já baixada; as pedidas e ainda a caminho; e as que cada vista usa.
         self._urls: dict[str, str] = {}
         self._a_caminho: dict[str, float] = {}  # origem → quando foi pedida
-        self._origens: dict[str, set[str]] = {"pagina": set(), "dialogo": set()}
+        self._origens: dict[str, set[str]] = {vista: set() for vista in _VISTAS}
         # Os ícones chegam às dezenas: as vistas que eles pedem são refeitas de uma vez, no máximo a cada ATRASO ms.
         self._a_refazer: set[str] = set()
         self._atraso = QTimer(self)
@@ -158,19 +177,25 @@ class ConquistasDoJogo(QObject):
         self._atraso.timeout.connect(self._refazer_dos_icones)
         # Referência fraca: a configuração é global e o modelo pode morrer antes.
         eu = weakref.ref(self)
-        shared.schema.connect("changed::conquistas-mostrar-ocultas", lambda *_: (c := eu()) and c._refazer(("dialogo",)))
+        shared.schema.connect(
+            "changed::conquistas-mostrar-ocultas", lambda *_: (c := eu()) and c._refazer(("dialogo", "sessao"))
+        )
         detalhes.alterado.connect(self._detalhes_mudou)
+        if sessao is not None:
+            sessao.alterado.connect(self._sessao_mudou)
 
     # -- montar as vistas ------------------------------------------------------------------------
 
     def _alvo(self, vista: str) -> str:
+        if vista == "sessao":
+            return self._jogo_da_sessao
         return self._detalhes.jogoId if vista == "pagina" else self._dialogo
 
     def _atual(self, game_id: str) -> Optional[Progresso]:
         jogo = self._loja.get(game_id)
         return progresso.do_jogo(jogo) if jogo is not None else None
 
-    def _refazer(self, vistas: tuple[str, ...] = ("pagina", "dialogo"), game_id: Optional[str] = None) -> None:
+    def _refazer(self, vistas: tuple[str, ...] = _VISTAS, game_id: Optional[str] = None) -> None:
         """Refaz as vistas cujo jogo é ``game_id`` (ou todas). Cada uma no seu `try`: a falha de uma não cala a outra."""
         mudou = False
         for vista in vistas:
@@ -180,6 +205,7 @@ class ConquistasDoJogo(QObject):
             try:
                 mudou |= getattr(self, f"_montar_{vista}")(alvo)
             except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                # A da sessão nunca trava o "Já terminei de jogar": some, e a camada segue.
                 logging.warning("Falha ao montar as conquistas (%s)", vista, exc_info=True)
                 self._origens[vista] = set()
                 if vista == "dialogo":
@@ -218,6 +244,12 @@ class ConquistasDoJogo(QObject):
             "bloqueadas": [fileira(linha, mostrar, self._urls) for linha in atual.bloqueadas],
         })  # fmt: skip
 
+    def _montar_sessao(self, game_id: str) -> bool:
+        atual = self._atual(game_id)
+        mostrar = shared.schema.get_boolean("conquistas-mostrar-ocultas")
+        self._pedir("sessao", _origens(atual.desbloqueadas + atual.bloqueadas, mostrar) if atual else set())
+        return self._guardar({"sessao": cartao_da_sessao(atual, mostrar, self._urls)})
+
     # -- ícones ----------------------------------------------------------------------------------
 
     def _pedir(self, vista: str, origens: set[str]) -> None:
@@ -245,13 +277,26 @@ class ConquistasDoJogo(QObject):
             self._atraso.start()
 
     def _refazer_dos_icones(self) -> None:
-        vistas, self._a_refazer = tuple(v for v in ("pagina", "dialogo") if v in self._a_refazer), set()
+        vistas, self._a_refazer = tuple(v for v in _VISTAS if v in self._a_refazer), set()
         self._refazer(vistas)
 
     # -- quem avisa ------------------------------------------------------------------------------
 
     def _detalhes_mudou(self) -> None:
         self._refazer(("pagina",))
+
+    def _sessao_mudou(self) -> None:
+        """Só um jogo novo (ou o fim) refaz o cartão: o `alterado` também vem a cada tique do relógio."""
+        jogo = self._sessao.jogoId
+        if jogo == self._jogo_da_sessao:
+            return
+        self._jogo_da_sessao = jogo
+        if jogo:
+            self._refazer(("sessao",))
+            return
+        self._origens["sessao"] = set()
+        if self._guardar(_VAZIAS["sessao"]):
+            self.alterado.emit()
 
     def mudou(self, game_id: Optional[str]) -> None:
         """O histórico, o catálogo ou uma conta mudou: refaz as vistas do jogo (``None`` = todas)."""

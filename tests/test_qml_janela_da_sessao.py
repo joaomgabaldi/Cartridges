@@ -166,7 +166,8 @@ def test_fechar_a_principal_com_a_manual_aberta_sai_e_grava(app_qt, monkeypatch,
     app.sessao._sair = lambda: (saidas.append(1), app.sessao.encerrar())  # noqa: SLF001
     SessionWindow.active.session_start -= 42  # 42 s jogados
     app.janela.close()
-    assert saidas == [1]
+    assert saidas == []  # o `quit()` vem na volta do laço, com a principal já fora da tela
+    assert _esperar(lambda: saidas == [1])
     assert jogo.playtime == 42
     assert isolado == [("imported_1", 42)]
     app.fechar()
@@ -202,6 +203,7 @@ import json, sys
 from pathlib import Path
 from types import SimpleNamespace
 from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from cartridges import app as modulo_app, shared
 from cartridges.modelos import sessao as modulo
@@ -211,11 +213,17 @@ from cartridges.utils import game_logo, session_fita, session_log, session_wallp
 ordem = []
 def anota(nome):
     return lambda *_a: ordem.append(nome)
+def visiveis():
+    return sorted(janela.title() for janela in QGuiApplication.topLevelWindows() if janela.isVisible())
+def anota_com_as_janelas(nome):
+    # R1: a parede e as fitas (que podem demorar) só depois de as janelas sumirem da tela.
+    return lambda *_a: ordem.append([nome, visiveis()])
 # Nenhum dispositivo, papel de parede ou chamada Win32 de verdade.
 for alvo, nome in ((session_fita, "abrir"), (session_fita, "comecar"), (session_fita, "voltar"),
-                   (session_fita, "fechar"), (session_wallpaper, "comecar"), (session_wallpaper, "restaurar"),
-                   (window_geometry, "restore_from_monitor")):
+                   (session_wallpaper, "comecar"), (window_geometry, "restore_from_monitor")):
     setattr(alvo, nome, anota(nome))
+session_fita.fechar = anota_com_as_janelas("fechar")
+session_wallpaper.restaurar = anota_com_as_janelas("restaurar")
 window_geometry.session_geometry = lambda: None
 game_logo.cached_logo_path = lambda _jogo: None
 session_log.record = lambda _id, segundos: ordem.append(["record", segundos])
@@ -230,7 +238,7 @@ for nome in ("hide_session_blocker", "session_toast", "present"):
     setattr(sessao, nome, anota(nome))
 # A ligação do `app.py`.
 app.saindo.connect(sessao.encerrar)
-app.aboutToQuit.connect(lambda: (ordem.append("aboutToQuit"), sessao.encerrar()))
+app.aboutToQuit.connect(lambda: (ordem.append("aboutToQuit"), sessao.devolver()))
 
 motor = QQmlApplicationEngine()
 motor.rootContext().setContextProperty("sessao", sessao)
@@ -247,6 +255,7 @@ jogo = SimpleNamespace(game_id="imported_1", name="Alfa", notes="", status="play
 SessionWindow(jogo).present()
 SessionWindow.active.session_start -= 42
 def fechar():
+    ordem.append(["antes", visiveis()])
     ordem.append("principal.close")
     principal.close()
 QTimer.singleShot(500, fechar)
@@ -267,8 +276,12 @@ def test_quit_real_com_a_manual_aberta_encerra_antes_de_fechar_as_janelas():
     assert resultado.returncode == 0, resultado.stderr
     saida = json.loads(resultado.stdout.strip().splitlines()[-1])
     assert saida["codigo"] == 0
-    depois = saida["ordem"][saida["ordem"].index("principal.close") + 1 :]
-    assert depois == [["record", 42], "restaurar", "fechar", "aboutToQuit"]
+    ordem = saida["ordem"]
+    # R4: a janela "Jogando" estava aberta (junto com a principal) quando o fechamento começou.
+    assert ordem[ordem.index("principal.close") - 1] == ["antes", ["", "Jogando Alfa"]]
+    depois = ordem[ordem.index("principal.close") + 1 :]
+    # R1: no `saindo` só a gravação; a parede e as fitas vêm no `aboutToQuit`, com as janelas já fora da tela.
+    assert depois == [["record", 42], "aboutToQuit", ["restaurar", []], ["fechar", []]]
     assert saida["playtime"] == 42
 
 

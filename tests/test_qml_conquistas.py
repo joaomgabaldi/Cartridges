@@ -4,6 +4,12 @@
 
 """O cartão de conquistas da página do jogo e a lista completa na tela (QML offscreen, D58, D62)."""
 
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QImage
@@ -17,6 +23,8 @@ from tests.apoio_conquistas import com_fonte
 from tests.test_qml_biblioteca import _achar, _App, _esperar, _jogos
 from tests.test_qml_detalhes import _abrir_pelo_cartao, _clicar, _foco_dentro_de
 from tests.test_qml_historico import _caixa, _expr, _todos
+
+RAIZ = Path(__file__).resolve().parent.parent
 
 CAT = Catalogo(
     (
@@ -325,4 +333,77 @@ def test_icone_cortado_em_quadrado(app_qt, pedidos, tmp_path):
     assert imagem.width() == imagem.height() == 36
     assert _expr(imagem, "fillMode") == 2  # Image.PreserveAspectCrop
     app.fechar()
+
+
+# O recorte arredondado é um `MultiEffect` (D60), que o backend `software` da plataforma offscreen não desenha: a
+# conferência dos pixels roda num processo à parte, na plataforma `windows` com Direct3D, e a janela nunca é mostrada
+# (o `grabWindow` de uma janela escondida desenha fora da tela).
+_RECORTE = r"""
+import json, sys
+from pathlib import Path
+from PySide6.QtCore import QObject, QUrl
+from PySide6.QtGui import QColor, QGuiApplication, QImage
+from PySide6.QtQml import QQmlComponent, QQmlEngine
+from PySide6.QtQuick import QQuickWindow
+
+app = QGuiApplication([])
+png = Path(sys.argv[1])
+imagem = QImage(80, 80, QImage.Format.Format_ARGB32)
+imagem.fill(QColor("red"))
+assert imagem.save(str(png), "PNG")
+url = QUrl.fromLocalFile(str(png)).toString()
+
+motor = QQmlEngine()
+janela = QQuickWindow()
+janela.resize(400, 200)
+janela.setColor(QColor("blue"))
+itens = []
+
+
+def montar(texto):
+    componente = QQmlComponent(motor)
+    componente.setData(texto.encode(), QUrl.fromLocalFile(str(Path("cartridges/qml/_recorte.qml").resolve())))
+    item = componente.create()
+    assert item is not None, componente.errorString()
+    item.setParent(janela.contentItem())  # o dono em C++: sem ele o coletor do motor apaga o item
+    item.setParentItem(janela.contentItem())
+    itens.append(item)
+    return item
+
+
+icone = montar('IconeDaConquista { x: 10; y: 10; tamanho: 48; url: "%s" }' % url)
+cartao = montar('CartaoDoAviso { x: 100; y: 10; opacidade: 1; icone: "%s" }' % url)
+for _ in range(20):
+    app.processEvents()
+tela = janela.grabWindow()
+escala = tela.width() / janela.width()
+
+
+def pixels(item):
+    canto = item.mapToScene(item.boundingRect().topLeft())
+    x, y = round(canto.x() * escala), round(canto.y() * escala)
+    meio = item.width() * escala / 2
+    return [tela.pixelColor(x, y).name(), tela.pixelColor(round(x + meio), round(y + meio)).name()]
+
+
+print(json.dumps({"api": str(janela.rendererInterface().graphicsApi()), "conquista": pixels(icone),
+                  "aviso": pixels(cartao.findChild(QObject, "iconeDoAviso"))}))
+"""
+
+
+def test_icones_de_conquista_cortam_os_cantos(tmp_path):
+    """O ícone vermelho cheio sai com o canto arredondado, no ícone das conquistas e no do aviso: no canto, o que está
+    atrás (o azul da janela; o escuro do cartão do aviso); no meio, o vermelho."""
+    ambiente = {**os.environ, "QT_QPA_PLATFORM": "windows", "CARTRIDGES_DADOS": str(tmp_path)}
+    resultado = subprocess.run(
+        [sys.executable, "-c", _RECORTE, str(tmp_path / "icone.png")],
+        cwd=RAIZ, env=ambiente, capture_output=True, text=True, timeout=60, check=False,
+    )  # fmt: skip
+    assert resultado.returncode == 0, resultado.stderr
+    medido = json.loads(resultado.stdout.strip().splitlines()[-1])
+    assert "Software" not in medido["api"], medido
+    for onde in ("conquista", "aviso"):
+        canto, meio = medido[onde]
+        assert meio == "#ff0000", (onde, medido)
+        assert canto != "#ff0000" and QColor(canto).red() < 128, (onde, medido)
 

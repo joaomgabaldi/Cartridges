@@ -15,7 +15,7 @@ import pytest
 from cartridges import shared
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.session_window import SessionWindow
-from cartridges.utils import session_fita, session_wallpaper, window_geometry
+from cartridges.utils import session_fita, session_log, session_wallpaper, window_geometry
 
 AVISO_DA_TELA = "A iluminação não acompanhou a tela de Hollow Knight. Use o modo janela sem bordas."
 
@@ -144,7 +144,9 @@ def test_encerrar_devolve_parede_e_fitas(modelo):
 
     modelo.definir_janela(JanelaQueNaoSeToca())
 
-    modelo.encerrar()
+    modelo.encerrar()  # o `saindo`: as janelas ainda na tela, nada que espere (R1)
+    assert modelo.chamadas == []
+    modelo.devolver()  # o `aboutToQuit`, com as janelas já fechadas
 
     assert modelo.chamadas == ["parede", "fechar"]
 
@@ -159,6 +161,23 @@ def test_encerrar_no_meio_da_sessao_devolve_as_fitas_depois_de_gravar(modelo, ma
         session_fita, "fechar", lambda: visto.update(gravado=SessionWindow.active is None, fitas="fechar")
     )
 
-    modelo.encerrar()
+    modelo.devolver()  # sem o `saindo` antes (o desligar do Windows): grava primeiro assim mesmo
 
     assert visto == {"gravado": True, "fitas": "fechar"}
+
+
+def test_devolver_com_falha_ao_gravar_devolve_parede_e_fitas(modelo, make_game, monkeypatch, caplog):
+    """Uma falha ao gravar (no `encerrar` de dentro do `devolver`) não deixa a parede trocada nem as fitas acesas."""
+    jogo = make_game(game_id="shortcuts_7", name="Hollow Knight")
+    SessionWindow(jogo).present()
+    modelo.chamadas.clear()
+
+    def quebra(*_args):
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr(session_log, "record", quebra)
+    with caplog.at_level("ERROR"):
+        modelo.devolver()
+
+    assert modelo.chamadas == ["parede", "fechar"]
+    assert "disco cheio" in caplog.text
