@@ -33,6 +33,7 @@ from cartridges.logging.session_file_handler import SessionFileHandler
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
+from cartridges.modelos.conquistas import ConquistasDoJogo
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.edicao import ModeloDaEdicao
@@ -213,6 +214,9 @@ def main(argv: list[str]) -> int:
     big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     sessao = ModeloDaSessao(avisos, controle=controle, big_picture=big_picture)
     shared.sessao = sessao
+    # O domínio avisa por aqui quando o histórico, o catálogo ou uma conta das conquistas muda (D58).
+    conquistas = ConquistasDoJogo(detalhes, sessao)
+    shared.conquistas = conquistas
     # Antes de o Qt fechar as janelas: sem isto a janela "Jogando" fecharia pelo fim normal da sessão, com interface.
     # O desligar do Windows emite o `aboutToQuit` antes do `quit()`; lá o `encerrar()` também vem primeiro.
     app.saindo.connect(sessao.encerrar)
@@ -223,6 +227,7 @@ def main(argv: list[str]) -> int:
         ("filtros", filtros), ("paginaTodos", pagina_biblioteca), ("paginaZerados", pagina_zerados),
         ("aplicativo", aplicativo), ("ponte", ponte), ("controle", controle), ("detalhes", detalhes),
         ("edicao", edicao), ("bigPicture", big_picture), ("sessao", sessao), ("historico", historico),
+        ("conquistasDoJogo", conquistas),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.

@@ -167,37 +167,15 @@ Rectangle {
                 }
 
                 // O logo (até 992×120) ou o nome, nunca os dois.
-                Item {
+                CabecalhoDoJogo {
                     Layout.fillWidth: true
                     Layout.leftMargin: 24
                     Layout.rightMargin: 24
-                    implicitHeight: logoVisivel ? logo.height : nome.implicitHeight
-                    readonly property bool logoVisivel: historico.logo !== "" && logo.status === Image.Ready
-
-                    Image {
-                        id: logo
-                        objectName: "logoDoHistorico"
-                        visible: parent.logoVisivel
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        source: historico.logo
-                        width: Math.min(historico.larguraDoLogo, parent.width)
-                        height: implicitWidth > 0 ? width * implicitHeight / implicitWidth : 0
-                        fillMode: Image.PreserveAspectFit
-                        asynchronous: false
-                        sourceSize.width: width * Screen.devicePixelRatio
-                    }
-                    Text {
-                        id: nome
-                        objectName: "nomeDoHistorico"
-                        visible: !parent.logoVisivel
-                        width: parent.width
-                        text: historico.nome
-                        textFormat: Text.PlainText
-                        wrapMode: Text.Wrap
-                        horizontalAlignment: Text.AlignHCenter
-                        color: Tema.texto
-                        font { family: Tema.fonte; pixelSize: 28; weight: Font.Bold }
-                    }
+                    logo: historico.logo
+                    larguraDoLogo: historico.larguraDoLogo
+                    nome: historico.nome
+                    nomeDoLogo: "logoDoHistorico"
+                    nomeDoTexto: "nomeDoHistorico"
                 }
 
                 Text {

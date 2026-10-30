@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QEventLoop, QMetaObject, Qt, QTimer, QUrl
+from PySide6.QtCore import QEventLoop, QMetaObject, QObject, Qt, QTimer, QUrl, Signal
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -24,6 +24,7 @@ from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.edicao import ModeloDaEdicao
+from cartridges.modelos.conquistas import ConquistasDoJogo
 from cartridges.modelos.historico import HistoricoDeSessoes
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.ponte import Ponte
@@ -383,6 +384,14 @@ def _achar(raiz, nome):
     return None
 
 
+class _DetalhesFalsos(QObject):
+    """O que o `ConquistasDoJogo` pede aos detalhes: o sinal, o jogo mostrado e a loja."""
+
+    alterado = Signal()
+    jogoId = ""  # noqa: N815
+    loja = SimpleNamespace(get=lambda _id: None)
+
+
 class _Janela:
     def __init__(self):
         self.modelo = ModeloDaBiblioteca()
@@ -393,6 +402,7 @@ class _Janela:
         self.historico = HistoricoDeSessoes(SimpleNamespace(get=lambda _id: None))
         self.big_picture = BigPicture(self.modelo)
         self.sessao = ModeloDaSessao(self.ponte.fila)
+        self.conquistas = ConquistasDoJogo(_DetalhesFalsos(), self.sessao)
         self.motor = QQmlEngine()
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         contexto = self.motor.rootContext()
@@ -407,6 +417,7 @@ class _Janela:
             ("bigPicture", self.big_picture),
             ("sessao", self.sessao),
             ("historico", self.historico),
+            ("conquistasDoJogo", self.conquistas),
         ):
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

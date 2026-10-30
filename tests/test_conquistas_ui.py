@@ -58,74 +58,6 @@ def com_conquistas(store):
     return game
 
 
-def test_cartao_mostra_o_progresso(real_window, com_conquistas):
-    real_window.update_conquistas_block(com_conquistas)
-    assert real_window.details_view_conquistas_box.get_visible()
-    assert real_window.details_view_conquistas_count.get_label() == "2 de 3"
-    assert real_window.details_view_conquistas_percent.get_label() == "66%"  # para baixo
-    assert real_window.details_view_conquistas_bar.get_fraction() == pytest.approx(2 / 3)
-
-
-def test_cartao_nao_arredonda_para_cima_ate_o_fim(real_window, store):
-    """999 de 1000 é 99%: 100% só quando está tudo desbloqueado."""
-    grande = Catalogo(
-        tuple(ConquistaInfo(f"N{n}", f"N{n}", "", "", "", False) for n in range(1000)), 0, True
-    )
-    catalogo.guardar("570", grande)
-    game = jogo(store, 1, steam_appid="570")
-    historico.registrar(game.game_id, [Desbloqueio(f"N{n}", 1) for n in range(999)])
-    com_fonte(game, "steam:570")
-    real_window.update_conquistas_block(game)
-    assert real_window.details_view_conquistas_count.get_label() == "999 de 1000"
-    assert real_window.details_view_conquistas_percent.get_label() == "99%"
-
-    historico.registrar(game.game_id, [Desbloqueio("N999", 1)])
-    real_window.update_conquistas_block(game)
-    assert real_window.details_view_conquistas_percent.get_label() == "100%"
-
-
-def test_cartao_some_sem_catalogo_ou_desligado(real_window, store, com_conquistas):
-    com_conquistas.conquistas = False
-    real_window.update_conquistas_block(com_conquistas)
-    assert not real_window.details_view_conquistas_box.get_visible()
-
-    sem_catalogo = jogo(store, 2, steam_appid="999")
-    com_fonte(sem_catalogo, "steam:999")
-    real_window.update_conquistas_block(sem_catalogo)
-    assert not real_window.details_view_conquistas_box.get_visible()
-
-
-def test_historico_antigo_sem_fonte_fica_oculto_ate_a_varredura(real_window, store):
-    catalogo.guardar("570", CAT)
-    game = jogo(store, 1, steam_appid="570")
-    historico.registrar(game.game_id, [Desbloqueio("A", 1)])
-    real_window.update_conquistas_block(game)
-    assert not real_window.details_view_conquistas_box.get_visible()
-    com_fonte(game, "steam:570")
-    real_window.update_conquistas_block(game)
-    assert real_window.details_view_conquistas_box.get_visible()
-
-
-def test_xbox_some_ao_sair_da_conta(real_window, store, monkeypatch):
-    catalogo.guardar("xbox-7", CAT)
-    game = jogo(store, 1)
-    com_fonte(game, "xbox:7")
-    monkeypatch.setattr(conta, "conectada", lambda: True)
-    real_window.update_conquistas_block(game)
-    assert real_window.details_view_conquistas_box.get_visible()
-    monkeypatch.setattr(conta, "conectada", lambda: False)
-    real_window.update_conquistas_block(game)
-    assert not real_window.details_view_conquistas_box.get_visible()
-
-
-def test_fonte_gravada_manda_mais_que_o_appid_atual(real_window, store):
-    catalogo.guardar("570", CAT)
-    game = jogo(store, 1, steam_appid="999")
-    com_fonte(game, "steam:570")
-    real_window.update_conquistas_block(game)
-    assert real_window.details_view_conquistas_box.get_visible()
-
-
 def test_icone_baixado_vai_para_o_cache(monkeypatch):
     chamadas = []
 
@@ -319,47 +251,6 @@ def test_encerrar_nunca_levanta(executor_proprio, monkeypatch):
         icones.encerrar()
 
 
-def _titulos(linhas):
-    return [linha.get_title() for linha in linhas]
-
-
-def test_lista_em_duas_secoes(real_window, com_conquistas):
-    from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415
-
-    dialogo = ConquistasDialog(com_conquistas)
-    assert _titulos(dialogo.linhas_desbloqueadas) == ["Rara", "Primeira"]  # recente primeiro
-    assert _titulos(dialogo.linhas_bloqueadas) == ["Conquista oculta"]
-    assert dialogo.linhas_bloqueadas[0].get_subtitle() == (
-        "Os detalhes aparecem depois do desbloqueio."
-    )
-
-
-def test_ocultas_reveladas_pela_preferencia(real_window, com_conquistas, schema):
-    from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415
-
-    schema.set_boolean("conquistas-mostrar-ocultas", True)
-    dialogo = ConquistasDialog(com_conquistas)
-    assert _titulos(dialogo.linhas_bloqueadas) == ["Segredo"]
-
-
-def test_oculta_desbloqueada_aparece_sempre(real_window, com_conquistas):
-    from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415
-
-    historico.registrar(com_conquistas.game_id, [Desbloqueio("C", 300)])
-    dialogo = ConquistasDialog(com_conquistas)
-    assert _titulos(dialogo.linhas_desbloqueadas) == ["Segredo", "Rara", "Primeira"]
-    assert dialogo.linhas_bloqueadas == []
-
-
-@pytest.mark.parametrize("oculta", [False, True])
-def test_icone_nao_estica_a_linha(real_window, oculta):
-    """O ícone fica no seu quadrado: se ele pedir a sobra da linha, o título é
-    empurrado para o meio e a imagem estica junto com a altura da linha."""
-    figura = conquistas_sessao.imagem(Aparencia("x.png", False, oculta), 36, 24)
-    assert not figura.compute_expand(Gtk.Orientation.HORIZONTAL)
-    assert figura.get_valign() == Gtk.Align.CENTER
-
-
 def _rotulos(widget):
     """Os textos de todos os Gtk.Label dentro de ``widget``."""
     textos = []
@@ -382,62 +273,6 @@ def _imagens(widget):
         achadas.extend(_imagens(filho))
         filho = filho.get_next_sibling()
     return achadas
-
-
-def test_bloqueada_sem_icone_cinza_usa_o_icone_apagado(real_window, store, monkeypatch):
-    from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415
-
-    carregados = []
-    monkeypatch.setattr(icones, "carregar", lambda origem, _entregar: carregados.append(origem))
-    cat = Catalogo((ConquistaInfo("XBOX:1", "T", "D", "https://x/1.png", "", False),), 0, False)
-    catalogo.guardar("xbox-7", cat)
-    game = jogo(store, 1)
-    com_fonte(game, "xbox:7")
-    monkeypatch.setattr(conta, "conectada", lambda: True)
-    dialogo = ConquistasDialog(game)
-    assert carregados == ["https://x/1.png"]
-    imagens = [i for fileira in dialogo.linhas_bloqueadas for i in _imagens(fileira)]
-    assert any(i.has_css_class("conquistas-icone-bloqueada") for i in imagens)
-
-
-def test_bloqueada_com_icone_cinza_nao_ganha_filtro(real_window, store, monkeypatch):
-    from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415
-
-    carregados = []
-    monkeypatch.setattr(icones, "carregar", lambda origem, _entregar: carregados.append(origem))
-    cat = Catalogo(
-        (ConquistaInfo("A", "T", "D", "https://x/cor.png", "https://x/cinza.png", False),), 0, False
-    )
-    catalogo.guardar("570", cat)
-    game = jogo(store, 1, steam_appid="570")
-    com_fonte(game, "steam:570")
-    dialogo = ConquistasDialog(game)
-    assert carregados == ["https://x/cinza.png"]
-    imagens = [i for fileira in dialogo.linhas_bloqueadas for i in _imagens(fileira)]
-    assert imagens and not any(i.has_css_class("conquistas-icone-bloqueada") for i in imagens)
-
-
-def test_data_da_conquista_comeca_com_maiuscula(real_window, com_conquistas):
-    from cartridges.conquistas_dialog import ConquistasDialog, _data  # noqa: PLC0415
-
-    assert _data(int(time.time())) == "Hoje"
-    assert _data(int(time.time()) - 86400) == "Ontem"
-    assert _data(2**62) is None
-
-    historico.registrar(com_conquistas.game_id, [Desbloqueio("C", int(time.time()))])
-    dialogo = ConquistasDialog(com_conquistas)
-    textos = [texto for fileira in dialogo.linhas_desbloqueadas for texto in _rotulos(fileira)]
-    assert "Hoje" in textos
-    assert "hoje" not in textos
-
-
-@pytest.mark.parametrize("quando", [2**62, -(2**62), -1, 2**63 - 1, -(2**63)])
-def test_data_absurda_nao_derruba_a_lista(real_window, com_conquistas, quando):
-    from cartridges.conquistas_dialog import ConquistasDialog  # noqa: PLC0415
-
-    historico.registrar(com_conquistas.game_id, [Desbloqueio("C", quando)])
-    dialogo = ConquistasDialog(com_conquistas)
-    assert "Segredo" in _titulos(dialogo.linhas_desbloqueadas)
 
 
 # -- Cartão da tela de sessão --------------------------------------------------

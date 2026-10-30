@@ -17,6 +17,7 @@ from cartridges import shared
 from cartridges.aplicativo import Aplicativo
 from cartridges.jogo import Jogo
 from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
+from cartridges.modelos.conquistas import ConquistasDoJogo
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
@@ -114,6 +115,7 @@ class _App:
         )
         self.leitor = _LeitorFalso()
         self.sessao = ModeloDaSessao(self.ponte.fila)
+        self.conquistas = ConquistasDoJogo(self.detalhes, self.sessao)
         leitor = self.leitor  # o lambda não captura `self`: senão `_App` <-> controle é um ciclo
         shared.schema.set_boolean("gamepad", True)
         self.controle = ControleDaGrade(
@@ -129,6 +131,7 @@ class _App:
             ("aplicativo", self.aplicativo), ("ponte", self.ponte), ("controle", self.controle),
             ("detalhes", self.detalhes), ("edicao", self.edicao), ("bigPicture", self.big_picture),
             ("sessao", self.sessao), ("historico", self.historico),
+            ("conquistasDoJogo", self.conquistas),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

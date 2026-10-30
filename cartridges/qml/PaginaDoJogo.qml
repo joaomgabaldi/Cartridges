@@ -45,7 +45,7 @@ Item {
 
     // Os botões por linha, de cima para baixo; só os que aparecem.
     function linhasDeBotoes() {
-        var linhas = [[botaoStatus, botaoAnotacao], [avisoDeAtualizacao],
+        var linhas = [[cartaoDeConquistas.botao], [botaoStatus, botaoAnotacao], [avisoDeAtualizacao],
                       [botaoJogar, botaoEditar, botaoExcluir, botaoRemover, botaoBuscar]]
         return linhas.map(l => l.filter(b => b.visible && b.enabled)).filter(l => l.length > 0)
     }
@@ -178,6 +178,7 @@ Item {
 
     Flickable {
         id: rolagem
+        objectName: "rolagemDaPagina"
         anchors.fill: parent
         contentWidth: width
         contentHeight: Math.max(height, linha.height + 48)
@@ -409,6 +410,12 @@ Item {
                             }
                         }
                     }
+                }
+
+                // As conquistas logo abaixo do HowLongToBeat; some sem conquistas.
+                CartaoDeConquistas {
+                    id: cartaoDeConquistas
+                    Layout.topMargin: 18
                 }
 
                 // As datas, o tempo de jogo e o tamanho.

@@ -48,7 +48,6 @@ install_data(
     'details_dialog.py',
     'conquista_aviso.py',
     'janela_restaurando.py',
-    'conquistas_dialog.py',
     'conquistas_sessao.py',
     'sgdb_picker.py',
     'logo_picker.py',

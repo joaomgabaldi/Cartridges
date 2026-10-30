@@ -285,6 +285,11 @@ class DetalhesDoJogo(QObject):
         # O alto contraste não tem sinal próprio no Qt 6.12; ligá-lo troca a paleta, e é por ela que reavaliamos.
         QGuiApplication.instance().paletteChanged.connect(self._tema_mudou)
 
+    @property
+    def loja(self) -> Any:
+        """A loja de onde saem os jogos (outros modelos buscam o jogo por ela)."""
+        return self._store
+
     # -- seguir o jogo ---------------------------------------------------------------------------
 
     @Slot(str, result=bool)
