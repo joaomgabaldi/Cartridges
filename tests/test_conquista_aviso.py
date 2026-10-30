@@ -8,14 +8,18 @@ import winsound
 from pathlib import Path
 
 import pytest
+from PySide6.QtGui import QWindow
 from cartridges import conquista_aviso
 from cartridges.conquistas import progresso
 from cartridges.conquistas.catalogo import ConquistaInfo
 from cartridges.conquistas.vigia import Desbloqueada
 
 
+_CRIAR_JANELA_REAL = conquista_aviso._criar_janela
+
+
 class JanelaFalsa:
-    """O contrato da janela do aviso (a de verdade é da Task 4): `titulo`, `entrar`, `sair`, `fechar`."""
+    """O contrato da janela do aviso (a de verdade, `JanelaDoAviso`): `titulo`, `entrar`, `sair`, `fechar`."""
 
     falham: set = set()  # títulos cujo `entrar` levanta (a janela não pôde ser preparada)
     entraram: list = []
@@ -250,6 +254,62 @@ def test_saida_que_falha_nao_trava_a_fila(monkeypatch, sem_efeitos):
     conquista_aviso.mostrar(_aviso("Dois"))
     sem_efeitos[-1][1]()
     assert conquista_aviso.na_tela() == "Dois"
+
+
+def test_animacao_de_saida_de_verdade_termina_e_destroi(monkeypatch, sem_efeitos, user32_falso, flush_idle):  # noqa: ARG001
+    """A `JanelaDoAviso` de verdade (offscreen, user32 falso): a saída animada termina sozinha e o próximo entra."""
+    monkeypatch.setattr(conquista_aviso, "_criar_janela", _CRIAR_JANELA_REAL)
+    conquista_aviso.mostrar(_aviso("Um"))
+    conquista_aviso.mostrar(_aviso("Dois"))
+    janela = conquista_aviso._atual
+    assert conquista_aviso.na_tela() == "Um"
+    sem_efeitos[-1][1]()  # o tempo do aviso acabou; o limite da saída fica na lista, sem rodar
+    for _ in range(100):
+        if conquista_aviso.na_tela() == "Dois":
+            break
+        flush_idle(0.05)
+    assert conquista_aviso.na_tela() == "Dois"
+    assert janela._destruida
+
+
+def test_limite_da_saida_vence_antes_do_terminou(monkeypatch, sem_efeitos, user32_falso, flush_idle):  # noqa: ARG001
+    """A `JanelaDoAviso` real sem quadros: o `_LIMITE_DA_SAIDA` fecha o aviso, o `ao_terminar` roda uma vez e um
+    `terminou` que chega depois não avança a fila de novo."""
+    monkeypatch.setattr(conquista_aviso, "_criar_janela", _CRIAR_JANELA_REAL)
+    saidas = []
+    saiu = conquista_aviso._saiu
+    monkeypatch.setattr(conquista_aviso, "_saiu", lambda vez, janela: saidas.append(janela) or saiu(vez, janela))
+    for titulo in ("Um", "Dois", "Três"):
+        conquista_aviso.mostrar(_aviso(titulo))
+    janela = conquista_aviso._atual
+    sem_efeitos[-1][1]()  # o tempo do aviso acabou: a saída começa e o limite fica agendado
+    assert sem_efeitos[-1][0] == conquista_aviso._LIMITE_DA_SAIDA
+    sem_efeitos[-1][1]()  # o limite vence antes de a animação terminar
+    assert conquista_aviso.na_tela() == "Dois"
+    assert janela._destruida and not QWindow.isVisible(janela)
+    assert saidas == [janela]
+    janela._terminou()  # o `terminou` tardio da animação de "Um"
+    flush_idle(0.5)
+    assert saidas == [janela]
+    assert conquista_aviso.na_tela() == "Dois"
+
+
+def test_cartao_do_aviso_e_o_mesmo_componente(monkeypatch, user32_falso):  # noqa: ARG001
+    """A janela mostra o `CartaoDoAviso.qml` registrado no módulo, o mesmo que o assistente e as Preferências usam."""
+    from cartridges.janela_do_aviso import JanelaDoAviso  # noqa: PLC0415
+
+    qml = Path(conquista_aviso.__file__).parent / "qml"
+    assert "CartaoDoAviso 1.0 CartaoDoAviso.qml" in (qml / "qmldir").read_text(encoding="utf-8").splitlines()
+    janela = JanelaDoAviso(conquista_aviso.Aviso("Rótulo", "Título", "Descrição", ""))
+    try:
+        assert Path(janela.source().toLocalFile()) == qml / "CartaoDoAviso.qml"
+        cartao = janela.rootObject()
+        assert cartao.objectName() == "cartaoDoAviso"
+        assert [cartao.property(nome) for nome in ("rotulo", "titulo", "descricao", "icone")] == [
+            "Rótulo", "Título", "Descrição", ""
+        ]
+    finally:
+        janela.fechar()
 
 
 # O som

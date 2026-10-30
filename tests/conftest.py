@@ -92,7 +92,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_estilo_css.py",
     "test_fita_wizard.py",
     "test_hwnd_ordem_import.py",
-    "test_janela_por_cima.py",
     "test_janela_restaurando.py",
     "test_ler_json.py",
     "test_log_engolidos.py",
@@ -345,6 +344,111 @@ def sem_cortina_de_verdade(monkeypatch):
         raise OSError("cortina de verdade nos testes")
 
     monkeypatch.setattr(cortina_monitor, "_api", recusa)
+
+
+@pytest.fixture(autouse=True)
+def sem_janela_por_cima_de_verdade(monkeypatch):
+    """Nenhum teste deixa uma janela TOPMOST nem muda estilos Win32 de verdade: sem o `user32_falso`,
+    `janela_por_cima.preparar` falha (e o aviso de conquista não entra)."""
+    from cartridges.utils import janela_por_cima  # noqa: PLC0415
+
+    def recusa():
+        raise AssertionError("o teste tentou falar com o user32 de verdade (janela_por_cima)")
+
+    monkeypatch.setattr(janela_por_cima, "_api", recusa)
+    monkeypatch.setattr(janela_por_cima, "_dono", None)
+
+
+class User32Falso:
+    """O user32 que `janela_por_cima` usa, sem janela de verdade: anota as chamadas.
+
+    Estilos e donos ficam num dicionário por HWND; ``primeiro_plano`` é o que
+    ``GetForegroundWindow`` devolve (o teste o muda quando a janela aparece).
+    """
+
+    DONO = 9000
+
+    def __init__(self) -> None:
+        self.chamadas: list[tuple[str, tuple]] = []
+        self.estilos: dict[int, int] = {}
+        self.donos: dict[int, int] = {}
+        self.primeiro_plano = 50
+        self.tamanho = (300, 80)
+        self.falhas: dict[str, Any] = {}  # nome -> valor devolvido no lugar do de sempre
+
+    def __getattr__(self, nome):
+        if nome.startswith("_"):
+            raise AttributeError(nome)
+        real = getattr(self, "_" + nome)
+
+        def chamar(*args):
+            self.chamadas.append((nome, args))
+            if nome in self.falhas:
+                return self.falhas[nome]
+            return real(*args)
+
+        return chamar
+
+    def pedidos(self, nome):
+        return [args for n, args in self.chamadas if n == nome]
+
+    def _GetWindowLongPtrW(self, hwnd, _indice):
+        return self.estilos.get(int(hwnd), 0)
+
+    def _SetWindowLongPtrW(self, hwnd, indice, valor):
+        from cartridges.utils import janela_por_cima as jpc  # noqa: PLC0415
+
+        if indice == jpc.GWLP_HWNDPARENT:
+            antes, self.donos[int(hwnd)] = self.donos.get(int(hwnd), 0), int(valor)
+        else:
+            antes, self.estilos[int(hwnd)] = self.estilos.get(int(hwnd), 0), int(valor)
+        return antes
+
+    def _GetWindow(self, hwnd, _qual):
+        return self.donos.get(int(hwnd), 0)
+
+    def _GetWindowRect(self, _hwnd, ref):
+        ref._obj.left, ref._obj.top = 0, 0
+        ref._obj.right, ref._obj.bottom = self.tamanho
+
+    def _GetMonitorInfoW(self, _monitor, ref):
+        r = ref._obj.rcMonitor
+        r.left, r.top, r.right, r.bottom = 0, 0, 1920, 1080
+        return 1
+
+    def _GetForegroundWindow(self):
+        return self.primeiro_plano
+
+    def _CreateWindowExW(self, *_args):
+        return self.DONO
+
+    def _IsWindow(self, hwnd):
+        return int(bool(hwnd))
+
+    def _IsIconic(self, _hwnd):
+        return 0
+
+    def _SetLayeredWindowAttributes(self, *_args):
+        return 1
+
+    def _SetWindowPos(self, *_args):
+        return 1
+
+    def _SetForegroundWindow(self, _hwnd):
+        return 1
+
+    def _MonitorFromWindow(self, *_args):
+        return 1
+
+
+@pytest.fixture
+def user32_falso(monkeypatch):
+    """Troca o user32 do `janela_por_cima` pelo `User32Falso` (o dono oculto é o `User32Falso.DONO`)."""
+    from cartridges.utils import janela_por_cima  # noqa: PLC0415
+
+    falso = User32Falso()
+    monkeypatch.setattr(janela_por_cima, "_api", lambda: falso)
+    return falso
 
 
 @pytest.fixture(autouse=True)
