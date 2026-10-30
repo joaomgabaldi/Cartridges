@@ -74,6 +74,47 @@ def test_desligar_mantem_o_historico(store, varridos):
     assert not varridos
 
 
+def _cartao_e_varredura(monkeypatch):
+    """O cartão da página (`shared.conquistas.mudou`) e a varredura, na ordem em que foram chamados."""
+    eventos = []
+    monkeypatch.setattr(
+        shared, "conquistas",
+        types.SimpleNamespace(mudou=lambda game_id: eventos.append(("mudou", game_id, historico.ler(game_id)))),
+    )
+    varredura = types.SimpleNamespace(varrer_jogo=lambda game: eventos.append(("varrer", game.game_id)))
+    avisos = types.SimpleNamespace(adicionar=lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        shared, "aplicativo", types.SimpleNamespace(varredura_conquistas=varredura, avisos=avisos), raising=False
+    )
+    return eventos
+
+
+def test_desligar_no_editor_refaz_o_cartao_da_pagina(store, monkeypatch):
+    """O `update` não refaz o cartão da página aberta: quem refaz é o `aplicar`."""
+    eventos = _cartao_e_varredura(monkeypatch)
+    game = jogo(store, 28, executable="x.exe", steam_appid="570")
+    _aplicar(store, game, conquistas=False)
+    assert eventos == [("mudou", game.game_id, None)]
+
+
+def test_religar_no_editor_refaz_o_cartao_e_depois_varre(store, monkeypatch):
+    eventos = _cartao_e_varredura(monkeypatch)
+    game = jogo(store, 29, executable="x.exe", steam_appid="570", conquistas=False)
+    _aplicar(store, game, conquistas=True)
+    assert eventos == [("mudou", game.game_id, None), ("varrer", game.game_id)]
+
+
+def test_o_cartao_e_refeito_depois_da_correcao_e_da_ligacao_do_zerado(store, monkeypatch):
+    """Se a refeita viesse antes, o cartão mostraria o histórico errado que a correção do appID apaga."""
+    eventos = _cartao_e_varredura(monkeypatch)
+    zerado = jogo(store, 30, removed=True, status="beaten", steam_appid="640")
+    historico.registrar(zerado.game_id, [Desbloqueio("Z", 5)])
+    vivo = jogo(store, 31, executable="x.exe", steam_appid="10")
+    historico.registrar(vivo.game_id, [Desbloqueio("ERRADA", 1)])
+    _aplicar(store, vivo, appid_buscado="640")
+    assert eventos[0] == ("mudou", vivo.game_id, {"Z": 5})
+
+
 def test_appid_que_liga_um_zerado_mantem_o_historico_dele(store):
     zerado = jogo(store, 26, removed=True, status="beaten", steam_appid="640")
     historico.registrar(zerado.game_id, [Desbloqueio("Z", 5)])

@@ -516,6 +516,11 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
     if jogo.steam_appid and str(jogo.steam_appid) != str(appid_anterior):
         ligar_zerado(jogo)
 
+    # O cartão de conquistas da página não segue o `update` (nada do que a página lê do jogo mudou): o interruptor e o
+    # histórico apagado pedem a refeita (como o `update_conquistas_block` da `main`).
+    if shared.conquistas is not None:
+        shared.conquistas.mudou(jogo.game_id)
+
     if jogo.conquistas and (appid_mudou or executavel_mudou or not conquistas_antes):
         if (varredura := getattr(shared.aplicativo, "varredura_conquistas", None)) is not None:
             varredura.varrer_jogo(jogo)
