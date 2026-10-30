@@ -5,7 +5,7 @@
 """O controle do Xbox na grade: lê o XInput e entrega sinais que o QML liga à interface.
 
 Só lê enquanto a janela está ativa e a preferência `gamepad` está ligada; com a janela inativa o
-`QTimer` para; a DLL continua carregada e só é solta durante uma sessão de jogo (plano 5), para o
+`QTimer` para; a DLL continua carregada e só é solta durante uma sessão de jogo (`suspender`), para o
 jogo ficar com o controle só para ele. Tudo roda na thread principal. A lógica de direção e botões é a do `gamepad.py` da `main`.
 """
 
@@ -22,6 +22,7 @@ from cartridges.xinput import (
     REPEAT_INTERVAL_US,
     RUMBLE_CAPA,
     RUMBLE_EDGE,
+    RUMBLE_LAUNCH,
     RUMBLE_MOVE,
     RUMBLE_PULO,
     THUMB_PRESS,
@@ -84,7 +85,10 @@ class ControleDaGrade(QObject):
         self._ultimo_toque_capa_us: int | None = None
         self._ajustar_base()
         self._geracao_de_vibracao = 0
-        # shortcut: sem suspender/retomar enquanto um jogo é rastreado (sessões, plano 5).
+        # Durante uma sessão o controle é do jogo: nada lê, e a DLL sai depois da vibração de abertura.
+        self._suspenso = False
+        self._soltura = QTimer(self, singleShot=True, interval=RUMBLE_LAUNCH[2] + 60)
+        self._soltura.timeout.connect(self._soltar)
         eu = weakref.ref(self)
         shared.schema.connect("changed::gamepad", lambda *_: (c := eu()) and c.sincronizar())
         QGuiApplication.instance().applicationStateChanged.connect(lambda *_: (c := eu()) and c.sincronizar())
@@ -118,7 +122,7 @@ class ControleDaGrade(QObject):
     @Slot()
     def sincronizar(self) -> None:
         ativa = self._estado_do_app() == Qt.ApplicationState.ApplicationActive
-        desejado = ativa and shared.schema.get_boolean("gamepad")
+        desejado = not self._suspenso and ativa and shared.schema.get_boolean("gamepad")
         if desejado and not self._timer.isActive():
             if self._leitor is None:
                 leitor = self._fabrica()
@@ -129,9 +133,48 @@ class ControleDaGrade(QObject):
             self._timer.start()
         elif not desejado and self._timer.isActive():
             # Só para de ler. A vibração em curso termina sozinha e a DLL fica carregada, como na `main`.
-            # shortcut: a DLL só é solta durante uma sessão de jogo (`LeitorXInput.soltar`); entra com as sessões, no plano 5.
             self._timer.stop()
             self._direcao = None
+
+    # Sessão de jogo ---------------------------------------------------------
+
+    @Slot()
+    def suspender(self) -> None:
+        """Entrega o controle ao jogo da sessão: para de ler na hora e solta a DLL depois do prazo.
+
+        O prazo é o da vibração de abertura, que sai logo antes: soltar antes deixaria os motores ligados,
+        porque o desligamento agendado dela não acharia mais a DLL.
+        """
+        if self._suspenso:
+            return
+        self._suspenso = True
+        self._timer.stop()
+        self._direcao = None
+        self._soltura.start()
+
+    def _soltar(self) -> None:
+        if not self._suspenso or self._leitor is None:
+            return  # retomado dentro do prazo: a DLL carregada fica
+        self._leitor.vibrar()  # os motores parados antes de a DLL sair
+        self._leitor.soltar()
+        self._leitor = None
+        # Redescoberta: o controle que estava aí ao voltar não é uma conexão nova; só uma leitura sem
+        # controle rearma o `conectado`.
+        self._sem_controle = False
+
+    @Slot()
+    def retomar(self) -> None:
+        """A sessão acabou: a leitura volta (com a DLL recarregada pela fábrica, se saiu) e a base é refeita."""
+        if not self._suspenso:
+            return
+        self._suspenso = False
+        self._soltura.stop()
+        self.sincronizar()  # o que o controle fez durante o jogo não é comando: a base vem do `_ajustar_base`
+
+    @Slot()
+    def vibrarAbertura(self) -> None:  # noqa: N802
+        """Um jogo iniciando: a vibração mais longa, com a preferência `gamepad-rumble`."""
+        self._vibrar(RUMBLE_LAUNCH)
 
     # Leitura ----------------------------------------------------------------
 

@@ -365,7 +365,9 @@ Principal {
 
     Binding { target: controle; property: "modoBigPicture"; value: bigPicture.visivel && !janela.popupAberto }  // com diálogo na frente vale a repetição da grade
 
-    // Com a camada da sessão à vista o controle não age por baixo dela (a Task 6 suspende a leitura).
+    // Com a camada da sessão à vista o controle não age por baixo dela: nem abre outro jogo, nem entra no
+    // Big Picture ao ser conectado (como a `main`). O `ModeloDaSessao` também suspende a leitura; isto vale
+    // mesmo sem ela.
     Connections {
         target: controle
         enabled: !sessao.emAndamento

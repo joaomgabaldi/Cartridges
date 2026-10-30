@@ -1071,3 +1071,90 @@ def test_lista_refeita_durante_a_abertura_fica_para_a_volta(abrivel):
     assert _ids(a.bp) == ["a", "b", "c"]  # ocupada: pendente
     a.bp.voltouDoJogo()
     assert _ids(a.bp) == ["n", "a", "b", "c"] and a.bp.nome == "B"
+
+
+# --- a sessão de jogo (Review Focus 5 do plano 5) ---------------------------------------------------
+
+
+@pytest.fixture
+def com_sessao(abrivel, monkeypatch, schema):
+    """O `abrivel` com o `ModeloDaSessao` de verdade: o `launch` falso começa o rastreio por processo."""
+    from cartridges.modelos.avisos import FilaDeAvisos  # noqa: PLC0415
+    from cartridges.modelos.sessao import ModeloDaSessao  # noqa: PLC0415
+    from cartridges.process_session import ProcessSession  # noqa: PLC0415
+
+    a = abrivel
+    a.sessao = ModeloDaSessao(FilaDeAvisos(), big_picture=a.bp)
+    monkeypatch.setattr(modulo.shared, "sessao", a.sessao, raising=False)
+    schema.set_boolean("minimize-after-launch", False)
+    for jogo in a.jogos.values():
+        jogo.executable, jogo.track_process, jogo.process_executable = r'start "" "D:\Jogos\x.exe"', False, ""
+        jogo.launch.efeito = lambda jogo=jogo: ProcessSession(jogo).start()
+    yield a
+    a.sessao.encerrar()
+
+
+def test_abrir_com_sessao_espera_o_fim(com_sessao):
+    a = com_sessao
+    _ida(a)
+    assert a.sessao.emAndamento and a.bp.ocupada
+    assert a.aberturas == [(0.0, 1.0)] and a.focos == []
+    assert a.janela.chamadas == ["tela cheia", "normal"], "a tela cheia só volta com o fim da sessão"
+
+
+def test_fim_da_sessao_reabre_com_o_jogo_no_centro(com_sessao):
+    a = com_sessao
+    _ida(a, "c")
+    a.sessao.terminar()
+    assert not a.sessao.emAndamento and not a.bp.ocupada
+    assert a.aberturas == [(0.0, 1.0), (1.0, 0.0)] and a.focos == [1]
+    assert a.janela.chamadas == ["tela cheia", "normal", "tela cheia"]
+    assert (a.bp.indice, a.bp.nome) == (0, "C")  # o jogado agora vem à frente e fica no centro
+
+
+def test_fim_da_sessao_com_queda_para_a_manual_reabre_o_big_picture(com_sessao):
+    from cartridges.process_session import ProcessSession  # noqa: PLC0415
+    from cartridges.session_window import SessionWindow  # noqa: PLC0415
+
+    a = com_sessao
+    _ida(a)
+    ProcessSession.active.stop(record=False, fall_back=True)  # o jogo nunca apareceu: passa à janela manual
+    assert a.sessao.emAndamento and a.bp.ocupada and a.aberturas == [(0.0, 1.0)], "a queda não reabre"
+    SessionWindow.active.close()
+    assert not a.bp.ocupada and a.aberturas == [(0.0, 1.0), (1.0, 0.0)] and a.focos == [1]
+    assert a.janela.chamadas.count("tela cheia") == 2  # a entrada e uma volta só
+    a.sessao.hide_session_blocker()  # um fim repetido não reabre de novo
+    assert len(a.aberturas) == 2 and a.janela.chamadas.count("tela cheia") == 2
+
+
+@pytest.mark.parametrize("visivel", [False, True])
+def test_fim_da_sessao_com_o_big_picture_escondido_nao_chama(app_qt, visivel):
+    from cartridges.modelos.avisos import FilaDeAvisos  # noqa: PLC0415
+    from cartridges.modelos.sessao import ModeloDaSessao  # noqa: PLC0415
+
+    chamadas = []
+    bp = SimpleNamespace(visivel=visivel, voltouDoJogo=lambda: chamadas.append(1))
+    ModeloDaSessao(FilaDeAvisos(), big_picture=bp).hide_session_blocker()
+    assert chamadas == ([1] if visivel else [])
+
+
+def test_fim_da_sessao_no_meio_de_um_fade_nao_cria_outra_cortina(fade):
+    from cartridges.modelos.avisos import FilaDeAvisos  # noqa: PLC0415
+    from cartridges.modelos.sessao import ModeloDaSessao  # noqa: PLC0415
+
+    bp = fade.bp
+    aberturas = []
+    bp.aberturaPedida.connect(lambda de, para: aberturas.append((de, para)))
+    bp.entrar()
+    bp.capasProntas()
+    concluir_cortina(bp)  # no escuro, já trocada: visível, ocupada e com a pausa correndo
+    assert bp.visivel and bp.ocupada
+    registro, chamadas = list(fade.registro), list(fade.janela.chamadas)
+
+    ModeloDaSessao(FilaDeAvisos(), big_picture=bp).hide_session_blocker()
+
+    assert fade.registro == registro and fade.janela.chamadas == chamadas and aberturas == []
+    concluir_pausa(bp)  # a sequência em curso segue até o fim, com o próprio `depois`
+    concluir_cortina(bp)
+    bp.filaTerminou()
+    assert not bp.ocupada and fade.registro.count("abriu 42") == 1 and fade.registro[-1] == "fechou"

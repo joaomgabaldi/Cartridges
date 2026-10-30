@@ -431,9 +431,9 @@ class BigPicture(QObject):
             raise
         if not aberto:
             self._desistir_da_abertura()
-        else:
-            # shortcut: sempre "sem sessão" até o plano 5 (a sessão), que escolhe aqui e liga o fim dela a `voltouDoJogo`.
+        elif shared.sessao is None or not shared.sessao.jogoId:
             self._voltar_sem_sessao()
+        # Com sessão, o `ModeloDaSessao` chama `voltouDoJogo` quando ela termina.
 
     def _desistir_da_abertura(self) -> None:
         """O jogo não abriu (comando a conferir, erro, sumiu): a capa volta e a tela cheia também."""
@@ -449,8 +449,9 @@ class BigPicture(QObject):
 
     @Slot()
     def voltouDoJogo(self) -> None:  # noqa: N802
-        # shortcut: ninguém chama até o plano 5 (a sessão), que liga o fim da sessão a este slot.
-        if not self._ocupada:
+        # Uma entrada ou saída em curso não é a espera do jogo: ela segue com o próprio `depois`, que uma
+        # sequência nova descartaria (`_fechar_cortina`).
+        if not self._ocupada or self._em_fade or self._na_fila or self._saindo:
             return
         self._voltar_a_tela_cheia()
         self._reabrir()

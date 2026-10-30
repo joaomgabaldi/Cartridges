@@ -74,9 +74,13 @@ class ModeloDaSessao(QObject):
     alterado = Signal()
     anotarPedido = Signal(str)
 
-    def __init__(self, avisos: FilaDeAvisos, parent: QObject | None = None) -> None:
+    def __init__(
+        self, avisos: FilaDeAvisos, controle: Any = None, big_picture: Any = None, parent: QObject | None = None
+    ) -> None:
         super().__init__(parent)
         self._avisos = avisos
+        self._controle = controle  # `ControleDaGrade`: suspenso a sessão inteira
+        self._big_picture = big_picture  # `BigPicture`: aberto, volta ao carrossel no fim
         self._jogo: Any = None  # o jogo da sessão; None sem sessão (camada escondida)
         self._manual: SessionWindow | None = None
         self._janela: QWindow | None = None
@@ -163,6 +167,9 @@ class ModeloDaSessao(QObject):
         # As fitas de LED vestem a cor do jogo (a rede corre em threads). `comecar` volta sozinho com o recurso
         # desligado ou sem fita configurada.
         session_fita.comecar(game)
+        # O controle fica todo com o jogo: nenhuma leitura e, depois da vibração de abertura, nem a DLL.
+        if self._controle is not None:
+            self._controle.suspender()
 
     def hide_session_blocker(self) -> None:
         jogo = self._jogo
@@ -171,9 +178,15 @@ class ModeloDaSessao(QObject):
         self._jogo = None
         self._manual = None
         self.alterado.emit()
+        # Primeiro: uma falha no que vem depois não deixa o controle suspenso para sempre.
+        if self._controle is not None:
+            self._controle.retomar()
         # Antes do `present()` de quem chamou: a janela reaparece já no lugar de origem, sem pular.
         # Sem efeito quando ela não saiu do lugar.
         window_geometry.restore_from_monitor(self._janela)
+        # O jogo foi aberto pelo Big Picture: de volta ao carrossel em tela cheia, com ele no centro.
+        if self._big_picture is not None and self._big_picture.visivel:
+            self._big_picture.voltouDoJogo()
         session_wallpaper.restaurar()
         self._devolver_as_fitas(jogo)
 
@@ -252,8 +265,8 @@ class ModeloDaSessao(QObject):
         return window_geometry.move_to_monitor(self._janela, shared.schema.get_string("session-monitor"))
 
     def vibrar_abertura(self) -> None:
-        # shortcut: sem vibração do controle, a Task 6 confirma o lançamento na mão.
-        return None
+        if self._controle is not None:
+            self._controle.vibrarAbertura()
 
     def session_elapsed(self) -> int:
         """Os segundos que a sessão em andamento já contou. Zero sem sessão."""

@@ -148,7 +148,7 @@ def main(argv: list[str]) -> int:
     detalhes = DetalhesDoJogo(shared.store, avisos=avisos)
     edicao = ModeloDaEdicao(aplicativo)
     big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
-    sessao = ModeloDaSessao(avisos)
+    sessao = ModeloDaSessao(avisos, controle=controle, big_picture=big_picture)
     shared.sessao = sessao
     motor.addImageProvider("desfoque", detalhes.provedor)
     motor.addImageProvider("fundo", ProvedorDoFundo())
