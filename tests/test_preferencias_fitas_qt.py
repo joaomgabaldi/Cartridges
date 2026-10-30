@@ -711,3 +711,99 @@ def test_fechar_as_preferencias_fecha_o_assistente(p, monkeypatch):
 
 
 # endregion
+
+
+# region O assistente de calibração
+
+
+@pytest.fixture
+def previas_da_calibracao(monkeypatch):
+    """A prévia de uma fita só (a da etapa de calibração), anotada, sem acender nada."""
+    pedidas = []
+    monkeypatch.setattr(session_fita, "previa_calibracao", lambda id_, cor, calibracoes: pedidas.append((id_, cor)))
+    return pedidas
+
+
+def test_linha_da_calibracao_segue_o_interruptor_da_iluminacao(app):
+    _com_fitas()
+    _abrir(app)
+    linha = app.achar("linhaCalibrarFitas")
+    assert linha.property("titulo") == "Calibrar as cores"
+    assert linha.property("subtitulo") == "Ajusta cada dispositivo para reproduzir as cores como a tela"
+    assert linha.property("dica") == "Abrir o assistente de calibração"
+    app.preferencias.definir("session-fita", False)
+    assert _esperar(lambda: not _enabled(app, "linhaCalibrarFitas"))
+    app.preferencias.definir("session-fita", True)
+    assert _esperar(lambda: _enabled(app, "linhaCalibrarFitas"))
+
+
+def _abrir_a_calibracao(app):
+    _com_fitas("Centro", "Direita")
+    shared.schema.set_boolean("session-fita", True)
+    _abrir(app)
+    botao = app.achar("linhaCalibrarFitasBotao")
+    botao.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QMetaObject.invokeMethod(botao, "click", Qt.ConnectionType.DirectConnection)
+    dialogo = app.achar("assistenteDeCalibracao")
+    assert _esperar(lambda: dialogo.property("visible") is True)
+    return dialogo, botao
+
+
+def test_botao_da_calibracao_abre_o_assistente(app, previas_da_calibracao):
+    _abrir_a_calibracao(app)
+    assistente = app.preferencias.calibracao
+    assert [linha["id"] for linha in assistente.linhas][1:] == ["eb0", "eb1"]
+    assert assistente.paginaAtual == "inicio"
+    # Só abrir o assistente não acende nada; quem acende é escolher um dispositivo.
+    assert previas_da_calibracao == []
+
+
+def test_abrir_a_calibracao_duas_vezes_nao_cria_outra(p):
+    _com_fitas()
+    p.abrirCalibracao()
+    primeira = p.calibracao
+    p.abrirCalibracao()
+    assert p.calibracao is primeira
+
+
+def test_fechar_as_preferencias_fecha_a_calibracao_e_volta_a_cor_do_app(p, previas, previas_da_calibracao):  # noqa: ARG001
+    _com_fitas()
+    p.abrirCalibracao()
+    p.calibracao.escolher("eb0")
+    previas.clear()
+    p.fechar()
+    assert p.calibracao is None
+    assert previas == [(session_fita.cor_do_app(), None)]  # uma só, e nenhuma outra por cima
+
+
+def test_calibracao_foco_tab_e_esc(app, previas, previas_da_calibracao, flush_idle):  # noqa: ARG001
+    from PySide6.QtTest import QTest  # noqa: PLC0415
+
+    dialogo, botao = _abrir_a_calibracao(app)
+    fechados = []
+    app.preferencias.calibracao.fechado.connect(lambda: fechados.append(1))
+    previas.clear()
+    assert _esperar(lambda: app.achar("dispositivoDaCalibracao-__todos__Botao").hasActiveFocus())
+    # O cartão das Preferências fica apagado por trás.
+    assert app.achar("cartaoDasPreferencias").property("enabled") is False
+    for _ in range(8):
+        QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+        flush_idle(0.03)
+        dentro, item = False, app.janela.activeFocusItem()
+        while item is not None:
+            dentro = dentro or item is dialogo
+            item = item.parentItem()
+        assert dentro  # o Tab circula dentro do modal
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: dialogo.property("visible") is False)
+    assert app.preferencias.calibracao is None
+    flush_idle(0.1)
+    # O Esc de verdade: um `fechado` e uma só volta à cor do app.
+    assert fechados == [1]
+    assert previas == [(session_fita.cor_do_app(), None)]
+    assert app.achar("cartaoDasPreferencias").property("enabled") is True
+    assert _esperar(lambda: botao.hasActiveFocus())
+
+
+# endregion
+

@@ -130,6 +130,7 @@ Rectangle {
         clip: true
         // Com o brilho por dispositivo ou o assistente das fitas por cima, o Tab não volta para cá.
         enabled: preferencias.brilhoPorDispositivo === null && preferencias.configuracaoDasFitas === null
+            && preferencias.calibracao === null
 
         Item {
             id: cabecalho
@@ -218,6 +219,7 @@ Rectangle {
     }
     BrilhoPorDispositivo {}
     ConfiguracaoDasFitas {}
+    AssistenteDeCalibracao {}
 
     Connections {
         target: preferencias.biblioteca

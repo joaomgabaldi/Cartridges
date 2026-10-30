@@ -840,3 +840,134 @@ def test_esc_fecha_o_assistente_e_volta_as_preferencias(app, flush_idle):
 
 
 # endregion
+
+
+# region O assistente de calibração
+
+
+@pytest.fixture
+def calibracao_aberta(app, fitas_espiadas, monkeypatch):
+    """O assistente aberto sobre duas fitas, sem acender nada (a prévia de uma fita só também é espiada)."""
+    from cartridges.utils import session_fita  # noqa: PLC0415
+
+    session_fita.gravar_fitas(
+        [session_fita.Fita("<b>Sala</b> & Cia", "eb0", "192.0.2.10", "k"), session_fita.Fita("Quarto", "eb1", "192.0.2.11", "k")]
+    )
+    monkeypatch.setattr(session_fita, "previa_calibracao", lambda *_a: fitas_espiadas.append("so"))
+    _abrir(app, "session")
+    app.preferencias.abrirCalibracao()
+    dialogo = app.achar("assistenteDeCalibracao")
+    assert _esperar(lambda: dialogo.property("visible") is True)
+    return app, dialogo
+
+
+def _centro_da_amostra(app, nome):
+    from PySide6.QtCore import QPointF  # noqa: PLC0415
+
+    amostra = app.achar(nome)
+    ponto = amostra.mapToScene(QPointF(amostra.width() / 2, amostra.height() / 2)).toPoint()
+    return app.janela.grabWindow().pixelColor(ponto)
+
+
+def _perto(a, b):
+    return max(abs(a.red() - b.red()), abs(a.green() - b.green()), abs(a.blue() - b.blue())) < 8
+
+
+def test_calibracao_mostra_a_amostra_na_cor_da_etapa(calibracao_aberta):
+    app, _dialogo = calibracao_aberta
+    assistente = app.preferencias.calibracao
+    assistente.escolher("eb0")
+    assert _esperar(lambda: app.achar("amostraDaCalibracao").property("visible") is True)
+    assert _esperar(lambda: _perto(_centro_da_amostra(app, "amostraDaCalibracao"), assistente.corNaTela))
+    assistente.proxima()  # amarelo
+    assert _esperar(lambda: _perto(_centro_da_amostra(app, "amostraDaCalibracao"), assistente.corNaTela))
+    assert app.achar("amostraDaCalibracao").property("height") == 240
+
+
+def test_temperatura_so_no_branco(calibracao_aberta):
+    app, _dialogo = calibracao_aberta
+    assistente = app.preferencias.calibracao
+    assistente.escolher("eb0")
+
+    def visiveis():
+        return [
+            app.achar(n).property("visible") is True
+            for n in ("tomDaCalibracao-eb0", "intensidadeDaCalibracao-eb0", "temperaturaDaCalibracao-eb0")
+        ]
+
+    assert _esperar(lambda: visiveis() == [True, True, False])
+    for _ in range(6):
+        assistente.proxima()
+    assert _esperar(lambda: visiveis() == [False, False, True])
+    textos = _textos(app.achar("assistenteDeCalibracao"))
+    assert "Mais quente" in textos and "Mais frio" in textos
+    assert assistente.titulo == "Branco (7 de 7)"
+
+
+def test_sliders_seguem_as_constantes_da_calibracao(calibracao_aberta):
+    from cartridges.utils import calibracao  # noqa: PLC0415
+
+    app, _dialogo = calibracao_aberta
+    app.preferencias.calibracao.escolher("eb0")
+    assert _esperar(lambda: app.achar("tomDaCalibracao-eb0").property("visible") is True)
+    tom, intensidade = app.achar("tomDaCalibracao-eb0"), app.achar("intensidadeDaCalibracao-eb0")
+    assert (tom.property("from"), tom.property("to")) == (-calibracao.TOM_MAXIMO, calibracao.TOM_MAXIMO)
+    assert (intensidade.property("from"), intensidade.property("to")) == (
+        calibracao.FATOR_MINIMO * 100, calibracao.FATOR_MAXIMO * 100
+    )
+
+
+def test_nomes_dos_dispositivos_em_texto_puro(calibracao_aberta):
+    app, dialogo = calibracao_aberta
+    nome = "<b>Sala</b> & Cia"
+
+    def formatos():
+        achados, pilha = [], [dialogo]
+        while pilha:
+            atual = pilha.pop()
+            texto = atual.property("text")
+            if isinstance(texto, str) and texto:
+                achados.append((texto, _avaliar(atual, "textFormat")))
+            pilha.extend(atual.childItems() if isinstance(atual, QQuickItem) else [])
+        return achados
+
+    # Na lista do início.
+    assert (nome, 0) in formatos()  # 0 = Text.PlainText
+    assert ("Todos os dispositivos", 0) in formatos()
+    # E nos grupos da etapa de todos.
+    app.preferencias.calibracao.escolher("__todos__")
+    assert _esperar(lambda: app.achar("tomDaCalibracao-eb0").property("visible") is True)
+    assert all(f == 0 for t, f in formatos() if nome in t)
+    assert sum(1 for t, _f in formatos() if t == nome) >= 2
+
+
+def test_textos_do_assistente_de_calibracao(calibracao_aberta):
+    app, dialogo = calibracao_aberta
+    # Os controles só existem com uma etapa na tela.
+    app.preferencias.calibracao.escolher("eb0")
+    assert _esperar(lambda: app.achar("tomDaCalibracao-eb0").property("visible") is True)
+    textos = _textos(dialogo)
+    for esperado in (
+        "Calibrar as cores",
+        "Cancelar",
+        "Escolha o dispositivo a calibrar. Em cada etapa, ajuste os controles até a cor do dispositivo ficar igual à da "
+        "tela. Para um resultado melhor, deixe o ambiente com pouca luz.",
+        "Todos os dispositivos",
+        "Ajusta todos ao mesmo tempo, cada um com os seus controles",
+        "Testar calibração",
+        "Restaurar",
+        "Voltar",
+        "Próximo",
+        "Voltar aos ajustes",
+        "Pausar",
+        "Avançar",
+        "Concluir",
+        "Tom",
+        "Intensidade",
+        "Temperatura",
+    ):
+        assert esperado in textos, esperado
+
+
+# endregion
+

@@ -5,16 +5,20 @@
 """O assistente de calibração: o que ele mostra nas fitas, o que grava e
 quando."""
 
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 from cartridges import shared
 from cartridges.utils import calibracao, session_fita
-from cartridges.calibracao_janela import SATURACAO_DA_REFERENCIA
+from cartridges.calibracao_janela import PAGINAS_DA_CALIBRACAO, SATURACAO_DA_REFERENCIA
 from cartridges.utils.calibracao import NEUTRA
 
 
 @pytest.fixture
-def assistente(tmp_path, monkeypatch, schema):
+def assistente(app_qt, tmp_path, monkeypatch, schema):  # noqa: ARG001
     """O assistente com duas fitas gravadas e a prévia nas fitas espionada."""
     from cartridges.calibracao_janela import AssistenteDeCalibracao  # noqa: PLC0415
 
@@ -41,7 +45,7 @@ def assistente(tmp_path, monkeypatch, schema):
     janela = AssistenteDeCalibracao(session_fita.fitas())
     janela.previas = previas
     yield janela
-    # O assistente que sobra deixa o temporizador do teste vivo no GLib: ele
+    # O assistente que sobra deixa o temporizador do teste vivo: ele
     # dispararia nos testes seguintes, já sem a prévia espionada, e a prévia
     # de verdade ficaria "em andamento" no estado global do session_fita.
     # Encerrar aqui, com a espionagem ainda no lugar, para o temporizador e
@@ -93,7 +97,7 @@ def test_navegacao_vai_do_inicio_ao_teste(assistente):
     for _ in range(7):
         assistente.proxima()
     assert assistente.pagina() == "teste"
-    assert assistente._pilha.get_child_by_name("fim") is None
+    assert "fim" not in PAGINAS_DA_CALIBRACAO
 
 
 def test_concluir_grava_a_calibracao_de_cada_fita(assistente):
@@ -115,9 +119,7 @@ def test_cancelar_nao_grava_e_volta_a_cor_do_app(assistente):
     assert assistente.previas[-1][1] == session_fita.cor_do_app()
 
 
-def test_testar_passa_pelas_cores_em_todas_e_para_ao_fechar(assistente):
-    from gi.repository import GLib  # noqa: PLC0415
-
+def test_testar_passa_pelas_cores_em_todas_e_para_ao_fechar(assistente, flush_idle):
     assistente.escolher("eb0")
     assistente.mudar_tom(-8)
     assistente.testar()
@@ -126,14 +128,16 @@ def test_testar_passa_pelas_cores_em_todas_e_para_ao_fechar(assistente):
     assert calibracoes["eb0"].cores[0] == (-8, 1.0)
     assistente.avancar_teste()
     assert assistente.previas[-1][1].matiz == 60
-    temporizador = assistente._temporizador
-    assert temporizador
+    assert assistente._temporizador is not None
     assistente.cancelar()
-    assert assistente._temporizador == 0
-    assert GLib.MainContext.default().find_source_by_id(temporizador) is None
+    assert assistente._temporizador is None
+    # O intervalo do teste é de 3 s: depois de 4 s, nenhuma prévia nova.
+    quantas = len(assistente.previas)
+    flush_idle(4)
+    assert len(assistente.previas) == quantas
 
 
-def test_fita_calibrada_aparece_como_calibrada(tmp_path, monkeypatch, schema):
+def test_fita_calibrada_aparece_como_calibrada(app_qt, tmp_path, monkeypatch, schema):  # noqa: ARG001
     from cartridges.calibracao_janela import AssistenteDeCalibracao  # noqa: PLC0415
 
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
@@ -167,7 +171,7 @@ def test_voltar_aos_ajustes_para_o_teste_e_guarda_os_ajustes(assistente):
     assistente.testar()
     assistente.voltar_aos_ajustes()
     assert assistente.pagina() == "inicio"
-    assert assistente._temporizador == 0
+    assert assistente._temporizador is None
     assert assistente.calibracoes["eb0"].cores[0] == (-8, 1.0)
     assert all(fita.calibracao is None for fita in session_fita.fitas())  # nada gravado
 
@@ -200,8 +204,9 @@ def test_todos_juntos_tem_controles_de_cada_dispositivo(assistente):
     from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
 
     assistente.escolher(TODOS)
-    tom_da_direita = assistente._controles_por_fita["eb1"]["tom"]
-    tom_da_direita.set_value(12)  # como se a pessoa arrastasse
+    assert [c["id"] for c in assistente.controles] == ["eb0", "eb1"]
+    assistente.mudarTom(12, "eb1")  # como se a pessoa arrastasse
+    assert assistente.controles[1]["tom"] == 12
     assert assistente.calibracoes["eb1"].cores[0] == (12, 1.0)
     assert assistente.calibracoes["eb0"].cores[0] == (0, 1.0)
 
@@ -213,7 +218,7 @@ def test_todos_juntos_cada_um_parte_da_sua_calibracao(assistente):
     assistente.calibracoes = {"eb0": puxada, "eb1": NEUTRA}
     assistente.escolher(TODOS)
     assert assistente.calibracoes == {"eb0": puxada, "eb1": NEUTRA}
-    assert assistente._controles_por_fita["eb0"]["tom"].get_value() == -8
+    assert assistente.controles[0]["tom"] == -8
 
 
 def test_todos_juntos_restaurar_volta_a_etapa_de_todas(assistente):
@@ -242,7 +247,9 @@ def test_todos_juntos_vai_do_branco_direto_ao_teste(assistente):
 def test_lista_comeca_com_todos_os_dispositivos(assistente):
     from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
 
-    assert TODOS in assistente._linhas_do_inicio
+    assert [linha["id"] for linha in assistente.linhas] == [TODOS, "eb0", "eb1"]
+    assert assistente.linhas[0]["nome"] == "Todos os dispositivos"
+    assert assistente.linhas[0]["subtitulo"] == "Ajusta todos ao mesmo tempo, cada um com os seus controles"
 
 
 def test_temperatura_de_volta_ao_centro_nao_conta_como_calibrada(assistente):
@@ -273,13 +280,13 @@ def test_um_dispositivo_sozinho_e_depois_todos_grava_tudo(assistente):
     assert gravadas["eb1"].cores[0] == (5, 1.0)
 
 
-def test_com_um_dispositivo_so_nao_ha_todos(tmp_path, monkeypatch, schema):
+def test_com_um_dispositivo_so_nao_ha_todos(app_qt, tmp_path, monkeypatch, schema):  # noqa: ARG001
     from cartridges.calibracao_janela import TODOS, AssistenteDeCalibracao  # noqa: PLC0415
 
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
     session_fita.gravar_fitas([session_fita.Fita("A", "eb0", "1", "k")])
     janela = AssistenteDeCalibracao(session_fita.fitas())
-    assert TODOS not in janela._linhas_do_inicio
+    assert [linha["id"] for linha in janela.linhas] == ["eb0"]
 
 
 def test_avancar_no_teste_reinicia_o_tempo(assistente):
@@ -287,7 +294,7 @@ def test_avancar_no_teste_reinicia_o_tempo(assistente):
     assistente.testar()
     antes = assistente._temporizador
     assistente.avancar_teste()
-    assert assistente._temporizador and assistente._temporizador != antes
+    assert assistente._temporizador is not None and assistente._temporizador is not antes
 
 
 def test_da_lista_da_para_ir_direto_ao_teste(assistente):
@@ -295,7 +302,7 @@ def test_da_lista_da_para_ir_direto_ao_teste(assistente):
     assistente.mudar_tom(-8)
     assistente.anterior()  # de volta à lista
     assert assistente.pagina() == "inicio"
-    assistente._testar_da_lista.emit("clicked")
+    assistente.testar()
     assert assistente.pagina() == "teste"
     assert assistente.previas[-1][2]["eb0"].cores[0] == (-8, 1.0)
 
@@ -309,3 +316,100 @@ def test_voltar_a_lista_devolve_as_fitas_a_cor_do_app(assistente):
     assistente.escolher("eb0")
     assistente.anterior()
     assert assistente.previas[-1][1] == session_fita.cor_do_app()
+
+
+def test_controles_preenchidos_nao_contam_como_ajuste(assistente):
+    """Carregar a etapa nos controles não é ajuste: só a prévia da etapa, nenhuma a mais."""
+    assistente.escolher("eb0")
+    assert len([p for p in assistente.previas if p[0] == "so"]) == 1
+    assistente.proxima()
+    assert len([p for p in assistente.previas if p[0] == "so"]) == 2
+    # Enquanto a etapa preenche os controles, o que eles disserem é ignorado.
+    antes = (len(assistente.previas), assistente.calibracoes["eb0"])
+    assistente._carregando = True  # noqa: SLF001
+    assistente.mudarTom(9, "eb0")
+    assistente.mudarIntensidade(50, "eb0")
+    assistente._carregando = False  # noqa: SLF001
+    assert (len(assistente.previas), assistente.calibracoes["eb0"]) == antes
+
+
+def test_cancelar_repetido_encerra_uma_vez(assistente):
+    fechados = []
+    assistente.fechado.connect(lambda: fechados.append(1))
+    assistente.escolher("eb0")
+    assistente.testar()
+    assistente.cancelar()  # o Esc do QML chama o cancelar
+    assistente.cancelar()
+    assistente._encerrar()  # noqa: SLF001
+    assert fechados == [1]
+    voltas = [p for p in assistente.previas if p[0] == "todas" and p[1] == session_fita.cor_do_app()]
+    assert len(voltas) == 1
+
+
+def test_calibracao_na_tela_acompanha_a_etapa_e_o_teste(assistente):
+    assistente.escolher("eb0")
+    assert assistente.paginaAtual == "etapa"
+    assert assistente.titulo == "Vermelho (1 de 7)"
+    cor = assistente.corNaTela
+    assert (cor.hsvHue(), cor.value()) == (0, 255)
+    assert abs(cor.hsvSaturation() - SATURACAO_DA_REFERENCIA / 1000 * 255) <= 1
+    assistente.testar()
+    assert assistente.paginaAtual == "teste"
+    assert assistente.titulo == "Vermelho"
+    assert assistente.pausado is False
+    assistente.pausar()
+    assert assistente.pausado is True and assistente._temporizador is None  # noqa: SLF001
+    assistente.pausar()
+    assert assistente.pausado is False and assistente._temporizador is not None  # noqa: SLF001
+
+
+def test_controles_do_branco_trazem_a_temperatura(assistente):
+    assistente.escolher("eb0")
+    assert assistente.controles[0]["branco"] is False
+    for _ in range(6):
+        assistente.proxima()
+    assert assistente.controles[0]["branco"] is True
+    assistente.mudar_temperatura(-1)
+    assert assistente.controles[0]["temperatura"] == -100
+
+
+def test_depois_de_encerrado_nada_religa_o_temporizador_nem_as_fitas(assistente):
+    assistente.escolher("eb0")
+    assistente.mudar_tom(-8)  # um ajuste que o Concluir gravaria
+    assistente.cancelar()
+    quantas = len(assistente.previas)
+    assistente.testar()
+    assistente.pausar()
+    assistente.avancar_teste()
+    assistente.proxima()
+    assistente.restaurar()
+    assistente.mudarTom(5, "eb0")
+    assistente.escolher("eb1")
+    assistente.voltar_aos_ajustes()
+    assistente.concluir()  # depois do Cancelar não grava
+    assert all(fita.calibracao is None for fita in session_fita.fitas())
+    assert assistente._temporizador is None  # noqa: SLF001
+    assert len(assistente.previas) == quantas
+    assert assistente.paginaAtual == "etapa"
+
+
+def test_faixas_dos_controles_vem_das_constantes(assistente):
+    assert assistente.tomMaximo == calibracao.TOM_MAXIMO
+    assert assistente.intensidadeMinima == round(calibracao.FATOR_MINIMO * 100)
+    assert assistente.intensidadeMaxima == round(calibracao.FATOR_MAXIMO * 100)
+
+
+# region Sem GTK
+
+
+def test_calibracao_janela_sem_gi():
+    codigo = (
+        "import builtins, sys; builtins._ = lambda m: m; "
+        "builtins.ngettext = lambda s, p, n: s if n == 1 else p; "
+        "import cartridges.calibracao_janela; "
+        "assert 'gi' not in sys.modules"
+    )
+    subprocess.run([sys.executable, "-c", codigo], check=True, cwd=Path(__file__).resolve().parent.parent, timeout=60)
+
+
+# endregion

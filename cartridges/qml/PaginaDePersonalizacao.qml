@@ -121,7 +121,15 @@ Column {
             subtitulo: "A cor da iluminação acompanha, devagar, a cor predominante do jogo. Jogos com cor escolhida manualmente mantêm a cor fixa."
             enabled: grupoIluminacao.ligada
         }
-        // shortcut: falta "Calibrar as cores" (Task 7 do plano 7, o assistente de calibração); entra aqui, apagada sem o interruptor.
+        LinhaDeAcao {
+            objectName: "linhaCalibrarFitas"
+            titulo: "Calibrar as cores"
+            subtitulo: "Ajusta cada dispositivo para reproduzir as cores como a tela"
+            glifo: ""  // seguir
+            dica: "Abrir o assistente de calibração"
+            enabled: grupoIluminacao.ligada
+            onAcionada: preferencias.abrirCalibracao()
+        }
         LinhaDeCor {
             objectName: "linhaDaCorDoApp"
             titulo: "Cor do app"

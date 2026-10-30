@@ -87,7 +87,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_botao_novidades.py",
     "test_buscar_atualizacoes_ui.py",
     "test_caixa_redimensionavel.py",
-    "test_calibracao_janela.py",
     "test_conquistas_backup.py",  # plano 8 (D56): importa utils/backup (GTK)
     "test_conquistas_preferencias.py",  # as contas já têm o seu arquivo (test_grupo_das_contas_qt.py); o resto, no plano 7
     "test_estilo_css.py",

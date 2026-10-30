@@ -23,6 +23,7 @@ from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 from PySide6.QtGui import QColor
 
 from cartridges import metadata_refresh, shared
+from cartridges.calibracao_janela import AssistenteDeCalibracao
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.fita_wizard import FitaWizard
 from cartridges.store.managers.sgdb_manager import SgdbManager
@@ -460,6 +461,7 @@ class Preferencias(QObject):
         self._fitas = FitasDasPreferencias(self)
         self._brilho: BrilhoPorDispositivo | None = None
         self._config: FitaWizard | None = None
+        self._calibracao: AssistenteDeCalibracao | None = None
 
     @Property(QObject, constant=True)
     def biblioteca(self) -> QObject:
@@ -513,6 +515,24 @@ class Preferencias(QObject):
             session_fita.reacender()
         self.alterado.emit()
 
+    @Property(QObject, notify=alterado)
+    def calibracao(self) -> QObject | None:
+        return self._calibracao
+
+    @Slot()
+    def abrirCalibracao(self) -> None:  # noqa: N802
+        if self._calibracao is not None:
+            return
+        self._calibracao = AssistenteDeCalibracao(session_fita.fitas(), self)
+        self._calibracao.fechado.connect(self._calibracao_fechou)
+        self.alterado.emit()
+
+    def _calibracao_fechou(self) -> None:
+        calibracao, self._calibracao = self._calibracao, None
+        if calibracao is not None:
+            calibracao.deleteLater()  # filho daqui: o QML ainda pode estar no clique que o fechou
+        self.alterado.emit()
+
     @Property(bool, notify=alterado)
     def aberto(self) -> bool:
         return self._aberto
@@ -552,6 +572,9 @@ class Preferencias(QObject):
         self._biblioteca.seguir(False)
         if self._brilho is not None:
             self._brilho.cancelar()
+        # O assistente de calibração devolve as fitas à cor do app ao se encerrar.
+        if self._calibracao is not None:
+            self._calibracao.cancelar()
         # Antes do `fitas.fechar()`: o fechamento do assistente relê as fitas.
         if self._config is not None:
             self._config.fechar()

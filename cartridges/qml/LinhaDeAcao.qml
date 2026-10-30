@@ -12,6 +12,9 @@ Item {
     property string rotulo
     property string dica
 
+    // O botão da linha inteira: quem hospeda a linha leva o foco até ele.
+    property alias botaoDaLinha: botao
+
     signal acionada()
 
     width: parent ? parent.width : implicitWidth
