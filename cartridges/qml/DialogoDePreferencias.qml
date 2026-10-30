@@ -128,6 +128,8 @@ Rectangle {
         color: Tema.fundo
         border.color: Tema.botaoSobre
         clip: true
+        // Com o brilho por dispositivo por cima, o Tab não volta para cá.
+        enabled: preferencias.brilhoPorDispositivo === null
 
         Item {
             id: cabecalho
@@ -214,6 +216,8 @@ Rectangle {
         onConfirmado: preferencias.biblioteca.buscarMetadados(true)
         onAlternativo: preferencias.biblioteca.buscarMetadados(false)
     }
+    BrilhoPorDispositivo {}
+
     Connections {
         target: preferencias.biblioteca
         function onPerguntar(corpo) {

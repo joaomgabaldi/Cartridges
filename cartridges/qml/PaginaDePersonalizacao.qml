@@ -78,5 +78,70 @@ Column {
         }
     }
 
-    // shortcut: faltam os grupos das fitas de LED e da iluminação das conquistas (Task 5); entram aqui, depois do "Papel de parede".
+    // A iluminação inteligente vale também fora da sessão (a cor do app): não segue a contagem de horas. O interruptor
+    // só liga com fita configurada; "Configurar" fica sempre clicável. O resto acompanha o interruptor.
+    GrupoDePreferencias {
+        id: grupoIluminacao
+        objectName: "grupoIluminacao"
+        titulo: "Iluminação inteligente"
+        descricao: "Muda a cor da iluminação inteligente enquanto o Cartridges está aberto: a cor do aplicativo fora do jogo e a cor do jogo durante a sessão. Ao fechar o aplicativo, a iluminação inteligente volta ao estado anterior."
+
+        readonly property bool ligada: preferencias.valores["session-fita"] === true
+
+        Interruptor {
+            chave: "session-fita"
+            titulo: "Mudar a cor da iluminação inteligente"
+            subtitulo: preferencias.fitas.subtitulo
+            enabled: preferencias.fitas.configuradas > 0
+        }
+        LinhaDeNumero {
+            objectName: "linhaDoBrilhoDasFitas"
+            titulo: "Brilho (%)"
+            subtitulo: "Aplicado aos jogos sem brilho próprio definido"
+            de: 1
+            ate: 100
+            passo: 1
+            pagina: 10
+            value: preferencias.fitas.brilho
+            enabled: grupoIluminacao.ligada
+            onAlterado: valor => preferencias.fitas.definirBrilho(valor)
+        }
+        LinhaDeAcao {
+            objectName: "linhaDoBrilhoPorDispositivo"
+            titulo: "Brilho máximo por dispositivo"
+            subtitulo: "Define o brilho máximo de cada dispositivo"
+            glifo: ""  // seguir
+            dica: "Ajustar o brilho de cada dispositivo"
+            enabled: grupoIluminacao.ligada
+            onAcionada: preferencias.abrirBrilhoPorDispositivo()
+        }
+        Interruptor {
+            chave: "fita-acompanha-tela"
+            titulo: "Cor acompanha a tela do jogo"
+            subtitulo: "A cor da iluminação acompanha, devagar, a cor predominante do jogo. Jogos com cor escolhida manualmente mantêm a cor fixa."
+            enabled: grupoIluminacao.ligada
+        }
+        // shortcut: falta "Calibrar as cores" (Task 7 do plano 7, o assistente de calibração); entra aqui, apagada sem o interruptor.
+        LinhaDeCor {
+            objectName: "linhaDaCorDoApp"
+            titulo: "Cor do app"
+            subtitulo: "A cor da iluminação inteligente com o aplicativo aberto e nenhum jogo em execução"
+            cor: preferencias.fitas.corDoApp
+            padrao: preferencias.fitas.corDoAppPadrao
+            dicaDaAmostra: "Escolher a cor da iluminação inteligente"
+            enabled: grupoIluminacao.ligada
+            onEscolhida: cor => preferencias.fitas.escolherCorDoApp(cor)
+            onVoltar: preferencias.fitas.voltarCorDoApp()
+        }
+        // shortcut: falta "Configurar a iluminação inteligente" (Task 6 do plano 7, o assistente das fitas); entra aqui, sempre clicável.
+        LinhaDeAcao {
+            objectName: "linhaTestarFitas"
+            titulo: "Testar"
+            subtitulo: preferencias.fitas.resultadoDoTeste || "Acende cada dispositivo na cor do aplicativo"
+            glifo: preferencias.fitas.testando ? "" : ""  // parar : reproduzir
+            dica: "Ligar a iluminação inteligente"
+            enabled: grupoIluminacao.ligada
+            onAcionada: preferencias.fitas.testar()
+        }
+    }
 }

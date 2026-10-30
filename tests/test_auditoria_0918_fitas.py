@@ -96,16 +96,6 @@ def _com_bind(monkeypatch, schema):
     )
 
 
-def test_m14_sem_contar_horas_as_fitas_seguem_configuraveis(monkeypatch, schema):
-    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "1.2.3.4", "k")])
-    schema.set_boolean("playtime-tracking", False)
-    _com_bind(monkeypatch, schema)
-
-    preferencias = _preferencias(monkeypatch)
-
-    assert preferencias.session_fita_switch.is_sensitive()
-    assert preferencias.fita_configurar_button.is_sensitive()
-    assert not preferencias.session_wallpaper_switch.is_sensitive()
 
 
 def test_m8_lote_de_capas_nao_repinta_jogo_apagado(monkeypatch, store, make_game):

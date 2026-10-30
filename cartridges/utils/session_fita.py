@@ -351,23 +351,6 @@ def rgb_para_cor(vermelho: float, verde: float, azul: float, brilho: int) -> Cor
     return Cor(round(matiz * 360) % 360, round(saturacao * 1000), brilho)
 
 
-def cor_para_rgba(cor: Cor) -> Any:
-    """A cor do módulo como o GTK mostra num seletor.
-
-    Só as Preferências ainda usam o seletor do GTK (plano 7); o resto usa
-    ``cor_para_rgb``.
-    """
-    from gi.repository import Gdk  # noqa: PLC0415
-
-    vermelho, verde, azul = cor_para_rgb(cor)
-    return Gdk.RGBA(red=vermelho, green=verde, blue=azul, alpha=1.0)
-
-
-def rgba_para_cor(rgba: Any, brilho: int) -> Cor:
-    """O caminho de volta, descartando o brilho que o seletor mostrou."""
-    return rgb_para_cor(rgba.red, rgba.green, rgba.blue, brilho)
-
-
 # endregion
 # region Conversa com o módulo
 

@@ -617,3 +617,114 @@ def test_m14_sem_contar_horas_o_papel_de_parede_fica_apagado(app):
     assert not _enabled(app, "interruptor-session-wallpaper")
     app.preferencias.definir("playtime-tracking", True)
     assert _esperar(lambda: _enabled(app, "grupoPapelDeParede") and _enabled(app, "interruptor-session-wallpaper"))
+
+
+# region Iluminação inteligente
+
+
+@pytest.fixture
+def fitas_espiadas(monkeypatch):
+    """Uma fita configurada e as prévias e arranques anotados, sem acender nada."""
+    from cartridges.utils import session_fita  # noqa: PLC0415
+
+    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "192.0.2.10", "k")])
+    anotadas = []
+    monkeypatch.setattr(session_fita, "previa", lambda cor, *_a: anotadas.append(cor))
+    monkeypatch.setattr(session_fita, "reacender", lambda: anotadas.append("reacender"))
+    return anotadas
+
+
+def test_linhas_da_iluminacao_apagadas_sem_o_interruptor(app, fitas_espiadas):
+    shared.schema.set_boolean("session-fita", False)
+    _abrir(app, "session")
+    assert app.achar("grupoIluminacao").property("titulo") == "Iluminação inteligente"
+    assert app.achar("grupoIluminacao").property("descricao") == (
+        "Muda a cor da iluminação inteligente enquanto o Cartridges está aberto: a cor do aplicativo fora do jogo e "
+        "a cor do jogo durante a sessão. Ao fechar o aplicativo, a iluminação inteligente volta ao estado anterior."
+    )
+    assert _linha(app, "interruptor-session-fita") == ("Mudar a cor da iluminação inteligente", "1 dispositivo configurado")
+    assert _linha(app, "linhaDoBrilhoDasFitas") == ("Brilho (%)", "Aplicado aos jogos sem brilho próprio definido")
+    assert _linha(app, "linhaDoBrilhoPorDispositivo") == (
+        "Brilho máximo por dispositivo", "Define o brilho máximo de cada dispositivo"
+    )
+    assert app.achar("linhaDoBrilhoPorDispositivo").property("dica") == "Ajustar o brilho de cada dispositivo"
+    assert _linha(app, "linhaDaCorDoApp") == (
+        "Cor do app", "A cor da iluminação inteligente com o aplicativo aberto e nenhum jogo em execução"
+    )
+    assert _linha(app, "linhaTestarFitas") == ("Testar", "Acende cada dispositivo na cor do aplicativo")
+    assert app.achar("linhaTestarFitas").property("dica") == "Ligar a iluminação inteligente"
+    caixa = app.achar("linhaDoBrilhoDasFitasCaixa")
+    assert (caixa.property("from"), caixa.property("to"), caixa.property("stepSize")) == (1, 100, 1)
+    assert app.achar("linhaDoBrilhoDasFitas").property("pagina") == 10
+    dependentes = (
+        "linhaDoBrilhoDasFitas", "linhaDoBrilhoPorDispositivo", "interruptor-fita-acompanha-tela",
+        "linhaDaCorDoApp", "linhaTestarFitas",
+    )  # fmt: skip
+    assert _enabled(app, "interruptor-session-fita")
+    assert [_enabled(app, n) for n in dependentes] == [False] * 5
+    _clique(app, "interruptor-session-fitaChave")
+    assert shared.schema.get_boolean("session-fita") is True
+    assert fitas_espiadas == ["reacender"]
+    assert _esperar(lambda: [_enabled(app, n) for n in dependentes] == [True] * 5)
+
+
+def test_interruptor_das_fitas_apagado_sem_fita(app):
+    shared.schema.set_boolean("session-fita", True)
+    _abrir(app, "session")
+    assert not _enabled(app, "interruptor-session-fita")
+    assert _linha(app, "interruptor-session-fita")[1] == "Nenhum dispositivo configurado"
+    assert app.achar("interruptor-session-fita").property("checked") is False
+
+
+def test_amostra_abre_o_seletor_e_a_cor_vai_ao_modelo(app, fitas_espiadas):
+    from cartridges.utils import session_fita  # noqa: PLC0415
+
+    shared.schema.set_boolean("session-fita", True)
+    _abrir(app, "session")
+    assert app.achar("linhaDaCorDoAppAmostra").property("dica") == "Escolher a cor da iluminação inteligente"
+    _clique(app, "linhaDaCorDoAppAmostra")
+    assert _esperar(lambda: app.achar("linhaDaCorDoAppBalao").property("opened") is True)
+    seletor = app.achar("linhaDaCorDoAppSeletor")
+    # O seletor parte da cor do app (o roxo).
+    assert abs(seletor.property("matiz") - session_fita.ROXO_DO_APP[0]) <= 1
+    QMetaObject.invokeMethod(seletor, "mover", Qt.ConnectionType.DirectConnection, Q_ARG("QVariant", 120), Q_ARG("QVariant", 900))
+    matiz, saturacao = session_fita.tom_do_app()
+    assert abs(matiz - 120) <= 1 and abs(saturacao - 900) <= 2
+    assert fitas_espiadas[-1] == session_fita.cor_do_app()
+    assert _esperar(lambda: abs(app.achar("linhaDaCorDoApp").property("cor").hsvHueF() * 360 - 120) <= 1)
+
+
+def test_voltar_a_cor_padrao_so_fora_do_roxo(app, fitas_espiadas):
+    from cartridges.utils import session_fita  # noqa: PLC0415
+
+    shared.schema.set_boolean("session-fita", True)
+    _abrir(app, "session")
+    assert app.achar("linhaDaCorDoAppVoltar").property("visible") is False
+    session_fita.salvar_tom_do_app(200, 800)
+    assert _esperar(lambda: app.achar("linhaDaCorDoAppVoltar").property("visible") is True)
+    assert app.achar("linhaDaCorDoAppVoltar").property("dica") == "Voltar à cor padrão"
+    _clique(app, "linhaDaCorDoAppVoltar")
+    assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
+    assert _esperar(lambda: app.achar("linhaDaCorDoAppVoltar").property("visible") is False)
+
+
+def test_testar_troca_o_glifo_e_mostra_o_resultado(app, fitas_espiadas, monkeypatch):
+    from cartridges.utils import session_fita  # noqa: PLC0415
+
+    shared.schema.set_boolean("session-fita", True)
+    import threading  # noqa: PLC0415
+
+    solta = threading.Event()
+    monkeypatch.setattr(session_fita, "aplicar", lambda *_a: solta.wait(5) and False)
+    _abrir(app, "session")
+    assert app.achar("linhaTestarFitas").property("glifo") == "\ue768"
+    _clique(app, "linhaTestarFitasBotao")
+    # Durante o teste o bot\u00e3o \u00e9 o de parar.
+    assert _esperar(lambda: app.achar("linhaTestarFitas").property("glifo") == "\ue71a")
+    assert app.achar("linhaTestarFitas").property("subtitulo") == "Testando\u2026"
+    solta.set()
+    assert _esperar(lambda: app.achar("linhaTestarFitas").property("subtitulo").startswith("Sem resposta: Centro."))
+    assert app.achar("linhaTestarFitas").property("glifo") == "\ue768"
+
+
+# endregion
