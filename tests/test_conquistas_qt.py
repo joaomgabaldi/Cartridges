@@ -465,19 +465,22 @@ def test_mudou_de_outra_thread_chega_na_principal(tela, flush_idle):
 
 
 def test_desconectar_avisa_uma_vez_e_some_o_cartao_aberto(avisos, flush_idle, monkeypatch):
-    """Review Focus 2: a conta Microsoft recusada com a página e a lista do jogo abertas."""
+    """Review Focus 2: a conta Microsoft recusada com a página, a lista e a tela da sessão do jogo abertas."""
     jogo = _jogo()
     catalogo.guardar("xbox-7", CAT)
     com_fonte(jogo, "xbox:7")
     monkeypatch.setattr(conta, "_sessao", conta._Sessao("R1", "Jogador", "1"))  # noqa: SLF001
     monkeypatch.setattr(conta, "_avisou", False)
     detalhes = _Detalhes(jogo)
-    modelo = ConquistasDoJogo(detalhes)
+    sessao = _Detalhes(jogo)  # a sessão também só expõe `jogoId` e `alterado`
+    modelo = ConquistasDoJogo(detalhes, sessao)
     monkeypatch.setattr(shared, "conquistas", modelo, raising=False)
     detalhes.mostrar(jogo.game_id)
+    sessao.mostrar(jogo.game_id)
     modelo.abrir(jogo.game_id)
     assert modelo.pagina["visivel"] is True
     assert modelo.aberto is True
+    assert modelo.sessao["visivel"] is True
 
     conta.recusada()
     conta.recusada()  # a segunda não acha mais conta
@@ -486,6 +489,7 @@ def test_desconectar_avisa_uma_vez_e_some_o_cartao_aberto(avisos, flush_idle, mo
     assert avisos.textos == ["A conta Microsoft foi desconectada. Entre novamente nas Preferências."]
     assert modelo.pagina["visivel"] is False
     assert modelo.aberto is False
+    assert modelo.sessao["visivel"] is False
 
 
 def test_falha_ao_montar_esconde_a_vista(tela, monkeypatch, caplog):

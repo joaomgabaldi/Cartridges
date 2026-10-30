@@ -202,6 +202,12 @@ class Pedido:
 
     def cancelar(self) -> None:
         self._terminar(Resultado.CANCELADO)
+        # Já aqui, e não só no `_entregar`: no `aboutToQuit` o laço acabou e a entrega na principal não roda.
+        # O `_servir` trata o fechar por baixo da espera.
+        try:
+            self._servidor.server_close()
+        except OSError:
+            pass
 
 
 def entrar(

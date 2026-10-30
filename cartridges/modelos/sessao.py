@@ -18,7 +18,7 @@ from typing import Any
 from PySide6.QtCore import Property, QCoreApplication, QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QWindow
 
-from cartridges import shared
+from cartridges import conquista_aviso, shared
 from cartridges.conquistas import sessao as sessao_conquistas
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.ordem import _url_da_capa  # noqa: PLC2701
@@ -341,12 +341,13 @@ class ModeloDaSessao(QObject):
 
     @Slot()
     def principalFechando(self) -> None:  # noqa: N802
-        """Fechar a principal com a janela manual aberta fecha o app, como na `main`.
+        """Fechar a principal com a janela manual ou o aviso de conquista na tela fecha o app, como na `main`.
 
-        Sem isto a manual, que também é janela, manteria o app vivo. O `encerrar()` grava a sessão, no
-        `QEvent.Quit` (`AplicacaoQt.saindo`), antes de o Qt fechar a manual.
+        Sem isto a manual ou o aviso (janela de topo sem dono, D59), que também são janelas, manteriam o app vivo. O
+        `encerrar()` grava a sessão e tira o aviso, no `QEvent.Quit` (`AplicacaoQt.saindo`), antes de o Qt fechar as
+        janelas.
         """
-        if self._manual is not None:
+        if self._manual is not None or conquista_aviso.na_tela() is not None:
             # Na volta do laço, com a principal já fora da tela: um `quit()` aqui dentro do `closing` emitiria o
             # `aboutToQuit` (a parede e as fitas, que esperam) com ela ainda à vista, congelada.
             QTimer.singleShot(0, self._sair)
@@ -392,6 +393,7 @@ class ModeloDaSessao(QObject):
         # Antes de a parede e as fitas voltarem (no `devolver`), como no `hide_session_blocker`; sem a leitura final,
         # que é só do fim normal da sessão. Nunca levanta.
         sessao_conquistas.parar()
+        conquista_aviso.fechar()  # fora da sessão (sem vigia) o aviso também sai; nunca levanta
 
     def devolver(self) -> None:
         """O `aboutToQuit`, depois do `big_picture.encerrar()`: a parede e as fitas voltam ao que eram.

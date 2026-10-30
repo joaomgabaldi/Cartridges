@@ -34,9 +34,10 @@ def _sem_parametros(origem: object) -> str:
 def _registrar_falha(o_que: str, origem: object, erro: BaseException) -> None:
     """Uma linha no log, sem a query string.
 
-    Falhas esperadas (rede, disco, imagem ilegível) levam só o tipo do erro: a
-    mensagem de uma falha de rede costuma trazer a URL inteira, com a chave.
-    Qualquer outra coisa é defeito nosso e leva o traceback.
+    Falhas esperadas (rede ou disco) levam só o tipo do erro: a mensagem de
+    uma falha de rede costuma trazer a URL inteira, com a chave. Qualquer
+    outra coisa é defeito nosso e leva o traceback. A imagem ilegível não
+    passa por aqui: o `carregar` a anota no log depois do `_legivel`.
     """
     if isinstance(erro, (RequestException, OSError)):
         logging.info(

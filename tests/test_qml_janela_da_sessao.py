@@ -285,6 +285,105 @@ def test_quit_real_com_a_manual_aberta_encerra_antes_de_fechar_as_janelas():
     assert saida["playtime"] == 42
 
 
+_SAIDA_COM_O_AVISO = r"""
+import json, sys
+from pathlib import Path
+from types import SimpleNamespace
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtGui import QGuiApplication, QWindow
+from PySide6.QtQml import QQmlApplicationEngine
+from cartridges import app as modulo_app, conquista_aviso, janela_do_aviso, shared
+from cartridges.modelos import sessao as modulo
+from cartridges.session_window import SessionWindow
+from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper, window_geometry
+
+com_sessao = sys.argv[1] == "com"
+ordem = []
+def visiveis():
+    return sorted(janela.title() for janela in QGuiApplication.topLevelWindows() if janela.isVisible())
+# Nenhum dispositivo, papel de parede, som ou chamada Win32 de verdade.
+for alvo, nome in ((session_fita, "abrir"), (session_fita, "comecar"), (session_fita, "voltar"),
+                   (session_fita, "fechar"), (session_wallpaper, "comecar"), (session_wallpaper, "restaurar"),
+                   (window_geometry, "restore_from_monitor")):
+    setattr(alvo, nome, lambda *_a: None)
+window_geometry.session_geometry = lambda: None
+game_logo.cached_logo_path = lambda _jogo: None
+session_log.record = lambda *_a: None
+modulo._posicionar = lambda *_a: None
+modulo._retangulo_da_janela = lambda _h: (0, 0, 316, 189)
+modulo._area_de_trabalho = lambda: (0, 0, 1920, 1040)
+shared.schema = SimpleNamespace(get_string=lambda _c: "inferior-direito", get_boolean=lambda _c: False)
+conquista_aviso._agendar = lambda *_a: None  # o aviso fica na tela até o fechamento
+
+class AvisoFalso(QWindow):
+    # Uma janela de topo com as flags do aviso, sem o Win32 do `janela_por_cima` (D59: sem dono no Qt).
+    def __init__(self, aviso):
+        super().__init__()
+        self.titulo = aviso.titulo
+        self.setTitle("aviso")
+        self.setFlags(janela_do_aviso._FLAGS)
+        self.resize(50, 50)
+    def entrar(self, _canto):
+        self.show()
+    def fechar(self):
+        ordem.append("aviso.fechar")
+        self.destroy()
+        self.deleteLater()
+conquista_aviso._criar_janela = AvisoFalso
+
+app = modulo_app.AplicacaoQt(sys.argv[:1])
+sessao = modulo.ModeloDaSessao(SimpleNamespace(adicionar=lambda *_a: None))
+shared.sessao = sessao
+for nome in ("hide_session_blocker", "session_toast", "present"):
+    setattr(sessao, nome, lambda *_a: None)
+# A ligação do `app.py`.
+app.saindo.connect(sessao.encerrar)
+app.aboutToQuit.connect(lambda: (ordem.append(["aboutToQuit", visiveis()]), sessao.devolver()))
+
+motor = QQmlApplicationEngine()
+motor.rootContext().setContextProperty("sessao", sessao)
+motor.loadData(b'''import QtQuick
+Window {
+    visible: true; width: 200; height: 100; title: "principal"
+    onClosing: sessao.principalFechando()
+    Loader { active: sessao.janelaManual; source: "JanelaDaSessao.qml" }
+}''', QUrl.fromLocalFile(str(Path("cartridges/qml/_saida.qml").resolve())))
+principal = motor.rootObjects()[0]
+sessao.definir_janela(principal)
+if com_sessao:
+    jogo = SimpleNamespace(game_id="imported_1", name="Alfa", notes="", status="playing", zerado=False,
+                           playtime=0, save=lambda: None, update=lambda: None)
+    SessionWindow(jogo).present()
+conquista_aviso.mostrar(conquista_aviso.Aviso("Conquista desbloqueada", "Primeira", "", ""))
+def fechar():
+    ordem.append(["antes", visiveis()])
+    principal.close()
+QTimer.singleShot(500, fechar)
+QTimer.singleShot(5000, lambda: (ordem.append(["prazo", visiveis()]), app.exit(2)))
+codigo = app.exec()
+print(json.dumps({"codigo": codigo, "ordem": ordem, "na_tela": conquista_aviso.na_tela()}))
+"""
+
+
+@pytest.mark.parametrize(("sessao", "antes"), [
+    ("sem", ["aviso", "principal"]),
+    ("com", ["Jogando Alfa", "aviso", "principal"]),
+])  # fmt: skip
+def test_fechar_a_principal_com_o_aviso_na_tela_encerra_o_app(sessao, antes):
+    """I1 da revisão final do plano 6: o aviso (janela de topo sem dono, D59) não segura o app aberto."""
+    ambiente = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
+    resultado = subprocess.run(
+        [sys.executable, "-c", _SAIDA_COM_O_AVISO, sessao], cwd=RAIZ, env=ambiente, capture_output=True,
+        text=True, timeout=60, check=False,
+    )  # fmt: skip
+    assert resultado.returncode == 0, resultado.stderr
+    saida = json.loads(resultado.stdout.strip().splitlines()[-1])
+    # O aviso sai no `saindo`, sem depender do vigia; no `aboutToQuit` nenhuma janela sobrou na tela.
+    assert saida["ordem"] == [["antes", antes], "aviso.fechar", ["aboutToQuit", []]]
+    assert saida["codigo"] == 0
+    assert saida["na_tela"] is None
+
+
 def test_fechar_a_principal_sem_sessao_nao_sai(app_qt, monkeypatch):
     app = _app(monkeypatch)
     app.sessao._sair = lambda: pytest.fail("saiu sem sessão manual")  # noqa: SLF001

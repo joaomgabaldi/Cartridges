@@ -154,6 +154,16 @@ def test_cancelar_duas_vezes_termina_uma(navegador, flush_idle):
     assert _esperar(pedido, resultados, flush_idle) == [login.Resultado.CANCELADO]
 
 
+def test_cancelar_pendente_fecha_a_porta_sem_o_laco_de_eventos(navegador, flush_idle):
+    """M1 da revisão final do plano 6: no `aboutToQuit` o laço já acabou e a entrega na principal não roda."""
+    resultados = []
+    pedido = login.entrar(resultados.append, abrir=navegador.append)
+    login.cancelar_pendente()  # sem `flush_idle`: como no fechamento do app
+    with pytest.raises(OSError):
+        socket.create_connection(("127.0.0.1", pedido.porta), timeout=1).close()
+    assert _esperar(pedido, resultados, flush_idle) == [login.Resultado.CANCELADO]
+
+
 def test_navegador_que_nao_abre_falha(flush_idle):
     def quebra(_url):
         raise OSError("sem navegador")

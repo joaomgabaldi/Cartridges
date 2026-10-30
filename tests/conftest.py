@@ -570,10 +570,7 @@ def avisos(monkeypatch):
 def sem_steam_no_registro(monkeypatch):
     """A Steam desta máquina (se houver) não entra nos testes: quem precisa de
     uma Steam monta a sua em ``tmp_path``."""
-    try:
-        from cartridges.conquistas import arquivos  # noqa: PLC0415
-    except ImportError:  # ainda depende do gi
-        return
+    from cartridges.conquistas import arquivos  # noqa: PLC0415
 
     monkeypatch.setattr(arquivos, "_valor_do_registro", lambda *_a: None)
     monkeypatch.setattr(arquivos, "_inteiro_do_registro", lambda *_a: None)
@@ -583,10 +580,7 @@ def sem_steam_no_registro(monkeypatch):
 def sem_ubisoft_no_registro(monkeypatch):
     """Os jogos da Ubisoft instalados nesta máquina (se houver) não entram nos testes:
     quem precisa de instalações troca `locais._do_registro`."""
-    try:
-        from cartridges.conquistas.ubisoft import locais  # noqa: PLC0415
-    except ImportError:  # ainda depende do gi
-        return
+    from cartridges.conquistas.ubisoft import locais  # noqa: PLC0415
 
     monkeypatch.setattr(locais, "_do_registro", lambda: {})
 
@@ -595,10 +589,7 @@ def sem_ubisoft_no_registro(monkeypatch):
 def sem_ea_no_registro(monkeypatch):
     """Os jogos da EA instalados nesta máquina (se houver) não entram nos testes:
     quem precisa de instalações troca `ea.jogo.chaves_do_registro`."""
-    try:
-        from cartridges.conquistas.ea import jogo  # noqa: PLC0415
-    except ImportError:  # ainda depende do gi
-        return
+    from cartridges.conquistas.ea import jogo  # noqa: PLC0415
 
     monkeypatch.setattr(jogo, "chaves_do_registro", lambda: [])
 

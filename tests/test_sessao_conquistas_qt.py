@@ -179,10 +179,12 @@ def test_encerrar_para_o_vigia_fecha_o_aviso_e_nao_le_no_fim(modelo, chamadas, m
     chamadas.clear()
 
     modelo.encerrar()  # o `saindo` (QEvent.Quit)
-    assert chamadas == ["vigia.parar", "aviso.fechar"]
+    # O segundo `fechar` é o do `encerrar`, para o aviso fora de sessão (I1 da revisão final do plano 6); repetido,
+    # não faz nada.
+    assert chamadas == ["vigia.parar", "aviso.fechar", "aviso.fechar"]
 
     modelo.devolver()  # o `aboutToQuit`, depois do `big_picture.encerrar()`
-    assert chamadas == ["vigia.parar", "aviso.fechar", "parede", "fechar"]
+    assert chamadas == ["vigia.parar", "aviso.fechar", "aviso.fechar", "parede", "fechar"]
 
 
 def test_devolver_sem_o_saindo_tambem_grava_antes(modelo, chamadas, make_game):
