@@ -10,7 +10,7 @@ Item {
     property QtObject fila
     property QtObject app
     // Com uma confirmação na tela, a janela não aceita atalhos arrastados.
-    readonly property bool dialogoAberto: confirmacao.visible || dialogoDeErros.visible
+    readonly property bool dialogoAberto: confirmacao.visible || dialogoDeErros.visible || confirmacaoDoApp.visible
 
     Connections {
         target: camada.ponte
@@ -23,6 +23,14 @@ Item {
 
     Connections {
         target: camada.app
+        function onConfirmacaoPedida(titulo, corpo, rotulo, rotuloCancelar, destrutivo) {
+            confirmacaoDoApp.titulo = titulo
+            confirmacaoDoApp.corpo = corpo
+            confirmacaoDoApp.rotuloConfirmar = rotulo
+            confirmacaoDoApp.rotuloCancelar = rotuloCancelar
+            confirmacaoDoApp.destrutivo = destrutivo
+            confirmacaoDoApp.abrir()
+        }
         function onDialogoPedido(titulo, corpo, itens) {
             dialogoDeErros.abrir(titulo, corpo, itens, camada.app.dialogoComPreferencias ? "Preferências" : "")
         }
@@ -185,5 +193,13 @@ Item {
         objectName: "dialogoDeErros"
         onDispensado: camada.app.dialogoFechado(false)
         onSecundario: camada.app.dialogoFechado(true)
+    }
+
+    // A pergunta que o domínio faz (D72): restaurar um save, "Saves sem backup". Esc e o X valem "não".
+    DialogoDeConfirmacao {
+        id: confirmacaoDoApp
+        objectName: "confirmacaoDoApp"
+        onConfirmado: camada.app.confirmacaoRespondida(true)
+        onCancelado: camada.app.confirmacaoRespondida(false)
     }
 }

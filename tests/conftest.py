@@ -83,11 +83,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_redefinir.py",  # plano 8 (D64): importa utils/redefinir (GTK)
     "test_reinicio.py",
     "test_restauracao_dialogs.py",
-    "test_saves_backup.py",
-    "test_saves_conferencia.py",
-    "test_saves_config.py",
-    "test_saves_ludusavi_real.py",
-    "test_saves_pasta.py",
     "test_saves_ui.py",  # plano 8 (D64): importa saves/backup_de_saves e saves/dialogo (GTK) e usa o preferences.py apagado
     "test_store_ligacao_manual.py",
     "test_tarefas_trabalhos.py",
@@ -492,6 +487,7 @@ def sem_jogo_de_verdade(monkeypatch):
     monkeypatch.setattr(shared, "sessao", None, raising=False)
     monkeypatch.setattr(shared, "conquistas", None, raising=False)
     monkeypatch.setattr(shared, "preferencias", None, raising=False)
+    monkeypatch.setattr(shared, "edicao", None, raising=False)
     monkeypatch.setattr(process_session.ProcessSession, "active", None)
     monkeypatch.setattr(session_window.SessionWindow, "active", None)
     monkeypatch.setattr(sessao_conquistas, "_vigia", None)

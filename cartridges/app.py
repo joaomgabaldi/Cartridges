@@ -228,6 +228,7 @@ def main(argv: list[str]) -> int:
     big_picture_fraco = weakref.ref(big_picture)
     preferencias = Preferencias(avisos, lambda: bool((b := big_picture_fraco()) and b.disponivel))
     shared.preferencias = preferencias
+    shared.edicao = edicao
     # Antes de o Qt fechar as janelas: sem isto a janela "Jogando" fecharia pelo fim normal da sessão, com interface.
     # Só o rápido (gravar, parar o vigia); a parede e as fitas vão ao `aboutToQuit` (`_fechar`, `sessao.devolver`).
     # O desligar do Windows emite o `aboutToQuit` antes do `quit()`; lá o `devolver()` grava primeiro.

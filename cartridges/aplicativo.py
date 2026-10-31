@@ -6,6 +6,7 @@
 
 import ctypes
 import weakref
+from collections import deque
 from collections.abc import Callable
 from pathlib import Path
 
@@ -32,6 +33,8 @@ class Aplicativo(QObject):
     tocarSempreChanged = Signal()  # noqa: N815
     # Diálogo de erros da importação: título, corpo e a lista [{titulo, subtitulo}] (texto puro).
     dialogoPedido = Signal(str, str, list)  # noqa: N815
+    # A pergunta do domínio (D72): título, corpo, rótulo de confirmar, rótulo de sair e se é destrutiva.
+    confirmacaoPedida = Signal(str, str, str, str, bool)  # noqa: N815
 
     def __init__(self, avisos: FilaDeAvisos | None = None, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -42,6 +45,11 @@ class Aplicativo(QObject):
         # Posta por `app.py` depois das outras varreduras; a edição e a importação a chamam.
         self.varredura_conquistas = None
         self._ao_fechar_dialogo: Callable[[], None] | None = None
+        # D72: uma fila FIFO só para os dois tipos de pedido; o da vez está na tela ("dialogo" ou
+        # "confirmacao") e o resto espera a resposta dele. Assim só o de cima recebe o teclado.
+        self._fila: deque[tuple[str, tuple]] = deque()
+        self._na_tela: str | None = None
+        self._ao_responder: Callable[[bool], None] | None = None
         # Página das Preferências que o diálogo oferece; None = sem o botão, "" = abre sem página.
         self._preferencias_do_dialogo: str | None = None
         self._colunas = shared.schema.get_uint("library-rows")
@@ -128,17 +136,68 @@ class Aplicativo(QObject):
         ao_fechar: Callable[[], None],
         preferencias: str | None = None,
     ) -> None:
-        """``preferencias``: a página que o botão "Preferências" abre (``""`` = a primeira); None = sem o botão."""
-        self._ao_fechar_dialogo = ao_fechar
-        self._preferencias_do_dialogo = preferencias
-        self.dialogoPedido.emit(titulo, corpo, itens)
+        """``preferencias``: a página que o botão "Preferências" abre (``""`` = a primeira); None = sem o botão.
+
+        Com outro diálogo na tela, este espera o fim dele (D72).
+        """
+        self._fila.append(("dialogo", (titulo, corpo, itens, ao_fechar, preferencias)))
+        self._mostrar_proximo()
+
+    def _mostrar_proximo(self) -> None:
+        if self._na_tela is not None or not self._fila:
+            return
+        tipo, pedido = self._fila.popleft()
+        self._na_tela = tipo
+        if tipo == "dialogo":
+            titulo, corpo, itens, self._ao_fechar_dialogo, self._preferencias_do_dialogo = pedido
+            self.dialogoPedido.emit(titulo, corpo, itens)
+        else:
+            titulo, corpo, rotulo, self._ao_responder, destrutivo = pedido
+            self.confirmacaoPedida.emit(titulo, corpo, rotulo, "Cancelar" if destrutivo else "Dispensar", destrutivo)
+
+    def pedir_confirmacao(
+        self,
+        titulo: str,
+        corpo: str,
+        rotulo: str,
+        ao_responder: Callable[[bool], None],
+        destrutivo: bool = False,
+    ) -> None:
+        """Pergunta com dois botões; ``ao_responder(True)`` se confirmou, ``False`` se saiu (Esc, X ou o botão de sair).
+
+        O botão de sair é "Cancelar" se ``destrutivo``, senão "Dispensar" (a regra do `create_dialog`).
+        Um pedido com outra confirmação na tela espera a resposta dela (D72).
+        """
+        self._fila.append(("confirmacao", (titulo, corpo, rotulo, ao_responder, destrutivo)))
+        self._mostrar_proximo()
+
+    @Slot(bool)
+    def confirmacaoRespondida(self, confirmou: bool) -> None:  # noqa: N802
+        if self._na_tela != "confirmacao":
+            return
+        ao_responder, self._ao_responder = self._ao_responder, None
+        try:
+            ao_responder(confirmou)
+        finally:
+            # Depois do callback: um pedido feito dentro dele fica atrás dos que já esperavam.
+            self._na_tela = None
+            self._mostrar_proximo()
 
     @Slot(bool)
     @Slot()
     def dialogoFechado(self, abrir_preferencias: bool = False) -> None:  # noqa: N802
         """``abrir_preferencias``: foi o botão "Preferências"; ``ao_fechar`` espera a tela fechar, se ela abriu."""
+        if self._na_tela != "dialogo":
+            return
         ao_fechar, self._ao_fechar_dialogo = self._ao_fechar_dialogo, None
         pagina, self._preferencias_do_dialogo = self._preferencias_do_dialogo, None
+        try:
+            self._ao_fechar_o_dialogo(ao_fechar, pagina, abrir_preferencias)
+        finally:
+            self._na_tela = None
+            self._mostrar_proximo()
+
+    def _ao_fechar_o_dialogo(self, ao_fechar: Callable[[], None] | None, pagina: str | None, abrir_preferencias: bool) -> None:
         if ao_fechar is None:
             return
         preferencias = shared.preferencias

@@ -174,6 +174,7 @@ conquistas = None  # o ConquistasDoJogo (plano 6)
 # O `Aplicativo` do app Qt (importando, avisos); None nos testes que não o criam.
 aplicativo = None
 preferencias = None  # o Preferencias (plano 7)
+edicao = None  # o ModeloDaEdicao (plano 8a)
 importer = None
 import_time = None
 store = None

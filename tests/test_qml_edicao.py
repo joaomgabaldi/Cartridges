@@ -745,6 +745,19 @@ def _abrir_avancadas(app):
     assert _esperar(lambda: _visivel(app, "campoAppid"))
 
 
+def test_abrir_com_avancadas_mostra_as_opcoes_avancadas(app):
+    # O "Editar jogo" do aviso "Saves sem backup": abre o editor já com a seção aberta.
+    app.edicao.abrir("shortcuts_z1", avancadas=True)
+    assert _esperar(lambda: _visivel(app, "campoAppid"))
+    assert app.achar("dialogoDeEdicao").property("avancadasAbertas") is True
+
+
+def test_abrir_sem_avancadas_deixa_a_secao_fechada(app):
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: app.achar("dialogoDeEdicao").property("visible") is True)
+    assert app.achar("dialogoDeEdicao").property("avancadasAbertas") is False
+
+
 def test_seletor_da_steam_pelo_appid_e_modal_e_preenche_o_campo(app, steam):
     app.edicao.abrir("shortcuts_z1")
     _abrir_avancadas(app)

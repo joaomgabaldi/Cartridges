@@ -28,12 +28,12 @@ def _guarda_save(raiz, jogo, arquivo="save.dat", conteudo="x"):
     (raiz / jogo / arquivo).write_text(conteudo)
 
 
-def test_sem_escolha_a_pasta_atual_e_a_padrao(settings) -> None:
+def test_sem_escolha_a_pasta_atual_e_a_padrao() -> None:
     assert pasta.atual() == shared.app_dir / "saves"
     assert pasta.padrao() == shared.app_dir / "saves"
 
 
-def test_move_quando_a_nova_esta_vazia(settings, tmp_path) -> None:
+def test_move_quando_a_nova_esta_vazia(tmp_path) -> None:
     antiga = pasta.padrao()
     _guarda_save(antiga, "X", conteudo="a")
     nova = tmp_path / "outra"
@@ -45,7 +45,7 @@ def test_move_quando_a_nova_esta_vazia(settings, tmp_path) -> None:
     assert pasta.atual() == nova
 
 
-def test_adota_quando_a_nova_tem_saves(settings, tmp_path) -> None:
+def test_adota_quando_a_nova_tem_saves(tmp_path) -> None:
     antiga = pasta.padrao()
     _guarda_save(antiga, "X")
     nova = tmp_path / "outra"
@@ -59,7 +59,7 @@ def test_adota_quando_a_nova_tem_saves(settings, tmp_path) -> None:
     assert pasta.atual() == nova
 
 
-def test_recusa_a_mesma_e_subpasta(settings) -> None:
+def test_recusa_a_mesma_e_subpasta() -> None:
     atual = pasta.padrao()
     _guarda_save(atual, "X")
 
@@ -74,7 +74,7 @@ def test_recusa_a_mesma_e_subpasta(settings) -> None:
     assert shared.schema.get_string("pasta-dos-saves") == ""
 
 
-def test_recusa_a_mesma_ignorando_maiusculas(settings) -> None:
+def test_recusa_a_mesma_ignorando_maiusculas() -> None:
     atual = pasta.padrao()
     atual.mkdir(parents=True)
 
@@ -82,7 +82,7 @@ def test_recusa_a_mesma_ignorando_maiusculas(settings) -> None:
         pasta.trocar(atual.parent / atual.name.upper())
 
 
-def test_voltar_ao_padrao_grava_vazio(settings, tmp_path) -> None:
+def test_voltar_ao_padrao_grava_vazio(tmp_path) -> None:
     outra = tmp_path / "outra"
     _guarda_save(pasta.padrao(), "X")
     pasta.trocar(outra)
@@ -96,7 +96,7 @@ def test_voltar_ao_padrao_grava_vazio(settings, tmp_path) -> None:
     assert not (outra / "X").exists()
 
 
-def test_antiga_inexistente_so_grava_a_chave(settings, tmp_path) -> None:
+def test_antiga_inexistente_so_grava_a_chave(tmp_path) -> None:
     nova = tmp_path / "outra"
 
     pasta.trocar(nova)
@@ -105,7 +105,7 @@ def test_antiga_inexistente_so_grava_a_chave(settings, tmp_path) -> None:
     assert pasta.atual() == nova
 
 
-def test_recusa_uma_pasta_que_contem_a_atual(settings) -> None:
+def test_recusa_uma_pasta_que_contem_a_atual() -> None:
     atual = pasta.padrao()
     _guarda_save(atual, "X")
 
@@ -124,7 +124,7 @@ def test_a_raiz_de_um_disco_contem_o_que_esta_nela() -> None:
     assert not pasta.dentro(Path("D:/Saves"), Path("E:/"))
 
 
-def test_recusa_se_a_nova_tem_um_arquivo_com_o_nome_de_um_item(settings, tmp_path) -> None:
+def test_recusa_se_a_nova_tem_um_arquivo_com_o_nome_de_um_item(tmp_path) -> None:
     _guarda_save(pasta.padrao(), "X")
     nova = tmp_path / "outra"
     nova.mkdir()
@@ -141,7 +141,7 @@ def test_recusa_se_a_nova_tem_um_arquivo_com_o_nome_de_um_item(settings, tmp_pat
     assert shared.schema.get_string("pasta-dos-saves") == ""
 
 
-def test_falha_no_meio_nao_deixa_saves_pela_metade(settings, tmp_path, monkeypatch) -> None:
+def test_falha_no_meio_nao_deixa_saves_pela_metade(tmp_path, monkeypatch) -> None:
     antiga = pasta.padrao()
     _guarda_save(antiga, "A")
     _guarda_save(antiga, "B")
@@ -182,7 +182,7 @@ def test_saves_em_ignora_copiando_em_qualquer_caixa(tmp_path, nome) -> None:
     assert [p.name for p in pasta.saves_em(tmp_path)] == ["Y"]
 
 
-def test_copia_pela_metade_nao_e_adotada(settings, tmp_path) -> None:
+def test_copia_pela_metade_nao_e_adotada(tmp_path) -> None:
     """A sobra de uma troca interrompida (app fechado no meio) não vale como save."""
     antiga = pasta.padrao()
     _guarda_save(antiga, "X", conteudo="a")
@@ -198,7 +198,7 @@ def test_copia_pela_metade_nao_e_adotada(settings, tmp_path) -> None:
     assert pasta.atual() == nova
 
 
-def test_sobra_copiando_e_apagada(settings, tmp_path) -> None:
+def test_sobra_copiando_e_apagada(tmp_path) -> None:
     """A sobra do app, de um save que vai ser levado, sai; o save chega sem a marca."""
     antiga = pasta.padrao()
     _guarda_save(antiga, "X", conteudo="a")
@@ -215,7 +215,7 @@ def test_sobra_copiando_e_apagada(settings, tmp_path) -> None:
     assert not (nova / "X" / pasta.MARCA_COPIANDO).exists()
 
 
-def test_so_o_que_o_app_criou_e_apagado(settings, tmp_path) -> None:
+def test_so_o_que_o_app_criou_e_apagado(tmp_path) -> None:
     """Na pasta nova, só as sobras com a marca do app (qualquer save, qualquer caixa);
     na antiga e no resto, nada."""
     antiga = pasta.padrao()
@@ -240,7 +240,7 @@ def test_so_o_que_o_app_criou_e_apagado(settings, tmp_path) -> None:
     assert not (nova / "Z.copiando").exists()
 
 
-def test_sobra_marcada_sai_tambem_antes_de_adotar(settings, tmp_path) -> None:
+def test_sobra_marcada_sai_tambem_antes_de_adotar(tmp_path) -> None:
     """Uma pasta nova com saves é adotada, mas a sobra do app nela não fica: o Ludusavi
     acha a pasta de um jogo pelo nome dentro do `mapping.yaml`, não pelo da pasta."""
     antiga = pasta.padrao()
@@ -258,7 +258,7 @@ def test_sobra_marcada_sai_tambem_antes_de_adotar(settings, tmp_path) -> None:
 
 
 @pytest.mark.parametrize("nome", ["X.copiando", "X.COPIANDO"])
-def test_pasta_do_usuario_com_nome_de_copia_barra_a_troca(settings, tmp_path, nome) -> None:
+def test_pasta_do_usuario_com_nome_de_copia_barra_a_troca(tmp_path, nome) -> None:
     """Uma pasta do usuário que já ocupa o `<nome>.copiando` (em qualquer caixa) não é
     apagada nem usada: a troca falha e o que ela já tinha criado desaparece."""
     antiga = pasta.padrao()
@@ -278,7 +278,7 @@ def test_pasta_do_usuario_com_nome_de_copia_barra_a_troca(settings, tmp_path, no
     assert shared.schema.get_string("pasta-dos-saves") == ""
 
 
-def test_copiando_que_e_atalho_nao_e_seguido(settings, tmp_path) -> None:
+def test_copiando_que_e_atalho_nao_e_seguido(tmp_path) -> None:
     """Uma junção `X.copiando` para fora, mesmo com a marca no destino dela, não é apagada."""
     winapi = pytest.importorskip("_winapi")
     _guarda_save(pasta.padrao(), "X")
@@ -300,7 +300,7 @@ def test_copiando_que_e_atalho_nao_e_seguido(settings, tmp_path) -> None:
 
 
 def test_sobra_que_nao_sai_avisa_no_log_e_deixa_a_marca_para_a_proxima(
-    settings, tmp_path, monkeypatch, caplog
+    tmp_path, monkeypatch, caplog
 ) -> None:
     antiga = pasta.padrao()
     _guarda_save(antiga, "X", conteudo="a")
@@ -333,7 +333,7 @@ def test_sobra_que_nao_sai_avisa_no_log_e_deixa_a_marca_para_a_proxima(
     assert pasta.atual() == nova
 
 
-def test_sobra_com_mapping_que_nao_sai_barra_a_troca(settings, tmp_path, monkeypatch) -> None:
+def test_sobra_com_mapping_que_nao_sai_barra_a_troca(tmp_path, monkeypatch) -> None:
     """Uma sobra do app que o Ludusavi ainda reconheceria não pode ficar na pasta que vai
     valer: a troca falha e nada muda."""
     antiga = pasta.padrao()
@@ -360,7 +360,7 @@ def test_sobra_com_mapping_que_nao_sai_barra_a_troca(settings, tmp_path, monkeyp
 
 
 def test_sobra_sem_mapping_que_nao_sai_so_avisa_e_a_troca_segue(
-    settings, tmp_path, monkeypatch, caplog
+    tmp_path, monkeypatch, caplog
 ) -> None:
     """Sem o `mapping.yaml` a pasta não parece mais um jogo para o Ludusavi."""
     _guarda_save(pasta.padrao(), "X")
@@ -384,7 +384,7 @@ def test_sobra_sem_mapping_que_nao_sai_so_avisa_e_a_troca_segue(
 
 
 @pytest.mark.parametrize("caso", ["a_atual", "dentro_da_atual", "contem_a_atual", "dentro_do_app"])
-def test_recusas_do_comeco_deixam_a_sobra_onde_esta(settings, tmp_path, caso) -> None:
+def test_recusas_do_comeco_deixam_a_sobra_onde_esta(tmp_path, caso) -> None:
     """As três primeiras recusas não mexem em nada, nem na sobra do app."""
     if caso == "dentro_do_app":
         pasta.trocar(tmp_path / "fora")  # a atual fora do app, para só esta regra recusar
@@ -407,7 +407,7 @@ def test_recusas_do_comeco_deixam_a_sobra_onde_esta(settings, tmp_path, caso) ->
     assert shared.schema.get_string("pasta-dos-saves") == escolha
 
 
-def test_recusa_por_conflito_nao_toca_no_que_e_do_usuario(settings, tmp_path) -> None:
+def test_recusa_por_conflito_nao_toca_no_que_e_do_usuario(tmp_path) -> None:
     _guarda_save(pasta.padrao(), "X")
     nova = tmp_path / "outra"
     (nova / "X").mkdir(parents=True)
@@ -425,7 +425,7 @@ def test_recusa_por_conflito_nao_toca_no_que_e_do_usuario(settings, tmp_path) ->
     assert shared.schema.get_string("pasta-dos-saves") == ""
 
 
-def test_todos_sao_copiados_antes_de_algum_ser_renomeado(settings, tmp_path, monkeypatch) -> None:
+def test_todos_sao_copiados_antes_de_algum_ser_renomeado(tmp_path, monkeypatch) -> None:
     antiga = pasta.padrao()
     _guarda_save(antiga, "A")
     _guarda_save(antiga, "B")
@@ -463,7 +463,7 @@ def test_todos_sao_copiados_antes_de_algum_ser_renomeado(settings, tmp_path, mon
 
 
 def test_morto_no_meio_da_copia_nao_e_adotado_e_a_nova_tentativa_completa(
-    settings, tmp_path, monkeypatch
+    tmp_path, monkeypatch
 ) -> None:
     """O app morre copiando o segundo save: nada foi renomeado, então a pasta não vale
     como adotada e a nova tentativa leva os dois."""
@@ -503,7 +503,7 @@ def test_morto_no_meio_da_copia_nao_e_adotado_e_a_nova_tentativa_completa(
     assert pasta.atual() == nova
 
 
-def test_falha_ao_renomear_desfaz_tambem_o_ja_renomeado(settings, tmp_path, monkeypatch) -> None:
+def test_falha_ao_renomear_desfaz_tambem_o_ja_renomeado(tmp_path, monkeypatch) -> None:
     antiga = pasta.padrao()
     _guarda_save(antiga, "A")
     _guarda_save(antiga, "B")
@@ -529,7 +529,7 @@ def test_falha_ao_renomear_desfaz_tambem_o_ja_renomeado(settings, tmp_path, monk
     assert shared.schema.get_string("pasta-dos-saves") == ""
 
 
-def test_desfazer_tira_o_mapping_do_renomeado_primeiro(settings, tmp_path, monkeypatch) -> None:
+def test_desfazer_tira_o_mapping_do_renomeado_primeiro(tmp_path, monkeypatch) -> None:
     """Mesmo que apagar o resto falhe, o que foi renomeado não fica com cara de save."""
     antiga = pasta.padrao()
     _guarda_save(antiga, "A")
@@ -563,7 +563,7 @@ def test_desfazer_tira_o_mapping_do_renomeado_primeiro(settings, tmp_path, monke
     assert shared.schema.get_string("pasta-dos-saves") == ""
 
 
-def test_original_que_nao_sai_nao_desfaz_a_troca(settings, tmp_path, monkeypatch) -> None:
+def test_original_que_nao_sai_nao_desfaz_a_troca(tmp_path, monkeypatch) -> None:
     antiga = pasta.padrao()
     _guarda_save(antiga, "X")
     nova = tmp_path / "outra"
@@ -580,7 +580,7 @@ def test_original_que_nao_sai_nao_desfaz_a_troca(settings, tmp_path, monkeypatch
     assert (antiga / "X" / "save.dat").is_file()  # sobrou duplicado, sem perda
 
 
-def test_so_os_saves_saem_de_uma_pasta_com_outras_coisas(settings, tmp_path) -> None:
+def test_so_os_saves_saem_de_uma_pasta_com_outras_coisas(tmp_path) -> None:
     """A raiz do OneDrive adotada e depois trocada: só as pastas com `mapping.yaml` vão."""
     onedrive = tmp_path / "OneDrive"
     (onedrive / "Fotos").mkdir(parents=True)
@@ -600,7 +600,7 @@ def test_so_os_saves_saem_de_uma_pasta_com_outras_coisas(settings, tmp_path) -> 
     assert (vazia / "Jogo" / "save.dat").is_file()
 
 
-def test_pasta_so_com_outras_coisas_nao_e_adotada(settings, tmp_path) -> None:
+def test_pasta_so_com_outras_coisas_nao_e_adotada(tmp_path) -> None:
     _guarda_save(pasta.padrao(), "X")
     documentos = tmp_path / "Documentos"
     (documentos / "Trabalho").mkdir(parents=True)
@@ -611,7 +611,7 @@ def test_pasta_so_com_outras_coisas_nao_e_adotada(settings, tmp_path) -> None:
     assert (documentos / "Trabalho").is_dir()
 
 
-def test_pasta_sem_mapping_na_antiga_fica_onde_esta(settings, tmp_path) -> None:
+def test_pasta_sem_mapping_na_antiga_fica_onde_esta(tmp_path) -> None:
     """Uma cópia pela metade (sem `mapping.yaml`) ou uma pasta qualquer não é save."""
     antiga = pasta.padrao()
     _guarda_save(antiga, "X")
@@ -626,7 +626,7 @@ def test_pasta_sem_mapping_na_antiga_fica_onde_esta(settings, tmp_path) -> None:
 
 
 @pytest.mark.parametrize("relativa", ["MeusSaves", "saves/Sub", ""])
-def test_recusa_pasta_dentro_da_pasta_do_app(settings, tmp_path, relativa) -> None:
+def test_recusa_pasta_dentro_da_pasta_do_app(tmp_path, relativa) -> None:
     pasta.trocar(tmp_path / "fora")  # a atual fora do app, para só esta regra recusar
     nova = shared.app_dir / relativa if relativa else shared.app_dir
 
@@ -636,7 +636,7 @@ def test_recusa_pasta_dentro_da_pasta_do_app(settings, tmp_path, relativa) -> No
     assert pasta.atual() == tmp_path / "fora"
 
 
-def test_recusa_pasta_que_contem_a_pasta_do_app(settings, tmp_path, monkeypatch) -> None:
+def test_recusa_pasta_que_contem_a_pasta_do_app(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(shared, "app_dir", tmp_path / "Local" / "app")
     pasta.trocar(tmp_path / "fora")
 
@@ -645,13 +645,13 @@ def test_recusa_pasta_que_contem_a_pasta_do_app(settings, tmp_path, monkeypatch)
     assert str(recusa.value) == "Escolha uma pasta fora da pasta de dados do Cartridges."
 
 
-def test_a_padrao_continua_aceita(settings, tmp_path) -> None:
+def test_a_padrao_continua_aceita(tmp_path) -> None:
     pasta.trocar(tmp_path / "fora")
     pasta.trocar(pasta.padrao())
     assert pasta.atual() == pasta.padrao()
 
 
-def test_a_chave_e_gravada_na_thread_da_tela(settings, tmp_path, monkeypatch, flush_idle) -> None:
+def test_a_chave_e_gravada_na_thread_da_tela(tmp_path, monkeypatch, flush_idle) -> None:
     _guarda_save(pasta.padrao(), "X")
     nova = tmp_path / "nova"
     gravou_em = []

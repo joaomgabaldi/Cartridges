@@ -809,10 +809,13 @@ class ModeloDaEdicao(QObject):
     # -- abrir e fechar --------------------------------------------------------------------------
 
     @Slot(str)
-    def abrir(self, game_id: str) -> None:
+    @Slot(str, bool)
+    def abrir(self, game_id: str, avancadas: bool = False) -> None:
         if self._aberto or (jogo := shared.store.get(game_id)) is None:
             return
         self._abrir(jogo)
+        if avancadas:
+            self.avancadasPedidas.emit()
 
     @Slot()
     def adicionar(self) -> None:

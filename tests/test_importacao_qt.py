@@ -451,11 +451,11 @@ def test_dialogo_de_erros_mostra_texto_puro_e_so_fecha_pelo_botao(app_qt):
     _esperar()
     dialogo = janela.achar("dialogoDeErros")
     assert dialogo.property("visible") is True
-    assert janela.achar("tituloDoDialogo").property("text") == "Aviso"
-    assert janela.achar("corpoDoDialogo").property("text") == "Corpo & <b>x</b>"
-    assert janela.achar("itemTitulo").property("text") == "T & <i>a</i>"
-    assert janela.achar("itemSubtitulo").property("text") == "S & <u>b</u>"
-    assert janela.achar("botaoDoDialogo").property("visible") is True
+    assert _achar(dialogo, "tituloDoDialogo").property("text") == "Aviso"
+    assert _achar(dialogo, "corpoDoDialogo").property("text") == "Corpo & <b>x</b>"
+    assert _achar(dialogo, "itemTitulo").property("text") == "T & <i>a</i>"
+    assert _achar(dialogo, "itemSubtitulo").property("text") == "S & <u>b</u>"
+    assert _achar(dialogo, "botaoDoDialogo").property("visible") is True
     # Com o diálogo aberto, a janela não aceita atalhos arrastados.
     assert janela.achar("alvoDeSoltar").property("enabled") is False
 

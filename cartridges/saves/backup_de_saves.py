@@ -17,21 +17,19 @@ import logging
 import subprocess
 import threading
 import time
+import weakref
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from gi.repository import Adw
-
 from cartridges import shared
 from cartridges.conquistas import arquivos
-from cartridges.game import Game
+from cartridges.jogo import Jogo
 from cartridges.saves import conferencia, config, ludusavi, pasta
 from cartridges.saves.ludusavi import LudusaviFalhou, Versao
 from cartridges.modelos import tarefas
-from cartridges.utils.create_dialog import create_dialog
-from cartridges.utils.na_tela import entregar_na_tela
+from cartridges.utils.thread_principal import na_thread_principal
 
 # Os testes trocam por um executor falso; é o que `ludusavi.rodar` recebe.
 executor = subprocess.run
@@ -51,16 +49,16 @@ _trava = threading.Lock()
 # Nome no Ludusavi -> versões, da mais nova para a mais velha. Lido pela tela
 # (`tem_backup`) sem esperar a trava: a tela nunca fica parada atrás de um backup.
 _cache: dict[str, list[Versao]] = {}
-# Quantas restaurações pendentes cada jogo tem (nome no Ludusavi, e também o objeto `Game`,
+# Quantas restaurações pendentes cada jogo tem (nome no Ludusavi, e também o objeto `Jogo`,
 # para o caso de o nome mudar no meio) e quantas de "Restaurar todos", para o jogo não
 # abrir no meio. Contadores, e não um conjunto e uma marca: com dois pedidos seguidos, o
 # fim do primeiro não pode soltar o jogo enquanto o segundo, na fila da trava, ainda vai
 # gravar. Só a thread da tela os muda: a restauração soma logo depois de abrir a thread de
-# trabalho, e o fim subtrai com `entregar_na_tela` (que só roda depois, quando a tela está
+# trabalho, e o fim subtrai com `na_thread_principal` (que só roda depois, quando a tela está
 # livre). Por isso não precisam de trava, a tela os lê sem esperar um backup, e um pedido
 # que não chega a abrir a thread não deixa marca.
 _restaurando: Counter[str] = Counter()
-_jogos_restaurando: Counter[int] = Counter()  # id do `Game`; vivo enquanto a thread o segura
+_jogos_restaurando: Counter[int] = Counter()  # id do `Jogo`; vivo enquanto a thread o segura
 _restaurando_todos = 0  # pylint: disable=invalid-name
 # Quantas tarefas visíveis de backup ou restauração estão de pé. Ao contrário dos de cima,
 # sobe na thread da tela e desce nas threads de trabalho, por isso a trava própria.
@@ -114,7 +112,7 @@ def _pasta_config() -> Path:
     return shared.app_dir / "ludusavi"
 
 
-def _biblioteca() -> list[Game]:
+def _biblioteca() -> list[Jogo]:
     """Os jogos da biblioteca. Quem chama na thread da tela tira o instantâneo antes de
     abrir a thread de trabalho, que então só lê atributos; o store itera sobre uma
     cópia protegida por trava, então chamar de outra thread também é seguro."""
@@ -126,7 +124,7 @@ def _em_segundo_plano(alvo, *argumentos) -> None:
 
 
 def _no_config(
-    game: Game, no_manifesto: bool = True, nome: str | None = None
+    game: Jogo, no_manifesto: bool = True, nome: str | None = None
 ) -> config.JogoNoConfig:
     # Todo nome guardado vai como "extend". O Ludusavi 0.31 trata "extend" de um nome
     # que o manifesto não conhece como uma entrada própria (conferido), e se o manifesto
@@ -139,7 +137,7 @@ def _no_config(
 
 
 def _preparar(
-    biblioteca: list[Game],
+    biblioteca: list[Jogo],
     atual: config.JogoNoConfig | None = None,
     redirecionamentos: list[tuple[str, str]] | None = None,
 ) -> None:
@@ -161,7 +159,7 @@ def _preparar(
     )
 
 
-def _ler_versoes(biblioteca: list[Game]) -> bool:
+def _ler_versoes(biblioteca: list[Jogo]) -> bool:
     """Relê as versões de todos os jogos. Sob a trava. Diz se conseguiu; falhar deixa
     o cache como estava."""
     global _cache  # noqa: PLW0603
@@ -174,17 +172,17 @@ def _ler_versoes(biblioteca: list[Game]) -> bool:
     return True
 
 
-def _mostrar_aviso(texto: str) -> bool:
-    toast = Adw.Toast.new(texto)
-    # O nome do jogo está no texto, e o Adw.Toast lê o título como markup por padrão.
-    toast.set_use_markup(False)
-    if shared.win is not None:
-        shared.win.toast_queue.add(toast)
-    return False
+def _mostrar_aviso(texto: str) -> None:
+    # A `FilaDeAvisos` mostra sempre texto puro: o nome do jogo no texto não é marcação.
+    aplicativo = shared.aplicativo
+    if aplicativo is None:
+        logging.warning("Aviso sem janela: %s", texto)
+    else:
+        aplicativo.avisos.adicionar(texto)
 
 
 def _avisar(texto: str) -> None:
-    entregar_na_tela(_mostrar_aviso, texto)
+    na_thread_principal(_mostrar_aviso, texto)
 
 
 def _nao_abriu(tarefa: tarefas.Tarefa | None, aviso: str) -> None:
@@ -195,23 +193,24 @@ def _nao_abriu(tarefa: tarefas.Tarefa | None, aviso: str) -> None:
     _avisar(aviso)
 
 
-def _nada_para_restaurar() -> bool:
-    if shared.win is not None:
-        create_dialog(
-            shared.win,
-            _("Nada para restaurar"),
-            _("Nenhum jogo tem cópias dos saves para restaurar."),
-        )
-    return False
+def _dialogo(titulo: str, corpo: str) -> None:
+    """Um aviso com o botão "Dispensar", pela fila de diálogos do app (D72); sem app, só o log."""
+    aplicativo = shared.aplicativo
+    if aplicativo is None:
+        logging.warning("%s: %s", titulo, corpo)
+    else:
+        aplicativo.pedir_dialogo(titulo, corpo, [], lambda: None)
 
 
-def _restauracao_incompleta(falhas: list[tuple[str, str]]) -> bool:
+def _nada_para_restaurar() -> None:
+    _dialogo(_("Nada para restaurar"), _("Nenhum jogo tem cópias dos saves para restaurar."))
+
+
+def _restauracao_incompleta(falhas: list[tuple[str, str]]) -> None:
     """O fim de "Restaurar todos" com falhas; ``falhas``: (nome do jogo, aviso) de cada
     jogo que não foi restaurado. Diálogo, e não aviso: o pedido vem das Preferências, e um
     aviso ficaria escondido atrás delas. Uma falha mostra o aviso dela, que diz o que
     fazer; várias, os nomes dos jogos."""
-    if shared.win is None:
-        return False
     if len(falhas) == 1:
         corpo = falhas[0][1]
     else:
@@ -219,8 +218,7 @@ def _restauracao_incompleta(falhas: list[tuple[str, str]]) -> bool:
         nomes = list(dict.fromkeys(nome for nome, _aviso in falhas))
         juntos = ", ".join(nomes[:-1]) + _(" e ") + nomes[-1] if len(nomes) > 1 else nomes[0]
         corpo = _("Não foi possível restaurar os saves dos seguintes jogos: {}.").format(juntos)
-    create_dialog(shared.win, _("Restauração incompleta"), corpo)
-    return False
+    _dialogo(_("Restauração incompleta"), corpo)
 
 
 def _marcar_nova(nome: str, inicio: datetime, comentario: str) -> None:
@@ -263,12 +261,11 @@ def _garantir_manifesto(pasta_config: Path) -> bool:
     return False
 
 
-def _salvar(game: Game) -> bool:
+def _salvar(game: Jogo) -> None:
     game.save()
-    return False
 
 
-def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
+def _resolver(game: Jogo) -> Optional[config.JogoNoConfig]:
     """O jogo como o Ludusavi o conhece, ou None se não há como backupear. Sob a trava.
 
     A primeira vez só liga o jogo sozinho se o manifesto tem o appID dele (e guarda o
@@ -291,17 +288,17 @@ def _resolver(game: Game) -> Optional[config.JogoNoConfig]:
         return None  # ver `_local_desconhecido`
     jogo = config.JogoNoConfig(nome, game.steam_appid, game.executable, True)
     game.ludusavi_nome = nome
-    entregar_na_tela(_salvar, game)
+    na_thread_principal(_salvar, game)
     return jogo
 
 
-def _local_desconhecido(game: Game) -> None:
+def _local_desconhecido(game: Jogo) -> None:
     """Sem o appID no manifesto e sem jogo escolhido nas opções avançadas, o jogo não
     tem backup. O usuário é avisado num diálogo até responder a ele (e então a marca é
     gravada no jogo); nas sessões seguintes, só o log. Sob a trava."""
     logging.info("O local dos saves de %s é desconhecido: sem backup", game.name)
     if not game.saves_local_desconhecido_avisado:
-        entregar_na_tela(_avisar_local_desconhecido, game)
+        na_thread_principal(_avisar_local_desconhecido, game)
 
 
 # Os jogos (`id` do objeto) com o diálogo de `_avisar_local_desconhecido` na tela: duas
@@ -309,51 +306,43 @@ def _local_desconhecido(game: Game) -> None:
 _local_desconhecido_na_tela: set[int] = set()
 
 
-def _avisar_local_desconhecido(game: Game) -> bool:
-    """Diálogo, e não aviso: o jogo fica sem backup dos saves até ser identificado, e um
+def _avisar_local_desconhecido(game: Jogo) -> None:
+    """Pergunta, e não aviso: o jogo fica sem backup dos saves até ser identificado, e um
     aviso que passasse despercebido (ou que o app fechasse antes de mostrar) não voltaria.
-    A marca só é gravada quando o usuário responde: fechado o app antes disso, o diálogo
+    A marca só é gravada quando o usuário responde: fechado o app antes disso, a pergunta
     volta no fim da próxima sessão."""
-    if (
-        shared.win is None
-        or game.saves_local_desconhecido_avisado
-        or id(game) in _local_desconhecido_na_tela
-    ):
-        return False
-    _local_desconhecido_na_tela.add(id(game))
-    create_dialog(
-        shared.win,
+    aplicativo = shared.aplicativo
+    if aplicativo is None or game.saves_local_desconhecido_avisado or id(game) in _local_desconhecido_na_tela:
+        return
+    chave = id(game)
+    _local_desconhecido_na_tela.add(chave)
+    fraco = weakref.ref(game)  # a pergunta vive na fila do app, que não segura o jogo
+    aplicativo.pedir_confirmacao(
         _("Saves sem backup"),
         _(
             "Não foi possível identificar os saves de {}. Indique o jogo nas opções "
             "avançadas para que o backup seja feito."
         ).format(game.name),
-        "editar",
         _("Editar jogo"),
-    ).connect("response", _ao_responder_local_desconhecido, game)
-    return False
-
-
-def _ao_responder_local_desconhecido(_dialogo, resposta: str, game: Game) -> None:
-    _local_desconhecido_na_tela.discard(id(game))
-    game.saves_local_desconhecido_avisado = True
-    game.save()
-    if resposta != "editar" or game.removed:
-        return
-    # Aqui, e não no topo: o diálogo de detalhes puxa a interface inteira (seletores,
-    # Pillow), que o backup em si não usa.
-    from cartridges.details_dialog import (  # pylint: disable=import-outside-toplevel
-        DetailsDialog,
+        lambda confirmou: _ao_responder_local_desconhecido(chave, fraco(), confirmou),
     )
 
-    if not DetailsDialog.is_open:
-        DetailsDialog(game, avancadas_abertas=True).present(shared.win)
+
+def _ao_responder_local_desconhecido(chave: int, game: Jogo | None, confirmou: bool) -> None:
+    _local_desconhecido_na_tela.discard(chave)
+    if game is None:  # o jogo já não existe: não há marca a gravar
+        return
+    game.saves_local_desconhecido_avisado = True
+    game.save()
+    edicao = shared.edicao
+    if confirmou and not game.removed and edicao is not None and not edicao.aberto:
+        edicao.abrir(game.game_id, avancadas=True)
 
 
 # -- backup ------------------------------------------------------------------
 
 
-def no_fim_da_sessao(game: Game) -> None:
+def no_fim_da_sessao(game: Jogo) -> None:
     """Dispara o backup do jogo e volta na hora. A tarefa nasce aqui (ver `em_andamento`)
     e a thread de trabalho a termina."""
     if not disponivel():
@@ -379,7 +368,7 @@ def _limite_do_backup(nome: str) -> int | None:
     return min(config.COPIAS_GUARDADAS + incompletas, 255)
 
 
-def _backup(game: Game, biblioteca: list[Game], tarefa: tarefas.Tarefa) -> None:
+def _backup(game: Jogo, biblioteca: list[Jogo], tarefa: tarefas.Tarefa) -> None:
     with _trava:
         try:
             jogo = _resolver(game)
@@ -413,11 +402,11 @@ def _backup(game: Game, biblioteca: list[Game], tarefa: tarefas.Tarefa) -> None:
 # -- versões -----------------------------------------------------------------
 
 
-def tem_backup(game: Game) -> bool:
+def tem_backup(game: Jogo) -> bool:
     return bool(_cache.get(game.ludusavi_nome))
 
 
-def versoes_do_jogo(game: Game) -> list[Versao]:
+def versoes_do_jogo(game: Jogo) -> list[Versao]:
     return list(_cache.get(game.ludusavi_nome, []))
 
 
@@ -426,7 +415,7 @@ def atualizar_cache() -> None:
         _em_segundo_plano(_atualizar_cache, _biblioteca())
 
 
-def _atualizar_cache(biblioteca: list[Game]) -> None:
+def _atualizar_cache(biblioteca: list[Jogo]) -> None:
     with _trava:
         _ler_versoes(biblioteca)
 
@@ -435,7 +424,7 @@ def _atualizar_cache(biblioteca: list[Game]) -> None:
 
 
 def _restaurar_um(
-    game: Game, nome: str, versao: Versao, biblioteca: list[Game]
+    game: Jogo, nome: str, versao: Versao, biblioteca: list[Jogo]
 ) -> str | None:
     """Restaura ``versao`` (do jogo ``nome`` no Ludusavi) sem arriscar o save atual. Sob a
     trava. None se restaurou; senão, o aviso para o usuário.
@@ -516,7 +505,7 @@ def _do_sistema(pastas: arquivos.Pastas) -> tuple[Path, ...]:
 
 
 def _conferir_previa(
-    game: Game, previa: ludusavi.Previa, limites: conferencia.Raizes, copiados: tuple[str, ...]
+    game: Jogo, previa: ludusavi.Previa, limites: conferencia.Raizes, copiados: tuple[str, ...]
 ) -> str | None:
     """O aviso para o usuário se a prévia não pode virar restauração, senão None: um destino
     fora das pastas de save, ou um save de hoje que a cópia dos saves atuais não guardou (o
@@ -540,7 +529,7 @@ def _conferir_previa(
     return None
 
 
-def restaurando(game: Game) -> bool:
+def restaurando(game: Jogo) -> bool:
     """Os saves do jogo estão sendo restaurados (sozinhos ou em "Restaurar todos"). Só
     na thread da tela."""
     nome = game.ludusavi_nome
@@ -586,7 +575,7 @@ def _desmarcar_todos(jogos: list[int]) -> bool:
     return False
 
 
-def restaurar(game: Game, versao: str) -> None:
+def restaurar(game: Jogo, versao: str) -> None:
     """Devolve os saves do jogo aos da versão ``versao`` (o `id`), guardando os atuais antes."""
     nome = game.ludusavi_nome
     if not (disponivel() and nome):
@@ -604,7 +593,7 @@ def restaurar(game: Game, versao: str) -> None:
 
 
 def _restaurar(
-    game: Game, nome: str, versao: str, biblioteca: list[Game], tarefa: tarefas.Tarefa
+    game: Jogo, nome: str, versao: str, biblioteca: list[Jogo], tarefa: tarefas.Tarefa
 ) -> None:
     try:
         with _trava:
@@ -623,7 +612,7 @@ def _restaurar(
             _ler_versoes(biblioteca)
     finally:
         _terminar_tarefa(tarefa)
-        entregar_na_tela(_desmarcar, nome, id(game))
+        na_thread_principal(_desmarcar, nome, id(game))
 
 
 def restaurar_todos() -> None:
@@ -635,7 +624,7 @@ def restaurar_todos() -> None:
         biblioteca = _biblioteca()
         pedidos = [(jogo, jogo.ludusavi_nome) for jogo in biblioteca if jogo.ludusavi_nome]
         if not pedidos:  # sem nome no Ludusavi, nenhum jogo tem backup
-            entregar_na_tela(_nada_para_restaurar)
+            na_thread_principal(_nada_para_restaurar)
             return
         # Total provisório (nunca 0): os nomes com cópias no cache, ou todos os nomes se o
         # cache ainda está vazio. A thread de trabalho o acerta quando souber quem tem backup.
@@ -652,7 +641,7 @@ def restaurar_todos() -> None:
 
 
 def _restaurar_todos(
-    biblioteca: list[Game], pedidos: list[tuple[Game, str]], tarefa: tarefas.Tarefa
+    biblioteca: list[Jogo], pedidos: list[tuple[Jogo, str]], tarefa: tarefas.Tarefa
 ) -> None:
     """``pedidos``: cada jogo com o nome que tinha no pedido. Os alvos saem deles, e não dos
     nomes de agora: um jogo cujo nome foi limpo na fila (o diálogo de detalhes, ao corrigir
@@ -665,12 +654,12 @@ def _restaurar_todos(
                 _avisar(_("Não foi possível restaurar os saves."))
                 return
             # Por nome, como no config: o mesmo jogo em duas lojas tem um nome só no Ludusavi.
-            jogos: dict[str, list[Game]] = {}
+            jogos: dict[str, list[Jogo]] = {}
             for jogo, nome in pedidos:
                 jogos.setdefault(nome, []).append(jogo)
             alvos = [nome for nome in jogos if _cache.get(nome)]
             if not alvos:
-                entregar_na_tela(_nada_para_restaurar)
+                na_thread_principal(_nada_para_restaurar)
                 return
             falhas: list[tuple[str, str]] = []  # (nome do jogo, aviso)
             for feitos, nome in enumerate(alvos):
@@ -691,11 +680,11 @@ def _restaurar_todos(
                     falhas.append((jogo.name, aviso))
             # Um aviso só, no fim: uma falha por jogo viraria uma fila de avisos.
             if falhas:
-                entregar_na_tela(_restauracao_incompleta, falhas)
+                na_thread_principal(_restauracao_incompleta, falhas)
             _ler_versoes(biblioteca)
     finally:
         _terminar_tarefa(tarefa)
-        entregar_na_tela(_desmarcar_todos, [id(jogo) for jogo, _nome in pedidos])
+        na_thread_principal(_desmarcar_todos, [id(jogo) for jogo, _nome in pedidos])
 
 
 # -- pasta dos saves ---------------------------------------------------------
