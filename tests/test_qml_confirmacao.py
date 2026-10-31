@@ -25,6 +25,7 @@ from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.historico import HistoricoDeSessoes
 from cartridges.modelos.saves import SavesDoJogo
 from cartridges.modelos.preferencias import Preferencias
+from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.modelos.tarefas import PainelDasTarefas
 from cartridges.ponte import Ponte
@@ -81,6 +82,7 @@ class _Janela:
         self.saves = SavesDoJogo(self.aplicativo)
         self.preferencias = shared.preferencias = Preferencias(self.ponte.fila, lambda: True)
         self.painel_das_tarefas = PainelDasTarefas()
+        self.restauracao = ContinuacaoDaRestauracao(self.aplicativo)
         self.big_picture = BigPicture(self.modelo)
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(_DetalhesFalsos(), self.sessao)
@@ -102,6 +104,7 @@ class _Janela:
             ("conquistasDoJogo", self.conquistas),
             ("preferencias", self.preferencias),
             ("painelDasTarefas", self.painel_das_tarefas),
+            ("restauracao", self.restauracao),
         ):
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

@@ -228,7 +228,8 @@ def resumo(jogo: Jogo) -> tuple[int, int, int]:
 
 def excluir(jogo: Jogo) -> None:
     """Exclui ``jogo`` de vez, sem tumba, e o tira das pendências."""
-    shared.win.retirar_da_grade(jogo)
+    if shared.win is not None:  # o app Qt não tem `win`: o `jogo_excluido` da store tira o cartão do modelo
+        shared.win.retirar_da_grade(jogo)
     shared.store.excluir(jogo)
     remover(jogo.game_id)
 

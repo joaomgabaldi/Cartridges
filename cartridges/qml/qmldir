@@ -63,3 +63,9 @@ AssistenteDeCalibracao 1.0 AssistenteDeCalibracao.qml
 BotaoDasTarefas 1.0 BotaoDasTarefas.qml
 JanelaDasTarefas 1.0 JanelaDasTarefas.qml
 JanelaRestaurando 1.0 JanelaRestaurando.qml
+ModalDaRestauracao 1.0 ModalDaRestauracao.qml
+BotaoDoModal 1.0 BotaoDoModal.qml
+DialogoDaPastaDeAtalhos 1.0 DialogoDaPastaDeAtalhos.qml
+JanelaDosPendentes 1.0 JanelaDosPendentes.qml
+EscolhaDoAtalho 1.0 EscolhaDoAtalho.qml
+DadosDoJogo 1.0 DadosDoJogo.qml

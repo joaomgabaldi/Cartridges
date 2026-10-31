@@ -38,7 +38,7 @@ Principal {
     inicio: [
         BotaoDaBarra {
             id: botaoAdicionar
-            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto
+            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta
             objectName: "botaoAdicionar"
             visible: janela.paginaAtual === "todos"
             glifo: ""
@@ -56,7 +56,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoVoltar
-            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto
+            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta
             objectName: "botaoVoltar"
             visible: janela.paginaAtual !== "todos"
             glifo: ""
@@ -69,7 +69,7 @@ Principal {
     fim: [
         BotaoDaBarra {
             id: botaoMenu
-            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto
+            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta
             objectName: "botaoMenu"
             glifo: ""
             dica: "Menu principal"
@@ -84,7 +84,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoZerados
-            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto
+            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta
             objectName: "botaoZerados"
             visible: janela.paginaAtual === "todos"
             trofeu: true
@@ -93,7 +93,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoBigPicture
-            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto
+            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta
             indisponivel: !bigPicture.disponivel
             objectName: "botaoBigPicture"
             visible: janela.paginaAtual === "todos"
@@ -103,7 +103,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoBusca
-            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto
+            enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta
             objectName: "botaoBusca"
             visible: janela.paginaAtual === "todos"
             glifo: ""
@@ -125,7 +125,7 @@ Principal {
         comBusca: true
         ativa: pilha.depth === 0 && !bigPicture.visivel && !sessao.emAndamento
         // Com o diálogo de edição, o Big Picture ou a sessão à frente, nada de trás recebe o mouse nem o Tab.
-        enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !bigPicture.visivel && !sessao.emAndamento
+        enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !bigPicture.visivel && !sessao.emAndamento
         onAbrirDetalhes: id => janela.abrirDetalhes(id)
         onEditar: id => edicao.abrir(id)
     }
@@ -136,7 +136,7 @@ Principal {
         objectName: "pilha"
         anchors.fill: parent
         visible: depth > 0
-        enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !bigPicture.visivel && !sessao.emAndamento
+        enabled: !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !bigPicture.visivel && !sessao.emAndamento
     }
 
     Component {
@@ -222,6 +222,27 @@ Principal {
         id: dialogoDeVersoes
         // Aberto pelo menu do jogo, que já fechou: o foco vai à página à vista.
         onRetornoPerdido: janela.paginaDoControle.focarGrade()
+    }
+
+    // A continuação da restauração de um backup (D81): acima das páginas e abaixo dos avisos. A pasta de atalhos
+    // vem primeiro e os outros três se empilham sobre a lista dos jogos sem atalho, na ordem em que se abrem.
+    DialogoDaPastaDeAtalhos {
+        id: dialogoDaPasta
+    }
+    JanelaDosPendentes {
+        id: janelaDosPendentes
+        // A lista de trás só volta a ouvir quando a escolha e o conflito saem.
+        enabled: !restauracao.escolhaAberta && !restauracao.conflitoAberto
+        onRetornoPerdido: janela.paginaDoControle.focarGrade()
+    }
+    EscolhaDoAtalho {
+        id: escolhaDoAtalho
+        // A lista foi relida e quem abriu sumiu: o foco vai ao "Lembrar mais tarde", ou à página à vista.
+        onRetornoPerdido: restauracao.pendentesAbertos ? janelaDosPendentes.focarInicial() : janela.paginaDoControle.focarGrade()
+    }
+    DadosDoJogo {
+        id: dadosDoJogo
+        onRetornoPerdido: restauracao.pendentesAbertos ? janelaDosPendentes.focarInicial() : janela.paginaDoControle.focarGrade()
     }
 
     // Por cima do diálogo de edição, que os abre; o foco volta ao botão que abriu cada um.
@@ -321,7 +342,7 @@ Principal {
         id: alvoDeSoltar
         objectName: "alvoDeSoltar"
         anchors.fill: parent
-        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !bigPicture.visivel && !sessao.emAndamento
+        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !bigPicture.visivel && !sessao.emAndamento
         onEntered: (arrasto) => arrasto.accepted = arrasto.hasUrls
         onDropped: (soltou) => {
             if (soltou.hasUrls) aplicativo.soltar(soltou.urls)
@@ -374,7 +395,7 @@ Principal {
     // A página à vista: "Todos os jogos", "Jogos Zerados" ou a de detalhes.
     readonly property var paginaDoControle: pilha.depth === 0 ? todos : pilha.currentItem
     // Algum diálogo na frente (os menus não contam): o botão das tarefas some.
-    readonly property bool modalAberto: camadaDeAvisos.dialogoAberto || edicao.aberto || historico.aberto || conquistasDoJogo.aberto || preferencias.aberto || saves.aberto
+    readonly property bool modalAberto: camadaDeAvisos.dialogoAberto || edicao.aberto || historico.aberto || conquistasDoJogo.aberto || preferencias.aberto || saves.aberto || restauracao.aberta
     // Menu ou diálogo na frente: o controle navega nele pelas teclas, como o teclado faria.
     readonly property bool popupAberto: menuPrincipal.opened || modalAberto
         || (paginaDoControle !== null && paginaDoControle.menuDoJogoAberto)

@@ -26,6 +26,7 @@ from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.historico import HistoricoDeSessoes
 from cartridges.modelos.saves import SavesDoJogo
 from cartridges.modelos.preferencias import Preferencias
+from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.modelos.tarefas import PainelDasTarefas
 from cartridges.ponte import Ponte
@@ -131,6 +132,7 @@ class _App:
             self.modelo, fabrica_da_cortina=cortina or (lambda _hwnd: None), animacoes_do_sistema=animacoes
         )
         self.painel_das_tarefas = PainelDasTarefas()
+        self.restauracao = ContinuacaoDaRestauracao(self.aplicativo)
         self.leitor = _LeitorFalso()
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(self.detalhes, self.sessao)
@@ -151,6 +153,7 @@ class _App:
             ("sessao", self.sessao), ("historico", self.historico), ("saves", self.saves),
             ("conquistasDoJogo", self.conquistas), ("preferencias", self.preferencias),
             ("painelDasTarefas", self.painel_das_tarefas),
+            ("restauracao", self.restauracao),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

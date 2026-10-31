@@ -44,6 +44,7 @@ from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.historico import HistoricoDeSessoes
 from cartridges.modelos.preferencias import Preferencias
+from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
 from cartridges.modelos.restaurando import Restaurando, entregar_so_ao_mudar
 from cartridges.modelos.saves import SavesDoJogo
 from cartridges.modelos.sessao import ModeloDaSessao
@@ -176,6 +177,7 @@ class _Abertura:
     varredura_tamanho: Any = None
     edicao: Any = None
     preferencias: Any = None
+    continuacao: Any = None
     painel: Any = None
     motor: Any = None
     aplicativo: Any = None
@@ -232,6 +234,15 @@ def _avisos_da_abertura(aplicativo: Any, restauracao_falhou: bool) -> None:
         )
 
 
+def _importar_na_abertura(aplicativo: Any, continuacao: Any) -> None:
+    """Depois de a janela aparecer. Com restauração pendente a importação é a da continuação (pasta de atalhos
+    obrigatória, roda mesmo com a importação automática desligada); senão, a automática."""
+    if restauracao.existe():
+        QTimer.singleShot(0, continuacao.continuar)
+    elif shared.schema.get_boolean("auto-import"):
+        QTimer.singleShot(0, lambda: aplicativo.importar(silenciosa=True))
+
+
 def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None:
     """A biblioteca e a janela principal, preenchendo ``abertura``. ``0`` no `--sair-apos-carregar`, ``1`` sem janela."""
     # A ponte para a thread principal nasce quando `thread_principal` é importado, aqui na principal.
@@ -277,6 +288,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     abertura.edicao = edicao = ModeloDaEdicao(aplicativo)
     historico = HistoricoDeSessoes(shared.store)
     saves = SavesDoJogo(aplicativo)
+    abertura.continuacao = continuacao = ContinuacaoDaRestauracao(aplicativo)
     abertura.painel = painel_das_tarefas = PainelDasTarefas()
     abertura.big_picture = big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     abertura.sessao = sessao = ModeloDaSessao(avisos, controle=controle, big_picture=big_picture)
@@ -304,6 +316,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
         ("edicao", edicao), ("bigPicture", big_picture), ("sessao", sessao), ("historico", historico),
         ("saves", saves), ("conquistasDoJogo", conquistas), ("preferencias", preferencias),
         ("painelDasTarefas", painel_das_tarefas),
+        ("restauracao", continuacao),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.
@@ -322,10 +335,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     shared.aplicativo = aplicativo
     aplicativo.verificador_de_atualizacoes = verificador  # a tela de preferências chama `check_async()` ao ligar o aviso
     _comecar_varreduras(aplicativo, verificador, varredura_hltb, varredura_tamanho)
-    # Depois de a janela aparecer. Com restauração pendente a importação é outra (plano 8).
-    # shortcut: sem `continuar_restauracao`, a abertura com restauração pendente não importa; entra no plano 8.
-    if not restauracao.existe() and shared.schema.get_boolean("auto-import"):
-        QTimer.singleShot(0, lambda: aplicativo.importar(silenciosa=True))
+    _importar_na_abertura(aplicativo, continuacao)
     return None
 
 

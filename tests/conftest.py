@@ -76,7 +76,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_log_excecoes.py",
     "test_menu_do_card.py",
     "test_na_tela.py",
-    "test_restauracao_dialogs.py",
     "test_store_ligacao_manual.py",
     "test_tela_de_download.py",
     "test_ui_logic.py",
