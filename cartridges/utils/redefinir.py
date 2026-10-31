@@ -15,8 +15,6 @@ import shutil
 from contextlib import suppress
 from typing import Optional
 
-from gi.repository import Gio
-
 from cartridges import shared
 from cartridges.utils.backup import _apagar_pasta, _irma
 
@@ -66,10 +64,9 @@ def aplicar_pendente() -> Optional[bool]:
             else:
                 item.unlink(missing_ok=True)
         for settings in (shared.schema, shared.state_schema):
-            for chave in settings.props.settings_schema.list_keys():
+            for chave in settings.list_keys():
                 if chave not in _FICAM:
                     settings.reset(chave)
-        Gio.Settings.sync()
     except OSError as erro:
         falha = erro
         return False

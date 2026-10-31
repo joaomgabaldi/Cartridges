@@ -45,8 +45,10 @@ def _padrao(tipo: str, texto: str) -> bool | int | str:
 
 
 @cache
-def _esquemas() -> dict[str, dict[str, tuple[str, bool | int | str]]]:
-    """id do esquema -> {chave: (tipo, padrão)}. Um tipo fora dos cinco levanta na carga."""
+def _esquemas() -> dict[str, dict[str, tuple]]:
+    """id do esquema -> {chave: (tipo, padrão, faixa, escolhas)}; `faixa` é ``(mín, máx)`` do
+    `<range>` e `escolhas` o conjunto das `<choices>`, ou ``None``. Um tipo fora dos cinco
+    levanta na carga."""
     esquemas = {}
     for esquema in ET.parse(_GSCHEMA).getroot().iter("schema"):
         chaves = {}
@@ -54,7 +56,12 @@ def _esquemas() -> dict[str, dict[str, tuple[str, bool | int | str]]]:
             tipo = chave.get("type")
             if tipo not in _TIPOS:
                 raise ValueError(f"Tipo {tipo!r} da chave {chave.get('name')!r} não é suportado")
-            chaves[chave.get("name")] = (tipo, _padrao(tipo, chave.findtext("default").strip()))
+            intervalo = chave.find("range")
+            faixa = None if intervalo is None else (int(intervalo.get("min")), int(intervalo.get("max")))
+            opcoes = chave.findall("choices/choice")
+            escolhas = frozenset(o.get("value") for o in opcoes) if opcoes else None
+            padrao = _padrao(tipo, chave.findtext("default").strip())
+            chaves[chave.get("name")] = (tipo, padrao, faixa, escolhas)
         esquemas[esquema.get("id")] = chaves
     return esquemas
 
@@ -70,7 +77,25 @@ class Configuracoes:
         definicao = self._chaves[chave]  # KeyError, como o GSettings, que aborta
         if tipo is not None and definicao[0] != tipo:
             raise TypeError(f"A chave {chave!r} é do tipo {definicao[0]!r}, não {tipo!r}")
-        return definicao
+        return definicao[:2]
+
+    def aceita(self, chave: str, valor: object) -> bool:
+        """Se ``valor`` serve à chave: o tipo, o `<range>` e as `<choices>` do gschema. Chave
+        desconhecida é ``False``. O que passa aqui `__setitem__` grava sem levantar."""
+        if chave not in self._chaves:
+            return False
+        tipo, _, faixa, escolhas = self._chaves[chave]
+        if tipo == "b":
+            return isinstance(valor, bool)
+        if tipo == "s":
+            return isinstance(valor, str) and (escolhas is None or valor in escolhas)
+        if not isinstance(valor, int) or isinstance(valor, bool):
+            return False
+        bits = _TIPOS[tipo][1]
+        minimo = 0 if tipo == "u" else -(1 << (bits - 1))
+        if not minimo <= valor < minimo + (1 << bits):
+            return False
+        return faixa is None or faixa[0] <= valor <= faixa[1]
 
     def _ler(self, chave: str, tipo: str | None = None) -> bool | int | str:
         tipo_da_chave, padrao = self._definicao(chave, tipo)

@@ -60,18 +60,15 @@ TESTES_AINDA_GTK: list[str] = [
     "test_app_updater.py",
     "test_area_de_trabalho_oculta.py",
     "test_assistente.py",
-    "test_auditoria_0918_fitas.py",  # plano 8 (D64): o b7 testa o backup (utils/backup, GTK); a3 usa o preferences.py apagado
     "test_auditoria_0918_importadores.py",
     "test_auditoria_0918_store.py",
     "test_auditoria_0918_ui.py",
     "test_auditoria_0923_resto.py",  # planos 8 e fase final: importa steam_picker, zerados_picker e game_logo (GTK)
     "test_auditoria_0923_zerados.py",
     "test_auditoria_1023_seguranca.py",
-    "test_backup.py",  # plano 8 (D64): importa utils/backup (GTK)
     "test_botao_novidades.py",
     "test_buscar_atualizacoes_ui.py",  # plano 8 (D64): importa o preferences.py apagado (as Atualizações voltam no plano 8)
     "test_caixa_redimensionavel.py",
-    "test_conquistas_backup.py",  # plano 8 (D56): importa utils/backup (GTK)
     "test_estilo_css.py",
     "test_hwnd_ordem_import.py",
     "test_janela_restaurando.py",
@@ -80,7 +77,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_log_excecoes.py",
     "test_menu_do_card.py",
     "test_na_tela.py",
-    "test_redefinir.py",  # plano 8 (D64): importa utils/redefinir (GTK)
     "test_reinicio.py",
     "test_restauracao_dialogs.py",
     "test_saves_ui.py",  # plano 8 (D64): importa saves/backup_de_saves e saves/dialogo (GTK) e usa o preferences.py apagado

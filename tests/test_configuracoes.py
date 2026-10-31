@@ -183,3 +183,29 @@ def test_changed_de_outra_thread_chega_na_principal(conf, app_qt):
         QTimer.singleShot(10, laco.quit)
         laco.exec()
     assert vistos == [True]
+
+
+def test_aceita_confere_o_tipo(conf):
+    assert conf.aceita("gamepad", True) is True
+    assert conf.aceita("gamepad", 1) is False
+    assert conf.aceita("gamepad", "sim") is False
+    assert conf.aceita("process-tracking-grace", 7) is True
+    assert conf.aceita("process-tracking-grace", True) is False  # bool não é número aqui
+    assert conf.aceita("shortcuts-location", "D:/Atalhos") is True
+    assert conf.aceita("shortcuts-location", 3) is False
+
+
+def test_aceita_confere_a_faixa(conf):
+    assert conf.aceita("conquistas-aviso-som-volume", 10) is True
+    assert conf.aceita("conquistas-aviso-som-volume", 100) is True
+    assert conf.aceita("conquistas-aviso-som-volume", 5) is False
+    assert conf.aceita("conquistas-aviso-som-volume", 101) is False
+
+
+def test_aceita_confere_as_escolhas(estado):
+    assert estado.aceita("sort-mode", "a-z") is True
+    assert estado.aceita("sort-mode", "x") is False
+
+
+def test_aceita_chave_desconhecida_e_falso(conf):
+    assert conf.aceita("nao-existe", True) is False

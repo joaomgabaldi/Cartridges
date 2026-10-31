@@ -11,6 +11,8 @@ import errno
 import json
 import os
 import shutil
+import subprocess
+import sys
 import threading
 import zipfile
 from pathlib import Path
@@ -29,7 +31,7 @@ _PASTAS_DO_APP = (
 
 
 @pytest.fixture(autouse=True)
-def _app_isolado(tmp_path, monkeypatch, app_dirs, settings):
+def _app_isolado(tmp_path, monkeypatch, app_dirs):
     """A pasta do app dentro de ``tmp_path/app``, com as configurações de verdade.
 
     O conftest põe ``app_dir`` no próprio ``tmp_path``, e a restauração cria
@@ -62,12 +64,12 @@ def test_an_old_json_backup_is_not_a_full_backup(tmp_path) -> None:
         backup.validar(old)
 
 
-def test_a_setting_the_schema_does_not_accept_falls_back_to_default(settings) -> None:
+def test_a_setting_the_schema_does_not_accept_falls_back_to_default(schema, state_schema) -> None:
     """Um valor editado à mão com tipo errado, ou fora das opções do schema,
     volta ao padrão em vez de ser gravado; o resto do backup entra; a chave
     que o backup não tem também volta ao padrão."""
-    main, state = settings
-    main.set_uint("library-rows", 2)
+    main, state = schema, state_schema
+    main["library-rows"] = 2
     main.set_boolean("gamepad-rumble", False)
     main.set_boolean("gamepad", True)
     state.set_string("sort-mode", "a-z")
@@ -84,9 +86,9 @@ def test_a_setting_the_schema_does_not_accept_falls_back_to_default(settings) ->
     assert state.get_string("sort-mode") == "last_played"
 
 
-def test_a_setting_removed_from_the_schema_is_ignored(settings) -> None:
+def test_a_setting_removed_from_the_schema_is_ignored(schema) -> None:
     """Backup de uma versão que ainda tinha "Capa inicia o jogo"."""
-    main, _state = settings
+    main = schema
     backup.aplicar_configuracoes(
         {"settings": {"cover-launches-game": True, "sgdb": True}, "state": {}}
     )
@@ -1303,3 +1305,66 @@ def test_sobra_de_restaurando_que_resiste_uma_vez_nao_impede(tmp_path, monkeypat
     assert backup.aplicar_pendente() is True
     assert recusas
     assert not (shared.games_dir / "velho.json").exists()
+
+
+# --------------------------------------------------------------------------
+# Sem gi, e o que o `Configuracoes.aceita` recusa
+# --------------------------------------------------------------------------
+
+
+def test_b7_exportar_por_cima_nao_trunca_o_backup_antigo(monkeypatch, store, make_game, tmp_path):
+    """Hoje o backup é o .zip de `utils/backup.py`; a garantia é a mesma."""
+    destino = tmp_path / "backup.zip"
+    destino.write_bytes(b"backup antigo")
+    store.add_game(make_game(game_id="a"), {})
+    (shared.covers_dir / "a.tiff").write_bytes(b"capa")
+
+    def cai_no_meio(*_args, **_kwargs):
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr(zipfile.ZipFile, "write", cai_no_meio)
+    with pytest.raises(OSError):
+        backup.exportar(destino, {"settings": {}, "state": {}})
+
+    assert destino.read_bytes() == b"backup antigo"
+    assert not destino.with_name("backup.zip.tmp").exists()
+
+
+def test_backup_sem_gi():
+    codigo = (
+        "import builtins, sys\n"
+        "builtins._ = lambda m: m\n"
+        "sys.modules['gi'] = None\n"  # import gi -> ImportError
+        "import cartridges.utils.backup, cartridges.utils.redefinir\n"
+        "assert not [m for m in sys.modules if m == 'gi' or m.startswith('gi.')\n"
+        "            if sys.modules[m] is not None]\n"
+    )
+    resultado = subprocess.run(
+        [sys.executable, "-c", codigo], cwd=Path(__file__).resolve().parent.parent,
+        capture_output=True, text=True, check=False, timeout=60,
+    )  # fmt: skip
+    assert resultado.returncode == 0, resultado.stderr
+
+
+def test_backup_de_outra_maquina_com_valor_fora_da_faixa_fica_no_padrao(
+    schema, state_schema, caplog
+):
+    schema["conquistas-aviso-som-volume"] = 50
+    state_schema["sort-mode"] = "newest"
+
+    with caplog.at_level("WARNING"):
+        backup.aplicar_configuracoes(
+            {"settings": {"conquistas-aviso-som-volume": 5}, "state": {"sort-mode": "inventado"}}
+        )
+
+    assert schema.get_int("conquistas-aviso-som-volume") == 100  # o padrão do gschema
+    assert state_schema.get_string("sort-mode") == "last_played"
+    assert "conquistas-aviso-som-volume ignorada no backup" in caplog.text
+
+
+def test_booleana_que_nao_e_bool_fica_no_padrao(schema):
+    schema.set_boolean("gamepad", True)
+
+    backup.aplicar_configuracoes({"settings": {"gamepad": "sim"}, "state": {}})
+
+    assert schema.get_boolean("gamepad") is False

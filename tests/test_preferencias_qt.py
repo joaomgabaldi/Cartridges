@@ -229,6 +229,29 @@ def test_m8_lote_de_capas_nao_repinta_jogo_apagado(app_qt, store, make_game):
     assert jogos[0].updates == 0
 
 
+def test_m8_tarefa_enfileirada_ve_o_cancelamento_do_reset(monkeypatch, make_game):
+    from cartridges.store.managers import sgdb_manager  # noqa: PLC0415
+    from cartridges.store.managers.async_manager import AsyncManager  # noqa: PLC0415
+
+    enfileiradas = []
+    monkeypatch.setattr(
+        AsyncManager,
+        "process_game",
+        lambda _self, game, data, _callback: enfileiradas.append((game, data)),
+    )
+    ajudas = []
+    monkeypatch.setattr(sgdb_manager, "SgdbHelper", lambda: ajudas.append(1))
+
+    manager = sgdb_manager.SgdbManager()
+    manager.process_game(make_game(), {}, lambda _m: None)
+    manager.cancel_tasks()
+    manager.reset_cancellable()
+    game, data = enfileiradas[0]
+    manager.main(game, data)
+
+    assert ajudas == []
+
+
 def test_sem_jogos_avisa_e_nao_pergunta(app_qt, store):
     fila, perguntas = _FilaFalsa(), []
     modelo = _modelo_de_atualizacoes(fila)
