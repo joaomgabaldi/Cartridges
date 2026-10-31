@@ -29,7 +29,7 @@ from PySide6.QtCore import (
     QTimer,
     QUrl,
 )
-from PySide6.QtGui import QWheelEvent, QWindow
+from PySide6.QtGui import QGuiApplication, QWheelEvent, QWindow
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -614,6 +614,8 @@ def fechamento(app_qt, monkeypatch):  # noqa: ARG001
     painel = PainelDasTarefas()
     painel.definir_janela(principal)
     yield SimpleNamespace(painel=painel, principal=principal, sessao=sessao, saidas=saidas)
+    painel.mostrarPrincipal()  # desfaz uma espera de sair que o teste deixou
+    QGuiApplication.setQuitOnLastWindowClosed(True)
     principal.destroy()
     _esperar()
 
@@ -695,9 +697,48 @@ def test_fechar_com_saves_em_andamento_esconde_e_mostra_as_tarefas(fechamento, m
     assert f.painel.aberta
     assert not f.principal.isVisible() and f.painel.principalEscondida
     assert f.sessao.fechando == 0
-    f.painel.janelaFechada()
-    _esperar()
-    assert f.saidas == [1]
+
+
+def test_fechar_as_tarefas_com_saves_em_andamento_espera_o_fim_para_sair(fechamento, monkeypatch):
+    """Fechar a janela das tarefas no meio dos saves não mata o Ludusavi: tudo some e o app sai quando eles acabam."""
+    f = fechamento
+    saves = [True]
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: saves[0])
+    outra = QWindow()  # a janela "Jogando", por exemplo
+    outra.show()
+    try:
+        assert f.painel.principalFechando() is False
+        f.painel.janelaFechada()
+        _esperar(limite=0.6)
+        assert f.saidas == []
+        assert not f.principal.isVisible() and not outra.isVisible()
+        assert not QGuiApplication.quitOnLastWindowClosed()  # fechar a última janela não encerra por fora
+
+        saves[0] = False
+        assert _esperar(lambda: f.saidas == [1])
+    finally:
+        outra.destroy()
+
+
+def test_segunda_abertura_durante_a_espera_traz_a_principal_e_nao_sai(fechamento, monkeypatch):
+    f = fechamento
+    saves = [True]
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: saves[0])
+    outra = QWindow()
+    outra.show()
+    try:
+        assert f.painel.principalFechando() is False
+        f.painel.janelaFechada()
+        _esperar()
+
+        f.painel.mostrarPrincipal()
+        assert f.principal.isVisible() and outra.isVisible()
+        assert QGuiApplication.quitOnLastWindowClosed()
+        saves[0] = False
+        _esperar(limite=0.6)
+        assert f.saidas == []  # a espera de sair foi desfeita: o app segue aberto
+    finally:
+        outra.destroy()
 
 
 def test_quit_com_a_principal_escondida_e_saves_em_andamento_nao_e_recusado(fechamento, monkeypatch):
@@ -815,7 +856,7 @@ _fechar = modulo_app._fechar
 
 def _fechar_anotado(*argumentos):
     _fechar(*argumentos)
-    anotar(sobre_o_fim=True)
+    anotar(sobre_o_fim=True, saves_no_fim=marca[0])
 
 
 modulo_app._fechar = _fechar_anotado
@@ -836,9 +877,8 @@ def passo_1():
 
 
 def passo_2():
-    tarefas = janela("janelaDasTarefas")
-    anotar(escondida=not principal().isVisible(), tarefas_visivel=bool(tarefas and tarefas.isVisible()))
-    marca[0] = False
+    tarefas_ = janela("janelaDasTarefas")
+    anotar(escondida=not principal().isVisible(), tarefas_visivel=bool(tarefas_ and tarefas_.isVisible()))
     QTimer.singleShot(200, passo_3)
 
 
@@ -850,8 +890,15 @@ def relogio():
 
 
 def passo_3():
-    relogio()
+    # Com os saves ainda em andamento: o app espera, sem janela à vista.
     janela("janelaDasTarefas").close()
+    QTimer.singleShot(800, passo_4)
+
+
+def passo_4():
+    anotar(visiveis_na_espera=sum(1 for j in QGuiApplication.topLevelWindows() if j.isVisible()))
+    marca[0] = False  # os saves acabaram
+    relogio()
 
 
 # O `quit()` de dentro do app (o reinício, o fim da sessão do Windows) com a principal à vista e trabalho em andamento.
@@ -905,19 +952,23 @@ def _main_num_processo(tmp_path, modo):
 
 
 def test_fechar_as_tarefas_depois_do_fim_do_backup_encerra_o_app(tmp_path):
-    """Review Focus 1: com o backup rodando a principal some e a janela das tarefas fica; o backup acaba, e fechar a
-    janela das tarefas encerra o app pelo `aboutToQuit` inteiro."""
+    """Review Focus 1: com o backup rodando a principal some e a janela das tarefas fica. Fechada a janela das tarefas
+    ainda no meio do backup, o processo segue vivo sem janela à vista; o backup acaba, e o app encerra pelo
+    `aboutToQuit` inteiro."""
     anotado = _main_num_processo(tmp_path, "fechar_tarefas")
-    assert anotado == {"escondida": True, "tarefas_visivel": True, "sobre_o_fim": True, "codigo": 0}
+    assert anotado == {
+        "escondida": True, "tarefas_visivel": True, "visiveis_na_espera": 0, "sobre_o_fim": True, "saves_no_fim": False,
+        "codigo": 0,
+    }  # fmt: skip
 
 
 def test_quit_com_a_principal_a_vista_e_saves_em_andamento_encerra(tmp_path):
     """Um `quit()` de dentro do app (o reinício, o fim da sessão do Windows) não é recusado pelo caso 1 da D78."""
     anotado = _main_num_processo(tmp_path, "quit_saves")
-    assert anotado == {"principal_visivel": True, "tarefas_visivel": False, "sobre_o_fim": True, "codigo": 0}
+    assert anotado == {"principal_visivel": True, "tarefas_visivel": False, "sobre_o_fim": True, "saves_no_fim": True, "codigo": 0}
 
 
 def test_quit_com_a_janela_das_tarefas_e_uma_tarefa_encerra(tmp_path):
     """Nem pelo caso 2: a janela das tarefas aberta e uma tarefa rodando."""
     anotado = _main_num_processo(tmp_path, "quit_tarefa")
-    assert anotado == {"principal_visivel": True, "tarefas_visivel": True, "sobre_o_fim": True, "codigo": 0}
+    assert anotado == {"principal_visivel": True, "tarefas_visivel": True, "sobre_o_fim": True, "saves_no_fim": False, "codigo": 0}

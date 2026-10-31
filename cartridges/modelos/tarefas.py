@@ -44,7 +44,7 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QWindow
+from PySide6.QtGui import QGuiApplication, QWindow
 
 from cartridges import shared
 from cartridges.utils import window_geometry
@@ -169,7 +169,9 @@ def acao_ao_fechar(saves_em_andamento: bool, janela_aberta: bool, tarefas: int) 
     """O que fechar a principal faz, na ordem da `main` (D78).
 
     Os saves vêm primeiro: fechar agora deixaria o Ludusavi órfão. Com a janela das tarefas aberta e alguma tarefa, a
-    principal só some; sem tarefa, a janela das tarefas vai junto (senão manteria o app vivo sozinha).
+    principal só some; sem tarefa, a janela das tarefas vai junto (senão manteria o app vivo sozinha). Fechar depois a
+    janela das tarefas, com a principal escondida, encerra o app; com os saves ainda em andamento, só quando eles
+    acabam (`PainelDasTarefas.janelaFechada`).
     """
     if saves_em_andamento:
         return "mostrar_e_esconder"
@@ -196,6 +198,12 @@ class PainelDasTarefas(QObject):
         self._janela: Optional[QWindow] = None
         self._escondida = False
         self._saindo = False
+        # A espera de sair até o fim dos saves (`janelaFechada`). O backup não avisa o fim: pergunta-se a
+        # `em_andamento()` na thread principal, sem bloqueá-la.
+        self._espera = QTimer(self)
+        self._espera.setInterval(250)
+        self._espera.timeout.connect(self._conferir_a_espera)
+        self._escondidas_na_espera: list[QWindow] = []
         # Referência fraca implícita: o Qt desliga a conexão quando o painel é destruído.
         lista.rowsInserted.connect(self._contar)
         lista.rowsRemoved.connect(self._contar)
@@ -247,15 +255,52 @@ class PainelDasTarefas(QObject):
 
     @Slot()
     def janelaFechada(self) -> None:  # noqa: N802
-        """A janela das tarefas fechou. Com a principal escondida, era a única do app: ele encerra."""
+        """A janela das tarefas fechou. Com a principal escondida, era a única do app: ele encerra.
+
+        Com os saves ainda em andamento, o encerramento espera o fim deles, com todas as janelas escondidas: sair agora
+        mataria a thread do backup e deixaria o `ludusavi.exe` órfão (uma restauração pararia no meio). A segunda
+        abertura desfaz a espera (`mostrarPrincipal`).
+        """
         if self._aberta:
             self._aberta = False
             self.alterado.emit()
         # A visibilidade de agora, e não a marca: o fim de uma sessão traz a principal de volta (`sessao.present`).
-        if self._janela is not None and not self._janela.isVisible():
-            # Na volta do laço: um `quit()` dentro do `closing` fecharia de novo, por dentro, a janela que está fechando,
-            # e o `aboutToQuit` (a parede e as fitas) rodaria com ela ainda na tela.
-            QTimer.singleShot(0, _sair)
+        if self._janela is None or self._janela.isVisible():
+            return
+        from cartridges.saves import backup_de_saves  # noqa: PLC0415  (ele importa este módulo)
+
+        if not self._saindo and backup_de_saves.em_andamento():
+            # Antes de esta janela acabar de fechar: senão o Qt sairia sozinho com a última janela fechada.
+            QGuiApplication.setQuitOnLastWindowClosed(False)
+            self._escondidas_na_espera = [
+                j for j in QGuiApplication.topLevelWindows() if j.isVisible() and j.objectName() != "janelaDasTarefas"
+            ]
+            for janela in self._escondidas_na_espera:
+                janela.hide()
+            self._espera.start()
+            return
+        # Na volta do laço: um `quit()` dentro do `closing` fecharia de novo, por dentro, a janela que está fechando,
+        # e o `aboutToQuit` (a parede e as fitas) rodaria com ela ainda na tela.
+        QTimer.singleShot(0, _sair)
+
+    def _conferir_a_espera(self) -> None:
+        from cartridges.saves import backup_de_saves  # noqa: PLC0415
+
+        if not backup_de_saves.em_andamento():
+            self._espera.stop()
+            _sair()
+
+    def _desfazer_a_espera(self) -> None:
+        if not self._espera.isActive():
+            return
+        self._espera.stop()
+        QGuiApplication.setQuitOnLastWindowClosed(True)
+        janelas, self._escondidas_na_espera = self._escondidas_na_espera, []
+        for janela in janelas:
+            try:
+                janela.show()
+            except RuntimeError:  # já destruída (o aviso de conquista que saiu por tempo)
+                continue
 
     @Slot(result=bool)
     def principalFechando(self) -> bool:  # noqa: N802
@@ -286,9 +331,13 @@ class PainelDasTarefas(QObject):
 
     @Slot()
     def mostrarPrincipal(self) -> None:  # noqa: N802
-        """A segunda abertura do app: a principal volta (escondida ou minimizada) e vem para a frente."""
+        """A segunda abertura do app: a principal volta (escondida ou minimizada) e vem para a frente.
+
+        Durante a espera do fim dos saves para sair, a espera é desfeita: o app segue aberto, com as janelas de antes.
+        """
         if (janela := self._janela) is None:
             return
+        self._desfazer_a_espera()
         if self._escondida:
             self._escondida = False
             self.alterado.emit()
