@@ -23,6 +23,7 @@ from cartridges.modelos.conquistas import ConquistasDoJogo
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.historico import HistoricoDeSessoes
+from cartridges.modelos.saves import SavesDoJogo
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.ponte import Ponte
@@ -76,6 +77,7 @@ class _Janela:
         self.aplicativo = Aplicativo(self.ponte.fila)
         self.edicao = ModeloDaEdicao(self.aplicativo)
         self.historico = HistoricoDeSessoes(SimpleNamespace(get=lambda _id: None))
+        self.saves = SavesDoJogo(self.aplicativo)
         self.preferencias = shared.preferencias = Preferencias(self.ponte.fila, lambda: True)
         self.big_picture = BigPicture(self.modelo)
         self.sessao = ModeloDaSessao(self.ponte.fila)
@@ -94,6 +96,7 @@ class _Janela:
             ("bigPicture", self.big_picture),
             ("sessao", self.sessao),
             ("historico", self.historico),
+            ("saves", self.saves),
             ("conquistasDoJogo", self.conquistas),
             ("preferencias", self.preferencias),
         ):

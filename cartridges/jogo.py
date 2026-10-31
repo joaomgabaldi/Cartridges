@@ -402,8 +402,13 @@ class Jogo(QObject):
     def launch(self, ao_confirmar: Optional[Callable[[], Any]] = None) -> bool:
         """``ao_confirmar`` é como relançar depois da confirmação do comando de um
         jogo restaurado; sem ele, é este mesmo ``launch``."""
-        # shortcut: sem a espera da restauração dos saves ("Aguarde o fim da restauração dos saves de
-        # {}."), no plano 8 com o backup_de_saves (D56).
+        # Dentro da função: o `backup_de_saves` importa o `Jogo`.
+        from cartridges.saves import backup_de_saves  # noqa: PLC0415
+
+        # Antes do comando a conferir (a ordem da `main`): o jogo não abre no meio da restauração dos saves dele.
+        if backup_de_saves.restaurando(self):
+            self._avisar(_("Aguarde o fim da restauração dos saves de {}."))
+            return False
         if self.comando_a_conferir:
             self._conferir_comando(ao_confirmar or self.launch)
             return False

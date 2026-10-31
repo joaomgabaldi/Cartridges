@@ -48,7 +48,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QGuiApplication
 
 from cartridges import shared
-from cartridges.saves import ludusavi
+from cartridges.saves import backup_de_saves, ludusavi
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.utils import game_logo
 from cartridges.utils.busca_do_seletor import BuscaDoSeletor, tamanho_baixado
@@ -1312,8 +1312,7 @@ class SeletorDaSteam(BuscaDoSeletor, QAbstractListModel):
 
 
 def pasta_do_ludusavi() -> Path:
-    # shortcut: a mesma conta do `backup_de_saves._pasta_config`, que ainda importa o gi; o plano 8 (D56) porta o backup_de_saves e volta a usar aquela.
-    return shared.app_dir / "ludusavi"
+    return backup_de_saves._pasta_config()  # noqa: SLF001
 
 
 class SeletorDoLudusavi(QAbstractListModel):

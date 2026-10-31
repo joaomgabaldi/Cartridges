@@ -40,8 +40,10 @@ from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.historico import HistoricoDeSessoes
 from cartridges.modelos.preferencias import Preferencias
+from cartridges.modelos.saves import SavesDoJogo
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.ponte import Ponte
+from cartridges.saves import backup_de_saves
 from cartridges.store.managers import async_manager
 from cartridges.store.managers.exibicao_manager import ExibicaoManager
 from cartridges.store.managers.file_manager import FileManager
@@ -134,6 +136,15 @@ def _ligar_conquistas(aplicativo: Aplicativo) -> VarreduraConquistas:
     return aplicativo.varredura_conquistas
 
 
+def _comecar_varreduras(aplicativo: Aplicativo, verificador, varredura_hltb, varredura_tamanho) -> None:  # noqa: ANN001
+    """Na ordem da `main`: atualizações, HowLongToBeat, tamanho em disco, o cache dos saves e as conquistas."""
+    verificador.start()
+    varredura_hltb.start()
+    varredura_tamanho.start()
+    backup_de_saves.atualizar_cache()
+    _ligar_conquistas(aplicativo)
+
+
 def _parar_varredura_de_conquistas() -> None:
     if shared.aplicativo is not None and shared.aplicativo.varredura_conquistas is not None:
         shared.aplicativo.varredura_conquistas.stop()
@@ -218,6 +229,7 @@ def main(argv: list[str]) -> int:
     detalhes = DetalhesDoJogo(shared.store, avisos=avisos)
     edicao = ModeloDaEdicao(aplicativo)
     historico = HistoricoDeSessoes(shared.store)
+    saves = SavesDoJogo(aplicativo)
     big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     sessao = ModeloDaSessao(avisos, controle=controle, big_picture=big_picture)
     shared.sessao = sessao
@@ -240,7 +252,7 @@ def main(argv: list[str]) -> int:
         ("filtros", filtros), ("paginaTodos", pagina_biblioteca), ("paginaZerados", pagina_zerados),
         ("aplicativo", aplicativo), ("ponte", ponte), ("controle", controle), ("detalhes", detalhes),
         ("edicao", edicao), ("bigPicture", big_picture), ("sessao", sessao), ("historico", historico),
-        ("conquistasDoJogo", conquistas), ("preferencias", preferencias),
+        ("saves", saves), ("conquistasDoJogo", conquistas), ("preferencias", preferencias),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.
@@ -255,11 +267,7 @@ def main(argv: list[str]) -> int:
     sessao.definir_janela(motor.rootObjects()[0])  # a que volta da barra de tarefas no fim da sessão
     shared.aplicativo = aplicativo
     aplicativo.verificador_de_atualizacoes = verificador  # a tela de preferências chama `check_async()` ao ligar o aviso
-    # Na ordem da `main`: atualizações, HowLongToBeat, tamanho em disco.
-    verificador.start()
-    varredura_hltb.start()
-    varredura_tamanho.start()
-    _ligar_conquistas(aplicativo)
+    _comecar_varreduras(aplicativo, verificador, varredura_hltb, varredura_tamanho)
     # Depois de a janela aparecer. Com restauração pendente a importação é outra (plano 8).
     # shortcut: sem `continuar_restauracao`, a abertura com restauração pendente não importa; entra no plano 8.
     if not restauracao.existe() and shared.schema.get_boolean("auto-import"):

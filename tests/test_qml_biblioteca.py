@@ -7,6 +7,7 @@
 import time
 from pathlib import Path
 
+import pytest
 from PySide6.QtCore import QEventLoop, QMetaObject, QObject, Qt, QTimer, QUrl, Signal
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
@@ -23,6 +24,7 @@ from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.historico import HistoricoDeSessoes
+from cartridges.modelos.saves import SavesDoJogo
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.ponte import Ponte
@@ -98,6 +100,12 @@ class _LojaFalsa(QObject):
         return self.por_id.get(game_id)
 
 
+@pytest.fixture(autouse=True)
+def _store_limpa(monkeypatch):
+    """`shared.store` volta ao que era ao fim de cada teste (o `SavesDoJogo` liga o sinal dela)."""
+    monkeypatch.setattr(shared, "store", None, raising=False)
+
+
 class _App:
     def __init__(self, jogos, animacoes=True, cortina=None):
         self.jogos = jogos
@@ -114,6 +122,8 @@ class _App:
         self.aplicativo = Aplicativo(self.ponte.fila)
         self.edicao = ModeloDaEdicao(self.aplicativo)
         self.historico = HistoricoDeSessoes(self.loja)
+        shared.store = self.loja  # o `SavesDoJogo` liga o `jogo_excluido` dela (a fixture acima restaura)
+        self.saves = SavesDoJogo(self.aplicativo)
         self.preferencias = shared.preferencias = Preferencias(self.ponte.fila, lambda: True)
         # Sem `cortina`, a fábrica não cria nenhuma: a troca é direta (o offscreen tem HWND falso).
         self.big_picture = BigPicture(
@@ -136,7 +146,7 @@ class _App:
             ("filtros", self.filtros), ("paginaTodos", self.todos), ("paginaZerados", self.zerados),
             ("aplicativo", self.aplicativo), ("ponte", self.ponte), ("controle", self.controle),
             ("detalhes", self.detalhes), ("edicao", self.edicao), ("bigPicture", self.big_picture),
-            ("sessao", self.sessao), ("historico", self.historico),
+            ("sessao", self.sessao), ("historico", self.historico), ("saves", self.saves),
             ("conquistasDoJogo", self.conquistas), ("preferencias", self.preferencias),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
@@ -335,11 +345,11 @@ def test_remover_pelo_menu_do_jogo(app_qt):
     app.fechar()
 
 
-def test_aviso_aparece_na_tela_e_desfaz(app_qt):
+def test_aviso_aparece_na_tela_e_desfaz(app_qt, monkeypatch):
     app = _App(_tres())
     jogo = app.modelo._jogos["imported_1"]  # noqa: SLF001
     jogo.save = lambda: None
-    shared.store = {jogo.game_id: jogo}  # a Store que o desfazer consulta
+    monkeypatch.setattr(shared, "store", {jogo.game_id: jogo}, raising=False)  # a Store que o desfazer consulta
     shared.games_dir.mkdir(parents=True, exist_ok=True)
     (shared.games_dir / f"{jogo.game_id}.json").write_text("{}")
     app.ponte.ligar(jogo)

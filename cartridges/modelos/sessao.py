@@ -23,6 +23,7 @@ from cartridges.conquistas import sessao as sessao_conquistas
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.ordem import _url_da_capa  # noqa: PLC2701
 from cartridges.process_session import ProcessSession
+from cartridges.saves import backup_de_saves
 from cartridges.session_window import SessionWindow
 from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper, window_geometry
 from cartridges.utils.format_playtime import format_playtime, format_stopwatch
@@ -243,17 +244,21 @@ class ModeloDaSessao(QObject):
     def session_toast(self, game: Any, seconds: int) -> None:
         """O aviso do fim da sessão, com atalho para a anotação quando há onde anotar."""
         texto = _("{}: {} de jogo").format(game.name, format_playtime(seconds))
-        # shortcut: sem o backup dos saves ao fim da sessão (backup_de_saves.no_fim_da_sessao), no plano 8 com o backup_de_saves (D56).
         if not pode_anotar(game):
             self._avisos.adicionar(texto)
-            return
-        eu, jogo_id = weakref.ref(self), game.game_id
+        else:
+            eu, jogo_id = weakref.ref(self), game.game_id
 
-        def anotar() -> None:
-            if (modelo := eu()) is not None:
-                modelo.anotarPedido.emit(jogo_id)
+            def anotar() -> None:
+                if (modelo := eu()) is not None:
+                    modelo.anotarPedido.emit(jogo_id)
 
-        self._avisos.adicionar(texto, _("Anotar"), anotar)
+            self._avisos.adicionar(texto, _("Anotar"), anotar)
+        # Por último: uma falha ao iniciar o backup não pode levar o aviso junto.
+        try:
+            backup_de_saves.no_fim_da_sessao(game)
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).exception("O backup dos saves de %s não chegou a começar", game.name)
 
     @Slot()
     def minimizar(self) -> None:
