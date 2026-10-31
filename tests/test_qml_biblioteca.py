@@ -124,7 +124,10 @@ class _App:
         self.aplicativo = Aplicativo(self.ponte.fila)
         self.edicao = ModeloDaEdicao(self.aplicativo)
         self.historico = HistoricoDeSessoes(self.loja)
-        shared.store = self.loja  # o `SavesDoJogo` liga o `jogo_excluido` dela (a fixture acima restaura)
+        # O `SavesDoJogo` liga o `jogo_excluido` da store (a fixture acima restaura); uma store de verdade, posta por
+        # quem importa o `_App` (test_qml_edicao), fica.
+        if not hasattr(shared.store, "jogo_excluido"):
+            shared.store = self.loja
         self.saves = SavesDoJogo(self.aplicativo)
         self.preferencias = shared.preferencias = Preferencias(self.ponte.fila, lambda: True)
         # Sem `cortina`, a fábrica não cria nenhuma: a troca é direta (o offscreen tem HWND falso).

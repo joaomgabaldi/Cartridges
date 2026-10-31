@@ -71,7 +71,7 @@ from cartridges.importer.importer import Importer  # yo dawg
 from cartridges.importer.shortcuts_source import ShortcutsSource
 from cartridges.janela_restaurando import JanelaRestaurando, entregar_so_ao_mudar
 from cartridges.logging.setup import log_system_info, setup_logging
-# shortcut: esta importação quebra (cartridges/preferences.py saiu na Task 8 do plano 7; as Preferências são Qt); a main GTK sai na troca da main (plano 8).
+# shortcut: esta importação quebra (cartridges/preferences.py saiu na Task 8 do plano 7; as Preferências são Qt); a main GTK sai na troca da main (fase final).
 from cartridges.preferences import CartridgesPreferences
 from cartridges.saves import backup_de_saves, dialogo
 from cartridges.store.managers.display_manager import DisplayManager
@@ -889,7 +889,7 @@ class CartridgesApplication(Adw.Application):
             return True
         if (janela := TarefasJanela.aberta) is None:
             return False
-        # shortcut: API do Gio.ListStore; a lista agora é um QAbstractListModel (rowCount/data), o plano 8 refaz este uso.
+        # shortcut: API do Gio.ListStore; a lista agora é um QAbstractListModel (rowCount/data), sai com a main GTK, na fase final.
         if tarefas.lista.get_n_items() > 0:
             win.set_visible(False)
             return True

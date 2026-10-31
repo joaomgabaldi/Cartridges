@@ -59,7 +59,7 @@ def abrir_url(url: str) -> bool:
     return QDesktopServices.openUrl(QUrl(url))
 
 
-# shortcut: o nome antigo, com Gtk, só para os chamadores GTK; sai com eles na troca da main.
+# shortcut: o nome antigo, com Gtk, só para os chamadores GTK; sai com eles na fase final.
 def open_uri(uri: str, parent: Optional["Gtk.Window"] = None) -> bool:
     """Open ``uri`` in the default browser.
 

@@ -193,6 +193,50 @@ def test_qml_que_nao_carrega_nao_deixa_as_fitas_acesas_e_o_saindo_encerra_a_sess
     assert saida["depois_do_saindo"] == []
 
 
+_CONTEXTO_VIVO = r"""
+import gc, json, sys
+from types import SimpleNamespace
+from cartridges import app as modulo_app
+
+modulo_app.session_fita = SimpleNamespace(abrir=lambda: None, fechar=lambda: None)
+modulo_app.session_wallpaper = SimpleNamespace(restaurar_orfaos=lambda: None)
+
+
+class MotorQueNaoCarrega(modulo_app.QQmlApplicationEngine):
+    def load(self, _url):  # sem janela: o `_abrir` devolve 1 logo depois do contexto
+        pass
+
+
+modulo_app.QQmlApplicationEngine = MotorQueNaoCarrega
+app = modulo_app.AplicacaoQt(sys.argv[:1])
+abertura = modulo_app._Abertura()
+codigo = modulo_app._abrir(app, sys.argv[:1], abertura)
+gc.collect()
+contexto = abertura.motor.rootContext()
+nomes = ["filtros", "paginaTodos", "paginaZerados", "aplicativo", "ponte", "controle", "detalhes", "edicao",
+         "bigPicture", "sessao", "historico", "saves", "conquistasDoJogo", "preferencias", "painelDasTarefas",
+         "restauracao"]
+print(json.dumps({"codigo": codigo, "mortos": [n for n in nomes if contexto.contextProperty(n) is None]}))
+"""
+
+
+def test_tudo_o_que_vai_ao_contexto_do_qml_sobrevive_ao_fim_do_abrir(tmp_path):
+    """Sem dono Python o objeto morre quando o `_abrir` devolve e a biblioteca abre em branco (grade vazia)."""
+    ambiente = {
+        **os.environ,
+        "CARTRIDGES_DADOS": str(tmp_path),
+        "CARTRIDGES_REGISTRO": rf"Software\CartridgesTestes\app-{uuid.uuid4()}",
+        "QT_QPA_PLATFORM": "offscreen",
+    }
+    resultado = subprocess.run(
+        [sys.executable, "-c", _CONTEXTO_VIVO], cwd=RAIZ, env=ambiente, capture_output=True, text=True, timeout=60,
+        check=False,
+    )  # fmt: skip
+    assert resultado.returncode == 0, resultado.stderr
+    saida = json.loads(resultado.stdout.strip().splitlines()[-1])
+    assert saida == {"codigo": 1, "mortos": []}
+
+
 def test_encerrar_roda_todo_passo_mesmo_com_um_que_falha(caplog):
     """Uma falha num passo do fechamento não pula o drenar das gravações (o tempo da sessão no jogo)."""
     from cartridges.app import _encerrar_em_ordem  # noqa: PLC0415

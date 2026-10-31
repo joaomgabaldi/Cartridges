@@ -45,7 +45,7 @@ def _avaliar(objeto, expressao):
 
 
 def _rotulos(menu):
-    return _avaliar(menu, "(function(){var r=[];for(var i=0;i<count;i++)r.push(itemAt(i).text);return r})()")
+    return _avaliar(menu, "(function(){var r=[];for(var i=0;i<count;i++)if(itemAt(i).height>0)r.push(itemAt(i).text);return r})()")
 
 
 def _clique(app, nome):

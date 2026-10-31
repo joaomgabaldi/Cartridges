@@ -457,7 +457,7 @@ class CartridgesWindow(Adw.ApplicationWindow):
         alvo_de_soltar.connect("leave", self._ao_sair_arrasto)
         alvo_de_soltar.connect("drop", self._ao_soltar)
         self.add_controller(alvo_de_soltar)
-        # shortcut: API do Gio.ListStore ("items-changed"); a lista agora é um QAbstractListModel, o plano 8 refaz este uso.
+        # shortcut: API do Gio.ListStore ("items-changed"); a lista agora é um QAbstractListModel, sai com a janela GTK, na fase final.
         self._global_handler_ids.append(
             (
                 tarefas.lista,

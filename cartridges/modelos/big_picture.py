@@ -109,7 +109,7 @@ class BigPicture(QObject):
         self._pausa.timeout.connect(self._clarear)
         self._espera_das_capas = QTimer(self, singleShot=True, interval=ESPERA_MAXIMA_DAS_CAPAS_MS)
         self._espera_das_capas.timeout.connect(self._trocar_agora)
-        # shortcut: as animações do Windows são lidas uma vez pelo `Aplicativo`; entra no plano 8 com a releitura do `Aplicativo`.
+        # shortcut: as animações do Windows são lidas uma vez pelo `Aplicativo`; entra no plano 8b com a releitura do `Aplicativo`.
         self._animacoes_do_sistema = animacoes_do_sistema
         self._animar_central = self._ler_animar_central()
         eu = weakref.ref(self)

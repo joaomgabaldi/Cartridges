@@ -241,7 +241,7 @@ class ContinuacaoDaRestauracao(QObject):
                 )
             return
         except OSError:
-            # shortcut: a cópia que falha só vai ao log (a `main` deixava a exceção subir) e não há texto aprovado para o aviso; sai quando houver.
+            # shortcut: a cópia que falha só vai ao log (a `main` deixava a exceção subir) e não há texto aprovado para o aviso; sai quando houver (o diálogo de erro inesperado do plano 8b, ou um texto aprovado).
             logging.exception("Não foi possível copiar o atalho %s", url.toLocalFile())
             return
         self._usar(caminho)

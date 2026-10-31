@@ -56,7 +56,7 @@ class Aplicativo(QObject):
         self._preferencias_do_dialogo: str | None = None
         self._colunas = shared.schema.get_uint("library-rows")
         self._tocar_sempre = shared.schema.get_boolean("cover-autoplay")
-        # shortcut: lido uma vez na abertura; a `main` religava no WM_SETTINGCHANGE. Quem mudar o ajuste com o app aberto só vê o efeito ao reabrir; entra no plano 8.
+        # shortcut: lido uma vez na abertura; a `main` religava no WM_SETTINGCHANGE. Quem mudar o ajuste com o app aberto só vê o efeito ao reabrir; entra no plano 8b.
         self._animacoes_do_sistema = _animacoes_do_sistema()
         # A `Configuracoes` entrega o aviso na thread principal; a referência fraca não prende o objeto.
         eu = weakref.ref(self)

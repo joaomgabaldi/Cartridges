@@ -183,6 +183,9 @@ class _Abertura:
     aplicativo: Any = None
     # O motor da janela "Restaurando o backup" (com o `Restaurando` dentro); vive até o fim do `main()`.
     restauracao: Any = None
+    # Os objetos que só o contexto do QML conhece (o Qt não é dono de objeto Python): sem uma referência aqui, saem
+    # da memória quando o `_abrir` devolve e a grade, o histórico e as versões dos saves ficam sem modelo.
+    mantidos: Any = None
 
 
 def _de(objeto: Any, metodo: str) -> Callable[[], Any]:
@@ -319,6 +322,10 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
         ("restauracao", continuacao),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
+    # O Qt não é dono do que vai ao contexto: tudo precisa de uma referência Python até o fim do `main()`.
+    abertura.mantidos = (
+        modelo, filtros, pagina_biblioteca, pagina_zerados, ponte, controle, detalhes, avisos, historico, saves,
+    )  # fmt: skip
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.
     session_wallpaper.restaurar_orfaos()
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))
