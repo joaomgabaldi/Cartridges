@@ -70,7 +70,6 @@ if TYPE_CHECKING:
 _MONITOR_DEFAULTTONULL = 0x00000000
 # SWP_NOZORDER | SWP_NOACTIVATE: place it exactly, without raising or focusing
 _PLACE = 0x0004 | 0x0010
-_SWP_NOSIZE = 0x0001
 # A folga entre o botão das tarefas e a janela solta que se abre acima dele.
 _FOLGA_BOTAO = 12
 _MONITORINFOF_PRIMARY = 0x00000001

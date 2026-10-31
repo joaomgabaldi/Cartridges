@@ -94,7 +94,7 @@ def preparar(saida: Path) -> dict[str, list]:
     # abertura dele acordaria o passeio. Nome próprio.
     from cartridges.utils import single_instance  # pylint: disable=import-outside-toplevel
 
-    single_instance._EVENT_NAME = "Local\\Cartridges.Passeio.Present"  # pylint: disable=protected-access
+    single_instance.nomes = lambda: ("Local\\Cartridges.Passeio.SingleInstance", "Local\\Cartridges.Passeio.Present")
 
     # As chaves vêm das preferências reais, só lidas. Todo o resto das
     # preferências fica no padrão, em memória: o registro nunca é gravado.

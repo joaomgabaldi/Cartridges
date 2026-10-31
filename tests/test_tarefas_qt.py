@@ -2,10 +2,20 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O botão do canto e a janela "Tarefas em andamento" (QML offscreen, D77); a regra de quando o botão pode aparecer."""
+"""O botão do canto e a janela "Tarefas em andamento" (QML offscreen, D77); a regra de quando o botão pode aparecer;
+fechar a principal com trabalho em andamento (D78). Os testes do fechamento vieram de `test_tarefas_ui.py` com os mesmos
+nomes."""
 
+import json
+import os
+import subprocess
+import sys
 import time
+import uuid
+import weakref
+import winreg
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import (
@@ -19,17 +29,23 @@ from PySide6.QtCore import (
     QTimer,
     QUrl,
 )
-from PySide6.QtGui import QWheelEvent
+from PySide6.QtGui import QWheelEvent, QWindow
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
 
+from cartridges import shared
 from cartridges.modelos import tarefas
-from cartridges.modelos.tarefas import PainelDasTarefas, pode_mostrar
+from cartridges.modelos.avisos import FilaDeAvisos
+from cartridges.modelos.sessao import ModeloDaSessao
+from cartridges.modelos.tarefas import PainelDasTarefas, acao_ao_fechar, pode_mostrar
+from cartridges.saves import backup_de_saves
 from cartridges.utils import window_geometry
+from tests.apoio_registro import _apagar_chave
 
-QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml"
+RAIZ = Path(__file__).resolve().parent.parent
+QML = RAIZ / "cartridges" / "qml"
 QQuickStyle.setStyle("Basic")
 
 
@@ -340,7 +356,8 @@ def test_com_tarefa_aparece_so_nas_duas_bibliotecas_livres(cena, flush_idle):
 def test_painel_acompanha_a_lista(app_qt, flush_idle):  # noqa: ARG001
     painel = PainelDasTarefas()
     avisos = []
-    painel.alterado.connect(lambda: avisos.append(painel.quantas))
+    fraco = weakref.ref(painel)  # o lambda não prende o painel (M3 da revisão da Task 3)
+    painel.alterado.connect(lambda: avisos.append(fraco().quantas))
     tarefa = tarefas.comecar("Importação", 2)
     flush_idle()
     assert painel.quantas == 1 and avisos == [1]
@@ -568,3 +585,339 @@ def test_tarefa_que_comeca_com_o_mouse_parado_no_canto_nao_recua(cena, flush_idl
     flush_idle()
     _chamar(cena.botao, "recolher")  # os 10 s da entrada
     assert _a_vista(cena)
+
+
+# -- fechar a principal com trabalho em andamento (D78) --------------------------------------------------------
+
+
+class _SessaoFalsa:
+    """O `shared.sessao`: só conta os `principalFechando()` que o painel repassa."""
+
+    def __init__(self):
+        self.fechando = 0
+
+    def principalFechando(self):  # noqa: N802
+        self.fechando += 1
+
+
+@pytest.fixture
+def fechamento(app_qt, monkeypatch):  # noqa: ARG001
+    """O painel com uma principal de verdade (offscreen), sem saves em andamento e sem encerrar o processo."""
+    monkeypatch.setattr(backup_de_saves, "_tarefas_abertas", 0)
+    sessao = _SessaoFalsa()
+    monkeypatch.setattr(shared, "sessao", sessao, raising=False)
+    saidas = []
+    monkeypatch.setattr(tarefas, "_sair", lambda: saidas.append(1))
+    principal = QWindow()
+    principal.resize(200, 200)
+    principal.show()
+    painel = PainelDasTarefas()
+    painel.definir_janela(principal)
+    yield SimpleNamespace(painel=painel, principal=principal, sessao=sessao, saidas=saidas)
+    principal.destroy()
+    _esperar()
+
+
+def test_acao_ao_fechar_regra_pura():
+    # (saves_em_andamento, janela_aberta, tarefas) -> ação
+    tabela = [
+        ((False, False, 0), "fechar"),
+        ((False, False, 2), "fechar"),
+        ((False, True, 0), "fechar_as_duas"),
+        ((False, True, 1), "esconder"),
+        ((True, False, 0), "mostrar_e_esconder"),
+        ((True, False, 1), "mostrar_e_esconder"),
+        ((True, True, 0), "mostrar_e_esconder"),
+        ((True, True, 3), "mostrar_e_esconder"),
+    ]
+    for argumentos, esperado in tabela:
+        assert acao_ao_fechar(*argumentos) == esperado, argumentos
+
+
+def test_fechar_a_janela_com_a_principal_escondida_encerra_o_app(fechamento, flush_idle):
+    f = fechamento
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    f.painel.mostrar()
+    assert f.painel.principalFechando() is False
+    assert f.painel.principalEscondida and not f.principal.isVisible()
+    f.painel.janelaFechada()
+    _esperar()
+    assert f.saidas == [1]
+    assert not f.painel.aberta
+
+
+def test_fechar_a_janela_com_a_principal_visivel_so_a_fecha(fechamento):
+    f = fechamento
+    f.painel.mostrar()
+    f.painel.janelaFechada()
+    _esperar()
+    assert f.saidas == []
+    assert not f.painel.aberta and f.principal.isVisible()
+
+
+def test_fechar_a_principal_com_tarefa_e_janela_so_esconde(fechamento, flush_idle):
+    f = fechamento
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    f.painel.mostrar()
+    assert f.painel.principalFechando() is False
+    assert not f.principal.isVisible() and f.painel.principalEscondida
+    assert f.painel.aberta
+    assert f.sessao.fechando == 0
+
+
+def test_fechar_a_principal_sem_tarefa_fecha_tambem_a_janela(fechamento):
+    f = fechamento
+    f.painel.mostrar()
+    assert f.painel.principalFechando() is True
+    assert not f.painel.aberta  # o Loader desfaz a janela das tarefas
+    assert not f.painel.principalEscondida
+    assert f.sessao.fechando == 1
+
+
+def test_fechar_a_principal_com_tarefa_sem_janela_fecha_tudo(fechamento, flush_idle):
+    f = fechamento
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    assert f.painel.principalFechando() is True
+    assert not f.painel.aberta and not f.painel.principalEscondida
+    assert f.sessao.fechando == 1
+
+
+def test_fechar_com_saves_em_andamento_esconde_e_mostra_as_tarefas(fechamento, monkeypatch):
+    """O backup ou a restauração dos saves em curso não pode ficar órfão: o app não fecha, mas some da tela e abre a
+    janela das tarefas, que o encerra ao ser fechada."""
+    f = fechamento
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: True)
+    assert not f.painel.aberta
+    assert f.painel.principalFechando() is False
+    assert f.painel.aberta
+    assert not f.principal.isVisible() and f.painel.principalEscondida
+    assert f.sessao.fechando == 0
+    f.painel.janelaFechada()
+    _esperar()
+    assert f.saidas == [1]
+
+
+def test_quit_com_a_principal_escondida_e_saves_em_andamento_nao_e_recusado(fechamento, monkeypatch):
+    """O `quit()` manda o `closing` também à principal escondida: ela deixa fechar, senão o app seguiria aberto com a
+    sessão já encerrada pelo `saindo`."""
+    f = fechamento
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: True)
+    assert f.painel.principalFechando() is False
+    f.painel.encerrando()  # o `saindo` do `quit()`, que depois manda o `closing` à principal escondida
+    assert f.painel.principalFechando() is True
+    assert f.sessao.fechando == 0
+
+
+def test_principal_trazida_de_volta_por_fora_nao_fica_escondida(fechamento, flush_idle):
+    """O fim de uma sessão (`sessao.present`) mostra a principal sem passar pelo painel."""
+    f = fechamento
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    f.painel.mostrar()
+    assert f.painel.principalFechando() is False
+    assert f.painel.principalEscondida
+    f.principal.show()
+    assert not f.painel.principalEscondida
+
+
+def test_fechar_logo_depois_de_pedir_o_backup_dos_saves_esconde(fechamento, monkeypatch):
+    """O backup conta desde o pedido: fechar o app antes de a thread chegar ao Ludusavi (a busca do nome, a espera
+    pela trava) também não o perde."""
+    f = fechamento
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
+    monkeypatch.setattr(backup_de_saves, "_biblioteca", list)
+    monkeypatch.setattr(backup_de_saves, "_em_segundo_plano", lambda *_args: None)  # nem roda
+
+    backup_de_saves.no_fim_da_sessao(SimpleNamespace(name="Meu Jogo"))
+    assert f.painel.principalFechando() is False
+    assert f.painel.aberta
+    assert not f.principal.isVisible() and f.painel.principalEscondida
+
+
+def test_fechar_a_principal_com_a_sessao_manual_e_saves_em_andamento_esconde(fechamento, monkeypatch):
+    """D78: os saves (caso 1) vêm antes da sessão manual, que fecharia o app com o Ludusavi rodando."""
+    f = fechamento
+    sessao = ModeloDaSessao(FilaDeAvisos())
+    sessao._manual = object()  # noqa: SLF001  (a janela "Jogando" na tela)
+    sairs = []
+    monkeypatch.setattr(sessao, "_sair", lambda: sairs.append(1))
+    monkeypatch.setattr(shared, "sessao", sessao, raising=False)
+    em_andamento = [True]
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: em_andamento[0])
+
+    assert f.painel.principalFechando() is False
+    _esperar()
+    assert sairs == []
+    assert not f.principal.isVisible() and f.painel.aberta
+
+    # Sem saves, com a principal de volta e a janela das tarefas fechada, a sessão manual fecha o app como antes.
+    em_andamento[0] = False
+    f.painel.mostrarPrincipal()
+    f.painel.janelaFechada()
+    assert f.painel.principalFechando() is True
+    _esperar()
+    assert sairs == [1]
+    sessao._manual = None  # noqa: SLF001
+
+
+# Roda o `main()` de verdade num processo à parte, sobre uma pasta de dados temporária. A marca troca o
+# `backup_de_saves.em_andamento`; os passos vêm por `QTimer`, depois das varreduras da abertura.
+_FECHAR_COM_BACKUP = r"""
+import json, os, sys, threading
+from pathlib import Path
+from types import SimpleNamespace
+
+import requests
+
+
+def _sem_rede(*_a, **_k):
+    raise requests.ConnectionError("rede bloqueada no teste")
+
+
+requests.sessions.Session.send = _sem_rede
+
+from PySide6.QtCore import QCoreApplication, QTimer
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtQml import QQmlEngine
+
+from cartridges import app as modulo_app, shared
+from cartridges.modelos import tarefas
+from cartridges.saves import backup_de_saves
+from cartridges.utils import single_instance
+
+ANOTACOES = Path(sys.argv[1])
+MODO = sys.argv[2]
+anotado = {}
+
+
+def anotar(**valores):
+    anotado.update(valores)
+    ANOTACOES.write_text(json.dumps(anotado), encoding="utf-8")
+
+
+# A trava é a da pasta temporária, nunca a do Cartridges desta máquina (D76).
+if single_instance.nomes()[0] == "Local\\io.github.joaomgabaldi.Cartridges.SingleInstance":
+    sys.exit(3)
+single_instance.present_running_instance = lambda: None
+shared.schema.set_boolean("auto-import", False)
+shared.schema.set_boolean("gamepad", False)
+modulo_app.session_fita = SimpleNamespace(abrir=lambda: None, fechar=lambda: None)
+modulo_app.session_wallpaper = SimpleNamespace(restaurar_orfaos=lambda: None)
+backup_de_saves.atualizar_cache = lambda: None
+marca = [False]
+backup_de_saves.em_andamento = lambda: marca[0]
+
+_fechar = modulo_app._fechar
+
+
+def _fechar_anotado(*argumentos):
+    _fechar(*argumentos)
+    anotar(sobre_o_fim=True)
+
+
+modulo_app._fechar = _fechar_anotado
+
+
+def janela(nome):
+    return next((j for j in QGuiApplication.topLevelWindows() if j.objectName() == nome), None)
+
+
+def principal():
+    return next(j for j in QGuiApplication.topLevelWindows() if j.title() == "Cartridges")
+
+
+def passo_1():
+    marca[0] = True
+    principal().close()
+    QTimer.singleShot(400, passo_2)
+
+
+def passo_2():
+    tarefas = janela("janelaDasTarefas")
+    anotar(escondida=not principal().isVisible(), tarefas_visivel=bool(tarefas and tarefas.isVisible()))
+    marca[0] = False
+    QTimer.singleShot(200, passo_3)
+
+
+def relogio():
+    # Em até 15 s o processo sai sozinho; senão, sai com 7 (um `closing` recusado cancela o `quit()`).
+    relogio = threading.Timer(15, os._exit, (7,))
+    relogio.daemon = True
+    relogio.start()
+
+
+def passo_3():
+    relogio()
+    janela("janelaDasTarefas").close()
+
+
+# O `quit()` de dentro do app (o reinício, o fim da sessão do Windows) com a principal à vista e trabalho em andamento.
+def quit_com_trabalho():
+    if MODO == "quit_saves":
+        marca[0] = True
+    else:
+        tarefas.comecar("Importação", 1)
+        QQmlEngine.contextForObject(principal()).contextProperty("painelDasTarefas").mostrar()
+    QTimer.singleShot(400, quit_agora)
+
+
+def quit_agora():
+    tarefas_ = janela("janelaDasTarefas")
+    anotar(principal_visivel=principal().isVisible(), tarefas_visivel=bool(tarefas_ and tarefas_.isVisible()))
+    relogio()
+    QCoreApplication.quit()
+
+
+_comecar = modulo_app._comecar_varreduras
+
+
+def _comecar_e_seguir(*argumentos):
+    _comecar(*argumentos)
+    QTimer.singleShot(500, passo_1 if MODO == "fechar_tarefas" else quit_com_trabalho)
+
+
+modulo_app._comecar_varreduras = _comecar_e_seguir
+codigo = modulo_app.main(sys.argv[:1])
+anotar(codigo=codigo)
+sys.exit(codigo)
+"""
+
+
+def _main_num_processo(tmp_path, modo):
+    """Roda o `_FECHAR_COM_BACKUP` no `modo` pedido; devolve o que ele anotou."""
+    dados = tmp_path / "dados"
+    dados.mkdir()
+    anotacoes = tmp_path / "anotacoes.json"
+    registro = rf"Software\CartridgesTestes\fechar-{uuid.uuid4()}"
+    ambiente = {**os.environ, "CARTRIDGES_DADOS": str(dados), "CARTRIDGES_REGISTRO": registro, "QT_QPA_PLATFORM": "offscreen"}
+    try:
+        resultado = subprocess.run(
+            [sys.executable, "-c", _FECHAR_COM_BACKUP, str(anotacoes), modo], cwd=RAIZ, env=ambiente,
+            capture_output=True, text=True, timeout=90, check=False,
+        )  # fmt: skip
+    finally:
+        _apagar_chave(winreg.HKEY_CURRENT_USER, registro)  # o roteiro grava "auto-import" e "gamepad"
+    assert resultado.returncode == 0, resultado.stderr[-3000:]
+    return json.loads(anotacoes.read_text(encoding="utf-8"))
+
+
+def test_fechar_as_tarefas_depois_do_fim_do_backup_encerra_o_app(tmp_path):
+    """Review Focus 1: com o backup rodando a principal some e a janela das tarefas fica; o backup acaba, e fechar a
+    janela das tarefas encerra o app pelo `aboutToQuit` inteiro."""
+    anotado = _main_num_processo(tmp_path, "fechar_tarefas")
+    assert anotado == {"escondida": True, "tarefas_visivel": True, "sobre_o_fim": True, "codigo": 0}
+
+
+def test_quit_com_a_principal_a_vista_e_saves_em_andamento_encerra(tmp_path):
+    """Um `quit()` de dentro do app (o reinício, o fim da sessão do Windows) não é recusado pelo caso 1 da D78."""
+    anotado = _main_num_processo(tmp_path, "quit_saves")
+    assert anotado == {"principal_visivel": True, "tarefas_visivel": False, "sobre_o_fim": True, "codigo": 0}
+
+
+def test_quit_com_a_janela_das_tarefas_e_uma_tarefa_encerra(tmp_path):
+    """Nem pelo caso 2: a janela das tarefas aberta e uma tarefa rodando."""
+    anotado = _main_num_processo(tmp_path, "quit_tarefa")
+    assert anotado == {"principal_visivel": True, "tarefas_visivel": True, "sobre_o_fim": True, "codigo": 0}

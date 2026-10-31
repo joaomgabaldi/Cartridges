@@ -296,7 +296,9 @@ Principal {
         visible: sessao.emAndamento
     }
 
-    onClosing: sessao.principalFechando()
+    // Com os saves em andamento, ou com a janela das tarefas aberta e alguma tarefa, a principal só some (D78); o
+    // painel repassa o resto à sessão (a manual e o aviso de conquista na tela fecham o app).
+    onClosing: (fechar) => fechar.accepted = painelDasTarefas.principalFechando()
 
     // A janela "Jogando {nome}" da sessão manual: própria, fora desta (D50).
     Loader {

@@ -52,7 +52,7 @@ from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
 from cartridges.store.store import Store
-from cartridges.utils import copias_animadas, restauracao, session_fita, session_wallpaper
+from cartridges.utils import copias_animadas, restauracao, session_fita, session_wallpaper, single_instance
 from cartridges.utils.hltb_backfill import HLTBBackfill
 from cartridges.utils.install_size import InstallSizeSweep
 from cartridges.utils.thread_principal import na_thread_principal
@@ -175,6 +175,11 @@ def _fechar(  # noqa: ANN001
 
 
 def main(argv: list[str]) -> int:
+    # Antes de tudo: uma segunda cópia não lê os jogos, muito menos grava por cima da primeira (D76). Quem realça a
+    # primeira é este processo, antes de sair: senão o segundo clique no atalho parece não fazer nada.
+    if not single_instance.acquire():
+        single_instance.present_running_instance()
+        return 0
     app = AplicacaoQt(argv)
     app.setApplicationName("Cartridges")
     app.setApplicationDisplayName("Cartridges")
@@ -268,6 +273,17 @@ def main(argv: list[str]) -> int:
     session_fita.abrir()
     big_picture.definir_janela(motor.rootObjects()[0])  # a janela que vai à tela cheia
     sessao.definir_janela(motor.rootObjects()[0])  # a que volta da barra de tarefas no fim da sessão
+    painel_das_tarefas.definir_janela(motor.rootObjects()[0])  # a que o fechamento esconde com trabalho em andamento
+    # Antes de o Qt mandar o `closing` às janelas: um `quit()` não é recusado pelo trabalho em andamento (D78).
+    app.saindo.connect(painel_das_tarefas.encerrando)
+    painel_fraco = weakref.ref(painel_das_tarefas)
+
+    def _acordar() -> None:
+        if (painel := painel_fraco()) is not None:
+            painel.mostrarPrincipal()
+
+    # A segunda abertura (o atalho clicado de novo) traz a principal, escondida pelas tarefas ou minimizada.
+    single_instance.watch_second_launch(lambda: na_thread_principal(_acordar))
     shared.aplicativo = aplicativo
     aplicativo.verificador_de_atualizacoes = verificador  # a tela de preferências chama `check_async()` ao ligar o aviso
     _comecar_varreduras(aplicativo, verificador, varredura_hltb, varredura_tamanho)

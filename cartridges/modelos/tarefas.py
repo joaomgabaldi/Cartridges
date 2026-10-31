@@ -40,11 +40,13 @@ from PySide6.QtCore import (
     QObject,
     QPoint,
     Qt,
+    QTimer,
     Signal,
     Slot,
 )
 from PySide6.QtGui import QWindow
 
+from cartridges import shared
 from cartridges.utils import window_geometry
 from cartridges.utils.thread_principal import eh_thread_principal, na_thread_principal
 
@@ -163,8 +165,26 @@ def pode_mostrar(quantas: int, pagina: str, modal_aberto: bool, big_picture: boo
     return quantas > 0 and pagina in ("todos", "zerados") and not (modal_aberto or big_picture or sessao)
 
 
+def acao_ao_fechar(saves_em_andamento: bool, janela_aberta: bool, tarefas: int) -> str:
+    """O que fechar a principal faz, na ordem da `main` (D78).
+
+    Os saves vêm primeiro: fechar agora deixaria o Ludusavi órfão. Com a janela das tarefas aberta e alguma tarefa, a
+    principal só some; sem tarefa, a janela das tarefas vai junto (senão manteria o app vivo sozinha).
+    """
+    if saves_em_andamento:
+        return "mostrar_e_esconder"
+    if not janela_aberta:
+        return "fechar"
+    return "esconder" if tarefas > 0 else "fechar_as_duas"
+
+
+def _sair() -> None:
+    QCoreApplication.quit()
+
+
 class PainelDasTarefas(QObject):
-    """O que a tela das tarefas pede ao Python: quantas há, se a janela está aberta e onde pô-la."""
+    """O que a tela das tarefas pede ao Python: quantas há, se a janela está aberta e onde pô-la; e o fechamento
+    da principal com trabalho em andamento (D78)."""
 
     alterado = Signal()
     frente = Signal()  # a janela já aberta deve vir para a frente
@@ -173,6 +193,9 @@ class PainelDasTarefas(QObject):
         super().__init__()
         self._quantas = lista.rowCount()
         self._aberta = False
+        self._janela: Optional[QWindow] = None
+        self._escondida = False
+        self._saindo = False
         # Referência fraca implícita: o Qt desliga a conexão quando o painel é destruído.
         lista.rowsInserted.connect(self._contar)
         lista.rowsRemoved.connect(self._contar)
@@ -189,6 +212,20 @@ class PainelDasTarefas(QObject):
     @Property(bool, notify=alterado)
     def aberta(self) -> bool:
         return self._aberta
+
+    @Property(bool, notify=alterado)
+    def principalEscondida(self) -> bool:  # noqa: N802
+        # A visibilidade de agora também: o fim de uma sessão traz a principal de volta sem passar por aqui.
+        return self._escondida and self._janela is not None and not self._janela.isVisible()
+
+    @Slot()
+    def encerrando(self) -> None:
+        """O `quit()` começou (`AplicacaoQt.saindo`): daqui em diante o `closing` da principal não recusa."""
+        self._saindo = True
+
+    def definir_janela(self, janela: QWindow) -> None:
+        """A principal, que o fechamento esconde e a segunda abertura mostra."""
+        self._janela = janela
 
     def _contar(self, *_args) -> None:
         if (quantas := lista.rowCount()) != self._quantas:
@@ -210,13 +247,58 @@ class PainelDasTarefas(QObject):
 
     @Slot()
     def janelaFechada(self) -> None:  # noqa: N802
+        """A janela das tarefas fechou. Com a principal escondida, era a única do app: ele encerra."""
         if self._aberta:
             self._aberta = False
             self.alterado.emit()
+        # A visibilidade de agora, e não a marca: o fim de uma sessão traz a principal de volta (`sessao.present`).
+        if self._janela is not None and not self._janela.isVisible():
+            # Na volta do laço: um `quit()` dentro do `closing` fecharia de novo, por dentro, a janela que está fechando,
+            # e o `aboutToQuit` (a parede e as fitas) rodaria com ela ainda na tela.
+            QTimer.singleShot(0, _sair)
 
-    @Slot(QWindow, float, float)
-    def posicionar(self, janela: QWindow, x: float, y: float) -> None:
-        """Leva a moldura da janela para logo acima do botão, cujo canto de cima é (x, y) em coordenadas da tela."""
-        # shortcut: o botão é sempre 34 x 34 (D77); lido do QML se um dia mudar de tamanho.
-        botao = (round(x), round(y), 34, 34)
+    @Slot(result=bool)
+    def principalFechando(self) -> bool:  # noqa: N802
+        """O `closing` da principal: True deixa fechar; False a esconde (o app segue com a janela das tarefas)."""
+        # O `closing` que vem do `quit()` (o reinício, o fim da sessão do Windows, a janela das tarefas fechada com a
+        # principal escondida): recusá-lo cancelaria o `quit()` com a sessão já encerrada pelo `saindo`.
+        if self._saindo:
+            return True
+        # Aqui dentro: o `backup_de_saves` importa este módulo.
+        from cartridges.saves import backup_de_saves  # noqa: PLC0415
+
+        acao = acao_ao_fechar(backup_de_saves.em_andamento(), self._aberta, self._quantas)
+        if acao == "mostrar_e_esconder":
+            self.mostrar()
+        if acao in ("mostrar_e_esconder", "esconder"):
+            self._escondida = True
+            self.alterado.emit()
+            if self._janela is not None:
+                self._janela.hide()
+            return False
+        if acao == "fechar_as_duas":
+            self._aberta = False  # o `Loader` desfaz a janela das tarefas
+            self.alterado.emit()
+        # A sessão manual e o aviso de conquista na tela agendam o `_sair` (plano 6).
+        if shared.sessao is not None:
+            shared.sessao.principalFechando()
+        return True
+
+    @Slot()
+    def mostrarPrincipal(self) -> None:  # noqa: N802
+        """A segunda abertura do app: a principal volta (escondida ou minimizada) e vem para a frente."""
+        if (janela := self._janela) is None:
+            return
+        if self._escondida:
+            self._escondida = False
+            self.alterado.emit()
+        janela.setWindowStates(janela.windowStates() & ~Qt.WindowState.WindowMinimized)
+        janela.show()
+        janela.raise_()
+        janela.requestActivate()
+
+    @Slot(QWindow, float, float, float, float)
+    def posicionar(self, janela: QWindow, x: float, y: float, largura: float, altura: float) -> None:
+        """Leva a moldura da janela para logo acima do botão, cujo retângulo é (x, y, largura, altura) na tela."""
+        botao = (round(x), round(y), round(largura), round(altura))
         janela.setFramePosition(QPoint(*window_geometry.posicao_acima_do_botao(botao, janela.frameGeometry().height())))

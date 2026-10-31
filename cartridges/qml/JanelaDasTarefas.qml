@@ -32,10 +32,11 @@ Window {
         if (pronta) return
         if (alvo) {
             var ponto = alvo.mapToGlobal(0, 0)
-            painelDasTarefas.posicionar(raiz, ponto.x, ponto.y)
+            painelDasTarefas.posicionar(raiz, ponto.x, ponto.y, alvo.width, alvo.height)
         }
         pronta = true
     }
+    // Com a principal escondida (fechada com trabalho em andamento, D78), fechar esta encerra o app.
     onClosing: painelDasTarefas.janelaFechada()
 
     Connections {

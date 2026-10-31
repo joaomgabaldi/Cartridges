@@ -8,7 +8,6 @@ import subprocess
 import sys
 
 from cartridges import main as main_module
-from cartridges.utils import single_instance
 
 
 def test_relancar_abre_o_mesmo_comando_desacoplado(monkeypatch):
@@ -57,9 +56,3 @@ def test_main_so_relanca_quando_pedido(monkeypatch):
     main_module.main()
     # O lock sai antes: o processo novo precisa conseguir pegá-lo.
     assert eventos == ["release", "relancar"]
-
-
-def test_release_sem_lock_nao_faz_nada(monkeypatch):
-    monkeypatch.setattr(single_instance, "_handle", None)
-    single_instance.release()
-    assert single_instance._handle is None

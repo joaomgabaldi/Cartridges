@@ -379,7 +379,8 @@ class ModeloDaSessao(QObject):
         # fechar (`session_geometry`), tem de gravar o retângulo de antes da sessão, não o do monitor do jogo (D52).
         if self._encerrado:
             return
-        # Só vai num sentido: um `quit()` cancelado deixaria a sessão encerrada (hoje nenhum `closing` recusa).
+        # Só vai num sentido: um `quit()` cancelado deixaria a sessão encerrada. O `closing` da principal nunca
+        # recusa depois do `saindo` (D78, `PainelDasTarefas.encerrando`).
         self._encerrado = True
         self._tique.stop()
         self._manual = None  # sem `alterado`: a interface já está indo embora

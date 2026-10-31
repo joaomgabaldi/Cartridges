@@ -680,3 +680,39 @@ def test_grade_com_jogos_chegando_depois_mostra_varias_colunas(app_qt):
     xs = {round(i.x()) for i in grade.property("contentItem").childItems() if i.property("jogoId") and i.isVisible()}
     assert len(xs) == colunas, f"as células ocupam {len(xs)} colunas de {colunas}"
     app.fechar()
+
+
+def test_botao_das_tarefas_some_com_modal_no_big_picture_e_na_sessao(app_qt, flush_idle):  # noqa: ARG001
+    """No `Aplicativo.qml` de verdade, com uma tarefa, o botão do canto só pode aparecer sem nada por cima (D77)."""
+    from cartridges.modelos import tarefas  # noqa: PLC0415
+
+    app = _App(_tres())
+    botao = app.achar("botaoDasTarefas")
+    tarefa = tarefas.comecar("Importação", 1)
+    flush_idle()
+    try:
+        assert botao.property("pode") is True
+
+        fechados = []
+        app.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: fechados.append(1))
+        assert _esperar(lambda: app.janela.property("modalAberto") is True)
+        assert botao.property("pode") is False
+        app.achar("dialogoDeErros").fechar()  # o "Dispensar": a resposta volta pela fila da D72
+        assert _esperar(lambda: botao.property("pode") is True)
+        assert fechados == [1]
+
+        app.big_picture.entrar()
+        assert _esperar(lambda: app.big_picture.visivel)
+        assert botao.property("pode") is False
+        assert _esperar(lambda: not app.big_picture.ocupada)
+        app.big_picture.sair()
+        assert _esperar(lambda: not app.big_picture.visivel, limite=5)
+        assert botao.property("pode") is True
+
+        app.sessao.show_session_blocker(app.jogos[0])
+        assert botao.property("pode") is False
+        app.sessao.hide_session_blocker()
+        assert botao.property("pode") is True
+    finally:
+        tarefas.lista.remover(tarefa)
+        app.fechar()
