@@ -36,17 +36,26 @@ GridView {
     readonly property int margem: 15
     // A célula leva o espaçamento inteiro; a margem de 15 é a diferença para o que ela já tem.
     readonly property int colunas: {
-        var cabem = Math.max(1, Math.floor((width - 2 * margem + espacamento) / cellWidth))
+        var cabem = Math.max(1, Math.floor((width - 2 * margem + espacamento) / larguraDaCelula))
         return colunasMaximas > 0 ? Math.min(cabem, colunasMaximas) : cabem
     }
 
-    cellWidth: 200 + espacamento
+    readonly property int larguraDaCelula: 200 + espacamento
+    cellWidth: larguraDaCelula
     cellHeight: 300 + 50 + espacamento
     // Poucos jogos ficam centralizados, como o FlowBox de antes.
-    leftMargin: Math.max(0, (width - Math.min(colunas, Math.max(1, count)) * cellWidth) / 2)
+    leftMargin: Math.max(0, (width - Math.min(colunas, Math.max(1, count)) * larguraDaCelula) / 2)
     rightMargin: leftMargin
+    // O GridView só refaz as colunas quando a largura ou a célula mudam: com a biblioteca vazia na
+    // abertura a margem é grande e a grade ficava em poucas colunas. Mexer na célula e devolver o
+    // vínculo força o recálculo; as duas margens chamam, para a ordem em que mudam não importar.
+    function refazerColunas() {
+        cellWidth = larguraDaCelula + 1
+        cellWidth = Qt.binding(() => larguraDaCelula)
+    }
     // O Flickable não recoloca o conteúdo quando a margem muda sozinha.
-    onLeftMarginChanged: contentX = -leftMargin
+    onLeftMarginChanged: { contentX = -leftMargin; refazerColunas() }
+    onRightMarginChanged: refazerColunas()
     topMargin: margem - espacamento / 2
     bottomMargin: topMargin
     clip: true

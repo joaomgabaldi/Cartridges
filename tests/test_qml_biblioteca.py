@@ -649,3 +649,21 @@ def test_janela_maximizada_volta_maximizada_depois_de_sair_da_frente(app_qt):
 
     assert app.janela.windowStates() == Qt.WindowState.WindowMaximized
     app.fechar()
+
+
+def test_grade_com_jogos_chegando_depois_mostra_varias_colunas(app_qt):
+    """Com a biblioteca vazia na abertura, a margem centralizadora não pode travar a grade em uma coluna."""
+    app = _App([])
+    app.janela.resize(1100, 700)
+    _esperar()
+    grade = app.achar("grade")
+    for n in range(20):
+        app.modelo.atualizar(_jogos((n, f"Jogo {n}", {}))[0])
+        _esperar()  # um quadro entre as chegadas, como no app: cada tamanho tem a sua margem
+    assert grade.property("count") == 20
+    _esperar()
+    colunas = grade.property("colunas")
+    assert colunas >= 4
+    xs = {round(i.x()) for i in grade.property("contentItem").childItems() if i.property("jogoId") and i.isVisible()}
+    assert len(xs) == colunas, f"as células ocupam {len(xs)} colunas de {colunas}"
+    app.fechar()
