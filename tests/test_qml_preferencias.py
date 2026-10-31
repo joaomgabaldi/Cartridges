@@ -389,11 +389,14 @@ def test_descricao_da_autenticacao_e_o_link_abre_o_navegador_falso(app, monkeypa
     assert urls == ["https://www.steamgriddb.com/profile/preferences/api"]
 
 
-def test_grupos_do_plano_8_nao_aparecem(app):
+def test_grupos_do_plano_8b_nao_aparecem(app):
+    """O backup e a Zona de perigo entraram no 8a (Task 7); faltam só "Atualizações" e "Barra superior"."""
     _abrir(app)
     todos = "\n".join(_textos(app.achar("dialogoDePreferencias")))
-    for texto in ("Backup da sua biblioteca", "Atualizações", "Zona de perigo", "Barra superior", "Redefinir"):
+    for texto in ("Atualizações", "Barra superior"):
         assert texto not in todos
+    for texto in ("Backup da sua biblioteca", "Zona de perigo", "Redefinir Cartridges"):
+        assert texto in todos
 
 
 # region Atualizar metadados e capas (Task 3)

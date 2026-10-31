@@ -26,6 +26,7 @@ from cartridges import conquista_aviso, metadata_refresh, shared
 from cartridges.calibracao_janela import AssistenteDeCalibracao
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.fita_wizard import FitaWizard
+from cartridges.modelos.backup_da_biblioteca import BackupDasPreferencias
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.modelos.contas import ContasDasLojas
 from cartridges.utils import janela_por_cima, open_uri, session_fita, window_geometry
@@ -525,6 +526,7 @@ class Preferencias(QObject):
         self._monitores: list[window_geometry.Monitor] = []
         self._biblioteca = AtualizacoesDaBiblioteca(avisos, self)
         self._fitas = FitasDasPreferencias(self)
+        self._backup = BackupDasPreferencias(avisos, self)
         self._brilho: BrilhoPorDispositivo | None = None
         self._config: FitaWizard | None = None
         self._calibracao: AssistenteDeCalibracao | None = None
@@ -537,6 +539,10 @@ class Preferencias(QObject):
     @Property(QObject, constant=True)
     def biblioteca(self) -> QObject:
         return self._biblioteca
+
+    @Property(QObject, constant=True)
+    def backup(self) -> QObject:
+        return self._backup
 
     @Property(QObject, constant=True)
     def fitas(self) -> QObject:
@@ -631,6 +637,7 @@ class Preferencias(QObject):
         self._contas = ContasDasLojas(self._avisos, parent=self)
         self._ler_monitores()
         self._fitas.reler()
+        self._backup.reler()
         eu = weakref.ref(self)
         self._ligacao = shared.schema.connect("changed", lambda *_: (p := eu()) and p._reler())
         self._reler()
@@ -781,6 +788,8 @@ class Preferencias(QObject):
             "bigPictureAtivo": gamepad and com_3d,
             "somDoBigPictureAtivo": com_3d,
             "subtituloSem3d": "" if com_3d else SEM_3D,
+            # Sem o Ludusavi no pacote não há saves a configurar (lido ao abrir, em `backup.reler`).
+            "savesDisponiveis": self._backup.savesDisponiveis,
             "monitores": rotulos,
             "monitorEscolhido": escolhido,
             "semSegundoMonitor": sem_segundo,

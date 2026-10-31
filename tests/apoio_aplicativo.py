@@ -18,11 +18,15 @@ class AvisosAnotados:
     def __init__(self) -> None:
         self.textos: list[str] = []
         self.ultima: dict | None = None
+        self.dispensados: list[int] = []
 
     def adicionar(self, texto, botao="", ao_clicar=None, segundos=5, chave=None) -> int:
         self.textos.append(texto)
         self.ultima = {"texto": texto, "botao": botao, "ao_clicar": ao_clicar, "segundos": segundos, "chave": chave}
         return len(self.textos)
+
+    def dispensar(self, id: int) -> None:  # noqa: A002
+        self.dispensados.append(id)
 
 
 class AplicativoAnotado:

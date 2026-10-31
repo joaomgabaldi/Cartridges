@@ -1,4 +1,6 @@
 import QtQuick
+import QtCore
+import QtQuick.Dialogs
 
 // A página Geral das Preferências. Só desenha: as chaves e as travas são do `preferencias` (cartridges/modelos/preferencias.py).
 Column {
@@ -7,6 +9,8 @@ Column {
 
     // Sem 3D o Big Picture não abre: as duas linhas dele dizem por quê no lugar do subtítulo (D47).
     readonly property string sem3d: preferencias.estado.subtituloSem3d || ""
+    // Sem o Ludusavi no pacote não há saves a configurar: as linhas deles somem e os textos não os prometem.
+    readonly property bool saves: preferencias.estado.savesDisponiveis === true
 
     width: parent ? parent.width : implicitWidth
     spacing: 24
@@ -19,7 +23,56 @@ Column {
         onAlternado: preferencias.definir(chave, checked)
     }
 
-    // shortcut: faltam "Backup da sua biblioteca", "Atualizações", "Zona de perigo" e o subtítulo de "Contar horas de jogo" que promete o backup dos saves, todos do plano 8 (D64); entram aqui, depois de "Comportamento".
+    // Criados só ao clicar: os seletores nativos não precisam existir antes.
+    function abrir(carga) {
+        if (carga.item) carga.item.open(); else carga.active = true
+    }
+    // O nome do dia na pasta Documentos (um nome solto abriria o seletor na pasta do aplicativo); relido a cada abertura:
+    // depois de uma exportação o diálogo guardaria o arquivo anterior.
+    function sugestaoDoBackup() {
+        return StandardPaths.writableLocation(StandardPaths.DocumentsLocation) + "/" + preferencias.backup.nomeDoArquivo
+    }
+    function abrirSalvar() {
+        if (cargaDoSalvar.item) cargaDoSalvar.item.selectedFile = sugestaoDoBackup()
+        abrir(cargaDoSalvar)
+    }
+    Loader {
+        id: cargaDoSalvar
+        active: false
+        visible: false  // sem isto o `Column` soma um espaço vazio por Loader
+        sourceComponent: FileDialog {
+            title: "Exportar para arquivo"
+            fileMode: FileDialog.SaveFile
+            nameFilters: ["Backup do Cartridges (*.zip)"]
+            // O nome sugerido vai na pasta Documentos: um nome solto abriria o seletor na pasta do aplicativo.
+            selectedFile: pagina.sugestaoDoBackup()
+            onAccepted: preferencias.backup.exportar(selectedFile)
+        }
+        onLoaded: item.open()
+    }
+    Loader {
+        id: cargaDoAbrir
+        active: false
+        visible: false  // sem isto o `Column` soma um espaço vazio por Loader
+        sourceComponent: FileDialog {
+            title: "Importar de arquivo"
+            fileMode: FileDialog.OpenFile
+            nameFilters: ["Backup do Cartridges (*.zip)"]
+            onAccepted: preferencias.backup.importar(selectedFile)
+        }
+        onLoaded: item.open()
+    }
+    Loader {
+        id: cargaDaPasta
+        active: false
+        visible: false  // sem isto o `Column` soma um espaço vazio por Loader
+        sourceComponent: FolderDialog {
+            title: "Selecionar pasta"
+            onAccepted: preferencias.backup.escolherPastaDosSaves(selectedFolder)
+        }
+        onLoaded: item.open()
+    }
+
     GrupoDePreferencias {
         objectName: "grupoComportamentoGeral"
         titulo: "Comportamento"
@@ -34,7 +87,9 @@ Column {
         Interruptor {
             chave: "playtime-tracking"
             titulo: "Contar horas de jogo"
-            subtitulo: "Registra o tempo de cada sessão; quando o jogo não pode ser acompanhado automaticamente, abre uma janela compacta para encerrar a sessão"
+            subtitulo: pagina.saves
+                ? "Registra o tempo de cada sessão e faz o backup dos saves ao fim dela; quando o jogo não pode ser acompanhado automaticamente, abre uma janela compacta para encerrar a sessão"
+                : "Registra o tempo de cada sessão; quando o jogo não pode ser acompanhado automaticamente, abre uma janela compacta para encerrar a sessão"
         }
         Interruptor {
             chave: "gamepad"
@@ -70,6 +125,62 @@ Column {
             pagina: 5
             value: preferencias.valores["process-tracking-grace"] || 0
             onAlterado: valor => preferencias.definir("process-tracking-grace", valor)
+        }
+    }
+
+    GrupoDePreferencias {
+        objectName: "grupoBackupDaBiblioteca"
+        titulo: "Backup da sua biblioteca"
+        descricao: pagina.saves
+            ? "Salve em um arquivo .zip a biblioteca completa, as cópias dos saves dos jogos e todas as configurações. A restauração substitui a biblioteca, as configurações e as cópias dos saves pelas do backup. Para devolver os saves aos jogos, use “Restaurar saves de todos os jogos”."
+            : "Salve em um arquivo .zip a biblioteca completa e todas as configurações. A restauração substitui a biblioteca e as configurações atuais pelas do backup."
+
+        LinhaDeBotao {
+            buscavel: true
+            objectName: "linhaExportarBackup"
+            titulo: "Exportar para arquivo"
+            onAcionada: pagina.abrirSalvar()
+        }
+        LinhaDeBotao {
+            buscavel: true
+            objectName: "linhaImportarBackup"
+            titulo: "Importar de arquivo"
+            onAcionada: pagina.abrir(cargaDoAbrir)
+        }
+        LinhaDeAcao {
+            buscavel: true
+            aparece: pagina.saves
+            objectName: "linhaPastaDosSaves"
+            titulo: "Pasta dos saves"
+            subtitulo: preferencias.backup.pastaDosSaves
+            rotulo: "Escolher"
+            rotuloSecundario: "Usar a padrão"
+            secundarioAtivo: !preferencias.backup.pastaPadrao
+            // A troca espera a trava dos saves e copia arquivos: a linha fica apagada até acabar.
+            enabled: !preferencias.backup.trocandoPasta
+            onAcionada: pagina.abrir(cargaDaPasta)
+            onSecundaria: preferencias.backup.usarPastaPadrao()
+        }
+        LinhaDeBotao {
+            buscavel: true
+            aparece: pagina.saves
+            objectName: "linhaRestaurarSaves"
+            titulo: "Restaurar saves de todos os jogos"
+            onAcionada: preferencias.backup.restaurarTodos()
+        }
+    }
+
+    // shortcut: falta o grupo "Atualizações" (depende do app_updater, plano 8b); entra aqui, entre "Backup da sua biblioteca" e "Zona de perigo".
+    GrupoDePreferencias {
+        objectName: "grupoZonaDePerigo"
+        titulo: "Zona de perigo"
+
+        LinhaDeBotao {
+            buscavel: true
+            objectName: "linhaRedefinir"
+            titulo: "Redefinir Cartridges"
+            destrutivo: true
+            onAcionada: preferencias.backup.redefinir()
         }
     }
 }
