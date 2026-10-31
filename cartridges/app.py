@@ -42,6 +42,7 @@ from cartridges.modelos.historico import HistoricoDeSessoes
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.modelos.saves import SavesDoJogo
 from cartridges.modelos.sessao import ModeloDaSessao
+from cartridges.modelos.tarefas import PainelDasTarefas
 from cartridges.ponte import Ponte
 from cartridges.saves import backup_de_saves
 from cartridges.store.managers import async_manager
@@ -230,6 +231,7 @@ def main(argv: list[str]) -> int:
     edicao = ModeloDaEdicao(aplicativo)
     historico = HistoricoDeSessoes(shared.store)
     saves = SavesDoJogo(aplicativo)
+    painel_das_tarefas = PainelDasTarefas()
     big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     sessao = ModeloDaSessao(avisos, controle=controle, big_picture=big_picture)
     shared.sessao = sessao
@@ -253,6 +255,7 @@ def main(argv: list[str]) -> int:
         ("aplicativo", aplicativo), ("ponte", ponte), ("controle", controle), ("detalhes", detalhes),
         ("edicao", edicao), ("bigPicture", big_picture), ("sessao", sessao), ("historico", historico),
         ("saves", saves), ("conquistasDoJogo", conquistas), ("preferencias", preferencias),
+        ("painelDasTarefas", painel_das_tarefas),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.

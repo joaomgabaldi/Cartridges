@@ -175,6 +175,24 @@ Principal {
         function onSair() { if (janela.paginaAtual === "jogo") janela.voltar() }
     }
 
+    // O botão das tarefas em andamento: sobre as páginas e abaixo de todo diálogo (que vêm depois, na ordem).
+    BotaoDasTarefas {
+        id: botaoDasTarefas
+        anchors.fill: parent
+        pagina: janela.paginaAtual
+        modalAberto: janela.modalAberto
+        emBigPicture: bigPicture.visivel
+        emSessao: sessao.emAndamento
+    }
+
+    // A janela "Tarefas em andamento": própria, fora desta, posta acima do botão.
+    Loader {
+        objectName: "carregadorDasTarefas"
+        active: painelDasTarefas.aberta
+        source: "JanelaDasTarefas.qml"
+        onLoaded: item.alvo = botaoDasTarefas.alvo
+    }
+
     // Abaixo da camada de avisos: o erro de uma validação aparece na frente do diálogo.
     DialogoDeEdicao {
         id: dialogoDeEdicao
@@ -353,8 +371,10 @@ Principal {
     // --- Controle do Xbox -------------------------------------------------------------------------------
     // A página à vista: "Todos os jogos", "Jogos Zerados" ou a de detalhes.
     readonly property var paginaDoControle: pilha.depth === 0 ? todos : pilha.currentItem
+    // Algum diálogo na frente (os menus não contam): o botão das tarefas some.
+    readonly property bool modalAberto: camadaDeAvisos.dialogoAberto || edicao.aberto || historico.aberto || conquistasDoJogo.aberto || preferencias.aberto || saves.aberto
     // Menu ou diálogo na frente: o controle navega nele pelas teclas, como o teclado faria.
-    readonly property bool popupAberto: menuPrincipal.opened || camadaDeAvisos.dialogoAberto || edicao.aberto || historico.aberto || conquistasDoJogo.aberto || preferencias.aberto || saves.aberto
+    readonly property bool popupAberto: menuPrincipal.opened || modalAberto
         || (paginaDoControle !== null && paginaDoControle.menuDoJogoAberto)
     property bool ponteiroEscondido: false
     property point posicaoDoPonteiro

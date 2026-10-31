@@ -38,10 +38,14 @@ from PySide6.QtCore import (
     QCoreApplication,
     QModelIndex,
     QObject,
+    QPoint,
     Qt,
     Signal,
+    Slot,
 )
+from PySide6.QtGui import QWindow
 
+from cartridges.utils import window_geometry
 from cartridges.utils.thread_principal import eh_thread_principal, na_thread_principal
 
 
@@ -152,3 +156,67 @@ def comecar(nome: str, total: int) -> Tarefa:
         tarefa.moveToThread(QCoreApplication.instance().thread())
     na_thread_principal(lista.adicionar, tarefa)
     return tarefa
+
+
+def pode_mostrar(quantas: int, pagina: str, modal_aberto: bool, big_picture: bool, sessao: bool) -> bool:
+    """O botão do canto só aparece com tarefa, numa das duas bibliotecas e sem nada por cima (D77)."""
+    return quantas > 0 and pagina in ("todos", "zerados") and not (modal_aberto or big_picture or sessao)
+
+
+class PainelDasTarefas(QObject):
+    """O que a tela das tarefas pede ao Python: quantas há, se a janela está aberta e onde pô-la."""
+
+    alterado = Signal()
+    frente = Signal()  # a janela já aberta deve vir para a frente
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._quantas = lista.rowCount()
+        self._aberta = False
+        # Referência fraca implícita: o Qt desliga a conexão quando o painel é destruído.
+        lista.rowsInserted.connect(self._contar)
+        lista.rowsRemoved.connect(self._contar)
+        lista.modelReset.connect(self._contar)
+
+    @Property(QObject, constant=True)
+    def lista(self) -> QObject:  # noqa: N802
+        return lista
+
+    @Property(int, notify=alterado)
+    def quantas(self) -> int:
+        return self._quantas
+
+    @Property(bool, notify=alterado)
+    def aberta(self) -> bool:
+        return self._aberta
+
+    def _contar(self, *_args) -> None:
+        if (quantas := lista.rowCount()) != self._quantas:
+            self._quantas = quantas
+            self.alterado.emit()
+
+    @Slot(int, str, bool, bool, bool, result=bool)
+    def podeMostrar(self, quantas: int, pagina: str, modal: bool, big_picture: bool, sessao: bool) -> bool:  # noqa: N802
+        return pode_mostrar(quantas, pagina, modal, big_picture, sessao)
+
+    @Slot()
+    def mostrar(self) -> None:
+        """Abre a janela; aberta, só a traz para a frente."""
+        if self._aberta:
+            self.frente.emit()
+            return
+        self._aberta = True
+        self.alterado.emit()
+
+    @Slot()
+    def janelaFechada(self) -> None:  # noqa: N802
+        if self._aberta:
+            self._aberta = False
+            self.alterado.emit()
+
+    @Slot(QWindow, float, float)
+    def posicionar(self, janela: QWindow, x: float, y: float) -> None:
+        """Leva a moldura da janela para logo acima do botão, cujo canto de cima é (x, y) em coordenadas da tela."""
+        # shortcut: o botão é sempre 34 x 34 (D77); lido do QML se um dia mudar de tamanho.
+        botao = (round(x), round(y), 34, 34)
+        janela.setFramePosition(QPoint(*window_geometry.posicao_acima_do_botao(botao, janela.frameGeometry().height())))

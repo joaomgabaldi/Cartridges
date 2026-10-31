@@ -2,9 +2,57 @@
 
 from types import SimpleNamespace
 
-from tests.test_metadata_refresh import FakeManager, FakeStore, make_game
+import pytest
 
 from cartridges.modelos import tarefas
+
+
+@pytest.fixture(autouse=True)
+def _lista_limpa():
+    """A lista é global: cada teste começa e termina sem tarefa nenhuma."""
+    _esvaziar()
+    yield
+    _esvaziar()
+
+
+def _esvaziar():
+    for tarefa in list(tarefas.lista._tarefas):  # noqa: SLF001
+        tarefas.lista.remover(tarefa)
+
+
+class FakeManager:
+    """No lugar dos managers da Steam e do HowLongToBeat."""
+
+    steam_api_helper = None
+
+    def reset_cancellable(self) -> None:
+        pass
+
+    def collect_errors(self):
+        return []
+
+    def process_game(self, game, additional_data, callback) -> None:  # noqa: ARG002
+        callback(self)
+
+
+class FakeStore:
+    """Só a busca por id que o refresh faz antes de salvar um jogo."""
+
+    def __init__(self) -> None:
+        self.games_by_id: dict = {}
+
+    def get(self, game_id, default=None):
+        return self.games_by_id.get(game_id, default)
+
+
+_contador = iter(range(1, 10_000))
+
+
+def _jogo():
+    jogo = SimpleNamespace(game_id=f"imported_{next(_contador)}", genre=None, steam_appid=None)
+    jogo.save = lambda: None
+    jogo.update = lambda: None
+    return jogo
 
 
 def _thread_em_linha(modulo, monkeypatch):
@@ -51,7 +99,7 @@ def test_hltb_vira_tarefa_com_a_fila_e_termina(monkeypatch, store, make_game, fl
     flush_idle()
 
     assert vistas == [("HowLongToBeat", 3)]
-    assert tarefas.lista.get_n_items() == 0
+    assert tarefas.lista.rowCount() == 0
 
 
 def _refresh_com_managers(monkeypatch):
@@ -63,11 +111,8 @@ def _refresh_com_managers(monkeypatch):
         SteamAPIManager,
     )
 
-    class Manager(FakeManager):
-        steam_api_helper = None
-
     monkeypatch.setattr(shared, "store", FakeStore(), raising=False)
-    shared.store.managers = {SteamAPIManager: Manager(), HLTBManager: Manager()}
+    shared.store.managers = {SteamAPIManager: FakeManager(), HLTBManager: FakeManager()}
     # `metadata_refresh` importa `Thread` direto, então não serve o helper acima.
     monkeypatch.setattr(
         metadata_refresh,
@@ -83,23 +128,23 @@ def test_metadados_vira_tarefa_e_termina(monkeypatch, flush_idle):
     refresh = _refresh_com_managers(monkeypatch)
     vistas = _tarefas_vistas(monkeypatch)
 
-    assert refresh.start([make_game(), make_game()]) is True
+    assert refresh.start([_jogo(), _jogo()]) is True
     flush_idle()
 
     assert vistas == [("Metadados", 2)]
-    assert tarefas.lista.get_n_items() == 0
+    assert tarefas.lista.rowCount() == 0
 
 
 def test_metadados_cancelado_tambem_sai_do_quadro(monkeypatch, flush_idle):
     refresh = _refresh_com_managers(monkeypatch)
     vistas = _tarefas_vistas(monkeypatch)
 
-    assert refresh.start([make_game(), make_game()]) is True
+    assert refresh.start([_jogo(), _jogo()]) is True
     refresh.cancel()
     flush_idle()
 
     assert vistas == [("Metadados", 2)]
-    assert tarefas.lista.get_n_items() == 0
+    assert tarefas.lista.rowCount() == 0
 
 
 def test_tamanho_conta_so_jogos_com_pasta(monkeypatch, store, make_game, win, flush_idle):
@@ -119,7 +164,7 @@ def test_tamanho_conta_so_jogos_com_pasta(monkeypatch, store, make_game, win, fl
     flush_idle()
 
     assert vistas == [("Tamanho em disco", 1)]
-    assert tarefas.lista.get_n_items() == 0
+    assert tarefas.lista.rowCount() == 0
 
 
 def test_tamanho_so_com_jogos_sem_pasta_nao_vira_tarefa(

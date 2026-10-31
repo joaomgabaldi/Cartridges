@@ -59,8 +59,6 @@ install_data(
     'session_history.py',
     'zerados_picker.py',
     'restauracao_dialogs.py',
-    'tarefas_janela.py',
-    'botao_tarefas.py',
     'process_session.py',
     'metadata_refresh.py',
     'game_cover.py',
