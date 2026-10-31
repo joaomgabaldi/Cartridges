@@ -598,14 +598,3 @@ def test_main_atualiza_o_cache_na_abertura():
         encoding="utf-8"
     )
     assert "backup_de_saves.atualizar_cache()" in texto
-
-
-def test_main_avisa_da_pasta_dos_saves_logo_depois_do_aviso_de_falha():
-    texto = (Path(__file__).resolve().parent.parent / "cartridges" / "main.py").read_text(
-        encoding="utf-8"
-    )
-    assert (
-        "            restauracao_dialogs.avisar_falha()\n\n"
-        "        if backup.pasta_dos_saves_desfeita:\n"
-        "            restauracao_dialogs.avisar_pasta_dos_saves(backup.pasta_dos_saves_desfeita)\n"
-    ) in texto

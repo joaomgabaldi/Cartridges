@@ -57,11 +57,12 @@ def _fechar(monkeypatch, falhar=()):
     monkeypatch.setattr(
         shared, "aplicativo", SimpleNamespace(varredura_conquistas=_Gravador(passos, "varredura", falhar)), raising=False
     )
-    app._fechar(  # noqa: SLF001
-        _Gravador(passos, "bp", falhar), _Gravador(passos, "sessao", falhar), _Gravador(passos, "verificador", falhar),
-        _Gravador(passos, "hltb", falhar), _Gravador(passos, "tamanho", falhar), _Gravador(passos, "edicao", falhar),
-        _Gravador(passos, "preferencias", falhar),
-    )  # fmt: skip
+    app._fechar(app._Abertura(  # noqa: SLF001
+        big_picture=_Gravador(passos, "bp", falhar), sessao=_Gravador(passos, "sessao", falhar),
+        verificador=_Gravador(passos, "verificador", falhar), varredura_hltb=_Gravador(passos, "hltb", falhar),
+        varredura_tamanho=_Gravador(passos, "tamanho", falhar), edicao=_Gravador(passos, "edicao", falhar),
+        preferencias=_Gravador(passos, "preferencias", falhar),
+    ))  # fmt: skip
     return passos
 
 

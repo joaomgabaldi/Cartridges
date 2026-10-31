@@ -10,7 +10,7 @@ from collections import deque
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
+from PySide6.QtCore import Property, QCoreApplication, QObject, QUrl, Signal, Slot
 
 from cartridges import shared
 from cartridges.importer.importer import Importer
@@ -44,6 +44,8 @@ class Aplicativo(QObject):
         self.verificador_de_atualizacoes = None
         # Posta por `app.py` depois das outras varreduras; a edição e a importação a chamam.
         self.varredura_conquistas = None
+        # Lida pelo `main()` depois do `exec()`: o app sai e se reabre (D75).
+        self.reiniciar = False
         self._ao_fechar_dialogo: Callable[[], None] | None = None
         # D72: uma fila FIFO só para os dois tipos de pedido; o da vez está na tela ("dialogo" ou
         # "confirmacao") e o resto espera a resposta dele. Assim só o de cima recebe o teclado.
@@ -215,6 +217,16 @@ class Aplicativo(QObject):
             ligacao.append(preferencias.alterado.connect(fechou))
         else:
             ao_fechar()
+
+    @Slot()
+    def pedir_reinicio(self) -> None:
+        """Sai do app e o reabre: o `main()` solta a trava e chama o `relancar()` depois do `exec()` (D75).
+
+        O `quit()`, e não o `exit()`: o fechamento passa pelo `saindo` e pelo `aboutToQuit` inteiros, e o `closing` da
+        principal não o recusa (`PainelDasTarefas.encerrando`).
+        """
+        self.reiniciar = True
+        QCoreApplication.quit()
 
     @Slot("QVariantList")
     def soltar(self, urls: list) -> None:

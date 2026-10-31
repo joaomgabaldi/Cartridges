@@ -519,10 +519,11 @@ def _fechar_o_app(preferencias, monkeypatch):
     monkeypatch.setattr(
         shared, "aplicativo", SimpleNamespace(varredura_conquistas=_Gravador(passos, "varredura")), raising=False
     )
-    modulo_app._fechar(  # noqa: SLF001
-        _Gravador(passos, "bp"), _Gravador(passos, "sessao"), _Gravador(passos, "verificador"),
-        _Gravador(passos, "hltb"), _Gravador(passos, "tamanho"), _Gravador(passos, "edicao"), preferencias,
-    )  # fmt: skip
+    modulo_app._fechar(modulo_app._Abertura(  # noqa: SLF001
+        big_picture=_Gravador(passos, "bp"), sessao=_Gravador(passos, "sessao"),
+        verificador=_Gravador(passos, "verificador"), varredura_hltb=_Gravador(passos, "hltb"),
+        varredura_tamanho=_Gravador(passos, "tamanho"), edicao=_Gravador(passos, "edicao"), preferencias=preferencias,
+    ))  # fmt: skip
     return passos
 
 

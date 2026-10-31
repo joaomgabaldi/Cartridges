@@ -46,7 +46,6 @@ install_data(
     'big_picture.py',
     'details_dialog.py',
     'conquista_aviso.py',
-    'janela_restaurando.py',
     'sgdb_picker.py',
     'logo_picker.py',
     'wallpaper_picker.py',

@@ -71,13 +71,11 @@ TESTES_AINDA_GTK: list[str] = [
     "test_caixa_redimensionavel.py",
     "test_estilo_css.py",
     "test_hwnd_ordem_import.py",
-    "test_janela_restaurando.py",
     "test_ler_json.py",
     "test_log_engolidos.py",
     "test_log_excecoes.py",
     "test_menu_do_card.py",
     "test_na_tela.py",
-    "test_reinicio.py",
     "test_restauracao_dialogs.py",
     "test_saves_ui.py",  # plano 8 (D64): importa saves/backup_de_saves e saves/dialogo (GTK) e usa o preferences.py apagado
     "test_store_ligacao_manual.py",
@@ -485,6 +483,17 @@ def sem_jogo_de_verdade(monkeypatch):
     monkeypatch.setattr(process_session.ProcessSession, "active", None)
     monkeypatch.setattr(session_window.SessionWindow, "active", None)
     monkeypatch.setattr(sessao_conquistas, "_vigia", None)
+
+
+@pytest.fixture(autouse=True)
+def sem_relancar_de_verdade(monkeypatch):
+    """Nenhum teste reabre o app (D75): o `_popen` do `relancar()` levanta; quem prova o comando troca o `_popen`."""
+    from cartridges import app as modulo_app  # noqa: PLC0415
+
+    def recusa(*_args, **_kwargs):
+        raise AssertionError("relancar: o app não é reaberto nos testes")
+
+    monkeypatch.setattr(modulo_app, "_popen", recusa)
 
 
 @pytest.fixture(autouse=True)

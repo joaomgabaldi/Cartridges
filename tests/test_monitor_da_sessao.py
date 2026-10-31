@@ -461,5 +461,5 @@ def test_abertura_desfaz_orfaos(monkeypatch):
     assert shared.schema.get_string("session-wallpaper-saved") == ""
 
     # E o app a chama antes de carregar o QML (a janela já nasce sobre a parede de volta).
-    fonte = inspect.getsource(app.main)
+    fonte = inspect.getsource(app._abrir)  # noqa: SLF001
     assert 0 <= fonte.index("session_wallpaper.restaurar_orfaos()") < fonte.index("motor.load(")
