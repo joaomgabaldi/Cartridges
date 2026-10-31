@@ -61,6 +61,8 @@ Item {
         objectName: linha.objectName + "Chave"
         anchors { right: parent.right; rightMargin: 16; verticalCenter: parent.verticalCenter }
         focusPolicy: Qt.StrongFocus
+        Keys.onReturnPressed: click()
+        Keys.onEnterPressed: click()
         Accessible.name: linha.titulo
         onToggled: linha.alternado()
         indicator: Rectangle {

@@ -51,6 +51,11 @@ Rectangle {
             if (p === dialogo) return true
         return false
     }
+    function irParaAba(indice) {
+        if (indice < 0 || indice >= abas.length) return
+        aba = abas[indice].id
+        repetidorDeAbas.itemAt(indice).forceActiveFocus(Qt.TabFocusReason)
+    }
     // O item com o foco fica à vista na rolagem.
     function mostrar(item) {
         var topo = item.mapToItem(rolagem.contentItem, 0, 0).y
@@ -116,6 +121,8 @@ Rectangle {
         property string glifo
         property bool atual: false
         focusPolicy: Qt.StrongFocus
+        Keys.onReturnPressed: click()
+        Keys.onEnterPressed: click()
         implicitHeight: 34
         leftPadding: 8
         rightPadding: 8
@@ -204,9 +211,14 @@ Rectangle {
                 anchors { left: parent.left; leftMargin: 12; top: parent.top; topMargin: 56 }
                 spacing: 4
                 Repeater {
+                    id: repetidorDeAbas
                     model: dialogo.abas
                     BotaoDaAba {
                         required property var modelData
+                        required property int index
+                        // As setas trocam de aba e levam o foco junto (sem dar a volta nas pontas).
+                        Keys.onLeftPressed: dialogo.irParaAba(index - 1)
+                        Keys.onRightPressed: dialogo.irParaAba(index + 1)
                         objectName: "aba-" + modelData.id
                         text: modelData.titulo
                         glifo: modelData.glifo
@@ -223,6 +235,8 @@ Rectangle {
                 focusPolicy: Qt.StrongFocus
                 implicitWidth: 34
                 implicitHeight: 34
+                Keys.onReturnPressed: click()
+                Keys.onEnterPressed: click()
                 Accessible.name: "Fechar"
                 ToolTip.visible: hovered
                 ToolTip.text: "Fechar"

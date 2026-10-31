@@ -76,6 +76,8 @@ Item {
             linha.alterado(Math.max(linha.de, Math.min(linha.ate, value + delta)))
         }
         contentItem: Text {
+            // Uma parada de Tab só, a da própria caixa: o SpinBox liga o `activeFocusOnTab` do item ao assumi-lo.
+            Component.onCompleted: activeFocusOnTab = false
             text: caixa.value
             textFormat: Text.PlainText
             horizontalAlignment: Text.AlignHCenter

@@ -7,7 +7,7 @@
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import Q_ARG, QMetaObject, QPoint, Qt
+from PySide6.QtCore import Q_ARG, QMetaObject, QPoint, QPointF, Qt
 from PySide6.QtCore import QUrl
 from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
@@ -53,6 +53,55 @@ def _textos(raiz):
             achados.append(texto)
         pilha.extend(atual.childItems() if isinstance(atual, QQuickItem) else [])
     return achados
+
+
+@pytest.mark.parametrize(("tecla", "modificador"), [
+    (Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier),
+    (Qt.Key.Key_Enter, Qt.KeyboardModifier.KeypadModifier),
+])
+def test_enter_aciona_interruptor_aba_e_fechar(app, tecla, modificador):
+    _abrir(app)
+    # O interruptor alterna com o Enter, como com o Espaço.
+    chave = app.achar("interruptor-auto-importChave")
+    antes = chave.property("checked")
+    chave.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(app.janela, tecla, modificador)
+    assert _esperar(lambda: chave.property("checked") is (not antes))
+    # A aba abre a sua página.
+    app.achar("aba-import").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(app.janela, tecla, modificador)
+    assert _esperar(lambda: app.achar("paginaDeImportacao").property("visible") is True)
+    # O X fecha.
+    app.achar("botaoFecharPreferencias").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(app.janela, tecla, modificador)
+    assert _esperar(lambda: not app.preferencias.aberto)
+
+
+def test_setas_trocam_de_aba_e_levam_o_foco(app):
+    _abrir(app)
+    app.achar("aba-general").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(app.janela, Qt.Key.Key_Right)
+    assert app.achar("dialogoDePreferencias").property("aba") == "session"
+    assert _foco_dentro_de(app, "aba-session")
+    QTest.keyClick(app.janela, Qt.Key.Key_Left)
+    assert app.achar("dialogoDePreferencias").property("aba") == "general"
+    assert _foco_dentro_de(app, "aba-general")
+    QTest.keyClick(app.janela, Qt.Key.Key_Left)  # na ponta, nada acontece
+    assert app.achar("dialogoDePreferencias").property("aba") == "general"
+
+
+def test_caixa_de_numero_tem_uma_parada_de_tab_e_segue_as_setas(app):
+    _abrir(app, "general")
+    caixa = app.achar("linhaDaEsperaCaixa")
+    caixa.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    valor = caixa.property("value")
+    QTest.keyClick(app.janela, Qt.Key.Key_Up)
+    assert _esperar(lambda: caixa.property("value") == valor + 1)
+    QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+    foco = app.janela.property("activeFocusItem")
+    assert foco is not caixa and foco.parentItem() is not caixa  # o item interno não é uma segunda parada
+    QTest.keyClick(app.janela, Qt.Key.Key_Backtab)
+    assert app.janela.property("activeFocusItem") is caixa
 
 
 def test_menu_principal_abre_as_preferencias(app):
@@ -452,7 +501,7 @@ def test_linha_dos_metadados_apagada_sem_as_duas_fontes(app):
 
 def test_atualizar_capas_apagado_sem_sgdb(app, store, make_game):
     from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
-    from tests.test_preferencias_qt import _ManagerDeCapas  # noqa: PLC0415
+    from tests.apoio_capas import _ManagerDeCapas  # noqa: PLC0415
 
     store.add_game(make_game(game_id="a"), {})
     store.managers[SgdbManager] = gerente = _ManagerDeCapas()
@@ -495,7 +544,7 @@ def test_foco_acompanha_o_botao_dos_metadados(app, store, make_game, monkeypatch
 
 def test_foco_das_capas_fica_no_dialogo_e_esc_fecha(app, store, make_game):
     from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
-    from tests.test_preferencias_qt import _ManagerDeCapas  # noqa: PLC0415
+    from tests.apoio_capas import _ManagerDeCapas  # noqa: PLC0415
 
     store.add_game(make_game(game_id="a"), {})
     store.managers[SgdbManager] = gerente = _ManagerDeCapas()
@@ -967,6 +1016,64 @@ def test_textos_do_assistente_de_calibracao(calibracao_aberta):
         "Temperatura",
     ):
         assert esperado in textos, esperado
+
+
+@pytest.mark.parametrize("nome", ["dialogoDaConfiguracaoDasFitas", "assistenteDeCalibracao"])
+def test_modal_por_cima_nao_aparece_com_assistente_indefinido(app, nome):
+    _abrir(app)  # com o pai visível, o `visible` do modal depende só do `assistente`
+    modal = app.achar(nome)
+    assert modal.property("visible") is False
+    _avaliar(modal, "assistente = undefined")
+    assert modal.property("visible") is False
+
+
+def _clicar_botao(app, nome):
+    """Um clique de verdade (mouse) no botão, esperando ele aparecer.
+
+    O clique vai perto da borda direita: no `offscreen` a fonte é larga, a fila de botões passa da borda esquerda do
+    cartão e o centro do primeiro cai na parte cortada.
+    """
+    assert _esperar(lambda: app.achar(nome).property("visible") is True), nome
+    botao = app.achar(nome)
+    ponto = botao.mapToScene(QPointF(botao.width() - 12, botao.height() / 2)).toPoint()
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
+
+
+def test_calibracao_clique_nos_botoes_de_ponta_a_ponta(calibracao_aberta, fitas_espiadas):
+    from cartridges.utils import session_fita  # noqa: PLC0415
+
+    app, _dialogo = calibracao_aberta
+    assistente = app.preferencias.calibracao
+    # Lista -> etapa: o dispositivo escolhido.
+    _clicar_botao(app, "dispositivoDaCalibracao-eb0")
+    assert assistente.paginaAtual == "etapa"
+    # Restaurar volta a etapa ao neutro; Voltar da primeira etapa leva à lista.
+    assistente.mudar_tom(-8)
+    _clicar_botao(app, "botaoRestaurarCalibracao")
+    assert assistente.calibracoes["eb0"].cores[0] == (0, 1.0)
+    _clicar_botao(app, "botaoVoltarCalibracao")
+    assert assistente.paginaAtual == "inicio"
+    # Testar -> teste; Pausar vira Continuar e de volta; Avançar muda a cor.
+    _clicar_botao(app, "botaoTestarCalibracao")
+    assert assistente.paginaAtual == "teste"
+    titulo = assistente.titulo
+    _clicar_botao(app, "botaoPausarCalibracao")
+    assert assistente.pausado is True
+    assert _esperar(lambda: app.achar("botaoPausarCalibracao").property("text") == "Continuar")
+    _clicar_botao(app, "botaoPausarCalibracao")
+    assert assistente.pausado is False
+    assert app.achar("botaoPausarCalibracao").property("text") == "Pausar"
+    _clicar_botao(app, "botaoAvancarTeste")
+    assert assistente.titulo != titulo
+    # Voltar aos ajustes devolve à lista; Testar de novo e Concluir grava e fecha.
+    _clicar_botao(app, "botaoVoltarAosAjustes")
+    assert assistente.paginaAtual == "inicio"
+    _clicar_botao(app, "botaoTestarCalibracao")
+    assistente.mudar_tom(5)
+    _clicar_botao(app, "botaoConcluirCalibracao")
+    assert _esperar(lambda: app.achar("assistenteDeCalibracao").property("visible") is False)
+    assert app.preferencias.calibracao is None
+    assert [f.id for f in session_fita.fitas()] == ["eb0", "eb1"]
 
 
 # endregion

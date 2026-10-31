@@ -17,7 +17,7 @@ Rectangle {
 
     anchors.fill: parent
     z: 10
-    visible: login !== null && login.aberto
+    visible: !!login && login.aberto
     color: "#80000000"
     Keys.onEscapePressed: janela.login.fechar()
     // Modal para o teclado: nenhuma tecla chega à tela de trás. O Tab passa, para circular entre os campos e os botões.

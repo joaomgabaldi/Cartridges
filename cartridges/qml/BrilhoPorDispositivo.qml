@@ -18,7 +18,7 @@ Rectangle {
 
     anchors.fill: parent
     z: 10
-    visible: modelo !== null
+    visible: !!modelo
     color: "#80000000"
     Keys.onEscapePressed: modelo.cancelar()
     // Modal para o teclado e o controle: nenhuma tecla chega às Preferências de trás (que ficam apagadas). O Tab passa,

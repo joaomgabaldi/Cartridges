@@ -103,7 +103,12 @@ def refresh(monkeypatch):
     monkeypatch.setattr(shared, "store", FakeStore(), raising=False)
     instance = MetadataRefresh()
     monkeypatch.setattr(instance, "_announce", lambda *_a: None)
-    return instance
+    yield instance
+    # `start` abre uma tarefa na lista global; um teste que não termina a fila a deixaria lá.
+    from cartridges.modelos import tarefas  # noqa: PLC0415
+
+    for tarefa in list(tarefas.lista._tarefas):  # noqa: SLF001
+        tarefas.lista.remover(tarefa)
 
 
 def drive(refresh_obj, managers, tags=None):

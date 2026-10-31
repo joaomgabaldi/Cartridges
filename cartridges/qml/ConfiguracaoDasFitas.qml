@@ -21,7 +21,7 @@ Rectangle {
 
     anchors.fill: parent
     z: 10
-    visible: assistente !== null
+    visible: !!assistente
     color: "#80000000"
     Keys.onEscapePressed: assistente.fechar()
     // Modal para o teclado e o controle: nenhuma tecla chega às Preferências de trás (que ficam apagadas). O Tab passa,

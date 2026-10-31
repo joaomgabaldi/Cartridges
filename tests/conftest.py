@@ -32,23 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 _RAIZ_REGISTRO = r"Software\CartridgesTestes"
-# Referências guardadas na importação: um teste que troca `winreg.OpenKey` ainda
-# está com o monkeypatch ativo quando a limpeza abaixo roda.
-_abrir_chave, _enum_chave, _apagar = winreg.OpenKey, winreg.EnumKey, winreg.DeleteKey
-
-
-def _apagar_chave(raiz: int, caminho: str) -> None:
-    try:
-        with _abrir_chave(raiz, caminho, 0, winreg.KEY_ALL_ACCESS) as chave:
-            while True:
-                try:
-                    filha = _enum_chave(chave, 0)
-                except OSError:
-                    break
-                _apagar_chave(raiz, f"{caminho}\\{filha}")
-    except FileNotFoundError:
-        return
-    _apagar(raiz, caminho)
+from tests.apoio_registro import _apagar_chave  # noqa: E402
 
 
 # Antes de qualquer `import cartridges`: o `shared` real calcula os caminhos ao ser importado,

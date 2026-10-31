@@ -33,8 +33,13 @@ def _linha(i):
 
 @pytest.fixture(autouse=True)
 def lista_vazia(app_qt):  # noqa: ARG001
+    _limpar()  # vazamento de outro arquivo não pode quebrar este
     yield
     _rodar(0.05)
+    _limpar()
+
+
+def _limpar():
     for tarefa in list(tarefas.lista._tarefas):  # noqa: SLF001
         tarefas.lista.remover(tarefa)
 

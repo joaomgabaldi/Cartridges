@@ -8,6 +8,7 @@ from cartridges import shared
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.utils import window_geometry
 from cartridges.utils.window_geometry import Monitor
+from tests.apoio_capas import _ManagerDeCapas
 
 _CRIAR_PLACA_REAL = window_geometry._criar_placa  # antes da guarda `sem_placa_de_verdade`
 
@@ -199,22 +200,6 @@ class _FilaFalsa:
 
     def dispensar(self, id_):
         self.dispensados.append(id_)
-
-
-class _ManagerDeCapas:
-    signals: set = set()
-
-    def __init__(self, erros=()):
-        self.callbacks, self.erros, self.resets = [], list(erros), 0
-
-    def reset_cancellable(self):
-        self.resets += 1
-
-    def collect_errors(self):
-        return self.erros
-
-    def process_game(self, _game, _data, callback):
-        self.callbacks.append(callback)
 
 
 def _capas(store, make_game, n=2, **manager):

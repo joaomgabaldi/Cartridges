@@ -31,7 +31,7 @@ from cartridges.modelos import preferencias as preferencias_mod
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.utils import open_uri, session_fita
 from tests.apoio_fita import falsas, pastas, sem_fade, sem_vigia  # noqa: F401
-from tests.conftest import _apagar_chave
+from tests.apoio_registro import _apagar_chave
 from tests.test_app_conquistas import _Gravador
 from tests.test_preferencias_fitas_qt import _com_fitas, previas  # noqa: F401
 from tests.test_qml_biblioteca import _achar, _esperar
