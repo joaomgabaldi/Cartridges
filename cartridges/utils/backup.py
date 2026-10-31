@@ -645,7 +645,7 @@ def aplicar_pendente(progresso: Optional[Callable[[float], None]] = None) -> Opt
             # Os saves do backup entraram na pasta padrão, na troca acima.
             escolhida = shared.schema.get_string(_CHAVE_DA_PASTA_DOS_SAVES)
             shared.schema.reset(_CHAVE_DA_PASTA_DOS_SAVES)
-                    # Só depois de zerada: uma falha antes daqui devolve tudo, a escolha
+            # Só depois de zerada: uma falha antes daqui devolve tudo, a escolha
             # inclusive, e não há o que avisar.
             pasta_dos_saves_desfeita = escolhida or None
     except Exception:  # pylint: disable=broad-exception-caught

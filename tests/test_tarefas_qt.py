@@ -720,6 +720,36 @@ def test_fechar_as_tarefas_com_saves_em_andamento_espera_o_fim_para_sair(fechame
         outra.destroy()
 
 
+def test_principal_de_volta_por_outro_caminho_desfaz_a_espera(fechamento, monkeypatch):
+    f = fechamento
+    saves = [True]
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: saves[0])
+    assert f.painel.principalFechando() is False
+    f.painel.janelaFechada()
+    _esperar()
+    assert not QGuiApplication.quitOnLastWindowClosed()
+
+    f.principal.show()  # por exemplo o `present` do fim de uma sessão
+    saves[0] = False
+    _esperar(limite=0.6)
+
+    assert f.saidas == []
+    assert not f.painel._espera.isActive()
+    assert QGuiApplication.quitOnLastWindowClosed()
+
+
+def test_espera_que_termina_restaura_o_sair_com_a_ultima_janela(fechamento, monkeypatch):
+    f = fechamento
+    saves = [True]
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: saves[0])
+    assert f.painel.principalFechando() is False
+    f.painel.janelaFechada()
+    _esperar()
+    saves[0] = False
+    assert _esperar(lambda: f.saidas == [1])
+    assert QGuiApplication.quitOnLastWindowClosed()
+
+
 def test_segunda_abertura_durante_a_espera_traz_a_principal_e_nao_sai(fechamento, monkeypatch):
     f = fechamento
     saves = [True]

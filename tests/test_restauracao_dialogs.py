@@ -342,6 +342,44 @@ def test_janela_destrava_a_lista_ao_atualizar(modelo, aplicativo, store, make_ga
     assert modelo.pendentesAbertos is True
 
 
+def test_importacao_que_termina_com_a_lista_fechada_nao_a_reabre(modelo, aplicativo, store, make_game, monkeypatch, tmp_path):
+    _jogo(store, make_game, "gt", "Gran Turismo 7")
+    restauracao.gravar(["gt"], 1)
+    atalho = tmp_path / "GT7.lnk"
+    monkeypatch.setattr(restauracao, "candidatos", lambda _jogo: [atalho])
+    monkeypatch.setattr(restauracao, "decidir", lambda *_a: None)
+    modelo.mostrarPendentes()
+    modelo.escolherAtalho("gt")
+    modelo.usarAtalho(str(atalho))
+    modelo.lembrarDepois()
+
+    aplicativo.importacoes.pedidos[0]["ao_terminar"]()
+
+    assert modelo.pendentesAbertos is False
+    assert modelo.listaTravada is False
+    assert _avisos(aplicativo) == []
+
+
+def test_importacao_que_esvazia_a_lista_fechada_avisa_restauracao_concluida(
+    modelo, aplicativo, store, make_game, monkeypatch, tmp_path
+):
+    _jogo(store, make_game, "gt", "Gran Turismo 7")
+    restauracao.gravar(["gt"], 1)
+    atalho = tmp_path / "GT7.lnk"
+    monkeypatch.setattr(restauracao, "candidatos", lambda _jogo: [atalho])
+    monkeypatch.setattr(restauracao, "decidir", lambda *_a: None)
+    modelo.mostrarPendentes()
+    modelo.escolherAtalho("gt")
+    modelo.usarAtalho(str(atalho))
+    modelo.lembrarDepois()
+    restauracao.remover("gt")
+
+    aplicativo.importacoes.pedidos[0]["ao_terminar"]()
+
+    assert _avisos(aplicativo) == ["Restauração concluída"]
+    assert modelo.listaTravada is False
+
+
 def test_janela_que_esvazia_avisa_restauracao_concluida(modelo, aplicativo, store, make_game):
     _jogo(store, make_game)
     restauracao.gravar(["a"], 1)

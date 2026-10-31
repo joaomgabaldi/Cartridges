@@ -284,10 +284,14 @@ class PainelDasTarefas(QObject):
         QTimer.singleShot(0, _sair)
 
     def _conferir_a_espera(self) -> None:
+        if self._janela is not None and self._janela.isVisible():
+            self._desfazer_a_espera()  # a principal voltou por outro caminho: o app segue aberto
+            return
         from cartridges.saves import backup_de_saves  # noqa: PLC0415
 
         if not backup_de_saves.em_andamento():
             self._espera.stop()
+            QGuiApplication.setQuitOnLastWindowClosed(True)  # um quit recusado não deixa o processo sem janela
             _sair()
 
     def _desfazer_a_espera(self) -> None:

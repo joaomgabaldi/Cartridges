@@ -120,6 +120,7 @@ Item {
         Keys.onEnterPressed: acionar(foco)
         Keys.onSpacePressed: acionar(foco)
         Keys.onEscapePressed: acionar(0)
+        Keys.onPressed: event => event.accepted = true  // modal: nenhuma tecla chega à página de trás
 
         MouseArea { anchors.fill: parent } // a grade embaixo não recebe cliques
 

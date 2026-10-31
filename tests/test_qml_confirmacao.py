@@ -280,3 +280,29 @@ def test_confirmacao_por_cima_das_preferencias(janela):
     _esperar()
     assert janela.foco_na_confirmacao()
     assert janela.preferencias.aberto is True
+
+
+def test_tab_nao_tira_o_foco_do_aviso_e_esc_ainda_fecha(janela):
+    janela.janela.show()
+    janela.janela.requestActivate()
+    fechados = []
+    janela.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: fechados.append(1))
+    dialogo = janela.achar("dialogoDeErros")
+    assert _esperar(lambda: dialogo.property("visible") is True)
+
+    def foco_no_dialogo():
+        item = janela.janela.property("activeFocusItem")
+        while item is not None:
+            if item is dialogo:
+                return True
+            item = item.parentItem()
+        return False
+
+    assert _esperar(foco_no_dialogo)
+    for tecla in (Qt.Key.Key_Tab, Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
+        QTest.keyClick(janela.janela, tecla)
+        _esperar()
+        assert foco_no_dialogo()
+    QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: dialogo.property("visible") is False)
+    assert fechados == [1]

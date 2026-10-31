@@ -27,8 +27,8 @@ from cartridges.calibracao_janela import AssistenteDeCalibracao
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.fita_wizard import FitaWizard
 from cartridges.modelos.backup_da_biblioteca import BackupDasPreferencias
-from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.modelos.contas import ContasDasLojas
+from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.utils import janela_por_cima, open_uri, session_fita, window_geometry
 from cartridges.utils.thread_principal import na_thread_principal
 

@@ -22,8 +22,10 @@ Rectangle {
         itens = novosItens
         rotuloSecundario = novoRotuloSecundario || ""
         visible = true
-        var alvo = rotuloSecundario !== "" ? botaoSecundario : dialogo
-        alvo.forceActiveFocus()
+        // Adiado: o item acabou de ficar visível e só então aceita o foco.
+        Qt.callLater(() => {
+            if (dialogo.visible) (dialogo.rotuloSecundario !== "" ? botaoSecundario : botao).forceActiveFocus(Qt.TabFocusReason)
+        })
     }
 
     function acionarSecundario() {
@@ -45,6 +47,8 @@ Rectangle {
     Keys.onEscapePressed: fechar()
     Keys.onReturnPressed: fechar()
     Keys.onEnterPressed: fechar()
+    // Modal: nenhuma tecla chega à página de trás.
+    Keys.onPressed: event => event.accepted = true
 
     MouseArea { anchors.fill: parent } // a grade embaixo não recebe cliques
 
@@ -159,6 +163,8 @@ Rectangle {
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
                     Accessible.name: rotulo.text
+                    Keys.onTabPressed: (botaoSecundario.visible ? botaoSecundario : botao).forceActiveFocus(Qt.TabFocusReason)
+                    Keys.onBacktabPressed: (botaoSecundario.visible ? botaoSecundario : botao).forceActiveFocus(Qt.BacktabFocusReason)
                     Keys.onReturnPressed: dialogo.fechar()
                     Keys.onEnterPressed: dialogo.fechar()
                     Text {
@@ -185,6 +191,8 @@ Rectangle {
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
                     Accessible.name: rotuloDoSecundario.text
+                    Keys.onTabPressed: botao.forceActiveFocus(Qt.TabFocusReason)
+                    Keys.onBacktabPressed: botao.forceActiveFocus(Qt.BacktabFocusReason)
                     Keys.onReturnPressed: dialogo.acionarSecundario()
                     Keys.onEnterPressed: dialogo.acionarSecundario()
                     Text {

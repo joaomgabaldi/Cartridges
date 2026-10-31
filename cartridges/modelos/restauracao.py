@@ -241,7 +241,7 @@ class ContinuacaoDaRestauracao(QObject):
                 )
             return
         except OSError:
-            # shortcut: a cópia que falha só vai ao log (a `main` deixava a exceção subir) e não há texto aprovado para o aviso; sai quando houver (o diálogo de erro inesperado do plano 8b, ou um texto aprovado).
+            # shortcut: só a falha de cópia do atalho vai ao log, sem aviso na tela (a `main` deixava a exceção subir) por falta de texto aprovado; sai no plano 8b, com o diálogo de erro inesperado.
             logging.exception("Não foi possível copiar o atalho %s", url.toLocalFile())
             return
         self._usar(caminho)
@@ -279,7 +279,18 @@ class ContinuacaoDaRestauracao(QObject):
         # importações ao mesmo tempo zerariam as listas de jogos achados uma da outra.
         self._travada = True
         self.alterado.emit()
-        self._aplicativo.importar(ao_terminar=self.mostrarPendentes, varrer_atalhos=True, silenciosa=True)
+        self._aplicativo.importar(ao_terminar=self._depois_da_importacao, varrer_atalhos=True, silenciosa=True)
+
+    def _depois_da_importacao(self) -> None:
+        """Fim da importação de uma escolha: relê a lista e só a reabre se ainda estava aberta (como a `main`)."""
+        if self._pendentes_abertos:
+            self.mostrarPendentes()
+            return
+        self._pendentes = self._ler_pendentes()
+        self._travada = False
+        self.alterado.emit()
+        if not self._pendentes:
+            self._aplicativo.avisos.adicionar(_("Restauração concluída"))
 
     # endregion
     # region O conflito de dados

@@ -4,8 +4,7 @@
 
 """Regressões da auditoria de 18/09/2026 que não dependem do `gi`: as varreduras de fundo.
 
-Saíram de `test_auditoria_0918_fitas.py` (b11, b12 e b16), que segue na lista do GTK por causa
-dos testes do backup (plano 8). Cada teste falha sem o conserto do achado cujo id está no nome.
+Saíram de `test_auditoria_0918_fitas.py` (b11, b12 e b16), apagado no plano 8a. Cada teste falha sem o conserto do achado cujo id está no nome.
 """
 
 import threading
