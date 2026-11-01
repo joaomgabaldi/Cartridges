@@ -100,14 +100,25 @@ def test_novidades_da_versao_atual_da_metainfo():
 
 
 def test_sem_release_da_versao_nao_mostra_novidades(app_qt, monkeypatch, tmp_path):  # noqa: ARG001
-    assert novidades_da_versao(METAINFO, "2.0.0") == []
+    assert novidades_da_versao(METAINFO, "9.9.9") == []
     assert novidades_da_versao(tmp_path / "nao_existe.xml", "2026.10.26") == []
-    monkeypatch.setattr(shared, "VERSION", "2.0.0")
+    monkeypatch.setattr(shared, "VERSION", "9.9.9")
     sobre = Sobre(None)
     sobre.abrir()
     assert sobre.temNovidades is False
     assert sobre.novidades == []
-    assert sobre.versao == "2.0.0"
+    assert sobre.versao == "9.9.9"
+
+
+def test_novidades_da_2_0_0_aparecem_no_sobre(app_qt):  # noqa: ARG001
+    # Sem trocar `shared.VERSION`: é a versão que o app realmente leva.
+    sobre = Sobre(None)
+    sobre.abrir()
+    assert sobre.temNovidades is True
+    assert len(sobre.novidades) >= 1
+    # O texto exato é o da 2.0.0, lida pela versão (não pelo topo, que muda a cada subida).
+    primeiro = novidades_da_versao(METAINFO, "2.0.0")[0]["texto"]
+    assert primeiro == "O aplicativo foi refeito com uma nova interface, integrada ao Windows 11."
 
 
 def test_modelo_le_as_novidades_da_versao_ao_abrir(app_qt, monkeypatch):  # noqa: ARG001
@@ -266,10 +277,10 @@ def test_pagina_principal_mostra_nome_versao_e_linhas(janela):
 
 
 def test_sem_release_da_versao_a_linha_novidades_some(janela, monkeypatch):
-    monkeypatch.setattr(shared, "VERSION", "2.0.0")
+    monkeypatch.setattr(shared, "VERSION", "9.9.9")
     _abrir(janela)
     assert janela.achar("linhaNovidades").property("visible") is False
-    assert janela.achar("versaoDoApp").property("text") == "2.0.0"
+    assert janela.achar("versaoDoApp").property("text") == "9.9.9"
 
 
 def test_pagina_de_novidades_tem_titulo_versao_e_itens(janela):

@@ -69,6 +69,10 @@ def test_parse_release_picks_the_exe_and_strips_prefixes():
     )
 
 
+def test_parse_release_tira_o_v_da_versao_normal():
+    assert parse_release(dict(_API, tag_name="v2.0.1")).version == "2.0.1"
+
+
 def test_parse_release_without_exe_is_none():
     data = dict(_API, assets=[_API["assets"][0]])
     assert parse_release(data) is None
@@ -94,6 +98,15 @@ def test_parse_release_without_digest_keeps_empty_hash():
         ("latest", "2026.09.12", False),
         ("2026.9.13", "2026.09.12", False),
         ("2026.09.13", "0.0.1-dev", False),
+        ("2.0.1", "2.0.0", True),
+        ("2.10.0", "2.9.0", True),
+        ("2.0.0", "2.0.0", False),
+        ("1.9.9", "2.0.0", False),
+        ("2026.10.26", "2.0.0", False),
+        ("2.1.0-beta", "2.0.0", False),
+        ("2.1", "2.0.0", False),
+        ("v2.0.1", "2.0.0", False),
+        ("2.0.1", "2026.10.26", False),
     ],
 )
 def test_is_newer(version, current, expected):
@@ -308,6 +321,20 @@ def test_check_asks_only_for_a_newer_release(tmp_path, monkeypatch, current, ask
         assert queued[0][1].version == "2026.09.10"
     else:
         assert queued == []
+
+
+def test_data_antiga_nunca_e_oferecida_a_2_0(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_updater, "download_dir", lambda: tmp_path / "update")
+    monkeypatch.setattr(app_updater.shared, "VERSION", "2.0.0")
+    api = dict(_API, tag_name="v2026.10.26")
+    resposta = types.SimpleNamespace(raise_for_status=lambda: None, json=lambda: api)
+    monkeypatch.setattr(app_updater.requests, "get", lambda *_a, **_k: resposta)
+    perguntas: list[tuple] = []
+    monkeypatch.setattr(app_updater, "na_thread_principal", lambda *args: perguntas.append(args))
+
+    AppUpdater()._check_thread()  # pylint: disable=protected-access
+
+    assert perguntas == []
 
 
 def _sem_sair(monkeypatch):

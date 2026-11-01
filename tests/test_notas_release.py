@@ -16,6 +16,9 @@ _spec.loader.exec_module(notas_release)
 METAINFO = """<?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <releases>
+    <release version="2.0.0" date="2026-11-01">
+      <description translate="no"><ul><li>Interface nova</li><li>Sem borda invisível</li></ul></description>
+    </release>
     <release version="2026.10.06" date="2026-10-06">
       <description translate="no">
         <ul>
@@ -51,6 +54,26 @@ def test_notas_da_versao_pedida(tmp_path):
     )
 
 
+def test_notas_da_2_0_0_depois_da_ultima_data(tmp_path):
+    arquivo = tmp_path / "metainfo.xml.in"
+    arquivo.write_text(METAINFO, encoding="utf-8")
+
+    novidades = notas_release.notas(str(arquivo), "2.0.0", "2026.10.06").split("\n\n")[1]
+    assert novidades == "- Interface nova.\n- Sem borda invisível."
+
+
+def test_notas_seguem_a_ordem_do_arquivo(tmp_path):
+    arquivo = tmp_path / "metainfo.xml.in"
+    arquivo.write_text(METAINFO, encoding="utf-8")
+
+    # Como texto, "2026..." é maior que "2.0.0": só a ordem do arquivo serve.
+    novidades = notas_release.notas(str(arquivo), "2.0.0", "2026.10.02").split("\n\n")[1]
+    assert novidades == (
+        "- Interface nova.\n- Sem borda invisível.\n"
+        "- Agora as buscas estão mais rápidas.\n- Foi corrigido o desenho da janela.\n- Item pulado."
+    )
+
+
 def test_versao_sem_release_para(tmp_path):
     arquivo = tmp_path / "metainfo.xml.in"
     arquivo.write_text(METAINFO, encoding="utf-8")
@@ -76,7 +99,7 @@ def test_junta_as_versoes_nunca_publicadas(tmp_path):
 
 
 def test_nao_passa_da_versao_pedida_nem_repete_a_publicada(tmp_path):
-    """Uma <release> mais nova que a versão do meson.build não entra; e com a
+    """Uma <release> mais nova que a versão pedida não entra; e com a
     própria versão já publicada (re-execução), só ela."""
     arquivo = tmp_path / "metainfo.xml.in"
     arquivo.write_text(METAINFO, encoding="utf-8")
@@ -86,3 +109,14 @@ def test_nao_passa_da_versao_pedida_nem_repete_a_publicada(tmp_path):
 
     assert novidades("2026.10.04", "2026.09.29") == "- Item pulado.\n- Item publicado."
     assert novidades("2026.10.04", "2026.10.04") == "- Item pulado."
+
+
+def test_anterior_ausente_ou_a_frente_devolve_so_a_versao(tmp_path):
+    arquivo = tmp_path / "metainfo.xml.in"
+    arquivo.write_text(METAINFO, encoding="utf-8")
+
+    def novidades(anterior):
+        return notas_release.notas(str(arquivo), "2026.10.04", anterior).split("\n\n")[1]
+
+    assert novidades("2099.01.01") == "- Item pulado."  # fora do arquivo
+    assert novidades("2026.10.06") == "- Item pulado."  # à frente da versão, no arquivo

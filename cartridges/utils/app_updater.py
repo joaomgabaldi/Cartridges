@@ -78,7 +78,8 @@ MAX_INSTALLER_BYTES = 512 * 1024 * 1024
 # de jogo que a adiou já acabou.
 ASK_RETRY_SECONDS = 60
 
-_VERSION_RE = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
+_NORMAL = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+_DATA = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 _CODE_RE = re.compile(r"`([^`]+)`")
 
@@ -121,10 +122,14 @@ def parse_release(data: dict) -> Optional[Release]:
 
 
 def is_newer(version: str, current: str) -> bool:
-    """``AAAA.MM.DD`` já ordena como texto; outro formato nunca é mais novo."""
-    if not (_VERSION_RE.fullmatch(version) and _VERSION_RE.fullmatch(current)):
-        return False
-    return version > current
+    """``X.Y.Z`` compara por número; ``AAAA.MM.DD`` (as versões antigas) é sempre
+    mais velha que ``X.Y.Z``; outro formato nunca é mais novo."""
+    # A data também casa com _NORMAL: ela é testada antes.
+    if _DATA.fullmatch(version) or _DATA.fullmatch(current):
+        return bool(_DATA.fullmatch(version) and _DATA.fullmatch(current) and version > current)
+    if (nova := _NORMAL.fullmatch(version)) and (atual := _NORMAL.fullmatch(current)):
+        return tuple(map(int, nova.groups())) > tuple(map(int, atual.groups()))
+    return False
 
 
 def notes_to_markup(notes: str) -> str:

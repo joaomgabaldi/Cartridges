@@ -28,6 +28,15 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2.0.0" date="2026-11-01">
+      <description translate="no">
+        <ul>
+          <li>O aplicativo foi refeito com uma nova interface, integrada ao Windows 11.</li>
+          <li>A janela não tem mais a borda invisível que atrapalhava cliques e o encaixe nas laterais da tela.</li>
+          <li>A biblioteca, as preferências, o histórico de sessões e os backups continuam como estavam.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.10.26" date="2026-10-26">
       <description translate="no">
         <ul>
