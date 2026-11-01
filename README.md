@@ -3,7 +3,7 @@
 
   # Cartridges
 
-  Seus jogos em um só lugar — launcher de jogos para Windows, em GTK4 e Libadwaita
+  Seus jogos em um só lugar — launcher de jogos para Windows, em Qt (PySide6)
 </div>
 
 Este é um fork da versão para Windows do [Cartridges](https://codeberg.org/kramo/cartridges), o launcher
@@ -218,70 +218,71 @@ dispositivos na sua conta; depois disso, o aplicativo conversa com eles direto p
 O instalador pede permissão de administrador e instala para todos os usuários. Depois de instalado,
 o aplicativo se atualiza sozinho.
 
-**Placa de vídeo NVIDIA:** no modo padrão, o driver da NVIDIA desenha uma moldura preta em volta da
-janela. O instalador evita isso sozinho: grava no driver um perfil "Cartridges" com o *método de
-apresentação Vulkan/OpenGL* em *Preferir nativo*. Se não conseguir, ele mostra no fim da
-instalação o passo a passo para fazer o ajuste no Painel de Controle NVIDIA. A desinstalação
-remove o perfil.
-
 Ao desinstalar, o instalador pergunta se deve remover também a biblioteca e as configurações.
 
 ## Compilação
 
-A build é feita no [MSYS2](https://www.msys2.org), ambiente UCRT64, instalado em
-`C:\msys64` (o caminho que o `build-installer.bat` espera; fora de `Program Files`, que exige
-administrador para gravar). Os comandos abaixo rodam no terminal UCRT64.
+O aplicativo é escrito em Python 3.15 com PySide6 6.12.0 (Qt Quick). A janela sem moldura usa o
+[QWindowKit](https://github.com/stdware/qwindowkit), compilado numa DLL pequena
+(`cartridges/janela/qwk_ponte.dll`) que o repositório não guarda. Os comandos abaixo rodam no
+PowerShell, a partir da raiz do projeto.
 
-### Dependências
+### Executar do código-fonte
 
-No shell UCRT64 (GTK 4.24 e libadwaita 1.10 ou mais recente):
+1. Instale o Python 3.15 e crie o ambiente com as dependências fixadas
+   (`requirements.txt`, mais o `pytest` e o `py7zr` do `requirements-dev.txt`):
 
-```bash
-pacman -S mingw-w64-ucrt-x86_64-gtk4 mingw-w64-ucrt-x86_64-libadwaita \
-  mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-python-gobject \
-  mingw-w64-ucrt-x86_64-python-requests mingw-w64-ucrt-x86_64-python-pillow \
-  mingw-w64-ucrt-x86_64-python-cryptography mingw-w64-ucrt-x86_64-python-pip \
-  mingw-w64-ucrt-x86_64-ffmpeg mingw-w64-ucrt-x86_64-meson mingw-w64-ucrt-x86_64-ninja \
-  mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-binutils
-/ucrt64/bin/python.exe -m pip install --break-system-packages tinytuya
-```
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File tools\ambiente_qt.ps1
+   ```
 
-O `blueprint-compiler` é baixado pelo Meson na primeira configuração.
+2. Gere a `qwk_ponte.dll`. É preciso o Git, o Visual Studio 2022 (ou só as Build Tools) com o conjunto de
+   ferramentas MSVC 14.44, o CMake e o Ninja. O primeiro comando baixa o SDK do Qt 6.12.0 e o
+   QWindowKit para `build-aux\windows\qwk\_deps`; o segundo compila a DLL:
 
-O `tinytuya` conversa com a iluminação inteligente, e o `python-cryptography` é necessário para ele.
-O `ffmpeg` converte o vídeo escolhido como capa e vai junto no instalador.
-Para gerar o instalador, também é preciso o [Inno Setup 7](https://jrsoftware.org/isinfo.php) (o 6 não serve).
+   ```powershell
+   .venv\Scripts\python tools\baixar_qt_sdk.py
+   build-aux\windows\qwk\compilar.bat
+   ```
 
-O aplicativo depende de uma correção no GTK que ainda não está no projeto oficial. Sem ela, a
-janela é desenhada pela metade em monitores maiores que o principal. A correção e o procedimento
-para instalá-la estão em [`build-aux/windows/gtk-patches`](build-aux/windows/gtk-patches/README.md).
+3. Abra o aplicativo:
+
+   ```powershell
+   .venv\Scripts\python -m cartridges
+   ```
+
+Executado a partir do código-fonte, o aplicativo usa o canal de desenvolvimento: os dados ficam em
+`%LOCALAPPDATA%\io.github.joaomgabaldi.Cartridges-dev` e nas preferências
+`Cartridges-dev` do registro, nunca nos da versão instalada. Para começar com uma cópia da sua
+biblioteca, rode `.venv\Scripts\python tools\copiar_dados_dev.py`.
+
+O `ffmpeg` converte o vídeo escolhido como capa animada e o Ludusavi faz o backup dos saves; o
+instalador leva os dois. Executado a partir do código-fonte, o aplicativo procura o `ffmpeg` no
+`PATH`, mas o Ludusavi só ao lado do Python (`.venv\Scripts\ludusavi.exe`); sem ele, o backup dos
+saves fica indisponível. Para usá-lo, copie para essa pasta o `ludusavi.exe` que o instalador leva
+(baixado em `_dist\cache-qt\ludusavi` na primeira montagem do instalador).
 
 ### Instalador
 
-O instalador oficial é gerado pelo workflow **Gerar instalador (beta)** do GitHub Actions, que o
-publica como pré-release. Depois de testada, a pré-release é promovida a versão final.
+O instalador oficial é gerado pelo workflow **Gerar instalador (beta)** do GitHub Actions
+(`.github/workflows/instalador.yml`), disparado à mão. Ele baixa o Python embutido, o `ffmpeg` e o
+Ludusavi (conferidos por SHA-256), compila a `qwk_ponte.dll`, monta a pasta do aplicativo com
+`build-aux/windows/montar_app_qt.py`, empacota com o [Inno Setup 7](https://jrsoftware.org/isinfo.php)
+(o 6 não serve) e publica uma pré-release. Depois de testada, a pré-release é promovida a versão final.
 
-Para gerar um instalador local de teste, execute `build-installer.bat`. Ele confere o GTK
-corrigido, compila o aplicativo, empacota com o Inno Setup e grava o instalador em `_dist`.
-
-### Build manual
-
-```bash
-export PATH="/ucrt64/bin:$PATH" PYTHONUTF8=1
-meson setup _build
-ninja -C _build
-```
-
-O `PYTHONUTF8=1` é necessário porque, sem ele, o compilador dos arquivos `.blp` os lê na
-codificação do Windows e falha.
+Para gerar um instalador local de teste, execute `build-installer.bat` e escolha a opção 2. Ele
+monta a pasta do aplicativo no canal final, empacota com o Inno Setup e grava o instalador em
+`_dist\instalador`. Precisa da `qwk_ponte.dll` do passo anterior, do Inno Setup 7 e de internet na
+primeira vez (para baixar o Python embutido, o `ffmpeg` e o Ludusavi). A opção 1 dispara o workflow
+no GitHub: não a use para um teste local.
 
 ### Testes
 
-```bash
-/ucrt64/bin/python.exe -m pytest
+```powershell
+.venv\Scripts\python -m pytest
 ```
 
-Os testes usam o GTK real do MSYS2, e não o Python do sistema.
+Os testes usam pastas e chaves de registro temporárias; nenhum toca nos dados do aplicativo.
 
 ## Histórico de versões
 
