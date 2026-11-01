@@ -56,7 +56,6 @@ install_data(
     'calibracao_janela.py',
     'session_window.py',
     'session_history.py',
-    'zerados_picker.py',
     'process_session.py',
     'metadata_refresh.py',
     'game_cover.py',

@@ -62,8 +62,7 @@ TESTES_AINDA_GTK: list[str] = [
     "test_auditoria_0918_importadores.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_auditoria_0918_store.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_auditoria_0918_ui.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_auditoria_0923_resto.py",  # planos 8b e fase final: steam_picker, zerados_picker e game_logo (GTK)
-    "test_auditoria_0923_zerados.py",  # plano 8b: Jogos Zerados manuais
+    "test_auditoria_0923_resto.py",  # planos 8b e fase final: steam_picker e game_logo (GTK)
     "test_auditoria_1023_seguranca.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_caixa_redimensionavel.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_estilo_css.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
@@ -76,8 +75,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_store_ligacao_manual.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_tela_de_download.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_ui_logic.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_zerados.py",  # plano 8b: ZeradosPicker
-    "test_zerados_manuais.py",  # plano 8b: ZeradosPicker
 ]
 
 collect_ignore = TESTES_AINDA_GTK

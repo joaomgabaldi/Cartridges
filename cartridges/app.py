@@ -50,6 +50,7 @@ from cartridges.modelos.restaurando import Restaurando, entregar_so_ao_mudar
 from cartridges.modelos.saves import SavesDoJogo
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.modelos.sobre import Sobre
+from cartridges.modelos.zerados_manuais import SeletorDeZerados
 from cartridges.modelos.tarefas import PainelDasTarefas
 from cartridges.ponte import Ponte
 from cartridges.saves import backup_de_saves
@@ -306,6 +307,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     abertura.atualizador = atualizador = AppUpdater()
     abertura.novidades = novidades = Novidades(avisos, NewsChecker())
     sobre = Sobre(avisos)
+    zerados_manuais = SeletorDeZerados()
     abertura.big_picture = big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     abertura.sessao = sessao = ModeloDaSessao(avisos, controle=controle, big_picture=big_picture)
     shared.sessao = sessao
@@ -333,11 +335,12 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
         ("saves", saves), ("conquistasDoJogo", conquistas), ("preferencias", preferencias),
         ("painelDasTarefas", painel_das_tarefas),
         ("restauracao", continuacao), ("atualizador", atualizador), ("novidades", novidades), ("sobre", sobre),
+        ("zeradosManuais", zerados_manuais),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     # O Qt não é dono do que vai ao contexto: tudo precisa de uma referência Python até o fim do `main()`.
     abertura.mantidos = (
-        modelo, filtros, pagina_biblioteca, pagina_zerados, ponte, controle, detalhes, avisos, historico, saves, sobre,
+        modelo, filtros, pagina_biblioteca, pagina_zerados, ponte, controle, detalhes, avisos, historico, saves, sobre, zerados_manuais,
     )  # fmt: skip
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.
     session_wallpaper.restaurar_orfaos()

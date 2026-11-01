@@ -74,15 +74,6 @@ def test_b23_falha_de_busca_troca_o_titulo(win):
     assert Status.descricao == "Verifique a conexão e tente novamente."
 
 
-def test_b27_seletor_vazio_nao_se_contradiz(store, win):
-    from cartridges.zerados_picker import ZeradosPicker  # noqa: PLC0415
-
-    dialogo = ZeradosPicker()
-    vazio = dialogo.pilha.get_child_by_name("vazio")
-    assert vazio.get_title() == "Nenhum jogo disponível"
-    assert vazio.get_description() == "Busque um jogo na Steam para adicioná-lo."
-
-
 def test_b29_instalador_sem_gnome():
     from pathlib import Path  # noqa: PLC0415
 

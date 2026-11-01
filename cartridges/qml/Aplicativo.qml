@@ -13,6 +13,9 @@ Principal {
     // O "Sobre o Cartridges" (D84), pelo mesmo motivo; sem ele no contexto o item do menu some e nenhum diálogo existe.
     readonly property QtObject servicoDoSobre: typeof sobre === "undefined" ? null : sobre
     readonly property bool sobreAberto: servicoDoSobre !== null && servicoDoSobre.aberto
+    // O "Adicionar a Jogos Zerados" (D85), pelo mesmo motivo; sem ele no contexto o botão "+" some e nenhum modal existe.
+    readonly property QtObject servicoDeZerados: typeof zeradosManuais === "undefined" ? null : zeradosManuais
+    readonly property bool zeradosAberto: servicoDeZerados !== null && servicoDeZerados.aberto
     // As Novidades (D83), pelo mesmo motivo; sem elas no contexto (os arneses que não as registram) o botão fica oculto.
     readonly property QtObject servicoDeNovidades: typeof novidades === "undefined" ? null : novidades
     // "todos", "zerados", "novidades" ou "jogo" (a página de detalhes, por cima de uma das duas).
@@ -47,7 +50,7 @@ Principal {
     inicio: [
         BotaoDaBarra {
             id: botaoAdicionar
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto
+            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoAdicionar"
             visible: janela.paginaAtual === "todos"
             glifo: ""
@@ -65,12 +68,21 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoVoltar
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto
+            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoVoltar"
             visible: janela.paginaAtual !== "todos"
             glifo: ""
             dica: "Voltar"
             onClicked: janela.voltar()
+        },
+        BotaoDaBarra {
+            id: botaoAdicionarZerado
+            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
+            objectName: "botaoAdicionarZerado"
+            visible: janela.paginaAtual === "zerados" && janela.servicoDeZerados !== null
+            glifo: ""
+            dica: "Adicionar a Jogos Zerados"
+            onClicked: janela.servicoDeZerados.abrir()
         }
     ]
 
@@ -78,7 +90,7 @@ Principal {
     fim: [
         BotaoDaBarra {
             id: botaoMenu
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto
+            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoMenu"
             glifo: ""
             dica: "Menu principal"
@@ -94,7 +106,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoAtualizar
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto
+            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoAtualizarNovidades"
             visible: janela.paginaAtual === "novidades"
             glifo: ""
@@ -103,7 +115,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoZerados
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto
+            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoZerados"
             visible: janela.paginaAtual === "todos"
             trofeu: true
@@ -112,7 +124,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoNovidades
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto
+            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoNovidades"
             visible: janela.paginaAtual === "todos" && janela.servicoDeNovidades !== null && janela.servicoDeNovidades.visivel
             glifo: ""
@@ -122,7 +134,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoBigPicture
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto
+            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             indisponivel: !bigPicture.disponivel
             objectName: "botaoBigPicture"
             visible: janela.paginaAtual === "todos"
@@ -132,7 +144,7 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoBusca
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto
+            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoBusca"
             visible: janela.paginaAtual === "todos"
             glifo: ""
@@ -154,7 +166,7 @@ Principal {
         comBusca: true
         ativa: pilha.depth === 0 && !bigPicture.visivel && !sessao.emAndamento
         // Com o diálogo de edição, o Big Picture ou a sessão à frente, nada de trás recebe o mouse nem o Tab.
-        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !bigPicture.visivel && !sessao.emAndamento
+        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto && !bigPicture.visivel && !sessao.emAndamento
         onAbrirDetalhes: id => janela.abrirDetalhes(id)
         onEditar: id => edicao.abrir(id)
     }
@@ -165,7 +177,7 @@ Principal {
         objectName: "pilha"
         anchors.fill: parent
         visible: depth > 0
-        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !bigPicture.visivel && !sessao.emAndamento
+        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto && !bigPicture.visivel && !sessao.emAndamento
     }
 
     Component {
@@ -266,6 +278,14 @@ Principal {
         id: dialogoSobre
         modelo: janela.servicoDoSobre
         // Aberto pelo menu principal, que já fechou: o foco vai à página à vista.
+        onRetornoPerdido: janela.paginaDoControle.focarGrade()
+    }
+
+    // O "Adicionar a Jogos Zerados" (D85), aberto pelo "+" da página; acima das páginas e abaixo dos avisos.
+    SeletorDeZerados {
+        id: seletorDeZerados
+        modelo: janela.servicoDeZerados
+        // Aberto pelo botão da barra, que ficou desabilitado: o foco vai à página à vista.
         onRetornoPerdido: janela.paginaDoControle.focarGrade()
     }
 
@@ -388,7 +408,7 @@ Principal {
         id: alvoDeSoltar
         objectName: "alvoDeSoltar"
         anchors.fill: parent
-        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !bigPicture.visivel && !sessao.emAndamento
+        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto && !bigPicture.visivel && !sessao.emAndamento
         onEntered: (arrasto) => arrasto.accepted = arrasto.hasUrls
         onDropped: (soltou) => {
             if (soltou.hasUrls) aplicativo.soltar(soltou.urls)
@@ -441,7 +461,7 @@ Principal {
     // A página à vista: "Todos os jogos", "Jogos Zerados" ou a de detalhes.
     readonly property var paginaDoControle: pilha.depth === 0 ? todos : pilha.currentItem
     // Algum diálogo na frente (os menus não contam): o botão das tarefas some.
-    readonly property bool modalAberto: camadaDeAvisos.dialogoAberto || edicao.aberto || historico.aberto || conquistasDoJogo.aberto || preferencias.aberto || saves.aberto || restauracao.aberta || sobreAberto
+    readonly property bool modalAberto: camadaDeAvisos.dialogoAberto || edicao.aberto || historico.aberto || conquistasDoJogo.aberto || preferencias.aberto || saves.aberto || restauracao.aberta || sobreAberto || zeradosAberto
     // Menu ou diálogo na frente: o controle navega nele pelas teclas, como o teclado faria.
     readonly property bool popupAberto: menuPrincipal.opened || modalAberto
         || (paginaDoControle !== null && paginaDoControle.menuDoJogoAberto)
@@ -449,7 +469,7 @@ Principal {
     property point posicaoDoPonteiro
 
     // Os botões da barra que o controle alcança com ↑ na primeira linha.
-    readonly property var botoesDaBarra: [botaoAdicionar, botaoVoltar, botaoZerados, botaoNovidades, botaoAtualizar, botaoBigPicture, botaoBusca, botaoMenu]
+    readonly property var botoesDaBarra: [botaoAdicionar, botaoVoltar, botaoAdicionarZerado, botaoZerados, botaoNovidades, botaoAtualizar, botaoBigPicture, botaoBusca, botaoMenu]
     function botaoFocado() {
         for (var i = 0; i < botoesDaBarra.length; ++i)
             if (botoesDaBarra[i].activeFocus) return botoesDaBarra[i]

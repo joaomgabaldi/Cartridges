@@ -37,6 +37,7 @@ from cartridges.modelos.preferencias import Preferencias
 from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.modelos.sobre import Sobre
+from cartridges.modelos.zerados_manuais import SeletorDeZerados
 from cartridges.modelos.tarefas import PainelDasTarefas
 from cartridges.ponte import Ponte
 from cartridges.store.managers.exibicao_manager import ExibicaoManager
@@ -422,6 +423,7 @@ class _Janela:
         self.atualizador = AppUpdater()
         self.novidades = Novidades(self.ponte.fila, NewsChecker())
         self.sobre = Sobre(self.ponte.fila)
+        self.zerados_manuais = SeletorDeZerados()
         self.big_picture = BigPicture(self.modelo)
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(_DetalhesFalsos(), self.sessao)
@@ -447,6 +449,7 @@ class _Janela:
             ("atualizador", self.atualizador),
             ("novidades", self.novidades),
             ("sobre", self.sobre),
+            ("zeradosManuais", self.zerados_manuais),
         ):
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

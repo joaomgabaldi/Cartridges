@@ -37,6 +37,7 @@ SeletorDeCor 1.0 SeletorDeCor.qml
 DialogoDoHistorico 1.0 DialogoDoHistorico.qml
 DialogoDeVersoes 1.0 DialogoDeVersoes.qml
 DialogoSobre 1.0 DialogoSobre.qml
+SeletorDeZerados 1.0 SeletorDeZerados.qml
 GraficoDoHistorico 1.0 GraficoDoHistorico.qml
 CartaoDoAviso 1.0 CartaoDoAviso.qml
 BarraDeProgresso 1.0 BarraDeProgresso.qml
