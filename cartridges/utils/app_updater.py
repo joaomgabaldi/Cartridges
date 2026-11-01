@@ -57,21 +57,19 @@ RELEASES_URL = "https://api.github.com/repos/joaomgabaldi/Cartridges/releases/la
 # aparece no log do Inno, em %TEMP%\Setup Log AAAA-MM-DD #NNN.txt, fora da
 # pasta que o app apaga.
 #
-# /FORCECLOSEAPPLICATIONS: o gdbus.exe que o GLib abre como barramento de sessão
-# vive uns 3 s depois de o app fechar. Instalado só para o usuário não há UAC
-# no meio, o instalador chega antes, não consegue fechar o gdbus com educação e,
-# em modo silencioso, desiste e desfaz tudo (testado em 13/09/2026). Forçado, o
-# Restart Manager encerra o gdbus e a instalação segue.
+# /FORCECLOSEAPPLICATIONS: em modo silencioso, se um processo que usa a pasta não
+# fecha com educação, o instalador desiste e desfaz tudo (visto em 13/09/2026, com
+# um processo auxiliar da versão GTK). Forçado, o Restart Manager o encerra e a
+# instalação segue.
 #
 # Risco conhecido: forçado, ele encerra também o próprio app se o fechamento
-# ainda não acabou — e o `do_shutdown` pode passar até 8 s em
-# `session_fita.fechar()` sem atender mensagens. O dano é limitado (a chave
-# órfã das fitas é desfeita na reabertura), mas o teste de ponta a ponta do
-# atualizador precisa ser repetido com as fitas ligadas.
+# ainda não acabou — e o `session_fita.fechar()`, no fechamento, pode levar até
+# 8 s. O dano é limitado (a chave órfã das fitas é desfeita na reabertura), mas o
+# teste de ponta a ponta do atualizador precisa ser repetido com as fitas ligadas.
 INSTALLER_ARGUMENTS = "/SILENT /SUPPRESSMSGBOXES /NORESTART /LOG /FORCECLOSEAPPLICATIONS"
 
 # Teto do download quando a release não informa o tamanho do anexo. O
-# instalador tem uns 60 MB; o teto só impede um corpo sem fim de encher o disco.
+# instalador tem pouco mais de 100 MB; o teto só impede um corpo sem fim de encher o disco.
 MAX_INSTALLER_BYTES = 512 * 1024 * 1024
 
 # De quanto em quanto tempo a pergunta da versão nova volta a olhar se a sessão
@@ -169,8 +167,8 @@ def installed_root() -> Optional[Path]:
     """Pasta da instalação, ou None quando o app roda do código-fonte.
 
     O app instalado roda de ``{app}\\bin\\Cartridges.exe`` e o Inno Setup deixa o
-    ``unins000.exe`` em ``{app}``. No MSYS2 o pai de ``bin`` é ``ucrt64``, que
-    não tem desinstalador, e o app nunca tenta se atualizar.
+    ``unins000.exe`` em ``{app}``. Rodando do código-fonte, o pai da pasta do
+    Python não tem desinstalador, e o app nunca tenta se atualizar.
     """
     root = Path(sys.executable).resolve().parent.parent
     return root if (root / "unins000.exe").is_file() else None

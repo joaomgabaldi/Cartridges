@@ -4,8 +4,11 @@
 
 """A árvore do app instalado: lançador, Python embutido, bibliotecas e o pacote lado a lado com `data/`."""
 
+import hashlib
 import importlib.util
 import json
+import re
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -20,6 +23,11 @@ def _tocar(caminho: Path, texto: str = "x") -> Path:
     caminho.parent.mkdir(parents=True, exist_ok=True)
     caminho.write_text(texto, encoding="utf-8")
     return caminho
+
+
+def _externo(pasta: Path, nome: str, licenca: str) -> Path:
+    _tocar(pasta / nome / "LICENSE", licenca)
+    return _tocar(pasta / nome / f"{nome}.exe")
 
 
 @pytest.fixture
@@ -52,8 +60,15 @@ def insumos(tmp_path):
     _tocar(lib / "PySide6" / "plugins" / "imageformats" / "qwebp.dll")
     _tocar(lib / "PySide6" / "translations" / "qt_pt.qm")
     _tocar(lib / "PySide6" / "resources" / "icudtl.dat")
+    _tocar(lib / "PySide6" / "__init__.py")  # "x" é Python válido: a montagem compila os `.py`
+    qwk = raiz / "build-aux" / "windows" / "qwk" / "_deps" / "qwindowkit"
+    _tocar(qwk / "LICENSE", "Apache")
+    _tocar(qwk / "qmsetup" / "LICENSE", "MIT")
     lancador = _tocar(tmp_path / "Cartridges.exe")
-    return dict(raiz=raiz, python=python, lib=lib, lancador=lancador)
+    return dict(
+        raiz=raiz, python=python, lib=lib, lancador=lancador,
+        ffmpeg=_externo(tmp_path, "ffmpeg", "GPL do FFmpeg"), ludusavi=_externo(tmp_path, "ludusavi", "MIT do Ludusavi"),
+    )  # fmt: skip
 
 
 def test_monta_a_arvore_do_app(insumos, tmp_path):
@@ -71,10 +86,10 @@ def test_monta_a_arvore_do_app(insumos, tmp_path):
     assert (destino / "app" / "data" / "sons" / "tique.wav").is_file()
     assert (destino / "app" / "data" / "icons" / "hicolor" / "scalable" / "apps" / "app.svg").is_file()
     assert not (destino / "app" / "data" / "screenshots").exists()
-    assert not (destino / "app" / "cartridges" / "__pycache__").exists()
-    # o bytecode dos subpacotes também fica de fora (par do antigo `test_meson_install`)
+    # o bytecode do repositório fica de fora: só entra o que a montagem compila
+    assert not (destino / "app" / "cartridges" / "__pycache__" / "x.pyc").exists()
     assert (destino / "app" / "cartridges" / "store" / "__init__.py").is_file()
-    assert not (destino / "app" / "cartridges" / "store" / "__pycache__").exists()
+    assert not (destino / "app" / "cartridges" / "store" / "__pycache__" / "y.pyc").exists()
     assert not (destino / "app" / "cartridges" / "shared.pyi").exists()
 
 
@@ -105,7 +120,8 @@ def test_tira_os_modulos_do_qt_que_o_app_nao_usa(insumos, tmp_path):
 
 @pytest.mark.parametrize("faltando", ["data/io.github.joaomgabaldi.Cartridges.gschema.xml.in",
                                       "data/library_placeholder.svg", "cartridges/janela/qwk_ponte.dll",
-                                      "data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in"])
+                                      "data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in",
+                                      "build-aux/windows/qwk/_deps/qwindowkit/LICENSE"])
 def test_recusa_montar_sem_o_que_o_app_exige(insumos, tmp_path, faltando):
     (insumos["raiz"] / faltando).unlink()
     with pytest.raises(SystemExit):
@@ -169,3 +185,213 @@ def test_monta_a_metainfo_para_o_sobre(insumos, tmp_path):
     destino = tmp_path / "saida"
     montar_app_qt.montar(destino, "desenvolvimento", **insumos)
     assert (destino / "app" / "data" / "io.github.joaomgabaldi.Cartridges.metainfo.xml.in").is_file()
+
+
+def test_monta_o_ffmpeg_ao_lado_do_lancador(insumos, tmp_path):
+    # `capa_video.executavel` o procura ao lado do `sys.executable`, que no app instalado é o lançador.
+    destino = tmp_path / "saida"
+    montar_app_qt.montar(destino, "final", **insumos)
+    assert (destino / "bin" / "ffmpeg.exe").is_file()
+    assert (destino / "bin" / "Cartridges.exe").is_file()
+
+
+def test_monta_o_ludusavi_ao_lado_do_lancador(insumos, tmp_path):
+    # O `[InstallDelete]` apaga o `ludusavi.exe` da versão GTK: sem este, o backup dos saves some em silêncio.
+    destino = tmp_path / "saida"
+    montar_app_qt.montar(destino, "final", **insumos)
+    assert (destino / "bin" / "ludusavi.exe").is_file()
+    assert (destino / "licencas" / "Ludusavi.txt").read_text(encoding="utf-8") == "MIT do Ludusavi"
+
+
+@pytest.mark.parametrize("externo", ["ffmpeg", "ludusavi"])
+def test_canal_final_exige_o_ffmpeg(insumos, tmp_path, externo):
+    insumos[externo] = None
+    destino = tmp_path / "saida"
+    with pytest.raises(SystemExit):
+        montar_app_qt.montar(destino, "final", **insumos)
+    assert not destino.exists()
+
+
+def test_recusa_o_ffmpeg_sem_a_licenca(insumos, tmp_path):
+    (insumos["ffmpeg"].parent / "LICENSE").unlink()
+    with pytest.raises(SystemExit):
+        montar_app_qt.montar(tmp_path / "saida", "final", **insumos)
+
+
+def test_canal_de_desenvolvimento_monta_sem_ffmpeg(insumos, tmp_path):
+    del insumos["ffmpeg"], insumos["ludusavi"]
+    destino = tmp_path / "saida"
+    montar_app_qt.montar(destino, "desenvolvimento", **insumos)
+    assert not (destino / "bin" / "ffmpeg.exe").exists()
+    assert not (destino / "bin" / "ludusavi.exe").exists()
+    assert not (destino / "licencas" / "FFmpeg.txt").exists()
+
+
+def test_monta_as_licencas(insumos, tmp_path):
+    _tocar(insumos["lib"] / "pyside6-6.12.0.dist-info" / "licenses" / "LICENSE", "LGPL")
+    destino = tmp_path / "saida"
+    montar_app_qt.montar(destino, "final", **insumos)
+    licencas = destino / "licencas"
+    assert (licencas / "QWindowKit.txt").read_text(encoding="utf-8") == "Apache"
+    assert (licencas / "qmsetup.txt").read_text(encoding="utf-8") == "MIT"
+    assert (licencas / "FFmpeg.txt").read_text(encoding="utf-8") == "GPL do FFmpeg"
+    assert (destino / "lib" / "pyside6-6.12.0.dist-info" / "licenses" / "LICENSE").is_file()
+
+
+def test_monta_com_os_pyc_compilados(insumos, tmp_path):
+    # Em Program Files o Python não grava: sem `.pyc` prontos, cada abertura recompila tudo (M3). Por data não
+    # serve: o Inno repõe a data dos arquivos e um `.pyc` feito na CI deixaria de conferir.
+    destino = tmp_path / "saida"
+    montar_app_qt.montar(destino, "final", **insumos)
+    fontes = [*(destino / "app" / "cartridges").rglob("*.py"), *(destino / "lib").rglob("*.py")]
+    assert len(fontes) >= 4
+    for fonte in fontes:
+        # O Python embutido é o 3.15: um `.pyc` de outra versão ele ignoraria, e recompilaria tudo a cada abertura.
+        pyc = fonte.parent / "__pycache__" / f"{fonte.stem}.cpython-315.pyc"
+        assert pyc.is_file(), fonte
+        # Bits do cabeçalho (PEP 552): 1 = por hash, sem conferir a fonte.
+        assert int.from_bytes(pyc.read_bytes()[4:8], "little") == 1, fonte
+
+
+def test_compilar_pyc_exige_o_python_do_app(tmp_path, monkeypatch):
+    _tocar(tmp_path / "modulo.py")
+    monkeypatch.setattr(montar_app_qt.sys.implementation, "cache_tag", "cpython-314")
+    with pytest.raises(SystemExit, match="3.15"):
+        montar_app_qt.compilar_pyc(tmp_path)
+    assert not (tmp_path / "__pycache__").exists()
+
+
+def test_compilar_pyc_recusa_um_py_que_nao_compila(tmp_path):
+    _tocar(tmp_path / "quebrado.py", "def (")
+    with pytest.raises(SystemExit):
+        montar_app_qt.compilar_pyc(tmp_path)
+
+
+def test_lancador_avisa_quando_o_python_sai_com_erro():
+    """Sem console, a recusa do `shared.py` e o QML que não carrega sairiam sem nenhum aviso (M2)."""
+    fonte = (Path(montar_app_qt.RAIZ) / "build-aux" / "windows" / "lancador" / "cartridges.c").read_text(encoding="utf-8")
+    assert "return py_main(" not in fonte
+    assert re.search(r"int r = py_main\(argc, argv\);\s*return r \? falha\(\) : 0;", fonte)
+    assert 'L"Não foi possível abrir o Cartridges. Reinstale o aplicativo."' in fonte
+
+
+def _normalizado(nome: str) -> str:
+    return re.sub(r"[-_.]+", "-", nome).lower()
+
+
+def test_requirements_fixa_tudo():
+    raiz = Path(montar_app_qt.RAIZ)
+    linhas = [l.strip() for l in (raiz / "requirements.txt").read_text(encoding="utf-8").splitlines() if l.strip()]
+    fixados = {}
+    for linha in linhas:
+        assert "==" in linha, linha
+        nome, versao = linha.split("==")
+        fixados[_normalizado(nome)] = versao
+    infos = list((raiz / "_dist" / "cache-qt" / "lib").glob("*.dist-info"))
+    if not infos:
+        pytest.skip("sem o cache das bibliotecas")
+    instalados = {}
+    for info in infos:
+        nome, versao = info.name.removesuffix(".dist-info").rsplit("-", 1)
+        instalados[_normalizado(nome)] = versao
+    # Nos dois sentidos: nem pacote do cache sem pino, nem pino que nada instala.
+    assert fixados == instalados
+
+
+def _pacote_falso(tmp_path, monkeypatch, membros: dict[str, str], prefixo: str, nome: str = "pacote.zip") -> None:
+    """Um `.zip` local no lugar do pacote oficial: nada vai à rede."""
+    arquivo = tmp_path / "origem" / nome
+    arquivo.parent.mkdir(exist_ok=True)
+    with zipfile.ZipFile(arquivo, "w") as z:
+        for caminho, texto in membros.items():
+            z.writestr(caminho, texto)
+    monkeypatch.setattr(montar_app_qt, f"{prefixo}_URL", arquivo.as_uri())
+    monkeypatch.setattr(montar_app_qt, f"{prefixo}_SHA256", hashlib.sha256(arquivo.read_bytes()).hexdigest())
+
+
+@pytest.fixture
+def pacote_do_ffmpeg(tmp_path, monkeypatch):
+    _pacote_falso(tmp_path, monkeypatch, {
+        montar_app_qt.FFMPEG_EXE: "binario", montar_app_qt.FFMPEG_LICENCA: "GPL", "outra/coisa.txt": "nao",
+    }, "FFMPEG")  # fmt: skip
+
+
+def test_baixar_ffmpeg_extrai_o_exe_e_a_licenca(pacote_do_ffmpeg, tmp_path):
+    exe = montar_app_qt.baixar_ffmpeg(tmp_path / "cache")
+    assert exe.name == "ffmpeg.exe" and exe.read_text(encoding="utf-8") == "binario"
+    licenca = (exe.parent / "LICENSE").read_text(encoding="utf-8")
+    assert licenca.endswith("GPL")
+    # GPLv3 §6: quem recebe o binário precisa saber onde está a fonte correspondente.
+    assert montar_app_qt.FFMPEG_FONTE in licenca
+    assert montar_app_qt.FFMPEG_FONTE.startswith("https://github.com/FFmpeg/FFmpeg/commit/")
+    assert not list(exe.parent.rglob("coisa.txt"))
+
+
+def test_baixar_ffmpeg_recusa_o_sha256_errado(pacote_do_ffmpeg, tmp_path, monkeypatch):
+    monkeypatch.setattr(montar_app_qt, "FFMPEG_SHA256", "0" * 64)
+    with pytest.raises(SystemExit):
+        montar_app_qt.baixar_ffmpeg(tmp_path / "cache")
+    assert not list((tmp_path / "cache").rglob("ffmpeg.exe"))
+
+
+def test_baixar_ffmpeg_nao_baixa_de_novo(pacote_do_ffmpeg, tmp_path, monkeypatch):
+    exe = montar_app_qt.baixar_ffmpeg(tmp_path / "cache")
+    # O mesmo nome de arquivo, numa origem que não existe: baixar de novo levantaria.
+    monkeypatch.setattr(montar_app_qt, "FFMPEG_URL", "file:///nao/existe/pacote.zip")
+    assert montar_app_qt.baixar_ffmpeg(tmp_path / "cache") == exe
+
+
+def test_baixar_ffmpeg_recusa_pacote_sem_o_exe(tmp_path, monkeypatch):
+    _pacote_falso(tmp_path, monkeypatch, {montar_app_qt.FFMPEG_LICENCA: "GPL"}, "FFMPEG")
+    with pytest.raises(SystemExit):
+        montar_app_qt.baixar_ffmpeg(tmp_path / "cache")
+
+
+def test_baixar_ludusavi_extrai_o_exe_e_a_licenca(tmp_path, monkeypatch):
+    _pacote_falso(tmp_path, monkeypatch, {"ludusavi.exe": "binario"}, "LUDUSAVI")
+    _pacote_falso(tmp_path, monkeypatch, {montar_app_qt.LUDUSAVI_LICENCA: "texto legal"}, "LUDUSAVI_LEGAL", "legal.zip")
+    exe = montar_app_qt.baixar_ludusavi(tmp_path / "cache")
+    assert exe.name == "ludusavi.exe" and exe.read_text(encoding="utf-8") == "binario"
+    assert (exe.parent / "LICENSE").read_text(encoding="utf-8") == "texto legal"
+
+
+@pytest.fixture
+def main_sem_rede(tmp_path, monkeypatch):
+    """O `main` com tudo o que baixa ou compila trocado; devolve o que `montar` recebeu e o que foi baixado."""
+    chamadas = {"baixados": []}
+
+    def baixar(nome):
+        return lambda cache: chamadas["baixados"].append(nome) or Path(nome)
+
+    monkeypatch.setattr(montar_app_qt, "baixar_python", lambda cache: tmp_path)
+    monkeypatch.setattr(montar_app_qt, "instalar_bibliotecas", lambda cache: tmp_path)
+    monkeypatch.setattr(montar_app_qt, "compilar_lancador", lambda cache: tmp_path)
+    monkeypatch.setattr(montar_app_qt, "renderizar_iss", lambda destino: tmp_path / "x.iss")
+    monkeypatch.setattr(montar_app_qt, "baixar_ffmpeg", baixar("ffmpeg"))
+    monkeypatch.setattr(montar_app_qt, "baixar_ludusavi", baixar("ludusavi"))
+    monkeypatch.setattr(montar_app_qt, "montar", lambda destino, canal, **k: chamadas.update(k))
+    return chamadas
+
+
+def _rodar_main(monkeypatch, tmp_path, *argumentos):
+    argv = ["montar_app_qt.py", "--destino", str(tmp_path / "saida"), "--cache", str(tmp_path / "cache"), *argumentos]
+    monkeypatch.setattr(montar_app_qt.sys, "argv", argv)
+    assert montar_app_qt.main() == 0
+
+
+def test_main_do_canal_final_baixa_o_que_falta(main_sem_rede, monkeypatch, tmp_path):
+    _rodar_main(monkeypatch, tmp_path, "--canal", "final")
+    assert main_sem_rede["baixados"] == ["ffmpeg", "ludusavi"]
+    assert main_sem_rede["ffmpeg"] == Path("ffmpeg") and main_sem_rede["ludusavi"] == Path("ludusavi")
+
+
+def test_main_usa_os_executaveis_passados(main_sem_rede, monkeypatch, tmp_path):
+    _rodar_main(monkeypatch, tmp_path, "--canal", "final", "--ffmpeg", "a.exe", "--ludusavi", "b.exe")
+    assert main_sem_rede["baixados"] == []
+    assert main_sem_rede["ffmpeg"] == Path("a.exe") and main_sem_rede["ludusavi"] == Path("b.exe")
+
+
+def test_main_do_desenvolvimento_nao_baixa_os_externos(main_sem_rede, monkeypatch, tmp_path):
+    _rodar_main(monkeypatch, tmp_path, "--canal", "desenvolvimento")
+    assert main_sem_rede["baixados"] == []
+    assert main_sem_rede["ffmpeg"] is None and main_sem_rede["ludusavi"] is None

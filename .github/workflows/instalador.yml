@@ -7,91 +7,79 @@ permissions:
   contents: write
 
 env:
-  # blueprint-compiler lê os .blp na codificação do locale; sem isto, cp1252.
   PYTHONUTF8: "1"
 
 jobs:
   instalador:
-    # O build GTK neste branch é obsoleto (o lançador novo não serve a ele); o plano 9 o substitui.
     if: github.ref == 'refs/heads/main'
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 60
     steps:
       - run: git config --global core.autocrlf false
 
       - uses: actions/checkout@v4
 
-      # A versão é a data do dia em Brasília (UTC-3 o ano todo desde 2019). A <release>
-      # do topo do metainfo passa a essa data; se ela já saiu como final, os itens
-      # acrescentados depois vão para uma <release> nova. O commit volta para o branch.
-      - name: Versão do dia
+      # O mesmo Python do app (PySide6 6.12.0 só tem rodas para ele): roda os scripts e o pip --target.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.15.1"
+
+      # A versão vem de cartridges/shared.py e as novidades já estão na <release> do topo do
+      # metainfo; aqui ela recebe a data de Brasília (UTC-3 o ano todo desde 2019). O commit
+      # volta para o branch só se a data mudou.
+      - name: Data da release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           metainfo=data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in
-          versao=$(date -u -d '-3 hours' +%Y.%m.%d)
-          anterior=$(gh release list --exclude-pre-releases --exclude-drafts -L 1 --json tagName --jq '.[0].tagName // ""')
-          if [ "$anterior" = "v$versao" ]; then
-            echo "::error::A release v$versao já foi publicada hoje como versão final. Gere o próximo instalador amanhã."
-            exit 1
-          fi
-          # Ponta atual do branch: num Re-run o checkout volta ao commit de antes do "Versão AAAA.MM.DD".
+          # Ponta atual do branch: num Re-run o checkout volta ao commit de antes da "Data da release".
           git fetch -q --depth=1 origin "$GITHUB_REF_NAME"
           git reset -q --hard FETCH_HEAD
-          publicado=()
-          if [ -n "$anterior" ]; then
-            git fetch -q --depth=1 origin "refs/tags/$anterior:refs/tags/$anterior"
-            git show "$anterior:$metainfo" > "$RUNNER_TEMP/publicado.xml"
-            publicado=("$RUNNER_TEMP/publicado.xml")
+          versao=$(sed -n 's/^VERSION = "\(.*\)"$/\1/p' cartridges/shared.py)
+          if [ -z "$versao" ]; then
+            echo "::error::Não achei VERSION em cartridges/shared.py."
+            exit 1
           fi
-          python build-aux/windows/versao_do_dia.py "$metainfo" "$versao" "${publicado[@]}"
-          sed -i "s/^  version: '.*',\$/  version: '$versao',/" meson.build
+          if pre=$(gh release view "v$versao" --json isPrerelease --jq .isPrerelease 2>/dev/null) && [ "$pre" != "true" ]; then
+            echo "::error::A versão v$versao já foi publicada. Suba a versão em cartridges/shared.py."
+            exit 1
+          fi
+          python build-aux/windows/data_da_release.py "$metainfo" "$versao" "$(date -u -d '-3 hours' +%Y-%m-%d)"
           if ! git diff --quiet; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git commit -am "Versão $versao"
+            git commit -am "Data da release $versao"
             git push origin "HEAD:$GITHUB_REF_NAME"
           fi
+          echo "VERSAO=$versao" >> "$GITHUB_ENV"
 
-      # release: false usa o C:\msys64 do runner, o caminho que o build-installer.ps1 espera.
-      - uses: msys2/setup-msys2@v2
+      - name: Ferramentas do script
+        # Só para extrair o SDK do Qt. Tudo fixado, e sem resolver dependência: o job tem `contents: write`.
+        run: python -m pip install --no-deps py7zr==1.1.4 brotli==1.2.1 inflate64==1.0.4 multivolumefile==0.2.3 psutil==7.2.2 pybcj==1.0.8 pycryptodomex==3.24.1 pyppmd==1.3.1 texttable==1.7.2
+
+      # SDK do Qt e QWindowKit baixados por tools/baixar_qt_sdk.py (o script confere o SHA-1 e
+      # refaz o que não estiver completo).
+      - uses: actions/cache@v4
         with:
-          msystem: UCRT64
-          release: false
-          update: true
-          install: >-
-            git
-            mingw-w64-ucrt-x86_64-gtk4
-            mingw-w64-ucrt-x86_64-libadwaita
-            mingw-w64-ucrt-x86_64-python
-            mingw-w64-ucrt-x86_64-python-gobject
-            mingw-w64-ucrt-x86_64-python-requests
-            mingw-w64-ucrt-x86_64-python-pillow
-            mingw-w64-ucrt-x86_64-python-cryptography
-            mingw-w64-ucrt-x86_64-python-pip
-            mingw-w64-ucrt-x86_64-ffmpeg
-            mingw-w64-ucrt-x86_64-meson
-            mingw-w64-ucrt-x86_64-ninja
-            mingw-w64-ucrt-x86_64-binutils
-            mingw-w64-ucrt-x86_64-gcc
+          path: build-aux/windows/qwk/_deps
+          key: qwk-deps-${{ hashFiles('tools/baixar_qt_sdk.py', 'build-aux/windows/qwk/compilar.bat', 'build-aux/windows/qwk/CMakeLists.txt', 'build-aux/windows/qwk/ponte.cpp') }}
 
-      - name: GTK corrigido, tinytuya e meson setup
-        shell: msys2 {0}
-        run: |
-          for nome in gtk4 libadwaita; do
-            trava=$(sed -n "s/^${nome}_package_version=//p" build-aux/windows/gtk-patches/patched-gtk.txt | tr -d '\r')
-            atual=$(pacman -Q mingw-w64-ucrt-x86_64-$nome | cut -d' ' -f2)
-            if [ "$atual" != "$trava" ]; then
-              echo "::error::O MSYS2 publicou o $nome $atual, mas a trava está em $trava. Execute 'Compilar GTK corrigido', teste a versão nova no PC e atualize a trava (build-aux/windows/gtk-patches/README.md)."
-              exit 1
-            fi
-            pacote="mingw-w64-ucrt-x86_64-$nome-$trava-any.pkg.tar.zst"
-            curl -fsSLO "https://github.com/$GITHUB_REPOSITORY/releases/download/gtk-corrigido/$pacote"
-            pacman -U --noconfirm "$pacote"
-          done
-          python -m pip install --break-system-packages tinytuya==1.20.0
-          meson setup _build
+      - name: SDK do Qt e QWindowKit
+        run: python tools/baixar_qt_sdk.py
+
+      - name: qwk_ponte.dll
+        shell: cmd
+        run: build-aux\windows\qwk\compilar.bat
+
+      # Baixa e confere o ffmpeg e o Ludusavi (SHA-256 fixos no script): sem eles o canal final não monta.
+      - name: Montar o app
+        run: python build-aux/windows/montar_app_qt.py --canal final --destino _dist/qt-final
+
+      # A pasta roda sozinha aqui, com dados temporários: é a única prova do libwebp_anim do ffmpeg
+      # e do que falta na pasta antes de ir para quem instala. Falhou, não sai instalador.
+      - name: Verificar a pasta montada
+        run: .\_dist\qt-final\python\python.exe -B build-aux\windows\verificar_pasta.py _dist\qt-final
 
       # A mesma versão do PC do desenvolvedor: o Inno 6 que o runner traz compila
       # o [Code] de outro jeito (recusa Variant onde o 7 aceita). O choco ainda
@@ -108,22 +96,25 @@ jobs:
           if (-not (Test-Path "$env:ProgramFiles\Inno Setup 7\ISCC.exe")) { throw 'O Inno Setup 7 não foi instalado.' }
 
       - name: Instalador
-        run: ./build-aux/windows/build-installer.ps1
+        run: |
+          $repo = (Get-Location).Path
+          & "$env:ProgramFiles\Inno Setup 7\ISCC.exe" "/DRepo=$repo" "/DPastaApp=$repo\_dist\qt-final" "/O$repo\_dist\instalador" "$repo\_dist\qt-final.iss"
+          if ($LASTEXITCODE -ne 0) { throw 'O ISCC falhou.' }
 
       - name: Publicar pré-release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          versao=$(sed -n "s/^  version: '\(.*\)',\$/\1/p" meson.build)
+          versao="$VERSAO"
           tag="v$versao"
           # Última versão final publicada: as notas juntam as que vieram depois dela.
           anterior=$(gh release list --exclude-pre-releases --exclude-drafts -L 1 --json tagName --jq '.[0].tagName // ""')
-          C:/msys64/ucrt64/bin/python.exe build-aux/windows/notas_release.py data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in "$versao" "${anterior#v}" > notas.md
-          cp "_dist/Cartridges Windows.exe" Cartridges.Windows.exe
+          python build-aux/windows/notas_release.py data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in "$versao" "${anterior#v}" > notas.md
+          cp "_dist/instalador/Cartridges Windows.exe" Cartridges.Windows.exe
           if pre=$(gh release view "$tag" --json isPrerelease --jq .isPrerelease 2>/dev/null); then
             if [ "$pre" != "true" ]; then
-              echo "::error::A release $tag já foi publicada hoje como versão final. Gere o próximo instalador amanhã."
+              echo "::error::A versão $tag já foi publicada. Suba a versão em cartridges/shared.py."
               exit 1
             fi
             git tag -f "$tag"

@@ -9,7 +9,7 @@ ToolButton {
 
     // Glifo da Segoe Fluent Icons (MDL2 de reserva): E710 adicionar, E700 menu, E721 buscar, E72B voltar.
     property string glifo
-    // A Segoe não tem troféu: este botão o desenha (o mesmo desenho do `trofeu-symbolic`).
+    // A Segoe não tem troféu: este botão o desenha (o mesmo desenho do ícone da `main`).
     property bool trofeu: false
     property string dica
     // O menu deste botão está aberto: a dica sairia por cima dele.

@@ -67,5 +67,7 @@ int WINAPI wWinMain(HINSTANCE instancia, HINSTANCE anterior, PWSTR linha, int ex
     argv[2] = pacote;
     for (i = 1; i < __argc; i++)
         argv[i + 2] = __wargv[i];
-    return py_main(argc, argv);
+    /* Sem console: um código diferente de zero (instalação danificada, QML que não carrega) sairia em silêncio. */
+    int r = py_main(argc, argv);
+    return r ? falha() : 0;
 }

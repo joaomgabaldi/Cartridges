@@ -1,7 +1,7 @@
 ﻿# instalador-online.ps1
 #
 # Dispara o workflow "Gerar instalador (beta)" no GitHub, acompanha até o fim,
-# traz o commit "Versão AAAA.MM.DD" que ele faz no main e abre a pré-release.
+# traz o commit "Data da release" que ele faz no main e abre a pré-release.
 # Chamado pelo build-installer.bat na raiz do projeto (opção online).
 
 $ErrorActionPreference = 'Stop'
@@ -50,6 +50,6 @@ Etapa 'Atualizando o repositório local'
 git pull --ff-only origin main
 if ($LASTEXITCODE) { Falha 'O git pull falhou.' }
 
-$versao = (Select-String -Path meson.build -Pattern "^  version: '(.*)',$").Matches[0].Groups[1].Value
+$versao = (Select-String -Path cartridges\shared.py -Pattern '^VERSION = "(.*)"').Matches[0].Groups[1].Value
 Etapa "Abrindo a pré-release v$versao"
 gh release view "v$versao" --web
