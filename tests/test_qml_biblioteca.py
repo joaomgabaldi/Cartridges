@@ -31,6 +31,7 @@ from cartridges.modelos.saves import SavesDoJogo
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
 from cartridges.modelos.sessao import ModeloDaSessao
+from cartridges.modelos.sobre import Sobre
 from cartridges.modelos.tarefas import PainelDasTarefas
 from cartridges.ponte import Ponte
 
@@ -141,6 +142,7 @@ class _App:
         self.restauracao = ContinuacaoDaRestauracao(self.aplicativo)
         self.atualizador = AppUpdater()
         self.novidades = Novidades(self.ponte.fila, NewsChecker())
+        self.sobre = Sobre(self.ponte.fila)
         self.leitor = _LeitorFalso()
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(self.detalhes, self.sessao)
@@ -164,6 +166,7 @@ class _App:
             ("restauracao", self.restauracao),
             ("atualizador", self.atualizador),
             ("novidades", self.novidades),
+            ("sobre", self.sobre),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

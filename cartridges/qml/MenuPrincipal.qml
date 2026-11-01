@@ -5,6 +5,9 @@ import QtQuick.Controls.Basic
 MenuDoTema {
     id: menu
 
+    // O `Sobre` (D84); nulo onde ele não está no contexto (os arneses dos outros diálogos): o item some.
+    property QtObject servicoDoSobre: null
+
     readonly property var rotulosDeFiltrar: rotulos(filtrar)
     readonly property var rotulosDeOrdenar: rotulos(ordenar)
     // Para os testes olharem o visual dos menus aninhados.
@@ -131,5 +134,12 @@ MenuDoTema {
         // Como a `main`: a ação some durante a importação.
         enabled: !aplicativo.importando
         onTriggered: preferencias.abrir()
+    }
+    ItemDoMenu {
+        objectName: "itemSobre"
+        visible: menu.servicoDoSobre !== null
+        height: visible ? implicitHeight : 0
+        text: "Sobre o Cartridges"
+        onTriggered: menu.servicoDoSobre.abrir()
     }
 }

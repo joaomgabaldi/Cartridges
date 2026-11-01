@@ -49,6 +49,8 @@ OBRIGATORIOS = (
 # O que de `data/` o app instalado lê.
 DATA = (
     "io.github.joaomgabaldi.Cartridges.gschema.xml.in",
+    # O "Sobre o Cartridges" lê as novidades da versão e a descrição daqui.
+    "io.github.joaomgabaldi.Cartridges.metainfo.xml.in",
     "library_placeholder.svg",
     "library_placeholder_small.svg",
     "sons",

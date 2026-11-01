@@ -29,6 +29,7 @@ from cartridges.modelos.novidades import Novidades
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
 from cartridges.modelos.saves import SavesDoJogo
+from cartridges.modelos.sobre import Sobre
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.modelos.tarefas import PainelDasTarefas
 from cartridges.ponte import Ponte
@@ -80,7 +81,7 @@ class _DetalhesFalsos(QObject):
 
 
 class Janela:
-    def __init__(self, com_atualizador=True, com_novidades=True):
+    def __init__(self, com_atualizador=True, com_novidades=True, com_sobre=True):
         self.modelo = ModeloDaBiblioteca()
         self.filtros = FiltrosDaBiblioteca(self.modelo)
         self.ponte = Ponte()
@@ -97,6 +98,7 @@ class Janela:
         self.atualizador = AppUpdater() if com_atualizador else None
         self.checker = NewsChecker()
         self.novidades = Novidades(self.ponte.fila, self.checker)
+        self.sobre = Sobre(self.ponte.fila)
         self.motor = QQmlEngine()
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         contexto = self.motor.rootContext()
@@ -118,6 +120,7 @@ class Janela:
             ("restauracao", self.restauracao),
             *([("atualizador", self.atualizador)] if self.atualizador is not None else []),
             *([("novidades", self.novidades)] if com_novidades else []),
+            *([("sobre", self.sobre)] if com_sobre else []),
         ):
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

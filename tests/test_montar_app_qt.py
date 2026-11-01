@@ -144,3 +144,11 @@ def test_montar_mantem_o_qt5compat(insumos, tmp_path):
 
     for nome in arquivos:
         assert (destino / "lib" / "PySide6" / "qml" / "Qt5Compat" / "GraphicalEffects" / nome).is_file(), nome
+
+
+def test_monta_a_metainfo_para_o_sobre(insumos, tmp_path):
+    """O "Sobre o Cartridges" lê as novidades e a descrição de `data/` ao lado do pacote."""
+    _tocar(insumos["raiz"] / "data" / "io.github.joaomgabaldi.Cartridges.metainfo.xml.in", "<component/>")
+    destino = tmp_path / "saida"
+    montar_app_qt.montar(destino, "desenvolvimento", **insumos)
+    assert (destino / "app" / "data" / "io.github.joaomgabaldi.Cartridges.metainfo.xml.in").is_file()
