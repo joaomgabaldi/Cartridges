@@ -391,59 +391,7 @@ def test_nothing_is_written_to_the_browser_cache():
 # ---------------------------------------------------------------------------
 
 
-def test_a_geometry_needs_a_size_to_be_usable():
-    """T7.6 A zero-sized rectangle is what an unrealised window reports."""
-    assert window_geometry.Geometry(0, 0, 0, 0, False).usable is False
-    assert window_geometry.Geometry(10, 10, 1170, 795, False).usable is True
-
-
-def test_stored_monta_a_geometria_das_chaves_do_estado():
-    """A janela reaparecida volta ao que o close-request gravou, não à abertura."""
-    valores = {"x": -7, "y": 20, "width": 900, "height": 600, "is-maximized": True}
-    schema = SimpleNamespace(
-        get_int=lambda chave: valores[chave],
-        get_boolean=lambda chave: valores[chave],
-    )
-    assert window_geometry.stored(schema) == window_geometry.Geometry(
-        -7, 20, 900, 600, True
-    )
-    valores["x"], valores["is-maximized"] = 50, False  # gravado depois
-    assert window_geometry.stored(schema) == window_geometry.Geometry(
-        50, 20, 900, 600, False
-    )
-
-
-def test_a_maximized_geometry_keeps_the_restored_size():
-    """T7.6 Saving the maximized size would grow the window on every run."""
-    geometry = window_geometry.Geometry(10, 10, 1170, 795, True)
-    assert geometry.maximized is True
-    assert (geometry.width, geometry.height) == (1170, 795)
-
-
-def test_reading_an_unrealised_window_gives_nothing(real_window):
-    """T7.6 There is no placement to save before the window has one."""
-    geometry = window_geometry.read(real_window)
-    assert geometry is None or isinstance(geometry, window_geometry.Geometry)
-
-
-def test_apply_size_sets_the_requested_size(real_window):
-    """T7.6 The restore half of the round trip."""
-    window_geometry.apply_size(
-        real_window, window_geometry.Geometry(0, 0, 900, 600, False)
-    )
-    assert real_window.get_default_size() == (900, 600)
-
-
-def test_apply_size_needs_no_stored_position(real_window):
-    """Na primeira abertura não há posição salva: o tamanho vale mesmo assim.
-
-    Sem isto a janela de uma instalação nova abria no mínimo do GTK (508x104).
-    """
-    unset = window_geometry.UNSET
-    window_geometry.apply_size(
-        real_window, window_geometry.Geometry(unset, unset, 1170, 795, False)
-    )
-    assert real_window.get_default_size() == (1170, 795)
+# Os testes do T7.6 foram para `tests/test_geometria_qt.py` (plano 8b, Task 6); os de `apply_size` saíram com ela.
 
 
 # ---------------------------------------------------------------------------

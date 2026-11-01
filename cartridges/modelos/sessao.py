@@ -375,8 +375,8 @@ class ModeloDaSessao(QObject):
         parede e as fitas, que podem demorar, ficam para o `devolver()`, com as janelas já fora da tela. Só a
         primeira chamada faz algo.
         """
-        # shortcut: aqui a janela não volta ao monitor de antes; o plano 8b, ao gravar a geometria da janela ao
-        # fechar (`session_geometry`), tem de gravar o retângulo de antes da sessão, não o do monitor do jogo (D52).
+        # A janela não volta ao monitor de antes aqui: a geometria gravada ao fechar é a de antes da sessão
+        # (`window_geometry.session_geometry`, D52 e D87).
         if self._encerrado:
             return
         # Só vai num sentido: um `quit()` cancelado deixaria a sessão encerrada. O `closing` da principal nunca

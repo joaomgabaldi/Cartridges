@@ -29,6 +29,7 @@ entregue na thread principal. A ordem das entregas é a das chamadas, então um
 ``terminar()`` logo depois do ``comecar()`` nunca chega antes dele.
 """
 
+from collections.abc import Callable
 from typing import Optional
 
 from PySide6.QtCore import (
@@ -204,6 +205,8 @@ class PainelDasTarefas(QObject):
         self._espera.setInterval(250)
         self._espera.timeout.connect(self._conferir_a_espera)
         self._escondidas_na_espera: list[QWindow] = []
+        # Posto pelo `app.py` (`GeometriaDaJanela.gravar`): o `closing` grava onde a principal está (D87).
+        self.gravar_geometria: Callable[[], None] = lambda: None
         # Referência fraca implícita: o Qt desliga a conexão quando o painel é destruído.
         lista.rowsInserted.connect(self._contar)
         lista.rowsRemoved.connect(self._contar)
@@ -309,6 +312,8 @@ class PainelDasTarefas(QObject):
     @Slot(result=bool)
     def principalFechando(self) -> bool:  # noqa: N802
         """O `closing` da principal: True deixa fechar; False a esconde (o app segue com a janela das tarefas)."""
+        # Antes de qualquer ação, com a janela ainda à vista e ainda não destruída pelo `close()` (D87).
+        self.gravar_geometria()
         # O `closing` que vem do `quit()` (o reinício, o fim da sessão do Windows, a janela das tarefas fechada com a
         # principal escondida): recusá-lo cancelaria o `quit()` com a sessão já encerrada pelo `saindo`.
         if self._saindo:

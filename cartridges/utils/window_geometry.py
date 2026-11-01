@@ -59,13 +59,12 @@ import weakref
 from collections.abc import Callable
 from ctypes import wintypes
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional
+from typing import Any, NamedTuple, Optional
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QTimer, Slot
+from PySide6.QtGui import QWindow
 
-# O GTK só entra dentro das funções que são dele (tamanho e posição de uma `Gtk.Window`): o resto, que a sessão do Qt usa, importa sem o `gi`.
-if TYPE_CHECKING:
-    from gi.repository import Gtk
+from cartridges import shared
 
 _MONITOR_DEFAULTTONULL = 0x00000000
 # SWP_NOZORDER | SWP_NOACTIVATE: place it exactly, without raising or focusing
@@ -488,41 +487,81 @@ def read(window: Any) -> Optional[Geometry]:
     )
 
 
-def apply_size(window: "Gtk.Window", geometry: Geometry) -> None:
-    """Ask for the stored size. Must run before the window is shown.
+def gravar(schema: Any, janela: Any, tela_cheia: bool) -> bool:
+    """Grava onde a janela está, se ainda dá para perguntar; diz se gravou (as regras do `save_window_geometry` da `main`).
 
-    Approximate on purpose: GTK sizes the content area while the stored figure
-    covers the frame, so this lands within the frame's width of the right answer
-    and :func:`apply_placement` corrects it exactly, before anything is visible.
-    Doing it here as well keeps the window from being laid out at a default size
-    it is never going to have.
-
-    Só o tamanho, e não `usable`: na primeira abertura não há posição salva, e
-    exigir uma deixava a janela no mínimo do GTK (508x104) em vez do padrão do
-    schema.
+    Em tela cheia (Big Picture) o retângulo é o da tela, não o da janela: vale a geometria gravada antes. Fechar o app
+    no meio de uma sessão: a janela está estacionada no monitor do jogo, e o que tem de ser lembrado é de onde ela saiu
+    (D52). Minimizada, `read` não responde, e fica a gravada antes.
     """
-    if geometry.width > 0 and geometry.height > 0:
-        window.set_default_size(geometry.width, geometry.height)
+    if tela_cheia:
+        return False
+    geometry = session_geometry() or read(janela)
+    if geometry is None:
+        return False
+    schema.set_int("x", geometry.x)
+    schema.set_int("y", geometry.y)
+    schema.set_boolean("is-maximized", geometry.maximized)
+    # A maximized window's rectangle is its monitor, not a size to reopen at,
+    # so the last real size is left in place for it to be restored to.
+    if not geometry.maximized:
+        schema.set_int("width", geometry.width)
+        schema.set_int("height", geometry.height)
+    return True
 
 
-def apply_placement(window: "Gtk.Window", geometry: Geometry) -> None:
-    """Put the window back on its monitor. Call this from "map", not "realize".
+def restaurar(janela: Any, geometria: Geometry) -> None:
+    """Põe a janela de volta no lugar e no tamanho gravados. Sem nada gravado (`usable` falso), não mexe nela.
 
-    A realized window already has a Win32 handle, so placing it there looks like
-    it should work and does nothing: GTK positions the window again on its way
-    to the screen, discarding whatever it was moved to beforehand.
-
-    Order matters: the window is moved first and maximized second, because
-    maximizing fills whichever monitor the window currently sits on. The other
-    way round always fills the primary one, which is the entire bug this exists
-    to fix.
+    Order matters: the window is moved first and maximized second, because maximizing fills whichever monitor the
+    window currently sits on. The other way round always fills the primary one.
     """
-    _place(window, geometry)
-    if geometry.maximized:
+    if not geometria.usable:
+        return
+    if not _place(janela, geometria) and (atual := read(janela)) is not None:
+        # A posição gravada não existe mais (um monitor desligado): a janela fica onde o Windows a pôs, no tamanho
+        # gravado, como a `main` (o `apply_size` vinha antes do lugar).
+        _place(janela, geometria._replace(x=atual.x, y=atual.y))
+    if geometria.maximized:
         # Deliberately not conditional on `_place` succeeding: if the stored
         # position was refused the user still asked for a maximized window, and
         # should get one wherever Windows has decided to put it.
-        window.maximize()
+        janela.showMaximized()
+
+
+class GeometriaDaJanela(QObject):
+    """A geometria da principal no contexto do QML (`geometria`, D87): restaurada no `onCompleted` do `Principal.qml`,
+    gravada no `closing` (`PainelDasTarefas.principalFechando`) e no primeiro passo do `_fechar`.
+
+    A janela fica numa referência comum, como no `PainelDasTarefas`: ela não segura o objeto C++ (o dono é o motor),
+    e uma janela já destruída responde com `RuntimeError`. Uma fraca morreria com o invólucro Python, que o PySide
+    solta a qualquer momento.
+    """
+
+    def __init__(self, parent: Optional[QObject] = None) -> None:
+        super().__init__(parent)
+        self._janela: Any = None
+
+    @Slot(QObject)
+    def restaurar(self, janela: Any) -> None:
+        self._janela = janela
+        try:
+            restaurar(janela, stored(shared.state_schema))
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Could not restore the window geometry", exc_info=True)
+
+    @Slot()
+    def gravar(self) -> None:
+        """Nunca levanta: roda no fechamento."""
+        janela = self._janela
+        try:
+            # Já fechada pelo `quit()`: o `close()` do Qt destrói a janela nativa e o `winId()` criaria outra, num
+            # lugar qualquer. O `closing` dela já gravou.
+            if janela is None or not janela.isVisible():
+                return
+            gravar(shared.state_schema, janela, janela.visibility() == QWindow.Visibility.FullScreen)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Could not save the window geometry", exc_info=True)
 
 
 # Where the window was before a play session sent it to another monitor, and
@@ -677,7 +716,7 @@ def posicao_acima_do_botao(botao: tuple[int, int, int, int], altura_da_janela: i
     return botao[0], botao[1] - _FOLGA_BOTAO - altura_da_janela
 
 
-def _place(window: "Gtk.Window", geometry: Geometry) -> bool:
+def _place(window: Any, geometry: Geometry) -> bool:
     """Move and size the window's frame to ``geometry``.
 
     A stored position is not trusted blindly. Monitors get unplugged and
@@ -719,22 +758,10 @@ def _hwnd(window: Any) -> Optional[int]:
     where it last did, which is what happens without this module at all, so it
     must never be allowed to take the application down with it.
     """
-    if window is None:
+    if window is None or not isinstance(window, QWindow):
         return None
     try:
-        from PySide6.QtGui import QWindow  # pylint: disable=import-outside-toplevel
-
-        if isinstance(window, QWindow):
-            return int(window.winId()) or None
-
-        import gi  # pylint: disable=import-outside-toplevel
-
-        gi.require_version("GdkWin32", "4.0")
-        from gi.repository import GdkWin32  # pylint: disable=import-outside-toplevel
-
-        if (surface := window.get_surface()) is None:
-            return None
-        return GdkWin32.Win32Surface.get_handle(surface) or None
+        return int(window.winId()) or None
     except Exception as error:  # pylint: disable=broad-exception-caught
         logging.warning("Could not read the window handle: %s", error)
         return None

@@ -35,6 +35,7 @@ class Aplicativo(QObject):
     dialogoPedido = Signal(str, str, list)  # noqa: N815
     # A pergunta do domínio (D72): título, corpo, rótulo de confirmar, rótulo de sair e se é destrutiva.
     confirmacaoPedida = Signal(str, str, str, str, bool)  # noqa: N815
+    animacoesDoSistemaChanged = Signal()  # noqa: N815
 
     def __init__(self, avisos: FilaDeAvisos | None = None, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -56,7 +57,7 @@ class Aplicativo(QObject):
         self._preferencias_do_dialogo: str | None = None
         self._colunas = shared.schema.get_uint("library-rows")
         self._tocar_sempre = shared.schema.get_boolean("cover-autoplay")
-        # shortcut: lido uma vez na abertura; a `main` religava no WM_SETTINGCHANGE. Quem mudar o ajuste com o app aberto só vê o efeito ao reabrir; entra no plano 8b.
+        # Relido a cada `WM_SETTINGCHANGE` (`reler_animacoes`, D88), como a `main`.
         self._animacoes_do_sistema = _animacoes_do_sistema()
         # A `Configuracoes` entrega o aviso na thread principal; a referência fraca não prende o objeto.
         eu = weakref.ref(self)
@@ -94,10 +95,17 @@ class Aplicativo(QObject):
         """`cover-autoplay` ("Animar capas"): as capas animadas à vista tocam sem o mouse."""
         return self._tocar_sempre
 
-    @Property(bool, constant=True)
+    @Property(bool, notify=animacoesDoSistemaChanged)
     def animacoesDoSistema(self) -> bool:  # noqa: N802
         """Os efeitos de animação do Windows estão ligados; desligados, nenhuma capa anima."""
         return self._animacoes_do_sistema
+
+    def reler_animacoes(self) -> None:
+        """Relê o ajuste do Windows (um `WM_SETTINGCHANGE` chegou) e avisa só se mudou."""
+        ligadas = _animacoes_do_sistema()
+        if ligadas != self._animacoes_do_sistema:
+            self._animacoes_do_sistema = ligadas
+            self.animacoesDoSistemaChanged.emit()
 
     def definir_importando(self, importando: bool) -> None:
         if importando != self._importando:

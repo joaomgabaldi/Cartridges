@@ -21,7 +21,7 @@ builtins._ = lambda message: message  # type: ignore[attr-defined]
 builtins.ngettext = lambda singular, plural, n: singular if n == 1 else plural  # type: ignore[attr-defined]
 
 # pylint: disable=wrong-import-position
-from PySide6.QtCore import QEvent, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, QUrl, Signal, qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -34,7 +34,7 @@ from cartridges.conquistas.ea import conta as ea_conta
 from cartridges.conquistas.epic import conta as epic_conta
 from cartridges.conquistas.varredura import VarreduraConquistas
 from cartridges.conquistas.xbox import conta, login
-from cartridges.logging.session_file_handler import SessionFileHandler
+from cartridges.logging.setup import log_system_info, setup_logging
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
@@ -70,29 +70,30 @@ from cartridges.utils import (
     session_wallpaper,
     single_instance,
 )
+from cartridges.utils.ajustes_do_windows import FiltroDeAjustes
 from cartridges.utils.app_updater import AppUpdater
 from cartridges.utils.hltb_backfill import HLTBBackfill
 from cartridges.utils.install_size import InstallSizeSweep
 from cartridges.utils.news_checker import NewsChecker
 from cartridges.utils.thread_principal import na_thread_principal
 from cartridges.utils.updates_checker import UpdatesChecker
+from cartridges.utils.window_geometry import GeometriaDaJanela
 
 _RAIZ = Path(__file__).resolve().parent
 _ICONE = _RAIZ.parent / "data" / "icons" / "hicolor" / "scalable" / "apps" / f"{shared.APP_ID}.svg"
 
 
 def _configurar_log() -> None:
-    # O `setup_logging` da versão GTK ainda importa o `gi`; este é o mínimo até ele ser portado.
+    """O log completo da `main` (D89): arquivo, console, ganchos de exceção, avisos do Qt e quedas nativas."""
     try:
-        arquivo = SessionFileHandler(shared.log_dir / "cartridges.log")
-    except (OSError, ValueError):
+        setup_logging()
+    except ValueError:
+        # dictConfig embrulha qualquer falha dos handlers em ValueError (uma rotação de log que não sobreviveu a uma
+        # queda, p.ex.). Ficar sem log NENHUM é o pior resultado possível para a sessão seguinte a um crash: o console
+        # segura as pontas até a rotação se curar na próxima execução.
         logging.basicConfig(level=logging.DEBUG)
         logging.exception("Não foi possível configurar o log em arquivo")
-        return
-    arquivo.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s: %(message)s", "%Y-%m-%d %H:%M:%S"))
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    logging.basicConfig(level=logging.NOTSET, handlers=[arquivo, console])
+    log_system_info()
 
 
 def _medidas_da_tela(app: QGuiApplication) -> None:
@@ -177,6 +178,8 @@ class _Abertura:
     """O que a abertura já criou. O `aboutToQuit` pode vir antes de tudo existir (o Windows desligando durante a
     restauração): o que ainda é ``None`` o `_fechar` pula."""
 
+    # A geometria da principal (D87): o primeiro passo do `_fechar` a grava.
+    geometria: Any = None
     big_picture: Any = None
     sessao: Any = None
     verificador: Any = None
@@ -194,6 +197,8 @@ class _Abertura:
     restauracao: Any = None
     # O motor do assistente da primeira abertura (com o `Assistente` dentro, D86); vive até o fim do `main()`.
     assistente: Any = None
+    # O filtro do `WM_SETTINGCHANGE` (D88), instalado no app; sai no fim do `_fechar`.
+    ajustes: Any = None
     # Os objetos que só o contexto do QML conhece (o Qt não é dono de objeto Python): sem uma referência aqui, saem
     # da memória quando o `_abrir` devolve e a grade, o histórico e as versões dos saves ficam sem modelo.
     mantidos: Any = None
@@ -207,6 +212,9 @@ def _fechar(abertura: _Abertura) -> None:
     """O `aboutToQuit`, na ordem da `main`; o `stop()` de cada um vem antes do `encerrar()`."""
     a = abertura
     _encerrar_em_ordem(
+        # Primeiro (D87): um `aboutToQuit` sem `closing` antes (o Windows desligando) grava aqui; a janela já fechada
+        # pelo `quit()` não é lida de novo (o `closing` dela gravou).
+        _de(a.geometria, "gravar"),
         _de(a.big_picture, "encerrar"),  # a cortina preta do fade nunca fica no monitor (ADR 0003)
         # As Preferências com um modal aberto (calibração, assistente das fitas, brilho, contas): fecham antes de a
         # sessão devolver as fitas (a prévia que saem não as acende de novo) e antes do login pendente.
@@ -224,6 +232,7 @@ def _fechar(abertura: _Abertura) -> None:
         copias_animadas.encerrar,
         icones.encerrar,  # os ícones na fila não seguram o processo com a rede travada
         _de(a.atualizador, "stop"),  # por último: nenhum passo anterior roda o laço de eventos, então um resultado do download já na fila só é tratado depois deste `stop()` e é descartado (D82)
+        _de(a.ajustes, "desligar"),  # o Qt guarda só o ponteiro: o filtro sai antes de o objeto Python poder morrer
     )
 
 
@@ -257,6 +266,25 @@ def _importar_na_abertura(aplicativo: Any, continuacao: Any) -> None:
         QTimer.singleShot(0, continuacao.continuar)
     elif shared.schema.get_boolean("auto-import"):
         QTimer.singleShot(0, lambda: aplicativo.importar(silenciosa=True))
+
+
+def _seguir_animacoes(aplicativo: Aplicativo, big_picture: BigPicture) -> None:
+    """O Big Picture segue as animações do Windows relidas pelo `Aplicativo` (D88); referências fracas."""
+    aplicativo_fraco, big_picture_fraco = weakref.ref(aplicativo), weakref.ref(big_picture)
+
+    def seguir() -> None:
+        if (a := aplicativo_fraco()) is not None and (b := big_picture_fraco()) is not None:
+            b.definir_animacoes_do_sistema(a.animacoesDoSistema)
+
+    aplicativo.animacoesDoSistemaChanged.connect(seguir)
+
+
+def _instalar_filtro_de_ajustes(app: AplicacaoQt, aplicativo: Aplicativo) -> FiltroDeAjustes:
+    """Cada `WM_SETTINGCHANGE` das janelas do app relê as animações (D88)."""
+    aplicativo_fraco = weakref.ref(aplicativo)
+    filtro = FiltroDeAjustes(lambda: (a := aplicativo_fraco()) is not None and a.reler_animacoes())
+    app.installNativeEventFilter(filtro)
+    return filtro
 
 
 def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None:
@@ -311,6 +339,9 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     sobre = Sobre(avisos)
     zerados_manuais = SeletorDeZerados()
     abertura.big_picture = big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
+    _seguir_animacoes(aplicativo, big_picture)
+    abertura.geometria = geometria = GeometriaDaJanela()
+    painel_das_tarefas.gravar_geometria = geometria.gravar
     abertura.sessao = sessao = ModeloDaSessao(avisos, controle=controle, big_picture=big_picture)
     shared.sessao = sessao
     # O domínio avisa por aqui quando o histórico, o catálogo ou uma conta das conquistas muda (D58).
@@ -337,7 +368,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
         ("saves", saves), ("conquistasDoJogo", conquistas), ("preferencias", preferencias),
         ("painelDasTarefas", painel_das_tarefas),
         ("restauracao", continuacao), ("atualizador", atualizador), ("novidades", novidades), ("sobre", sobre),
-        ("zeradosManuais", zerados_manuais),
+        ("zeradosManuais", zerados_manuais), ("geometria", geometria),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     # O Qt não é dono do que vai ao contexto: tudo precisa de uma referência Python até o fim do `main()`.
@@ -358,6 +389,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     # Antes de o Qt mandar o `closing` às janelas: um `quit()` não é recusado pelo trabalho em andamento (D78).
     app.saindo.connect(painel_das_tarefas.encerrando)
     shared.aplicativo = aplicativo
+    abertura.ajustes = _instalar_filtro_de_ajustes(app, aplicativo)
     aplicativo.verificador_de_atualizacoes = verificador  # a tela de preferências chama `check_async()` ao ligar o aviso
     _comecar_varreduras(aplicativo, verificador, novidades, varredura_hltb, varredura_tamanho)
     # Depois da janela e antes dos avisos da abertura. A pergunta da versão nova não entra na fila da D72: se um diálogo
@@ -549,6 +581,8 @@ def main(argv: list[str]) -> int:
                 return codigo
             _avisos_da_abertura(abertura.aplicativo, restauracao_falhou)
     codigo = app.exec()
+    # O gancho do log (D89) sai antes da destruição do app e do interpretador: um aviso tardio do Qt vai ao stderr.
+    qInstallMessageHandler(None)
     if abertura.aplicativo is not None and abertura.aplicativo.reiniciar:
         # A trava sai antes: o processo novo precisa conseguir tomá-la.
         single_instance.release()

@@ -4,10 +4,8 @@
 
 """O que o assistente faz com a resposta da nuvem da Tuya."""
 
-import ast
 import json
 import logging
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -75,15 +73,9 @@ def test_a_tinytuya_fica_calada_no_arquivo_de_log():
     da biblioteca é o que separa o segredo do arquivo que vai anexado a
     relatório de bug — e não pode sumir numa refatoração.
     """
-    # shortcut: lê o dicionário do código-fonte, porque `logging/setup.py` ainda importa o GLib; volta ao import
-    # direto quando o log migrar para o Qt.
-    fonte = (Path(__file__).resolve().parent.parent / "cartridges" / "logging" / "setup.py").read_text(encoding="utf-8")
-    lib_loggers = next(
-        ast.literal_eval(no.value)
-        for no in ast.parse(fonte).body
-        if isinstance(no, ast.Assign) and no.targets[0].id == "LIB_LOGGERS"
-    )
-    nivel = logging.getLevelNamesMapping()[lib_loggers["tinytuya"]["level"]]
+    from cartridges.logging.setup import LIB_LOGGERS  # noqa: PLC0415
+
+    nivel = logging.getLevelNamesMapping()[LIB_LOGGERS["tinytuya"]["level"]]
     assert nivel >= logging.WARNING
 
 

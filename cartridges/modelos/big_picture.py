@@ -109,7 +109,7 @@ class BigPicture(QObject):
         self._pausa.timeout.connect(self._clarear)
         self._espera_das_capas = QTimer(self, singleShot=True, interval=ESPERA_MAXIMA_DAS_CAPAS_MS)
         self._espera_das_capas.timeout.connect(self._trocar_agora)
-        # shortcut: as animações do Windows são lidas uma vez pelo `Aplicativo`; entra no plano 8b com a releitura do `Aplicativo`.
+        # As animações do Windows: lidas pelo `Aplicativo` e relidas a cada `WM_SETTINGCHANGE` (D88, `definir_animacoes_do_sistema`).
         self._animacoes_do_sistema = animacoes_do_sistema
         self._animar_central = self._ler_animar_central()
         eu = weakref.ref(self)
@@ -168,7 +168,7 @@ class BigPicture(QObject):
     def jogosNaFila(self) -> int:  # noqa: N802
         return regras.JOGOS_NA_FILA
 
-    @Property(bool, constant=True)
+    @Property(bool, notify=alterado)
     def animacoes(self) -> bool:
         """As animações do Windows estão ativas: sem elas a fila e o passo vão direto ao fim."""
         return self._animacoes_do_sistema
@@ -185,6 +185,14 @@ class BigPicture(QObject):
     def jaSaiu(self) -> bool:  # noqa: N802
         """O usuário saiu do Big Picture nesta sessão: a entrada automática não volta."""
         return self._ja_saiu
+
+    def definir_animacoes_do_sistema(self, ligadas: bool) -> None:
+        """O ajuste do Windows mudou com o app aberto (D88): a fila, o passo e a capa central seguem."""
+        if ligadas == self._animacoes_do_sistema:
+            return
+        self._animacoes_do_sistema = ligadas
+        self.alterado.emit()
+        self._religar_animar_central()
 
     def _ler_animar_central(self) -> bool:
         return self._animacoes_do_sistema and shared.schema.get_boolean("cover-autoplay")

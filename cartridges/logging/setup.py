@@ -17,7 +17,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import ctypes
 import faulthandler
 import logging
 import logging.config as logging_dot_config
@@ -26,7 +25,7 @@ import platform
 import sys
 import threading
 
-from gi.repository import GLib
+from PySide6.QtCore import QtMsgType, qInstallMessageHandler
 
 from cartridges import shared
 from cartridges.logging.session_file_handler import SessionFileHandler
@@ -145,7 +144,7 @@ def setup_logging() -> None:
     }
     logging_dot_config.dictConfig(config)
     registrar_excecoes_nao_tratadas()
-    registrar_avisos_do_glib()
+    registrar_avisos_do_qt()
     for handler in logging.getLogger().handlers:
         if isinstance(handler, SessionFileHandler):
             registrar_quedas_nativas(handler.log_file)
@@ -158,8 +157,8 @@ def registrar_excecoes_nao_tratadas() -> None:
     num `__del__` não é uma ação do usuário que falhou).
 
     O padrão do Python só escreve no stderr, e o app instalado roda no
-    pythonw, sem console: um erro num callback do GTK (abrir a tela de edição,
-    salvar) sumia sem deixar rastro no `cartridges.log`. O PyGObject entrega
+    pythonw, sem console: um erro num slot do Qt (abrir a tela de edição,
+    salvar) sumia sem deixar rastro no `cartridges.log`. O PySide entrega
     esses erros ao `sys.excepthook`.
     """
 
@@ -191,7 +190,7 @@ def registrar_excecoes_nao_tratadas() -> None:
 
 
 def registrar_quedas_nativas(arquivo) -> None:  # type: ignore
-    """Grava no ``arquivo`` a pilha de uma queda nativa (C, driver, GTK).
+    """Grava no ``arquivo`` a pilha de uma queda nativa (C, driver, Qt).
 
     Uma queda dessas mata o processo sem passar pelo Python, e o log ficava
     parado na última linha normal. O ``faulthandler`` escreve direto no
@@ -200,56 +199,49 @@ def registrar_quedas_nativas(arquivo) -> None:  # type: ignore
     faulthandler.enable(file=arquivo, all_threads=True)
 
 
-# Erro, crítico, aviso e mensagem; depuração e informação o GLib já descarta
-# por padrão, e continuam descartadas.
-_NIVEIS_DO_GLIB = (
-    (GLib.LogLevelFlags.LEVEL_ERROR, "ERROR", logging.ERROR),
-    (GLib.LogLevelFlags.LEVEL_CRITICAL, "CRITICAL", logging.ERROR),
-    (GLib.LogLevelFlags.LEVEL_WARNING, "WARNING", logging.WARNING),
-    (GLib.LogLevelFlags.LEVEL_MESSAGE, "MESSAGE", logging.INFO),
-)
+# Informação, aviso, crítico e fatal; a depuração do Qt fica de fora, como antes.
+_NIVEIS_DO_QT = {
+    QtMsgType.QtInfoMsg: ("INFO", logging.INFO),
+    QtMsgType.QtWarningMsg: ("WARNING", logging.WARNING),
+    QtMsgType.QtCriticalMsg: ("CRITICAL", logging.ERROR),
+    QtMsgType.QtFatalMsg: ("FATAL", logging.CRITICAL),
+}
+_qt_registrado = False
+# Um aviso do Qt nascido enquanto outro é registrado (um handler do log que mexe no Qt) não é registrado: sem laço.
+_registrando = threading.local()
 
 
-def _campo(campos, chave: str) -> str:  # type: ignore
-    """O valor de um campo do GLib, lido como UTF-8.
+def _registrar_do_qt(tipo, contexto, mensagem) -> None:  # type: ignore
+    """O gancho de mensagens do Qt: roda em qualquer thread e nunca levanta."""
+    if getattr(_registrando, "ativo", False):
+        return
+    _registrando.ativo = True
+    try:
+        if (nivel := _NIVEIS_DO_QT.get(tipo)) is None:
+            return
+        nome, nivel_do_log = nivel
+        # O arquivo QML e a linha, quando o Qt os informa e a mensagem ainda não os traz (o `console.warn`).
+        arquivo = getattr(contexto, "file", None)
+        onde = f" ({arquivo}:{contexto.line})" if arquivo and arquivo not in mensagem else ""
+        logging.log(nivel_do_log, "Qt-%s: %s%s", nome, mensagem, onde)
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+    finally:
+        _registrando.ativo = False
 
-    Não `GLib.log_writer_format_fields`: ele devolve o texto na codificação do
-    Windows, e qualquer acento na mensagem (UTF-8 no GTK) quebrava a leitura.
-    """
-    for campo in campos:
-        if campo.key == chave and campo.value:
-            if campo.length < 0:
-                bruto = ctypes.string_at(campo.value)
-            else:
-                bruto = ctypes.string_at(campo.value, campo.length)
-            return bruto.decode("utf-8", errors="replace")
-    return ""
-_glib_registrado = False
 
-
-def registrar_avisos_do_glib() -> None:
-    """Grava no log os avisos do GTK, do GLib e do Adwaita.
+def registrar_avisos_do_qt() -> None:
+    """Grava no log os avisos do Qt e do QML.
 
     Pelo mesmo motivo de `registrar_excecoes_nao_tratadas`: o padrão é o
-    stderr, e o pythonw não tem console. Um `Gtk-CRITICAL` é o rastro típico de
-    uma tela que parou de responder. Só age na primeira chamada: o GLib aborta
-    o processo se o destino dos avisos for trocado duas vezes.
+    stderr, e o pythonw não tem console. Um aviso do QML é o rastro típico de
+    uma tela que parou de responder. Só age na primeira chamada.
     """
-    global _glib_registrado  # pylint: disable=global-statement
-    if _glib_registrado:
+    global _qt_registrado  # pylint: disable=global-statement
+    if _qt_registrado:
         return
-    _glib_registrado = True
-
-    def registrar(nivel, campos, _n, _dados):  # type: ignore
-        for bandeira, nome, nivel_do_log in _NIVEIS_DO_GLIB:
-            if nivel & bandeira:
-                dominio = _campo(campos, "GLIB_DOMAIN") or "GLib"
-                mensagem = _campo(campos, "MESSAGE")
-                logging.log(nivel_do_log, "%s-%s: %s", dominio, nome, mensagem)
-                break
-        return GLib.LogWriterOutput.HANDLED
-
-    GLib.log_set_writer_func(registrar, None)
+    _qt_registrado = True
+    qInstallMessageHandler(_registrar_do_qt)
 
 
 def log_system_info() -> None:

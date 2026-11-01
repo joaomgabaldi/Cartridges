@@ -66,8 +66,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_estilo_css.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_hwnd_ordem_import.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_ler_json.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_log_engolidos.py",  # plano 8b: logging sem gi
-    "test_log_excecoes.py",  # plano 8b: logging sem gi
     "test_menu_do_card.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_na_tela.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_store_ligacao_manual.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar

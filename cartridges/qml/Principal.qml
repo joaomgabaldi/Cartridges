@@ -42,6 +42,10 @@ Window {
         height = 700
         minimumWidth = 640
         minimumHeight = 480
+        // Depois do tamanho de hoje: o lugar e o tamanho gravados ao fechar (D87); sem nada gravado, fica este.
+        // Opcional: os arneses dos testes não põem `geometria` no contexto.
+        const servico = typeof geometria === "undefined" ? null : geometria
+        if (servico) servico.restaurar(janela)
     }
 
     Connections {
