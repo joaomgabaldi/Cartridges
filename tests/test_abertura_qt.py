@@ -290,6 +290,167 @@ def test_fechar_durante_a_restauracao_pula_o_que_ainda_nao_existe(monkeypatch, c
     assert "Falha ao encerrar" not in caplog.text
 
 
+# -- o assistente da primeira abertura (D86) -------------------------------------------------------------------------
+
+
+def _assistente(app_qt, monkeypatch, eventos, restaurar=None):
+    """O `_mostrar_assistente` de verdade (a janela num motor próprio), com o `_abrir` e o `_restaurar_e_abrir` espiões."""
+    from cartridges import assistente as modulo_assistente  # noqa: PLC0415
+
+    monkeypatch.setattr(shared, "store", None, raising=False)
+    monkeypatch.setattr(modulo_assistente, "precisa_mostrar", lambda: True)
+    monkeypatch.setattr(modulo_app, "_abrir", lambda _app, _argv, _abertura: eventos.append("abrir"))
+    monkeypatch.setattr(modulo_app, "_avisos_da_abertura", lambda *_a: eventos.append("avisos"))
+
+    def restaurar_espiao(_app, _argv, _abertura):
+        eventos.append("restaurar")
+        if restaurar is not None:
+            restaurar()
+
+    monkeypatch.setattr(modulo_app, "_restaurar_e_abrir", restaurar_espiao)
+    abertura = modulo_app._Abertura()  # noqa: SLF001
+    assert modulo_app._mostrar_assistente(app_qt, ["cartridges"], abertura) is True  # noqa: SLF001
+    janela = abertura.assistente.rootObjects()[0]
+    modelo = abertura.assistente.rootContext().contextProperty("assistente")
+    _esperar()
+    return abertura, janela, modelo
+
+
+def _fechar_assistente(abertura):
+    if abertura.assistente is not None:
+        for raiz in abertura.assistente.rootObjects():
+            raiz.close()
+        abertura.assistente.deleteLater()
+    _esperar()
+
+
+def test_primeira_abertura_mostra_o_assistente_e_nao_abre(app_qt, monkeypatch):
+    eventos = []
+    abertura, janela, modelo = _assistente(app_qt, monkeypatch, eventos)
+    try:
+        assert janela.isVisible() and eventos == []
+        assert shared.store is not None and list(shared.store) == []  # a store vazia das contas (Pré-voo 9)
+        modelo.concluir()
+        assert eventos == ["abrir", "avisos"]
+        assert _esperar(lambda: not janela.isVisible())
+    finally:
+        _fechar_assistente(abertura)
+
+
+def test_segunda_ativacao_com_o_assistente_traz_o_assistente(app_qt, monkeypatch):
+    """D76: o segundo clique no atalho com o assistente à vista traz o assistente."""
+    eventos = []
+    abertura, janela, _modelo = _assistente(app_qt, monkeypatch, eventos)
+    try:
+        janela.showMinimized()
+        _esperar()
+        modulo_app._acordar(abertura)  # noqa: SLF001
+        _esperar()
+        assert janela.isVisible()
+        assert not janela.windowStates() & Qt.WindowState.WindowMinimized
+        assert eventos == []
+    finally:
+        _fechar_assistente(abertura)
+
+
+def test_restaurar_pelo_assistente_segue_a_restauracao(app_qt, monkeypatch, tmp_path):
+    from cartridges import assistente as modulo_assistente  # noqa: PLC0415
+
+    monkeypatch.setattr(modulo_assistente, "_em_thread", lambda tarefa: tarefa())
+    monkeypatch.setattr(backup, "validar", lambda _caminho: {})
+    monkeypatch.setattr(backup, "agendar", lambda _caminho: None)
+    eventos, vista = [], []
+    abertura, janela, modelo = _assistente(app_qt, monkeypatch, eventos, restaurar=lambda: vista.append(janela.isVisible()))
+    try:
+        modelo.restaurarBackup(modulo_app.QUrl.fromLocalFile(str(tmp_path / "b.zip")))
+        assert _esperar(lambda: eventos)
+        # A janela "Restaurando…" nasce com o assistente ainda na tela; só depois ele fecha.
+        assert eventos == ["restaurar"] and vista == [True]
+        assert shared.schema.get_boolean("assistente-concluido") is True
+        assert _esperar(lambda: not janela.isVisible())
+    finally:
+        _fechar_assistente(abertura)
+
+
+def test_backup_pendente_vem_antes_do_assistente(monkeypatch):
+    eventos = []
+    preparar_main(monkeypatch, lambda *_a: eventos.append("abrir"), eventos)
+    monkeypatch.setattr(modulo_app.backup, "ha_pendente", lambda: True)
+    monkeypatch.setattr(modulo_app, "_restaurar_e_abrir", lambda *_a: eventos.append("restaurar"))
+    monkeypatch.setattr(modulo_app, "_mostrar_assistente", lambda *_a, **_k: eventos.append("assistente") or True)
+    assert modulo_app.main(["cartridges"]) == 0
+    assert eventos == ["log", "restaurar"]
+
+
+def test_sem_backup_agendado_abre_na_hora(monkeypatch):
+    from cartridges import assistente as modulo_assistente  # noqa: PLC0415
+
+    eventos = []
+
+    preparar_main(monkeypatch, lambda *_a: eventos.append("abrir"), eventos)
+    monkeypatch.setattr(modulo_assistente, "precisa_mostrar", lambda: False)
+    monkeypatch.setattr(modulo_app, "_restaurar_e_abrir", lambda *_a: eventos.append("restaurar"))
+    monkeypatch.setattr(backup, "pasta_dos_saves_desfeita", None)
+    monkeypatch.setattr(redefinir, "falha", None)
+    assert modulo_app.main(["cartridges"]) == 0
+    assert eventos == ["log", "abrir"]
+
+
+def test_sair_apos_carregar_nao_mostra_o_assistente(tmp_path):
+    """Pré-voo 8: o modo de teste da carga, sem tela, sobre uma pasta de dados vazia (a primeira abertura)."""
+    resultado = _rodar(["-m", "cartridges", "--sair-apos-carregar"], tmp_path / "dados")
+    assert resultado.returncode == 0, resultado.stderr
+    assert "jogos carregados: 0" in resultado.stdout
+
+
+# O `main()` de verdade sobre uma pasta de dados vazia: o assistente aparece e o roteiro o fecha pelo X.
+_FECHAR_PELO_X = r"""
+import sys
+from pathlib import Path
+from PySide6.QtCore import QTimer
+from cartridges import app as modulo_app
+
+anotacoes = Path(sys.argv[1])
+
+def anotar(texto):
+    with anotacoes.open("a", encoding="utf-8") as arquivo:
+        arquivo.write(texto + "\n")
+
+def abrir(*_a):
+    anotar("abrir")
+    return 1
+
+modulo_app._abrir = abrir
+fechar_original = modulo_app._fechar
+
+def fechar(abertura):
+    anotar("aboutToQuit")
+    fechar_original(abertura)
+
+modulo_app._fechar = fechar
+mostrar_original = modulo_app._mostrar_assistente
+
+def mostrar(app, argv, abertura, *a, **k):
+    mostrado = mostrar_original(app, argv, abertura, *a, **k)
+    anotar(f"assistente {mostrado}")
+    janela = abertura.assistente.rootObjects()[0]
+    QTimer.singleShot(500, janela.close)
+    return mostrado
+
+modulo_app._mostrar_assistente = mostrar
+sys.exit(modulo_app.main(["cartridges"]))
+"""
+
+
+def test_fechar_o_assistente_pelo_x_encerra_o_app_sem_abrir_a_biblioteca(tmp_path):
+    anotacoes = tmp_path / "anotacoes.txt"
+    inicio = time.monotonic()
+    resultado = _rodar(["-c", _FECHAR_PELO_X, str(anotacoes)], tmp_path / "dados")
+    assert resultado.returncode == 0, resultado.stderr
+    assert time.monotonic() - inicio < 15
+    assert anotacoes.read_text(encoding="utf-8").splitlines() == ["assistente True", "aboutToQuit"]
+
+
 # -- o reinício ------------------------------------------------------------------------------------------------------
 
 # Com a principal à vista e saves em andamento, o X seria recusado (D78); o `quit()` do reinício não pode ser.

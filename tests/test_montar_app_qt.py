@@ -146,6 +146,16 @@ def test_montar_mantem_o_qt5compat(insumos, tmp_path):
         assert (destino / "lib" / "PySide6" / "qml" / "Qt5Compat" / "GraphicalEffects" / nome).is_file(), nome
 
 
+def test_monta_as_imagens_do_assistente(insumos, tmp_path):
+    """O assistente da primeira abertura mostra a capa e o ícone de conquista de exemplo, lidos de `data/`."""
+    for nome in ("capa_de_exemplo.svg", "conquista_de_exemplo.svg"):
+        _tocar(insumos["raiz"] / "data" / nome, "<svg/>")
+    destino = tmp_path / "saida"
+    montar_app_qt.montar(destino, "desenvolvimento", **insumos)
+    for nome in ("capa_de_exemplo.svg", "conquista_de_exemplo.svg"):
+        assert (destino / "app" / "data" / nome).is_file(), nome
+
+
 def test_monta_a_metainfo_para_o_sobre(insumos, tmp_path):
     """O "Sobre o Cartridges" lê as novidades e a descrição de `data/` ao lado do pacote."""
     _tocar(insumos["raiz"] / "data" / "io.github.joaomgabaldi.Cartridges.metainfo.xml.in", "<component/>")

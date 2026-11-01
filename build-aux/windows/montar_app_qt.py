@@ -53,6 +53,9 @@ DATA = (
     "io.github.joaomgabaldi.Cartridges.metainfo.xml.in",
     "library_placeholder.svg",
     "library_placeholder_small.svg",
+    # A capa e o ícone de conquista de exemplo do assistente da primeira abertura.
+    "capa_de_exemplo.svg",
+    "conquista_de_exemplo.svg",
     "sons",
     "icons/hicolor",
 )

@@ -10,6 +10,8 @@ Column {
     objectName: "grupoDasContas"
 
     property var contas
+    // O título e a descrição; o assistente da primeira abertura os esconde (a página dele já explica as contas).
+    property bool comCabecalho: true
     // Quantas contas passam na busca; o grupo some sem nenhuma (como `GrupoDePreferencias.linhasAMostrar`).
     readonly property int linhasAMostrar: [contas.microsoft, contas.epic, contas.ea]
         .filter(d => BuscaDasPreferencias.passa(d.titulo, d.subtitulo)).length
@@ -20,6 +22,7 @@ Column {
 
     Text {
         objectName: "tituloDoGrupoDasContas"
+        visible: grupo.comCabecalho
         width: parent.width
         leftPadding: 4
         text: grupo.contas.titulo
@@ -31,6 +34,7 @@ Column {
     }
     Text {
         objectName: "descricaoDoGrupoDasContas"
+        visible: grupo.comCabecalho
         width: parent.width
         leftPadding: 4
         text: grupo.contas.descricao

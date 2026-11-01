@@ -1,7 +1,6 @@
 blueprints = custom_target(
   'blueprints',
   input: files(
-    'gtk/assistente.blp',
     'gtk/details-dialog.blp',
     'gtk/logo-picker.blp',
     'gtk/sgdb-picker.blp',

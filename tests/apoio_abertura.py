@@ -38,7 +38,7 @@ class AppFalso:
 
 
 def preparar_main(monkeypatch, abrir, eventos: list) -> None:
-    """Troca no `app` tudo o que o `main()` faria de verdade (trava, log, estilo, backup, `_abrir`, `relancar`).
+    """Troca no `app` tudo o que o `main()` faria de verdade (trava, log, estilo, backup, assistente, `_abrir`, `relancar`).
 
     ``abrir(app, argv, abertura)`` faz o papel do `_abrir`; ``eventos`` recebe "log", "release" e "relancar".
     """
@@ -57,3 +57,5 @@ def preparar_main(monkeypatch, abrir, eventos: list) -> None:
     monkeypatch.setattr(modulo_app.backup, "ha_pendente", lambda: False)
     monkeypatch.setattr(modulo_app.backup, "aplicar_pendente", lambda progresso=None: None)  # noqa: ARG005
     monkeypatch.setattr(modulo_app.redefinir, "aplicar_pendente", lambda: None)
+    # A pasta de dados dos testes está vazia: sem isto o `main()` pararia no assistente da primeira abertura (D86).
+    monkeypatch.setattr(modulo_app.assistente, "precisa_mostrar", lambda: False)

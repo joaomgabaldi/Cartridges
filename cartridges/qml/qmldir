@@ -49,6 +49,7 @@ ConquistasDaSessao 1.0 ConquistasDaSessao.qml
 GrupoDasContas 1.0 GrupoDasContas.qml
 JanelaDeLogin 1.0 JanelaDeLogin.qml
 DialogoDePreferencias 1.0 DialogoDePreferencias.qml
+JanelaDoAssistente 1.0 JanelaDoAssistente.qml
 PaginaGeral 1.0 PaginaGeral.qml
 PaginaDeImportacao 1.0 PaginaDeImportacao.qml
 PaginaDoSteamGridDB 1.0 PaginaDoSteamGridDB.qml

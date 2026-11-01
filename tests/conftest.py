@@ -56,9 +56,7 @@ def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
 # Testes que ainda dependem do `gi` (direta ou indiretamente), em ordem alfabética.
 # Cada plano que porta o módulo tira o teste daqui; a fase final exige a lista vazia.
 TESTES_AINDA_GTK: list[str] = [
-    "test_abertura.py",  # plano 8b: abertura e assistente
     "test_area_de_trabalho_oculta.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_assistente.py",  # plano 8b: assistente da primeira abertura
     "test_auditoria_0918_importadores.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_auditoria_0918_store.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_auditoria_0918_ui.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar

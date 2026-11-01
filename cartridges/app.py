@@ -26,7 +26,7 @@ from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 
-from cartridges import shared
+from cartridges import assistente, shared
 from cartridges.aplicativo import Aplicativo
 from cartridges.carga import carregar_jogos_do_disco
 from cartridges.conquistas import icones
@@ -192,6 +192,8 @@ class _Abertura:
     aplicativo: Any = None
     # O motor da janela "Restaurando o backup" (com o `Restaurando` dentro); vive até o fim do `main()`.
     restauracao: Any = None
+    # O motor do assistente da primeira abertura (com o `Assistente` dentro, D86); vive até o fim do `main()`.
+    assistente: Any = None
     # Os objetos que só o contexto do QML conhece (o Qt não é dono de objeto Python): sem uma referência aqui, saem
     # da memória quando o `_abrir` devolve e a grade, o histórico e as versões dos saves ficam sem modelo.
     mantidos: Any = None
@@ -367,17 +369,16 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
 
 def _acordar(abertura: _Abertura) -> None:
     """A segunda abertura (o atalho clicado de novo): traz a principal, escondida pelas tarefas ou minimizada; sem ela
-    ainda (a restauração em andamento), a janela da restauração."""
+    ainda, a janela da restauração ou a do assistente da primeira abertura."""
     if abertura.painel is not None:
         abertura.painel.mostrarPrincipal()
         return
-    if abertura.restauracao is None:
-        return
-    for janela in abertura.restauracao.rootObjects():
-        if janela.isVisible():  # já fechada (a abertura quebrou): o app está saindo
-            janela.setWindowStates(janela.windowStates() & ~Qt.WindowState.WindowMinimized)
-            janela.raise_()
-            janela.requestActivate()
+    for motor in (abertura.restauracao, abertura.assistente):
+        for janela in motor.rootObjects() if motor is not None else ():
+            if janela.isVisible():  # já fechada (a abertura quebrou, o assistente saiu): outra está à vista, ou o app sai
+                janela.setWindowStates(janela.windowStates() & ~Qt.WindowState.WindowMinimized)
+                janela.raise_()
+                janela.requestActivate()
 
 
 def _janela_da_restauracao() -> QQmlApplicationEngine:
@@ -439,6 +440,58 @@ def _restaurar_e_abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -
     threading.Thread(target=restaurar, name="restauracao-do-backup").start()
 
 
+def _mostrar_assistente(app: AplicacaoQt, argv: list[str], abertura: _Abertura, restauracao_falhou: bool = False) -> bool:
+    """O assistente da primeira abertura (D86), antes da biblioteca: ``True`` se ele está na tela (quem chama vai direto
+    ao `exec()`; o `_abrir` vem quando ele termina), ``False`` para seguir ao `_abrir`.
+
+    Nunca no `--sair-apos-carregar` (o modo de teste da carga, sem tela). Cada saída fecha a janela num `finally`,
+    depois de a próxima existir: o app sem nenhuma janela, nem por um instante, sairia. O X fecha sem outra janela, e
+    o app sai (o `_fechar` pula o que ainda é ``None``).
+    """
+    if "--sair-apos-carregar" in argv or not assistente.precisa_mostrar():
+        return False
+    # Conectar uma conta no assistente lê os jogos da loja (D61): sem biblioteca ainda, sobre uma store vazia.
+    shared.store = Store()
+    app_fraco = weakref.ref(app)
+
+    def fechar_a_janela() -> None:
+        for janela in abertura.assistente.rootObjects():
+            janela.close()
+
+    def ao_terminar() -> None:
+        codigo = None
+        try:
+            codigo = _abrir(app_fraco(), argv, abertura)
+            if codigo is None:
+                _avisos_da_abertura(abertura.aplicativo, restauracao_falhou)
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).exception("Falha ao abrir o app depois do assistente")
+            codigo = 1
+        finally:
+            fechar_a_janela()
+        if codigo is not None and (qt := app_fraco()) is not None:
+            qt.exit(codigo)
+
+    def ao_restaurar() -> None:
+        try:
+            # A janela "Restaurando o backup" nasce antes de esta fechar; o backup agendado segue como na abertura.
+            _restaurar_e_abrir(app_fraco(), argv, abertura)
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).exception("Falha ao restaurar o backup agendado pelo assistente")
+        finally:
+            fechar_a_janela()
+
+    abertura.assistente = motor = QQmlApplicationEngine()
+    modelo = assistente.Assistente(ao_terminar, ao_restaurar, parent=motor)
+    motor.rootContext().setContextProperty("assistente", modelo)
+    motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "JanelaDoAssistente.qml")))
+    if not motor.rootObjects():
+        logging.getLogger(__name__).error("A janela do assistente não carregou; a biblioteca abre sem ele")
+        return False
+    modelo.definir_janela(motor.rootObjects()[0])
+    return True
+
+
 def relancar() -> None:
     """Abre o app de novo, desacoplado deste processo, que já está saindo (D75)."""
     if Path(sys.executable).stem.lower() == "cartridges":
@@ -489,10 +542,12 @@ def main(argv: list[str]) -> int:
     else:
         # Sem backup agendado, só a recuperação de uma troca interrompida, que apenas renomeia pastas.
         restauracao_falhou = backup.aplicar_pendente() is False
-        codigo = _abrir(app, argv, abertura)
-        if codigo is not None:
-            return codigo
-        _avisos_da_abertura(abertura.aplicativo, restauracao_falhou)
+        # A primeira abertura: o assistente antes da biblioteca (D86); a biblioteca abre quando ele termina.
+        if not _mostrar_assistente(app, argv, abertura, restauracao_falhou):
+            codigo = _abrir(app, argv, abertura)
+            if codigo is not None:
+                return codigo
+            _avisos_da_abertura(abertura.aplicativo, restauracao_falhou)
     codigo = app.exec()
     if abertura.aplicativo is not None and abertura.aplicativo.reiniciar:
         # A trava sai antes: o processo novo precisa conseguir tomá-la.

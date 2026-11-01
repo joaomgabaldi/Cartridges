@@ -635,6 +635,8 @@ from PySide6.QtCore import QTimer
 m.session_fita = SimpleNamespace(abrir=lambda: None, fechar=lambda: None)
 m.session_wallpaper = SimpleNamespace(restaurar_orfaos=lambda: None)
 m.restauracao = SimpleNamespace(existe=lambda: True)  # sem a importação automática da abertura
+# A pasta de dados vazia mostraria o assistente da primeira abertura (D86) no lugar da principal.
+m.assistente.precisa_mostrar = lambda: False
 
 
 class Quieto:
