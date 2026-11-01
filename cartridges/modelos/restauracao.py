@@ -6,7 +6,6 @@
 atalho e o conflito de dados. As regras são do `utils/restauracao.py`; este modelo só guia o fluxo dos quatro modais
 da janela (o QML recebe dicionários e ids, nunca um `Jogo`). Só na thread principal."""
 
-import logging
 import weakref
 from datetime import datetime
 from pathlib import Path
@@ -240,10 +239,7 @@ class ContinuacaoDaRestauracao(QObject):
                     _("Já existe um atalho com este nome na pasta de atalhos."), "", [], lambda: None
                 )
             return
-        except OSError:
-            # shortcut: só a falha de cópia do atalho vai ao log, sem aviso na tela (a `main` deixava a exceção subir) por falta de texto aprovado; sai no plano 8b, com o diálogo de erro inesperado.
-            logging.exception("Não foi possível copiar o atalho %s", url.toLocalFile())
-            return
+        # Outra falha de cópia (OSError) sobe, como na `main`: o Qt a entrega ao `sys.excepthook`, que loga e abre o erro inesperado (D89).
         self._usar(caminho)
 
     def _usar(self, caminho: Path) -> None:

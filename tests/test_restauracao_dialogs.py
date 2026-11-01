@@ -300,6 +300,20 @@ def test_atalho_de_mesmo_nome_avisa_conforme_a_lista(modelo, aplicativo, store, 
     assert aplicativo.dialogos[1:] == [("Já existe um atalho com este nome na pasta de atalhos.", "")]
 
 
+def test_falha_ao_copiar_o_atalho_sobe_para_o_erro_inesperado(modelo, store, make_game, monkeypatch, tmp_path):
+    """Como na `main`: a exceção sobe ao `sys.excepthook` (log e diálogo), sem engolir (D89)."""
+    _jogo(store, make_game, "gt", "Gran Turismo 7")
+
+    def falha(_origem):
+        raise PermissionError("negado")
+
+    monkeypatch.setattr(restauracao, "copiar_para_a_pasta", falha)
+    monkeypatch.setattr(restauracao, "candidatos", lambda _jogo: [])
+    modelo.escolherAtalho("gt")
+    with pytest.raises(PermissionError):
+        modelo.procurado(QUrl.fromLocalFile(str(tmp_path / "GT7.lnk")))
+
+
 def test_procurado_sem_escolha_ou_vazio_e_ignorado(modelo, aplicativo, monkeypatch, tmp_path):
     copiados = []
     monkeypatch.setattr(restauracao, "copiar_para_a_pasta", lambda o: copiados.append(o) or o)

@@ -54,23 +54,21 @@ def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
 
 
 # Testes que ainda dependem do `gi` (direta ou indiretamente), em ordem alfabética.
-# Cada plano que porta o módulo tira o teste daqui; a fase final exige a lista vazia.
+# Sobram só os de widget GTK sem tela Qt correspondente e os que importam o GTK morto
+# (`main.py`, `window.py`, `details_dialog.py`); a fase final os reescreve ou apaga com o GTK (D90).
+# O `test_app_sem_gtk.py` prova que o app Qt não importa nada disso.
 TESTES_AINDA_GTK: list[str] = [
-    "test_area_de_trabalho_oculta.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_auditoria_0918_importadores.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_auditoria_0918_store.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_auditoria_0918_ui.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_auditoria_0923_resto.py",  # planos 8b e fase final: steam_picker e game_logo (GTK)
-    "test_auditoria_1023_seguranca.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_caixa_redimensionavel.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_estilo_css.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_hwnd_ordem_import.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_ler_json.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_menu_do_card.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_na_tela.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_store_ligacao_manual.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_tela_de_download.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_ui_logic.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
+    "test_area_de_trabalho_oculta.py",  # fase final: testa o harness `tests/area_de_trabalho_oculta.py`, que nada mais importa (não é widget GTK); apagar com o harness
+    "test_auditoria_0918_store.py",  # fase final: usa `real_window` (window.py) e `details_dialog` (GTK morto)
+    "test_auditoria_0918_ui.py",  # fase final: importa `Adw`, `main` e `session_window` (GTK morto)
+    "test_auditoria_1023_seguranca.py",  # fase final: usa `real_window` (window.py) e o `gi` (GTK morto)
+    "test_caixa_redimensionavel.py",  # fase final: widget GTK (Gtk) das caixas da `window.py`
+    "test_estilo_css.py",  # fase final: o `style.css` do GTK, sem tela Qt correspondente
+    "test_hwnd_ordem_import.py",  # fase final: importa `cartridges.main` (GTK morto)
+    "test_menu_do_card.py",  # fase final: popover do `DisplayManager` e `real_window` (GTK morto)
+    "test_na_tela.py",  # fase final: fila de redesenho do GLib (`utils/na_tela.py`, GTK)
+    "test_tela_de_download.py",  # fase final: `TelaDeDownload` é widget GTK (`gi`)
+    "test_ui_logic.py",  # fase final: importa `CartridgesWindow` (`window.py`, GTK morto)
 ]
 
 collect_ignore = TESTES_AINDA_GTK
@@ -514,12 +512,16 @@ def sem_navegador_de_verdade(monkeypatch):
     """
     from cartridges.conquistas.xbox import login as login_xbox  # noqa: PLC0415
     from cartridges.modelos import contas as modelo_das_contas  # noqa: PLC0415
+    from cartridges.utils import open_uri  # noqa: PLC0415
 
     chamadas: list[str] = []
 
     def recusa(url):
         chamadas.append(url)
         raise AssertionError("navegador: nenhum login abre nos testes")
+
+    # O funil de `abrir_url` (Novidades, Sobre, detalhes...): quem importa o nome e o troca no próprio módulo não passa por aqui.
+    monkeypatch.setattr(open_uri.QDesktopServices, "openUrl", staticmethod(lambda url: recusa(url.toString())))
 
     monkeypatch.setattr(modelo_das_contas, "_abrir_navegador", recusa)
     original = login_xbox._abrir_navegador  # noqa: SLF001

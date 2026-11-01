@@ -365,3 +365,13 @@ def test_abrir_nunca_abre_o_navegador_de_verdade(caso, sem_navegador_de_verdade)
     assert sem_navegador_de_verdade == [caso.conta.PAGINA_DE_LOGIN]
     assert login.erro == caso.sem_navegador  # a exceção do guarda foi engolida como "sem navegador"
     sem_navegador_de_verdade.clear()  # provado de propósito: o guarda do fim do teste não reclama
+
+
+def test_abrir_url_sem_troca_nunca_chega_ao_navegador_de_verdade(sem_navegador_de_verdade):
+    """O funil `abrir_url` (Novidades, Sobre...) termina no `QDesktopServices.openUrl`: o `conftest.py` o recusa."""
+    from cartridges.utils.open_uri import abrir_url  # noqa: PLC0415
+
+    with pytest.raises(AssertionError):
+        abrir_url("https://exemplo.test/x")
+    assert sem_navegador_de_verdade == ["https://exemplo.test/x"]
+    sem_navegador_de_verdade.clear()  # provado de propósito

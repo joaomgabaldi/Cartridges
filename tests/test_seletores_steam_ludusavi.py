@@ -97,6 +97,21 @@ def test_steam_sem_resultado_e_item_que_nao_e_jogo(edicao, steam):
     assert edicao.appid == ""
 
 
+def test_falha_de_busca_troca_o_titulo(edicao, steam):
+    """Par Qt do b23 da auditoria 0923: a busca que cai mostra o erro, não 'nenhum encontrado'."""
+    edicao.adicionar()
+    seletor = edicao.seletorDaSteam
+
+    def cair(_nome):
+        raise RuntimeError("sem rede")
+
+    steam.find_candidates = cair
+    seletor.abrir("Portal")
+    assert _esperar(lambda: seletor.vazio)
+    assert seletor.tituloDoEstado == "Não foi possível concluir a busca" and seletor.erro is True
+    assert seletor.descricaoDoEstado == "Verifique a conexão e tente novamente."
+
+
 def test_fechar_o_seletor_descarta_o_que_chega_depois(edicao, steam):
     edicao.adicionar()
     seletor = edicao.seletorDaSteam

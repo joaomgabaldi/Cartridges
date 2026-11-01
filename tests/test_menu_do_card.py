@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import pytest
 
 from cartridges import shared
-from tests.test_zerados import jogo
+from tests.apoio_edicao import jogo
 
 
 @pytest.fixture

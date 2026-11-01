@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Auditoria de 23/09: M6, M9, B17, B26, B23."""
+"""Auditoria de 23/09: M6, M9, B17, B29, B24 (B26 está no `test_metadata_refresh.py`; B23, no `test_seletores_steam_ludusavi.py`)."""
 
 from cartridges import shared
 
@@ -27,51 +27,10 @@ def test_m9_webp_nao_e_candidato_utilizavel():
     assert game_logo.pick_logo([webp, png]) is png
 
 
-def test_b26_plural_dos_metadados(win):
-    from cartridges.metadata_refresh import MetadataRefresh  # noqa: PLC0415
-
-    MetadataRefresh._announce(1, 1, False)
-    MetadataRefresh._announce(3, 3, False)
-    MetadataRefresh._announce(2, 5, True)
-    titulos = [t.get_title() for t in win.toast_queue.added]
-    assert titulos == [
-        "Metadados atualizados: 1 jogo",
-        "Metadados atualizados: 3 jogos",
-        "Atualização cancelada após 2 de 5 jogos",
-    ]
-
-
 def test_b17_refresh_nao_tem_mais_dialogo_de_erro():
     from cartridges.metadata_refresh import MetadataRefresh  # noqa: PLC0415
 
     assert not hasattr(MetadataRefresh, "_show_error")
-
-
-def test_b23_falha_de_busca_troca_o_titulo(win):
-    from cartridges.steam_picker import SteamPicker  # noqa: PLC0415
-
-    picker = SteamPicker.__new__(SteamPicker)
-    picker._generation = 0
-
-    class Status:
-        titulo = descricao = None
-
-        def set_title(self, t):
-            Status.titulo = t
-
-        def set_description(self, d):
-            Status.descricao = d
-
-    class Pilha:
-        def set_visible_child_name(self, _n):
-            pass
-
-    picker.status_page, picker.stack = Status(), Pilha()
-    SteamPicker._show_empty(
-        picker, "Não foi possível concluir a busca", "Verifique a conexão e tente novamente."
-    )
-    assert Status.titulo == "Não foi possível concluir a busca"
-    assert Status.descricao == "Verifique a conexão e tente novamente."
 
 
 def test_b29_instalador_sem_gnome():
@@ -88,9 +47,8 @@ def test_b29_instalador_sem_gnome():
 def test_b24_confirmacao_de_patch_diz_o_que_aconteceu():
     from pathlib import Path  # noqa: PLC0415
 
-    texto = (Path(__file__).parent.parent / "cartridges/window.py").read_text(encoding="utf-8")
-    assert '_("Você instalou a atualização?")' in texto
-    assert "A página da atualização foi aberta no navegador. Confirme após " in texto
-    assert "instalá-la para ocultar o aviso." in texto
-    assert '_("Ainda não")' in texto
-    assert '_("Já instalei")' in texto
+    texto = (Path(__file__).parent.parent / "cartridges/qml/PaginaDoJogo.qml").read_text(encoding="utf-8")
+    assert 'titulo: "Você instalou a atualização?"' in texto
+    assert "A página da atualização foi aberta no navegador. Confirme após instalá-la para ocultar o aviso." in texto
+    assert 'rotuloCancelar: "Ainda não"' in texto
+    assert 'rotuloConfirmar: "Já instalei"' in texto

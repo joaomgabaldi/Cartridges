@@ -7,9 +7,7 @@
 Um teste por achado de comportamento; cada um falha sem o conserto.
 """
 
-import hashlib
 import json
-import threading
 import types
 from datetime import datetime
 
