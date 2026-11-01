@@ -84,7 +84,7 @@ def _apagados(iss: str) -> set[str]:
 
 
 def test_iss_final_apaga_a_arvore_do_gtk_e_a_do_qt(final):
-    assert _apagados(final) == {"bin", "etc", "lib", "share", "python", "app"}
+    assert _apagados(final) == {"bin", "etc", "lib", "share", "python", "app", "licencas"}
 
 
 def test_iss_de_desenvolvimento_apaga_so_a_arvore_do_qt(renderizado):

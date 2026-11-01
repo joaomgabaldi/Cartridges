@@ -83,8 +83,8 @@ STYLE_RANK = {"official": 3, "white": 2, "custom": 1, "black": -2}
 
 # Formats that can carry transparency. A JPEG logo comes with a baked-in
 # rectangle of background, which is exactly the "artificial frame" the header
-# must not have, so it loses to any alternative. Sem leitor WebP no runtime
-# (o GdkPixbuf do MSYS2 não tem o loader), `.webp` não entra aqui — `_usable`
+# must not have, so it loses to any alternative. `.webp` é recusado como na versão
+# anterior (paridade; ver `_usable`), então não entra aqui — `_usable`
 # já descarta esses candidatos antes de chegar a este critério.
 TRANSPARENT_SUFFIXES = (".png",)
 
@@ -372,9 +372,8 @@ def _usable(logo: dict[str, Any]) -> bool:
     if suffix not in IMAGE_SUFFIXES:
         return False
 
-    # Sem leitor WebP no runtime (o GdkPixbuf do MSYS2 não tem o loader): um
-    # candidato .webp seria baixado, descartado e registrado como "sem logo",
-    # e o jogo nunca ganharia logo.
+    # Paridade com a versão anterior, que não lia WebP: o .webp continua recusado
+    # para não mudar quais logos os jogos recebem.
     if suffix == ".webp":
         return False
 

@@ -216,6 +216,36 @@ def _prop(tipo: Any, nome: str, notify: Any) -> Property:
     return Property(tipo, lambda self: self._v[nome], notify=notify)
 
 
+def _entregar(fraco: Any, nome: str, *args: Any) -> None:
+    """Entrega na principal, se o modelo ainda existe."""
+    if (modelo := fraco()) is not None:
+        getattr(modelo, nome)(*args)
+
+
+# As threads seguram o modelo só por referência fraca: um QObject sem pai finalizado na thread de trabalho
+# (a última referência caindo ali) dá access violation. Se o modelo morreu, o resultado é descartado.
+def _buscar_logo(fraco: Any, jogo: Jogo) -> None:
+    caminho = None
+    try:
+        caminho = game_logo.fetch_logo(jogo)
+    except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        # Sem a entrega abaixo o id ficaria na lista de buscas para sempre, e o jogo nunca mais teria logo.
+        logging.warning("Erro inesperado ao buscar o logo de %s", jogo.name, exc_info=True)
+    finally:
+        na_thread_principal(_entregar, fraco, "_logo_chegou", jogo.game_id, caminho)
+
+
+def _calcular_fundo(fraco: Any, game_id: str, chave: str, caminho: Path) -> None:
+    resultado = None
+    try:
+        resultado = desfoque.calcular(caminho)
+    except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        # Sem a entrega abaixo a chave ficaria marcada e o fundo parado até a capa mudar.
+        logging.warning("Erro inesperado ao desfocar a capa de %s", game_id, exc_info=True)
+    finally:
+        na_thread_principal(_entregar, fraco, "_fundo_chegou", game_id, chave, resultado)
+
+
 class DetalhesDoJogo(QObject):
     """O jogo da página de detalhes, em propriedades que o QML lê. Só na thread principal."""
 
@@ -470,18 +500,8 @@ class DetalhesDoJogo(QObject):
             return {"logo": _url_da_capa(carregado[0]), "larguraDoLogo": carregado[1]}
         if game_logo.logo_lookup_needed(jogo) and jogo.game_id not in self._buscas_de_logo:
             self._buscas_de_logo.add(jogo.game_id)
-            threading.Thread(target=self._buscar_logo, args=(jogo,), daemon=True).start()
+            threading.Thread(target=_buscar_logo, args=(weakref.ref(self), jogo), daemon=True).start()
         return {"logo": "", "larguraDoLogo": 0}
-
-    def _buscar_logo(self, jogo: Jogo) -> None:
-        caminho = None
-        try:
-            caminho = game_logo.fetch_logo(jogo)
-        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-            # Sem a entrega abaixo o id ficaria na lista de buscas para sempre, e o jogo nunca mais teria logo.
-            logging.warning("Erro inesperado ao buscar o logo de %s", jogo.name, exc_info=True)
-        finally:
-            na_thread_principal(self._logo_chegou, jogo.game_id, caminho)
 
     def _logo_chegou(self, game_id: str, caminho: Path | None) -> None:
         self._buscas_de_logo.discard(game_id)
@@ -503,18 +523,10 @@ class DetalhesDoJogo(QObject):
         if caminho is None:
             self._luminancia = _RESERVA
             return {"fundo": ""}
-        threading.Thread(target=self._calcular_fundo, args=(jogo.game_id, chave, caminho), daemon=True).start()
+        threading.Thread(
+            target=_calcular_fundo, args=(weakref.ref(self), jogo.game_id, chave, caminho), daemon=True
+        ).start()
         return {}
-
-    def _calcular_fundo(self, game_id: str, chave: str, caminho: Path) -> None:
-        resultado = None
-        try:
-            resultado = desfoque.calcular(caminho)
-        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-            # Sem a entrega abaixo a chave ficaria marcada e o fundo parado até a capa mudar.
-            logging.warning("Erro inesperado ao desfocar a capa de %s", game_id, exc_info=True)
-        finally:
-            na_thread_principal(self._fundo_chegou, game_id, chave, resultado)
 
     def _fundo_chegou(self, game_id: str, chave: str, resultado: desfoque.Desfoque | None) -> None:
         if game_id != self._atual or chave != self._chave_do_fundo:

@@ -194,8 +194,8 @@ def _win32_dir(directory: str) -> str:
     """``directory`` in the shape the Windows shell accepts.
 
     `os.path.dirname` hands back whatever `os.sep` says, and on the interpreter
-    this app ships with (MSYS2 ucrt64) that is a forward slash — which Explorer
-    does not open.
+    the previous (GTK) version shipped (MSYS2 ucrt64) that was a forward slash —
+    which Explorer does not open. Kept because libraries written by it still hold such paths.
     """
     return directory.replace("/", "\\")
 

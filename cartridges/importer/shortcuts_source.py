@@ -174,8 +174,8 @@ def resolve_lnk_targets(paths: list[Path]) -> dict[str, dict]:
         # in its replacement is an escape. The separator swap matters because
         # the shell namespace parser is stricter than the file APIs — the same
         # path that `CreateShortcut` opens happily returns a null namespace here
-        # if it carries forward slashes, and the ucrt64 Python this ships with
-        # produces exactly that. A null namespace means no AUMID, which means no
+        # if it carries forward slashes, and the ucrt64 Python the previous (GTK)
+        # version shipped produced exactly that; libraries written by it may still hold such paths. A null namespace means no AUMID, which means no
         # Store or Game Pass shortcut is recognised as one at all: they lose
         # their only usable target, get dropped, and `remove_games` then clears
         # every Game Pass game in the library. Fixed on the PowerShell side so

@@ -19,8 +19,8 @@
 
 """Keep a second copy of the app from running alongside the first.
 
-GApplication already promises this — that is what the application id is for —
-but it delivers it over the D-Bus session bus, and Windows has no session bus
+The previous (GTK) version relied on GApplication, which promises this — that is
+what the application id is for — but delivers it over the D-Bus session bus, and Windows has no session bus
 running. GLib tries to start one by spawning ``gdbus.exe``; when that fails
 (a mismatched MSYS2 build, missing dependencies) it prints
 

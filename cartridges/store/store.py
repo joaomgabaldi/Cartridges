@@ -43,9 +43,9 @@ def _path_key(path: str) -> str:
     """A shortcut path in the one shape comparisons may use.
 
     Two conventions have to be flattened before two paths naming one file can be
-    told to be equal. Separators, because the interpreter this ships with (MSYS2
-    ucrt64) has `os.sep` and `os.altsep` the other way round, so a library
-    written by one build and rescanned by another disagrees with itself — and
+    told to be equal. Separators, because the interpreter the previous (GTK) version
+    shipped (MSYS2 ucrt64) had `os.sep` and `os.altsep` the other way round, so
+    a library written by one build and rescanned by another disagrees with itself — and
     the anchor index is keyed by exactly this value, so a disagreement there
     means a game is not recognised, is imported again, and has its old record
     removed with everything on it. And case, because Windows paths are

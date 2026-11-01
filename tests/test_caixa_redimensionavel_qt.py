@@ -133,6 +133,7 @@ def test_puxador_nunca_sai_da_janela(app_qt):
     assert _esperar(lambda: balao.property("opened") is True)
     _arrastar_puxador(app, balao, 400, 300)  # o cursor para na janela; o limite é do balão
     fundo = _fundo_do_puxador(balao)
+    assert fundo.x() <= app.janela.width() and fundo.y() <= app.janela.height()
     assert app.caixa_da_anotacao.largura > caixa.MINIMO[0]
     balao.close()
     _esperar()

@@ -434,6 +434,7 @@ def test_editing_the_cover_refreshes_the_open_details_page(app_qt, store):
     jogo = _jogo()
     detalhes = _modelo(store, jogo)
     detalhes.mostrar("a")
+    assert _rodar_ate(lambda: detalhes.fundo)  # a thread do desfoque não pode estar lendo a capa ao regravá-la
     antes = detalhes.capa
     Image.new("RGB", (200, 300), "blue").save(capa)
     os.utime(capa, ns=(1_000_000_000, 1_000_000_000))
@@ -455,6 +456,28 @@ def test_an_unchanged_apply_keeps_the_computed_blur(app_qt, store, monkeypatch):
     jogo.update()
     _rodar_ate(lambda: False, 0.2)
     assert calculos == [] and detalhes.fundo == fundo
+
+
+def test_thread_de_fundo_e_de_logo_nao_seguram_o_modelo(app_qt, store, monkeypatch):
+    """Com as threads presas, apagar o modelo o solta; ao soltá-las nada é entregue e nada quebra."""
+    Image.new("RGB", (200, 300), "red").save(shared.covers_dir / "a.tiff")
+    preso, solto = threading.Event(), threading.Event()
+    monkeypatch.setattr(desfoque, "calcular", lambda _c: (preso.set(), solto.wait(5))[1] and None)
+    monkeypatch.setattr(game_logo, "logo_lookup_needed", lambda _j: True)
+    monkeypatch.setattr(game_logo, "fetch_logo", lambda _j: solto.wait(5) and None)
+    detalhes = _modelo(store, _jogo())
+    entregas = []
+    monkeypatch.setattr(modulo.DetalhesDoJogo, "_fundo_chegou", lambda *a: entregas.append(a))
+    monkeypatch.setattr(modulo.DetalhesDoJogo, "_logo_chegou", lambda *a: entregas.append(a))
+    detalhes.mostrar("a")
+    assert preso.wait(5)
+    fraco = weakref.ref(detalhes)
+    del detalhes
+    gc.collect()
+    assert fraco() is None
+    solto.set()
+    _rodar_ate(lambda: False, 0.3)
+    assert entregas == []
 
 
 def test_uma_atualizacao_um_aviso(app_qt, store):
