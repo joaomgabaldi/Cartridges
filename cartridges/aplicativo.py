@@ -218,6 +218,11 @@ class Aplicativo(QObject):
         else:
             ao_fechar()
 
+    @Slot(str)
+    def avisar(self, texto: str) -> None:
+        """Um aviso simples na fila do app (o QML não alcança a `FilaDeAvisos.adicionar`)."""
+        self._avisos.adicionar(texto)
+
     @Slot()
     def pedir_reinicio(self) -> None:
         """Sai do app e o reabre: o `main()` solta a trava e chama o `relancar()` depois do `exec()` (D75).

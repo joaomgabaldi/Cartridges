@@ -21,7 +21,7 @@
 
 A cada abertura do app instalado, uma thread pergunta ao GitHub qual é a última
 release. Se a tag for mais nova que ``shared.VERSION``, a thread principal mostra
-as notas da release com Sim/Não. No Sim, o instalador é baixado para
+as notas da release com "Agora não"/"Atualizar". No "Atualizar", o instalador é baixado para
 ``%TEMP%\\Cartridges-update``, conferido pelo SHA256 que o GitHub publica e aberto
 em modo silencioso; o app fecha e o próprio instalador o reabre no fim.
 
@@ -29,6 +29,7 @@ Não confundir com ``updates_checker``, que trata das atualizações dos jogos.
 """
 
 import hashlib
+import html
 import logging
 import os
 import re
@@ -36,16 +37,17 @@ import shutil
 import sys
 import tempfile
 import threading
+import weakref
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
 import requests
-from gi.repository import Adw, GLib, Gtk
+from PySide6.QtCore import Property, QCoreApplication, QObject, QTimer, Signal, Slot
 
 from cartridges import shared
 from cartridges.saves import backup_de_saves
-from cartridges.utils.na_tela import entregar_na_tela
+from cartridges.utils.thread_principal import na_thread_principal
 
 RELEASES_URL = "https://api.github.com/repos/joaomgabaldi/Cartridges/releases/latest"
 
@@ -126,14 +128,14 @@ def is_newer(version: str, current: str) -> bool:
 
 
 def notes_to_markup(notes: str) -> str:
-    """Converte o Markdown das notas da release para markup do Pango.
+    """Converte o Markdown das notas da release para o ``Text.RichText`` do Qt.
 
     Só o que as notas usam: ``## título``, ``**negrito**``, crases e ``- `` no
     começo da linha. A seção ``## Instalação`` é cortada: ela manda baixar o
     arquivo da página do GitHub, o que dentro do app não faz sentido.
     """
-    # ponytail: negrito e crase cruzados ("`a **b` c**") geram markup inválido e
-    # o Gtk.Label fica vazio; as notas são escritas à mão, não vale um parser.
+    # ponytail: negrito e crase cruzados ("`a **b` c**") geram tags mal aninhadas
+    # (o Qt as engole sem erro); as notas são escritas à mão, não vale um parser.
     lines: list[str] = []
     skipping = False
     for raw in notes.replace("\r\n", "\n").split("\n"):
@@ -141,20 +143,21 @@ def notes_to_markup(notes: str) -> str:
             title = raw[3:].strip()
             skipping = title == "Instalação"
             if not skipping:
-                lines.append(f"<b>{GLib.markup_escape_text(title)}</b>")
+                lines.append(f"<b>{html.escape(title, quote=False)}</b>")
             continue
         if skipping:
             continue
 
         # Escapar antes de trocar: `**` e crase não mudam no escape, e o que o
-        # texto trouxer de `<` ou `&` não vira tag.
-        line = GLib.markup_escape_text(raw)
+        # texto trouxer de `<` ou `&` não vira tag
+        # (nem link: nenhum `<a>` é gerado).
+        line = html.escape(raw, quote=False)
         line = _BOLD_RE.sub(r"<b>\1</b>", line)
         line = _CODE_RE.sub(r"<tt>\1</tt>", line)
         if line.startswith("- "):
             line = "• " + line[2:]
         lines.append(line)
-    return "\n".join(lines).strip()
+    return "\n".join(lines).strip().replace("\n", "<br>")
 
 
 def installed_root() -> Optional[Path]:
@@ -171,6 +174,17 @@ def installed_root() -> Optional[Path]:
 def download_dir() -> Path:
     """Onde o instalador baixado fica até a próxima abertura do app."""
     return Path(tempfile.gettempdir()) / "Cartridges-update"
+
+
+def _abrir_instalador(caminho: Path) -> None:
+    """Abre o instalador sem esperar por ele; o ponto que os testes trocam.
+
+    ShellExecute: o próprio Inno Setup pede o UAC depois de começar, quando o app
+    já fechou. As barras são trocadas porque um caminho pode vir montado com "/".
+
+    :raises OSError: o Windows não conseguiu abrir o arquivo
+    """
+    os.startfile(str(caminho).replace("/", "\\"), arguments=INSTALLER_ARGUMENTS)
 
 
 def _buscar_release() -> Optional[Release]:
@@ -249,10 +263,18 @@ def download_installer(
         raise
 
 
-class AppUpdater:
-    """Checagem na abertura, pergunta, download e troca pelo instalador."""
+class AppUpdater(QObject):
+    """Checagem na abertura, pergunta, download e troca pelo instalador.
 
-    def __init__(self) -> None:
+    O QML (``DialogoDaAtualizacao``) lê ``pergunta``, ``baixando`` e ``progresso``
+    e responde por ``responder``/``cancelar``; o botão das Preferências chama
+    ``buscarAgora``. Tudo o que toca a tela roda na thread principal.
+    """
+
+    alterado = Signal()
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
         # Ligado pelo Cancelar ou pelo fechamento do app: o download para no
         # próximo pedaço e um resultado que chegue depois é descartado.
         self._cancel = threading.Event()
@@ -262,6 +284,34 @@ class AppUpdater:
         self._perguntando = False
         # Uma busca do botão no caminho; reabrir as Preferências devolve o botão.
         self._buscando = False
+        self._release: Optional[Release] = None
+        self._pergunta: dict = {}
+        self._baixando = False
+        self._progresso = 0.0
+
+    # -- o que o QML lê ------------------------------------------------------
+
+    @Property("QVariantMap", notify=alterado)
+    def pergunta(self) -> dict:
+        return self._pergunta
+
+    @Property(bool, notify=alterado)
+    def baixando(self) -> bool:
+        return self._baixando
+
+    @Property(float, notify=alterado)
+    def progresso(self) -> float:
+        return self._progresso
+
+    @Property(bool, notify=alterado)
+    def buscando(self) -> bool:
+        return self._buscando
+
+    @Property(str, constant=True)
+    def versao(self) -> str:
+        return shared.VERSION
+
+    # -- ciclo de vida -------------------------------------------------------
 
     def start(self) -> None:
         """Checa uma vez, fora da thread principal. Só no app instalado."""
@@ -282,37 +332,69 @@ class AppUpdater:
         ``responder(texto)`` para um aviso. Sempre na thread principal, uma vez.
         """
         if installed_root() is None:
-            responder(_("A busca de atualizações só funciona no aplicativo instalado."))
+            responder("A busca de atualizações só funciona no aplicativo instalado.")
             return
         if self._buscando:
-            responder(_("A busca de atualizações já está em andamento."))
+            responder("A busca de atualizações já está em andamento.")
             return
-        self._buscando = True
+        self._definir_busca(True)
 
         def work() -> None:
             try:
                 release = _buscar_release()
             except Exception as error:  # pylint: disable=broad-exception-caught
                 logging.info("Busca de versão nova falhou: %s", error)
-                entregar_na_tela(
+                na_thread_principal(
                     self._responder_busca,
                     responder,
-                    _(
-                        "Não foi possível buscar atualizações. Verifique a conexão "
-                        "com a internet."
-                    ),
+                    "Não foi possível buscar atualizações. Verifique a conexão "
+                    "com a internet.",
                 )
                 return
             if release is None or not is_newer(release.version, shared.VERSION):
-                entregar_na_tela(
+                na_thread_principal(
                     self._responder_busca,
                     responder,
-                    _("O Cartridges já está na versão mais recente."),
+                    "O Cartridges já está na versão mais recente.",
                 )
                 return
-            entregar_na_tela(self._perguntar_agora, release, responder)
+            na_thread_principal(self._perguntar_agora, release, responder)
 
         threading.Thread(target=work, daemon=True).start()
+
+    @Slot()
+    def buscarAgora(self) -> None:  # noqa: N802
+        """O botão das Preferências: a resposta vira um aviso na fila do app."""
+
+        def responder(texto: Optional[str]) -> None:
+            if texto is not None and shared.aplicativo is not None:
+                shared.aplicativo.avisos.adicionar(texto)
+
+        self.buscar_agora(responder)
+
+    # -- respostas do diálogo ------------------------------------------------
+
+    @Slot(bool)
+    def responder(self, atualizar: bool) -> None:
+        """"Atualizar" começa o download; "Agora não" (ou Esc) só fecha a pergunta."""
+        release = self._release
+        if not self._pergunta or release is None:
+            return
+        # "Agora não" não grava nada: na próxima abertura, a pergunta volta.
+        self._pergunta = {}
+        self._release = None
+        if atualizar:
+            self._download(release)
+        else:
+            self._perguntando = False
+            self.alterado.emit()
+
+    @Slot()
+    def cancelar(self) -> None:
+        self._cancel.set()
+        self._perguntando = False
+        self._baixando = False
+        self.alterado.emit()
 
     # -- thread de checagem --------------------------------------------------
 
@@ -338,54 +420,34 @@ class AppUpdater:
         if not is_newer(release.version, shared.VERSION):
             return
         logging.info("Versão nova disponível: %s", release.version)
-        GLib.idle_add(self._ask, release)
+        na_thread_principal(self._ask, release)
 
     # -- thread principal ----------------------------------------------------
 
-    def _ask(self, release: Release) -> bool:
-        if self._stopped or shared.win is None or self._perguntando:
-            return False
+    def _definir_busca(self, buscando: bool) -> None:
+        self._buscando = buscando
+        self.alterado.emit()
+
+    def _ask(self, release: Release) -> None:
+        if self._stopped or shared.aplicativo is None or self._perguntando:
+            return
 
         # A pergunta espera a sessão acabar (veja `_ocupado`).
         if self._ocupado():
-            GLib.timeout_add_seconds(ASK_RETRY_SECONDS, self._ask, release)
-            return False
+            eu = weakref.ref(self)
+            QTimer.singleShot(
+                ASK_RETRY_SECONDS * 1000, lambda: (u := eu()) and u._ask(release)  # noqa: SLF001
+            )
+            return
 
-        notes = Gtk.Label(
-            label=notes_to_markup(release.notes),
-            use_markup=True,
-            wrap=True,
-            xalign=0,
-        )
-        scrolled = Gtk.ScrolledWindow(
-            child=notes,
-            hscrollbar_policy=Gtk.PolicyType.NEVER,
-            max_content_height=360,
-            propagate_natural_height=True,
-        )
-        dialog = Adw.AlertDialog(
-            heading=_("Nova versão disponível: {}").format(release.version),
-            body=_(
-                "Deseja baixar e instalar a atualização agora? O aplicativo será "
-                "fechado durante a instalação."
-            ),
-            extra_child=scrolled,
-            prefer_wide_layout=True,
-        )
-        dialog.add_response("no", _("Agora não"))
-        dialog.add_response("yes", _("Atualizar"))
-        # Atualizar destacado, mas não como padrão: a caixa aparece sem ser pedida,
-        # e um Enter perdido (digitando na busca) não pode começar o download.
-        dialog.set_response_appearance("yes", Adw.ResponseAppearance.SUGGESTED)
-        dialog.set_close_response("no")
-        dialog.connect("response", self._on_answer, release)
-        dialog.present(shared.win)
+        self._release = release
+        self._pergunta = {"versao": release.version, "notas": notes_to_markup(release.notes)}
         self._perguntando = True
-        return False
+        self.alterado.emit()
 
     @staticmethod
     def _ocupado() -> bool:
-        """Com um jogo aberto, o Sim fecharia o app no meio da sessão, e o app
+        """Com um jogo aberto, o "Atualizar" fecharia o app no meio da sessão, e o app
         reaberto pelo instalador não volta a rastrear o jogo. Vale também para o
         backup ou a restauração dos saves."""
         # avoid import cycles
@@ -401,51 +463,35 @@ class AppUpdater:
     def _responder_busca(
         self, responder: Callable[[Optional[str]], None], texto: Optional[str]
     ) -> None:
-        self._buscando = False
+        self._definir_busca(False)
         responder(texto)
 
     def _perguntar_agora(
         self, release: Release, responder: Callable[[Optional[str]], None]
     ) -> None:
-        self._buscando = False
+        self._definir_busca(False)
         # Pedida pelo botão, a pergunta não espera em silêncio: a pessoa clicou
         # e precisa de uma resposta agora.
         if self._ocupado():
             responder(
-                _(
-                    "Versão {} disponível. Conclua o jogo, o backup ou a restauração "
-                    "dos saves em andamento para atualizar."
-                ).format(release.version)
+                "Versão {} disponível. Conclua o jogo, o backup ou a restauração "
+                "dos saves em andamento para atualizar.".format(release.version)
             )
             return
         self._ask(release)
         responder(None)
 
-    def _on_answer(
-        self, _dialog: Adw.AlertDialog, response: str, release: Release
-    ) -> None:
-        # "Agora não" não grava nada: na próxima abertura, a pergunta volta.
-        if response == "yes":
-            self._download(release)
-        else:
-            self._perguntando = False
-
     def _download(self, release: Release) -> None:
         # Um Cancelar de antes, na mesma sessão, não pode parar este download.
         self._cancel.clear()
-        bar = Gtk.ProgressBar(show_text=True)
-        dialog = Adw.AlertDialog(heading=_("Baixando atualização…"), extra_child=bar)
-        dialog.add_response("cancel", _("Cancelar"))
-        dialog.set_close_response("cancel")
-        dialog.connect("response", lambda *_args: self._cancelar())
-        # Modal, como a pergunta: não dá para iniciar um jogo com o app prestes
-        # a fechar para instalar.
-        dialog.present(shared.win)
+        self._baixando = True
+        self._progresso = 0.0
+        self.alterado.emit()
 
         target = download_dir() / f"Cartridges-{release.version}.exe"
 
         def progress(fraction: float) -> None:
-            entregar_na_tela(bar.set_fraction, fraction)
+            na_thread_principal(self._atualizar_progresso, fraction)
 
         def work() -> None:
             try:
@@ -454,43 +500,41 @@ class AppUpdater:
                 return
             except Exception as error:  # pylint: disable=broad-exception-caught
                 logging.warning("Download da atualização falhou: %s", error)
-                entregar_na_tela(self._finish, dialog, None)
+                na_thread_principal(self._finish, None)
                 return
-            entregar_na_tela(self._finish, dialog, target)
+            na_thread_principal(self._finish, target)
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _cancelar(self) -> None:
-        self._cancel.set()
-        self._perguntando = False
+    def _atualizar_progresso(self, fraction: float) -> None:
+        if self._baixando and not self._stopped:
+            self._progresso = fraction
+            self.alterado.emit()
 
-    def _finish(self, dialog: Adw.AlertDialog, target: Optional[Path]) -> bool:
+    def _finish(self, target: Optional[Path]) -> None:
         # Cancelar apertado no último instante, ou o app fechando: o resultado
         # chegou tarde e não vale mais.
         if self._stopped or self._cancel.is_set():
-            return False
+            return
 
         if target is None:
-            message = _("Não foi possível baixar a atualização")
+            message = "Não foi possível baixar a atualização"
         else:
             try:
-                # os.startfile (ShellExecute) abre o instalador sem esperar por
-                # ele; o próprio Inno Setup pede o UAC depois de começar, quando
-                # o app já fechou. As barras são trocadas porque o Python do
-                # MSYS2 monta caminhos com "/".
-                os.startfile(
-                    str(target).replace("/", "\\"), arguments=INSTALLER_ARGUMENTS
-                )
+                _abrir_instalador(target)
             except OSError as error:
                 logging.warning("Não foi possível abrir o instalador: %s", error)
-                message = _("Não foi possível abrir o instalador")
+                message = "Não foi possível abrir o instalador"
             else:
                 # O instalador precisa do app fechado para trocar os arquivos,
-                # e o [Run] do .iss o reabre no fim.
-                shared.win.get_application().quit()
-                return False
+                # e o [Run] do .iss o reabre no fim. Um segundo resultado não
+                # sai de novo.
+                self._stopped = True
+                QCoreApplication.quit()
+                return
 
         self._perguntando = False
-        dialog.force_close()
-        shared.win.toast_queue.add(Adw.Toast.new(message))
-        return False
+        self._baixando = False
+        self.alterado.emit()
+        if shared.aplicativo is not None:
+            shared.aplicativo.avisos.adicionar(message)

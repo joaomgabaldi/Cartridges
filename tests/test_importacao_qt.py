@@ -19,6 +19,7 @@ from PySide6.QtTest import QTest
 
 from cartridges import aplicativo as modulo
 from cartridges import shared
+from cartridges.utils.app_updater import AppUpdater
 from cartridges.aplicativo import Aplicativo
 from cartridges.importer.source import SourceScanError
 from cartridges.jogo import Jogo
@@ -411,6 +412,7 @@ class _Janela:
         self.preferencias = shared.preferencias = Preferencias(self.ponte.fila, lambda: True)
         self.painel_das_tarefas = PainelDasTarefas()
         self.restauracao = ContinuacaoDaRestauracao(self.aplicativo)
+        self.atualizador = AppUpdater()
         self.big_picture = BigPicture(self.modelo)
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(_DetalhesFalsos(), self.sessao)
@@ -433,6 +435,7 @@ class _Janela:
             ("preferencias", self.preferencias),
             ("painelDasTarefas", self.painel_das_tarefas),
             ("restauracao", self.restauracao),
+            ("atualizador", self.atualizador),
         ):
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

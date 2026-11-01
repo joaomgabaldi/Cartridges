@@ -17,6 +17,7 @@ ItemDoMenu 1.0 ItemDoMenu.qml
 MenuDoJogo 1.0 MenuDoJogo.qml
 PaginaDoJogo 1.0 PaginaDoJogo.qml
 DialogoDeConfirmacao 1.0 DialogoDeConfirmacao.qml
+DialogoDaAtualizacao 1.0 DialogoDaAtualizacao.qml
 DialogoDeEdicao 1.0 DialogoDeEdicao.qml
 LinhaDeTexto 1.0 LinhaDeTexto.qml
 LinhaDeAlternancia 1.0 LinhaDeAlternancia.qml

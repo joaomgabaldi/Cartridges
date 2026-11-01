@@ -103,16 +103,3 @@ def test_b24_confirmacao_de_patch_diz_o_que_aconteceu():
     assert "instalá-la para ocultar o aviso." in texto
     assert '_("Ainda não")' in texto
     assert '_("Já instalei")' in texto
-
-
-def test_b28_dialogo_de_atualizacao_diz_o_que_acontece():
-    from pathlib import Path  # noqa: PLC0415
-
-    texto = (Path(__file__).parent.parent / "cartridges/utils/app_updater.py").read_text(
-        encoding="utf-8"
-    )
-    assert "Deseja baixar e instalar a atualização agora? O aplicativo será " in texto
-    assert "fechado durante a instalação." in texto
-    assert '_("Agora não")' in texto
-    assert '_("Atualizar")' in texto
-    assert "Atualizar destacado" in texto

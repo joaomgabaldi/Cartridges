@@ -67,6 +67,7 @@ from cartridges.utils import (
     session_wallpaper,
     single_instance,
 )
+from cartridges.utils.app_updater import AppUpdater
 from cartridges.utils.hltb_backfill import HLTBBackfill
 from cartridges.utils.install_size import InstallSizeSweep
 from cartridges.utils.thread_principal import na_thread_principal
@@ -178,6 +179,7 @@ class _Abertura:
     edicao: Any = None
     preferencias: Any = None
     continuacao: Any = None
+    atualizador: Any = None
     painel: Any = None
     motor: Any = None
     aplicativo: Any = None
@@ -211,6 +213,7 @@ def _fechar(abertura: _Abertura) -> None:
         async_manager.encerrar,  # drena as gravações, a do tempo da sessão inclusive
         copias_animadas.encerrar,
         icones.encerrar,  # os ícones na fila não seguram o processo com a rede travada
+        _de(a.atualizador, "stop"),  # por último: nenhum passo anterior roda o laço de eventos, então um resultado do download já na fila só é tratado depois deste `stop()` e é descartado (D82)
     )
 
 
@@ -293,6 +296,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     saves = SavesDoJogo(aplicativo)
     abertura.continuacao = continuacao = ContinuacaoDaRestauracao(aplicativo)
     abertura.painel = painel_das_tarefas = PainelDasTarefas()
+    abertura.atualizador = atualizador = AppUpdater()
     abertura.big_picture = big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     abertura.sessao = sessao = ModeloDaSessao(avisos, controle=controle, big_picture=big_picture)
     shared.sessao = sessao
@@ -319,7 +323,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
         ("edicao", edicao), ("bigPicture", big_picture), ("sessao", sessao), ("historico", historico),
         ("saves", saves), ("conquistasDoJogo", conquistas), ("preferencias", preferencias),
         ("painelDasTarefas", painel_das_tarefas),
-        ("restauracao", continuacao),
+        ("restauracao", continuacao), ("atualizador", atualizador),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     # O Qt não é dono do que vai ao contexto: tudo precisa de uma referência Python até o fim do `main()`.
@@ -342,6 +346,9 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     shared.aplicativo = aplicativo
     aplicativo.verificador_de_atualizacoes = verificador  # a tela de preferências chama `check_async()` ao ligar o aviso
     _comecar_varreduras(aplicativo, verificador, varredura_hltb, varredura_tamanho)
+    # Depois da janela e antes dos avisos da abertura. A pergunta da versão nova não entra na fila da D72: se um diálogo
+    # dela abrir com a pergunta na tela, a pergunta espera escondida (`DialogoDaAtualizacao.outroAberto`).
+    atualizador.start()
     _importar_na_abertura(aplicativo, continuacao)
     return None
 

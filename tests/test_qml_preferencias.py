@@ -390,12 +390,11 @@ def test_descricao_da_autenticacao_e_o_link_abre_o_navegador_falso(app, monkeypa
 
 
 def test_grupos_do_plano_8b_nao_aparecem(app):
-    """O backup e a Zona de perigo entraram no 8a (Task 7); faltam só "Atualizações" e "Barra superior"."""
+    """O backup e a Zona de perigo entraram no 8a (Task 7); "Atualizações" entrou na Task 1 do 8b; falta só "Barra superior"."""
     _abrir(app)
     todos = "\n".join(_textos(app.achar("dialogoDePreferencias")))
-    for texto in ("Atualizações", "Barra superior"):
-        assert texto not in todos
-    for texto in ("Backup da sua biblioteca", "Zona de perigo", "Redefinir Cartridges"):
+    assert "Barra superior" not in todos
+    for texto in ("Atualizações", "Backup da sua biblioteca", "Zona de perigo", "Redefinir Cartridges"):
         assert texto in todos
 
 

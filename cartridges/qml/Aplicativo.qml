@@ -8,6 +8,8 @@ Principal {
 
     // Lido aqui, fora dos Avisos, porque lá o nome da propriedade é o mesmo.
     readonly property QtObject ligacao: ponte
+    // O AppUpdater (D82), pelo mesmo motivo; sem ele no contexto (os testes dos outros diálogos) a camada fica sem o diálogo da versão.
+    readonly property QtObject servicoDeAtualizacao: typeof atualizador === "undefined" ? null : atualizador
     // "todos", "zerados" ou "jogo" (a página de detalhes, por cima de uma das duas).
     readonly property string paginaAtual: pilha.depth === 0 ? "todos"
         : (pilha.currentItem && pilha.currentItem.objectName === "paginaDoJogo" ? "jogo" : "zerados")
@@ -335,6 +337,7 @@ Principal {
         ponte: janela.ligacao
         fila: aplicativo.avisos
         app: aplicativo
+        atualizador: janela.servicoDeAtualizacao
     }
 
     // Atalhos arrastados do Explorer: só com a janela livre de diálogos.

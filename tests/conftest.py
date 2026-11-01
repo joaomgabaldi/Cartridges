@@ -57,7 +57,6 @@ def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
 # Cada plano que porta o módulo tira o teste daqui; a fase final exige a lista vazia.
 TESTES_AINDA_GTK: list[str] = [
     "test_abertura.py",  # plano 8b: abertura e assistente
-    "test_app_updater.py",  # plano 8b: atualizações
     "test_area_de_trabalho_oculta.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_assistente.py",  # plano 8b: assistente da primeira abertura
     "test_auditoria_0918_importadores.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
@@ -67,7 +66,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_auditoria_0923_zerados.py",  # plano 8b: Jogos Zerados manuais
     "test_auditoria_1023_seguranca.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_botao_novidades.py",  # plano 8b: botão Novidades
-    "test_buscar_atualizacoes_ui.py",  # plano 8b: o grupo Atualizações das Preferências (D64)
     "test_caixa_redimensionavel.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_estilo_css.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_hwnd_ordem_import.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
@@ -492,6 +490,27 @@ def sem_relancar_de_verdade(monkeypatch):
         raise AssertionError("relancar: o app não é reaberto nos testes")
 
     monkeypatch.setattr(modulo_app, "_popen", recusa)
+
+
+@pytest.fixture(autouse=True)
+def sem_instalador_de_verdade(monkeypatch, tmp_path):
+    """Nenhum teste abre um instalador nem apaga a pasta de downloads de verdade: o `_abrir_instalador` levanta (e o
+    teste falha ao fim, mesmo que o erro tenha sido engolido) e o `download_dir` aponta para o `tmp_path`.
+
+    Devolve a lista dos caminhos pedidos; quem prova o guarda de propósito a esvazia.
+    """
+    from cartridges.utils import app_updater  # noqa: PLC0415
+
+    chamadas: list = []
+
+    def recusa(caminho):
+        chamadas.append(caminho)
+        raise AssertionError("atualizador: nenhum instalador é aberto nos testes")
+
+    monkeypatch.setattr(app_updater, "_abrir_instalador", recusa)
+    monkeypatch.setattr(app_updater, "download_dir", lambda: tmp_path / "Cartridges-update")
+    yield chamadas
+    assert not chamadas, f"o teste tentou abrir o instalador: {chamadas}"
 
 
 @pytest.fixture(autouse=True)

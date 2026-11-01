@@ -15,6 +15,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 
 from cartridges import aplicativo as aplicativo_modulo
 from cartridges import shared
+from cartridges.utils.app_updater import AppUpdater
 from cartridges.aplicativo import Aplicativo
 from cartridges.jogo import Jogo
 from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
@@ -136,6 +137,7 @@ class _App:
         )
         self.painel_das_tarefas = PainelDasTarefas()
         self.restauracao = ContinuacaoDaRestauracao(self.aplicativo)
+        self.atualizador = AppUpdater()
         self.leitor = _LeitorFalso()
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(self.detalhes, self.sessao)
@@ -157,6 +159,7 @@ class _App:
             ("conquistasDoJogo", self.conquistas), ("preferencias", self.preferencias),
             ("painelDasTarefas", self.painel_das_tarefas),
             ("restauracao", self.restauracao),
+            ("atualizador", self.atualizador),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

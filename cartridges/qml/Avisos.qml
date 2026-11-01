@@ -9,8 +9,10 @@ Item {
     property QtObject ponte
     property QtObject fila
     property QtObject app
+    // O AppUpdater (D82): a pergunta da versão nova e o download; null onde não há atualizador (testes).
+    property QtObject atualizador
     // Com uma confirmação na tela, a janela não aceita atalhos arrastados.
-    readonly property bool dialogoAberto: confirmacao.visible || dialogoDeErros.visible || confirmacaoDoApp.visible
+    readonly property bool dialogoAberto: confirmacao.visible || dialogoDeErros.visible || confirmacaoDoApp.visible || dialogoDaAtualizacao.visible
 
     Connections {
         target: camada.ponte
@@ -202,5 +204,13 @@ Item {
         objectName: "confirmacaoDoApp"
         onConfirmado: camada.app.confirmacaoRespondida(true)
         onCancelado: camada.app.confirmacaoRespondida(false)
+    }
+
+    // A versão nova (D82): fica por cima das Preferências, como as outras perguntas desta camada.
+    DialogoDaAtualizacao {
+        id: dialogoDaAtualizacao
+        objectName: "dialogoDaAtualizacao"
+        atualizador: camada.atualizador
+        outroAberto: confirmacao.visible || dialogoDeErros.visible || confirmacaoDoApp.visible
     }
 }

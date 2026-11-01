@@ -170,7 +170,28 @@ Column {
         }
     }
 
-    // shortcut: falta o grupo "Atualizações" (depende do app_updater, plano 8b); entra aqui, entre "Backup da sua biblioteca" e "Zona de perigo".
+    // O AppUpdater (D82); sem ele no contexto (os testes das outras páginas), o botão avisa que não foi possível.
+    readonly property QtObject servicoDeAtualizacao: typeof atualizador === "undefined" ? null : atualizador
+
+    GrupoDePreferencias {
+        objectName: "grupoAtualizacoes"
+        titulo: "Atualizações"
+
+        LinhaDeAcao {
+            buscavel: true
+            objectName: "linhaBuscarAtualizacoes"
+            titulo: "Buscar atualizações"
+            subtitulo: "Versão atual: " + (pagina.servicoDeAtualizacao ? pagina.servicoDeAtualizacao.versao : "")
+            rotulo: "Buscar"
+            // Só o botão apaga durante a busca, como na `main`.
+            botaoDaLinha.enabled: !pagina.servicoDeAtualizacao || !pagina.servicoDeAtualizacao.buscando
+            onAcionada: {
+                if (pagina.servicoDeAtualizacao) pagina.servicoDeAtualizacao.buscarAgora()
+                else aplicativo.avisar("Não foi possível buscar atualizações")
+            }
+        }
+    }
+
     GrupoDePreferencias {
         objectName: "grupoZonaDePerigo"
         titulo: "Zona de perigo"

@@ -215,7 +215,7 @@ gc.collect()
 contexto = abertura.motor.rootContext()
 nomes = ["filtros", "paginaTodos", "paginaZerados", "aplicativo", "ponte", "controle", "detalhes", "edicao",
          "bigPicture", "sessao", "historico", "saves", "conquistasDoJogo", "preferencias", "painelDasTarefas",
-         "restauracao"]
+         "restauracao", "atualizador"]
 print(json.dumps({"codigo": codigo, "mortos": [n for n in nomes if contexto.contextProperty(n) is None]}))
 """
 
