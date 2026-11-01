@@ -35,6 +35,7 @@ from cartridges.modelos.tarefas import PainelDasTarefas
 from cartridges.modelos.zerados_manuais import SeletorDeZerados
 from cartridges.ponte import Ponte
 from cartridges.utils.app_updater import AppUpdater
+from cartridges.utils.caixa_redimensionavel import CaixaDaAnotacao
 from cartridges.utils.news_checker import NewsChecker
 
 QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml"
@@ -140,6 +141,7 @@ class _App:
         self.novidades = Novidades(self.ponte.fila, NewsChecker())
         self.sobre = Sobre(self.ponte.fila)
         self.zerados_manuais = SeletorDeZerados()
+        self.caixa_da_anotacao = CaixaDaAnotacao()
         self.leitor = _LeitorFalso()
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(self.detalhes, self.sessao)
@@ -165,6 +167,7 @@ class _App:
             ("novidades", self.novidades),
             ("sobre", self.sobre),
             ("zeradosManuais", self.zerados_manuais),
+            ("caixaDaAnotacao", self.caixa_da_anotacao),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

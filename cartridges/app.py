@@ -72,6 +72,7 @@ from cartridges.utils import (
 )
 from cartridges.utils.ajustes_do_windows import FiltroDeAjustes
 from cartridges.utils.app_updater import AppUpdater
+from cartridges.utils.caixa_redimensionavel import CaixaDaAnotacao
 from cartridges.utils.hltb_backfill import HLTBBackfill
 from cartridges.utils.install_size import InstallSizeSweep
 from cartridges.utils.news_checker import NewsChecker
@@ -338,6 +339,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     abertura.novidades = novidades = Novidades(avisos, NewsChecker())
     sobre = Sobre(avisos)
     zerados_manuais = SeletorDeZerados()
+    caixa_da_anotacao = CaixaDaAnotacao()
     abertura.big_picture = big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     _seguir_animacoes(aplicativo, big_picture)
     abertura.geometria = geometria = GeometriaDaJanela()
@@ -368,12 +370,13 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
         ("saves", saves), ("conquistasDoJogo", conquistas), ("preferencias", preferencias),
         ("painelDasTarefas", painel_das_tarefas),
         ("restauracao", continuacao), ("atualizador", atualizador), ("novidades", novidades), ("sobre", sobre),
-        ("zeradosManuais", zerados_manuais), ("geometria", geometria),
+        ("zeradosManuais", zerados_manuais), ("geometria", geometria), ("caixaDaAnotacao", caixa_da_anotacao),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     # O Qt não é dono do que vai ao contexto: tudo precisa de uma referência Python até o fim do `main()`.
     abertura.mantidos = (
         modelo, filtros, pagina_biblioteca, pagina_zerados, ponte, controle, detalhes, avisos, historico, saves, sobre, zerados_manuais,
+        caixa_da_anotacao,
     )  # fmt: skip
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.
     session_wallpaper.restaurar_orfaos()
