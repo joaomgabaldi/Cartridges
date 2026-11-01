@@ -212,3 +212,21 @@ def test_o_dialogo_nao_aparece_sem_atualizador_no_contexto(app_qt):  # noqa: ARG
         assert j.achar("dialogoDaAtualizacao").property("visible") is False
     finally:
         j.fechar()
+
+
+@pytest.mark.parametrize("tecla", [None, Qt.Key.Key_Escape])
+def test_ao_fechar_a_pergunta_o_foco_volta_a_grade(janela, tecla):
+    """Review final, M1: o foco volta à grade (não à janela) depois de "Agora não" e do Esc."""
+    grade = janela.achar("grade")
+    # Sem nada focado (a janela aberta e parada): o retorno capturado é o conteúdo da janela, não a grade.
+    grade.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    avaliar(janela.janela, "activeFocusItem.focus = false; contentItem.forceActiveFocus(); 1")
+    assert grade.property("activeFocus") is False
+    dialogo = _perguntar(janela)
+    assert esperar(lambda: janela.achar("botaoAgoraNao").property("activeFocus") is True)
+    if tecla is None:
+        _clique(janela, "botaoAgoraNao")
+    else:
+        QTest.keyClick(janela.janela, tecla)
+    assert esperar(lambda: dialogo.property("visible") is False)
+    assert esperar(lambda: grade.property("activeFocus") is True)

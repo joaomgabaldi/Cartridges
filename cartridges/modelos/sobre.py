@@ -180,6 +180,10 @@ class Sobre(QObject):
         return ABOUT_LICENSE
 
     @Property(str, constant=True)
+    def urlDaLicenca(self) -> str:  # noqa: N802
+        return URL_DA_LICENCA
+
+    @Property(str, constant=True)
     def textoDeSuporte(self) -> str:  # noqa: N802
         return TEXTO_DE_SUPORTE
 

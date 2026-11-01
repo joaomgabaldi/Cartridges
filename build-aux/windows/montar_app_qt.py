@@ -40,10 +40,12 @@ MARCADOR = ".montado-por-montar_app_qt"
 
 CANAIS = ("desenvolvimento", "final")
 
-# Sem eles o app nem importa (`shared` lê o gschema na importação) ou mostra cartões vazios.
+# Sem eles o app nem importa (`shared` lê o gschema na importação), mostra cartões vazios ou perde, em silêncio,
+# as "Novidades" e a descrição do "Sobre o Cartridges" (a metainfo).
 OBRIGATORIOS = (
     "cartridges/janela/qwk_ponte.dll",
     "data/io.github.joaomgabaldi.Cartridges.gschema.xml.in",
+    "data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in",
     "data/library_placeholder.svg",
 )
 # O que de `data/` o app instalado lê.

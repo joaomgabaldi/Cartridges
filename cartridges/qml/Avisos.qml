@@ -12,6 +12,8 @@ Item {
     // O AppUpdater (D82): a pergunta da versão nova e o download; null onde não há atualizador (testes).
     property QtObject atualizador
     // Com uma confirmação na tela, a janela não aceita atalhos arrastados.
+    // A pergunta da atualização fechou sem ter a quem devolver o foco.
+    signal retornoPerdido()
     readonly property bool dialogoAberto: confirmacao.visible || dialogoDeErros.visible || confirmacaoDoApp.visible || dialogoDaAtualizacao.visible
 
     Connections {
@@ -212,5 +214,6 @@ Item {
         objectName: "dialogoDaAtualizacao"
         atualizador: camada.atualizador
         outroAberto: confirmacao.visible || dialogoDeErros.visible || confirmacaoDoApp.visible
+        onRetornoPerdido: camada.retornoPerdido()
     }
 }

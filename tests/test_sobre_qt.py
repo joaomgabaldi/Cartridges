@@ -306,6 +306,50 @@ def test_licenca_com_um_unico_link_e_so_ele_abre(janela, _sem_navegador):
     assert _sem_navegador == [GPL]
 
 
+def test_link_da_licenca_recebe_foco_pelo_teclado_e_enter_abre(janela, _sem_navegador):
+    """Review final (Task 3, m1): o link entra na ordem do Tab, tem borda de foco e o Enter abre só a GPL."""
+    _abrir(janela)
+    _clique(janela, "linhaLegal")
+    assert esperar(lambda: janela.sobre.pagina == "legal")
+    licenca = janela.achar("licencaDoApp")
+    assert esperar(lambda: janela.achar("botaoVoltarDoSobre").property("activeFocus") is True)
+    for _ in range(4):
+        if licenca.property("activeFocus") is True:
+            break
+        QTest.keyClick(janela.janela, Qt.Key.Key_Tab)
+    assert licenca.property("activeFocus") is True
+    assert janela.achar("focoDaLicenca").property("visible") is True
+    QTest.keyClick(janela.janela, Qt.Key.Key_Return)
+    assert _sem_navegador == [GPL]
+    # ↑/↓ (o controle) tiram o foco do link.
+    QTest.keyClick(janela.janela, Qt.Key.Key_Down)
+    assert licenca.property("activeFocus") is False
+
+
+def test_paginas_longas_rolam_pelo_teclado(janela):
+    """Review final (Task 3, m3): setas e PageUp/PageDown rolam as páginas fora da principal; Tab e Esc seguem."""
+    janela.janela.setHeight(260)
+    _abrir(janela)
+    _clique(janela, "linhaCreditos")
+    assert esperar(lambda: janela.sobre.pagina == "creditos")
+    assert esperar(lambda: janela.achar("botaoVoltarDoSobre").property("activeFocus") is True)
+    rolagem = janela.achar("rolagemDoSobre")
+    assert rolagem.property("contentHeight") > rolagem.property("height")
+
+    QTest.keyClick(janela.janela, Qt.Key.Key_Down)
+    assert rolagem.property("contentY") == 40
+    QTest.keyClick(janela.janela, Qt.Key.Key_PageDown)
+    assert rolagem.property("contentY") > 40
+    QTest.keyClick(janela.janela, Qt.Key.Key_PageUp)
+    QTest.keyClick(janela.janela, Qt.Key.Key_PageUp)
+    assert rolagem.property("contentY") == 0
+    QTest.keyClick(janela.janela, Qt.Key.Key_Up)  # não passa do topo
+    assert rolagem.property("contentY") == 0
+    # Na principal as setas não rolam nada e o Esc continua voltando.
+    QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
+    assert esperar(lambda: janela.sobre.pagina == "principal")
+
+
 def test_problemas_mostra_o_log_em_texto_puro_e_os_botoes(janela, area):
     _abrir(janela)
     _clique(janela, "linhaProblemas")

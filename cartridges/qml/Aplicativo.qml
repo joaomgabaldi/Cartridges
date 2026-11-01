@@ -396,6 +396,7 @@ Principal {
     Avisos {
         id: camadaDeAvisos
         objectName: "camadaDeAvisos"
+        onRetornoPerdido: janela.paginaDoControle.focarGrade()
         anchors.fill: parent
         ponte: janela.ligacao
         fila: aplicativo.avisos

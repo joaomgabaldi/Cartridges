@@ -834,3 +834,23 @@ def test_assistente_sem_gi(tmp_path):
         _apagar_chave(winreg.HKEY_CURRENT_USER, registro)
     assert resultado.returncode == 0, resultado.stderr
     assert resultado.stdout.strip().endswith("ok")
+
+
+def test_concluir_durante_a_preparacao_e_recusado_e_o_backup_restaura_uma_vez(monkeypatch, schema, tmp_path):
+    """Review final (Task 5, m1): "Abrir a biblioteca" no meio da preparação não abre a biblioteca duas vezes."""
+    pendentes = []
+    monkeypatch.setattr(modulo, "_em_thread", pendentes.append)
+    monkeypatch.setattr(modulo, "na_thread_principal", lambda funcao, *args: funcao(*args))
+    monkeypatch.setattr(backup, "validar", lambda caminho: {})
+    monkeypatch.setattr(backup, "agendar", lambda caminho: None)
+    assistente, terminou, restaurou = _assistente()
+    assistente.restaurarBackup(QUrl.fromLocalFile(str(tmp_path / "b.zip")))
+    assert assistente.preparando
+
+    assistente.concluir()
+
+    assert terminou == [] and not schema.get_boolean("assistente-concluido")
+    pendentes[0]()  # o backup fica pronto
+    assert restaurou == [1] and terminou == []
+    assistente._backup_preparado("ok")  # noqa: SLF001  # um resultado repetido depois da saída não restaura de novo
+    assert restaurou == [1]

@@ -29,7 +29,14 @@ Rectangle {
     color: "#80000000"
     Keys.onEscapePressed: pagina === "principal" ? modelo.fechar() : modelo.voltar()
     // Modal para o teclado e o controle: nenhuma tecla chega à página de trás. O Tab passa, para circular.
-    Keys.onPressed: event => event.accepted = event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab
+    // Fora da principal, as setas e o PageUp/PageDown rolam a página (o que nenhum botão trata chega aqui).
+    Keys.onPressed: event => {
+        if (pagina !== "principal") {
+            var passo = { [Qt.Key_Down]: 40, [Qt.Key_Up]: -40, [Qt.Key_PageDown]: rolagem.height, [Qt.Key_PageUp]: -rolagem.height }[event.key]
+            if (passo !== undefined) rolagem.contentY = Math.max(0, Math.min(rolagem.contentHeight - rolagem.height, rolagem.contentY + passo))
+        }
+        event.accepted = event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab
+    }
 
     function focar(de) {
         if (!visible) return
@@ -216,6 +223,7 @@ Rectangle {
 
         Flickable {
             id: rolagem
+            objectName: "rolagemDoSobre"
             anchors { left: parent.left; right: parent.right; top: cabecalho.bottom; bottom: parent.bottom }
             contentWidth: width
             contentHeight: corpo.implicitHeight + 24
@@ -411,10 +419,19 @@ Rectangle {
                         color: Tema.texto
                         font { family: Tema.fonte; pixelSize: 14 }
                     }
-                    // shortcut: o link só abre com o mouse (um Text não o põe na ordem do Tab), quando houver mais de um link.
+                    // O texto só traz o link da GPL: ele mesmo entra na ordem do Tab, e o Enter abre esse endereço.
+                    // shortcut: o Enter abre sempre a GPL, quando houver mais de um link no texto.
                     Text {
+                        id: licenca
                         objectName: "licencaDoApp"
                         width: parent.width
+                        activeFocusOnTab: true
+                        Accessible.role: Accessible.Link
+                        Keys.onReturnPressed: dialogo.modelo.abrirLicenca(dialogo.modelo.urlDaLicenca)
+                        Keys.onEnterPressed: dialogo.modelo.abrirLicenca(dialogo.modelo.urlDaLicenca)
+                        // ↑/↓ (o controle do Xbox) levam o foco ao vizinho, como o Tab.
+                        Keys.onDownPressed: nextItemInFocusChain(true).forceActiveFocus(Qt.TabFocusReason)
+                        Keys.onUpPressed: nextItemInFocusChain(false).forceActiveFocus(Qt.BacktabFocusReason)
                         text: dialogo.modelo ? dialogo.modelo.licenca : ""
                         textFormat: Text.StyledText
                         wrapMode: Text.Wrap
@@ -422,6 +439,15 @@ Rectangle {
                         color: Tema.texto
                         font { family: Tema.fonte; pixelSize: 14 }
                         onLinkActivated: link => dialogo.modelo.abrirLicenca(link)
+
+                        Rectangle {
+                            objectName: "focoDaLicenca"
+                            anchors { fill: parent; margins: -4 }
+                            visible: licenca.activeFocus
+                            color: "transparent"
+                            radius: 4
+                            border { width: 2; color: Tema.texto }
+                        }
                     }
                 }
 

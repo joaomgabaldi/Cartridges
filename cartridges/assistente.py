@@ -264,7 +264,8 @@ class Assistente(QObject):
     @Slot()
     def concluir(self) -> None:
         """Fecha o assistente de vez: "Pular configuração" e "Abrir a biblioteca". Quem fecha a janela é o `ao_terminar`."""
-        if self._saindo:  # um segundo clique não abre a biblioteca duas vezes
+        # Um segundo clique não abre a biblioteca duas vezes; com o backup sendo preparado, quem sai é a restauração.
+        if self._saindo or self._preparando:
             return
         shared.schema.set_boolean("assistente-concluido", True)
         self._sair()
@@ -306,6 +307,8 @@ class Assistente(QObject):
             self._aviso_da_restauracao = None
         self.alterado.emit()
         if resultado == "ok":
+            if self._saindo:  # já saiu por outra via: a restauração não abre a biblioteca de novo
+                return
             shared.schema.set_boolean("assistente-concluido", True)
             self._sair()
             self._ao_restaurar()

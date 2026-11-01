@@ -10,6 +10,7 @@ Nada de verdade: o `fetch_news` é falso (a rede também é recusada pelo `sem_r
 
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -257,6 +258,7 @@ def test_busca_automatica_termina_em_silencio(app_qt, feed):
 def test_atualizar_com_busca_em_voo_nao_comeca_outra(app_qt):
     checker = CheckerFalso()
     checker.loading = True
+    shared.schema.set_boolean("show-news-button", True)  # feed ligado: a busca em voo é a que responde
     novidades, fila = _tela(checker)
 
     novidades.atualizar()
@@ -290,6 +292,27 @@ def test_atualizar_com_o_feed_parado_nao_deixa_aviso_eterno(app_qt, feed):
     assert fila.texto == "Não foi possível atualizar as novidades"
     fila.fechar()
     assert fila.visivel is False  # nada ficou na fila atrás
+
+
+def test_atualizar_com_busca_em_voo_e_chave_desligada_nao_deixa_aviso_eterno(app_qt, monkeypatch):
+    """Review final: busca em voo + chave desligada + "Atualizar" antes do fim: a busca abandonada nunca responderia."""
+    soltar = threading.Event()
+    monkeypatch.setattr(news_checker, "fetch_news", lambda: soltar.wait(10) and [])
+    novidades, fila = _tela()
+    try:
+        shared.schema.set_boolean("show-news-button", True)
+        novidades.ligar()  # a primeira busca fica em voo
+        assert esperar(lambda: novidades._checker.loading)  # noqa: SLF001
+        shared.schema.set_boolean("show-news-button", False)
+        novidades.ligar()  # `stop()`: a busca em voo é abandonada, mas `loading` segue verdadeiro
+
+        novidades.atualizar()
+
+        assert fila.texto == "Não foi possível atualizar as novidades"
+    finally:
+        soltar.set()
+        assert esperar(lambda: not novidades._checker.loading)  # noqa: SLF001
+        novidades.parar()
 
 
 def test_acompanhar_a_chave_duas_vezes_liga_uma_so(app_qt):

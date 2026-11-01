@@ -122,7 +122,8 @@ class Novidades(QObject):
         self._avisos_sem_pedido()
         self._pedido = True
         self._aviso = self._avisos.adicionar("Atualizando novidades…", segundos=0)
-        if not self._checker.loading:
+        # Chave desligada: o checker está parado e a busca em voo foi abandonada; `check_async` responde "falha" na hora.
+        if not self._checker.loading or not self.visivel:
             self._checker.check_async()
         self.alterado.emit()
 

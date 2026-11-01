@@ -20,6 +20,15 @@ Rectangle {
 
     // Quem tinha o foco ao abrir: volta a tê-lo ao fechar.
     property Item retorno: null
+    signal retornoPerdido()
+
+    // Depois de a página de trás voltar a ficar habilitada; sem para onde voltar, o foco vai à página à vista.
+    function devolverAoRetorno() {
+        if (visible || outroAberto) return // escondido para dar lugar a outro diálogo: o foco é dele
+        if (retorno && retorno !== Window.contentItem && retorno.visible && retorno.enabled) retorno.forceActiveFocus(Qt.TabFocusReason)
+        else dialogo.retornoPerdido()
+        retorno = null
+    }
 
     function recusar() {
         if (baixando) atualizador.cancelar()
@@ -40,9 +49,8 @@ Rectangle {
             retorno = Window.window ? Window.window.activeFocusItem : null
             // Adiado: o item acabou de ficar visível e só então aceita o foco.
             Qt.callLater(() => { if (dialogo.visible) (dialogo.baixando ? botaoCancelar : botaoAgoraNao).forceActiveFocus(Qt.TabFocusReason) })
-        } else if (retorno) {
-            retorno.forceActiveFocus(Qt.TabFocusReason)
-            retorno = null
+        } else {
+            Qt.callLater(devolverAoRetorno)
         }
     }
     // Da pergunta ao download o diálogo segue aberto: o foco vai ao botão que sobrou.

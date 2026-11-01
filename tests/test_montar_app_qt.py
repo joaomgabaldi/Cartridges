@@ -34,6 +34,7 @@ def insumos(tmp_path):
     _tocar(raiz / "cartridges" / "instalacao.json", '{"canal": "final"}')
     _tocar(raiz / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml.in")
     _tocar(raiz / "data" / "library_placeholder.svg")
+    _tocar(raiz / "data" / "io.github.joaomgabaldi.Cartridges.metainfo.xml.in", "<component/>")
     _tocar(raiz / "data" / "sons" / "tique.wav")
     _tocar(raiz / "data" / "icons" / "hicolor" / "scalable" / "apps" / "app.svg")
     _tocar(raiz / "data" / "screenshots" / "grande.png")
@@ -98,7 +99,8 @@ def test_tira_os_modulos_do_qt_que_o_app_nao_usa(insumos, tmp_path):
 
 
 @pytest.mark.parametrize("faltando", ["data/io.github.joaomgabaldi.Cartridges.gschema.xml.in",
-                                      "data/library_placeholder.svg", "cartridges/janela/qwk_ponte.dll"])
+                                      "data/library_placeholder.svg", "cartridges/janela/qwk_ponte.dll",
+                                      "data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in"])
 def test_recusa_montar_sem_o_que_o_app_exige(insumos, tmp_path, faltando):
     (insumos["raiz"] / faltando).unlink()
     with pytest.raises(SystemExit):
