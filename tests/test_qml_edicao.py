@@ -5,7 +5,7 @@
 """O diálogo de edição e o "Adicionar jogo" (QML offscreen, sem a ponte do QWindowKit)."""
 
 import pytest
-from PySide6.QtCore import Q_ARG, QMetaObject, QPointF, Qt
+from PySide6.QtCore import Q_ARG, QMetaObject, QPointF, Qt, QtMsgType, QUrl, qInstallMessageHandler
 from PySide6.QtGui import QColor
 from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
@@ -1183,3 +1183,89 @@ def test_busca_das_preferencias_nao_mexe_nas_linhas_do_editor_por_baixo(app):
     app.achar("dialogoDePreferencias").setProperty("filtro", "zzzzzz")
     assert _esperar(lambda: app.achar("estadoSemResultadoDasPreferencias").property("visible") is True)
     assert app.achar("campoNome").property("visible") is True
+
+
+def test_sem_avisos_do_qml_ao_abrir_e_fechar(app_qt, store, monkeypatch):
+    jogos = [jogo(store, 1, name="Alfa", executable=r'"C:\Jogos\alfa.exe"')]
+    avisos = []
+    anterior = qInstallMessageHandler(lambda tipo, _ctx, msg: avisos.append(msg) if tipo in (QtMsgType.QtWarningMsg, QtMsgType.QtCriticalMsg) else None)
+    try:
+        janela = _App(jogos)
+        monkeypatch.setattr(shared, "aplicativo", janela.aplicativo, raising=False)
+        janela.edicao.abrir("shortcuts_z1")
+        assert _esperar(lambda: janela.achar("dialogoDeEdicao").property("visible") is True)
+        QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
+        assert _esperar(lambda: not janela.edicao.aberto)
+        janela.fechar()
+    finally:
+        qInstallMessageHandler(anterior)
+    assert [a for a in avisos if "DialogoDeEdicao" in a] == []
+
+
+def test_abrir_pasta_que_falha_avisa_que_nao_foi_possivel(app, monkeypatch):
+    from cartridges.modelos import edicao as modelo_da_edicao  # noqa: PLC0415
+
+    abertas, dialogos = [], []
+    monkeypatch.setattr(modelo_da_edicao, "game_folder", lambda _comando: r"C:\Jogos")
+    monkeypatch.setattr(modelo_da_edicao, "open_folder", lambda pasta: abertas.append(pasta) or False)
+    monkeypatch.setattr(app.aplicativo, "pedir_dialogo", lambda titulo, corpo, itens, ao_fechar: dialogos.append((titulo, corpo, itens, ao_fechar)))
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: app.achar("dialogoDeEdicao").property("visible") is True)
+    foco = []
+    app.edicao.focoDevolvido.connect(lambda: foco.append(1))
+    app.edicao.abrirPasta()
+    assert abertas == [r"C:\Jogos"]
+    assert [d[:3] for d in dialogos] == [("Não foi possível abrir a pasta", "A pasta pode ter sido movida ou apagada.", [])]
+    dialogos[0][3]()  # fechar o aviso devolve o foco ao editor
+    assert foco == [1]
+
+
+def test_abrir_pasta_que_funciona_nao_avisa(app, monkeypatch):
+    from cartridges.modelos import edicao as modelo_da_edicao  # noqa: PLC0415
+
+    dialogos = []
+    monkeypatch.setattr(modelo_da_edicao, "game_folder", lambda _comando: r"C:\Jogos")
+    monkeypatch.setattr(modelo_da_edicao, "open_folder", lambda _pasta: True)
+    monkeypatch.setattr(app.aplicativo, "pedir_dialogo", lambda *a: dialogos.append(a))
+    app.edicao.abrir("shortcuts_z1")
+    app.edicao.abrirPasta()
+    assert dialogos == []
+
+
+def test_escolher_executavel_poe_o_caminho_entre_aspas_e_url_vazia_nao_muda(app):
+    app.edicao.abrir("shortcuts_z2")
+    app.edicao.escolherExecutavel(QUrl.fromLocalFile("C:/Meus Jogos/Beta/beta.exe"))
+    assert app.edicao.executavel == r'"C:\Meus Jogos\Beta\beta.exe"'
+    app.edicao.escolherExecutavel(QUrl())
+    assert app.edicao.executavel == r'"C:\Meus Jogos\Beta\beta.exe"'
+
+
+def test_tab_ate_um_campo_abaixo_da_dobra_rola_o_editor(app):
+    """O `Connections` da Edição estava morto: a rolagem não seguia o foco (consertado com `dialogo.Window.window`)."""
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _foco_dentro_de(app, "campoNome"))
+    antes = _avaliar(app.achar("campoNome"), "rolagem.contentY")  # o nome, ao abrir, já ficou à vista
+    app.achar("alternanciaDeConquistas").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    _esperar()
+    assert _esperar(lambda: _avaliar(app.achar("campoNome"), "rolagem.contentY") > antes)
+
+
+def test_aviso_fechado_devolve_o_foco_ao_ultimo_campo_e_nao_ao_nome(app, monkeypatch):
+    from cartridges.modelos import edicao as modelo_da_edicao  # noqa: PLC0415
+
+    dialogos = []
+    monkeypatch.setattr(modelo_da_edicao, "game_folder", lambda _comando: r"C:\Jogos")
+    monkeypatch.setattr(modelo_da_edicao, "open_folder", lambda _pasta: False)
+    monkeypatch.setattr(app.aplicativo, "pedir_dialogo", lambda titulo, corpo, itens, ao_fechar: dialogos.append(ao_fechar))
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _foco_dentro_de(app, "campoNome"))
+    app.achar("botaoAbrirPasta").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    _esperar()
+    assert _esperar(lambda: app.achar("botaoAbrirPasta").property("activeFocus") is True)
+    app.edicao.abrirPasta()
+    assert len(dialogos) == 1
+    app.janela.contentItem().forceActiveFocus()  # o aviso levou o foco
+    dialogos[0]()
+    _esperar()
+    assert _esperar(lambda: app.achar("botaoAbrirPasta").property("activeFocus") is True)
+    assert app.achar("campoNome").property("activeFocus") is False

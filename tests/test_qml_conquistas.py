@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QtMsgType, qInstallMessageHandler
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtTest import QTest
 
@@ -407,3 +407,23 @@ def test_icones_de_conquista_cortam_os_cantos(tmp_path):
         assert meio == "#ff0000", (onde, medido)
         assert canto != "#ff0000" and QColor(canto).red() < 128, (onde, medido)
 
+
+
+def test_sem_avisos_do_qml_ao_abrir_e_fechar(app_qt):
+    avisos = []
+    anterior = qInstallMessageHandler(lambda tipo, _ctx, msg: avisos.append(msg) if tipo in (QtMsgType.QtWarningMsg, QtMsgType.QtCriticalMsg) else None)
+    try:
+        app = _app()
+        # A `PaginaDasConquistas` é a aba "conquistas" das Preferências; a lista de conquistas é outra tela.
+        assert app.preferencias.abrir("conquistas")
+        assert _esperar(lambda: app.achar("dialogoDePreferencias").property("visible") is True)
+        assert _esperar(lambda: app.achar("paginaDasConquistas").property("visible") is True)
+        QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+        assert _esperar(lambda: app.achar("dialogoDePreferencias").property("visible") is False)
+        _abrir_lista(app)
+        QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+        assert _esperar(lambda: app.achar("dialogoDeConquistas").property("visible") is False)
+        app.fechar()
+    finally:
+        qInstallMessageHandler(anterior)
+    assert [a for a in avisos if "PaginaDasConquistas" in a or "DialogoDeConquistas" in a] == []

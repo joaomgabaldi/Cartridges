@@ -574,3 +574,21 @@ def test_setas_e_paginas_movem_o_foco_entre_as_versoes(janela_dos_saves):
     assert _esperar(lambda: linhas[1].property("activeFocus") is True)
     QTest.keyClick(janela.janela, Qt.Key.Key_PageUp)
     assert _esperar(lambda: linhas[0].property("activeFocus") is True)
+
+
+def test_fechar_as_versoes_devolve_o_foco_a_grade(janela_dos_saves):
+    """Aberto sem nenhum item com o foco (só o `contentItem` da janela): ao fechar, o foco vai à grade, não ao fundo."""
+    janela = janela_dos_saves()
+    grade = janela.achar("grade")
+    grade.setProperty("focus", False)
+    janela.janela.contentItem().forceActiveFocus()
+    _esperar()
+    assert janela.janela.activeFocusItem() is janela.janela.contentItem()
+
+    assert janela.saves.abrir("imported_1") is True
+    dialogo = janela.achar("dialogoDeVersoes")
+    assert _esperar(lambda: janela.achar("botaoFecharDasVersoes").property("activeFocus") is True)
+    QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
+
+    assert _esperar(lambda: dialogo.property("visible") is False)
+    assert _esperar(lambda: grade.property("activeFocus") is True)

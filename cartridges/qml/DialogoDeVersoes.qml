@@ -25,7 +25,7 @@ Rectangle {
     function devolverAoRetorno() {
         if (visible) return
         // Quem abriu pode ter sumido (o menu do jogo fechou ao escolher "Restaurar save"): o foco vai à página à vista.
-        if (retorno && retorno.visible && retorno.enabled) retorno.forceActiveFocus(Qt.TabFocusReason)
+        if (retorno && retorno !== Window.contentItem && retorno.visible && retorno.enabled) retorno.forceActiveFocus(Qt.TabFocusReason)
         else dialogo.retornoPerdido()
     }
     signal retornoPerdido()

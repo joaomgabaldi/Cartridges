@@ -107,10 +107,11 @@ Rectangle {
         return false
     }
 
-    // Ctrl+F leva ao campo de busca (não com um modal por cima).
+    // Ctrl+F leva ao campo de busca (não com um modal por cima, nem com um aviso da camada dos avisos).
+    property bool avisoAberto: false
     Shortcut {
-        sequence: StandardKey.Find
-        enabled: dialogo.visible && cartao.enabled && !confirmacaoDosMetadados.visible
+        sequences: [StandardKey.Find] // Ctrl+F e a tecla Find do padrão; `sequence` ligaria só a primeira (aviso do Qt)
+        enabled: dialogo.visible && cartao.enabled && !confirmacaoDosMetadados.visible && !dialogo.avisoAberto
         onActivated: campoDeBusca.forceActiveFocus(Qt.ShortcutFocusReason)
     }
 

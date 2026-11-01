@@ -95,7 +95,7 @@ Column {
             // O texto mais longo inteiro, com o recuo e a seta da caixa (LinhaDeEscolha).
             larguraDaCaixa: Math.ceil(medidaDoCanto.width) + 70
             model: ["Canto superior esquerdo", "Canto superior direito", "Canto inferior esquerdo", "Canto inferior direito"]
-            currentIndex: preferencias.estado.posicaoDoAviso
+            currentIndex: preferencias.estado.posicaoDoAviso || 0 // o estado chega depois de a tela abrir
             enabled: preferencias.estado.avisoAtivo === true
             onEscolhido: indice => preferencias.escolherPosicaoDoAviso(indice)
         }

@@ -230,3 +230,17 @@ def test_ao_fechar_a_pergunta_o_foco_volta_a_grade(janela, tecla):
         QTest.keyClick(janela.janela, tecla)
     assert esperar(lambda: dialogo.property("visible") is False)
     assert esperar(lambda: grade.property("activeFocus") is True)
+
+
+def test_pergunta_respondida_com_outro_dialogo_aberto_nao_devolve_o_foco(janela):
+    """A pergunta escondida para dar lugar a uma confirmação perde o `retorno`; respondida de fora, o foco segue na confirmação."""
+    dialogo = _perguntar(janela)
+    assert dialogo.property("retorno") is not None
+    janela.aplicativo.pedir_confirmacao("Restaurar?", "Corpo", "Restaurar", lambda _ok: None)
+    confirmacao = janela.achar("confirmacaoDoApp")
+    assert esperar(lambda: confirmacao.property("visible") is True)
+    assert esperar(lambda: janela.foco_dentro_de("confirmacaoDoApp"))
+    assert esperar(lambda: dialogo.property("retorno") is None)  # zerado ao esconder, não só ao responder
+    janela.atualizador.responder(False)
+    assert esperar(lambda: janela.atualizador.pergunta == {})
+    assert janela.foco_dentro_de("confirmacaoDoApp")

@@ -19,7 +19,7 @@ Rectangle {
     property string alvoDoSeletor: "executavel"
 
     function dentro(item) {
-        for (var p = item; p; p = p.parentItem)
+        for (var p = item; p; p = p.parent) // `parent` (o `parentItem` do C++ não existe no QML)
             if (p === dialogo) return true
         return false
     }
@@ -60,9 +60,9 @@ Rectangle {
     signal retornoPerdido()
 
     Connections {
-        target: Window.window
+        target: dialogo.Window.window
         function onActiveFocusItemChanged() {
-            var foco = Window.window.activeFocusItem
+            var foco = dialogo.Window.window.activeFocusItem
             if (!dialogo.visible || !foco || !dialogo.dentro(foco)) return
             dialogo.ultimoFoco = foco
             if (foco !== botaoCancelar && foco !== botaoAplicar) dialogo.mostrar(foco)

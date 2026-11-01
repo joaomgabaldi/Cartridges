@@ -24,7 +24,9 @@ Rectangle {
 
     // Depois de a página de trás voltar a ficar habilitada; sem para onde voltar, o foco vai à página à vista.
     function devolverAoRetorno() {
-        if (visible || outroAberto) return // escondido para dar lugar a outro diálogo: o foco é dele
+        if (visible) return
+        // Escondido para dar lugar a outro diálogo: o foco é dele, e o `retorno` velho não vale mais.
+        if (outroAberto) { retorno = null; return }
         if (retorno && retorno !== Window.contentItem && retorno.visible && retorno.enabled) retorno.forceActiveFocus(Qt.TabFocusReason)
         else dialogo.retornoPerdido()
         retorno = null

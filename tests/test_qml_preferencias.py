@@ -7,7 +7,7 @@
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import Q_ARG, QMetaObject, QPoint, QPointF, Qt
+from PySide6.QtCore import Q_ARG, QMetaObject, QPoint, QPointF, Qt, QtMsgType, qInstallMessageHandler
 from PySide6.QtCore import QUrl
 from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
@@ -1218,3 +1218,34 @@ def test_loader_das_contas_some_na_busca_sem_conta(app):
     assert _esperar(lambda: _visivel(app, "linhaDoBrilhoDasFitas"))
     assert not _visivel(app, "carregadorDasContas")
     assert _esperar(lambda: app.achar("paginaDasConquistas").property("implicitHeight") == 0)
+
+
+def test_sem_avisos_do_qml_ao_abrir_e_fechar(app_qt):
+    avisos = []
+    anterior = qInstallMessageHandler(lambda tipo, _ctx, msg: avisos.append(msg) if tipo in (QtMsgType.QtWarningMsg, QtMsgType.QtCriticalMsg) else None)
+    try:
+        janela = _App(_jogos((1, "Alfa", {})))
+        _abrir(janela)
+        assert janela.preferencias.fechar() is not False
+        assert _esperar(lambda: janela.achar("dialogoDePreferencias").property("visible") is False)
+        janela.fechar()
+    finally:
+        qInstallMessageHandler(anterior)
+    assert [a for a in avisos if "DialogoDePreferencias" in a] == []
+
+
+def test_ctrl_f_leva_ao_campo_de_busca_e_com_aviso_aberto_nao_tira_o_foco_do_aviso(app):
+    _abrir(app)
+    app.achar("botaoFecharPreferencias").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(app.janela, Qt.Key.Key_F, Qt.KeyboardModifier.ControlModifier)
+    assert _esperar(lambda: app.achar("campoDeBuscaDasPreferencias").property("activeFocus") is True)
+
+    # Um aviso por cima das Preferências (a fila de diálogos do app): o Ctrl+F é dele, o foco fica no aviso.
+    app.achar("botaoFecharPreferencias").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: None)
+    assert _esperar(lambda: app.achar("camadaDeAvisos").property("dialogoAberto") is True)
+    assert _esperar(lambda: _foco_dentro_de(app, "camadaDeAvisos"))
+    QTest.keyClick(app.janela, Qt.Key.Key_F, Qt.KeyboardModifier.ControlModifier)
+    _esperar()
+    assert app.achar("campoDeBuscaDasPreferencias").property("activeFocus") is False
+    assert _foco_dentro_de(app, "camadaDeAvisos")

@@ -395,3 +395,55 @@ def test_balao_e_menus_nao_vazam_o_foco_para_a_pagina(app_qt):
         aberto.close()
         _esperar()
     app.fechar()
+
+
+def _app_com_atualizacao(monkeypatch):
+    """Um jogo com a faixa "Atualização disponível"; a página e o navegador são falsos (nada é aberto de verdade)."""
+    from cartridges.modelos import detalhes as modelo_dos_detalhes  # noqa: PLC0415
+    from cartridges.utils import open_uri  # noqa: PLC0415
+
+    abertos = []
+    monkeypatch.setattr(modelo_dos_detalhes, "abrir_url", lambda url: abertos.append(url) or True)
+    monkeypatch.setattr(open_uri.QDesktopServices, "openUrl", lambda url: abertos.append(url) or True)
+    app = _App(_jogos((1, "Alfa", {"track_updates": True, "update_available_ts": 10, "update_url": "https://r.example/x"})))
+    monkeypatch.setattr(app.jogos[0], "save", lambda: None)
+    _abrir_pelo_cartao(app, 0)
+    assert _esperar(lambda: app.achar("avisoDeAtualizacao").property("visible") is True)
+    _clicar(app, app.achar("avisoDeAtualizacao"))
+    dialogo = app.achar("dialogoAtualizacao")
+    assert _esperar(lambda: dialogo.property("visible") is True)
+    assert abertos == ["https://r.example/x"]
+    return app, dialogo, abertos
+
+
+def test_voce_instalou_a_atualizacao_foco_padrao_e_ja_instalei(app_qt, monkeypatch):
+    """Como a `main`: o padrão é "Já instalei" (`set_default_response("confirm")`); ele esconde a faixa."""
+    app, dialogo, _abertos = _app_com_atualizacao(monkeypatch)
+    assert dialogo.property("corpo") == "A página da atualização foi aberta no navegador. Confirme após instalá-la para ocultar o aviso."
+    assert dialogo.property("rotuloConfirmar") == "Já instalei" and dialogo.property("rotuloCancelar") == "Ainda não"
+    assert dialogo.property("titulo") == "Você instalou a atualização?"
+    assert _esperar(lambda: _foco_dentro_de(app, "dialogoAtualizacao"))
+    assert dialogo.findChild(QQuickItem, "botaoConfirmarDoDialogo").property("activeFocus") is True
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert _esperar(lambda: dialogo.property("visible") is False)
+    assert _esperar(lambda: app.achar("avisoDeAtualizacao").property("visible") is False)
+    assert app.jogos[0].update_available_ts == 0
+    app.fechar()
+
+
+@pytest.mark.parametrize("tecla", [None, Qt.Key.Key_Escape])
+def test_voce_instalou_a_atualizacao_ainda_nao_nao_descarta(app_qt, monkeypatch, tecla):
+    """"Ainda não" e Esc (o `set_close_response("cancel")` da `main`) não descartam; a faixa segue viva."""
+    app, dialogo, abertos = _app_com_atualizacao(monkeypatch)
+    if tecla is None:
+        _clicar(app, dialogo.findChild(QQuickItem, "botaoCancelarDoDialogo"))
+    else:
+        QTest.keyClick(app.janela, tecla)
+    assert _esperar(lambda: dialogo.property("visible") is False)
+    _esperar()  # um descarte adiado (callLater) apareceria aqui
+    assert app.achar("avisoDeAtualizacao").property("visible") is True
+    assert app.jogos[0].update_available_ts == 10
+    _clicar(app, app.achar("avisoDeAtualizacao"))
+    assert _esperar(lambda: dialogo.property("visible") is True)
+    assert abertos == ["https://r.example/x"] * 2
+    app.fechar()

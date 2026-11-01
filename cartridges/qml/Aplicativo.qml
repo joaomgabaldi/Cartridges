@@ -262,6 +262,7 @@ Principal {
     // As Preferências: por cima da edição (o erro do SteamGridDB a deixa aberta) e abaixo da camada da sessão.
     DialogoDePreferencias {
         id: dialogoDePreferencias
+        avisoAberto: camadaDeAvisos.dialogoAberto
         // Fechado a partir de um menu, o foco não tem para onde voltar: vai ao editor, se aberto, ou à página à vista.
         onRetornoPerdido: edicao.aberto ? dialogoDeEdicao.devolverFoco() : janela.paginaDoControle.focarGrade()
     }
