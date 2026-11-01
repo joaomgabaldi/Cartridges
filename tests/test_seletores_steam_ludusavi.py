@@ -202,6 +202,26 @@ def test_buscar_metadados_varios_abre_o_seletor(edicao, steam, hltb):
     assert hltb.pedidos == [("Portal", None)]
 
 
+def test_b29_escolha_da_steam_volta_o_spinner(edicao, steam, hltb):
+    edicao.adicionar()
+    edicao.nome = "Portal"
+    steam.erro_do_resolve = SteamGameNotFoundError()
+    edicao.buscarMetadados()
+    seletor = edicao.seletorDaSteam
+    assert _esperar(lambda: seletor.aberto and seletor.rowCount() == 2)
+    assert edicao.ocupado is False and edicao.buscandoMetadados is False
+    hltb.soltar.clear()  # a perna do HowLongToBeat fica esperando
+
+    seletor.escolher(1)
+
+    # Escolhido o jogo, a busca volta a andar: o botão gira e o Aplicar fica bloqueado até terminar.
+    assert _esperar(lambda: hltb.pedidos)
+    assert edicao.buscandoMetadados is True and edicao.ocupado is True
+    hltb.soltar.set()
+    assert _esperar(lambda: not edicao.ocupado and edicao.buscandoMetadados is False)
+    assert edicao.appid == "620"
+
+
 def test_buscar_metadados_sem_resultado_mostra_erro(edicao, steam, dialogos):
     edicao.adicionar()
     edicao.nome = "Portal"

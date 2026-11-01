@@ -13,9 +13,9 @@ from PySide6.QtTest import QTest
 from cartridges.jogo import Jogo
 from cartridges.modelos import sessao as modulo_da_sessao
 from cartridges.process_session import ProcessSession
-from tests.test_qml_biblioteca import _achar, _App, _esperar, _jogos
-from tests.test_qml_big_picture import _aberto_com, _entrar, _itens
-from tests.test_qml_detalhes import _abrir_pelo_cartao, _clicar, _foco_dentro_de
+from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos
+from tests.apoio_qml_big_picture import _aberto_com, _entrar, _itens
+from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _clicar, _foco_dentro_de
 
 
 @pytest.fixture(autouse=True)

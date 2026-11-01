@@ -102,6 +102,36 @@ def test_dialogo_de_confirmacao_usa_o_texto_aprovado(app_qt):
     assert chamadas == [1]
 
 
+def test_primeiro_lancamento_pede_confirmacao(app_qt, monkeypatch):
+    """Um jogo restaurado de um backup só inicia depois de a pessoa conferir o comando."""
+    from cartridges.ponte import Ponte  # noqa: PLC0415
+
+    executados = []
+    monkeypatch.setattr("cartridges.jogo.run_executable", lambda comando, admin: executados.append((comando, admin)))
+    ponte = Ponte()
+    pedidos = []
+    ponte.confirmacaoPedida.connect(lambda titulo, corpo: pedidos.append((titulo, corpo)))
+    jogo = Jogo(
+        {"game_id": "a", "source": "imported", "name": "Alfa", "executable": "cmd /c echo x\u202e& calc",
+         "run_as_admin": True, "comando_a_conferir": True}
+    )  # fmt: skip
+    jogo.save = lambda: None
+    ponte.ligar(jogo)
+    relancados = []
+
+    assert jogo.launch(lambda: relancados.append(1)) is False
+    assert executados == [] and len(pedidos) == 1
+    assert "cmd /c echo x<U+202E>& calc" in pedidos[0][1] and "administrador" in pedidos[0][1]
+
+    ponte.cancelar()  # a pessoa desistiu: nada inicia e o jogo continua por conferir
+    ponte.confirmar()
+    assert jogo.comando_a_conferir is True and relancados == [] and executados == []
+
+    jogo.launch(lambda: relancados.append(1))  # tenta de novo e confirma
+    ponte.confirmar()
+    assert jogo.comando_a_conferir is False and relancados == [1]
+
+
 def test_aviso_chega_como_texto(app_qt):
     from cartridges.ponte import Ponte  # noqa: PLC0415
 

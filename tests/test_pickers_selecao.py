@@ -182,3 +182,33 @@ def test_escolher_de_novo_zera_o_progresso(classe, baixar, temp):
     assert seletor.textoDoProgresso == "" and seletor.baixando is False
     seletor.fechar()
     baixar.soltar.set()
+
+
+# -- o texto e a barra de "Baixando…" (eram os testes da `TelaDeDownload` GTK) -----------------------
+
+
+def _recebido(seletor, recebido, total):
+    """Entrega o progresso na thread principal, como a `na_thread_principal` do download faria."""
+    seletor._baixando = True  # noqa: SLF001
+    seletor._progresso_recebido(seletor._generation, recebido, total)  # noqa: SLF001
+
+
+def test_sem_total_mostra_so_o_recebido(classe, temp):
+    seletor, _ = criar(classe)
+    _recebido(seletor, 512 * 1024, None)
+    # Sem total, a barra fica indeterminada (-1) e o texto traz só o que chegou.
+    assert seletor.textoDoProgresso == "512 KB" and seletor.progresso == -1.0
+
+
+def test_corpo_maior_que_o_total_pulsa_e_mostra_so_o_recebido(classe, temp):
+    # O servidor informou menos do que mandou: o total real não é conhecido, e "30,0 MB de 20,0 MB"
+    # pareceria erro do aplicativo.
+    seletor, _ = criar(classe)
+    _recebido(seletor, 30 * 1024 * 1024, 20 * 1024 * 1024)
+    assert seletor.textoDoProgresso == "30,0 MB" and seletor.progresso == -1.0
+
+
+def test_recebido_igual_ao_total_enche_a_barra(classe, temp):
+    seletor, _ = criar(classe)
+    _recebido(seletor, 20 * 1024 * 1024, 20 * 1024 * 1024)
+    assert seletor.textoDoProgresso == "20,0 MB de 20,0 MB" and seletor.progresso == 1.0

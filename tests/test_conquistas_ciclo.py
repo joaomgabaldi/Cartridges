@@ -7,7 +7,7 @@ from cartridges.conquistas import historico
 from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.store import store as store_module
 from cartridges.store.managers.file_manager import FileManager
-from tests.test_auditoria_0923_ligacao import ligar  # noqa: F401
+from tests.apoio_auditoria_0923_ligacao import ligar
 from tests.apoio_edicao import jogo
 
 

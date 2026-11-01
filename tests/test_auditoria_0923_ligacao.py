@@ -11,13 +11,7 @@ import pytest
 from cartridges import shared
 from cartridges.utils import session_log
 from tests.apoio_edicao import girar, jogo, stub_sgdb
-
-
-@pytest.fixture
-def ligar():
-    from cartridges.utils.ligacao_zerado import ligar_zerado  # noqa: PLC0415
-
-    return ligar_zerado
+from tests.apoio_auditoria_0923_ligacao import ligar  # noqa: F401  (as fixtures vêm junto)
 
 
 @pytest.fixture

@@ -30,10 +30,10 @@ from cartridges.modelos.conquistas import ConquistasDoJogo
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.utils import session_fita, session_wallpaper, window_geometry
 from tests.apoio_conquistas import com_fonte
-from tests.test_conquistas_qt import _Detalhes, _jogo
-from tests.test_qml_biblioteca import _achar, _App, _esperar, _jogos
-from tests.test_qml_detalhes import _foco_dentro_de
-from tests.test_qml_historico import _caixa, _expr, _todos
+from tests.apoio_conquistas_qt import _Detalhes, _jogo
+from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos
+from tests.apoio_qml_detalhes import _foco_dentro_de
+from tests.apoio_qml_historico import _caixa, _expr, _todos
 
 _parar_de_verdade = sessao_conquistas.parar  # antes de qualquer troca dos testes
 

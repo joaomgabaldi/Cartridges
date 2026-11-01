@@ -19,6 +19,7 @@ from PySide6.QtCore import QEventLoop, QTimer
 
 from cartridges import shared
 from cartridges.modelos import seletores
+from cartridges.utils.busca_do_seletor import tamanho_baixado
 from cartridges.utils.steamgriddb import SgdbAuthError, SgdbError
 from tests.apoio_seletores import (  # noqa: F401  (as fixtures vêm junto)
     Destino,
@@ -336,4 +337,46 @@ def test_download_que_estoura_nao_deixa_baixando(classe, baixar, temp):
     seletor.escolher(0)
     assert _esperar(lambda: seletor.erro)
     assert seletor.baixando is False and destino.capas == [] and destino.logos == []
+    seletor.fechar()
+
+
+# -- o tamanho baixado ("Baixando…") e o nome da prévia --------------------------------------------
+
+MB = 1024 * 1024
+FUGA = "..{0}..{0}fuga".format(chr(92))  # um id de API com barras invertidas
+
+
+def test_formata_mb_com_virgula():
+    assert tamanho_baixado(4_582_277, 21 * MB) == "4,4 MB de 21,0 MB"
+
+
+def test_formata_kb_abaixo_de_um_mega():
+    assert tamanho_baixado(40 * 1024, 512 * 1024) == "40 KB de 512 KB"
+    assert tamanho_baixado(MB, None) == "1,0 MB"
+
+
+def test_kb_arredonda_para_cima():
+    assert tamanho_baixado(300, None) == "1 KB"
+    assert tamanho_baixado(1536, 4096) == "2 KB de 4 KB"
+
+
+def test_quase_um_mega_ja_e_mb():
+    assert tamanho_baixado(1_048_000, None) == "1,0 MB"
+
+
+def test_previa_do_sgdb_fica_na_pasta_temporaria(classe, baixar, temp):
+    # O id e o endereço da API nunca viram nome de arquivo: um id "..\x" gravava fora da pasta.
+    sgdb = SgdbFalso(
+        grids=[{"id": FUGA, "url": "https://x/a.png", "thumb": "https://x/t/x.bat"}],
+        logos=[{"id": FUGA, "url": "https://x/a.png", "thumb": "https://x/t/x.bat", "style": "white",
+                "width": 600, "height": 200, "score": 1, "mime": "image/png"}],
+    )  # fmt: skip
+    seletor, _ = _criar(classe, sgdb)
+    seletor.abrir("Jogo")
+    assert _esperar(lambda: _prontos(seletor, 1))
+
+    arquivos = [p for p in temp.rglob("*") if p.is_file()]
+    assert len(arquivos) == 1
+    assert arquivos[0].suffix == ".png" and "fuga" not in str(arquivos[0].relative_to(temp))
+    assert temp in arquivos[0].parents
     seletor.fechar()

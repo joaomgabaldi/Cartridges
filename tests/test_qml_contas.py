@@ -20,7 +20,7 @@ from cartridges.conquistas.ea import conta as ea_conta
 from cartridges.conquistas.epic import conta as epic_conta
 from cartridges.conquistas.xbox import conta as xbox_conta
 from cartridges.modelos.contas import ContasDasLojas
-from tests.test_qml_biblioteca import _achar, _esperar
+from tests.apoio_qml_biblioteca import _achar, _esperar
 
 QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml"
 _COD = "0123456789abcdef0123456789abcdef"

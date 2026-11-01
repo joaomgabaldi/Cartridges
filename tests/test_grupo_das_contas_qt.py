@@ -22,7 +22,7 @@ from cartridges.modelos import contas as modulo
 from cartridges.modelos.contas import ContasDasLojas
 from cartridges.modelos.conquistas import ConquistasDoJogo
 from tests.apoio_conquistas import com_fonte
-from tests.test_conquistas_qt import _Detalhes
+from tests.apoio_conquistas_qt import _Detalhes
 
 _COD = "0123456789abcdef0123456789abcdef"
 _CURL = "curl 'https://accounts.ea.com/connect/auth' -H 'cookie: remid=AAA; _nx_mpcid=BBB'"

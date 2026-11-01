@@ -30,9 +30,9 @@ from cartridges.xinput import (
     XINPUT_RIGHT_SHOULDER,
     LeitorXInput,
 )
-from tests.test_controle_grade import ATIVO, Montagem
-from tests.test_qml_big_picture import _aberto_com, _entrar
-from tests.test_qml_biblioteca import _esperar
+from tests.apoio_controle_grade import ATIVO, Montagem
+from tests.apoio_qml_big_picture import _aberto_com, _entrar
+from tests.apoio_qml_biblioteca import _esperar
 
 
 @pytest.fixture(autouse=True)
@@ -186,7 +186,7 @@ def test_foco_de_volta_nao_e_conexao():
 
 
 def _entrada(monkeypatch, *, preferencia=True, controle=True, tem_3d=True, grade=True, ja_saiu=False, quantidade=3):
-    from tests.test_qml_biblioteca import _App, _jogos  # noqa: PLC0415
+    from tests.apoio_qml_biblioteca import _App, _jogos  # noqa: PLC0415
 
     monkeypatch.setattr(modulo_bp, "tem_3d", lambda _janela: tem_3d)
     app = _App(_jogos(*((n, f"Jogo {n}", {}) for n in range(quantidade))))
@@ -309,7 +309,7 @@ def test_pulo_na_ponta_vibra_o_fim(app_qt, monkeypatch):
 
 
 def test_a_abre_e_b_sai(app_qt, monkeypatch):
-    from tests.test_qml_big_picture import _com_launch_falso  # noqa: PLC0415
+    from tests.apoio_qml_big_picture import _com_launch_falso  # noqa: PLC0415
 
     app = _aberto_com(monkeypatch)
     jogo = _com_launch_falso(app, monkeypatch)
@@ -338,7 +338,7 @@ def test_start_y_back_nada(app_qt, monkeypatch, sinal):
 
 
 def test_ocupada_ignora_tudo(app_qt, monkeypatch):
-    from tests.test_qml_big_picture import _com_launch_falso  # noqa: PLC0415
+    from tests.apoio_qml_big_picture import _com_launch_falso  # noqa: PLC0415
 
     app = _aberto_com(monkeypatch)
     jogo = _com_launch_falso(app, monkeypatch)

@@ -13,15 +13,8 @@ import time
 
 from cartridges import shared
 from cartridges.utils import session_fita
-from tests.test_session_fita import (  # noqa: F401 - fixtures reusadas
-    FitaFalsa,
-    _jogo,
-    cor_mandada,
-    estado_mandado,
-    falsas,
-    pastas,
-    sem_fade,
-)
+from tests.apoio_fita import FitaFalsa, cor_mandada, estado_mandado, falsas, pastas, sem_fade
+from tests.apoio_session_fita import _jogo
 
 
 def test_a3_fechamento_devolve_a_fita_suspensa(falsas, schema):

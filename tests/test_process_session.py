@@ -220,6 +220,20 @@ def test_a_wall_clock_jump_changes_nothing(make_game, running, clock, monkeypatc
     assert session.session_seconds == 20
 
 
+def test_m6_a_noite_dormindo_nao_vira_tempo_de_jogo(make_game, running, clock):
+    """O PC dormiu a noite toda: só um intervalo de verificação conta como tempo de jogo."""
+    session = make_session(make_game)
+    session.started = True
+    session.counting = True
+    session.last_tick = clock.now
+
+    clock.advance(8 * 3600)
+    session._accumulate()
+
+    assert session.session_seconds == session.POLL_INTERVAL
+    assert session.game.playtime == session.POLL_INTERVAL
+
+
 def test_paused_time_is_not_counted(make_game, running, clock):
     """The grace wait after a process vanishes must never become playtime."""
     session = make_session(make_game)

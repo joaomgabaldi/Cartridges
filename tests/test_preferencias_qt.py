@@ -9,11 +9,10 @@ from cartridges.modelos.preferencias import Preferencias
 from cartridges.utils import window_geometry
 from cartridges.utils.window_geometry import Monitor
 from tests.apoio_capas import _ManagerDeCapas
+from tests.apoio_preferencias_qt import PRINCIPAL, SEGUNDO
 
 _CRIAR_PLACA_REAL = window_geometry._criar_placa  # antes da guarda `sem_placa_de_verdade`
 
-PRINCIPAL = Monitor(r"\\.\DISPLAY1", 0, 0, 1920, 1080, True, 1, r"\\?\DISPLAY#A#1")
-SEGUNDO = Monitor(r"\\.\DISPLAY2", 1920, 0, 800, 600, False, 2, r"\\?\DISPLAY#B#2")
 TERCEIRO = Monitor(r"\\.\DISPLAY3", -1920, 0, 1920, 1080, False, 3, r"\\?\DISPLAY#C#3")
 
 

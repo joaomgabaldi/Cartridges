@@ -116,6 +116,23 @@ def test_game_root_climbs_to_the_folder_below_a_container(directory, expected):
     assert _win32(pm._game_root(directory)) == expected
 
 
+@pytest.mark.parametrize(
+    ("directory", "expected"),
+    [
+        ("C:/Program Files/Epic Games/GTAV", "C:/Program Files/Epic Games/GTAV"),
+        ("C:/Program Files/EA Games/Battlefield 6/SP", "C:/Program Files/EA Games/Battlefield 6"),
+        ("C:/Program Files (x86)/Rockstar Games/Red Dead Redemption 2", "C:/Program Files (x86)/Rockstar Games/Red Dead Redemption 2"),
+        # Um jogo direto em Program Files continua na própria pasta.
+        ("C:/Program Files (x86)/Steam", "C:/Program Files (x86)/Steam"),
+        # Os contêineres de antes não mudam.
+        ("C:/Program Files/Steam/steamapps/common/Halo/bin", "C:/Program Files/Steam/steamapps/common/Halo"),
+    ],
+)
+def test_m7_pasta_de_editora_nao_e_pasta_de_jogo(directory, expected):
+    """Epic Games, EA Games e Rockstar Games são pastas de editora, não de jogo."""
+    assert _win32(pm._game_root(directory)) == _win32(expected)
+
+
 def test_game_root_gives_up_at_the_drive_root():
     """T4.4 A layout we do not recognise is better admitted than guessed."""
     assert pm._game_root("D:\\SomeGame\\Bin") == ""

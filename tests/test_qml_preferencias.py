@@ -15,44 +15,18 @@ from PySide6.QtTest import QTest
 
 from cartridges import shared
 from cartridges.utils import open_uri, window_geometry
-from tests.test_qml_biblioteca import QML, _achar, _App, _esperar, _jogos
-from tests.test_qml_detalhes import _abrir_pelo_cartao, _cartoes, _clicar, _foco_dentro_de
-
-
-@pytest.fixture
-def app(app_qt, monkeypatch):
-    from tests.test_preferencias_qt import PRINCIPAL, SEGUNDO  # noqa: PLC0415
-
-    monkeypatch.setattr(window_geometry, "monitors", lambda: [PRINCIPAL, SEGUNDO])
-    janela = _App(_jogos((1, "Alfa", {}), (2, "Beta", {})))
-    yield janela
-    janela.fechar()
-
-
-def _abrir(app, pagina=""):
-    assert app.preferencias.abrir(pagina)
-    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("visible") is True)
-
-
-def _avaliar(objeto, expressao):
-    valor = QQmlExpression(QQmlEngine.contextForObject(objeto), objeto, expressao).evaluate()[0]
-    return valor.toVariant() if hasattr(valor, "toVariant") else valor
-
-
-def _clique(app, nome):
-    QMetaObject.invokeMethod(app.achar(nome), "click", Qt.ConnectionType.DirectConnection)
-
-
-def _textos(raiz):
-    """Todo `text` de todo item abaixo de `raiz`, visível ou não."""
-    achados, pilha = [], [raiz]
-    while pilha:
-        atual = pilha.pop()
-        texto = atual.property("text")
-        if isinstance(texto, str) and texto:
-            achados.append(texto)
-        pilha.extend(atual.childItems() if isinstance(atual, QQuickItem) else [])
-    return achados
+from tests.apoio_qml_biblioteca import QML, _achar, _App, _esperar, _jogos
+from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _cartoes, _clicar, _foco_dentro_de
+from tests.apoio_qml_preferencias import (  # noqa: F401  (as fixtures vêm junto)
+    _abrir,
+    _avaliar,
+    _clique,
+    _enabled,
+    _linha,
+    _textos,
+    app,
+    fitas_espiadas,
+)
 
 
 @pytest.mark.parametrize(("tecla", "modificador"), [
@@ -241,11 +215,6 @@ def test_b25_subtitulos_de_preferencias_descrevem_o_comportamento():
         '"Busca na Steam título, desenvolvedora, publicadora, lançamento, '
         'gênero, descrição, avaliações e compatibilidade com controle"'
     ) in texto
-
-
-def _linha(app, nome):
-    linha = app.achar(nome)
-    return linha.property("titulo"), linha.property("subtitulo")
 
 
 def test_textos_da_pagina_geral_e_da_importacao(app):
@@ -582,10 +551,6 @@ def test_foco_levado_para_outro_controle_nao_e_roubado_ao_terminar(app, store, m
 # region Personalização (Task 4)
 
 
-def _enabled(app, nome):
-    return app.achar(nome).property("enabled") is True
-
-
 def test_textos_da_personalizacao(app):
     _abrir(app, "session")
     assert app.achar("paginaDePersonalizacao").property("visible") is True
@@ -627,7 +592,7 @@ def test_monitor_apagado_com_o_interruptor_desligado_e_identificar_sempre_ativo(
 
 
 def test_sem_segundo_monitor_o_grupo_apaga_e_explica(app, monkeypatch):
-    from tests.test_preferencias_qt import PRINCIPAL  # noqa: PLC0415
+    from tests.apoio_preferencias_qt import PRINCIPAL  # noqa: PLC0415
 
     monkeypatch.setattr(window_geometry, "monitors", lambda: [PRINCIPAL])
     _abrir(app, "session")
@@ -670,18 +635,6 @@ def test_m14_sem_contar_horas_o_papel_de_parede_fica_apagado(app):
 
 
 # region Iluminação inteligente
-
-
-@pytest.fixture
-def fitas_espiadas(monkeypatch):
-    """Uma fita configurada e as prévias e arranques anotados, sem acender nada."""
-    from cartridges.utils import session_fita  # noqa: PLC0415
-
-    session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "192.0.2.10", "k")])
-    anotadas = []
-    monkeypatch.setattr(session_fita, "previa", lambda cor, *_a: anotadas.append(cor))
-    monkeypatch.setattr(session_fita, "reacender", lambda: anotadas.append("reacender"))
-    return anotadas
 
 
 def test_linhas_da_iluminacao_apagadas_sem_o_interruptor(app, fitas_espiadas):

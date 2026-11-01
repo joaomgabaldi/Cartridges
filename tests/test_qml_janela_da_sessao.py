@@ -20,7 +20,7 @@ from cartridges.modelos.sessao import canto_inferior_direito
 from cartridges.process_session import ProcessSession
 from cartridges.session_window import SessionWindow
 from cartridges.utils import session_fita, session_log
-from tests.test_qml_biblioteca import _achar, _App, _esperar, _jogos
+from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos
 
 RAIZ = Path(__file__).resolve().parent.parent
 

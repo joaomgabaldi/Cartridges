@@ -106,6 +106,20 @@ def test_older_than_last_year_is_the_year(at):
     assert rd.relative_date(stamp(2019, 3, 1)) == "2019"
 
 
+@pytest.mark.parametrize(
+    ("hoje", "data", "esperado"),
+    [
+        ((2026, 9, 18), (2026, 8, 31), "mês passado"),
+        ((2026, 1, 5), (2024, 12, 31), "2024"),
+        ((2026, 3, 31), (2026, 1, 31), "janeiro"),
+    ],
+)
+def test_b27_mes_e_ano_pelo_calendario(at, hoje, data, esperado):
+    """Mês e ano contam pelo calendário, não por blocos de 30 e 365 dias."""
+    at(*hoje)
+    assert rd.relative_date(stamp(*data)) == esperado
+
+
 def test_the_day_and_month_tables_line_up_with_python():
     """The tables are indexed by weekday()/month, so their order is load-bearing."""
     assert rd.WEEKDAYS[datetime(2026, 6, 15).weekday()] == "segunda-feira"

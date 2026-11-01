@@ -18,7 +18,7 @@ from cartridges.jogo import Jogo
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.xinput import RUMBLE_LAUNCH
-from tests.test_controle_grade import ATIVO, INATIVO, Montagem
+from tests.apoio_controle_grade import ATIVO, INATIVO, Montagem
 
 CLASSICO = r'start "" "D:\Jogos\halo.exe"'
 
@@ -152,7 +152,7 @@ def test_abertura_vibra_antes_de_sair_da_frente(monkeypatch, schema):
 def test_sessao_bloqueia_a_entrada_automatica(app_qt, monkeypatch):
     """Um controle conectado com a sessão à vista não abre o Big Picture por baixo dela, como na `main`."""
     from cartridges.modelos import big_picture as modulo_bp  # noqa: PLC0415
-    from tests.test_qml_biblioteca import _App, _esperar, _jogos  # noqa: PLC0415
+    from tests.apoio_qml_biblioteca import _App, _esperar, _jogos  # noqa: PLC0415
 
     monkeypatch.setattr(modulo_bp, "tem_3d", lambda _janela: True)
     app = _App(_jogos(*((n, f"Jogo {n}", {}) for n in range(3))))

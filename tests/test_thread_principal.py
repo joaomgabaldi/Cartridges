@@ -12,6 +12,7 @@ from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
 
 from cartridges.store.managers.async_manager import AsyncManager
 from cartridges.store.pipeline import Pipeline
+from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.thread_principal import eh_thread_principal, na_thread_principal
 
 
@@ -138,3 +139,35 @@ def test_encerrar_descarta_sem_quebrar_quem_chama(app_qt, monkeypatch):
     entregas = []
     _Gerente().process_game("a", {}, entregas.append)  # não levanta
     assert entregas == []
+
+
+def test_entrega_passa_na_frente_do_redesenho_continuo(app_qt):
+    """`entregar_na_tela` chega à thread principal mesmo com algo sempre pronto no laço (um spinner animando)."""
+    ocupado = QTimer()
+    ocupado.setInterval(0)
+    ocupado.timeout.connect(lambda: None)
+    ocupado.start()
+    visto = []
+    thread = threading.Thread(target=lambda: entregar_na_tela(lambda: visto.append(eh_thread_principal())))
+    thread.start()
+    thread.join()
+    try:
+        assert _rodar_ate(lambda: visto)
+    finally:
+        ocupado.stop()
+    assert visto == [True]
+
+
+def test_entregas_da_mesma_thread_chegam_na_ordem(app_qt):
+    """Os seletores contam com o `_finish_results` depois dos `_add_result`."""
+    vistos = []
+
+    def trabalho():
+        for numero in range(5):
+            entregar_na_tela(vistos.append, numero)
+
+    thread = threading.Thread(target=trabalho)
+    thread.start()
+    thread.join()
+    assert _rodar_ate(lambda: len(vistos) == 5)
+    assert vistos == [0, 1, 2, 3, 4]

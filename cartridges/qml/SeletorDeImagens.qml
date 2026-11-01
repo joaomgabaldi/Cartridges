@@ -215,6 +215,7 @@ Rectangle {
                     font { family: Tema.fonte; pixelSize: 20; weight: Font.DemiBold }
                 }
                 ProgressBar {
+                    objectName: seletorDeImagens.objectName + "Barra"
                     width: parent.width
                     from: 0
                     to: 1

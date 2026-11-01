@@ -454,3 +454,27 @@ def test_fechar_para_as_miniaturas_da_fila(app_qt, wallhaven, baixar, temp):
     # Só as que já estavam em voo (6 threads) chegaram a pedir; as 18 da fila não pedem nada.
     assert len(baixar.urls) <= 6
     assert _vazio_de(temp) == []
+
+
+# -- arquivo do disco que não abre (eram os testes da `WallpaperPicker` GTK) --------------------------
+
+
+def test_b9_bomba_na_tela_de_parede_sai_do_spinner(app_qt, tmp_path, temp, monkeypatch):
+    arquivo = tmp_path / "enorme.png"
+    Image.new("RGB", (100, 100)).save(arquivo)
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 100)
+    seletor, _ = criar()
+    seletor.abrirArquivo(QUrl.fromLocalFile(str(arquivo)))
+    assert _esperar(lambda: seletor.erro)
+    assert seletor.tituloDoEstado == "Não foi possível abrir a imagem" and seletor.buscando is False
+    seletor.fechar()
+    assert _vazio_de(temp) == []
+
+
+def test_h7_falha_de_leitura_nao_diz_nenhum_encontrado(app_qt, tmp_path, temp):
+    seletor, _ = criar()
+    seletor.abrirArquivo(QUrl.fromLocalFile(str(tmp_path / "sumiu.png")))
+    assert _esperar(lambda: seletor.erro)
+    assert "Nenhum papel de parede" not in seletor.tituloDoEstado
+    assert (seletor.tituloDoEstado, seletor.descricaoDoEstado) == ("Não foi possível abrir a imagem", "Tente outra imagem.")
+    seletor.fechar()

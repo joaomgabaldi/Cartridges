@@ -35,12 +35,6 @@ from tests.apoio_fita import (  # noqa: F401
 _dispositivo_de_verdade = session_fita._dispositivo
 
 
-def _jogo(tmp_path, game_id="jogo-1", cor=(220, 20, 20)):
-    capa = tmp_path / f"{game_id}.png"
-    Image.new("RGB", (60, 90), cor).save(capa)
-    return SimpleNamespace(game_id=game_id, name="Jogo", get_cover_path=lambda: capa)
-
-
 def test_sem_configuracao_nao_ha_fitas():
     assert session_fita.fitas() == []
 
@@ -2576,6 +2570,7 @@ def test_log_separa_candidata_de_confirmada_esperando(na_tela, caplog, monkeypat
 
 
 from cartridges.utils import calibracao as calibracao_mod  # noqa: E402
+from tests.apoio_session_fita import _jogo
 
 VERMELHO_PUXADO = calibracao_mod.Calibracao(
     ((-8, 1.0),) + ((0, 1.0),) * 5, (0, 0)

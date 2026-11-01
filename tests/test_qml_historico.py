@@ -14,8 +14,9 @@ from PySide6.QtTest import QTest
 from cartridges.jogo import Jogo
 from cartridges.modelos import historico as modulo
 from cartridges.utils import session_log
-from tests.test_qml_biblioteca import _achar, _App, _esperar, _jogos
-from tests.test_qml_detalhes import _abrir_pelo_cartao, _clicar
+from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos
+from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _clicar
+from tests.apoio_qml_historico import _caixa, _expr, _todos
 
 
 @pytest.fixture(autouse=True)
@@ -39,30 +40,6 @@ def _abrir(app, indice=0):
     assert _esperar(lambda: app.achar("dialogoDoHistorico").property("visible") is True)
     _esperar()
     return app.achar("dialogoDoHistorico")
-
-
-def _todos(raiz, nome):
-    achados, pilha, vistos = [], [raiz], {}
-    while pilha:
-        atual = pilha.pop()
-        if id(atual) in vistos:
-            continue
-        vistos[id(atual)] = atual  # vivo até o fim: o id não se repete
-        if atual.objectName() == nome:
-            achados.append(atual)
-        pilha.extend(atual.children())
-        if isinstance(atual, QQuickItem):
-            pilha.extend(atual.childItems())
-    return achados
-
-
-def _caixa(item):
-    topo = item.mapToScene(QPointF(0, 0))  # não o `boundingRect()`: o de um Text é o da parte pintada
-    return topo.x(), topo.y(), item.width(), item.height()
-
-
-def _expr(objeto, texto):
-    return QQmlExpression(QQmlEngine.contextForObject(objeto), objeto, texto).evaluate()[0]
 
 
 def _clique_no_botao(item):

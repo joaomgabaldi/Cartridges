@@ -20,9 +20,9 @@ from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.jogo import Jogo
 from tests.apoio_conquistas import com_fonte
-from tests.test_qml_biblioteca import _achar, _App, _esperar, _jogos
-from tests.test_qml_detalhes import _abrir_pelo_cartao, _clicar, _foco_dentro_de
-from tests.test_qml_historico import _caixa, _expr, _todos
+from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos
+from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _clicar, _foco_dentro_de
+from tests.apoio_qml_historico import _caixa, _expr, _todos
 
 RAIZ = Path(__file__).resolve().parent.parent
 

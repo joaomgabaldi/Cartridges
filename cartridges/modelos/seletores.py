@@ -463,7 +463,11 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
 
     def _progresso_recebido(self, geracao: int, recebido: int, total: Optional[int]) -> None:
         if geracao == self._generation and self._baixando:
-            self._progresso = min(recebido / total, 1.0) if total else -1.0
+            # Chegou mais do que o servidor informou: o total real não é conhecido, e "30,0 MB de 20,0 MB"
+            # pareceria erro do aplicativo.
+            if total is not None and recebido > total:
+                total = None
+            self._progresso = recebido / total if total else -1.0
             self._progresso_texto = tamanho_baixado(recebido, total)
             self.progressoChanged.emit()
 

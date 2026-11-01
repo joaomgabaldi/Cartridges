@@ -9,21 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from cartridges import app, shared
-
-
-class _Gravador:
-    """Um objeto cujos métodos anotam a chamada numa lista comum; `falhar` levanta no método dado."""
-
-    def __init__(self, passos, nome, falhar=()):
-        self._passos, self._nome, self._falhar = passos, nome, falhar
-
-    def __getattr__(self, metodo):
-        def chamar(*_):
-            self._passos.append(f"{self._nome}.{metodo}")
-            if metodo in self._falhar:
-                raise RuntimeError(metodo)
-
-        return chamar
+from tests.apoio_app_conquistas import _Gravador
 
 
 def test_abertura_carrega_as_contas_antes_da_varredura(monkeypatch):

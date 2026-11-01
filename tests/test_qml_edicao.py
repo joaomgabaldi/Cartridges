@@ -16,8 +16,8 @@ from cartridges.jogo import Jogo
 from cartridges.utils import session_fita
 from tests.apoio_edicao import jogo
 from tests.apoio_fita import pastas  # noqa: F401  # a pasta descartável das fitas (autouse)
-from tests.test_qml_biblioteca import _achar, _App, _esperar
-from tests.test_qml_detalhes import _abrir_pelo_cartao, _cartoes, _foco_dentro_de
+from tests.apoio_qml_biblioteca import _achar, _App, _esperar
+from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _cartoes, _foco_dentro_de
 
 
 @pytest.fixture(autouse=True)
@@ -640,6 +640,33 @@ def test_escolher_uma_capa_do_seletor_a_deixa_na_previa(app, sgdb):
     assert provisoria.suffix == ".tiff" and [p.name for p in app.temp.iterdir()] == [provisoria.name]
     app.edicao.cancelar()
     assert list(app.temp.iterdir()) == []
+
+
+def test_pulsa_do_clique_ate_o_primeiro_dado(app, sgdb, monkeypatch):
+    """Entre o clique e o primeiro dado (DNS, TLS, um servidor lento) a barra fica indeterminada."""
+    import threading  # noqa: PLC0415
+
+    from cartridges.modelos import seletores  # noqa: PLC0415
+    from tests.apoio_seletores import png_bytes  # noqa: PLC0415
+
+    liberar = threading.Event()
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
+    seletor = app.edicao.seletorDeCapa
+    # Só depois das miniaturas: o download da imagem escolhida é que espera.
+    monkeypatch.setattr(seletores, "download_bytes", lambda *_a, **_k: liberar.wait(5) and png_bytes())
+
+    seletor.escolher(1)
+    assert _esperar(lambda: _visivel(app, "seletorDeCapaBaixando"))
+    barra = app.achar("seletorDeCapaBarra")
+    assert seletor.textoDoProgresso == "" and barra.property("indeterminate") is True
+
+    seletor._progresso_recebido(seletor._generation, 2 * 1024 * 1024, 8 * 1024 * 1024)  # noqa: SLF001  (o primeiro dado)
+    assert _esperar(lambda: barra.property("indeterminate") is False)
+    assert barra.property("value") == pytest.approx(0.25)
+    liberar.set()
+    assert _esperar(lambda: app.edicao.temCapa and not app.edicao.ocupado, 10)
+    app.edicao.cancelar()
 
 
 def test_animadas_pede_as_capas_animadas(app, sgdb):

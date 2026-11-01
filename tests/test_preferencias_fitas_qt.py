@@ -26,27 +26,14 @@ from cartridges.modelos import preferencias as preferencias_mod
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.utils import session_fita
 from tests.apoio_fita import falsas, pastas, sem_fade, sem_vigia  # noqa: F401
-from tests.test_qml_biblioteca import _App, _esperar, _jogos
-from tests.test_qml_preferencias import _avaliar
+from tests.apoio_qml_biblioteca import _App, _esperar, _jogos
+from tests.apoio_qml_preferencias import _avaliar
+from tests.apoio_preferencias_fitas_qt import _com_fitas, previas  # noqa: F401  (as fixtures vêm junto)
 
 SEM_RESPOSTA = (
     "Sem resposta: {}. Se o dispositivo estiver ligado, o endereço dele na rede pode ter mudado; configure a "
     "iluminação inteligente novamente."
 )
-
-
-def _com_fitas(*nomes):
-    session_fita.gravar_fitas(
-        [session_fita.Fita(nome, f"eb{i}", f"192.0.2.{10 + i}", "chave") for i, nome in enumerate(nomes or ("Centro",))]
-    )
-
-
-@pytest.fixture
-def previas(monkeypatch):
-    """Cada `previa(cor, tetos)` pedida, sem acender nada."""
-    pedidas = []
-    monkeypatch.setattr(session_fita, "previa", lambda cor, tetos=None, *_a: pedidas.append((cor, tetos)))
-    return pedidas
 
 
 @pytest.fixture

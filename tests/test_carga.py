@@ -65,6 +65,19 @@ def test_ficha_malformada_e_pulada(app_dirs):
     assert [jogo.game_id for jogo, _ in store.recebidos] == ["shortcuts_t"]
 
 
+def test_registro_com_game_id_de_caminho_nao_e_carregado(app_dirs):
+    # O game_id vira nome de arquivo (capa, logo, exclusão): só o formato que o app gera é carregado.
+    barra = chr(92)
+    _gravar(app_dirs, "bom.json", _ficha("imported_1"))
+    _gravar(app_dirs, "fuga.json", _ficha(f"..{barra}..{barra}Documents{barra}x"))
+    _gravar(app_dirs, "absoluto.json", _ficha(f"C:{barra}x"))
+    _gravar(app_dirs, "barra.json", _ficha("a/b"))
+    store = _StoreDeMentira()
+
+    assert carregar_jogos_do_disco(store) == 1
+    assert [jogo.game_id for jogo, _ in store.recebidos] == ["imported_1"]
+
+
 def test_campo_de_tipo_errado_e_saneado(app_dirs):
     _gravar(
         app_dirs,

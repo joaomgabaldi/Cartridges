@@ -114,6 +114,17 @@ def test_deleting_removes_exactly_one_line():
     ]
 
 
+def test_b17_apagar_sessao_com_byte_nao_utf8_no_arquivo():
+    alheia = b'{"game_id": "caf\xe9", "end": 5, "seconds": 5}\n'
+    alvo = b'{"game_id": "g", "end": 10, "seconds": 60}\n'
+    path().write_bytes(alheia + alvo)
+
+    assert session_log.delete("g", 10, 60) is True
+    # O texto volta ao disco com o fim de linha do sistema; o que importa é o
+    # byte não-UTF-8 da linha alheia voltar igual.
+    assert path().read_bytes().replace(b"\r\n", b"\n") == alheia
+
+
 def test_deleting_something_that_is_not_there_says_so():
     """Quem chama desconta o tempo do total só quando isto devolve True."""
     session_log.record("g", 60, end=1_700_000_100)
