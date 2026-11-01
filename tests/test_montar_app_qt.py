@@ -30,6 +30,8 @@ def insumos(tmp_path):
     _tocar(raiz / "cartridges" / "qml" / "Aplicativo.qml")
     _tocar(raiz / "cartridges" / "janela" / "qwk_ponte.dll")
     _tocar(raiz / "cartridges" / "__pycache__" / "x.pyc")
+    _tocar(raiz / "cartridges" / "store" / "__init__.py")
+    _tocar(raiz / "cartridges" / "store" / "__pycache__" / "y.pyc")
     _tocar(raiz / "cartridges" / "shared.pyi")
     _tocar(raiz / "cartridges" / "instalacao.json", '{"canal": "final"}')
     _tocar(raiz / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml.in")
@@ -70,6 +72,9 @@ def test_monta_a_arvore_do_app(insumos, tmp_path):
     assert (destino / "app" / "data" / "icons" / "hicolor" / "scalable" / "apps" / "app.svg").is_file()
     assert not (destino / "app" / "data" / "screenshots").exists()
     assert not (destino / "app" / "cartridges" / "__pycache__").exists()
+    # o bytecode dos subpacotes também fica de fora (par do antigo `test_meson_install`)
+    assert (destino / "app" / "cartridges" / "store" / "__init__.py").is_file()
+    assert not (destino / "app" / "cartridges" / "store" / "__pycache__").exists()
     assert not (destino / "app" / "cartridges" / "shared.pyi").exists()
 
 

@@ -175,7 +175,7 @@ class Aplicativo(QObject):
     ) -> None:
         """Pergunta com dois botões; ``ao_responder(True)`` se confirmou, ``False`` se saiu (Esc, X ou o botão de sair).
 
-        O botão de sair é "Cancelar" se ``destrutivo``, senão "Dispensar" (a regra do `create_dialog`).
+        O botão de sair é "Cancelar" se ``destrutivo``, senão "Dispensar".
         Um pedido com outra confirmação na tela espera a resposta dela (D72).
         """
         self._fila.append(("confirmacao", (titulo, corpo, rotulo, ao_responder, destrutivo)))

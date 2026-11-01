@@ -46,7 +46,7 @@ from cartridges.utils.thread_principal import na_thread_principal
 # O painel de desenvolvedor da Tuya, de onde saem o Access ID e o Access Secret.
 PAINEL_DA_TUYA = "https://auth.tuya.com/?from=https%3A%2F%2Fdeveloper.tuya.com%3Fredirect%3Dhttps%3A%2F%2Fplatform.tuya.com"
 
-# As regiões que a Tuya oferece, na mesma ordem da lista do `.blp`. As duas
+# As regiões que a Tuya oferece, na mesma ordem da lista da tela. As duas
 # listas precisam andar juntas: o índice escolhido na tela é o índice aqui.
 REGIOES = ("us", "eu", "cn", "in")
 

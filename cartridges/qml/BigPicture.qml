@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Window
 
-// O Cover Flow do Big Picture. Calibração copiada de cartridges/big_picture.py (valores da `main`);
+// O Cover Flow do Big Picture. Calibração copiada do Big Picture da `main` (cartridges/big_picture.py de lá);
 // o estado vem do `bigPicture` (Python). A geometria é a do protótipo (D6).
 Item {
     id: tela

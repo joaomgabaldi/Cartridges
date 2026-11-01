@@ -17,31 +17,17 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Hand a URL to the user's browser, safely and without warnings.
+"""Entrega uma URL ao navegador do usuário, com segurança.
 
-Two things live here that were previously scattered and slightly wrong at every
-call site.
-
-The scheme guard: several of these URLs are lifted out of a third-party RSS
-feed, so only ``http``/``https`` is ever followed. A ``file:`` or ``javascript:``
-URL that finds its way into a post must not become an OS-level launch just
-because someone clicked a row.
-
-The launcher: ``Gio.AppInfo.launch_default_for_uri(uri, None)`` was used
-throughout, which trips a ``G_IS_APP_LAUNCH_CONTEXT`` assertion in GIO — it is
-being handed no launch context at all, and the browser window it opens is
-parented to nothing. :class:`Gtk.UriLauncher` builds the context itself and
-accepts the window the click came from, which is what the platform expects.
+Várias dessas URLs vêm de um feed RSS ou de um JSON de terceiros: só ``http``/``https``
+é seguido. Uma URL ``file:`` ou ``javascript:`` que chegue a um texto não pode virar
+uma abertura pelo sistema só porque alguém clicou numa linha.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Optional
 
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
-
-if TYPE_CHECKING:
-    from gi.repository import Gtk
 
 _ALLOWED_SCHEMES = ("http://", "https://")
 
@@ -57,33 +43,3 @@ def abrir_url(url: str) -> bool:
             logging.warning("Refusing to open URI with unexpected scheme: %r", url)
         return False
     return QDesktopServices.openUrl(QUrl(url))
-
-
-# shortcut: o nome antigo, com Gtk, só para os chamadores GTK; sai com eles na fase final.
-def open_uri(uri: str, parent: Optional["Gtk.Window"] = None) -> bool:
-    """Open ``uri`` in the default browser.
-
-    :param parent: window the click came from; defaults to the main window.
-    :returns: False when the URL was empty or carried an unexpected scheme, in
-        which case nothing was launched.
-    """
-    from gi.repository import Gtk  # noqa: PLC0415
-
-    from cartridges import shared  # noqa: PLC0415
-
-    uri = (uri or "").strip()
-    if not uri.startswith(_ALLOWED_SCHEMES):
-        if uri:
-            logging.warning("Refusing to open URI with unexpected scheme: %r", uri)
-        return False
-
-    def on_launched(launcher: Gtk.UriLauncher, result: Any) -> None:
-        # A browser that refuses to start is the OS's business, not something
-        # worth a dialog — but it should not vanish from the log either.
-        try:
-            launcher.launch_finish(result)
-        except Exception as error:  # pylint: disable=broad-exception-caught
-            logging.info("Could not open %s: %s", uri, error)
-
-    Gtk.UriLauncher.new(uri).launch(parent or shared.win, None, on_launched)
-    return True

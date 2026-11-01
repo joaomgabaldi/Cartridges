@@ -597,6 +597,59 @@ def test_copia_animada_a_vista_e_largada_antes_de_apagar_e_refeita_se_velha(app_
     app.fechar()
 
 
+def _cartao_com_copia(monkeypatch, lixo):
+    """Um cartão com autoplay ligado e a cópia animada pronta; com `lixo`, a cópia é trocada por bytes que não são WebP."""
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    monkeypatch.setattr(aplicativo_modulo, "_animacoes_do_sistema", lambda: True)
+    monkeypatch.setattr(copias_animadas, "ao_terminar_copia", None)
+    monkeypatch.setattr(copias_animadas, "soltar_do_jogo", None)
+    shared.schema.set_boolean("cover-autoplay", True)
+    jogos = _jogo_com_capa_animada()
+    capa = shared.covers_dir / "imported_1.webp"
+    copia = copias_animadas.caminho_para(capa, copias_animadas.tamanhos()[0])
+    if lixo:
+        copia.write_bytes(LIXO)
+    app = _App(jogos)
+    app.modelo.ativar_copias()
+    return app, capa, copia, *_cartao_animado(app)
+
+
+LIXO = b"isto nao e um webp"
+
+
+def test_copia_animada_valida_aparece_em_ate_3_s(app_qt, monkeypatch):
+    """Controle positivo do teste da cópia corrompida: com a cópia boa, a espera daquele teste bastaria para a animação aparecer."""
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    app, _capa, _copia, cartao, animada = _cartao_com_copia(monkeypatch, lixo=False)
+    assert _esperar(lambda: animada.property("playing") is True)
+    assert _esperar(lambda: animada.property("visible"), limite=3.0)
+    copias_animadas.soltar("imported_1")
+    shared.schema.reset("cover-autoplay")
+    app.fechar()
+
+
+def test_copia_animada_corrompida_deixa_a_capa_parada_visivel(app_qt, monkeypatch):
+    """Sem o refazer da `main`: a cópia lixo fica, o `AnimatedImage` a tenta e não carrega, e a capa parada segue à vista."""
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    app, capa, copia, cartao, animada = _cartao_com_copia(monkeypatch, lixo=True)
+    parada = _achar(cartao, "capaParada")
+    assert _esperar(lambda: animada.property("playing") is True)
+    # A animada tentou abrir justamente a cópia lixo...
+    assert _esperar(lambda: animada.property("source").toString().split("?")[0].endswith(copia.name))
+    # ...e, pelo mesmo tempo que a cópia boa leva para aparecer (teste vizinho), não carregou.
+    assert not _esperar(lambda: animada.property("visible"), limite=3.0)
+    # A cópia não foi refeita (diferença aceita da `main`) e a capa parada é a capa real, não o espaço vazio.
+    assert copia.read_bytes() == LIXO
+    assert parada.property("source").toString() == cartao.property("capa") != ""
+    assert parada.property("source").toString().split("?")[0].endswith(capa.name)
+    copias_animadas.soltar("imported_1")
+    shared.schema.reset("cover-autoplay")
+    app.fechar()
+
+
 def test_janela_maximizada_volta_maximizada_depois_de_sair_da_frente(app_qt):
     """Review Focus 4, pelo caminho do app: `sair_da_frente` minimiza, `present()` devolve a janela maximizada."""
     app = _App(_tres())

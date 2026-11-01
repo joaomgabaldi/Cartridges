@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-# A interface é hardcoded em pt-BR (como em `cartridges.in`). Antes de importar
+# A interface é hardcoded em pt-BR. Antes de importar
 # `cartridges.jogo`, cujos STATUS_LABELS chamam `_()` na importação.
 builtins._ = lambda message: message  # type: ignore[attr-defined]
 builtins.ngettext = lambda singular, plural, n: singular if n == 1 else plural  # type: ignore[attr-defined]

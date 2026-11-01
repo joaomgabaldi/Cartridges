@@ -47,8 +47,8 @@ _LOCK = threading.Lock()
 
 
 def _path() -> Path:
-    # Resolvido a cada chamada, não no import: `shared.app_dir` é montado pelo
-    # meson e repontado pelos testes, e uma constante de módulo congelaria o
+    # Resolvido a cada chamada, não no import: `shared.app_dir` é montado em
+    # tempo de execução e repontado pelos testes, e uma constante de módulo congelaria o
     # valor de quem importasse primeiro.
     return shared.app_dir / "sessions.jsonl"
 

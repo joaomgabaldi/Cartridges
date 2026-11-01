@@ -4,7 +4,7 @@
 
 """A parte do controle do Xbox que só fala com o Windows (XInput): a DLL, a leitura e a vibração.
 
-Sem gi nem Qt: serve à grade do app Qt (`modelos/controle.py`) e ao módulo GTK `gamepad.py`.
+Sem gi nem Qt: serve à grade do app Qt (`modelos/controle.py`).
 Os valores (constantes, zona morta, presets de vibração) são os da `main`.
 """
 

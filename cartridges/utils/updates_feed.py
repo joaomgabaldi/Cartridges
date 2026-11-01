@@ -102,7 +102,7 @@ _MAX_TITLE_CHARS = 300  # characters kept from one spoiler header
 _MAX_URL_CHARS = 2048  # characters kept from one href
 
 # Only these two schemes ever survive parsing. The URL ends up persisted in the
-# game's JSON and eventually reaches Gtk.UriLauncher; `open_uri` guards that
+# game's JSON and eventually reaches the browser; `abrir_url` guards that
 # call too, but a `javascript:`/`file:` URL should never make it as far as disk
 # in the first place.
 _ALLOWED_URL_SCHEMES = ("http://", "https://")

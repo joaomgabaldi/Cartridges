@@ -259,7 +259,7 @@ def test_open_folder_reports_success(tmp_path, monkeypatch):
 
 def test_open_folder_reports_failure_instead_of_raising(monkeypatch):
     """The folder was there when the button was shown; gone by the click is a
-    message to the user, not an unhandled exception — see `details_dialog.py`."""
+    message to the user, not an unhandled exception (a página de detalhes)."""
 
     def _missing(_directory):
         raise OSError("gone")

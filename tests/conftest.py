@@ -53,7 +53,7 @@ def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
     shutil.rmtree(_DADOS_DA_SESSAO, ignore_errors=True)
 
 
-# Como em `cartridges.in`: o texto da interface passa por `_()` já na definição das classes.
+# Como no app: o texto da interface passa por `_()` já na definição das classes.
 builtins._ = lambda message: message  # type: ignore[attr-defined]
 builtins.ngettext = (  # type: ignore[attr-defined]
     lambda singular, plural, n: singular if n == 1 else plural
