@@ -291,6 +291,9 @@ def test_busca_nao_vale_em_zerados(app_qt):
     zerados.busca = "zelda"
     assert _nomes_de(biblioteca) == ["Zelda"]
     assert _nomes_de(zerados) == ["Halo"]
+    modelo.atualizar(_jogo("c", "Zelda 2"))  # chega com a busca já escrita
+    assert _nomes_de(biblioteca) == ["Zelda", "Zelda 2"]
+    assert _nomes_de(zerados) == ["Halo"]
 
 
 def test_filtros_valem_nas_duas_paginas(app_qt):
@@ -328,6 +331,24 @@ def test_opcoes_incluem_zerados(app_qt):
     modelo.atualizar(_jogo("a", "A", removed=True, status="beaten", genre="Ação"))
     filtros.recalcularOpcoes()
     assert filtros.generos == ["Ação"]
+
+
+def test_a_removed_games_values_leave_the_menu(app_qt):
+    """Um desinstalado comum não deixa o gênero nem o ano como opção."""
+    modelo = ModeloDaBiblioteca()
+    filtros = FiltrosDaBiblioteca(modelo)
+    modelo.atualizar(_jogo("a", "A", genre="Corrida", release_date="2020", removed=True))
+    filtros.recalcularOpcoes()
+    assert (filtros.generos, filtros.anos) == ([], [])
+
+
+def test_the_status_menu_offers_every_status_whatever_the_library_holds(app_qt):
+    """Lista fixa: "o que eu zerei?" vale numa biblioteca em que nada foi zerado ainda."""
+    modelo = ModeloDaBiblioteca()
+    filtros = FiltrosDaBiblioteca(modelo)
+    modelo.atualizar(_jogo("a", "A"))
+    filtros.recalcularOpcoes()
+    assert [s["rotulo"] for s in filtros.opcoesDeStatus] == ["Quero jogar", "Jogando", "Zerado", "Abandonado"]
 
 
 def test_status_tem_rotulo_e_valor(app_qt):
@@ -450,3 +471,34 @@ def test_copia_que_nao_saiu_nao_e_pedida_de_novo(app_qt, pedidos):
     modelo.atualizar(jogo)
     assert len(pedidos) == 1
     assert _animada_de(modelo) == ""
+
+
+def test_gravacao_falha_nao_pede_de_novo_ate_a_capa_mudar(app_qt, pedidos):
+    """Refazer a cada atualização custaria de 10 a 25 s de CPU toda vez; uma capa nova pede de novo."""
+    import os  # noqa: PLC0415
+
+    caminho, _ = _capa_animada("a", com_copia=False)
+    modelo = ModeloDaBiblioteca()
+    jogo = _jogo("a", "A")
+    modelo.atualizar(jogo)
+    modelo.ativar_copias()
+    modelo.copia_terminou("a", "falhou")
+    modelo.atualizar(jogo)
+    assert len(pedidos) == 1
+    os.utime(caminho, ns=(1_000_000_000, 1_000_000_000))  # a capa foi regravada
+    modelo.atualizar(jogo)
+    assert len(pedidos) == 2, "capa nova: pede de novo"
+
+
+def test_capas_na_ordem_percorre_a_biblioteca_e_depois_os_zerados(app_qt, pedidos):
+    """As cópias saem na ordem em que a grade mostra as capas: a biblioteca e depois os zerados."""
+    shared.state_schema.set_string("sort-mode", "a-z")
+    modelo = ModeloDaBiblioteca()
+    caminhos = {}
+    for game_id, nome, extra in (("z", "A0", {"removed": True, "status": "beaten"}), ("b", "B", {}), ("a", "A", {})):
+        caminhos[game_id], _ = _capa_animada(game_id, com_copia=False)
+        modelo.atualizar(_jogo(game_id, nome, **extra))
+    (shared.covers_dir / "s.tiff").write_bytes(b"x")
+    modelo.atualizar(_jogo("s", "C"))  # capa parada: fora da lista
+    modelo.ativar_copias()
+    assert pedidos == [[("a", caminhos["a"]), ("b", caminhos["b"]), ("z", caminhos["z"])]]

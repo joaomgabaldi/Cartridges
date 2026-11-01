@@ -100,6 +100,30 @@ def test_a_maximized_geometry_keeps_the_restored_size():
     assert (geometry.width, geometry.height) == (1170, 795)
 
 
+
+def test_a_negative_coordinate_is_usable():
+    """Um monitor real em coordenada negativa vale como posição gravada."""
+    assert Geometry(-476, 100, 800, 600, False).usable
+
+
+def test_a_minimized_window_is_not_read(monkeypatch):
+    """A1: fechar pela taskbar com a janela minimizada (o estado normal
+    enquanto um jogo roda) gravava o retângulo icônico como geometria."""
+
+    class FakeUser32:
+        @staticmethod
+        def IsIconic(_hwnd):  # noqa: N802
+            return 1
+
+        @staticmethod
+        def GetWindowRect(*_args):  # noqa: N802
+            raise AssertionError("não se pergunta o rect de uma janela icônica")
+
+    monkeypatch.setattr(window_geometry, "_user32", FakeUser32())
+    monkeypatch.setattr(window_geometry, "_hwnd", lambda _window: 42)
+
+    assert window_geometry.read(object()) is None
+
 # --- gravar --------------------------------------------------------------------------------------------------------
 
 

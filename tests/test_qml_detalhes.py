@@ -11,6 +11,7 @@ from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
+from cartridges import shared
 from cartridges.jogo import Jogo
 from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos, _tres
 from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _cartoes, _clicar, _foco_dentro_de
@@ -413,4 +414,54 @@ def test_voce_instalou_a_atualizacao_ainda_nao_nao_descarta(app_qt, monkeypatch,
     _clicar(app, app.achar("avisoDeAtualizacao"))
     assert _esperar(lambda: dialogo.property("visible") is True)
     assert abertos == ["https://r.example/x"] * 2
+    app.fechar()
+
+
+def test_closing_the_notes_popover_saves_the_text(app_qt):
+    """O balão grava ao fechar, com o mesmo tratamento de espaços da edição: só Enter conta como vazio."""
+    app = _App(_jogos((1, "Alfa", {"status": "playing"})))
+    pagina = _abrir_pelo_cartao(app)
+    balao = _achar(pagina, "balaoDaAnotacao")
+    for digitado, gravado in (("\n  Parei no capítulo 4.\nCofre: 8815  \n", "Parei no capítulo 4.\nCofre: 8815"), ("\n\n", "")):
+        balao.open()
+        assert _esperar(lambda: balao.property("opened") is True)
+        _achar(balao.property("contentItem"), "campoDaAnotacao").setProperty("text", digitado)
+        balao.close()
+        assert _esperar(lambda: app.jogos[0].notes == gravado)
+    app.fechar()
+
+
+def test_a_anotacao_nao_aparece_no_meio_das_informacoes(app_qt):
+    """A anotação se lê só no balão do botão: o bloco com o texto no meio das informações saiu (pedido de 18/10/2026)."""
+    app = _App(_jogos((1, "Alfa", {"status": "playing", "notes": "Cofre: 8815"})))
+    pagina = _abrir_pelo_cartao(app)
+    balao = _achar(pagina, "balaoDaAnotacao")
+
+    def itens_com_texto(texto):
+        """Os objetos da página (fora do balão) cujo `text` é `texto`, descendo por itens e por filhos QObject."""
+        achados, pilha, vistos = [], [pagina], {}
+        while pilha:
+            atual = pilha.pop()
+            if id(atual) in vistos or atual == balao:
+                continue
+            vistos[id(atual)] = atual  # guardar o objeto impede o reuso do id
+            if atual.property("text") == texto:
+                achados.append(atual)
+            pilha.extend(atual.children())
+            if isinstance(atual, QQuickItem):
+                pilha.extend(atual.childItems())
+        return achados
+
+    assert itens_com_texto("Alfa"), "a varredura enxerga os textos da página (o título)"
+    assert itens_com_texto("Cofre: 8815") == [], "a anotação só entra no balão"
+    app.fechar()
+
+
+def test_capa_ilegivel_na_pagina_mostra_a_capa_padrao(app_qt):
+    """Como na grade: um arquivo de capa quebrado mostra o placeholder, e não um quadro vazio."""
+    (shared.covers_dir / "imported_1.tiff").write_bytes(b"nao e uma imagem")
+    app = _App(_jogos((1, "Alfa", {})))
+    pagina = _abrir_pelo_cartao(app)
+    capa = _achar(pagina, "capaDaPagina")
+    assert _esperar(lambda: capa.property("source").toString().endswith("library_placeholder.svg"))
     app.fechar()

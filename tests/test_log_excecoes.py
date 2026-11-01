@@ -19,6 +19,7 @@ from PySide6.QtCore import QTimer, qInstallMessageHandler, qWarning
 
 from cartridges import shared
 from cartridges.logging import setup
+from cartridges.logging.session_file_handler import SessionFileHandler
 from cartridges.utils import erro_inesperado
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -464,3 +465,76 @@ def _rastro_do_app(n):
     except RuntimeError:
         return sys.exc_info()[2]
     return None
+
+
+# --- O arquivo de log da sessão (`SessionFileHandler`, trazidos de test_ui_logic.py) --------------------------------
+
+
+def _registro(mensagem="hello"):
+    return logging.LogRecord("test", logging.INFO, __file__, 1, mensagem, None, None)
+
+
+def test_the_log_stops_at_the_cap_and_says_so(tmp_path, monkeypatch):
+    """T7.5 An unbounded session log made the next startup read it all back."""
+    monkeypatch.setattr(SessionFileHandler, "MAX_BYTES", 2000)
+    handler = SessionFileHandler(filename=tmp_path / "cartridges.log", backup_count=2)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+
+    for index in range(500):
+        handler.emit(_registro(f"line {index} " + "x" * 50))
+    handler.close()
+
+    text = (tmp_path / "cartridges.log").read_text(encoding="utf-8")
+    assert "Log capped at 2000 bytes" in text
+    assert "line 0 " in text, "the beginning is what is kept"
+    assert "line 499 " not in text
+
+
+def test_emit_never_raises_into_the_caller(tmp_path):
+    """T7.5 This runs inside somebody's logging call, often while handling an error."""
+    handler = SessionFileHandler(filename=tmp_path / "cartridges.log", backup_count=2)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    handler.close()
+
+    handler.emit(_registro("after close"))  # must not raise
+
+
+def test_rotation_keeps_the_previous_session(tmp_path):
+    """T7.5 backup_count limits how many sessions are kept, not their size."""
+    path = tmp_path / "cartridges.log"
+    first = SessionFileHandler(filename=path, backup_count=2)
+    first.setFormatter(logging.Formatter("%(message)s"))
+    first.emit(_registro("session one"))
+    first.close()
+
+    second = SessionFileHandler(filename=path, backup_count=2)
+    second.close()
+
+    archived = [item for item in tmp_path.iterdir() if item.name != "cartridges.log"]
+    assert archived, "the previous session should have been rotated away"
+
+
+def test_rotation_survives_an_undecodable_log(tmp_path):
+    """T7.5 A half-written file from a crash must not stop the app from starting."""
+    path = tmp_path / "cartridges.log"
+    path.write_bytes(b"\xff\xfe invalid \x00 bytes")
+
+    handler = SessionFileHandler(filename=path, backup_count=2)
+    handler.close()
+
+    assert path.exists()
+
+
+def test_rotation_survives_a_crash_between_compress_and_unlink(tmp_path):
+    """B10: a queda deixava `.log` e `.log.xz` no mesmo número; a próxima
+    inicialização levantava na rotação, o dictConfig virava ValueError e a
+    sessão rodava sem log nenhum — justamente a sessão depois de um crash."""
+    import lzma  # noqa: PLC0415
+
+    path = tmp_path / "cartridges.log"
+    path.write_text("sessão interrompida\n", encoding="utf-8")
+    with lzma.open(tmp_path / "cartridges.log.xz", "wb") as file:
+        file.write(b"metade comprimida")
+
+    handler = SessionFileHandler(filename=path, backup_count=2)  # não pode levantar
+    handler.close()

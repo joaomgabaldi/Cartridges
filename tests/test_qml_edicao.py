@@ -163,6 +163,98 @@ def test_ocupado_bloqueia_aplicar_e_enter(app):
     assert shared.store.get("shortcuts_z1").name == "Mudou"
 
 
+def test_loading_operations_balance(app):
+    """Duas operações sobrepostas: o Aplicar só volta quando a última termina."""
+    app.edicao.abrir("shortcuts_z1")
+    aplicar = app.achar("botaoAplicarDaEdicao")
+    assert _esperar(lambda: aplicar.property("enabled") is True)
+    app.edicao.iniciar_operacao()
+    app.edicao.iniciar_operacao()
+    assert _esperar(lambda: aplicar.property("enabled") is False)
+    app.edicao.terminar_operacao()
+    _esperar()
+    assert app.edicao.ocupado is True and aplicar.property("enabled") is False, "uma ainda está em andamento"
+    app.edicao.terminar_operacao()
+    assert _esperar(lambda: aplicar.property("enabled") is True)
+
+
+def test_an_extra_end_never_drives_the_counter_negative(app):
+    """Uma thread que termina duas vezes não pode deixar o Aplicar impossível de bloquear."""
+    app.edicao.abrir("shortcuts_z1")
+    app.edicao.terminar_operacao()
+    app.edicao.terminar_operacao()
+    assert app.edicao.ocupado is False
+    app.edicao.iniciar_operacao()
+    assert app.edicao.ocupado is True
+    assert _esperar(lambda: app.achar("botaoAplicarDaEdicao").property("enabled") is False)
+
+
+@pytest.mark.parametrize(("gravado", "posicao"), [(None, 0), ("full", 1), ("partial", 2)])
+def test_controller_support_round_trips(app, store, gravado, posicao):
+    """A linha é o único lugar onde o valor se digita à mão: o mapa valor↔posição vale nos dois sentidos."""
+    jogo(store, 9, controller_support=gravado)
+    app.edicao.abrir("shortcuts_z9")
+    assert app.edicao.controleIndice == posicao
+    app.edicao.controleIndice = (posicao + 1) % 3
+    app.edicao.controleIndice = posicao
+    assert app.edicao._form.controle == gravado  # noqa: SLF001
+
+
+def _pasta_de_jogo(tmp_path):
+    """Pasta que o app reconhece como a de um jogo só: tem desinstalador."""
+    pasta = tmp_path / "Jogo"
+    pasta.mkdir()
+    (pasta / "unins000.exe").write_bytes(b"")
+    (pasta / "jogo.exe").write_bytes(b"")
+    return f'"{pasta / "jogo.exe"}"'
+
+
+def _aberto_e_visivel(app, nome):
+    assert _esperar(lambda: app.achar("dialogoDeEdicao").property("visible") is True)
+    _esperar()
+    return app.achar(nome).property("visible") is True
+
+
+def test_the_folder_button_follows_the_executable_field(app, tmp_path):
+    """Segue o que se digita, não o que o diálogo abriu: trocar o .exe por um steam:// é uma edição comum."""
+    (tmp_path / "halo.exe").write_bytes(b"")
+    app.edicao.adicionar()
+    app.edicao.executavel = f'start "" "{tmp_path}\\halo.exe"'
+    assert _aberto_e_visivel(app, "botaoAbrirPasta") is True
+    app.edicao.executavel = 'start "" "steam://rungameid/440"'
+    assert _aberto_e_visivel(app, "botaoAbrirPasta") is False
+
+
+def test_the_folder_button_is_hidden_on_an_empty_dialog(app):
+    """O "Adicionar jogo" começa sem comando: não há pasta a abrir."""
+    app.edicao.adicionar()
+    assert _aberto_e_visivel(app, "botaoAbrirPasta") is False
+
+
+def test_rastrear_processo_some_quando_a_pasta_do_jogo_e_reconhecida(app, tmp_path):
+    """Com a pasta reconhecida o tempo já é contado por ela: a opção de rastrear pelo nome não aparece."""
+    app.edicao.adicionar()
+    app.edicao.executavel = _pasta_de_jogo(tmp_path)
+    app.edicao.rastrearProcesso = True
+    assert _aberto_e_visivel(app, "alternanciaDeRastreio") is False
+    assert app.achar("campoProcesso").property("visible") is False
+
+
+def test_rastrear_processo_aparece_para_jogo_lancado_pela_loja(app):
+    """Um steam:// não diz onde o jogo mora: sem o nome do executável, a sessão seria manual."""
+    app.edicao.adicionar()
+    app.edicao.executavel = "steam://rungameid/620"
+    assert _aberto_e_visivel(app, "alternanciaDeRastreio") is True
+
+
+def test_rastrear_processo_ja_abre_escondido_para_jogo_com_pasta(app, store, tmp_path):
+    """Ao abrir um jogo existente, a visibilidade vem do comando gravado, sem nada digitado."""
+    jogo(store, 9, executable=_pasta_de_jogo(tmp_path), track_process=True, process_executable="jogo.exe")
+    app.edicao.abrir("shortcuts_z9")
+    assert _aberto_e_visivel(app, "alternanciaDeRastreio") is False
+    assert app.achar("campoProcesso").property("visible") is False
+
+
 def test_clicar_na_nota_atual_remove(app):
     app.edicao.adicionar()
     app.edicao.definirNota(3)
@@ -420,6 +512,23 @@ def test_segunda_escolha_apaga_a_primeira(app, tmp_path):
     assert not segunda.exists()
 
 
+def test_capa_provisoria_descartada_abandona_as_copias(app, tmp_path, monkeypatch):
+    """Trocar a provisória e fechar sem aplicar: a geração das cópias dela sai da fila junto com o arquivo."""
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    abandonadas = []
+    monkeypatch.setattr(copias_animadas, "abandonar", abandonadas.append)
+    app.edicao.abrir("shortcuts_z2")
+    _escolher_capa(app, _imagem(tmp_path / "a.png", cor="red"))
+    primeira = _provisoria(app)
+    _escolher_capa(app, _imagem(tmp_path / "b.png", cor="blue"))
+    segunda = _provisoria(app)
+    assert abandonadas == [primeira]
+    app.edicao.cancelar()
+    assert abandonadas == [primeira, segunda]
+    assert not segunda.exists()
+
+
 def test_resultado_atrasado_de_um_dialogo_fechado_e_descartado(app, tmp_path, monkeypatch):
     temp = tmp_path / "temp"
     temp.mkdir()
@@ -482,6 +591,12 @@ def test_apagar_capa_volta_ao_placeholder(app, tmp_path):
     assert _esperar(lambda: app.achar("previaDaCapa").property("source").toString().endswith("library_placeholder.svg"))
     app.edicao.aplicar()
     assert shared.store.get("shortcuts_z2").get_cover_path() is None
+
+
+def test_capa_ilegivel_na_previa_mostra_a_capa_padrao(app):
+    (shared.covers_dir / "shortcuts_z2.tiff").write_bytes(b"nao e uma imagem")
+    app.edicao.abrir("shortcuts_z2")
+    assert _esperar(lambda: app.achar("previaDaCapa").property("source").toString().endswith("library_placeholder.svg"))
 
 
 def test_logo_titulo_e_restaurar(app):

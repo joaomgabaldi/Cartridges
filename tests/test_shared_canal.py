@@ -83,3 +83,15 @@ def test_variaveis_de_ambiente_tem_prioridade(carregar, monkeypatch, tmp_path):
 
 def test_nenhum_instalacao_json_no_codigo_fonte():
     assert not Path(shared_real.__file__).with_name("instalacao.json").exists()
+
+
+def test_nothing_is_written_to_the_browser_cache():
+    """O log da sessão não mora no INetCache, que a Limpeza de Disco esvazia: o log da execução que deu errado
+    sumiria entre a queda e alguém ir procurá-lo. Lido do código, e não do `shared` dos testes (o conftest troca as pastas)."""
+    codigo = [
+        linha.strip()
+        for linha in Path(shared_real.__file__).read_text(encoding="utf-8").splitlines()
+        if linha.strip() and not linha.strip().startswith("#")
+    ]
+    assert not any("get_user_cache_dir" in linha or "INetCache" in linha for linha in codigo)
+    assert 'log_dir = app_dir / "logs"' in codigo

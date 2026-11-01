@@ -53,14 +53,6 @@ def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
     shutil.rmtree(_DADOS_DA_SESSAO, ignore_errors=True)
 
 
-# Testes que ainda dependem do `gi` (direta ou indiretamente), em ordem alfabética.
-# Sobra só o `test_ui_logic.py` (Task 4 do plano 9); o `test_app_sem_gtk.py` prova que o app Qt não importa o GTK.
-TESTES_AINDA_GTK: list[str] = [
-    "test_ui_logic.py",  # fase final: importa `CartridgesWindow` (`window.py`, GTK morto)
-]
-
-collect_ignore = TESTES_AINDA_GTK
-
 # Como em `cartridges.in`: o texto da interface passa por `_()` já na definição das classes.
 builtins._ = lambda message: message  # type: ignore[attr-defined]
 builtins.ngettext = (  # type: ignore[attr-defined]
@@ -68,88 +60,12 @@ builtins.ngettext = (  # type: ignore[attr-defined]
 )
 
 
-class FakeToastQueue:
-    def __init__(self) -> None:
-        self.added: list = []
-        self.dismissed: list = []
-
-    def add(self, toast) -> None:
-        self.added.append(toast)
-
-    def dismiss(self, toast) -> None:
-        self.dismissed.append(toast)
-
-    def dismiss_after(self, toast, _seconds) -> None:
-        self.dismissed.append(toast)
-
-
-class FakeAction:
-    def __init__(self) -> None:
-        self.enabled = True
-
-    def set_enabled(self, enabled: bool) -> None:
-        self.enabled = enabled
-
-
-class FakeApplication:
-    """``Game.__init__`` takes a reference to the application."""
-
-    def __init__(self) -> None:
-        self.state = AppState.DEFAULT
-        self.activated: list = []
-        self._actions: dict = {}
-
-    def activate_action(self, name, target=None) -> None:
-        self.activated.append((name, target))
-
-    def lookup_action(self, name) -> FakeAction:
-        return self._actions.setdefault(name, FakeAction())
-
-
 class FakeWindow:
-    """Only what the store, the session and a Game reach for."""
+    """O `shared.win` dos testes: só o que a store e a adoção ainda tocam (as capas e os avisos por jogo)."""
 
     def __init__(self) -> None:
         self.game_covers: dict = {}
         self.toasts: dict = {}
-        self.toast_queue = FakeToastQueue()
-        self.session_blocker_shown: list = []
-        self.notes_toast_games: list = []
-        self.presented = 0
-        self.application = FakeApplication()
-
-    def get_application(self) -> FakeApplication:
-        return self.application
-
-    # DetailsDialog snapshots and restores the library's scroll position so
-    # editing a game does not move the grid underneath the user.
-    def store_library_scroll(self) -> None:
-        self.scroll_stored = True
-
-    def restore_library_scroll(self) -> None:
-        self.scroll_restored = True
-
-    def show_session_blocker(self, game: Any) -> None:
-        self.session_blocker_shown.append(game)
-
-    def hide_session_blocker(self) -> None:
-        self.session_blocker_shown.append(None)
-
-    def session_toast(self, game: Any, seconds: int) -> None:
-        """O aviso de fim de sessão é montado pela janela de verdade.
-
-        Delegado em vez de imitado: é ali que mora a regra de não interpretar o
-        título como markup, e um duplo aqui a testaria no lugar dela.
-        """
-        from cartridges.window import CartridgesWindow  # noqa: PLC0415
-
-        CartridgesWindow.session_toast(self, game, seconds)
-
-    def on_session_toast_notes(self, _toast: Any, game: Any) -> None:
-        self.notes_toast_games.append(game)
-
-    def present(self) -> None:
-        self.presented += 1
 
 
 from cartridges import shared  # noqa: E402
@@ -157,8 +73,6 @@ from cartridges.utils import window_geometry as _window_geometry  # noqa: E402
 
 _MONITORS_REAL = _window_geometry.monitors  # a enumeração de verdade (`monitors_de_verdade`)
 from cartridges.configuracoes import Configuracoes  # noqa: E402
-
-AppState = shared.AppState
 
 # `import_time` fixo, como antes.
 shared.import_time = 1_700_000_000
@@ -621,10 +535,7 @@ def sem_ludusavi(request, monkeypatch):
     trocam `backup_de_saves.disponivel`."""
     if request.module.__name__.startswith("test_saves_"):
         return
-    try:
-        from cartridges.saves import backup_de_saves  # noqa: PLC0415
-    except ImportError:  # ainda depende do gi
-        return
+    from cartridges.saves import backup_de_saves  # noqa: PLC0415
 
     monkeypatch.setattr(backup_de_saves, "disponivel", lambda: False)
 

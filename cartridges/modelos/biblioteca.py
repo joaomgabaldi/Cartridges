@@ -169,7 +169,10 @@ class ModeloDaBiblioteca(QAbstractListModel):
         # Referência fraca: o gancho é global e o modelo pode morrer antes (nos testes, por exemplo).
         fraca = weakref.ref(self)
         copias_animadas.soltar_do_jogo = lambda game_id: (m := fraca()) and m.soltar_copia(game_id)
-        capas = [(linha.jogo_id, caminho) for linha in self._linhas if (caminho := self._capa_animada_sem_copia(linha))]
+        # Na ordem da grade (a biblioteca e depois os zerados): as capas que a pessoa vê primeiro ficam prontas antes.
+        modo = shared.state_schema.get_string("sort-mode")
+        linhas = sorted(self._linhas, key=lambda linha: (linha.zerado, ordem.chave(linha, modo)))
+        capas = [(linha.jogo_id, caminho) for linha in linhas if (caminho := self._capa_animada_sem_copia(linha))]
         if capas:
             copias_animadas.preparar(capas)
 

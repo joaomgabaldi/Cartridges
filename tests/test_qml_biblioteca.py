@@ -135,6 +135,24 @@ def test_submenu_aninhado_usa_as_cores_do_tema(app_qt):
     app.fechar()
 
 
+def test_clear_appears_only_while_a_filter_is_active(app_qt):
+    """"Limpar" aparece com qualquer um dos três filtros (gênero, ano, status) e zera os três."""
+    app = _App(_tres())
+    limpar = app.achar("limpar")
+    assert limpar.property("exibido") is False
+    for campo, valor in (("genero", "RPG"), ("ano", "2020"), ("status", "beaten")):
+        setattr(app.filtros, campo, valor)
+        assert _esperar(lambda: limpar.property("exibido") is True), campo
+        app.filtros.limpar()
+        assert _esperar(lambda: limpar.property("exibido") is False), campo
+    app.filtros.genero, app.filtros.ano, app.filtros.status = "RPG", "2020", "beaten"
+    assert _esperar(lambda: limpar.property("exibido") is True)
+    QMetaObject.invokeMethod(limpar, "click", Qt.ConnectionType.DirectConnection)
+    assert _esperar(lambda: (app.filtros.genero, app.filtros.ano, app.filtros.status) == ("", "", ""))
+    assert limpar.property("exibido") is False
+    app.fechar()
+
+
 def test_escolher_filtro_move_a_marca_e_limpar_aparece_e_some(app_qt):
     app = _App(_tres())
     limpar = app.achar("limpar")
@@ -355,6 +373,67 @@ def test_capa_parada_nunca_anima(app_qt):
     app = _App(_jogos((1, "Alfa", {})))
     cartao, animada = _cartao_animado(app)
     assert cartao.property("capaAnimada") == "" and animada.property("playing") is False
+    app.fechar()
+
+
+def test_origem_ilegivel_mostra_a_capa_padrao(app_qt):
+    """Uma capa que não se lê (arquivo quebrado) mostra o placeholder, e não um cartão vazio."""
+    (shared.covers_dir / "imported_1.tiff").write_bytes(b"nao e uma imagem")
+    app = _App(_jogos((1, "Alfa", {})))
+    cartao, _animada = _cartao_animado(app)
+    parada = _achar(cartao, "capaParada")
+    assert cartao.property("capa").startswith("file:///")
+    assert _esperar(lambda: parada.property("source").toString().endswith("library_placeholder.svg"))
+    app.fechar()
+
+
+def test_deve_tocar(app_qt, monkeypatch):
+    """Opção, animações do Windows e sessão têm teste próprio; aqui, a janela minimizada para a capa e a devolve."""
+    monkeypatch.setattr(aplicativo_modulo, "_animacoes_do_sistema", lambda: True)
+    shared.schema.set_boolean("cover-autoplay", True)
+    app = _App(_jogo_com_capa_animada())
+    app.janela.show()
+    _cartao, animada = _cartao_animado(app)
+    assert _esperar(lambda: animada.property("playing") is True)
+    app.janela.showMinimized()
+    assert _esperar(lambda: animada.property("playing") is False and animada.property("source").toString() == "")
+    app.janela.showNormal()
+    assert _esperar(lambda: animada.property("playing") is True)
+    shared.schema.reset("cover-autoplay")
+    app.fechar()
+
+
+def test_na_vista(app_qt):
+    """Só o que cruza a janela da grade conta como à vista; metade dentro já conta."""
+    app = _App(_jogos(*[(n, f"Jogo {n:03}", {}) for n in range(1, 121)]))
+    grade = app.achar("grade")
+    _esperar()
+    delegado = next(i for i in grade.property("contentItem").childItems() if i.property("jogoId") == "imported_1")
+    cartao = delegado.childItems()[0]
+    assert cartao.property("naVista") is True
+    for deslocamento, esperado in ((delegado.height() / 2, True), (delegado.height() + 1, False)):
+        alvo = delegado.y() + deslocamento
+        grade.setProperty("contentY", alvo)
+        assert _esperar(lambda alvo=alvo: grade.property("contentYParado") == alvo)
+        assert cartao.property("naVista") is esperado, deslocamento
+    app.fechar()
+
+
+def test_filtrar_com_a_grade_cabendo_na_tela_reavalia_o_autoplay(app_qt, monkeypatch):
+    """Filtrar não rola nada: a capa filtrada para, e a que volta com a busca limpa toca de novo."""
+    monkeypatch.setattr(aplicativo_modulo, "_animacoes_do_sistema", lambda: True)
+    shared.schema.set_boolean("cover-autoplay", True)
+    app = _App(_jogo_com_capa_animada())
+    grade = app.achar("grade")
+    _cartao, animada = _cartao_animado(app)
+    assert _esperar(lambda: animada.property("playing") is True)
+    app.todos.busca = "halo"
+    assert _esperar(lambda: grade.property("count") == 0)
+    app.todos.busca = ""
+    assert _esperar(lambda: grade.property("count") == 1)
+    _cartao, animada = _cartao_animado(app)
+    assert _esperar(lambda: animada.property("playing") is True)
+    shared.schema.reset("cover-autoplay")
     app.fechar()
 
 

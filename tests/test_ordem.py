@@ -58,6 +58,43 @@ def test_ordem_e_total_e_estavel():
         assert _ordenar(linhas, modo) == _ordenar(list(reversed(linhas)), modo)
 
 
+def test_identical_records_compare_equal():
+    """O mesmo jogo não vem antes nem depois de si mesmo, em nenhum modo (o z-a também)."""
+    linha = _linha("1", "Halo", lancamento="2012", estrelas=3)
+    for modo in ordem.MODOS:
+        assert ordem.chave(linha, modo) == ordem.chave(linha, modo)
+
+
+def test_the_order_is_antisymmetric_and_transitive():
+    """As três propriedades de uma ordem, em todos os modos: sem elas a grade troca jogos de lugar."""
+    linhas = [
+        _linha("1", "Alien", lancamento="2010", estrelas=4),
+        _linha("2", "Halo", lancamento="2012"),
+        _linha("3", "Halo", estrelas=4),
+        _linha("4", "halo", lancamento="2012", tamanho=5),
+        _linha("5", "Zelda", estrelas=2, tamanho=5),
+    ]
+
+    for modo in ordem.MODOS:
+        def comparar(a, b):
+            ka, kb = ordem.chave(a, modo), ordem.chave(b, modo)
+            return -1 if ka < kb else (1 if kb < ka else 0)
+
+        for a in linhas:
+            assert comparar(a, a) == 0
+            for b in linhas:
+                assert comparar(a, b) == -comparar(b, a)
+                for c in linhas:
+                    if comparar(a, b) <= 0 and comparar(b, c) <= 0:
+                        assert comparar(a, c) <= 0
+
+
+def test_ties_on_rating_fall_back_to_the_title():
+    """Sem desempate a grade trocaria os dois de lugar a cada reordenação."""
+    linhas = [_linha("1", "Beta", estrelas=4), _linha("2", "Alfa", estrelas=4)]
+    assert _ordenar(linhas, "rating") == _ordenar(list(reversed(linhas)), "rating") == ["2", "1"]
+
+
 def test_sem_data_vai_para_o_fim_nos_dois_sentidos():
     linhas = [_linha("n", "A"), _linha("v", lancamento="2020"), _linha("o", lancamento="2010")]
     assert _ordenar(linhas, "released_newest") == ["v", "o", "n"]

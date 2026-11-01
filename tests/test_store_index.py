@@ -621,7 +621,7 @@ def test_cleanup_game_avisa_a_janela_pelo_sinal(store, make_game, seed, win):
 
     store.cleanup_game(game)
 
-    assert win.toast_queue.dismissed == [], "must not touch widgets inline"
+    assert win.toasts == {(game, "remove"): toast}, "must not touch widgets inline"
     assert excluidos == [A_ID]
 
 

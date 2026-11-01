@@ -326,6 +326,24 @@ PERSISTED_METADATA = {
 }
 
 
+# O que a ficha guarda e não é metadado do jogo: identidade, contas do app, o rastreio e o aviso dispensado.
+NOT_GAME_METADATA = {
+    "added", "blacklisted", "comando_a_conferir", "executable", "game_id", "install_size", "install_size_ts",
+    "last_played", "name", "playtime", "removed", "shortcut_mtime", "shortcut_path", "source", "track_process",
+    "update_dismissed_ts", "version",
+}  # fmt: skip
+
+
+def test_the_guard_covers_every_persisted_field():
+    """O `PERSISTED_METADATA` é escrito à mão: um campo novo na ficha obriga a escolher entre pô-lo na guarda
+    acima ou dizer aqui por que ele não pertence a ela."""
+    from cartridges.jogo import PERSISTED_ATTRS  # noqa: PLC0415
+
+    cobertos = set(PERSISTED_METADATA) | NOT_GAME_METADATA
+    assert set(PERSISTED_ATTRS) - cobertos == set(), "campo fora da guarda"
+    assert cobertos - set(PERSISTED_ATTRS) == set(), "a guarda lista um campo que ninguém grava"
+
+
 def test_aplicar_sem_mudar_nada_nao_custa_nada(edicao, store, sgdb):
     game = jogo(store, 52, executable="x.exe", **PERSISTED_METADATA)
     _aplicar(edicao, game)

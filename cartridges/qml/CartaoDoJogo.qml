@@ -95,8 +95,12 @@ Rectangle {
 
         Image {
             id: imagem
+            objectName: "capaParada"
+            // A URL que não se leu (arquivo quebrado): no lugar dela, o placeholder, como na `main`. Uma capa nova muda a URL (`?v=`).
+            property string ilegivel: ""
             anchors.fill: parent
-            source: cartao.capa !== "" ? cartao.capa : (cartao.modelo ? cartao.modelo.placeholder : "")
+            source: cartao.capa !== "" && cartao.capa !== ilegivel ? cartao.capa : (cartao.modelo ? cartao.modelo.placeholder : "")
+            onStatusChanged: if (status === Image.Error && source.toString() === cartao.capa) ilegivel = cartao.capa
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             // Na resolução real da tela, para a capa não ficar borrada em DPI alto.

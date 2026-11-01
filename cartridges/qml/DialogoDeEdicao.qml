@@ -254,8 +254,15 @@ Rectangle {
                         AnimatedImage {
                             id: previa
                             objectName: "previaDaCapa"
+                            // A URL que não se leu (arquivo quebrado): no lugar dela, o placeholder, como na grade.
+                            property string ilegivel: ""
                             anchors.fill: parent
-                            source: edicao.capa !== "" ? edicao.capa : paginaTodos.placeholder
+                            source: edicao.capa !== "" && edicao.capa !== ilegivel ? edicao.capa : paginaTodos.placeholder
+                            // Adiado: o `AnimatedImage` falha dentro da própria atribuição do `source`, que não se reavalia ali.
+                            onStatusChanged: if (status === Image.Error && source.toString() === edicao.capa) {
+                                const url = edicao.capa
+                                Qt.callLater(() => ilegivel = url)
+                            }
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
                             cache: false

@@ -413,6 +413,50 @@ def test_desfoque_que_falha_ainda_entrega(app_qt, store, monkeypatch):
     assert entregas[0][2] is None and detalhes.fundo == ""
 
 
+def test_a_new_cover_recomputes_the_blur_for_the_open_page(app_qt, store):
+    """Uma capa dada a um jogo com a página aberta refaz o fundo, que ficaria no de reserva para sempre."""
+    jogo = _jogo()
+    detalhes = _modelo(store, jogo)
+    detalhes.mostrar("a")
+    assert detalhes.fundo == ""
+    Image.new("RGB", (200, 300), "red").save(shared.covers_dir / "a.tiff")
+    jogo.update()
+    assert _rodar_ate(lambda: detalhes.fundo)
+    assert detalhes.fundo.startswith("image://desfoque/a?v=")
+
+
+def test_editing_the_cover_refreshes_the_open_details_page(app_qt, store):
+    """A capa trocada com a página aberta chega à página (a URL muda e o QML relê o arquivo)."""
+    import os  # noqa: PLC0415
+
+    capa = shared.covers_dir / "a.tiff"
+    Image.new("RGB", (200, 300), "red").save(capa)
+    jogo = _jogo()
+    detalhes = _modelo(store, jogo)
+    detalhes.mostrar("a")
+    antes = detalhes.capa
+    Image.new("RGB", (200, 300), "blue").save(capa)
+    os.utime(capa, ns=(1_000_000_000, 1_000_000_000))
+    jogo.update()
+    assert detalhes.capa.startswith("file:///") and detalhes.capa != antes
+
+
+def test_an_unchanged_apply_keeps_the_computed_blur(app_qt, store, monkeypatch):
+    """Aplicar sem trocar a capa não refaz o desfoque nem apaga o fundo (a página piscava preta)."""
+    Image.new("RGB", (200, 300), "green").save(shared.covers_dir / "a.tiff")
+    jogo = _jogo()
+    detalhes = _modelo(store, jogo)
+    detalhes.mostrar("a")
+    assert _rodar_ate(lambda: detalhes.fundo)
+    fundo = detalhes.fundo
+    calculos = []
+    monkeypatch.setattr(desfoque, "calcular", lambda caminho: calculos.append(caminho))
+    jogo.name = "Outro nome"
+    jogo.update()
+    _rodar_ate(lambda: False, 0.2)
+    assert calculos == [] and detalhes.fundo == fundo
+
+
 def test_uma_atualizacao_um_aviso(app_qt, store):
     detalhes = _modelo(store, _jogo())
     avisos = []

@@ -218,8 +218,11 @@ Item {
                     }
                     Image {
                         objectName: "capaDaPagina"
+                        // A URL que não se leu (arquivo quebrado): no lugar dela, o placeholder, como na grade. Uma capa nova muda a URL.
+                        property string ilegivel: ""
                         anchors.fill: parent
-                        source: detalhes.capa !== "" ? detalhes.capa : raiz.placeholder
+                        source: detalhes.capa !== "" && detalhes.capa !== ilegivel ? detalhes.capa : raiz.placeholder
+                        onStatusChanged: if (status === Image.Error && source.toString() === detalhes.capa) ilegivel = detalhes.capa
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
                         // Na resolução real da tela: a capa guardada tem mais pixels que a da grade.

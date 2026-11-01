@@ -22,7 +22,10 @@ from cartridges.xinput import (
     XINPUT_A,
     XINPUT_B,
     XINPUT_BACK,
+    XINPUT_DPAD_DOWN,
+    XINPUT_DPAD_LEFT,
     XINPUT_DPAD_RIGHT,
+    XINPUT_DPAD_UP,
     XINPUT_START,
     XINPUT_Y,
     intervalo_de_repeticao_us,
@@ -118,6 +121,37 @@ def test_direcional_segurado_ao_voltar_o_foco_nao_repete_sozinho():
     montagem.tique()  # base
     montagem.tique(REPEAT_DELAY_US * 3)
     assert montagem.comandos() == []
+
+
+def test_releasing_and_pressing_again_moves():
+    """Depois da trava da volta do foco, soltar e apertar de novo é entrada de verdade."""
+    montagem = Montagem()
+    montagem.leitor.botoes = XINPUT_DPAD_DOWN
+    montagem.tique()  # base: travado
+    montagem.leitor.botoes = 0
+    montagem.tique(100_000)
+    assert montagem.comandos() == []
+    montagem.leitor.botoes = XINPUT_DPAD_DOWN
+    montagem.tique(100_000)
+    assert montagem.comandos() == [("mover", 0, 1)]
+
+
+def test_changing_direction_without_releasing_moves():
+    """Trocar uma direção por outra sem soltar também é entrada de verdade."""
+    montagem = Montagem()
+    montagem.leitor.botoes = XINPUT_DPAD_DOWN
+    montagem.tique()  # base: travado
+    montagem.leitor.botoes = XINPUT_DPAD_UP
+    montagem.tique(100_000)
+    assert montagem.comandos() == [("mover", 0, -1)]
+
+
+def test_the_dpad_beats_the_stick(m):
+    """Os dois ao mesmo tempo: uma direção só, a do direcional."""
+    m.leitor.botoes = XINPUT_DPAD_LEFT
+    m.leitor.lx = 30_000
+    m.tique()
+    assert m.comandos() == [("mover", -1, 0)]
 
 
 def test_zona_morta_do_analogico(m):
