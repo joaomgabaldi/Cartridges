@@ -14,7 +14,7 @@ from PySide6.QtTest import QTest
 from cartridges.jogo import Jogo
 from cartridges.modelos import historico as modulo
 from cartridges.utils import session_log
-from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos
+from tests.apoio_qml_biblioteca import _achar, _App, _assentar, _esperar, _jogos
 from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _clicar
 from tests.apoio_qml_historico import _caixa, _expr, _todos
 
@@ -38,13 +38,13 @@ def _sessoes(quantas, jogo="imported_1", segundos=3600):
 def _abrir(app, indice=0):
     app.historico.abrir(app.jogos[indice].game_id)
     assert _esperar(lambda: app.achar("dialogoDoHistorico").property("visible") is True)
-    _esperar()
+    _assentar()
     return app.achar("dialogoDoHistorico")
 
 
 def _clique_no_botao(item):
     QMetaObject.invokeMethod(item, "click", Qt.ConnectionType.DirectConnection)
-    _esperar()
+    _assentar()
 
 
 # -- o tempo de jogo na página de detalhes -------------------------------------------------------

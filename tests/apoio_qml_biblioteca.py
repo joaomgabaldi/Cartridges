@@ -54,6 +54,14 @@ def _esperar(ate=None, limite=3.0):
     return ate is None
 
 
+def _assentar(fatias=3):
+    """Deixa o QML recém-criado processar o que enfileirou (`Qt.callLater`, foco, polimento): poucas fatias, não 0,3 s fixos."""
+    for _ in range(fatias):
+        laco = QEventLoop()
+        QTimer.singleShot(15, laco.quit)
+        laco.exec()
+
+
 def _achar(raiz, nome):
     """O objeto de `objectName` igual a `nome`, descendo pelos itens visuais e pelos filhos QObject."""
     pilha = [raiz]
@@ -174,7 +182,7 @@ class _App:
         self.janela = componente.createWithInitialProperties({"semAgente": True})
         assert self.janela is not None, componente.errorString()
         self.componente = componente
-        _esperar()
+        _assentar()
 
     def achar(self, nome):
         objeto = _achar(self.janela, nome)

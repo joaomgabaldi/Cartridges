@@ -884,8 +884,9 @@ def test_confirmacao_do_comando_na_frente_e_cancelar_volta(app_qt, monkeypatch):
     app.fechar()
 
 
-def _com_confirmacao_aberta(monkeypatch):
-    app = _aberto_com(monkeypatch)
+def _com_confirmacao_aberta(monkeypatch, animacoes=False):
+    # Sem animações do sistema: estes testes provam a camada de confirmação, não a animação (essa fica no teste acima).
+    app = _aberto_com(monkeypatch, animacoes=animacoes)
     jogo = _com_launch_falso(app, monkeypatch)
     jogo.executable, jogo.comando_a_conferir = "jogo.exe", True
     app.ponte.ligar(jogo)
@@ -928,7 +929,7 @@ def test_confirmacao_enter_logo_ao_abrir_nao_inicia(app_qt, monkeypatch, tecla):
 
 
 def test_confirmacao_a_duas_vezes_logo_ao_abrir_nao_inicia(app_qt, monkeypatch):
-    app, jogo, avisos = _com_confirmacao_aberta(monkeypatch)
+    app, jogo, avisos = _com_confirmacao_aberta(monkeypatch, animacoes=True)  # a guarda é por tempo: o ritmo da animação conta
     app.controle.ativar.emit()
     app.controle.ativar.emit()
     assert avisos.property("dialogoAberto") is False and jogo.launch.chamadas == 0
