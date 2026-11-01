@@ -19,14 +19,15 @@ Rectangle {
     property Item retorno: null
 
     function contem(pai, item) {
-        for (var p = item; p; p = p.parentItem)
+        for (var p = item; p; p = p.parent) // `parent`: o `parentItem` do C++ não existe no QML
             if (p === pai) return true
         return false
     }
     function dentro(item) { return contem(dialogo, item) }
     // Depois de uma exclusão ou de "Mostrar mais" a linha ou o botão que tinha o foco pode ter sumido.
     function garantirFoco() {
-        if (visible && !(Window.window && dentro(Window.window.activeFocusItem)))
+        var f = Window.window ? Window.window.activeFocusItem : null
+        if (visible && !(f && f.visible && dentro(f))) // o botão escondido ainda é filho do diálogo
             botaoFechar.forceActiveFocus(Qt.TabFocusReason)
     }
     // O item com o foco fica à vista, na tabela e na rolagem do diálogo.
@@ -69,7 +70,7 @@ Rectangle {
         function onActiveFocusItemChanged() {
             var foco = dialogo.Window.window.activeFocusItem
             if (!dialogo.visible || !foco || !dialogo.dentro(foco)) return
-            dialogo.trazer(rolagem, foco)
+            if (dialogo.contem(rolagem.contentItem, foco)) dialogo.trazer(rolagem, foco)
             if (dialogo.contem(tabela.contentItem, foco)) dialogo.trazer(tabela, foco)
         }
     }

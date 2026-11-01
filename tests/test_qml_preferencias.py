@@ -1249,3 +1249,44 @@ def test_ctrl_f_leva_ao_campo_de_busca_e_com_aviso_aberto_nao_tira_o_foco_do_avi
     _esperar()
     assert app.achar("campoDeBuscaDasPreferencias").property("activeFocus") is False
     assert _foco_dentro_de(app, "camadaDeAvisos")
+
+
+def _itens_com_nome(raiz, prefixo):
+    achados, pilha = [], [raiz]
+    while pilha:
+        atual = pilha.pop()
+        if atual.objectName().startswith(prefixo) and not atual.objectName().endswith("Chave"):
+            achados.append(atual)
+        pilha.extend(atual.childItems())
+    return achados
+
+
+def test_foco_num_campo_abaixo_da_dobra_rola_a_pagina(app):
+    """O `dentro()`/`contem()` subiam por `parentItem` (inexistente no QML): a rolagem não seguia o foco."""
+    _abrir(app, "session")
+    assert app.achar("rolagemDasPreferencias").property("contentY") == 0
+    interruptores = [i for i in _itens_com_nome(app.achar("rolagemDasPreferencias"), "interruptor-") if i.property("enabled")]
+    ultimo = max(interruptores, key=lambda i: i.mapToScene(QPointF(0, 0)).y())  # o mais baixo da página
+    assert ultimo.mapToScene(QPointF(0, 0)).y() > app.achar("rolagemDasPreferencias").mapToScene(QPointF(0, 0)).y() + app.achar("rolagemDasPreferencias").height()
+    ultimo.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    assert _esperar(lambda: app.achar("rolagemDasPreferencias").property("contentY") > 0)
+
+
+def test_foco_que_passa_pela_propria_linha_ainda_volta_ao_botao_ao_terminar(app, store, make_game, monkeypatch):
+    """O `_dentro()` subia por `parentItem` (inexistente no QML): qualquer foco num filho da linha contava como "saiu"."""
+    refresh, _ = _com_refresh_falso(monkeypatch)
+    store.add_game(make_game(game_id="a", has_hltb_times=False), {})
+    _abrir(app, "import")
+    app.achar("linhaDosMetadadosBotao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    refresh.running, refresh.done, refresh.total = True, 0, 1
+    refresh.progress.emit()
+    assert _esperar(lambda: _foco_dentro_de(app, "linhaDosMetadadosParar"))
+    assert _esperar(lambda: app.achar("linhaDosMetadados").property("_focoNaLinha") is True)
+    # O foco passa pela linha e volta ao botão de parar (ambos dentro dela): nada disso é "a pessoa foi embora".
+    app.achar("linhaDosMetadados").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("linhaDosMetadadosParar").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    _esperar()
+    assert app.achar("linhaDosMetadados").property("_focoNaLinha") is True
+    refresh.running = False
+    refresh.progress.emit()
+    assert _esperar(lambda: _foco_dentro_de(app, "linhaDosMetadadosBotao"))

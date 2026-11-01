@@ -34,7 +34,7 @@ Item {
     property bool _focoVeioDoBotao: false
     property bool _focoNaLinha: false  // o foco já foi entregue ao "parar" (ou à linha)
     function _dentro(item) {
-        for (var p = item; p; p = p.parentItem)
+        for (var p = item; p; p = p.parent) // `parent`: o `parentItem` do C++ não existe no QML
             if (p === linha) return true
         return false
     }

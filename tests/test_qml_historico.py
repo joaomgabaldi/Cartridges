@@ -396,3 +396,41 @@ def test_dica_do_grafico_acompanha_o_mouse(app_qt):
     grafico.setProperty("xDoMouse", grafico.width() - 12)
     assert grafico.property("dicaDoMouse") == app.historico.dica(1.0)
     app.fechar()
+
+
+def test_garantir_foco_deixa_o_foco_onde_esta_dentro_do_dialogo(app_qt):
+    """O `dentro()` subia por `parentItem` (inexistente no QML): o foco sempre ia ao botão de fechar."""
+    app = _app()
+    _sessoes(3)
+    dialogo = _abrir(app)
+    app.achar("botaoSemana").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    assert _esperar(lambda: app.janela.property("activeFocusItem") is app.achar("botaoSemana"))
+    QMetaObject.invokeMethod(dialogo, "garantirFoco", Qt.ConnectionType.DirectConnection)
+    assert app.janela.property("activeFocusItem") is app.achar("botaoSemana")
+    app.fechar()
+
+
+def test_foco_numa_sessao_abaixo_da_dobra_rola_a_tabela(app_qt):
+    app = _app()
+    _sessoes(40)
+    _abrir(app)
+    tabela = app.achar("tabelaDeSessoes")
+    assert _expr(tabela, "contentY") == 0
+    ultima = max(_todos(tabela, "botaoExcluirSessao"), key=lambda b: _caixa(b)[1])
+    ultima.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    assert _esperar(lambda: _expr(tabela, "contentY") > 0)
+    app.fechar()
+
+
+def test_foco_depois_do_ultimo_mostrar_mais_vai_ao_botao_de_fechar(app_qt):
+    """O botão escondido continua "dentro" do diálogo: o `garantirFoco` olha também a visibilidade."""
+    app = _app()
+    _sessoes(120)
+    _abrir(app)
+    botao = app.achar("botaoMostrarMais")
+    botao.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    assert _esperar(lambda: app.janela.property("activeFocusItem") is botao)
+    _clique_no_botao(botao)
+    assert _esperar(lambda: botao.property("visible") is False)
+    assert _esperar(lambda: app.janela.property("activeFocusItem") is app.achar("botaoFecharHistorico"))
+    app.fechar()

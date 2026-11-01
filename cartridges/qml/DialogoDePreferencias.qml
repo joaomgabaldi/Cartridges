@@ -47,7 +47,7 @@ Rectangle {
     signal retornoPerdido()
 
     function dentro(item) {
-        for (var p = item; p; p = p.parentItem)
+        for (var p = item; p; p = p.parent) // `parent`: o `parentItem` do C++ não existe no QML
             if (p === dialogo) return true
         return false
     }
@@ -102,7 +102,7 @@ Rectangle {
         }
     }
     function contem(pai, item) {
-        for (var p = item; p; p = p.parentItem)
+        for (var p = item; p; p = p.parent) // `parent`: o `parentItem` do C++ não existe no QML
             if (p === pai) return true
         return false
     }
@@ -263,6 +263,7 @@ Rectangle {
 
         Flickable {
             id: rolagem
+            objectName: "rolagemDasPreferencias"
             anchors { left: parent.left; right: parent.right; top: cabecalho.bottom; bottom: parent.bottom }
             contentWidth: width
             contentHeight: paginas.implicitHeight + 32
