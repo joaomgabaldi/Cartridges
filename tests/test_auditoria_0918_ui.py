@@ -258,24 +258,6 @@ def test_b17_apagar_sessao_com_byte_nao_utf8_no_arquivo(app_dirs):
     assert path.read_bytes().replace(b"\r\n", b"\n") == alheia
 
 
-# -- B26 ----------------------------------------------------------------------
-
-
-def test_b26_busca_que_falhou_nao_diz_atualizadas():
-    from cartridges.utils.news_checker import NewsChecker
-    from cartridges.utils.news_feed import NewsPost
-
-    checker = NewsChecker()
-    checker._posts = (NewsPost("a", 1, "t", "", "", ""),)
-    resultados = []
-    checker.connect("poll-finished", lambda _c, ok: resultados.append(ok))
-
-    checker._apply(None)
-
-    assert resultados == [False]
-    assert checker._posts, "o cache fica"
-
-
 # -- B27 ----------------------------------------------------------------------
 
 

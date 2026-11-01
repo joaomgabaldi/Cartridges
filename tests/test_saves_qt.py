@@ -122,11 +122,18 @@ def test_main_atualiza_o_cache_na_abertura(monkeypatch):
     monkeypatch.setattr(backup_de_saves, "atualizar_cache", lambda: ordem.append("cache"))
     monkeypatch.setattr(app_modulo, "_ligar_conquistas", lambda _aplicativo: ordem.append("conquistas"))
 
+    class Novidades:
+        def acompanhar_a_chave(self):
+            pass
+
+        def ligar(self):
+            ordem.append("novidades")
+
     app_modulo._comecar_varreduras(  # noqa: SLF001
-        object(), Varredura("atualizacoes"), Varredura("hltb"), Varredura("tamanho")
+        object(), Varredura("atualizacoes"), Novidades(), Varredura("hltb"), Varredura("tamanho")
     )
 
-    assert ordem == ["atualizacoes", "hltb", "tamanho", "cache", "conquistas"]
+    assert ordem == ["atualizacoes", "novidades", "hltb", "tamanho", "cache", "conquistas"]
 
 
 def test_pasta_do_ludusavi_e_a_do_backup_de_saves():

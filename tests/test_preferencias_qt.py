@@ -83,7 +83,7 @@ def test_chave_fora_da_lista_nao_e_gravada(p, caplog):
     with caplog.at_level("WARNING"):
         p.definir("assistente-concluido", True)
         p.definir("fita-estado-anterior", "x")
-        p.definir("show-news-button", True)
+        p.definir("news-check-interval", 3)
     assert {c: shared.schema.get_value(c) for c in shared.schema.list_keys()} == antes
     avisos = [r for r in caplog.records if r.name == "cartridges.modelos.preferencias"]
     assert [r.levelname for r in avisos] == ["WARNING"] * 3

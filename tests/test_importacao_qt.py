@@ -20,6 +20,7 @@ from PySide6.QtTest import QTest
 from cartridges import aplicativo as modulo
 from cartridges import shared
 from cartridges.utils.app_updater import AppUpdater
+from cartridges.utils.news_checker import NewsChecker
 from cartridges.aplicativo import Aplicativo
 from cartridges.importer.source import SourceScanError
 from cartridges.jogo import Jogo
@@ -30,6 +31,7 @@ from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.conquistas import ConquistasDoJogo
 from cartridges.modelos.historico import HistoricoDeSessoes
+from cartridges.modelos.novidades import Novidades
 from cartridges.modelos.saves import SavesDoJogo
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
@@ -380,8 +382,12 @@ def test_passada_agendada_espera_pela_importacao_do_aplicativo(app_qt):
 
 def _achar(raiz, nome):
     pilha = [raiz]
+    vistos = {}  # um item é filho QObject e filho visual: sem isto a árvore é percorrida 2^profundidade vezes
     while pilha:
         atual = pilha.pop()
+        if id(atual) in vistos:
+            continue
+        vistos[id(atual)] = atual  # guardar o objeto impede o reuso do id
         if atual.objectName() == nome:
             return atual
         pilha.extend(atual.children())
@@ -413,6 +419,7 @@ class _Janela:
         self.painel_das_tarefas = PainelDasTarefas()
         self.restauracao = ContinuacaoDaRestauracao(self.aplicativo)
         self.atualizador = AppUpdater()
+        self.novidades = Novidades(self.ponte.fila, NewsChecker())
         self.big_picture = BigPicture(self.modelo)
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(_DetalhesFalsos(), self.sessao)
@@ -436,6 +443,7 @@ class _Janela:
             ("painelDasTarefas", self.painel_das_tarefas),
             ("restauracao", self.restauracao),
             ("atualizador", self.atualizador),
+            ("novidades", self.novidades),
         ):
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

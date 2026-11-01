@@ -16,6 +16,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 from cartridges import aplicativo as aplicativo_modulo
 from cartridges import shared
 from cartridges.utils.app_updater import AppUpdater
+from cartridges.utils.news_checker import NewsChecker
 from cartridges.aplicativo import Aplicativo
 from cartridges.jogo import Jogo
 from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
@@ -25,6 +26,7 @@ from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.historico import HistoricoDeSessoes
+from cartridges.modelos.novidades import Novidades
 from cartridges.modelos.saves import SavesDoJogo
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
@@ -138,6 +140,7 @@ class _App:
         self.painel_das_tarefas = PainelDasTarefas()
         self.restauracao = ContinuacaoDaRestauracao(self.aplicativo)
         self.atualizador = AppUpdater()
+        self.novidades = Novidades(self.ponte.fila, NewsChecker())
         self.leitor = _LeitorFalso()
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(self.detalhes, self.sessao)
@@ -160,6 +163,7 @@ class _App:
             ("painelDasTarefas", self.painel_das_tarefas),
             ("restauracao", self.restauracao),
             ("atualizador", self.atualizador),
+            ("novidades", self.novidades),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

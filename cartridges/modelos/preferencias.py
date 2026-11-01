@@ -32,10 +32,11 @@ from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.utils import janela_por_cima, open_uri, session_fita, window_geometry
 from cartridges.utils.thread_principal import na_thread_principal
 
-# As 19 de `bind_switches` da main (sem `show-news-button`, D64), mais as que ela ligava por widget próprio.
+# As 19 de `bind_switches` da main, mais as que ela ligava por widget próprio. `show-news-button` voltou na D83 (a D64 o tirara).
 CHAVES_GRAVAVEIS = frozenset(
     {
         "minimize-after-launch",
+        "show-news-button",
         "playtime-tracking",
         "session-move-window",
         "session-wallpaper",
@@ -68,7 +69,7 @@ CHAVES_DE_TEXTO = frozenset({"sgdb-key", "wallhaven-key", "conquistas-chave-stea
 CHAVES_DA_TELA = (
     CHAVES_GRAVAVEIS
     | CHAVES_DE_TEXTO
-    | {"show-news-button", "shortcuts-location", "session-monitor", "conquistas-aviso-posicao", "conquistas-pulso-estilo"}
+    | {"shortcuts-location", "session-monitor", "conquistas-aviso-posicao", "conquistas-pulso-estilo"}
 )
 # Chaves inteiras: (mínimo, máximo), como no gschema. As demais de CHAVES_GRAVAVEIS são booleanas.
 _INTEIROS = {"process-tracking-grace": (0, 120), "conquistas-aviso-som-volume": (10, 100)}

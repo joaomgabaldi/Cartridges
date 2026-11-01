@@ -65,7 +65,6 @@ TESTES_AINDA_GTK: list[str] = [
     "test_auditoria_0923_resto.py",  # planos 8b e fase final: steam_picker, zerados_picker e game_logo (GTK)
     "test_auditoria_0923_zerados.py",  # plano 8b: Jogos Zerados manuais
     "test_auditoria_1023_seguranca.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
-    "test_botao_novidades.py",  # plano 8b: botão Novidades
     "test_caixa_redimensionavel.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_estilo_css.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar
     "test_hwnd_ordem_import.py",  # fase final: depende de módulo ou widget GTK (gi); reescrever ou apagar

@@ -16,6 +16,8 @@ ToolButton {
     property bool menuAberto: false
     // Apagado e fora do foco, mas habilitado: um botão desabilitado não recebe hover e a dica (o porquê) não abriria.
     property bool indisponivel: false
+    // O ponto de "há novidade" no canto do ícone; nunca recebe o clique (o botão inteiro é o alvo).
+    property bool selo: false
     // O WindowAgent da Principal, depois do setup (nulo nos testes).
     readonly property QtObject agente: Window.window && Window.window.agentePronto ? Window.window.agente : null
 
@@ -34,6 +36,17 @@ ToolButton {
     onAgenteChanged: registrar()
 
     contentItem: Item {
+        Rectangle {
+            objectName: "seloDoBotao"
+            visible: botao.selo
+            z: 1
+            width: 8
+            height: 8
+            radius: 4
+            color: Tema.destaque
+            x: parent.width / 2 + 3
+            y: parent.height / 2 - 11
+        }
         Text {
             visible: !botao.trofeu
             anchors.centerIn: parent

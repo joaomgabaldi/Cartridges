@@ -389,12 +389,11 @@ def test_descricao_da_autenticacao_e_o_link_abre_o_navegador_falso(app, monkeypa
     assert urls == ["https://www.steamgriddb.com/profile/preferences/api"]
 
 
-def test_grupos_do_plano_8b_nao_aparecem(app):
-    """O backup e a Zona de perigo entraram no 8a (Task 7); "Atualizações" entrou na Task 1 do 8b; falta só "Barra superior"."""
+def test_grupos_do_plano_8b_aparecem(app):
+    """O backup e a Zona de perigo entraram no 8a (Task 7); "Atualizações" na Task 1 do 8b e "Barra superior" na Task 2."""
     _abrir(app)
     todos = "\n".join(_textos(app.achar("dialogoDePreferencias")))
-    assert "Barra superior" not in todos
-    for texto in ("Atualizações", "Backup da sua biblioteca", "Zona de perigo", "Redefinir Cartridges"):
+    for texto in ("Barra superior", "Atualizações", "Backup da sua biblioteca", "Zona de perigo", "Redefinir Cartridges"):
         assert texto in todos
 
 

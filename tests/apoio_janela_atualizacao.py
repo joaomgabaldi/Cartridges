@@ -25,6 +25,7 @@ from cartridges.modelos.conquistas import ConquistasDoJogo
 from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.historico import HistoricoDeSessoes
+from cartridges.modelos.novidades import Novidades
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
 from cartridges.modelos.saves import SavesDoJogo
@@ -32,6 +33,7 @@ from cartridges.modelos.sessao import ModeloDaSessao
 from cartridges.modelos.tarefas import PainelDasTarefas
 from cartridges.ponte import Ponte
 from cartridges.utils.app_updater import AppUpdater
+from cartridges.utils.news_checker import NewsChecker
 
 QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml"
 QQuickStyle.setStyle("Basic")
@@ -51,8 +53,12 @@ def esperar(ate=None, limite=5.0):
 
 def achar(raiz, nome):
     pilha = [raiz]
+    vistos = {}  # um item é filho QObject e filho visual: sem isto a árvore é percorrida 2^profundidade vezes
     while pilha:
         atual = pilha.pop()
+        if id(atual) in vistos:
+            continue
+        vistos[id(atual)] = atual  # guardar o objeto impede o reuso do id
         if atual.objectName() == nome:
             return atual
         pilha.extend(atual.children())
@@ -74,7 +80,7 @@ class _DetalhesFalsos(QObject):
 
 
 class Janela:
-    def __init__(self, com_atualizador=True):
+    def __init__(self, com_atualizador=True, com_novidades=True):
         self.modelo = ModeloDaBiblioteca()
         self.filtros = FiltrosDaBiblioteca(self.modelo)
         self.ponte = Ponte()
@@ -89,6 +95,8 @@ class Janela:
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(_DetalhesFalsos(), self.sessao)
         self.atualizador = AppUpdater() if com_atualizador else None
+        self.checker = NewsChecker()
+        self.novidades = Novidades(self.ponte.fila, self.checker)
         self.motor = QQmlEngine()
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         contexto = self.motor.rootContext()
@@ -109,6 +117,7 @@ class Janela:
             ("painelDasTarefas", self.painel_das_tarefas),
             ("restauracao", self.restauracao),
             *([("atualizador", self.atualizador)] if self.atualizador is not None else []),
+            *([("novidades", self.novidades)] if com_novidades else []),
         ):
             contexto.setContextProperty(nome, valor)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))

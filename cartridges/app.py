@@ -43,6 +43,7 @@ from cartridges.modelos.controle import ControleDaGrade
 from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.historico import HistoricoDeSessoes
+from cartridges.modelos.novidades import Novidades
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
 from cartridges.modelos.restaurando import Restaurando, entregar_so_ao_mudar
@@ -70,6 +71,7 @@ from cartridges.utils import (
 from cartridges.utils.app_updater import AppUpdater
 from cartridges.utils.hltb_backfill import HLTBBackfill
 from cartridges.utils.install_size import InstallSizeSweep
+from cartridges.utils.news_checker import NewsChecker
 from cartridges.utils.thread_principal import na_thread_principal
 from cartridges.utils.updates_checker import UpdatesChecker
 
@@ -152,9 +154,11 @@ def _ligar_conquistas(aplicativo: Aplicativo) -> VarreduraConquistas:
     return aplicativo.varredura_conquistas
 
 
-def _comecar_varreduras(aplicativo: Aplicativo, verificador, varredura_hltb, varredura_tamanho) -> None:  # noqa: ANN001
-    """Na ordem da `main`: atualizações, HowLongToBeat, tamanho em disco, o cache dos saves e as conquistas."""
+def _comecar_varreduras(aplicativo: Aplicativo, verificador, novidades, varredura_hltb, varredura_tamanho) -> None:  # noqa: ANN001
+    """Na ordem da `main`: atualizações, novidades, HowLongToBeat, tamanho em disco, o cache dos saves e as conquistas."""
     verificador.start()
+    novidades.acompanhar_a_chave()
+    novidades.ligar()  # só busca com `show-news-button` ligado
     varredura_hltb.start()
     varredura_tamanho.start()
     backup_de_saves.atualizar_cache()
@@ -174,6 +178,7 @@ class _Abertura:
     big_picture: Any = None
     sessao: Any = None
     verificador: Any = None
+    novidades: Any = None
     varredura_hltb: Any = None
     varredura_tamanho: Any = None
     edicao: Any = None
@@ -205,6 +210,7 @@ def _fechar(abertura: _Abertura) -> None:
         _de(a.sessao, "devolver"),  # a parede e as fitas, com as janelas já fora da tela (grava antes se o `saindo` não veio)
         login.cancelar_pendente,  # um login da conta Microsoft esperando o navegador não sobrevive ao app
         ea_conta.gravar_pendente,  # o `remid` novo da EA que não coube no disco: última tentativa
+        _de(a.novidades, "parar"),  # antes do `stop` do verificador: nenhum resultado do feed chega a uma tela que fecha
         _de(a.verificador, "stop"),
         _de(a.varredura_hltb, "stop"),
         _de(a.varredura_tamanho, "stop"),
@@ -297,6 +303,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     abertura.continuacao = continuacao = ContinuacaoDaRestauracao(aplicativo)
     abertura.painel = painel_das_tarefas = PainelDasTarefas()
     abertura.atualizador = atualizador = AppUpdater()
+    abertura.novidades = novidades = Novidades(avisos, NewsChecker())
     abertura.big_picture = big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     abertura.sessao = sessao = ModeloDaSessao(avisos, controle=controle, big_picture=big_picture)
     shared.sessao = sessao
@@ -323,7 +330,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
         ("edicao", edicao), ("bigPicture", big_picture), ("sessao", sessao), ("historico", historico),
         ("saves", saves), ("conquistasDoJogo", conquistas), ("preferencias", preferencias),
         ("painelDasTarefas", painel_das_tarefas),
-        ("restauracao", continuacao), ("atualizador", atualizador),
+        ("restauracao", continuacao), ("atualizador", atualizador), ("novidades", novidades),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     # O Qt não é dono do que vai ao contexto: tudo precisa de uma referência Python até o fim do `main()`.
@@ -345,7 +352,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     app.saindo.connect(painel_das_tarefas.encerrando)
     shared.aplicativo = aplicativo
     aplicativo.verificador_de_atualizacoes = verificador  # a tela de preferências chama `check_async()` ao ligar o aviso
-    _comecar_varreduras(aplicativo, verificador, varredura_hltb, varredura_tamanho)
+    _comecar_varreduras(aplicativo, verificador, novidades, varredura_hltb, varredura_tamanho)
     # Depois da janela e antes dos avisos da abertura. A pergunta da versão nova não entra na fila da D72: se um diálogo
     # dela abrir com a pergunta na tela, a pergunta espera escondida (`DialogoDaAtualizacao.outroAberto`).
     atualizador.start()

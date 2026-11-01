@@ -18,7 +18,16 @@ Column {
         onAlternado: preferencias.definir(chave, checked)
     }
 
-    // shortcut: falta o grupo "Barra superior" (D64: o botão Novidades não aparece, sem `show-news-button`); na `main` é o primeiro grupo da página, antes de "Biblioteca".
+    GrupoDePreferencias {
+        objectName: "grupoBarraSuperior"
+        titulo: "Barra superior"
+
+        Interruptor {
+            chave: "show-news-button"
+            titulo: "Mostrar o botão Novidades"
+        }
+    }
+
     GrupoDePreferencias {
         objectName: "grupoBiblioteca"
         titulo: "Biblioteca"

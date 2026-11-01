@@ -10,9 +10,12 @@ Principal {
     readonly property QtObject ligacao: ponte
     // O AppUpdater (D82), pelo mesmo motivo; sem ele no contexto (os testes dos outros diálogos) a camada fica sem o diálogo da versão.
     readonly property QtObject servicoDeAtualizacao: typeof atualizador === "undefined" ? null : atualizador
-    // "todos", "zerados" ou "jogo" (a página de detalhes, por cima de uma das duas).
+    // As Novidades (D83), pelo mesmo motivo; sem elas no contexto (os arneses que não as registram) o botão fica oculto.
+    readonly property QtObject servicoDeNovidades: typeof novidades === "undefined" ? null : novidades
+    // "todos", "zerados", "novidades" ou "jogo" (a página de detalhes, por cima de uma das duas).
     readonly property string paginaAtual: pilha.depth === 0 ? "todos"
-        : (pilha.currentItem && pilha.currentItem.objectName === "paginaDoJogo" ? "jogo" : "zerados")
+        : (pilha.currentItem && pilha.currentItem.objectName === "paginaDoJogo" ? "jogo"
+        : (pilha.currentItem && pilha.currentItem.objectName === "paginaDasNovidades" ? "novidades" : "zerados"))
 
     // Abre a página de detalhes do jogo; o foco inicial é dela (StackView.onActivated).
     function abrirDetalhes(jogoId) { abrirDetalhesDe(jogoId, false) }
@@ -32,7 +35,8 @@ Principal {
 
     telaCheia: bigPicture.visivel || sessao.emAndamento
 
-    tituloDaBarra: paginaAtual === "todos" ? "Todos os jogos" : paginaAtual === "zerados" ? "Jogos Zerados" : detalhes.nome
+    tituloDaBarra: paginaAtual === "todos" ? "Todos os jogos" : paginaAtual === "zerados" ? "Jogos Zerados"
+        : paginaAtual === "novidades" ? "Novidades" : detalhes.nome
 
     // Depois do setup do QWindowKit (Principal.qml), que roda no onCompleted da base.
     Component.onCompleted: visible = true
@@ -67,7 +71,7 @@ Principal {
         }
     ]
 
-    // Da direita para a esquerda: menu principal, Jogos Zerados e busca.
+    // Da direita para a esquerda: menu principal, "Atualizar" (só nas Novidades), Jogos Zerados, Novidades, Big Picture e busca.
     fim: [
         BotaoDaBarra {
             id: botaoMenu
@@ -85,6 +89,15 @@ Principal {
             }
         },
         BotaoDaBarra {
+            id: botaoAtualizar
+            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta
+            objectName: "botaoAtualizarNovidades"
+            visible: janela.paginaAtual === "novidades"
+            glifo: ""
+            dica: "Atualizar"
+            onClicked: janela.servicoDeNovidades.atualizar()
+        },
+        BotaoDaBarra {
             id: botaoZerados
             enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta
             objectName: "botaoZerados"
@@ -92,6 +105,16 @@ Principal {
             trofeu: true
             dica: "Jogos Zerados"
             onClicked: pilha.push(zerados)
+        },
+        BotaoDaBarra {
+            id: botaoNovidades
+            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta
+            objectName: "botaoNovidades"
+            visible: janela.paginaAtual === "todos" && janela.servicoDeNovidades !== null && janela.servicoDeNovidades.visivel
+            glifo: ""
+            selo: janela.servicoDeNovidades !== null && janela.servicoDeNovidades.naoVistas
+            dica: "Novidades"
+            onClicked: { janela.servicoDeNovidades.abrir(); pilha.push(paginaDasNovidades) }
         },
         BotaoDaBarra {
             id: botaoBigPicture
@@ -153,6 +176,14 @@ Principal {
             StackView.onActivated: focarGrade()
             // O fundo cobre "Todos os jogos" durante a transição.
             Rectangle { anchors.fill: parent; color: Tema.fundo; z: -1 }
+        }
+    }
+
+    Component {
+        id: paginaDasNovidades
+        PaginaDasNovidades {
+            objectName: "paginaDasNovidades"
+            onVoltar: janela.voltar()
         }
     }
 
@@ -406,7 +437,7 @@ Principal {
     property point posicaoDoPonteiro
 
     // Os botões da barra que o controle alcança com ↑ na primeira linha.
-    readonly property var botoesDaBarra: [botaoAdicionar, botaoVoltar, botaoZerados, botaoBigPicture, botaoBusca, botaoMenu]
+    readonly property var botoesDaBarra: [botaoAdicionar, botaoVoltar, botaoZerados, botaoNovidades, botaoAtualizar, botaoBigPicture, botaoBusca, botaoMenu]
     function botaoFocado() {
         for (var i = 0; i < botoesDaBarra.length; ++i)
             if (botoesDaBarra[i].activeFocus) return botoesDaBarra[i]
