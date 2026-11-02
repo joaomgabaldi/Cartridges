@@ -131,7 +131,8 @@ SeletorBase {
                     anchors.right: parent.right
                 }
 
-                delegate: Item {
+                // `FocusScope`: o foco que `moverFoco` dá à célula desce ao botão, com o anel e o Enter.
+                delegate: FocusScope {
                     id: celula
                     required property int index
                     required property string miniatura
@@ -146,6 +147,7 @@ SeletorBase {
                         height: seletorDePapel.seletor.alturaDaCelula
                         padding: 0
                         hoverEnabled: false  // `.no-hover`
+                        focus: true
                         focusPolicy: Qt.StrongFocus
                         Accessible.name: "Papel de parede " + (celula.index + 1)
                         Accessible.role: Accessible.Button

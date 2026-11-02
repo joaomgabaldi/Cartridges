@@ -1674,6 +1674,95 @@ def test_a_barra_do_seletor_fica_na_borda_da_pagina_e_arrasta_a_grade(app, sgdb,
     assert grade.property("contentY") > 100
 
 
+def _seletor_pelo_teclado(app, wallhaven, nome, botao, itens):
+    """Abre o seletor com `itens` miniaturas, em 1200, e chega ao campo de busca só com Tab, sem forçar foco."""
+    from tests.apoio_seletores import SgdbFalso, lista_de_grades, lista_de_logos, lista_do_wallhaven  # noqa: PLC0415
+
+    app.edicao.seletorDeCapa.sgdb = app.edicao.seletorDeLogo.sgdb = SgdbFalso(grids=lista_de_grades(itens), logos=lista_de_logos(itens))
+    wallhaven.achados = lista_do_wallhaven(itens)
+    app.janela.resize(1200, 795)
+    _esperar(lambda: False, 0.3)
+    app.edicao.abrir("shortcuts_z1")
+    _clique(app, botao)
+    grade = app.achar(nome + "Grade")
+    assert _esperar(lambda: _visivel(app, nome) and grade.property("count") == itens, 6)
+    _esperar(lambda: False, 0.4)
+    campo = app.achar(nome + "Campo")
+    for _ in range(12):
+        if campo.property("activeFocus"):
+            break
+        QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+    assert campo.property("activeFocus") is True
+    return grade
+
+
+def _assert_foco_visivel(app, nome, indice):
+    foco = app.janela.activeFocusItem()
+    assert foco.objectName() == f"{nome}Miniatura{indice}", foco
+    assert foco.property("visualFocus") is True, indice  # o anel de foco acende
+
+
+SELETORES_DE_GRADE = [
+    ("seletorDeCapa", "botaoEscolherCapaSgdb", 9, [4, 5, 6, 6, 5]),  # 4 colunas: 6 + 4 não existe, o foco fica
+    ("seletorDeLogo", "botaoEscolherLogoSgdb", 6, [2, 3, 4, 4, 3]),  # 2 colunas
+    ("seletorDePapel", "botaoEscolherPapelWallhaven", 9, [4, 5, 6, 6, 5]),
+]
+
+
+@pytest.mark.parametrize("pelo_controle", [False, True], ids=["teclado", "controle"])
+@pytest.mark.parametrize(("nome", "botao", "itens", "esperado"), SELETORES_DE_GRADE, ids=[s[0] for s in SELETORES_DE_GRADE])
+def test_as_setas_movem_o_foco_visivel_entre_as_miniaturas_e_enter_escolhe(app, sgdb, wallhaven, nome, botao, itens, esperado, pelo_controle):
+    """Como a `FlowBox` da `main`: índice coerente em sequência, anel aceso, e Enter ativa a célula. O controle entra pelo `teclar`."""
+
+    def tecla(codigo):
+        if pelo_controle:
+            app.controle.teclar(int(codigo))
+        else:
+            QTest.keyClick(app.janela, codigo)
+
+    _seletor_pelo_teclado(app, wallhaven, nome, botao, itens)
+    tecla(Qt.Key.Key_Down)
+    _assert_foco_visivel(app, nome, 0)
+    passos = [Qt.Key.Key_Down, Qt.Key.Key_Right, Qt.Key.Key_Right, Qt.Key.Key_Down, Qt.Key.Key_Left]
+    for codigo, indice in zip(passos, esperado, strict=True):
+        tecla(codigo)
+        _assert_foco_visivel(app, nome, indice)
+    tecla(Qt.Key.Key_Return)
+    if nome == "seletorDePapel":
+        assert _esperar(lambda: _visivel(app, "seletorDePapelUsar"), 6)
+    else:
+        assert _esperar(lambda: not _visivel(app, nome), 10)
+
+
+@pytest.mark.parametrize(("nome", "botao", "itens", "_esperado"), SELETORES_DE_GRADE, ids=[s[0] for s in SELETORES_DE_GRADE])
+def test_seta_no_campo_seguida_de_enter_escolhe_a_primeira_miniatura(app, sgdb, wallhaven, nome, botao, itens, _esperado):
+    _seletor_pelo_teclado(app, wallhaven, nome, botao, itens)
+    QTest.keyClick(app.janela, Qt.Key.Key_Down)
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    if nome == "seletorDePapel":
+        assert _esperar(lambda: _visivel(app, "seletorDePapelUsar"), 6)
+    else:
+        assert _esperar(lambda: not _visivel(app, nome), 10)
+
+
+@pytest.mark.parametrize(("nome", "botao", "itens"), [("seletorDeCapa", "botaoEscolherCapaSgdb", 30), ("seletorDePapel", "botaoEscolherPapelWallhaven", 24)])
+def test_a_seta_desce_a_grade_longa_e_volta_ao_campo(app, sgdb, wallhaven, nome, botao, itens):
+    """Fora da tela: a seta rola até a célula e o foco visível continua nela; acima da primeira linha, volta ao campo."""
+    grade = _seletor_pelo_teclado(app, wallhaven, nome, botao, itens)
+    colunas = app.achar(nome).property("colunas")
+    QTest.keyClick(app.janela, Qt.Key.Key_Down)
+    linhas = (itens - 1) // colunas
+    for linha in range(1, linhas + 1):
+        QTest.keyClick(app.janela, Qt.Key.Key_Down)
+        _assert_foco_visivel(app, nome, linha * colunas)
+    assert grade.property("contentY") > 100
+    for linha in range(linhas - 1, -1, -1):
+        QTest.keyClick(app.janela, Qt.Key.Key_Up)
+        _assert_foco_visivel(app, nome, linha * colunas)
+    QTest.keyClick(app.janela, Qt.Key.Key_Up)
+    assert app.achar(nome + "Campo").property("activeFocus") is True
+
+
 def test_clicar_de_novo_na_linha_da_iluminacao_fecha_o_balao(app, previas):
     """M8: o aperto na linha fecha o balão e a soltura não o reabre, qualquer que seja a duração do aperto (pela ordem dos eventos)."""
     _com_fita()

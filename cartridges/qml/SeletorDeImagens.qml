@@ -135,7 +135,8 @@ SeletorBase {
                     anchors.right: parent.right
                 }
 
-                delegate: Item {
+                // `FocusScope`: o foco que `moverFoco` dá à célula desce ao botão, com o anel e o Enter.
+                delegate: FocusScope {
                     id: celula
                     required property int index
                     required property string miniatura
@@ -152,6 +153,7 @@ SeletorBase {
                         height: seletorDeImagens.alturaDaCelula
                         padding: 0
                         hoverEnabled: false  // `.no-hover`: a célula não reage ao mouse
+                        focus: true
                         focusPolicy: Qt.StrongFocus
                         Accessible.name: "Miniatura " + (celula.index + 1)
                         Accessible.role: Accessible.Button
