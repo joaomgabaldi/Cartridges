@@ -1565,3 +1565,31 @@ def test_a_grade_do_seletor_ocupa_a_largura_toda(app, sgdb):
     _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
     grade = app.achar("seletorDeCapaGrade")
     assert grade.property("width") == grade.parentItem().property("width") and grade.property("leftMargin") > 0
+
+
+def test_clicar_de_novo_na_linha_da_iluminacao_fecha_o_balao(app, previas):
+    """M8: o aperto na linha fecha o balão e o clique dela não o reabre."""
+    _com_fita()
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
+    linha = app.achar("linhaDaFita")
+    ponto = linha.mapToScene(QPointF(30, linha.height() / 2)).toPoint()
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
+    assert _esperar(lambda: app.achar("balaoDaCorDaFita").property("opened") is True)
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
+    _esperar(lambda: False, 0.4)
+    assert app.achar("balaoDaCorDaFita").property("opened") is False
+
+
+def test_a_grade_do_seletor_fica_centrada_em_janela_estreita(app, sgdb):
+    """Q1: com a margem mudando, o `contentX` acompanha (-leftMargin) e as colunas reais são as de `colunas`."""
+    app.janela.resize(690, 795)
+    _esperar(lambda: False, 0.3)
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
+    _esperar(lambda: False, 0.3)
+    grade = app.achar("seletorDeCapaGrade")
+    assert abs(grade.property("contentX") + grade.property("leftMargin")) < 1
+    colunas = app.achar("seletorDeCapa").property("colunas")
+    disponivel = grade.property("width") - grade.property("leftMargin") - grade.property("rightMargin")
+    assert int(disponivel // grade.property("cellWidth")) == colunas

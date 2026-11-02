@@ -578,15 +578,22 @@ def test_o_titulo_do_menu_de_buscas_e_um_rotulo_de_secao_e_o_menu_e_um_popover_c
 
 
 def test_jogar_tem_hover_visivel_nos_dois_temas(app_qt):
-    """I4/DE-03: o véu do hover é `currentColor` a 10% (o texto do botão), não um branco fixo."""
+    """I4/DE-03/Q2: o véu do hover é `currentColor` a 10% (o texto do botão), nos dois temas, não um branco fixo.
+
+    O offscreen não aceita trocar o esquema de cores (`setColorScheme` fica em Unknown), então o escuro é provado pelo
+    que o véu usa: a `corDoTexto`, que no escuro é preto a 80% (`test_jogar_usa_o_texto_e_o_fundo_invertidos_por_tema`),
+    e nunca o branco fixo do código antigo; no tema que o ambiente der, a cor lida tem de ser a do texto."""
+    from pathlib import Path  # noqa: PLC0415
+
+    fonte = (Path(__file__).resolve().parent.parent / "cartridges" / "qml" / "PaginaDoJogo.qml").read_text(encoding="utf-8")
+    veu = next(linha for linha in fonte.splitlines() if "botaoJogar.down ? Qt.rgba(0, 0, 6" in linha)
+    assert "Qt.alpha(botaoJogar.corDoTexto" in veu and "Qt.rgba(1, 1, 1, 0.1)" not in veu
     app = _App(_tres())
     pagina = _abrir_pelo_cartao(app)
     jogar = _achar(pagina, "botaoJogarDaPagina")
-    # O offscreen não produz hover: lê a cor que o véu teria (a do estado "passando").
     contexto = QQmlEngine.contextForObject(jogar)
-    veu = QQmlExpression(contexto, jogar, "background.children[0].color").evaluate()[0]
+    veu_pronto = QQmlExpression(contexto, jogar, "background.children[0].color").evaluate()[0]
     texto = QQmlExpression(contexto, jogar, "corDoTexto").evaluate()[0]
-    assert (veu.red(), veu.green(), veu.blue()) == (texto.red(), texto.green(), texto.blue())
-    assert 0 < veu.alpha() <= 26
+    assert (veu_pronto.red(), veu_pronto.green(), veu_pronto.blue()) == (texto.red(), texto.green(), texto.blue())
+    assert 0 < veu_pronto.alpha() <= 26
     app.fechar()
-

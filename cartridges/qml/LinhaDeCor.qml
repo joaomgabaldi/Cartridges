@@ -25,7 +25,7 @@ LinhaDoGrupo {
         id: areaDaLinha
         anchors.fill: parent
         hoverEnabled: true
-        onClicked: amostra.click()
+        onClicked: amostra.alternar()
     }
 
     Row {

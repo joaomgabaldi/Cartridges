@@ -94,7 +94,9 @@ MolduraDoDialogo {
             id: areaDaLinha
             anchors.fill: parent
             hoverEnabled: true
-            onClicked: if (linhaDeArte.ativavel && linhaDeArte.ativavel.enabled) linhaDeArte.ativavel.click()
+            onClicked: if (linhaDeArte.ativavel && linhaDeArte.ativavel.enabled) {
+                if (linhaDeArte.ativavel.alternar) linhaDeArte.ativavel.alternar(); else linhaDeArte.ativavel.click()
+            }
         }
         Row {
             id: lado

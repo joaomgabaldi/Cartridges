@@ -26,7 +26,7 @@ SeletorBase {
     comBusca: !seletor.soArquivo
     rolado: grade.contentY > -grade.topMargin + 1
     // O primeiro foco do diálogo: "Não trocar" na grade do wallhaven, o campo se não houver o botão; nada forçado depois.
-    focoInicial: seletor.soArquivo ? null : botaoNaoTrocar.enabled ? botaoNaoTrocar : campo
+    focoInicial: seletor.soArquivo ? null : botaoNaoTrocar
     onFecharPedido: seletor.fechar()
     onBuscaEditada: texto => seletor.busca = texto
     onBuscaConfirmada: seletor.buscarAgora()
@@ -106,6 +106,9 @@ SeletorBase {
                 // Ocupa a largura toda (a barra de rolagem fica na borda); as colunas ficam centradas pela margem.
                 anchors.fill: parent
                 leftMargin: Math.max(0, (width - seletorDePapel.colunas * cellWidth) / 2)
+                rightMargin: leftMargin
+                // O GridView não reposiciona sozinho quando a margem muda: sem isto, a grade fica descentrada.
+                onLeftMarginChanged: contentX = -leftMargin
                 topMargin: 6
                 bottomMargin: 6
                 model: seletorDePapel.seletor

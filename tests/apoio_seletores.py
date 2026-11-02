@@ -167,7 +167,6 @@ def prontos(seletor, n=None):
     return (
         not seletor.buscando
         and seletor.rowCount() > 0
-        and not any(seletor.data(seletor.index(i, 0), seletor.Papel.Carregando) for i in range(seletor.rowCount()))
         and (n is None or seletor.rowCount() == n)
     )
 

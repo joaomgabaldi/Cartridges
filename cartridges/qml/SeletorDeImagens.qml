@@ -111,6 +111,9 @@ SeletorBase {
                 // Ocupa a largura toda (a barra de rolagem fica na borda); as colunas ficam centradas pela margem.
                 anchors.fill: parent
                 leftMargin: Math.max(0, (width - seletorDeImagens.colunas * cellWidth) / 2)
+                rightMargin: leftMargin
+                // O GridView não reposiciona sozinho quando a margem muda: sem isto, a grade fica descentrada.
+                onLeftMarginChanged: contentX = -leftMargin
                 topMargin: 6
                 bottomMargin: 6
                 model: seletorDeImagens.seletor

@@ -5,7 +5,7 @@
 """Os seletores do diálogo de edição (D41, camada 2): capa e logo do SteamGridDB (`SeletorDeImagens.qml`),
 jogo da Steam (`SeletorDaSteam.qml`) e jogo do Ludusavi (`SeletorDoLudusavi.qml`).
 
-Cada um é uma lista de miniaturas: a busca devolve os endereços, as linhas aparecem "carregando" e as
+Cada um é uma lista de miniaturas: a busca devolve os endereços, as linhas entram quando a miniatura chega e as
 miniaturas chegam uma a uma. Escolher baixa a imagem original e a entrega ao diálogo de edição
 (`entregar_capa_baixada`, `entregar_logo_baixado`, `usar_titulo_no_logo`). Só na thread principal; as
 threads (busca, miniaturas, download) entregam por `na_thread_principal` e o que chega a um seletor que já
@@ -98,8 +98,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
     class Papel(IntEnum):
         Miniatura = Qt.ItemDataRole.UserRole + 1
         Animada = Qt.ItemDataRole.UserRole + 2
-        Carregando = Qt.ItemDataRole.UserRole + 3
-        CopiaAnimada = Qt.ItemDataRole.UserRole + 4
+        CopiaAnimada = Qt.ItemDataRole.UserRole + 3
 
     abertoChanged = Signal()  # noqa: N815
     buscaChanged = Signal()  # noqa: N815
@@ -154,7 +153,6 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         return {
             self.Papel.Miniatura: QByteArray(b"miniatura"),
             self.Papel.Animada: QByteArray(b"animada"),
-            self.Papel.Carregando: QByteArray(b"carregando"),
             self.Papel.CopiaAnimada: QByteArray(b"copiaAnimada"),
         }
 
@@ -170,8 +168,6 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
                 return linha["miniatura"]
             case self.Papel.Animada:
                 return linha["animada"]
-            case self.Papel.Carregando:
-                return linha["carregando"]
             case self.Papel.CopiaAnimada:
                 return linha.get("copia", "")
         return None
@@ -429,7 +425,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         original, animada = self._itens[numero]
         linha = {
             "id": numero, "original": original, "animada": animada,
-            "miniatura": QUrl.fromLocalFile(str(arquivo)).toString(), "carregando": False, "arquivo": arquivo,
+            "miniatura": QUrl.fromLocalFile(str(arquivo)).toString(), "arquivo": arquivo,
         }  # fmt: skip
         self.beginInsertRows(QModelIndex(), len(self._linhas), len(self._linhas))
         self._linhas.append(linha)
