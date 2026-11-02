@@ -67,6 +67,8 @@ def test_aviso_do_qml_leva_o_arquivo_e_a_linha(app_qt, caplog):  # noqa: ARG001
 
     setup.registrar_avisos_do_qt()
     motor = QQmlEngine()
+    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    motor.addImageProvider("icone", ProvedorDeIcones())
     componente = QQmlComponent(motor)
     componente.setData(b"import QtQml\nQtObject {\n    Component.onCompleted: console.warn('aviso do qml')\n}\n", QUrl("file:///teste/Aviso.qml"))
     objeto = componente.create()
@@ -378,7 +380,7 @@ def test_falha_ao_montar_o_dialogo_nao_derruba_e_libera(aviso, monkeypatch, flus
 
 
 def test_principal_escondida_o_dialogo_espera_na_fila(app_qt, monkeypatch, flush_idle):  # noqa: ARG001
-    """Pré-voo 13: com a principal escondida (D78) o pedido vai à fila da D72 e aparece quando ela volta."""
+    """Pré-voo 13: sem a janela das tarefas, o pedido vai à pilha (R5), por cima, e está lá quando a principal voltar."""
     from cartridges.aplicativo import Aplicativo  # noqa: PLC0415
 
     aplicativo = Aplicativo()
@@ -387,9 +389,9 @@ def test_principal_escondida_o_dialogo_espera_na_fila(app_qt, monkeypatch, flush
     aplicativo.dialogoPedido.connect(lambda titulo, corpo, itens: pedidos.append(titulo))
     aplicativo.pedir_dialogo("Outro aviso", "Antes deste.", [], lambda: None)
     _avisar(RuntimeError("escondida"), flush_idle)
-    assert pedidos == ["Outro aviso"]  # espera o de cima
+    assert pedidos == ["Outro aviso", "Ocorreu um erro inesperado"]  # cobre o anterior
     aplicativo.dialogoFechado(False)
-    assert pedidos == ["Outro aviso", "Ocorreu um erro inesperado"]
+    assert pedidos[-1] == "Outro aviso"  # que volta ao fechar
 
 
 def test_dialogo_real_monta_com_a_janela_de_verdade(app_qt, monkeypatch, flush_idle):  # noqa: ARG001

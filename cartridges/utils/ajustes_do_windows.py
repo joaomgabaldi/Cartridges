@@ -5,20 +5,43 @@
 """Os ajustes do Windows relidos com o app aberto (D88).
 
 O Windows avisa toda janela de topo com um `WM_SETTINGCHANGE` quando um ajuste do sistema muda (os "Efeitos de
-animação", entre outros). O tema e o realce o Qt já segue sozinho; as animações são lidas por nós
-(`SPI_GETCLIENTAREAANIMATION`), e este filtro diz quando relê-las.
+animação", entre outros). O tema o Qt já segue sozinho; as animações são lidas por nós
+(`SPI_GETCLIENTAREAANIMATION`), e este filtro diz quando relê-las. O realce também: o Qt entrega a variante clara
+dele no tema escuro, e a `main` usa o `AccentColor` cru do registro.
 """
 
 import logging
+import winreg
 from collections.abc import Callable
 from ctypes import wintypes
 
 from PySide6.QtCore import QAbstractNativeEventFilter, QCoreApplication
+from PySide6.QtGui import QColor, QGuiApplication, QPalette
 
 from cartridges.utils.thread_principal import na_thread_principal
 
 _WM_SETTINGCHANGE = 0x001A
 _GENERICA = b"windows_generic_MSG"
+
+
+def cor_de_destaque() -> str | None:
+    """O `AccentColor` do Windows, como `#rrggbb` (o DWORD vem como 0xAABBGGRR); None se não houver."""
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\DWM") as chave:
+            valor = winreg.QueryValueEx(chave, "AccentColor")[0]
+    except OSError:
+        return None
+    return f"#{valor & 0xFF:02x}{(valor >> 8) & 0xFF:02x}{(valor >> 16) & 0xFF:02x}"
+
+
+def aplicar_cor_de_destaque() -> None:
+    """Põe o realce do registro na paleta do app, de onde o `Tema` o lê (`apply_windows_theme` da `main`)."""
+    if (cor := cor_de_destaque()) is None:
+        return
+    paleta = QGuiApplication.palette()
+    if paleta.color(QPalette.ColorRole.Accent) != QColor(cor):
+        paleta.setColor(QPalette.ColorRole.Accent, QColor(cor))
+        QGuiApplication.setPalette(paleta)
 
 
 def e_mudanca_de_ajuste(tipo, mensagem) -> bool:  # noqa: ANN001

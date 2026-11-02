@@ -72,6 +72,9 @@ CANAIS = ("desenvolvimento", "final")
 LICENCAS = {
     "QWindowKit.txt": "build-aux/windows/qwk/_deps/qwindowkit/LICENSE",
     "qmsetup.txt": "build-aux/windows/qwk/_deps/qwindowkit/qmsetup/LICENSE",
+    # Os ícones de `data/icones`, os mesmos da versão GTK.
+    "adwaita-icon-theme.txt": "build-aux/windows/licencas/adwaita-icon-theme.txt",
+    "libadwaita.txt": "build-aux/windows/licencas/libadwaita.txt",
 }
 
 # Sem eles o app nem importa (`shared` lê o gschema na importação), mostra cartões vazios ou perde, em silêncio,
@@ -94,6 +97,8 @@ DATA = (
     "conquista_de_exemplo.svg",
     "sons",
     "icons/hicolor",
+    # Os ícones simbólicos da interface (`image://icone`).
+    "icones",
 )
 
 # Do PySide6, o que o app não usa: WebEngine, 3D, PDF, o Designer, as ferramentas de

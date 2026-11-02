@@ -5,6 +5,7 @@
 """O `ModeloDaSessao`: o que os rastreadores pedem no lugar do `shared.win` (D48)."""
 
 import pytest
+from PySide6.QtTest import QTest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QWindow
 
@@ -81,6 +82,7 @@ def test_aviso_do_fim_em_texto_puro_e_anotar_so_quando_pode(modelo, make_game):
 
     modelo.fila.fechar()
     modelo.session_toast(make_game(name="Outro", status=""), 30)
+    QTest.qWait(300)  # o anterior sai com o fade antes de o próximo entrar
     assert modelo.fila.texto == "Outro: menos de 1 min de jogo" and modelo.fila.botao == ""
 
     assert pode_anotar(make_game(status="", notes="  onde parei  ")) is True

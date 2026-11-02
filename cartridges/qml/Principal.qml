@@ -11,7 +11,8 @@ Window {
     property bool semAgente: false
     // O texto no centro da barra; por padrão, o título da janela.
     property string tituloDaBarra: title
-    // O que for declarado dentro de Principal vai para a área abaixo da barra.
+    // O que for declarado dentro de Principal vai para a área, que ocupa a janela inteira, por cima da barra: um modal
+    // cobre a barra (J05); as páginas descem `alturaDoTopo`.
     default property alias conteudo: area.data
     // Botões da página na barra: `inicio` à esquerda, `fim` à direita (cada um chama
     // `agente.setHitTestVisible(item, true)`, senão o QWindowKit trata o clique como arrasto).
@@ -19,11 +20,17 @@ Window {
     property alias fim: barra.fim
     readonly property int alturaDaBarra: barra.altura
     readonly property int larguraDoBotao: barra.larguraDoBotao
+    // Onde as páginas começam: abaixo da barra, ou no topo em tela cheia.
+    readonly property int alturaDoTopo: telaCheia ? 0 : barra.altura
     readonly property QtObject agente: carga.item
     // Só depois do `setup`: o QWindowKit falha ao registrar itens antes dele.
     property bool agentePronto: false
     // Tela cheia (Big Picture): a barra some e a área começa no topo.
     property bool telaCheia: false
+    // Com um modal na frente a barra não arrasta nem aciona nada (nem o Snap Layouts do maximizar).
+    property bool barraTrancada: false
+    // A linha de baixo da barra, com o conteúdo rolado.
+    property alias sombraDaBarra: barra.sombra
 
     color: usarMica ? "transparent" : Tema.fundo
     title: "Cartridges"
@@ -38,10 +45,11 @@ Window {
             barra.ligarAgente()
             agentePronto = true
         }
-        width = 1100
-        height = 700
-        minimumWidth = 640
-        minimumHeight = 480
+        // gschema da `main`: 1170x795; window.blp: mínimo 360x100.
+        width = 1170
+        height = 795
+        minimumWidth = 360
+        minimumHeight = 100
         // Depois do tamanho de hoje: o lugar e o tamanho gravados ao fechar (D87); sem nada gravado, fica este.
         // Opcional: os arneses dos testes não põem `geometria` no contexto.
         const servico = typeof geometria === "undefined" ? null : geometria
@@ -63,6 +71,9 @@ Window {
         id: barra
         objectName: "barraDeTitulo"
         visible: !janela.telaCheia
+        enabled: !janela.barraTrancada
+        // Livre, fica acima da área e recebe o mouse direto; com modal, a área (e o modal nela) a cobre.
+        z: janela.barraTrancada ? 0 : 1
         anchors { top: parent.top; left: parent.left; right: parent.right }
         janela: janela
         agente: janela.agente
@@ -72,6 +83,18 @@ Window {
     Item {
         id: area
         objectName: "areaDaJanela"
-        anchors { top: janela.telaCheia ? parent.top : barra.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
+        anchors.fill: parent
+    }
+
+    // window.csd: o contorno claro de 1 px; some com a janela maximizada ou em tela cheia. O raio é o do DWM (R9).
+    Rectangle {
+        objectName: "contornoDaJanela"
+        anchors.fill: parent
+        z: 1000
+        enabled: false
+        visible: janela.visibility === Window.Windowed && !janela.telaCheia
+        radius: 8
+        color: "transparent"
+        border { width: 1; color: Tema.contorno }
     }
 }

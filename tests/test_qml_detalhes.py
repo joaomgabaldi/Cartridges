@@ -317,7 +317,7 @@ def test_dialogo_destrutivo_e_modal_para_teclado_e_controle(app_qt):
     app = _App(_jogos((1, "Zero", {"removed": True, "status": "beaten", "executable": ""})))
     pagina, dialogo, botao = _abrir_excluir(app)
     # Foco inicial no Cancelar (a ação é destrutiva).
-    assert _foco_dentro_de(app, "botaoCancelarDoDialogo")
+    assert _esperar(lambda: _foco_dentro_de(app, "botaoCancelarDoDialogo"))
     cliques = []
     for nome in ("botaoEditar", "botaoExcluir", "botaoStatus"):
         _achar(pagina, nome).clicked.connect(lambda n=nome: cliques.append(n))
@@ -339,7 +339,7 @@ def test_dialogo_destrutivo_e_modal_para_teclado_e_controle(app_qt):
     app.controle.ativar.emit()
     assert dialogo.property("visible") is False and cliques == []
     # Ao fechar, o foco volta ao botão que abriu.
-    assert _foco_dentro_de(app, "botaoExcluir")
+    assert _esperar(lambda: _foco_dentro_de(app, "botaoExcluir"))
     app.fechar()
 
 
@@ -391,7 +391,7 @@ def test_voce_instalou_a_atualizacao_foco_padrao_e_ja_instalei(app_qt, monkeypat
     assert dialogo.property("rotuloConfirmar") == "Já instalei" and dialogo.property("rotuloCancelar") == "Ainda não"
     assert dialogo.property("titulo") == "Você instalou a atualização?"
     assert _esperar(lambda: _foco_dentro_de(app, "dialogoAtualizacao"))
-    assert dialogo.findChild(QQuickItem, "botaoConfirmarDoDialogo").property("activeFocus") is True
+    assert _esperar(lambda: _achar(dialogo, "botaoConfirmarDoDialogo").property("activeFocus") is True)
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
     assert _esperar(lambda: dialogo.property("visible") is False)
     assert _esperar(lambda: app.achar("avisoDeAtualizacao").property("visible") is False)
@@ -404,7 +404,7 @@ def test_voce_instalou_a_atualizacao_ainda_nao_nao_descarta(app_qt, monkeypatch,
     """"Ainda não" e Esc (o `set_close_response("cancel")` da `main`) não descartam; a faixa segue viva."""
     app, dialogo, abertos = _app_com_atualizacao(monkeypatch)
     if tecla is None:
-        _clicar(app, dialogo.findChild(QQuickItem, "botaoCancelarDoDialogo"))
+        _clicar(app, _achar(dialogo, "botaoCancelarDoDialogo"))
     else:
         QTest.keyClick(app.janela, tecla)
     assert _esperar(lambda: dialogo.property("visible") is False)

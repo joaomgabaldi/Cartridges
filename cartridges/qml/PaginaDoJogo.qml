@@ -479,7 +479,7 @@ Item {
                                     onTriggered: detalhes.definirStatus(modelData[0])
                                 }
                             }
-                            MenuSeparator {}
+                            SeparadorDoMenu {}
                             ItemDoMenu {
                                 objectName: "itemSemStatus"
                                 text: "Sem status"
@@ -605,7 +605,7 @@ Item {
         rotuloCancelar: "Cancelar"
         destrutivo: true
         onConfirmado: raiz.excluir()
-        onVisibleChanged: if (!visible) raiz.forceActiveFocus()
+        onRetornoPerdido: raiz.forceActiveFocus()
     }
     DialogoDeConfirmacao {
         id: dialogoAtualizacao
@@ -614,7 +614,9 @@ Item {
         corpo: "A página da atualização foi aberta no navegador. Confirme após instalá-la para ocultar o aviso."
         rotuloConfirmar: "Já instalei"
         rotuloCancelar: "Ainda não"
+        sugerido: true
+        respostaInicial: "confirmar"  // `window.py:2059`
         onConfirmado: raiz.atualizacaoConfirmada()
-        onVisibleChanged: if (!visible) raiz.forceActiveFocus()
+        onRetornoPerdido: raiz.forceActiveFocus()
     }
 }

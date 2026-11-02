@@ -128,10 +128,10 @@ def test_submenu_aninhado_usa_as_cores_do_tema(app_qt):
     app = _App(_tres())
     menu = app.achar("menuPrincipal")
     # Fundo e texto do Tema (claro ou escuro); o padrão do Basic seria #26282a no texto.
-    assert _cor(menu.property("fundoDeOrdenar"), "color") in ("#2b2b2b", "#ffffff")
+    assert _cor(menu.property("fundoDeOrdenar"), "color") in ("#36363a", "#ffffff")
     item = menu.property("primeiroDeOrdenar")
-    assert _cor(item.property("contentItem"), "color") in ("#ffffff", "#1a1a1a")
-    assert item.property("implicitHeight") == 34
+    assert _cor(item.property("contentItem"), "color") in ("#ffffff", "#000006")
+    assert item.property("implicitHeight") == 32
     app.fechar()
 
 

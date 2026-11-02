@@ -160,6 +160,8 @@ class _App:
             estado_do_app=lambda: Qt.ApplicationState.ApplicationActive,
         )
         self.motor = QQmlEngine()
+        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.addImageProvider("desfoque", self.detalhes.provedor)
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         contexto = self.motor.rootContext()

@@ -1,6 +1,6 @@
 import QtQuick
 
-// O aviso (um por vez, com botão opcional) na parte de baixo e a confirmação do comando de um jogo restaurado.
+// O aviso embaixo (o toast da libadwaita, um por vez, com botão opcional) e os diálogos que o domínio pede.
 // Os textos vão sempre em PlainText: nome de jogo e comando não são marcação.
 Item {
     id: camada
@@ -11,17 +11,25 @@ Item {
     property QtObject app
     // O AppUpdater (D82): a pergunta da versão nova e o download; null onde não há atualizador (testes).
     property QtObject atualizador
+    // Onde o aviso aparece: a `ToastOverlay` da `main` fica abaixo dos diálogos, e as Preferências têm a delas.
+    property Item lugarDoAviso: null
     // A pergunta da atualização fechou sem ter a quem devolver o foco.
     signal retornoPerdido()
     // Com uma confirmação na tela, a janela não aceita atalhos arrastados.
-    readonly property bool dialogoAberto: confirmacao.visible || dialogoDeErros.visible || confirmacaoDoApp.visible || dialogoDaAtualizacao.visible
+    readonly property bool dialogoAberto: confirmacao.aberto || dialogoDeErros.aberto || confirmacaoDoApp.aberto || dialogoDaAtualizacao.aberto
+
+    // A pilha dos diálogos (R5): o último a abrir fica por cima, como o `Adw.Dialog.present` da `main`.
+    property int ordem: 10
+    function subir(dialogo) { dialogo.z = ++ordem }
 
     Connections {
         target: camada.ponte
         function onConfirmacaoPedida(titulo, corpo) {
-            tituloDaConfirmacao.text = titulo
-            corpoDaConfirmacao.text = corpo
-            confirmacao.abrir()
+            confirmacao.titulo = titulo
+            confirmacao.corpo = corpo
+            camada.subir(confirmacao)
+            confirmacao.aberto = true
+            Qt.callLater(confirmacao.focarInicial)
         }
     }
 
@@ -33,164 +41,102 @@ Item {
             confirmacaoDoApp.rotuloConfirmar = rotulo
             confirmacaoDoApp.rotuloCancelar = rotuloCancelar
             confirmacaoDoApp.destrutivo = destrutivo
+            camada.subir(confirmacaoDoApp)
             confirmacaoDoApp.abrir()
         }
         function onDialogoPedido(titulo, corpo, itens) {
+            camada.subir(dialogoDeErros)
             dialogoDeErros.abrir(titulo, corpo, itens, camada.app.dialogoComPreferencias ? "Preferências" : "")
         }
     }
 
+    // toast: fundo #505053, texto branco, cápsula, 6 de respiro (12 à esquerda), margens 12 e 24 embaixo; sai com fade.
     Rectangle {
         id: aviso
+        parent: camada.lugarDoAviso ? camada.lugarDoAviso : camada
+        z: 100
         anchors { bottom: parent.bottom; bottomMargin: 24; horizontalCenter: parent.horizontalCenter }
         objectName: "aviso"
-        width: Math.min(textoDoAviso.implicitWidth + 40 + (botaoDoAviso.visible ? botaoDoAviso.width + 8 : 0), parent.width - 48)
-        height: 44
+        // 12 à esquerda, 6 à direita, e o que os botões ocupam ao lado do texto.
+        readonly property real _botoes: fecharDoAviso.width + 6 + (botaoDoAviso.visible ? botaoDoAviso.width + 6 : 0)
+        width: Math.min(textoDoAviso.implicitWidth + _botoes + 18, parent.width - 24)
+        height: 46
         radius: height / 2
-        color: Tema.barra
-        border.color: Tema.botaoSobre
+        color: Tema.aviso
         opacity: camada.fila && camada.fila.visivel ? 1 : 0
         visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta } }
+        Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
 
-        // O corpo do aviso não deixa o clique passar para a grade por baixo.
+        Sombra { camadas: Tema.sombraAviso; raio: aviso.radius }
+
+        // O corpo do aviso não deixa o clique passar para a grade por baixo; com o mouse em cima, o tempo para.
         MouseArea { anchors.fill: parent; enabled: aviso.visible }
-
-        Text {
-            id: textoDoAviso
-            objectName: "textoDoAviso"
-            anchors {
-                left: parent.left; leftMargin: 20; top: parent.top; bottom: parent.bottom
-                right: botaoDoAviso.visible ? botaoDoAviso.left : parent.right
-                rightMargin: botaoDoAviso.visible ? 8 : 20
+        HoverHandler {
+            enabled: aviso.visible
+            onHoveredChanged: {
+                if (!camada.fila) return
+                if (hovered) camada.fila.pausar()
+                else camada.fila.retomar()
             }
-            text: camada.fila ? camada.fila.texto : ""
-            verticalAlignment: Text.AlignVCenter
-            horizontalAlignment: botaoDoAviso.visible ? Text.AlignLeft : Text.AlignHCenter
-            textFormat: Text.PlainText
-            elide: Text.ElideRight
-            color: Tema.texto
-            font.family: Tema.fonte
-            font.pixelSize: 14
         }
 
-        Text {
-            id: botaoDoAviso
-            objectName: "botaoDoAviso"
-            anchors { right: parent.right; rightMargin: 16; verticalCenter: parent.verticalCenter }
-            visible: camada.fila && camada.fila.botao !== ""
-            text: camada.fila ? camada.fila.botao : ""
-            textFormat: Text.PlainText
-            color: Tema.destaque
-            font { family: Tema.fonte; pixelSize: 14; weight: Font.DemiBold }
-            padding: 6
-            Accessible.role: Accessible.Button
-            Accessible.name: text
-            // Só o botão recebe o toque; o resto do aviso não esconde a grade por baixo.
-            TapHandler { onTapped: camada.fila.clicar() }
+        Row {
+            id: linhaDoAviso
+            anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
+            spacing: 6
+
+            Text {
+                id: textoDoAviso
+                objectName: "textoDoAviso"
+                anchors.verticalCenter: parent.verticalCenter
+                leftPadding: 6
+                rightPadding: 6
+                width: aviso.width - aviso._botoes - 18
+                text: camada.fila ? camada.fila.texto : ""
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                color: "white"
+                font { family: Tema.fonte; pixelSize: Tema.corpo }
+            }
+            Botao {
+                id: botaoDoAviso
+                objectName: "botaoDoAviso"
+                anchors.verticalCenter: parent.verticalCenter
+                estilo: "plano"
+                corDoTexto: "white"
+                afastamentoDoAnel: 1
+                visible: camada.fila && camada.fila.botao !== ""
+                text: camada.fila ? camada.fila.botao : ""
+                focusPolicy: Qt.NoFocus
+                onClicked: camada.fila.clicar()
+            }
+            // O X do Adw.Toast.
+            Botao {
+                id: fecharDoAviso
+                objectName: "fecharDoAviso"
+                anchors.verticalCenter: parent.verticalCenter
+                estilo: "plano"
+                circular: true
+                corDoTexto: "white"
+                afastamentoDoAnel: 1
+                icone: "window-close"
+                focusPolicy: Qt.NoFocus
+                Accessible.name: "Fechar"
+                onClicked: camada.fila.fechar()
+            }
         }
     }
 
-    Rectangle {
+    // A confirmação do comando de um jogo restaurado. Barreira de segurança (R6): Enter ou A logo ao abrir cancelam,
+    // nunca iniciam; o foco começa em "Dispensar". O que tinha o foco antes (a camada do Big Picture, um cartão) o retoma.
+    DialogoDeAlerta {
         id: confirmacao
-        anchors.fill: parent
-        visible: false
-        color: "#80000000"
-
-        // 0 = Dispensar (o padrão), 1 = Iniciar. Teclado e controle acionam o botão em foco; Esc cancela.
-        property int foco: 0
-        property Item focoAnterior: null
-
-        function abrir() {
-            // Reaberto com o diálogo já à vista, o foco atual é o dele: o anterior continua valendo.
-            if (!visible) focoAnterior = Window.window ? Window.window.activeFocusItem : null
-            foco = 0  // barreira de segurança: Enter ou A logo ao abrir cancelam, nunca iniciam
-            visible = true
-            forceActiveFocus()
-        }
-        function acionar(indice) {
-            visible = false
-            // O que tinha o foco antes (a camada do Big Picture, um cartão) o retoma.
-            if (focoAnterior && focoAnterior.visible && focoAnterior.enabled) focoAnterior.forceActiveFocus()
-            focoAnterior = null
-            if (indice === 1) camada.ponte.confirmar()
-            else camada.ponte.cancelar()
-        }
-
-        focus: visible
-        Keys.onLeftPressed: foco = 0
-        Keys.onRightPressed: foco = 1
-        Keys.onReturnPressed: acionar(foco)
-        Keys.onEnterPressed: acionar(foco)
-        Keys.onSpacePressed: acionar(foco)
-        Keys.onEscapePressed: acionar(0)
-        Keys.onPressed: event => event.accepted = true  // modal: nenhuma tecla chega à página de trás
-
-        MouseArea { anchors.fill: parent } // a grade embaixo não recebe cliques
-
-        Rectangle {
-            anchors.centerIn: parent
-            width: Math.min(460, parent.width - 48)
-            height: coluna.implicitHeight + 48
-            radius: 8
-            color: Tema.fundo
-            border.color: Tema.botaoSobre
-
-            Column {
-                id: coluna
-                anchors { left: parent.left; right: parent.right; top: parent.top; margins: 24 }
-                spacing: 16
-
-                Text {
-                    id: tituloDaConfirmacao
-                    width: parent.width
-                    textFormat: Text.PlainText
-                    wrapMode: Text.Wrap
-                    color: Tema.texto
-                    font.family: Tema.fonte
-                    font.pixelSize: 18
-                    font.weight: Font.DemiBold
-                }
-                Text {
-                    id: corpoDaConfirmacao
-                    width: parent.width
-                    textFormat: Text.PlainText
-                    wrapMode: Text.Wrap
-                    color: Tema.texto
-                    font.family: Tema.fonte
-                    font.pixelSize: 14
-                }
-                Row {
-                    spacing: 8
-                    anchors.right: parent.right
-
-                    Repeater {
-                        model: [{ rotulo: "Dispensar", principal: false }, { rotulo: "Iniciar", principal: true }]
-                        delegate: Rectangle {
-                            id: botao
-                            required property var modelData
-                            required property int index
-                            width: rotulo.implicitWidth + 40
-                            height: 36
-                            radius: 6
-                            color: modelData.principal ? Tema.destaque : Tema.botaoSobre
-                            border { width: 2; color: confirmacao.foco === botao.index ? Tema.texto : "transparent" }
-                            Accessible.role: Accessible.Button
-                            Accessible.name: modelData.rotulo
-                            Text {
-                                id: rotulo
-                                anchors.centerIn: parent
-                                text: botao.modelData.rotulo
-                                color: botao.modelData.principal ? "white" : Tema.texto
-                                font.family: Tema.fonte
-                                font.pixelSize: 14
-                            }
-                            TapHandler { onTapped: confirmacao.acionar(botao.index) }
-                        }
-                    }
-                }
-            }
-        }
+        objectName: "confirmacaoDoComando"
+        respostas: [{ id: "dispensar", rotulo: "Dispensar", objeto: "botaoDispensarComando" },
+                    { id: "iniciar", rotulo: "Iniciar", objeto: "botaoIniciarComando" }]
+        respostaDeEscape: "dispensar"
+        respostaInicial: "dispensar"
+        onRespondido: resposta => resposta === "iniciar" ? camada.ponte.confirmar() : camada.ponte.cancelar()
     }
 
     DialogoDeAviso {
@@ -208,12 +154,12 @@ Item {
         onCancelado: camada.app.confirmacaoRespondida(false)
     }
 
-    // A versão nova (D82): fica por cima das Preferências, como as outras perguntas desta camada.
+    // A versão nova (D82): abre por cima do que estiver na tela, como as outras perguntas desta camada.
     DialogoDaAtualizacao {
         id: dialogoDaAtualizacao
         objectName: "dialogoDaAtualizacao"
         atualizador: camada.atualizador
-        outroAberto: confirmacao.visible || dialogoDeErros.visible || confirmacaoDoApp.visible
+        onAbertoChanged: if (aberto) camada.subir(dialogoDaAtualizacao)
         onRetornoPerdido: camada.retornoPerdido()
     }
 }

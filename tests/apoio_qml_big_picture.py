@@ -44,6 +44,8 @@ class _Tela:
         self.bp.entrar()  # antes do QML existir: a lista só acompanha a biblioteca visível, e sem fila
         self.bp.filaTerminou()
         self.motor = QQmlEngine()
+        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         self.motor.rootContext().setContextProperty("bigPicture", self.bp)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "BigPicture.qml")))

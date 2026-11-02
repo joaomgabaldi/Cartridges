@@ -1,114 +1,100 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// Uma linha com título e uma lista de opções (ComboBox), do diálogo de edição.
-Item {
+// O `Adw.ComboRow`: o valor e a seta soltos no fim da linha; a linha inteira abre o popover, com a marca no item escolhido.
+LinhaDoGrupo {
     id: linha
 
-    // `aparece` é a regra de cada linha (ex.: só com um interruptor ligado); a busca esconde mais, nunca mostra o que a regra esconde.
-    // O grupo conta por estas duas propriedades, não pelo `visible` efetivo (que depende do próprio grupo: laço, D58).
-    property bool aparece: true
-    // Só as linhas das Preferências são buscáveis (`buscavel: true`); as dos assistentes e do editor ignoram a busca.
-    // Nas Preferências use `aparece` para a regra da linha, nunca `visible` (um `visible:` de instância desliga o filtro).
-    property bool buscavel: false
-    readonly property bool passaNoFiltro: !buscavel || BuscaDasPreferencias.passa(linha.titulo, "")
-    visible: aparece && passaNoFiltro
-
-    property string titulo
     property alias model: caixa.model
     property alias currentIndex: caixa.currentIndex
-    // A largura da caixa; quem tem opções mais longas que o padrão a alarga.
+    // A largura mínima do popover; quem tem opções longas a alarga.
     property int larguraDaCaixa: 180
 
     // A pessoa escolheu uma opção (o índice).
     signal escolhido(int indice)
 
-    width: parent ? parent.width : implicitWidth
-    implicitHeight: 58
-
-    Rectangle {
-        width: parent.width
-        height: 1
-        color: Tema.borda
-        visible: linha.y > 0
-    }
-
-    Text {
-        anchors { left: parent.left; leftMargin: 16; right: caixa.left; rightMargin: 12; verticalCenter: parent.verticalCenter }
-        text: linha.titulo
-        textFormat: Text.PlainText
-        wrapMode: Text.Wrap
-        color: Tema.texto
-        font { family: Tema.fonte; pixelSize: 15 }
-    }
+    reservaADireita: Math.min(valor.implicitWidth, width * 0.6) + 22
+    sobre: caixa.hovered || caixa.popup.visible
+    pressionada: caixa.down
+    foco: caixa.visualFocus
 
     ComboBox {
         id: caixa
         objectName: linha.objectName + "Caixa"
-        anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
-        implicitWidth: linha.larguraDaCaixa
-        implicitHeight: 34
+        anchors.fill: parent
         focusPolicy: Qt.StrongFocus
+        hoverEnabled: true
         Accessible.name: linha.titulo
         onActivated: indice => linha.escolhido(indice)
 
+        // A seta e o valor ficam no fim da linha; o título, à esquerda, é da base.
+        leftPadding: linha.width - linha.reservaADireita - 14
+        rightPadding: 36
         contentItem: Text {
-            leftPadding: 12
-            rightPadding: 30
+            id: valor
             text: caixa.displayText
             textFormat: Text.PlainText
             elide: Text.ElideRight
+            horizontalAlignment: Text.AlignRight
             verticalAlignment: Text.AlignVCenter
-            color: Tema.texto
-            font { family: Tema.fonte; pixelSize: 14 }
-        }
-        indicator: Text {
-            x: caixa.width - width - 10
-            y: (caixa.height - height) / 2
-            text: ""  // seta para baixo
-            textFormat: Text.PlainText
             color: Tema.textoSecundario
-            font { family: Tema.fonteDeIcones; pixelSize: 10 }
+            font { family: Tema.fonte; pixelSize: Tema.corpo }
         }
-        background: Rectangle {
-            radius: 6
-            color: caixa.hovered ? Tema.botaoSobre : Tema.fundo
-            border { width: caixa.visualFocus ? 2 : 1; color: caixa.visualFocus ? Tema.destaque : Tema.borda }
+        indicator: Icone {
+            x: caixa.width - width - 14
+            y: (caixa.height - height) / 2
+            nome: "pan-down"
         }
+        background: Item {}
         delegate: ItemDelegate {
             id: opcao
             required property var modelData
             required property int index
-            width: caixa.width
-            implicitHeight: 34
+            width: caixa.popup.width - 2 * caixa.popup.padding
+            implicitWidth: textoDaOpcao.implicitWidth + 12 + 12 + 22
+            implicitHeight: 32
+            hoverEnabled: true
             highlighted: caixa.highlightedIndex === index
             contentItem: Text {
+                id: textoDaOpcao
                 text: opcao.modelData
                 textFormat: Text.PlainText
                 elide: Text.ElideRight
                 verticalAlignment: Text.AlignVCenter
                 color: Tema.texto
-                font { family: Tema.fonte; pixelSize: 14; weight: caixa.currentIndex === opcao.index ? Font.DemiBold : Font.Normal }
+                font { family: Tema.fonte; pixelSize: Tema.corpo }
             }
-            background: Rectangle { radius: 4; color: opcao.highlighted ? Tema.botaoSobre : "transparent" }
+            leftPadding: 12
+            rightPadding: 34
+            Icone {
+                anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
+                visible: caixa.currentIndex === opcao.index
+                nome: "object-select"
+            }
+            background: Rectangle {
+                radius: 9
+                color: opcao.down ? Tema.menuPressionado : opcao.highlighted ? Tema.menuSobre : "transparent"
+            }
         }
         popup: Popup {
+            width: Math.max(linha.larguraDaCaixa, Math.min(lista.contentItem.childrenRect.width + 2 * padding, linha.width))
+            x: caixa.width - width - 6
             y: caixa.height + 2
-            width: caixa.width
             implicitHeight: contentItem.implicitHeight + 2 * padding
-            padding: 4
+            padding: 6
             // Dentro da janela, como os menus do Tema.
             popupType: Popup.Item
             contentItem: ListView {
+                id: lista
                 clip: true
                 implicitHeight: contentHeight
                 model: caixa.popup.visible ? caixa.delegateModel : null
                 currentIndex: caixa.highlightedIndex
             }
             background: Rectangle {
-                radius: 8
-                color: Tema.superficie
-                border.color: Tema.borda
+                radius: 15
+                color: Tema.popover
+                Sombra { camadas: Tema.sombraPopover; raio: 15 }
             }
         }
     }

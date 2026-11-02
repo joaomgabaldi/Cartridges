@@ -299,6 +299,8 @@ class _Janela:
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(_DetalhesFalsos(), self.sessao)
         self.motor = QQmlEngine()
+        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         contexto = self.motor.rootContext()
         for nome, valor in (

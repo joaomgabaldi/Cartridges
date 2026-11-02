@@ -1,22 +1,12 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// Uma linha com título, explicação e uma caixa de número (o `Adw.SpinRow`). `alterado` leva o número que a
-// pessoa pediu; quem usa grava e devolve o valor em `value` (a caixa só mostra o que a linha recebe).
-Item {
+// O `Adw.SpinRow`: o valor em texto, que aceita digitação, e os botões redondos de 30 (− e +), 6 entre eles com 2 de
+// margem. `alterado` leva o número que a pessoa pediu; quem usa grava e devolve o valor em `value` (a caixa só mostra o
+// que a linha recebe).
+LinhaDoGrupo {
     id: linha
 
-    // `aparece` é a regra de cada linha (ex.: só com um interruptor ligado); a busca esconde mais, nunca mostra o que a regra esconde.
-    // O grupo conta por estas duas propriedades, não pelo `visible` efetivo (que depende do próprio grupo: laço, D58).
-    property bool aparece: true
-    // Só as linhas das Preferências são buscáveis (`buscavel: true`); as dos assistentes e do editor ignoram a busca.
-    // Nas Preferências use `aparece` para a regra da linha, nunca `visible` (um `visible:` de instância desliga o filtro).
-    property bool buscavel: false
-    readonly property bool passaNoFiltro: !buscavel || BuscaDasPreferencias.passa(linha.titulo, linha.subtitulo)
-    visible: aparece && passaNoFiltro
-
-    property string titulo
-    property string subtitulo
     property int de: 0
     property int ate: 100
     property int passo: 1
@@ -26,47 +16,20 @@ Item {
 
     signal alterado(int valor)
 
-    width: parent ? parent.width : implicitWidth
-    implicitHeight: Math.max(textos.implicitHeight, 34) + 24
-
-    Rectangle {
-        width: parent.width
-        height: 1
-        color: Tema.borda
-        visible: linha.y > 0
-    }
-
-    Column {
-        id: textos
-        anchors { left: parent.left; leftMargin: 16; right: caixa.left; rightMargin: 12; verticalCenter: parent.verticalCenter }
-        spacing: 2
-        Text {
-            width: parent.width
-            text: linha.titulo
-            textFormat: Text.PlainText
-            wrapMode: Text.Wrap
-            color: Tema.texto
-            font { family: Tema.fonte; pixelSize: 15 }
-        }
-        Text {
-            width: parent.width
-            visible: text !== ""
-            text: linha.subtitulo
-            textFormat: Text.PlainText
-            wrapMode: Text.Wrap
-            color: Tema.textoSecundario
-            font { family: Tema.fonte; pixelSize: 12 }
-        }
-    }
+    reservaADireita: caixa.width
+    foco: caixa.activeFocus
+    // row.spin.focused: o contorno fica a -1 da linha.
 
     SpinBox {
         id: caixa
         objectName: linha.objectName + "Caixa"
-        anchors { right: parent.right; rightMargin: 16; verticalCenter: parent.verticalCenter }
+        anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
         from: linha.de
         to: linha.ate
         stepSize: linha.passo
+        editable: true
         focusPolicy: Qt.StrongFocus
+        hoverEnabled: true
         Accessible.name: linha.titulo
         onValueModified: linha.alterado(value)
         Keys.onPressed: event => {
@@ -75,41 +38,52 @@ Item {
             event.accepted = true
             linha.alterado(Math.max(linha.de, Math.min(linha.ate, value + delta)))
         }
-        contentItem: Text {
+        padding: 0
+        leftPadding: 0
+        rightPadding: 12 + 2 * 34 + 6
+        implicitHeight: 34
+        implicitWidth: Math.max(valor.contentWidth, 16) + rightPadding
+        contentItem: TextInput {
+            id: valor
             // Uma parada de Tab só, a da própria caixa: o SpinBox liga o `activeFocusOnTab` do item ao assumi-lo.
             Component.onCompleted: activeFocusOnTab = false
-            text: caixa.value
-            textFormat: Text.PlainText
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
+            text: caixa.displayText
+            readOnly: !caixa.editable
+            validator: caixa.validator
+            inputMethodHints: Qt.ImhDigitsOnly
+            selectByMouse: true
+            horizontalAlignment: Qt.AlignRight
+            verticalAlignment: Qt.AlignVCenter
             color: Tema.texto
-            font { family: Tema.fonte; pixelSize: 15 }
+            selectionColor: Qt.alpha(Tema.destaque, 0.25)
+            selectedTextColor: Tema.texto
+            font { family: Tema.fonte; pixelSize: Tema.corpo }
         }
-        up.indicator: Text {
-            x: caixa.width - width - 8
-            anchors.verticalCenter: parent.verticalCenter
-            text: "+"
-            textFormat: Text.PlainText
-            color: caixa.up.pressed ? Tema.destaque : Tema.texto
-            opacity: caixa.enabled ? 1 : 0.4
-            font { family: Tema.fonte; pixelSize: 18 }
+        down.indicator: Rectangle {
+            x: caixa.width - 2 * 34 - 6 + 2
+            y: 2
+            width: 30
+            height: 30
+            radius: 15
+            color: !caixa.enabled || caixa.value <= caixa.from ? Tema.botao
+                : caixa.down.pressed ? Tema.pressionado : caixa.down.hovered ? Tema.botaoSobre : Tema.botao
+            opacity: caixa.value <= caixa.from ? Tema.opacidadeDesabilitado : 1
+            Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
+            Icone { anchors.centerIn: parent; nome: "list-remove" }
         }
-        down.indicator: Text {
-            x: 8
-            anchors.verticalCenter: parent.verticalCenter
-            text: "−"
-            textFormat: Text.PlainText
-            color: caixa.down.pressed ? Tema.destaque : Tema.texto
-            opacity: caixa.enabled ? 1 : 0.4
-            font { family: Tema.fonte; pixelSize: 18 }
+        up.indicator: Rectangle {
+            x: caixa.width - 34 + 2
+            y: 2
+            width: 30
+            height: 30
+            radius: 15
+            color: !caixa.enabled || caixa.value >= caixa.to ? Tema.botao
+                : caixa.up.pressed ? Tema.pressionado : caixa.up.hovered ? Tema.botaoSobre : Tema.botao
+            opacity: caixa.value >= caixa.to ? Tema.opacidadeDesabilitado : 1
+            Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
+            Icone { anchors.centerIn: parent; nome: "list-add" }
         }
-        background: Rectangle {
-            implicitWidth: 104
-            implicitHeight: 34
-            radius: 6
-            color: "transparent"
-            border { width: caixa.visualFocus ? 2 : 1; color: caixa.visualFocus ? Tema.destaque : Tema.borda }
-        }
+        background: null
     }
 
     // O valor da linha manda na caixa, mesmo depois de a pessoa mexer nela.

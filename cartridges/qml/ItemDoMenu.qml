@@ -1,44 +1,67 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O item de menu do Tema: marca de seleção à esquerda e seta de submenu à direita.
+// O item de menu (modelbutton): 32 de altura, raio 9, 10% ao passar e 19% pressionado, marca à esquerda e seta do
+// submenu (`go-next`, a 30%) à direita. `radio`: a marca é a bolinha do `radio` do GTK, com aro também desligada.
 MenuItem {
     id: item
 
-    implicitHeight: 34
+    property bool radio: false
+
+    implicitHeight: 32
     implicitWidth: contentItem.implicitWidth + leftPadding + rightPadding
     leftPadding: 12
-    rightPadding: 28
+    rightPadding: item.subMenu ? 34 : 12
+    hoverEnabled: true
 
     contentItem: Text {
         leftPadding: item.checkable ? 22 : 0  // lugar da marca
         text: item.text
         textFormat: Text.PlainText
         color: Tema.texto
-        opacity: item.enabled ? 1 : 0.5
+        opacity: item.enabled ? 1 : Tema.opacidadeDesabilitado
         verticalAlignment: Text.AlignVCenter
-        font { family: Tema.fonte; pixelSize: 14 }
+        font { family: Tema.fonte; pixelSize: Tema.corpo }
     }
-    indicator: Text {
-        visible: item.checked
-        textFormat: Text.PlainText
-        x: 8
+    indicator: Item {
+        x: 12
         anchors.verticalCenter: parent.verticalCenter
-        text: ""  // marca de seleção
-        font { family: Tema.fonteDeIcones; pixelSize: 12 }
-        color: Tema.texto
+        width: 16
+        height: 16
+        visible: item.checkable
+        Icone {
+            anchors.centerIn: parent
+            visible: !item.radio && item.checked
+            nome: "object-select"
+            tamanho: 14
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            visible: item.radio
+            width: 14
+            height: 14
+            radius: 7
+            color: "transparent"
+            border { width: 1; color: Qt.alpha(Tema.corBase, 0.3) }
+            Rectangle {
+                anchors.centerIn: parent
+                visible: item.checked
+                width: 6
+                height: 6
+                radius: 3
+                color: Tema.texto
+            }
+        }
     }
-    arrow: Text {
-        visible: item.subMenu
-        textFormat: Text.PlainText
-        x: parent.width - width - 10
+    arrow: Icone {
+        visible: !!item.subMenu
+        x: parent.width - width - 12
         anchors.verticalCenter: parent.verticalCenter
-        text: ""  // seta para a direita
-        font { family: Tema.fonteDeIcones; pixelSize: 10 }
-        color: Tema.textoSecundario
+        nome: "go-next"
+        opacity: 0.3
     }
     background: Rectangle {
-        radius: 4
-        color: item.highlighted ? Tema.botaoSobre : "transparent"
+        radius: 9
+        color: item.down ? Tema.menuPressionado : item.highlighted ? Tema.menuSobre : "transparent"
     }
 }

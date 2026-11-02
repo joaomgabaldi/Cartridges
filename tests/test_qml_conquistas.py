@@ -374,6 +374,8 @@ assert imagem.save(str(png), "PNG")
 url = QUrl.fromLocalFile(str(png)).toString()
 
 motor = QQmlEngine()
+from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+motor.addImageProvider("icone", ProvedorDeIcones())
 janela = QQuickWindow()
 janela.resize(400, 200)
 janela.setColor(QColor("blue"))

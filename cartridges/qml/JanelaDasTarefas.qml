@@ -17,9 +17,11 @@ Window {
     minimumWidth: width
     maximumWidth: width
     // Ligadas ao conteúdo, e não ao `height`: o limite lido de volta travaria a janela na altura de antes.
-    minimumHeight: conteudo.implicitHeight
-    maximumHeight: conteudo.implicitHeight
-    height: conteudo.implicitHeight
+    minimumHeight: alturaPedida
+    maximumHeight: alturaPedida
+    height: alturaPedida
+    // O aviso de erro (B05) precisa de lugar, se a lista for curta.
+    readonly property real alturaPedida: Math.max(conteudo.implicitHeight, aviso.aberto ? aviso._alturaPedida + 2 * aviso.margemV : 0)
     color: Tema.fundo
     opacity: pronta ? 1 : 0
     transientParent: null  // solta: não some junto com a principal
@@ -43,6 +45,11 @@ Window {
         target: painelDasTarefas
         function onFrente() {
             if (raiz.visibility === Window.Minimized) raiz.showNormal()
+            raiz.raise()
+            raiz.requestActivate()
+        }
+        function onAvisoPedido(titulo, corpo) {
+            aviso.abrir(titulo, corpo, [], "")
             raiz.raise()
             raiz.requestActivate()
         }
@@ -109,5 +116,12 @@ Window {
             color: Tema.textoSecundario
             font { family: Tema.fonte; pixelSize: 14 }
         }
+    }
+
+    // Um erro inesperado com a principal escondida (B05).
+    DialogoDeAviso {
+        id: aviso
+        objectName: "avisoNaJanelaDasTarefas"
+        onDispensado: painelDasTarefas.avisoFechado()
     }
 }

@@ -32,7 +32,10 @@ def test_um_por_vez_na_ordem(app_qt):
     segundo = fila.adicionar("dois", segundos=0)
     assert (fila.texto, fila.visivel) == ("um", True)
     fila.fechar()
-    assert (fila.texto, fila.visivel) == ("dois", True)
+    # A04: o aviso sai com o fade antes de o próximo entrar.
+    assert fila.visivel is False
+    assert _esperar(lambda: fila.visivel)
+    assert fila.texto == "dois"
     fila.dispensar(segundo)
     assert fila.visivel is False
 
@@ -44,6 +47,7 @@ def test_dispensar_um_da_fila(app_qt):
     fila.adicionar("tres", segundos=0)
     fila.dispensar(do_meio)
     fila.fechar()
+    assert _esperar(lambda: fila.visivel)
     assert fila.texto == "tres"
 
 
@@ -55,7 +59,8 @@ def test_dispensar_depois_conta_quando_aparece(app_qt):
     _esperar(minimo=0.3)
     assert fila.texto == "um"  # ainda na fila: a contagem não começou
     fila.fechar()
-    assert (fila.texto, fila.visivel) == ("dois", True)
+    assert _esperar(lambda: fila.visivel)
+    assert fila.texto == "dois"
     assert _esperar(lambda: not fila.visivel)
 
 
@@ -66,17 +71,44 @@ def test_segundos_fecha_sozinho(app_qt):
     assert _esperar(lambda: not fila.visivel)
 
 
-def test_mesma_chave_substitui(app_qt):
+def test_mesma_chave_tira_o_antigo_e_vai_ao_fim_da_fila(app_qt):
+    """A07: como `game.py:400-406` da `main`: o velho sai e o novo entra no fim."""
     fila = FilaDeAvisos()
     fila.adicionar("a", segundos=0)
     fila.adicionar("b1", segundos=0, chave=("x", "remove"))
-    fila.adicionar("b2", segundos=0, chave=("x", "remove"))  # na fila: troca no lugar
+    fila.adicionar("c", segundos=0)
+    fila.adicionar("b2", segundos=0, chave=("x", "remove"))  # na fila: sai dali e vai ao fim
     fila.fechar()
+    assert _esperar(lambda: fila.visivel)
+    assert fila.texto == "c"
+    fila.fechar()
+    assert _esperar(lambda: fila.visivel)
     assert fila.texto == "b2"
-    fila.adicionar("b3", segundos=0, chave=("x", "remove"))  # na tela: troca a da tela
-    assert fila.texto == "b3"
-    fila.fechar()
+    fila.adicionar("b3", segundos=0, chave=("x", "remove"))  # na tela: sai com o fade e o novo entra depois
     assert fila.visivel is False
+    assert _esperar(lambda: fila.visivel)
+    assert fila.texto == "b3"
+
+
+def test_o_mouse_em_cima_para_o_tempo(app_qt):
+    """A05: o tempo do aviso para com o mouse em cima e retoma de onde estava."""
+    fila = FilaDeAvisos()
+    fila.adicionar("oi", segundos=0.1)
+    fila.pausar()
+    _esperar(minimo=0.25)
+    assert fila.visivel is True
+    fila.retomar()
+    assert _esperar(lambda: not fila.visivel)
+
+
+def test_retomar_sem_pausar_nao_faz_nada(app_qt):
+    fila = FilaDeAvisos()
+    fila.retomar()
+    fila.adicionar("oi", segundos=0)
+    fila.pausar()  # sem tempo correndo
+    fila.retomar()
+    _esperar(minimo=0.05)
+    assert fila.visivel is True
 
 
 def test_clicar_roda_a_acao_e_fecha(app_qt):
@@ -134,7 +166,9 @@ def test_excluir_dispensa_o_desfazer(app_qt):
     _remover(ponte, jogo)
     ponte.fila.adicionar("outro", segundos=0)  # na fila, atrás do desfazer
     ponte.dispensar_desfazer("a")
-    assert ponte.fila.texto == "outro"  # o desfazer saiu da tela
+    assert ponte.fila.visivel is False  # o desfazer saiu da tela
+    assert _esperar(lambda: ponte.fila.visivel)
+    assert ponte.fila.texto == "outro"
     ponte.fila.fechar()
     assert ponte.fila.visivel is False
 

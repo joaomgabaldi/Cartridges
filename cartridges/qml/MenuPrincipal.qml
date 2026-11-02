@@ -127,7 +127,7 @@ MenuDoTema {
         }
     }
 
-    MenuSeparator {}
+    SeparadorDoMenu {}
     ItemDoMenu {
         objectName: "itemPreferencias"
         text: "Preferências"

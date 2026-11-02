@@ -64,6 +64,8 @@ def insumos(tmp_path):
     qwk = raiz / "build-aux" / "windows" / "qwk" / "_deps" / "qwindowkit"
     _tocar(qwk / "LICENSE", "Apache")
     _tocar(qwk / "qmsetup" / "LICENSE", "MIT")
+    _tocar(raiz / "build-aux/windows/licencas/adwaita-icon-theme.txt", "CC-BY-SA ou LGPL")
+    _tocar(raiz / "build-aux/windows/licencas/libadwaita.txt", "LGPL 2.1")
     lancador = _tocar(tmp_path / "Cartridges.exe")
     return dict(
         raiz=raiz, python=python, lib=lib, lancador=lancador,
@@ -234,6 +236,8 @@ def test_monta_as_licencas(insumos, tmp_path):
     licencas = destino / "licencas"
     assert (licencas / "QWindowKit.txt").read_text(encoding="utf-8") == "Apache"
     assert (licencas / "qmsetup.txt").read_text(encoding="utf-8") == "MIT"
+    assert (licencas / "adwaita-icon-theme.txt").read_text(encoding="utf-8") == "CC-BY-SA ou LGPL"
+    assert (licencas / "libadwaita.txt").read_text(encoding="utf-8") == "LGPL 2.1"
     assert (licencas / "FFmpeg.txt").read_text(encoding="utf-8") == "GPL do FFmpeg"
     assert (destino / "lib" / "pyside6-6.12.0.dist-info" / "licenses" / "LICENSE").is_file()
 

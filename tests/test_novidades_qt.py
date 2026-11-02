@@ -267,15 +267,15 @@ def test_atualizar_avisa_e_troca_o_aviso_pelo_resultado(app_qt, feed):
     novidades, fila = _tela()
 
     novidades.atualizar()
-    assert fila.texto == "Atualizando novidades…"
-    assert fila.visivel is True
+    assert esperar(lambda: fila.texto == "Atualizando novidades…")
     assert esperar(lambda: fila.texto == "Novidades atualizadas")
     assert fila.visivel is True  # o "Atualizando…" saiu, o resultado ficou
 
     fila.fechar()  # o aviso do resultado sai da frente; o próximo pedido é um aviso novo
+    QTest.qWait(250)  # o fade: um "Atualizando…" enfileirado aqui sairia da fila antes de aparecer
     feed.erro = requests.ConnectionError("sem rede")
     novidades.atualizar()
-    assert fila.texto == "Atualizando novidades…"
+    assert esperar(lambda: fila.texto == "Atualizando novidades…")
     assert esperar(lambda: fila.texto == "Não foi possível atualizar as novidades")
     # O cache da busca anterior continua à mostra.
     assert novidades.estado == "lista"
@@ -297,12 +297,10 @@ def test_atualizar_com_busca_em_voo_nao_comeca_outra(app_qt):
     novidades.atualizar()
 
     assert "check_async" not in checker.chamadas
-    assert fila.texto == "Atualizando novidades…"
+    assert esperar(lambda: fila.texto == "Atualizando novidades…")
     # O fim da busca em voo responde ao pedido do mesmo jeito.
     checker.buscaTerminou.emit(True)
-    assert fila.texto == "Novidades atualizadas"
-
-
+    assert esperar(lambda: fila.texto == "Novidades atualizadas")
 def test_desligar_a_chave_tira_o_aviso_de_atualizando(app_qt):
     checker = CheckerFalso()
     novidades, fila = _tela(checker)
@@ -322,7 +320,7 @@ def test_atualizar_com_o_feed_parado_nao_deixa_aviso_eterno(app_qt, feed):
     novidades.atualizar()
 
     assert feed.buscas == 0
-    assert fila.texto == "Não foi possível atualizar as novidades"
+    assert esperar(lambda: fila.texto == "Não foi possível atualizar as novidades")
     fila.fechar()
     assert fila.visivel is False  # nada ficou na fila atrás
 
@@ -341,7 +339,7 @@ def test_atualizar_com_busca_em_voo_e_chave_desligada_nao_deixa_aviso_eterno(app
 
         novidades.atualizar()
 
-        assert fila.texto == "Não foi possível atualizar as novidades"
+        assert esperar(lambda: fila.texto == "Não foi possível atualizar as novidades")
     finally:
         soltar.set()
         assert esperar(lambda: not novidades._checker.loading)  # noqa: SLF001

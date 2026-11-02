@@ -241,6 +241,8 @@ app.saindo.connect(sessao.encerrar)
 app.aboutToQuit.connect(lambda: (ordem.append("aboutToQuit"), sessao.devolver()))
 
 motor = QQmlApplicationEngine()
+from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+motor.addImageProvider("icone", ProvedorDeIcones())
 motor.rootContext().setContextProperty("sessao", sessao)
 motor.loadData(b'''import QtQuick
 Window {
@@ -341,6 +343,8 @@ app.saindo.connect(sessao.encerrar)
 app.aboutToQuit.connect(lambda: (ordem.append(["aboutToQuit", visiveis()]), sessao.devolver()))
 
 motor = QQmlApplicationEngine()
+from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+motor.addImageProvider("icone", ProvedorDeIcones())
 motor.rootContext().setContextProperty("sessao", sessao)
 motor.loadData(b'''import QtQuick
 Window {

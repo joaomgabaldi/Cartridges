@@ -318,6 +318,8 @@ def _criar_qml(fonte, pasta):
     from PySide6.QtQml import QQmlComponent, QQmlEngine  # pylint: disable=import-outside-toplevel
 
     motor = QQmlEngine()
+    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    motor.addImageProvider("icone", ProvedorDeIcones())
     componente = QQmlComponent(motor)
     componente.setData(fonte, QUrl.fromLocalFile(str(pasta / "Tela.qml")))
     objeto = componente.create()

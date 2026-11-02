@@ -9,7 +9,7 @@ import os
 
 import pytest
 from PIL import Image
-from PySide6.QtCore import QCoreApplication, QPoint, QPointF, Qt, QUrl
+from PySide6.QtCore import QCoreApplication, QObject, QPoint, QPointF, Qt, QUrl
 from PySide6.QtGui import QWheelEvent, QWindow
 from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem, QQuickWindow
@@ -288,6 +288,8 @@ def _capa_de_teste(motor, pasta, *, central, animar=False, animada=False, escala
 
 def test_central_em_alta_so_estatica(app_qt, tmp_path):
     motor = QQmlEngine()
+    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    motor.addImageProvider("icone", ProvedorDeIcones())
     capa = _capa_de_teste(motor, tmp_path, central=True)
     lateral = _capa_de_teste(motor, tmp_path, central=False)
     animada = _capa_de_teste(motor, tmp_path, central=True, animada=True)
@@ -305,6 +307,8 @@ def test_central_em_alta_so_estatica(app_qt, tmp_path):
 
 def test_reflexo_com_mipmap(app_qt, tmp_path):
     motor = QQmlEngine()
+    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    motor.addImageProvider("icone", ProvedorDeIcones())
     capa = _capa_de_teste(motor, tmp_path, central=False)
     reflexo = _achar(capa, "reflexo")
     assert [_avaliar(reflexo, f"layer.{p}") for p in ("enabled", "mipmap", "smooth")] == [True, True, True]
@@ -313,6 +317,8 @@ def test_reflexo_com_mipmap(app_qt, tmp_path):
 
 def test_animada_so_com_autoplay(app_qt, tmp_path):
     motor = QQmlEngine()
+    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    motor.addImageProvider("icone", ProvedorDeIcones())
     parada = _capa_de_teste(motor, tmp_path, central=True, animada=True, animar=False)
     tocando = _capa_de_teste(motor, tmp_path, central=True, animada=True, animar=True)
     lateral = _capa_de_teste(motor, tmp_path, central=False, animada=True, animar=True)
@@ -530,19 +536,19 @@ def test_botao_some_fora_de_todos_e_com_a_edicao_aberta(app_qt, monkeypatch):
 
 def test_tela_cheia_esconde_a_barra(app_qt, monkeypatch):
     app = _aberto_com(monkeypatch)
-    barra, area = app.achar("barraDeTitulo"), app.achar("areaDaJanela")
-    assert barra.property("visible") is True and area.property("y") == barra.property("height") > 0
+    barra, pagina = app.achar("barraDeTitulo"), app.achar("pagina")
+    assert barra.property("visible") is True and pagina.property("y") == barra.property("height") > 0
     _entrar(app)
     assert app.janela.property("telaCheia") is True
     assert barra.property("visible") is False
-    assert area.property("y") == 0
+    assert pagina.property("y") == 0
     # Os botões da barra saem do foco: o Tab não os alcança, fica no Big Picture.
     QTest.keyClick(app.janela, Qt.Key.Key_Tab)
     assert app.achar("bigPicture").property("activeFocus") is True
     assert not any(b.property("activeFocus") for b in app.janela.property("botoesDaBarra").toVariant())
     app.big_picture.sair()
     assert _esperar(lambda: not app.big_picture.visivel, limite=5)
-    assert barra.property("visible") is True and area.property("y") == barra.property("height")
+    assert barra.property("visible") is True and pagina.property("y") == barra.property("height")
     app.fechar()
 
 
@@ -660,8 +666,9 @@ def test_dica_aparece_no_botao_indisponivel(app_qt, monkeypatch):
     centro = botao.mapToScene(QPointF(botao.width() / 2, botao.height() / 2)).toPoint()
     QTest.mouseMove(app.janela, centro)
     QTest.mouseMove(app.janela, centro + QPoint(1, 0))
-    assert _esperar(lambda: _avaliar(botao, "ToolTip.visible") is True, limite=5)
-    assert _avaliar(botao, "ToolTip.text") == "Requer uma placa de vídeo com aceleração 3D."
+    dica = botao.findChild(QObject, "dica")
+    assert _esperar(lambda: dica.property("visible") is True, limite=5)
+    assert dica.property("text") == "Requer uma placa de vídeo com aceleração 3D."
     app.fechar()
 
 

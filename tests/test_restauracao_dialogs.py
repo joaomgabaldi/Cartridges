@@ -546,6 +546,8 @@ class _Janela:
         # A importação de verdade lê a pasta de atalhos; aqui só se anota o pedido.
         self.aplicativo.importar = lambda **kw: self.importacoes.append(kw)
         self.motor = QQmlEngine()
+        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         contexto = self.motor.rootContext()
         for nome, valor in (

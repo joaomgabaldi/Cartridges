@@ -87,7 +87,7 @@ Rectangle {
             for (var i = 0; i < abasLinha.children.length; ++i)
                 if (abasLinha.children[i].atual === true) abasLinha.children[i].forceActiveFocus(Qt.TabFocusReason)
         } else {
-            confirmacaoDosMetadados.visible = false
+            confirmacaoDosMetadados.aberto = false
             filtro = ""
             Qt.callLater(devolverAoRetorno)
         }
@@ -302,6 +302,7 @@ Rectangle {
         titulo: "Atualizar metadados"
         rotuloConfirmar: "Buscar o que falta"
         rotuloAlternativo: "Buscar tudo"
+        respostaInicial: "confirmar"  // `set_default_response("missing")`
         onConfirmado: preferencias.biblioteca.buscarMetadados(true)
         onAlternativo: preferencias.biblioteca.buscarMetadados(false)
     }

@@ -75,7 +75,8 @@ def test_caixa_de_numero_tem_uma_parada_de_tab_e_segue_as_setas(app):
     foco = app.janela.property("activeFocusItem")
     assert foco is not caixa and foco.parentItem() is not caixa  # o item interno não é uma segunda parada
     QTest.keyClick(app.janela, Qt.Key.Key_Backtab)
-    assert app.janela.property("activeFocusItem") is caixa
+    foco = app.janela.property("activeFocusItem")
+    assert foco is caixa or foco.parentItem() is caixa  # editável (P35): a caixa passa o foco ao seu campo
 
 
 def test_menu_principal_abre_as_preferencias(app):
@@ -618,6 +619,8 @@ def test_chave_do_wallhaven_apagada_sem_o_papel_de_parede(app):
 
 def test_placa_mostra_o_numero(app_qt):
     motor = QQmlEngine()
+    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    motor.addImageProvider("icone", ProvedorDeIcones())
     componente = QQmlComponent(motor, QUrl.fromLocalFile(str(QML / "PlacaDoMonitor.qml")))
     placa = componente.createWithInitialProperties({"numero": "2"})
     assert placa is not None, componente.errorString()

@@ -197,6 +197,12 @@ def _painel_esperando() -> Optional["PainelDasTarefas"]:
     return painel if painel is not None and shiboken6.isValid(painel) and painel.principalEscondida else None
 
 
+def painel_aberto_sem_a_principal() -> Optional["PainelDasTarefas"]:
+    """O painel, se a janela das tarefas está aberta e a principal, escondida; a janela ativa que sobrou (B05)."""
+    painel = _painel() if _painel is not None else None
+    return painel if painel is not None and painel.aberta and painel.principalEscondida else None
+
+
 def fechamento_esperando() -> bool:
     """O app está fechando: a principal está escondida à espera de um trabalho em andamento."""
     return _painel_esperando() is not None
@@ -218,6 +224,8 @@ class PainelDasTarefas(QObject):
 
     alterado = Signal()
     frente = Signal()  # a janela já aberta deve vir para a frente
+    # Um erro inesperado com a principal escondida: o aviso abre nesta janela (título, corpo).
+    avisoPedido = Signal(str, str)  # noqa: N815
 
     def __init__(self) -> None:
         super().__init__()
@@ -232,6 +240,7 @@ class PainelDasTarefas(QObject):
         self._espera.setInterval(250)
         self._espera.timeout.connect(self._conferir_a_espera)
         self._escondidas_na_espera: list[QWindow] = []
+        self._ao_fechar_aviso: Optional[Callable[[], None]] = None
         global _painel  # noqa: PLW0603
         _painel = weakref.ref(self)
         # Posto pelo `app.py` (`GeometriaDaJanela.gravar`): o `closing` grava onde a principal está (D87).
@@ -257,6 +266,17 @@ class PainelDasTarefas(QObject):
     def principalEscondida(self) -> bool:  # noqa: N802
         # A visibilidade de agora também: o fim de uma sessão traz a principal de volta sem passar por aqui.
         return self._escondida and self._janela is not None and not self._janela.isVisible()
+
+    def pedir_aviso(self, titulo: str, corpo: str, ao_fechar: Callable[[], None]) -> None:
+        """O aviso na janela das tarefas (`_janela_para_o_dialogo` da `main`)."""
+        self._ao_fechar_aviso = ao_fechar
+        self.avisoPedido.emit(titulo, corpo)
+
+    @Slot()
+    def avisoFechado(self) -> None:  # noqa: N802
+        ao_fechar, self._ao_fechar_aviso = self._ao_fechar_aviso, None
+        if ao_fechar is not None:
+            ao_fechar()
 
     @Slot()
     def encerrando(self) -> None:

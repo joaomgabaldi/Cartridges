@@ -36,10 +36,12 @@ Principal {
         else if (paginaAtual !== "todos") pilha.clear(StackView.PopTransition)
     }
 
-    // O `y` de um menu aberto por um botão da barra: abaixo dos 46 px dela, fora da área de arrasto do QWindowKit.
+    // O `y` de um menu aberto por um botão da barra: abaixo dos 47 px dela, fora da área de arrasto do QWindowKit.
     function baseDaBarra(botao) { return botao.height + (alturaDaBarra - botao.height) / 2 }
 
     telaCheia: bigPicture.visivel || sessao.emAndamento
+    // Com um diálogo na frente, a barra de título não arrasta nem aciona nada (J05).
+    barraTrancada: modalAberto
 
     tituloDaBarra: paginaAtual === "todos" ? "Todos os jogos" : paginaAtual === "zerados" ? "Jogos Zerados"
         : paginaAtual === "novidades" ? "Novidades" : detalhes.nome
@@ -50,10 +52,9 @@ Principal {
     inicio: [
         BotaoDaBarra {
             id: botaoAdicionar
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoAdicionar"
             visible: janela.paginaAtual === "todos"
-            glifo: ""
+            icone: "list-add"
             dica: "Adicionar jogo"
             onClicked: menuDeAdicionar.open()
             menuAberto: menuDeAdicionar.opened
@@ -62,25 +63,23 @@ Principal {
                 objectName: "menuDeAdicionar"
                 y: janela.baseDaBarra(parent)
                 ItemDoMenu { objectName: "itemAdicionarJogo"; text: "Adicionar jogo"; enabled: !aplicativo.importando; onTriggered: edicao.adicionar() }
-                MenuSeparator {}
+                SeparadorDoMenu {}
                 ItemDoMenu { text: "Importar"; enabled: !aplicativo.importando; onTriggered: aplicativo.importar() }
             }
         },
         BotaoDaBarra {
             id: botaoVoltar
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoVoltar"
             visible: janela.paginaAtual !== "todos"
-            glifo: ""
+            icone: "go-previous"
             dica: "Voltar"
             onClicked: janela.voltar()
         },
         BotaoDaBarra {
             id: botaoAdicionarZerado
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoAdicionarZerado"
             visible: janela.paginaAtual === "zerados" && janela.servicoDeZerados !== null
-            glifo: ""
+            icone: "list-add"
             dica: "Adicionar a Jogos Zerados"
             onClicked: janela.servicoDeZerados.abrir()
         }
@@ -90,9 +89,9 @@ Principal {
     fim: [
         BotaoDaBarra {
             id: botaoMenu
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoMenu"
-            glifo: ""
+            visible: janela.paginaAtual === "todos" || janela.paginaAtual === "zerados"
+            icone: "open-menu"
             dica: "Menu principal"
             onClicked: menuPrincipal.open()
             menuAberto: menuPrincipal.opened
@@ -106,48 +105,44 @@ Principal {
         },
         BotaoDaBarra {
             id: botaoAtualizar
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoAtualizarNovidades"
             visible: janela.paginaAtual === "novidades"
-            glifo: ""
+            icone: "view-refresh"
             dica: "Atualizar"
             onClicked: janela.servicoDeNovidades.atualizar()
         },
         BotaoDaBarra {
             id: botaoZerados
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoZerados"
             visible: janela.paginaAtual === "todos"
-            trofeu: true
+            icone: "trofeu"
             dica: "Jogos Zerados"
             onClicked: pilha.push(zerados)
         },
         BotaoDaBarra {
             id: botaoNovidades
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoNovidades"
             visible: janela.paginaAtual === "todos" && janela.servicoDeNovidades !== null && janela.servicoDeNovidades.visivel
-            glifo: ""
+            icone: "novidades"
+            tamanhoDoIcone: 20  // window.blp: pixel-size 20
             selo: janela.servicoDeNovidades !== null && janela.servicoDeNovidades.naoVistas
             dica: "Novidades"
             onClicked: { janela.servicoDeNovidades.abrir(); pilha.push(paginaDasNovidades) }
         },
         BotaoDaBarra {
             id: botaoBigPicture
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             indisponivel: !bigPicture.disponivel
             objectName: "botaoBigPicture"
             visible: janela.paginaAtual === "todos"
-            glifo: ""
+            icone: "video-display"
             dica: bigPicture.disponivel ? "Big Picture" : "Requer uma placa de vídeo com aceleração 3D."
             onClicked: bigPicture.entrar()
         },
         BotaoDaBarra {
             id: botaoBusca
-            enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             objectName: "botaoBusca"
             visible: janela.paginaAtual === "todos"
-            glifo: ""
+            icone: "system-search"
             dica: "Buscar"
             checkable: true
             checked: todos.buscaAberta
@@ -161,7 +156,7 @@ Principal {
     PaginaDaBiblioteca {
         id: todos
         objectName: "pagina"
-        anchors.fill: parent
+        anchors { fill: parent; topMargin: janela.alturaDoTopo }
         pagina: paginaTodos
         comBusca: true
         ativa: pilha.depth === 0 && !bigPicture.visivel && !sessao.emAndamento
@@ -175,7 +170,7 @@ Principal {
     StackView {
         id: pilha
         objectName: "pilha"
-        anchors.fill: parent
+        anchors { fill: parent; topMargin: janela.alturaDoTopo }
         visible: depth > 0
         enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto && !bigPicture.visivel && !sessao.emAndamento
     }
@@ -240,6 +235,12 @@ Principal {
         active: painelDasTarefas.aberta
         source: "JanelaDasTarefas.qml"
         onLoaded: item.alvo = botaoDasTarefas.alvo
+    }
+
+    // O aviso embaixo (`ToastOverlay` da `main`): sobre as páginas e abaixo de todo diálogo. As Preferências têm o delas.
+    Item {
+        id: baseDoAviso
+        anchors.fill: parent
     }
 
     // Abaixo da camada de avisos: o erro de uma validação aparece na frente do diálogo.
@@ -403,6 +404,7 @@ Principal {
         fila: aplicativo.avisos
         app: aplicativo
         atualizador: janela.servicoDeAtualizacao
+        lugarDoAviso: preferencias.aberto ? dialogoDePreferencias : janela.telaCheia ? null : baseDoAviso
     }
 
     // Atalhos arrastados do Explorer: só com a janela livre de diálogos.

@@ -46,6 +46,7 @@ from cartridges.modelos.edicao import ModeloDaEdicao
 from cartridges.modelos.historico import HistoricoDeSessoes
 from cartridges.modelos.novidades import Novidades
 from cartridges.modelos.preferencias import Preferencias
+from cartridges.modelos.provedor_de_icones import ProvedorDeIcones
 from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
 from cartridges.modelos.restaurando import Restaurando, entregar_so_ao_mudar
 from cartridges.modelos.saves import SavesDoJogo
@@ -71,7 +72,7 @@ from cartridges.utils import (
     session_wallpaper,
     single_instance,
 )
-from cartridges.utils.ajustes_do_windows import FiltroDeAjustes
+from cartridges.utils.ajustes_do_windows import FiltroDeAjustes, aplicar_cor_de_destaque
 from cartridges.utils.app_updater import AppUpdater
 from cartridges.utils.caixa_redimensionavel import CaixaDaAnotacao
 from cartridges.utils.hltb_backfill import HLTBBackfill
@@ -282,9 +283,15 @@ def _seguir_animacoes(aplicativo: Aplicativo, big_picture: BigPicture) -> None:
 
 
 def _instalar_filtro_de_ajustes(app: AplicacaoQt, aplicativo: Aplicativo) -> FiltroDeAjustes:
-    """Cada `WM_SETTINGCHANGE` das janelas do app relê as animações (D88)."""
+    """Cada `WM_SETTINGCHANGE` das janelas do app relê as animações (D88) e a cor de destaque."""
     aplicativo_fraco = weakref.ref(aplicativo)
-    filtro = FiltroDeAjustes(lambda: (a := aplicativo_fraco()) is not None and a.reler_animacoes())
+
+    def ao_mudar() -> None:
+        aplicar_cor_de_destaque()
+        if (a := aplicativo_fraco()) is not None:
+            a.reler_animacoes()
+
+    filtro = FiltroDeAjustes(ao_mudar)
     app.installNativeEventFilter(filtro)
     return filtro
 
@@ -363,6 +370,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     app.saindo.connect(sessao.encerrar)
     motor.addImageProvider("desfoque", detalhes.provedor)
     motor.addImageProvider("fundo", ProvedorDoFundo())
+    motor.addImageProvider("icone", ProvedorDeIcones())
     contexto = motor.rootContext()
     for nome, valor in (
         ("filtros", filtros), ("paginaTodos", pagina_biblioteca), ("paginaZerados", pagina_zerados),
@@ -420,6 +428,7 @@ def _acordar(abertura: _Abertura) -> None:
 def _janela_da_restauracao() -> QQmlApplicationEngine:
     """A janela "Restaurando o backup" num motor próprio, com o `Restaurando` (filho do motor) no contexto."""
     motor = QQmlApplicationEngine()
+    motor.addImageProvider("icone", ProvedorDeIcones())
     restaurando = Restaurando(motor)
     motor.rootContext().setContextProperty("restaurando", restaurando)
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "JanelaRestaurando.qml")))
@@ -518,6 +527,7 @@ def _mostrar_assistente(app: AplicacaoQt, argv: list[str], abertura: _Abertura, 
             fechar_a_janela()
 
     abertura.assistente = motor = QQmlApplicationEngine()
+    motor.addImageProvider("icone", ProvedorDeIcones())
     modelo = assistente.Assistente(ao_terminar, ao_restaurar, parent=motor)
     motor.rootContext().setContextProperty("assistente", modelo)
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "JanelaDoAssistente.qml")))
@@ -556,6 +566,7 @@ def main(argv: list[str]) -> int:
     app.setApplicationName("Cartridges")
     app.setApplicationDisplayName("Cartridges")
     app.setWindowIcon(QIcon(str(_ICONE)))
+    aplicar_cor_de_destaque()
     abertura = _Abertura()
     app.aboutToQuit.connect(lambda: _fechar(abertura))
     # "Redefinir Cartridges", agendado nas Preferências: antes do log, que mora na pasta do app e a travaria.

@@ -262,6 +262,8 @@ def test_nada_gravado_nao_mexe_na_janela(win32_falso):
 
 def _principal(geometria):
     motor = QQmlEngine()
+    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    motor.addImageProvider("icone", ProvedorDeIcones())
     motor.rootContext().setContextProperty("geometria", geometria)
     componente = QQmlComponent(motor, QUrl.fromLocalFile(str(QML / "Principal.qml")))
     janela = componente.createWithInitialProperties({"semAgente": True})
@@ -270,12 +272,12 @@ def _principal(geometria):
 
 
 def test_sem_geometria_gravada_usa_o_tamanho_do_qt(app_qt, win32_falso, state_schema):  # noqa: ARG001
-    """Nada gravado (a primeira abertura): a janela fica no tamanho de hoje do Qt, 1100×700."""
+    """Nada gravado (a primeira abertura): a janela fica no tamanho padrão da `main`, 1170×795."""
     assert state_schema.get_int("x") == UNSET
     geometria = GeometriaDaJanela()
     motor, componente, janela = _principal(geometria)
     try:
-        assert (janela.width(), janela.height()) == (1100, 700)
+        assert (janela.width(), janela.height()) == (1170, 795)
         assert win32_falso.colocadas == []
         assert janela.visibility() != QWindow.Visibility.Maximized
     finally:
@@ -285,7 +287,7 @@ def test_sem_geometria_gravada_usa_o_tamanho_do_qt(app_qt, win32_falso, state_sc
 
 
 def test_principal_restaura_depois_do_tamanho(app_qt, monkeypatch, win32_falso, state_schema):  # noqa: ARG001
-    """O `onCompleted` pede a restauração depois do tamanho de hoje: o gravado vence o 1100×700."""
+    """O `onCompleted` pede a restauração depois do tamanho de hoje: o gravado vence o 1170×795."""
     for chave, valor in (("x", 100), ("y", 50), ("width", 900), ("height", 600)):
         state_schema.set_int(chave, valor)
     tamanhos = []
@@ -298,7 +300,7 @@ def test_principal_restaura_depois_do_tamanho(app_qt, monkeypatch, win32_falso, 
     monkeypatch.setattr(window_geometry, "_place", colocar)
     motor, componente, janela = _principal(GeometriaDaJanela())
     try:
-        assert tamanhos == [(1100, 700)]
+        assert tamanhos == [(1170, 795)]
         assert win32_falso.colocadas[0][1] == Geometry(100, 50, 900, 600, False)
     finally:
         janela.deleteLater()

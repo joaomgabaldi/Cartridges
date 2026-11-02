@@ -89,6 +89,8 @@ def _achar(raiz, nome):
 class _Pagina:
     def __init__(self, preferencias):
         self.motor = QQmlEngine()
+        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.rootContext().setContextProperty("preferencias", preferencias)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "PaginaGeral.qml")))
         self.item = componente.create()

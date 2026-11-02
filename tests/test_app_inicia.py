@@ -55,6 +55,8 @@ def test_app_carrega_e_sai(tmp_path):
 
 def _carregar(url, **propriedades):
     motor = QQmlEngine()
+    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    motor.addImageProvider("icone", ProvedorDeIcones())
     componente = QQmlComponent(motor, QUrl.fromLocalFile(str(QML / url)))
     objeto = componente.createWithInitialProperties(propriedades)
     assert objeto is not None, componente.errorString()

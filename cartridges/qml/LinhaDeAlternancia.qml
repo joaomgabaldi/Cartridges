@@ -1,87 +1,64 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// Uma linha com título, explicação e uma chave liga/desliga, do diálogo de edição.
-Item {
+// O `Adw.SwitchRow`: título, explicação e o interruptor; a linha inteira aciona, com hover de 4% e 8% pressionada.
+LinhaDoGrupo {
     id: linha
 
-    // `aparece` é a regra de cada linha (ex.: só com um interruptor ligado); a busca esconde mais, nunca mostra o que a regra esconde.
-    // O grupo conta por estas duas propriedades, não pelo `visible` efetivo (que depende do próprio grupo: laço, D58).
-    property bool aparece: true
-    // Só as linhas das Preferências são buscáveis (`buscavel: true`); as dos assistentes e do editor ignoram a busca.
-    // Nas Preferências use `aparece` para a regra da linha, nunca `visible` (um `visible:` de instância desliga o filtro).
-    property bool buscavel: false
-    readonly property bool passaNoFiltro: !buscavel || BuscaDasPreferencias.passa(linha.titulo, linha.subtitulo)
-    visible: aparece && passaNoFiltro
-
-    property string titulo
-    property string subtitulo
     property alias checked: chave.checked
 
     // A pessoa ligou ou desligou a chave.
     signal alternado()
 
-    width: parent ? parent.width : implicitWidth
-    implicitHeight: textos.implicitHeight + 24
+    reservaADireita: chave.width
+    sobre: areaDaLinha.containsMouse && !chave.hovered
+    pressionada: areaDaLinha.pressed
 
-    Rectangle {
-        width: parent.width
-        height: 1
-        color: Tema.borda
-        visible: linha.y > 0
-    }
-
-    Column {
-        id: textos
-        anchors { left: parent.left; leftMargin: 16; right: chave.left; rightMargin: 12; verticalCenter: parent.verticalCenter }
-        spacing: 2
-        Text {
-            width: parent.width
-            text: linha.titulo
-            textFormat: Text.PlainText
-            wrapMode: Text.Wrap
-            color: Tema.texto
-            font { family: Tema.fonte; pixelSize: 15 }
-        }
-        Text {
-            width: parent.width
-            visible: text !== ""
-            text: linha.subtitulo
-            textFormat: Text.PlainText
-            wrapMode: Text.Wrap
-            color: Tema.textoSecundario
-            font { family: Tema.fonte; pixelSize: 12 }
-        }
-        // O clique no texto liga a chave, como na linha do Adwaita.
-        TapHandler { onTapped: { chave.forceActiveFocus(Qt.MouseFocusReason); chave.click() } }
+    MouseArea {
+        id: areaDaLinha
+        anchors.fill: parent
+        hoverEnabled: true
+        onClicked: { chave.forceActiveFocus(Qt.MouseFocusReason); chave.click() }
     }
 
     Switch {
         id: chave
         objectName: linha.objectName + "Chave"
-        anchors { right: parent.right; rightMargin: 16; verticalCenter: parent.verticalCenter }
+        anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
         focusPolicy: Qt.StrongFocus
+        hoverEnabled: true
+        padding: 0
         Keys.onReturnPressed: click()
         Keys.onEnterPressed: click()
         Accessible.name: linha.titulo
         onToggled: linha.alternado()
+        // switch: padding 3, botão de 20, raio 14; fundo 15% (20% sobre, 25% pressionado); ligado, o destaque.
         indicator: Rectangle {
-            implicitWidth: 44
-            implicitHeight: 22
-            x: chave.leftPadding
-            y: (chave.height - height) / 2
-            radius: height / 2
-            color: chave.checked ? Tema.destaque : Tema.botaoSobre
-            border { width: chave.visualFocus ? 2 : 1; color: chave.visualFocus ? Tema.texto : Tema.borda }
+            implicitWidth: 46
+            implicitHeight: 26
+            radius: 14
+            color: chave.checked ? Tema.destaque
+                : Qt.alpha(Tema.corBase, chave.pressed ? 0.25 : chave.hovered || areaDaLinha.containsMouse ? 0.20 : 0.15)
+            Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                visible: chave.checked && (chave.hovered || chave.pressed)
+                color: chave.pressed ? Qt.rgba(0, 0, 6 / 255, 0.2) : Qt.rgba(1, 1, 1, 0.1)
+            }
             Rectangle {
                 x: chave.checked ? parent.width - width - 3 : 3
                 y: 3
-                width: parent.height - 6
-                height: width
-                radius: width / 2
-                color: chave.checked ? "white" : Tema.textoSecundario
-                Behavior on x { NumberAnimation { duration: Tema.duracaoCurta } }
+                width: 20
+                height: 20
+                radius: 10
+                // color-mix(white 80%, view_bg), branco sobre e ligado.
+                color: chave.checked || chave.hovered || chave.pressed ? "white"
+                    : Qt.rgba(0.8 + 0.2 * Tema.vista.r, 0.8 + 0.2 * Tema.vista.g, 0.8 + 0.2 * Tema.vista.b, 1)
+                Sombra { camadas: chave.enabled ? [[2, 4, 0, 0, 0, 6 / 255, 0.2]] : []; raio: 10 }
+                Behavior on x { NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
             }
+            AnelDeFoco { ativo: chave.visualFocus; raio: 14 }
         }
     }
 }

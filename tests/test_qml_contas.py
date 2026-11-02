@@ -52,6 +52,8 @@ class _Tela:
     def __init__(self, avisos, abrir=lambda _url: None, em_thread=_sincrono):
         self.contas = ContasDasLojas(avisos, em_thread=em_thread, abrir=abrir)
         self.motor = QQmlEngine()
+        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.rootContext().setContextProperty("contasDeTeste", self.contas)
         componente = QQmlComponent(self.motor)
         componente.setData(_FONTE, QUrl.fromLocalFile(str(QML / "_contas.qml")))

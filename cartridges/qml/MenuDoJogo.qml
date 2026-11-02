@@ -27,7 +27,7 @@ MenuDoTema {
     // Lido ao abrir, como o `hidden-when` da `main`: o backup que termina com o menu aberto só aparece na próxima vez.
     property bool temSave: false
     onAboutToShow: temSave = saves.temBackup(jogoId)
-    MenuSeparator {
+    SeparadorDoMenu {
         visible: menu.temSave
         height: menu.temSave ? implicitHeight : 0
     }

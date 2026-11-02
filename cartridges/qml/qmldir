@@ -41,6 +41,7 @@ SeletorDeZerados 1.0 SeletorDeZerados.qml
 GraficoDoHistorico 1.0 GraficoDoHistorico.qml
 CartaoDoAviso 1.0 CartaoDoAviso.qml
 BarraDeProgresso 1.0 BarraDeProgresso.qml
+Icone 1.0 Icone.qml
 IconeDaConquista 1.0 IconeDaConquista.qml
 CabecalhoDoJogo 1.0 CabecalhoDoJogo.qml
 CartaoDeConquistas 1.0 CartaoDeConquistas.qml
@@ -74,3 +75,13 @@ DialogoDaPastaDeAtalhos 1.0 DialogoDaPastaDeAtalhos.qml
 JanelaDosPendentes 1.0 JanelaDosPendentes.qml
 EscolhaDoAtalho 1.0 EscolhaDoAtalho.qml
 DadosDoJogo 1.0 DadosDoJogo.qml
+Sombra 1.0 Sombra.qml
+AnelDeFoco 1.0 AnelDeFoco.qml
+Dica 1.0 Dica.qml
+Botao 1.0 Botao.qml
+SeparadorDoMenu 1.0 SeparadorDoMenu.qml
+MolduraDoDialogo 1.0 MolduraDoDialogo.qml
+CabecalhoDoDialogo 1.0 CabecalhoDoDialogo.qml
+DialogoDeAlerta 1.0 DialogoDeAlerta.qml
+DialogoDeAviso 1.0 DialogoDeAviso.qml
+LinhaDoGrupo 1.0 LinhaDoGrupo.qml

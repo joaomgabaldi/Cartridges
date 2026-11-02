@@ -6,9 +6,10 @@
 
 import ctypes
 import weakref
-from collections import deque
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import Property, QCoreApplication, QObject, QUrl, Signal, Slot
 
@@ -17,6 +18,16 @@ from cartridges.importer.importer import Importer
 from cartridges.importer.shortcuts_source import ShortcutsSource
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.utils import soltar_atalhos
+
+
+@dataclass(eq=False)
+class _Pedido:
+    """Um diálogo pedido pelo domínio: "dialogo" (`dialogoPedido`) ou "confirmacao" (`confirmacaoPedida`)."""
+
+    tipo: str
+    sinal: tuple
+    resposta: Callable[..., None]
+    preferencias: Any = None  # só "dialogo": a página do botão "Preferências"; None = sem o botão
 
 
 def _animacoes_do_sistema() -> bool:
@@ -47,14 +58,10 @@ class Aplicativo(QObject):
         self.varredura_conquistas = None
         # Lida pelo `main()` depois do `exec()`: o app sai e se reabre (D75).
         self.reiniciar = False
-        self._ao_fechar_dialogo: Callable[[], None] | None = None
-        # D72: uma fila FIFO só para os dois tipos de pedido; o da vez está na tela ("dialogo" ou
-        # "confirmacao") e o resto espera a resposta dele. Assim só o de cima recebe o teclado.
-        self._fila: deque[tuple[str, tuple]] = deque()
-        self._na_tela: str | None = None
-        self._ao_responder: Callable[[bool], None] | None = None
-        # Página das Preferências que o diálogo oferece; None = sem o botão, "" = abre sem página.
-        self._preferencias_do_dialogo: str | None = None
+        # R5: uma pilha, como o `Adw.Dialog.present` da `main`: o pedido novo cobre o de cima e, quando este fecha, o
+        # anterior volta. O QML tem um diálogo de cada tipo: `_na_tela` diz qual pedido cada um mostra agora.
+        self._pilha: list[_Pedido] = []
+        self._na_tela: dict[str, _Pedido | None] = {"dialogo": None, "confirmacao": None}
         self._colunas = shared.schema.get_uint("library-rows")
         self._tocar_sempre = shared.schema.get_boolean("cover-autoplay")
         # Relido a cada `WM_SETTINGCHANGE` (`reler_animacoes`, D88), como a `main`.
@@ -136,7 +143,8 @@ class Aplicativo(QObject):
     @Property(bool, notify=dialogoPedido)
     def dialogoComPreferencias(self) -> bool:  # noqa: N802
         """O diálogo pedido oferece o botão "Preferências"."""
-        return self._preferencias_do_dialogo is not None
+        pedido = self._na_tela["dialogo"]
+        return pedido is not None and pedido.preferencias is not None
 
     def pedir_dialogo(
         self,
@@ -148,22 +156,30 @@ class Aplicativo(QObject):
     ) -> None:
         """``preferencias``: a página que o botão "Preferências" abre (``""`` = a primeira); None = sem o botão.
 
-        Com outro diálogo na tela, este espera o fim dele (D72).
+        Com outro diálogo na tela, este o cobre; ao fechar, o anterior volta (R5).
         """
-        self._fila.append(("dialogo", (titulo, corpo, itens, ao_fechar, preferencias)))
-        self._mostrar_proximo()
+        self._empilhar(_Pedido("dialogo", (titulo, corpo, itens), ao_fechar, preferencias))
 
-    def _mostrar_proximo(self) -> None:
-        if self._na_tela is not None or not self._fila:
-            return
-        tipo, pedido = self._fila.popleft()
-        self._na_tela = tipo
-        if tipo == "dialogo":
-            titulo, corpo, itens, self._ao_fechar_dialogo, self._preferencias_do_dialogo = pedido
-            self.dialogoPedido.emit(titulo, corpo, itens)
-        else:
-            titulo, corpo, rotulo, self._ao_responder, destrutivo = pedido
-            self.confirmacaoPedida.emit(titulo, corpo, rotulo, "Cancelar" if destrutivo else "Dispensar", destrutivo)
+    def _empilhar(self, pedido: _Pedido) -> None:
+        self._pilha.append(pedido)
+        self._mostrar(pedido)
+
+    def _mostrar(self, pedido: _Pedido) -> None:
+        self._na_tela[pedido.tipo] = pedido
+        (self.dialogoPedido if pedido.tipo == "dialogo" else self.confirmacaoPedida).emit(*pedido.sinal)
+
+    def _tirar_do_topo(self, tipo: str) -> _Pedido | None:
+        """O pedido de cima, se ele for deste tipo; tirá-lo tira o diálogo da tela."""
+        if not self._pilha or self._pilha[-1].tipo != tipo:
+            return None
+        pedido = self._pilha.pop()
+        self._na_tela[tipo] = None
+        return pedido
+
+    def _mostrar_o_topo(self) -> None:
+        """O de cima volta, se o diálogo dele passou a mostrar outro pedido; se continua à vista, nada a fazer."""
+        if self._pilha and self._na_tela[self._pilha[-1].tipo] is not self._pilha[-1]:
+            self._mostrar(self._pilha[-1])
 
     def pedir_confirmacao(
         self,
@@ -176,36 +192,33 @@ class Aplicativo(QObject):
         """Pergunta com dois botões; ``ao_responder(True)`` se confirmou, ``False`` se saiu (Esc, X ou o botão de sair).
 
         O botão de sair é "Cancelar" se ``destrutivo``, senão "Dispensar".
-        Um pedido com outra confirmação na tela espera a resposta dela (D72).
+        Com outro diálogo na tela, este o cobre; ao responder, o anterior volta (R5).
         """
-        self._fila.append(("confirmacao", (titulo, corpo, rotulo, ao_responder, destrutivo)))
-        self._mostrar_proximo()
+        sair = "Cancelar" if destrutivo else "Dispensar"
+        self._empilhar(_Pedido("confirmacao", (titulo, corpo, rotulo, sair, destrutivo), ao_responder))
 
     @Slot(bool)
     def confirmacaoRespondida(self, confirmou: bool) -> None:  # noqa: N802
-        if self._na_tela != "confirmacao":
+        pedido = self._tirar_do_topo("confirmacao")
+        if pedido is None:
             return
-        ao_responder, self._ao_responder = self._ao_responder, None
         try:
-            ao_responder(confirmou)
+            pedido.resposta(confirmou)
         finally:
-            # Depois do callback: um pedido feito dentro dele fica atrás dos que já esperavam.
-            self._na_tela = None
-            self._mostrar_proximo()
+            # Depois do callback: um pedido feito dentro dele já está por cima.
+            self._mostrar_o_topo()
 
     @Slot(bool)
     @Slot()
     def dialogoFechado(self, abrir_preferencias: bool = False) -> None:  # noqa: N802
         """``abrir_preferencias``: foi o botão "Preferências"; ``ao_fechar`` espera a tela fechar, se ela abriu."""
-        if self._na_tela != "dialogo":
+        pedido = self._tirar_do_topo("dialogo")
+        if pedido is None:
             return
-        ao_fechar, self._ao_fechar_dialogo = self._ao_fechar_dialogo, None
-        pagina, self._preferencias_do_dialogo = self._preferencias_do_dialogo, None
         try:
-            self._ao_fechar_o_dialogo(ao_fechar, pagina, abrir_preferencias)
+            self._ao_fechar_o_dialogo(pedido.resposta, pedido.preferencias, abrir_preferencias)
         finally:
-            self._na_tela = None
-            self._mostrar_proximo()
+            self._mostrar_o_topo()
 
     def _ao_fechar_o_dialogo(self, ao_fechar: Callable[[], None] | None, pagina: str | None, abrir_preferencias: bool) -> None:
         if ao_fechar is None:

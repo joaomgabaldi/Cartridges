@@ -160,6 +160,8 @@ def test_grade_carrega_no_qml(app_qt):
 
     qml = Path(shared.__file__).parent / "qml"
     motor = QQmlEngine()
+    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    motor.addImageProvider("icone", ProvedorDeIcones())
     motor.addImportPath(str(qml.parent))
     modelo = ModeloDaBiblioteca()
     modelo.atualizar(_jogo("a", "A"))

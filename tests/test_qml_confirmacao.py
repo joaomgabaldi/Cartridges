@@ -87,6 +87,8 @@ class _Janela:
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(_DetalhesFalsos(), self.sessao)
         self.motor = QQmlEngine()
+        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         contexto = self.motor.rootContext()
         for nome, valor in (
@@ -178,8 +180,9 @@ def test_confirmacao_simples_diz_dispensar(janela):
     janela.aplicativo.pedir_confirmacao("Saves sem backup", "Corpo", "Editar jogo", lambda _c: None)
     assert _esperar(lambda: janela.achar("confirmacaoDoApp").property("visible") is True)
     assert janela.dentro_da_confirmacao("botaoCancelarDoDialogo").property("text") == "Dispensar"
-    confirmar = janela.dentro_da_confirmacao("botaoConfirmarDoDialogo")
-    assert _esperar(lambda: confirmar.property("activeFocus") is True)
+    # Como o AdwAlertDialog sem resposta padrão (`create_dialog`): o foco começa no primeiro botão.
+    sair = janela.dentro_da_confirmacao("botaoCancelarDoDialogo")
+    assert _esperar(lambda: sair.property("activeFocus") is True)
 
 
 def test_esc_responde_que_nao(janela):
@@ -202,47 +205,51 @@ def test_confirmar_responde_que_sim_uma_vez(janela):
     assert respostas == [True]
 
 
-def test_dois_pedidos_de_confirmacao_aparecem_um_depois_do_outro(janela):
+def test_o_pedido_novo_cobre_a_confirmacao_e_ela_volta_ao_fechar(janela):
+    """R5: pilha, como o `Adw.Dialog.present` da `main`: o mais recente é o que se vê e responde."""
     respostas = []
     janela.aplicativo.pedir_confirmacao("Primeira", "A", "Sim", lambda c: respostas.append(("a", c)))
     janela.aplicativo.pedir_confirmacao("Segunda", "B", "Sim", lambda c: respostas.append(("b", c)), destrutivo=True)
     confirmacao = janela.achar("confirmacaoDoApp")
     assert _esperar(lambda: confirmacao.property("visible") is True)
-    # O segundo espera: a tela ainda mostra o primeiro e nenhuma resposta foi dada.
-    assert janela.dentro_da_confirmacao("tituloDoDialogo").property("text") == "Primeira"
+    assert janela.dentro_da_confirmacao("tituloDoDialogo").property("text") == "Segunda"
+    assert janela.dentro_da_confirmacao("botaoCancelarDoDialogo").property("text") == "Cancelar"
     assert respostas == []
 
     _responder_pelo_botao(janela, "botaoConfirmarDoDialogo")
-    assert _esperar(lambda: janela.dentro_da_confirmacao("tituloDoDialogo").property("text") == "Segunda")
+    assert _esperar(lambda: janela.dentro_da_confirmacao("tituloDoDialogo").property("text") == "Primeira")
     assert confirmacao.property("visible") is True
-    assert janela.dentro_da_confirmacao("botaoCancelarDoDialogo").property("text") == "Cancelar"
-    assert respostas == [("a", True)]
+    assert janela.dentro_da_confirmacao("botaoCancelarDoDialogo").property("text") == "Dispensar"
+    assert respostas == [("b", True)]
 
+    janela.janela.show()
+    janela.janela.requestActivate()
+    assert _esperar(janela.foco_na_confirmacao)
     QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
     assert _esperar(lambda: confirmacao.property("visible") is False)
-    assert respostas == [("a", True), ("b", False)]
+    assert respostas == [("b", True), ("a", False)]
 
 
-def test_dois_dialogos_seguidos_aparecem_um_depois_do_outro(janela):
+def test_o_dialogo_novo_cobre_o_anterior_e_ele_volta_ao_fechar(janela):
     fechados = []
     janela.aplicativo.pedir_dialogo("Um", "A", [], lambda: fechados.append(1))
     janela.aplicativo.pedir_dialogo("Dois", "B", [], lambda: fechados.append(2))
     dialogo = janela.achar("dialogoDeErros")
     assert _esperar(lambda: dialogo.property("visible") is True)
-    assert dialogo.property("titulo") == "Um"
+    assert dialogo.property("titulo") == "Dois"
     assert fechados == []
 
     dialogo.fechar()
-    assert _esperar(lambda: dialogo.property("titulo") == "Dois")
+    assert _esperar(lambda: dialogo.property("titulo") == "Um")
     assert dialogo.property("visible") is True
-    assert fechados == [1]
+    assert fechados == [2]
 
     dialogo.fechar()
     assert _esperar(lambda: dialogo.property("visible") is False)
-    assert fechados == [1, 2]
+    assert fechados == [2, 1]
 
 
-def test_dialogo_e_confirmacao_seguidos_aparecem_um_depois_do_outro(janela):
+def test_o_dialogo_cobre_a_confirmacao_e_o_teclado_e_do_de_cima(janela):
     janela.janela.show()
     janela.janela.requestActivate()
     respostas, fechados = [], []
@@ -250,20 +257,31 @@ def test_dialogo_e_confirmacao_seguidos_aparecem_um_depois_do_outro(janela):
     janela.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: fechados.append(1))
     confirmacao = janela.achar("confirmacaoDoApp")
     dialogo = janela.achar("dialogoDeErros")
-    assert _esperar(lambda: confirmacao.property("visible") is True)
-    # O diálogo espera a resposta da pergunta: não aparece por baixo dela nem rouba o teclado.
-    assert dialogo.property("visible") is False
+    assert _esperar(lambda: dialogo.property("visible") is True)
+    # A pergunta fica por baixo, à vista; o de cima é o último a abrir, e só ele recebe o teclado.
+    assert confirmacao.property("visible") is True
+    assert dialogo.property("z") > confirmacao.property("z")
+    assert _esperar(lambda: janela.janela.property("activeFocusItem").objectName() == "botaoDoDialogo")
+
+    QTest.keyClick(janela.janela, Qt.Key.Key_Escape)  # responde ao diálogo, não à pergunta
+    assert _esperar(lambda: dialogo.property("visible") is False)
+    assert confirmacao.property("visible") is True
+    assert fechados == [1]
+    assert respostas == []
     assert _esperar(janela.foco_na_confirmacao)
 
-    QTest.keyClick(janela.janela, Qt.Key.Key_Escape)  # responde à pergunta, não ao diálogo
-    assert _esperar(lambda: dialogo.property("visible") is True)
-    assert confirmacao.property("visible") is False
+    QTest.keyClick(janela.janela, Qt.Key.Key_Escape)  # o foco voltou à pergunta
+    assert _esperar(lambda: confirmacao.property("visible") is False)
     assert respostas == [False]
-    assert fechados == []
 
-    QTest.keyClick(janela.janela, Qt.Key.Key_Escape)  # agora o diálogo é quem recebe o teclado
-    assert _esperar(lambda: dialogo.property("visible") is False)
-    assert fechados == [1]
+
+def test_a_confirmacao_cobre_o_dialogo_mesmo_pedida_depois(janela):
+    janela.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: None)
+    janela.aplicativo.pedir_confirmacao("Restaurar?", "Corpo", "Restaurar", lambda _c: None)
+    confirmacao = janela.achar("confirmacaoDoApp")
+    dialogo = janela.achar("dialogoDeErros")
+    assert _esperar(lambda: confirmacao.property("visible") is True)
+    assert confirmacao.property("z") > dialogo.property("z")
 
 
 def test_confirmacao_por_cima_das_preferencias(janela):

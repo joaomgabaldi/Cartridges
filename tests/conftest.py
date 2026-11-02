@@ -767,5 +767,6 @@ def app_qt():
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     from PySide6.QtGui import QGuiApplication  # noqa: PLC0415
 
-    app = QGuiApplication.instance() or QGuiApplication([])
+    # A opção desliga a animação de abrir e fechar diálogos (`Tema.animacoes`): os testes leem o `visible` na hora.
+    app = QGuiApplication.instance() or QGuiApplication(["pytest", "--sem-animacao-de-dialogo"])
     yield app

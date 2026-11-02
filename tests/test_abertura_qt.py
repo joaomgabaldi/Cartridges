@@ -195,19 +195,21 @@ def test_main_avisa_da_pasta_dos_saves_logo_depois_do_aviso_de_falha(app_qt, mon
 
     modulo_app._avisos_da_abertura(aplicativo, True)  # noqa: SLF001
 
-    assert pedidos == [("Não foi possível restaurar", "Não foi possível restaurar o backup. Tente novamente.")]
-    aplicativo.dialogoFechado()
-    assert pedidos[1] == (
+    restaurar = ("Não foi possível restaurar", "Não foi possível restaurar o backup. Tente novamente.")
+    pasta = (
         "Cópias dos saves na pasta padrão",
         "As cópias dos saves do backup foram para a pasta padrão. "
         "Para voltar a usar D:\\Saves & Cia, escolha-a novamente em Preferências.",
     )
+    redefinir_ = ("Não foi possível redefinir", "Não foi possível concluir a redefinição do Cartridges. Tente novamente.")
+    # Em pilha, como a `main`: o último a abrir é o que se vê; cada um que fecha devolve a tela ao anterior.
+    assert pedidos == [restaurar, pasta, redefinir_]
     aplicativo.dialogoFechado()
-    assert pedidos[2] == (
-        "Não foi possível redefinir", "Não foi possível concluir a redefinição do Cartridges. Tente novamente."
-    )
+    assert pedidos[3] == pasta
     aplicativo.dialogoFechado()
-    assert len(pedidos) == 3
+    assert pedidos[4] == restaurar
+    aplicativo.dialogoFechado()
+    assert len(pedidos) == 5
 
 
 def test_sem_falhas_a_abertura_nao_avisa(monkeypatch):
@@ -468,6 +470,8 @@ qt = modulo_app.AplicacaoQt([])
 painel = PainelDasTarefas()
 qt.saindo.connect(painel.encerrando)  # como o `_abrir`
 motor = QQmlApplicationEngine()
+from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+motor.addImageProvider("icone", ProvedorDeIcones())
 motor.rootContext().setContextProperty("painelDasTarefas", painel)
 motor.loadData(b"import QtQuick\nWindow { visible: true; width: 200; height: 200; "
                b"onClosing: (fechar) => fechar.accepted = painelDasTarefas.principalFechando() }")

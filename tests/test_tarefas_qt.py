@@ -141,6 +141,8 @@ class _Cena:
     def __init__(self):
         self.painel = PainelDasTarefas()
         self.motor = QQmlEngine()
+        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.rootContext().setContextProperty("painelDasTarefas", self.painel)
         self.componente = QQmlComponent(self.motor)
         self.componente.setData(_CENA, QUrl.fromLocalFile(str(QML / "_cena.qml")))

@@ -36,6 +36,8 @@ def _achar(item, nome):
 @pytest.fixture
 def janela(app_qt):  # noqa: ARG001
     motor = QQmlApplicationEngine()
+    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    motor.addImageProvider("icone", ProvedorDeIcones())
     restaurando = Restaurando(motor)
     motor.rootContext().setContextProperty("restaurando", restaurando)
     motor.load(QUrl.fromLocalFile(str(QML)))

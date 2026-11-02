@@ -16,6 +16,7 @@ from cartridges import shared
 from cartridges.utils import app_updater
 from cartridges.utils.app_updater import AppUpdater, DownloadCancelled, Release
 from tests.apoio_janela_atualizacao import Janela, avaliar, esperar
+from tests.apoio_qml_biblioteca import _achar
 
 _NOTAS = "## Novidades\n- **a** & <b>x</b>\n- `b`"
 _RELEASE = Release("2026.09.30", _NOTAS, "https://x/setup.exe", 10, "ab")
@@ -69,7 +70,7 @@ def test_pergunta_mostra_versao_corpo_e_notas(janela):
     assert avaliar(notas, "textFormat === Text.RichText") is True
     assert janela.achar("botaoAgoraNao").property("text") == "Agora não"
     assert janela.achar("botaoAtualizar").property("text") == "Atualizar"
-    assert janela.achar("botaoCancelarAtualizacao").property("visible") is False
+    assert _achar(dialogo, "botaoCancelarAtualizacao") is None  # na pergunta, esse botão não existe
     assert janela.achar("barraDaAtualizacao").property("visible") is False
     # Entra na conta do diálogo aberto: o fundo não aceita atalhos arrastados nem a barra, cliques.
     assert janela.achar("camadaDeAvisos").property("dialogoAberto") is True
@@ -91,16 +92,8 @@ def test_foco_inicial_em_agora_nao_e_tab_circula(janela):
 def test_enter_na_pergunta_nao_comeca_o_download(janela, download_falso):
     """Review Focus 1: a caixa aparece sem ser pedida; um Enter perdido nunca começa o download."""
     dialogo = _perguntar(janela)
-    # Com o foco na própria caixa (nenhum botão), Enter não faz nada.
-    dialogo.forceActiveFocus(Qt.FocusReason.TabFocusReason)
-    QTest.keyClick(janela.janela, Qt.Key.Key_Return)
-    QTest.keyClick(janela.janela, Qt.Key.Key_Enter, Qt.KeyboardModifier.KeypadModifier)
-    esperar()
-    assert dialogo.property("visible") is True
-    assert janela.atualizador.baixando is False
-
     # Com o foco inicial (em "Agora não"), Enter só fecha a pergunta.
-    janela.achar("botaoAgoraNao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    assert esperar(lambda: janela.achar("botaoAgoraNao").property("activeFocus") is True)
     QTest.keyClick(janela.janela, Qt.Key.Key_Return)
     assert esperar(lambda: dialogo.property("visible") is False)
     assert janela.atualizador.baixando is False
@@ -125,7 +118,7 @@ def test_atualizar_mostra_a_barra_e_cancelar_fecha(janela, download_falso):
     assert dialogo.property("visible") is True
     assert janela.achar("tituloDaAtualizacao").property("text") == "Baixando atualização…"
     assert janela.achar("barraDaAtualizacao").property("visible") is True
-    assert janela.achar("botaoAtualizar").property("visible") is False
+    assert _achar(dialogo, "botaoAtualizar") is None  # no download, só "Cancelar"
     assert janela.achar("porcentagemDaAtualizacao").property("text") == "0%"
     assert esperar(lambda: janela.achar("botaoCancelarAtualizacao").property("activeFocus") is True)
     assert download_falso == [_RELEASE]
@@ -168,8 +161,7 @@ def test_pergunta_fica_por_cima_das_preferencias(janela):
 
 
 def test_confirmacao_que_chega_com_a_pergunta_na_tela_fica_por_cima_e_leva_o_teclado(janela):
-    """Um diálogo da D72 não abre encoberto: a pergunta espera escondida, Esc/Enter são da confirmação, e depois
-    a pergunta volta com o foco em "Agora não"."""
+    """R5: pilha. A pergunta fica por baixo, à vista; Esc e Enter são da confirmação, e depois o foco volta a "Agora não"."""
     respostas = []
     dialogo = _perguntar(janela)
     assert esperar(lambda: janela.achar("botaoAgoraNao").property("activeFocus") is True)
@@ -177,7 +169,8 @@ def test_confirmacao_que_chega_com_a_pergunta_na_tela_fica_por_cima_e_leva_o_tec
     janela.aplicativo.pedir_confirmacao("Restaurar?", "Corpo", "Restaurar", respostas.append)
     confirmacao = janela.achar("confirmacaoDoApp")
     assert esperar(lambda: confirmacao.property("visible") is True)
-    assert dialogo.property("visible") is False
+    assert dialogo.property("visible") is True
+    assert confirmacao.property("z") > dialogo.property("z")
     assert esperar(lambda: janela.foco_dentro_de("confirmacaoDoApp"))
     # A pergunta continua pendente; Esc responde "não" à confirmação, não a ela.
     assert janela.atualizador.pergunta != {}
@@ -185,9 +178,18 @@ def test_confirmacao_que_chega_com_a_pergunta_na_tela_fica_por_cima_e_leva_o_tec
     assert esperar(lambda: confirmacao.property("visible") is False)
     assert respostas == [False]
 
-    assert esperar(lambda: dialogo.property("visible") is True)
     assert esperar(lambda: janela.achar("botaoAgoraNao").property("activeFocus") is True)
     assert janela.atualizador.pergunta != {} and janela.atualizador.baixando is False
+
+
+def test_a_pergunta_abre_por_cima_de_outro_dialogo(janela):
+    """B04: como o `dialog.present` da `main`, nada de esperar o outro fechar."""
+    janela.aplicativo.pedir_confirmacao("Restaurar?", "Corpo", "Restaurar", lambda _ok: None)
+    confirmacao = janela.achar("confirmacaoDoApp")
+    assert esperar(lambda: confirmacao.property("visible") is True)
+    dialogo = _perguntar(janela)
+    assert dialogo.property("z") > confirmacao.property("z")
+    assert esperar(lambda: janela.achar("botaoAgoraNao").property("activeFocus") is True)
 
 
 def test_dialogo_de_erros_que_chega_durante_o_download_nao_cancela_nada(janela, download_falso):  # noqa: ARG001
@@ -198,12 +200,13 @@ def test_dialogo_de_erros_que_chega_durante_o_download_nao_cancela_nada(janela, 
     janela.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: fechados.append(1))
     erros = janela.achar("dialogoDeErros")
     assert esperar(lambda: erros.property("visible") is True)
-    assert dialogo.property("visible") is False
+    assert erros.property("z") > dialogo.property("z")
+    assert esperar(lambda: janela.foco_dentro_de("dialogoDeErros"))
     QTest.keyClick(janela.janela, Qt.Key.Key_Escape)  # fecha o diálogo de erros, não cancela o download
     assert esperar(lambda: erros.property("visible") is False)
     assert fechados == [1]
     assert janela.atualizador.baixando is True and not janela.atualizador._cancel.is_set()  # noqa: SLF001
-    assert esperar(lambda: dialogo.property("visible") is True)
+    assert dialogo.property("visible") is True
 
 
 def test_o_dialogo_nao_aparece_sem_atualizador_no_contexto(app_qt):  # noqa: ARG001
@@ -233,14 +236,13 @@ def test_ao_fechar_a_pergunta_o_foco_volta_a_grade(janela, tecla):
 
 
 def test_pergunta_respondida_com_outro_dialogo_aberto_nao_devolve_o_foco(janela):
-    """A pergunta escondida para dar lugar a uma confirmação perde o `retorno`; respondida de fora, o foco segue na confirmação."""
+    """A pergunta coberta por uma confirmação, respondida de fora: o foco segue na confirmação, não volta a quem a abriu."""
     dialogo = _perguntar(janela)
     assert dialogo.property("retorno") is not None
     janela.aplicativo.pedir_confirmacao("Restaurar?", "Corpo", "Restaurar", lambda _ok: None)
     confirmacao = janela.achar("confirmacaoDoApp")
     assert esperar(lambda: confirmacao.property("visible") is True)
     assert esperar(lambda: janela.foco_dentro_de("confirmacaoDoApp"))
-    assert esperar(lambda: dialogo.property("retorno") is None)  # zerado ao esconder, não só ao responder
     janela.atualizador.responder(False)
     assert esperar(lambda: janela.atualizador.pergunta == {})
     assert janela.foco_dentro_de("confirmacaoDoApp")

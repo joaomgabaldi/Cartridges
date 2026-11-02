@@ -302,7 +302,7 @@ def test_soltar_avisa_ate_o_fim_da_importacao(tmp_path, schema, app_qt, monkeypa
     assert fila.adicionados == [("Importando atalhos…", "", 0), ("1 arquivo foi ignorado.", "", 5)]
     assert fila.texto == "Importando atalhos…"
     importacoes[0]["ao_terminar"]()
-    assert fila.texto == "1 arquivo foi ignorado."
+    assert _esperar(lambda: fila.texto == "1 arquivo foi ignorado.")
 
 
 def test_soltar_durante_importacao_nao_copia(tmp_path, schema, app_qt):
@@ -428,6 +428,8 @@ class _Janela:
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(_DetalhesFalsos(), self.sessao)
         self.motor = QQmlEngine()
+        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         contexto = self.motor.rootContext()
         for nome, valor in (
@@ -528,7 +530,7 @@ def test_dialogo_de_erros_sem_preferencias_esconde_o_segundo_botao(app_qt):
     janela = _Janela()
     janela.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: None)
     _esperar()
-    assert janela.achar("botaoSecundarioDoDialogo").property("visible") is False
+    assert _achar(janela.achar("dialogoDeErros"), "botaoSecundarioDoDialogo") is None
     janela.fechar()
 
 
@@ -622,5 +624,6 @@ def test_resumo_vazio_silencioso_nao_aparece(fonte, app_qt, monkeypatch):
 
 def test_todo_texto_do_dialogo_e_texto_puro():
     """Caminhos e mensagens de erro não são marcação: nenhum `Text` do diálogo fica no formato automático."""
-    fonte_qml = (QML / "DialogoDeAviso.qml").read_text(encoding="utf-8")
-    assert fonte_qml.count("Text {") == fonte_qml.count("textFormat: Text.PlainText") > 0
+    for arquivo in ("DialogoDeAlerta.qml", "LinhaDoGrupo.qml"):
+        fonte_qml = (QML / arquivo).read_text(encoding="utf-8")
+        assert fonte_qml.count("Text {") == fonte_qml.count("textFormat: Text.PlainText") > 0

@@ -532,6 +532,6 @@ def test_cores_do_cartao_da_sessao_nao_seguem_o_tema(app_qt, sem_vigia):
     assert _expr(barra, "Tema.escuro") is False
     assert _expr(barra, "background.color.toString()") == "#3d3d3d" != _expr(barra, "Tema.botaoSobre.toString()")
     tema = _expr(rolagem, "Tema.textoSecundario.toString()")
-    assert _expr(rolagem, "contentItem.color.toString()") == "#9a9a9a" != tema
+    assert _expr(rolagem, "contentItem.color.toString()") == "#339a9a9a" != tema  # a cor da tela da sessão, com o alfa de repouso (20%)
     assert _expr(ladrilho, "Qt.rgba(color.r, color.g, color.b, 1).toString()") == "#ffffff"
     app.fechar()
