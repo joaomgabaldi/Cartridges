@@ -165,8 +165,9 @@ def passa(linha: Linha, busca: str, genero: str, ano: str, status: str) -> bool:
 
 
 def chave_alfabetica(texto: str) -> str:
-    """Ordem alfabética que não exila os acentos: NFKD separa a marca da letra-base."""
-    return unicodedata.normalize("NFKD", texto.casefold())
+    """Ordem alfabética que não exila os acentos: NFKD separa a marca da letra-base e a marca é descartada."""
+    decomposto = unicodedata.normalize("NFKD", texto.casefold())
+    return "".join(c for c in decomposto if not unicodedata.combining(c))
 
 
 def opcoes(linhas: Iterable[Linha]) -> tuple[list[str], list[str]]:

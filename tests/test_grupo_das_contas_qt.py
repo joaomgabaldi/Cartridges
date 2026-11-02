@@ -560,6 +560,30 @@ def test_varre_os_jogos_quando_o_ok_chega_depois_do_cancelar(monkeypatch, avisos
     assert avisos.textos == []
 
 
+def test_ok_tardio_nao_esquece_o_pedido_novo(monkeypatch, avisos):
+    estado = {"conectada": False}
+    monkeypatch.setattr(conta, "conectada", lambda: estado["conectada"])
+    monkeypatch.setattr(login, "cancelar_pendente", lambda: None)
+    monkeypatch.setattr(modulo, "_varrer_jogos_da_loja", lambda _filtro, _loja: None)
+    retornos = []
+
+    class Pedido:
+        def cancelar(self):
+            pass
+
+    monkeypatch.setattr(login, "entrar", lambda ao_terminar, **_k: retornos.append(ao_terminar) or Pedido())
+    grupo = _contas(avisos)
+    grupo.clicarMicrosoft()
+    grupo.clicarMicrosoft()  # cancela o primeiro
+    retornos[0](login.Resultado.CANCELADO)
+    grupo.clicarMicrosoft()  # pedido novo
+    novo = grupo._pedido  # noqa: SLF001
+    assert novo is not None
+    estado["conectada"] = True  # a troca do antigo acabou conectando a conta
+    retornos[0](login.Resultado.OK)  # o OK tardio do antigo
+    assert grupo._pedido is novo  # noqa: SLF001
+
+
 def test_grupo_largado_no_meio_do_login_da_microsoft_ainda_varre(monkeypatch, avisos):
     import gc  # noqa: PLC0415
 

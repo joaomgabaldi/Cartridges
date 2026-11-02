@@ -425,4 +425,39 @@ def test_fim_da_importacao_roda_uma_vez_mesmo_com_erro(importer, monkeypatch):
     assert terminou == [1]
 
 
+def test_erro_no_fim_nao_perde_os_jogos_importados(importer, make_game, monkeypatch):
+    def estoura():
+        raise RuntimeError("falhou")
+
+    monkeypatch.setattr(importer, "resolver_pendencias", estoura)
+    pedidos = []
+    varredura = type("V", (), {"varrer_jogos": lambda _s, jogos: pedidos.append(list(jogos))})()
+    _terminar_importacao(
+        importer, monkeypatch, varredura, {"shortcuts_a"},
+        [make_game(game_id="shortcuts_a", steam_appid="570")],
+    )
+    assert importer.imported_game_ids == {"shortcuts_a"}
+    assert shared.store.new_game_ids == set()
+    assert [[j.game_id for j in p] for p in pedidos] == [["shortcuts_a"]]
+
+
+def test_erro_ao_terminar_a_tarefa_nao_prende_a_importacao(importer, monkeypatch):
+    from PySide6.QtCore import QTimer  # noqa: PLC0415
+
+    class Tarefa:
+        def atualizar(self, *_):
+            pass
+
+        def terminar(self):
+            raise RuntimeError("falhou")
+
+    importer.tarefa = Tarefa()
+    importer._relogio = QTimer()  # noqa: SLF001
+    importer._relogio.start(100)  # noqa: SLF001
+    with pytest.raises(RuntimeError):
+        importer._tic()  # noqa: SLF001
+    assert not importer._relogio.isActive()  # noqa: SLF001
+    assert importer.tarefa is None
+
+
 # endregion

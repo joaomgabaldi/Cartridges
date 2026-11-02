@@ -592,10 +592,13 @@ def _voltou(lote: _Lote, destino: Path, resultado: Resultado) -> None:
     if lote is not _lote or destino not in lote.pendentes:
         return
     game_id = lote.pendentes.pop(destino)
-    if ao_terminar_copia is not None:
-        ao_terminar_copia(game_id, resultado)
-    if ao_terminar_da_pagina is not None:
-        ao_terminar_da_pagina(game_id, resultado)
+    # Um gancho que levanta não pode deixar a última cópia sem encerrar o lote.
+    for gancho in (ao_terminar_copia, ao_terminar_da_pagina):
+        if gancho is not None:
+            try:
+                gancho(game_id, resultado)
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.warning("Falha ao avisar o fim da cópia de %s", game_id, exc_info=True)
     lote.feitos += 1
     lote.tarefa.atualizar(lote.feitos)
     if not lote.pendentes:

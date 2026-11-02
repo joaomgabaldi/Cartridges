@@ -350,6 +350,8 @@ def test_trocar_o_periodo_mantem_as_linhas_da_tabela(app_qt):
     assert sorted(map(id, depois)) == sorted(map(id, antes))
     assert app.historico.periodo == "week"
     app.fechar()
+
+
 # -- o gráfico --------------------------------------------------------------------------------------
 
 

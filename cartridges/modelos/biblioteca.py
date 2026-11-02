@@ -177,8 +177,8 @@ class ModeloDaBiblioteca(QAbstractListModel):
             copias_animadas.preparar(capas)
 
     def _capa_animada_sem_copia(self, linha: Linha) -> Path | None:
-        """O arquivo da capa, se ela é animada e a cópia da grade falta (e não falhou antes)."""
-        if linha.capa_animada or (linha.jogo_id, linha.capa) in self._sem_copia:
+        """O arquivo da capa, se ela é animada (e não falhou antes); o ``preparar`` vê quais cópias, da grade ou grande, faltam."""
+        if (linha.jogo_id, linha.capa) in self._sem_copia:
             return None
         jogo = self._jogos.get(linha.jogo_id)
         caminho = jogo.get_cover_path() if jogo is not None else None

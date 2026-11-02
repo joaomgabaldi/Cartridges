@@ -557,6 +557,15 @@ def test_set_loading_avisa_quando_o_estado_muda(app_qt, store):
 # -- as cópias animadas da página ----------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _ganchos_da_pagina_limpos(monkeypatch):
+    """Os ganchos da página são globais: cada teste começa sem os de outro e o `monkeypatch` os devolve no fim."""
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    monkeypatch.setattr(copias_animadas, "ao_terminar_da_pagina", None)
+    monkeypatch.setattr(copias_animadas, "soltar_da_pagina", None)
+
+
 def _com_copias(game_id="a", grade=True, grande=True):
     """Uma capa animada de verdade em `covers_dir`, com as cópias pedidas já geradas."""
     from cartridges.utils import copias_animadas  # noqa: PLC0415

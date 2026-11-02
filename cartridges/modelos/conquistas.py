@@ -286,7 +286,7 @@ class ConquistasDoJogo(QObject):
         self._refazer(("pagina",))
 
     def _sessao_mudou(self) -> None:
-        """Só um jogo novo (ou o fim) refaz o cartão: o `alterado` também vem a cada tique do relógio."""
+        """Só um jogo novo (ou o fim) refaz o cartão: o `alterado` também sai com outros campos da sessão."""
         jogo = self._sessao.jogoId
         if jogo == self._jogo_da_sessao:
             return

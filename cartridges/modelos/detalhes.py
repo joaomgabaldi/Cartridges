@@ -360,12 +360,12 @@ class DetalhesDoJogo(QObject):
     def copia_pronta(self, game_id: str, _resultado: str) -> None:
         """Uma cópia do jogo ficou pronta: a página toca a grande, sem esperar outra mudança. Só na principal."""
         if game_id == self._atual and (jogo := self._mostrado()) is not None:
-            self._mesclar({"capaAnimada": self._copia_animada(jogo)})
+            self._mesclar({"capaAnimada": self._copia_animada(jogo.get_cover_path(), Linha.de(jogo))})
 
     @staticmethod
-    def _copia_animada(jogo: Jogo) -> str:
+    def _copia_animada(caminho: Path | None, linha: Linha) -> str:
         """A cópia grande, ou a da grade enquanto a grande não existe."""
-        return url_da_copia(jogo.get_cover_path(), 1) or Linha.de(jogo).capa_animada
+        return url_da_copia(caminho, 1) or linha.capa_animada
 
     @Slot()
     def esquecer(self) -> None:
@@ -393,7 +393,7 @@ class DetalhesDoJogo(QObject):
     def _atualizar(self, jogo: Jogo, trocou: bool) -> None:
         linha = Linha.de(jogo)
         campos = {
-            "jogoId": jogo.game_id, "nome": jogo.name, "capa": linha.capa, "capaAnimada": self._copia_animada(jogo),
+            "jogoId": jogo.game_id, "nome": jogo.name, "capa": linha.capa, "capaAnimada": self._copia_animada(jogo.get_cover_path(), linha),
             "desenvolvedora": jogo.developer or "", "publicadora": jogo.publisher or "",
             "dataDeLancamento": data_de_lancamento(jogo), "nota": nota(jogo), "metacritic": metacritic(jogo),
             "avaliacoes": avaliacoes(jogo), "genero": jogo.genre or "", "controle": controle(jogo),

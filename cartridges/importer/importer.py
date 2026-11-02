@@ -177,13 +177,12 @@ class Importer(ErrorProducer):
         if not self.finished:
             return True
 
-        if self.tarefa is not None:
-            self.tarefa.terminar()
-            self.tarefa = None
-            self._progresso = None
-        # Parado antes: um erro no fim não pode repetir o `finish_import` a cada tique.
+        # Parado antes de tudo: um erro no fim não pode repetir o `finish_import` a cada tique.
         if self._relogio is not None:
             self._relogio.stop()
+        if self.tarefa is not None:
+            tarefa, self.tarefa, self._progresso = self.tarefa, None, None
+            tarefa.terminar()
         self.finish_import()
         return False
 
@@ -195,9 +194,13 @@ class Importer(ErrorProducer):
         try:
             self.resolver_pendencias()
             self.remove_games()
-            self.imported_game_ids = shared.store.new_game_ids
-            shared.store.new_game_ids = set()
-            shared.store.duplicate_game_ids = set()
+        except Exception:  # noqa: BLE001
+            logging.exception("Erro ao encerrar a importação")
+        # Fora do `try`: com erro acima, os jogos novos ainda chegam à varredura.
+        self.imported_game_ids = shared.store.new_game_ids
+        shared.store.new_game_ids = set()
+        shared.store.duplicate_game_ids = set()
+        try:
             self.__class__.summary_toast = self.create_summary_toast()
             self.create_error_dialog()
         except Exception:  # noqa: BLE001

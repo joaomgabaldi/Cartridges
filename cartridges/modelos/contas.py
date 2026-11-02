@@ -241,12 +241,16 @@ def _varrer_jogos_da_loja(filtro: Callable[[Any], bool], loja: str) -> None:
         logging.warning("Falha ao ler as conquistas da conta %s depois do login", loja, exc_info=True)
 
 
-def _ao_entrar_xbox(grupo: "weakref.ref[ContasDasLojas]", avisos: Any, resultado: "xbox_login.Resultado") -> None:
+def _ao_entrar_xbox(
+    grupo: "weakref.ref[ContasDasLojas]", avisos: Any, quem: object, resultado: "xbox_login.Resultado"
+) -> None:
     """O fim do login da conta Microsoft. Sem o grupo (a tela fechou), sobra só a leitura dos jogos: nada de aviso nem
     de linha."""
     vivo = grupo()
     if vivo is not None:
-        vivo._pedido = None  # noqa: SLF001
+        # Só esquece o pedido que terminou: o OK tardio de um cancelado não apaga o pedido novo.
+        if vivo._quem_pediu is quem:  # noqa: SLF001
+            vivo._pedido = None  # noqa: SLF001
         vivo._atualizar()  # noqa: SLF001
     # Cancelar durante a troca de código pode deixar a conta conectada: o que vale é o estado da conta, não o
     # resultado que chegou.
@@ -321,6 +325,7 @@ class ContasDasLojas(QObject):
         self._em_thread = em_thread
         self._fechado = False
         self._pedido: Any = None  # o login pendente da conta Microsoft
+        self._quem_pediu: object = None  # a marca do clique que o criou
         self._logins: dict[str, LoginDaLoja] = {}  # as janelas à vista
         self._linhas = self._montar()
         # Os ouvintes das contas são globais: com referência fraca, não seguram o grupo.
@@ -384,7 +389,8 @@ class ContasDasLojas(QObject):
             self._atualizar()
             return
         try:
-            self._pedido = xbox_login.entrar(partial(_ao_entrar_xbox, weakref.ref(self), self._avisos))
+            quem = self._quem_pediu = object()
+            self._pedido = xbox_login.entrar(partial(_ao_entrar_xbox, weakref.ref(self), self._avisos, quem))
         except Exception as erro:  # pylint: disable=broad-exception-caught
             # Porta local bloqueada, limite de handles, falha ao criar a thread: o clique não levanta e a pessoa vê o aviso.
             logging.warning("Falha ao iniciar o login da conta Microsoft: %s", type(erro).__name__)
@@ -393,7 +399,7 @@ class ContasDasLojas(QObject):
         self._atualizar()
 
     def _ao_entrar(self, resultado: "xbox_login.Resultado") -> None:
-        _ao_entrar_xbox(weakref.ref(self), self._avisos, resultado)
+        _ao_entrar_xbox(weakref.ref(self), self._avisos, self._quem_pediu, resultado)
 
     # -- as contas Epic e EA ---------------------------------------------------------------------
 

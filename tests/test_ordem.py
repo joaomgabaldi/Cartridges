@@ -214,6 +214,12 @@ def test_a_z_poe_os_acentos_junto_da_letra():
     assert [nomes[i] for i in _ordenar(linhas, "z-a")] == ["Zelda", "Fable", "Éden", "Banana", "Árvore"]
 
 
+def test_a_z_acento_junto_da_mesma_inicial():
+    linhas = [_linha(str(i), nome) for i, nome in enumerate(["Epic", "Éden", "Ábaco", "Azul"])]
+    nomes = {linha.jogo_id: linha.nome for linha in linhas}
+    assert [nomes[i] for i in _ordenar(linhas, "a-z")] == ["Ábaco", "Azul", "Éden", "Epic"]
+
+
 def test_chave_nao_refaz_a_data_a_cada_comparacao(monkeypatch):
     ordem.chave.cache_clear()
     chamadas = []

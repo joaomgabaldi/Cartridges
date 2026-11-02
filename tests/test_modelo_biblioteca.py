@@ -461,6 +461,14 @@ def test_copia_pronta_atualiza_a_linha(app_qt, pedidos):
     assert _animada_de(modelo).startswith("file:///") and mudancas
 
 
+def test_copia_grande_faltando_e_pedida_ao_ativar(app_qt, pedidos):
+    caminho, _ = _capa_animada("a")  # só a cópia da grade está no disco
+    modelo = ModeloDaBiblioteca()
+    modelo.atualizar(_jogo("a", "A"))
+    modelo.ativar_copias()
+    assert pedidos == [[("a", caminho)]], "o preparar filtra o que já está em dia"
+
+
 def test_copia_que_nao_saiu_nao_e_pedida_de_novo(app_qt, pedidos):
     _capa_animada("a", com_copia=False)
     modelo = ModeloDaBiblioteca()

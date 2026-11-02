@@ -978,6 +978,20 @@ def test_erro_inesperado_resulta_falhou_e_a_tarefa_termina(
     assert "a.webp" in caplog.text
 
 
+def test_gancho_que_levanta_nao_prende_o_lote(fila, tarefas_criadas, geradas, monkeypatch):
+    def estoura(game_id, resultado):
+        raise RuntimeError("falhou")
+
+    monkeypatch.setattr(copias_animadas, "ao_terminar_copia", estoura)
+    monkeypatch.setattr(copias_animadas, "ao_terminar_da_pagina", estoura)
+
+    copias_animadas.preparar([_capa("a")])
+    fila.rodar_tudo()
+
+    assert tarefas_criadas[0].terminadas == 1
+    assert copias_animadas._lote is None  # noqa: SLF001
+
+
 def test_capa_nova_avisa_a_grade_quando_a_copia_fica_pronta(fila, tarefas_criadas, geradas, monkeypatch, tmp_path):
     """O ``apagar`` da troca não pode levar o ``preparar`` da capa nova: a grade é avisada das duas cópias."""
     from cartridges.utils import save_cover  # noqa: PLC0415
