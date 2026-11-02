@@ -242,6 +242,7 @@ class FiltroDeEventos(QObject):
             pass
         return False
 
+
 def _ligar_tela(alvo) -> None:  # type: ignore
     """Liga os sinais de um popup ou loader do QML, quando ele recebe um filho.
 
