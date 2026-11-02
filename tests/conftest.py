@@ -42,6 +42,8 @@ _DADOS_DA_SESSAO = tempfile.mkdtemp(prefix="cartridges-testes-")
 _REGISTRO_DA_SESSAO = f"{_RAIZ_REGISTRO}\\sessao-{uuid.uuid4()}"
 os.environ["CARTRIDGES_DADOS"] = _DADOS_DA_SESSAO
 os.environ["CARTRIDGES_REGISTRO"] = _REGISTRO_DA_SESSAO
+# O log detalhado (rastreio de toda chamada) fica desligado nos testes; os que precisam o ligam.
+os.environ["CARTRIDGES_LOG_DETALHADO"] = "0"
 
 
 def pytest_configure(config):

@@ -185,3 +185,47 @@ def test_ativo_variavel_vence_constante(monkeypatch):
     assert detalhado.ativo() is False
     monkeypatch.setattr(detalhado, "ATIVO", True)
     assert detalhado.ativo() is True
+
+
+def _modulo(nome, fonte):
+    espaco = {"__name__": nome}
+    exec(compile(fonte, "<teste>", "exec"), espaco)  # pylint: disable=exec-used
+    return type("Modulo", (), espaco)
+
+
+def test_excecao_de_terceiro_atravessa_o_rastreio_intacta(app, caplog):
+    _com_log(caplog)
+    terceiro = _modulo("terceiro.a", "def levanta():\n    raise KeyError('x')\n")
+    erro = None
+    try:
+        terceiro.levanta()
+    except KeyError as e:
+        erro = e
+    assert erro is not None and erro.args == ("x",)
+    assert _linhas(caplog) == []
+
+
+_IDENTICA = "def f():\n    return 1\n"
+
+
+def test_funcao_identica_de_terceiro_nao_esconde_a_do_app(app, caplog):  # pylint: disable=unused-argument
+    _com_log(caplog)
+    detalhado.remover_rastreio()
+    terceiro = _modulo("terceiro.b", _IDENTICA)
+    meu = _modulo("cartridges.a", _IDENTICA)
+    detalhado.instalar_rastreio()
+    terceiro.f()
+    meu.f()
+    assert any("cartridges.a.f" in l for l in _linhas(caplog))
+
+
+def test_ferramenta_ocupada_so_gera_aviso(monkeypatch, caplog):
+    from cartridges.logging import setup  # pylint: disable=import-outside-toplevel
+
+    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "1")
+    sys.monitoring.use_tool_id(sys.monitoring.PROFILER_ID, "outra")
+    try:
+        setup._ligar_rastreio()  # pylint: disable=protected-access
+    finally:
+        sys.monitoring.free_tool_id(sys.monitoring.PROFILER_ID)
+    assert any("Log detalhado desligado" in r.getMessage() for r in caplog.records)

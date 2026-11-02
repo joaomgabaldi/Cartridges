@@ -43,8 +43,6 @@ _FERRAMENTA = _mon.PROFILER_ID
 
 # Por thread: a pilha de horários de início e a trava de reentrada.
 _estado = threading.local()
-# Código -> é do app? Resolvido uma vez por objeto `code`.
-_do_app: dict = {}
 
 
 def ativo() -> bool:
@@ -63,12 +61,10 @@ def _e_do_app(code, frame) -> bool:  # type: ignore
     Usa o ``__name__`` dos globais, e não ``co_filename``, que muda no app
     instalado a partir de ``.pyc``.
     """
-    resposta = _do_app.get(code)
-    if resposta is None:
-        nome = frame.f_globals.get("__name__", "")
-        resposta = nome.startswith("cartridges.") and not nome.startswith("cartridges.logging")
-        _do_app[code] = resposta
-    return resposta
+    # Sem cache por `code`: ele compara por valor, e funções idênticas de um
+    # módulo de terceiros e do app colidiriam.
+    nome = frame.f_globals.get("__name__", "")
+    return nome.startswith("cartridges.") and not nome.startswith("cartridges.logging")
 
 
 def _valor(obj) -> str:  # type: ignore
@@ -104,12 +100,13 @@ def _rotulo(code, frame) -> str:  # type: ignore
     return f"{frame.f_globals.get('__name__', '?')}.{code.co_qualname}"
 
 
-def _evento(empilha: bool, desempilha: bool, texto):  # type: ignore
+def _evento(empilha: bool, desempilha: bool, texto, desliga: bool = False):  # type: ignore
     """Monta o callback de um evento.
 
     ``texto(code, frame, profundidade, duracao, extra)`` devolve a linha, ou
     ``None`` para só mexer na pilha. Todo callback engole qualquer falha: o
-    rastreio nunca levanta dentro do código rastreado.
+    rastreio nunca levanta dentro do código rastreado. ``desliga`` marca os
+    eventos que aceitam ``DISABLE`` para o código de terceiros.
     """
 
     def callback(code, _offset, *extra):  # type: ignore
@@ -119,7 +116,7 @@ def _evento(empilha: bool, desempilha: bool, texto):  # type: ignore
                 return None
             frame = sys._getframe(1)  # pylint: disable=protected-access
             if not _e_do_app(code, frame):
-                return _mon.DISABLE if (empilha or desempilha) else None
+                return _mon.DISABLE if desliga else None
             _estado.trava = True
             try:
                 duracao = 0.0
@@ -159,11 +156,11 @@ def _levantou(code, frame, profundidade, _duracao, extra):  # type: ignore
 # gerador abandonado recebendo `close()`) empilha, para o PY_UNWIND seguinte
 # não desempilhar a chamada de outra função.
 _CALLBACKS = {
-    _EV.PY_START: _evento(True, False, _entrada),
-    _EV.PY_RESUME: _evento(True, False, _retomada),
+    _EV.PY_START: _evento(True, False, _entrada, True),
+    _EV.PY_RESUME: _evento(True, False, _retomada, True),
     _EV.PY_THROW: _evento(True, False, _retomada),
-    _EV.PY_RETURN: _evento(False, True, _saida),
-    _EV.PY_YIELD: _evento(False, True, _saida),
+    _EV.PY_RETURN: _evento(False, True, _saida, True),
+    _EV.PY_YIELD: _evento(False, True, _saida, True),
     _EV.RAISE: _evento(False, False, _levantou),
     _EV.PY_UNWIND: _evento(False, True, None),
 }
@@ -175,7 +172,6 @@ def instalar_rastreio() -> None:
     global _instalado  # pylint: disable=global-statement
     if _instalado:
         return
-    _do_app.clear()
     _mon.use_tool_id(_FERRAMENTA, "cartridges-rastreio")
     _instalado = True
     for evento, callback in _CALLBACKS.items():
@@ -194,3 +190,4 @@ def remover_rastreio() -> None:
         _mon.register_callback(_FERRAMENTA, evento, None)
     _mon.free_tool_id(_FERRAMENTA)
     _instalado = False
+

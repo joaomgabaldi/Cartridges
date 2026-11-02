@@ -28,6 +28,7 @@ import threading
 from PySide6.QtCore import QtMsgType, qInstallMessageHandler
 
 from cartridges import shared
+from cartridges.logging import detalhado
 from cartridges.logging.session_file_handler import SessionFileHandler
 
 
@@ -143,11 +144,22 @@ def setup_logging() -> None:
         },
     }
     logging_dot_config.dictConfig(config)
+    _ligar_rastreio()
     registrar_excecoes_nao_tratadas()
     registrar_avisos_do_qt()
     for handler in logging.getLogger().handlers:
         if isinstance(handler, SessionFileHandler):
             registrar_quedas_nativas(handler.log_file)
+
+
+def _ligar_rastreio() -> None:
+    """Liga o log detalhado, se ativo. Outra ferramenta com o mesmo id (cProfile) só gera um aviso."""
+    if not detalhado.ativo():
+        return
+    try:
+        detalhado.instalar_rastreio()
+    except ValueError:
+        logging.warning("Log detalhado desligado: outra ferramenta de monitoramento (cProfile, p.ex.) está em uso")
 
 
 def registrar_excecoes_nao_tratadas() -> None:
