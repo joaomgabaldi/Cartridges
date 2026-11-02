@@ -101,16 +101,6 @@ GridView {
     onCountChanged: { contagemMudou = true; fimDaContagem.restart() }
     Timer { id: fimDaContagem; interval: 150; onTriggered: grade.contagemMudou = false }
 
-    // As capas animadas pausadas guardam o quadro e o arquivo por 30 s; passando de 8, a mais antiga volta ao primeiro.
-    property var pausadas: []
-    function registrarPausa(cartao) {
-        var lista = pausadas.filter(c => c !== cartao)
-        lista.push(cartao)
-        while (lista.length > 8) lista.shift().liberar()
-        pausadas = lista
-    }
-    function esquecerPausa(cartao) { pausadas = pausadas.filter(c => c !== cartao) }
-
     function abrirDoAtual() {
         if (currentItem) grade.abrirDetalhes(currentItem.jogoId)
     }
@@ -204,8 +194,8 @@ GridView {
             id: cartao
             anchors { centerIn: parent; horizontalCenterOffset: celula.desvioX; verticalCenterOffset: celula.desvioY }
             temAtualizacao: parent.temAtualizacao
-            onPausou: grade.registrarPausa(cartao)
-            Component.onDestruction: grade.esquecerPausa(cartao)
+            onPausou: CapasPausadas.registrar(cartao)
+            Component.onDestruction: CapasPausadas.esquecer(cartao)
             modelo: grade.biblioteca
             jogoId: parent.jogoId
             nome: parent.nome

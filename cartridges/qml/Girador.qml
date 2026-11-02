@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Shapes
 
 // O `Adw.Spinner`: um arco que gira, cresce e encolhe, na cor do texto (`currentColor`). Só anima com `running`.
-// shortcut: o tamanho de 64 não foi medido na libadwaita (o widget enche o espaço que recebe); conferir na rodada visual.
 Item {
     id: girador
 

@@ -87,3 +87,4 @@ DialogoDeAviso 1.0 DialogoDeAviso.qml
 LinhaDoGrupo 1.0 LinhaDoGrupo.qml
 Girador 1.0 Girador.qml
 RolagemPorMola 1.0 RolagemPorMola.qml
+singleton CapasPausadas 1.0 CapasPausadas.qml

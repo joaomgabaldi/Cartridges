@@ -28,14 +28,54 @@ Principal {
     function abrirDetalhes(jogoId) { abrirDetalhesDe(jogoId, false) }
     function abrirDetalhesDe(jogoId, anotar) {
         if (paginaAtual === "jogo") return
-        if (detalhes.mostrar(jogoId)) pilha.push(paginaDoJogo, { anotarAoEntrar: anotar })
+        if (detalhes.mostrar(jogoId)) empurrar(paginaDoJogo, { anotarAoEntrar: anotar })
     }
     // Fecha a página de detalhes, ou sai de Jogos Zerados; o foco volta ao cartão de onde se saiu.
     function voltar() {
         if (paginaAtual === "jogo") detalhes.esquecer()
         if (paginaAtual === "jogo" && pilha.depth > 1) pilha.pop()
-        else if (paginaAtual !== "todos") pilha.clear(StackView.PopTransition)
+        else if (paginaAtual !== "todos") sairDaPilha()
     }
+
+    // O `StackView` não anima o primeiro `push` numa pilha vazia nem o `clear` que a esvazia (a página de baixo, "Todos os
+    // jogos", fica fora dela): o deslize e a sombra da transição dessas duas passagens são feitos aqui, à mão.
+    property bool _saindoDaPilha: false
+    function empurrar(componente, propriedades) {
+        const vazia = pilha.depth === 0
+        pilha.push(componente, propriedades || {})
+        if (vazia && Tema.animacoes && pilha.currentItem) {
+            deslizeDaPagina.target = pilha.currentItem
+            deslizeDaPagina.from = pilha.width
+            deslizeDaPagina.to = 0
+            avancoDaPilha.from = 0
+            avancoDaPilha.to = 1
+            deslizeDaPagina.restart()
+            avancoDaPilha.restart()
+        }
+    }
+    function sairDaPilha() {
+        if (!Tema.animacoes || pilha.depth !== 1 || !pilha.currentItem) {
+            pilha.clear(StackView.PopTransition)
+            return
+        }
+        if (_saindoDaPilha) return
+        _saindoDaPilha = true
+        deslizeDaPagina.target = pilha.currentItem
+        deslizeDaPagina.from = 0
+        deslizeDaPagina.to = pilha.width
+        avancoDaPilha.from = 1
+        avancoDaPilha.to = 0
+        deslizeDaPagina.restart()
+        avancoDaPilha.restart()
+    }
+    NumberAnimation {
+        id: deslizeDaPagina
+        property: "x"
+        duration: 400
+        easing.type: Easing.OutCubic
+        onFinished: if (janela._saindoDaPilha) { janela._saindoDaPilha = false; pilha.clear(StackView.Immediate) }
+    }
+    NumberAnimation { id: avancoDaPilha; target: pilha; property: "avanco"; duration: 400; easing.type: Easing.OutCubic }
 
     // O `y` de um menu aberto por um botão da barra: abaixo dos 47 px dela, fora da área de arrasto do QWindowKit.
     function baseDaBarra(botao) { return botao.height + (alturaDaBarra - botao.height) / 2 }
@@ -149,7 +189,7 @@ Principal {
             visible: janela.paginaAtual === "todos"
             icone: "trofeu"
             dica: "Jogos Zerados"
-            onClicked: pilha.push(zerados)
+            onClicked: janela.empurrar(zerados)
         },
         BotaoDoApp {
             id: botaoNovidades
@@ -159,7 +199,7 @@ Principal {
             tamanhoDoIcone: 20  // window.blp: pixel-size 20
             selo: janela.servicoDeNovidades !== null && janela.servicoDeNovidades.naoVistas
             dica: "Novidades"
-            onClicked: { janela.servicoDeNovidades.abrir(); pilha.push(paginaDasNovidades) }
+            onClicked: { janela.servicoDeNovidades.abrir(); janela.empurrar(paginaDasNovidades) }
         },
         BotaoDoApp {
             id: botaoBigPicture
@@ -206,11 +246,40 @@ Principal {
         visible: depth > 0
         // `AdwNavigationView`: a página nova desliza da direita e a de baixo recua um quarto da largura; ao voltar,
         // o contrário. shortcut: duração e recuo não medidos na libadwaita (400 ms, 1/4); conferir na rodada visual.
-        pushEnter: Transition { XAnimator { from: pilha.width; to: 0; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic } }
+        // O `avanco` (0 a 1) leva o escurecimento e a sombra da página de baixo, logo abaixo.
+        property real avanco: 0
+        pushEnter: Transition { ParallelAnimation {
+            XAnimator { from: pilha.width; to: 0; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic }
+            NumberAnimation { target: pilha; property: "avanco"; from: 0; to: 1; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic }
+        } }
         pushExit: Transition { XAnimator { from: 0; to: -pilha.width / 4; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic } }
         popEnter: Transition { XAnimator { from: -pilha.width / 4; to: 0; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic } }
-        popExit: Transition { XAnimator { from: 0; to: pilha.width; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic } }
+        popExit: Transition { ParallelAnimation {
+            XAnimator { from: 0; to: pilha.width; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic }
+            NumberAnimation { target: pilha; property: "avanco"; from: 1; to: 0; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic }
+        } }
         enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto && !bigPicture.visivel && !sessao.emAndamento
+    }
+
+    // `AdwNavigationView`: a página de baixo escurece e a que entra projeta uma sombra na borda esquerda. Não medidos:
+    // 20% de escurecimento e 32 px de sombra, na libadwaita.
+    Item {
+        objectName: "sombraDaTransicao"
+        anchors { fill: parent; topMargin: janela.alturaDoTopo }
+        visible: pilha.avanco > 0 && pilha.avanco < 1
+        enabled: false
+        readonly property real borda: pilha.width * (1 - pilha.avanco)
+        Rectangle { x: 0; width: parent.borda; height: parent.height; color: Qt.rgba(0, 0, 6 / 255, 0.2 * pilha.avanco) }
+        Rectangle {
+            x: parent.borda - width
+            width: 32
+            height: parent.height
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0; color: "transparent" }
+                GradientStop { position: 1; color: Qt.rgba(0, 0, 6 / 255, 0.25 * pilha.avanco) }
+            }
+        }
     }
 
     Component {

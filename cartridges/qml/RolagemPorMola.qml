@@ -17,6 +17,7 @@ Item {
     property real _velocidade: 0
     property real _desvio: 0   // posição menos destino, no instante `_tempo` = 0
     property real _tempo: 0
+    property real _escrito: NaN
     readonly property real _omega: Math.sqrt(rigidez)
     readonly property bool correndo: relogio.running
 
@@ -57,11 +58,21 @@ Item {
             const v = mola._velocidadeEm(mola._tempo)
             const [minimo, maximo] = mola._limites()
             if (Math.abs(d) < mola.epsilon && Math.abs(v) < mola.epsilon) {
+                mola._escrito = mola._destino
                 mola.alvo.contentY = mola._destino
                 running = false
             } else {
-                mola.alvo.contentY = Math.max(minimo, Math.min(mola._destino + d, maximo))
+                mola._escrito = Math.max(minimo, Math.min(mola._destino + d, maximo))
+                mola.alvo.contentY = mola._escrito
             }
+        }
+    }
+
+    // Outra coisa mexeu na rolagem (teclado, barra de rolagem, `positionViewAtIndex`): a mola larga, senão sobrescreveria.
+    Connections {
+        target: mola.alvo
+        function onContentYChanged() {
+            if (relogio.running && Math.abs(mola.alvo.contentY - mola._escrito) > 0.5) relogio.running = false
         }
     }
 

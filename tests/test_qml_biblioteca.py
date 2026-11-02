@@ -124,14 +124,61 @@ def _cor(objeto, propriedade):
     return objeto.property(propriedade).name()
 
 
-def test_submenu_aninhado_usa_as_cores_do_tema(app_qt):
+def test_menu_do_popover_usa_as_cores_do_tema(app_qt):
     app = _App(_tres())
     menu = app.achar("menuPrincipal")
     # Fundo e texto do Tema (claro ou escuro); o padrão do Basic seria #26282a no texto.
-    assert _cor(menu.property("fundoDeOrdenar"), "color") in ("#36363a", "#ffffff")
-    item = menu.property("primeiroDeOrdenar")
+    assert _cor(menu.property("background"), "color") in ("#36363a", "#ffffff")
+    item = app.achar("ordenar-Jogados recentemente")
     assert _cor(item.property("contentItem"), "color") in ("#ffffff", "#000006")
     assert item.property("implicitHeight") == 32
+    app.fechar()
+
+
+def test_submenus_deslizam_no_mesmo_popover_e_voltam(app_qt):
+    """M02: "Filtrar por" e "Ordenar por" trocam a página do mesmo popover, com o cabeçalho "‹ Título" para voltar."""
+    app = _App(_tres())
+    menu = app.achar("menuPrincipal")
+    menu.open()
+    assert _esperar(lambda: menu.property("opened") is True)
+    assert menu.property("pagina") == "raiz"
+    assert app.achar("entrada-ordenar").property("visible") is True
+    assert app.achar("ordenar-Tamanho").property("visible") is False
+    QMetaObject.invokeMethod(app.achar("entrada-ordenar"), "click", Qt.ConnectionType.DirectConnection)
+    assert _esperar(lambda: menu.property("pagina") == "ordenar" and menu.property("opened") is True)
+    assert app.achar("ordenar-Tamanho").property("visible") is True
+    assert app.achar("entrada-ordenar").property("visible") is False
+    # Só um popover: o menu continua o mesmo e a altura é a da página (10 itens + cabeçalho + separador).
+    assert menu.property("height") > 10 * 32
+    # O cabeçalho volta; depois, Filtrar por > Status.
+    QMetaObject.invokeMethod(app.achar("cabecalho-ordenar"), "click", Qt.ConnectionType.DirectConnection)
+    assert _esperar(lambda: menu.property("pagina") == "raiz" and menu.property("opened") is True)
+    QMetaObject.invokeMethod(app.achar("entrada-filtrar"), "click", Qt.ConnectionType.DirectConnection)
+    assert _esperar(lambda: menu.property("pagina") == "filtrar" and menu.property("opened") is True)
+    QMetaObject.invokeMethod(app.achar("entrada-status"), "click", Qt.ConnectionType.DirectConnection)
+    assert _esperar(lambda: menu.property("pagina") == "status" and menu.property("opened") is True)
+    app.achar("menuPrincipal").setProperty("pagina", "status")  # os itens de outra página ficam desabilitados
+    QMetaObject.invokeMethod(app.achar("status-Zerado"), "click", Qt.ConnectionType.DirectConnection)
+    assert _esperar(lambda: menu.property("opened") is False and app.filtros.status == "beaten")
+    # Escolher fecha o popover, e a próxima abertura recomeça na raiz.
+    assert _esperar(lambda: menu.property("pagina") == "raiz")
+    app.fechar()
+
+
+def test_menu_principal_navega_pelo_teclado_e_pelo_controle(app_qt):
+    """M02 com o controle: Enter entra, Esquerda volta, Esc fecha (o controle entrega estas teclas ao item em foco)."""
+    app = _App(_tres())
+    menu = app.achar("menuPrincipal")
+    menu.open()
+    assert _esperar(lambda: menu.property("opened") is True)
+    _tecla(app, Qt.Key.Key_Down)
+    _tecla(app, Qt.Key.Key_Down)  # Ordenar por
+    app.controle.teclar(int(Qt.Key.Key_Return))
+    assert _esperar(lambda: menu.property("pagina") == "ordenar" and menu.property("opened") is True)
+    _tecla(app, Qt.Key.Key_Left)
+    assert _esperar(lambda: menu.property("pagina") == "raiz" and menu.property("opened") is True)
+    app.controle.teclar(int(Qt.Key.Key_Escape))
+    assert _esperar(lambda: menu.property("opened") is False)
     app.fechar()
 
 
@@ -147,6 +194,7 @@ def test_clear_appears_only_while_a_filter_is_active(app_qt):
         assert _esperar(lambda: limpar.property("exibido") is False), campo
     app.filtros.genero, app.filtros.ano, app.filtros.status = "RPG", "2020", "beaten"
     assert _esperar(lambda: limpar.property("exibido") is True)
+    app.achar("menuPrincipal").setProperty("pagina", "filtrar")  # os itens de outra página ficam desabilitados
     QMetaObject.invokeMethod(limpar, "click", Qt.ConnectionType.DirectConnection)
     assert _esperar(lambda: (app.filtros.genero, app.filtros.ano, app.filtros.status) == ("", "", ""))
     assert limpar.property("exibido") is False
@@ -158,12 +206,14 @@ def test_escolher_filtro_move_a_marca_e_limpar_aparece_e_some(app_qt):
     limpar = app.achar("limpar")
     assert limpar.property("exibido") is False
     assert app.achar("status-Todos").property("checked") is True
+    app.achar("menuPrincipal").setProperty("pagina", "status")  # os itens de outra página ficam desabilitados
     QMetaObject.invokeMethod(app.achar("status-Zerado"), "click", Qt.ConnectionType.DirectConnection)
     _esperar(lambda: app.filtros.status == "beaten")
     assert app.filtros.status == "beaten"
     assert app.achar("status-Zerado").property("checked") is True
     assert app.achar("status-Todos").property("checked") is False
     assert limpar.property("exibido") is True
+    app.achar("menuPrincipal").setProperty("pagina", "filtrar")
     QMetaObject.invokeMethod(limpar, "click", Qt.ConnectionType.DirectConnection)
     _esperar(lambda: app.filtros.status == "")
     assert app.filtros.status == ""
@@ -336,11 +386,17 @@ def test_animacao_so_com_autoplay(app_qt, monkeypatch):
     # Passados os 30 s (ou além de 8 pausadas) larga o arquivo e volta ao primeiro quadro.
     QMetaObject.invokeMethod(cartao, "liberar", Qt.ConnectionType.DirectConnection)
     assert animada.property("source").toString() == ""
-    # Passar o mouse toca a capa mesmo com "Animar capas" desligado (`game_cover.py:531`).
+    # Desligado de novo e sem o mouse: nada toca. Com o mouse em cima, toca mesmo assim (`game_cover.py:531`, C17).
     cartao.setProperty("naVista", True)
     shared.schema.set_boolean("cover-autoplay", False)
     assert _esperar(lambda: not app.aplicativo.tocarSempre)
     assert cartao.property("animando") is False
+    # (O offscreen não produz o hover do `HoverHandler`: `passando` é a propriedade que ele alimenta, e o teste a liga.)
+    cartao.setProperty("passando", True)
+    assert _esperar(lambda: cartao.property("animando") is True and animada.property("playing") is True)
+    assert cartao.property("mostrarBotoes") is True
+    cartao.setProperty("passando", False)
+    assert _esperar(lambda: cartao.property("animando") is False and animada.property("playing") is False)
     shared.schema.reset("cover-autoplay")
     app.fechar()
 
@@ -408,6 +464,8 @@ def test_deve_tocar(app_qt, monkeypatch):
     assert _esperar(lambda: animada.property("playing") is True)
     app.janela.showMinimized()
     assert _esperar(lambda: animada.property("playing") is False)
+    # Pausada no quadro atual, com o arquivo guardado por 30 s (C18), e não largada.
+    assert _cartao.property("retendo") is True and animada.property("source").toString() == _cartao.property("capaAnimada")
     app.janela.showNormal()
     assert _esperar(lambda: animada.property("playing") is True)
     shared.schema.reset("cover-autoplay")
@@ -843,7 +901,7 @@ def test_busca_espera_150_ms_e_o_enter_aplica_na_hora(app_qt):
     assert app.todos.busca == "Beta"
     QMetaObject.invokeMethod(campo, "accepted", Qt.ConnectionType.DirectConnection)
     assert app.todos.busca == "Gama"
-    assert _esperar(lambda: app.achar("barraDeBusca").property("height") == 47)  # S01
+    assert _esperar(lambda: app.achar("barraDeBusca").property("height") == 46)  # S01: 6 + 34 + 6 (CSS 2853)
     app.fechar()
 
 
@@ -940,4 +998,124 @@ def test_botao_das_tarefas_da_main(app_qt):
     assert (circulo.width(), circulo.height()) == (34, 34)
     dica = _achar(circulo, "dica")
     assert dica is not None and dica.property("texto") == "Tarefas em andamento"
+    app.fechar()
+
+
+def test_a_linha_da_rolagem_e_uma_so_abaixo_da_busca_aberta(app_qt):
+    """S01/B02: com a busca aberta a linha (`undershoot-top`) fica sob ela e a da barra de título apaga; nunca duas."""
+    app = _App(_jogos(*[(n, f"Jogo {n:03}", {}) for n in range(1, 61)]))
+    grade = app.achar("grade")
+    _esperar()
+    grade.setProperty("contentY", 300.0)
+    assert _esperar(lambda: app.janela.property("sombraDaBarra") is True)
+    assert app.achar("linhaDaBusca").property("visible") is False
+    app.achar("pagina").setProperty("buscaAberta", True)
+    assert _esperar(lambda: app.janela.property("sombraDaBarra") is False)
+    assert app.achar("linhaDaBusca").property("visible") is True
+    app.fechar()
+
+
+def test_roda_real_do_mouse_aciona_a_mola_e_o_teclado_a_cancela(app_qt):
+    """G06: um evento de roda de verdade chega ao `WheelHandler`; mover a rolagem por fora (Tab, setas) para a mola."""
+    from PySide6.QtCore import QCoreApplication, QPoint, QPointF  # noqa: PLC0415
+    from PySide6.QtGui import QWheelEvent  # noqa: PLC0415
+
+    app = _App(_jogos(*[(n, f"Jogo {n:03}", {}) for n in range(1, 121)]))
+    app.janela.show()
+    grade = app.achar("grade")
+    _esperar()
+    topo = grade.property("contentY")
+    mola = app.achar("rolagemPorMola")
+    mola.setProperty("ativa", True)  # no harness `Tema.animacoes` é falso e a mola fica desligada
+    # Uma roda descendo (angleDelta negativo): o `contentY` desce por mola até o destino de 120 px.
+    pos = QPointF(400, 300)
+    evento = QWheelEvent(pos, pos, QPoint(0, 0), QPoint(0, -120), Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier,
+                         Qt.ScrollPhase.NoScrollPhase, False)
+    QCoreApplication.sendEvent(app.janela, evento)
+    assert _esperar(lambda: mola.property("correndo") is True)
+    assert _esperar(lambda: not mola.property("correndo"), limite=5.0)
+    assert abs(grade.property("contentY") - (topo + 120)) <= 0.5
+    # Em curso, uma rolagem vinda do teclado cancela a mola em vez de ser sobrescrita no quadro seguinte.
+    QCoreApplication.sendEvent(app.janela, QWheelEvent(pos, pos, QPoint(0, 0), QPoint(0, -120), Qt.MouseButton.NoButton,
+                                                       Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False))
+    assert _esperar(lambda: mola.property("correndo") is True)
+    grade.setProperty("contentY", 2000.0)  # o mesmo efeito de `positionViewAtIndex`
+    assert _esperar(lambda: mola.property("correndo") is False)
+    assert abs(grade.property("contentY") - 2000.0) < 1
+    app.fechar()
+
+
+def test_o_limite_de_8_capas_pausadas_e_global(app_qt):
+    """C18: como `MAX_PAUSADAS_ABERTAS` da `main`, o limite vale para todas as grades juntas (um só registro)."""
+    motor = QQmlEngine()
+    componente = QQmlComponent(motor)
+    componente.setData(
+        b"""import QtQuick
+import "file:///""" + QML.as_posix().encode() + b"""\"
+QtObject {
+    property var liberadas: []
+    Component.onCompleted: {
+        for (var i = 0; i < 10; ++i) {
+            CapasPausadas.registrar(criar(i))
+        }
+    }
+    function criar(n) { return { liberar: function() { liberadas = liberadas.concat([n]) } } }
+}""",
+        QUrl.fromLocalFile(str(QML / "_pausadas.qml")),
+    )
+    objeto = componente.create()
+    assert objeto is not None, componente.errorString()
+    assert objeto.property("liberadas").toVariant() == [0, 1]  # a mais antiga sai primeiro, a partir da nona
+
+
+def _nome_do_atual(menu):
+    return menu.property("atual")
+
+
+def test_setas_so_andam_pelos_itens_da_pagina_atual(app_qt):
+    """New-1: os itens das outras páginas são ocultos e desabilitados; nem ↓ nem o controle os alcançam."""
+    app = _App(_tres())
+    menu = app.achar("menuPrincipal")
+    menu.open()
+    assert _esperar(lambda: menu.property("opened") is True)
+    vistos = []
+    for _ in range(8):  # dá a volta na raiz
+        _tecla(app, Qt.Key.Key_Down)
+        vistos.append(_nome_do_atual(menu))
+    assert set(vistos) == {"entrada-filtrar", "entrada-ordenar", "itemPreferencias", "itemSobre"}, vistos
+    # Dentro de "Ordenar por": o primeiro ↓ cai no primeiro item de ordenação, e nenhum sai da página.
+    QMetaObject.invokeMethod(app.achar("entrada-ordenar"), "click", Qt.ConnectionType.DirectConnection)
+    assert _esperar(lambda: menu.property("pagina") == "ordenar" and menu.property("opened") is True)
+    vistos = []
+    for _ in range(14):
+        _tecla(app, Qt.Key.Key_Down)
+        vistos.append(_nome_do_atual(menu))
+    assert all(n and (n.startswith("ordenar-") or n == "cabecalho-ordenar") for n in vistos), vistos
+    app.fechar()
+
+
+def test_trocar_de_pagina_nao_fecha_o_popover(app_qt):
+    """New-2: o clique e o Enter nos itens de navegação trocam a página sem passar por fechado."""
+    from PySide6.QtCore import QPointF  # noqa: PLC0415
+    from PySide6.QtTest import QTest  # noqa: PLC0415
+
+    app = _App(_tres())
+    app.janela.show()
+    menu = app.achar("menuPrincipal")
+    fechamentos = []
+    menu.closed.connect(lambda: fechamentos.append(1))
+    menu.open()
+    assert _esperar(lambda: menu.property("opened") is True)
+    entrada = app.achar("entrada-ordenar")
+    centro = entrada.mapToScene(QPointF(entrada.width() / 2, entrada.height() / 2)).toPoint()
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, pos=centro)
+    assert _esperar(lambda: menu.property("pagina") == "ordenar")
+    _esperar()
+    assert menu.property("opened") is True and fechamentos == []
+    # O Enter (o controle entrega a tecla ao item em foco) também.
+    QMetaObject.invokeMethod(app.achar("cabecalho-ordenar"), "forceActiveFocus", Qt.ConnectionType.DirectConnection)
+    app.controle.teclar(int(Qt.Key.Key_Return))
+    assert _esperar(lambda: menu.property("pagina") == "raiz")
+    _esperar()
+    assert menu.property("opened") is True and fechamentos == []
     app.fechar()

@@ -24,10 +24,13 @@ Rectangle {
     // Como na `main` (`game_cover.py:531`): passar o mouse toca a capa animada com ou sem "Animar capas", também em
     // Jogos Zerados. Sem animação o cartão mostra a capa parada; fora da vista, janela minimizada ou oculta, nada toca
     // e o arquivo da cópia é largado.
-    readonly property bool animando: capaAnimada !== "" && naVista && (tocarSempre || passagem.hovered)
+    readonly property bool animando: capaAnimada !== "" && naVista && (tocarSempre || passando)
         && Window.visibility !== Window.Minimized && Window.visibility !== Window.Hidden
     // Parar pausa no quadro atual (`tocador_capas.py`): o arquivo da cópia fica aberto por 30 s, e só então a capa volta
     // ao primeiro quadro; a grade limita as pausadas a 8 (`liberar`). Retomar segue de onde parou.
+    // O ponteiro está sobre o cartão. Propriedade comum (não só `passagem.hovered`) para os testes, que no offscreen não
+    // conseguem produzir o hover, a poderem ligar.
+    property bool passando: passagem.hovered
     property bool retendo: false
     signal pausou()
     function liberar() { retendo = false; retencao.stop() }
@@ -59,7 +62,7 @@ Rectangle {
     // 15 + a linha de 17 + 15.
     readonly property int alturaDoNome: 47
     // Só o ponteiro e o menu aberto mostram os botões (`game.py:564`): o foco do teclado e o controle não.
-    readonly property bool mostrarBotoes: !zerado && (passagem.hovered || menuAberto)
+    readonly property bool mostrarBotoes: !zerado && (passando || menuAberto)
     // O menu do jogo está aberto a partir deste cartão: os botões ficam à vista enquanto ele durar.
     property bool menuAberto: false
     readonly property string nomeAcessivel: Accessible.name

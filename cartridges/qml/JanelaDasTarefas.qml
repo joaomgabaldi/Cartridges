@@ -36,6 +36,10 @@ Window {
         active: !raiz.semAgente
         source: "AgenteDaJanela.qml"
     }
+    Connections {
+        target: Tema
+        function onEscuroChanged() { if (raiz.agente) raiz.agente.setWindowAttribute("dark-mode", Tema.escuro) }
+    }
     // O tamanho e os limites só depois do `setup`: antes, o QWindowKit os sobrescreve.
     Component.onCompleted: {
         if (agente) {

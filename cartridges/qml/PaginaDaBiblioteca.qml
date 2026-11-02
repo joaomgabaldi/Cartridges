@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Shapes
 
 // Uma página de jogos: "Todos os jogos" (com busca) ou "Jogos Zerados". Os botões ficam na barra de título
 // (Aplicativo.qml); aqui estão a barra de busca, a grade e o aviso de página vazia.
@@ -25,7 +26,10 @@ Item {
     // O controle do Xbox (Aplicativo.qml): o menu do jogo está aberto, e os comandos sobre o cartão atual.
     readonly property bool menuDoJogoAberto: grade.menuAberto
     // A grade rolada: a barra de título mostra a linha de baixo.
-    readonly property bool rolado: grade.rolado
+    // Com a busca aberta, a linha fica sob ela (`undershoot` abaixo da `SearchBar`), e a da barra de título apaga:
+    // só uma linha, nunca duas.
+    readonly property bool buscaVisivel: comBusca && buscaAberta
+    readonly property bool rolado: grade.rolado && !buscaVisivel
     function moverSelecao(dx, dy) { return grade.moverSelecao(dx, dy) }
     // O x (na janela) do centro do cartão atual, para achar o botão da barra mais próximo.
     function xDoAtual() {
@@ -81,22 +85,16 @@ Item {
         }
     }
 
-    // A `SearchBar`: padding 6/6/7/6, o campo de 34 (47 no total), a linha de baixo na cor da barra; abre em 250 ms.
-    Rectangle {
+    // A `SearchBar` dentro do `.top-bar` da `ToolbarView`: transparente, sem linha própria (CSS 2853 vence a 2839),
+    // padding 6 em volta do campo de 34 (46 no total); abre em 250 ms.
+    Item {
         id: barraDeBusca
         objectName: "barraDeBusca"
         anchors { top: parent.top; left: parent.left; right: parent.right }
-        height: raiz.comBusca && raiz.buscaAberta ? 47 : 0
+        height: raiz.buscaVisivel ? 46 : 0
         visible: height > 0
         clip: true
-        color: Tema.barra
         Behavior on height { enabled: Tema.animacoes; NumberAnimation { duration: 250 } }
-
-        Rectangle {
-            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-            height: 1
-            color: Tema.sombraDaBarra
-        }
 
         // O `GtkSearchEntry` espera 150 ms depois da última tecla para filtrar; Enter e Esc aplicam na hora.
         Timer {
@@ -182,8 +180,29 @@ Item {
         onEditar: id => raiz.editar(id)
     }
 
-    // `overshoot` do scrolledwindow: o brilho na ponta quando se arrasta além dela (CSS 2343): 12% do texto numa faixa
-    // de 3% e 5% numa de 50% da altura, que somem ao soltar. Linear em vez de radial.
+    // `toolbarview.undershoot-top` (CSS 2914): sob a busca aberta, a linha de 1 px mais o degradê de 4 px em `shade_color`
+    // a 75%, enquanto a grade está rolada. Sem a busca, a mesma linha é a `sombraDaBarra` da barra de título.
+    Item {
+        id: linhaBusca
+        objectName: "linhaDaBusca"
+        anchors { top: barraDeBusca.bottom; left: parent.left; right: parent.right }
+        height: 4
+        visible: raiz.buscaVisivel && grade.rolado
+        enabled: false
+        z: 1
+        readonly property color sombra: Qt.rgba(0, 0, 6 / 255, (Tema.escuro ? 0.25 : 0.07) * 0.75)
+        Rectangle {
+            anchors.fill: parent
+            gradient: Gradient {
+                GradientStop { position: 0; color: linhaBusca.sombra }
+                GradientStop { position: 1; color: "transparent" }
+            }
+        }
+        Rectangle { anchors { left: parent.left; right: parent.right; top: parent.top } height: 1; color: linhaBusca.sombra }
+    }
+
+    // `overshoot` do scrolledwindow (CSS 2343): dois degradês radiais em `currentColor`, 12% numa faixa de 3% da altura e
+    // 5% numa de 50%, com o centro na borda; somem ao soltar. Dispara com `verticalOvershoot` (`DragOverBounds`).
     Repeater {
         model: [{ topo: true }, { topo: false }]
         Item {
@@ -197,22 +216,36 @@ Item {
             visible: grade.visible && forca > 0
             opacity: forca
             enabled: false
-            Rectangle {
+            clip: true
+            // Uma elipse por camada: o `farthest-side` do CSS é a elipse inscrita na faixa.
+            component Camada: Item {
+                id: camada
+                required property real fracao
+                required property real alfa
                 anchors { left: parent.left; right: parent.right; top: brilho.modelData.topo ? parent.top : undefined; bottom: brilho.modelData.topo ? undefined : parent.bottom }
-                height: parent.height
-                gradient: Gradient {
-                    GradientStop { position: 0; color: Tema.mistura(brilho.modelData.topo ? 0.05 : 0) }
-                    GradientStop { position: 1; color: Tema.mistura(brilho.modelData.topo ? 0 : 0.05) }
+                height: brilho.height * fracao
+                Shape {
+                    // Um círculo de raio `height`, esticado na largura: a elipse.
+                    width: camada.height * 2
+                    height: camada.height
+                    transform: Scale { xScale: camada.width / (camada.height * 2) }
+                    ShapePath {
+                        strokeColor: "transparent"
+                        fillGradient: RadialGradient {
+                            centerX: camada.height
+                            centerY: brilho.modelData.topo ? 0 : camada.height
+                            focalX: centerX
+                            focalY: centerY
+                            centerRadius: camada.height
+                            GradientStop { position: 0; color: Tema.mistura(camada.alfa) }
+                            GradientStop { position: 1; color: Tema.mistura(0) }
+                        }
+                        PathRectangle { x: 0; y: 0; width: camada.height * 2; height: camada.height }
+                    }
                 }
             }
-            Rectangle {
-                anchors { left: parent.left; right: parent.right; top: brilho.modelData.topo ? parent.top : undefined; bottom: brilho.modelData.topo ? undefined : parent.bottom }
-                height: grade.height * 0.03
-                gradient: Gradient {
-                    GradientStop { position: 0; color: Tema.mistura(brilho.modelData.topo ? 0.12 : 0) }
-                    GradientStop { position: 1; color: Tema.mistura(brilho.modelData.topo ? 0 : 0.12) }
-                }
-            }
+            Camada { fracao: 1; alfa: 0.05 }
+            Camada { fracao: 0.06; alfa: 0.12 }
         }
     }
 
