@@ -198,14 +198,7 @@ def baixar_python(cache: Path) -> Path:
     marcador = extraido / ".sha256"
     if marcador.is_file() and marcador.read_text() == PYTHON_SHA256:
         return extraido
-    cache.mkdir(parents=True, exist_ok=True)
-    arquivo = cache / PYTHON_URL.rsplit("/", 1)[1]
-    if not arquivo.is_file() or _sha256(arquivo) != PYTHON_SHA256:
-        with urllib.request.urlopen(PYTHON_URL, timeout=120) as r:
-            arquivo.write_bytes(r.read())
-    if _sha256(arquivo) != PYTHON_SHA256:
-        arquivo.unlink()
-        sys.exit("O SHA-256 do Python embutido baixado não confere; nada foi extraído.")
+    arquivo = _baixar_conferido(PYTHON_URL, PYTHON_SHA256, cache)
     shutil.rmtree(extraido, ignore_errors=True)
     with zipfile.ZipFile(arquivo) as z:
         z.extractall(extraido)

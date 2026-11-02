@@ -157,3 +157,19 @@ def test_copia_dev_nao_leva_contas_nem_chave_da_steam(chaves, tmp_path):
     assert not (tmp_path / "destino" / "contas").exists()
     assert (tmp_path / "destino" / "games" / "a.json").exists()
     assert "conquistas-chave-steam" not in _ler(destino)
+
+
+def test_nao_herda_as_chaves_da_sessao(chaves, tmp_path):
+    """O papel de parede e a fita guardados da sessão real não vão à -dev: ela os restauraria."""
+    origem, destino = chaves
+    with winreg.OpenKeyEx(cd.RAIZ, origem, 0, winreg.KEY_WRITE) as k:
+        winreg.SetValueEx(k, "session-wallpaper-saved", 0, winreg.REG_SZ, '{"M1": "c:/real.jpg"}')
+        winreg.SetValueEx(k, "fita-estado-anterior", 0, winreg.REG_SZ, "{}")
+    pasta = tmp_path / "origem"
+    pasta.mkdir()
+
+    cd.copiar(pasta, tmp_path / "destino", origem, destino)
+
+    copiado = _ler(destino)
+    assert "session-wallpaper-saved" not in copiado and "fita-estado-anterior" not in copiado
+    assert "texto" in copiado

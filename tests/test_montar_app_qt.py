@@ -395,3 +395,19 @@ def test_main_do_desenvolvimento_nao_baixa_os_externos(main_sem_rede, monkeypatc
     _rodar_main(monkeypatch, tmp_path, "--canal", "desenvolvimento")
     assert main_sem_rede["baixados"] == []
     assert main_sem_rede["ffmpeg"] is None and main_sem_rede["ludusavi"] is None
+
+
+def test_baixar_python_passa_pelo_download_conferido(tmp_path, monkeypatch):
+    chamadas = []
+    pacote = tmp_path / "python.zip"
+    with zipfile.ZipFile(pacote, "w") as z:
+        z.writestr("python315.dll", "x")
+
+    def conferido(url, sha256, cache):
+        chamadas.append((url, sha256))
+        return pacote
+
+    monkeypatch.setattr(montar_app_qt, "_baixar_conferido", conferido)
+    extraido = montar_app_qt.baixar_python(tmp_path / "cache")
+    assert chamadas == [(montar_app_qt.PYTHON_URL, montar_app_qt.PYTHON_SHA256)]
+    assert (extraido / "python315.dll").is_file()
