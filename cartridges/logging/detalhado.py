@@ -22,7 +22,17 @@ o tempo) e exceção vira uma linha DEBUG do logger ``cartridges.rastreio``, com
 a profundidade da chamada. Nenhum valor é filtrado: o log pode conter dados
 sensíveis, por decisão do usuário.
 
-Limite conhecido: um ``Loader`` com ``sourceComponent: algumId`` não é visto.
+Telas do QML: o Qt não avisa a criação de um item, só o ``ChildAdded`` do pai, e
+tocar no filho nesse instante quebra o wrapper do PySide. Por isso o filtro só
+liga os sinais quando varre a árvore já pronta: ao mostrar uma janela
+(``Show``), ao carregar um ``Loader`` e ao trocar a página de uma ``StackView``.
+Nessa varredura, todo item de tipo QML do app ganha o ``visibleChanged``, e a
+tela que só alterna ``visible`` vira "apareceu"/"sumiu".
+
+Limites conhecidos: um item criado depois da varredura e que não passa por um
+``Loader`` nem pela ``StackView`` (por exemplo, o delegate de uma lista, ou um
+``Component.createObject`` solto) não é vigiado; e um ``Popup`` só é ligado
+quando recebe um filho ou quando a varredura o encontra.
 """
 
 import logging
@@ -31,7 +41,8 @@ import sys
 import threading
 import time
 
-from PySide6.QtCore import SIGNAL, QEvent, QObject
+from PySide6.QtCore import SIGNAL, QEvent, QObject, QTimer
+from PySide6.QtQuick import QQuickItem, QQuickWindow
 
 # Liga o log detalhado por padrão. A variável de ambiente CARTRIDGES_LOG_DETALHADO
 # ("1" ou "0") vence esta constante.
@@ -212,8 +223,27 @@ _EVENTOS_DA_INTERFACE = {
 }
 
 
+def _nome(objeto) -> str:  # type: ignore
+    """O nome da classe sem o sufixo ``_QMLTYPE_n`` que o QML acrescenta aos tipos do app."""
+    return objeto.metaObject().className().split("_QML")[0]
+
+
 def _quem(objeto) -> str:  # type: ignore
-    return f"{objeto.metaObject().className()}({objeto.objectName()!r})"
+    """Identifica o alvo: classe, nome, texto (se houver) e a tela que o contém.
+
+    Ex.: ``BotaoDoDialogo('botaoCancelar') texto='Cancelar' dentro de Dialogo('confirmacao')``.
+    """
+    texto = f"{_nome(objeto)}({objeto.objectName()!r})"
+    rotulo = objeto.property("text")
+    if isinstance(rotulo, str) and rotulo:
+        texto += f" texto={rotulo[:60]!r}"
+    if isinstance(objeto, QQuickItem):
+        pai = objeto.parentItem()
+        while pai is not None:
+            if pai.objectName() or "_QMLTYPE_" in pai.metaObject().className():
+                return texto + f" dentro de {_nome(pai)}({pai.objectName()!r})"
+            pai = pai.parentItem()
+    return texto
 
 
 def _detalhe(evento) -> str:  # type: ignore
@@ -238,6 +268,8 @@ class FiltroDeEventos(QObject):
                 _log_ui.debug("%s em %s%s", nome, _quem(destino), _detalhe(evento))
             elif tipo == _ET.ChildAdded:
                 _ligar_tela(destino)  # nunca toca no filho: ele ainda está no construtor da base
+            if tipo == _ET.Show and isinstance(destino, QQuickWindow):
+                _varrer(destino.contentItem())
         except Exception:  # pylint: disable=broad-exception-caught
             pass
         return False
@@ -260,10 +292,75 @@ def _ligar_tela(alvo) -> None:  # type: ignore
     elif alvo.inherits("QQuickLoader"):
         alvo.setProperty("_logLigado", True)
         alvo.connect(SIGNAL("loaded()"), lambda: _tentar(lambda: _tela_carregada(alvo)))
+    elif alvo.inherits("QQuickStackView"):
+        alvo.setProperty("_logLigado", True)
+        alvo.connect(SIGNAL("currentItemChanged()"), lambda: _tentar(lambda: _pilha_mudou(alvo)))
 
 
 def _tela_carregada(loader) -> None:  # type: ignore
-    _log_ui.debug("tela carregada: %s source=%s", _quem(loader), loader.property("source"))
+    origem = loader.property("source")
+    item = loader.property("item")
+    # Com `sourceComponent` a origem é vazia e não diz nada: nomeia-se o item carregado.
+    destino = f" source={origem.toString()!r}" if origem is not None and not origem.isEmpty() else ""
+    if item is not None:
+        destino += f" item={_quem(item)}"
+    _log_ui.debug("tela carregada: %s%s", _quem(loader), destino)
+    if item is not None:
+        _varrer(item)
+
+
+# Itens cuja visibilidade mudou desde o último despejo (o despejo roda no próximo ciclo do laço de eventos).
+_mudancas: list = []
+
+
+def _visibilidade_mudou(item) -> None:  # type: ignore
+    """Junta as mudanças do ciclo: esconder um pai dispara o sinal em todos os descendentes."""
+    if not _mudancas:
+        QTimer.singleShot(0, lambda: _tentar(_despejar))
+    _mudancas.append(item)
+
+
+def _despejar() -> None:
+    itens = _mudancas[:]
+    _mudancas.clear()
+    for item in itens:
+        try:
+            pai = item.parentItem()
+            while pai is not None and pai not in itens:
+                pai = pai.parentItem()
+            if pai is None:  # só a raiz da mudança: os descendentes vão junto
+                _log_ui.debug("%s: %s", "apareceu" if item.isVisible() else "sumiu", _quem(item))
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+
+
+def _pilha_mudou(pilha) -> None:  # type: ignore
+    atual = pilha.property("currentItem")
+    _log_ui.debug("tela na pilha: %s", _quem(atual) if atual is not None else "(vazia)")
+    if atual is not None:
+        _varrer(atual)
+
+
+def _varrer(raiz) -> None:  # type: ignore
+    """Liga o rastreio de visibilidade em tudo o que está sob ``raiz``, uma vez só por item.
+
+    Roda sobre a árvore já construída (nunca no ``ChildAdded``). Cada item
+    entra numa guarda por propriedade dinâmica, para não ligar duas vezes.
+    """
+    pendentes = [raiz]
+    while pendentes:
+        item = pendentes.pop()
+        try:
+            pendentes.extend(item.childItems())
+            for filho in item.children():
+                if filho.inherits("QQuickPopup"):
+                    _ligar_tela(filho)
+            _ligar_tela(item)
+            if "_QMLTYPE_" in item.metaObject().className() and not item.property("_logVisivel"):
+                item.setProperty("_logVisivel", True)
+                item.visibleChanged.connect(lambda i=item: _tentar(lambda: _visibilidade_mudou(i)))
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
 
 
 def _tentar(funcao) -> None:  # type: ignore

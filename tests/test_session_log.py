@@ -286,3 +286,28 @@ def test_limite_continua_por_padrao(tmp_path, monkeypatch):
         assert handler.capped is True
     finally:
         handler.close()
+
+
+def test_sem_limite_nao_consulta_a_posicao_do_arquivo(tmp_path):
+    from cartridges.logging.session_file_handler import SessionFileHandler  # noqa: PLC0415
+
+    class Contador:
+        """Arquivo de verdade por trás; só conta as chamadas a tell()."""
+
+        def __init__(self, arquivo):
+            self.arquivo, self.tells = arquivo, 0
+
+        def tell(self):
+            self.tells += 1
+            return self.arquivo.tell()
+
+        def __getattr__(self, nome):
+            return getattr(self.arquivo, nome)
+
+    handler = SessionFileHandler(tmp_path / "cartridges.log", sem_limite=True)
+    contador = handler.stream = Contador(handler.stream)
+    try:
+        _grava_linhas(handler, 3)
+    finally:
+        handler.close()
+    assert contador.tells == 0

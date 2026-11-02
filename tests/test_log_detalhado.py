@@ -564,3 +564,188 @@ def test_qml_real_com_filtro_e_rastreio_nao_gera_erros_do_qt(filtro, tmp_path): 
         qInstallMessageHandler(anterior)
     ruins = [m for m in mensagens if "undefined" in m or "is not a function" in m or "No Wrapper found" in m]
     assert ruins == []
+
+
+# --- Telas que só alternam `visible`, páginas da pilha e identificação do alvo ---------------------------------------
+
+
+_QML_BOTAO = b"""
+import QtQuick
+Item { property string text: ""; width: 80; height: 30 }
+"""
+
+_QML_DIALOGO = b"""
+import QtQuick
+Item { width: 100; height: 100 }
+"""
+
+_QML_CAIXA = b"""
+import QtQuick
+Item { width: 10; height: 10 }
+"""
+
+_QML_PAGINA = b"""
+import QtQuick
+Item {
+    objectName: "paginaDeTeste"
+    Caixa { objectName: "caixaDaPagina" }
+}
+"""
+
+_QML_BOTOES = b"""
+import QtQuick
+Item {
+    width: 300; height: 300
+    Dialogo {
+        objectName: "confirmaTeste"
+        Botao { objectName: "botaoCancelarTeste"; text: "Cancelar"; MouseArea { objectName: "" } }
+    }
+}
+"""
+
+_QML_PILHA = b"""
+import QtQuick
+import QtQuick.Controls
+Item {
+    width: 200; height: 200
+    StackView { id: pilha; objectName: "pilhaTeste"; anchors.fill: parent }
+    Component { id: pagina; Pagina {} }
+    function empurrar() { pilha.push(pagina) }
+}
+"""
+
+
+def _tipos_qml(pasta):
+    for nome, fonte in (("Botao", _QML_BOTAO), ("Dialogo", _QML_DIALOGO), ("Caixa", _QML_CAIXA), ("Pagina", _QML_PAGINA)):
+        (pasta / f"{nome}.qml").write_bytes(fonte)
+
+
+def _janela_com(fonte, pasta):
+    from PySide6.QtQuick import QQuickWindow  # pylint: disable=import-outside-toplevel
+
+    _tipos_qml(pasta)
+    motor, componente, raiz = _criar_qml(fonte, pasta)
+    janela = QQuickWindow()
+    raiz.setParentItem(janela.contentItem())
+    janela.resize(300, 300)
+    janela.show()
+    _processar()
+    return motor, componente, raiz, janela
+
+
+def test_quem_nomeia_o_botao_com_texto_e_o_dialogo_que_o_contem(filtro, tmp_path):  # pylint: disable=unused-argument
+    from PySide6.QtCore import QObject  # pylint: disable=import-outside-toplevel
+    from PySide6.QtQuick import QQuickItem  # pylint: disable=import-outside-toplevel
+
+    motor, componente, raiz, janela = _janela_com(_QML_BOTOES, tmp_path)
+    botao = raiz.findChild(QObject, "botaoCancelarTeste")
+    mouse = botao.childItems()[0]
+    assert detalhado._quem(botao) == "Botao('botaoCancelarTeste') texto='Cancelar' dentro de Dialogo('confirmaTeste')"  # pylint: disable=protected-access
+    assert detalhado._quem(mouse) == "QQuickMouseArea('') dentro de Botao('botaoCancelarTeste')"  # pylint: disable=protected-access
+    assert isinstance(botao, QQuickItem)
+    janela.destroy()
+    del raiz, componente, motor
+
+
+def test_dialogo_que_so_alterna_visible_gera_uma_linha_por_mudanca(filtro, caplog, tmp_path):  # pylint: disable=unused-argument
+    from PySide6.QtCore import QObject  # pylint: disable=import-outside-toplevel
+
+    motor, componente, raiz, janela = _janela_com(_QML_BOTOES, tmp_path)
+    dialogo = raiz.findChild(QObject, "confirmaTeste")
+    caplog.clear()
+    dialogo.setProperty("visible", False)
+    _processar()
+    dialogo.setProperty("visible", True)
+    _processar()
+    linhas = _ui(caplog)
+    sumiu = [l for l in linhas if l.startswith("sumiu")]
+    assert len(sumiu) == 1 and sumiu[0].startswith("sumiu: Dialogo('confirmaTeste')"), linhas
+    assert len([l for l in linhas if l.startswith("apareceu")]) == 1, linhas  # os filhos não entram na enxurrada
+    assert not any("botaoCancelarTeste" in l and l.startswith(("apareceu:", "sumiu:")) for l in linhas), linhas
+    janela.destroy()
+    del raiz, componente, motor
+
+
+def test_pagina_empurrada_na_pilha_e_nomeada_e_seus_filhos_vigiados(filtro, caplog, tmp_path):  # pylint: disable=unused-argument
+    from PySide6.QtCore import QMetaObject, QObject  # pylint: disable=import-outside-toplevel
+
+    motor, componente, raiz, janela = _janela_com(_QML_PILHA, tmp_path)
+    caplog.clear()
+    QMetaObject.invokeMethod(raiz, "empurrar")
+    _processar()
+    assert any(l.startswith("tela na pilha:") and "paginaDeTeste" in l for l in _ui(caplog)), _ui(caplog)
+    caixa = raiz.findChild(QObject, "caixaDaPagina")
+    caplog.clear()
+    caixa.setProperty("visible", False)
+    _processar()
+    assert any(l.startswith("sumiu:") and "caixaDaPagina" in l for l in _ui(caplog)), _ui(caplog)
+    janela.destroy()
+    del raiz, componente, motor
+
+
+def test_dialogo_real_do_aplicativo_abrir_e_fechar_uma_linha_cada(filtro, caplog):  # pylint: disable=unused-argument
+    from PySide6.QtCore import QMetaObject  # pylint: disable=import-outside-toplevel
+
+    from tests.apoio_janela_atualizacao import Janela, avaliar, esperar  # pylint: disable=import-outside-toplevel
+
+    janela = Janela()
+    try:
+        janela.janela.show()
+        esperar()
+        dialogo = janela.achar("confirmacaoDoApp")
+        caplog.clear()
+        QMetaObject.invokeMethod(dialogo, "abrir")
+        esperar()
+        abriu = [l for l in _ui(caplog) if l.startswith(("apareceu", "sumiu"))]
+        avaliar(dialogo, "resolver(false)")
+        esperar()
+        fechou = [l for l in _ui(caplog) if l.startswith(("apareceu", "sumiu"))][len(abriu) :]
+    finally:
+        janela.fechar()
+        esperar()
+    assert len(abriu) == 1 and abriu[0].startswith("apareceu: DialogoDeConfirmacao('confirmacaoDoApp')"), abriu
+    assert "dentro de Avisos('camadaDeAvisos')" in abriu[0]
+    assert len(fechou) == 1 and fechou[0].startswith("sumiu: DialogoDeConfirmacao('confirmacaoDoApp')"), fechou
+
+
+def test_pagina_de_zerados_no_aplicativo_real_e_nomeada(filtro, caplog):  # pylint: disable=unused-argument
+    from PySide6.QtCore import QPoint, QPointF, Qt  # pylint: disable=import-outside-toplevel
+    from PySide6.QtTest import QTest  # pylint: disable=import-outside-toplevel
+
+    from tests.apoio_janela_atualizacao import Janela, esperar  # pylint: disable=import-outside-toplevel
+
+    janela = Janela()
+    try:
+        janela.janela.show()
+        esperar()
+        botao = janela.achar("botaoZerados")
+        centro = botao.mapToScene(QPointF(botao.width() / 2, botao.height() / 2))
+        caplog.clear()
+        QTest.mouseClick(janela.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(int(centro.x()), int(centro.y())))
+        esperar()
+    finally:
+        janela.fechar()
+        esperar()
+    linhas = _ui(caplog)
+    assert any(l.startswith("tela na pilha:") and "paginaDeZerados" in l for l in linhas), linhas
+    assert any(l.startswith("clique em") and "botaoZerados" in l for l in linhas), linhas
+
+
+def test_loader_com_source_component_nomeia_o_item(filtro, caplog, tmp_path):  # pylint: disable=unused-argument
+    """O Loader é achado pela varredura da janela; o item carregado depois entra na linha."""
+    fonte = b"""
+import QtQuick
+Item {
+    property bool ligado: false
+    Component { id: comp; Item { objectName: "itemCarregado" } }
+    Loader { objectName: "loaderDeComponente"; sourceComponent: comp; active: parent.ligado }
+}
+"""
+    motor, componente, raiz, janela = _janela_com(fonte, tmp_path)
+    caplog.clear()
+    raiz.setProperty("ligado", True)
+    _processar()
+    linhas = [l for l in _ui(caplog) if l.startswith("tela carregada")]
+    assert linhas and "itemCarregado" in linhas[0] and "source=" not in linhas[0], linhas
+    janela.destroy()
+    del raiz, componente, motor

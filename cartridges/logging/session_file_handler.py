@@ -174,6 +174,9 @@ class SessionFileHandler(StreamHandler):
 
         super().emit(record)
 
+        if self.sem_limite:
+            return
+
         try:
             # StreamHandler.emit flushes every record, so this is just a byte
             # offset on an already-synced file rather than an extra flush.
@@ -184,7 +187,7 @@ class SessionFileHandler(StreamHandler):
             # made it, so leave the handler as it was.
             return
 
-        if self.sem_limite or size < self.MAX_BYTES:
+        if size < self.MAX_BYTES:
             return
 
         # Set before writing: if the note itself fails, the cap still holds and
