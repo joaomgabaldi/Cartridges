@@ -12,20 +12,41 @@ ser coletado é descartado. As perguntas e os diálogos vão pelo `Aplicativo` (
 
 import logging
 import threading
+import time
 import weakref
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 import shiboken6
-from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
+from PySide6.QtCore import Property, QObject, QTimer, QUrl, Signal, Slot
 
 from cartridges import shared
+from cartridges.modelos import tarefas
 from cartridges.saves import backup_de_saves, pasta
 from cartridges.utils import backup, redefinir
 from cartridges.utils.thread_principal import na_thread_principal
 
 _log = logging.getLogger(__name__)
+
+_agora = time.monotonic  # trocável nos testes
+
+# Com o app fechando, a exportação que passa tanto tempo sem gravar nada é dada como presa (D111).
+PRAZO_SEM_PROGRESSO_S = 120
+
+
+class _Exportacao:
+    """O que a thread da exportação e a tela dividem: o último progresso e se o prazo já venceu (D111)."""
+
+    def __init__(self, tarefa: Any, avisos: Any) -> None:
+        self.tarefa = tarefa
+        self.avisos = avisos
+        self.aviso: Any = None
+        self.ultimo = _agora()
+        self.vencida = False
+
+    def avancar(self) -> None:
+        self.ultimo = _agora()  # atribuição simples: sem trava entre a thread e o timer
 
 
 def _caminho(url: QUrl) -> Path | None:
@@ -67,6 +88,11 @@ class BackupDasPreferencias(QObject):
         # Uma exportação e um preparo de cada vez (D106): o segundo pedido cai em `_aguarde()`.
         self._exportando = False
         self._preparando = False
+        self._exportacao: _Exportacao | None = None
+        # Sem o modelo não há prazo; em produção ele vive o app todo (`Preferencias`), então só os testes o perdem.
+        self._relogio_exportacao = QTimer(self)
+        self._relogio_exportacao.setInterval(1000)
+        self._relogio_exportacao.timeout.connect(self._conferir_exportacao)
 
     # region Estado
 
@@ -122,28 +148,48 @@ class BackupDasPreferencias(QObject):
         eu = weakref.ref(self)
         # A tarefa conta em `em_andamento()`: fechar o app, importar e redefinir esperam o fim da exportação (D106).
         tarefa = backup_de_saves.comecar_tarefa(_("Exportando backup…"), 1)
-        aviso = None
+        estado = _Exportacao(tarefa, avisos)
 
         def trabalho() -> None:
             # Qualquer erro volta para a tela: o aviso de progresso não pode ficar pendurado.
             try:
-                sem_saves = backup.exportar(destino, configuracoes)
+                sem_saves = backup.exportar(destino, configuracoes, progresso=estado.avancar)
             except Exception as erro:  # noqa: BLE001
                 _log.exception("Não foi possível exportar o backup")
-                na_thread_principal(_exportacao_acabou, eu, avisos, aviso, tarefa, erro, None)
+                na_thread_principal(_exportacao_acabou, estado, eu, erro, None)
             else:
-                na_thread_principal(_exportacao_acabou, eu, avisos, aviso, tarefa, None, sem_saves)
+                na_thread_principal(_exportacao_acabou, estado, eu, None, sem_saves)
 
         self._exportando = True
         try:
-            aviso = self._avisar(_("Exportando backup…"), segundos=0)
+            estado.aviso = self._avisar(_("Exportando backup…"), segundos=0)
+            self._exportacao = estado
+            self._relogio_exportacao.start()
             threading.Thread(target=trabalho, daemon=True).start()
         except BaseException:
             # Sem thread não há quem termine a tarefa: a contagem não pode ficar presa.
             self._exportando = False
+            self._relogio_exportacao.stop()
+            self._exportacao = None
             backup_de_saves.terminar_tarefa(tarefa)
-            _dispensar(avisos, aviso)
+            _dispensar(avisos, estado.aviso)
             raise
+
+    def _conferir_exportacao(self) -> None:
+        """D111: só com o app fechando (a principal escondida à espera da exportação) e sem nenhum progresso há
+        `PRAZO_SEM_PROGRESSO_S`: cancela o fechamento, solta a tarefa e avisa. A thread presa não morre: `_exportando`
+        segue até ela voltar, e o resultado de então é descartado (`_exportacao_acabou`). O backup anterior fica
+        intacto: a thread só grava num `.tmp` e troca no fim."""
+        estado = self._exportacao
+        if estado is None or estado.vencida or not tarefas.fechamento_esperando():
+            return
+        if _agora() - estado.ultimo <= PRAZO_SEM_PROGRESSO_S:
+            return
+        estado.vencida = True
+        self._relogio_exportacao.stop()
+        _log.warning("A exportação do backup ficou %s s sem progresso", PRAZO_SEM_PROGRESSO_S)
+        _terminar_exportacao(estado, mostrar=True)
+        _dialogo(_("Não foi possível exportar"), _texto_do_destino())
 
     # endregion
     # region Importar
@@ -293,18 +339,44 @@ def _dispensar(avisos: Any, aviso: Any) -> None:
         fila.dispensar(aviso)
 
 
-def _exportacao_acabou(
-    eu: Any, avisos: Any, aviso: Any, tarefa: Any, erro: Exception | None, sem_saves: str | None
-) -> None:
-    # Antes de qualquer guarda: com o modelo morto a tarefa ainda tem de acabar, ou o app não fecha mais.
+def _terminar_exportacao(estado: _Exportacao, mostrar: bool) -> None:
+    """Tira a exportação da contagem, sempre. Com um diálogo a mostrar (``mostrar``), o fechamento em espera é
+    cancelado ANTES de a tarefa sair da contagem: senão o app sai primeiro."""
+    if mostrar:
+        try:
+            tarefas.cancelar_fechamento()
+        except Exception:  # noqa: BLE001
+            _log.exception("Não foi possível cancelar o fechamento")
     try:
-        backup_de_saves.terminar_tarefa(tarefa)
+        backup_de_saves.terminar_tarefa(estado.tarefa)
     except Exception:  # noqa: BLE001
         _log.exception("Não foi possível terminar a tarefa da exportação")
-    _dispensar(avisos, aviso)
+    _dispensar(estado.avisos, estado.aviso)
+
+
+def _texto_do_destino() -> str:
+    return _(
+        "Não foi possível gravar o arquivo. Verifique se a pasta "
+        "de destino está acessível e se há espaço livre em disco."
+    )
+
+
+def _exportacao_acabou(
+    estado: _Exportacao, eu: Any, erro: Exception | None, sem_saves: str | None
+) -> None:
     modelo = _vivo(eu)
+    if estado.vencida:
+        # O prazo já avisou e soltou a tarefa (D111): só a trava de "uma exportação de cada vez" se desfaz.
+        _log.warning("A exportação presa voltou depois do prazo (%r); resultado descartado", erro or sem_saves)
+        if modelo is not None:
+            modelo._exportando = False  # noqa: SLF001
+        return
+    # Antes de qualquer guarda: com o modelo morto a tarefa ainda tem de acabar, ou o app não fecha mais.
+    _terminar_exportacao(estado, mostrar=modelo is not None and (erro is not None or sem_saves in ("ausente", "vazia")))
     if modelo is None:
         return
+    modelo._relogio_exportacao.stop()  # noqa: SLF001
+    modelo._exportacao = None  # noqa: SLF001
     modelo._exportando = False  # noqa: SLF001
     if isinstance(erro, backup.SavesInacessiveis):
         _dialogo(
@@ -315,13 +387,7 @@ def _exportacao_acabou(
             ),
         )
     elif erro is not None:
-        _dialogo(
-            _("Não foi possível exportar"),
-            _(
-                "Não foi possível gravar o arquivo. Verifique se a pasta "
-                "de destino está acessível e se há espaço livre em disco."
-            ),
-        )
+        _dialogo(_("Não foi possível exportar"), _texto_do_destino())
     elif sem_saves == "ausente":
         _dialogo(
             _("Backup exportado sem os saves"),

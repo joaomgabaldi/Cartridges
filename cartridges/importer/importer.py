@@ -182,7 +182,11 @@ class Importer(ErrorProducer):
             self._relogio.stop()
         if self.tarefa is not None:
             tarefa, self.tarefa, self._progresso = self.tarefa, None, None
-            tarefa.terminar()
+            try:
+                tarefa.terminar()
+            except Exception:  # noqa: BLE001
+                # O `finish_import` roda mesmo assim: senão `importando` ficaria ligado.
+                logging.exception("Erro ao terminar a tarefa da importação")
         self.finish_import()
         return False
 

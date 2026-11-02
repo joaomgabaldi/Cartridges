@@ -29,7 +29,7 @@ import logging
 import shutil
 import stat
 import zipfile
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from pathlib import Path, PurePosixPath
 from time import sleep, time
 from typing import Any, Callable, Iterable, Literal, Optional
@@ -61,6 +61,8 @@ _COMPLETO = ".completo"
 # Quanto da restauração se lê de uma vez: o progresso anda a cada pedaço.
 _PEDACO = 1024 * 1024
 _TENTATIVAS_DE_APAGAR = 5
+# De quanto em quanto a exportação, na fila da trava dos saves, avisa que está viva.
+_ESPERA_DA_TRAVA_S = 5
 # Quanto de um save é lido por vez ao copiá-lo para o backup.
 _BLOCO = 1024 * 1024
 # Marca, dentro de `.anterior`, que os saves da pasta padrão não saíram da
@@ -260,16 +262,17 @@ def _compressao(caminho: Path) -> int:
     )
 
 
-def _incluir(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
+def _incluir(arquivo: zipfile.ZipFile, caminho: Path, nome: str, progresso: Callable[[], None]) -> None:
     try:
         arquivo.write(caminho, nome, compress_type=_compressao(caminho))
+        progresso()
     except FileNotFoundError:
         # Apagado entre a listagem e a leitura (uma capa trocada agora): o
         # backup sai sem ele, em vez de não sair.
         logging.debug("%s sumiu durante o backup", caminho)
 
 
-def _incluir_save(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
+def _incluir_save(arquivo: zipfile.ZipFile, caminho: Path, nome: str, progresso: Callable[[], None]) -> None:
     """Como `_incluir`, para um arquivo da pasta dos saves, que pode estar num
     OneDrive sem conexão: só o erro de LER vira `SavesInacessiveis`, inclusive o
     arquivo que sumiu (com a trava dos saves, nada some de forma legítima: é a pasta
@@ -292,10 +295,26 @@ def _incluir_save(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
             if not bloco:
                 break
             destino.write(bloco)
+            progresso()  # por bloco: um save de gigabytes não pode parecer parado
+
+
+@contextmanager
+def _trava_dos_saves(progresso: Callable[[], None]):
+    """A trava do Ludusavi, esperada com um aviso de progresso a cada tique: o Ludusavi a segura por minutos, e
+    quem espera atrás dele não está parado."""
+    trava = backup_de_saves.trava_dos_saves()
+    while not trava.acquire(timeout=_ESPERA_DA_TRAVA_S):
+        progresso()
+    try:
+        yield
+    finally:
+        trava.release()
 
 
 def exportar(
-    destino: Path, configuracoes: dict[str, Any]
+    destino: Path,
+    configuracoes: dict[str, Any],
+    progresso: Callable[[], None] | None = None,
 ) -> Literal["ausente", "vazia"] | None:
     """Grava o backup em ``destino``. Pode rodar fora da thread principal;
     ``configuracoes`` vem de `ler_configuracoes`, lida na principal.
@@ -303,7 +322,11 @@ def exportar(
     Devolve ``"ausente"`` se a pasta dos saves escolhida não existe ou não pode ser
     alcançada, e ``"vazia"`` se existe mas não tem nenhuma cópia de save: nos dois o
     .zip é gerado sem saves e quem chamou precisa avisar. Em todo o resto, ``None``;
-    a pasta padrão ausente ou vazia não conta (ainda não houve backup de save)."""
+    a pasta padrão ausente ou vazia não conta (ainda não houve backup de save).
+
+    ``progresso()``, se dado, é chamado (na thread de quem exporta) a cada arquivo gravado e a
+    cada bloco de save lido: quem espera vê que a exportação não está parada."""
+    progresso = progresso or (lambda: None)
     manifesto = {
         "version": VERSAO,
         "app_version": shared.VERSION,
@@ -324,10 +347,10 @@ def exportar(
                 compress_type=zipfile.ZIP_DEFLATED,
             )
             for caminho, nome in _entradas():
-                _incluir(arquivo, caminho, nome)
+                _incluir(arquivo, caminho, nome, progresso)
             # Com a trava do Ludusavi: um backup de save em andamento não pode
             # entrar aqui pela metade.
-            with backup_de_saves.trava_dos_saves():
+            with _trava_dos_saves(progresso):
                 # A pasta é lida uma vez, antes da listagem: o aviso e o que entra no
                 # .zip partem da mesma leitura, mesmo que ela apareça ou suma depois.
                 pasta = pasta_dos_saves.atual()
@@ -344,7 +367,7 @@ def exportar(
                         # alcance não é "sem saves".
                         aviso = "vazia" if pasta.is_dir() else "ausente"
                 for caminho, nome in entradas:
-                    _incluir_save(arquivo, caminho, nome)
+                    _incluir_save(arquivo, caminho, nome, progresso)
         temporario.replace(destino)
     finally:
         temporario.unlink(missing_ok=True)

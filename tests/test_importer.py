@@ -441,7 +441,7 @@ def test_erro_no_fim_nao_perde_os_jogos_importados(importer, make_game, monkeypa
     assert [[j.game_id for j in p] for p in pedidos] == [["shortcuts_a"]]
 
 
-def test_erro_ao_terminar_a_tarefa_nao_prende_a_importacao(importer, monkeypatch):
+def test_terminar_que_levanta_nao_prende_a_importacao(importer, monkeypatch):
     from PySide6.QtCore import QTimer  # noqa: PLC0415
 
     class Tarefa:
@@ -451,13 +451,18 @@ def test_erro_ao_terminar_a_tarefa_nao_prende_a_importacao(importer, monkeypatch
         def terminar(self):
             raise RuntimeError("falhou")
 
+    terminou = []
+    importer.ao_terminar = lambda: terminou.append(1)
     importer.tarefa = Tarefa()
     importer._relogio = QTimer()  # noqa: SLF001
     importer._relogio.start(100)  # noqa: SLF001
-    with pytest.raises(RuntimeError):
-        importer._tic()  # noqa: SLF001
+    importer.aplicativo.definir_importando(True)
+    monkeypatch.setattr(type(importer), "finished", property(lambda _: True))
+    importer._tic()  # noqa: SLF001
     assert not importer._relogio.isActive()  # noqa: SLF001
     assert importer.tarefa is None
+    assert importer.aplicativo.importando is False
+    assert terminou == [1]
 
 
 # endregion

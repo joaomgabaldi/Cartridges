@@ -149,9 +149,11 @@ class ModeloDaBiblioteca(QAbstractListModel):
             return
         nova = Linha.de(jogo)
         self._jogos[jogo.game_id] = jogo
-        if self._copias_ativas and (caminho := self._capa_animada_sem_copia(nova)):
+        i = self._linha_de(jogo.game_id)
+        # Jogo novo na lista (carga, volta do bloqueio): olha também a cópia grande, como o `ativar_copias`.
+        if self._copias_ativas and (i < 0 or not nova.capa_animada) and (caminho := self._capa_animada_sem_copia(nova)):
             copias_animadas.preparar([(jogo.game_id, caminho)])
-        if (i := self._linha_de(jogo.game_id)) < 0:
+        if i < 0:
             self.beginInsertRows(QModelIndex(), len(self._linhas), len(self._linhas))
             self._linhas.append(nova)
             self._contar(nova, 1)

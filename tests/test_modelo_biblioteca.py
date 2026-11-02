@@ -469,6 +469,28 @@ def test_copia_grande_faltando_e_pedida_ao_ativar(app_qt, pedidos):
     assert pedidos == [[("a", caminho)]], "o preparar filtra o que já está em dia"
 
 
+def test_atualizar_com_a_copia_da_grade_em_dia_nao_chama_o_preparar(app_qt, pedidos):
+    _capa_animada("a")  # a cópia da grade está em dia; a grande falta
+    modelo = ModeloDaBiblioteca()
+    jogo = _jogo("a", "A")
+    modelo.atualizar(jogo)
+    modelo.ativar_copias()
+    assert len(pedidos) == 1, "o ativar_copias olha todas, inclusive a grande"
+    modelo.atualizar(jogo)
+    assert len(pedidos) == 1
+
+
+def test_jogo_que_volta_a_lista_pede_a_copia_grande(app_qt, pedidos):
+    _capa_animada("a")  # a cópia da grade está em dia; a grande falta
+    modelo = ModeloDaBiblioteca()
+    jogo = _jogo("a", "A")
+    modelo.atualizar(jogo)
+    modelo.ativar_copias()
+    modelo.retirar("a")  # bloqueado
+    modelo.atualizar(jogo)  # desbloqueado: entra de novo na lista
+    assert len(pedidos) == 2
+
+
 def test_copia_que_nao_saiu_nao_e_pedida_de_novo(app_qt, pedidos):
     _capa_animada("a", com_copia=False)
     modelo = ModeloDaBiblioteca()

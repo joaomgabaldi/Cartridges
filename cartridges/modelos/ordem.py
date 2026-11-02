@@ -179,4 +179,4 @@ def opcoes(linhas: Iterable[Linha]) -> tuple[list[str], list[str]]:
             generos.add(linha.genero)
         if ano := parse_release_date(linha.lancamento)[0]:
             anos.add(str(ano))
-    return sorted(generos, key=chave_alfabetica), sorted(anos, reverse=True)
+    return sorted(generos, key=lambda g: (chave_alfabetica(g), g)), sorted(anos, reverse=True)

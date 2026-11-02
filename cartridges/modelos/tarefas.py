@@ -29,9 +29,11 @@ entregue na thread principal. A ordem das entregas é a das chamadas, então um
 ``terminar()`` logo depois do ``comecar()`` nunca chega antes dele.
 """
 
+import weakref
 from collections.abc import Callable
 from typing import Optional
 
+import shiboken6
 from PySide6.QtCore import (
     Property,
     QAbstractListModel,
@@ -185,6 +187,31 @@ def _sair() -> None:
     QCoreApplication.quit()
 
 
+# O painel em uso (o último criado): quem termina um trabalho com erro durante a espera do fechamento
+# o procura aqui para trazer a principal de volta (`cancelar_fechamento`).
+_painel: Optional["weakref.ref[PainelDasTarefas]"] = None
+
+
+def _painel_esperando() -> Optional["PainelDasTarefas"]:
+    painel = _painel() if _painel is not None else None
+    return painel if painel is not None and shiboken6.isValid(painel) and painel.principalEscondida else None
+
+
+def fechamento_esperando() -> bool:
+    """O app está fechando: a principal está escondida à espera de um trabalho em andamento."""
+    return _painel_esperando() is not None
+
+
+def cancelar_fechamento() -> bool:
+    """Se o app está fechando (`fechamento_esperando`), cancela: a principal volta e o app segue aberto. Devolve se
+    havia o que cancelar. Só na principal; antes de o trabalho sair da contagem (`backup_de_saves.terminar_tarefa`),
+    senão o app sai primeiro."""
+    if (painel := _painel_esperando()) is None:
+        return False
+    painel.mostrarPrincipal()
+    return True
+
+
 class PainelDasTarefas(QObject):
     """O que a tela das tarefas pede ao Python: quantas há, se a janela está aberta e onde pô-la; e o fechamento
     da principal com trabalho em andamento (D78)."""
@@ -205,6 +232,8 @@ class PainelDasTarefas(QObject):
         self._espera.setInterval(250)
         self._espera.timeout.connect(self._conferir_a_espera)
         self._escondidas_na_espera: list[QWindow] = []
+        global _painel  # noqa: PLW0603
+        _painel = weakref.ref(self)
         # Posto pelo `app.py` (`GeometriaDaJanela.gravar`): o `closing` grava onde a principal está (D87).
         self.gravar_geometria: Callable[[], None] = lambda: None
         # Referência fraca implícita: o Qt desliga a conexão quando o painel é destruído.

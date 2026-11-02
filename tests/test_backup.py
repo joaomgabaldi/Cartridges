@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -275,6 +276,51 @@ def _guardar_saves(raiz, jogo="X", mapping="mapping", backup_1="save"):
     (raiz / jogo / "backup-1.zip").write_bytes(backup_1.encode())
 
 
+def _exportar_avisando(tmp_path):
+    avisos = []
+    destino = tmp_path / "saida" / "backup.zip"
+    destino.parent.mkdir()
+    backup.exportar(destino, {"settings": {}, "state": {}}, progresso=lambda: avisos.append(1))
+    with zipfile.ZipFile(destino) as arquivo:
+        return avisos, arquivo.namelist()
+
+
+def test_exportar_avisa_o_progresso_a_cada_arquivo(tmp_path):
+    _encher_pasta_do_app()
+    _guardar_saves(shared.app_dir / "saves")
+    avisos, nomes = _exportar_avisando(tmp_path)
+    # Um aviso por arquivo gravado (o manifesto não conta); os dois saves cabem num bloco cada.
+    assert len(nomes) > 3
+    assert len(avisos) == len(nomes) - 1
+
+
+def test_exportar_avisa_o_progresso_a_cada_bloco_do_save(tmp_path, monkeypatch):
+    monkeypatch.setattr(backup, "_BLOCO", 4)
+    _guardar_saves(shared.app_dir / "saves", backup_1="0123456789")  # 10 bytes: 3 blocos; o mapping (7 bytes), 2
+    avisos, nomes = _exportar_avisando(tmp_path)
+    assert len(nomes) == 3
+    assert len(avisos) == 3 + 2
+
+
+def test_exportar_na_fila_da_trava_avisa_o_progresso(tmp_path, monkeypatch):
+    """Esperar a trava dos saves (presa pelo Ludusavi por minutos) também conta como progresso."""
+    monkeypatch.setattr(backup, "_ESPERA_DA_TRAVA_S", 0.02)
+    avisos, destino = [], tmp_path / "backup.zip"
+    thread = threading.Thread(
+        target=backup.exportar, args=(destino, {"settings": {}, "state": {}}, lambda: avisos.append(1)), daemon=True
+    )
+    trava = backup_de_saves.trava_dos_saves()
+    with trava:
+        thread.start()
+        fim = time.monotonic() + 5
+        while len(avisos) < 3 and time.monotonic() < fim:
+            time.sleep(0.01)
+        assert len(avisos) >= 3 and thread.is_alive()
+    thread.join(5)
+    assert not thread.is_alive() and destino.is_file()
+    assert not trava.locked()
+
+
 def test_exporta_saves_da_pasta_padrao(tmp_path):
     _guardar_saves(shared.app_dir / "saves")
     with zipfile.ZipFile(_exportar(tmp_path)) as arquivo:
@@ -465,9 +511,9 @@ def test_exportar_com_a_pasta_que_some_no_meio_falha(tmp_path, monkeypatch):
     shared.schema.set_string("pasta-dos-saves", str(fora))
     copiar = backup._incluir_save
 
-    def some_e_copia(arquivo, caminho, nome):
+    def some_e_copia(arquivo, caminho, nome, progresso):
         shutil.rmtree(fora)
-        copiar(arquivo, caminho, nome)
+        copiar(arquivo, caminho, nome, progresso)
 
     monkeypatch.setattr(backup, "_incluir_save", some_e_copia)
 

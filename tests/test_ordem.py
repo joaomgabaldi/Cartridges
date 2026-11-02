@@ -180,6 +180,18 @@ def test_opcoes_ordenam_acentos():
     assert generos == ["Ação", "Aventura"]
 
 
+def test_generos_que_so_diferem_no_acento_tem_ordem_fixa(monkeypatch):
+    # O `set` do módulo vira uma lista em ordem de chegada: sem desempate, a ordem de entrada
+    # decidiria (na prática, o hash das strings).
+    class EmOrdem(list):
+        add = list.append
+
+    monkeypatch.setattr(ordem, "set", EmOrdem, raising=False)
+    sem, com = _linha("a", genero="Acao"), _linha("b", genero="Ação")
+    assert ordem.opcoes([sem, com])[0] == ["Acao", "Ação"]
+    assert ordem.opcoes([com, sem])[0] == ["Acao", "Ação"]
+
+
 def test_anos_decrescentes():
     linhas = [_linha("a", lancamento="2010"), _linha("b", lancamento="17/set./2020"), _linha("c", lancamento="Em breve")]
     assert ordem.opcoes(linhas)[1] == ["2020", "2010"]

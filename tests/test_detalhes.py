@@ -617,6 +617,21 @@ def test_pagina_troca_para_a_copia_grande_quando_ela_fica_pronta(app_qt, store, 
     assert _tamanho_no_nome(1) in detalhes.capaAnimada
 
 
+def test_copia_pronta_nao_refaz_a_linha_com_a_copia_grande(app_qt, store, monkeypatch):
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    _com_copias()
+    detalhes = _modelo(store, _jogo())
+    detalhes.mostrar("a")
+    antes = detalhes.capaAnimada
+    monkeypatch.setattr(modulo.Linha, "de", classmethod(lambda *_: pytest.fail("a linha não é preciso refazer")))
+
+    copias_animadas.ao_terminar_da_pagina("a", "pronta")
+
+    assert detalhes.capaAnimada == antes
+    assert _tamanho_no_nome(1) in antes
+
+
 def test_copia_de_outro_jogo_nao_muda_a_pagina(app_qt, store):
     from cartridges.utils import copias_animadas  # noqa: PLC0415
 

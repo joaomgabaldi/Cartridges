@@ -360,7 +360,10 @@ class DetalhesDoJogo(QObject):
     def copia_pronta(self, game_id: str, _resultado: str) -> None:
         """Uma cópia do jogo ficou pronta: a página toca a grande, sem esperar outra mudança. Só na principal."""
         if game_id == self._atual and (jogo := self._mostrado()) is not None:
-            self._mesclar({"capaAnimada": self._copia_animada(jogo.get_cover_path(), Linha.de(jogo))})
+            caminho = jogo.get_cover_path()
+            # A linha só se refaz sem a cópia grande (o único caso em que a da grade serve).
+            url = url_da_copia(caminho, 1) or Linha.de(jogo).capa_animada
+            self._mesclar({"capaAnimada": url})
 
     @staticmethod
     def _copia_animada(caminho: Path | None, linha: Linha) -> str:

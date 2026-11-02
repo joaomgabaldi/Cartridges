@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QEventLoop, QTimer, QUrl
+from PySide6.QtGui import QGuiApplication, QWindow
 from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 
@@ -264,7 +265,7 @@ def test_nome_do_arquivo_sugerido(modelo):
 def _exportar_com(monkeypatch, modelo, aplicativo, flush_idle, resultado):
     """O caminho inteiro de "Exportar" com `exportar` devolvendo `resultado` (ou levantando, se for uma exceção)."""
 
-    def exportar(_destino, _configuracoes):
+    def exportar(_destino, _configuracoes, **_k):
         if isinstance(resultado, Exception):
             raise resultado
         return resultado
@@ -333,7 +334,7 @@ def test_exportar_com_os_saves_mostra_o_toast(monkeypatch, modelo, aplicativo, f
 
 def test_exportar_sem_url_nao_faz_nada(monkeypatch, modelo, aplicativo, flush_idle):
     monkeypatch.setattr(backup, "ler_configuracoes", lambda: pytest.fail("leu as configurações"))
-    monkeypatch.setattr(backup, "exportar", lambda *_a: pytest.fail("exportou"))
+    monkeypatch.setattr(backup, "exportar", lambda *_a, **_k: pytest.fail("exportou"))
     modelo.exportar(QUrl())
     flush_idle()
     assert aplicativo.avisos.textos == [] and aplicativo.dialogos == []
@@ -343,7 +344,7 @@ def test_aviso_de_exportando_some_no_fim(monkeypatch, modelo, aplicativo, flush_
     """"Exportando backup…" não tem tempo: fica até o fim e sai pelo id."""
     gate = threading.Event()
     monkeypatch.setattr(backup, "ler_configuracoes", lambda: {})
-    monkeypatch.setattr(backup, "exportar", lambda *_a: gate.wait(5) and None)
+    monkeypatch.setattr(backup, "exportar", lambda *_a, **_k: gate.wait(5) and None)
     modelo.exportar(URL)
     assert aplicativo.avisos.textos == ["Exportando backup…"]
     assert aplicativo.avisos.ultima["segundos"] == 0
@@ -361,7 +362,7 @@ def test_resultado_da_exportacao_depois_de_fechar_as_preferencias_nao_levanta(mo
     monkeypatch.setattr(modulo, "na_thread_principal", lambda f, *a: entregas.append((f, a)))
     monkeypatch.setattr(backup, "ler_configuracoes", lambda: {})
 
-    def exportar(*_a):
+    def exportar(*_a, **_k):
         gate.wait(5)
         raise OSError("disco cheio")
 
@@ -637,7 +638,7 @@ def _preso(monkeypatch, objeto, nome, erro=None):
     """Troca `objeto.nome` por um falso que espera o ``gate`` e conta as chamadas."""
     gate, chamadas = threading.Event(), []
 
-    def falso(*args):
+    def falso(*args, **_k):
         chamadas.append(args)
         gate.wait(5)
         if erro is not None:
@@ -721,7 +722,7 @@ def test_tarefa_da_exportacao_termina_com_o_modelo_morto(monkeypatch, aplicativo
     entregas, gate = [], threading.Event()
     monkeypatch.setattr(modulo, "na_thread_principal", lambda f, *a: entregas.append((f, a)))
     monkeypatch.setattr(backup, "ler_configuracoes", lambda: {})
-    monkeypatch.setattr(backup, "exportar", lambda *_a: gate.wait(5) and None)
+    monkeypatch.setattr(backup, "exportar", lambda *_a, **_k: gate.wait(5) and None)
     m = BackupDasPreferencias(aplicativo.avisos)
     m.exportar(URL)
     del m
@@ -735,6 +736,194 @@ def test_tarefa_da_exportacao_termina_com_o_modelo_morto(monkeypatch, aplicativo
         funcao(*args)
     assert backup_de_saves.em_andamento() is False
     assert tarefas.lista.rowCount() == 0
+
+
+# endregion
+
+
+# region D110/D111: exportação que falha ou prende com o app fechando
+
+PRESA = (
+    "Não foi possível exportar",
+    "Não foi possível gravar o arquivo. Verifique se a pasta de destino está acessível e se há espaço livre em disco.",
+)
+
+
+@pytest.fixture
+def fechando(modelo, monkeypatch):
+    """O painel das tarefas com uma principal de verdade (offscreen); `_sair` só anota. O relógio da exportação é falso."""
+    monkeypatch.setattr(shared, "sessao", None, raising=False)
+    saidas, relogio = [], [0.0]
+    monkeypatch.setattr(tarefas, "_sair", lambda: saidas.append(1))
+    monkeypatch.setattr(modulo, "_agora", lambda: relogio[0])
+    principal = QWindow()
+    principal.resize(200, 200)
+    principal.show()
+    painel = tarefas.PainelDasTarefas()
+    painel.definir_janela(principal)
+    yield type("Fechando", (), {"painel": painel, "principal": principal, "saidas": saidas, "relogio": relogio})
+    painel.mostrarPrincipal()
+    QGuiApplication.setQuitOnLastWindowClosed(True)
+    principal.destroy()
+
+
+def _fechar_exportando(fechando, monkeypatch, modelo, erro=None, resultado=None, janela_aberta=False):
+    """Começa uma exportação presa, fecha a principal e a janela das tarefas (a espera do fechamento começa)."""
+    monkeypatch.setattr(backup, "ler_configuracoes", lambda: {})
+    gate, avancos = threading.Event(), []
+
+    def exportar(_destino, _configuracoes, progresso=None):
+        avancos.append(progresso)
+        gate.wait(5)
+        if erro is not None:
+            raise erro
+        return resultado
+
+    monkeypatch.setattr(backup, "exportar", exportar)
+    modelo.exportar(URL)
+    assert fechando.painel.principalFechando() is False
+    if not janela_aberta:  # com ela aberta a espera não começa: a janela das tarefas segura o app
+        fechando.painel.janelaFechada()
+    assert not fechando.principal.isVisible()
+    return gate, avancos
+
+
+def _esperar_saida(flush_idle, fechando, limite=1.0):
+    fim = time.monotonic() + limite
+    while not fechando.saidas and time.monotonic() < fim:
+        flush_idle(0.05)
+    return fechando.saidas
+
+
+def test_exportacao_que_falha_ao_fechar_cancela_a_saida_e_mostra_o_erro(
+    monkeypatch, modelo, aplicativo, flush_idle, fechando
+):
+    gate, _ = _fechar_exportando(fechando, monkeypatch, modelo, erro=OSError("disco cheio"))
+    gate.set()
+    assert _drenar(flush_idle, lambda: aplicativo.dialogos)
+    assert _esperar_saida(flush_idle, fechando, 0.6) == []
+    assert fechando.principal.isVisible()
+    assert aplicativo.dialogos == [PRESA]
+    assert not backup_de_saves.em_andamento()
+    assert QGuiApplication.quitOnLastWindowClosed()
+    assert not fechando.painel._espera.isActive()  # noqa: SLF001
+
+
+def test_exportacao_que_falha_com_a_janela_das_tarefas_aberta_volta_a_principal(
+    monkeypatch, modelo, aplicativo, flush_idle, fechando
+):
+    gate, _ = _fechar_exportando(fechando, monkeypatch, modelo, erro=OSError("disco cheio"), janela_aberta=True)
+    assert fechando.painel.aberta
+    gate.set()
+    assert _drenar(flush_idle, lambda: aplicativo.dialogos)
+    assert fechando.principal.isVisible() and not fechando.painel.principalEscondida
+    assert fechando.saidas == [] and aplicativo.dialogos == [PRESA]
+
+
+@pytest.mark.parametrize("resultado", ["ausente", "vazia"])
+def test_exportacao_sem_saves_ao_fechar_cancela_a_saida(monkeypatch, modelo, aplicativo, flush_idle, fechando, resultado):
+    gate, _ = _fechar_exportando(fechando, monkeypatch, modelo, resultado=resultado)
+    gate.set()
+    assert _drenar(flush_idle, lambda: aplicativo.dialogos)
+    assert _esperar_saida(flush_idle, fechando, 0.6) == []
+    assert fechando.principal.isVisible()
+    assert aplicativo.dialogos[0][0] == "Backup exportado sem os saves"
+
+
+def test_exportacao_que_da_certo_ao_fechar_sai_normalmente(monkeypatch, modelo, aplicativo, flush_idle, fechando):
+    gate, _ = _fechar_exportando(fechando, monkeypatch, modelo)
+    gate.set()
+    assert _esperar_saida(flush_idle, fechando) == [1]
+    assert not fechando.principal.isVisible()
+    assert aplicativo.dialogos == []
+
+
+def test_exportacao_que_falha_sem_fechar_so_mostra_o_erro(monkeypatch, modelo, aplicativo, flush_idle, fechando):
+    monkeypatch.setattr(backup, "ler_configuracoes", lambda: {})
+    monkeypatch.setattr(backup, "exportar", lambda *_a, **_k: (_ for _ in ()).throw(OSError("disco cheio")))
+    modelo.exportar(URL)
+    assert _drenar(flush_idle, lambda: aplicativo.dialogos)
+    assert aplicativo.dialogos == [PRESA]
+    assert fechando.principal.isVisible() and fechando.saidas == []
+
+
+def test_exportacao_presa_ao_fechar_volta_a_principal_e_avisa(monkeypatch, modelo, aplicativo, flush_idle, fechando):
+    gate, _ = _fechar_exportando(fechando, monkeypatch, modelo)
+    assert modelo._relogio_exportacao.isActive()  # noqa: SLF001
+    fechando.relogio[0] = modulo.PRAZO_SEM_PROGRESSO_S + 1
+    modelo._conferir_exportacao()  # noqa: SLF001
+    try:
+        assert _esperar_saida(flush_idle, fechando, 0.6) == []
+        assert fechando.principal.isVisible()
+        assert aplicativo.dialogos == [PRESA]
+        assert not backup_de_saves.em_andamento()
+        assert not modelo._relogio_exportacao.isActive()  # noqa: SLF001
+        assert QGuiApplication.quitOnLastWindowClosed()
+    finally:
+        gate.set()
+
+
+def test_exportacao_lenta_com_progresso_nao_vence_o_prazo(monkeypatch, modelo, aplicativo, fechando):
+    gate, avancos = _fechar_exportando(fechando, monkeypatch, modelo)
+    try:
+        fechando.relogio[0] = 100
+        avancos[0]()  # a thread gravou um arquivo
+        fechando.relogio[0] = 100 + modulo.PRAZO_SEM_PROGRESSO_S - 1
+        modelo._conferir_exportacao()  # noqa: SLF001
+        assert aplicativo.dialogos == [] and backup_de_saves.em_andamento()
+        assert not fechando.principal.isVisible()
+    finally:
+        gate.set()
+
+
+def test_exportacao_presa_com_o_app_aberto_nao_avisa(monkeypatch, modelo, aplicativo, flush_idle, fechando):
+    monkeypatch.setattr(backup, "ler_configuracoes", lambda: {})
+    gate = threading.Event()
+    monkeypatch.setattr(backup, "exportar", lambda *_a, **_k: gate.wait(5) and None)
+    modelo.exportar(URL)
+    try:
+        fechando.relogio[0] = 10 * modulo.PRAZO_SEM_PROGRESSO_S
+        modelo._conferir_exportacao()  # noqa: SLF001
+        assert aplicativo.dialogos == [] and backup_de_saves.em_andamento()
+        flush_idle()
+        assert tarefas.lista.rowCount() == 1
+    finally:
+        gate.set()
+
+
+def _presa_vencida(monkeypatch, modelo, fechando):
+    gate, _ = _fechar_exportando(fechando, monkeypatch, modelo)
+    fechando.relogio[0] = modulo.PRAZO_SEM_PROGRESSO_S + 1
+    modelo._conferir_exportacao()  # noqa: SLF001
+    return gate
+
+
+def test_exportacao_presa_que_volta_depois_nao_avisa_de_novo(monkeypatch, modelo, aplicativo, flush_idle, fechando):
+    gate = _presa_vencida(monkeypatch, modelo, fechando)
+    gate.set()
+    assert _drenar(flush_idle, lambda: modelo._exportando is False)  # noqa: SLF001
+    flush_idle()
+    assert aplicativo.dialogos == [PRESA]
+    assert "Backup exportado" not in aplicativo.avisos.textos
+    assert backup_de_saves._tarefas_abertas == 0  # noqa: SLF001  (a tarefa não termina duas vezes)
+    assert modelo._exportando is False  # noqa: SLF001
+
+
+def test_outra_exportacao_com_a_presa_ainda_viva_pede_para_aguardar(monkeypatch, modelo, aplicativo, fechando):
+    gate = _presa_vencida(monkeypatch, modelo, fechando)
+    try:
+        modelo.exportar(URL)
+        assert aplicativo.avisos.textos[-1] == AGUARDE
+    finally:
+        gate.set()
+
+
+def test_fechar_de_novo_com_a_presa_sai(monkeypatch, modelo, fechando):
+    gate = _presa_vencida(monkeypatch, modelo, fechando)
+    try:
+        assert fechando.painel.principalFechando() is True
+    finally:
+        gate.set()
 
 
 # endregion
