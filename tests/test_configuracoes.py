@@ -95,6 +95,18 @@ def test_string(conf, subchave):
     assert conf.get_string("sgdb-key") == "ação"
 
 
+@pytest.mark.parametrize(
+    "texto",
+    ["abc", r"C:\Users\ana\Atalhos", "it's", 'diz "oi"', '{"a": 1, "b": "x"}', "ação ñ", "quebra\nlinha", "'abc'", ""],
+)
+def test_texto_gravado_pela_glib_volta_igual(conf, subchave, texto):
+    # Guarda da D99: o registro guarda o texto cru (REG_SZ), sem aspas de GVariant.
+    _gravar(subchave, "sgdb-key", texto, winreg.REG_SZ)
+    assert conf.get_string("sgdb-key") == texto
+    conf.set_string("sgdb-key", texto)
+    assert _ler(subchave, "sgdb-key") == (texto, winreg.REG_SZ)
+
+
 def test_reset_apaga_e_volta_ao_padrao(conf, subchave):
     conf.set_int("process-tracking-grace", 9)
     conf.reset("process-tracking-grace")

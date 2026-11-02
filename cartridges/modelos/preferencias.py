@@ -705,8 +705,7 @@ class Preferencias(QObject):
         if chave not in CHAVES_DE_TEXTO:
             _log.warning("Texto de preferência fora da lista recusado: %r", chave)
             return
-        if chave != "sgdb-key":
-            texto = texto.strip()
+        texto = texto.strip()
         shared.schema[chave] = texto
         if chave == "sgdb-key" and not texto:
             shared.schema["sgdb"] = False

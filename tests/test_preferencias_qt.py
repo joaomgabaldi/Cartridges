@@ -56,9 +56,17 @@ def test_chave_do_sgdb_vazia_desliga_o_sgdb(p):
     assert not p.estado["sgdbAtivo"]
 
 
-def test_chave_do_sgdb_gravada_como_digitada(p):
+def test_chave_do_sgdb_gravada_sem_espacos(p):
     p.definirTexto("sgdb-key", "  abc ")
-    assert shared.schema.get_string("sgdb-key") == "  abc "
+    assert shared.schema.get_string("sgdb-key") == "abc"
+
+
+def test_chave_do_sgdb_so_com_espacos_desliga_o_sgdb(p):
+    p.definirTexto("sgdb-key", "abc")
+    p.definir("sgdb", True)
+    p.definirTexto("sgdb-key", "   ")
+    assert shared.schema.get_string("sgdb-key") == ""
+    assert not shared.schema.get_boolean("sgdb")
 
 
 def test_chave_do_wallhaven_sem_espacos_nas_pontas(p):
