@@ -69,7 +69,7 @@ Button {
             const alfa = botao.estilo === "plano" ? (botao.down ? 0.16 : botao.checked ? 0.10 : botao.hovered ? 0.07 : 0)
                 : botao.estilo === "destrutivo" ? (ligado ? 0.35 : botao.hovered ? 0.20 : 0.15)
                 : (ligado ? 0.30 : botao.hovered ? 0.15 : 0.10)
-            return Qt.alpha(botao.corDoTexto, alfa)
+            return Qt.alpha(botao.corDoTexto, botao.corDoTexto.a * alfa)
         }
         Behavior on color { ColorAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
         // .suggested-action: claro a 10% ao passar, escuro a 20% pressionado.

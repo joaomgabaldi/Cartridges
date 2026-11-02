@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 
 // A pergunta da versão nova e o "Baixando atualização…" (D82), na camada dos avisos: acima das Preferências.
 // `atualizador` é o AppUpdater (cartridges/utils/app_updater.py). As notas vão em RichText porque o `notes_to_markup`
@@ -37,16 +38,26 @@ DialogoDeAlerta {
     // Da pergunta ao download o diálogo segue aberto: o foco vai ao botão que sobrou.
     onBaixandoChanged: if (aberto) Qt.callLater(focarInicial)
 
-    Text {
-        id: notas
-        objectName: "notasDaAtualizacao"
+    // `ScrolledWindow` com `max_content_height=360` (`app_updater.py`): as notas rolam além disso.
+    Flickable {
         width: parent.width
-        visible: !dialogo.baixando && text !== ""
-        text: dialogo.pergunta.notas || ""
-        textFormat: Text.RichText
-        wrapMode: Text.Wrap
-        color: Tema.texto
-        font { family: Tema.fonte; pixelSize: Tema.corpo }
+        height: Math.min(notas.implicitHeight, 360)
+        visible: !dialogo.baixando && notas.text !== ""
+        contentHeight: notas.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        ScrollBar.vertical: BarraDeRolagem {}
+
+        Text {
+            id: notas
+            objectName: "notasDaAtualizacao"
+            width: parent.width
+            text: dialogo.pergunta.notas || ""
+            textFormat: Text.RichText
+            wrapMode: Text.Wrap
+            color: Tema.texto
+            font { family: Tema.fonte; pixelSize: Tema.corpo }
+        }
     }
 
     Column {

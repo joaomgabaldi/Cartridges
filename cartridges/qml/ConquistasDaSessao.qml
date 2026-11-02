@@ -122,7 +122,7 @@ Rectangle {
                 }
             }
 
-            ScrollBar.horizontal: BarraDeRolagem { objectName: "rolagemDaSessao"; cor: "#9a9a9a" }  // a do tema escuro
+            ScrollBar.horizontal: BarraDeRolagem { objectName: "rolagemDaSessao"; cor: "#ffffff" }  // a do tema escuro
         }
     }
 }

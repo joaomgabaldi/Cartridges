@@ -466,6 +466,7 @@ Principal {
     readonly property var paginaDoControle: pilha.depth === 0 ? todos : pilha.currentItem
     // Algum diálogo na frente (os menus não contam): o botão das tarefas some.
     readonly property bool modalAberto: camadaDeAvisos.dialogoAberto || edicao.aberto || historico.aberto || conquistasDoJogo.aberto || preferencias.aberto || saves.aberto || restauracao.aberta || sobreAberto || zeradosAberto
+        || (paginaDoControle !== null && paginaDoControle.dialogoAberto === true)
     // Menu ou diálogo na frente: o controle navega nele pelas teclas, como o teclado faria.
     readonly property bool popupAberto: menuPrincipal.opened || modalAberto
         || (paginaDoControle !== null && paginaDoControle.menuDoJogoAberto)

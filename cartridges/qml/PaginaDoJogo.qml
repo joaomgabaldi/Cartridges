@@ -27,6 +27,8 @@ Item {
     // Menu, balão ou diálogo na frente: o controle navega nele pelas teclas.
     readonly property bool menuDoJogoAberto: menuDeStatus.opened || menuDeBuscas.opened || balaoDaAnotacao.opened
         || dialogoExcluir.visible || dialogoAtualizacao.visible
+    // As confirmações da página: Aplicativo.qml as soma a `modalAberto`, e a barra de título fica trancada.
+    readonly property bool dialogoAberto: dialogoExcluir.aberto || dialogoAtualizacao.aberto
     readonly property bool compacta: width < 1000
     readonly property int larguraDaCapa: compacta ? 280 : 420
     readonly property int alturaDaCapa: larguraDaCapa * 3 / 2

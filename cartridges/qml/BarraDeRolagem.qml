@@ -32,7 +32,7 @@ ScrollBar {
         implicitWidth: barra.grossura
         implicitHeight: barra.grossura
         radius: Math.min(width, height) / 2
-        color: Qt.alpha(barra.cor, barra.pressed ? 0.6 : barra.ativa ? 0.4 : 0.2)
+        color: Qt.alpha(barra.cor, barra.cor.a * (barra.pressed ? 0.6 : barra.ativa ? 0.4 : 0.2))
         opacity: barra.size < 1 && barra.acordada ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta } }
         Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
@@ -43,7 +43,7 @@ ScrollBar {
         width: barra.emPe ? barra.grossura : barra.width - 18
         height: barra.emPe ? barra.height - 18 : barra.grossura
         radius: Math.min(width, height) / 2
-        color: Qt.alpha(barra.cor, 0.1)
+        color: Qt.alpha(barra.cor, barra.cor.a * 0.1)
         opacity: barra.ativa && barra.size < 1 ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta } }
     }

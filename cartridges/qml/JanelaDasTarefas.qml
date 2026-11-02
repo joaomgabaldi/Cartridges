@@ -39,7 +39,8 @@ Window {
         pronta = true
     }
     // Com a principal escondida (fechada com trabalho em andamento, D78), fechar esta encerra o app.
-    onClosing: painelDasTarefas.janelaFechada()
+    // Fechada com o aviso aberto: liberar o erro inesperado já (se o fechamento for recusado, o `onDispensado` nunca viria).
+    onClosing: { painelDasTarefas.avisoFechado(); painelDasTarefas.janelaFechada() }
 
     Connections {
         target: painelDasTarefas

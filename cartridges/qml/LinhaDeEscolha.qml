@@ -10,6 +10,8 @@ LinhaDoGrupo {
     // A largura mínima do popover; quem tem opções longas a alarga.
     property int larguraDaCaixa: 180
 
+    readonly property real larguraDoPopover: caixa.popup.width
+
     // A pessoa escolheu uma opção (o índice).
     signal escolhido(int indice)
 
@@ -76,8 +78,20 @@ LinhaDoGrupo {
                 color: opcao.down ? Tema.menuPressionado : opcao.highlighted ? Tema.menuSobre : "transparent"
             }
         }
+        // O popover cresce até o maior texto, como o GtkPopover; medido a cada abertura (os delegados só existem aberto).
+        property real larguraDoMaior: 0
+        function medirOpcoes() {
+            let maior = 0
+            for (let i = 0; i < count; ++i) {
+                medida.text = textAt(i)
+                maior = Math.max(maior, medida.advanceWidth)
+            }
+            larguraDoMaior = maior + 12 + 12 + 22
+        }
+        TextMetrics { id: medida; font { family: Tema.fonte; pixelSize: Tema.corpo } }
         popup: Popup {
-            width: Math.max(linha.larguraDaCaixa, Math.min(lista.contentItem.childrenRect.width + 2 * padding, linha.width))
+            onAboutToShow: caixa.medirOpcoes()
+            width: Math.max(linha.larguraDaCaixa, Math.min(caixa.larguraDoMaior + 2 * padding, linha.width))
             x: caixa.width - width - 6
             y: caixa.height + 2
             implicitHeight: contentItem.implicitHeight + 2 * padding

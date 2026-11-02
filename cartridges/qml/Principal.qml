@@ -29,6 +29,13 @@ Window {
     property bool telaCheia: false
     // Com um modal na frente a barra não arrasta nem aciona nada (nem o Snap Layouts do maximizar).
     property bool barraTrancada: false
+    // A saída do modal leva ~127 ms: a barra só sobe de novo depois, para não pular sobre o escurecimento.
+    property bool _saindo: false
+    onBarraTrancadaChanged: {
+        _saindo = !barraTrancada && Tema.animacoes
+        if (_saindo) fimDaSaida.restart()
+    }
+    Timer { id: fimDaSaida; interval: 140; onTriggered: janela._saindo = false }
     // A linha de baixo da barra, com o conteúdo rolado.
     property alias sombraDaBarra: barra.sombra
 
@@ -73,7 +80,7 @@ Window {
         visible: !janela.telaCheia
         enabled: !janela.barraTrancada
         // Livre, fica acima da área e recebe o mouse direto; com modal, a área (e o modal nela) a cobre.
-        z: janela.barraTrancada ? 0 : 1
+        z: janela.barraTrancada || janela._saindo ? 0 : 1
         anchors { top: parent.top; left: parent.left; right: parent.right }
         janela: janela
         agente: janela.agente

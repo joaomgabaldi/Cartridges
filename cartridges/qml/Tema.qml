@@ -34,8 +34,8 @@ QtObject {
     readonly property int pesoTitulo4: 700
     readonly property int pesoForte: 700    // .heading, .caption-heading e todo botão com texto
 
-    // A cor do texto sem o alfa do tema claro, para as misturas abaixo.
-    readonly property color corBase: escuro ? "#ffffff" : "#000006"
+    // `currentColor` da libadwaita: o texto, com o alfa dele (0,8 no claro). As misturas abaixo somam o alfa do estado a esse.
+    readonly property color corBase: escuro ? "#ffffff" : Qt.rgba(0, 0, 6 / 255, 0.8)
 
     // window_bg_color e window_fg_color.
     readonly property color fundo: escuro ? "#222226" : "#fafafb"
@@ -104,7 +104,7 @@ QtObject {
 
     readonly property SystemPalette sistema: SystemPalette {}
 
-    function mistura(alfa) { return Qt.rgba(corBase.r, corBase.g, corBase.b, alfa) }
+    function mistura(alfa) { return Qt.rgba(corBase.r, corBase.g, corBase.b, corBase.a * alfa) }
 
     // `oklab(from cor min(l, 0.5) a b)` no claro e `max(l, 0.85)` no escuro: as cores "standalone" da libadwaita.
     function derivada(cor) {

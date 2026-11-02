@@ -42,7 +42,7 @@ MenuItem {
             height: 14
             radius: 7
             color: "transparent"
-            border { width: 1; color: Qt.alpha(Tema.corBase, 0.3) }
+            border { width: 1; color: Tema.mistura(0.3) }
             Rectangle {
                 anchors.centerIn: parent
                 visible: item.checked

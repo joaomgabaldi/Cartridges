@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QObject, QPointF, Qt, QUrl
+from PySide6.QtCore import QMetaObject, QObject, QPointF, Qt, QUrl
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtTest import QTest
 
@@ -270,6 +270,21 @@ def test_um_modal_cobre_e_tranca_a_barra(app):
     assert _esperar(lambda: barra.property("enabled") is True)
 
 
+def test_a_confirmacao_de_excluir_da_pagina_do_jogo_tranca_a_barra(app):
+    """J05: o diálogo de PaginaDoJogo também trava e cobre a barra (nada de Voltar com a pergunta aberta)."""
+    pagina = _abrir_pelo_cartao(app)
+    barra = app.achar("barraDeTitulo")
+    assert barra.property("enabled") is True
+    QMetaObject.invokeMethod(_achar(pagina, "botaoExcluir"), "click", Qt.ConnectionType.DirectConnection)
+    assert _esperar(lambda: barra.property("enabled") is False)
+    assert barra.property("z") == 0
+    voltar = app.achar("botaoVoltar")
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, pos=_centro(voltar))
+    assert app.janela.property("paginaAtual") == "jogo"
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: barra.property("enabled") is True)
+
+
 def test_tamanho_padrao_e_minimo_da_main(app):
     janela = app.janela
     assert (janela.width(), janela.height()) == (1170, 795)
@@ -325,3 +340,38 @@ def test_alerta_nunca_vira_folha(app):
     app.janela.setWidth(360)
     _esperar(limite=0.1)
     assert alerta.property("emFolha") is False
+
+
+# --- LinhaDeEscolha: o popover alarga até o maior texto ----------------------------------------------
+
+_ESCOLHA = """
+import QtQuick
+import "file:///%s"
+Window {
+    width: 900
+    height: 400
+    visible: true
+    LinhaDeEscolha {
+        objectName: "escolha"
+        width: 800
+        titulo: "Idioma"
+        model: ["Curta", "Uma opção bem mais longa que a largura mínima do popover"]
+    }
+}
+"""
+
+
+def test_popover_da_escolha_alarga_pelo_texto(app_qt):
+    motor = QQmlEngine()
+    motor.addImageProvider("icone", ProvedorDeIcones())
+    componente = QQmlComponent(motor)
+    componente.setData((_ESCOLHA % QML.as_posix()).encode("utf-8"), QUrl("file:///escolha.qml"))
+    raiz = componente.create()
+    assert raiz is not None, componente.errorString()
+    assert _esperar(lambda: raiz.isExposed())
+    escolha = _achar(raiz.contentItem(), "escolha")
+    assert escolha.property("larguraDoPopover") == 180
+    QTest.mouseClick(raiz, Qt.MouseButton.LeftButton, pos=_centro(escolha))
+    assert _esperar(lambda: escolha.property("larguraDoPopover") > 300)
+    raiz.close()
+    raiz.deleteLater()

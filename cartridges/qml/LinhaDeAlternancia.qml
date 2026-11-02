@@ -13,6 +13,8 @@ LinhaDoGrupo {
     reservaADireita: chave.width
     sobre: areaDaLinha.containsMouse && !chave.hovered
     pressionada: areaDaLinha.pressed
+    // Na AdwSwitchRow o contorno de foco é da linha, não do interruptor; o Tab para aqui, no Switch, e o anel sai na linha.
+    foco: chave.visualFocus
 
     MouseArea {
         id: areaDaLinha
@@ -38,7 +40,7 @@ LinhaDoGrupo {
             implicitHeight: 26
             radius: 14
             color: chave.checked ? Tema.destaque
-                : Qt.alpha(Tema.corBase, chave.pressed ? 0.25 : chave.hovered || areaDaLinha.containsMouse ? 0.20 : 0.15)
+                : Tema.mistura(chave.pressed ? 0.25 : chave.hovered || areaDaLinha.containsMouse ? 0.20 : 0.15)
             Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
             Rectangle {
                 anchors.fill: parent
@@ -58,7 +60,6 @@ LinhaDoGrupo {
                 Sombra { camadas: chave.enabled ? [[2, 4, 0, 0, 0, 6 / 255, 0.2]] : []; raio: 10 }
                 Behavior on x { NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
             }
-            AnelDeFoco { ativo: chave.visualFocus; raio: 14 }
         }
     }
 }
