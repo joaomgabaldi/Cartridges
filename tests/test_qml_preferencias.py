@@ -46,7 +46,7 @@ def test_enter_aciona_interruptor_aba_e_fechar(app, tecla, modificador):
     QTest.keyClick(app.janela, tecla, modificador)
     assert _esperar(lambda: app.achar("paginaDeImportacao").property("visible") is True)
     # O X fecha.
-    app.achar("botaoFecharPreferencias").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("dialogoDePreferencias").property("botaoFechar").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     QTest.keyClick(app.janela, tecla, modificador)
     assert _esperar(lambda: not app.preferencias.aberto)
 
@@ -328,15 +328,32 @@ def test_escolher_pasta_grava_o_caminho_e_url_vazia_nao_grava(app, tmp_path):
     assert shared.schema.get_string("shortcuts-location") == str(Path(tmp_path))
 
 
-def test_linhas_dos_atalhos_so_com_atalhos_ligado(app):
+def test_linhas_dos_atalhos_so_com_atalhos_ligado_e_o_expansor_aberto(app):
     shared.schema.set_boolean("shortcuts", False)
     _abrir(app, "import")
+    expansor = app.achar("interruptor-shortcuts")
+    assert expansor.property("icone") == "shortcuts-source"
     assert app.achar("linhaDaPasta").property("visible") is False
     assert app.achar("interruptor-shortcuts-recursive").property("visible") is False
+    # Ligar abre as filhas (P48).
     _clique(app, "interruptor-shortcutsChave")
     assert _esperar(lambda: app.achar("linhaDaPasta").property("visible") is True)
     assert app.achar("interruptor-shortcuts-recursive").property("visible") is True
-    assert app.achar("linhaDaPasta").property("dica") == "Selecionar pasta"
+    assert app.achar("linhaDaPastaBotao").property("dica") == "Selecionar pasta"
+    # A seta recolhe sem desligar; a chave segue ligada.
+    expansor.setProperty("expandida", False)
+    assert _esperar(lambda: app.achar("linhaDaPasta").property("visible") is False)
+    assert shared.schema.get_boolean("shortcuts") is True
+    # P49: o caminho é o texto grande e o título o pequeno e apagado.
+    assert app.achar("linhaDaPasta").property("propriedade") is True
+
+
+def test_expansor_abre_recolhido_com_a_chave_ja_ligada(app):
+    shared.schema.set_boolean("shortcuts", True)
+    _abrir(app, "import")
+    assert app.achar("interruptor-shortcuts").property("checked") is True
+    assert app.achar("interruptor-shortcuts").property("aberta") is False
+    assert app.achar("linhaDaPasta").property("visible") is False
 
 
 def test_chave_do_sgdb_digitada_e_o_interruptor_acende(app):
@@ -596,11 +613,13 @@ def test_monitor_apagado_com_o_interruptor_desligado_e_identificar_sempre_ativo(
     assert _enabled(app, "linhaIdentificarMonitores")
     app.preferencias.definir("session-move-window", True)
     assert _esperar(lambda: _enabled(app, "linhaDoMonitor"))
-    # Sem contar horas o grupo inteiro apaga, menos o "Identificar".
+    # Sem contar horas o grupo inteiro apaga, o "Identificar" inclusive (P41/P42), com o título e a descrição.
     app.preferencias.definir("playtime-tracking", False)
     assert _esperar(lambda: not _enabled(app, "linhaDoMonitor"))
     assert not _enabled(app, "interruptor-session-move-window")
-    assert _enabled(app, "linhaIdentificarMonitores")
+    assert not _enabled(app, "linhaIdentificarMonitores")
+    assert not _enabled(app, "grupoAoIniciarUmJogo")
+    assert app.achar("linhaIdentificarMonitores").property("opacity") == 0.5
 
 
 def test_sem_segundo_monitor_o_grupo_apaga_e_explica(app, monkeypatch):
@@ -611,7 +630,7 @@ def test_sem_segundo_monitor_o_grupo_apaga_e_explica(app, monkeypatch):
     assert not _enabled(app, "linhaDoMonitor")
     assert not _enabled(app, "interruptor-session-move-window")
     assert not _enabled(app, "interruptor-session-wallpaper")
-    assert _enabled(app, "linhaIdentificarMonitores")
+    assert not _enabled(app, "linhaIdentificarMonitores")
     assert _linha(app, "interruptor-session-move-window")[1] == "Requer um segundo monitor"
     assert _linha(app, "interruptor-session-wallpaper")[1] == "Requer um segundo monitor"
 
@@ -669,12 +688,13 @@ def test_linhas_da_iluminacao_apagadas_sem_o_interruptor(app, fitas_espiadas):
     assert _linha(app, "linhaDoBrilhoPorDispositivo") == (
         "Brilho máximo por dispositivo", "Define o brilho máximo de cada dispositivo"
     )
-    assert app.achar("linhaDoBrilhoPorDispositivo").property("dica") == "Ajustar o brilho de cada dispositivo"
+    assert app.achar("linhaDoBrilhoPorDispositivoBotao").property("dica") == "Ajustar o brilho de cada dispositivo"
+    assert app.achar("linhaDoBrilhoPorDispositivoBotao").property("icone") == "go-next"
     assert _linha(app, "linhaDaCorDoApp") == (
         "Cor do app", "A cor da iluminação inteligente com o aplicativo aberto e nenhum jogo em execução"
     )
     assert _linha(app, "linhaTestarFitas") == ("Testar", "Acende cada dispositivo na cor do aplicativo")
-    assert app.achar("linhaTestarFitas").property("dica") == "Ligar a iluminação inteligente"
+    assert app.achar("linhaTestarFitasBotao").property("dica") == "Ligar a iluminação inteligente"
     caixa = app.achar("linhaDoBrilhoDasFitasCaixa")
     assert (caixa.property("from"), caixa.property("to"), caixa.property("stepSize")) == (1, 100, 1)
     assert app.achar("linhaDoBrilhoDasFitas").property("pagina") == 10
@@ -732,7 +752,7 @@ def test_voltar_a_cor_padrao_so_fora_do_roxo(app, fitas_espiadas):
     assert _esperar(lambda: app.achar("linhaDaCorDoAppVoltar").property("visible") is False)
 
 
-def test_testar_troca_o_glifo_e_mostra_o_resultado(app, fitas_espiadas, monkeypatch):
+def test_testar_troca_o_icone_e_mostra_o_resultado(app, fitas_espiadas, monkeypatch):
     from cartridges.utils import session_fita  # noqa: PLC0415
 
     shared.schema.set_boolean("session-fita", True)
@@ -741,14 +761,14 @@ def test_testar_troca_o_glifo_e_mostra_o_resultado(app, fitas_espiadas, monkeypa
     solta = threading.Event()
     monkeypatch.setattr(session_fita, "aplicar", lambda *_a: solta.wait(5) and False)
     _abrir(app, "session")
-    assert app.achar("linhaTestarFitas").property("glifo") == "\ue768"
+    assert app.achar("linhaTestarFitasBotao").property("icone") == "media-playback-start"
     _clique(app, "linhaTestarFitasBotao")
     # Durante o teste o bot\u00e3o \u00e9 o de parar.
-    assert _esperar(lambda: app.achar("linhaTestarFitas").property("glifo") == "\ue71a")
+    assert _esperar(lambda: app.achar("linhaTestarFitasBotao").property("icone") == "media-playback-stop")
     assert app.achar("linhaTestarFitas").property("subtitulo") == "Testando\u2026"
     solta.set()
     assert _esperar(lambda: app.achar("linhaTestarFitas").property("subtitulo").startswith("Sem resposta: Centro."))
-    assert app.achar("linhaTestarFitas").property("glifo") == "\ue768"
+    assert app.achar("linhaTestarFitasBotao").property("icone") == "media-playback-start"
 
 
 # endregion
@@ -905,7 +925,7 @@ def test_calibracao_mostra_a_amostra_na_cor_da_etapa(calibracao_aberta):
     assert _esperar(lambda: _perto(_centro_da_amostra(app, "amostraDaCalibracao"), assistente.corNaTela))
     assistente.proxima()  # amarelo
     assert _esperar(lambda: _perto(_centro_da_amostra(app, "amostraDaCalibracao"), assistente.corNaTela))
-    assert app.achar("amostraDaCalibracao").property("height") == 240
+    assert app.achar("amostraDaCalibracao").property("height") >= 240  # P65: ocupa o que sobra
 
 
 def test_temperatura_so_no_branco(calibracao_aberta):
@@ -1055,7 +1075,7 @@ def test_calibracao_clique_nos_botoes_de_ponta_a_ponta(calibracao_aberta, fitas_
 
 
 
-# --- A busca (D69) ---
+# --- A busca (P15 a P22) ---
 
 
 def _buscar(app, texto):
@@ -1067,44 +1087,69 @@ def _visivel(app, nome):
     return app.achar(nome).property("visible") is True
 
 
-def test_buscar_brilho_mostra_as_linhas_das_duas_paginas(app):
+def _resultados(app):
+    """Os resultados na tela, na ordem: (título, "Página → Grupo")."""
+    achados = []
+    pilha = [app.achar("resultadosDaBuscaDasPreferencias")]
+    prefixo = "resultadoDaBusca-"
+    while pilha:
+        atual = pilha.pop()
+        nome = atual.objectName()
+        if nome.startswith(prefixo) and nome[len(prefixo):].isdigit():
+            achados.append((int(nome[len(prefixo):]), atual.property("titulo"), atual.property("subtitulo")))
+        pilha.extend(atual.childItems())
+    return [(t, sub) for _i, t, sub in sorted(achados)]
+
+
+def _clicar_resultado(app, indice):
+    QMetaObject.invokeMethod(app.achar(f"resultadoDaBusca-{indice}Botao"), "click", Qt.ConnectionType.DirectConnection)
+
+
+def test_buscar_brilho_lista_as_linhas_das_duas_paginas_com_pagina_e_grupo(app):
     _abrir(app)
     _buscar(app, "brilho")
-    assert _esperar(lambda: _visivel(app, "linhaDoBrilhoDasFitas"))
-    assert _visivel(app, "linhaDoBrilhoPorDispositivo")
-    assert not _visivel(app, "interruptor-sgdb")
+    assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
+    resultados = _resultados(app)
+    # P16: uma lista só, cada linha com o subtítulo "Página → Grupo".
+    assert ("Brilho (%)", "Personalização → Iluminação inteligente") in resultados
+    assert ("Brilho máximo por dispositivo", "Personalização → Iluminação inteligente") in resultados
+    assert not any(t == "Usar o SteamGridDB" for t, _ in resultados)
     assert not _visivel(app, "abas")  # a barra de abas some
+    assert not _visivel(app, "paginaGeral")
 
 
 def test_busca_sem_acento_acha_iluminacao(app):
     _abrir(app)
     _buscar(app, "ILUMINACAO")
-    assert _esperar(lambda: _visivel(app, "interruptor-session-fita"))
-    assert _visivel(app, "linhaConfigurarFitas")
-    assert not _visivel(app, "interruptor-gamepad")
+    assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
+    titulos = [t for t, _ in _resultados(app)]
+    assert "Mudar a cor da iluminação inteligente" in titulos and "Configurar a iluminação inteligente" in titulos
+    assert "Usar controle Xbox" not in titulos
 
 
 def test_busca_no_subtitulo(app):
     _abrir(app)
     _buscar(app, "segundos de espera")
-    assert _esperar(lambda: _visivel(app, "linhaDaEspera"))
-    assert not _visivel(app, "interruptor-gamepad")
+    assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
+    assert _resultados(app) == [("Tempo de espera ao fechar o jogo", "Geral → Comportamento")]
 
 
-def test_grupo_sem_linhas_some_na_busca(app):
+def test_grupo_sem_titulo_mostra_so_a_pagina(app):
     _abrir(app)
-    _buscar(app, "brilho")
-    assert _esperar(lambda: _visivel(app, "grupoIluminacao"))
-    assert not _visivel(app, "grupoComportamentoGeral")
-    assert not _visivel(app, "grupoBiblioteca")
+    _buscar(app, "atualizar metadados")
+    assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
+    assert ("Atualizar metadados", "Importação") in _resultados(app)
 
 
-def test_linha_escondida_por_regra_continua_escondida_na_busca(app):
-    app.preferencias.definir("shortcuts", False)
+def test_filhas_do_expansor_nao_entram_na_busca(app):
+    """P22: a `main` só indexa as linhas de nível de grupo; "Pasta" e "Buscar em subpastas" ficam fora."""
+    app.preferencias.definir("shortcuts", True)
     _abrir(app)
-    _buscar(app, "pasta")
-    assert _esperar(lambda: _visivel(app, "grupoAtalhos") is False)
-    assert not _visivel(app, "linhaDaPasta")
+    _buscar(app, "subpastas")
+    assert _esperar(lambda: _visivel(app, "estadoSemResultadoDasPreferencias"))
+    assert _resultados(app) == []
+    _buscar(app, "atalhos")
+    assert _esperar(lambda: ("Atalhos", "Importação → Atalhos") in _resultados(app))
 
 
 def test_nenhum_resultado(app):
@@ -1112,21 +1157,80 @@ def test_nenhum_resultado(app):
     assert not _visivel(app, "estadoSemResultadoDasPreferencias")
     _buscar(app, "zzzzzz")
     assert _esperar(lambda: _visivel(app, "estadoSemResultadoDasPreferencias"))
-    assert app.achar("estadoSemResultadoDasPreferencias").property("titulo") == "Nenhum resultado encontrado"
+    vazio = app.achar("estadoSemResultadoDasPreferencias")
+    assert vazio.property("titulo") == "Nenhum resultado encontrado"
+    # P21: o ícone de lupa e a descrição.
+    assert vazio.property("descricao") == "Tente uma busca diferente."
+    assert vazio.property("icone") == "edit-find"
     _buscar(app, "brilho")
     assert _esperar(lambda: not _visivel(app, "estadoSemResultadoDasPreferencias"))
 
 
-def test_esc_limpa_a_busca_e_depois_fecha(app):
+def test_clicar_num_resultado_leva_a_pagina_e_poe_o_foco_na_linha(app):
+    """P17: o resultado só navega; não liga o interruptor dele."""
+    _abrir(app)
+    antes = shared.schema.get_boolean("gamepad")
+    _buscar(app, "controle xbox")
+    assert _esperar(lambda: _resultados(app) != [])
+    titulos = [t for t, _ in _resultados(app)]
+    _clicar_resultado(app, titulos.index("Usar controle Xbox"))
+    assert _esperar(lambda: app.achar("campoDeBuscaDasPreferencias").property("text") == "")
+    dialogo = app.achar("dialogoDePreferencias")
+    assert dialogo.property("buscaAtiva") is False
+    assert dialogo.property("aba") == "general"
+    assert _visivel(app, "paginaGeral") and _visivel(app, "abas")
+    assert _esperar(lambda: _foco_dentro_de(app, "interruptor-gamepad"))
+    assert shared.schema.get_boolean("gamepad") is antes
+
+
+def test_clicar_num_resultado_de_outra_pagina_troca_de_aba(app):
+    _abrir(app, "general")
+    _buscar(app, "capas animadas")
+    assert _esperar(lambda: _resultados(app) != [])
+    _clicar_resultado(app, 0)
+    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("aba") == "session")
+    assert _esperar(lambda: _foco_dentro_de(app, "interruptor-cover-autoplay"))
+
+
+def test_lupa_liga_o_campo_no_lugar_do_titulo(app):
+    _abrir(app)
+    dialogo = app.achar("dialogoDePreferencias")
+    campo = app.achar("campoDeBuscaDasPreferencias")
+    assert dialogo.property("buscaAtiva") is False
+    assert not _visivel(app, "campoDeBuscaDasPreferencias")
+    _clique(app, "botaoDeBuscaDasPreferencias")
+    assert _esperar(lambda: dialogo.property("buscaAtiva") is True and campo.property("activeFocus") is True)
+    assert _visivel(app, "abas")  # sem texto, as páginas e as abas continuam à vista
+    _clique(app, "botaoDeBuscaDasPreferencias")
+    assert _esperar(lambda: dialogo.property("buscaAtiva") is False)
+    assert not _visivel(app, "campoDeBuscaDasPreferencias")
+
+
+def test_digitar_em_qualquer_ponto_abre_a_busca(app):
+    """P18: a tecla que nenhum controle trata vai ao campo."""
+    _abrir(app)
+    app.achar("aba-general").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    for tecla in (Qt.Key.Key_B, Qt.Key.Key_R, Qt.Key.Key_I):
+        QTest.keyClick(app.janela, tecla)
+    campo = app.achar("campoDeBuscaDasPreferencias")
+    assert _esperar(lambda: campo.property("text") == "bri")
+    assert app.achar("dialogoDePreferencias").property("buscaAtiva") is True
+    assert campo.property("activeFocus") is True
+
+
+def test_esc_sai_da_busca_mesmo_com_texto_e_o_segundo_fecha(app):
     _abrir(app)
     campo = app.achar("campoDeBuscaDasPreferencias")
-    campo.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    dialogo = app.achar("dialogoDePreferencias")
+    app.achar("aba-general").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     for tecla in (Qt.Key.Key_B, Qt.Key.Key_R, Qt.Key.Key_I):
         QTest.keyClick(app.janela, tecla)
     assert _esperar(lambda: campo.property("text") == "bri")
     QTest.keyClick(app.janela, Qt.Key.Key_Escape)
-    assert _esperar(lambda: campo.property("text") == "")
+    # P19: com o texto, um Esc só limpa e devolve o título.
+    assert _esperar(lambda: campo.property("text") == "" and dialogo.property("buscaAtiva") is False)
     assert app.preferencias.aberto
+    assert _visivel(app, "abas")
     QTest.keyClick(app.janela, Qt.Key.Key_Escape)
     assert _esperar(lambda: not app.preferencias.aberto)
 
@@ -1134,9 +1238,9 @@ def test_esc_limpa_a_busca_e_depois_fecha(app):
 def test_limpar_volta_a_aba_de_antes(app):
     _abrir(app, "import")
     _buscar(app, "brilho")
-    assert _esperar(lambda: _visivel(app, "linhaDoBrilhoDasFitas"))
+    assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
     _buscar(app, "")
-    assert _esperar(lambda: not _visivel(app, "linhaDoBrilhoDasFitas"))
+    assert _esperar(lambda: not _visivel(app, "resultadosDaBuscaDasPreferencias"))
     assert _visivel(app, "paginaDeImportacao")
     assert app.achar("dialogoDePreferencias").property("aba") == "import"
 
@@ -1148,6 +1252,7 @@ def test_ctrl_f_leva_ao_campo(app):
     assert campo.property("activeFocus") is not True
     QTest.keyClick(app.janela, Qt.Key.Key_F, Qt.KeyboardModifier.ControlModifier)
     assert _esperar(lambda: campo.property("activeFocus") is True)
+    assert app.achar("dialogoDePreferencias").property("buscaAtiva") is True
 
 
 def test_filtro_nao_esvazia_os_assistentes_abertos_por_cima(app, fitas_espiadas, monkeypatch):
@@ -1156,7 +1261,7 @@ def test_filtro_nao_esvazia_os_assistentes_abertos_por_cima(app, fitas_espiadas,
     monkeypatch.setattr(session_fita, "previa_calibracao", lambda *_a: None)
     _abrir(app, "session")
     _buscar(app, "brilho")
-    assert _esperar(lambda: _visivel(app, "linhaDoBrilhoDasFitas"))
+    assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
     app.preferencias.abrirBrilhoPorDispositivo()
     assert _esperar(lambda: _visivel(app, "brilhoDoDispositivo-eb0"))
     app.preferencias.abrirCalibracao()
@@ -1167,12 +1272,13 @@ def test_filtro_nao_esvazia_os_assistentes_abertos_por_cima(app, fitas_espiadas,
     assert _visivel(app, "grupoDaContaDaTuya")
 
 
-def test_buscar_epic_mostra_a_linha_da_conta(app):
+def test_buscar_epic_lista_a_conta(app):
     _abrir(app)
     _buscar(app, "epic")
-    assert _esperar(lambda: _visivel(app, "botaoDaConta_epic"))
-    assert not _visivel(app, "botaoDaConta_microsoft")
-    assert not _visivel(app, "botaoDaConta_ea")
+    assert _esperar(lambda: _resultados(app) != [])
+    resultados = _resultados(app)
+    assert len(resultados) == 1 and "Epic" in resultados[0][0]
+    assert resultados[0][1].startswith("Conquistas")
 
 
 def test_fechar_com_texto_e_reabrir_volta_com_campo_vazio_e_abas(app):
@@ -1183,15 +1289,8 @@ def test_fechar_com_texto_e_reabrir_volta_com_campo_vazio_e_abas(app):
     assert _esperar(lambda: not _visivel(app, "dialogoDePreferencias"))
     _abrir(app)
     assert app.achar("campoDeBuscaDasPreferencias").property("text") == ""
+    assert app.achar("dialogoDePreferencias").property("buscaAtiva") is False
     assert _visivel(app, "abas")
-
-
-def test_loader_das_contas_some_na_busca_sem_conta(app):
-    _abrir(app)
-    _buscar(app, "brilho")
-    assert _esperar(lambda: _visivel(app, "linhaDoBrilhoDasFitas"))
-    assert not _visivel(app, "carregadorDasContas")
-    assert _esperar(lambda: app.achar("paginaDasConquistas").property("implicitHeight") == 0)
 
 
 def test_sem_avisos_do_qml_ao_abrir_e_fechar(app_qt):
@@ -1210,12 +1309,12 @@ def test_sem_avisos_do_qml_ao_abrir_e_fechar(app_qt):
 
 def test_ctrl_f_leva_ao_campo_de_busca_e_com_aviso_aberto_nao_tira_o_foco_do_aviso(app):
     _abrir(app)
-    app.achar("botaoFecharPreferencias").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("dialogoDePreferencias").property("botaoFechar").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     QTest.keyClick(app.janela, Qt.Key.Key_F, Qt.KeyboardModifier.ControlModifier)
     assert _esperar(lambda: app.achar("campoDeBuscaDasPreferencias").property("activeFocus") is True)
 
     # Um aviso por cima das Preferências (a fila de diálogos do app): o Ctrl+F é dele, o foco fica no aviso.
-    app.achar("botaoFecharPreferencias").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("dialogoDePreferencias").property("botaoFechar").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     app.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: None)
     assert _esperar(lambda: app.achar("camadaDeAvisos").property("dialogoAberto") is True)
     assert _esperar(lambda: _foco_dentro_de(app, "camadaDeAvisos"))

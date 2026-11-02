@@ -1,116 +1,85 @@
 import QtQuick
 import QtQuick.Controls.Basic
-import QtQuick.Window
+import QtQuick.Layouts
 
-// "Calibrar as cores", por cima das Preferências: a cor de referência de cada etapa em um quadro, o dispositivo aceso
-// nela e os controles até os dois ficarem iguais. Só desenha: o que ele mostra e grava é o `assistente` (um
-// `AssistenteDeCalibracao`, cartridges/calibracao_janela.py), que existe só enquanto a janela está aberta. As
-// Preferências o ligam ao `preferencias.calibracao`; quem o usar em outro lugar passa o próprio `assistente`.
-// Esc cancela; o foco volta a quem o abriu.
-Rectangle {
+// "Calibrar as cores", por cima das Preferências (`Adw.Dialog` de 520 por 620 com a `HeaderBar` e uma página por passo): a
+// cor de referência de cada etapa em um quadro, o dispositivo aceso nela e os controles até os dois ficarem iguais. Só
+// desenha: o que ele mostra e grava é o `assistente` (um `AssistenteDeCalibracao`, cartridges/calibracao_janela.py), que
+// existe só enquanto a janela está aberta. As Preferências o ligam ao `preferencias.calibracao`; quem o usar em outro
+// lugar passa o próprio `assistente`. Esc cancela; o foco volta a quem o abriu.
+MolduraDoDialogo {
     id: dialogo
     objectName: "assistenteDeCalibracao"
 
     property var assistente: preferencias.calibracao
     readonly property string pagina: assistente ? assistente.paginaAtual : ""
-    // Quem tinha o foco ao abrir: volta a tê-lo ao fechar.
-    property Item retorno: null
 
-    Accessible.role: Accessible.Dialog
-    Accessible.name: "Calibrar as cores"
+    aberto: !!assistente
+    largura: 520
+    altura: 620
+    nomeAcessivel: "Calibrar as cores"
+    onFecharPedido: if (assistente) assistente.cancelar()
 
-    anchors.fill: parent
-    z: 10
-    visible: !!assistente
-    color: "#80000000"
-    Keys.onEscapePressed: assistente.cancelar()
-    // Modal para o teclado e o controle: nenhuma tecla chega às Preferências de trás (que ficam apagadas). O Tab passa,
-    // para circular entre os botões e os controles.
-    Keys.onPressed: event => event.accepted = event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab
-
-    function devolverAoRetorno() {
-        if (!visible && retorno && retorno.visible && retorno.enabled) retorno.forceActiveFocus(Qt.TabFocusReason)
-    }
-    // O foco acompanha a página: o primeiro dispositivo da lista, o "Próximo" nas etapas e o "Pausar" no teste.
+    // O foco acompanha a página: o primeiro dispositivo da lista, o "Próximo" nas etapas e o "Pausar" no teste. (Fica a
+    // cargo do GTK na `main`; aqui o Qt perderia o foco ao esconder a página e o Esc deixaria de chegar ao diálogo.)
     function focarPagina() {
-        if (!visible) return
+        if (!aberto) return
         if (pagina === "inicio") {
-            const primeira = listaDeDispositivos.itemAt(0)
+            const primeira = cargaDaLista.item ? cargaDaLista.item.lista.itemAt(0) : null
             if (primeira) primeira.botaoDaLinha.forceActiveFocus(Qt.TabFocusReason)
         } else if (pagina === "etapa") botaoProxima.forceActiveFocus(Qt.TabFocusReason)
         else if (pagina === "etapa_todos") botaoProximaDeTodos.forceActiveFocus(Qt.TabFocusReason)
         else if (pagina === "teste") botaoPausar.forceActiveFocus(Qt.TabFocusReason)
     }
     onPaginaChanged: Qt.callLater(focarPagina)
-    onVisibleChanged: {
-        if (visible) {
-            retorno = Window.window ? Window.window.activeFocusItem : null
-            // Depois de o `visible` assentar, como no `DialogoDeConfirmacao`.
-            Qt.callLater(focarPagina)
-        } else {
-            // Depois das Preferências de trás voltarem a ficar habilitadas.
-            Qt.callLater(devolverAoRetorno)
-        }
+    // Depois do foco inicial da moldura, que também é adiado.
+    onAbertoChanged: if (aberto) Qt.callLater(() => Qt.callLater(focarPagina))
+
+    // A página de cada passo: 12 em cima, 24 embaixo e dos lados, 18 entre os blocos.
+    component Pagina: ColumnLayout {
+        anchors { fill: parent; topMargin: 12; bottomMargin: 24; leftMargin: 24; rightMargin: 24 }
+        spacing: 18
     }
 
-    MouseArea { anchors.fill: parent } // o que está embaixo não recebe cliques
-
-    component Botao: Button {
-        id: botao
-        property bool destaque: false
-        focusPolicy: Qt.StrongFocus
-        implicitHeight: 36
-        leftPadding: 14
-        rightPadding: 14
-        Keys.onReturnPressed: click()
-        Keys.onEnterPressed: click()
-        contentItem: Text {
-            text: botao.text
-            textFormat: Text.PlainText
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            color: botao.destaque ? "white" : Tema.texto
-            font { family: Tema.fonte; pixelSize: 14 }
-        }
-        background: Rectangle {
-            radius: 6
-            color: botao.destaque ? Tema.destaque : Tema.superficie
-            opacity: botao.down ? 0.75 : botao.hovered ? 0.9 : 1
-            border { width: botao.visualFocus ? 2 : 1; color: botao.visualFocus ? Tema.texto : Tema.borda }
-        }
+    // Os botões da base de cada página, à direita, com 12 entre eles.
+    component FilaDeBotoes: RowLayout {
+        Layout.alignment: Qt.AlignRight
+        spacing: 12
     }
 
-    // Os botões da base de cada página, à direita.
-    component FilaDeBotoes: Item {
-        default property alias botoes: fila.data
-        width: parent ? parent.width : implicitWidth
-        height: 36
-        Row {
-            id: fila
-            anchors.right: parent.right
-            spacing: 10
-        }
-    }
-
-    // A cor de referência: o quadro que a pessoa compara com o dispositivo.
+    // A cor de referência: o quadro que a pessoa compara com o dispositivo (`DrawingArea` sem borda, raio 12).
     component Amostra: Rectangle {
+        Layout.fillWidth: true
         radius: 12
         color: dialogo.assistente ? dialogo.assistente.corNaTela : "transparent"
-        border { width: 1; color: Tema.borda }
     }
 
     component Titulo: Text {
+        Layout.fillWidth: true
         textFormat: Text.PlainText
         elide: Text.ElideRight
         color: Tema.texto
-        font { family: Tema.fonte; pixelSize: 20; weight: Font.DemiBold }
+        font { family: Tema.fonte; pixelSize: Tema.titulo2; weight: Tema.pesoTitulo2 }
         Accessible.role: Accessible.Heading
         Accessible.name: text
     }
 
-    // Um controle deslizante com o rótulo à esquerda. `neutro` é o ponto sem ajuste, marcado na barra: para onde o
-    // "Restaurar" leva.
-    component LinhaDeControle: Row {
+    // A coluna dos rótulos tem a largura do maior (a grade do GTK usa a natural).
+    TextMetrics {
+        id: medidaDaIntensidade
+        font { family: Tema.fonte; pixelSize: Tema.corpo }
+        text: "Intensidade"
+    }
+    TextMetrics {
+        id: medidaDaTemperatura
+        font { family: Tema.fonte; pixelSize: Tema.corpo }
+        text: "Temperatura"
+    }
+    readonly property real larguraDosRotulos: Math.ceil(Math.max(medidaDaIntensidade.width, medidaDaTemperatura.width))
+
+    // Um controle deslizante com o rótulo à esquerda (`Gtk.Scale` do Adwaita: trilha de 10, botão branco de 20 e 12 de
+    // respiro). `neutro` é o ponto sem ajuste, marcado embaixo da barra: para onde o "Restaurar" leva.
+    component LinhaDeControle: Item {
         id: linhaDeControle
         property string rotulo
         property string nomeDoControle
@@ -121,54 +90,78 @@ Rectangle {
         signal movido(int valor)
 
         width: parent ? parent.width : implicitWidth
-        height: 32
-        spacing: 12
-
+        height: 34
         Text {
-            width: 100
-            height: parent.height
+            width: dialogo.larguraDosRotulos
+            y: 0
+            height: 22
             text: linhaDeControle.rotulo
             textFormat: Text.PlainText
             verticalAlignment: Text.AlignVCenter
             color: Tema.texto
-            font { family: Tema.fonte; pixelSize: 14 }
+            font { family: Tema.fonte; pixelSize: Tema.corpo }
         }
         Slider {
             id: barra
             objectName: linhaDeControle.nomeDoControle
-            width: parent.width - 112
+            x: dialogo.larguraDosRotulos + 12
+            width: parent.width - x
             height: parent.height
             from: linhaDeControle.de
             to: linhaDeControle.ate
             stepSize: 1
             value: linhaDeControle.valor
             focusPolicy: Qt.StrongFocus
+            hoverEnabled: true
+            // `scale`: 12 de respiro em volta; o botão fica a 2 px das pontas da trilha.
+            leftPadding: 12 + 2
+            rightPadding: 12 + 2
+            topPadding: 0
+            bottomPadding: 0
             Accessible.name: linhaDeControle.rotulo
             onMoved: linhaDeControle.movido(Math.round(value))
-            background: Rectangle {
-                x: barra.leftPadding
-                y: barra.topPadding + barra.availableHeight / 2 - height / 2
-                width: barra.availableWidth
-                height: 4
-                radius: 2
-                color: Tema.borda
-                Rectangle { width: barra.visualPosition * parent.width; height: parent.height; radius: 2; color: Tema.destaque }
+            background: Item {
+                readonly property real inicio: barra.leftPadding - 2
+                readonly property real larguraDaTrilha: barra.width - 2 * 12
                 Rectangle {
-                    x: (linhaDeControle.neutro - barra.from) / (barra.to - barra.from) * (parent.width - width)
-                    y: -3
-                    width: 2
+                    x: parent.inicio
+                    y: 11
+                    width: parent.larguraDaTrilha
                     height: 10
-                    color: Tema.textoSecundario
+                    radius: 5
+                    color: Tema.mistura(barra.hovered || barra.pressed ? 0.20 : 0.15)
+                    Rectangle {
+                        width: barra.visualPosition * (parent.width - 4) + 2
+                        height: parent.height
+                        radius: height / 2
+                        color: Tema.destaque
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: parent.radius
+                            color: Tema.mistura(0.10)
+                            visible: barra.hovered || barra.pressed
+                        }
+                    }
+                }
+                // A marca do ponto sem ajuste: 1 x 6, a 6 da trilha, apagada.
+                Rectangle {
+                    x: parent.inicio + 2 + (linhaDeControle.neutro - barra.from) / (barra.to - barra.from) * (parent.larguraDaTrilha - 4)
+                    y: 11 + 10 + 6
+                    width: 1
+                    height: 6
+                    color: Qt.alpha(Tema.texto, Tema.opacidadeApagado)
                 }
             }
             handle: Rectangle {
-                x: barra.leftPadding + barra.visualPosition * (barra.availableWidth - width)
-                y: barra.topPadding + barra.availableHeight / 2 - height / 2
-                width: 18
-                height: 18
-                radius: 9
-                color: Tema.destaque
-                border { width: barra.visualFocus ? 3 : 1; color: barra.visualFocus ? Tema.texto : Tema.borda }
+                x: barra.leftPadding + barra.visualPosition * (barra.availableWidth) - width / 2
+                y: 16 - height / 2
+                width: 20
+                height: 20
+                radius: 10
+                color: barra.hovered || barra.pressed ? "white"
+                    : Qt.rgba(0.8 + 0.2 * Tema.vista.r, 0.8 + 0.2 * Tema.vista.g, 0.8 + 0.2 * Tema.vista.b, 1)
+                Sombra { camadas: [[0, 0, 1, 0, 0, 6 / 255, 0.10], [2, 4, 0, 0, 0, 6 / 255, 0.2]]; raio: 10 }
+                AnelDeFoco { ativo: barra.visualFocus; raio: 10; afastamento: 0 }
             }
         }
     }
@@ -183,11 +176,13 @@ Rectangle {
             : { id: "", nome: "", tom: 0, intensidade: 100, temperatura: 0, branco: false }
 
         width: parent ? parent.width : implicitWidth
-        implicitHeight: coluna.implicitHeight + 8
+        implicitWidth: parent ? parent.width : 0
+        implicitHeight: coluna.implicitHeight
+        Layout.fillWidth: true
+        Layout.preferredHeight: implicitHeight
 
         Column {
             id: coluna
-            y: 4
             width: parent.width
             spacing: 6
 
@@ -228,75 +223,61 @@ Rectangle {
                 height: quente.implicitHeight
                 Text {
                     id: quente
-                    x: 112
+                    x: dialogo.larguraDosRotulos + 12
                     text: "Mais quente"
                     textFormat: Text.PlainText
                     color: Tema.textoSecundario
-                    font { family: Tema.fonte; pixelSize: 12 }
+                    font { family: Tema.fonte; pixelSize: Tema.corpo }
                 }
                 Text {
                     anchors.right: parent.right
                     text: "Mais frio"
                     textFormat: Text.PlainText
                     color: Tema.textoSecundario
-                    font { family: Tema.fonte; pixelSize: 12 }
+                    font { family: Tema.fonte; pixelSize: Tema.corpo }
                 }
             }
         }
     }
 
-    Rectangle {
-        anchors.centerIn: parent
-        width: Math.min(520, parent.width - 48)
-        height: Math.min(620, parent.height - 48)
-        radius: 8
-        color: Tema.fundo
-        border.color: Tema.botaoSobre
-        clip: true
-
-        Item {
-            id: cabecalho
-            width: parent.width
-            height: 56
-
+    CabecalhoDoDialogo {
+        titulo: "Calibrar as cores"
+        comFechar: false
+        inicio: [
             Botao {
                 objectName: "botaoCancelarCalibracao"
-                anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
+                estilo: "plano"
                 text: "Cancelar"
                 onClicked: dialogo.assistente.cancelar()
             }
+        ]
+    }
+
+    Item {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+
+        // A escolha do dispositivo.
+        Pagina {
+            visible: dialogo.pagina === "inicio"
+
             Text {
-                anchors.centerIn: parent
-                text: "Calibrar as cores"
+                Layout.fillWidth: true
+                text: "Escolha o dispositivo a calibrar. Em cada etapa, ajuste os controles até a cor do dispositivo ficar igual à da tela. Para um resultado melhor, deixe o ambiente com pouca luz."
                 textFormat: Text.PlainText
+                wrapMode: Text.Wrap
                 color: Tema.texto
-                font { family: Tema.fonte; pixelSize: 15; weight: Font.DemiBold }
-                Accessible.role: Accessible.Heading
-                Accessible.name: text
+                font { family: Tema.fonte; pixelSize: Tema.corpo }
             }
-            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Tema.borda }
-        }
-
-        Item {
-            id: area
-            anchors { left: parent.left; right: parent.right; top: cabecalho.bottom; bottom: parent.bottom; margins: 24; topMargin: 16 }
-
-            // A escolha do dispositivo.
-            Column {
-                width: parent.width
-                spacing: 18
-                visible: dialogo.pagina === "inicio"
-
-                Text {
-                    width: parent.width
-                    text: "Escolha o dispositivo a calibrar. Em cada etapa, ajuste os controles até a cor do dispositivo ficar igual à da tela. Para um resultado melhor, deixe o ambiente com pouca luz."
-                    textFormat: Text.PlainText
-                    wrapMode: Text.Wrap
-                    color: Tema.textoSecundario
-                    font { family: Tema.fonte; pixelSize: 14 }
-                }
-                GrupoDeLinhas {
-                    width: parent.width
+            // Criada com o diálogo já à vista: o cartão some enquanto a altura é zero, e um `Column` não conta as linhas que
+            // nascem sob um pai escondido (a altura nunca sairia de zero).
+            Loader {
+                id: cargaDaLista
+                Layout.fillWidth: true
+                Layout.preferredHeight: item ? item.implicitHeight : 0
+                active: dialogo.visible
+                sourceComponent: GrupoDeLinhas {
+                    property alias lista: listaDeDispositivos
                     // Pela contagem, e não pela lista: as linhas (com o foco) ficam onde estão quando algo muda.
                     Repeater {
                         id: listaDeDispositivos
@@ -310,131 +291,136 @@ Rectangle {
                             // O nome vem da conta da Tuya: a linha o mostra em PlainText.
                             titulo: dispositivo.nome
                             subtitulo: dispositivo.subtitulo
-                            glifo: ""  // seguir
+                            icone: "go-next"
                             onAcionada: dialogo.assistente.escolherDispositivo(dispositivo.id)
                         }
                     }
                 }
-                FilaDeBotoes {
-                    Botao {
-                        objectName: "botaoTestarCalibracao"
-                        text: "Testar calibração"
-                        onClicked: dialogo.assistente.testar()
-                    }
+            }
+            // Os botões da base ficam no pé (`Gtk.Box` do fim, sem `vexpand`: o vão sobra embaixo do último bloco).
+            FilaDeBotoes {
+                Botao {
+                    objectName: "botaoTestarCalibracao"
+                    text: "Testar calibração"
+                    onClicked: dialogo.assistente.testar()
                 }
             }
+            Item { Layout.fillHeight: true }
+        }
 
-            // Uma cor de um dispositivo.
-            Column {
-                width: parent.width
-                spacing: 16
-                visible: dialogo.pagina === "etapa"
+        // Uma cor de um dispositivo.
+        Pagina {
+            visible: dialogo.pagina === "etapa"
 
-                Titulo { width: parent.width; text: dialogo.assistente ? dialogo.assistente.titulo : "" }
-                Amostra {
-                    objectName: "amostraDaCalibracao"
-                    width: parent.width
-                    height: 240
-                }
-                Repeater {
-                    model: dialogo.pagina === "etapa" ? dialogo.assistente.controles.length : 0
-                    Controles { required property int index; indice: index }
-                }
-                FilaDeBotoes {
-                    Botao { objectName: "botaoRestaurarCalibracao"; text: "Restaurar"; onClicked: dialogo.assistente.restaurar() }
-                    Botao { objectName: "botaoVoltarCalibracao"; text: "Voltar"; onClicked: dialogo.assistente.anterior() }
-                    Botao {
-                        id: botaoProxima
-                        objectName: "botaoProximaCalibracao"
-                        text: "Próximo"
-                        destaque: true
-                        onClicked: dialogo.assistente.proxima()
-                    }
+            Titulo { text: dialogo.assistente ? dialogo.assistente.titulo : "" }
+            // A amostra ocupa o que sobra (`vexpand`), com 240 no mínimo.
+            Amostra {
+                objectName: "amostraDaCalibracao"
+                Layout.fillHeight: true
+                Layout.minimumHeight: 240
+            }
+            Repeater {
+                model: dialogo.pagina === "etapa" ? dialogo.assistente.controles.length : 0
+                Controles { required property int index; indice: index }
+            }
+            FilaDeBotoes {
+                Botao { objectName: "botaoRestaurarCalibracao"; text: "Restaurar"; onClicked: dialogo.assistente.restaurar() }
+                Botao { objectName: "botaoVoltarCalibracao"; text: "Voltar"; onClicked: dialogo.assistente.anterior() }
+                Botao {
+                    id: botaoProxima
+                    objectName: "botaoProximaCalibracao"
+                    text: "Próximo"
+                    estilo: "sugestao"
+                    onClicked: dialogo.assistente.proxima()
                 }
             }
+        }
 
-            // Uma cor de todos os dispositivos: a amostra menor e, embaixo, os controles de cada um, numa área que rola.
-            Item {
-                anchors.fill: parent
-                visible: dialogo.pagina === "etapa_todos"
+        // Uma cor de todos os dispositivos: a amostra menor e, embaixo, os controles de cada um, numa área que rola.
+        Pagina {
+            visible: dialogo.pagina === "etapa_todos"
 
-                Titulo {
-                    id: tituloDeTodos
-                    width: parent.width
-                    text: dialogo.assistente ? dialogo.assistente.titulo : ""
-                }
-                Amostra {
-                    id: amostraDeTodos
-                    objectName: "amostraDeTodosDaCalibracao"
-                    anchors { top: tituloDeTodos.bottom; topMargin: 16 }
-                    width: parent.width
-                    height: 72
-                }
-                Flickable {
-                    id: rolagem
-                    anchors { left: parent.left; right: parent.right; top: amostraDeTodos.bottom; topMargin: 16; bottom: botoesDeTodos.top; bottomMargin: 16 }
-                    contentWidth: width
-                    contentHeight: grupos.implicitHeight
-                    boundsBehavior: Flickable.StopAtBounds
-                    clip: true
-                    ScrollBar.vertical: BarraDeRolagem {}
+            Titulo { text: dialogo.assistente ? dialogo.assistente.titulo : "" }
+            Amostra {
+                objectName: "amostraDeTodosDaCalibracao"
+                Layout.preferredHeight: 72
+            }
+            Flickable {
+                id: rolagem
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                contentWidth: width
+                contentHeight: grupos.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                clip: true
+                ScrollBar.vertical: BarraDeRolagem {}
 
-                    Column {
-                        id: grupos
-                        width: rolagem.width - 12
-                        spacing: 18
+                Column {
+                    id: grupos
+                    width: rolagem.width
+                    spacing: 18
 
-                        Repeater {
-                            model: dialogo.pagina === "etapa_todos" ? dialogo.assistente.controles.length : 0
-                            GrupoDePreferencias {
-                                id: grupoDoDispositivo
-                                required property int index
-                                // O nome vem da conta da Tuya: o grupo o mostra em PlainText.
-                                titulo: dialogo.assistente && index < dialogo.assistente.controles.length
-                                    ? dialogo.assistente.controles[index].nome : ""
-                                Controles { indice: grupoDoDispositivo.index }
+                    // Um grupo por dispositivo: só o título e os controles, sem cartão (`PreferencesGroup.add` de um
+                    // widget que não é linha).
+                    Repeater {
+                        model: dialogo.pagina === "etapa_todos" ? dialogo.assistente.controles.length : 0
+                        Column {
+                            id: grupoDoDispositivo
+                            required property int index
+                            width: grupos.width - 12
+                            spacing: 6
+                            // O nome vem da conta da Tuya: o grupo o mostra em PlainText.
+                            Text {
+                                width: parent.width
+                                height: 34
+                                verticalAlignment: Text.AlignVCenter
+                                text: dialogo.assistente && grupoDoDispositivo.index < dialogo.assistente.controles.length
+                                    ? dialogo.assistente.controles[grupoDoDispositivo.index].nome : ""
+                                textFormat: Text.PlainText
+                                wrapMode: Text.Wrap
+                                color: Tema.texto
+                                font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
+                                Accessible.role: Accessible.Heading
+                                Accessible.name: text
                             }
+                            Controles { width: parent.width; indice: grupoDoDispositivo.index }
                         }
                     }
                 }
-                FilaDeBotoes {
-                    id: botoesDeTodos
-                    anchors.bottom: parent.bottom
-                    Botao { objectName: "botaoRestaurarTodosCalibracao"; text: "Restaurar"; onClicked: dialogo.assistente.restaurar() }
-                    Botao { objectName: "botaoVoltarTodosCalibracao"; text: "Voltar"; onClicked: dialogo.assistente.anterior() }
-                    Botao {
-                        id: botaoProximaDeTodos
-                        objectName: "botaoProximaTodosCalibracao"
-                        text: "Próximo"
-                        destaque: true
-                        onClicked: dialogo.assistente.proxima()
-                    }
+            }
+            FilaDeBotoes {
+                Botao { objectName: "botaoRestaurarTodosCalibracao"; text: "Restaurar"; onClicked: dialogo.assistente.restaurar() }
+                Botao { objectName: "botaoVoltarTodosCalibracao"; text: "Voltar"; onClicked: dialogo.assistente.anterior() }
+                Botao {
+                    id: botaoProximaDeTodos
+                    objectName: "botaoProximaTodosCalibracao"
+                    text: "Próximo"
+                    estilo: "sugestao"
+                    onClicked: dialogo.assistente.proxima()
                 }
             }
+        }
 
-            // O teste final: as cores passam sozinhas.
-            Column {
-                width: parent.width
-                spacing: 16
-                visible: dialogo.pagina === "teste"
+        // O teste final: as cores passam sozinhas.
+        Pagina {
+            visible: dialogo.pagina === "teste"
 
-                Titulo { width: parent.width; text: dialogo.assistente ? dialogo.assistente.titulo : "" }
-                Amostra {
-                    objectName: "amostraDoTesteDaCalibracao"
-                    width: parent.width
-                    height: 240
+            Titulo { text: dialogo.assistente ? dialogo.assistente.titulo : "" }
+            Amostra {
+                objectName: "amostraDoTesteDaCalibracao"
+                Layout.fillHeight: true
+                Layout.minimumHeight: 240
+            }
+            FilaDeBotoes {
+                Botao { objectName: "botaoVoltarAosAjustes"; text: "Voltar aos ajustes"; onClicked: dialogo.assistente.voltarAosAjustes() }
+                Botao {
+                    id: botaoPausar
+                    objectName: "botaoPausarCalibracao"
+                    text: dialogo.assistente && dialogo.assistente.pausado ? "Continuar" : "Pausar"
+                    onClicked: dialogo.assistente.pausar()
                 }
-                FilaDeBotoes {
-                    Botao { objectName: "botaoVoltarAosAjustes"; text: "Voltar aos ajustes"; onClicked: dialogo.assistente.voltarAosAjustes() }
-                    Botao {
-                        id: botaoPausar
-                        objectName: "botaoPausarCalibracao"
-                        text: dialogo.assistente && dialogo.assistente.pausado ? "Continuar" : "Pausar"
-                        onClicked: dialogo.assistente.pausar()
-                    }
-                    Botao { objectName: "botaoAvancarTeste"; text: "Avançar"; onClicked: dialogo.assistente.avancarTeste() }
-                    Botao { objectName: "botaoConcluirCalibracao"; text: "Concluir"; destaque: true; onClicked: dialogo.assistente.concluir() }
-                }
+                Botao { objectName: "botaoAvancarTeste"; text: "Avançar"; onClicked: dialogo.assistente.avancarTeste() }
+                Botao { objectName: "botaoConcluirCalibracao"; text: "Concluir"; estilo: "sugestao"; onClicked: dialogo.assistente.concluir() }
             }
         }
     }

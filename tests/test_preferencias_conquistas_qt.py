@@ -487,16 +487,16 @@ def test_um_passo_que_falha_no_fechar_nao_pula_os_outros(p, monkeypatch, caplog)
     assert "falhou" in caplog.text
 
 
-def test_fechar_depois_do_assistente_das_fitas_ainda_devolve_a_cor_do_app(p, previas):
-    """O `recontar()` do fechamento do assistente não zera a marca de prévia (o `reler()` zeraria)."""
+def test_fechar_depois_do_assistente_das_fitas_nao_mexe_nas_fitas(p, previas):
+    """P53: fechar as Preferências não devolve a cor do app; só o balão do pulso e os diálogos internos devolvem."""
     _com_fitas("Centro")
-    p.fitas.definirBrilho(30)  # prévia nesta abertura
+    p.fitas.definirBrilho(30)
     p.abrirConfiguracaoDasFitas()
     p.configuracaoDasFitas.fechar()
     assert p.configuracaoDasFitas is None
     previas.clear()
     p.fechar()
-    assert previas[-1] == (session_fita.cor_do_app(), None)
+    assert previas == []
 
 
 def test_fechar_duas_vezes_nao_levanta(p):

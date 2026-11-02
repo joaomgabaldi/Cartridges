@@ -13,6 +13,8 @@ Item {
     property bool sombra: false
     // O `objectName` do título (os testes de cada diálogo).
     property alias objetoDoTitulo: textoDoTitulo.objectName
+    // As Preferências trocam o título pelo campo de busca, em crossfade.
+    property alias opacidadeDoTitulo: textoDoTitulo.opacity
     property alias inicio: areaDoInicio.data
     property alias fim: areaDoFim.data
     readonly property alias botaoFechar: botaoFechar
@@ -38,6 +40,7 @@ Item {
         textFormat: Text.PlainText
         color: Tema.texto
         font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
+        Behavior on opacity { enabled: Tema.animacoes; NumberAnimation { duration: Tema.duracaoCurta } }
         Accessible.role: Accessible.Heading
         Accessible.name: text
     }

@@ -58,17 +58,19 @@ def test_chave_do_sgdb_vazia_desliga_o_sgdb(p):
     assert not p.estado["sgdbAtivo"]
 
 
-def test_chave_do_sgdb_gravada_sem_espacos(p):
+def test_chave_do_sgdb_e_gravada_como_veio(p):
+    # P43: a `main` não apara a chave do SteamGridDB (só a do wallhaven e a da Steam).
     p.definirTexto("sgdb-key", "  abc ")
-    assert shared.schema.get_string("sgdb-key") == "abc"
+    assert shared.schema.get_string("sgdb-key") == "  abc "
 
 
-def test_chave_do_sgdb_so_com_espacos_desliga_o_sgdb(p):
+def test_chave_do_sgdb_so_com_espacos_vale_como_preenchida(p):
+    # Como na `main`: `bool("   ")` é verdadeiro, então o SteamGridDB não desliga.
     p.definirTexto("sgdb-key", "abc")
     p.definir("sgdb", True)
     p.definirTexto("sgdb-key", "   ")
-    assert shared.schema.get_string("sgdb-key") == ""
-    assert not shared.schema.get_boolean("sgdb")
+    assert shared.schema.get_string("sgdb-key") == "   "
+    assert shared.schema.get_boolean("sgdb")
 
 
 def test_chave_do_wallhaven_sem_espacos_nas_pontas(p):
@@ -324,6 +326,30 @@ def test_recusa_por_nada_a_buscar_avisa(app_qt, store, make_game, monkeypatch):
     assert fila.textos == ["Todos os jogos já estão com os metadados completos"]
 
 
+def test_resposta_vale_para_a_lista_da_hora_da_pergunta(app_qt, store, make_game, monkeypatch):
+    """P52: a `main` guarda os jogos da pergunta; um jogo que entra depois não entra na busca."""
+    from cartridges import metadata_refresh  # noqa: PLC0415
+
+    faltando = make_game(game_id="b", has_hltb_times=False)
+    store.add_game(faltando, {})
+    chamadas = []
+
+    class Falso(metadata_refresh.MetadataRefresh):
+        def start(self, games, only_missing=False):
+            chamadas.append((games, only_missing))
+            return True
+
+    monkeypatch.setattr(metadata_refresh, "get_metadata_refresh", lambda: Falso())
+    perguntas = []
+    modelo = _modelo_de_atualizacoes(_FilaFalsa())
+    modelo.perguntar.connect(perguntas.append)
+    modelo.atualizarMetadados()
+    assert perguntas[0].startswith("Buscar o que falta atualiza 1 de 1 jogos")
+    store.add_game(make_game(game_id="c", has_hltb_times=False), {})  # chega depois da pergunta
+    modelo.buscarMetadados(True)
+    assert chamadas == [([faltando], True)]
+
+
 def test_buscar_metadados_comeca_pelos_jogos_certos(app_qt, store, make_game, monkeypatch):
     from cartridges import metadata_refresh  # noqa: PLC0415
 
@@ -347,6 +373,14 @@ def test_buscar_metadados_comeca_pelos_jogos_certos(app_qt, store, make_game, mo
     assert chamadas == [([faltando], True), ([completo, faltando], False)]
 
 
+def test_baixando_capas_usa_o_tempo_padrao_do_aviso(app_qt, store, make_game):
+    # P51: o aviso comum sai sozinho; só o fim do lote o dispensa antes.
+    _capas(store, make_game)
+    fila = _FilaFalsa()
+    _modelo_de_atualizacoes(fila).atualizarCapas()
+    assert fila.chamadas == [{"texto": "Baixando capas…", "segundos": 5}]
+
+
 def test_capas_dispensam_o_baixando_e_avisam_o_fim(app_qt, store, make_game):
     jogos, gerente = _capas(store, make_game)
     fila = _FilaFalsa()
@@ -355,7 +389,7 @@ def test_capas_dispensam_o_baixando_e_avisam_o_fim(app_qt, store, make_game):
     modelo.atualizarCapas()
 
     assert gerente.resets == 1
-    assert fila.chamadas == [{"texto": "Baixando capas…", "segundos": 0}]
+    assert fila.chamadas == [{"texto": "Baixando capas…", "segundos": 5}]
     assert modelo.baixandoCapas is True
     gerente.callbacks[0](gerente)
     assert modelo.baixandoCapas is True and not fila.dispensados

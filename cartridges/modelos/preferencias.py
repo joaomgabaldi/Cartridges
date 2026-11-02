@@ -99,6 +99,8 @@ class AtualizacoesDaBiblioteca(QObject):
         self._seguindo = False
         self._ligacao: int | None = None
         self._refresh_seguido: Any = None
+        # Os jogos e os incompletos da hora da pergunta: a resposta vale para eles, como na `main`.
+        self._pergunta: tuple[list[Any], list[Any]] | None = None
 
     @staticmethod
     def _refresh() -> metadata_refresh.MetadataRefresh:
@@ -171,6 +173,7 @@ class AtualizacoesDaBiblioteca(QObject):
             self._avisar(_("Nenhum jogo na biblioteca"))
             return
         incompletos = [jogo for jogo in jogos if refresh.is_incomplete(jogo)]
+        self._pergunta = (jogos, incompletos)
         self.perguntar.emit(
             _(
                 "Buscar o que falta atualiza {} de {} jogos, consultando somente "
@@ -182,8 +185,13 @@ class AtualizacoesDaBiblioteca(QObject):
     @Slot(bool)
     def buscarMetadados(self, somente_faltantes: bool) -> None:  # noqa: N802
         refresh = self._refresh()
-        jogos = refresh.library()
-        desejados = [jogo for jogo in jogos if refresh.is_incomplete(jogo)] if somente_faltantes else jogos
+        if self._pergunta is not None:
+            jogos, incompletos = self._pergunta
+            self._pergunta = None
+        else:
+            jogos = refresh.library()
+            incompletos = [jogo for jogo in jogos if refresh.is_incomplete(jogo)]
+        desejados = incompletos if somente_faltantes else jogos
         if refresh.start(desejados, only_missing=somente_faltantes):
             return
         # `start` recusa por dois motivos, e dizer que não há o que buscar com uma atualização em curso seria falso.
@@ -212,7 +220,7 @@ class AtualizacoesDaBiblioteca(QObject):
         gerente.reset_cancellable()
         self._baixando = True
         self.alterado.emit()
-        aviso = self._avisar(_("Baixando capas…"), segundos=0)
+        aviso = self._avisar(_("Baixando capas…"))
         eu = weakref.ref(self)
         contador = 0
 
@@ -249,7 +257,7 @@ class FitasDasPreferencias(QObject):
     """A iluminação inteligente vista pelas Preferências: o brilho, a cor do app e o "Testar".
 
     Abrir a tela não acende nada (`reler` só conta as fitas); quem acende é a mão: o brilho e a cor mostram a
-    prévia na hora, e fechar depois de uma prévia devolve as fitas à cor do app. O teste conversa com as fitas numa
+    prévia na hora, e fechar a tela não mexe nas fitas. O teste conversa com as fitas numa
     thread e volta por `na_thread_principal` com referência fraca. Só na thread principal.
     """
 
@@ -259,7 +267,6 @@ class FitasDasPreferencias(QObject):
         super().__init__(parent)
         self._configuradas = 0
         self._aberta = False
-        self._houve_previa = False
         self._balao_do_pulso = False
         self._parar: threading.Event | None = None
         self._resultado = ""
@@ -308,17 +315,18 @@ class FitasDasPreferencias(QObject):
     def resultadoDoTeste(self) -> str:  # noqa: N802
         return self._resultado
 
-    def _previa(self, cor: session_fita.Cor) -> None:
-        self._houve_previa = True
+    @staticmethod
+    def _previa(cor: session_fita.Cor) -> None:
         session_fita.previa(cor)
 
     @Slot()
     def reler(self) -> None:
         """A tela abriu: conta as fitas. Nunca acende nada."""
         self._aberta = True
-        # A volta à cor do app no fechamento vale só para uma prévia feita nesta abertura.
-        self._houve_previa = False
         self._balao_do_pulso = False
+        # O resultado do teste dura até as Preferências fecharem; sem teste em curso, abre com o subtítulo padrão.
+        if self._parar is None:
+            self._resultado = ""
         self.recontar()
 
     @Slot()
@@ -328,8 +336,6 @@ class FitasDasPreferencias(QObject):
         if not self._configuradas:
             # Desligada, e não só apagada: quando houver fita, quem religa é a pessoa.
             shared.schema["session-fita"] = False
-        if self._parar is None:
-            self._resultado = ""
         self.alterado.emit()
 
     @Slot(int)
@@ -451,13 +457,9 @@ class FitasDasPreferencias(QObject):
 
     @Slot()
     def fechar(self) -> None:
-        """A tela fechou: depois de uma prévia nesta abertura, as fitas voltam à cor do app. Sem prévia, não toca nelas
-        (numa sessão, pintar a cor do app por cima da do jogo seria errado)."""
+        """A tela fechou. Não toca nas fitas (a `main` só devolve a cor no balão do pulso e nos diálogos internos)."""
         self._aberta = False
         self._balao_do_pulso = False
-        if self._houve_previa:
-            self._houve_previa = False
-            session_fita.previa(session_fita.cor_do_app())
 
 
 def _entregar_teste(eu: "weakref.ref[FitasDasPreferencias]", *args: Any) -> None:
@@ -661,7 +663,7 @@ class Preferencias(QObject):
             lambda: config is not None and config.fechar(),
             lambda: brilho is not None and brilho.cancelar(),
             self._fitas.fecharCorDoPulso,
-            # Depois de uma prévia nesta abertura, as fitas voltam à cor do app.
+            # Só fecha o estado da tela: as fitas ficam como estão.
             self._fitas.fechar,
             lambda: self._biblioteca.seguir(False),
             self._soltar_ouvinte,
@@ -705,7 +707,9 @@ class Preferencias(QObject):
         if chave not in CHAVES_DE_TEXTO:
             _log.warning("Texto de preferência fora da lista recusado: %r", chave)
             return
-        texto = texto.strip()
+        # A `main` grava a chave do SteamGridDB como veio e aparou as outras duas.
+        if chave != "sgdb-key":
+            texto = texto.strip()
         shared.schema[chave] = texto
         if chave == "sgdb-key" and not texto:
             shared.schema["sgdb"] = False

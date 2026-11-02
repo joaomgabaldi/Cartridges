@@ -23,7 +23,7 @@ Column {
         onAlternado: preferencias.definir(chave, checked)
     }
 
-    // Criados só ao clicar: os seletores nativos não precisam existir antes.
+    // Criados só ao clicar: os seletores nativos não precisam existir antes. Sem título próprio: o Windows mostra o padrão dele.
     function abrir(carga) {
         if (carga.item) carga.item.open(); else carga.active = true
     }
@@ -41,7 +41,6 @@ Column {
         active: false
         visible: false  // sem isto o `Column` soma um espaço vazio por Loader
         sourceComponent: FileDialog {
-            title: "Exportar para arquivo"
             fileMode: FileDialog.SaveFile
             nameFilters: ["Backup do Cartridges (*.zip)"]
             // O nome sugerido vai na pasta Documentos: um nome solto abriria o seletor na pasta do aplicativo.
@@ -55,7 +54,6 @@ Column {
         active: false
         visible: false  // sem isto o `Column` soma um espaço vazio por Loader
         sourceComponent: FileDialog {
-            title: "Importar de arquivo"
             fileMode: FileDialog.OpenFile
             nameFilters: ["Backup do Cartridges (*.zip)"]
             onAccepted: preferencias.backup.importar(selectedFile)
@@ -67,7 +65,6 @@ Column {
         active: false
         visible: false  // sem isto o `Column` soma um espaço vazio por Loader
         sourceComponent: FolderDialog {
-            title: "Selecionar pasta"
             onAccepted: preferencias.backup.escolherPastaDosSaves(selectedFolder)
         }
         onLoaded: item.open()
@@ -131,6 +128,7 @@ Column {
     GrupoDePreferencias {
         objectName: "grupoBackupDaBiblioteca"
         titulo: "Backup da sua biblioteca"
+        separada: true
         descricao: pagina.saves
             ? "Salve em um arquivo .zip a biblioteca completa, as cópias dos saves dos jogos e todas as configurações. A restauração substitui a biblioteca, as configurações e as cópias dos saves pelas do backup. Para devolver os saves aos jogos, use “Restaurar saves de todos os jogos”."
             : "Salve em um arquivo .zip a biblioteca completa e todas as configurações. A restauração substitui a biblioteca e as configurações atuais pelas do backup."
@@ -147,19 +145,28 @@ Column {
             titulo: "Importar de arquivo"
             onAcionada: pagina.abrir(cargaDoAbrir)
         }
-        LinhaDeAcao {
+        // A linha não aciona nada: só os dois botões respondem (`preferences.blp:72-86`).
+        LinhaDeBotoes {
             buscavel: true
             aparece: pagina.saves
             objectName: "linhaPastaDosSaves"
             titulo: "Pasta dos saves"
             subtitulo: preferencias.backup.pastaDosSaves
-            rotulo: "Escolher"
-            rotuloSecundario: "Usar a padrão"
-            secundarioAtivo: !preferencias.backup.pastaPadrao
+            quebraDoSubtitulo: Text.WrapAnywhere
             // A troca espera a trava dos saves e copia arquivos: a linha fica apagada até acabar.
             enabled: !preferencias.backup.trocandoPasta
-            onAcionada: pagina.abrir(cargaDaPasta)
-            onSecundaria: preferencias.backup.usarPastaPadrao()
+
+            Botao {
+                objectName: "linhaPastaDosSavesBotaoSecundario"
+                text: "Usar a padrão"
+                enabled: !preferencias.backup.pastaPadrao
+                onClicked: preferencias.backup.usarPastaPadrao()
+            }
+            Botao {
+                objectName: "linhaPastaDosSavesBotao"
+                text: "Escolher"
+                onClicked: pagina.abrir(cargaDaPasta)
+            }
         }
         LinhaDeBotao {
             buscavel: true
@@ -177,17 +184,22 @@ Column {
         objectName: "grupoAtualizacoes"
         titulo: "Atualizações"
 
-        LinhaDeAcao {
+        // Não ativável: só o botão "Buscar" responde (`preferences.blp:96-104`).
+        LinhaDeBotoes {
             buscavel: true
             objectName: "linhaBuscarAtualizacoes"
             titulo: "Buscar atualizações"
             subtitulo: "Versão atual: " + (pagina.servicoDeAtualizacao ? pagina.servicoDeAtualizacao.versao : "")
-            rotulo: "Buscar"
-            // Só o botão apaga durante a busca, como na `main`.
-            botaoDaLinha.enabled: !pagina.servicoDeAtualizacao || !pagina.servicoDeAtualizacao.buscando
-            onAcionada: {
-                if (pagina.servicoDeAtualizacao) pagina.servicoDeAtualizacao.buscarAgora()
-                else aplicativo.avisar("Não foi possível buscar atualizações")
+
+            Botao {
+                objectName: "linhaBuscarAtualizacoesBotao"
+                text: "Buscar"
+                // Só o botão apaga durante a busca, como na `main`.
+                enabled: !pagina.servicoDeAtualizacao || !pagina.servicoDeAtualizacao.buscando
+                onClicked: {
+                    if (pagina.servicoDeAtualizacao) pagina.servicoDeAtualizacao.buscarAgora()
+                    else aplicativo.avisar("Não foi possível buscar atualizações")
+                }
             }
         }
     }
@@ -195,6 +207,7 @@ Column {
     GrupoDePreferencias {
         objectName: "grupoZonaDePerigo"
         titulo: "Zona de perigo"
+        separada: true
 
         LinhaDeBotao {
             buscavel: true

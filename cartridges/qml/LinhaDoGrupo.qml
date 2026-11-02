@@ -21,6 +21,8 @@ FocusScope {
     property string titulo
     property string subtitulo
     property int quebraDoSubtitulo: Text.Wrap
+    // `.property`: o título pequeno e apagado, o valor (o subtítulo) no tamanho e na cor do texto.
+    property bool propriedade: false
     property real alturaMinima: 50
     property real reservaADireita: 0
     property bool sobre: false
@@ -80,9 +82,9 @@ FocusScope {
             textFormat: Text.PlainText
             wrapMode: Text.Wrap
             lineHeightMode: Text.FixedHeight
-            lineHeight: Tema.alturaDoCorpo
-            color: Tema.texto
-            font { family: Tema.fonte; pixelSize: Tema.corpo }
+            lineHeight: linha.propriedade ? Tema.alturaDaLegenda : Tema.alturaDoCorpo
+            color: linha.propriedade ? Tema.textoSecundario : Tema.texto
+            font { family: Tema.fonte; pixelSize: linha.propriedade ? Tema.legenda : Tema.corpo }
         }
         Text {
             objectName: linha.objectName + "Subtitulo"
@@ -92,9 +94,9 @@ FocusScope {
             textFormat: Text.PlainText
             wrapMode: linha.quebraDoSubtitulo
             lineHeightMode: Text.FixedHeight
-            lineHeight: Tema.alturaDaLegenda
-            color: Tema.textoSecundario
-            font { family: Tema.fonte; pixelSize: Tema.legenda }
+            lineHeight: linha.propriedade ? Tema.alturaDoCorpo : Tema.alturaDaLegenda
+            color: linha.propriedade ? Tema.texto : Tema.textoSecundario
+            font { family: Tema.fonte; pixelSize: linha.propriedade ? Tema.corpo : Tema.legenda }
         }
     }
 

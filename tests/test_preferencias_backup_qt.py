@@ -230,12 +230,14 @@ def test_pasta_padrao_apaga_usar_a_padrao(montar, monkeypatch, flush_idle):
     p, pagina = montar()
     linha = pagina.achar("linhaPastaDosSaves")
     assert p.backup.pastaPadrao is True
-    assert linha.property("rotuloSecundario") == "Usar a padrão" and linha.property("rotulo") == "Escolher"
-    assert linha.property("secundarioAtivo") is False
+    # P38: a linha não é ativável; "Usar a padrão" e "Escolher" são botões de verdade.
+    usar, escolher = pagina.achar("linhaPastaDosSavesBotaoSecundario"), pagina.achar("linhaPastaDosSavesBotao")
+    assert usar.property("text") == "Usar a padrão" and escolher.property("text") == "Escolher"
+    assert usar.property("enabled") is False
     # Fora da padrão o botão acende (a tela relê ao abrir) e "Usar a padrão" troca para a padrão.
     shared.schema.set_string("pasta-dos-saves", "X:/nova")
     p.backup.reler()
-    assert p.backup.pastaPadrao is False and linha.property("secundarioAtivo") is True
+    assert p.backup.pastaPadrao is False and usar.property("enabled") is True
     trocas, gate = [], threading.Event()
 
     def falsa(nova):
@@ -251,7 +253,7 @@ def test_pasta_padrao_apaga_usar_a_padrao(montar, monkeypatch, flush_idle):
     shared.schema.set_string("pasta-dos-saves", "")
     gate.set()
     assert _drenar(flush_idle, lambda: not p.backup.trocandoPasta)
-    assert linha.property("enabled") is True and linha.property("secundarioAtivo") is False
+    assert linha.property("enabled") is True and usar.property("enabled") is False
 
 
 def test_nome_do_arquivo_sugerido(modelo):

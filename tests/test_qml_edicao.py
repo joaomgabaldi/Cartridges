@@ -1194,7 +1194,12 @@ def _abrir_o_seletor_de_cor(app):
     assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
     _clique(app, "botaoDaCorDaFita")
     assert _esperar(lambda: app.achar("balaoDaCorDaFita").property("opened") is True)
-    return app.achar("seletorDeCor")
+    # O balão abre na paleta (P46); o "+" leva ao seletor de cor livre.
+    seletor = app.achar("seletorDeCor")
+    assert seletor.property("visible") is False
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, _centro_na_janela(app.achar("botaoDaCorDaFitaMais")))
+    assert _esperar(lambda: seletor.property("visible") is True and seletor.property("activeFocus") is True)
+    return seletor
 
 
 def _ponto(seletor, fx, fy):

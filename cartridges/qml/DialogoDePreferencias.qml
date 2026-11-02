@@ -1,61 +1,62 @@
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Layouts
 import QtQuick.Window
 
-// As Preferências: um modal dentro da janela, com abas no topo e uma página por aba. Só desenha: o que ele mostra e
-// grava é o `preferencias` (cartridges/modelos/preferencias.py). Modal para o mouse, o teclado e o controle, como o de
-// edição; o foco volta a quem o abriu.
-Rectangle {
+// As Preferências (`Adw.PreferencesDialog`): o `Adw.Dialog` de 640 de largura e altura máxima, com o cabeçalho de 47 (a
+// lupa à esquerda, o título no meio, o X), uma página por aba e a barra das abas no pé (`AdwViewSwitcherBar`: ícone sobre
+// rótulo). A lupa troca o título pelo campo de busca; com texto, os resultados vêm numa lista só, cada um com "Página →
+// Grupo", e clicar num leva à página e à linha. Só desenha: o que ele mostra e grava é o `preferencias`
+// (cartridges/modelos/preferencias.py). Modal para o mouse, o teclado e o controle; o foco volta a quem o abriu.
+MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoDePreferencias"
 
-    Accessible.role: Accessible.Dialog
-    Accessible.name: "Preferências"
-
     readonly property var abas: [
-        { id: "general", titulo: "Geral", glifo: "" },
-        { id: "session", titulo: "Personalização", glifo: "" },
-        { id: "import", titulo: "Importação", glifo: "" },
-        { id: "sgdb", titulo: "SteamGridDB", glifo: "" },
-        { id: "conquistas", titulo: "Conquistas", glifo: "\ue734" }
+        { id: "general", titulo: "Geral", icone: "user-home" },
+        { id: "session", titulo: "Personalização", icone: "video-joined-displays" },
+        { id: "import", titulo: "Importação", icone: "document-save" },
+        { id: "sgdb", titulo: "SteamGridDB", icone: "image-x-generic" },
+        { id: "conquistas", titulo: "Conquistas", icone: "starred" }
     ]
     readonly property var rotulosDasAbas: abas.map(a => a.titulo)
     // A aba à vista; abre na que o `preferencias` pediu, se ela existe.
     property string aba: "general"
-    // Quem tinha o foco ao abrir.
-    property Item retorno: null
-    // O texto da busca; com ele as abas somem e as cinco páginas aparecem juntas, só com as linhas que casam (D69).
+    readonly property int indiceDaAba: Math.max(0, abas.findIndex(a => a.id === aba))
+    // A lupa ligada: o campo toma o lugar do título. A barra das abas some só com texto na busca.
+    property bool buscaAtiva: false
     property alias filtro: campoDeBusca.text
     readonly property bool buscando: filtro !== ""
-    // (Um grupo `soTemOutros`, sem linha buscável, não conta: hoje nenhum grupo das cinco páginas é assim.)
-    // Quantos grupos têm linha à mostra (pela contagem de cada grupo, não pela altura: ela só se atualiza com o layout).
-    readonly property int gruposAMostrar: {
-        var n = 0
-        for (var i = 0; i < paginas.children.length; ++i)
-            for (var j = 0; j < paginas.children[i].children.length; ++j)
-                if (paginas.children[i].children[j].linhasAMostrar > 0) ++n
-        return n
-    }
-    // O texto vai ao singleton só depois de as páginas ficarem à vista: o `Column` só se reorganiza quando a
-    // visibilidade efetiva de um filho muda, e uma linha escondida enquanto a página ainda estava escondida deixaria
-    // a altura velha (rolagem com vazio no fim).
+    // As linhas que casam com a busca: { linha, titulo, local, aba }.
+    property var resultados: []
+    property bool avisoAberto: false
+    // O X do cabeçalho (o `objectName` dele é o da base, comum a todos os diálogos).
+    readonly property Item botaoFechar: cabecalho.botaoFechar
+
+    aberto: preferencias.aberto
+    largura: 640
+    altura: 2000  // `content-height` sem teto próprio: a janela limita
+    nomeAcessivel: "Preferências"
+    onFecharPedido: preferencias.fechar()
+
     onFiltroChanged: {
         rolagem.contentY = 0
-        Qt.callLater(() => BuscaDasPreferencias.texto = filtro)
+        if (filtro !== "") buscaAtiva = true
+        procurar()
+    }
+    onAbertoChanged: if (aberto) {
+        aba = abas.some(a => a.id === preferencias.pagina) ? preferencias.pagina : "general"
+        rolagem.contentY = 0
+        filtro = ""
+        buscaAtiva = false
+        // O foco começa na aba à vista (`focarInicial` roda depois, quando as abas já estão à mostra).
+        focoInicial = repetidorDeAbas.itemAt(indiceDaAba)
+    } else {
+        confirmacaoDosMetadados.aberto = false
+        filtro = ""
+        buscaAtiva = false
     }
 
-    signal retornoPerdido()
-
-    function dentro(item) {
-        for (var p = item; p; p = p.parent) // `parent`: o `parentItem` do C++ não existe no QML
-            if (p === dialogo) return true
-        return false
-    }
-    function irParaAba(indice) {
-        if (indice < 0 || indice >= abas.length) return
-        aba = abas[indice].id
-        repetidorDeAbas.itemAt(indice).forceActiveFocus(Qt.TabFocusReason)
-    }
     // O item com o foco fica à vista na rolagem.
     function mostrar(item) {
         var topo = item.mapToItem(rolagem.contentItem, 0, 0).y
@@ -63,43 +64,10 @@ Rectangle {
         if (topo < rolagem.contentY) rolagem.contentY = Math.max(0, topo - 8)
         else if (base > rolagem.contentY + rolagem.height) rolagem.contentY = base - rolagem.height + 8
     }
-    // Depois da reação das outras bindings ao `aberto` (a página de trás volta a ficar habilitada).
-    function devolverAoRetorno() {
-        if (visible) return
-        if (retorno && retorno.visible && retorno.enabled) retorno.forceActiveFocus(Qt.TabFocusReason)
-        else dialogo.retornoPerdido()
-    }
-
-    anchors.fill: parent
-    visible: preferencias.aberto
-    color: "#80000000"
-    Keys.onEscapePressed: preferencias.fechar()
-    // Modal para o teclado e o controle: nenhuma tecla chega à página de trás.
-    Keys.onPressed: event => event.accepted = true
-
-    onVisibleChanged: {
-        if (visible) {
-            retorno = Window.window ? Window.window.activeFocusItem : null
-            aba = abas.some(a => a.id === preferencias.pagina) ? preferencias.pagina : "general"
-            rolagem.contentY = 0
-            filtro = ""
-            // O foco começa na aba à vista.
-            for (var i = 0; i < abasLinha.children.length; ++i)
-                if (abasLinha.children[i].atual === true) abasLinha.children[i].forceActiveFocus(Qt.TabFocusReason)
-        } else {
-            confirmacaoDosMetadados.aberto = false
-            filtro = ""
-            Qt.callLater(devolverAoRetorno)
-        }
-    }
-
-    Connections {
-        target: dialogo.Window.window
-        function onActiveFocusItemChanged() {
-            var foco = dialogo.Window.window.activeFocusItem
-            if (!dialogo.visible || !foco || !dialogo.dentro(foco) || !dialogo.contem(rolagem.contentItem, foco)) return
-            dialogo.mostrar(foco)
-        }
+    function irParaAba(indice) {
+        if (indice < 0 || indice >= abas.length) return
+        aba = abas[indice].id
+        repetidorDeAbas.itemAt(indice).forceActiveFocus(Qt.TabFocusReason)
     }
     function contem(pai, item) {
         for (var p = item; p; p = p.parent) // `parent`: o `parentItem` do C++ não existe no QML
@@ -107,218 +75,310 @@ Rectangle {
         return false
     }
 
-    // Ctrl+F leva ao campo de busca (não com um modal por cima, nem com um aviso da camada dos avisos).
-    property bool avisoAberto: false
+    function entrarNaBusca() {
+        buscaAtiva = true
+        campoDeBusca.forceActiveFocus(Qt.ShortcutFocusReason)
+    }
+    // Esc no campo, ou a lupa desligada: volta o título e as abas, com o foco na lupa.
+    function sairDaBusca() {
+        filtro = ""
+        buscaAtiva = false
+        botaoDaLupa.forceActiveFocus(Qt.TabFocusReason)
+    }
+
+    // As linhas das Preferências, na ordem das páginas, com a página e o grupo de cada uma. As filhas de um expansor
+    // (que não são `buscavel`) ficam de fora, como na `main`.
+    function procurar() {
+        var achados = []
+        if (filtro === "") { resultados = achados; return }
+        function andar(item, pagina) {
+            for (var i = 0; i < item.children.length; ++i) {
+                var c = item.children[i]
+                if (c.itens !== undefined && c.separada !== undefined) { // um `GrupoDeLinhas`
+                    var grupo = c.parent
+                    var tituloDoGrupo = grupo.titulo !== undefined ? grupo.titulo : (grupo.contas ? grupo.contas.titulo : "")
+                    for (var j = 0; j < c.itens.length; ++j) {
+                        var linha = c.itens[j]
+                        if (linha.buscavel !== true || !linha.aparece || !linha.titulo) continue
+                        if (!preferencias.corresponde(linha.titulo + " " + (linha.subtitulo || ""), filtro)) continue
+                        achados.push({
+                            linha: linha, titulo: linha.titulo, aba: pagina.id,
+                            local: tituloDoGrupo ? pagina.titulo + " → " + tituloDoGrupo : pagina.titulo
+                        })
+                    }
+                } else andar(c, pagina)
+            }
+        }
+        for (var k = 0; k < paginas.children.length; ++k) andar(paginas.children[k], abas[k])
+        resultados = achados
+    }
+    // O primeiro controle da linha que aceita o Tab.
+    function focarLinha(linha) {
+        function achar(item) {
+            if (item.visible && item.enabled && item.activeFocusOnTab) return item
+            for (var i = 0; i < item.children.length; ++i) {
+                var r = achar(item.children[i])
+                if (r) return r
+            }
+            return null
+        }
+        var alvo = achar(linha)
+        if (alvo) alvo.forceActiveFocus(Qt.TabFocusReason)
+        else linha.forceActiveFocus(Qt.TabFocusReason)
+    }
+    // Clicar num resultado sai da busca, vai à página e põe o foco na linha.
+    function abrirResultado(resultado) {
+        aba = resultado.aba
+        filtro = ""
+        buscaAtiva = false
+        Qt.callLater(() => focarLinha(resultado.linha))
+    }
+
+    Connections {
+        target: dialogo.Window.window
+        function onActiveFocusItemChanged() {
+            var foco = dialogo.Window.window.activeFocusItem
+            if (!dialogo.visible || !foco || !dialogo.contem(rolagem.contentItem, foco)) return
+            dialogo.mostrar(foco)
+        }
+    }
+
+    // Ctrl+F liga a lupa (não com um modal por cima, nem com um aviso da camada dos avisos).
     Shortcut {
         sequences: [StandardKey.Find] // Ctrl+F e a tecla Find do padrão; `sequence` ligaria só a primeira (aviso do Qt)
-        enabled: dialogo.visible && cartao.enabled && !confirmacaoDosMetadados.visible && !dialogo.avisoAberto
-        onActivated: campoDeBusca.forceActiveFocus(Qt.ShortcutFocusReason)
+        enabled: dialogo.aberto && raiz.enabled && !dialogo.avisoAberto
+        onActivated: dialogo.entrarNaBusca()
     }
 
-    MouseArea { anchors.fill: parent } // o que está embaixo não recebe cliques
+    Binding { target: botaoDaLupa; property: "checked"; value: dialogo.buscaAtiva }
 
-    component BotaoDaAba: Button {
-        id: botao
-        property string glifo
-        property bool atual: false
-        focusPolicy: Qt.StrongFocus
-        Keys.onReturnPressed: click()
-        Keys.onEnterPressed: click()
-        implicitHeight: 34
-        leftPadding: 8
-        rightPadding: 8
-        checkable: false
-        Accessible.role: Accessible.PageTab
-        Accessible.name: text
-        contentItem: Row {
-            spacing: 6
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: botao.glifo
-                textFormat: Text.PlainText
-                color: botao.atual ? "white" : Tema.texto
-                font { family: Tema.fonteDeIcones; pixelSize: 14 }
-            }
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: botao.text
-                textFormat: Text.PlainText
-                color: botao.atual ? "white" : Tema.texto
-                font { family: Tema.fonte; pixelSize: 14 }
-            }
-        }
-        background: Rectangle {
-            radius: 6
-            color: botao.atual ? Tema.destaque : botao.down ? Tema.pressionado : botao.hovered ? Tema.botaoSobre : "transparent"
-            border { width: botao.visualFocus ? 2 : 0; color: Tema.texto }
-        }
-    }
-
-    Rectangle {
-        id: cartao
+    Item {
+        id: raiz
         objectName: "cartaoDasPreferencias"
-        anchors.centerIn: parent
-        width: Math.min(640, parent.width - 48)
-        height: Math.min(620, parent.height - 48)
-        radius: 8
-        color: Tema.fundo
-        border.color: Tema.botaoSobre
-        clip: true
-        // Com o brilho por dispositivo ou o assistente das fitas por cima, o Tab não volta para cá.
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        // Com o brilho por dispositivo, o assistente das fitas, a calibração, uma pergunta ou o login por cima, o Tab não volta para cá.
         enabled: preferencias.brilhoPorDispositivo === null && preferencias.configuracaoDasFitas === null
-            && preferencias.calibracao === null && !loginEpic.visible && !loginEa.visible
+            && preferencias.calibracao === null && !loginEpic.aberto && !loginEa.aberto && !confirmacaoDosMetadados.aberto
 
-        Item {
-            id: cabecalho
-            width: parent.width
-            // O campo de busca no alto; as abas abaixo dele, que somem durante a busca.
-            height: dialogo.buscando ? 56 : 104
+        // Digitar em qualquer ponto abre a busca (`search-started`): as teclas que nenhum controle tratou vão ao campo.
+        Keys.onPressed: event => {
+            if (event.text === "" || event.text.charCodeAt(0) < 32 || event.text.charCodeAt(0) === 127) return
+            if (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) return
+            dialogo.entrarNaBusca()
+            campoDeBusca.insert(campoDeBusca.length, event.text)
+            event.accepted = true
+        }
 
-            TextField {
-                id: campoDeBusca
-                objectName: "campoDeBuscaDasPreferencias"
-                anchors { left: parent.left; leftMargin: 12; right: botaoFechar.left; rightMargin: 8; top: parent.top; topMargin: 11 }
-                height: 34
-                leftPadding: 34
-                placeholderText: "Buscar nas Preferências"
-                placeholderTextColor: Tema.textoSecundario
-                color: Tema.texto
-                selectByMouse: true
-                font { family: Tema.fonte; pixelSize: 14 }
-                Accessible.name: "Buscar nas Preferências"
-                // Esc com texto limpa a busca; sem texto, sobe ao diálogo e fecha.
-                Keys.onEscapePressed: event => {
-                    event.accepted = text !== ""
-                    if (event.accepted) text = ""
-                }
-                background: Rectangle {
-                    radius: 6
-                    color: Tema.superficie
-                    border { width: campoDeBusca.activeFocus ? 2 : 1; color: campoDeBusca.activeFocus ? Tema.destaque : Tema.borda }
-                }
-                Text {
-                    anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
-                    text: ""  // buscar
-                    textFormat: Text.PlainText
-                    color: Tema.textoSecundario
-                    font { family: Tema.fonteDeIcones; pixelSize: 14 }
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 0
+
+            CabecalhoDoDialogo {
+                id: cabecalho
+                titulo: "Preferências"
+                sombra: rolagem.contentY > 0
+                opacidadeDoTitulo: dialogo.buscaAtiva ? 0 : 1
+                onFechar: preferencias.fechar()
+                inicio: [
+                    Botao {
+                        id: botaoDaLupa
+                        objectName: "botaoDeBuscaDasPreferencias"
+                        estilo: "plano"
+                        icone: "system-search"
+                        dica: "Buscar nas Preferências"
+                        checkable: true
+                        onClicked: if (dialogo.buscaAtiva) dialogo.sairDaBusca(); else dialogo.entrarNaBusca()
+                    }
+                ]
+
+                // O campo no lugar do título, no máximo com 400 de largura.
+                CampoDeBusca {
+                    id: campoDeBusca
+                    objectName: "campoDeBuscaDasPreferencias"
+                    anchors { centerIn: parent; verticalCenterOffset: -0.5 }
+                    width: Math.max(0, Math.min(400, parent.width - 2 * 52))
+                    visible: opacity > 0
+                    opacity: dialogo.buscaAtiva ? 1 : 0
+                    enabled: dialogo.buscaAtiva
+                    placeholderText: "Buscar nas Preferências"
+                    Accessible.name: "Buscar nas Preferências"
+                    Behavior on opacity { enabled: Tema.animacoes; NumberAnimation { duration: Tema.duracaoCurta } }
+                    // Esc sai da busca, mesmo com texto; outro Esc fecha o diálogo.
+                    Keys.onEscapePressed: dialogo.sairDaBusca()
                 }
             }
 
-            Row {
-                id: abasLinha
+            Flickable {
+                id: rolagem
+                objectName: "rolagemDasPreferencias"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                contentWidth: width
+                contentHeight: !dialogo.buscando ? paginas.implicitHeight + 48
+                    : dialogo.resultados.length > 0 ? resultadosDaBusca.implicitHeight + 48 : height
+                boundsBehavior: Flickable.StopAtBounds
+                clip: true
+                ScrollBar.vertical: BarraDeRolagem {}
+
+                // `PreferencesPage`: 24 em cima e embaixo, 12 dos lados, e o conteúdo com no máximo 556 (os cartões de 532
+                // medidos na `main` em 640; em 480 o conteúdo ocupa a largura toda).
+                readonly property real larguraDoConteudo: Math.min(width, 556) - 24
+
+                Column {
+                    id: paginas
+                    x: (rolagem.width - width) / 2
+                    y: 24
+                    width: rolagem.larguraDoConteudo
+                    visible: !dialogo.buscando
+
+                    PaginaGeral { visible: dialogo.aba === "general" }
+                    PaginaDePersonalizacao { visible: dialogo.aba === "session" }
+                    PaginaDeImportacao { visible: dialogo.aba === "import" }
+                    PaginaDoSteamGridDB { visible: dialogo.aba === "sgdb" }
+                    PaginaDasConquistas { visible: dialogo.aba === "conquistas" }
+                }
+
+                // Os resultados: uma lista só, num cartão, com "Página → Grupo" no lugar do subtítulo da linha.
+                GrupoDeLinhas {
+                    id: resultadosDaBusca
+                    objectName: "resultadosDaBuscaDasPreferencias"
+                    x: (rolagem.width - width) / 2
+                    y: 24
+                    width: rolagem.larguraDoConteudo
+                    visible: dialogo.buscando && dialogo.resultados.length > 0
+
+                    Repeater {
+                        model: dialogo.buscando ? dialogo.resultados : []
+                        LinhaDeAcao {
+                            required property var modelData
+                            required property int index
+                            objectName: "resultadoDaBusca-" + index
+                            titulo: modelData.titulo
+                            subtitulo: modelData.local
+                            onAcionada: dialogo.abrirResultado(modelData)
+                        }
+                    }
+                }
+
+                // Sem linha que case: o ícone de lupa, o título e a descrição.
+                EstadoVazio {
+                    id: semResultado
+                    objectName: "estadoSemResultadoDasPreferencias"
+                    width: rolagem.width
+                    height: Math.max(rolagem.height, implicitHeight)
+                    visible: dialogo.buscando && dialogo.resultados.length === 0
+                    icone: "edit-find"
+                    titulo: "Nenhum resultado encontrado"
+                    descricao: "Tente uma busca diferente."
+                }
+            }
+
+            // `AdwViewSwitcherBar`: 47 de altura com a linha de cima, que só aparece quando há mais conteúdo por rolar.
+            Item {
+                id: barraDeAbas
                 objectName: "abas"
+                Layout.fillWidth: true
+                implicitHeight: 47
                 visible: !dialogo.buscando
-                anchors { left: parent.left; leftMargin: 12; top: parent.top; topMargin: 56 }
-                spacing: 4
-                Repeater {
-                    id: repetidorDeAbas
-                    model: dialogo.abas
-                    BotaoDaAba {
-                        required property var modelData
-                        required property int index
-                        // As setas trocam de aba e levam o foco junto (sem dar a volta nas pontas).
-                        Keys.onLeftPressed: dialogo.irParaAba(index - 1)
-                        Keys.onRightPressed: dialogo.irParaAba(index + 1)
-                        objectName: "aba-" + modelData.id
-                        text: modelData.titulo
-                        glifo: modelData.glifo
-                        atual: dialogo.aba === modelData.id
-                        onClicked: dialogo.aba = modelData.id
+
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: Tema.sombraDaBarra
+                    visible: rolagem.contentY + rolagem.height < rolagem.contentHeight - 1
+                }
+                Row {
+                    anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 4 }
+                    spacing: 3
+                    Repeater {
+                        id: repetidorDeAbas
+                        model: dialogo.abas
+                        Button {
+                            id: botao
+                            required property var modelData
+                            required property int index
+                            readonly property bool atual: dialogo.aba === modelData.id
+                            objectName: "aba-" + modelData.id
+                            text: modelData.titulo
+                            width: Math.min(100, (barraDeAbas.width - 4 * 3) / dialogo.abas.length)
+                            height: 40
+                            padding: 0
+                            hoverEnabled: true
+                            focusPolicy: Qt.StrongFocus
+                            Accessible.role: Accessible.PageTab
+                            Accessible.name: text
+                            Keys.onReturnPressed: click()
+                            Keys.onEnterPressed: click()
+                            // As setas trocam de aba e levam o foco junto (sem dar a volta nas pontas).
+                            Keys.onLeftPressed: dialogo.irParaAba(index - 1)
+                            Keys.onRightPressed: dialogo.irParaAba(index + 1)
+                            onClicked: dialogo.aba = modelData.id
+                            // O ícone de 16 sobre o rótulo de 10 em negrito (`viewswitcher.narrow`).
+                            contentItem: Item {
+                                Icone {
+                                    anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 4 }
+                                    nome: botao.modelData.icone
+                                }
+                                Text {
+                                    anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 4 }
+                                    width: parent.width
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+                                    text: botao.text
+                                    textFormat: Text.PlainText
+                                    color: Tema.texto
+                                    font { family: Tema.fonte; pixelSize: Tema.legenda; weight: Tema.pesoForte }
+                                }
+                            }
+                            background: Rectangle {
+                                radius: 9
+                                color: botao.down ? Tema.planoPressionado : botao.atual ? Tema.planoLigado : botao.hovered ? Tema.planoSobre : "transparent"
+                                Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
+                                AnelDeFoco { ativo: botao.visualFocus; raio: 9; afastamento: -2 }
+                            }
+                        }
                     }
                 }
             }
-
-            Button {
-                id: botaoFechar
-                objectName: "botaoFecharPreferencias"
-                anchors { right: parent.right; rightMargin: 12; top: parent.top; topMargin: 11 }
-                focusPolicy: Qt.StrongFocus
-                implicitWidth: 34
-                implicitHeight: 34
-                Keys.onReturnPressed: click()
-                Keys.onEnterPressed: click()
-                Accessible.name: "Fechar"
-                ToolTip.visible: hovered
-                ToolTip.text: "Fechar"
-                ToolTip.delay: 600
-                onClicked: preferencias.fechar()
-                contentItem: Text {
-                    text: ""  // fechar
-                    textFormat: Text.PlainText
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    color: Tema.texto
-                    font { family: Tema.fonteDeIcones; pixelSize: 14 }
-                }
-                background: Rectangle {
-                    radius: 6
-                    color: botaoFechar.down ? Tema.pressionado : botaoFechar.hovered ? Tema.botaoSobre : "transparent"
-                    border { width: botaoFechar.visualFocus ? 2 : 0; color: Tema.destaque }
-                }
-            }
-
-            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Tema.borda }
-        }
-
-        Flickable {
-            id: rolagem
-            objectName: "rolagemDasPreferencias"
-            anchors { left: parent.left; right: parent.right; top: cabecalho.bottom; bottom: parent.bottom }
-            contentWidth: width
-            contentHeight: paginas.implicitHeight + 32
-            boundsBehavior: Flickable.StopAtBounds
-            clip: true
-            ScrollBar.vertical: BarraDeRolagem {}
-
-            Column {
-                id: paginas
-                x: 16
-                y: 16
-                width: rolagem.width - 32
-
-                PaginaGeral { visible: dialogo.buscando || dialogo.aba === "general" }
-                PaginaDePersonalizacao { visible: dialogo.buscando || dialogo.aba === "session" }
-                PaginaDeImportacao { visible: dialogo.buscando || dialogo.aba === "import" }
-                PaginaDoSteamGridDB { visible: dialogo.buscando || dialogo.aba === "sgdb" }
-                PaginaDasConquistas { visible: dialogo.buscando || dialogo.aba === "conquistas" }
-            }
-        }
-
-        // Sem linha à vista, as páginas ficam com altura zero (cada grupo sem linha some).
-        EstadoVazio {
-            objectName: "estadoSemResultadoDasPreferencias"
-            anchors { left: parent.left; right: parent.right; top: cabecalho.bottom; bottom: parent.bottom }
-            visible: dialogo.buscando && dialogo.gruposAMostrar === 0
-            glifo: ""
-            titulo: "Nenhum resultado encontrado"
         }
     }
 
-    // O escopo da atualização de metadados: a pergunta chega do `preferencias.biblioteca`.
-    DialogoDeConfirmacao {
-        id: confirmacaoDosMetadados
-        objectName: "dialogoDosMetadados"
-        titulo: "Atualizar metadados"
-        rotuloConfirmar: "Buscar o que falta"
-        rotuloAlternativo: "Buscar tudo"
-        respostaInicial: "confirmar"  // `set_default_response("missing")`
-        onConfirmado: preferencias.biblioteca.buscarMetadados(true)
-        onAlternativo: preferencias.biblioteca.buscarMetadados(false)
-    }
-    BrilhoPorDispositivo {}
-    ConfiguracaoDasFitas {}
-    AssistenteDeCalibracao {}
-    // As janelas de login das contas, por cima das Preferências (que ficam apagadas enquanto uma está aberta).
-    JanelaDeLogin {
-        id: loginEpic
-        objectName: "janelaDeLoginEpic"
-        login: preferencias.contas ? preferencias.contas.loginEpic : null
-    }
-    JanelaDeLogin {
-        id: loginEa
-        objectName: "janelaDeLoginEa"
-        login: preferencias.contas ? preferencias.contas.loginEa : null
+    // Os diálogos internos e as janelas de login ficam acima do cartão (o `z` do aviso, dentro dele, é 100) e fora do layout:
+    // cada um cobre a janela inteira por conta própria, e o `Item` sem tamanho só os segura.
+    Item {
+        z: 200
+        Layout.preferredWidth: 0
+        Layout.preferredHeight: 0
+
+        // O escopo da atualização de metadados: a pergunta chega do `preferencias.biblioteca`.
+        DialogoDeConfirmacao {
+            id: confirmacaoDosMetadados
+            objectName: "dialogoDosMetadados"
+            titulo: "Atualizar metadados"
+            rotuloConfirmar: "Buscar o que falta"
+            rotuloAlternativo: "Buscar tudo"
+            respostaInicial: "confirmar"  // `set_default_response("missing")`
+            onConfirmado: preferencias.biblioteca.buscarMetadados(true)
+            onAlternativo: preferencias.biblioteca.buscarMetadados(false)
+            onRetornoPerdido: dialogo.focarInicial()
+        }
+        BrilhoPorDispositivo { onRetornoPerdido: dialogo.focarInicial() }
+        ConfiguracaoDasFitas { onRetornoPerdido: dialogo.focarInicial() }
+        AssistenteDeCalibracao { onRetornoPerdido: dialogo.focarInicial() }
+        // As janelas de login das contas, por cima das Preferências (que ficam apagadas enquanto uma está aberta).
+        JanelaDeLogin {
+            id: loginEpic
+            objectName: "janelaDeLoginEpic"
+            login: preferencias.contas ? preferencias.contas.loginEpic : null
+            onRetornoPerdido: dialogo.focarInicial()
+        }
+        JanelaDeLogin {
+            id: loginEa
+            objectName: "janelaDeLoginEa"
+            login: preferencias.contas ? preferencias.contas.loginEa : null
+            onRetornoPerdido: dialogo.focarInicial()
+        }
     }
 
     Connections {

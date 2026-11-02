@@ -214,15 +214,14 @@ def test_brilho_mostra_na_hora(p, previas):
     assert shared.schema.get_int("fita-brilho-padrao") == session_fita.BRILHO_MINIMO
 
 
-def test_fechar_depois_de_uma_previa_volta_a_cor_do_app(app_qt, previas):  # noqa: ARG001
+def test_fechar_depois_de_uma_previa_nao_mexe_nas_fitas(app_qt, previas):  # noqa: ARG001
+    """P53: a `main` só devolve a cor no balão do pulso e nos diálogos internos; fechar as Preferências não."""
     modelo = Preferencias(None, lambda: True)
     modelo.abrir()
-    modelo.fechar()
-    assert previas == []  # sem prévia, fechar não acende nada
-    modelo.abrir()
     modelo.fitas.definirBrilho(30)
+    quantas = len(previas)
     modelo.fechar()
-    assert previas[-1] == (session_fita.cor_do_app(), None)
+    assert len(previas) == quantas
 
 
 # endregion
@@ -251,6 +250,20 @@ def test_o_teste_nao_escreve_em_tela_ja_fechada(app_qt, monkeypatch, teste_preso
     # Reaberta, a linha volta ao texto de sempre.
     modelo.abrir()
     assert modelo.fitas.resultadoDoTeste == ""
+    modelo.fechar()
+
+
+def test_resultado_do_teste_sobrevive_ao_fechar_do_assistente_das_fitas(app_qt, monkeypatch, teste_preso):  # noqa: ARG001
+    """P57: o resultado fica até as Preferências fecharem, mesmo depois do assistente (`recontar`)."""
+    _com_fitas()
+    monkeypatch.setattr(session_fita, "aplicar", lambda *_a: True)
+    modelo = Preferencias(None, lambda: True)
+    modelo.abrir()
+    modelo.fitas.testar()
+    teste_preso.rodar()
+    assert modelo.fitas.resultadoDoTeste == "Teste concluído"
+    modelo.fitas.recontar()
+    assert modelo.fitas.resultadoDoTeste == "Teste concluído"
     modelo.fechar()
 
 
@@ -483,19 +496,6 @@ def test_erro_no_meio_do_teste_vale_como_interrompido(p, monkeypatch, teste_pres
     assert p.fitas.testando is False
 
 
-def test_fechar_so_volta_a_cor_do_app_com_previa_nesta_abertura(app_qt, previas):  # noqa: ARG001
-    modelo = Preferencias(None, lambda: True)
-    modelo.abrir()
-    modelo.fitas.definirBrilho(30)
-    modelo.fechar()
-    assert previas[-1] == (session_fita.cor_do_app(), None)
-    quantas = len(previas)
-    # Outra abertura, sem prévia: fechar não pinta a cor do app (numa sessão, por cima da cor do jogo).
-    modelo.abrir()
-    modelo.fechar()
-    assert len(previas) == quantas
-
-
 def test_brilho_por_dispositivo_foco_no_salvar_tab_e_esc(app, flush_idle):
     from PySide6.QtTest import QTest  # noqa: PLC0415
 
@@ -507,8 +507,9 @@ def test_brilho_por_dispositivo_foco_no_salvar_tab_e_esc(app, flush_idle):
     QMetaObject.invokeMethod(botao, "click", Qt.ConnectionType.DirectConnection)
     dialogo = app.achar("dialogoDoBrilhoPorDispositivo")
     assert _esperar(lambda: dialogo.property("visible") is True)
-    salvar = app.achar("botaoSalvarDoBrilho")
-    assert _esperar(lambda: salvar.hasActiveFocus())
+    # P64: o `Adw.Dialog` da `main` não tem resposta padrão; o foco abre no primeiro controle, o Cancelar.
+    cancelar = app.achar("botaoCancelarDoBrilho")
+    assert _esperar(lambda: cancelar.hasActiveFocus())
     caixas = {app.achar("brilhoDoDispositivo-eb0Caixa"), app.achar("brilhoDoDispositivo-eb1Caixa")}
     focados = []
     for _ in range(6):
@@ -717,7 +718,7 @@ def test_linha_da_calibracao_segue_o_interruptor_da_iluminacao(app):
     linha = app.achar("linhaCalibrarFitas")
     assert linha.property("titulo") == "Calibrar as cores"
     assert linha.property("subtitulo") == "Ajusta cada dispositivo para reproduzir as cores como a tela"
-    assert linha.property("dica") == "Abrir o assistente de calibração"
+    assert app.achar("linhaCalibrarFitasBotao").property("dica") == "Abrir o assistente de calibração"
     app.preferencias.definir("session-fita", False)
     assert _esperar(lambda: not _enabled(app, "linhaCalibrarFitas"))
     app.preferencias.definir("session-fita", True)

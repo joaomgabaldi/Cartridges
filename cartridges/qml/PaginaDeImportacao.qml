@@ -6,8 +6,6 @@ Column {
     id: pagina
     objectName: "paginaDeImportacao"
 
-    readonly property bool comAtalhos: preferencias.valores["shortcuts"] === true
-
     width: parent ? parent.width : implicitWidth
     spacing: 24
 
@@ -27,7 +25,6 @@ Column {
         id: carga
         active: false
         sourceComponent: FolderDialog {
-            title: "Selecionar pasta"
             onAccepted: preferencias.escolherPastaDosAtalhos(selectedFolder)
         }
         onLoaded: item.open()
@@ -51,24 +48,43 @@ Column {
         }
     }
 
-    GrupoDePreferencias {
-        objectName: "grupoAtualizarMetadados"
+    // O progresso fica abaixo do cartão, num grupo só dele, com 12 de margem (`metadata_update_group`); o texto "N de M"
+    // vai sobre a barra (`show-text`).
+    Column {
+        width: parent.width
+        spacing: 12
 
-        LinhaDeAtualizacao {
-            buscavel: true
-            objectName: "linhaDosMetadados"
-            titulo: "Atualizar metadados"
-            subtitulo: "Busca dados para jogos já na biblioteca"
-            // Sem nenhuma das duas fontes ligadas a busca não faria nada.
-            enabled: preferencias.biblioteca.metadadosAtivos
-            emAndamento: preferencias.biblioteca.rodando
-            podeParar: true
-            paradaPedida: preferencias.biblioteca.cancelado
-            progressoVisivel: preferencias.biblioteca.rodando
-            fracao: preferencias.biblioteca.fracao
-            textoDoProgresso: preferencias.biblioteca.progresso
-            onAcionada: preferencias.biblioteca.atualizarMetadados()
-            onParada: preferencias.biblioteca.cancelarMetadados()
+        GrupoDePreferencias {
+            objectName: "grupoAtualizarMetadados"
+
+            LinhaDeAtualizacao {
+                buscavel: true
+                objectName: "linhaDosMetadados"
+                titulo: "Atualizar metadados"
+                subtitulo: "Busca dados para jogos já na biblioteca"
+                // Sem nenhuma das duas fontes ligadas a busca não faria nada.
+                enabled: preferencias.biblioteca.metadadosAtivos
+                emAndamento: preferencias.biblioteca.rodando
+                podeParar: true
+                paradaPedida: preferencias.biblioteca.cancelado
+                onAcionada: preferencias.biblioteca.atualizarMetadados()
+                onParada: preferencias.biblioteca.cancelarMetadados()
+            }
+        }
+        BarraDeProgresso {
+            objectName: "linhaDosMetadadosProgresso"
+            width: parent.width
+            implicitHeight: 16
+            visible: preferencias.biblioteca.rodando
+            value: preferencias.biblioteca.fracao
+            Text {
+                objectName: "linhaDosMetadadosProgressoTexto"
+                anchors.centerIn: parent
+                text: preferencias.biblioteca.progresso
+                textFormat: Text.PlainText
+                color: Tema.texto
+                font { family: Tema.fonte; pixelSize: Tema.legenda }
+            }
         }
     }
 
@@ -76,18 +92,38 @@ Column {
         objectName: "grupoAtalhos"
         titulo: "Atalhos"
         descricao: "Importa atalhos de jogos (.lnk e .url) de uma pasta. Funciona com Steam, Epic, Ubisoft Connect, Xbox/Microsoft Store e outros."
+        separada: true
 
-        Interruptor { chave: "shortcuts"; titulo: "Atalhos" }
-        LinhaDeAcao {
+        // As filhas ficam fora da busca (`buscavel` falso): a `main` só indexa as linhas de nível de grupo.
+        LinhaExpansora {
             buscavel: true
-            objectName: "linhaDaPasta"
-            aparece: pagina.comAtalhos
-            titulo: "Pasta"
-            subtitulo: preferencias.estado.pastaDosAtalhos || ""
-            glifo: ""  // pasta
-            dica: "Selecionar pasta"
-            onAcionada: pagina.escolherPasta()
+            objectName: "interruptor-shortcuts"
+            icone: "shortcuts-source"
+            titulo: "Atalhos"
+            checked: preferencias.valores["shortcuts"] === true
+            onAlternado: preferencias.definir("shortcuts", checked)
+
+            LinhaDeBotoes {
+                objectName: "linhaDaPasta"
+                titulo: "Pasta"
+                subtitulo: preferencias.estado.pastaDosAtalhos || ""
+                propriedade: true
+                ativavel: botaoDaPasta
+                Botao {
+                    id: botaoDaPasta
+                    objectName: "linhaDaPastaBotao"
+                    estilo: "plano"
+                    icone: "folder"
+                    dica: "Selecionar pasta"
+                    onClicked: pagina.escolherPasta()
+                }
+            }
+            LinhaDeAlternancia {
+                objectName: "interruptor-shortcuts-recursive"
+                titulo: "Buscar em subpastas"
+                checked: preferencias.valores["shortcuts-recursive"] === true
+                onAlternado: preferencias.definir("shortcuts-recursive", checked)
+            }
         }
-        Interruptor { chave: "shortcuts-recursive"; titulo: "Buscar em subpastas"; aparece: pagina.comAtalhos }
     }
 }

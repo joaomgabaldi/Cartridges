@@ -42,13 +42,14 @@ Column {
     GrupoDePreferencias {
         objectName: "grupoAoIniciarUmJogo"
         titulo: "Ao iniciar um jogo"
+        // Sem contar horas, ou sem segundo monitor, o grupo inteiro apaga, título e descrição incluídos (`preferences.py:689-712`).
+        enabled: preferencias.estado.moverAtivo === true
         descricao: "Move o Cartridges para outro monitor (se disponível) em vez de minimizá-lo para a barra de tarefas."
 
         Interruptor {
             chave: "session-move-window"
             titulo: "Mover para outro monitor"
             subtitulo: pagina.semSegundo ? "Requer um segundo monitor" : ""
-            enabled: preferencias.estado.moverAtivo === true
         }
         LinhaDeEscolha {
             buscavel: true
@@ -59,7 +60,6 @@ Column {
             enabled: preferencias.estado.monitorAtivo === true
             onEscolhido: indice => preferencias.escolherMonitor(indice)
         }
-        // Sempre clicável: é olhando para as telas que se decide qual escolher.
         LinhaDeBotao {
             buscavel: true
             objectName: "linhaIdentificarMonitores"
@@ -120,15 +120,21 @@ Column {
             enabled: grupoIluminacao.ligada
             onAlterado: valor => preferencias.fitas.definirBrilho(valor)
         }
-        LinhaDeAcao {
+        LinhaDeBotoes {
             buscavel: true
             objectName: "linhaDoBrilhoPorDispositivo"
             titulo: "Brilho máximo por dispositivo"
             subtitulo: "Define o brilho máximo de cada dispositivo"
-            glifo: ""  // seguir
-            dica: "Ajustar o brilho de cada dispositivo"
+            ativavel: botaoDoBrilho
             enabled: grupoIluminacao.ligada
-            onAcionada: preferencias.abrirBrilhoPorDispositivo()
+            Botao {
+                id: botaoDoBrilho
+                objectName: "linhaDoBrilhoPorDispositivoBotao"
+                estilo: "plano"
+                icone: "go-next"
+                dica: "Ajustar o brilho de cada dispositivo"
+                onClicked: preferencias.abrirBrilhoPorDispositivo()
+            }
         }
         Interruptor {
             chave: "fita-acompanha-tela"
@@ -136,15 +142,21 @@ Column {
             subtitulo: "A cor da iluminação acompanha, devagar, a cor predominante do jogo. Jogos com cor escolhida manualmente mantêm a cor fixa."
             enabled: grupoIluminacao.ligada
         }
-        LinhaDeAcao {
+        LinhaDeBotoes {
             buscavel: true
             objectName: "linhaCalibrarFitas"
             titulo: "Calibrar as cores"
             subtitulo: "Ajusta cada dispositivo para reproduzir as cores como a tela"
-            glifo: ""  // seguir
-            dica: "Abrir o assistente de calibração"
+            ativavel: botaoDaCalibracao
             enabled: grupoIluminacao.ligada
-            onAcionada: preferencias.abrirCalibracao()
+            Botao {
+                id: botaoDaCalibracao
+                objectName: "linhaCalibrarFitasBotao"
+                estilo: "plano"
+                icone: "go-next"
+                dica: "Abrir o assistente de calibração"
+                onClicked: preferencias.abrirCalibracao()
+            }
         }
         LinhaDeCor {
             buscavel: true
@@ -158,24 +170,36 @@ Column {
             onEscolhida: cor => preferencias.fitas.escolherCorDoApp(cor)
             onVoltar: preferencias.fitas.voltarCorDoApp()
         }
-        LinhaDeAcao {
+        LinhaDeBotoes {
             buscavel: true
             objectName: "linhaConfigurarFitas"
             titulo: "Configurar a iluminação inteligente"
             subtitulo: "Busca os dispositivos na sua conta da Tuya"
-            glifo: ""  // engrenagem
-            dica: "Abrir assistente"
-            onAcionada: preferencias.abrirConfiguracaoDasFitas()
+            ativavel: botaoDaConfiguracao
+            Botao {
+                id: botaoDaConfiguracao
+                objectName: "linhaConfigurarFitasBotao"
+                estilo: "plano"
+                icone: "applications-engineering"
+                dica: "Abrir assistente"
+                onClicked: preferencias.abrirConfiguracaoDasFitas()
+            }
         }
-        LinhaDeAcao {
+        LinhaDeBotoes {
             buscavel: true
             objectName: "linhaTestarFitas"
             titulo: "Testar"
             subtitulo: preferencias.fitas.resultadoDoTeste || "Acende cada dispositivo na cor do aplicativo"
-            glifo: preferencias.fitas.testando ? "" : ""  // parar : reproduzir
-            dica: "Ligar a iluminação inteligente"
+            ativavel: botaoDoTeste
             enabled: grupoIluminacao.ligada
-            onAcionada: preferencias.fitas.testar()
+            Botao {
+                id: botaoDoTeste
+                objectName: "linhaTestarFitasBotao"
+                estilo: "plano"
+                icone: preferencias.fitas.testando ? "media-playback-stop" : "media-playback-start"
+                dica: "Ligar a iluminação inteligente"
+                onClicked: preferencias.fitas.testar()
+            }
         }
     }
 }

@@ -47,7 +47,8 @@ def test_linha_mostra_a_versao_atual(janela):
     linha = janela.achar("linhaBuscarAtualizacoes")
     assert linha.property("titulo") == "Buscar atualizações"
     assert linha.property("subtitulo") == f"Versão atual: {shared.VERSION}"
-    assert linha.property("rotulo") == "Buscar"
+    # P39: a linha não aciona nada; o botão "Buscar" é que responde.
+    assert janela.achar("linhaBuscarAtualizacoesBotao").property("text") == "Buscar"
     assert janela.achar("grupoAtualizacoes").property("titulo") == "Atualizações"
 
 
@@ -128,13 +129,22 @@ def test_busca_com_versao_nova_abre_a_pergunta_sem_aviso(janela, monkeypatch, tm
     assert _aviso(janela) == ""
 
 
+def _resultados_da_busca(janela):
+    achados, pilha = [], [janela.achar("resultadosDaBuscaDasPreferencias")]
+    while pilha:
+        atual = pilha.pop()
+        if atual.objectName().startswith("resultadoDaBusca-") and atual.objectName()[17:].isdigit():
+            achados.append((atual.property("titulo"), atual.property("subtitulo")))
+        pilha.extend(atual.childItems())
+    return achados
+
+
 def test_busca_acha_buscar_atualizacoes(janela):
     _abrir_preferencias(janela)
     janela.achar("dialogoDePreferencias").setProperty("filtro", "atualiza")
     assert esperar(lambda: janela.achar("campoDeBuscaDasPreferencias").property("text") == "atualiza")
-    linha = janela.achar("linhaBuscarAtualizacoes")
-    assert esperar(lambda: linha.property("passaNoFiltro") is True)
-    assert linha.property("buscavel") is True and linha.property("aparece") is True
-    # Uma busca que não combina esconde a linha (a regra é a do filtro, não um `visible:` na instância).
+    assert esperar(lambda: ("Buscar atualizações", "Geral → Atualizações") in _resultados_da_busca(janela))
+    # Uma busca que não combina não deixa resultado: só a tela de nenhum resultado.
     janela.achar("dialogoDePreferencias").setProperty("filtro", "zzzz")
-    assert esperar(lambda: linha.property("passaNoFiltro") is False)
+    assert esperar(lambda: janela.achar("estadoSemResultadoDasPreferencias").property("visible") is True)
+    assert _resultados_da_busca(janela) == []
