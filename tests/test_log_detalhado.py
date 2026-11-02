@@ -432,3 +432,135 @@ def test_depuracao_do_qt_so_no_modo_detalhado(monkeypatch, caplog):
     setup._registrar_do_qt(QtMsgType.QtDebugMsg, contexto, "dentro")  # pylint: disable=protected-access
     mensagens = [r.getMessage() for r in caplog.records]
     assert "Qt-DEBUG: dentro" in mensagens and not any("fora" in m for m in mensagens)
+
+
+# --- Rodada de correção: o filtro não mexe nos filhos; o dictConfig não cala os loggers dos módulos -------------------
+
+
+def test_subclasse_python_com_pai_continua_inteira_sob_o_filtro(filtro):  # pylint: disable=unused-argument
+    """O ChildAdded dispara dentro do construtor; o filtro não pode tocar nem guardar o filho (sem processEvents aqui)."""
+    from PySide6.QtCore import Property, QEvent, QObject, QMetaObject, Slot  # pylint: disable=import-outside-toplevel
+
+    chamadas = []
+
+    class Filho(QObject):
+        def __init__(self, pai):
+            super().__init__(pai)
+            self._valor = 7
+
+        def event(self, e):
+            if e.type() == QEvent.Type.User:
+                chamadas.append("event")
+            return super().event(e)
+
+        @Slot()
+        def tocar(self):
+            chamadas.append("slot")
+
+        def _ler(self):
+            return self._valor
+
+        valor = Property(int, _ler)
+
+    pai = QObject()
+    filho = Filho(pai)
+    filho.setObjectName("f")
+    from PySide6.QtCore import QCoreApplication  # pylint: disable=import-outside-toplevel
+
+    QCoreApplication.sendEvent(filho, QEvent(QEvent.Type.User))
+    assert QMetaObject.invokeMethod(filho, "tocar")
+    assert chamadas == ["event", "slot"]
+    assert filho.property("valor") == 7
+    assert type(pai.children()[0]) is Filho  # pylint: disable=unidiomatic-typecheck
+
+
+@pytest.fixture
+def logging_do_processo(monkeypatch):
+    """Devolve o logging do processo ao que era e neutraliza os ganchos globais do setup_logging."""
+    from cartridges.logging import setup  # pylint: disable=import-outside-toplevel
+
+    raiz = logging.getLogger()
+    antes_raiz = (list(raiz.handlers), raiz.level)
+    antes = {
+        n: (lg.disabled, lg.level, list(lg.handlers), lg.propagate)
+        for n, lg in logging.root.manager.loggerDict.items()
+        if isinstance(lg, logging.Logger)
+    }
+    for nome in ("_enable_windows_ansi", "registrar_excecoes_nao_tratadas", "registrar_avisos_do_qt"):
+        monkeypatch.setattr(setup, nome, lambda: None)
+    monkeypatch.setattr(setup, "registrar_quedas_nativas", lambda _arquivo: None)
+    yield setup
+    detalhado.remover_rastreio()
+    for handler in list(raiz.handlers):
+        if handler not in antes_raiz[0]:
+            raiz.removeHandler(handler)
+            handler.close()
+    raiz.setLevel(antes_raiz[1])
+    for nome, lg in list(logging.root.manager.loggerDict.items()):
+        if not isinstance(lg, logging.Logger):
+            continue
+        if nome in antes:
+            lg.disabled, lg.level, lg.handlers, lg.propagate = antes[nome][0], antes[nome][1], antes[nome][2], antes[nome][3]
+        else:
+            for handler in list(lg.handlers):
+                lg.removeHandler(handler)
+                handler.close()
+            lg.level, lg.propagate = logging.NOTSET, True
+
+
+def _setup_real(setup, monkeypatch, tmp_path, ligado):
+    from cartridges import shared  # pylint: disable=import-outside-toplevel
+
+    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "1" if ligado else "0")
+    monkeypatch.setattr(shared, "log_dir", tmp_path)
+    setup.setup_logging()
+    return tmp_path / "cartridges.log"
+
+
+def _ler_log(arquivo):
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+    return arquivo.read_text(encoding="utf-8")
+
+
+def test_setup_real_grava_rastreio_e_interface_no_arquivo(logging_do_processo, monkeypatch, tmp_path):
+    modulo = _modulo("cartridges.teste_setup_real", "def f(a):\n    return a\n")
+    arquivo = _setup_real(logging_do_processo, monkeypatch, tmp_path, True)
+    modulo.f(41)
+    logging.getLogger("cartridges.interface").debug("clique em teste")
+    texto = _ler_log(arquivo)
+    assert "cartridges.teste_setup_real.f(a=41)" in texto
+    assert "clique em teste" in texto
+    assert "[MainThread]" in texto
+
+
+def test_logger_de_modulo_criado_antes_do_setup_continua_escrevendo(logging_do_processo, monkeypatch, tmp_path):
+    previo = logging.getLogger("cartridges.teste_previo_ao_setup")
+    for ligado in (True, False):
+        detalhado.remover_rastreio()
+        arquivo = _setup_real(logging_do_processo, monkeypatch, tmp_path / str(ligado), ligado)
+        previo.warning("linha do modulo %s", ligado)
+        assert f"linha do modulo {ligado}" in _ler_log(arquivo)
+
+
+def test_qml_real_com_filtro_e_rastreio_nao_gera_erros_do_qt(filtro, tmp_path):  # pylint: disable=unused-argument
+    """Modo ligado, QML de verdade: o filtro e o rastreio não podem quebrar objetos Python com pai."""
+    from PySide6.QtCore import qInstallMessageHandler  # pylint: disable=import-outside-toplevel
+
+    from tests.apoio_janela_atualizacao import Janela, esperar  # pylint: disable=import-outside-toplevel
+
+    mensagens = []
+    anterior = qInstallMessageHandler(lambda _t, _c, m: mensagens.append(m))
+    detalhado.instalar_rastreio()
+    janela = None
+    try:
+        janela = Janela()
+        esperar()
+    finally:
+        if janela is not None:
+            janela.fechar()
+            esperar()
+        detalhado.remover_rastreio()
+        qInstallMessageHandler(anterior)
+    ruins = [m for m in mensagens if "undefined" in m or "is not a function" in m or "No Wrapper found" in m]
+    assert ruins == []

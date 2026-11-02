@@ -80,6 +80,12 @@ LIB_LOGGERS = {
         # DEBUG output is the reason the file handler exists.
         "level": "INFO",
     },
+    # Só ruído de depuração; com `disable_existing_loggers: False` deixaria de ficar calada, então fica em WARNING.
+    "charset_normalizer": {
+        "handlers": ["lib_console_handler", "file_handler"],
+        "propagate": False,
+        "level": "WARNING",
+    },
     "tinytuya": {
         "handlers": ["lib_console_handler", "file_handler"],
         "propagate": False,
@@ -117,6 +123,8 @@ def setup_logging() -> None:
 
     config = {
         "version": 1,
+        # Sem isto o dictConfig desliga todo logger criado antes dele (os `getLogger(__name__)` dos módulos).
+        "disable_existing_loggers": False,
         "formatters": {
             "file_formatter": {
                 "format": formato_do_arquivo,

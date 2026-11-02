@@ -21,6 +21,8 @@ Usa ``sys.monitoring`` (PEP 669). Cada entrada, saída (com o valor devolvido e
 o tempo) e exceção vira uma linha DEBUG do logger ``cartridges.rastreio``, com
 a profundidade da chamada. Nenhum valor é filtrado: o log pode conter dados
 sensíveis, por decisão do usuário.
+
+Limite conhecido: um ``Loader`` com ``sourceComponent: algumId`` não é visto.
 """
 
 import logging
@@ -29,7 +31,7 @@ import sys
 import threading
 import time
 
-from PySide6.QtCore import SIGNAL, QEvent, QObject, QTimer
+from PySide6.QtCore import SIGNAL, QEvent, QObject
 
 # Liga o log detalhado por padrão. A variável de ambiente CARTRIDGES_LOG_DETALHADO
 # ("1" ou "0") vence esta constante.
@@ -235,39 +237,28 @@ class FiltroDeEventos(QObject):
             if (nome := _EVENTOS_DA_INTERFACE.get(tipo)) is not None:
                 _log_ui.debug("%s em %s%s", nome, _quem(destino), _detalhe(evento))
             elif tipo == _ET.ChildAdded:
-                self._filho_novo(evento.child())
+                _ligar_tela(destino)  # nunca toca no filho: ele ainda está no construtor da base
         except Exception:  # pylint: disable=broad-exception-caught
             pass
         return False
 
-    @staticmethod
-    def _filho_novo(filho) -> None:  # type: ignore
-        """Agenda o exame de um filho recém-criado.
+def _ligar_tela(alvo) -> None:  # type: ignore
+    """Liga os sinais de um popup ou loader do QML, quando ele recebe um filho.
 
-        No ``ChildAdded`` o objeto ainda está dentro do construtor da base
-        (a classe é só ``QObject``), e o Qt não avisa a criação de um Popup ou
-        Loader do QML: só a dos filhos deles. Por isso o exame vai para o
-        próximo ciclo do laço de eventos, quando a classe já é a final.
-        """
-        QTimer.singleShot(0, lambda: _tentar(lambda: _examinar(filho)))
-
-
-def _examinar(filho) -> None:  # type: ignore
-    """Liga os sinais de popups e loaders do QML a linhas de log (o filho ou o pai dele)."""
-    if "_QMLTYPE_" in filho.metaObject().className():
-        _log_ui.debug("objeto do QML criado: %s", _quem(filho))
-    for alvo in (filho, filho.parent()):
-        if alvo is None or alvo.property("_logLigado"):
-            continue
-        if alvo.inherits("QQuickPopup"):
-            alvo.setProperty("_logLigado", True)
-            alvo.connect(SIGNAL("opened()"), lambda: _tentar(lambda: _log_ui.debug("popup aberto: %s", _quem(alvo))))
-            alvo.connect(SIGNAL("closed()"), lambda: _tentar(lambda: _log_ui.debug("popup fechado: %s", _quem(alvo))))
-        elif alvo.inherits("QQuickLoader"):
-            alvo.setProperty("_logLigado", True)
-            alvo.connect(SIGNAL("loaded()"), lambda: _tentar(lambda: _tela_carregada(alvo)))
-            if alvo.property("item") is not None:  # carregou antes de ligarmos o sinal
-                _tela_carregada(alvo)
+    O Qt não avisa a criação do Popup ou Loader em si, só a dos filhos dele
+    (ChildAdded no pai). O filho nunca é tocado nem guardado: no ChildAdded ele
+    ainda está no construtor da base, e segurar o ponteiro faz o PySide
+    registrar um wrapper errado para ele.
+    """
+    if alvo.property("_logLigado"):
+        return
+    if alvo.inherits("QQuickPopup"):
+        alvo.setProperty("_logLigado", True)
+        alvo.connect(SIGNAL("opened()"), lambda: _tentar(lambda: _log_ui.debug("popup aberto: %s", _quem(alvo))))
+        alvo.connect(SIGNAL("closed()"), lambda: _tentar(lambda: _log_ui.debug("popup fechado: %s", _quem(alvo))))
+    elif alvo.inherits("QQuickLoader"):
+        alvo.setProperty("_logLigado", True)
+        alvo.connect(SIGNAL("loaded()"), lambda: _tentar(lambda: _tela_carregada(alvo)))
 
 
 def _tela_carregada(loader) -> None:  # type: ignore
