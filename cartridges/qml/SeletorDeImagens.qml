@@ -104,16 +104,22 @@ SeletorBase {
         PaginaDoSeletor {
             ativa: !seletorDeImagens.seletor.vazio && !seletorDeImagens.seletor.baixando && grade.count > 0
 
+            // As laterais (fora da grade) também rolam com a roda do mouse.
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: event => {
+                    if (event.point.position.x >= grade.x && event.point.position.x <= grade.x + grade.width) return
+                    grade.contentY = Math.max(-grade.topMargin, Math.min(grade.contentHeight - grade.height + grade.bottomMargin, grade.contentY - event.angleDelta.y))
+                }
+            }
+
             GridView {
                 id: grade
                 objectName: seletorDeImagens.objectName + "Grade"
-                // `FlowBox homogeneous` centrado: células de largura fixa mais 12, o conjunto no meio.
-                // Ocupa a largura toda (a barra de rolagem fica na borda); as colunas ficam centradas pela margem.
-                anchors.fill: parent
-                leftMargin: Math.max(0, (width - seletorDeImagens.colunas * cellWidth) / 2)
-                rightMargin: leftMargin
-                // O GridView não reposiciona sozinho quando a margem muda: sem isto, a grade fica descentrada.
-                onLeftMarginChanged: contentX = -leftMargin
+                // `FlowBox homogeneous` centrado: só as colunas ocupam a largura; a roda nas laterais rola pelo `WheelHandler`.
+                width: seletorDeImagens.colunas * cellWidth
+                height: parent.height
+                anchors.horizontalCenter: parent.horizontalCenter
                 topMargin: 6
                 bottomMargin: 6
                 model: seletorDeImagens.seletor

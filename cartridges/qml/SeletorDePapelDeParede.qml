@@ -25,7 +25,7 @@ SeletorBase {
     // Um arquivo do disco não tem o que buscar: abre direto no ajuste.
     comBusca: !seletor.soArquivo
     rolado: grade.contentY > -grade.topMargin + 1
-    // O primeiro foco do diálogo: "Não trocar" na grade do wallhaven, o campo se não houver o botão; nada forçado depois.
+    // O primeiro foco do diálogo: "Não trocar" na grade do wallhaven; nada, com arquivo do disco; nada forçado depois.
     focoInicial: seletor.soArquivo ? null : botaoNaoTrocar
     onFecharPedido: seletor.fechar()
     onBuscaEditada: texto => seletor.busca = texto
@@ -100,15 +100,22 @@ SeletorBase {
             ativa: !seletorDePapel.seletor.vazio && !seletorDePapel.seletor.baixando && !seletorDePapel.seletor.ajustando
                 && !seletorDePapel.seletor.soArquivo && grade.count > 0
 
+            // As laterais (fora da grade) também rolam com a roda do mouse.
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: event => {
+                    if (event.point.position.x >= grade.x && event.point.position.x <= grade.x + grade.width) return
+                    grade.contentY = Math.max(-grade.topMargin, Math.min(grade.contentHeight - grade.height + grade.bottomMargin, grade.contentY - event.angleDelta.y))
+                }
+            }
+
             GridView {
                 id: grade
                 objectName: seletorDePapel.objectName + "Grade"
-                // Ocupa a largura toda (a barra de rolagem fica na borda); as colunas ficam centradas pela margem.
-                anchors.fill: parent
-                leftMargin: Math.max(0, (width - seletorDePapel.colunas * cellWidth) / 2)
-                rightMargin: leftMargin
-                // O GridView não reposiciona sozinho quando a margem muda: sem isto, a grade fica descentrada.
-                onLeftMarginChanged: contentX = -leftMargin
+                // `FlowBox homogeneous` centrado: só as colunas ocupam a largura; a roda nas laterais rola pelo `WheelHandler`.
+                width: seletorDePapel.colunas * cellWidth
+                height: parent.height
+                anchors.horizontalCenter: parent.horizontalCenter
                 topMargin: 6
                 bottomMargin: 6
                 model: seletorDePapel.seletor

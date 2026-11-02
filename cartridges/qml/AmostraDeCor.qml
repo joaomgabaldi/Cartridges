@@ -16,11 +16,16 @@ Botao {
     property string nomeDaRoda: objectName + "Roda"
     readonly property alias balao: balao
 
-    // Quando o balão fechou: o aperto fora do botão (na linha) o fecha, e o clique da linha não pode reabri-lo.
-    property real fechouEm: 0
+    // Uma linha que aciona a amostra (`apertou` no aperto, `alternar` na soltura): o aperto fora do botão fecha o balão, e a
+    // soltura não pode reabri-lo. Pela ordem dos eventos, sem relógio: no aperto vale o estado de antes dele (aberto agora, ou
+    // fechado neste mesmo despacho, quando o aperto chegou antes ao balão).
+    property bool _fechouAgora: false
+    property bool _estavaAberto: false
+    function apertou() { _estavaAberto = balao.opened || _fechouAgora }
     function alternar() {
-        if (!balao.opened && Date.now() - fechouEm < 300) return
-        click()
+        const estava = _estavaAberto
+        _estavaAberto = false
+        if (!estava) click()
     }
 
     signal escolhida(color cor)
@@ -94,7 +99,8 @@ Botao {
             amostra.aberta()
         }
         onClosed: {
-            amostra.fechouEm = Date.now()
+            amostra._fechouAgora = true
+            Qt.callLater(() => amostra._fechouAgora = false)
             amostra.forceActiveFocus(Qt.TabFocusReason)
             amostra.fechada()
         }

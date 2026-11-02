@@ -1559,37 +1559,49 @@ def test_botoes_da_capa_nao_recebem_clique_convertendo_e_a_amostra_fecha_o_balao
     assert app.achar("balaoDaCorDaFita").property("opened") is False
 
 
-def test_a_grade_do_seletor_ocupa_a_largura_toda(app, sgdb):
-    """M6: a barra de rolagem fica na borda; só as colunas são centradas."""
+def test_a_grade_do_seletor_so_ocupa_as_colunas(app, sgdb):
+    """M6 (revisto): a grade tem a largura das colunas e fica centrada; as laterais rolam pelo `WheelHandler`."""
     app.edicao.abrir("shortcuts_z1")
     _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
     grade = app.achar("seletorDeCapaGrade")
-    assert grade.property("width") == grade.parentItem().property("width") and grade.property("leftMargin") > 0
+    assert grade.property("width") == app.achar("seletorDeCapa").property("colunas") * grade.property("cellWidth")
+
+
+@pytest.mark.parametrize("largura", [560, 620, 672, 690, 760, 790, 900])
+def test_as_colunas_reais_da_grade_do_seletor_sao_as_de_colunas(app, sgdb, largura):
+    """Q1: mede, na tela, o `x` de cada miniatura: as colunas reais são `colunas` e a grade fica centrada."""
+    from tests.apoio_seletores import SgdbFalso, lista_de_grades  # noqa: PLC0415
+
+    app.edicao.seletorDeCapa.sgdb = SgdbFalso(grids=lista_de_grades(9))
+    app.janela.resize(largura, 795)
+    _esperar(lambda: False, 0.3)
+    app.edicao.abrir("shortcuts_z1")
+    _clique(app, "botaoEscolherCapaSgdb")
+    assert _esperar(lambda: _visivel(app, "seletorDeCapa") and _visivel(app, "seletorDeCapaMiniatura8"), 6)
+    _esperar(lambda: False, 0.4)
+    seletor = app.achar("seletorDeCapa")
+    colunas = seletor.property("colunas")
+    xs = sorted({round(_x_da_cena(app.achar(f"seletorDeCapaMiniatura{i}"))) for i in range(9)})
+    assert len(xs) == colunas, (largura, colunas, xs)
+    grade = app.achar("seletorDeCapaGrade")
+    esquerda = xs[0] - _x_da_cena(grade)
+    direita = _x_da_cena(grade) + grade.property("width") - (xs[-1] + 140)
+    assert abs(esquerda - direita) <= 2, (largura, esquerda, direita)
 
 
 def test_clicar_de_novo_na_linha_da_iluminacao_fecha_o_balao(app, previas):
-    """M8: o aperto na linha fecha o balão e o clique dela não o reabre."""
+    """M8: o aperto na linha fecha o balão e a soltura não o reabre, qualquer que seja a duração do aperto (pela ordem dos eventos)."""
     _com_fita()
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
     linha = app.achar("linhaDaFita")
     ponto = linha.mapToScene(QPointF(30, linha.height() / 2)).toPoint()
-    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
-    assert _esperar(lambda: app.achar("balaoDaCorDaFita").property("opened") is True)
-    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
-    _esperar(lambda: False, 0.4)
-    assert app.achar("balaoDaCorDaFita").property("opened") is False
-
-
-def test_a_grade_do_seletor_fica_centrada_em_janela_estreita(app, sgdb):
-    """Q1: com a margem mudando, o `contentX` acompanha (-leftMargin) e as colunas reais são as de `colunas`."""
-    app.janela.resize(690, 795)
-    _esperar(lambda: False, 0.3)
-    app.edicao.abrir("shortcuts_z1")
-    _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
-    _esperar(lambda: False, 0.3)
-    grade = app.achar("seletorDeCapaGrade")
-    assert abs(grade.property("contentX") + grade.property("leftMargin")) < 1
-    colunas = app.achar("seletorDeCapa").property("colunas")
-    disponivel = grade.property("width") - grade.property("leftMargin") - grade.property("rightMargin")
-    assert int(disponivel // grade.property("cellWidth")) == colunas
+    balao = app.achar("balaoDaCorDaFita")
+    for espera in (0, 0.7):  # clique instantâneo e aperto longo
+        QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
+        assert _esperar(lambda: balao.property("opened") is True)
+        QTest.mousePress(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
+        _esperar(lambda: False, espera + 0.05)
+        QTest.mouseRelease(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
+        _esperar(lambda: False, 0.3)
+        assert balao.property("opened") is False, espera
