@@ -147,6 +147,19 @@ def test_relogio_escondido_sem_monitor(app_qt):
     app.fechar()
 
 
+def test_relogio_acompanha_o_tique(app_qt, monkeypatch):
+    monkeypatch.setattr(modulo_da_sessao.window_geometry, "session_geometry", lambda: object())
+    app = _app()
+    _comecar(app)
+    relogio = app.achar("relogioDaSessao")
+    assert relogio.property("visible") is True
+    app.sessao.session_elapsed = lambda: 125
+
+    app.sessao._tique.timeout.emit()  # noqa: SLF001
+    _esperar()
+
+    assert relogio.property("text") == "0:02:05"
+    app.fechar()
 def test_anotacao_da_sessao_vai_ao_jogo_da_sessao(app_qt):
     app = _app()
     _abrir_pelo_cartao(app, 1)  # os detalhes de Beta ficam por baixo

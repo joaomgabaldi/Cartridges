@@ -48,20 +48,25 @@ def _prop(tipo: Any, nome: str, notify: Any) -> Property:
 
 class HistoricoDeSessoes(QObject):
     alterado = Signal()
+    # Sinais próprios: trocar o período não refaz as linhas da tabela, e "Mostrar mais" não redesenha o gráfico.
+    tabelaMudou = Signal()  # noqa: N815
+    graficoMudou = Signal()  # noqa: N815
 
     _p = partial(_prop, notify=alterado)
+    _t = partial(_prop, notify=tabelaMudou)
+    _g = partial(_prop, notify=graficoMudou)
     aberto = _p(bool, "aberto")
     nome = _p(str, "nome")
     logo = _p(str, "logo")
     larguraDoLogo = _p(int, "larguraDoLogo")  # noqa: N815
     resumo = _p(str, "resumo")
     vazio = _p(bool, "vazio")
-    sessoes = _p("QVariantList", "sessoes")
-    haMais = _p(bool, "haMais")  # noqa: N815
-    periodo = _p(str, "periodo")
-    totalDoPeriodo = _p(str, "totalDoPeriodo")  # noqa: N815
-    grafico = _p("QVariantMap", "grafico")
-    del _p
+    sessoes = _t("QVariantList", "sessoes")
+    haMais = _t(bool, "haMais")  # noqa: N815
+    periodo = _g(str, "periodo")
+    totalDoPeriodo = _g(str, "totalDoPeriodo")  # noqa: N815
+    grafico = _g("QVariantMap", "grafico")
+    del _p, _t, _g
 
     def __init__(self, store: Any, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -96,7 +101,12 @@ class HistoricoDeSessoes(QObject):
         self._jogo = None
         self._sessoes, self._dias, self._posicoes = [], [], []
         self._v = {**_PADRAO, "aberto": False}
+        self._avisar_tudo()
+
+    def _avisar_tudo(self) -> None:
         self.alterado.emit()
+        self.tabelaMudou.emit()
+        self.graficoMudou.emit()
 
     def _mostrado(self) -> Any:
         return self._jogo() if self._jogo else None
@@ -114,13 +124,13 @@ class HistoricoDeSessoes(QObject):
             self._v.update(
                 resumo=_("Nenhuma sessão registrada."), vazio=True, sessoes=[], haMais=False, totalDoPeriodo="", grafico={}
             )
-            self.alterado.emit()
+            self._avisar_tudo()
             return
         sete, trinta = resumo_dos_ultimos_dias(self._sessoes, date.today())
         # As variáveis são os tempos jogados nos últimos 7 e 30 dias
         resumo = _("Últimos 7 dias: {} · últimos 30 dias: {}").format(tempo_ou_nenhuma(sete), tempo_ou_nenhuma(trinta))
         self._v.update(resumo=resumo, vazio=False, **self._tabela(), **self._grafico())
-        self.alterado.emit()
+        self._avisar_tudo()
 
     def _tabela(self) -> dict[str, Any]:
         return {
@@ -161,7 +171,7 @@ class HistoricoDeSessoes(QObject):
         """Acrescenta a próxima página de sessões ao fim da tabela."""
         self._mostradas += PAGINA
         self._v.update(self._tabela())
-        self.alterado.emit()
+        self.tabelaMudou.emit()
 
     @Slot(str)
     def definirPeriodo(self, periodo: str) -> None:  # noqa: N802
@@ -170,7 +180,7 @@ class HistoricoDeSessoes(QObject):
         self._v["periodo"] = periodo
         if self._sessoes:
             self._v.update(self._grafico())
-        self.alterado.emit()
+        self.graficoMudou.emit()
 
     @Slot("qint64", "qint64")
     def excluir(self, fim: int, segundos: int) -> None:

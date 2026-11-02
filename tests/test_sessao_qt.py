@@ -194,3 +194,22 @@ def test_terminar_encerra_os_dois(modelo, make_game, relogio):
     assert SessionWindow.active is None and ProcessSession.active is None
     assert manual.game.playtime == 60
     assert [linha["seconds"] for linha in session_log.load("shortcuts_6")] == [30, 30]
+
+
+def test_tique_so_renotifica_o_relogio(modelo):
+    mudancas, relogios = [], []
+    modelo.alterado.connect(lambda: mudancas.append(1), Qt.ConnectionType.DirectConnection)
+    modelo.relogioMudou.connect(lambda: relogios.append(1), Qt.ConnectionType.DirectConnection)
+
+    modelo._tique.timeout.emit()  # noqa: SLF001
+
+    assert (len(mudancas), len(relogios)) == (0, 1)
+
+
+def test_relogio_acompanha_o_alterado(modelo):
+    relogios = []
+    modelo.relogioMudou.connect(lambda: relogios.append(1), Qt.ConnectionType.DirectConnection)
+
+    modelo.alterado.emit()
+
+    assert relogios == [1]

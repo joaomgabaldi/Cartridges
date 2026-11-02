@@ -28,7 +28,7 @@ janela de um processo que está na frente, e mostrar pode ativá-la.
 
 Não aparece sobre jogo em tela cheia exclusiva (o mesmo limite do Hydra); a
 iluminação cobre esse caso. O mesmo jeito de falar com o Win32 que
-`session_window.position_bottom_right` já usa.
+`cartridges/modelos/sessao.py` (`_posicionar`) já usa.
 """
 
 import ctypes

@@ -410,3 +410,49 @@ def test_dica_depois_de_fechar_e_vazia():
     historico.fechar()
 
     assert historico.dica(0.5) == ""
+
+
+# -- sinais próprios (tabela e gráfico) ------------------------------------------------------
+
+
+def _contar(historico):
+    contagem = {"alterado": 0, "tabelaMudou": 0, "graficoMudou": 0}
+    for nome in contagem:
+        getattr(historico, nome).connect(lambda nome=nome: contagem.__setitem__(nome, contagem[nome] + 1))
+    return contagem
+
+
+def test_trocar_o_periodo_nao_renotifica_as_sessoes():
+    jogo = _jogo()
+    session_log.record(jogo.game_id, 3600, end=int(time()))
+    historico, _ = _aberto(jogo)
+    contagem = _contar(historico)
+
+    historico.definirPeriodo("week")
+
+    assert contagem == {"alterado": 0, "tabelaMudou": 0, "graficoMudou": 1}
+    assert historico.periodo == "week"
+
+
+def test_mostrar_mais_nao_renotifica_o_grafico():
+    jogo = _jogo()
+    for i in range(modulo.PAGINA + 5):
+        session_log.record(jogo.game_id, 60, end=int(time()) - i * 60)
+    historico, _ = _aberto(jogo)
+    contagem = _contar(historico)
+
+    historico.mostrarMais()
+
+    assert contagem == {"alterado": 0, "tabelaMudou": 1, "graficoMudou": 0}
+    assert len(historico.sessoes) == modulo.PAGINA + 5
+
+
+def test_reler_e_fechar_avisam_os_tres_sinais():
+    jogo = _jogo()
+    session_log.record(jogo.game_id, 3600, end=int(time()))
+    historico, _ = _aberto(jogo)
+    contagem = _contar(historico)
+
+    historico.fechar()
+
+    assert contagem == {"alterado": 1, "tabelaMudou": 1, "graficoMudou": 1}

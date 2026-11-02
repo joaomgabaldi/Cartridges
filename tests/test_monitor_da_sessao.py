@@ -319,8 +319,10 @@ def test_relogio_so_com_a_janela_movida(modelo, schema, monkeypatch, make_game):
     assert modelo.relogioVisivel is True
     assert modelo._tique.isActive() and modelo._tique.interval() == 1000  # noqa: SLF001
     avisos.clear()
+    relogios = []
+    modelo.relogioMudou.connect(lambda: relogios.append(1))
     modelo._tique.timeout.emit()  # noqa: SLF001
-    assert avisos == [1]  # cada tique avisa o QML, que lê o relógio de novo
+    assert relogios == [1] and avisos == []  # cada tique avisa só o relógio, que o QML lê de novo
 
     modelo.hide_session_blocker()
     assert modelo.relogioVisivel is False

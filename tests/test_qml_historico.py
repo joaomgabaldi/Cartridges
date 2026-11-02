@@ -64,7 +64,7 @@ def test_tempo_de_jogo_clicavel_so_com_sessoes(app_qt):
     assert _expr(area, "cursorShape") == Qt.CursorShape.ArrowCursor.value
 
     session_log.record("imported_1", 5400, end=1_700_000_000)
-    app.detalhes._mesclar({})  # noqa: SLF001
+    app.detalhes._mostrado().update()  # noqa: SLF001; como o fim de uma sessão: `record` e depois `update`
     assert _esperar(lambda: tempo.property("clicavel") is True)
     # O sublinhado é na cor do próprio texto: nem link nem botão.
     assert _expr(tempo, "font.underline") is True
@@ -335,6 +335,21 @@ def test_confirmar_exclui_e_desconta_do_total(app_qt):
     app.fechar()
 
 
+def test_trocar_o_periodo_mantem_as_linhas_da_tabela(app_qt):
+    app = _app()
+    _sessoes(3)
+    _abrir(app)
+    antes = _todos(app.achar("tabelaDeSessoes"), "linhaDaSessao")
+    assert len(antes) == 3
+
+    app.historico.definirPeriodo("week")
+    _assentar()
+
+    depois = _todos(app.achar("tabelaDeSessoes"), "linhaDaSessao")
+    # Os mesmos objetos: o `Repeater` não refez a tabela só porque o gráfico mudou.
+    assert sorted(map(id, depois)) == sorted(map(id, antes))
+    assert app.historico.periodo == "week"
+    app.fechar()
 # -- o gráfico --------------------------------------------------------------------------------------
 
 

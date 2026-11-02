@@ -74,6 +74,7 @@ def pode_anotar(jogo: Any) -> bool:
 
 class ModeloDaSessao(QObject):
     alterado = Signal()
+    relogioMudou = Signal()  # noqa: N815
     anotarPedido = Signal(str)
 
     def __init__(
@@ -96,7 +97,9 @@ class ModeloDaSessao(QObject):
         self._relogio_visivel = False
         self._tique = QTimer(self)
         self._tique.setInterval(1000)
-        self._tique.timeout.connect(self.alterado)
+        # O tique só renova o relógio; o resto da camada não se renotifica a cada segundo.
+        self._tique.timeout.connect(self.relogioMudou)
+        self.alterado.connect(self.relogioMudou)
         self._sair = QCoreApplication.quit  # trocado nos testes: sair de verdade acabaria o laço do teste
         self._encerrado = False
 
@@ -129,7 +132,7 @@ class ModeloDaSessao(QObject):
     def anotacao(self) -> str:
         return self._anotacao
 
-    @Property(str, notify=alterado)
+    @Property(str, notify=relogioMudou)
     def relogio(self) -> str:
         return format_stopwatch(self.session_elapsed())
 
