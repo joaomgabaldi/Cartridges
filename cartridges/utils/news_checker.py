@@ -89,7 +89,8 @@ class NewsChecker(QObject):
         self._timer.stop()
         interval_hours = shared.schema.get_int(_INTERVAL_KEY)
         if interval_hours > 0:
-            self._timer.start(interval_hours * 3600 * 1000)
+            # O QTimer guarda int32: a chave aceita mais horas do que cabem em milissegundos.
+            self._timer.start(min(interval_hours * 3600 * 1000, 2**31 - 1))
 
     def stop(self) -> None:
         """Para o relógio e abandona a busca em voo."""

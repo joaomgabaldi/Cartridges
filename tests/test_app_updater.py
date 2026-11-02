@@ -8,6 +8,7 @@ import hashlib
 import subprocess
 import sys
 import threading
+import time
 import types
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -159,6 +160,7 @@ def test_notes_markup_do_exemplo_do_brief():
 
 
 def test_installed_root_finds_the_uninstaller(tmp_path, monkeypatch):
+    monkeypatch.setattr(shared, "canal", lambda: "final")
     (tmp_path / "bin").mkdir()
     (tmp_path / "bin" / "pythonw.exe").write_bytes(b"")
     (tmp_path / "unins000.exe").write_bytes(b"")
@@ -167,10 +169,47 @@ def test_installed_root_finds_the_uninstaller(tmp_path, monkeypatch):
 
 
 def test_installed_root_is_none_from_source(tmp_path, monkeypatch):
+    monkeypatch.setattr(shared, "canal", lambda: "final")
     (tmp_path / "bin").mkdir()
     (tmp_path / "bin" / "python.exe").write_bytes(b"")
     monkeypatch.setattr(sys, "executable", str(tmp_path / "bin" / "python.exe"))
     assert installed_root() is None
+
+
+def _instalacao_falsa(tmp_path, monkeypatch):
+    """Um `unins000.exe` ao lado do Python falso: só o canal decide se é uma instalação."""
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "pythonw.exe").write_bytes(b"")
+    (tmp_path / "unins000.exe").write_bytes(b"")
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "bin" / "pythonw.exe"))
+
+
+def test_canal_de_desenvolvimento_nunca_se_atualiza(tmp_path, monkeypatch):
+    _instalacao_falsa(tmp_path, monkeypatch)
+    monkeypatch.setattr(shared, "canal", lambda: "desenvolvimento")
+    assert installed_root() is None
+
+    def no_thread(*_args, **_kwargs):
+        pytest.fail("a cópia de desenvolvimento não checa versão nova")
+
+    monkeypatch.setattr(app_updater.threading, "Thread", no_thread)
+    AppUpdater().start()
+
+    respostas = []
+    AppUpdater().buscar_agora(respostas.append)
+    assert respostas == [FORA_DA_INSTALACAO]
+
+
+def test_canal_final_continua_se_atualizando(tmp_path, monkeypatch):
+    _instalacao_falsa(tmp_path, monkeypatch)
+    monkeypatch.setattr(shared, "canal", lambda: "final")
+    assert installed_root() == tmp_path.resolve()
+    iniciadas = []
+    monkeypatch.setattr(
+        app_updater.threading, "Thread", lambda **kw: types.SimpleNamespace(start=lambda: iniciadas.append(kw))
+    )
+    AppUpdater().start()
+    assert len(iniciadas) == 1
 
 
 # -- download_installer -------------------------------------------------------
@@ -226,7 +265,7 @@ def test_download_writes_verified_installer(tmp_path, fake_get):
     # Repositório público: nada de token no pedido.
     assert fake_get[0][1] == {}
     assert target.read_bytes() == _PAYLOAD
-    assert not target.with_name(target.name + ".part").exists()
+    assert list(target.parent.glob("*.part")) == []
     assert fractions[-1] == 1.0
     assert fractions == sorted(fractions)
 
@@ -350,7 +389,7 @@ def test_finish_after_cancel_neither_installs_nor_quits(tmp_path, monkeypatch, s
     updater._cancel.set()  # pylint: disable=protected-access
 
     # O guarda `sem_instalador_de_verdade` falha o teste se o instalador abrir.
-    updater._finish(tmp_path / "x.exe")  # pylint: disable=protected-access
+    updater._finish(tmp_path / "x.exe", updater._cancel)  # pylint: disable=protected-access
 
     assert sem_instalador_de_verdade == []
     assert sairam == []
@@ -362,8 +401,8 @@ def test_finish_abre_o_instalador_e_sai_uma_vez(tmp_path, monkeypatch, sem_insta
     monkeypatch.setattr(app_updater, "_abrir_instalador", abertos.append)
     updater = AppUpdater()
 
-    updater._finish(tmp_path / "x.exe")  # pylint: disable=protected-access
-    updater._finish(tmp_path / "x.exe")  # pylint: disable=protected-access
+    updater._finish(tmp_path / "x.exe", updater._cancel)  # pylint: disable=protected-access
+    updater._finish(tmp_path / "x.exe", updater._cancel)  # pylint: disable=protected-access
 
     assert abertos == [tmp_path / "x.exe"]
     assert sairam == [1]
@@ -382,7 +421,7 @@ def test_finish_que_nao_abre_o_instalador_avisa_e_nao_sai(tmp_path, monkeypatch,
     updater = AppUpdater()
     updater._baixando = True  # pylint: disable=protected-access
 
-    updater._finish(tmp_path / "x.exe")  # pylint: disable=protected-access
+    updater._finish(tmp_path / "x.exe", updater._cancel)  # pylint: disable=protected-access
 
     assert avisos == ["Não foi possível abrir o instalador"]
     assert sairam == [] and not updater.baixando
@@ -449,6 +488,95 @@ def test_fechar_o_app_no_meio_do_download_descarta_o_resultado(tmp_path, monkeyp
     for funcao, args in fila:
         funcao(*args)
     assert sem_instalador_de_verdade == [] and sairam == []
+
+
+def test_cancelar_e_baixar_de_novo_nao_ressuscita_o_download_antigo(tmp_path, monkeypatch, sem_instalador_de_verdade):
+    """O download antigo, preso, termina depois do segundo: o `Event` dele continua ligado e o resultado é descartado."""
+    sairam = _sem_sair(monkeypatch)
+    fila: list = []
+    monkeypatch.setattr(app_updater, "na_thread_principal", lambda f, *a: fila.append((f, a)))
+    eventos: list[threading.Event] = []
+    soltar = threading.Event()
+    iniciadas: list[threading.Thread] = []
+
+    def preso(_release, _target, _progress, cancelled):
+        eventos.append(cancelled)
+        soltar.wait(5)  # não olha o `cancelled`: termina "bem" mesmo cancelado
+
+    monkeypatch.setattr(app_updater, "download_installer", preso)
+    original = threading.Thread
+
+    def thread(target, **kw):
+        t = original(target=target, **kw)
+        iniciadas.append(t)
+        return t
+
+    monkeypatch.setattr(app_updater.threading, "Thread", thread)
+    updater = AppUpdater()
+    release = _release("ab")
+    try:
+        updater._download(release)  # pylint: disable=protected-access
+        updater.cancelar()
+        updater._download(release)  # pylint: disable=protected-access
+        deadline = time.monotonic() + 5
+        while len(eventos) < 2 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert len(eventos) == 2
+        assert eventos[0] is not eventos[1]
+        assert eventos[0].is_set() and not eventos[1].is_set()
+
+        soltar.set()
+        for t in iniciadas:
+            t.join(5)
+    finally:
+        soltar.set()
+    # Só o resultado da primeira chegou à fila (a segunda também termina "bem", mas é a vigente).
+    resultados = [(f, a) for f, a in fila if f.__name__ == "_finish"]
+    primeiro = [a for _f, a in resultados if a[1] is eventos[0]]
+    assert len(primeiro) == 1
+    updater._finish(*primeiro[0])  # pylint: disable=protected-access
+    assert sem_instalador_de_verdade == [] and sairam == []
+    assert updater.baixando is True  # o progresso do download vigente não foi escondido
+
+    # O progresso do antigo também é ignorado.
+    updater._progresso = 0.3  # pylint: disable=protected-access
+    updater._atualizar_progresso(0.9, eventos[0])  # pylint: disable=protected-access
+    assert updater.progresso == 0.3
+
+
+def test_cada_download_tem_o_proprio_part(tmp_path, monkeypatch):
+    """Dois downloads do mesmo instalador, em threads diferentes, nunca gravam no mesmo `.part`."""
+    partes: list[str] = []
+    gravando = threading.Barrier(2)
+
+    class _Lento(_FakeResponse):
+        def iter_content(self, chunk_size):
+            yield self._payload[:4]
+            partes.extend(p.name for p in (tmp_path / "update").glob("*.part"))
+            gravando.wait(5)  # os dois estão com o `.part` aberto ao mesmo tempo
+            yield self._payload[4:]
+
+    monkeypatch.setattr(app_updater.requests, "get", lambda *_a, **_k: _Lento(_PAYLOAD))
+    alvo = tmp_path / "update" / "Cartridges-2026.09.13.exe"
+    erros = []
+
+    def baixar():
+        try:
+            download_installer(
+                _release(hashlib.sha256(_PAYLOAD).hexdigest()), alvo, lambda _f: None, threading.Event()
+            )
+        except Exception as erro:  # pylint: disable=broad-exception-caught
+            erros.append(erro)
+
+    threads = [threading.Thread(target=baixar) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    assert len(set(partes)) == 2, partes
+    assert not any(t.is_alive() for t in threads)
+    # O que sobra de um `replace` na corrida é problema do Windows, não do `.part`: nenhum sobra.
+    assert list(alvo.parent.glob("*.part")) == []
 
 
 def test_pergunta_espera_os_saves(monkeypatch):

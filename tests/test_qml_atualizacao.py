@@ -130,7 +130,7 @@ def test_atualizar_mostra_a_barra_e_cancelar_fecha(janela, download_falso):
     assert esperar(lambda: janela.achar("botaoCancelarAtualizacao").property("activeFocus") is True)
     assert download_falso == [_RELEASE]
 
-    janela.atualizador._atualizar_progresso(0.5)  # noqa: SLF001
+    janela.atualizador._atualizar_progresso(0.5, janela.atualizador._cancel)  # noqa: SLF001
     assert janela.achar("porcentagemDaAtualizacao").property("text") == "50%"
     assert janela.achar("barraDaAtualizacao").property("value") == 0.5
 

@@ -168,8 +168,12 @@ def installed_root() -> Optional[Path]:
 
     O app instalado roda de ``{app}\\bin\\Cartridges.exe`` e o Inno Setup deixa o
     ``unins000.exe`` em ``{app}``. Rodando do código-fonte, o pai da pasta do
-    Python não tem desinstalador, e o app nunca tenta se atualizar.
+    Python não tem desinstalador, e o app nunca tenta se atualizar. A cópia de
+    desenvolvimento nunca se atualiza, nem com um desinstalador ao lado: a versão
+    final não pode ser instalada por cima dela (D109).
     """
+    if shared.canal() != "final":
+        return None
     root = Path(sys.executable).resolve().parent.parent
     return root if (root / "unins000.exe").is_file() else None
 
@@ -217,7 +221,7 @@ def download_installer(
 ) -> None:
     """Baixa o instalador para ``target``, conferindo o SHA256 no caminho.
 
-    Grava em ``target.part`` e só renomeia depois de o hash bater, então um
+    Grava em ``target.<thread>.part`` e só renomeia depois de o hash bater, então um
     ``target`` que existe é sempre um instalador inteiro e conferido. Em
     qualquer falha, Cancelar incluído, o ``.part`` é apagado e a exceção sobe.
     ``progress`` recebe a fração de 0 a 1, chamado desta mesma thread.
@@ -232,7 +236,8 @@ def download_installer(
         raise ValueError("a release não informa o SHA256 do instalador")
 
     target.parent.mkdir(parents=True, exist_ok=True)
-    part = target.with_name(target.name + ".part")
+    # Um `.part` por thread: dois downloads do mesmo instalador não se pisam.
+    part = target.with_name(f"{target.name}.{threading.get_ident()}.part")
     hasher = hashlib.sha256()
     received = 0
     # O tamanho informado é o do anexo publicado: passar dele já é outro
@@ -485,8 +490,9 @@ class AppUpdater(QObject):
         responder(None)
 
     def _download(self, release: Release) -> None:
-        # Um Cancelar de antes, na mesma sessão, não pode parar este download.
-        self._cancel.clear()
+        # Evento novo por download: um Cancelar de antes, na mesma sessão, não
+        # para este, e o resultado de um download antigo, ainda preso, é descartado.
+        self._cancel = cancel = threading.Event()
         self._baixando = True
         self._progresso = 0.0
         self.alterado.emit()
@@ -494,30 +500,30 @@ class AppUpdater(QObject):
         target = download_dir() / f"Cartridges-{release.version}.exe"
 
         def progress(fraction: float) -> None:
-            na_thread_principal(self._atualizar_progresso, fraction)
+            na_thread_principal(self._atualizar_progresso, fraction, cancel)
 
         def work() -> None:
             try:
-                download_installer(release, target, progress, self._cancel)
+                download_installer(release, target, progress, cancel)
             except DownloadCancelled:
                 return
             except Exception as error:  # pylint: disable=broad-exception-caught
                 logging.warning("Download da atualização falhou: %s", error)
-                na_thread_principal(self._finish, None)
+                na_thread_principal(self._finish, None, cancel)
                 return
-            na_thread_principal(self._finish, target)
+            na_thread_principal(self._finish, target, cancel)
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _atualizar_progresso(self, fraction: float) -> None:
-        if self._baixando and not self._stopped:
+    def _atualizar_progresso(self, fraction: float, cancel: threading.Event) -> None:
+        if cancel is self._cancel and not cancel.is_set() and self._baixando and not self._stopped:
             self._progresso = fraction
             self.alterado.emit()
 
-    def _finish(self, target: Optional[Path]) -> None:
-        # Cancelar apertado no último instante, ou o app fechando: o resultado
-        # chegou tarde e não vale mais.
-        if self._stopped or self._cancel.is_set():
+    def _finish(self, target: Optional[Path], cancel: threading.Event) -> None:
+        # Cancelar apertado no último instante, o app fechando ou um download mais
+        # novo no lugar: o resultado chegou tarde e não vale mais.
+        if self._stopped or cancel is not self._cancel or cancel.is_set():
             return
 
         if target is None:

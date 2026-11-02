@@ -98,7 +98,8 @@ class UpdatesChecker:
         self._armacao += 1
         # O temporizador roda numa thread própria; a consulta volta à principal.
         self._timer = threading.Timer(
-            interval_hours * 3600, na_thread_principal, (self._on_timer, self._armacao)
+            min(interval_hours * 3600, threading.TIMEOUT_MAX),
+            na_thread_principal, (self._on_timer, self._armacao)
         )
         self._timer.daemon = True
         self._timer.start()

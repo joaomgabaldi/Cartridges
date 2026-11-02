@@ -106,6 +106,7 @@ class Novidades(QObject):
     def abrir(self) -> None:
         """Abrir a página reconhece tudo o que há nela; sem nada em cache (primeira vez, ou só falhas), busca agora."""
         self._checker.mark_seen()
+        self._refazer()
         if not self._checker.posts:
             self._checker.check_async()
         self.alterado.emit()
@@ -115,6 +116,9 @@ class Novidades(QObject):
         self._pagina_a_vista = visivel
         if visivel:
             self._checker.mark_seen()
+            # As datas relativas envelhecem com o app aberto.
+            if self._refazer():
+                self.alterado.emit()
 
     @Slot()
     def atualizar(self) -> None:
@@ -135,8 +139,13 @@ class Novidades(QObject):
 
     # -- o que o checker avisa -----------------------------------------------
 
-    def _refazer(self) -> None:
-        self._posts = [_como_dicionario(post) for post in self._checker.posts]
+    def _refazer(self) -> bool:
+        """Refaz a lista (as datas relativas mudam com o tempo); `True` se ela mudou."""
+        novos = [_como_dicionario(post) for post in self._checker.posts]
+        mudou = novos != self._posts
+        if mudou:
+            self._posts = novos
+        return mudou
 
     def _ao_mudar_os_posts(self) -> None:
         self._refazer()

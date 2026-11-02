@@ -177,6 +177,15 @@ def test_intervalo_zero_nao_arma_o_timer(app_qt, feed, horas, armado):
     checker.stop()
 
 
+def test_intervalo_enorme_nao_estoura_o_temporizador(app_qt, feed):
+    shared.schema.set_int("news-check-interval", 2147483647)
+    checker = NewsChecker()
+    checker.start()
+    assert checker._timer.isActive() is True  # noqa: SLF001
+    assert checker._timer.interval() == 2**31 - 1  # noqa: SLF001
+    checker.stop()
+
+
 def test_resultado_da_busca_depois_do_stop_e_descartado(app_qt, feed):
     """Review Focus 3: a busca em voo que chega depois do `stop()` só solta a trava."""
     feed.posts = [post(200)]
@@ -227,6 +236,30 @@ def test_abrir_sem_posts_busca_e_com_posts_so_reconhece(app_qt):
     checker.posts = (post(1),)
     novidades.abrir()
     assert checker.chamadas == ["mark_seen"]
+
+
+@pytest.mark.parametrize("como", ["abrir", "pagina_visivel"])
+def test_datas_relativas_refeitas_ao_abrir(app_qt, monkeypatch, como):
+    """A data relativa envelhece com o app aberto: abrir a página a refaz, sem mandar a lista ao topo."""
+    checker = CheckerFalso()
+    checker.posts = (post(100),)
+    datas = ["hoje"]
+    monkeypatch.setattr(modulo_novidades, "relative_date", lambda _ts: datas[0])
+    novidades, _ = _tela(checker)
+    refeitas = []
+    avisos_de_mudanca = []
+    novidades.listaRefeita.connect(lambda: refeitas.append(1))
+    novidades.alterado.connect(lambda: avisos_de_mudanca.append(1))
+    assert novidades.posts[0]["subtitulo"].startswith("hoje")
+
+    datas[0] = "ontem"
+    if como == "abrir":
+        novidades.abrir()
+    else:
+        novidades.paginaVisivel(True)
+
+    assert novidades.posts[0]["subtitulo"].startswith("ontem")
+    assert avisos_de_mudanca and refeitas == []
 
 
 def test_atualizar_avisa_e_troca_o_aviso_pelo_resultado(app_qt, feed):

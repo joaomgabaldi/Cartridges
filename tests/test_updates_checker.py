@@ -94,3 +94,15 @@ def test_verificador_para_no_stop(monkeypatch, store, make_game) -> None:
     _rodar_ate(lambda: False, 0.3)
     # O resultado que chega depois do `stop` é descartado
     assert not avisos.visivel and jogo.saves == 0
+
+
+def test_intervalo_enorme_nao_estoura_o_temporizador(monkeypatch) -> None:
+    """`threading.Timer` recusa mais que `TIMEOUT_MAX`: a chave vai até 2147483647 horas."""
+    shared.schema.set_int("updates-check-interval", 2147483647)
+    verificador = updates_checker.UpdatesChecker()
+    try:
+        verificador._armar()  # noqa: SLF001
+        assert verificador._timer.interval == threading.TIMEOUT_MAX  # noqa: SLF001
+        assert verificador._timer.is_alive()
+    finally:
+        verificador._cancelar_timer()  # noqa: SLF001
