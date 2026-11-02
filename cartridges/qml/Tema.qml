@@ -63,6 +63,8 @@ QtObject {
     // destructive_bg_color e destructive_color (texto e ícone destrutivos).
     readonly property color destrutivo: escuro ? "#c01c28" : "#e01b24"
     readonly property color destrutivoTexto: derivada(destrutivo)
+    // warning_color (o ícone de aviso).
+    readonly property color avisoIcone: derivada(escuro ? "#cd9309" : "#e5a50a")
     readonly property color erro: escuro ? "#ff938c" : "#c30000"
     // card_bg_color, dialog_bg_color (só o de alerta), popover_bg_color, view_bg_color.
     readonly property color cartao: escuro ? Qt.rgba(1, 1, 1, 0.08) : "#ffffff"

@@ -78,7 +78,7 @@ Principal {
         // De onde a página está: com ela ainda entrando, não salta para x=0 antes de sair.
         deslizeDaPagina.from = pilha.currentItem.x
         deslizeDaPagina.to = pilha.width
-        avancoDaPilha.from = 1
+        avancoDaPilha.from = pilha.avanco
         avancoDaPilha.to = 0
         deslizeDaPagina.restart()
         avancoDaPilha.restart()

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 
 // O cabeçalho do Adw.Dialog: 47 de altura, plano, título em negrito centrado e o X circular do `windowcontrols`.
@@ -48,14 +49,14 @@ Item {
     }
 
     // windowcontrols > button: 34 de largura, círculo de 24 a 10%, 15% ao passar, 30% pressionado.
-    Item {
+    Control {  // um `Control`: o anel só aparece com o teclado (`visualFocus`)
         id: botaoFechar
         objectName: "fecharDoCabecalho"
         visible: cabecalho.comFechar
         anchors { right: parent.right; rightMargin: 6; verticalCenter: parent.verticalCenter; verticalCenterOffset: -0.5 }
         width: 34
         height: 34
-        activeFocusOnTab: true
+        focusPolicy: Qt.StrongFocus
         Accessible.role: Accessible.Button
         Accessible.name: "Fechar"
         Accessible.onPressAction: cabecalho.fechar()
@@ -70,7 +71,7 @@ Item {
             color: area.pressed ? Tema.pressionado : area.containsMouse ? Tema.botaoSobre : Tema.botao
             Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
             Icone { anchors.centerIn: parent; nome: "window-close" }
-            AnelDeFoco { ativo: botaoFechar.activeFocus; raio: 12 }
+            AnelDeFoco { ativo: botaoFechar.visualFocus; raio: 12 }
         }
         MouseArea {
             id: area

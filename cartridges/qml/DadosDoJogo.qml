@@ -100,7 +100,7 @@ ModalDaRestauracao {
             height: 24
             anchors.verticalCenter: parent.verticalCenter
             // `warning_color` do tema (a classe `.warning` do GTK), e não um amarelo fixo.
-            Icone { anchors.centerIn: parent; nome: "dialog-warning"; cor: Tema.derivada(Tema.escuro ? "#cd9309" : "#e5a50a") }
+            Icone { anchors.centerIn: parent; nome: "dialog-warning"; cor: Tema.avisoIcone }
         }
         Cartao { rotulo: "Este PC"; objeto: "EstePc"; icone: "computer"; dados: restauracao.conflito.estePc || ({}) }
     }

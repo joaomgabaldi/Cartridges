@@ -40,7 +40,7 @@ Item {
     // O logo só vale enquanto o arquivo decodifica: um PNG truncado passa pela leitura do cabeçalho.
     readonly property bool logoVisivel: detalhes.logo !== "" && logo.status !== Image.Error
     // `warning_color` (a cor de aviso do tema, como texto).
-    readonly property color corDeAviso: Tema.derivada(Tema.escuro ? "#cd9309" : "#e5a50a")
+    readonly property color corDeAviso: Tema.avisoIcone
     // Entrou pelo teclado? (`:focus-visible`: o anel do foco inicial só aparece então.)
     property bool tecladoEmUso: false
 

@@ -686,3 +686,22 @@ def test_saida_do_historico_mantem_o_conteudo_durante_a_animacao(tmp_path):
     ambiente = dict(os.environ, QT_QPA_PLATFORM="offscreen", PYTHONPATH=str(raiz), APPDATA=str(tmp_path), LOCALAPPDATA=str(tmp_path), USERPROFILE=str(tmp_path))
     rodou = subprocess.run([sys.executable, "-c", _SAIDA, str(raiz)], env=ambiente, capture_output=True, text=True, timeout=120, check=False, cwd=raiz)
     assert "OK" in rodou.stdout, rodou.stdout + rodou.stderr
+
+
+def test_anel_do_x_so_com_foco_do_teclado(app_qt):
+    """Aberto com o clique no cartão, o X recebe o foco sem anel; Tab até ele (Shift+Tab da primeira linha) o mostra."""
+    app = _app()
+    _sessoes(2)
+    _abrir_pelo_cartao(app, 0)
+    dialogo = _abrir(app)
+    x = _achar(dialogo, "fecharDoCabecalho")
+    anel = _achar(x, "anelDeFoco")
+    assert app.janela.property("activeFocusItem") is x
+    assert _esperar(lambda: anel.property("ativo") is False)
+    assert x.property("visualFocus") is False
+    QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+    assert _esperar(lambda: app.janela.property("activeFocusItem") is not x)
+    QTest.keyClick(app.janela, Qt.Key.Key_Backtab)
+    assert _esperar(lambda: app.janela.property("activeFocusItem") is x)
+    assert _esperar(lambda: anel.property("ativo") is True)
+    app.fechar()
