@@ -88,3 +88,9 @@ LinhaDoGrupo 1.0 LinhaDoGrupo.qml
 Girador 1.0 Girador.qml
 RolagemPorMola 1.0 RolagemPorMola.qml
 singleton CapasPausadas 1.0 CapasPausadas.qml
+BotaoOsd 1.0 BotaoOsd.qml
+CampoDeBusca 1.0 CampoDeBusca.qml
+AmostraDeCor 1.0 AmostraDeCor.qml
+SeletorBase 1.0 SeletorBase.qml
+PaginaDoSeletor 1.0 PaginaDoSeletor.qml
+TelaDeDownload 1.0 TelaDeDownload.qml

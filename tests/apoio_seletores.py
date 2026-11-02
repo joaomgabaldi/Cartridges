@@ -118,9 +118,13 @@ class Destino:
         self.capas: list[Path] = []
         self.logos: list[Path] = []
         self.titulos = 0
+        # A conversão da capa dentro do seletor: terminou bem?
+        self.convertida = True
 
-    def entregar_capa_baixada(self, arquivo):
+    def entregar_capa_baixada(self, arquivo, ao_terminar=None):
         self.capas.append(arquivo)
+        if ao_terminar is not None:
+            ao_terminar(self.convertida)
 
     def entregar_logo_baixado(self, arquivo):
         self.logos.append(arquivo)

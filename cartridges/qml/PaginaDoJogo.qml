@@ -4,7 +4,8 @@ import QtQuick.Effects
 import QtQuick.Layouts
 import QtQuick.Window
 
-// A página de detalhes de um jogo: a capa à esquerda, os dados à direita e, embaixo, as ações.
+// A página de detalhes de um jogo: a capa à esquerda, os dados à direita e, embaixo, as ações. Abaixo de 850 px vira uma
+// coluna (o `Adw.Breakpoint` da `main`): capa em cima, tudo centralizado.
 // Tudo o que ela mostra vem de `detalhes` (cartridges/modelos/detalhes.py), exposto pelo contexto;
 // nenhum botão age sozinho, só emite o sinal (Aplicativo.qml os liga).
 Item {
@@ -29,15 +30,25 @@ Item {
         || dialogoExcluir.visible || dialogoAtualizacao.visible
     // As confirmações da página: Aplicativo.qml as soma a `modalAberto`, e a barra de título fica trancada.
     readonly property bool dialogoAberto: dialogoExcluir.aberto || dialogoAtualizacao.aberto
-    readonly property bool compacta: width < 1000
+    // `Adw.Breakpoint (max-width: 850px)`.
+    readonly property bool compacta: width <= 850
     readonly property int larguraDaCapa: compacta ? 280 : 420
     readonly property int alturaDaCapa: larguraDaCapa * 3 / 2
-    readonly property int larguraDoTexto: Math.max(240, Math.min(600, width - larguraDaCapa - 48 * 2))
+    // `max-width-chars: 72` (e 24 no título): a largura do "0" do Segoe UI vezes o número de caracteres.
+    readonly property real tetoDoTexto: 72 * zeroDoCorpo.advanceWidth
+    readonly property real tetoDoTitulo: 24 * zeroDoTitulo.advanceWidth
     // O logo só vale enquanto o arquivo decodifica: um PNG truncado passa pela leitura do cabeçalho.
     readonly property bool logoVisivel: detalhes.logo !== "" && logo.status !== Image.Error
+    // `warning_color` (a cor de aviso do tema, como texto).
+    readonly property color corDeAviso: Tema.derivada(Tema.escuro ? "#cd9309" : "#e5a50a")
+    // Entrou pelo teclado? (`:focus-visible`: o anel do foco inicial só aparece então.)
+    property bool tecladoEmUso: false
+
+    TextMetrics { id: zeroDoCorpo; text: "0"; font { family: Tema.fonte; pixelSize: Tema.corpo } }
+    TextMetrics { id: zeroDoTitulo; text: "0"; font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 } }
 
     function focarInicial() {
-        (detalhes.zerado ? botaoStatus : botaoJogar).forceActiveFocus(Qt.TabFocusReason)
+        (detalhes.zerado ? botaoStatus : botaoJogar).forceActiveFocus(tecladoEmUso ? Qt.TabFocusReason : Qt.OtherFocusReason)
     }
     // Os nomes que a janela chama em qualquer página.
     function focarGrade() { focarInicial() }
@@ -86,6 +97,13 @@ Item {
     Keys.onReturnPressed: abrirDetalhesDoAtual()
     Keys.onEnterPressed: abrirDetalhesDoAtual()
 
+    // Quem estava com o foco ao abrir a página (a grade, que sabe se o último gesto foi do teclado) diz como se chegou aqui:
+    // com o mouse, o foco inicial não tem anel (`:focus-visible`).
+    Component.onCompleted: {
+        for (var p = Window.window ? Window.window.activeFocusItem : null; p; p = p.parent) {
+            if (p.porTeclado === true || p.visualFocus === true) { tecladoEmUso = true; break }
+        }
+    }
     // Depois do foco que a própria StackView dá à página ao ativá-la.
     StackView.onActivated: Qt.callLater(() => {
         focarInicial()
@@ -95,8 +113,9 @@ Item {
     property bool anotarAoEntrar: false
     function abrirAnotacao() { if (botaoAnotacao.visible) balaoDaAnotacao.open() }
 
-    // Cobre a biblioteca por baixo durante a transição.
-    Rectangle { anchors.fill: parent; color: Tema.fundo; z: -2 }
+    // `#details_view`: branco no tema claro e preto no escuro, sob a capa desfocada (muda o resultado da opacidade dela).
+    // Também cobre a biblioteca por baixo durante a transição.
+    Rectangle { anchors.fill: parent; color: Tema.escuro ? "black" : "white"; z: -2 }
 
     // A capa desfocada, esticada; sem capa, o fundo liso (nada a desenhar).
     Image {
@@ -111,70 +130,86 @@ Item {
         visible: detalhes.fundo !== ""
     }
 
+    // Uma linha de dados (`dim-label`, 12 px): a largura natural do texto até o teto de 72 caracteres.
     component Dado: Text {
+        id: dado
         Layout.fillWidth: true
+        Layout.preferredWidth: Math.min(gemeo.implicitWidth, raiz.tetoDoTexto)
         visible: text !== ""
         textFormat: Text.PlainText
         wrapMode: Text.Wrap
+        horizontalAlignment: raiz.compacta ? Text.AlignHCenter : Text.AlignLeft
         color: Tema.textoSecundario
-        font { family: Tema.fonte; pixelSize: 14 }
+        font { family: Tema.fonte; pixelSize: Tema.corpo }
+        // O mesmo texto sem quebra: a largura que ele pediria sozinho.
+        Text {
+            id: gemeo
+            visible: false
+            text: dado.text
+            textFormat: Text.PlainText
+            font: dado.font
+        }
     }
 
-    // Uma linha de texto das datas, do tempo de jogo e do tamanho.
+    // Uma linha de texto das datas, do tempo de jogo e do tamanho: cada rótulo quebra por dentro e centraliza.
     component Linha: Text {
+        id: linhaDeData
+        Layout.fillWidth: true
+        Layout.preferredWidth: gemeoDaLinha.implicitWidth
+        Layout.maximumWidth: gemeoDaLinha.implicitWidth
         visible: text !== ""
         textFormat: Text.PlainText
+        wrapMode: Text.Wrap
+        horizontalAlignment: Text.AlignHCenter
         color: Tema.texto
-        font { family: Tema.fonte; pixelSize: 14 }
-    }
-
-    component BotaoRedondo: Button {
-        id: botao
-        property string glifo
-        property string dica
-        implicitWidth: 40
-        implicitHeight: 40
-        focusPolicy: Qt.StrongFocus
-        Accessible.name: dica
-        ToolTip.visible: hovered && dica !== ""
-        ToolTip.text: dica
-        ToolTip.delay: 600
-        contentItem: Text {
-            text: botao.glifo
+        font { family: Tema.fonte; pixelSize: Tema.corpo }
+        Text {
+            id: gemeoDaLinha
+            visible: false
+            text: linhaDeData.text
             textFormat: Text.PlainText
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            color: Tema.texto
-            font { family: Tema.fonteDeIcones; pixelSize: 16 }
-        }
-        background: Rectangle {
-            radius: width / 2
-            color: botao.down ? Tema.pressionado : botao.hovered ? Tema.botaoSobre : Tema.superficie
-            border { width: botao.visualFocus ? 2 : 1; color: botao.visualFocus ? Tema.destaque : Tema.borda }
+            font: linhaDeData.font
         }
     }
 
-    component BotaoDeTexto: Button {
-        id: botao
-        property string dica
-        focusPolicy: Qt.StrongFocus
-        implicitHeight: 34
-        leftPadding: 12
-        rightPadding: 12
-        ToolTip.visible: hovered && dica !== ""
-        ToolTip.text: dica
-        ToolTip.delay: 600
-        contentItem: Text {
-            text: botao.text
-            textFormat: Text.PlainText
-            verticalAlignment: Text.AlignVCenter
-            color: Tema.texto
-            font { family: Tema.fonte; pixelSize: 14 }
+    // `MenuButton` plano com rótulo: o texto e a seta `pan-down` (altura 34, padding 10).
+    component BotaoDeMenu: Botao {
+        id: botaoDeMenu
+        estilo: "plano"
+        leftPadding: 10
+        rightPadding: 10
+        implicitWidth: contentItem.implicitWidth + 20
+        contentItem: Item {
+            implicitWidth: rotuloESeta.implicitWidth
+            implicitHeight: rotuloESeta.implicitHeight
+            Row {
+                id: rotuloESeta
+                anchors.centerIn: parent
+                spacing: 6
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: botaoDeMenu.text
+                    textFormat: Text.PlainText
+                    color: Tema.texto
+                    font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
+                }
+                Icone { anchors.verticalCenter: parent.verticalCenter; nome: "pan-down" }
+            }
         }
-        background: Rectangle {
-            radius: 6
-            color: botao.down ? Tema.pressionado : botao.hovered ? Tema.botaoSobre : "transparent"
-            border { width: botao.visualFocus ? 2 : 0; color: Tema.destaque }
+    }
+
+    // O título de seção do menu de buscas (um rótulo, sem ação).
+    component TituloDeSecao: Item {
+        property string texto
+        implicitHeight: 32
+        implicitWidth: rotulo.implicitWidth + 24
+        Text {
+            id: rotulo
+            anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
+            text: parent.texto
+            textFormat: Text.PlainText
+            color: Tema.textoSecundario
+            font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
         }
     }
 
@@ -183,24 +218,31 @@ Item {
         objectName: "rolagemDaPagina"
         anchors.fill: parent
         contentWidth: width
-        contentHeight: Math.max(height, linha.height + 48)
+        contentHeight: Math.max(height, linha.height + 2 * linha.margem)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: BarraDeRolagem {}
 
-        RowLayout {
+        GridLayout {
             id: linha
-            x: Math.max(24, (rolagem.width - width) / 2)
-            y: Math.max(24, (rolagem.contentHeight - height) / 2)
-            spacing: 48
+            readonly property real margem: raiz.compacta ? 12 : 24
+            x: Math.max(margem, (rolagem.width - width) / 2)
+            y: Math.max(margem, (rolagem.contentHeight - height) / 2)
+            // A coluna de texto encolhe, nunca a capa.
+            width: Math.min(implicitWidth, rolagem.width - 2 * margem)
+            columns: raiz.compacta ? 1 : 2
+            columnSpacing: 48
+            rowSpacing: 0
 
             // --- A capa ---------------------------------------------------------------------------
             Item {
                 id: coluna
                 Layout.preferredWidth: raiz.larguraDaCapa
                 Layout.preferredHeight: raiz.alturaDaCapa
-                Layout.alignment: Qt.AlignTop
+                Layout.alignment: raiz.compacta ? Qt.AlignHCenter | Qt.AlignTop : Qt.AlignTop
 
+                // `.card`: o contorno e a sombra do cartão, fora do corte arredondado.
+                Sombra { camadas: Tema.sombraCartao; raio: 12 }
                 Item {
                     id: mascara
                     anchors.fill: parent
@@ -225,7 +267,8 @@ Item {
                         anchors.fill: parent
                         source: detalhes.capa !== "" && detalhes.capa !== ilegivel ? detalhes.capa : raiz.placeholder
                         onStatusChanged: if (status === Image.Error && source.toString() === detalhes.capa) ilegivel = detalhes.capa
-                        fillMode: Image.PreserveAspectCrop
+                        // `content-fit: contain` (o padrão do `Gtk.Picture`): um arquivo fora de 2:3 aparece inteiro.
+                        fillMode: Image.PreserveAspectFit
                         asynchronous: true
                         // Na resolução real da tela: a capa guardada tem mais pixels que a da grade.
                         sourceSize: Qt.size(raiz.larguraDaCapa * Screen.devicePixelRatio,
@@ -240,42 +283,46 @@ Item {
                         source: detalhes.capaAnimada !== "" && aVista ? detalhes.capaAnimada : ""
                         playing: aVista
                         visible: status === AnimatedImage.Ready
-                        fillMode: Image.PreserveAspectCrop
+                        fillMode: Image.PreserveAspectFit
                         asynchronous: true
                         cache: false
                     }
                 }
-                BusyIndicator {
+                Girador {
                     objectName: "carregandoDaPagina"
                     anchors.centerIn: parent
                     running: detalhes.carregando
                     visible: detalhes.carregando
-                    palette.dark: Tema.destaque
                 }
             }
 
             // --- Os dados -------------------------------------------------------------------------
             ColumnLayout {
-                Layout.preferredWidth: raiz.larguraDoTexto
-                Layout.alignment: Qt.AlignVCenter
-                spacing: 3
+                id: dados
+                Layout.fillWidth: true
+                Layout.maximumWidth: dados.implicitWidth
+                Layout.alignment: raiz.compacta ? Qt.AlignHCenter | Qt.AlignTop : Qt.AlignVCenter
+                spacing: 0
 
-                // O logo (altura reservada só com ele) ou o título, nunca os dois.
+                // O logo (altura reservada só com ele) ou o título, nunca os dois. `margin-bottom: 12` do cabeçalho
+                // (e 30 de margem em cima na janela estreita).
                 Item {
                     Layout.fillWidth: true
-                    Layout.bottomMargin: 9
+                    Layout.preferredWidth: raiz.logoVisivel ? Math.min(detalhes.larguraDoLogo, raiz.tetoDoTexto) : Math.min(gemeoDoTitulo.implicitWidth, raiz.tetoDoTitulo)
+                    Layout.topMargin: raiz.compacta ? 30 : 0
+                    Layout.bottomMargin: 12
                     implicitHeight: raiz.logoVisivel ? 72 : titulo.implicitHeight
 
                     Image {
                         id: logo
                         objectName: "logoDoJogo"
                         visible: raiz.logoVisivel
-                        anchors { left: parent.left; bottom: parent.bottom }
+                        anchors { left: raiz.compacta ? undefined : parent.left; horizontalCenter: raiz.compacta ? parent.horizontalCenter : undefined; bottom: parent.bottom }
                         width: Math.min(detalhes.larguraDoLogo, parent.width)
                         height: 72
                         source: detalhes.logo
                         fillMode: Image.PreserveAspectFit
-                        horizontalAlignment: Image.AlignLeft
+                        horizontalAlignment: raiz.compacta ? Image.AlignHCenter : Image.AlignLeft
                         verticalAlignment: Image.AlignBottom
                         asynchronous: false
                         // Decodifica na escala da tela: o arquivo em cache pode ter 4096 px e o cabeçalho tem 72.
@@ -289,34 +336,44 @@ Item {
                         text: detalhes.nome
                         textFormat: Text.PlainText
                         wrapMode: Text.Wrap
+                        horizontalAlignment: raiz.compacta ? Text.AlignHCenter : Text.AlignLeft
                         color: Tema.texto
-                        font { family: Tema.fonte; pixelSize: 28; weight: Font.Bold }
+                        font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 }
+                    }
+                    // O título numa linha só: a largura que ele pede (até 24 caracteres; mais que isso quebra).
+                    Text {
+                        id: gemeoDoTitulo
+                        visible: false
+                        text: detalhes.nome
+                        textFormat: Text.PlainText
+                        font: titulo.font
                     }
                 }
 
+                // `heading`: negrito, na cor do texto.
                 Dado {
                     objectName: "desenvolvedora"
-                    Layout.topMargin: 3
+                    Layout.topMargin: 6
                     text: detalhes.desenvolvedora
                     color: Tema.texto
-                    font.weight: Font.DemiBold
-                    font.pixelSize: 15
+                    font.weight: Tema.pesoForte
                 }
-                Dado { objectName: "publicadora"; text: detalhes.publicadora }
-                Dado { objectName: "dataDeLancamento"; text: detalhes.dataDeLancamento }
-                Dado { objectName: "nota"; text: detalhes.nota }
-                Dado { objectName: "metacritic"; text: detalhes.metacritic }
-                Dado { objectName: "avaliacoes"; text: detalhes.avaliacoes }
-                Dado { objectName: "genero"; text: detalhes.genero }
-                Dado { objectName: "controle"; text: detalhes.controle }
+                Dado { objectName: "publicadora"; Layout.topMargin: 3; text: detalhes.publicadora }
+                Dado { objectName: "dataDeLancamento"; Layout.topMargin: 3; text: detalhes.dataDeLancamento }
+                Dado { objectName: "nota"; Layout.topMargin: 3; text: detalhes.nota }
+                Dado { objectName: "metacritic"; Layout.topMargin: 3; text: detalhes.metacritic }
+                Dado { objectName: "avaliacoes"; Layout.topMargin: 3; text: detalhes.avaliacoes }
+                Dado { objectName: "genero"; Layout.topMargin: 3; text: detalhes.genero }
+                Dado { objectName: "controle"; Layout.topMargin: 3; text: detalhes.controle }
                 Dado {
                     objectName: "controleRecomendado"
+                    Layout.topMargin: 3
                     visible: detalhes.controleRecomendado
                     text: "★ Os desenvolvedores recomendam o uso de um controle."
                 }
                 Dado {
                     objectName: "descricao"
-                    Layout.topMargin: 9
+                    Layout.topMargin: 12
                     text: detalhes.descricao
                 }
 
@@ -324,17 +381,20 @@ Item {
                 ColumnLayout {
                     id: blocoHltb
                     objectName: "blocoHltb"
-                    Layout.topMargin: 15
+                    Layout.topMargin: 18
+                    Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignLeft
                     visible: detalhes.hltb.celulas !== undefined
                         && (detalhes.hltb.celulas.length > 0 || detalhes.hltb.capitulos.length > 0)
-                    spacing: 6
+                    spacing: 0
 
+                    // `caption-heading dim-label`: 700, 9,8 px.
                     Text {
                         Layout.leftMargin: 3
+                        Layout.bottomMargin: 6
                         text: "HowLongToBeat"
                         textFormat: Text.PlainText
                         color: Tema.textoSecundario
-                        font { family: Tema.fonte; pixelSize: 12; weight: Font.DemiBold }
+                        font { family: Tema.fonte; pixelSize: Tema.legenda; weight: Tema.pesoForte }
                     }
                     Rectangle {
                         objectName: "cartaoHltb"
@@ -342,35 +402,48 @@ Item {
                         implicitWidth: celulas.implicitWidth
                         implicitHeight: celulas.implicitHeight
                         radius: 12
-                        color: Tema.superficie
-                        border { width: 1; color: Tema.borda }
+                        color: Tema.cartao
+                        Sombra { camadas: Tema.sombraCartao; raio: 12 }
                         Row {
                             id: celulas
                             Repeater {
                                 model: detalhes.hltb.celulas
                                 delegate: Row {
+                                    id: celula
                                     required property var modelData
+                                    // `.hltb-cell`: padding 10/20, mínimo 76.
                                     Rectangle {
-                                        visible: modelData.separador
-                                        width: 1; height: 32; y: 10
+                                        visible: celula.modelData.separador
+                                        width: 1
+                                        height: Math.max(0, celulaTexto.height - 20)
+                                        y: 10
                                         color: Tema.borda
                                     }
-                                    Column {
-                                        topPadding: 10; bottomPadding: 10; leftPadding: 18; rightPadding: 18
-                                        spacing: 2
-                                        Text {
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                            text: modelData.valor
-                                            textFormat: Text.PlainText
-                                            color: Tema.texto
-                                            font { family: Tema.fonte; pixelSize: 17; weight: Font.Bold }
-                                        }
-                                        Text {
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                            text: modelData.rotulo
-                                            textFormat: Text.PlainText
-                                            color: Tema.textoSecundario
-                                            font { family: Tema.fonte; pixelSize: 12 }
+                                    Item {
+                                        id: celulaTexto
+                                        width: Math.max(76, texto.implicitWidth + 40)
+                                        height: texto.implicitHeight + 20
+                                        Column {
+                                            id: texto
+                                            anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 10 }
+                                            spacing: 2
+                                            Text {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                text: celula.modelData.valor
+                                                textFormat: Text.PlainText
+                                                color: Tema.texto
+                                                font {
+                                                    family: Tema.fonte; pixelSize: Tema.titulo4; weight: Tema.pesoTitulo4
+                                                    features: ({ "tnum": 1 })
+                                                }
+                                            }
+                                            Text {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                text: celula.modelData.rotulo
+                                                textFormat: Text.PlainText
+                                                color: Tema.textoSecundario
+                                                font { family: Tema.fonte; pixelSize: Tema.legenda }
+                                            }
                                         }
                                     }
                                 }
@@ -381,25 +454,28 @@ Item {
                         objectName: "capitulosHltb"
                         visible: detalhes.hltb.capitulos !== undefined && detalhes.hltb.capitulos.length > 0
                         implicitWidth: tabela.implicitWidth + 32
-                        implicitHeight: tabela.implicitHeight + 20
+                        implicitHeight: tabela.implicitHeight + 24
                         radius: 12
-                        color: Tema.superficie
-                        border { width: 1; color: Tema.borda }
+                        color: Tema.cartao
+                        Sombra { camadas: Tema.sombraCartao; raio: 12 }
+                        // `.hltb-chapters`: padding 12/16, colunas a 16, valores com mínimo 68 e centrados.
                         GridLayout {
                             id: tabela
-                            x: 16; y: 10
+                            x: 16; y: 12
                             columns: 4
-                            columnSpacing: 20
+                            columnSpacing: 16
                             rowSpacing: 4
                             Item { width: 1; height: 1 }
                             Repeater {
                                 model: detalhes.hltb.colunas
                                 delegate: Text {
                                     required property string modelData
+                                    Layout.minimumWidth: 68
+                                    horizontalAlignment: Text.AlignHCenter
                                     text: modelData
                                     textFormat: Text.PlainText
                                     color: Tema.textoSecundario
-                                    font { family: Tema.fonte; pixelSize: 12 }
+                                    font { family: Tema.fonte; pixelSize: Tema.legenda }
                                 }
                             }
                             Repeater {
@@ -407,10 +483,19 @@ Item {
                                 delegate: Text {
                                     required property int index
                                     readonly property var capitulo: detalhes.hltb.capitulos[Math.floor(index / 4)]
-                                    text: index % 4 === 0 ? capitulo.rotulo : capitulo.valores[index % 4 - 1]
+                                    readonly property bool rotuloDaLinha: index % 4 === 0
+                                    Layout.minimumWidth: rotuloDaLinha ? 0 : 68
+                                    Layout.rightMargin: rotuloDaLinha ? 8 : 0
+                                    horizontalAlignment: rotuloDaLinha ? Text.AlignLeft : Text.AlignHCenter
+                                    text: rotuloDaLinha ? capitulo.rotulo : capitulo.valores[index % 4 - 1]
                                     textFormat: Text.PlainText
-                                    color: index % 4 === 0 ? Tema.textoSecundario : Tema.texto
-                                    font { family: Tema.fonte; pixelSize: 14 }
+                                    color: Tema.texto
+                                    font {
+                                        family: Tema.fonte
+                                        pixelSize: rotuloDaLinha ? Tema.legenda : Tema.corpo
+                                        weight: rotuloDaLinha ? Tema.pesoForte : Tema.pesoCorpo
+                                        features: ({ "tnum": rotuloDaLinha ? 0 : 1 })
+                                    }
                                 }
                             }
                         }
@@ -421,12 +506,15 @@ Item {
                 CartaoDeConquistas {
                     id: cartaoDeConquistas
                     Layout.topMargin: 18
+                    Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignLeft
                 }
 
-                // As datas, o tempo de jogo e o tamanho.
-                Flow {
+                // As datas, o tempo de jogo e o tamanho: uma linha, e cada rótulo quebra por dentro.
+                RowLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: 12
+                    Layout.maximumWidth: implicitWidth
+                    Layout.topMargin: 15
+                    Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignLeft
                     spacing: 12
                     Linha { text: detalhes.adicionado }
                     Linha { text: detalhes.jogadoPorUltimo }
@@ -444,9 +532,7 @@ Item {
                         Accessible.name: text
                         Accessible.description: dica
                         Accessible.onPressAction: if (clicavel) raiz.abrirHistorico()
-                        ToolTip.visible: areaDoTempo.containsMouse && clicavel
-                        ToolTip.text: dica
-                        ToolTip.delay: 600
+                        Dica { texto: tempoDeJogo.dica; ativa: areaDoTempo.containsMouse && tempoDeJogo.clicavel }
                         MouseArea {
                             id: areaDoTempo
                             objectName: "areaDoTempoDeJogo"
@@ -461,9 +547,10 @@ Item {
                 }
 
                 Row {
-                    Layout.topMargin: 9
+                    Layout.topMargin: 12
+                    Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignLeft
                     spacing: 6
-                    BotaoDeTexto {
+                    BotaoDeMenu {
                         id: botaoStatus
                         objectName: "botaoStatus"
                         text: detalhes.rotuloDoStatus
@@ -472,7 +559,9 @@ Item {
                         MenuDoTema {
                             id: menuDeStatus
                             objectName: "menuDeStatus"
-                            y: parent.height
+                            x: (parent.width - width) / 2
+                            y: parent.height + 6
+                            setaEm: width / 2
                             Repeater {
                                 model: detalhes.statusOpcoes
                                 delegate: ItemDoMenu {
@@ -489,7 +578,7 @@ Item {
                             }
                         }
                     }
-                    BotaoDeTexto {
+                    BotaoDeMenu {
                         id: botaoAnotacao
                         objectName: "botaoAnotacao"
                         visible: detalhes.mostraAnotacao
@@ -500,7 +589,6 @@ Item {
                         BalaoDaAnotacao {
                             id: balaoDaAnotacao
                             objectName: "balaoDaAnotacao"
-                            y: parent.height + 4
                             texto: detalhes.anotacao
                             editavel: detalhes.anotacaoEditavel
                             onGravar: texto => detalhes.gravarAnotacao(texto)
@@ -508,89 +596,149 @@ Item {
                     }
                 }
 
-                BotaoDeTexto {
+                // `#details_view_update_notice`: padding 8/16, raio 12, a cor de aviso a 15% (25% ao passar), 200 ms.
+                Button {
                     id: avisoDeAtualizacao
                     objectName: "avisoDeAtualizacao"
-                    Layout.topMargin: 9
+                    Layout.topMargin: 15
+                    Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignLeft
                     visible: detalhes.temAtualizacao
+                    focusPolicy: Qt.StrongFocus
+                    hoverEnabled: true
                     text: "Atualização disponível"
-                    dica: "Abrir a página da atualização"
-                    font.weight: Font.DemiBold
+                    topPadding: 8
+                    bottomPadding: 8
+                    leftPadding: 16
+                    rightPadding: 16
+                    Accessible.name: text
+                    Keys.onReturnPressed: click()
+                    Keys.onEnterPressed: click()
                     onClicked: {
                         detalhes.abrirAtualizacao()
                         dialogoAtualizacao.abrir()
                     }
+                    contentItem: Row {
+                        spacing: 8
+                        Icone { anchors.verticalCenter: parent.verticalCenter; nome: "software-update-available"; cor: raiz.corDeAviso }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: avisoDeAtualizacao.text
+                            textFormat: Text.PlainText
+                            color: raiz.corDeAviso
+                            font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
+                        }
+                    }
+                    background: Rectangle {
+                        radius: 12
+                        color: Qt.alpha(raiz.corDeAviso, avisoDeAtualizacao.hovered || avisoDeAtualizacao.down ? 0.25 : 0.15)
+                        Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
+                        AnelDeFoco { ativo: avisoDeAtualizacao.visualFocus; raio: 12 }
+                    }
+                    Dica { texto: "Abrir a página da atualização"; ativa: avisoDeAtualizacao.hovered }
                 }
 
-                RowLayout {
-                    Layout.topMargin: 18
-                    spacing: 9
+                // A barra de ação: "Jogar" (pílula `opaque`) e os botões redondos, 15 depois dele e 6 entre si.
+                GridLayout {
+                    Layout.topMargin: 24
+                    Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignLeft
+                    columns: raiz.compacta ? 1 : 2
+                    columnSpacing: 0
+                    rowSpacing: 0
 
+                    // `#details_view_play_button`: texto branco sobre preto a 80% no claro; o inverso no escuro.
                     Button {
                         id: botaoJogar
                         objectName: "botaoJogarDaPagina"
+                        Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignVCenter
                         visible: !detalhes.zerado
                         focusPolicy: Qt.StrongFocus
-                        implicitWidth: 96
-                        implicitHeight: 40
+                        hoverEnabled: true
                         text: "Jogar"
+                        leftPadding: 32
+                        rightPadding: 32
+                        topPadding: 0
+                        bottomPadding: 0
+                        implicitHeight: 44
+                        implicitWidth: contentItem.implicitWidth + 64
                         Accessible.name: "Jogar"
+                        Keys.onReturnPressed: click()
+                        Keys.onEnterPressed: click()
                         onClicked: raiz.jogar()
+                        readonly property color corDoTexto: Tema.escuro ? Qt.rgba(0, 0, 0, 0.8) : "white"
                         contentItem: Text {
                             text: botaoJogar.text
                             textFormat: Text.PlainText
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
-                            color: "white"
-                            font { family: Tema.fonte; pixelSize: 15; weight: Font.DemiBold }
+                            color: botaoJogar.corDoTexto
+                            font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
                         }
                         background: Rectangle {
-                            radius: 20
-                            color: Tema.destaque
-                            opacity: botaoJogar.down ? 0.75 : botaoJogar.hovered ? 0.9 : 1
-                            border { width: botaoJogar.visualFocus ? 2 : 0; color: Tema.texto }
+                            radius: height / 2
+                            color: Tema.escuro ? "white" : Qt.rgba(0, 0, 0, 0.8)
+                            // `button.opaque`: um véu claro ao passar e um escuro ao apertar.
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: parent.radius
+                                visible: botaoJogar.hovered || botaoJogar.down
+                                color: botaoJogar.down ? Qt.rgba(0, 0, 6 / 255, 0.2) : Qt.rgba(1, 1, 1, 0.1)
+                            }
+                            AnelDeFoco { ativo: botaoJogar.visualFocus; raio: parent.radius }
                         }
                     }
-                    BotaoRedondo {
-                        id: botaoEditar
-                        objectName: "botaoEditar"
-                        glifo: ""
-                        dica: "Editar"
-                        onClicked: raiz.editar()
-                    }
-                    BotaoRedondo {
-                        id: botaoExcluir
-                        objectName: "botaoExcluir"
-                        visible: detalhes.zerado
-                        glifo: ""
-                        dica: "Excluir"
-                        onClicked: dialogoExcluir.abrir()
-                    }
-                    BotaoRedondo {
-                        id: botaoRemover
-                        objectName: "botaoRemover"
-                        visible: !detalhes.zerado
-                        glifo: ""
-                        dica: "Remover"
-                        onClicked: raiz.remover()
-                    }
-                    BotaoRedondo {
-                        id: botaoBuscar
-                        objectName: "botaoBuscarDaPagina"
-                        visible: !detalhes.zerado
-                        glifo: ""
-                        dica: "Buscar"
-                        onClicked: menuDeBuscas.open()
-                        MenuDoTema {
-                            id: menuDeBuscas
-                            objectName: "menuDeBuscas"
-                            y: parent.height
-                            // O título da seção, como no menu da `main`: sem ação.
-                            ItemDoMenu { objectName: "tituloDoMenuDeBuscas"; text: "Buscar em…"; enabled: false }
-                            ItemDoMenu { text: "IGDB"; onTriggered: detalhes.buscarEm("igdb") }
-                            ItemDoMenu { text: "SteamGridDB"; onTriggered: detalhes.buscarEm("sgdb") }
-                            ItemDoMenu { text: "PCGamingWiki"; onTriggered: detalhes.buscarEm("pcgw") }
-                            ItemDoMenu { text: "HowLongToBeat"; onTriggered: detalhes.buscarEm("hltb") }
+                    RowLayout {
+                        Layout.leftMargin: raiz.compacta ? 0 : 15
+                        Layout.topMargin: raiz.compacta ? 30 : 0
+                        Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignVCenter
+                        spacing: 6
+                        Botao {
+                            id: botaoEditar
+                            objectName: "botaoEditar"
+                            circular: true
+                            icone: "document-edit"
+                            dica: "Editar"
+                            onClicked: raiz.editar()
+                        }
+                        Botao {
+                            id: botaoExcluir
+                            objectName: "botaoExcluir"
+                            visible: detalhes.zerado
+                            circular: true
+                            icone: "user-trash"
+                            dica: "Excluir"
+                            onClicked: dialogoExcluir.abrir()
+                        }
+                        Botao {
+                            id: botaoRemover
+                            objectName: "botaoRemover"
+                            visible: !detalhes.zerado
+                            circular: true
+                            icone: "user-trash"
+                            dica: "Remover"
+                            onClicked: raiz.remover()
+                        }
+                        Botao {
+                            id: botaoBuscar
+                            objectName: "botaoBuscarDaPagina"
+                            visible: !detalhes.zerado
+                            circular: true
+                            icone: "system-search"
+                            dica: "Buscar"
+                            dicaAtiva: hovered && !menuDeBuscas.opened
+                            onClicked: menuDeBuscas.open()
+                            MenuDoTema {
+                                id: menuDeBuscas
+                                objectName: "menuDeBuscas"
+                                x: (parent.width - width) / 2
+                                y: parent.height + 6
+                                setaEm: width / 2
+                                // O título da seção, como no menu da `main`: sem ação.
+                                TituloDeSecao { objectName: "tituloDoMenuDeBuscas"; texto: "Buscar em…" }
+                                ItemDoMenu { text: "IGDB"; onTriggered: detalhes.buscarEm("igdb") }
+                                ItemDoMenu { text: "SteamGridDB"; onTriggered: detalhes.buscarEm("sgdb") }
+                                ItemDoMenu { text: "PCGamingWiki"; onTriggered: detalhes.buscarEm("pcgw") }
+                                ItemDoMenu { text: "HowLongToBeat"; onTriggered: detalhes.buscarEm("hltb") }
+                            }
                         }
                     }
                 }

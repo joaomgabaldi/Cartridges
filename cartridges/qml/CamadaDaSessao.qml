@@ -131,7 +131,6 @@ Rectangle {
                 BalaoDaAnotacao {
                     id: balao
                     objectName: "balaoDaSessao"
-                    y: parent.height + 4
                     texto: sessao.anotacao
                     onGravar: texto => sessao.gravarAnotacao(texto)
                 }

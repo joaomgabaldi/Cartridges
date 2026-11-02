@@ -599,9 +599,8 @@ class ModeloDaEdicao(QObject):
     filtroDoLogo = Property(  # noqa: N815
         str, lambda self: _filtro(_("Imagens de logo"), game_logo.IMAGE_SUFFIXES), constant=True
     )
-    filtroDoPapel = Property(  # noqa: N815
-        str, lambda self: _filtro(_("Imagens"), session_wallpaper.IMAGE_SUFFIXES), constant=True
-    )
+    # O papel de parede de um arquivo usa o filtro das capas, "Imagens e vídeos" (`details_dialog.py:1283`).
+    filtroDoPapel = Property(str, lambda self: filtro_de_capa(), constant=True)  # noqa: N815
 
     @Property(str, notify=capaChanged)
     def capa(self) -> str:
@@ -671,14 +670,18 @@ class ModeloDaEdicao(QObject):
         if self._aberto and (caminho := url.toLocalFile()):
             self._converter_capa(Path(caminho), apagar_origem=False)
 
-    def entregar_capa_baixada(self, arquivo: Path) -> None:
-        """A capa que o seletor do SteamGridDB baixou: vira provisória como a de um arquivo, e o original sai."""
+    def entregar_capa_baixada(self, arquivo: Path, ao_terminar: Optional[Callable[[bool], None]] = None) -> None:
+        """A capa que o seletor do SteamGridDB baixou: vira provisória como a de um arquivo, e o original sai.
+
+        ``ao_terminar(convertida)`` avisa o seletor, que só fecha com a capa pronta e volta à grade se ela falhar."""
         if self._aberto:
-            self._converter_capa(arquivo, apagar_origem=True)
+            self._converter_capa(arquivo, apagar_origem=True, ao_terminar=ao_terminar)
         else:
             arquivo.unlink(missing_ok=True)
 
-    def _converter_capa(self, arquivo: Path, apagar_origem: bool) -> None:
+    def _converter_capa(
+        self, arquivo: Path, apagar_origem: bool, ao_terminar: Optional[Callable[[bool], None]] = None
+    ) -> None:
         geracao = self._geracao
         self._pedido_da_capa += 1
         pedido = self._pedido_da_capa
@@ -697,11 +700,13 @@ class ModeloDaEdicao(QObject):
                 logging.exception("Could not prepare the chosen cover")
             if apagar_origem:
                 arquivo.unlink(missing_ok=True)
-            na_thread_principal(self._capa_pronta, geracao, pedido, nova, erro)
+            na_thread_principal(self._capa_pronta, geracao, pedido, nova, erro, ao_terminar)
 
         threading.Thread(target=trabalhar, daemon=True).start()
 
-    def _capa_pronta(self, geracao: int, pedido: int, nova: Optional[Path], erro: str) -> None:
+    def _capa_pronta(
+        self, geracao: int, pedido: int, nova: Optional[Path], erro: str, ao_terminar: Optional[Callable[[bool], None]] = None
+    ) -> None:
         if geracao != self._geracao or not self._aberto:
             # O diálogo fechou (ou é de outro jogo): a capa pronta não tem onde entrar.
             if nova is not None:
@@ -714,11 +719,15 @@ class ModeloDaEdicao(QObject):
             if nova is not None:
                 edicao.descartar_provisoria(nova)
             self.capaChanged.emit()
+            if ao_terminar is not None:
+                ao_terminar(True)  # a escolha mais nova é que vale; este seletor já cumpriu o que lhe cabia
             return
         if nova is not None:
             self._trocar_capa(nova)
         else:
             self.capaChanged.emit()
+        if ao_terminar is not None:
+            ao_terminar(nova is not None)
         if erro:
             self._aplicativo.pedir_dialogo(_("Não foi possível usar o vídeo"), erro, [], self.focoDevolvido.emit)
 

@@ -114,10 +114,11 @@ def test_puxador_aumenta_a_caixa_e_grava_ao_soltar(app_qt):
 
     _arrastar_puxador(app, balao, 60, 40)
 
-    assert (app.caixa_da_anotacao.largura, app.caixa_da_anotacao.altura) == (380, 160)
-    assert balao.property("contentItem").property("width") == 380
+    # A largura cresce para os dois lados (`FATOR_DA_LARGURA = 2` da `main`): o puxador acompanha o mouse.
+    assert (app.caixa_da_anotacao.largura, app.caixa_da_anotacao.altura) == (440, 160)
+    assert balao.property("contentItem").property("width") == 440
     assert balao.property("contentItem").property("height") == 160
-    assert _guardado() == (380, 160)
+    assert _guardado() == (440, 160)
     app.fechar()
 
 

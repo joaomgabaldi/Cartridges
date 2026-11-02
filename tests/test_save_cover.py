@@ -10,10 +10,11 @@ uma truncada passa no ``is_file()`` do SGDB, que então nunca mais re-busca.
 """
 
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from PySide6.QtCore import QEventLoop, QTimer
 
 from cartridges import shared
@@ -380,6 +381,34 @@ def test_convert_cover_ilegivel_devolve_none(tmp_path):
 
     assert convert_cover(ruim) is None
     assert convert_cover(None) is None
+
+
+def test_formato_que_o_pillow_nao_le_mas_o_qt_le_vira_capa(tmp_path, monkeypatch):
+    """B02: o `Gdk.Texture` da `main` vira o `QImageReader`; sem resize, a TIFF do Qt é a própria saída."""
+    from cartridges.utils import save_cover as modulo  # noqa: PLC0415
+
+    origem = tmp_path / "so_o_qt.xyz"  # PNG por dentro; a extensão não é do Pillow, e ele "não o lê"
+    Image.new("RGB", (300, 200), "blue").save(origem, format="PNG")
+    abrir = Image.open
+
+    def sem_png(fp, *args, **kwargs):
+        if Path(fp).suffix == ".xyz":
+            raise UnidentifiedImageError(fp)
+        return abrir(fp, *args, **kwargs)
+
+    monkeypatch.setattr(modulo.Image, "open", sem_png)
+
+    reduzida = modulo.convert_cover(origem)
+    assert reduzida is not None and reduzida.suffix == ".tiff"
+    with Image.open(reduzida) as imagem:
+        assert imagem.size == shared.image_size
+    reduzida.unlink()
+
+    inteira = modulo.convert_cover(origem, resize=False)
+    assert inteira is not None and inteira != origem
+    with Image.open(inteira) as imagem:
+        assert imagem.size == (300, 200)
+    inteira.unlink()
 
 
 def test_modulos_desta_tarefa_nao_importam_gi():

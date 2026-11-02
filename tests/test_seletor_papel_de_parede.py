@@ -478,3 +478,10 @@ def test_h7_falha_de_leitura_nao_diz_nenhum_encontrado(app_qt, tmp_path, temp):
     assert "Nenhum papel de parede" not in seletor.tituloDoEstado
     assert (seletor.tituloDoEstado, seletor.descricaoDoEstado) == ("Não foi possível abrir a imagem", "Tente outra imagem.")
     seletor.fechar()
+
+
+def test_as_caixas_da_previa_do_ajuste_sao_as_da_main():
+    """DE-82: `PREVIEW_MAX`, `HYBRID_LANDSCAPE_MAX` e `HYBRID_PORTRAIT_MAX` do `wallpaper_picker.py`."""
+    from cartridges.modelos import seletores  # noqa: PLC0415
+
+    assert (seletores.CAIXA_UNICA, seletores.CAIXA_DEITADA, seletores.CAIXA_EM_PE) == ((800, 440), (600, 340), (220, 340))

@@ -27,6 +27,7 @@ from typing import Optional
 from uuid import uuid4
 
 from PIL import Image, UnidentifiedImageError
+from PySide6.QtGui import QImage, QImageReader
 
 from cartridges import shared
 from cartridges.jogo import ANIMATED_SUFFIXES  # reexportado: mora ao lado de get_cover_path
@@ -57,7 +58,7 @@ def convert_cover(cover_path: Optional[Path] = None, resize: bool = True) -> Opt
     return _convert_readable_cover(cover_path, resize)
 
 
-def _convert_readable_cover(cover_path: Path, resize: bool) -> Optional[Path]:
+def _convert_readable_cover(cover_path: Path, resize: bool, via_qt: bool = False) -> Optional[Path]:
     tmp_path: Optional[Path] = None
     try:
         with Image.open(cover_path) as image:
@@ -105,8 +106,10 @@ def _convert_readable_cover(cover_path: Path, resize: bool) -> Optional[Path]:
     except (UnidentifiedImageError, OSError, ValueError) as error:
         if tmp_path is not None:
             tmp_path.unlink(missing_ok=True)
-        logging.warning("Could not convert cover %s: %s", Path(cover_path).name, error)
-        return None
+        if via_qt:  # a intermediária do Qt também não abriu: sem segunda volta
+            logging.warning("Could not convert cover %s: %s", Path(cover_path).name, error)
+            return None
+        return _convert_pelo_qt(cover_path, resize, error)
     except BaseException:
         # Qualquer outra falha: sem o temporário que ficou pela metade, e quem chamou decide.
         if tmp_path is not None:
@@ -114,6 +117,30 @@ def _convert_readable_cover(cover_path: Path, resize: bool) -> Optional[Path]:
         raise
 
     return tmp_path
+
+
+def _convert_pelo_qt(cover_path: Path, resize: bool, motivo: Exception) -> Optional[Path]:
+    """O que o Pillow não lê e o Qt lê (o `Gdk.Texture` da `main`): regrava num TIFF e passa de novo por `convert_cover`."""
+    intermediaria = _temporario(".tiff")
+    resultado: Optional[Path] = None
+    try:
+        leitor = QImageReader(str(cover_path))
+        leitor.setAutoTransform(True)
+        imagem: QImage = leitor.read()
+        if imagem.isNull() or not imagem.save(str(intermediaria), "TIFF"):
+            logging.warning("Could not convert cover %s: %s", Path(cover_path).name, motivo)
+            return None
+        # Sem redução (`composite_cover`), a TIFF do Qt já é a entrada; com ela, passa pelo bloco do Pillow uma vez só.
+        resultado = _convert_readable_cover(intermediaria, True, via_qt=True) if resize else intermediaria
+        return resultado
+    except OSError as erro:
+        logging.warning("Could not convert cover %s: %s", Path(cover_path).name, erro)
+        return None
+    finally:
+        # A intermediária é só a entrada da chamada de cima, que grava um temporário próprio; se ela devolveu a própria
+        # entrada (`resize=False`), apagá-la deixaria quem chamou com um caminho para um arquivo que não existe.
+        if resultado is not intermediaria:
+            intermediaria.unlink(missing_ok=True)
 
 
 class UnreadableCoverError(Exception):

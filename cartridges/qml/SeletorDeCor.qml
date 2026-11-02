@@ -45,7 +45,6 @@ FocusScope {
         id: quadrado
         anchors.fill: parent
         radius: 6
-        border { width: raiz.activeFocus ? 2 : 1; color: raiz.activeFocus ? Tema.destaque : Tema.borda }
         clip: true
 
         // O círculo de matizes de 0 a 360 graus, esticado na horizontal.
@@ -81,6 +80,9 @@ FocusScope {
             Rectangle { anchors.fill: parent; anchors.margins: -1; radius: width / 2; color: "transparent"; border { width: 1; color: "#80000000" } }
         }
     }
+
+    // O contorno do foco do teclado, por fora do quadrado (sem borda de 1 px própria: o balão já o separa do fundo).
+    AnelDeFoco { ativo: raiz.activeFocus; raio: 6; afastamento: 0 }
 
     MouseArea {
         anchors.fill: parent

@@ -668,10 +668,12 @@ def test_linhas_da_iluminacao_apagadas_sem_o_interruptor(app, fitas_espiadas):
     )  # fmt: skip
     assert _enabled(app, "interruptor-session-fita")
     assert [_enabled(app, n) for n in dependentes] == [False] * 5
+    assert app.achar("linhaDaCorDoApp").property("opacity") == 0.5  # P23: a linha travada aparece apagada
     _clique(app, "interruptor-session-fitaChave")
     assert shared.schema.get_boolean("session-fita") is True
     assert fitas_espiadas == ["reacender"]
     assert _esperar(lambda: [_enabled(app, n) for n in dependentes] == [True] * 5)
+    assert app.achar("linhaDaCorDoApp").property("opacity") == 1
 
 
 def test_interruptor_das_fitas_apagado_sem_fita(app):

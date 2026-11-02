@@ -35,7 +35,7 @@ ModalDaRestauracao {
             text: restauracao.conflito.nome || ""
             textFormat: Text.PlainText
             color: Tema.texto
-            font { family: Tema.fonte; pixelSize: 20; weight: Font.DemiBold }
+            font { family: Tema.fonte; pixelSize: Tema.titulo2; weight: Tema.pesoTitulo2 }  // title-2
         }
     }
 
@@ -43,19 +43,18 @@ ModalDaRestauracao {
         id: cartao
         property string rotulo
         property string objeto  // "Backup" ou "EstePc"
-        property string glifo
+        property string icone
         property var dados: ({})
         width: (parent.width - 24 - 2 * parent.spacing) / 2  // 24: o aviso entre os dois
         height: dentro.implicitHeight + 28
-        radius: 8
-        color: Tema.superficie
-        border.color: Tema.borda
-        Text {
+        // `.card`: raio 12 e a sombra do cartão.
+        radius: 12
+        color: Tema.cartao
+        Sombra { camadas: Tema.sombraCartao; raio: 12 }
+        Icone {
             anchors { left: parent.left; leftMargin: 14; top: parent.top; topMargin: 14 }
-            text: cartao.glifo
-            textFormat: Text.PlainText
-            color: Tema.texto
-            font { family: Tema.fonteDeIcones; pixelSize: 24 }
+            nome: cartao.icone
+            tamanho: 24
         }
         Column {
             id: dentro
@@ -66,21 +65,21 @@ ModalDaRestauracao {
                 text: cartao.rotulo
                 textFormat: Text.PlainText
                 color: Tema.texto
-                font { family: Tema.fonte; pixelSize: 14; weight: Font.DemiBold }
+                font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }  // heading
             }
             Text {
                 objectName: "tempoDoCartao" + cartao.objeto
                 text: cartao.dados.tempo || ""
                 textFormat: Text.PlainText
                 color: Tema.textoSecundario
-                font { family: Tema.fonte; pixelSize: 13 }
+                font { family: Tema.fonte; pixelSize: Tema.corpo }
             }
             Text {
                 objectName: "sessoesDoCartao" + cartao.objeto
                 text: cartao.dados.sessoes || ""
                 textFormat: Text.PlainText
                 color: Tema.textoSecundario
-                font { family: Tema.fonte; pixelSize: 13 }
+                font { family: Tema.fonte; pixelSize: Tema.corpo }
             }
             Text {
                 objectName: "ultimaDoCartao" + cartao.objeto
@@ -88,24 +87,22 @@ ModalDaRestauracao {
                 text: cartao.dados.ultima || ""
                 textFormat: Text.PlainText
                 color: Tema.textoSecundario
-                font { family: Tema.fonte; pixelSize: 13 }
+                font { family: Tema.fonte; pixelSize: Tema.corpo }
             }
         }
     }
     Row {
         width: parent.width
         spacing: 12
-        Cartao { rotulo: "Backup"; objeto: "Backup"; glifo: ""; dados: restauracao.conflito.backup || ({}) }
-        Text {
+        Cartao { rotulo: "Backup"; objeto: "Backup"; icone: "drive-harddisk"; dados: restauracao.conflito.backup || ({}) }
+        Item {
             width: 24
-            horizontalAlignment: Text.AlignHCenter
+            height: 24
             anchors.verticalCenter: parent.verticalCenter
-            text: ""  // aviso
-            textFormat: Text.PlainText
-            color: "#e5a50a"
-            font { family: Tema.fonteDeIcones; pixelSize: 22 }
+            // `warning_color` do tema (a classe `.warning` do GTK), e não um amarelo fixo.
+            Icone { anchors.centerIn: parent; nome: "dialog-warning"; cor: Tema.derivada(Tema.escuro ? "#cd9309" : "#e5a50a") }
         }
-        Cartao { rotulo: "Este PC"; objeto: "EstePc"; glifo: ""; dados: restauracao.conflito.estePc || ({}) }
+        Cartao { rotulo: "Este PC"; objeto: "EstePc"; icone: "computer"; dados: restauracao.conflito.estePc || ({}) }
     }
     Text {
         objectName: "textoDoConflito"
@@ -115,7 +112,7 @@ ModalDaRestauracao {
         wrapMode: Text.Wrap
         horizontalAlignment: Text.AlignHCenter
         color: Tema.texto
-        font { family: Tema.fonte; pixelSize: 14 }
+        font { family: Tema.fonte; pixelSize: Tema.corpo }
     }
     Row {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -144,6 +141,6 @@ ModalDaRestauracao {
         textFormat: Text.PlainText
         horizontalAlignment: Text.AlignHCenter
         color: Tema.textoSecundario
-        font { family: Tema.fonte; pixelSize: 12 }
+        font { family: Tema.fonte; pixelSize: Tema.legenda }  // caption dim-label
     }
 }

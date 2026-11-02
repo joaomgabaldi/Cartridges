@@ -1,247 +1,118 @@
 import QtQuick
 import QtQuick.Controls.Basic
-import QtQuick.Window
+import QtQuick.Effects
+import QtQuick.Layouts
 
 // O seletor do papel de parede da sessão: uma grade de candidatos do wallhaven já cortados no formato dos monitores
-// e, depois da escolha, a barra que desliza a faixa de cada monitor.
+// (`Adw.Dialog` de 860x700) e, depois da escolha, a barra que desliza a faixa de cada monitor.
 // Só desenha: a busca, os cortes e o download são do `seletor` (SeletorDePapelDeParede, cartridges/modelos/seletores.py).
 // Modal para o mouse, o teclado e o controle (abre por cima do diálogo de edição, que fica desabilitado);
 // o foco volta ao botão que o abriu. Esc fecha o seletor inteiro, como na versão anterior.
-Rectangle {
+SeletorBase {
     id: seletorDePapel
 
     property QtObject seletor
 
-    readonly property int colunas: Math.max(2, Math.floor(grade.width / (seletor.larguraDaCelula + 12)))
+    // `min-children-per-line: 1`, `max-children-per-line: 4`.
+    readonly property int colunas: Math.max(1, Math.min(4, Math.floor((conteudo.width - 24 + 12) / (seletor.larguraDaCelula + 12))))
 
-    // Quem tinha o foco ao abrir: volta a tê-lo ao fechar.
-    property Item retorno: null
-    signal retornoPerdido()
+    aberto: seletor.aberto
+    largura: 860
+    altura: 700
+    titulo: "Escolher papel de parede"
+    placeholder: "Buscar no wallhaven…"
+    nomeDaBusca: "Buscar no wallhaven"
+    // Um arquivo do disco não tem o que buscar: abre direto no ajuste.
+    comBusca: !seletor.soArquivo
+    rolado: grade.contentY > -grade.topMargin + 1
+    // O primeiro foco do diálogo: "Não trocar" na grade do wallhaven, o campo se não houver o botão; nada forçado depois.
+    focoInicial: seletor.soArquivo ? null : botaoNaoTrocar.enabled ? botaoNaoTrocar : campo
+    onFecharPedido: seletor.fechar()
+    onBuscaEditada: texto => seletor.busca = texto
+    onBuscaConfirmada: seletor.buscarAgora()
+    onSetaParaBaixo: moverFoco(0)
 
-    anchors.fill: parent
-    z: 5
-    visible: seletor.aberto
-    color: "#80000000"
-    Keys.onEscapePressed: seletor.fechar()
-    // Modal para o teclado e o controle: nenhuma tecla chega ao diálogo de trás.
-    Keys.onPressed: event => event.accepted = true
-
-    onVisibleChanged: {
-        if (visible) {
-            retorno = Window.window ? Window.window.activeFocusItem : null
-            focarInicio()
-        } else {
-            // Depois de o diálogo de trás voltar a ficar habilitado.
-            Qt.callLater(devolverAoRetorno)
-        }
-    }
-    function focarInicio() {
-        if (seletor.soArquivo) botaoFechar.forceActiveFocus(Qt.TabFocusReason)
-        else campoDeBusca.forceActiveFocus(Qt.TabFocusReason)
-    }
-    function devolverAoRetorno() {
-        if (visible) return
-        if (retorno && retorno.visible && retorno.enabled) retorno.forceActiveFocus(Qt.TabFocusReason)
-        else seletorDePapel.retornoPerdido()
-    }
-    // Na segunda etapa o foco vai ao botão de confirmar; na volta à grade, ao início.
-    Connections {
-        target: seletorDePapel.seletor
-        function onAjustandoChanged() {
-            if (!seletorDePapel.visible) return
-            if (seletorDePapel.seletor.ajustando) botaoUsar.forceActiveFocus(Qt.TabFocusReason)
-            else seletorDePapel.focarInicio()
-        }
-    }
+    Binding { target: seletorDePapel.campo; property: "text"; value: seletorDePapel.seletor.busca }
 
     // A seta numa célula leva o foco à vizinha; para cima da primeira linha, ao campo de busca.
     function moverFoco(indice) {
-        if (indice < 0) { campoDeBusca.forceActiveFocus(Qt.BacktabFocusReason); return }
+        if (indice < 0) { campo.forceActiveFocus(Qt.BacktabFocusReason); return }
         if (indice >= grade.count) return
         grade.positionViewAtIndex(indice, GridView.Contain)
         var item = grade.itemAtIndex(indice)
         if (item) item.forceActiveFocus(Qt.TabFocusReason)
     }
 
-    MouseArea { anchors.fill: parent } // o que está embaixo não recebe cliques
-
-    Rectangle {
-        anchors.centerIn: parent
-        width: Math.min(720, parent.width - 48)
-        height: Math.min(620, parent.height - 48)
-        radius: 8
-        color: Tema.fundo
-        border.color: Tema.botaoSobre
-        clip: true
-
-        component Botao: Button {
-            id: botao
-            property color cor: Tema.superficie
-            property color corDoTexto: Tema.texto
-            property string dica
-            ToolTip.visible: hovered && dica !== ""
-            ToolTip.text: dica
-            ToolTip.delay: 600
-            focusPolicy: Qt.StrongFocus
-            implicitHeight: 34
-            leftPadding: 18
-            rightPadding: 18
-            Keys.onReturnPressed: click()
-            Keys.onEnterPressed: click()
-            contentItem: Text {
-                text: botao.text
-                textFormat: Text.PlainText
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                color: botao.corDoTexto
-                font { family: Tema.fonte; pixelSize: 14 }
-            }
-            background: Rectangle {
-                radius: 6
-                color: botao.cor
-                opacity: botao.down ? 0.75 : botao.hovered ? 0.9 : 1
-                border { width: botao.visualFocus ? 2 : 1; color: botao.visualFocus ? Tema.texto : Tema.borda }
-            }
-        }
-
-        // O cabeçalho vem primeiro: a ordem do Tab é "Fechar", "Não trocar", o campo e as miniaturas.
-        Rectangle {
-            id: cabecalho
-            anchors { left: parent.left; right: parent.right; top: parent.top }
-            height: 56
-            color: Tema.fundo
-
-            Botao {
-                id: botaoFechar
-                objectName: seletorDePapel.objectName + "Fechar"
-                anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
-                text: "Fechar"
-                onClicked: seletorDePapel.seletor.fechar()
-            }
-            Text {
-                objectName: seletorDePapel.objectName + "Titulo"
-                anchors { left: botaoFechar.right; right: botaoNaoTrocar.left; leftMargin: 8; rightMargin: 8; verticalCenter: parent.verticalCenter }
-                text: "Escolher papel de parede"
-                textFormat: Text.PlainText
-                horizontalAlignment: Text.AlignHCenter
-                elide: Text.ElideRight
-                color: Tema.texto
-                font { family: Tema.fonte; pixelSize: 16; weight: Font.DemiBold }
-                Accessible.role: Accessible.Heading
-                Accessible.name: text
-            }
-            // Um arquivo do disco não tem o que "não trocar": só a grade do wallhaven oferece a escolha.
-            Botao {
-                id: botaoNaoTrocar
-                objectName: seletorDePapel.objectName + "NaoTrocar"
-                anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
-                visible: !seletorDePapel.seletor.soArquivo
-                width: visible ? implicitWidth : 0
-                text: "Não trocar"
-                enabled: !seletorDePapel.seletor.baixando && !seletorDePapel.seletor.ajustando
-                dica: "Não alterar o papel de parede quando este jogo rodar"
-                Accessible.name: dica
-                onClicked: seletorDePapel.seletor.naoTrocar()
-            }
-        }
-
-        Rectangle {
-            id: campo
-            anchors { left: parent.left; right: parent.right; top: cabecalho.bottom; margins: 12; topMargin: 0 }
-            height: seletorDePapel.seletor.soArquivo ? 0 : 40
+    // Um arquivo do disco não tem o que "não trocar": só a grade do wallhaven oferece a escolha.
+    fim: [
+        Botao {
+            id: botaoNaoTrocar
+            objectName: seletorDePapel.objectName + "NaoTrocar"
             visible: !seletorDePapel.seletor.soArquivo
-            radius: 8
-            color: Tema.superficie
-            border { width: campoDeBusca.activeFocus ? 2 : 1; color: campoDeBusca.activeFocus ? Tema.destaque : Tema.borda }
-            enabled: !seletorDePapel.seletor.baixando && !seletorDePapel.seletor.ajustando
-            opacity: enabled ? 1 : 0.5
-
-            TextField {
-                id: campoDeBusca
-                objectName: seletorDePapel.objectName + "Campo"
-                anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
-                selectByMouse: true
-                placeholderText: "Buscar no wallhaven…"
-                placeholderTextColor: Tema.textoSecundario
-                color: Tema.texto
-                selectionColor: Tema.destaque
-                selectedTextColor: "white"
-                font { family: Tema.fonte; pixelSize: 15 }
-                background: null
-                verticalAlignment: TextInput.AlignVCenter
-                text: seletorDePapel.seletor.busca
-                Accessible.name: "Buscar no wallhaven"
-                onTextEdited: seletorDePapel.seletor.busca = text
-                onAccepted: seletorDePapel.seletor.buscarAgora()
-                Keys.onDownPressed: seletorDePapel.moverFoco(0)
-            }
+            text: "Não trocar"
+            enabled: !seletorDePapel.seletor.ajustando
+            dica: "Não alterar o papel de parede quando este jogo rodar"
+            Accessible.name: dica
+            onClicked: seletorDePapel.seletor.naoTrocar()
         }
+    ]
 
-        Item {
-            id: conteudo
-            anchors { left: parent.left; right: parent.right; top: campo.bottom; bottom: parent.bottom; topMargin: 8 }
+    Item {
+        id: conteudo
+        Layout.fillWidth: true
+        Layout.fillHeight: true
 
-            // Buscando e ainda sem nenhuma miniatura (ou abrindo um arquivo).
-            BusyIndicator {
+        // Buscando e ainda sem nenhuma miniatura (ou abrindo um arquivo).
+        PaginaDoSeletor {
+            ativa: seletorDePapel.seletor.buscando && grade.count === 0 && !seletorDePapel.seletor.vazio
+                && !seletorDePapel.seletor.baixando && !seletorDePapel.seletor.ajustando
+            Girador {
                 objectName: seletorDePapel.objectName + "Carregando"
                 anchors.centerIn: parent
                 width: 32
                 height: 32
-                running: visible
-                visible: seletorDePapel.seletor.buscando && grade.count === 0 && !seletorDePapel.seletor.vazio
+                running: parent.visible
             }
+        }
 
+        PaginaDoSeletor {
+            ativa: seletorDePapel.seletor.vazio
             EstadoVazio {
                 objectName: seletorDePapel.objectName + "Vazio"
                 anchors.fill: parent
-                visible: seletorDePapel.seletor.vazio
-                glifo: ""  // imagem
+                icone: "image-x-generic"
                 titulo: seletorDePapel.seletor.tituloDoEstado
                 descricao: seletorDePapel.seletor.descricaoDoEstado
             }
+        }
 
-            // A tela "Baixando…" da imagem escolhida.
-            Column {
+        // A tela "Baixando…" da imagem escolhida.
+        PaginaDoSeletor {
+            ativa: seletorDePapel.seletor.baixando
+            TelaDeDownload {
                 objectName: seletorDePapel.objectName + "Baixando"
                 anchors.centerIn: parent
-                width: Math.min(parent.width - 48, 320)
-                spacing: 10
-                visible: seletorDePapel.seletor.baixando
-                Text {
-                    width: parent.width
-                    text: "Baixando…"
-                    textFormat: Text.PlainText
-                    horizontalAlignment: Text.AlignHCenter
-                    color: Tema.texto
-                    font { family: Tema.fonte; pixelSize: 20; weight: Font.DemiBold }
-                }
-                ProgressBar {
-                    width: parent.width
-                    from: 0
-                    to: 1
-                    indeterminate: seletorDePapel.seletor.progresso < 0 || seletorDePapel.seletor.textoDoProgresso === ""
-                    value: Math.max(0, seletorDePapel.seletor.progresso)
-                }
-                Text {
-                    width: parent.width
-                    text: seletorDePapel.seletor.textoDoProgresso
-                    textFormat: Text.PlainText
-                    horizontalAlignment: Text.AlignHCenter
-                    color: Tema.textoSecundario
-                    font { family: Tema.fonte; pixelSize: 13 }
-                }
+                progresso: seletorDePapel.seletor.progresso
+                texto: seletorDePapel.seletor.textoDoProgresso
             }
+        }
+
+        PaginaDoSeletor {
+            ativa: !seletorDePapel.seletor.vazio && !seletorDePapel.seletor.baixando && !seletorDePapel.seletor.ajustando
+                && !seletorDePapel.seletor.soArquivo && grade.count > 0
 
             GridView {
                 id: grade
                 objectName: seletorDePapel.objectName + "Grade"
-                anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
-                visible: !seletorDePapel.seletor.vazio && !seletorDePapel.seletor.baixando && !seletorDePapel.seletor.ajustando
-                    && !seletorDePapel.seletor.soArquivo
+                width: seletorDePapel.colunas * cellWidth
+                height: parent.height
+                anchors.horizontalCenter: parent.horizontalCenter
+                topMargin: 6
+                bottomMargin: 6
                 model: seletorDePapel.seletor
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
-                cellWidth: Math.floor(width / seletorDePapel.colunas)
+                cellWidth: seletorDePapel.seletor.larguraDaCelula + 12
                 cellHeight: seletorDePapel.seletor.alturaDaCelula + 12
                 ScrollBar.vertical: BarraDeRolagem {}
 
@@ -260,6 +131,7 @@ Rectangle {
                         width: seletorDePapel.seletor.larguraDaCelula
                         height: seletorDePapel.seletor.alturaDaCelula
                         padding: 0
+                        hoverEnabled: false  // `.no-hover`
                         focusPolicy: Qt.StrongFocus
                         enabled: !celula.carregando
                         Accessible.name: "Papel de parede " + (celula.index + 1)
@@ -272,44 +144,51 @@ Rectangle {
                         Keys.onUpPressed: seletorDePapel.moverFoco(celula.index - seletorDePapel.colunas)
                         onClicked: seletorDePapel.seletor.escolher(celula.index)
 
-                        background: Rectangle {
-                            radius: 8
-                            color: Tema.superficie
-                            border { width: botao.visualFocus ? 3 : botao.hovered ? 2 : 1; color: botao.visualFocus || botao.hovered ? Tema.destaque : Tema.borda }
-                        }
+                        // `.wallpaper-preview`: raio 8, sem borda; o contorno do foco é o da `flowboxchild`.
+                        background: Item { AnelDeFoco { ativo: botao.visualFocus; raio: 8; afastamento: 0 } }
                         // A miniatura já vem cortada no formato do monitor (a mesma `enquadrar` do arquivo final).
                         contentItem: Item {
-                            clip: true
+                            Item {
+                                id: mascara
+                                anchors.fill: parent
+                                visible: false
+                                layer.enabled: true
+                                Rectangle { anchors.fill: parent; radius: 8 }
+                            }
                             Image {
                                 anchors.fill: parent
-                                anchors.margins: 1
                                 source: celula.miniatura
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 cache: false
-                            }
-                            BusyIndicator {
-                                anchors.centerIn: parent
-                                width: 28
-                                height: 28
-                                running: celula.carregando
-                                visible: running
+                                layer.enabled: true
+                                layer.effect: MultiEffect {
+                                    maskEnabled: true
+                                    maskSource: mascara
+                                    maskThresholdMin: 0.5
+                                    maskSpreadAtMin: 1.0
+                                }
                             }
                         }
                     }
                 }
             }
+        }
 
-            // A segunda etapa: um corte por orientação dos monitores, cada um com a sua barra.
-            Item {
-                id: ajuste
-                objectName: seletorDePapel.objectName + "Ajuste"
-                anchors { fill: parent; bottomMargin: 64 }
-                visible: seletorDePapel.seletor.ajustando
+        // A segunda etapa: um corte por orientação dos monitores, cada um com a sua barra; "Voltar" e "Usar esta imagem" no
+        // mesmo bloco, centrado, logo abaixo das prévias (espaços de 12, margens de 12).
+        PaginaDoSeletor {
+            id: ajuste
+            objectName: seletorDePapel.objectName + "Ajuste"
+            ativa: seletorDePapel.seletor.ajustando
+
+            Column {
+                anchors.centerIn: parent
+                spacing: 12
 
                 Row {
-                    anchors.centerIn: parent
-                    spacing: 24
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 12
                     Repeater {
                         model: seletorDePapel.seletor.cortes
                         delegate: Column {
@@ -322,17 +201,18 @@ Rectangle {
                             required property int larguraDaPrevia
                             required property int alturaDaPrevia
                             required property string orientacao
-                            spacing: 10
+                            spacing: 12
 
                             Image {
                                 objectName: seletorDePapel.objectName + "Previa" + corte.index
+                                anchors.horizontalCenter: parent.horizontalCenter
                                 width: corte.larguraDaPrevia
                                 height: corte.alturaDaPrevia
                                 source: corte.previa
                                 fillMode: Image.PreserveAspectFit
                                 cache: false
-                                Rectangle { anchors.fill: parent; color: "transparent"; border { width: 1; color: Tema.borda } }
                             }
+                            // `caption dim-label`.
                             Text {
                                 width: corte.larguraDaPrevia
                                 visible: corte.desliza
@@ -341,8 +221,10 @@ Rectangle {
                                 wrapMode: Text.WordWrap
                                 horizontalAlignment: Text.AlignHCenter
                                 color: Tema.textoSecundario
-                                font { family: Tema.fonte; pixelSize: 13 }
+                                font { family: Tema.fonte; pixelSize: Tema.legenda }
                             }
+                            // O `Gtk.Scale` da libadwaita: calha de 10 (15% do texto; 20% ao passar), o trecho andado na
+                            // cor de destaque e o marcador branco de 20 com contorno e sombra, em 12 de folga.
                             Slider {
                                 id: barra
                                 objectName: seletorDePapel.objectName + "Barra" + corte.index
@@ -352,26 +234,29 @@ Rectangle {
                                 to: 100
                                 stepSize: 1
                                 value: corte.posicao
+                                hoverEnabled: true
                                 focusPolicy: Qt.StrongFocus
+                                padding: 12
                                 Accessible.name: corte.dica
                                 onMoved: seletorDePapel.seletor.definirPosicao(corte.index, value)
                                 background: Rectangle {
                                     x: barra.leftPadding
                                     y: barra.topPadding + barra.availableHeight / 2 - height / 2
                                     width: barra.availableWidth
-                                    height: 4
-                                    radius: 2
-                                    color: Tema.borda
-                                    Rectangle { width: barra.visualPosition * parent.width; height: parent.height; radius: 2; color: Tema.destaque }
+                                    height: 10
+                                    radius: 5
+                                    color: Tema.mistura(barra.hovered || barra.pressed ? 0.20 : 0.15)
+                                    Rectangle { width: barra.visualPosition * parent.width; height: parent.height; radius: 5; color: Tema.destaque }
                                 }
                                 handle: Rectangle {
                                     x: barra.leftPadding + barra.visualPosition * (barra.availableWidth - width)
                                     y: barra.topPadding + barra.availableHeight / 2 - height / 2
-                                    width: 18
-                                    height: 18
-                                    radius: 9
-                                    color: Tema.destaque
-                                    border { width: barra.visualFocus ? 3 : 1; color: barra.visualFocus ? Tema.texto : Tema.borda }
+                                    width: 20
+                                    height: 20
+                                    radius: 10
+                                    color: Tema.escuro ? Qt.tint("#1d1d20", Qt.rgba(1, 1, 1, 0.8)) : "white"
+                                    Sombra { camadas: [[0, 0, 1, 0, 0, 6 / 255, 0.10], [2, 4, 0, 0, 0, 6 / 255, 0.20]]; raio: 10 }
+                                    AnelDeFoco { ativo: barra.visualFocus; raio: 10; afastamento: 0 }
                                 }
                             }
                         }
@@ -379,7 +264,7 @@ Rectangle {
                 }
 
                 Row {
-                    anchors { horizontalCenter: parent.horizontalCenter; top: parent.bottom; topMargin: 14 }
+                    anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 12
                     Botao {
                         id: botaoVoltar
@@ -390,9 +275,8 @@ Rectangle {
                     Botao {
                         id: botaoUsar
                         objectName: seletorDePapel.objectName + "Usar"
+                        estilo: "sugestao"
                         text: "Usar esta imagem"
-                        cor: Tema.destaque
-                        corDoTexto: "white"
                         onClicked: seletorDePapel.seletor.usarEstaImagem()
                     }
                 }

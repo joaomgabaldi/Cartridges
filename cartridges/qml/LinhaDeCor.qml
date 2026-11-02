@@ -1,24 +1,12 @@
 import QtQuick
-import QtQuick.Controls.Basic
 
-// Uma linha com título, subtítulo e, à direita, uma amostra de cor que abre o `SeletorDeCor` num balão (como a linha
-// da fita do editor). Cada movimento no seletor emite `escolhida`; quem usa grava e devolve a cor em `cor`. Fora do
-// padrão (`padrao: false`) aparece o botão de voltar a ele. `aberta` e `fechada` contam do balão (o pulso das
-// conquistas mostra a própria cor só enquanto ele está aberto).
-Item {
+// Uma linha com título, subtítulo e, à direita, a amostra de cor que abre o `SeletorDeCor` num balão (como a linha da
+// fita do editor). Cada movimento no seletor emite `escolhida`; quem usa grava e devolve a cor em `cor`. Fora do padrão
+// (`padrao: false`) aparece o botão de voltar a ele. `aberta` e `fechada` contam do balão (o pulso das conquistas mostra a
+// própria cor só enquanto ele está aberto). Desabilitada, apaga a 50% como as outras linhas.
+LinhaDoGrupo {
     id: linha
 
-    // `aparece` é a regra de cada linha (ex.: só com um interruptor ligado); a busca esconde mais, nunca mostra o que a regra esconde.
-    // O grupo conta por estas duas propriedades, não pelo `visible` efetivo (que depende do próprio grupo: laço, D58).
-    property bool aparece: true
-    // Só as linhas das Preferências são buscáveis (`buscavel: true`); as dos assistentes e do editor ignoram a busca.
-    // Nas Preferências use `aparece` para a regra da linha, nunca `visible` (um `visible:` de instância desliga o filtro).
-    property bool buscavel: false
-    readonly property bool passaNoFiltro: !buscavel || BuscaDasPreferencias.passa(linha.titulo, linha.subtitulo)
-    visible: aparece && passaNoFiltro
-
-    property string titulo
-    property string subtitulo
     property color cor
     property bool padrao: true
     property string dicaDaAmostra
@@ -28,121 +16,41 @@ Item {
     signal fechada()
     signal voltar()
 
-    width: parent ? parent.width : implicitWidth
-    implicitHeight: Math.max(textos.implicitHeight, 34) + 24
+    reservaADireita: lado.width
+    sobre: areaDaLinha.containsMouse
+    pressionada: areaDaLinha.pressed
 
-    component BotaoDaLinha: Button {
-        id: botao
-        property string glifo
-        property string dica
-        focusPolicy: Qt.StrongFocus
-        implicitWidth: 34
-        implicitHeight: 34
-        Accessible.name: dica
-        ToolTip.visible: hovered && dica !== ""
-        ToolTip.text: dica
-        ToolTip.delay: 600
-        Keys.onReturnPressed: click()
-        Keys.onEnterPressed: click()
-        contentItem: Text {
-            text: botao.glifo
-            textFormat: Text.PlainText
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            color: Tema.texto
-            font { family: Tema.fonteDeIcones; pixelSize: 16 }
-        }
-        background: Rectangle {
-            radius: 6
-            color: botao.down ? Tema.pressionado : botao.hovered ? Tema.botaoSobre : "transparent"
-            border { width: botao.visualFocus ? 2 : 0; color: Tema.destaque }
-        }
-    }
-
-    Rectangle {
-        width: parent.width
-        height: 1
-        color: Tema.borda
-        visible: linha.y > 0
-    }
-
-    Column {
-        id: textos
-        anchors { left: parent.left; leftMargin: 16; right: botoes.left; rightMargin: 12; verticalCenter: parent.verticalCenter }
-        spacing: 2
-        Text {
-            width: parent.width
-            text: linha.titulo
-            textFormat: Text.PlainText
-            wrapMode: Text.Wrap
-            color: Tema.texto
-            font { family: Tema.fonte; pixelSize: 15 }
-        }
-        Text {
-            width: parent.width
-            visible: text !== ""
-            text: linha.subtitulo
-            textFormat: Text.PlainText
-            wrapMode: Text.Wrap
-            color: Tema.textoSecundario
-            font { family: Tema.fonte; pixelSize: 12 }
-        }
+    // A linha inteira abre o balão (`activatable-widget`).
+    MouseArea {
+        id: areaDaLinha
+        anchors.fill: parent
+        hoverEnabled: true
+        onClicked: amostra.click()
     }
 
     Row {
-        id: botoes
-        anchors { right: parent.right; rightMargin: 10; verticalCenter: parent.verticalCenter }
-        spacing: 4
+        id: lado
+        anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
+        spacing: 6
 
-        BotaoDaLinha {
+        Botao {
             objectName: linha.objectName + "Voltar"
             visible: !linha.padrao
-            glifo: ""  // desfazer
+            estilo: "plano"
+            icone: "edit-undo"
             dica: "Voltar à cor padrão"
             onClicked: linha.voltar()
         }
-        BotaoDaLinha {
+        AmostraDeCor {
             id: amostra
             objectName: linha.objectName + "Amostra"
+            cor: linha.cor
             dica: linha.dicaDaAmostra
-            onClicked: balao.opened ? balao.close() : balao.open()
-            // A amostra de 22x22, em círculo.
-            Rectangle {
-                anchors.centerIn: parent
-                width: 22
-                height: 22
-                radius: 11
-                color: linha.cor
-                border { width: 1; color: Tema.borda }
-            }
-            Popup {
-                id: balao
-                objectName: linha.objectName + "Balao"
-                x: amostra.width - width
-                y: amostra.height + 4
-                padding: 12
-                margins: 8  // o balão não sai da janela, mesmo com a linha no pé da rolagem
-                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                // O seletor parte da cor que a linha mostra agora; depois disso quem manda nele é a mão.
-                onAboutToShow: {
-                    seletor.matiz = Math.max(0, linha.cor.hsvHue) * 360
-                    seletor.saturacao = Math.round(linha.cor.hsvSaturation * 1000)
-                }
-                onOpened: {
-                    seletor.forceActiveFocus(Qt.TabFocusReason)
-                    linha.aberta()
-                }
-                onClosed: {
-                    amostra.forceActiveFocus(Qt.TabFocusReason)
-                    linha.fechada()
-                }
-                background: Rectangle { color: Tema.superficie; border.color: Tema.borda; radius: 8 }
-                contentItem: SeletorDeCor {
-                    id: seletor
-                    objectName: linha.objectName + "Seletor"
-                    onEscolhida: cor => linha.escolhida(cor)
-                }
-            }
+            nomeDoBalao: linha.objectName + "Balao"
+            nomeDoSeletor: linha.objectName + "Seletor"
+            onEscolhida: cor => linha.escolhida(cor)
+            onAberta: linha.aberta()
+            onFechada: linha.fechada()
         }
     }
 }

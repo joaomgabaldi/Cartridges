@@ -15,12 +15,13 @@ ColumnLayout {
     visible: dados.visivel === true
     spacing: 6
 
+    // `caption-heading dim-label`.
     Text {
         Layout.leftMargin: 3
         text: "Conquistas"
         textFormat: Text.PlainText
         color: Tema.textoSecundario
-        font { family: Tema.fonte; pixelSize: 12; weight: Font.DemiBold }
+        font { family: Tema.fonte; pixelSize: Tema.legenda; weight: Tema.pesoForte }
     }
 
     Button {
@@ -33,9 +34,7 @@ ColumnLayout {
         bottomPadding: 12
         implicitWidth: Math.max(260, leftPadding + contentItem.implicitWidth + rightPadding)
         Accessible.name: "Conquistas, " + (bloco.dados.contagem || "")
-        ToolTip.visible: hovered
-        ToolTip.text: "Ver todas as conquistas"
-        ToolTip.delay: 600
+        hoverEnabled: true
         // O Enter também abre (o Espaço e o clique já são do botão).
         Keys.onReturnPressed: clicked()
         Keys.onEnterPressed: clicked()
@@ -52,14 +51,14 @@ ColumnLayout {
                     text: bloco.dados.contagem || ""
                     textFormat: Text.PlainText
                     color: Tema.texto
-                    font { family: Tema.fonte; pixelSize: 17; weight: Font.Bold }
+                    font { family: Tema.fonte; pixelSize: Tema.titulo4; weight: Tema.pesoTitulo4 }
                 }
                 Text {
                     objectName: "porcentagemDeConquistas"
                     text: bloco.dados.porcentagem || ""
                     textFormat: Text.PlainText
                     color: Tema.textoSecundario
-                    font { family: Tema.fonte; pixelSize: 14 }
+                    font { family: Tema.fonte; pixelSize: Tema.corpo }
                 }
             }
 
@@ -94,10 +93,18 @@ ColumnLayout {
             }
         }
 
+        // `button.card`: o cartão, mais 4% do texto ao passar e 8% ao apertar.
         background: Rectangle {
             radius: 12
-            color: cartao.down ? Tema.pressionado : cartao.hovered ? Tema.botaoSobre : Tema.superficie
-            border { width: cartao.visualFocus ? 2 : 1; color: cartao.visualFocus ? Tema.destaque : Tema.borda }
+            color: Tema.cartao
+            Sombra { camadas: Tema.sombraCartao; raio: 12 }
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: cartao.down ? Tema.linhaPressionada : cartao.hovered ? Tema.linhaSobre : "transparent"
+            }
+            AnelDeFoco { ativo: cartao.visualFocus; raio: 12; afastamento: -2 }
         }
+        Dica { texto: "Ver todas as conquistas"; ativa: cartao.hovered }
     }
 }

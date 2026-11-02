@@ -465,3 +465,113 @@ def test_capa_ilegivel_na_pagina_mostra_a_capa_padrao(app_qt):
     capa = _achar(pagina, "capaDaPagina")
     assert _esperar(lambda: capa.property("source").toString().endswith("library_placeholder.svg"))
     app.fechar()
+
+
+# -- Auditoria GTK x Qt, pacote B: a página de detalhes como a da `main` --------------------------------------------
+
+
+def _centro(item):
+    return item.mapToScene(item.boundingRect().center())
+
+
+def test_a_pagina_vira_coluna_ate_850(app_qt):
+    """DE-06: o `Adw.Breakpoint (max-width: 850px)`: capa de 280 em cima, tudo numa coluna."""
+    app = _App(_tres())
+    pagina = _abrir_pelo_cartao(app)
+    app.janela.resize(1000, 795)
+    assert _esperar(lambda: pagina.property("compacta") is False)
+    assert pagina.property("larguraDaCapa") == 420
+    capa = _achar(pagina, "capaDaPagina")
+    texto = _achar(pagina, "tituloDoJogo")
+    assert capa.parentItem().mapToScene(capa.parentItem().boundingRect().center()).y() <= texto.mapToScene(texto.boundingRect().center()).y() + 400
+    larga_x = _centro(capa.parentItem()).x(), _centro(texto).x()
+    assert larga_x[0] < larga_x[1]  # a capa à esquerda, o texto à direita
+    app.janela.resize(850, 795)
+    assert _esperar(lambda: pagina.property("compacta") is True)
+    assert pagina.property("larguraDaCapa") == 280
+    capa_y, texto_y = _centro(capa.parentItem()).y(), _centro(texto).y()
+    assert texto_y > capa_y  # o texto desceu para baixo da capa
+    assert abs(_centro(capa.parentItem()).x() - app.janela.width() / 2) < 2  # capa centrada
+    app.fechar()
+
+
+def test_barra_de_acao_botoes_de_34_e_jogar_de_44(app_qt):
+    """DE-03, DE-04, DE-05: "Jogar" é uma pílula de 44; os redondos, 34x34, a 15 do "Jogar" e a 6 entre si."""
+    app = _App(_tres())
+    pagina = _abrir_pelo_cartao(app)
+    jogar, editar, remover, buscar = (_achar(pagina, n) for n in ("botaoJogarDaPagina", "botaoEditar", "botaoRemover", "botaoBuscarDaPagina"))
+    assert jogar.property("height") == 44
+    assert (editar.property("width"), editar.property("height")) == (34, 34)
+    assert (buscar.property("width"), buscar.property("height")) == (34, 34)
+    x = lambda item: item.mapToScene(item.boundingRect().topLeft()).x()  # noqa: E731
+    assert round(x(editar) - (x(jogar) + jogar.property("width"))) == 15
+    assert round(x(remover) - (x(editar) + 34)) == 6
+    # Os ícones são os da `main` (Adwaita), não glifos da Segoe.
+    assert (editar.property("icone"), remover.property("icone"), buscar.property("icone")) == ("document-edit", "user-trash", "system-search")
+    app.fechar()
+
+
+def test_jogar_usa_o_texto_e_o_fundo_invertidos_por_tema(app_qt):
+    """DE-02: branco sobre preto a 80% no claro; preto a 80% sobre branco no escuro."""
+    app = _App(_tres())
+    pagina = _abrir_pelo_cartao(app)
+    jogar = _achar(pagina, "botaoJogarDaPagina")
+    escuro = QQmlExpression(QQmlEngine.contextForObject(jogar), jogar, "Tema.escuro").evaluate()[0]
+    fundo = QQmlExpression(QQmlEngine.contextForObject(jogar), jogar, "background.color").evaluate()[0]
+    texto = QQmlExpression(QQmlEngine.contextForObject(jogar), jogar, "corDoTexto").evaluate()[0]
+    if escuro:
+        assert fundo.name() == "#ffffff" and texto.alpha() == 204 and texto.red() == 0
+    else:
+        assert texto.name() == "#ffffff" and fundo.alpha() == 204 and fundo.red() == 0
+    app.fechar()
+
+
+def test_o_foco_inicial_so_tem_anel_quando_a_entrada_foi_pelo_teclado(app_qt):
+    """DE-26: abrir com o mouse põe o foco em "Jogar" sem o anel (`:focus-visible`); com o teclado, com ele."""
+    app = _App(_tres())
+    pagina = _abrir_pelo_cartao(app)  # pelo clique
+    jogar = _achar(pagina, "botaoJogarDaPagina")
+    assert _esperar(lambda: jogar.property("activeFocus") is True)
+    assert jogar.property("visualFocus") is False
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: app.janela.property("paginaAtual") == "todos")
+    app.achar("grade").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)  # pelo teclado
+    assert _esperar(lambda: app.janela.property("paginaAtual") == "jogo")
+    jogar = _achar(app.achar("paginaDoJogo"), "botaoJogarDaPagina")
+    assert _esperar(lambda: jogar.property("visualFocus") is True)
+    app.fechar()
+
+
+def test_o_balao_da_anotacao_abre_centrado_no_botao_e_cresce_para_os_dois_lados(app_qt):
+    """DE-31, DE-32: centrado no botão (com seta), e a largura anda o dobro do mouse (`FATOR_DA_LARGURA`)."""
+    app = _App(_jogos((1, "Alfa", {"status": "playing"})))
+    pagina = _abrir_pelo_cartao(app)
+    botao = _achar(pagina, "botaoAnotacao")
+    QMetaObject.invokeMethod(botao, "click", Qt.ConnectionType.DirectConnection)
+    balao = _achar(pagina, "balaoDaAnotacao")
+    assert _esperar(lambda: balao.property("opened") is True)
+    conteudo = balao.property("contentItem")
+    assert abs(_centro(conteudo).x() - _centro(botao).x()) < 1.5
+    # O puxador fica numa faixa própria, abaixo do texto: 16 de altura, depois da última linha do texto.
+    puxador = _achar(conteudo, "puxadorDaAnotacao")
+    assert puxador.property("height") == 16
+    assert puxador.mapToScene(puxador.boundingRect().topLeft()).y() >= conteudo.mapToScene(conteudo.boundingRect().bottomLeft()).y() - 1
+    balao.close()
+    app.fechar()
+
+
+def test_o_titulo_do_menu_de_buscas_e_um_rotulo_de_secao_e_o_menu_e_um_popover_com_seta(app_qt):
+    """DE-17: "Buscar em…" não é um item apagado; o menu abre centrado no botão, com seta."""
+    app = _App(_tres())
+    pagina = _abrir_pelo_cartao(app)
+    botao = _achar(pagina, "botaoBuscarDaPagina")
+    QMetaObject.invokeMethod(botao, "click", Qt.ConnectionType.DirectConnection)
+    menu = _achar(pagina, "menuDeBuscas")
+    assert _esperar(lambda: menu.property("opened") is True)
+    titulo = _achar(menu, "tituloDoMenuDeBuscas")
+    assert titulo.property("texto") == "Buscar em…" and titulo.property("enabled") is True  # um rótulo, não um item apagado
+    assert menu.property("setaEm") > 0
+    assert abs(_centro(menu.property("contentItem")).x() - _centro(botao).x()) < 40  # o menu está centrado no botão
+    menu.close()
+    app.fechar()

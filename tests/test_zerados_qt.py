@@ -18,7 +18,7 @@ from cartridges.modelos import zerados_manuais as modulo
 from cartridges.modelos.zerados_manuais import MOTIVO, SeletorDeZerados, candidatos, descricao
 from cartridges.utils import zerado_manual
 from cartridges.utils.steam import SteamError, SteamGameNotFoundError
-from tests.apoio_janela_atualizacao import Janela, avaliar, esperar
+from tests.apoio_janela_atualizacao import Janela, achar, avaliar, esperar
 
 
 def jogo(store, numero, **campos):
@@ -500,6 +500,11 @@ def _clique(janela, nome):
     QMetaObject.invokeMethod(janela.achar(nome), "click", Qt.ConnectionType.DirectConnection)
 
 
+def _fechar_do_cabecalho(janela):
+    """O X do cabeçalho do seletor (à direita, depois do que houver no cabeçalho)."""
+    return achar(janela.achar("seletorDeZerados"), "fecharDoCabecalho")
+
+
 def _digitar(janela, texto):
     for letra in texto:
         QTest.keyClick(janela.janela, letra)
@@ -587,15 +592,30 @@ def test_linhas_inativas_ficam_apagadas_e_nao_agem(janela, store, steam):
     linha = janela.achar("zeradosLinha0")
     assert esperar(lambda: janela.achar("zeradosLinha0Subtitulo").property("text") == "Já está em Jogos Zerados")
     assert linha.property("opacity") < 1
-    _clique(janela, "zeradosLinha0")
+    _clique(janela, "zeradosLinha0Botao")
     assert store.get("imported_1") is None
+
+
+def test_a_linha_que_ja_esta_fica_fora_do_foco(janela, store, steam):
+    """DE-94: a linha "já está em Jogos Zerados" é insensível: as setas passam por ela sem parar."""
+    jogo(store, 61, name="Hades", removed=True, status="beaten")
+    steam.achados = [resultado(1145360, "Hades"), resultado(504230, "Celeste")]
+    _abrir(janela)
+    janela.zerados_manuais.buscar("hades")
+    assert esperar(lambda: janela.zerados_manuais.estado == "lista" and len(janela.zerados_manuais.linhas) == 3)
+    assert janela.achar("zeradosLinha0Botao").property("enabled") is False
+    assert janela.achar("zeradosLinha1Botao").property("enabled") is True
+    janela.achar("zeradosCampo").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(janela.janela, Qt.Key.Key_Down)
+    assert esperar(lambda: janela.achar("zeradosLinha1Botao").property("activeFocus") is True)
+    assert janela.achar("zeradosLinha0Botao").property("activeFocus") is False
 
 
 def test_clicar_num_desinstalado_marca_e_tira_da_lista(janela, store):
     game = jogo(store, 62, removed=True, name="Antigo")
     _abrir(janela)
 
-    _clique(janela, "zeradosLinha0")
+    _clique(janela, "zeradosLinha0Botao")
 
     assert game.zerado is True
     assert esperar(lambda: janela.achar("zeradosVazio").property("visible") is True)
@@ -646,7 +666,7 @@ def test_esc_fecha_e_o_foco_volta(janela, store):
 def test_tab_circula_dentro_do_seletor(janela, store):
     jogo(store, 66, removed=True, name="A")
     _abrir(janela)
-    fechar = janela.achar("zeradosFechar")
+    fechar = _fechar_do_cabecalho(janela)
     campo = janela.achar("zeradosCampo")
     linha = janela.achar("zeradosLinha0")
     assert esperar(lambda: campo.property("activeFocus") is True)
@@ -670,7 +690,9 @@ def test_fundo_fica_apagado_com_o_seletor(janela):
 
 def test_o_botao_fechar_fecha_o_seletor(janela):
     dialogo = _abrir(janela)
-    _clique(janela, "zeradosFechar")
+    x = _fechar_do_cabecalho(janela)
+    x.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(janela.janela, Qt.Key.Key_Return)
     assert esperar(lambda: dialogo.property("visible") is False)
     assert janela.zerados_manuais.aberto is False
 

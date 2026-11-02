@@ -86,6 +86,57 @@ def test_escolher_entrega_o_arquivo(classe, baixar, temp):
     assert _vazio_de(temp) == [entregue.name]
 
 
+def test_as_linhas_entram_uma_a_uma_quando_a_miniatura_chega(classe, baixar, temp):
+    """DE-72: até a primeira miniatura, o seletor só busca (spinner central); a linha entra quando a miniatura chega."""
+    seletor, _ = _criar(classe)
+    baixar.soltar.clear()
+    seletor.abrir("Jogo")
+    assert baixar.comecou.wait(5)
+    assert seletor.buscando is True and seletor.rowCount() == 0
+    baixar.soltar.set()
+    assert _esperar(lambda: _prontos(seletor, 3))
+    assert seletor.rowCount() == 3 and seletor.buscando is False
+    seletor.fechar()
+
+
+def test_escolher_nao_interrompe_as_miniaturas(baixar, temp, monkeypatch):
+    """DE-86: a escolha tem a sua geração; a miniatura que faltava chega durante o download e depois dele."""
+    import threading  # noqa: PLC0415
+
+    liberar = threading.Event()
+
+    def download(url, timeout=10, max_bytes=0, ao_progredir=None):
+        if url.endswith("2-t.png"):
+            assert liberar.wait(5)
+        return baixar(url, timeout, max_bytes, ao_progredir)
+
+    monkeypatch.setattr(seletores, "download_bytes", download)
+    seletor, destino = _criar(seletores.SeletorDoSgdb)
+    destino.convertida = False  # a escolha volta à grade, e a terceira miniatura ainda não veio
+    seletor.abrir("Jogo")
+    assert _esperar(lambda: seletor.rowCount() == 2)
+    seletor.escolher(0)
+    assert _esperar(lambda: destino.capas)
+    assert _esperar(lambda: seletor.baixando is False)
+    assert seletor.aberto is True and seletor.buscando is True and seletor.rowCount() == 2
+    liberar.set()
+    assert _esperar(lambda: seletor.rowCount() == 3 and seletor.buscando is False)
+    seletor.fechar()
+
+
+def test_capa_que_nao_converte_volta_a_grade(baixar, temp):
+    """DE-49: o seletor da capa só fecha com a capa pronta; se a conversão falha, a grade volta."""
+    seletor, destino = _criar(seletores.SeletorDoSgdb)
+    destino.convertida = False
+    seletor.abrir("Jogo")
+    assert _esperar(lambda: _prontos(seletor, 3))
+    seletor.escolher(1)
+    assert _esperar(lambda: destino.capas)
+    assert _esperar(lambda: seletor.baixando is False)
+    assert seletor.aberto is True and seletor.vazio is False and seletor.rowCount() == 3
+    seletor.fechar()
+
+
 def test_fechar_com_download_cancela_e_limpa(classe, baixar, temp, app_dirs):
     seletor, destino = _criar(classe)
     seletor.abrir("Jogo")

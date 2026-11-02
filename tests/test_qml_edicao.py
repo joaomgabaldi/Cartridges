@@ -329,7 +329,8 @@ def test_textos_de_terceiros_em_texto_puro(app, store):
     textos, pilha = [], [dialogo]
     while pilha:
         atual = pilha.pop()
-        if isinstance(atual, QQuickItem) and atual.metaObject().className().startswith("QQuickText"):
+        # O número da `LinhaDeNumero` é um TextInput (só dígitos): não tem `textFormat`.
+        if isinstance(atual, QQuickItem) and atual.metaObject().className().startswith("QQuickText") and "Input" not in atual.metaObject().className():
             textos.append(atual)
         if isinstance(atual, QQuickItem):
             pilha.extend(atual.childItems())
@@ -919,7 +920,7 @@ def test_seletor_da_steam_pelo_appid_e_modal_e_preenche_o_campo(app, steam):
     assert app.edicao.aberto is True and _esperar(lambda: _foco_dentro_de(app, "botaoBuscarAppid"))
     _clique(app, "botaoBuscarAppid")
     assert _esperar(lambda: _visivel(app, "seletorDaSteamLinha0"))
-    app.achar("seletorDaSteamLinha0").forceActiveFocus()
+    app.achar("seletorDaSteamLinha0Botao").forceActiveFocus()
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
     assert _esperar(lambda: app.achar("campoAppid").property("text") == "400")
     assert _esperar(lambda: not _visivel(app, "seletorDaSteam"))
@@ -952,7 +953,7 @@ def test_buscar_metadados_com_varios_candidatos_abre_o_seletor(app, steam):
     app.achar("botaoBuscarMetadados").forceActiveFocus()
     _clique(app, "botaoBuscarMetadados")
     assert _esperar(lambda: _visivel(app, "seletorDaSteam") and _visivel(app, "seletorDaSteamLinha1"))
-    app.achar("seletorDaSteamLinha1").forceActiveFocus()
+    app.achar("seletorDaSteamLinha1Botao").forceActiveFocus()
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
     assert _esperar(lambda: not app.edicao.ocupado and app.achar("campoDesenvolvedora").property("text") == "Valve")
     assert app.edicao.appid == "620"
@@ -972,10 +973,11 @@ def test_aviso_de_busca_sem_resultado_no_seletor_da_steam(app, steam):
 def test_botoes_da_steam_desligados_sem_titulo(app, steam):
     app.edicao.adicionar()
     _abrir_avancadas(app)
-    assert app.achar("botaoBuscarMetadados").property("enabled") is False
+    # O botão dos dados da Steam fica sempre ativo (sem título, o clique não faz nada); o do AppID espera o título.
+    assert app.achar("botaoBuscarMetadados").property("enabled") is True
     assert app.achar("botaoBuscarAppid").property("enabled") is False
     app.edicao.nome = "Portal"
-    assert app.achar("botaoBuscarMetadados").property("enabled") is True
+    assert app.achar("botaoBuscarAppid").property("enabled") is True
 
 
 def _manifesto():
@@ -988,36 +990,36 @@ def _manifesto():
 def test_linha_do_ludusavi_desligada_sem_a_lista_baixada(app):
     app.edicao.abrir("shortcuts_z1")
     _abrir_avancadas(app)
-    assert app.achar("botaoJogoNoLudusavi").property("enabled") is False
-    assert app.achar("subtituloDoLudusavi").property("text") == "A lista de jogos do Ludusavi ainda não foi baixada."
+    assert app.achar("linhaDoLudusaviBotao").property("enabled") is False
+    assert app.achar("linhaDoLudusaviSubtitulo").property("text") == "A lista de jogos do Ludusavi ainda não foi baixada."
 
 
 def test_seletor_do_ludusavi_escolhe_e_o_subtitulo_muda(app):
     _manifesto()
     app.edicao.abrir("shortcuts_z1")
     _abrir_avancadas(app)
-    assert app.achar("subtituloDoLudusavi").property("text") == "Nenhum"
-    app.achar("botaoJogoNoLudusavi").forceActiveFocus()
-    _clique(app, "botaoJogoNoLudusavi")
+    assert app.achar("linhaDoLudusaviSubtitulo").property("text") == "Nenhum"
+    app.achar("linhaDoLudusaviBotao").forceActiveFocus()
+    _clique(app, "linhaDoLudusaviBotao")
     assert _esperar(lambda: _visivel(app, "seletorDoLudusavi") and _visivel(app, "seletorDoLudusaviLinha2"))
     assert app.achar("seletorDoLudusaviTitulo").property("text") == "Jogo no Ludusavi"
-    assert app.achar("seletorDoLudusaviNenhum").property("text") == "Nenhum (desliga o backup)"
+    assert app.achar("seletorDoLudusaviNenhumTitulo").property("text") == "Nenhum (desliga o backup)"
     assert app.achar("seletorDoLudusaviCampo").property("placeholderText") == "Buscar jogo"
     for _ in range(12):
         QTest.keyClick(app.janela, Qt.Key.Key_Tab)
         assert _foco_dentro_de(app, "seletorDoLudusavi")
     QTest.keyClick(app.janela, Qt.Key.Key_Escape)
     assert _esperar(lambda: not _visivel(app, "seletorDoLudusavi"))
-    assert _esperar(lambda: _foco_dentro_de(app, "botaoJogoNoLudusavi"))
-    _clique(app, "botaoJogoNoLudusavi")
+    assert _esperar(lambda: _foco_dentro_de(app, "linhaDoLudusaviBotao"))
+    _clique(app, "linhaDoLudusaviBotao")
     assert _esperar(lambda: _visivel(app, "seletorDoLudusaviLinha1"))
     app.achar("seletorDoLudusaviLinha1").forceActiveFocus()
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
-    assert _esperar(lambda: app.achar("subtituloDoLudusavi").property("text") == "Portal")
-    _clique(app, "botaoJogoNoLudusavi")
+    assert _esperar(lambda: app.achar("linhaDoLudusaviSubtitulo").property("text") == "Portal")
+    _clique(app, "linhaDoLudusaviBotao")
     assert _esperar(lambda: _visivel(app, "seletorDoLudusaviNenhum"))
-    _clique(app, "seletorDoLudusaviNenhum")
-    assert _esperar(lambda: app.achar("subtituloDoLudusavi").property("text") == "Backup desligado")
+    _clique(app, "seletorDoLudusaviNenhumBotao")
+    assert _esperar(lambda: app.achar("linhaDoLudusaviSubtitulo").property("text") == "Backup desligado")
 
 
 def test_textos_dos_seletores_novos_em_texto_puro(app, steam):
@@ -1084,7 +1086,7 @@ def wallhaven(app, tmp_path, monkeypatch):
 
 def test_seletor_de_papel_modal_esc_fecha_e_devolve_o_foco(app, wallhaven):
     app.edicao.abrir("shortcuts_z1")
-    assert app.achar("botaoEscolherPapelWallhaven").property("glifo") == ""  # o ícone de buscar, como o da capa e o do logo
+    assert app.achar("botaoEscolherPapelWallhaven").property("icone") == "edit-find"  # o ícone de buscar, como o da capa e o do logo
     assert app.achar("botaoEscolherPapelWallhaven").property("dica") == "Escolher papel de parede no wallhaven"
     _abrir_seletor(app, "botaoEscolherPapelWallhaven", "seletorDePapel")
     assert app.achar("seletorDePapelTitulo").property("text") == "Escolher papel de parede"
@@ -1112,7 +1114,8 @@ def test_seletor_de_papel_escolhe_ajusta_e_o_aplicar_grava(app, wallhaven):
     app.achar("seletorDePapelMiniatura1").forceActiveFocus()
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
     assert _esperar(lambda: _visivel(app, "seletorDePapelUsar"))
-    assert _esperar(lambda: _foco_dentro_de(app, "seletorDePapelUsar"))
+    # Na etapa de ajuste o foco não é forçado a lugar nenhum (`DE-88`).
+    assert app.achar("seletorDePapelUsar").property("activeFocus") is False
     # A barra desliza a faixa do monitor em pé.
     app.edicao.seletorDePapelDeParede.definirPosicao(0, 100)
     assert _esperar(lambda: app.achar("seletorDePapelBarra0").property("value") == 100)
@@ -1293,7 +1296,7 @@ def test_o_brilho_da_fita_vai_a_edicao(app, previas):
     _com_fita()
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
-    caixa = app.achar("caixaDoBrilhoDaFita")
+    caixa = app.achar("linhaDoBrilhoDaFitaCaixa")
     assert caixa.property("from") == 1 and caixa.property("to") == 100
     assert caixa.property("value") == app.edicao.fitaBrilho
     assert app.achar("linhaDoBrilhoDaFitaSubtitulo").property("visible") is False
@@ -1342,6 +1345,37 @@ def test_sem_avisos_do_qml_ao_abrir_e_fechar(app_qt, store, monkeypatch):
     finally:
         qInstallMessageHandler(anterior)
     assert [a for a in avisos if "DialogoDeEdicao" in a] == []
+
+
+def test_sem_avisos_do_qml_na_pagina_nos_dialogos_e_nos_seletores(app_qt, store, monkeypatch):
+    """Nada de laço de binding, nem propriedade indefinida, nos arquivos do pacote B (página, editor e seletores)."""
+    jogos = [jogo(store, 1, name="Alfa", executable=r'"C:\Jogoslfa.exe"', developer="Dev A", description="Texto")]
+    avisos = []
+    anterior = qInstallMessageHandler(lambda tipo, _ctx, msg: avisos.append(msg) if tipo in (QtMsgType.QtWarningMsg, QtMsgType.QtCriticalMsg) else None)
+    try:
+        janela = _App(jogos)
+        monkeypatch.setattr(shared, "aplicativo", janela.aplicativo, raising=False)
+        _abrir_pelo_cartao(janela, 0)
+        janela.janela.resize(800, 700)  # o breakpoint de 850
+        _esperar(lambda: False, 0.3)
+        QMetaObject.invokeMethod(janela.achar("botaoEditar"), "click", Qt.ConnectionType.DirectConnection)
+        assert _esperar(lambda: janela.achar("dialogoDeEdicao").property("visible") is True)
+        janela.edicao.avancadasPedidas.emit()
+        for seletor in (janela.edicao.seletorDeCapa, janela.edicao.seletorDeLogo, janela.edicao.seletorDaSteam):
+            seletor.abrir("Alfa")
+            _esperar(lambda: False, 0.3)
+            seletor.fechar()
+        janela.edicao.escolherJogoNoLudusavi()
+        janela.edicao.seletorDoLudusavi.fechar()
+        janela.edicao.seletorDePapelDeParede.abrir("Alfa")
+        _esperar(lambda: False, 0.3)
+        janela.edicao.seletorDePapelDeParede.fechar()
+        janela.fechar()
+    finally:
+        qInstallMessageHandler(anterior)
+    nossos = ("PaginaDoJogo", "DialogoDeEdicao", "Seletor", "LinhaDeCor", "AmostraDeCor", "BalaoDaAnotacao", "CampoDeBusca", "TelaDeDownload", "PaginaDoSeletor", "BotaoOsd")
+    # O laço de `altura` do `DialogoDeAlerta` (da fundação, pendência do pacote F) aparece com as confirmações da página.
+    assert [a for a in avisos if any(n in a for n in nossos) and "DialogoDeAlerta" not in a] == []
 
 
 def test_abrir_pasta_que_falha_avisa_que_nao_foi_possivel(app, monkeypatch):
@@ -1411,3 +1445,93 @@ def test_aviso_fechado_devolve_o_foco_ao_ultimo_campo_e_nao_ao_nome(app, monkeyp
     _esperar()
     assert _esperar(lambda: app.achar("botaoAbrirPasta").property("activeFocus") is True)
     assert app.achar("campoNome").property("activeFocus") is False
+
+
+# -- Auditoria GTK x Qt, pacote B: o editor e os seletores como os da `main` ---------------------------------------
+
+
+def _x_da_cena(item):
+    return item.mapToScene(item.boundingRect().topLeft()).x()
+
+
+def test_a_moldura_do_editor_tem_480_e_os_botoes_da_capa_ficam_parados(app):
+    """DE-37, DE-43, DE-44: 480 de largura, sem teto de altura; Excluir, Buscar, Abrir arquivo, com posições fixas."""
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
+    cartao = _achar(app.achar("dialogoDeEdicao"), "cartaoDoDialogo")
+    assert cartao.property("width") == 480
+    excluir, buscar, abrir = (app.achar(n) for n in ("botaoExcluirCapa", "botaoEscolherCapaSgdb", "botaoEscolherCapa"))
+    assert (excluir.property("width"), buscar.property("height")) == (34, 34)
+    assert _x_da_cena(excluir) < _x_da_cena(buscar) < _x_da_cena(abrir)
+    antes = (_x_da_cena(buscar), _x_da_cena(abrir))
+    assert excluir.property("visible") is False  # sem capa, o botão só está transparente...
+    assert excluir.property("opacity") == 0
+    app.edicao.cancelar()
+    assert _esperar(lambda: not app.edicao.aberto)
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
+    assert (_x_da_cena(app.achar("botaoEscolherCapaSgdb")), _x_da_cena(app.achar("botaoEscolherCapa"))) == antes  # ...e não muda os outros
+
+
+def test_clicar_na_linha_do_logo_aciona_o_botao_de_busca(app, sgdb):
+    """DE-52: as linhas Logo, Papel e Iluminação são ativáveis (`activatable-widget`)."""
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
+    linha = app.achar("linhaDoLogo")
+    ponto = linha.mapToScene(QPointF(30, linha.height() / 2)).toPoint()
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
+    assert _esperar(lambda: _visivel(app, "seletorDeLogo"))
+
+
+def test_enter_no_appid_nao_aplica(app):
+    """DE-57: só o executável e o nome do processo chamam o Aplicar."""
+    app.edicao.abrir("shortcuts_z1")
+    app.edicao.nome = "Mudou"
+    _abrir_avancadas(app)
+    app.achar("campoAppid").forceActiveFocus()
+    app.achar("campoAppid").confirmado.emit()
+    _esperar(lambda: False, 0.2)
+    assert app.edicao.aberto is True and shared.store.get("shortcuts_z1").name == "Alfa"
+
+
+def test_o_foco_inicial_do_seletor_e_o_do_dialogo_da_main(app, sgdb):
+    """DE-66, DE-68: sem botão "Fechar" (o X é do cabeçalho); o foco inicial é o botão do cabeçalho, ou o campo se não há."""
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
+    assert app.achar("seletorDeCapaAtalho").property("activeFocus") is True
+    assert _achar(app.janela, "seletorDeCapaFechar") is None
+    x = _achar(app.achar("seletorDeCapa"), "fecharDoCabecalho")
+    assert x is not None and _x_da_cena(x) > _x_da_cena(app.achar("seletorDeCapaAtalho"))  # o X vem depois do botão extra
+
+
+def test_o_campo_de_busca_tem_lupa_e_limpa_mantendo_o_foco(app, sgdb):
+    """DE-67: `SearchEntry` de 34, com o botão de limpar quando há texto."""
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
+    campo = app.achar("seletorDeCapaCampo")
+    assert campo.property("height") == 34 and campo.property("width") <= 450
+    limpar = app.achar("seletorDeCapaCampoLimpar")
+    assert limpar.property("visible") is True
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, _centro_na_janela(limpar))
+    assert _esperar(lambda: campo.property("text") == "" and campo.property("activeFocus") is True)
+    assert app.edicao.seletorDeCapa.busca == ""
+
+
+def _centro_na_janela(item):
+    ponto = item.mapToScene(item.boundingRect().center()).toPoint()
+    return ponto
+
+
+def test_as_linhas_do_ludusavi_e_o_selecionado_tem_fundo(app):
+    """DE-91, DE-92: o jogo escolhido é a linha selecionada (fundo), e a linha tem 8 em cima e embaixo."""
+    _manifesto()
+    app.edicao.abrir("shortcuts_z1")
+    app.edicao.ludusavi_escolhido("Portal")
+    _abrir_avancadas(app)
+    _clique(app, "linhaDoLudusaviBotao")
+    assert _esperar(lambda: _visivel(app, "seletorDoLudusaviLinha0") and _visivel(app, "seletorDoLudusaviLinha1"))
+    linha = app.achar("seletorDoLudusaviLinha1")  # Portal, em ordem alfabética: Alien, Portal, Zelda
+    assert linha.property("height") == 33
+    fundo = _avaliar(linha, "background.color")
+    assert fundo.alpha() > 0 and _avaliar(app.achar("seletorDoLudusaviLinha0"), "background.color").alpha() == 0
+

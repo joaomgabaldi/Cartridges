@@ -1,249 +1,129 @@
 import QtQuick
 import QtQuick.Controls.Basic
-import QtQuick.Window
+import QtQuick.Layouts
 
 // "Adicionar a Jogos Zerados" (D85): um campo de busca na Steam e a lista dos desinstalados (ou dos resultados), num
-// modal de 460×520. Só desenha: as regras, a busca e a escolha são do `modelo` (o `SeletorDeZerados`,
+// `Adw.Dialog` de 460x520. Só desenha: as regras, a busca e a escolha são do `modelo` (o `SeletorDeZerados`,
 // cartridges/modelos/zerados_manuais.py). Nome de jogo e aviso, texto de terceiros, em PlainText. Modal para o mouse, o
 // teclado e o controle (o fundo fica desabilitado); Esc fecha e o foco volta a quem abriu.
-Rectangle {
+SeletorBase {
     id: seletor
     objectName: "seletorDeZerados"
+    prefixoDosObjetos: "zerados"
 
     property QtObject modelo
-    // Quem tinha o foco ao abrir: volta a tê-lo ao fechar.
-    property Item retorno: null
-    signal retornoPerdido()
 
-    Accessible.role: Accessible.Dialog
-    Accessible.name: "Adicionar a Jogos Zerados"
+    aberto: !!modelo && modelo.aberto
+    largura: 460
+    altura: 520
+    titulo: "Adicionar a Jogos Zerados"
+    placeholder: "Buscar na Steam"
+    nomeDaBusca: "Buscar na Steam"
+    // Sem `Adw.Clamp` na barra: o campo ocupa a largura, com 12 dos lados.
+    larguraDoCampo: 10000
+    margemDoCampo: 12
+    rolado: lista.contentY > 0
+    onFecharPedido: modelo.fechar()
+    // A busca na Steam só começa com Enter (a loja limita as requisições); apagar o campo volta aos desinstalados.
+    onBuscaEditada: texto => modelo.mudouBusca(texto)
+    onBuscaConfirmada: modelo.buscar(campo.text)
+    onSetaParaBaixo: moverFoco(0)
+    // O campo guarda o texto só nesta abertura.
+    onAbertoChanged: if (aberto) campo.text = ""
 
-    anchors.fill: parent
-    z: 5
-    visible: !!modelo && modelo.aberto
-    color: "#80000000"
-    Keys.onEscapePressed: modelo.fechar()
-    // Modal para o teclado e o controle: nenhuma tecla chega à página de trás. O Tab passa, para circular.
-    Keys.onPressed: event => event.accepted = event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab
-
-    function focarInicial() {
-        if (visible) campoDeBusca.forceActiveFocus(Qt.TabFocusReason)
-    }
-    function devolverAoRetorno() {
-        if (visible) return
-        // Quem abriu pode ter perdido o foco para a janela quando o fundo ficou desabilitado: o foco vai à página à vista.
-        if (retorno && retorno !== Window.contentItem && retorno.visible && retorno.enabled) retorno.forceActiveFocus(Qt.TabFocusReason)
-        else seletor.retornoPerdido()
-    }
-    // A seta numa linha leva o foco à vizinha; para cima da primeira, ao campo de busca.
-    function moverFoco(indice) {
-        if (indice < 0) { campoDeBusca.forceActiveFocus(Qt.BacktabFocusReason); return }
-        if (indice >= lista.count) return
-        lista.positionViewAtIndex(indice, ListView.Contain)
-        var item = lista.itemAtIndex(indice)
-        if (item) item.forceActiveFocus(Qt.TabFocusReason)
-    }
-
-    onVisibleChanged: {
-        if (visible) {
-            retorno = Window.window ? Window.window.activeFocusItem : null
-            campoDeBusca.text = ""
-            // Adiado: o item acabou de ficar visível e só então aceita o foco.
-            Qt.callLater(focarInicial)
-        } else {
-            // Depois de a página de trás voltar a ficar habilitada.
-            Qt.callLater(devolverAoRetorno)
-        }
+    // A seta numa linha leva o foco à vizinha ativa (a que já está na lista fica fora do foco); para cima da primeira, ao campo.
+    function moverFoco(indice, passo) {
+        passo = passo === undefined ? 1 : passo
+        while (indice >= 0 && indice < linhas.count && !linhas.itemAt(indice).enabled) indice += passo
+        if (indice < 0) { campo.forceActiveFocus(Qt.BacktabFocusReason); return }
+        var linha = linhas.itemAt(indice)
+        if (!linha) return
+        var topo = linha.mapToItem(lista.contentItem, 0, 0).y
+        if (topo < lista.contentY) lista.contentY = Math.max(0, topo - 12)
+        else if (topo + linha.height > lista.contentY + lista.height) lista.contentY = topo + linha.height - lista.height + 12
+        linha.botaoDaLinha.forceActiveFocus(Qt.TabFocusReason)
     }
 
-    MouseArea { anchors.fill: parent } // o que está embaixo não recebe cliques
+    Item {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
 
-    Rectangle {
-        anchors.centerIn: parent
-        width: Math.min(460, parent.width - 48)
-        height: Math.min(520, parent.height - 48)
-        radius: 8
-        color: Tema.fundo
-        border.color: Tema.botaoSobre
-        clip: true
-
-        // O cabeçalho vem primeiro: a ordem do Tab é "Fechar", o campo e as linhas.
-        Rectangle {
-            id: cabecalho
-            anchors { left: parent.left; right: parent.right; top: parent.top }
-            height: 56
-            color: Tema.fundo
-
-            Button {
-                id: botaoFechar
-                objectName: "zeradosFechar"
-                anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
-                text: "Fechar"
-                focusPolicy: Qt.StrongFocus
-                implicitHeight: 34
-                leftPadding: 18
-                rightPadding: 18
-                Keys.onReturnPressed: click()
-                Keys.onEnterPressed: click()
-                onClicked: seletor.modelo.fechar()
-                contentItem: Text {
-                    text: botaoFechar.text
-                    textFormat: Text.PlainText
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    color: Tema.texto
-                    font { family: Tema.fonte; pixelSize: 14 }
-                }
-                background: Rectangle {
-                    radius: 6
-                    color: Tema.superficie
-                    opacity: botaoFechar.down ? 0.75 : botaoFechar.hovered ? 0.9 : 1
-                    border { width: botaoFechar.visualFocus ? 2 : 1; color: botaoFechar.visualFocus ? Tema.texto : Tema.borda }
-                }
-            }
-            Text {
-                objectName: "zeradosTitulo"
-                anchors { left: botaoFechar.right; right: parent.right; leftMargin: 8; rightMargin: 12 + botaoFechar.width + 8; verticalCenter: parent.verticalCenter }
-                text: "Adicionar a Jogos Zerados"
-                textFormat: Text.PlainText
-                horizontalAlignment: Text.AlignHCenter
-                elide: Text.ElideRight
-                color: Tema.texto
-                font { family: Tema.fonte; pixelSize: 16; weight: Font.DemiBold }
-                Accessible.role: Accessible.Heading
-                Accessible.name: text
-            }
-        }
-
-        Rectangle {
-            id: campo
-            anchors { left: parent.left; right: parent.right; top: cabecalho.bottom; margins: 12; topMargin: 0 }
-            height: 40
-            radius: 8
-            color: Tema.superficie
-            border { width: campoDeBusca.activeFocus ? 2 : 1; color: campoDeBusca.activeFocus ? Tema.destaque : Tema.borda }
-
-            TextField {
-                id: campoDeBusca
-                objectName: "zeradosCampo"
-                anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
-                selectByMouse: true
-                placeholderText: "Buscar na Steam"
-                placeholderTextColor: Tema.textoSecundario
-                color: Tema.texto
-                selectionColor: Tema.destaque
-                selectedTextColor: "white"
-                font { family: Tema.fonte; pixelSize: 15 }
-                background: null
-                verticalAlignment: TextInput.AlignVCenter
-                Accessible.name: "Buscar na Steam"
-                // A busca na Steam só começa com Enter (a loja limita as requisições); apagar o campo volta aos desinstalados.
-                onTextEdited: seletor.modelo.mudouBusca(text)
-                onAccepted: seletor.modelo.buscar(text)
-                Keys.onDownPressed: seletor.moverFoco(0)
-            }
-        }
-
-        Text {
-            id: aviso
-            objectName: "zeradosAviso"
-            anchors { left: parent.left; right: parent.right; top: campo.bottom; leftMargin: 16; rightMargin: 16; topMargin: 8 }
-            visible: !!seletor.modelo && seletor.modelo.aviso !== ""
-            height: visible ? implicitHeight : 0
-            text: seletor.modelo ? seletor.modelo.aviso : ""
-            textFormat: Text.PlainText
-            wrapMode: Text.Wrap
-            color: Tema.textoSecundario
-            font { family: Tema.fonte; pixelSize: 13 }
-        }
-
-        Item {
-            anchors { left: parent.left; right: parent.right; top: aviso.bottom; bottom: parent.bottom; topMargin: 8 }
-
-            BusyIndicator {
+        PaginaDoSeletor {
+            ativa: !!seletor.modelo && seletor.modelo.estado === "carregando"
+            Girador {
                 objectName: "zeradosCarregando"
                 anchors.centerIn: parent
                 width: 32
                 height: 32
-                running: visible
-                visible: !!seletor.modelo && seletor.modelo.estado === "carregando"
+                running: parent.visible
             }
+        }
 
+        PaginaDoSeletor {
+            ativa: !!seletor.modelo && seletor.modelo.estado === "vazio"
             EstadoVazio {
                 objectName: "zeradosVazio"
                 anchors.fill: parent
-                visible: !!seletor.modelo && seletor.modelo.estado === "vazio"
-                glifo: ""  // marca de seleção
+                icone: "object-select"
                 titulo: "Nenhum jogo disponível"
                 descricao: "Busque um jogo na Steam para adicioná-lo."
             }
+        }
 
-            ListView {
+        PaginaDoSeletor {
+            ativa: !!seletor.modelo && seletor.modelo.estado === "lista"
+
+            Flickable {
                 id: lista
                 objectName: "zeradosLista"
-                anchors { fill: parent; leftMargin: 12; rightMargin: 12; bottomMargin: 12 }
-                visible: !!seletor.modelo && seletor.modelo.estado === "lista"
-                model: seletor.modelo ? seletor.modelo.linhas : []
+                anchors.fill: parent
+                contentWidth: width
+                contentHeight: conteudoDaLista.height + 24
                 clip: true
-                spacing: 4
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: BarraDeRolagem {}
+                // A mesma mola das grades: a lista também rola com inércia.
+                RolagemPorMola { alvo: lista; ativa: Tema.animacoes }
 
-                // Uma linha inativa continua alcançável pelas setas (o motivo é lido pelo leitor de tela), mas não age.
-                delegate: Button {
-                    id: linha
-                    required property int index
-                    required property var modelData
-                    objectName: "zeradosLinha" + index
-                    width: lista.width
-                    implicitHeight: 58
-                    focusPolicy: Qt.StrongFocus
-                    opacity: modelData.ativa ? 1 : 0.5
-                    Accessible.name: modelData.titulo
-                    Accessible.description: modelData.subtitulo
-                    Accessible.role: Accessible.Button
-                    Keys.onReturnPressed: click()
-                    Keys.onEnterPressed: click()
-                    Keys.onDownPressed: seletor.moverFoco(index + 1)
-                    Keys.onUpPressed: seletor.moverFoco(index - 1)
-                    onClicked: if (modelData.ativa) seletor.modelo.escolher(modelData.chave)
+                // `Adw.Clamp` com 12 de margem: o aviso (que rola com a lista) e a `boxed-list` contínua.
+                Column {
+                    id: conteudoDaLista
+                    x: (lista.width - width) / 2
+                    y: 12
+                    width: Math.min(600, lista.width - 24)
 
-                    background: Rectangle {
-                        radius: 8
-                        color: linha.down && linha.modelData.ativa ? Tema.pressionado : linha.hovered && linha.modelData.ativa ? Tema.botaoSobre : Tema.superficie
-                        border { width: linha.visualFocus ? 2 : 1; color: linha.visualFocus ? Tema.destaque : Tema.borda }
+                    Text {
+                        objectName: "zeradosAviso"
+                        width: parent.width
+                        visible: !!seletor.modelo && seletor.modelo.aviso !== ""
+                        height: visible ? implicitHeight + 12 : 0
+                        text: seletor.modelo ? seletor.modelo.aviso : ""
+                        textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                        color: Tema.textoSecundario
+                        font { family: Tema.fonte; pixelSize: Tema.corpo }
                     }
-                    contentItem: Item {
-                        Column {
-                            anchors { left: parent.left; leftMargin: 8; right: mais.left; rightMargin: 8; verticalCenter: parent.verticalCenter }
-                            Text {
-                                objectName: "zeradosLinha" + linha.index + "Titulo"
-                                width: parent.width
-                                text: linha.modelData.titulo
-                                textFormat: Text.PlainText
-                                elide: Text.ElideRight
-                                color: Tema.texto
-                                font { family: Tema.fonte; pixelSize: 15 }
+                    GrupoDeLinhas {
+                        width: parent.width
+
+                        Repeater {
+                            id: linhas
+                            model: seletor.modelo ? seletor.modelo.linhas : []
+                            // Uma linha inativa fica fora do foco e não age; o motivo é o subtítulo.
+                            delegate: LinhaDeAcao {
+                                id: linha
+                                required property int index
+                                required property var modelData
+                                objectName: "zeradosLinha" + index
+                                titulo: modelData.titulo
+                                subtitulo: modelData.subtitulo
+                                icone: modelData.ativa ? "list-add" : ""
+                                enabled: modelData.ativa
+                                Accessible.description: modelData.subtitulo
+                                Keys.onDownPressed: seletor.moverFoco(index + 1, 1)
+                                Keys.onUpPressed: seletor.moverFoco(index - 1, -1)
+                                onAcionada: seletor.modelo.escolher(modelData.chave)
                             }
-                            Text {
-                                objectName: "zeradosLinha" + linha.index + "Subtitulo"
-                                width: parent.width
-                                visible: text !== ""
-                                text: linha.modelData.subtitulo
-                                textFormat: Text.PlainText
-                                elide: Text.ElideRight
-                                color: Tema.textoSecundario
-                                font { family: Tema.fonte; pixelSize: 12 }
-                            }
-                        }
-                        Text {
-                            id: mais
-                            anchors { right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }
-                            visible: linha.modelData.ativa
-                            text: ""  // adicionar
-                            textFormat: Text.PlainText
-                            color: Tema.textoSecundario
-                            font { family: Tema.fonteDeIcones; pixelSize: 14 }
                         }
                     }
                 }

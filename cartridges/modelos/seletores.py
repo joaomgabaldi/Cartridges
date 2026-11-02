@@ -50,7 +50,7 @@ from PySide6.QtGui import QGuiApplication
 from cartridges import shared
 from cartridges.saves import backup_de_saves, ludusavi
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
-from cartridges.utils import game_logo
+from cartridges.utils import copias_animadas, game_logo
 from cartridges.utils.busca_do_seletor import BuscaDoSeletor, tamanho_baixado
 from cartridges.utils.download import (
     MAX_ANIMATED_IMAGE_BYTES,
@@ -123,8 +123,13 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         self.sgdb = SgdbHelper()
         self._linhas: list[dict[str, Any]] = []
         self._aberto = False
-        # Uma busca nova, uma escolha ou o fechamento invalidam tudo o que as threads ainda entregam.
+        # Uma busca nova, uma escolha ou o fechamento invalidam o que as threads de download entregam. As miniaturas
+        # têm a geração delas (`_geracao_da_busca`): escolher uma imagem não as interrompe, como na `main`, e voltar
+        # à grade a encontra completa.
         self._generation = 0
+        self._geracao_da_busca = 0
+        # O que a busca devolveu e ainda espera a miniatura: a linha só entra no modelo quando ela chega.
+        self._itens: list[tuple[str, bool]] = []
         self._closed = True
         self._last_query: Optional[str] = None
         self._busca = ""
@@ -269,7 +274,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
 
     def search(self) -> None:
         self._generation += 1
-        geracao = self._generation
+        geracao = self._geracao_da_busca = self._generation
         self._cancelar_debounce()
         self._limpar()
         self._baixando = False
@@ -292,7 +297,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         threading.Thread(target=self._thread_da_busca, args=args, daemon=True).start()
 
     def _show_empty(self, titulo: str, descricao: str = "", generation: Optional[int] = None, erro: bool = False) -> None:
-        if generation is not None and generation != self._generation:
+        if generation is not None and generation not in (self._generation, self._geracao_da_busca):
             return
         self._titulo, self._descricao = titulo, descricao
         self._vazio, self._erro = True, erro
@@ -315,7 +320,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
 
     def _corpo_da_busca(self, consulta: str, animada: bool, geracao: int, pasta: Optional[Path]) -> None:
         def cancelar(*_args: Any) -> None:
-            if self._closed or geracao != self._generation:
+            if self._closed or geracao != self._geracao_da_busca:
                 raise DownloadCancelado
 
         try:
@@ -346,7 +351,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         na_thread_principal(self._receber, geracao, [(original, animada) for original, _previa in itens])
         limite = MAX_ANIMATED_IMAGE_BYTES if animada else MAX_IMAGE_BYTES
         for numero, (_original, previa) in enumerate(itens):
-            if self._closed or geracao != self._generation:
+            if self._closed or geracao != self._geracao_da_busca:
                 return
             arquivo = None
             try:
@@ -362,7 +367,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
                     sufixo = ".apng"
                 # O nome nunca sai da resposta da API: um id "..\x" gravava fora da pasta.
                 destino = pasta / f"{uuid4().hex}{sufixo}" if pasta is not None else None
-                if destino is not None and not self._closed and geracao == self._generation:
+                if destino is not None and not self._closed and geracao == self._geracao_da_busca:
                     try:
                         destino.write_bytes(conteudo)
                         arquivo = destino
@@ -378,7 +383,11 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
     def _limpar(self) -> None:
         for linha in self._linhas:
             if linha["arquivo"] is not None:
+                if linha["animada"]:
+                    # As cópias reduzidas ainda na fila rodariam por minutos depois, à frente das da biblioteca.
+                    copias_animadas.abandonar(linha["arquivo"])
                 self._apagar(linha["arquivo"])
+        self._itens = []
         if self._linhas:
             self.beginResetModel()
             self._linhas = []
@@ -397,39 +406,50 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
                 pass
 
     def _receber(self, geracao: int, itens: list[tuple[str, bool]]) -> None:
-        if geracao != self._generation or self._closed:
+        """A busca achou ``itens``: eles esperam a miniatura, e a linha só entra no modelo quando ela chega (até a
+        primeira, o spinner central; depois, uma a uma, como na `main`)."""
+        if geracao != self._geracao_da_busca or self._closed:
             return
-        self.beginResetModel()
-        self._linhas = [
-            {"id": numero, "original": original, "animada": animada, "miniatura": "", "carregando": True, "arquivo": None}
-            for numero, (original, animada) in enumerate(itens)
-        ]
-        self.endResetModel()
-
-    def _linha(self, numero: int) -> int:
-        return next((i for i, linha in enumerate(self._linhas) if linha["id"] == numero), -1)
+        self._itens = list(itens)
 
     def _previa_pronta(self, geracao: int, numero: int, arquivo: Optional[Path]) -> None:
-        if geracao != self._generation or self._closed:
+        if geracao != self._geracao_da_busca or self._closed:
             if arquivo is not None:
                 self._apagar(arquivo)
             return
-        posicao = self._linha(numero)
-        if posicao < 0:
+        if arquivo is None or not 0 <= numero < len(self._itens):
+            # A miniatura não veio: a linha nunca entra.
+            if arquivo is not None:
+                self._apagar(arquivo)
             return
-        if arquivo is None:
-            # A miniatura não veio: a linha sai, em vez de ficar carregando para sempre.
-            self.beginRemoveRows(QModelIndex(), posicao, posicao)
-            del self._linhas[posicao]
-            self.endRemoveRows()
-            return
-        linha = self._linhas[posicao]
-        linha.update(miniatura=QUrl.fromLocalFile(str(arquivo)).toString(), carregando=False, arquivo=arquivo)
-        indice = self.index(posicao, 0)
-        self.dataChanged.emit(indice, indice, [self.Papel.Miniatura, self.Papel.Carregando])
+        original, animada = self._itens[numero]
+        linha = {
+            "id": numero, "original": original, "animada": animada,
+            "miniatura": QUrl.fromLocalFile(str(arquivo)).toString(), "carregando": False, "arquivo": arquivo,
+        }  # fmt: skip
+        self.beginInsertRows(QModelIndex(), len(self._linhas), len(self._linhas))
+        self._linhas.append(linha)
+        self.endInsertRows()
+        if animada:
+            self._pedir_copia(linha, geracao)
+
+    def _pedir_copia(self, linha: dict[str, Any], geracao: int) -> None:
+        """A prévia animada toca a cópia reduzida ao tamanho da grade (`copias_animadas`), e não a original, que pode
+        ter centenas de MB: assim todas tocam ao mesmo tempo, como na `main`. Até ela chegar, vale o primeiro quadro."""
+        tamanho = copias_animadas.tamanhos()[0]
+        destino = copias_animadas.caminho_para(linha["arquivo"], tamanho)
+
+        def pronta(resultado: str) -> None:
+            if resultado != "pronta" or geracao != self._geracao_da_busca or self._closed or linha not in self._linhas:
+                return
+            linha["miniatura"] = QUrl.fromLocalFile(str(destino)).toString()
+            indice = self.index(self._linhas.index(linha), 0)
+            self.dataChanged.emit(indice, indice, [self.Papel.Miniatura])
+
+        copias_animadas.pedir(linha["arquivo"], destino, tamanho, pronta)
 
     def _fim_das_previas(self, geracao: int) -> None:
-        if geracao != self._generation or self._closed:
+        if geracao != self._geracao_da_busca or self._closed:
             return
         self._buscando = False
         if not self._linhas:
@@ -446,11 +466,10 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         linha = self._linhas[indice]
         if linha["carregando"]:
             return
-        # Encerra a busca que ainda baixa miniaturas: cada uma que chegasse depois traria a grade de
-        # volta por cima do carregamento.
+        # Só o download tem geração nova: as miniaturas seguem chegando (a grade já não está à vista, então não
+        # voltam por cima do carregamento) e "Voltar" a encontra completa.
         self._generation += 1
         self._cancelar_debounce()
-        self._buscando = False
         self._baixando = True
         self._progresso, self._progresso_texto = 0.0, ""
         self.estadoChanged.emit()
@@ -526,6 +545,10 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
             arquivo.unlink(missing_ok=True)
             self.fechar()
             return
+        self._concluir(arquivo, geracao)
+
+    def _concluir(self, arquivo: Path, geracao: int) -> None:
+        """O arquivo baixado chegou: entrega a quem o recebe e fecha."""
         self._entregar(arquivo)
         self.fechar()
 
@@ -536,6 +559,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         """Cancela a busca e o download e apaga todos os arquivos do seletor."""
         self._closed = True
         self._generation += 1
+        self._geracao_da_busca = -1
         self._cancelar_debounce()
         self._aberto = self._buscando = self._baixando = self._vazio = self._erro = False
         self._progresso, self._progresso_texto = 0.0, ""
@@ -595,8 +619,20 @@ class SeletorDoSgdb(_SeletorDoSteamGridDB):
                 itens.append((original, original if animada else (grade.get("thumb") or original)))
         return itens
 
-    def _entregar(self, arquivo: Path) -> None:
-        self._destino.entregar_capa_baixada(arquivo)
+    def _concluir(self, arquivo: Path, geracao: int) -> None:
+        """A capa é convertida aqui dentro, com a tela "Baixando…" à vista (`sgdb_picker.py:328`): o seletor só fecha com ela
+        pronta; se a conversão falhar, volta à grade."""
+        self._destino.entregar_capa_baixada(arquivo, lambda ok: self._capa_convertida(geracao, ok))
+
+    def _capa_convertida(self, geracao: int, convertida: bool) -> None:
+        if self._closed or geracao != self._generation:
+            return
+        if convertida:
+            self.fechar()
+            return
+        self._baixando = False
+        self.baixandoChanged.emit()
+        self.estadoChanged.emit()
 
 
 class SeletorDeLogo(_SeletorDoSteamGridDB):
@@ -648,9 +684,9 @@ MAX_PAPEIS = 24
 LADO_DA_CELULA = 260
 # A caixa em que a prévia do ajuste cabe: com uma orientação só ela tem o diálogo inteiro; no arranjo misto as
 # duas dividem a largura, e a deitada fica com a maior parte.
-CAIXA_UNICA = (640, 360)
-CAIXA_DEITADA = (440, 250)
-CAIXA_EM_PE = (150, 250)
+CAIXA_UNICA = (800, 440)
+CAIXA_DEITADA = (600, 340)
+CAIXA_EM_PE = (220, 340)
 
 
 def monitores_das_telas() -> list[Monitor]:
@@ -822,7 +858,7 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
 
     def _corpo_da_busca(self, consulta: str, animada: bool, geracao: int, pasta: Optional[Path]) -> None:
         def cancelar(*_args: Any) -> None:
-            if self._closed or geracao != self._generation:
+            if self._closed or geracao != self._geracao_da_busca:
                 raise DownloadCancelado
 
         alvo = self._formatos
@@ -848,7 +884,7 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
         with ThreadPoolExecutor(max_workers=6) as executor:
             arquivos = executor.map(lambda item: self._miniatura(str(item["thumb"]), pasta, pixels, cancelar), itens)
             for numero, arquivo in enumerate(arquivos):
-                if self._closed or geracao != self._generation:
+                if self._closed or geracao != self._geracao_da_busca:
                     executor.shutdown(wait=False, cancel_futures=True)  # o que está na fila nem começa
                     return
                 na_thread_principal(self._previa_pronta, geracao, numero, arquivo)
@@ -953,7 +989,7 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
         self._cortes.redefinir(linhas)
         for numero in range(len(linhas)):
             self._desenhar(numero)
-        self._baixando = self._buscando = False
+        self._baixando = False
         self._ajustando = True
         self.estadoChanged.emit()
         self.baixandoChanged.emit()
@@ -997,19 +1033,15 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
 
     @Slot()
     def voltar(self) -> None:
-        """Da segunda etapa para a grade. As miniaturas que a escolha interrompeu saem: não voltariam sozinhas."""
+        """Da segunda etapa para a grade, que segue com as miniaturas que chegaram (e as que ainda chegam)."""
         if self._so_arquivo:
             self.fechar()  # um arquivo do disco não tem grade para onde voltar
             return
         if not self._ajustando:
             return
         self._sair_do_ajuste()
-        for numero in reversed(range(len(self._linhas))):
-            if self._linhas[numero]["carregando"]:
-                self.beginRemoveRows(QModelIndex(), numero, numero)
-                del self._linhas[numero]
-                self.endRemoveRows()
-        if self._linhas:
+        # As miniaturas não pararam (a escolha não as interrompe): a grade volta como estava, ou ainda chegando.
+        if self._linhas or self._buscando:
             self.estadoChanged.emit()
         else:
             self._show_empty(_("Não foi possível carregar as pré-visualizações"), _("Tente novamente."), erro=True)

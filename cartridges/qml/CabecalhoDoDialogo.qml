@@ -10,6 +10,8 @@ Item {
     property string titulo
     property bool comFechar: true
     property bool sombra: false
+    // O `objectName` do título (os testes de cada diálogo).
+    property alias objetoDoTitulo: textoDoTitulo.objectName
     property alias inicio: areaDoInicio.data
     property alias fim: areaDoFim.data
     readonly property alias botaoFechar: botaoFechar
@@ -26,6 +28,7 @@ Item {
     }
 
     Text {
+        id: textoDoTitulo
         objectName: "tituloDoCabecalho"
         anchors { centerIn: parent; verticalCenterOffset: -1.5 }
         width: Math.min(implicitWidth, Math.max(0, parent.width - 2 * Math.max(areaDoInicio.width + 12, areaDoFim.width + (botaoFechar.visible ? 41 : 6) + 6)))
