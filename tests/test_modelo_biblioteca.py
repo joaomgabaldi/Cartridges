@@ -550,3 +550,20 @@ def test_copia_velha_e_refeita_ao_ativar(app_qt, pedidos):
     modelo.ativar_copias()
 
     assert pedidos == [[("a", caminho)]]
+
+
+# --- Halo da atualização (C01) -----------------------------------------------
+
+
+def test_tem_atualizacao_so_com_patch_esperando_e_fora_dos_zerados(app_qt):
+    """`has_update and not zerado`, como o `update-available` da `main` (`display_manager.py:90`)."""
+    modelo = ModeloDaBiblioteca()
+    modelo.atualizar(_jogo("a", "A", track_updates=True, update_available_ts=5))
+    modelo.atualizar(_jogo("b", "B", track_updates=True, update_available_ts=0))
+    modelo.atualizar(_jogo("c", "C", track_updates=False, update_available_ts=5))
+    modelo.atualizar(_jogo("d", "D", track_updates=True, update_available_ts=5, removed=True, status="beaten"))
+    papel = ModeloDaBiblioteca.Papel.TemAtualizacao
+    tem = {modelo.linha(i).jogo_id: modelo.data(modelo.index(i), papel) for i in range(modelo.rowCount())}
+    assert tem["a"] is True and tem["b"] is False and tem["c"] is False
+    assert tem.get("d") is False  # um zerado nunca tem o halo
+    assert bytes(modelo.roleNames()[papel]) == b"temAtualizacao"

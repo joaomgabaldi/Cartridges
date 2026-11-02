@@ -272,7 +272,7 @@ def test_menu_do_cartao_aponta_para_o_jogo_dele(app_qt):
     app.fechar()
 
 
-def test_anel_e_botoes_so_por_teclado(app_qt):
+def test_anel_so_por_teclado_e_botoes_so_pelo_ponteiro(app_qt):
     from PySide6.QtCore import QCoreApplication, QEvent  # noqa: PLC0415
     from PySide6.QtGui import QKeyEvent  # noqa: PLC0415
 
@@ -289,7 +289,9 @@ def test_anel_e_botoes_so_por_teclado(app_qt):
         QCoreApplication.sendEvent(app.janela, QKeyEvent(tipo, Qt.Key.Key_Right, Qt.KeyboardModifier.NoModifier))
     _esperar(lambda: grade.property("porTeclado") is True)
     atual = next(c for c in _cartoes(grade) if c.property("focado"))
-    assert atual.property("nome") == "Beta" and atual.property("mostrarBotoes") is True
+    # Como na `main` (`game.py:564`, R7): o teclado acende o anel, mas só o ponteiro e o menu aberto mostram os botões.
+    assert atual.property("nome") == "Beta" and atual.property("mostrarBotoes") is False
+    assert _achar(atual, "anelDeFoco").property("ativo") is True
     app.fechar()
 
 
@@ -319,7 +321,7 @@ def test_animacao_so_com_autoplay(app_qt, monkeypatch):
     app = _App(_jogo_com_capa_animada())
     cartao, animada = _cartao_animado(app)
     assert cartao.property("capaAnimada").startswith("file:///")
-    # "Animar capas" desligado: nada anima, nem com o mouse em cima (a `main` também não), e o arquivo nem é aberto.
+    # "Animar capas" desligado: nada anima sem o mouse em cima, e o arquivo nem é aberto.
     assert animada.property("playing") is False and animada.property("source").toString() == ""
     # Ligado: toca.
     shared.schema.set_boolean("cover-autoplay", True)
@@ -327,9 +329,18 @@ def test_animacao_so_com_autoplay(app_qt, monkeypatch):
     assert _esperar(lambda: animada.property("playing") is True)
     assert animada.property("source").toString() == cartao.property("capaAnimada")
     assert _esperar(lambda: animada.property("visible"))  # a animação carregou e cobre a capa parada
-    # Fora da vista da grade, nada toca nem segura o arquivo.
+    # Fora da vista da grade nada toca; a capa para no quadro atual e guarda o arquivo por 30 s (`tocador_capas.py`).
     cartao.setProperty("naVista", False)
-    assert animada.property("playing") is False and animada.property("source").toString() == ""
+    assert animada.property("playing") is False and animada.property("source").toString() == cartao.property("capaAnimada")
+    assert cartao.property("retendo") is True
+    # Passados os 30 s (ou além de 8 pausadas) larga o arquivo e volta ao primeiro quadro.
+    QMetaObject.invokeMethod(cartao, "liberar", Qt.ConnectionType.DirectConnection)
+    assert animada.property("source").toString() == ""
+    # Passar o mouse toca a capa mesmo com "Animar capas" desligado (`game_cover.py:531`).
+    cartao.setProperty("naVista", True)
+    shared.schema.set_boolean("cover-autoplay", False)
+    assert _esperar(lambda: not app.aplicativo.tocarSempre)
+    assert cartao.property("animando") is False
     shared.schema.reset("cover-autoplay")
     app.fechar()
 
@@ -354,7 +365,7 @@ def test_grade_coberta_pelos_zerados_para(app_qt, monkeypatch):
     QMetaObject.invokeMethod(app.achar("botaoZerados"), "click", Qt.ConnectionType.DirectConnection)
     assert _esperar(lambda: app.janela.property("paginaAtual") == "zerados")
     assert _esperar(lambda: animada.property("playing") is False)
-    assert animada.property("source").toString() == ""
+    assert animada.property("source").toString() == cartao.property("capaAnimada")  # pausada, com o quadro guardado
     shared.schema.reset("cover-autoplay")
     app.fechar()
 
@@ -396,7 +407,7 @@ def test_deve_tocar(app_qt, monkeypatch):
     _cartao, animada = _cartao_animado(app)
     assert _esperar(lambda: animada.property("playing") is True)
     app.janela.showMinimized()
-    assert _esperar(lambda: animada.property("playing") is False and animada.property("source").toString() == "")
+    assert _esperar(lambda: animada.property("playing") is False)
     app.janela.showNormal()
     assert _esperar(lambda: animada.property("playing") is True)
     shared.schema.reset("cover-autoplay")
@@ -745,3 +756,188 @@ def test_itens_de_ano_tem_o_nome_do_grupo(app_qt):
         assert _achar(app.janela, "genero-2023") is None
     finally:
         app.fechar()
+
+
+# -- Auditoria GTK x Qt, pacote A: grade, cartão, busca, atalhos, estados vazios e tarefas ---------------------------
+
+
+def _tecla(app, tecla, modificadores=Qt.KeyboardModifier.NoModifier, texto=""):
+    from PySide6.QtCore import QCoreApplication, QEvent  # noqa: PLC0415
+    from PySide6.QtGui import QKeyEvent  # noqa: PLC0415
+
+    for tipo in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
+        QCoreApplication.sendEvent(app.janela, QKeyEvent(tipo, tecla, modificadores, texto))
+    _esperar()
+
+
+def test_grade_tem_o_passo_e_o_cartao_da_main(app_qt):
+    """G01-G04, C06: passo de 218x365 (200+6+12, 347+6+12), cartão de 200x347 com rodapé de 47, a 18 do topo."""
+    app = _App(_tres())
+    app.janela.resize(1170, 795)
+    _esperar()
+    grade = app.achar("grade")
+    assert grade.property("cellWidth") == 218 and grade.property("cellHeight") == 365
+    cartao = next(c for c in _cartoes(grade) if c.property("nome") == "Alfa")
+    assert (cartao.width(), cartao.height(), cartao.property("alturaDoNome")) == (200, 347, 47)
+    # 1170 de largura: (1170 - 30 + 12) / 218 = 5 colunas, como o gabarito.
+    assert grade.property("colunas") == 5
+    # O cartão fica a 9 da borda da célula; a célula, a topMargin (9) do topo: 18 no total (15 + 3).
+    assert grade.property("topMargin") == 9
+    app.fechar()
+
+
+def test_espaco_abre_e_tecla_menu_nao_abre(app_qt):
+    """G09, G11: Espaço abre os detalhes como o Enter; a tecla Menu e Shift+F10 não abrem nada (R7)."""
+    app = _App(_tres())
+    grade = app.achar("grade")
+    grade.forceActiveFocus()
+    _esperar()
+    _tecla(app, Qt.Key.Key_Menu)
+    _tecla(app, Qt.Key.Key_F10, Qt.KeyboardModifier.ShiftModifier)
+    assert app.achar("menuDoJogo").property("visible") is False
+    assert app.todos.busca == "" and app.achar("pagina").property("buscaAberta") is False
+    _tecla(app, Qt.Key.Key_Space, texto=" ")
+    assert _esperar(lambda: app.janela.property("paginaAtual") == "jogo")
+    assert app.achar("pagina").property("buscaAberta") is False  # o espaço não vira busca
+    app.fechar()
+
+
+def test_tab_percorre_os_cartoes(app_qt):
+    """G10."""
+    app = _App(_tres())
+    grade = app.achar("grade")
+    grade.forceActiveFocus()
+    _esperar()
+    _tecla(app, Qt.Key.Key_Tab)
+    _tecla(app, Qt.Key.Key_Tab)
+    assert grade.property("currentIndex") == 2
+    _tecla(app, Qt.Key.Key_Backtab, Qt.KeyboardModifier.ShiftModifier)
+    assert grade.property("currentIndex") == 1
+    app.fechar()
+
+
+def test_digitar_com_o_foco_num_botao_da_barra_abre_a_busca(app_qt):
+    """G12: o `key-capture-widget` é a página inteira (o Espaço não conta: aciona o botão)."""
+    app = _App(_tres())
+    botao = app.achar("botaoMenu")
+    botao.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    _esperar()
+    _tecla(app, Qt.Key.Key_G, texto="g")
+    assert app.achar("pagina").property("buscaAberta") is True
+    assert app.achar("campoDeBusca").property("text") == "g"
+    assert _esperar(lambda: app.todos.busca == "g")  # depois dos 150 ms do `GtkSearchEntry`
+    app.fechar()
+
+
+def test_busca_espera_150_ms_e_o_enter_aplica_na_hora(app_qt):
+    """S04, S03: o filtro espera; Enter aplica; o botão de limpar só existe com texto."""
+    app = _App(_tres())
+    app.achar("pagina").setProperty("buscaAberta", True)
+    campo = app.achar("campoDeBusca")
+    limpar = app.achar("limparBusca")
+    assert limpar.property("visible") is False
+    campo.setProperty("text", "Beta")
+    assert app.todos.busca == "" and limpar.property("visible") is True
+    assert _esperar(lambda: app.todos.busca == "Beta")
+    campo.setProperty("text", "Gama")
+    assert app.todos.busca == "Beta"
+    QMetaObject.invokeMethod(campo, "accepted", Qt.ConnectionType.DirectConnection)
+    assert app.todos.busca == "Gama"
+    assert _esperar(lambda: app.achar("barraDeBusca").property("height") == 47)  # S01
+    app.fechar()
+
+
+def test_esc_e_alt_esquerda_voltam_de_jogos_zerados(app_qt):
+    """N01, N02."""
+    from PySide6.QtTest import QTest  # noqa: PLC0415
+
+    app = _App(_tres())
+    for esc in (True, False):
+        QMetaObject.invokeMethod(app.achar("botaoZerados"), "click", Qt.ConnectionType.DirectConnection)
+        assert _esperar(lambda: app.janela.property("paginaAtual") == "zerados")
+        if esc:
+            app.achar("gradeDeZerados").forceActiveFocus()
+            _tecla(app, Qt.Key.Key_Escape)
+        else:
+            QTest.keyClick(app.janela, Qt.Key.Key_Left, Qt.KeyboardModifier.AltModifier)
+        assert _esperar(lambda: app.janela.property("paginaAtual") == "todos"), esc
+    app.fechar()
+
+
+def test_a_barra_de_titulo_acende_a_linha_com_a_grade_rolada(app_qt):
+    """B02: `sombraDaBarra` segue o `contentY` da grade (o topo é -topMargin, não 0)."""
+    app = _App(_jogos(*[(n, f"Jogo {n:03}", {}) for n in range(1, 61)]))
+    grade = app.achar("grade")
+    _esperar()
+    assert app.janela.property("sombraDaBarra") is False
+    grade.setProperty("contentY", 300.0)
+    assert _esperar(lambda: app.janela.property("sombraDaBarra") is True)
+    grade.setProperty("contentY", -grade.property("topMargin"))
+    assert _esperar(lambda: app.janela.property("sombraDaBarra") is False)
+    app.fechar()
+
+
+def test_roda_do_mouse_anda_por_mola_ate_o_destino_e_nao_passa_dos_limites(app_qt):
+    """G06: cada entalhe soma 120 px ao destino; a mola assenta nele (sem repique) e para no topo."""
+    from PySide6.QtCore import Q_ARG  # noqa: PLC0415
+
+    app = _App(_jogos(*[(n, f"Jogo {n:03}", {}) for n in range(1, 61)]))
+    grade = app.achar("grade")
+    _esperar()
+    topo = grade.property("contentY")
+    mola = app.achar("rolagemPorMola")
+    QMetaObject.invokeMethod(mola, "empurrar", Qt.ConnectionType.DirectConnection, Q_ARG("QVariant", 1))
+    assert _esperar(lambda: not mola.property("correndo"), limite=5.0)
+    assert abs(grade.property("contentY") - (topo + 120)) <= 0.5
+    QMetaObject.invokeMethod(mola, "empurrar", Qt.ConnectionType.DirectConnection, Q_ARG("QVariant", -10))
+    assert _esperar(lambda: not mola.property("correndo"), limite=5.0)
+    assert abs(grade.property("contentY") - topo) <= 0.5  # o clamp: não sobe além do topo
+    app.fechar()
+
+
+def test_cartao_halo_carregando_e_botoes_da_main(app_qt):
+    """C01, C09, C11, C13, C14: halo só com atualização, capa some carregando, botões de 34 sem dica própria."""
+    jogos = _tres()
+    jogos[0].loading = 1
+    jogos[1].track_updates = True
+    jogos[1].update_available_ts = 10
+    app = _App(jogos)
+    grade = app.achar("grade")
+    por_nome = {c.property("nome"): c for c in _cartoes(grade)}
+    assert _esperar(lambda: _achar(por_nome["Beta"], "haloDaAtualizacao") is not None)
+    assert _achar(por_nome["Alfa"], "haloDaAtualizacao") is None and _achar(por_nome["Gama"], "haloDaAtualizacao") is None
+    assert _achar(por_nome["Alfa"], "capaParada").parentItem().property("opacity") == 0
+    assert _achar(por_nome["Alfa"], "carregando").property("running") is True
+    assert _achar(por_nome["Gama"], "capaParada").parentItem().property("opacity") == 1
+    jogar = _achar(por_nome["Gama"], "botaoJogar")
+    assert (jogar.width(), jogar.height()) == (34, 34) and jogar.property("dica") == "Jogar"
+    assert _achar(jogar, "dica") is None  # a `main` não tem dica nos botões do cartão
+    mais = _achar(por_nome["Gama"], "botaoMais")
+    assert mais.x() == 200 - 34 - 6 and mais.y() == 6
+    app.fechar()
+
+
+def test_estado_vazio_e_aviso_de_soltar_da_main(app_qt):
+    """V01-V03, L01."""
+    app = _App([])
+    assert app.achar("estadoVazio").property("iconeDoApp") is True
+    assert abs(app.achar("avisoDeSoltar").property("color").alphaF() - 0.88) < 0.01
+    app.fechar()
+    app = _App(_tres())
+    app.achar("pagina").setProperty("buscaAberta", True)
+    app.achar("campoDeBusca").setProperty("text", "zzz")
+    assert _esperar(lambda: app.achar("estadoVazio").property("visible"))
+    icone = _achar(app.achar("estadoVazio"), "iconeDoEstado")
+    assert icone.property("nome") == "system-search" and icone.width() == 128 and icone.property("opacity") == 0.55
+    app.fechar()
+
+
+def test_botao_das_tarefas_da_main(app_qt):
+    """K01-K04, B15: osd de 34, giro de 1,2 s e a dica da libadwaita."""
+    app = _App(_tres())
+    assert app.achar("giroDasTarefas").property("duration") == 1200
+    circulo = app.achar("circuloDasTarefas")
+    assert (circulo.width(), circulo.height()) == (34, 34)
+    dica = _achar(circulo, "dica")
+    assert dica is not None and dica.property("texto") == "Tarefas em andamento"
+    app.fechar()

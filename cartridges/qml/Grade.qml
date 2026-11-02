@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// A grade de capas da biblioteca: células de 200 de largura, 12 de espaçamento e 15 de margem,
-// centralizada na janela.
+// A grade de capas da biblioteca (o `AnimatedFlowBox` da `main`): cartões de 200x347, com 3 de respiro de cada lado
+// (`flowboxchild`) e 12 de espaçamento, a 15 de margem, centralizada na janela.
 GridView {
     id: grade
 
@@ -34,15 +34,18 @@ GridView {
 
     readonly property int espacamento: 12
     readonly property int margem: 15
+    // O `flowboxchild` tem 3 de padding em volta do cartão (CSS 2950): o passo é 200 + 6 + 12 = 218 na horizontal e
+    // 347 + 6 + 12 = 365 na vertical; o cartão fica centrado na célula, a 18 da borda (15 + 3).
+    readonly property int respiro: 6
     // A célula leva o espaçamento inteiro; a margem de 15 é a diferença para o que ela já tem.
     readonly property int colunas: {
         var cabem = Math.max(1, Math.floor((width - 2 * margem + espacamento) / larguraDaCelula))
         return colunasMaximas > 0 ? Math.min(cabem, colunasMaximas) : cabem
     }
 
-    readonly property int larguraDaCelula: 200 + espacamento
+    readonly property int larguraDaCelula: 200 + respiro + espacamento
     cellWidth: larguraDaCelula
-    cellHeight: 300 + 50 + espacamento
+    cellHeight: 347 + respiro + espacamento
     // Poucos jogos ficam centralizados, como o FlowBox de antes.
     leftMargin: Math.max(0, (width - Math.min(colunas, Math.max(1, count)) * larguraDaCelula) / 2)
     rightMargin: leftMargin
@@ -60,27 +63,53 @@ GridView {
     bottomMargin: topMargin
     clip: true
     focus: true
-    boundsBehavior: Flickable.StopAtBounds
+    // Sem o salto elástico do toque; deixa arrastar além da ponta só para o brilho de `overshoot` (PaginaDaBiblioteca).
+    boundsBehavior: Flickable.DragOverBounds
     model: biblioteca
     ScrollBar.vertical: BarraDeRolagem {}
     keyNavigationEnabled: true
     currentIndex: 0
 
+    // A roda do mouse com mola (`spring_scroll.py`); o touchpad segue o do Flickable.
+    RolagemPorMola { objectName: "rolagemPorMola"; alvo: grade; ativa: Tema.animacoes }
+
+    // O foco é do botão da capa na `main`: Enter e Espaço abrem os detalhes. Sem tecla de menu ("No keyboard shortcuts
+    // on purpose", `main.py:693`); o menu abre pelo botão "Mais opções" e pelo clique direito.
     Keys.onReturnPressed: { porTeclado = true; abrirDoAtual() }
     Keys.onEnterPressed: { porTeclado = true; abrirDoAtual() }
-    Keys.onMenuPressed: { porTeclado = true; if (currentItem) currentItem.abrirMenu() }
+    Keys.onSpacePressed: { porTeclado = true; abrirDoAtual() }
+    // Tab percorre os cartões um a um; nas pontas o foco sai da grade.
+    Keys.onTabPressed: event => {
+        porTeclado = true
+        if (currentIndex < count - 1) { currentIndex++; positionViewAtIndex(currentIndex, GridView.Contain) }
+        else event.accepted = false
+    }
+    Keys.onBacktabPressed: event => {
+        porTeclado = true
+        if (currentIndex > 0) { currentIndex--; positionViewAtIndex(currentIndex, GridView.Contain) }
+        else event.accepted = false
+    }
     // Setas: só marcam o uso do teclado; o GridView é quem move o `currentIndex`.
     Keys.onLeftPressed: event => { porTeclado = true; event.accepted = false }
     Keys.onRightPressed: event => { porTeclado = true; event.accepted = false }
     Keys.onUpPressed: event => { porTeclado = true; event.accepted = false }
     Keys.onDownPressed: event => { porTeclado = true; event.accepted = false }
     HoverHandler { onPointChanged: grade.porTeclado = false }
-    // Não é Keys.onPressed: a página já usa o da grade para abrir a busca ao digitar.
-    Shortcut {
-        sequence: "Shift+F10"
-        enabled: grade.activeFocus
-        onActivated: { grade.porTeclado = true; if (grade.currentItem) grade.currentItem.abrirMenu() }
+
+    // Entrar ou sair capa (importar, buscar, esconder) não anima: o salto é o de sempre (`animated_flow_box.py`).
+    property bool contagemMudou: false
+    onCountChanged: { contagemMudou = true; fimDaContagem.restart() }
+    Timer { id: fimDaContagem; interval: 150; onTriggered: grade.contagemMudou = false }
+
+    // As capas animadas pausadas guardam o quadro e o arquivo por 30 s; passando de 8, a mais antiga volta ao primeiro.
+    property var pausadas: []
+    function registrarPausa(cartao) {
+        var lista = pausadas.filter(c => c !== cartao)
+        lista.push(cartao)
+        while (lista.length > 8) lista.shift().liberar()
+        pausadas = lista
     }
+    function esquecerPausa(cartao) { pausadas = pausadas.filter(c => c !== cartao) }
 
     function abrirDoAtual() {
         if (currentItem) grade.abrirDetalhes(currentItem.jogoId)
@@ -95,6 +124,8 @@ GridView {
     }
 
     readonly property bool menuAberto: menuDoJogo.visible
+    // Rolada para além do topo: a linha de baixo da barra de título acende (`sombraDaBarra`).
+    readonly property bool rolado: contentY - (originY - topMargin) > 0
 
     // O passo do controle: um cartão para o lado ou para cima/baixo, sem passar da borda.
     // Devolve se o cartão atual mudou; na borda, quem chamou faz o controle vibrar (ou, em ↑ na primeira linha, vai à barra).
@@ -134,14 +165,47 @@ GridView {
         required property bool zerado
         required property bool carregando
         required property string capaAnimada
+        required property bool temAtualizacao
+        id: celula
         width: grade.cellWidth
         height: grade.cellHeight
 
         function abrirMenu() { cartao.abrirMenu() }
 
+        // As capas deslizam até o lugar novo, com mola de amortecimento crítico (massa 1, rigidez 450, epsilon .002),
+        // quando a grade refaz as linhas: mudou o número de colunas ou alguma capa mudou de linha. O `x` da célula
+        // não inclui a margem esquerda, então recentrar a grade (que é seco) não passa por aqui.
+        // shortcut: parte de onde a capa está desenhada, mas não herda a velocidade da mola em curso.
+        property real xAnterior: NaN
+        property real yAnterior: NaN
+        property real baseX: 0
+        property real baseY: 0
+        // 1 - progresso da mola: (1 + tau) e^-tau, com tau de 0 a 8,3 em 387 ms (1% de erro como o epsilon da `main`).
+        property real tau: 8.3
+        readonly property real restante: tau >= 8.3 ? 0 : (1 + tau) * Math.exp(-tau)
+        readonly property real desvioX: baseX * restante
+        readonly property real desvioY: baseY * restante
+        function reposicionar() {
+            if (!isNaN(xAnterior) && Tema.animacoes && !grade.contagemMudou && (x !== xAnterior || y !== yAnterior)) {
+                baseX = xAnterior - x + desvioX
+                baseY = yAnterior - y + desvioY
+                tau = 0
+                deslize.restart()
+            }
+            xAnterior = x
+            yAnterior = y
+        }
+        onXChanged: Qt.callLater(reposicionar)
+        onYChanged: Qt.callLater(reposicionar)
+        Component.onCompleted: Qt.callLater(reposicionar)
+        NumberAnimation { id: deslize; target: celula; property: "tau"; from: 0; to: 8.3; duration: 387 }
+
         CartaoDoJogo {
             id: cartao
-            anchors.centerIn: parent
+            anchors { centerIn: parent; horizontalCenterOffset: celula.desvioX; verticalCenterOffset: celula.desvioY }
+            temAtualizacao: parent.temAtualizacao
+            onPausou: grade.registrarPausa(cartao)
+            Component.onDestruction: grade.esquecerPausa(cartao)
             modelo: grade.biblioteca
             jogoId: parent.jogoId
             nome: parent.nome
@@ -161,7 +225,7 @@ GridView {
             onMenuPedido: (id, ancora) => {
                 grade.currentIndex = index
                 menuDoJogo.jogoId = id
-                menuDoJogo.popup(ancora, ancora.width - menuDoJogo.width, ancora.height + 4)
+                menuDoJogo.popup(ancora, ancora.width - menuDoJogo.width, ancora.height + 6)
             }
         }
     }

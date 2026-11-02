@@ -48,6 +48,8 @@ class Linha:
     carregando: bool
     # URL da cópia WebP animada no tamanho da grade, quando já existe; senão "".
     capa_animada: str = ""
+    # Há um patch esperando no feed e o jogo não é um zerado: o halo dourado do cartão (`update-available`).
+    tem_atualizacao: bool = False
 
     @classmethod
     def de(cls, jogo: Jogo) -> "Linha":
@@ -71,6 +73,7 @@ class Linha:
             jogo.stars,
             jogo.loading > 0,
             url_da_copia(caminho),
+            bool(jogo.has_update and not jogo.zerado),
         )
 
 

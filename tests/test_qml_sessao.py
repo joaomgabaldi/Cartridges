@@ -69,7 +69,8 @@ def test_camada_cobre_a_barra_e_a_grade(app_qt):
     assert app.achar("barraDeTitulo").property("visible") is False  # a camada cobre a barra também
     assert app.janela.property("telaCheia") is True
     assert app.achar("pagina").property("enabled") is False
-    assert app.achar("alvoDeSoltar").property("enabled") is False
+    # Só diálogo aberto recusa o arrasto (`window.py:572`, R7): na sessão a `main` ainda importa o atalho solto.
+    assert app.achar("alvoDeSoltar").property("enabled") is True
     assert camada.property("color").alpha() == 235  # rgba(0, 0, 0, 0.92)
     app.fechar()
 

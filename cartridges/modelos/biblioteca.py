@@ -60,6 +60,7 @@ class ModeloDaBiblioteca(QAbstractListModel):
         Zerado = Qt.ItemDataRole.UserRole + 4
         Carregando = Qt.ItemDataRole.UserRole + 5
         CapaAnimada = Qt.ItemDataRole.UserRole + 6
+        TemAtualizacao = Qt.ItemDataRole.UserRole + 7
 
     def __init__(self, parent: Any = None) -> None:
         super().__init__(parent)
@@ -79,6 +80,7 @@ class ModeloDaBiblioteca(QAbstractListModel):
             self.Papel.Zerado: QByteArray(b"zerado"),
             self.Papel.Carregando: QByteArray(b"carregando"),
             self.Papel.CapaAnimada: QByteArray(b"capaAnimada"),
+            self.Papel.TemAtualizacao: QByteArray(b"temAtualizacao"),
         }
 
     def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:  # noqa: B008
@@ -95,6 +97,7 @@ class ModeloDaBiblioteca(QAbstractListModel):
             self.Papel.Zerado: linha.zerado,
             self.Papel.Carregando: linha.carregando,
             self.Papel.CapaAnimada: linha.capa_animada,
+            self.Papel.TemAtualizacao: linha.tem_atualizacao,
         }.get(role)
 
     def linha(self, i: int) -> Linha:

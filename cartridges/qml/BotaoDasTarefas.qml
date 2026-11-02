@@ -145,9 +145,12 @@ Item {
         enabled: raiz.aVista && raiz.pode
         visible: x + width > 0
         Accessible.name: "Tarefas em andamento"
-        ToolTip.visible: hovered
-        ToolTip.text: "Tarefas em andamento"
-        ToolTip.delay: 500
+        // A dica da libadwaita; acima do botão, porque ele fica rente ao fundo da janela.
+        Dica {
+            texto: "Tarefas em andamento"
+            ativa: circulo.hovered
+            y: -height - 6
+        }
         onClicked: {
             raiz.esconder(true)
             painelDasTarefas.mostrar()
@@ -158,19 +161,26 @@ Item {
             NumberAnimation { objectName: "deslizeDasTarefas"; duration: Tema.duracaoMedia; easing.type: Easing.OutCubic }
         }
 
-        contentItem: Text {
-            id: glifo
-            text: ""
-            font { family: Tema.fonteDeIcones; pixelSize: 16 }
-            color: "white"
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
+        // `view-refresh-symbolic`, branco a 90% (`.osd`).
+        contentItem: Item {
+            Icone {
+                id: glifo
+                anchors.centerIn: parent
+                nome: "view-refresh"
+                cor: "white"
+                opacity: 0.9
+            }
         }
+        // `.circular.osd`: preto a 65%; ao passar, 15% de branco na mistura; pressionado, 25%. Com a sombra do
+        // `.botao-tarefas`: `0 2px 8px rgba(0, 0, 0, .35)`.
         background: Rectangle {
             radius: width / 2
-            color: circulo.down ? "#e6505050" : circulo.hovered ? "#e6424242" : "#e6303030"
-            border { width: circulo.visualFocus ? 2 : 0; color: Tema.destaque }
+            color: circulo.down ? Qt.rgba(0.25, 0.25, 0.25, 0.65)
+                : circulo.hovered ? Qt.rgba(0.15, 0.15, 0.15, 0.65) : Qt.rgba(0, 0, 0, 0.65)
+            Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
+            Sombra { camadas: [[2, 8, 0, 0, 0, 0, 0.35]]; raio: parent.radius }
         }
+        AnelDeFoco { ativo: circulo.visualFocus; raio: 17; afastamento: 1 }
 
         // Gira enquanto à vista.
         RotationAnimator {
@@ -179,7 +189,7 @@ Item {
             target: glifo
             from: 0
             to: 360
-            duration: 1600
+            duration: 1200
             loops: Animation.Infinite
             running: raiz.girando
             onRunningChanged: if (!running) glifo.rotation = 0

@@ -130,8 +130,7 @@ Window {
     Loader {
         objectName: "carregadorDasTarefas"
         active: painelDasTarefas.aberta
-        source: "JanelaDasTarefas.qml"
-        onLoaded: item.alvo = botao.alvo
+        sourceComponent: Component { JanelaDasTarefas { alvo: botao.alvo; semAgente: true } }
     }
 }
 """
@@ -265,10 +264,12 @@ def test_janela_solta_nao_e_transiente_nem_modal_nem_redimensionavel(cena):
     janela = cena.abrir_a_janela()
     assert janela.transientParent() is None
     assert janela.modality() == Qt.WindowModality.NonModal
+    # Sem moldura nativa (K05): a barra é a do app, com só minimizar e fechar (`:minimize,close`); o QWindowKit a liga.
     flags = janela.flags()
     assert not flags & Qt.WindowType.WindowMaximizeButtonHint
-    assert flags & Qt.WindowType.WindowMinimizeButtonHint
-    assert flags & Qt.WindowType.WindowCloseButtonHint
+    assert not flags & Qt.WindowType.WindowTitleHint and not flags & Qt.WindowType.CustomizeWindowHint
+    barra = _todos(janela, "barraDasTarefas")[0]
+    assert barra.property("comMaximizar") is False and barra.property("titulo") == "Tarefas em andamento"
     assert janela.width() == 360 and janela.minimumWidth() == 360 and janela.maximumWidth() == 360
     assert janela.minimumHeight() == janela.maximumHeight() == janela.height()
 

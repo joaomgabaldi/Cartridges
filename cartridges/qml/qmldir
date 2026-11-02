@@ -85,3 +85,5 @@ CabecalhoDoDialogo 1.0 CabecalhoDoDialogo.qml
 DialogoDeAlerta 1.0 DialogoDeAlerta.qml
 DialogoDeAviso 1.0 DialogoDeAviso.qml
 LinhaDoGrupo 1.0 LinhaDoGrupo.qml
+Girador 1.0 Girador.qml
+RolagemPorMola 1.0 RolagemPorMola.qml

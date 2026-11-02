@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Shapes
 
 // A janela do app: as páginas da biblioteca, os botões da barra e as camadas de aviso e confirmação.
 // `paginaTodos`, `paginaZerados`, `filtros`, `aplicativo` e `ponte` vêm do contexto (cartridges/app.py).
@@ -49,8 +50,36 @@ Principal {
     // Depois do setup do QWindowKit (Principal.qml), que roda no onCompleted da base.
     Component.onCompleted: visible = true
 
+    // A linha de baixo da barra aparece com o conteúdo da página rolado (`undershoot-top` da `ToolbarView`).
+    sombraDaBarra: !!paginaDoControle && paginaDoControle.rolado === true
+
+    // O `key-capture-widget` da `main` é a página inteira: digitar com o foco num botão da barra abre a busca, e Esc
+    // volta de Jogos Zerados. Quem decide é a página à vista (`capturar`).
+    function capturarNaPagina(event) {
+        if (paginaDoControle && typeof paginaDoControle.capturar === "function" && paginaDoControle.capturar(event))
+            event.accepted = true
+    }
+    component BotaoDoApp: BotaoDaBarra {
+        Keys.onPressed: event => janela.capturarNaPagina(event)
+    }
+
+    // `AdwNavigationView`: Alt+←, a tecla Voltar do teclado e o botão Voltar do mouse voltam uma página (a `main` não
+    // desliga). Sem diálogo na frente e fora do Big Picture e da sessão.
+    readonly property bool podeVoltarPorAtalho: paginaAtual !== "todos" && !modalAberto && !bigPicture.visivel
+        && !sessao.emAndamento
+    Shortcut {
+        sequences: ["Alt+Left", "Back"]
+        enabled: janela.podeVoltarPorAtalho
+        onActivated: janela.voltar()
+    }
+    TapHandler {
+        acceptedButtons: Qt.BackButton
+        enabled: janela.podeVoltarPorAtalho
+        onTapped: janela.voltar()
+    }
+
     inicio: [
-        BotaoDaBarra {
+        BotaoDoApp {
             id: botaoAdicionar
             objectName: "botaoAdicionar"
             visible: janela.paginaAtual === "todos"
@@ -62,12 +91,14 @@ Principal {
                 id: menuDeAdicionar
                 objectName: "menuDeAdicionar"
                 y: janela.baseDaBarra(parent)
+                // A seta aponta o centro do botão (34 de largura), com o menu alinhado à esquerda dele.
+                setaEm: parent.width / 2
                 ItemDoMenu { objectName: "itemAdicionarJogo"; text: "Adicionar jogo"; enabled: !aplicativo.importando; onTriggered: edicao.adicionar() }
                 SeparadorDoMenu {}
                 ItemDoMenu { text: "Importar"; enabled: !aplicativo.importando; onTriggered: aplicativo.importar() }
             }
         },
-        BotaoDaBarra {
+        BotaoDoApp {
             id: botaoVoltar
             objectName: "botaoVoltar"
             visible: janela.paginaAtual !== "todos"
@@ -75,7 +106,7 @@ Principal {
             dica: "Voltar"
             onClicked: janela.voltar()
         },
-        BotaoDaBarra {
+        BotaoDoApp {
             id: botaoAdicionarZerado
             objectName: "botaoAdicionarZerado"
             visible: janela.paginaAtual === "zerados" && janela.servicoDeZerados !== null
@@ -87,7 +118,7 @@ Principal {
 
     // Da direita para a esquerda: menu principal, "Atualizar" (só nas Novidades), Jogos Zerados, Novidades, Big Picture e busca.
     fim: [
-        BotaoDaBarra {
+        BotaoDoApp {
             id: botaoMenu
             objectName: "botaoMenu"
             visible: janela.paginaAtual === "todos" || janela.paginaAtual === "zerados"
@@ -101,9 +132,10 @@ Principal {
                 servicoDoSobre: janela.servicoDoSobre
                 y: janela.baseDaBarra(parent)
                 x: parent.width - width
+                setaEm: width - parent.width / 2
             }
         },
-        BotaoDaBarra {
+        BotaoDoApp {
             id: botaoAtualizar
             objectName: "botaoAtualizarNovidades"
             visible: janela.paginaAtual === "novidades"
@@ -111,7 +143,7 @@ Principal {
             dica: "Atualizar"
             onClicked: janela.servicoDeNovidades.atualizar()
         },
-        BotaoDaBarra {
+        BotaoDoApp {
             id: botaoZerados
             objectName: "botaoZerados"
             visible: janela.paginaAtual === "todos"
@@ -119,7 +151,7 @@ Principal {
             dica: "Jogos Zerados"
             onClicked: pilha.push(zerados)
         },
-        BotaoDaBarra {
+        BotaoDoApp {
             id: botaoNovidades
             objectName: "botaoNovidades"
             visible: janela.paginaAtual === "todos" && janela.servicoDeNovidades !== null && janela.servicoDeNovidades.visivel
@@ -129,7 +161,7 @@ Principal {
             dica: "Novidades"
             onClicked: { janela.servicoDeNovidades.abrir(); pilha.push(paginaDasNovidades) }
         },
-        BotaoDaBarra {
+        BotaoDoApp {
             id: botaoBigPicture
             indisponivel: !bigPicture.disponivel
             objectName: "botaoBigPicture"
@@ -138,7 +170,7 @@ Principal {
             dica: bigPicture.disponivel ? "Big Picture" : "Requer uma placa de vídeo com aceleração 3D."
             onClicked: bigPicture.entrar()
         },
-        BotaoDaBarra {
+        BotaoDoApp {
             id: botaoBusca
             objectName: "botaoBusca"
             visible: janela.paginaAtual === "todos"
@@ -172,6 +204,12 @@ Principal {
         objectName: "pilha"
         anchors { fill: parent; topMargin: janela.alturaDoTopo }
         visible: depth > 0
+        // `AdwNavigationView`: a página nova desliza da direita e a de baixo recua um quarto da largura; ao voltar,
+        // o contrário. shortcut: duração e recuo não medidos na libadwaita (400 ms, 1/4); conferir na rodada visual.
+        pushEnter: Transition { XAnimator { from: pilha.width; to: 0; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic } }
+        pushExit: Transition { XAnimator { from: 0; to: -pilha.width / 4; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic } }
+        popEnter: Transition { XAnimator { from: -pilha.width / 4; to: 0; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic } }
+        popExit: Transition { XAnimator { from: 0; to: pilha.width; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic } }
         enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto && !bigPicture.visivel && !sessao.emAndamento
     }
 
@@ -184,6 +222,7 @@ Principal {
             ativa: StackView.status !== StackView.Inactive && !bigPicture.visivel && !sessao.emAndamento
             onAbrirDetalhes: id => janela.abrirDetalhes(id)
             onEditar: id => edicao.abrir(id)
+            onVoltar: janela.voltar()
             StackView.onActivated: focarGrade()
             // O fundo cobre "Todos os jogos" durante a transição.
             Rectangle { anchors.fill: parent; color: Tema.fundo; z: -1 }
@@ -233,8 +272,7 @@ Principal {
     Loader {
         objectName: "carregadorDasTarefas"
         active: painelDasTarefas.aberta
-        source: "JanelaDasTarefas.qml"
-        onLoaded: item.alvo = botaoDasTarefas.alvo
+        sourceComponent: Component { JanelaDasTarefas { alvo: botaoDasTarefas.alvo; semAgente: janela.semAgente } }
     }
 
     // O aviso embaixo (`ToastOverlay` da `main`): sobre as páginas e abaixo de todo diálogo. As Preferências têm o delas.
@@ -412,35 +450,58 @@ Principal {
         id: alvoDeSoltar
         objectName: "alvoDeSoltar"
         anchors.fill: parent
-        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto && !bigPicture.visivel && !sessao.emAndamento
+        enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
         onEntered: (arrasto) => arrasto.accepted = arrasto.hasUrls
         onDropped: (soltou) => {
             if (soltou.hasUrls) aplicativo.soltar(soltou.urls)
         }
     }
 
+    // `.aviso-de-soltar`: a janela a 12% de transparência por cima, com a moldura tracejada no meio.
     Rectangle {
         id: avisoDeSoltar
         objectName: "avisoDeSoltar"
         anchors.fill: parent
-        color: "#99000000"
+        color: Qt.alpha(Tema.fundo, 0.88)
         opacity: alvoDeSoltar.containsDrag ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: 150 } }
 
-        Rectangle {
+        // `.moldura-de-soltar`: 420 de largura, padding 44/32, tracejado de 2 px em 45% do texto, raio 16, texto a 80%.
+        Item {
+            id: moldura
             anchors.centerIn: parent
             width: Math.min(420, avisoDeSoltar.width - 48)
-            height: 140
-            radius: 12
-            color: Tema.fundo
-            border { color: Tema.destaque; width: 2 }
-            Text {
-                anchors.centerIn: parent
-                text: "Solte aqui para importar"
-                textFormat: Text.PlainText
-                color: Tema.texto
-                font { family: Tema.fonte; pixelSize: 20; weight: Font.DemiBold }
+            height: coluna.implicitHeight + 88
+            Shape {
+                anchors.fill: parent
+                ShapePath {
+                    strokeColor: Qt.alpha(Tema.texto, Tema.texto.a * 0.45)
+                    strokeWidth: 2
+                    strokeStyle: ShapePath.DashLine
+                    dashPattern: [3, 3]
+                    fillColor: "transparent"
+                    PathRectangle { x: 1; y: 1; width: moldura.width - 2; height: moldura.height - 2; radius: 15 }
+                }
+            }
+            Column {
+                id: coluna
+                anchors { centerIn: parent }
+                spacing: 14
+                Icone {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    nome: "folder-download"
+                    tamanho: 40
+                    cor: Tema.texto
+                    opacity: 0.8
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Solte aqui para importar"
+                    textFormat: Text.PlainText
+                    color: Qt.alpha(Tema.texto, Tema.texto.a * 0.8)
+                    font { family: Tema.fonte; pixelSize: Tema.titulo3; weight: Tema.pesoTitulo3 }
+                }
             }
         }
     }

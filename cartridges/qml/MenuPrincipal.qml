@@ -21,7 +21,7 @@ MenuDoTema {
     function rotulos(submenu) {
         var lista = []
         for (var i = 0; i < submenu.count; ++i)
-            if (submenu.itemAt(i).objectName !== "limpar")
+            if (submenu.itemAt(i).objectName !== "limpar" && submenu.itemAt(i).objectName !== "limparSeparador")
                 lista.push(submenu.itemAt(i).text)
         return lista
     }
@@ -90,7 +90,13 @@ MenuDoTema {
                 }
             }
         }
-        // "Limpar" só existe enquanto há o que limpar.
+        // "Limpar" só existe enquanto há o que limpar, numa seção própria (com o separador acima).
+        SeparadorDoMenu {
+            objectName: "limparSeparador"
+            readonly property bool exibido: filtros.genero !== "" || filtros.ano !== "" || filtros.status !== ""
+            visible: exibido
+            height: exibido ? implicitHeight : 0
+        }
         ItemDoMenu {
             objectName: "limpar"
             readonly property bool exibido: filtros.genero !== "" || filtros.ano !== "" || filtros.status !== ""

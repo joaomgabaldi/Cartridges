@@ -4,7 +4,7 @@ import QtQuick.Effects
 import QtQuick.Window
 
 // Um jogo da grade, no desenho da versão anterior: a capa e o nome dentro do mesmo cartão arredondado.
-// Ao passar o mouse (ou com o foco do teclado na grade): jogar no canto superior esquerdo e "Mais opções" no direito.
+// Ao passar o mouse: jogar no canto superior esquerdo e "Mais opções" no direito (`toggle_play` da `main`: só o ponteiro).
 Rectangle {
     id: cartao
 
@@ -17,13 +17,31 @@ Rectangle {
     property string capaAnimada: ""
     // O cartão está dentro da janela visível da grade (o delegate liga).
     property bool naVista: true
-    // "Animar capas" (com os efeitos de animação do Windows ligados): a única forma de a capa animar.
-    // Animar ao passar o mouse não existe na `main`; fica como proposta, aguardando a aprovação do usuário.
+    // "Animar capas" (com os efeitos de animação do Windows ligados): as capas à vista tocam sem o mouse.
     property bool tocarSempre: false
-    // Sem animação o cartão mostra a capa parada; fora da vista, janela minimizada ou oculta, nada toca
+    // Há um patch esperando no feed (e o jogo não é zerado): o halo dourado em volta do cartão.
+    property bool temAtualizacao: false
+    // Como na `main` (`game_cover.py:531`): passar o mouse toca a capa animada com ou sem "Animar capas", também em
+    // Jogos Zerados. Sem animação o cartão mostra a capa parada; fora da vista, janela minimizada ou oculta, nada toca
     // e o arquivo da cópia é largado.
-    readonly property bool animando: capaAnimada !== "" && naVista && tocarSempre
+    readonly property bool animando: capaAnimada !== "" && naVista && (tocarSempre || passagem.hovered)
         && Window.visibility !== Window.Minimized && Window.visibility !== Window.Hidden
+    // Parar pausa no quadro atual (`tocador_capas.py`): o arquivo da cópia fica aberto por 30 s, e só então a capa volta
+    // ao primeiro quadro; a grade limita as pausadas a 8 (`liberar`). Retomar segue de onde parou.
+    property bool retendo: false
+    signal pausou()
+    function liberar() { retendo = false; retencao.stop() }
+    onAnimandoChanged: {
+        if (animando) {
+            retendo = false
+            retencao.stop()
+        } else if (capaAnimada !== "" && animada.status === AnimatedImage.Ready) {
+            retendo = true
+            retencao.restart()
+            pausou()
+        }
+    }
+    Timer { id: retencao; interval: 30000; onTriggered: cartao.retendo = false }
     // O cartão sob o foco do teclado na grade (o delegate liga).
     property bool focado: false
     // O modelo da biblioteca: só `iniciar` é chamado nele; o QML nunca vê um Jogo.
@@ -38,8 +56,10 @@ Rectangle {
 
     readonly property int larguraDaCapa: 200
     readonly property int alturaDaCapa: 300
-    readonly property int alturaDoNome: 50
-    readonly property bool mostrarBotoes: !zerado && (passagem.hovered || focado || menuAberto)
+    // 15 + a linha de 17 + 15.
+    readonly property int alturaDoNome: 47
+    // Só o ponteiro e o menu aberto mostram os botões (`game.py:564`): o foco do teclado e o controle não.
+    readonly property bool mostrarBotoes: !zerado && (passagem.hovered || menuAberto)
     // O menu do jogo está aberto a partir deste cartão: os botões ficam à vista enquanto ele durar.
     property bool menuAberto: false
     readonly property string nomeAcessivel: Accessible.name
@@ -52,8 +72,39 @@ Rectangle {
     width: larguraDaCapa
     height: alturaDaCapa + alturaDoNome
     radius: 12
-    color: Tema.superficie
-    border { width: focado ? 2 : 0; color: Tema.destaque }
+    color: Tema.cartao
+    readonly property bool pressionado: toque.pressed
+
+    // `.card`, ou o realce do ponteiro (`#cover_button:hover`), ou o halo da atualização: cada regra troca o
+    // `box-shadow` inteiro, e o halo vem por último e vence o ponteiro.
+    Sombra {
+        visible: !cartao.temAtualizacao
+        opacity: passagem.hovered ? 0 : 1
+        Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta } }
+        camadas: Tema.sombraCartao
+        raio: cartao.radius
+    }
+    Loader {
+        anchors.fill: parent
+        z: -1
+        active: !cartao.temAtualizacao && (passagem.hovered || opacity > 0)
+        opacity: passagem.hovered ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta } }
+        sourceComponent: Sombra { camadas: [[6, 16, 2, 0, 0, 0, 0.25]]; raio: cartao.radius }
+    }
+    Loader {
+        anchors.fill: parent
+        z: -1
+        active: cartao.temAtualizacao
+        sourceComponent: Sombra { objectName: "haloDaAtualizacao"; camadas: [[0, 22, 5, 245 / 255, 184 / 255, 32 / 255, 0.8]]; raio: cartao.radius }
+    }
+    // O véu do `button:hover`: 4% do texto ao passar, 8% pressionado, atrás da capa (só o rodapé o mostra).
+    Rectangle {
+        anchors.fill: parent
+        radius: cartao.radius
+        color: cartao.pressionado ? Tema.mistura(0.08) : passagem.hovered ? Tema.mistura(0.04) : "transparent"
+        Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
+    }
 
     Accessible.role: Accessible.Button
     Accessible.name: nome
@@ -63,6 +114,7 @@ Rectangle {
 
     // Clique na capa: detalhes. Clique direito: Editar (como na `main`).
     TapHandler {
+        id: toque
         onTapped: cartao.abrirDetalhes(cartao.jogoId)
     }
     TapHandler {
@@ -85,6 +137,8 @@ Rectangle {
         id: capa
         width: cartao.larguraDaCapa
         height: cartao.alturaDaCapa
+        // Carregando, a capa some e o girador aparece (`set_loading`).
+        opacity: cartao.carregando ? 0 : 1
         layer.enabled: true
         layer.effect: MultiEffect {
             maskEnabled: true
@@ -101,7 +155,8 @@ Rectangle {
             anchors.fill: parent
             source: cartao.capa !== "" && cartao.capa !== ilegivel ? cartao.capa : (cartao.modelo ? cartao.modelo.placeholder : "")
             onStatusChanged: if (status === Image.Error && source.toString() === cartao.capa) ilegivel = cartao.capa
-            fillMode: Image.PreserveAspectCrop
+            // A capa que não é 2:3 é esticada para 200x300 (`new_from_file_at_scale(..., False)`); o placeholder também.
+            fillMode: Image.Stretch
             asynchronous: true
             // Na resolução real da tela, para a capa não ficar borrada em DPI alto.
             sourceSize: Qt.size(cartao.larguraDaCapa * Screen.devicePixelRatio,
@@ -112,21 +167,20 @@ Rectangle {
             id: animada
             objectName: "capaAnimada"
             anchors.fill: parent
-            source: cartao.animando ? cartao.capaAnimada : ""
+            source: cartao.animando || cartao.retendo ? cartao.capaAnimada : ""
             playing: cartao.animando
             visible: status === AnimatedImage.Ready
-            fillMode: Image.PreserveAspectCrop
+            fillMode: Image.Stretch
             asynchronous: true
             cache: false
         }
     }
 
-    BusyIndicator {
+    Girador {
         objectName: "carregando"
         anchors { horizontalCenter: capa.horizontalCenter; verticalCenter: capa.verticalCenter }
         running: cartao.carregando
         visible: cartao.carregando
-        palette.dark: Tema.destaque
     }
 
     Text {
@@ -136,9 +190,12 @@ Rectangle {
         text: cartao.nome
         textFormat: Text.PlainText
         color: Tema.texto
-        font { family: Tema.fonte; pixelSize: 14 }
+        font { family: Tema.fonte; pixelSize: Tema.corpo }
         elide: Text.ElideRight
     }
+
+    // O foco do teclado: contorno de 2 px em destaque a 50%, afastado -1 (CSS 382), por cima da capa.
+    AnelDeFoco { ativo: cartao.focado; raio: cartao.radius; afastamento: -1 }
 
     // Os botões só existem fora de um zerado (que não joga nem tem menu).
     Loader {
@@ -148,22 +205,27 @@ Rectangle {
         sourceComponent: Item {
             readonly property Item ancoraDoMenu: botaoMais
             opacity: cartao.mostrarBotoes ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta } }
+            // `Revealer` crossfade: 250 ms.
+            Behavior on opacity { NumberAnimation { duration: 250 } }
 
+            // `.circular.osd`: 34x34, fundo preto a 65%; ao passar, 15% de branco na mistura; pressionado, 25%.
             component BotaoRedondo: Rectangle {
                 id: botao
-                property string glifo
+                property string icone
                 property string dica
                 signal clicado()
-                width: 36; height: width; radius: width / 2
-                color: pressao.pressed ? "#cc000000" : (pressao.containsMouse ? "#b3000000" : "#99000000")
+                width: 34; height: width; radius: width / 2
+                color: pressao.pressed ? Qt.rgba(0.25, 0.25, 0.25, 0.65)
+                    : (pressao.containsMouse ? Qt.rgba(0.15, 0.15, 0.15, 0.65) : Qt.rgba(0, 0, 0, 0.65))
+                Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
                 Accessible.role: Accessible.Button
+                // Sem dica visível (`game.blp`): o nome é só para quem usa leitor de tela.
                 Accessible.name: dica
-                Text {
+                Icone {
                     anchors.centerIn: parent
-                    text: botao.glifo
-                    color: "white"
-                    font { family: Tema.fonteDeIcones; pixelSize: 16 }
+                    nome: botao.icone
+                    cor: "white"
+                    opacity: 0.9
                 }
                 // MouseArea, não TapHandler: o clique no botão não pode chegar ao cartão.
                 MouseArea {
@@ -171,19 +233,15 @@ Rectangle {
                     anchors.fill: parent
                     enabled: cartao.mostrarBotoes
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
                     onClicked: botao.clicado()
                 }
-                ToolTip.visible: pressao.containsMouse && ToolTip.text !== ""
-                ToolTip.delay: 600
-                ToolTip.text: dica
             }
 
             BotaoRedondo {
                 id: botaoJogar
                 objectName: "botaoJogar"
                 x: 6; y: 6
-                glifo: ""
+                icone: "media-playback-start"
                 dica: "Jogar"
                 onClicado: if (cartao.modelo) cartao.modelo.iniciar(cartao.jogoId)
             }
@@ -191,7 +249,7 @@ Rectangle {
                 id: botaoMais
                 objectName: "botaoMais"
                 x: cartao.larguraDaCapa - width - 6; y: 6
-                glifo: ""
+                icone: "view-more"
                 dica: "Mais opções"
                 onClicado: cartao.abrirMenu()
             }

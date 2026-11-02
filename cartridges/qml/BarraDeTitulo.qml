@@ -13,6 +13,8 @@ Rectangle {
     property QtObject agente
     property string titulo: ""
     property bool sombra: false
+    // Só minimizar e fechar (`:minimize,close`), como a janela das tarefas.
+    property bool comMaximizar: true
     // Os botões da página: `inicio` à esquerda do título, `fim` à direita, antes dos botões do sistema.
     default property alias inicio: areaDoInicio.data
     property alias fim: areaDoFim.data
@@ -29,7 +31,7 @@ Rectangle {
     function ligarAgente() {
         agente.setTitleBar(barra)
         agente.botaoDeSistema("minimizar", minimizar)
-        agente.botaoDeSistema("maximizar", maximizar)
+        if (comMaximizar) agente.botaoDeSistema("maximizar", maximizar)
         agente.botaoDeSistema("fechar", fechar)
     }
 
@@ -76,6 +78,7 @@ Rectangle {
             }
             Botao {
                 id: maximizar
+                visible: barra.comMaximizar
                 icone: barra.janela.visibility === Window.Maximized ? "window-restore" : "window-maximize"
                 onClicked: barra.janela.visibility === Window.Maximized ? barra.janela.showNormal() : barra.janela.showMaximized()
             }
