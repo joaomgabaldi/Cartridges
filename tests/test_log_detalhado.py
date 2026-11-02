@@ -229,3 +229,206 @@ def test_ferramenta_ocupada_so_gera_aviso(monkeypatch, caplog):
     finally:
         sys.monitoring.free_tool_id(sys.monitoring.PROFILER_ID)
     assert any("Log detalhado desligado" in r.getMessage() for r in caplog.records)
+
+
+# --- Eventos do Qt, log e interruptor ------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def filtro(app_qt, monkeypatch, caplog):
+    """O filtro instalado no app de teste; ao fim sai do app (o app_qt vive a sessão toda)."""
+    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "1")
+    caplog.set_level(logging.DEBUG, logger="cartridges.interface")
+    instalado = detalhado.instalar_filtro(app_qt)
+    yield instalado
+    app_qt.removeEventFilter(instalado)
+    instalado.setParent(None)
+
+
+def _ui(caplog):
+    return [r.getMessage() for r in caplog.records if r.name == "cartridges.interface"]
+
+
+@pytest.fixture
+def janela(app_qt):
+    from PySide6.QtGui import QWindow  # pylint: disable=import-outside-toplevel
+
+    j = QWindow()
+    j.setObjectName("janelaTeste")
+    j.resize(100, 100)
+    yield j
+    j.destroy()
+
+
+def test_clique_e_registrado(filtro, janela, caplog):  # pylint: disable=unused-argument
+    from PySide6.QtCore import Qt  # pylint: disable=import-outside-toplevel
+    from PySide6.QtTest import QTest  # pylint: disable=import-outside-toplevel
+
+    janela.show()
+    QTest.mouseClick(janela, Qt.MouseButton.LeftButton)
+    assert any(l.startswith("clique em QWindow('janelaTeste')") for l in _ui(caplog))
+
+
+def test_tecla_e_registrada(filtro, janela, caplog):  # pylint: disable=unused-argument
+    from PySide6.QtCore import Qt  # pylint: disable=import-outside-toplevel
+    from PySide6.QtTest import QTest  # pylint: disable=import-outside-toplevel
+
+    janela.show()
+    QTest.keyClick(janela, Qt.Key.Key_A)
+    assert any(l.startswith("tecla em QWindow('janelaTeste')") for l in _ui(caplog))
+
+
+def test_janela_mostrar_e_esconder(filtro, janela, caplog):  # pylint: disable=unused-argument
+    janela.show()
+    janela.hide()
+    linhas = _ui(caplog)
+    assert any(l.startswith("mostrou em QWindow") for l in linhas)
+    assert any(l.startswith("escondeu em QWindow") for l in linhas)
+
+
+def test_movimento_do_mouse_fica_de_fora(filtro, janela, caplog):  # pylint: disable=unused-argument
+    from PySide6.QtCore import QPoint  # pylint: disable=import-outside-toplevel
+    from PySide6.QtTest import QTest  # pylint: disable=import-outside-toplevel
+
+    janela.show()
+    caplog.clear()
+    QTest.mouseMove(janela, QPoint(10, 10))
+    assert _ui(caplog) == []
+
+
+_QML_POPUP = b"""
+import QtQuick
+import QtQuick.Controls
+Item {
+    property alias p: popup
+    Popup { id: popup; objectName: "meuPopup"; width: 10; height: 10 }
+}
+"""
+
+_QML_LOADER = b"""
+import QtQuick
+Item {
+    Loader { objectName: "meuLoader"; source: "Filha.qml" }
+}
+"""
+
+
+def _criar_qml(fonte, pasta):
+    from PySide6.QtCore import QUrl  # pylint: disable=import-outside-toplevel
+    from PySide6.QtQml import QQmlComponent, QQmlEngine  # pylint: disable=import-outside-toplevel
+
+    motor = QQmlEngine()
+    componente = QQmlComponent(motor)
+    componente.setData(fonte, QUrl.fromLocalFile(str(pasta / "Tela.qml")))
+    objeto = componente.create()
+    assert objeto is not None, componente.errorString()
+    return motor, componente, objeto
+
+
+def _processar():
+    from PySide6.QtCore import QCoreApplication  # pylint: disable=import-outside-toplevel
+
+    for _ in range(5):
+        QCoreApplication.processEvents()
+
+
+def test_popup_do_qml_abrir_e_fechar(filtro, caplog, tmp_path):  # pylint: disable=unused-argument
+    from PySide6.QtCore import QMetaObject, QObject  # pylint: disable=import-outside-toplevel
+    from PySide6.QtQuick import QQuickWindow  # pylint: disable=import-outside-toplevel
+
+    motor, componente, raiz = _criar_qml(_QML_POPUP, tmp_path)
+    janela = QQuickWindow()
+    raiz.setParentItem(janela.contentItem())
+    _processar()
+    popup = raiz.findChild(QObject, "meuPopup")
+    QMetaObject.invokeMethod(popup, "open")
+    _processar()
+    QMetaObject.invokeMethod(popup, "close")
+    _processar()
+    linhas = _ui(caplog)
+    assert any("popup aberto" in l and "meuPopup" in l for l in linhas), linhas
+    assert any("popup fechado" in l and "meuPopup" in l for l in linhas), linhas
+    del janela, raiz, componente, motor
+
+
+def test_loader_do_qml_registra_a_tela(filtro, caplog, tmp_path):  # pylint: disable=unused-argument
+    (tmp_path / "Filha.qml").write_text("import QtQuick\nItem {}\n", encoding="utf-8")
+    motor, componente, raiz = _criar_qml(_QML_LOADER, tmp_path)
+    _processar()
+    linhas = _ui(caplog)
+    assert any("tela carregada" in l and "meuLoader" in l for l in linhas), linhas
+    del raiz, componente, motor
+
+
+def test_destinatario_destruido_nao_levanta(filtro):
+    import shiboken6  # pylint: disable=import-outside-toplevel
+    from PySide6.QtCore import QEvent, QObject  # pylint: disable=import-outside-toplevel
+
+    alvo = QObject()
+    shiboken6.delete(alvo)
+    assert filtro.eventFilter(alvo, QEvent(QEvent.Type.Show)) is False
+
+
+def test_desligado_nao_instala(monkeypatch, app_qt):
+    from cartridges.logging import setup  # pylint: disable=import-outside-toplevel
+
+    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "0")
+    assert detalhado.instalar_filtro(app_qt) is None
+    chamadas = []
+    monkeypatch.setattr(detalhado, "instalar_rastreio", lambda: chamadas.append(1))
+    setup._ligar_rastreio()  # pylint: disable=protected-access
+    assert chamadas == []
+
+
+@pytest.fixture
+def config_capturada(monkeypatch):
+    """Roda o setup_logging sem mexer no logging do processo: devolve o dicionário entregue ao dictConfig."""
+    from cartridges.logging import setup  # pylint: disable=import-outside-toplevel
+
+    capturado = {}
+    monkeypatch.setattr(setup.logging_dot_config, "dictConfig", capturado.update)
+    monkeypatch.setattr(setup, "_enable_windows_ansi", lambda: None)
+    monkeypatch.setattr(setup, "registrar_excecoes_nao_tratadas", lambda: None)
+    monkeypatch.setattr(setup, "registrar_avisos_do_qt", lambda: None)
+    monkeypatch.setattr(detalhado, "instalar_rastreio", lambda: None)
+    antes = dict(setup.LIB_LOGGERS["urllib3"])
+    yield setup, capturado
+    assert setup.LIB_LOGGERS["urllib3"] == antes
+
+
+def test_config_ligada_abre_niveis(monkeypatch, config_capturada):
+    setup, config = config_capturada
+    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "1")
+    setup.setup_logging()
+    assert config["loggers"]["urllib3"]["level"] == "DEBUG"
+    assert config["loggers"]["PIL"]["level"] == "WARNING" and config["loggers"]["tinytuya"]["level"] == "WARNING"
+    assert config["formatters"]["file_formatter"]["format"] == (
+        "%(asctime)s.%(msecs)03d [%(threadName)s] %(levelname)s: %(message)s"
+    )
+    assert config["handlers"]["file_handler"]["sem_limite"] is True
+
+
+def test_config_desligada_igual_a_hoje(monkeypatch, config_capturada):
+    setup, config = config_capturada
+    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "0")
+    setup.setup_logging()
+    assert config["loggers"]["urllib3"]["level"] == "INFO"
+    assert config["formatters"]["file_formatter"]["format"] == "%(asctime)s - %(levelname)s: %(message)s"
+    assert config["handlers"]["file_handler"]["sem_limite"] is False
+
+
+def test_depuracao_do_qt_so_no_modo_detalhado(monkeypatch, caplog):
+    from types import SimpleNamespace  # pylint: disable=import-outside-toplevel
+
+    from PySide6.QtCore import QtMsgType  # pylint: disable=import-outside-toplevel
+
+    from cartridges.logging import setup  # pylint: disable=import-outside-toplevel
+
+    caplog.set_level(logging.DEBUG)
+    contexto = SimpleNamespace(file=None, line=0)
+    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "0")
+    setup._registrar_do_qt(QtMsgType.QtDebugMsg, contexto, "fora")  # pylint: disable=protected-access
+    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "1")
+    setup._registrar_do_qt(QtMsgType.QtDebugMsg, contexto, "dentro")  # pylint: disable=protected-access
+    mensagens = [r.getMessage() for r in caplog.records]
+    assert "Qt-DEBUG: dentro" in mensagens and not any("fora" in m for m in mensagens)

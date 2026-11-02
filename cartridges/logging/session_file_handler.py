@@ -148,7 +148,8 @@ class SessionFileHandler(StreamHandler):
         for path in self.get_logfiles():
             self.rotate_file(path)
 
-    def __init__(self, filename: PathLike, backup_count: int = 2) -> None:
+    def __init__(self, filename: PathLike, backup_count: int = 2, sem_limite: bool = False) -> None:
+        self.sem_limite = sem_limite  # o log detalhado grava além de MAX_BYTES
         self.filename = Path(filename)
         self.backup_count = backup_count
         self.create_dir()
@@ -183,7 +184,7 @@ class SessionFileHandler(StreamHandler):
             # made it, so leave the handler as it was.
             return
 
-        if size < self.MAX_BYTES:
+        if self.sem_limite or size < self.MAX_BYTES:
             return
 
         # Set before writing: if the note itself fails, the cap still holds and

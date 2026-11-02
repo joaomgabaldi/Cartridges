@@ -254,3 +254,35 @@ def test_week_and_month_do_not_reach_before_the_first_session():
 
     assert period_range(sessions, "week", today) == (date(2026, 9, 17), today)
     assert period_range(sessions, "month", today) == (date(2026, 9, 17), today)
+
+
+def _grava_linhas(handler, quantas):
+    import logging  # noqa: PLC0415
+
+    for i in range(quantas):
+        handler.emit(logging.LogRecord("t", logging.INFO, __file__, 1, f"linha {i} " + "x" * 50, None, None))
+
+
+def test_sem_limite_grava_alem_de_max_bytes(tmp_path, monkeypatch):
+    from cartridges.logging.session_file_handler import SessionFileHandler  # noqa: PLC0415
+
+    monkeypatch.setattr(SessionFileHandler, "MAX_BYTES", 500)
+    handler = SessionFileHandler(tmp_path / "cartridges.log", sem_limite=True)
+    try:
+        _grava_linhas(handler, 100)
+        assert handler.capped is False
+    finally:
+        handler.close()
+    assert "linha 99 " in (tmp_path / "cartridges.log").read_text(encoding="utf-8")
+
+
+def test_limite_continua_por_padrao(tmp_path, monkeypatch):
+    from cartridges.logging.session_file_handler import SessionFileHandler  # noqa: PLC0415
+
+    monkeypatch.setattr(SessionFileHandler, "MAX_BYTES", 500)
+    handler = SessionFileHandler(tmp_path / "cartridges.log")
+    try:
+        _grava_linhas(handler, 100)
+        assert handler.capped is True
+    finally:
+        handler.close()

@@ -105,12 +105,21 @@ def setup_logging() -> None:
     lib_log_level = os.environ.get("LIBLOGLEVEL", "WARNING").upper()
 
     log_filename = shared.log_dir / "cartridges.log"
+    detalhado_ativo = detalhado.ativo()
+    # Com o log detalhado: milissegundos e thread em cada linha, urllib3 em DEBUG e o arquivo sem o limite de 32 MiB.
+    # A cópia evita mutar LIB_LOGGERS, que os testes e o modo desligado leem.
+    lib_loggers = {**LIB_LOGGERS, "urllib3": {**LIB_LOGGERS["urllib3"], "level": "DEBUG"}} if detalhado_ativo else LIB_LOGGERS
+    formato_do_arquivo = (
+        "%(asctime)s.%(msecs)03d [%(threadName)s] %(levelname)s: %(message)s"
+        if detalhado_ativo
+        else "%(asctime)s - %(levelname)s: %(message)s"
+    )
 
     config = {
         "version": 1,
         "formatters": {
             "file_formatter": {
-                "format": "%(asctime)s - %(levelname)s: %(message)s",
+                "format": formato_do_arquivo,
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
             "console_formatter": {
@@ -125,6 +134,7 @@ def setup_logging() -> None:
                 "level": "DEBUG",
                 "filename": log_filename,
                 "backup_count": 2,
+                "sem_limite": detalhado_ativo,
             },
             "app_console_handler": {
                 "class": "logging.StreamHandler",
@@ -137,7 +147,7 @@ def setup_logging() -> None:
                 "level": lib_log_level,
             },
         },
-        "loggers": LIB_LOGGERS,
+        "loggers": lib_loggers,
         "root": {
             "level": "NOTSET",
             "handlers": ["app_console_handler", "file_handler"],
@@ -211,7 +221,7 @@ def registrar_quedas_nativas(arquivo) -> None:  # type: ignore
     faulthandler.enable(file=arquivo, all_threads=True)
 
 
-# Informação, aviso, crítico e fatal; a depuração do Qt fica de fora, como antes.
+# Informação, aviso, crítico e fatal; a depuração do Qt só entra no log detalhado.
 _NIVEIS_DO_QT = {
     QtMsgType.QtInfoMsg: ("INFO", logging.INFO),
     QtMsgType.QtWarningMsg: ("WARNING", logging.WARNING),
@@ -229,7 +239,10 @@ def _registrar_do_qt(tipo, contexto, mensagem) -> None:  # type: ignore
         return
     _registrando.ativo = True
     try:
-        if (nivel := _NIVEIS_DO_QT.get(tipo)) is None:
+        nivel = _NIVEIS_DO_QT.get(tipo)
+        if nivel is None and tipo == QtMsgType.QtDebugMsg and detalhado.ativo():
+            nivel = ("DEBUG", logging.DEBUG)
+        if nivel is None:
             return
         nome, nivel_do_log = nivel
         # O arquivo QML e a linha, quando o Qt os informa e a mensagem ainda não os traz (o `console.warn`).

@@ -34,6 +34,7 @@ from cartridges.conquistas.ea import conta as ea_conta
 from cartridges.conquistas.epic import conta as epic_conta
 from cartridges.conquistas.varredura import VarreduraConquistas
 from cartridges.conquistas.xbox import conta, login
+from cartridges.logging.detalhado import instalar_filtro
 from cartridges.logging.setup import log_system_info, setup_logging
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
@@ -560,6 +561,7 @@ def main(argv: list[str]) -> int:
     # "Redefinir Cartridges", agendado nas Preferências: antes do log, que mora na pasta do app e a travaria.
     redefinido = redefinir.aplicar_pendente()
     _configurar_log()
+    filtro = instalar_filtro(app)  # noqa: F841  # a referência vive até o fim do main
     if redefinido:
         logging.info("Cartridges redefinido")
     elif redefinido is False:

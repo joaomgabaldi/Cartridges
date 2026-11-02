@@ -29,6 +29,8 @@ import sys
 import threading
 import time
 
+from PySide6.QtCore import SIGNAL, QEvent, QObject, QTimer
+
 # Liga o log detalhado por padrão. A variável de ambiente CARTRIDGES_LOG_DETALHADO
 # ("1" ou "0") vence esta constante.
 ATIVO = True
@@ -191,3 +193,98 @@ def remover_rastreio() -> None:
     _mon.free_tool_id(_FERRAMENTA)
     _instalado = False
 
+
+# --- Eventos do Qt --------------------------------------------------------------
+
+_log_ui = logging.getLogger("cartridges.interface")
+_ET = QEvent.Type
+_EVENTOS_DA_INTERFACE = {
+    _ET.MouseButtonPress: "clique",
+    _ET.MouseButtonRelease: "soltou o clique",
+    _ET.MouseButtonDblClick: "clique duplo",
+    _ET.KeyPress: "tecla",
+    _ET.Wheel: "roda do mouse",
+    _ET.Show: "mostrou",
+    _ET.Hide: "escondeu",
+    _ET.Close: "fechou",
+}
+
+
+def _quem(objeto) -> str:  # type: ignore
+    return f"{objeto.metaObject().className()}({objeto.objectName()!r})"
+
+
+def _detalhe(evento) -> str:  # type: ignore
+    tipo = evento.type()
+    if tipo in (_ET.MouseButtonPress, _ET.MouseButtonRelease, _ET.MouseButtonDblClick):
+        return f" botao={evento.button().name}"
+    if tipo == _ET.KeyPress:
+        return f" tecla={evento.key()} texto={evento.text()!r}"
+    return ""
+
+
+class FiltroDeEventos(QObject):
+    """Filtro de eventos do app: grava cliques, teclas, janelas e telas do QML.
+
+    Nunca consome o evento (devolve sempre ``False``) e nunca levanta.
+    """
+
+    def eventFilter(self, destino, evento):  # type: ignore  # pylint: disable=invalid-name
+        try:
+            tipo = evento.type()
+            if (nome := _EVENTOS_DA_INTERFACE.get(tipo)) is not None:
+                _log_ui.debug("%s em %s%s", nome, _quem(destino), _detalhe(evento))
+            elif tipo == _ET.ChildAdded:
+                self._filho_novo(evento.child())
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+        return False
+
+    @staticmethod
+    def _filho_novo(filho) -> None:  # type: ignore
+        """Agenda o exame de um filho recém-criado.
+
+        No ``ChildAdded`` o objeto ainda está dentro do construtor da base
+        (a classe é só ``QObject``), e o Qt não avisa a criação de um Popup ou
+        Loader do QML: só a dos filhos deles. Por isso o exame vai para o
+        próximo ciclo do laço de eventos, quando a classe já é a final.
+        """
+        QTimer.singleShot(0, lambda: _tentar(lambda: _examinar(filho)))
+
+
+def _examinar(filho) -> None:  # type: ignore
+    """Liga os sinais de popups e loaders do QML a linhas de log (o filho ou o pai dele)."""
+    if "_QMLTYPE_" in filho.metaObject().className():
+        _log_ui.debug("objeto do QML criado: %s", _quem(filho))
+    for alvo in (filho, filho.parent()):
+        if alvo is None or alvo.property("_logLigado"):
+            continue
+        if alvo.inherits("QQuickPopup"):
+            alvo.setProperty("_logLigado", True)
+            alvo.connect(SIGNAL("opened()"), lambda: _tentar(lambda: _log_ui.debug("popup aberto: %s", _quem(alvo))))
+            alvo.connect(SIGNAL("closed()"), lambda: _tentar(lambda: _log_ui.debug("popup fechado: %s", _quem(alvo))))
+        elif alvo.inherits("QQuickLoader"):
+            alvo.setProperty("_logLigado", True)
+            alvo.connect(SIGNAL("loaded()"), lambda: _tentar(lambda: _tela_carregada(alvo)))
+            if alvo.property("item") is not None:  # carregou antes de ligarmos o sinal
+                _tela_carregada(alvo)
+
+
+def _tela_carregada(loader) -> None:  # type: ignore
+    _log_ui.debug("tela carregada: %s source=%s", _quem(loader), loader.property("source"))
+
+
+def _tentar(funcao) -> None:  # type: ignore
+    try:
+        funcao()
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
+
+def instalar_filtro(app):  # type: ignore
+    """Instala o filtro no ``app``; devolve ``None`` com o modo desligado."""
+    if not ativo():
+        return None
+    filtro = FiltroDeEventos(app)
+    app.installEventFilter(filtro)
+    return filtro
