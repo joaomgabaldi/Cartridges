@@ -71,19 +71,24 @@ Column {
                 onParada: preferencias.biblioteca.cancelarMetadados()
             }
         }
-        BarraDeProgresso {
-            objectName: "linhaDosMetadadosProgresso"
+        // `show-text` no GTK 4: o texto vai acima da trilha de 8, menor (`smaller`), esmaecido e com algarismos de largura fixa.
+        Column {
             width: parent.width
-            implicitHeight: 16
+            spacing: 0
             visible: preferencias.biblioteca.rodando
-            value: preferencias.biblioteca.fracao
             Text {
                 objectName: "linhaDosMetadadosProgressoTexto"
-                anchors.centerIn: parent
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
                 text: preferencias.biblioteca.progresso
                 textFormat: Text.PlainText
-                color: Tema.texto
-                font { family: Tema.fonte; pixelSize: Tema.legenda }
+                color: Tema.textoSecundario
+                font { family: Tema.fonte; pixelSize: Tema.legenda; features: { "tnum": 1 } }
+            }
+            BarraDeProgresso {
+                objectName: "linhaDosMetadadosProgresso"
+                width: parent.width
+                value: preferencias.biblioteca.fracao
             }
         }
     }

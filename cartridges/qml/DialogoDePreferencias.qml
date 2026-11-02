@@ -347,9 +347,12 @@ MolduraDoDialogo {
     // Os diálogos internos e as janelas de login ficam acima do cartão (o `z` do aviso, dentro dele, é 100) e fora do layout:
     // cada um cobre a janela inteira por conta própria, e o `Item` sem tamanho só os segura.
     Item {
+        // Filho direto do cartão e não do layout: o `z` só ordena irmãos, e assim o véu e o cartão deles ficam acima do aviso
+        // (`z` 100) e do contorno do cartão (`z` 20).
+        parent: dialogo.cartao
         z: 200
-        Layout.preferredWidth: 0
-        Layout.preferredHeight: 0
+        width: 0
+        height: 0
 
         // O escopo da atualização de metadados: a pergunta chega do `preferencias.biblioteca`.
         DialogoDeConfirmacao {

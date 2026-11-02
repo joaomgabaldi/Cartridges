@@ -208,8 +208,12 @@ def test_progresso_dos_metadados_fica_abaixo_do_cartao(app, monkeypatch):
     assert _esperar(lambda: barra.property("visible") is True)
     assert app.achar("linhaDosMetadadosProgressoTexto").property("text") == "3 de 12"
     cartao = app.achar("grupoAtualizarMetadados")
-    abaixo = barra.mapToItem(cartao, QPointF(0, 0)).y()
-    assert abaixo == pytest.approx(cartao.property("height") + 12)  # margem de 12 sob o cartão
+    texto = app.achar("linhaDosMetadadosProgressoTexto")
+    # I3: o texto fica acima da trilha, com a margem de 12 sob o cartão; a trilha tem 8.
+    assert texto.mapToItem(cartao, QPointF(0, 0)).y() == pytest.approx(cartao.property("height") + 12)
+    assert barra.mapToItem(cartao, QPointF(0, 0)).y() >= texto.mapToItem(cartao, QPointF(0, 0)).y() + texto.property("height")
+    assert barra.property("height") == 8
+    assert _avaliar(texto, "color.a") < 1 or _avaliar(texto, "color.toString() !== Tema.texto.toString()")  # esmaecido
     assert linha.property("height") == 54  # o cartão não cresceu
 
 
@@ -369,6 +373,46 @@ def test_calibracao_todos_os_dispositivos_sem_cartao(app, fitas_espiadas, monkey
             cartoes += 1
         pai = pai.parentItem()
     assert cartoes == 0
+
+
+# endregion
+
+
+# region Rodada 1 da revisão (I1, I2)
+
+
+def test_dialogo_interno_acompanha_o_redimensionamento_da_janela(app, fitas_espiadas):  # noqa: ARG001
+    shared.schema.set_boolean("session-fita", True)
+    _abrir(app, "session")
+    app.preferencias.abrirBrilhoPorDispositivo()
+    dialogo = app.achar("dialogoDoBrilhoPorDispositivo")
+    assert _esperar(lambda: dialogo.property("visible") is True)
+    janela = app.janela
+
+    def origem():
+        return dialogo.mapToScene(QPointF(0, 0)).toPoint()
+
+    assert (origem().x(), origem().y()) == (0, 0)
+    janela.resize(janela.width() + 300, janela.height() + 200)
+    assert _esperar(lambda: (origem().x(), origem().y()) == (0, 0))
+    assert dialogo.property("width") == janela.width()
+
+
+def test_aviso_e_contorno_ficam_abaixo_do_dialogo_interno(app, fitas_espiadas):  # noqa: ARG001
+    shared.schema.set_boolean("session-fita", True)
+    _abrir(app, "session")
+    app.preferencias.abrirBrilhoPorDispositivo()
+    dialogo = app.achar("dialogoDoBrilhoPorDispositivo")
+    assert _esperar(lambda: dialogo.property("visible") is True)
+    app.aplicativo.avisar("Olá")
+    aviso = app.achar("aviso")
+    assert _esperar(lambda: aviso.property("visible") is True)
+    cartao = aviso.parentItem()
+    ponto = aviso.mapToItem(cartao, QPointF(aviso.property("width") / 2, aviso.property("height") / 2))
+    # O que o cartão das Preferências tem de mais alto naquele ponto é o diálogo interno (via o `Item` de `z: 200`), não o aviso.
+    topo = max(cartao.childItems(), key=lambda c: c.property("z") or 0)
+    assert topo is not aviso and (topo.property("z") or 0) > aviso.property("z")
+    assert dialogo.parentItem() is topo
 
 
 # endregion

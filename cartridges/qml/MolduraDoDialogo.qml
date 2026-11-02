@@ -114,6 +114,10 @@ FocusScope {
     visible: false
     focus: visible
 
+    // Declarada dentro de um cartão que se move com a janela (as Preferências), a origem muda a cada redimensionamento.
+    onWidthChanged: if (visible) Qt.callLater(_cobrir)
+    onHeightChanged: if (visible) Qt.callLater(_cobrir)
+
     onAbertoChanged: {
         if (aberto) {
             // Reaberto no meio da saída, ou com o foco em lugar nenhum: o retorno de antes continua valendo.
