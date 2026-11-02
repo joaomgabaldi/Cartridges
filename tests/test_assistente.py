@@ -448,6 +448,13 @@ def test_rodape_nao_fica_numa_barra_da_janela(janela):
     assert pai is janela.raiz.contentItem()
 
 
+def test_cartao_do_aviso_na_pagina_de_conquistas_e_embutido(janela):
+    """Como na main (`conquista-aviso-cartao-embutido`): contorno e sombra no cartão do assistente."""
+    janela.ir_para("conquistas")
+    sombra = janela.achar("sombraDoAviso")
+    assert sombra.property("visible") is True
+
+
 def test_foco_do_teclado_fica_na_pagina_atual(janela):
     paginas = {janela.achar(f"pagina_{nome}"): nome for nome in janela.modelo.paginas}
 

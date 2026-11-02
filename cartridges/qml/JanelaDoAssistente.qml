@@ -338,6 +338,7 @@ Window {
                         titulo: raiz.modelo.cartao.titulo
                         descricao: raiz.modelo.cartao.descricao
                         icone: raiz.modelo.cartao.icone
+                        embutido: true
                     }
                     GrupoDasContas {
                         id: grupoDasContas
