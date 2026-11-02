@@ -22,6 +22,7 @@ from PySide6.QtQuick import QQuickItem
 
 from cartridges import shared
 from cartridges.modelos import backup_da_biblioteca as modulo
+from cartridges.modelos import tarefas
 from cartridges.modelos.backup_da_biblioteca import BackupDasPreferencias
 from cartridges.modelos.preferencias import Preferencias
 from cartridges.saves import backup_de_saves, pasta
@@ -613,6 +614,127 @@ def test_redefinir_que_nao_consegue_agendar_avisa(monkeypatch, modelo, aplicativ
     textos = _confirmar(monkeypatch, modelo, aplicativo, em_andamento=False)
     assert textos == ["Não foi possível redefinir o Cartridges"]
     assert aplicativo.reinicios == 0
+
+
+# endregion
+
+
+# region D106: sem duas execuções e sem cortar a exportação
+
+
+@pytest.fixture(autouse=True)
+def _contagem_limpa(monkeypatch):
+    """A contagem das tarefas e a lista são do módulo: o que sobra de um teste não passa ao seguinte."""
+    monkeypatch.setattr(backup_de_saves, "_tarefas_abertas", 0)
+    for tarefa in list(tarefas.lista._tarefas):  # pylint: disable=protected-access
+        tarefas.lista.remover(tarefa)
+    yield
+    for tarefa in list(tarefas.lista._tarefas):  # pylint: disable=protected-access
+        tarefas.lista.remover(tarefa)
+
+
+def _preso(monkeypatch, objeto, nome, erro=None):
+    """Troca `objeto.nome` por um falso que espera o ``gate`` e conta as chamadas."""
+    gate, chamadas = threading.Event(), []
+
+    def falso(*args):
+        chamadas.append(args)
+        gate.wait(5)
+        if erro is not None:
+            raise erro
+
+    monkeypatch.setattr(objeto, nome, falso)
+    return gate, chamadas
+
+
+def test_segunda_restauracao_durante_o_preparo_e_recusada(monkeypatch, modelo, aplicativo, flush_idle, tmp_path):
+    monkeypatch.setattr(backup, "validar", lambda _caminho: None)
+    gate, chamadas = _preso(monkeypatch, backup, "agendar")
+    modelo._preparar(tmp_path / "a.zip")  # noqa: SLF001
+    modelo._preparar(tmp_path / "b.zip")  # noqa: SLF001
+    assert aplicativo.avisos.textos == ["Preparando a restauração…", AGUARDE]
+    gate.set()
+    assert _drenar(flush_idle, lambda: aplicativo.reinicios)
+    assert len(chamadas) == 1
+
+
+def test_preparo_que_falha_libera_a_restauracao(monkeypatch, modelo, aplicativo, flush_idle, tmp_path):
+    monkeypatch.setattr(backup, "validar", lambda _caminho: None)
+    gate, chamadas = _preso(monkeypatch, backup, "agendar", erro=OSError("disco cheio"))
+    gate.set()
+    modelo._preparar(tmp_path / "a.zip")  # noqa: SLF001
+    assert _drenar(flush_idle, lambda: aplicativo.dialogos)
+    modelo._preparar(tmp_path / "b.zip")  # noqa: SLF001
+    assert _drenar(flush_idle, lambda: len(aplicativo.dialogos) == 2)
+    assert len(chamadas) == 2 and AGUARDE not in aplicativo.avisos.textos
+
+
+def _exportando_preso(monkeypatch, modelo):
+    monkeypatch.setattr(backup, "ler_configuracoes", lambda: {})
+    gate, chamadas = _preso(monkeypatch, backup, "exportar")
+    modelo.exportar(URL)
+    return gate, chamadas
+
+
+def test_segunda_exportacao_em_andamento_e_recusada(monkeypatch, modelo, aplicativo, flush_idle):
+    gate, chamadas = _exportando_preso(monkeypatch, modelo)
+    modelo.exportar(URL)
+    assert aplicativo.avisos.textos == ["Exportando backup…", AGUARDE]
+    gate.set()
+    assert _drenar(flush_idle, lambda: not backup_de_saves.em_andamento())
+    assert len(chamadas) == 1
+
+
+def test_exportacao_em_andamento_segura_o_fechamento(monkeypatch, modelo, flush_idle):
+    gate, _chamadas = _exportando_preso(monkeypatch, modelo)
+    assert backup_de_saves.em_andamento() is True
+    assert tarefas.acao_ao_fechar(backup_de_saves.em_andamento(), False, 0) == "mostrar_e_esconder"
+    gate.set()
+    assert _drenar(flush_idle, lambda: not backup_de_saves.em_andamento())
+    assert tarefas.acao_ao_fechar(backup_de_saves.em_andamento(), False, 0) == "fechar"
+
+
+def test_redefinir_durante_a_exportacao_pede_para_aguardar(monkeypatch, modelo, aplicativo, flush_idle):
+    monkeypatch.setattr(redefinir, "agendar", lambda: pytest.fail("agendou durante a exportação"))
+    gate, _chamadas = _exportando_preso(monkeypatch, modelo)
+    modelo.redefinir()
+    aplicativo.responder(0, True)
+    assert aplicativo.avisos.textos == ["Exportando backup…", AGUARDE]
+    assert aplicativo.reinicios == 0
+    gate.set()
+    assert _drenar(flush_idle, lambda: not backup_de_saves.em_andamento())
+
+
+@pytest.mark.parametrize("erro", [None, OSError("disco cheio")])
+def test_tarefa_da_exportacao_termina_mesmo_com_erro(monkeypatch, modelo, flush_idle, erro):
+    gate, _chamadas = _preso(monkeypatch, backup, "exportar", erro=erro)
+    monkeypatch.setattr(backup, "ler_configuracoes", lambda: {})
+    modelo.exportar(URL)
+    assert _drenar(flush_idle, lambda: tarefas.lista.rowCount() == 1)
+    gate.set()
+    assert _drenar(flush_idle, lambda: not backup_de_saves.em_andamento())
+    assert tarefas.lista.rowCount() == 0
+
+
+def test_tarefa_da_exportacao_termina_com_o_modelo_morto(monkeypatch, aplicativo):
+    _com_ludusavi(monkeypatch)
+    entregas, gate = [], threading.Event()
+    monkeypatch.setattr(modulo, "na_thread_principal", lambda f, *a: entregas.append((f, a)))
+    monkeypatch.setattr(backup, "ler_configuracoes", lambda: {})
+    monkeypatch.setattr(backup, "exportar", lambda *_a: gate.wait(5) and None)
+    m = BackupDasPreferencias(aplicativo.avisos)
+    m.exportar(URL)
+    del m
+    gc.collect()
+    assert backup_de_saves.em_andamento() is True
+    gate.set()
+    fim = time.monotonic() + 5
+    while not entregas and time.monotonic() < fim:
+        time.sleep(0.01)
+    for funcao, args in entregas:
+        funcao(*args)
+    assert backup_de_saves.em_andamento() is False
+    assert tarefas.lista.rowCount() == 0
 
 
 # endregion

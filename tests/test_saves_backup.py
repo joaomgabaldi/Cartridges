@@ -1159,7 +1159,7 @@ def test_restaurar_todos_bloqueia_todos_mesmo_com_cache_vazio(store, make_game, 
     assert backup_de_saves.restaurando(com_nome) is False
 
 
-@pytest.mark.parametrize("quebra", ["_em_segundo_plano", "_biblioteca", "_comecar_tarefa"])
+@pytest.mark.parametrize("quebra", ["_em_segundo_plano", "_biblioteca", "comecar_tarefa"])
 @pytest.mark.parametrize("pedido", ["backup", "um", "todos"])
 def test_pedido_que_nao_chega_a_abrir_a_thread_nao_deixa_marca(
     store, make_game, falso, monkeypatch, flush_idle, quebra, pedido
@@ -1853,3 +1853,17 @@ def test_sem_appid_com_nome_gravado_continua_com_backup(store, make_game, falso,
 
     assert falso.chamou("find") == []
     assert len(falso.chamou("backup")) == 1
+
+
+def test_aviso_de_saves_nao_depende_do_endereco(store, make_game, monkeypatch):
+    """A marca da pergunta na tela é o `game_id`: dois objetos com o mesmo `id()` não se confundem."""
+    monkeypatch.setattr(backup_de_saves, "id", lambda _objeto: 1, raising=False)
+    um = na_biblioteca(store, make_game, game_id="a", name="Um")
+    outro = na_biblioteca(store, make_game, game_id="b", name="Outro")
+    backup_de_saves._avisar_local_desconhecido(um)  # pylint: disable=protected-access
+    backup_de_saves._avisar_local_desconhecido(outro)  # pylint: disable=protected-access
+    backup_de_saves._avisar_local_desconhecido(um)  # pylint: disable=protected-access
+    assert [c[1] for c in perguntas()] == [
+        _aviso_sem_backup("Um")[1],
+        _aviso_sem_backup("Outro")[1],
+    ]

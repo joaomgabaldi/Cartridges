@@ -90,7 +90,7 @@ def _somar_tarefa(passo: int) -> None:
         _tarefas_abertas += passo
 
 
-def _comecar_tarefa(nome: str, total: int) -> tarefas.Tarefa:
+def comecar_tarefa(nome: str, total: int) -> tarefas.Tarefa:
     """`tarefas.comecar`, contada em `em_andamento`. Soma antes: a tarefa nunca fica
     à vista sem a contagem."""
     _somar_tarefa(1)
@@ -101,7 +101,7 @@ def _comecar_tarefa(nome: str, total: int) -> tarefas.Tarefa:
         raise
 
 
-def _terminar_tarefa(tarefa: tarefas.Tarefa) -> None:
+def terminar_tarefa(tarefa: tarefas.Tarefa) -> None:
     try:
         tarefa.terminar()
     finally:
@@ -189,7 +189,7 @@ def _nao_abriu(tarefa: tarefas.Tarefa | None, aviso: str) -> None:
     """O pedido não chegou a abrir a thread de trabalho: desfaz a tarefa e avisa o usuário.
     Quem chama registra a exceção; nada sobe para a tela que pediu."""
     if tarefa is not None:
-        _terminar_tarefa(tarefa)
+        terminar_tarefa(tarefa)
     _avisar(aviso)
 
 
@@ -301,9 +301,9 @@ def _local_desconhecido(game: Jogo) -> None:
         na_thread_principal(_avisar_local_desconhecido, game)
 
 
-# Os jogos (`id` do objeto) com o diálogo de `_avisar_local_desconhecido` na tela: duas
+# Os jogos (`game_id`) com o diálogo de `_avisar_local_desconhecido` na tela: duas
 # sessões seguidas não abrem dois. Só a thread da tela o usa.
-_local_desconhecido_na_tela: set[int] = set()
+_local_desconhecido_na_tela: set[str] = set()
 
 
 def _avisar_local_desconhecido(game: Jogo) -> None:
@@ -312,9 +312,9 @@ def _avisar_local_desconhecido(game: Jogo) -> None:
     A marca só é gravada quando o usuário responde: fechado o app antes disso, a pergunta
     volta no fim da próxima sessão."""
     aplicativo = shared.aplicativo
-    if aplicativo is None or game.saves_local_desconhecido_avisado or id(game) in _local_desconhecido_na_tela:
+    if aplicativo is None or game.saves_local_desconhecido_avisado or game.game_id in _local_desconhecido_na_tela:
         return
-    chave = id(game)
+    chave = game.game_id
     _local_desconhecido_na_tela.add(chave)
     fraco = weakref.ref(game)  # a pergunta vive na fila do app, que não segura o jogo
     aplicativo.pedir_confirmacao(
@@ -328,7 +328,7 @@ def _avisar_local_desconhecido(game: Jogo) -> None:
     )
 
 
-def _ao_responder_local_desconhecido(chave: int, game: Jogo | None, confirmou: bool) -> None:
+def _ao_responder_local_desconhecido(chave: str, game: Jogo | None, confirmou: bool) -> None:
     _local_desconhecido_na_tela.discard(chave)
     if game is None:  # o jogo já não existe: não há marca a gravar
         return
@@ -350,7 +350,7 @@ def no_fim_da_sessao(game: Jogo) -> None:
     tarefa = None
     try:
         biblioteca = _biblioteca()
-        tarefa = _comecar_tarefa(_("Backup dos saves de {}").format(game.name), 1)
+        tarefa = comecar_tarefa(_("Backup dos saves de {}").format(game.name), 1)
         _em_segundo_plano(_backup, game, biblioteca, tarefa)
     except Exception:  # pylint: disable=broad-exception-caught
         logging.exception("O backup dos saves de %s não chegou a começar", game.name)
@@ -396,7 +396,7 @@ def _backup(game: Jogo, biblioteca: list[Jogo], tarefa: tarefas.Tarefa) -> None:
         else:
             _ler_versoes(biblioteca)
         finally:
-            _terminar_tarefa(tarefa)
+            terminar_tarefa(tarefa)
 
 
 # -- versões -----------------------------------------------------------------
@@ -583,7 +583,7 @@ def restaurar(game: Jogo, versao: str) -> None:
     tarefa = None
     try:
         biblioteca = _biblioteca()
-        tarefa = _comecar_tarefa(_("Restaurando o save de {}").format(game.name), 1)
+        tarefa = comecar_tarefa(_("Restaurando o save de {}").format(game.name), 1)
         _em_segundo_plano(_restaurar, game, nome, versao, biblioteca, tarefa)
     except Exception:  # pylint: disable=broad-exception-caught
         logging.exception("A restauração do save de %s não chegou a começar", game.name)
@@ -611,7 +611,7 @@ def _restaurar(
                 _avisar(aviso)
             _ler_versoes(biblioteca)
     finally:
-        _terminar_tarefa(tarefa)
+        terminar_tarefa(tarefa)
         na_thread_principal(_desmarcar, nome, id(game))
 
 
@@ -630,7 +630,7 @@ def restaurar_todos() -> None:
         # cache ainda está vazio. A thread de trabalho o acerta quando souber quem tem backup.
         nomes = {nome for _jogo, nome in pedidos}
         provisorio = sum(1 for nome in nomes if _cache.get(nome)) or len(nomes)
-        tarefa = _comecar_tarefa(_("Restaurando os saves"), provisorio)
+        tarefa = comecar_tarefa(_("Restaurando os saves"), provisorio)
         _em_segundo_plano(_restaurar_todos, biblioteca, pedidos, tarefa)
     except Exception:  # pylint: disable=broad-exception-caught
         logging.exception("A restauração dos saves não chegou a começar")
@@ -683,7 +683,7 @@ def _restaurar_todos(
                 na_thread_principal(_restauracao_incompleta, falhas)
             _ler_versoes(biblioteca)
     finally:
-        _terminar_tarefa(tarefa)
+        terminar_tarefa(tarefa)
         na_thread_principal(_desmarcar_todos, [id(jogo) for jogo, _nome in pedidos])
 
 

@@ -64,6 +64,9 @@ class BackupDasPreferencias(QObject):
         self._pasta = ""
         self._padrao = True
         self._trocando = False
+        # Uma exportação e um preparo de cada vez (D106): o segundo pedido cai em `_aguarde()`.
+        self._exportando = False
+        self._preparando = False
 
     # region Estado
 
@@ -111,10 +114,15 @@ class BackupDasPreferencias(QObject):
         destino = _caminho(url)
         if destino is None:
             return
+        if self._exportando:
+            self._aguarde()
+            return
         configuracoes = backup.ler_configuracoes()  # na principal (lê o schema)
         avisos = weakref.ref(self._avisos) if self._avisos is not None else None
-        aviso = self._avisar(_("Exportando backup…"), segundos=0)
         eu = weakref.ref(self)
+        # A tarefa conta em `em_andamento()`: fechar o app, importar e redefinir esperam o fim da exportação (D106).
+        tarefa = backup_de_saves.comecar_tarefa(_("Exportando backup…"), 1)
+        aviso = None
 
         def trabalho() -> None:
             # Qualquer erro volta para a tela: o aviso de progresso não pode ficar pendurado.
@@ -122,11 +130,20 @@ class BackupDasPreferencias(QObject):
                 sem_saves = backup.exportar(destino, configuracoes)
             except Exception as erro:  # noqa: BLE001
                 _log.exception("Não foi possível exportar o backup")
-                na_thread_principal(_exportacao_acabou, eu, avisos, aviso, erro, None)
+                na_thread_principal(_exportacao_acabou, eu, avisos, aviso, tarefa, erro, None)
             else:
-                na_thread_principal(_exportacao_acabou, eu, avisos, aviso, None, sem_saves)
+                na_thread_principal(_exportacao_acabou, eu, avisos, aviso, tarefa, None, sem_saves)
 
-        threading.Thread(target=trabalho, daemon=True).start()
+        self._exportando = True
+        try:
+            aviso = self._avisar(_("Exportando backup…"), segundos=0)
+            threading.Thread(target=trabalho, daemon=True).start()
+        except BaseException:
+            # Sem thread não há quem termine a tarefa: a contagem não pode ficar presa.
+            self._exportando = False
+            backup_de_saves.terminar_tarefa(tarefa)
+            _dispensar(avisos, aviso)
+            raise
 
     # endregion
     # region Importar
@@ -137,7 +154,7 @@ class BackupDasPreferencias(QObject):
         if origem is None:
             return
         # A restauração fecha o app e troca a pasta dos saves: não pode cair no meio de um backup ou de uma restauração.
-        if backup_de_saves.em_andamento():
+        if backup_de_saves.em_andamento() or self._preparando:
             self._aguarde()
             return
         eu = weakref.ref(self)
@@ -150,6 +167,9 @@ class BackupDasPreferencias(QObject):
 
     def _preparar(self, origem: Path) -> None:
         """Valida e copia o .zip fora da thread principal (centenas de capas levam segundos)."""
+        if self._preparando:  # a pergunta pode ter ficado aberta enquanto outro preparo corria
+            self._aguarde()
+            return
         avisos = weakref.ref(self._avisos) if self._avisos is not None else None
         aviso = self._avisar(_("Preparando a restauração…"), segundos=0)
         eu = weakref.ref(self)
@@ -167,7 +187,13 @@ class BackupDasPreferencias(QObject):
                 resultado = ""
             na_thread_principal(_preparo_acabou, eu, avisos, aviso, resultado)
 
-        threading.Thread(target=trabalho, daemon=True).start()
+        self._preparando = True
+        try:
+            threading.Thread(target=trabalho, daemon=True).start()
+        except BaseException:
+            self._preparando = False
+            _dispensar(avisos, aviso)
+            raise
 
     # endregion
     # region Pasta dos saves
@@ -235,7 +261,7 @@ class BackupDasPreferencias(QObject):
 
     def _redefinir_confirmado(self) -> None:
         # A limpeza é na abertura seguinte (`utils/redefinir.py`); um backup dos saves no meio gravaria na pasta que ela apaga.
-        if backup_de_saves.em_andamento():
+        if backup_de_saves.em_andamento() or self._preparando:
             self._aguarde()
             return
         try:
@@ -267,11 +293,19 @@ def _dispensar(avisos: Any, aviso: Any) -> None:
         fila.dispensar(aviso)
 
 
-def _exportacao_acabou(eu: Any, avisos: Any, aviso: Any, erro: Exception | None, sem_saves: str | None) -> None:
+def _exportacao_acabou(
+    eu: Any, avisos: Any, aviso: Any, tarefa: Any, erro: Exception | None, sem_saves: str | None
+) -> None:
+    # Antes de qualquer guarda: com o modelo morto a tarefa ainda tem de acabar, ou o app não fecha mais.
+    try:
+        backup_de_saves.terminar_tarefa(tarefa)
+    except Exception:  # noqa: BLE001
+        _log.exception("Não foi possível terminar a tarefa da exportação")
     _dispensar(avisos, aviso)
     modelo = _vivo(eu)
     if modelo is None:
         return
+    modelo._exportando = False  # noqa: SLF001
     if isinstance(erro, backup.SavesInacessiveis):
         _dialogo(
             _("Não foi possível exportar"),
@@ -315,6 +349,7 @@ def _preparo_acabou(eu: Any, avisos: Any, aviso: Any, resultado: str) -> None:
     modelo = _vivo(eu)
     if modelo is None:
         return
+    modelo._preparando = False  # noqa: SLF001
     if resultado == "invalido":
         _dialogo(_("Backup inválido"), _("O arquivo não é um backup válido do Cartridges."))
     elif resultado == "falhou":
