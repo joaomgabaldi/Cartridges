@@ -6,6 +6,7 @@
 
 import pytest
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QWindow
 
 from cartridges import process_session as ps
 from cartridges import session_window as sw
@@ -213,3 +214,19 @@ def test_relogio_acompanha_o_alterado(modelo):
     modelo.alterado.emit()
 
     assert relogios == [1]
+
+
+def test_present_traz_de_volta_a_janela_escondida_ainda_maximizada(modelo, app_qt):  # noqa: ARG001
+    """`show()` chama `showNormal()`: a principal escondida pelo fechamento voltaria sem a maximização."""
+    janela = QWindow()
+    janela.resize(200, 200)
+    janela.setVisible(True)
+    janela.setWindowStates(Qt.WindowState.WindowMaximized)
+    janela.hide()
+    modelo.definir_janela(janela)
+    try:
+        modelo.present()
+        assert janela.isVisible()
+        assert janela.windowStates() & Qt.WindowState.WindowMaximized
+    finally:
+        janela.destroy()

@@ -277,7 +277,7 @@ class ModeloDaSessao(QObject):
             return
         janela.setWindowStates(janela.windowStates() & ~Qt.WindowState.WindowMinimized)
         if not janela.isVisible():  # fechada com a janela manual ainda aberta
-            janela.show()
+            janela.setVisible(True)  # `show()` perderia a maximização
         janela.raise_()
         janela.requestActivate()
 

@@ -950,12 +950,25 @@ def quit_agora():
     QCoreApplication.quit()
 
 
+# A janela das tarefas aberta, sem tarefa nenhuma, e a principal fechada: o `Loader` desfaz a janela das tarefas.
+def fechar_as_duas():
+    QQmlEngine.contextForObject(principal()).contextProperty("painelDasTarefas").mostrar()
+    QTimer.singleShot(400, fechar_a_principal)
+
+
+def fechar_a_principal():
+    tarefas_ = janela("janelaDasTarefas")
+    anotar(tarefas_visivel=bool(tarefas_ and tarefas_.isVisible()))
+    relogio()
+    principal().close()
+
+
 _comecar = modulo_app._comecar_varreduras
 
 
 def _comecar_e_seguir(*argumentos):
     _comecar(*argumentos)
-    QTimer.singleShot(500, passo_1 if MODO == "fechar_tarefas" else quit_com_trabalho)
+    QTimer.singleShot(500, {"fechar_tarefas": passo_1, "fechar_as_duas": fechar_as_duas}.get(MODO, quit_com_trabalho))
 
 
 modulo_app._comecar_varreduras = _comecar_e_seguir
@@ -1004,3 +1017,60 @@ def test_quit_com_a_janela_das_tarefas_e_uma_tarefa_encerra(tmp_path):
     """Nem pelo caso 2: a janela das tarefas aberta e uma tarefa rodando."""
     anotado = _main_num_processo(tmp_path, "quit_tarefa")
     assert anotado == {"principal_visivel": True, "tarefas_visivel": True, "sobre_o_fim": True, "saves_no_fim": False, "codigo": 0}
+
+
+def test_fechar_a_principal_com_a_janela_das_tarefas_e_sem_tarefa_encerra_o_processo(tmp_path):
+    """O app de verdade: sem a saída agendada o processo ficava vivo e invisível (o relógio o derruba com 7)."""
+    anotado = _main_num_processo(tmp_path, "fechar_as_duas")
+    assert anotado == {"tarefas_visivel": True, "sobre_o_fim": True, "saves_no_fim": False, "codigo": 0}
+
+
+def test_fechar_com_a_janela_das_tarefas_aberta_e_sem_tarefa_encerra_o_app(fechamento):
+    """O `Loader` desfaz a janela das tarefas sem evento de fechamento: o Qt não vê a "última janela fechada" e o
+    processo ficaria vivo e invisível. A saída é agendada, como a da sessão."""
+    f = fechamento
+    f.painel.mostrar()
+    assert f.painel.principalFechando() is True
+    assert _esperar(lambda: f.saidas == [1])
+
+
+@pytest.mark.parametrize(
+    ("antes", "escondida", "depois"),
+    [
+        (Qt.WindowState.WindowMaximized, True, Qt.WindowState.WindowMaximized),
+        (Qt.WindowState.WindowMaximized | Qt.WindowState.WindowMinimized, False, Qt.WindowState.WindowMaximized),
+        (Qt.WindowState.WindowNoState, True, Qt.WindowState.WindowNoState),
+    ],
+)
+def test_mostrar_principal_mantem_o_estado_e_tira_so_o_minimizado(fechamento, flush_idle, antes, escondida, depois):
+    """`QWindow.show()` chama `showNormal()` e perderia a maximização: a principal volta como estava."""
+    f = fechamento
+    f.principal.setWindowStates(antes)
+    if escondida:
+        f.painel.mostrar()
+        tarefas.comecar("Importação", 1)
+        flush_idle()
+        assert f.painel.principalFechando() is False
+        assert not f.principal.isVisible()
+    f.painel.mostrarPrincipal()
+    assert f.principal.isVisible()
+    assert f.principal.windowStates() == depois
+
+
+def test_mostrar_principal_durante_a_espera_devolve_as_janelas_maximizadas(fechamento, monkeypatch):
+    """`_desfazer_a_espera` traz de volta as janelas escondidas pela espera dos saves (a "Jogando", por exemplo) sem
+    perder a maximização."""
+    f = fechamento
+    monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: True)
+    outra = QWindow()
+    outra.setVisible(True)
+    outra.setWindowStates(Qt.WindowState.WindowMaximized)
+    try:
+        assert f.painel.principalFechando() is False
+        f.painel.janelaFechada()  # a espera do fim dos saves: tudo some
+        assert not outra.isVisible() and f.painel._espera.isActive()
+        f.painel.mostrarPrincipal()
+        assert outra.isVisible()
+        assert outra.windowStates() & Qt.WindowState.WindowMaximized
+    finally:
+        outra.destroy()

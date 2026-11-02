@@ -334,7 +334,7 @@ class PainelDasTarefas(QObject):
         janelas, self._escondidas_na_espera = self._escondidas_na_espera, []
         for janela in janelas:
             try:
-                janela.show()
+                janela.setVisible(True)  # `show()` perderia a maximização
             except RuntimeError:  # já destruída (o aviso de conquista que saiu por tempo)
                 continue
 
@@ -362,6 +362,8 @@ class PainelDasTarefas(QObject):
         if acao == "fechar_as_duas":
             self._aberta = False  # o `Loader` desfaz a janela das tarefas
             self.alterado.emit()
+            # O `Loader` desfaz a janela das tarefas sem evento de fechamento: o Qt não vê a última janela fechada.
+            QTimer.singleShot(0, _sair)
         # A sessão manual e o aviso de conquista na tela agendam o `_sair` (plano 6).
         if shared.sessao is not None:
             shared.sessao.principalFechando()
@@ -380,7 +382,7 @@ class PainelDasTarefas(QObject):
             self._escondida = False
             self.alterado.emit()
         janela.setWindowStates(janela.windowStates() & ~Qt.WindowState.WindowMinimized)
-        janela.show()
+        janela.setVisible(True)  # `show()` chama `showNormal()` e perderia a maximização
         janela.raise_()
         janela.requestActivate()
 
