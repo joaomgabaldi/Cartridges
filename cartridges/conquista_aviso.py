@@ -27,7 +27,6 @@ from cartridges.conquistas import progresso
 from cartridges.utils.thread_principal import na_thread_principal
 
 DURACAO = 5
-_ENTRADA_MS = 250
 _LIMITE_DA_SAIDA = 1  # segundos até a saída ser dada por terminada, com ou sem animação
 
 

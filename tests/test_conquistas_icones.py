@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 import requests
-from PySide6.QtGui import QColor, QImage
+from PySide6.QtGui import QColor, QImage, QImageReader
 from requests.exceptions import ConnectionError as ErroDeConexao
 
 from cartridges import shared
@@ -151,6 +151,19 @@ def test_arquivo_ilegivel_no_cache_e_apagado(monkeypatch, carregar_e_esperar, ca
     # Ilegível é falha esperada (um portal de rede serve HTML no lugar do ícone): info, sem traceback.
     assert not [r for r in caplog.records if r.levelno >= 30]
     assert "SEGREDO" not in caplog.text
+
+
+def test_icone_com_corpo_ruim_sai_do_cache(tmp_path, monkeypatch, carregar_e_esperar):
+    """Só a assinatura do PNG: o `canRead` aceita, a decodificação não."""
+    bom = _png(tmp_path / "bom.png", 8, 8).read_bytes()
+    ruim = bom[:8] + b"\x00" * 16
+    monkeypatch.setattr(icones, "download_bytes", lambda *_a, **_k: ruim)
+    arquivo = icones.arquivo_local(URL)
+    assert arquivo is not None and arquivo.is_file()
+    assert QImageReader(str(arquivo)).canRead()
+    assert not icones._legivel(arquivo)  # noqa: SLF001
+    assert carregar_e_esperar(URL) == []
+    assert not arquivo.exists()
 
 
 def test_arquivo_local_ilegivel_nao_e_apagado(tmp_path, carregar_e_esperar):

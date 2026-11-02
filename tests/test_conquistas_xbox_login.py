@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import socket
+import threading
 import urllib.parse
 import urllib.request
 
@@ -143,6 +144,52 @@ def test_volta_repetida_troca_o_codigo_uma_vez(monkeypatch, navegador, flush_idl
     assert chamadas == []
     pedido.cancelar()
     assert _esperar(pedido, resultados, flush_idle) == [login.Resultado.CANCELADO]
+
+
+def test_cancelar_durante_a_troca_entrega_o_ok_depois(monkeypatch, navegador, flush_idle):
+    solta, dentro = threading.Event(), threading.Event()
+
+    def conectar(_c, _v, _r):
+        dentro.set()
+        assert solta.wait(5)
+
+    monkeypatch.setattr(conta, "conectar", conectar)
+    resultados = []
+    pedido = login.entrar(resultados.append, abrir=navegador.append)
+    estado = _parametros(navegador[0])["state"]
+    volta = threading.Thread(target=_voltar, args=(pedido, {"code": "COD", "state": estado}))
+    volta.start()
+    assert dentro.wait(5)
+    pedido.cancelar()
+    flush_idle()
+    assert resultados == [login.Resultado.CANCELADO]
+    solta.set()
+    volta.join(5)
+    flush_idle()
+    assert resultados == [login.Resultado.CANCELADO, login.Resultado.OK]
+
+
+def test_falha_depois_de_cancelar_nao_entrega_nada(monkeypatch, navegador, flush_idle):
+    solta, dentro = threading.Event(), threading.Event()
+
+    def conectar(_c, _v, _r):
+        dentro.set()
+        assert solta.wait(5)
+        raise RuntimeError("recusada")
+
+    monkeypatch.setattr(conta, "conectar", conectar)
+    resultados = []
+    pedido = login.entrar(resultados.append, abrir=navegador.append)
+    estado = _parametros(navegador[0])["state"]
+    volta = threading.Thread(target=_voltar, args=(pedido, {"code": "COD", "state": estado}))
+    volta.start()
+    assert dentro.wait(5)
+    pedido.cancelar()
+    flush_idle()
+    solta.set()
+    volta.join(5)
+    flush_idle()
+    assert resultados == [login.Resultado.CANCELADO]
 
 
 def test_cancelar_duas_vezes_termina_uma(navegador, flush_idle):

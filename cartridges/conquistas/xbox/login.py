@@ -163,7 +163,10 @@ class Pedido:
                 resultado = self._trocar(valor["code"])
         finally:
             self._responder(pedido_http, 200, TEXTO_OK if resultado is Resultado.OK else TEXTO_FALHOU)
-            self._terminar(resultado)
+            # Cancelar durante a troca já entregou o CANCELADO, mas a conta ficou conectada: o OK que chega depois
+            # também é entregue (quem ouve decide pelo estado da conta). Falha depois do cancelar não entrega nada.
+            if not self._terminar(resultado) and resultado is Resultado.OK:
+                na_thread_principal(self._entregar, resultado)
 
     def _trocar(self, codigo: str) -> Resultado:
         try:
@@ -179,15 +182,17 @@ class Pedido:
             return Resultado.FALHOU
         return Resultado.OK
 
-    def _terminar(self, resultado: Resultado) -> None:
+    def _terminar(self, resultado: Resultado) -> bool:
+        """Entrega ``resultado`` se o pedido ainda não terminou; devolve se terminou agora."""
         global _pendente  # pylint: disable=global-statement
         with self._fim:
             if self._terminou.is_set():
-                return
+                return False
             self._terminou.set()
         if _pendente is self:
             _pendente = None
         na_thread_principal(self._entregar, resultado)
+        return True
 
     def _entregar(self, resultado: Resultado) -> None:
         """Na thread principal: fecha o servidor e avisa quem pediu."""

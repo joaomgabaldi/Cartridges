@@ -69,12 +69,13 @@ Rectangle {
             // A seção já some sem linhas; o grupo escondido pela altura zero nunca mediria as que o Repeater cria.
             visible: true
             Repeater {
-                model: secao.fileiras
+                // Só a contagem: o lote de ícones refaz a lista inteira e não deve recriar as fileiras.
+                model: secao.fileiras.length
                 delegate: Item {
                     id: fileira
                     objectName: "fileiraDeConquista"
-                    required property var modelData
                     required property int index
+                    readonly property var modelData: secao.fileiras[index] || ({})
                     width: parent.width
                     height: linha.implicitHeight + 24
                     // A bloqueada fica apagada, como o `dim-label` da `main`.

@@ -545,6 +545,21 @@ def test_grupo_largado_no_meio_da_troca_ainda_varre(monkeypatch, avisos):
     assert not modulo._em_voo  # noqa: SLF001  # o login não fica preso depois de entregar
 
 
+def test_varre_os_jogos_quando_o_ok_chega_depois_do_cancelar(monkeypatch, avisos):
+    estado = {"conectada": False}
+    monkeypatch.setattr(conta, "conectada", lambda: estado["conectada"])
+    monkeypatch.setattr(login, "cancelar_pendente", lambda: None)
+    varridos = []
+    monkeypatch.setattr(modulo, "_varrer_jogos_da_loja", lambda _filtro, loja: varridos.append(loja))
+    grupo = _contas(avisos)
+    grupo._ao_entrar(login.Resultado.CANCELADO)  # noqa: SLF001
+    assert varridos == []
+    estado["conectada"] = True
+    grupo._ao_entrar(login.Resultado.OK)  # noqa: SLF001
+    assert varridos == ["Xbox"]
+    assert avisos.textos == []
+
+
 def test_grupo_largado_no_meio_do_login_da_microsoft_ainda_varre(monkeypatch, avisos):
     import gc  # noqa: PLC0415
 

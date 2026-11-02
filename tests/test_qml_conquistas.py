@@ -311,6 +311,26 @@ def test_ladrilho_ate_o_icone_chegar(app_qt, pedidos, tmp_path):
     app.fechar()
 
 
+def test_lote_de_icones_nao_recria_as_fileiras(app_qt, pedidos, tmp_path):
+    app = _app()
+    _pagina, dialogo = _abrir_lista(app)
+    antes = next(f for f in _todos(dialogo, "fileiraDeConquista") if _achar(f, "tituloDaConquista").property("text") == "Rara")
+    assert _achar(_achar(antes, "iconeDaConquista"), "imagemDaConquista").property("visible") is False
+
+    dict(pedidos)["https://x/b.png"](_png(tmp_path / "b.png"))
+
+    def _icone_trocou():
+        try:  # a fileira antiga morreu (a lista foi refeita): o ícone dela não existe mais
+            return _achar(_achar(antes, "iconeDaConquista"), "imagemDaConquista").property("visible") is True
+        except (AttributeError, RuntimeError):
+            return False
+
+    assert _esperar(_icone_trocou)
+    depois = next(f for f in _todos(dialogo, "fileiraDeConquista") if _achar(f, "tituloDaConquista").property("text") == "Rara")
+    assert depois is antes  # a mesma fileira continua viva
+    app.fechar()
+
+
 def test_oculta_e_um_ladrilho_com_interrogacao(app_qt):
     app = _app()
     _pagina, dialogo = _abrir_lista(app)

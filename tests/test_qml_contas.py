@@ -222,6 +222,18 @@ def test_texto_do_modelo_aparece_no_campo(tela):
     assert _esperar(lambda: tela.achar("campoDeVariasLinhas", janela).property("text") == "")
 
 
+def test_colar_curl_longo_nao_e_cortado(tela):
+    """O campo de uma linha escondido tem limite de 32767 caracteres: não pode devolver ao modelo o texto cortado."""
+    tela.clicar("botaoDaConta_ea")
+    janela = tela.achar("janelaEa")
+    longo = "a" * 40000
+    tela.achar("campoDeVariasLinhas", janela).setProperty("text", longo)
+    assert _esperar(lambda: tela.contas.loginEa.texto == longo)
+    QTest.qWait(50)
+    assert len(tela.contas.loginEa.texto) == 40000
+    assert len(tela.achar("campoDeVariasLinhas", janela).property("text")) == 40000
+
+
 def test_enter_conecta_na_epic(tela, monkeypatch):
     recebidos = []
     monkeypatch.setattr(epic_conta, "conectar", recebidos.append)

@@ -35,12 +35,12 @@ Rectangle {
         if (!visible && retorno && retorno.visible && retorno.enabled) retorno.forceActiveFocus(Qt.TabFocusReason)
     }
 
-    // O texto do modelo (a recusa o limpa) e o do campo andam juntos.
+    // O texto do modelo (a recusa o limpa) e o do campo andam juntos. Só o campo à vista é sincronizado: o de uma
+    // linha, escondido, cortaria em 32767 caracteres e devolveria o corte ao modelo.
     Connections {
         target: janela.login
         function onMudou() {
-            if (janela.login.texto !== campoDeUmaLinha.text) campoDeUmaLinha.text = janela.login.texto
-            if (janela.login.texto !== campoDeVariasLinhas.text) campoDeVariasLinhas.text = janela.login.texto
+            if (janela.login.texto !== janela.campoAtual.text) janela.campoAtual.text = janela.login.texto
         }
     }
 
@@ -128,7 +128,7 @@ Rectangle {
                 rightPadding: 10
                 implicitHeight: 38
                 Accessible.name: janela.login ? janela.login.rotuloDoCampo : ""
-                onTextChanged: if (janela.login && janela.login.texto !== text) janela.login.texto = text
+                onTextChanged: if (janela.login && janela.campoAtual === campoDeUmaLinha && janela.login.texto !== text) janela.login.texto = text
                 onAccepted: if (janela.login) janela.login.conectar()
                 background: Rectangle {
                     radius: 6
@@ -171,7 +171,7 @@ Rectangle {
                         font { family: Tema.fonte; pixelSize: 14 }
                         background: null
                         Accessible.name: janela.login ? janela.login.rotuloDoCampo : ""
-                        onTextChanged: if (janela.login && janela.login.texto !== text) janela.login.texto = text
+                        onTextChanged: if (janela.login && janela.campoAtual === campoDeVariasLinhas && janela.login.texto !== text) janela.login.texto = text
                     }
                 }
             }

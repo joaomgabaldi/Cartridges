@@ -89,7 +89,8 @@ def arquivo_local(origem: str) -> Optional[Path]:
 
 
 def _legivel(caminho: Path) -> bool:
-    return QImageReader(str(caminho)).canRead()
+    # `canRead` só olha a assinatura: um corpo cortado passaria e o QML ficaria sem ícone para sempre.
+    return not QImageReader(str(caminho)).read().isNull()
 
 
 def carregar(origem: str, entregar: Callable[[Path], None]) -> None:
