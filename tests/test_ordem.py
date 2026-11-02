@@ -205,3 +205,32 @@ def test_copia_mais_velha_que_a_capa_nao_e_usada():
         os.utime(copia, ns=(2_000_000_000, 2_000_000_000))
         assert ordem.url_da_copia(capa, indice).startswith("file:///"), "igual passa"
     assert ordem.url_da_copia(None) == ""
+
+
+def test_a_z_poe_os_acentos_junto_da_letra():
+    linhas = [_linha(str(i), nome) for i, nome in enumerate(["Zelda", "Éden", "Árvore", "Banana", "Fable"])]
+    nomes = {linha.jogo_id: linha.nome for linha in linhas}
+    assert [nomes[i] for i in _ordenar(linhas, "a-z")] == ["Árvore", "Banana", "Éden", "Fable", "Zelda"]
+    assert [nomes[i] for i in _ordenar(linhas, "z-a")] == ["Zelda", "Fable", "Éden", "Banana", "Árvore"]
+
+
+def test_chave_nao_refaz_a_data_a_cada_comparacao(monkeypatch):
+    ordem.chave.cache_clear()
+    chamadas = []
+    original = ordem.parse_release_date
+    monkeypatch.setattr(ordem, "parse_release_date", lambda texto: chamadas.append(texto) or original(texto))
+    linhas = [_linha(str(i), f"J{i}", lancamento=f"20{i:02d}") for i in range(10)]
+    try:
+        _ordenar(linhas, "released_newest")
+        _ordenar(linhas, "released_newest")
+        assert len(chamadas) == len(linhas)
+    finally:
+        ordem.chave.cache_clear()
+
+
+def test_linha_le_a_capa_uma_vez(monkeypatch):
+    jogo = _jogo("a", "Alfa")
+    chamadas = []
+    monkeypatch.setattr(jogo, "get_cover_path", lambda: chamadas.append(1))
+    Linha.de(jogo)
+    assert len(chamadas) == 1

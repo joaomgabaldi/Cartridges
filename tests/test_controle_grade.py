@@ -255,3 +255,18 @@ def test_presente_ao_achar_o_controle():
     montagem.tique()
     montagem.tique(33_000)
     assert presentes == [1], "um só aviso, na leitura que fixa a base"
+
+
+def test_repeticao_na_grade_nao_dispara_em_rajada(m):
+    ms = 1000
+    m.leitor.botoes = XINPUT_DPAD_RIGHT
+    m.tique()  # aperto em 0 ms
+    m.tique(400 * ms)
+    assert len(m.comandos()) == 2
+    m.tique(1050 * ms)  # 1450 ms: um tique muito atrasado move uma vez só
+    assert len(m.comandos()) == 3
+    for _ in range(3):  # 1483, 1516, 1549 ms: ainda dentro do intervalo
+        m.tique(33 * ms)
+    assert len(m.comandos()) == 3
+    m.tique(21 * ms)  # 1570 ms
+    assert len(m.comandos()) == 4

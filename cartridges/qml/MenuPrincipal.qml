@@ -69,7 +69,7 @@ MenuDoTema {
                 model: filtros.anos
                 Escolha {
                     required property string modelData
-                    grupo: "genero"
+                    grupo: "ano"
                     rotulo: modelData
                     atual: filtros.ano === modelData
                     onEscolhido: filtros.ano = modelData

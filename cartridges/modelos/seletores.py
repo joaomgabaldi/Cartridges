@@ -61,6 +61,7 @@ from cartridges.utils.download import (
 )
 from cartridges.utils.logo_arquivos import IMAGE_SUFFIXES
 from cartridges.utils.name_cleaner import clean_for_search, clean_game_name
+from cartridges.utils.title_match import rank_candidates
 from cartridges.utils.steam import SteamAPIHelper, SteamGameNotFoundError, SteamNotAGameError, SteamRateLimiter
 from cartridges.utils.session_wallpaper import Formatos, Monitor, Posicoes, corta, eixo_do_corte, enquadrar, formatos
 from cartridges.utils.steamgriddb import SgdbAuthError, SgdbError, SgdbHelper
@@ -236,9 +237,13 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         raise NotImplementedError
 
     def _primeiro_id(self, consulta: str) -> Any:
+        consulta = clean_for_search(consulta)
         jogos = self.sgdb.search_games(consulta)
-        # .get, não [ ]: um item sem "id" (200 de shape inesperado) não pode matar a thread.
-        return jogos[0].get("id") if jogos and isinstance(jogos[0], dict) else None
+        # Só dicts com "id": um item de shape inesperado (200) não pode matar a thread.
+        jogos = [j for j in jogos or [] if isinstance(j, dict) and j.get("id") is not None]
+        # Como o caminho automático: o melhor do ranking; sem ninguém nele, o primeiro da lista (D105).
+        ranking = rank_candidates(consulta, jogos)
+        return (ranking[0][0] if ranking else jogos[0])["id"] if jogos else None
 
     @Slot(str)
     def abrir(self, nome: str) -> None:

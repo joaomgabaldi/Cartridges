@@ -9,6 +9,7 @@ proxies (`biblioteca.py`) apenas aplicam estas regras, que repetem `sort_func`, 
 e `rebuild_filter_menu` da janela GTK.
 """
 
+import functools
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -50,10 +51,11 @@ class Linha:
 
     @classmethod
     def de(cls, jogo: Jogo) -> "Linha":
+        caminho = jogo.get_cover_path()  # uma só leitura: a capa e a cópia animada olham o mesmo arquivo
         return cls(
             jogo.game_id,
             jogo.name,
-            _url_da_capa(jogo.get_cover_path()),
+            _url_da_capa(caminho),
             jogo.zerado,
             jogo.removed,
             jogo.status or "",
@@ -68,7 +70,7 @@ class Linha:
             jogo.install_size,
             jogo.stars,
             jogo.loading > 0,
-            url_da_copia(jogo.get_cover_path()),
+            url_da_copia(caminho),
         )
 
 
@@ -121,9 +123,10 @@ def _data_de_lancamento(linha: Linha) -> int:
     return -1 if ano is None else ano * 10000 + (mes or 0) * 100 + (dia or 0)
 
 
+@functools.lru_cache(maxsize=16384)  # a `Linha` é congelada (hashável); sem isto cada comparação refaz a data
 def chave(linha: Linha, modo: str) -> tuple:
     """Chave de ordenação: a ordem crescente das chaves é a ordem da grade."""
-    nome = (linha.nome.lower(), linha.jogo_id)  # o id desempata dois jogos de mesmo nome
+    nome = (chave_alfabetica(linha.nome), linha.jogo_id)  # o id desempata dois jogos de mesmo nome
     if modo == "a-z":
         return (nome,)
     if modo == "z-a":

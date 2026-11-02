@@ -19,6 +19,7 @@ from PySide6.QtCore import QEventLoop, QTimer
 
 from cartridges import shared
 from cartridges.modelos import seletores
+from cartridges.utils.name_cleaner import clean_for_search
 from cartridges.utils.busca_do_seletor import tamanho_baixado
 from cartridges.utils.steamgriddb import SgdbAuthError, SgdbError
 from tests.apoio_seletores import (  # noqa: F401  (as fixtures vêm junto)
@@ -380,3 +381,38 @@ def test_previa_do_sgdb_fica_na_pasta_temporaria(classe, baixar, temp):
     assert arquivos[0].suffix == ".png" and "fuga" not in str(arquivos[0].relative_to(temp))
     assert temp in arquivos[0].parents
     seletor.fechar()
+
+
+class _SgdbComJogos(SgdbFalso):
+    def __init__(self, jogos):
+        super().__init__()
+        self.jogos = jogos
+
+    def search_games(self, consulta):
+        self.consultas.append(consulta)
+        return self.jogos
+
+
+def _primeiro(jogos, consulta):
+    seletor, _ = _criar(seletores.SeletorDoSgdb, _SgdbComJogos(jogos))
+    return seletor._primeiro_id(consulta), seletor.sgdb
+
+
+def test_primeiro_id_escolhe_como_o_caminho_automatico():
+    achado, _ = _primeiro([{"id": 111, "name": "Halo Infinite Multiplayer"}, {"id": 222, "name": "Halo"}], "Halo")
+    assert achado == 222
+
+
+def test_primeiro_id_limpa_a_consulta():
+    _, sgdb = _primeiro([{"id": 1, "name": "Assassin's Creed Shadows"}], "Assassin’s Creed Shadows")
+    assert sgdb.consultas == [clean_for_search("Assassin’s Creed Shadows")]
+
+
+def test_primeiro_id_sem_ninguem_no_ranking_fica_com_o_primeiro():
+    achado, _ = _primeiro([{"id": 7, "name": "Totalmente Outro"}, {"id": 8, "name": "Nada A Ver"}], "Halo")
+    assert achado == 7
+
+
+def test_primeiro_id_ignora_item_sem_id():
+    achado, _ = _primeiro([{"name": "Halo"}, "lixo", {"id": 5, "name": "Halo"}], "Halo")
+    assert achado == 5

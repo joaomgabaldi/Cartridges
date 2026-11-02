@@ -253,7 +253,10 @@ class ControleDaGrade(QObject):
                 devido = agora - self._ultimo_passo >= intervalo_de_repeticao_us(agora - self._desde)
         else:
             # A primeira repetição espera o atraso; as outras vêm em ritmo constante.
-            devido = agora - self._desde >= REPEAT_DELAY_US + REPEAT_INTERVAL_US * self._repeticoes
+            devido = (
+                agora - self._desde >= REPEAT_DELAY_US + REPEAT_INTERVAL_US * self._repeticoes
+                and agora - self._ultimo_passo >= REPEAT_INTERVAL_US  # um tique atrasado não dispara em rajada
+            )
         if devido:
             self._repeticoes += 1
             self._ultimo_passo = agora

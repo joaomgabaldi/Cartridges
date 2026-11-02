@@ -734,3 +734,14 @@ def test_adicionar_jogo_desligado_durante_a_importacao(app_qt):
         assert _esperar(lambda: item.property("enabled") is True)
     finally:
         app.fechar()
+
+
+def test_itens_de_ano_tem_o_nome_do_grupo(app_qt):
+    app = _App(_jogos((1, "Alfa", {"release_date": "01/05/2023"})))
+    try:
+        app.filtros.recalcularOpcoes()
+        assert app.filtros.anos == ["2023"]
+        assert app.achar("ano-2023")
+        assert _achar(app.janela, "genero-2023") is None
+    finally:
+        app.fechar()
