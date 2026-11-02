@@ -504,6 +504,8 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
     aplicar_fita(form, jogo)
 
     shared.store.add_game(jogo, {}, run_pipeline=False)
+    # À mão, durante uma importação: o "Desfazer" dela não pode levá-lo embora.
+    shared.store.new_game_ids.discard(jogo.game_id)
     jogo.save()
     jogo.update()
 

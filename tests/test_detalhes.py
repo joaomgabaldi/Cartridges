@@ -532,3 +532,22 @@ def test_detalhes_nao_prende_o_jogo(app_qt, store):
     gc.collect()
     assert referencia() is None
     detalhes._ao_atualizar()  # noqa: SLF001  (o jogo morreu: nada a fazer)
+
+
+def test_set_loading_avisa_quando_o_estado_muda(app_qt, store):
+    jogo = _jogo()
+    detalhes = _modelo(store, jogo)
+    detalhes.mostrar("a")
+    avisos = []
+    jogo.atualizado.connect(lambda *_a: avisos.append(1))
+
+    jogo.set_loading(1)
+    assert len(avisos) == 1
+    assert detalhes.carregando is True
+    jogo.set_loading(1)  # 1 -> 2: o estado visível é o mesmo
+    assert len(avisos) == 1
+    jogo.set_loading(-1)
+    assert len(avisos) == 1
+    jogo.set_loading(-1)
+    assert len(avisos) == 2
+    assert detalhes.carregando is False

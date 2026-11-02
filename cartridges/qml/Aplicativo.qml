@@ -61,7 +61,7 @@ Principal {
                 id: menuDeAdicionar
                 objectName: "menuDeAdicionar"
                 y: janela.baseDaBarra(parent)
-                ItemDoMenu { objectName: "itemAdicionarJogo"; text: "Adicionar jogo"; onTriggered: edicao.adicionar() }
+                ItemDoMenu { objectName: "itemAdicionarJogo"; text: "Adicionar jogo"; enabled: !aplicativo.importando; onTriggered: edicao.adicionar() }
                 MenuSeparator {}
                 ItemDoMenu { text: "Importar"; enabled: !aplicativo.importando; onTriggered: aplicativo.importar() }
             }

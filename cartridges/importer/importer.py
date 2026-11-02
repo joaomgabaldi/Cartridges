@@ -157,8 +157,9 @@ class Importer(ErrorProducer):
             na_thread_principal(self.source_callback, source)
 
     def _tic(self) -> None:
-        if not self.monitor_import() and self._relogio is not None:
-            self._relogio.stop()
+        # Um tique que já estava na fila quando o relógio parou não repete o fim.
+        if self._relogio is not None and self._relogio.isActive():
+            self.monitor_import()
 
     def monitor_import(self) -> bool:
         """Acompanha a importação: a tarefa na janela de tarefas nasce com o
@@ -180,6 +181,9 @@ class Importer(ErrorProducer):
             self.tarefa.terminar()
             self.tarefa = None
             self._progresso = None
+        # Parado antes: um erro no fim não pode repetir o `finish_import` a cada tique.
+        if self._relogio is not None:
+            self._relogio.stop()
         self.finish_import()
         return False
 
@@ -188,13 +192,17 @@ class Importer(ErrorProducer):
         logging.info("Import done")
         # Antes de `remove_games` e do reset abaixo: as duas leem
         # `duplicate_game_ids`.
-        self.resolver_pendencias()
-        self.remove_games()
-        self.imported_game_ids = shared.store.new_game_ids
-        shared.store.new_game_ids = set()
-        shared.store.duplicate_game_ids = set()
-        self.__class__.summary_toast = self.create_summary_toast()
-        self.create_error_dialog()
+        try:
+            self.resolver_pendencias()
+            self.remove_games()
+            self.imported_game_ids = shared.store.new_game_ids
+            shared.store.new_game_ids = set()
+            shared.store.duplicate_game_ids = set()
+            self.__class__.summary_toast = self.create_summary_toast()
+            self.create_error_dialog()
+        except Exception:  # noqa: BLE001
+            # Com erro ou sem, a importação acaba: `importando` desliga e o resto roda.
+            logging.exception("Erro ao encerrar a importação")
         self.aplicativo.definir_importando(False)
         self.varrer_conquistas_dos_importados()
         if self.ao_terminar is not None:

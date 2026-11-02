@@ -56,12 +56,6 @@ class _Importador:
         self.observado: list = []
 
 
-@pytest.fixture(autouse=True)
-def _sem_janela_gtk(monkeypatch):
-    """No app Qt `shared.win` não existe: a exclusão tira o cartão pelo `jogo_excluido` da store."""
-    monkeypatch.setattr(shared, "win", None, raising=False)
-
-
 @pytest.fixture
 def aplicativo(monkeypatch):
     anotado = apoio_aplicativo.instalar(monkeypatch)

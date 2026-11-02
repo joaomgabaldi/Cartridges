@@ -90,11 +90,10 @@ def test_b12_resultado_tardio_do_hltb_nao_sobrescreve_a_correcao(store, make_gam
 
 
 def test_b16_jogo_que_saiu_do_disco_perde_o_tamanho(
-    monkeypatch, store, make_game, win, flush_idle
+    monkeypatch, store, make_game, flush_idle
 ):
     from cartridges.utils import install_size  # noqa: PLC0415
 
-    win.sort_state = "name"
     jogo = make_game(game_id="a", install_size=5000, install_size_ts=0)
     store.add_game(jogo, {})
     monkeypatch.setattr(install_size, "install_size_folder", lambda _cmd: "C:/sumiu")

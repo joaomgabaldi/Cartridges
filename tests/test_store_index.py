@@ -610,18 +610,15 @@ def test_clear_empties_all_three_indexes(store, make_game, seed):
     assert store._games_by_shortcut == {}
 
 
-def test_cleanup_game_avisa_a_janela_pelo_sinal(store, make_game, seed, win):
+def test_cleanup_game_avisa_a_janela_pelo_sinal(store, make_game, seed):
     """T1.46 Isto roda numa thread do importador: a store não toca no aviso de
     desfazer, só emite `jogo_excluido` (a janela o recebe enfileirado)."""
     game = seed(make_game(game_id=A_ID))
-    toast = object()
-    win.toasts[(game, "remove")] = toast
     excluidos = []
     store.jogo_excluido.connect(excluidos.append, Qt.ConnectionType.DirectConnection)
 
     store.cleanup_game(game)
 
-    assert win.toasts == {(game, "remove"): toast}, "must not touch widgets inline"
     assert excluidos == [A_ID]
 
 

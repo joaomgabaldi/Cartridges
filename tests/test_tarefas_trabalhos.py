@@ -147,10 +147,9 @@ def test_metadados_cancelado_tambem_sai_do_quadro(monkeypatch, flush_idle):
     assert tarefas.lista.rowCount() == 0
 
 
-def test_tamanho_conta_so_jogos_com_pasta(monkeypatch, store, make_game, win, flush_idle):
+def test_tamanho_conta_so_jogos_com_pasta(monkeypatch, store, make_game, flush_idle):
     from cartridges.utils import install_size  # noqa: PLC0415
 
-    win.sort_state = "name"
     store.add_game(make_game(game_id="com", executable="com", install_size=0, install_size_ts=0), {})
     store.add_game(make_game(game_id="sem", executable="sem", install_size=0, install_size_ts=0), {})
     vistas = _tarefas_vistas(monkeypatch)
@@ -168,11 +167,10 @@ def test_tamanho_conta_so_jogos_com_pasta(monkeypatch, store, make_game, win, fl
 
 
 def test_tamanho_so_com_jogos_sem_pasta_nao_vira_tarefa(
-    monkeypatch, store, make_game, win, flush_idle
+    monkeypatch, store, make_game, flush_idle
 ):
     from cartridges.utils import install_size  # noqa: PLC0415
 
-    win.sort_state = "name"
     jogo = make_game(game_id="sem", install_size=5000, install_size_ts=0)
     store.add_game(jogo, {})
     vistas = _tarefas_vistas(monkeypatch)

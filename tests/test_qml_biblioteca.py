@@ -721,3 +721,16 @@ def test_botao_das_tarefas_some_com_modal_no_big_picture_e_na_sessao(app_qt, flu
     finally:
         tarefas.lista.remover(tarefa)
         app.fechar()
+
+
+def test_adicionar_jogo_desligado_durante_a_importacao(app_qt):
+    app = _App(_tres())
+    try:
+        item = app.achar("itemAdicionarJogo")
+        assert item.property("enabled") is True
+        app.aplicativo.definir_importando(True)
+        assert _esperar(lambda: item.property("enabled") is False)
+        app.aplicativo.definir_importando(False)
+        assert _esperar(lambda: item.property("enabled") is True)
+    finally:
+        app.fechar()

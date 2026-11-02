@@ -57,7 +57,6 @@ def test_resolver_tira_o_encontrado_o_adotado_e_o_excluido(store, make_game):
     restauracao.gravar(["achado", "sem_atalho", "desinstalado", "adotado"], 5)
 
     restauracao.resolver({"achado"})
-
     assert restauracao.ids() == frozenset({"sem_atalho"})
 
 
@@ -159,12 +158,6 @@ def pasta_de_atalhos(tmp_path, schema):
     return pasta
 
 
-@pytest.fixture
-def retirados(win):
-    lista = []
-    win.retirar_da_grade = lista.append
-    return lista
-
 
 def test_candidatos_sem_os_do_backup_e_por_nome(store, make_game, pasta_de_atalhos):
     for nome in ("Hades.lnk", "Gran Turismo 7.lnk", "GT7.url", "Leia-me.txt"):
@@ -251,18 +244,17 @@ def test_jogo_do_atalho_e_resumo(store, make_game, pasta_de_atalhos):
     assert restauracao.resumo(novo) == (6000, 1, 1_700_000_090)
 
 
-def test_manter_backup(store, make_game, pasta_de_atalhos, retirados):
+def test_manter_backup(store, make_game, pasta_de_atalhos):
     caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
     restauracao.decidir(restaurado, caminho, novo, "backup")
     assert store.get("shortcuts_novo") is None
-    assert retirados == [novo]
     assert restaurado.shortcut_path == str(caminho)
     assert restaurado.playtime == 36000
     # Continua pendente até a importação adotá-lo pelo atalho novo.
     assert restauracao.e_pendente("gt") is True
 
 
-def test_mesclar_dados(store, make_game, pasta_de_atalhos, retirados):
+def test_mesclar_dados(store, make_game, pasta_de_atalhos):
     caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
     restauracao.decidir(restaurado, caminho, novo, "mesclar")
     assert store.get("shortcuts_novo") is None
@@ -272,7 +264,7 @@ def test_mesclar_dados(store, make_game, pasta_de_atalhos, retirados):
     assert restaurado.shortcut_path == str(caminho)
 
 
-def test_mesclar_soma_as_conquistas(store, make_game, pasta_de_atalhos, retirados):
+def test_mesclar_soma_as_conquistas(store, make_game, pasta_de_atalhos):
     from cartridges.conquistas import historico  # noqa: PLC0415
     from cartridges.conquistas.formatos import Desbloqueio  # noqa: PLC0415
 
@@ -285,7 +277,7 @@ def test_mesclar_soma_as_conquistas(store, make_game, pasta_de_atalhos, retirado
 
 
 def test_manter_backup_soma_as_conquistas_do_novo(
-    store, make_game, pasta_de_atalhos, retirados
+    store, make_game, pasta_de_atalhos
 ):
     """Conquista desbloqueada é fato, não versão que se escolhe: o jogo novo
     sai, mas o que ele tinha vai para o restaurado."""
@@ -302,7 +294,7 @@ def test_manter_backup_soma_as_conquistas_do_novo(
 
 
 def test_manter_este_pc_soma_as_conquistas_do_restaurado(
-    store, make_game, pasta_de_atalhos, retirados
+    store, make_game, pasta_de_atalhos
 ):
     from cartridges.conquistas import historico  # noqa: PLC0415
     from cartridges.conquistas.formatos import Desbloqueio  # noqa: PLC0415
@@ -316,7 +308,7 @@ def test_manter_este_pc_soma_as_conquistas_do_restaurado(
     assert historico.ler("gt") is None
 
 
-def test_manter_este_pc(store, make_game, pasta_de_atalhos, retirados):
+def test_manter_este_pc(store, make_game, pasta_de_atalhos):
     caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
     restauracao.decidir(restaurado, caminho, novo, "este_pc")
     assert store.get("gt") is None
@@ -325,17 +317,16 @@ def test_manter_este_pc(store, make_game, pasta_de_atalhos, retirados):
     assert restauracao.existe() is False
 
 
-def test_sem_jogo_novo_so_aponta(store, make_game, pasta_de_atalhos, retirados):
+def test_sem_jogo_novo_so_aponta(store, make_game, pasta_de_atalhos):
     caminho = pasta_de_atalhos / "GT7.lnk"
     restauracao.gravar(["gt"], 100)
     restaurado = make_game(game_id="gt", added=10)
     store.add_game(restaurado, {}, run_pipeline=False)
     restauracao.decidir(restaurado, caminho, None, "backup")
     assert restaurado.shortcut_path == str(caminho)
-    assert retirados == []
 
 
-def test_excluir_pendente_apaga_de_vez(store, make_game, retirados):
+def test_excluir_pendente_apaga_de_vez(store, make_game):
     restauracao.gravar(["gt", "outro"], 1)
     jogo = make_game(game_id="gt")
     store.add_game(jogo, {}, run_pipeline=False)

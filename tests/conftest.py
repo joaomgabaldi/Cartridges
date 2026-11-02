@@ -60,14 +60,6 @@ builtins.ngettext = (  # type: ignore[attr-defined]
 )
 
 
-class FakeWindow:
-    """O `shared.win` dos testes: só o que a store e a adoção ainda tocam (as capas e os avisos por jogo)."""
-
-    def __init__(self) -> None:
-        self.game_covers: dict = {}
-        self.toasts: dict = {}
-
-
 from cartridges import shared  # noqa: E402
 from cartridges.utils import window_geometry as _window_geometry  # noqa: E402
 
@@ -341,13 +333,6 @@ def user32_falso(monkeypatch):
     falso = User32Falso()
     monkeypatch.setattr(janela_por_cima, "_api", lambda: falso)
     return falso
-
-
-@pytest.fixture(autouse=True)
-def win(monkeypatch):
-    fake = FakeWindow()
-    monkeypatch.setattr(shared, "win", fake, raising=False)
-    return fake
 
 
 @pytest.fixture(autouse=True)

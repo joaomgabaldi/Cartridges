@@ -157,3 +157,10 @@ def test_nada_importa_um_modulo_apagado():
 )
 def test_sem_gtk_no_repositorio(caminho):
     assert not (ROOT / caminho).exists()
+
+
+def test_sem_estado_morto_do_gtk():
+    from cartridges import shared  # noqa: PLC0415
+
+    assert not hasattr(shared, "AppState")
+    assert not hasattr(shared, "win")

@@ -396,3 +396,33 @@ def test_fim_da_importacao_sem_varredura_nao_levanta(importer, make_game, monkey
 
 
 # endregion
+
+
+# region Fim da importação e jogo adicionado à mão
+
+
+def test_fim_da_importacao_roda_uma_vez_mesmo_com_erro(importer, monkeypatch):
+    from PySide6.QtCore import QTimer  # noqa: PLC0415
+
+    chamadas, terminou = [], []
+
+    def estoura():
+        chamadas.append(1)
+        raise RuntimeError("falhou")
+
+    monkeypatch.setattr(importer, "resolver_pendencias", estoura)
+    importer.ao_terminar = lambda: terminou.append(1)
+    importer._relogio = QTimer()  # noqa: SLF001
+    importer._relogio.start(100)  # noqa: SLF001
+    importer.aplicativo.definir_importando(True)
+
+    importer._tic()  # noqa: SLF001
+    importer._tic()  # noqa: SLF001
+
+    assert chamadas == [1]
+    assert not importer._relogio.isActive()  # noqa: SLF001
+    assert importer.aplicativo.importando is False
+    assert terminou == [1]
+
+
+# endregion

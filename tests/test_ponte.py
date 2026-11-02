@@ -70,7 +70,7 @@ def test_jogo_importado_depois_fica_ligado(app_qt):
     thread = threading.Thread(target=gerente.main, args=(jogo, {}))
     thread.start()
     thread.join()
-    assert _rodar_ate(lambda: jogo.game_id in ponte._ligados)  # noqa: SLF001
+    assert _rodar_ate(lambda: jogo in ponte._ligados)  # noqa: SLF001
     jogo.aviso.emit("x", "")
     assert avisos == ["x"]
 
@@ -83,3 +83,14 @@ def test_jogo_nao_prende_a_ponte(app_qt):
     gc.collect()
     assert ref() is None
     jogo.aviso.emit("oi", "")  # a ponte já se foi: nada acontece
+
+
+def test_ligar_depois_da_adocao_nao_duplica_os_sinais(app_qt):
+    """A adoção troca o `game_id` do mesmo objeto: ligar de novo não conecta os sinais outra vez."""
+    ponte, jogo, avisos = Ponte(), _jogo(), []
+    ponte.fila.adicionar = lambda texto, *_a, **_k: avisos.append(texto)
+    ponte.ligar(jogo)
+    jogo.game_id = "outro"
+    ponte.ligar(jogo)
+    jogo.aviso.emit("oi", "")
+    assert avisos == ["oi"]

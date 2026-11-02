@@ -714,3 +714,19 @@ def test_estado_do_logo_e_do_papel(edicao, store):
 
 
 # endregion
+
+
+def test_jogo_adicionado_a_mao_durante_a_importacao_nao_entra_no_desfazer(edicao, store, sgdb, monkeypatch):
+    from cartridges.importer.importer import Importer  # noqa: PLC0415
+
+    monkeypatch.setattr(Importer, "summary_toast", None)
+    importer = Importer(SimpleNamespace(avisos=None))
+    form = edicao.Formulario.do_jogo(None)
+    form.nome, form.executavel = "Jogo novo", "cmd /c exit"
+
+    novo = edicao.aplicar(form, None, "").jogo
+
+    assert novo.game_id not in store.new_game_ids
+    importer.imported_game_ids = store.new_game_ids  # o que o fim da importação guarda para o "Desfazer"
+    importer.undo_import()
+    assert novo.removed is False

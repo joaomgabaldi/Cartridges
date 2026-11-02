@@ -473,9 +473,10 @@ class Jogo(QObject):
             self._avisar(_("{} removido"), "remove")
 
     def set_loading(self, state: int) -> None:
-        # shortcut: só a contagem (o widget escondia a capa e mostrava o spinner);
-        # o indicador na tela volta com a grade QML, que lê `loading`.
+        antes = self.loading > 0
         self.loading += state
+        if (self.loading > 0) != antes:
+            self.update()
 
     # A capa que não coube em disco (arquivo preso): vale até fechar o app (`edicao.aplicar`).
     capa_da_sessao: Optional[Path] = None

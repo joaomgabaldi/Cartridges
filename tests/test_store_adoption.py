@@ -17,7 +17,6 @@ bug that already happened or the guard that stopped it.
 
 import json
 import threading
-import types
 
 import pytest
 from PySide6.QtCore import Qt
@@ -326,7 +325,7 @@ def test_rekeys_the_id_indexes(store, make_game, seed):
 
 
 def test_cover_widget_rekey_goes_through_a_signal(
-    store, make_game, seed, win
+    store, make_game, seed
 ):
     """T1.14 ``game_covers`` is read-modify-written from the main thread.
 
@@ -335,8 +334,6 @@ def test_cover_widget_rekey_goes_through_a_signal(
     `capa_trocou_de_id`, e a grade troca a chave na thread dela.
     """
     seed(make_game(game_id=OLD_ID, shortcut_path=LNK))
-    sentinel = types.SimpleNamespace(path=None)
-    win.game_covers[OLD_ID] = sentinel
     trocas = []
     store.capa_trocou_de_id.connect(
         lambda antigo, novo: trocas.append((antigo, novo)), Qt.ConnectionType.DirectConnection
@@ -344,7 +341,6 @@ def test_cover_widget_rekey_goes_through_a_signal(
 
     store.adopt_legacy_game(make_game(game_id=NEW_ID, shortcut_path=LNK))
 
-    assert win.game_covers == {OLD_ID: sentinel}, "must not be done inline"
     assert trocas == [(OLD_ID, NEW_ID)]
 
 

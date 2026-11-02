@@ -30,16 +30,15 @@ class Ponte(QObject):
         super().__init__()
         self.fila = fila if fila is not None else FilaDeAvisos(self)
         self._pendente: Callable[[], Any] | None = None
-        self._ligados: dict[str, weakref.ref] = {}
+        self._ligados: "weakref.WeakSet[Jogo]" = weakref.WeakSet()
 
     def ligar(self, jogo: Jogo) -> None:
         """Liga os sinais do jogo, uma vez por jogo. Não prende o jogo nem a ponte."""
         if not eh_thread_principal():
             raise RuntimeError("Ponte.ligar: só na thread principal")
-        antigo = self._ligados.get(jogo.game_id)
-        if antigo is not None and antigo() is jogo:
+        if jogo in self._ligados:
             return
-        self._ligados[jogo.game_id] = weakref.ref(jogo)
+        self._ligados.add(jogo)
         ponte, ref_jogo = weakref.ref(self), weakref.ref(jogo)
 
         def aviso(texto: str, acao: str) -> None:

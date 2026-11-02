@@ -19,17 +19,10 @@
 
 import json
 import os
-from enum import IntEnum, auto
 from pathlib import Path
 from typing import Literal
 
 from cartridges.configuracoes import Configuracoes
-
-
-class AppState(IntEnum):
-    DEFAULT = auto()
-    LOAD_FROM_DISK = auto()
-    IMPORT = auto()
 
 
 APP_ID = "io.github.joaomgabaldi.Cartridges"
@@ -168,7 +161,6 @@ display_size = (200, 300)
 details_size = (420, 630)
 
 # pylint: disable=invalid-name
-win = None
 sessao = None  # o ModeloDaSessao (plano 5)
 conquistas = None  # o ConquistasDoJogo (plano 6)
 # O `Aplicativo` do app Qt (importando, avisos); None nos testes que não o criam.
