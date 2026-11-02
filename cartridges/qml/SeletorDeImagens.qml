@@ -104,13 +104,12 @@ SeletorBase {
         PaginaDoSeletor {
             ativa: !seletorDeImagens.seletor.vazio && !seletorDeImagens.seletor.baixando && grade.count > 0
 
-            // As laterais (fora da grade) também rolam com a roda do mouse.
+            // As laterais e a barra também rolam com a roda, no passo do próprio `GridView` (linhas * 24). Sobre a grade, a roda
+            // só chega aqui quando ela já está na ponta, e aí o limite anula o giro.
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                onWheel: event => {
-                    if (event.point.position.x >= grade.x && event.point.position.x <= grade.x + grade.width) return
-                    grade.contentY = Math.max(-grade.topMargin, Math.min(grade.contentHeight - grade.height + grade.bottomMargin, grade.contentY - event.angleDelta.y))
-                }
+                onWheel: event => grade.contentY = Math.max(-grade.topMargin, Math.min(grade.contentHeight - grade.height + grade.bottomMargin,
+                    grade.contentY - event.angleDelta.y / 120 * Qt.styleHints.wheelScrollLines * 24))
             }
 
             GridView {
@@ -127,7 +126,14 @@ SeletorBase {
                 boundsBehavior: Flickable.StopAtBounds
                 cellWidth: seletorDeImagens.larguraDaCelula + 12
                 cellHeight: seletorDeImagens.alturaDaCelula + 12
-                ScrollBar.vertical: BarraDeRolagem {}
+                // A barra é da página inteira, como o `ScrolledWindow` da `main`: fica na borda, não sobre a última coluna.
+                ScrollBar.vertical: BarraDeRolagem {
+                    objectName: seletorDeImagens.objectName + "Rolagem"
+                    parent: grade.parent
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.right: parent.right
+                }
 
                 delegate: Item {
                     id: celula

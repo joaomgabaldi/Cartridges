@@ -5,8 +5,8 @@
 """O diálogo de edição e o "Adicionar jogo" (QML offscreen, sem a ponte do QWindowKit)."""
 
 import pytest
-from PySide6.QtCore import Q_ARG, QMetaObject, QPointF, Qt, QtMsgType, QUrl, qInstallMessageHandler
-from PySide6.QtGui import QColor
+from PySide6.QtCore import Q_ARG, QCoreApplication, QMetaObject, QPoint, QPointF, Qt, QtMsgType, QUrl, qInstallMessageHandler
+from PySide6.QtGui import QColor, QGuiApplication, QWheelEvent
 from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
@@ -1070,7 +1070,7 @@ def wallhaven(app, tmp_path, monkeypatch):
     from tests.apoio_seletores import DownloadFalso, WallhavenFalso  # noqa: PLC0415
 
     temp = tmp_path / "temp"
-    temp.mkdir()
+    temp.mkdir(exist_ok=True)  # o `sgdb` pode já ter criado
     monkeypatch.setattr("tempfile.tempdir", str(temp))
     monkeypatch.setattr(modelo, "_segundo_monitor", lambda: True)
     imagem = Image.new("RGB", (160, 90), "red")
@@ -1577,16 +1577,101 @@ def test_as_colunas_reais_da_grade_do_seletor_sao_as_de_colunas(app, sgdb, largu
     _esperar(lambda: False, 0.3)
     app.edicao.abrir("shortcuts_z1")
     _clique(app, "botaoEscolherCapaSgdb")
-    assert _esperar(lambda: _visivel(app, "seletorDeCapa") and _visivel(app, "seletorDeCapaMiniatura8"), 6)
+    # A contagem, não a miniatura 8: `achar` levanta enquanto as linhas ainda chegam uma a uma.
+    assert _esperar(lambda: _visivel(app, "seletorDeCapa") and app.achar("seletorDeCapaGrade").property("count") == 9, 6)
     _esperar(lambda: False, 0.4)
     seletor = app.achar("seletorDeCapa")
     colunas = seletor.property("colunas")
     xs = sorted({round(_x_da_cena(app.achar(f"seletorDeCapaMiniatura{i}"))) for i in range(9)})
     assert len(xs) == colunas, (largura, colunas, xs)
-    grade = app.achar("seletorDeCapaGrade")
-    esquerda = xs[0] - _x_da_cena(grade)
-    direita = _x_da_cena(grade) + grade.property("width") - (xs[-1] + 140)
+    pagina = app.achar("seletorDeCapaGrade").parentItem()  # as sobras contam a partir da página, não da própria grade
+    esquerda = xs[0] - _x_da_cena(pagina)
+    direita = _x_da_cena(pagina) + pagina.property("width") - (xs[-1] + 140)
     assert abs(esquerda - direita) <= 2, (largura, esquerda, direita)
+
+
+def _grade_longa(app, wallhaven, nome):
+    """Abre o seletor `nome` (capa ou papel) cheio de miniaturas, numa janela de 1200; devolve a grade e a página."""
+    from tests.apoio_seletores import SgdbFalso, lista_de_grades, lista_do_wallhaven  # noqa: PLC0415
+
+    app.edicao.seletorDeCapa.sgdb = SgdbFalso(grids=lista_de_grades(40))
+    wallhaven.achados = lista_do_wallhaven(40)
+    app.janela.resize(1200, 795)
+    _esperar(lambda: False, 0.3)
+    app.edicao.abrir("shortcuts_z1")
+    _clique(app, "botaoEscolherCapaSgdb" if nome == "seletorDeCapa" else "botaoEscolherPapelWallhaven")
+    grade = app.achar(nome + "Grade")
+    total = 30 if nome == "seletorDeCapa" else 24  # os tetos de cada busca
+    assert _esperar(lambda: _visivel(app, nome) and grade.property("count") == total, 6)
+    _esperar(lambda: False, 0.4)
+    return grade, grade.parentItem()
+
+
+def _girar(app, grade, x, y, angulo=-120):
+    """Um `QWheelEvent` de verdade, na janela: o mesmo caminho da roda do mouse. Sobre a grade o `GridView` anima; espera parar."""
+    pos = QPointF(x, y)
+    QCoreApplication.sendEvent(app.janela, QWheelEvent(pos, pos, QPoint(0, 0), QPoint(0, angulo), Qt.MouseButton.NoButton,
+                                                       Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False))
+    QTest.qWait(30)
+    assert _esperar(lambda: not grade.property("moving"), 3)
+
+
+@pytest.mark.parametrize("nome", ["seletorDeCapa", "seletorDePapel"])
+def test_a_roda_rola_a_grade_um_passo_por_entalhe_em_toda_a_pagina(app, sgdb, wallhaven, nome):
+    """M6: um entalhe rola o mesmo nas laterais, sobre a grade e na borda: o `GridView` e o `WheelHandler` não somam."""
+    erros = []
+    anterior = qInstallMessageHandler(lambda _tipo, _ctx, texto: erros.append(texto))
+    try:
+        grade, pagina = _grade_longa(app, wallhaven, nome)
+        passo = QGuiApplication.styleHints().wheelScrollLines() * 24
+        y = pagina.mapToScene(QPointF(0, pagina.height() / 2)).y()
+        esquerda = pagina.mapToScene(QPointF(0, 0)).x()
+        inicio_da_grade = grade.mapToScene(QPointF(0, 0)).x()
+        assert inicio_da_grade - esquerda > 20  # as laterais existem
+        lateral = esquerda + 5
+        for onde, x in {
+            "lateral esquerda": lateral,
+            "sobre a grade": inicio_da_grade + grade.width() / 2,
+            "lateral direita": esquerda + pagina.width() - 30,
+            "borda, sobre a barra": esquerda + pagina.width() - 3,
+        }.items():
+            antes = grade.property("contentY")
+            _girar(app, grade, x, y)
+            assert grade.property("contentY") - antes == pytest.approx(passo), onde
+            _girar(app, grade, x, y, 120)
+            assert grade.property("contentY") == pytest.approx(antes), onde
+        # A lateral para nas pontas, como a grade.
+        fim = grade.property("contentHeight") - grade.height() + grade.property("bottomMargin")
+        for _ in range(int(fim / passo) + 3):
+            _girar(app, grade, lateral, y)
+        assert grade.property("contentY") == pytest.approx(fim)
+        _girar(app, grade, inicio_da_grade + grade.width() / 2, y)  # sobre a grade, na ponta: nada muda
+        assert grade.property("contentY") == pytest.approx(fim)
+        for _ in range(int(fim / passo) + 3):
+            _girar(app, grade, lateral, y, 120)
+        assert grade.property("contentY") == pytest.approx(-grade.property("topMargin"))
+    finally:
+        qInstallMessageHandler(anterior)
+    assert not [e for e in erros if "TypeError" in e], erros
+
+
+@pytest.mark.parametrize("nome", ["seletorDeCapa", "seletorDePapel"])
+def test_a_barra_do_seletor_fica_na_borda_da_pagina_e_arrasta_a_grade(app, sgdb, wallhaven, nome):
+    """M6: como o `ScrolledWindow` da `main`, a barra é da página inteira, não da grade; e continua arrastando a grade."""
+    grade, pagina = _grade_longa(app, wallhaven, nome)
+    barra = app.achar(nome + "Rolagem")
+    direita = pagina.mapToScene(QPointF(pagina.width(), 0)).x()
+    assert barra.mapToScene(QPointF(barra.width(), 0)).x() == pytest.approx(direita)
+    assert barra.height() == pagina.height()
+    assert barra.mapToScene(QPointF(0, 0)).x() >= grade.mapToScene(QPointF(grade.width(), 0)).x()  # não pisa na última coluna
+    x = int(direita - barra.width() / 2)
+    topo = int(pagina.mapToScene(QPointF(0, 0)).y())
+    QTest.mouseMove(app.janela, QPoint(x, topo + 20))
+    QTest.mousePress(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(x, topo + 20))
+    assert barra.property("pressed") is True
+    QTest.mouseMove(app.janela, QPoint(x, topo + 200))
+    QTest.mouseRelease(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(x, topo + 200))
+    assert grade.property("contentY") > 100
 
 
 def test_clicar_de_novo_na_linha_da_iluminacao_fecha_o_balao(app, previas):
