@@ -32,15 +32,26 @@ Principal {
     }
     // Fecha a página de detalhes, ou sai de Jogos Zerados; o foco volta ao cartão de onde se saiu.
     function voltar() {
-        if (paginaAtual === "jogo") detalhes.esquecer()
-        if (paginaAtual === "jogo" && pilha.depth > 1) pilha.pop()
+        if (paginaAtual === "jogo" && pilha.depth > 1) { detalhes.esquecer(); pilha.pop() }
         else if (paginaAtual !== "todos") sairDaPilha()
     }
 
     // O `StackView` não anima o primeiro `push` numa pilha vazia nem o `clear` que a esvazia (a página de baixo, "Todos os
     // jogos", fica fora dela): o deslize e a sombra da transição dessas duas passagens são feitos aqui, à mão.
     property bool _saindoDaPilha: false
+    // Esvaziar a pilha de uma página de detalhes esquece o jogo; com a saída animada, isso fica para depois do deslize.
+    property bool _esquecerAoSair: false
+    function _terminarSaida() {
+        deslizeDaPagina.stop()
+        avancoDaPilha.stop()
+        pilha.avanco = 0
+        _saindoDaPilha = false
+        if (_esquecerAoSair) { _esquecerAoSair = false; detalhes.esquecer() }
+        pilha.clear(StackView.Immediate)
+    }
     function empurrar(componente, propriedades) {
+        // Um push durante a saída animada: a saída termina na hora, senão o `onFinished` apagaria a página nova.
+        if (_saindoDaPilha) _terminarSaida()
         const vazia = pilha.depth === 0
         pilha.push(componente, propriedades || {})
         if (vazia && Tema.animacoes && pilha.currentItem) {
@@ -54,14 +65,18 @@ Principal {
         }
     }
     function sairDaPilha() {
+        const jogo = paginaAtual === "jogo"
         if (!Tema.animacoes || pilha.depth !== 1 || !pilha.currentItem) {
+            if (jogo) detalhes.esquecer()
             pilha.clear(StackView.PopTransition)
             return
         }
         if (_saindoDaPilha) return
         _saindoDaPilha = true
+        _esquecerAoSair = jogo
         deslizeDaPagina.target = pilha.currentItem
-        deslizeDaPagina.from = 0
+        // De onde a página está: com ela ainda entrando, não salta para x=0 antes de sair.
+        deslizeDaPagina.from = pilha.currentItem.x
         deslizeDaPagina.to = pilha.width
         avancoDaPilha.from = 1
         avancoDaPilha.to = 0
@@ -73,7 +88,7 @@ Principal {
         property: "x"
         duration: 400
         easing.type: Easing.OutCubic
-        onFinished: if (janela._saindoDaPilha) { janela._saindoDaPilha = false; pilha.clear(StackView.Immediate) }
+        onFinished: if (janela._saindoDaPilha) janela._terminarSaida()
     }
     NumberAnimation { id: avancoDaPilha; target: pilha; property: "avanco"; duration: 400; easing.type: Easing.OutCubic }
 

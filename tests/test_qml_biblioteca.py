@@ -1119,3 +1119,20 @@ def test_trocar_de_pagina_nao_fecha_o_popover(app_qt):
     _esperar()
     assert menu.property("opened") is True and fechamentos == []
     app.fechar()
+
+
+def test_push_durante_a_saida_animada_nao_e_apagado(app_qt):
+    """Round 3: um `empurrar` com a saída em curso termina a saída na hora e a página nova fica (depth 1, estado dos detalhes)."""
+    from PySide6.QtCore import Q_ARG  # noqa: PLC0415
+
+    app = _App(_tres())
+    QMetaObject.invokeMethod(app.achar("botaoZerados"), "click", Qt.ConnectionType.DirectConnection)
+    assert _esperar(lambda: app.janela.property("paginaAtual") == "zerados")
+    app.janela.setProperty("_saindoDaPilha", True)  # o harness desliga as animações: simula a saída em curso
+    QMetaObject.invokeMethod(app.janela, "abrirDetalhes", Qt.ConnectionType.DirectConnection,
+                             Q_ARG("QVariant", "imported_1"))
+    assert _esperar(lambda: app.janela.property("paginaAtual") == "jogo")
+    assert app.janela.property("_saindoDaPilha") is False
+    assert app.achar("pilha").property("depth") == 1
+    assert app.detalhes.jogoId == "imported_1"
+    app.fechar()
