@@ -447,7 +447,7 @@ def test_mostrar_mais_nao_renotifica_o_grafico():
     assert len(historico.sessoes) == modulo.PAGINA + 5
 
 
-def test_reler_e_fechar_avisam_os_tres_sinais():
+def test_fechar_so_avisa_o_aberto_e_guarda_o_conteudo_para_a_animacao_de_saida():
     jogo = _jogo()
     session_log.record(jogo.game_id, 3600, end=int(time()))
     historico, _ = _aberto(jogo)
@@ -455,4 +455,6 @@ def test_reler_e_fechar_avisam_os_tres_sinais():
 
     historico.fechar()
 
-    assert contagem == {"alterado": 1, "tabelaMudou": 1, "graficoMudou": 1}
+    # Só `aberto` muda: o cartão sai com o conteúdo intacto (I1).
+    assert contagem == {"alterado": 1, "tabelaMudou": 0, "graficoMudou": 0}
+    assert historico.aberto is False and historico.nome == jogo.name and len(historico.sessoes) == 1

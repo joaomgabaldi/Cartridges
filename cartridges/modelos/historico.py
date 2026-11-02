@@ -98,10 +98,12 @@ class HistoricoDeSessoes(QObject):
 
     @Slot()
     def fechar(self) -> None:
+        # Só `aberto` muda: o cartão segue com o conteúdo durante a animação de saída (na `main` o `Adw.Dialog` sai
+        # intacto). O próximo `abrir` sobrescreve tudo.
         self._jogo = None
         self._sessoes, self._dias, self._posicoes = [], [], []
-        self._v = {**_PADRAO, "aberto": False}
-        self._avisar_tudo()
+        self._v = {**self._v, "aberto": False}
+        self.alterado.emit()
 
     def _avisar_tudo(self) -> None:
         self.alterado.emit()

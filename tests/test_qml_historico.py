@@ -610,3 +610,79 @@ def test_dica_do_grafico_tem_o_atraso_de_500_ms(app_qt):
     assert dica.property("delay") == 500
     assert _achar(app.achar("tabelaDeSessoes"), "botaoExcluirSessao").property("dica") == "Excluir esta sessão"
     app.fechar()
+
+
+# -- Rodada de correções 1 (I1): a saída do histórico leva o conteúdo ---------------------------------
+
+_SAIDA = r"""
+import builtins, sys, time
+builtins._ = lambda m: m
+sys.path.insert(0, sys.argv[1])
+from PySide6.QtCore import Qt, QPoint
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtTest import QTest
+app = QGuiApplication(["x"])  # sem a opção dos testes: a animação de saída roda
+from cartridges.utils import session_log
+agora = int(time.time())
+session_log.load = lambda gid: [{"end": agora - i * 86400, "seconds": 3600} for i in range(30 if gid.endswith("_1") else 2)]
+from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos
+from tests.apoio_qml_historico import _todos
+app_ = _App(_jogos((1, "Alfa", {"playtime": 5400}), (2, "Beta", {})))
+j = app_.janela
+j.show()
+
+def estado():
+    d = _achar(j, "dialogoDoHistorico")
+    cartao = _achar(d, "cartaoDoDialogo")
+    nome = [t for t in _todos(d, "nomeDoHistorico") if t.property("visible")]
+    return (round(cartao.height()), nome[0].property("text") if nome else None, len(_todos(d, "linhaDaSessao")), d.property("visible"))
+
+def sair(como):
+    d = _achar(j, "dialogoDoHistorico")
+    antes = estado()
+    assert antes[0] > 400 and antes[1] == "Alfa" and antes[2] == 30, antes
+    cartao = _achar(d, "cartaoDoDialogo")  # leitura barata: só propriedades de itens já achados
+    nome = next(t for t in _todos(d, "nomeDoHistorico") if t.property("visible"))
+    linha = _todos(d, "linhaDaSessao")[0]
+    def barato():
+        return (round(cartao.height()), nome.property("text"), nome.property("visible"), linha.property("titulo") != "")
+    esperado = barato()
+    if como == "esc":
+        QTest.keyClick(j, Qt.Key.Key_Escape)
+    else:
+        x = _achar(d, "fecharDoCabecalho")
+        p = x.mapToScene(x.boundingRect().center()).toPoint()
+        QTest.mouseClick(j, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(p.x(), p.y()))
+    amostras, inicio = [], time.monotonic()
+    while d.property("visible") and time.monotonic() - inicio < 3:
+        QTest.qWait(1)
+        if d.property("visible") and cartao.property("opacity") > 0:  # à vista: é o que a pessoa vê durante a saída
+            amostras.append(barato())
+    assert not app_.historico.aberto
+    if como == "x":  # a primeira rodada aquece o renderizador (o primeiro quadro leva quase 1 s)
+        assert amostras, "a saída tem de durar alguns quadros"
+    assert set(amostras) <= {esperado}, (como, esperado, sorted(set(amostras)))
+
+for como in ("esc", "x"):
+    app_.historico.abrir("imported_1")
+    assert _esperar(lambda: estado()[3] and estado()[0] > 400)
+    sair(como)
+# Reabrir de outro jogo não mostra o velho.
+app_.historico.abrir("imported_2")
+assert _esperar(lambda: estado()[3] and estado()[1] == "Beta")
+assert estado()[2] == 2 and app_.historico.nome == "Beta"
+print("OK")
+"""
+
+
+def test_saida_do_historico_mantem_o_conteudo_durante_a_animacao(tmp_path):
+    """I1: abrir e fechar pelo Esc e pelo X, com a animação ligada: a altura e o conteúdo do cartão não mudam até sumir."""
+    import os  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    raiz = Path(__file__).resolve().parent.parent
+    ambiente = dict(os.environ, QT_QPA_PLATFORM="offscreen", PYTHONPATH=str(raiz), APPDATA=str(tmp_path), LOCALAPPDATA=str(tmp_path), USERPROFILE=str(tmp_path))
+    rodou = subprocess.run([sys.executable, "-c", _SAIDA, str(raiz)], env=ambiente, capture_output=True, text=True, timeout=120, check=False, cwd=raiz)
+    assert "OK" in rodou.stdout, rodou.stdout + rodou.stderr
