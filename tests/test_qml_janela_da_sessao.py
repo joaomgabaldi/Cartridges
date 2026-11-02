@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A janela "Jogando {nome}" da sessão manual (D50): moldura nativa, 300x150, canto da área de trabalho."""
+"""A janela "Jogando {nome}" da sessão manual (D50, R3): sem moldura (barra própria), 300x150, canto da área de trabalho."""
 
 import json
 import os
@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QMetaObject, Qt
+from PySide6.QtTest import QTest
 
 from cartridges import shared
 from cartridges.jogo import Jogo
@@ -61,6 +62,38 @@ def test_titulo_e_tamanho_fixo(app_qt, monkeypatch):
     assert (janela.minimumWidth(), janela.minimumHeight()) == (300, 150)
     assert (janela.maximumWidth(), janela.maximumHeight()) == (300, 150)
     assert _achar(janela, "botaoTermineiDaJanela") is not None
+    app.fechar()
+
+
+def test_barra_propria_de_47_com_titulo_minimizar_e_fechar_e_o_botao_no_resto(app_qt, monkeypatch):
+    """SES-01/02/03/04: a `Adw.HeaderBar` da `main` (47 px, título centrado, sem maximizar) e o botão pílula no meio do resto."""
+    monkeypatch.setattr(modulo, "_posicionar", lambda *a: None)
+    app = _app(monkeypatch)
+    janela = _abrir(app)
+    barra = _achar(janela, "barraDaJanelaDaSessao")
+    assert (barra.width(), barra.height()) == (300, 47)
+    assert barra.property("comMaximizar") is False  # só minimizar e fechar, como a janela das tarefas
+    assert barra.property("titulo") == "Jogando A & B"
+    assert _achar(barra, "tituloDaBarraTexto").property("text") == "Jogando A & B"
+    assert not janela.flags() & Qt.WindowType.WindowMaximizeButtonHint
+    botao = _achar(janela, "botaoTermineiDaJanela")
+    assert (botao.height(), botao.property("estilo"), botao.property("pilula")) == (44, "sugestao", True)
+    # No meio do que sobra abaixo da barra: (150 - 47) / 2 + 47 = 98,5.
+    centro = botao.mapToScene(botao.boundingRect().center())
+    assert (centro.x(), abs(centro.y() - 98.5) <= 0.5) == (150.0, True)
+    app.fechar()
+
+
+def test_enter_no_botao_da_janela_encerra_a_sessao(app_qt, monkeypatch, isolado):
+    """SES-08: Enter aciona o botão da janela (o `Gtk.Button` responde a Enter e a Espaço)."""
+    monkeypatch.setattr(modulo, "_posicionar", lambda *a: None)
+    app = _app(monkeypatch)
+    janela = _abrir(app)
+    assert _esperar(lambda: janela.activeFocusItem() is not None)
+    QTest.keyClick(janela, Qt.Key.Key_Return)
+    assert _esperar(lambda: not app.sessao.janelaManual)
+    assert SessionWindow.active is None
+    assert [r[0] for r in isolado] == ["imported_1"]
     app.fechar()
 
 

@@ -514,7 +514,7 @@ Principal {
     Loader {
         objectName: "carregadorDaJanelaManual"
         active: sessao.janelaManual
-        source: "JanelaDaSessao.qml"
+        sourceComponent: Component { JanelaDaSessao { semAgente: janela.semAgente } }
     }
 
     Avisos {

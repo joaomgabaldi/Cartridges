@@ -37,21 +37,21 @@ Rectangle {
                 text: "Conquistas"
                 textFormat: Text.PlainText
                 color: "white"
-                font { family: Tema.fonte; pixelSize: 15; weight: Font.Bold }
+                font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }  // .heading
             }
             Text {
                 objectName: "contagemDaSessao"
                 text: cartao.dados.contagem || ""
                 textFormat: Text.PlainText
                 color: Qt.rgba(1, 1, 1, 0.55)
-                font { family: Tema.fonte; pixelSize: 14; features: { "tnum": 1 } }
+                font { family: Tema.fonte; pixelSize: Tema.corpo; features: { "tnum": 1 } }
             }
             Text {
                 objectName: "porcentagemDaSessao"
                 text: cartao.dados.porcentagem || ""
                 textFormat: Text.PlainText
                 color: Qt.rgba(1, 1, 1, 0.55)
-                font { family: Tema.fonte; pixelSize: 14; features: { "tnum": 1 } }
+                font { family: Tema.fonte; pixelSize: Tema.corpo; features: { "tnum": 1 } }
             }
         }
 
@@ -95,26 +95,27 @@ Rectangle {
                 oculta: dados.oculta === true
 
                 HoverHandler { id: sobre }
-                ToolTip {
+                // A dica do app (500 ms); o texto já sai escapado por `progresso.dica`, com `<b>` e `<br>`.
+                Dica {
                     id: dica
                     objectName: "dicaDaSessao"
-                    visible: sobre.hovered
-                    delay: 600
-                    text: icone.dados.dica || ""
-                    // A dica já sai escapada por `progresso.dica`, com `<b>` e `<br>`.
+                    ativa: sobre.hovered
+                    texto: icone.dados.dica || ""
                     contentItem: Text {
                         text: dica.text
                         textFormat: Text.StyledText
                         wrapMode: Text.Wrap
-                        color: dica.palette.toolTipText
-                        font { family: Tema.fonte; pixelSize: 13 }
+                        color: "white"
+                        font { family: Tema.fonte; pixelSize: Tema.corpo }
                     }
                 }
             }
 
-            // A roda vertical rola para os lados (a lista não tem para onde ir na vertical).
+            // A roda do mouse rola para os lados com a mola do app (a lista não tem para onde ir na vertical).
+            RolagemPorMola { objectName: "molaDaSessao"; alvo: lista; horizontal: true }
+            // O touchpad rola direto: a mola é só do mouse, como na `main`.
             WheelHandler {
-                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                acceptedDevices: PointerDevice.TouchPad
                 onWheel: evento => {
                     const passo = evento.angleDelta.y !== 0 ? evento.angleDelta.y : evento.angleDelta.x
                     const fim = Math.max(0, cartao.larguraDosIcones - lista.width)

@@ -391,7 +391,7 @@ def test_poucos_icones_deixam_o_cartao_estreito(app_qt, sem_vigia):
     app.fechar()
 
 
-def _rodar(app, item, dy):
+def _rodar(app, item, dy, esperar=True):
     """Um entalhe da roda vertical sobre ``item`` (negativo: para baixo, como a roda girada para o usuário)."""
     centro = item.mapToScene(item.boundingRect().center())
     evento = QWheelEvent(
@@ -399,21 +399,29 @@ def _rodar(app, item, dy):
         Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False,
     )  # fmt: skip
     QCoreApplication.sendEvent(app.janela, evento)
-    _esperar()
+    if esperar:
+        _esperar()
 
 
-def test_roda_do_mouse_rola_para_os_lados(app_qt, sem_vigia):
+def test_roda_do_mouse_rola_para_os_lados_por_mola(app_qt, sem_vigia):
+    """SES-20: a roda do mouse anda a fileira por mola (o `spring_scroll` da `main`), e não por salto: 120 px por entalhe."""
     app = _app(_catalogo_de(157), desbloqueadas=())
     app.janela.show()
     _comecar(app)
     lista = _lista(app)
+    mola = _achar(lista, "molaDaSessao")
     assert _esperar(lambda: lista.property("contentWidth") > lista.property("width"))
-    _rodar(app, lista, -120)
-    andou = lista.property("contentX")
-    assert andou > 0
+    _rodar(app, lista, -120, esperar=False)
+    QTest.qWait(60)
+    # Entre o início e o destino: um salto direto cairia em 120 de uma vez.
+    assert mola.property("correndo") and 0 < lista.property("contentX") < 120
+    assert _esperar(lambda: not mola.property("correndo"), limite=5.0)
+    assert abs(lista.property("contentX") - 120) <= 1
     _rodar(app, lista, 120)
-    assert lista.property("contentX") < andou
+    assert _esperar(lambda: not mola.property("correndo"), limite=5.0)
+    assert lista.property("contentX") == 0
     _rodar(app, lista, 120)
+    assert _esperar(lambda: not mola.property("correndo"), limite=5.0)
     assert lista.property("contentX") == 0  # não passa do início
     app.fechar()
 
@@ -532,6 +540,32 @@ def test_cores_do_cartao_da_sessao_nao_seguem_o_tema(app_qt, sem_vigia):
     assert _expr(barra, "Tema.escuro") is False
     assert _expr(barra, "background.color.toString()") == "#3d3d3d" != _expr(barra, "Tema.botaoSobre.toString()")
     tema = _expr(rolagem, "Tema.textoSecundario.toString()")
-    assert _expr(rolagem, "contentItem.color.toString()") == "#339a9a9a" != tema  # a cor da tela da sessão, com o alfa de repouso (20%)
+    assert _expr(rolagem, "contentItem.color.toString()") == "#33ffffff" != tema  # a cor da tela da sessão (BarraDeRolagem `cor`), com o alfa de repouso (20%)
     assert _expr(ladrilho, "Qt.rgba(color.r, color.g, color.b, 1).toString()") == "#ffffff"
+    app.fechar()
+
+
+# -- Auditoria GTK x Qt, pacote D --------------------------------------------------------------------
+
+
+def test_cartao_da_sessao_tem_as_medidas_da_main(app_qt, sem_vigia):
+    """SES-17/18/19/21/22: textos de 12 px, barra de 8, estrela da Adwaita no ladrilho e dica do app com 500 ms."""
+    app = _app()
+    _comecar(app)
+    cartao = _cartao(app)
+    for nome in ("tituloDaSessao", "contagemDaSessao", "porcentagemDaSessao"):
+        assert _expr(_achar(cartao, nome), "font.pixelSize") == 12, nome
+    assert _expr(_achar(cartao, "tituloDaSessao"), "font.weight") == 700  # .heading
+    barra = _achar(cartao, "barraDaSessao")
+    assert barra.height() == 8 and _expr(barra, "background.radius") == 4
+    assert _esperar(lambda: len(_icones(app)) == 3)
+    nao_oculto = next(i for i in _icones(app) if i.property("oculta") is False)
+    estrela = _achar(nao_oculto, "estrelaDaConquista")
+    assert estrela.property("nome") == "starred" and estrela.property("tamanho") == 24  # tamanho // 2
+    assert estrela.property("visible") is (nao_oculto.property("imagemPronta") is False)
+    oculto = next(i for i in _icones(app) if i.property("oculta") is True)
+    assert _achar(oculto, "estrelaDaConquista").property("visible") is False
+    dicas = _todos(_lista(app), "dicaDaSessao")
+    assert {d.property("delay") for d in dicas} == {500}
+    assert {_expr(d.property("contentItem"), "font.pixelSize") for d in dicas} == {12}
     app.fechar()

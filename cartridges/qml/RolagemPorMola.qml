@@ -12,6 +12,8 @@ Item {
     // Perto o bastante do destino para parar, em pixels.
     property real epsilon: 0.5
     property bool ativa: true
+    // Na horizontal (a fileira de ícones da sessão): rola o `contentX`, e a roda vertical o move do mesmo jeito.
+    property bool horizontal: false
 
     property real _destino: 0
     property real _velocidade: 0
@@ -21,7 +23,13 @@ Item {
     readonly property real _omega: Math.sqrt(rigidez)
     readonly property bool correndo: relogio.running
 
+    function _atual() { return horizontal ? alvo.contentX : alvo.contentY }
+    function _escrever(valor) { if (horizontal) alvo.contentX = valor; else alvo.contentY = valor }
     function _limites() {
+        if (horizontal) {
+            const esquerda = alvo.originX - alvo.leftMargin
+            return [esquerda, Math.max(esquerda, alvo.originX + alvo.contentWidth + alvo.rightMargin - alvo.width)]
+        }
         const topo = alvo.originY - alvo.topMargin
         return [topo, Math.max(topo, alvo.originY + alvo.contentHeight + alvo.bottomMargin - alvo.height)]
     }
@@ -38,7 +46,7 @@ Item {
     function empurrar(entalhes) {
         const [minimo, maximo] = _limites()
         if (maximo <= minimo) return false
-        const atual = alvo.contentY
+        const atual = _atual()
         let velocidade = 0
         if (relogio.running) velocidade = _velocidadeEm(_tempo)
         else _destino = atual
@@ -59,11 +67,11 @@ Item {
             const [minimo, maximo] = mola._limites()
             if (Math.abs(d) < mola.epsilon && Math.abs(v) < mola.epsilon) {
                 mola._escrito = mola._destino
-                mola.alvo.contentY = mola._destino
+                mola._escrever(mola._destino)
                 running = false
             } else {
                 mola._escrito = Math.max(minimo, Math.min(mola._destino + d, maximo))
-                mola.alvo.contentY = mola._escrito
+                mola._escrever(mola._escrito)
             }
         }
     }
@@ -71,10 +79,10 @@ Item {
     // Outra coisa mexeu na rolagem (teclado, barra de rolagem, `positionViewAtIndex`): a mola larga, senão sobrescreveria.
     Connections {
         target: mola.alvo
-        function onContentYChanged() {
-            if (relogio.running && Math.abs(mola.alvo.contentY - mola._escrito) > 0.5) relogio.running = false
-        }
+        function onContentYChanged() { mola._largar() }
+        function onContentXChanged() { mola._largar() }
     }
+    function _largar() { if (relogio.running && Math.abs(_atual() - _escrito) > 0.5) relogio.running = false }
 
     WheelHandler {
         parent: mola.alvo

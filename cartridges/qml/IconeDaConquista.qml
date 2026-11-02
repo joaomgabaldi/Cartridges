@@ -31,14 +31,20 @@ Item {
 
         Text {
             anchors.centerIn: parent
-            text: icone.oculta ? "?" : ""  // a estrela cheia (o starred-symbolic da `main`)
+            visible: icone.oculta
+            text: "?"
             textFormat: Text.PlainText
             color: Qt.rgba(icone.corDoLadrilho.r, icone.corDoLadrilho.g, icone.corDoLadrilho.b, 0.6)
-            font {
-                family: icone.oculta ? Tema.fonte : Tema.fonteDeIcones
-                pixelSize: icone.oculta ? icone.interrogacao : icone.tamanho / 2
-                weight: icone.oculta ? Font.ExtraBold : Font.Normal
-            }
+            font { family: Tema.fonte; pixelSize: icone.interrogacao; weight: Font.ExtraBold }
+        }
+        // O `starred-symbolic` da Adwaita, de metade do lado (`set_pixel_size(tamanho // 2)` da `main`).
+        Icone {
+            objectName: "estrelaDaConquista"
+            anchors.centerIn: parent
+            visible: !icone.oculta
+            nome: "starred"
+            tamanho: Math.floor(icone.tamanho / 2)
+            cor: Qt.rgba(icone.corDoLadrilho.r, icone.corDoLadrilho.g, icone.corDoLadrilho.b, 0.6)
         }
     }
 

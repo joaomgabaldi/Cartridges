@@ -2,6 +2,8 @@
 
 import types
 
+from PySide6.QtCore import Qt
+
 import pytest
 
 from cartridges import shared
@@ -490,6 +492,24 @@ def test_placa_no_centro_do_monitor(app_qt, monkeypatch):  # noqa: ARG001
         finally:
             placa.close()
             placa.deleteLater()
+
+
+def test_placa_e_janela_comum_que_recebe_foco_e_aparece_na_barra_de_tarefas(app_qt, monkeypatch):  # noqa: ARG001
+    """SES-41: o `Gtk.Window(decorated=False)` da `main` é comum; sem `Tool`, `DoesNotAcceptFocus` nem `TransparentForInput`."""
+    monkeypatch.setattr(window_geometry, "_place", lambda _janela, _geometria: True)
+    placa = _CRIAR_PLACA_REAL(SEGUNDO, 200)
+    try:
+        flags = placa.flags()
+        assert flags & Qt.WindowType.FramelessWindowHint
+        assert flags & Qt.WindowType.WindowType_Mask == Qt.WindowType.Window  # `Tool` tira da barra de tarefas
+        for tirada in (
+            Qt.WindowType.WindowDoesNotAcceptFocus,
+            Qt.WindowType.WindowTransparentForInput, Qt.WindowType.WindowStaysOnTopHint,
+        ):
+            assert not flags & tirada, tirada
+    finally:
+        placa.close()
+        placa.deleteLater()
 
 
 def test_placas_fecham_sozinhas_mesmo_com_as_preferencias_fechadas(p, monkeypatch):

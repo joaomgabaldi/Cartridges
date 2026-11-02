@@ -389,13 +389,8 @@ def _criar_placa(monitor: Monitor, lado: int) -> Any:
     from PySide6.QtQuick import QQuickView  # noqa: PLC0415
 
     placa = QQuickView()
-    placa.setFlags(
-        Qt.WindowType.Tool
-        | Qt.WindowType.FramelessWindowHint
-        | Qt.WindowType.WindowStaysOnTopHint
-        | Qt.WindowType.WindowDoesNotAcceptFocus
-        | Qt.WindowType.WindowTransparentForInput
-    )
+    # Janela comum sem moldura, como o `Gtk.Window(decorated=False)` da `main`: recebe foco e aparece na barra de tarefas.
+    placa.setFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
     placa.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
     placa.setInitialProperties({"numero": monitor.number})
     placa.setSource(QUrl.fromLocalFile(str(_PLACA)))

@@ -9,7 +9,7 @@ Item {
     property string logo: ""
     property int larguraDoLogo: 0
     property string nome: ""
-    property int tamanhoDoNome: 28
+    property int tamanhoDoNome: Tema.titulo1  // .title-1
     // Os `objectName` dos dois, para os testes de cada diálogo.
     property string nomeDoLogo: "logoDoCabecalho"
     property string nomeDoTexto: "nomeDoCabecalho"
@@ -39,6 +39,6 @@ Item {
         wrapMode: Text.Wrap
         horizontalAlignment: Text.AlignHCenter
         color: Tema.texto
-        font { family: Tema.fonte; pixelSize: cabecalho.tamanhoDoNome; weight: Font.Bold }
+        font { family: Tema.fonte; pixelSize: cabecalho.tamanhoDoNome; weight: Tema.pesoTitulo1 }
     }
 }

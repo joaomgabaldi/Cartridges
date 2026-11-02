@@ -1,11 +1,18 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Window
 
-// A janela "Jogando {nome}" da sessão manual (D50): moldura nativa do Windows, 300×150, tamanho fixo.
-// Fechar pela moldura e o botão fazem o mesmo: encerrar a sessão com registro. Posta pelo Python.
+// A janela "Jogando {nome}" da sessão manual (D50, R3): como a `Adw.Window` da `main` (`session_window.py`), sem moldura,
+// com a barra própria de 47 px (título centrado, minimizar e fechar, sem maximizar), 300×150 no total e tamanho fixo.
+// Fechar pela barra e o botão fazem o mesmo: encerrar a sessão com registro. Posta pelo Python.
 Window {
     id: raiz
     objectName: "janelaDaSessao"
+
+    // Os testes rodam sem a ponte do QWindowKit (como a `Principal`).
+    property bool semAgente: false
+    readonly property QtObject agente: carga.item
+    property bool _posta: false
+
     title: sessao.tituloDaJanela
     width: 300
     height: 150
@@ -15,35 +22,72 @@ Window {
     maximumHeight: height
     color: Tema.fundo
     transientParent: null  // solta: não some junto com a janela principal
-    flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowCloseButtonHint
+    flags: Qt.Window
     visible: true
 
-    onVisibleChanged: if (visible) sessao.posicionarJanelaManual(raiz)
+    Loader {
+        id: carga
+        active: !raiz.semAgente
+        source: "AgenteDaJanela.qml"
+    }
+    Connections {
+        target: Tema
+        function onEscuroChanged() { if (raiz.agente) raiz.agente.setWindowAttribute("dark-mode", Tema.escuro) }
+    }
+    // O tamanho e os limites só depois do `setup`: antes, o QWindowKit os sobrescreve.
+    Component.onCompleted: {
+        if (agente) {
+            agente.setup(raiz)
+            agente.setWindowAttribute("dark-mode", Tema.escuro)
+            barra.ligarAgente()
+        }
+        width = 300
+        height = 150
+        minimumWidth = 300
+        maximumWidth = 300
+        minimumHeight = 150
+        maximumHeight = 150
+    }
+
+    // Acima do relógio: o retângulo da janela só vale depois do primeiro quadro e da moldura removida.
+    onFrameSwapped: {
+        if (_posta) return
+        _posta = true
+        sessao.posicionarJanelaManual(raiz)
+    }
     onClosing: sessao.janelaManualFechada()
 
-    Button {
+    BarraDeTitulo {
+        id: barra
+        objectName: "barraDaJanelaDaSessao"
+        anchors { top: parent.top; left: parent.left; right: parent.right }
+        janela: raiz
+        agente: raiz.agente
+        titulo: sessao.tituloDaJanela
+        comMaximizar: false
+    }
+
+    // O botão no meio do que sobra abaixo da barra (`valign: center`, `vexpand`).
+    Botao {
         id: botao
         objectName: "botaoTermineiDaJanela"
-        anchors.centerIn: parent
+        anchors { horizontalCenter: parent.horizontalCenter; verticalCenter: parent.verticalCenter; verticalCenterOffset: barra.altura / 2 }
         focus: true
+        estilo: "sugestao"
+        pilula: true
         text: "Já terminei de jogar"
-        implicitHeight: 44
-        leftPadding: 28
-        rightPadding: 28
         onClicked: sessao.janelaManualFechada()
-        contentItem: Text {
-            text: botao.text
-            textFormat: Text.PlainText
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            color: "white"
-            font { family: Tema.fonte; pixelSize: 16; weight: Font.DemiBold }
-        }
-        background: Rectangle {
-            radius: height / 2
-            color: Tema.destaque
-            opacity: botao.down ? 0.7 : botao.hovered ? 0.85 : 1
-            border { width: botao.visualFocus ? 2 : 0; color: Tema.texto }
-        }
+    }
+
+    // window.csd: o contorno claro de 1 px; o raio é o do DWM (R9).
+    Rectangle {
+        objectName: "contornoDaJanelaDaSessao"
+        anchors.fill: parent
+        z: 1000
+        enabled: false
+        visible: raiz.visibility === Window.Windowed
+        radius: 8
+        color: "transparent"
+        border { width: 1; color: Tema.contorno }
     }
 }

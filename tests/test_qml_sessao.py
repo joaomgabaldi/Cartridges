@@ -7,6 +7,7 @@
 import pytest
 from PIL import Image
 from PySide6.QtCore import QMetaObject, Qt, QUrl
+from PySide6.QtGui import QFont, QFontMetricsF
 from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtTest import QTest
 
@@ -16,6 +17,7 @@ from cartridges.process_session import ProcessSession
 from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos
 from tests.apoio_qml_big_picture import _aberto_com, _entrar, _itens
 from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _clicar, _foco_dentro_de
+from tests.apoio_qml_historico import _expr
 
 
 @pytest.fixture(autouse=True)
@@ -91,9 +93,12 @@ def test_teclado_nao_alcanca_a_grade_com_a_sessao(app_qt, lancamentos):
     for tecla in (Qt.Key.Key_Return, Qt.Key.Key_Space, Qt.Key.Key_Tab, Qt.Key.Key_Return, Qt.Key.Key_Tab, Qt.Key.Key_Space):
         _tecla(app, tecla)
         assert app.janela.property("paginaAtual") == "todos"  # nenhum cartão abriu os detalhes
-        assert _foco_dentro_de(app, "camadaDaSessao"), tecla
+        # Enter no "Onde eu parei" abre o balão (SES-08), e o foco vai à caixa dele: é da camada, não da grade.
+        assert _foco_dentro_de(app, "camadaDaSessao") or _foco_dentro_de(app, "campoDaAnotacao"), tecla
         assert not _foco_dentro_de(app, "grade"), tecla
         assert not _foco_dentro_de(app, "barraDeTitulo"), tecla
+        if _foco_dentro_de(app, "campoDaAnotacao"):
+            _tecla(app, Qt.Key.Key_Escape)
     # Mesmo que algo devolva o foco ao cartão (o que um `forceActiveFocus` atrasado faria), a grade desligada não o aceita.
     QMetaObject.invokeMethod(app.achar("pagina"), "focarGrade", Qt.ConnectionType.DirectConnection)
     _esperar()
@@ -320,4 +325,109 @@ def test_controle_nao_abre_menu_nem_detalhes_na_grade_com_a_sessao(app_qt, lanca
         assert app.achar("menuPrincipal").property("opened") is False
         assert app.achar("menuDoJogo").property("visible") is False
     assert lancamentos == []
+    app.fechar()
+
+
+# -- Auditoria GTK x Qt, pacote D (sessão) ----------------------------------------------------------
+
+
+def test_enter_aciona_o_ja_terminei_e_abre_o_balao(app_qt, monkeypatch):
+    """SES-08: o `Gtk.Button` responde a Enter e a Espaço; o `Button` do Qt só respondia a Espaço."""
+    app = _app()
+    processo = _ProcessoFalso()
+    monkeypatch.setattr(ProcessSession, "active", processo)
+    _comecar(app)
+    assert _foco_dentro_de(app, "botaoJaTerminei")
+    _tecla(app, Qt.Key.Key_Return)
+    assert processo.parou == [True]
+    _tecla(app, Qt.Key.Key_Enter)  # o Enter do teclado numérico também
+    assert processo.parou == [True, True]
+    _tecla(app, Qt.Key.Key_Tab)
+    assert _foco_dentro_de(app, "botaoAnotacaoDaSessao")
+    _tecla(app, Qt.Key.Key_Return)
+    assert _esperar(lambda: app.achar("balaoDaSessao").property("opened") is True)
+    app.fechar()
+
+
+def test_foco_aberto_pelo_teclado_tem_anel_e_pelo_mouse_nao(app_qt):
+    """SES-07: o anel só vem se o teclado já estava em uso quando o jogo abriu (`grab_focus` depois do clique, na `main`)."""
+    app = _app()
+    _cartao_focado(app)
+    _tecla(app, Qt.Key.Key_Right)  # o teclado em uso: a grade mostra o anel do cartão
+    assert app.achar("grade").property("porTeclado") is True
+    _comecar(app)
+    assert _foco_dentro_de(app, "botaoJaTerminei")
+    assert app.achar("botaoJaTerminei").property("visualFocus") is True
+    app.fechar()
+
+    # Com o mouse (outra janela, sem o gesto de teclado de antes): abre os detalhes e clica em "Jogar" (o `launch` é falso), como a pessoa faria.
+    app = _app()
+    _abrir_pelo_cartao(app, 0)
+    _clicar(app, app.achar("botaoJogarDaPagina"))
+    _comecar(app)
+    assert _foco_dentro_de(app, "botaoJaTerminei")
+    assert app.achar("botaoJaTerminei").property("activeFocus") is True
+    assert app.achar("botaoJaTerminei").property("visualFocus") is False
+    app.fechar()
+
+
+def test_botoes_da_camada_sao_os_da_main(app_qt):
+    """SES-04/09/10/12: pílula de 44 com 12 px em negrito e padding 32; relógio e nome em title-1; "Onde eu parei" com a seta."""
+    app = _app()
+    _comecar(app)
+    botao, anotar = app.achar("botaoJaTerminei"), app.achar("botaoAnotacaoDaSessao")
+    assert botao.height() == 44 and botao.property("leftPadding") == 32 and botao.property("rightPadding") == 32
+    assert botao.property("estilo") == "sugestao" and botao.property("pilula") is True
+    assert (anotar.height(), anotar.property("leftPadding")) == (34, 10)
+    assert anotar.property("estilo") == "plano"
+    assert _expr(anotar, "contentItem.children[0].font.pixelSize") == 12
+    assert _expr(anotar, "contentItem.children[0].font.weight") == 700
+    assert _expr(anotar, "contentItem.children[1].nome") == "pan-down"  # a seta ao lado do texto
+    nome = app.achar("nomeDaSessao")
+    assert _expr(nome, "font.pixelSize") == 22 and _expr(nome, "font.weight") == 800
+    app.fechar()
+
+
+def _nome_de_largura(minimo, maximo):
+    """Um nome cujo texto em title-1 mede entre `minimo` e `maximo` px, com a fonte que houver (a offscreen não tem fontes)."""
+    fonte = QFont("Segoe UI")
+    fonte.setPixelSize(22)
+    fonte.setWeight(QFont.Weight.ExtraBold)
+    medida, nome = QFontMetricsF(fonte), "Jogo"
+    while medida.horizontalAdvance(nome) < minimo:
+        nome += " jogo"
+    assert medida.horizontalAdvance(nome) <= maximo
+    return nome
+
+
+def test_nome_ocupa_a_largura_natural_e_so_quebra_no_limite_da_janela(app_qt):
+    """SES-11: a coluna não é presa a 640; só o logo é. O nome quebra em `largura - 48`."""
+    app = _app((1, _nome_de_largura(700, 1100), {}))
+    app.janela.setWidth(1170)
+    _comecar(app)
+    nome = app.achar("nomeDaSessao")
+    assert _esperar(lambda: nome.width() > 640)  # antes: coluna presa a min(largura - 48, 640)
+    assert nome.property("lineCount") == 1
+    app.fechar()
+
+    app = _app((1, "palavra " * 40, {}))
+    app.janela.setWidth(1170)
+    _comecar(app)
+    nome = app.achar("nomeDaSessao")
+    assert _esperar(lambda: nome.property("lineCount") > 1)
+    assert nome.width() == 1170 - 48
+    app.fechar()
+
+
+def test_anotacao_da_camada_grava_em_jogo_zerado(app_qt):
+    """SES-16: na `main` a caixa da camada nunca é só leitura; só uma caixa não editável deixa de gravar."""
+    app = _app((1, "Alfa", {"status": "beaten", "removed": True}))
+    assert app.jogos[0].zerado
+    _comecar(app)
+    QMetaObject.invokeMethod(app.achar("botaoAnotacaoDaSessao"), "click", Qt.ConnectionType.DirectConnection)
+    balao = app.achar("balaoDaSessao")
+    assert _esperar(lambda: balao.property("opened") is True)
+    _achar(balao.property("contentItem"), "campoDaAnotacao").setProperty("text", "no último chefe")
+    balao.close()
+    assert _esperar(lambda: app.jogos[0].notes == "no último chefe")
     app.fechar()

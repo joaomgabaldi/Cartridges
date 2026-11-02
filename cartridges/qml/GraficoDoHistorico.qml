@@ -52,7 +52,7 @@ Item {
         function xDe(i) { return n === 1 ? margemEsquerda + larguraUtil / 2 : margemEsquerda + larguraUtil * g.posicoes[i] / ultima }
         function yDe(valor) { return baseY - alturaUtil * valor / g.topo }
 
-        ctx.font = "12px '" + Tema.fonte + "'"
+        ctx.font = "9.84px '" + Tema.fonte + "'"  // .caption, 82% de 12 px
         ctx.textAlign = "left"
         ctx.textBaseline = "middle"
 
@@ -101,13 +101,13 @@ Item {
                 for (var a = inicio; a < fim; ++a) ctx.lineTo(pontos[a][0], pontos[a][1])
                 ctx.lineTo(pontos[fim - 1][0], baseY)
                 ctx.closePath()
-                ctx.fillStyle = cor(Tema.destaque, 0.15)
+                ctx.fillStyle = cor(Tema.destaqueTexto, 0.15)
                 ctx.fill()
 
                 ctx.beginPath()
                 ctx.moveTo(pontos[inicio][0], pontos[inicio][1])
                 for (var b = inicio + 1; b < fim; ++b) ctx.lineTo(pontos[b][0], pontos[b][1])
-                ctx.strokeStyle = cor(Tema.destaque, 1)
+                ctx.strokeStyle = cor(Tema.destaqueTexto, 1)
                 ctx.lineWidth = 2
                 ctx.lineJoin = "round"
                 ctx.stroke()
@@ -117,7 +117,7 @@ Item {
 
         // Pontos só enquanto cabem: num período de anos eles viram uma faixa.
         if (n === 1 || larguraUtil / (ultima + 1) >= 8) {
-            ctx.fillStyle = cor(Tema.destaque, 1)
+            ctx.fillStyle = cor(Tema.destaqueTexto, 1)
             for (var d = 0; d < n; ++d) {
                 ctx.beginPath()
                 ctx.arc(pontos[d][0], pontos[d][1], 3, 0, 2 * Math.PI)
@@ -138,7 +138,7 @@ Item {
         Connections {
             target: Tema
             function onEscuroChanged() { tela.requestPaint() }
-            function onDestaqueChanged() { tela.requestPaint() }
+            function onDestaqueTextoChanged() { tela.requestPaint() }
         }
     }
 
@@ -151,11 +151,11 @@ Item {
         onExited: raiz.xDoMouse = -1
     }
 
-    ToolTip {
+    // A dica do app (500 ms, como a do GTK), junto do mouse.
+    Dica {
         x: area.mouseX + 12
         y: area.mouseY + 16
-        visible: area.containsMouse && raiz.dicaDoMouse !== ""
-        text: raiz.dicaDoMouse
-        delay: 0
+        ativa: area.containsMouse
+        texto: raiz.dicaDoMouse
     }
 }

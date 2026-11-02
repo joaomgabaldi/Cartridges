@@ -9,13 +9,13 @@ ProgressBar {
     to: 1
     property color corDaTrilha: Tema.botaoSobre  // a da tela da sessão, sempre escura, não segue o tema
 
-    implicitHeight: 6
-    background: Rectangle { radius: 3; color: barra.corDaTrilha }
+    implicitHeight: 8  // GtkProgressBar: 8 px, raio 99
+    background: Rectangle { radius: 4; color: barra.corDaTrilha }
     contentItem: Item {
         Rectangle {
             width: barra.visualPosition * parent.width
             height: parent.height
-            radius: 3
+            radius: 4
             color: Tema.destaque
         }
     }

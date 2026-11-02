@@ -323,9 +323,9 @@ class ModeloDaSessao(QObject):
 
     @Slot(str)
     def gravarAnotacao(self, texto: str) -> None:  # noqa: N802
-        """A anotação do balão da camada, com a regra do `DetalhesDoJogo.gravarAnotacao`."""
+        """A anotação do balão da camada. Grava também num jogo zerado: na `main` só uma caixa não editável deixa de gravar, e a da camada nunca é."""
         jogo = self._anotando
-        if jogo is None or jogo.zerado:
+        if jogo is None:
             return
         texto = texto.strip()
         if texto == (jogo.notes or ""):

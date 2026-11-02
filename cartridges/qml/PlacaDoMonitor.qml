@@ -9,14 +9,14 @@ Rectangle {
 
     implicitWidth: 200
     implicitHeight: 200
-    color: "#1c1b22"
-    border { width: 3; color: Tema.destaque }
+    color: Tema.fundo  // a janela comum da `main`: fundo e texto do tema, sem borda
+    border.width: 0
 
     Text {
         anchors.centerIn: parent
         text: placa.numero
         textFormat: Text.PlainText
-        color: "white"
-        font { family: Tema.fonte; pixelSize: placa.height * 0.55; weight: Font.Bold }
+        color: Tema.texto
+        font { family: Tema.fonte; pixelSize: 128; weight: Font.Bold }  // 96 pt
     }
 }

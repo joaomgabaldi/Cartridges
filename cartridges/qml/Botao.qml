@@ -76,8 +76,10 @@ Button {
         Rectangle {
             anchors.fill: parent
             radius: parent.radius
-            visible: botao.estilo === "sugestao" && (botao.hovered || botao.down)
+            opacity: botao.estilo === "sugestao" && (botao.hovered || botao.down) ? 1 : 0
+            visible: opacity > 0
             color: botao.down ? Qt.rgba(0, 0, 6 / 255, 0.2) : Qt.rgba(1, 1, 1, 0.1)
+            Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }  // transição de 200 ms
         }
         AnelDeFoco { ativo: botao.visualFocus; raio: parent.radius; afastamento: botao.afastamentoDoAnel }
     }

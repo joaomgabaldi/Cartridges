@@ -156,10 +156,10 @@ def test_historico_e_conquistas_apagados_com_as_preferencias(app):
     _abrir_pelo_cartao(app, 0)
     app.historico.abrir(app.jogos[0].game_id)
     assert _esperar(lambda: app.achar("dialogoDoHistorico").property("visible") is True)
-    assert app.achar("cartaoDoHistorico").property("enabled") is True
+    assert _achar(app.achar("dialogoDoHistorico"), "rolagemDoHistorico").property("enabled") is True
     assert app.achar("caixaDeConquistas").property("enabled") is True
     _abrir(app)
-    assert app.achar("cartaoDoHistorico").property("enabled") is False
+    assert _achar(app.achar("dialogoDoHistorico"), "rolagemDoHistorico").property("enabled") is False
     assert app.achar("caixaDeConquistas").property("enabled") is False
 
 
@@ -625,6 +625,11 @@ def test_placa_mostra_o_numero(app_qt):
     placa = componente.createWithInitialProperties({"numero": "2"})
     assert placa is not None, componente.errorString()
     assert "2" in _textos(placa)
+    # SES-40: fundo e texto do tema, sem borda, número em 96 pt (128 px).
+    ex = lambda o, t: QQmlExpression(QQmlEngine.contextForObject(o), o, t).evaluate()[0]  # noqa: E731
+    assert ex(placa, "color.toString() === Tema.fundo.toString() && border.width === 0") is True
+    numero = next(t for t in placa.childItems() if t.property("text") == "2")
+    assert ex(numero, "font.pixelSize === 128 && color.toString() === Tema.texto.toString()") is True
 
 
 def test_m14_sem_contar_horas_o_papel_de_parede_fica_apagado(app):

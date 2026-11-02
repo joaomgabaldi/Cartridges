@@ -3,145 +3,127 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
 
-// O histórico de sessões de um jogo: o logo (ou o nome) e o resumo no topo, e lado a lado a tabela das sessões e o
-// painel do gráfico. Só desenha: o que ele mostra e faz é o `historico` (cartridges/modelos/historico.py).
-// Modal para o mouse, o teclado e o controle, como o de edição; o foco volta a quem o abriu. Sem título visível: o logo
-// (ou o nome) é a manchete, e o título só vive no nome acessível.
-Rectangle {
-    id: dialogo
-    objectName: "dialogoDoHistorico"
+// O histórico de sessões de um jogo (`Adw.Dialog` de 1040 de largura): o logo (ou o nome) e o resumo no topo, e lado a lado
+// a tabela das sessões e o painel do gráfico. Só desenha: o que ele mostra e faz é o `historico`
+// (cartridges/modelos/historico.py). Modal para o mouse, o teclado e o controle; o foco volta a quem o abriu. A faixa de
+// cima não mostra título (`show_title=False`): o logo (ou o nome) é a manchete, e o título só vive no nome acessível.
+// A raiz é só um `Item`: a confirmação de exclusão cobre a janela e não pode morar dentro do cartão.
+Item {
+    id: raiz
 
-    Accessible.role: Accessible.Dialog
-    Accessible.name: "Histórico de sessões"
-    // A sessão cuja exclusão a confirmação pergunta.
-    property var excluindo: ({ fim: 0, segundos: 0, duracao: "", titulo: "" })
-    // Quem tinha o foco ao abrir.
-    property Item retorno: null
+    MolduraDoDialogo {
+        id: dialogo
+        objectName: "dialogoDoHistorico"
 
-    function contem(pai, item) {
-        for (var p = item; p; p = p.parent) // `parent`: o `parentItem` do C++ não existe no QML
-            if (p === pai) return true
-        return false
-    }
-    function dentro(item) { return contem(dialogo, item) }
-    // Depois de uma exclusão ou de "Mostrar mais" a linha ou o botão que tinha o foco pode ter sumido.
-    function garantirFoco() {
-        var f = Window.window ? Window.window.activeFocusItem : null
-        if (visible && !(f && f.visible && dentro(f))) // o botão escondido ainda é filho do diálogo
-            botaoFechar.forceActiveFocus(Qt.TabFocusReason)
-    }
-    // O item com o foco fica à vista, na tabela e na rolagem do diálogo.
-    function trazer(rolagem, item) {
-        var topo = item.mapToItem(rolagem.contentItem, 0, 0).y
-        var base = topo + item.height
-        if (topo < rolagem.contentY) rolagem.contentY = Math.max(0, topo - 8)
-        else if (base > rolagem.contentY + rolagem.height) rolagem.contentY = base - rolagem.height + 8
-    }
-    function pedirExclusao(sessao) {
-        excluindo = sessao
-        confirmacao.abrir()
-    }
+        // A sessão cuja exclusão a confirmação pergunta.
+        property var excluindo: ({ fim: 0, segundos: 0, duracao: "", titulo: "" })
+        // O que sobra da altura do cartão para a tabela: o que o cartão pode ter, menos o cabeçalho e tudo o que não é a
+        // tabela (a manchete, o resumo, os respiros). Sem ler a altura do próprio cartão (laço).
+        readonly property real alturaMaximaDoCartao: emFolha ? height - 30 : height - 2 * margemV
+        readonly property real alturaLivreDaTabela: alturaMaximaDoCartao - cabecalho.implicitHeight
+            - (manchete.implicitHeight + resumo.implicitHeight + 5 * 12)
+        // 34 do seletor, 12, o total, 12 e o gráfico no piso: o painel nunca fica mais baixo que isto.
+        readonly property real pisoDoPainel: 34 + 12 + totalDoPeriodo.implicitHeight + 12 + 240
 
-    anchors.fill: parent
-    visible: historico.aberto
-    color: "#80000000"
-    Keys.onEscapePressed: historico.fechar()
-    // Modal para o teclado e o controle: nenhuma tecla chega à página de trás.
-    Keys.onPressed: event => event.accepted = true
+        function contem(pai, item) {
+            for (var p = item; p; p = p.parent) // `parent`: o `parentItem` do C++ não existe no QML
+                if (p === pai) return true
+            return false
+        }
+        // Depois de uma exclusão ou de "Mostrar mais" a linha ou o botão que tinha o foco pode ter sumido.
+        function garantirFoco() {
+            var f = Window.window ? Window.window.activeFocusItem : null
+            if (visible && !(f && f.visible && dentro(f))) // o botão escondido ainda é filho do diálogo
+                cabecalho.botaoFechar.forceActiveFocus(Qt.TabFocusReason)
+        }
+        // O item com o foco fica à vista, na tabela e na rolagem do diálogo.
+        function trazer(rolagem, item) {
+            var topo = item.mapToItem(rolagem.contentItem, 0, 0).y
+            var base = topo + item.height
+            if (topo < rolagem.contentY) rolagem.contentY = Math.max(0, topo - 8)
+            else if (base > rolagem.contentY + rolagem.height) rolagem.contentY = base - rolagem.height + 8
+        }
+        function pedirExclusao(sessao) {
+            excluindo = sessao
+            confirmacao.abrir()
+        }
+        // As setas andam entre as linhas, como na `ListBox` da `main`.
+        function irParaLinha(indice) {
+            var linha = repetidor.itemAt(indice)
+            if (linha) linha.alvo.forceActiveFocus(Qt.TabFocusReason)
+        }
 
-    onVisibleChanged: {
-        if (visible) {
-            retorno = Window.window ? Window.window.activeFocusItem : null
+        aberto: historico.aberto
+        largura: 1040
+        focoInicial: cabecalho.botaoFechar
+        nomeAcessivel: "Histórico de sessões"
+        onFecharPedido: historico.fechar()
+        onAbertoChanged: if (aberto) {
             rolagem.contentY = 0
             tabela.contentY = 0
-            botaoFechar.forceActiveFocus(Qt.TabFocusReason)
-        } else {
-            // Depois da reação das outras bindings ao `aberto` (a página de trás volta a ficar habilitada).
-            Qt.callLater(devolverAoRetorno)
         }
-    }
-    function devolverAoRetorno() {
-        if (visible) return
-        if (retorno && retorno.visible && retorno.enabled) retorno.forceActiveFocus(Qt.TabFocusReason)
-    }
 
-    Connections {
-        target: dialogo.Window.window
-        function onActiveFocusItemChanged() {
-            var foco = dialogo.Window.window.activeFocusItem
-            if (!dialogo.visible || !foco || !dialogo.dentro(foco)) return
-            if (dialogo.contem(rolagem.contentItem, foco)) dialogo.trazer(rolagem, foco)
-            if (dialogo.contem(tabela.contentItem, foco)) dialogo.trazer(tabela, foco)
+        Connections {
+            target: dialogo.Window.window
+            function onActiveFocusItemChanged() {
+                var foco = dialogo.Window.window.activeFocusItem
+                if (!dialogo.visible || !foco || !dialogo.dentro(foco)) return
+                if (dialogo.contem(rolagem.contentItem, foco)) dialogo.trazer(rolagem, foco)
+                if (dialogo.contem(tabela.contentItem, foco)) dialogo.trazer(tabela, foco)
+            }
         }
-    }
 
-    MouseArea { anchors.fill: parent } // o que está embaixo não recebe cliques
+        // O seletor de período: o `Adw.ToggleGroup`, uma trilha só a 10% com cada opção dentro (padding 3, raio 9 e 6).
+        component BotaoDoPeriodo: Button {
+            id: botao
+            focusPolicy: Qt.StrongFocus
+            hoverEnabled: true
+            implicitHeight: 28
+            implicitWidth: Math.max(contentItem.implicitWidth + 16, 24)
+            leftPadding: 8
+            rightPadding: 8
+            topPadding: 0
+            bottomPadding: 0
+            Accessible.role: Accessible.RadioButton
+            Accessible.checked: checked
+            Keys.onReturnPressed: click()
+            Keys.onEnterPressed: click()
+            contentItem: Text {
+                text: botao.text
+                textFormat: Text.PlainText
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                color: Tema.texto
+                font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
+            }
+            background: Rectangle {
+                radius: 6
+                // `--active-toggle-bg-color`: branco no claro, branco a 20% no escuro.
+                color: botao.checked ? (Tema.escuro ? Qt.rgba(1, 1, 1, 0.2) : "#ffffff")
+                    : botao.down ? Tema.planoPressionado : botao.hovered ? Tema.planoSobre : "transparent"
+                border { width: botao.checked || botao.hovered || botao.down ? 1 : 0; color: Tema.borda }
+                Behavior on color { ColorAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
+                Sombra { visible: botao.checked; camadas: Tema.sombraAviso; raio: 6 }
+                AnelDeFoco { ativo: botao.visualFocus; raio: 6; afastamento: 0 }
+            }
+        }
 
-    component BotaoDoPeriodo: Button {
-        id: botao
-        focusPolicy: Qt.StrongFocus
-        implicitHeight: 34
-        leftPadding: 16
-        rightPadding: 16
-        Accessible.role: Accessible.RadioButton
-        Accessible.checked: checked
-        contentItem: Text {
-            text: botao.text
-            textFormat: Text.PlainText
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            color: botao.checked ? "white" : Tema.texto
-            font { family: Tema.fonte; pixelSize: 14 }
+        CabecalhoDoDialogo {
+            id: cabecalho
+            titulo: ""
+            sombra: rolagem.contentY > 0
+            onFechar: historico.fechar()
         }
-        background: Rectangle {
-            radius: 6
-            color: botao.checked ? Tema.destaque : botao.down ? Tema.pressionado : botao.hovered ? Tema.botaoSobre : Tema.superficie
-            border { width: botao.visualFocus ? 2 : 1; color: botao.visualFocus ? Tema.texto : Tema.borda }
-        }
-    }
 
-    component BotaoDeIcone: Button {
-        id: botao
-        property string glifo
-        property string dica
-        focusPolicy: Qt.StrongFocus
-        implicitWidth: 34
-        implicitHeight: 34
-        Accessible.name: dica
-        ToolTip.visible: hovered && dica !== ""
-        ToolTip.text: dica
-        ToolTip.delay: 600
-        contentItem: Text {
-            text: botao.glifo
-            textFormat: Text.PlainText
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            color: Tema.texto
-            font { family: Tema.fonteDeIcones; pixelSize: 16 }
-        }
-        background: Rectangle {
-            radius: 6
-            color: botao.down ? Tema.pressionado : botao.hovered ? Tema.botaoSobre : "transparent"
-            border { width: botao.visualFocus ? 2 : 0; color: Tema.destaque }
-        }
-    }
-
-    Rectangle {
-        id: cartao
-        objectName: "cartaoDoHistorico"
-        anchors.centerIn: parent
-        width: Math.min(1040, parent.width - 48)
-        height: Math.min(parent.height - 48, conteudo.implicitHeight)
-        radius: 8
-        color: Tema.fundo
-        border.color: Tema.botaoSobre
-        clip: true
         // Com a confirmação ou as Preferências na frente, nada daqui recebe o mouse nem o Tab.
-        enabled: !confirmacao.visible && !preferencias.aberto
-
         Flickable {
             id: rolagem
-            anchors.fill: parent
+            objectName: "rolagemDoHistorico"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.preferredHeight: contentHeight
+            Layout.minimumHeight: 0
+            enabled: !confirmacao.aberto && !preferencias.aberto
             contentWidth: width
             contentHeight: conteudo.implicitHeight
             boundsBehavior: Flickable.StopAtBounds
@@ -153,22 +135,9 @@ Rectangle {
                 width: rolagem.width
                 spacing: 12
 
-                // A faixa de cima: só o botão de fechar, à direita.
-                Item {
-                    Layout.fillWidth: true
-                    implicitHeight: 40
-                    BotaoDeIcone {
-                        id: botaoFechar
-                        objectName: "botaoFecharHistorico"
-                        anchors { right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }
-                        glifo: ""  // fechar
-                        dica: "Fechar"
-                        onClicked: historico.fechar()
-                    }
-                }
-
                 // O logo (até 992×120) ou o nome, nunca os dois.
                 CabecalhoDoJogo {
+                    id: manchete
                     Layout.fillWidth: true
                     Layout.leftMargin: 24
                     Layout.rightMargin: 24
@@ -180,6 +149,7 @@ Rectangle {
                 }
 
                 Text {
+                    id: resumo
                     objectName: "resumoDoHistorico"
                     Layout.fillWidth: true
                     Layout.leftMargin: 24
@@ -189,7 +159,7 @@ Rectangle {
                     wrapMode: Text.Wrap
                     horizontalAlignment: Text.AlignHCenter
                     color: Tema.textoSecundario
-                    font { family: Tema.fonte; pixelSize: 14 }
+                    font { family: Tema.fonte; pixelSize: Tema.corpo }
                 }
 
                 // A tabela e o painel do gráfico: o painel tem sempre a altura da faixa, e a faixa segue a da tabela.
@@ -199,17 +169,18 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.leftMargin: 24
                     Layout.rightMargin: 24
-                    Layout.bottomMargin: 24
                     Layout.topMargin: 12
                     spacing: 24
 
-                    // Rola a partir de 440 de altura em vez de esticar a caixa para fora da janela.
+                    // A altura é a das linhas, até 440 e até o que a janela deixa, mas nunca abaixo do piso do painel: o
+                    // gráfico fica à vista (`max_content_height` da `main` é só um teto). Só quando nem o piso cabe, o
+                    // cartão inteiro rola.
                     Flickable {
                         id: tabela
                         objectName: "tabelaDeSessoes"
                         Layout.preferredWidth: 440
                         Layout.maximumWidth: 440
-                        Layout.preferredHeight: Math.min(contentHeight, 440)
+                        Layout.preferredHeight: Math.min(contentHeight, 440, Math.max(dialogo.pisoDoPainel, dialogo.alturaLivreDaTabela))
                         Layout.alignment: Qt.AlignTop
                         contentWidth: width
                         contentHeight: linhas.implicitHeight
@@ -222,85 +193,58 @@ Rectangle {
                             width: tabela.width
                             spacing: 6
 
-                            Rectangle {
+                            GrupoDeLinhas {
                                 width: parent.width
-                                height: lista.implicitHeight
-                                radius: 12
-                                color: Tema.superficie
-                                border { width: 1; color: Tema.borda }
-                                clip: true
-                                Column {
-                                    id: lista
-                                    width: parent.width
-                                    Repeater {
-                                        model: historico.sessoes
-                                        delegate: Item {
-                                            id: linha
-                                            objectName: "linhaDaSessao"
-                                            required property var modelData
-                                            required property int index
-                                            width: lista.width
-                                            height: 56
-                                            Rectangle { width: parent.width; height: 1; color: Tema.borda; visible: linha.index > 0 }
-                                            Column {
-                                                anchors { left: parent.left; leftMargin: 16; right: lixeira.left; rightMargin: 8; verticalCenter: parent.verticalCenter }
-                                                Text {
-                                                    objectName: "tituloDaSessao"
-                                                    width: parent.width
-                                                    text: linha.modelData.titulo
-                                                    textFormat: Text.PlainText
-                                                    elide: Text.ElideRight
-                                                    color: Tema.texto
-                                                    font { family: Tema.fonte; pixelSize: 15 }
-                                                }
-                                                Text {
-                                                    objectName: "subtituloDaSessao"
-                                                    width: parent.width
-                                                    text: linha.modelData.subtitulo
-                                                    textFormat: Text.PlainText
-                                                    elide: Text.ElideRight
-                                                    color: Tema.textoSecundario
-                                                    font { family: Tema.fonte; pixelSize: 12 }
-                                                }
-                                            }
-                                            BotaoDeIcone {
-                                                id: lixeira
-                                                objectName: "botaoExcluirSessao"
-                                                anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
-                                                glifo: ""  // lixeira
-                                                dica: "Excluir esta sessão"
-                                                onClicked: dialogo.pedirExclusao(linha.modelData)
-                                            }
+                                Repeater {
+                                    id: repetidor
+                                    model: historico.sessoes
+                                    delegate: LinhaDoGrupo {
+                                        id: linha
+                                        objectName: "linhaDaSessao"
+                                        required property var modelData
+                                        required property int index
+                                        property alias alvo: alvoDaLinha
+                                        titulo: modelData.titulo
+                                        subtitulo: modelData.subtitulo
+                                        reservaADireita: lixeira.width
+                                        // Cada linha recebe o foco do teclado antes da lixeira (`ListBoxRow` da `main`).
+                                        Button {
+                                            id: alvoDaLinha
+                                            objectName: "alvoDaLinhaDaSessao"
+                                            anchors.fill: parent
+                                            focusPolicy: Qt.StrongFocus  // um `Control`: o anel só aparece com o teclado (`visualFocus`)
+                                            contentItem: Item {}
+                                            background: Item {}
+                                            Binding { target: linha; property: "foco"; value: alvoDaLinha.visualFocus }
+                                            Accessible.role: Accessible.ListItem
+                                            Accessible.name: linha.titulo + ". " + linha.subtitulo
+                                            Keys.onUpPressed: dialogo.irParaLinha(linha.index - 1)
+                                            Keys.onDownPressed: dialogo.irParaLinha(linha.index + 1)
+                                        }
+                                        Botao {
+                                            id: lixeira
+                                            objectName: "botaoExcluirSessao"
+                                            anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
+                                            estilo: "plano"
+                                            icone: "user-trash"
+                                            dica: "Excluir esta sessão"
+                                            onClicked: dialogo.pedirExclusao(linha.modelData)
+                                            Keys.onUpPressed: dialogo.irParaLinha(linha.index - 1)
+                                            Keys.onDownPressed: dialogo.irParaLinha(linha.index + 1)
                                         }
                                     }
                                 }
                             }
-                            Button {
+                            Botao {
                                 id: botaoMais
                                 objectName: "botaoMostrarMais"
                                 visible: historico.haMais
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                focusPolicy: Qt.StrongFocus
+                                estilo: "plano"
                                 text: "Mostrar mais sessões"
-                                implicitHeight: 34
-                                leftPadding: 16
-                                rightPadding: 16
                                 onClicked: {
                                     historico.mostrarMais()
                                     Qt.callLater(dialogo.garantirFoco)
-                                }
-                                contentItem: Text {
-                                    text: botaoMais.text
-                                    textFormat: Text.PlainText
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    color: Tema.texto
-                                    font { family: Tema.fonte; pixelSize: 14 }
-                                }
-                                background: Rectangle {
-                                    radius: 6
-                                    color: botaoMais.down ? Tema.pressionado : botaoMais.hovered ? Tema.botaoSobre : "transparent"
-                                    border { width: botaoMais.visualFocus ? 2 : 0; color: Tema.destaque }
                                 }
                             }
                         }
@@ -315,35 +259,44 @@ Rectangle {
                         Layout.fillHeight: true
                         spacing: 12
 
-                        Row {
+                        Rectangle {
                             Layout.alignment: Qt.AlignHCenter
-                            spacing: 4
-                            BotaoDoPeriodo {
-                                objectName: "botaoSemana"
-                                text: "Semana"
-                                checked: historico.periodo === "week"
-                                onClicked: historico.definirPeriodo("week")
-                            }
-                            BotaoDoPeriodo {
-                                objectName: "botaoMes"
-                                text: "Mês"
-                                checked: historico.periodo === "month"
-                                onClicked: historico.definirPeriodo("month")
-                            }
-                            BotaoDoPeriodo {
-                                objectName: "botaoTodoOPeriodo"
-                                text: "Todo o período"
-                                checked: historico.periodo === "all"
-                                onClicked: historico.definirPeriodo("all")
+                            implicitWidth: periodos.implicitWidth + 6
+                            implicitHeight: 34
+                            radius: 9
+                            color: Tema.botao
+                            border { width: 1; color: Tema.borda }
+                            Row {
+                                id: periodos
+                                anchors.centerIn: parent
+                                BotaoDoPeriodo {
+                                    objectName: "botaoSemana"
+                                    text: "Semana"
+                                    checked: historico.periodo === "week"
+                                    onClicked: historico.definirPeriodo("week")
+                                }
+                                BotaoDoPeriodo {
+                                    objectName: "botaoMes"
+                                    text: "Mês"
+                                    checked: historico.periodo === "month"
+                                    onClicked: historico.definirPeriodo("month")
+                                }
+                                BotaoDoPeriodo {
+                                    objectName: "botaoTodoOPeriodo"
+                                    text: "Todo o período"
+                                    checked: historico.periodo === "all"
+                                    onClicked: historico.definirPeriodo("all")
+                                }
                             }
                         }
                         Text {
+                            id: totalDoPeriodo
                             objectName: "totalDoPeriodo"
                             Layout.alignment: Qt.AlignHCenter
                             text: historico.totalDoPeriodo
                             textFormat: Text.PlainText
                             color: Tema.textoSecundario
-                            font { family: Tema.fonte; pixelSize: 14 }
+                            font { family: Tema.fonte; pixelSize: Tema.corpo }
                         }
                         GraficoDoHistorico {
                             Layout.fillWidth: true
@@ -354,6 +307,9 @@ Rectangle {
                         }
                     }
                 }
+
+                // A margem de baixo de 24 é da caixa inteira (12 do espaçamento e estes 12), mesmo sem as colunas.
+                Item { implicitHeight: 12 }
             }
         }
     }
