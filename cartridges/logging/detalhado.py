@@ -1,0 +1,196 @@
+# detalhado.py
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+"""Log detalhado: grava no log toda chamada de função do pacote ``cartridges``.
+
+Usa ``sys.monitoring`` (PEP 669). Cada entrada, saída (com o valor devolvido e
+o tempo) e exceção vira uma linha DEBUG do logger ``cartridges.rastreio``, com
+a profundidade da chamada. Nenhum valor é filtrado: o log pode conter dados
+sensíveis, por decisão do usuário.
+"""
+
+import logging
+import os
+import sys
+import threading
+import time
+
+# Liga o log detalhado por padrão. A variável de ambiente CARTRIDGES_LOG_DETALHADO
+# ("1" ou "0") vence esta constante.
+ATIVO = True
+
+_VARIAVEL = "CARTRIDGES_LOG_DETALHADO"
+_LIMITE = 500
+
+_log = logging.getLogger("cartridges.rastreio")
+_mon = sys.monitoring
+_EV = _mon.events
+_FERRAMENTA = _mon.PROFILER_ID
+
+# Por thread: a pilha de horários de início e a trava de reentrada.
+_estado = threading.local()
+# Código -> é do app? Resolvido uma vez por objeto `code`.
+_do_app: dict = {}
+
+
+def ativo() -> bool:
+    """Diz se o rastreio deve ser ligado: a variável de ambiente vence ``ATIVO``."""
+    valor = os.environ.get(_VARIAVEL)
+    if valor == "1":
+        return True
+    if valor == "0":
+        return False
+    return ATIVO
+
+
+def _e_do_app(code, frame) -> bool:  # type: ignore
+    """Se o código pertence ao app (e não ao próprio rastreio nem a terceiros).
+
+    Usa o ``__name__`` dos globais, e não ``co_filename``, que muda no app
+    instalado a partir de ``.pyc``.
+    """
+    resposta = _do_app.get(code)
+    if resposta is None:
+        nome = frame.f_globals.get("__name__", "")
+        resposta = nome.startswith("cartridges.") and not nome.startswith("cartridges.logging")
+        _do_app[code] = resposta
+    return resposta
+
+
+def _valor(obj) -> str:  # type: ignore
+    """O ``repr`` do valor, cortado; ele já escapa a quebra de linha."""
+    try:
+        texto = repr(obj)
+    except Exception:  # pylint: disable=broad-exception-caught
+        return "<repr falhou>"
+    if len(texto) > _LIMITE:
+        return texto[:_LIMITE] + f"...<cortado, {len(texto)} caracteres>"
+    return texto
+
+
+def _argumentos(code, frame) -> str:  # type: ignore
+    """Os parâmetros da função com os valores recebidos, como ``a=1, b=2``."""
+    quantos = code.co_argcount + code.co_kwonlyargcount
+    if code.co_flags & 0x04:  # *args
+        quantos += 1
+    if code.co_flags & 0x08:  # **kwargs
+        quantos += 1
+    locais = frame.f_locals
+    return ", ".join(f"{n}={_valor(locais[n])}" for n in code.co_varnames[:quantos] if n in locais)
+
+
+def _pilha():  # type: ignore
+    if not hasattr(_estado, "pilha"):
+        _estado.pilha = []
+        _estado.trava = False
+    return _estado.pilha
+
+
+def _rotulo(code, frame) -> str:  # type: ignore
+    return f"{frame.f_globals.get('__name__', '?')}.{code.co_qualname}"
+
+
+def _evento(empilha: bool, desempilha: bool, texto):  # type: ignore
+    """Monta o callback de um evento.
+
+    ``texto(code, frame, profundidade, duracao, extra)`` devolve a linha, ou
+    ``None`` para só mexer na pilha. Todo callback engole qualquer falha: o
+    rastreio nunca levanta dentro do código rastreado.
+    """
+
+    def callback(code, _offset, *extra):  # type: ignore
+        try:
+            pilha = _pilha()
+            if _estado.trava:
+                return None
+            frame = sys._getframe(1)  # pylint: disable=protected-access
+            if not _e_do_app(code, frame):
+                return _mon.DISABLE if (empilha or desempilha) else None
+            _estado.trava = True
+            try:
+                duracao = 0.0
+                if empilha:
+                    pilha.append(time.perf_counter())
+                profundidade = len(pilha)
+                if desempilha and pilha:
+                    duracao = (time.perf_counter() - pilha.pop()) * 1000
+                if texto is not None and _log.isEnabledFor(logging.DEBUG):
+                    _log.debug(texto(code, frame, profundidade, duracao, extra))
+            finally:
+                _estado.trava = False
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+        return None
+
+    return callback
+
+
+def _entrada(code, frame, profundidade, _duracao, _extra):  # type: ignore
+    return "%d > %s(%s)" % (profundidade, _rotulo(code, frame), _argumentos(code, frame))
+
+
+def _retomada(code, frame, profundidade, _duracao, _extra):  # type: ignore
+    return "%d > %s(retomado)" % (profundidade, _rotulo(code, frame))
+
+
+def _saida(code, frame, profundidade, duracao, extra):  # type: ignore
+    return "%d < %s = %s (%.1f ms)" % (profundidade, _rotulo(code, frame), _valor(extra[0]), duracao)
+
+
+def _levantou(code, frame, profundidade, _duracao, extra):  # type: ignore
+    return "%d ! %s levantou %s" % (profundidade, _rotulo(code, frame), _valor(extra[0]))
+
+
+# Sem DISABLE em RAISE/PY_UNWIND/PY_THROW: eles não aceitam. PY_THROW (um
+# gerador abandonado recebendo `close()`) empilha, para o PY_UNWIND seguinte
+# não desempilhar a chamada de outra função.
+_CALLBACKS = {
+    _EV.PY_START: _evento(True, False, _entrada),
+    _EV.PY_RESUME: _evento(True, False, _retomada),
+    _EV.PY_THROW: _evento(True, False, _retomada),
+    _EV.PY_RETURN: _evento(False, True, _saida),
+    _EV.PY_YIELD: _evento(False, True, _saida),
+    _EV.RAISE: _evento(False, False, _levantou),
+    _EV.PY_UNWIND: _evento(False, True, None),
+}
+_instalado = False
+
+
+def instalar_rastreio() -> None:
+    """Liga o rastreio em todas as threads. Não faz nada se já estiver ligado."""
+    global _instalado  # pylint: disable=global-statement
+    if _instalado:
+        return
+    _do_app.clear()
+    _mon.use_tool_id(_FERRAMENTA, "cartridges-rastreio")
+    _instalado = True
+    for evento, callback in _CALLBACKS.items():
+        _mon.register_callback(_FERRAMENTA, evento, callback)
+    _mon.set_events(_FERRAMENTA, sum(_CALLBACKS))
+    _mon.restart_events()
+
+
+def remover_rastreio() -> None:
+    """Desliga o rastreio e devolve a ferramenta do ``sys.monitoring``."""
+    global _instalado  # pylint: disable=global-statement
+    if not _instalado:
+        return
+    _mon.set_events(_FERRAMENTA, 0)
+    for evento in _CALLBACKS:
+        _mon.register_callback(_FERRAMENTA, evento, None)
+    _mon.free_tool_id(_FERRAMENTA)
+    _instalado = False
