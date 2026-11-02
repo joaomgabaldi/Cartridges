@@ -18,17 +18,17 @@ Column {
     visible: linhasAMostrar > 0
 
     width: parent ? parent.width : implicitWidth
-    spacing: 8
+    // preferencesgroup > box: 6 entre o cabeçalho e o cartão; a descrição leva mais 6 embaixo.
+    spacing: 6
 
     Text {
         objectName: "tituloDoGrupoDasContas"
         visible: grupo.comCabecalho
         width: parent.width
-        leftPadding: 4
         text: grupo.contas.titulo
         textFormat: Text.PlainText
         color: Tema.texto
-        font { family: Tema.fonte; pixelSize: 14; weight: Font.Bold }
+        font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }  // .heading
         Accessible.role: Accessible.Heading
         Accessible.name: text
     }
@@ -36,73 +36,67 @@ Column {
         objectName: "descricaoDoGrupoDasContas"
         visible: grupo.comCabecalho
         width: parent.width
-        leftPadding: 4
+        bottomPadding: 6
         text: grupo.contas.descricao
         textFormat: Text.PlainText
         wrapMode: Text.Wrap
         color: Tema.textoSecundario
-        font { family: Tema.fonte; pixelSize: 13 }
+        font { family: Tema.fonte; pixelSize: Tema.corpo }
     }
 
-    // Uma conta: o nome da conta em cima, o estado embaixo e o botão à direita.
-    component LinhaDaConta: Item {
+    // Uma conta (`Adw.ActionRow` com o botão como sufixo): o nome em cima, o estado embaixo e o botão à direita. O nome
+    // da conta quebra a linha, em vez de ser cortado: a altura acompanha o conteúdo.
+    component LinhaDaConta: LinhaDoGrupo {
         id: linha
         property string chave
         property var dados
-        visible: BuscaDasPreferencias.passa(dados.titulo, dados.subtitulo)
+        titulo: dados.titulo
+        subtitulo: dados.subtitulo
+        buscavel: true
         signal clicado()
 
-        width: parent.width
-        height: 58
-
-        Rectangle { width: parent.width; height: 1; color: Tema.borda; visible: linha.y > 0 }
+        comTextos: false
+        alturaMinima: Math.max(50, colunaDaConta.implicitHeight + 12)
 
         Column {
-            anchors { left: parent.left; leftMargin: 16; right: botao.left; rightMargin: 12; verticalCenter: parent.verticalCenter }
+            id: colunaDaConta
+            anchors {
+                left: parent.left; leftMargin: 14
+                right: botao.left; rightMargin: 12
+                verticalCenter: parent.verticalCenter; verticalCenterOffset: linha._separador / 2
+            }
+            spacing: 3
             Text {
                 objectName: "tituloDaConta_" + linha.chave
                 width: parent.width
                 text: linha.dados.titulo
                 textFormat: Text.PlainText
-                elide: Text.ElideRight
+                wrapMode: Text.Wrap
+                lineHeightMode: Text.FixedHeight
+                lineHeight: Tema.alturaDoCorpo
                 color: Tema.texto
-                font { family: Tema.fonte; pixelSize: 15 }
+                font { family: Tema.fonte; pixelSize: Tema.corpo }
             }
             Text {
                 objectName: "subtituloDaConta_" + linha.chave
                 width: parent.width
                 text: linha.dados.subtitulo
                 textFormat: Text.PlainText
-                elide: Text.ElideRight
+                wrapMode: Text.Wrap
+                lineHeightMode: Text.FixedHeight
+                lineHeight: Tema.alturaDaLegenda
                 color: Tema.textoSecundario
-                font { family: Tema.fonte; pixelSize: 12 }
+                font { family: Tema.fonte; pixelSize: Tema.legenda }
             }
         }
 
-        Button {
+        Botao {
             id: botao
             objectName: "botaoDaConta_" + linha.chave
-            anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
+            anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter; verticalCenterOffset: linha._separador / 2 }
             text: linha.dados.botao
-            focusPolicy: Qt.StrongFocus
-            implicitHeight: 34
-            leftPadding: 18
-            rightPadding: 18
             Accessible.name: linha.dados.botao + ", " + linha.dados.titulo
             onClicked: linha.clicado()
-            contentItem: Text {
-                text: botao.text
-                textFormat: Text.PlainText
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                color: Tema.texto
-                font { family: Tema.fonte; pixelSize: 14 }
-            }
-            background: Rectangle {
-                radius: 6
-                color: botao.down ? Tema.pressionado : botao.hovered ? Tema.botaoSobre : Tema.superficie
-                border { width: botao.visualFocus ? 2 : 1; color: botao.visualFocus ? Tema.texto : Tema.borda }
-            }
         }
     }
 

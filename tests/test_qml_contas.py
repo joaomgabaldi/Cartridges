@@ -361,3 +361,148 @@ def test_a_janela_fechada_por_fora_some_sem_levantar(tela):
     tela.contas.fechar()
     assert _esperar(lambda: janela.property("visible") is False)
     assert isinstance(tela.janela, QQuickWindow)
+
+
+# -- Auditoria GTK x Qt, pacote E --------------------------------------------------------------------
+
+
+def _y(item, raiz):
+    return item.mapToItem(raiz, 0, 0).y()
+
+
+def test_login_tem_cabecalho_com_titulo_centrado_e_x(tela):
+    """L1: faixa de 47 com o título em heading centrado e o X circular, como o `Adw.HeaderBar` da `main`."""
+    tela.clicar("botaoDaConta_epic")
+    janela = tela.achar("janelaEpic")
+    assert _esperar(lambda: janela.property("visible") is True)
+    cartao = tela.achar("cartaoDoDialogo", janela)
+    titulo = tela.achar("tituloDoLogin", janela)
+    assert titulo.property("text") == "Entrar na conta Epic"
+    assert _valor(titulo, "font.pixelSize") == 12 and _valor(titulo, "font.weight") == 700
+    assert titulo.parentItem().height() == 47
+    # O centro do título é o do cabeçalho (no offscreen a fonte de reserva é larga e os botões podem alargar a coluna).
+    cabecalho = titulo.parentItem()
+    assert abs(titulo.x() + titulo.width() / 2 - cabecalho.width() / 2) <= 1
+    assert cartao.width() == 460
+    assert _valor(cartao, "radius") == 15
+    x = tela.achar("fecharDoCabecalho", janela)  # o X de verdade, com o mouse
+    QTest.mouseClick(tela.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, x.mapToScene(x.boundingRect().center()).toPoint())
+    assert _esperar(lambda: janela.property("visible") is False)
+    assert tela.contas.loginEpic is None
+
+
+def test_login_da_epic_usa_a_linha_de_texto_numa_lista(tela):
+    """L2/L3/L7: o código vai numa `Adw.EntryRow` de lista com borda, com o rótulo flutuando dentro; 18 entre os blocos."""
+    tela.clicar("botaoDaConta_epic")
+    janela = tela.achar("janelaEpic")
+    assert _esperar(lambda: janela.property("visible") is True)
+    campo = tela.achar("campoDeUmaLinha", janela)
+    assert campo.property("titulo") == "Código de autorização"
+    assert campo.property("alturaMinima") == 50
+    assert tela.achar("rotuloDoCampoDoLogin", janela).property("visible") is False  # o rótulo é o da fileira
+    passos = tela.achar("passosDoLogin", janela)
+    cartao = tela.achar("cartaoDoDialogo", janela)
+    lista = campo.parentItem().parentItem()  # a coluna do `GrupoDeLinhas` e o grupo
+    assert _y(lista, cartao) - (_y(passos, cartao) + passos.height()) == 18
+    assert _valor(passos, "font.pixelSize") == 12
+    assert _valor(tela.achar("botaoCancelarLogin", janela), "estilo") == "normal"
+    # O corpo: 12 em cima do cabeçalho, 24 dos lados.
+    assert _y(passos, cartao) == 47 + 12
+    assert passos.mapToItem(cartao, 0, 0).x() == 24
+
+
+def test_login_da_ea_tem_o_texto_na_moldura_da_main_e_12_entre_blocos(tela):
+    """L3/L4: `TextView` em moldura de 1 px a 15%, fundo da vista, margens 6, quebra por palavra, sem anel de foco."""
+    tela.clicar("botaoDaConta_ea")
+    janela = tela.achar("janelaEa")
+    assert _esperar(lambda: janela.property("visible") is True)
+    area = tela.achar("rolagemDoLogin", janela)
+    assert _valor(area, "border.width") == 1 and _valor(area, "radius") == 0
+    assert _valor(area, "color") == _valor(area, "Tema.vista") and _valor(area, "border.color") == _valor(area, "Tema.borda")
+    campo = tela.achar("campoDeVariasLinhas", janela)
+    assert campo.property("padding") == 6
+    assert _valor(campo, "wrapMode === TextArea.Wrap") is True
+    assert _valor(campo, "font.pixelSize") == 12
+    cartao = tela.achar("cartaoDoDialogo", janela)
+    rotulo = tela.achar("rotuloDoCampoDoLogin", janela)
+    assert rotulo.property("visible") is True and _valor(rotulo, "font.weight") == 700
+    passos = tela.achar("passosDoLogin", janela)
+    assert _y(rotulo, cartao) - (_y(passos, cartao) + passos.height()) == 12
+
+
+def test_botoes_e_indicador_do_login_seguem_a_main(tela):
+    """L5/L8: botões da `main` (34, 12 px em negrito, "Conectar" em destaque) e o `Adw.Spinner` de 16 px."""
+    tela.clicar("botaoDaConta_epic")
+    janela = tela.achar("janelaEpic")
+    assert _esperar(lambda: janela.property("visible") is True)
+    for nome, estilo in (("botaoDaPaginaDoLogin", "normal"), ("botaoCancelarLogin", "normal"), ("botaoConectarLogin", "sugestao")):
+        botao = tela.achar(nome, janela)
+        assert botao.height() == 34 and _valor(botao, "estilo") == estilo, nome
+    indicador = tela.achar("indicadorDoLogin", janela)
+    assert (_valor(indicador, "implicitWidth"), _valor(indicador, "implicitHeight")) == (16, 16)
+    assert _valor(indicador, "objectName") == "indicadorDoLogin" and _valor(indicador, "grossura") == pytest.approx(1.6)
+
+
+def test_endereco_da_epic_em_cor_normal_do_texto(desconectadas, avisos):
+    """L7: o endereço mostrado sem navegador usa a cor do texto, não a secundária."""
+
+    def sem_navegador(_url):
+        raise OSError("sem navegador")
+
+    t = _Tela(avisos, abrir=sem_navegador)
+    try:
+        t.clicar("botaoDaConta_epic")
+        janela = t.achar("janelaEpic")
+        endereco = t.achar("enderecoDoLogin", janela)
+        assert _esperar(lambda: endereco.property("visible") is True)
+        assert _valor(endereco, "color") == _valor(endereco, "Tema.texto")
+    finally:
+        t.fechar()
+
+
+def test_login_abre_com_o_foco_no_campo_sem_anel(tela):
+    """L9: medido num `Adw.Dialog` com o mesmo corpo, o foco cai no campo (Epic: o texto da fileira; EA: o `TextView`), sem
+    anel de foco (a `TextView` não tem) e, na Epic, o contorno da fileira."""
+    tela.clicar("botaoDaConta_epic")
+    campo = tela.achar("campoDeUmaLinha", tela.achar("janelaEpic"))
+    assert _esperar(lambda: campo.property("activeFocus") is True)
+    assert _valor(campo, "foco") is True  # a fileira acende o contorno do campo, como a `EntryRow` com foco
+    tela.clicar("botaoDaConta_ea")
+    area = tela.achar("campoDeVariasLinhas", tela.achar("janelaEa"))
+    assert _esperar(lambda: area.property("activeFocus") is True)
+
+
+def test_grupo_das_contas_segue_as_medidas_da_main(tela):
+    """C1: título e descrição de 12 (a descrição apagada), fileira de 54 com título 12 e subtítulo 10, margem de 14."""
+    titulo = tela.achar("tituloDoGrupoDasContas")
+    assert _valor(titulo, "font.pixelSize") == 12 and _valor(titulo, "font.weight") == 700
+    descricao = tela.achar("descricaoDoGrupoDasContas")
+    assert _valor(descricao, "font.pixelSize") == 12 and _valor(descricao, "color.toString()") == _valor(descricao, "Tema.textoSecundario.toString()")
+    for chave in ("microsoft", "epic", "ea"):
+        assert _valor(tela.achar(f"tituloDaConta_{chave}"), "font.pixelSize") == 12
+        assert _valor(tela.achar(f"subtituloDaConta_{chave}"), "font.pixelSize") == 10
+        botao = tela.achar(f"botaoDaConta_{chave}")
+        assert botao.height() == 34 and _valor(botao, "estilo") == "normal"
+    linha = tela.achar("tituloDaConta_microsoft").parentItem().parentItem()
+    assert linha.height() == 54
+    assert tela.achar("tituloDaConta_microsoft").mapToItem(linha, 0, 0).x() == 14
+    assert _valor(tela.achar("tituloDaConta_microsoft").parentItem(), "spacing") == 3
+    botao = tela.achar("botaoDaConta_microsoft")
+    assert linha.width() - (botao.mapToItem(linha, 0, 0).x() + botao.width()) == 14
+
+
+def test_nome_longo_da_conta_quebra_a_linha_e_alarga_a_fileira(monkeypatch, desconectadas, avisos):
+    """C2: o subtítulo quebra (o `AdwActionRow` faz o mesmo); a altura acompanha o conteúdo."""
+    nome = "Uma conta com um nome muito comprido que não cabe em uma linha só " * 2
+    monkeypatch.setattr(epic_conta, "conectada", lambda: True)
+    monkeypatch.setattr(epic_conta, "nome", lambda: nome)
+    t = _Tela(avisos)
+    try:
+        subtitulo = t.achar("subtituloDaConta_epic")
+        assert subtitulo.property("lineCount") > 1
+        assert subtitulo.property("text") == nome  # inteiro, sem corte
+        linha = subtitulo.parentItem().parentItem()
+        assert linha.height() > 54
+        assert t.achar("tituloDaConta_microsoft").parentItem().parentItem().height() == 54
+    finally:
+        t.fechar()

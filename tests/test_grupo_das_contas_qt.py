@@ -518,7 +518,7 @@ def test_conta_que_cai_atualiza_a_linha_e_o_cartao(avisos, flush_idle, monkeypat
     assert avisos.textos == ["A conta Microsoft foi desconectada. Entre novamente nas Preferências."]
     assert grupo.microsoft["subtitulo"] == "Não conectada" and grupo.microsoft["botao"] == "Entrar"
     assert modelo.pagina["visivel"] is False
-    assert modelo.aberto is False
+    assert modelo.aberto is True  # D13: a lista aberta segue como estava
 
 
 # O hospedeiro fecha e larga o grupo no meio da troca: a conta conecta mesmo assim, e a leitura dos jogos acontece.

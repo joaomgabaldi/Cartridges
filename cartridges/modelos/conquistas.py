@@ -162,8 +162,11 @@ class ConquistasDoJogo(QObject):
         self._sessao = sessao
         self._jogo_da_sessao = ""  # o jogo que a vista da sessão mostra ("" sem sessão)
         self._v: dict[str, Any] = {"pagina": _PAGINA_VAZIA, "sessao": _SESSAO_VAZIA, **_DIALOGO_FECHADO}
-        # O jogo do diálogo; o da página é o dos detalhes. Só o id: o `Jogo` vem da loja a cada montagem.
+        # O jogo do diálogo; o da página é o dos detalhes. Só o id: o `Jogo` vem da loja na abertura.
         self._dialogo = ""
+        # A lista é um retrato do momento em que o diálogo abriu (como na `main`): (progresso, ocultas, nome). Conquista
+        # nova, troca da preferência ou jogo que perde o cartão não a mudam; só os ícones, que chegam depois.
+        self._retrato: Optional[tuple[Progresso, bool, str]] = None
         self._logo: tuple[str, int] = ("", 0)
         # Ícones: origem → URL `file:` já baixada; as pedidas e ainda a caminho; e as que cada vista usa.
         self._urls: dict[str, str] = {}
@@ -177,9 +180,7 @@ class ConquistasDoJogo(QObject):
         self._atraso.timeout.connect(self._refazer_dos_icones)
         # Referência fraca: a configuração é global e o modelo pode morrer antes.
         eu = weakref.ref(self)
-        shared.schema.connect(
-            "changed::conquistas-mostrar-ocultas", lambda *_: (c := eu()) and c._refazer(("dialogo", "sessao"))
-        )
+        shared.schema.connect("changed::conquistas-mostrar-ocultas", lambda *_: (c := eu()) and c._refazer(("sessao",)))
         detalhes.alterado.connect(self._detalhes_mudou)
         if sessao is not None:
             sessao.alterado.connect(self._sessao_mudou)
@@ -210,6 +211,7 @@ class ConquistasDoJogo(QObject):
                 self._origens[vista] = set()
                 if vista == "dialogo":
                     self._dialogo = ""
+                    self._retrato = None
                 mudou |= self._guardar(_VAZIAS[vista])
         if mudou:
             self.alterado.emit()
@@ -226,17 +228,18 @@ class ConquistasDoJogo(QObject):
         return self._guardar({"pagina": cartao_da_pagina(atual, self._urls)})
 
     def _montar_dialogo(self, game_id: str) -> bool:
-        atual = self._atual(game_id)
-        if atual is None:
-            # Sem catálogo, sem fonte ou com a conta desconectada não há o que listar: o diálogo se fecha.
-            self._dialogo = ""
-            self._origens["dialogo"] = set()
-            return self._guardar(_DIALOGO_FECHADO)
-        mostrar = shared.schema.get_boolean("conquistas-mostrar-ocultas")
+        if self._retrato is None:
+            atual, jogo = self._atual(game_id), self._loja.get(game_id)
+            if atual is None or jogo is None:
+                # Sem catálogo, sem fonte ou com a conta desconectada não há o que listar: o diálogo nem abre.
+                self._dialogo = ""
+                self._origens["dialogo"] = set()
+                return self._guardar(_DIALOGO_FECHADO)
+            self._retrato = (atual, shared.schema.get_boolean("conquistas-mostrar-ocultas"), jogo.name)
+        atual, mostrar, nome = self._retrato
         self._pedir("dialogo", _origens(atual.desbloqueadas + atual.bloqueadas, mostrar))
-        jogo = self._loja.get(game_id)
         return self._guardar({
-            "aberto": True, "nome": jogo.name, "logo": self._logo[0], "larguraDoLogo": self._logo[1],
+            "aberto": True, "nome": nome, "logo": self._logo[0], "larguraDoLogo": self._logo[1],
             # A primeira variável é quantas foram desbloqueadas; a segunda, o total
             "resumo": _("{} de {} conquistas desbloqueadas").format(atual.feitas, atual.total),
             "fracao": atual.fracao,
@@ -299,11 +302,12 @@ class ConquistasDoJogo(QObject):
             self.alterado.emit()
 
     def mudou(self, game_id: Optional[str]) -> None:
-        """O histórico, o catálogo ou uma conta mudou: refaz as vistas do jogo (``None`` = todas)."""
+        """O histórico, o catálogo ou uma conta mudou: refaz a página e a sessão do jogo (``None`` = todas). A lista do
+        diálogo aberto não muda: é o retrato de quando abriu."""
         if not eh_thread_principal():
             na_thread_principal(self.mudou, game_id)
             return
-        self._refazer(game_id=game_id)
+        self._refazer(("pagina", "sessao"), game_id=game_id)
 
     # -- o diálogo -------------------------------------------------------------------------------
 
@@ -314,6 +318,7 @@ class ConquistasDoJogo(QObject):
         if jogo is None:
             return
         self._dialogo = game_id
+        self._retrato = None
         logo, largura = "", 0
         # Só o que já está em disco: a busca no SteamGridDB é da página de detalhes, de onde isto é aberto.
         if (caminho := game_logo.cached_logo_path(jogo)) and (
@@ -326,6 +331,7 @@ class ConquistasDoJogo(QObject):
     @Slot()
     def fechar(self) -> None:
         self._dialogo = ""
+        self._retrato = None
         self._logo = ("", 0)
         self._origens["dialogo"] = set()
         if self._guardar(_DIALOGO_FECHADO):

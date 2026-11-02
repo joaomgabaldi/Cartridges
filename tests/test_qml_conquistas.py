@@ -11,10 +11,11 @@ import sys
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import Qt, QtMsgType, qInstallMessageHandler
+from PySide6.QtCore import QPoint, QPointF, Qt, QtMsgType, qInstallMessageHandler
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtTest import QTest
 
+from cartridges import shared
 from cartridges.conquistas import catalogo, historico, icones
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.formatos import Desbloqueio
@@ -168,7 +169,7 @@ def test_esc_fecha_e_o_foco_volta_ao_cartao(app_qt):
     cartao.forceActiveFocus(Qt.FocusReason.TabFocusReason)
     _clicar(app, cartao)
     assert _esperar(lambda: app.conquistas.aberto)
-    assert _esperar(lambda: _foco_dentro_de(app, "botaoFecharConquistas"))
+    assert _esperar(lambda: _foco_dentro_de(app, "fecharDoCabecalho"))
 
     QTest.keyClick(app.janela, Qt.Key.Key_Escape)
 
@@ -180,27 +181,60 @@ def test_esc_fecha_e_o_foco_volta_ao_cartao(app_qt):
     app.fechar()
 
 
-def test_cartao_que_some_com_a_lista_aberta_devolve_o_foco_a_pagina(app_qt):
+def test_cartao_que_some_com_a_lista_aberta_nao_fecha_a_lista(app_qt):
+    """D13: a lista é o retrato de quando abriu; o jogo que perde o cartão não a fecha nem a esvazia (a página, sim)."""
     app = _app()
     _abrir_pelo_cartao(app, 0)
     cartao = app.achar("cartaoDeConquistas")
     cartao.forceActiveFocus(Qt.FocusReason.TabFocusReason)
     _clicar(app, cartao)
     assert _esperar(lambda: app.conquistas.aberto)
+    dialogo = app.achar("dialogoDeConquistas")
+    antes = sorted(t.property("text") for t in _todos(dialogo, "tituloDaConquista"))
+    assert antes == ["Conquista oculta", "Primeira", "Rara"]
 
     app.jogos[0].conquistas = False  # o cartão some: quem abriu a lista deixa de existir
     app.conquistas.mudou(None)
 
+    assert _esperar(lambda: app.achar("blocoDeConquistas").property("visible") is False)
+    _assentar()
+    assert app.conquistas.aberto is True
+    assert dialogo.property("visible") is True
+    assert sorted(t.property("text") for t in _todos(dialogo, "tituloDaConquista")) == antes
+    # Fechada pela pessoa, o foco volta à página à vista.
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
     assert _esperar(lambda: app.conquistas.aberto is False)
-    assert app.achar("blocoDeConquistas").property("visible") is False
     assert _esperar(lambda: _foco_dentro_de(app, "paginaDoJogo"))
+    app.fechar()
+
+
+def test_lista_aberta_nao_muda_com_conquista_nova_nem_com_a_preferencia(app_qt):
+    """D14: conquista nova e a troca de "mostrar ocultas" só valem na próxima abertura."""
+    app = _app()
+    _pagina, dialogo = _abrir_lista(app)
+    titulos = lambda: sorted(t.property("text") for t in _todos(dialogo, "tituloDaConquista"))  # noqa: E731
+    assert titulos() == ["Conquista oculta", "Primeira", "Rara"]
+
+    historico.registrar(app.jogos[0].game_id, [Desbloqueio("A", 100), Desbloqueio("B", 200), Desbloqueio("C", 300)])
+    app.conquistas.mudou(app.jogos[0].game_id)
+    shared.schema.set_boolean("conquistas-mostrar-ocultas", True)
+    _assentar()
+
+    assert titulos() == ["Conquista oculta", "Primeira", "Rara"]  # a oculta segue sem nome, mesmo com a preferência
+    assert app.conquistas.resumo == "2 de 3 conquistas desbloqueadas"
+    # Na próxima abertura a lista é refeita.
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: app.conquistas.aberto is False)
+    app.conquistas.abrir(app.jogos[0].game_id)
+    assert _esperar(lambda: app.conquistas.resumo == "3 de 3 conquistas desbloqueadas")
+    shared.schema.set_boolean("conquistas-mostrar-ocultas", False)
     app.fechar()
 
 
 def test_botao_de_fechar_fecha(app_qt):
     app = _app()
-    _abrir_lista(app)
-    _clicar(app, app.achar("botaoFecharConquistas"))
+    _pagina, dialogo = _abrir_lista(app)
+    _clicar(app, _achar(dialogo, "fecharDoCabecalho"))
     assert _esperar(lambda: app.conquistas.aberto is False)
     app.fechar()
 
@@ -449,3 +483,186 @@ def test_sem_avisos_do_qml_ao_abrir_e_fechar(app_qt):
     finally:
         qInstallMessageHandler(anterior)
     assert [a for a in avisos if "PaginaDasConquistas" in a or "DialogoDeConquistas" in a] == []
+
+
+# -- Auditoria GTK x Qt, pacote E --------------------------------------------------------------------
+
+
+def test_dialogo_tem_as_medidas_da_main(app_qt):
+    """D1/D3/D6 a D10: moldura de 520 por 640, raio 15, cabeçalho de 47, conteúdo 24 abaixo, fileiras de 55 de passo."""
+    app = _app()
+    _pagina, dialogo = _abrir_lista(app)
+    cartao = _achar(dialogo, "cartaoDoDialogo")
+    assert (cartao.width(), cartao.height()) == (520, 640)
+    assert _expr(cartao, "radius") == 15
+    assert _expr(dialogo, "Accessible.name") == "Conquistas"
+    cabecalho = _achar(dialogo, "tituloDoCabecalho").parentItem()
+    assert cabecalho.height() == 47
+    rolagem = _achar(dialogo, "rolagemDeConquistas")
+    assert rolagem.y() == 47  # logo abaixo do cabeçalho
+    nome = _achar(dialogo, "nomeDasConquistas")
+    assert nome.mapToItem(rolagem.property("contentItem"), 0, 0).y() == 24  # a margem da `PreferencesPage`
+    assert _expr(nome, "font.pixelSize") == 22 and _expr(nome, "font.weight") == 800  # title-1
+    resumo = _achar(dialogo, "resumoDasConquistas")
+    assert _expr(resumo, "font.pixelSize") == 12 and _expr(resumo, "wrapMode") == 0  # Text.NoWrap
+    assert resumo.property("lineCount") == 1
+    barra = _achar(dialogo, "barraDasConquistas")
+    assert barra.height() == 8
+    # Os grupos: título de 12 em negrito sem recuo, a 12 da lista.
+    secao = _achar(dialogo, "secaoDesbloqueadas")
+    titulo = _expr(secao, "children[0]")
+    assert _expr(titulo, "font.pixelSize") == 12 and _expr(titulo, "font.weight") == 700
+    assert titulo.x() == 0
+    assert _expr(secao, "spacing") == 12
+    # As fileiras: 54 e 55 (o separador), título 12, subtítulo 10 com 3 de distância, data e porcentagem 12.
+    fileiras = sorted(_todos(secao, "fileiraDeConquista"), key=lambda f: f.y())
+    assert [f.height() for f in fileiras] == [54, 55]
+    for f in fileiras:
+        assert _expr(_achar(f, "tituloDaConquista"), "font.pixelSize") == 12
+        assert _expr(_achar(f, "subtituloDaConquista"), "font.pixelSize") == 10
+        assert _expr(_achar(f, "dataDaConquista"), "font.pixelSize") == 12
+        assert _expr(_achar(f, "porcentagemDaConquista"), "font.pixelSize") == 12
+        assert _expr(_achar(f, "subtituloDaConquista").parentItem(), "spacing") == 3
+        assert _achar(f, "iconeDaConquista").mapToItem(f, 0, 0).x() == 14  # a margem lateral da fileira
+    app.fechar()
+
+
+def test_aberto_com_o_mouse_o_foco_vai_ao_fechar_sem_anel(app_qt):
+    """D5: o X recebe o foco ao abrir, mas o anel só aparece se o teclado já estava em uso."""
+    app = _app()
+    _abrir_pelo_cartao(app, 0)
+    cartao = app.achar("cartaoDeConquistas")
+    cartao.forceActiveFocus(Qt.FocusReason.MouseFocusReason)
+    _clicar(app, cartao)
+    assert _esperar(lambda: app.conquistas.aberto)
+    assert _esperar(lambda: _foco_dentro_de(app, "fecharDoCabecalho"))
+    fechar = _achar(app.achar("dialogoDeConquistas"), "fecharDoCabecalho")
+    assert fechar.property("activeFocus") is True
+    assert fechar.property("visualFocus") is False
+    app.fechar()
+
+    # Pelo teclado (Enter no cartão focado com Tab), o anel acende.
+    app = _app()
+    _abrir_pelo_cartao(app, 0)
+    app.achar("cartaoDeConquistas").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    assert _esperar(lambda: _foco_dentro_de(app, "cartaoDeConquistas"))
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert _esperar(lambda: app.conquistas.aberto)
+    fechar = _achar(app.achar("dialogoDeConquistas"), "fecharDoCabecalho")
+    assert _esperar(lambda: fechar.property("visualFocus") is True)
+    app.fechar()
+
+
+def test_fileiras_recebem_foco_e_as_setas_andam_entre_elas(app_qt):
+    """D12: Tab alcança as fileiras, Cima e Baixo andam entre elas sem sair da lista, com o anel de foco."""
+    app = _app()
+    _pagina, dialogo = _abrir_lista(app)
+    alvos = sorted(_todos(dialogo, "alvoDaFileiraDeConquista"), key=lambda a: a.mapToScene(QPointF(0, 0)).y())
+    assert len(alvos) == 3
+    fechar = _achar(dialogo, "fecharDoCabecalho")
+    assert fechar.property("activeFocus") is True
+
+    QTest.keyClick(app.janela, Qt.Key.Key_Tab)  # do X à primeira fileira
+    assert _esperar(lambda: alvos[0].property("activeFocus") is True)
+    assert alvos[0].property("visualFocus") is True
+    primeira = alvos[0].parentItem()
+    assert _expr(primeira, "foco") is True
+    assert _expr(_achar(primeira, "anelDeFoco"), "ativo") is True
+
+    QTest.keyClick(app.janela, Qt.Key.Key_Down)
+    assert _esperar(lambda: alvos[1].property("activeFocus") is True)
+    assert _expr(primeira, "foco") is False
+    QTest.keyClick(app.janela, Qt.Key.Key_Down)  # passa ao grupo "Bloqueadas"
+    assert _esperar(lambda: alvos[2].property("activeFocus") is True)
+    QTest.keyClick(app.janela, Qt.Key.Key_Down)  # na última, fica onde está (não volta ao X)
+    _esperar()
+    assert alvos[2].property("activeFocus") is True
+    QTest.keyClick(app.janela, Qt.Key.Key_Up)
+    assert _esperar(lambda: alvos[1].property("activeFocus") is True)
+    QTest.keyClick(app.janela, Qt.Key.Key_Up)
+    assert _esperar(lambda: alvos[0].property("activeFocus") is True)
+    QTest.keyClick(app.janela, Qt.Key.Key_Up)  # na primeira, fica onde está (não sobe ao X)
+    _esperar()
+    assert alvos[0].property("activeFocus") is True
+    assert dialogo.property("visible") is True
+    app.fechar()
+
+
+def test_foco_numa_fileira_de_baixo_rola_a_lista(app_qt):
+    """D12: a fileira focada fica à vista na rolagem do diálogo."""
+    infos = tuple(ConquistaInfo(f"K{i}", f"Meta {i}", "Faça.", "", "", False, 50.0) for i in range(30))
+    app = _app(Catalogo(infos, 0, True), tuple((f"K{i}", 100 + i) for i in range(5)))
+    _pagina, dialogo = _abrir_lista(app)
+    rolagem = _achar(dialogo, "rolagemDeConquistas")
+    assert rolagem.property("contentY") == 0
+    alvos = sorted(_todos(dialogo, "alvoDaFileiraDeConquista"), key=lambda a: a.mapToScene(QPointF(0, 0)).y())
+    alvos[-1].forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    assert _esperar(lambda: rolagem.property("contentY") > 0)
+    topo = alvos[-1].mapToItem(rolagem, 0, 0).y()
+    assert 0 <= topo and topo + alvos[-1].height() <= rolagem.height()
+    app.fechar()
+
+
+def test_abre_e_fecha_pela_moldura_com_o_esmaecimento_da_main(app_qt):
+    """D2/D11/D15: o fundo é o `Tema.esmaecido` (e não o #80000000 dos dois temas) e a janela estreita vira folha de baixo."""
+    app = _app()
+    _pagina, dialogo = _abrir_lista(app)
+    assert _expr(dialogo, "cor.toString()") == _expr(dialogo, "Tema.fundo.toString()")
+    assert dialogo.property("podeSerFolha") is True
+    assert dialogo.property("emFolha") is False
+    app.janela.resize(420, 700)
+    assert _esperar(lambda: dialogo.property("emFolha") is True)
+    cartao = _achar(dialogo, "cartaoDoDialogo")
+    assert cartao.width() == 420
+    app.fechar()
+
+
+def test_cartao_da_pagina_segue_a_main(app_qt):
+    """P2 a P5: contagem 14, porcentagem e `+N` 12, sem espaço entre elas; ícones sem ladrilho; foco a -1; hover a 200 ms."""
+    app = _app()
+    _abrir_pelo_cartao(app, 0)
+    contagem = app.achar("contagemDeConquistas")
+    porcentagem = app.achar("porcentagemDeConquistas")
+    assert _expr(contagem, "font.pixelSize") == 14 and _expr(contagem, "font.weight") == 700  # title-4
+    assert _expr(porcentagem, "font.pixelSize") == 12
+    assert _expr(app.achar("restoDeConquistas"), "font.pixelSize") == 12
+    assert porcentagem.x() == contagem.x() + contagem.width()  # a `Box` da `main` não tem espaçamento
+    # P5: até o ícone chegar (ou se falhar) fica só o espaço de 32 px, sem ladrilho.
+    icones_ = _visiveis(app.achar("iconesDeConquistas"), "iconeDaConquista")
+    assert len(icones_) == 2
+    for icone in icones_:
+        assert icone.property("semLadrilho") is True
+        assert (icone.width(), icone.height()) == (32, 32)
+        assert _achar(icone, "ladrilhoDaConquista").property("visible") is False
+    cartao = app.achar("cartaoDeConquistas")
+    assert _expr(_achar(cartao, "anelDeFoco"), "afastamento") == -1
+    # P4: ao apertar (o hover não existe no offscreen) soma 8% do texto, com a transição de 200 ms (não de uma vez).
+    camada = _achar(cartao, "camadaDoCartaoDeConquistas")
+    assert camada.property("opacity") == 0
+    ponto = cartao.mapToScene(cartao.boundingRect().center()).toPoint()
+    QTest.mousePress(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
+    vistos = []
+    for _ in range(40):
+        _assentar(1)
+        vistos.append(camada.property("opacity"))
+        if vistos[-1] == 1:
+            break
+    assert vistos[-1] == 1
+    assert any(0 < v < 1 for v in vistos), vistos
+    assert _expr(camada, "color") == _expr(camada, "Tema.linhaPressionada")
+    QTest.mouseRelease(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(2, 2))  # solta fora: não abre
+    assert app.conquistas.aberto is False
+    app.fechar()
+
+
+def test_icone_da_conquista_usa_o_fundo_de_7_2_por_cento(app_qt):
+    """I1: `alpha(currentColor, .12)` sobre `color: alpha(currentColor, .6)`: o fundo é 0,6 x 0,12 do texto (o claro leva o 0,8)."""
+    app = _app()
+    _pagina, dialogo = _abrir_lista(app)
+    icone = _icone_da_primeira(dialogo)
+    ladrilho = _achar(icone, "ladrilhoDaConquista")
+    texto_a = _expr(icone, "Tema.texto.a")
+    assert _expr(ladrilho, "color.a") == pytest.approx(texto_a * 0.072, abs=0.002)
+    estrela = _achar(icone, "estrelaDaConquista")
+    assert _expr(estrela, "cor.a") == pytest.approx(texto_a * 0.6, abs=0.01)
+    app.fechar()

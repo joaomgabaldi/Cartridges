@@ -59,7 +59,7 @@ Rectangle {
             objectName: "barraDaSessao"
             Layout.fillWidth: true
             value: cartao.dados.fracao || 0
-            corDaTrilha: "#3d3d3d"  // a do tema escuro: a camada é sempre escura
+            corDaTrilha: Qt.rgba(1, 1, 1, 0.15)  // `currentColor` a 15%: branco, porque a camada é sempre escura
         }
 
         // Uma linha só, rolando para os lados: em grade, um jogo com muitas conquistas virava um paredão de ícones que
@@ -90,6 +90,8 @@ Rectangle {
                 tamanho: cartao.tamanho
                 interrogacao: 24
                 corDoLadrilho: "white"
+                // `.session-blocker label { color: white }`: a interrogação é branca a 100%; o ladrilho e a estrela seguem o texto.
+                corDaInterrogacao: "white"
                 url: dados.url || ""
                 cinza: dados.cinza === true
                 oculta: dados.oculta === true

@@ -45,6 +45,7 @@ ColumnLayout {
 
             RowLayout {
                 Layout.fillWidth: true
+                spacing: 0  // a `Box` da `main` não tem espaçamento: a contagem e a porcentagem se tocam
                 Text {
                     objectName: "contagemDeConquistas"
                     Layout.fillWidth: true
@@ -77,6 +78,7 @@ ColumnLayout {
                     delegate: IconeDaConquista {
                         required property var modelData
                         tamanho: 32
+                        semLadrilho: true  // a `main` deixa só o espaço de 32 px até o ícone chegar (e se falhar)
                         url: modelData.url
                         cinza: modelData.cinza
                         oculta: modelData.oculta
@@ -88,22 +90,26 @@ ColumnLayout {
                     text: bloco.dados.resto || ""
                     textFormat: Text.PlainText
                     color: Tema.textoSecundario
-                    font { family: Tema.fonte; pixelSize: 14 }
+                    font { family: Tema.fonte; pixelSize: Tema.corpo }
                 }
             }
         }
 
-        // `button.card`: o cartão, mais 4% do texto ao passar e 8% ao apertar.
+        // `button.card`: o cartão, mais 4% do texto ao passar e 8% ao apertar, com a transição de 200 ms.
         background: Rectangle {
             radius: 12
             color: Tema.cartao
             Sombra { camadas: Tema.sombraCartao; raio: 12 }
             Rectangle {
+                objectName: "camadaDoCartaoDeConquistas"
                 anchors.fill: parent
                 radius: parent.radius
-                color: cartao.down ? Tema.linhaPressionada : cartao.hovered ? Tema.linhaSobre : "transparent"
+                color: cartao.down ? Tema.linhaPressionada : Tema.linhaSobre
+                opacity: cartao.down || cartao.hovered ? 1 : 0
+                Behavior on color { ColorAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
+                Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
             }
-            AnelDeFoco { ativo: cartao.visualFocus; raio: 12; afastamento: -2 }
+            AnelDeFoco { ativo: cartao.visualFocus; raio: 12; afastamento: -1 }  // `button.card:focus-visible`: outline-offset -1
         }
         Dica { texto: "Ver todas as conquistas"; ativa: cartao.hovered }
     }

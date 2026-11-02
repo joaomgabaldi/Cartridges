@@ -157,10 +157,21 @@ def test_historico_e_conquistas_apagados_com_as_preferencias(app):
     app.historico.abrir(app.jogos[0].game_id)
     assert _esperar(lambda: app.achar("dialogoDoHistorico").property("visible") is True)
     assert _achar(app.achar("dialogoDoHistorico"), "rolagemDoHistorico").property("enabled") is True
-    assert app.achar("caixaDeConquistas").property("enabled") is True
+    # A lista fechada fica desabilitada pela moldura: abre-se, com um catálogo, para conferir.
+    from cartridges.conquistas import catalogo, historico  # noqa: PLC0415
+    from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo  # noqa: PLC0415
+    from cartridges.conquistas.formatos import Desbloqueio  # noqa: PLC0415
+    from tests.apoio_conquistas import com_fonte  # noqa: PLC0415
+
+    catalogo.guardar("570", Catalogo((ConquistaInfo("A", "Primeira", "Faça algo.", "", "", False, 55.0),), 0, True))
+    historico.registrar(app.jogos[0].game_id, [Desbloqueio("A", 100)])
+    com_fonte(app.jogos[0], "steam:570")
+    app.conquistas.abrir(app.jogos[0].game_id)
+    assert _esperar(lambda: app.achar("dialogoDeConquistas").property("visible") is True)
+    assert _achar(app.achar("dialogoDeConquistas"), "rolagemDeConquistas").property("enabled") is True
     _abrir(app)
     assert _achar(app.achar("dialogoDoHistorico"), "rolagemDoHistorico").property("enabled") is False
-    assert app.achar("caixaDeConquistas").property("enabled") is False
+    assert _achar(app.achar("dialogoDeConquistas"), "rolagemDeConquistas").property("enabled") is False
 
 
 def test_controle_nao_passa_com_as_preferencias_abertas(app):

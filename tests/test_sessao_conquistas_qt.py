@@ -538,10 +538,16 @@ def test_cores_do_cartao_da_sessao_nao_seguem_o_tema(app_qt, sem_vigia):
     ladrilho = _achar(_icones(app)[0], "ladrilhoDaConquista")
 
     assert _expr(barra, "Tema.escuro") is False
-    assert _expr(barra, "background.color.toString()") == "#3d3d3d" != _expr(barra, "Tema.botaoSobre.toString()")
+    # `currentColor` a 15%: branco a 15% (B1), e não a cor do tema de agora.
+    assert _expr(barra, "background.color.toString()") == "#26ffffff" != _expr(barra, "Tema.botaoSobre.toString()")
     tema = _expr(rolagem, "Tema.textoSecundario.toString()")
     assert _expr(rolagem, "contentItem.color.toString()") == "#33ffffff" != tema  # a cor da tela da sessão (BarraDeRolagem `cor`), com o alfa de repouso (20%)
     assert _expr(ladrilho, "Qt.rgba(color.r, color.g, color.b, 1).toString()") == "#ffffff"
+    # I1: o fundo do ladrilho é o texto a 0,6 x 0,12 = 7,2%; S2: a interrogação da oculta é branca a 100%.
+    assert _expr(ladrilho, "color.a") == pytest.approx(0.072, abs=0.003)
+    oculto = next(i for i in _icones(app) if i.property("oculta") is True)
+    assert _expr(oculto, "corDaInterrogacao.toString()") == "#ffffff"
+    assert _expr(_achar(_achar(oculto, "ladrilhoDaConquista"), "estrelaDaConquista"), "cor.a") == pytest.approx(0.6, abs=0.01)
     app.fechar()
 
 

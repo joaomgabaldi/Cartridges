@@ -14,7 +14,9 @@ from PySide6.QtCore import QTimer, QUrl, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtQuick import QQuickView
 
+from cartridges import shared
 from cartridges.conquistas import icones
+from cartridges.modelos.provedor_de_icones import ProvedorDeIcones
 from cartridges.utils import janela_por_cima
 
 _CARTAO = Path(__file__).resolve().parent / "qml" / "CartaoDoAviso.qml"
@@ -54,8 +56,15 @@ class JanelaDoAviso(QQuickView):
             self.setFormat(formato)
             self.setColor(QColor(Qt.GlobalColor.transparent))
         self.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
+        self.engine().addImageProvider("icone", ProvedorDeIcones())  # a estrela do aviso sem ícone
+        # A estrela é só do aviso sem ícone; com ele a caminho (ou que falhou), fica o quadrado vazio. O fade segue os
+        # efeitos de animação do Windows, como o `gtk-enable-animations` da `main`.
+        animar = getattr(shared.aplicativo, "animacoesDoSistema", True) is not False
         self.setInitialProperties(
-            {"rotulo": aviso.rotulo, "titulo": aviso.titulo, "descricao": aviso.descricao, "opaco": opaco}
+            {
+                "rotulo": aviso.rotulo, "titulo": aviso.titulo, "descricao": aviso.descricao, "opaco": opaco,
+                "semIcone": not aviso.icone, "animar": animar,
+            }
         )
         self.setSource(QUrl.fromLocalFile(str(_CARTAO)))
         self.cartao = self.rootObject()

@@ -184,7 +184,11 @@ def test_lista_em_duas_secoes(tela):
 def test_ocultas_reveladas_pela_preferencia(tela, schema):
     tela.modelo.abrir(tela.jogo.game_id)
     schema.set_boolean("conquistas-mostrar-ocultas", True)
-    # A preferência é seguida com o diálogo aberto.
+    # D14: a lista aberta é o retrato de quando abriu; a preferência vale na abertura seguinte.
+    assert _titulos(tela.modelo.bloqueadas) == ["Conquista oculta"]
+    assert tela.modelo.bloqueadas[0]["icone"]["oculta"] is True
+    tela.modelo.fechar()
+    tela.modelo.abrir(tela.jogo.game_id)
     assert _titulos(tela.modelo.bloqueadas) == ["Segredo"]
     assert tela.modelo.bloqueadas[0]["icone"]["oculta"] is False
 
@@ -460,7 +464,7 @@ def test_desconectar_avisa_uma_vez_e_some_o_cartao_aberto(avisos, flush_idle, mo
 
     assert avisos.textos == ["A conta Microsoft foi desconectada. Entre novamente nas Preferências."]
     assert modelo.pagina["visivel"] is False
-    assert modelo.aberto is False
+    assert modelo.aberto is True  # D13: a lista aberta segue como estava (o retrato de quando abriu)
     assert modelo.sessao["visivel"] is False
 
 
@@ -477,5 +481,5 @@ def test_falha_ao_montar_esconde_a_vista(tela, monkeypatch, caplog):
         tela.modelo.mudou(None)
 
     assert tela.modelo.pagina["visivel"] is False
-    assert tela.modelo.aberto is False
-    assert caplog.text.count("Falha ao montar as conquistas") == 2
+    assert tela.modelo.aberto is True  # D13: a lista aberta não é refeita, então não falha nem fecha
+    assert caplog.text.count("Falha ao montar as conquistas") == 1

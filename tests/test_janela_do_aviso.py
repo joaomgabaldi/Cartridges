@@ -5,13 +5,14 @@ O user32 é sempre o `user32_falso` (nenhuma janela TOPMOST nem estilo Win32 de 
 """
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QColor, QWindow
 from PySide6.QtQml import QQmlEngine, QQmlExpression
 
-from cartridges import conquista_aviso
+from cartridges import conquista_aviso, shared
 from cartridges.conquistas import icones
 from cartridges.utils import janela_por_cima as jpc
 
@@ -211,3 +212,90 @@ def test_opaco_sem_fundo_transparente(abrir, monkeypatch):
     assert opaca.color() == QColor("#1c1b22")
     assert opaca.rootObject().property("opaco") is True
     assert opaca.rootObject().property("raio") == 0
+
+
+# -- Auditoria GTK x Qt, pacote E --------------------------------------------------------------------
+
+
+def _expr(item, texto):
+    return QQmlExpression(QQmlEngine.contextForObject(item), item, texto).evaluate()[0]
+
+
+def test_cartao_tem_as_fontes_e_os_limites_da_main(abrir):
+    """A3/A4: rótulo e descrição são caption (10, linha de 140%), o título é heading (12, 700); cada um quebra em 36
+    caracteres medidos na própria fonte, então o caption quebra mais cedo que o título."""
+    longo = "palavra " * 30
+    janela = abrir(rotulo=longo, titulo=longo, descricao=longo)
+    raiz = janela.rootObject()
+    rotulo, titulo, descricao = (_filho(janela, n) for n in ("rotuloDoAviso", "tituloDoAviso", "descricaoDoAviso"))
+    for caption in (rotulo, descricao):
+        assert _expr(caption, "font.pixelSize") == 10 and _expr(caption, "lineHeight") == 1.4
+    assert _expr(titulo, "font.pixelSize") == 12 and _expr(titulo, "font.weight") == 700
+    limites = {
+        rotulo: _expr(raiz, "medidaDoRotulo.averageCharacterWidth") * 36,
+        titulo: _expr(raiz, "medidaDoTitulo.averageCharacterWidth") * 36,
+        descricao: _expr(raiz, "medidaDaDescricao.averageCharacterWidth") * 36,
+    }
+    for texto, limite in limites.items():
+        assert texto.property("width") == pytest.approx(limite, abs=0.5)
+        assert texto.property("lineCount") > 1
+    assert descricao.property("width") < titulo.property("width")
+
+
+def test_estrela_so_no_aviso_sem_icone_nenhum(abrir, entregas):
+    """A5: com o ícone a caminho (ou que falhou) fica o quadrado vazio de 48 px, sem a estrela."""
+    sem = abrir()
+    assert sem.rootObject().property("semIcone") is True
+    assert _filho(sem, "estrelaDoAviso").property("visible") is True
+    com = abrir(icone="https://exemplo.test/i.jpg")  # o ícone ainda não chegou
+    assert com.rootObject().property("semIcone") is False
+    assert _filho(com, "estrelaDoAviso").property("visible") is False
+    assert [origem for origem, _ in entregas] == ["https://exemplo.test/i.jpg"]
+
+
+def test_estrela_e_o_starred_da_main(abrir):
+    """I2: o `starred-symbolic` da Adwaita, branco, de 48 px (e não o glifo da Segoe)."""
+    estrela = _filho(abrir(), "estrelaDoAviso")
+    assert estrela.property("nome") == "starred" and estrela.property("tamanho") == 48
+    assert _expr(estrela, "cor.toString()") == "#ffffff"
+
+
+def test_fade_em_ease_out_cubic_e_segue_as_animacoes_do_windows(abrir, monkeypatch, flush_idle):
+    """A1/A7: a curva é a do `Adw.TimedAnimation`; com os efeitos do Windows desligados o fade pula ao fim."""
+    janela = abrir()
+    raiz = janela.rootObject()
+    assert _expr(raiz, "animacao.easing.type === Easing.OutCubic") is True
+    assert raiz.property("animar") is True and _expr(raiz, "animacao.duration") == 250
+
+    monkeypatch.setattr(shared, "aplicativo", SimpleNamespace(animacoesDoSistema=False))
+    sem = abrir()
+    assert sem.rootObject().property("animar") is False
+    assert _expr(sem.rootObject(), "animacao.duration") == 0
+    sem.entrar("inferior-direito")
+    assert _esperar(flush_idle, lambda: sem.rootObject().property("opacidade") == 1)
+    chamadas = []
+    sem.sair(lambda: chamadas.append(1))
+    assert _esperar(flush_idle, lambda: chamadas == [1])  # o `terminou` sai mesmo sem animar
+
+
+def test_borda_esquerda_acompanha_a_curva_e_a_reserva_opaca_tem_faixa_reta(abrir, monkeypatch):
+    """A2: a borda de 3 px é a meia-lua do CSS (raio 12 fora, 9x12 dentro); sem transparência os cantos são retos."""
+    transparente = abrir().rootObject()
+    assert _expr(transparente, "children[1].objectName") == "bordaDoAviso"
+    assert transparente.findChild(QObject, "bordaDoAviso").property("visible") is True
+    assert transparente.findChild(QObject, "bordaRetaDoAviso").property("visible") is False
+    monkeypatch.setattr(jpc, "FUNDO_TRANSPARENTE", False)
+    opaca = abrir().rootObject()
+    assert opaca.findChild(QObject, "bordaDoAviso").property("visible") is False
+    reta = opaca.findChild(QObject, "bordaRetaDoAviso")
+    assert reta.property("visible") is True and reta.property("width") == 3
+
+
+def test_cartao_embutido_tem_contorno_e_sombra(abrir):
+    """A6: no assistente o cartão leva `0 0 0 1px alpha(white,.14), 0 2px 8px rgba(0,0,0,.35)`."""
+    raiz = abrir().rootObject()
+    sombra = raiz.findChild(QObject, "sombraDoAviso")
+    assert raiz.property("embutido") is False and sombra.property("visible") is False
+    raiz.setProperty("embutido", True)
+    assert sombra.property("visible") is True
+    assert _expr(sombra, "camadas.length") == 2
