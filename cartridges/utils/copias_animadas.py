@@ -367,13 +367,15 @@ def apagar(game_id: str) -> None:
     """Apaga as cópias do jogo e invalida os trabalhos dele, pendentes ou não."""
     soltar(game_id)
     # Os trabalhos invalidados abaixo nunca avisam: a tarefa precisa saber que
-    # não deve mais esperá-los. Pode vir de uma thread de segundo plano, e a
-    # tarefa é da thread principal. Quem pediu as cópias de novo (a capa nova)
-    # o fez depois desta chamada, e a entrega mantém a ordem.
-    # Sempre agendado: ler ``_lote`` aqui, fora da thread principal e sem
-    # trava, podia ver None um instante antes de um ``preparar`` criar o lote,
-    # e a tarefa ficaria esperando para sempre. O descarte já ignora o None.
-    entregar_na_tela(_descartar_do_lote, game_id)
+    # não deve mais esperá-los. Na principal o descarte é na hora: enfileirado, ele
+    # rodaria depois do ``preparar`` da capa nova (``save_cover._refazer_copias``) e
+    # a levaria junto. De outra thread, a entrega mantém a ordem, e é a tarefa,
+    # da thread principal, que descarta; ler ``_lote`` aqui, sem trava, podia ver None
+    # um instante antes de um ``preparar`` criar o lote. O descarte já ignora o None.
+    if eh_thread_principal():
+        _descartar_do_lote(game_id)
+    else:
+        entregar_na_tela(_descartar_do_lote, game_id)
     with _trava:
         for destino, trabalho in list(_trabalhos.items()):
             if trabalho.chave == game_id:
@@ -403,7 +405,7 @@ def abandonar(origem: Path) -> None:
             if (trabalho := _trabalhos.pop(destino, None)) is not None:
                 trabalho.invalido = True
     # O mesmo desconto do ``apagar``: a tarefa não espera trabalho invalidado.
-    entregar_na_tela(_descartar_do_lote, origem.stem)
+    _descartar_do_lote(origem.stem)
     for destino in destinos:
         try:
             destino.unlink(missing_ok=True)
@@ -580,6 +582,8 @@ def preparar(capas: list[tuple[str, Path]]) -> None:
 # Quem quer saber de cada cópia que termina (o modelo da biblioteca): (game_id, resultado), na
 # thread principal. Um só, e global: o pedido pode ter vindo de outro lugar (``save_cover``).
 ao_terminar_copia: Callable[[str, Resultado], None] | None = None
+# O mesmo aviso para a cópia grande que a página de detalhes toca.
+ao_terminar_da_pagina: Callable[[str, Resultado], None] | None = None
 
 
 def _voltou(lote: _Lote, destino: Path, resultado: Resultado) -> None:
@@ -590,6 +594,8 @@ def _voltou(lote: _Lote, destino: Path, resultado: Resultado) -> None:
     game_id = lote.pendentes.pop(destino)
     if ao_terminar_copia is not None:
         ao_terminar_copia(game_id, resultado)
+    if ao_terminar_da_pagina is not None:
+        ao_terminar_da_pagina(game_id, resultado)
     lote.feitos += 1
     lote.tarefa.atualizar(lote.feitos)
     if not lote.pendentes:

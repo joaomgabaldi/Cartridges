@@ -9,6 +9,7 @@ import threading
 import time
 import weakref
 
+import pytest
 from PIL import Image
 from PySide6.QtCore import QEventLoop, QSize, QTimer
 
@@ -551,3 +552,85 @@ def test_set_loading_avisa_quando_o_estado_muda(app_qt, store):
     jogo.set_loading(-1)
     assert len(avisos) == 2
     assert detalhes.carregando is False
+
+
+# -- as cópias animadas da página ----------------------------------------------------------------
+
+
+def _com_copias(game_id="a", grade=True, grande=True):
+    """Uma capa animada de verdade em `covers_dir`, com as cópias pedidas já geradas."""
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    shared.covers_dir.mkdir(parents=True, exist_ok=True)
+    capa = shared.covers_dir / f"{game_id}.webp"
+    quadros = [Image.new("RGBA", (8, 12), (tom, 0, 0, 255)) for tom in (0, 90)]
+    quadros[0].save(capa, "WEBP", save_all=True, append_images=quadros[1:], duration=[100, 100], loop=0, lossless=True)
+    for pedida, tamanho in zip((grade, grande), copias_animadas.tamanhos(), strict=True):
+        if pedida:
+            assert copias_animadas.gerar(capa, copias_animadas.caminho_para(capa, tamanho), tamanho)
+    return capa
+
+
+def _tamanho_no_nome(indice):
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    return "{}x{}".format(*copias_animadas.tamanhos()[indice])
+
+
+def test_pagina_toca_a_copia_grande(app_qt, store):
+    _com_copias()
+    detalhes = _modelo(store, _jogo())
+    detalhes.mostrar("a")
+    assert _tamanho_no_nome(1) in detalhes.capaAnimada
+
+
+def test_pagina_usa_a_da_grade_sem_a_grande(app_qt, store):
+    _com_copias(grande=False)
+    detalhes = _modelo(store, _jogo())
+    detalhes.mostrar("a")
+    assert _tamanho_no_nome(0) in detalhes.capaAnimada
+
+
+def test_pagina_troca_para_a_copia_grande_quando_ela_fica_pronta(app_qt, store, monkeypatch):
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    capa = _com_copias(grande=False)
+    jogo = _jogo()
+    detalhes = _modelo(store, jogo)
+    detalhes.mostrar("a")
+    assert _tamanho_no_nome(0) in detalhes.capaAnimada
+    monkeypatch.setattr(jogo, "update", lambda: pytest.fail("a página deve ser avisada sem atualizar o jogo"))
+    tamanho = copias_animadas.tamanhos()[1]
+    assert copias_animadas.gerar(capa, copias_animadas.caminho_para(capa, tamanho), tamanho)
+
+    copias_animadas.ao_terminar_da_pagina("a", "pronta")
+
+    assert _tamanho_no_nome(1) in detalhes.capaAnimada
+
+
+def test_copia_de_outro_jogo_nao_muda_a_pagina(app_qt, store):
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    capa = _com_copias(grande=False)
+    detalhes = _modelo(store, _jogo())
+    detalhes.mostrar("a")
+    antes = detalhes.capaAnimada
+    tamanho = copias_animadas.tamanhos()[1]
+    assert copias_animadas.gerar(capa, copias_animadas.caminho_para(capa, tamanho), tamanho)
+
+    copias_animadas.ao_terminar_da_pagina("b", "pronta")
+
+    assert detalhes.capaAnimada == antes
+
+
+def test_mudar_o_tema_nao_le_o_historico(app_qt, store, monkeypatch):
+    lidos = []
+    original = modulo.session_log.load
+    monkeypatch.setattr(modulo.session_log, "load", lambda game_id: (lidos.append(game_id), original(game_id))[1])
+    detalhes = _modelo(store, _jogo(playtime=3600))
+
+    detalhes.mostrar("a")
+    assert lidos == ["a"]
+    detalhes._tema_mudou()  # noqa: SLF001
+
+    assert lidos == ["a"], "o tema não muda as sessões"

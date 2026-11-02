@@ -184,3 +184,24 @@ def test_anos_decrescentes():
     linhas = [_linha("a", lancamento="2010"), _linha("b", lancamento="17/set./2020"), _linha("c", lancamento="Em breve")]
     assert ordem.opcoes(linhas)[1] == ["2020", "2010"]
 
+
+
+def test_copia_mais_velha_que_a_capa_nao_e_usada():
+    import os  # noqa: PLC0415
+
+    from cartridges import shared  # noqa: PLC0415
+    from cartridges.utils import copias_animadas  # noqa: PLC0415
+
+    shared.covers_dir.mkdir(parents=True, exist_ok=True)
+    shared.capas_animadas_dir.mkdir(parents=True, exist_ok=True)
+    capa = shared.covers_dir / "a.webp"
+    capa.write_bytes(b"x")
+    os.utime(capa, ns=(2_000_000_000, 2_000_000_000))
+    for indice in (0, 1):
+        copia = copias_animadas.caminho_para(capa, copias_animadas.tamanhos()[indice])
+        copia.write_bytes(b"x")
+        os.utime(copia, ns=(1_000_000_000, 1_000_000_000))
+        assert ordem.url_da_copia(capa, indice) == "", "mais velha: a tela a larga e o preparar a refaz"
+        os.utime(copia, ns=(2_000_000_000, 2_000_000_000))
+        assert ordem.url_da_copia(capa, indice).startswith("file:///"), "igual passa"
+    assert ordem.url_da_copia(None) == ""

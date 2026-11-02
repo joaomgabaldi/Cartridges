@@ -15,9 +15,7 @@ formulário e mostra o resultado. Tudo aqui roda na thread principal.
 """
 
 import logging
-import os
 import re
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import time
@@ -34,7 +32,7 @@ from cartridges.utils import capa_video, copias_animadas, game_logo, session_fit
 from cartridges.utils.ligacao_zerado import ligar_zerado
 from cartridges.utils.process_monitor import install_dir_from_command
 from cartridges.utils.run_executable import aumid_from_command
-from cartridges.utils.save_cover import composite_cover, convert_cover, save_cover
+from cartridges.utils.save_cover import _temporario, composite_cover, convert_cover, save_cover  # noqa: PLC2701
 from cartridges.utils.steam import STEAM_METADATA_VERSION, format_release_date
 from cartridges.utils.thread_principal import na_thread_principal
 
@@ -219,12 +217,6 @@ def descartar_provisoria(caminho: Path) -> None:
     # geração das cópias dela na fila.
     copias_animadas.abandonar(caminho)
     _descartar(caminho)
-
-
-def _temporario(sufixo: str) -> Path:
-    descritor, nome = tempfile.mkstemp(suffix=sufixo)
-    os.close(descritor)
-    return Path(nome)
 
 
 def preparar_capa(arquivo: Path) -> Optional[Path]:

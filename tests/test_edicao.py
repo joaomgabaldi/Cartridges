@@ -730,3 +730,10 @@ def test_jogo_adicionado_a_mao_durante_a_importacao_nao_entra_no_desfazer(edicao
     importer.imported_game_ids = store.new_game_ids  # o que o fim da importação guarda para o "Desfazer"
     importer.undo_import()
     assert novo.removed is False
+
+
+def test_edicao_usa_o_temporario_do_save_cover():
+    from cartridges import edicao as modulo  # noqa: PLC0415
+    from cartridges.utils import save_cover  # noqa: PLC0415
+
+    assert modulo._temporario is save_cover._temporario  # noqa: SLF001

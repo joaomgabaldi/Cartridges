@@ -976,3 +976,41 @@ def test_erro_inesperado_resulta_falhou_e_a_tarefa_termina(
 
     assert tarefas_criadas[0].eventos[-1] == ("terminar",)
     assert "a.webp" in caplog.text
+
+
+def test_capa_nova_avisa_a_grade_quando_a_copia_fica_pronta(fila, tarefas_criadas, geradas, monkeypatch, tmp_path):
+    """O ``apagar`` da troca não pode levar o ``preparar`` da capa nova: a grade é avisada das duas cópias."""
+    from cartridges.utils import save_cover  # noqa: PLC0415
+
+    entregas = []  # a entrega à principal de verdade chega depois do que a principal já fez
+    monkeypatch.setattr(copias_animadas, "entregar_na_tela", lambda funcao, *args: entregas.append((funcao, args)))
+    avisados = []
+    monkeypatch.setattr(copias_animadas, "ao_terminar_copia", lambda game_id, resultado: avisados.append(game_id))
+    shared.covers_dir.mkdir(parents=True, exist_ok=True)
+    capa = _animada(shared.covers_dir / "g1.webp", [100, 100])
+
+    save_cover._refazer_copias("g1", capa, tmp_path / "provisoria.webp")
+    fila.rodar_tudo()
+    for funcao, args in entregas:
+        funcao(*args)
+
+    assert avisados == ["g1", "g1"]
+    (tarefa,) = tarefas_criadas
+    assert tarefa.eventos[-1] == ("terminar",) and tarefa.terminadas == 1
+    assert tarefa.eventos[:2] == [("atualizar", 1, 2), ("atualizar", 2, 2)]
+
+
+def test_apagar_de_outra_thread_continua_na_fila(fila, tarefas_criadas, geradas, monkeypatch):
+    """Só a thread principal descarta na hora; de outra, o descarte vai pela entrega, em ordem."""
+    copias_animadas.preparar([_capa("a")])
+    entregas = []
+    monkeypatch.setattr(copias_animadas, "entregar_na_tela", lambda funcao, *args: entregas.append((funcao, args)))
+
+    thread = threading.Thread(target=copias_animadas.apagar, args=("a",))
+    thread.start()
+    thread.join()
+
+    assert entregas == [(copias_animadas._descartar_do_lote, ("a",))]  # noqa: SLF001
+    assert copias_animadas._lote.pendentes  # noqa: SLF001
+    entregas[0][0](*entregas[0][1])
+    assert tarefas_criadas[0].terminadas == 1

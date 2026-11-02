@@ -24,7 +24,7 @@ from PySide6.QtGui import QGuiApplication, QImage
 from PySide6.QtQuick import QQuickImageProvider
 
 from cartridges.jogo import STATUS_LABELS, Jogo, status_label
-from cartridges.modelos.ordem import Linha, _url_da_capa  # noqa: PLC2701
+from cartridges.modelos.ordem import Linha, _url_da_capa, url_da_copia  # noqa: PLC2701
 from cartridges.utils import copias_animadas, desfoque, game_logo, session_log
 from cartridges.utils.format_playtime import format_playtime, format_size
 from cartridges.utils.hltb import format_hltb_time
@@ -311,6 +311,7 @@ class DetalhesDoJogo(QObject):
         # Referência fraca: o gancho é global e o modelo pode morrer antes (como o da grade).
         fraca = weakref.ref(self)
         copias_animadas.soltar_da_pagina = lambda game_id: (m := fraca()) and m.soltar_copia(game_id)
+        copias_animadas.ao_terminar_da_pagina = lambda game_id, resultado: (m := fraca()) and m.copia_pronta(game_id, resultado)
         QGuiApplication.styleHints().colorSchemeChanged.connect(self._tema_mudou)
         # O alto contraste não tem sinal próprio no Qt 6.12; ligá-lo troca a paleta, e é por ela que reavaliamos.
         QGuiApplication.instance().paletteChanged.connect(self._tema_mudou)
@@ -356,6 +357,16 @@ class DetalhesDoJogo(QObject):
             # O ``AnimatedImage`` só larga o arquivo quando destrói o filme, num ``deleteLater``.
             QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
+    def copia_pronta(self, game_id: str, _resultado: str) -> None:
+        """Uma cópia do jogo ficou pronta: a página toca a grande, sem esperar outra mudança. Só na principal."""
+        if game_id == self._atual and (jogo := self._mostrado()) is not None:
+            self._mesclar({"capaAnimada": self._copia_animada(jogo)})
+
+    @staticmethod
+    def _copia_animada(jogo: Jogo) -> str:
+        """A cópia grande, ou a da grade enquanto a grande não existe."""
+        return url_da_copia(jogo.get_cover_path(), 1) or Linha.de(jogo).capa_animada
+
     @Slot()
     def esquecer(self) -> None:
         """A página fechou: para de seguir o jogo e descarta o que ainda estiver a caminho."""
@@ -382,7 +393,7 @@ class DetalhesDoJogo(QObject):
     def _atualizar(self, jogo: Jogo, trocou: bool) -> None:
         linha = Linha.de(jogo)
         campos = {
-            "jogoId": jogo.game_id, "nome": jogo.name, "capa": linha.capa, "capaAnimada": linha.capa_animada,
+            "jogoId": jogo.game_id, "nome": jogo.name, "capa": linha.capa, "capaAnimada": self._copia_animada(jogo),
             "desenvolvedora": jogo.developer or "", "publicadora": jogo.publisher or "",
             "dataDeLancamento": data_de_lancamento(jogo), "nota": nota(jogo), "metacritic": metacritic(jogo),
             "avaliacoes": avaliacoes(jogo), "genero": jogo.genre or "", "controle": controle(jogo),
@@ -393,6 +404,9 @@ class DetalhesDoJogo(QObject):
             "temAtualizacao": bool(jogo.has_update and not jogo.zerado),
             "mostraAnotacao": mostra_anotacao(jogo), "dicaDaAnotacao": dica_da_anotacao(jogo),
             "anotacao": jogo.notes or "", "anotacaoEditavel": not jogo.zerado,
+            # O total só abre a lista das sessões que o formaram se elas existem (o tempo restaurado de um backup é
+            # um total sem sessões); lido só aqui, a cada mudança do jogo, e só de um jogo com tempo.
+            "temSessoes": bool(tempo_de_jogo(jogo)) and bool(session_log.load(jogo.game_id)),
         }  # fmt: skip
         if trocou:
             # O logo e o fundo do jogo anterior não ficam atrás dos metadados deste.
@@ -408,9 +422,6 @@ class DetalhesDoJogo(QObject):
         tema = QGuiApplication.styleHints().colorScheme()
         # Sem esquema de cores no sistema (Unknown) vale o 0.3 do alto contraste, como na janela GTK.
         fixo = _alto_contraste() or tema == Qt.ColorScheme.Unknown
-        # O total só abre a lista das sessões que o formaram se elas existem (o tempo restaurado de um backup é um
-        # total sem sessões); relido a cada mudança, e só de um jogo com tempo.
-        novo["temSessoes"] = bool(novo["tempoDeJogo"]) and bool(session_log.load(novo["jogoId"]))
         novo["opacidadeDoFundo"] = opacidade_do_fundo(self._luminancia, tema == Qt.ColorScheme.Dark, fixo)
         if novo != self._v:
             self._v = novo

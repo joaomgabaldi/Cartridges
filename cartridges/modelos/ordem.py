@@ -68,15 +68,25 @@ class Linha:
             jogo.install_size,
             jogo.stars,
             jogo.loading > 0,
-            _url_da_copia(jogo.get_cover_path()),
+            url_da_copia(jogo.get_cover_path()),
         )
 
 
-def _url_da_copia(caminho: Path | None) -> str:
-    """URL da cópia animada da capa, no tamanho da grade, ou "" se a capa é parada ou a cópia não existe."""
+def url_da_copia(caminho: Path | None, indice: int = 0) -> str:
+    """URL da cópia animada da capa (``indice`` 0: a da grade; 1: a de detalhes), ou "" se não há.
+
+    "" também quando a capa é parada, a cópia não existe ou é mais velha que a capa (a tela a larga
+    e o ``preparar`` a refaz).
+    """
     if caminho is None or caminho.suffix not in ANIMATED_SUFFIXES:
         return ""
-    return _url_da_capa(copias_animadas.caminho_para(caminho, copias_animadas.tamanhos()[0]))
+    copia = copias_animadas.caminho_para(caminho, copias_animadas.tamanhos()[indice])
+    try:
+        if copia.stat().st_mtime_ns < caminho.stat().st_mtime_ns:
+            return ""
+    except OSError:
+        return ""
+    return _url_da_capa(copia)
 
 
 def _url_da_capa(caminho: Path | None) -> str:

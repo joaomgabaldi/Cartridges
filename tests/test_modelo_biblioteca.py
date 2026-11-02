@@ -502,3 +502,19 @@ def test_capas_na_ordem_percorre_a_biblioteca_e_depois_os_zerados(app_qt, pedido
     modelo.atualizar(_jogo("s", "C"))  # capa parada: fora da lista
     modelo.ativar_copias()
     assert pedidos == [[("a", caminhos["a"]), ("b", caminhos["b"]), ("z", caminhos["z"])]]
+
+
+def test_copia_velha_e_refeita_ao_ativar(app_qt, pedidos):
+    """Uma cópia mais velha que a capa não vale como pronta: `ativar_copias` pede a refeita."""
+    import os  # noqa: PLC0415
+
+    caminho, copia = _capa_animada("a")
+    os.utime(copia, ns=(1_000_000_000, 1_000_000_000))
+    os.utime(caminho, ns=(2_000_000_000, 2_000_000_000))
+    modelo = ModeloDaBiblioteca()
+    modelo.atualizar(_jogo("a", "A"))
+    assert _animada_de(modelo) == ""
+
+    modelo.ativar_copias()
+
+    assert pedidos == [[("a", caminho)]]
