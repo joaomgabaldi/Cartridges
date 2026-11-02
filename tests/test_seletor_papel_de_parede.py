@@ -485,3 +485,15 @@ def test_as_caixas_da_previa_do_ajuste_sao_as_da_main():
     from cartridges.modelos import seletores  # noqa: PLC0415
 
     assert (seletores.CAIXA_UNICA, seletores.CAIXA_DEITADA, seletores.CAIXA_EM_PE) == ((800, 440), (600, 340), (220, 340))
+
+
+def test_buscar_no_ajuste_volta_a_grade(app_qt, wallhaven, arte, temp):
+    """I2/DE-75: com o campo ativo, digitar ou dar Enter na etapa de ajuste faz a busca e sai dela."""
+    seletor, _ = criar()
+    seletor.abrir("Jogo")
+    assert _esperar(lambda: prontos(seletor, 3))
+    ajustar(seletor)
+    assert seletor.ajustando is True
+    seletor.buscarAgora()
+    assert seletor.ajustando is False and seletor.cortes.rowCount() == 0
+    seletor.fechar()

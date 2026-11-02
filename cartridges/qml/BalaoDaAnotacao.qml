@@ -24,7 +24,7 @@ Popup {
     padding: 0
     bottomPadding: 16  // a faixa do puxador, abaixo do texto
     margins: 8
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
     function restaurar() { if (caixa) caixa.restaurar(janelaLargura, janelaAltura, livreLargura(), livreAltura()) }
     onAboutToShow: {
         campo.text = raiz.texto

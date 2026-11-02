@@ -74,7 +74,7 @@ Botao {
         y: amostra.height + 6
         padding: 12
         margins: 8  // o balão não sai da janela, mesmo com a linha no pé da rolagem
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         enter: null
         exit: null
         // O seletor parte da cor que a linha mostra agora; depois disso quem manda nele é a mão.

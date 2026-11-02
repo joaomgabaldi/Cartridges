@@ -99,6 +99,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         Miniatura = Qt.ItemDataRole.UserRole + 1
         Animada = Qt.ItemDataRole.UserRole + 2
         Carregando = Qt.ItemDataRole.UserRole + 3
+        CopiaAnimada = Qt.ItemDataRole.UserRole + 4
 
     abertoChanged = Signal()  # noqa: N815
     buscaChanged = Signal()  # noqa: N815
@@ -154,6 +155,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
             self.Papel.Miniatura: QByteArray(b"miniatura"),
             self.Papel.Animada: QByteArray(b"animada"),
             self.Papel.Carregando: QByteArray(b"carregando"),
+            self.Papel.CopiaAnimada: QByteArray(b"copiaAnimada"),
         }
 
     def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:  # noqa: B008, N802
@@ -170,6 +172,8 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
                 return linha["animada"]
             case self.Papel.Carregando:
                 return linha["carregando"]
+            case self.Papel.CopiaAnimada:
+                return linha.get("copia", "")
         return None
 
     # -- propriedades ----------------------------------------------------------------------------
@@ -269,7 +273,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
     @Slot()
     def buscarAgora(self) -> None:  # noqa: N802
         """Enter no campo: busca já, sem esperar o atraso."""
-        if self._aberto and not self._baixando:
+        if self._aberto:
             self.search()
 
     def search(self) -> None:
@@ -435,16 +439,16 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
 
     def _pedir_copia(self, linha: dict[str, Any], geracao: int) -> None:
         """A prévia animada toca a cópia reduzida ao tamanho da grade (`copias_animadas`), e não a original, que pode
-        ter centenas de MB: assim todas tocam ao mesmo tempo, como na `main`. Até ela chegar, vale o primeiro quadro."""
+        ter centenas de MB: assim todas tocam ao mesmo tempo, como na `main`. Até ela chegar (ou se falhar), a célula mostra só o primeiro quadro, parado; a original nunca toca."""
         tamanho = copias_animadas.tamanhos()[0]
         destino = copias_animadas.caminho_para(linha["arquivo"], tamanho)
 
         def pronta(resultado: str) -> None:
             if resultado != "pronta" or geracao != self._geracao_da_busca or self._closed or linha not in self._linhas:
                 return
-            linha["miniatura"] = QUrl.fromLocalFile(str(destino)).toString()
+            linha["copia"] = QUrl.fromLocalFile(str(destino)).toString()
             indice = self.index(self._linhas.index(linha), 0)
-            self.dataChanged.emit(indice, indice, [self.Papel.Miniatura])
+            self.dataChanged.emit(indice, indice, [self.Papel.CopiaAnimada])
 
         copias_animadas.pedir(linha["arquivo"], destino, tamanho, pronta)
 
@@ -464,8 +468,6 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         if not self._aberto or self._baixando or not 0 <= indice < len(self._linhas):
             return
         linha = self._linhas[indice]
-        if linha["carregando"]:
-            return
         # Só o download tem geração nova: as miniaturas seguem chegando (a grade já não está à vista, então não
         # voltam por cima do carregamento) e "Voltar" a encontra completa.
         self._generation += 1
@@ -622,7 +624,11 @@ class SeletorDoSgdb(_SeletorDoSteamGridDB):
     def _concluir(self, arquivo: Path, geracao: int) -> None:
         """A capa é convertida aqui dentro, com a tela "Baixando…" à vista (`sgdb_picker.py:328`): o seletor só fecha com ela
         pronta; se a conversão falhar, volta à grade."""
-        self._destino.entregar_capa_baixada(arquivo, lambda ok: self._capa_convertida(geracao, ok))
+        self._destino.entregar_capa_baixada(
+            arquivo,
+            lambda ok: self._capa_convertida(geracao, ok),
+            lambda: not self._closed and geracao == self._generation,
+        )
 
     def _capa_convertida(self, geracao: int, convertida: bool) -> None:
         if self._closed or geracao != self._generation:
@@ -990,6 +996,8 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
         for numero in range(len(linhas)):
             self._desenhar(numero)
         self._baixando = False
+        if self._so_arquivo:
+            self._buscando = False  # um arquivo do disco não tem miniaturas a esperar
         self._ajustando = True
         self.estadoChanged.emit()
         self.baixandoChanged.emit()
@@ -1081,10 +1089,10 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
                 destino.nao_trocar_papel()
             self.fechar()
 
-    @Slot()
-    def buscarAgora(self) -> None:  # noqa: N802
-        if not self._ajustando:
-            super().buscarAgora()
+    def search(self) -> None:
+        # Uma busca nova leva de volta à grade, como o `search()` da `main` (`wallpaper_picker.py:217`).
+        self._sair_do_ajuste()
+        super().search()
 
     @Slot()
     def fechar(self) -> None:

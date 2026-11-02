@@ -670,17 +670,27 @@ class ModeloDaEdicao(QObject):
         if self._aberto and (caminho := url.toLocalFile()):
             self._converter_capa(Path(caminho), apagar_origem=False)
 
-    def entregar_capa_baixada(self, arquivo: Path, ao_terminar: Optional[Callable[[bool], None]] = None) -> None:
+    def entregar_capa_baixada(
+        self,
+        arquivo: Path,
+        ao_terminar: Optional[Callable[[bool], None]] = None,
+        vigente: Optional[Callable[[], bool]] = None,
+    ) -> None:
         """A capa que o seletor do SteamGridDB baixou: vira provisória como a de um arquivo, e o original sai.
 
-        ``ao_terminar(convertida)`` avisa o seletor, que só fecha com a capa pronta e volta à grade se ela falhar."""
+        ``ao_terminar(convertida)`` avisa o seletor, que só fecha com a capa pronta e volta à grade se ela falhar.
+        ``vigente()`` diz se o seletor ainda a espera: fechado no meio da conversão, a capa pronta é descartada."""
         if self._aberto:
-            self._converter_capa(arquivo, apagar_origem=True, ao_terminar=ao_terminar)
+            self._converter_capa(arquivo, apagar_origem=True, ao_terminar=ao_terminar, vigente=vigente)
         else:
             arquivo.unlink(missing_ok=True)
 
     def _converter_capa(
-        self, arquivo: Path, apagar_origem: bool, ao_terminar: Optional[Callable[[bool], None]] = None
+        self,
+        arquivo: Path,
+        apagar_origem: bool,
+        ao_terminar: Optional[Callable[[bool], None]] = None,
+        vigente: Optional[Callable[[], bool]] = None,
     ) -> None:
         geracao = self._geracao
         self._pedido_da_capa += 1
@@ -700,12 +710,18 @@ class ModeloDaEdicao(QObject):
                 logging.exception("Could not prepare the chosen cover")
             if apagar_origem:
                 arquivo.unlink(missing_ok=True)
-            na_thread_principal(self._capa_pronta, geracao, pedido, nova, erro, ao_terminar)
+            na_thread_principal(self._capa_pronta, geracao, pedido, nova, erro, ao_terminar, vigente)
 
         threading.Thread(target=trabalhar, daemon=True).start()
 
     def _capa_pronta(
-        self, geracao: int, pedido: int, nova: Optional[Path], erro: str, ao_terminar: Optional[Callable[[bool], None]] = None
+        self,
+        geracao: int,
+        pedido: int,
+        nova: Optional[Path],
+        erro: str,
+        ao_terminar: Optional[Callable[[bool], None]] = None,
+        vigente: Optional[Callable[[], bool]] = None,
     ) -> None:
         if geracao != self._geracao or not self._aberto:
             # O diálogo fechou (ou é de outro jogo): a capa pronta não tem onde entrar.
@@ -714,6 +730,12 @@ class ModeloDaEdicao(QObject):
             return
         self._capas_em_voo -= 1
         self.terminar_operacao()
+        if vigente is not None and not vigente():
+            # O seletor fechou no meio da conversão: a pessoa desistiu, e a capa do editor não muda (`_select_done`).
+            if nova is not None:
+                edicao.descartar_provisoria(nova)
+            self.capaChanged.emit()
+            return
         if pedido != self._pedido_da_capa:
             # Uma escolha mais nova foi pedida depois desta: vale a última.
             if nova is not None:

@@ -970,11 +970,14 @@ def test_aviso_de_busca_sem_resultado_no_seletor_da_steam(app, steam):
     assert vazio.property("descricao") == "Tente buscar por outro nome."
 
 
-def test_botoes_da_steam_desligados_sem_titulo(app, steam):
+def test_botoes_da_steam_sem_titulo(app, steam):
+    """DE-56: o botão dos dados da Steam fica ativo sem título e o clique não faz nada; o do AppID espera o título."""
     app.edicao.adicionar()
     _abrir_avancadas(app)
-    # O botão dos dados da Steam fica sempre ativo (sem título, o clique não faz nada); o do AppID espera o título.
     assert app.achar("botaoBuscarMetadados").property("enabled") is True
+    _clique(app, "botaoBuscarMetadados")
+    _esperar(lambda: False, 0.2)
+    assert app.edicao.buscandoMetadados is False and app.edicao.ocupado is False
     assert app.achar("botaoBuscarAppid").property("enabled") is False
     app.edicao.nome = "Portal"
     assert app.achar("botaoBuscarAppid").property("enabled") is True
@@ -1114,6 +1117,7 @@ def test_seletor_de_papel_escolhe_ajusta_e_o_aplicar_grava(app, wallhaven):
     app.achar("seletorDePapelMiniatura1").forceActiveFocus()
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
     assert _esperar(lambda: _visivel(app, "seletorDePapelUsar"))
+    assert app.achar("seletorDePapelNaoTrocar").property("enabled") is True  # M1: sem `set_sensitive` na `main`
     # Na etapa de ajuste o foco não é forçado a lugar nenhum (`DE-88`).
     assert app.achar("seletorDePapelUsar").property("activeFocus") is False
     # A barra desliza a faixa do monitor em pé.
@@ -1535,3 +1539,29 @@ def test_as_linhas_do_ludusavi_e_o_selecionado_tem_fundo(app):
     fundo = _avaliar(linha, "background.color")
     assert fundo.alpha() > 0 and _avaliar(app.achar("seletorDoLudusaviLinha0"), "background.color").alpha() == 0
 
+
+
+def test_botoes_da_capa_nao_recebem_clique_convertendo_e_a_amostra_fecha_o_balao(app, previas):
+    """M3 (convertendo, os botões não agem) e M8 (clicar de novo na amostra fecha o balão)."""
+    _com_fita()
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
+    app.edicao._capas_em_voo = 1  # noqa: SLF001
+    app.edicao.capaChanged.emit()
+    assert _esperar(lambda: app.achar("botaoEscolherCapa").property("enabled") is False)
+    app.edicao._capas_em_voo = 0  # noqa: SLF001
+    app.edicao.capaChanged.emit()
+    assert _esperar(lambda: app.achar("botaoEscolherCapa").property("enabled") is True)
+    amostra = app.achar("botaoDaCorDaFita")
+    for _ in range(2):
+        QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, _centro_na_janela(amostra))
+        _esperar(lambda: False, 0.15)
+    assert app.achar("balaoDaCorDaFita").property("opened") is False
+
+
+def test_a_grade_do_seletor_ocupa_a_largura_toda(app, sgdb):
+    """M6: a barra de rolagem fica na borda; só as colunas são centradas."""
+    app.edicao.abrir("shortcuts_z1")
+    _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
+    grade = app.achar("seletorDeCapaGrade")
+    assert grade.property("width") == grade.parentItem().property("width") and grade.property("leftMargin") > 0

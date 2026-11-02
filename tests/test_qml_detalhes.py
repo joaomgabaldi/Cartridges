@@ -575,3 +575,18 @@ def test_o_titulo_do_menu_de_buscas_e_um_rotulo_de_secao_e_o_menu_e_um_popover_c
     assert abs(_centro(menu.property("contentItem")).x() - _centro(botao).x()) < 40  # o menu está centrado no botão
     menu.close()
     app.fechar()
+
+
+def test_jogar_tem_hover_visivel_nos_dois_temas(app_qt):
+    """I4/DE-03: o véu do hover é `currentColor` a 10% (o texto do botão), não um branco fixo."""
+    app = _App(_tres())
+    pagina = _abrir_pelo_cartao(app)
+    jogar = _achar(pagina, "botaoJogarDaPagina")
+    # O offscreen não produz hover: lê a cor que o véu teria (a do estado "passando").
+    contexto = QQmlEngine.contextForObject(jogar)
+    veu = QQmlExpression(contexto, jogar, "background.children[0].color").evaluate()[0]
+    texto = QQmlExpression(contexto, jogar, "corDoTexto").evaluate()[0]
+    assert (veu.red(), veu.green(), veu.blue()) == (texto.red(), texto.green(), texto.blue())
+    assert 0 < veu.alpha() <= 26
+    app.fechar()
+

@@ -121,7 +121,7 @@ class Destino:
         # A conversão da capa dentro do seletor: terminou bem?
         self.convertida = True
 
-    def entregar_capa_baixada(self, arquivo, ao_terminar=None):
+    def entregar_capa_baixada(self, arquivo, ao_terminar=None, vigente=None):
         self.capas.append(arquivo)
         if ao_terminar is not None:
             ao_terminar(self.convertida)

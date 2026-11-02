@@ -17,7 +17,6 @@ MolduraDoDialogo {
     // `Adw.Clamp (maximum-size: 450)`; Ludusavi e Zerados não têm clamp e margens de 12.
     property real larguraDoCampo: 450
     property real margemDoCampo: 6
-    property bool campoAtivo: true
     // A linha de baixo da barra aparece com o conteúdo rolado.
     property bool rolado: false
     property alias fim: cabecalho.fim
@@ -51,8 +50,6 @@ MolduraDoDialogo {
             x: Math.round((parent.width - width) / 2)
             y: 6
             width: Math.min(base.larguraDoCampo, parent.width - 2 * base.margemDoCampo)
-            enabled: base.campoAtivo
-            opacity: enabled ? 1 : Tema.opacidadeDesabilitado
             placeholderText: base.placeholder
             Accessible.name: base.nomeDaBusca
             onTextEdited: base.buscaEditada(text)

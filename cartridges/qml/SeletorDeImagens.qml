@@ -108,9 +108,9 @@ SeletorBase {
                 id: grade
                 objectName: seletorDeImagens.objectName + "Grade"
                 // `FlowBox homogeneous` centrado: células de largura fixa mais 12, o conjunto no meio.
-                width: seletorDeImagens.colunas * cellWidth
-                height: parent.height
-                anchors.horizontalCenter: parent.horizontalCenter
+                // Ocupa a largura toda (a barra de rolagem fica na borda); as colunas ficam centradas pela margem.
+                anchors.fill: parent
+                leftMargin: Math.max(0, (width - seletorDeImagens.colunas * cellWidth) / 2)
                 topMargin: 6
                 bottomMargin: 6
                 model: seletorDeImagens.seletor
@@ -125,7 +125,7 @@ SeletorBase {
                     required property int index
                     required property string miniatura
                     required property bool animada
-                    required property bool carregando
+                    required property string copiaAnimada
                     width: grade.cellWidth
                     height: grade.cellHeight
 
@@ -138,7 +138,6 @@ SeletorBase {
                         padding: 0
                         hoverEnabled: false  // `.no-hover`: a célula não reage ao mouse
                         focusPolicy: Qt.StrongFocus
-                        enabled: !celula.carregando
                         Accessible.name: "Miniatura " + (celula.index + 1)
                         Accessible.role: Accessible.Button
                         Keys.onReturnPressed: click()
@@ -192,9 +191,10 @@ SeletorBase {
                                 // As prévias animadas tocam todas, na cópia reduzida que o seletor pede.
                                 Loader {
                                     anchors.fill: parent
-                                    active: celula.animada && celula.miniatura !== ""
+                                    // Só a cópia reduzida toca; a original (até 200 MB) fica só como primeiro quadro.
+                                    active: celula.animada && celula.copiaAnimada !== ""
                                     sourceComponent: AnimatedImage {
-                                        source: celula.miniatura
+                                        source: celula.copiaAnimada
                                         fillMode: Image.PreserveAspectCrop
                                         cache: false
                                     }
@@ -204,6 +204,8 @@ SeletorBase {
                             Image {
                                 anchors.centerIn: parent
                                 visible: seletorDeImagens.horizontal
+                                // Decodifica no máximo o dobro da célula (sem ampliar o que é menor).
+                                sourceSize: Qt.size(seletorDeImagens.larguraDaCelula * 2, seletorDeImagens.alturaDaCelula * 2)
                                 width: Math.min(implicitWidth, parent.width - 24)
                                 height: Math.min(implicitHeight, parent.height - 24)
                                 source: seletorDeImagens.horizontal ? celula.miniatura : ""

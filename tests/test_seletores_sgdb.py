@@ -124,6 +124,48 @@ def test_escolher_nao_interrompe_as_miniaturas(baixar, temp, monkeypatch):
     seletor.fechar()
 
 
+def test_fechar_o_seletor_durante_a_conversao_mantem_a_capa_do_editor(edicao, temp, monkeypatch):
+    """I3/DE-49: quem desistiu (fechou o seletor) não vê a capa mudar depois; nada de temporário sobra."""
+    import threading  # noqa: PLC0415
+
+    from cartridges import edicao as regra  # noqa: PLC0415
+
+    liberar = threading.Event()
+    original = regra.preparar_capa
+
+    def devagar(arquivo):
+        assert liberar.wait(5)
+        return original(arquivo)
+
+    monkeypatch.setattr(regra, "preparar_capa", devagar)
+    seletor = edicao.seletorDeCapa
+    seletor.abrir("Jogo")
+    assert _esperar(lambda: _prontos(seletor, 3))
+    seletor.escolher(0)
+    assert _esperar(lambda: edicao.convertendoCapa)
+    seletor.fechar()
+    liberar.set()
+    assert _esperar(lambda: not edicao.convertendoCapa)
+    assert edicao.temCapa is False
+    edicao.cancelar()
+    assert _vazio_de(temp) == []
+
+
+def test_enter_no_campo_busca_mesmo_durante_o_download(baixar, temp):
+    """I2/DE-75: o campo está ativo, então o Enter também busca (a busca nova cancela o download)."""
+    seletor, _ = _criar(seletores.SeletorDoSgdb)
+    seletor.abrir("Jogo")
+    assert _esperar(lambda: _prontos(seletor, 3))
+    baixar.soltar.clear()
+    baixar.comecou.clear()
+    seletor.escolher(0)
+    assert _esperar(baixar.comecou.is_set) and seletor.baixando is True
+    seletor.buscarAgora()
+    assert seletor.baixando is False
+    baixar.soltar.set()
+    seletor.fechar()
+
+
 def test_capa_que_nao_converte_volta_a_grade(baixar, temp):
     """DE-49: o seletor da capa só fecha com a capa pronta; se a conversão falha, a grade volta."""
     seletor, destino = _criar(seletores.SeletorDoSgdb)
@@ -254,6 +296,25 @@ def test_animadas_filtra(baixar, temp, schema):
     assert all(not u.endswith("-t.png") for u in baixar.urls)
     assert all(seletor.data(seletor.index(i, 0), seletor.Papel.Animada) for i in range(12))
     assert baixar.limites[-1] == seletores.MAX_ANIMATED_IMAGE_BYTES
+    seletor.fechar()
+
+
+def test_a_previa_animada_so_toca_a_copia_reduzida(baixar, temp, schema, monkeypatch):
+    """I1/DE-78: a original (até 200 MB) nunca é fonte animada; só a cópia reduzida, quando chega."""
+    pedidos = []
+    monkeypatch.setattr(seletores.copias_animadas, "pedir", lambda origem, destino, tamanho, pronto: pedidos.append((destino, pronto)))
+    seletor, _ = _criar(seletores.SeletorDoSgdb, SgdbFalso(grids=lista_de_grades(2)))
+    seletor.animadas = True  # sem aberto, não faz nada: abre antes
+    seletor.abrir("Jogo")
+    seletor.animadas = True
+    assert _esperar(lambda: _prontos(seletor, 2) and len(pedidos) == 2)
+    copia = lambda i: seletor.data(seletor.index(i, 0), seletor.Papel.CopiaAnimada)  # noqa: E731
+    assert copia(0) == "" and copia(1) == ""
+    destino, pronto = pedidos[0]
+    pronto("falhou")
+    assert copia(0) == ""
+    pronto("pronta")
+    assert copia(0).endswith(destino.name)
     seletor.fechar()
 
 

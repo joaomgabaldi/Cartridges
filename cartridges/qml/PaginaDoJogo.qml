@@ -681,7 +681,8 @@ Item {
                                 anchors.fill: parent
                                 radius: parent.radius
                                 visible: botaoJogar.hovered || botaoJogar.down
-                                color: botaoJogar.down ? Qt.rgba(0, 0, 6 / 255, 0.2) : Qt.rgba(1, 1, 1, 0.1)
+                                // `button.opaque:hover`: 10% de `currentColor`, o texto do botão (preto no tema escuro, branco no claro).
+                                color: botaoJogar.down ? Qt.rgba(0, 0, 6 / 255, 0.2) : Qt.alpha(botaoJogar.corDoTexto, botaoJogar.corDoTexto.a * 0.1)
                             }
                             AnelDeFoco { ativo: botaoJogar.visualFocus; raio: parent.radius }
                         }

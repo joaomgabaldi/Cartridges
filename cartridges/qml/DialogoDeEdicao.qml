@@ -170,6 +170,7 @@ MolduraDoDialogo {
                     Item {
                         anchors.fill: parent
                         opacity: edicao.convertendoCapa ? 0 : 1
+                        enabled: !edicao.convertendoCapa  // somem, e não recebem clique nem Tab
                         Behavior on opacity { enabled: Tema.animacoes; NumberAnimation { duration: Tema.duracaoCurta } }
 
                         // `.card`: raio 12, o contorno e a sombra; o corte acompanha o raio.
@@ -366,7 +367,7 @@ MolduraDoDialogo {
                         Item {
                             anchors.fill: parent
                             opacity: edicao.buscandoMetadados ? 0 : 1
-                            enabled: !edicao.buscandoMetadados
+                            // Sem `enabled`: o foco do teclado fica no botão (o modelo ignora o segundo clique).
                             Behavior on opacity { enabled: Tema.animacoes; NumberAnimation { duration: Tema.duracaoCurta } }
                             BotaoDeLinha {
                                 objectName: "botaoBuscarMetadados"
@@ -559,6 +560,9 @@ MolduraDoDialogo {
                     Icone {
                         anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
                         nome: "pan-down"
+                        // `.expander-row-arrow`: 55% fechada; aberta, 100% e na cor de destaque.
+                        cor: dialogo.avancadasAbertas ? Tema.destaqueTexto : Tema.texto
+                        opacity: dialogo.avancadasAbertas ? 1 : Tema.opacidadeApagado
                         rotation: dialogo.avancadasAbertas ? 180 : 0
                         Behavior on rotation { enabled: Tema.animacoes; NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
                     }

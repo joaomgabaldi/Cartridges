@@ -50,7 +50,6 @@ SeletorBase {
             objectName: seletorDePapel.objectName + "NaoTrocar"
             visible: !seletorDePapel.seletor.soArquivo
             text: "Não trocar"
-            enabled: !seletorDePapel.seletor.ajustando
             dica: "Não alterar o papel de parede quando este jogo rodar"
             Accessible.name: dica
             onClicked: seletorDePapel.seletor.naoTrocar()
@@ -104,9 +103,9 @@ SeletorBase {
             GridView {
                 id: grade
                 objectName: seletorDePapel.objectName + "Grade"
-                width: seletorDePapel.colunas * cellWidth
-                height: parent.height
-                anchors.horizontalCenter: parent.horizontalCenter
+                // Ocupa a largura toda (a barra de rolagem fica na borda); as colunas ficam centradas pela margem.
+                anchors.fill: parent
+                leftMargin: Math.max(0, (width - seletorDePapel.colunas * cellWidth) / 2)
                 topMargin: 6
                 bottomMargin: 6
                 model: seletorDePapel.seletor
@@ -120,7 +119,6 @@ SeletorBase {
                     id: celula
                     required property int index
                     required property string miniatura
-                    required property bool carregando
                     width: grade.cellWidth
                     height: grade.cellHeight
 
@@ -133,7 +131,6 @@ SeletorBase {
                         padding: 0
                         hoverEnabled: false  // `.no-hover`
                         focusPolicy: Qt.StrongFocus
-                        enabled: !celula.carregando
                         Accessible.name: "Papel de parede " + (celula.index + 1)
                         Accessible.role: Accessible.Button
                         Keys.onReturnPressed: click()
