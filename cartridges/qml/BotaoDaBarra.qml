@@ -17,6 +17,7 @@ Botao {
     estilo: "plano"
     implicitWidth: 34
     implicitHeight: 34
+    semRealce: indisponivel
     focusPolicy: indisponivel ? Qt.NoFocus : Qt.TabFocus
     opacity: indisponivel || !enabled ? Tema.opacidadeDesabilitado : 1
     dicaAtiva: hovered && !menuAberto

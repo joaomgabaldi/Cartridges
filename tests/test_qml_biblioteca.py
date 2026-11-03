@@ -509,13 +509,15 @@ def test_filtrar_com_a_grade_cabendo_na_tela_reavalia_o_autoplay(app_qt, monkeyp
 # --- Controle do Xbox na interface -------------------------------------------------------------
 
 def test_controle_move_a_selecao_e_vibra_na_borda(app_qt):
+    # O `GtkFlowBox` responde que andou mesmo contra a parede (medido com o GTK 4.24 da `main`: `child_focus` devolve True e o
+    # foco fica): na grade a borda vibra o tique leve, não o toque firme.
     app = _App(_tres())
     grade = app.achar("grade")
     colunas = grade.property("colunas")
     assert colunas >= 1
     app.controle.mover.emit(-1, 0)
     assert grade.property("currentIndex") == 0, "na borda esquerda a seleção fica"
-    assert app.leitor.vibracoes == [(0.6, 0.2)], "e o controle vibra"
+    assert app.leitor.vibracoes == [(0.0, 0.14)], "e o controle vibra como a `main`"
     app.leitor.vibracoes.clear()
     app.controle.mover.emit(1, 0)
     if colunas > 1:
@@ -536,7 +538,7 @@ def test_controle_nao_passa_do_ultimo_jogo(app_qt):
     assert grade.property("currentIndex") == 2
     app.leitor.vibracoes.clear()
     app.controle.mover.emit(1, 0)
-    assert app.leitor.vibracoes == [(0.6, 0.2)], "no último jogo vibra"
+    assert app.leitor.vibracoes == [(0.0, 0.14)], "no último jogo vibra o tique, como o `FlowBox` da `main`"
     app.fechar()
 
 
@@ -560,9 +562,11 @@ def test_controle_sobe_da_primeira_linha_para_a_barra_e_desce(app_qt):
     botoes = ["botaoAdicionar", "botaoZerados", "botaoBusca", "botaoMenu"]
     com_foco = [n for n in botoes if app.achar(n).property("activeFocus")]
     assert len(com_foco) == 1, "um botão da barra recebe o foco"
-    assert app.leitor.vibracoes == [], "e o controle não vibra"
+    assert app.leitor.vibracoes == [(0.0, 0.14)], "e o controle vibra o tique (C-11)"
+    app.leitor.vibracoes.clear()
     app.controle.mover.emit(0, 1)
     assert grade.property("activeFocus") is True
+    assert app.leitor.vibracoes == [(0.0, 0.14)]
     app.fechar()
 
 

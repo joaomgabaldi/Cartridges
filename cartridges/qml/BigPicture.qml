@@ -46,7 +46,11 @@ Item {
         saltando = false
     }
     Component.onCompleted: irDireto(indice)
-    onIndiceChanged: posicao = indice
+    onIndiceChanged: { posicao = indice; assentarCentral() }
+    onPosicaoChanged: assentarCentral()
+    // A central exibida muda quando o passo chega ao índice atual, não quando ele começa.
+    property int centralExibida: 0
+    function assentarCentral() { if (Math.abs(posicao - indice) < 0.001) centralExibida = indice }
 
     // Lista refeita com o centro em outro índice: pula direto, como o `definir_jogos` da `main`.
     // Vem antes do `alterado`, então `indice` ainda é o antigo; mudança só de capa não passa por aqui.
@@ -158,9 +162,8 @@ Item {
     }
 
     // --- P1: as capas da fila decodificadas antes de escurecer ---
-    // No tamanho das vagas em tela cheia no monitor da janela (Review Focus 4): o cache do Qt Quick
-    // só acerta com a mesma URL, `sourceSize` e `fillMode`. Vivem até o fim da fila de entrada.
-    readonly property real alturaEmTelaCheia: Screen.height * 0.55
+    // No tamanho das vagas (300 e 630 de altura, vezes a escala do monitor): o cache do Qt Quick só acerta com a mesma
+    // URL, `sourceSize` e `fillMode`. Vivem até o fim da fila de entrada.
     property var preparo: []
     property bool preparoAvisado: true
     function preparar() {
@@ -193,8 +196,8 @@ Item {
                 objectName: "preparoDaCapa"
                 source: modelData
                 asynchronous: true
-                fillMode: Image.PreserveAspectCrop
-                sourceSize.height: Math.round(tela.alturaEmTelaCheia * tela.escala)
+                fillMode: Image.Stretch
+                sourceSize.height: Math.round(300 * tela.escala)
                 onStatusChanged: Qt.callLater(tela.conferirPreparo)
             }
         }
@@ -204,8 +207,8 @@ Item {
             objectName: "preparoDaCentral"
             source: tela.preparo.length > 0 && tela.jogos.length > 0 && tela.jogos[0].capaAnimada === "" ? tela.preparo[0] : ""
             asynchronous: true
-            fillMode: Image.PreserveAspectCrop
-            sourceSize.height: Math.round(tela.alturaEmTelaCheia * tela.escalaNaAbertura * tela.escala)
+            fillMode: Image.Stretch
+            sourceSize.height: Math.round(630 * tela.escala)
             onStatusChanged: Qt.callLater(tela.conferirPreparo)
         }
     }
@@ -252,8 +255,8 @@ Item {
             .times(translacao(-larguraCapa / 2, -alturaCapa / 2, 0))
     }
 
-    // O toque do Qt Quick acerta a capa errada sob a projeção (ADR 0005, D44): projeta os cantos e
-    // testa o quadrilátero, da capa mais próxima do centro à mais distante.
+    // O toque do Qt Quick acerta a capa errada sob a projeção (ADR 0005, D44): projeta os cantos e testa a caixa alinhada
+    // que os contém (`transform_bounds` + `contains_point` da `main`), da capa mais próxima do centro à mais distante.
     function capaEm(px, py) {
         const visiveis = []
         for (let i = Math.max(0, Math.floor(posicao - capasDeCadaLado) + 1);
@@ -264,15 +267,8 @@ Item {
             const m = transformacao(i)
             const cantos = [[0, 0], [larguraCapa, 0], [larguraCapa, alturaCapa], [0, alturaCapa]]
                 .map(([x, y]) => { const v = m.times(Qt.vector4d(x, y, 0, 1)); return [v.x / v.w, v.y / v.w] })
-            // Dentro do quadrilátero convexo: o mesmo lado de todas as arestas.
-            let positivos = 0, negativos = 0
-            for (let k = 0; k < 4; k++) {
-                const [ax, ay] = cantos[k], [bx, by] = cantos[(k + 1) % 4]
-                const lado = (bx - ax) * (py - ay) - (by - ay) * (px - ax)
-                if (lado < 0) negativos++
-                if (lado > 0) positivos++
-            }
-            if (positivos === 0 || negativos === 0) return i
+            const xs = cantos.map(c => c[0]), ys = cantos.map(c => c[1])
+            if (px >= Math.min(...xs) && px <= Math.max(...xs) && py >= Math.min(...ys) && py <= Math.max(...ys)) return i
         }
         return -1
     }
@@ -347,13 +343,14 @@ Item {
                     jogo: tela.jogos[vaga.i]
                     indice: vaga.i
                     mascara: mascaraDoReflexo
+                    placeholder: bigPicture.placeholder
                     largura: tela.larguraCapa
                     altura: tela.alturaCapa
                     escala: tela.escala
-                    escalaDaCentral: tela.escalaNaAbertura
                     opacidadeDoReflexo: tela.reflexoOpacidade
-                    // Só no fim do passo: segurando a tecla nenhuma capa de passagem carrega a cópia em alta.
-                    central: vaga.i === tela.indice && Math.abs(tela.posicao - vaga.i) < 0.001
+                    // Só no fim do passo: segurando a tecla nenhuma capa de passagem carrega a cópia em alta, e a antiga
+                    // central a guarda até o passo acabar (`done` da `main`).
+                    central: vaga.i === tela.centralExibida
                     animar: bigPicture.animarCentral && bigPicture.visivel && !tela.sessaoEmAndamento
                     opacity: (1 - tela.progressoAbertura) * tela.opacidadeCapas
                     transform: Matrix4x4 { matrix: tela.transformacao(vaga.i) }
@@ -410,21 +407,24 @@ Item {
         opacity: tela.opacidadeDoRodape
         Text {
             objectName: "nomeDoRodape"
-            width: tela.width * 0.8
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Math.min(implicitWidth, tela.width)
             text: bigPicture.nome
             textFormat: Text.PlainText
             color: "white"
-            font { family: Tema.fonte; pixelSize: 27; weight: Font.ExtraBold }
+            font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 }  // `title-1`: 21,72 px, arredondado (o Qt só aceita inteiro)
             wrapMode: Text.Wrap
             horizontalAlignment: Text.AlignHCenter
         }
         Text {
-            width: tela.width * 0.8
+            objectName: "desenvolvedoraDoRodape"
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Math.min(implicitWidth, tela.width)
             text: bigPicture.desenvolvedora
             textFormat: Text.PlainText
             color: "white"
             opacity: 0.55
-            font { family: Tema.fonte; pixelSize: 15 }
+            font { family: Tema.fonte; pixelSize: Tema.corpo }
             horizontalAlignment: Text.AlignHCenter
         }
     }

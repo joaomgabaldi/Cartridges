@@ -128,10 +128,10 @@ def test_big_picture_segue_as_animacoes_relidas(app_qt, monkeypatch, schema):  #
 
     ligadas[0] = False
     aplicativo.reler_animacoes()
-    assert not big_picture.animacoes and not big_picture.animarCentral
-    assert mudou == [False]
+    assert not big_picture.animacoes and big_picture.animarCentral  # a capa central só depende de `cover-autoplay` (BP-15)
+    assert mudou == []
 
     ligadas[0] = True
     aplicativo.reler_animacoes()
     assert big_picture.animacoes and big_picture.animarCentral
-    assert mudou == [False, True]
+    assert mudou == []

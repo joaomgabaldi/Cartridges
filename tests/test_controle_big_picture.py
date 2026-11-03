@@ -228,13 +228,14 @@ def test_conectado_do_qml_so_com_a_grade_a_vista(app_qt, monkeypatch):
     app.fechar()
 
 
-def test_conectado_com_menu_aberto_nao_entra(app_qt, monkeypatch):
+def test_conectado_com_menu_aberto_entra(app_qt, monkeypatch):
+    # Só diálogo impede a entrada automática (`window.py:1396-1410`); um menu aberto não (BP-14).
     app = _entrada(monkeypatch, grade=False)
     shared.schema.set_boolean("big-picture-ao-conectar", True)
     shared.schema.set_boolean("gamepad", True)
     app.achar("menuPrincipal").open()
     app.controle.conectado.emit()
-    assert not app.big_picture.ocupada
+    assert app.big_picture.ocupada
     app.fechar()
 
 

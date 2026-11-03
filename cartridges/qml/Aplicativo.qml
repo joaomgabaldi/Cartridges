@@ -648,6 +648,94 @@ Principal {
         return dy < 0 ? Qt.Key_Up : dy > 0 ? Qt.Key_Down : dx < 0 ? Qt.Key_Left : Qt.Key_Right
     }
 
+    // --- O passo do direcional nos diálogos e menus (`scope.child_focus(direction)` da `main`) -----------------------
+    // O escopo do foco: o diálogo (`MolduraDoDialogo`) ou o popup (menu, lista de escolha, balão) em que ele está.
+    function escopoDoFoco(foco) {
+        for (var p = foco; p; p = p.parent) {
+            if (typeof p.dentro === "function" && typeof p.focarInicial === "function") return p
+            if (p.parent === Overlay.overlay) return p
+        }
+        return null
+    }
+    function descende(item, raiz) {
+        for (var p = item; p; p = p.parent)
+            if (p === raiz) return true
+        return false
+    }
+    // O que o direcional nunca altera: texto, número, deslizante e lista de escolha (a `main` só move o foco).
+    function ehEditor(item) {
+        return typeof item.cursorPosition === "number" || typeof item.stepSize === "number"
+            || (item.popup !== undefined && typeof item.currentIndex === "number")
+    }
+    // O controle do escopo mais perto, na direção, do foco: o vizinho geométrico entre os da ordem do Tab.
+    function vizinhoNaDirecao(foco, escopo, dx, dy) {
+        var c0 = foco.mapToItem(null, foco.width / 2, foco.height / 2)
+        var melhor = null, nota = 1e9, atual = foco
+        for (var i = 0; i < 500; ++i) {
+            atual = atual.nextItemInFocusChain(true)
+            if (!atual || atual === foco) break
+            if (!atual.visible || !atual.enabled || !descende(atual, escopo)) continue
+            var c = atual.mapToItem(null, atual.width / 2, atual.height / 2)
+            var adiante = (c.x - c0.x) * dx + (c.y - c0.y) * dy
+            if (adiante < 1) continue
+            var n = adiante + 2 * (dx !== 0 ? Math.abs(c.y - c0.y) : Math.abs(c.x - c0.x))
+            if (n < nota) { nota = n; melhor = atual }
+        }
+        return melhor
+    }
+    // O viewport segue o foco: a rolagem que contém o item o traz para dentro, sem sobrar.
+    function garantirVisivel(item, escopo) {
+        for (var p = item.parent; p && p !== escopo.parent; p = p.parent) {
+            if (typeof p.contentY !== "number" || typeof p.contentHeight !== "number" || !p.contentItem) continue
+            var topo = item.mapToItem(p.contentItem, 0, 0).y
+            var minimo = p.originY - p.topMargin
+            var maximo = Math.max(minimo, p.originY + p.contentHeight + p.bottomMargin - p.height)
+            if (topo < p.contentY) p.contentY = Math.max(minimo, topo)
+            else if (topo + item.height > p.contentY + p.height) p.contentY = Math.min(maximo, topo + item.height - p.height)
+        }
+    }
+    function realcadoEm(raiz) {
+        for (var i = 0; i < raiz.children.length; ++i) {
+            var filho = raiz.children[i]
+            if (filho.highlighted === true) return filho
+            var dentro = realcadoEm(filho)
+            if (dentro) return dentro
+        }
+        return null
+    }
+    // O que um passo pode mexer sem trocar o foco: o item realçado do menu e a rolagem.
+    function situacaoDoPasso(escopo) {
+        var foco = janela.activeFocusItem
+        var rolagem = 0
+        for (var p = foco; p; p = p.parent)
+            if (typeof p.contentY === "number") { rolagem = p.contentY; break }
+        return [foco, escopo && escopo.parent === Overlay.overlay ? realcadoEm(escopo) : null, rolagem,
+                foco && typeof foco.currentIndex === "number" ? foco.currentIndex : -1]
+    }
+    // Um passo com diálogo ou menu na frente. Primeiro o vizinho geométrico; sem ele, a tecla de seta (menus, listas e
+    // grades andam por elas), exceto nos controles de valor, onde a seta mudaria o que está escolhido. Devolve se mexeu.
+    function passoNosPopups(dx, dy) {
+        var foco = janela.activeFocusItem
+        var escopo = foco ? escopoDoFoco(foco) : null
+        // Uma lista de escolha aberta (o foco continua na caixa) anda pelas setas dela.
+        var listaAberta = !!foco && foco.popup !== undefined && foco.popup.visible === true
+        if (escopo && !listaAberta) {
+            var vizinho = vizinhoNaDirecao(foco, escopo, dx, dy)
+            if (vizinho) {
+                vizinho.forceActiveFocus(Qt.TabFocusReason)
+                garantirVisivel(vizinho, escopo)
+                return true
+            }
+            if (ehEditor(foco)) return false
+        }
+        var antes = situacaoDoPasso(escopo)
+        controle.teclar(teclaDoPasso(dx, dy))
+        var depois = situacaoDoPasso(escopo)
+        for (var i = 0; i < antes.length; ++i)
+            if (antes[i] !== depois[i]) return true
+        return false
+    }
+
     // O Big Picture manda no controle desde o escuro da entrada até o fim da saída: a grade escondida não recebe nada.
     readonly property bool bigPictureNaFrente: bigPicture.visivel || bigPicture.ocupada
 
@@ -660,7 +748,11 @@ Principal {
         target: controle
         enabled: !sessao.emAndamento
         function onMover(dx, dy) {
-            if (janela.popupAberto) { controle.teclar(janela.teclaDoPasso(dx, dy)); return }
+            if (janela.popupAberto) {
+                if (janela.passoNosPopups(dx, dy)) controle.passar()
+                else controle.bater()
+                return
+            }
             if (janela.bigPictureNaFrente) {
                 // Só ← e →; ocupada, a página não anda e o toque não vibra.
                 if (bigPicture.ocupada || dx === 0) return
@@ -675,6 +767,7 @@ Principal {
                 if (dy > 0) {
                     janela.paginaDoControle.mostrarSelecao()
                     janela.paginaDoControle.focarGrade()
+                    controle.passar()
                 } else if (dx !== 0) {
                     var vizinho = janela.botaoPerto(x, focado, dx)
                     if (vizinho) { janela.focarBotao(vizinho); controle.passar() }
@@ -686,7 +779,7 @@ Principal {
                 } else if (dy < 0) {
                     // ↑ na primeira linha: o botão da barra mais perto na horizontal.
                     var botao = janela.botaoPerto(janela.paginaDoControle.xDoAtual(), null, 0)
-                    if (botao) janela.focarBotao(botao)
+                    if (botao) { janela.focarBotao(botao); controle.passar() }
                     else controle.bater()
                 } else controle.bater()
             }
@@ -697,15 +790,21 @@ Principal {
             else controle.bater()
         }
         function onConectado() {
-            bigPicture.controleConectado(janela.paginaAtual === "todos" && !janela.popupAberto)
+            bigPicture.controleConectado(janela.paginaAtual === "todos" && !janela.modalAberto)
         }
         function onPresente() {
             if (janela.bigPictureNaFrente) return
-            if (!janela.popupAberto && !janela.botaoFocado() && janela.paginaDoControle)
-                janela.paginaDoControle.mostrarSelecao()
+            // Fora da grade (num botão da barra, ou sem foco), o primeiro jogo; na grade, só acende a seleção.
+            if (!janela.popupAberto && janela.paginaDoControle && janela.paginaDoControle.mostrarSelecao() === true)
+                controle.passar()
         }
         function onAtivar() {
-            if (janela.popupAberto) { controle.teclar(Qt.Key_Return); return }
+            if (janela.popupAberto) {
+                // Um campo de texto de várias linhas não ativa nada (`activate` num `TextView`): o Return seria uma quebra de linha.
+                var foco = janela.activeFocusItem
+                if (!foco || typeof foco.lineCount !== "number") controle.teclar(Qt.Key_Return)
+                return
+            }
             if (janela.bigPictureNaFrente) { if (!bigPicture.ocupada) bigPicture.abrirJogo(); return }
             var focado = janela.botaoFocado()
             if (focado) focado.click()
@@ -717,7 +816,11 @@ Principal {
             if (janela.paginaAtual !== "todos") janela.voltar()
             else if (todos.buscaAberta) todos.buscaAberta = false
         }
-        function onMenuPrincipal() { if (!janela.bigPictureNaFrente && !janela.popupAberto) menuPrincipal.open() }
+        // O Start só abre o menu em "Todos os jogos" e em Jogos Zerados (`on_open_menu_action`).
+        function onMenuPrincipal() {
+            if (!janela.bigPictureNaFrente && !janela.popupAberto && (janela.paginaAtual === "todos" || janela.paginaAtual === "zerados"))
+                menuPrincipal.open()
+        }
         function onMenuDoJogo() { if (!janela.bigPictureNaFrente && !janela.popupAberto && janela.paginaDoControle) janela.paginaDoControle.abrirMenuDoAtual() }
         function onBuscar() { if (!janela.bigPictureNaFrente && !janela.popupAberto && janela.paginaAtual === "todos") todos.alternarBusca() }
         function onUsado() {

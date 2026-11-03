@@ -156,6 +156,11 @@ class BigPicture(QObject):
     def desenvolvedora(self) -> str:
         return (self._central() or {}).get("desenvolvedora", "")
 
+    @Property(str, constant=True)
+    def placeholder(self) -> str:
+        """A imagem da capa que falta: a mesma da grade."""
+        return self._modelo.placeholder
+
     @Property(bool, notify=alterado)
     def vazia(self) -> bool:
         return not self._jogos
@@ -195,7 +200,8 @@ class BigPicture(QObject):
         self._religar_animar_central()
 
     def _ler_animar_central(self) -> bool:
-        return self._animacoes_do_sistema and shared.schema.get_boolean("cover-autoplay")
+        # Só a preferência (`big_picture.py:288` da `main`); as animações do sistema valem para a grade.
+        return shared.schema.get_boolean("cover-autoplay")
 
     def _religar_animar_central(self) -> None:
         animar = self._ler_animar_central()
@@ -205,7 +211,7 @@ class BigPicture(QObject):
 
     @Property(bool, notify=animarCentralMudou)
     def animarCentral(self) -> bool:  # noqa: N802
-        """A capa animada do jogo central toca: `cover-autoplay` ligado e animações do Windows ativas."""
+        """A capa animada do jogo central toca: `cover-autoplay` ligado."""
         return self._animar_central
 
     # --- a lista segue o modelo ---
@@ -410,11 +416,8 @@ class BigPicture(QObject):
         self.aberturaPedida.emit(0.0, 1.0)
 
     def _janela_normal(self) -> None:
-        if self._janela is None:
-            return
-        if self._estava_maximizada:
-            self._janela.showMaximized()
-        else:
+        # Só sai da tela cheia (`unfullscreen()` da `main`): a maximização volta na saída do Big Picture.
+        if self._janela is not None:
             self._janela.showNormal()
 
     def _voltar_a_tela_cheia(self) -> None:

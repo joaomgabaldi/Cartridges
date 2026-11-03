@@ -72,15 +72,25 @@ Item {
             if (j >= 0) { r = i; c = j }
         }
         if (r < 0) { focarInicial(); return true }
+        var botao
         if (dx !== 0) {
             if (c + dx < 0 || c + dx >= linhas[r].length) return false
-            linhas[r][c + dx].forceActiveFocus(Qt.TabFocusReason)
+            botao = linhas[r][c + dx]
         } else {
             if (r + dy < 0 || r + dy >= linhas.length) return false
             var alvo = linhas[r + dy]
-            alvo[Math.min(c, alvo.length - 1)].forceActiveFocus(Qt.TabFocusReason)
+            botao = alvo[Math.min(c, alvo.length - 1)]
         }
+        botao.forceActiveFocus(Qt.TabFocusReason)
+        mostrarBotao(botao)
         return true
+    }
+    // O viewport segue o foco (`window.blp:480`): o botão fora da vista rola para dentro dela.
+    function mostrarBotao(botao) {
+        var topo = botao.mapToItem(rolagem.contentItem, 0, 0).y
+        var fim = topo + botao.height
+        if (topo < rolagem.contentY) rolagem.contentY = Math.max(0, topo)
+        else if (fim > rolagem.contentY + rolagem.height) rolagem.contentY = Math.min(rolagem.contentHeight - rolagem.height, fim - rolagem.height)
     }
     // O A do controle e o Enter: ativa o botão focado.
     function abrirDetalhesDoAtual() {

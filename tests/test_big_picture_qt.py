@@ -1027,7 +1027,7 @@ def test_duas_aberturas_sem_ativacao_dao_uma_tela_cheia(abrivel, schema):
     assert a.janela.chamadas.count("tela cheia") == 2  # a entrada e a única volta
 
 
-def test_maximizada_com_ida_e_volta_de_jogo_maximiza_a_cada_saida_da_tela_cheia(app_qt, tiques, monkeypatch):
+def test_maximizada_so_volta_maximizada_na_saida_do_big_picture(app_qt, tiques, monkeypatch):
     jogos = {"a": _jogo("a", 30)}
     modelo, bp, janela, _ = _com_janela(*jogos.values(), maximizada=True)
     monkeypatch.setattr(modulo.shared, "store", SimpleNamespace(get=jogos.get))
@@ -1039,8 +1039,9 @@ def test_maximizada_com_ida_e_volta_de_jogo_maximiza_a_cada_saida_da_tela_cheia(
     bp.aberturaTerminou()
     bp.sair()
     bp.filaTerminou()
-    assert janela.chamadas.count("maximizada") == 2  # a ida do jogo e a saída; "normal" nunca
-    assert "normal" not in janela.chamadas
+    # Ao abrir o jogo a `main` só chama `unfullscreen()` (BP-16): a ida do jogo é "normal"; a maximização volta na saída.
+    assert janela.chamadas.count("maximizada") == 1
+    assert janela.chamadas.index("normal") < janela.chamadas.index("maximizada")
 
 
 def test_voltou_do_jogo_sem_estar_ocupada_nao_faz_nada(abrivel):

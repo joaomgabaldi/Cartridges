@@ -19,6 +19,7 @@ from cartridges import shared
 from cartridges.jogo import Jogo
 from cartridges.modelos import regras_do_big_picture as regras
 from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
+from cartridges.modelos import biblioteca as modulo_biblioteca
 from cartridges.modelos.biblioteca import ModeloDaBiblioteca
 from tests.apoio_qml_biblioteca import QML, _achar, _esperar
 from tests.apoio_qml_big_picture import (
@@ -112,18 +113,28 @@ def test_capa_em_acha_a_central_no_meio(app_qt):
     tela.fechar()
 
 
-def test_capa_em_lateral_pelo_quadrilatero(app_qt):
+def test_capa_em_lateral_pela_caixa_alinhada(app_qt):
+    # Como a `main` (`transform_bounds` + `contains_point`): a caixa que contém a capa projetada acerta, mesmo nos cantos
+    # que o quadrilátero inclinado deixa de fora (BP-02; D7 só justifica o teste próprio, não a forma).
     tela = _Tela()
     tela.bp.irPara(2)
     cantos = _cantos(tela, 1)
     centro = (sum(x for x, _ in cantos) / 4, sum(y for _, y in cantos) / 4)
     assert _capa_em(tela, *centro) == 1
-    # Dentro da caixa alinhada (a da `main`) e fora do quadrilátero: não é a capa 1 (D44).
     xs, ys = [x for x, _ in cantos], [y for _, y in cantos]
-    fora = [(x, y) for x in (min(xs), max(xs)) for y in (min(ys), max(ys)) if not _dentro(cantos, x, y)]
-    assert fora, "a capa lateral inclinada tem de deixar cantos da caixa de fora"
+    vizinha = _cantos(tela, 2)  # a central desenha por cima da que está ao lado
+    vx, vy = [x for x, _ in vizinha], [y for _, y in vizinha]
+    fora = [
+        (x, y)
+        for x in (min(xs) + 1, max(xs) - 1)
+        for y in (min(ys) + 1, max(ys) - 1)
+        if not _dentro(cantos, x, y) and not (min(vx) <= x <= max(vx) and min(vy) <= y <= max(vy))
+    ]
+    assert fora, "a capa lateral inclinada tem de deixar cantos da caixa fora do quadrilátero"
     for x, y in fora:
-        assert _capa_em(tela, x, y) != 1
+        assert _capa_em(tela, x, y) == 1
+    # Fora da caixa, nada.
+    assert _capa_em(tela, min(xs) - 5, max(ys) + 5) != 1
     tela.fechar()
 
 
@@ -294,10 +305,11 @@ def test_central_em_alta_so_estatica(app_qt, tmp_path):
     lateral = _capa_de_teste(motor, tmp_path, central=False)
     animada = _capa_de_teste(motor, tmp_path, central=True, animada=True)
     _esperar()
-    # Pixels reais: 150 · 1,25 nas laterais; a central ganha por cima 150 · 1,6 · 1,25.
-    assert _avaliar(_achar(capa, "capa"), "sourceSize.height") == round(150 * 1.25)
+    # As texturas da `main` em pixels reais: 300 · 1,25 nas laterais (a da grade); a central ganha por cima a dos detalhes, 630 · 1,25.
+    assert _avaliar(_achar(capa, "capa"), "sourceSize.height") == round(300 * 1.25)
     em_alta = _achar(capa, "capaEmAlta")
-    assert _avaliar(em_alta, "sourceSize.height") == round(150 * 1.6 * 1.25)
+    assert _avaliar(em_alta, "sourceSize.height") == round(630 * 1.25)
+    assert _avaliar(_achar(capa, "capa"), "fillMode") == 0 == _avaliar(em_alta, "fillMode")  # Stretch: 2:3 sem corte
     assert em_alta.property("source").toString() != ""
     assert em_alta.property("visible") is True  # pronta: só então aparece
     assert _achar(lateral, "capaEmAlta").property("source").toString() == ""
@@ -339,7 +351,7 @@ def test_animar_central_segue_o_autoplay_e_as_animacoes_do_sistema(app_qt):
         assert (bp.animarCentral, sem_sistema.animarCentral) == (False, False)
         shared.schema.set_boolean("cover-autoplay", True)
         _esperar()
-        assert (bp.animarCentral, sem_sistema.animarCentral) == (True, False)
+        assert (bp.animarCentral, sem_sistema.animarCentral) == (True, True)  # só a preferência (BP-15)
     finally:
         shared.schema.set_boolean("cover-autoplay", antes)
 
@@ -444,7 +456,7 @@ def test_central_em_alta_so_no_fim_do_passo(app_qt):
 
     assert centrais() == [0]
     tela.bp.irPara(3)
-    assert centrais() == []  # durante o passo, nenhuma
+    assert centrais() == [0]  # durante o passo a antiga guarda a textura grande (BP-05)
     assert _esperar(lambda: centrais() == [3])
     tela.fechar()
 
@@ -519,6 +531,8 @@ def test_botao_indisponivel_sem_3d(app_qt, monkeypatch):
     botao = app.achar("botaoBigPicture")
     assert botao.property("indisponivel") is True
     assert botao.property("dica") == "Requer uma placa de vídeo com aceleração 3D."
+    # Insensível como na `main`: 50% de opacidade e sem o realce do ponteiro (BP-11); a dica continua a abrir.
+    assert botao.property("opacity") == 0.5 and botao.property("semRealce") is True
     app.fechar()
 
 
@@ -737,8 +751,9 @@ def test_preparo_usa_o_mesmo_tamanho_das_capas():
     assert dados["telaCheia"][0] == dados["telaCheia"][1]
     assert len(dados["vagas"]) == 1 and dados["vagas"] == dados["preparo"]
     altura = json.loads(dados["vagas"][0])[0]
-    assert altura == round(dados["telaCheia"][1] * 0.55 * 1.25)
+    assert altura == round(300 * 1.25)  # a textura da grade, como na `main`
     assert len(dados["central"]) == 1 and dados["central"] == dados["preparoCentral"]
+    assert dados["central"][0][0] == round(630 * 1.25)
 
 
 def test_preparo_avisa_com_capa_ilegivel_e_sem_capa(app_qt, tmp_path):
@@ -987,3 +1002,42 @@ def test_modo_big_picture_do_controle_so_sem_dialogo_na_frente(app_qt, monkeypat
     QTest.keyClick(app.janela, Qt.Key.Key_Escape)
     assert app.controle.modoBigPicture is True
     app.fechar()
+
+
+def test_sem_capa_desenha_o_placeholder_da_biblioteca(app_qt, tmp_path):
+    # BP-01: `capa.get_texture() or GameCover.placeholder`; o quadro cinza com o nome do jogo não existe na `main`.
+    motor = QQmlEngine()
+    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    motor.addImageProvider("icone", ProvedorDeIcones())
+    placeholder = QUrl.fromLocalFile(str(modulo_biblioteca._PLACEHOLDER))  # noqa: SLF001
+    sem = _capa_de_teste(motor, tmp_path, central=False)
+    sem.setProperty("jogo", {"nome": "Sem capa", "capa": "", "capaAnimada": ""})
+    sem.setProperty("placeholder", placeholder)
+    com = _capa_de_teste(motor, tmp_path, central=False)
+    com.setProperty("placeholder", placeholder)
+    assert _esperar(lambda: _avaliar(_achar(com, "capa"), "status") == 1)  # Image.Ready
+    quadro = _achar(sem, "placeholderDaCapa")
+    assert quadro.property("visible") is True
+    assert quadro.property("source") == placeholder
+    assert _avaliar(quadro, "fillMode") == 0  # Stretch
+    assert _achar(com, "placeholderDaCapa").property("visible") is False  # a capa pronta cobre o placeholder
+    assert "Sem capa" not in _textos_de(sem), "o nome do jogo no quadro cinza saiu"
+
+
+def _textos_de(raiz):
+    return [i.property("text") for i in _itens(raiz, lambda i: i.metaObject().className().startswith("QQuickText"))]
+
+
+def test_rodape_tem_os_tamanhos_da_main_e_so_quebra_na_largura_da_tela(app_qt):
+    # BP-07, BP-08, BP-09: nome em `title-1`, desenvolvedora no corpo, largura natural.
+    tela = _Tela(1, nome="Zelda")
+    nome, dev = tela.achar("nomeDoRodape"), tela.achar("desenvolvedoraDoRodape")
+    assert _avaliar(nome, "font.pixelSize") == _avaliar(nome, "Tema.titulo1") and _avaliar(nome, "font.weight") == 800
+    assert _avaliar(dev, "font.pixelSize") == _avaliar(dev, "Tema.corpo")
+    assert nome.property("width") == pytest.approx(nome.property("implicitWidth"))
+    assert nome.property("width") < LARGURA * 0.8, "o nome curto não ocupa 80% da tela"
+    tela.fechar()
+    longa = _Tela(1, nome="Um nome de jogo muito longo " * 12)
+    nome = longa.achar("nomeDoRodape")
+    assert nome.property("width") == pytest.approx(LARGURA) and nome.property("lineCount") > 1
+    longa.fechar()

@@ -101,6 +101,7 @@ class Janela:
         self.novidades = Novidades(self.ponte.fila, self.checker)
         self.sobre = Sobre(self.ponte.fila)
         self.zerados_manuais = SeletorDeZerados()
+        self.controle = ControleDaGrade(estado_do_app=lambda: Qt.ApplicationState.ApplicationInactive)
         self.motor = QQmlEngine()
         from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
         self.motor.addImageProvider("icone", ProvedorDeIcones())
@@ -112,7 +113,7 @@ class Janela:
             ("paginaZerados", FiltroDaPagina(self.modelo, self.filtros, "zerados")),
             ("aplicativo", self.aplicativo),
             ("ponte", self.ponte),
-            ("controle", ControleDaGrade(estado_do_app=lambda: Qt.ApplicationState.ApplicationInactive)),
+            ("controle", self.controle),
             ("edicao", self.edicao),
             ("bigPicture", self.big_picture),
             ("sessao", self.sessao),

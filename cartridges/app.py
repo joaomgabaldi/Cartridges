@@ -184,6 +184,7 @@ class _Abertura:
     # A geometria da principal (D87): o primeiro passo do `_fechar` a grava.
     geometria: Any = None
     big_picture: Any = None
+    controle: Any = None
     sessao: Any = None
     verificador: Any = None
     novidades: Any = None
@@ -219,6 +220,7 @@ def _fechar(abertura: _Abertura) -> None:
         # pelo `quit()` não é lida de novo (o `closing` dela gravou).
         _de(a.geometria, "gravar"),
         _de(a.big_picture, "encerrar"),  # a cortina preta do fade nunca fica no monitor (ADR 0003)
+        _de(a.controle, "encerrar"),  # os motores do controle parados (`detach` da `main`)
         # As Preferências com um modal aberto (calibração, assistente das fitas, brilho, contas): fecham antes de a
         # sessão devolver as fitas (a prévia que saem não as acende de novo) e antes do login pendente.
         _de(a.preferencias, "fechar"),
@@ -336,7 +338,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     abertura.motor = motor = QQmlApplicationEngine()
     qwk.registrar(motor)
     abertura.aplicativo = aplicativo = Aplicativo(avisos)
-    controle = ControleDaGrade()
+    abertura.controle = controle = ControleDaGrade()
     detalhes = DetalhesDoJogo(shared.store, avisos=avisos)
     abertura.edicao = edicao = ModeloDaEdicao(aplicativo)
     historico = HistoricoDeSessoes(shared.store)
@@ -396,6 +398,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     # janela: sem ela não há `aboutToQuit`, e o `fechar()` (no fim do `ModeloDaSessao.devolver()`) nunca viria.
     session_fita.abrir()
     big_picture.definir_janela(motor.rootObjects()[0])  # a janela que vai à tela cheia
+    controle.definir_janela(motor.rootObjects()[0])  # só a principal ativa dá o controle (C-24)
     sessao.definir_janela(motor.rootObjects()[0])  # a que volta da barra de tarefas no fim da sessão
     painel_das_tarefas.definir_janela(motor.rootObjects()[0])  # a que o fechamento esconde com trabalho em andamento
     # Antes de o Qt mandar o `closing` às janelas: um `quit()` não é recusado pelo trabalho em andamento (D78).

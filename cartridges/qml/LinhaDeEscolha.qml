@@ -28,6 +28,16 @@ LinhaDoGrupo {
         hoverEnabled: true
         Accessible.name: linha.titulo
         onActivated: indice => linha.escolhido(indice)
+        // O A do controle (e o Enter) abre a lista, como o `activate` da `Adw.ComboRow`; fechada, o Qt não a abre com essa tecla.
+        // O soltar da mesma tecla é engolido: o `ComboBox` o leria como "escolher o realçado" e fecharia a lista que acabou de abrir.
+        property bool _abertaPelaTecla: false
+        readonly property var _teclasDeAbrir: [Qt.Key_Return, Qt.Key_Enter]
+        Keys.onPressed: event => {
+            if (_teclasDeAbrir.includes(event.key) && !popup.visible) { popup.open(); _abertaPelaTecla = true; event.accepted = true }
+        }
+        Keys.onReleased: event => {
+            if (_abertaPelaTecla && _teclasDeAbrir.includes(event.key)) { _abertaPelaTecla = false; event.accepted = true }
+        }
 
         // A seta e o valor ficam no fim da linha; o título, à esquerda, é da base.
         leftPadding: linha.width - linha.reservaADireita - 14

@@ -9,7 +9,7 @@ import sys
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt, Signal
 
 from cartridges import shared
 from cartridges.modelos.controle import ControleDaGrade
@@ -26,6 +26,7 @@ from cartridges.xinput import (
     XINPUT_DPAD_LEFT,
     XINPUT_DPAD_RIGHT,
     XINPUT_DPAD_UP,
+    XINPUT_LEFT_SHOULDER,
     XINPUT_START,
     XINPUT_Y,
     intervalo_de_repeticao_us,
@@ -257,7 +258,9 @@ def test_presente_ao_achar_o_controle():
     assert presentes == [1], "um só aviso, na leitura que fixa a base"
 
 
-def test_repeticao_na_grade_nao_dispara_em_rajada(m):
+def test_repeticao_na_grade_segue_a_agenda_absoluta(m):
+    # Como a `main` (`gamepad.py:645-648`): o passo n vence em atraso + n · 120 ms desde o aperto, sem esperar mais 120 ms do
+    # passo anterior; leitura de 33 ms não deixa a repetição 10% mais lenta (C-19). Um tique, no máximo um passo.
     ms = 1000
     m.leitor.botoes = XINPUT_DPAD_RIGHT
     m.tique()  # aperto em 0 ms
@@ -265,8 +268,64 @@ def test_repeticao_na_grade_nao_dispara_em_rajada(m):
     assert len(m.comandos()) == 2
     m.tique(1050 * ms)  # 1450 ms: um tique muito atrasado move uma vez só
     assert len(m.comandos()) == 3
-    for _ in range(3):  # 1483, 1516, 1549 ms: ainda dentro do intervalo
-        m.tique(33 * ms)
-    assert len(m.comandos()) == 3
-    m.tique(21 * ms)  # 1570 ms
+    m.tique(33 * ms)  # 1483 ms: ainda atrasado na agenda, anda um passo por tique até alcançar
     assert len(m.comandos()) == 4
+    for _ in range(40):  # alcançada a agenda, os passos saem a cada 120 ms de relógio, não a cada 4 leituras
+        m.tique(33 * ms)
+    desde_o_aperto_ms = 400 + 1050 + 33 + 40 * 33
+    assert len(m.comandos()) == 2 + (desde_o_aperto_ms - 400) // 120
+
+
+class _JanelaFalsa(QObject):
+    """A janela principal: o `isActive` e o `activeChanged` de uma `QWindow`."""
+
+    activeChanged = Signal()  # noqa: N815
+
+    def __init__(self, ativa=True):
+        super().__init__()
+        self.ativa = ativa
+
+    def isActive(self):  # noqa: N802
+        return self.ativa
+
+
+def test_so_a_janela_principal_ativa_da_o_controle():
+    # C-24: com Tarefas, Login ou o assistente em foco o app segue "ativo" no Qt, mas a principal não: o controle para.
+    montagem = Montagem()
+    janela = _JanelaFalsa(ativa=False)
+    montagem.controle.definir_janela(janela)
+    assert not montagem.controle.lendo, "o app está ativo, a principal não"
+    janela.ativa = True
+    janela.activeChanged.emit()
+    assert montagem.controle.lendo
+    janela.ativa = False
+    janela.activeChanged.emit()
+    assert not montagem.controle.lendo
+
+
+def test_encerrar_para_a_leitura_e_os_motores(m):
+    # C-25: o app fecha no meio de uma vibração; os motores não ficam ligados.
+    shared.schema.set_boolean("gamepad-rumble", True)
+    m.controle.bater()
+    m.leitor.vibracoes.clear()
+    m.controle.encerrar()
+    assert not m.controle.lendo
+    assert m.leitor.vibracoes == [(0.0, 0.0)]
+
+
+def test_no_big_picture_outro_botao_junto_nao_anula_o_salto(m):
+    # C-26: só A, B e os ombros valem; Start junto com LB não toma o lugar do salto.
+    m.controle.modoBigPicture = True
+    pulos = []
+    m.controle.pular.connect(pulos.append)
+    m.leitor.botoes = XINPUT_LEFT_SHOULDER | XINPUT_START
+    m.tique()
+    assert pulos == [-10]
+    assert "menuPrincipal" not in m.eventos
+    # Fora do Big Picture a cadeia é a de sempre: o Start vence.
+    m.leitor.botoes = 0
+    m.tique()
+    m.controle.modoBigPicture = False
+    m.leitor.botoes = XINPUT_LEFT_SHOULDER | XINPUT_START
+    m.tique()
+    assert "menuPrincipal" in m.eventos and pulos == [-10]

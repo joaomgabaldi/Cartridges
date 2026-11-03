@@ -664,3 +664,24 @@ def test_clique_na_linha_abrir_no_navegador_abre_o_endereco(janela, feed, _sem_n
     assert esperar(lambda: achar(linha, "abrirNoNavegador").property("visible") is True)
     _clique_em(linha, "abrirNoNavegador")
     assert _sem_navegador == ["https://x/1"]
+
+
+def test_controle_alcanca_o_link_da_linha_aberta_e_o_a_o_abre(janela, feed, monkeypatch):
+    # M3 do pacote G: ↑/↓ chegam ao "Abrir no navegador" e o A age nele, em vez de recolher a linha.
+    abertos = []
+    monkeypatch.setattr(janela.novidades, "abrirNoNavegador", abertos.append, raising=False)
+    feed.posts = [post(200, titulo="Alfa"), post(100, titulo="Beta")]
+    _abrir_a_pagina(janela)
+    assert esperar(lambda: len(_posts_na_lista(janela)) == 2)
+    primeira, _segunda = _posts_na_lista(janela)
+    assert esperar(lambda: primeira.property("activeFocus") is True)
+    controle = janela.controle
+    controle.ativar.emit()  # A no cabeçalho abre a linha
+    assert primeira.property("aberta") is True
+    controle.mover.emit(0, 1)
+    link = achar(primeira, "abrirNoNavegador")
+    assert esperar(lambda: link.property("activeFocus") is True)
+    controle.ativar.emit()
+    assert primeira.property("aberta") is True and len(abertos) == 1, "o A abre o link, não recolhe a linha"
+    controle.mover.emit(0, -1)
+    assert esperar(lambda: primeira.property("activeFocus") is True)

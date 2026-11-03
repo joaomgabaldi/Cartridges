@@ -30,10 +30,18 @@ Item {
     function mostrarSelecao() {}
     function abrirMenuDoAtual() {}
     function xDoAtual() { return raiz.mapToItem(null, raiz.width / 2, 0).x }
-    // Só ↑ e ↓ andam pelas linhas; devolve se o foco mudou.
+    // Só ↑ e ↓ andam, pelas paradas da lista: o cabeçalho de cada linha e, na linha aberta, o "Abrir no navegador"; devolve
+    // se o foco mudou.
     function moverSelecao(dx, dy) {
         if (!comLista) return false
         if (dy === 0) return false
+        var foco = Window.window ? Window.window.activeFocusItem : null
+        var atual = lista.itemAtIndex(lista.currentIndex)
+        if (foco && foco.objectName === "abrirNoNavegador" && dy < 0) { irPara(lista.currentIndex); return true }
+        if (dy > 0 && atual && atual.aberta && atual.botaoDoLink.visible && foco === atual.botaoDoCabecalho) {
+            atual.botaoDoLink.forceActiveFocus(Qt.TabFocusReason)
+            return true
+        }
         var i = lista.currentIndex + dy
         if (i < 0 || i >= lista.count) return false
         irPara(i)
@@ -45,9 +53,10 @@ Item {
         var linha = lista.itemAtIndex(i)
         if (linha) linha.botaoDoCabecalho.forceActiveFocus(Qt.TabFocusReason)
     }
-    // O A do controle: expande a linha do foco (ou tenta de novo).
+    // O A do controle: o botão em foco age (o cabeçalho expande a linha, o link abre o navegador); sem botão, a linha do foco.
     function abrirDetalhesDoAtual() {
         var foco = Window.window ? Window.window.activeFocusItem : null
+        if (foco && foco.click) { foco.click(); return }
         for (var p = foco; p; p = p.parent) {
             if (p.alternar) { p.alternar(); return }
         }
@@ -138,6 +147,7 @@ Item {
             readonly property real _corpo: (_comResumo ? resumoDaLinha.implicitHeight + 24 + 1 : 0) + (_comLink ? 50 + 4 + 1 : 0)
 
             readonly property alias botaoDoCabecalho: cabecalhoBotao
+            readonly property alias botaoDoLink: abrir
 
             function alternar() { if (expansivel) aberta = !aberta }
 

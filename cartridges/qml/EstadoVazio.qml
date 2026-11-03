@@ -23,6 +23,10 @@ Item {
     property color corDaDescricao: Tema.texto
     property color corDoIcone: Tema.texto
     signal botaoClicado()
+    // O controle alcança o botão (a `main` o põe na ordem do foco da página vazia).
+    readonly property bool botaoFocado: botao.activeFocus
+    function focarBotao() { botao.forceActiveFocus(Qt.TabFocusReason) }
+    function acionarBotao() { botao.click() }
 
     readonly property var _porGlifo: ({
         "": "display-brightness", "": "document-edit", "": "list-add", "": "window-close",

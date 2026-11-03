@@ -30,23 +30,48 @@ Item {
     // só uma linha, nunca duas.
     readonly property bool buscaVisivel: comBusca && buscaAberta
     readonly property bool rolado: grade.rolado && !buscaVisivel
-    function moverSelecao(dx, dy) { return grade.moverSelecao(dx, dy) }
+    // Devolve se o passo tem onde acontecer aqui; falso em ↑ na primeira linha (o controle vai à barra) e onde não há nada a fazer.
+    function moverSelecao(dx, dy) {
+        // Na busca, ↓ só entra na grade, sem andar uma linha; ↑ vai à barra e ←/→ não fazem nada.
+        if (campo.activeFocus) {
+            if (dy <= 0) return false
+            grade.porTeclado = true
+            grade.forceActiveFocus()
+            return true
+        }
+        // Página vazia: o foco alcança o botão "Importar" (`window.blp:20-29`).
+        if (grade.count === 0) {
+            if (dy <= 0 || !aviso.visible || aviso.rotuloDoBotao === "" || aviso.botaoFocado) return false
+            aviso.focarBotao()
+            return true
+        }
+        // O `GtkFlowBox` responde que andou mesmo contra a parede (o toque é o de passar): só ↑ na primeira linha sai.
+        return grade.moverSelecao(dx, dy) || dy >= 0
+    }
     // O x (na janela) do centro do cartão atual, para achar o botão da barra mais próximo.
     function xDoAtual() {
         return grade.currentItem ? grade.currentItem.mapToItem(null, grade.currentItem.width / 2, 0).x : 0
     }
-    // Um controle apareceu: acende a seleção no cartão atual, sem tirar o foco de quem digita na busca.
+    // Um controle apareceu: acende a seleção, sem tirar o foco de quem digita na busca. Com o foco fora da grade, vai ao
+    // primeiro jogo (`_focus_first`); devolve se foi.
     function mostrarSelecao() {
-        if (buscaAberta) return
+        if (buscaAberta) return false
+        const foraDaGrade = !grade.activeFocus && grade.count > 0
         grade.porTeclado = true
+        if (foraDaGrade) { grade.currentIndex = 0; grade.rolarAte(0) }
         grade.forceActiveFocus()
+        return foraDaGrade
     }
+    // O Y só age com o foco num cartão: na barra, na busca ou no botão da página vazia não faz nada.
     function abrirMenuDoAtual() {
+        if (!grade.activeFocus) return
         grade.porTeclado = true
-        grade.forceActiveFocus()
         if (grade.currentItem) grade.currentItem.abrirMenu()
     }
+    // O A: o botão da página vazia, o primeiro resultado da busca (o Enter do campo), ou o cartão atual.
     function abrirDetalhesDoAtual() {
+        if (aviso.botaoFocado) { aviso.acionarBotao(); return }
+        if (campo.activeFocus) { campo.accepted(); return }
         grade.porTeclado = true
         grade.forceActiveFocus()
         grade.abrirDoAtual()

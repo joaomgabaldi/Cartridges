@@ -110,6 +110,8 @@ GridView {
         var i = biblioteca.indiceDe(jogoId)
         currentIndex = i >= 0 ? i : 0
         positionViewAtIndex(currentIndex, GridView.Contain)
+        // Saindo do Big Picture pelo controle, o cartão volta com a seleção à mostra (`set_focus_visible`).
+        porTeclado = true
         forceActiveFocus()
     }
 
@@ -118,7 +120,7 @@ GridView {
     readonly property bool rolado: contentY - (originY - topMargin) > 0
 
     // O passo do controle: um cartão para o lado ou para cima/baixo, sem passar da borda.
-    // Devolve se o cartão atual mudou; na borda, quem chamou faz o controle vibrar (ou, em ↑ na primeira linha, vai à barra).
+    // Devolve se o cartão atual mudou; na borda, quem chamou decide (em ↑ na primeira linha, vai à barra).
     function moverSelecao(dx, dy) {
         porTeclado = true
         forceActiveFocus()
@@ -129,15 +131,37 @@ GridView {
         if (dx < 0) alvo = i > 0 ? i - 1 : i
         else if (dx > 0) alvo = i < count - 1 ? i + 1 : i
         else if (dy < 0) alvo = i - colunas >= 0 ? i - colunas : i
-        else if (dy > 0)
-            // Embaixo de uma coluna sem cartão, a última linha para no último jogo.
-            alvo = i + colunas < count ? i + colunas
-                : (Math.floor(i / colunas) < Math.floor((count - 1) / colunas) ? count - 1 : i)
+        // Embaixo de uma coluna sem cartão o `GtkFlowBox` não anda: o foco fica onde está.
+        else if (dy > 0) alvo = i + colunas < count ? i + colunas : i
         if (alvo === i) return false
         currentIndex = alvo
-        positionViewAtIndex(alvo, GridView.Contain)
+        rolarAte(alvo)
         return true
     }
+
+    // A rolagem do controle (`_scroll_to_focus`): 200 ms, OutCubic. Na primeira linha volta à margem de cima, na última vai
+    // ao fim; nas outras só o bastante para o cartão caber. Uma animação em curso é interrompida e a nova parte de onde está.
+    function rolarAte(indice) {
+        var topo = originY + Math.floor(indice / colunas) * cellHeight
+        var base = topo + cellHeight
+        var minimo = originY - topMargin
+        var maximo = Math.max(minimo, originY + contentHeight + bottomMargin - height)
+        var alvo
+        if (indice < colunas) alvo = minimo
+        else if (base >= originY + contentHeight - 1) alvo = maximo
+        else if (topo < contentY) alvo = topo
+        else if (base > contentY + height) alvo = base - height
+        else return
+        alvo = Math.min(Math.max(alvo, minimo), maximo)
+        rolagemDoControle.stop()
+        if (Math.abs(alvo - contentY) < 1) return
+        cancelFlick()
+        if (!Tema.animacoes) { contentY = alvo; return }
+        rolagemDoControle.from = contentY
+        rolagemDoControle.to = alvo
+        rolagemDoControle.start()
+    }
+    NumberAnimation { id: rolagemDoControle; objectName: "rolagemDoControle"; target: grade; property: "contentY"; duration: 200; easing.type: Easing.OutCubic }
 
     // Um menu para a grade toda; o cartão diz a que jogo ele se refere.
     MenuDoJogo {

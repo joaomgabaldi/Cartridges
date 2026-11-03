@@ -13,7 +13,7 @@ import weakref
 from collections.abc import Callable
 
 from PySide6.QtCore import Property, QObject, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QGuiApplication, QKeyEvent
+from PySide6.QtGui import QGuiApplication, QKeyEvent, QWindow
 
 from cartridges import shared
 from cartridges.xinput import (
@@ -82,6 +82,7 @@ class ControleDaGrade(QObject):
         self._botoes = 0
         self._modo_big_picture = False
         self._sem_controle = True  # a última leitura (ou o início) não tinha controle: o próximo é uma conexão
+        self._janela: QWindow | None = None  # a principal: só ela dá o controle (`window.is_active()` da `main`)
         self._ultimo_toque_capa_us: int | None = None
         self._ajustar_base()
         self._geracao_de_vibracao = 0
@@ -119,9 +120,18 @@ class ControleDaGrade(QObject):
         self._ultimo_passo = 0
         self._travada = False
 
+    def definir_janela(self, janela: QWindow) -> None:
+        """A janela principal: com Tarefas, Login ou o assistente em foco, o controle não mexe na grade de trás."""
+        self._janela = janela
+        janela.activeChanged.connect(self.sincronizar)
+        self.sincronizar()
+
     @Slot()
     def sincronizar(self) -> None:
-        ativa = self._estado_do_app() == Qt.ApplicationState.ApplicationActive
+        if self._janela is not None:
+            ativa = self._janela.isActive()
+        else:
+            ativa = self._estado_do_app() == Qt.ApplicationState.ApplicationActive
         desejado = not self._suspenso and ativa and shared.schema.get_boolean("gamepad")
         if desejado and not self._timer.isActive():
             if self._leitor is None:
@@ -253,10 +263,7 @@ class ControleDaGrade(QObject):
                 devido = agora - self._ultimo_passo >= intervalo_de_repeticao_us(agora - self._desde)
         else:
             # A primeira repetição espera o atraso; as outras vêm em ritmo constante.
-            devido = (
-                agora - self._desde >= REPEAT_DELAY_US + REPEAT_INTERVAL_US * self._repeticoes
-                and agora - self._ultimo_passo >= REPEAT_INTERVAL_US  # um tique atrasado não dispara em rajada
-            )
+            devido = agora - self._desde >= REPEAT_DELAY_US + REPEAT_INTERVAL_US * self._repeticoes
         if devido:
             self._repeticoes += 1
             self._ultimo_passo = agora
@@ -273,6 +280,9 @@ class ControleDaGrade(QObject):
             return
         self._engajado = True
         self.usado.emit()
+        if self._modo_big_picture:
+            # No Big Picture só valem A, B e os ombros: outro botão na mesma leitura não anula o salto.
+            apertados &= XINPUT_A | XINPUT_B | XINPUT_LEFT_SHOULDER | XINPUT_RIGHT_SHOULDER
         if apertados & XINPUT_A:
             self.ativar.emit()
         elif apertados & XINPUT_B:
@@ -294,6 +304,15 @@ class ControleDaGrade(QObject):
             return
         for tipo in (QKeyEvent.Type.KeyPress, QKeyEvent.Type.KeyRelease):
             QGuiApplication.sendEvent(janela, QKeyEvent(tipo, tecla, Qt.KeyboardModifier.NoModifier))
+
+    @Slot()
+    def encerrar(self) -> None:
+        """O app fecha: para a leitura e os motores (o `detach` da `main`); uma vibração em curso não sobrevive."""
+        self._timer.stop()
+        self._soltura.stop()
+        self._geracao_de_vibracao += 1  # o desligamento agendado de uma vibração antiga não vale mais
+        if self._leitor is not None:
+            self._leitor.vibrar()
 
     # Vibração ---------------------------------------------------------------
 

@@ -13,8 +13,8 @@ Item {
     required property real altura
     property real escala: 1  // pixels reais por pixel lógico
     property bool central: false
+    property url placeholder  // a imagem da capa que falta: a da grade
     property bool animar: false  // `bigPicture.animarCentral`
-    property real escalaDaCentral: 1.6  // ESCALA_NA_ABERTURA: a central cresce até aqui
     property real opacidadeDoReflexo: 0.35  // REFLEXO_OPACIDADE
 
     width: largura
@@ -23,21 +23,15 @@ Item {
     Item {
         id: face
         anchors.fill: parent
-        Rectangle {
+        // Sem capa, ou com a capa ilegível ou ainda carregando: o placeholder da biblioteca (`capa.get_texture() or
+        // GameCover.placeholder`), que o reflexo copia junto.
+        Image {
+            objectName: "placeholderDaCapa"
             anchors.fill: parent
             visible: imagem.status !== Image.Ready
-            color: "#2e2e32"
-            Text {
-                anchors.fill: parent
-                anchors.margins: 12
-                text: capa.jogo.nome
-                textFormat: Text.PlainText
-                color: "#c0c0c0"
-                wrapMode: Text.Wrap
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                font { family: Tema.fonte; pixelSize: 18 }
-            }
+            source: capa.placeholder
+            fillMode: Image.Stretch
+            sourceSize.height: Math.round(300 * capa.escala)
         }
         Image {
             id: imagem
@@ -45,11 +39,11 @@ Item {
             anchors.fill: parent
             source: capa.jogo.capa
             asynchronous: true
-            fillMode: Image.PreserveAspectCrop
-            sourceSize.height: Math.round(capa.altura * capa.escala)
+            fillMode: Image.Stretch  // esticada para 2:3, sem corte (`big_picture.py:451-453`)
+            sourceSize.height: Math.round(300 * capa.escala)  // a textura da grade: 300 de altura
             mipmap: true
         }
-        // A central, na resolução da abertura (ela cresce 1,6x); só quando pronta, sem piscar.
+        // A central, na resolução dos detalhes (630 de altura); só quando pronta, sem piscar.
         // Capa animada não ganha: toca a cópia da grade.
         Image {
             id: emAlta
@@ -57,8 +51,8 @@ Item {
             anchors.fill: parent
             source: capa.central && capa.jogo.capaAnimada === "" ? capa.jogo.capa : ""
             asynchronous: true
-            fillMode: Image.PreserveAspectCrop
-            sourceSize.height: Math.round(capa.altura * capa.escalaDaCentral * capa.escala)
+            fillMode: Image.Stretch
+            sourceSize.height: Math.round(630 * capa.escala)
             mipmap: true
             visible: status === Image.Ready
         }
@@ -69,7 +63,7 @@ Item {
             source: capa.central && capa.animar ? capa.jogo.capaAnimada : ""
             playing: source != ""
             visible: status === AnimatedImage.Ready
-            fillMode: Image.PreserveAspectCrop
+            fillMode: Image.Stretch
             asynchronous: true
             cache: false
         }

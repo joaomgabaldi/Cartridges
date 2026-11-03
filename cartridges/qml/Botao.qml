@@ -16,6 +16,8 @@ Button {
     // O mnemônico é a primeira letra: sublinhada enquanto o Alt está seguro (o texto é do app, nunca de terceiros).
     property bool sublinharPrimeira: false
     property bool dicaAtiva: hovered
+    // Sem o realce do ponteiro (o botão insensível da `main`, que ainda mostra a dica).
+    property bool semRealce: false
     property real raio: pilula || circular ? height / 2 : 9
     property real afastamentoDoAnel: estilo === "plano" ? -2 : 1
     // A cor do texto e do ícone; quem precisa de outra (o aviso, branco) a troca.
@@ -68,9 +70,10 @@ Button {
             // Tudo é `currentColor`: a cor do texto do próprio botão, com o alfa do estado.
             if (botao.estilo === "sugestao") return Tema.destaque
             const ligado = botao.down || botao.checked
-            const alfa = botao.estilo === "plano" ? (botao.down ? 0.16 : botao.checked ? 0.10 : botao.hovered ? 0.07 : 0)
-                : botao.estilo === "destrutivo" ? (ligado ? 0.35 : botao.hovered ? 0.20 : 0.15)
-                : (ligado ? 0.30 : botao.hovered ? 0.15 : 0.10)
+            const sobre = botao.hovered && !botao.semRealce
+            const alfa = botao.estilo === "plano" ? (botao.down ? 0.16 : botao.checked ? 0.10 : sobre ? 0.07 : 0)
+                : botao.estilo === "destrutivo" ? (ligado ? 0.35 : sobre ? 0.20 : 0.15)
+                : (ligado ? 0.30 : sobre ? 0.15 : 0.10)
             return Qt.alpha(botao.corDoTexto, botao.corDoTexto.a * alfa)
         }
         Behavior on color { ColorAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
