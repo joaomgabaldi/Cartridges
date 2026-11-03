@@ -32,7 +32,13 @@ Button {
     Accessible.name: text !== "" ? text : dica
     Keys.onReturnPressed: click()
     Keys.onEnterPressed: click()
-    opacity: enabled ? 1 : Tema.opacidadeDesabilitado
+    // Dentro de uma linha apagada só vale o apagado dela (50% no total na `main`): somados, dariam 25%.
+    readonly property bool _dentroDeLinhaApagada: {
+        for (let p = parent; p; p = p.parent)
+            if (p.linhaApagada === true) return true
+        return false
+    }
+    opacity: enabled || _dentroDeLinhaApagada ? 1 : Tema.opacidadeDesabilitado
     implicitHeight: pilula ? 44 : 34
     implicitWidth: _soIcone ? implicitHeight : Math.max(contentItem.implicitWidth + leftPadding + rightPadding, 34)
     // .text-button 5/17; .image-text 5/9; .pill 10/32.

@@ -155,7 +155,9 @@ Window {
                 opacity: Tema.opacidadeApagado
             }
             Column {
-                width: parent.width
+                // O `AdwClamp` da `StatusPage` dá 547 aos textos numa janela de 640 (medido na `main`).
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Math.min(547, parent.width)
                 spacing: 12
                 Text {
                     objectName: "titulo_" + pagina.nome
@@ -215,7 +217,7 @@ Window {
         Item {
             id: carrossel
             objectName: "carrossel"
-            anchors { top: parent.top; left: parent.left; right: parent.right; bottom: rodape.top }
+            anchors { top: parent.top; left: parent.left; right: parent.right; bottom: rodape.top; bottomMargin: 12 }
             clip: true
 
             // Sem binding: um `posicao: indice` pularia para o destino antes do `onIndiceChanged` e nunca animaria.
@@ -535,7 +537,9 @@ Window {
                 objectName: "pontos"
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: 7
-                height: 8
+                // `Adw.CarouselIndicatorDots`: 20 de altura (rodapé de 44 na primeira tela, como na `main`), os pontos ao centro.
+                height: 20
+                topPadding: 6
                 Repeater {
                     model: raiz.modelo.paginas.length
                     Item {

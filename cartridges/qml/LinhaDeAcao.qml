@@ -54,7 +54,6 @@ LinhaDoGrupo {
             anchors.verticalCenter: parent.verticalCenter
             visible: linha.rotuloSecundario !== ""
             enabled: linha.secundarioAtivo
-            opacity: linha.enabled && !enabled ? Tema.opacidadeDesabilitado : 1  // com a linha desabilitada, ela já apaga tudo
             text: linha.rotuloSecundario
             onClicked: linha.secundaria()
         }

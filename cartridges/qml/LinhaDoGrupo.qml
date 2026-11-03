@@ -42,6 +42,7 @@ FocusScope {
     implicitHeight: Math.max(alturaMinima, comTextos ? colunaDeTextos.implicitHeight + 12 : 0) + 4 + _separador
     // disabled-opacity: a linha e tudo nela.
     opacity: enabled ? 1 : Tema.opacidadeDesabilitado
+    readonly property bool linhaApagada: !enabled
 
     Rectangle {
         anchors.fill: parent

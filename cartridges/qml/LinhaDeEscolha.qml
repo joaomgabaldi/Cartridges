@@ -49,7 +49,7 @@ LinhaDoGrupo {
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignRight
             verticalAlignment: Text.AlignVCenter
-            color: Tema.textoSecundario
+            color: Tema.texto
             font { family: Tema.fonte; pixelSize: Tema.corpo }
         }
         indicator: Icone {

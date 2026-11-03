@@ -12,7 +12,15 @@ ToolTip {
     objectName: "dica"
     text: texto
     delay: 500
-    visible: ativa && texto !== ""
+    // O clique esconde a dica até o ponteiro sair (GTK): um diálogo aberto pelo botão não fica com a dica por cima.
+    property bool _clicada: false
+    onAtivaChanged: if (!ativa) _clicada = false
+    Connections {
+        target: dica.parent
+        ignoreUnknownSignals: true
+        function onPressedChanged() { if (dica.parent.pressed && dica.ativa) dica._clicada = true }
+    }
+    visible: ativa && !_clicada && texto !== ""
     popupType: Popup.Item
     margins: 6
     x: parent ? Math.round((parent.width - width) / 2) : 0

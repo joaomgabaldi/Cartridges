@@ -86,11 +86,11 @@ Principal {
     NumberAnimation {
         id: deslizeDaPagina
         property: "x"
-        duration: 400
+        duration: 210  // medido na janela real da `main`: a mola do `AdwNavigationView` acaba em cerca de 215 ms
         easing.type: Easing.OutCubic
         onFinished: if (janela._saindoDaPilha) janela._terminarSaida()
     }
-    NumberAnimation { id: avancoDaPilha; target: pilha; property: "avanco"; duration: 400; easing.type: Easing.OutCubic }
+    NumberAnimation { id: avancoDaPilha; target: pilha; property: "avanco"; duration: 210; easing.type: Easing.OutCubic }
 
     // O `y` de um menu aberto por um botão da barra: abaixo dos 47 px dela, fora da área de arrasto do QWindowKit.
     function baseDaBarra(botao) { return botao.height + (alturaDaBarra - botao.height) / 2 }
@@ -275,18 +275,18 @@ Principal {
         anchors { fill: parent; topMargin: janela.alturaDoTopo }
         visible: depth > 0
         // `AdwNavigationView`: a página nova desliza da direita e a de baixo recua um quarto da largura; ao voltar,
-        // o contrário. shortcut: duração e recuo não medidos na libadwaita (400 ms, 1/4); conferir na rodada visual.
+        // o contrário. 210 ms medidos na janela real da `main` (a mola acaba em cerca de 215 ms); o recuo de 1/4 segue não medido.
         // O `avanco` (0 a 1) leva o escurecimento e a sombra da página de baixo, logo abaixo.
         property real avanco: 0
         pushEnter: Transition { ParallelAnimation {
-            XAnimator { from: pilha.width; to: 0; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic }
-            NumberAnimation { target: pilha; property: "avanco"; from: 0; to: 1; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic }
+            XAnimator { from: pilha.width; to: 0; duration: Tema.animacoes ? 210 : 0; easing.type: Easing.OutCubic }
+            NumberAnimation { target: pilha; property: "avanco"; from: 0; to: 1; duration: Tema.animacoes ? 210 : 0; easing.type: Easing.OutCubic }
         } }
-        pushExit: Transition { XAnimator { from: 0; to: -pilha.width / 4; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic } }
-        popEnter: Transition { XAnimator { from: -pilha.width / 4; to: 0; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic } }
+        pushExit: Transition { XAnimator { from: 0; to: -pilha.width / 4; duration: Tema.animacoes ? 210 : 0; easing.type: Easing.OutCubic } }
+        popEnter: Transition { XAnimator { from: -pilha.width / 4; to: 0; duration: Tema.animacoes ? 210 : 0; easing.type: Easing.OutCubic } }
         popExit: Transition { ParallelAnimation {
-            XAnimator { from: 0; to: pilha.width; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic }
-            NumberAnimation { target: pilha; property: "avanco"; from: 1; to: 0; duration: Tema.animacoes ? 400 : 0; easing.type: Easing.OutCubic }
+            XAnimator { from: 0; to: pilha.width; duration: Tema.animacoes ? 210 : 0; easing.type: Easing.OutCubic }
+            NumberAnimation { target: pilha; property: "avanco"; from: 1; to: 0; duration: Tema.animacoes ? 210 : 0; easing.type: Easing.OutCubic }
         } }
         enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto && !bigPicture.visivel && !sessao.emAndamento
     }

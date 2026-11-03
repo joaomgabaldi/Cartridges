@@ -44,7 +44,8 @@ LinhaDoGrupo {
             text: linha.titulo
             textFormat: Text.PlainText
             elide: Text.ElideRight
-            color: linha.erro ? Tema.destrutivoTexto : Tema.textoSecundario
+            // `row.entry:disabled .dimmed`: apagada, a linha tira o `.dimmed` do rótulo, e fica só o apagado dela.
+            color: linha.erro ? Tema.destrutivoTexto : linha.enabled ? Tema.textoSecundario : Tema.texto
             font { family: Tema.fonte; pixelSize: linha._rotuloEmCima ? Tema.legenda : Tema.corpo }
             Behavior on y { NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
         }
@@ -83,5 +84,7 @@ LinhaDoGrupo {
         anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
         visible: !campo.activeFocus && lado.children.length === 0
         nome: "document-edit"
+        // `.edit-icon:disabled`: 30% no total, com os 50% da linha.
+        opacity: linha.enabled ? 1 : 0.6
     }
 }

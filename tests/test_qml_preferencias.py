@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Q_ARG, QMetaObject, QPoint, QPointF, Qt, QtMsgType, qInstallMessageHandler
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QObject, QUrl
 from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
@@ -634,6 +634,22 @@ def test_sem_segundo_monitor_o_grupo_apaga_e_explica(app, monkeypatch):
     assert not _enabled(app, "linhaIdentificarMonitores")
     assert _linha(app, "interruptor-session-move-window")[1] == "Requer um segundo monitor"
     assert _linha(app, "interruptor-session-wallpaper")[1] == "Requer um segundo monitor"
+
+
+def test_botao_em_linha_apagada_nao_soma_dois_apagados(app, store, make_game):
+    """Medido na `main`: 50% no total. O botão apagado fora de uma linha continua a 50% por conta própria."""
+    from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
+    from tests.apoio_capas import _ManagerDeCapas  # noqa: PLC0415
+
+    store.add_game(make_game(game_id="a"), {})
+    store.managers[SgdbManager] = _ManagerDeCapas()
+    shared.schema.set_boolean("sgdb", False)
+    _abrir(app, "sgdb")
+    linha = app.achar("linhaDasCapas")
+    assert linha.property("opacity") == 0.5
+    botoes = [b for b in linha.findChildren(QObject) if b.metaObject().className().startswith("Botao_")]
+    assert botoes
+    assert all(b.property("enabled") is False and b.property("opacity") == 1 for b in botoes)
 
 
 def test_chave_do_wallhaven_apagada_sem_o_papel_de_parede(app):

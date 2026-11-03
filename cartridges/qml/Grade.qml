@@ -201,6 +201,7 @@ GridView {
         readonly property real desvioX: baseX * restante
         readonly property real desvioY: baseY * restante
         function reposicionar() {
+            if (!grade) return  // chamado depois de o cartão sair da grade
             if (!isNaN(xAnterior) && Tema.animacoes && !grade.contagemMudou && (x !== xAnterior || y !== yAnterior)) {
                 baseX = xAnterior - x + desvioX
                 baseY = yAnterior - y + desvioY

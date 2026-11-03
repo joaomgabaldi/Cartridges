@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QMetaObject, QObject, QPointF, Qt, QUrl
+from PySide6.QtCore import QMetaObject, QObject, QPoint, QPointF, Qt, QUrl
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtTest import QTest
 
@@ -404,5 +404,31 @@ def test_popover_da_escolha_alarga_pelo_texto(app_qt):
     assert escolha.property("larguraDoPopover") == 180
     QTest.mouseClick(raiz, Qt.MouseButton.LeftButton, pos=_centro(escolha))
     assert _esperar(lambda: escolha.property("larguraDoPopover") > 300)
+    raiz.close()
+    raiz.deleteLater()
+
+
+def test_o_clique_esconde_a_dica_ate_o_ponteiro_sair(app_qt):
+    """No GTK a dica some com o clique: um diálogo aberto pelo botão não fica com ela por cima."""
+    motor = QQmlEngine()
+    componente = QQmlComponent(motor)
+    componente.setData(
+        (
+            'import QtQuick\nimport QtQuick.Controls.Basic\nimport "file:///%s"\n'
+            "Window { width: 200; height: 200; visible: true; property alias ativa: d.ativa; readonly property bool aVista: d.visible\n"
+            '  Button { width: 80; height: 40; Dica { id: d; texto: "Buscar"; ativa: true; delay: 0 } } }'
+            % QML.as_posix()
+        ).encode("utf-8"),
+        QUrl("file:///dica.qml"),
+    )
+    raiz = componente.create()
+    assert raiz is not None, componente.errorString()
+    assert _esperar(lambda: raiz.isExposed())
+    assert raiz.property("aVista") is True
+    QTest.mouseClick(raiz, Qt.MouseButton.LeftButton, pos=QPoint(40, 20))
+    assert _esperar(lambda: raiz.property("aVista") is False)
+    raiz.setProperty("ativa", False)
+    raiz.setProperty("ativa", True)
+    assert raiz.property("aVista") is True
     raiz.close()
     raiz.deleteLater()
