@@ -16,13 +16,14 @@ SeletorBase {
     property string rotuloDoAtalho
     property string dicaDoAtalho
     property bool atalhoAlterna: false
-    // O logo é um letreiro horizontal: células de 300x110, uma ou duas por linha. A capa tem 140x210, de duas a quatro.
+    // O logo é um letreiro horizontal: células de 323x110, uma ou duas por linha. A capa tem 200x210, de duas a quatro (medido na `main`: o `FlowBox` homogêneo dá à célula a largura natural da prévia, não o `width_request`).
     property bool horizontal: false
 
-    readonly property int larguraDaCelula: horizontal ? 300 : 140
+    // A `FlowBox` encolhe a capa até o `width_request` de 140, para caberem as duas colunas do mínimo em janela estreita.
+    readonly property int larguraDaCelula: horizontal ? 323 : Math.max(140, Math.min(200, Math.floor((conteudo.width - 36) / 2)))
     readonly property int alturaDaCelula: horizontal ? 110 : 210
     readonly property int colunas: Math.max(horizontal ? 1 : 2,
-        Math.min(horizontal ? 2 : 4, Math.floor((conteudo.width - 24 + 12) / (larguraDaCelula + 12))))
+        Math.min(horizontal ? 2 : 4, Math.floor((conteudo.width - 24 + 12) / ((horizontal ? 323 : 200) + 12))))
 
     signal atalhoClicado()
 

@@ -634,6 +634,19 @@ def test_barra_transparente_com_o_fundo_por_baixo_so_nos_detalhes(app_qt):
     app.fechar()
 
 
+def test_fundo_da_barra_acompanha_o_deslize_da_pagina(app_qt):
+    app = _App(_tres())
+    pilha, janela = app.achar("pilha"), app.janela
+    assert janela.property("deslocamentoDoFundo") == 0
+    # Em repouso o fundo fica no lugar, mesmo com o `avanco` parado em 0 (animações desligadas nunca o movem).
+    pilha.setProperty("avanco", 0.5)
+    assert janela.property("deslocamentoDoFundo") == 0
+    pilha.setProperty("avanco", 1)
+    _abrir_pelo_cartao(app)
+    assert _esperar(lambda: janela.property("deslocamentoDoFundo") == 0)
+    app.fechar()
+
+
 def test_rotulos_da_pagina_tem_a_linha_de_17_px_da_main(app_qt):
     # Segoe UI de 12 px: o Pango da `main` dá 17 px por linha (o Qt, 16); a coluna inteira ficava 14 px mais baixa.
     app = _App(_tres())

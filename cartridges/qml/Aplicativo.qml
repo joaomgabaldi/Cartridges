@@ -116,9 +116,13 @@ Principal {
     // `Adw.ToolbarView details_view_toolbar_view` (window.blp:472): nos detalhes a barra é transparente sobre o fundo
     // desfocado, a continuação do fundo da página (`PaginaDoJogo.qml`).
     barraTransparente: paginaAtual === "jogo"
+    // O fundo da barra desliza com a página que entra e, na volta a Todos, com a que sai (na `main` a barra é da própria
+    // página). O `avanco` da pilha acompanha o deslize; o `XAnimator` da página não atualiza o `x` no meio do caminho.
+    readonly property real deslocamentoDoFundo: avancoDaPilha.running || pilha.busy ? Math.round(pilha.width * (1 - pilha.avanco)) : 0
     fundoDaBarra: [
-        Rectangle { anchors.fill: parent; visible: janela.barraTransparente; color: Tema.escuro ? "black" : "white" },
+        Rectangle { x: janela.deslocamentoDoFundo; width: parent.width; height: parent.height; visible: janela.barraTransparente; color: Tema.escuro ? "black" : "white" },
         Image {
+            x: janela.deslocamentoDoFundo
             width: parent.width
             height: janela.height
             visible: janela.barraTransparente && detalhes.fundo !== ""

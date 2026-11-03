@@ -376,6 +376,8 @@ Window {
 
                     GrupoDePreferencias {
                         objectName: "grupoDaChaveSgdb"
+                        // Medido na `main` (janela de 640): o grupo fica 34 px mais longe da capa que os 12 do `Box`.
+                        topPadding: 34
                         // A mesma frase das Preferências; texto nosso, com o único link.
                         descricao: 'É necessária uma chave da API para usar o SteamGridDB. <a href="https://www.steamgriddb.com/profile/preferences/api">Obtenha aqui</a>.'
                         descricaoRica: true
@@ -416,12 +418,15 @@ Window {
                     }
                     GrupoDasContas {
                         id: grupoDasContas
+                        // Medido na `main` (janela de 640), como o espaço antes da Steam Web API, abaixo.
+                        topPadding: 18
                         width: parent.width
                         contas: raiz.modelo.contas
                         comCabecalho: false
                     }
                     GrupoDePreferencias {
                         objectName: "grupoDaChaveDaSteam"
+                        topPadding: 23
                         titulo: "Steam Web API"
                         descricao: 'Informe a chave da Steam Web API. <a href="https://steamcommunity.com/dev/apikey">Obtenha aqui</a>.'
                         descricaoRica: true

@@ -142,13 +142,34 @@ def test_posicionar_usa_o_hwnd_da_janela_e_nao_rouba_o_foco(app_qt, monkeypatch)
     monkeypatch.setattr(modulo, "_user32", lambda: Fake())
 
     class Janela:
+        escala = 1.0
+
         def winId(self):  # noqa: N802
             return 4242
+
+        def devicePixelRatio(self):  # noqa: N802
+            return self.escala
 
     modelo = modulo.ModeloDaSessao(None)
     modelo.posicionarJanelaManual(Janela())
     # Janela 316x158 (com a borda invisível) na área 1920x1040, margem 29: o canto fica em 1575,853.
     assert chamadas == [(4242, 0, 1575, 853, 0, 0, 0x0015)]
+
+
+def test_a_margem_acompanha_a_escala_da_tela(app_qt, monkeypatch):
+    """Retângulo e área em px físicos: com escala 1,5 a margem de 29 vira 44 (43,5 arredondado)."""
+    chamadas = []
+    monkeypatch.setattr(modulo, "_posicionar", lambda *a: chamadas.append(a))
+
+    class Janela:
+        def winId(self):  # noqa: N802
+            return 7
+
+        def devicePixelRatio(self):  # noqa: N802
+            return 1.5
+
+    modulo.ModeloDaSessao(None).posicionarJanelaManual(Janela())
+    assert chamadas == [(7, 1920 - 316 - 44, 1040 - 158 - 44)]
 
 
 def test_falha_no_win32_deixa_onde_esta(app_qt, monkeypatch, caplog):
@@ -160,6 +181,9 @@ def test_falha_no_win32_deixa_onde_esta(app_qt, monkeypatch, caplog):
     class Janela:
         def winId(self):  # noqa: N802
             return 1
+
+        def devicePixelRatio(self):  # noqa: N802
+            return 1.0
 
     with caplog.at_level("ERROR"):
         modulo.ModeloDaSessao(None).posicionarJanelaManual(Janela())  # não levanta

@@ -1578,6 +1578,24 @@ def test_a_grade_do_seletor_so_ocupa_as_colunas(app, sgdb):
     assert grade.property("width") == app.achar("seletorDeCapa").property("colunas") * grade.property("cellWidth")
 
 
+@pytest.mark.parametrize("largura", [360, 450])
+def test_capas_cabem_no_cartao_do_seletor_em_janela_estreita(app, sgdb, largura):
+    from tests.apoio_seletores import SgdbFalso, lista_de_grades  # noqa: PLC0415
+
+    app.edicao.seletorDeCapa.sgdb = SgdbFalso(grids=lista_de_grades(4))
+    app.janela.resize(largura, 795)
+    _esperar(lambda: False, 0.3)
+    app.edicao.abrir("shortcuts_z1")
+    _clique(app, "botaoEscolherCapaSgdb")
+    assert _esperar(lambda: _visivel(app, "seletorDeCapa") and app.achar("seletorDeCapaGrade").property("count") == 4, 6)
+    _esperar(lambda: False, 0.4)
+    seletor = app.achar("seletorDeCapa")
+    largura_da_celula = seletor.property("larguraDaCelula")
+    assert 140 <= largura_da_celula < 200
+    primeira, segunda = (_x_da_cena(app.achar(f"seletorDeCapaMiniatura{i}")) for i in (0, 1))
+    assert primeira >= 0 and segunda + largura_da_celula <= largura
+
+
 @pytest.mark.parametrize("largura", [560, 620, 672, 690, 760, 790, 900])
 def test_as_colunas_reais_da_grade_do_seletor_sao_as_de_colunas(app, sgdb, largura):
     """Q1: mede, na tela, o `x` de cada miniatura: as colunas reais são `colunas` e a grade fica centrada."""
@@ -1597,7 +1615,7 @@ def test_as_colunas_reais_da_grade_do_seletor_sao_as_de_colunas(app, sgdb, largu
     assert len(xs) == colunas, (largura, colunas, xs)
     pagina = app.achar("seletorDeCapaGrade").parentItem()  # as sobras contam a partir da página, não da própria grade
     esquerda = xs[0] - _x_da_cena(pagina)
-    direita = _x_da_cena(pagina) + pagina.property("width") - (xs[-1] + 140)
+    direita = _x_da_cena(pagina) + pagina.property("width") - (xs[-1] + 200)
     assert abs(esquerda - direita) <= 2, (largura, esquerda, direita)
 
 
@@ -1714,7 +1732,7 @@ def _assert_foco_visivel(app, nome, indice):
 
 
 SELETORES_DE_GRADE = [
-    ("seletorDeCapa", "botaoEscolherCapaSgdb", 9, [4, 5, 6, 6, 5]),  # 4 colunas: 6 + 4 não existe, o foco fica
+    ("seletorDeCapa", "botaoEscolherCapaSgdb", 9, [3, 4, 5, 8, 7]),  # 3 colunas, como na `main`
     ("seletorDeLogo", "botaoEscolherLogoSgdb", 6, [2, 3, 4, 4, 3]),  # 2 colunas
     ("seletorDePapel", "botaoEscolherPapelWallhaven", 9, [4, 5, 6, 6, 5]),
 ]

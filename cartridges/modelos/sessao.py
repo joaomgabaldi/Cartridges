@@ -343,7 +343,9 @@ class ModeloDaSessao(QObject):
             hwnd = int(janela.winId())
             esquerda, topo, direita, base = _retangulo_da_janela(hwnd)
             # 37 px visíveis até a área de trabalho na `main` (12 + a sombra de 25); aqui o retângulo já soma 8 de moldura invisível.
-            x, y = canto_inferior_direito(_area_de_trabalho(), direita - esquerda, base - topo, margem=29)
+            # O retângulo e a área vêm em px físicos: a margem (lógica) é escalada pela razão de pixels da tela da janela.
+            margem = round(29 * janela.devicePixelRatio())
+            x, y = canto_inferior_direito(_area_de_trabalho(), direita - esquerda, base - topo, margem=margem)
             _posicionar(hwnd, x, y)
         except Exception:  # noqa: BLE001
             logging.getLogger(__name__).exception("Não foi possível posicionar a janela Jogando")
