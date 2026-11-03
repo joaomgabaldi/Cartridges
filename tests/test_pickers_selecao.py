@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Escolher uma capa ou um logo encerra a busca que ainda baixa miniaturas, e como o download corre.
+"""Escolher uma capa ou um logo não interrompe a busca que ainda baixa miniaturas, e como o download corre.
 
 Os seletores de capa e de logo do SteamGridDB (`cartridges.modelos.seletores`). O seletor de papel de
 parede (wallhaven) ainda é do GTK e entra com a tarefa 10 do plano 3.
@@ -58,10 +58,9 @@ def test_previa_atrasada_nao_tira_o_carregamento_da_escolha(classe, monkeypatch,
     assert baixar.comecou.is_set()
 
     seletor.escolher(0)
-    assert esperar(lambda: baixar.cancelado.is_set()), "a busca das miniaturas é encerrada pela escolha"
+    # Como na `main`, escolher não interrompe as miniaturas (pacote B): o download da escolha corre ao lado delas.
     assert esperar(lambda: len(baixar.urls) == 3)  # o download da escolha, preso como o resto
-    # A miniatura atrasada não chega: a grade segue em "baixando", sem nada novo.
-    assert seletor.baixando is True and _miniatura(seletor, 1) == "" and _miniatura(seletor, 2) == ""
+    assert seletor.baixando is True and not baixar.cancelado.is_set()
     baixar.soltar.set()
     assert esperar(lambda: destino.capas or destino.logos)
     (entregue,) = destino.capas or destino.logos

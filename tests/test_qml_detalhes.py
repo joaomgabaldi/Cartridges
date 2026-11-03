@@ -431,6 +431,24 @@ def test_closing_the_notes_popover_saves_the_text(app_qt):
     app.fechar()
 
 
+def test_voltar_pelo_mouse_com_o_balao_aberto_grava_a_anotacao(app_qt):
+    """O botão Voltar do mouse com o balão aberto volta à biblioteca sem perder o que foi digitado (revisão final, I1).
+
+    Alt+← não chega ao atalho com o balão aberto; o clique do mouse fecha o balão e volta no mesmo gesto."""
+    app = _App(_jogos((1, "Alfa", {"status": "playing"})))
+    pagina = _abrir_pelo_cartao(app)
+    balao = _achar(pagina, "balaoDaAnotacao")
+    balao.open()
+    assert _esperar(lambda: balao.property("opened") is True)
+    _achar(balao.property("contentItem"), "campoDaAnotacao").setProperty("text", "Parei no capítulo 4.")
+
+    QTest.mouseClick(app.janela, Qt.MouseButton.BackButton, Qt.KeyboardModifier.NoModifier, QPoint(20, 400))
+
+    assert _esperar(lambda: app.janela.property("paginaAtual") == "todos")
+    assert _esperar(lambda: app.jogos[0].notes == "Parei no capítulo 4.")
+    app.fechar()
+
+
 def test_a_anotacao_nao_aparece_no_meio_das_informacoes(app_qt):
     """A anotação se lê só no balão do botão: o bloco com o texto no meio das informações saiu (pedido de 18/10/2026)."""
     app = _App(_jogos((1, "Alfa", {"status": "playing", "notes": "Cofre: 8815"})))
