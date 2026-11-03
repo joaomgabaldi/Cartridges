@@ -19,6 +19,8 @@ MolduraDoDialogo {
     readonly property string pagina: modelo ? modelo.pagina : "principal"
     // A página de onde se veio, para o foco voltar à linha dela.
     property string paginaAnterior: "principal"
+    // Há um alerta por cima: os atalhos Alt do Sobre ficam quietos.
+    property bool avisoAberto: false
     readonly property var linhas: ({ novidades: linhaNovidades, creditos: linhaCreditos, legal: linhaLegal,
                                      problemas: linhaProblemas, depuracao: linhaDepuracao })
 
@@ -42,7 +44,8 @@ MolduraDoDialogo {
 
     function focar(de, teclado) {
         if (!aberto) return
-        var alvo = pagina !== "principal" ? (pagina === "depuracao" ? botaoCopiar : botaoVoltar)
+        var alvo = pagina === "problemas" && linhas[de] && linhas[de].visible ? linhas[de].botaoDaLinha
+            : pagina !== "principal" ? (pagina === "depuracao" ? botaoCopiar : botaoVoltar)
             : (linhas[de] && linhas[de].visible ? linhas[de].botaoDaLinha : focoInicial)
         alvo.forceActiveFocus(teclado ? Qt.TabFocusReason : Qt.OtherFocusReason)
     }
@@ -86,7 +89,7 @@ MolduraDoDialogo {
         }
         Shortcut {
             sequence: "Alt+" + linha.mnemonico
-            enabled: dialogo.visible && dialogo.pagina === (destino === "depuracao" ? "problemas" : "principal") && linha.visible
+            enabled: dialogo.aberto && !dialogo.avisoAberto && dialogo.pagina === (destino === "depuracao" ? "problemas" : "principal") && linha.visible
             onActivated: linha.botaoDaLinha.click()
         }
     }
@@ -162,6 +165,7 @@ MolduraDoDialogo {
                     layer.effect: MultiEffect {
                         shadowEnabled: true
                         shadowColor: Qt.rgba(0, 0, 6 / 255, 0.05)
+                        blurMax: 12  // o raio do `icon-dropshadow`; o padrão (32) borrava demais
                         shadowBlur: 1.0
                         shadowVerticalOffset: 1
                     }
@@ -214,7 +218,8 @@ MolduraDoDialogo {
                     }
                     background: Rectangle {
                         radius: height / 2
-                        color: botaoDaVersao.down ? Tema.pressionado : botaoDaVersao.hovered ? Tema.botaoSobre : Tema.botao
+                        // O botão do GTK deriva o fundo de `currentColor`, que aqui é o destaque: 10%, 15% e 30%.
+                        color: Qt.alpha(Tema.destaqueTexto, botaoDaVersao.down ? 0.30 : botaoDaVersao.hovered ? 0.15 : 0.10)
                         AnelDeFoco { ativo: botaoDaVersao.visualFocus; raio: parent.radius; afastamento: 1 }
                     }
                 }
@@ -445,7 +450,7 @@ MolduraDoDialogo {
             text: "Copiar texto"
             sublinharPrimeira: dialogo.altSegurado
             onClicked: dialogo.modelo.copiar()
-            Shortcut { sequence: "Alt+C"; enabled: barraDeAcoes.visible; onActivated: botaoCopiar.click() }
+            Shortcut { sequence: "Alt+C"; enabled: barraDeAcoes.visible && dialogo.aberto && !dialogo.avisoAberto; onActivated: botaoCopiar.click() }
         }
         Botao {
             id: botaoSalvar
@@ -454,7 +459,7 @@ MolduraDoDialogo {
             text: "Salvar como…"
             sublinharPrimeira: dialogo.altSegurado
             onClicked: { if (cargaDoSalvar.item) cargaDoSalvar.item.open(); else cargaDoSalvar.active = true }
-            Shortcut { sequence: "Alt+S"; enabled: barraDeAcoes.visible; onActivated: botaoSalvar.click() }
+            Shortcut { sequence: "Alt+S"; enabled: barraDeAcoes.visible && dialogo.aberto && !dialogo.avisoAberto; onActivated: botaoSalvar.click() }
         }
     }
 }

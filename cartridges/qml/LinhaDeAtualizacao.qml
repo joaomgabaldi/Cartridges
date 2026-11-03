@@ -85,8 +85,8 @@ LinhaDoGrupo {
             anchors.verticalCenter: parent.verticalCenter
             visible: linha.emAndamento && !linha.podeParar
             running: visible
-            width: 32
-            height: 32
+            width: 16
+            height: 16
             Accessible.name: "Em andamento"
         }
     }

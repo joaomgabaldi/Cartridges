@@ -454,6 +454,7 @@ def test_confirmar_o_escopo_busca_so_o_que_falta_e_cancelar_nao_busca(app, store
     QTest.keyClick(app.janela, Qt.Key.Key_Escape)  # Esc vale como cancelar e não fecha as preferências
     assert _esperar(lambda: dialogo.property("visible") is False)
     assert app.preferencias.aberto is True and not chamadas
+    assert app.preferencias.biblioteca._pergunta is None  # noqa: SLF001  # M6: a pergunta cancelada não fica guardada
 
     _clique(app, "linhaDosMetadadosBotao")
     assert _esperar(lambda: dialogo.property("visible") is True)

@@ -27,7 +27,6 @@ ICONE = Path(__file__).resolve().parent.parent.parent / "data" / "icons" / "hico
 TITULOS = {
     "principal": "Sobre",
     "novidades": "Novidades",
-    "detalhes": "Detalhes",
     "creditos": "Créditos",
     "legal": "Aviso legal",
     "problemas": "Solução de problemas",
@@ -106,13 +105,6 @@ def novidades_da_versao(metainfo: Path, versao: str) -> list[dict]:
     return []
 
 
-def descricao_do_app(metainfo: Path) -> list[str]:
-    """Os `<p>` da `<description>` do app (a página "Detalhes")."""
-    raiz = _raiz(metainfo)
-    descricao = raiz.find("description") if raiz is not None else None
-    return [] if descricao is None else [_texto(p) for p in descricao.findall("p")]
-
-
 def _area_de_transferencia() -> object:
     """O ponto que os testes trocam: nenhum teste escreve na área de transferência de verdade."""
     return QGuiApplication.clipboard()
@@ -151,10 +143,6 @@ class Sobre(QObject):
     @Property(bool, notify=alterado)
     def temNovidades(self) -> bool:  # noqa: N802
         return bool(self._novidades)
-
-    @Property("QStringList", constant=True)
-    def detalhes(self) -> list:
-        return descricao_do_app(METAINFO)
 
     @Property(str, notify=alterado)
     def depuracao(self) -> str:

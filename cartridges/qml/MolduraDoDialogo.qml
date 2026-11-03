@@ -145,6 +145,29 @@ FocusScope {
     }
     Component.onCompleted: if (aberto) { visible = true; _animar() }
 
+    // Alt+Tab tira o foco da janela sem soltar o Alt na moldura: o sublinhado dos mnemônicos não pode ficar preso.
+    Connections {
+        target: moldura.Window.window
+        function onActiveChanged() { if (!moldura.Window.window.active) moldura.altSegurado = false }
+    }
+
+    // O foco por seta ou Tab acompanha a rolagem das setas (o `GtkScrolledWindow` rola até o foco).
+    Connections {
+        target: moldura.Window.window
+        function onActiveFocusItemChanged() {
+            const r = moldura.rolagemDasSetas
+            const foco = moldura.Window.window.activeFocusItem
+            if (!r || !foco || !moldura.visible) return
+            let dentro = false
+            for (var q = foco; q; q = q.parent) if (q === r.contentItem) { dentro = true; break }
+            if (!dentro) return
+            const topo = foco.mapToItem(r.contentItem, 0, 0).y
+            const base = topo + foco.height
+            if (topo < r.contentY) r.contentY = Math.max(0, topo - 8)
+            else if (base > r.contentY + r.height) r.contentY = base - r.height + 8
+        }
+    }
+
     Keys.onEscapePressed: if (fechavel) fecharPedido()
     // Modal para o teclado e o controle: nenhuma tecla chega à página de trás. O Tab passa, para circular.
     Keys.onReleased: event => { if (event.key === Qt.Key_Alt) altSegurado = false }
@@ -181,6 +204,7 @@ FocusScope {
     // floating-sheet > dimming. Ao fechar, deixa passar o clique (`can-target` falso, como na DLL). A `main` segura o toque
     // fora do diálogo flutuante (`dialog_backdrop.py`): nem fecha nem arrasta. Na folha de baixo, fecha.
     Rectangle {
+        objectName: "esmaecimentoDaMoldura"
         anchors.fill: parent
         color: Tema.esmaecido
         opacity: Math.max(0, Math.min(1, moldura.progresso))

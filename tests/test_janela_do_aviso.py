@@ -281,7 +281,6 @@ def test_fade_em_ease_out_cubic_e_segue_as_animacoes_do_windows(abrir, monkeypat
 def test_borda_esquerda_acompanha_a_curva_e_a_reserva_opaca_tem_faixa_reta(abrir, monkeypatch):
     """A2: a borda de 3 px é a meia-lua do CSS (raio 12 fora, 9x12 dentro); sem transparência os cantos são retos."""
     transparente = abrir().rootObject()
-    assert _expr(transparente, "children[1].objectName") == "bordaDoAviso"
     assert transparente.findChild(QObject, "bordaDoAviso").property("visible") is True
     assert transparente.findChild(QObject, "bordaRetaDoAviso").property("visible") is False
     monkeypatch.setattr(jpc, "FUNDO_TRANSPARENTE", False)

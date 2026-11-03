@@ -410,6 +410,8 @@ def test_roda_do_mouse_rola_para_os_lados_por_mola(app_qt, sem_vigia):
     _comecar(app)
     lista = _lista(app)
     mola = _achar(lista, "molaDaSessao")
+    assert mola.property("ativa") is False  # M7: no harness `Tema.animacoes` é falso e a mola fica desligada
+    mola.setProperty("ativa", True)
     assert _esperar(lambda: lista.property("contentWidth") > lista.property("width"))
     _rodar(app, lista, -120, esperar=False)
     QTest.qWait(60)

@@ -57,6 +57,21 @@ ModalDaRestauracao {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: BarraDeRolagem {}
+        // O Tab leva o foco a uma linha fora da vista: a lista rola até ela (o `GtkScrolledWindow` faz o mesmo).
+        Connections {
+            target: lista.Window.window
+            function onActiveFocusItemChanged() {
+                const foco = lista.Window.window.activeFocusItem
+                if (!foco) return
+                let dentro = false
+                for (var q = foco; q; q = q.parent) if (q === lista.contentItem) { dentro = true; break }
+                if (!dentro) return
+                const topo = foco.mapToItem(lista.contentItem, 0, 0).y
+                const base = topo + foco.height
+                if (topo < lista.contentY) lista.contentY = Math.max(0, topo - 8)
+                else if (base > lista.contentY + lista.height) lista.contentY = base - lista.height + 8
+            }
+        }
 
         GrupoDeLinhas {
             id: grupo

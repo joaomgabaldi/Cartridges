@@ -18,7 +18,7 @@ from PySide6.QtTest import QTest
 from cartridges import shared
 from cartridges.modelos import sobre as modulo_sobre
 from cartridges.modelos.avisos import FilaDeAvisos
-from cartridges.modelos.sobre import Sobre, descricao_do_app, informacoes_de_depuracao, novidades_da_versao
+from cartridges.modelos.sobre import Sobre, informacoes_de_depuracao, novidades_da_versao
 from tests.apoio_janela_atualizacao import Janela, achar, avaliar, esperar
 
 METAINFO = Path(__file__).resolve().parent.parent / "data" / "io.github.joaomgabaldi.Cartridges.metainfo.xml.in"
@@ -148,19 +148,11 @@ def test_modelo_le_as_novidades_da_versao_ao_abrir(app_qt, monkeypatch):  # noqa
     assert len(sobre.novidades) == 3
 
 
-def test_detalhes_sao_a_descricao_da_metainfo(app_qt):  # noqa: ARG001
-    paragrafos = descricao_do_app(METAINFO)
-    assert len(paragrafos) == 1
-    assert paragrafos[0].startswith("O Cartridges é um lançador simples para todos os seus jogos.")
-    assert Sobre(None).detalhes == paragrafos
-
-
 def test_textos_do_sobre_sao_os_da_main():
     """Conferidos contra `git show main:cartridges/main.py` (ABOUT_*, on_about_action, ABOUT_DIALOG_STRINGS)."""
     assert modulo_sobre.TITULOS == {
         "principal": "Sobre",
         "novidades": "Novidades",
-        "detalhes": "Detalhes",
         "creditos": "Créditos",
         "legal": "Aviso legal",
         "problemas": "Solução de problemas",

@@ -60,7 +60,6 @@ Item {
         for (var p = foco; p; p = p.parent) {
             if (p.alternar) { p.alternar(); return }
         }
-        if (foco && foco.click) foco.click()
     }
 
     focus: true
@@ -138,7 +137,8 @@ Item {
             property bool aberta: false
             // A linha expandida mora no `novidades`: a página é destruída ao voltar (DA-37).
             readonly property string chave: modelData.url + "|" + modelData.titulo
-            Component.onCompleted: aberta = novidades.estaAberta(chave)
+            property bool _pronta: false  // a linha restaurada como aberta nasce aberta, sem animar de fechada
+            Component.onCompleted: { aberta = novidades.estaAberta(chave); _pronta = true }
             onAbertaChanged: novidades.definirAberta(chave, aberta)
             readonly property bool _comResumo: modelData.resumo !== ""
             readonly property bool _comLink: modelData.url !== ""
@@ -153,7 +153,7 @@ Item {
 
             comTextos: false
             implicitHeight: _separador + _cabecalho + (aberta ? _corpo : 0)
-            Behavior on implicitHeight { enabled: Tema.animacoes; NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
+            Behavior on implicitHeight { enabled: Tema.animacoes && linha._pronta; NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
             onActiveFocusChanged: if (activeFocus) lista.currentIndex = index
             Keys.onUpPressed: raiz.moverSelecao(0, -1)
             Keys.onDownPressed: raiz.moverSelecao(0, 1)

@@ -170,19 +170,19 @@ MolduraDoDialogo {
                 objectName: "botaoDaPaginaDoLogin"
                 text: janela.login ? janela.login.botaoDaPagina : ""
                 enabled: janela.login !== null && !janela.login.ocupada
-                onClicked: janela.login.abrirPagina()
+                onClicked: if (janela.login) janela.login.abrirPagina()
             }
             Botao {
                 objectName: "botaoCancelarLogin"
                 text: "Cancelar"
-                onClicked: janela.login.fechar()
+                onClicked: if (janela.login) janela.login.fechar()
             }
             Botao {
                 objectName: "botaoConectarLogin"
                 text: "Conectar"
                 estilo: "sugestao"
                 enabled: janela.login !== null && janela.login.podeConectar
-                onClicked: janela.login.conectar()
+                onClicked: if (janela.login) janela.login.conectar()
             }
         }
     }

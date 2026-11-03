@@ -75,6 +75,17 @@ MolduraDoDialogo {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: BarraDeRolagem {}
+            // O Tab leva o foco a uma linha fora da vista: a lista rola até ela (o `GtkScrolledWindow` faz o mesmo).
+            Connections {
+                target: cartela.Window.window
+                function onActiveFocusItemChanged() {
+                    for (var p = cartela.Window.window.activeFocusItem; p && p !== vista; p = p.parent)
+                        if (p.parent === vista.contentItem && typeof p.index === "number") {
+                            vista.positionViewAtIndex(p.index, ListView.Contain)
+                            return
+                        }
+                }
+            }
         }
     }
 

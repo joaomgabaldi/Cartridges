@@ -32,6 +32,7 @@ Item {
             source: capa.placeholder
             fillMode: Image.Stretch
             sourceSize.height: Math.round(300 * capa.escala)
+            mipmap: true  // como a capa: sem serrilhado sob o giro
         }
         Image {
             id: imagem

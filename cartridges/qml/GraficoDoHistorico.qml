@@ -52,7 +52,7 @@ Item {
         function xDe(i) { return n === 1 ? margemEsquerda + larguraUtil / 2 : margemEsquerda + larguraUtil * g.posicoes[i] / ultima }
         function yDe(valor) { return baseY - alturaUtil * valor / g.topo }
 
-        ctx.font = "9.84px '" + Tema.fonte + "'"  // .caption, 82% de 12 px
+        ctx.font = "10px '" + Tema.fonte + "'"  // .caption, 82% de 12 px
         ctx.textAlign = "left"
         ctx.textBaseline = "middle"
 

@@ -276,7 +276,9 @@ def test_logo_ou_nome_no_dialogo(tela, monkeypatch, tmp_path):
     assert tela.modelo.nome == "Jogo 1"  # o nome segue: o QML mostra só um dos dois
 
     tela.modelo.fechar()
-    assert (tela.modelo.aberto, tela.modelo.logo, tela.modelo.nome) == (False, "", "")
+    # Fecha sem esvaziar: o cartão não encolhe durante a animação de saída.
+    assert (tela.modelo.aberto, tela.modelo.nome) == (False, "Jogo 1")
+    assert tela.modelo.logo.startswith("file:///")
 
 
 def test_abrir_jogo_desconhecido_ou_sem_cartao_nao_abre(tela):
@@ -466,6 +468,20 @@ def test_desconectar_avisa_uma_vez_e_some_o_cartao_aberto(avisos, flush_idle, mo
     assert modelo.pagina["visivel"] is False
     assert modelo.aberto is True  # D13: a lista aberta segue como estava (o retrato de quando abriu)
     assert modelo.sessao["visivel"] is False
+
+
+def test_falha_ao_abrir_o_dialogo_fecha_e_esquece_o_retrato(tela, monkeypatch, caplog):
+    def quebrar(_jogo):
+        raise RuntimeError("falha")
+
+    monkeypatch.setattr(progresso, "do_jogo", quebrar)
+    with caplog.at_level(logging.WARNING):
+        tela.modelo.abrir(tela.jogo.game_id)
+
+    assert tela.modelo.aberto is False
+    assert tela.modelo._retrato is None  # pylint: disable=protected-access
+    assert tela.modelo._dialogo == ""  # pylint: disable=protected-access
+    assert caplog.text.count("Falha ao montar as conquistas (dialogo)") == 1
 
 
 def test_falha_ao_montar_esconde_a_vista(tela, monkeypatch, caplog):

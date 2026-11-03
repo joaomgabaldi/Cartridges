@@ -27,9 +27,7 @@ Column {
         objectName: "carregadorDasContas"
         width: parent.width
         active: preferencias.contas !== null
-        readonly property int linhasAMostrar: item ? item.linhasAMostrar : 0
-        // Sem conta que case, o Loader sai (senão guardaria a altura do grupo).
-        visible: active && linhasAMostrar > 0
+        visible: active
         sourceComponent: GrupoDasContas { contas: preferencias.contas }
     }
 

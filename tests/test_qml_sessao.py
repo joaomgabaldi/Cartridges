@@ -182,6 +182,22 @@ def test_anotacao_da_sessao_vai_ao_jogo_da_sessao(app_qt):
     app.fechar()
 
 
+def test_balao_aberto_deixa_o_botao_marcado_e_sem_dica(app_qt):
+    """M4/M5: o `MenuButton` da `main` fica `:checked` com o balão aberto, e a dica não fica por cima dele."""
+    app = _app()
+    _comecar(app)
+    botao = app.achar("botaoAnotacaoDaSessao")
+    assert botao.property("checked") is False
+    QMetaObject.invokeMethod(botao, "click", Qt.ConnectionType.DirectConnection)
+    balao = app.achar("balaoDaSessao")
+    assert _esperar(lambda: balao.property("opened") is True)
+    assert botao.property("checked") is True
+    assert botao.property("dicaAtiva") is False
+    balao.close()
+    assert _esperar(lambda: botao.property("checked") is False)
+    app.fechar()
+
+
 def test_anotacao_digitada_chega_ao_jogo_mesmo_se_a_sessao_acaba_com_o_balao_aberto(app_qt):
     app = _app()
     _comecar(app)

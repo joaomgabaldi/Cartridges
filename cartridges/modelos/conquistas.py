@@ -334,6 +334,7 @@ class ConquistasDoJogo(QObject):
         self._retrato = None
         self._logo = ("", 0)
         self._origens["dialogo"] = set()
-        if self._guardar(_DIALOGO_FECHADO):
+        # Só `aberto` cai: o diálogo sai com o conteúdo intacto (120 ms); `abrir` sobrescreve tudo na vez seguinte.
+        if self._guardar({"aberto": False}):
             self.alterado.emit()
 

@@ -17,9 +17,9 @@ from PySide6.QtTest import QTest
 
 from cartridges import shared
 from cartridges.jogo import Jogo
+from cartridges.modelos import biblioteca as modulo_biblioteca
 from cartridges.modelos import regras_do_big_picture as regras
 from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
-from cartridges.modelos import biblioteca as modulo_biblioteca
 from cartridges.modelos.biblioteca import ModeloDaBiblioteca
 from tests.apoio_qml_biblioteca import QML, _achar, _esperar
 from tests.apoio_qml_big_picture import (
@@ -341,7 +341,7 @@ def test_animada_so_com_autoplay(app_qt, tmp_path):
     assert _achar(lateral, "capaAnimada").property("source").toString() == ""
 
 
-def test_animar_central_segue_o_autoplay_e_as_animacoes_do_sistema(app_qt):
+def test_animar_central_segue_so_o_autoplay(app_qt):
     modelo = ModeloDaBiblioteca()
     antes = shared.schema.get_boolean("cover-autoplay")
     try:
@@ -533,6 +533,16 @@ def test_botao_indisponivel_sem_3d(app_qt, monkeypatch):
     assert botao.property("dica") == "Requer uma placa de vídeo com aceleração 3D."
     # Insensível como na `main`: 50% de opacidade e sem o realce do ponteiro (BP-11); a dica continua a abrir.
     assert botao.property("opacity") == 0.5 and botao.property("semRealce") is True
+    # C5: nem o aperto muda a cor do fundo (a `main` insensível não reage).
+    fundo = _avaliar(botao, "background.color.a")
+    ponto = botao.mapToScene(botao.boundingRect().center()).toPoint()
+    QTest.mousePress(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
+    try:
+        assert _esperar(lambda: _avaliar(botao, "down") is True)
+        _esperar(lambda: False, 0.4)  # a transição de cor de 200 ms
+        assert _avaliar(botao, "background.color.a") == fundo
+    finally:
+        QTest.mouseRelease(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
     app.fechar()
 
 
@@ -1022,6 +1032,18 @@ def test_sem_capa_desenha_o_placeholder_da_biblioteca(app_qt, tmp_path):
     assert _avaliar(quadro, "fillMode") == 0  # Stretch
     assert _achar(com, "placeholderDaCapa").property("visible") is False  # a capa pronta cobre o placeholder
     assert "Sem capa" not in _textos_de(sem), "o nome do jogo no quadro cinza saiu"
+
+
+def test_tela_sem_capa_recebe_o_placeholder_do_modelo(app_qt):
+    # BP-01 (C3): o `BigPicture.qml` passa `bigPicture.placeholder` à capa; sem isso o jogo sem capa ficaria em branco.
+    tela = _Tela(quantidade=1)
+    try:
+        quadros = _itens(tela.tela, lambda i: i.objectName() == "placeholderDaCapa")
+        assert quadros, "o jogo sem capa desenha o placeholder"
+        assert quadros[0].property("source").toLocalFile() != ""
+        assert quadros[0].property("source").toString() == QUrl(tela.bp.placeholder).toString()
+    finally:
+        tela.fechar()
 
 
 def _textos_de(raiz):

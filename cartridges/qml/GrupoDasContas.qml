@@ -12,10 +12,6 @@ Column {
     property var contas
     // O título e a descrição; o assistente da primeira abertura os esconde (a página dele já explica as contas).
     property bool comCabecalho: true
-    // Quantas contas passam na busca; o grupo some sem nenhuma (como `GrupoDePreferencias.linhasAMostrar`).
-    readonly property int linhasAMostrar: [contas.microsoft, contas.epic, contas.ea]
-        .filter(d => BuscaDasPreferencias.passa(d.titulo, d.subtitulo)).length
-    visible: linhasAMostrar > 0
 
     width: parent ? parent.width : implicitWidth
     // preferencesgroup > box: 6 entre o cabeçalho e o cartão; a descrição leva mais 6 embaixo.

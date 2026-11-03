@@ -182,6 +182,11 @@ class AtualizacoesDaBiblioteca(QObject):
             ).format(len(incompletos), len(jogos))
         )
 
+    @Slot()
+    def descartarPergunta(self) -> None:  # noqa: N802
+        """A pergunta foi cancelada ou as Preferências fecharam: a próxima busca olha a biblioteca de novo."""
+        self._pergunta = None
+
     @Slot(bool)
     def buscarMetadados(self, somente_faltantes: bool) -> None:  # noqa: N802
         refresh = self._refresh()
@@ -666,6 +671,7 @@ class Preferencias(QObject):
             # Só fecha o estado da tela: as fitas ficam como estão.
             self._fitas.fechar,
             lambda: self._biblioteca.seguir(False),
+            self._biblioteca.descartarPergunta,
             self._soltar_ouvinte,
         )
         for passo in passos:

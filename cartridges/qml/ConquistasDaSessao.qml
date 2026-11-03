@@ -114,10 +114,10 @@ Rectangle {
             }
 
             // A roda do mouse rola para os lados com a mola do app (a lista não tem para onde ir na vertical).
-            RolagemPorMola { objectName: "molaDaSessao"; alvo: lista; horizontal: true }
+            RolagemPorMola { objectName: "molaDaSessao"; alvo: lista; horizontal: true; ativa: Tema.animacoes }
             // O touchpad rola direto: a mola é só do mouse, como na `main`.
             WheelHandler {
-                acceptedDevices: PointerDevice.TouchPad
+                acceptedDevices: Tema.animacoes ? PointerDevice.TouchPad : PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: evento => {
                     const passo = evento.angleDelta.y !== 0 ? evento.angleDelta.y : evento.angleDelta.x
                     const fim = Math.max(0, cartao.larguraDosIcones - lista.width)

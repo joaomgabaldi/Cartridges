@@ -106,10 +106,10 @@ class _Pagina:
         return QQmlExpression(QQmlEngine.contextForObject(objeto), objeto, expressao).evaluate()[0]
 
     def visivel(self, nome):
-        """Uma linha aparece pela regra e pelo filtro (o `visible` efetivo pede o polimento do layout, que sem janela não roda)."""
+        """Uma linha aparece pela regra (o `visible` efetivo pede o polimento do layout, que sem janela não roda)."""
         objeto = self.achar(nome)
         if objeto.property("buscavel") is True:
-            return objeto.property("aparece") is True and objeto.property("passaNoFiltro") is True
+            return objeto.property("aparece") is True
         return objeto.property("visible") is True
 
 
@@ -211,19 +211,13 @@ def test_grupos_na_ordem_da_main(montar):
         assert pagina.achar(nome).property("buscavel") is True
 
 
-def test_busca_acha_restaurar_saves(montar):
-    """Só "Restaurar saves de todos os jogos" tem "restaurar saves" (o texto da `main`): as outras linhas e os outros grupos somem."""
+def test_restaurar_saves_some_sem_o_ludusavi_e_o_grupo_fica_com_as_outras_linhas(montar):
+    """Sem o Ludusavi a linha "Restaurar saves" some; o grupo do backup segue com as outras."""
     _p, pagina = montar()
-    pagina.avaliar(pagina.item, "BuscaDasPreferencias.texto = 'restaurar saves'")
-    assert pagina.visivel("linhaRestaurarSaves")
-    for nome in ("linhaExportarBackup", "linhaImportarBackup", "linhaPastaDosSaves", "linhaRedefinir"):
-        assert not pagina.visivel(nome), nome
-    assert pagina.visivel("grupoBackupDaBiblioteca")
-    assert not pagina.visivel("grupoZonaDePerigo") and not pagina.visivel("grupoComportamentoGeral")
-    # Sem o Ludusavi a linha some e o grupo inteiro com ela.
+    assert pagina.visivel("linhaRestaurarSaves") and pagina.visivel("grupoBackupDaBiblioteca")
     _p, pagina = montar(disponivel=False)
-    pagina.avaliar(pagina.item, "BuscaDasPreferencias.texto = 'restaurar saves'")
-    assert not pagina.visivel("grupoBackupDaBiblioteca")
+    assert not pagina.visivel("linhaRestaurarSaves")
+    assert pagina.visivel("grupoBackupDaBiblioteca") and pagina.visivel("linhaExportarBackup")
 
 
 def test_pasta_padrao_apaga_usar_a_padrao(montar, monkeypatch, flush_idle):

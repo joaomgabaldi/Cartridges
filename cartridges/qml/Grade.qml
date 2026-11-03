@@ -235,7 +235,7 @@ GridView {
             focado: grade.activeFocus && grade.porTeclado && parent.GridView.isCurrentItem
             menuAberto: menuDoJogo.visible && menuDoJogo.jogoId === jogoId
             // O índice vai junto: ao voltar, o foco é do cartão de onde a página saiu.
-            onAbrirDetalhes: id => { grade.currentIndex = index; grade.abrirDetalhes(id) }
+            onAbrirDetalhes: id => { grade.porTeclado = false; grade.currentIndex = index; grade.abrirDetalhes(id) }
             onEditar: id => grade.editar(id)
             onMenuPedido: (id, ancora) => {
                 grade.currentIndex = index

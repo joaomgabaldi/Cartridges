@@ -30,7 +30,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 def isolado(monkeypatch):
     """Nenhuma chamada Win32 de verdade e nenhum histórico gravado."""
     monkeypatch.setattr(modulo, "_area_de_trabalho", lambda: (0, 0, 1920, 1040))
-    monkeypatch.setattr(modulo, "_retangulo_da_janela", lambda _hwnd: (0, 0, 316, 189))
+    monkeypatch.setattr(modulo, "_retangulo_da_janela", lambda _hwnd: (0, 0, 316, 158))
     monkeypatch.setattr(modulo, "_user32", lambda: pytest.fail("Win32 de verdade"))
     registros = []
     monkeypatch.setattr(session_log, "record", lambda jogo_id, s: registros.append((jogo_id, s)))
@@ -147,8 +147,8 @@ def test_posicionar_usa_o_hwnd_da_janela_e_nao_rouba_o_foco(app_qt, monkeypatch)
 
     modelo = modulo.ModeloDaSessao(None)
     modelo.posicionarJanelaManual(Janela())
-    # Janela 316x189 (com moldura) na área 1920x1040, margem 12: o canto fica em 1592,839.
-    assert chamadas == [(4242, 0, 1592, 839, 0, 0, 0x0015)]
+    # Janela 316x158 (com a borda invisível) na área 1920x1040, margem 12: o canto fica em 1592,870.
+    assert chamadas == [(4242, 0, 1592, 870, 0, 0, 0x0015)]
 
 
 def test_falha_no_win32_deixa_onde_esta(app_qt, monkeypatch, caplog):
@@ -261,7 +261,7 @@ window_geometry.session_geometry = lambda: None
 game_logo.cached_logo_path = lambda _jogo: None
 session_log.record = lambda _id, segundos: ordem.append(["record", segundos])
 modulo._posicionar = lambda *_a: None
-modulo._retangulo_da_janela = lambda _h: (0, 0, 316, 189)
+modulo._retangulo_da_janela = lambda _h: (0, 0, 316, 158)
 modulo._area_de_trabalho = lambda: (0, 0, 1920, 1040)
 
 app = modulo_app.AplicacaoQt(sys.argv[:1])
@@ -345,7 +345,7 @@ window_geometry.session_geometry = lambda: None
 game_logo.cached_logo_path = lambda _jogo: None
 session_log.record = lambda *_a: None
 modulo._posicionar = lambda *_a: None
-modulo._retangulo_da_janela = lambda _h: (0, 0, 316, 189)
+modulo._retangulo_da_janela = lambda _h: (0, 0, 316, 158)
 modulo._area_de_trabalho = lambda: (0, 0, 1920, 1040)
 shared.schema = SimpleNamespace(get_string=lambda _c: "inferior-direito", get_boolean=lambda _c: False)
 conquista_aviso._agendar = lambda *_a: None  # o aviso fica na tela até o fechamento

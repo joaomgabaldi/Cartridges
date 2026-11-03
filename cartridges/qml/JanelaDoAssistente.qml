@@ -5,8 +5,8 @@ import QtQuick.Effects
 import QtQuick.Window
 
 // O assistente da primeira abertura (D86): janela própria com a barra do app (`Adw.HeaderBar` sem título, minimizar e
-// fechar; 640x640 no total, o conteúdo com 593), antes da biblioteca, num motor próprio. As oito telas do `.blp` da `main` num carrossel sem gesto, os pontos e o rodapé
-// "Voltar" | "Pular" "Continuar". Só desenha: o que ele mostra e grava é o `assistente` (cartridges/assistente.py).
+// fechar; 640x640 no total, o conteúdo com 593), antes da biblioteca, num motor próprio. As oito telas do `.blp` da
+// `main` num carrossel sem gesto, os pontos e o rodapé "Voltar" | "Pular" "Continuar". Só desenha: o que ele mostra e grava é o `assistente` (cartridges/assistente.py).
 // Os modais por cima (iluminação, logins, aviso) deixam o fundo `enabled: false`.
 Window {
     id: raiz
@@ -221,10 +221,17 @@ Window {
             readonly property real _w: Math.sqrt(500 / 0.5)
             // Resposta ao degrau do oscilador crítico: 1 - (1 + wt)e^(-wt).
             on_TChanged: posicao = _de + (_para - _de) * (1 - (1 + _w * _t) * Math.exp(-_w * _t))
-            NumberAnimation { id: relogioDoCarrossel; target: carrossel; property: "_t"; from: 0; to: 0.5; duration: 500 }
+            property int _ultimo: raiz.modelo.indice
+            NumberAnimation {
+                id: relogioDoCarrossel; target: carrossel; property: "_t"; from: 0; to: 0.5; duration: 500
+                onFinished: carrossel.posicao = carrossel._para  // cai no índice exato, sem o resto da curva
+            }
             Connections {
                 target: raiz.modelo
                 function onIndiceChanged() {
+                    // O `alterado` do modelo dispara a cada ajuste: só uma troca de tela reinicia a animação.
+                    if (raiz.modelo.indice === carrossel._ultimo) return
+                    carrossel._ultimo = raiz.modelo.indice
                     relogioDoCarrossel.stop()
                     // `animar` já foi relido pelo modelo a esta troca (`animarMudou`).
                     if (!raiz.modelo.animar) { carrossel.posicao = raiz.modelo.indice; return }
@@ -510,7 +517,7 @@ Window {
             }
         }
 
-        // O rodapé é conteúdo da janela (a moldura é a nativa): arrastar sobre os botões não move a janela.
+        // O rodapé é conteúdo da janela (a barra é a do app, com o QWindowKit): arrastar sobre os botões não move a janela.
         Column {
             id: rodape
             objectName: "rodape"

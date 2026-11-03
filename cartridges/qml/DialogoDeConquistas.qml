@@ -164,7 +164,7 @@ MolduraDoDialogo {
                         background: Item {}
                         Binding { target: fileira; property: "foco"; value: alvoDaLinha.visualFocus }
                         Accessible.role: Accessible.ListItem
-                        Accessible.name: fileira.modelData.titulo + ". " + fileira.modelData.subtitulo
+                        Accessible.name: [fileira.modelData.titulo, fileira.modelData.subtitulo].filter(Boolean).join(". ")
                         Keys.onUpPressed: dialogo.irParaVizinha(alvoDaLinha, false)
                         Keys.onDownPressed: dialogo.irParaVizinha(alvoDaLinha, true)
                     }

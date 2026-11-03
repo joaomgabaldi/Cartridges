@@ -10,13 +10,14 @@ LinhaDoGrupo {
     property Item ativavel
 
     reservaADireita: lado.width
-    sobre: !!ativavel && areaDaLinha.containsMouse
+    sobre: !!ativavel && passando.hovered
     pressionada: !!ativavel && areaDaLinha.pressed
 
+    // O `HoverHandler` vê o ponteiro também sobre os botões do fim, que o `MouseArea` não via.
+    HoverHandler { id: passando; enabled: !!linha.ativavel }
     MouseArea {
         id: areaDaLinha
         anchors.fill: parent
-        hoverEnabled: true
         enabled: !!linha.ativavel
         onClicked: if (linha.ativavel.enabled) linha.ativavel.click()
     }

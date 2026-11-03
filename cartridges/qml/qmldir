@@ -1,6 +1,5 @@
 module Cartridges
 singleton Tema 1.0 Tema.qml
-singleton BuscaDasPreferencias 1.0 BuscaDasPreferencias.qml
 BarraDeTitulo 1.0 BarraDeTitulo.qml
 Principal 1.0 Principal.qml
 CartaoDoJogo 1.0 CartaoDoJogo.qml

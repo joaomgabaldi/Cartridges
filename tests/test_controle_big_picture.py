@@ -221,7 +221,7 @@ def test_conectado_do_qml_so_com_a_grade_a_vista(app_qt, monkeypatch):
     app = _entrada(monkeypatch, grade=False)  # o slot não faz nada
     shared.schema.set_boolean("big-picture-ao-conectar", True)
     shared.schema.set_boolean("gamepad", True)
-    app.controle.conectado.emit()  # o QML passa `paginaAtual === "todos" && !popupAberto`
+    app.controle.conectado.emit()  # o QML passa `paginaAtual === "todos" && !modalAberto`
     assert app.big_picture.ocupada
     assert _esperar(lambda: not app.big_picture.ocupada and app.big_picture.visivel, limite=5)
     app.big_picture.encerrar()

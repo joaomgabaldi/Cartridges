@@ -134,6 +134,12 @@ MolduraDoDialogo {
         Qt.callLater(() => focarLinha(resultado.linha))
     }
 
+    // Uma preferência mudou com a busca aberta (uma linha pode ter aparecido ou sumido): refaz os resultados.
+    Connections {
+        target: preferencias
+        function onAlterado() { if (dialogo.filtro !== "") Qt.callLater(dialogo.procurar) }
+    }
+
     Connections {
         target: dialogo.Window.window
         function onActiveFocusItemChanged() {
@@ -364,6 +370,7 @@ MolduraDoDialogo {
             respostaInicial: "confirmar"  // `set_default_response("missing")`
             onConfirmado: preferencias.biblioteca.buscarMetadados(true)
             onAlternativo: preferencias.biblioteca.buscarMetadados(false)
+            onCancelado: preferencias.biblioteca.descartarPergunta()
             onRetornoPerdido: dialogo.focarInicial()
         }
         BrilhoPorDispositivo { onRetornoPerdido: dialogo.focarInicial() }

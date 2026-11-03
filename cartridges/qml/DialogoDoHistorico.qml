@@ -52,6 +52,13 @@ Item {
             var linha = repetidor.itemAt(indice)
             if (linha) linha.alvo.forceActiveFocus(Qt.TabFocusReason)
         }
+        // Home, End, PageUp e PageDown entre as linhas, como o `GtkListBox`.
+        function irParaLinhaPorTecla(indice, tecla) {
+            var passo = Math.max(1, Math.floor(rolagem.height / Math.max(1, repetidor.itemAt(indice).height)))
+            var destino = tecla === Qt.Key_Home ? 0 : tecla === Qt.Key_End ? repetidor.count - 1
+                : tecla === Qt.Key_PageUp ? indice - passo : indice + passo
+            irParaLinha(Math.max(0, Math.min(repetidor.count - 1, destino)))
+        }
 
         aberto: historico.aberto
         largura: 1040
@@ -101,8 +108,7 @@ Item {
                 // `--active-toggle-bg-color`: branco no claro, branco a 20% no escuro.
                 color: botao.checked ? (Tema.escuro ? Qt.rgba(1, 1, 1, 0.2) : "#ffffff")
                     : botao.down ? Tema.planoPressionado : botao.hovered ? Tema.planoSobre : "transparent"
-                border { width: botao.checked || botao.hovered || botao.down ? 1 : 0; color: Tema.borda }
-                Behavior on color { ColorAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
+                                Behavior on color { ColorAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
                 Sombra { visible: botao.checked; camadas: Tema.sombraAviso; raio: 6 }
                 AnelDeFoco { ativo: botao.visualFocus; raio: 6; afastamento: 0 }
             }
@@ -112,6 +118,8 @@ Item {
             id: cabecalho
             titulo: ""
             sombra: rolagem.contentY > 0
+            // Com a confirmação ou as Preferências na frente, o Tab não alcança o X que ficou atrás.
+            enabled: !confirmacao.aberto && !preferencias.aberto
             onFechar: historico.fechar()
         }
 
@@ -220,6 +228,11 @@ Item {
                                             Accessible.name: linha.titulo + ". " + linha.subtitulo
                                             Keys.onUpPressed: dialogo.irParaLinha(linha.index - 1)
                                             Keys.onDownPressed: dialogo.irParaLinha(linha.index + 1)
+                                            Keys.onPressed: event => {
+                                                if ([Qt.Key_Home, Qt.Key_End, Qt.Key_PageUp, Qt.Key_PageDown].indexOf(event.key) < 0) return
+                                                dialogo.irParaLinhaPorTecla(linha.index, event.key)
+                                                event.accepted = true
+                                            }
                                         }
                                         Botao {
                                             id: lixeira
@@ -231,6 +244,11 @@ Item {
                                             onClicked: dialogo.pedirExclusao(linha.modelData)
                                             Keys.onUpPressed: dialogo.irParaLinha(linha.index - 1)
                                             Keys.onDownPressed: dialogo.irParaLinha(linha.index + 1)
+                                            Keys.onPressed: event => {
+                                                if ([Qt.Key_Home, Qt.Key_End, Qt.Key_PageUp, Qt.Key_PageDown].indexOf(event.key) < 0) return
+                                                dialogo.irParaLinhaPorTecla(linha.index, event.key)
+                                                event.accepted = true
+                                            }
                                         }
                                     }
                                 }
@@ -265,7 +283,6 @@ Item {
                             implicitHeight: 34
                             radius: 9
                             color: Tema.botao
-                            border { width: 1; color: Tema.borda }
                             Row {
                                 id: periodos
                                 anchors.centerIn: parent

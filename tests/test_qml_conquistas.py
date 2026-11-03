@@ -607,6 +607,8 @@ def test_abre_e_fecha_pela_moldura_com_o_esmaecimento_da_main(app_qt):
     """D2/D11/D15: o fundo é o `Tema.esmaecido` (e não o #80000000 dos dois temas) e a janela estreita vira folha de baixo."""
     app = _app()
     _pagina, dialogo = _abrir_lista(app)
+    esmaecimento = _achar(dialogo, "esmaecimentoDaMoldura")
+    assert _expr(esmaecimento, "color.toString()") == _expr(dialogo, "Tema.esmaecido.toString()")
     assert _expr(dialogo, "cor.toString()") == _expr(dialogo, "Tema.fundo.toString()")
     assert dialogo.property("podeSerFolha") is True
     assert dialogo.property("emFolha") is False

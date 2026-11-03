@@ -31,15 +31,15 @@ Column {
         to: 1
         indeterminate: tela.progresso < 0 || tela.texto === ""
         value: Math.max(0, tela.progresso)
-        implicitHeight: 6
-        background: Rectangle { radius: 3; color: Tema.mistura(0.15) }
+        implicitHeight: 8
+        background: Rectangle { radius: 4; color: Tema.mistura(0.15) }
         contentItem: Item {
             clip: true
             Rectangle {
                 visible: !barra.indeterminate
                 width: barra.visualPosition * parent.width
                 height: parent.height
-                radius: 3
+                radius: 4
                 color: Tema.destaque
             }
             // Sem total: um trecho que vai e volta.

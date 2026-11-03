@@ -192,12 +192,11 @@ class BigPicture(QObject):
         return self._ja_saiu
 
     def definir_animacoes_do_sistema(self, ligadas: bool) -> None:
-        """O ajuste do Windows mudou com o app aberto (D88): a fila, o passo e a capa central seguem."""
+        """O ajuste do Windows mudou com o app aberto (D88): a fila e o passo seguem."""
         if ligadas == self._animacoes_do_sistema:
             return
         self._animacoes_do_sistema = ligadas
-        self.alterado.emit()
-        self._religar_animar_central()
+        self.alterado.emit()  # a capa central não muda com isto: só a preferência manda nela (BP-15)
 
     def _ler_animar_central(self) -> bool:
         # Só a preferência (`big_picture.py:288` da `main`); as animações do sistema valem para a grade.

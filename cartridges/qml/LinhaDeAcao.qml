@@ -8,8 +8,6 @@ LinhaDoGrupo {
 
     // O nome do ícone em `data/icones`.
     property string icone
-    // Obsoleto: glifo Segoe, até cada pacote trocar pelo `icone` (tabela em docs/auditoria-gtk-qt/COMPONENTES.md).
-    property string glifo
     property string rotulo
     property string dica
     // Um segundo botão, à esquerda do rótulo (ex.: "Usar a padrão"); só existe com `rotuloSecundario`.
@@ -34,7 +32,7 @@ LinhaDoGrupo {
         anchors.fill: parent
         focusPolicy: Qt.StrongFocus
         hoverEnabled: true
-        Accessible.name: linha.dica !== "" ? linha.dica : linha.titulo
+        Accessible.name: linha.dica !== "" ? linha.dica : [linha.titulo, linha.subtitulo].filter(Boolean).join(". ")
         Accessible.role: Accessible.Button
         Keys.onReturnPressed: click()
         Keys.onEnterPressed: click()
@@ -67,10 +65,10 @@ LinhaDoGrupo {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             visible: linha.icone === "" && text !== ""
-            text: linha.glifo !== "" ? linha.glifo : linha.rotulo
+            text: linha.rotulo
             textFormat: Text.PlainText
             color: Tema.texto
-            font { family: linha.glifo !== "" ? Tema.fonteDeIcones : Tema.fonte; pixelSize: linha.glifo !== "" ? 16 : Tema.corpo }
+            font { family: Tema.fonte; pixelSize: Tema.corpo }
         }
     }
 }

@@ -125,6 +125,8 @@ Rectangle {
                 corDoTexto: "white"
                 text: "Onde eu parei"
                 dica: "Anotar onde você parou neste jogo"
+                dicaAtiva: hovered && !balao.opened
+                checked: balao.opened
                 leftPadding: 10
                 rightPadding: 10
                 Accessible.description: dica

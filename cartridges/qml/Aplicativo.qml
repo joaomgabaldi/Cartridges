@@ -401,6 +401,7 @@ Principal {
     DialogoSobre {
         id: dialogoSobre
         modelo: janela.servicoDoSobre
+        avisoAberto: camadaDeAvisos.dialogoAberto
         // Aberto pelo menu principal, que já fechou: o foco vai à página à vista.
         onRetornoPerdido: janela.paginaDoControle.focarGrade()
     }
@@ -502,8 +503,8 @@ Principal {
     // Entrando no Big Picture (por exemplo ao conectar o controle) nenhum menu fica aberto por cima dele.
     Connections {
         target: bigPicture
-        function onAlterado() {
-            if (!bigPicture.visivel) return
+        function onFilaPedida(entrar) {  // só na entrada: um menu aberto depois, por atalho, não fecha a cada emissão
+            if (!entrar) return
             menuPrincipal.close()
             todos.fecharMenuDoJogo()
         }
@@ -672,7 +673,8 @@ Principal {
             if (p === raiz) return true
         return false
     }
-    // O que o direcional nunca altera: texto, número, deslizante e lista de escolha (a `main` só move o foco).
+    // O que o direcional nunca altera: texto, número, deslizante e lista de escolha (a `main` só move o foco). O
+    // `SeletorDeCor` não existe na `main` (R2): sem vizinho na direção, as setas dele mudam a cor, e vale assim.
     function ehEditor(item) {
         return typeof item.cursorPosition === "number" || typeof item.stepSize === "number"
             || (item.popup !== undefined && typeof item.currentIndex === "number")

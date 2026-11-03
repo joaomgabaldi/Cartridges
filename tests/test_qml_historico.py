@@ -581,6 +581,44 @@ def test_tab_e_setas_andam_pelas_linhas_antes_da_lixeira(app_qt):
     app.fechar()
 
 
+def test_home_end_e_paginas_andam_entre_as_linhas(app_qt):
+    """M15: como o `GtkListBox`, Home vai à primeira linha, End à última e PageUp/PageDown saltam."""
+    app = _app()
+    _sessoes(4)
+    _abrir(app)
+    alvos = sorted(_todos(app.achar("tabelaDeSessoes"), "alvoDaLinhaDaSessao"), key=lambda a: _caixa(a)[1])
+
+    def foco():
+        return app.janela.property("activeFocusItem")
+
+    QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+    assert _esperar(lambda: foco() is alvos[0])
+    QTest.keyClick(app.janela, Qt.Key.Key_End)
+    assert _esperar(lambda: foco() is alvos[-1])
+    QTest.keyClick(app.janela, Qt.Key.Key_Home)
+    assert _esperar(lambda: foco() is alvos[0])
+    QTest.keyClick(app.janela, Qt.Key.Key_PageDown)
+    assert _esperar(lambda: foco() is not alvos[0])
+    QTest.keyClick(app.janela, Qt.Key.Key_PageUp)
+    assert _esperar(lambda: foco() is alvos[0])
+    app.fechar()
+
+
+def test_x_do_historico_fica_atras_da_confirmacao(app_qt):
+    """M1: com a confirmação de exclusão aberta, o Tab não chega ao X do histórico que ficou atrás dela."""
+    app = _app()
+    _sessoes(2)
+    dialogo = _abrir(app)
+    x = _achar(dialogo, "fecharDoCabecalho")
+    _clique_no_botao(_todos(app.achar("tabelaDeSessoes"), "botaoExcluirSessao")[0])
+    assert app.achar("dialogoExcluirSessao").property("visible") is True
+    assert x.property("enabled") is False
+    for _ in range(8):
+        QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+        assert app.janela.property("activeFocusItem") is not x
+    app.fechar()
+
+
 def test_vazio_a_margem_de_baixo_e_da_caixa_inteira(app_qt):
     """SES-36: sem sessão o cartão não termina colado no resumo: sobram os 24 de baixo."""
     app = _app()

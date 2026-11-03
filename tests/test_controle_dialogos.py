@@ -194,7 +194,7 @@ def test_menu_cada_passo_vibra_e_a_ponta_vibra_o_toque(app):
     app.leitor.vibracoes.clear()
     for _ in range(20):  # além do último item
         app.controle.mover.emit(0, 1)
-    assert app.leitor.vibracoes[-1] in (EDGE, MOVE)
+    assert app.leitor.vibracoes[-1] == EDGE
     assert app.leitor.vibracoes.count(MOVE) < 20, "ao menos um passo bateu na ponta e vibrou o toque firme"
 
 

@@ -69,9 +69,10 @@ Button {
         color: {
             // Tudo é `currentColor`: a cor do texto do próprio botão, com o alfa do estado.
             if (botao.estilo === "sugestao") return Tema.destaque
-            const ligado = botao.down || botao.checked
+            const apertado = botao.down && !botao.semRealce  // o botão insensível da `main` não reage ao aperto
+            const ligado = apertado || botao.checked
             const sobre = botao.hovered && !botao.semRealce
-            const alfa = botao.estilo === "plano" ? (botao.down ? 0.16 : botao.checked ? 0.10 : sobre ? 0.07 : 0)
+            const alfa = botao.estilo === "plano" ? (apertado ? 0.16 : botao.checked ? 0.10 : sobre ? 0.07 : 0)
                 : botao.estilo === "destrutivo" ? (ligado ? 0.35 : sobre ? 0.20 : 0.15)
                 : (ligado ? 0.30 : sobre ? 0.15 : 0.10)
             return Qt.alpha(botao.corDoTexto, botao.corDoTexto.a * alfa)

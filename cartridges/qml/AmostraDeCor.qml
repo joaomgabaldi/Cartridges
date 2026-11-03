@@ -102,6 +102,10 @@ Botao {
         objectName: amostra.nomeDoBalao
         // Sem espaço embaixo do botão, o balão sobe para o outro lado dele (como o `GtkPopover`) e não cobre a amostra.
         property bool porCima: false
+        function recalcularLado() {
+            const janela = amostra.Window.height > 0 ? amostra.Window.height : Number.MAX_VALUE
+            porCima = amostra.mapToItem(null, 0, amostra.height).y + 6 + implicitHeight + margins > janela
+        }
         x: (amostra.width - width) / 2
         y: porCima ? -height - 6 : amostra.height + 6
         padding: 12
@@ -110,10 +114,11 @@ Botao {
         enter: null
         exit: null
         // O seletor parte da cor que a linha mostra agora; depois disso quem manda nele é a mão.
+        // A altura muda com o seletor (45 tons ou o seletor livre): o lado se refaz com o balão aberto.
+        Connections { target: amostra; function onEditandoChanged() { if (balao.visible) balao.recalcularLado() } }
         onAboutToShow: {
             amostra.editando = false
-            const janela = amostra.Window.height > 0 ? amostra.Window.height : Number.MAX_VALUE
-            porCima = amostra.mapToItem(null, 0, amostra.height).y + 6 + implicitHeight + margins > janela
+            recalcularLado()
             seletor.matiz = Math.max(0, amostra.cor.hsvHue) * 360
             seletor.saturacao = Math.round(amostra.cor.hsvSaturation * 1000)
         }
@@ -156,7 +161,7 @@ Botao {
                 focusPolicy: Qt.StrongFocus
                 hoverEnabled: true
                 Accessible.role: Accessible.Button
-                Accessible.name: cor.toString()
+                Accessible.name: ["Azul", "Verde", "Amarelo", "Laranja", "Vermelho", "Roxo", "Marrom", "Claro", "Escuro"][coluna] + " " + (linha + 1)
                 function acionar() { amostra.escolhida(cor) }
                 Keys.onReturnPressed: acionar()
                 Keys.onEnterPressed: acionar()
@@ -208,8 +213,15 @@ Botao {
                         }
                     }
                 }
-                Row {
-                    spacing: 12
+                // O rótulo fica acima da fila do "+", à esquerda (como o `GtkColorChooserWidget`).
+                Column {
+                    spacing: 6
+                    Text {
+                        text: "Personalizada"
+                        textFormat: Text.PlainText
+                        color: Tema.textoSecundario
+                        font { family: Tema.fonte; pixelSize: Tema.corpo }
+                    }
                     Control {
                         id: maisCor
                         objectName: amostra.objectName + "Mais"
@@ -230,13 +242,6 @@ Botao {
                             AnelDeFoco { ativo: maisCor.visualFocus; raio: 6; afastamento: 1 }
                         }
                         MouseArea { anchors.fill: parent; onClicked: amostra.editando = true }
-                    }
-                    Text {
-                        anchors.verticalCenter: maisCor.verticalCenter
-                        text: "Personalizada"
-                        textFormat: Text.PlainText
-                        color: Tema.textoSecundario
-                        font { family: Tema.fonte; pixelSize: Tema.corpo }
                     }
                 }
             }

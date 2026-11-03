@@ -19,13 +19,13 @@ Column {
     width: parent ? parent.width : implicitWidth
     // preferencesgroup > box: 6 entre o cabeçalho e o cartão; com descrição, 6 a mais.
     spacing: 6
-    // Com linhas das Preferências, conta-as pela regra e pelo filtro (`aparece` e `passaNoFiltro`), nunca pelo `visible` ou pelo `implicitHeight`:
+    // Com linhas das Preferências, conta-as pela regra (`aparece`), nunca pelo `visible` ou pelo `implicitHeight`:
     // estes dependem do próprio grupo e o deixavam sempre escondido (D58).
     readonly property int linhasAMostrar: {
         var n = 0
         for (var i = 0; i < caixa.itens.length; ++i) {
             var c = caixa.itens[i]
-            if (c.buscavel === true && c.aparece && c.passaNoFiltro) ++n
+            if (c.buscavel === true && c.aparece) ++n
         }
         return n
     }
