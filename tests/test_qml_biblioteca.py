@@ -127,10 +127,13 @@ def _cor(objeto, propriedade):
 def test_menu_do_popover_usa_as_cores_do_tema(app_qt):
     app = _App(_tres())
     menu = app.achar("menuPrincipal")
-    # Fundo e texto do Tema (claro ou escuro); o padrão do Basic seria #26282a no texto.
-    assert _cor(menu.property("background"), "color") in ("#36363a", "#ffffff")
+    # Fundo e texto do mesmo tema (o `Tema.escuro` do Windows); o padrão do Basic seria #26282a no texto.
+    from PySide6.QtGui import QGuiApplication  # noqa: PLC0415
+
+    escuro = QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
+    assert _cor(menu.property("background"), "color") == ("#36363a" if escuro else "#ffffff")
     item = app.achar("ordenar-Jogados recentemente")
-    assert _cor(item.property("contentItem"), "color") in ("#ffffff", "#000006")
+    assert _cor(item.property("contentItem"), "color") == ("#ffffff" if escuro else "#000006")
     assert item.property("implicitHeight") == 32
     app.fechar()
 
@@ -1139,4 +1142,41 @@ def test_push_durante_a_saida_animada_nao_e_apagado(app_qt):
     assert app.janela.property("_saindoDaPilha") is False
     assert app.achar("pilha").property("depth") == 1
     assert app.detalhes.jogoId == "imported_1"
+    app.fechar()
+
+
+def test_soltar_atalho_fica_desligado_com_a_confirmacao_da_pagina_do_jogo(app_qt):
+    """m1: o alvo de soltar segue `modalAberto` (que inclui as confirmações da página do jogo)."""
+    from PySide6.QtCore import Q_ARG  # noqa: PLC0415
+
+    app = _App(_tres())
+    QMetaObject.invokeMethod(app.janela, "abrirDetalhes", Qt.ConnectionType.DirectConnection,
+                             Q_ARG("QVariant", "imported_1"))
+    assert _esperar(lambda: app.janela.property("paginaAtual") == "jogo")
+    assert app.achar("alvoDeSoltar").property("enabled") is True
+    QMetaObject.invokeMethod(app.achar("dialogoExcluir"), "abrir", Qt.ConnectionType.DirectConnection)
+    assert _esperar(lambda: app.janela.property("modalAberto") is True)
+    assert app.achar("alvoDeSoltar").property("enabled") is False
+    app.fechar()
+
+
+def test_voltar_com_o_menu_principal_aberto_nao_volta_de_pagina(app_qt):
+    """m2: a tecla Voltar é do menu aberto; Alt+← o fecha ao voltar, e ele não fica sobre a outra página."""
+    from PySide6.QtTest import QTest  # noqa: PLC0415
+
+    app = _App(_tres())
+    QMetaObject.invokeMethod(app.achar("botaoZerados"), "click", Qt.ConnectionType.DirectConnection)
+    assert _esperar(lambda: app.janela.property("paginaAtual") == "zerados")
+    menu = app.achar("menuPrincipal")
+    menu.open()
+    assert _esperar(lambda: menu.property("opened") is True)
+    QTest.keyClick(app.janela, Qt.Key.Key_Back)
+    _esperar()
+    assert app.janela.property("paginaAtual") == "zerados"
+    menu.open()
+    assert _esperar(lambda: menu.property("opened") is True)
+    QTest.keyClick(app.janela, Qt.Key.Key_Left, Qt.KeyboardModifier.AltModifier)
+    _esperar()
+    assert app.janela.property("paginaAtual") == "todos"
+    assert menu.property("opened") is False  # o menu não fica aberto sobre a outra página
     app.fechar()

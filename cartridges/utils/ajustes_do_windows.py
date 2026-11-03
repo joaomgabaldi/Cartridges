@@ -31,6 +31,8 @@ def cor_de_destaque() -> str | None:
             valor = winreg.QueryValueEx(chave, "AccentColor")[0]
     except OSError:
         return None
+    if not isinstance(valor, int):  # REG_SZ/REG_BINARY de um tema de terceiros
+        return None
     return f"#{valor & 0xFF:02x}{(valor >> 8) & 0xFF:02x}{(valor >> 16) & 0xFF:02x}"
 
 

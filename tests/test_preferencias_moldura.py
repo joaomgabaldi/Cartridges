@@ -178,7 +178,7 @@ def test_linhas_das_fitas_acionam_pela_linha_inteira(app, fitas_espiadas):  # no
     shared.schema.set_boolean("session-fita", True)
     _abrir(app, "session")
     linha = app.achar("linhaDoBrilhoPorDispositivo")
-    assert linha.property("ativavel") is not None
+    assert linha.property("ativavel").objectName() == "linhaDoBrilhoPorDispositivoBotao"
     _rolar_ate(app, linha)
     # Um clique longe do botão, no texto da linha (P40: `activatable-widget`).
     ponto = linha.mapToScene(QPointF(60, linha.property("height") / 2)).toPoint()

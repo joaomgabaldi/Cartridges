@@ -184,6 +184,20 @@ def test_cor_de_destaque_vem_crua_do_registro(monkeypatch):
     assert ajustes_do_windows.cor_de_destaque() == "#0078d4"
 
 
+@pytest.mark.parametrize("valor", ["#0078d4", bytes([0, 120, 212, 255])])  # REG_SZ, REG_BINARY de um tema de terceiros
+def test_cor_de_destaque_que_nao_e_dword_e_ignorada(monkeypatch, valor):
+    class Chave:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+    monkeypatch.setattr(ajustes_do_windows.winreg, "OpenKey", lambda *_a: Chave())
+    monkeypatch.setattr(ajustes_do_windows.winreg, "QueryValueEx", lambda *_a: (valor, 1))
+    assert ajustes_do_windows.cor_de_destaque() is None
+
+
 def test_cor_de_destaque_sem_a_chave(monkeypatch):
     def falha(*_a):
         raise OSError

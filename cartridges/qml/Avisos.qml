@@ -142,6 +142,7 @@ Item {
     DialogoDeAviso {
         id: dialogoDeErros
         objectName: "dialogoDeErros"
+        naPilha: true
         onDispensado: camada.app.dialogoFechado(false)
         onSecundario: camada.app.dialogoFechado(true)
     }
@@ -150,6 +151,7 @@ Item {
     DialogoDeConfirmacao {
         id: confirmacaoDoApp
         objectName: "confirmacaoDoApp"
+        naPilha: true
         onConfirmado: camada.app.confirmacaoRespondida(true)
         onCancelado: camada.app.confirmacaoRespondida(false)
     }

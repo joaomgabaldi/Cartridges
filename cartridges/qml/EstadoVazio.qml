@@ -9,8 +9,6 @@ Item {
 
     // O nome do ícone simbólico (`data/icones/<nome>-symbolic.svg`), como o `icon-name` da `main`.
     property string icone
-    // Glifo da Segoe Fluent Icons: só para quem ainda não trocou por `icone`; vira o ícone equivalente.
-    property string glifo
     // O ícone simbólico do app (o da `main` em "Nenhum jogo").
     property bool iconeDoApp: false
     property string titulo
@@ -28,14 +26,7 @@ Item {
     function focarBotao() { botao.forceActiveFocus(Qt.TabFocusReason) }
     function acionarBotao() { botao.click() }
 
-    readonly property var _porGlifo: ({
-        "": "display-brightness", "": "document-edit", "": "list-add", "": "window-close",
-        "": "view-more", "": "preferences-system", "": "edit-find", "": "go-previous",
-        "": "view-refresh", "": "object-select", "": "user-trash", "": "dialog-warning",
-        "": "computer", "": "user-home", "": "folder", "": "novidades", "": "dialog-information",
-        "": "image-x-generic", "": "drive-harddisk"
-    })
-    readonly property string nomeDoIcone: icone !== "" ? icone : (_porGlifo[glifo] || "")
+    readonly property string nomeDoIcone: icone
 
     Column {
         anchors.centerIn: parent

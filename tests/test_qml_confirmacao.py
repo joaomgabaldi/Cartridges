@@ -324,3 +324,24 @@ def test_tab_nao_tira_o_foco_do_aviso_e_esc_ainda_fecha(janela):
     QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
     assert _esperar(lambda: dialogo.property("visible") is False)
     assert fechados == [1]
+
+
+def test_erro_a_confirmacao_b_erro_c_dispensar_c_deixa_o_foco_em_b(janela):
+    """m5: o diálogo de erros reaproveitado (C) fecha com B ainda na tela: o foco fica em B, não vai à grade de trás."""
+    janela.janela.show()
+    janela.janela.requestActivate()
+    from tests.apoio_qml_biblioteca import _achar as achar_rapido  # noqa: PLC0415  (a daqui é exponencial na árvore inteira)
+
+    achar_rapido(janela.janela, "grade").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    janela.aplicativo.pedir_dialogo("A", "Corpo", [], lambda: None)
+    janela.aplicativo.pedir_confirmacao("B?", "Corpo", "Sim", lambda _c: None)
+    janela.aplicativo.pedir_dialogo("C", "Corpo", [], lambda: None)
+    erros = janela.achar("dialogoDeErros")
+    confirmacao = janela.achar("confirmacaoDoApp")
+    assert _esperar(lambda: erros.property("titulo") == "C" and erros.property("visible") is True)
+    erros.fechar()
+    assert _esperar(lambda: erros.property("visible") is False)
+    assert confirmacao.property("visible") is True
+    assert _esperar(janela.foco_na_confirmacao)
+    _esperar()
+    assert janela.foco_na_confirmacao()

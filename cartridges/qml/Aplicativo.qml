@@ -553,7 +553,9 @@ Principal {
         id: alvoDeSoltar
         objectName: "alvoDeSoltar"
         anchors.fill: parent
+        // A lista do `modalAberto`, à mão: ligado nele, a ordem dos bindings muda e o foco que volta das Preferências não acha o botão do menu.
         enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
+            && !(janela.paginaDoControle && janela.paginaDoControle.dialogoAberto === true)
         onEntered: (arrasto) => arrasto.accepted = arrasto.hasUrls
         onDropped: (soltou) => {
             if (soltou.hasUrls) aplicativo.soltar(soltou.urls)

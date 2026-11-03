@@ -40,6 +40,8 @@ FocusScope {
 
     property Item retorno: null
     property bool _tecladoEmUso: false
+    // Um dos diálogos da pilha de pedidos do `Aplicativo` (R5).
+    property bool naPilha: false
     property bool _cobertaAoFechar: false
 
     // Margens do adw-floating-sheet: crescem com a janela. A 795 de altura dão 30 (medido no gabarito).
@@ -100,6 +102,9 @@ FocusScope {
         retorno = null
         // Fechou um diálogo coberto (a pilha): o foco é do de cima e fica com ele.
         if (_cobertaAoFechar) return
+        // Da pilha (R5), com a outra ainda aberta (um diálogo reaproveitado por cima de uma pergunta): o foco é dela.
+        const outra = naPilha && parent ? Array.from(parent.children).find(f => f !== moldura && f.naPilha === true && f.aberto && f.visible) : null
+        if (outra) { outra.focarInicial(); return }
         if (alvo && alvo !== Window.contentItem && alvo.visible && alvo.enabled) alvo.forceActiveFocus(Qt.TabFocusReason)
         else retornoPerdido()
     }
