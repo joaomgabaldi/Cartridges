@@ -463,26 +463,22 @@ def test_cartao_do_aviso_na_pagina_de_conquistas_e_embutido(janela):
 
 
 def test_foco_do_teclado_fica_na_pagina_atual(janela):
-    paginas = {janela.achar(f"pagina_{nome}"): nome for nome in janela.modelo.paginas}
+    # Em JS: pelo Python, o PySide faz de cada item devolvido filho do anterior, e a cadeia, que é circular, fecha um ciclo
+    # de pais que derruba o processo ao coletar os wrappers (`Object::invalidate` em memória liberada).
+    percurso = """(function () {
+        var alcancadas = {}, item = contentItem
+        for (var passo = 0; passo < 60 && item; ++passo) {
+            item = item.nextItemInFocusChain(true)
+            for (var pai = item; pai; pai = pai.parent)
+                if (pai.objectName.indexOf("pagina_") === 0) alcancadas[pai.objectName] = true
+        }
+        return Object.keys(alcancadas).join()
+    })()"""
 
-    def paginas_alcancadas():
-        alcancadas = set()
-        item = janela.raiz.contentItem()
-        for _passo in range(60):
-            item = item.nextItemInFocusChain(True)
-            if item is None:
-                break
-            pai = item
-            while pai is not None and pai not in paginas:
-                pai = pai.parentItem()
-            if pai is not None:
-                alcancadas.add(paginas[pai])
-        return alcancadas
-
-    assert paginas_alcancadas() == {"boas_vindas"}
+    assert avaliar(janela.raiz, percurso) == "pagina_boas_vindas"
     janela.modelo.avancar()
     esperar()
-    assert paginas_alcancadas() == {"jogos"}
+    assert avaliar(janela.raiz, percurso) == "pagina_jogos"
 
 
 def test_continuar_da_tela_dos_jogos_espera_a_pasta(schema, tmp_path):
