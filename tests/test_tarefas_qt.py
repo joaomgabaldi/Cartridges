@@ -1095,3 +1095,17 @@ def test_nome_longo_alarga_a_janela_e_o_vazio_e_centrado(cena, flush_idle):
 
     assert avaliar(vazio, "horizontalAlignment === Text.AlignHCenter") is True
     assert janela.width() == 360
+
+
+def test_segundo_erro_com_o_aviso_aberto_nao_troca_o_texto_e_libera_os_dois(app_qt):
+    """O aviso à vista não muda por baixo de quem lê; ao fechá-lo, os dois erros inesperados são liberados."""
+    painel = PainelDasTarefas()
+    pedidos, liberados = [], []
+    painel.avisoPedido.connect(lambda titulo, corpo: pedidos.append((titulo, corpo)))
+    painel.pedir_aviso("Erro 1", "primeiro", lambda: liberados.append(1))
+    painel.pedir_aviso("Erro 2", "segundo", lambda: liberados.append(2))
+    assert pedidos == [("Erro 1", "primeiro")]
+    painel.avisoFechado()
+    assert liberados == [1, 2]
+    painel.pedir_aviso("Erro 3", "terceiro", lambda: liberados.append(3))  # fechado, o próximo aviso abre de novo
+    assert pedidos[-1] == ("Erro 3", "terceiro")

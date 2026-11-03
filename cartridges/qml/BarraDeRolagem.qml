@@ -8,7 +8,7 @@ ScrollBar {
 
     readonly property bool ativa: hovered || pressed
     readonly property bool emPe: orientation === Qt.Vertical
-    property color cor: Tema.corBase  // a da tela da sessão, sempre escura, não segue o tema
+    property color cor: Tema.corBase  // a cor-base segue o tema; a tela da sessão (sempre escura) passa a sua
     property bool acordada: false
 
     property real grossura: ativa ? 8 : 3

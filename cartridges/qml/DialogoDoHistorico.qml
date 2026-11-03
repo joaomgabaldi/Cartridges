@@ -108,7 +108,7 @@ Item {
                 // `--active-toggle-bg-color`: branco no claro, branco a 20% no escuro.
                 color: botao.checked ? (Tema.escuro ? Qt.rgba(1, 1, 1, 0.2) : "#ffffff")
                     : botao.down ? Tema.planoPressionado : botao.hovered ? Tema.planoSobre : "transparent"
-                                Behavior on color { ColorAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
+                Behavior on color { ColorAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
                 Sombra { visible: botao.checked; camadas: Tema.sombraAviso; raio: 6 }
                 AnelDeFoco { ativo: botao.visualFocus; raio: 6; afastamento: 0 }
             }

@@ -48,7 +48,7 @@ Column {
                 visible: barra.indeterminate
                 width: parent.width * 0.3
                 height: parent.height
-                radius: 3
+                radius: 4
                 color: Tema.destaque
                 SequentialAnimation on x {
                     running: pulso.visible && Tema.animacoes

@@ -304,6 +304,18 @@ def test_pagina_principal_mostra_nome_versao_e_linhas(janela):
     assert janela.achar("tituloDaPaginaDoSobre").property("opacity") == 0
 
 
+def test_foco_na_ultima_linha_rola_ate_ela_sem_passar_do_fim(janela):
+    """A rolagem até o foco para no fim do conteúdo, sem deixar uma faixa vazia embaixo."""
+    janela.janela.resize(900, 420)
+    esperar(limite=0.3)
+    _abrir(janela)
+    rolagem = _no_sobre(janela, "rolagemDoSobre")
+    assert esperar(lambda: rolagem.property("contentHeight") > rolagem.property("height") + 20)
+    avaliar(janela.achar("linhaLegal"), "botaoDaLinha.forceActiveFocus(Qt.TabFocusReason)")
+    assert esperar(lambda: rolagem.property("contentY") > 0)
+    assert rolagem.property("contentY") <= rolagem.property("contentHeight") - rolagem.property("height") + 0.5
+
+
 def test_sem_release_da_versao_a_linha_novidades_some(janela, monkeypatch):
     monkeypatch.setattr(shared, "VERSION", "9.9.9")
     _abrir(janela)

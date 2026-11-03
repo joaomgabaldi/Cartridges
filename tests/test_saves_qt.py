@@ -432,6 +432,18 @@ def test_dialogo_lista_versoes_mais_recente_primeiro(janela_dos_saves, versoes):
     assert _esperar(lambda: janela.fechar_das_versoes().property("activeFocus") is True)
 
 
+def test_versao_incompleta_chega_ao_leitor_como_descricao(janela_dos_saves):
+    """G-M9: o título é o nome da linha e o subtítulo (que diz se a versão é incompleta) é a descrição, como a `AdwActionRow`."""
+    janela = janela_dos_saves()
+    assert janela.saves.abrir("imported_1") is True
+    assert _esperar(lambda: janela.achar("dialogoDeVersoes").property("visible") is True)
+    for linha in janela.linhas():
+        botao = _achar(linha, linha.property("objectName") + "Botao")
+        assert _avaliar(botao, "Accessible.name") == _avaliar(linha, "modelData.titulo")
+        assert _avaliar(botao, "Accessible.description") == _avaliar(linha, "modelData.subtitulo")
+    assert any(_avaliar(_achar(l, l.property("objectName") + "Botao"), "Accessible.description") for l in janela.linhas())
+
+
 def test_versoes_e_confirmacao_em_texto_puro(janela_dos_saves, monkeypatch):
     janela = janela_dos_saves(_jogo(1, "Tom & <b>Jerry</b>", ludusavi_nome="A"))
     assert janela.saves.abrir("imported_1")

@@ -13,7 +13,7 @@ FocusScope {
     // O grupo conta por ela, não pelo `visible` efetivo (que depende do próprio grupo: laço, D58).
     property bool aparece: true
     // Só as linhas das Preferências são buscáveis (`buscavel: true`); as dos assistentes e do editor ignoram a busca.
-    // Nas Preferências use `aparece` para a regra da linha, nunca `visible` (um `visible:` de instância desliga o filtro).
+    // Nas Preferências use `aparece` para a regra da linha, nunca `visible` (um `visible:` de instância foge da contagem do grupo).
     property bool buscavel: false
     visible: aparece
 

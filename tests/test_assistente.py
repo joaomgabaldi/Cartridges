@@ -565,6 +565,19 @@ def test_animar_e_relido_a_cada_troca_de_tela(janela, monkeypatch):
     assert janela.modelo.animar is False
 
 
+def test_troca_de_tela_anima_o_carrossel_e_termina_no_indice_exato(janela):
+    """G-M8: com `animar` verdadeiro o "Continuar" leva a posição por valores intermediários até o índice exato."""
+    carrossel = janela.achar("carrossel")
+    assert janela.modelo.animar is True and carrossel.property("posicao") == 0
+    visto = []
+    janela.modelo.avancar()
+    assert esperar(lambda: visto.append(carrossel.property("posicao")) or 0 < visto[-1] < 1, limite=3.0)
+    assert esperar(lambda: carrossel.property("posicao") == 1, limite=3.0)
+    janela.modelo.alterado.emit()  # um ajuste qualquer no meio do repouso não reinicia nada
+    esperar(limite=0.2)
+    assert carrossel.property("posicao") == 1
+
+
 # -- a animação das capas ---------------------------------------------------------------------------------------------
 
 

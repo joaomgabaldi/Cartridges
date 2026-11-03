@@ -100,8 +100,9 @@ class HistoricoDeSessoes(QObject):
     def fechar(self) -> None:
         # Só `aberto` muda: o cartão segue com o conteúdo durante a animação de saída (na `main` o `Adw.Dialog` sai
         # intacto). O próximo `abrir` sobrescreve tudo.
+        # As sessões, os dias e as posições ficam até o próximo `abrir`: a dica do gráfico e um "Mostrar mais" nos 120 ms
+        # de saída não podem esvaziar o que ainda está à vista.
         self._jogo = None
-        self._sessoes, self._dias, self._posicoes = [], [], []
         self._v = {**self._v, "aberto": False}
         self.alterado.emit()
 

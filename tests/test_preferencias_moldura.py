@@ -238,6 +238,13 @@ def test_balao_da_cor_abre_na_paleta_e_o_mais_leva_ao_seletor(app, fitas_espiada
     # Os 45 tons da paleta; clicar num grava a cor e acende as fitas.
     tons = _avaliar(amostra, "paleta")
     assert len(tons) == 9 and all(len(coluna) == 5 for coluna in tons)
+    # P-M3: cada tom tem o nome da paleta da `main` (vertido para o português), sem repetir.
+    nomes = _avaliar(amostra, "nomesDosTons")
+    assert [len(coluna) for coluna in nomes] == [5] * 9
+    assert len({n for coluna in nomes for n in coluna}) == 45
+    assert (nomes[0][0], nomes[0][2], nomes[6][4], nomes[7][0], nomes[8][4]) == (
+        "Azul muito claro", "Azul", "Marrom muito escuro", "Branco", "Preto"
+    )
     amostra.setProperty("editando", False)
     QMetaObject.invokeMethod(app.achar("linhaDaCorDoAppAmostraMais"), "forceActiveFocus")
     QTest.keyClick(app.janela, Qt.Key.Key_Return)

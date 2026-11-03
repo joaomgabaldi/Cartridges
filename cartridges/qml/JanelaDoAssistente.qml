@@ -214,14 +214,16 @@ Window {
             anchors { top: parent.top; left: parent.left; right: parent.right; bottom: rodape.top }
             clip: true
 
-            property real posicao: raiz.modelo.indice
+            // Sem binding: um `posicao: indice` pularia para o destino antes do `onIndiceChanged` e nunca animaria.
+            property real posicao: 0
             property real _de: 0
             property real _t: 0
             property int _para: 0
             readonly property real _w: Math.sqrt(500 / 0.5)
             // Resposta ao degrau do oscilador crítico: 1 - (1 + wt)e^(-wt).
             on_TChanged: posicao = _de + (_para - _de) * (1 - (1 + _w * _t) * Math.exp(-_w * _t))
-            property int _ultimo: raiz.modelo.indice
+            property int _ultimo: -1
+            Component.onCompleted: { _ultimo = raiz.modelo.indice; posicao = _ultimo }
             NumberAnimation {
                 id: relogioDoCarrossel; target: carrossel; property: "_t"; from: 0; to: 0.5; duration: 500
                 onFinished: carrossel.posicao = carrossel._para  // cai no índice exato, sem o resto da curva

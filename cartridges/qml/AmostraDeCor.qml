@@ -17,7 +17,7 @@ Botao {
     property string nomeDaRoda: objectName + "Roda"
     readonly property alias balao: balao
     // O balão abre na paleta (`Gtk.ColorChooserWidget`); o "+" leva ao seletor de cor livre. A paleta é a do GTK 4: nove
-    // colunas de cinco tons (azul, verde, amarelo, laranja, vermelho, roxo, marrom, claro e escuro).
+    // colunas de cinco tons (azul, verde, amarelo, laranja, vermelho, roxo, marrom, branco com cinzas claros e cinzas escuros com preto).
     property bool editando: false
     // O "+" some ao abrir o seletor: o foco vai para ele.
     onEditandoChanged: if (editando) Qt.callLater(() => seletor.forceActiveFocus(Qt.TabFocusReason))
@@ -33,6 +33,17 @@ Botao {
         ["#ffffff", "#f6f5f4", "#deddda", "#c0bfbc", "#9a9996"],
         ["#77767b", "#5e5c64", "#3d3846", "#241f31", "#000000"]
     ]
+
+    // Os nomes dos tons que o `GtkColorChooserWidget` da `main` dá (a DLL do GTK; sem tradução na `main`, em inglês),
+    // vertidos para o português do app, na ordem de `paleta`.
+    readonly property var nomesDosTons: {
+        const cores = ["Azul", "Verde", "Amarelo", "Laranja", "Vermelho", "Roxo", "Marrom"]
+        const tons = [" muito claro", " claro", "", " escuro", " muito escuro"]
+        const linhas = cores.map(c => tons.map(t => c + t))
+        linhas.push(["Branco", "Cinza claro 1", "Cinza claro 2", "Cinza claro 3", "Cinza claro 4"])
+        linhas.push(["Cinza escuro 1", "Cinza escuro 2", "Cinza escuro 3", "Cinza escuro 4", "Preto"])
+        return linhas
+    }
 
     // Uma linha que aciona a amostra (`apertou` no aperto, `alternar` na soltura): o aperto fora do botão fecha o balão, e a
     // soltura não pode reabri-lo. Pela ordem dos eventos, sem relógio: no aperto vale o estado de antes dele (aberto agora, ou
@@ -161,7 +172,7 @@ Botao {
                 focusPolicy: Qt.StrongFocus
                 hoverEnabled: true
                 Accessible.role: Accessible.Button
-                Accessible.name: ["Azul", "Verde", "Amarelo", "Laranja", "Vermelho", "Roxo", "Marrom", "Claro", "Escuro"][coluna] + " " + (linha + 1)
+                Accessible.name: coluna >= 0 ? amostra.nomesDosTons[coluna][linha] : ""
                 function acionar() { amostra.escolhida(cor) }
                 Keys.onReturnPressed: acionar()
                 Keys.onEnterPressed: acionar()

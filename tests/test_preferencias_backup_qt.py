@@ -220,6 +220,33 @@ def test_restaurar_saves_some_sem_o_ludusavi_e_o_grupo_fica_com_as_outras_linhas
     assert pagina.visivel("grupoBackupDaBiblioteca") and pagina.visivel("linhaExportarBackup")
 
 
+def test_grupo_some_quando_nenhuma_linha_aparece_e_volta_com_uma(app_qt):
+    """D58: o grupo conta as linhas pela regra (`aparece`); sem nenhuma ele some, e com uma ele volta."""
+    motor = QQmlEngine()
+    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    motor.addImageProvider("icone", ProvedorDeIcones())
+    componente = QQmlComponent(motor)
+    componente.setData(
+        b"""import QtQuick
+GrupoDePreferencias {
+    width: 400; titulo: "Teste"
+    LinhaDeBotao { objectName: "a"; buscavel: true; aparece: false; titulo: "A" }
+    LinhaDeBotao { objectName: "b"; buscavel: true; aparece: false; titulo: "B" }
+}""",
+        QUrl.fromLocalFile(str(QML / "ProvaDoGrupo.qml")),
+    )
+    grupo = componente.create()
+    assert grupo is not None, componente.errorString()
+    try:
+        assert grupo.property("linhasAMostrar") == 0
+        _achar(grupo, "b").setProperty("aparece", True)
+        assert grupo.property("linhasAMostrar") == 1
+        _achar(grupo, "b").setProperty("aparece", False)
+        assert grupo.property("linhasAMostrar") == 0
+    finally:
+        grupo.deleteLater()
+
+
 def test_pasta_padrao_apaga_usar_a_padrao(montar, monkeypatch, flush_idle):
     p, pagina = montar()
     linha = pagina.achar("linhaPastaDosSaves")

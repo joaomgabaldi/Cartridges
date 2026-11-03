@@ -401,15 +401,21 @@ def test_excluir_com_fim_depois_de_2038():
     assert historico.sessoes == []
 
 
-def test_dica_depois_de_fechar_e_vazia():
+def test_dica_e_mostrar_mais_na_saida_nao_esvaziam_o_que_esta_a_vista():
+    """Nos 120 ms de saída o cartão ainda aparece: a dica do gráfico continua e "Mostrar mais" não esvazia a tabela."""
     jogo = _jogo()
-    session_log.record(jogo.game_id, 3600)
+    for n in range(modulo.PAGINA + 5):
+        session_log.record(jogo.game_id, 60, end=1_700_000_000 + n * 86400)
     historico, _ = _aberto(jogo)
-    assert historico.dica(0.5) != ""
+    dica = historico.dica(0.5)
+    assert dica != ""
+    antes = len(historico.sessoes)
 
     historico.fechar()
+    historico.mostrarMais()
 
-    assert historico.dica(0.5) == ""
+    assert historico.dica(0.5) == dica
+    assert len(historico.sessoes) >= antes
 
 
 # -- sinais próprios (tabela e gráfico) ------------------------------------------------------

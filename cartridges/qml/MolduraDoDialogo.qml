@@ -164,7 +164,7 @@ FocusScope {
             const topo = foco.mapToItem(r.contentItem, 0, 0).y
             const base = topo + foco.height
             if (topo < r.contentY) r.contentY = Math.max(0, topo - 8)
-            else if (base > r.contentY + r.height) r.contentY = base - r.height + 8
+            else if (base > r.contentY + r.height) r.contentY = Math.max(0, Math.min(r.contentHeight - r.height, base - r.height + 8))
         }
     }
 

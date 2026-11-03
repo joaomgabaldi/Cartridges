@@ -269,6 +269,15 @@ class PainelDasTarefas(QObject):
 
     def pedir_aviso(self, titulo: str, corpo: str, ao_fechar: Callable[[], None]) -> None:
         """O aviso na janela das tarefas (`_janela_para_o_dialogo` da `main`)."""
+        anterior = self._ao_fechar_aviso
+        if anterior is not None:
+            # Já há um aviso à vista: o texto dele fica (não é trocado por baixo de quem lê) e fechar libera os dois.
+            def ambos() -> None:
+                anterior()
+                ao_fechar()
+
+            self._ao_fechar_aviso = ambos
+            return
         self._ao_fechar_aviso = ao_fechar
         self.avisoPedido.emit(titulo, corpo)
 

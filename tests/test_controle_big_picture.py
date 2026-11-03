@@ -228,20 +228,23 @@ def test_conectado_do_qml_so_com_a_grade_a_vista(app_qt, monkeypatch):
     app.fechar()
 
 
-def test_conectado_com_menu_aberto_entra(app_qt, monkeypatch):
-    # Só diálogo impede a entrada automática (`window.py:1396-1410`); um menu aberto não (BP-14).
-    app = _entrada(monkeypatch, grade=False)
+@pytest.mark.parametrize("quantidade", [3, 0], ids=["com_jogos", "biblioteca_vazia"])
+def test_conectado_com_menu_aberto_entra(app_qt, monkeypatch, quantidade):
+    # Só diálogo impede a entrada automática (`window.py:1396-1410`); um menu aberto não (BP-14). Sem jogos não há
+    # fila de entrada, e o menu também não pode ficar por cima.
+    app = _entrada(monkeypatch, grade=False, quantidade=quantidade)
     shared.schema.set_boolean("big-picture-ao-conectar", True)
     shared.schema.set_boolean("gamepad", True)
     app.achar("menuPrincipal").open()
     app.controle.conectado.emit()
-    assert app.big_picture.ocupada
+    assert app.big_picture.ocupada or not quantidade  # sem jogos não há fila: entra direto
     # Concluída a entrada, o menu não fica por cima do Big Picture e o direcional troca a capa.
     assert _esperar(lambda: app.big_picture.visivel and not app.big_picture.ocupada, limite=5)
     assert app.achar("menuPrincipal").property("opened") is False
     assert app.controle.property("modoBigPicture") is True
-    app.controle.mover.emit(1, 0)
-    assert app.big_picture.indice == 1
+    if quantidade:
+        app.controle.mover.emit(1, 0)
+        assert app.big_picture.indice == 1
     app.big_picture.encerrar()
     app.fechar()
 

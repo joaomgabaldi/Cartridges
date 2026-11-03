@@ -597,10 +597,13 @@ def test_home_end_e_paginas_andam_entre_as_linhas(app_qt):
     assert _esperar(lambda: foco() is alvos[-1])
     QTest.keyClick(app.janela, Qt.Key.Key_Home)
     assert _esperar(lambda: foco() is alvos[0])
+    # O salto é a altura visível dividida pela altura da linha (ao menos 1), limitado às pontas.
+    rolagem = app.achar("rolagemDoHistorico")
+    passo = max(1, int(rolagem.property("height") // _caixa(alvos[0])[3]))
     QTest.keyClick(app.janela, Qt.Key.Key_PageDown)
-    assert _esperar(lambda: foco() is not alvos[0])
+    assert _esperar(lambda: foco() is alvos[min(len(alvos) - 1, passo)])
     QTest.keyClick(app.janela, Qt.Key.Key_PageUp)
-    assert _esperar(lambda: foco() is alvos[0])
+    assert _esperar(lambda: foco() is alvos[max(0, min(len(alvos) - 1, passo) - passo)])
     app.fechar()
 
 

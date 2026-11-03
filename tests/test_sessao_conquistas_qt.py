@@ -428,6 +428,21 @@ def test_roda_do_mouse_rola_para_os_lados_por_mola(app_qt, sem_vigia):
     app.fechar()
 
 
+def test_sem_animacoes_a_roda_do_mouse_rola_direto_sem_a_mola(app_qt, sem_vigia):
+    """M7: com `Tema.animacoes` falso (o harness) a mola fica fora e a roda do mouse rola a fileira de uma vez."""
+    app = _app(_catalogo_de(157), desbloqueadas=())
+    app.janela.show()
+    _comecar(app)
+    lista = _lista(app)
+    mola = _achar(lista, "molaDaSessao")
+    assert mola.property("ativa") is False
+    assert _esperar(lambda: lista.property("contentWidth") > lista.property("width"))
+    _rodar(app, lista, -120)
+    assert not mola.property("correndo")
+    assert lista.property("contentX") == 120  # direto, sem passar por valores intermediários
+    app.fechar()
+
+
 def test_com_157_conquistas_e_logo_alto_o_botao_continua_na_janela(app_qt, sem_vigia, monkeypatch, tmp_path):
     """Review Focus 4: o logo no teto de altura e o cartão cheio não empurram o botão para fora da janela."""
     Image.new("RGBA", (300, 400), (255, 0, 0, 255)).save(tmp_path / "logo.png")  # mais alto que largo

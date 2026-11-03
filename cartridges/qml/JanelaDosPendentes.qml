@@ -69,7 +69,7 @@ ModalDaRestauracao {
                 const topo = foco.mapToItem(lista.contentItem, 0, 0).y
                 const base = topo + foco.height
                 if (topo < lista.contentY) lista.contentY = Math.max(0, topo - 8)
-                else if (base > lista.contentY + lista.height) lista.contentY = base - lista.height + 8
+                else if (base > lista.contentY + lista.height) lista.contentY = Math.max(0, Math.min(lista.contentHeight - lista.height, base - lista.height + 8))
             }
         }
 

@@ -500,13 +500,18 @@ Principal {
         function onSaiu(jogoId) { todos.focarJogo(jogoId) }
     }
 
-    // Entrando no Big Picture (por exemplo ao conectar o controle) nenhum menu fica aberto por cima dele.
+    // Entrando no Big Picture (por exemplo ao conectar o controle) nenhum menu fica aberto por cima dele: com ou sem
+    // fila de entrada (a biblioteca vazia não tem fila), na passagem de `visivel` para verdadeiro.
+    property bool _bigPictureVisto: false
     Connections {
         target: bigPicture
-        function onFilaPedida(entrar) {  // só na entrada: um menu aberto depois, por atalho, não fecha a cada emissão
-            if (!entrar) return
-            menuPrincipal.close()
-            todos.fecharMenuDoJogo()
+        function onAlterado() {
+            const visivel = bigPicture.visivel
+            if (visivel && !janela._bigPictureVisto) {
+                menuPrincipal.close()
+                todos.fecharMenuDoJogo()
+            }
+            janela._bigPictureVisto = visivel
         }
     }
 

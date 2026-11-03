@@ -32,7 +32,8 @@ LinhaDoGrupo {
         anchors.fill: parent
         focusPolicy: Qt.StrongFocus
         hoverEnabled: true
-        Accessible.name: linha.dica !== "" ? linha.dica : [linha.titulo, linha.subtitulo].filter(Boolean).join(". ")
+        Accessible.name: linha.dica !== "" ? linha.dica : linha.titulo
+        Accessible.description: linha.subtitulo  // como a `AdwActionRow`: o título é o nome, o subtítulo descreve
         Accessible.role: Accessible.Button
         Keys.onReturnPressed: click()
         Keys.onEnterPressed: click()

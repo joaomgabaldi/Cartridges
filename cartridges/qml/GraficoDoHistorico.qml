@@ -52,7 +52,7 @@ Item {
         function xDe(i) { return n === 1 ? margemEsquerda + larguraUtil / 2 : margemEsquerda + larguraUtil * g.posicoes[i] / ultima }
         function yDe(valor) { return baseY - alturaUtil * valor / g.topo }
 
-        ctx.font = "10px '" + Tema.fonte + "'"  // .caption, 82% de 12 px
+        ctx.font = "10px '" + Tema.fonte + "'"  // 10 px: o mais perto do .caption (9,84) que o Canvas aceita; igual a `Tema.legenda`
         ctx.textAlign = "left"
         ctx.textBaseline = "middle"
 
