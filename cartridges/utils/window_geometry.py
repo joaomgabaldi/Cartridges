@@ -69,6 +69,12 @@ from cartridges import shared
 _MONITOR_DEFAULTTONULL = 0x00000000
 # SWP_NOZORDER | SWP_NOACTIVATE: place it exactly, without raising or focusing
 _PLACE = 0x0004 | 0x0010
+# SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE: só o tamanho
+_SO_O_TAMANHO = 0x0002 | 0x0004 | 0x0010
+# O retângulo que o GTK da `main` gravava inclui a sombra da janela (a diferença de 28x29 que `main.py` cita): o Qt não a
+# tem. Esquerda/topo e largura/altura a descontar na primeira abertura depois da `main` (DA-72). O reparte entre os
+# lados é aproximado (14 e 14; o 1 a mais de altura fica embaixo): a sombra do GTK4 é um pouco maior embaixo.
+_SOMBRA_DO_GTK = (14, 14, 28, 29)
 # A folga entre o botão das tarefas e a janela solta que se abre acima dele.
 _FOLGA_BOTAO = 12
 _MONITORINFOF_PRIMARY = 0x00000001
@@ -512,6 +518,9 @@ def restaurar(janela: Any, geometria: Geometry) -> None:
     window currently sits on. The other way round always fills the primary one.
     """
     if not geometria.usable:
+        # Primeira abertura: sem posição, mas o tamanho padrão do schema (1170x795) vale, como o `apply_size` da `main` (DA-71).
+        if geometria.width > 0 and geometria.height > 0:
+            _dimensionar(janela, geometria.width, geometria.height)
         return
     if not _place(janela, geometria) and (atual := read(janela)) is not None:
         # A posição gravada não existe mais (um monitor desligado): a janela fica onde o Windows a pôs, no tamanho
@@ -522,6 +531,31 @@ def restaurar(janela: Any, geometria: Geometry) -> None:
         # position was refused the user still asked for a maximized window, and
         # should get one wherever Windows has decided to put it.
         janela.showMaximized()
+
+
+def _dimensionar(janela: Any, largura: int, altura: int) -> bool:
+    """Só o tamanho da moldura, sem mover."""
+    if (hwnd := _hwnd(janela)) is None:
+        return False
+    return bool(_user32.SetWindowPos(hwnd, 0, 0, 0, largura, altura, _SO_O_TAMANHO))
+
+
+def sem_a_sombra_do_gtk(geometria: Geometry) -> Geometry:
+    """A geometria gravada pela `main` convertida para o Qt: tira a sombra do GTK do retângulo. Maximizada não muda
+    (o retângulo é o do monitor)."""
+    if not geometria.usable or geometria.maximized:
+        return geometria
+    esquerda, topo, largura, altura = _SOMBRA_DO_GTK
+    return geometria._replace(
+        x=geometria.x + esquerda,
+        y=geometria.y + topo,
+        width=max(1, geometria.width - largura),
+        height=max(1, geometria.height - altura),
+    )
+
+
+# Existe depois que o Qt gravou a geometria pela primeira vez: dali em diante o retângulo gravado já é o dele.
+_MARCA_DO_QT = "geometria-qt"
 
 
 class GeometriaDaJanela(QObject):
@@ -541,7 +575,10 @@ class GeometriaDaJanela(QObject):
     def restaurar(self, janela: Any) -> None:
         self._janela = janela
         try:
-            restaurar(janela, stored(shared.state_schema))
+            geometria = stored(shared.state_schema)
+            if not (shared.app_dir / _MARCA_DO_QT).exists():
+                geometria = sem_a_sombra_do_gtk(geometria)
+            restaurar(janela, geometria)
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Could not restore the window geometry", exc_info=True)
 
@@ -554,7 +591,9 @@ class GeometriaDaJanela(QObject):
             # lugar qualquer. O `closing` dela já gravou.
             if janela is None or not janela.isVisible():
                 return
-            gravar(shared.state_schema, janela, janela.visibility() == QWindow.Visibility.FullScreen)
+            if gravar(shared.state_schema, janela, janela.visibility() == QWindow.Visibility.FullScreen):
+                (shared.app_dir / _MARCA_DO_QT).parent.mkdir(parents=True, exist_ok=True)
+                (shared.app_dir / _MARCA_DO_QT).touch()
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Could not save the window geometry", exc_info=True)
 

@@ -15,20 +15,7 @@ ModalDaRestauracao {
     Row {
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: 14
-        Rectangle {
-            width: 44
-            height: 66
-            radius: 4
-            color: Tema.botaoSobre
-            clip: true
-            Image {
-                anchors.fill: parent
-                source: restauracao.conflito.capa || ""
-                fillMode: Image.PreserveAspectCrop
-                asynchronous: true
-                sourceSize: Qt.size(88, 132)
-            }
-        }
+        ModalDaRestauracao.Capa { width: 44; height: 66; fonte: restauracao.conflito.capa || "" }
         Text {
             objectName: "nomeDoConflito"
             anchors.verticalCenter: parent.verticalCenter

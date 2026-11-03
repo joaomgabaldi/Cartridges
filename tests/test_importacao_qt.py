@@ -168,6 +168,21 @@ def test_importar_com_importacao_em_andamento_nao_comeca_outra(fonte, app_qt):
     assert shared.importer is None
 
 
+def test_retorno_de_uma_importacao_pedida_durante_outra_nao_se_perde(fonte, app_qt):
+    """DA-63: `on_import_action` da `main` sempre guarda o `ao_terminar`; aqui a segunda não roda junta, mas o retorno
+    sai no fim da que está em curso (senão a "Jogos sem atalho" da restauração ficaria travada)."""
+    fonte.jogos = _jogos("A")
+    app = Aplicativo(FilaRegistrada())
+    fins = []
+    app.importar(ao_terminar=lambda: fins.append("primeira"))
+    assert app.importando is True
+    app.importar(ao_terminar=lambda: fins.append("segunda"))  # em curso: não começa outra
+    assert fins == []
+    assert _esperar(lambda: not app.importando), "a importação não terminou"
+    assert _esperar(lambda: len(fins) == 2)
+    assert fins == ["primeira", "segunda"]
+
+
 def test_resumo_com_desfazer(fonte, store, app_qt):
     fonte.jogos = _jogos("B", "A")
     fila = FilaRegistrada()

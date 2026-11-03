@@ -132,6 +132,7 @@ class Assistente(QObject):
     """
 
     alterado = Signal()
+    animarMudou = Signal()  # noqa: N815
     dialogoPedido = Signal(str, str)  # noqa: N815  # título e corpo de um aviso com "Dispensar"
 
     def __init__(
@@ -182,7 +183,8 @@ class Assistente(QObject):
     avisos = Property(QObject, lambda self: self._avisos, constant=True)
     contas = Property(QObject, lambda self: self._contas, constant=True)
     configuracaoDasFitas = Property(QObject, lambda self: self._config, notify=alterado)  # noqa: N815
-    animar = Property(bool, lambda self: self._animar, constant=True)
+    # Relido a cada troca de tela (`gtk-enable-animations` da `main`): o ajuste do Windows pode mudar com a janela aberta.
+    animar = Property(bool, lambda self: self._animar, notify=animarMudou)
     cartao = Property("QVariantMap", lambda self: self._cartao, constant=True)
     imagens = Property(
         "QVariantMap",
@@ -223,6 +225,11 @@ class Assistente(QObject):
 
     def _ir_para(self, indice: int) -> None:
         if 0 <= indice < len(self._paginas) and indice != self._indice:
+            # Antes do índice: o `Behavior` do carrossel lê `animar` no instante em que a posição muda.
+            animar = _animacoes_do_sistema()
+            if animar != self._animar:
+                self._animar = animar
+                self.animarMudou.emit()
             self._indice = indice
             self.alterado.emit()
 

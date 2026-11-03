@@ -526,7 +526,7 @@ Principal {
         fila: aplicativo.avisos
         app: aplicativo
         atualizador: janela.servicoDeAtualizacao
-        lugarDoAviso: preferencias.aberto ? dialogoDePreferencias.cartao : janela.telaCheia ? null : baseDoAviso
+        lugarDoAviso: preferencias.aberto ? dialogoDePreferencias.cartao : janela.sobreAberto ? dialogoSobre.cartao : janela.telaCheia ? null : baseDoAviso
     }
 
     // Atalhos arrastados do Explorer: só com a janela livre de diálogos.

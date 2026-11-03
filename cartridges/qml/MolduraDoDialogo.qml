@@ -21,6 +21,11 @@ FocusScope {
     property color cor: Tema.fundo
     // Sem `fechavel`, nem o Esc nem o toque fora pedem o fechamento (`can-close` falso).
     property bool fechavel: true
+    // O controle do Xbox manda ↑/↓ nos diálogos (`_focus_scope` da `main`: o direcional anda por `child_focus`): sem isto, o
+    // que nenhum controle trata leva o foco ao vizinho da ordem do Tab, sem sair do diálogo.
+    property bool setasMovemOFoco: false
+    // Uma página rolável: com ela, ↑/↓ rolam quando o vizinho do Tab fica fora dela (nada a que ir) e PgUp/PgDn rolam sempre.
+    property Flickable rolagemDasSetas: null
     property Item focoInicial: null
     property string nomeAcessivel: ""
     default property alias conteudo: coluna.data
@@ -139,7 +144,21 @@ FocusScope {
 
     Keys.onEscapePressed: if (fechavel) fecharPedido()
     // Modal para o teclado e o controle: nenhuma tecla chega à página de trás. O Tab passa, para circular.
-    Keys.onPressed: event => event.accepted = event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab
+    Keys.onPressed: event => {
+        const r = rolagemDasSetas
+        if (r && (event.key === Qt.Key_PageUp || event.key === Qt.Key_PageDown))
+            r.contentY = Math.max(0, Math.min(r.contentHeight - r.height, r.contentY + (event.key === Qt.Key_PageUp ? -r.height : r.height)))
+        if (setasMovemOFoco && (event.key === Qt.Key_Down || event.key === Qt.Key_Up)) {
+            const adiante = event.key === Qt.Key_Down
+            const foco = Window.window ? Window.window.activeFocusItem : null
+            const alvo = foco ? foco.nextItemInFocusChain(adiante) : null
+            let naPagina = false
+            for (let p = alvo; r && p; p = p.parent) if (p === r.contentItem) naPagina = true
+            if (r && !naPagina) r.contentY = Math.max(0, Math.min(r.contentHeight - r.height, r.contentY + (adiante ? 40 : -40)))
+            else if (alvo && dentro(alvo)) alvo.forceActiveFocus(adiante ? Qt.TabFocusReason : Qt.BacktabFocusReason)
+        }
+        event.accepted = event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab
+    }
 
     // floating-sheet > dimming. Ao fechar, deixa passar o clique (`can-target` falso, como na DLL). A `main` segura o toque
     // fora do diálogo flutuante (`dialog_backdrop.py`): nem fecha nem arrasta. Na folha de baixo, fecha.

@@ -20,7 +20,7 @@ ModalDaRestauracao {
         wrapMode: Text.Wrap
         horizontalAlignment: Text.AlignHCenter
         color: Tema.texto
-        font { family: Tema.fonte; pixelSize: 14 }
+        font { family: Tema.fonte; pixelSize: Tema.corpo }
     }
     Item {
         width: parent.width
@@ -39,7 +39,6 @@ ModalDaRestauracao {
         active: false
         visible: false  // sem isto a `Column` soma um espaço vazio por Loader
         sourceComponent: FolderDialog {
-            title: "Selecionar pasta"
             onAccepted: restauracao.escolherPasta(selectedFolder)
         }
         onLoaded: item.open()

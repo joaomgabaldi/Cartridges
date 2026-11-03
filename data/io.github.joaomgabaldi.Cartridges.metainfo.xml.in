@@ -31,7 +31,7 @@
     <release version="2.0.0" date="2026-11-01">
       <description translate="no">
         <ul>
-          <li>O aplicativo foi refeito com uma nova interface, integrada ao Windows 11.</li>
+          <li>O aplicativo foi refeito por dentro e continua com o mesmo visual de antes.</li>
           <li>A janela não tem mais a borda invisível que atrapalhava cliques e o encaixe nas laterais da tela.</li>
           <li>A biblioteca, as preferências, o histórico de sessões e os backups continuam como estavam.</li>
         </ul>
@@ -42,6 +42,7 @@
         <ul>
           <li>Agora é possível arrastar atalhos de jogos para a janela do aplicativo para importá-los.</li>
           <li>Um jogo adicionado manualmente passa a ser reconhecido quando o atalho dele é colocado na pasta de atalhos, sem duplicar o jogo na biblioteca.</li>
+          <li>Foi realizada uma correção de segurança.</li>
         </ul>
       </description>
     </release>

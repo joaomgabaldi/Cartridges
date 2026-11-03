@@ -41,6 +41,12 @@ def _sem_monitores(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _sem_a_barra_do_qwindowkit(monkeypatch):
+    # Os testes não carregam a ponte do QWindowKit: a janela fica com a moldura nativa (`comAgente` não existe).
+    monkeypatch.setattr(modulo_app, "_com_barra_propria", lambda _motor: None)
+
+
+@pytest.fixture(autouse=True)
 def _com_animacoes(monkeypatch):
     # O ajuste do Windows desta máquina não decide o teste; quem precisa sem animações sobrescreve.
     monkeypatch.setattr(modulo, "_animacoes_do_sistema", lambda: True)
@@ -516,8 +522,46 @@ def test_boas_vindas_mostra_o_logo_do_app(janela):
 
 
 def test_icone_da_iluminacao_e_de_luz(janela):
-    # O "display-brightness-symbolic" da `main`: o sol (Brightness) da Segoe.
-    assert janela.achar("icone_iluminacao").property("text") == "\ue706"
+    # O "display-brightness-symbolic" da `main` (DA-05 e DA-43): o SVG da Adwaita em 128 px, e não o glifo da Segoe.
+    icone = janela.achar("icone_iluminacao")
+    assert icone.property("nome") == "display-brightness"
+    assert icone.property("tamanho") == 128
+
+
+def test_status_page_tem_os_tamanhos_do_libadwaita(janela):
+    """DA-42: título title-1 (22), descrição de 12 e ícone de 128; a página das conquistas é `compact` (title-2 e 96)."""
+    titulo = janela.achar("titulo_iluminacao")
+    assert titulo.property("font").pixelSize() == 22
+    assert janela.achar("descricao_iluminacao").property("font").pixelSize() == 12
+    compacto = janela.achar("titulo_conquistas")
+    assert compacto.property("font").pixelSize() == 16
+
+
+def test_botoes_do_rodape_sao_os_da_main(janela):
+    """DA-44: "Voltar" e "Pular" são botões comuns; "Continuar" é sugestão sem cápsula; "Pular configuração" é plano."""
+    janela.ir_para("jogos")
+    assert janela.achar("botaoVoltar").property("estilo") == "normal"
+    assert janela.achar("botaoPular").property("estilo") == "normal"
+    continuar = janela.achar("botaoContinuar")
+    assert continuar.property("estilo") == "sugestao" and continuar.property("pilula") is False
+    pular = janela.achar("botaoPularConfiguracao")
+    assert pular.property("estilo") == "plano" and pular.property("pilula") is False
+
+
+def test_ponto_da_tela_atual_e_maior(janela):
+    """DA-45: o ponto da página à vista tem raio 4 (8 px) e os outros 3 (6 px)."""
+    esperar()
+    pontos = [p for p in janela.achar("pontos").childItems() if p.property("peso") is not None]
+    assert len(pontos) == len(janela.modelo.paginas)
+    assert pontos[0].width() == 8 and pontos[1].width() == 6
+
+
+def test_animar_e_relido_a_cada_troca_de_tela(janela, monkeypatch):
+    """DA-46: o ajuste de animações do Windows muda com a janela aberta; a `main` o lê a cada `scroll_to`."""
+    assert janela.modelo.animar is True
+    monkeypatch.setattr(modulo, "_animacoes_do_sistema", lambda: False)
+    janela.modelo.avancar()
+    assert janela.modelo.animar is False
 
 
 # -- a animação das capas ---------------------------------------------------------------------------------------------
@@ -526,7 +570,8 @@ def test_icone_da_iluminacao_e_de_luz(janela):
 def test_tela_das_capas_tem_o_palco_com_as_duas_imagens(janela):
     palco = janela.achar("palcoDasCapas")
     capa, vazia = janela.achar("capaDeExemplo"), janela.achar("capaVazia")
-    assert capa.parentItem() is palco and vazia.parentItem() is palco
+    # DA-47: as duas imagens passam por uma máscara de raio 6 (um item entre elas e o palco).
+    assert capa.parentItem() is vazia.parentItem() and capa.parentItem().parentItem() is palco
     assert capa.property("source").toString().endswith("/data/capa_de_exemplo.svg")
     assert vazia.property("source").toString().endswith("/data/library_placeholder.svg")
     assert (palco.width(), palco.height()) == (120, 180)

@@ -12,18 +12,19 @@ import lzma
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QMetaObject, Qt, QUrl
+from PySide6.QtCore import QMetaObject, QPointF, Qt, QUrl
 from PySide6.QtTest import QTest
 
 from cartridges import shared
 from cartridges.modelos import sobre as modulo_sobre
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.sobre import Sobre, descricao_do_app, informacoes_de_depuracao, novidades_da_versao
-from tests.apoio_janela_atualizacao import Janela, avaliar, esperar
+from tests.apoio_janela_atualizacao import Janela, achar, avaliar, esperar
 
 METAINFO = Path(__file__).resolve().parent.parent / "data" / "io.github.joaomgabaldi.Cartridges.metainfo.xml.in"
 GPL = "https://www.gnu.org/licenses/gpl-3.0.html"
-LINHAS = ("linhaNovidades", "linhaDetalhes", "linhaCreditos", "linhaLegal", "linhaProblemas")
+# A ordem da `main` (três grupos): Novidades; Solução de problemas; Créditos e Aviso legal. Sem "Detalhes" (o gabarito não o mostra).
+LINHAS = ("linhaNovidades", "linhaProblemas", "linhaCreditos", "linhaLegal")
 
 
 @pytest.fixture(autouse=True)
@@ -64,6 +65,20 @@ def _clique(janela, nome):
     QMetaObject.invokeMethod(janela.achar(nome), "click", Qt.ConnectionType.DirectConnection)
 
 
+def _no_sobre(janela, nome):
+    """O objeto de dentro do diálogo (o X do cabeçalho existe em vários diálogos)."""
+    objeto = achar(janela.achar("dialogoSobre"), nome)
+    assert objeto is not None, f"sem objeto {nome!r} no Sobre"
+    return objeto
+
+
+def _clique_real(janela, nome):
+    """O gesto de verdade: um clique do mouse no centro do item."""
+    item = _no_sobre(janela, nome)
+    centro = item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint()
+    QTest.mouseClick(janela.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, centro)
+
+
 def _abrir(janela):
     janela.sobre.abrir()
     dialogo = janela.achar("dialogoSobre")
@@ -94,7 +109,8 @@ def test_log_ilegivel_nao_derruba_o_sobre(tmp_path):
 
 def test_novidades_da_versao_atual_da_metainfo():
     itens = novidades_da_versao(METAINFO, "2026.10.26")
-    assert [i["tipo"] for i in itens] == ["li", "li"]
+    assert [i["tipo"] for i in itens] == ["li", "li", "li"]
+    assert itens[2]["texto"] == "Foi realizada uma correção de segurança."  # B06: o item do `b074a2f` da `main`
     assert itens[0]["texto"] == "Agora é possível arrastar atalhos de jogos para a janela do aplicativo para importá-los."
     assert itens[1]["texto"].startswith("Um jogo adicionado manualmente passa a ser reconhecido")
 
@@ -118,7 +134,7 @@ def test_novidades_da_2_0_0_aparecem_no_sobre(app_qt):  # noqa: ARG001
     assert len(sobre.novidades) >= 1
     # O texto exato é o da 2.0.0, lida pela versão (não pelo topo, que muda a cada subida).
     primeiro = novidades_da_versao(METAINFO, "2.0.0")[0]["texto"]
-    assert primeiro == "O aplicativo foi refeito com uma nova interface, integrada ao Windows 11."
+    assert primeiro == "O aplicativo foi refeito por dentro e continua com o mesmo visual de antes."  # R12: sem "integrada ao Windows 11"
 
 
 def test_modelo_le_as_novidades_da_versao_ao_abrir(app_qt, monkeypatch):  # noqa: ARG001
@@ -129,7 +145,7 @@ def test_modelo_le_as_novidades_da_versao_ao_abrir(app_qt, monkeypatch):  # noqa
     sobre.abrir()
     assert sobre.aberto is True
     assert sobre.temNovidades is True
-    assert len(sobre.novidades) == 2
+    assert len(sobre.novidades) == 3
 
 
 def test_detalhes_sao_a_descricao_da_metainfo(app_qt):  # noqa: ARG001
@@ -148,6 +164,7 @@ def test_textos_do_sobre_sao_os_da_main():
         "creditos": "Créditos",
         "legal": "Aviso legal",
         "problemas": "Solução de problemas",
+        "depuracao": "Informações de depuração",
     }
     assert modulo_sobre.ABOUT_THANKS_TITLE == "O autor original agradece às pessoas abaixo pelas suas contribuições:"
     assert modulo_sobre.COPYRIGHT == "© 2022-2024 kramo\n© 2026 joaomgabaldi"
@@ -182,6 +199,10 @@ def test_navegacao_so_aceita_as_seis_paginas(app_qt):  # noqa: ARG001
     assert sobre.pagina == "creditos"
     sobre.voltar()
     assert sobre.pagina == "principal"
+    sobre.irPara("problemas")
+    sobre.irPara("depuracao")
+    sobre.voltar()  # o log volta à "Solução de problemas"
+    assert sobre.pagina == "problemas"
     sobre.irPara("legal")
     sobre.fechar()
     assert sobre.aberto is False
@@ -197,10 +218,12 @@ def test_depuracao_e_lida_ao_abrir_a_pagina_de_problemas(app_qt, monkeypatch, tm
     sobre.abrir()
     assert sobre.depuracao == ""
     sobre.irPara("problemas")
+    assert sobre.depuracao == ""  # a página de problemas só tem o texto e a linha
+    sobre.irPara("depuracao")
     assert sobre.depuracao == "um\n"
     log.write_text("dois\n", encoding="utf-8")
     sobre.irPara("principal")
-    sobre.irPara("problemas")
+    sobre.irPara("depuracao")
     assert sobre.depuracao == "dois\n"
 
 
@@ -220,7 +243,7 @@ def test_salvar_como_grava_o_texto(app_qt, tmp_path, monkeypatch):  # noqa: ARG0
     monkeypatch.setattr(shared, "log_files", [log])
     sobre = Sobre(None)
     sobre.abrir()
-    sobre.irPara("problemas")
+    sobre.irPara("depuracao")
     destino = tmp_path / "salvo.log"
     sobre.salvar(QUrl.fromLocalFile(str(destino)))
     assert destino.read_text(encoding="utf-8") == "conteúdo ✓\n"
@@ -248,9 +271,20 @@ def test_copiar_texto_vai_para_a_area_de_transferencia(app_qt, area, tmp_path, m
     monkeypatch.setattr(shared, "log_files", [log])
     sobre = Sobre(None)
     sobre.abrir()
-    sobre.irPara("problemas")
+    sobre.irPara("depuracao")
     sobre.copiar()
     assert area.texto == "abc\n"
+
+
+def test_copiar_a_versao_copia_o_numero_e_avisa(app_qt, area, monkeypatch):  # noqa: ARG001
+    """DA-23 e DA-26: o botão da versão copia o número; copiar avisa (em pt-BR, ao contrário do inglês da `main`)."""
+    monkeypatch.setattr(shared, "VERSION", "2026.10.26")
+    fila = FilaDeAvisos()
+    sobre = Sobre(fila)
+    sobre.abrir()
+    sobre.copiarVersao()
+    assert area.texto == "2026.10.26"
+    assert fila.texto == "Copiado para a área de transferência"
 
 
 def test_item_sobre_no_menu_principal_depois_de_preferencias(janela):
@@ -271,9 +305,11 @@ def test_pagina_principal_mostra_nome_versao_e_linhas(janela):
     assert janela.achar("desenvolvedorDoApp").property("text") == "joaomgabaldi"
     assert janela.achar("versaoDoApp").property("text") == "2026.10.26"
     assert all(janela.achar(n).property("visible") is True for n in LINHAS)
-    assert [janela.achar(n).property("text") for n in LINHAS] == [
-        "Novidades", "Detalhes", "Créditos", "Aviso legal", "Solução de problemas",
+    assert [janela.achar(n).property("titulo") for n in LINHAS] == [
+        "Novidades", "Solução de problemas", "Créditos", "Aviso legal",
     ]  # fmt: skip
+    # DA-21: sem título na principal; "Cartridges" só aparece ao rolar (opacidade 0).
+    assert janela.achar("tituloDaPaginaDoSobre").property("opacity") == 0
 
 
 def test_sem_release_da_versao_a_linha_novidades_some(janela, monkeypatch):
@@ -301,7 +337,6 @@ def test_creditos_em_texto_puro_e_com_os_oito_nomes(janela):
     agradecimento = janela.achar("tituloDosAgradecimentos")
     assert agradecimento.property("text") == modulo_sobre.ABOUT_THANKS_TITLE
     assert avaliar(agradecimento, "wrapMode !== Text.NoWrap") is True  # quebra linha, sem "…"
-    assert avaliar(agradecimento, "elide === Text.ElideNone") is True
     assert janela.achar("nomeDoCredito-Sabri Ünal") is not None
 
 
@@ -309,9 +344,9 @@ def test_licenca_com_um_unico_link_e_so_ele_abre(janela, _sem_navegador):
     _abrir(janela)
     _clique(janela, "linhaLegal")
     assert esperar(lambda: janela.sobre.pagina == "legal")
-    assert janela.achar("copyrightDoApp").property("text") == "© 2022-2024 kramo\n© 2026 joaomgabaldi"
     licenca = janela.achar("licencaDoApp")
-    assert licenca.property("text") == modulo_sobre.ABOUT_LICENSE
+    # DA-28: copyright e licença num único rótulo.
+    assert licenca.property("text") == "© 2022-2024 kramo<br>© 2026 joaomgabaldi<br><br>" + modulo_sobre.ABOUT_LICENSE
     assert avaliar(licenca, "textFormat === Text.StyledText") is True
     avaliar(licenca, 'linkActivated("' + GPL + '")')  # o sinal do Text liga ao `abrirLicenca`
     assert _sem_navegador == [GPL]
@@ -329,12 +364,12 @@ def test_link_da_licenca_recebe_foco_pelo_teclado_e_enter_abre(janela, _sem_nave
             break
         QTest.keyClick(janela.janela, Qt.Key.Key_Tab)
     assert licenca.property("activeFocus") is True
-    assert janela.achar("focoDaLicenca").property("visible") is True
+    assert esperar(lambda: janela.achar("focoDaLicenca").property("visible") is True)  # o anel entra em 200 ms
     QTest.keyClick(janela.janela, Qt.Key.Key_Return)
     assert _sem_navegador == [GPL]
-    # ↑/↓ (o controle) tiram o foco do link.
+    # ↑/↓ (o controle) sem outro controle na página: rolam a página (aqui ela cabe) e o foco não é perdido (DA-08).
     QTest.keyClick(janela.janela, Qt.Key.Key_Down)
-    assert licenca.property("activeFocus") is False
+    assert licenca.property("activeFocus") is True
 
 
 def test_paginas_longas_rolam_pelo_teclado(janela):
@@ -366,13 +401,22 @@ def test_problemas_mostra_o_log_em_texto_puro_e_os_botoes(janela, area):
     _clique(janela, "linhaProblemas")
     assert esperar(lambda: janela.sobre.pagina == "problemas")
     assert janela.achar("textoDeSuporte").property("text") == modulo_sobre.TEXTO_DE_SUPORTE
+    # DA-25: o log fica numa página própria, com a barra de baixo.
+    assert janela.achar("barraDeAcoesDoSobre").property("visible") is False
+    _clique(janela, "linhaDepuracao")
+    assert esperar(lambda: janela.sobre.pagina == "depuracao")
+    assert janela.achar("tituloDaPaginaDoSobre").property("text") == "Informações de depuração"
+    assert janela.achar("barraDeAcoesDoSobre").property("visible") is True
     texto = janela.achar("textoDaDepuracao")
     assert texto.property("text") == "linha do log & <b>x</b>\n"
-    assert avaliar(texto, "textFormat === Text.PlainText") is True
+    assert avaliar(texto, "textFormat === TextEdit.PlainText") is True
+    assert janela.achar("textoDaDepuracao").property("readOnly") is True
     assert janela.achar("botaoCopiarTexto").property("text") == "Copiar texto"
     assert janela.achar("botaoSalvarComo").property("text") == "Salvar como…"
     _clique(janela, "botaoCopiarTexto")
     assert area.texto == "linha do log & <b>x</b>\n"
+    QTest.keyClick(janela.janela, Qt.Key.Key_Escape)  # o log volta aos problemas, e não à principal
+    assert esperar(lambda: janela.sobre.pagina == "problemas")
 
 
 def test_esc_volta_e_depois_fecha_e_o_foco_volta_a_grade(janela):
@@ -383,7 +427,7 @@ def test_esc_volta_e_depois_fecha_e_o_foco_volta_a_grade(janela):
     janela.sobre.abrir()
     dialogo = janela.achar("dialogoSobre")
     assert esperar(lambda: dialogo.property("visible") is True)
-    assert esperar(lambda: janela.achar("linhaNovidades").property("activeFocus") is True)  # foco inicial por callLater
+    assert esperar(lambda: janela.achar("linhaNovidadesBotao").property("activeFocus") is True)  # foco inicial por callLater
 
     _clique(janela, "linhaCreditos")
     assert esperar(lambda: janela.sobre.pagina == "creditos")
@@ -401,13 +445,14 @@ def test_esc_volta_e_depois_fecha_e_o_foco_volta_a_grade(janela):
 
 def test_tab_circula_dentro_do_sobre(janela):
     _abrir(janela)
-    linhas = [janela.achar(n) for n in LINHAS]
+    linhas = [janela.achar(n + "Botao") for n in LINHAS]
     assert esperar(lambda: linhas[0].property("activeFocus") is True)
-    for esperado in (*linhas[1:], janela.achar("botaoFecharDoSobre"), linhas[0]):
+    # Depois da última linha, a ordem da árvore recomeça: o X do cabeçalho, o botão da versão e a primeira linha.
+    for esperado in (*linhas[1:], _no_sobre(janela, "fecharDoCabecalho"), _no_sobre(janela, "botaoDaVersao"), linhas[0]):
         QTest.keyClick(janela.janela, Qt.Key.Key_Tab)
         assert esperar(lambda esperado=esperado: esperado.property("activeFocus") is True)
     QTest.keyClick(janela.janela, Qt.Key.Key_Backtab)
-    assert janela.achar("botaoFecharDoSobre").property("activeFocus") is True
+    assert _no_sobre(janela, "botaoDaVersao").property("activeFocus") is True
 
 
 def test_fundo_fica_apagado_com_o_sobre(janela):
@@ -422,7 +467,7 @@ def test_fundo_fica_apagado_com_o_sobre(janela):
 
 def test_o_x_fecha_o_sobre(janela):
     dialogo = _abrir(janela)
-    _clique(janela, "botaoFecharDoSobre")
+    _clique_real(janela, "fecharDoCabecalho")
     assert esperar(lambda: dialogo.property("visible") is False)
     assert janela.sobre.aberto is False
 
@@ -435,3 +480,22 @@ def test_sem_sobre_no_contexto_nao_ha_item_nem_dialogo(app_qt):  # noqa: ARG001
         assert j.achar("pagina").property("enabled") is True
     finally:
         j.fechar()
+
+
+def test_anel_de_foco_so_aparece_com_o_teclado_ao_trocar_de_pagina(janela):
+    """DA-06: entrar numa página pelo mouse não mostra o anel no botão de voltar; pelo teclado, sim."""
+    _abrir(janela)
+    janela.achar("linhaCreditosBotao").forceActiveFocus(Qt.FocusReason.MouseFocusReason)
+    _clique(janela, "linhaCreditos")
+    voltar = janela.achar("botaoVoltarDoSobre")
+    assert esperar(lambda: voltar.property("activeFocus") is True)
+    assert voltar.property("visualFocus") is False
+    QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
+    assert esperar(lambda: janela.sobre.pagina == "principal")
+    linha = janela.achar("linhaCreditosBotao")
+    assert esperar(lambda: linha.property("activeFocus") is True)
+    _no_sobre(janela, "botaoDaVersao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    linha.forceActiveFocus(Qt.FocusReason.TabFocusReason)  # o foco veio do teclado: com anel
+    QTest.keyClick(janela.janela, Qt.Key.Key_Return)
+    assert esperar(lambda: janela.sobre.pagina == "creditos")
+    assert esperar(lambda: voltar.property("visualFocus") is True)

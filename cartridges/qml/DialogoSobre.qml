@@ -1,81 +1,55 @@
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Layouts
 import QtQuick.Window
 import QtCore
 import QtQuick.Dialogs
+import QtQuick.Effects
 
-// "Sobre o Cartridges" (D84): as páginas do `Adw.AboutDialog`, num modal de 420×560. Só desenha: os textos, a página à
-// vista e as ações são do `modelo` (o `Sobre`, cartridges/modelos/sobre.py). Texto de terceiros (o log) em PlainText; a
-// licença é a única em StyledText, e só o link dela é aberto. Esc volta uma página e, na principal, fecha; o foco volta
-// a quem abriu.
-Rectangle {
+// "Sobre o Cartridges" (D84): as páginas do `Adw.AboutDialog` (360 de largura, altura pelo conteúdo), numa `MolduraDoDialogo`.
+// Só desenha: os textos, a página à vista e as ações são do `modelo` (o `Sobre`, cartridges/modelos/sobre.py). Na principal o
+// cabeçalho não tem título ("Cartridges" surge ao rolar); nas subpáginas, a seta de voltar e o título da página. Texto de
+// terceiros (o log) em PlainText; a licença é a única em StyledText, e só o link dela é aberto. Esc volta uma página e, na
+// principal, fecha. Alt+letra abre a linha ou aciona o botão (os mnemônicos da `main`).
+MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoSobre"
 
     property QtObject modelo
     readonly property string pagina: modelo ? modelo.pagina : "principal"
-    // Quem tinha o foco ao abrir: volta a tê-lo ao fechar.
-    property Item retorno: null
     // A página de onde se veio, para o foco voltar à linha dela.
     property string paginaAnterior: "principal"
-    readonly property var linhas: ({ novidades: linhaNovidades, detalhes: linhaDetalhes, creditos: linhaCreditos,
-                                     legal: linhaLegal, problemas: linhaProblemas })
+    readonly property var linhas: ({ novidades: linhaNovidades, creditos: linhaCreditos, legal: linhaLegal,
+                                     problemas: linhaProblemas, depuracao: linhaDepuracao })
 
-    Accessible.role: Accessible.Dialog
-    Accessible.name: "Sobre o Cartridges"
-
-    anchors.fill: parent
-    visible: !!modelo && modelo.aberto
-    color: "#80000000"
-    Keys.onEscapePressed: pagina === "principal" ? modelo.fechar() : modelo.voltar()
-    // Modal para o teclado e o controle: nenhuma tecla chega à página de trás. O Tab passa, para circular.
-    // Fora da principal, as setas e o PageUp/PageDown rolam a página (o que nenhum botão trata chega aqui).
-    Keys.onPressed: event => {
-        if (pagina !== "principal") {
-            var passo = { [Qt.Key_Down]: 40, [Qt.Key_Up]: -40, [Qt.Key_PageDown]: rolagem.height, [Qt.Key_PageUp]: -rolagem.height }[event.key]
-            if (passo !== undefined) rolagem.contentY = Math.max(0, Math.min(rolagem.contentHeight - rolagem.height, rolagem.contentY + passo))
-        }
-        event.accepted = event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab
-    }
-
-    function focar(de) {
-        if (!visible) return
-        var alvo = pagina !== "principal" ? botaoVoltar : (linhas[de] && linhas[de].visible ? linhas[de]
-            : (linhaNovidades.visible ? linhaNovidades : linhaDetalhes))
-        alvo.forceActiveFocus(Qt.TabFocusReason)
-    }
-    function devolverAoRetorno() {
-        if (visible) return
-        // Quem abriu pode ter sumido (o item do menu fechou ao escolher "Sobre o Cartridges"), ou ter perdido o foco para
-        // a janela quando o fundo ficou desabilitado: o foco vai à página à vista.
-        if (retorno && retorno !== Window.contentItem && retorno.visible && retorno.enabled) retorno.forceActiveFocus(Qt.TabFocusReason)
-        else dialogo.retornoPerdido()
-    }
-    signal retornoPerdido()
-
-    onVisibleChanged: {
-        if (visible) {
-            retorno = Window.window ? Window.window.activeFocusItem : null
-            paginaAnterior = "principal"
-            rolagem.contentY = 0
-            // Adiado: o item acabou de ficar visível e só então aceita o foco.
-            Qt.callLater(() => dialogo.focar("principal"))
-        } else {
-            // Depois de a página de trás voltar a ficar habilitada.
-            Qt.callLater(devolverAoRetorno)
-        }
-    }
+    aberto: !!modelo && modelo.aberto
+    largura: 360
+    setasMovemOFoco: true
+    // Abaixo da camada dos avisos (declarada depois): a confirmação e o erro abrem por cima, como antes da moldura (`z` 10).
+    z: 0
+    rolagemDasSetas: rolagem
+    focoInicial: linhaNovidades.aparece ? linhaNovidades.botaoDaLinha : linhaCreditos.botaoDaLinha
+    nomeAcessivel: "Sobre o Cartridges"
+    onFecharPedido: pagina === "principal" ? modelo.fechar() : modelo.voltar()
+    onAbertoChanged: if (aberto) { paginaAnterior = "principal"; rolagem.contentY = 0 }
     onPaginaChanged: {
         var de = paginaAnterior
         paginaAnterior = pagina
         rolagem.contentY = 0
-        Qt.callLater(() => dialogo.focar(de))
+        // O anel só aparece se o teclado já estava em uso (`:focus-visible`): com o mouse, sem anel (DA-06).
+        var foco = Window.window ? Window.window.activeFocusItem : null
+        var teclado = !!foco && foco.visualFocus === true
+        Qt.callLater(() => dialogo.focar(de, teclado))
     }
 
-    MouseArea { anchors.fill: parent } // o que está embaixo não recebe cliques
+    function focar(de, teclado) {
+        if (!aberto) return
+        var alvo = pagina !== "principal" ? (pagina === "depuracao" ? botaoCopiar : botaoVoltar)
+            : (linhas[de] && linhas[de].visible ? linhas[de].botaoDaLinha : focoInicial)
+        alvo.forceActiveFocus(teclado ? Qt.TabFocusReason : Qt.OtherFocusReason)
+    }
 
-    // Criado só ao clicar: o seletor nativo não precisa existir antes. O nome do log na pasta Documentos (um nome solto
-    // abriria o seletor na pasta do aplicativo).
+    // Criado só ao clicar: o seletor nativo não precisa existir antes. O nome do log na pasta Documentos.
     Loader {
         id: cargaDoSalvar
         active: false
@@ -89,450 +63,384 @@ Rectangle {
         onLoaded: item.open()
     }
 
-    Rectangle {
-        id: cartao
-        anchors.centerIn: parent
-        width: Math.min(420, parent.width - 48)
-        height: Math.min(560, parent.height - 48)
-        radius: 8
-        color: Tema.fundo
-        border.color: Tema.botaoSobre
-        clip: true
-
-        // O botão de ícone do cabeçalho (voltar e fechar).
-        component BotaoDoCabecalho: Button {
-            id: botaoDeIcone
-            property string glifo
-            implicitWidth: 34
-            implicitHeight: 34
-            focusPolicy: Qt.StrongFocus
-            Keys.onReturnPressed: click()
-            Keys.onEnterPressed: click()
-            contentItem: Text {
-                text: botaoDeIcone.glifo
-                textFormat: Text.PlainText
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                color: Tema.texto
-                font { family: Tema.fonteDeIcones; pixelSize: 14 }
-            }
-            background: Rectangle {
-                radius: 6
-                color: botaoDeIcone.down ? Tema.pressionado : botaoDeIcone.hovered ? Tema.botaoSobre : "transparent"
-                border { width: botaoDeIcone.visualFocus ? 2 : 0; color: Tema.texto }
-            }
+    // Uma linha da página principal (`AdwActionRow` com `go-next`); Alt+`mnemonico` a abre.
+    component LinhaDoSobre: LinhaDeAcao {
+        id: linha
+        property string destino
+        property string mnemonico
+        titulo: dialogo.modelo ? dialogo.modelo.titulos[destino] : ""
+        icone: "go-next"
+        function click() { botaoDaLinha.click() }
+        onAcionada: dialogo.modelo.irPara(destino)
+        Shortcut {
+            sequence: "Alt+" + linha.mnemonico
+            enabled: dialogo.visible && dialogo.pagina === (destino === "depuracao" ? "problemas" : "principal") && linha.visible
+            onActivated: linha.botaoDaLinha.click()
         }
+    }
 
-        // O botão de texto do corpo.
-        component BotaoDoSobre: Button {
-            id: botaoDeTexto
-            focusPolicy: Qt.StrongFocus
-            implicitHeight: 36
-            leftPadding: 20
-            rightPadding: 20
-            Keys.onReturnPressed: click()
-            Keys.onEnterPressed: click()
-            contentItem: Text {
-                text: botaoDeTexto.text
-                textFormat: Text.PlainText
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                color: Tema.texto
-                font { family: Tema.fonte; pixelSize: 14 }
-            }
-            background: Rectangle {
-                radius: 6
-                color: Tema.superficie
-                opacity: botaoDeTexto.down ? 0.75 : botaoDeTexto.hovered ? 0.9 : 1
-                border { width: botaoDeTexto.visualFocus ? 2 : 1; color: botaoDeTexto.visualFocus ? Tema.texto : Tema.borda }
-            }
-        }
+    // O texto do corpo de uma subpágina: `body`.
+    component TextoDeCorpo: Text {
+        Layout.fillWidth: true
+        textFormat: Text.PlainText
+        wrapMode: Text.Wrap
+        color: Tema.texto
+        font { family: Tema.fonte; pixelSize: Tema.corpo }
+    }
 
-        // Uma linha da página principal: o rótulo e a seta para a página.
-        component LinhaDoSobre: Button {
-            id: linha
-            property string destino
-            width: parent.width
-            implicitHeight: 48
-            focusPolicy: Qt.StrongFocus
-            leftPadding: 16
-            rightPadding: 16
-            text: dialogo.modelo ? dialogo.modelo.titulos[destino] : ""
-            Keys.onReturnPressed: click()
-            Keys.onEnterPressed: click()
-            onClicked: dialogo.modelo.irPara(destino)
-            contentItem: Item {
-                Text {
-                    anchors { left: parent.left; right: seta.left; rightMargin: 8; verticalCenter: parent.verticalCenter }
-                    text: linha.text
-                    textFormat: Text.PlainText
-                    elide: Text.ElideRight
-                    color: Tema.texto
-                    font { family: Tema.fonte; pixelSize: 14 }
-                }
-                Text {
-                    id: seta
-                    anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-                    text: ""  // seta para a direita
-                    textFormat: Text.PlainText
-                    color: Tema.textoSecundario
-                    font { family: Tema.fonteDeIcones; pixelSize: 12 }
-                }
-            }
-            background: Rectangle {
-                color: linha.down ? Tema.pressionado : linha.hovered ? Tema.botaoSobre : "transparent"
-                border { width: linha.visualFocus ? 2 : 0; color: Tema.texto }
-            }
-        }
-
-        Item {
-            id: cabecalho
-            width: parent.width
-            height: 56
-
-            BotaoDoCabecalho {
+    CabecalhoDoDialogo {
+        id: cabecalho
+        // A principal não tem título: "Cartridges" aparece quando o nome sai de vista (`main_title_revealer`).
+        titulo: dialogo.pagina === "principal" ? "Cartridges" : (dialogo.modelo ? dialogo.modelo.titulos[dialogo.pagina] : "")
+        objetoDoTitulo: "tituloDaPaginaDoSobre"
+        opacidadeDoTitulo: dialogo.pagina !== "principal" || rolagem.contentY > nomeDoApp.y + nomeDoApp.height ? 1 : 0
+        sombra: rolagem.contentY > 0
+        onFechar: dialogo.modelo.fechar()
+        inicio: [
+            Botao {
                 id: botaoVoltar
                 objectName: "botaoVoltarDoSobre"
-                anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
                 visible: dialogo.pagina !== "principal"
-                glifo: ""  // seta para a esquerda
-                Accessible.name: "Voltar"
+                icone: "go-previous"
+                dica: "Voltar"
                 onClicked: dialogo.modelo.voltar()
             }
-            Text {
-                objectName: "tituloDaPaginaDoSobre"
-                anchors { left: parent.left; leftMargin: 56; right: botaoFechar.left; rightMargin: 8; verticalCenter: parent.verticalCenter }
-                horizontalAlignment: Text.AlignHCenter
-                text: dialogo.modelo ? dialogo.modelo.titulos[dialogo.pagina] : ""
-                textFormat: Text.PlainText
-                elide: Text.ElideRight
-                color: Tema.texto
-                font { family: Tema.fonte; pixelSize: 15; weight: Font.DemiBold }
-                Accessible.role: Accessible.Heading
-                Accessible.name: text
-            }
-            BotaoDoCabecalho {
-                id: botaoFechar
-                objectName: "botaoFecharDoSobre"
-                anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
-                glifo: ""  // X
-                Accessible.name: "Fechar"
-                onClicked: dialogo.modelo.fechar()
-            }
-        }
+        ]
+    }
 
-        Flickable {
-            id: rolagem
-            objectName: "rolagemDoSobre"
-            anchors { left: parent.left; right: parent.right; top: cabecalho.bottom; bottom: parent.bottom }
-            contentWidth: width
-            contentHeight: corpo.implicitHeight + 24
-            clip: true
-            interactive: contentHeight > height
-            boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: BarraDeRolagem {}
+    Flickable {
+        id: rolagem
+        objectName: "rolagemDoSobre"
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        Layout.preferredHeight: contentHeight
+        Layout.minimumHeight: 0
+        contentWidth: width
+        contentHeight: corpo.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        ScrollBar.vertical: BarraDeRolagem {}
+        RolagemPorMola { alvo: rolagem }
+        Item {
+            id: corpo
+            width: rolagem.width
+            implicitHeight: Math.max(principal.visible ? principal.implicitHeight : 0, novidades.visible ? novidades.implicitHeight : 0,
+                creditos.visible ? creditos.implicitHeight : 0, legal.visible ? legal.implicitHeight : 0,
+                problemas.visible ? problemas.implicitHeight : 0, depuracao.visible ? depuracao.implicitHeight : 0)
 
-            Column {
-                id: corpo
-                x: 24
-                width: rolagem.width - 48
-                spacing: 12
+            // --- principal: margem 12, espaço 6; os grupos a 18 da versão e entre si (`adw.css:1910`) ---
+            ColumnLayout {
+                id: principal
+                visible: dialogo.pagina === "principal"
+                x: 12
+                width: parent.width - 24
+                spacing: 6
 
-                // --- principal ---
-                Column {
-                    visible: dialogo.pagina === "principal"
-                    width: parent.width
-                    spacing: 6
-
-                    Image {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        width: 96
-                        height: 96
-                        source: dialogo.modelo ? dialogo.modelo.icone : ""
-                        sourceSize: Qt.size(192, 192)
-                        fillMode: Image.PreserveAspectFit
-                        Accessible.ignored: true
+                Image {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 12
+                    Layout.preferredWidth: 128
+                    Layout.preferredHeight: 128
+                    source: dialogo.modelo ? dialogo.modelo.icone : ""
+                    sourceSize: Qt.size(256, 256)
+                    fillMode: Image.PreserveAspectFit
+                    Accessible.ignored: true
+                    // `icon-dropshadow`: a sombra suave de 12 px a 5% embaixo do ícone.
+                    layer.enabled: true
+                    layer.effect: MultiEffect {
+                        shadowEnabled: true
+                        shadowColor: Qt.rgba(0, 0, 6 / 255, 0.05)
+                        shadowBlur: 1.0
+                        shadowVerticalOffset: 1
                     }
-                    Text {
-                        objectName: "nomeDoApp"
-                        width: parent.width
-                        horizontalAlignment: Text.AlignHCenter
-                        text: "Cartridges"
+                }
+                Text {
+                    id: nomeDoApp
+                    objectName: "nomeDoApp"
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
+                    text: "Cartridges"
+                    textFormat: Text.PlainText
+                    color: Tema.texto
+                    font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 }
+                }
+                Text {
+                    objectName: "desenvolvedorDoApp"
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
+                    text: dialogo.modelo ? dialogo.modelo.desenvolvedor : ""
+                    textFormat: Text.PlainText
+                    color: Tema.texto
+                    font { family: Tema.fonte; pixelSize: Tema.corpo }
+                }
+                // `.app-version`: botão em cápsula com o texto no destaque; copia o número (`about.copy-property`).
+                Button {
+                    id: botaoDaVersao
+                    objectName: "botaoDaVersao"
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 3
+                    focusPolicy: Qt.StrongFocus
+                    hoverEnabled: true
+                    topPadding: 3
+                    bottomPadding: 3
+                    leftPadding: 18
+                    rightPadding: 18
+                    Accessible.name: "Copiar a versão"
+                    Keys.onReturnPressed: click()
+                    Keys.onEnterPressed: click()
+                    onClicked: dialogo.modelo.copiarVersao()
+                    contentItem: Text {
+                        id: selo
+                        objectName: "versaoDoApp"
+                        text: dialogo.modelo ? dialogo.modelo.versao : ""
                         textFormat: Text.PlainText
-                        color: Tema.texto
-                        font { family: Tema.fonte; pixelSize: 24; weight: Font.DemiBold }
-                    }
-                    Text {
-                        objectName: "desenvolvedorDoApp"
-                        width: parent.width
                         horizontalAlignment: Text.AlignHCenter
-                        text: dialogo.modelo ? dialogo.modelo.desenvolvedor : ""
-                        textFormat: Text.PlainText
-                        color: Tema.textoSecundario
-                        font { family: Tema.fonte; pixelSize: 14 }
+                        color: Tema.destaqueTexto
+                        font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
                     }
-                    Rectangle {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        width: selo.implicitWidth + 24
-                        height: 26
-                        radius: 13
-                        color: Tema.botaoSobre
+                    background: Rectangle {
+                        radius: height / 2
+                        color: botaoDaVersao.down ? Tema.pressionado : botaoDaVersao.hovered ? Tema.botaoSobre : Tema.botao
+                        AnelDeFoco { ativo: botaoDaVersao.visualFocus; raio: parent.radius; afastamento: 1 }
+                    }
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 12  // 18 menos o espaço de 6
+                    Layout.bottomMargin: 6
+                    spacing: 18
+                    // `visible` explícito em todos: criado com o diálogo escondido, o grupo mediria zero para sempre (armadilha 19).
+                    GrupoDeLinhas {
+                        Layout.fillWidth: true
+                        visible: linhaNovidades.aparece
+                        LinhaDoSobre { id: linhaNovidades; objectName: "linhaNovidades"; destino: "novidades"; mnemonico: "N"; aparece: !!dialogo.modelo && dialogo.modelo.temNovidades }
+                    }
+                    GrupoDeLinhas {
+                        Layout.fillWidth: true
+                        visible: true
+                        LinhaDoSobre { id: linhaProblemas; objectName: "linhaProblemas"; destino: "problemas"; mnemonico: "S" }
+                    }
+                    GrupoDeLinhas {
+                        Layout.fillWidth: true
+                        visible: true
+                        LinhaDoSobre { id: linhaCreditos; objectName: "linhaCreditos"; destino: "creditos"; mnemonico: "C" }
+                        LinhaDoSobre { id: linhaLegal; objectName: "linhaLegal"; destino: "legal"; mnemonico: "A" }
+                    }
+                }
+            }
+
+            // --- novidades da versão: texto somente leitura, margens 12/18, com seleção ---
+            ColumnLayout {
+                id: novidades
+                visible: dialogo.pagina === "novidades"
+                x: 12
+                width: parent.width - 24
+                spacing: 8
+
+                TextEdit {
+                    objectName: "cabecalhoDaVersao"
+                    Layout.fillWidth: true
+                    Layout.topMargin: 18
+                    readOnly: true
+                    selectByMouse: true
+                    text: "Versão " + (dialogo.modelo ? dialogo.modelo.versao : "")
+                    textFormat: TextEdit.PlainText
+                    wrapMode: TextEdit.Wrap
+                    color: Tema.texto
+                    selectionColor: Tema.destaque
+                    selectedTextColor: Tema.textoDoDestaque
+                    font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Font.Bold }
+                }
+                Repeater {
+                    model: dialogo.modelo ? dialogo.modelo.novidades : []
+                    RowLayout {
+                        id: novidade
+                        required property int index
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: index === (dialogo.modelo ? dialogo.modelo.novidades.length : 0) - 1 ? 18 : 0
+                        spacing: 8
                         Text {
-                            id: selo
-                            objectName: "versaoDoApp"
-                            anchors.centerIn: parent
-                            text: dialogo.modelo ? dialogo.modelo.versao : ""
+                            Layout.alignment: Qt.AlignTop
+                            visible: novidade.modelData.tipo === "li"
+                            text: "•"
                             textFormat: Text.PlainText
                             color: Tema.texto
-                            font { family: Tema.fonte; pixelSize: 13 }
+                            font { family: Tema.fonte; pixelSize: Tema.corpo }
                         }
-                    }
-                    Item { width: 1; height: 12 }
-                    Column {
-                        width: parent.width
-                        LinhaDoSobre { id: linhaNovidades; objectName: "linhaNovidades"; destino: "novidades"; visible: !!dialogo.modelo && dialogo.modelo.temNovidades; height: visible ? implicitHeight : 0 }
-                        LinhaDoSobre { id: linhaDetalhes; objectName: "linhaDetalhes"; destino: "detalhes" }
-                        LinhaDoSobre { id: linhaCreditos; objectName: "linhaCreditos"; destino: "creditos" }
-                        LinhaDoSobre { id: linhaLegal; objectName: "linhaLegal"; destino: "legal" }
-                        LinhaDoSobre { id: linhaProblemas; objectName: "linhaProblemas"; destino: "problemas" }
-                    }
-                }
-
-                // --- novidades da versão ---
-                Column {
-                    visible: dialogo.pagina === "novidades"
-                    width: parent.width
-                    spacing: 8
-
-                    Text {
-                        objectName: "cabecalhoDaVersao"
-                        width: parent.width
-                        text: "Versão " + (dialogo.modelo ? dialogo.modelo.versao : "")
-                        textFormat: Text.PlainText
-                        wrapMode: Text.Wrap
-                        color: Tema.texto
-                        font { family: Tema.fonte; pixelSize: 16; weight: Font.Bold }
-                    }
-                    Repeater {
-                        model: dialogo.modelo ? dialogo.modelo.novidades : []
-                        Row {
-                            id: novidade
-                            required property int index
-                            required property var modelData
-                            width: corpo.width
-                            spacing: 8
-                            Text {
-                                id: marcador
-                                visible: novidade.modelData.tipo === "li"
-                                text: "•"
-                                textFormat: Text.PlainText
-                                color: Tema.texto
-                                font { family: Tema.fonte; pixelSize: 14 }
-                            }
-                            Text {
-                                objectName: "itemDeNovidade-" + novidade.index
-                                width: novidade.width - (marcador.visible ? marcador.width + novidade.spacing : 0)
-                                text: novidade.modelData.texto
-                                textFormat: Text.PlainText
-                                wrapMode: Text.Wrap
-                                color: Tema.texto
-                                font { family: Tema.fonte; pixelSize: 14 }
-                            }
+                        TextEdit {
+                            objectName: "itemDeNovidade-" + novidade.index
+                            Layout.fillWidth: true
+                            readOnly: true
+                            selectByMouse: true
+                            text: novidade.modelData.texto
+                            textFormat: TextEdit.PlainText
+                            wrapMode: TextEdit.Wrap
+                            color: Tema.texto
+                            selectionColor: Tema.destaque
+                            selectedTextColor: Tema.textoDoDestaque
+                            font { family: Tema.fonte; pixelSize: Tema.corpo }
                         }
                     }
                 }
+            }
 
-                // --- detalhes ---
-                Column {
-                    visible: dialogo.pagina === "detalhes"
-                    width: parent.width
-                    spacing: 12
+            // --- créditos: um grupo por seção (o título quebra a linha) com uma linha por pessoa ---
+            ColumnLayout {
+                id: creditos
+                visible: dialogo.pagina === "creditos"
+                x: 12
+                width: parent.width - 24
+                spacing: 18
 
-                    Repeater {
-                        model: dialogo.modelo ? dialogo.modelo.detalhes : []
+                Item { Layout.preferredHeight: 0 }
+                Repeater {
+                    model: dialogo.modelo ? dialogo.modelo.creditos : []
+                    ColumnLayout {
+                        id: secao
+                        required property var modelData
+                        required property int index
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: index === (dialogo.modelo ? dialogo.modelo.creditos.length : 0) - 1 ? 18 : 0
+                        spacing: 12
                         Text {
-                            required property string modelData
-                            width: corpo.width
-                            text: modelData
+                            objectName: secao.modelData.titulo !== "" ? "tituloDosAgradecimentos" : ""
+                            Layout.fillWidth: true
+                            visible: text !== ""
+                            text: secao.modelData.titulo
                             textFormat: Text.PlainText
                             wrapMode: Text.Wrap
                             color: Tema.texto
-                            font { family: Tema.fonte; pixelSize: 14 }
+                            font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
+                            Accessible.role: Accessible.Heading
+                            Accessible.name: text
                         }
-                    }
-                }
-
-                // --- créditos ---
-                Column {
-                    visible: dialogo.pagina === "creditos"
-                    width: parent.width
-                    spacing: 16
-
-                    Repeater {
-                        model: dialogo.modelo ? dialogo.modelo.creditos : []
-                        Column {
-                            id: secao
-                            required property var modelData
-                            width: corpo.width
-                            spacing: 6
-                            Text {
-                                // Só a seção com título leva o nome; o título é uma frase e quebra a linha, sem "…".
-                                objectName: secao.modelData.titulo !== "" ? "tituloDosAgradecimentos" : ""
-                                visible: text !== ""
-                                width: parent.width
-                                text: secao.modelData.titulo
-                                textFormat: Text.PlainText
-                                wrapMode: Text.Wrap
-                                elide: Text.ElideNone
-                                color: Tema.texto
-                                font { family: Tema.fonte; pixelSize: 14; weight: Font.DemiBold }
-                            }
+                        GrupoDeLinhas {
+                            Layout.fillWidth: true
+                            visible: true
                             Repeater {
                                 model: secao.modelData.nomes
-                                Text {
+                                LinhaDoGrupo {
                                     required property string modelData
                                     objectName: "nomeDoCredito-" + modelData
-                                    width: secao.width
-                                    text: modelData
-                                    textFormat: Text.PlainText
-                                    wrapMode: Text.Wrap
-                                    color: Tema.textoSecundario
-                                    font { family: Tema.fonte; pixelSize: 14 }
+                                    titulo: modelData
                                 }
                             }
                         }
                     }
                 }
+            }
 
-                // --- aviso legal ---
-                Column {
-                    visible: dialogo.pagina === "legal"
-                    width: parent.width
-                    spacing: 16
+            // --- aviso legal: copyright e licença num só rótulo; o link da GPL entra no Tab e o Enter o abre ---
+            ColumnLayout {
+                id: legal
+                visible: dialogo.pagina === "legal"
+                x: 12
+                width: parent.width - 24
 
-                    Text {
-                        objectName: "copyrightDoApp"
-                        width: parent.width
-                        text: dialogo.modelo ? dialogo.modelo.copyright : ""
-                        textFormat: Text.PlainText
-                        wrapMode: Text.Wrap
-                        color: Tema.texto
-                        font { family: Tema.fonte; pixelSize: 14 }
-                    }
-                    // O texto só traz o link da GPL: ele mesmo entra na ordem do Tab, e o Enter abre esse endereço.
-                    // shortcut: o Enter abre sempre a GPL, quando houver mais de um link no texto.
-                    Text {
-                        id: licenca
-                        objectName: "licencaDoApp"
-                        width: parent.width
-                        activeFocusOnTab: true
-                        Accessible.role: Accessible.Link
-                        Keys.onReturnPressed: dialogo.modelo.abrirLicenca(dialogo.modelo.urlDaLicenca)
-                        Keys.onEnterPressed: dialogo.modelo.abrirLicenca(dialogo.modelo.urlDaLicenca)
-                        // ↑/↓ (o controle do Xbox) levam o foco ao vizinho, como o Tab.
-                        Keys.onDownPressed: nextItemInFocusChain(true).forceActiveFocus(Qt.TabFocusReason)
-                        Keys.onUpPressed: nextItemInFocusChain(false).forceActiveFocus(Qt.BacktabFocusReason)
-                        text: dialogo.modelo ? dialogo.modelo.licenca : ""
-                        textFormat: Text.StyledText
-                        wrapMode: Text.Wrap
-                        linkColor: Tema.destaque
-                        color: Tema.texto
-                        font { family: Tema.fonte; pixelSize: 14 }
-                        onLinkActivated: link => dialogo.modelo.abrirLicenca(link)
+                // shortcut: o Enter abre sempre a GPL, quando houver mais de um link no texto.
+                Text {
+                    id: licenca
+                    objectName: "licencaDoApp"
+                    Layout.fillWidth: true
+                    Layout.topMargin: 18
+                    Layout.bottomMargin: 18
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Link
+                    Keys.onReturnPressed: dialogo.modelo.abrirLicenca(dialogo.modelo.urlDaLicenca)
+                    Keys.onEnterPressed: dialogo.modelo.abrirLicenca(dialogo.modelo.urlDaLicenca)
+                    text: dialogo.modelo ? dialogo.modelo.copyright.split("\n").join("<br>") + "<br><br>" + dialogo.modelo.licenca : ""
+                    textFormat: Text.StyledText
+                    wrapMode: Text.Wrap
+                    linkColor: Tema.destaqueTexto
+                    color: Tema.texto
+                    font { family: Tema.fonte; pixelSize: Tema.corpo }
+                    onLinkActivated: link => dialogo.modelo.abrirLicenca(link)
+                    // Cursor de mão sobre o link.
+                    HoverHandler { cursorShape: licenca.hoveredLink !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor }
 
-                        Rectangle {
-                            objectName: "focoDaLicenca"
-                            anchors { fill: parent; margins: -4 }
-                            visible: licenca.activeFocus
-                            color: "transparent"
-                            radius: 4
-                            border { width: 2; color: Tema.texto }
-                        }
-                    }
-                }
-
-                // --- solução de problemas ---
-                Column {
-                    visible: dialogo.pagina === "problemas"
-                    width: parent.width
-                    spacing: 12
-
-                    Text {
-                        objectName: "textoDeSuporte"
-                        width: parent.width
-                        text: dialogo.modelo ? dialogo.modelo.textoDeSuporte : ""
-                        textFormat: Text.PlainText
-                        wrapMode: Text.Wrap
-                        color: Tema.texto
-                        font { family: Tema.fonte; pixelSize: 14 }
-                    }
-                    Text {
-                        width: parent.width
-                        text: "Informações de depuração"
-                        textFormat: Text.PlainText
-                        color: Tema.texto
-                        font { family: Tema.fonte; pixelSize: 14; weight: Font.DemiBold }
-                        Accessible.role: Accessible.Heading
-                        Accessible.name: text
-                    }
-                    Rectangle {
-                        width: parent.width
-                        height: 220
-                        radius: 6
-                        color: Tema.superficie
-                        border.color: Tema.borda
-                        clip: true
-
-                        Flickable {
-                            id: logRolavel
-                            objectName: "rolagemDaDepuracao"
-                            anchors { fill: parent; margins: 8 }
-                            contentWidth: width
-                            contentHeight: depuracao.implicitHeight
-                            clip: true
-                            boundsBehavior: Flickable.StopAtBounds
-                            activeFocusOnTab: true
-                            Accessible.name: "Informações de depuração"
-                            ScrollBar.vertical: BarraDeRolagem {}
-                            function rolar(delta) {
-                                contentY = Math.max(0, Math.min(contentHeight - height, contentY + delta))
-                            }
-                            Keys.onUpPressed: rolar(-40)
-                            Keys.onDownPressed: rolar(40)
-                            Keys.onPressed: event => {
-                                if (event.key === Qt.Key_PageUp) { rolar(-height); event.accepted = true }
-                                else if (event.key === Qt.Key_PageDown) { rolar(height); event.accepted = true }
-                            }
-
-                            Text {
-                                id: depuracao
-                                objectName: "textoDaDepuracao"
-                                width: logRolavel.width - 12
-                                text: dialogo.modelo ? dialogo.modelo.depuracao : ""
-                                textFormat: Text.PlainText
-                                wrapMode: Text.WrapAnywhere
-                                color: Tema.texto
-                                font { family: "Consolas"; pixelSize: 12 }
-                            }
-                        }
-                    }
-                    Row {
-                        spacing: 8
-                        BotaoDoSobre {
-                            objectName: "botaoCopiarTexto"
-                            text: "Copiar texto"
-                            onClicked: dialogo.modelo.copiar()
-                        }
-                        BotaoDoSobre {
-                            objectName: "botaoSalvarComo"
-                            text: "Salvar como…"
-                            onClicked: {
-                                if (cargaDoSalvar.item) cargaDoSalvar.item.open(); else cargaDoSalvar.active = true
-                            }
-                        }
-                    }
+                    AnelDeFoco { objectName: "focoDaLicenca"; ativo: licenca.activeFocus; raio: 4; afastamento: -4 }
                 }
             }
+
+            // --- solução de problemas: o texto e a linha que abre o log ---
+            ColumnLayout {
+                id: problemas
+                visible: dialogo.pagina === "problemas"
+                x: 12
+                width: parent.width - 24
+                spacing: 18
+
+                TextoDeCorpo {
+                    objectName: "textoDeSuporte"
+                    Layout.topMargin: 18
+                    text: dialogo.modelo ? dialogo.modelo.textoDeSuporte : ""
+                }
+                GrupoDeLinhas {
+                    Layout.fillWidth: true
+                    Layout.bottomMargin: 18
+                    visible: true
+                    LinhaDoSobre { id: linhaDepuracao; objectName: "linhaDepuracao"; destino: "depuracao"; mnemonico: "D" }
+                }
+            }
+
+            // --- informações de depuração: o log na página inteira, com seleção; os botões ficam na barra de baixo ---
+            ColumnLayout {
+                id: depuracao
+                visible: dialogo.pagina === "depuracao"
+                x: 12
+                width: parent.width - 24
+
+                TextEdit {
+                    id: logDepuracao
+                    objectName: "textoDaDepuracao"
+                    Layout.fillWidth: true
+                    Layout.topMargin: 18
+                    Layout.bottomMargin: 18
+                    readOnly: true
+                    selectByMouse: true
+                    activeFocusOnTab: true
+                    Accessible.name: "Informações de depuração"
+                    text: dialogo.modelo ? dialogo.modelo.depuracao : ""
+                    textFormat: TextEdit.PlainText
+                    wrapMode: TextEdit.Wrap
+                    color: Tema.texto
+                    selectionColor: Tema.destaque
+                    selectedTextColor: Tema.textoDoDestaque
+                    font { family: Tema.fonte; pixelSize: Tema.corpo }
+                    // ↑/↓ rolam a página (o cursor de um `TextEdit` somente leitura não anda).
+                    Keys.onUpPressed: rolagem.contentY = Math.max(0, rolagem.contentY - 40)
+                    Keys.onDownPressed: rolagem.contentY = Math.max(0, Math.min(rolagem.contentHeight - rolagem.height, rolagem.contentY + 40))
+                }
+            }
+        }
+    }
+
+    // `GtkActionBar` da página do log: "Copiar texto" à esquerda, "Salvar como…" à direita. Alt+C e Alt+S.
+    Item {
+        id: barraDeAcoes
+        objectName: "barraDeAcoesDoSobre"
+        Layout.fillWidth: true
+        implicitHeight: visible ? 46 : 0
+        visible: dialogo.pagina === "depuracao"
+        Rectangle { width: parent.width; height: 1; color: Tema.sombraDaBarra }
+        Botao {
+            id: botaoCopiar
+            objectName: "botaoCopiarTexto"
+            anchors { left: parent.left; leftMargin: 6; verticalCenter: parent.verticalCenter }
+            text: "Copiar texto"
+            onClicked: dialogo.modelo.copiar()
+            Shortcut { sequence: "Alt+C"; enabled: barraDeAcoes.visible; onActivated: botaoCopiar.click() }
+        }
+        Botao {
+            id: botaoSalvar
+            objectName: "botaoSalvarComo"
+            anchors { right: parent.right; rightMargin: 6; verticalCenter: parent.verticalCenter }
+            text: "Salvar como…"
+            onClicked: { if (cargaDoSalvar.item) cargaDoSalvar.item.open(); else cargaDoSalvar.active = true }
+            Shortcut { sequence: "Alt+S"; enabled: barraDeAcoes.visible; onActivated: botaoSalvar.click() }
         }
     }
 }

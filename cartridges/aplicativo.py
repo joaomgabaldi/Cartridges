@@ -132,6 +132,18 @@ class Aplicativo(QObject):
         a que o usuário pede avisa sempre, senão o clique parece não ter funcionado.
         """
         if self._importando:
+            # A segunda importação não roda junto, mas o retorno de quem a pediu não se perde (a "Jogos sem atalho" da
+            # restauração ficaria travada): ele sai no fim da que está em curso (DA-63).
+            atual = shared.importer
+            if ao_terminar is not None and atual is not None:
+                anterior = atual.ao_terminar
+
+                def encadeado() -> None:
+                    if anterior is not None:
+                        anterior()
+                    ao_terminar()
+
+                atual.ao_terminar = encadeado
             return
         importador = shared.importer = Importer(self)
         importador.ao_terminar = ao_terminar

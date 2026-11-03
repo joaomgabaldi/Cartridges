@@ -2,70 +2,35 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 
-// A escolha do atalho de um jogo restaurado: o título é o nome do jogo e há uma linha por atalho candidato (D81). Sem
-// candidatos não abre: o modelo pede direto o seletor de arquivos (`procurarPedido`), que este modal cria sob demanda.
+// A escolha do atalho de um jogo restaurado: o título é o nome do jogo e há uma linha por atalho candidato (D81), numa
+// `boxed-list` de `ActionRow` ativáveis (título quebra, subtítulo com o arquivo). Sem candidatos não abre: o modelo pede
+// direto o seletor de arquivos (`procurarPedido`), que este modal cria sob demanda.
 ModalDaRestauracao {
     id: dialogo
     objectName: "dialogoDaEscolhaDoAtalho"
 
     aberto: restauracao.escolhaAberta
     titulo: restauracao.escolha.nome || ""
-    inicial: lista.count > 0 ? lista.itemAtIndex(0) : botaoProcurar
+    inicial: lista.vista.count > 0 ? lista.vista.itemAtIndex(0).botaoDaLinha : botaoProcurar
     onSaiu: restauracao.fecharEscolha()
 
-    ListView {
+    ModalDaRestauracao.Cartela {
         id: lista
-        objectName: "listaDeCandidatos"
         width: parent.width
-        height: Math.min(contentHeight, 360)
+        objetoDaLista: "listaDeCandidatos"
+        alturaMaxima: 360
         model: restauracao.escolha.candidatos || []
-        spacing: 4
-        clip: true
-        boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: BarraDeRolagem {}
 
-        delegate: Button {
+        delegate: LinhaDeAcao {
             id: linha
             required property int index
             required property var modelData
             objectName: "candidato-" + index
-            width: ListView.view.width
-            implicitHeight: 56
-            focusPolicy: Qt.StrongFocus
-            leftPadding: 16
-            rightPadding: 16
-            Accessible.name: modelData.titulo + ", " + modelData.subtitulo
-            Keys.onReturnPressed: click()
-            Keys.onEnterPressed: click()
-            onClicked: restauracao.usarAtalho(modelData.caminho)
-
-            contentItem: Column {
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 2
-                Text {
-                    objectName: "tituloDoCandidato"
-                    width: parent.width
-                    text: linha.modelData.titulo
-                    textFormat: Text.PlainText
-                    elide: Text.ElideRight
-                    color: Tema.texto
-                    font { family: Tema.fonte; pixelSize: 14 }
-                }
-                Text {
-                    objectName: "subtituloDoCandidato"
-                    width: parent.width
-                    text: linha.modelData.subtitulo
-                    textFormat: Text.PlainText
-                    elide: Text.ElideRight
-                    color: Tema.textoSecundario
-                    font { family: Tema.fonte; pixelSize: 12 }
-                }
-            }
-            background: Rectangle {
-                radius: 6
-                color: linha.down ? Tema.pressionado : linha.hovered ? Tema.botaoSobre : Tema.superficie
-                border { width: linha.visualFocus ? 2 : 1; color: linha.visualFocus ? Tema.texto : Tema.borda }
-            }
+            titulo: modelData.titulo
+            subtitulo: modelData.subtitulo
+            // Os testes e o controle acionam a linha pelo botão que a cobre.
+            function click() { botaoDaLinha.click() }
+            onAcionada: restauracao.usarAtalho(modelData.caminho)
         }
     }
     Item {

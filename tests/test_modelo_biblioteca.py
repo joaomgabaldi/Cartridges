@@ -567,3 +567,20 @@ def test_tem_atualizacao_so_com_patch_esperando_e_fora_dos_zerados(app_qt):
     assert tem["a"] is True and tem["b"] is False and tem["c"] is False
     assert tem.get("d") is False  # um zerado nunca tem o halo
     assert bytes(modelo.roleNames()[papel]) == b"temAtualizacao"
+
+
+def test_pipeline_so_avanca_depois_da_exibicao(app_qt):
+    """B17: o `ExibicaoManager` leva o jogo à grade na principal e só então deixa o pipeline seguir (como o `DisplayManager`)."""
+    thread_principal.na_thread_principal(lambda: None)
+    modelo = ModeloDaBiblioteca()
+    ordem = []
+    original = modelo.atualizar
+    modelo.atualizar = lambda jogo: (ordem.append("exibiu"), original(jogo))
+    gerente = ExibicaoManager(modelo)
+    jogo = _jogo("a", "Alfa")
+    thread = threading.Thread(target=lambda: gerente.process_game(jogo, {}, lambda _m: ordem.append("avancou")))
+    thread.start()
+    thread.join()
+    assert ordem == []
+    assert _rodar_ate(lambda: len(ordem) == 2)
+    assert ordem == ["exibiu", "avancou"]

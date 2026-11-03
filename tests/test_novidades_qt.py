@@ -238,8 +238,7 @@ def test_abrir_sem_posts_busca_e_com_posts_so_reconhece(app_qt):
     assert checker.chamadas == ["mark_seen"]
 
 
-@pytest.mark.parametrize("como", ["abrir", "pagina_visivel"])
-def test_datas_relativas_refeitas_ao_abrir(app_qt, monkeypatch, como):
+def test_datas_relativas_refeitas_ao_abrir(app_qt, monkeypatch):
     """A data relativa envelhece com o app aberto: abrir a página a refaz, sem mandar a lista ao topo."""
     checker = CheckerFalso()
     checker.posts = (post(100),)
@@ -253,10 +252,10 @@ def test_datas_relativas_refeitas_ao_abrir(app_qt, monkeypatch, como):
     assert novidades.posts[0]["subtitulo"].startswith("hoje")
 
     datas[0] = "ontem"
-    if como == "abrir":
-        novidades.abrir()
-    else:
-        novidades.paginaVisivel(True)
+    # DA-37: a página voltar a ficar à vista não refaz a lista (recolheria as linhas abertas); abrir refaz.
+    novidades.paginaVisivel(True)
+    assert novidades.posts[0]["subtitulo"].startswith("hoje")
+    novidades.abrir()
 
     assert novidades.posts[0]["subtitulo"].startswith("ontem")
     assert avisos_de_mudanca and refeitas == []
@@ -613,7 +612,8 @@ def test_sem_novidades_no_contexto_o_botao_fica_oculto_sem_erro(app_qt, monkeypa
         j.fechar()
 
 
-def test_posts_que_chegam_com_a_pagina_aberta_em_carregando_levam_o_foco_a_lista(janela):
+def test_posts_que_chegam_com_a_pagina_aberta_nao_puxam_o_foco(janela):
+    """DA-36: refazer a lista não leva o foco à primeira linha (a `main` não o move; o Tab já entra nela)."""
     checker = janela.checker
     checker._running = True  # noqa: SLF001
     _abrir_a_pagina(janela)
@@ -622,4 +622,5 @@ def test_posts_que_chegam_com_a_pagina_aberta_em_carregando_levam_o_foco_a_lista
     checker._apply([post(200, titulo="Alfa")])  # noqa: SLF001
 
     assert esperar(lambda: len(_posts_na_lista(janela)) == 1)
-    assert esperar(lambda: _posts_na_lista(janela)[0].property("activeFocus") is True)
+    esperar()
+    assert _posts_na_lista(janela)[0].property("activeFocus") is False

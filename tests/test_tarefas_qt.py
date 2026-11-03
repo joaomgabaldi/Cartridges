@@ -1077,3 +1077,21 @@ def test_mostrar_principal_durante_a_espera_devolve_as_janelas_maximizadas(fecha
         assert outra.windowStates() & Qt.WindowState.WindowMaximized
     finally:
         outra.destroy()
+
+
+def test_nome_longo_alarga_a_janela_e_o_vazio_e_centrado(cena, flush_idle):
+    """DA-52 e DA-51: o nome não quebra e a janela cresce em largura (360 de mínimo); o aviso de vazio fica centrado."""
+    tarefa = tarefas.comecar("Um nome de tarefa muito comprido " * 4, 3)
+    flush_idle()
+    janela = cena.abrir_a_janela()
+    _esperar()
+    assert janela.width() > 360
+    assert janela.minimumWidth() == janela.maximumWidth() == janela.width()
+    tarefa.terminar()
+    flush_idle()
+    _esperar()
+    vazio = cena.achar("avisoDeVazio")
+    from tests.apoio_janela_atualizacao import avaliar  # noqa: PLC0415
+
+    assert avaliar(vazio, "horizontalAlignment === Text.AlignHCenter") is True
+    assert janela.width() == 360

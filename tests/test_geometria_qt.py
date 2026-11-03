@@ -286,8 +286,40 @@ def test_sem_geometria_gravada_usa_o_tamanho_do_qt(app_qt, win32_falso, state_sc
     del motor, componente
 
 
-def test_principal_restaura_depois_do_tamanho(app_qt, monkeypatch, win32_falso, state_schema):  # noqa: ARG001
+def _ja_gravado_pelo_qt(monkeypatch, tmp_path):
+    """A marca de que o Qt já gravou a geometria: o retângulo gravado já é o dele (sem a sombra do GTK)."""
+    monkeypatch.setattr(shared, "app_dir", tmp_path)
+    (tmp_path / "geometria-qt").touch()
+
+
+def test_primeira_abertura_depois_da_main_desconta_a_sombra_do_gtk(monkeypatch, win32_falso, state_schema, tmp_path):
+    """DA-72: o retângulo gravado pela `main` inclui a sombra do GTK (28x29); a primeira abertura no Qt a desconta,
+    uma vez só (depois que o Qt grava, a marca existe e o retângulo vale como está)."""
+    monkeypatch.setattr(shared, "app_dir", tmp_path / "dados")
+    for chave, valor in (("x", 100), ("y", 50), ("width", 900), ("height", 600)):
+        state_schema.set_int(chave, valor)
+    janela = _JanelaFalsa()
+    geometria = GeometriaDaJanela()
+    geometria.restaurar(janela)
+    assert win32_falso.colocadas[-1][1] == Geometry(114, 64, 872, 571, False)
+    geometria.gravar()  # o Qt grava: dali em diante vale o retângulo dele
+    geometria.restaurar(janela)
+    assert win32_falso.colocadas[-1][1] == Geometry(100, 50, 900, 600, False)
+
+
+def test_sem_posicao_o_tamanho_padrao_do_schema_vale(monkeypatch):
+    """DA-71: na primeira abertura não há posição, mas o 1170x795 do schema vale (o `apply_size` da `main`)."""
+    pedidos = []
+    monkeypatch.setattr(window_geometry, "_dimensionar", lambda _j, largura, altura: pedidos.append((largura, altura)))
+    window_geometry.restaurar(_JanelaFalsa(), Geometry(UNSET, UNSET, 1170, 795, False))
+    assert pedidos == [(1170, 795)]
+    window_geometry.restaurar(_JanelaFalsa(), Geometry(UNSET, UNSET, 0, 0, False))  # nada gravado de verdade
+    assert pedidos == [(1170, 795)]
+
+
+def test_principal_restaura_depois_do_tamanho(app_qt, monkeypatch, win32_falso, state_schema, tmp_path):  # noqa: ARG001
     """O `onCompleted` pede a restauração depois do tamanho de hoje: o gravado vence o 1170×795."""
+    _ja_gravado_pelo_qt(monkeypatch, tmp_path)
     for chave, valor in (("x", 100), ("y", 50), ("width", 900), ("height", 600)):
         state_schema.set_int(chave, valor)
     tamanhos = []

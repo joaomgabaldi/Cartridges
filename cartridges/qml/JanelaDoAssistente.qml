@@ -1,10 +1,11 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Dialogs
+import QtQuick.Effects
 import QtQuick.Window
 
-// O assistente da primeira abertura (D86): janela própria com a moldura nativa (minimizar e fechar), antes da
-// biblioteca, num motor próprio. As oito telas do `.blp` da `main` num carrossel sem gesto, os pontos e o rodapé
+// O assistente da primeira abertura (D86): janela própria com a barra do app (`Adw.HeaderBar` sem título, minimizar e
+// fechar; 640x640 no total, o conteúdo com 593), antes da biblioteca, num motor próprio. As oito telas do `.blp` da `main` num carrossel sem gesto, os pontos e o rodapé
 // "Voltar" | "Pular" "Continuar". Só desenha: o que ele mostra e grava é o `assistente` (cartridges/assistente.py).
 // Os modais por cima (iluminação, logins, aviso) deixam o fundo `enabled: false`.
 Window {
@@ -16,6 +17,10 @@ Window {
     readonly property var modelo: assistente
     readonly property string paginaAtual: modelo.paginas[modelo.indice] || ""
     readonly property bool modalAberto: fitas.visible || loginEpic.visible || loginEa.visible || dialogo.visible
+    // Sem a marca `comAgente` (os testes), não há ponte do QWindowKit e a moldura é a nativa.
+    readonly property bool semAgente: typeof comAgente === "undefined"
+    readonly property QtObject agente: carga.item
+    readonly property real topo: semAgente ? 0 : barra.altura
 
     title: "Cartridges"
     width: 640
@@ -25,8 +30,18 @@ Window {
     minimumHeight: 640
     maximumHeight: 640
     color: Tema.fundo
-    flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint
+    flags: semAgente ? Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint : Qt.Window
     visible: true
+
+    Loader {
+        id: carga
+        active: !raiz.semAgente
+        source: "AgenteDaJanela.qml"
+    }
+    Connections {
+        target: Tema
+        function onEscuroChanged() { if (raiz.agente) raiz.agente.setWindowAttribute("dark-mode", Tema.escuro) }
+    }
 
     onClosing: (fechar) => fechar.accepted = raiz.modelo.fecharNoX()
 
@@ -43,7 +58,19 @@ Window {
     }
     onPaginaAtualChanged: Qt.callLater(raiz.recuperarFoco)
     onModalAbertoChanged: if (!modalAberto) Qt.callLater(() => Qt.callLater(raiz.recuperarFoco))
-    Component.onCompleted: Qt.callLater(raiz.recuperarFoco)
+    // O tamanho só depois do `setup`: antes, o QWindowKit o sobrescreve.
+    Component.onCompleted: {
+        if (agente) {
+            agente.setup(raiz)
+            agente.setWindowAttribute("dark-mode", Tema.escuro)
+            barra.ligarAgente()
+            width = 640
+            height = 640
+            minimumWidth = maximumWidth = 640
+            minimumHeight = maximumHeight = 640
+        }
+        Qt.callLater(raiz.recuperarFoco)
+    }
 
     Connections {
         target: raiz.modelo
@@ -70,15 +97,17 @@ Window {
         onLoaded: item.open()
     }
 
-    // Uma tela, como o `Adw.StatusPage`: o ícone (glifo ou imagem), o título, a descrição e o conteúdo, centralizados e
-    // com rolagem quando não cabem. Só a tela à vista fica habilitada: o Tab não alcança as outras.
+    // Uma tela, como o `Adw.StatusPage` (`adw.css:1920`): margem 36/12 e espaço 36 entre o ícone, o texto e o conteúdo; o
+    // título e a descrição a 12. `compacta` (a das conquistas): ícone de 96, título title-2, margem 24 e espaço 24. Com
+    // rolagem quando não cabe. Só a tela à vista fica habilitada: o Tab não alcança as outras.
     component Pagina: Flickable {
         id: pagina
         property string nome
-        property string glifo
+        property string icone
         property string imagem
         property string titulo
         property string descricao
+        property bool compacta: false
         // O controle que recebe o foco quando a tela aparece.
         property Item primeiro: null
         default property alias conteudo: extra.data
@@ -89,7 +118,7 @@ Window {
         width: carrossel.width
         height: carrossel.height
         contentWidth: width
-        contentHeight: Math.max(height, coluna.implicitHeight + 48)
+        contentHeight: Math.max(height, coluna.implicitHeight + 2 * (compacta ? 24 : 36))
         interactive: contentHeight > height
         boundsBehavior: Flickable.StopAtBounds
         clip: true
@@ -97,10 +126,10 @@ Window {
 
         Column {
             id: coluna
-            x: 24
-            y: Math.max(24, (pagina.height - implicitHeight) / 2)
-            width: pagina.width - 48
-            spacing: 12
+            x: 12
+            y: Math.max(pagina.compacta ? 24 : 36, (pagina.height - implicitHeight) / 2)
+            width: pagina.width - 24
+            spacing: pagina.compacta ? 24 : 36
 
             Image {
                 objectName: "imagem_" + pagina.nome
@@ -111,38 +140,44 @@ Window {
                 width: 128
                 height: 128
             }
-            Text {
+            Icone {
                 objectName: "icone_" + pagina.nome
                 anchors.horizontalCenter: parent.horizontalCenter
-                visible: pagina.glifo !== ""
-                text: pagina.glifo
-                textFormat: Text.PlainText
-                color: Tema.textoSecundario
-                font { family: Tema.fonteDeIcones; pixelSize: 96 }
+                visible: pagina.icone !== ""
+                nome: pagina.icone
+                tamanho: pagina.compacta ? 96 : 128
+                opacity: Tema.opacidadeApagado
             }
-            Text {
-                objectName: "titulo_" + pagina.nome
+            Column {
                 width: parent.width
-                text: pagina.titulo
-                textFormat: Text.PlainText
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.Wrap
-                color: Tema.texto
-                font { family: Tema.fonte; pixelSize: 26; weight: Font.Bold }
-                Accessible.role: Accessible.Heading
-                Accessible.name: text
+                spacing: 12
+                Text {
+                    objectName: "titulo_" + pagina.nome
+                    width: parent.width
+                    text: pagina.titulo
+                    textFormat: Text.PlainText
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
+                    color: Tema.texto
+                    font {
+                        family: Tema.fonte
+                        pixelSize: pagina.compacta ? Tema.titulo2 : Tema.titulo1
+                        weight: pagina.compacta ? Tema.pesoTitulo2 : Tema.pesoTitulo1
+                    }
+                    Accessible.role: Accessible.Heading
+                    Accessible.name: text
+                }
+                Text {
+                    objectName: "descricao_" + pagina.nome
+                    width: parent.width
+                    text: pagina.descricao
+                    textFormat: Text.PlainText
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
+                    color: Tema.texto
+                    font { family: Tema.fonte; pixelSize: Tema.corpo }
+                }
             }
-            Text {
-                objectName: "descricao_" + pagina.nome
-                width: parent.width
-                text: pagina.descricao
-                textFormat: Text.PlainText
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.Wrap
-                color: Tema.texto
-                font { family: Tema.fonte; pixelSize: 15 }
-            }
-            Item { width: 1; height: 12 }
             Column {
                 id: extra
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -152,34 +187,21 @@ Window {
         }
     }
 
-    // O botão sem fundo ("flat").
-    component BotaoPlano: Button {
-        id: plano
-        focusPolicy: Qt.StrongFocus
-        implicitHeight: 36
-        leftPadding: 20
-        rightPadding: 20
-        Keys.onReturnPressed: click()
-        Keys.onEnterPressed: click()
-        contentItem: Text {
-            text: plano.text
-            textFormat: Text.PlainText
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            opacity: plano.enabled ? 1 : 0.5
-            color: Tema.texto
-            font { family: Tema.fonte; pixelSize: 14 }
-        }
-        background: Rectangle {
-            radius: height / 2
-            color: plano.down ? Tema.pressionado : plano.hovered ? Tema.botaoSobre : "transparent"
-            border { width: plano.visualFocus ? 2 : 0; color: Tema.texto }
-        }
+    // A barra do app: sem título, só minimizar e fechar (`Adw.HeaderBar` do `assistente.blp`).
+    BarraDeTitulo {
+        id: barra
+        objectName: "barraDoAssistente"
+        anchors { top: parent.top; left: parent.left; right: parent.right }
+        visible: !raiz.semAgente
+        janela: raiz
+        agente: raiz.agente
+        titulo: ""
+        comMaximizar: false
     }
 
     Item {
         id: fundo
-        anchors.fill: parent
+        anchors { fill: parent; topMargin: raiz.topo }
         enabled: !raiz.modalAberto
 
         Item {
@@ -188,14 +210,32 @@ Window {
             anchors { top: parent.top; left: parent.left; right: parent.right; bottom: rodape.top }
             clip: true
 
+            property real posicao: raiz.modelo.indice
+            property real _de: 0
+            property real _t: 0
+            property int _para: 0
+            readonly property real _w: Math.sqrt(500 / 0.5)
+            // Resposta ao degrau do oscilador crítico: 1 - (1 + wt)e^(-wt).
+            on_TChanged: posicao = _de + (_para - _de) * (1 - (1 + _w * _t) * Math.exp(-_w * _t))
+            NumberAnimation { id: relogioDoCarrossel; target: carrossel; property: "_t"; from: 0; to: 0.5; duration: 500 }
+            Connections {
+                target: raiz.modelo
+                function onIndiceChanged() {
+                    relogioDoCarrossel.stop()
+                    // `animar` já foi relido pelo modelo a esta troca (`animarMudou`).
+                    if (!raiz.modelo.animar) { carrossel.posicao = raiz.modelo.indice; return }
+                    carrossel._de = carrossel.posicao
+                    carrossel._para = raiz.modelo.indice
+                    relogioDoCarrossel.start()
+                }
+            }
+
             // Sem gesto: só os botões trocam de tela. A troca é animada só com as animações do Windows ligadas.
+            // `Adw.Carousel.scroll_to(animate=True)`: mola de amortecimento crítico (massa 0,5, rigidez 500). A posição é em
+            // telas (`posicao`); os pontos a seguem.
             Row {
                 id: fileira
-                x: -raiz.modelo.indice * carrossel.width
-                Behavior on x {
-                    enabled: raiz.modelo.animar
-                    NumberAnimation { duration: Tema.duracaoMedia; easing.type: Easing.OutCubic }
-                }
+                x: -carrossel.posicao * carrossel.width
 
                 Pagina {
                     nome: "boas_vindas"
@@ -224,9 +264,10 @@ Window {
                             text: "Restaurar um backup"
                             onClicked: cargaDoBackup.active ? cargaDoBackup.item.open() : cargaDoBackup.active = true
                         }
-                        BotaoPlano {
+                        Botao {
                             objectName: "botaoPularConfiguracao"
                             anchors.horizontalCenter: parent.horizontalCenter
+                            estilo: "plano"
                             text: "Pular configuração"
                             onClicked: raiz.modelo.concluir()
                         }
@@ -235,7 +276,7 @@ Window {
 
                 Pagina {
                     nome: "jogos"
-                    glifo: ""  // Folder ("folder-symbolic")
+                    icone: "folder"
                     titulo: "Seus jogos"
                     descricao: "O Cartridges adiciona à biblioteca os jogos cujos atalhos estão em uma pasta. Escolha a pasta onde estão, ou onde ficarão, os atalhos dos seus jogos. Novos atalhos colocados nela aparecem na biblioteca sempre que o aplicativo é aberto."
                     primeiro: linhaDaPasta.botaoDaLinha
@@ -271,21 +312,34 @@ Window {
                         width: 120
                         height: 180
 
-                        Image {
-                            objectName: "capaDeExemplo"
+                        // `.capa-de-exemplo`: raio 6 nas duas imagens (máscara; `clip` só corta em retângulo).
+                        Item {
+                            id: mascaraDaCapa
                             anchors.fill: parent
-                            source: raiz.modelo.imagens.capa
-                            sourceSize: Qt.size(240, 360)
-                            opacity: palco.quadro[2]
+                            visible: false
+                            layer.enabled: true
+                            Rectangle { anchors.fill: parent; radius: 6 }
                         }
-                        Image {
-                            objectName: "capaVazia"
-                            x: palco.quadro[0]
-                            width: parent.width
-                            height: parent.height
-                            source: raiz.modelo.imagens.vazia
-                            sourceSize: Qt.size(240, 360)
-                            opacity: palco.quadro[1]
+                        Item {
+                            anchors.fill: parent
+                            layer.enabled: true
+                            layer.effect: MultiEffect { maskEnabled: true; maskSource: mascaraDaCapa; maskThresholdMin: 0.5; maskSpreadAtMin: 1.0 }
+                            Image {
+                                objectName: "capaDeExemplo"
+                                anchors.fill: parent
+                                source: raiz.modelo.imagens.capa
+                                sourceSize: Qt.size(240, 360)
+                                opacity: palco.quadro[2]
+                            }
+                            Image {
+                                objectName: "capaVazia"
+                                x: palco.quadro[0]
+                                width: parent.width
+                                height: parent.height
+                                source: raiz.modelo.imagens.vazia
+                                sourceSize: Qt.size(240, 360)
+                                opacity: palco.quadro[1]
+                            }
                         }
                         NumberAnimation {
                             id: animacao
@@ -328,6 +382,7 @@ Window {
 
                 Pagina {
                     nome: "conquistas"
+                    compacta: true
                     titulo: "Conquistas"
                     descricao: "Entre com as contas das lojas para acompanhar as conquistas dos seus jogos."
 
@@ -364,7 +419,7 @@ Window {
 
                 Pagina {
                     nome: "iluminacao"
-                    glifo: ""  // Brightness ("display-brightness-symbolic")
+                    icone: "display-brightness"
                     titulo: "Iluminação inteligente"
                     descricao: "O Cartridges pode mudar a cor dos seus dispositivos de iluminação compatíveis com a Tuya de acordo com o jogo em execução."
                     primeiro: botaoConfigurar
@@ -380,7 +435,7 @@ Window {
 
                 Pagina {
                     nome: "controle"
-                    glifo: ""  // Game ("input-gaming-symbolic")
+                    icone: "input-gaming"
                     titulo: "Controle"
                     descricao: "O Cartridges pode abrir o Big Picture automaticamente quando um controle é conectado."
 
@@ -398,7 +453,7 @@ Window {
 
                 Pagina {
                     nome: "monitores"
-                    glifo: ""  // TVMonitor ("video-joined-displays-symbolic")
+                    icone: "video-joined-displays"
                     titulo: "Outros monitores"
                     descricao: "Escolha o que o Cartridges faz com os demais monitores ao iniciar um jogo."
 
@@ -434,7 +489,7 @@ Window {
 
                 Pagina {
                     nome: "pronto"
-                    glifo: ""  // CheckMark ("object-select-symbolic")
+                    icone: "object-select"
                     titulo: "Tudo pronto"
                     descricao: "Você pode alterar estas opções a qualquer momento em Preferências."
                     primeiro: botaoAbrirBiblioteca
@@ -458,19 +513,28 @@ Window {
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: 12 }
             spacing: 12
 
+            // `Adw.CarouselIndicatorDots`: o ponto da tela à vista é maior (raio 4 contra 3) e a troca desliza com o carrossel.
             Row {
                 objectName: "pontos"
                 anchors.horizontalCenter: parent.horizontalCenter
-                spacing: 8
+                spacing: 7
+                height: 8
                 Repeater {
                     model: raiz.modelo.paginas.length
-                    Rectangle {
+                    Item {
+                        id: ponto
                         required property int index
-                        width: 7
-                        height: 7
-                        radius: 3.5
-                        color: Tema.texto
-                        opacity: index === raiz.modelo.indice ? 0.9 : 0.3
+                        readonly property real peso: Math.max(0, 1 - Math.abs(carrossel.posicao - index))
+                        width: 6 + 2 * peso
+                        height: 8
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: parent.width
+                            height: width
+                            radius: width / 2
+                            color: Tema.texto
+                            opacity: 0.3 + 0.6 * ponto.peso
+                        }
                     }
                 }
             }
@@ -480,7 +544,7 @@ Window {
                 height: 36
                 visible: raiz.modelo.rodapeVisivel
 
-                BotaoPlano {
+                Botao {
                     objectName: "botaoVoltar"
                     anchors.left: parent.left
                     text: "Voltar"
@@ -489,15 +553,15 @@ Window {
                 Row {
                     anchors.right: parent.right
                     spacing: 6
-                    BotaoPlano {
+                    Botao {
                         objectName: "botaoPular"
                         text: "Pular"
                         onClicked: raiz.modelo.avancar()
                     }
-                    BotaoDoModal {
+                    Botao {
                         objectName: "botaoContinuar"
                         text: "Continuar"
-                        destaque: true
+                        estilo: "sugestao"
                         enabled: raiz.modelo.podeContinuar
                         onClicked: raiz.modelo.avancar()
                     }
@@ -529,5 +593,16 @@ Window {
         id: dialogo
         objectName: "dialogoDoAssistente"
         z: 10
+    }
+
+    // window.csd: o contorno de 1 px da janela sem moldura nativa.
+    Rectangle {
+        anchors.fill: parent
+        z: 1000
+        enabled: false
+        visible: !raiz.semAgente
+        radius: 8
+        color: "transparent"
+        border { width: 1; color: Tema.contorno }
     }
 }

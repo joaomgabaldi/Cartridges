@@ -31,6 +31,7 @@ TITULOS = {
     "creditos": "Créditos",
     "legal": "Aviso legal",
     "problemas": "Solução de problemas",
+    "depuracao": "Informações de depuração",
 }
 DESENVOLVEDOR = "joaomgabaldi"
 COPYRIGHT = "© 2022-2024 kramo\n© 2026 joaomgabaldi"
@@ -218,18 +219,30 @@ class Sobre(QObject):
         if pagina not in TITULOS:
             return
         # O log é lido ao abrir a página, não a cada abertura do diálogo (pode ter megabytes).
-        if pagina == "problemas":
+        if pagina == "depuracao":
             self._depuracao = informacoes_de_depuracao(list(shared.log_files))
         self._pagina = pagina
         self.alterado.emit()
 
     @Slot()
     def voltar(self) -> None:
-        self.irPara("principal")
+        """Uma página para trás: o log volta à "Solução de problemas"; as demais, à principal."""
+        self.irPara("problemas" if self._pagina == "depuracao" else "principal")
 
     @Slot()
     def copiar(self) -> None:
         _area_de_transferencia().setText(self._depuracao)
+        self._avisar_copia()
+
+    @Slot()
+    def copiarVersao(self) -> None:  # noqa: N802
+        """O botão da versão (`about.copy-property`): copia o número e avisa."""
+        _area_de_transferencia().setText(self._versao)
+        self._avisar_copia()
+
+    def _avisar_copia(self) -> None:
+        if self._avisos is not None:
+            self._avisos.adicionar("Copiado para a área de transferência")
 
     @Slot(QUrl)
     def salvar(self, url: QUrl) -> None:

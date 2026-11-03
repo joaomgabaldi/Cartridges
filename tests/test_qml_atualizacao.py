@@ -119,12 +119,12 @@ def test_atualizar_mostra_a_barra_e_cancelar_fecha(janela, download_falso):
     assert janela.achar("tituloDaAtualizacao").property("text") == "Baixando atualização…"
     assert janela.achar("barraDaAtualizacao").property("visible") is True
     assert _achar(dialogo, "botaoAtualizar") is None  # no download, só "Cancelar"
-    assert janela.achar("porcentagemDaAtualizacao").property("text") == "0%"
+    assert janela.achar("porcentagemDaAtualizacao").property("text") == "0 %"
     assert esperar(lambda: janela.achar("botaoCancelarAtualizacao").property("activeFocus") is True)
     assert download_falso == [_RELEASE]
 
     janela.atualizador._atualizar_progresso(0.5, janela.atualizador._cancel)  # noqa: SLF001
-    assert janela.achar("porcentagemDaAtualizacao").property("text") == "50%"
+    assert janela.achar("porcentagemDaAtualizacao").property("text") == "50 %"
     assert janela.achar("barraDaAtualizacao").property("value") == 0.5
 
     _clique(janela, "botaoCancelarAtualizacao")

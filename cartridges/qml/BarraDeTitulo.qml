@@ -15,6 +15,8 @@ Rectangle {
     property bool sombra: false
     // Só minimizar e fechar (`:minimize,close`), como a janela das tarefas.
     property bool comMaximizar: true
+    // Sem o fechar (`:minimize`), como a janela "Restaurando o backup".
+    property bool comFechar: true
     // Os botões da página: `inicio` à esquerda do título, `fim` à direita, antes dos botões do sistema.
     default property alias inicio: areaDoInicio.data
     property alias fim: areaDoFim.data
@@ -32,7 +34,7 @@ Rectangle {
         agente.setTitleBar(barra)
         agente.botaoDeSistema("minimizar", minimizar)
         if (comMaximizar) agente.botaoDeSistema("maximizar", maximizar)
-        agente.botaoDeSistema("fechar", fechar)
+        if (comFechar) agente.botaoDeSistema("fechar", fechar)
     }
 
     // padding 6/7/7/7 da headerbar: o centro do conteúdo fica em 23, não em 23,5.
@@ -84,6 +86,7 @@ Rectangle {
             }
             Botao {
                 id: fechar
+                visible: barra.comFechar
                 icone: "window-close"
                 onClicked: barra.janela.close()
             }

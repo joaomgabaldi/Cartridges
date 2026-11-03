@@ -15,10 +15,14 @@ Window {
     property bool semAgente: false
     readonly property QtObject agente: carga.item
 
+    // O nome de uma tarefa não quebra (`tarefas_janela.py`): um nome longo alarga a janela, com 360 de mínimo (DA-52).
+    property real larguraDoConteudo: 0
+    readonly property real larguraPedida: Math.max(360, larguraDoConteudo + 48)
+
     title: "Tarefas em andamento"
-    width: 360
-    minimumWidth: width
-    maximumWidth: width
+    width: larguraPedida
+    minimumWidth: larguraPedida
+    maximumWidth: larguraPedida
     // Ligadas ao conteúdo, e não ao `height`: o limite lido de volta travaria a janela na altura de antes.
     minimumHeight: alturaPedida
     maximumHeight: alturaPedida
@@ -47,12 +51,21 @@ Window {
             agente.setWindowAttribute("dark-mode", Tema.escuro)
             barra.ligarAgente()
         }
-        width = 360
-        minimumWidth = 360
-        maximumWidth = 360
+        width = Qt.binding(() => larguraPedida)
+        minimumWidth = Qt.binding(() => larguraPedida)
+        maximumWidth = Qt.binding(() => larguraPedida)
         height = Qt.binding(() => alturaPedida)
         minimumHeight = Qt.binding(() => alturaPedida)
         maximumHeight = Qt.binding(() => alturaPedida)
+    }
+
+    function medir() {
+        var maior = 0
+        for (var i = 0; i < repetidor.count; ++i) {
+            var bloco = repetidor.itemAt(i)
+            if (bloco) maior = Math.max(maior, bloco.larguraDoNome)
+        }
+        larguraDoConteudo = maior
     }
 
     // A superfície e a altura da moldura só existem depois do primeiro quadro.
@@ -108,7 +121,10 @@ Window {
         spacing: 18
 
         Repeater {
+            id: repetidor
             model: painelDasTarefas.lista
+            onItemAdded: raiz.medir()
+            onItemRemoved: raiz.medir()
             delegate: Column {
                 id: bloco
                 required property string nome
@@ -116,14 +132,17 @@ Window {
                 required property int total
                 width: conteudo.width
                 spacing: 6
+                readonly property real larguraDoNome: nomeDaTarefa.implicitWidth
 
                 Text {
+                    id: nomeDaTarefa
                     objectName: "nomeDaTarefa"
                     readonly property bool textoPuro: textFormat === Text.PlainText
                     width: parent.width
                     text: bloco.nome
                     textFormat: Text.PlainText
-                    wrapMode: Text.Wrap
+                    wrapMode: Text.NoWrap
+                    onImplicitWidthChanged: raiz.medir()
                     color: Tema.texto
                     font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
                 }
@@ -148,6 +167,8 @@ Window {
 
         Text {
             objectName: "avisoDeVazio"
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
             visible: painelDasTarefas.quantas === 0
             text: "Nenhuma tarefa em andamento"
             textFormat: Text.PlainText

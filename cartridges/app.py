@@ -425,9 +425,19 @@ def _acordar(abertura: _Abertura) -> None:
                 janela.requestActivate()
 
 
+def _com_barra_propria(motor: QQmlApplicationEngine) -> None:
+    """As janelas da abertura (restauração e assistente) têm a barra do app, como a `Adw.HeaderBar` da `main`: o QWindowKit
+    e a marca `comAgente` no contexto. Os testes carregam o QML sem isto e ficam com a moldura de uma janela comum."""
+    from cartridges.janela import qwk  # noqa: PLC0415
+
+    qwk.registrar(motor)
+    motor.rootContext().setContextProperty("comAgente", True)
+
+
 def _janela_da_restauracao() -> QQmlApplicationEngine:
     """A janela "Restaurando o backup" num motor próprio, com o `Restaurando` (filho do motor) no contexto."""
     motor = QQmlApplicationEngine()
+    _com_barra_propria(motor)
     motor.addImageProvider("icone", ProvedorDeIcones())
     restaurando = Restaurando(motor)
     motor.rootContext().setContextProperty("restaurando", restaurando)
@@ -527,6 +537,7 @@ def _mostrar_assistente(app: AplicacaoQt, argv: list[str], abertura: _Abertura, 
             fechar_a_janela()
 
     abertura.assistente = motor = QQmlApplicationEngine()
+    _com_barra_propria(motor)
     motor.addImageProvider("icone", ProvedorDeIcones())
     modelo = assistente.Assistente(ao_terminar, ao_restaurar, parent=motor)
     motor.rootContext().setContextProperty("assistente", modelo)

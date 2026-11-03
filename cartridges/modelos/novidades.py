@@ -115,10 +115,8 @@ class Novidades(QObject):
     def paginaVisivel(self, visivel: bool) -> None:  # noqa: N802
         self._pagina_a_vista = visivel
         if visivel:
+            # Só os posts novos refazem a lista (`_ao_mudar_os_posts`): refazê-la aqui recolheria as linhas abertas (DA-37).
             self._checker.mark_seen()
-            # As datas relativas envelhecem com o app aberto.
-            if self._refazer():
-                self.alterado.emit()
 
     @Slot()
     def atualizar(self) -> None:

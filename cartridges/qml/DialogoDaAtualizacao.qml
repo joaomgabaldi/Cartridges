@@ -60,24 +60,25 @@ DialogoDeAlerta {
         }
     }
 
+    // `Gtk.ProgressBar(show_text=True)`: o texto da barra ("42 %", `font-size: smaller`, apagado) fica acima do trilho de 8 px.
     Column {
         width: parent.width
         spacing: 6
         visible: dialogo.baixando
 
+        Text {
+            objectName: "porcentagemDaAtualizacao"
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: Math.round((dialogo.atualizador ? dialogo.atualizador.progresso : 0) * 100) + " %"
+            textFormat: Text.PlainText
+            color: Tema.textoSecundario
+            font { family: Tema.fonte; pixelSize: Tema.legenda }
+        }
         BarraDeProgresso {
             objectName: "barraDaAtualizacao"
             width: parent.width
             value: dialogo.atualizador ? dialogo.atualizador.progresso : 0
             corDaTrilha: Tema.botaoSobre
-        }
-        Text {
-            objectName: "porcentagemDaAtualizacao"
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: Math.round((dialogo.atualizador ? dialogo.atualizador.progresso : 0) * 100) + "%"
-            textFormat: Text.PlainText
-            color: Tema.textoSecundario
-            font { family: Tema.fonte; pixelSize: Tema.corpo }
         }
     }
 }

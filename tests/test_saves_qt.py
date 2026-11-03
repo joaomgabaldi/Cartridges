@@ -332,6 +332,12 @@ class _Janela:
         assert objeto is not None, f"sem objeto {nome!r}"
         return objeto
 
+    def fechar_das_versoes(self):
+        """O X do cabeçalho do diálogo (o mesmo nome existe em outros diálogos)."""
+        objeto = _achar(self.achar("dialogoDeVersoes"), "fecharDoCabecalho")
+        assert objeto is not None, "sem o X do diálogo das versões"
+        return objeto
+
     def dentro_da_confirmacao(self, nome):
         objeto = _achar(self.achar("confirmacaoDoApp"), nome)
         assert objeto is not None, f"sem objeto {nome!r} na confirmação"
@@ -423,7 +429,7 @@ def test_dialogo_lista_versoes_mais_recente_primeiro(janela_dos_saves, versoes):
     assert janela.achar("alvoDeSoltar").property("enabled") is False
     assert janela.achar("pagina").property("enabled") is False
     assert janela.achar("botaoBusca").property("enabled") is False
-    assert _esperar(lambda: janela.achar("botaoFecharDasVersoes").property("activeFocus") is True)
+    assert _esperar(lambda: janela.fechar_das_versoes().property("activeFocus") is True)
 
 
 def test_versoes_e_confirmacao_em_texto_puro(janela_dos_saves, monkeypatch):
@@ -431,8 +437,8 @@ def test_versoes_e_confirmacao_em_texto_puro(janela_dos_saves, monkeypatch):
     assert janela.saves.abrir("imported_1")
     _esperar(lambda: janela.achar("dialogoDeVersoes").property("visible") is True)
     for linha in janela.linhas():
-        for nome in ("tituloDaVersao", "subtituloDaVersao"):
-            assert _avaliar(_achar(linha, nome), "textFormat === Text.PlainText") is True
+        for sufixo in ("Titulo", "Subtitulo"):
+            assert _avaliar(_achar(linha, linha.objectName() + sufixo), "textFormat === Text.PlainText") is True
     # A segunda linha em ordem decrescente é a incompleta: o texto de fora (o nome do jogo) nunca é interpretado.
     QMetaObject.invokeMethod(janela.linhas()[1], "click", Qt.ConnectionType.DirectConnection)
     confirmacao = janela.achar("confirmacaoDoApp")
@@ -539,7 +545,7 @@ def test_esc_fecha_e_o_foco_volta_ao_cartao(janela_dos_saves):
     QMetaObject.invokeMethod(janela.achar("itemRestaurarSave"), "click", Qt.ConnectionType.DirectConnection)
     dialogo = janela.achar("dialogoDeVersoes")
     assert _esperar(lambda: dialogo.property("visible") is True)
-    assert _esperar(lambda: janela.achar("botaoFecharDasVersoes").property("activeFocus") is True)
+    assert _esperar(lambda: janela.fechar_das_versoes().property("activeFocus") is True)
 
     QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
 
@@ -552,7 +558,7 @@ def test_tab_circula_dentro_do_dialogo_das_versoes(janela_dos_saves):
     janela = janela_dos_saves()
     janela.saves.abrir("imported_1")
     _esperar(lambda: janela.achar("dialogoDeVersoes").property("visible") is True)
-    botao = janela.achar("botaoFecharDasVersoes")
+    botao = janela.fechar_das_versoes()
     assert _esperar(lambda: botao.property("activeFocus") is True)
     linhas = janela.linhas()
     for esperado in (*linhas, botao):  # X -> v3 -> v2 -> v1 -> X
@@ -589,7 +595,7 @@ def test_fechar_as_versoes_devolve_o_foco_a_grade(janela_dos_saves):
 
     assert janela.saves.abrir("imported_1") is True
     dialogo = janela.achar("dialogoDeVersoes")
-    assert _esperar(lambda: janela.achar("botaoFecharDasVersoes").property("activeFocus") is True)
+    assert _esperar(lambda: janela.fechar_das_versoes().property("activeFocus") is True)
     QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
 
     assert _esperar(lambda: dialogo.property("visible") is False)

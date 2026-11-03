@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Callable
+import threading
+from typing import Any, Callable
 
 from cartridges.jogo import Jogo
 from cartridges.modelos.biblioteca import ModeloDaBiblioteca
@@ -23,8 +24,20 @@ class ExibicaoManager(Manager):
         self.modelo = modelo
         self.ao_ver = ao_ver
 
+    def process_game(self, game: Jogo, additional_data: dict, callback: Callable[[Manager], Any]) -> None:
+        """Roda a exibição na thread principal e só então deixa o pipeline avançar (como o `DisplayManager` da `main`):
+        o fim da importação não pode passar à frente do último jogo entrar na grade (B17)."""
+        if threading.current_thread() is threading.main_thread():
+            super().process_game(game, additional_data, callback)
+            return
+        na_thread_principal(super().process_game, game, additional_data, callback)
+
     def main(self, game: Jogo, _additional_data: dict) -> None:
-        na_thread_principal(self._ver, game)
+        # Já na principal (o pipeline subiu até lá em `process_game`): na hora. De fora (`save`), pela ponte.
+        if threading.current_thread() is threading.main_thread():
+            self._ver(game)
+        else:
+            na_thread_principal(self._ver, game)
 
     def _ver(self, jogo: Jogo) -> None:
         if self.ao_ver is not None:

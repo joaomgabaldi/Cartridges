@@ -1,8 +1,11 @@
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Layouts
 
 // "Jogos sem atalho": a lista dos jogos restaurados cujo atalho não foi achado, com "Escolher atalho…" e "Excluir" em
-// cada um (D81). Só desenha: a lista e as ações são do `restauracao`. Esc vale "Lembrar mais tarde".
+// cada um (D81). Só desenha: a lista e as ações são do `restauracao`. Esc vale "Lembrar mais tarde". Como `JanelaPendentes`
+// da `main`: o texto centrado, a nota apagada com o ícone, uma `boxed-list` de `ActionRow` (capa 32x48 no início, os dois
+// botões no fim) e o botão em pílula.
 ModalDaRestauracao {
     id: dialogo
     objectName: "dialogoDosPendentes"
@@ -19,18 +22,18 @@ ModalDaRestauracao {
         text: "Os atalhos dos jogos abaixo não foram encontrados."
         textFormat: Text.PlainText
         wrapMode: Text.Wrap
+        horizontalAlignment: Text.AlignHCenter
         color: Tema.texto
-        font { family: Tema.fonte; pixelSize: 14 }
+        font { family: Tema.fonte; pixelSize: Tema.corpo }
     }
+    // A nota inteira é `dim-label`: o ícone e o texto.
     Row {
         width: parent.width
         spacing: 10
-        Text {
+        Icone {
             id: iconeDaNota
-            text: ""  // informação
-            textFormat: Text.PlainText
-            color: Tema.textoSecundario
-            font { family: Tema.fonteDeIcones; pixelSize: 16 }
+            nome: "dialog-information"
+            cor: Tema.textoSecundario
         }
         Text {
             objectName: "recomendacaoDosPendentes"
@@ -39,87 +42,90 @@ ModalDaRestauracao {
             textFormat: Text.PlainText
             wrapMode: Text.Wrap
             color: Tema.textoSecundario
-            font { family: Tema.fonte; pixelSize: 13 }
+            font { family: Tema.fonte; pixelSize: Tema.corpo }
         }
     }
-    ListView {
+    // `ScrolledWindow` com `max_content_height=420`.
+    Flickable {
         id: lista
         objectName: "listaDosPendentes"
         width: parent.width
-        height: Math.min(contentHeight, 420)
+        height: Math.min(grupo.implicitHeight, 420)
         // Travada enquanto a importação de uma escolha de atalho roda.
         enabled: !restauracao.listaTravada
-        model: restauracao.pendentes
-        spacing: 6
+        contentHeight: grupo.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: BarraDeRolagem {}
 
-        delegate: Rectangle {
-            id: linha
-            required property var modelData
-            objectName: "pendente-" + modelData.id
-            width: ListView.view.width
-            height: 72
-            radius: 6
-            color: Tema.superficie
-            border.color: Tema.borda
+        GrupoDeLinhas {
+            id: grupo
+            width: lista.width
+            visible: true  // criado com o diálogo escondido, mediria zero para sempre
+            Repeater {
+                model: restauracao.pendentes
+                delegate: LinhaDoGrupo {
+                    id: linha
+                    required property var modelData
+                    objectName: "pendente-" + modelData.id
+                    comTextos: false
+                    alturaMinima: Math.max(50, conteudo.implicitHeight + 12)
 
-            Rectangle {
-                id: capa
-                anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
-                width: 32
-                height: 48
-                radius: 4
-                color: Tema.botaoSobre
-                clip: true
-                Image {
-                    anchors.fill: parent
-                    source: linha.modelData.capa
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    sourceSize: Qt.size(64, 96)
-                }
-            }
-            Column {
-                anchors {
-                    left: capa.right; leftMargin: 12; right: botoes.left; rightMargin: 12
-                    verticalCenter: parent.verticalCenter
-                }
-                spacing: 2
-                Text {
-                    objectName: "nomeDoPendente"
-                    width: parent.width
-                    text: linha.modelData.nome
-                    textFormat: Text.PlainText
-                    elide: Text.ElideRight
-                    color: Tema.texto
-                    font { family: Tema.fonte; pixelSize: 14 }
-                }
-                Text {
-                    objectName: "tempoDoPendente"
-                    width: parent.width
-                    text: linha.modelData.tempo
-                    textFormat: Text.PlainText
-                    elide: Text.ElideRight
-                    color: Tema.textoSecundario
-                    font { family: Tema.fonte; pixelSize: 12 }
-                }
-            }
-            Row {
-                id: botoes
-                anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
-                spacing: 8
-                BotaoDoModal {
-                    objectName: "botaoEscolherAtalho"
-                    text: "Escolher atalho…"
-                    onClicked: restauracao.escolherAtalho(linha.modelData.id)
-                }
-                BotaoDoModal {
-                    objectName: "botaoExcluirPendente"
-                    text: "Excluir"
-                    perigo: true
-                    onClicked: restauracao.excluir(linha.modelData.id)
+                    RowLayout {
+                        id: conteudo
+                        anchors {
+                            left: parent.left; leftMargin: 14
+                            right: parent.right; rightMargin: 14
+                            verticalCenter: parent.verticalCenter; verticalCenterOffset: linha._separador / 2
+                        }
+                        spacing: 12
+
+                        ModalDaRestauracao.Capa {
+                            Layout.alignment: Qt.AlignVCenter
+                            fonte: linha.modelData.capa
+                        }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                            spacing: 3
+                            // O título da linha quebra (não é cortado com "…").
+                            Text {
+                                objectName: "nomeDoPendente"
+                                Layout.fillWidth: true
+                                text: linha.modelData.nome
+                                textFormat: Text.PlainText
+                                wrapMode: Text.Wrap
+                                lineHeightMode: Text.FixedHeight
+                                lineHeight: Tema.alturaDoCorpo
+                                color: Tema.texto
+                                font { family: Tema.fonte; pixelSize: Tema.corpo }
+                            }
+                            Text {
+                                objectName: "tempoDoPendente"
+                                Layout.fillWidth: true
+                                text: linha.modelData.tempo
+                                textFormat: Text.PlainText
+                                wrapMode: Text.Wrap
+                                lineHeightMode: Text.FixedHeight
+                                lineHeight: Tema.alturaDaLegenda
+                                color: Tema.textoSecundario
+                                font { family: Tema.fonte; pixelSize: Tema.legenda }
+                            }
+                        }
+                        Botao {
+                            objectName: "botaoEscolherAtalho"
+                            Layout.alignment: Qt.AlignVCenter
+                            text: "Escolher atalho…"
+                            onClicked: restauracao.escolherAtalho(linha.modelData.id)
+                        }
+                        Botao {
+                            objectName: "botaoExcluirPendente"
+                            Layout.alignment: Qt.AlignVCenter
+                            text: "Excluir"
+                            estilo: "destrutivo"
+                            onClicked: restauracao.excluir(linha.modelData.id)
+                        }
+                    }
                 }
             }
         }

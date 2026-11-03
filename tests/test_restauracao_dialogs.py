@@ -617,7 +617,7 @@ def test_pedir_pasta_esc_e_x_nao_fecham(janela, schema):
     botao = j.achar("botaoEscolherPasta", dialogo)
     assert botao.property("text") == "Escolher pasta…"
     assert _esperar(lambda: botao.property("activeFocus") is True)
-    assert j.achar("botaoFecharDoModal", dialogo).property("visible") is False  # sem X
+    assert j.achar("fecharDoCabecalho", dialogo).property("visible") is False  # sem X
     assert j.achar("alvoDeSoltar").property("enabled") is False
 
     QTest.keyClick(j.janela, Qt.Key.Key_Escape)
@@ -705,8 +705,8 @@ def test_escolha_do_atalho_lista_candidatos_em_texto_puro(janela, store, make_ga
     assert _esperar(lambda: dialogo.property("visible") is True)
 
     assert dialogo.property("titulo") == "Tom & <b>Jerry</b>"
-    titulo = j.achar("tituloDoCandidato")
-    subtitulo = j.achar("subtituloDoCandidato")
+    titulo = j.achar("candidato-0Titulo")
+    subtitulo = j.achar("candidato-0Subtitulo")
     assert titulo.property("text") == "<Jogo> & 2"
     assert subtitulo.property("text") == "<Jogo> & 2.lnk"
     assert _puro(titulo)
@@ -741,7 +741,7 @@ def test_esc_fecha_so_a_escolha_e_o_foco_volta(janela, store, make_game, monkeyp
     escolher.forceActiveFocus(Qt.FocusReason.TabFocusReason)
     _clicar(escolher)
     assert _esperar(lambda: j.visivel("dialogoDaEscolhaDoAtalho"))
-    assert _esperar(lambda: j.achar("candidato-0").property("activeFocus") is True)
+    assert _esperar(lambda: j.achar("candidato-0Botao").property("activeFocus") is True)
 
     QTest.keyClick(j.janela, Qt.Key.Key_Escape)
 
@@ -757,7 +757,7 @@ def test_tab_circula_dentro_dos_pendentes(janela, store, make_game):
     j.restauracao.mostrarPendentes()
     assert _esperar(lambda: j.visivel("dialogoDosPendentes"))
     dialogo = j.achar("dialogoDosPendentes")
-    nomes = ("botaoFecharDoModal", "botaoEscolherAtalho", "botaoExcluirPendente", "botaoLembrarDepois")
+    nomes = ("fecharDoCabecalho", "botaoEscolherAtalho", "botaoExcluirPendente", "botaoLembrarDepois")
     sequencia = [j.achar(n, dialogo) for n in nomes]
     assert _esperar(lambda: sequencia[-1].property("activeFocus") is True)  # o foco inicial
     for esperado in sequencia:  # ... -> X -> Escolher -> Excluir -> Lembrar
