@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QMetaObject, QPointF, Qt, QUrl
+from PySide6.QtTest import QTest
 
 from cartridges import app as modulo_app
 from cartridges import assistente as modulo
@@ -906,3 +907,22 @@ def test_concluir_durante_a_preparacao_e_recusado_e_o_backup_restaura_uma_vez(mo
     assert restaurou == [1] and terminou == []
     assistente._backup_preparado("ok")  # noqa: SLF001  # um resultado repetido depois da saída não restaura de novo
     assert restaurou == [1]
+
+
+def test_anel_de_foco_so_aparece_com_o_teclado(janela):
+    """DA-06 (I4): aberto e avançado com o mouse, o primeiro controle de cada tela não mostra o anel; pelo teclado, sim."""
+    comecar = janela.achar("botaoComecar")
+    assert esperar(lambda: comecar.property("activeFocus") is True)
+    assert comecar.property("visualFocus") is False  # aberto sem teclado: sem anel
+    _clicar(comecar)  # o clique do mouse
+    pasta = janela.achar("linhaDaPastaBotao")
+    assert esperar(lambda: pasta.property("activeFocus") is True)
+    assert pasta.property("visualFocus") is False
+
+    janela.modelo.voltar()
+    assert esperar(lambda: comecar.property("activeFocus") is True)
+    janela.achar("botaoRestaurar").forceActiveFocus(Qt.FocusReason.TabFocusReason)  # o teclado entra em uso
+    comecar.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(janela.raiz, Qt.Key.Key_Return)
+    assert esperar(lambda: pasta.property("activeFocus") is True)
+    assert pasta.property("visualFocus") is True

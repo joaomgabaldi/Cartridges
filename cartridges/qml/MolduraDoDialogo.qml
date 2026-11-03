@@ -26,6 +26,8 @@ FocusScope {
     property bool setasMovemOFoco: false
     // Uma página rolável: com ela, ↑/↓ rolam quando o vizinho do Tab fica fora dela (nada a que ir) e PgUp/PgDn rolam sempre.
     property Flickable rolagemDasSetas: null
+    // Alt seguro: os mnemônicos aparecem sublinhados (`gtk-enable-mnemonics` da `main`).
+    property bool altSegurado: false
     property Item focoInicial: null
     property string nomeAcessivel: ""
     default property alias conteudo: coluna.data
@@ -124,6 +126,7 @@ FocusScope {
     onHeightChanged: if (visible) Qt.callLater(_cobrir)
 
     onAbertoChanged: {
+        altSegurado = false
         if (aberto) {
             // Reaberto no meio da saída, ou com o foco em lugar nenhum: o retorno de antes continua valendo.
             const foco = Window.window ? Window.window.activeFocusItem : null
@@ -144,18 +147,33 @@ FocusScope {
 
     Keys.onEscapePressed: if (fechavel) fecharPedido()
     // Modal para o teclado e o controle: nenhuma tecla chega à página de trás. O Tab passa, para circular.
+    Keys.onReleased: event => { if (event.key === Qt.Key_Alt) altSegurado = false }
     Keys.onPressed: event => {
+        if (event.key === Qt.Key_Alt) altSegurado = true
         const r = rolagemDasSetas
         if (r && (event.key === Qt.Key_PageUp || event.key === Qt.Key_PageDown))
             r.contentY = Math.max(0, Math.min(r.contentHeight - r.height, r.contentY + (event.key === Qt.Key_PageUp ? -r.height : r.height)))
         if (setasMovemOFoco && (event.key === Qt.Key_Down || event.key === Qt.Key_Up)) {
             const adiante = event.key === Qt.Key_Down
             const foco = Window.window ? Window.window.activeFocusItem : null
-            const alvo = foco ? foco.nextItemInFocusChain(adiante) : null
-            let naPagina = false
-            for (let p = alvo; r && p; p = p.parent) if (p === r.contentItem) naPagina = true
-            if (r && !naPagina) r.contentY = Math.max(0, Math.min(r.contentHeight - r.height, r.contentY + (adiante ? 40 : -40)))
-            else if (alvo && dentro(alvo)) alvo.forceActiveFocus(adiante ? Qt.TabFocusReason : Qt.BacktabFocusReason)
+            if (!r) {
+                const vizinho = foco ? foco.nextItemInFocusChain(adiante) : null
+                if (vizinho && dentro(vizinho)) vizinho.forceActiveFocus(adiante ? Qt.TabFocusReason : Qt.BacktabFocusReason)
+            } else {
+                // Com uma página rolável: anda a cadeia até o primeiro controle que esteja de fato abaixo (↓) ou acima (↑) do
+                // foco, sem dar a volta; se não há, rola a página.
+                const yDe = item => item.mapToItem(null, 0, 0).y
+                const y0 = foco ? yDe(foco) : 0
+                let alvo = foco
+                let achou = null
+                for (let i = 0; foco && i < 100; ++i) {
+                    alvo = alvo.nextItemInFocusChain(adiante)
+                    if (!alvo || alvo === foco) break
+                    if (dentro(alvo) && (adiante ? yDe(alvo) > y0 + 1 : yDe(alvo) < y0 - 1)) { achou = alvo; break }
+                }
+                if (achou) achou.forceActiveFocus(adiante ? Qt.TabFocusReason : Qt.BacktabFocusReason)
+                else r.contentY = Math.max(0, Math.min(r.contentHeight - r.height, r.contentY + (adiante ? 40 : -40)))
+            }
         }
         event.accepted = event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab
     }

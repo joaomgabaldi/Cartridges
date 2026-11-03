@@ -416,3 +416,18 @@ def test_aviso_e_contorno_ficam_abaixo_do_dialogo_interno(app, fitas_espiadas): 
 
 
 # endregion
+
+
+def test_alerta_do_app_fica_na_frente_das_preferencias_e_responde_ao_clique(app, fitas_espiadas):  # noqa: ARG001
+    """I6: a camada dos avisos (z 20) fica acima das molduras (z 10): com as Preferências abertas, o clique real no botão do
+    alerta o alcança e o fecha. Antes (z 0) o clique caía nas Preferências e o alerta ficava preso."""
+    _abrir(app, "session")
+    fechados = []
+    app.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: fechados.append(1))
+    dialogo = app.achar("dialogoDeErros")
+    assert _esperar(lambda: dialogo.property("visible") is True)
+    botao = _achar(dialogo, "botaoDoDialogo")
+    assert app.achar("camadaDeAvisos").property("z") > app.achar("dialogoDePreferencias").property("z")
+    _clicar(app, botao)
+    assert _esperar(lambda: dialogo.property("visible") is False)
+    assert fechados == [1]

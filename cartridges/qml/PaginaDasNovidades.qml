@@ -127,6 +127,10 @@ Item {
             // Sem resumo nem link não há o que abrir: a linha é simples, sem seta.
             readonly property bool expansivel: modelData.resumo !== "" || modelData.url !== ""
             property bool aberta: false
+            // A linha expandida mora no `novidades`: a página é destruída ao voltar (DA-37).
+            readonly property string chave: modelData.url + "|" + modelData.titulo
+            Component.onCompleted: aberta = novidades.estaAberta(chave)
+            onAbertaChanged: novidades.definirAberta(chave, aberta)
             readonly property bool _comResumo: modelData.resumo !== ""
             readonly property bool _comLink: modelData.url !== ""
             // Cabeçalho: título e subtítulo (que quebram) em 50 no mínimo, mais os 4 de respiro.

@@ -25,8 +25,6 @@ MolduraDoDialogo {
     aberto: !!modelo && modelo.aberto
     largura: 360
     setasMovemOFoco: true
-    // Abaixo da camada dos avisos (declarada depois): a confirmação e o erro abrem por cima, como antes da moldura (`z` 10).
-    z: 0
     rolagemDasSetas: rolagem
     focoInicial: linhaNovidades.aparece ? linhaNovidades.botaoDaLinha : linhaCreditos.botaoDaLinha
     nomeAcessivel: "Sobre o Cartridges"
@@ -63,15 +61,29 @@ MolduraDoDialogo {
         onLoaded: item.open()
     }
 
-    // Uma linha da página principal (`AdwActionRow` com `go-next`); Alt+`mnemonico` a abre.
+    // Uma linha da página principal (`AdwActionRow` com `go-next`); Alt+`mnemonico` a abre. O mnemônico é a primeira letra
+    // do título (`_Novidades`, `main.py:129`) e aparece sublinhado enquanto o Alt está seguro.
     component LinhaDoSobre: LinhaDeAcao {
         id: linha
         property string destino
         property string mnemonico
         titulo: dialogo.modelo ? dialogo.modelo.titulos[destino] : ""
         icone: "go-next"
+        comTextos: false
         function click() { botaoDaLinha.click() }
         onAcionada: dialogo.modelo.irPara(destino)
+        Text {
+            objectName: linha.objectName + "Rotulo"
+            anchors { left: parent.left; leftMargin: 14; right: parent.right; rightMargin: 14 + 16 + 12; verticalCenter: parent.verticalCenter; verticalCenterOffset: linha._separador / 2 }
+            // O título vem do modelo (texto do app); o StyledText só serve ao sublinhado.
+            text: dialogo.altSegurado ? "<u>" + linha.titulo.charAt(0) + "</u>" + linha.titulo.slice(1) : linha.titulo
+            textFormat: dialogo.altSegurado ? Text.StyledText : Text.PlainText
+            elide: Text.ElideRight
+            lineHeightMode: Text.FixedHeight
+            lineHeight: Tema.alturaDoCorpo
+            color: Tema.texto
+            font { family: Tema.fonte; pixelSize: Tema.corpo }
+        }
         Shortcut {
             sequence: "Alt+" + linha.mnemonico
             enabled: dialogo.visible && dialogo.pagina === (destino === "depuracao" ? "problemas" : "principal") && linha.visible
@@ -382,7 +394,7 @@ MolduraDoDialogo {
                     Layout.fillWidth: true
                     Layout.bottomMargin: 18
                     visible: true
-                    LinhaDoSobre { id: linhaDepuracao; objectName: "linhaDepuracao"; destino: "depuracao"; mnemonico: "D" }
+                    LinhaDoSobre { id: linhaDepuracao; objectName: "linhaDepuracao"; destino: "depuracao"; mnemonico: "I" }
                 }
             }
 
@@ -431,6 +443,7 @@ MolduraDoDialogo {
             objectName: "botaoCopiarTexto"
             anchors { left: parent.left; leftMargin: 6; verticalCenter: parent.verticalCenter }
             text: "Copiar texto"
+            sublinharPrimeira: dialogo.altSegurado
             onClicked: dialogo.modelo.copiar()
             Shortcut { sequence: "Alt+C"; enabled: barraDeAcoes.visible; onActivated: botaoCopiar.click() }
         }
@@ -439,6 +452,7 @@ MolduraDoDialogo {
             objectName: "botaoSalvarComo"
             anchors { right: parent.right; rightMargin: 6; verticalCenter: parent.verticalCenter }
             text: "Salvar como…"
+            sublinharPrimeira: dialogo.altSegurado
             onClicked: { if (cargaDoSalvar.item) cargaDoSalvar.item.open(); else cargaDoSalvar.active = true }
             Shortcut { sequence: "Alt+S"; enabled: barraDeAcoes.visible; onActivated: botaoSalvar.click() }
         }

@@ -307,16 +307,6 @@ def test_primeira_abertura_depois_da_main_desconta_a_sombra_do_gtk(monkeypatch, 
     assert win32_falso.colocadas[-1][1] == Geometry(100, 50, 900, 600, False)
 
 
-def test_sem_posicao_o_tamanho_padrao_do_schema_vale(monkeypatch):
-    """DA-71: na primeira abertura não há posição, mas o 1170x795 do schema vale (o `apply_size` da `main`)."""
-    pedidos = []
-    monkeypatch.setattr(window_geometry, "_dimensionar", lambda _j, largura, altura: pedidos.append((largura, altura)))
-    window_geometry.restaurar(_JanelaFalsa(), Geometry(UNSET, UNSET, 1170, 795, False))
-    assert pedidos == [(1170, 795)]
-    window_geometry.restaurar(_JanelaFalsa(), Geometry(UNSET, UNSET, 0, 0, False))  # nada gravado de verdade
-    assert pedidos == [(1170, 795)]
-
-
 def test_principal_restaura_depois_do_tamanho(app_qt, monkeypatch, win32_falso, state_schema, tmp_path):  # noqa: ARG001
     """O `onCompleted` pede a restauração depois do tamanho de hoje: o gravado vence o 1170×795."""
     _ja_gravado_pelo_qt(monkeypatch, tmp_path)

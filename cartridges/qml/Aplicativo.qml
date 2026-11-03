@@ -520,6 +520,9 @@ Principal {
     Avisos {
         id: camadaDeAvisos
         objectName: "camadaDeAvisos"
+        // Acima de toda moldura (`z` 10): a pergunta da atualização e as confirmações abrem na frente das Preferências, da
+        // edição etc., como o `Adw.Dialog.present` da `main`.
+        z: 20
         onRetornoPerdido: janela.paginaDoControle.focarGrade()
         anchors.fill: parent
         ponte: janela.ligacao

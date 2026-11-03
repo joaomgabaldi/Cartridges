@@ -47,13 +47,17 @@ Window {
 
     // O foco do teclado acompanha a tela: quem o tinha pode ter sumido (a tela saiu da vista, o rodapé escondeu, um
     // modal fechou com o fundo desabilitado e o devolveu à janela). Aí ele vai ao primeiro controle da tela.
+    // O anel só aparece se o teclado já estava em uso (`:focus-visible`, DA-06): lembra se o último foco veio dele.
+    property bool _teclado: false
+    onActiveFocusItemChanged: if (activeFocusItem && activeFocusItem !== contentItem) _teclado = activeFocusItem.visualFocus === true
+
     function recuperarFoco() {
         if (raiz.modalAberto) return
         var foco = raiz.activeFocusItem
         if (foco && foco !== raiz.contentItem && foco.visible && foco.enabled) return
         for (var i = 0; i < fileira.children.length; ++i) {
             var pagina = fileira.children[i]
-            if (pagina.nome === raiz.paginaAtual && pagina.primeiro) pagina.primeiro.forceActiveFocus(Qt.TabFocusReason)
+            if (pagina.nome === raiz.paginaAtual && pagina.primeiro) pagina.primeiro.forceActiveFocus(raiz._teclado ? Qt.TabFocusReason : Qt.OtherFocusReason)
         }
     }
     onPaginaAtualChanged: Qt.callLater(raiz.recuperarFoco)

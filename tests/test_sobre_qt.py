@@ -499,3 +499,79 @@ def test_anel_de_foco_so_aparece_com_o_teclado_ao_trocar_de_pagina(janela):
     QTest.keyClick(janela.janela, Qt.Key.Key_Return)
     assert esperar(lambda: janela.sobre.pagina == "creditos")
     assert esperar(lambda: voltar.property("visualFocus") is True)
+
+
+def test_clique_real_no_botao_da_versao_copia_o_numero_e_avisa(janela, area):
+    """I7 (DA-23): o gesto de verdade, o clique do mouse no botão da versão."""
+    _abrir(janela)
+    _clique_real(janela, "botaoDaVersao")
+    assert area.texto == "2026.10.26"
+    assert janela.ponte.fila.texto == "Copiado para a área de transferência"
+
+
+def test_alt_mais_letra_abre_as_linhas_e_aciona_os_botoes(janela, area):
+    """I5 e I7 (DA-30): os mnemônicos da `main` (N, S, C, A; I no log; C e S na barra do log), pelo teclado."""
+    alt = Qt.KeyboardModifier.AltModifier
+    for tecla, pagina in ((Qt.Key.Key_N, "novidades"), (Qt.Key.Key_S, "problemas"), (Qt.Key.Key_C, "creditos"), (Qt.Key.Key_A, "legal")):
+        _abrir(janela)
+        QTest.keyClick(janela.janela, tecla, alt)
+        assert esperar(lambda pagina=pagina: janela.sobre.pagina == pagina), pagina
+        janela.sobre.fechar()
+        assert esperar(lambda: janela.achar("dialogoSobre").property("visible") is False)
+    _abrir(janela)
+    QTest.keyClick(janela.janela, Qt.Key.Key_S, alt)
+    assert esperar(lambda: janela.sobre.pagina == "problemas")
+    QTest.keyClick(janela.janela, Qt.Key.Key_I, alt)  # "Informações de depuração": a primeira letra, como na `main`
+    assert esperar(lambda: janela.sobre.pagina == "depuracao")
+    QTest.keyClick(janela.janela, Qt.Key.Key_C, alt)  # "Copiar texto"
+    assert area.texto == "linha do log & <b>x</b>\n"
+
+
+def test_alt_seguro_sublinha_o_mnemonico(janela):
+    """I5 (DA-30): enquanto o Alt está seguro, a primeira letra dos rótulos aparece sublinhada."""
+    _abrir(janela)
+    rotulo = achar(janela.achar("dialogoSobre"), "linhaNovidadesRotulo")
+    assert rotulo.property("text") == "Novidades"
+    QTest.keyPress(janela.janela, Qt.Key.Key_Alt)
+    assert esperar(lambda: rotulo.property("text") == "<u>N</u>ovidades")
+    QTest.keyRelease(janela.janela, Qt.Key.Key_Alt)
+    assert esperar(lambda: rotulo.property("text") == "Novidades")
+    _clique(janela, "linhaProblemas")
+    _clique(janela, "linhaDepuracao")
+    assert esperar(lambda: janela.sobre.pagina == "depuracao")
+    QTest.keyPress(janela.janela, Qt.Key.Key_Alt)
+    assert esperar(lambda: janela.achar("botaoCopiarTexto").property("sublinharPrimeira") is True)
+    QTest.keyRelease(janela.janela, Qt.Key.Key_Alt)
+
+
+def test_setas_andam_pelas_linhas_da_principal(janela):
+    """I7 (DA-08): ↓ e ↑ (o direcional do controle) levam o foco de linha em linha, sem rolar nem dar a volta."""
+    _abrir(janela)
+    linhas = [janela.achar(n + "Botao") for n in LINHAS]
+    versao = _no_sobre(janela, "botaoDaVersao")
+    versao.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    for esperado in linhas:
+        QTest.keyClick(janela.janela, Qt.Key.Key_Down)
+        assert esperar(lambda esperado=esperado: esperado.property("activeFocus") is True)
+    for esperado in (*reversed(linhas[:-1]), versao):
+        QTest.keyClick(janela.janela, Qt.Key.Key_Up)
+        assert esperar(lambda esperado=esperado: esperado.property("activeFocus") is True)
+
+
+def test_seta_para_baixo_chega_a_linha_do_log_e_ao_link_da_licenca(janela):
+    """I2 (DA-08): nas subpáginas, ↓ do "Voltar" alcança o que a página tem (a linha do log, o link da licença)."""
+    _abrir(janela)
+    _clique(janela, "linhaProblemas")
+    assert esperar(lambda: janela.achar("botaoVoltarDoSobre").property("activeFocus") is True)
+    QTest.keyClick(janela.janela, Qt.Key.Key_Down)
+    assert esperar(lambda: janela.achar("linhaDepuracaoBotao").property("activeFocus") is True)
+    QTest.keyClick(janela.janela, Qt.Key.Key_Return)
+    assert esperar(lambda: janela.sobre.pagina == "depuracao")
+    QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
+    assert esperar(lambda: janela.sobre.pagina == "problemas")
+    QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
+    assert esperar(lambda: janela.sobre.pagina == "principal")
+    _clique(janela, "linhaLegal")
+    assert esperar(lambda: janela.achar("botaoVoltarDoSobre").property("activeFocus") is True)
+    QTest.keyClick(janela.janela, Qt.Key.Key_Down)
+    assert esperar(lambda: janela.achar("licencaDoApp").property("activeFocus") is True)

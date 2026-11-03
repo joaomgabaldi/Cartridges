@@ -40,6 +40,8 @@ class Novidades(QObject):
         self._checker = checker
         self._posts: list[dict] = []
         self._pagina_a_vista = False
+        # As linhas expandidas, fora do delegate: a página é destruída ao voltar e a `main` mantém as linhas até os posts mudarem.
+        self._abertas: set[str] = set()
         # O "Atualizar" apertado: quem responde é o fim da busca. O aviso "Atualizando…" não some sozinho.
         self._pedido = False
         self._aviso: int | None = None
@@ -69,6 +71,18 @@ class Novidades(QObject):
     @Property("QVariantList", notify=alterado)
     def posts(self) -> list:
         return self._posts
+
+    @Slot(str, result=bool)
+    def estaAberta(self, chave: str) -> bool:  # noqa: N802
+        return chave in self._abertas
+
+    @Slot(str, bool)
+    def definirAberta(self, chave: str, aberta: bool) -> None:  # noqa: N802
+        """Guarda a linha expandida (DA-37): reabrir a página a mostra como estava; só posts novos zeram."""
+        if aberta:
+            self._abertas.add(chave)
+        else:
+            self._abertas.discard(chave)
 
     # -- a chave e o ciclo de vida -------------------------------------------
 
@@ -146,6 +160,7 @@ class Novidades(QObject):
         return mudou
 
     def _ao_mudar_os_posts(self) -> None:
+        self._abertas.clear()
         self._refazer()
         self.alterado.emit()
         self.listaRefeita.emit()

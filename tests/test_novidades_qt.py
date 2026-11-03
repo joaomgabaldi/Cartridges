@@ -624,3 +624,43 @@ def test_posts_que_chegam_com_a_pagina_aberta_nao_puxam_o_foco(janela):
     assert esperar(lambda: len(_posts_na_lista(janela)) == 1)
     esperar()
     assert _posts_na_lista(janela)[0].property("activeFocus") is False
+
+
+def test_reabrir_a_pagina_mantem_as_linhas_expandidas(janela, feed):
+    """DA-37 (I3): a `main` mantém as linhas até os posts mudarem; a página daqui é destruída ao voltar, então o estado
+    mora no modelo. Expandir, voltar e reabrir devolve a linha aberta; posts novos zeram."""
+    feed.posts = [post(200, titulo="Alfa", resumo="Texto", url="https://x/1"), post(100, titulo="Beta")]
+    _abrir_a_pagina(janela)
+    assert esperar(lambda: len(_posts_na_lista(janela)) == 2)
+    primeira = _posts_na_lista(janela)[0]
+    _clique_em(primeira, "cabecalhoDaNovidade")
+    assert primeira.property("aberta") is True
+
+    _clique(janela, "botaoVoltar")
+    assert esperar(lambda: janela.achar("pilha").property("depth") == 0)
+    _clique(janela, "botaoNovidades")
+    assert esperar(lambda: janela.achar("pilha").property("depth") == 1)
+    assert esperar(lambda: len(_posts_na_lista(janela)) == 2)
+    assert esperar(lambda: _posts_na_lista(janela)[0].property("aberta") is True)
+    assert _posts_na_lista(janela)[1].property("aberta") is False
+
+    feed.posts = [post(300, titulo="Novo"), post(200, titulo="Alfa", resumo="Texto", url="https://x/1")]
+    janela.checker._apply(feed.posts)  # noqa: SLF001
+    assert esperar(lambda: all(p.property("aberta") is False for p in _posts_na_lista(janela)))
+
+
+def _clique_em(raiz, nome):
+    QMetaObject.invokeMethod(achar(raiz, nome), "click", Qt.ConnectionType.DirectConnection)
+
+
+def test_clique_na_linha_abrir_no_navegador_abre_o_endereco(janela, feed, _sem_navegador):
+    """I7 (DA-33): a linha inteira "Abrir no navegador" é ativável; o navegador de verdade nunca abre (`abrir_url` anota)."""
+    feed.posts = [post(200, titulo="Alfa", resumo="Texto", url="https://x/1")]
+    _abrir_a_pagina(janela)
+    assert esperar(lambda: len(_posts_na_lista(janela)) == 1)
+    linha = _posts_na_lista(janela)[0]
+    _clique_em(linha, "cabecalhoDaNovidade")
+    assert linha.property("aberta") is True
+    assert esperar(lambda: achar(linha, "abrirNoNavegador").property("visible") is True)
+    _clique_em(linha, "abrirNoNavegador")
+    assert _sem_navegador == ["https://x/1"]

@@ -13,6 +13,8 @@ Button {
     property string icone
     property int tamanhoDoIcone: 16
     property string dica
+    // O mnemônico é a primeira letra: sublinhada enquanto o Alt está seguro (o texto é do app, nunca de terceiros).
+    property bool sublinharPrimeira: false
     property bool dicaAtiva: hovered
     property real raio: pilula || circular ? height / 2 : 9
     property real afastamentoDoAnel: estilo === "plano" ? -2 : 1
@@ -52,8 +54,8 @@ Button {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: text !== ""
-                text: botao.text
-                textFormat: Text.PlainText
+                text: botao.sublinharPrimeira ? "<u>" + botao.text.charAt(0) + "</u>" + botao.text.slice(1) : botao.text
+                textFormat: botao.sublinharPrimeira ? Text.StyledText : Text.PlainText
                 color: botao.corDoTexto
                 font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
             }

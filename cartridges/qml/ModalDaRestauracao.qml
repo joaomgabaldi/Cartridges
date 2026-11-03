@@ -80,8 +80,6 @@ MolduraDoDialogo {
 
     focoInicial: inicial
     setasMovemOFoco: true
-    // Abaixo da camada dos avisos (declarada depois): a confirmação e o erro abrem por cima, como antes da moldura (`z` 10).
-    z: 0
     nomeAcessivel: titulo
     onFecharPedido: saiu()
 
