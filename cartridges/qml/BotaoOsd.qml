@@ -18,10 +18,13 @@ Button {
     Keys.onReturnPressed: click()
     Keys.onEnterPressed: click()
 
-    contentItem: Icone {
-        nome: botao.icone
-        cor: "white"
-        opacity: 0.9
+    contentItem: Item {
+        Icone {
+            anchors.centerIn: parent
+            nome: botao.icone
+            cor: "white"
+            opacity: 0.9
+        }
     }
     background: Rectangle {
         radius: width / 2

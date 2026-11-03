@@ -38,6 +38,10 @@ Window {
     Timer { id: fimDaSaida; interval: 140; onTriggered: janela._saindo = false }
     // A linha de baixo da barra, com o conteúdo rolado.
     property alias sombraDaBarra: barra.sombra
+    // A barra sem fundo, com a página dos detalhes por baixo.
+    property alias barraTransparente: barra.transparente
+    // O que passa por baixo da barra transparente: fica sob ela mesmo quando um modal a põe abaixo da área (J05).
+    property alias fundoDaBarra: fundoSobABarra.data
 
     color: usarMica ? "transparent" : Tema.fundo
     title: "Cartridges"
@@ -72,6 +76,14 @@ Window {
         id: carga
         active: !janela.semAgente
         source: "AgenteDaJanela.qml"
+    }
+
+    Item {
+        id: fundoSobABarra
+        visible: !janela.telaCheia
+        anchors { top: parent.top; left: parent.left; right: parent.right }
+        height: barra.altura
+        clip: true
     }
 
     BarraDeTitulo {

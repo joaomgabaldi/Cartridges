@@ -15,6 +15,8 @@ Button {
     property string dica
     // O mnemônico é a primeira letra: sublinhada enquanto o Alt está seguro (o texto é do app, nunca de terceiros).
     property bool sublinharPrimeira: false
+    // Corta o rótulo com reticências quando o botão é mais estreito que ele (o `Gtk.Label` das respostas do `AdwAlertDialog`).
+    property bool cortarRotulo: false
     property bool dicaAtiva: hovered
     // Sem o realce do ponteiro (o botão insensível da `main`, que ainda mostra a dica).
     property bool semRealce: false
@@ -39,8 +41,20 @@ Button {
     topPadding: 0
     bottomPadding: 0
 
+    // A largura do rótulo inteiro: com `cortarRotulo` o `Text` encolhe, e o `implicitWidth` do botão não pode encolher junto.
+    // Só nos botões que cortam o rótulo (um `TextMetrics` em todo botão apareceria entre os `Text` dos testes de formato).
+    Loader {
+        id: medida
+        active: botao.cortarRotulo
+        sourceComponent: TextMetrics {
+            text: botao.text
+            font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
+        }
+    }
+    readonly property real _larguraDoRotulo: medida.item ? medida.item.advanceWidth : 0
+
     contentItem: Item {
-        implicitWidth: conteudo.implicitWidth
+        implicitWidth: botao.cortarRotulo ? botao._larguraDoRotulo + (botao.icone !== "" ? botao.tamanhoDoIcone + conteudo.spacing : 0) : conteudo.implicitWidth
         implicitHeight: conteudo.implicitHeight
         Row {
             id: conteudo
@@ -56,6 +70,8 @@ Button {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: text !== ""
+                width: botao.cortarRotulo ? Math.min(botao._larguraDoRotulo, Math.max(0, botao.availableWidth - (botao.icone !== "" ? botao.tamanhoDoIcone + conteudo.spacing : 0))) : implicitWidth
+                elide: botao.cortarRotulo ? Text.ElideRight : Text.ElideNone
                 text: botao.sublinharPrimeira ? "<u>" + botao.text.charAt(0) + "</u>" + botao.text.slice(1) : botao.text
                 textFormat: botao.sublinharPrimeira ? Text.StyledText : Text.PlainText
                 color: botao.corDoTexto

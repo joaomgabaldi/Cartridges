@@ -56,6 +56,7 @@ ModalDaRestauracao {
         contentHeight: grupo.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
+        RolagemDaRoda { alvo: lista }
         ScrollBar.vertical: BarraDeRolagem {}
         // O Tab leva o foco a uma linha fora da vista: a lista rola até ela (o `GtkScrolledWindow` faz o mesmo).
         Connections {

@@ -135,6 +135,7 @@ Item {
             contentWidth: width
             contentHeight: conteudo.implicitHeight
             boundsBehavior: Flickable.StopAtBounds
+            RolagemDaRoda { alvo: rolagem }
             clip: true
             ScrollBar.vertical: BarraDeRolagem {}
 
@@ -195,6 +196,7 @@ Item {
                         boundsBehavior: Flickable.StopAtBounds
                         clip: true
                         ScrollBar.vertical: BarraDeRolagem {}
+                        RolagemDaRoda { alvo: tabela }
 
                         Column {
                             id: linhas

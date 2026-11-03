@@ -4,7 +4,7 @@ import QtQuick.Dialogs
 import QtQuick.Effects
 import QtQuick.Window
 
-// O assistente da primeira abertura (D86): janela própria com a barra do app (`Adw.HeaderBar` sem título, minimizar e
+// O assistente da primeira abertura (D86): janela própria com a barra do app (`Adw.HeaderBar` com o título da janela, minimizar e
 // fechar; 640x640 no total, o conteúdo com 593), antes da biblioteca, num motor próprio. As oito telas do `.blp` da
 // `main` num carrossel sem gesto, os pontos e o rodapé "Voltar" | "Pular" "Continuar". Só desenha: o que ele mostra e grava é o `assistente` (cartridges/assistente.py).
 // Os modais por cima (iluminação, logins, aviso) deixam o fundo `enabled: false`.
@@ -127,12 +127,14 @@ Window {
         boundsBehavior: Flickable.StopAtBounds
         clip: true
         ScrollBar.vertical: BarraDeRolagem {}
+        RolagemDaRoda { alvo: pagina }
 
         Column {
             id: coluna
-            x: 12
+            // O `AdwClamp` da `StatusPage` (600 de máximo) dentro da margem de 12.
+            width: Math.min(600, pagina.width - 24)
+            x: (pagina.width - width) / 2
             y: Math.max(pagina.compacta ? 24 : 36, (pagina.height - implicitHeight) / 2)
-            width: pagina.width - 24
             spacing: pagina.compacta ? 24 : 36
 
             Image {
@@ -178,6 +180,8 @@ Window {
                     textFormat: Text.PlainText
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
+                    lineHeightMode: Text.FixedHeight
+                    lineHeight: Tema.alturaDoCorpo  // a linha de 17 px do Pango da `main`
                     color: Tema.texto
                     font { family: Tema.fonte; pixelSize: Tema.corpo }
                 }
@@ -191,7 +195,7 @@ Window {
         }
     }
 
-    // A barra do app: sem título, só minimizar e fechar (`Adw.HeaderBar` do `assistente.blp`).
+    // A barra do app: o título da janela, só minimizar e fechar (`Adw.HeaderBar` do `assistente.blp`).
     BarraDeTitulo {
         id: barra
         objectName: "barraDoAssistente"
@@ -199,7 +203,7 @@ Window {
         visible: !raiz.semAgente
         janela: raiz
         agente: raiz.agente
-        titulo: ""
+        titulo: "Cartridges"  // o título da janela, que o `Adw.HeaderBar` sem título-widget mostra
         comMaximizar: false
     }
 

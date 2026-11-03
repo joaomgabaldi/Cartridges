@@ -99,5 +99,12 @@ FocusScope {
         }
     }
 
-    AnelDeFoco { ativo: linha.foco; raio: linha.raioDaLinha; afastamento: -2 }
+    // O contorno segue os cantos do cartão: arredondado em cima na primeira linha e embaixo na última.
+    AnelDeFoco {
+        ativo: linha.foco
+        raio: linha.raioDaLinha
+        raioSuperior: linha.separada || linha.primeira ? 12 : 0
+        raioInferior: linha.separada || linha.ultima ? 12 : 0
+        afastamento: -2
+    }
 }

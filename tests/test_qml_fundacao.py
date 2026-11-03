@@ -349,6 +349,23 @@ def test_alerta_empilha_com_o_primeiro_embaixo(app):
     assert cancelar.property("x") == confirmar.property("x") == 24
 
 
+def test_rotulo_longo_de_botao_empilhado_termina_em_reticencias(app):
+    """Item 8: a `main` (Gtk.Label dos botões do `AdwAlertDialog`) corta o rótulo que não cabe; o Qt deixava vazar."""
+    alerta, _ = _alerta_aberto(app, "Corpo", "Buscar tudo de novo em todos os jogos da biblioteca " * 2)
+    alerta.setProperty("rotuloConfirmar", "Um rótulo de resposta tão longo que não cabe de jeito nenhum no botão empilhado")
+    confirmar = _achar(alerta, "botaoConfirmarDoDialogo")
+    assert _esperar(lambda: confirmar.property("width") == 372 - 48)
+    pilha, texto = [confirmar], None
+    while pilha and texto is None:
+        atual = pilha.pop()
+        if atual.metaObject().className().startswith("QQuickText") and atual.property("text") == "Um rótulo de resposta tão longo que não cabe de jeito nenhum no botão empilhado":
+            texto = atual
+        pilha.extend(atual.childItems())
+    assert texto is not None
+    assert texto.property("truncated") is True
+    assert texto.property("width") <= confirmar.property("width") - 40
+
+
 def test_alerta_nunca_vira_folha(app):
     alerta, _ = _alerta_aberto(app, "Corpo")
     app.janela.setWidth(360)

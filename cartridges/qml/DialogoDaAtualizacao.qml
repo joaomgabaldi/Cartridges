@@ -40,12 +40,14 @@ DialogoDeAlerta {
 
     // `ScrolledWindow` com `max_content_height=360` (`app_updater.py`): as notas rolam além disso.
     Flickable {
+        id: notasRolagem
         width: parent.width
         height: Math.min(notas.implicitHeight, 360)
         visible: !dialogo.baixando && notas.text !== ""
         contentHeight: notas.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
+        RolagemDaRoda { alvo: notasRolagem }
         ScrollBar.vertical: BarraDeRolagem {}
 
         Text {

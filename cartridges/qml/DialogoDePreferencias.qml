@@ -49,8 +49,9 @@ MolduraDoDialogo {
         rolagem.contentY = 0
         filtro = ""
         buscaAtiva = false
-        // O foco começa na aba à vista (`focarInicial` roda depois, quando as abas já estão à mostra).
-        focoInicial = repetidorDeAbas.itemAt(indiceDaAba)
+        // O foco começa no X: o primeiro Tab vai à primeira linha habilitada da página (na `main`, "Contar horas de jogo"),
+        // e não pelas cinco abas, que ficam no fim da ordem do Tab.
+        focoInicial = cabecalho.botaoFechar
     } else {
         confirmacaoDosMetadados.aberto = false
         filtro = ""
@@ -224,6 +225,7 @@ MolduraDoDialogo {
                 contentHeight: !dialogo.buscando ? paginas.implicitHeight + 48
                     : dialogo.resultados.length > 0 ? resultadosDaBusca.implicitHeight + 48 : height
                 boundsBehavior: Flickable.StopAtBounds
+                RolagemDaRoda { alvo: rolagem }
                 clip: true
                 ScrollBar.vertical: BarraDeRolagem {}
 

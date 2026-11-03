@@ -173,7 +173,9 @@ FocusScope {
         }
     }
 
-    Keys.onEscapePressed: if (fechavel) fecharPedido()
+    // O pedido vem de uma tecla (Esc): quem usa pode devolver o foco com o anel visível (`:focus-visible`), sem ter tido foco antes.
+    property bool pedidoPorTeclado: false
+    Keys.onEscapePressed: if (fechavel) { pedidoPorTeclado = true; fecharPedido(); pedidoPorTeclado = false }
     // Modal para o teclado e o controle: nenhuma tecla chega à página de trás. O Tab passa, para circular.
     Keys.onReleased: event => { if (event.key === Qt.Key_Alt) altSegurado = false }
     Keys.onPressed: event => {

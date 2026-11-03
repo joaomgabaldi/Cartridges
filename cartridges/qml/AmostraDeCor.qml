@@ -61,7 +61,8 @@ Botao {
     signal aberta()
     signal fechada()
 
-    estilo: "plano"
+    // `MenuButton` sem `flat` na `main`. Só o apagado da linha vale: o do botão não se soma a ele.
+    opacity: 1
     implicitWidth: 34
     implicitHeight: 34
     leftPadding: 0

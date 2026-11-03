@@ -464,12 +464,16 @@ class ModeloDaEdicao(QObject):
     def fitaCor(self) -> QColor:  # noqa: N802
         """A cor cheia (sem o brilho da fita), como o seletor a mostra."""
         cor = self._form.fita_na_tela
-        return QColor.fromRgbF(*session_fita.cor_para_rgb(cor)) if cor is not None else QColor()
+        if cor is None:
+            # Sem dispositivo a `main` desenha o círculo com a cor de partida do seletor, branca (`desenhar_amostra`).
+            return QColor("white")
+        return QColor.fromRgbF(*session_fita.cor_para_rgb(cor))
 
     @Property(int, notify=fitaChanged)
     def fitaBrilho(self) -> int:  # noqa: N802
         cor = self._form.fita_na_tela
-        return session_fita.por_cento(cor.brilho) if cor is not None else 100
+        # Sem dispositivo o `Adw.SpinRow` da `main` fica no 0 do `Gtk.Adjustment` (nada o preenche).
+        return session_fita.por_cento(cor.brilho) if cor is not None else 0
 
     @Property(bool, notify=fitaChanged)
     def fitaManual(self) -> bool:  # noqa: N802

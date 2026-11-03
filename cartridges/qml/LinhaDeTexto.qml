@@ -53,6 +53,9 @@ LinhaDoGrupo {
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: 9 }
             focus: true
             padding: 0
+            // O estilo Basic soma 4 ao recuo da esquerda (`padding + 4`): o texto saía 4 px à direita do rótulo.
+            leftPadding: 0
+            rightPadding: 0
             selectByMouse: true
             color: linha.erro ? Tema.destrutivoTexto : Tema.texto
             selectionColor: Qt.alpha(Tema.destaque, 0.25)
@@ -60,6 +63,10 @@ LinhaDoGrupo {
             font { family: Tema.fonte; pixelSize: Tema.corpo }
             background: null
             Accessible.name: linha.titulo
+            // `gtk-entry-select-on-focus`: o foco do teclado ou o dado por código seleciona o texto; o clique só põe o
+            // cursor, e voltar à janela ou fechar um balão não refaz o foco na `main` (colar não pode trocar o texto todo).
+            onActiveFocusChanged: if (activeFocus && focusReason !== Qt.MouseFocusReason
+                && focusReason !== Qt.ActiveWindowFocusReason && focusReason !== Qt.PopupFocusReason) selectAll()
             onTextEdited: linha.editado()
             onAccepted: linha.confirmado()
         }

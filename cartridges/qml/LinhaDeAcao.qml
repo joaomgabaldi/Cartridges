@@ -63,13 +63,25 @@ LinhaDoGrupo {
             visible: linha.icone !== ""
             nome: linha.icone
         }
-        Text {
+        // O botão do sufixo da `main` (`Gtk.Button` "Escolher"): 34 de altura, raio 9 e o cinza de 10% do texto. Só o desenho:
+        // a linha inteira é o controle (foco, Enter e clique), então não há segunda parada de Tab.
+        Rectangle {
+            objectName: linha.objectName + "Rotulo"
             anchors.verticalCenter: parent.verticalCenter
-            visible: linha.icone === "" && text !== ""
-            text: linha.rotulo
-            textFormat: Text.PlainText
-            color: Tema.texto
-            font { family: Tema.fonte; pixelSize: Tema.corpo }
+            visible: linha.icone === "" && linha.rotulo !== ""
+            width: textoDoRotulo.implicitWidth + 34
+            height: 34
+            radius: 9
+            color: Qt.alpha(Tema.texto, Tema.texto.a * (linha.pressionada ? 0.30 : linha.sobre ? 0.15 : 0.10))
+            Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
+            Text {
+                id: textoDoRotulo
+                anchors.centerIn: parent
+                text: linha.rotulo
+                textFormat: Text.PlainText
+                color: Tema.texto
+                font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
+            }
         }
     }
 }

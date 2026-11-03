@@ -42,7 +42,10 @@ MolduraDoDialogo {
             if (botoes.itemAt(i)) maior = Math.max(maior, botoes.itemAt(i).implicitWidth)
         return botoes.count * maior + 12 * (botoes.count - 1) + 48
     }
-    readonly property real _larguraDoTexto: mensagem._temExtra ? 372 : Math.max(textoDoTitulo.implicitWidth, textoDoCorpo.implicitWidth) + 48
+    // A largura que cada texto pediria sem quebrar (os gêmeos escondidos): a do `Text` de verdade segue a do cartão, que sai daqui.
+    readonly property real _larguraDoTexto: mensagem._temExtra ? 372 : Math.max(gemeoDoTitulo.implicitWidth, gemeoDoCorpo.implicitWidth) + 48
+    Text { id: gemeoDoTitulo; visible: false; text: alerta.titulo; textFormat: Text.PlainText; font: textoDoTitulo.font }
+    Text { id: gemeoDoCorpo; visible: false; text: alerta.corpo; textFormat: Text.PlainText; font: textoDoCorpo.font }
 
     raio: 18
     cor: Tema.dialogo
@@ -65,6 +68,7 @@ MolduraDoDialogo {
         contentHeight: mensagem.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
+        RolagemDaRoda { alvo: rolagem }
         interactive: contentHeight > height
         ScrollBar.vertical: BarraDeRolagem {}
 
@@ -72,7 +76,8 @@ MolduraDoDialogo {
         // Posições à mão: um Column escondido não se reorganiza, e o texto trocado antes de abrir deixaria a altura velha.
         Item {
             id: mensagem
-            width: rolagem.width
+            // A largura do cartão, e não a da `rolagem`: a do layout muda depois da altura pedida, que depende deste texto (laço).
+            width: alerta.cartao.width
             // Pelo conteúdo, nunca pelo `visible`: com o diálogo escondido ele é sempre falso.
             readonly property real _fimDoTexto: alerta.corpo !== "" ? textoDoCorpo.y + textoDoCorpo.height : textoDoTitulo.y + textoDoTitulo.height
             readonly property bool _temExtra: colunaExtra.implicitHeight > colunaExtra.topPadding
@@ -128,7 +133,8 @@ MolduraDoDialogo {
         objectName: "respostasDoAlerta"
         Layout.fillWidth: true
         readonly property int quantos: botoes.count
-        readonly property real larguraDeCada: quantos > 0 ? (width - 48 - 12 * (quantos - 1)) / quantos : 0
+        // Pela largura do cartão, não pela do layout (que só vem depois da altura pedida, e a altura depende de `empilhado`).
+        readonly property real larguraDeCada: quantos > 0 ? (alerta.cartao.width - 48 - 12 * (quantos - 1)) / quantos : 0
         readonly property bool empilhado: {
             for (var i = 0; i < botoes.count; ++i)
                 if (botoes.itemAt(i) && botoes.itemAt(i).implicitWidth > larguraDeCada) return true
@@ -154,6 +160,7 @@ MolduraDoDialogo {
                 leftPadding: 20
                 rightPadding: 20
                 raio: 12
+                cortarRotulo: true  // o rótulo longo de um botão empilhado termina em reticências, não vaza
                 // Setas e Tab circulam entre as respostas.
                 readonly property Item proximo: botoes.itemAt((index + 1) % area.quantos)
                 readonly property Item anterior: botoes.itemAt((index + area.quantos - 1) % area.quantos)

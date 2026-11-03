@@ -32,7 +32,8 @@ ColumnLayout {
         rightPadding: 16
         topPadding: 12
         bottomPadding: 12
-        implicitWidth: Math.max(260, leftPadding + contentItem.implicitWidth + rightPadding)
+        // `.conquistas-card`: min-width 260 é do conteúdo (content-box); o padding de 16 vem por fora, 292 no total.
+        implicitWidth: leftPadding + Math.max(260, contentItem.implicitWidth) + rightPadding
         Accessible.name: "Conquistas, " + (bloco.dados.contagem || "")
         hoverEnabled: true
         // O Enter também abre (o Espaço e o clique já são do botão).

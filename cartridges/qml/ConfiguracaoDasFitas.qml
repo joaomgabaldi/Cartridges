@@ -49,6 +49,7 @@ MolduraDoDialogo {
         contentWidth: width
         contentHeight: paginas.implicitHeight + 48
         boundsBehavior: Flickable.StopAtBounds
+        RolagemDaRoda { alvo: rolagem }
         clip: true
         ScrollBar.vertical: BarraDeRolagem {}
 

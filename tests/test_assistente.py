@@ -939,3 +939,13 @@ def test_anel_de_foco_so_aparece_com_o_teclado(janela):
     QTest.keyClick(janela.raiz, Qt.Key.Key_Return)
     assert esperar(lambda: pasta.property("activeFocus") is True)
     assert pasta.property("visualFocus") is True
+
+
+def test_barra_com_titulo_texto_no_clamp_de_600_e_botao_escolher_com_fundo(janela):
+    """V6: a barra mostra "Cartridges"; o texto da tela cabe no `AdwClamp` de 600 da `StatusPage`; "Escolher" é um botão cinza de 34."""
+    assert janela.achar("barraDoAssistente").property("titulo") == "Cartridges"
+    descricao = janela.achar("descricao_boas_vindas")
+    assert descricao.property("width") <= 600
+    assert descricao.property("lineHeight") == 17
+    botao = janela.achar("linhaDaPastaRotulo")
+    assert botao.property("height") == 34 and botao.property("radius") == 9

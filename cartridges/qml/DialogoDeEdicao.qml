@@ -120,7 +120,7 @@ MolduraDoDialogo {
             Botao {
                 id: botaoCancelar
                 objectName: "botaoCancelarDaEdicao"
-                estilo: "plano"
+                // `Button cancel_button` sem `flat` no `details-dialog.blp`: o botão de texto da barra tem o cinza de 10%.
                 text: "Cancelar"
                 onClicked: edicao.cancelar()
             }
@@ -146,6 +146,7 @@ MolduraDoDialogo {
         contentWidth: width
         contentHeight: grupos.implicitHeight + 48
         boundsBehavior: Flickable.StopAtBounds
+        RolagemDaRoda { alvo: rolagem }
         clip: true
         ScrollBar.vertical: BarraDeRolagem {}
 

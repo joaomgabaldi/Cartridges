@@ -1299,6 +1299,12 @@ def test_sem_fita_as_duas_linhas_ficam_apagadas_com_o_aviso(app):
     for linha in ("linhaDaFita", "linhaDoBrilhoDaFita"):
         assert app.achar(linha).property("enabled") is False
         assert app.achar(linha + "Subtitulo").property("text") == "Nenhum dispositivo configurado"
+    # Item 6: como na `main`, sem dispositivo o brilho mostra 0 e a amostra é um círculo branco (não um ponto escuro, nem 100).
+    assert app.edicao.fitaBrilho == 0
+    assert app.edicao.fitaCor.name() == "#ffffff"
+    assert app.achar("linhaDoBrilhoDaFitaCaixa").property("value") == 0
+    assert app.achar("linhaDoBrilhoDaFitaCaixa").property("displayText") == "0"
+    assert app.achar("amostraDaCor").property("color").name() == "#ffffff"
 
 
 def test_o_brilho_da_fita_vai_a_edicao(app, previas):
@@ -1784,3 +1790,38 @@ def test_clicar_de_novo_na_linha_da_iluminacao_fecha_o_balao(app, previas):
         QTest.mouseRelease(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
         _esperar(lambda: False, 0.3)
         assert balao.property("opened") is False, espera
+
+
+def _campo_interno(linha):
+    pilha = [linha]
+    while pilha:
+        atual = pilha.pop()
+        if "TextField" in atual.metaObject().className():
+            return atual
+        pilha.extend(atual.childItems())
+    raise AssertionError("sem TextField")
+
+
+def test_titulo_abre_selecionado_e_o_texto_comeca_no_rotulo(app):
+    """Item 4: na `main` o foco no campo seleciona o texto; e o recuo de 4 px do estilo Basic fazia o texto sair do rótulo."""
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _foco_dentro_de(app, "campoNome"))
+    campo = _campo_interno(app.achar("campoNome"))
+    assert _esperar(lambda: campo.property("activeFocus") is True)
+    assert campo.property("selectedText") == "Alfa"
+    assert campo.property("leftPadding") == 0
+    # Um clique do mouse no campo não seleciona tudo: só põe o cursor.
+    outro = _campo_interno(app.achar("campoDesenvolvedora"))
+    outro.forceActiveFocus(Qt.FocusReason.MouseFocusReason)
+    assert outro.property("selectedText") == ""
+
+
+def test_anel_de_foco_do_titulo_tem_os_cantos_de_cima_arredondados(app):
+    """Item 5: o contorno da primeira linha do grupo segue os cantos do cartão, e não sai reto."""
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: _foco_dentro_de(app, "campoNome"))
+    linha = app.achar("campoNome")
+    anel = [c for c in linha.childItems() if c.objectName() == "anelDeFoco"][0]
+    assert _esperar(lambda: anel.property("visible") is True)
+    assert _avaliar(anel, "topLeftRadius") == 12 and _avaliar(anel, "topRightRadius") == 12
+    assert _avaliar(anel, "bottomLeftRadius") == 0 and _avaliar(anel, "bottomRightRadius") == 0

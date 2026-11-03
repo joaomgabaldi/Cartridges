@@ -6,7 +6,7 @@
 
 import pytest
 from PIL import Image
-from PySide6.QtCore import Q_ARG, QMetaObject, QPoint, Qt, QUrl
+from PySide6.QtCore import Q_ARG, QMetaObject, QPoint, QPointF, Qt, QUrl
 from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
@@ -615,3 +615,51 @@ def test_jogar_tem_hover_visivel_nos_dois_temas(app_qt):
     assert (veu_pronto.red(), veu_pronto.green(), veu_pronto.blue()) == (texto.red(), texto.green(), texto.blue())
     assert 0 < veu_pronto.alpha() <= 26
     app.fechar()
+
+
+def test_barra_transparente_com_o_fundo_por_baixo_so_nos_detalhes(app_qt):
+    # `Adw.ToolbarView details_view_toolbar_view`: barra plana sobre a capa desfocada; nas outras páginas, a barra de sempre.
+    app = _App(_tres())
+    barra = app.achar("barraDeTitulo")
+    assert barra.property("transparente") is False
+    pagina = _abrir_pelo_cartao(app)
+    assert _esperar(lambda: barra.property("transparente") is True)
+    fundo = _achar(pagina, "fundoDesfocado")
+    assert fundo.mapToScene(QPointF(0, 0)).y() == 0  # passa por baixo da barra de 47 px
+    assert pagina.mapToScene(QPointF(0, 0)).y() == 47  # o conteúdo continua abaixo dela
+    QTest.keyClick(app.janela, Qt.Key.Key_Escape)
+    assert _esperar(lambda: app.janela.property("paginaAtual") == "todos")
+    assert _esperar(lambda: barra.property("transparente") is False)
+    app.fechar()
+
+
+def test_rotulos_da_pagina_tem_a_linha_de_17_px_da_main(app_qt):
+    # Segoe UI de 12 px: o Pango da `main` dá 17 px por linha (o Qt, 16); a coluna inteira ficava 14 px mais baixa.
+    app = _App(_tres())
+    pagina = _abrir_pelo_cartao(app)
+    app.detalhes._mesclar({"desenvolvedora": "Estúdio", "descricao": "palavra " * 200})  # noqa: SLF001
+    dev, descricao = _achar(pagina, "desenvolvedora"), _achar(pagina, "descricao")
+    assert _esperar(lambda: dev.property("height") == 17)
+    linhas = descricao.property("lineCount")
+    assert descricao.property("height") == 17 * linhas
+    # Teto de 72 caracteres, também com a coluna mais larga que ele.
+    assert descricao.property("width") <= pagina.property("tetoDoTexto")
+    app.fechar()
+
+
+def test_abrir_o_app_e_os_alertas_nao_gera_binding_loop(app_qt):
+    """V7: `MolduraDoDialogo._alturaBase` e `DialogoDeAlerta.altura` (largura do layout lida de dentro da altura pedida)."""
+    from PySide6.QtCore import qInstallMessageHandler  # noqa: PLC0415
+
+    mensagens = []
+    anterior = qInstallMessageHandler(lambda _t, _c, m: mensagens.append(m))
+    try:
+        app = _App(_tres())
+        _abrir_pelo_cartao(app)
+        app.aplicativo.pedir_confirmacao("Pergunta?", "Corpo " * 30, "Sim", lambda _c: None)
+        assert _esperar(lambda: app.achar("confirmacaoDoApp").property("visible") is True)
+        QTest.qWait(200)
+        app.fechar()
+    finally:
+        qInstallMessageHandler(anterior)
+    assert [m for m in mensagens if "Binding loop" in m] == []

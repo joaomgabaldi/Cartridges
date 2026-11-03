@@ -107,6 +107,21 @@ Principal {
 
     // A linha de baixo da barra aparece com o conteúdo da página rolado (`undershoot-top` da `ToolbarView`).
     sombraDaBarra: !!paginaDoControle && paginaDoControle.rolado === true
+    // `Adw.ToolbarView details_view_toolbar_view` (window.blp:472): nos detalhes a barra é transparente sobre o fundo
+    // desfocado, a continuação do fundo da página (`PaginaDoJogo.qml`).
+    barraTransparente: paginaAtual === "jogo"
+    fundoDaBarra: [
+        Rectangle { anchors.fill: parent; visible: janela.barraTransparente; color: Tema.escuro ? "black" : "white" },
+        Image {
+            width: parent.width
+            height: janela.height
+            visible: janela.barraTransparente && detalhes.fundo !== ""
+            source: visible ? detalhes.fundo : ""
+            fillMode: Image.Stretch
+            asynchronous: false
+            opacity: detalhes.opacidadeDoFundo
+        }
+    ]
 
     // O `key-capture-widget` da `main` é a página inteira: digitar com o foco num botão da barra abre a busca, e Esc
     // volta de Jogos Zerados. Quem decide é a página à vista (`capturar`).

@@ -193,6 +193,7 @@ MolduraDoDialogo {
         contentWidth: width
         contentHeight: conteudo.implicitHeight + 48  // 24 em cima e embaixo (a margem da `PreferencesPage`)
         boundsBehavior: Flickable.StopAtBounds
+        RolagemDaRoda { alvo: rolagem }
         clip: true
         ScrollBar.vertical: BarraDeRolagem {}
         // PgUp e PgDn rolam a página, como a `ScrolledWindow`; as setas andam entre as fileiras.

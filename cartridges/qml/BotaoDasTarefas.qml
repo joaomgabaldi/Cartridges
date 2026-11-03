@@ -3,8 +3,8 @@ import QtQuick.Controls.Basic
 
 // O botão redondo do canto inferior esquerdo que abre as tarefas em andamento (D77).
 // Não fica à vista: entra deslizando quando uma tarefa começa, recua depois de `entradaMs` e volta quando o mouse
-// passa rente à borda, no canto. Cobre a área das páginas sem tirar nada delas: o canto é vigiado por um
-// `HoverHandler` passivo, e o botão recolhido não recebe o mouse. `painelDasTarefas` vem do contexto (cartridges/app.py).
+// passa rente à borda, no canto. Cobre a área das páginas sem tirar nada delas: só o canto é vigiado, por um
+// `HoverHandler`, e o botão recolhido não recebe o mouse. `painelDasTarefas` vem do contexto (cartridges/app.py).
 Item {
     id: raiz
     objectName: "botaoDasTarefas"
@@ -96,6 +96,15 @@ Item {
             aoSair()
         }
     }
+    // O botão fica por cima do vigia e tira o hover dele: em cima do botão o mouse continua no canto, e o botão não recua.
+    function aoPassarNoBotao(sobre) {
+        if (sobre) {
+            noCanto = true
+            recuo.stop()
+        } else if (!vigiaDoHover.hovered) {
+            aoDeixar()
+        }
+    }
 
     Component.onCompleted: vistas = painelDasTarefas.quantas
 
@@ -119,10 +128,20 @@ Item {
         onTriggered: raiz.recolher()
     }
 
-    HoverHandler {
-        enabled: raiz.vigiarMouse
-        onPointChanged: raiz.aoMover(point.position.x, point.position.y)
-        onHoveredChanged: if (!hovered) raiz.aoDeixar()
+    // Só no canto: um `HoverHandler` do tamanho da página, por cima dela, tirava o hover de todas as capas (mesmo com
+    // `blocking: false`, medido no Qt 6.12).
+    Item {
+        id: vigia
+        objectName: "vigiaDoCanto"
+        y: raiz.height - raiz.canto
+        width: raiz.aVista ? raiz.canto : raiz.faixa
+        height: raiz.canto
+        HoverHandler {
+            id: vigiaDoHover
+            enabled: raiz.vigiarMouse
+            onPointChanged: raiz.aoMover(point.position.x, vigia.y + point.position.y)
+            onHoveredChanged: if (!hovered && !sobreOBotao.hovered) raiz.aoDeixar()
+        }
     }
 
     Item {
@@ -145,6 +164,11 @@ Item {
         enabled: raiz.aVista && raiz.pode
         visible: x + width > 0
         Accessible.name: "Tarefas em andamento"
+        HoverHandler {
+            id: sobreOBotao
+            enabled: raiz.vigiarMouse
+            onHoveredChanged: raiz.aoPassarNoBotao(hovered)
+        }
         // A dica da libadwaita; acima do botão, porque ele fica rente ao fundo da janela.
         Dica {
             texto: "Tarefas em andamento"

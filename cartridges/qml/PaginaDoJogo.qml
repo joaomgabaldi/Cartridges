@@ -34,8 +34,9 @@ Item {
     readonly property bool compacta: width <= 850
     readonly property int larguraDaCapa: compacta ? 280 : 420
     readonly property int alturaDaCapa: larguraDaCapa * 3 / 2
-    // `max-width-chars: 72` (e 24 no título): a largura do "0" do Segoe UI vezes o número de caracteres.
-    readonly property real tetoDoTexto: 72 * zeroDoCorpo.advanceWidth
+    // `max-width-chars: 72` (e 24 no título): a largura do "0" do Segoe UI vezes o número de caracteres. O texto usa a
+    // largura média do Pango, maior que a do "0": a quebra de linha da janela real da `main` pede 7,4 por caractere.
+    readonly property real tetoDoTexto: 72 * 7.4
     readonly property real tetoDoTitulo: 24 * zeroDoTitulo.advanceWidth
     // O logo só vale enquanto o arquivo decodifica: um PNG truncado passa pela leitura do cabeçalho.
     readonly property bool logoVisivel: detalhes.logo !== "" && logo.status !== Image.Error
@@ -44,7 +45,6 @@ Item {
     // Entrou pelo teclado? (`:focus-visible`: o anel do foco inicial só aparece então.)
     property bool tecladoEmUso: false
 
-    TextMetrics { id: zeroDoCorpo; text: "0"; font { family: Tema.fonte; pixelSize: Tema.corpo } }
     TextMetrics { id: zeroDoTitulo; text: "0"; font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 } }
 
     function focarInicial() {
@@ -125,19 +125,28 @@ Item {
 
     // `#details_view`: branco no tema claro e preto no escuro, sob a capa desfocada (muda o resultado da opacidade dela).
     // Também cobre a biblioteca por baixo durante a transição.
+    // A barra de título é transparente aqui (`ToolbarView` plana da `main`): a mesma imagem continua sob ela, em
+    // `Aplicativo.fundoDaBarra`. Por isso o `y` negativo: esticada pela janela inteira, cortada aqui no fim da barra.
+    readonly property int sobreABarra: Window.window && Window.window.alturaDaBarra ? Window.window.alturaDaBarra : 0
     Rectangle { anchors.fill: parent; color: Tema.escuro ? "black" : "white"; z: -2 }
 
     // A capa desfocada, esticada; sem capa, o fundo liso (nada a desenhar).
-    Image {
-        id: fundo
-        objectName: "fundoDesfocado"
+    Item {
         anchors.fill: parent
         z: -1
-        source: detalhes.fundo
-        fillMode: Image.Stretch
-        asynchronous: false  // provedor Python na thread de imagens trava: ela espera o GIL segurando o mutex do cache
-        opacity: detalhes.opacidadeDoFundo
-        visible: detalhes.fundo !== ""
+        clip: true
+        Image {
+            id: fundo
+            objectName: "fundoDesfocado"
+            y: -raiz.sobreABarra
+            width: parent.width
+            height: parent.height + raiz.sobreABarra
+            source: detalhes.fundo
+            fillMode: Image.Stretch
+            asynchronous: false  // provedor Python na thread de imagens trava: ela espera o GIL segurando o mutex do cache
+            opacity: detalhes.opacidadeDoFundo
+            visible: detalhes.fundo !== ""
+        }
     }
 
     // Uma linha de dados (`dim-label`, 12 px): a largura natural do texto até o teto de 72 caracteres.
@@ -145,12 +154,18 @@ Item {
         id: dado
         Layout.fillWidth: true
         Layout.preferredWidth: Math.min(gemeo.implicitWidth, raiz.tetoDoTexto)
+        // O rótulo da `main` é `halign: start`: nunca passa da largura que pede, nem quando a coluna é mais larga.
+        Layout.maximumWidth: Math.min(gemeo.implicitWidth, raiz.tetoDoTexto)
+        Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignLeft
         visible: text !== ""
         textFormat: Text.PlainText
         wrapMode: Text.Wrap
         horizontalAlignment: raiz.compacta ? Text.AlignHCenter : Text.AlignLeft
         color: Tema.textoSecundario
         font { family: Tema.fonte; pixelSize: Tema.corpo }
+        // O Pango da `main` dá 17 px à linha do Segoe UI de 12 (o Qt, 16): a coluna inteira ficava 14 px mais baixa.
+        lineHeightMode: Text.FixedHeight
+        lineHeight: Tema.alturaDoCorpo
         // O mesmo texto sem quebra: a largura que ele pediria sozinho.
         Text {
             id: gemeo
@@ -173,6 +188,8 @@ Item {
         horizontalAlignment: Text.AlignHCenter
         color: Tema.texto
         font { family: Tema.fonte; pixelSize: Tema.corpo }
+        lineHeightMode: Text.FixedHeight
+        lineHeight: Tema.alturaDoCorpo
         Text {
             id: gemeoDaLinha
             visible: false
@@ -231,6 +248,7 @@ Item {
         contentHeight: Math.max(height, linha.height + 2 * linha.margem)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
+        RolagemDaRoda { alvo: rolagem }
         ScrollBar.vertical: BarraDeRolagem {}
 
         GridLayout {
@@ -421,7 +439,7 @@ Item {
                                 delegate: Row {
                                     id: celula
                                     required property var modelData
-                                    // `.hltb-cell`: padding 10/20, mínimo 76.
+                                    // `.hltb-cell`: padding 10/20 por fora do mínimo de 76 (3 células + 2 filetes = 350, como na `main`).
                                     Rectangle {
                                         visible: celula.modelData.separador
                                         width: 1
@@ -431,7 +449,7 @@ Item {
                                     }
                                     Item {
                                         id: celulaTexto
-                                        width: Math.max(76, texto.implicitWidth + 40)
+                                        width: Math.max(76, texto.implicitWidth) + 40  // min-width é do conteúdo: o padding vem por fora
                                         height: texto.implicitHeight + 20
                                         Column {
                                             id: texto

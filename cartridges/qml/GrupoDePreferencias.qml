@@ -72,7 +72,8 @@ Column {
         text: grupo.descricao
         textFormat: grupo.descricaoRica ? Text.StyledText : Text.PlainText
         wrapMode: Text.Wrap
-        linkColor: Tema.destaqueTexto
+        // A descrição é `dim-label` (55%): o link, com ela, também.
+        linkColor: Qt.alpha(Tema.destaqueTexto, Tema.destaqueTexto.a * Tema.opacidadeApagado)
         color: Tema.textoSecundario
         font { family: Tema.fonte; pixelSize: Tema.corpo }
         onLinkActivated: endereco => grupo.linkAcionado(endereco)

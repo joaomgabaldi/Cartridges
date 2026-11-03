@@ -579,3 +579,38 @@ def test_seta_para_baixo_chega_a_linha_do_log_e_ao_link_da_licenca(janela):
     assert esperar(lambda: janela.achar("botaoVoltarDoSobre").property("activeFocus") is True)
     QTest.keyClick(janela.janela, Qt.Key.Key_Down)
     assert esperar(lambda: janela.achar("licencaDoApp").property("activeFocus") is True)
+
+
+def test_o_cartao_nao_encolhe_nas_subpaginas_e_a_capsula_tem_30_px(janela):
+    """V4: a altura do cartão é a da principal em toda página; a cápsula da versão é `padding 3` sobre `min-height 24`."""
+    _abrir(janela)
+    cartao = achar(janela.achar("dialogoSobre"), "cartaoDoDialogo")
+    assert esperar(lambda: cartao.property("height") > 300)
+    altura = cartao.property("height")
+    assert _no_sobre(janela, "botaoDaVersao").property("height") == 30
+    for destino in ("linhaCreditos", "linhaProblemas"):
+        _clique(janela, destino)
+        assert esperar(lambda: janela.sobre.pagina != "principal")
+        QTest.qWait(50)
+        assert cartao.property("height") >= altura  # nunca encolhe; uma página mais alta que a principal a alonga
+        if destino == "linhaProblemas":
+            assert cartao.property("height") == altura
+        QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
+        assert esperar(lambda: janela.sobre.pagina == "principal")
+
+
+def test_alt_seta_esquerda_volta_com_o_foco_na_linha_e_o_anel(janela):
+    _abrir(janela)
+    voltar = janela.achar("botaoVoltarDoSobre")
+    assert voltar.property("estilo") == "plano"
+    _clique(janela, "linhaCreditos")
+    assert esperar(lambda: janela.sobre.pagina == "creditos")
+    assert esperar(lambda: voltar.property("activeFocus") is True)
+    QTest.keyClick(janela.janela, Qt.Key.Key_Left, Qt.KeyboardModifier.AltModifier)
+    assert esperar(lambda: janela.sobre.pagina == "principal")
+    linha = janela.achar("linhaCreditosBotao")
+    assert esperar(lambda: linha.property("activeFocus") is True)
+    assert linha.property("visualFocus") is True
+    # Na principal o atalho não faz nada.
+    QTest.keyClick(janela.janela, Qt.Key.Key_Left, Qt.KeyboardModifier.AltModifier)
+    assert janela.sobre.pagina == "principal"

@@ -38,7 +38,7 @@ MolduraDoDialogo {
         rolagem.contentY = 0
         // O anel só aparece se o teclado já estava em uso (`:focus-visible`): com o mouse, sem anel (DA-06).
         var foco = Window.window ? Window.window.activeFocusItem : null
-        var teclado = !!foco && foco.visualFocus === true
+        var teclado = pedidoPorTeclado || (!!foco && foco.visualFocus === true)
         Qt.callLater(() => dialogo.focar(de, teclado))
     }
 
@@ -48,6 +48,13 @@ MolduraDoDialogo {
             : pagina !== "principal" ? (pagina === "depuracao" ? botaoCopiar : botaoVoltar)
             : (linhas[de] && linhas[de].visible ? linhas[de].botaoDaLinha : focoInicial)
         alvo.forceActiveFocus(teclado ? Qt.TabFocusReason : Qt.OtherFocusReason)
+    }
+
+    // Alt+← volta à página anterior (a ação `navigation.pop` do `AdwNavigationView`), com o anel de foco da tecla.
+    Shortcut {
+        sequence: "Alt+Left"
+        enabled: dialogo.aberto && !dialogo.avisoAberto && dialogo.pagina !== "principal"
+        onActivated: { dialogo.pedidoPorTeclado = true; dialogo.modelo.voltar(); dialogo.pedidoPorTeclado = false }
     }
 
     // Criado só ao clicar: o seletor nativo não precisa existir antes. O nome do log na pasta Documentos.
@@ -99,6 +106,8 @@ MolduraDoDialogo {
         Layout.fillWidth: true
         textFormat: Text.PlainText
         wrapMode: Text.Wrap
+        lineHeightMode: Text.FixedHeight
+        lineHeight: Tema.alturaDoCorpo
         color: Tema.texto
         font { family: Tema.fonte; pixelSize: Tema.corpo }
     }
@@ -116,6 +125,7 @@ MolduraDoDialogo {
                 id: botaoVoltar
                 objectName: "botaoVoltarDoSobre"
                 visible: dialogo.pagina !== "principal"
+                estilo: "plano"  // o botão de voltar da barra do `AdwNavigationPage` é plano
                 icone: "go-previous"
                 dica: "Voltar"
                 onClicked: dialogo.modelo.voltar()
@@ -135,11 +145,13 @@ MolduraDoDialogo {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: BarraDeRolagem {}
-        RolagemPorMola { alvo: rolagem }
+        RolagemDaRoda { alvo: rolagem }
         Item {
             id: corpo
             width: rolagem.width
-            implicitHeight: Math.max(principal.visible ? principal.implicitHeight : 0, novidades.visible ? novidades.implicitHeight : 0,
+            // O cartão do `AdwAboutDialog` não encolhe nas subpáginas: guarda a altura da principal, medida à vista.
+            property real alturaDaPrincipal: 0
+            implicitHeight: Math.max(alturaDaPrincipal, principal.visible ? principal.implicitHeight : 0, novidades.visible ? novidades.implicitHeight : 0,
                 creditos.visible ? creditos.implicitHeight : 0, legal.visible ? legal.implicitHeight : 0,
                 problemas.visible ? problemas.implicitHeight : 0, depuracao.visible ? depuracao.implicitHeight : 0)
 
@@ -150,6 +162,8 @@ MolduraDoDialogo {
                 x: 12
                 width: parent.width - 24
                 spacing: 6
+                onImplicitHeightChanged: if (visible && implicitHeight > 0) corpo.alturaDaPrincipal = implicitHeight
+                onVisibleChanged: if (visible && implicitHeight > 0) corpo.alturaDaPrincipal = implicitHeight
 
                 Image {
                     Layout.alignment: Qt.AlignHCenter
@@ -188,6 +202,8 @@ MolduraDoDialogo {
                     wrapMode: Text.Wrap
                     text: dialogo.modelo ? dialogo.modelo.desenvolvedor : ""
                     textFormat: Text.PlainText
+                    lineHeightMode: Text.FixedHeight
+                    lineHeight: Tema.alturaDoCorpo
                     color: Tema.texto
                     font { family: Tema.fonte; pixelSize: Tema.corpo }
                 }
@@ -203,6 +219,8 @@ MolduraDoDialogo {
                     bottomPadding: 3
                     leftPadding: 18
                     rightPadding: 18
+                    // `.app-version`: padding 3/18 por fora do `min-height: 24` do botão (30 no total).
+                    implicitHeight: Math.max(24, selo.implicitHeight) + topPadding + bottomPadding
                     Accessible.name: "Copiar a versão"
                     Keys.onReturnPressed: click()
                     Keys.onEnterPressed: click()
@@ -213,6 +231,7 @@ MolduraDoDialogo {
                         text: dialogo.modelo ? dialogo.modelo.versao : ""
                         textFormat: Text.PlainText
                         horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                         color: Tema.destaqueTexto
                         font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
                     }
@@ -225,8 +244,10 @@ MolduraDoDialogo {
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: 12  // 18 menos o espaço de 6
-                    Layout.bottomMargin: 6
+                    // `margin-top: 18` mais o `border-spacing` de 6 da caixa de fora (a margem não substitui o espaço); embaixo,
+                    // `margin-bottom: 6` mais os 12 da margem da caixa de fora.
+                    Layout.topMargin: 18
+                    Layout.bottomMargin: 18
                     spacing: 18
                     // `visible` explícito em todos: criado com o diálogo escondido, o grupo mediria zero para sempre (armadilha 19).
                     GrupoDeLinhas {

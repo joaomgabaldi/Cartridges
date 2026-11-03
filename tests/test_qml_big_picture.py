@@ -189,7 +189,8 @@ def test_dezessete_vagas_qualquer_tamanho(app_qt, quantidade):
     tela = _Tela(quantidade)
     tela.bp.irPara(quantidade // 2)
     _esperar()
-    assert len(tela.itens("QQuickLoader")) == 17
+    # Só as vagas do carrossel: o `Botao` também tem um `Loader`, o da medida do rótulo.
+    assert len([v for v in tela.itens("QQuickLoader") if v.property("i") is not None]) == 17
     capas = _itens(tela.tela, lambda i: i.objectName() == "capaDoBigPicture")
     assert len(capas) == min(quantidade, 15)
     tela.fechar()

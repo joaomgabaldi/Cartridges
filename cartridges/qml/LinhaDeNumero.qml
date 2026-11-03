@@ -24,7 +24,8 @@ LinhaDoGrupo {
         id: caixa
         objectName: linha.objectName + "Caixa"
         anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
-        from: linha.de
+        // Apagada e abaixo do mínimo (o 0 da `main` sem dispositivo): o `SpinBox` não o prende ao mínimo.
+        from: linha.enabled ? linha.de : Math.min(linha.de, linha.value)
         to: linha.ate
         stepSize: linha.passo
         editable: true

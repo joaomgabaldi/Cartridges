@@ -538,6 +538,20 @@ def test_sair_da_janela_agenda_o_recuo(cena, flush_idle):
     assert cena.achar("recuoDasTarefas").property("running")
 
 
+def test_o_mouse_em_cima_do_botao_nao_o_deixa_recuar(cena, flush_idle):
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    _chamar(cena.botao, "aoMover", 10, 590)
+    _chamar(cena.botao, "aoDeixar")
+    assert cena.achar("recuoDasTarefas").property("running")
+    _chamar(cena.botao, "aoPassarNoBotao", True)
+    assert cena.botao.property("noCanto") is True
+    assert not cena.achar("recuoDasTarefas").property("running")
+    _chamar(cena.botao, "aoPassarNoBotao", False)
+    assert cena.botao.property("noCanto") is False
+    assert cena.achar("recuoDasTarefas").property("running")
+
+
 def test_sessao_esconde_o_botao_sem_deslizar(cena, flush_idle):
     tarefas.comecar("Importação", 1)
     flush_idle()
@@ -1109,3 +1123,15 @@ def test_segundo_erro_com_o_aviso_aberto_nao_troca_o_texto_e_libera_os_dois(app_
     assert liberados == [1, 2]
     painel.pedir_aviso("Erro 3", "terceiro", lambda: liberados.append(3))  # fechado, o próximo aviso abre de novo
     assert pedidos[-1] == ("Erro 3", "terceiro")
+
+
+def test_o_vigia_do_hover_so_ocupa_o_canto_e_nao_a_pagina(cena, flush_idle):
+    # Um HoverHandler do tamanho da página tirava o hover das capas abaixo do botão.
+    vigia = cena.achar("vigiaDoCanto")
+    _chamar(cena.botao, "recolher")
+    assert vigia.property("width") == 16 and vigia.property("height") == 72
+    assert vigia.property("y") == 600 - 72
+    tarefas.comecar("Importação", 1)
+    flush_idle()
+    assert _a_vista(cena)
+    assert vigia.property("width") == 72 and vigia.property("height") == 72

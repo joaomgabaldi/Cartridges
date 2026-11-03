@@ -72,6 +72,7 @@ SeletorBase {
                 contentHeight: grupo.height + 24
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
+                RolagemDaRoda { alvo: lista }
                 ScrollBar.vertical: BarraDeRolagem {}
 
                 // `Adw.Clamp` de 500 com 12 de margem: a `boxed-list` contínua, as linhas coladas com separador.

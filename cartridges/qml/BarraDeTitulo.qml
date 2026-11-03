@@ -13,6 +13,8 @@ Rectangle {
     property QtObject agente
     property string titulo: ""
     property bool sombra: false
+    // Sem fundo: a página de trás (os detalhes do jogo) passa por baixo, como na `ToolbarView` plana da `main`.
+    property bool transparente: false
     // Só minimizar e fechar (`:minimize,close`), como a janela das tarefas.
     property bool comMaximizar: true
     // Sem o fechar (`:minimize`), como a janela "Restaurando o backup".
@@ -27,7 +29,7 @@ Rectangle {
     readonly property int larguraDoBotao: 34
 
     height: altura
-    color: Tema.fundo
+    color: transparente ? "transparent" : Tema.fundo
 
     // Chamado pela Principal depois do setup do agente.
     function ligarAgente() {

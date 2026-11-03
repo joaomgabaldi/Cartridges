@@ -100,6 +100,7 @@ MolduraDoDialogo {
                 contentWidth: width
                 contentHeight: campoDeVariasLinhas.implicitHeight
                 boundsBehavior: Flickable.StopAtBounds
+                RolagemDaRoda { alvo: rolagem }
                 clip: true
                 ScrollBar.vertical: BarraDeRolagem {}
 

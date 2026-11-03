@@ -1364,3 +1364,46 @@ def test_foco_que_passa_pela_propria_linha_ainda_volta_ao_botao_ao_terminar(app,
     refresh.running = False
     refresh.progress.emit()
     assert _esperar(lambda: _foco_dentro_de(app, "linhaDosMetadadosBotao"))
+
+
+def test_a_roda_nas_preferencias_anda_o_passo_do_gtk(app):
+    """V3: cada entalhe anda `pow(altura visível, 2/3)` px, como o `ScrolledWindow` da `main` (cerca de 78), e não os 23 do `Flickable`."""
+    from PySide6.QtCore import QCoreApplication, QPoint  # noqa: PLC0415
+    from PySide6.QtGui import QWheelEvent  # noqa: PLC0415
+
+    _abrir(app, "general")
+    rolagem = app.achar("rolagemDasPreferencias")
+    assert rolagem.property("contentHeight") > rolagem.property("height")
+    esperado = rolagem.property("height") ** (2 / 3)
+    assert 60 < esperado < 110
+    centro = rolagem.mapToScene(QPointF(rolagem.width() / 2, rolagem.height() / 2))
+    QCoreApplication.sendEvent(app.janela, QWheelEvent(centro, centro, QPoint(0, 0), QPoint(0, -120), Qt.MouseButton.NoButton,
+                                                       Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False))
+    QTest.qWait(30)
+    assert abs(rolagem.property("contentY") - esperado) < 1
+
+
+def test_o_primeiro_tab_vai_a_primeira_linha_habilitada_da_pagina(app):
+    """V5: na `main` o Tab inicial cai em "Contar horas de jogo"; antes o foco abria numa aba e o Tab andava por todas."""
+    _abrir(app, "general")
+    assert _foco_dentro_de(app, "fecharDoCabecalho")
+    QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+    assert _foco_dentro_de(app, "interruptor-playtime-tracking")
+
+
+def test_o_link_da_descricao_tem_a_opacidade_da_descricao(app):
+    """Item 9: o "Obtenha aqui" da `main` sai com os 55% da descrição `dim-label`, e não vivo."""
+    _abrir(app, "sgdb")
+    grupo = app.achar("grupoAutenticacao")
+    texto = [t for t in _filhos_text(grupo) if "Obtenha" in (t.property("text") or "")][0]
+    assert abs(_avaliar(texto, "linkColor.a") - 0.55 * _avaliar(texto, "Tema.destaqueTexto.a")) < 0.02
+
+
+def _filhos_text(raiz):
+    pilha, achados = [raiz], []
+    while pilha:
+        atual = pilha.pop()
+        if atual.metaObject().className().startswith("QQuickText") and "Metrics" not in atual.metaObject().className():
+            achados.append(atual)
+        pilha.extend(atual.childItems())
+    return achados

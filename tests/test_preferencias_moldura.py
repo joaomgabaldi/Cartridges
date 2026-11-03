@@ -151,9 +151,11 @@ def test_o_aviso_das_preferencias_fica_no_cartao_delas(app):
     assert ancora is not None
 
 
-def test_abre_com_o_foco_na_aba_da_pagina(app):
+def test_abre_com_o_foco_no_x_e_a_aba_da_pagina_a_vista(app):
+    # V5: o primeiro Tab vai à primeira linha da página, como na `main`; a aba à vista é a pedida, mas não leva o foco.
     _abrir(app, "sgdb")
-    assert _esperar(lambda: app.janela.activeFocusItem() is app.achar("aba-sgdb"))
+    assert _esperar(lambda: app.janela.activeFocusItem() is app.achar("dialogoDePreferencias").property("botaoFechar"))
+    assert app.achar("dialogoDePreferencias").property("aba") == "sgdb"
 
 
 def test_os_diretorios_de_arquivo_nao_tem_titulo_proprio():
