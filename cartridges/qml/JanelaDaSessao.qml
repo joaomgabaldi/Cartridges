@@ -14,8 +14,9 @@ Window {
     property bool _posta: false
 
     title: sessao.tituloDaJanela
-    width: 300
-    height: 150
+    // O `Adw.Window` da `main` não desce de 360x200, apesar do `set_default_size(300, 150)` (medido na janela real).
+    width: 360
+    height: 200
     minimumWidth: width
     maximumWidth: width
     minimumHeight: height
@@ -41,12 +42,12 @@ Window {
             agente.setWindowAttribute("dark-mode", Tema.escuro)
             barra.ligarAgente()
         }
-        width = 300
-        height = 150
-        minimumWidth = 300
-        maximumWidth = 300
-        minimumHeight = 150
-        maximumHeight = 150
+        width = 360
+        height = 200
+        minimumWidth = 360
+        maximumWidth = 360
+        minimumHeight = 200
+        maximumHeight = 200
     }
 
     // Acima do relógio: o retângulo da janela só vale depois do primeiro quadro e da moldura removida.

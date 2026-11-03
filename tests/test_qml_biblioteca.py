@@ -1180,3 +1180,27 @@ def test_voltar_com_o_menu_principal_aberto_nao_volta_de_pagina(app_qt):
     assert app.janela.property("paginaAtual") == "todos"
     assert menu.property("opened") is False  # o menu não fica aberto sobre a outra página
     app.fechar()
+
+
+def test_poucos_jogos_ficam_a_esquerda_da_grade(app_qt):
+    """Medido na `main`: a grade fica centrada pelas colunas que cabem, e não pelos jogos que há."""
+    app = _App(_tres())
+    app.janela.show()
+    grade = app.achar("grade")
+    assert grade.property("colunas") > 3
+    esperado = (grade.width() - grade.property("colunas") * grade.property("larguraDaCelula")) / 2
+    assert grade.property("leftMargin") == pytest.approx(esperado)
+    app.fechar()
+
+
+def test_a_volta_pelo_teclado_acende_o_anel_e_espera_o_proximo_hover(app_qt):
+    """O hover em si o offscreen não produz: o reenvio com o mouse parado foi conferido em janela real."""
+    from PySide6.QtCore import QMetaObject  # noqa: PLC0415
+
+    app = _App(_tres())
+    app.janela.show()
+    grade = app.achar("grade")
+    QMetaObject.invokeMethod(grade, "marcarTeclado", Qt.ConnectionType.DirectConnection)
+    assert grade.property("porTeclado") is True
+    assert grade.property("_registrarPonteiro") is True
+    app.fechar()

@@ -46,8 +46,8 @@ GridView {
     readonly property int larguraDaCelula: 200 + respiro + espacamento
     cellWidth: larguraDaCelula
     cellHeight: 347 + respiro + espacamento
-    // Poucos jogos ficam centralizados, como o FlowBox de antes.
-    leftMargin: Math.max(0, (width - Math.min(colunas, Math.max(1, count)) * larguraDaCelula) / 2)
+    // A grade fica centrada pelo número de colunas que cabem; poucos jogos ficam à esquerda dela (medido na `main`).
+    leftMargin: Math.max(0, (width - colunas * larguraDaCelula) / 2)
     rightMargin: leftMargin
     // O GridView só refaz as colunas quando a largura ou a célula mudam: com a biblioteca vazia na
     // abertura a margem é grande e a grade ficava em poucas colunas. Mexer na célula e devolver o
@@ -94,7 +94,23 @@ GridView {
     Keys.onRightPressed: event => { porTeclado = true; event.accepted = false }
     Keys.onUpPressed: event => { porTeclado = true; event.accepted = false }
     Keys.onDownPressed: event => { porTeclado = true; event.accepted = false }
-    HoverHandler { onPointChanged: grade.porTeclado = false }
+    // Só o ponteiro que anda apaga o anel: o Qt reenvia o hover quando a página volta com o mouse parado.
+    property point _ultimoPonteiro
+    // A volta pelo teclado: o primeiro hover depois dela só registra onde o ponteiro está.
+    property bool _registrarPonteiro: false
+    function marcarTeclado() {
+        porTeclado = true
+        _registrarPonteiro = true
+    }
+    HoverHandler {
+        onPointChanged: {
+            const p = point.scenePosition
+            const andou = p.x !== grade._ultimoPonteiro.x || p.y !== grade._ultimoPonteiro.y
+            if (andou && !grade._registrarPonteiro) grade.porTeclado = false
+            grade._registrarPonteiro = false
+            grade._ultimoPonteiro = p
+        }
+    }
 
     // Entrar ou sair capa (importar, buscar, esconder) não anima: o salto é o de sempre (`animated_flow_box.py`).
     property bool contagemMudou: false

@@ -62,6 +62,7 @@ Botao {
     signal fechada()
 
     // `MenuButton` sem `flat` na `main`.
+    dicaSomeAoClicar: false
     implicitWidth: 34
     implicitHeight: 34
     leftPadding: 0

@@ -26,8 +26,10 @@ Item {
     signal terminou()
 
     readonly property int raio: opaco ? 0 : 12
-    // max-width-chars: 36, medido na fonte de cada texto (o caption quebra mais cedo que o título).
-    readonly property real larguraMaxima: medidaDoTitulo.averageCharacterWidth * 36
+    // max-width-chars: 36. A largura do caractere é a do Pango, 0,617 do corpo da fonte (a quebra da janela real da `main`;
+    // o `averageCharacterWidth` do Qt é menor e quebrava o rótulo e a descrição em duas linhas).
+    readonly property real larguraMaxima: 36 * 0.617 * Tema.corpo
+    readonly property real larguraDaLegenda: 36 * 0.617 * Tema.legenda
 
     opacity: opacidade
     implicitWidth: 3 + 12 + Math.max(280, conteudo.implicitWidth) + 16
@@ -47,9 +49,6 @@ Item {
         onFinished: cartao.terminou()
     }
 
-    FontMetrics { id: medidaDoRotulo; font: textoDoRotulo.font }
-    FontMetrics { id: medidaDoTitulo; font: textoDoTitulo.font }
-    FontMetrics { id: medidaDaDescricao; font: textoDaDescricao.font }
 
     Rectangle {
         anchors.fill: parent
@@ -136,7 +135,7 @@ Item {
                 id: textoDoRotulo
                 objectName: "rotuloDoAviso"
                 visible: text !== ""
-                width: Math.min(implicitWidth, 36 * medidaDoRotulo.averageCharacterWidth)
+                width: Math.min(implicitWidth, cartao.larguraDaLegenda)
                 text: cartao.rotulo
                 textFormat: Text.PlainText
                 wrapMode: Text.Wrap
@@ -162,7 +161,7 @@ Item {
                 id: textoDaDescricao
                 objectName: "descricaoDoAviso"
                 visible: text !== ""
-                width: Math.min(implicitWidth, 36 * medidaDaDescricao.averageCharacterWidth)
+                width: Math.min(implicitWidth, cartao.larguraDaLegenda)
                 text: cartao.descricao
                 textFormat: Text.PlainText
                 wrapMode: Text.Wrap

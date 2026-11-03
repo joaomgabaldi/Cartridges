@@ -84,6 +84,7 @@ OBRIGATORIOS = (
     "data/io.github.joaomgabaldi.Cartridges.gschema.xml.in",
     "data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in",
     "data/library_placeholder.svg",
+    "data/library_placeholder_small.svg",
     *LICENCAS.values(),
 )
 # O que de `data/` o app instalado lê.
@@ -92,6 +93,7 @@ DATA = (
     # O "Sobre o Cartridges" lê as novidades da versão e a descrição daqui.
     "io.github.joaomgabaldi.Cartridges.metainfo.xml.in",
     "library_placeholder.svg",
+    "library_placeholder_small.svg",
     # A capa e o ícone de conquista de exemplo do assistente da primeira abertura.
     "capa_de_exemplo.svg",
     "conquista_de_exemplo.svg",

@@ -25,6 +25,7 @@ Item {
     function focarGrade() { if (vazioComBotao) aviso.focarBotao(); else grade.forceActiveFocus() }
     function fecharMenuDoJogo() { grade.fecharMenu() }
     function focarJogo(jogoId) { grade.focarJogo(jogoId) }
+    function marcarTeclado() { grade.marcarTeclado() }
 
     // O controle do Xbox (Aplicativo.qml): o menu do jogo está aberto, e os comandos sobre o cartão atual.
     readonly property bool menuDoJogoAberto: grade.menuAberto

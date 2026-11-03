@@ -16,7 +16,7 @@ from PySide6.QtCore import QEventLoop, QSize, QTimer
 from cartridges import shared
 from cartridges.jogo import Jogo
 from cartridges.modelos import detalhes as modulo
-from cartridges.modelos.detalhes import DetalhesDoJogo
+from cartridges.modelos.detalhes import _FUNDO_SEM_CAPA, DetalhesDoJogo
 from cartridges.utils import desfoque, game_logo
 
 
@@ -336,7 +336,7 @@ def test_desfoque_sem_capa_usa_placeholder(app_qt, store, tmp_path):
     assert desfoque.calcular(tmp_path / "nao-existe.tiff") is None
     detalhes = _modelo(store, _jogo())
     detalhes.mostrar("a")
-    assert detalhes.fundo == ""
+    assert detalhes.fundo.endswith("library_placeholder_small.svg")
     assert detalhes._luminancia == (0.3, 0.5)  # noqa: SLF001
 
 
@@ -378,7 +378,7 @@ def test_desfoque_de_outro_jogo_e_descartado(app_qt, store, monkeypatch):
     liberar.set()
     assert _rodar_ate(lambda: entregas)  # o resultado de "a" chegou, e foi descartado
     assert detalhes.jogoId == "b"
-    assert detalhes.fundo == ""
+    assert detalhes.fundo == _FUNDO_SEM_CAPA
 
 
 def test_desfoque_em_voo_entre_sair_e_mostrar_nao_trava_o_fundo(app_qt, store, monkeypatch):
@@ -411,7 +411,7 @@ def test_desfoque_que_falha_ainda_entrega(app_qt, store, monkeypatch):
     monkeypatch.setattr(detalhes, "_fundo_chegou", lambda *a: (entregas.append(a), original(*a)))
     detalhes.mostrar("a")
     assert _rodar_ate(lambda: entregas)
-    assert entregas[0][2] is None and detalhes.fundo == ""
+    assert entregas[0][2] is None and detalhes.fundo == _FUNDO_SEM_CAPA
 
 
 def test_a_new_cover_recomputes_the_blur_for_the_open_page(app_qt, store):
@@ -419,10 +419,10 @@ def test_a_new_cover_recomputes_the_blur_for_the_open_page(app_qt, store):
     jogo = _jogo()
     detalhes = _modelo(store, jogo)
     detalhes.mostrar("a")
-    assert detalhes.fundo == ""
+    assert detalhes.fundo == _FUNDO_SEM_CAPA
     Image.new("RGB", (200, 300), "red").save(shared.covers_dir / "a.tiff")
     jogo.update()
-    assert _rodar_ate(lambda: detalhes.fundo)
+    assert _rodar_ate(lambda: detalhes.fundo.startswith("image://desfoque"))
     assert detalhes.fundo.startswith("image://desfoque/a?v=")
 
 

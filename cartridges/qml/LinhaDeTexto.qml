@@ -68,6 +68,8 @@ LinhaDoGrupo {
             // cursor, e voltar à janela ou fechar um balão não refaz o foco na `main` (colar não pode trocar o texto todo).
             onActiveFocusChanged: if (activeFocus && focusReason !== Qt.MouseFocusReason
                 && focusReason !== Qt.ActiveWindowFocusReason && focusReason !== Qt.PopupFocusReason) selectAll()
+            // Fora de foco o texto longo mostra o começo (a `GtkText` da `main`); no Qt o cursor iria ao fim e cortaria o início.
+            onTextChanged: if (!activeFocus) cursorPosition = 0
             onTextEdited: linha.editado()
             onAccepted: linha.confirmado()
         }

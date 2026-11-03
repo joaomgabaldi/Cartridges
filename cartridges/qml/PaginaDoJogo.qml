@@ -130,7 +130,7 @@ Item {
     readonly property int sobreABarra: Window.window && Window.window.alturaDaBarra ? Window.window.alturaDaBarra : 0
     Rectangle { anchors.fill: parent; color: Tema.escuro ? "black" : "white"; z: -2 }
 
-    // A capa desfocada, esticada; sem capa, o fundo liso (nada a desenhar).
+    // A capa desfocada, esticada; sem capa, o placeholder pequeno esticado.
     Item {
         anchors.fill: parent
         z: -1
@@ -202,6 +202,7 @@ Item {
     // `MenuButton` plano com rótulo: o texto e a seta `pan-down` (altura 34, padding 10).
     component BotaoDeMenu: Botao {
         id: botaoDeMenu
+        dicaSomeAoClicar: false
         estilo: "plano"
         leftPadding: 10
         rightPadding: 10

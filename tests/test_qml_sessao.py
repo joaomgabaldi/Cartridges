@@ -182,7 +182,7 @@ def test_anotacao_da_sessao_vai_ao_jogo_da_sessao(app_qt):
     app.fechar()
 
 
-def test_balao_aberto_deixa_o_botao_marcado_e_sem_dica(app_qt):
+def test_balao_aberto_deixa_o_botao_marcado(app_qt):
     """M4/M5: o `MenuButton` da `main` fica `:checked` com o balão aberto, e a dica não fica por cima dele."""
     app = _app()
     _comecar(app)
@@ -192,7 +192,6 @@ def test_balao_aberto_deixa_o_botao_marcado_e_sem_dica(app_qt):
     balao = app.achar("balaoDaSessao")
     assert _esperar(lambda: balao.property("opened") is True)
     assert botao.property("checked") is True
-    assert botao.property("dicaAtiva") is False
     balao.close()
     assert _esperar(lambda: botao.property("checked") is False)
     app.fechar()

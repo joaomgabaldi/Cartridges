@@ -416,7 +416,7 @@ def test_o_clique_esconde_a_dica_ate_o_ponteiro_sair(app_qt):
         (
             'import QtQuick\nimport QtQuick.Controls.Basic\nimport "file:///%s"\n'
             "Window { width: 200; height: 200; visible: true; property alias ativa: d.ativa; readonly property bool aVista: d.visible\n"
-            '  Button { width: 80; height: 40; Dica { id: d; texto: "Buscar"; ativa: true; delay: 0 } } }'
+            '  Button { width: 80; height: 40; Dica { id: d; texto: "Buscar"; ativa: true; delay: 0; someAoClicar: true } } }'
             % QML.as_posix()
         ).encode("utf-8"),
         QUrl("file:///dica.qml"),
@@ -432,3 +432,18 @@ def test_o_clique_esconde_a_dica_ate_o_ponteiro_sair(app_qt):
     assert raiz.property("aVista") is True
     raiz.close()
     raiz.deleteLater()
+
+
+def test_campo_fora_de_foco_mostra_o_comeco_do_texto(app_qt):
+    """Na `main` o texto longo aparece do início; no Qt o cursor iria ao fim e cortaria o começo."""
+    motor = QQmlEngine()
+    componente = QQmlComponent(motor)
+    componente.setData(
+        ('import QtQuick\nimport "file:///%s"\nLinhaDeTexto { width: 200; text: "%s" }' % (QML.as_posix(), "x" * 200)).encode("utf-8"),
+        QUrl("file:///campo.qml"),
+    )
+    linha = componente.create()
+    assert linha is not None, componente.errorString()
+    campo = next(f for f in linha.findChildren(QObject) if f.metaObject().className().startswith("TextField"))
+    assert campo.property("cursorPosition") == 0
+    linha.deleteLater()

@@ -33,5 +33,5 @@ Button {
         AnelDeFoco { ativo: botao.visualFocus; raio: parent.radius }
     }
 
-    Dica { texto: botao.dica; ativa: botao.hovered }
+    Dica { texto: botao.dica; ativa: botao.hovered; someAoClicar: true }
 }

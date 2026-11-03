@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A janela "Jogando {nome}" da sessão manual (D50, R3): sem moldura (barra própria), 300x150, canto da área de trabalho."""
+"""A janela "Jogando {nome}" da sessão manual (D50, R3): sem moldura (barra própria), 360x200, canto da área de trabalho."""
 
 import json
 import os
@@ -58,9 +58,9 @@ def test_titulo_e_tamanho_fixo(app_qt, monkeypatch):
     app = _app(monkeypatch)
     janela = _abrir(app)
     assert janela.title() == "Jogando A & B"
-    assert (janela.width(), janela.height()) == (300, 150)
-    assert (janela.minimumWidth(), janela.minimumHeight()) == (300, 150)
-    assert (janela.maximumWidth(), janela.maximumHeight()) == (300, 150)
+    assert (janela.width(), janela.height()) == (360, 200)
+    assert (janela.minimumWidth(), janela.minimumHeight()) == (360, 200)
+    assert (janela.maximumWidth(), janela.maximumHeight()) == (360, 200)
     assert _achar(janela, "botaoTermineiDaJanela") is not None
     app.fechar()
 
@@ -71,16 +71,16 @@ def test_barra_propria_de_47_com_titulo_minimizar_e_fechar_e_o_botao_no_resto(ap
     app = _app(monkeypatch)
     janela = _abrir(app)
     barra = _achar(janela, "barraDaJanelaDaSessao")
-    assert (barra.width(), barra.height()) == (300, 47)
+    assert (barra.width(), barra.height()) == (360, 47)
     assert barra.property("comMaximizar") is False  # só minimizar e fechar, como a janela das tarefas
     assert barra.property("titulo") == "Jogando A & B"
     assert _achar(barra, "tituloDaBarraTexto").property("text") == "Jogando A & B"
     assert not janela.flags() & Qt.WindowType.WindowMaximizeButtonHint
     botao = _achar(janela, "botaoTermineiDaJanela")
     assert (botao.height(), botao.property("estilo"), botao.property("pilula")) == (44, "sugestao", True)
-    # No meio do que sobra abaixo da barra: (150 - 47) / 2 + 47 = 98,5.
+    # No meio do que sobra abaixo da barra: (200 - 47) / 2 + 47 = 123,5.
     centro = botao.mapToScene(botao.boundingRect().center())
-    assert (centro.x(), abs(centro.y() - 98.5) <= 0.5) == (150.0, True)
+    assert (centro.x(), abs(centro.y() - 123.5) <= 0.5) == (180.0, True)
     app.fechar()
 
 
@@ -147,8 +147,8 @@ def test_posicionar_usa_o_hwnd_da_janela_e_nao_rouba_o_foco(app_qt, monkeypatch)
 
     modelo = modulo.ModeloDaSessao(None)
     modelo.posicionarJanelaManual(Janela())
-    # Janela 316x158 (com a borda invisível) na área 1920x1040, margem 12: o canto fica em 1592,870.
-    assert chamadas == [(4242, 0, 1592, 870, 0, 0, 0x0015)]
+    # Janela 316x158 (com a borda invisível) na área 1920x1040, margem 29: o canto fica em 1575,853.
+    assert chamadas == [(4242, 0, 1575, 853, 0, 0, 0x0015)]
 
 
 def test_falha_no_win32_deixa_onde_esta(app_qt, monkeypatch, caplog):

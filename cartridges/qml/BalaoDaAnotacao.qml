@@ -16,13 +16,14 @@ Popup {
     // O balão fica centrado no botão (com seta) e a largura cresce para os dois lados. O espaço livre é, então, o dobro do
     // menor lado entre o centro do botão e a borda da janela; embaixo, o que sobra depois da seta e da faixa do puxador.
     function centroNaCena() { return parent ? parent.mapToItem(null, parent.width / 2, parent.height) : Qt.point(0, 0) }
-    function livreLargura() { var c = centroNaCena(); return 2 * Math.min(c.x, janelaLargura - c.x) - 16 }
-    function livreAltura() { return janelaAltura - centroNaCena().y - 6 - 16 - 8 }
+    function livreLargura() { var c = centroNaCena(); return 2 * Math.min(c.x, janelaLargura - c.x) - 32 }
+    function livreAltura() { return janelaAltura - centroNaCena().y - 6 - 32 - 8 }
 
     x: parent ? Math.round((parent.width - width) / 2) : 0
     y: parent ? parent.height + 6 : 0
-    padding: 0
-    bottomPadding: 16  // a faixa do puxador, abaixo do texto
+    // `popover > contents`: 8 em volta; embaixo soma a faixa do puxador.
+    padding: 8
+    bottomPadding: 24
     margins: 8
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
     function restaurar() { if (caixa) caixa.restaurar(janelaLargura, janelaAltura, livreLargura(), livreAltura()) }
@@ -55,11 +56,9 @@ Popup {
     contentItem: Item {
         implicitWidth: raiz.caixa ? raiz.caixa.largura : 320
         implicitHeight: raiz.caixa ? raiz.caixa.altura : 120
-        // `textview`: o fundo da vista; só os cantos de cima são redondos (a faixa do puxador fica abaixo).
+        // `textview`: o fundo da vista, dentro da margem do balão.
         Rectangle {
             anchors.fill: parent
-            topLeftRadius: 15
-            topRightRadius: 15
             color: Tema.vista
         }
         ScrollView {

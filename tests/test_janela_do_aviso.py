@@ -78,7 +78,7 @@ def test_texto_longo_quebra_em_36_caracteres(abrir):
     janela = abrir(descricao="Uma descrição muito comprida que não cabe numa linha só do cartão do aviso.")
     descricao = _filho(janela, "descricaoDoAviso")
     assert descricao.property("lineCount") > 1
-    assert descricao.property("width") <= janela.rootObject().property("larguraMaxima") + 0.5
+    assert descricao.property("width") <= janela.rootObject().property("larguraDaLegenda") + 0.5
 
 
 def test_sem_descricao_so_duas_linhas(abrir):
@@ -232,9 +232,9 @@ def test_cartao_tem_as_fontes_e_os_limites_da_main(abrir):
         assert _expr(caption, "font.pixelSize") == 10 and _expr(caption, "lineHeight") == 1.4
     assert _expr(titulo, "font.pixelSize") == 12 and _expr(titulo, "font.weight") == 700
     limites = {
-        rotulo: _expr(raiz, "medidaDoRotulo.averageCharacterWidth") * 36,
-        titulo: _expr(raiz, "medidaDoTitulo.averageCharacterWidth") * 36,
-        descricao: _expr(raiz, "medidaDaDescricao.averageCharacterWidth") * 36,
+        rotulo: 222,  # 36 x 0,617 x 10 px
+        titulo: 266.5,  # 36 x 0,617 x 12 px
+        descricao: 222,
     }
     for texto, limite in limites.items():
         assert texto.property("width") == pytest.approx(limite, abs=0.5)

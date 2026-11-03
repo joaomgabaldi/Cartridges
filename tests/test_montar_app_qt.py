@@ -44,6 +44,7 @@ def insumos(tmp_path):
     _tocar(raiz / "cartridges" / "instalacao.json", '{"canal": "final"}')
     _tocar(raiz / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml.in")
     _tocar(raiz / "data" / "library_placeholder.svg")
+    _tocar(raiz / "data" / "library_placeholder_small.svg")
     _tocar(raiz / "data" / "io.github.joaomgabaldi.Cartridges.metainfo.xml.in", "<component/>")
     _tocar(raiz / "data" / "sons" / "tique.wav")
     _tocar(raiz / "data" / "icons" / "hicolor" / "scalable" / "apps" / "app.svg")
@@ -85,6 +86,7 @@ def test_monta_a_arvore_do_app(insumos, tmp_path):
     # `data/` ao lado do pacote: é onde shared, configuracoes e modelos a procuram
     assert (destino / "app" / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml.in").is_file()
     assert (destino / "app" / "data" / "library_placeholder.svg").is_file()
+    assert (destino / "app" / "data" / "library_placeholder_small.svg").is_file()
     assert (destino / "app" / "data" / "sons" / "tique.wav").is_file()
     assert (destino / "app" / "data" / "icons" / "hicolor" / "scalable" / "apps" / "app.svg").is_file()
     assert not (destino / "app" / "data" / "screenshots").exists()

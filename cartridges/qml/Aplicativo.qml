@@ -31,6 +31,12 @@ Principal {
         if (detalhes.mostrar(jogoId)) empurrar(paginaDoJogo, { anotarAoEntrar: anotar })
     }
     // Fecha a página de detalhes, ou sai de Jogos Zerados; o foco volta ao cartão de onde se saiu.
+    // Pelo teclado, o cartão de volta acende o anel (`:focus-visible` da `main`).
+    function voltarPeloTeclado() {
+        const abaixo = pilha.depth > 1 ? pilha.get(pilha.depth - 2) : todos
+        if (abaixo && abaixo.marcarTeclado) abaixo.marcarTeclado()
+        voltar()
+    }
     function voltar() {
         if (paginaAtual === "jogo" && pilha.depth > 1) { detalhes.esquecer(); pilha.pop() }
         else if (paginaAtual !== "todos") sairDaPilha()
@@ -140,7 +146,7 @@ Principal {
     Shortcut {
         sequences: ["Alt+Left", "Back"]
         enabled: janela.podeVoltarPorAtalho
-        onActivated: janela.voltar()
+        onActivated: janela.voltarPeloTeclado()
     }
     TapHandler {
         acceptedButtons: Qt.BackButton
@@ -321,7 +327,7 @@ Principal {
             ativa: StackView.status !== StackView.Inactive && !bigPicture.visivel && !sessao.emAndamento
             onAbrirDetalhes: id => janela.abrirDetalhes(id)
             onEditar: id => edicao.abrir(id)
-            onVoltar: janela.voltar()
+            onVoltar: janela.voltarPeloTeclado()
             StackView.onActivated: focarGrade()
             // O fundo cobre "Todos os jogos" durante a transição.
             Rectangle { anchors.fill: parent; color: Tema.fundo; z: -1 }
@@ -341,7 +347,7 @@ Principal {
         PaginaDoJogo {
             objectName: "paginaDoJogo"
             placeholder: paginaTodos.placeholder
-            onVoltar: janela.voltar()
+            onVoltar: janela.voltarPeloTeclado()
             onJogar: detalhes.jogar()
             onEditar: edicao.abrir(detalhes.jogoId)
             onRemover: detalhes.remover()

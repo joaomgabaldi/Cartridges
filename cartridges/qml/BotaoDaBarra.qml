@@ -3,6 +3,7 @@ import QtQuick.Window
 
 // Botão de ícone da barra de título: plano, 34x34, raio 9. `icone` é o nome em `data/icones`; `dica` é o tooltip.
 Botao {
+    dicaSomeAoClicar: false
     id: botao
 
     // O menu deste botão está aberto: a dica sairia por cima dele.

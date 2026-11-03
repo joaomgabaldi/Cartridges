@@ -14,7 +14,7 @@ SeletorBase {
     property QtObject seletor
 
     // `min-children-per-line: 1`, `max-children-per-line: 4`.
-    readonly property int colunas: Math.max(1, Math.min(4, Math.floor((conteudo.width - 24 + 12) / (seletor.larguraDaCelula + 12))))
+    readonly property int colunas: Math.max(1, Math.min(4, Math.floor((conteudo.width - 24 - 12) / (seletor.larguraDaCelula + 18))))
 
     aberto: seletor.aberto
     largura: 860
@@ -120,8 +120,9 @@ SeletorBase {
                 model: seletorDePapel.seletor
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
-                cellWidth: seletorDePapel.seletor.larguraDaCelula + 12
-                cellHeight: seletorDePapel.seletor.alturaDaCelula + 12
+                // O `FlowBoxChild` soma 3 de cada lado da miniatura, e o `FlowBox` afasta 12 (medido na `main`).
+                cellWidth: seletorDePapel.seletor.larguraDaCelula + 18
+                cellHeight: seletorDePapel.seletor.alturaDaCelula + 18
                 // A barra é da página inteira, como o `ScrolledWindow` da `main`: fica na borda, não sobre a última coluna.
                 ScrollBar.vertical: BarraDeRolagem {
                     objectName: seletorDePapel.objectName + "Rolagem"

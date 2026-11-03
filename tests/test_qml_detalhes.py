@@ -65,6 +65,7 @@ def test_esc_volta_e_foca_o_cartao(app_qt):
     grade = app.achar("grade")
     assert _esperar(lambda: grade.property("activeFocus") is True)
     assert grade.property("currentIndex") == 2
+    assert grade.property("porTeclado") is True  # o anel volta com o cartão, como no `:focus-visible` da `main`
     assert app.detalhes.jogoId == "imported_3"  # o modelo ainda guarda; o que importa é que parou de seguir
     assert app.detalhes._jogo is None  # noqa: SLF001
     app.fechar()

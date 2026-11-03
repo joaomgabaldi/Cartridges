@@ -12,13 +12,15 @@ ToolTip {
     objectName: "dica"
     text: texto
     delay: 500
-    // O clique esconde a dica até o ponteiro sair (GTK): um diálogo aberto pelo botão não fica com a dica por cima.
+    // Para o botão que abre um diálogo: no GTK a dica sai junto com o ponteiro, coberto pelo diálogo. O Qt só vê o ponteiro
+    // sair quando ele anda, então o clique a esconde. Quem abre balão não liga: a dica fica, como na `main`.
+    property bool someAoClicar: false
     property bool _clicada: false
     onAtivaChanged: if (!ativa) _clicada = false
     Connections {
         target: dica.parent
         ignoreUnknownSignals: true
-        function onPressedChanged() { if (dica.parent.pressed && dica.ativa) dica._clicada = true }
+        function onPressedChanged() { if (dica.someAoClicar && dica.parent.pressed && dica.ativa) dica._clicada = true }
     }
     visible: ativa && !_clicada && texto !== ""
     popupType: Popup.Item

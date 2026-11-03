@@ -40,7 +40,7 @@ LinhaDoGrupo {
         onClicked: linha.acionada()
         contentItem: Item {}
         background: Item {}
-        Dica { texto: linha.dica; ativa: botao.hovered }
+        Dica { texto: linha.dica; ativa: botao.hovered; someAoClicar: true }
     }
 
     Row {

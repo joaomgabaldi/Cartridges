@@ -36,6 +36,8 @@ from cartridges.utils.thread_principal import na_thread_principal
 _COLUNAS_HLTB = (_("História"), _("Extras"), _("Completista"))
 _CHAVES_HLTB = ("hltb_main", "hltb_main_extra", "hltb_completionist")
 _RESERVA = desfoque.LUMINANCIA_RESERVA
+# Sem capa, o fundo é o placeholder pequeno esticado, sem desfoque (`GameCover._apply_blur` da `main`).
+_FUNDO_SEM_CAPA = (Path(__file__).resolve().parent.parent.parent / "data" / "library_placeholder_small.svg").as_uri()
 _BUSCAS = {
     "igdb": "https://www.igdb.com/search?type=1&q=",
     "sgdb": "https://www.steamgriddb.com/search/grids?term=",
@@ -536,7 +538,7 @@ class DetalhesDoJogo(QObject):
         caminho = jogo.get_cover_path()
         if caminho is None:
             self._luminancia = _RESERVA
-            return {"fundo": ""}
+            return {"fundo": _FUNDO_SEM_CAPA}
         threading.Thread(
             target=_calcular_fundo, args=(weakref.ref(self), jogo.game_id, chave, caminho), daemon=True
         ).start()
@@ -546,9 +548,9 @@ class DetalhesDoJogo(QObject):
         if game_id != self._atual or chave != self._chave_do_fundo:
             return
         if resultado is None:
-            # Sem capa legível: o QML usa o fundo de reserva.
+            # Sem capa legível: o fundo de reserva.
             self._luminancia = _RESERVA
-            self._mesclar({"fundo": ""})
+            self._mesclar({"fundo": _FUNDO_SEM_CAPA})
             return
         self.provedor.guardar(game_id, resultado.png)
         self._versao_do_fundo += 1

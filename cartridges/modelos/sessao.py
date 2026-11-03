@@ -342,7 +342,8 @@ class ModeloDaSessao(QObject):
         try:
             hwnd = int(janela.winId())
             esquerda, topo, direita, base = _retangulo_da_janela(hwnd)
-            x, y = canto_inferior_direito(_area_de_trabalho(), direita - esquerda, base - topo)
+            # 37 px visíveis até a área de trabalho na `main` (12 + a sombra de 25); aqui o retângulo já soma 8 de moldura invisível.
+            x, y = canto_inferior_direito(_area_de_trabalho(), direita - esquerda, base - topo, margem=29)
             _posicionar(hwnd, x, y)
         except Exception:  # noqa: BLE001
             logging.getLogger(__name__).exception("Não foi possível posicionar a janela Jogando")

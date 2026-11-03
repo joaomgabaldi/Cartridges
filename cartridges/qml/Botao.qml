@@ -18,6 +18,8 @@ Button {
     // Corta o rótulo com reticências quando o botão é mais estreito que ele (o `Gtk.Label` das respostas do `AdwAlertDialog`).
     property bool cortarRotulo: false
     property bool dicaAtiva: hovered
+    // O botão que abre diálogo esconde a dica ao clicar; quem abre balão desliga isto (`Dica.someAoClicar`).
+    property bool dicaSomeAoClicar: true
     // Sem o realce do ponteiro (o botão insensível da `main`, que ainda mostra a dica).
     property bool semRealce: false
     property real raio: pilula || circular ? height / 2 : 9
@@ -112,5 +114,5 @@ Button {
         AnelDeFoco { ativo: botao.visualFocus; raio: parent.radius; afastamento: botao.afastamentoDoAnel }
     }
 
-    Dica { texto: botao.dica; ativa: botao.dicaAtiva }
+    Dica { texto: botao.dica; ativa: botao.dicaAtiva; someAoClicar: botao.dicaSomeAoClicar }
 }
