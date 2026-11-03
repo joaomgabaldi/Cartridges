@@ -236,6 +236,13 @@ def test_conectado_com_menu_aberto_entra(app_qt, monkeypatch):
     app.achar("menuPrincipal").open()
     app.controle.conectado.emit()
     assert app.big_picture.ocupada
+    # Concluída a entrada, o menu não fica por cima do Big Picture e o direcional troca a capa.
+    assert _esperar(lambda: app.big_picture.visivel and not app.big_picture.ocupada, limite=5)
+    assert app.achar("menuPrincipal").property("opened") is False
+    assert app.controle.property("modoBigPicture") is True
+    app.controle.mover.emit(1, 0)
+    assert app.big_picture.indice == 1
+    app.big_picture.encerrar()
     app.fechar()
 
 

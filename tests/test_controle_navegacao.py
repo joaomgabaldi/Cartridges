@@ -182,13 +182,17 @@ def test_pagina_vazia_o_direcional_alcanca_o_botao_importar_e_o_a_aciona(app_qt)
     app.aplicativo.importar = lambda: chamadas.append("importar")
     estado = app.achar("estadoVazio")
     assert _esperar(lambda: estado.property("visible") is True)
-    app.controle.mover.emit(0, 1)
+    assert _esperar(lambda: estado.property("botaoFocado") is True)  # a página vazia já abre com o foco no botão
+    app.controle.ativar.emit()
+    assert chamadas == ["importar"]
+    app.controle.mover.emit(0, -1)  # ↑ vai à barra
+    assert estado.property("botaoFocado") is False
+    app.leitor.vibracoes.clear()
+    app.controle.mover.emit(0, 1)  # ↓ da barra: direto ao botão, não à grade invisível
     assert estado.property("botaoFocado") is True
     assert app.leitor.vibracoes == [MOVE]
     app.controle.ativar.emit()
-    assert chamadas == ["importar"]
-    app.controle.mover.emit(0, -1)  # ↑ volta à barra
-    assert estado.property("botaoFocado") is False
+    assert chamadas == ["importar", "importar"]
     app.fechar()
 
 

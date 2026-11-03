@@ -148,6 +148,41 @@ def test_lista_de_escolha_aberta_o_direcional_e_o_a_escolhem(app):
     assert escolha.property("currentIndex") == inicio + 1
 
 
+def test_lista_de_escolha_aberta_passo_que_anda_vibra_o_tique_e_a_ponta_o_toque(app):
+    # C-10: na lista aberta o passo que move o realce é MOVE; só a ponta é EDGE.
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: app.achar("dialogoDeEdicao").property("visible") is True)
+    caixa = app.achar("escolhaDeStatusCaixa")
+    caixa.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.controle.ativar.emit()
+    assert _esperar(lambda: _avaliar(caixa, "popup.visible") is True)
+    app.leitor.vibracoes.clear()
+    app.controle.mover.emit(0, 1)
+    assert app.leitor.vibracoes == [MOVE]
+    for _ in range(_avaliar(caixa, "count")):
+        app.controle.mover.emit(0, 1)
+    assert app.leitor.vibracoes[-1] == EDGE
+
+
+def test_passo_lateral_sem_vizinho_na_mesma_altura_nao_move_o_foco(app):
+    # I1: ← e → só alcançam controles que se cruzam com o foco na vertical (`focus_sort` do GTK).
+    app.sobre.abrir()
+    assert _esperar(lambda: app.achar("dialogoSobre").property("visible") is True)
+    _com_foco_em(app, "linhaProblemas")
+    app.controle.mover.emit(1, 0)
+    assert app.achar("linhaProblemas").property("activeFocus") is True
+    assert app.leitor.vibracoes == [EDGE]
+
+
+def test_esquerda_no_campo_nome_nao_vai_ao_cancelar(app):
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: app.achar("dialogoDeEdicao").property("visible") is True)
+    _com_foco_em(app, "campoNome")
+    app.controle.mover.emit(-1, 0)
+    assert app.achar("campoNome").property("activeFocus") is True
+    assert app.leitor.vibracoes == [EDGE]
+
+
 def test_menu_cada_passo_vibra_e_a_ponta_vibra_o_toque(app):
     # C-10: em menus cada passo vibra, o tique se o realce andou e o toque firme se bateu.
     menu = app.achar("menuPrincipal")

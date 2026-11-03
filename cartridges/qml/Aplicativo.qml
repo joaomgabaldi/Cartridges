@@ -499,6 +499,16 @@ Principal {
         function onSaiu(jogoId) { todos.focarJogo(jogoId) }
     }
 
+    // Entrando no Big Picture (por exemplo ao conectar o controle) nenhum menu fica aberto por cima dele.
+    Connections {
+        target: bigPicture
+        function onAlterado() {
+            if (!bigPicture.visivel) return
+            menuPrincipal.close()
+            todos.fecharMenuDoJogo()
+        }
+    }
+
     // Acima do Big Picture e abaixo dos avisos (D49).
     CamadaDaSessao {
         id: camadaDaSessao
@@ -670,11 +680,18 @@ Principal {
     // O controle do escopo mais perto, na direção, do foco: o vizinho geométrico entre os da ordem do Tab.
     function vizinhoNaDirecao(foco, escopo, dx, dy) {
         var c0 = foco.mapToItem(null, foco.width / 2, foco.height / 2)
+        var r0 = foco.mapToItem(null, 0, 0)
         var melhor = null, nota = 1e9, atual = foco
         for (var i = 0; i < 500; ++i) {
             atual = atual.nextItemInFocusChain(true)
             if (!atual || atual === foco) break
             if (!atual.visible || !atual.enabled || !descende(atual, escopo)) continue
+            // Como o `focus_sort` do GTK: o candidato tem de se cruzar com o foco no eixo perpendicular (a faixa vertical
+            // para ←/→, a horizontal para ↑/↓); sem isso o toque lateral saltaria para outra altura do diálogo.
+            var r = atual.mapToItem(null, 0, 0)
+            var cruza = dx !== 0 ? r.y < r0.y + foco.height && r.y + atual.height > r0.y
+                                 : r.x < r0.x + foco.width && r.x + atual.width > r0.x
+            if (!cruza) continue
             var c = atual.mapToItem(null, atual.width / 2, atual.height / 2)
             var adiante = (c.x - c0.x) * dx + (c.y - c0.y) * dy
             if (adiante < 1) continue
@@ -710,7 +727,8 @@ Principal {
         for (var p = foco; p; p = p.parent)
             if (typeof p.contentY === "number") { rolagem = p.contentY; break }
         return [foco, escopo && escopo.parent === Overlay.overlay ? realcadoEm(escopo) : null, rolagem,
-                foco && typeof foco.currentIndex === "number" ? foco.currentIndex : -1]
+                foco && typeof foco.currentIndex === "number" ? foco.currentIndex : -1,
+                foco && typeof foco.highlightedIndex === "number" ? foco.highlightedIndex : -1]
     }
     // Um passo com diálogo ou menu na frente. Primeiro o vizinho geométrico; sem ele, a tecla de seta (menus, listas e
     // grades andam por elas), exceto nos controles de valor, onde a seta mudaria o que está escolhido. Devolve se mexeu.

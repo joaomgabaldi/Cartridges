@@ -20,7 +20,10 @@ Item {
     // Esc em Jogos Zerados volta (`pop-on-escape` da `AdwNavigationPage`); "Todos os jogos" não tem para onde.
     signal voltar()
 
-    function focarGrade() { grade.forceActiveFocus() }
+    // Página vazia com o botão "Importar": é ele que recebe o foco, não a grade invisível.
+    readonly property bool vazioComBotao: grade.count === 0 && aviso.visible && aviso.rotuloDoBotao !== ""
+    function focarGrade() { if (vazioComBotao) aviso.focarBotao(); else grade.forceActiveFocus() }
+    function fecharMenuDoJogo() { grade.fecharMenu() }
     function focarJogo(jogoId) { grade.focarJogo(jogoId) }
 
     // O controle do Xbox (Aplicativo.qml): o menu do jogo está aberto, e os comandos sobre o cartão atual.
@@ -56,6 +59,7 @@ Item {
     // primeiro jogo (`_focus_first`); devolve se foi.
     function mostrarSelecao() {
         if (buscaAberta) return false
+        if (vazioComBotao) { aviso.focarBotao(); return false }
         const foraDaGrade = !grade.activeFocus && grade.count > 0
         grade.porTeclado = true
         if (foraDaGrade) { grade.currentIndex = 0; grade.rolarAte(0) }

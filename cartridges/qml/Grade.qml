@@ -116,6 +116,7 @@ GridView {
     }
 
     readonly property bool menuAberto: menuDoJogo.visible
+    function fecharMenu() { menuDoJogo.close() }
     // Rolada para além do topo: a linha de baixo da barra de título acende (`sombraDaBarra`).
     readonly property bool rolado: contentY - (originY - topMargin) > 0
 
