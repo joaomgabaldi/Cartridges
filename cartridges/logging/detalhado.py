@@ -17,22 +17,13 @@
 
 """Log detalhado: grava no log toda chamada de função do pacote ``cartridges``.
 
-Usa ``sys.monitoring`` (PEP 669). Cada entrada, saída (com o valor devolvido e
-o tempo) e exceção vira uma linha DEBUG do logger ``cartridges.rastreio``, com
-a profundidade da chamada. Nenhum valor é filtrado: o log pode conter dados
-sensíveis, por decisão do usuário.
+Usa ``sys.monitoring`` (PEP 669): cada entrada, saída (com o valor devolvido e o tempo) e exceção vira uma linha DEBUG do
+logger ``cartridges.rastreio``. Nenhum valor é filtrado: o log pode conter dados sensíveis.
 
-Telas do QML: o Qt não avisa a criação de um item, só o ``ChildAdded`` do pai, e
-tocar no filho nesse instante quebra o wrapper do PySide. Por isso o filtro só
-liga os sinais quando varre a árvore já pronta: ao mostrar uma janela
-(``Show``), ao carregar um ``Loader`` e ao trocar a página de uma ``StackView``.
-Nessa varredura, todo item de tipo QML do app ganha o ``visibleChanged``, e a
-tela que só alterna ``visible`` vira "apareceu"/"sumiu".
-
-Limites conhecidos: um item criado depois da varredura e que não passa por um
-``Loader`` nem pela ``StackView`` (por exemplo, o delegate de uma lista, ou um
-``Component.createObject`` solto) não é vigiado; e um ``Popup`` só é ligado
-quando recebe um filho ou quando a varredura o encontra.
+Telas do QML: o Qt só avisa o ``ChildAdded`` do pai, e tocar no filho nesse instante quebra o wrapper do PySide. Por isso
+os sinais só são ligados varrendo a árvore pronta: ao mostrar uma janela (``Show``), carregar um ``Loader`` ou trocar a
+página de uma ``StackView``. Não são vigiados um item criado depois disso fora de ``Loader``/``StackView`` (delegate de
+lista, ``Component.createObject``), nem um ``Popup`` até receber um filho.
 """
 
 import logging
@@ -61,7 +52,6 @@ _estado = threading.local()
 
 
 def ativo() -> bool:
-    """Diz se o rastreio deve ser ligado: a variável de ambiente vence ``ATIVO``."""
     valor = os.environ.get(_VARIAVEL)
     if valor == "1":
         return True
@@ -71,19 +61,13 @@ def ativo() -> bool:
 
 
 def _e_do_app(code, frame) -> bool:  # type: ignore
-    """Se o código pertence ao app (e não ao próprio rastreio nem a terceiros).
-
-    Usa o ``__name__`` dos globais, e não ``co_filename``, que muda no app
-    instalado a partir de ``.pyc``.
-    """
-    # Sem cache por `code`: ele compara por valor, e funções idênticas de um
-    # módulo de terceiros e do app colidiriam.
+    """Se o código pertence ao app. Usa o ``__name__`` dos globais: o ``co_filename`` muda no app instalado (``.pyc``)."""
+    # Sem cache por `code`: ele compara por valor, e funções idênticas de terceiros e do app colidiriam.
     nome = frame.f_globals.get("__name__", "")
     return nome.startswith("cartridges.") and not nome.startswith("cartridges.logging")
 
 
 def _valor(obj) -> str:  # type: ignore
-    """O ``repr`` do valor, cortado; ele já escapa a quebra de linha."""
     try:
         texto = repr(obj)
     except Exception:  # pylint: disable=broad-exception-caught
@@ -94,7 +78,6 @@ def _valor(obj) -> str:  # type: ignore
 
 
 def _argumentos(code, frame) -> str:  # type: ignore
-    """Os parâmetros da função com os valores recebidos, como ``a=1, b=2``."""
     quantos = code.co_argcount + code.co_kwonlyargcount
     if code.co_flags & 0x04:  # *args
         quantos += 1
@@ -116,12 +99,9 @@ def _rotulo(code, frame) -> str:  # type: ignore
 
 
 def _evento(empilha: bool, desempilha: bool, texto, desliga: bool = False):  # type: ignore
-    """Monta o callback de um evento.
+    """Monta o callback de um evento; ``texto`` devolve a linha, ou ``None`` para só mexer na pilha.
 
-    ``texto(code, frame, profundidade, duracao, extra)`` devolve a linha, ou
-    ``None`` para só mexer na pilha. Todo callback engole qualquer falha: o
-    rastreio nunca levanta dentro do código rastreado. ``desliga`` marca os
-    eventos que aceitam ``DISABLE`` para o código de terceiros.
+    O callback engole qualquer falha (o rastreio nunca levanta no código rastreado); ``desliga`` marca os eventos que aceitam ``DISABLE``.
     """
 
     def callback(code, _offset, *extra):  # type: ignore
@@ -167,9 +147,7 @@ def _levantou(code, frame, profundidade, _duracao, extra):  # type: ignore
     return "%d ! %s levantou %s" % (profundidade, _rotulo(code, frame), _valor(extra[0]))
 
 
-# Sem DISABLE em RAISE/PY_UNWIND/PY_THROW: eles não aceitam. PY_THROW (um
-# gerador abandonado recebendo `close()`) empilha, para o PY_UNWIND seguinte
-# não desempilhar a chamada de outra função.
+# Sem DISABLE em RAISE/PY_UNWIND/PY_THROW (não aceitam). PY_THROW (gerador abandonado recebendo `close()`) empilha, para o PY_UNWIND seguinte não desempilhar outra função.
 _CALLBACKS = {
     _EV.PY_START: _evento(True, False, _entrada, True),
     _EV.PY_RESUME: _evento(True, False, _retomada, True),
@@ -183,7 +161,6 @@ _instalado = False
 
 
 def instalar_rastreio() -> None:
-    """Liga o rastreio em todas as threads. Não faz nada se já estiver ligado."""
     global _instalado  # pylint: disable=global-statement
     if _instalado:
         return
@@ -196,7 +173,6 @@ def instalar_rastreio() -> None:
 
 
 def remover_rastreio() -> None:
-    """Desliga o rastreio e devolve a ferramenta do ``sys.monitoring``."""
     global _instalado  # pylint: disable=global-statement
     if not _instalado:
         return
@@ -206,8 +182,6 @@ def remover_rastreio() -> None:
     _mon.free_tool_id(_FERRAMENTA)
     _instalado = False
 
-
-# --- Eventos do Qt --------------------------------------------------------------
 
 _log_ui = logging.getLogger("cartridges.interface")
 _ET = QEvent.Type
@@ -229,10 +203,7 @@ def _nome(objeto) -> str:  # type: ignore
 
 
 def _quem(objeto) -> str:  # type: ignore
-    """Identifica o alvo: classe, nome, texto (se houver) e a tela que o contém.
-
-    Ex.: ``BotaoDoDialogo('botaoCancelar') texto='Cancelar' dentro de Dialogo('confirmacao')``.
-    """
+    """Identifica o alvo: classe, nome, texto (se houver) e a tela que o contém."""
     texto = f"{_nome(objeto)}({objeto.objectName()!r})"
     rotulo = objeto.property("text")
     if isinstance(rotulo, str) and rotulo:
@@ -256,10 +227,7 @@ def _detalhe(evento) -> str:  # type: ignore
 
 
 class FiltroDeEventos(QObject):
-    """Filtro de eventos do app: grava cliques, teclas, janelas e telas do QML.
-
-    Nunca consome o evento (devolve sempre ``False``) e nunca levanta.
-    """
+    """Filtro de eventos do app: grava cliques, teclas, janelas e telas do QML. Nunca consome o evento nem levanta."""
 
     def eventFilter(self, destino, evento):  # type: ignore  # pylint: disable=invalid-name
         try:
@@ -278,10 +246,7 @@ class FiltroDeEventos(QObject):
 def _ligar_tela(alvo) -> None:  # type: ignore
     """Liga os sinais de um popup ou loader do QML, quando ele recebe um filho.
 
-    O Qt não avisa a criação do Popup ou Loader em si, só a dos filhos dele
-    (ChildAdded no pai). O filho nunca é tocado nem guardado: no ChildAdded ele
-    ainda está no construtor da base, e segurar o ponteiro faz o PySide
-    registrar um wrapper errado para ele.
+    O filho nunca é tocado nem guardado: no ChildAdded ele ainda está no construtor da base, e segurar o ponteiro faz o PySide registrar um wrapper errado.
     """
     if alvo.property("_logLigado"):
         return
@@ -342,11 +307,7 @@ def _pilha_mudou(pilha) -> None:  # type: ignore
 
 
 def _varrer(raiz) -> None:  # type: ignore
-    """Liga o rastreio de visibilidade em tudo o que está sob ``raiz``, uma vez só por item.
-
-    Roda sobre a árvore já construída (nunca no ``ChildAdded``). Cada item
-    entra numa guarda por propriedade dinâmica, para não ligar duas vezes.
-    """
+    """Liga o rastreio de visibilidade sob ``raiz`` (já construída, nunca no ``ChildAdded``), uma vez por item (guarda por propriedade dinâmica)."""
     pendentes = [raiz]
     while pendentes:
         item = pendentes.pop()
@@ -371,7 +332,6 @@ def _tentar(funcao) -> None:  # type: ignore
 
 
 def instalar_filtro(app):  # type: ignore
-    """Instala o filtro no ``app``; devolve ``None`` com o modo desligado."""
     if not ativo():
         return None
     filtro = FiltroDeEventos(app)

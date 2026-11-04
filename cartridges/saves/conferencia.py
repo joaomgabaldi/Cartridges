@@ -1,10 +1,6 @@
 """As conferências antes de deixar o Ludusavi restaurar uma versão.
 
-Funções puras sobre nomes e caminhos: se o zip da versão está inteiro, que caminhos
-trocar quando o usuário do Windows ou a pasta do jogo mudaram, e se os destinos que
-a prévia da restauração mostra são lugares de save. Um backup importado não pode
-gravar fora das pastas de save nem deixar um executável ou um script para trás.
-Rodar o Ludusavi e avisar o usuário é de quem chama.
+Funções puras sobre nomes e caminhos: zip inteiro, caminhos a trocar quando o usuário ou a pasta do jogo mudaram, e destinos que são lugar de save. Um backup importado não pode gravar fora das pastas de save nem deixar executável ou script.
 """
 
 import os
@@ -72,14 +68,7 @@ def redirecionamentos(
 ) -> list[tuple[str, str]]:
     """Os (origem, destino) que levam os saves da versão ao lugar de hoje, sem repetição.
 
-    Primeiro os usuários: `X:/Users/<nome>`, que não é a pasta de `casa` e não existe,
-    vai para `casa`. Depois a pasta do jogo: das pastas de jogo (antes de um marcador)
-    que não existem mais e não são as atuais, a mais alta dá a raiz antiga (subindo pelas
-    pastas de binários, como `arquivos.bases_da_pasta`), e um redirecionamento só leva
-    essa raiz à raiz atual (a última de `bases_atuais`): a estrutura de dentro se mantém.
-    O que está numa pasta do `sistema` (AppData, Documentos, Público, ProgramData) nunca é
-    pasta de jogo: um `/Profile/` ali é save comum, e não de emulador.
-    A origem fica com o texto do zip: o Ludusavi a compara sem trocar maiúsculas.
+    Primeiro os usuários: `X:/Users/<nome>` que não é a `casa` e não existe vai para `casa`. Depois a pasta do jogo: das pastas de jogo (antes de um marcador) que não existem mais, a mais alta dá a raiz antiga (subindo pelas pastas de binários, como `arquivos.bases_da_pasta`), levada à raiz atual (a última de `bases_atuais`). O que está numa pasta do `sistema` (AppData, Documentos, Público, ProgramData) nunca é pasta de jogo. A origem fica com o texto do zip: o Ludusavi a compara sem trocar maiúsculas.
     """
     usuarios: dict[str, None] = {}
     antigas: list[Path] = []
@@ -87,10 +76,7 @@ def redirecionamentos(
         if usuario := _USUARIO.match(caminho):
             if not dentro(Path(usuario[0]), casa) and not Path(usuario[0]).exists():
                 usuarios[usuario[0]] = None
-            # ponytail: um jogo instalado dentro do perfil de um usuário não ganha
-            # redirecionamento da pasta do jogo — o do usuário já leva o caminho (o
-            # Ludusavi encadeia dois sobre o mesmo caminho). Para tratar, o do jogo
-            # teria de substituir o do usuário.
+            # shortcut: um jogo instalado no perfil de um usuário não ganha redirecionamento da pasta do jogo (o do usuário já leva o caminho e o Ludusavi encadeia dois); tratar exigiria o do jogo substituir o do usuário.
             continue
         if (marcador := _MARCADOR.search(caminho)) and bases_atuais:
             pasta = Path(caminho[: marcador.start()])
@@ -116,10 +102,7 @@ class Raizes:
 
 
 def raizes(pastas: arquivos.Pastas, casa: Path, extras: list[Path]) -> Raizes:
-    """As pastas do usuário e do sistema onde um jogo guarda o save, mais as `extras`
-    (a Steam, o Ubisoft Connect, a pasta do jogo). Documentos entra como o Windows o
-    informa: pode estar em outro disco. As proibidas são onde um arquivo vira programa
-    ou credencial."""
+    """As pastas do usuário e do sistema onde um jogo guarda o save, mais as `extras` (Steam, Ubisoft Connect, pasta do jogo). Documentos entra como o Windows o informa (pode estar em outro disco). As proibidas são onde um arquivo vira programa ou credencial."""
     return Raizes(
         permitidas=(
             casa,
@@ -175,9 +158,7 @@ _BARRAS = re.compile(r"[\\/]+")
 
 
 def _resolvido(caminho: str | Path) -> Path:
-    """O caminho como o Windows o enxerga: sem `..`, sem pontos e espaços no fim dos
-    nomes, e com as junções, os links simbólicos e os nomes curtos (`MICROS~1`) trocados
-    pelo que de fato são. O que ainda não existe fica como está."""
+    """O caminho como o Windows o enxerga: sem `..`, sem pontos/espaços no fim dos nomes e com junções, links e nomes curtos (`MICROS~1`) resolvidos. O que não existe fica como está."""
     return Path(os.path.realpath(os.path.abspath(caminho)))
 
 
@@ -226,8 +207,6 @@ def _comparavel(caminho: str) -> str:
 
 
 def fora_da_copia(previa: Previa, copiados: tuple[str, ...]) -> str | None:
-    """O primeiro arquivo que a restauração gravaria por cima sem estar entre os
-    ``copiados`` pela cópia dos saves atuais (um caminho que o config de agora não cobre:
-    o manifesto sem o jogo, a pasta antiga do jogo que ainda existe), ou `None`."""
+    """O primeiro arquivo que a restauração gravaria por cima sem estar entre os ``copiados`` pela cópia dos saves atuais (o config de agora não o cobre), ou `None`."""
     guardados = set(map(_comparavel, copiados))
     return next((a for a in previa.sobrescritos if _comparavel(a) not in guardados), None)

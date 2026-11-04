@@ -21,7 +21,6 @@ from logging import Formatter, LogRecord
 
 
 class ColorLogFormatter(Formatter):
-    """Formatter that outputs logs in a colored format"""
 
     RESET = "\033[0m"
     DIM = "\033[2m"

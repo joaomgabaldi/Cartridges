@@ -1,8 +1,6 @@
 """O `config.yaml` do Ludusavi, montado como função pura.
 
-O Ludusavi lê YAML, e JSON é YAML: o arquivo sai de `json.dumps`. Aqui só se
-decide o que ele precisa saber (onde guardar os saves, as raízes das lojas, e
-as pastas de emulador e da pasta do jogo de cada título); rodá-lo é de `ludusavi.py`.
+O Ludusavi lê YAML, e JSON é YAML: o arquivo sai de `json.dumps`. Aqui só se decide o que ele precisa saber (onde guardar os saves, as raízes das lojas, as pastas de emulador e do jogo de cada título); rodá-lo é de `ludusavi.py`.
 """
 
 import json
@@ -19,7 +17,6 @@ from cartridges.utils.gravar_atomico import gravar_atomico
 # Quantas versões completas o Ludusavi guarda de cada jogo (a retenção do config).
 COPIAS_GUARDADAS = 5
 
-# A pasta do sistema (atributo de `arquivos.Pastas`) e o seu nome no Ludusavi.
 _PLACEHOLDERS = {
     "appdata": "<winAppData>",
     "localappdata": "<winLocalAppData>",
@@ -48,11 +45,7 @@ class JogoNoConfig:
 
 
 def pastas_de_emulador(appid: str) -> list[str]:
-    """A pasta do jogo em cada emulador: a que guarda o save e as conquistas.
-
-    Sai de `arquivos._FIXOS`, cortada no appID (o Ludusavi copia a pasta inteira),
-    sem repetição — as duas linhas do OnlineFix caem na mesma pasta.
-    """
+    """A pasta do jogo em cada emulador (a que guarda o save e as conquistas), de `arquivos._FIXOS` cortada no appID, sem repetição: as duas linhas do OnlineFix caem na mesma pasta."""
     pastas: dict[str, None] = {}
     for pasta, modelo, _formato in arquivos._FIXOS:
         pastas[f"{_PLACEHOLDERS[pasta]}/{modelo.split('{appid}')[0]}{appid}"] = None
@@ -60,7 +53,6 @@ def pastas_de_emulador(appid: str) -> list[str]:
 
 
 def na_pasta_do_jogo(executavel: str, appid: str) -> list[str]:
-    """Os lugares de save que moram ao lado do executável, com `/` e absolutos."""
     caminhos = []
     for base in arquivos.bases_do_jogo(executavel):
         raiz = _CURINGAS.sub(lambda m: f"[{m.group()}]", base.as_posix())

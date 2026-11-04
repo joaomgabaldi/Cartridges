@@ -1,10 +1,6 @@
 """O catálogo cruzado com o histórico: o que a página do jogo e a lista mostram.
 
-Só contam as conquistas que existem no catálogo (`resolveUnlockedAchievementCount`
-do Hydra): um nome estranho no arquivo de um crack fica guardado, mas não infla o
-"X de Y". Sem catálogo não há o que mostrar, e o cartão some. Também some sem
-fonte gravada no histórico (a varredura grava de onde vêm as conquistas do jogo):
-sem de onde ler o progresso, "0 de N" ficaria parado para sempre.
+Só contam as conquistas que existem no catálogo (`resolveUnlockedAchievementCount` do Hydra): um nome estranho no arquivo de um crack fica guardado, mas não infla o "X de Y". Sem catálogo, ou sem fonte gravada no histórico (sem de onde ler o progresso, "0 de N" ficaria parado para sempre), o cartão some.
 """
 
 from dataclasses import dataclass
@@ -18,7 +14,6 @@ from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 @dataclass(frozen=True)
 class Linha:
     info: ConquistaInfo
-    # Segundos Unix; 0 é desbloqueada sem data; None é bloqueada.
     quando: Optional[int]
 
     @property
@@ -70,7 +65,6 @@ def montar(cat: Optional[Catalogo], hist: Optional[dict[str, int]]) -> Optional[
     # Mais recente primeiro. `sort` é estável, então as sem data (0) ficam no
     # fim, na ordem do catálogo.
     feitas.sort(key=lambda linha: linha.quando or 0, reverse=True)
-    # As que se pode ver antes das ocultas, cada grupo na ordem do catálogo.
     faltam.sort(key=lambda linha: linha.info.oculta)
     return Progresso(tuple(feitas), tuple(faltam))
 
@@ -87,7 +81,6 @@ def do_jogo(game: Any) -> Optional[Progresso]:
 
 
 def porcentagem_em_texto(valor: float) -> str:
-    """Porcentagem global no jeito brasileiro: 4.1 vira "4,1%"."""
     return f"{valor:.1f}%".replace(".", ",")
 
 
@@ -116,7 +109,6 @@ def aparencia(linha: Linha, mostrar_ocultas: bool) -> Aparencia:
 
 
 def dica(linha: Linha, mostrar_ocultas: bool) -> str:
-    """O texto ao passar o mouse no ícone: nome, descrição e porcentagem (markup Pango)."""
     if _escondida(linha, mostrar_ocultas):
         return "<b>{}</b>\n{}".format(
             _escapar(_("Conquista oculta")), _escapar(_("Os detalhes aparecem depois do desbloqueio."))
@@ -126,6 +118,5 @@ def dica(linha: Linha, mostrar_ocultas: bool) -> str:
     if info.descricao:
         partes.append(_escapar(info.descricao))
     if info.porcentagem is not None:
-        # A variável é a porcentagem já formatada, como "3,8%"
         partes.append(_escapar(_("{} dos jogadores").format(porcentagem_em_texto(info.porcentagem))))
     return "\n".join(partes)

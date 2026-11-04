@@ -1,19 +1,10 @@
 """A conta EA do usuário: guarda, renovação e desconexão.
 
-Não há OAuth para apps de terceiros na EA. O usuário entra em ea.com no navegador
-e cola o pedido copiado ("Copiar como cURL", ``ea/janela.py``); dele o app tira só
-dois cookies, ``remid`` e ``_nx_mpcid``. Com eles, ``accounts.ea.com`` emite o
-token de acesso, como faz o EA app. O app nunca vê a senha.
+A EA não tem OAuth para apps de terceiros: o usuário entra em ea.com no navegador e cola o pedido copiado ("Copiar como cURL", ``ea/janela.py``), do qual o app tira só os cookies ``remid`` e ``_nx_mpcid``; com eles ``accounts.ea.com`` emite o token de acesso, como o EA app. O app nunca vê a senha.
 
-Os dois cookies são guardados cifrados pelo DPAPI (``utils/dpapi.py``), em
-``contas/ea.json`` — fora do backup. O token de acesso fica só na memória.
+Os cookies ficam cifrados pelo DPAPI (``utils/dpapi.py``) em ``contas/ea.json``, fora do backup; o token só na memória. O ``remid`` é de uso único: cada renovação devolve um novo no ``Set-Cookie`` e o antigo pode ser recusado logo depois, por isso o novo é gravado antes de o token ser publicado e as renovações vão uma de cada vez.
 
-O ``remid`` é de uso único: cada renovação devolve um novo em ``Set-Cookie`` e o
-antigo pode ser recusado logo depois. O novo é gravado antes de o token ser
-publicado, e as renovações vão uma de cada vez.
-
-Nada de token, cookie, texto colado, pid, persona, nome da conta ou corpo de
-resposta vai para o log: só o tipo da exceção, o status HTTP e o ``error`` da EA.
+Nada de token, cookie, texto colado, pid, persona, nome da conta ou corpo de resposta vai para o log: só o tipo da exceção, o status HTTP e o ``error`` da EA.
 """
 
 import base64
@@ -34,7 +25,7 @@ from cartridges.utils import download, dpapi
 from cartridges.utils.gravar_atomico import gravar_atomico
 from cartridges.utils.thread_principal import na_thread_principal
 
-# O User-Agent do EA app: a Juno e o token o exigem (prova de 15/10).
+# O User-Agent do EA app: a Juno e o token o exigem.
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
     "Origin/10.6.0.00000 EAApp/13.805.11.6320 Chrome/109.0.5414.120 Safari/537.36"
@@ -42,7 +33,6 @@ UA = (
 TOKEN = "https://accounts.ea.com/connect/auth?client_id=ORIGIN_JS_SDK&response_type=token&redirect_uri=nucleus:rest&prompt=none"
 PAGINA_DE_LOGIN = "https://www.ea.com/login"
 IDENTIDADE = "https://gateway.ea.com/proxy/identity"
-# Renova o que vence em menos que isto.
 _MARGEM = 5 * 60
 _TEMPO = 15
 _UMA_HORA = 3600
@@ -84,10 +74,8 @@ class _Sessao:
 _trava = threading.Lock()
 _renovando = threading.Lock()
 _sessao: Optional[_Sessao] = None
-# Um aviso de desconexão por execução (volta a valer depois de um login).
 _avisou = False
-# (`remid` colado e já gasto, cookies que a renovação devolveu): se o `conectar` falha
-# depois de renovar, a nova tentativa com o mesmo texto parte dos cookies novos.
+# (`remid` colado e já gasto, cookies devolvidos pela renovação): se o `conectar` falha depois de renovar, a nova tentativa com o mesmo texto parte dos cookies novos.
 _pendente: Optional[tuple[str, Cookies]] = None
 _ouvintes: list[Callable[[], None]] = []
 # O `remid` da sessão é mais novo que o do disco (a gravação falhou). Regravado na
@@ -105,9 +93,7 @@ def _pedir(metodo: str, url: str, **kwargs: Any) -> requests.Response:
 
 
 def extrair(texto: Any) -> Optional[Cookies]:
-    """Os cookies ``remid`` e ``_nx_mpcid`` no texto colado (cURL de bash ou de
-    cmd, ou só o cabeçalho ``Cookie``); o primeiro valor de cada um vence.
-    ``None`` se faltar algum. Nunca loga o texto."""
+    """Os cookies ``remid`` e ``_nx_mpcid`` do texto colado (cURL de bash ou cmd, ou só o cabeçalho ``Cookie``); vale o primeiro valor de cada. ``None`` se faltar algum. Nunca loga o texto."""
     if not isinstance(texto, str) or len(texto) > _TAMANHO_MAXIMO_COLADO:
         return None
     texto = _ESCAPE_DO_CMD.sub(r"\1", texto)
@@ -145,9 +131,7 @@ def _remid_da_resposta(resposta: Any) -> Optional[str]:
 
 
 def _renovar(remid: str, nx_mpcid: str) -> tuple[_Acesso, str]:
-    """Troca os cookies por um token. Devolve o token e o ``remid`` seguinte (o
-    mesmo, se a EA não mandou outro). Levanta ``LoginRecusado``,
-    ``requests.RequestException`` ou ``ValueError``."""
+    """Troca os cookies por um token; devolve-o com o ``remid`` seguinte (o mesmo, se a EA não mandou outro). Levanta ``LoginRecusado``, ``requests.RequestException`` ou ``ValueError``."""
     resposta = _pedir(
         "GET",
         TOKEN,
@@ -168,7 +152,6 @@ def _renovar(remid: str, nx_mpcid: str) -> tuple[_Acesso, str]:
 
 
 def _identidade(acesso: str) -> tuple[str, str]:
-    """O nome e a persona da conta. Levanta ``requests.RequestException`` ou ``ValueError``."""
     autorizado = {"Authorization": f"Bearer {acesso}", "User-Agent": UA}
     resposta = _pedir("GET", f"{IDENTIDADE}/pids/me", headers=autorizado)
     resposta.raise_for_status()
@@ -217,7 +200,6 @@ def _salvar(sessao: _Sessao) -> bool:
 
 
 def carregar() -> None:
-    """Lê a conta guardada, sem rede. Ilegível ou de outro PC = não conectada."""
     global _sessao  # pylint: disable=global-statement
     try:
         dados = json.loads(_arquivo().read_text(encoding="utf-8"))
@@ -265,8 +247,7 @@ def persona() -> Optional[str]:
 
 
 def ao_mudar(ouvinte: Callable[[], None]) -> Callable[[], None]:
-    """Registra `ouvinte` (chamado na thread principal a cada conexão ou
-    desconexão) e devolve a função que o remove."""
+    """Registra `ouvinte` (chamado na thread principal a cada conexão ou desconexão) e devolve a função que o remove."""
     return aviso_da_conta.inscrever(_ouvintes, ouvinte)
 
 
@@ -291,9 +272,7 @@ def _desconectar(avisar: bool) -> None:
 def conectar(texto: str) -> None:
     """Tira os cookies do texto colado, confere com a EA, guarda e conecta.
 
-    Levanta ``LoginRecusado``, ``requests.RequestException``, ``ValueError``,
-    ``KeyError`` ou ``OSError`` (não gravou: sem isso a conta sumiria na próxima
-    abertura): quem chama é a janela de login, que mostra o que aconteceu.
+    Levanta ``LoginRecusado``, ``requests.RequestException``, ``ValueError``, ``KeyError`` ou ``OSError`` (não gravou: a conta sumiria na próxima abertura); quem chama é a janela de login, que mostra o que aconteceu.
     """
     global _sessao, _avisou, _sem_gravar  # pylint: disable=global-statement
     cookies = extrair(texto)
@@ -324,11 +303,7 @@ def conectar(texto: str) -> None:
 def autorizacao(forcar: bool = False, recusado: Optional[str] = None) -> Optional[str]:
     """O token de acesso para a API da EA, renovando se venceu.
 
-    ``forcar`` renova mesmo sem vencer; ``recusado`` é o token que a EA recusou: se outra
-    thread já o trocou enquanto esta esperava a vez, vale o token novo (sem gastar outro ``remid``).
-
-    Roda em thread. ``None``: sem conta, falha (logada) ou renovação recusada
-    (a conta já foi desconectada e o usuário avisado).
+    ``forcar`` renova mesmo sem vencer; ``recusado`` é o token que a EA recusou (se outra thread já o trocou, vale o novo, sem gastar outro ``remid``). Roda em thread. ``None``: sem conta, falha (logada) ou renovação recusada (conta desconectada e usuário avisado).
     """
     global _sem_gravar  # pylint: disable=global-statement
     # Rede fora de `_trava`; `_renovando` serializa as renovações; a publicação
@@ -371,7 +346,6 @@ def autorizacao(forcar: bool = False, recusado: Optional[str] = None) -> Optiona
 
 
 def sair() -> None:
-    """Desconecta sem aviso (o usuário pediu) e apaga os catálogos e caches da conta."""
     with _trava:
         _desconectar(avisar=False)
     try:

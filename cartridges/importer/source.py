@@ -24,7 +24,6 @@ from typing import Any, Generator, Optional
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.jogo import Jogo
 
-# Type of the data returned by iterating on a Source
 SourceIterationResult = Optional[Jogo | tuple[Jogo, tuple[Any]]]
 
 
@@ -48,7 +47,6 @@ class SourceScanError(FriendlyError):
 
 
 class SourceIterable(Iterable):
-    """Data producer for a source of games"""
 
     source: "Source"
 
@@ -67,7 +65,6 @@ class SourceIterable(Iterable):
 
 
 class Source(Iterable):
-    """Source of games. E.g an installed app with a config file that lists game directories"""
 
     source_id: str
     name: str
@@ -75,14 +72,11 @@ class Source(Iterable):
 
     @property
     def game_id_format(self) -> str:
-        """The string format used to construct game IDs"""
         return self.source_id + "_{game_id}"
 
     @property
     def is_available(self) -> bool:
-        """Whether the source can be scanned. Subclasses narrow this."""
         return True
 
     def __iter__(self) -> Generator[SourceIterationResult, None, None]:
-        """Get an iterator for the source"""
         return iter(self.iterable_class(self))

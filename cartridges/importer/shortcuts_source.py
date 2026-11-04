@@ -17,17 +17,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Windows source that imports game shortcuts (``.lnk`` / ``.url``).
+"""Fonte do Windows que importa atalhos de jogos (``.lnk`` / ``.url``).
 
-Handles classic ``.lnk`` shortcuts (resolved to their target executable),
-``.url`` internet shortcuts (protocol launchers such as ``steam://`` or
-``com.epicgames.launcher://``) and ``.lnk`` shortcuts to UWP/Microsoft Store
-apps (launched through ``shell:AppsFolder``).
-
-``.lnk`` files are resolved in a single batch through PowerShell's
-``WScript.Shell`` and ``Shell.Application`` COM objects, which requires no
-third-party Python dependency and is able to read both the target path and the
-AppUserModelID needed to launch Store apps.
+Cobre ``.lnk`` clássicos (resolvidos ao executável), ``.url`` (launchers como ``steam://`` e ``com.epicgames.launcher://``)
+e ``.lnk`` de apps UWP/Store (lançados por ``shell:AppsFolder``). Os ``.lnk`` são resolvidos em lote pelo PowerShell
+(COM ``WScript.Shell``/``Shell.Application``), que lê o alvo e o AppUserModelID sem dependência Python.
 """
 
 import configparser
@@ -46,68 +40,33 @@ from cartridges.jogo import Jogo
 from cartridges.importer.source import Source, SourceIterable, SourceScanError
 from cartridges.utils.name_cleaner import clean_game_name
 
-# Match a Steam appid out of a steam:// launch URL.
 _STEAM_APPID_RE = re.compile(r"steam://(?:rungameid|run)/(\d+)", re.IGNORECASE)
 
-# Characters that must never reach a double-quoted cmd.exe argument: a quote
-# would close the quoting and let metacharacters (&, |, >) inject commands; the
-# same goes for control characters (new lines split commands). `%` expands
-# variables even inside quotes, and `%CMDCMDLINE:~-1%` is a `"`: only the
-# percent-encoding of printable ASCII (`%3A`, `%20`) passes, since a variable
-# name starting with a digit is one no Windows variable has (the Epic URLs need
-# it). `!` stays allowed: delayed expansion is off unless turned on, and real
-# paths carry it ("Overcooked! 2"), whose shortcuts would vanish from the library.
+# Nunca chegam a um argumento cmd.exe entre aspas: aspas fecham a citação e deixam metacaracteres injetar comandos; controle quebra comando; `%` expande variáveis até entre aspas (`%CMDCMDLINE:~-1%` é um `"`), por isso só passa a codificação percentual ASCII (`%3A`, `%20`, usada pelas URLs da Epic). `!` fica permitido: expansão tardia desligada e caminhos reais o usam ("Overcooked! 2").
 _UNSAFE_CMD_CHARS_RE = re.compile(r'["\x00-\x1f]|%(?![2-7][0-9A-Fa-f])')
 
-# Characters cmd.exe acts on when they appear outside quotes: command chaining
-# and grouping (`&`, `|`, `(`, `)`), redirection (`<`, `>`) and the escape
-# prefix (`^`). Inside a quoted run cmd takes them literally — see
-# :func:`args_safe`.
+# O que o cmd.exe interpreta fora de aspas: encadeamento/agrupamento, redireção e escape (`^`); entre aspas é literal (ver `args_safe`).
 _SHELL_METACHARS = frozenset("&|<>^()")
 
-# Characters refused in arguments whether quoted or not: control characters
-# (a line break ends the command), `%` (variable expansion happens *inside*
-# quotes too, before any quoting is looked at) and `!` (the same expansion when
-# delayed expansion is on — off by default, but a registry value away).
+# Recusados em argumentos com ou sem aspas: controle (quebra de linha termina o comando), `%` (expande até dentro de aspas) e `!` (expansão tardia, a um valor de registro de ser ligada).
 _ARGS_ALWAYS_UNSAFE_RE = re.compile(r"[\x00-\x1f%!]")
 
-# A target that names a file on a drive or a UNC share. Such a target is a file
-# path even when the file is missing right now (drive unplugged, share offline),
-# and must keep the file-path identity and command — see `build_from_lnk`.
+# Alvo em unidade ou compartilhamento UNC: é caminho de arquivo mesmo com o arquivo ausente (disco desconectado) e mantém identidade e comando de arquivo (ver `build_from_lnk`).
 _ABSOLUTE_PATH_RE = re.compile(r"^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/])")
 
 
 def cmd_safe(value: str) -> bool:
-    """Whether ``value`` can be embedded inside a double-quoted cmd.exe argument.
+    """Se ``value`` cabe num argumento cmd.exe entre aspas.
 
-    Launch commands run through ``shell=True``. Shortcut files are plain data a
-    user may have downloaded, so a crafted URL/target must not be able to break
-    out of its quoting and execute arbitrary commands.
+    Os comandos rodam com ``shell=True`` e atalhos são dados de terceiros: uma URL/alvo forjada não pode escapar da citação.
     """
     return not _UNSAFE_CMD_CHARS_RE.search(value)
 
 
 def args_safe(value: str) -> bool:
-    """Whether ``value`` can be appended *unquoted* to a cmd.exe command line.
+    """Se ``value`` pode ser anexado *sem aspas* à linha de comando do cmd.exe.
 
-    A shortcut's argument string cannot simply be wrapped in quotes — the game
-    would then receive the whole thing as one argument instead of several — so
-    it is concatenated raw, and this is the security boundary for it: outside
-    quotes, `&`, `|`, `<`, `>`, `^`, `(` and `)` are interpreted by the shell,
-    and any one of them turns a shortcut into a command of the attacker's
-    choosing.
-
-    Refusing every quote (the old rule) also refused real launchers: GOG's
-    ``/path="D:\\GOG Games\\X"``, Battle.net's ``--exec="launch Pro"``, an
-    emulator's ``"...\\Game (USA).sfc"``. So the text is walked the way cmd.exe
-    walks it — every ``"`` toggles quoting, with no escape for it — and a
-    metacharacter is accepted only while a quoted run is open. The quotes must
-    balance, so the run cannot spill into anything appended later. `%`, `!`
-    and control characters are refused everywhere (see
-    ``_ARGS_ALWAYS_UNSAFE_RE``).
-
-    The rest of the command (``start "" /D "..." "..."``) always has balanced
-    quotes, so the parity here is the parity cmd sees.
+    Os argumentos de um atalho não podem ser envolvidos em aspas (o jogo receberia um só argumento), então vão crus, e esta é a fronteira de segurança: fora de aspas `& | < > ^ ( )` viram comando do atacante. O texto é percorrido como o cmd.exe faz (cada ``"`` alterna a citação, sem escape) e um metacaractere só passa dentro de aspas abertas; as aspas precisam fechar, para a citação não vazar para o que vier depois. `%`, `!` e controle são recusados em todo lugar (``_ARGS_ALWAYS_UNSAFE_RE``). Isso aceita lançadores reais (GOG ``/path="D:\\GOG Games\\X"``, Battle.net ``--exec="launch Pro"``).
     """
     if _ARGS_ALWAYS_UNSAFE_RE.search(value):
         return False
@@ -119,10 +78,7 @@ def args_safe(value: str) -> bool:
             return False
     return not quoted
 
-# Names that are clearly not games and pollute shortcut folders. "Manual",
-# "Support" and "Benchmark" only as the last word ("Halo Manual"): anywhere in
-# the name they also took real games ("Manual Samuel", "Tech Support: Error
-# Unknown").
+# Nomes que claramente não são jogos. "Manual", "Support" e "Benchmark" só como última palavra: em qualquer posição levavam jogos reais ("Manual Samuel").
 _SKIP_NAME_RE = re.compile(
     r"\b(uninstall|uninstaller|readme|read me|website|home\s*page)\b"
     r"|\b(manual|support|benchmark)\s*$",
@@ -131,11 +87,7 @@ _SKIP_NAME_RE = re.compile(
 
 
 def steam_appid_from_url(value: str) -> Optional[str]:
-    """Return a plain Steam appid from a launch URL, if present.
-
-    ``rungameid`` can encode a 64-bit composite id for mods/non-Steam
-    shortcuts; only plain appids (kept short) are returned.
-    """
+    """Appid simples da Steam de uma URL de lançamento, se houver; ids compostos de 64 bits (mods/atalhos não-Steam) são ignorados."""
     if not value:
         return None
     match = _STEAM_APPID_RE.search(value)
@@ -146,20 +98,14 @@ def steam_appid_from_url(value: str) -> Optional[str]:
 
 
 def resolve_lnk_targets(paths: list[Path]) -> dict[str, dict]:
-    """Resolve a batch of ``.lnk`` files via PowerShell COM.
-
-    Returns a mapping of ``str(path)`` to a dict with ``Target``,
-    ``Arguments``, ``Icon``, ``WorkingDirectory`` and ``Aumid`` keys.
-    """
+    """Resolve um lote de ``.lnk`` via PowerShell COM: ``str(path)`` -> dict com ``Target``, ``Arguments``, ``Icon``, ``WorkingDirectory`` e ``Aumid``."""
     if not paths:
         return {}
 
     list_file = Path(tempfile.gettempdir()) / f"cartridges_lnks_{os.getpid()}.txt"
     list_file.write_text("\n".join(str(path) for path in paths), encoding="utf-8")
 
-    # Results are emitted through the pipeline and collected once: the previous
-    # `$out += ...` pattern copies the whole array per item (O(n²) for big
-    # shortcut folders).
+    # Emitido pelo pipeline e coletado uma vez: o `$out += ...` anterior copia o array a cada item (O(n²)).
     # fmt: off
     script = (
         "[Console]::OutputEncoding=[Text.Encoding]::UTF8;"
@@ -170,17 +116,7 @@ def resolve_lnk_targets(paths: list[Path]) -> dict[str, dict]:
         "  $p=[string]$_; if([string]::IsNullOrWhiteSpace($p)){return};"
         "  $sc=$wsh.CreateShortcut($p); $aumid='';"
         "  try{"
-        # `.Replace`, not `-replace`: the latter is a regex and a lone backslash
-        # in its replacement is an escape. The separator swap matters because
-        # the shell namespace parser is stricter than the file APIs — the same
-        # path that `CreateShortcut` opens happily returns a null namespace here
-        # if it carries forward slashes, and the ucrt64 Python the previous (GTK)
-        # version shipped produced exactly that; libraries written by it may still hold such paths. A null namespace means no AUMID, which means no
-        # Store or Game Pass shortcut is recognised as one at all: they lose
-        # their only usable target, get dropped, and `remove_games` then clears
-        # every Game Pass game in the library. Fixed on the PowerShell side so
-        # `File=$p` keeps echoing the path exactly as written, which is what
-        # `lnk_data` is keyed by.
+        # `.Replace`, não `-replace` (regex: a barra invertida no destino é escape). O parser de namespace do shell é mais estrito que as APIs de arquivo: um caminho com barras normais dá namespace nulo, sem AUMID, e atalhos Store/Game Pass seriam descartados e removidos por `remove_games`. A versão anterior (GTK, ucrt64) gravava esses caminhos. Corrigido no PowerShell para `File=$p` ecoar o caminho como escrito, a chave de `lnk_data`.
         "    $ns=$shell.Namespace(((Split-Path $p).Replace('/','\\')));"
         "    if($ns){$it=$ns.ParseName((Split-Path $p -Leaf));"
         "      if($it){$aumid=$it.ExtendedProperty('System.AppUserModel.ID')}}"
@@ -193,9 +129,7 @@ def resolve_lnk_targets(paths: list[Path]) -> dict[str, dict]:
     )
     # fmt: on
 
-    # Pass the list path through the environment instead of embedding it in the
-    # script text, so a path containing quotes or other special characters can't
-    # break (or be injected into) the PowerShell command.
+    # O caminho da lista vai por variável de ambiente, não embutido no script: aspas ou caracteres especiais não quebram nem injetam no PowerShell.
     env = {**os.environ, "CARTRIDGES_LNK_LIST": str(list_file)}
 
     try:
@@ -243,12 +177,9 @@ def resolve_lnk_targets(paths: list[Path]) -> dict[str, dict]:
 
 
 def resolve_start_apps() -> list[tuple[str, str]]:
-    """Return ``(display name, launch AUMID)`` for every installed Start app.
+    """Pares ``(nome, AUMID de lançamento)`` de cada app do Menu Iniciar.
 
-    Xbox/Store ``.lnk`` files carry a ``System.AppUserModel.ID`` that is only a
-    taskbar-grouping id (e.g. ``XboxGames.<pkg>_<app>``), which
-    ``shell:AppsFolder`` cannot launch — it just opens the Apps folder. The real
-    launch id comes from ``Get-StartApps``, matched against the shortcut.
+    O ``System.AppUserModel.ID`` dos ``.lnk`` Xbox/Store só agrupa na barra de tarefas e o ``shell:AppsFolder`` não o lança (só abre a pasta de apps); o id real vem do ``Get-StartApps``.
     """
     script = (
         "[Console]::OutputEncoding=[Text.Encoding]::UTF8;"
@@ -294,11 +225,9 @@ def resolve_start_apps() -> list[tuple[str, str]]:
 
 
 def atalhos_da_pasta() -> list[Path]:
-    """Os ``.lnk`` e ``.url`` da pasta de atalhos configurada, com ou sem
-    subpastas conforme a preferência. Lista vazia se a pasta não existir.
+    """Os ``.lnk`` e ``.url`` da pasta de atalhos, com ou sem subpastas conforme a preferência (vazio se a pasta não existir).
 
-    Compartilhada pela varredura e pela janela de pendências da restauração,
-    que precisa oferecer exatamente os atalhos que a importação enxerga.
+    Compartilhada com a janela de pendências da restauração, que deve oferecer exatamente o que a importação enxerga.
     """
     location = shared.schema.get_string("shortcuts-location")
     if not location:
@@ -308,10 +237,7 @@ def atalhos_da_pasta() -> list[Path]:
         return []
 
     if shared.schema.get_boolean("shortcuts-recursive"):
-        # os.walk, not rglob: rglob descends into NTFS junctions (creatable
-        # without admin rights), and one looping back to a parent repeated
-        # every shortcut dozens of times. os.walk already skips symlinks;
-        # junctions are pruned here, as `install_size.folder_size` does.
+        # os.walk, não rglob: o rglob entra em junções NTFS (criáveis sem admin) e uma que volte a um pai repetia cada atalho dezenas de vezes; as junções são podadas aqui, como em `install_size.folder_size`.
         entries: list[Path] = []
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = [
@@ -332,10 +258,7 @@ class ShortcutsSourceIterable(SourceIterable):
     source: "ShortcutsSource"
 
     def __iter__(self):
-        """Generator method producing games from shortcut files.
-
-        A pasta existir já é checado antes (`ShortcutsSource.is_available`);
-        `atalhos_da_pasta` devolve lista vazia se ela sumir no meio."""
+        """Gera jogos dos atalhos. A existência da pasta já é checada em `is_available`; `atalhos_da_pasta` devolve vazio se ela sumir no meio."""
 
         url_files: list[Path] = []
         lnk_files: list[Path] = []
@@ -345,23 +268,12 @@ class ShortcutsSourceIterable(SourceIterable):
             else:
                 lnk_files.append(entry)
 
-        # The `.url` shortcuts first, deliberately: they are parsed here, in
-        # process, and cannot be taken down by the PowerShell failures guarded
-        # below. Yielding them before the risky part means a scan that has to
-        # give up still counts every game it did manage to see.
+        # Os `.url` primeiro, de propósito: são lidos aqui e não caem com as falhas do PowerShell abaixo, então uma varredura que desiste ainda conta o que viu.
         for entry in url_files:
             yield self.build_from_url(entry)
 
         lnk_data = resolve_lnk_targets(lnk_files)
-        # An empty result for a non-empty batch is a failure, not a folder
-        # without shortcuts: `resolve_lnk_targets` returns {} for a missing
-        # PowerShell, a blocked execution policy and a timed-out batch alike.
-        # Treated as "no games", it used to mark every .lnk game as removed —
-        # permanently, since coming back needs the shortcut's mtime to rise and
-        # nothing touched the files. The `.url` games (Steam, Epic) are resolved
-        # separately and kept reporting fine, so a guard on the source producing
-        # nothing at all would never have caught this: the batch is what failed,
-        # so the batch is what has to be checked.
+        # Lote vazio para entrada não vazia é falha, não pasta sem atalhos (`resolve_lnk_targets` devolve {} para PowerShell ausente, política bloqueada ou timeout): tratado como "sem jogos" marcaria todo jogo .lnk como removido, para sempre. Os `.url` resolvem à parte, então checar só se a fonte produziu algo não pegaria isto.
         if lnk_files and not lnk_data:
             raise SourceScanError(
                 _("Não foi possível ler os atalhos"),
@@ -371,29 +283,12 @@ class ShortcutsSourceIterable(SourceIterable):
                 ),
             )
 
-        # Map shortcut grouping AUMIDs to real, launchable ones (Xbox/Store).
-        # Get-StartApps spawns a whole PowerShell (1-3 s), so only pay for it
-        # when at least one shortcut actually carries an AUMID (UWP/Store app).
+        # Mapeia os AUMIDs de agrupamento para os de lançamento (Xbox/Store). O Get-StartApps abre um PowerShell inteiro (1-3 s): só se algum atalho tiver AUMID.
         needs_start_apps = any(
             (item.get("Aumid") or "").strip() for item in lnk_data.values()
         )
         start_apps = resolve_start_apps() if needs_start_apps else []
-        # Same reasoning as above, and it matters more here: a machine with
-        # Store shortcuts always has Start apps, so an empty list means the
-        # lookup broke (its own 60 s timeout, most likely).
-        #
-        # What carrying on would cost is worth being exact about, because the
-        # obvious answer stopped being true. It is no longer that the games get
-        # an unlaunchable command — the fallback below launches the shortcut
-        # itself, which works. It is that every Xbox and Game Pass game (the
-        # ones whose shortcut carries a grouping id and so needs resolving at
-        # all) would be *written* down to that fallback:
-        # `Store._refresh_derived_executable` adopts a rescanned packaged
-        # command, so one failed lookup would replace their working AUMID
-        # commands with the degraded one, and with it the package identity their
-        # playtime tracking follows. A later good scan does undo it — but a
-        # whole session of a failing lookup should not cost that in the first
-        # place.
+        # Mesmo raciocínio, mais forte aqui: quem tem atalhos da Store sempre tem apps no Menu Iniciar, então lista vazia é consulta quebrada (timeout de 60 s). Seguir adiante gravaria, via `Store._refresh_derived_executable`, o comando degradado no lugar do AUMID de cada jogo Xbox/Game Pass, junto com a identidade do pacote que o tempo de jogo segue.
         if needs_start_apps and not start_apps:
             raise SourceScanError(
                 _("Não foi possível ler os aplicativos do menu Iniciar"),
@@ -417,16 +312,13 @@ class ShortcutsSourceIterable(SourceIterable):
             yield self.build_from_lnk(entry, lnk_data.get(str(entry)))
 
     def build_from_url(self, entry: Path):
-        """Build a game from a ``.url`` internet shortcut"""
         parser = configparser.ConfigParser(interpolation=None, strict=False)
         try:
             raw = entry.read_bytes()
             try:
                 text = raw.decode("utf-8-sig")
             except UnicodeDecodeError:
-                # Windows writes .url files in the ANSI code page, not UTF-8: an
-                # accented IconFile path made the whole file unreadable, and a
-                # game already in the library was then marked removed.
+                # O Windows grava .url na página de código ANSI, não UTF-8: um IconFile acentuado tornava o arquivo ilegível e o jogo da biblioteca era marcado removido.
                 text = raw.decode("mbcs")
             parser.read_string(text)
         except (configparser.Error, OSError, UnicodeDecodeError) as error:
@@ -438,11 +330,9 @@ class ShortcutsSourceIterable(SourceIterable):
 
         url = parser.get("InternetShortcut", "URL", fallback="").strip()
         if not url or url.lower().startswith(("http://", "https://")):
-            # Plain web bookmarks are not games
             return None
 
-        # Security: the URL is embedded in a cmd.exe command; refuse anything
-        # that could escape its quoting (command injection via a crafted .url)
+        # Segurança: a URL entra num comando cmd.exe; recusa o que escape da citação (injeção por .url forjado).
         if not cmd_safe(url):
             logging.warning("Ignoring unsafe URL in shortcut %s", entry)
             return None
@@ -454,10 +344,7 @@ class ShortcutsSourceIterable(SourceIterable):
         additional_data: dict = {}
         if appid := steam_appid_from_url(url):
             additional_data["steam_appid"] = appid
-        # Same reasoning as the .lnk branch: the file is the stable thing, the
-        # URL inside it is not. A launcher re-issuing its URI scheme, or an Epic
-        # shortcut rewritten with a new catalog id, renames the game exactly the
-        # way a patched target does.
+        # Como no ramo .lnk: o arquivo é o estável, a URL dentro dele não (um launcher que reemite o esquema, ou um atalho da Epic com catálogo novo, renomeia o jogo).
         additional_data["identity_anchor"] = str(entry)
         additional_data["alvo"] = url
 
@@ -469,7 +356,6 @@ class ShortcutsSourceIterable(SourceIterable):
         )
 
     def build_from_lnk(self, entry: Path, data: Optional[dict]):
-        """Build a game from a ``.lnk`` shortcut using resolved COM data"""
         name = clean_game_name(entry.stem)
         if _SKIP_NAME_RE.search(name):
             return None
@@ -485,19 +371,7 @@ class ShortcutsSourceIterable(SourceIterable):
 
         additional_data: dict = {}
 
-        # Security: target and workdir are embedded in quoted cmd.exe arguments.
-        # Windows paths can't legitimately contain quotes/control chars, so any
-        # value that does is malicious or corrupt — skip the shortcut entirely.
-        #
-        # `arguments` is checked with them, and it is the one that actually
-        # mattered: unlike the other two it is appended to the command *unquoted*
-        # (a quoted argument string would be passed to the game as a single
-        # argument), so it needed no quote to break out at all. A .lnk carrying
-        # `Arguments = & calc.exe` produced `start "" "game.exe" & calc.exe`,
-        # which `run_executable` hands straight to `shell=True` — arbitrary code
-        # execution from a shortcut file the user only had to drop in the
-        # scanned folder. The stricter rule below also rejects the shell
-        # metacharacters that are harmless inside quotes but not outside them.
+        # Segurança: alvo e pasta de trabalho entram em argumentos cmd.exe entre aspas; caminhos legítimos não têm aspas/controle, então o atalho é pulado. `arguments` também é checado e é o que importava: vai *sem aspas* (`Arguments = & calc.exe` virava `start "" "game.exe" & calc.exe` em `shell=True`). A regra mais estrita abaixo também recusa metacaracteres do shell fora de aspas.
         if not cmd_safe(target) or not cmd_safe(workdir):
             logging.warning("Ignoring shortcut with unsafe target: %s", entry)
             return None
@@ -506,18 +380,8 @@ class ShortcutsSourceIterable(SourceIterable):
             logging.warning("Ignoring shortcut with unsafe arguments: %s", entry)
             return None
 
-        # A target that looks like a file path is one even while the file is
-        # missing — a game on a USB drive that is unplugged during the scan.
-        # Sent to the URI branch below, it hashed a different identity (`target`
-        # without `|arguments`), so the game's id changed, the anchor adopted the
-        # old record and replaced its command with a poorer one (no /D, no
-        # arguments) — losing any command the user had edited — and the id moved
-        # again when the drive came back. Only a missing path is caught here: an
-        # existing folder target keeps the branch it always had, and a packaged
-        # app's target (WindowsApps, unreadable) still goes to the AUMID branch.
-        # A UNC target is never looked at on disk: checking it makes Windows
-        # connect to that machine and send the user's credentials, during a scan
-        # nobody asked to touch the network. It takes the missing-path branch.
+        # Alvo com cara de caminho de arquivo é arquivo mesmo ausente (USB desconectado): pelo ramo de URI o hash perderia `|arguments`, o id mudaria e a âncora trocaria o comando por um mais pobre. Só caminho ausente cai aqui; pasta existente e app empacotado (WindowsApps) seguem seus ramos.
+        # UNC nunca é consultado no disco: o Windows conectaria à máquina e enviaria as credenciais da pessoa numa varredura que ninguém pediu para tocar a rede.
         is_path = target and Path(target).suffix.lower() != ".lnk"
         de_rede = target[:1] in ("\\", "/") and target[1:2] in ("\\", "/")
         if is_path and (
@@ -528,7 +392,6 @@ class ShortcutsSourceIterable(SourceIterable):
                 and (de_rede or not Path(target).exists())
             )
         ):
-            # Classic executable target
             executable = 'start ""'
             if workdir:
                 executable += f' /D "{workdir}"'
@@ -543,39 +406,17 @@ class ShortcutsSourceIterable(SourceIterable):
                 additional_data["steam_appid"] = appid
 
         elif aumid:
-            # UWP / Microsoft Store app.
-            #
-            # The identity is the AUMID *as the shortcut carries it*, never the
-            # resolved one below. Resolution goes through Get-StartApps, and a
-            # game_id must not depend on anything that can fail: a PowerShell
-            # timeout changed the id, so the game looked new and its old record
-            # looked missing, and `remove_games` took the playtime, cover, logo
-            # and update tracking with it — permanently, because coming back
-            # needs the shortcut's mtime to rise and the file was never touched.
-            # The resolved AUMID is a launch detail, and belongs in the command.
-            # Being wrong there is recoverable in both directions — but only
-            # because `Store._refresh_derived_executable` exists to re-adopt a
-            # rescanned packaged command. Without it the ordinary path for a
-            # game already in the library is the duplicate branch, which drops
-            # everything the scan found, and a stale command would be stale for
-            # good.
+            # App UWP / Microsoft Store: a identidade é o AUMID *como o atalho o traz*, nunca o resolvido (o Get-StartApps pode falhar, e um timeout mudava o id, fazendo `remove_games` levar tempo de jogo, capa e logo). O resolvido é detalhe de lançamento, recuperável porque `Store._refresh_derived_executable` readota o comando relido.
             launch_aumid = self._real_aumid(entry.stem, aumid)
             identity = f"uwp:{aumid}"
-            # Security: the AUMID lands unquoted in a shell command; real ones
-            # only use word chars plus ".", "!", "+" and "-" (PFN!AppId form)
+            # Segurança: o AUMID entra sem aspas no shell; os reais só usam caracteres de palavra mais ".", "!", "+" e "-" (forma PFN!AppId).
             if not re.fullmatch(r"[\w.!+\-]+", launch_aumid):
                 logging.warning("Ignoring shortcut with unsafe AUMID: %s", entry)
                 return None
             if "!" in launch_aumid:
                 executable = f"explorer.exe shell:AppsFolder\\{launch_aumid}"
             elif cmd_safe(str(entry)):
-                # A grouping id with no "!" is not launchable — `shell:AppsFolder`
-                # just opens the Apps folder with it, which looks like a game
-                # that starts and immediately does nothing. Launch the shortcut
-                # itself instead: it is what the user would double-click, and
-                # the shell knows what to do with it. Losing the AUMID here also
-                # keeps the game out of the packaged playtime path, which had
-                # nothing to watch for anyway.
+                # Um id de agrupamento sem "!" não lança: o `shell:AppsFolder` só abre a pasta de apps. Lança-se o próprio atalho, e sem AUMID o jogo fica fora do rastreio de tempo de jogo empacotado.
                 logging.info("No launchable AUMID for %s; using the shortcut", entry)
                 executable = f'start "" "{entry}"'
             else:
@@ -583,8 +424,7 @@ class ShortcutsSourceIterable(SourceIterable):
                 return None
 
         elif target:
-            # A protocol/URI target (e.g. steam://), or a relative path or folder
-            # (cmd_safe was already enforced on `target` above)
+            # URI de protocolo (steam://), caminho relativo ou pasta (`cmd_safe` já foi imposto em `target`).
             if target.lower().startswith(("http://", "https://")):
                 return None
             executable = f'start "" "{target}"'
@@ -597,24 +437,8 @@ class ShortcutsSourceIterable(SourceIterable):
             logging.debug("Shortcut %s has no usable target", entry)
             return None
 
-        # Let the store match on the shortcut file, for every shortcut and not
-        # only the packaged ones it was first added for.
-        #
-        # A classic shortcut hashes `target|arguments`, so anything that edits
-        # where the .lnk points — installing a patch, a launcher moving its
-        # executable, the game reinstalled elsewhere — renames the game. The
-        # file in the scanned folder did not change, but the id derived from it
-        # did, so the scan reported a new game plus a missing one and
-        # `remove_games` took the playtime, cover, logo and update tracking with
-        # it. The shortcut file is what the user actually curates; the target is
-        # a launch detail, and a launch detail must not be able to delete a
-        # library.
-        #
-        # Note which half of the problem this covers. A *renamed* shortcut needs
-        # nothing from the anchor: the identity does not include the file name,
-        # so the id survives and the duplicate branch follows the new path. The
-        # two signals move independently, and each one is what repairs the
-        # other — the anchor is the direction that had no repair at all.
+        # A store casa pelo arquivo de atalho, para todo atalho: o clássico faz hash de `alvo|argumentos`, então editar o alvo (patch, launcher que muda o executável) renomeava o jogo e `remove_games` levava tempo de jogo, capa e logo. O arquivo é o que a pessoa cura; o alvo é detalhe de lançamento.
+        # Atalho *renomeado* não precisa da âncora: o id não inclui o nome do arquivo e o ramo de duplicado segue o caminho novo.
         additional_data["identity_anchor"] = str(entry)
 
         return (
@@ -625,13 +449,7 @@ class ShortcutsSourceIterable(SourceIterable):
         )
 
     def _real_aumid(self, name: str, aumid: str) -> str:
-        """Resolve a shortcut's AUMID to a launchable one via the Start apps.
-
-        Xbox/Game Pass shortcuts expose a grouping id that ``shell:AppsFolder``
-        can't launch. Prefer a Start app with the same display name; failing
-        that, match by package identity (grouping ids lack the ``!`` of a real
-        AUMID). Falls back to the original value when nothing matches.
-        """
+        """Resolve o AUMID de um atalho para um lançável via Start apps: prefere o app de mesmo nome e, senão, a identidade do pacote (ids de agrupamento não têm o ``!``); sem correspondência devolve o original."""
         if real := self._aumid_by_name.get(name.casefold()):
             return real
 
@@ -646,13 +464,11 @@ class ShortcutsSourceIterable(SourceIterable):
         return aumid
 
     def _game_id(self, identity: str) -> str:
-        """The game id a launch identity hashes to."""
         digest = sha256(identity.encode("utf-8")).hexdigest()[:16]
         return self.source.game_id_format.format(game_id=digest)
 
     @staticmethod
     def _mtime(entry: Path) -> int:
-        """Shortcut file modification time, used to detect reinstalls"""
         try:
             return int(entry.stat().st_mtime)
         except OSError:
@@ -666,7 +482,6 @@ class ShortcutsSourceIterable(SourceIterable):
         mtime: int = 0,
         shortcut_path: str = "",
     ) -> Jogo:
-        """Create a game with a stable id derived from its launch identity"""
         # Roda na thread do import: o Jogo é um QObject sem interface, e quem
         # o desenha conecta os sinais dele à thread principal.
         return Jogo(
@@ -683,7 +498,6 @@ class ShortcutsSourceIterable(SourceIterable):
 
 
 class ShortcutsSource(Source):
-    """Source importing ``.lnk`` and ``.url`` game shortcuts on Windows"""
 
     source_id = "shortcuts"
     name = _("Atalhos")
@@ -691,12 +505,7 @@ class ShortcutsSource(Source):
 
     @property
     def is_available(self) -> bool:
-        """Available only when the configured shortcuts folder exists.
-
-        A missing folder (unset setting, disconnected drive) must skip the
-        scan entirely: an "empty" scan would otherwise mark every previously
-        imported game as removed.
-        """
+        """Só com a pasta de atalhos configurada existente: uma pasta ausente (disco desconectado) deve pular a varredura, senão um scan "vazio" marcaria tudo como removido."""
         if not super().is_available:
             return False
         location = shared.schema.get_string("shortcuts-location")

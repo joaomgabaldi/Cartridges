@@ -1,16 +1,8 @@
 """A conta Microsoft do usuário: guarda, renovação e desconexão.
 
-O caminho é o documentado pela Microsoft ("Xbox services sign-in for title
-websites", GDK): o login da conta Microsoft (MSA) vira um token de usuário do
-Xbox e este, um token XSTS para ``http://xboxlive.com``. A API de conquistas
-recebe o par ``(uhs, xsts)``.
+É o caminho documentado pela Microsoft ("Xbox services sign-in for title websites", GDK): o login da conta Microsoft (MSA) vira um token de usuário do Xbox e este um token XSTS para ``http://xboxlive.com``; a API de conquistas recebe o par ``(uhs, xsts)``.
 
-Só a chave de renovação é guardada, cifrada pelo DPAPI (``utils/dpapi.py``), em
-``contas/microsoft.json`` — fora do backup, porque o DPAPI só abre no PC e no
-usuário do Windows que a cifrou. Os tokens de acesso ficam só na memória.
-
-Nada de token, código, chave de renovação ou corpo de resposta da autenticação
-vai para o log: só o tipo da exceção, o status HTTP e o ``XErr`` do Xbox.
+Só a chave de renovação é guardada, cifrada pelo DPAPI (``utils/dpapi.py``) em ``contas/microsoft.json``, fora do backup (o DPAPI só abre no PC e usuário que cifrou); os tokens ficam só na memória. Nada de token, código, chave de renovação ou corpo de resposta da autenticação vai para o log: só o tipo da exceção, o status HTTP e o ``XErr`` do Xbox.
 """
 
 import base64
@@ -40,7 +32,6 @@ _USUARIO = "https://user.auth.xboxlive.com/user/authenticate"
 _XSTS = "https://xsts.auth.xboxlive.com/xsts/authorize"
 SEM_PERFIL_XBOX = 2148916233
 CONTA_INFANTIL = 2148916238
-# Renova o que vence em menos que isto.
 _MARGEM = 5 * 60
 _TEMPO = 15
 _UMA_HORA = 3600
@@ -80,7 +71,6 @@ class _Sessao:
 _trava = threading.Lock()
 _renovando = threading.Lock()
 _sessao: Optional[_Sessao] = None
-# Um aviso de desconexão por execução (volta a valer depois de um login).
 _avisou = False
 _ouvintes: list[Callable[[], None]] = []
 
@@ -90,7 +80,6 @@ def _arquivo():
 
 
 def _post(url: str, **kwargs: Any) -> requests.Response:
-    """O único ponto de rede da conta. O corpo é lido sob um teto antes de devolver."""
     return download.request_capped("POST", url, timeout=_TEMPO, **kwargs)
 
 
@@ -134,7 +123,6 @@ def _msa(dados: dict[str, str]) -> tuple[_Acesso, str]:
 
 
 def _xbox(acesso_msa: str) -> tuple[_Acesso, str, str, str]:
-    """Token de usuário e XSTS: devolve ``(xsts, uhs, xuid, gamertag)``."""
     cabecalho = {"x-xbl-contract-version": "1"}
     resposta = _post(
         _USUARIO,
@@ -201,7 +189,6 @@ def _salvar(sessao: _Sessao) -> None:
 
 
 def carregar() -> None:
-    """Lê a conta guardada, sem rede. Ilegível ou de outro PC = não conectada."""
     global _sessao  # pylint: disable=global-statement
     try:
         dados = json.loads(_arquivo().read_text(encoding="utf-8"))
@@ -233,8 +220,7 @@ def xuid() -> Optional[str]:
 
 
 def ao_mudar(ouvinte: Callable[[], None]) -> Callable[[], None]:
-    """Registra `ouvinte` (chamado na thread principal a cada conexão ou
-    desconexão) e devolve a função que o remove."""
+    """Registra `ouvinte` (chamado na thread principal a cada conexão ou desconexão) e devolve a função que o remove."""
     return aviso_da_conta.inscrever(_ouvintes, ouvinte)
 
 
@@ -256,12 +242,7 @@ def _desconectar(avisar: bool) -> None:
 
 
 def conectar(codigo: str, verificador: str, retorno: str) -> None:
-    """Troca o código do login pelas chaves, guarda e conecta.
-
-    Levanta ``SemPerfilXbox``, ``ContaInfantil``, ``Recusada``,
-    ``requests.RequestException``, ``ValueError`` ou ``KeyError``: quem chama é
-    o login, que mostra o que aconteceu.
-    """
+    """Troca o código do login pelas chaves, guarda e conecta. Levanta ``SemPerfilXbox``, ``ContaInfantil``, ``Recusada``, ``requests.RequestException``, ``ValueError`` ou ``KeyError`` (o login mostra o que aconteceu)."""
     global _sessao, _avisou  # pylint: disable=global-statement
     msa, renovacao = _msa(
         {
@@ -281,16 +262,8 @@ def conectar(codigo: str, verificador: str, retorno: str) -> None:
 
 
 def autorizacao(forcar: bool = False) -> Optional[tuple[str, str]]:
-    """O par ``(uhs, xsts)`` para a API do Xbox, renovando o que venceu.
-
-    Roda em thread. ``None``: sem conta, falha (logada) ou renovação recusada
-    (a conta já foi desconectada e o usuário avisado).
-    """
-    # A rede roda fora de `_trava`, que só guarda memória e arquivo: `sair()` e
-    # `recusada()` vêm da thread principal e não podem esperar uma renovação
-    # lenta. `_renovando` só serializa as renovações entre si. Cada passo que
-    # publica confere que a sessão ainda é a mesma (sair, recusada ou um novo
-    # login a trocam): se mudou, o resultado é descartado sem gravar nada.
+    """O par ``(uhs, xsts)`` para a API do Xbox, renovando o que venceu. Roda em thread. ``None``: sem conta, falha (logada) ou renovação recusada (conta desconectada e usuário avisado)."""
+    # A rede roda fora de `_trava` (só memória e arquivo): `sair()` e `recusada()` vêm da thread principal e não podem esperar uma renovação lenta. `_renovando` só serializa as renovações; cada passo que publica confere que a sessão ainda é a mesma, senão descarta o resultado sem gravar.
     with _renovando:
         with _trava:
             sessao = _sessao
@@ -325,8 +298,7 @@ def autorizacao(forcar: bool = False) -> Optional[tuple[str, str]]:
                 _desconectar(avisar=True)
             return None
         except Exception as erro:  # pylint: disable=broad-exception-caught
-            # Rede fora, resposta fora do formato, o que for: a conta continua
-            # conectada e a próxima tentativa renova de novo.
+            # Rede fora, resposta fora do formato, o que for: a conta continua conectada e a próxima tentativa renova de novo.
             logging.info("Conta Microsoft: renovação falhou (%s)", type(erro).__name__)
             return None
         return uhs, xsts.valor
@@ -340,6 +312,5 @@ def recusada() -> None:
 
 
 def sair() -> None:
-    """Desconecta sem aviso (o usuário pediu)."""
     with _trava:
         _desconectar(avisar=False)

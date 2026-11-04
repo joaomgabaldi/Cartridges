@@ -35,12 +35,11 @@ from cartridges.utils.steamgriddb import (
     SgdbNoImageFound,
 )
 
-# Key under which `process_game` hands `main` the cancellable of its batch.
+# Chave pela qual `process_game` entrega ao `main` o cancellable do lote.
 _CANCELLABLE = "sgdb_cancellable"
 
 
 class SgdbManager(AsyncManager):
-    """Manager in charge of downloading a game's cover from SteamGridDB"""
 
     run_after = (SteamAPIManager,)
     retryable_on = (
@@ -51,32 +50,19 @@ class SgdbManager(AsyncManager):
         JSONDecodeError,
         Timeout,
     )
-    # A missing game or image is an expected outcome, not a user-facing error
     continue_on = (SgdbGameNotFound, SgdbNoImageFound)
 
     def process_game(
         self, game: Jogo, additional_data: dict, callback: Callable[[Manager], Any]
     ) -> None:
-        # The cancellable is captured here, when the task is queued: a reset
-        # cancels the current one and swaps in a fresh one right away, and a
-        # task that looked up `self.cancellable` only when it got to run would
-        # see the fresh, uncancelled one and write its cover after the wipe.
+        # Capturado ao enfileirar: um reset troca o cancellable, e uma tarefa que o lesse só ao rodar escreveria a capa depois da limpeza.
         super().process_game(
             game, {**additional_data, _CANCELLABLE: self.cancellable}, callback
         )
 
     def main(self, game: Jogo, additional_data: dict) -> None:
         cancellable = additional_data.get(_CANCELLABLE) or self.cancellable
-        # The cancellation has to be honoured here, by hand, because nothing
-        # else will honour it: AsyncManager.process_game only checks the
-        # cancellable before it runs a task, so cancelling still lets a task that
-        # already started run to the end, and SgdbHelper never looks at a
-        # cancellable of any kind. Cancelling therefore only ever stopped tasks
-        # that had not been created yet — of which, in an import, there are
-        # none: they are all queued up front. So a wrong API key in a 300-game
-        # library meant 300 identical 401s, 300 identical FriendlyErrors queued
-        # for the user and 300 pointless round trips to steamgriddb.com.
-        # Checking on the way in is what turns that into one error and stops.
+        # O cancelamento é tratado aqui à mão: o AsyncManager só o confere antes de rodar e o SgdbHelper o ignora. Sem isto, uma chave errada numa biblioteca de 300 jogos gerava 300 erros 401 idênticos.
         if cancellable.is_set():
             return
 
@@ -84,7 +70,6 @@ class SgdbManager(AsyncManager):
             sgdb = SgdbHelper()
             sgdb.conditionaly_update_cover(game, additional_data)
         except SgdbAuthError as error:
-            # If invalid auth, cancel all SGDBManager tasks of this batch
             cancellable.set()
             raise FriendlyError(
                 _("Não foi possível autenticar no SteamGridDB"),

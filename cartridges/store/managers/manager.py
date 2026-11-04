@@ -30,13 +30,7 @@ if TYPE_CHECKING:
 
 
 class Manager(ErrorProducer):
-    """Class in charge of handling a post creation action for games.
-
-    * May connect to signals on the game to handle them.
-    * May cancel its running tasks on critical error,
-    in that case a new cancellable must be generated for new tasks to run.
-    * May be retried on some specific error types
-    """
+    """Ação pós-criação de um jogo. Pode se ligar a sinais do jogo e cancelar suas tarefas num erro crítico (então gera um cancellable novo); pode ser repetida em certos erros."""
 
     run_after: Container[type["Manager"]] = tuple()
     blocking: bool = True
@@ -62,15 +56,11 @@ class Manager(ErrorProducer):
         """
 
     def run(self, game: "Jogo", additional_data: dict) -> None:
-        """Handle errors (retry, ignore or raise) that occur in the manager logic"""
-
-        # Keep track of the number of tries
         tries = 1
 
         def handle_error(error: Exception) -> None:
             nonlocal tries
 
-            # If FriendlyError, handle its cause instead
             base_error = error
             if isinstance(error, FriendlyError) and error.__cause__ is not None:
                 error = error.__cause__
@@ -85,29 +75,22 @@ class Manager(ErrorProducer):
             retrying_format = "Retrying %s in %s for %s"
             unretryable_format = "Unretryable %s in %s for %s"
 
-            # isinstance (not an exact type check) so subclasses also match,
-            # e.g. requests wraps connection failures in its own subclasses
+            # isinstance, não tipo exato: o requests embrulha falhas de conexão em subclasses próprias.
             if isinstance(error, tuple(self.continue_on)):
-                # Handle skippable errors (skip silently)
                 return
 
             if isinstance(error, tuple(self.retryable_on)):
-                # ``tries`` starts at 1 (the initial attempt), so ``max_tries``
-                # is the total number of attempts: with max_tries=3 the main
-                # logic runs at most 3 times before giving up.
+                # `tries` começa em 1 (a tentativa inicial): `max_tries` é o total de tentativas.
                 if tries >= self.max_tries:
-                    # Handle being out of retries
                     logging.error(out_of_retries_format, *log_args)
                     self.report_error(base_error)
                 else:
-                    # Handle retryable errors
                     logging.error(retrying_format, *log_args)
                     sleep(self.retry_delay)
                     tries += 1
                     try_manager_logic()
 
             else:
-                # Handle unretryable errors
                 logging.error(unretryable_format, *log_args, exc_info=error)
                 self.report_error(base_error)
 
@@ -122,6 +105,5 @@ class Manager(ErrorProducer):
     def process_game(
         self, game: "Jogo", additional_data: dict, callback: Callable[["Manager"], Any]
     ) -> None:
-        """Pass the game through the manager"""
         self.run(game, additional_data)
         callback(self)

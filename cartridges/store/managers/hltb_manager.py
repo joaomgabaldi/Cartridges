@@ -34,21 +34,14 @@ from cartridges.utils.hltb import (
 
 
 class HLTBManager(AsyncManager):
-    """Manager in charge of completing a game's HowLongToBeat estimates.
+    """Completa as estimativas do HowLongToBeat do jogo.
 
-    Runs after the Steam lookup on purpose: that step is what turns a shortcut
-    named ``Play Cyberpunk 2077 - Atalho`` into the real title, and searching
-    HowLongToBeat with the corrected name is the difference between a match and
-    a miss. Failures are never fatal — the game simply keeps whatever times it
-    already had (usually none) and the rest of the import carries on.
+    Roda depois da consulta à Steam de propósito: ela corrige o nome de um atalho ("Play Cyberpunk 2077 - Atalho"), e
+    buscar com o nome certo decide entre achar e não achar. Falhas nunca são fatais.
     """
 
     run_after = (SteamAPIManager,)
-    # No retryable_on: the helper handles its own recovery — it refreshes an
-    # expired credential and retries once — and converts every transport
-    # failure into an HLTBError, so nothing from requests ever reaches the
-    # retry machinery. Listing those exceptions here would only look like
-    # protection that isn't there.
+    # Sem retryable_on: o helper renova a credencial expirada e tenta de novo, e converte falhas de transporte em HLTBError.
 
     hltb_helper: HLTBHelper
 
@@ -57,8 +50,7 @@ class HLTBManager(AsyncManager):
         self.hltb_helper = HLTBHelper(HLTBRateLimiter())
 
     def main(self, game: Jogo, additional_data: dict) -> None:
-        # Tumba não é processada, exceto o zerado adicionado à mão
-        # (`zerado_manual`), que só existe como tumba e precisa dos dados.
+        # Jogo apagado não é processado, exceto o zerado manual (`zerado_manual`), que só existe assim e precisa dos dados.
         if game.blacklisted or (
             game.removed and not additional_data.get("zerado_manual")
         ):
@@ -67,10 +59,7 @@ class HLTBManager(AsyncManager):
         if not shared.schema.get_boolean("hltb-metadata"):
             return
 
-        # Completion estimates barely move once a game is out, so a game that
-        # already has them is left alone. Only an explicit refresh (the button
-        # in the details dialog) asks again, which keeps a re-import of a large
-        # library from replaying hundreds of requests for unchanged numbers.
+        # As estimativas quase não mudam: só o botão de atualizar nos detalhes pede de novo, e reimportar uma biblioteca grande não repete centenas de requisições.
         refresh = bool(additional_data.get("refresh_hltb"))
         if game.has_hltb_times and not refresh:
             return
@@ -90,21 +79,15 @@ class HLTBManager(AsyncManager):
         game.update_values(times)
 
     def _fetch(self, game: Jogo) -> HLTBTimes:
-        """Get ``game``'s times, id first and title search as the fallback."""
         return fetch_times(self.hltb_helper, game.name, game.hltb_id)
 
 
 def shared_helper() -> HLTBHelper:
-    """The app-wide helper, or a throwaway one if the manager isn't up yet.
+    """O helper do app, ou um descartável se o manager ainda não subiu.
 
-    Everything outside the pipeline (the backfill, the details dialog) has to
-    borrow the manager's instance rather than build its own: a fresh
-    :class:`HLTBHelper` would rediscover the endpoint, start a second refill
-    thread that never exits, and — worse — hand out request budget the shared
-    rate limiter has no idea it spent.
+    Fora do pipeline é preciso usar a instância do manager: um helper novo redescobriria o endpoint e gastaria cota que o limitador compartilhado não conhece.
     """
-    # `is not None`, not a truth test: Store defines __len__, so an empty
-    # library would read as falsy and send every caller to a throwaway helper.
+    # `is not None`, não verdade: Store define __len__, e uma biblioteca vazia mandaria todos a um helper descartável.
     store = getattr(shared, "store", None)
     manager = store.managers.get(HLTBManager) if store is not None else None
     if isinstance(manager, HLTBManager):

@@ -1,10 +1,6 @@
 """O catálogo de um jogo da Ubisoft Connect, a partir do ZIP do cache do launcher.
 
-O ZIP (`cache\\achievements\\<productId>_<hash>`, sem extensão) traz `<idioma>_loc.txt`
-(UTF-8 com BOM, uma conquista por linha: `id⇥nome⇥descrição`) e `<id>.png`, conferidos em
-05/10/2026. Não há raridade nem conquista oculta, e o ícone é um só: a bloqueada usa
-o mesmo, em cinza (a página aplica o filtro). Os ícones são extraídos para o cache do app,
-porque a página só sabe abrir um arquivo ou uma URL.
+O ZIP (`cache\\achievements\\<productId>_<hash>`, sem extensão) traz `<idioma>_loc.txt` (UTF-8 com BOM, uma conquista por linha: `id⇥nome⇥descrição`) e `<id>.png`. Não há raridade nem conquista oculta, e o ícone é um só: a bloqueada usa o mesmo, em cinza (a página aplica o filtro). Os ícones são extraídos para o cache do app, pois a página só abre arquivo ou URL.
 
 Só disco: roda em thread (varredura). O vigia, na thread principal, só lê o cache.
 """
@@ -59,7 +55,6 @@ def pasta_dos_icones(produto: str) -> Path:
 
 
 def _ler_entrada(arquivo: zipfile.ZipFile, info: zipfile.ZipInfo, teto: int) -> Optional[bytes]:
-    """O conteúdo da entrada, ou None se passar do teto (o declarado ou o real)."""
     if info.file_size > teto:
         return None
     with arquivo.open(info) as entrada:
@@ -80,7 +75,6 @@ def _linhas_do_loc(dados: bytes) -> dict[int, tuple[str, str]]:
 
 
 def _escolher(idiomas: dict[str, dict[int, tuple[str, str]]]) -> dict[int, tuple[str, str]]:
-    """pt-BR; senão en-US; senão o primeiro idioma com conquistas, em ordem alfabética."""
     por_nome = {nome.casefold(): conquistas for nome, conquistas in idiomas.items()}
     for preferido in _PREFERIDOS:
         if por_nome.get(preferido):
@@ -150,11 +144,7 @@ def _montar(produto: str, caminho: Path) -> Catalogo:
 
 
 def obter(produto: str) -> tuple[Optional[Catalogo], bool]:
-    """O catálogo do produto e se ele foi refeito agora. Nunca levanta.
-
-    Refaz só quando o ZIP é mais novo que o catálogo guardado (o Ubisoft Connect o regrava
-    ao fechar o jogo); sem ZIP, ou com ZIP ruim, vale o guardado.
-    """
+    """O catálogo do produto e se foi refeito agora. Nunca levanta. Refaz só quando o ZIP é mais novo que o guardado (o Ubisoft Connect o regrava ao fechar o jogo); sem ZIP, ou com ZIP ruim, vale o guardado."""
     guardado = catalogo.em_cache(chave(produto))
     try:
         caminho = locais.pacote(produto)

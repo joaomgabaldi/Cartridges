@@ -1,18 +1,8 @@
 """De onde vêm as conquistas de cada jogo — ou de lugar nenhum, e o cartão some.
 
-Quatro respostas: a conta de uma loja (Xbox, Epic ou EA; ver `contas.py`; jogo do
-Xbox/Game Pass com a conta Microsoft conectada, jogo da Epic com a conta Epic
-conectada, ou jogo da EA, reconhecido pela chave `EA Games` do registro, com a conta
-EA conectada), os arquivos locais da Ubisoft Connect (atalho `uplay://` ou pasta de
-instalação do launcher; ver `ubisoft/`), a Steam ou um emulador (appID e onde ler o
-progresso: atalho `steam://`, arquivo de emulador, ou sinal de emulador na pasta do
-jogo), ou nenhuma. Jogo do Xbox, da Epic ou da EA sem conta não cai para a Steam: o catálogo
-da Steam ficaria parado em "0 de N", que é justamente o que esta regra acaba.
+Quatro respostas: a conta de uma loja (Xbox/Game Pass, Epic ou EA, reconhecido pela chave `EA Games` do registro; ver `contas.py`); os arquivos locais da Ubisoft Connect (atalho `uplay://` ou pasta do launcher; ver `ubisoft/`); a Steam ou um emulador (atalho `steam://`, arquivo ou sinal de emulador na pasta do jogo); ou nenhuma. Jogo do Xbox, Epic ou EA sem conta não cai para a Steam: o catálogo ficaria parado em "0 de N".
 
-`do_jogo` olha o disco e roda em thread (varredura, vigia). A página do jogo
-não pode tocar no disco do jogo (um HD dormindo travaria a tela), então a
-varredura grava a fonte no histórico (`historico.registrar(..., fonte=)`) e o
-cartão usa `gravada`.
+`do_jogo` olha o disco e roda em thread. A página do jogo não toca o disco do jogo (um HD dormindo travaria a tela): a varredura grava a fonte no histórico (`historico.registrar(..., fonte=)`) e o cartão usa `gravada`.
 """
 
 import json
@@ -139,12 +129,10 @@ def _da_url(executavel: str) -> Optional[tuple[str, str]]:
 
 
 def url_da_epic(game: Any) -> bool:
-    """Se o executável é o atalho do launcher da Epic. Só o texto, nunca o disco."""
     return _da_url(getattr(game, "executable", "") or "") is not None
 
 
 def url_da_ubisoft(game: Any) -> bool:
-    """Se o executável é o atalho do Ubisoft Connect. Só o texto, nunca o disco."""
     return ubisoft_loja.de_url(getattr(game, "executable", "") or "") is not None
 
 
@@ -167,11 +155,7 @@ def _ler_manifests(itens: tuple[Path, ...]) -> tuple[dict, ...]:
 
 
 def _manifests() -> tuple[dict, ...]:
-    """Os manifests do Epic Games Launcher instalado (`<guid>.item`, JSON), já filtrados.
-
-    Só são lidos de novo quando algum muda (`cache_de_leitura`): sem isso, cada
-    jogo da varredura relia e interpretava todos eles.
-    """
+    """Os manifests do Epic Games Launcher instalado (`<guid>.item`, JSON), já filtrados; só são relidos quando algum muda (`cache_de_leitura`)."""
     pasta = arquivos.pastas_do_sistema().programdata / "Epic" / "EpicGamesLauncher" / "Data" / "Manifests"
     try:
         itens = sorted(item for item in pasta.iterdir() if item.suffix.casefold() == ".item")[:_MANIFESTS]
@@ -189,7 +173,6 @@ def _manifests() -> tuple[dict, ...]:
 
 
 def _dos_manifests(app: str) -> Optional[str]:
-    """O namespace do ``AppName`` nos manifests do launcher."""
     procurado = app.casefold()
     for dados in _manifests():
         if isinstance(dados.get("AppName"), str) and dados["AppName"].casefold() == procurado:
@@ -200,9 +183,7 @@ def _dos_manifests(app: str) -> Optional[str]:
 def _da_pasta(pastas: list[Path]) -> Optional[tuple[str, str]]:
     """O jogo cuja pasta de instalação (``InstallLocation`` do manifest) contém o exe.
 
-    Atalho `.lnk` direto para o exe: a pasta do jogo não guarda o namespace (o
-    ``.egstore`` só tem o manifesto binário, conferido neste PC), o manifest do launcher guarda.
-    Vale a pasta de instalação mais funda; relativa ou raiz do disco não vale.
+    Para o atalho `.lnk` direto ao exe: a pasta do jogo não guarda o namespace (o ``.egstore`` só tem o manifesto binário), o manifest do launcher guarda. Vale a pasta de instalação mais funda; relativa ou raiz do disco não vale.
     """
     if not pastas:
         return None
@@ -264,7 +245,6 @@ def eh_da_ea(game: Any) -> bool:
 
 
 def do_jogo(game: Any) -> Optional[Fonte]:
-    """A fonte do jogo, olhando o disco. Roda em thread e nunca levanta."""
     try:
         if eh_do_xbox(game):
             if not conta.conectada():
@@ -281,7 +261,6 @@ def do_jogo(game: Any) -> Optional[Fonte]:
             return Fonte(EPIC, epic[0]) if epic_conta.conectada() else None
         candidato = candidato_da_ea(game)
         if candidato is not None:
-            # Como a Epic: sem conta, nenhuma fonte (não cai para a Steam).
             if not ea_conta.conectada():
                 return None
             guardado = ea_api.conjunto_guardado(candidato.pasta)
@@ -301,7 +280,6 @@ def do_jogo(game: Any) -> Optional[Fonte]:
 
 
 def gravada(game: Any) -> Optional[Fonte]:
-    """A fonte guardada no histórico. Só lê o arquivo do histórico, nunca o disco do jogo."""
     return Fonte.de_texto(historico.fonte(game.game_id))
 
 

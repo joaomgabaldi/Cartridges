@@ -4,10 +4,8 @@
 
 """A janela principal só aparece desenhada, com as capas à vista.
 
-Sem isto a abertura mostrava a janela branca (o Windows a mapeia antes do primeiro quadro do Qt) e depois a grade com os
-cartões vazios, preenchidos um a um. O `Principal.qml` chama `cobrir` logo depois do setup do QWindowKit: a janela fica
-escondida pelo DWM (`DWMWA_CLOAK`), que continua compondo e entregando quadros a ela, e é revelada no quadro seguinte ao
-das capas prontas, ou no `PRAZO_MS`.
+O `Principal.qml` chama `cobrir` depois do setup do QWindowKit: o DWM esconde a janela (`DWMWA_CLOAK`) mas continua
+entregando quadros, e ela é revelada no quadro seguinte ao das capas prontas, ou no `PRAZO_MS`.
 """
 
 import ctypes
@@ -39,9 +37,8 @@ def _capa_carregando(raiz: Any) -> bool:
 
 
 class CortinaDaAbertura(QObject):
-    """No contexto do motor da principal como `cortinaDaAbertura`."""
 
-    # O teto da espera: uma capa lenta (disco frio, arquivo enorme) não segura a janela.
+    # Teto da espera: uma capa lenta não segura a janela.
     PRAZO_MS = 2500
 
     def __init__(self) -> None:
@@ -68,7 +65,6 @@ class CortinaDaAbertura(QObject):
         self._prazo.start()
 
     def depois_de_revelar(self, funcao: Callable[[], None]) -> None:
-        """Roda ``funcao`` quando a janela aparecer; na hora, se ela não está escondida."""
         if self._janela is None:
             funcao()
         else:

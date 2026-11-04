@@ -30,13 +30,11 @@ if TYPE_CHECKING:
 
 
 class Pipeline(QObject):
-    """Class representing a set of managers for a game.
+    """Conjunto de managers de um jogo.
 
-    Thread safety: ``advance``/``manager_callback`` are reached both from the
-    main thread (async manager callbacks) and from import worker threads
-    (blocking managers run inline). Every mutation or read of the state sets is
-    therefore guarded by an RLock — re-entrant because a blocking manager calls
-    ``manager_callback`` (→ ``advance``) synchronously from within ``advance``.
+    `advance`/`manager_callback` são chamados pela thread principal (managers assíncronos) e pelas threads da importação
+    (managers bloqueantes, inline): todo acesso ao estado usa um RLock, reentrante porque um manager bloqueante chama
+    `manager_callback` (→ `advance`) de dentro do `advance`.
     """
 
     advanced = Signal()
@@ -61,7 +59,6 @@ class Pipeline(QObject):
 
     @property
     def not_done(self) -> set[Manager]:
-        """Get the managers that are not done yet"""
         with self._lock:
             return self.waiting | self.running
 
@@ -72,7 +69,6 @@ class Pipeline(QObject):
 
     @property
     def blocked(self) -> set[Manager]:
-        """Get the managers that cannot run because their dependencies aren't done"""
         with self._lock:
             not_done = self.waiting | self.running
             blocked = set()
@@ -86,15 +82,11 @@ class Pipeline(QObject):
 
     @property
     def ready(self) -> set[Manager]:
-        """Get the managers that can be run"""
         with self._lock:
             return self.waiting - self.blocked
 
     def advance(self) -> None:
-        """Spawn tasks for managers that are able to run for a game"""
-
-        # Claim the runnable managers under the lock so two threads advancing
-        # concurrently can never schedule the same manager twice
+        # Reserva os managers sob o lock: duas threads avançando não agendam o mesmo manager duas vezes.
         with self._lock:
             managers = self.ready
             blocking = set(filter(lambda manager: manager.blocking, managers))
@@ -104,13 +96,11 @@ class Pipeline(QObject):
                 self.waiting.remove(manager)
                 self.running.add(manager)
 
-        # Run outside the lock: blocking managers may take long (network) and
-        # async callbacks from other threads must not be stalled meanwhile
+        # Fora do lock: manager bloqueante pode demorar (rede) e callbacks assíncronos de outras threads não podem esperar.
         for manager in to_run:
             manager.process_game(self.game, self.additional_data, self.manager_callback)
 
     def manager_callback(self, manager: Manager) -> None:
-        """Method called by a manager when it's done"""
         logging.debug("%s done for %s", manager.name, self.game.game_id)
         with self._lock:
             self.running.discard(manager)

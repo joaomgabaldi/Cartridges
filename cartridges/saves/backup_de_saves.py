@@ -1,16 +1,9 @@
 """O backup e a restauração dos saves, jogo a jogo, em segundo plano.
 
-É o que a interface chama: o fim de uma sessão dispara o backup, o menu do jogo
-lista as versões e restaura uma, as Preferências restauram todas e trocam a pasta.
-Cada operação roda numa thread, aparece como tarefa na janela de tarefas desde o
-pedido e só fala com o usuário quando falha (um aviso) ou quando "Restaurar todos"
-não acha nada a restaurar; sucesso é silencioso.
-
-Uma trava única cobre gravar o `config.yaml` e rodar o Ludusavi: duas sessões que
-terminam em sequência esperam uma pela outra, e a troca da pasta dos saves nunca
-acontece no meio de um backup. O config de cada chamada leva todos os jogos da
-biblioteca que já têm nome no Ludusavi, para que o `restore` de qualquer um ache a
-sua entrada.
+Cada operação roda numa thread, aparece como tarefa desde o pedido e só fala com o usuário quando falha (ou quando
+"Restaurar todos" não acha nada). Uma trava única cobre gravar o `config.yaml` e rodar o Ludusavi: sessões em sequência
+esperam uma pela outra e a troca da pasta dos saves nunca cai no meio de um backup. O config de cada chamada leva todos
+os jogos com nome no Ludusavi, para o `restore` de qualquer um achar a sua entrada.
 """
 
 import logging
@@ -34,9 +27,7 @@ from cartridges.utils.thread_principal import na_thread_principal
 # Os testes trocam por um executor falso; é o que `ludusavi.rodar` recebe.
 executor = subprocess.run
 
-# Quanto esperar, depois de uma tentativa falha de baixar o manifesto, antes da próxima.
-# Curta: só precisa cobrir o resto de um "Restaurar todos", e não segurar quem tenta de
-# novo depois que a rede volta.
+# Espera depois de uma tentativa falha de baixar o manifesto; curta, para cobrir o resto de um "Restaurar todos" sem segurar quem tenta de novo.
 PAUSA_DO_MANIFESTO = 60
 _manifesto_falhou_em: float | None = None  # `time.monotonic()` da última falha
 
@@ -49,14 +40,7 @@ _trava = threading.Lock()
 # Nome no Ludusavi -> versões, da mais nova para a mais velha. Lido pela tela
 # (`tem_backup`) sem esperar a trava: a tela nunca fica parada atrás de um backup.
 _cache: dict[str, list[Versao]] = {}
-# Quantas restaurações pendentes cada jogo tem (nome no Ludusavi, e também o objeto `Jogo`,
-# para o caso de o nome mudar no meio) e quantas de "Restaurar todos", para o jogo não
-# abrir no meio. Contadores, e não um conjunto e uma marca: com dois pedidos seguidos, o
-# fim do primeiro não pode soltar o jogo enquanto o segundo, na fila da trava, ainda vai
-# gravar. Só a thread da tela os muda: a restauração soma logo depois de abrir a thread de
-# trabalho, e o fim subtrai com `na_thread_principal` (que só roda depois, quando a tela está
-# livre). Por isso não precisam de trava, a tela os lê sem esperar um backup, e um pedido
-# que não chega a abrir a thread não deixa marca.
+# Restaurações pendentes por jogo (nome no Ludusavi e objeto `Jogo`, caso o nome mude no meio) e de "Restaurar todos", para o jogo não abrir no meio. Contadores e não conjunto: o fim do primeiro pedido não pode soltar o jogo enquanto o segundo, na fila da trava, ainda vai gravar. Só a thread da tela os muda (soma ao abrir a thread de trabalho; subtrai em `na_thread_principal`), por isso dispensam trava.
 _restaurando: Counter[str] = Counter()
 _jogos_restaurando: Counter[int] = Counter()  # id do `Jogo`; vivo enquanto a thread o segura
 _restaurando_todos = 0  # pylint: disable=invalid-name
@@ -67,8 +51,7 @@ _trava_tarefas = threading.Lock()
 
 
 def trava_dos_saves() -> threading.Lock:
-    """A trava que cobre o Ludusavi e a pasta dos saves, para quem precisa de uma
-    pasta dos saves estável (o backup do app): ``with trava_dos_saves(): ...``."""
+    """A trava que cobre o Ludusavi e a pasta dos saves: ``with trava_dos_saves(): ...`` para quem precisa dela estável (o backup do app)."""
     return _trava
 
 
@@ -77,9 +60,7 @@ def disponivel() -> bool:
 
 
 def em_andamento() -> bool:
-    """Há um backup ou uma restauração pedidos e ainda não terminados. Conta desde o
-    pedido, quando a tarefa visível nasce: fechar o app na busca do nome ou na espera pela
-    trava perderia a operação sem aviso, e no meio dela deixaria o `ludusavi.exe` órfão."""
+    """Há backup ou restauração pedido e não terminado. Conta desde o pedido: fechar o app na busca do nome ou na espera pela trava perderia a operação e deixaria o `ludusavi.exe` órfão."""
     with _trava_tarefas:
         return _tarefas_abertas > 0
 
@@ -91,8 +72,7 @@ def _somar_tarefa(passo: int) -> None:
 
 
 def comecar_tarefa(nome: str, total: int) -> tarefas.Tarefa:
-    """`tarefas.comecar`, contada em `em_andamento`. Soma antes: a tarefa nunca fica
-    à vista sem a contagem."""
+    """`tarefas.comecar`, contada em `em_andamento`; soma antes, para a tarefa nunca ficar à vista sem a contagem."""
     _somar_tarefa(1)
     try:
         return tarefas.comecar(nome, total)
@@ -113,9 +93,7 @@ def _pasta_config() -> Path:
 
 
 def _biblioteca() -> list[Jogo]:
-    """Os jogos da biblioteca. Quem chama na thread da tela tira o instantâneo antes de
-    abrir a thread de trabalho, que então só lê atributos; o store itera sobre uma
-    cópia protegida por trava, então chamar de outra thread também é seguro."""
+    """Os jogos da biblioteca. Na thread da tela, tire o instantâneo antes de abrir a thread de trabalho; o store itera sobre cópia protegida, então outra thread também é segura."""
     return [jogo for jogo in shared.store if not jogo.removed and not jogo.blacklisted]
 
 
@@ -126,11 +104,7 @@ def _em_segundo_plano(alvo, *argumentos) -> None:
 def _no_config(
     game: Jogo, no_manifesto: bool = True, nome: str | None = None
 ) -> config.JogoNoConfig:
-    # Todo nome guardado vai como "extend". O Ludusavi 0.31 trata "extend" de um nome
-    # que o manifesto não conhece como uma entrada própria (conferido), e se o manifesto
-    # ganhar esse nome mais tarde, juntar os caminhos dele é o desejado. Por isso o
-    # config não precisa lembrar se o nome veio do manifesto ou foi criado aqui.
-    # ``nome``: o de quando a operação foi pedida, que o diálogo de detalhes pode ter limpado.
+    # Todo nome guardado vai como "extend": o Ludusavi 0.31 trata "extend" de nome desconhecido como entrada própria, e se o manifesto o ganhar depois juntar os caminhos é o desejado. ``nome``: o de quando o pedido foi feito (o diálogo de detalhes pode tê-lo limpado).
     return config.JogoNoConfig(
         nome or game.ludusavi_nome, game.steam_appid, game.executable, no_manifesto
     )
@@ -141,8 +115,7 @@ def _preparar(
     atual: config.JogoNoConfig | None = None,
     redirecionamentos: list[tuple[str, str]] | None = None,
 ) -> None:
-    """Grava o `config.yaml` desta chamada. Sempre sob a trava. Os `redirecionamentos`
-    são os da restauração que vem a seguir."""
+    """Grava o `config.yaml` desta chamada, sempre sob a trava; `redirecionamentos` são os da restauração seguinte."""
     escolhida = pasta.atual()
     # Uma pasta configurada que sumiu (disco externo, OneDrive desconectado) não
     # pode virar uma pasta nova e vazia: os backups antigos ficariam para trás sem aviso.
@@ -160,8 +133,7 @@ def _preparar(
 
 
 def _ler_versoes(biblioteca: list[Jogo]) -> bool:
-    """Relê as versões de todos os jogos. Sob a trava. Diz se conseguiu; falhar deixa
-    o cache como estava."""
+    """Relê as versões de todos os jogos, sob a trava; diz se conseguiu (falhar deixa o cache como estava)."""
     global _cache  # noqa: PLW0603
     try:
         _preparar(biblioteca)
@@ -186,15 +158,14 @@ def _avisar(texto: str) -> None:
 
 
 def _nao_abriu(tarefa: tarefas.Tarefa | None, aviso: str) -> None:
-    """O pedido não chegou a abrir a thread de trabalho: desfaz a tarefa e avisa o usuário.
-    Quem chama registra a exceção; nada sobe para a tela que pediu."""
+    """O pedido não chegou a abrir a thread de trabalho: desfaz a tarefa e avisa. Quem chama registra a exceção."""
     if tarefa is not None:
         terminar_tarefa(tarefa)
     _avisar(aviso)
 
 
 def _dialogo(titulo: str, corpo: str) -> None:
-    """Um aviso com o botão "Dispensar", pela fila de diálogos do app (D72); sem app, só o log."""
+    """Um aviso com o botão "Dispensar", pela fila de diálogos do app; sem app, só o log."""
     aplicativo = shared.aplicativo
     if aplicativo is None:
         logging.warning("%s: %s", titulo, corpo)
@@ -207,14 +178,10 @@ def _nada_para_restaurar() -> None:
 
 
 def _restauracao_incompleta(falhas: list[tuple[str, str]]) -> None:
-    """O fim de "Restaurar todos" com falhas; ``falhas``: (nome do jogo, aviso) de cada
-    jogo que não foi restaurado. Diálogo, e não aviso: o pedido vem das Preferências, e um
-    aviso ficaria escondido atrás delas. Uma falha mostra o aviso dela, que diz o que
-    fazer; várias, os nomes dos jogos."""
+    """Fim de "Restaurar todos" com falhas (``falhas``: nome do jogo e aviso). Diálogo e não aviso: o pedido vem das Preferências, que esconderiam um aviso. Uma falha mostra o aviso dela; várias, os nomes."""
     if len(falhas) == 1:
         corpo = falhas[0][1]
     else:
-        # O mesmo jogo em duas lojas aparece uma vez.
         nomes = list(dict.fromkeys(nome for nome, _aviso in falhas))
         juntos = ", ".join(nomes[:-1]) + _(" e ") + nomes[-1] if len(nomes) > 1 else nomes[0]
         corpo = _("Não foi possível restaurar os saves dos seguintes jogos: {}.").format(juntos)
@@ -222,9 +189,7 @@ def _restauracao_incompleta(falhas: list[tuple[str, str]]) -> None:
 
 
 def _marcar_nova(nome: str, inicio: datetime, comentario: str) -> None:
-    """Grava ``comentario`` na versão mais nova do jogo, só se ela foi criada depois de
-    ``inicio``: um backup sem mudança não cria versão, e uma versão antiga nunca leva a
-    marca de outra operação. Sob a trava. Nunca levanta: a falha vai para o log."""
+    """Grava ``comentario`` na versão mais nova só se criada depois de ``inicio`` (um backup sem mudança não cria versão). Sob a trava; nunca levanta."""
     try:
         lista = ludusavi.versoes(_pasta_config(), executor).get(nome)
         if lista and lista[0].quando >= inicio:
@@ -234,16 +199,13 @@ def _marcar_nova(nome: str, inicio: datetime, comentario: str) -> None:
 
 
 def _exigir_manifesto() -> None:
-    """Antes de todo `ludusavi.fazer_backup`. Sem o manifesto, o Ludusavi copia só os
-    caminhos do config (emulador, pasta do jogo) e sai com 0: a versão ficaria sem o save
-    que o manifesto aponta, e sem marca de incompleta."""
+    """Antes de todo `ludusavi.fazer_backup`: sem o manifesto o Ludusavi copia só os caminhos do config e sai com 0, deixando a versão sem o save do manifesto e sem marca de incompleta."""
     if not _garantir_manifesto(_pasta_config()):
         raise LudusaviFalhou("o manifesto do Ludusavi não foi baixado")
 
 
 def _garantir_manifesto(pasta_config: Path) -> bool:
-    """O manifesto está baixado, baixando-o agora se falta (instalação nova, ou a pasta do
-    Ludusavi, que fica fora do backup do app, perdida numa formatação). Sob a trava."""
+    """O manifesto está baixado, baixando-o se falta (instalação nova, ou pasta do Ludusavi perdida: fica fora do backup do app). Sob a trava."""
     global _manifesto_falhou_em  # pylint: disable=global-statement
     if ludusavi.manifesto_baixado(pasta_config):
         return True
@@ -268,11 +230,7 @@ def _salvar(game: Jogo) -> None:
 def _resolver(game: Jogo) -> Optional[config.JogoNoConfig]:
     """O jogo como o Ludusavi o conhece, ou None se não há como backupear. Sob a trava.
 
-    A primeira vez só liga o jogo sozinho se o manifesto tem o appID dele (e guarda o
-    nome); as seguintes usam o guardado. Qualquer outro caso (sem appID, ou appID fora
-    do manifesto) fica sem backup até o usuário indicar o jogo nas opções avançadas:
-    nada de palpite pelo título nem de entrada própria. Sem o manifesto baixado, "não
-    achado" não quer dizer nada: levanta e nada é guardado.
+    A primeira vez só liga o jogo sozinho se o manifesto tem o appID dele (guardando o nome); sem appID, ou com appID fora do manifesto, fica sem backup até o usuário indicar o jogo nas opções avançadas, sem palpite pelo título. Sem o manifesto baixado, "não achado" não significa nada: levanta e nada é guardado.
     """
     if game.backup_dos_saves_desligado:
         logging.info("O backup dos saves de %s está desligado", game.name)
@@ -293,9 +251,7 @@ def _resolver(game: Jogo) -> Optional[config.JogoNoConfig]:
 
 
 def _local_desconhecido(game: Jogo) -> None:
-    """Sem o appID no manifesto e sem jogo escolhido nas opções avançadas, o jogo não
-    tem backup. O usuário é avisado num diálogo até responder a ele (e então a marca é
-    gravada no jogo); nas sessões seguintes, só o log. Sob a trava."""
+    """Jogo sem appID no manifesto e sem jogo escolhido nas opções avançadas fica sem backup. O diálogo avisa até o usuário responder (a marca é gravada no jogo); depois, só o log. Sob a trava."""
     logging.info("O local dos saves de %s é desconhecido: sem backup", game.name)
     if not game.saves_local_desconhecido_avisado:
         na_thread_principal(_avisar_local_desconhecido, game)
@@ -307,10 +263,7 @@ _local_desconhecido_na_tela: set[str] = set()
 
 
 def _avisar_local_desconhecido(game: Jogo) -> None:
-    """Pergunta, e não aviso: o jogo fica sem backup dos saves até ser identificado, e um
-    aviso que passasse despercebido (ou que o app fechasse antes de mostrar) não voltaria.
-    A marca só é gravada quando o usuário responde: fechado o app antes disso, a pergunta
-    volta no fim da próxima sessão."""
+    """Pergunta, e não aviso: o jogo fica sem backup até ser identificado, e um aviso despercebido não voltaria. A marca só é gravada na resposta; fechado o app antes, a pergunta volta na próxima sessão."""
     aplicativo = shared.aplicativo
     if aplicativo is None or game.saves_local_desconhecido_avisado or game.game_id in _local_desconhecido_na_tela:
         return
@@ -339,12 +292,8 @@ def _ao_responder_local_desconhecido(chave: str, game: Jogo | None, confirmou: b
         edicao.abrir(game.game_id, avancadas=True)
 
 
-# -- backup ------------------------------------------------------------------
-
-
 def no_fim_da_sessao(game: Jogo) -> None:
-    """Dispara o backup do jogo e volta na hora. A tarefa nasce aqui (ver `em_andamento`)
-    e a thread de trabalho a termina."""
+    """Dispara o backup do jogo e volta na hora; a tarefa nasce aqui (ver `em_andamento`) e a thread de trabalho a termina."""
     if not disponivel():
         return
     tarefa = None
@@ -358,10 +307,7 @@ def no_fim_da_sessao(game: Jogo) -> None:
 
 
 def _limite_do_backup(nome: str) -> int | None:
-    """O ``limite`` do backup normal: as cópias guardadas mais as incompletas do jogo. A
-    retenção do Ludusavi conta as incompletas como versões completas; sem esta folga,
-    cada backup que falha empurraria para fora uma versão boa, e uma sequência de falhas
-    deixaria só incompletas. None (a retenção do config) quando não há incompleta."""
+    """O ``limite`` do backup normal: as cópias guardadas mais as incompletas do jogo. A retenção do Ludusavi conta as incompletas como completas; sem a folga, falhas seguidas empurrariam as versões boas para fora. None quando não há incompleta."""
     incompletas = sum(1 for v in _cache.get(nome, []) if v.comentario == INCOMPLETA)
     if not incompletas:
         return None
@@ -383,10 +329,7 @@ def _backup(game: Jogo, biblioteca: list[Jogo], tarefa: tarefas.Tarefa) -> None:
                 limite = _limite_do_backup(jogo.nome)
                 ludusavi.fazer_backup(jogo.nome, _pasta_config(), executor, limite)
             except LudusaviFalhou:
-                # O Ludusavi cria a versão mesmo quando um arquivo falha; só a falha do
-                # próprio backup deixa uma versão nova, então só ela é marcada. Relê as
-                # versões: a lista mostra a incompleta e não oferece o que a retenção
-                # do Ludusavi apagou nessa rodada.
+                # O Ludusavi cria a versão mesmo quando um arquivo falha; só a falha do próprio backup deixa versão nova, então só ela é marcada. Relê as versões para a lista mostrar a incompleta e não oferecer o que a retenção apagou.
                 _marcar_nova(jogo.nome, inicio, INCOMPLETA)
                 _ler_versoes(biblioteca)
                 raise
@@ -397,9 +340,6 @@ def _backup(game: Jogo, biblioteca: list[Jogo], tarefa: tarefas.Tarefa) -> None:
             _ler_versoes(biblioteca)
         finally:
             terminar_tarefa(tarefa)
-
-
-# -- versões -----------------------------------------------------------------
 
 
 def tem_backup(game: Jogo) -> bool:
@@ -420,25 +360,15 @@ def _atualizar_cache(biblioteca: list[Jogo]) -> None:
         _ler_versoes(biblioteca)
 
 
-# -- restauração -------------------------------------------------------------
-
-
 def _restaurar_um(
     game: Jogo, nome: str, versao: Versao, biblioteca: list[Jogo]
 ) -> str | None:
-    """Restaura ``versao`` (do jogo ``nome`` no Ludusavi) sem arriscar o save atual. Sob a
-    trava. None se restaurou; senão, o aviso para o usuário.
+    """Restaura ``versao`` (do jogo ``nome`` no Ludusavi) sem arriscar o save atual, sob a trava. None se restaurou; senão, o aviso.
 
-    Nesta ordem, e qualquer falha interrompe tudo antes do `restore`: o zip da versão
-    tem de estar inteiro (o Ludusavi grava uma versão danificada por cima do save e só
-    depois acusa o erro); os saves atuais viram uma versão nova; os caminhos do zip são
-    levados ao usuário e à pasta do jogo de hoje; a prévia só pode gravar em pastas
-    de save, e só por cima do que a cópia dos saves atuais guardou.
+    Qualquer falha interrompe antes do `restore`, nesta ordem: o zip da versão tem de estar inteiro (o Ludusavi grava uma versão danificada por cima do save e só depois acusa o erro); os saves atuais viram uma versão nova; os caminhos do zip vão ao usuário e à pasta do jogo de hoje; a prévia só grava em pastas de save, por cima do que a cópia dos saves atuais guardou.
     """
     if game.ludusavi_nome != nome:
-        # O nome mudou depois do pedido (o diálogo de detalhes limpa o nome ao corrigir o
-        # appID): o config de agora já não leva o que `nome` precisava (emulador, pasta do
-        # jogo), e a cópia dos saves atuais sairia incompleta. Nada é copiado nem gravado.
+        # O nome mudou depois do pedido (o diálogo de detalhes o limpa ao corrigir o appID): o config de agora não leva o que `nome` precisava e a cópia dos saves sairia incompleta. Nada é copiado nem gravado.
         logging.warning(
             "O nome de %s no Ludusavi mudou de %r para %r durante a restauração: abortada",
             game.name,
@@ -459,8 +389,7 @@ def _restaurar_um(
         _exigir_manifesto()  # fora do `try` de baixo: não é o jogo aberto
         inicio = datetime.now(timezone.utc)
         try:
-            # Uma cópia a mais que as guardadas: no limite normal, a cópia apagaria a
-            # mais antiga, que pode ser a escolhida.
+            # Uma cópia a mais: no limite normal a cópia apagaria a mais antiga, que pode ser a escolhida.
             limite = min(len(_cache.get(nome, [])) + 1, 255)
             copiados = ludusavi.fazer_backup(nome, _pasta_config(), executor, limite)
         except LudusaviFalhou:
@@ -507,9 +436,7 @@ def _do_sistema(pastas: arquivos.Pastas) -> tuple[Path, ...]:
 def _conferir_previa(
     game: Jogo, previa: ludusavi.Previa, limites: conferencia.Raizes, copiados: tuple[str, ...]
 ) -> str | None:
-    """O aviso para o usuário se a prévia não pode virar restauração, senão None: um destino
-    fora das pastas de save, ou um save de hoje que a cópia dos saves atuais não guardou (o
-    config de agora não cobre o caminho dele), que a restauração perderia de vez."""
+    """O aviso se a prévia não pode virar restauração, senão None: destino fora das pastas de save, ou save de hoje que a cópia dos saves atuais não guardou (a restauração o perderia)."""
     if (recusado := conferencia.recusado(previa, limites)) is not None:
         logging.warning(
             "A restauração dos saves de %s gravaria em %r: recusada", game.name, recusado
@@ -530,8 +457,7 @@ def _conferir_previa(
 
 
 def restaurando(game: Jogo) -> bool:
-    """Os saves do jogo estão sendo restaurados (sozinhos ou em "Restaurar todos"). Só
-    na thread da tela."""
+    """Os saves do jogo estão sendo restaurados (sozinhos ou em "Restaurar todos"). Só na thread da tela."""
     nome = game.ludusavi_nome
     # Pelo objeto também: o nome pode ter sido limpado no meio da restauração.
     return id(game) in _jogos_restaurando or (
@@ -555,8 +481,7 @@ def _marcar(nome: str, jogo: int, passo: int) -> None:
 
 
 def _marcar_todos(passo: int, jogos: list[int]) -> None:
-    """O mesmo para "Restaurar todos": a marca geral e a de cada objeto ``jogos`` (os que
-    tinham nome ao pedir; o nome de um deles pode ser limpo durante a execução)."""
+    """O mesmo para "Restaurar todos": a marca geral e a de cada objeto ``jogos``."""
     global _restaurando_todos  # pylint: disable=global-statement
     _restaurando_todos += passo
     for jogo in jogos:
@@ -564,8 +489,7 @@ def _marcar_todos(passo: int, jogos: list[int]) -> None:
 
 
 def _desmarcar(nome: str, jogo: int) -> bool:
-    """Fim de uma restauração (callback da tela). O jogo só volta a poder abrir quando o
-    último pedido acaba."""
+    """Fim de uma restauração (callback da tela): o jogo só abre de novo quando o último pedido acaba."""
     _marcar(nome, jogo, -1)
     return False
 
@@ -626,8 +550,7 @@ def restaurar_todos() -> None:
         if not pedidos:  # sem nome no Ludusavi, nenhum jogo tem backup
             na_thread_principal(_nada_para_restaurar)
             return
-        # Total provisório (nunca 0): os nomes com cópias no cache, ou todos os nomes se o
-        # cache ainda está vazio. A thread de trabalho o acerta quando souber quem tem backup.
+        # Total provisório (nunca 0): os nomes com cópias no cache, ou todos se o cache está vazio; a thread de trabalho o acerta.
         nomes = {nome for _jogo, nome in pedidos}
         provisorio = sum(1 for nome in nomes if _cache.get(nome)) or len(nomes)
         tarefa = comecar_tarefa(_("Restaurando os saves"), provisorio)
@@ -643,13 +566,10 @@ def restaurar_todos() -> None:
 def _restaurar_todos(
     biblioteca: list[Jogo], pedidos: list[tuple[Jogo, str]], tarefa: tarefas.Tarefa
 ) -> None:
-    """``pedidos``: cada jogo com o nome que tinha no pedido. Os alvos saem deles, e não dos
-    nomes de agora: um jogo cujo nome foi limpo na fila (o diálogo de detalhes, ao corrigir
-    o appID) continua com cópias e, sem poder ser restaurado, entra no aviso de falha."""
+    """``pedidos``: cada jogo com o nome do pedido. Os alvos saem deles, não dos nomes de agora: um jogo com nome limpo na fila continua com cópias e, sem poder ser restaurado, entra no aviso de falha."""
     try:
         with _trava:
-            # O cache pode estar vazio (nada o encheu ainda) ou velho: relê antes. Sem
-            # conseguir ler, não há como saber o que restaurar, e o usuário precisa saber.
+            # O cache pode estar vazio ou velho: relê. Sem conseguir ler, não há o que restaurar e o usuário precisa saber.
             if not _ler_versoes(biblioteca):
                 _avisar(_("Não foi possível restaurar os saves."))
                 return
@@ -687,15 +607,8 @@ def _restaurar_todos(
         na_thread_principal(_desmarcar_todos, [id(jogo) for jogo, _nome in pedidos])
 
 
-# -- pasta dos saves ---------------------------------------------------------
-
-
 def trocar_pasta(nova: Path) -> None:
-    """Troca a pasta dos saves sem que um backup ou restauração esteja rodando.
-
-    Espera a trava, então quem chama (as Preferências) deve fazê-lo fora da thread
-    da tela. Levanta `pasta.TrocaRecusada`, sem mexer em nada, se a troca não vale.
-    """
+    """Troca a pasta dos saves sem backup ou restauração rodando. Espera a trava (chamar fora da thread da tela); levanta `pasta.TrocaRecusada` sem mexer em nada se a troca não vale."""
     with _trava:
         pasta.trocar(nova)
     atualizar_cache()

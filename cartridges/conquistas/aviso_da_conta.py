@@ -11,7 +11,6 @@ from cartridges import shared
 
 
 def inscrever(ouvintes: list[Callable[[], None]], ouvinte: Callable[[], None]) -> Callable[[], None]:
-    """Põe ``ouvinte`` em ``ouvintes`` e devolve a função que o tira (pode ser chamada de novo)."""
     ouvintes.append(ouvinte)
 
     def remover() -> None:
@@ -26,11 +25,7 @@ def inscrever(ouvintes: list[Callable[[], None]], ouvinte: Callable[[], None]) -
 def notificar(
     avisar: bool, ja_avisou: bool, ouvintes: list[Callable[[], None]], aviso: str, nome: str
 ) -> bool:
-    """Na thread principal: o ``aviso`` (se ``avisar`` e ainda não avisado), os
-    ouvintes e o cartão do jogo aberto. Devolve se a desconexão já foi avisada.
-
-    Nunca levanta: um ouvinte que falha não cala os outros. ``nome`` é o da conta, para o log.
-    """
+    """Na thread principal: o ``aviso`` (se ``avisar`` e ainda não avisado), os ouvintes e o cartão do jogo aberto; devolve se a desconexão já foi avisada. Nunca levanta (um ouvinte que falha não cala os outros); ``nome`` é o da conta, para o log."""
     try:
         if avisar and not ja_avisou and shared.aplicativo is not None:
             ja_avisou = True

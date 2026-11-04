@@ -37,22 +37,14 @@ from cartridges.utils.steam import (
 )
 
 
-# Os campos que a tela de edição grava de volta — os únicos em que um valor
-# vindo da Steam pode atropelar algo que o usuário digitou. Metacritic,
-# avaliações, suporte a controle e afins não são editáveis à mão e continuam
-# sempre atualizados.
+# Os campos que a tela de edição grava de volta: os únicos em que um valor da Steam pode atropelar o que a pessoa digitou.
 _USER_EDITED_KEYS = ("name", "developer", "publisher", "release_date", "genre")
 
 
 def _keep_user_edits(game: Jogo, online_data: dict, additional_data: dict) -> dict:
     """No modo "só o que falta", um campo editável só preenche o que está vazio.
 
-    O modo escolhia quais *jogos* entravam na fila, mas aplicava o dict
-    inteiro: um jogo renomeado à mão que entrasse pela lacuna do gênero saía
-    com o nome e a desenvolvedora revertidos para os da Steam — em silêncio, e
-    na biblioteca inteira de uma vez a cada bump de STEAM_METADATA_VERSION,
-    que re-enfileira tudo. A regra é a mesma da restauração de backup: o que
-    está preenchido na biblioteca é mais recente do que o que veio de fora.
+    O modo escolhia os *jogos* da fila mas aplicava o dict inteiro: um jogo renomeado à mão voltava ao nome da Steam, na biblioteca toda a cada bump de STEAM_METADATA_VERSION. O que está na biblioteca é mais recente que o de fora (a mesma regra da restauração de backup).
     """
     if not additional_data.get("only_missing"):
         return online_data
@@ -64,15 +56,9 @@ def _keep_user_edits(game: Jogo, online_data: dict, additional_data: dict) -> di
 
 
 class SteamAPIManager(AsyncManager):
-    """Manager in charge of completing a game's data from the Steam API.
+    """Completa os dados do jogo pela API da Steam.
 
-    For games with a known Steam appid the appdetails endpoint is queried
-    directly, and the appid is remembered so later refreshes never go back to
-    guessing from the title. For everything else (e.g. imported shortcuts) the
-    name is resolved first, and only adopted when the match is unambiguous —
-    a title like "The Outer Worlds" ranks below its own sequel in Steam's
-    search, so a best-effort guess would attach the wrong game's data. Lookups
-    that fail simply leave the game untouched; they never hide it.
+    Com appid conhecido consulta o appdetails direto e o guarda; sem ele (atalhos) resolve o nome e só adota um resultado inequívoco: "The Outer Worlds" fica abaixo da sequência na busca da Steam. Falhas deixam o jogo intacto.
     """
 
     retryable_on = (HTTPError, SSLError, RequestsConnectionError, Timeout)
@@ -89,15 +75,9 @@ class SteamAPIManager(AsyncManager):
     def resolve_tags(
         appid: str, additional_data: dict
     ) -> tuple[Optional[list[int]], bool]:
-        """Work out where this game's user tags come from.
+        """Define de onde vêm as tags do jogo: ``(tag_ids, skip_genre)``.
 
-        The library refresh fetches the tags of every game up front, hundreds
-        per request, and hands the result over as ``steam_tags``. A game absent
-        from that mapping is one the bulk call did not answer for, and its
-        genre must be left exactly as it is — recomputing it without tags would
-        quietly downgrade it to the coarse store genre.
-
-        :return: an ``(tag_ids, skip_genre)`` tuple
+        A atualização da biblioteca busca as tags de todos os jogos de uma vez (``steam_tags``); um jogo fora desse mapa não foi respondido, e seu gênero não pode ser recalculado sem tags (cairia para o gênero genérico da loja).
         """
         bulk = additional_data.get("steam_tags")
         if not isinstance(bulk, dict):
@@ -106,25 +86,19 @@ class SteamAPIManager(AsyncManager):
         return tag_ids, tag_ids is None
 
     def main(self, game: Jogo, additional_data: dict) -> None:
-        # Tumba não é processada, exceto o zerado adicionado à mão
-        # (`zerado_manual`), que só existe como tumba e precisa dos dados.
+        # Jogo apagado não é processado, exceto o zerado manual (`zerado_manual`), que só existe assim e precisa dos dados.
         if game.blacklisted or (
             game.removed and not additional_data.get("zerado_manual")
         ):
             return
 
-        # Only fetch metadata when enabled
         if not shared.schema.get_boolean("steam-metadata"):
             return
 
-        # Guardado para saber, depois de gravar, se o appID mudou — e então
-        # agendar a ligação com um zerado do mesmo appID (Q2).
+        # Para saber, depois de gravar, se o appID mudou e então agendar a ligação com um zerado do mesmo appID.
         anterior = game.steam_appid
 
-        # A known appid is authoritative: it comes either from a steam:// URL
-        # or from an earlier resolution the user may have corrected by hand.
-        # Searching by name again would risk overwriting that with whatever
-        # the store currently ranks first.
+        # Um appid conhecido (URL steam:// ou resolução anterior corrigida à mão) é a verdade: buscar o nome de novo poderia sobrescrevê-lo.
         appid = additional_data.get("steam_appid") or game.steam_appid
 
         if appid is not None:
@@ -140,18 +114,12 @@ class SteamAPIManager(AsyncManager):
                 return
             game.steam_appid = str(appid)
             game.update_values(_keep_user_edits(game, online_data, additional_data))
-            # Stamped only on the paths that actually answered. A lookup that
-            # failed or found nothing must leave the game looking unchecked, or
-            # a network blip would mark it as up to date with fields it never
-            # received and "only what is missing" would never come back for it.
+            # Só nos caminhos que responderam: uma falha de rede não pode deixar o jogo "em dia" com campos que nunca recebeu.
             game.steam_checked = STEAM_METADATA_VERSION
             self._marcar_ligacao(game, anterior, additional_data)
             return
 
-        # Otherwise resolve the name, which only succeeds when the matcher is
-        # sure the title is the same game — a merely related one (a sequel, an
-        # expansion) would attach another game's developer, publisher and
-        # scores to this one, so the game is left untouched instead.
+        # Senão resolve o nome, só quando o matcher tem certeza de ser o mesmo jogo; um parente (sequência, expansão) traria dados de outro jogo.
         try:
             appid, online_data = self.steam_api_helper.resolve(
                 clean_for_search(game.name)
@@ -163,7 +131,6 @@ class SteamAPIManager(AsyncManager):
             logging.debug("Steam search failed for %s", game.name, exc_info=error)
             return
 
-        # Remember it so later refreshes skip the search entirely.
         game.steam_appid = appid
         game.update_values(_keep_user_edits(game, online_data, additional_data))
         game.steam_checked = STEAM_METADATA_VERSION
@@ -171,20 +138,9 @@ class SteamAPIManager(AsyncManager):
 
     @staticmethod
     def _marcar_ligacao(game: Jogo, anterior: Optional[str], additional_data: dict) -> None:
-        """Se o appID mudou, marca que ``game`` pode ligar com um zerado (Q2).
+        """Se o appID mudou, marca que ``game`` pode ligar com um zerado; só marca, não liga na hora.
 
-        Só marca — não liga na hora. Rodando dentro de um pipeline (import,
-        carga inicial), o SGDB corre logo depois do Steam no mesmo grupo de
-        managers (``run_after``) para buscar uma capa; se a ligação copiasse a
-        capa do zerado aqui, o download do SGDB a sobrescreveria assim que
-        terminasse, ainda que depois. Por isso quem liga de fato é
-        `Store._ao_avancar_pipeline`, só depois que o pipeline inteiro (SGDB
-        incluído) termina. Fora de um pipeline (ex.: atualização de metadados
-        em lote), quem chama `main` decide sozinho o que fazer com a marca.
-
-        ``sem_ligacao`` é usado pelo zerado adicionado à mão
-        (`zerado_manual`): o seletor já impede um zerado com o appID de um jogo
-        da biblioteca, e a ligação não precisa rodar por baixo.
+        O SGDB corre depois do Steam no mesmo pipeline e sobrescreveria a capa copiada do zerado; quem liga é `Store._ao_avancar_pipeline`, com o pipeline terminado. Fora de um pipeline, quem chama `main` decide. ``sem_ligacao`` vem do zerado manual (`zerado_manual`), cujo seletor já impede appID de jogo da biblioteca.
         """
         if str(game.steam_appid) != str(anterior) and not additional_data.get("sem_ligacao"):
             additional_data["ligar_zerado"] = True

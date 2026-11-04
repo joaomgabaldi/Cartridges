@@ -64,7 +64,6 @@ def _secao(dados: bytes, inicio: int, nivel: int) -> tuple[dict[str, Any], int]:
 
 
 def ler_bytes(dados: bytes) -> Optional[dict[str, Any]]:
-    """A seção raiz de ``dados``, ou None se não for KeyValues inteiro e válido."""
     if len(dados) > LIMITE_DE_BYTES:
         return None
     try:
@@ -74,7 +73,6 @@ def ler_bytes(dados: bytes) -> Optional[dict[str, Any]]:
 
 
 def ler(caminho: Path) -> Optional[dict[str, Any]]:
-    """O conteúdo do arquivo, ou None se ele não pôde ser lido ou entendido."""
     try:
         with open(caminho, "rb") as arquivo:
             dados = arquivo.read(LIMITE_DE_BYTES + 1)

@@ -1,8 +1,6 @@
 """O Ludusavi (`ludusavi.exe`, ao lado do Python do app) como processo.
 
-Só fala com ele: monta a linha de comando, lê o JSON de `--api` e transforma
-qualquer defeito em `LudusaviFalhou`. Não sabe de pasta de jogo, de backup nem de
-configuração — isso é de quem chama.
+Monta a linha de comando, lê o JSON de `--api` e transforma qualquer defeito em `LudusaviFalhou`; pasta de jogo, backup e configuração são de quem chama.
 """
 
 import json
@@ -29,11 +27,7 @@ class LudusaviFalhou(Exception):
 
 @dataclass(frozen=True)
 class Versao:
-    """Uma cópia guardada de um jogo: ``id`` é o que `restore --backup` pede.
-
-    ``comentario`` é a marca que o app grava com `marcar` ("" sem marca); ``arquivo``
-    é o zip da versão, ou None quando o Ludusavi não informou a pasta do jogo.
-    """
+    """Uma cópia guardada de um jogo: ``id`` é o que `restore --backup` pede; ``comentario`` é a marca do app ("" sem marca); ``arquivo`` é o zip da versão, ou None sem a pasta do jogo."""
 
     id: str
     quando: datetime  # UTC
@@ -119,7 +113,6 @@ def _nome_achado(argumentos: list[str], pasta_config: Path, executor: Executor) 
 
 
 def nome_por_appid(appid: str, pasta_config: Path, executor: Executor = subprocess.run) -> Optional[str]:
-    """O nome do jogo no manifesto do Ludusavi para um appID da Steam, ou None."""
     return _nome_achado(["--steam-id", appid], pasta_config, executor)
 
 
@@ -128,10 +121,7 @@ def manifesto_baixado(pasta_config: Path) -> bool:
 
 
 def baixar_manifesto(pasta_config: Path, executor: Executor = subprocess.run) -> None:
-    """Baixa o `manifest.yaml`. O `--try-manifest-update` dos outros comandos não basta: o
-    `backups` não baixa, e o app só roda o `find` e o `backup` com o manifesto já baixado.
-    `--force` porque o cache pode dizer que a última busca foi há menos de 24 h. O limite
-    é curto porque, sem rede, o Ludusavi pode ficar parado com a trava dos saves presa."""
+    """Baixa o `manifest.yaml`. O `--try-manifest-update` dos outros comandos não basta (o `backups` não baixa), e o app só roda o `find` e o `backup` com o manifesto já baixado. `--force` porque o cache pode dizer que a última busca foi há menos de 24 h. O limite é curto: sem rede, o Ludusavi pode parar com a trava dos saves presa."""
     rodar(["manifest", "update", "--force"], pasta_config, executor, api=False, limite_de_tempo=3 * 60)
 
 
@@ -202,7 +192,6 @@ def marcar(
     pasta_config: Path,
     executor: Executor = subprocess.run,
 ) -> None:
-    """Grava ``comentario`` na versão ``versao`` do jogo ``nome``."""
     rodar(
         ["backups", "edit", nome, "--backup", versao, "--comment", comentario],
         pasta_config,
@@ -221,7 +210,6 @@ def _quando(texto: object) -> Optional[datetime]:
 
 
 def versoes(pasta_config: Path, executor: Executor = subprocess.run) -> dict[str, list[Versao]]:
-    """Todas as versões de todos os jogos, por nome, da mais nova para a mais velha."""
     jogos = rodar(["backups"], pasta_config, executor).get("games")
     por_jogo: dict[str, list[Versao]] = {}
     for nome, dados in (jogos if isinstance(jogos, dict) else {}).items():
@@ -243,7 +231,6 @@ def restaurar(
     versao: Optional[str] = None,
     executor: Executor = subprocess.run,
 ) -> None:
-    """Devolve os arquivos do jogo; sem ``versao``, a mais recente."""
     argumentos = ["restore", nome, "--force"]
     if versao:
         argumentos += ["--backup", versao]

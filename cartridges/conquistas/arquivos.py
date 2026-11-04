@@ -1,11 +1,6 @@
 """Onde cada emulador de Steam (e a Steam) grava as conquistas de um jogo.
 
-A tabela de caminhos é a de `find-achievement-files.ts` do Hydra Launcher
-(hydralauncher/hydra, licença MIT). Os caminhos do AppData e dos Documentos
-sobrevivem à desinstalação do jogo; os da pasta do jogo, não — e é por isso que
-o app guarda o que leu (`historico`).
-
-FLT, SmartSteamEmu e RLE ficam de fora: o Hydra não tem leitor para eles.
+A tabela de caminhos é a de `find-achievement-files.ts` do Hydra Launcher (hydralauncher/hydra, MIT). Os caminhos do AppData e dos Documentos sobrevivem à desinstalação do jogo; os da pasta do jogo não, por isso o app guarda o que leu (`historico`). FLT, SmartSteamEmu e RLE ficam de fora: o Hydra não tem leitor para eles.
 """
 
 import os
@@ -41,9 +36,7 @@ class Pastas:
     programdata: Path
 
 
-# Nomes de pasta que guardam o executável sem ser a raiz do jogo
-# (`NESTED_EXECUTABLE_DIRS` do Hydra). Só se sobe por elas: um executável em
-# `C:\Jogos\X\x.exe` nunca leva a busca a `C:\Jogos`, onde moram os outros.
+# Pastas que guardam o executável sem ser a raiz do jogo (`NESTED_EXECUTABLE_DIRS` do Hydra). Só se sobe por elas: `C:\Jogos\X\x.exe` nunca leva a busca a `C:\Jogos`.
 _PASTAS_DE_BINARIOS = frozenset(
     {"bin", "bin32", "bin64", "binaries", "win32", "win64", "x64", "x86", "game", "runtime"}
 )
@@ -62,10 +55,7 @@ def pastas_do_sistema() -> Pastas:
     )
 
 
-# Onde a Steam diz que está instalada: a chave do usuário e, na falta dela (uma
-# instalação para todos os usuários), a da máquina. Nunca um caminho fixo: cada
-# um instala a Steam onde quiser. `appcache` e `userdata` ficam sempre ali,
-# nunca nas bibliotecas de jogos de outros discos.
+# Onde a Steam diz que está instalada: a chave do usuário e, na falta dela, a da máquina. Nunca um caminho fixo. `appcache` e `userdata` ficam sempre ali, nunca nas bibliotecas de outros discos.
 _CHAVES_DA_STEAM = (
     (winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamPath"),
     (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath"),
@@ -73,7 +63,6 @@ _CHAVES_DA_STEAM = (
 
 
 def _do_registro(raiz: int, caminho: str, nome: str) -> object:
-    """O valor cru do registro, ou None se a chave ou o valor não existem. Nunca levanta."""
     try:
         with winreg.OpenKey(raiz, caminho) as chave:
             return winreg.QueryValueEx(chave, nome)[0]
@@ -91,12 +80,10 @@ _CHAVE_DA_CONTA_ATIVA = (
     r"Software\Valve\Steam\ActiveProcess",
     "ActiveUser",
 )
-# A última conta que o `ActiveUser` trouxe, para quando a Steam estiver fechada.
 _CONTA_GUARDADA = "conquistas-ultima-conta-steam"
 
 
 def _inteiro_do_registro(raiz: int, caminho: str, nome: str) -> Optional[int]:
-    """Um valor DWORD do registro. Nunca levanta; o que não é inteiro vale None."""
     valor = _do_registro(raiz, caminho, nome)
     return valor if isinstance(valor, int) and not isinstance(valor, bool) else None
 
@@ -111,9 +98,7 @@ def pasta_da_steam() -> Optional[Path]:
 
 
 def eh_caminho_de_rede(caminho: object) -> bool:
-    """Se ``caminho`` começa como UNC (``\\\\servidor\\…``, ``//servidor/…``,
-    ``\\\\?\\UNC\\…``, ``\\\\.\\…``). Só olha o texto: checar o arquivo já faria o
-    Windows conectar na máquina e mandar as credenciais do usuário."""
+    """Se ``caminho`` começa como UNC (``\\\\servidor\\…``, ``//servidor/…``, ``\\\\?\\UNC\\…``, ``\\\\.\\…``). Só olha o texto: checar o arquivo faria o Windows conectar na máquina e mandar as credenciais do usuário."""
     texto = str(caminho or "").lstrip()
     return len(texto) >= 2 and texto[0] in "\\/" and texto[1] in "\\/"
 
@@ -130,11 +115,7 @@ def _subpastas(pasta: Path) -> list[Path]:
 
 
 def raiz_de_instalacao(texto: object) -> Optional[Path]:
-    """A pasta de instalação que um launcher guarda, normalizada para comparar.
-
-    Só pasta absoluta e que não é a raiz do disco (que pegaria todo jogo instalado
-    nele). Só olha o texto, nunca o disco.
-    """
+    """A pasta de instalação que um launcher guarda, normalizada para comparar; só pasta absoluta e não a raiz do disco (pegaria todo jogo instalado nele). Só olha o texto."""
     if not isinstance(texto, str) or not texto.strip() or not os.path.isabs(texto):
         return None
     try:
@@ -145,11 +126,7 @@ def raiz_de_instalacao(texto: object) -> Optional[Path]:
 
 
 def da_instalacao_mais_funda(pastas: list[Path], raizes: Iterable[tuple[Path, T]]) -> Optional[T]:
-    """O valor da pasta de instalação mais funda que contém uma das ``pastas`` do jogo.
-
-    ``raizes`` vem de `raiz_de_instalacao`. Pasta inteira: `FallGuys2` não está
-    dentro de `FallGuys`. No empate vale a primeira.
-    """
+    """O valor da pasta de instalação mais funda que contém uma das ``pastas`` do jogo (``raizes`` vem de `raiz_de_instalacao`). Pasta inteira: `FallGuys2` não está dentro de `FallGuys`. No empate vale a primeira."""
     normalizadas = []
     for base in pastas:
         try:
@@ -181,14 +158,11 @@ def bases_da_pasta(pasta: Path) -> list[Path]:
 
 
 def bases_do_jogo(executavel: str) -> list[Path]:
-    """A pasta do executável e as pastas-pai que ainda são do jogo."""
     pasta = game_folder(executavel or "")
     return bases_da_pasta(Path(pasta)) if pasta else []
 
 
-# Os caminhos fixos de cada emulador, na ordem de preferência (entre dois caminhos
-# iguais, vale o primeiro): a pasta do sistema (atributo de `Pastas`), o caminho a
-# partir dela com ``{appid}`` no lugar do appID, e o formato do arquivo.
+# Os caminhos fixos de cada emulador, em ordem de preferência: a pasta do sistema (atributo de `Pastas`), o caminho a partir dela com ``{appid}`` e o formato do arquivo.
 _FIXOS: tuple[tuple[str, str, str], ...] = (
     ("appdata", "Goldberg SteamEmu Saves/{appid}/achievements.json", formatos.GOLDBERG),
     ("appdata", "GSE Saves/{appid}/achievements.json", formatos.GOLDBERG),
@@ -209,7 +183,7 @@ _FIXOS: tuple[tuple[str, str, str], ...] = (
     ("appdata", "CreamAPI/{appid}/stats/CreamAPI.Achievements.cfg", formatos.CREAMAPI),
     ("appdata", ".1911/{appid}/achievement", formatos.RAZOR1911),
 )
-# Goldberg e GSE guardam também um nível abaixo do appID (`scan-nested-achievement-files.ts`).
+# Goldberg e GSE guardam também um nível abaixo do appID.
 _RAIZES_ANINHADAS = ("Goldberg SteamEmu Saves", "GSE Saves")
 
 
@@ -221,7 +195,6 @@ def _fixos(p: Pastas, appid: str) -> list[ArquivoDeConquista]:
 
 
 def _aninhados(p: Pastas, appid: str) -> list[ArquivoDeConquista]:
-    """Goldberg e GSE com um nível a mais."""
     return [
         ArquivoDeConquista(sub / "achievements.json", formatos.GOLDBERG)
         for raiz in _RAIZES_ANINHADAS
@@ -258,10 +231,7 @@ def _guardar_conta(conta: str) -> None:
 def _conta_do_usuario() -> Optional[str]:
     """A conectada agora ou, com a Steam fechada, a última que o app viu conectada.
 
-    Nunca pelo `config\\loginusers.vdf`, que diria a última que entrou: ler esse
-    arquivo é o que ladrão de conta Steam faz, e o Kaspersky derrubava o app por
-    isso (PDM:Trojan.Win32.Generic, 19/10/2026). Quem chama roda numa thread: a
-    gravação vai para a thread principal, e só quando a conta muda.
+    Nunca pelo `config\\loginusers.vdf`: ler esse arquivo é o que ladrão de conta Steam faz, e o Kaspersky derrubava o app por isso. Roda numa thread: a gravação vai para a principal, e só quando a conta muda.
     """
     global _conta_enfileirada  # pylint: disable=global-statement
     guardada = shared.state_schema.get_string(_CONTA_GUARDADA) or None
@@ -278,11 +248,7 @@ def _conta_do_usuario() -> Optional[str]:
 def _contas(steam: Path) -> list[Path]:
     """As contas da Steam deste PC cujos arquivos valem.
 
-    Uma só, quando dá para saber qual é: a conectada agora ou, com a Steam
-    fechada, a última que o app viu conectada. O histórico só soma, então
-    misturar as contas de quem divide o PC misturaria as conquistas. Sem saber
-    (a Steam nunca esteve aberta com o app aberto, ou a conta achada não tem
-    pasta em `userdata`), todas: as pastas com nome só de dígitos.
+    Uma só quando dá para saber (a conectada agora ou a última vista): o histórico só soma, e misturar contas de quem divide o PC misturaria as conquistas. Sem saber, todas as pastas de `userdata` só de dígitos.
     """
     todas = [conta for conta in _subpastas(steam / "userdata") if appid_valido(conta.name)]
     achada = _conta_do_usuario()
@@ -299,7 +265,6 @@ def _estado_na_steam(steam: Path, conta: Path, appid: str) -> ArquivoDeConquista
 
 
 def _na_steam(appid: str) -> list[ArquivoDeConquista]:
-    """O estado que a própria Steam guarda e o cache da biblioteca, por conta."""
     steam = pasta_da_steam()
     if steam is None:
         return []
@@ -320,7 +285,6 @@ def appid_valido(appid: object) -> bool:
 
 
 def arquivos_do_jogo(appid: str, executavel: str) -> list[ArquivoDeConquista]:
-    """Os arquivos de conquista que existem hoje para ``appid``, sem repetição."""
     if not appid_valido(appid):
         return []
     pastas = pastas_do_sistema()
@@ -344,11 +308,7 @@ def arquivos_do_jogo(appid: str, executavel: str) -> list[ArquivoDeConquista]:
 
 
 def da_steam_esperados(appid: str, executavel: str) -> list[ArquivoDeConquista]:
-    """O estado da Steam de cada conta, exista ou não ainda.
-
-    A Steam cria esse arquivo ao abrir o jogo, já com as conquistas antigas: o
-    vigia precisa conhecê-lo antes, para lê-lo em silêncio quando aparecer.
-    """
+    """O estado da Steam de cada conta, exista ou não ainda: ela o cria ao abrir o jogo, já com as conquistas antigas, e o vigia precisa conhecê-lo antes para lê-lo em silêncio."""
     if not appid_valido(appid) or not eh_jogo_da_steam(executavel):
         return []
     steam = pasta_da_steam()

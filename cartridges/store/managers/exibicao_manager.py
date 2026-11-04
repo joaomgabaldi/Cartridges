@@ -25,8 +25,7 @@ class ExibicaoManager(Manager):
         self.ao_ver = ao_ver
 
     def process_game(self, game: Jogo, additional_data: dict, callback: Callable[[Manager], Any]) -> None:
-        """Roda a exibição na thread principal e só então deixa o pipeline avançar (como o `DisplayManager` da `main`):
-        o fim da importação não pode passar à frente do último jogo entrar na grade (B17)."""
+        """Roda a exibição na thread principal e só então deixa o pipeline avançar: o fim da importação não pode passar à frente do último jogo entrar na grade."""
         if threading.current_thread() is threading.main_thread():
             super().process_game(game, additional_data, callback)
             return

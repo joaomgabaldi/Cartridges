@@ -1,8 +1,6 @@
-"""Os ícones das conquistas: baixados uma vez, guardados no cache, entregues
-como arquivo na thread principal.
+"""Os ícones das conquistas: baixados uma vez, guardados no cache, entregues como arquivo na thread principal.
 
-Uma lista de conquistas pode pedir dezenas de ícones de uma vez; quatro
-trabalhadores bastam e não disputam a rede com o resto do app.
+Uma lista pode pedir dezenas de ícones de uma vez; quatro trabalhadores bastam e não disputam a rede com o resto do app.
 """
 
 import hashlib
@@ -27,17 +25,13 @@ _trabalhadores = ThreadPoolExecutor(
 
 
 def _sem_parametros(origem: object) -> str:
-    """A origem sem a query string, que pode carregar chave e nunca vai ao log."""
     return str(origem).split("?", 1)[0].split("#", 1)[0]
 
 
 def _registrar_falha(o_que: str, origem: object, erro: BaseException) -> None:
     """Uma linha no log, sem a query string.
 
-    Falhas esperadas (rede ou disco) levam só o tipo do erro: a mensagem de
-    uma falha de rede costuma trazer a URL inteira, com a chave. Qualquer
-    outra coisa é defeito nosso e leva o traceback. A imagem ilegível não
-    passa por aqui: o `carregar` a anota no log depois do `_legivel`.
+    Falhas esperadas (rede ou disco) levam só o tipo do erro, pois a mensagem de uma falha de rede costuma trazer a URL com a chave; qualquer outra coisa é defeito e leva o traceback.
     """
     if isinstance(erro, (RequestException, OSError)):
         logging.info(
@@ -54,7 +48,6 @@ def _registrar_falha(o_que: str, origem: object, erro: BaseException) -> None:
 
 
 def _resolver(origem: str) -> tuple[Optional[Path], bool]:
-    """O arquivo do ícone e se ele veio do cache de downloads. Nunca levanta."""
     try:
         if not origem:
             return None, False
@@ -84,7 +77,6 @@ def _resolver(origem: str) -> tuple[Optional[Path], bool]:
 
 
 def arquivo_local(origem: str) -> Optional[Path]:
-    """O arquivo do ícone no disco, baixando-o se for preciso. Nunca levanta."""
     return _resolver(origem)[0]
 
 
@@ -94,8 +86,6 @@ def _legivel(caminho: Path) -> bool:
 
 
 def carregar(origem: str, entregar: Callable[[Path], None]) -> None:
-    """Carrega ``origem`` fora da tela e chama ``entregar`` com o arquivo, na thread principal."""
-
     def trabalho() -> None:
         caminho, do_cache = _resolver(origem)
         if caminho is None:
@@ -103,9 +93,7 @@ def carregar(origem: str, entregar: Callable[[Path], None]) -> None:
         if not _legivel(caminho):
             logging.info("Ícone de conquista ilegível (%s)", _sem_parametros(origem))
             if do_cache:
-                # Um arquivo ruim no cache (a página de um portal de rede salva
-                # como imagem, por exemplo) ficaria ruim para sempre; apagado, o
-                # próximo pedido baixa de novo.
+                # Um arquivo ruim no cache (a página de um portal de rede salva como imagem, por exemplo) ficaria ruim para sempre; apagado, o próximo pedido baixa de novo.
                 try:
                     caminho.unlink(missing_ok=True)
                 except OSError:
@@ -127,12 +115,9 @@ def carregar(origem: str, entregar: Callable[[Path], None]) -> None:
 
 
 def encerrar() -> None:
-    """Para de aceitar pedidos e descarta os que ainda não começaram.
+    """Para de aceitar pedidos e descarta os que não começaram.
 
-    Chamado no encerramento do app: as threads do executor não são daemons, e
-    com a rede travada os downloads na fila segurariam o processo vivo. Um
-    download já em andamento termina sozinho (no máximo o tempo limite).
-    Depois disto, ``carregar`` não faz nada. Nunca levanta.
+    Chamado no encerramento: as threads do executor não são daemons, e com a rede travada os downloads na fila segurariam o processo vivo. Um download em andamento termina sozinho (no máximo o tempo limite). Nunca levanta.
     """
     try:
         _trabalhadores.shutdown(wait=False, cancel_futures=True)

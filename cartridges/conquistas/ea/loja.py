@@ -22,11 +22,7 @@ def id_da_conta() -> Optional[str]:
 
 
 def resolver(game: Any, _fonte: Any) -> Optional[str]:
-    """O conjunto de conquistas do jogo: o título da instalação, achado na biblioteca da conta.
-
-    ``""`` = sabidamente sem fonte (não é da biblioteca, ou a oferta não tem conquistas);
-    ``None`` = não se sabe (sem conta). O resultado vai ao cache, para a próxima passada.
-    """
+    """O conjunto de conquistas do jogo (o título da instalação, achado na biblioteca da conta): ``""`` = sabidamente sem fonte; ``None`` = não se sabe (sem conta). O resultado vai ao cache."""
     from cartridges.conquistas import fontes  # noqa: PLC0415  (fontes importa contas)
 
     candidato = fontes.candidato_da_ea(game)

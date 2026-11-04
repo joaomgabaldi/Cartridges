@@ -1,13 +1,10 @@
-"""Onde o Ubisoft Connect deixa as conquistas neste PC (conferido em 05/10/2026).
+"""Onde o Ubisoft Connect deixa as conquistas neste PC.
 
 - progresso: `%LOCALAPPDATA%\\Ubisoft Game Launcher\\spool\\<conta>\\<productId>.spool`;
-- catálogo: `%ProgramData%\\Ubisoft\\Ubisoft Game Launcher\\cache\\achievements\\<productId>_<hash>`,
-  um ZIP sem extensão (ao lado ficam cópias extraídas `file_<hash>`, que não interessam);
-- jogos instalados: `HKLM\\SOFTWARE\\(WOW6432Node\\)Ubisoft\\Launcher\\Installs\\<productId>`,
-  valor `InstallDir` (Playnite, `UplayLibrary.cs`).
+- catálogo: `%ProgramData%\\Ubisoft\\Ubisoft Game Launcher\\cache\\achievements\\<productId>_<hash>`, um ZIP sem extensão (ao lado ficam cópias extraídas `file_<hash>`, que não interessam);
+- jogos instalados: `HKLM\\SOFTWARE\\(WOW6432Node\\)Ubisoft\\Launcher\\Installs\\<productId>`, valor `InstallDir` (Playnite, `UplayLibrary.cs`).
 
-O `.spool` e o ZIP só existem depois que o jogo é aberto pelo Ubisoft Connect neste PC.
-Tudo aqui olha o disco ou o registro: só em thread (o vigia só lista o `.spool` de um jogo).
+O `.spool` e o ZIP só existem depois que o jogo é aberto pelo Ubisoft Connect neste PC. Tudo aqui olha o disco ou o registro: só em thread (o vigia só lista o `.spool` de um jogo).
 """
 
 import re
@@ -46,7 +43,6 @@ def _mtime(caminho: Path) -> Optional[float]:
 
 
 def spools(produto: str) -> list[tuple[Path, str]]:
-    """Os `.spool` do produto, de cada conta deste PC: ``(arquivo, conta)``."""
     try:
         contas = sorted(pasta for pasta in pasta_do_spool().iterdir() if pasta.is_dir())
     except OSError:
@@ -60,7 +56,6 @@ def spools(produto: str) -> list[tuple[Path, str]]:
 
 
 def spool(produto: str) -> Optional[tuple[Path, str]]:
-    """O `.spool` modificado por último (a conta usada por último), ou None."""
     melhor: Optional[tuple[float, Path, str]] = None
     for arquivo, conta in spools(produto):
         quando = _mtime(arquivo)
@@ -70,7 +65,6 @@ def spool(produto: str) -> Optional[tuple[Path, str]]:
 
 
 def pacote(produto: str) -> Optional[Path]:
-    """O ZIP do catálogo do produto (`<productId>_<hash>`), o mais novo, ou None."""
     nome = re.compile(rf"{re.escape(produto)}_[0-9A-Za-z]+")
     try:
         itens = list(pasta_do_cache().iterdir())

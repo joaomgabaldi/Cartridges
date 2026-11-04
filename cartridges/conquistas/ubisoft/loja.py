@@ -1,7 +1,6 @@
 """Qual jogo é da Ubisoft Connect, e qual é o productId dele.
 
-O atalho do launcher é `uplay://launch/<productId>/0` (Playnite, `Uplay.cs`; conferido nos
-atalhos do usuário). Um `.lnk` direto para o `.exe` é reconhecido pela pasta de instalação
+O atalho do launcher é `uplay://launch/<productId>/0` (Playnite, `Uplay.cs`). Um `.lnk` direto para o `.exe` é reconhecido pela pasta de instalação
 que o registro do launcher guarda para cada produto (`locais.instalacoes`): vale a mais
 funda que contém a pasta do executável.
 """
@@ -17,7 +16,6 @@ _URL = re.compile(r"uplay://launch/([0-9]{1,10})\b", re.IGNORECASE)
 
 
 def de_url(executavel: str) -> Optional[str]:
-    """O productId do atalho do launcher. Só o texto, nunca o disco."""
     achado = _URL.search(executavel or "")
     return achado.group(1) if achado else None
 

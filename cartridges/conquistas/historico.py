@@ -1,24 +1,10 @@
 """As conquistas desbloqueadas de cada jogo, guardadas pelo app.
 
-Os arquivos dos emuladores não bastam: os que ficam na pasta do jogo vão embora
-com a desinstalação, e trocar o crack ou reinstalar zera o arquivo. Então o app
-guarda o que já leu, e a regra é a do Hydra (`mergeUnlockedAchievementLists`):
-**só soma**. Conquista nova entra; conquista que some do arquivo fica; a mesma
-conquista com outra data fica com a mais antiga.
+Os arquivos dos emuladores não bastam: os da pasta do jogo somem com a desinstalação, e trocar o crack zera o arquivo. O app guarda o que leu pela regra do Hydra (`mergeUnlockedAchievementLists`): **só soma**. Conquista nova entra, a que some do arquivo fica, e a mesma com outra data fica com a mais antiga.
 
-Um arquivo por jogo, `conquistas/<id>.json`, para acompanhar o jogo como o resto
-dos dados por id: Jogos Zerados (o id não muda), troca de id e Excluir
-(`store.py`), ligação de zerado (`transferir`) e backup.
+Um arquivo por jogo, `conquistas/<id>.json`, que acompanha o jogo como o resto dos dados por id (Jogos Zerados, troca de id, Excluir, ligação de zerado, backup). Guarda também a fonte das conquistas (`"fonte"`, como `"xbox:123"` ou `"steam:570"`; ver `fontes.py`) e, nas fontes de conta (Xbox, Epic, EA), a conta (`"conta"`: XUID, `account_id` ou persona), pois o `xbox:<titleId>` não distingue duas contas. A regra de só somar vale para as desbloqueadas; fonte e conta podem trocar.
 
-O arquivo também guarda de onde vêm as conquistas do jogo (`"fonte"`, como
-`"xbox:123"` ou `"steam:570"`; ver `fontes.py`) e, nas fontes de conta (Xbox, Epic, EA),
-de qual conta (`"conta"`, o XUID, o `account_id` ou a persona): o `xbox:<titleId>` não
-distingue duas contas, e trocar de conta traz conquistas que o histórico não
-conhecia. A regra de só somar vale
-para as desbloqueadas; fonte e conta são só dados do jogo e podem trocar.
-
-Não existir o arquivo é o que marca "nunca varrido": a primeira varredura grava
-mesmo sem nada desbloqueado, e não conta como conquista nova.
+Arquivo inexistente marca "nunca varrido": a primeira varredura grava mesmo sem nada desbloqueado e não conta como conquista nova.
 """
 
 import enum
@@ -67,7 +53,6 @@ def _limpo(dados: Any) -> Optional[_Dados]:
 
 
 def _data_valida(quando: Any) -> bool:
-    """Número que cabe como data: nem bool, nem NaN/infinito, nem gigante demais."""
     if isinstance(quando, bool) or not isinstance(quando, (int, float)):
         return False
     if isinstance(quando, float) and not math.isfinite(quando):
@@ -109,28 +94,22 @@ def _ler_estado(game_id: str) -> tuple[Optional[_Dados], _Estado]:
 
 
 def ler(game_id: str) -> Optional[dict[str, int]]:
-    """O que está guardado, ou None se o jogo nunca foi varrido (ou não deu para ler)."""
     dados = _ler_estado(game_id)[0]
     return dados.desbloqueadas if dados else None
 
 
 def fonte(game_id: str) -> Optional[str]:
-    """De onde vêm as conquistas do jogo (``"xbox:123"``), ou None se não há."""
     dados = _ler_estado(game_id)[0]
     return dados.fonte if dados else None
 
 
 def conta(game_id: str) -> Optional[str]:
-    """A conta (XUID ou ``account_id``) que gerou a fonte de loja do jogo, ou None se não há."""
     dados = _ler_estado(game_id)[0]
     return dados.conta if dados else None
 
 
 def contem(game_id: str, lidos: Iterable[Desbloqueio]) -> bool:
-    """Se tudo o que foi lido já está guardado (o histórico só soma).
-
-    Jogo nunca varrido: só vale para uma leitura vazia.
-    """
+    """Se tudo o que foi lido já está guardado (o histórico só soma); jogo nunca varrido: só vale para uma leitura vazia."""
     guardado = ler(game_id)
     if guardado is None:
         return not any(True for _lido in lidos)
@@ -152,7 +131,6 @@ def _guardar_ilegivel(game_id: str) -> bool:
 def fundir(
     atual: dict[str, int], novos: Iterable[Desbloqueio]
 ) -> tuple[dict[str, int], list[str]]:
-    """``atual`` mais ``novos``, sem tirar nada. Devolve também as que entraram."""
     resultado = dict(atual)
     entraram: list[str] = []
     for desbloqueio in novos:
@@ -188,13 +166,9 @@ def registrar(
     fonte: Optional[str] = None,
     conta: Optional[str] = None,
 ) -> tuple[list[str], bool]:
-    """Funde ``novos`` no que está guardado e grava.
+    """Funde ``novos`` no que está guardado e grava; devolve ``(as que entraram agora, se era a primeira vez)``.
 
-    Com ``fonte``, grava também de onde vêm as conquistas (mesmo que nada novo
-    tenha entrado) e, só para as fontes de loja com conta (Xbox, Epic, EA) e da Ubisoft,
-    a ``conta``; sem fonte, a que já estava guardada (e a conta dela) fica.
-
-    Devolve ``(as que entraram agora, se era a primeira vez)``.
+    Com ``fonte``, grava também de onde vêm as conquistas (mesmo sem nada novo) e, só para as fontes de loja com conta e a Ubisoft, a ``conta``; sem fonte, a guardada (e a conta dela) fica.
     """
     with _trava:
         dados, estado = _ler_estado(game_id)
@@ -227,11 +201,7 @@ def registrar(
 
 
 def esquecer_fonte(game_id: str) -> None:
-    """Tira do arquivo a fonte gravada, sem mexer nas desbloqueadas.
-
-    Não cria arquivo e não levanta: arquivo ausente, ilegível ou indisponível
-    fica como está.
-    """
+    """Tira do arquivo a fonte gravada, sem mexer nas desbloqueadas. Não cria arquivo e não levanta: ausente, ilegível ou indisponível fica como está."""
     with _trava:
         dados, estado = _ler_estado(game_id)
         if estado is not _Estado.OK or not dados or dados.fonte is None:
@@ -256,16 +226,12 @@ def _por_a_origem_de_lado(game_id: str) -> None:
 def transferir(de_id: str, para_id: str) -> bool:
     """Funde o que ``de_id`` tem no que ``para_id`` tem (ligação de zerado).
 
-    True: a fusão foi gravada, ou não havia o que transferir. False: não deu
-    para gravar. Quem chama exclui a origem logo depois, e o Excluir apaga
-    `<id>.json`; por isso, no False, a origem já saiu do caminho (vira
-    `<id>.json.pendente`) e o fluxo de quem chama não precisa mudar.
+    True: a fusão foi gravada, ou não havia o que transferir. False: não deu para gravar; como quem chama exclui a origem logo depois (o Excluir apaga `<id>.json`), a origem já saiu do caminho (vira `<id>.json.pendente`).
     """
     with _trava:
         dados_da_origem, estado_da_origem = _ler_estado(de_id)
         if estado_da_origem is _Estado.ILEGIVEL:
-            # Pô-lo à parte antes do Excluir, para o que não deu para ler
-            # não ir embora junto.
+            # À parte antes do Excluir, para o que não deu para ler não ir embora junto.
             logging.warning("Conquistas de %s ilegíveis: nada a transferir", de_id)
             return _guardar_ilegivel(de_id)
         if estado_da_origem is _Estado.INDISPONIVEL:
@@ -288,7 +254,6 @@ def transferir(de_id: str, para_id: str) -> bool:
         destino, fonte_do_destino, conta_do_destino = (
             dados_do_destino if dados_do_destino else (None, None, None)
         )
-        # A conta vai junto da fonte a que pertence.
         if fonte_do_destino:
             fonte_final, conta_final = fonte_do_destino, conta_do_destino
         else:
@@ -306,7 +271,6 @@ def transferir(de_id: str, para_id: str) -> bool:
 
 
 def mover(de_id: str, para_id: str) -> None:
-    """Passa o arquivo de ``de_id`` para ``para_id`` (troca de id do jogo)."""
     with _trava:
         try:
             origem = caminho(de_id)

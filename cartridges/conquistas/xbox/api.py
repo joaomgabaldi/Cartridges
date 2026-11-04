@@ -1,19 +1,8 @@
 """A API do Xbox: o titleId de um jogo, o catálogo de conquistas e o progresso.
 
-Os endpoints são os documentados no GDK (``achievements.xboxlive.com``, contrato
-2; o 4 traz também a raridade, ver ``docs/superpowers/prova-xbox``) e o
-``titlehub`` que o Playnite usa (``XboxAccountClient.cs``). Uma chamada só traz
-o catálogo e o progresso da conta: cada conquista vem com nome, descrição,
-ícone, raridade e, se já foi conseguida, quando.
+Os endpoints são os do GDK (``achievements.xboxlive.com``, contrato 2; o 4 traz também a raridade) e o ``titlehub`` que o Playnite usa (``XboxAccountClient.cs``). Uma chamada traz o catálogo e o progresso da conta: nome, descrição, ícone, raridade e, se conseguida, quando. O PFN do pacote vira titleId pelo ``MicrosoftGame.config`` do jogo ou pelo titlehub, e o resultado fica em ``xbox-titulos.json`` no cache.
 
-O PFN do pacote vira titleId pelo ``MicrosoftGame.config`` do jogo, quando ele
-existe, ou pelo titlehub; o resultado fica em ``xbox-titulos.json``, no cache.
-
-Roda só em thread (varredura e vigia): faz rede e pode esperar o limitador. Todo
-dado que vem da rede, do jogo ou do cache é tratado como não confiável: o que
-não serve vira log e é descartado, sem derrubar o resto. Nada de token nem
-cabeçalho ``Authorization`` vai para o log, e a mensagem de uma exceção do
-``requests`` (que pode trazer a URL) também não: só o tipo e o status.
+Roda só em thread (faz rede e pode esperar o limitador). Dado da rede, do jogo ou do cache é não confiável: o que não serve vira log e é descartado. Nada de token nem cabeçalho ``Authorization`` vai para o log, nem a mensagem de exceção do ``requests`` (pode trazer a URL): só o tipo e o status.
 """
 
 import json
@@ -39,7 +28,7 @@ from cartridges.utils.ler_json import ler_json
 from cartridges.utils.gravar_atomico import gravar_atomico
 from cartridges.utils.rate_limiter import RateLimiter
 
-# Aprovado pela prova: as mesmas chaves do contrato 2, mais a raridade.
+# O contrato 4: as mesmas chaves do contrato 2, mais a raridade.
 CONTRATO = "4"
 PREFIXO = "XBOX:"
 _IDIOMAS = "pt-BR, pt;q=0.9, en-US;q=0.8"
@@ -85,7 +74,6 @@ def chave_do_catalogo(titulo: str) -> str:
 
 
 def _requisitar(metodo: str, url: str, **kwargs: Any) -> requests.Response:
-    """O único ponto de rede. O corpo é lido sob um teto antes de devolver."""
     return download.request_capped(metodo, url, timeout=_TEMPO, **kwargs)
 
 
@@ -107,9 +95,7 @@ def _pedir(metodo: str, url: str, contrato: str, aut: tuple[str, str], kwargs: d
 
 
 def _sem_autorizacao() -> None:
-    """`conta.autorizacao` devolveu None: sem conta (ou recusada e já desconectada)
-    é None; conta ainda conectada é a renovação que falhou por rede, e quem varre
-    precisa saber para parar de esperar o tempo limite de cada jogo."""
+    """`conta.autorizacao` devolveu None: sem conta (ou recusada e já desconectada) é None; conta ainda conectada é a renovação que falhou por rede, e quem varre precisa saber para parar de esperar o tempo limite de cada jogo."""
     if conta.conectada():
         logging.info("Xbox: a renovação do acesso falhou")
         raise FalhaDeRede()
@@ -151,9 +137,6 @@ def _chamar(metodo: str, url: str, contrato: str, **kwargs: Any) -> Optional[Any
 
 def _titulo_valido(valor: Any) -> bool:
     return isinstance(valor, str) and arquivos.appid_valido(valor)
-
-
-# --- titleId ----------------------------------------------------------------
 
 
 def _do_config(bases: list[Path]) -> Optional[str]:
@@ -228,10 +211,7 @@ def titulo_local(pfn: Optional[str], bases: list[Path]) -> Optional[str]:
 
 
 def titulo(pfn: Optional[str], bases: list[Path]) -> Optional[str]:
-    """``titulo_local`` e, sem resposta, o titlehub (que grava o cache).
-
-    Levanta ``FalhaDeRede``. ``None`` também quando a conta não está conectada.
-    """
+    """``titulo_local`` e, sem resposta, o titlehub (que grava o cache). Levanta ``FalhaDeRede``; ``None`` também sem conta conectada."""
     achado = titulo_local(pfn, bases)
     if achado is not None or not isinstance(pfn, str) or not pfn:
         return achado
@@ -261,9 +241,6 @@ def titulo(pfn: Optional[str], bases: list[Path]) -> Optional[str]:
         return achado
     _guardar_titulo(pfn, None)
     return ""
-
-
-# --- conquistas -------------------------------------------------------------
 
 
 def _no_tamanho(url: str) -> str:
@@ -355,10 +332,7 @@ def _todas(titulo: str, extra: dict[str, str]) -> Optional[list[tuple[ConquistaI
 
 
 def ler(titulo: str) -> Optional[Leitura]:
-    """Catálogo e progresso da conta numa chamada; guarda o catálogo no cache.
-
-    Levanta ``FalhaDeRede``. ``None``: sem conta, desconectou ou resposta inválida.
-    """
+    """Catálogo e progresso da conta numa chamada; guarda o catálogo no cache. Levanta ``FalhaDeRede``; ``None``: sem conta, desconectou ou resposta inválida."""
     achadas = _todas(titulo, {})
     if achadas is None:
         return None
@@ -378,10 +352,7 @@ def ler(titulo: str) -> Optional[Leitura]:
 
 
 def desbloqueadas(titulo: str) -> Optional[list[Desbloqueio]]:
-    """Só o progresso (``unlockedOnly=true``), sem tocar no cache.
-
-    Levanta ``FalhaDeRede``. ``None``: sem conta, desconectou ou resposta inválida.
-    """
+    """Só o progresso (``unlockedOnly=true``), sem tocar no cache. Levanta ``FalhaDeRede``; ``None``: sem conta, desconectou ou resposta inválida."""
     achadas = _todas(titulo, {"unlockedOnly": "true"})
     if achadas is None:
         return None

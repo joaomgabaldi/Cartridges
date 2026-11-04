@@ -1,12 +1,6 @@
 """Onde os backups dos saves moram, e a troca dessa pasta.
 
-A escolha fica na chave `pasta-dos-saves` (vazia = a pasta padrão). Trocar não
-joga os backups fora: se a pasta nova não tem saves eles vão junto; se ela já tem,
-é ela que vale e a antiga fica como estava.
-
-"Save" aqui é só a pasta de jogo que o Ludusavi grava, com o `mapping.yaml` dentro.
-A pasta escolhida pode ser a raiz do OneDrive ou dos Documentos: o resto do que
-há nela não é do app, não decide nada e nunca sai do lugar.
+A escolha fica na chave `pasta-dos-saves` (vazia = a padrão). Trocar leva os backups junto; se a pasta nova já tem saves, ela vale e a antiga fica como estava. "Save" é só a pasta de jogo que o Ludusavi grava, com o `mapping.yaml`; o resto da pasta escolhida (pode ser a raiz do OneDrive ou dos Documentos) não é do app e nunca sai do lugar.
 """
 
 import logging
@@ -47,13 +41,9 @@ def atual() -> Path:
 
 
 def saves_em(raiz: Path, e_arquivo: Callable[[Path], bool] = Path.is_file) -> list[Path]:
-    """As pastas de jogo do Ludusavi dentro de `raiz`, em ordem; o resto fica de fora,
-    inclusive a cópia (`.copiando`, em qualquer caixa) que uma troca de pasta
-    interrompida deixou pela metade.
+    """As pastas de jogo do Ludusavi dentro de `raiz`, em ordem; fica de fora o resto, inclusive a cópia `.copiando` (qualquer caixa) deixada por uma troca interrompida.
 
-    `e_arquivo` diz se o `mapping.yaml` de uma pasta existe. O padrão trata qualquer erro
-    de leitura como "não é um jogo"; quem não pode deixar um save de fora sem saber (a
-    exportação) passa uma função que deixa o erro subir."""
+    `e_arquivo` diz se o `mapping.yaml` existe; o padrão trata erro de leitura como "não é jogo", e a exportação passa uma função que deixa o erro subir para não deixar um save de fora sem saber."""
     if not raiz.is_dir():
         return []
     return sorted(
@@ -64,7 +54,6 @@ def saves_em(raiz: Path, e_arquivo: Callable[[Path], bool] = Path.is_file) -> li
 
 
 def _chave(caminho: Path) -> str:
-    """Forma comparável do caminho: absoluto e sem diferença de maiúsculas."""
     return os.path.normcase(os.path.abspath(caminho))
 
 
@@ -89,10 +78,7 @@ def _sobra_do_app(parcial: Path) -> bool:
 
 
 def _apagar_copia(copia: Path) -> None:
-    """Apaga uma pasta que o app criou, em uma ordem que deixa um tropeço no meio sem
-    deixar rastro de save: primeiro o `mapping.yaml` (o Ludusavi acha a pasta de um jogo
-    pelo nome que há nele, não pelo da pasta), depois o resto, e a marca por último, que
-    é o que faz a próxima troca reconhecer a sobra como do app. Levanta `OSError`."""
+    """Apaga uma pasta que o app criou, numa ordem que não deixa rastro de save se algo tropeçar: primeiro o `mapping.yaml` (o Ludusavi acha o jogo pelo nome dentro dele), depois o resto, e a marca por último (é ela que faz a próxima troca reconhecer a sobra como do app). Levanta `OSError`."""
     (copia / MAPA).unlink(missing_ok=True)
     for item in list(copia.iterdir()):
         if item.name.lower() == MARCA_COPIANDO:
@@ -106,14 +92,9 @@ def _apagar_copia(copia: Path) -> None:
 
 
 def _apagar_sobras(raiz: Path) -> None:
-    """Apaga de `raiz` as sobras `*.copiando` (qualquer caixa) do app, de uma troca
-    interrompida, qualquer que seja o jogo. Só as que têm a marca dele: o que não tem
-    é do usuário e fica; se ocupa o nome de um save a levar, a cópia dele falha adiante
-    (`mkdir` sem `exist_ok`).
+    """Apaga de `raiz` as sobras `*.copiando` do app (qualquer caixa) de uma troca interrompida; só as com a marca dele, o resto é do usuário.
 
-    Se uma sobra não sai e o `mapping.yaml` dela continua lá, o Ludusavi ainda a acharia
-    na pasta que vai valer e gravaria backups nela: o erro é relançado e a troca falha.
-    Sem o `mapping.yaml` a pasta não parece mais um jogo, e o erro só vai para o log."""
+    Se uma sobra não sai e o `mapping.yaml` dela continua lá, o Ludusavi ainda a acharia e gravaria backups nela: o erro é relançado e a troca falha. Sem o `mapping.yaml`, o erro só vai para o log."""
     if not raiz.is_dir():
         return
     for item in list(raiz.iterdir()):
@@ -127,15 +108,9 @@ def _apagar_sobras(raiz: Path) -> None:
 
 
 def _levar(antiga: Path, nova: Path) -> list[Path]:
-    """Copia os saves de `antiga` para `nova` e devolve os que foram copiados.
+    """Copia os saves de `antiga` para `nova` e devolve os copiados.
 
-    Todos vão primeiro para `<nome>.copiando` (com a marca do app dentro desde o início)
-    e só depois que o último terminou cada um é renomeado para `<nome>`. Assim, um app
-    fechado durante as cópias, que são quase todo o tempo, não deixa pasta com cara de
-    save nem uma cópia pela metade que a próxima troca adote; só uma queda nas
-    renomeações do fim (milissegundos) ainda pode deixar uma mistura. Se algo falhar,
-    apaga só o que esta chamada criou em `nova` (os originais nunca foram tocados) e
-    relança o erro.
+    Todos vão primeiro para `<nome>.copiando` (com a marca do app) e só depois do último cada um ganha `<nome>`: um app fechado durante as cópias não deixa pasta com cara de save nem cópia pela metade; só uma queda nas renomeações do fim ainda pode deixar mistura. Se algo falhar, apaga só o que esta chamada criou (os originais nunca são tocados) e relança.
     """
     saves = saves_em(antiga)
     if any((nova / save.name).exists() for save in saves):
@@ -151,8 +126,7 @@ def _levar(antiga: Path, nova: Path) -> list[Path]:
             criados.append(parcial)
             (parcial / MARCA_COPIANDO).touch()
             shutil.copytree(save, parcial, dirs_exist_ok=True)
-        # ponytail: uma queda no meio deste laço (milissegundos) ainda pode deixar uma
-        # mistura; fechar essa janela pediria um registro da troca, só se acontecer.
+        # shortcut: uma queda no meio deste laço (milissegundos) ainda pode deixar mistura; fechar a janela pediria um registro da troca.
         for indice, save in enumerate(saves):
             parcial = criados[indice]
             (parcial / MARCA_COPIANDO).unlink()
@@ -169,14 +143,7 @@ def _levar(antiga: Path, nova: Path) -> list[Path]:
 
 
 def _gravar_escolha(valor: str) -> None:
-    """Grava a chave na thread da tela (GSettings avisa quem o observa na thread em
-    que é escrito) e só volta depois de gravada.
-
-    Esperar é o que mantém a ordem: os originais só saem, e a trava dos saves só é
-    solta, com a pasta nova já valendo — senão um backup logo em seguida, ou a
-    releitura do cache, ainda veria a antiga. Não trava: nada na thread da tela
-    espera a trava dos saves.
-    """
+    """Grava a chave na thread da tela (a chave avisa quem a observa na thread em que é escrita) e só volta depois de gravada, para os originais só saírem e a trava só ser solta com a pasta nova já valendo. Não trava: nada na thread da tela espera a trava dos saves."""
     if threading.current_thread() is threading.main_thread():
         shared.schema.set_string(_CHAVE, valor)
         return
@@ -196,12 +163,7 @@ def _gravar_escolha(valor: str) -> None:
 def trocar(nova: Path) -> None:
     """Passa a guardar os saves em `nova`.
 
-    Levanta `TrocaRecusada`, sem mexer em nada, se `nova` é a pasta atual, está dentro
-    dela, é uma pasta que a contém, ou está dentro da pasta de dados do app (fora a
-    padrão) ou a contém. Também a levanta se `nova` já tem algo com o nome de um save que
-    precisaria receber; essa recusa vem depois de apagar de `nova` as sobras `.copiando`
-    que o próprio app deixou. Se uma dessas sobras não puder sair e o Ludusavi ainda a
-    reconheceria, levanta o `OSError` e nada muda.
+    Levanta `TrocaRecusada`, sem mexer em nada, se `nova` é a atual, está dentro dela ou a contém, está dentro da pasta de dados do app (fora a padrão) ou a contém, ou já tem algo com o nome de um save a receber (depois de apagar as sobras `.copiando` do app). Se uma sobra não puder sair e o Ludusavi ainda a reconheceria, levanta o `OSError` e nada muda.
     """
     antiga = atual()
     if dentro(nova, antiga):

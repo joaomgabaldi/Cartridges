@@ -1,15 +1,8 @@
 """O login da conta Microsoft pelo navegador padrão.
 
-O app abre a página de login da Microsoft (OAuth, código de autorização com
-PKCE S256) e recebe a volta numa porta livre em ``127.0.0.1`` (o Entra ignora a
-porta nos redirecionamentos ``localhost``). O app nunca vê a senha, e o
-servidor só aceita a volta que traz o ``state`` deste pedido.
+Abre a página de login da Microsoft (OAuth, código de autorização com PKCE S256) e recebe a volta numa porta livre em ``127.0.0.1`` (o Entra ignora a porta nos redirecionamentos ``localhost``). O app nunca vê a senha, e o servidor só aceita a volta com o ``state`` deste pedido.
 
-A troca do código pelas chaves (``conta.conectar``) faz rede e roda na thread
-do servidor, nunca na principal. ``ao_terminar`` é chamado uma única vez, na
-thread principal, e o servidor sempre é fechado.
-
-Nada de código, URL com ``code=`` nem corpo de resposta vai para o log.
+A troca do código pelas chaves (``conta.conectar``) faz rede e roda na thread do servidor, nunca na principal. ``ao_terminar`` é chamado uma única vez, na thread principal, e o servidor sempre é fechado. Nada de código, URL com ``code=`` nem corpo de resposta vai para o log.
 """
 
 import base64
@@ -30,7 +23,6 @@ from cartridges.utils.thread_principal import na_thread_principal
 
 TEXTO_OK = "Login concluído. Pode fechar esta aba e voltar ao Kyron."
 TEXTO_FALHOU = "O login não foi concluído. Pode fechar esta aba."
-# Quanto uma conexão pode ficar aberta sem terminar a requisição.
 _TEMPO_DA_CONEXAO = 5
 
 
@@ -59,7 +51,6 @@ def _pagina(texto: str) -> bytes:
 
 
 class Pedido:
-    """Um login em curso: o servidor de retorno e o que ele espera receber."""
 
     def __init__(self, ao_terminar: Callable[[Resultado], None], prazo: float) -> None:
         self._ao_terminar = ao_terminar
@@ -71,9 +62,7 @@ class Pedido:
         pedido = self
 
         class _Volta(http.server.BaseHTTPRequestHandler):
-            # Uma conexão aberta que não manda requisição (pré-conexão
-            # especulativa do navegador, outro processo local) não pode
-            # segurar a thread para sempre.
+            # Uma conexão aberta sem requisição (pré-conexão do navegador, outro processo local) não pode segurar a thread para sempre.
             timeout = _TEMPO_DA_CONEXAO
 
             def do_GET(self) -> None:  # noqa: N802
@@ -82,16 +71,14 @@ class Pedido:
             def log_message(self, *_args) -> None:
                 pass
 
-        # Uma thread por conexão: a conexão ociosa não segura a volta real
-        # nem o laço que confere o prazo. Threads daemon: fechar o servidor
-        # não espera por elas.
+        # Uma thread por conexão (daemon): a conexão ociosa não segura a volta real nem o laço do prazo, e fechar o servidor não espera por elas.
         self._servidor = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Volta)
         self._servidor.daemon_threads = True
         self._servidor.block_on_close = False
         self._servidor.timeout = 0.2
         self._trocando = False
         self.porta: int = self._servidor.server_port
-        # Forma aprovada pela prova ao vivo: sem barra no fim.
+        # Sem barra no fim.
         self.retorno = f"http://localhost:{self.porta}"
 
     def url(self) -> str:
@@ -195,7 +182,6 @@ class Pedido:
         return True
 
     def _entregar(self, resultado: Resultado) -> None:
-        """Na thread principal: fecha o servidor e avisa quem pediu."""
         try:
             self._servidor.server_close()
         except OSError:

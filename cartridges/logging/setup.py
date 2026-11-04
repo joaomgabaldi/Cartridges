@@ -33,12 +33,9 @@ from cartridges.logging.session_file_handler import SessionFileHandler
 
 
 def _enable_windows_ansi() -> None:
-    """Enable ANSI escape processing on the attached console.
+    """Ativa o processamento ANSI do console clássico (o Windows Terminal já o faz), senão as cores saem como lixo.
 
-    Windows Terminal handles ANSI natively, but the classic conhost only does
-    so after ENABLE_VIRTUAL_TERMINAL_PROCESSING is set — without it the color
-    formatter's escapes show up as literal ``←[31m`` garbage. Best effort: no
-    console (pythonw) or an old console simply leaves colors off.
+    Melhor esforço: sem console (pythonw) as cores ficam desligadas.
     """
     try:
         import ctypes  # pylint: disable=import-outside-toplevel
@@ -54,10 +51,7 @@ def _enable_windows_ansi() -> None:
         pass
 
 
-# Bibliotecas barulhentas, silenciadas aqui em vez de na raiz. Módulo, e não
-# variável local de `setup_logging`, para que um teste consiga prender o nível
-# de cada uma sem ter de chamar o `dictConfig` de verdade — que reconfigura o
-# logging do processo inteiro.
+# Módulo, e não local de `setup_logging`, para os testes prenderem o nível sem chamar o `dictConfig` (reconfigura o processo).
 LIB_LOGGERS = {
     "PIL": {
         "handlers": ["lib_console_handler", "file_handler"],
@@ -67,17 +61,7 @@ LIB_LOGGERS = {
     "urllib3": {
         "handlers": ["lib_console_handler", "file_handler"],
         "propagate": False,
-        # Explicitly INFO, not NOTSET. NOTSET means "ask my parent",
-        # and the parent here is the root at NOTSET too, i.e. level 0,
-        # i.e. everything passes — so urllib3's DEBUG went straight
-        # into file_handler, which sits at DEBUG. That is one
-        # "Starting new HTTPS connection" plus a request line per cover
-        # download, per SteamGridDB lookup, per HowLongToBeat query and
-        # per poll, and it buried the app's own lines in the session
-        # log people attach to bug reports. `propagate: False` never
-        # helped: file_handler is attached right here, not inherited.
-        # The root is deliberately left at NOTSET — the app's own
-        # DEBUG output is the reason the file handler exists.
+        # INFO explícito: NOTSET herdaria a raiz (nível 0) e o DEBUG do urllib3 inundaria o `file_handler`, enterrando as linhas do app.
         "level": "INFO",
     },
     # Só ruído de depuração; com `disable_existing_loggers: False` deixaria de ficar calada, então fica em WARNING.
@@ -89,22 +73,13 @@ LIB_LOGGERS = {
     "tinytuya": {
         "handlers": ["lib_console_handler", "file_handler"],
         "propagate": False,
-        # WARNING é obrigatório aqui, e não uma questão de ruído: em DEBUG a
-        # tinytuya loga o dicionário de cabeçalhos inteiro de cada chamada à
-        # nuvem, e enquanto ela ainda não tem token esse dicionário carrega a
-        # API Secret da conta em claro. Sem esta entrada o logger cai na raiz,
-        # que está em NOTSET (tudo passa) e alimenta o `file_handler`, que está
-        # em DEBUG — ou seja, a Secret iria parar no `cartridges.log`, que é
-        # justamente o arquivo que as pessoas anexam a relatório de bug. O
-        # nível cobre os sub-loggers da biblioteca por herança.
+        # WARNING é obrigatório: em DEBUG a tinytuya loga os cabeçalhos da nuvem com a API Secret em claro, e iria para o `cartridges.log` que as pessoas anexam a relatórios.
         "level": "WARNING",
     },
 }
 
 
 def setup_logging() -> None:
-    """Intitate the app's logging"""
-
     _enable_windows_ansi()
 
     app_log_level = os.environ.get("LOGLEVEL", "INFO").upper()
@@ -181,15 +156,9 @@ def _ligar_rastreio() -> None:
 
 
 def registrar_excecoes_nao_tratadas() -> None:
-    """Grava no log todo erro não tratado, do thread principal ou de outro.
+    """Grava no log todo erro não tratado, de qualquer thread, e avisa a pessoa num diálogo (o `unraisablehook` não avisa).
 
-    Depois de gravar, avisa o usuário num diálogo (o `unraisablehook` não: erro
-    num `__del__` não é uma ação do usuário que falhou).
-
-    O padrão do Python só escreve no stderr, e o app instalado roda no
-    pythonw, sem console: um erro num slot do Qt (abrir a tela de edição,
-    salvar) sumia sem deixar rastro no `cartridges.log`. O PySide entrega
-    esses erros ao `sys.excepthook`.
+    O padrão do Python só escreve no stderr, e o app instalado (pythonw) não tem console; o PySide entrega os erros dos slots ao `sys.excepthook`.
     """
 
     def registrar(tipo, valor, rastro) -> None:  # type: ignore
@@ -210,8 +179,7 @@ def registrar_excecoes_nao_tratadas() -> None:
 
     sys.excepthook = registrar
     threading.excepthook = da_thread
-    # Erros que não sobem para ninguém (num __del__, na coleta de lixo): o
-    # Python os entrega a este gancho, que por padrão também só usa o stderr.
+    # Erros sem destinatário (num __del__, na coleta de lixo) chegam a este gancho, que por padrão só usa o stderr.
     sys.unraisablehook = lambda u: logging.critical(
         "Erro não tratado (não levantável): %s",
         u.err_msg or "exceção ignorada",
@@ -220,11 +188,9 @@ def registrar_excecoes_nao_tratadas() -> None:
 
 
 def registrar_quedas_nativas(arquivo) -> None:  # type: ignore
-    """Grava no ``arquivo`` a pilha de uma queda nativa (C, driver, Qt).
+    """Grava no ``arquivo`` a pilha de uma queda nativa (C, driver, Qt), que mata o processo sem passar pelo Python.
 
-    Uma queda dessas mata o processo sem passar pelo Python, e o log ficava
-    parado na última linha normal. O ``faulthandler`` escreve direto no
-    descritor do arquivo, por isso precisa do arquivo que continua aberto.
+    O ``faulthandler`` escreve direto no descritor, por isso o arquivo precisa continuar aberto.
     """
     faulthandler.enable(file=arquivo, all_threads=True)
 
@@ -264,12 +230,7 @@ def _registrar_do_qt(tipo, contexto, mensagem) -> None:  # type: ignore
 
 
 def registrar_avisos_do_qt() -> None:
-    """Grava no log os avisos do Qt e do QML.
-
-    Pelo mesmo motivo de `registrar_excecoes_nao_tratadas`: o padrão é o
-    stderr, e o pythonw não tem console. Um aviso do QML é o rastro típico de
-    uma tela que parou de responder. Só age na primeira chamada.
-    """
+    """Grava no log os avisos do Qt e do QML (o padrão é o stderr, e o pythonw não tem console). Só age na primeira chamada."""
     global _qt_registrado  # pylint: disable=global-statement
     if _qt_registrado:
         return
@@ -278,8 +239,6 @@ def registrar_avisos_do_qt() -> None:
 
 
 def log_system_info() -> None:
-    """Log system debug information"""
-
     logging.debug("Starting %s v%s", shared.APP_ID, shared.VERSION)
     logging.debug("Python version: %s", sys.version)
     logging.debug("Platform: %s", platform.platform())

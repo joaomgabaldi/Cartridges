@@ -31,7 +31,6 @@ if TYPE_CHECKING:
     from cartridges.jogo import Jogo
 
 
-
 class _PoolDaemon:
     """Fila + N threads daemon. O `atexit` do `concurrent.futures` faz `join` de toda thread de
     `ThreadPoolExecutor`, o que seguraria a saída por uma requisição de até 30 s; thread daemon não."""
@@ -74,18 +73,15 @@ _gravacao = ThreadPoolExecutor(max_workers=4, thread_name_prefix="gravacao")
 
 
 def rodar_na_rede(funcao: Callable[..., Any], *args: Any) -> None:
-    """Roda `funcao` numa thread daemon do pool de rede (a importação roda as fontes aqui)."""
     _rede.submit(funcao, *args)
 
 
 def encerrar() -> None:
-    """Fim do app: descarta a fila de rede e espera a de gravação terminar."""
     _rede.encerrar()
     _gravacao.shutdown(wait=True)
 
 
 class AsyncManager(Manager):
-    """Manager that can run asynchronously"""
 
     blocking = False
     # "rede" (daemon, descartável na saída) ou "gravacao" (drenada na saída; nunca perde uma gravação).
@@ -97,20 +93,16 @@ class AsyncManager(Manager):
         self.cancellable = threading.Event()
 
     def cancel_tasks(self):
-        """Cancel all tasks for this manager"""
         self.cancellable.set()
 
     def reset_cancellable(self):
-        """Reset the cancellable for this manager.
-        Already scheduled Tasks will no longer be cancellable."""
+        """Troca o cancellable; as tarefas já agendadas deixam de ser canceláveis."""
         self.cancellable = threading.Event()
 
     def process_game(
         self, game: "Jogo", additional_data: dict, callback: Callable[["Manager"], Any]
     ) -> None:
-        """Create a task to process the game in a separate thread"""
-        # Capturado aqui: um reset troca o evento, e a tarefa já enfileirada
-        # continua vendo o cancelamento do seu lote.
+        # Capturado aqui: um reset troca o evento, e a tarefa já enfileirada continua vendo o cancelamento do seu lote.
         cancellable = self.cancellable
         args = (game, additional_data, callback, cancellable)
         try:
@@ -122,9 +114,7 @@ class AsyncManager(Manager):
                 logging.debug("%s: tarefa descartada, app encerrando", self.name)
 
     def _task_thread_func(self, game, additional_data, callback, cancellable):
-        """Task thread entry point"""
-        # Como o Gio.Task: cancelada, a tarefa não roda, mas a conclusão ainda é
-        # entregue; sem ela o pipeline nunca termina e a importação não acaba.
+        # Cancelada, a tarefa não roda, mas a conclusão ainda é entregue; sem ela o pipeline nunca termina.
         try:
             if not cancellable.is_set():
                 self.run(game, additional_data)

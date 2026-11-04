@@ -2,11 +2,7 @@ from typing import Iterable, Optional
 
 
 class FriendlyError(Exception):
-    """
-    An error that is supposed to be shown to the user in a nice format
-
-    Use `raise ... from ...` to preserve context.
-    """
+    """Erro que a interface mostra à pessoa; use `raise ... from ...` para preservar o contexto."""
 
     title_format: str
     title_args: Iterable[str]
@@ -15,12 +11,10 @@ class FriendlyError(Exception):
 
     @property
     def title(self) -> str:
-        """Get the formatted error title"""
         return self.title_format.format(*self.title_args)
 
     @property
     def subtitle(self) -> str:
-        """Get the formatted error subtitle"""
         return self.subtitle_format.format(*self.subtitle_args)
 
     def __init__(
@@ -30,11 +24,6 @@ class FriendlyError(Exception):
         title_args: Optional[Iterable[str]] = None,
         subtitle_args: Optional[Iterable[str]] = None,
     ) -> None:
-        """Create a friendly error
-
-        :param str title: The error's title, translatable with gettext
-        :param str subtitle: The error's subtitle, translatable with gettext
-        """
         super().__init__()
         if title is not None:
             self.title_format = title

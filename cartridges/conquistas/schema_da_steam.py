@@ -14,7 +14,6 @@ from typing import Any
 class ConquistaDoSchema:
     bloco: str
     bit: int
-    # O "API name", o mesmo que os emuladores usam.
     nome: str
     display: dict = field(default_factory=dict)
 
@@ -24,7 +23,6 @@ def _de_conquistas(bloco: dict) -> bool:
 
 
 def conquistas(schema: Any, appid: str) -> list[ConquistaDoSchema]:
-    """As conquistas do schema, na ordem em que ele as traz."""
     raiz = schema.get(appid) if isinstance(schema, dict) else None
     blocos = raiz.get("stats") if isinstance(raiz, dict) else None
     if not isinstance(blocos, dict):

@@ -1,22 +1,10 @@
 """O catálogo de conquistas de um jogo: nomes, descrições, ícones e raridade.
 
-Primeiro, o schema que a Steam deste PC já guardou para o jogo
-(`appcache\\stats\\UserGameStatsSchema_<appid>.bin`): o catálogo inteiro, em
-português e sem rede. Sem ele, com a chave da Steam Web API (Preferências), vem
-da Steam em português (`GetSchemaForGame`, ``l=brazilian``). Sem nenhum dos
-dois, ou quando a Steam não tem catálogo, vem do
-`steam_settings\\achievements.json` que muitos jogos trazem ao lado do
-executável. A porcentagem global (`GetGlobalAchievementPercentagesForApp`)
-não exige chave e é o que marca as raras (menos de 10% dos jogadores).
+Primeiro o schema que a Steam deste PC guardou (`appcache\\stats\\UserGameStatsSchema_<appid>.bin`): catálogo inteiro, em português e sem rede. Sem ele, com a chave da Steam Web API (Preferências), vem da Steam (`GetSchemaForGame`, ``l=brazilian``); sem nenhum dos dois, do `steam_settings\\achievements.json` que muitos jogos trazem ao lado do executável. A porcentagem global (`GetGlobalAchievementPercentagesForApp`) não exige chave e marca as raras (menos de 10%).
 
-Guardado em cache por appID durante 7 dias (1 dia quando a raridade não pôde
-ser buscada e nenhuma conquista tem porcentagem). Rede fora usa o cache vencido: o
-catálogo muda pouco, e um catálogo de ontem é melhor que nenhum. O schema local
-da Steam, quando existe, vem antes e não precisa de rede nem de chave; um schema
-mais novo que o cache também o renova.
+Cache por appID por 7 dias (1 dia quando a raridade não pôde ser buscada). Sem rede, usa o cache vencido; um schema local mais novo que o cache o renova.
 
-Nada aqui levanta para quem chama: resposta da rede, arquivo do jogo e cache em
-disco são lidos como dado não confiável, e o que não serve vira log e lista vazia.
+Nada aqui levanta: resposta da rede, arquivo do jogo e cache são dado não confiável, e o que não serve vira log e lista vazia.
 """
 
 import hashlib
@@ -60,7 +48,6 @@ class ConquistaInfo:
     nome: str
     titulo: str
     descricao: str
-    # URL da Steam ou caminho de um arquivo do jogo; "" quando não há.
     icone: str
     icone_cinza: str
     oculta: bool
@@ -75,11 +62,8 @@ class ConquistaInfo:
 class Catalogo:
     conquistas: tuple[ConquistaInfo, ...]
     obtido_em: int
-    # Se veio da Steam com chave.
     com_chave: bool
-    # Impressão da chave configurada quando o catálogo foi feito ("" se não havia).
-    # Chave nova, trocada ou removida renova o catálogo; a mesma chave, mesmo
-    # recusada, não é tentada de novo antes dos 7 dias.
+    # Impressão da chave configurada quando o catálogo foi feito ("" se não havia): chave nova, trocada ou removida renova; a mesma, mesmo recusada, só é tentada de novo após 7 dias.
     impressao_da_chave: str = ""
     # Se nenhuma conquista ficou com porcentagem porque a raridade não pôde ser
     # buscada: o catálogo vale 1 dia, não 7 (`VALIDADE_SEM_RARIDADE`).
@@ -213,7 +197,6 @@ def _sem_token(valor: Any) -> Any:
 
 
 def arquivo_do_schema_local(appid: str) -> Optional[Path]:
-    """O schema do jogo que a Steam deste PC guardou, se houver."""
     steam = arquivos.pasta_da_steam()
     if steam is None or not arquivos.appid_valido(appid):
         return None
@@ -298,7 +281,6 @@ def _arquivo_do_cache(appid: str) -> Path:
 
 
 def _info_do_cache(item: Any) -> ConquistaInfo:
-    """Um item do cache, ou levanta TypeError/OverflowError se o arquivo foi adulterado."""
     info = ConquistaInfo(**item)
     textos = (info.nome, info.titulo, info.descricao, info.icone, info.icone_cinza)
     porcentagem = info.porcentagem
@@ -367,7 +349,6 @@ def guardar(appid: str, cat: Catalogo) -> None:
 
 
 def _impressao(chave: str) -> str:
-    """Identifica a chave sem guardá-la: o cache fica em disco."""
     if not chave:
         return ""
     return hashlib.sha256(chave.encode()).hexdigest()[:16]
@@ -376,10 +357,8 @@ def _impressao(chave: str) -> str:
 def vencido(
     cat: Catalogo, agora: int, impressao_atual: str, schema_mudou_em: Optional[int] = None
 ) -> bool:
-    # Cache de mais de um dia no futuro (relógio errado quando foi feito, ou
-    # arquivo adulterado) nunca venceria: conta como vencido. Schema local mais
-    # novo que o catálogo: a Steam o regravou (o jogo ganhou conquistas numa
-    # atualização). Sem raridade, vale só 1 dia: a próxima abertura com rede a busca.
+    # Cache de mais de um dia no futuro (relógio errado, ou adulterado) nunca venceria: conta como vencido. Schema local mais novo que o catálogo: a Steam o regravou (conquistas novas numa atualização).
+    # Sem raridade, vale só 1 dia: a próxima abertura com rede a busca.
     validade = VALIDADE_SEM_RARIDADE if cat.sem_raridade else VALIDADE
     return (
         agora - cat.obtido_em >= validade
@@ -413,16 +392,7 @@ def renovar(
 ) -> Renovacao:
     """Busca o catálogo de novo e grava no cache. Nunca levanta.
 
-    Com ``rede=False`` nada vai à Steam: vale o cache (mesmo vencido) ou o
-    arquivo do jogo. É o que quem varre vários jogos usa depois que um pedido
-    falhou por rede, para não esperar o tempo limite de cada jogo. O schema que a
-    Steam deste PC guardou, quando existe, vem antes de tudo isso: não precisa de
-    rede nem de chave.
-
-    Com `usar_chave=False` a Steam já recusou a chave nesta passada: o schema
-    não é pedido de novo, e o resultado sai como se a recusa tivesse acabado de
-    voltar (``chave_recusada``). Com o schema local presente, nem a chave nem a
-    recusa entram: o catálogo vem dele.
+    Com ``rede=False`` nada vai à Steam: vale o cache (mesmo vencido) ou o arquivo do jogo (quem varre vários jogos usa depois que um pedido falhou por rede). O schema local da Steam, quando existe, vem antes de tudo e não precisa de rede nem de chave. Com `usar_chave=False` a Steam já recusou a chave nesta passada: o schema não é pedido de novo e o resultado sai como se a recusa tivesse acabado de voltar (``chave_recusada``).
     """
     if not arquivos.appid_valido(appid):
         return Renovacao(None)
@@ -434,16 +404,14 @@ def renovar(
     schema_respondeu = False
     com_chave = False
     impressao = _impressao(chave)
-    # O schema que a Steam deste PC já guardou é o catálogo inteiro, em
-    # português e sem rede: com ele, a chave nem é usada neste jogo.
+    # O schema local já é o catálogo inteiro, em português e sem rede: a chave nem é usada neste jogo.
     infos: list[ConquistaInfo] = _do_schema_local(appid)
 
     if not infos and chave:
         if not rede:
             if anterior is not None:
                 return Renovacao(anterior)
-            # Nada foi perguntado à Steam, então não há veredito sobre a chave:
-            # sem impressão, a próxima abertura tenta de novo.
+            # Nada foi perguntado à Steam: sem veredito sobre a chave, a próxima abertura tenta de novo.
             impressao = ""
         elif not usar_chave:
             recusada = True
@@ -467,18 +435,14 @@ def renovar(
                 )
                 if anterior is not None:
                     return Renovacao(anterior, rede_falhou=rede_falhou)
-                # Falha de rede não é veredito sobre a chave: sem impressão, a
-                # próxima abertura tenta a Steam de novo.
+                # Falha de rede não é veredito sobre a chave: sem impressão, a próxima abertura tenta de novo.
                 impressao = ""
 
     if not infos:
         infos = _local(executavel)
     if not infos:
         if (schema_respondeu or recusada) and (anterior is None or not anterior.conquistas):
-            # A Steam respondeu à chave e o jogo não tem conquistas, ou recusou a
-            # chave: guarda o "nenhuma" pelos mesmos 7 dias, em vez de perguntar a
-            # cada abertura (trocar a chave muda a impressão e renova). O cartão
-            # segue escondido (`progresso.montar` não monta catálogo vazio).
+            # A Steam respondeu à chave e o jogo não tem conquistas, ou recusou a chave: guarda o "nenhuma" pelos mesmos 7 dias (trocar a chave renova). O cartão segue escondido (`progresso.montar` não monta catálogo vazio).
             vazio = Catalogo((), agora, schema_respondeu, impressao)
             try:
                 guardar(appid, vazio)
@@ -524,7 +488,6 @@ def obter(
     rede: bool = True,
     usar_chave: bool = True,
 ) -> Renovacao:
-    """O catálogo em cache, renovado só quando venceu."""
     if not arquivos.appid_valido(appid):
         return Renovacao(None)
     agora = int(time.time()) if agora is None else agora

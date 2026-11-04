@@ -44,7 +44,6 @@ if TYPE_CHECKING:
 
 # pylint: disable=too-many-instance-attributes
 class Importer(ErrorProducer):
-    """A class in charge of scanning sources for games"""
 
     # O id do aviso do resumo na fila (`FilaDeAvisos`); o da importação anterior
     # sai da tela quando a próxima começa.
@@ -92,14 +91,9 @@ class Importer(ErrorProducer):
         self.game_pipelines = set()
         self.sources = set()
 
-        # game_pipelines is added to from source worker threads but read on the
-        # main thread (progress polling, summary). Guard it so a concurrent add
-        # can't raise "Set changed size during iteration".
+        # game_pipelines recebe pelas threads das fontes e é lido pela principal: o lock evita "Set changed size during iteration".
         self._pipelines_lock = threading.Lock()
-        # Pipelines already counted as done. The "advanced" signal fires from
-        # worker and main threads alike; without this dedup two emissions could
-        # both see is_done (double count) or interleave a lost `+= 1` — either
-        # way the done/created equality never holds and the import never ends.
+        # Pipelines já contados: o sinal "advanced" vem de várias threads, e sem esta deduplicação duas emissões contariam em dobro (ou perderiam um `+= 1`) e a importação nunca terminaria.
         self._counted_done_pipelines: set[Pipeline] = set()
 
     @property
@@ -133,9 +127,7 @@ class Importer(ErrorProducer):
         self._relogio.timeout.connect(self._tic)
         self._relogio.start()
 
-        # Collect all errors and reset the cancellables for the managers
-        # - Only one importer exists at any given time
-        # - Every import starts fresh
+        # Uma importação por vez: coleta os erros e reinicia os cancellables dos managers.
         self.collect_errors()
         for manager in shared.store.managers.values():
             manager.collect_errors()
@@ -162,9 +154,7 @@ class Importer(ErrorProducer):
             self.monitor_import()
 
     def monitor_import(self) -> bool:
-        """Acompanha a importação: a tarefa na janela de tarefas nasce com o
-        primeiro jogo novo — a verificação que não acha nada nunca aparece — e
-        o fim dispara a limpeza."""
+        """Acompanha a importação: a tarefa na janela de tarefas nasce com o primeiro jogo novo (a verificação que não acha nada nunca aparece) e o fim dispara a limpeza."""
         with self._pipelines_lock:
             total = len(self.game_pipelines)
             feitos = self.n_pipelines_done
@@ -191,7 +181,6 @@ class Importer(ErrorProducer):
         return False
 
     def finish_import(self) -> None:
-        """Callback called when importing has finished"""
         logging.info("Import done")
         # Antes de `remove_games` e do reset abaixo: as duas leem
         # `duplicate_game_ids`.
@@ -218,11 +207,7 @@ class Importer(ErrorProducer):
     def varrer_conquistas_dos_importados(self) -> None:
         """Dá catálogo e histórico aos jogos recém-importados, em silêncio.
 
-        O vigia da sessão só usa o catálogo já guardado: sem isto, um jogo
-        importado com o app aberto ficaria sem catálogo (e sem o cartão de
-        conquistas) até a próxima abertura. Se a varredura da abertura ainda
-        não rodou, ela os inclui e esta passada só se repete — sem dano. Nunca
-        levanta: nada aqui derruba o fim da importação.
+        O vigia da sessão só usa o catálogo já guardado: sem isto, um jogo importado com o app aberto ficaria sem o cartão de conquistas até a próxima abertura. Nunca levanta.
         """
         try:
             varredura = getattr(self.aplicativo, "varredura_conquistas", None)
@@ -241,9 +226,7 @@ class Importer(ErrorProducer):
             )
 
     def resolver_pendencias(self) -> None:
-        """Tira das pendências da restauração os jogos que esta importação
-        achou. Só depois de varrer a pasta de atalhos até o fim: uma
-        varredura que não aconteceu não sabe quem está lá."""
+        """Tira das pendências da restauração os jogos que esta importação achou, só depois de varrer a pasta de atalhos até o fim."""
         if "shortcuts" in self.scanned_source_ids and restauracao.existe():
             antes = restauracao.ids()
             restauracao.resolver(shared.store.duplicate_game_ids)
@@ -253,7 +236,6 @@ class Importer(ErrorProducer):
                     jogo.update()
 
     def remove_games(self) -> None:
-        """Set removed to True for missing games"""
         if not shared.schema.get_boolean("remove-missing"):
             return
 
@@ -268,9 +250,7 @@ class Importer(ErrorProducer):
             # janela de pendências, não vira desinstalado.
             if restauracao.e_pendente(game.game_id):
                 continue
-            # Only remove games whose source was actually scanned this run.
-            # A missing/unset folder (e.g. a disconnected drive) must not be
-            # mistaken for "every game was uninstalled"
+            # Só remove jogos de fonte realmente varrida: uma pasta ausente (disco desconectado) não pode virar "tudo foi desinstalado".
             if game.base_source not in self.scanned_source_ids:
                 continue
             if (game.base_source in keys) and (
@@ -292,53 +272,36 @@ class Importer(ErrorProducer):
     """Import Actions — Threaded; None of this should touch GUI"""
 
     def source_task_thread_func(self, data: tuple) -> None:
-        """Source import task code"""
-
         source: Source
         source, *_rest = data
 
-        # Early exit if not available or not installed
         if not source.is_available:
             logging.info("Source %s skipped, not available", source.source_id)
             return
         iterator = iter(source)
 
-        # Get games from source
         logging.info("Scanning source %s", source.source_id)
-        # Whether the scan ran to the end. Anything that interrupts it leaves
-        # this False, which is what keeps `remove_games` off this source's
-        # games: an incomplete scan cannot tell a missing game from an unseen
-        # one, and guessing wrong deletes a library.
+        # Se a varredura foi até o fim: só assim `remove_games` pode agir sobre os jogos desta fonte, pois uma varredura incompleta não distingue jogo ausente de não visto.
         scan_complete = False
         scan_failed = False
         while True:
-            # Handle exceptions raised when iterating
             try:
                 iteration_result = next(iterator)
             except StopIteration:
                 scan_complete = True
                 break
             except SourceScanError as error:
-                # The source knows its own scan failed and said so. Reported
-                # like any other error, not just logged: a scan that quietly
-                # produces half a library is worse than one that says it broke.
+                # A fonte avisou que a varredura falhou: reportado como erro, não só logado, porque metade de uma biblioteca em silêncio é pior.
                 logging.warning("Scan of %s incomplete: %s", source.source_id, error)
                 self.report_error(error)
                 break
             except Exception as error:  # pylint: disable=broad-exception-caught
-                # A generator that raised is closed, so this `continue` cannot
-                # resume it: the next `next()` raises StopIteration and the loop
-                # ends there, with however many games were yielded before the
-                # error and no way to know what came after. That is an
-                # incomplete scan — and it reaches the same StopIteration that a
-                # clean finish does, which is why it needs its own flag rather
-                # than being inferred from how the loop ended.
+                # Um gerador que levantou está fechado: o próximo `next()` dá StopIteration, igual a um fim limpo, por isso a varredura incompleta precisa de flag própria.
                 logging.exception("%s in %s", type(error).__name__, source.source_id)
                 self.report_error(error)
                 scan_failed = True
                 continue
 
-            # Handle the result depending on its type
             if isinstance(iteration_result, Jogo):
                 game = iteration_result
                 additional_data = {}
@@ -347,8 +310,7 @@ class Importer(ErrorProducer):
             elif iteration_result is None:
                 continue
             else:
-                # Warn source implementers that an invalid type was produced
-                # Should not happen on production code
+                # Avisa quem implementa fontes: tipo inválido (não deve ocorrer em produção)
                 logging.warning(
                     "%s produced an invalid iteration return type %s",
                     source.source_id,
@@ -356,7 +318,6 @@ class Importer(ErrorProducer):
                 )
                 continue
 
-            # Register game
             pipeline: Optional[Pipeline] = shared.store.add_game(
                 game, additional_data
             )
@@ -366,8 +327,6 @@ class Importer(ErrorProducer):
                     self.game_pipelines.add(pipeline)
                 self._contar_ao_avancar(pipeline)
 
-        # Only a scan that ran to the end licenses removing that source's
-        # missing games
         if scan_complete and not scan_failed:
             self.scanned_source_ids.add(source.source_id)
         else:
@@ -389,16 +348,11 @@ class Importer(ErrorProducer):
         self.pipeline_advanced_callback(pipeline)
 
     def source_callback(self, source: Source) -> None:
-        """Callback executed when a source is fully scanned"""
         logging.debug("Import done for source %s", source.source_id)
         self.n_source_tasks_done += 1
 
     def pipeline_advanced_callback(self, pipeline: Pipeline) -> None:
-        """Callback called when a pipeline for a game has advanced.
-
-        May run on any thread. Counting is idempotent per pipeline so
-        concurrent or repeated "advanced" emissions cannot skew the counter.
-        """
+        """Chamado quando o pipeline de um jogo avança; pode rodar em qualquer thread e conta uma vez por pipeline."""
         if pipeline.is_done:
             with self._pipelines_lock:
                 if pipeline not in self._counted_done_pipelines:
@@ -408,15 +362,11 @@ class Importer(ErrorProducer):
     """GUI Actions"""
 
     def create_error_dialog(self) -> None:
-        """Dialog containing all errors raised by importers"""
-
-        # Collect all errors that happened in the importer and the managers
         errors = []
         errors.extend(self.collect_errors())
         for manager in shared.store.managers.values():
             errors.extend(manager.collect_errors())
 
-        # Filter out non friendly errors
         errors = sorted(
             set(
                 tuple(
@@ -428,7 +378,6 @@ class Importer(ErrorProducer):
             )
         )
 
-        # No error to display
         if not errors:
             self.timeout_toast()
             return
@@ -444,8 +393,7 @@ class Importer(ErrorProducer):
         self.aplicativo.pedir_dialogo(titulo, corpo, itens, self.timeout_toast, preferencias="")
 
     def undo_import(self, *_args: object) -> None:
-        # Games may have vanished since the import (e.g. removed by hand),
-        # so missing ids are skipped instead of crashing the undo
+        # O jogo pode ter sumido desde a importação (removido à mão): ids ausentes são pulados.
         for game_id in self.imported_game_ids:
             if game := shared.store.get(game_id):
                 game.removed = True
@@ -468,18 +416,15 @@ class Importer(ErrorProducer):
 
     @staticmethod
     def summarize_names(names: list[str], singular: str, plural: str) -> str:
-        """Human-friendly summary: names when few, a count when many"""
         if len(names) <= 3:
             return (singular if len(names) == 1 else plural).format(
                 ", ".join(sorted(names, key=str.casefold))
             )
         return plural.format(
-            # The variable is the number of games.
             ngettext("{} jogo", "{} jogos", len(names)).format(len(names))
         )
 
     def create_summary_toast(self) -> Optional[int]:
-        """Aviso com o resumo do que foi importado e removido; devolve o id na fila."""
         with self._pipelines_lock:
             pipelines = list(self.game_pipelines)
         added_names = [
@@ -495,14 +440,12 @@ class Importer(ErrorProducer):
 
         parts = []
         if added_names:
-            # The variable is the game name(s) or the number of games.
             parts.append(
                 self.summarize_names(
                     added_names, _("Importado: {}"), _("Importados: {}")
                 )
             )
         if removed_names:
-            # The variable is the game name(s) or the number of games.
             parts.append(
                 self.summarize_names(
                     removed_names, _("Removido: {}"), _("Removidos: {}")
@@ -525,10 +468,6 @@ class Importer(ErrorProducer):
             shared.preferencias.abrir("import")
 
     def timeout_toast(self, *_args: object) -> None:
-        """Dá 5 segundos ao resumo depois que o usuário dispensou os avisos.
-
-        Entregue à fila em vez de contado aqui: o resumo pode ainda esperar atrás de
-        outro aviso, e uma contagem iniciada agora acabaria antes de ele aparecer.
-        """
+        """Dá 5 segundos ao resumo depois que o usuário dispensou os avisos (pela fila: o resumo pode esperar atrás de outro aviso)."""
         if self.__class__.summary_toast is not None:
             self.aplicativo.avisos.dispensar_depois(self.__class__.summary_toast, 5)

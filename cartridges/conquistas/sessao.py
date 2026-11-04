@@ -1,16 +1,8 @@
-"""Liga o vigia de conquistas à sessão de jogo e decide o que fazer com cada
-conquista nova: o cartão por cima do jogo e o pulso na iluminação.
+"""Liga o vigia de conquistas à sessão de jogo e decide o que fazer com cada conquista nova: o cartão por cima do jogo e o pulso na iluminação.
 
-Quem chama é a janela, nos mesmos dois pontos em que a sessão já veste o papel
-de parede e as fitas (`show_session_blocker` e `hide_session_blocker`). As
-preferências são lidas na hora do aviso, então mudá-las no meio da partida
-vale para a próxima conquista. Nos jogos da Steam, das lojas com conta (Xbox,
-Epic, EA) e da Ubisoft Connect, só o pulso: a Steam, a Xbox Game Bar e os overlays da
-Epic, da EA e da Ubisoft já mostram o aviso deles.
+A janela chama nos mesmos pontos em que a sessão veste o papel de parede e as fitas (`show_session_blocker`/`hide_session_blocker`). As preferências são lidas na hora do aviso. Nos jogos da Steam, das lojas com conta e da Ubisoft Connect só o pulso: a Steam, a Xbox Game Bar e os overlays da Epic, EA e Ubisoft já mostram o aviso.
 
-O vigia depende do tipo da fonte gravada do jogo (`_VIGIAS`): a de uma loja com
-conta consulta a conta (`vigia_da_conta`); a da Ubisoft olha o `.spool`
-(`ubisoft/vigia`); a da Steam, ou nenhuma, olha os arquivos (`vigia`).
+O vigia depende do tipo da fonte gravada (`_VIGIAS`): loja com conta consulta a conta (`vigia_da_conta`), a Ubisoft olha o `.spool` (`ubisoft/vigia`), a Steam ou nenhuma olha os arquivos (`vigia`).
 """
 
 import logging
@@ -25,9 +17,7 @@ from cartridges.conquistas.vigia import Desbloqueada, Vigia, acompanha
 from cartridges.conquistas.xbox import vigia as vigia_xbox
 from cartridges.utils import session_fita
 
-# O vigia de cada tipo de fonte gravada que não é a Steam: o tipo do jogo decide o
-# vigia. `Vigia` é procurado na hora (os testes o trocam). Fonte Steam, ou nenhuma,
-# fica com o vigia de arquivos (`Vigia`/`acompanha` deste módulo).
+# O vigia de cada tipo de fonte que não é a Steam. `Vigia` é procurado na hora (os testes o trocam); Steam, ou nenhuma, fica com o vigia de arquivos deste módulo.
 _VIGIAS = {"xbox": vigia_xbox, "epic": vigia_epic, "ea": vigia_ea, "ubisoft": vigia_ubisoft}
 # Fontes cujo próprio aviso já aparece durante a partida (Xbox Game Bar, overlay da
 # Epic, overlay do Ubisoft Connect): aqui, só o pulso.
@@ -50,7 +40,6 @@ def _da_steam(game: Any) -> bool:
 
 
 def _so_pulso(game: Any) -> bool:
-    """Steam e as lojas com conta já mostram o aviso delas: aqui, só o pulso."""
     if _da_steam(game):
         return True
     try:
@@ -62,11 +51,7 @@ def _so_pulso(game: Any) -> bool:
 
 
 def acompanhando(game: Any) -> bool:
-    """Se o vigia está acompanhando ``game`` agora.
-
-    Durante a sessão o vigia é o dono do histórico do jogo: quem mais grava ali
-    (a varredura de abertura) tira dele a novidade que ele ia avisar.
-    """
+    """Se o vigia está acompanhando ``game`` agora: durante a sessão ele é o dono do histórico do jogo, e a varredura de abertura tiraria dele a novidade a avisar."""
     vigia_ = _vigia
     return (
         vigia_ is not None
@@ -76,7 +61,6 @@ def acompanhando(game: Any) -> bool:
 
 
 def comecar(game: Any) -> None:
-    """A sessão de ``game`` começou. Nunca levanta."""
     global _vigia  # pylint: disable=global-statement
     parar()
     try:
@@ -99,7 +83,6 @@ def comecar(game: Any) -> None:
 
 
 def parar() -> None:
-    """A sessão acabou (ou o app vai fechar). Nunca levanta."""
     global _vigia  # pylint: disable=global-statement
     vigia_, _vigia = _vigia, None
     if vigia_ is None:

@@ -1,15 +1,8 @@
 """Os arquivos em que os emuladores de Steam (e a Steam) gravam as conquistas.
 
-Um leitor por formato, todos com a mesma saída: o que está desbloqueado, com o
-nome interno da conquista (o "API name" da Steam) e a hora em segundos Unix.
-Transcrito de `parse-achievement-formats.ts` e `parse-achievement-file.ts` do
-Hydra Launcher (hydralauncher/hydra, licença MIT), que mantém esses formatos
-contra arquivos reais há anos.
+Um leitor por formato, todos com a mesma saída: o que está desbloqueado, com o nome interno (o "API name" da Steam) e a hora em segundos Unix. Transcrito de `parse-achievement-formats.ts` e `parse-achievement-file.ts` do Hydra Launcher (hydralauncher/hydra, MIT).
 
-Nenhum leitor levanta. O jogo pode estar gravando o arquivo no instante da
-leitura, e um arquivo pela metade vale "nada novo agora", não um erro: a leitura
-seguinte, com o arquivo inteiro, pega o que faltou. E o histórico só soma, então
-uma leitura vazia nunca apaga o que já foi guardado.
+Nenhum leitor levanta: o jogo pode estar gravando no instante da leitura, e um arquivo pela metade vale "nada novo agora" (a leitura seguinte pega o que faltou). Como o histórico só soma, uma leitura vazia nunca apaga o que já foi guardado.
 """
 
 import json
@@ -25,10 +18,8 @@ from cartridges.conquistas.cache_de_leitura import CacheDeLeitura, assinatura
 
 @dataclass(frozen=True)
 class Desbloqueio:
-    """Uma conquista desbloqueada, do jeito que o arquivo a descreve."""
 
     nome: str
-    # Segundos Unix. Zero quando o arquivo não diz quando foi.
     quando: int
 
 
@@ -224,7 +215,6 @@ _schemas = CacheDeLeitura(_SCHEMAS_GUARDADOS)
 
 
 def _bits(bloco: Any) -> Optional[int]:
-    """Os 32 bits de conquista de um bloco do estado, ou None se o bloco não os tem."""
     if not isinstance(bloco, dict):
         return None
     bits = bloco.get("data")
@@ -298,7 +288,6 @@ _LEITORES: dict[str, Callable[[Path], list[Desbloqueio]]] = {
 
 
 def _hora_valida(quando: Any) -> int:
-    """A hora, ou 0 ("sem data") se for negativa ou grande demais para o histórico."""
     try:
         return int(quando) if 0 <= quando < _HORA_MAXIMA else 0
     except (TypeError, ValueError, OverflowError):
@@ -306,12 +295,7 @@ def _hora_valida(quando: Any) -> int:
 
 
 def ler_ou_none(caminho: Path, formato: str) -> Optional[list[Desbloqueio]]:
-    """Como `ler`, mas diz quando a leitura falhou.
-
-    Devolve None se o arquivo não pôde ser lido ou entendido (em uso por outro
-    programa, gravado pela metade). Devolve ``[]`` se o arquivo não existe, se o
-    formato é desconhecido ou se ele foi lido sem nada desbloqueado. Nunca levanta.
-    """
+    """Como `ler`, mas diz quando a leitura falhou: None se o arquivo não pôde ser lido ou entendido (em uso, gravado pela metade); ``[]`` se não existe, o formato é desconhecido ou não há nada desbloqueado. Nunca levanta."""
     leitor = _LEITORES.get(formato)
     if leitor is None:
         logging.warning("Formato de conquistas desconhecido: %s", formato)
@@ -338,5 +322,4 @@ def ler_ou_none(caminho: Path, formato: str) -> Optional[list[Desbloqueio]]:
 
 
 def ler(caminho: Path, formato: str) -> list[Desbloqueio]:
-    """As conquistas desbloqueadas em ``caminho``. Nunca levanta."""
     return ler_ou_none(caminho, formato) or []

@@ -1,4 +1,4 @@
-"""O jogo da EA app no disco (conferido em 15/10/2026).
+"""O jogo da EA app no disco.
 
 - registro: `HKLM\\SOFTWARE\\(WOW6432Node\\)EA Games\\<jogo>`, valores `DisplayName` e `Install Dir`;
   é a chave que torna um jogo candidato (o `installerdata.xml` sozinho vem junto em cópias da pasta);
@@ -40,7 +40,6 @@ def normalizar(titulo: str) -> str:
 
 
 def _pasta_normalizada(texto: str) -> Optional[str]:
-    """None para vazio e para raiz de unidade (uma chave estragada pegaria o disco todo)."""
     if not texto.strip():
         return None
     pasta = Path(texto.strip())
@@ -50,7 +49,6 @@ def _pasta_normalizada(texto: str) -> Optional[str]:
 
 
 def chaves_do_registro() -> list[tuple[str, str]]:
-    """``(DisplayName, Install Dir)`` de cada jogo, sem repetir; erro → ``[]``."""
     achados: list[tuple[str, str]] = []
     try:
         for caminho in _CHAVES:
@@ -114,7 +112,6 @@ def candidato(
     pastas: list[Path],
     chaves: Callable[[], list[tuple[str, str]]] = chaves_do_registro,
 ) -> Optional[Candidato]:
-    """O jogo cuja chave `EA Games` aponta para uma das ``pastas`` (a do exe e as acima)."""
     try:
         lidas = chaves()
     except Exception as erro:  # pylint: disable=broad-exception-caught

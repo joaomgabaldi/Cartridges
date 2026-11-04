@@ -1,18 +1,10 @@
 """A conta Epic do usuário: guarda, renovação e desconexão.
 
-O login é o do Epic Games Launcher, como fazem o legendary e o Heroic (pesquisa
-de 04/10, seção 2.2): a página de login da Epic mostra um código, que o usuário
-cola na janela do app (`epic/janela.py`). O app nunca vê a senha.
+O login é o do Epic Games Launcher, como no legendary e no Heroic: a página de login da Epic mostra um código, que o usuário cola na janela do app (`epic/janela.py`). O app nunca vê a senha.
 
-Só a chave de renovação é guardada, cifrada pelo DPAPI (``utils/dpapi.py``), em
-``contas/epic.json`` — fora do backup. O token de acesso fica só na memória.
+Só a chave de renovação é guardada, cifrada pelo DPAPI (``utils/dpapi.py``) em ``contas/epic.json``, fora do backup; o token de acesso fica só na memória. A Epic troca a chave a cada uso e a antiga ainda foi aceita logo depois, sem garantia de por quanto tempo: a nova é sempre gravada e as renovações vão uma de cada vez.
 
-A Epic troca a chave de renovação a cada uso. A antiga ainda foi aceita logo
-depois (prova de 05/10), mas nada garante por quanto tempo: a nova é gravada
-sempre, e as renovações vão uma de cada vez, para nunca depender da antiga.
-
-Nada de token, código, chave, ``account_id`` ou corpo de resposta vai para o log:
-só o tipo da exceção, o status HTTP e o ``errorCode`` da Epic.
+Nada de token, código, chave, ``account_id`` ou corpo de resposta vai para o log: só o tipo da exceção, o status HTTP e o ``errorCode`` da Epic.
 """
 
 import base64
@@ -45,7 +37,6 @@ PAGINA_DE_LOGIN = "https://www.epicgames.com/id/login?redirectUrl=" + urllib.par
 _OAUTH = "https://account-public-service-prod03.ol.epicgames.com/account/api/oauth"
 TOKEN = f"{_OAUTH}/token"
 ENCERRAR = f"{_OAUTH}/sessions/kill/"
-# Renova o que vence em menos que isto.
 _MARGEM = 5 * 60
 _TEMPO = 15
 _UMA_HORA = 3600
@@ -83,7 +74,6 @@ class _Sessao:
 _trava = threading.Lock()
 _renovando = threading.Lock()
 _sessao: Optional[_Sessao] = None
-# Um aviso de desconexão por execução (volta a valer depois de um login).
 _avisou = False
 _ouvintes: list[Callable[[], None]] = []
 
@@ -93,7 +83,6 @@ def _arquivo():
 
 
 def _pedir(metodo: str, url: str, **kwargs: Any) -> requests.Response:
-    """O único ponto de rede da conta. O corpo é lido sob um teto antes de devolver."""
     return download.request_capped(metodo, url, timeout=_TEMPO, **kwargs)
 
 
@@ -173,7 +162,6 @@ def _salvar(sessao: _Sessao) -> None:
 
 
 def carregar() -> None:
-    """Lê a conta guardada, sem rede. Ilegível ou de outro PC = não conectada."""
     global _sessao  # pylint: disable=global-statement
     try:
         dados = json.loads(_arquivo().read_text(encoding="utf-8"))
@@ -206,8 +194,7 @@ def account_id() -> Optional[str]:
 
 
 def ao_mudar(ouvinte: Callable[[], None]) -> Callable[[], None]:
-    """Registra `ouvinte` (chamado na thread principal a cada conexão ou
-    desconexão) e devolve a função que o remove."""
+    """Registra `ouvinte` (chamado na thread principal a cada conexão ou desconexão) e devolve a função que o remove."""
     return aviso_da_conta.inscrever(_ouvintes, ouvinte)
 
 
@@ -238,11 +225,7 @@ def _esquecer_a_biblioteca() -> None:
 
 
 def conectar(codigo: str) -> None:
-    """Troca o código colado pelas chaves, guarda e conecta.
-
-    Levanta ``CodigoRecusado``, ``requests.RequestException``, ``ValueError`` ou
-    ``KeyError``: quem chama é a janela de login, que mostra o que aconteceu.
-    """
+    """Troca o código colado pelas chaves, guarda e conecta. Levanta ``CodigoRecusado``, ``requests.RequestException``, ``ValueError`` ou ``KeyError`` (a janela de login mostra o que aconteceu)."""
     global _sessao, _avisou  # pylint: disable=global-statement
     try:
         corpo = _token({"grant_type": "authorization_code", "code": codigo})
@@ -268,8 +251,7 @@ def conectar(codigo: str) -> None:
 def autorizacao(forcar: bool = False) -> Optional[str]:
     """O token de acesso para a API da Epic, renovando se venceu.
 
-    Roda em thread. ``None``: sem conta, falha (logada) ou renovação recusada
-    (a conta já foi desconectada e o usuário avisado).
+    Roda em thread. ``None``: sem conta, falha (logada) ou renovação recusada (conta desconectada e usuário avisado).
     """
     # Mesmas garantias do Xbox: rede fora de `_trava`; `_renovando` serializa
     # as renovações; a publicação confere que a sessão ainda é a mesma.

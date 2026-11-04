@@ -1,25 +1,10 @@
 """O vigia da sessão: percebe, durante a partida, as conquistas que acabaram de sair.
 
-O jeito é o do Hydra (`achievement-watcher-manager.ts`): de tempos em tempos,
-olhar o `mtime` de cada arquivo de conquista e reler só o que mudou. Aqui o
-vigia só existe enquanto a sessão de um jogo aberto pelo Cartridges está
-aberta, e o que já estava nos arquivos quando a sessão começou entra no
-histórico em silêncio — é a base, não novidade.
+Como no Hydra (`achievement-watcher-manager.ts`): olha de tempos em tempos o `mtime` de cada arquivo de conquista e relê só o que mudou. Só existe enquanto a sessão de um jogo aberto pelo app está aberta, e o que já estava nos arquivos no começo entra no histórico em silêncio (é a base).
 
-Roda na thread principal (`QTimer`), como manda o histórico:
-cada olhada é um punhado de `stat`, e a releitura é de arquivos pequenos. Um
-arquivo pode aparecer no meio da partida (a primeira conquista de um jogo
-novo), então a lista de arquivos é refeita a cada `REBUSCA` olhadas.
+Roda na thread principal (`QTimer`): cada olhada é um punhado de `stat` e a releitura é de arquivos pequenos. A lista de arquivos é refeita a cada `REBUSCA` olhadas, pois um arquivo pode surgir no meio da partida (a primeira conquista de um jogo novo).
 
-Nos jogos da Steam, o estado vem do `UserGameStats` que a própria Steam grava
-no instante do desbloqueio. Ela cria esse arquivo ao abrir o jogo, já com as
-conquistas antigas: por isso ele é conhecido desde o início da sessão, e
-quando aparece entra em silêncio, como a base.
-
-Tudo o que o vigia lê vem de arquivos de emulador ou da Steam, então quando lê
-algo num jogo sem fonte gravada ele grava a fonte `steam:<appid>`: um emulador
-que aparece no meio da partida dá fonte ao jogo sem esperar a varredura. Uma
-fonte já gravada nunca é trocada por ele.
+Nos jogos da Steam o estado vem do `UserGameStats`, gravado no desbloqueio; a Steam o cria ao abrir o jogo já com as conquistas antigas, então ao aparecer ele entra em silêncio. Tudo o que o vigia lê vem de emulador ou da Steam: ao ler algo num jogo sem fonte ele grava `steam:<appid>`, dando fonte ao emulador que aparece no meio da partida; uma fonte já gravada nunca é trocada.
 """
 
 import logging
@@ -45,22 +30,17 @@ MARGEM_DA_STEAM = 5 * 60
 
 @dataclass(frozen=True)
 class Desbloqueada:
-    """Uma conquista que acabou de sair, pronta para o aviso."""
 
     nome: str
     # None quando o jogo não tem catálogo: sem nome nem ícone para mostrar.
     info: Optional[ConquistaInfo]
-    # Se foi a que fechou 100% do jogo.
     completou: bool
 
 
 def acompanha(game: Any) -> bool:
     """Se o vigia de arquivos acompanha este jogo: appID válido e conquistas ligadas.
 
-    Jogo do Xbox/Game Pass (o executável é um AUMID) e jogo aberto pelo launcher
-    da Epic ou da Ubisoft ficam de fora: eles têm vigia próprio, e um arquivo
-    velho de emulador com o mesmo appID não os faz da Steam.
-    Só o texto do executável é olhado, nunca o disco.
+    Xbox/Game Pass (executável é AUMID) e jogos abertos pelo launcher da Epic ou da Ubisoft ficam de fora (vigia próprio). Só o texto do executável é olhado, nunca o disco.
     """
     return (
         arquivos.appid_valido(getattr(game, "steam_appid", None))
@@ -73,24 +53,18 @@ def acompanha(game: Any) -> bool:
 
 
 def _gravada_da_ea(game: Any) -> bool:
-    """Jogo da EA, pela fonte gravada no histórico (nunca o disco do jogo)."""
     fonte = fontes.gravada(game)
     return fonte is not None and fonte.tipo == fontes.EA
 
 
 def completou(antes: Optional[progresso.Progresso], depois: Optional[progresso.Progresso]) -> bool:
-    """Se o jogo acabou de chegar a 100%."""
     return bool(depois is not None and depois.completo and not (antes is not None and antes.completo))
 
 
 def para_avisar(
     entraram: list[str], lidos: list[formatos.Desbloqueio], limite: Optional[float]
 ) -> list[str]:
-    """As que entraram, da mais antiga para a mais nova, sem as de antes de ``limite``.
-
-    Conquista com hora anterior ao limite veio de outro aparelho (ou a Steam acabou
-    de sincronizá-la): entra no histórico, mas não é aviso. Sem hora, avisa.
-    """
+    """As que entraram, da mais antiga para a mais nova, sem as de antes de ``limite`` (de outro aparelho, ou que a Steam acabou de sincronizar: entram no histórico, mas não são aviso). Sem hora, avisa."""
     horas = {d.nome.strip().upper(): d.quando for d in lidos}
     return [
         nome
@@ -134,10 +108,8 @@ class Vigia:
         self.game = game
         self._avisar = avisar
         self._relogio = relogio
-        # A hora em que a sessão começou; None antes de `iniciar`.
         self._inicio: Optional[float] = None
         self._arquivos: list[ArquivoDeConquista] = []
-        # O mtime de cada arquivo na última leitura que foi guardada com sucesso.
         self._mtimes: dict[str, Optional[int]] = {}
         # Arquivos cuja base ainda não foi lida: lidos em silêncio até dar certo.
         self._pendentes: set[str] = set()
@@ -178,7 +150,6 @@ class Vigia:
             self._fonte.stop()
             self._fonte = None
 
-    # -- o que cada tipo de fonte troca (o vigia da Ubisoft é uma subclasse) ----------
 
     def _acompanha(self) -> bool:
         return acompanha(self.game)
@@ -187,14 +158,12 @@ class Vigia:
         return arquivos.arquivos_do_jogo(str(self.game.steam_appid), self.game.executable)
 
     def _esperados(self) -> list[ArquivoDeConquista]:
-        """Arquivos que ainda não existem e, quando aparecerem, entram em silêncio."""
         return arquivos.da_steam_esperados(str(self.game.steam_appid), self.game.executable)
 
     def _ler(self, achado: ArquivoDeConquista) -> Optional[list[formatos.Desbloqueio]]:
         return formatos.ler_ou_none(achado.caminho, achado.formato)
 
     def _fonte_ao_registrar(self) -> str:
-        """A fonte gravada quando o vigia lê algo num jogo ainda sem fonte."""
         return f"steam:{self.game.steam_appid}"
 
     def _novo_em_silencio(self) -> bool:
@@ -205,7 +174,6 @@ class Vigia:
         return False
 
     def _desistiu(self, chave: str, rebusca: bool) -> bool:
-        """Se o arquivo falhou vezes demais para ser tentado neste tique."""
         return self._falhas.get(chave, 0) >= TENTATIVAS and not rebusca
 
     def _resultado(self, chave: str, deu_certo: bool) -> None:
@@ -225,11 +193,7 @@ class Vigia:
         return historico.contem(self.game.game_id, lidos)
 
     def _base(self) -> None:
-        """O que já está nos arquivos entra no histórico em silêncio.
-
-        Arquivo que não pôde ser lido agora fica pendente: continua em silêncio
-        até uma leitura dar certo, para o que ele já tinha não virar aviso.
-        """
+        """O que já está nos arquivos entra no histórico em silêncio; o que não pôde ser lido fica pendente, também em silêncio, até uma leitura dar certo."""
         lidos_por_arquivo: list[tuple[ArquivoDeConquista, Optional[int], list]] = []
         for achado in self._arquivos:
             atual = _mtime(achado.caminho)
@@ -250,7 +214,6 @@ class Vigia:
                 self._pendentes.add(str(achado.caminho))
 
     def _retomar_base(self, achado: ArquivoDeConquista, atual: Optional[int]) -> None:
-        """Nova tentativa de ler, em silêncio, um arquivo que ficou sem base."""
         chave = str(achado.caminho)
         if atual is None:
             if chave in self._caminhos_esperados:
@@ -272,7 +235,6 @@ class Vigia:
             self._mtimes[chave] = atual
 
     def _olhar(self) -> bool:
-        """Um tique. O timer só para em `parar`."""
         try:
             self._olhadas += 1
             rebusca = self._olhadas % REBUSCA == 0
@@ -289,9 +251,7 @@ class Vigia:
                 chave = str(achado.caminho)
                 atual = _mtime(achado.caminho)
                 if chave in self._pendentes:
-                    # Ausente não faz E/S: `_retomar_base` zera as falhas já neste
-                    # tique, em vez de esperar a rebusca (30 s) para o arquivo que
-                    # volta ser lido.
+                    # Ausente não faz E/S: `_retomar_base` zera as falhas já neste tique, sem esperar a rebusca (30 s).
                     if atual is None or not self._desistiu(chave, rebusca):
                         self._retomar_base(achado, atual)
                 elif atual is None:
@@ -340,20 +300,14 @@ class Vigia:
         self._avisar(desbloqueadas(avisaveis, por_nome, completou(antes, progresso.do_jogo(self.game))))
 
     def _chave_do_catalogo(self) -> str:
-        """A chave do catálogo da fonte gravada, a mesma que `progresso.do_jogo` usa.
-
-        Assim os títulos e o `completou` saem do mesmo catálogo. Sem fonte
-        gravada, o appID do jogo.
-        """
+        """A chave do catálogo da fonte gravada, a mesma de `progresso.do_jogo` (títulos e `completou` saem do mesmo catálogo); sem fonte, o appID do jogo."""
         fonte = fontes.gravada(self.game)
         return fontes.chave_do_catalogo(fonte) if fonte is not None else str(self.game.steam_appid)
 
     def _limite(self) -> Optional[float]:
         """A hora abaixo da qual uma conquista da Steam não é desta sessão.
 
-        Ao abrir o jogo a Steam baixa do servidor o que foi ganho em outro
-        aparelho e regrava o arquivo: essas conquistas têm horas antigas. Só vale
-        para jogos da Steam; a hora dos emuladores é menos confiável.
+        Ao abrir o jogo a Steam baixa o que foi ganho em outro aparelho e regrava o arquivo, com horas antigas. Só vale para a Steam; a hora dos emuladores é menos confiável.
         """
         if self._inicio is None or not arquivos.eh_jogo_da_steam(self.game.executable):
             return None

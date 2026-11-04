@@ -1,13 +1,9 @@
 """A API da EA: biblioteca e conjunto de conquistas (Juno), catálogo e progresso (API antiga).
 
-- A Juno (``service-aggregation-layer.juno.ea.com``, GraphQL) dá o ``psd`` da conta, a
-  biblioteca (título → ofertas) e, por oferta, o id do conjunto de conquistas.
-- A API antiga (``achievements.gameservices.ea.com``) devolve num pedido só o catálogo e o
-  progresso do conjunto, em português. Prova em ``docs/superpowers/prova-ea/``.
+- A Juno (``service-aggregation-layer.juno.ea.com``, GraphQL) dá o ``psd`` da conta, a biblioteca (título → ofertas) e, por oferta, o id do conjunto de conquistas.
+- A API antiga (``achievements.gameservices.ea.com``) devolve num pedido só o catálogo e o progresso do conjunto, em português.
 
-Roda só em thread (varredura e vigia): faz rede e pode esperar o limitador. Todo dado que
-vem da rede ou do cache é tratado como não confiável. Nada de token, persona, psd, consulta,
-corpo ou título vai para o log: só o tipo da exceção e o status.
+Roda só em thread (faz rede e pode esperar o limitador). Dado da rede ou do cache é não confiável; nada de token, persona, psd, consulta, corpo ou título vai para o log, só o tipo da exceção e o status.
 """
 
 import json
@@ -95,7 +91,6 @@ def chave_do_catalogo(conjunto: str) -> str:
 
 
 def _requisitar(metodo: str, url: str, **kwargs: Any) -> requests.Response:
-    """O único ponto de rede. O corpo é lido sob um teto antes de devolver."""
     return download.request_capped(metodo, url, timeout=_TEMPO, **kwargs)
 
 
@@ -156,15 +151,11 @@ def _autorizado(metodo: str, url: str, cabecalhos: Callable[[str], dict], **kwar
         with _trava_do_acesso:
             ja_renovado = not forcar and acesso == _acesso_ja_renovado
         if ja_renovado:
-            # No máximo uma renovação forçada por acesso: sem isto, uma recusa persistente
-            # faria o vigia gastar um `remid` a cada 15 s.
+            # No máximo uma renovação forçada por acesso: senão uma recusa persistente faria o vigia gastar um `remid` a cada 15 s.
             logging.info("EA: este acesso já foi renovado à força; sem nova tentativa")
             return None
     logging.info("EA: acesso recusado duas vezes")
     return None
-
-
-# --- Juno -------------------------------------------------------------------
 
 
 def _juno(consulta: str, variaveis: Optional[dict[str, str]] = None) -> Optional[dict]:
@@ -229,9 +220,6 @@ def conjunto_da_oferta(oferta: str) -> Optional[str]:
         if conjunto_valido(identificador):
             return identificador
     return ""
-
-
-# --- arquivos de cache ------------------------------------------------------
 
 
 def _ler_dicionario(arquivo: Path) -> dict:
@@ -335,9 +323,6 @@ def guardar_conjunto(pasta: str, conjunto: str) -> None:
         _gravar(_arquivo_dos_jogos(), dados)
 
 
-# --- API antiga -------------------------------------------------------------
-
-
 def _porcentagem(valor: Any) -> Optional[float]:
     if not isinstance(valor, str):
         return None
@@ -384,7 +369,6 @@ def _conquista(chave: Any, item: Any) -> Optional[tuple[ConquistaInfo, Optional[
 
 
 def _antiga(conjunto: str) -> Optional[tuple[list[ConquistaInfo], list[Desbloqueio]]]:
-    """Catálogo e progresso do conjunto, num pedido só. Levanta ``FalhaDeRede``."""
     persona = conta.persona()
     if not conjunto_valido(conjunto) or not persona:
         return None
@@ -416,15 +400,8 @@ def _antiga(conjunto: str) -> Optional[tuple[list[ConquistaInfo], list[Desbloque
     return infos, feitas
 
 
-# --- o que a varredura e o vigia pedem --------------------------------------
-
-
 def ler(conjunto: str) -> Optional[Leitura]:
-    """Catálogo e progresso da conta; guarda o catálogo no cache.
-
-    Levanta ``FalhaDeRede``. ``None``: sem conta, acesso recusado, conjunto inválido
-    ou resposta inválida.
-    """
+    """Catálogo e progresso da conta; guarda o catálogo no cache. Levanta ``FalhaDeRede``; ``None``: sem conta, acesso recusado, conjunto ou resposta inválidos."""
     lido = _antiga(conjunto)
     if lido is None:
         return None
@@ -441,6 +418,5 @@ def ler(conjunto: str) -> Optional[Leitura]:
 
 
 def desbloqueadas(conjunto: str) -> Optional[list[Desbloqueio]]:
-    """Só o progresso, para o vigia. Levanta ``FalhaDeRede``."""
     lido = _antiga(conjunto)
     return None if lido is None else lido[1]

@@ -1,17 +1,8 @@
 """O vigia da sessão para os jogos cujas conquistas vêm de uma conta (Xbox, Epic, EA).
 
-Não há arquivo local: a cada `INTERVALO` segundos, uma consulta às conquistas
-desbloqueadas da conta (`loja.desbloqueadas`), numa thread, com o resultado
-aplicado na thread principal. O primeiro resultado é a base (silêncio); depois,
-o que entra no histórico é novidade — salvo o que tem hora anterior ao início
-da sessão, que veio de outro aparelho e entra em silêncio, com a mesma margem
-da Steam. Só pulso: a Xbox Game Bar e os overlays da Epic e da EA já mostram o aviso deles.
+Sem arquivo local: a cada `INTERVALO` segundos, uma thread consulta as conquistas desbloqueadas da conta (`loja.desbloqueadas`) e o resultado é aplicado na principal. O primeiro resultado é a base (silêncio); depois, o que entra no histórico é novidade, salvo o que tem hora anterior ao início da sessão (de outro aparelho, mesma margem da Steam). Só pulso: a Xbox Game Bar e os overlays da Epic e da EA já mostram o aviso.
 
-Não há leitura final aqui: o fim da sessão já chama a varredura do jogo, que lê
-a conta de novo (`varredura.varrer_jogo`).
-
-A loja é um dos módulos de `contas.lojas()`; sem loja passada, vale a da fonte
-gravada do jogo.
+Não há leitura final: o fim da sessão já chama a varredura do jogo (`varredura.varrer_jogo`). A loja é um módulo de `contas.lojas()`; sem loja passada, vale a da fonte gravada.
 """
 
 import logging
@@ -29,8 +20,6 @@ INTERVALO = 15
 
 
 def _em_thread(trabalho: Callable[[], Any], entregar: Callable[[Any], None]) -> None:
-    """Roda ``trabalho`` numa thread e ``entregar`` com o resultado, na thread principal."""
-
     def devolver(resultado: Any) -> bool:
         entregar(resultado)
         return False  # uma vez só
@@ -64,12 +53,10 @@ class Vigia:
         self._relogio = relogio
         self._em_thread = em_thread
         self._loja = loja
-        # A hora em que a sessão começou; None antes de `iniciar`.
         self._inicio: Optional[float] = None
         self._fonte_glib: Optional[Any] = None
         # O titleId (Xbox), namespace (Epic) ou conjunto (EA) da fonte gravada.
         self._id = ""
-        # Enquanto a base não foi gravada, o que chega entra em silêncio.
         self._base_feita = False
         self._pedindo = False
         # Muda a cada iniciar/parar: a resposta de um pedido de antes é descartada.
@@ -110,12 +97,10 @@ class Vigia:
         self._pedindo = False
 
     def _tique(self) -> bool:
-        """Callback do timer: nunca levanta."""
         self._olhar()
         return True
 
     def _olhar(self) -> None:
-        """Pede a lista da conta, se não há um pedido em andamento. Nunca levanta."""
         if not self.ativo or self._pedindo:
             return
         self._pedindo = True
@@ -140,7 +125,6 @@ class Vigia:
             return None
 
     def _receber(self, geracao: int, lidos: Optional[list[Desbloqueio]]) -> None:
-        """Roda na thread principal, com o resultado do pedido. Nunca levanta."""
         try:
             if geracao != self._geracao or not self.ativo:
                 return

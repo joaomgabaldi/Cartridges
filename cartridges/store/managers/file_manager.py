@@ -22,11 +22,7 @@ from uuid import uuid4
 
 from cartridges import shared
 
-# Re-exported so tests (and this module's own writer below) keep one name for
-# "everything a record persists". The tuple itself lives beside Jogo because it
-# is also the whitelist of what `Jogo.update_values` accepts — the two lists
-# drifting apart is how a field could be saved but never loadable, or vice
-# versa. The edit-dialog guard in the tests asserts against this import path.
+# Reexportado: os testes e o gravador abaixo usam um só nome; a tupla mora junto de `Jogo` porque também é a lista do que `Jogo.update_values` aceita.
 from cartridges.jogo import PERSISTED_ATTRS, Jogo
 from cartridges.store.managers.async_manager import AsyncManager
 from cartridges.store.managers.hltb_manager import HLTBManager
@@ -34,11 +30,8 @@ from cartridges.store.managers.steam_api_manager import SteamAPIManager
 
 
 class FileManager(AsyncManager):
-    """Manager in charge of saving a game to a file"""
 
-    # Saving last: writing before the online lookups finish would persist a
-    # game without the metadata that is about to arrive, and the next launch
-    # would show it as permanently missing.
+    # Grava por último: antes das consultas online o jogo seria salvo sem os metadados que estão para chegar.
     run_after = (SteamAPIManager, HLTBManager)
     signals = {"salvar"}
     executor = "gravacao"
@@ -51,16 +44,8 @@ class FileManager(AsyncManager):
 
         attrs = PERSISTED_ATTRS
 
-        # Write to a temp file, then replace: an interrupted write (crash,
-        # power loss) can't leave a truncated JSON behind.
-        #
-        # The temp name carries a unique suffix. This manager is asynchronous,
-        # so two saves of the *same* game (the update checker raising a notice
-        # while a play session persists its minute, say) run on two Gio.Task
-        # threads at once. With a single fixed `<id>.json.tmp` they opened the
-        # same file and interleaved their writes, and whichever renamed second
-        # published whatever mixture was on disk — the atomic replace protected
-        # against a torn write but not against two writers.
+        # Grava num arquivo temporário e troca: uma escrita interrompida não deixa JSON truncado.
+        # O nome tem sufixo único: duas gravações do mesmo jogo ao mesmo tempo (threads) intercalariam as escritas no mesmo `.tmp`.
         path = shared.games_dir / f"{game.game_id}.json"
         tmp_path = path.with_name(f"{game.game_id}.{uuid4().hex}.json.tmp")
         try:
@@ -73,7 +58,6 @@ class FileManager(AsyncManager):
                 )
             tmp_path.replace(path)
         except BaseException:
-            # A failed write must not leave its scratch file in the games
-            # folder, where the loader would have to learn to skip it.
+            # Uma escrita que falha não deixa o temporário na pasta de jogos.
             tmp_path.unlink(missing_ok=True)
             raise

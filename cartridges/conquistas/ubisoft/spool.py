@@ -1,11 +1,6 @@
 """O progresso de um jogo da Ubisoft Connect: o arquivo `<productId>.spool`.
 
-O Ubisoft Connect grava em `%LOCALAPPDATA%\\Ubisoft Game Launcher\\spool\\<conta>\\` o
-histórico das conquistas da conta para cada jogo aberto neste PC, e o regrava no instante
-do desbloqueio (conferido em 05/10/2026). O formato é protobuf sem schema: o campo
-1, repetido, é uma conquista; dentro dele, o campo 1 traz o id — numa submensagem,
-`1:{1:id}`, como no arquivo real; o PSerban93/Achievements (MIT) lê o id direto, `1:id`, e os
-dois são aceitos — e o campo 2 traz a hora do desbloqueio, em segundos Unix.
+O Ubisoft Connect grava em `%LOCALAPPDATA%\\Ubisoft Game Launcher\\spool\\<conta>\\` o histórico das conquistas da conta para cada jogo aberto neste PC, regravado no instante do desbloqueio. O formato é protobuf sem schema: o campo 1, repetido, é uma conquista; dentro dele, o campo 1 traz o id (numa submensagem, `1:{1:id}`, como no arquivo real; o PSerban93/Achievements (MIT) lê `1:id` direto, e os dois são aceitos) e o campo 2 a hora do desbloqueio, em segundos Unix.
 """
 
 import logging
@@ -82,7 +77,6 @@ def _segundos(hora: Optional[int]) -> int:
 
 
 def _registro(dados: bytes, inicio: int, fim: int) -> Optional[Desbloqueio]:
-    """Uma conquista, ou None se o registro não tiver um id que preste."""
     try:
         campos = _campos(dados, inicio, fim)
     except _Invalido:
@@ -107,10 +101,7 @@ def _registro(dados: bytes, inicio: int, fim: int) -> Optional[Desbloqueio]:
 
 
 def ler_ou_none(caminho: Path) -> Optional[list[Desbloqueio]]:
-    """As conquistas do `.spool`, ou None se ele não pôde ser lido agora.
-
-    Arquivo ausente é o caso normal (jogo nunca aberto neste PC): None sem log.
-    """
+    """As conquistas do `.spool`, ou None se ele não pôde ser lido agora (arquivo ausente é o caso normal: jogo nunca aberto neste PC, None sem log)."""
     try:
         with open(caminho, "rb") as arquivo:
             dados = arquivo.read(_TAMANHO_MAXIMO + 1)

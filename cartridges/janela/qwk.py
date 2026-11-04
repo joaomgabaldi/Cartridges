@@ -2,10 +2,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Registra os tipos QML do QWindowKit (WindowAgent) no motor QML criado pelo Python.
+"""Registra os tipos QML do QWindowKit (WindowAgent) no motor QML.
 
-A `qwk_ponte.dll` (build-aux/windows/qwk/compilar.bat) recebe o ponteiro C++ do motor,
-obtido pelo shiboken6; não há binding gerado.
+A `qwk_ponte.dll` (build-aux/windows/qwk/compilar.bat) recebe o ponteiro C++ do motor, obtido pelo shiboken6.
 """
 
 import ctypes
@@ -19,7 +18,6 @@ from PySide6.QtQml import QQmlEngine
 
 
 def registrar(motor: QQmlEngine) -> None:
-    # As dependências (Qt6Core/Gui/Qml/Quick) são as DLLs que o próprio PySide6 traz.
     os.add_dll_directory(str(Path(PySide6.__file__).parent))
     ponte = ctypes.CDLL(str(Path(__file__).with_name("qwk_ponte.dll")))
     ponte.qwk_registrar.argtypes = [ctypes.c_void_p]

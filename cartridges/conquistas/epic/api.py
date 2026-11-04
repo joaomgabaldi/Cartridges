@@ -1,19 +1,12 @@
 """A API da Epic: catálogo de conquistas, progresso da conta e a biblioteca.
 
-É o GraphQL da loja da Epic (`store.epicgames.com/graphql`), que só aceita consultas
-registradas (*persisted queries*, pelo hash), por GET — os hashes são os que o achievist
-usa (`app/platforms/epic.py`). Prova em ``docs/superpowers/prova-epic/resultado.md``.
+É o GraphQL da loja (`store.epicgames.com/graphql`), que só aceita consultas registradas (*persisted queries*, pelo hash), por GET; os hashes são os do achievist (`app/platforms/epic.py`).
 
 - O catálogo é pedido por namespace (o ``sandboxId``), sem login, e traz o ``productId``.
-- O progresso é pedido por ``productId`` e só reconhece a conta com o token no cookie
-  ``EPIC_EG1``, como o site da Epic faz. A resposta diz se reconheceu
-  (``relationship: SELF``); com a conta reconhecida, ``ServiceError`` é "nunca jogou".
-- A biblioteca da conta (com o token no cabeçalho) liga o ``AppName`` dos atalhos antigos
-  ao namespace.
+- O progresso é por ``productId`` e só reconhece a conta com o token no cookie ``EPIC_EG1``; a resposta diz se reconheceu (``relationship: SELF``), e com a conta reconhecida ``ServiceError`` é "nunca jogou".
+- A biblioteca da conta (token no cabeçalho) liga o ``AppName`` dos atalhos antigos ao namespace.
 
-Roda só em thread (varredura e vigia): faz rede e pode esperar o limitador. Todo dado que
-vem da rede ou do cache é tratado como não confiável. Nada de token, variáveis ou corpo vai
-para o log: só o tipo da exceção e o status.
+Roda só em thread (faz rede e pode esperar o limitador). Dado da rede ou do cache é não confiável; nada de token, variáveis ou corpo vai para o log, só o tipo da exceção e o status.
 """
 
 import json
@@ -97,7 +90,6 @@ def chave_do_catalogo(ns: str) -> str:
 
 
 def _requisitar(metodo: str, url: str, **kwargs: Any) -> requests.Response:
-    """O único ponto de rede. O corpo é lido sob um teto antes de devolver."""
     return download.request_capped(metodo, url, timeout=_TEMPO, **kwargs)
 
 
@@ -128,8 +120,7 @@ def _json(resposta: requests.Response) -> Optional[Any]:
 
 
 def _sem_autorizacao() -> None:
-    """Sem token: sem conta (ou recusada e já desconectada) é None; conta ainda
-    conectada é a renovação que falhou por rede (Ruling 5 da fase 4)."""
+    """Sem token: sem conta (ou recusada e já desconectada) é None; conta ainda conectada é a renovação que falhou por rede."""
     if conta.conectada():
         logging.info("Epic: a renovação do acesso falhou")
         raise FalhaDeRede()
@@ -145,7 +136,6 @@ def _caminho(dados: Any, *chaves: str) -> Any:
 
 
 def _consulta(operacao: tuple[str, str], variaveis: dict[str, str], acesso: Optional[str] = None) -> Optional[dict]:
-    """Uma consulta registrada na loja. ``acesso`` vai no cookie do site."""
     nome, hash_ = operacao
     compacto = {"separators": (",", ":")}
     params = {
@@ -170,9 +160,6 @@ def _consulta(operacao: tuple[str, str], variaveis: dict[str, str], acesso: Opti
         return None
     dados = corpo.get("data")
     return dados if isinstance(dados, dict) else None
-
-
-# --- catálogo ---------------------------------------------------------------
 
 
 def _texto(item: dict, chave: str, reserva: str) -> Optional[str]:
@@ -239,9 +226,6 @@ def _catalogo(ns: str) -> Optional[tuple[str, list[ConquistaInfo]]]:
     return produto, infos
 
 
-# --- progresso --------------------------------------------------------------
-
-
 def _feitas(lista: Any) -> list[Desbloqueio]:
     achados = []
     for item in lista if isinstance(lista, list) else []:
@@ -256,7 +240,6 @@ def _feitas(lista: Any) -> list[Desbloqueio]:
 
 
 def _desbloqueios(produto: str) -> Optional[list[Desbloqueio]]:
-    """O progresso da conta no produto. Levanta ``FalhaDeRede``."""
     conta_id = conta.account_id()
     if not conta_id:
         return None
@@ -282,8 +265,7 @@ def _desbloqueios(produto: str) -> Optional[list[Desbloqueio]]:
         with _trava_do_acesso:
             ja_renovado = not forcar and acesso == _acesso_ja_renovado
         if ja_renovado:
-            # No máximo uma renovação forçada por acesso: sem isto, uma loja que
-            # mudou o cookie faria o vigia renovar (e gravar a chave) a cada 15 s.
+            # No máximo uma renovação forçada por acesso: senão uma loja que mudou o cookie faria o vigia renovar a cada 15 s.
             logging.info("Epic: este acesso já foi renovado à força; sem nova tentativa")
             return None
     else:
@@ -298,9 +280,6 @@ def _desbloqueios(produto: str) -> Optional[list[Desbloqueio]]:
         logging.info("Epic: progresso fora do formato")
         return None
     return _feitas(_caminho(resultado, "data", "playerAchievements"))
-
-
-# --- produto de cada namespace (o progresso é por produto) ------------------
 
 
 def _arquivo_dos_produtos() -> Path:
@@ -339,15 +318,8 @@ def _guardar_produto(ns: str, produto: str) -> None:
             _gravar(_arquivo_dos_produtos(), dados)
 
 
-# --- o que a varredura e o vigia pedem --------------------------------------
-
-
 def ler(ns: str) -> Optional[Leitura]:
-    """Catálogo e progresso da conta; guarda o catálogo no cache.
-
-    Levanta ``FalhaDeRede``. ``None``: sem conta, desconectou, namespace inválido
-    ou resposta inválida.
-    """
+    """Catálogo e progresso da conta; guarda o catálogo no cache. Levanta ``FalhaDeRede``; ``None``: sem conta, desconectou, namespace ou resposta inválidos."""
     if not namespace_valido(ns):
         return None
     lido = _catalogo(ns)
@@ -376,7 +348,6 @@ def ler(ns: str) -> Optional[Leitura]:
 
 
 def desbloqueadas(ns: str) -> Optional[list[Desbloqueio]]:
-    """Só o progresso, para o vigia. Levanta ``FalhaDeRede``."""
     if not namespace_valido(ns):
         return None
     produto = _produto_guardado(ns)
@@ -389,9 +360,6 @@ def desbloqueadas(ns: str) -> Optional[list[Desbloqueio]]:
             return []
         _guardar_produto(ns, produto)
     return _desbloqueios(produto)
-
-
-# --- biblioteca -------------------------------------------------------------
 
 
 def _arquivo_da_biblioteca() -> Path:

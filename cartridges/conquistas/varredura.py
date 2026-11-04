@@ -1,40 +1,12 @@
 """A passada de abertura: lê as conquistas de cada jogo e guarda no histórico.
 
-É o `preSearchAchievements` do Hydra Launcher (hydralauncher/hydra, licença
-MIT, `src/main/services/achievements/`) no molde de `utils/hltb_backfill.py`:
-uma vez por execução, em segundo plano, aparecendo em "Tarefas em andamento".
-Entram os jogos da biblioteca e os de Jogos Zerados — as pastas do AppData
-sobrevivem à desinstalação, então um zerado antigo ainda recupera o que tinha.
+Adaptada do `preSearchAchievements` do Hydra Launcher (hydralauncher/hydra, MIT, `src/main/services/achievements/`): uma vez por execução, em segundo plano, em "Tarefas em andamento". Entram os jogos da biblioteca e os de Jogos Zerados (as pastas do AppData sobrevivem à desinstalação).
 
-A leitura roda numa thread, em duas passadas. A primeira decide a fonte das
-conquistas de cada jogo (`fontes.do_jogo`: a conta de uma loja — Xbox, Epic, EA;
-ver `contas.py` —, Steam/emulador, Ubisoft ou nenhuma) e lê o que está no disco:
-os arquivos dos emuladores e os da Ubisoft Connect (`.spool` e o catálogo do ZIP); a gravação do histórico, com a fonte (ou o esquecimento
-dela, para o jogo sem fonte), volta para a thread principal, onde dá para
-conferir que o jogo ainda está na store. Sem essa conferência, um jogo
-excluído no meio da passada ganharia de volta o arquivo que o Excluir acabou
-de apagar. A segunda vai à rede: renova o catálogo dos jogos da Steam e lê as
-contas das lojas (Xbox, Epic, EA) dos jogos que vêm delas. Quando um pedido falha
-por rede, os jogos seguintes (de qualquer fonte) ficam só com o cache e o
-arquivo do jogo. Jogo sem fonte não vai à rede.
+Duas passadas. A primeira decide a fonte de cada jogo (`fontes.do_jogo`) e lê o disco (emuladores, `.spool` e catálogo da Ubisoft); a gravação volta à thread principal, que confere se o jogo ainda está na store (senão um jogo excluído no meio ganharia de volta o arquivo recém-apagado). A segunda vai à rede: renova o catálogo da Steam e lê as contas das lojas (Xbox, Epic, EA). Quando um pedido falha por rede, os jogos seguintes ficam só com cache e arquivo; jogo sem fonte não vai à rede.
 
-A fonte de uma loja com conta só é gravada na segunda passada, junto com as
-conquistas da conta. A primeira leitura de uma fonte (o jogo ainda não tinha
-aquela loja como fonte, ou ela era de outra conta: conta recém-conectada, por
-exemplo) não conta no aviso, senão as conquistas antigas da conta apareceriam
-como novas.
+A fonte de uma loja com conta só é gravada na segunda passada. A primeira leitura de uma fonte (conta recém-conectada, por exemplo) não conta no aviso, senão as conquistas antigas da conta apareceriam como novas.
 
-Terminada a primeira passada, um aviso só com o que entrou desde a abertura
-anterior: o que foi jogado por fora do app. Ele não espera a rede; as
-conquistas novas das contas, que só chegam pela rede, saem num aviso próprio
-(um só, somando as lojas) no fim da segunda passada, com o mesmo texto. A primeira
-varredura de um jogo não conta — senão quem acabou de instalar receberia
-"quinhentas conquistas novas". Num jogo da Steam, também não conta a conquista
-com data anterior à varredura anterior: ela foi ganha em outro aparelho e só
-chegou agora porque a Steam deste PC criou o arquivo quando o jogo rodou aqui
-pela primeira vez (o mesmo critério do vigia, com a mesma margem). O mesmo vale para a Ubisoft, cuja
-hora também é confiável: o `.spool` nasce, ao abrir o jogo neste PC, com o que a
-conta já tinha.
+Ao fim da primeira passada sai um aviso só com o que entrou desde a abertura anterior (jogado fora do app); as novas das contas, que só chegam pela rede, saem num aviso próprio no fim da segunda. A primeira varredura de um jogo não conta. Na Steam e na Ubisoft (hora confiável), conquista com data anterior à varredura anterior também não: foi ganha em outro aparelho e só chegou porque o arquivo nasceu quando o jogo rodou aqui (mesmo critério e margem do vigia).
 """
 
 import logging
@@ -67,7 +39,6 @@ def participa(game: Any) -> bool:
 
 
 def _filtrar(games: list[Any], filtro: Callable[[Any], bool]) -> list[Any]:
-    """Trabalho de thread: quem passa no filtro. O que o filtro não souber decidir fica de fora."""
     passaram = []
     for game in games:
         try:
@@ -83,20 +54,16 @@ class Leitura:
     """O que os arquivos de um jogo trazem (primeira passada)."""
 
     game: Any
-    # O appID que a leitura de fato usou: o jogo pode ter o appID corrigido
-    # enquanto a thread lê, e a leitura velha não vale para o appID novo.
-    # Vazio quando a fonte não é a Steam.
+    # O appID que a leitura usou (vazio fora da Steam): o jogo pode ter o appID corrigido durante a leitura, e a leitura velha não vale para o novo.
     appid: str
     desbloqueios: list[formatos.Desbloqueio] = field(default_factory=list)
     # Falso na varredura de um jogo só: não entra no aviso final.
     avisar: bool = True
-    # De onde vêm as conquistas do jogo; None = de lugar nenhum.
     fonte: Optional[Fonte] = None
     # O executável que gerou a fonte: se for editado até a entrega, a leitura é descartada.
     executavel: str = ""
     # Ubisoft: a conta do `.spool` lido (None = nenhum `.spool` agora).
     conta: Optional[str] = None
-    # Ubisoft: o catálogo foi refeito nesta leitura (a página aberta atualiza).
     catalogo_mudou: bool = False
     # Falso quando o arquivo existia mas não pôde ser lido agora: nada é gravado.
     valida: bool = True
@@ -111,8 +78,7 @@ class LeituraDaConta:
     desbloqueios: list[formatos.Desbloqueio] = field(default_factory=list)
     # Falso na varredura de um jogo só: não entra no aviso das contas.
     avisar: bool = True
-    # O executável que gerou a fonte: se for editado até a entrega (o jogo passou a
-    # ser outro, ou de outra loja), a leitura é descartada, como a do appID corrigido.
+    # O executável que gerou a fonte: se editado até a entrega, a leitura é descartada.
     executavel: str = ""
 
 
@@ -123,8 +89,7 @@ class Catalogacao:
     game: Any
     appid: str
     chave_recusada: bool = False
-    # Veio um catálogo (novo ou do cache): o cartão do jogo aberto pode ter de
-    # aparecer mesmo sem conquista nova.
+    # Veio um catálogo (novo ou do cache): o cartão do jogo aberto pode ter de aparecer mesmo sem conquista nova.
     mudou: bool = False
     # A Steam não respondeu: o resto da passada não vai à rede.
     rede_falhou: bool = False
@@ -167,11 +132,7 @@ def ler_jogo(game: Any) -> Leitura:
 def ler_da_conta(
     game: Any, fonte: Fonte, executavel: Optional[str] = None
 ) -> tuple[Optional[LeituraDaConta], bool]:
-    """Trabalho de thread, com rede: o id da fonte (se faltar) e a leitura da conta.
-
-    ``executavel``: o que a primeira passada leu (sem ele, o de agora).
-    Devolve ``(leitura, rede_falhou)``.
-    """
+    """Trabalho de thread, com rede: o id da fonte (se faltar) e a leitura da conta; ``executavel`` é o da primeira passada. Devolve ``(leitura, rede_falhou)``."""
     if executavel is None:
         executavel = getattr(game, "executable", "") or ""
     loja = contas.da_fonte(fonte)
@@ -209,11 +170,9 @@ def mensagem(novas_por_jogo: list[tuple[str, int]]) -> Optional[str]:
         return None
     total = sum(novas for _nome, novas in com_novas)
     if len(com_novas) == 1:
-        # A primeira variável é o número de conquistas; a segunda, o nome do jogo
         return ngettext("{} nova conquista em {}", "{} novas conquistas em {}", total).format(
             total, com_novas[0][0]
         )
-    # A primeira variável é o número de conquistas; a segunda, o de jogos
     return _("{} novas conquistas em {} jogos").format(total, len(com_novas))
 
 
@@ -223,7 +182,6 @@ def _aviso(texto: str) -> None:
 
 
 class VarreduraConquistas(PassadaAgendada):
-    """Uma passada por execução, no molde de `HLTBBackfill`."""
 
     atraso_inicial = _ATRASO_INICIAL
     espera_da_importacao = _ESPERA_IMPORTACAO
@@ -234,8 +192,7 @@ class VarreduraConquistas(PassadaAgendada):
         self._avisou_chave = False
         self._novas: list[tuple[str, int]] = []
         self._novas_da_conta: list[tuple[str, int]] = []
-        # Quando começou a varredura anterior que foi até o fim (0 = nenhuma),
-        # lido do estado no começo de cada passada com aviso.
+        # Quando começou a varredura anterior que foi até o fim (0 = nenhuma), lido no começo de cada passada com aviso.
         self._desde = 0
 
     def run_async(self) -> None:
@@ -258,11 +215,7 @@ class VarreduraConquistas(PassadaAgendada):
     def varrer_jogos(self, games: Any, filtro: Optional[Callable[[Any], bool]] = None) -> None:
         """Alguns jogos, numa thread só e sem aviso (jogos recém-importados).
 
-        Não grava a data da varredura e não conta como a passada da abertura.
-        Quem não participa fica de fora; sem ninguém, nada roda.
-
-        ``filtro``: critério extra que pode ler o disco do jogo; por isso é
-        aplicado na thread da varredura, nunca por quem pede.
+        Não grava a data da varredura nem conta como a passada da abertura. ``filtro``: critério extra que pode ler o disco do jogo, por isso aplicado na thread da varredura.
         """
         jogos = [game for game in games if participa(game)]
         if not jogos:
@@ -271,7 +224,6 @@ class VarreduraConquistas(PassadaAgendada):
             target=self._worker, args=(jogos, self._generation, False, filtro), daemon=True
         ).start()
 
-    # -- a passada ------------------------------------------------------------
 
     def _worker(
         self,
@@ -280,9 +232,7 @@ class VarreduraConquistas(PassadaAgendada):
         avisar: bool = True,
         filtro: Optional[Callable[[Any], bool]] = None,
     ) -> None:
-        """Duas passadas. A dos arquivos vem primeiro e só toca o disco: o
-        histórico é gravado e o aviso de conquistas novas sai sem esperar a
-        Steam. A da rede (catálogo da Steam, contas das lojas: Xbox, Epic, EA) vem depois."""
+        """Duas passadas. A dos arquivos vem primeiro e só toca o disco: grava o histórico e avisa sem esperar a Steam. A da rede (catálogo da Steam, contas Xbox, Epic, EA) vem depois."""
         tarefa = None
         concluiu = False
         try:
@@ -290,8 +240,7 @@ class VarreduraConquistas(PassadaAgendada):
                 games = _filtrar(games, filtro)
             if avisar:
                 inicio = int(time.time())
-                # Na fila antes de qualquer `_entregar` desta passada: a fila
-                # serve as chamadas na ordem em que entraram.
+                # Na fila antes de qualquer `_entregar` desta passada (a fila serve na ordem de entrada).
                 na_thread_principal(self._comecar_aviso)
                 tarefa = tarefas.comecar(_("Conquistas"), 2 * len(games))
             lidas: dict[str, tuple[Optional[Fonte], str]] = {}
@@ -318,10 +267,7 @@ class VarreduraConquistas(PassadaAgendada):
         tarefa: Optional[Any],
         lidas: dict[str, tuple[Optional[Fonte], str]],
     ) -> bool:
-        """Lê os arquivos de cada jogo e anota em ``lidas`` a fonte (e o executável) de cada um.
-
-        Devolve se foi até o fim sem ser parada.
-        """
+        """Lê os arquivos de cada jogo e anota em ``lidas`` a fonte (e o executável); devolve se foi até o fim sem ser parada."""
         for feitos, game in enumerate(games):
             if tarefa is not None:
                 tarefa.atualizar(feitos)
@@ -367,13 +313,11 @@ class VarreduraConquistas(PassadaAgendada):
                 logging.warning("Falha ao renovar o catálogo de %s", game.name, exc_info=True)
                 continue
             if catalogacao.rede_falhou and rede:
-                # Sem rede para um jogo, sem rede para os outros: o resto da
-                # passada fica com o cache e o arquivo de cada jogo.
+                # Sem rede para um jogo, sem rede para os outros: o resto fica com o cache e o arquivo.
                 rede = False
                 logging.info("Sem rede para o catálogo de conquistas; seguindo só com o disco")
             if catalogacao.chave_recusada and usar_chave:
-                # A mesma chave seria recusada em cada jogo: os seguintes não
-                # a mandam à Steam. O aviso ao usuário segue sendo um só.
+                # A mesma chave seria recusada em cada jogo: os seguintes não a mandam à Steam (o aviso segue sendo um só).
                 usar_chave = False
                 logging.info("Chave da Steam recusada; os demais jogos seguem sem ela")
             catalogacao.avisar = avisar
@@ -396,7 +340,6 @@ class VarreduraConquistas(PassadaAgendada):
             na_thread_principal(self._entregar_da_conta, leitura)
         return rede
 
-    # -- na thread principal --------------------------------------------------
 
     def _comecar_aviso(self) -> bool:
         # Chamada da fila: nada pode escapar daqui.
@@ -410,9 +353,7 @@ class VarreduraConquistas(PassadaAgendada):
     def _contam(self, entraram: list[str], lidos: list[formatos.Desbloqueio], hora_confiavel: bool) -> int:
         """Quantas das que entraram contam como novas no aviso.
 
-        Quando a hora é confiável (Steam, Ubisoft), a conquista com data anterior à
-        varredura anterior (menos a margem do relógio) é de outro aparelho ou chegou da
-        conta: entrou no histórico, mas não é novidade desde a última abertura. Sem data, conta.
+        Com hora confiável (Steam, Ubisoft), a conquista anterior à varredura anterior (menos a margem do relógio) é de outro aparelho ou veio da conta: entra no histórico, mas não é novidade. Sem data, conta.
         """
         if not self._desde or not hora_confiavel:
             return len(entraram)
@@ -425,7 +366,6 @@ class VarreduraConquistas(PassadaAgendada):
         return sum(1 for nome in entraram if not 0 < horas.get(nome, 0) < limite)
 
     def _entregar(self, leitura: Leitura) -> bool:
-        # Roda como chamada da fila: nada pode escapar daqui.
         try:
             if not self._stopped:
                 novas = self._gravar(leitura)
@@ -436,7 +376,6 @@ class VarreduraConquistas(PassadaAgendada):
         return False
 
     def _entregar_catalogo(self, catalogacao: Catalogacao) -> bool:
-        # Também chamada da fila: nada pode escapar daqui.
         try:
             if self._stopped:
                 return False
@@ -456,9 +395,7 @@ class VarreduraConquistas(PassadaAgendada):
         if shared.store.get(game.game_id) is not game or not participa(game):
             return 0
         fonte = leitura.fonte
-        # O appID foi corrigido durante a leitura (e o Aplicar já apagou o
-        # histórico antigo): estas conquistas são do jogo errado e, como o
-        # histórico só cresce, gravá-las as deixaria para sempre.
+        # O appID foi corrigido durante a leitura (e o Aplicar já apagou o histórico antigo): são conquistas do jogo errado, e o histórico só cresce.
         if (
             fonte is not None
             and fonte.tipo == fontes.STEAM
@@ -486,17 +423,15 @@ class VarreduraConquistas(PassadaAgendada):
         return 0 if primeira else self._contam(entraram, leitura.desbloqueios, arquivos.eh_jogo_da_steam(executavel))
 
     def _gravar_da_ubisoft(self, leitura: Leitura, antes: Optional[str]) -> int:
-        """Grava o histórico, a fonte e a conta da Ubisoft. Devolve quantas contam para o aviso.
+        """Grava o histórico, a fonte e a conta da Ubisoft; devolve quantas contam para o aviso.
 
-        A primeira leitura (histórico novo, ou fonte ou conta diferente da gravada) não
-        avisa: o `.spool` nasce com o que a conta já tinha.
+        A primeira leitura (histórico novo, ou fonte ou conta diferente) não avisa: o `.spool` nasce com o que a conta já tinha.
         """
         game = leitura.game
         fonte = leitura.fonte
         if fonte is None or not leitura.valida:
             return 0
-        # O executável foi editado depois da leitura: o productId pode ser outro e, como o
-        # histórico só cresce, gravar deixaria as conquistas do jogo errado para sempre.
+        # O executável foi editado depois da leitura: o productId pode ser outro, e o histórico só cresce.
         if (getattr(game, "executable", "") or "") != leitura.executavel:
             return 0
         conta_antes = historico.conta(game.game_id)
@@ -518,7 +453,6 @@ class VarreduraConquistas(PassadaAgendada):
             shared.conquistas.mudou(game.game_id)
 
     def _entregar_da_conta(self, leitura: LeituraDaConta) -> bool:
-        # Também chamada da fila: nada pode escapar daqui.
         try:
             game = leitura.game
             if (
@@ -530,9 +464,7 @@ class VarreduraConquistas(PassadaAgendada):
                 or not loja.conectada()
             ):
                 return False
-            # O executável foi editado depois da leitura: o jogo pode ser outro (ou
-            # de outra loja) e, como o histórico só cresce, gravar deixaria as
-            # conquistas do jogo errado para sempre. A próxima varredura refaz.
+            # Executável editado depois da leitura: o jogo pode ser outro (ou de outra loja) e o histórico só cresce; a próxima varredura refaz.
             if (getattr(game, "executable", "") or "") != leitura.executavel:
                 return False
             texto = leitura.fonte.texto
@@ -544,11 +476,7 @@ class VarreduraConquistas(PassadaAgendada):
             entraram, primeira = historico.registrar(
                 game.game_id, leitura.desbloqueios, fonte=texto, conta=id_conta
             )
-            # A primeira leitura da fonte (conta recém-conectada, por exemplo)
-            # traz o que a conta já tinha: não é novidade. Vale também quando só a
-            # conta mudou: a fonte (`xbox:<titleId>`, `epic:<namespace>`) é a mesma,
-            # mas as conquistas de uma conta que não é a que o histórico conhecia
-            # não são novidade.
+            # A primeira leitura da fonte (conta recém-conectada, por exemplo), ou de uma conta diferente da que o histórico conhecia, traz o que a conta já tinha: não é novidade.
             primeira_da_conta = antes != texto or conta_antes != id_conta
             novas = 0 if (primeira or primeira_da_conta) else len(entraram)
             self._atualizar_pagina(game, bool(entraram) or primeira_da_conta)
@@ -570,11 +498,7 @@ class VarreduraConquistas(PassadaAgendada):
         return False
 
     def _concluir(self, inicio: Optional[int] = None) -> bool:
-        """Também chamada da fila: não levanta, e a lista sempre zera.
-
-        ``inicio``: quando começou esta passada, se ela leu os arquivos de todos
-        os jogos; vira a "varredura anterior" da próxima abertura.
-        """
+        """Também chamada da fila: não levanta, e a lista sempre zera. ``inicio``: quando começou esta passada, se leu os arquivos de todos os jogos; vira a "varredura anterior" da próxima abertura."""
         try:
             if not self._stopped and (texto := mensagem(self._novas)):
                 _aviso(texto)
