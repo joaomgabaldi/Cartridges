@@ -2,13 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O backup da biblioteca e a Zona de perigo das Preferências, sem tela.
-
-Exportar, importar, a pasta dos saves, "Restaurar saves de todos os jogos" e o Redefinir. O trabalho pesado roda em
-threads e volta por `na_thread_principal` com referência fraca a este objeto: um resultado que chega depois de ele ser
-coletado é descartado. Perguntas e diálogos vão pelo `Aplicativo`, o reinício por `pedir_reinicio`. Só na thread
-principal.
-"""
+"""O backup da biblioteca e a Zona de perigo das Preferências, sem tela."""
 
 import logging
 import threading
@@ -29,9 +23,8 @@ from cartridges.utils.thread_principal import na_thread_principal
 
 _log = logging.getLogger(__name__)
 
-_agora = time.monotonic  # trocável nos testes
+_agora = time.monotonic
 
-# Com o app fechando, a exportação que passa tempo demais sem gravar nada é dada como presa.
 PRAZO_SEM_PROGRESSO_S = 120
 
 
@@ -85,11 +78,9 @@ class BackupDasPreferencias(QObject):
         self._pasta = ""
         self._padrao = True
         self._trocando = False
-        # Uma exportação e um preparo de cada vez: o segundo pedido cai em `_aguarde()`.
         self._exportando = False
         self._preparando = False
         self._exportacao: _Exportacao | None = None
-        # Sem o modelo não há prazo; em produção ele vive o app todo (`Preferencias`), então só os testes o perdem.
         self._relogio_exportacao = QTimer(self)
         self._relogio_exportacao.setInterval(1000)
         self._relogio_exportacao.timeout.connect(self._conferir_exportacao)
@@ -116,7 +107,6 @@ class BackupDasPreferencias(QObject):
 
     @Slot()
     def reler(self) -> None:
-        """As Preferências abriram (ou a troca da pasta acabou): lê o Ludusavi e a pasta dos saves."""
         self._saves = backup_de_saves.disponivel()
         atual = pasta.atual()
         # O `os.sep` deste Python é "/"; o Windows mostra a pasta com "\".
@@ -138,10 +128,9 @@ class BackupDasPreferencias(QObject):
         if self._exportando:
             self._aguarde()
             return
-        configuracoes = backup.ler_configuracoes()  # na principal (lê o schema)
+        configuracoes = backup.ler_configuracoes()
         avisos = weakref.ref(self._avisos) if self._avisos is not None else None
         eu = weakref.ref(self)
-        # A tarefa conta em `em_andamento()`: fechar o app, importar e redefinir esperam o fim da exportação.
         tarefa = backup_de_saves.comecar_tarefa(_("Exportando backup…"), 1)
         estado = _Exportacao(tarefa, avisos)
 
@@ -171,11 +160,6 @@ class BackupDasPreferencias(QObject):
             raise
 
     def _conferir_exportacao(self) -> None:
-        """Só com o app fechando (a principal escondida à espera da exportação) e sem nenhum progresso há
-        `PRAZO_SEM_PROGRESSO_S`: cancela o fechamento, solta a tarefa e avisa. A thread presa não morre:
-        `_exportando` segue até ela voltar, e o resultado de então é descartado (`_exportacao_acabou`). O backup
-        anterior fica intacto: a thread só grava num `.tmp` e troca no fim.
-        """
         estado = self._exportacao
         if estado is None or estado.vencida or not tarefas.fechamento_esperando():
             return
@@ -206,7 +190,7 @@ class BackupDasPreferencias(QObject):
 
     def _preparar(self, origem: Path) -> None:
         """Valida e copia o .zip fora da thread principal (centenas de capas levam segundos)."""
-        if self._preparando:  # a pergunta pode ter ficado aberta enquanto outro preparo corria
+        if self._preparando:
             self._aguarde()
             return
         avisos = weakref.ref(self._avisos) if self._avisos is not None else None
@@ -326,8 +310,6 @@ def _dispensar(avisos: Any, aviso: Any) -> None:
 
 
 def _terminar_exportacao(estado: _Exportacao, mostrar: bool) -> None:
-    """Tira a exportação da contagem, sempre. Com um diálogo a mostrar (``mostrar``), o fechamento em espera é
-    cancelado ANTES de a tarefa sair da contagem: senão o app sai primeiro."""
     if mostrar:
         try:
             tarefas.cancelar_fechamento()
@@ -352,12 +334,10 @@ def _exportacao_acabou(
 ) -> None:
     modelo = _vivo(eu)
     if estado.vencida:
-        # O prazo já avisou e soltou a tarefa: só a trava de "uma exportação de cada vez" se desfaz.
         _log.warning("A exportação presa voltou depois do prazo (%r); resultado descartado", erro or sem_saves)
         if modelo is not None:
             modelo._exportando = False  # noqa: SLF001
         return
-    # Antes de qualquer guarda: com o modelo morto a tarefa ainda tem de acabar, ou o app não fecha mais.
     _terminar_exportacao(estado, mostrar=modelo is not None and (erro is not None or sem_saves in ("ausente", "vazia")))
     if modelo is None:
         return
@@ -407,7 +387,7 @@ def _preparo_acabou(eu: Any, avisos: Any, aviso: Any, resultado: str) -> None:
     elif resultado == "falhou":
         _dialogo(_("Não foi possível restaurar"), _("Não foi possível restaurar o backup. Tente novamente."))
     # Confere de novo: a preparação leva segundos, e a pessoa pode ter começado um backup ou uma restauração dos saves
-    # nesse meio tempo. O backup já copiado é desfeito, para não ser aplicado por surpresa numa abertura futura.
+    # nesse meio tempo.
     elif backup_de_saves.em_andamento():
         try:
             backup.cancelar_agendado()

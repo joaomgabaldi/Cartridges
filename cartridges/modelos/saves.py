@@ -4,12 +4,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""As versões guardadas dos saves de um jogo ("Restaurar save").
-
-As funções puras vêm do antigo `saves/dialogo.py`. `SavesDoJogo` (contexto `saves`) é o que o `DialogoDeVersoes.qml`
-mostra: escolher uma versão pede a confirmação e só então chama `backup_de_saves.restaurar`. O QML só recebe
-dicionários e ids, nunca um `Jogo` nem uma `Versao`.
-"""
+"""As versões guardadas dos saves de um jogo ("Restaurar save")."""
 
 import weakref
 from datetime import datetime
@@ -23,19 +18,16 @@ from cartridges.saves.ludusavi import Versao
 
 
 def _data_e_hora(quando: datetime) -> tuple[str, str]:
-    """A data e a hora locais de uma versão (o Ludusavi as guarda em UTC)."""
     local = quando.astimezone()
     return f"{local:%d/%m/%Y}", f"{local:%H:%M}"
 
 
 def formatar(quando: datetime) -> str:
-    """"09/10/2026 às 21:14", no horário local."""
     data, hora = _data_e_hora(quando)
     return f"{data} às {hora}"
 
 
 def subtitulo(versao: Versao) -> str:
-    """O que a marca da versão significa para o usuário; o comentário cru nunca aparece."""
     if versao.comentario == backup_de_saves.INCOMPLETA:
         return _("Incompleta: alguns arquivos não puderam ser copiados")
     if versao.comentario == backup_de_saves.ANTES_DE_RESTAURAR:

@@ -23,20 +23,19 @@ DURACAO_FILA_ENTRADA_MS = 1700
 DURACAO_FILA_SAIDA_MS = 1100
 JOGOS_NA_FILA = 30
 
-# Calibração do Cover Flow. Distâncias em múltiplos da largura da capa, exceto a profundidade (px).
+# Calibração do Cover Flow.
 PERSPECTIVA = 900
 ANGULO_LATERAL = 65
-ESPACO_CENTRAL = 1.15  # do centro até a primeira lateral
-ESPACO_LATERAL = 0.45  # entre laterais
+ESPACO_CENTRAL = 1.15
+ESPACO_LATERAL = 0.45
 PROFUNDIDADE_LATERAL = 220
 CAPAS_DE_CADA_LADO = 8
 DURACAO_PASSO_MS = 350
 ESCALA_NA_ABERTURA = 1.6
-REFLEXO_ALCANCE = 0.55  # o reflexo some a esta fração da altura da capa
+REFLEXO_ALCANCE = 0.55
 REFLEXO_OPACIDADE = 0.35
 
-# Fundo: degradê vertical do topo à base, pontilhado em no máximo 1 tom.
-FUNDO_TOPO = (28, 28, 30)  # #1c1c1e
+FUNDO_TOPO = (28, 28, 30)
 FUNDO_EXPOENTE = 1.6
 _BAYER_8 = (
     (0, 32, 8, 40, 2, 34, 10, 42),
@@ -52,12 +51,7 @@ _LIMIARES = tuple(tuple((v + 0.5) / 64 for v in linha) for linha in _BAYER_8)
 
 
 def bytes_do_fundo(largura: int, altura: int) -> bytes:
-    """O fundo em RGB de 8 bits (`largura·altura·3` bytes, linha a linha).
-
-    Cada linha tem um valor exato por canal; o arredondamento usa os limiares
-    da matriz Bayer 8×8 completa, então nenhum pixel difere do exato em mais de 1 tom.
-    A linha é montada com 8 pixels que se repetem (sem laço por pixel).
-    """
+    """O fundo em RGB de 8 bits (`largura·altura·3` bytes, linha a linha)."""
     repeticoes = -(-largura // 8)
     linhas = []
     for y in range(altura):
@@ -72,13 +66,7 @@ def bytes_do_fundo(largura: int, altura: int) -> bytes:
 
 
 def jogos_da_biblioteca(linhas: Iterable[Linha]) -> list[Linha]:
-    """Os jogos que aparecem na biblioteca, do jogado mais recentemente ao mais antigo.
-
-    As linhas vêm do `ModeloDaBiblioteca`, que já tira bloqueados e pendentes de restauração;
-    sobram os desinstalados (que estão ali por causa de Jogos Zerados).
-    """
     visiveis = [linha for linha in linhas if not linha.removido]
-    # Duas ordenações estáveis: nome crescente primeiro, depois jogado_em decrescente.
     visiveis.sort(key=lambda linha: linha.nome.casefold())
     visiveis.sort(key=lambda linha: linha.jogado_em, reverse=True)
     return visiveis
@@ -100,11 +88,9 @@ def _limitar(x: float) -> float:
 
 
 def quadro_da_fila(t: float, n: float, base: float) -> tuple[float, float, float, float]:
-    """(posição, virada, opacidade das capas, opacidade do rodapé) da fila no instante `t` (0 a 1)."""
-    corrida = 1 - (1 - _limitar(t / 0.7)) ** 3  # ease_out_cubic
+    corrida = 1 - (1 - _limitar(t / 0.7)) ** 3
     x = _limitar((t - 0.65) / 0.35)
     c1 = 1.4
-    # ease_out_back; a virada fica em 0 até `x` sair de 0
     virada = 1 + (c1 + 1) * (x - 1) ** 3 + c1 * (x - 1) ** 2 if x > 0 else 0.0
     return base + n * (1 - corrida), virada, min(1.0, 5 * t), _limitar((t - 0.8) / 0.2)
 
@@ -137,7 +123,6 @@ class Carrossel:
         return self.ir_para(len(self.ids) - 1)
 
     def trocar_lista(self, ids: list[str], centro: str | None = None) -> None:
-        """Troca a lista mantendo o jogo central (ou o `centro`, se dado)."""
         alvo = centro if centro is not None else self.atual
         self.ids = list(ids)
         if alvo in self.ids:
@@ -147,15 +132,13 @@ class Carrossel:
 
 
 INTERVALO_TIQUE_S = 0.07
-# `data/` fica ao lado do pacote `cartridges` (e do `_dist`, que copia a pasta inteira).
 _ARQUIVO_DO_TIQUE = Path(__file__).resolve().parent.parent.parent / "data" / "sons" / "tique.wav"
 _ultimo_tique = float("-inf")
 _dados_tique: bytes | None = None
 
 
 def _tocar_dados(dados: bytes) -> None:
-    # SND_MEMORY não aceita SND_ASYNC: por isso a thread. SND_NODEFAULT: sem som
-    # padrão do Windows por cima do jogo se não der para tocar.
+    # SND_MEMORY não aceita SND_ASYNC: por isso a thread.
     try:
         winsound.PlaySound(dados, winsound.SND_MEMORY | winsound.SND_NODEFAULT)
     except Exception:
@@ -163,7 +146,7 @@ def _tocar_dados(dados: bytes) -> None:
 
 
 def tocar_tique(tocar=_tocar_dados) -> None:  # noqa: ANN001
-    """Toca o tique de troca de capa, se ligado e passados 70 ms do anterior. Nunca levanta."""
+    """Toca o tique de troca de capa, se ligado e passados 70 ms do anterior."""
     global _ultimo_tique, _dados_tique  # noqa: PLW0603
     try:
         from cartridges import shared  # noqa: PLC0415
@@ -177,7 +160,7 @@ def tocar_tique(tocar=_tocar_dados) -> None:  # noqa: ANN001
             try:
                 _dados_tique = _ARQUIVO_DO_TIQUE.read_bytes()
             except OSError:
-                _dados_tique = b""  # avisa uma vez só; sem o arquivo, o tique fica mudo
+                _dados_tique = b""
                 raise
         if not _dados_tique:
             return

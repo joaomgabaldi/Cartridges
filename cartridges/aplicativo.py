@@ -27,11 +27,10 @@ class _Pedido:
     tipo: str
     sinal: tuple
     resposta: Callable[..., None]
-    preferencias: Any = None  # só "dialogo": a página do botão "Preferências"; None = sem o botão
+    preferencias: Any = None
 
 
 def _animacoes_do_sistema() -> bool:
-    """"Efeitos de animação" do Windows (SPI_GETCLIENTAREAANIMATION)."""
     ligado = ctypes.c_int(1)
     if not ctypes.windll.user32.SystemParametersInfoW(0x1042, 0, ctypes.pointer(ligado), 0):
         return True
@@ -52,10 +51,7 @@ class Aplicativo(QObject):
         self._importando = False
         self.verificador_de_atualizacoes = None
         self.varredura_conquistas = None
-        # Lida pelo `main()` depois do `exec()`: o app sai e se reabre.
         self.reiniciar = False
-        # Pilha de pedidos: o novo cobre o de cima e, quando fecha, o anterior volta. `_na_tela` diz qual pedido cada
-        # diálogo do QML mostra.
         self._pilha: list[_Pedido] = []
         self._na_tela: dict[str, _Pedido | None] = {"dialogo": None, "confirmacao": None}
         self._colunas = shared.schema.get_uint("library-rows")
@@ -88,21 +84,17 @@ class Aplicativo(QObject):
 
     @Property(int, notify=colunasMaximasChanged)
     def colunasMaximas(self) -> int:  # noqa: N802
-        """`library-rows`: 0 deixa as colunas acompanharem a largura da janela."""
         return self._colunas
 
     @Property(bool, notify=tocarSempreChanged)
     def tocarSempre(self) -> bool:  # noqa: N802
-        """`cover-autoplay` ("Animar capas"): as capas animadas à vista tocam sem o mouse."""
         return self._tocar_sempre
 
     @Property(bool, notify=animacoesDoSistemaChanged)
     def animacoesDoSistema(self) -> bool:  # noqa: N802
-        """Os efeitos de animação do Windows estão ligados; desligados, nenhuma capa anima."""
         return self._animacoes_do_sistema
 
     def reler_animacoes(self) -> None:
-        """Relê o ajuste do Windows (um `WM_SETTINGCHANGE` chegou) e avisa só se mudou."""
         ligadas = _animacoes_do_sistema()
         if ligadas != self._animacoes_do_sistema:
             self._animacoes_do_sistema = ligadas
@@ -124,7 +116,6 @@ class Aplicativo(QObject):
         sempre.
         """
         if self._importando:
-            # A segunda importação não roda junto; o retorno de quem a pediu sai no fim da que está em curso.
             atual = shared.importer
             if ao_terminar is not None and atual is not None:
                 anterior = atual.ao_terminar
@@ -168,7 +159,6 @@ class Aplicativo(QObject):
         (self.dialogoPedido if pedido.tipo == "dialogo" else self.confirmacaoPedida).emit(*pedido.sinal)
 
     def _tirar_do_topo(self, tipo: str) -> _Pedido | None:
-        """O pedido de cima, se ele for deste tipo; tirá-lo tira o diálogo da tela."""
         if not self._pilha or self._pilha[-1].tipo != tipo:
             return None
         pedido = self._pilha.pop()
@@ -176,7 +166,6 @@ class Aplicativo(QObject):
         return pedido
 
     def _mostrar_o_topo(self) -> None:
-        """O de cima volta, se o diálogo dele passou a mostrar outro pedido; se continua à vista, nada a fazer."""
         if self._pilha and self._na_tela[self._pilha[-1].tipo] is not self._pilha[-1]:
             self._mostrar(self._pilha[-1])
 
@@ -188,9 +177,7 @@ class Aplicativo(QObject):
         ao_responder: Callable[[bool], None],
         destrutivo: bool = False,
     ) -> None:
-        """Pergunta com dois botões; ``ao_responder(True)`` se confirmou, ``False`` se saiu. Sair é "Cancelar" se
-        ``destrutivo``, senão "Dispensar".
-        """
+        """Pergunta com dois botões; ``ao_responder(True)`` se confirmou, ``False`` se saiu."""
         sair = "Cancelar" if destrutivo else "Dispensar"
         self._empilhar(_Pedido("confirmacao", (titulo, corpo, rotulo, sair, destrutivo), ao_responder))
 
@@ -202,7 +189,6 @@ class Aplicativo(QObject):
         try:
             pedido.resposta(confirmou)
         finally:
-            # Depois do callback: um pedido feito dentro dele já está por cima.
             self._mostrar_o_topo()
 
     @Slot(bool)
@@ -222,7 +208,6 @@ class Aplicativo(QObject):
             return
         preferencias = shared.preferencias
         if abrir_preferencias and pagina is not None and preferencias is not None and preferencias.abrir(pagina):
-            # Uma vez só, quando as Preferências fecham.
             ligacao: list = []
             fraco = weakref.ref(preferencias)  # a conexão vive no próprio objeto: referência forte formaria um ciclo
 
@@ -242,21 +227,17 @@ class Aplicativo(QObject):
 
     @Slot()
     def pedir_reinicio(self) -> None:
-        """Sai e reabre o app: o `main()` chama `relancar()` depois do `exec()`."""
         self.reiniciar = True
         QCoreApplication.quit()
 
     @Slot("QVariantList")
     def soltar(self, urls: list) -> None:
-        """Atalhos arrastados para a janela: copia para a pasta de atalhos e importa."""
         caminhos = []
         for url in urls:
             url = url if isinstance(url, QUrl) else QUrl(str(url))
-            # Um arquivo sem caminho local (de rede, de um celular) fica de fora.
             caminhos.append(Path(url.toLocalFile()) if url.isLocalFile() else None)
         textos, importar = soltar_atalhos.ao_soltar(caminhos, self._importando)
         if importar:
-            # A varredura leva segundos; até lá este aviso fica na tela e os outros esperam na fila.
             aguarde = self._avisos.adicionar("Importando atalhos…", segundos=0)
             self.importar(varrer_atalhos=True, ao_terminar=lambda: self._avisos.dispensar(aguarde))
         for texto in textos:

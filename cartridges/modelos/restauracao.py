@@ -4,9 +4,6 @@
 
 """A continuação da restauração de um backup, sem tela: a pasta de atalhos, os jogos sem atalho, a escolha do atalho e
 o conflito de dados.
-
-As regras são do `utils/restauracao.py`; este modelo só guia o fluxo dos quatro modais da janela (o QML recebe
-dicionários e ids, nunca um `Jogo`). Só na thread principal.
 """
 
 import weakref
@@ -40,7 +37,6 @@ def _cartao(jogo: Any) -> dict[str, str]:
 
 class ContinuacaoDaRestauracao(QObject):
     alterado = Signal()
-    # O QML abre o seletor de arquivos dos atalhos.
     procurarPedido = Signal()  # noqa: N815
 
     def __init__(self, aplicativo: Any, parent: QObject | None = None) -> None:
@@ -52,10 +48,10 @@ class ContinuacaoDaRestauracao(QObject):
         self._pendentes_abertos = False
         self._travada = False
         self._escolha: dict[str, Any] = {}
-        self._alvo = ""  # o jogo cujo atalho se escolhe (também sem lista, quando só o seletor abre)
+        self._alvo = ""
         self._candidatos: list[Path] = []
         self._conflito: dict[str, Any] = {}
-        self._decisao: tuple[str, Path, str] | None = None  # (restaurado, atalho, novo) à espera da escolha
+        self._decisao: tuple[str, Path, str] | None = None
 
     @Property(bool, notify=alterado)
     def aberta(self) -> bool:
@@ -99,8 +95,6 @@ class ContinuacaoDaRestauracao(QObject):
 
     @Slot()
     def continuar(self) -> None:
-        """A cada abertura enquanto houver pendências: a pasta de atalhos é obrigatória, a importação roda mesmo com
-        "Importar jogos automaticamente" desligado, e a janela dos jogos sem atalho abre no fim dela."""
         local = shared.schema.get_string("shortcuts-location")
         if not local or not Path(local).expanduser().is_dir():
             self._texto_da_pasta = (
@@ -116,7 +110,7 @@ class ContinuacaoDaRestauracao(QObject):
     @Slot(QUrl)
     def escolherPasta(self, url: QUrl) -> None:  # noqa: N802
         if url.isEmpty() or not url.toLocalFile():
-            return  # seletor cancelado: a janela continua
+            return
         shared.schema.set_string("shortcuts-location", str(Path(url.toLocalFile())))
         self._pedindo_pasta = False
         self.alterado.emit()
@@ -135,7 +129,6 @@ class ContinuacaoDaRestauracao(QObject):
 
     @Slot()
     def mostrarPendentes(self) -> None:  # noqa: N802
-        """Abre (ou relê) a lista, destravada; sem pendências a restauração acabou ali mesmo."""
         self._pendentes = self._ler_pendentes()
         self._travada = False
         if self._pendentes:
@@ -148,7 +141,6 @@ class ContinuacaoDaRestauracao(QObject):
 
     @Slot()
     def lembrarDepois(self) -> None:  # noqa: N802
-        """Só fecha: a restauração continua pendente e o aviso de concluída não aparece."""
         self._pendentes_abertos = False
         self.alterado.emit()
 
@@ -185,7 +177,6 @@ class ContinuacaoDaRestauracao(QObject):
         self._alvo = jogo_id
         candidatos = restauracao.candidatos(jogo)
         if not candidatos:
-            # Sem atalho para sugerir, a janela teria só o botão de procurar: abre direto o seletor.
             self.procurarPedido.emit()
             return
         self._candidatos = candidatos
@@ -209,7 +200,6 @@ class ContinuacaoDaRestauracao(QObject):
 
     @Slot(str)
     def usarAtalho(self, caminho: str) -> None:  # noqa: N802
-        """Só um caminho da lista de candidatos atual (o QML é a fronteira)."""
         escolhido = next((c for c in self._candidatos if str(c) == caminho), None)
         if escolhido is not None:
             self._usar(escolhido)
@@ -221,7 +211,6 @@ class ContinuacaoDaRestauracao(QObject):
         try:
             caminho = restauracao.copiar_para_a_pasta(Path(url.toLocalFile()))
         except restauracao.AtalhoJaExiste:
-            # Sem candidatos, o atalho de mesmo nome é de outro jogo e não há lista onde selecioná-lo.
             if self._candidatos:
                 self._aplicativo.pedir_dialogo(
                     _("Já existe um atalho com este nome. Selecione-o na lista."), "", [], lambda: None
@@ -263,14 +252,11 @@ class ContinuacaoDaRestauracao(QObject):
         if decisao == "este_pc":
             self.mostrarPendentes()
             return
-        # A varredura adota o jogo pelo atalho novo e o tira das pendências. A lista fica travada até lá: duas
-        # importações ao mesmo tempo zerariam as listas de jogos achados uma da outra.
         self._travada = True
         self.alterado.emit()
         self._aplicativo.importar(ao_terminar=self._depois_da_importacao, varrer_atalhos=True, silenciosa=True)
 
     def _depois_da_importacao(self) -> None:
-        """Fim da importação de uma escolha: relê a lista e só a reabre se ainda estava aberta."""
         if self._pendentes_abertos:
             self.mostrarPendentes()
             return

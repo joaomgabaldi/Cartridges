@@ -33,7 +33,6 @@ class Ponte(QObject):
         self._ligados: "weakref.WeakSet[Jogo]" = weakref.WeakSet()
 
     def ligar(self, jogo: Jogo) -> None:
-        """Liga os sinais do jogo, uma vez por jogo. Não prende o jogo nem a ponte."""
         if not eh_thread_principal():
             raise RuntimeError("Ponte.ligar: só na thread principal")
         if jogo in self._ligados:
@@ -64,7 +63,6 @@ class Ponte(QObject):
 
     @Slot(str)
     def dispensar_desfazer(self, game_id: str) -> None:
-        """Um jogo excluído não tem o que desfazer."""
         self.fila.dispensar_chave((game_id, "remove"))
 
     def _avisar(self, ref_jogo: "weakref.ref[Jogo]", texto: str, acao: str) -> None:

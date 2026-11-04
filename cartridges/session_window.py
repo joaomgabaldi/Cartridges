@@ -27,19 +27,12 @@ from cartridges.utils import session_log
 
 
 class SessionWindow(QObject):
-    """O relógio da sessão manual, mostrada na janela "Jogando {nome}" (QML).
+    """O relógio da sessão manual, mostrada na janela "Jogando {nome}" (QML)."""
 
-    Não dá para detectar a saída do jogo (Steam/Epic/UWP passam a outro processo): o usuário clica em "Já terminei de
-    jogar". O tempo vai para ``game.playtime`` a cada minuto, então uma queda perde no máximo o último minuto. A
-    janela em si é do `ModeloDaSessao` (`abrir_janela_manual`).
-    """
-
-    # Uma sessão acompanhada por vez; também mantém este objeto vivo.
     active: "Optional[SessionWindow]" = None
 
     TICK_INTERVAL = 60
-    # Um intervalo maior que isto entre duas gravações é o PC dormindo, não jogo: o relógio monotônico conta o sono. É
-    # creditado como um tick só.
+    # Um intervalo maior que isto entre duas gravações é o PC dormindo, não jogo: o relógio monotônico conta o sono.
     MAX_GAP = TICK_INTERVAL + 30
 
     def __init__(self, game: Any) -> None:
@@ -56,15 +49,10 @@ class SessionWindow(QObject):
 
     @property
     def elapsed(self) -> int:
-        """Os segundos da sessão, inclusive os ainda não gravados.
-
-        `flush` grava a cada minuto adiantando `session_start`; sem somar o que
-        já foi gravado, o relógio voltava a zero a cada gravação.
-        """
+        """Os segundos da sessão, inclusive os ainda não gravados."""
         return self.session_seconds + int(monotonic() - self.session_start)
 
     def flush(self) -> None:
-        """Soma o tempo decorrido ao total do jogo e grava."""
         now = monotonic()
         elapsed = int(now - self.session_start)
         if elapsed > self.MAX_GAP:
@@ -73,17 +61,14 @@ class SessionWindow(QObject):
         if elapsed > 0:
             self.game.playtime += elapsed
             self.session_seconds += elapsed
-            # Avança pelos segundos inteiros gravados, não até `now`: o resto descartado se perderia a cada minuto.
             self.session_start += elapsed
             self.game.save()
 
     def present(self) -> None:
-        """Põe a camada da sessão e pede a janela "Jogando {nome}"."""
         shared.sessao.show_session_blocker(self.game)
         shared.sessao.abrir_janela_manual(self)
 
     def close(self, *_args: Any) -> None:
-        """Encerra a sessão. Chamar de novo não faz nada."""
         if self._fechada:
             return
         self._fechada = True

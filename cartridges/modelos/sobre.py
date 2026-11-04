@@ -2,11 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O diálogo Sobre: as páginas e os textos.
-
-As funções puras leem os logs e a metainfo; `Sobre` é o estado do `DialogoSobre.qml` (página à vista, versão,
-novidades da versão, o texto de depuração) e as ações dele. Tudo na thread principal.
-"""
+"""O diálogo Sobre: as páginas e os textos."""
 
 import logging
 import lzma
@@ -55,8 +51,6 @@ NOME_DO_LOG = "cartridges.log"
 
 
 def informacoes_de_depuracao(arquivos: list[Path]) -> str:
-    """Os logs um depois do outro, com uma linha entre eles. Um log ilegível não pode custar o diálogo: os `.xz`
-    de sessões anteriores podem estar truncados por uma queda, e a rotação preserva de propósito um byte rasgado."""
     texto = ""
     for indice, caminho in enumerate(arquivos):
         if indice > 0:
@@ -86,7 +80,6 @@ def _raiz(metainfo: Path) -> ET.Element | None:
 
 
 def novidades_da_versao(metainfo: Path, versao: str) -> list[dict]:
-    """Os parágrafos (`p`) e os itens (`li`) da `<release version=versao>`; vazio se ela não existe."""
     raiz = _raiz(metainfo)
     if raiz is None:
         return []
@@ -105,7 +98,6 @@ def novidades_da_versao(metainfo: Path, versao: str) -> list[dict]:
 
 
 def _area_de_transferencia() -> object:
-    """O ponto que os testes trocam: nenhum teste escreve na área de transferência de verdade."""
     return QGuiApplication.clipboard()
 
 
@@ -183,7 +175,6 @@ class Sobre(QObject):
 
     @Slot()
     def abrir(self) -> None:
-        """Sempre pela página principal; a versão e as novidades dela são relidas a cada abertura."""
         self._versao = shared.VERSION
         self._novidades = novidades_da_versao(METAINFO, self._versao)
         self._pagina = "principal"
@@ -201,7 +192,6 @@ class Sobre(QObject):
     def irPara(self, pagina: str) -> None:  # noqa: N802
         if pagina not in TITULOS:
             return
-        # O log é lido ao abrir a página, não a cada abertura do diálogo (pode ter megabytes).
         if pagina == "depuracao":
             self._depuracao = informacoes_de_depuracao(list(shared.log_files))
         self._pagina = pagina
@@ -209,7 +199,6 @@ class Sobre(QObject):
 
     @Slot()
     def voltar(self) -> None:
-        """Uma página para trás: o log volta à "Solução de problemas"; as demais, à principal."""
         self.irPara("problemas" if self._pagina == "depuracao" else "principal")
 
     @Slot()
@@ -219,7 +208,6 @@ class Sobre(QObject):
 
     @Slot()
     def copiarVersao(self) -> None:  # noqa: N802
-        """O botão da versão: copia o número e avisa."""
         _area_de_transferencia().setText(self._versao)
         self._avisar_copia()
 
@@ -229,7 +217,6 @@ class Sobre(QObject):
 
     @Slot(QUrl)
     def salvar(self, url: QUrl) -> None:
-        """Grava o texto de depuração no arquivo escolhido; sem escolha (diálogo cancelado), nada."""
         if url.isEmpty():
             return
         try:
@@ -241,6 +228,5 @@ class Sobre(QObject):
 
     @Slot(str)
     def abrirLicenca(self, url: str) -> None:  # noqa: N802
-        """O texto da licença é StyledText: só o endereço da GPL que ele mesmo traz é aberto."""
         if url == URL_DA_LICENCA:
             abrir_url(url)

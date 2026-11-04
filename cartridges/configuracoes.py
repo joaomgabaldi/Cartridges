@@ -21,12 +21,10 @@ from PySide6.QtCore import QCoreApplication
 
 from cartridges.utils.thread_principal import eh_thread_principal, na_thread_principal
 
-# `cartridges` é um pacote sem `__init__` (sem `__file__`): parte deste arquivo.
 _GSCHEMA = (
     Path(__file__).resolve().parent.parent / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml.in"
 )
 
-# tipo GVariant -> (tipo no registro, bits)
 _TIPOS = {
     "b": (winreg.REG_DWORD, 1),
     "i": (winreg.REG_DWORD, 32),
@@ -40,15 +38,15 @@ def _padrao(tipo: str, texto: str) -> bool | int | str:
     if tipo == "b":
         return {"true": True, "false": False}[texto]
     if tipo == "s":
-        return ast.literal_eval(texto)  # "texto" ou 'texto'
+        return ast.literal_eval(texto)
     return int(texto)
 
 
 @cache
 def _esquemas() -> dict[str, dict[str, tuple]]:
-    """id do esquema -> {chave: (tipo, padrão, faixa, escolhas)}; `faixa` é ``(mín, máx)`` do
-    `<range>` e `escolhas` o conjunto das `<choices>`, ou ``None``. Um tipo fora dos cinco
-    levanta na carga."""
+    """id do esquema -> {chave: (tipo, padrão, faixa, escolhas)}; `faixa` é ``(mín, máx)`` do `<range>` e `escolhas` o
+    conjunto das `<choices>`, ou ``None``.
+    """
     esquemas = {}
     for esquema in ET.parse(_GSCHEMA).getroot().iter("schema"):
         chaves = {}
@@ -74,13 +72,13 @@ class Configuracoes:
         self._proximo_id = 1
 
     def _definicao(self, chave: str, tipo: str | None = None) -> tuple[str, bool | int | str]:
-        definicao = self._chaves[chave]  # KeyError, como o GSettings, que aborta
+        definicao = self._chaves[chave]
         if tipo is not None and definicao[0] != tipo:
             raise TypeError(f"A chave {chave!r} é do tipo {definicao[0]!r}, não {tipo!r}")
         return definicao[:2]
 
     def aceita(self, chave: str, valor: object) -> bool:
-        """Se ``valor`` serve à chave: o tipo, o `<range>` e as `<choices>`. Chave desconhecida é ``False``."""
+        """Se ``valor`` serve à chave: o tipo, o `<range>` e as `<choices>`."""
         if chave not in self._chaves:
             return False
         tipo, _, faixa, escolhas = self._chaves[chave]
@@ -111,7 +109,7 @@ class Configuracoes:
             return valor
         if tipo_da_chave == "b":
             return bool(valor)
-        if tipo_da_chave != "u" and valor >> (bits - 1):  # complemento de 2
+        if tipo_da_chave != "u" and valor >> (bits - 1):
             valor -= 1 << bits
         return valor
 
