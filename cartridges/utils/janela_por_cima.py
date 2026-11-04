@@ -1,34 +1,10 @@
-"""Uma janela que fica por cima de tudo sem roubar o foco do jogo.
+"""Uma janela por cima de tudo sem roubar o foco do jogo (o aviso de conquista: um jogo em tela cheia minimiza ao perder o foco).
 
-Um jogo em tela cheia minimiza quando perde o foco, então o aviso de conquista
-não pode ser uma janela comum. Os estilos estendidos do Win32 fazem o
-trabalho, aplicados depois do `create()` da ``QWindow`` (quando ela já existe
-no Windows) e antes de ela aparecer:
+Estilos do Win32 aplicados depois do `create()` da ``QWindow`` e antes de ela aparecer: ``WS_EX_NOACTIVATE`` (não ativa), ``WS_EX_TOPMOST``, ``WS_EX_TRANSPARENT`` + ``WS_EX_LAYERED`` + ``SetLayeredWindowAttributes`` (o clique passa; o TRANSPARENT sozinho é ignorado) e ``WS_EX_TOOLWINDOW`` (fora da barra e do Alt+Tab; no Qt, depois de a janela aparecer).
 
-- ``WS_EX_NOACTIVATE``: mostrar ou clicar não a torna a janela ativa, e o
-  Windows não lhe dá botão na barra de tarefas;
-- ``WS_EX_TOPMOST``: por cima das janelas comuns;
-- ``WS_EX_TRANSPARENT`` junto com ``WS_EX_LAYERED`` e
-  ``SetLayeredWindowAttributes``: o clique passa para o que está embaixo
-  (``WS_EX_TRANSPARENT`` sozinho é ignorado);
-- ``WS_EX_TOOLWINDOW``: fora da barra de tarefas e do Alt+Tab; no Qt ele fica
-  depois de a janela aparecer (medido, D59; o GTK o tirava).
+O cartão também tem um dono: uma janela oculta, criada uma vez, a que ele é amarrado antes do ``show()`` e de novo depois (o Qt refaz o dono ao mostrar). Janela com dono não ganha botão na barra; a principal não serve de dono (minimizada na sessão, o Windows esconde as janelas dela).
 
-Além do ``WS_EX_NOACTIVATE`` e do ``WS_EX_TOOLWINDOW``, o cartão tem um dono:
-uma janela oculta, criada uma vez, a que ele é amarrado antes de aparecer e de
-novo logo depois do ``show()``, porque o Qt refaz o dono ao mostrar a janela
-(medido, D59). Janela com dono não ganha botão na barra. A janela principal não
-serve de dono: fica minimizada durante a sessão, e o Windows esconde as janelas
-de um dono minimizado.
-
-O WS_EX_NOACTIVATE não basta quando o processo do Cartridges já está em primeiro
-plano (a janela principal ou as preferências em uso): o Windows só deixa ativar
-janela de um processo que está na frente, e mostrar pode ativá-la.
-`mostrar_sem_tomar_o_foco` mostra a janela e devolve o foco a quem o tinha.
-
-Não aparece sobre jogo em tela cheia exclusiva (o mesmo limite do Hydra); a
-iluminação cobre esse caso. O mesmo jeito de falar com o Win32 que
-`cartridges/modelos/sessao.py` (`_posicionar`) já usa.
+O NOACTIVATE não basta com o processo em primeiro plano: `mostrar_sem_tomar_o_foco` devolve o foco a quem o tinha. Não aparece sobre jogo em tela cheia exclusiva; a iluminação cobre esse caso.
 """
 
 import ctypes
@@ -55,17 +31,9 @@ MONITOR_DEFAULTTOPRIMARY = 1
 HWND_TOPMOST = -1
 HWND_NOTOPMOST = -2
 
-# Decididos na prova técnica (Tarefa 1 do plano da fase 2): sem WS_EX_LAYERED e
-# SetLayeredWindowAttributes(0, 255, LWA_ALPHA) o clique não passa (o
-# WS_EX_TRANSPARENT sozinho é ignorado). Com GDK_DEBUG=dcomp e fundo transparente
-# no CSS, o canto arredondado mostra o que está atrás, também com as camadas.
-# Mostrar com set_visible(True) simples depois dos estilos e então SetWindowPos
-# (HWND_TOPMOST, SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW) mantém o foco;
-# ShowWindow(SW_SHOWNOACTIVATE) antes de o GTK mostrar derruba o processo.
-# No Qt (D59, medido em 30/10/2026, D3D11): a janela transparente ou com
-# WindowTransparentForInput já sai do Qt com WS_EX_LAYERED e
-# SetLayeredWindowAttributes(0, 255, LWA_ALPHA) — a mesma chamada daqui, sem efeito
-# a mais; com USAR_CAMADAS = False o WS_EX_LAYERED continua (é do Qt).
+# Sem WS_EX_LAYERED e SetLayeredWindowAttributes(0, 255, LWA_ALPHA) o clique não passa. No Qt (D3D11) a janela
+# transparente ou com WindowTransparentForInput já sai com essa chamada, sem efeito a mais; com USAR_CAMADAS = False
+# o WS_EX_LAYERED continua (é do Qt).
 USAR_CAMADAS = True
 FUNDO_TRANSPARENTE = True
 
@@ -89,10 +57,8 @@ _user32: Optional[Any] = None
 def _api() -> Any:
     """user32 com os tipos declarados (HWND de 64 bits não pode virar int de 32).
 
-    Uma cópia só deste módulo: ``ctypes.windll.user32`` é compartilhado, e os
-    ``argtypes`` declarados aqui (o ``GetMonitorInfoW`` com a estrutura simples)
-    quebrariam as chamadas de ``window_geometry``, que declara outra estrutura
-    para a mesma função.
+    Cópia própria: ``ctypes.windll.user32`` é compartilhado, e os ``argtypes`` do ``GetMonitorInfoW`` daqui
+    quebrariam ``window_geometry``, que declara outra estrutura para a mesma função.
     """
     global _user32  # pylint: disable=global-statement
     if _user32 is None:
@@ -152,8 +118,7 @@ def estilos_de(janela: Any) -> int:
 def _definir_estilos(hwnd: int) -> bool:
     """Aplica os estilos e confere. False (ou exceção) se algum não pegou.
 
-    `SetWindowLongPtrW` devolve o valor antigo, não um sucesso: o jeito de saber
-    é reler. Sem `WS_EX_NOACTIVATE` o cartão tomaria o foco do jogo.
+    `SetWindowLongPtrW` devolve o valor antigo, não sucesso: só relendo se sabe.
     """
     u = _api()
     estilos = ESTILOS | (WS_EX_LAYERED if USAR_CAMADAS else 0)
@@ -173,7 +138,6 @@ _dono: Optional[int] = None
 
 
 def _dono_oculto() -> Optional[int]:
-    """O dono dos cartões: uma janela Win32 oculta, criada uma vez e nunca mostrada."""
     global _dono  # pylint: disable=global-statement
     u = _api()
     if _dono is None or not u.IsWindow(_dono):
@@ -185,12 +149,11 @@ def _dono_oculto() -> Optional[int]:
 
 
 def dono_oculto() -> Optional[int]:
-    """O dono oculto compartilhado (para outras janelas que ficam fora da barra)."""
+    """O dono oculto compartilhado, para outras janelas que ficam fora da barra."""
     return _dono_oculto()
 
 
 def _amarrar_ao_dono(hwnd: int) -> None:
-    """Dá um dono à janela: janela com dono não tem botão na barra de tarefas."""
     u = _api()
     dono = _dono_oculto()
     u.SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, dono)
@@ -211,11 +174,7 @@ def dono_de(janela: Any) -> int:
 
 
 def preparar(janela: Any) -> bool:
-    """Aplica os estilos e o dono. Chamar depois de `create()`, antes de mostrar.
-
-    True só se a janela ficou sem ativação (e em camadas, se for o caso): quem
-    chama não deve mostrar a janela se for False, porque ela tomaria o foco.
-    """
+    """Aplica os estilos e o dono (depois de `create()`, antes de mostrar). Se False, quem chama não deve mostrar a janela: ela tomaria o foco."""
     hwnd = handle(janela)
     if not hwnd:
         return False
@@ -235,19 +194,14 @@ def preparar(janela: Any) -> bool:
 
 
 def mostrar_sem_tomar_o_foco(janela: Any) -> None:
-    """Mostra a janela e, se ela tomou o foco, o devolve a quem o tinha.
-
-    Com o processo já em primeiro plano o Windows pode ativar a janela ao
-    mostrá-la, apesar do WS_EX_NOACTIVATE. Falha do Win32 não levanta: o cartão aparece do mesmo jeito.
-    """
+    """Mostra a janela e, se ela tomou o foco (o Windows pode ativá-la com o processo em primeiro plano), o devolve. Falha do Win32 não levanta."""
     anterior = None
     try:
         anterior = _api().GetForegroundWindow()
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning("Não foi possível ler a janela em primeiro plano", exc_info=True)
     janela.show()
-    # O Qt refaz o dono ao mostrar a janela (o da `transientParent`, nenhum aqui): sem
-    # amarrar de novo, o cartão ficava sem dono (medido, D59).
+    # O Qt refaz o dono ao mostrar a janela: sem amarrar de novo, o cartão ficava sem dono.
     hwnd = handle(janela)
     if hwnd:
         try:
@@ -280,8 +234,7 @@ def posicao(
 
 
 def _monitor_em_uso() -> tuple[int, int, int, int]:
-    """O monitor inteiro (não a área de trabalho) da janela em primeiro plano:
-    o jogo em tela cheia cobre a barra de tarefas, e o aviso vai no canto dele."""
+    """O monitor inteiro (não a área de trabalho) da janela em primeiro plano: o jogo em tela cheia cobre a barra de tarefas."""
     u = _api()
     monitor = u.MonitorFromWindow(u.GetForegroundWindow(), MONITOR_DEFAULTTOPRIMARY)
     info = _MONITORINFO()
@@ -303,10 +256,8 @@ def por_no_canto(janela: Any, canto: str, margem: int = 24) -> bool:
         u.GetWindowRect(hwnd, ctypes.byref(retangulo))
         tamanho = (retangulo.right - retangulo.left, retangulo.bottom - retangulo.top)
         x, y = posicao(canto, _monitor_em_uso(), tamanho, margem)
-        # Mostrar a janela pode desfazer o TOPMOST (o GTK o tirava), e logo depois de o primeiro
-        # plano mudar o Windows aceita o HWND_TOPMOST sem aplicá-lo (devolve
-        # sucesso): o cartão ficava atrás do jogo e da barra de tarefas. Passar
-        # antes por HWND_NOTOPMOST faz o pedido valer (medido em 06/10/2026).
+        # Mostrar a janela pode desfazer o TOPMOST, e logo após o primeiro plano mudar o Windows aceita o HWND_TOPMOST
+        # sem aplicá-lo (devolve sucesso): o cartão ficava atrás do jogo. Passar antes por HWND_NOTOPMOST faz valer.
         u.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE)
         u.SetWindowPos(
             hwnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW

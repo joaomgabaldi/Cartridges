@@ -17,22 +17,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Fill in HowLongToBeat times for games that are already in the library.
+"""Preenche os tempos do HowLongToBeat dos jogos que já estão na biblioteca.
 
-The import pipeline looks the times up for every game it adds, but it only ever
-runs for *new* games: a game already in the store is dropped as a duplicate, and
-the startup load from disk runs no online manager at all. So a library imported
-before this feature existed — or one where a lookup failed on a bad network day
-— would keep its empty rows forever, and the only cure was opening each game and
-pressing the fetch button. That does not scale past a handful of games, which is
-what this sweep is for.
-
-It runs once per app launch, on a single worker thread, and is deliberately
-unhurried: pacing comes from the same :class:`HLTBRateLimiter` the importer
-uses, so a sweep of a large library trickles out in the background instead of
-hammering a site that publishes no API. Nothing here is on the critical path —
-every result is applied to its game as it lands, so quitting halfway keeps
-whatever was already found.
+A importação só busca os tempos de jogos novos; uma biblioteca antiga, ou uma busca que falhou, ficaria vazia.
+Roda uma vez por abertura, numa thread, no ritmo do mesmo :class:`HLTBRateLimiter` da importação (o site não tem API).
+Cada resultado é aplicado ao chegar, então sair no meio guarda o que já foi achado.
 """
 
 import logging
@@ -52,29 +41,22 @@ from cartridges.utils.hltb import (
 )
 from cartridges.utils.thread_principal import na_thread_principal
 
-# Startup is busy (window, disk load, and usually an auto-import right after),
-# and the auto-import's own HowLongToBeat lookups share this rate limiter. Wait
-# a bit before adding to the queue, then keep waiting while an import runs.
+# A abertura está ocupada e a importação automática divide o mesmo limitador: espera antes de entrar na fila.
 _START_DELAY_SECONDS = 20
 _IMPORT_RETRY_SECONDS = 30
 
 
 class HLTBBackfill(PassadaAgendada):
-    """One background sweep over the library for missing completion times."""
+    """Uma varredura em segundo plano atrás dos tempos que faltam."""
 
     atraso_inicial = _START_DELAY_SECONDS
     espera_da_importacao = _IMPORT_RETRY_SECONDS
 
-    # -- the sweep ------------------------------------------------------------
-
     def run_async(self) -> None:
-        """Start one sweep off the main thread, unless one is already running."""
         if self._stopped or not shared.schema.get_boolean("hltb-metadata"):
             return
 
-        # Snapshot on the main thread: the store's mappings are mutated by
-        # imports, and iterating them from a worker would risk a "dictionary
-        # changed size during iteration" mid-sweep.
+        # Retrato na thread principal: a importação muda os mapas da store durante a varredura.
         games = [
             game
             for game in shared.store
@@ -96,17 +78,14 @@ class HLTBBackfill(PassadaAgendada):
 
     def _worker(self, games: list[Jogo], generation: int) -> None:
         found = 0
-        # Jogo que o site não conhece volta a cada abertura, e de propósito
-        # aparece nas tarefas toda vez: é o sinal de que vale conferir o nome.
+        # O jogo que o site não conhece volta a cada abertura, de propósito: é o sinal de que vale conferir o nome.
         tarefa = tarefas.comecar(_("HowLongToBeat"), len(games))
         try:
             for feitos, game in enumerate(games):
                 tarefa.atualizar(feitos)
                 if self._deve_parar(generation):
                     break
-                # Re-checked per game, not just in the snapshot: the pipeline or
-                # the details dialog may have filled this one in meanwhile, and
-                # the setting may have been switched off mid-sweep.
+                # Conferido por jogo: a importação ou a edição pode tê-lo preenchido, ou a opção ter sido desligada.
                 if game.removed or game.has_hltb_times:
                     continue
                 if not shared.schema.get_boolean("hltb-metadata"):
@@ -115,14 +94,11 @@ class HLTBBackfill(PassadaAgendada):
                 try:
                     times = fetch_times(shared_helper(), game.name, game.hltb_id)
                 except HLTBGameNotFoundError:
-                    # Resposta, não erro: sem rastro, ou cada jogo que o site
-                    # não conhece deixava um traceback no log a cada abertura.
+                    # Resposta, não erro: sem traceback no log.
                     logging.debug("HowLongToBeat backfill missed %s", game.name)
                     continue
                 except HLTBError as error:
-                    # A miss is the common case (plenty of games have no entry)
-                    # and a network failure is not worth a dialog either: the
-                    # next launch sweeps again.
+                    # Falha de rede não merece diálogo: a próxima abertura varre de novo.
                     logging.debug(
                         "HowLongToBeat backfill missed %s", game.name, exc_info=error
                     )
@@ -148,28 +124,16 @@ class HLTBBackfill(PassadaAgendada):
                 len(games),
             )
 
-    # -- applying results (main thread) ---------------------------------------
-
     def _apply(self, game: Jogo, times: HLTBTimes) -> None:
-        """Write one game's times and repaint it. Runs on the main thread."""
-        # `has_hltb_times` again, not just in the worker: the fetch button in
-        # the details may have answered while this lookup was in flight, and
-        # the sweep only ever fills what is missing — it must not overwrite a
-        # correction the user just made.
+        # `has_hltb_times` de novo: o botão de buscar pode ter respondido antes, e a varredura não sobrescreve correção do usuário.
         if self._stopped or game.removed or game.has_hltb_times:
             return
-        # Identidade no store, não só o snapshot: um reset apaga a biblioteca
-        # e os arquivos enquanto o worker ainda anda pela lista dele, e o
-        # `save()` abaixo regravaria o JSON de um jogo que o usuário acabou de
-        # apagar — que então renascia na grade e no launch seguinte. O mesmo
-        # idioma do `_in_library` do MetadataRefresh.
+        # Identidade na store: um reset apaga a biblioteca enquanto o worker anda, e o `save()` ressuscitaria o jogo apagado.
         store = getattr(shared, "store", None)
         if store is None or store.get(game.game_id) is not game:
             return
 
-        # update_values only carries the keys the lookup returned, so a game
-        # with only a main-story estimate keeps whatever the other two held.
+        # `update_values` leva só as chaves devolvidas: o que o site não trouxe fica como estava.
         game.update_values(dict(times))
         game.save()
-        # The details page follows the game and refreshes itself on this update.
         game.update()

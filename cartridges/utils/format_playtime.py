@@ -19,11 +19,7 @@
 
 
 def format_playtime(seconds: int) -> str:
-    """Human-readable playtime, capped at hours (never days/weeks).
-
-    Under an hour it shows whole minutes ("45 min"); from an hour on it shows
-    fractional hours with a comma decimal ("10,5 horas").
-    """
+    """Minutos inteiros abaixo de uma hora ("45 min"); depois, horas com vírgula ("10,5 horas"), nunca dias."""
     if seconds < 60:
         return _("menos de 1 min")
     minutes = round(seconds / 60)
@@ -38,21 +34,12 @@ def format_playtime(seconds: int) -> str:
 
 
 def format_stopwatch(seconds: int) -> str:
-    """The running clock shown while a game is open: ``0:05:12``.
-
-    Unlike :func:`format_playtime`, which rounds because nobody cares whether a
-    library says 10,5 or 10,6 hours, this one is watched second by second, so it
-    shows every unit and never rounds. Hours are not padded and not capped: they
-    are a counter, not a field, and a session that reaches 100 hours should say
-    so rather than wrap.
-    """
+    """O relógio do jogo aberto (``0:05:12``): sem arredondar, e as horas não são limitadas nem preenchidas."""
     seconds = max(0, seconds)
     return f"{seconds // 3600}:{seconds // 60 % 60:02}:{seconds % 60:02}"
 
 
-# Base 1024 com os rótulos curtos, que é o que o Explorer mostra: o número aqui
-# existe para ser comparado com o de lá, e uma medida em base 1000 mostraria
-# 94 GB onde o Windows mostra 87.
+# Base 1024 com rótulos curtos, como o Explorer: em base 1000 mostraria 94 GB onde o Windows mostra 87.
 _UNITS = ("B", "KB", "MB", "GB", "TB")
 
 
@@ -67,8 +54,7 @@ def format_size(size: int) -> str:
         value /= 1024
         unit += 1
 
-    # Uma casa decimal só a partir de MB: "1,4 KB" é precisão que ninguém pediu,
-    # e em bytes a fração não existe.
+    # Casa decimal só a partir de MB.
     if unit < 2:
         return f"{round(value)} {_UNITS[unit]}"
 
@@ -86,17 +72,17 @@ if __name__ == "__main__":
     assert format_playtime(59) == "menos de 1 min"
     assert format_playtime(60) == "1 min"
     assert format_playtime(1800) == "30 min"
-    assert format_playtime(3599) == "1 hora"  # rounds up to a full hour, not "60 min"
+    assert format_playtime(3599) == "1 hora"  # arredonda para 1 hora, não "60 min"
     assert format_playtime(3600) == "1 hora"
     assert format_playtime(5400) == "1,5 horas"
     assert format_playtime(37800) == "10,5 horas"
-    assert format_playtime(90000) == "25 horas"  # stays in hours, never days
+    assert format_playtime(90000) == "25 horas"  # fica em horas, nunca dias
 
     assert format_stopwatch(0) == "0:00:00"
-    assert format_stopwatch(-1) == "0:00:00"  # never a negative clock
+    assert format_stopwatch(-1) == "0:00:00"  # nunca negativo
     assert format_stopwatch(9) == "0:00:09"
     assert format_stopwatch(312) == "0:05:12"
     assert format_stopwatch(3600) == "1:00:00"
     assert format_stopwatch(45296) == "12:34:56"
-    assert format_stopwatch(360000) == "100:00:00"  # hours are never capped
+    assert format_stopwatch(360000) == "100:00:00"  # as horas não têm limite
     print("ok")

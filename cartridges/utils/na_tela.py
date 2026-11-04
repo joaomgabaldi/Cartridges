@@ -12,20 +12,5 @@ from cartridges.utils.thread_principal import na_thread_principal
 
 
 def entregar_na_tela(func: Callable[..., Any], *args: Any) -> None:
-    """Agenda ``func(*args)`` na thread principal, à frente do redesenho.
-
-    Para o resultado que o usuário espera olhando um spinner ou uma barra. O
-    ``GLib.idle_add`` puro usa a prioridade ociosa (200), abaixo do redesenho
-    do GTK (120): enquanto algo anima e cada quadro ocupa o intervalo inteiro
-    da tela, o callback não roda. Em 28/09/2026 o resultado já baixado ficava
-    de 9 a 36 s parado na fila; em PRIORITY_DEFAULT a pior espera foi ~0,1 s.
-
-    Todas as entregas de uma mesma thread passam por aqui: prioridades
-    diferentes não rodam na ordem em que foram agendadas, e os seletores
-    contam com o ``_finish_results`` depois dos ``_add_result``. Tarefa de
-    fundo, que ninguém espera, e adiamento feito na própria thread principal
-    continuam no ``GLib.idle_add`` comum.
-    """
-    # No Qt, a fila de `na_thread_principal` já roda na ordem e não espera o
-    # redesenho; o valor que a função devolve é ignorado (era o "repetir" do GLib).
+    """Agenda ``func(*args)`` na thread principal, na ordem das chamadas e sem esperar o redesenho."""
     na_thread_principal(func, *args)

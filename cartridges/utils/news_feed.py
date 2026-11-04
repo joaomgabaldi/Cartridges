@@ -17,22 +17,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Read the repack site's RSS feed as *news*: everything that is not a digest.
+"""Lê o feed RSS do site de repacks como *novidades*: tudo o que não é um digest.
 
-One document, two readers with opposite appetites.
-:mod:`cartridges.utils.updates_feed` wants the periodic *Updates Digest* posts,
-whose bodies are machine fodder for the per-game patch notice. This module wants
-the other half — new repacks, site announcements, anything a person would
-actually sit and read — and drops the digests on the floor.
-
-That exclusion is the whole point of the split and it only goes one way. A
-digest never reaches the Novidades page: its body is a wall of collapsible
-spoiler markup that reads as noise, and every game it names is already surfaced
-on that game's own details page. Conversely a news post is never handed to the
-update matcher, which would happily mistake a repack announcement for a patch.
-
-Only the parts of an ``<item>`` that a list row can show are kept: title, link,
-publication date, and a short plain-text excerpt cut out of the HTML summary.
+:mod:`cartridges.utils.updates_feed` quer os digests (aviso de patch por jogo); este módulo quer o resto e descarta os digests, que na página de Novidades seriam um muro de markup de spoiler (e uma novidade nunca vai ao casador de atualizações, que a confundiria com um patch). Só o que uma linha da lista mostra é guardado: título, link, data e um trecho do resumo.
 """
 
 import logging
@@ -41,9 +28,7 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 
 # pylint: disable=protected-access
-# The digest reader owns the feed's transport and its date/title conventions;
-# borrowing them here keeps both halves of the same document reading it the same
-# way instead of drifting apart.
+# O leitor de digests é dono do transporte e das convenções de data e título do feed.
 from cartridges.utils.updates_feed import (
     FEED_URL,
     _MAX_FEED_BYTES,
@@ -55,50 +40,42 @@ from cartridges.utils.updates_feed import (
     parse_xml,
 )
 
-# WordPress serves the short summary in <description> and the full post body in
-# this RSS extension element. The summary is preferred: it is already an
-# excerpt, so it needs far less trimming than the full body.
+# O WordPress põe o resumo em <description> e o corpo inteiro neste elemento; o resumo é preferido.
 _CONTENT_NS = "{http://purl.org/rss/1.0/modules/content/}encoded"
 
-# Hard ceiling on the excerpt. Rows are expanders that show the whole text, so
-# this is not a display choice — it is a sanity guard for the case where a post
-# ships its entire body in <description> instead of a summary.
+# Guarda contra um post que traga o corpo inteiro em <description>; as linhas mostram o texto todo.
 _SUMMARY_MAX_CHARS = 4000
 
-# WordPress appends a "read the rest" teaser to the excerpt. It is a link in the
-# markup, so it survives tag stripping as a dangling sentence; cut it off.
+# O WordPress anexa um "leia o resto" ao resumo; sobrevive à remoção das tags como frase solta.
 _TEASER_RE = re.compile(
     r"\s*(continue reading|read more|leia mais)\b.*$", re.IGNORECASE | re.DOTALL
 )
 
 _WHITESPACE_RE = re.compile(r"\s+")
 
-# Tags whose text content is markup plumbing, never prose.
 _SKIPPED_TAGS = frozenset({"script", "style"})
 
-# Ceiling on how many rows one feed may produce. The page is a list of recent
-# posts; a document claiming a hundred thousand of them is not one.
+# Teto de linhas por feed.
 _MAX_POSTS = 500
 
-# Ceiling on the tag shown beside a post's date. It is a WordPress category,
-# not free text, and it shares a single line with the date.
+# Teto da categoria, mostrada na mesma linha da data.
 _MAX_CATEGORY_CHARS = 120
 
 
 @dataclass(frozen=True)
 class NewsPost:
-    """One readable feed post, reduced to what a list row shows."""
+    """Um post do feed, reduzido ao que uma linha da lista mostra."""
 
-    identifier: str  # guid or link — used to tell posts apart, not to order them
-    timestamp: int  # pubDate as epoch seconds; the post's ordering key
+    identifier: str  # guid ou link; distingue os posts, não os ordena
+    timestamp: int  # pubDate em segundos; a chave de ordenação
     title: str
-    url: str  # the post's own page, or "" when the link is missing
-    summary: str  # plain-text excerpt, possibly ""
-    category: str  # first <category>, or "" — shown as a tag on the row
+    url: str  # "" sem link
+    summary: str
+    category: str  # primeira <category>, mostrada como etiqueta
 
 
 class _TextExtractor(HTMLParser):
-    """Collect the visible text of an HTML fragment, ignoring the markup."""
+    """O texto visível de um fragmento HTML."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -119,11 +96,7 @@ class _TextExtractor(HTMLParser):
 
 
 def strip_html(fragment: str) -> str:
-    """Return the plain text of an HTML fragment, whitespace collapsed.
-
-    A malformed fragment yields whatever was parsed before it broke rather than
-    raising: an unreadable excerpt costs a row its subtitle, never the page.
-    """
+    """O texto puro de um fragmento HTML, com espaços colapsados. Fragmento malformado devolve o que foi lido, sem levantar."""
     parser = _TextExtractor()
     try:
         parser.feed(fragment or "")
@@ -135,16 +108,8 @@ def strip_html(fragment: str) -> str:
 
 
 def summarize(fragment: str, max_chars: int = _SUMMARY_MAX_CHARS) -> str:
-    """Turn a post's HTML summary into plain text, kept whole.
-
-    Nothing is shortened for presentation: the news rows expand to show the
-    entire excerpt, so trimming here would throw away text the reader asked
-    for. The cap only catches a runaway body, and even then the cut lands on a
-    word boundary with an ellipsis rather than mid-word.
-    """
-    # Cutting the teaser off often leaves the dash or spacing that introduced
-    # it. A trailing "…" is kept — the excerpt really is truncated — and a full
-    # stop is never touched, or every excerpt would lose its last sentence.
+    """O resumo HTML de um post em texto puro, inteiro: o limite só pega corpo descontrolado, cortando em fim de palavra com reticências."""
+    # Tirar o "leia o resto" deixa o travessão que o introduzia; o "…" final fica e o ponto final nunca sai.
     text = _TEASER_RE.sub("", strip_html(fragment)).strip(" \t–—-")
     if len(text) <= max_chars:
         return text
@@ -155,11 +120,7 @@ def summarize(fragment: str, max_chars: int = _SUMMARY_MAX_CHARS) -> str:
 
 
 def parse_news(xml_text: str) -> list[NewsPost]:
-    """Parse a feed document into readable posts, newest first.
-
-    Update digests are skipped — see this module's docstring — as are items with
-    no title, which carry nothing a row could display.
-    """
+    """Os posts legíveis do feed, do mais novo ao mais antigo; pula digests e itens sem título."""
     root = parse_xml(xml_text)
     if root is None:
         return []
@@ -174,19 +135,15 @@ def parse_news(xml_text: str) -> list[NewsPost]:
         title = _WHITESPACE_RE.sub(" ", (item.findtext("title") or "")).strip()
         if not title:
             continue
-        # The one exclusion this module exists for.
         if is_update_digest(title):
             continue
         title = title[:_MAX_TITLE_CHARS]
 
-        # The link is displayed and eventually launched, so it goes through the
-        # same scheme guard as a digest's repack URL. A rejected link costs the
-        # row its "Abrir no navegador" action; the post itself still reads.
+        # O link é aberto no navegador: passa pela mesma guarda de esquema da URL de um digest.
         link = _safe_url(item.findtext("link"))
         identifier = (item.findtext("guid") or link or title).strip()
 
-        # One post, one row: a feed that repeats a guid (a re-publish, or a
-        # concatenated document) would otherwise stack identical rows.
+        # Um guid repetido (republicação, documento concatenado) empilharia linhas iguais.
         if identifier in seen:
             continue
         seen.add(identifier)
@@ -215,9 +172,5 @@ def parse_news(xml_text: str) -> list[NewsPost]:
 def fetch_news(
     url: str = FEED_URL, timeout: float = 15, max_bytes: int = _MAX_FEED_BYTES
 ) -> list[NewsPost]:
-    """Download and parse the feed into readable posts.
-
-    :raises requests.RequestException: on any network/HTTP failure — the caller
-        treats a failed poll as "nothing new", never as an error worth a dialog.
-    """
+    """Baixa e lê o feed. Levanta ``requests.RequestException`` em falha de rede; quem chama a trata como "nada novo"."""
     return parse_news(fetch_feed_text(url, timeout, max_bytes))

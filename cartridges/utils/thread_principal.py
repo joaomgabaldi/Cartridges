@@ -4,8 +4,7 @@
 
 """Entrega de chamadas à thread principal (a do `QCoreApplication`).
 
-Substitui o `GLib.idle_add`: de qualquer thread, inclusive da principal, a
-função é enfileirada e roda no laço de eventos, na ordem das chamadas.
+De qualquer thread, inclusive da principal, a função é enfileirada e roda no laço de eventos, na ordem das chamadas.
 """
 
 import threading
@@ -30,10 +29,8 @@ def eh_thread_principal() -> bool:
     return threading.current_thread() is threading.main_thread()
 
 
-# O QObject nasce na thread que o cria, e é ela que o recebe as entregas. Por isso só
-# a thread principal o cria: na importação (o app importa na principal) ou no primeiro
-# uso a partir dela. Uma thread de trabalho nunca o cria, senão as chamadas iriam
-# parar numa thread sem laço de eventos.
+# O QObject recebe as entregas na thread que o criou: só a principal o cria, senão as chamadas
+# iriam para uma thread sem laço de eventos.
 _ponte: _Ponte | None = _Ponte() if eh_thread_principal() else None
 
 

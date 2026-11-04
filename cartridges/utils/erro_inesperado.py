@@ -1,15 +1,6 @@
-"""Avisa o usuário de um erro não tratado, num diálogo da janela principal (D89).
+"""Avisa o usuário de um erro não tratado, num diálogo da janela principal.
 
-Chamado pelos ganchos de exceção de `cartridges.logging.setup`, de qualquer
-thread: o diálogo sempre é pedido na thread da tela, via `na_thread_principal`,
-à fila de diálogos do `Aplicativo` (D72). Sem `shared.aplicativo` (o assistente,
-a restauração) o erro fica só no log. Depois do `aboutToQuit` o `shared.aplicativo`
-continua lá: o pedido entra na pilha, que não roda mais, e só o log fica. Com a principal escondida e a
-janela das tarefas aberta, o diálogo abre nela, como na `main`; sem ela, espera a principal voltar.
-Nada é enviado a lugar nenhum.
-Sem enxurrada: um diálogo aberto por vez, e o mesmo erro (tipo + arquivo:linha
-do último quadro do app) só avisa uma vez por execução do app. Só `Exception`
-merece diálogo: `KeyboardInterrupt`, `SystemExit` e afins só vão para o log.
+Chamado pelos ganchos de exceção de `cartridges.logging.setup`, de qualquer thread; o diálogo é pedido na thread da tela (com a principal escondida, abre na janela das tarefas). Sem `shared.aplicativo` ou depois do `aboutToQuit` só o log fica. Um diálogo por vez, e o mesmo erro (tipo + arquivo:linha do último quadro do app) avisa uma vez por execução; só `Exception` merece diálogo.
 """
 
 import logging
@@ -29,7 +20,7 @@ _aberto = False
 def _chave(tipo, rastro) -> tuple:  # type: ignore
     try:
         quadros = traceback.extract_tb(rastro)
-        # O quadro do app, não o da biblioteca (requests, GTK) onde estourou.
+        # O quadro do app, não o da biblioteca onde estourou.
         do_app = [q for q in quadros if _PACOTE in Path(q.filename).parts]
         quadro = (do_app or quadros)[-1]
         return (tipo, quadro.filename, quadro.lineno)

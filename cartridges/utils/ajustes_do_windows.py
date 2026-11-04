@@ -2,12 +2,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Os ajustes do Windows relidos com o app aberto (D88).
+"""Os ajustes do Windows relidos com o app aberto.
 
-O Windows avisa toda janela de topo com um `WM_SETTINGCHANGE` quando um ajuste do sistema muda (os "Efeitos de
-animação", entre outros). O tema o Qt já segue sozinho; as animações são lidas por nós
-(`SPI_GETCLIENTAREAANIMATION`), e este filtro diz quando relê-las. O realce também: o Qt entrega a variante clara
-dele no tema escuro, e a `main` usa o `AccentColor` cru do registro.
+O Windows avisa toda janela de topo com um `WM_SETTINGCHANGE` quando um ajuste muda. O tema o Qt já segue;
+as animações (`SPI_GETCLIENTAREAANIMATION`) e o realce são relidos por nós, e este filtro diz quando.
+O Qt entrega a variante clara do realce no tema escuro, por isso se usa o `AccentColor` cru do registro.
 """
 
 import logging
@@ -37,7 +36,7 @@ def cor_de_destaque() -> str | None:
 
 
 def aplicar_cor_de_destaque() -> None:
-    """Põe o realce do registro na paleta do app, de onde o `Tema` o lê (`apply_windows_theme` da `main`)."""
+    """Põe o realce do registro na paleta do app, de onde o `Tema` o lê."""
     if (cor := cor_de_destaque()) is None:
         return
     paleta = QGuiApplication.palette()
@@ -57,11 +56,10 @@ def e_mudanca_de_ajuste(tipo, mensagem) -> bool:  # noqa: ANN001
 
 
 class FiltroDeAjustes(QAbstractNativeEventFilter):
-    """Instalado no app: a cada `WM_SETTINGCHANGE` de uma janela dele, chama ``ao_mudar`` pela thread principal.
+    """A cada `WM_SETTINGCHANGE`, chama ``ao_mudar`` pela thread principal.
 
-    Roda dentro do procedimento da janela, em toda mensagem nativa: nunca consome nenhuma, nunca levanta, e o retorno
-    vai para a fila (fora do procedimento da janela). Várias janelas recebem a mesma mudança: quem relê só avisa se
-    o valor mudou.
+    Roda no procedimento da janela, em toda mensagem nativa: nunca consome nenhuma nem levanta.
+    Várias janelas recebem a mesma mudança: quem relê só avisa se o valor mudou.
     """
 
     def __init__(self, ao_mudar: Callable[[], None]) -> None:
@@ -77,6 +75,6 @@ class FiltroDeAjustes(QAbstractNativeEventFilter):
         return False, 0
 
     def desligar(self) -> None:
-        """Sai do app. O Qt guarda só o ponteiro: o filtro sai antes de o objeto Python poder morrer."""
+        """O Qt guarda só o ponteiro: o filtro sai antes de o objeto Python poder morrer."""
         if (app := QCoreApplication.instance()) is not None:
             app.removeNativeEventFilter(self)

@@ -17,16 +17,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A cor que resume uma imagem — a capa de um jogo, ou a tela dele durante a
-sessão —, para vestir as fitas de LED.
+"""A cor que resume uma imagem (a capa ou a tela do jogo), para vestir as fitas de LED.
 
-Dominante aqui não é "a que ocupa mais pixels": numa capa a cor mais comum
-costuma ser o preto do fundo ou o cinza de uma moldura, e nenhum dos dois diz
-nada sobre o jogo. O que vence é a mais viva entre as que aparecem bastante —
-frequência vezes saturação —, e cinzas, pretos e brancos nem entram na conta.
-
-Só matiz e saturação saem daqui. O brilho é do usuário: ele vem do jogo ou do
-padrão das Preferências, nunca da imagem.
+Dominante não é a que ocupa mais pixels (costuma ser o preto do fundo): vence a mais viva entre as
+frequentes (frequência vezes saturação); cinzas, pretos e brancos não entram. Só matiz e saturação saem
+daqui; o brilho é do usuário.
 """
 
 import colorsys
@@ -36,32 +31,21 @@ from typing import Optional
 
 from PIL import Image
 
-# Abaixo disto a cor é um cinza (pouca saturação) ou quase preta (pouco valor),
-# e nos dois casos ela viraria uma luz sem graça na parede.
+# Abaixo disto a cor é cinza (pouca saturação) ou quase preta (pouco valor).
 MIN_SATURACAO = 0.25
 MIN_VALOR = 0.15
 
-# A capa cabe em 64x64 para a conta: a cor dominante não muda com o tamanho, e
-# oito cores são suficientes para separar o fundo do que salta aos olhos.
+# 64x64 e oito cores bastam para separar o fundo do que salta aos olhos.
 AMOSTRA = (64, 64)
 CORES = 8
 
 
 def dominante(capa: Path) -> Optional[tuple[int, int]]:
-    """Matiz (0–359) e saturação (0–1000) da capa, ou ``None`` sem cor útil.
-
-    Nunca levanta: quem chama está na thread de UI, e um enfeite de sessão não
-    pode derrubar a tela.
-    """
+    """Matiz (0–359) e saturação (0–1000) da capa, ou ``None`` sem cor útil. Nunca levanta (thread de UI)."""
     try:
         with Image.open(capa) as imagem:
             return dominante_da_imagem(imagem)
-    # A captura é larga de propósito. As capas vêm de fora — download da
-    # SteamGridDB, da Wallhaven, arquivo que o usuário escolheu — e a Pillow
-    # tem um jeito diferente de reclamar de cada defeito: arquivo truncado,
-    # formato estranho, imagem gigante (``DecompressionBombError``, que nem
-    # herda de ``OSError``). Listar as exceções seria apostar que a lista está
-    # completa; qualquer uma delas quer dizer a mesma coisa, "sem cor útil".
+    # Captura larga de propósito: o Pillow reclama de cada defeito de um jeito (``DecompressionBombError`` nem é ``OSError``).
     except Exception as erro:
         logging.info("Capa sem cor legível (%s): %s", capa.name, erro)
         return None
@@ -70,12 +54,9 @@ def dominante(capa: Path) -> Optional[tuple[int, int]]:
 def dominante_da_imagem(
     imagem: Image.Image, cores: int = CORES, min_valor: float = MIN_VALOR
 ) -> Optional[tuple[int, int]]:
-    """A mesma conta de ``dominante``, para uma imagem já aberta: o print da
-    tela do jogo não passa por arquivo.
+    """A conta de ``dominante`` para uma imagem já aberta (o print da tela do jogo).
 
-    A tela pede mais cores e um valor mínimo menor que a capa: numa cena, o
-    amarelo forte não pode se fundir ao branco do lado, e o corredor
-    azul-escuro ainda tem cor para dar.
+    A tela pede mais cores e um valor mínimo menor que a capa, para o amarelo forte não se fundir ao branco vizinho.
     """
     amostra = imagem.convert("RGB").resize(AMOSTRA)
     paleta = amostra.quantize(colors=cores, method=Image.Quantize.FASTOCTREE)

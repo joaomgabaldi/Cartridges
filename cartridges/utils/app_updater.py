@@ -19,13 +19,7 @@
 
 """Avisa quando saiu uma versão nova do Cartridges e instala, se a pessoa quiser.
 
-A cada abertura do app instalado, uma thread pergunta ao GitHub qual é a última
-release. Se a tag for mais nova que ``shared.VERSION``, a thread principal mostra
-as notas da release com "Agora não"/"Atualizar". No "Atualizar", o instalador é baixado para
-``%TEMP%\\Cartridges-update``, conferido pelo SHA256 que o GitHub publica e aberto
-em modo silencioso; o app fecha e o próprio instalador o reabre no fim.
-
-Não confundir com ``updates_checker``, que trata das atualizações dos jogos.
+A cada abertura do app instalado, uma thread pergunta ao GitHub a última release; se a tag for mais nova que ``shared.VERSION``, a principal mostra as notas com "Agora não"/"Atualizar". No "Atualizar", o instalador é baixado para ``%TEMP%\\Cartridges-update``, conferido pelo SHA256 do GitHub e aberto em modo silencioso; o app fecha e o instalador o reabre. Não confundir com ``updates_checker`` (atualizações dos jogos).
 """
 
 import hashlib
@@ -51,29 +45,13 @@ from cartridges.utils.thread_principal import na_thread_principal
 
 RELEASES_URL = "https://api.github.com/repos/joaomgabaldi/Cartridges/releases/latest"
 
-# Janela de progresso sem nenhuma pergunta, e sem reiniciar o Windows. O [Run]
-# do Cartridges.iss.in não tem skipifsilent, então reabre o app no fim. O que
-# falhar depois de o app fechar (UAC recusado, arquivo em uso, antivírus) só
-# aparece no log do Inno, em %TEMP%\Setup Log AAAA-MM-DD #NNN.txt, fora da
-# pasta que o app apaga.
-#
-# /FORCECLOSEAPPLICATIONS: em modo silencioso, se um processo que usa a pasta não
-# fecha com educação, o instalador desiste e desfaz tudo (visto em 13/09/2026, com
-# um processo auxiliar da versão GTK). Forçado, o Restart Manager o encerra e a
-# instalação segue.
-#
-# Risco conhecido: forçado, ele encerra também o próprio app se o fechamento
-# ainda não acabou — e o `session_fita.fechar()`, no fechamento, pode levar até
-# 8 s. O dano é limitado (a chave órfã das fitas é desfeita na reabertura), mas o
-# teste de ponta a ponta do atualizador precisa ser repetido com as fitas ligadas.
+# Só a janela de progresso, sem perguntas nem reiniciar o Windows. O [Run] do Cartridges.iss.in não tem skipifsilent e reabre o app no fim. Falhas depois de o app fechar só aparecem no log do Inno, em %TEMP%\Setup Log AAAA-MM-DD #NNN.txt.
+# /FORCECLOSEAPPLICATIONS: em modo silencioso, um processo que não fecha com educação faz o instalador desistir e desfazer tudo. Risco: encerra também o app se o fechamento não acabou (`session_fita.fechar()` leva até 8 s; a chave órfã das fitas é desfeita na reabertura).
 INSTALLER_ARGUMENTS = "/SILENT /SUPPRESSMSGBOXES /NORESTART /LOG /FORCECLOSEAPPLICATIONS"
 
-# Teto do download quando a release não informa o tamanho do anexo. O
-# instalador tem pouco mais de 100 MB; o teto só impede um corpo sem fim de encher o disco.
+# Teto do download quando a release não informa o tamanho do anexo: só impede um corpo sem fim de encher o disco.
 MAX_INSTALLER_BYTES = 512 * 1024 * 1024
 
-# De quanto em quanto tempo a pergunta da versão nova volta a olhar se a sessão
-# de jogo que a adiou já acabou.
 ASK_RETRY_SECONDS = 60
 
 _NORMAL = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
@@ -90,7 +68,7 @@ class Release:
     notes: str
     url: str
     size: int
-    # Hex minúsculo; "" quando o GitHub não informou o digest do anexo.
+    # Hex minúsculo; "" sem digest do anexo.
     sha256: str
 
 
@@ -122,7 +100,7 @@ def parse_release(data: dict) -> Optional[Release]:
 def is_newer(version: str, current: str) -> bool:
     """``X.Y.Z`` compara por número; ``AAAA.MM.DD`` (as versões antigas) é sempre
     mais velha que ``X.Y.Z``; outro formato nunca é mais novo."""
-    # A data também casa com _NORMAL: ela é testada antes.
+    # A data também casa com _NORMAL, por isso é testada antes.
     if _DATA.fullmatch(version) or _DATA.fullmatch(current):
         return bool(_DATA.fullmatch(version) and _DATA.fullmatch(current) and version > current)
     if (nova := _NORMAL.fullmatch(version)) and (atual := _NORMAL.fullmatch(current)):
@@ -131,14 +109,8 @@ def is_newer(version: str, current: str) -> bool:
 
 
 def notes_to_markup(notes: str) -> str:
-    """Converte o Markdown das notas da release para o ``Text.RichText`` do Qt.
-
-    Só o que as notas usam: ``## título``, ``**negrito**``, crases e ``- `` no
-    começo da linha. A seção ``## Instalação`` é cortada: ela manda baixar o
-    arquivo da página do GitHub, o que dentro do app não faz sentido.
-    """
-    # ponytail: negrito e crase cruzados ("`a **b` c**") geram tags mal aninhadas
-    # (o Qt as engole sem erro); as notas são escritas à mão, não vale um parser.
+    """Converte o Markdown das notas da release para o ``Text.RichText`` do Qt (só ``## título``, ``**negrito**``, crases e ``- ``). A seção ``## Instalação`` é cortada: manda baixar da página do GitHub, o que no app não faz sentido."""
+    # shortcut: negrito e crase cruzados ("`a **b` c**") geram tags mal aninhadas que o Qt engole; trocar por um parser se as notas deixarem de ser escritas à mão.
     lines: list[str] = []
     skipping = False
     for raw in notes.replace("\r\n", "\n").split("\n"):
@@ -151,9 +123,7 @@ def notes_to_markup(notes: str) -> str:
         if skipping:
             continue
 
-        # Escapar antes de trocar: `**` e crase não mudam no escape, e o que o
-        # texto trouxer de `<` ou `&` não vira tag
-        # (nem link: nenhum `<a>` é gerado).
+        # Escapa antes de trocar: `**` e crase não mudam no escape, e `<` ou `&` do texto não viram tag.
         line = html.escape(raw, quote=False)
         line = _BOLD_RE.sub(r"<b>\1</b>", line)
         line = _CODE_RE.sub(r"<tt>\1</tt>", line)
@@ -166,11 +136,9 @@ def notes_to_markup(notes: str) -> str:
 def installed_root() -> Optional[Path]:
     """Pasta da instalação, ou None quando o app roda do código-fonte.
 
-    O app instalado roda de ``{app}\\bin\\Kyron.exe`` e o Inno Setup deixa o
-    ``unins000.exe`` em ``{app}``. Rodando do código-fonte, o pai da pasta do
-    Python não tem desinstalador, e o app nunca tenta se atualizar. A cópia de
-    desenvolvimento nunca se atualiza, nem com um desinstalador ao lado: a versão
-    final não pode ser instalada por cima dela (D109).
+    O app instalado roda de ``{app}\\bin\\Kyron.exe`` e o Inno Setup deixa o ``unins000.exe`` em ``{app}``;
+    do código-fonte não há desinstalador, e o app nunca tenta se atualizar. A cópia de desenvolvimento também
+    nunca se atualiza: a versão final não pode ser instalada por cima dela.
     """
     if shared.canal() != "final":
         return None
@@ -179,27 +147,19 @@ def installed_root() -> Optional[Path]:
 
 
 def download_dir() -> Path:
-    """Onde o instalador baixado fica até a próxima abertura do app."""
     return Path(tempfile.gettempdir()) / "Cartridges-update"
 
 
 def _abrir_instalador(caminho: Path) -> None:
-    """Abre o instalador sem esperar por ele; o ponto que os testes trocam.
+    """Abre o instalador sem esperar por ele (o ponto que os testes trocam). Levanta ``OSError``.
 
-    ShellExecute: o próprio Inno Setup pede o UAC depois de começar, quando o app
-    já fechou. As barras são trocadas porque um caminho pode vir montado com "/".
-
-    :raises OSError: o Windows não conseguiu abrir o arquivo
+    ShellExecute: o Inno Setup pede o UAC depois de começar, com o app já fechado. As barras são trocadas porque um caminho pode vir com "/".
     """
     os.startfile(str(caminho).replace("/", "\\"), arguments=INSTALLER_ARGUMENTS)
 
 
 def _buscar_release() -> Optional[Release]:
-    """Pergunta ao GitHub qual é a última release.
-
-    :raises requests.RequestException: falha de rede ou HTTP
-    :raises ValueError: resposta que não é JSON
-    """
+    """Pergunta ao GitHub qual é a última release. Levanta ``RequestException`` (rede/HTTP) ou ``ValueError`` (não é JSON)."""
     response = requests.get(
         RELEASES_URL,
         timeout=10,
@@ -219,19 +179,11 @@ def download_installer(
     progress: Callable[[float], None],
     cancelled: threading.Event,
 ) -> None:
-    """Baixa o instalador para ``target``, conferindo o SHA256 no caminho.
+    """Baixa o instalador para ``target``, conferindo o SHA256.
 
-    Grava em ``target.<thread>.part`` e só renomeia depois de o hash bater, então um
-    ``target`` que existe é sempre um instalador inteiro e conferido. Em
-    qualquer falha, Cancelar incluído, o ``.part`` é apagado e a exceção sobe.
-    ``progress`` recebe a fração de 0 a 1, chamado desta mesma thread.
-
-    :raises DownloadCancelled: ``cancelled`` foi ligado no meio
-    :raises ValueError: a release não informa o hash, ou ele não confere
-    :raises requests.RequestException: falha de rede ou HTTP
+    Grava em ``target.<thread>.part`` e só renomeia com o hash batendo: um ``target`` existente é sempre inteiro e conferido. Em qualquer falha (Cancelar incluído) o ``.part`` é apagado e a exceção sobe: ``DownloadCancelled``, ``ValueError`` (sem hash ou hash errado) ou ``RequestException``. ``progress`` (0 a 1) é chamado desta thread.
     """
-    # Sem hash não há como saber se o .exe é o que foi publicado, e ele vai
-    # rodar com o pedido de administrador. Recusa antes de baixar 60 MB.
+    # Sem hash não há como saber se o .exe é o publicado, e ele roda como administrador: recusa antes de baixar.
     if not release.sha256:
         raise ValueError("a release não informa o SHA256 do instalador")
 
@@ -240,8 +192,7 @@ def download_installer(
     part = target.with_name(f"{target.name}.{threading.get_ident()}.part")
     hasher = hashlib.sha256()
     received = 0
-    # O tamanho informado é o do anexo publicado: passar dele já é outro
-    # arquivo, e não adianta baixar o resto para o hash recusar no fim.
+    # Passar do tamanho do anexo publicado já é outro arquivo; não adianta baixar o resto para o hash recusar.
     limit = release.size or MAX_INSTALLER_BYTES
     try:
         with requests.get(
@@ -266,7 +217,7 @@ def download_installer(
             raise ValueError("o SHA256 do instalador baixado não confere")
         part.replace(target)
     except BaseException:
-        # O `with` já fechou o arquivo, senão o Windows não deixaria apagar.
+        # O `with` já fechou o arquivo; senão o Windows não deixaria apagar.
         part.unlink(missing_ok=True)
         raise
 
@@ -274,30 +225,25 @@ def download_installer(
 class AppUpdater(QObject):
     """Checagem na abertura, pergunta, download e troca pelo instalador.
 
-    O QML (``DialogoDaAtualizacao``) lê ``pergunta``, ``baixando`` e ``progresso``
-    e responde por ``responder``/``cancelar``; o botão das Preferências chama
-    ``buscarAgora``. Tudo o que toca a tela roda na thread principal.
+    O QML (``DialogoDaAtualizacao``) lê ``pergunta``, ``baixando`` e ``progresso`` e responde por ``responder``/``cancelar``;
+    o botão das Preferências chama ``buscarAgora``. O que toca a tela roda na thread principal.
     """
 
     alterado = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        # Ligado pelo Cancelar ou pelo fechamento do app: o download para no
-        # próximo pedaço e um resultado que chegue depois é descartado.
+        # Ligado pelo Cancelar ou pelo fechamento: o download para no próximo pedaço e um resultado tardio é descartado.
         self._cancel = threading.Event()
         self._stopped = False
-        # A pergunta (ou o download que ela abriu) está na tela: a checagem da
-        # abertura adiada e o botão das Preferências não abrem uma segunda.
+        # A pergunta (ou o download dela) está na tela: nenhuma outra abre.
         self._perguntando = False
-        # Uma busca do botão no caminho; reabrir as Preferências devolve o botão.
+        # Uma busca do botão no caminho.
         self._buscando = False
         self._release: Optional[Release] = None
         self._pergunta: dict = {}
         self._baixando = False
         self._progresso = 0.0
-
-    # -- o que o QML lê ------------------------------------------------------
 
     @Property("QVariantMap", notify=alterado)
     def pergunta(self) -> dict:
@@ -319,26 +265,18 @@ class AppUpdater(QObject):
     def versao(self) -> str:
         return shared.VERSION
 
-    # -- ciclo de vida -------------------------------------------------------
-
     def start(self) -> None:
-        """Checa uma vez, fora da thread principal. Só no app instalado."""
         if installed_root() is None:
             return
         threading.Thread(target=self._check_thread, daemon=True).start()
 
     def stop(self) -> None:
-        """Descarta a checagem ou o download que ainda estiverem no caminho."""
         self._stopped = True
         self._cancel.set()
 
     def buscar_agora(self, responder: Callable[[Optional[str]], None]) -> None:
-        """Checagem pedida pelo botão das Preferências.
-
-        Diferente da checagem da abertura, toda resposta chega à pessoa: versão
-        nova vira a pergunta de sempre e ``responder(None)``; o resto vira
-        ``responder(texto)`` para um aviso. Sempre na thread principal, uma vez.
-        """
+        """Checagem pedida pelo botão das Preferências: toda resposta chega à pessoa (versão nova vira a pergunta e
+        ``responder(None)``; o resto vira ``responder(texto)``). Sempre na thread principal, uma vez."""
         if installed_root() is None:
             responder("A busca de atualizações só funciona no aplicativo instalado.")
             return
@@ -380,15 +318,11 @@ class AppUpdater(QObject):
 
         self.buscar_agora(responder)
 
-    # -- respostas do diálogo ------------------------------------------------
-
     @Slot(bool)
     def responder(self, atualizar: bool) -> None:
-        """"Atualizar" começa o download; "Agora não" (ou Esc) só fecha a pergunta."""
         release = self._release
         if not self._pergunta or release is None:
             return
-        # "Agora não" não grava nada: na próxima abertura, a pergunta volta.
         self._pergunta = {}
         self._release = None
         if atualizar:
@@ -404,18 +338,14 @@ class AppUpdater(QObject):
         self._baixando = False
         self.alterado.emit()
 
-    # -- thread de checagem --------------------------------------------------
-
     def _check_thread(self) -> None:
-        # O instalador da atualização anterior sai aqui. Se ainda estiver em
-        # uso (acabou de reabrir o app), o erro é ignorado e ele sai na próxima.
+        # O instalador da atualização anterior sai aqui; em uso (app recém-reaberto), sai na próxima.
         shutil.rmtree(download_dir(), ignore_errors=True)
 
         try:
             release = _buscar_release()
         except (requests.RequestException, ValueError) as error:
-            # Sem rede não é erro: o app abre como sempre, e a pergunta fica
-            # para a próxima abertura.
+            # Sem rede não é erro: a pergunta fica para a próxima abertura.
             logging.info("Checagem de versão nova falhou: %s", error)
             return
         except Exception:  # pylint: disable=broad-exception-caught
@@ -430,8 +360,6 @@ class AppUpdater(QObject):
         logging.info("Versão nova disponível: %s", release.version)
         na_thread_principal(self._ask, release)
 
-    # -- thread principal ----------------------------------------------------
-
     def _definir_busca(self, buscando: bool) -> None:
         self._buscando = buscando
         self.alterado.emit()
@@ -440,7 +368,6 @@ class AppUpdater(QObject):
         if self._stopped or shared.aplicativo is None or self._perguntando:
             return
 
-        # A pergunta espera a sessão acabar (veja `_ocupado`).
         if self._ocupado():
             eu = weakref.ref(self)
             QTimer.singleShot(
@@ -455,10 +382,9 @@ class AppUpdater(QObject):
 
     @staticmethod
     def _ocupado() -> bool:
-        """Com um jogo aberto, o "Atualizar" fecharia o app no meio da sessão, e o app
-        reaberto pelo instalador não volta a rastrear o jogo. Vale também para o
-        backup ou a restauração dos saves."""
-        # avoid import cycles
+        """Com um jogo aberto, o "Atualizar" fecharia o app no meio da sessão, e o app reaberto não volta a rastrear o jogo.
+        Vale também para o backup ou a restauração dos saves."""
+        # evita import circular
         from cartridges.process_session import ProcessSession
         from cartridges.session_window import SessionWindow
 
@@ -478,8 +404,7 @@ class AppUpdater(QObject):
         self, release: Release, responder: Callable[[Optional[str]], None]
     ) -> None:
         self._definir_busca(False)
-        # Pedida pelo botão, a pergunta não espera em silêncio: a pessoa clicou
-        # e precisa de uma resposta agora.
+        # Pedida pelo botão, a pergunta não espera em silêncio: a pessoa precisa de uma resposta agora.
         if self._ocupado():
             responder(
                 "Versão {} disponível. Conclua o jogo, o backup ou a restauração "
@@ -490,8 +415,7 @@ class AppUpdater(QObject):
         responder(None)
 
     def _download(self, release: Release) -> None:
-        # Evento novo por download: um Cancelar de antes, na mesma sessão, não
-        # para este, e o resultado de um download antigo, ainda preso, é descartado.
+        # Evento novo por download: um Cancelar anterior não o para, e o resultado de um download antigo é descartado.
         self._cancel = cancel = threading.Event()
         self._baixando = True
         self._progresso = 0.0
@@ -521,8 +445,7 @@ class AppUpdater(QObject):
             self.alterado.emit()
 
     def _finish(self, target: Optional[Path], cancel: threading.Event) -> None:
-        # Cancelar apertado no último instante, o app fechando ou um download mais
-        # novo no lugar: o resultado chegou tarde e não vale mais.
+        # Cancelar de última hora, app fechando ou download mais novo: o resultado chegou tarde.
         if self._stopped or cancel is not self._cancel or cancel.is_set():
             return
 
@@ -535,9 +458,7 @@ class AppUpdater(QObject):
                 logging.warning("Não foi possível abrir o instalador: %s", error)
                 message = "Não foi possível abrir o instalador"
             else:
-                # O instalador precisa do app fechado para trocar os arquivos,
-                # e o [Run] do .iss o reabre no fim. Um segundo resultado não
-                # sai de novo.
+                # O instalador precisa do app fechado para trocar os arquivos (o [Run] do .iss o reabre); um segundo resultado não sai de novo.
                 self._stopped = True
                 QCoreApplication.quit()
                 return

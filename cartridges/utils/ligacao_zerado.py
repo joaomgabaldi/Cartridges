@@ -6,15 +6,12 @@
 
 """Liga um jogo de Jogos Zerados ao jogo da biblioteca que tem o mesmo appID.
 
-Um zerado recriado pelo backup (ou reinstalado de outra pasta) não casa com o
-atalho novo: o jogo volta como um jogo novo, e a página ficaria com as duas
-versões. Quando o jogo da biblioteca ganha o appID da Steam (pela rotina da
-Steam ou pela edição), os dados do zerado passam para ele e o zerado sai, como
-se tivesse sido movido de Jogos Zerados para a biblioteca.
+Um zerado recriado pelo backup (ou reinstalado de outra pasta) não casa com o atalho novo, e a página
+ficaria com as duas versões. Quando o jogo da biblioteca ganha o appID da Steam, os dados do zerado passam
+para ele e o zerado sai.
 
-Liga só quando não há dúvida: exatamente um zerado e exatamente um jogo da
-biblioteca com aquele appID. Qualquer outro caso fica como está, com uma linha
-no log — escolher às cegas estragaria dados.
+Liga só sem dúvida: exatamente um zerado e um jogo da biblioteca com aquele appID; o resto fica como está,
+com uma linha no log.
 """
 
 import logging
@@ -28,7 +25,7 @@ from cartridges.utils.save_cover import save_cover
 
 
 def agendar(jogo: Jogo) -> None:
-    """Pede a ligação na thread principal. Seguro de qualquer thread."""
+    """Pede a ligação na thread principal; seguro de qualquer thread."""
     na_thread_principal(ligar_zerado, jogo)
 
 
@@ -37,8 +34,7 @@ def _vazio(valor) -> bool:
 
 
 def _mover_capa(zerado: Jogo, jogo: Jogo) -> None:
-    # Pela troca de capa de sempre: ela invalida as cópias animadas da capa
-    # anterior (o nome delas é só o id) e atualiza a capa na tela.
+    # Pela troca de capa normal: invalida as cópias animadas da capa anterior (o nome delas é só o id).
     origem = zerado.get_cover_path()
     if origem is not None:
         save_cover(jogo.game_id, origem)
@@ -47,12 +43,8 @@ def _mover_capa(zerado: Jogo, jogo: Jogo) -> None:
 def _mover_escolhas(zerado: Jogo, jogo: Jogo) -> None:
     """Leva a escolha manual do zerado, só se o jogo não tiver uma própria.
 
-    "Escolha própria" é qualquer decisão travada do jogo, não só a presença de
-    um arquivo: no logo, "usar o título" (``logo_choice`` devolve ``"title"``)
-    é uma decisão tão do jogo quanto um logo manual; na parede de sessão,
-    "não trocar" (``escolha`` devolve ``"none"``) idem. Só ``"auto"`` (nenhuma
-    decisão tomada) conta como vazio — sobrescrever uma decisão travada do
-    jogo seria desfazê-la, não preencher uma lacuna.
+    Escolha própria é qualquer decisão travada, não só um arquivo (logo "title", parede "none");
+    só ``"auto"`` conta como vazio.
     """
     if game_logo.logo_choice(zerado) == "manual" and game_logo.logo_choice(jogo) == "auto":
         if (logo := game_logo.cached_logo_path(zerado)) is not None:
@@ -74,8 +66,7 @@ def _mover_escolhas(zerado: Jogo, jogo: Jogo) -> None:
         (brilho := session_fita.brilho_escolhido(zerado.game_id)) is not None
         and session_fita.brilho_gravado(jogo.game_id) is None
     ):
-        # Só o brilho próprio: também é escolha do zerado, e o arquivo dele
-        # vai embora com a ligação.
+        # O brilho próprio também é escolha do zerado, e o arquivo dele vai embora com a ligação.
         session_fita.salvar_brilho(jogo.game_id, jogo.name, brilho)
 
 
@@ -106,34 +97,24 @@ def ligar_zerado(jogo: Jogo) -> bool:
             setattr(jogo, campo, getattr(zerado, campo))
 
     session_log.mover_jogo(zerado.game_id, jogo.game_id)
-    # As conquistas também, somadas às do jogo: as do zerado são do mesmo
-    # jogo (mesmo appID), e o arquivo dele vai embora com o Excluir abaixo.
+    # As conquistas são do mesmo jogo (mesmo appID); o arquivo do zerado vai embora com o Excluir abaixo.
     historico.transferir(zerado.game_id, jogo.game_id)
     try:
         _mover_capa(zerado, jogo)
         _mover_escolhas(zerado, jogo)
     except OSError as erro:
-        # Capa e escolhas se refazem; o tempo e as sessões, que já passaram,
-        # são o que não pode se perder.
+        # Capa e escolhas se refazem; o tempo e as sessões não.
         logging.warning("Ligação de %s: arquivos não copiados: %s", jogo.name, erro)
 
-    # Salva antes de excluir: se `cleanup_game` falhar (ex.: PermissionError no
-    # Windows, arquivo aberto por outro processo), o jogo já ficou com o tempo
-    # somado e o resto gravado em disco — só o zerado, que também tentou sair,
-    # fica para trás, em vez de o trabalho de fusão inteiro morrer na memória.
+    # Salva antes de excluir: se `cleanup_game` falhar (PermissionError no Windows), só o zerado fica para trás.
     jogo.save()
     jogo.update()
 
-    # O `jogo_excluido` da store tira o zerado da grade e, se a página de
-    # detalhes dele estiver aberta, sai dela (`DetalhesDoJogo._excluido`) — do
-    # contrário ela seguiria um jogo que não existe mais na store, e qualquer
-    # ação ali (mudar status, editar) reviveria o arquivo apagado, contando o
-    # tempo em dobro numa próxima ligação. Mesmo caminho do Excluir.
+    # O `jogo_excluido` da store fecha a página de detalhes do zerado; aberta, uma ação ali reviveria o arquivo apagado.
     shared.store.excluir(zerado, apagar_sessoes=False)
 
     if shared.aplicativo is not None:
         # Texto puro: a fila de avisos não interpreta markup.
-        # A variável é o nome do jogo
         shared.aplicativo.avisos.adicionar(
             _("Os dados de {} em Jogos Zerados foram transferidos para a biblioteca").format(
                 jogo.name

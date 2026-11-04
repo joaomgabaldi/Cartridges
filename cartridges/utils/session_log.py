@@ -6,21 +6,10 @@
 
 """Histórico de sessões de jogo: uma linha por sessão terminada.
 
-``game.playtime`` é um número só, e um número só não responde nada além de
-"quanto no total": não dá para saber o que foi jogado esta semana, nem para
-apagar uma sessão que contou errado sem editar o total à mão. Este módulo
-guarda as sessões que o total soma.
+Guarda as sessões que ``game.playtime`` soma, para saber o que foi jogado esta semana e apagar uma sessão errada.
 
-O formato é JSON Lines — um objeto por linha, gravado com ``append``. Foi
-escolhido por causa de como as escritas acontecem: uma sessão termina e sua
-linha precisa chegar ao disco sem reler nem reescrever o arquivo inteiro, que é
-o que um JSON único exigiria a cada partida. Apagar uma sessão reescreve tudo,
-mas isso acontece por escolha de alguém olhando a tela, não a cada partida.
-
-Linhas ilegíveis (um arquivo cortado por queda de energia no meio de um append,
-um arquivo editado à mão) são puladas em vez de derrubar a leitura: o histórico
-é um registro secundário, e perder uma linha dele nunca pode custar a
-biblioteca.
+JSON Lines com ``append``: a linha de uma sessão chega ao disco sem reescrever o arquivo (só apagar reescreve).
+Linhas ilegíveis (corte por queda de energia, edição à mão) são puladas: perder uma linha nunca pode custar a biblioteca.
 """
 
 import json
@@ -34,32 +23,24 @@ from typing import Any, Optional
 from cartridges import shared
 
 
-# Ano 3000. Qualquer `end` além disto é edição manual ou lixo, e aceitar um
-# valor que o fromtimestamp do Windows recusa só move o erro para quem exibe.
+# Ano 3000: um `end` além disso é lixo, e o fromtimestamp do Windows o recusaria na tela.
 _MAX_END = 32503680000
 
-# `record` (thread do jogo que acabou de fechar) e as reescritas — `delete`
-# (thread principal, na tela de histórico), `apagar_jogo` e `mover_jogo`
-# (threads de import/restore) — mexem no mesmo arquivo. Sem isto, um `record`
-# entre o `read_text` e o `tmp.replace` de uma reescrita se perde, e duas
-# reescritas concorrentes disputam o mesmo nome de `.jsonl.tmp`.
+# `record` e as reescritas (`delete`, `apagar_jogo`, `mover_jogo`) rodam em threads diferentes sobre o mesmo arquivo:
+# sem a trava, um `record` entre o `read_text` e o `replace` se perde e duas reescritas disputam o `.jsonl.tmp`.
 _LOCK = threading.Lock()
 
 
 def _path() -> Path:
-    # Resolvido a cada chamada, não no import: `shared.app_dir` é montado em
-    # tempo de execução e repontado pelos testes, e uma constante de módulo congelaria o
-    # valor de quem importasse primeiro.
+    # A cada chamada, não no import: `shared.app_dir` é montado em execução e repontado pelos testes.
     return shared.app_dir / "sessions.jsonl"
 
 
 def record(game_id: str, seconds: int, end: Optional[int] = None) -> None:
-    """Anota uma sessão terminada. Sessões de 0 s não são anotadas.
+    """Anota uma sessão terminada (0 s não é anotada).
 
-    ``end`` é o instante em que a sessão acabou (padrão: agora). O início é
-    derivado dele, e não medido: quem conta o tempo usa o relógio monotônico
-    justamente porque o relógio de parede pula, então o único instante de
-    parede confiável de uma sessão é o momento em que ela termina.
+    ``end`` é o instante em que acabou (padrão: agora); o início é derivado dele, pois o tempo é contado
+    com o relógio monotônico e o de parede pula: só o fim é um instante de parede confiável.
     """
     if seconds <= 0:
         return
@@ -73,9 +54,7 @@ def record(game_id: str, seconds: int, end: Optional[int] = None) -> None:
         shared.app_dir.mkdir(parents=True, exist_ok=True)
         path = _path()
         with _LOCK:
-            # Um append cortado (queda de energia) ou um arquivo salvo por um
-            # editor que não termina em quebra de linha colaria esta sessão na
-            # última, e `load` descartaria as duas.
+            # Sem quebra de linha final (append cortado, editor), esta sessão colaria na última e o `load` descartaria as duas.
             prefixo = ""
             try:
                 with path.open("rb") as existente:
@@ -89,23 +68,14 @@ def record(game_id: str, seconds: int, end: Optional[int] = None) -> None:
             with path.open("a", encoding="utf-8") as file:
                 file.write(prefixo + line + "\n")
     except OSError:
-        # O tempo já foi somado ao jogo e salvo; o histórico é o extra. Falhar
-        # aqui não pode desfazer a sessão nem interromper o fechamento dela.
+        # O tempo já foi somado e salvo; falhar aqui não pode desfazer a sessão nem interromper o fechamento.
         logging.exception("Não foi possível anotar a sessão de %s", game_id)
 
 
 def load(game_id: Optional[str] = None) -> list[dict[str, Any]]:
-    """As sessões anotadas, da mais recente para a mais antiga.
-
-    Sem ``game_id``, devolve todas. O arquivo é lido inteiro: uma sessão por
-    partida jogada é da ordem de alguns milhares de linhas por década, o que é
-    menos que uma única capa.
-    """
+    """As sessões anotadas, da mais recente para a mais antiga; sem ``game_id``, todas. O arquivo é lido inteiro (poucos milhares de linhas por década)."""
     try:
-        # errors="replace": um byte não-UTF-8 (cauda rasgada pós-queda, edição
-        # salva em ANSI) custa a linha em que está — o replacement char quebra o
-        # json.loads dela — e não a leitura inteira, que era o que o
-        # UnicodeDecodeError fazia por ser ValueError, fora do guard de OSError.
+        # errors="replace": um byte não-UTF-8 custa só a linha dele, não a leitura inteira (UnicodeDecodeError é ValueError, fora do guard de OSError).
         text = _path().read_text(encoding="utf-8", errors="replace")
     except FileNotFoundError:
         return []
@@ -126,13 +96,8 @@ def load(game_id: Optional[str] = None) -> list[dict[str, Any]]:
         except (ValueError, TypeError, KeyError):
             logging.debug("Linha ilegível no histórico de sessões, ignorada")
             continue
-        # Faixa, além de tipo: um `end` negativo ou além do alcance do
-        # datetime.fromtimestamp do Windows derrubaria o diálogo de histórico —
-        # e o contrato daqui é que uma linha editada à mão custa a linha.
-        #
-        # Começo antes de 03/01/1970 (editado à mão, ou vindo de um backup):
-        # no Windows, `datetime.timestamp()` dessas datas levanta OSError 22 e
-        # derrubaria o gráfico do histórico.
+        # Faixa, além de tipo: `end` fora do alcance do datetime.fromtimestamp do Windows, ou começo antes de
+        # 03/01/1970 (OSError 22 em `datetime.timestamp()`), derrubaria a tela de histórico.
         if seconds < 0 or end < 0 or end > _MAX_END or end - seconds < 172800:
             logging.debug("Sessão fora de faixa no histórico, ignorada")
             continue
@@ -145,9 +110,7 @@ def load(game_id: Optional[str] = None) -> list[dict[str, Any]]:
 
 
 def _reescrever(path: Path, kept: list[str]) -> bool:
-    """Grava ``kept`` por cima do histórico, via temporário + troca."""
-    # Mesmo cuidado do FileManager: grava num temporário e substitui, para que
-    # uma queda no meio não deixe um histórico truncado no lugar do inteiro.
+    """Grava ``kept`` por cima do histórico, via temporário + troca (uma queda no meio não deixa um histórico truncado)."""
     tmp = path.with_suffix(".jsonl.tmp")
     try:
         tmp.write_text(
@@ -164,19 +127,11 @@ def _reescrever(path: Path, kept: list[str]) -> bool:
 
 
 def delete(game_id: str, end: int, seconds: int) -> bool:
-    """Apaga uma sessão. Devolve se alguma linha saiu de fato.
-
-    A sessão é identificada pelos três campos juntos, e só a primeira ocorrência
-    é removida: duas sessões idênticas do mesmo jogo no mesmo segundo são
-    registros distintos, e apagar uma não pode levar a outra junto.
-    """
+    """Apaga uma sessão (identificada pelos três campos; só a primeira ocorrência sai). Devolve se alguma linha saiu."""
     path = _path()
     with _LOCK:
         try:
-            # surrogateescape, e não o "replace" do `load`: o arquivo volta ao
-            # disco inteiro, e um byte não-UTF-8 numa linha alheia tem que
-            # voltar igual. Sem isto, o UnicodeDecodeError (ValueError)
-            # escapava do guard abaixo.
+            # surrogateescape, não o "replace" do `load`: o arquivo volta ao disco, e um byte não-UTF-8 alheio tem de voltar igual.
             lines = path.read_text(encoding="utf-8", errors="surrogateescape").splitlines()
         except FileNotFoundError:
             return False
@@ -208,9 +163,7 @@ def delete(game_id: str, end: int, seconds: int) -> bool:
 
 
 def apagar_jogo(game_id: str) -> None:
-    """Apaga todas as sessões de um jogo — chamada por `Store.cleanup_game`,
-    tanto no "Excluir" da página de zerados quanto na reinstalação de uma
-    tumba comum, que não pode herdar o histórico do jogo apagado."""
+    """Apaga todas as sessões de um jogo (chamada por `Store.cleanup_game`): uma reinstalação não herda o histórico do jogo apagado."""
     path = _path()
     with _LOCK:
         try:
@@ -237,11 +190,7 @@ def apagar_jogo(game_id: str) -> None:
 
 
 def mover_jogo(id_antigo: str, id_novo: str) -> None:
-    """Passa as sessões de ``id_antigo`` para ``id_novo``.
-
-    Usado quando um jogo troca de id (adoção pela âncora do atalho) e quando um
-    zerado é ligado ao jogo da biblioteca pelo appID: as sessões seguem o jogo.
-    """
+    """Passa as sessões de ``id_antigo`` para ``id_novo`` (adoção pela âncora do atalho, ligação de zerado pelo appID)."""
     path = _path()
     with _LOCK:
         try:
@@ -276,13 +225,8 @@ def daily_seconds(
 ) -> list[tuple[date, int]]:
     """Quanto se jogou em cada dia de ``first`` a ``last``, inclusive.
 
-    Uma sessão que atravessa a meia-noite é repartida entre os dois dias: quem
-    jogou das 23h à 1h jogou uma hora em cada um, e jogar tudo na conta do dia
-    em que ela terminou faria um dia de duas horas e outro de nada. O início é
-    ``end - seconds``, a mesma derivação de ``record``.
-
-    As meias-noites são convertidas em timestamp em vez de subtrair datetimes
-    locais, para que um dia de horário de verão tenha 23 ou 25 horas, e não 24.
+    Uma sessão que atravessa a meia-noite é repartida entre os dois dias. As meias-noites são convertidas
+    em timestamp, para um dia de horário de verão ter 23 ou 25 horas.
     """
     days = (last - first).days + 1
     if days <= 0:
@@ -297,8 +241,7 @@ def daily_seconds(
     range_end = midnight(last + timedelta(days=1))
 
     for entry in sessions:
-        # Recortado à faixa antes de andar dia a dia: uma sessão editada à mão
-        # com anos de duração não pode custar um laço de anos.
+        # Recortado à faixa antes de andar dia a dia: uma sessão editada à mão com anos de duração não pode custar um laço de anos.
         start = max(entry["end"] - entry["seconds"], range_start)
         end = min(entry["end"], range_end)
         while start < end:

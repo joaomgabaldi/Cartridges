@@ -4,13 +4,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O que os seletores com busca (logo, capa, papel de parede, Steam) fazem igual:
-esperar a pessoa parar de digitar e interromper o download da imagem escolhida
-quando o seletor fecha ou a busca muda.
+"""O que os seletores com busca fazem igual: esperar a pessoa parar de digitar e interromper o download da imagem escolhida.
 
-Quem usa é um modelo (um ``QObject``) com ``busca`` (o texto do campo), ``search()``
-e os atributos ``_generation``, ``_last_query`` e ``_closed``. O atraso corre numa
-``threading.Timer``; quem dispara é sempre a thread principal (``na_thread_principal``).
+Quem usa é um ``QObject`` com ``busca``, ``search()``, ``_generation``, ``_last_query`` e ``_closed``.
+O atraso corre numa ``threading.Timer``; quem dispara é sempre a thread principal.
 """
 
 import threading
@@ -24,9 +21,7 @@ _MB = 1024 * 1024
 
 
 def _tamanho(n: int) -> str:
-    # MB de 1024², como os limites de download: o maior arquivo diz "200,0 MB".
-    # Para cima, como o Explorador de Arquivos: 300 bytes já são "1 KB",
-    # nunca "0 KB" com algo baixado. O que arredonda para 1024 KB já é MB.
+    # KB para cima, como o Explorador de Arquivos: nunca "0 KB" com algo baixado. MB de 1024².
     kb = -(-n // 1024)
     if kb < 1024:
         return f"{kb} KB"
@@ -41,7 +36,6 @@ def tamanho_baixado(recebido: int, total: Optional[int]) -> str:
 
 
 class BuscaDoSeletor:
-    # Quanto esperar depois da última tecla antes de buscar.
     atraso_da_busca_ms = 500
 
     _debounce_timer: Optional[threading.Timer] = None
@@ -68,18 +62,12 @@ class BuscaDoSeletor:
         if token != self._debounce_id or self._closed:
             return
         self._debounce_timer = None
-        # O texto programático do ``abrir`` já foi buscado: sem este guard, abrir o
-        # seletor buscava duas vezes a mesma coisa. Enter no campo continua repetindo
-        # a busca (caminho do ``buscarAgora``, não daqui).
+        # O texto programático do ``abrir`` já foi buscado; Enter repete a busca por outro caminho (``buscarAgora``).
         if self.busca.strip() == self._last_query:
             return
         self.search()
 
     def _ao_progredir(self, recebido: int, total: Optional[int]) -> None:
-        """O ``ao_progredir`` do ``download_bytes`` da imagem escolhida.
-
-        Roda na thread do download. Com o seletor fechado, interrompe: sem
-        isso, uma capa animada de 200 MB seguia baixando escondida até o fim.
-        """
+        """Roda na thread do download; com o seletor fechado, interrompe (uma capa animada de 200 MB seguia baixando)."""
         if self._closed:
             raise DownloadCancelado

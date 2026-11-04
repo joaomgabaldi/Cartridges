@@ -17,27 +17,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Quanto cada jogo ocupa no disco, medido em segundo plano.
+"""Quanto cada jogo ocupa no disco, medido em segundo plano ("preciso de espaço, o que eu apago?").
 
-A pergunta que isto responde é "preciso de espaço, o que eu apago?", e a
-resposta já estava quase pronta na tela de detalhes: o status diz se o jogo foi
-zerado, a data diz há quanto tempo ele não roda. Faltavam os bytes.
-
-A pasta medida é a mesma que o rastreio de processo vigia
-(:func:`install_dir_from_command`), e não a pasta do executável
-(:func:`game_folder`, que é o que o botão de abrir pasta usa). A diferença
-importa justamente aqui: um jogo que abre por ``SP\\bf6.exe`` mora na pasta
-acima, e medir a que o comando nomeia contaria uma fração da instalação. A
-regra tem a vantagem de já ser conhecida — se o app conta o seu tempo de jogo
-sozinho, ele sabe o tamanho; se não conta, não sabe. Jogos abertos por URL de
-loja (``steam://``, Epic, GOG) ficam sem tamanho, pelo mesmo motivo de sempre:
-quem sabe onde eles estão é o lançador.
-
-A varredura é uma só por execução do app, sequencial e sem pressa, no mesmo
-molde do preenchimento do HowLongToBeat. Ela lê metadados de diretório, não
-conteúdo, mas ainda assim é a coisa mais pesada que este app faz com o disco —
-por isso um jogo medido há menos de uma semana é pulado, e por isso a varredura
-espera a importação terminar antes de começar.
+A pasta medida é a que o rastreio de processo vigia (:func:`install_dir_from_command`), não a do executável (:func:`game_folder`): um jogo que abre por ``SP\\bf6.exe`` mora na pasta acima. Jogos abertos por URL de loja ficam sem tamanho (só o lançador sabe onde estão).
+Uma varredura por execução, sequencial e sem pressa (é o mais pesado que o app faz com o disco): pula o jogo medido há menos de uma semana e espera a importação terminar.
 """
 
 import logging
@@ -56,43 +39,22 @@ from cartridges.utils.process_monitor import install_dir_from_command
 from cartridges.utils.run_executable import aumid_from_command
 from cartridges.utils.thread_principal import na_thread_principal
 
-# Startup is busy (window, disk load, and usually an auto-import right after).
 _START_DELAY_SECONDS = 25
 _IMPORT_RETRY_SECONDS = 30
 
-# Uma medição vale uma semana. Um jogo cresce quando recebe um patch ou um DLC,
-# o que não acontece entre dois cliques — e a alternativa, remedir tudo a cada
-# início, torraria disco toda vez para mudar um número em dois ou três jogos.
+# Uma medição vale uma semana: remedir tudo a cada início torraria disco para mudar poucos números.
 _REFRESH_AFTER_SECONDS = 7 * 24 * 60 * 60
 
 
-# Pastas que só existem para guardar a biblioteca inteira de alguém. Nenhum
-# jogo tem uma destas dentro de si, e uma pasta que tem uma delas é onde os
-# jogos moram, e não um jogo. É um subconjunto do `_CONTAINER_DIRS` do monitor
-# de processos, de propósito: lá a lista pode ser generosa porque errar só
-# custa deixar de vigiar uma pasta, aqui um nome ambíguo como "common" ou
-# "games" apareceria dentro de algum jogo mais cedo ou mais tarde e o tamanho
-# dele sumiria da tela sem explicação.
+# Pastas que guardam uma biblioteca inteira: quem tem uma dentro é onde os jogos moram, não um jogo. Subconjunto de
+# `_CONTAINER_DIRS` do monitor de processos, de propósito: um nome ambíguo como "common" ou "games" apareceria dentro de algum jogo.
 _LIBRARY_DIRS = frozenset({"steamapps", "xboxgames", "windowsapps"})
 
 
 def install_size_folder(command: str) -> str:
-    """A pasta a medir para ``command``, ou "" quando não dá para saber.
+    """A pasta a medir para ``command``, ou "" se não for possível saber: o executável clássico (raiz achada pelo rastreio de processo) ou o jogo empacotado (:func:`game_folder` dá a raiz real).
 
-    Dois casos, na ordem: o executável clássico, cuja raiz o rastreio de
-    processo já sabe achar, e o jogo empacotado (Microsoft Store / Game Pass),
-    cuja pasta o Windows registra contra o pacote. Para o segundo,
-    :func:`game_folder` devolve a raiz real da instalação — é só para ele que
-    ela é chamada aqui, porque para um executável comum ela devolveria a pasta
-    do exe, que pode ser uma subpasta do jogo.
-
-    Sobra um caso que as duas erram: um atalho feito à mão para
-    ``steam.exe -applaunch 440`` nomeia o cliente da Steam, e a pasta do
-    cliente é onde *toda* a biblioteca Steam está instalada. Abrir essa pasta é
-    uma resposta defensável (é o que o comando roda, e é o que o botão de pasta
-    faz); dizer que o jogo ocupa 400 GB não é — ainda mais numa ordenação feita
-    para decidir o que apagar, onde o número errado iria para o topo. Uma pasta
-    que contém uma biblioteca inteira dentro de si é recusada.
+    Um atalho manual para ``steam.exe -applaunch 440`` nomeia o cliente, cuja pasta contém *toda* a biblioteca Steam: abri-la é defensável, mas dizer que o jogo ocupa 400 GB não. Pasta que contém uma biblioteca inteira é recusada.
     """
     if not (command or "").strip():
         return ""
@@ -106,7 +68,6 @@ def install_size_folder(command: str) -> str:
 
 
 def _holds_a_library(directory: str) -> bool:
-    """``directory`` é o lugar onde ficam os jogos, em vez de ser um jogo?"""
     if not directory:
         return False
 
@@ -124,13 +85,8 @@ def _holds_a_library(directory: str) -> bool:
 def folder_size(directory: str) -> int:
     """Soma o tamanho dos arquivos sob ``directory``, em bytes.
 
-    O que não dá para ler é contado como zero em vez de derrubar a medição:
-    uma pasta do Game Pass costuma negar acesso no meio do caminho, e meia
-    medição continua sendo mais útil do que nenhuma.
-
-    Links e junções não são seguidos. Um jogo cuja instalação real mora do
-    outro lado de uma junção mede pequeno — mas seguir significaria contar duas
-    vezes o que estiver dos dois lados, e correr o risco de andar em círculo.
+    O que não dá para ler conta zero (pastas do Game Pass negam acesso no meio do caminho). Links e junções não
+    são seguidos: seguir contaria duas vezes o que está dos dois lados e arriscaria andar em círculo.
     """
     total = 0
     stack = [directory]
@@ -140,9 +96,7 @@ def folder_size(directory: str) -> int:
             with os.scandir(current) as entries:
                 for entry in entries:
                     try:
-                        # follow_symlinks=False só filtra symlink de verdade;
-                        # junção (mklink /J, criável sem privilégio) passa por
-                        # ele e precisa do is_junction() para valer a promessa.
+                        # follow_symlinks=False só filtra symlink; a junção (mklink /J) precisa do is_junction().
                         if entry.is_dir(follow_symlinks=False) and not entry.is_junction():
                             stack.append(entry.path)
                         elif entry.is_file(follow_symlinks=False):
@@ -160,15 +114,11 @@ class InstallSizeSweep(PassadaAgendada):
     atraso_inicial = _START_DELAY_SECONDS
     espera_da_importacao = _IMPORT_RETRY_SECONDS
 
-    # -- a varredura ----------------------------------------------------------
-
     def run_async(self) -> None:
-        """Começa uma varredura fora do thread principal, se não houver uma."""
         if self._stopped:
             return
 
-        # Instantâneo no thread principal: os mapeamentos do store mudam com uma
-        # importação, e iterá-los de um trabalhador arriscaria estourar no meio.
+        # Retrato na thread principal: a importação muda os mapas da store.
         games = [
             game
             for game in shared.store
@@ -187,23 +137,18 @@ class InstallSizeSweep(PassadaAgendada):
 
     @staticmethod
     def _is_stale(game: Jogo) -> bool:
-        """Este jogo precisa ser medido agora?"""
         return (int(time()) - (game.install_size_ts or 0)) >= _REFRESH_AFTER_SECONDS
 
     def _worker(self, games: list[Jogo], generation: int) -> None:
         measured = 0
         tarefa: Optional[tarefas.Tarefa] = None
         try:
-            # Primeiro a pasta de cada um. Sem pasta conhecida não há o que
-            # medir — nem o que mostrar nas tarefas: um jogo aberto pela loja
-            # passaria pela fila em milissegundos a cada abertura, e o botão do
-            # canto piscaria por nada.
+            # Sem pasta conhecida não há o que medir nem mostrar nas tarefas (o botão do canto piscaria por nada).
             com_pasta: list[tuple[Jogo, str]] = []
             for game in games:
                 if self._deve_parar(generation):
                     return
-                # Reconferido por jogo: uma importação pode ter removido este
-                # daqui até a vez dele chegar.
+                # Reconferido por jogo: uma importação pode tê-lo removido.
                 if game.removed or not self._is_stale(game):
                     continue
                 folder = install_size_folder(game.executable)
@@ -222,14 +167,8 @@ class InstallSizeSweep(PassadaAgendada):
                 if game.removed:
                     continue
 
-                # ponytail: uma pasta por vez, sem paralelismo. Uma biblioteca
-                # muito grande leva minutos na primeira execução; se incomodar,
-                # o caminho é medir só o que a tela vai mostrar, não abrir mais
-                # threads em cima do mesmo disco.
-                # Pasta vazia ou ilegível inteira é jogo que saiu do disco ou
-                # instalação que não dá para ler: o tamanho vira desconhecido
-                # (zero, que a tela não mostra), porque um número antigo ficaria
-                # no topo do "o que apagar" por um jogo que já não ocupa nada.
+                # shortcut: uma pasta por vez; uma biblioteca grande leva minutos na primeira execução (melhor medir só o que a tela mostra do que abrir threads no mesmo disco).
+                # Pasta vazia ou ilegível vira tamanho desconhecido (zero): um número antigo ficaria no topo do "o que apagar".
                 size = folder_size(folder)
                 if not size:
                     if game.install_size:
@@ -248,26 +187,17 @@ class InstallSizeSweep(PassadaAgendada):
                 len(games),
             )
 
-    # -- aplicando os resultados (thread principal) ---------------------------
-
     def _apply(self, game: Jogo, size: int) -> None:
-        """Grava o tamanho de um jogo e o repinta. Roda no thread principal."""
         if self._stopped or game.removed:
             return
-        # Identidade no store, não só o snapshot: um reset apaga a biblioteca
-        # enquanto o worker anda pela lista dele, e o `save()` abaixo
-        # regravaria o JSON de um jogo recém-apagado. Mesmo idioma do
-        # `_in_library` do MetadataRefresh e do HLTBBackfill.
+        # Identidade na store: um reset apaga a biblioteca enquanto o worker anda, e o `save()` ressuscitaria o jogo apagado.
         store = getattr(shared, "store", None)
         if store is None or store.get(game.game_id) is not game:
             return
 
         game.install_size = size
-        # Sem carimbo quando o tamanho some: sem ele, a próxima varredura mede
-        # de novo — um disco externo desligado volta a ter tamanho quando
-        # volta, e não uma semana depois.
+        # Sem carimbo quando o tamanho some: a próxima varredura mede de novo (disco externo que volta).
         if size:
             game.install_size_ts = int(time())
         game.save()
-        # A página de detalhes e a ordenação por tamanho seguem o `atualizado`.
         game.update()

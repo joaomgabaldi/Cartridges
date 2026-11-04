@@ -4,13 +4,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O que sobra de uma restauração de backup depois da troca: os jogos
-restaurados cujo atalho ainda não foi encontrado.
+"""O que sobra de uma restauração de backup depois da troca: os jogos restaurados cujo atalho ainda não foi encontrado.
 
-Tudo aqui só existe enquanto `restauracao_pendente.json` existir na pasta do
-app. Sem o arquivo, a importação, a biblioteca e a abertura seguem como
-sempre. O arquivo nasce na troca (`backup.aplicar_pendente`) e morre quando a
-última pendência sai.
+Só existe enquanto `restauracao_pendente.json` existir na pasta do app; ele nasce na troca
+(`backup.aplicar_pendente`) e morre quando a última pendência sai.
 """
 
 import difflib
@@ -30,10 +27,7 @@ from cartridges.utils.name_cleaner import clean_for_search
 
 _NOME = "restauracao_pendente.json"
 
-# Lido uma vez por caminho: `e_pendente` roda para cada card em todo filtro da
-# biblioteca. A chave é o caminho, e não um valor único, porque os testes
-# repontam `shared.app_dir` a cada teste. Só `gravar` escreve o arquivo, e ela
-# descarta a entrada.
+# Lido uma vez por caminho (`e_pendente` roda por card em todo filtro); só `gravar` escreve e descarta a entrada.
 _cache: dict[str, tuple[frozenset[str], int]] = {}
 
 
@@ -54,8 +48,7 @@ def _ler() -> tuple[frozenset[str], int]:
         except FileNotFoundError:
             lidos = (frozenset(), 0)
         except (OSError, ValueError, TypeError, AttributeError):
-            # Ilegível: sem pendências. A próxima importação regrava a lista
-            # vazia e o arquivo some, encerrando o fluxo.
+            # Ilegível: sem pendências; a próxima importação regrava a lista vazia e o arquivo some.
             logging.warning("%s ilegível; pendências da restauração ignoradas", caminho)
             lidos = (frozenset(), 0)
         _cache[chave] = lidos
@@ -79,7 +72,7 @@ def e_pendente(game_id: str) -> bool:
 
 
 def gravar(game_ids: Iterable[str], quando: int) -> None:
-    """Grava as pendências. Lista vazia apaga o arquivo e encerra o fluxo."""
+    """Lista vazia apaga o arquivo e encerra o fluxo."""
     caminho = _arquivo()
     _cache.pop(str(caminho), None)
     ordenados = sorted(set(game_ids))
@@ -100,12 +93,8 @@ def remover(game_id: str) -> None:
 
 
 def resolver(encontrados: set[str]) -> None:
-    """Depois de uma importação que varreu a pasta de atalhos até o fim.
-
-    Sai da lista o pendente que a varredura achou (``encontrados`` é o
-    ``duplicate_game_ids`` da store) e o que não está mais na store com esse id:
-    a âncora do atalho o adotou sob um id novo, ou ele foi excluído.
-    """
+    """Depois de uma importação que varreu a pasta de atalhos até o fim: sai da lista o pendente achado
+    (``encontrados`` é o ``duplicate_game_ids`` da store) e o que não está mais na store com esse id."""
     restantes = []
     for game_id in ids():
         jogo = shared.store.get(game_id)
@@ -121,9 +110,7 @@ def pendentes() -> list[Jogo]:
 
 
 def ids_que_dependem_de_atalho(pasta_games: Path) -> list[str]:
-    """Os jogos de ``pasta_games`` que só abrem com um atalho: vivos, visíveis
-    e de fonte de atalhos. Um manual (``imported``) ou um zerado não dependem
-    de atalho nenhum para aparecer."""
+    """Os jogos de ``pasta_games`` que só abrem com um atalho: vivos, visíveis e de fonte de atalhos."""
     game_ids = []
     for arquivo in sorted(pasta_games.glob("*.json")):
         try:
@@ -149,7 +136,6 @@ class AtalhoJaExiste(Exception):
 
 
 def _do_backup(jogo: Jogo) -> bool:
-    """Veio no backup, e não da importação depois dele."""
     return (jogo.added or 0) < restaurado_em()
 
 
@@ -158,9 +144,8 @@ def _pasta() -> Path:
 
 
 def candidatos(jogo: Jogo) -> list[Path]:
-    """Os atalhos da pasta que nenhum jogo do backup usa, os de nome mais
-    parecido com o de ``jogo`` primeiro. Os de jogos que a importação criou
-    depois da restauração entram: escolher um deles resolve o conflito."""
+    """Os atalhos da pasta que nenhum jogo do backup usa, os de nome mais parecido primeiro.
+    Os de jogos criados pela importação depois da restauração entram: escolher um resolve o conflito."""
     usados = {
         _path_key(outro.shortcut_path)
         for outro in shared.store
@@ -177,10 +162,8 @@ def candidatos(jogo: Jogo) -> list[Path]:
 
 
 def copiar_para_a_pasta(origem: Path) -> Path:
-    """``origem`` como a importação vai enxergá-lo: dentro da pasta de
-    atalhos. Um arquivo de fora é copiado para a raiz dela (o original fica
-    onde está). ``AtalhoJaExiste`` se já houver lá um arquivo com esse nome:
-    dois atalhos do mesmo jogo virariam um jogo duplicado na importação."""
+    """``origem`` dentro da pasta de atalhos (um arquivo de fora é copiado para a raiz dela).
+    ``AtalhoJaExiste`` se já houver lá um com esse nome: dois atalhos do mesmo jogo duplicariam o jogo."""
     raiz = _pasta()
     chave_raiz = _path_key(str(raiz)).rstrip("\\")
     chave_pai = _path_key(str(origem.parent)).rstrip("\\")
@@ -197,8 +180,7 @@ def copiar_para_a_pasta(origem: Path) -> Path:
 
 
 def jogo_do_atalho(caminho: Path) -> Optional[Jogo]:
-    """O jogo que a importação criou a partir de ``caminho`` depois da
-    restauração, se houver."""
+    """O jogo que a importação criou a partir de ``caminho`` depois da restauração, se houver."""
     chave = _path_key(str(caminho))
     for jogo in shared.store:
         if (
@@ -213,37 +195,24 @@ def jogo_do_atalho(caminho: Path) -> Optional[Jogo]:
 
 
 def tem_historico(jogo: Jogo) -> bool:
-    """Horas jogadas ou sessões. As duas, e não só as sessões: o tempo é
-    gravado a cada minuto de jogo, e a sessão só entra no histórico quando
-    termina bem. Um jogo cuja sessão caiu no meio tem horas e nenhuma sessão,
-    e excluí-lo sem perguntar apagaria esse tempo."""
+    """Horas jogadas ou sessões: o tempo é gravado a cada minuto, e a sessão só entra no histórico quando termina bem."""
     return bool(jogo.playtime) or bool(session_log.load(jogo.game_id))
 
 
 def resumo(jogo: Jogo) -> tuple[int, int, int]:
-    """(segundos jogados, número de sessões, última vez jogado) para os
-    cartões da tela de conflito."""
+    """(segundos jogados, número de sessões, última vez jogado) para a tela de conflito."""
     return jogo.playtime or 0, len(session_log.load(jogo.game_id)), jogo.last_played or 0
 
 
 def excluir(jogo: Jogo) -> None:
-    """Exclui ``jogo`` de vez, sem tumba, e o tira das pendências."""
+    """Exclui ``jogo`` de vez e o tira das pendências."""
     shared.store.excluir(jogo)
     remover(jogo.game_id)
 
 
 def decidir(restaurado: Jogo, caminho: Path, novo: Optional[Jogo], decisao: str) -> None:
-    """Aplica a escolha feita para ``restaurado`` com o atalho ``caminho``.
-
-    ``novo`` é o jogo que a importação já criou a partir de ``caminho``, se
-    houver. ``"backup"`` e ``"mesclar"`` ficam com o restaurado (a mescla leva
-    antes as sessões e o tempo do novo); ``"este_pc"`` fica com o novo. Quem
-    chama importa em seguida, exceto em ``"este_pc"``: é a varredura que adota
-    o restaurado pelo atalho novo e o tira das pendências.
-    """
-    # Conquista desbloqueada é fato, não uma versão que se escolhe: nas três
-    # decisões o histórico do jogo que sai passa para o que fica, antes do
-    # Excluir que apagaria o arquivo.
+    """Aplica a escolha para ``restaurado`` com o atalho ``caminho`` (``novo`` é o jogo que a importação já criou dele): ``"backup"`` e ``"mesclar"`` ficam com o restaurado (a mescla leva antes as sessões e o tempo do novo), ``"este_pc"`` com o novo. Quem chama importa em seguida, exceto em ``"este_pc"``: a varredura adota o restaurado pelo atalho novo."""
+    # Conquista desbloqueada é fato, não uma versão a escolher: o histórico do jogo que sai passa para o que fica, antes do Excluir.
     if decisao == "este_pc":
         if novo is not None:
             historico.transferir(restaurado.game_id, novo.game_id)

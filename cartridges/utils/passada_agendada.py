@@ -4,12 +4,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O agendamento das passadas de segundo plano da abertura (HowLongToBeat,
-tamanho em disco, conquistas): esperar um pouco depois de abrir, esperar a
-importação acabar, uma passada por vez, e parar de verdade no ``stop``.
+"""O agendamento das passadas de segundo plano da abertura (HowLongToBeat, tamanho em disco, conquistas).
 
-Cada passada só escreve ``run_async`` (o retrato da store e a thread) e o
-trabalhador, que confere ``_deve_parar`` entre um jogo e outro.
+Espera um pouco depois de abrir, espera a importação acabar, roda uma por vez e para de verdade no ``stop``.
+Cada passada escreve só ``run_async`` e o trabalhador, que confere ``_deve_parar`` entre um jogo e outro.
 """
 
 import threading
@@ -22,27 +20,18 @@ from cartridges.utils.thread_principal import na_thread_principal
 class PassadaAgendada:
     """Uma passada por execução, armada por ``start`` e desligada por ``stop``."""
 
-    # A abertura está ocupada (janela, disco e, em geral, uma importação logo depois).
     atraso_inicial = 20
-    # A importação mexe no mesmo disco e na mesma rede: a passada espera ela acabar.
     espera_da_importacao = 30
 
     def __init__(self) -> None:
-        # Temporizador da partida pendente: cancelável no encerramento e nunca armado duas vezes.
         self._timer: Optional[threading.Timer] = None
-        # Sobe a cada armação e a cada `stop()`: a partida que já disparou mas ainda
-        # espera na fila da thread principal confere o número e se descarta.
+        # Sobe a cada armação e a cada `stop()`: a partida já disparada que espera na fila confere o número e se descarta.
         self._armacao = 0
-        # Uma passada por vez: `run_async` é alcançável pelo temporizador e por quem pede.
         self._lock = threading.Lock()
         self._running = False
-        # Marcado ao sair. O trabalhador confere entre um jogo e outro; o que já
-        # está em curso não dá para cancelar, e o resultado dele é descartado.
+        # Marcado ao sair; o que já está em curso não se cancela, e o resultado é descartado.
         self._stopped = False
-        # Sobe a cada `stop()`. O trabalhador leva o número com que nasceu e para
-        # quando ele muda: o `start()` logo depois do `stop()` (o reset faz isso)
-        # desfaz o `_stopped`, e o trabalhador antigo seguiria numa biblioteca que
-        # já não existe.
+        # Sobe a cada `stop()`: o `start()` logo depois (o reset) desfaz o `_stopped`, e o trabalhador antigo seguiria numa biblioteca que já não existe.
         self._generation = 0
 
     def start(self) -> None:
@@ -54,8 +43,7 @@ class PassadaAgendada:
         if self._timer is not None:
             self._timer.cancel()
         self._armacao += 1
-        # O temporizador roda numa thread própria; a partida volta à principal, onde
-        # `run_async` tira o retrato da store.
+        # A partida volta à thread principal, onde `run_async` tira o retrato da store.
         self._timer = threading.Timer(
             segundos, na_thread_principal, (self._on_timer, self._armacao)
         )

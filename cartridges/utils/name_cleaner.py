@@ -17,17 +17,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Utilities to normalize raw game names coming from shortcuts/file names.
+"""Normaliza nomes de jogo vindos de atalhos e arquivos (``Game (DX12)``, ``Game™``, ``Game - Shortcut``).
 
-Shortcut file names frequently carry technical clutter such as
-``Game (DX12)``, ``Game - Windows``, ``Game™`` or ``Game - Shortcut`` that
-hurts both readability and online cover/metadata lookups. ``clean_game_name``
-strips that noise conservatively, never returning an empty string.
+``clean_game_name`` tira esse ruído com cautela e nunca devolve texto vazio.
 """
 
 import re
 
-# Standalone tokens that are pure noise in a game title.
 _NOISE_TOKENS = {
     "windows",
     "win32",
@@ -49,9 +45,7 @@ _NOISE_TOKENS = {
     "64bit",
 }
 
-# Noise only when bracketed: "Hades (PC)" is the game Hades, but "PC Building
-# Simulator" is a title in its own right. Requiring the brackets keeps the
-# stripping safe for words that are common enough to appear in a real name.
+# Ruído só entre colchetes: "Hades (PC)" é Hades, mas "PC Building Simulator" é um título.
 _BRACKET_NOISE_TOKENS = _NOISE_TOKENS | {
     "pc",
     "steam",
@@ -75,15 +69,11 @@ _LAUNCH_PREFIX_RE = re.compile(
 _DIRECTX_PHRASE_RE = re.compile(r"\bdirectx\s*1?[0-2]\b", re.IGNORECASE)
 _WS_RE = re.compile(r"\s{2,}")
 _SEARCH_SEPARATORS_RE = re.compile(r"[-–—:;,./]+")
-# Typographic apostrophes, folded onto the plain ASCII one for queries. Stores
-# index the straight form: HowLongToBeat found "Assassin's Creed Mirage" and
-# missed "Assassin’s Creed Shadows" purely because the shortcut carried a
-# curly quote, and the search term never matched anything.
+# Apóstrofos tipográficos viram o ASCII nas buscas: as lojas indexam a forma reta ("Assassin’s" não achava nada).
 _APOSTROPHE_RE = re.compile("[’ʼ‘‛´`]")
 
 
 def _normalize(token: str) -> str:
-    """Reduce a token to its alphanumeric core for noise comparison."""
     return re.sub(r"[^a-z0-9]", "", token.lower())
 
 
@@ -92,28 +82,21 @@ def _is_noise(token: str) -> bool:
 
 
 def _strip_noise_brackets(match: re.Match) -> str:
-    """Drop bracketed groups whose content is purely a noise token.
-
-    An empty group counts too: "(DirectX 12)" is emptied by the phrase rule
-    before this runs, and "ICARUS ( )" reached the library.
-    """
+    """Tira o grupo entre colchetes só de ruído, ou vazio ("(DirectX 12)" já foi esvaziado antes)."""
     inner = _normalize(match.group(0))
     return " " if not inner or inner in _BRACKET_NOISE_TOKENS else match.group(0)
 
 
 def clean_game_name(name: str) -> str:
-    """Return a tidied version of ``name`` for display and online lookups."""
     if not name:
         return name
 
     cleaned = name.strip()
 
-    # Defensive: drop a trailing shortcut extension if one slipped through.
     for ext in (".lnk", ".url"):
         if cleaned.lower().endswith(ext):
             cleaned = cleaned[: -len(ext)]
 
-    # Underscores commonly stand in for spaces in dumped file names.
     cleaned = cleaned.replace("_", " ")
 
     cleaned = _TRADEMARK_RE.sub("", cleaned)
@@ -122,7 +105,6 @@ def clean_game_name(name: str) -> str:
     cleaned = _DIRECTX_PHRASE_RE.sub(" ", cleaned)
     cleaned = _BRACKETS_RE.sub(_strip_noise_brackets, cleaned)
 
-    # Drop standalone noise tokens, but keep at least one token.
     tokens = cleaned.split()
     kept = [token for token in tokens if not _is_noise(token)]
     cleaned = " ".join(kept if kept else tokens)
@@ -132,14 +114,9 @@ def clean_game_name(name: str) -> str:
 
 
 def clean_for_search(name: str) -> str:
-    """``clean_game_name`` variant tuned for online title searches.
+    """``clean_game_name`` para buscas online: separadores viram espaço e apóstrofos viram ASCII.
 
-    Also replaces separators (dashes, colons, dots, …) with spaces and folds
-    curly apostrophes onto the ASCII one. Steam and SteamGridDB often miss a
-    title like "Black Myth - Wukong" that matches fine as "Black Myth Wukong",
-    and a shortcut spelled "Assassin’s Creed Shadows" finds nothing at all in
-    catalogues that store "Assassin's". Only used to build the query, never for
-    display — the game keeps the punctuation it came with on screen.
+    Steam e SteamGridDB erram "Black Myth - Wukong" mas acham "Black Myth Wukong". Só para a consulta, nunca para exibir.
     """
     display = clean_game_name(name)
     cleaned = _SEARCH_SEPARATORS_RE.sub(" ", _APOSTROPHE_RE.sub("'", display))

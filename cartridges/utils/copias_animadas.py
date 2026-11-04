@@ -6,9 +6,8 @@
 
 """Cópias reduzidas das capas animadas, no tamanho em que são exibidas.
 
-Tocar o GIF/WebP original na biblioteca decodificaria e redimensionaria
-centenas de quadros grandes a cada volta. A cópia já sai no tamanho da tela e
-com os quadros curtos fundidos, então o player só decodifica o que mostra.
+Tocar o original decodificaria e redimensionaria centenas de quadros grandes a cada volta: a cópia já sai
+no tamanho da tela e com os quadros curtos fundidos.
 """
 
 import contextlib
@@ -34,13 +33,10 @@ from cartridges import shared
 from cartridges.utils.na_tela import entregar_na_tela
 from cartridges.utils.thread_principal import eh_thread_principal
 
-# Como terminou um pedido. ``ilegivel`` é só a origem que não abre; ``falhou``
-# é a cópia que não pôde ser gravada (disco cheio, permissão negada): nada foi
-# gravado, a capa segue animada e o pedido pode ser repetido depois.
+# ``ilegivel`` é a origem que não abre; ``falhou`` é a cópia que não pôde ser gravada (disco cheio, permissão): a capa segue animada.
 Resultado = Literal["pronta", "estatica", "ilegivel", "falhou"]
 
-# Abaixo disto o quadro é fundido ao anterior: nenhuma tela mostra mais de
-# ~30 quadros por segundo, e os quadros a mais só custariam decodificação.
+# Abaixo disto o quadro é fundido ao anterior: nenhuma tela mostra mais de ~30 quadros por segundo.
 QUADRO_MINIMO_MS = 30
 
 
@@ -53,7 +49,6 @@ class GravacaoFalhou(Exception):
 
 
 def tamanhos() -> tuple[tuple[int, int], tuple[int, int]]:
-    """(grade, detalhes): os dois tamanhos em que a capa é exibida."""
     return (
         (int(shared.display_size[0]), int(shared.display_size[1])),
         (int(shared.details_size[0]), int(shared.details_size[1])),
@@ -63,10 +58,8 @@ def tamanhos() -> tuple[tuple[int, int], tuple[int, int]]:
 def caminho_para(origem: Path, tamanho: tuple[int, int]) -> Path:
     """Onde fica a cópia de ``origem`` no ``tamanho`` pedido.
 
-    As capas da biblioteca vão para o cache do app. As prévias dos seletores
-    moram numa pasta temporária que o próprio seletor limpa: a cópia fica ao
-    lado delas e some junto. O tamanho no nome faz uma mudança de escala gerar
-    cópias novas, sem confundir com as do tamanho anterior.
+    As da biblioteca vão para o cache do app; as prévias dos seletores ficam ao lado delas, numa pasta temporária
+    que o seletor limpa. O tamanho no nome faz uma mudança de escala gerar cópias novas.
     """
     nome = f"{origem.stem}_{tamanho[0]}x{tamanho[1]}.webp"
     if origem.parent == shared.covers_dir:
@@ -78,33 +71,28 @@ class _CodificadorIndisponivel(Exception):
     """O ``_webp.WebPAnimEncoder`` do Pillow sumiu ou mudou de assinatura."""
 
 
-# Vira True na primeira vez que o codificador quadro a quadro falha: daí em
-# diante toda cópia vai direto pelo caminho da lista, e o aviso sai uma vez só.
+# Vira True na primeira falha do codificador quadro a quadro: daí em diante vai pelo caminho da lista, e o aviso sai uma vez.
 _sem_codificador = False
 
 
 class _PorQuadro:
-    """Codifica cada quadro assim que ele chega, sem guardar a animação.
+    """Codifica cada quadro assim que chega, sem guardar a animação.
 
-    Usa a API privada do Pillow (``_webp.WebPAnimEncoder``), na mesma ordem
-    do ``WebPImagePlugin._save_all``: o ``save`` público só aceita a lista de
-    todos os quadros, e uma cópia de detalhes inteira em RAM chegava a 600 MB.
-    Qualquer ``AttributeError``/``TypeError`` vindo dela vira
-    ``_CodificadorIndisponivel``, e ``gerar`` refaz pela lista.
+    Usa a API privada do Pillow (``_webp.WebPAnimEncoder``), na ordem do ``WebPImagePlugin._save_all``: o ``save``
+    público só aceita a lista inteira, que chegava a 600 MB na cópia de detalhes. ``AttributeError``/``TypeError``
+    viram ``_CodificadorIndisponivel``, e ``gerar`` refaz pela lista.
     """
 
     def __init__(self, tamanho: tuple[int, int]) -> None:
         self._instante = 0
         try:
-            # tamanho, fundo, loop, minimize_size, kmin, kmax, allow_mixed,
-            # verbose; kmin/kmax são os padrões do Pillow para com perda.
+            # tamanho, fundo, loop, minimize_size, kmin, kmax, allow_mixed, verbose (kmin/kmax: padrões do Pillow com perda).
             self._enc = _webp.WebPAnimEncoder(tamanho, 0, 0, False, 3, 5, False, False)
         except (AttributeError, TypeError) as erro:
             raise _CodificadorIndisponivel(erro) from erro
 
     def add(self, quadro: Image.Image, duracao: int) -> None:
-        # lossless, quality, alpha_quality, method: os mesmos quality=90 e
-        # method=4 do caminho da lista.
+        # lossless, quality, alpha_quality, method: os mesmos quality=90 e method=4 do caminho da lista.
         try:
             self._enc.add(quadro.getim(), self._instante, False, 90.0, 100.0, 4)
         except (AttributeError, TypeError) as erro:
@@ -113,8 +101,7 @@ class _PorQuadro:
 
     def dados(self) -> bytes:
         try:
-            # O quadro vazio fecha a animação: o instante dele dá a duração do
-            # último quadro.
+            # O quadro vazio fecha a animação: o instante dele dá a duração do último.
             self._enc.add(None, self._instante, False, 90.0, 100.0, 0)
             dados = self._enc.assemble(b"", b"", b"")  # ICC, EXIF, XMP
         except (AttributeError, TypeError) as erro:
@@ -127,8 +114,7 @@ class _PorQuadro:
 class _EmLista:
     """O caminho público do Pillow: todos os quadros na memória até o fim.
 
-    ponytail: só para o caso de a API privada do ``_PorQuadro`` mudar; o pico
-    aqui é a animação inteira reduzida (até ~600 MB numa cópia de detalhes).
+    shortcut: só para o caso de a API privada do ``_PorQuadro`` mudar; o pico é a animação inteira (até ~600 MB).
     """
 
     def __init__(self) -> None:
@@ -155,26 +141,21 @@ def _codificar(
     saida: "_PorQuadro | _EmLista",
 ) -> bytes | None:
     """O WebP da cópia, ou None se não é animada ou deixou de ser vigente."""
-    # O quadro reduzido que ainda espera: a duração dele só é final quando o
-    # seguinte chega (um curto absorve o seguinte).
+    # A duração do quadro pendente só é final quando o seguinte chega (um curto absorve o seguinte).
     pendente: Image.Image | None = None
     duracao_pendente = 0
     entregues = 0
     with Image.open(io.BytesIO(dados)) as imagem:
         for quadro in ImageSequence.Iterator(imagem):
-            # Uma capa com centenas de quadros leva segundos: se a capa mudou
-            # ou o app está fechando, para já. Como cada quadro é codificado
-            # aqui mesmo, isto vale também para a codificação.
+            # Centenas de quadros levam segundos: se a capa mudou ou o app fecha, para já (vale também para a codificação).
             if not vigente():
                 return None
-            # No WebP o Pillow só preenche info["duration"] ao decodificar o
-            # quadro; lida antes, sai vazia e todo quadro valeria 100 ms.
+            # No WebP o Pillow só preenche info["duration"] ao decodificar o quadro; antes disso todo quadro valeria 100 ms.
             quadro.load()
             duracao = int(quadro.info.get("duration", 100)) or 100
             reduzido = quadro.convert("RGBA").resize(tamanho, Image.LANCZOS)
             if pendente is not None and duracao_pendente < QUADRO_MINIMO_MS:
-                # O curto some e cede o tempo ao seguinte, que é o que aparece:
-                # mostrar o relance curto pela duração do longo seria pior.
+                # O curto cede o tempo ao seguinte, que é o que aparece.
                 pendente = reduzido
                 duracao_pendente += duracao
                 continue
@@ -204,25 +185,9 @@ def gerar(
 ) -> bool:
     """Grava em ``destino`` a cópia de ``origem`` reduzida a ``tamanho``.
 
-    Devolve False, sem gravar nada, se a origem não é animada (menos de 2
-    quadros, contados depois da fusão) ou se ``vigente()`` diz, no fim, que a
-    capa mudou ou o app fechou no meio da geração (``vigente`` é consultada a
-    cada quadro lido e antes da troca final). Se a origem não abre, o erro de leitura
-    (``OSError``, ``ValueError``, ``Image.DecompressionBombError``) sobe para
-    quem chamou decidir o que mostrar. Se é a codificação ou a gravação que
-    falha, sobe ``GravacaoFalhou``, sem deixar ``.tmp`` para trás.
-
-    A fusão acima depende só da origem, mas o libwebp também funde quadros
-    repetidos ou quase iguais ao gravar, e com perda isso depende dos pixels,
-    ou seja, do tamanho. A contagem de quadros das cópias da grade e dos
-    detalhes pode divergir; a duração total, que a fusão preserva, não. Quem
-    troca de uma cópia para a outra continua pelo tempo, não pelo quadro.
-
-    A origem é lida inteira para a memória antes de abrir: nenhum trabalho
-    segura o arquivo, que no Windows não poderia ser apagado (a pasta do
-    seletor) nem substituído (``save_cover``) enquanto estivesse aberto. Só a
-    pasta das cópias da biblioteca é criada aqui; a de uma prévia que já sumiu
-    não é recriada, e a gravação falha com ``GravacaoFalhou``.
+    False, sem gravar, se a origem não é animada (menos de 2 quadros após a fusão) ou se ``vigente()`` (a cada quadro e antes da troca final) diz que a capa mudou ou o app fechou. Origem que não abre sobe como ``OSError``/``ValueError``/``Image.DecompressionBombError``; falha de codificação ou gravação, ``GravacaoFalhou``, sem deixar ``.tmp``.
+    O libwebp funde quadros quase iguais ao gravar e, com perda, isso depende do tamanho: a contagem de quadros da grade e dos detalhes pode divergir (a duração não), então quem troca de cópia continua pelo tempo.
+    A origem é lida inteira antes de abrir: aberta, o Windows não deixaria apagá-la (pasta do seletor) nem substituí-la (``save_cover``).
     """
     global _sem_codificador  # pylint: disable=global-statement
     dados = origem.read_bytes()
@@ -238,19 +203,14 @@ def gerar(
     if webp is None:
         return False
 
-    # Grava ao lado e troca de nome no fim: quem vê o destino nunca pega uma
-    # cópia pela metade. O nome leva um sufixo único porque, quando a capa
-    # troca, o trabalho velho e o novo podem gravar o mesmo destino juntos.
+    # Grava ao lado e troca de nome no fim, para ninguém pegar uma cópia pela metade; sufixo único porque o trabalho velho e o novo podem gravar o mesmo destino.
     temporario = destino.with_name(f"{destino.name}.{uuid4().hex}.tmp")
     try:
         if destino.parent == shared.capas_animadas_dir:
             destino.parent.mkdir(parents=True, exist_ok=True)
         temporario.write_bytes(webp)
-        # A checagem e a troca formam um passo só em relação ao ``apagar``,
-        # que invalida e apaga com a mesma trava: o rename cai antes da
-        # invalidação (e o glob do ``apagar`` o remove) ou depois (e é pulado).
-        # Sem isto a cópia da capa velha podia aparecer depois da troca.
-        # ``vigente`` não pode pegar a trava, ou travaria aqui.
+        # Checagem e troca são um passo só em relação ao ``apagar`` (mesma trava): o rename cai antes da invalidação
+        # (e o glob do ``apagar`` o remove) ou depois (e é pulado). ``vigente`` não pode pegar a trava, ou travaria aqui.
         with _trava:
             if not vigente():
                 return False
@@ -267,16 +227,13 @@ def gerar(
 class _Trabalho:
     chave: str  # game_id: o que ``apagar`` usa para invalidar
     prontos: list[Callable[[Resultado], None]] = field(default_factory=list)
-    # Vira True quando a capa muda ou o pedido é cancelado; o trabalho que já
-    # rodava vê isso em ``vigente`` e descarta o resultado.
+    # Vira True quando a capa muda ou o pedido é cancelado; o trabalho em curso vê em ``vigente`` e descarta.
     invalido: bool = False
 
 
-# Trocado pelos testes. Dois trabalhos por vez: a geração é quase toda CPU, e
-# cada trabalho segura só a origem e um ou dois quadros reduzidos.
+# Trocado pelos testes. Dois trabalhos por vez: a geração é quase toda CPU.
 _executor = ThreadPoolExecutor(max_workers=2)
-# Guarda ``_trabalhos`` e os campos de cada ``_Trabalho``. ``gerar`` a pega só
-# na checagem final e no rename; nunca durante a geração nem num ``pronto``.
+# Guarda ``_trabalhos`` e os campos de cada ``_Trabalho``; ``gerar`` a pega só na checagem final e no rename.
 _trava = threading.Lock()
 _trabalhos: dict[Path, _Trabalho] = {}  # destino -> trabalho pendente ou rodando
 
@@ -289,10 +246,8 @@ def pedir(
 ) -> None:
     """Gera a cópia em segundo plano e avisa ``pronto`` na thread principal.
 
-    Pedido repetido para o mesmo ``destino``, com o trabalho ainda pendente ou
-    rodando, só acrescenta o ``pronto``. Se a capa muda (``apagar``) ou o pedido
-    é cancelado antes do fim, ``pronto`` não é chamado: quem trocou a capa
-    pede de novo.
+    Pedido repetido para o mesmo ``destino`` só acrescenta o ``pronto``. Se a capa muda (``apagar``) ou o pedido é
+    cancelado, ``pronto`` não é chamado: quem trocou a capa pede de novo.
     """
     with _trava:
         trabalho = _trabalhos.get(destino)
@@ -322,8 +277,7 @@ def _rodar(
         logging.warning("Não foi possível ler a capa animada %s", origem.name)
         resultado = "ilegivel"
     except Exception:  # pylint: disable=broad-exception-caught
-        # Um erro que ninguém previu não pode deixar o pedido sem resposta: a
-        # tarefa "Capas animadas" esperaria por ele para sempre.
+        # Um erro imprevisto não pode deixar o pedido sem resposta: a tarefa "Capas animadas" esperaria para sempre.
         logging.exception("Erro inesperado ao gerar a cópia animada de %s", origem.name)
         resultado = "falhou"
     finally:
@@ -340,22 +294,19 @@ def _rodar(
 
 def _entregar(pronto: Callable[[Resultado], None], resultado: Resultado) -> bool:
     pronto(resultado)
-    return False  # o GLib repetiria o callback que devolvesse um valor verdadeiro
+    return False
 
 
-# Quem larga os arquivos de cópia que a tela segura abertos (o modelo da biblioteca): o
-# ``AnimatedImage`` mantém o ``.webp`` aberto sem compartilhar a exclusão, e o Windows não deixa
-# apagar nem regravar um arquivo assim (WinError 32). Chamado com o id do jogo, na thread principal.
+# Larga os arquivos de cópia que a tela segura: o ``AnimatedImage`` mantém o ``.webp`` aberto sem compartilhar a exclusão,
+# e o Windows não deixa apagar nem regravar assim (WinError 32). Chamado com o id do jogo, na thread principal.
 soltar_do_jogo: Callable[[str], None] | None = None
-# O mesmo pedido, para a cópia grande que a página de detalhes toca.
 soltar_da_pagina: Callable[[str], None] | None = None
 
 
 def soltar(game_id: str) -> None:
     """Pede à tela que largue as cópias do jogo, antes de apagá-las ou regravá-las.
 
-    Só a thread principal toca a tela; de outra thread não faz nada (a cópia presa fica para a
-    limpeza da próxima abertura, que a apaga se o jogo deixou de existir).
+    Só a thread principal toca a tela; de outra thread não faz nada (a cópia presa fica para a limpeza da próxima abertura).
     """
     if eh_thread_principal():
         for gancho in (soltar_do_jogo, soltar_da_pagina):
@@ -366,12 +317,9 @@ def soltar(game_id: str) -> None:
 def apagar(game_id: str) -> None:
     """Apaga as cópias do jogo e invalida os trabalhos dele, pendentes ou não."""
     soltar(game_id)
-    # Os trabalhos invalidados abaixo nunca avisam: a tarefa precisa saber que
-    # não deve mais esperá-los. Na principal o descarte é na hora: enfileirado, ele
-    # rodaria depois do ``preparar`` da capa nova (``save_cover._refazer_copias``) e
-    # a levaria junto. De outra thread, a entrega mantém a ordem, e é a tarefa,
-    # da thread principal, que descarta; ler ``_lote`` aqui, sem trava, podia ver None
-    # um instante antes de um ``preparar`` criar o lote. O descarte já ignora o None.
+    # Os trabalhos invalidados nunca avisam: a tarefa precisa deixar de esperá-los. Na principal o descarte é imediato
+    # (enfileirado, rodaria depois do ``preparar`` da capa nova e a levaria junto). De outra thread, a entrega mantém
+    # a ordem; ler ``_lote`` aqui, sem trava, podia ver None antes de um ``preparar`` criar o lote.
     if eh_thread_principal():
         _descartar_do_lote(game_id)
     else:
@@ -380,8 +328,7 @@ def apagar(game_id: str) -> None:
         for destino, trabalho in list(_trabalhos.items()):
             if trabalho.chave == game_id:
                 trabalho.invalido = True
-                # Fora do dicionário: um pedido novo para este destino (a capa
-                # nova) não pode herdar um trabalho que vai descartar o resultado.
+                # Fora do dicionário: um pedido novo para este destino não herda um trabalho que vai descartar o resultado.
                 del _trabalhos[destino]
     for arquivo in _copias_de(game_id):
         try:
@@ -392,19 +339,15 @@ def apagar(game_id: str) -> None:
 
 
 def abandonar(origem: Path) -> None:
-    """Cancela e apaga as cópias de uma capa fora da biblioteca.
+    """Cancela e apaga as cópias de uma capa fora da biblioteca (prévias do seletor, capa provisória da edição).
 
-    Para as prévias do seletor e a capa provisória da edição: ``apagar`` só
-    acha as da biblioteca, pelo id do jogo, e as destas ficariam na fila
-    (minutos de CPU depois de o seletor fechar) e no disco (ao lado do
-    temporário, em %TEMP%). Sempre na thread principal.
+    ``apagar`` só acha as da biblioteca, pelo id; as destas ficariam na fila (minutos de CPU) e em %TEMP%. Na thread principal.
     """
     destinos = [caminho_para(origem, tamanho) for tamanho in tamanhos()]
     with _trava:
         for destino in destinos:
             if (trabalho := _trabalhos.pop(destino, None)) is not None:
                 trabalho.invalido = True
-    # O mesmo desconto do ``apagar``: a tarefa não espera trabalho invalidado.
     _descartar_do_lote(origem.stem)
     for destino in destinos:
         try:
@@ -415,13 +358,9 @@ def abandonar(origem: Path) -> None:
 
 
 def adotar(origem: Path, capa: Path) -> None:
-    """Copia para a capa ``capa`` as cópias prontas de ``origem``.
+    """Copia para ``capa`` as cópias prontas de ``origem`` (a capa provisória da edição que vira a do jogo), para o ``preparar`` não as gerar de novo.
 
-    Para a capa provisória da edição que vira a capa do jogo: as cópias que a
-    prévia já tem (as do vídeo saem junto com ele, ``capa_video``) não são
-    geradas de novo pelo ``preparar``, que só pede as que faltam. Vem depois
-    do ``apagar`` da capa velha e antes do ``preparar``. Uma cópia que não
-    copia é só gerada de novo.
+    Vem depois do ``apagar`` da capa velha e antes do ``preparar``. Uma cópia que falha é só gerada de novo.
     """
     soltar(capa.stem)
     for tamanho in tamanhos():
@@ -449,11 +388,7 @@ def _dono_e_tamanho(arquivo: Path) -> tuple[str, str]:
 
 
 def _copias_de(game_id: str) -> list[Path]:
-    """As cópias do jogo ``game_id``, de todos os tamanhos.
-
-    O id é o que vem antes do último ``_``: o glob ``{id}_*`` também pegaria as
-    cópias de um jogo cujo id começa igual (``x`` e ``x_y``).
-    """
+    """As cópias do jogo ``game_id``, de todos os tamanhos (o id é o que vem antes do último ``_``: o glob ``{id}_*`` pegaria ``x_y`` junto com ``x``)."""
     return [
         arquivo
         for arquivo in shared.capas_animadas_dir.glob("*.webp")
@@ -462,7 +397,6 @@ def _copias_de(game_id: str) -> list[Path]:
 
 
 def pares_de_migracao(antigo: str, novo: str) -> list[tuple[Path, Path]]:
-    """(cópia atual, cópia com o id novo) de cada cópia do jogo ``antigo``."""
     return [
         (arquivo, arquivo.with_name(f"{novo}_{_dono_e_tamanho(arquivo)[1]}.webp"))
         for arquivo in _copias_de(antigo)
@@ -470,11 +404,9 @@ def pares_de_migracao(antigo: str, novo: str) -> list[tuple[Path, Path]]:
 
 
 def limpar(ids: set[str]) -> None:
-    """Apaga o que sobrou na pasta das cópias: de jogo que não existe mais, de
-    tamanho que nenhuma tela usa e todo temporário de gravação interrompida.
+    """Apaga o que sobrou na pasta das cópias: de jogo inexistente, de tamanho que nenhuma tela usa e temporários de gravação interrompida.
 
-    Roda numa thread de segundo plano na abertura, sem tocar o GTK. Só olha os
-    arquivos da própria pasta; um que sumiu ou está preso fica para a próxima.
+    Roda numa thread de segundo plano na abertura; um arquivo que sumiu ou está preso fica para a próxima.
     """
     validos = {f"{largura}x{altura}" for largura, altura in tamanhos()}
     for arquivo in list(shared.capas_animadas_dir.glob("*")):
@@ -493,11 +425,10 @@ def limpar(ids: set[str]) -> None:
 
 
 def encerrar() -> None:
-    """Invalida todos os trabalhos, pendentes e em andamento. Para fechar o app.
+    """Invalida todos os trabalhos, pendentes e em andamento, para fechar o app.
 
-    O executor não é daemon: sem isto o interpretador esperaria a geração em
-    curso (segundos numa capa grande) e todo trabalho ainda na fila. Os
-    pendentes saem sem gerar e os em andamento param no próximo quadro.
+    O executor não é daemon: sem isto o interpretador esperaria a geração em curso e toda a fila. Os pendentes
+    saem sem gerar e os em andamento param no próximo quadro.
     """
     with _trava:
         for trabalho in _trabalhos.values():
@@ -505,8 +436,6 @@ def encerrar() -> None:
         _trabalhos.clear()
     _encerrar_lote()
 
-
-# --- A tarefa "Capas animadas" -------------------------------------------------
 
 
 class _Lote:
@@ -519,16 +448,12 @@ class _Lote:
         self.pendentes: dict[Path, str] = {}  # destino -> game_id
 
 
-# Só a thread principal troca isto. Há no máximo uma tarefa: um pedido novo
-# durante ela entra no mesmo lote em vez de abrir outro item na lista.
+# Só a thread principal troca isto. No máximo uma tarefa: um pedido novo durante ela entra no mesmo lote.
 _lote: _Lote | None = None
 
 
 def _em_dia(origem: Path, destino: Path, game_id: str) -> bool:
-    """A cópia existe e não é mais velha que a capa; uma velha é largada pela tela para ser refeita.
-
-    Cinto de segurança: a capa trocada com a cópia antiga presa manteria a animação velha na grade.
-    """
+    """A cópia existe e não é mais velha que a capa; uma velha é largada pela tela para ser refeita (senão a animação velha ficaria na grade)."""
     try:
         if not destino.exists():
             return False
@@ -541,13 +466,10 @@ def _em_dia(origem: Path, destino: Path, game_id: str) -> bool:
 
 
 def preparar(capas: list[tuple[str, Path]]) -> None:
-    """Gera, em segundo plano, as cópias que faltam das capas (na ordem dada).
+    """Gera, em segundo plano, as cópias que faltam das capas (na ordem dada). Na thread principal.
 
-    Sempre na thread principal. Mostra uma só tarefa "Capas animadas" nas
-    tarefas em andamento, que termina quando todo pedido voltou (``estatica``,
-    ``ilegivel`` e ``falhou`` também contam) ou quando o app fecha. Sem nada a
-    gerar, não mostra tarefa nenhuma. Chamada durante uma tarefa em andamento,
-    acrescenta as cópias novas a ela; cópia já esperada não conta duas vezes.
+    Mostra uma só tarefa "Capas animadas", que termina quando todo pedido voltou (``estatica``, ``ilegivel`` e
+    ``falhou`` contam) ou o app fecha; sem nada a gerar, nenhuma. Durante uma tarefa, acrescenta as cópias novas a ela.
     """
     global _lote  # pylint: disable=global-statement
     novos: dict[Path, tuple[str, Path, tuple[int, int]]] = {}
@@ -560,12 +482,9 @@ def preparar(capas: list[tuple[str, Path]]) -> None:
     if not novos:
         return
 
-    # O lote e as pendências ficam prontos antes do primeiro ``pedir``: um aviso
-    # nunca chega a um lote que ainda acha que terminou.
+    # O lote e as pendências ficam prontos antes do primeiro ``pedir``: um aviso nunca chega a um lote que acha que terminou.
     if _lote is None:
-        # Aqui e não no topo: a lista de `tarefas` é um QObject e nasce na thread que
-        # importa o módulo (a principal, no app); a store importa este módulo só para
-        # apagar e migrar cópias.
+        # Aqui e não no topo: a lista de `tarefas` é um QObject e nasce na thread que importa o módulo; a store importa este só para apagar e migrar.
         from cartridges.modelos import tarefas  # pylint: disable=import-outside-toplevel
 
         _lote = _Lote(tarefas.comecar(_("Capas animadas"), len(novos)), len(novos))
@@ -579,20 +498,17 @@ def preparar(capas: list[tuple[str, Path]]) -> None:
         pedir(origem, destino, tamanho, partial(_voltou, lote, destino))
 
 
-# Quem quer saber de cada cópia que termina (o modelo da biblioteca): (game_id, resultado), na
-# thread principal. Um só, e global: o pedido pode ter vindo de outro lugar (``save_cover``).
+# Quem quer saber de cada cópia que termina (o modelo da biblioteca): (game_id, resultado), na thread principal. Global: o pedido pode vir de ``save_cover``.
 ao_terminar_copia: Callable[[str, Resultado], None] | None = None
-# O mesmo aviso para a cópia grande que a página de detalhes toca.
 ao_terminar_da_pagina: Callable[[str, Resultado], None] | None = None
 
 
 def _voltou(lote: _Lote, destino: Path, resultado: Resultado) -> None:
-    # Um aviso tardio de lote que já terminou ou foi cancelado, ou de cópia que
-    # a tarefa já deixou de esperar, não conta nem reabre nada.
+    # Aviso tardio de lote terminado ou cancelado, ou de cópia que a tarefa já não espera, não conta.
     if lote is not _lote or destino not in lote.pendentes:
         return
     game_id = lote.pendentes.pop(destino)
-    # Um gancho que levanta não pode deixar a última cópia sem encerrar o lote.
+    # Um gancho que levanta não pode deixar o lote sem encerrar.
     for gancho in (ao_terminar_copia, ao_terminar_da_pagina):
         if gancho is not None:
             try:
@@ -606,7 +522,6 @@ def _voltou(lote: _Lote, destino: Path, resultado: Resultado) -> None:
 
 
 def _descartar_do_lote(game_id: str) -> bool:
-    """A capa do jogo mudou: a tarefa deixa de esperar as cópias antigas."""
     if _lote is not None:
         descartadas = [d for d, dono in _lote.pendentes.items() if dono == game_id]
         for destino in descartadas:
@@ -616,7 +531,7 @@ def _descartar_do_lote(game_id: str) -> bool:
         elif descartadas:
             _lote.total -= len(descartadas)
             _lote.tarefa.atualizar(_lote.feitos, _lote.total)
-    return False  # o GLib repetiria o callback que devolvesse um valor verdadeiro
+    return False
 
 
 def _encerrar_lote() -> None:

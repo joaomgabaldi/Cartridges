@@ -19,41 +19,29 @@
 
 """A correção de cor de cada dispositivo, ajustada no assistente de calibração.
 
-O firmware de cada fita reproduz as cores do seu jeito: o "vermelho" que o
-app manda pode sair arroxeado. A calibração guarda, para seis cores de
-referência, quanto o tom anda e quanto a intensidade muda, e as cores entre
-elas usam a mistura proporcional das duas vizinhas. O branco tem um ajuste
-próprio, que pesa mais quanto mais pálida for a cor.
-
-Só contas: nada de tela nem de rede. As cores chegam e saem como a ``Cor`` de
-``session_fita`` (matiz 0–359, saturação e brilho 0–1000); o brilho nunca muda.
+O firmware de cada fita reproduz as cores do seu jeito (o "vermelho" pode sair arroxeado). Para seis cores de referência guarda-se quanto o tom anda e a intensidade muda, e as intermediárias misturam as duas vizinhas; o branco tem ajuste próprio, mais forte quanto mais pálida a cor. Só contas: as cores são a ``Cor`` de ``session_fita`` (matiz 0–359, saturação e brilho 0–1000) e o brilho nunca muda.
 """
 
 import math
 from typing import Any, NamedTuple
 
-# As cores de referência, uma por etapa do assistente.
 REFERENCIAS = (0, 60, 120, 180, 240, 300)
 
-# Os limites dos controles do assistente.
 TOM_MAXIMO = 30
 FATOR_MINIMO = 0.5
 FATOR_MAXIMO = 1.5
 SATURACAO_DO_BRANCO = 300
 
-# Até onde o ajuste do branco alcança: cor com saturação 0 recebe o ajuste
-# inteiro, e a partir de 40% não recebe nada — uma cor viva não tem branco.
+# Saturação 0 recebe o ajuste do branco inteiro; a partir de 40% (400) não recebe nada.
 FAIXA_DO_BRANCO = 400
 
-# Os tons de branco nas pontas da Temperatura.
 MATIZ_QUENTE = 30
 MATIZ_FRIO = 210
 
 
 class Calibracao(NamedTuple):
-    """``cores``: seis pares (deslocamento de tom em graus, fator de
-    intensidade), um por ``REFERENCIAS``. ``branco``: matiz e saturação do tom
-    de branco (saturação 0 = branco neutro)."""
+    """``cores``: seis pares (deslocamento de tom em graus, fator de intensidade), um por ``REFERENCIAS``.
+    ``branco``: matiz e saturação do tom de branco (saturação 0 = neutro)."""
 
     cores: tuple[tuple[int, float], ...]
     branco: tuple[int, int]
@@ -63,10 +51,8 @@ NEUTRA = Calibracao(((0, 1.0),) * len(REFERENCIAS), (0, 0))
 
 
 def corrigir(cor: Any, calibracao: Calibracao) -> Any:
-    """A cor que a fita deve receber para mostrar ``cor``."""
     matiz, saturacao = cor.matiz, cor.saturacao
 
-    # Tom e intensidade: a mistura das duas referências vizinhas.
     indice = int(matiz // 60) % 6
     andado = (matiz - REFERENCIAS[indice]) / 60
     tom_a, fator_a = calibracao.cores[indice]
@@ -76,8 +62,7 @@ def corrigir(cor: Any, calibracao: Calibracao) -> Any:
     matiz = (matiz + tom) % 360
     saturacao = min(1000.0, saturacao * fator)
 
-    # Branco: a cor e o tom do branco como vetores no círculo de cores; a cor
-    # pálida ganha o vetor do branco quase inteiro, a viva não ganha nada.
+    # Branco: soma de vetores no círculo de cores; a cor pálida ganha o vetor do branco quase inteiro.
     peso = max(0.0, 1 - saturacao / FAIXA_DO_BRANCO)
     matiz_b, saturacao_b = calibracao.branco
     if peso and saturacao_b:
@@ -98,8 +83,7 @@ def _limitar(valor: float, minimo: float, maximo: float) -> float:
 
 
 def _numero(valor: Any) -> float:
-    """Um número de verdade do arquivo: infinito e NaN não são, e um inteiro
-    enorme demais para virar ``float`` também não."""
+    """Um número finito do arquivo (infinito, NaN e inteiro grande demais para ``float`` não valem)."""
     numero = float(valor)
     if not math.isfinite(numero):
         raise ValueError(valor)
@@ -107,9 +91,7 @@ def _numero(valor: Any) -> float:
 
 
 def de_json(dados: Any) -> Calibracao:
-    """A calibração gravada no ``fitas.json``. Arquivo mexido à mão (tipo
-    errado, lista curta) vale como neutra, e número fora dos limites é
-    trazido para dentro deles: isto roda em toda troca de cor."""
+    """A calibração gravada no ``fitas.json``. Arquivo mexido à mão vale como neutra e número fora dos limites é trazido para dentro."""
     try:
         cores = tuple(
             (
@@ -128,8 +110,7 @@ def de_json(dados: Any) -> Calibracao:
     if len(cores) != len(REFERENCIAS):
         return NEUTRA
     if not branco[1]:
-        # Sem saturação, o tom de branco é o neutro, qualquer que seja a matiz
-        # gravada (a Temperatura no centro gravava 210 antes da correção).
+        # Sem saturação o branco é o neutro, qualquer que seja a matiz gravada (versões antigas gravavam 210).
         branco = NEUTRA.branco
     return Calibracao(cores, branco)
 
@@ -142,19 +123,16 @@ def para_json(calibracao: Calibracao) -> dict[str, Any]:
 
 
 def branco_da_temperatura(temperatura: float) -> tuple[int, int]:
-    """O tom de branco de uma posição da Temperatura: −1 o mais quente, 0
-    neutro, +1 o mais frio."""
+    """O tom de branco de uma posição da Temperatura: −1 o mais quente, 0 neutro, +1 o mais frio."""
     temperatura = _limitar(temperatura, -1, 1)
     saturacao = round(abs(temperatura) * SATURACAO_DO_BRANCO)
-    # O centro do controle é o branco neutro, igual ao da calibração neutra:
-    # voltar a ele desfaz o ajuste, e o dispositivo não conta como calibrado.
+    # O centro é o branco neutro: voltar a ele desfaz o ajuste e o dispositivo não conta como calibrado.
     if not saturacao:
         return NEUTRA.branco
     return (MATIZ_QUENTE if temperatura < 0 else MATIZ_FRIO), saturacao
 
 
 def temperatura_do_branco(branco: tuple[int, int]) -> float:
-    """O caminho de volta, para o controle mostrar a posição gravada."""
     matiz, saturacao = branco
     distancia_do_frio = abs((matiz - MATIZ_FRIO + 180) % 360 - 180)
     sinal = 1 if distancia_do_frio < 90 else -1

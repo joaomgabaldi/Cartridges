@@ -20,10 +20,7 @@
 from datetime import datetime
 from typing import Any
 
-# Weekday/month names in pt-BR. GLib's %A/%B follow the C locale, which is
-# English on Windows (gettext/locale aren't wired up here), so format them
-# ourselves to match the rest of the hardcoded pt-BR UI. weekday() is
-# 0=Monday..6=Sunday; month is 1=Jan..12=Dec.
+# Nomes em pt-BR porque o locale do Windows daria inglês. weekday() é 0=segunda; mês é 1=janeiro.
 WEEKDAYS = (
     "segunda-feira",
     "terça-feira",
@@ -52,19 +49,10 @@ MONTHS = (
 def relative_date(timestamp: int) -> Any:  # pylint: disable=too-many-return-statements
     today = datetime.today()
     date = datetime.fromtimestamp(timestamp)
-    # Calendar days apart, not elapsed 24-hour periods: a session that ended at
-    # 23:50 yesterday read as "Hoje" until 23:50 today, because the subtraction
-    # never crossed a whole day. Every branch below compares against weekday()
-    # and day-of-month, which are calendar boundaries too, so this is the unit
-    # they were written for. Negatives are clamped: a timestamp in the future
-    # (a clock that was wrong when the game ran, a library copied from a machine
-    # ahead of ours) used to fall through to the weekday branch and announce a
-    # day of the week, which reads as a date in the past.
+    # Dias de calendário, não períodos de 24 h; o futuro (relógio errado) vira 0 em vez de cair no dia da semana.
     days_no = max(0, (today.date() - date.date()).days)
 
-    # Minúsculas: o valor sempre segue um rótulo com dois-pontos ("Jogado por
-    # último: hoje"), nunca abre frase sozinho. Quem precisar de maiúscula
-    # (um rótulo autônomo) capitaliza no próprio lugar de uso.
+    # Minúsculas: o valor sempre segue um rótulo com dois-pontos ("Jogado por último: hoje").
     if days_no == 0:
         return _("hoje")
     if days_no == 1:
@@ -73,9 +61,7 @@ def relative_date(timestamp: int) -> Any:  # pylint: disable=too-many-return-sta
         return WEEKDAYS[date.weekday()]
     if days_no <= day_of_week + 7:
         return _("semana passada")
-    # Mês e ano pelo calendário também, e não por dias contados: com 30 dias
-    # fixos, 31/08 lido em 18/09 saía "este mês", e 31/12 de dois anos atrás,
-    # lido no começo de janeiro, saía "ano passado".
+    # Mês e ano pelo calendário, não por 30 dias fixos (31/08 lido em 18/09 saía "este mês").
     months_no = (today.year - date.year) * 12 + today.month - date.month
     if months_no <= 0:
         return _("este mês")
@@ -89,7 +75,6 @@ def relative_date(timestamp: int) -> Any:  # pylint: disable=too-many-return-sta
 
 
 if __name__ == "__main__":
-    # Guards against an off-by-one / misordering vs. weekday()/month conventions
     assert WEEKDAYS[0] == "segunda-feira" and WEEKDAYS[6] == "domingo"
     assert MONTHS[0] == "janeiro" and MONTHS[11] == "dezembro"
     assert len(WEEKDAYS) == 7 and len(MONTHS) == 12

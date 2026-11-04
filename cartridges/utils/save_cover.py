@@ -62,45 +62,33 @@ def _convert_readable_cover(cover_path: Path, resize: bool, via_qt: bool = False
     tmp_path: Optional[Path] = None
     try:
         with Image.open(cover_path) as image:
-            # A cover can come straight off the network (SteamGridDB) or from a
-            # file the user picked. Pillow refuses absurd pixel counts with a
-            # DecompressionBombError, which is neither UnidentifiedImageError
-            # nor OSError — it escaped this handler entirely and took the
-            # importer's worker thread with it. Treat it as "unreadable cover",
-            # which is what it is.
+            # O Pillow recusa contagens absurdas de pixels com DecompressionBombError (nem UnidentifiedImageError nem OSError):
+            # escapava e derrubava a thread do importador. Vale como "capa ilegível".
             animated = getattr(image, "is_animated", False)
             fmt = (image.format or "").upper()
 
-            # GIF, animated WebP and APNG are stored verbatim at their original
-            # resolution: the library plays reduced copies made by Pillow
-            # (``copias_animadas``), never the original. Re-encoding an animated
-            # cover into a 256-colour GIF caused banding, washed-out colours
-            # and, for APNG, outright save failures.
+            # GIF, WebP animado e APNG ficam como vieram (a biblioteca toca as cópias de ``copias_animadas``):
+            # recodificar num GIF de 256 cores dava banding e, no APNG, falha ao salvar.
             if animated and (suffix := _SUFIXO_ANIMADO.get(fmt)):
                 tmp_path = _temporario(suffix)
                 copyfile(cover_path, tmp_path)
                 return tmp_path
 
-            # Any other animated format has no copy pipeline, so fall back to a
-            # clean full-colour still of the first frame.
+            # Outro formato animado não tem pipeline de cópias: vira um still colorido do primeiro quadro.
             if animated:
                 image.seek(0)
 
-            # This might not be necessary in the future
-            # https://github.com/python-pillow/Pillow/issues/2663
+            # Talvez desnecessário no futuro: https://github.com/python-pillow/Pillow/issues/2663
             if image.mode not in ("RGB", "RGBA"):
                 image = image.convert("RGBA")
 
             tmp_path = _temporario(".tiff")
-            # Covers are always stored losslessly at high resolution
             (image.resize(shared.image_size) if resize else image).save(
                 tmp_path,
                 compression="tiff_adobe_deflate",
             )
     except Image.DecompressionBombError:
-        # Fora do fallback abaixo: ele regrava a mesma imagem gigante num TIFF
-        # e chama `convert_cover` de novo, que a recusa de novo — recursão sem
-        # fim, com um TIFF enorme a mais em %TEMP% a cada nível.
+        # Fora do fallback abaixo: ele regravaria a imagem gigante num TIFF e chamaria `convert_cover` de novo, sem fim.
         logging.warning("Cover refused, image too large: %s", Path(cover_path).name)
         return None
     except (UnidentifiedImageError, OSError, ValueError) as error:
@@ -120,7 +108,7 @@ def _convert_readable_cover(cover_path: Path, resize: bool, via_qt: bool = False
 
 
 def _convert_pelo_qt(cover_path: Path, resize: bool, motivo: Exception) -> Optional[Path]:
-    """O que o Pillow não lê e o Qt lê (o `Gdk.Texture` da `main`): regrava num TIFF e passa de novo por `convert_cover`."""
+    """O que o Pillow não lê e o Qt lê: regrava num TIFF e passa de novo por `convert_cover`."""
     intermediaria = _temporario(".tiff")
     resultado: Optional[Path] = None
     try:
@@ -130,15 +118,14 @@ def _convert_pelo_qt(cover_path: Path, resize: bool, motivo: Exception) -> Optio
         if imagem.isNull() or not imagem.save(str(intermediaria), "TIFF"):
             logging.warning("Could not convert cover %s: %s", Path(cover_path).name, motivo)
             return None
-        # Sem redução (`composite_cover`), a TIFF do Qt já é a entrada; com ela, passa pelo bloco do Pillow uma vez só.
+        # Sem redução (`composite_cover`), a TIFF do Qt já é a entrada; com ela, passa pelo Pillow uma vez só.
         resultado = _convert_readable_cover(intermediaria, True, via_qt=True) if resize else intermediaria
         return resultado
     except OSError as erro:
         logging.warning("Could not convert cover %s: %s", Path(cover_path).name, erro)
         return None
     finally:
-        # A intermediária é só a entrada da chamada de cima, que grava um temporário próprio; se ela devolveu a própria
-        # entrada (`resize=False`), apagá-la deixaria quem chamou com um caminho para um arquivo que não existe.
+        # Se devolveu a própria entrada (`resize=False`), apagá-la deixaria quem chamou com um caminho inexistente.
         if resultado is not intermediaria:
             intermediaria.unlink(missing_ok=True)
 
@@ -148,14 +135,8 @@ class UnreadableCoverError(Exception):
 
 
 def composite_cover(image_path: Path) -> Image.Image:
-    """``image_path`` shaped as a cover, for a cover picked from a file.
-
-    An image taller than a cover, or wider by at most
-    `enquadramento.MAX_STRETCH`, is just stretched later; anything wider is
-    fitted in the middle over a blurred, stretched copy of itself.
-    """
-    # `convert_cover` returns None for anything Pillow cannot read; `str(None)`
-    # used to turn that into a literal "None" filename.
+    """``image_path`` no formato de capa, para uma capa escolhida de um arquivo (regra em `enquadramento`)."""
+    # `convert_cover` devolve None para o que o Pillow não lê; `str(None)` virava um arquivo "None".
     converted = convert_cover(image_path, resize=False)
     if converted is None:
         raise UnreadableCoverError(image_path)
@@ -165,8 +146,7 @@ def composite_cover(image_path: Path) -> Image.Image:
     except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as error:
         raise UnreadableCoverError(image_path) from error
     finally:
-        # `convert_cover` may hand back the input untouched; only a temp it
-        # made is ours to remove.
+        # `convert_cover` pode devolver a entrada intacta; só o temporário que ele criou é nosso.
         if converted != image_path:
             converted.unlink(missing_ok=True)
 
@@ -186,28 +166,23 @@ def composite_cover(image_path: Path) -> Image.Image:
 def save_cover(game_id: str, cover_path: Path) -> None:
     shared.covers_dir.mkdir(parents=True, exist_ok=True)
 
-    # As cópias reduzidas são apagadas só com a capa nova já no lugar (aqui e
-    # no fim): até lá a tela ainda mostra a velha e pode pedir a cópia dela.
+    # As cópias reduzidas só são apagadas com a capa nova no lugar: até lá a tela ainda mostra a velha.
 
     if not cover_path:
-        # Remoção explícita: aqui sim toda forma anterior cai, e não há nada
-        # novo para proteger.
+        # Remoção explícita: toda forma anterior cai.
         for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
             (shared.covers_dir / f"{game_id}{suffix}").unlink(missing_ok=True)
         entregar_na_tela(_refazer_copias, game_id, None, None)
         return
 
-    # Animated covers keep their own extension; everything else is a TIFF still
+    # Capa animada mantém a extensão; o resto vira TIFF
     if cover_path.suffix.lower() in ANIMATED_SUFFIXES:
         dest = shared.covers_dir / f"{game_id}{cover_path.suffix.lower()}"
     else:
         dest = shared.covers_dir / f"{game_id}.tiff"
 
-    # Copia para um tmp no próprio diretório e só então assume o nome final.
-    # A ordem antiga — apagar tudo e depois copiar — deixava a capa ausente ou
-    # truncada num disco cheio ou numa queda, e uma truncada passa no
-    # `is_file()` do SGDB, que então nunca mais re-busca. O `replace` é atômico
-    # no mesmo volume; uma cópia que falha custa o tmp e preserva a capa atual.
+    # Copia para um tmp no mesmo diretório e só então assume o nome final: apagar antes deixava a capa ausente ou
+    # truncada (num disco cheio), e uma truncada passa no `is_file()` do SGDB, que nunca mais re-busca. O `replace` é atômico.
     tmp_dest = dest.with_name(f"{dest.name}.{uuid4().hex}.tmp")
     try:
         copyfile(cover_path, tmp_dest)
@@ -215,35 +190,29 @@ def save_cover(game_id: str, cover_path: Path) -> None:
     finally:
         tmp_dest.unlink(missing_ok=True)
 
-    # As formas de OUTRO sufixo só caem depois que a nova está no lugar.
+    # As formas de outro sufixo só caem com a nova no lugar.
     for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
         if suffix != dest.suffix:
             (shared.covers_dir / f"{game_id}{suffix}").unlink(missing_ok=True)
 
-    # Apagar, adotar e preparar as cópias numa entrega só, na principal: a tela
-    # segura o arquivo da cópia velha aberto, e só ela o larga (``soltar``).
+    # Apagar, adotar e preparar as cópias numa entrega só, na principal: só a tela larga a cópia velha (``soltar``).
     entregar_na_tela(_refazer_copias, game_id, dest, cover_path)
 
-    # save_cover can be called from a worker thread (e.g. the async SgdbManager),
-    # but the grid is refreshed by the game's `update()`, which belongs to the main
-    # thread. A URL com `?v=<mtime_ns>` da grade troca a capa sozinha.
+    # Pode rodar numa thread de trabalho, mas o `update()` do jogo é da principal. A URL com `?v=<mtime_ns>` da grade troca a capa.
     na_thread_principal(_atualizar_jogo, game_id)
 
 
 def _refazer_copias(game_id: str, dest: Optional[Path], cover_path: Optional[Path]) -> None:
-    """Troca as cópias reduzidas do jogo pelas da capa nova (``dest``; ``None`` se a capa saiu).
+    """Troca as cópias reduzidas do jogo pelas da capa nova (``dest``; ``None`` se a capa saiu). Na thread principal.
 
-    Sempre na thread principal. O ``apagar`` invalida todo pedido que já existe, então o que
-    leu a capa velha não sobrevive, e o que vier depois só acha a nova.
+    O ``apagar`` invalida todo pedido existente: quem leu a capa velha não sobrevive.
     """
-    # Uma capa gravada com sucesso vale mais que a provisória que ficou como a da sessão depois de uma
-    # gravação que falhou (`Jogo.capa_da_sessao`): vale para todo caminho, a edição e a importação.
+    # Uma capa gravada com sucesso vale mais que a provisória da sessão deixada por uma gravação que falhou (`Jogo.capa_da_sessao`).
     if (store := getattr(shared, "store", None)) is not None and (jogo := store.get(game_id)) is not None:
         jogo.capa_da_sessao = None
     copias_animadas.apagar(game_id)
     if dest is not None and dest.suffix in ANIMATED_SUFFIXES:
-        # A prévia da edição pode já ter as cópias desta capa: o ``preparar``
-        # só gera as que faltarem, com o autoplay ligado ou não.
+        # A prévia da edição pode já ter as cópias desta capa: o ``preparar`` só gera as que faltarem.
         copias_animadas.adotar(cover_path, dest)
         copias_animadas.preparar([(game_id, dest)])
 

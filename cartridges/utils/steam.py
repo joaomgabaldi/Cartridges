@@ -33,38 +33,24 @@ from cartridges.utils.steam_genre import pick_genre
 from cartridges.utils.title_match import TitleMatch, rank_candidates
 
 
-# Bumped whenever a Steam lookup starts producing a field it did not before.
-# A game records the version it was last looked up at, which is what lets the
-# refresh tell "this game predates the new field" from "Steam has nothing to
-# say about it". Field emptiness cannot answer that: of 30 games looked up
-# fresh, 29 had no gamepad recommendation and 5 no controller support — all of
-# them correct answers, none of them a gap to go back for.
+# Sobe quando a consulta passa a produzir um campo novo. O jogo guarda a versão da última consulta, o que distingue "anterior
+# ao campo" de "a Steam não tem nada a dizer" (campo vazio não distingue: 29 de 30 jogos não têm recomendação de controle, e é resposta correta).
 #
 # 1: genre, controller_support, gamepad_recommended
 # 2: description
 STEAM_METADATA_VERSION = 2
 
-# appdetails category ids for gamepad support. Steam exposes no "no support"
-# value: a game simply carries neither.
+# Ids de categoria do appdetails para controle. Não há "sem suporte": o jogo simplesmente não traz nenhum.
 CONTROLLER_FULL_CATEGORY = 28
 CONTROLLER_PARTIAL_CATEGORY = 18
-# "Gamepad Recommended". Steam has no id for the opposite claim, so like the
-# two above, absence means "unstated" rather than "no".
+# "Gamepad Recommended"; a ausência significa "não declarado", não "não".
 GAMEPAD_RECOMMENDED_CATEGORY = 60
 
-# How many user tags to ask for. Only the first one that names a genre is
-# used, but the genre tag can sit well down the list on games whose top tags
-# are all setting and mood — Spider-Man reaches "Ação / Aventura" at 8.
+# Quantas tags pedir: só a primeira de gênero vale, mas ela pode estar bem abaixo (Spider-Man chega a "Ação / Aventura" na 8ª).
 TAG_COUNT = 20
 
-# Appids per bulk tag request. The endpoint answers 200 of them in one call in
-# well under a second. This is what makes refreshing a whole library
-# affordable: one token for the tags of 200 games instead of 200 tokens.
-#
-# 200 is also close to the ceiling, which is why it is not higher: the appids
-# travel in the query string, and a full batch measures 6647 bytes of URL —
-# inside the 8 kB most servers accept, but with only about a fifth to spare.
-# Raising this number is not free; it needs measuring again.
+# Appids por requisição de tags: 200 em menos de um segundo, um token em vez de 200 ao atualizar a biblioteca. É perto do teto:
+# os appids vão na URL, e um lote cheio mede 6647 bytes, dentro dos 8 kB de a maioria dos servidores, com pouca folga. Subir exige medir de novo.
 TAG_BATCH_SIZE = 200
 
 
@@ -90,7 +76,7 @@ class SteamAPIData(TypedDict, total=False):
     metacritic: int
     steam_review: str
     genre: str
-    # "full" or "partial"; absent when Steam claims neither.
+    # "full" ou "partial"; ausente se a Steam não declara.
     controller_support: str
     gamepad_recommended: bool
     description: str
@@ -99,8 +85,7 @@ class SteamAPIData(TypedDict, total=False):
 class SteamRateLimiter(RateLimiter):
     """Rate limiter for the Steam web API"""
 
-    # Steam web API limit
-    # 200 requests per 5 min seems to be the limit
+    # O limite parece ser 200 requisições em 5 min
     # https://stackoverflow.com/questions/76047820/how-am-i-exceeding-steam-apis-rate-limit
     # https://stackoverflow.com/questions/51795457/avoiding-error-429-too-many-requests-steam-web-api
     refill_period_seconds = 5 * 60
@@ -108,43 +93,28 @@ class SteamRateLimiter(RateLimiter):
     burst_tokens = 100
 
     def _init_pick_history(self) -> None:
-        """
-        Load the pick history from schema.
-
-        Allows remembering API limits through restarts of Cartridges: the base
-        class drains the bucket by what is restored here (`seed_history`), so a
-        relaunch right after a large import starts with the tokens those
-        requests already spent, instead of a full burst on top of them.
-        """
+        """Carrega o histórico do schema, para lembrar o limite entre execuções: `seed_history` drena o balde pelo que é restaurado."""
         super()._init_pick_history()
         timestamps_str = shared.state_schema.get_string("steam-limiter-tokens-history")
-        # A corrupted state entry (bad JSON / wrong type) must never crash the
-        # importer at startup; just start with a fresh history instead.
+        # Entrada de estado corrompida nunca pode derrubar a abertura: recomeça com histórico novo.
         try:
             timestamps = json.loads(timestamps_str)
         except ValueError:
             timestamps = []
         if isinstance(timestamps, list):
             restored = [t for t in timestamps if isinstance(t, (int, float))]
-            # Guarded, because `add()` with no arguments logs a pick at the
-            # current time: a first launch (or a history that has just aged
-            # out) would otherwise invent a request nobody made — and now that
-            # a restored pick costs a token, it would also cost a real one.
+            # `add()` sem argumentos registra uma retirada agora: sem a guarda, uma primeira abertura inventaria uma requisição (e gastaria um token).
             if restored:
                 self.pick_history.add(*restored)
         self.pick_history.remove_old_entries()
 
     def acquire(self) -> None:
-        """Get a token from the bucket and store the pick history in the schema"""
         super().acquire()
         timestamps_str = json.dumps(self.pick_history.copy_timestamps())
         shared.state_schema.set_string("steam-limiter-tokens-history", timestamps_str)
 
 
-# Month names mapped to their number. Kept explicit so parsing does not depend
-# on the process locale: datetime.strptime("%b") would expect localized names
-# and silently fail. Portuguese only: appdetails is asked for it (`l=brazilian`),
-# and it is what the app stores and what a date typed by hand is written in.
+# Tabela própria para o parse não depender do locale (`strptime("%b")` falharia em silêncio). Só português: o appdetails é pedido assim (`l=brazilian`).
 _MONTH_NUMBERS = {
     "jan": 1, "janeiro": 1,
     "fev": 2, "fevereiro": 2,
@@ -159,7 +129,6 @@ _MONTH_NUMBERS = {
     "nov": 11, "novembro": 11,
     "dez": 12, "dezembro": 12,
 }  # fmt: skip
-# Output uses Brazilian Portuguese abbreviations
 _MONTH_ABBR = (
     "", "jan.", "fev.", "mar.", "abr.", "mai.", "jun.",
     "jul.", "ago.", "set.", "out.", "nov.", "dez.",
@@ -173,13 +142,8 @@ _UNDATED_TEXTS = {"em breve": "Em breve", "a ser anunciado": "A ser anunciado"}
 def parse_release_date(raw: Optional[str]) -> tuple[Optional[int], Optional[int], Optional[int]]:
     """Lê uma data de lançamento como ``(ano, mês, dia)``; mês e dia podem faltar.
 
-    Formatos aceitos, e só eles: "17/set./2020" (o da Steam), "02/09/2020"
-    (digitado à mão), "set. 2020" ou "set./2020" (mês e ano) e "2020". Os meses
-    vêm de uma tabela própria, e não do locale do processo, que é o que
-    `datetime.strptime("%b")` usaria.
-
-    O dia e o mês só passam se formarem uma data que existe: "31/fev./2026" e
-    "99/inf./99" dão ``(None, None, None)``, como "Em breve".
+    Só estes formatos: "17/set./2020" (Steam), "02/09/2020" (à mão), "set. 2020" ou "set./2020" e "2020".
+    Dia e mês só passam se formarem uma data que existe: "31/fev./2026" dá ``(None, None, None)``, como "Em breve".
     """
     text = (raw or "").strip().lower()
     day = month = None
@@ -201,11 +165,9 @@ def parse_release_date(raw: Optional[str]) -> tuple[Optional[int], Optional[int]
 
 
 def format_release_date(raw: Optional[str]) -> Optional[str]:
-    """A data no formato da Steam ("2/set./2026", "set./2026", "2026").
+    """A data no formato da Steam ("2/set./2026", "set./2026", "2026"); "Em breve" e "A ser anunciado" passam na grafia do app.
 
-    "Em breve" e "A ser anunciado" passam na grafia do app. Qualquer outra
-    coisa é descartada (``None``, com registro no log de depuração): o texto
-    mostrado é sempre montado aqui, nunca o que veio de fora.
+    O resto é descartado (``None``): o texto mostrado é sempre montado aqui, nunca o que veio de fora.
     """
     text = (raw or "").strip()
     if not text:
@@ -236,10 +198,7 @@ class SteamAPIHelper:
         self.rate_limiter = rate_limiter
 
     def search_store(self, name: str) -> list[dict]:
-        """Return the raw store search results for ``name``.
-
-        :raises SteamGameNotFoundError: if the endpoint returns nothing usable
-        """
+        """Os resultados crus da busca da loja. Levanta ``SteamGameNotFoundError`` se nada for utilizável."""
         with self.rate_limiter:
             try:
                 with get_capped(
@@ -249,18 +208,12 @@ class SteamAPIHelper:
                 ) as response:
                     response.raise_for_status()
                     payload = response.json()
-                    # JSON válido que não é objeto (null, lista — proxy no
-                    # meio) fazia `.get()` estourar AttributeError, que nenhum
-                    # except daqui ou do seletor da Steam cobre: a thread do picker
-                    # morria e o spinner ficava eterno. Shape errado vale o
-                    # mesmo "não encontrado" do JSON inválido logo abaixo.
+                    # JSON válido que não é objeto (proxy) estourava AttributeError fora de todo except: a thread do seletor morria
+                    # e o spinner ficava eterno. Formato errado vale o mesmo "não encontrado" do JSON inválido.
                     items = payload.get("items") if isinstance(payload, dict) else None
                     if not isinstance(items, list):
                         items = []
-                    # Só entradas com appid numérico: `"id": null` (ou sem
-                    # "id") passava daqui e estourava TypeError/KeyError adiante
-                    # — no `resolve`, nos seletores — fora de todo except,
-                    # matando a thread do seletor com o spinner girando.
+                    # Só entradas com appid numérico: `"id": null` passava e estourava TypeError/KeyError adiante, fora de todo except.
                     items = [
                         item
                         for item in items
@@ -270,8 +223,7 @@ class SteamAPIHelper:
                 logging.warning("Steam search HTTP error for %s", name, exc_info=error)
                 raise error
             except ValueError as error:
-                # 200 with an invalid JSON body (proxy, captive portal, …):
-                # treat it as "not found" so the game is left untouched
+                # 200 com corpo JSON inválido (proxy, captive portal): vale "não encontrado", o jogo fica como está
                 logging.warning("Steam search invalid response for %s", name)
                 raise SteamGameNotFoundError() from error
 
@@ -280,14 +232,7 @@ class SteamAPIHelper:
         return items
 
     def search_candidates(self, name: str) -> list[tuple[dict, TitleMatch]]:
-        """Return the plausible store entries for ``name``, best match first.
-
-        Entries that cannot be the same game — a sequel, a soundtrack, an
-        unrelated title sharing a word — are dropped, so what comes back is
-        either the game or something worth showing the user as a suggestion.
-
-        :raises SteamGameNotFoundError: if nothing plausible is found
-        """
+        """As entradas plausíveis da loja para ``name``, a melhor primeiro; sequência, trilha ou título alheio são descartados. Levanta ``SteamGameNotFoundError``."""
         ranked = rank_candidates(name, self.search_store(name))
         if not ranked:
             logging.debug("No plausible Steam candidate for %s", name)
@@ -295,26 +240,14 @@ class SteamAPIHelper:
         return ranked
 
     def find_candidates(self, name: str) -> list[tuple[dict, TitleMatch]]:
-        """Return everything that could be ``name``, best match first.
-
-        Only the storefront search. The fallback through the full app list
-        (``ISteamApps/GetAppList``) was removed: Steam retired that endpoint
-        (404), and its replacement requires a Web API key the app does not
-        have.
-
-        :raises SteamGameNotFoundError: if nothing plausible is found
-        """
+        """Tudo o que pode ser ``name``, o melhor primeiro. Só a busca da loja: a Steam aposentou o ``ISteamApps/GetAppList`` (404) e o substituto exige chave de Web API."""
         return self.search_candidates(name)
 
     def resolve(self, name: str, max_attempts: int = 4) -> tuple[str, SteamAPIData]:
-        """Find the appid for ``name`` and return it with its metadata.
+        """O appid de ``name`` com seus metadados, ``(appid, data)``. Levanta ``SteamGameNotFoundError``.
 
-        Confident candidates are tried in order until one turns out to be an
-        actual game: dedicated servers, test builds and trailers can share
-        their game's name and are only distinguishable once appdetails answers.
-
-        :return: an ``(appid, data)`` tuple
-        :raises SteamGameNotFoundError: if nothing confident resolves to a game
+        Candidatos confiantes são tentados em ordem até um ser um jogo: servidores dedicados, builds de teste e trailers
+        dividem o nome e só se distinguem quando o appdetails responde.
         """
         attempts = 0
         for candidate, match in self.find_candidates(name):
@@ -341,24 +274,14 @@ class SteamAPIHelper:
         tag_ids: Optional[list[int]] = None,
         skip_genre: bool = False,
     ) -> SteamAPIData:
-        """
-        Get online data for a game from its appid.
-        May block to satisfy the Steam web API limitations.
+        """Dados online de um jogo pelo appid; pode bloquear pelo limite da API.
 
-        See https://wiki.teamfortress.com/wiki/User:RJackson/StorefrontAPI#appdetails
+        https://wiki.teamfortress.com/wiki/User:RJackson/StorefrontAPI#appdetails
         """
-
-        # Get data from the API (way block to satisfy its limits)
         with self.rate_limiter:
             try:
                 with get_capped(
-                    # Portuguese, for the one field of this payload that is
-                    # prose: the description. Everything else we read survives
-                    # the switch untouched — `type` is not translated, category
-                    # and genre ids are the same, and the date only changes
-                    # shape ("5 Dec, 2019" to "5/dez./2019"), which the parser
-                    # already reads because it has to accept the Portuguese
-                    # form the app itself stores.
+                    # Português para a descrição, o único campo em prosa; o resto sobrevive (ids iguais, e a data só muda de forma, que o parser já lê).
                     f"{self.base_url}/appdetails?appids={appid}&l=brazilian",
                     timeout=10,
                 ) as response:
@@ -368,15 +291,11 @@ class SteamAPIHelper:
                 logging.warning("Steam API HTTP error for %s", appid, exc_info=error)
                 raise error
             except ValueError as error:
-                # 200 with an invalid JSON body: same handling as "not found"
                 logging.warning("Steam API invalid response for %s", appid)
                 raise SteamGameNotFoundError() from error
 
-        # Um pedido leva um appID só, então a resposta tem uma entrada só, e é
-        # a dele. A chave não serve: desde 24/09/2026 a Steam devolve a entrada
-        # sob o ID de um DLC do jogo (o 391220 veio como "541750"), com o
-        # appID certo dentro de `data`. Qualquer outro formato conta como "não
-        # encontrado": o jogo fica como está, em vez de a importação cair.
+        # Um pedido leva um appID só, então a resposta tem uma entrada só. A chave não serve: a Steam passou a devolvê-la sob o ID de um
+        # DLC (o 391220 veio como "541750"), com o appID certo em `data`. Outro formato vale "não encontrado".
         entry = (
             next(iter(payload.values()))
             if isinstance(payload, dict) and len(payload) == 1
@@ -391,23 +310,17 @@ class SteamAPIHelper:
             logging.debug("Appid %s has no data", appid)
             raise SteamGameNotFoundError()
 
-        # Handle appid is not a game
         if app_data.get("type") not in {"game", "demo", "mod"}:
             logging.debug("Appid %s is not a game", appid)
             raise SteamNotAGameError()
 
         values = self.parse_app_data(app_data)
 
-        # `skip_genre` leaves the key out entirely rather than computing one, so
-        # `update_values` never touches the field. Falling back to the coarse
-        # store genre here would be worse than saying nothing: it would replace
-        # a hard-won "Metroidvania" with "Ação" whenever the tag request had
-        # simply failed.
+        # `skip_genre` deixa a chave de fora para o `update_values` não tocar no campo: cair no gênero amplo trocaria um "Metroidvania" por "Ação" quando a requisição de tags falhou.
         if not skip_genre and (genre := self.get_genre(appid, app_data, tag_ids)):
             values["genre"] = genre
 
-        # Both scores are shown side by side in the UI, so the review summary is
-        # always fetched, regardless of whether there's a Metacritic score.
+        # As duas notas aparecem lado a lado: o resumo de avaliações é sempre buscado, com ou sem Metacritic.
         review = self.get_review_summary(appid)
         if review:
             values["steam_review"] = review
@@ -415,20 +328,11 @@ class SteamAPIHelper:
 
     @staticmethod
     def parse_app_data(app_data: dict) -> SteamAPIData:
-        """Pull the fields we keep out of an appdetails payload.
-
-        Every field is optional: the name is only included when non-empty so an
-        API quirk can never blank out the game's title, and the rest are simply
-        left out when absent so `update_values` does not overwrite what the
-        record already holds.
-        """
+        """Os campos que guardamos de um appdetails. Todos opcionais: o nome só entra não vazio e o resto fica de fora se ausente, para o `update_values` não sobrescrever."""
         values = SteamAPIData()
         if name := app_data.get("name"):
             values["name"] = name
-        # `short_description`, not `about_the_game`. The long one is HTML with
-        # images and autoplay video, and for some games it is *only* that:
-        # Cyberpunk 2077's runs 3665 characters and contains no text at all.
-        # This one is a plain sentence or two, always present, and translated.
+        # `short_description` e não `about_the_game`: o longo é HTML com imagens e vídeo, e às vezes só isso (o do Cyberpunk 2077 tem 3665 caracteres sem texto algum).
         if description := app_data.get("short_description"):
             values["description"] = description.strip()
         if developers := app_data.get("developers"):
@@ -447,26 +351,14 @@ class SteamAPIHelper:
             values["metacritic"] = score
         if controller := SteamAPIHelper.parse_controller_support(app_data):
             values["controller_support"] = controller
-        # Always written, unlike the fields above. Those are left out when
-        # absent because absent means "the API did not say", which must not
-        # overwrite what the record holds. Here the payload is the whole
-        # answer — the category is in the list or it is not — so a game that
-        # loses the recommendation should lose the line with it.
+        # Sempre gravado, ao contrário dos acima: aqui o payload é a resposta inteira, e um jogo que perde a recomendação perde a linha.
         values["gamepad_recommended"] = SteamAPIHelper.parse_gamepad_recommended(app_data)
         return values
 
     def get_genre(
         self, appid: str, app_data: dict, tag_ids: Optional[list[int]] = None
     ) -> Optional[str]:
-        """Return the single genre to show for a game, or None.
-
-        ``tag_ids`` lets a caller that already has the user tags — the library
-        refresh, which fetches them for every game at once — supply them
-        instead of paying a request per game. Left out, they are fetched here:
-        the appdetails payload in ``app_data`` only carries the coarse store
-        genres, which are the fallback rather than the answer. See
-        :mod:`cartridges.utils.steam_genre`.
-        """
+        """O gênero a mostrar, ou None. ``tag_ids`` evita uma requisição por jogo quando quem chama já as tem (a atualização da biblioteca); senão são buscadas aqui, pois o appdetails só traz os gêneros amplos. Ver :mod:`cartridges.utils.steam_genre`."""
         genres = app_data.get("genres")
         genre_ids = (
             [str(entry.get("id")) for entry in genres if isinstance(entry, dict)]
@@ -479,7 +371,6 @@ class SteamAPIHelper:
 
     @staticmethod
     def category_ids(app_data: dict) -> set:
-        """The appdetails category ids, or an empty set for any odd shape."""
         categories = app_data.get("categories")
         if not isinstance(categories, list):
             return set()
@@ -487,66 +378,35 @@ class SteamAPIHelper:
 
     @staticmethod
     def parse_controller_support(app_data: dict) -> Optional[str]:
-        """Return "full", "partial" or None from an appdetails payload.
-
-        Matched on the category id rather than its description: thirteen
-        categories have "Controller", "Gamepad" or "Input" in the name
-        (DualShock, DualSense, Tracked Controller, Steam Input API, the four
-        Remote Play ones), and none of them answers whether the game is
-        playable with a gamepad.
-        """
+        """"full", "partial" ou None. Pelo id da categoria e não pela descrição: treze categorias têm "Controller", "Gamepad" ou "Input" no nome e nenhuma diz se o jogo se joga com controle."""
         ids = SteamAPIHelper.category_ids(app_data)
         if CONTROLLER_FULL_CATEGORY in ids:
             return "full"
         if CONTROLLER_PARTIAL_CATEGORY in ids:
             return "partial"
-        # Neither category present. Reported as "unknown" rather than "none":
-        # plenty of older games take a gamepad without ever being labelled for
-        # it, so the UI omits the line instead of claiming there is no support.
+        # Nenhuma categoria: "desconhecido" e não "nenhum" (muitos jogos antigos aceitam controle sem rótulo); a interface omite a linha.
         return None
 
     @staticmethod
     def parse_gamepad_recommended(app_data: dict) -> bool:
-        """Whether the developers recommend playing with a gamepad.
-
-        A separate claim from `parse_controller_support`, and a rarer one: full
-        support says the game *works* with a gamepad, this says it is the way
-        it is meant to be played. Only 2 of 52 games surveyed carried it.
-        """
+        """Se os desenvolvedores recomendam controle: afirmação à parte e mais rara que `parse_controller_support` (suporte diz que *funciona*; isto, que é como se deve jogar)."""
         return GAMEPAD_RECOMMENDED_CATEGORY in SteamAPIHelper.category_ids(app_data)
 
     def get_store_tags(self, appid: str) -> list[int]:
-        """Return one game's user tag ids, most-voted first.
+        """Os ids das tags de um jogo, a mais votada primeiro (as da página da loja, que o appdetails não traz; :mod:`cartridges.utils.steam_genre` dá os nomes).
 
-        These are the store page tags ("Metroidvania", "Soulslike"), which the
-        appdetails endpoint does not carry — only ids come back here, and
-        :mod:`cartridges.utils.steam_genre` is what turns one into a name.
-
-        Returns an empty list on any failure: the genre falls back to the
-        coarse `genres` field, which is already in hand, so a hiccup here is
-        never worth failing (or retrying) the whole lookup over.
+        Lista vazia em qualquer falha: o gênero cai no `genres`, que já está em mãos, e não vale falhar a consulta toda por isso.
         """
         return self.get_store_tags_bulk([appid]).get(appid, [])
 
     def get_store_tags_bulk(
         self, appids: list[str], should_stop: Optional[Callable[[], bool]] = None
     ) -> dict[str, list[int]]:
-        """Return user tag ids for many games at once, keyed by appid.
+        """Os ids de tag de vários jogos de uma vez, por appid (uma requisição cobre :data:`TAG_BATCH_SIZE` jogos).
 
-        One request covers :data:`TAG_BATCH_SIZE` games, which is what keeps a
-        whole-library refresh from spending a rate limiter token per game.
-        Appids that fail, are unknown or carry no tags are simply absent from
-        the result rather than mapped to an empty list, so a caller can tell
-        "no tags came back" from "this game has none" — the first must not
-        overwrite a genre that is already on record.
-
-        ``should_stop`` is consulted between batches. A large library takes
-        several of them, each able to sit on a 30 s timeout, so without this a
-        user who cancels in the first second still waits out every request that
-        was going to be made.
+        Appid que falha, é desconhecido ou sem tags fica ausente, não lista vazia: quem chama distingue "não vieram tags" de "o jogo não tem" (o primeiro não pode sobrescrever um gênero gravado). ``should_stop`` é consultado entre lotes (cada um pode ficar 30 s em timeout).
         """
-        # The endpoint wants numbers, and `steam_appid` is a string that can
-        # have been hand-edited in the game's record.
+        # O endpoint quer números, e `steam_appid` é uma string que pode ter sido editada à mão.
         numeric: dict[int, str] = {}
         for appid in appids:
             try:
@@ -576,12 +436,8 @@ class SteamAPIHelper:
                     ) as response:
                         response.raise_for_status()
                         items = response.json()["response"].get("store_items", [])
-                # AttributeError included on purpose: a proxy or captive portal
-                # answering 200 with `{"response": null}` reaches the `.get`
-                # above on a non-dict, and that one escaping used to kill the
-                # refresh's prefetch thread — which, being the only thing that
-                # schedules the queue, left the whole run wedged as "running"
-                # for the rest of the process.
+                # AttributeError de propósito: um proxy respondendo 200 com `{"response": null}` chega ao `.get` num não-dict, e
+                # matava a thread de pré-busca da atualização, que agenda a fila: a rodada ficava "em andamento" para sempre.
                 except (
                     RequestException,
                     ValueError,
@@ -609,12 +465,7 @@ class SteamAPIHelper:
         return result
 
     def get_review_summary(self, appid: str) -> Optional[str]:
-        """Return the localized Steam review summary (e.g. "Muito positivas").
-
-        Uses the public appreviews endpoint, which is separate from appdetails.
-        Returns None when the game has no reviews or on any error, so a failure
-        here never blocks the rest of the import.
-        """
+        """O resumo de avaliações da Steam (ex.: "Muito positivas"), do endpoint público appreviews. None sem avaliações ou em qualquer erro: nunca bloqueia a importação."""
         with self.rate_limiter:
             try:
                 with get_capped(
@@ -630,22 +481,15 @@ class SteamAPIHelper:
                 ) as response:
                     response.raise_for_status()
                     payload = response.json()
-                    # isinstance antes do .get(): corpo não-objeto estourava
-                    # AttributeError depois do appdetails já ter respondido —
-                    # a mesma perda que o comentário abaixo descreve, pela
-                    # porta do shape em vez da do transporte.
+                    # isinstance antes do .get(): corpo não-objeto estourava AttributeError depois de o appdetails responder (a perda descrita abaixo).
                     summary = (
                         payload.get("query_summary")
                         if isinstance(payload, dict)
                         else None
                     )
             except (RequestException, ValueError) as error:
-                # Every transport failure, not just HTTPError: a timeout or a
-                # dropped connection here used to escape *after* appdetails had
-                # already answered, throwing away the name, developer and
-                # Metacritic score it returned and making the manager retry the
-                # whole appdetails request three times over. A review summary is
-                # the least important field on the page; it is never worth that.
+                # Toda falha de transporte, não só HTTPError: um timeout aqui escapava *depois* de o appdetails responder, perdia nome,
+                # desenvolvedora e Metacritic e fazia o manager repetir o appdetails três vezes. O resumo é o campo menos importante.
                 logging.debug("Steam reviews error for %s", appid, exc_info=error)
                 return None
 

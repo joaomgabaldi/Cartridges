@@ -17,25 +17,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Veste os outros monitores com a arte do jogo enquanto a sessão corre.
+"""Veste os outros monitores (todos menos o principal, onde o jogo roda) com a arte do jogo durante a sessão.
 
-Os outros são todos menos o principal, em pé ou deitados. O jogo roda no
-principal — é a mesma premissa da opção de levar a janela para outro monitor —,
-e ali a arte ficaria atrás dele. Quem é o principal é o Windows quem diz, pelo
-retângulo: é o único que começa na origem da área de trabalho, então ligar,
-desligar ou girar uma tela não pede configuração nenhuma.
-
-A troca é por monitor, e isso descarta o caminho óbvio: o
-``SystemParametersInfo(SPI_SETDESKWALLPAPER)`` de sempre pinta a área de
-trabalho inteira, os três monitores de uma vez. Quem sabe falar de um monitor
-só é a ``IDesktopWallpaper``, COM desde o Windows 8, chamada aqui por ctypes
-como o resto das APIs nativas do app.
-
-O papel de parede de antes é guardado no GSettings, e não em memória, porque
-o caminho de volta tem de sobreviver ao processo: o app fechado no meio da
-sessão (ou morto) deixaria as três telas vestidas de um jogo que já acabou.
-Com a chave em disco, o arranque seguinte desfaz — é o que :func:`restaurar`
-faz quando :func:`restaurar_orfaos` a chama.
+O principal é o único que começa na origem da área de trabalho, então ligar, desligar ou girar uma tela não pede configuração. A troca é por monitor: o ``SPI_SETDESKWALLPAPER`` pinta todos; só a ``IDesktopWallpaper`` (COM, por ctypes) fala de um.
+O papel de parede de antes fica no GSettings, não em memória: o app morto no meio da sessão deixaria as telas vestidas, e o arranque seguinte desfaz (:func:`restaurar_orfaos`).
 """
 
 import ctypes
@@ -62,14 +47,10 @@ from cartridges.utils.wallhaven import IMAGE_SUFFIXES, melhor_para
 if TYPE_CHECKING:
     from cartridges.game import Game
 
-# O que a `enquadrar` usa quando o corte é vertical. Não é o meio: numa arte de
-# jogo o que importa costuma estar na metade de cima (rosto, título), e centrar
-# come a testa antes de comer o chão.
+# O que a `enquadrar` usa no corte vertical: numa arte de jogo o que importa costuma estar na metade de cima (rosto, título).
 CENTRO_VERTICAL = 0.4
 
-# Onde a tela de escolha cai quando não há monitor-alvo ligado — ela precisa de
-# uma proporção mesmo com tudo desconectado. Deitado porque é o formato de quase
-# toda arte e de quase todo monitor.
+# Onde a tela de escolha cai sem monitor-alvo ligado (ela precisa de uma proporção): deitado, o formato de quase toda arte e monitor.
 PAISAGEM_PADRAO = (1920, 1080)
 
 _COINIT_APARTMENTTHREADED = 0x2
@@ -80,9 +61,7 @@ _IID_IDESKTOP_WALLPAPER = "{B92B56A9-8B55-4E14-9A89-0199BBB6F93B}"
 _CLSCTX_ALL = 23
 # DESKTOP_SLIDESHOW_STATE: uma apresentação de slides está configurada.
 _DSS_SLIDESHOW = 0x2
-# O Spotlight da área de trabalho (Windows 11) não aparece no estado da
-# IDesktopWallpaper: para ela é só uma imagem fixa numa pasta do sistema. Quem
-# diz que ele está ligado é o registro — qualquer uma das duas marcas basta.
+# O Spotlight (Windows 11) não aparece no estado da IDesktopWallpaper (para ela é só uma imagem fixa): quem diz que está ligado é o registro, e qualquer das duas marcas basta.
 _SPOTLIGHT = (
     (r"Software\Microsoft\Windows\CurrentVersion\DesktopSpotlight\Settings", "EnabledState", 1),
     (r"Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers", "BackgroundType", 3),
@@ -124,17 +103,12 @@ class Monitor(NamedTuple):
 
     @property
     def principal(self) -> bool:
-        # O Windows põe o canto do principal na origem da área de trabalho, e
-        # só o dele: os outros começam onde o arranjo os pôs, até em negativo.
+        # O canto do principal fica na origem da área de trabalho, só o dele: os outros começam onde o arranjo os pôs, até em negativo.
         return self.x == 0 and self.y == 0
 
 
 class _AreaDeTrabalho:
-    """A ``IDesktopWallpaper`` viva, com COM iniciado nesta thread.
-
-    Use como gerenciador de contexto: a inicialização do COM é por thread, e
-    desfazê-la fora da que a fez não desfaz nada.
-    """
+    """A ``IDesktopWallpaper`` viva, com COM iniciado nesta thread. Use como gerenciador de contexto: o COM é por thread, e desfazê-lo fora da que o fez não desfaz nada."""
 
     def __init__(self) -> None:
         self._ole32 = ctypes.windll.ole32  # type: ignore
@@ -159,14 +133,9 @@ class _AreaDeTrabalho:
                 tabela[indice]
             )
 
-        # A ordem da vtable é a da interface, IUnknown incluído nos três
-        # primeiros lugares. Errar um índice aqui chama o método vizinho com
-        # os argumentos deste, e o que sai disso não é um erro: é a memória
-        # errada sendo lida.
+        # A ordem da vtable é a da interface, IUnknown nos três primeiros lugares. Errar um índice chama o método vizinho com estes argumentos, e não dá erro: lê memória errada.
         self._set = metodo(3, c_wchar_p, c_wchar_p)
-        # As duas que devolvem texto recebem um ponteiro cru, e não c_wchar_p:
-        # a string é alocada pela COM e tem de voltar para ela em
-        # `CoTaskMemFree`, e o c_wchar_p copia o texto e perde o endereço.
+        # As duas que devolvem texto recebem um ponteiro cru e não c_wchar_p: a string é da COM e volta a ela em `CoTaskMemFree`, e o c_wchar_p copia o texto e perde o endereço.
         self._get = metodo(4, c_wchar_p, POINTER(c_void_p))
         self._id_em = metodo(5, c_uint, POINTER(c_void_p))
         self._quantos = metodo(6, POINTER(c_uint))
@@ -185,7 +154,6 @@ class _AreaDeTrabalho:
             self._ole32.CoUninitialize()
 
     def _texto(self, ponteiro: c_void_p) -> str:
-        """Copia uma string alocada pela COM e a devolve à COM."""
         if not ponteiro.value:
             return ""
         try:
@@ -194,7 +162,6 @@ class _AreaDeTrabalho:
             self._ole32.CoTaskMemFree(ponteiro)
 
     def ligados(self) -> list[Monitor]:
-        """Os monitores ligados agora, cada um com o seu retângulo."""
         quantos = c_uint()
         if self._quantos(self._ponteiro, byref(quantos)):
             return []
@@ -211,8 +178,7 @@ class _AreaDeTrabalho:
             try:
                 self._retangulo(self._ponteiro, identificador, byref(retangulo))
             except OSError:
-                # A lista inclui monitor que já esteve ligado nesta máquina e
-                # não está mais; esse não tem retângulo.
+                # A lista inclui monitor que já esteve ligado e não está mais; esse não tem retângulo.
                 continue
             largura = retangulo.right - retangulo.left
             altura = retangulo.bottom - retangulo.top
@@ -223,13 +189,7 @@ class _AreaDeTrabalho:
         return monitores
 
     def papel(self, monitor: str) -> Optional[str]:
-        """O papel de parede do monitor agora.
-
-        Vazio quando o monitor não mostra imagem nenhuma (só a cor de fundo), e
-        ``None`` quando a pergunta falhou. As duas respostas não podem se
-        confundir: a primeira é um estado a devolver no fim da sessão, a
-        segunda é não saber qual era — e aí o monitor não deve ser vestido.
-        """
+        """O papel de parede do monitor agora. Vazio se não mostra imagem (só a cor de fundo), ``None`` se a pergunta falhou: a primeira é um estado a devolver no fim, a segunda é não saber qual era, e o monitor não deve ser vestido."""
         atual = c_void_p()
         try:
             self._get(self._ponteiro, monitor, byref(atual))
@@ -238,12 +198,7 @@ class _AreaDeTrabalho:
         return self._texto(atual)
 
     def em_apresentacao(self) -> bool:
-        """True com uma apresentação de slides ou o Spotlight na área de trabalho.
-
-        Vestir um monitor por cima deles os troca por uma imagem fixa, e
-        devolver o caminho de antes não os religa: a rotação se perderia.
-        Então, com um deles ligado, a sessão não mexe em nada.
-        """
+        """True com uma apresentação de slides ou o Spotlight na área de trabalho: vestir por cima os troca por uma imagem fixa e devolver o caminho não os religa, então a sessão não mexe em nada."""
         if _spotlight_ligado():
             return True
         estado = wintypes.DWORD()
@@ -254,7 +209,6 @@ class _AreaDeTrabalho:
         return bool(estado.value & _DSS_SLIDESHOW)
 
     def vestir(self, monitor: str, caminho: str) -> bool:
-        """Troca a parede de ``monitor``. Diz se o Windows aceitou."""
         try:
             self._set(self._ponteiro, monitor, caminho)
         except OSError as erro:
@@ -263,11 +217,8 @@ class _AreaDeTrabalho:
         return True
 
 
-# region Monitores-alvo
-
 
 def alvos(monitores: list[Monitor]) -> list[Monitor]:
-    """Os monitores que recebem a arte: todos menos o principal."""
     return [monitor for monitor in monitores if not monitor.principal]
 
 
@@ -279,23 +230,16 @@ class Formatos(NamedTuple):
 
     @property
     def grade(self) -> tuple[int, int]:
-        """O formato da tela de escolha.
-
-        Em pé só quando todos os alvos estão em pé. No arranjo misto a grade é
-        deitada: quase toda arte é deitada, a miniatura a mostra quase inteira,
-        e o corte agressivo fica para o ajuste em pé.
-        """
+        """O formato da tela de escolha: em pé só quando todos os alvos estão em pé; no arranjo misto é deitada (quase toda arte é, e o corte agressivo fica para o ajuste em pé)."""
         return self.paisagem or self.retrato or PAISAGEM_PADRAO
 
     @property
     def ratio(self) -> str:
-        """Por qual formato a busca começa: o da grade."""
         largura, altura = self.grade
         return "portrait" if altura > largura else "landscape"
 
     @property
     def minimo(self) -> tuple[int, int]:
-        """O ``atleast`` da busca: a imagem que nenhum dos cortes precisa esticar."""
         tamanhos = [tamanho for tamanho in (self.retrato, self.paisagem) if tamanho]
         if not tamanhos:
             return self.grade
@@ -306,10 +250,7 @@ class Formatos(NamedTuple):
 
 
 def formatos(monitores: list[Monitor]) -> Formatos:
-    """Os formatos dos monitores-alvo entre ``monitores``.
-
-    Aceita a lista completa ou só os alvos: :func:`alvos` é filtro puro.
-    """
+    """Os formatos dos monitores-alvo entre ``monitores`` (a lista completa ou só os alvos: :func:`alvos` é filtro puro)."""
 
     def maior(orientacao: list[Monitor]) -> Optional[tuple[int, int]]:
         if not orientacao:
@@ -325,7 +266,6 @@ def formatos(monitores: list[Monitor]) -> Formatos:
 
 
 def formatos_ligados() -> Formatos:
-    """Os formatos dos monitores-alvo ligados agora. Usada pela tela de escolha."""
     try:
         with _AreaDeTrabalho() as area:
             return formatos(area.ligados())
@@ -342,15 +282,8 @@ def enquadrar(
 ) -> Image.Image:
     """Recorta ``imagem`` para ``largura`` x ``altura``, na faixa ``posicao``.
 
-    A única regra de enquadramento do recurso, e o motivo de ser uma função
-    só: a grade da tela de escolha corta a miniatura de 432px por aqui e o
-    arquivo final corta o original de 4K por aqui. Como o ``ImageOps.fit``
-    trabalha em proporção, as duas dão o MESMO quadro — o que se vê ao
-    escolher é o que vai para o monitor, e não uma aproximação dele.
-
-    ``posicao`` corre no eixo que sobra (0 = esquerda/topo, 1 = direita/pé).
-    Qual eixo é esse depende das duas proporções, e é o que
-    :func:`eixo_do_corte` responde para quem desenha a barrinha.
+    A única regra de enquadramento: a miniatura de 432px da escolha e o original 4K do arquivo final passam por aqui, e como o ``ImageOps.fit`` trabalha em proporção,
+    dão o MESMO quadro. ``posicao`` corre no eixo que sobra (0 = esquerda/topo, 1 = direita/pé), que :func:`eixo_do_corte` informa.
     """
     if eixo_do_corte(imagem.width, imagem.height, largura, altura):
         centro = (posicao, CENTRO_VERTICAL)
@@ -362,20 +295,14 @@ def enquadrar(
 def eixo_do_corte(
     origem_largura: int, origem_altura: int, largura: int, altura: int
 ) -> bool:
-    """True quando o corte come as laterais; False quando come topo e pé."""
     if not origem_altura or not altura:
         return True
-    # Empate devolve lateral: com as duas proporções iguais nada é cortado, e
-    # o eixo só decide o texto da dica — que fala do caso comum, a arte larga.
+    # Empate devolve lateral: com as proporções iguais nada é cortado, e o eixo só decide o texto da dica (a arte larga, o caso comum).
     return (origem_largura / origem_altura) >= (largura / altura)
 
 
 def corta(origem_largura: int, origem_altura: int, largura: int, altura: int) -> bool:
-    """True quando enquadrar a origem no monitor remove alguma parte dela.
-
-    Com meio por cento de folga: a cópia reduzida que a tela de ajuste recorta
-    arredonda um pixel aqui e ali, e 1564x880 é a mesma arte 16:9 de 3840x2160.
-    """
+    """True quando enquadrar a origem no monitor remove alguma parte dela, com meio por cento de folga (a cópia reduzida arredonda um pixel: 1564x880 é a mesma arte 16:9 de 3840x2160)."""
     if not origem_altura or not altura:
         return False
     alvo = largura / altura
@@ -383,13 +310,7 @@ def corta(origem_largura: int, origem_altura: int, largura: int, altura: int) ->
 
 
 def da_capa(capa: Path, largura: int, altura: int) -> Image.Image:
-    """A capa do jogo virando papel de parede: inteira, sobre ela mesma borrada.
-
-    Reservado ao caso em que o wallhaven não tem nada: a capa é 2:3 e o monitor
-    9:16, e cortar 30% da largura de uma capa apaga metade do título. Aqui o
-    corte vai para o FUNDO, que já vai ser borrado, e a capa aparece inteira
-    por cima.
-    """
+    """A capa virando papel de parede: inteira, sobre ela mesma borrada. Só quando o wallhaven não tem nada: cortar 30% da largura de uma capa 2:3 apagaria metade do título, então o corte vai para o FUNDO, que já será borrado."""
     with Image.open(capa) as arquivo:
         imagem = arquivo.convert("RGB")
         fundo = enquadrar(imagem, largura, altura).filter(ImageFilter.GaussianBlur(60))
@@ -406,11 +327,7 @@ def da_capa(capa: Path, largura: int, altura: int) -> Image.Image:
 
 
 class Posicoes(NamedTuple):
-    """A faixa escolhida para cada orientação de monitor, de 0 a 1.
-
-    Por orientação e não por monitor: dois monitores em pé mostram o mesmo
-    corte, e o id de um monitor muda quando ele troca de porta.
-    """
+    """A faixa escolhida (0 a 1) para cada orientação de monitor: por orientação e não por monitor, pois dois em pé mostram o mesmo corte e o id muda quando o monitor troca de porta."""
 
     retrato: float = 0.5
     paisagem: float = 0.5
@@ -452,13 +369,10 @@ def _gravar_sidecar(
         "position_portrait": posicoes.retrato,
         "position_landscape": posicoes.paisagem,
         "timestamp": int(time.time()),
-        # Travado é escolha de gente. A busca automática nunca mexe nele, nem
-        # quando o jogo é renomeado — foi o usuário que casou aquela arte com
-        # aquele jogo, e isso vale mais que qualquer palpite de busca.
+        # Travado é escolha do usuário: a busca automática nunca mexe, nem quando o jogo é renomeado.
         "locked": travado,
     }
-    # tmp + replace: uma queda no meio não pode deixar um sidecar truncado,
-    # que se lê como "automático" e entrega a escolha travada à busca.
+    # tmp + replace: um sidecar truncado se lê como "automático" e entregaria a escolha travada à busca.
     destino = _sidecar(game_id)
     tmp = destino.with_name(f"{destino.name}.{uuid4().hex}.tmp")
     try:
@@ -473,8 +387,7 @@ def _gravar_sidecar(
 
 def _arquivo_do_sidecar(dados: Optional[dict[str, Any]]) -> Optional[Path]:
     nome = str((dados or {}).get("file") or "")
-    # Só um nome solto: um caminho absoluto ou de rede vindo de um backup
-    # faria o app abrir arquivos fora da pasta (e conectar noutra máquina).
+    # Só um nome solto: um caminho absoluto ou de rede vindo de um backup abriria arquivos fora da pasta.
     if not nome or Path(nome).name != nome:
         return None
     caminho = shared.wallpapers_dir / nome
@@ -482,12 +395,7 @@ def _arquivo_do_sidecar(dados: Optional[dict[str, Any]]) -> Optional[Path]:
 
 
 def escolha(game: "Game") -> str:
-    """Como a parede deste jogo está decidida: ``auto``, ``manual`` ou ``none``.
-
-    "Não trocar" é o sidecar travado SEM arquivo. Travado com um arquivo que
-    sumiu do disco não é essa decisão, é uma escolha que se perdeu — e aí o
-    jogo volta à busca automática em vez de ficar sem parede em silêncio.
-    """
+    """Como a parede deste jogo está decidida: ``auto``, ``manual`` ou ``none``. "Não trocar" é o sidecar travado SEM arquivo; travado com arquivo sumido é escolha perdida, e o jogo volta à busca automática."""
     dados = _ler_sidecar(game.game_id)
     if not dados or not dados.get("locked"):
         return "auto"
@@ -497,21 +405,17 @@ def escolha(game: "Game") -> str:
 
 
 def imagem_escolhida(game_id: str) -> Optional[Path]:
-    """A imagem que está valendo para ``game_id``, se houver uma em disco."""
     return _arquivo_do_sidecar(_ler_sidecar(game_id))
 
 
 def posicoes_escolhidas(game_id: str) -> Posicoes:
-    """As posições de recorte gravadas para ``game_id``, ou o padrão (0.5,
-    0.5) se não houver escolha. Usado pela exportação do backup, que precisa
-    ler o que já está decidido sem duplicar o parse do sidecar."""
+    """As posições de recorte gravadas para ``game_id``, ou o padrão (0.5, 0.5). Usado pela exportação do backup."""
     return _posicoes(_ler_sidecar(game_id))
 
 
 def salvar_escolha(
     game_id: str, name: str, origem: Path, posicoes: Posicoes
 ) -> Optional[Path]:
-    """Adota ``origem`` como a parede de ``game_id``. Trava a escolha."""
     sufixo = origem.suffix.lower()
     if sufixo not in IMAGE_SUFFIXES:
         sufixo = ".jpg"
@@ -551,13 +455,9 @@ def _apagar_imagens(game_id: str, manter: str = "") -> None:
 def _fonte(
     game: "Game", largura: int, altura: int, formato: str
 ) -> Optional[tuple[Path, Posicoes]]:
-    """A imagem de partida deste jogo e a faixa dela, baixando se precisar.
+    """A imagem de partida deste jogo e a faixa dela, baixando se precisar. ``largura`` x ``altura`` é o mínimo dos cortes e ``formato`` é por onde a busca começa.
 
-    ``largura`` x ``altura`` é o mínimo que os cortes precisam, e ``formato`` é
-    por onde a busca começa — o da grade da tela de escolha.
-
-    ``None`` quando o jogo está marcado para não trocar a parede, ou quando
-    não sobrou nem busca nem capa.
+    ``None`` se o jogo está marcado para não trocar a parede ou se não sobrou nem busca nem capa.
     """
     dados = _ler_sidecar(game.game_id)
     posicoes = _posicoes(dados)
@@ -567,12 +467,9 @@ def _fonte(
             return None  # "não trocar"
         if arquivo := _arquivo_do_sidecar(dados):
             return arquivo, posicoes
-        # A escolha à mão apontava para um arquivo que sumiu: segue para a
-        # busca, como `escolha` já mostra na tela de edição.
+        # A escolha à mão apontava para um arquivo que sumiu: segue para a busca.
 
-    # Uma busca automática que já deu certo fica em disco: a sessão seguinte
-    # do mesmo jogo não toca a rede, e a parede aparece no instante em que o
-    # bloqueador aparece.
+    # Uma busca automática que deu certo fica em disco: a sessão seguinte não toca a rede, e a parede aparece junto com o bloqueador.
     if (arquivo := _arquivo_do_sidecar(dados)) and dados.get("name") == game.name:
         return arquivo, posicoes
 
@@ -596,8 +493,7 @@ def _fonte(
             )
             return destino, Posicoes()
 
-    # Último degrau: a capa. Não fica guardada como fonte — ela já está em
-    # `covers`, e uma cópia aqui envelheceria sozinha quando a capa mudasse.
+    # Último degrau: a capa, que não é guardada como fonte (já está em `covers`, e uma cópia envelheceria quando a capa mudasse).
     capa = game.get_cover_path()
     return (capa, Posicoes()) if capa else None
 
@@ -607,11 +503,8 @@ def _fonte(
 
 _CHAVE_ORIGINAIS = "session-wallpaper-saved"
 
-# Cada sessão ganha um número, e só a corrente pode vestir as telas. A arte é
-# preparada numa thread (rede e Pillow levam segundos), e uma sessão curta
-# acaba antes disso: sem o número, a preparação vestiria os monitores DEPOIS da
-# devolução, e eles ficariam com a arte de um jogo já fechado até o próximo
-# arranque. Só a thread de UI mexe nele; a de trabalho só o carrega de volta.
+# Cada sessão ganha um número e só a corrente pode vestir as telas: a arte é preparada numa thread (segundos), e uma sessão curta acaba antes;
+# sem o número, a preparação vestiria os monitores DEPOIS da devolução. Só a thread de UI mexe nele.
 _sessao = 0
 
 
@@ -628,12 +521,7 @@ def _limpar_cache() -> None:
 
 
 def comecar(game: "Game") -> None:
-    """Começa a vestir as telas para ``game``. Chamar da thread de UI.
-
-    Sem monitor além do principal, desliga a opção em vez de começar: não há
-    tela para vestir, e quando um segundo monitor voltar quem religa é o
-    usuário, nas Preferências.
-    """
+    """Começa a vestir as telas para ``game`` (thread de UI). Sem monitor além do principal, desliga a opção; quem religa é o usuário, nas Preferências."""
     if not window_geometry.has_secondary_monitor():
         shared.schema.set_boolean("session-wallpaper", False)
         return
@@ -641,13 +529,9 @@ def comecar(game: "Game") -> None:
 
 
 def aplicar(game: "Game", sessao: int) -> None:
-    """Prepara a arte de ``game`` para cada monitor-alvo. Roda fora da UI.
+    """Prepara a arte de ``game`` para cada monitor-alvo, fora da UI; quem a põe na parede é :func:`_vestir`, na thread de UI, onde a sessão é conferida.
 
-    Só prepara: os arquivos saem daqui prontos, e quem os põe na parede é
-    :func:`_vestir`, de volta na thread de UI, onde a sessão é conferida.
-
-    Nunca levanta: isto é enfeite de sessão, e uma sessão de jogo não pode
-    falhar porque um monitor foi desligado ou porque o site saiu do ar.
+    Nunca levanta: é enfeite, e a sessão não pode falhar porque um monitor foi desligado ou o site saiu do ar.
     """
     try:
         with _AreaDeTrabalho() as area:
@@ -665,8 +549,7 @@ def aplicar(game: "Game", sessao: int) -> None:
 
         _cache().mkdir(parents=True, exist_ok=True)
         carimbo = int(time.time())
-        # A capa entra pela composição com fundo borrado; tudo o mais é
-        # arte larga o bastante para o corte.
+        # A capa entra pela composição com fundo borrado; o resto é arte larga o bastante para o corte.
         da_capa_ = origem.parent == shared.covers_dir
         quadros = []
         for monitor in monitores:
@@ -680,9 +563,7 @@ def aplicar(game: "Game", sessao: int) -> None:
                         monitor.altura,
                         posicoes.para(monitor),
                     )
-            # Nome novo a cada sessão: o Windows guarda o papel de parede
-            # por caminho, e reescrever o mesmo arquivo com outro conteúdo
-            # deixa a tela com a imagem antiga.
+            # Nome novo a cada sessão: o Windows guarda o papel de parede por caminho, e reescrever o mesmo arquivo deixa a imagem antiga.
             destino = _cache() / (
                 f"{game.game_id}-{monitor.largura}x{monitor.altura}-{carimbo}.jpg"
             )
@@ -696,13 +577,8 @@ def aplicar(game: "Game", sessao: int) -> None:
 
 
 def _vestir(sessao: int, quadros: list[tuple[str, Path]]) -> None:
-    """Põe na parede o que :func:`aplicar` preparou. Roda na thread de UI.
-
-    Aqui, e não na thread que preparou, porque é onde a sessão pode ser
-    conferida sem corrida com :func:`restaurar`, que também roda aqui.
-    """
+    """Põe na parede o que :func:`aplicar` preparou, na thread de UI: é onde a sessão é conferida sem corrida com :func:`restaurar`."""
     if sessao != _sessao:
-        # A sessão acabou enquanto a arte era preparada.
         for _monitor, arquivo in quadros:
             try:
                 arquivo.unlink(missing_ok=True)
@@ -719,11 +595,8 @@ def _vestir(sessao: int, quadros: list[tuple[str, Path]]) -> None:
 
     try:
         with _AreaDeTrabalho() as area:
-            # O original de cada monitor é gravado ANTES de vestir: com a chave
-            # em disco, um app morto no meio da sessão ainda deixa o caminho de
-            # volta. Um monitor que já consta nela (uma devolução anterior que
-            # falhou) fica com o valor de lá, porque o que ele mostra agora
-            # pode ser a nossa arte.
+            # O original de cada monitor é gravado ANTES de vestir: com a chave em disco, um app morto no meio da sessão deixa o caminho de volta.
+            # Um monitor que já consta nela (devolução anterior que falhou) fica com o valor de lá: o que mostra agora pode ser a nossa arte.
             for monitor, _arquivo in quadros:
                 if monitor not in originais:
                     if (atual := area.papel(monitor)) is not None:
@@ -733,7 +606,7 @@ def _vestir(sessao: int, quadros: list[tuple[str, Path]]) -> None:
             shared.schema.set_string(_CHAVE_ORIGINAIS, json.dumps(originais))
 
             for monitor, arquivo in quadros:
-                # Sem o original não há como voltar, então não se veste.
+                # Sem o original não há como voltar: não se veste.
                 if monitor in originais:
                     area.vestir(monitor, str(arquivo))
     except Exception as erro:  # pylint: disable=broad-except
@@ -741,12 +614,7 @@ def _vestir(sessao: int, quadros: list[tuple[str, Path]]) -> None:
 
 
 def restaurar() -> None:
-    """Devolve cada monitor ao papel de parede que tinha. Seguro chamar à toa.
-
-    Encerra a sessão corrente antes de tudo, mesmo sem nada a devolver: é
-    justamente enquanto a arte ainda está sendo preparada que a chave está
-    vazia, e sem isso a preparação vestiria as telas depois desta volta.
-    """
+    """Devolve cada monitor ao papel de parede que tinha; seguro chamar à toa. Encerra a sessão corrente antes de tudo, mesmo sem nada a devolver: com a arte ainda em preparo a chave está vazia, e a preparação vestiria as telas depois."""
     global _sessao  # pylint: disable=global-statement
     _sessao += 1
 
@@ -763,25 +631,19 @@ def restaurar() -> None:
 
     try:
         with _AreaDeTrabalho() as area:
-            # Vazio também volta: é o monitor que mostrava só a cor de
-            # fundo, e a IDesktopWallpaper aceita "" como "sem imagem".
+            # Vazio também volta: era o monitor só com a cor de fundo, e a IDesktopWallpaper aceita "" como "sem imagem".
             recusados = {
                 monitor: caminho
                 for monitor, caminho in originais.items()
                 if not area.vestir(monitor, str(caminho))
             }
     except OSError as erro:
-        # A chave fica. Ela é o único registro dos originais, a sessão
-        # seguinte não a sobrescreve (só acrescenta monitores que faltem) e o
-        # próximo arranque tenta a volta de novo.
+        # A chave fica: é o único registro dos originais (a sessão seguinte só acrescenta monitores que faltem) e o próximo arranque tenta de novo.
         logging.warning("Não foi possível devolver o papel de parede: %s", erro)
         return
 
-    # Pela mesma razão, quem o Windows recusou fica na chave — o original no
-    # iCloud Drive sem rede, por exemplo. Só sai dela quem voltou de fato. O
-    # cache vai embora assim mesmo: a tela não depende dele (o Windows guarda
-    # a própria cópia da imagem), e mantê-lo à espera de um monitor que nunca
-    # mais for ligado o faria crescer a cada sessão.
+    # Quem o Windows recusou fica na chave (o original no iCloud Drive sem rede, por exemplo); só sai quem voltou de fato. O cache vai embora assim
+    # mesmo: a tela não depende dele (o Windows guarda a própria cópia), e mantê-lo para um monitor que nunca mais ligar o faria crescer.
     shared.schema.set_string(
         _CHAVE_ORIGINAIS, json.dumps(recusados) if recusados else ""
     )
@@ -789,7 +651,6 @@ def restaurar() -> None:
 
 
 def restaurar_orfaos() -> None:
-    """Desfaz no arranque a troca que uma sessão anterior não desfez."""
     if shared.schema.get_string(_CHAVE_ORIGINAIS):
         logging.info("Papel de parede de uma sessão anterior encontrado; desfazendo")
         restaurar()
@@ -799,9 +660,8 @@ def restaurar_orfaos() -> None:
 
 
 def imagem_para_textura_bytes(imagem: Image.Image) -> bytes:
-    """PNG em memória, que é como o GTK aceita uma imagem do Pillow."""
+    """PNG em memória."""
     buffer = BytesIO()
-    # Nível 1: a compressão aqui é pura perda de tempo — o PNG vive alguns
-    # milissegundos, entre o Pillow e a textura.
+    # Nível 1: o PNG vive alguns milissegundos entre o Pillow e a textura, comprimir é perda de tempo.
     imagem.save(buffer, "png", compress_level=1)
     return buffer.getvalue()

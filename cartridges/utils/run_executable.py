@@ -31,9 +31,7 @@ def run_executable(executable, run_as_admin: bool = False) -> None:
         return
 
     logging.info("Launching `%s`", str(executable))
-    # CREATE_NO_WINDOW hides the intermediate cmd.exe console that shell=True
-    # spawns; the game itself opens its own window normally (via `start`).
-    # CREATE_NEW_PROCESS_GROUP detaches the game from our Ctrl+C/console group.
+    # CREATE_NO_WINDOW esconde o console do cmd.exe do shell=True; CREATE_NEW_PROCESS_GROUP solta o jogo do Ctrl+C do app.
     # pylint: disable=consider-using-with
     subprocess.Popen(
         executable,
@@ -46,17 +44,10 @@ def run_executable(executable, run_as_admin: bool = False) -> None:
 
 
 def _run_elevated(executable: str) -> None:
-    """Launch elevated on Windows (shows a UAC prompt).
+    """Abre o jogo elevado (pede o UAC), numa thread daemon porque o prompt bloqueia até ser respondido.
 
-    The whole app can't run as admin (GTK/Adwaita misbehave elevated), so only
-    the game that needs it is elevated. The UAC prompt blocks until answered,
-    so the work runs on a daemon thread to keep the UI responsive.
-
-    UWP / Game Pass games: invoke ``runas`` on the ``shell:AppsFolder`` item —
-    the same thing as right-clicking the Start menu entry — which keeps the
-    package identity (elevating the package's bare .exe launches nothing, and
-    the .lnk exposes no ``runas`` verb). Classic games run through an elevated
-    ``cmd /c``, whose spawned children inherit the elevated token.
+    UWP / Game Pass: ``runas`` no item ``shell:AppsFolder``, que mantém a identidade do pacote (elevar o .exe
+    solto não abre nada). Jogos comuns passam por um ``cmd /c`` elevado, cujos filhos herdam o token.
     """
     threading.Thread(
         target=_elevate_worker, args=(executable,), daemon=True
@@ -65,57 +56,27 @@ def _run_elevated(executable: str) -> None:
 
 def _elevate_worker(executable: str) -> None:
     if aumid := aumid_from_command(executable):
-        # Invoke "runas" on the app's AppsFolder item — exactly what right-
-        # clicking the Start menu entry and choosing "Run as administrator"
-        # does. This keeps the package identity that a bare .exe loses (running
-        # GameLaunchHelper.exe directly elevates but never launches the game).
         _shell_execute_runas(f"shell:AppsFolder\\{aumid}", None, None, 1)
         return
 
-    # As aspas externas são as que o `shell=True` do caminho normal põe
-    # (`cmd.exe /c "<comando>"`). Sem elas, um comando que começa com aspas e
-    # tem outro par adiante (`"...\Dir (x86)\x.exe" -cfg "..."`) cai na regra do
-    # cmd que tira a primeira e a última aspas da linha, e se parte ao meio.
+    # As aspas externas são as do `shell=True` normal: sem elas, um comando com dois pares de aspas cai na regra do cmd
+    # que tira a primeira e a última e se parte ao meio.
     _shell_execute_runas("cmd.exe", f'/c "{executable}"', str(shared.home), 0)
 
 
-# The characters an AUMID is made of, deliberately the same class the importer
-# validates against when it writes the command (`importer/shortcuts_source.py`),
-# so the two ends agree on what an AUMID is. Anything else — a closing quote, a
-# space, an argument after it — ends the AUMID rather than being part of it.
+# Mesma classe de caracteres que o importador valida (`importer/shortcuts_source.py`); aspas, espaço ou argumento encerram o AUMID.
 _AUMID_CHARS = re.compile(r"[\w.!+\-]+")
 
-# Case-insensitive like the shell itself: `shell:appsfolder\PFN!App` typed by
-# hand launches fine, so it must also be recognised as a packaged game — a
-# case-sensitive `find` silently dropped it to exe-style tracking and to the
-# identity-less `cmd /c` elevation branch. A regex (not casefold on the string)
-# so the match positions stay valid in the original text: casefold can change
-# a string's length.
+# Sem diferenciar maiúsculas, como o shell. Regex e não casefold: o casefold pode mudar o tamanho do texto e as posições.
 _MARKER_RE = re.compile(re.escape("shell:AppsFolder\\"), re.IGNORECASE)
 
 
 def aumid_from_command(executable: str) -> str:
-    """Extract the AUMID from a ``...shell:AppsFolder\\<AUMID>`` launch command.
+    """O AUMID de um comando ``...shell:AppsFolder\\<AUMID>``; "" para qualquer outro (o teste de "jogo da Microsoft Store").
 
-    Returns "" for anything else, which doubles as the test for "is this a
-    Microsoft Store / Game Pass game?" — used both to elevate it correctly and
-    to pick how its playtime is tracked.
-
-    The rest of the line is not the AUMID: a command may quote it and may carry
-    arguments after it. A ``.url`` shortcut imports as
-    ``start "" "shell:AppsFolder\\PFN!App"``, and taking everything after the
-    marker gave back ``PFN!App"``, trailing quote and all. That stayed invisible
-    on the tracking side, where ``ProcessSession`` splits on the ``!`` and throws
-    the tail away, but the raw value is what ``_elevate_worker`` hands to
-    ``ShellExecuteEx``: the quote made the elevated launch fail with nothing but
-    a warning in the log, by which point the main window had already been
-    minimised for a game that was never going to start.
-
-    Not narrowed further to the ``PFN!AppId`` shape on purpose. The importer's
-    ``_real_aumid`` falls back to a grouping id, which has no ``!``, when it
-    cannot resolve one to a real AUMID; rejecting those here would only move
-    them to the manual session window, where a game the shell cannot launch at
-    all would sit collecting playtime.
+    Só o AUMID, sem as aspas e argumentos que o comando pode ter (um ``.url`` importa como
+    ``start "" "shell:AppsFolder\\PFN!App"``): com a aspa, a elevação via ``ShellExecuteEx`` falhava.
+    Não exige a forma ``PFN!AppId`` de propósito: o importador cai num id de agrupamento sem ``!`` quando não resolve.
     """
     found = _MARKER_RE.search(executable)
     if found is None:
@@ -126,7 +87,6 @@ def aumid_from_command(executable: str) -> str:
 
 
 def _shell_execute_runas(file_, params, directory, show) -> None:
-    """Invoke the ``runas`` verb via ShellExecuteEx (blocks on the UAC prompt)."""
     import ctypes  # pylint: disable=import-outside-toplevel
     from ctypes import wintypes  # pylint: disable=import-outside-toplevel
 
@@ -149,12 +109,12 @@ def _shell_execute_runas(file_, params, directory, show) -> None:
             ("hProcess", wintypes.HANDLE),
         ]
 
-    see_mask_invokeidlist = 0x0000000C  # resolve the link's verbs via IContextMenu
-    see_mask_noasync = 0x00000100  # finish before returning
+    see_mask_invokeidlist = 0x0000000C  # resolve os verbos do link via IContextMenu
+    see_mask_noasync = 0x00000100  # termina antes de retornar
     coinit_apartmentthreaded = 0x2
 
     ole32 = ctypes.windll.ole32  # type: ignore
-    # IContextMenu (INVOKEIDLIST) needs COM; init it on this thread
+    # INVOKEIDLIST (IContextMenu) precisa de COM nesta thread
     hresult = ole32.CoInitializeEx(None, coinit_apartmentthreaded)
     try:
         info = SHELLEXECUTEINFOW()
@@ -168,8 +128,8 @@ def _shell_execute_runas(file_, params, directory, show) -> None:
 
         logging.info("Launching elevated `%s`", file_)
         if not ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(info)):  # type: ignore
-            # Non-zero failure code, e.g. the user cancelled the UAC prompt
+            # Falha ou UAC cancelado
             logging.warning("Elevated launch failed or was cancelled for `%s`", file_)
     finally:
-        if hresult in (0, 1):  # S_OK / S_FALSE: we own the COM init
+        if hresult in (0, 1):  # S_OK / S_FALSE: o COM é nosso
             ole32.CoUninitialize()

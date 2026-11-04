@@ -19,16 +19,9 @@
 
 """A cor predominante do monitor do jogo, para a iluminação acompanhar a tela.
 
-O jogo roda sempre no monitor principal, e é só ele que entra no print: a
-Pillow, pedida a área de todos os monitores, captura todos e só depois
-recorta — com três monitores, o triplo do custo a cada amostra. A cor sai da
-mesma conta da capa (``dominante_da_imagem``), então pretos, cinzas e
-brancos não viram luz.
-
-O print é o da Pillow (GDI), que pega janela e tela cheia sem bordas. Jogo em
-tela cheia exclusiva devolve a imagem toda preta — e isso é distinto de uma
-cena escura, que sempre tem algum pixel aceso: é a captura bloqueada, e quem
-acompanha a sessão avisa o usuário no fim dela.
+Só o monitor principal entra no print: o Pillow, pedida a área de todos, captura todos e só depois recorta.
+A cor sai da mesma conta da capa (``dominante_da_imagem``). O print é o do GDI; jogo em tela cheia exclusiva
+devolve a imagem toda preta (uma cena escura sempre tem algum pixel aceso): é a captura bloqueada.
 """
 
 import ctypes
@@ -43,22 +36,15 @@ from PIL import Image, ImageGrab, ImageStat
 from cartridges.utils.cor_da_capa import dominante_da_imagem
 
 
-# A tela reduzida a mais cores que a capa, e cores escuras ainda contam: ver
-# ``dominante_da_imagem``.
 CORES_DA_TELA = 16
 MIN_VALOR_DA_TELA = 0.06
 
 
 class Amostra(NamedTuple):
-    """O resultado de uma amostra da tela.
+    """``tipo``: ``"cor"`` (``cor`` = matiz 0–359, saturação 0–1000), ``"sem_cor"``, ``"ignorada"`` (nada
+    capturado: sem janela na frente ou janela do próprio app) ou ``"bloqueada"`` (captura falhou ou toda preta).
 
-    ``tipo``: ``"cor"`` (com ``cor`` = matiz 0–359 e saturação 0–1000),
-    ``"sem_cor"`` (a imagem veio, mas sem cor útil), ``"ignorada"`` (nada foi
-    capturado: nenhuma janela na frente, ou a janela é do próprio app) ou
-    ``"bloqueada"`` (a captura falhou ou veio toda preta).
-
-    Com imagem (``"cor"`` e ``"sem_cor"``), ``luz`` é a luminosidade média da
-    cena, de 0 a 1, e ``ms`` quanto a captura levou.
+    Com imagem, ``luz`` é a luminosidade média da cena (0 a 1) e ``ms`` o tempo da captura.
     """
 
     tipo: str
@@ -71,9 +57,7 @@ _user32: Optional[Any] = None
 
 
 def _api() -> Any:
-    """user32 com os tipos declarados. Uma cópia só deste módulo, pelo mesmo
-    motivo de ``janela_por_cima._api``: ``ctypes.windll.user32`` é
-    compartilhado, e os ``argtypes`` de um módulo valem para todos."""
+    """user32 com os tipos declarados, em cópia própria: os ``argtypes`` de ``ctypes.windll.user32`` valem para todos os módulos."""
     global _user32  # pylint: disable=global-statement
     if _user32 is None:
         u = ctypes.WinDLL("user32")  # type: ignore[attr-defined]
@@ -85,7 +69,6 @@ def _api() -> Any:
 
 
 def _janela_da_frente() -> int:
-    """A janela em primeiro plano, ou 0 se não houver nenhuma."""
     return _api().GetForegroundWindow() or 0
 
 
@@ -96,26 +79,20 @@ def _processo_da(hwnd: int) -> int:
 
 
 def _capturar() -> Image.Image:
-    """O monitor principal inteiro, que é onde o jogo roda."""
     return ImageGrab.grab()
 
 
 def cor_da_tela() -> Amostra:
-    """Uma amostra do monitor do jogo. Nunca levanta: roda numa thread da
-    sessão, e um enfeite não pode derrubá-la."""
+    """Uma amostra do monitor do jogo. Nunca levanta: roda numa thread da sessão."""
     try:
         hwnd = _janela_da_frente()
-        # O próprio Cartridges na frente (Alt+Tab no meio do jogo): a luz não
-        # pode pegar o roxo do app. Nada é capturado, e isso não conta nem
-        # como captura que funcionou nem como bloqueio.
+        # O próprio app na frente (Alt+Tab): a luz não pode pegar a cor dele; não conta como captura nem como bloqueio.
         if not hwnd or _processo_da(hwnd) == os.getpid():
             return Amostra("ignorada")
         inicio = time.perf_counter()
         imagem = _capturar()
         ms = round((time.perf_counter() - inicio) * 1000)
-    # Larga como a da capa: o GDI e a Pillow reclamam de jeitos diferentes
-    # (monitor desligado no meio, sessão bloqueada do Windows), e todos querem
-    # dizer a mesma coisa — não deu para ver a tela.
+    # Larga de propósito: o GDI e o Pillow reclamam de jeitos diferentes (monitor desligado, sessão bloqueada).
     except Exception as erro:  # pylint: disable=broad-exception-caught
         logging.info("Captura da tela do jogo falhou: %s", erro)
         return Amostra("bloqueada")

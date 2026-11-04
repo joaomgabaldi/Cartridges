@@ -17,21 +17,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Where a game's files are, taken from the command that launches it.
+"""Onde ficam os arquivos de um jogo, a partir do comando que o abre.
 
-Only two kinds of command say where the game lives. A classic one names the
-executable, and the folder is the one holding it — even when that executable
-is a store client's own (``steam.exe -applaunch 440``): the folder offered is
-the client's, because that is what the command runs, and telling "a game's
-exe" from "a launcher's exe" would take a blocklist of every client ever
-shipped. A packaged one (Microsoft Store / Game Pass) names an AUMID, and
-Windows records the install folder against the package.
-
-Everything else — ``steam://rungameid/…``, the Epic and GOG launcher URIs, a
-Start menu ``.lnk`` standing in for a package with no launchable AUMID — is a
-request for some other program to start the game, and that program is the only
-one that knows where it put it. There is nothing to guess from, so those get
-None and the caller hides the button rather than opening the wrong folder.
+Só dois tipos de comando dizem: o clássico, que nomeia o executável (a pasta é a dele, mesmo de um cliente como ``steam.exe -applaunch 440``; distinguir exe de jogo e de launcher exigiria uma lista de todos) e o empacotado (Microsoft Store / Game Pass), cujo AUMID leva à pasta que o Windows registra. O resto (``steam://``, URIs de Epic e GOG, ``.lnk`` do Menu Iniciar) pede a outro programa que abra o jogo: devolve None e o botão some, em vez de abrir a pasta errada.
 """
 
 import itertools
@@ -43,25 +31,17 @@ from typing import Optional
 
 from cartridges.utils.run_executable import aumid_from_command
 
-# The launch command's own paths, quoted (what the file chooser and the
-# importer write) or bare (typed by hand), collected in the order they appear —
-# so "the last launchable one is the game" keeps meaning that even when the two
-# forms mix in one command, a bare exe typed by hand with a quoted argument
-# after it. A bare path still stops at whitespace, because one with spaces
-# cannot be told apart from its arguments.
+# Os caminhos do comando, entre aspas ou soltos, na ordem em que aparecem ("o último executável é o jogo").
+# Um caminho solto para no espaço, pois não se distingue dos argumentos.
 _PATH = re.compile(
     r'"(?P<quoted>[A-Za-z]:[\\/][^"]*)"'
     r'|(?<!\S)(?P<bare>[A-Za-z]:[\\/][^\s"]*)(?!\S)'
 )
 
-# What counts as "the game's own executable" among the paths in a command. A
-# `.lnk` or `.url` is excluded on purpose: those are pointers, and the folder
-# holding the pointer is the Start menu, not the game.
+# `.lnk` e `.url` ficam de fora: são ponteiros, e a pasta deles é o Menu Iniciar, não o jogo.
 _LAUNCHABLE_SUFFIXES = (".exe", ".bat", ".cmd", ".com")
 
-# Where Windows records every package installed for this user, one subkey per
-# package full name (``Name_Version_Architecture_ResourceId_PublisherId``), each
-# carrying the folder its files were laid down in.
+# Uma subchave por nome completo de pacote (``Name_Version_Architecture_ResourceId_PublisherId``), com a pasta de instalação.
 _PACKAGES_KEY = (
     r"Software\Classes\Local Settings\Software\Microsoft\Windows"
     r"\CurrentVersion\AppModel\Repository\Packages"
@@ -69,14 +49,7 @@ _PACKAGES_KEY = (
 
 
 def game_folder(command: str) -> Optional[str]:
-    """The folder a launch command points into, or None when it cannot be known.
-
-    The folder is returned only when it exists on disk, so a game that has since
-    been uninstalled or moved reads the same as one whose launcher hides it: no
-    folder to offer — even when the command still names folders that outlived
-    the executable, like a ``/D`` working directory or a settings path among
-    the arguments. Those are near the game, not the game.
-    """
+    """A pasta para a qual o comando aponta, ou None. Só devolve pasta que existe: jogo desinstalado ou movido não tem pasta a oferecer."""
     if not (command := (command or "").strip()):
         return None
 
@@ -87,21 +60,15 @@ def game_folder(command: str) -> Optional[str]:
 
 
 def _executable_folder(command: str) -> Optional[str]:
-    """The folder holding the executable a classic command runs."""
     candidates = []
     for match in _PATH.finditer(command):
         if quoted := match.group("quoted"):
             candidates.append(quoted)
         elif match.group("bare").casefold().endswith(_LAUNCHABLE_SUFFIXES):
-            # A bare path is only trusted whole. Truncated at a space, the
-            # fragment ("C:\Games\Halo" out of "C:\Games\Halo CE\halo.exe")
-            # carries no launchable suffix — and keeping it as a folder
-            # candidate would resolve to whatever neighbour shares the prefix.
+            # Caminho solto só vale inteiro: cortado no espaço ("C:\Games\Halo"), viraria a pasta de um vizinho.
             candidates.append(match.group("bare"))
 
-    # The game's executable comes after whatever precedes it (the `start`
-    # title, a `/D` working directory), and before any argument that happens
-    # to be a path too — so the last launchable one is the game.
+    # O executável do jogo vem depois do que o precede (título do `start`, `/D`) e antes de argumentos que também são caminhos.
     launchable = [
         candidate
         for candidate in candidates
@@ -111,16 +78,11 @@ def _executable_folder(command: str) -> Optional[str]:
         if os.path.isfile(candidate):
             return _win32_dir(os.path.dirname(candidate))
 
-    # The command names its executable and the disk no longer has it. The game
-    # is gone, and any folder still standing in the command — the `/D` working
-    # directory, a settings path among the arguments — is not the game's:
-    # offering it would open somebody else's folder.
+    # O executável sumiu do disco: o jogo se foi, e a `/D` ou um caminho de configuração nos argumentos não é a pasta dele.
     if launchable:
         return None
 
-    # No absolute executable named at all: the importer's form for a relative
-    # target, `start "" /D "<workdir>" "game.exe"`. The first folder that
-    # exists is that working directory.
+    # Sem executável absoluto (forma do importador, `start "" /D "<workdir>" "game.exe"`): a primeira pasta existente é a de trabalho.
     for candidate in candidates:
         if os.path.isdir(candidate):
             return _win32_dir(candidate)
@@ -129,12 +91,10 @@ def _executable_folder(command: str) -> Optional[str]:
 
 
 def _package_folder(aumid: str) -> Optional[str]:
-    """The install folder of the package an AUMID belongs to.
+    """A pasta de instalação do pacote de um AUMID.
 
-    The AUMID's family name (``Name_PublisherId``) is not what the registry
-    files packages under — that is the full name, which carries the version,
-    architecture and resource id in between. So the packages are walked and
-    matched on the two ends the family name gives us.
+    O registro usa o nome completo (com versão, arquitetura e recurso no meio), não a família
+    (``Name_PublisherId``): percorre os pacotes e casa pelas duas pontas.
     """
     family = aumid.split("!", 1)[0]
     name, _sep, publisher = family.rpartition("_")
@@ -144,10 +104,7 @@ def _package_folder(aumid: str) -> Optional[str]:
     prefix = (name + "_").casefold()
     suffix = ("_" + publisher).casefold()
 
-    # A family can have several packages registered at once: resource packages
-    # (``split.language-pt`` and friends, which hold no executable) alongside
-    # the main one, and an older version alongside the one an update is
-    # replacing it with. Skip the first kind, and prefer the newest of the rest.
+    # Uma família pode ter vários pacotes: de recursos (``split.language-pt``, sem executável) e versões antigas. Pula os primeiros e prefere o mais novo.
     best: Optional[tuple[tuple[int, ...], str]] = None
     try:
         packages = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _PACKAGES_KEY)
@@ -160,7 +117,7 @@ def _package_folder(aumid: str) -> Optional[str]:
             try:
                 full_name = winreg.EnumKey(packages, index)
             except OSError:
-                break  # end of the list
+                break  # fim da lista
 
             folded = full_name.casefold()
             if not (folded.startswith(prefix) and folded.endswith(suffix)):
@@ -191,17 +148,15 @@ def _package_folder(aumid: str) -> Optional[str]:
 
 
 def _win32_dir(directory: str) -> str:
-    """``directory`` in the shape the Windows shell accepts.
+    """``directory`` no formato do shell do Windows.
 
-    `os.path.dirname` hands back whatever `os.sep` says, and on the interpreter
-    the previous (GTK) version shipped (MSYS2 ucrt64) that was a forward slash —
-    which Explorer does not open. Kept because libraries written by it still hold such paths.
+    A versão anterior (GTK) rodava no MSYS2, onde `os.path.dirname` devolvia barra normal, que o Explorer não abre;
+    as bibliotecas gravadas por ela ainda guardam esses caminhos.
     """
     return directory.replace("/", "\\")
 
 
 def open_folder(directory: str) -> bool:
-    """Show ``directory`` in Explorer. Returns whether it worked."""
     if not directory:
         return False
 
@@ -209,8 +164,6 @@ def open_folder(directory: str) -> bool:
     try:
         os.startfile(directory)  # type: ignore[attr-defined]  # Windows-only
     except OSError:
-        # The folder was there when the button was shown; if it went away since,
-        # the caller is what tells the user — this just gets it into the log too.
         logging.exception("Could not open folder `%s`", directory)
         return False
     return True

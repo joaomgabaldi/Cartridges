@@ -1,9 +1,8 @@
 """Uma cortina preta sobre o monitor do app, para o fade do Big Picture.
 
-Janela Win32 própria (classe registrada uma vez), em camadas, por cima de tudo,
-que deixa o clique passar e não rouba o foco. O dono é o mesmo dono oculto dos
-cartões de `janela_por_cima`, o que a mantém fora da barra de tarefas. Qualquer
-falha ao criá-la levanta `OSError`: quem chama faz a troca sem fade.
+Janela Win32 em camadas, por cima de tudo, que deixa o clique passar e não rouba o foco. O dono é o mesmo
+dono oculto dos cartões de `janela_por_cima`, o que a mantém fora da barra de tarefas.
+Falha ao criá-la levanta `OSError`: quem chama faz a troca sem fade.
 """
 
 import ctypes
@@ -53,7 +52,6 @@ _classe_registrada = False
 
 
 def _api() -> Any:
-    """As funções do Win32 usadas aqui (user32, gdi32 e kernel32) num objeto só."""
     global _api_real  # pylint: disable=global-statement
     if _api_real is None:
         u = janela_por_cima._api()  # pylint: disable=protected-access
@@ -84,7 +82,6 @@ def _api() -> Any:
 
 
 def _registrar_classe(u: Any) -> Any:
-    """Registra a classe uma vez e devolve o HINSTANCE."""
     global _proc, _classe_registrada  # pylint: disable=global-statement
     instancia = u.GetModuleHandleW(None)
     if not _classe_registrada:
@@ -102,7 +99,7 @@ def _registrar_classe(u: Any) -> Any:
 
 
 class CortinaMonitor:
-    """Janela preta que cobre o monitor da janela `hwnd_app`; `alfa` 0 a 1."""
+    """Janela preta que cobre o monitor de `hwnd_app`; `alfa` de 0 a 1."""
 
     def __init__(self, hwnd_app: int) -> None:
         self.hwnd: Optional[int] = None

@@ -4,11 +4,9 @@
 
 """Redefinir Cartridges: o app volta ao estado de recém-instalado.
 
-Preferências só agenda (`agendar`) e reinicia o app; a limpeza roda na abertura
-seguinte (`aplicar_pendente`), antes do log em arquivo, que no Windows trava a
-própria pasta, e antes de qualquer leitura de dados. Sai tudo da pasta do app e
-todas as configurações voltam ao padrão. Uma pasta dos saves escolhida fora da
-pasta do app é só esquecida: ela pode ser a raiz do OneDrive ou dos Documentos.
+Só agenda (`agendar`) e reinicia o app; a limpeza roda na abertura seguinte (`aplicar_pendente`),
+antes do log em arquivo (que no Windows trava a própria pasta) e de qualquer leitura de dados.
+Uma pasta dos saves fora da pasta do app é só esquecida: pode ser a raiz do OneDrive ou dos Documentos.
 """
 
 import shutil
@@ -20,13 +18,10 @@ from cartridges.utils.backup import _apagar_pasta, _irma
 
 _AGENDADO = "redefinir"
 
-# Desfazem o que o app mudou fora dele (fitas e papel de parede do Windows) quando
-# o fechamento não conseguiu; zerar deixaria a mudança para sempre. O balde do
-# limitador da Steam é o que segura as requisições depois de uma rajada.
+# Desfazem o que o app mudou fora dele (fitas, papel de parede) quando o fechamento falhou; zerar deixaria a mudança para sempre.
 _FICAM = frozenset({"fita-estado-anterior", "session-wallpaper-saved", "steam-limiter-tokens-history"})
 
-# O erro da última `aplicar_pendente`, para a abertura registrar no log (que ainda
-# não existia) e avisar depois de a janela abrir. Fora o caso, ``None``.
+# O erro da última `aplicar_pendente`, para a abertura registrar no log e avisar depois de a janela abrir.
 falha: Optional[OSError] = None  # pylint: disable=invalid-name
 
 
@@ -48,16 +43,14 @@ def aplicar_pendente() -> Optional[bool]:
     if not marca.is_file():
         return None
     try:
-        # Sobras de uma restauração de backup interrompida: a abertura as
-        # devolveria à pasta recém-esvaziada.
+        # Sobras de uma restauração interrompida: a abertura as devolveria à pasta esvaziada.
         for sufixo in (".anterior", ".restaurando", ".lixo"):
             _apagar_pasta(_irma(sufixo))
         for item in list(shared.app_dir.iterdir()):
             if item.name == _AGENDADO:
                 continue
             if item.name == "logs":
-                # O processo que pediu a redefinição ainda pode estar saindo,
-                # com o log aberto; o que sobrar dele não é de ninguém.
+                # O processo que pediu a redefinição ainda pode estar saindo, com o log aberto.
                 shutil.rmtree(item, ignore_errors=True)
             elif item.is_dir() and not item.is_symlink() and not item.is_junction():
                 _apagar_pasta(item)
@@ -71,8 +64,7 @@ def aplicar_pendente() -> Optional[bool]:
         falha = erro
         return False
     finally:
-        # Mesmo na falha: repetir sozinho numa abertura futura apagaria o que o
-        # usuário fizesse até lá. O aviso pede que ele tente de novo.
+        # Mesmo na falha: repetir sozinho numa abertura futura apagaria o que o usuário fizesse até lá.
         with suppress(OSError):
             marca.unlink(missing_ok=True)
     return True

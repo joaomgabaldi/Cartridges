@@ -19,35 +19,7 @@
 
 """Remember the main window's size, position and state across runs.
 
-Two things here are not what a GTK application would normally do, and both have
-the same cause: GTK4 has no window-position API at all. The toolkit's model
-comes from Wayland, where a client may neither know nor choose where it sits.
-That is fine there and useless on Windows, where an app that cannot remember its
-monitor reopens on the primary one every time, however many screens are
-attached. So the position is read and applied through Win32, the same way the
-session window is placed.
-
-Size is measured and restored as a Win32 frame rectangle rather than through
-GTK's default size, because on Windows those two disagree: give a window a
-default width of 724 and, once it has been maximized and restored, GTK reports
-that width back as 696. The frame's 28 pixels are counted on the way in but not
-on the way out. Persisting that through a two-way GSettings binding, as an
-application normally would, made the remembered size ratchet down by 28x29 on
-every run, which is how this window reached 724x428 from a 1170x795 default. A
-frame rectangle means the same thing in both directions, so it survives the
-round trip.
-
-The size is also only ever saved while the window is not maximized, so that a
-maximized window remembers the size to go back to rather than the screen it
-happened to fill.
-
-The same Win32 handle also answers a second question, which is why the monitor
-list lives here: parking the window on another screen while a game runs (see
-:func:`move_to_monitor`) is the startup restore done twice — out to the chosen
-monitor, then back to exactly where it was. GDK's own monitor list cannot be
-used for it: on Windows ``get_connector()`` and ``get_description()`` are both
-``None``, and GDK's ordering is not the desktop's, so there would be nothing to
-label a monitor with and nothing stable to store.
+Position is read and applied through Win32, so the app reopens on the right monitor. Size is a Win32 frame rectangle (the same in both directions: the version before Qt, on GTK, reported a width 28 px smaller after a maximize/restore, and the saved size ratcheted down every run), saved only while not maximized. The same handle gives the monitor list, since parking the window on another screen during a game (:func:`move_to_monitor`) is the startup restore done twice.
 """
 
 from __future__ import annotations
@@ -67,22 +39,18 @@ from PySide6.QtGui import QWindow
 from cartridges import shared
 
 _MONITOR_DEFAULTTONULL = 0x00000000
-# SWP_NOZORDER | SWP_NOACTIVATE: place it exactly, without raising or focusing
+# SWP_NOZORDER | SWP_NOACTIVATE: posiciona sem elevar nem focar
 _PLACE = 0x0004 | 0x0010
-# O retângulo que o GTK da `main` gravava inclui a sombra da janela (a diferença de 28x29 que `main.py` cita): o Qt não a
-# tem. Esquerda/topo e largura/altura a descontar na primeira abertura depois da `main` (DA-72). O reparte entre os
-# lados é aproximado (14 e 14; o 1 a mais de altura fica embaixo): a sombra do GTK4 é um pouco maior embaixo.
+# O retângulo gravado pela versão anterior (GTK) inclui a sombra da janela (28x29), que o Qt não tem: esquerda/topo e largura/altura
+# a descontar na primeira abertura depois dela. O reparte é aproximado (14 e 14; o 1 a mais de altura fica embaixo).
 _SOMBRA_DO_GTK = (14, 14, 28, 29)
-# A folga entre o botão das tarefas e a janela solta que se abre acima dele.
 _FOLGA_BOTAO = 12
 _MONITORINFOF_PRIMARY = 0x00000001
 _SW_HIDE = 0
 _SW_SHOWNORMAL = 1
 _SW_SHOWMAXIMIZED = 3
 
-# Declared rather than left to ctypes' defaults, which pass and return C ints:
-# a handle is a 64-bit pointer here, and a truncated HMONITOR would read as "no
-# monitor" and quietly throw away every stored position.
+# Declarados, e não os padrões do ctypes (C int): o handle é um ponteiro de 64 bits, e um HMONITOR truncado leria como "sem monitor" e descartaria toda posição gravada.
 _user32 = ctypes.windll.user32  # type: ignore
 _user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
 _user32.GetWindowRect.restype = wintypes.BOOL
@@ -177,9 +145,7 @@ _user32.EnumDisplayDevicesW.restype = wintypes.BOOL
 _EDD_GET_DEVICE_INTERFACE_NAME = 0x00000001
 _DISPLAY_DEVICE_ACTIVE = 0x00000001
 
-# What the schema holds until a window has been closed once. Not 0, which is a
-# perfectly real coordinate, and not -1, which a second monitor placed above the
-# primary genuinely produces: this desktop's portrait screen starts at y=-476.
+# O que o schema guarda até a janela fechar uma vez. Não 0 (coordenada real) nem -1 (um segundo monitor acima do principal o produz de verdade).
 UNSET = -(2**31)
 
 
@@ -194,17 +160,11 @@ class Geometry(NamedTuple):
 
     @property
     def usable(self) -> bool:
-        """False for the "nothing stored yet" value the schema starts at."""
         return self.width > 0 and self.height > 0 and self.x != UNSET
 
 
 def stored(schema: Any) -> Geometry:
-    """A geometria que ``save_window_geometry`` gravou no GSettings do estado.
-
-    Lida de novo a cada "map", e não uma vez na abertura: a janela principal
-    pode ser escondida e reaparecer (veja `on_win_close_request`), e o "map"
-    seguinte tem de devolvê-la a onde o usuário a deixou, não a onde ela abriu.
-    """
+    """A geometria gravada no schema de estado. Lida de novo a cada "map": a janela principal pode ser escondida e reaparecer, e deve voltar a onde o usuário a deixou."""
     return Geometry(
         schema.get_int("x"),
         schema.get_int("y"),
@@ -217,72 +177,47 @@ def stored(schema: Any) -> Geometry:
 class Monitor(NamedTuple):
     """An attached screen, in the same physical coordinates as :class:`Geometry`."""
 
-    device: str  # "\\\\.\\DISPLAY2", the name the desktop numbers monitors by
-    x: int  # the whole screen, taskbar included: a window sent here is
-    y: int  # maximized over it, and the badge is centred on it
+    device: str  # "\\\\.\\DISPLAY2", o nome com que o desktop numera os monitores
+    x: int  # a tela inteira, barra de tarefas incluída: a janela enviada para cá é maximizada sobre ela
+    y: int
     width: int
     height: int
     primary: bool
-    ordinal: int = 0  # 1-based place in :func:`monitors`; 0 when built by hand
-    # O caminho do monitor (``\\\\?\\DISPLAY#DEL4123#5&...#{e6f07b5f-...}``): o
-    # modelo e a saída de vídeo em que ele está ligado. Vazio quando o Windows
-    # não o informa, e então vale o ``device``.
+    ordinal: int = 0  # posição (de 1) em :func:`monitors`; 0 se montado à mão
+    # O caminho do monitor (``\\\\?\\DISPLAY#DEL4123#5&...#{e6f07b5f-...}``): modelo e saída de vídeo. Vazio se o Windows não o informa; então vale o ``device``.
     path: str = ""
 
     @property
     def key(self) -> str:
-        """O que a preferência ``session-monitor`` guarda para esta tela.
-
-        Não o ``device``: o Windows troca os nomes ``DISPLAYn`` entre as telas
-        quando elas dormem e acordam, são religadas em outra ordem ou o driver
-        reinicia, e a tela escolhida passava a ser a outra. O caminho é do
-        monitor e da porta em que ele está, e só muda se o cabo mudar de porta.
-        """
+        """O que a preferência ``session-monitor`` guarda: não o ``device`` (o Windows troca os nomes ``DISPLAYn`` entre as telas
+        ao dormir, religar ou reiniciar o driver), mas o caminho, que só muda se o cabo mudar de porta."""
         return self.path or self.device
 
     def is_stored(self, stored: str) -> bool:
-        """Se ``stored`` (o valor da preferência) aponta para esta tela.
-
-        Aceita também o ``device``, que é o que as versões anteriores gravavam:
-        a escolha antiga continua valendo até a tela de preferências gravar o
-        caminho no lugar dele.
-        """
+        """Se ``stored`` (o valor da preferência) aponta para esta tela; aceita também o ``device`` que as versões anteriores gravavam."""
         return bool(stored) and stored in (self.path, self.device)
 
     @property
     def number(self) -> str:
-        """What the preference list and the identify badge call this screen.
-
-        The place in the list, and not the "22" of ``\\\\.\\DISPLAY22``: the
-        desktop keeps counting up as screens and drivers come and go, so after
-        a while the device names read 22, 23, 24 while Windows' own display
-        settings still say 1, 2, 3.
-        """
+        """O nome da tela na lista de preferências e na placa de identificação: a posição na lista, não o "22" de ``\\\\.\\DISPLAY22`` (o desktop continua contando enquanto telas e drivers vêm e vão, e as configurações do Windows dizem 1, 2, 3)."""
         if self.ordinal:
             return str(self.ordinal)
         return self.device.rsplit("DISPLAY", 1)[-1] or "?"
 
 
 def _device_order(monitor: Monitor) -> tuple[int, str]:
-    """DISPLAY2 before DISPLAY10, which plain string order gets backwards."""
+    """DISPLAY2 antes de DISPLAY10, que a ordem de texto inverte."""
     digits = monitor.device.rsplit("DISPLAY", 1)[-1]
     return (int(digits) if digits.isdigit() else 0, monitor.device)
 
 
 def _place_order(monitor: Monitor) -> tuple[bool, int, int, tuple[int, str]]:
-    """O principal primeiro; os outros da esquerda para a direita, depois de
-    cima para baixo. O nome só desempata telas na mesma posição."""
+    """O principal primeiro; os outros da esquerda para a direita e de cima para baixo; o nome só desempata."""
     return (not monitor.primary, monitor.x, monitor.y, _device_order(monitor))
 
 
 def numbered(found: list[Monitor]) -> list[Monitor]:
-    """The monitors in place order, each told its place (1, 2, 3...).
-
-    Pela posição na área de trabalho, e não pela ordem dos nomes ``DISPLAYn``:
-    o Windows troca esses nomes entre as telas (veja :attr:`Monitor.key`), e a
-    tela da esquerda virava o "Monitor 3" de uma sessão para a outra. A
-    posição só muda quando o usuário rearranja as telas.
-    """
+    """Os monitores em ordem de posição, cada um com o seu número (1, 2, 3...): pela posição na área de trabalho e não pelos nomes ``DISPLAYn``, que o Windows troca (:attr:`Monitor.key`)."""
     return [
         monitor._replace(ordinal=place)
         for place, monitor in enumerate(sorted(found, key=_place_order), 1)
@@ -304,11 +239,7 @@ def _monitor_path(device: str) -> str:
 
 
 def monitors() -> list[Monitor]:
-    """Every attached monitor, in desktop order.
-
-    Empty if the enumeration fails, which callers must treat as "don't move the
-    window" rather than as an error worth showing anyone.
-    """
+    """Todos os monitores, em ordem. Vazio se a enumeração falha: quem chama trata como "não mover a janela", não como erro."""
     found: list[Monitor] = []
 
     def collect(handle: int, _hdc: int, _rect: Any, _param: int) -> bool:
@@ -335,65 +266,39 @@ def monitors() -> list[Monitor]:
         logging.warning("Could not list the monitors: %s", error)
         return []
 
-    # Sorted by place, not by the order the callback fired in: the enumeration
-    # order is whatever the driver hands over, and a list that reshuffles
-    # between runs would make "Monitor 2" mean a different screen each time.
+    # Por posição, não pela ordem do callback (a do driver): uma lista que embaralha faria o "Monitor 2" mudar de tela.
     return numbered(found)
 
 
 def has_secondary_monitor() -> bool:
-    """True when some attached monitor is not the primary one.
-
-    What both session options that use other screens need: the game runs on the
-    primary, so without a second monitor there is nowhere to park the window and
-    nowhere to show the art. A failed enumeration answers False, which is the
-    safe side — the caller switches its option off instead of touching a screen.
-    """
+    """True se algum monitor não é o principal. As opções de sessão que usam outras telas precisam disso (o jogo roda no principal). Enumeração que falha dá False, o lado seguro: a opção é desligada."""
     return any(not monitor.primary for monitor in monitors())
 
 
 def monitores_da_sessao() -> list[Monitor]:
-    """Os monitores que a sessão pode usar: todos menos o principal.
-
-    O principal fica fora: é onde o jogo roda, e a janela maximizada ali
-    ficaria na frente dele.
-    """
+    """Os monitores que a sessão pode usar: todos menos o principal, onde o jogo roda."""
     return [monitor for monitor in monitors() if not monitor.primary]
 
 
 def escolha_de_monitor(monitores: list[Monitor], gravado: str) -> tuple[list[str], int]:
-    """Os rótulos da lista de monitores e a posição do que está gravado.
-
-    O que fica guardado é o caminho do monitor (:attr:`Monitor.key`), e não a
-    posição na lista nem o nome ``DISPLAYn``, que o Windows troca entre as
-    telas: desligar um monitor, ou o Windows renomear as telas, não faz a
-    escolha passar a apontar para outro. Uma escolha antiga, gravada pelo
-    nome, também é reconhecida (:meth:`Monitor.is_stored`). Se o monitor
-    gravado estiver desligado (ou for o principal, guardado de antes de ele sair
-    da lista), a posição é a do primeiro: quem chama grava essa escolha, que é a
-    única forma de a lista mostrar o que vai acontecer de verdade.
-
-    Só o número no rótulo, porque só o número tem resposta: resolução e posição
-    empatam entre telas iguais, e é o botão "Identificar monitores" que diz qual
-    é qual — na própria tela, que é onde se olha.
-    """
+    """Os rótulos da lista de monitores e a posição do que está gravado (o caminho, :attr:`Monitor.key`; um nome antigo também vale, :meth:`Monitor.is_stored`). Gravado desligado (ou o principal) cai no primeiro, e quem chama grava essa escolha. O rótulo é só o número: resolução e posição empatam entre telas iguais, e "Identificar monitores" mostra qual é qual."""
     rotulos = [_("Monitor {}").format(m.number) for m in monitores]
     escolhido = next((i for i, m in enumerate(monitores) if m.is_stored(gravado)), 0)
     return rotulos, escolhido
 
 
-# As placas na tela, seguradas aqui até fecharem: quem as pediu (as Preferências) pode já ter fechado.
+# As placas na tela, seguradas até fecharem: quem as pediu (as Preferências) pode já ter fechado.
 _placas: list[Any] = []
 _PLACA = Path(__file__).resolve().parent.parent / "qml" / "PlacaDoMonitor.qml"
 
 
 def _criar_placa(monitor: Monitor, lado: int) -> Any:
-    """A placa do ``monitor``: uma ``QQuickView`` sem moldura com o número, no centro da tela (D68)."""
+    """A placa do ``monitor``: uma ``QQuickView`` sem moldura com o número, no centro da tela."""
     from PySide6.QtCore import QUrl, Qt  # noqa: PLC0415
     from PySide6.QtQuick import QQuickView  # noqa: PLC0415
 
     placa = QQuickView()
-    # Janela comum sem moldura, como o `Gtk.Window(decorated=False)` da `main`: recebe foco e aparece na barra de tarefas.
+    # Janela comum sem moldura: recebe foco e aparece na barra de tarefas.
     placa.setFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
     placa.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
     placa.setInitialProperties({"numero": monitor.number})
@@ -404,7 +309,7 @@ def _criar_placa(monitor: Monitor, lado: int) -> Any:
         raise RuntimeError(f"a placa do monitor não carregou: {erros}")
     placa.resize(lado, lado)
     placa.show()
-    # Depois do `show`: antes dele a janela ainda não tem lugar na área de trabalho.
+    # Depois do `show`: antes dele a janela não tem lugar na área de trabalho.
     _place(
         placa,
         Geometry(
@@ -432,21 +337,10 @@ def _fechar_placa(ref: Any) -> None:
 
 
 def identificar_monitores(segundos: int = 3, criar: Optional[Callable[[Monitor, int], Any]] = None) -> None:
-    """Pisca o número de cada monitor sobre ele, como as configurações do Windows.
-
-    A pergunta "qual deles é o 2?" não tem resposta em texto: dois monitores
-    iguais dão o mesmo rótulo, e a posição relativa só desempata enquanto eles
-    estiverem em lados diferentes. O que responde é olhar para as telas — então
-    o número vai para a tela, e não mais texto para a lista.
-
-    Mora aqui, e não junto da tela de preferências, porque é a mesma pergunta
-    que o resto do arquivo responde: onde ficam os monitores, e como se põe uma
-    janela em cima de um deles. Só na thread principal.
-    """
+    """Pisca o número de cada monitor sobre ele, como as configurações do Windows ("qual deles é o 2?" não tem resposta em texto). Só na thread principal."""
     criar = criar or _criar_placa
     for monitor in monitors():
-        # Um quarto do lado menor da tela, para o número sair do mesmo tamanho
-        # relativo em telas de tamanhos diferentes.
+        # Um quarto do lado menor da tela, para o número sair do mesmo tamanho relativo.
         lado = max(200, min(monitor.width, monitor.height) // 4)
         placa = criar(monitor, lado)
         if placa is None:
@@ -456,20 +350,12 @@ def identificar_monitores(segundos: int = 3, criar: Optional[Callable[[Monitor, 
 
 
 def read(window: Any) -> Optional[Geometry]:
-    """The window's frame rectangle, or None if it can no longer be asked.
-
-    For a maximized window this is the monitor's work area, which is not a size
-    worth restoring but is exactly the position needed to reopen on the same
-    screen, so callers keep the position and drop the size in that case.
-    """
+    """O retângulo da moldura, ou None se não dá mais para perguntar. Maximizada, é a área de trabalho do monitor: serve de posição, não de tamanho."""
     if (hwnd := _hwnd(window)) is None:
         return None
 
-    # A minimized window's rect is the icon parking spot — (-32000,-32000),
-    # ~160x28 — not a geometry. And minimized is this app's normal state while a
-    # game runs (it minimizes itself on launch), so closing from the taskbar or
-    # quitting mid-session would persist the sliver and reopen tiny. Treat it
-    # like an unaskable window: the previously stored geometry stays.
+    # O retângulo de uma janela minimizada é o ponto de estacionamento do ícone (-32000,-32000, ~160x28), não uma geometria; e minimizada é o
+    # estado normal durante um jogo: fechar assim gravaria o fiapo e reabriria minúscula. Vale como não perguntável: a gravada fica.
     if _user32.IsIconic(hwnd):
         return None
 
@@ -487,11 +373,10 @@ def read(window: Any) -> Optional[Geometry]:
 
 
 def gravar(schema: Any, janela: Any, tela_cheia: bool) -> bool:
-    """Grava onde a janela está, se ainda dá para perguntar; diz se gravou (as regras do `save_window_geometry` da `main`).
+    """Grava onde a janela está, se ainda dá para perguntar; diz se gravou.
 
-    Em tela cheia (Big Picture) o retângulo é o da tela, não o da janela: vale a geometria gravada antes. Fechar o app
-    no meio de uma sessão: a janela está estacionada no monitor do jogo, e o que tem de ser lembrado é de onde ela saiu
-    (D52). Minimizada, `read` não responde, e fica a gravada antes.
+    Em tela cheia (Big Picture) o retângulo é o da tela: vale a gravada antes. Fechar no meio de uma sessão: a janela está
+    estacionada no monitor do jogo, e o que se lembra é de onde ela saiu. Minimizada, `read` não responde e fica a gravada.
     """
     if tela_cheia:
         return False
@@ -501,8 +386,7 @@ def gravar(schema: Any, janela: Any, tela_cheia: bool) -> bool:
     schema.set_int("x", geometry.x)
     schema.set_int("y", geometry.y)
     schema.set_boolean("is-maximized", geometry.maximized)
-    # A maximized window's rectangle is its monitor, not a size to reopen at,
-    # so the last real size is left in place for it to be restored to.
+    # O retângulo de uma maximizada é o do monitor: o último tamanho real fica para a restauração.
     if not geometry.maximized:
         schema.set_int("width", geometry.width)
         schema.set_int("height", geometry.height)
@@ -510,29 +394,23 @@ def gravar(schema: Any, janela: Any, tela_cheia: bool) -> bool:
 
 
 def restaurar(janela: Any, geometria: Geometry) -> None:
-    """Põe a janela de volta no lugar e no tamanho gravados. Sem nada gravado (`usable` falso), não mexe nela.
+    """Põe a janela de volta no lugar e no tamanho gravados; sem nada gravado (`usable` falso), não mexe.
 
-    Order matters: the window is moved first and maximized second, because maximizing fills whichever monitor the
-    window currently sits on. The other way round always fills the primary one.
+    A ordem importa: move primeiro e maximiza depois, pois maximizar preenche o monitor em que a janela está (ao contrário, sempre o principal).
     """
     if not geometria.usable:
-        # Primeira abertura: o 1170x795 lógico já vem do `Principal.qml` (DA-71, feito em F); o `SetWindowPos` trabalha em
-        # pixels físicos e o encolheria fora de 100% de escala.
+        # Primeira abertura: o 1170x795 lógico já vem do `Principal.qml`; o `SetWindowPos` usa pixels físicos e o encolheria fora de 100% de escala.
         return
     if not _place(janela, geometria) and (atual := read(janela)) is not None:
-        # A posição gravada não existe mais (um monitor desligado): a janela fica onde o Windows a pôs, no tamanho
-        # gravado, como a `main` (o `apply_size` vinha antes do lugar).
+        # A posição gravada não existe mais (monitor desligado): a janela fica onde o Windows a pôs, no tamanho gravado.
         _place(janela, geometria._replace(x=atual.x, y=atual.y))
     if geometria.maximized:
-        # Deliberately not conditional on `_place` succeeding: if the stored
-        # position was refused the user still asked for a maximized window, and
-        # should get one wherever Windows has decided to put it.
+        # Não depende de `_place` ter dado certo: com a posição recusada, a pessoa ainda pediu maximizada.
         janela.showMaximized()
 
 
 def sem_a_sombra_do_gtk(geometria: Geometry) -> Geometry:
-    """A geometria gravada pela `main` convertida para o Qt: tira a sombra do GTK do retângulo. Maximizada não muda
-    (o retângulo é o do monitor)."""
+    """A geometria gravada pela versão anterior (GTK) convertida para o Qt: tira a sombra do retângulo. Maximizada não muda."""
     if not geometria.usable or geometria.maximized:
         return geometria
     esquerda, topo, largura, altura = _SOMBRA_DO_GTK
@@ -549,12 +427,9 @@ _MARCA_DO_QT = "geometria-qt"
 
 
 class GeometriaDaJanela(QObject):
-    """A geometria da principal no contexto do QML (`geometria`, D87): restaurada no `onCompleted` do `Principal.qml`,
-    gravada no `closing` (`PainelDasTarefas.principalFechando`) e no primeiro passo do `_fechar`.
+    """A geometria da principal no contexto do QML (`geometria`): restaurada no `onCompleted` do `Principal.qml`, gravada no `closing` e no primeiro passo do `_fechar`.
 
-    A janela fica numa referência comum, como no `PainelDasTarefas`: ela não segura o objeto C++ (o dono é o motor),
-    e uma janela já destruída responde com `RuntimeError`. Uma fraca morreria com o invólucro Python, que o PySide
-    solta a qualquer momento.
+    A janela fica numa referência comum: não segura o objeto C++ (o dono é o motor), e uma destruída responde com `RuntimeError`. Uma fraca morreria com o invólucro Python, que o PySide solta a qualquer momento.
     """
 
     def __init__(self, parent: Optional[QObject] = None) -> None:
@@ -577,8 +452,7 @@ class GeometriaDaJanela(QObject):
         """Nunca levanta: roda no fechamento."""
         janela = self._janela
         try:
-            # Já fechada pelo `quit()`: o `close()` do Qt destrói a janela nativa e o `winId()` criaria outra, num
-            # lugar qualquer. O `closing` dela já gravou.
+            # Já fechada pelo `quit()`: o `close()` do Qt destrói a janela nativa e o `winId()` criaria outra, num lugar qualquer; o `closing` já gravou.
             if janela is None or not janela.isVisible():
                 return
             if gravar(shared.state_schema, janela, janela.visibility() == QWindow.Visibility.FullScreen):
@@ -588,49 +462,21 @@ class GeometriaDaJanela(QObject):
             logging.warning("Could not save the window geometry", exc_info=True)
 
 
-# Where the window was before a play session sent it to another monitor, and
-# the flag that says a session is holding it there. Module state rather than a
-# window attribute because the same three callers — the launch, the end of the
-# session and the app quitting — all have to agree on one answer, and only one
-# session can run at a time anyway.
+# Onde a janela estava antes de uma sessão a enviar a outro monitor (e o sinal de que a sessão a segura lá). Estado do módulo porque lançamento,
+# fim da sessão e saída do app concordam numa resposta, e só uma sessão roda por vez.
 _before_session: Optional[Geometry] = None
 _before_placement: "Optional[_WINDOWPLACEMENT]" = None
 
 def session_geometry() -> Optional[Geometry]:
-    """Where the window would be if no game were running, or None if none is.
-
-    What has to be persisted when the app is closed mid-session: the window is
-    parked on the game's monitor, and saving *that* would make the parking spot
-    the place the app reopens at forever after.
-    """
+    """Onde a janela estaria sem jogo rodando, ou None. É o que se grava ao fechar no meio da sessão: salvar o monitor do jogo faria dele o lugar de reabertura para sempre."""
     return _before_session
 
 
 def move_to_monitor(window: Any, stored: str) -> bool:
-    """Park ``window`` maximized on the monitor ``stored`` names. Says whether it went.
+    """Estaciona ``window`` maximizada no monitor que ``stored`` nomeia (a preferência ``session-monitor``) e diz se foi.
 
-    ``stored`` is the ``session-monitor`` preference: a :attr:`Monitor.key`,
-    or the device name older versions saved (:meth:`Monitor.is_stored`).
-
-    False for every reason there is not to move — no such monitor attached, the
-    monitor is the primary one (where the game runs, which the window would then
-    cover), no handle to move, nothing readable to come back to — and the caller
-    then does what it did before this feature existed (minimize, in the launch
-    path). Losing the window off-screen is a much worse failure than not moving
-    it, so anything unclear counts as a reason not to.
-
-    Done with ``WINDOWPLACEMENT`` rather than with ``SetWindowPos``, because
-    here there is a state to come back to. A placement carries both halves of
-    what a window is — where it sits when it is not maximized, and whether it is
-    showing maximized right now — so reading one before and writing it back
-    after restores a maximized window *and* the size it un-maximizes to, which
-    moving a maximized window by hand loses: its restore rectangle would become
-    the game's monitor.
-
-    Both writes are synchronous, which is the second reason not to use
-    :meth:`Gtk.Window.maximize` here: the un-maximize has to have finished
-    before the window is moved, and GTK's may not land until the next frame — by
-    which time the move it was supposed to precede has already happened.
+    False por qualquer razão para não mover (monitor ausente ou principal, sem handle, nada legível para voltar): quem chama minimiza. Perder a janela fora da tela é pior que não mover.
+    Usa ``WINDOWPLACEMENT`` e não ``SetWindowPos``: a colocação leva onde a janela fica desmaximizada e se está maximizada, então ler antes e gravar depois restaura as duas coisas. As gravações são síncronas: a desmaximização termina antes de mover.
     """
     global _before_session, _before_placement  # pylint: disable=global-statement
 
@@ -647,17 +493,11 @@ def move_to_monitor(window: Any, stored: str) -> bool:
     if (placement := _get_placement(hwnd)) is None:
         return False
 
-    # Two writes, in the order the startup restore uses and for the same
-    # reason: put the window on the monitor first, maximize it second. Asking
-    # for both at once does nothing to a window that is already maximized —
-    # Windows takes the placement's rectangle as where to *restore* it to and
-    # keeps maximizing it over the monitor it is already on, which is how a
-    # maximized library window stayed put while reporting that it had moved.
+    # Duas gravações, na ordem da restauração da abertura: monitor primeiro, maximizar depois. Pedir as duas juntas não faz nada a uma
+    # janela já maximizada (o Windows toma o retângulo como onde *restaurá-la* e segue maximizando no monitor atual).
     if not _set_placement(hwnd, placement, _SW_SHOWNORMAL, target):
         return False
-    # Best effort: a window that arrived on the right monitor but did not
-    # maximize is still the right window in the right place, and still one the
-    # end of the session puts back.
+    # Best effort: a janela que chegou ao monitor certo sem maximizar ainda está no lugar certo e o fim da sessão a devolve.
     _set_placement(hwnd, placement, _SW_SHOWMAXIMIZED, target)
 
     _before_session, _before_placement = current, placement
@@ -666,16 +506,9 @@ def move_to_monitor(window: Any, stored: str) -> bool:
 
 
 def restore_from_monitor(window: Any) -> None:
-    """Put the window back exactly where :func:`move_to_monitor` found it.
+    """Devolve a janela exatamente a onde :func:`move_to_monitor` a achou; sem efeito se nada foi movido.
 
-    A no-op when no move happened, so the end of every session can call it
-    without asking. A window GTK has hidden (`on_win_close_request` does that
-    mid-session) gets the placement written as ``SW_HIDE`` instead: showing it
-    here, behind GTK's back, leaves it without keyboard focus after the
-    `present()` that follows. Hidden is enough to bring back what matters — the
-    rectangle it un-maximizes to and whether it was maximized — which would
-    otherwise stay the game monitor's, and the next "map" moves the window
-    still maximized without touching that rectangle.
+    Uma janela escondida no meio da sessão recebe a colocação como ``SW_HIDE``: mostrá-la aqui a deixaria sem foco de teclado depois do `present()` seguinte. Escondida basta para trazer de volta o retângulo de ao desmaximizar e se estava maximizada.
     """
     global _before_session, _before_placement  # pylint: disable=global-statement
 
@@ -689,10 +522,7 @@ def restore_from_monitor(window: Any) -> None:
         _set_placement(hwnd, placement, _SW_HIDE)
         return
 
-    # The mirror of the two steps in `move_to_monitor`, for the same reason: a
-    # window that was maximized before the game has to be un-maximized onto its
-    # own monitor first, or asking for "maximized, over there" leaves it
-    # maximized right here.
+    # O espelho de `move_to_monitor`: a janela que estava maximizada antes do jogo é desmaximizada no próprio monitor primeiro, senão "maximizada, lá" a deixa maximizada aqui.
     if placement.showCmd == _SW_SHOWMAXIMIZED:
         _set_placement(hwnd, placement, _SW_SHOWNORMAL)
     _user32.SetWindowPlacement(hwnd, ctypes.byref(placement))
@@ -704,15 +534,8 @@ def _set_placement(
     show: int,
     target: Optional[Monitor] = None,
 ) -> bool:
-    """Show ``hwnd`` as ``show``, keeping the rest of ``placement`` as it is.
-
-    With a ``target``, the placement's rectangle is replaced by that monitor's,
-    which is the only way ``WINDOWPLACEMENT`` has of saying *where*: Windows
-    maximizes a window over whichever screen its rectangle lands on. Nobody
-    sees the rectangle itself — the window covers it — so the whole screen
-    serves. Without one, the window keeps the rectangle it is carrying, which
-    is what putting it back means.
-    """
+    """Mostra ``hwnd`` como ``show``, mantendo o resto de ``placement``. Com ``target``, o retângulo é trocado pelo daquele monitor, a única forma de o ``WINDOWPLACEMENT``
+    dizer *onde* (o Windows maximiza sobre a tela em que o retângulo cai); sem ele, a janela mantém o retângulo que carrega."""
     wanted = _WINDOWPLACEMENT.from_buffer_copy(placement)
     wanted.showCmd = show
     if target is not None:
@@ -732,22 +555,15 @@ def _get_placement(hwnd: int) -> "Optional[_WINDOWPLACEMENT]":
 
 
 def posicao_acima_do_botao(botao: tuple[int, int, int, int], altura_da_janela: int) -> tuple[int, int]:
-    """O canto (x, y) da moldura de uma janela solta para que ela fique logo acima do botão das tarefas.
+    """O canto (x, y) da moldura de uma janela solta logo acima do botão das tarefas, alinhada à esquerda dele com folga de 12 px.
 
-    `botao` é (x, y, largura, altura) em coordenadas lógicas da tela (as do Qt: a escala não entra na conta);
-    `altura_da_janela` é a da moldura inteira. A janela fica alinhada à esquerda do botão, com a folga de 12 px.
+    `botao` é (x, y, largura, altura) em coordenadas lógicas da tela (as do Qt); `altura_da_janela` é a da moldura inteira.
     """
     return botao[0], botao[1] - _FOLGA_BOTAO - altura_da_janela
 
 
 def _place(window: Any, geometry: Geometry) -> bool:
-    """Move and size the window's frame to ``geometry``.
-
-    A stored position is not trusted blindly. Monitors get unplugged and
-    desktops get rearranged, so a remembered position can name a place that no
-    longer exists; restoring onto it would leave the window somewhere the user
-    can neither see nor drag back.
-    """
+    """Move e dimensiona a moldura para ``geometry``. A posição gravada não é confiável: monitores são desligados e arranjos mudam, e restaurar num lugar que não existe deixaria a janela onde ela não se vê nem se arrasta de volta."""
     if not geometry.usable or (hwnd := _hwnd(window)) is None:
         return False
 
@@ -774,13 +590,9 @@ def _place(window: Any, geometry: Geometry) -> bool:
 
 
 def _hwnd(window: Any) -> Optional[int]:
-    """The window's Win32 handle, or None before it is realized.
+    """O handle Win32 da janela, ou None antes de ela existir. Uma `QWindow` dá o ``winId()``, que no Windows já é o HWND.
 
-    Uma `QWindow` (a janela principal do Qt) dá o ``winId()``, que no Windows já é o HWND.
-
-    Everything here is best-effort: a failure costs the user a window that opens
-    where it last did, which is what happens without this module at all, so it
-    must never be allowed to take the application down with it.
+    Tudo aqui é best-effort: uma falha custa uma janela que abre onde abriu da última vez, e nunca pode derrubar o app.
     """
     if window is None or not isinstance(window, QWindow):
         return None

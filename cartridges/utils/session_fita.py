@@ -19,16 +19,7 @@
 
 """As fitas de LED atrás dos monitores, acompanhando o app e a sessão.
 
-O ciclo tem quatro momentos: o app abre e as fitas acendem na cor dele, o jogo
-abre e elas vestem a cor daquele jogo, o jogo fecha e elas voltam à do app, o app
-fecha e elas voltam exatamente ao que eram antes de tudo — inclusive apagadas.
-
-O estado de antes fica no GSettings, e não em memória, pela mesma razão do papel
-de parede de sessão: o app morto no meio da sessão deixaria as três fitas
-vestidas de um jogo que já acabou, e só o arranque seguinte pode desfazer isso.
-
-A conversa é local. A nuvem da Tuya entra uma única vez, no assistente, para
-buscar a chave de cada módulo; daí em diante é o PC falando direto com a fita.
+O app abre e as fitas acendem na cor dele; o jogo abre e elas vestem a do jogo; o jogo fecha e voltam à do app; o app fecha e voltam exatamente ao que eram antes, inclusive apagadas. O estado de antes fica no GSettings, não em memória: o app morto no meio da sessão deixaria as fitas vestidas, e o arranque seguinte desfaz. A nuvem da Tuya entra uma vez, no assistente, para buscar a chave de cada módulo; o resto é local.
 """
 
 import colorsys
@@ -48,12 +39,9 @@ from cartridges.utils.ler_json import ler_json
 if TYPE_CHECKING:
     from cartridges.game import Game
 
-# Matiz e saturação do #22D3EE, o ciano do Kyron. É o padrão da "cor do app" — a
-# das fitas quando não há jogo correndo —, que o usuário pode trocar nas
-# Preferências. O brilho não entra: ele é do usuário.
+# Matiz e saturação do #22D3EE, o ciano do Kyron: o padrão da "cor do app" (a das fitas sem jogo), trocável nas Preferências. O brilho é do usuário.
 COR_PADRAO_DO_APP = (188, 857)
-# O padrão de antes do Kyron (#9141ac). Só ele e o "Restaurar padrão" antigo
-# gravavam (284, 620); a amostra roxa da paleta grava (285, 622).
+# O padrão de antes do Kyron (#9141ac): só ele e o "Restaurar padrão" antigo gravavam (284, 620); a amostra roxa da paleta grava (285, 622).
 ROXO_ANTIGO = (284, 620)
 
 
@@ -65,11 +53,9 @@ class Fita(NamedTuple):
     ip: str
     key: str
     versao: str = "3.3"
-    # O teto deste dispositivo, em porcentagem: o brilho do app e o de cada
-    # jogo valem sobre ele. Um brilho de 50% num dispositivo em 50 acende a 25.
+    # O teto deste dispositivo, em porcentagem: o brilho do app e o de cada jogo valem sobre ele (50% num dispositivo em 50 acende a 25).
     brilho: int = 100
-    # A correção de cor do assistente de calibração, como fica no arquivo (ver
-    # ``calibracao.para_json``). ``None``: nunca calibrado.
+    # A correção do assistente de calibração, como no arquivo (``calibracao.para_json``); ``None``: nunca calibrado.
     calibracao: Optional[dict[str, Any]] = None
 
 
@@ -82,13 +68,7 @@ class Cor(NamedTuple):
 
 
 def _gravar_json(caminho: Path, dados: dict[str, Any]) -> None:
-    """Grava um JSON num temporário e troca, para não perder o arquivo se a
-    energia cair no meio.
-
-    Nunca levanta: quem chama está na thread de UI, e um enfeite de sessão não
-    pode derrubar a tela. A pasta entra no mesmo ``try`` da escrita porque ela
-    falha pelo mesmo motivo — permissão negada, disco cheio, caminho ocupado.
-    """
+    """Grava um JSON num temporário e troca, para não perder o arquivo se a energia cair. Nunca levanta (thread de UI); a pasta entra no mesmo ``try`` porque falha pelos mesmos motivos."""
     temporario = caminho.with_name(caminho.name + ".tmp")
     try:
         caminho.parent.mkdir(parents=True, exist_ok=True)
@@ -98,11 +78,8 @@ def _gravar_json(caminho: Path, dados: dict[str, Any]) -> None:
         logging.warning("Não foi possível gravar %s: %s", caminho.name, erro)
 
 
-# region Configuração
-
 
 def fitas() -> list[Fita]:
-    """As fitas configuradas. Lista vazia quando não há configuração válida."""
     try:
         dados = json.loads(shared.fitas_arquivo.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -132,8 +109,7 @@ def fitas() -> list[Fita]:
 
 
 def _teto(valor: Any) -> int:
-    """O brilho por dispositivo lido do arquivo. Valor mexido à mão vale 100,
-    e não tira o dispositivo da lista."""
+    """O brilho por dispositivo lido do arquivo; valor mexido à mão vale 100 e não tira o dispositivo da lista."""
     try:
         return max(1, min(100, int(valor)))
     except (TypeError, ValueError):
@@ -141,13 +117,9 @@ def _teto(valor: Any) -> int:
 
 
 def gravar_fitas(lista: list[Fita]) -> None:
-    """Grava a configuração das fitas."""
     conteudo = {"fitas": [fita._asdict() for fita in lista]}
     _gravar_json(shared.fitas_arquivo, conteudo)
 
-
-# endregion
-# region Cor por jogo
 
 
 def _sidecar(game_id: str):
@@ -166,14 +138,12 @@ def _ler_sidecar(game_id: str) -> Optional[dict[str, Any]]:
 
 
 def escolhida(game_id: str) -> bool:
-    """Se a cor deste jogo foi escolhida por gente, e não pela capa."""
     dados = _ler_sidecar(game_id)
     return bool(dados and dados.get("locked"))
 
 
 def cor_escolhida(game_id: str) -> Optional[Cor]:
-    """A cor manual gravada para ``game_id``, ou ``None`` se a cor for
-    automática (segue a capa). Usado pela exportação do backup."""
+    """A cor manual gravada para ``game_id``, ou ``None`` se for automática (segue a capa). Usado pelo backup."""
     dados = _ler_sidecar(game_id)
     if not dados or not dados.get("locked"):
         return None
@@ -184,12 +154,7 @@ def cor_escolhida(game_id: str) -> Optional[Cor]:
 
 
 def salvar_cor(game_id: str, name: str, cor: Cor) -> None:
-    """Guarda a escolha manual de um jogo.
-
-    Pelo temporário como o resto: um sidecar truncado por uma queda no meio da
-    escrita é lido como corrompido, e o jogo voltaria em silêncio para a cor
-    automática — o usuário perderia a escolha sem nenhum aviso.
-    """
+    """Guarda a escolha manual de um jogo, pelo temporário: um sidecar truncado lido como corrompido faria o jogo voltar em silêncio à cor automática."""
     dados = {
         "name": name,
         "matiz": cor.matiz,
@@ -202,8 +167,7 @@ def salvar_cor(game_id: str, name: str, cor: Cor) -> None:
 
 
 def redefinir(game_id: str) -> None:
-    """Devolve o jogo à cor automática. O brilho da escolha fica, como brilho
-    próprio: "voltar ao automático" é sobre a cor."""
+    """Devolve o jogo à cor automática; o brilho da escolha fica, como brilho próprio."""
     dados = _ler_sidecar(game_id)
     if dados and not dados.get("locked"):
         return  # só brilho próprio: não há cor escolhida a desfazer
@@ -222,8 +186,7 @@ def _apagar_sidecar(game_id: str) -> None:
 
 
 def _brilho_de(dados: dict[str, Any]) -> Optional[int]:
-    """O brilho gravado, ou ``None`` se ele não estiver lá ou for ilegível
-    (sidecar mexido à mão)."""
+    """O brilho gravado, ou ``None`` se não estiver lá ou for ilegível (sidecar mexido à mão)."""
     try:
         return max(BRILHO_MINIMO, min(BRILHO_CHEIO, int(dados["brilho"])))
     except (KeyError, TypeError, ValueError):
@@ -231,20 +194,13 @@ def _brilho_de(dados: dict[str, Any]) -> Optional[int]:
 
 
 def brilho_gravado(game_id: str) -> Optional[int]:
-    """O brilho no arquivo do jogo, seja da cor escolhida ou o próprio, sem
-    tocar na capa: a tela de edição precisa dele para mostrar o automático, e
-    tirar a cor da capa ali custaria uma segunda leitura da imagem."""
+    """O brilho no arquivo do jogo, da cor escolhida ou o próprio, sem tocar na capa (a edição precisa dele sem uma segunda leitura da imagem)."""
     dados = _ler_sidecar(game_id)
     return _brilho_de(dados) if dados else None
 
 
 def brilho_escolhido(game_id: str) -> Optional[int]:
-    """O brilho próprio de um jogo com cor automática, ou ``None``.
-
-    O brilho é separado da cor: mexer só nele não tira o jogo da cor
-    automática (da capa, ou da tela). Jogo com cor escolhida à mão tem o
-    brilho dentro da escolha, e aqui volta ``None``.
-    """
+    """O brilho próprio de um jogo com cor automática, ou ``None``. É separado da cor: mexer nele não tira o jogo da cor automática; com cor escolhida à mão o brilho está na escolha e aqui volta ``None``."""
     dados = _ler_sidecar(game_id)
     if not dados or dados.get("locked"):
         return None
@@ -252,8 +208,7 @@ def brilho_escolhido(game_id: str) -> Optional[int]:
 
 
 def salvar_brilho(game_id: str, name: str, brilho: int) -> None:
-    """Guarda o brilho próprio de um jogo com cor automática. O brilho padrão
-    não é guardado: o jogo segue o padrão, e mudar o padrão o alcança."""
+    """Guarda o brilho próprio de um jogo com cor automática; o padrão não é guardado (o jogo segue o padrão)."""
     if brilho == brilho_padrao():
         _apagar_sidecar(game_id)
         return
@@ -263,22 +218,19 @@ def salvar_brilho(game_id: str, name: str, brilho: int) -> None:
     )
 
 
-# O módulo conta o brilho de 0 a 1000; gente conta de 0 a 100. A conversão mora
-# aqui, num lugar só, e as telas falam sempre em porcentagem.
+# O módulo conta o brilho de 0 a 1000; as telas falam em porcentagem.
 BRILHO_CHEIO = 1000
 
-# O mínimo que ainda acende. Abaixo disto o módulo apaga, e "1%" na tela tem de
-# continuar sendo luz.
+# O mínimo que ainda acende: abaixo disto o módulo apaga.
 BRILHO_MINIMO = 10
 
 
 def por_cento(brilho: int) -> int:
-    """O brilho do módulo (0–1000) como a tela mostra (0–100)."""
     return round(brilho * 100 / BRILHO_CHEIO)
 
 
 def de_por_cento(valor: float) -> int:
-    """O caminho de volta, sem deixar a fita pedir um brilho que apaga."""
+    """O caminho de volta, sem pedir um brilho que apaga."""
     return max(BRILHO_MINIMO, min(BRILHO_CHEIO, round(valor * BRILHO_CHEIO / 100)))
 
 
@@ -292,12 +244,9 @@ def na_fita(
     teto: Optional[int] = None,
     calibracao: Optional[calibracao_mod.Calibracao] = None,
 ) -> Cor:
-    """A cor que este dispositivo recebe: corrigida pela calibração dele e com
-    o brilho proporcional ao teto. Toda cor que vai a uma fita passa por aqui.
+    """A cor que este dispositivo recebe: corrigida pela calibração e com o brilho proporcional ao teto (toda cor que vai a uma fita passa por aqui).
 
-    ``teto`` e ``calibracao`` trocam os do arquivo, para a prévia das janelas
-    de brilho por dispositivo e de calibração mostrar o que ainda não foi
-    salvo.
+    ``teto`` e ``calibracao`` trocam os do arquivo, para as prévias mostrarem o que ainda não foi salvo.
     """
     teto = fita.brilho if teto is None else teto
     if calibracao is None and fita.calibracao is not None:
@@ -308,12 +257,10 @@ def na_fita(
 
 
 def cor_do_jogo(game: "Game") -> Cor:
-    """A cor que este jogo veste: a escolhida, a da capa, ou o roxo do app."""
+    """A cor que este jogo veste: a escolhida, a da capa ou a do app."""
     dados = _ler_sidecar(game.game_id)
     if dados and dados.get("locked"):
-        # Sidecar mexido à mão com tipo errado (``"matiz": null``) não pode
-        # levantar aqui: isto roda na thread de UI, abrindo os detalhes. Vale o
-        # automático, como para o sidecar corrompido.
+        # Sidecar mexido à mão (``"matiz": null``) não pode levantar aqui (thread de UI): vale o automático.
         try:
             return Cor(
                 int(dados.get("matiz", tom_do_app()[0])),
@@ -328,11 +275,9 @@ def cor_do_jogo(game: "Game") -> Cor:
 
 
 def cor_da_capa(capa: Optional[Path], brilho: Optional[int] = None) -> Cor:
-    """A cor automática desta capa, ou o roxo do app sem capa ou sem cor útil,
-    no brilho próprio do jogo (``brilho``) ou no padrão.
+    """A cor automática desta capa, ou a do app sem capa ou sem cor útil, no brilho próprio do jogo (``brilho``) ou no padrão.
 
-    Separada de ``cor_do_jogo`` para a tela de detalhes, que mostra a capa
-    ainda não aplicada e não a gravada no disco.
+    Separada de ``cor_do_jogo`` para a tela de detalhes, que mostra a capa ainda não aplicada.
     """
     da_capa = dominante(capa) if capa else None
     matiz, saturacao = da_capa if da_capa else tom_do_app()
@@ -340,42 +285,30 @@ def cor_da_capa(capa: Optional[Path], brilho: Optional[int] = None) -> Cor:
 
 
 def cor_para_rgb(cor: Cor) -> tuple[float, float, float]:
-    """A cor do módulo como um seletor a mostra: vermelho, verde e azul de 0 a 1.
-
-    O seletor mostra a cor cheia, não a cor no brilho da fita: um roxo a 18%
-    aparece quase preto no quadradinho, e ninguém escolhe cor assim.
-    """
+    """A cor do módulo como o seletor a mostra (RGB de 0 a 1): cheia, não no brilho da fita (um roxo a 18% apareceria quase preto)."""
     return colorsys.hsv_to_rgb(cor.matiz / 360, cor.saturacao / 1000, 1)
 
 
 def rgb_para_cor(vermelho: float, verde: float, azul: float, brilho: int) -> Cor:
-    """O caminho de volta, descartando o brilho que o seletor mostrou."""
     matiz, saturacao, _valor = colorsys.rgb_to_hsv(vermelho, verde, azul)
     return Cor(round(matiz * 360) % 360, round(saturacao * 1000), brilho)
 
 
-# endregion
-# region Conversa com o módulo
 
-# Os pontos de dado do controlador RGB, medidos nos módulos: 20 liga e desliga,
-# 21 é o modo ("colour" é cor fixa, contra "scene" e "music"), 24 é a cor como
-# matiz, saturação e brilho em hexadecimal de quatro dígitos cada.
+# Pontos de dado do controlador RGB, medidos nos módulos: 20 liga/desliga, 21 o modo ("colour" é cor fixa, contra "scene" e "music"), 24 a cor (matiz, saturação e brilho em hex de 4 dígitos).
 DP_LIGADA = "20"
 DP_MODO = "21"
 DP_COR = "24"
 
-# Cinco segundos é folgado para uma resposta que costuma vir em milissegundos, e
-# curto o bastante para a thread não ficar pendurada quando a fita sumiu.
+# Folgado para uma resposta de milissegundos e curto para a thread não ficar pendurada quando a fita sumiu.
 ESPERA = 5
 
 
 def hsv_hex(cor: Cor) -> str:
-    """A cor do jeito que o módulo aceita: HHHHSSSSVVVV."""
     return f"{cor.matiz:04x}{cor.saturacao:04x}{cor.brilho:04x}"
 
 
 def cor_de_hex(valor: str) -> Optional[Cor]:
-    """O caminho de volta, para ler o que o módulo respondeu."""
     if len(valor) != 12:
         return None
     try:
@@ -385,22 +318,13 @@ def cor_de_hex(valor: str) -> Optional[Cor]:
 
 
 def _dispositivo(fita: Fita) -> Any:
-    """O objeto da tinytuya para esta fita. Trocado nos testes.
-
-    Importado aqui dentro de propósito: a biblioteca só faz falta quando há
-    fita configurada, e o resto do app (e os testes) não paga por ela.
-    """
+    """O objeto da tinytuya para esta fita (trocado nos testes). Importada aqui dentro: só faz falta com fita configurada."""
     import tinytuya  # noqa: PLC0415
 
-    # Sem retentativa: a tinytuya tenta cinco vezes com cinco segundos entre
-    # elas, e uma fita que não respondeu na primeira não vai responder na
-    # quinta. O caminho de fechamento do app é síncrono — insistir custaria
-    # dezenas de segundos de encerramento travado por uma fita fora da tomada.
-    # Com isto, o teto por fita é o ESPERA do soquete.
+    # Sem retentativa: a tinytuya tenta cinco vezes com cinco segundos entre elas, e o fechamento do app é síncrono (uma fita fora da
+    # tomada travaria o encerramento por dezenas de segundos). O teto por fita é o ESPERA do soquete.
     #
-    # Persistente: a conexão fica aberta enquanto o app vive. Abrir custa uns
-    # 225 ms por comando e mandar pela conexão aberta, uns 11 — é a diferença
-    # entre o brilho acompanhar o dedo no controle e correr atrás dele.
+    # Persistente: abrir custa ~225 ms por comando, mandar pela conexão aberta ~11: é o que faz o brilho acompanhar o dedo no controle.
     modulo = tinytuya.BulbDevice(
         fita.id,
         fita.ip,
@@ -414,65 +338,46 @@ def _dispositivo(fita: Fita) -> Any:
     return modulo
 
 
-# O intervalo do batimento, que mantém as conexões vivas. Os módulos derrubam
-# conexão parada em torno de trinta segundos; dez dá margem de sobra, e menos
-# que isso seria só pacote a mais sem ganho nenhum.
+# Intervalo do batimento que mantém as conexões vivas: os módulos derrubam conexão parada em ~30 s.
 BATIMENTO = 10
 
-# Quantas falhas seguidas até a fita ser dada como fora do ar. Uma só pode ser
-# engasgo da rede; três é fita desligada da tomada. Suspensa, ela para de custar
-# o ESPERA do soquete a cada troca de cor.
+# Falhas seguidas até a fita ser dada como fora do ar (uma pode ser engasgo da rede; três, fita desligada). Suspensa, ela para de custar o ESPERA a cada troca.
 FALHAS_PARA_SUSPENDER = 3
 
-# As conexões abertas, por id da fita, com o IP em que foram abertas: se o
-# assistente gravar a fita num endereço novo, a conexão velha não serve mais.
+# As conexões abertas por id da fita, com o IP em que foram abertas (um endereço novo invalida a velha).
 _conexoes: dict[str, tuple[str, Any]] = {}
 _falhas: dict[str, int] = {}
 _suspensas: set[str] = set()
-# Desde quando cada fita suspensa está fora do ar, e quanto tempo cada uma
-# ficou fora do ar na sessão em curso (ver ``fitas_fora_do_ar``).
+# Desde quando cada fita suspensa está fora do ar, e quanto ficou na sessão em curso (``fitas_fora_do_ar``).
 _suspensa_em: dict[str, float] = {}
 _fora_do_ar: dict[str, float] = {}
-# As fitas que a sessão em curso pinta: só elas entram no aviso do fim dela.
 _fitas_da_sessao: set[str] = set()
 _TRAVA_CONEXOES = threading.Lock()
 
 
 def _agora() -> float:
-    """O relógio da conta do tempo fora do ar. Trocado nos testes."""
     return time.monotonic()
 
-# Cada leva de conexões tem um número. O batimento de uma leva morre sozinho
-# quando o número muda — é assim que fechar tudo desliga também o batimento, sem
-# precisar esperar a thread acordar.
+# Cada leva de conexões tem um número; o batimento de uma leva morre quando ele muda (fechar tudo desliga o batimento sem esperar a thread acordar).
 _geracao = 0
 _batimento_vivo = False
 
 
-# Uma conversa de cada vez com cada módulo, e não uma de cada vez no total: as
-# três fitas falam ao mesmo tempo, cada uma com a sua trava. O módulo Tuya
-# aceita uma sessão por vez, então dois comandos simultâneos para a MESMA fita
-# disputam o soquete e voltam com erro de endereço em uso. Reentrante porque o
-# fade segura a fita do primeiro degrau ao comando final, e o comando final
-# passa de novo pela trava.
+# Uma conversa de cada vez com cada módulo (as fitas falam ao mesmo tempo, cada uma com sua trava): o módulo Tuya aceita uma sessão por vez, e dois comandos
+# simultâneos para a MESMA fita voltam com erro de endereço em uso. Reentrante porque o fade segura a fita do primeiro degrau ao comando final.
 _TRAVAS_FITA: dict[str, threading.RLock] = {}
 _TRAVA_DAS_TRAVAS = threading.Lock()
 
 
 def _trava_da(fita: Fita) -> threading.RLock:
-    """A trava daquela fita, criada na primeira vez que alguém fala com ela."""
     with _TRAVA_DAS_TRAVAS:
         return _TRAVAS_FITA.setdefault(fita.id, threading.RLock())
 
 
 def _conexao(fita: Fita) -> tuple[Any, bool]:
-    """A conexão aberta desta fita, e se ela já existia.
+    """A conexão aberta desta fita e se ela já existia (abre na primeira vez e quando o IP mudou).
 
-    Abre na primeira vez, e de novo quando o IP da fita mudou. Quem chama
-    precisa saber se a conexão é nova: falha numa conexão guardada costuma ser
-    soquete que morreu em silêncio, e vale abrir outra na hora; falha numa
-    conexão recém-aberta é a fita que não responde, e insistir só dobraria a
-    espera.
+    Falha numa conexão guardada costuma ser soquete morto em silêncio, e vale abrir outra; numa recém-aberta é a fita que não responde, e insistir só dobraria a espera.
     """
     global _batimento_vivo  # noqa: PLW0603
 
@@ -500,17 +405,9 @@ def _fechar_conexao(modulo: Any) -> None:
 
 
 def _esvaziar(modulo: Any) -> None:
-    """Joga fora o que chegou no soquete sem ninguém pedir.
+    """Joga fora o que chegou no soquete sem ninguém pedir (chamar com a trava da fita).
 
-    A tinytuya não confere se a resposta é do pedido que ela fez: lê a mais
-    antiga que houver. Numa conexão que fica aberta, uma mensagem sobrando — a
-    fita avisando de uma troca feita pelo Smart Life, por exemplo — vira a
-    resposta do comando seguinte, e daí em diante toda resposta é a do
-    anterior. O comando volta vazio (e o "Testar" diz que a fita não
-    respondeu), e o fechamento sai com a resposta do último comando por ler: o
-    Windows fecha com RST, e a fita joga fora o comando que acabou de chegar.
-    Chamar com a trava da fita: aí nada que está no soquete é resposta de
-    alguém.
+    A tinytuya lê a resposta mais antiga sem conferir o pedido: uma mensagem sobrando (um aviso de troca feita pelo Smart Life) vira a resposta do comando seguinte e, daí em diante, toda resposta é a do anterior ("Testar" diz que a fita não respondeu); o fechamento sai com a resposta do último comando por ler (o Windows fecha com RST e a fita joga fora o comando).
     """
     soquete = getattr(modulo, "socket", None)
     if soquete is None:
@@ -529,9 +426,7 @@ def _esvaziar(modulo: Any) -> None:
 def _descartar(fita: Fita, modulo: Any) -> None:
     """Joga fora esta conexão da fita; a próxima conversa abre outra.
 
-    Chamar com a trava da fita, e só tira do mapa se a guardada ainda for esta:
-    fora da trava, o batimento podia pegar o objeto no meio do descarte, e a
-    tinytuya reabria o soquete dele — uma conexão que ninguém mais fechava.
+    Chamar com a trava da fita, e só tira do mapa se a guardada ainda for esta: fora dela, o batimento pegaria o objeto no meio do descarte e a tinytuya reabriria um soquete que ninguém fecharia.
     """
     with _TRAVA_CONEXOES:
         guardada = _conexoes.get(fita.id)
@@ -541,23 +436,16 @@ def _descartar(fita: Fita, modulo: Any) -> None:
 
 
 def _conversar(fita: Fita, acao: Any) -> Optional[Any]:
-    """Uma conversa com a fita pela conexão aberta. ``None`` quando falha.
+    """Uma conversa com a fita pela conexão aberta; ``None`` quando falha.
 
-    Conexão guardada que falha é descartada e tentada de novo uma vez, já com
-    uma conexão nova — é o caso do roteador que reiniciou ou do PC que voltou
-    da suspensão, e o comando segue de onde parou. Três falhas seguidas
-    suspendem a fita até o botão "Testar" pedir, o fechamento do app tentar
-    devolvê-la, ou o app abrir de novo.
+    Conexão guardada que falha é descartada e tentada uma vez com conexão nova (roteador reiniciado, PC que voltou da suspensão). Três falhas seguidas
+    suspendem a fita até o "Testar", o fechamento do app ou a próxima abertura.
     """
     if fita.id in _suspensas:
         return None
 
-    # Nunca entregar uma fita sem IP para a tinytuya. Sem endereço ela faz uma
-    # varredura por conta própria ao abrir a conexão — e com as três fitas em
-    # paralelo, são três varreduras disputando a mesma porta de broadcast: uma
-    # ganha, as outras voltam com "apenas uma utilização de cada endereço de
-    # soquete". Quem acha o IP é a nossa varredura, que tem trava. Isto não
-    # conta como falha: a fita não está fora do ar, só ainda não foi achada.
+    # Nunca entregar uma fita sem IP à tinytuya: ela varreria por conta própria, e três varreduras em paralelo disputam a porta de broadcast
+    # ("apenas uma utilização de cada endereço de soquete"). Quem acha o IP é a nossa varredura, com trava. Não conta como falha.
     if not fita.ip:
         logging.info("Fita %s ainda sem endereço na rede", fita.nome)
         return None
@@ -598,12 +486,7 @@ def _contar_falha(fita: Fita) -> None:
 
 
 def retomar(ids: Optional[set[str]] = None) -> None:
-    """Tira fitas da suspensão. Sem argumento, tira todas.
-
-    Chamado pelo botão "Testar", onde o usuário pediu para tentar de novo, e
-    pelo fechamento do app: a fita suspensa no meio do jogo (o roteador que
-    reiniciou) ainda tem um estado de antes para receber.
-    """
+    """Tira fitas da suspensão (sem argumento, todas). Chamado pelo "Testar" e pelo fechamento do app: a fita suspensa no meio do jogo ainda tem um estado de antes para receber."""
     alvo = set(_suspensas) if ids is None else ids & _suspensas
     for identificador in alvo:
         _suspensas.discard(identificador)
@@ -616,7 +499,6 @@ def retomar(ids: Optional[set[str]] = None) -> None:
 
 
 def _bater(geracao: int) -> None:
-    """Mantém as conexões vivas enquanto esta leva de conexões existir."""
     global _batimento_vivo  # noqa: PLW0603
 
     while True:
@@ -629,17 +511,12 @@ def _bater(geracao: int) -> None:
             abertas = list(_conexoes.items())
         for identificador, (_ip, modulo) in abertas:
             trava = _TRAVAS_FITA.get(identificador)
-            # Fita ocupada numa conversa de verdade não precisa de batimento: a
-            # própria conversa mantém a conexão viva.
+            # Fita numa conversa de verdade não precisa de batimento.
             if trava is None or not trava.acquire(blocking=False):
                 continue
-            # Uma consulta, e não o `heartbeat` da tinytuya: ele manda sem ler
-            # a resposta, e ela sobrava no soquete — ver `_esvaziar`. A
-            # consulta lê a própria resposta, e de quebra diz se a fita sumiu.
+            # Uma consulta e não o `heartbeat` da tinytuya: ele não lê a resposta, que sobrava no soquete (`_esvaziar`); a consulta a lê e diz se a fita sumiu.
             try:
-                # Reconferido já com a trava: a conexão da lista pode ter sido
-                # descartada depois que ela foi tirada, e usar o objeto fechado
-                # faria a tinytuya reabrir um soquete que ninguém mais fecharia.
+                # Reconferido com a trava: a conexão pode ter sido descartada, e usar o objeto fechado faria a tinytuya reabrir um soquete que ninguém fecharia.
                 with _TRAVA_CONEXOES:
                     if _conexoes.get(identificador, (None, None))[1] is not modulo:
                         continue
@@ -656,7 +533,6 @@ def _bater(geracao: int) -> None:
 
 
 def fechar_conexoes() -> None:
-    """Fecha todas as conexões e desliga o batimento. Seguro chamar à toa."""
     global _geracao, _batimento_vivo  # noqa: PLW0603
 
     with _TRAVA_CONEXOES:
@@ -669,13 +545,8 @@ def fechar_conexoes() -> None:
 
 
 def ler_estado(fita: Fita) -> Optional[dict[str, Any]]:
-    """Se a fita está acesa e em que cor. ``None`` quando ela não responde.
-
-    Espera a resposta da consulta pelo tipo, e não a primeira mensagem que
-    chegar: no arranque com órfãos, a leitura vem logo depois da devolução,
-    com a segunda cópia do último aviso ainda a caminho — e um aviso só com a
-    cor, lido como estado, faria a fita acesa passar por apagada.
-    """
+    """Se a fita está acesa e em que cor; ``None`` se não responde. Espera a resposta da consulta pelo tipo, não a primeira mensagem: no arranque com órfãos,
+    a segunda cópia do último aviso ainda está a caminho, e um aviso só com a cor, lido como estado, faria a fita acesa passar por apagada."""
 
     def consultar(modulo: Any) -> Any:
         resposta = modulo.status(nowait=True)
@@ -697,24 +568,9 @@ def ler_estado(fita: Fita) -> Optional[dict[str, Any]]:
 
 
 def aplicar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
-    """Manda cor e estado para uma fita. Nunca levanta; devolve se deu certo.
+    """Manda cor e estado para uma fita; nunca levanta e devolve se deu certo.
 
-    Sem cor, só o liga/desliga vai. A fita que estava apagada às vezes não
-    reporta o ponto da cor, e o estado guardado dela sai com a cor vazia;
-    mandar ``24: ""`` faz o módulo recusar o comando inteiro — e aí a fita não
-    apaga, que é justamente o que a devolução do fechamento promete.
-
-    Apagar vai em dois passos, o desliga antes da cor: junto, a cor chegava
-    primeiro e a fita acendia nela por um instante — a piscada no brilho de
-    antes no fim do fade do fechamento. A cor vai mesmo assim, depois: sem ela
-    a fita guardaria o último degrau do fade, a 1%, e religada por fora
-    acenderia quase apagada. Desligada, a fita troca a cor guardada sem
-    acender — medido.
-
-    Acender vai em dois passos, a cor antes do liga: a fita guarda a última cor
-    que teve, e mandar tudo junto deixa o módulo acender no vermelho de ontem,
-    no brilho de ontem, antes de obedecer à cor de agora. A piscada dura um
-    piscar de olhos e é justamente o que se vê num quarto escuro.
+    Sem cor, só o liga/desliga vai (mandar ``24: ""`` faz o módulo recusar o comando todo). Apagar vai em dois passos, o desliga antes da cor (junto, a fita piscava no brilho de antes); a cor vai depois para ela não guardar o último degrau do fade, a 1%. Acender vai com a cor antes do liga (a fita guarda a última cor e, junto, acenderia no vermelho de ontem antes de obedecer).
     """
     if not cor_hex:
         feito = _mandar(fita, {DP_LIGADA: ligada})
@@ -727,8 +583,7 @@ def aplicar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
             fita, {DP_LIGADA: True}
         )
 
-    # Deu errado no meio, não se sabe o que a fita mostra: o próximo fade não
-    # tem de onde partir e vai direto.
+    # Falha no meio: não se sabe o que a fita mostra, e o próximo fade vai direto.
     if feito:
         _mostrada[fita.id] = (ligada, cor_hex or _mostrada.get(fita.id, (False, ""))[1])
     else:
@@ -737,17 +592,10 @@ def aplicar(fita: Fita, ligada: bool, cor_hex: str) -> bool:
 
 
 def _mandar(fita: Fita, valores: dict[str, Any]) -> bool:
-    """Um comando para uma fita. Nunca levanta; devolve se deu certo.
-
-    Confirmado pelo aviso em que a fita diz que está nestes valores, e não pela
-    resposta que a tinytuya leria (ver ``_esperar``). Com a confirmação, o
-    comando foi aplicado de verdade: fechar a conexão depois disso não perde
-    nada, mesmo com a cópia do aviso ainda a caminho.
-    """
+    """Um comando para uma fita; nunca levanta e devolve se deu certo. Confirmado pelo aviso em que a fita diz estar nestes valores, não pela resposta da tinytuya (``_esperar``): fechar a conexão depois não perde nada."""
 
     def mandar(modulo: Any) -> Any:
-        # De vez em quando a fita joga fora um comando, sem aviso — mais logo
-        # depois de um fade. O mesmo comando reenviado pega; medido.
+        # De vez em quando a fita joga fora um comando, sem aviso (mais após um fade); reenviar pega (medido).
         for _envio in range(ENVIOS):
             resposta = modulo.set_multiple_values(valores, nowait=True)
             if isinstance(resposta, dict) and resposta.get("Error"):
@@ -759,51 +607,28 @@ def _mandar(fita: Fita, valores: dict[str, Any]) -> bool:
     return _conversar(fita, mandar) is not None
 
 
-# endregion
-# region Fade
-
-# A fita não sabe fazer fade sozinha: o ponto 28 ("gradiente") é aceito e
-# ignorado nestes módulos. Então o fade é o app mandando as cores do meio, uma
-# atrás da outra, sem esperar resposta. Medido com as três fitas juntas: a 30
-# degraus por segundo elas acompanham com meio segundo de atraso constante; a
-# 40 o atraso cresce e elas começam a jogar degraus fora; a 60 param no meio
-# do caminho. Os degraus menores vêm da duração: 2 s a 30/s dá degraus do
-# tamanho dos de 1,5 s a 40/s. O degrau perdido não aparece; o que não pode se
-# perder é o fim, e por isso o fim vai sempre num comando que espera resposta.
+# A fita não faz fade sozinha (o ponto 28 "gradiente" é aceito e ignorado): o app manda as cores do meio, sem esperar resposta. Medido com as três fitas: a 30
+# degraus/s acompanham com meio segundo de atraso constante; a 40 o atraso cresce e jogam degraus fora; a 60 param no meio. O degrau perdido não aparece;
+# o fim não pode se perder, por isso vai sempre num comando que espera resposta.
 RITMO_FADE = 30
 DURACAO_FADE = 2
-# O brilho do fade de entrada sobe por esta curva (o andado elevado a ela), e
-# não em linha reta. O olho nota muito a diferença entre 1% e 10% e quase nada
-# entre 60% e 100%: em linha reta, a fita parecia acesa em meio segundo e o
-# resto da subida passava despercebido, e o fade de entrada parecia mais curto
-# que o de saída, embora levasse o mesmo tempo (medido nos logs, 17/10/2026).
-# O de saída fica em linha reta: nele a parte que o olho nota já cai no fim.
+# O brilho do fade de entrada sobe por esta curva (o andado elevado a ela): o olho nota 1% a 10% e quase nada de 60% a 100%, e em linha reta a fita parecia acesa em meio
+# segundo e o fade de entrada parecia mais curto que o de saída (medido). O de saída fica em linha reta: a parte que o olho nota já cai no fim.
 CURVA_DA_ENTRADA = 2.2
 
-# O que cada fita está mostrando agora, por id: se está acesa, e a cor em
-# hexadecimal. Sem isso o fade não tem de onde partir — e ler a fita antes de
-# cada troca custaria uma volta de rede a cada play. Fita que não está aqui
-# muda direto, sem fade.
+# O que cada fita mostra agora, por id (acesa e cor em hex): sem isso o fade não tem de onde partir, e ler a fita custaria uma volta de rede a cada play. Fita ausente muda direto.
 _mostrada: dict[str, tuple[bool, str]] = {}
 
-# Cada troca pedida para uma fita ganha um número. O fade que vê o número da
-# sua fita mudar para de mandar degraus: outra troca chegou (o play no meio do
-# fade da abertura), e ela parte de onde este parou.
+# Cada troca pedida para uma fita ganha um número; o fade que o vê mudar para de mandar degraus (outra troca chegou) e a nova parte de onde este parou.
 _geracoes: dict[str, int] = {}
 
 
 def _degraus(origem: Cor, destino: Cor, passos: int) -> list[str]:
-    """As cores do caminho, sem a origem e com o destino, em hexadecimal.
+    """As cores do caminho, sem a origem e com o destino, em hex.
 
-    O caminho é a mistura das duas cores, como duas luzes que se dissolvem uma
-    na outra, e não um giro pela roda de cores. No quinto teste, as trocas
-    entre o azul (~200°) e o vermelho ou laranja (~10–30°) do CONTROL passavam
-    pela roda por roxo, magenta e rosa vivos — as "cores aleatórias" do meio.
-    Entre cores quase opostas como essas, a mistura passa por um tom de pouca
-    saturação. Entre cores mais próximas (azul puro e vermelho, a uns 120°) a
-    mistura das duas luzes é de fato roxa, e o caminho fica como o da roda.
-    O brilho vai em linha reta de uma ponta à outra: a mistura sozinha
-    escureceria o meio.
+    O caminho é a mistura das duas cores (duas luzes que se dissolvem), não um giro pela roda: a troca entre o azul (~200°) e o vermelho ou laranja
+    passava por roxo, magenta e rosa vivos, as "cores aleatórias" do meio; a mistura passa por um tom de pouca saturação. O brilho vai em linha reta
+    (a mistura sozinha escureceria o meio).
     """
     return [cor_hex for _passo, cor_hex in _degraus_no_passo(origem, destino, passos)]
 
@@ -811,10 +636,7 @@ def _degraus(origem: Cor, destino: Cor, passos: int) -> list[str]:
 def _degraus_no_passo(
     origem: Cor, destino: Cor, passos: int, curva: float = 1.0
 ) -> list[tuple[int, str]]:
-    """Os degraus de ``_degraus`` com o número do passo de cada um (1 a
-    ``passos``): sem os repetidos, um fade que muda pouco tem poucos degraus,
-    e quem quer a duração inteira agenda cada um pelo passo dele. ``curva``
-    entorta só o brilho (ver ``CURVA_DA_ENTRADA``)."""
+    """Os degraus de ``_degraus`` com o número do passo (1 a ``passos``), sem repetidos: quem quer a duração inteira agenda cada um pelo passo. ``curva`` entorta só o brilho (``CURVA_DA_ENTRADA``)."""
     de_rgb = colorsys.hsv_to_rgb(origem.matiz / 360, origem.saturacao / 1000, 1)
     para_rgb = colorsys.hsv_to_rgb(destino.matiz / 360, destino.saturacao / 1000, 1)
     caminho = []
@@ -830,9 +652,7 @@ def _degraus_no_passo(
                 round(origem.brilho + (destino.brilho - origem.brilho) * andado**curva),
             )
         )
-        # Degrau igual ao anterior não muda nada na fita, e o fim do fade é
-        # reconhecido pelo aviso do último degrau: repetido, o aviso da
-        # primeira cópia pareceria o do fim.
+        # Degrau igual ao anterior não muda a fita, e o fim do fade é reconhecido pelo aviso do último: repetido, o da primeira cópia pareceria o do fim.
         if cor_hex != anterior:
             caminho.append((passo, cor_hex))
             anterior = cor_hex
@@ -843,23 +663,14 @@ def _vigente(fita: Fita, geracao: int) -> bool:
     return _geracoes.get(fita.id) == geracao
 
 
-# Quanto o fade interrompido ainda espera a fita: a espera inteira
-# (ESPERA_AVISO) segurava o pulso que o interrompeu por até 3 s; sem espera
-# nenhuma, o comando do pulso chegava antes de a fita aplicar os degraus que já
-# tinha recebido, e a confirmação dele podia estourar o prazo.
+# Quanto o fade interrompido ainda espera a fita: a espera inteira (ESPERA_AVISO) seguraria o pulso por até 3 s; sem espera, o comando chegaria antes de a fita aplicar os degraus e a confirmação estouraria.
 ESPERA_NA_INTERRUPCAO = 0.6
 
-# Os códigos das mensagens da fita no protocolo Tuya que importam aqui: o
-# aviso de estado, que ela manda depois de aplicar um comando (o ``STATUS`` da
-# tinytuya), e a resposta a uma consulta — o ``DP_QUERY`` (10) até a versão
-# 3.3 do protocolo, o ``DP_QUERY_NEW`` (16) da 3.4 em diante. Os "recebi" são 7.
+# Códigos de mensagem do protocolo Tuya: o aviso de estado após aplicar um comando (``STATUS`` da tinytuya) e a resposta a uma consulta (``DP_QUERY`` (10) até a 3.3, ``DP_QUERY_NEW`` (16) da 3.4 em diante). Os "recebi" são 7.
 AVISO_DE_ESTADO = 8
 RESPOSTAS_DA_CONSULTA = (10, 16)
 
-# Quanto esperar pela mensagem certa. Medido a 30 degraus/s com as três fitas
-# juntas: o aviso do último degrau chega até meio segundo depois do fim da
-# rajada, e uma vez chegou em 1,75 s. Um comando solto é avisado em bem menos
-# de um segundo, e por isso o comando divide a espera em três envios.
+# Quanto esperar pela mensagem certa. Medido a 30 degraus/s com as três fitas: o aviso do último degrau chega até meio segundo após a rajada (uma vez, 1,75 s); um comando solto, em bem menos de um segundo, por isso o comando divide a espera em três envios.
 ESPERA_AVISO = 3
 ENVIOS = 3
 
@@ -867,13 +678,9 @@ ENVIOS = 3
 def _esperar(
     modulo: Any, aceita: Any, prazo: float = ESPERA_AVISO
 ) -> Optional[dict[str, Any]]:
-    """Lê o que a fita manda até chegar a mensagem que ``aceita(cmd, dps)``
-    reconhece, e devolve os valores dela. ``None`` quando ela não vem no prazo.
+    """Lê o que a fita manda até chegar a mensagem que ``aceita(cmd, dps)`` reconhece e devolve os valores dela; ``None`` fora do prazo.
 
-    Leitura crua, e não a da tinytuya, que pega a mensagem mais antiga seja ela
-    qual for — a fita manda cada aviso duas vezes, e a segunda cópia virava a
-    resposta do pedido seguinte. Aqui, o que não é a resposta procurada é
-    pulado.
+    Leitura crua e não a da tinytuya, que pega a mensagem mais antiga (a fita manda cada aviso duas vezes, e a segunda cópia virava a resposta do pedido seguinte): o que não é a procurada é pulado.
     """
     soquete = modulo.socket
     espera = soquete.gettimeout()
@@ -899,11 +706,7 @@ def _alcancou(
 ) -> bool:
     """Lê o que a fita manda até ela avisar que está nestes valores.
 
-    Os avisos chegam na ordem dos comandos: quando chega o destes valores, os
-    de antes já chegaram. O aviso não traz tudo o que foi mandado — o modo
-    (21) nunca vem —, então vale o aviso que traz algum dos valores e em que
-    todos os que traz batem. A cópia do aviso de um comando anterior traz
-    outro valor e é pulada.
+    Os avisos chegam na ordem dos comandos. O aviso não traz tudo (o modo, 21, nunca vem): vale o que traz algum dos valores e em que todos os que traz batem; a cópia de um comando anterior traz outro valor e é pulada.
     """
 
     def aceita(cmd: int, dps: dict[str, Any]) -> bool:
@@ -920,17 +723,9 @@ def _alcancou(
 def _rajada(
     fita: Fita, caminho: list[str], geracao: int, momentos: Optional[list[float]] = None
 ) -> None:
-    """Manda os degraus no ritmo do fade, sem esperar resposta de nenhum.
+    """Manda os degraus no ritmo do fade, sem esperar resposta; no fim espera a fita alcançar o último degrau.
 
-    No fim espera a fita alcançar o último degrau: ela aplica mais devagar do
-    que recebe, e avisa de cada degrau aos lotes, até um segundo depois do
-    último — medido. Sem essa espera, o comando final entraria na fila atrás
-    dos degraus e estouraria a própria espera dele. O marco é o aviso do
-    último degrau: nem o silêncio nem uma consulta de estado servem, porque a
-    fita fica calada no meio dos lotes e responde à consulta com o degrau em
-    que está, antes dos avisos que faltam. Às vezes ela joga fora o fim da
-    rajada e o aviso não vem; segue-se assim mesmo, e quem garante a cor final
-    é o comando final, que é reenviado até ser avisado.
+    Ela aplica mais devagar do que recebe e avisa aos lotes, até 1 s depois do último (medido): sem a espera o comando final entraria na fila atrás dos degraus e estouraria a própria espera. O marco é o aviso do último degrau (nem o silêncio nem uma consulta servem). Se a fita joga fora o fim da rajada, segue-se: o comando final é reenviado até ser avisado.
     """
 
     def degraus(modulo: Any) -> Any:
@@ -939,8 +734,7 @@ def _rajada(
         enviados = 0
         for indice, cor_hex in enumerate(caminho):
             if not _vigente(fita, geracao):
-                # Outra troca tomou a vez: só um instante para a fita aplicar
-                # o que já recebeu (ver ESPERA_NA_INTERRUPCAO).
+                # Outra troca tomou a vez: só um instante para a fita aplicar o que recebeu (ESPERA_NA_INTERRUPCAO).
                 if ultimo is not None:
                     _alcancou(modulo, {DP_COR: ultimo}, ESPERA_NA_INTERRUPCAO)
                 logging.info(
@@ -959,9 +753,7 @@ def _rajada(
             if falta > 0:
                 time.sleep(falta)
         confirmou = ultimo is not None and _alcancou(modulo, {DP_COR: ultimo})
-        # Uma linha por fita e por fade, para investigar a perda de
-        # sincronismo entre elas: quando cada uma começou e terminou, e se
-        # avisou que chegou ao último degrau.
+        # Uma linha por fita e por fade, para investigar perda de sincronismo: quando começou, terminou e se avisou o último degrau.
         logging.info(
             "Fade de %s: %s degraus em %.1f s, %s",
             fita.nome,
@@ -975,11 +767,7 @@ def _rajada(
 
 
 def _reservar(alvos: list[Fita]) -> dict[str, int]:
-    """O número da próxima troca de cada fita, tirado agora.
-
-    Quem pede a troca na thread de UI reserva ali: a ordem das trocas é a dos
-    pedidos, e não a de quem terminou de calcular a cor primeiro.
-    """
+    """O número da próxima troca de cada fita, tirado agora: quem pede na thread de UI reserva ali, e a ordem é a dos pedidos, não a de quem calculou a cor primeiro."""
     with _TRAVA_DAS_TRAVAS:
         for fita in alvos:
             _geracoes[fita.id] = _geracoes.get(fita.id, 0) + 1
@@ -989,12 +777,9 @@ def _reservar(alvos: list[Fita]) -> dict[str, int]:
 def _transitar(
     fita: Fita, ligada: bool, cor_hex: str, geracao: Optional[int] = None
 ) -> bool:
-    """Leva a fita ao estado pedido deslizando, e confirma o fim.
+    """Leva a fita ao estado pedido deslizando e confirma o fim. Síncrona: segura a fita do primeiro degrau ao comando final, para duas trocas não se misturarem.
 
-    Síncrona: segura a fita do primeiro degrau ao comando final, para duas
-    trocas nunca se misturarem na mesma fita. Devolve se o fim deu certo, e
-    falso também quando outra troca tomou o lugar desta no meio do caminho.
-    ``geracao`` é o número que ``_reservar`` tirou; sem ele, tira agora.
+    Falso se o fim falhou ou se outra troca tomou o lugar. ``geracao`` é o número de ``_reservar``; sem ele, tira agora.
     """
     if geracao is None:
         geracao = _reservar([fita])[fita.id]
@@ -1007,14 +792,9 @@ def _transitar(
         antes = _mostrada.get(fita.id)
         alvo = cor_de_hex(cor_hex)
         origem = cor_de_hex(antes[1]) if antes is not None and antes[0] else None
-        # Acender do escuro é o espelho do apagar: liga já na cor de destino,
-        # no brilho mínimo, e só com a fita acesa e confirmada o brilho sobe. A
-        # primeira tentativa de fade de entrada deixava a fita apagada no teste
-        # com as fitas de verdade; a hipótese (ADR 0001) é que os degraus iam
-        # com ela ainda desligada. Se o liga no mínimo não pega, nenhum degrau
-        # vai, mas a cor final ainda é tentada: desistir deixaria a fita
-        # apagada, ou acesa a 1%. Fita de estado desconhecido continua
-        # acendendo direto: não se sabe se está apagada.
+        # Acender do escuro é o espelho do apagar: liga já na cor de destino, no brilho mínimo, e só com a fita acesa e confirmada o brilho sobe (a primeira tentativa
+        # deixava a fita apagada: os degraus iam com ela ainda desligada). Se o liga no mínimo não pega, nenhum degrau vai, mas a cor final ainda é tentada.
+        # Fita de estado desconhecido acende direto.
         if (
             passos
             and ligada
@@ -1025,9 +805,7 @@ def _transitar(
         ):
             inicio = alvo._replace(brilho=BRILHO_MINIMO)
             if aplicar(fita, True, hsv_hex(inicio)) and _vigente(fita, geracao):
-                # Cada degrau no momento do passo dele: com a curva, os
-                # primeiros se repetem e caem fora, e agendar pela posição na
-                # lista encurtaria o fade.
+                # Cada degrau no momento do passo dele: com a curva os primeiros se repetem e caem fora, e agendar pela posição encurtaria o fade.
                 no_passo = _degraus_no_passo(inicio, alvo, passos, CURVA_DA_ENTRADA)
                 _rajada(
                     fita,
@@ -1036,7 +814,6 @@ def _transitar(
                     [passo / RITMO_FADE for passo, _cor in no_passo],
                 )
         elif passos and origem is not None:
-            # Apagar é escurecer até o mínimo e só então desligar.
             destino = alvo if ligada else origem._replace(brilho=BRILHO_MINIMO)
             if destino is not None and destino != origem:
                 _rajada(fita, _degraus(origem, destino, passos), geracao)
@@ -1046,26 +823,15 @@ def _transitar(
         return aplicar(fita, ligada, cor_hex)
 
 
-# endregion
-# region Varredura
 
-
-# A varredura é broadcast: ela acha as fitas na rede de casa pelo id, e é o
-# assistente quem a usa, uma vez, para descobrir o endereço de cada fita. O app
-# não varre sozinho depois disso — o IP das fitas é fixo, e se um dia mudar é
-# só rodar o assistente de novo. Doze segundos é o que basta para todo mundo
-# responder; o padrão da tinytuya é dezoito.
+# A varredura é broadcast e só o assistente a usa, uma vez, para achar o endereço de cada fita (o IP é fixo; se mudar, roda-se o assistente). Doze segundos bastam; o padrão da tinytuya é dezoito.
 ESPERA_VARREDURA = 12
 
-# Uma varredura de cada vez no processo inteiro. Ela abre um soquete de
-# broadcast numa porta fixa, e o Windows não tem `SO_REUSEPORT`: duas ao mesmo
-# tempo fazem a segunda morrer com "apenas uma utilização de cada endereço de
-# soquete".
+# Uma varredura por vez no processo: ela abre um soquete de broadcast numa porta fixa e o Windows não tem `SO_REUSEPORT` (a segunda morre com "apenas uma utilização de cada endereço de soquete").
 _TRAVA_VARREDURA = threading.Lock()
 
 
 def ips_da_varredura(achados: dict[str, Any]) -> dict[str, str]:
-    """O que a varredura encontrou, como um mapa de id do módulo para IP."""
     mapa = {}
     for ip, dados in (achados or {}).items():
         identificador = (dados or {}).get("gwId")
@@ -1075,11 +841,7 @@ def ips_da_varredura(achados: dict[str, Any]) -> dict[str, str]:
 
 
 def versoes_da_varredura(achados: dict[str, Any]) -> dict[str, str]:
-    """A versão do protocolo de cada módulo que a varredura achou, por id.
-
-    O assistente grava a fita com ela: um módulo 3.4 ou 3.5 falado como 3.3
-    nunca responde.
-    """
+    """A versão do protocolo de cada módulo achado, por id: o assistente grava a fita com ela (um módulo 3.4 ou 3.5 falado como 3.3 nunca responde)."""
     mapa = {}
     for dados in (achados or {}).values():
         identificador = (dados or {}).get("gwId")
@@ -1090,19 +852,10 @@ def versoes_da_varredura(achados: dict[str, Any]) -> dict[str, str]:
 
 
 def enderecos_na_rede() -> tuple[dict[str, str], dict[str, str]]:
-    """O endereço e a versão do protocolo de cada módulo Tuya que respondeu
-    na rede, cada um num mapa por id.
-
-    Sem enquete: ``poll=True`` iria perguntar o estado de cada aparelho achado —
-    inclusive dos que não são nossos — e aqui só o endereço e a versão
-    interessam. Nunca levanta; sem rede ou sem biblioteca, devolve dois mapas
-    vazios.
-    """
+    """O endereço e a versão do protocolo de cada módulo Tuya que respondeu na rede, em mapas por id. Sem ``poll=True`` (perguntaria o estado de aparelhos que não são nossos). Nunca levanta; sem rede ou biblioteca, dois mapas vazios."""
     with _TRAVA_VARREDURA:
         try:
-            # Dentro do `try`: sem a biblioteca instalada, o `ImportError` cru
-            # derrubaria a thread do assistente e a tela ficaria em
-            # "Buscando…" para sempre.
+            # Dentro do `try`: sem a biblioteca, o `ImportError` derrubaria a thread do assistente e a tela ficaria em "Buscando…" para sempre.
             import tinytuya  # noqa: PLC0415
 
             achados = tinytuya.deviceScan(False, ESPERA_VARREDURA, poll=False)
@@ -1111,51 +864,29 @@ def enderecos_na_rede() -> tuple[dict[str, str], dict[str, str]]:
             logging.warning("Varredura das fitas falhou: %s", erro)
             return {}, {}
 
-# endregion
-# region Ciclo de vida
-
 CHAVE_ESTADO = "fita-estado-anterior"
 
-# Quanto o fechamento do app pode esperar pela devolução. Com as fitas falando
-# ao mesmo tempo, o custo do conjunto é o da mais lenta, e a mais lenta possível
-# é uma fita muda: o ESPERA do soquete. O prazo fica um segundo acima disso, e
-# não abaixo — com quatro segundos, uma única fita fora da tomada fazia o
-# fechamento desistir e as três ficavam com a cor do app até o arranque
-# seguinte. O fade vem antes da espera, e entra na conta. Estourado o prazo,
-# quem termina o serviço ainda é o arranque.
+# Quanto o fechamento pode esperar pela devolução: o custo do conjunto é o da fita mais lenta, uma fita muda (o ESPERA do soquete), e o prazo fica um segundo
+# acima disso (com quatro segundos, uma fita fora da tomada fazia o fechamento desistir e as três ficavam com a cor do app). O fade entra na conta. Estourado, o arranque termina o serviço.
 PRAZO_FECHAMENTO = ESPERA + DURACAO_FADE + 1
 
-# Um arranque de cada vez. Guardar o estado é "lê a chave, conversa com as
-# fitas, grava a chave", e o miolo disso leva segundos de rede: sem a trava,
-# dois arranques próximos leriam a chave vazia ao mesmo tempo e o segundo
-# gravaria por cima o roxo que o primeiro acabou de pintar.
+# Um arranque por vez: guardar o estado é "lê a chave, conversa com as fitas, grava a chave" (segundos de rede); sem a trava, dois arranques leriam a chave vazia juntos e o segundo gravaria por cima a cor que o primeiro pintou.
 _TRAVA_ARRANQUE = threading.Lock()
 
 
 def ligada() -> bool:
-    """Se há o que fazer: recurso ligado nas Preferências e fita configurada."""
     return bool(shared.schema.get_boolean("session-fita") and fitas())
 
 
 def _em_thread(tarefa: Any) -> threading.Thread:
-    """Toda conversa com as fitas sai da thread de UI por aqui."""
     linha = threading.Thread(target=tarefa, daemon=True)
     linha.start()
     return linha
 
 
 def _em_paralelo(itens: list[Any], tarefa: Any) -> list[Any]:
-    """Roda ``tarefa`` para cada item ao mesmo tempo e espera todas.
-
-    As fitas têm de mudar juntas. Em fila, cada uma só começa depois de a
-    anterior ter aberto conexão, mandado o comando e respondido — e a troca de
-    cor corre visivelmente de um monitor para o outro, que é exatamente o que a
-    imersão não pode ter. Em paralelo, o custo do conjunto é o da fita mais
-    lenta, e não a soma delas.
-
-    Cada fita tem a sua trava lá embaixo, então o paralelo aqui nunca faz duas
-    conversas com o mesmo módulo.
-    """
+    """Roda ``tarefa`` para cada item ao mesmo tempo e espera todas. As fitas têm de mudar juntas: em fila, a troca de cor correria visivelmente de um monitor ao outro, e o custo seria a soma e não o da fita mais lenta.
+    Cada fita tem a sua trava, então o paralelo nunca faz duas conversas com o mesmo módulo."""
     if not itens:
         return []
 
@@ -1180,16 +911,9 @@ def _vestir(
     alvos: Optional[list[Fita]] = None,
     geracoes: Optional[dict[str, int]] = None,
 ) -> None:
-    """Acende as fitas na cor pedida, ao mesmo tempo e deslizando.
-    Síncrono; nunca levanta.
+    """Acende as fitas na cor pedida, ao mesmo tempo e deslizando. Síncrono; nunca levanta.
 
-    Sem ``alvos``, acende todas as configuradas. ``geracoes`` são os números
-    que ``_reservar`` tirou na hora do pedido; sem eles, cada fita tira o seu
-    agora.
-
-    Fita que não responde fica como está — e depois de três falhas seguidas é
-    suspensa, para não atrasar as outras. O endereço de cada fita é o que o
-    assistente achou: IP mudou, roda-se o assistente de novo.
+    Sem ``alvos``, todas as configuradas. ``geracoes`` são os números de ``_reservar`` na hora do pedido; sem eles, cada fita tira o seu. Fita que não responde fica como está e, após três falhas, é suspensa para não atrasar as outras.
     """
     _em_paralelo(
         fitas() if alvos is None else alvos,
@@ -1205,7 +929,6 @@ def _pintar_fita(
     tetos: Optional[dict[str, int]] = None,
     calibracoes: Optional[dict[str, calibracao_mod.Calibracao]] = None,
 ) -> None:
-    """Só a cor, sem mexer no liga/desliga e sem fade. Para a prévia ao vivo."""
     cor_hex = hsv_hex(
         na_fita(cor, fita, (tetos or {}).get(fita.id), (calibracoes or {}).get(fita.id))
     )
@@ -1213,16 +936,8 @@ def _pintar_fita(
         _mostrada[fita.id] = (_mostrada[fita.id][0], cor_hex)
 
 
-# A cor que a prévia ainda deve mostrar em cada fita, e as fitas que têm uma
-# thread servindo. Arrastar o controle do brilho gera dezenas de valores por
-# segundo, e cada um deles é uma conversa de rede: em vez de enfileirar todos,
-# guardamos só o último e a thread pega o valor mais recente quando termina o
-# anterior. Os passos do meio se perdem, que é exatamente o que se quer — o olho
-# só precisa ver onde o controle parou. Uma thread por fita: uma fita que não
-# responde leva segundos para desistir, e as outras não podem esperar por ela.
-# A fita vai junto do pedido, e não fica a da thread: a thread que já estava
-# servindo uma fita guardou a fita de quando começou, e pintaria com a
-# calibração (e o brilho máximo) de antes do Concluir do assistente.
+# A cor que a prévia ainda deve mostrar em cada fita e as fitas com thread servindo. Arrastar o brilho gera dezenas de valores por segundo, cada um uma conversa de rede: guarda-se só o último e a thread pega o mais recente ao terminar o anterior. Uma thread por fita (uma muda leva segundos para desistir).
+# A fita vai junto do pedido, não a da thread, que pintaria com a calibração de antes do Concluir do assistente.
 _previa_alvos: dict[
     str, tuple[Fita, Cor, Optional[dict[str, int]], Optional[dict[str, Any]]]
 ] = {}
@@ -1235,21 +950,14 @@ def previa(
     tetos: Optional[dict[str, int]] = None,
     calibracoes: Optional[dict[str, calibracao_mod.Calibracao]] = None,
 ) -> None:
-    """Mostra esta cor nas fitas agora. Chamar da thread de UI, à vontade.
-
-    ``tetos`` troca o brilho por dispositivo do arquivo (id → porcentagem), e
-    ``calibracoes`` a calibração (id → ``Calibracao`` em edição).
-    """
+    """Mostra esta cor nas fitas agora (thread de UI, à vontade). ``tetos`` troca o brilho por dispositivo do arquivo (id → porcentagem) e ``calibracoes`` a calibração em edição."""
     _previa_em({fita.id: cor for fita in fitas()}, tetos, calibracoes)
 
 
 def previa_calibracao(
     id_da_fita: str, cor: Cor, calibracoes: dict[str, calibracao_mod.Calibracao]
 ) -> None:
-    """A prévia do assistente de calibração: só este dispositivo acende na
-    cor, com a calibração em edição; os outros ficam no brilho mínimo, para
-    a luz deles não contaminar a comparação. Sem desligar ninguém: o
-    liga/desliga é do ciclo do app. Chamar da thread de UI."""
+    """A prévia do assistente de calibração (thread de UI): só este dispositivo acende na cor, com a calibração em edição; os outros ficam no brilho mínimo, para não contaminar a comparação. Ninguém é desligado: o liga/desliga é do ciclo do app."""
     apagada = Cor(cor.matiz, 0, BRILHO_MINIMO)
     _previa_em(
         {fita.id: cor if fita.id == id_da_fita else apagada for fita in fitas()},
@@ -1276,7 +984,6 @@ def _previa_em(
 
 
 def _servir_previa(fita: Fita) -> None:
-    """Pinta nesta fita o alvo mais recente até não haver mais nada novo."""
     while True:
         with _PREVIA:
             alvo = _previa_alvos.pop(fita.id, None)
@@ -1287,7 +994,6 @@ def _servir_previa(fita: Fita) -> None:
 
 
 def tom_do_app() -> tuple[int, int]:
-    """Matiz e saturação da cor do app: a escolhida, ou o ciano de fábrica."""
     return (
         shared.schema.get_int("fita-matiz-app"),
         shared.schema.get_int("fita-saturacao-app"),
@@ -1295,7 +1001,6 @@ def tom_do_app() -> tuple[int, int]:
 
 
 def salvar_tom_do_app(matiz: int, saturacao: int) -> None:
-    """Grava a cor do app escolhida nas Preferências."""
     shared.schema.set_int("fita-matiz-app", matiz % 360)
     shared.schema.set_int("fita-saturacao-app", max(0, min(1000, saturacao)))
 
@@ -1312,20 +1017,12 @@ def migrar_roxo_antigo() -> None:
 
 
 def cor_do_app() -> Cor:
-    """A cor das fitas quando não há jogo correndo, no brilho padrão.
-
-    Pública porque as Preferências e a tela de detalhes precisam da mesma cor,
-    e ela mora num lugar só.
-    """
+    """A cor das fitas quando não há jogo correndo, no brilho padrão (pública: as Preferências e os detalhes precisam da mesma)."""
     return Cor(*tom_do_app(), brilho_padrao())
 
 
 def _estado_de(alvos: list[Fita]) -> dict[str, dict[str, Any]]:
-    """O estado de cada uma destas fitas, por id.
-
-    Quem não respondeu fica de fora: devolver uma fita ao estado que só foi
-    chutado seria pior que não devolver nada.
-    """
+    """O estado de cada uma destas fitas, por id; quem não respondeu fica de fora (devolver a um estado chutado seria pior que não devolver)."""
     lidos = _em_paralelo(alvos, ler_estado)
     return {
         fita.id: lido for fita, lido in zip(alvos, lidos) if lido is not None
@@ -1333,18 +1030,9 @@ def _estado_de(alvos: list[Fita]) -> dict[str, dict[str, Any]]:
 
 
 def _guardar_e_vestir() -> None:
-    """Guarda o estado das fitas que ainda não têm um e acende na cor do app
-    as que têm. Chamar com a ``_TRAVA_ARRANQUE``.
+    """Guarda o estado das fitas que ainda não têm um e acende na cor do app as que têm (com a ``_TRAVA_ARRANQUE``).
 
-    Só é lida a fita que falta na chave. A que já está nela tem guardado o
-    primeiro estado, o de antes do app — relê-la agora gravaria por cima a cor
-    que o próprio app pintou, e o fechamento devolveria as fitas à cor do app
-    para sempre.
-
-    Só é pintada a fita que está na chave: fita que não respondeu à leitura e
-    responde ao pintar ficaria na cor do app sem estado para voltar. Ela é lida
-    de novo no próximo arranque ou reacender. Nenhuma lida, nada é gravado — a
-    chave nunca vira ``"{}"``.
+    Só se lê a fita que falta na chave: relê-la gravaria por cima a cor que o app pintou, e o fechamento devolveria as fitas à cor do app para sempre. Só se pinta a fita que está na chave (uma que não respondeu à leitura ficaria na cor do app sem estado para voltar). Nenhuma lida, nada é gravado: a chave nunca vira ``"{}"``.
     """
     if not ligada():
         return
@@ -1360,7 +1048,6 @@ def _guardar_e_vestir() -> None:
 
 
 def _estados_guardados() -> dict[str, Any]:
-    """A chave lida como dicionário. Chave mexida à mão vira dicionário vazio."""
     try:
         estados = json.loads(shared.schema.get_string(CHAVE_ESTADO) or "{}")
     except ValueError:
@@ -1369,33 +1056,22 @@ def _estados_guardados() -> dict[str, Any]:
 
 
 def _guardadas() -> list[Fita]:
-    """As fitas com estado de antes guardado: as únicas que o app pinta, por
-    serem as únicas que o fechamento sabe devolver."""
+    """As fitas com estado de antes guardado: as únicas que o app pinta, por serem as únicas que o fechamento sabe devolver."""
     estados = _estados_guardados()
     return [fita for fita in fitas() if fita.id in estados]
 
 
 def _repor(fita: Fita, estado: Any) -> None:
-    """Devolve uma fita ao estado guardado dela, deslizando.
-
-    Estado que não é dicionário é chave mexida à mão, e não pode virar
-    ``AttributeError`` cru aqui dentro.
-    """
+    """Devolve uma fita ao estado guardado, deslizando. Estado que não é dicionário é chave mexida à mão e não pode virar ``AttributeError``."""
     if not isinstance(estado, dict):
         return
     _transitar(fita, bool(estado.get("ligada")), str(estado.get("cor", "")))
 
 
 def devolver_removidas(removidas: list[Fita]) -> None:
-    """Devolve ao estado guardado as fitas que saem da configuração.
+    """Devolve ao estado guardado as fitas que saem da configuração: a desmarcada no assistente some do arquivo, e com ela a única referência para devolvê-la (ficaria na cor do app para sempre). É rede: fora da thread de UI.
 
-    Sem isto, a fita desmarcada no assistente some do arquivo e, com ela, a
-    única referência que o fechamento do app tinha para devolvê-la: ela ficaria
-    na cor do Cartridges para sempre. É rede — chamar de fora da thread de UI.
-
-    Com a ``_TRAVA_ARRANQUE``: o assistente fecha logo depois de chamar isto, e
-    o reacender que o fechamento dele dispara também lê e grava a chave. Sem a
-    trava, a última gravação apagaria a outra.
+    Com a ``_TRAVA_ARRANQUE``: o reacender disparado ao fechar o assistente também lê e grava a chave, e a última gravação apagaria a outra.
     """
     with _TRAVA_ARRANQUE:
         estados = _estados_guardados()
@@ -1412,7 +1088,6 @@ def devolver_removidas(removidas: list[Fita]) -> None:
 
 
 def _devolver() -> None:
-    """Devolve cada fita ao estado guardado e limpa a chave."""
     if not shared.schema.get_string(CHAVE_ESTADO):
         return
 
@@ -1424,31 +1099,19 @@ def _devolver() -> None:
     ]
     _em_paralelo(devolver, lambda par: _repor(par[0], par[1]))
 
-    # Limpa mesmo quando alguma fita não respondeu: a chave diz "há uma troca
-    # pendente", e insistir eternamente numa fita que saiu da tomada deixaria o
-    # app tentando desfazer isso em todo arranque.
+    # Limpa mesmo se alguma fita não respondeu: insistir numa fita fora da tomada deixaria o app tentando desfazer em todo arranque.
     shared.schema.set_string(CHAVE_ESTADO, "")
 
 
 def restaurar_orfaos() -> None:
-    """Desfaz a troca que uma execução anterior não desfez.
-
-    Síncrona: ``_devolver`` conversa com cada fita, e isso é rede. Chamar de
-    dentro da thread do arranque (é o que ``_arrancar`` faz), nunca da thread
-    de UI — ali seguraria a tela por segundos toda vez que houvesse órfão.
-    """
+    """Desfaz a troca que uma execução anterior não desfez. Síncrona (rede): chamar da thread do arranque (``_arrancar``), nunca da de UI."""
     if shared.schema.get_string(CHAVE_ESTADO):
         logging.info("Fitas de uma sessão anterior encontradas; desfazendo")
         _devolver()
 
 
 def _arrancar() -> None:
-    """Os dois passos do arranque, já fora da thread de UI.
-
-    A trava não espera: se alguém a segura, é outra conversa do ciclo em
-    curso (a devolução das fitas removidas no assistente, um reacender), e o
-    arranque não tem o que disputar com ela.
-    """
+    """Os dois passos do arranque, fora da thread de UI. A trava não espera: se alguém a segura, é outra conversa do ciclo em curso (devolução das fitas removidas, reacender)."""
     if not _TRAVA_ARRANQUE.acquire(blocking=False):
         logging.info("Arranque das fitas já em curso; segunda chamada ignorada")
         return
@@ -1461,19 +1124,11 @@ def _arrancar() -> None:
 
 
 def abrir() -> None:
-    """O app abriu: desfaz o que ficou de antes e acende na cor do app.
+    """O app abriu: desfaz o que ficou de antes e acende na cor do app (thread de UI). Só para o arranque; com o app aberto quem religa o ciclo chama ``reacender``.
 
-    Só para o arranque do app. Com o app já aberto, a chave é a desta execução
-    e não um órfão: quem religa o ciclo com o app aberto chama ``reacender``.
-
-    Chamar da thread de UI. Os dois passos correm na MESMA thread, e nesta
-    ordem: o estado que uma execução anterior deixou pendurado precisa ser
-    devolvido antes de guardarmos o estado novo, senão a cor do próprio app
-    viraria "o estado de antes" do usuário.
+    Os dois passos correm na MESMA thread e nesta ordem: o estado pendurado por uma execução anterior é devolvido antes de guardar o novo, senão a cor do app viraria "o estado de antes".
     """
-    # A devolução de órfãos acontece mesmo com o recurso desligado nas
-    # Preferências: quem desligou a opção no meio do caminho continua com as
-    # fitas vestidas de uma sessão que já acabou.
+    # A devolução de órfãos acontece mesmo com o recurso desligado: quem desligou no meio do caminho segue com as fitas vestidas de uma sessão que acabou.
     if not ligada() and not shared.schema.get_string(CHAVE_ESTADO):
         return
     _em_thread(_arrancar)
@@ -1485,24 +1140,17 @@ def _reacender() -> None:
 
 
 def reacender() -> None:
-    """O ciclo foi religado com o app aberto: o interruptor foi ligado, ou o
-    assistente fechou. Chamar da thread de UI.
+    """O ciclo foi religado com o app aberto (interruptor ligado ou assistente fechado; thread de UI).
 
-    Não desfaz órfão nenhum — a chave, se houver, é desta execução, e
-    devolvê-la faria as fitas piscarem no estado de antes. Só guarda o estado
-    das fitas que ainda não têm um (a primeira vez que o recurso liga, a fita
-    nova do assistente) e veste a cor do app. A trava espera aqui, ao contrário
-    do arranque: o reacender que chega junto com a devolução das fitas
-    removidas no assistente tem trabalho a fazer depois dela.
+    Não desfaz órfão (a chave é desta execução, e devolvê-la faria as fitas piscarem no estado de antes): guarda o estado das fitas sem um e veste a cor do app.
+    A trava espera aqui, ao contrário do arranque: o reacender junto da devolução das fitas removidas tem trabalho a fazer depois dela.
     """
     if not ligada():
         return
     _em_thread(_reacender)
 
 
-# O jogo da sessão em curso, para o pulso de conquista saber se ainda há
-# sessão. Só a thread de UI escreve (em `comecar` e `voltar`); a thread do
-# pulso só lê, e lê de novo antes de cada passo.
+# O jogo da sessão em curso, para o pulso de conquista saber se ainda há sessão. Só a thread de UI escreve (`comecar`, `voltar`); a do pulso lê antes de cada passo.
 _jogo_da_sessao: Optional["Game"] = None
 
 
@@ -1510,24 +1158,15 @@ class _TesteDoPulso:
     """Marcador de um teste do pulso: um novo a cada clique em "Testar"."""
 
 
-# O teste do pulso que está valendo (um marcador novo a cada clique), ou None.
-# Como ``_jogo_da_sessao``: só a thread de UI escreve, sob ``_TRAVA_PULSO``.
+# O teste do pulso em vigor, ou None. Como ``_jogo_da_sessao``: só a thread de UI escreve, sob ``_TRAVA_PULSO``.
 _teste_do_pulso: Optional[_TesteDoPulso] = None
 
 
 def comecar(game: "Game") -> None:
-    """A sessão começou: veste a cor do jogo. Chamar da thread de UI.
-
-    A cor é calculada dentro da thread, e não antes dela: tirar a cor da capa
-    abre e quantiza uma imagem, e isso não pode acontecer enquanto o jogo abre.
-    A vez de cada fita, essa sim, é tirada aqui: um "Já terminei" logo depois
-    tem de vencer a cor do jogo que ainda estava sendo calculada.
-    """
+    """A sessão começou: veste a cor do jogo (thread de UI). A cor é calculada dentro da thread (tirá-la da capa abre e quantiza uma imagem, o que não pode ocorrer enquanto o jogo abre); a vez de cada fita é tirada aqui, para um "Já terminei" logo depois vencer a cor ainda em cálculo."""
     global _jogo_da_sessao, _teste_do_pulso  # noqa: PLW0603
     alvos = _guardadas() if ligada() else None
-    # A sessão e a vez de cada fita mudam juntas, sob a trava do pulso: um
-    # pulso que vê a sessão antiga não reserva depois desta troca. Um teste do
-    # pulso em curso também acaba: a sessão é dona das fitas.
+    # A sessão e a vez de cada fita mudam juntas, sob a trava do pulso (um pulso que vê a sessão antiga não reserva depois). Um teste do pulso em curso também acaba: a sessão é dona das fitas.
     global _acompanhamento, _cor_ambiente, _teto_da_sessao, _amostras_validas, _amostras_bloqueadas  # noqa: PLW0603
     global _fitas_da_sessao, _candidata, _ultima_troca  # noqa: PLW0603
     with _TRAVA_PULSO:
@@ -1535,12 +1174,9 @@ def comecar(game: "Game") -> None:
         _teste_do_pulso = None
         _limpar_fila_de_pulsos()
         geracoes = _reservar(alvos) if alvos is not None else {}
-        # Um marcador novo por sessão: o acompanhamento de uma sessão que
-        # acabou (ainda dormindo a fatia dele) nunca fala pela seguinte, nem
-        # quando ela é do mesmo jogo.
+        # Um marcador novo por sessão: o acompanhamento de uma sessão acabada (ainda dormindo a fatia) nunca fala pela seguinte, nem do mesmo jogo.
         _acompanhamento = sessao = object()
-        # A conta do tempo fora do ar é da sessão: a fita que já estava
-        # suspensa começa a contar agora.
+        # A conta do tempo fora do ar é da sessão: a fita já suspensa começa a contar agora.
         _fora_do_ar.clear()
         _fitas_da_sessao = {fita.id for fita in alvos} if alvos is not None else set()
         for identificador in list(_suspensa_em):
@@ -1558,7 +1194,6 @@ def comecar(game: "Game") -> None:
 def _vestir_o_jogo(
     game: "Game", alvos: list[Fita], geracoes: dict[str, int], sessao: object
 ) -> None:
-    """A cor do jogo, que é também o ponto de partida da cor ambiente."""
     global _cor_ambiente, _teto_da_sessao  # noqa: PLW0603
     cor = cor_do_jogo(game)
     with _TRAVA_PULSO:
@@ -1569,11 +1204,8 @@ def _vestir_o_jogo(
 
 
 def voltar() -> None:
-    """A sessão acabou: de volta à cor do app. Chamar da thread de UI."""
-    # Antes de tudo: o pulso que estiver no meio para no próximo passo, e a
-    # fila do que não começou vai fora — a sessão acabou. A vez de cada fita
-    # é tirada na mesma trava: depois dela nenhum pulso reserva mais, e a volta
-    # à cor do app nunca é atropelada por um passo dourado.
+    """A sessão acabou: de volta à cor do app (thread de UI)."""
+    # Antes de tudo: o pulso no meio para no próximo passo e a fila vai fora. A vez de cada fita sai da mesma trava: depois dela nenhum pulso reserva, e a volta nunca é atropelada por um passo dourado.
     alvos = _guardadas() if ligada() else None
     geracoes = _encerrar_pulsos(alvos)
     if alvos is None:
@@ -1581,79 +1213,43 @@ def voltar() -> None:
     _em_thread(lambda: _vestir(cor_do_app(), alvos, geracoes or {}))
 
 
-# region Cor da tela
-
-# A cada quantos segundos a tela é amostrada. A luz acompanha a cena, não a
-# ação: uma explosão não pode virar um clarão na parede. A confirmação (ver
-# ``_decidir``) exige duas amostras seguidas, então é este intervalo que diz
-# quanto uma cena precisa durar para trocar a luz: com 3 s, uma cena de uns 3
-# a 6 s já passa. É a troca escolhida no quarto teste, em que com 6 s de
-# amostra, 6 de confirmação e 6 de fade a cor nova chegava uns 20 s depois da
-# cena; se a agitação do segundo teste voltar, é aqui que se mexe. Cada
-# amostra custa uns 30 ms de captura (medido nos testes), e o tempo de cada
-# uma vai para o log.
+# A cada quantos segundos a tela é amostrada. A luz acompanha a cena, não a ação (uma explosão não vira clarão). A confirmação (``_decidir``) exige duas amostras seguidas, então este intervalo diz quanto uma cena precisa durar para trocar a luz (com 3 s, uns 3 a 6 s); com 6 s de amostra, confirmação e fade, a cor nova chegava uns 20 s depois. Cada amostra custa ~30 ms de captura.
 INTERVALO_DA_TELA = 3
 
-# O fade da troca, o dobro do resto do app: a cor nova chega sem que se
-# perceba o momento em que ela começou. No segundo teste, 3 s com troca a cada
-# 10 s deram dor de cabeça; no quarto, 6 s com confirmação deixavam a cor
-# atrasada. Com a confirmação e o intervalo mínimo, 4 s.
+# O fade da troca, o dobro do resto do app: a cor nova chega sem que se perceba quando começou. Medido: 3 s com troca a cada 10 s deram dor de cabeça; 6 s com confirmação deixavam a cor atrasada.
 FADE_DA_TELA = 4
 
-# A troca só vale quando duas amostras seguidas concordam (ver ``_decidir``), e
-# no máximo uma a cada 15 s: no segundo teste, sem isso, a luz trocou umas 50
-# vezes em 12 minutos, pulando entre o vermelho e o azul da mesma cena e
-# seguindo quadros de transição. No terceiro, com 30 s, a espera do intervalo
-# somava atraso à cor nova. Contado da decisão, não do fim do fade: entre o fim
-# de um fade e o começo do seguinte ficam uns 10 s.
+# A troca só vale com duas amostras seguidas concordando (``_decidir``) e no máximo uma a cada 15 s: sem isso a luz trocou umas 50 vezes em 12 minutos, pulando entre o vermelho e o azul da mesma cena e seguindo quadros de transição;
+# com 30 s, a espera somava atraso à cor nova. Contado da decisão, não do fim do fade.
 INTERVALO_MINIMO_ENTRE_TROCAS = 15
 
-# Os degraus por segundo do fade da tela, metade dos do resto do app. Num fade
-# de 4 s, 15 por segundo ainda são degraus que o olho não separa, e metade do
-# tráfego: a 30/s, no segundo teste, a fita perdia o fim da rajada e o comando
-# final a fazia pular até a cor.
+# Degraus por segundo do fade da tela, metade dos do resto do app: num fade de 4 s o olho não separa 15/s, e a 30/s a fita perdia o fim da rajada e o comando final a fazia pular até a cor.
 RITMO_DA_TELA = 15
 
-# A troca grande de matiz desliza direto, pelo lado curto do círculo, como a
-# pequena: no terceiro teste, passar pelo escuro (apagar a cor de agora e
-# acender a nova) chamou mais atenção que o roxo no meio do caminho.
+# A troca grande de matiz desliza direto, pelo lado curto do círculo, como a pequena: passar pelo escuro chamou mais atenção que o roxo no meio do caminho.
 
-# A saturação mínima da luz. Na tela, cor com saturação média já é cor; numa
-# fita de LED ela parece branca — no primeiro teste, um amarelo forte na tela
-# virou luz branca. Com o piso em 60%, no segundo, vermelho virou rosa (e o
-# rosa, na fita, parece roxo). A faixa aceita da tela (de 0,25 a 1) vai para
-# 850–1000.
+# Saturação mínima da luz: na tela, saturação média já é cor, mas numa fita de LED parece branca (um amarelo forte virou luz branca); com o piso em 60%, vermelho virou rosa (e na fita rosa parece roxo).
+# A faixa aceita da tela (0,25 a 1) vai para 850–1000.
 SATURACAO_MINIMA_DA_TELA = 850
 
-# O brilho acompanha a cena: o do jogo é o teto, e a cena escura o reduz até
-# 40% dele. Cena com luminosidade média a partir de 35% já ganha o teto — uma
-# cena normal de jogo fica entre 20% e 40%, e sem isso quase nunca chegaria lá.
+# O brilho do jogo é o teto, e a cena escura o reduz até 40% dele; luminosidade média a partir de 35% já ganha o teto (uma cena normal fica entre 20% e 40%).
 PISO_DO_BRILHO = 0.4
 LUZ_PLENA = 0.35
 
-# Quanto a cor nova precisa se afastar da atual para a luz mudar. Abaixo disso
-# é a mesma cena com outra luz, e trocar só chamaria atenção para a parede.
-# Matiz em graus, pelo lado curto do círculo; saturação de 0 a 1000.
+# Quanto a cor nova precisa se afastar da atual para a luz mudar (abaixo disso trocar só chamaria atenção). Matiz em graus, pelo lado curto do círculo; saturação de 0 a 1000.
 LIMIAR_MATIZ = 20
 LIMIAR_SATURACAO = 250
-# O brilho, em fração do teto: abaixo de 15%, a fita ficaria oscilando com
-# cada nuvem que passa.
+# O brilho, em fração do teto: abaixo de 15% a fita oscilaria a cada nuvem que passa.
 LIMIAR_BRILHO = 0.15
 
-# Quantas amostras bloqueadas, sem nenhuma boa, fazem o aviso do fim da
-# sessão. Uma só pode ser a tela preta de carregamento numa sessão curta, e o
-# aviso mandaria para o modo janela quem já está nele.
+# Quantas amostras bloqueadas, sem nenhuma boa, fazem o aviso do fim da sessão (uma só pode ser a tela preta de carregamento).
 BLOQUEADAS_PARA_AVISAR = 2
 
-# O marcador da sessão que está sendo acompanhada (ver ``comecar``), a cor que
-# as fitas vestem agora nela, e quantas amostras da sessão vieram com imagem
-# e quantas bloqueadas. Escritos sob ``_TRAVA_PULSO``.
+# O marcador da sessão acompanhada (``comecar``), a cor que as fitas vestem nela e quantas amostras vieram com imagem e quantas bloqueadas. Escritos sob ``_TRAVA_PULSO``.
 _acompanhamento: Optional[object] = None
 _cor_ambiente: Optional[Cor] = None
-# O brilho do jogo, que é o teto do brilho da cena.
 _teto_da_sessao: Optional[int] = None
-# A troca que a última amostra pediu e ainda espera confirmação, e quando foi a
-# última troca da sessão (no relógio de ``_agora``).
+# A troca que a última amostra pediu e espera confirmação, e quando foi a última da sessão (relógio de ``_agora``).
 _candidata: Optional[Cor] = None
 _ultima_troca: Optional[float] = None
 _amostras_validas = 0
@@ -1661,29 +1257,22 @@ _amostras_bloqueadas = 0
 
 
 def acompanha_tela() -> bool:
-    """Se a cor da sessão acompanha a tela do jogo (Preferências)."""
     return shared.schema.get_boolean("fita-acompanha-tela")
 
 
 def _saturacao_da_luz(saturacao: int) -> int:
-    """A saturação da tela (250–1000, a faixa aceita como cor) levada à da
-    luz (``SATURACAO_MINIMA_DA_TELA``–1000)."""
+    """A saturação da tela (250–1000, a faixa aceita como cor) levada à da luz (``SATURACAO_MINIMA_DA_TELA``–1000)."""
     andado = (max(250, min(1000, saturacao)) - 250) / 750
     return round(SATURACAO_MINIMA_DA_TELA + (1000 - SATURACAO_MINIMA_DA_TELA) * andado)
 
 
 def _brilho_da_cena(luz: float, teto: int) -> int:
-    """O brilho para uma cena com esta luminosidade média (0–1)."""
     fator = PISO_DO_BRILHO + (1 - PISO_DO_BRILHO) * min(1.0, luz / LUZ_PLENA)
     return max(BRILHO_MINIMO, round(teto * fator))
 
 
 def _proxima_cor(atual: Cor, amostra: "tela_do_jogo.Amostra", teto: int) -> Optional[Cor]:
-    """A cor nova se ela for diferente de verdade da atual; senão ``None``.
-
-    Amostra "sem_cor" (cena preta ou cinza) só mexe no brilho. Sem a luz da
-    cena, o brilho é o teto.
-    """
+    """A cor nova se for diferente de verdade da atual; senão ``None``. Amostra "sem_cor" (cena preta ou cinza) só mexe no brilho; sem a luz da cena, o brilho é o teto."""
     brilho = teto if amostra.luz is None else _brilho_da_cena(amostra.luz, teto)
     if amostra.tipo == "cor" and amostra.cor:
         matiz, saturacao = amostra.cor[0], _saturacao_da_luz(amostra.cor[1])
@@ -1696,7 +1285,6 @@ def _proxima_cor(atual: Cor, amostra: "tela_do_jogo.Amostra", teto: int) -> Opti
 
 
 def _difere(uma: Cor, outra: Cor, teto: int) -> bool:
-    """Se duas cores da luz são diferentes de verdade, pelos limiares."""
     distancia = abs((outra.matiz - uma.matiz + 180) % 360 - 180)
     return (
         distancia > LIMIAR_MATIZ
@@ -1706,12 +1294,9 @@ def _difere(uma: Cor, outra: Cor, teto: int) -> bool:
 
 
 def _decidir(pedida: Optional[Cor], teto: int) -> Optional[Cor]:
-    """A troca que vale agora, ou ``None``. Chamar com ``_TRAVA_PULSO``.
+    """A troca que vale agora, ou ``None`` (com ``_TRAVA_PULSO``). ``pedida`` é a troca desta amostra (``None``: a cena segue com a luz de agora e a candidata vai fora).
 
-    ``pedida`` é a troca que esta amostra pede (``None``: a cena segue com a
-    luz de agora, e a candidata vai fora). A troca vale quando a amostra
-    concorda com a candidata da anterior e já passou o intervalo mínimo desde
-    a última; vai para a cor desta amostra, a mais recente.
+    Vale quando a amostra concorda com a candidata da anterior e já passou o intervalo mínimo desde a última; vai para a cor desta amostra, a mais recente.
     """
     global _candidata, _ultima_troca  # noqa: PLW0603
     if pedida is None:
@@ -1733,7 +1318,6 @@ def _segue(sessao: object) -> bool:
 
 
 def _dormir(segundos: float, continua: Any) -> bool:
-    """Dorme em fatias; ``False`` assim que ``continua()`` deixa de valer."""
     limite = time.monotonic() + segundos
     while True:
         if not continua():
@@ -1745,20 +1329,14 @@ def _dormir(segundos: float, continua: Any) -> bool:
 
 
 def _dormir_na_sessao(sessao: object) -> bool:
-    """Dorme o intervalo; ``False`` assim que a sessão acaba ou o interruptor
-    desliga."""
+    """Dorme o intervalo; ``False`` assim que a sessão acaba ou o interruptor desliga."""
     return _dormir(INTERVALO_DA_TELA, lambda: _segue(sessao))
 
 
 def _acompanhar(sessao: object) -> None:
-    """A thread da sessão: amostra a tela a cada intervalo e desliza até a
-    cor nova quando ela muda de verdade. Nunca levanta.
+    """A thread da sessão: amostra a tela a cada intervalo e desliza até a cor nova quando muda de verdade. Nunca levanta.
 
-    A iluminação desligada no meio da sessão encerra o acompanhamento, como
-    encerra o pulso. As fitas são relidas a cada amostra, e não guardadas do
-    começo: a removida no assistente já foi devolvida e não pode ser pintada.
-    Conferido aqui, uma vez por intervalo, e não em ``_dormir_na_sessao``:
-    ``ligada`` lê o arquivo das fitas, e o sono confere dez vezes por segundo.
+    A iluminação desligada no meio encerra o acompanhamento, como o pulso. As fitas são relidas a cada amostra (a removida no assistente já foi devolvida e não pode ser pintada); conferido aqui e não em ``_dormir_na_sessao``, pois ``ligada`` lê o arquivo e o sono confere dez vezes por segundo.
     """
     while _dormir_na_sessao(sessao):
         alvos = _guardadas() if ligada() else []
@@ -1773,10 +1351,7 @@ def _acompanhar(sessao: object) -> None:
 def _uma_amostra(sessao: object, alvos: list[Fita]) -> None:
     global _cor_ambiente, _amostras_validas, _amostras_bloqueadas  # noqa: PLW0603
     amostra = tela_do_jogo.cor_da_tela()
-    # A conferência da sessão, a do pulso e a reserva são uma coisa só, sob a
-    # trava: o fim da sessão ou uma conquista não cabem entre elas. Pulso
-    # tocando, a amostra fica para a rodada seguinte — o pulso volta à cor
-    # ambiente, e uma troca no meio dele seria atropelada.
+    # A conferência da sessão, a do pulso e a reserva são uma coisa só, sob a trava (o fim da sessão ou uma conquista não cabem entre elas). Com pulso tocando, a amostra fica para a rodada seguinte: uma troca no meio dele seria atropelada.
     with _TRAVA_PULSO:
         if _acompanhamento is not sessao:
             return
@@ -1820,8 +1395,7 @@ def _registrar(
     brilho: Optional[int],
     confirmada: bool = False,
 ) -> None:
-    """Uma linha por amostra, para calibrar os números acima jogando: o que a
-    tela deu, o que a luz fez e quanto a captura custou."""
+    """Uma linha por amostra, para calibrar os números acima jogando (o que a tela deu, o que a luz fez e quanto a captura custou)."""
     if amostra.tipo == "ignorada":
         return
     if nova is not None:
@@ -1847,8 +1421,7 @@ def _registrar(
 
 
 def captura_bloqueada() -> bool:
-    """Se a sessão que acabou tentou acompanhar a tela e não viu imagem
-    nenhuma: tela cheia exclusiva. Zera a contagem — o aviso é um só."""
+    """Se a sessão que acabou tentou acompanhar a tela e não viu imagem alguma (tela cheia exclusiva). Zera a contagem: o aviso é um só."""
     global _amostras_validas, _amostras_bloqueadas  # noqa: PLW0603
     with _TRAVA_PULSO:
         bloqueada = _amostras_bloqueadas >= BLOQUEADAS_PARA_AVISAR and _amostras_validas == 0
@@ -1856,28 +1429,19 @@ def captura_bloqueada() -> bool:
     return bloqueada
 
 
-# endregion
 
 
-# region Fitas fora do ar na sessão
-
-# A cada quantos segundos a fita suspensa é tentada de novo na sessão. A
-# suspensão poupa a espera de uma fita fora da tomada em cada troca de cor; mas
-# no primeiro teste um soluço do Wi-Fi suspendeu uma fita por 40 minutos de
-# jogo. Fora de sessão a suspensão segue como era.
+# A cada quantos segundos a fita suspensa é tentada de novo na sessão (a suspensão poupa a espera de uma fita fora da tomada, mas um soluço do Wi-Fi suspendeu uma fita por 40 minutos de jogo). Fora de sessão a suspensão segue.
 RETENTATIVA = 15
 
-# Quanto tempo fora do ar, somado na sessão, faz o aviso do fim dela.
 FORA_DO_AR_PARA_AVISAR = 60
 
 
 def _comecar_vigia(sessao: object) -> None:
-    """Sobe a vigia desta sessão. Separada para os testes a desligarem."""
     _em_thread(lambda: _vigiar_fitas(sessao))
 
 
 def _vigiar_fitas(sessao: object) -> None:
-    """Enquanto a sessão durar, tenta de novo as fitas suspensas."""
     while _dormir(RETENTATIVA, lambda: _acompanhamento is sessao):
         try:
             if not _retentar_suspensas(sessao):
@@ -1887,14 +1451,8 @@ def _vigiar_fitas(sessao: object) -> None:
 
 
 def _retentar_suspensas(sessao: object) -> bool:
-    """Uma rodada: cada fita suspensa volta à cor ambiente, acesa — a fita que
-    voltou da tomada pode ter voltado apagada. A que não responder volta à
-    suspensão na hora, sem esperar três falhas novas, senão cada troca de cor
-    esperaria por ela outra vez. ``False`` quando a sessão acabou ou a
-    iluminação foi desligada.
-
-    Com um pulso tocando, a rodada fica para a próxima: a tentativa numa fita
-    muda segura a fita pela espera inteira, e o pulso pararia esperando por ela.
+    """Uma rodada: cada fita suspensa volta à cor ambiente, acesa (a que voltou da tomada pode ter voltado apagada). A que não responder volta à suspensão na hora, sem esperar três falhas, senão cada troca esperaria por ela.
+    ``False`` se a sessão acabou ou a iluminação foi desligada. Com pulso tocando, fica para a próxima: a tentativa numa fita muda a seguraria pela espera inteira e o pulso pararia.
     """
     if not ligada():
         return False
@@ -1906,8 +1464,7 @@ def _retentar_suspensas(sessao: object) -> bool:
         if not candidatas or cor is None or _pulsando:
             return True
         geracoes = _reservar(candidatas)
-    # O relógio é lido antes: o tempo da tentativa que falhar também foi fora
-    # do ar, e a conta não pode ganhar um buraco a cada rodada.
+    # O relógio é lido antes: o tempo da tentativa que falhar também foi fora do ar.
     inicio = _agora()
     retomar({fita.id for fita in candidatas})
 
@@ -1916,10 +1473,7 @@ def _retentar_suspensas(sessao: object) -> bool:
             logging.info("Fita %s voltou a responder", fita.nome)
             return
         if not _falhas.get(fita.id) and not _vigente(fita, geracoes[fita.id]):
-            # Outra troca tomou a vez no meio, e a fita não falhou: ela fica
-            # fora da suspensão, e a troca que venceu fala com ela. Devolvê-la
-            # à suspensão aqui, a cada coincidência, somava tempo fora do ar
-            # que não houve — e o aviso falso no fim da sessão.
+            # Outra troca tomou a vez e a fita não falhou: fica fora da suspensão (devolvê-la somaria tempo fora do ar que não houve, e daria o aviso falso no fim).
             return
         _suspensas.add(fita.id)
         _suspensa_em[fita.id] = inicio
@@ -1929,8 +1483,7 @@ def _retentar_suspensas(sessao: object) -> bool:
 
 
 def fitas_fora_do_ar() -> list[str]:
-    """Os nomes das fitas que ficaram mais de ``FORA_DO_AR_PARA_AVISAR``
-    segundos fora do ar na sessão que acabou. Zera a conta — o aviso é um só."""
+    """Os nomes das fitas que ficaram mais de ``FORA_DO_AR_PARA_AVISAR`` segundos fora do ar na sessão que acabou. Zera a conta: o aviso é um só."""
     agora = _agora()
     total = dict(_fora_do_ar)
     for identificador, desde in list(_suspensa_em.items()):
@@ -1947,19 +1500,14 @@ def fitas_fora_do_ar() -> list[str]:
     ]
 
 
-# endregion
 
-# region Pulso de conquista
-
-# A cor de fábrica do pulso: dourado no brilho máximo de cada dispositivo (o
-# teto dele ainda vale). A escolhida nas Preferências sai de ``cor_do_pulso``.
+# A cor de fábrica do pulso: dourado no brilho máximo de cada dispositivo (o teto vale). A escolhida sai de ``cor_do_pulso``.
 TOM_DO_OURO = (45, 1000)
 OURO = Cor(*TOM_DO_OURO, BRILHO_CHEIO)
 
 
 class Passo(NamedTuple):
-    """Um passo do pulso: a cor (``pulso`` ou ``base``, a de antes), quanto
-    tempo ela segura e em quantos segundos chega deslizando (0 = direto)."""
+    """Um passo do pulso: a cor (``pulso`` ou ``base``, a de antes), quanto tempo ela segura e em quantos segundos chega deslizando (0 = direto)."""
 
     alvo: str
     segura: float
@@ -1967,12 +1515,10 @@ class Passo(NamedTuple):
 
 
 _RESPIRAR = [Passo("pulso", 0.4, 0.8), Passo("base", 0.0, 0.8)]
-# 0,2 s + 0,2 s: 2,5 piscadas por segundo, abaixo das 3 por segundo que as
-# normas de acessibilidade tratam como risco para quem é sensível a luz.
+# 0,2 s + 0,2 s: 2,5 piscadas por segundo, abaixo das 3 que as normas de acessibilidade tratam como risco para quem é sensível a luz.
 _RAPIDO = [Passo("pulso", 0.2), Passo("base", 0.2)]
 
-# Os passos de cada estilo, por tipo. Depois do último, a fita desliza de
-# volta à cor de base. "piscar" é o pulso de sempre, passo a passo.
+# Os passos de cada estilo, por tipo; depois do último, a fita desliza de volta à cor de base.
 ESTILOS_DO_PULSO: dict[str, dict[str, list[Passo]]] = {
     "piscar": {
         "normal": [Passo("pulso", 1.5)],
@@ -1995,7 +1541,6 @@ ESTILO_PADRAO = "respirar"
 
 
 def tom_do_pulso() -> tuple[int, int]:
-    """Matiz e saturação da cor do pulso: a escolhida, ou o dourado de fábrica."""
     return (
         shared.schema.get_int("conquistas-pulso-matiz"),
         shared.schema.get_int("conquistas-pulso-saturacao"),
@@ -2003,65 +1548,46 @@ def tom_do_pulso() -> tuple[int, int]:
 
 
 def salvar_tom_do_pulso(matiz: int, saturacao: int) -> None:
-    """Grava a cor do pulso escolhida nas Preferências."""
     shared.schema.set_int("conquistas-pulso-matiz", matiz % 360)
     shared.schema.set_int("conquistas-pulso-saturacao", max(0, min(1000, saturacao)))
 
 
 def redefinir_tom_do_pulso() -> None:
-    """Volta a cor do pulso ao dourado de fábrica."""
     salvar_tom_do_pulso(*TOM_DO_OURO)
 
 
 def cor_do_pulso() -> Cor:
-    """A cor do pulso, sempre no brilho máximo (o teto de cada fita vale)."""
     return Cor(*tom_do_pulso(), BRILHO_CHEIO)
 
 
 def estilo_do_pulso() -> str:
-    """O estilo escolhido; um valor que não existe vira o padrão."""
     estilo = shared.schema.get_string("conquistas-pulso-estilo")
     return estilo if estilo in ESTILOS_DO_PULSO else ESTILO_PADRAO
 
 
-# Da mais fraca à mais forte: o pedido que espera a vez sobe para o maior.
 FORCA_DOS_PULSOS = ("normal", "rara", "completo")
 
-# Uma thread só serve os pulsos. Uma rajada de conquistas é um pulso só: o
-# pedido que chega durante um pulso é absorvido, menos o "completo" (100%), que
-# espera e toca logo depois — a não ser que o pulso em curso já seja o
-# "completo". Fica no máximo UM pedido esperando: um pedido de conquista só o
-# promove ao tipo mais forte, já um teste novo toma o lugar da fila inteira.
-# Esta trava guarda a sessão, o teste do pulso, a fila, o tipo em curso e a vez
-# de cada fita: quem confere o dono do pulso e quem
-# encerra a sessão ou o teste tiram a vez das fitas dentro dela, e nenhum passo
-# de pulso reserva depois de o dono perder a validade. Dentro dela só entram a
-# conferência, a reserva (``_TRAVA_DAS_TRAVAS``, nunca o contrário) e a fila —
-# nada de rede, e nunca com a trava de uma fita na mão.
+# Uma thread só serve os pulsos. Uma rajada de conquistas é um pulso só: o pedido durante um pulso é absorvido, menos o "completo" (100%), que espera e toca depois. No máximo UM pedido espera (conquista só o promove ao tipo mais forte, um teste novo toma o lugar da fila).
+# Esta trava guarda a sessão, o teste, a fila, o tipo em curso e a vez de cada fita: nenhum passo reserva depois de o dono perder a validade. Dentro dela só entram a conferência, a reserva (``_TRAVA_DAS_TRAVAS``, nunca o contrário) e a fila: nada de rede, nunca com a trava de uma fita.
 _TRAVA_PULSO = threading.Lock()
 _fila_de_pulsos: list[tuple[object, str]] = []
 _pulsando = False
-# O tipo e o dono do pulso que a thread está tocando agora, ou None. O dono
-# conta para a absorção: o pulso de uma sessão que acabou (ainda dormindo num
-# passo) não fala pela sessão seguinte.
+# O tipo e o dono do pulso em curso, ou None. O dono conta na absorção: o pulso de uma sessão acabada (ainda dormindo num passo) não fala pela seguinte.
 _tipo_em_curso: Optional[str] = None
 _dono_em_curso: object = None
-# Quanto o pulso dorme de cada vez num passo: o de uma sessão que acabou para
-# logo, em vez de segurar a fila até o fim do passo (8 s no "Brilho longo").
+# Quanto o pulso dorme de cada vez num passo: o de uma sessão acabada para logo, em vez de segurar a fila até o fim (8 s no "Brilho longo").
 _FATIA = 0.1
 
 
 def _limpar_fila_de_pulsos() -> None:
-    """Nada esperando, nada em curso. Chamar com ``_TRAVA_PULSO`` na mão."""
+    """Nada esperando, nada em curso. Chamar com ``_TRAVA_PULSO``."""
     global _tipo_em_curso, _dono_em_curso  # noqa: PLW0603  # pylint: disable=global-statement
     _fila_de_pulsos.clear()
     _tipo_em_curso = _dono_em_curso = None
 
 
 def _encerrar_pulsos(alvos: Optional[list[Fita]] = None) -> Optional[dict[str, int]]:
-    """A sessão acabou (ou o app vai fechar): o pulso em curso para no próximo
-    passo e a fila vai fora. Com ``alvos``, devolve a vez de cada um deles,
-    tirada na mesma trava."""
+    """A sessão acabou (ou o app vai fechar): o pulso em curso para no próximo passo e a fila vai fora. Com ``alvos``, devolve a vez de cada um, tirada na mesma trava."""
     global _jogo_da_sessao, _teste_do_pulso, _acompanhamento, _cor_ambiente, _teto_da_sessao  # noqa: PLW0603
     global _candidata, _ultima_troca  # noqa: PLW0603
     with _TRAVA_PULSO:
@@ -2074,19 +1600,14 @@ def _encerrar_pulsos(alvos: Optional[list[Fita]] = None) -> Optional[dict[str, i
 
 
 def _dono_vale(dono: object) -> bool:
-    """O pulso deste dono ainda vale? Chamar com ``_TRAVA_PULSO`` na mão."""
+    """O pulso deste dono ainda vale? Chamar com ``_TRAVA_PULSO``."""
     if dono is _jogo_da_sessao:
         return dono is not None
     return dono is _teste_do_pulso and _jogo_da_sessao is None
 
 
 def pulsar_conquista(tipo: str) -> None:
-    """Uma conquista saiu: as fitas piscam na cor do pulso e voltam à cor do jogo.
-
-    Chamar da thread de UI. Não faz nada fora de sessão, com o recurso
-    desligado ou com um tipo que não está em ``FORCA_DOS_PULSOS``. Durante um
-    pulso, só o "completo" espera a vez (ver ``_TRAVA_PULSO``).
-    """
+    """Uma conquista saiu: as fitas piscam na cor do pulso e voltam à do jogo (thread de UI). Sem efeito fora de sessão, com o recurso desligado ou com tipo fora de ``FORCA_DOS_PULSOS``; durante um pulso, só o "completo" espera a vez."""
     global _pulsando  # noqa: PLW0603
     jogo = _jogo_da_sessao
     if jogo is None or tipo not in FORCA_DOS_PULSOS or not ligada():
@@ -2113,8 +1634,7 @@ def pulsar_conquista(tipo: str) -> None:
 
 
 def _servir_em_thread(mensagem_de_falha: str) -> None:
-    """Põe `_servir_pulsos` numa thread (quem chama já marcou `_pulsando`); se não
-    der, desfaz a marca e esvazia a fila, para o próximo pulso tentar de novo."""
+    """Põe `_servir_pulsos` numa thread (quem chama já marcou `_pulsando`); se não der, desfaz a marca e esvazia a fila, para o próximo pulso tentar de novo."""
     global _pulsando  # noqa: PLW0603
     try:
         _em_thread(_servir_pulsos)
@@ -2142,7 +1662,6 @@ def _servir_pulsos() -> None:
 
 
 def _tingir(fita: Fita, cor: Cor, geracao: int) -> None:
-    """Só a cor, direto, sem fade: a fita já está acesa na sessão."""
     with _trava_da(fita):
         if not _vigente(fita, geracao):
             return
@@ -2150,15 +1669,11 @@ def _tingir(fita: Fita, cor: Cor, geracao: int) -> None:
         if _mandar(fita, {DP_MODO: "colour", DP_COR: cor_hex}):
             _mostrada[fita.id] = (True, cor_hex)
         else:
-            # Não se sabe o que a fita mostra: o próximo fade parte direto.
             _mostrada.pop(fita.id, None)
 
 
 def _deslizar(fita: Fita, cor: Cor, segundos: float, geracao: int) -> None:
-    """A cor chegando aos poucos, no ritmo do fade, e o comando direto no fim.
-
-    Fita sem cor conhecida (``_mostrada``) não tem de onde deslizar: vai direto.
-    """
+    """A cor chegando aos poucos, no ritmo do fade, e o comando direto no fim. Fita sem cor conhecida (``_mostrada``) vai direto."""
     with _trava_da(fita):
         if not _vigente(fita, geracao):
             return
@@ -2181,12 +1696,7 @@ def _rajada_da_tela(fita: Fita, degraus: list[tuple[int, str]], geracao: int) ->
 
 
 def _deslizar_da_tela(fita: Fita, cor: Cor, geracao: int) -> None:
-    """A troca da cor da tela: ``FADE_DA_TELA`` a ``RITMO_DA_TELA``.
-
-    Cada degrau sai no momento do passo dele, e não no ritmo dos que sobraram:
-    uma troca de 25° no mesmo brilho tem uns 25 degraus distintos, e a 15 por
-    segundo o fade de 4 s duraria menos de 2.
-    """
+    """A troca da cor da tela: ``FADE_DA_TELA`` a ``RITMO_DA_TELA``. Cada degrau sai no momento do passo dele, não no ritmo dos que sobraram (25° no mesmo brilho dão uns 25 degraus, e a 15/s o fade de 4 s duraria menos de 2)."""
     with _trava_da(fita):
         if not _vigente(fita, geracao):
             return
@@ -2200,13 +1710,9 @@ def _deslizar_da_tela(fita: Fita, cor: Cor, geracao: int) -> None:
 
 
 def _vez_do_pulso(dono: object, alvos: list[Fita]) -> Optional[dict[str, int]]:
-    """A vez de cada fita para o próximo passo do pulso, ou ``None`` se a
-    sessão acabou, o teste foi interrompido ou o recurso foi desligado, e o
-    pulso deve parar.
+    """A vez de cada fita para o próximo passo do pulso, ou ``None`` se a sessão acabou, o teste foi interrompido ou o recurso desligado (o pulso para).
 
-    A conferência do dono e a reserva são uma coisa só, sob a trava: sem
-    isso, o fim da sessão podia caber entre as duas, e o passo dourado, com a
-    vez maior, tomava o lugar da volta à cor do app.
+    Conferência do dono e reserva são uma coisa só, sob a trava: senão o fim da sessão caberia entre as duas e o passo dourado, com a vez maior, tomaria o lugar da volta à cor do app.
     """
     if not ligada():
         return None
@@ -2217,7 +1723,6 @@ def _vez_do_pulso(dono: object, alvos: list[Fita]) -> Optional[dict[str, int]]:
 
 
 def _esperar_o_passo(dono: object, segundos: float) -> bool:
-    """Dorme o passo em fatias; ``False`` assim que o dono perde a validade."""
     restante = segundos
     while True:
         fatia = min(_FATIA, restante)
@@ -2231,8 +1736,7 @@ def _esperar_o_passo(dono: object, segundos: float) -> bool:
 
 
 def _base_do_pulso(dono: object) -> Cor:
-    """A cor de antes do pulso: a do app no teste; na sessão, a que a tela
-    deu por último, ou a do jogo."""
+    """A cor de antes do pulso: a do app no teste; na sessão, a que a tela deu por último, ou a do jogo."""
     if isinstance(dono, _TesteDoPulso):
         return cor_do_app()
     return _cor_ambiente or cor_do_jogo(dono)
@@ -2268,12 +1772,8 @@ def _pulsar(dono: object, tipo: str) -> None:
 
 
 def testar_pulso() -> None:
-    """Toca o pulso normal com a cor e o estilo escolhidos, para ver como ficou.
-
-    Chamar da thread de UI. Numa sessão, é o pulso normal do jogo; fora dela,
-    parte da cor do app e volta a ela. Um clique novo toma o lugar do teste
-    anterior (o que tocava para no próximo passo); uma sessão que começa ou o
-    app fechando interrompem o teste do mesmo jeito.
+    """Toca o pulso normal com a cor e o estilo escolhidos (thread de UI). Numa sessão é o pulso normal do jogo; fora dela, parte da cor do app e volta a ela.
+    Um clique novo toma o lugar do teste anterior (que para no próximo passo); uma sessão que começa ou o app fechando o interrompem do mesmo jeito.
     """
     global _teste_do_pulso, _pulsando  # noqa: PLW0603
     if _jogo_da_sessao is not None:
@@ -2285,7 +1785,6 @@ def testar_pulso() -> None:
         if _jogo_da_sessao is not None:
             return
         _teste_do_pulso = dono = _TesteDoPulso()
-        # Fora de sessão a fila só tem testes: o novo é o único que espera.
         _fila_de_pulsos[:] = [(dono, "normal")]
         if _pulsando:
             return
@@ -2293,20 +1792,11 @@ def testar_pulso() -> None:
     _servir_em_thread("Não foi possível iniciar o teste do pulso")
 
 
-# endregion
 
 
 def _devolver_no_fechamento() -> None:
-    """A devolução do fechamento, na vez dela.
-
-    Espera um arranque ou reacender em curso terminar: correndo junto, o
-    vestir dele e a devolução disputariam cada fita, e se o vestir vencesse a
-    fita ficaria na cor do app com a chave já limpa. A espera cabe no prazo do
-    fechamento; estourado, a chave fica para o próximo arranque.
-
-    As fitas suspensas são tentadas também: suspensão poupa espera na troca
-    de cor, mas aqui é a última chance de devolvê-las antes de a chave ser
-    limpa.
+    """A devolução do fechamento, na vez dela: espera um arranque ou reacender em curso (junto, o vestir dele e a devolução disputariam cada fita, e se o vestir vencesse a fita ficaria na cor do app com a chave já limpa).
+    A espera cabe no prazo do fechamento; estourado, a chave fica para o próximo arranque. As fitas suspensas também são tentadas: é a última chance de devolvê-las antes de a chave ser limpa.
     """
     if not _TRAVA_ARRANQUE.acquire(timeout=PRAZO_FECHAMENTO):
         return
@@ -2318,18 +1808,8 @@ def _devolver_no_fechamento() -> None:
 
 
 def fechar() -> None:
-    """O app está fechando: devolve o estado de antes, com hora marcada.
-
-    Aqui se espera, ao contrário dos outros: é a última janela em que ainda há
-    processo para desfazer. Mas não se espera para sempre. Estourado o
-    ``PRAZO_FECHAMENTO``, o app sai assim mesmo — a chave continua gravada e o
-    ``restaurar_orfaos`` do próximo arranque termina o serviço. É exatamente
-    para isso que a chave existe.
-    """
-    # Antes de devolver qualquer coisa: o app fecha sem passar por ``voltar``,
-    # e um pulso ainda vivo tiraria uma vez maior que a da devolução e deixaria
-    # a fita dourada, com a chave já limpa e nada para o próximo arranque
-    # consertar.
+    """O app está fechando: devolve o estado de antes, com hora marcada. Aqui se espera (é a última janela com processo para desfazer), mas não para sempre: estourado o ``PRAZO_FECHAMENTO``, o app sai e o ``restaurar_orfaos`` do próximo arranque termina o serviço."""
+    # Antes de devolver: o app fecha sem passar por ``voltar``, e um pulso vivo tiraria uma vez maior que a da devolução e deixaria a fita dourada, com a chave limpa.
     _encerrar_pulsos()
     linha = _em_thread(_devolver_no_fechamento)
     linha.join(PRAZO_FECHAMENTO)
@@ -2338,10 +1818,8 @@ def fechar() -> None:
             "Fitas não devolvidas dentro de %ss; fica para o próximo arranque",
             PRAZO_FECHAMENTO,
         )
-        # A devolução ainda está usando as conexões: fechar agora a derrubaria
-        # no meio. O processo está saindo e leva os soquetes junto.
+        # A devolução ainda usa as conexões: fechar agora a derrubaria no meio; o processo está saindo e leva os soquetes.
         return
     fechar_conexoes()
 
 
-# endregion

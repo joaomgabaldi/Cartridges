@@ -6,18 +6,14 @@
 
 """A caixa do "Onde eu parei", que o usuário aumenta ou diminui pelo puxador.
 
-As duas caixas (a da tela do jogo e a da tela de sessão) dividem o mesmo tamanho,
-guardado no estado do app e reaplicado sempre que uma delas aparece. A regra é pura;
-o ``CaixaDaAnotacao`` a entrega ao QML.
+As duas caixas (tela do jogo e tela de sessão) dividem o mesmo tamanho, guardado no estado do app.
 """
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from cartridges import shared
 
-# O tamanho de sempre da caixa, que é também o menor.
 MINIMO = (320, 120)
-# Quanto da janela a caixa pode ocupar: maior que isso ela não cabe mais na tela.
 FRACAO_MAXIMA = (0.9, 0.8)
 _LARGURA = "notas-largura"
 _ALTURA = "notas-altura"
@@ -35,9 +31,9 @@ def novo_tamanho(
 
 
 def maximo_da_janela(largura: float, altura: float, livre_largura: float, livre_altura: float) -> tuple[int, int]:
-    """O maior tamanho da caixa: a fração da janela, e nunca além do espaço livre à direita e abaixo do balão.
+    """O maior tamanho da caixa: a fração da janela, limitada ao espaço livre à direita e abaixo do balão.
 
-    O balão do Qt não é empurrado para dentro da janela; sem o limite do espaço livre, o puxador sairia da janela.
+    O balão do Qt não é empurrado para dentro da janela; sem o limite, o puxador sairia dela.
     """
     return (
         round(min(largura * FRACAO_MAXIMA[0], livre_largura)),
@@ -69,9 +65,7 @@ class CaixaDaAnotacao(QObject):
 
     @Slot(float, float, float, float)
     def restaurar(self, janela_largura: float, janela_altura: float, livre_largura: float, livre_altura: float) -> None:
-        """Põe a caixa no tamanho guardado, entre o mínimo e o que a janela de agora comporta: o tamanho deixado com a
-        janela grande não passa da janela pequena, e um valor mexido à mão não encolhe a caixa a nada. Não regrava o
-        tamanho: o guardado fica para quando a janela voltar a ser grande."""
+        """Põe a caixa no tamanho guardado, entre o mínimo e o que a janela de agora comporta. Não regrava o guardado."""
         guardado = (shared.state_schema.get_int(_LARGURA), shared.state_schema.get_int(_ALTURA))
         maximo = maximo_da_janela(janela_largura, janela_altura, livre_largura, livre_altura) if janela_largura > 0 else guardado
         self._por(novo_tamanho(guardado, (0, 0), maximo))

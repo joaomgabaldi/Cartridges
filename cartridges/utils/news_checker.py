@@ -17,16 +17,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Vigia o feed do repack atrás de posts legíveis e acende o selo do botão Novidades (D83).
+"""Vigia o feed do repack atrás de posts legíveis e acende o selo do botão Novidades.
 
-A thread de trabalho só faz a rede; tudo o que toca a tela volta à thread principal por `na_thread_principal`. O
-checker guarda os posts buscados, então abrir a página é instantâneo e reabri-la não custa uma requisição.
-
-A novidade é um número só: `news-last-seen-ts` guarda a data do post mais novo que a pessoa já viu, e o selo acende
-quando o feed traz algo mais novo. Abrir a página reconhece tudo o que há nela.
-
-A primeira busca bem-sucedida depois da instalação é a linha de base, não novidade: sem registro do que a pessoa viu,
-todo post do feed seria "não visto", e acender o selo por um acervo que ninguém perdeu o esvaziaria de sentido.
+A thread de trabalho só faz a rede; o que toca a tela volta à principal. O checker guarda os posts buscados.
+`news-last-seen-ts` guarda a data do post mais novo já visto; o selo acende quando o feed traz algo mais novo,
+e abrir a página reconhece tudo. A primeira busca bem-sucedida depois da instalação é a linha de base, não novidade.
 """
 
 import logging
@@ -40,28 +35,25 @@ from cartridges import shared
 from cartridges.utils.news_feed import NewsPost, fetch_news
 from cartridges.utils.thread_principal import na_thread_principal
 
-# Horas entre as buscas em segundo plano. 0 desliga a busca recorrente (a página ainda busca ao abrir).
+# Horas entre as buscas em segundo plano; 0 desliga (a página ainda busca ao abrir).
 _INTERVAL_KEY = "news-check-interval"
 
-# O post mais novo já visto, no schema de estado: é estado da janela, não preferência.
 _LAST_SEEN_KEY = "news-last-seen-ts"
 
 
 class NewsChecker(QObject):
     """Dono da busca recorrente, dos posts em cache e da marca de não vistos."""
 
-    # A lista de posts foi trocada por uma diferente.
     postsMudaram = Signal()  # noqa: N815
-    # Uma busca terminou; `True` se trouxe posts, `False` se a rede (ou o feed) falhou.
+    # `True` se a busca trouxe posts, `False` se a rede (ou o feed) falhou.
     buscaTerminou = Signal(bool)  # noqa: N815
-    # A marca de não vistos virou; o argumento é o novo estado.
     naoVistasMudou = Signal(bool)  # noqa: N815
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.check_async)
-        # Uma busca por vez: o teste e a troca são travados porque o botão de atualizar pode apertar a qualquer hora.
+        # Uma busca por vez: o botão de atualizar pode apertar a qualquer hora.
         self._lock = threading.Lock()
         self._running = False
         # Depois do `stop()` (fim do app, ou a chave desligada) o resultado de uma busca em voo só solta a trava.
@@ -71,7 +63,6 @@ class NewsChecker(QObject):
 
     @property
     def posts(self) -> tuple[NewsPost, ...]:
-        """Os posts da última busca bem-sucedida, do mais novo ao mais antigo."""
         return self._posts
 
     @property
@@ -83,7 +74,6 @@ class NewsChecker(QObject):
         return self._has_unseen
 
     def start(self) -> None:
-        """Busca já e arma o relógio. Não espera nenhum jogo: as novidades são globais."""
         self._stopped = False
         self.check_async()
         self._timer.stop()
@@ -93,14 +83,12 @@ class NewsChecker(QObject):
             self._timer.start(min(interval_hours * 3600 * 1000, 2**31 - 1))
 
     def stop(self) -> None:
-        """Para o relógio e abandona a busca em voo."""
         self._stopped = True
         self._timer.stop()
 
     def check_async(self) -> None:
-        """Uma busca fora da thread principal, a menos que já haja uma."""
         if self._stopped:
-            # Parado (chave desligada, fim do app): quem pediu a busca (o "Atualizar") não espera um fim que não vem.
+            # Parado: quem pediu a busca (o "Atualizar") não espera um fim que não vem.
             self.buscaTerminou.emit(False)
             return
         with self._lock:
@@ -122,7 +110,6 @@ class NewsChecker(QObject):
             na_thread_principal(self._apply, posts)
 
     def _apply(self, posts: Optional[list[NewsPost]]) -> None:
-        """Entrega uma busca terminada ao estado. Roda na thread principal."""
         with self._lock:
             self._running = False
         if self._stopped:
@@ -132,8 +119,7 @@ class NewsChecker(QObject):
             self.buscaTerminou.emit(False)
             return
         fetched = tuple(posts)
-        # Os posts são imutáveis, então a igualdade é de verdade: a lista só é refeita (e a rolagem volta ao topo)
-        # quando mudou, não a cada busca de seis horas.
+        # A lista só é refeita (e a rolagem volta ao topo) quando mudou.
         if fetched != self._posts:
             self._posts = fetched
             self.postsMudaram.emit()
@@ -146,7 +132,7 @@ class NewsChecker(QObject):
     def _refresh_unseen(self) -> None:
         newest = self._newest_timestamp()
         last_seen = shared.state_schema.get_int64(_LAST_SEEN_KEY)
-        # Primeira vez: o feed de hoje é a linha de base (ver a docstring do módulo).
+        # Primeira vez: o feed de hoje é a linha de base.
         if last_seen == 0 and newest:
             shared.state_schema.set_int64(_LAST_SEEN_KEY, newest)
             last_seen = newest
@@ -160,7 +146,6 @@ class NewsChecker(QObject):
         self.naoVistasMudou.emit(unseen)
 
     def mark_seen(self) -> None:
-        """Reconhece todos os posts em cache; chamado ao abrir a página."""
         newest = self._newest_timestamp()
         if newest > shared.state_schema.get_int64(_LAST_SEEN_KEY):
             shared.state_schema.set_int64(_LAST_SEEN_KEY, newest)

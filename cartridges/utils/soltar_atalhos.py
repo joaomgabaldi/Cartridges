@@ -6,10 +6,8 @@
 
 """Atalhos arrastados para a janela: quais entram na pasta de atalhos.
 
-Os arquivos vêm de qualquer programa que arraste para cá, então só passam
-``.lnk`` e ``.url`` locais, de tamanho de atalho, e nunca por cima de um que
-já esteja na pasta. O conteúdo deles é julgado depois, pela varredura, como o
-de qualquer outro atalho da pasta.
+Os arquivos vêm de qualquer programa, então só passam ``.lnk`` e ``.url`` locais, de tamanho de atalho,
+e nunca por cima de um que já esteja na pasta. A varredura julga o conteúdo depois.
 """
 
 import logging
@@ -33,11 +31,7 @@ class Resultado:
 
 
 def filtrar(caminhos: list[Optional[Path]]) -> tuple[list[Path], int]:
-    """Os atalhos aceitos, na ordem em que vieram, e quantos ficaram de fora.
-
-    ``None`` é um arquivo sem caminho local (de rede, de um celular): fica de
-    fora como os demais.
-    """
+    """Os atalhos aceitos, na ordem em que vieram, e quantos ficaram de fora (``None``: sem caminho local)."""
     aceitos: list[Path] = []
     ignorados = 0
     for caminho in caminhos:
@@ -58,7 +52,6 @@ def filtrar(caminhos: list[Optional[Path]]) -> tuple[list[Path], int]:
 
 
 def copiar(caminhos: list[Optional[Path]]) -> Resultado:
-    """Copia os atalhos aceitos para a pasta de atalhos, sem sobrescrever."""
     aceitos, ignorados = filtrar(caminhos)
     copiados = ja_existiam = 0
     for caminho in aceitos:
@@ -82,8 +75,7 @@ def ao_soltar(
     caminhos: list[Optional[Path]], importando: bool
 ) -> tuple[list[str], bool]:
     """Os avisos a mostrar, em ordem, e se a importação deve rodar."""
-    # A varredura em andamento pode já ter passado pela pasta, e não veria
-    # os atalhos copiados agora.
+    # A varredura em andamento pode já ter passado pela pasta e não veria os atalhos copiados agora.
     if importando:
         return [_("Aguarde o fim da importação em andamento.")], False
     if not pasta_configurada():

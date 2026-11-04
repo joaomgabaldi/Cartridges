@@ -17,34 +17,16 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Pick a single genre to show for a game.
+"""Escolhe um único gênero para mostrar de um jogo.
 
-Steam has two different things that could pass for a genre, and neither works
-on its own.
-
-The `genres` field of appdetails is authoritative but useless at this size:
-Call of Duty is "Action", Doom is "Action", Hades is "Action". Nearly every
-game in a library would carry the same three or four words.
-
-The user tags are the ones that actually say what a game is — "Tiro em
-Primeira Pessoa (FPS)", "Metroidvania", "Soulslike" — but they are a free-for-
-all. The list mixes genres with settings ("Velho Oeste"), moods ("Relaxante"),
-art styles ("Gráficos Pixelados") and player counts ("Um Jogador"), so the
-top-voted tag is very often not a genre at all.
-
-So the tags are filtered through the table below, and the first *listed* tag by
-vote wins. Anything not in the table cannot be picked, which is the point: this
-is an allowlist, not a ranking. When no listed tag is present, the coarse
-`genres` field is the fallback — it is always right, just vague.
+O campo `genres` do appdetails é vago demais ("Action" para Call of Duty, Doom e Hades); as tags dos usuários dizem
+o que o jogo é, mas misturam gêneros com cenário, humor, estilo e número de jogadores. Por isso as tags passam pela
+tabela abaixo (uma lista de permissão, não um ranking) e vence a primeira *listada* por voto; sem nenhuma, o `genres` é o recurso.
 """
 
 from typing import Iterable, Optional
 
-# Tags that name a kind of game. Deliberately missing are the broad ones
-# ("Ação", "Aventura", "RPG", "Estratégia", "Simulação", "Casual", "Indie"):
-# they duplicate the `genres` field, which is already the fallback, and being
-# the most-voted tags on almost everything they would win every time and bury
-# the specific tag sitting right below them.
+# Faltam de propósito as tags amplas ("Ação", "RPG", "Indie"...): duplicam o `genres` e, sendo as mais votadas, enterrariam a tag específica logo abaixo.
 GENRE_TAGS = {
     # Tiro
     1663: "Tiro em Primeira Pessoa (FPS)",
@@ -154,12 +136,7 @@ GENRE_TAGS = {
     1036: "Educativo",
 }
 
-# Listed tags that name a mechanic the game *contains* rather than the kind of
-# game it is. They are only consulted once every other listed tag is exhausted,
-# because on raw votes they beat the better tag a few places below them: GTA V
-# is tagged "Simulador Automobilístico" and Spider-Man "Furtivo", both true and
-# both a poor answer to "what game is this". Assetto Corsa still ends up as a
-# driving sim — nothing above it applies.
+# Tags de mecânica que o jogo *contém* (GTA V é "Simulador Automobilístico"): só valem quando as outras se esgotam.
 VAGUE_GENRE_TAGS = frozenset(
     {
         1774,  # Tiro
@@ -177,10 +154,7 @@ VAGUE_GENRE_TAGS = frozenset(
     }
 )
 
-# The `genres` field of appdetails, mapped by id rather than by the string
-# Steam sends. The ids are stable across languages, so this table is what the
-# names shown actually come from — including their capitalisation, which the
-# API is inconsistent about.
+# O `genres` mapeado por id, não pela string da Steam: os ids não mudam com o idioma, e a API é inconsistente com maiúsculas.
 GENRE_NAMES = {
     "1": "Ação",
     "2": "Estratégia",
@@ -197,18 +171,12 @@ GENRE_NAMES = {
     "70": "Acesso Antecipado",
 }
 
-# Genres that say something about how a game is sold rather than what it is.
-# Kept as a last resort only, so a game whose only other genre is "Indie" still
-# shows something.
+# Dizem como o jogo é vendido, não o que é; último recurso.
 WEAK_GENRES = frozenset({"4", "23", "37", "70"})
 
 
 def pick_genre(genre_ids: Iterable[str], tag_ids: Iterable[int]) -> Optional[str]:
-    """Return the single genre to display, or None when nothing is usable.
-
-    ``tag_ids`` must be in Steam's own order, which is by descending vote
-    count — the whole selection rests on it.
-    """
+    """O gênero a mostrar, ou None. ``tag_ids`` deve vir na ordem da Steam (votos decrescentes): a escolha depende disso."""
     tag_ids = list(tag_ids)
     for wanted_vague in (False, True):
         for tag_id in tag_ids:

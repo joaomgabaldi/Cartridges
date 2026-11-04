@@ -43,7 +43,6 @@ from cartridges.utils.save_cover import ANIMATED_SUFFIXES, convert_cover, save_c
 from cartridges.utils.title_match import rank_candidates
 
 
-# Ver ``conditionaly_update_cover``.
 _downloads_animados = threading.BoundedSemaphore(2)
 
 
@@ -68,15 +67,10 @@ class SgdbNoImageFound(SgdbError):
 
 
 def auth_error(res: requests.Response) -> SgdbAuthError:
-    """Build the error for a 401, whatever the body turned out to be.
+    """O erro de um 401, qualquer que seja o corpo.
 
-    The API answers 401 with a JSON ``errors`` list, but the 401 the user
-    actually hits — a bad or expired key — is often served by Cloudflare in
-    front of it, as an HTML page. Reading that as JSON raised a JSONDecodeError
-    (or a KeyError on a JSON body of another shape), and JSONDecodeError is in
-    `SgdbManager.retryable_on`: the wrong-key case was retried three times and
-    then reported as a generic failure, so the one dialog that would have told
-    the user what to fix was the one they never saw.
+    Uma chave ruim costuma receber 401 do Cloudflare, em HTML: lido como JSON dava JSONDecodeError, que está em
+    `SgdbManager.retryable_on`, e o caso era repetido três vezes e virava falha genérica, sem o diálogo que diria o que corrigir.
     """
     try:
         message = str(res.json()["errors"][0])
@@ -86,13 +80,10 @@ def auth_error(res: requests.Response) -> SgdbAuthError:
 
 
 def _data_list(res: requests.Response) -> list:
-    """O ``data`` de um 200 do SGDB, exigindo o shape documentado.
+    """O ``data`` de um 200 do SGDB, exigindo o formato documentado.
 
-    Um 200 com JSON válido de outro formato — ``{"success": false}`` de um
-    proxy, por exemplo — levantava ``KeyError`` no ``res.json()["data"]``, que
-    nenhum ``except (SgdbError, RequestException)`` dos pickers cobre: a thread
-    de busca morria e o diálogo ficava no spinner para sempre. Shape errado
-    agora é ``SgdbBadRequest``, um erro tratável como qualquer outro.
+    Um 200 de outro formato (``{"success": false}`` de um proxy) levantava ``KeyError``, que os pickers não tratam:
+    a thread morria e o diálogo ficava no spinner. Agora é ``SgdbBadRequest``.
     """
     try:
         payload = res.json()
@@ -104,7 +95,7 @@ def _data_list(res: requests.Response) -> list:
 
 
 class SgdbHelper:
-    """Helper class to make queries to SteamGridDB"""
+    """Consultas ao SteamGridDB."""
 
     base_url = "https://www.steamgriddb.com/api/v2/"
 
@@ -115,9 +106,8 @@ class SgdbHelper:
         return headers
 
     def get_game_id(self, game: Jogo) -> Any:
-        """Get the best matching SGDB game id for a game. Can raise an exception."""
-        # The query is a path segment, so it must be URL-encoded — otherwise
-        # spaces and characters like ':', '&', "'" or accents break the request.
+        """O id SGDB que melhor casa com o jogo. Pode levantar."""
+        # A consulta é um segmento de caminho: precisa de URL-encode (espaços, ':', '&', acentos).
         query = clean_for_search(game.name)
         uri = f"{self.base_url}search/autocomplete/{quote(query, safe='')}"
         res = get_capped(uri, headers=self.auth_headers, timeout=10)
@@ -129,12 +119,8 @@ class SgdbHelper:
                 with_ids = [r for r in results if r.get("id") is not None]
                 if not with_ids:
                     raise SgdbBadRequest(res.status_code)
-                # Ranked by the same title matching as the Steam lookup, not by
-                # string equality: the query is the *cleaned* name and the
-                # results are raw, so "Alien: Isolation" never equalled
-                # anything and the autocomplete's first (fuzzy) hit won. A
-                # confident match ranks first; failing one, the best plausible
-                # title; a sequel or an unrelated title is never taken.
+                # Pelo mesmo casamento de títulos da Steam, não por igualdade: a consulta é o nome *limpo* e os
+                # resultados são crus. Um casamento confiante vence; senão o melhor plausível; sequência ou título alheio nunca.
                 ranked = rank_candidates(query, with_ids)
                 if not ranked:
                     raise SgdbGameNotFound(query)
@@ -144,15 +130,13 @@ class SgdbHelper:
             case 404:
                 raise SgdbGameNotFound(res.status_code)
             case _:
-                # raise_for_status() only raises on 4xx/5xx; guard against an
-                # unexpected 2xx/3xx silently returning None.
+                # raise_for_status() só levanta em 4xx/5xx; guarda contra um 2xx/3xx inesperado devolver None.
                 res.raise_for_status()
                 raise SgdbBadRequest(res.status_code)
 
     def _lista(self, uri: str, jogo: bool = True) -> list[dict]:
-        """O ``data`` de uma resposta em lista. Levanta na chave recusada e, com
-        ``jogo``, no 404 (`SgdbGameNotFound`); qualquer outro erro HTTP levanta pelo
-        ``raise_for_status``, e um 2xx/3xx inesperado vira lista vazia."""
+        """O ``data`` de uma resposta em lista. Levanta na chave recusada e, com ``jogo``, no 404 (`SgdbGameNotFound`);
+        um 2xx/3xx inesperado vira lista vazia."""
         res = get_capped(uri, headers=self.auth_headers, timeout=10)
         match res.status_code:
             case 200:
@@ -166,9 +150,7 @@ class SgdbHelper:
                 return []
 
     def search_games(self, query: str) -> list[dict]:
-        """Return the SGDB games matching a query (list of ``{id, name, …}``)."""
-        # Busca sem resultado é lista vazia, não "jogo não encontrado": aqui o
-        # 404 não tem significado próprio e cai no `raise_for_status`.
+        # Busca sem resultado é lista vazia, não "jogo não encontrado": o 404 cai no `raise_for_status`.
         return self._lista(
             f"{self.base_url}search/autocomplete/{quote(query, safe='')}", jogo=False
         )
@@ -176,11 +158,9 @@ class SgdbHelper:
     def get_grids(
         self, game_id: str, animated: bool = False, dimensions: Optional[str] = None
     ) -> list[dict]:
-        """Return every grid (cover) available for a SGDB game id.
+        """Os grids (capas) de um jogo SGDB, com ao menos ``url`` e ``thumb``.
 
-        Each item has at least ``url`` (full image) and ``thumb`` (preview).
-        ``dimensions`` (e.g. ``"600x900"``) is optional: restricting it drops
-        most animated grids, which rarely use the exact cover size.
+        ``dimensions`` (ex.: ``"600x900"``) é opcional: restringi-lo descarta a maioria das animadas, que raramente têm o tamanho exato.
         """
         params = []
         if dimensions:
@@ -193,23 +173,15 @@ class SgdbHelper:
         return self._lista(uri)
 
     def get_logos(self, game_id: str) -> list[dict]:
-        """Return the horizontal logos available for a SGDB game id.
+        """Os logos horizontais de um jogo SGDB, com ``url``, ``style`` e ``width``/``height``; escolher é com quem chama.
 
-        Each item carries at least ``url``, ``style`` (``official``/``white``/
-        ``black``/``custom``) and its intrinsic ``width``/``height``; picking
-        between them is the caller's job, since what makes a logo usable
-        depends on where it is drawn.
-
-        Only static, non-NSFW, non-joke assets are asked for: the details page
-        header is a piece of branding, not a place for an animation to loop
-        behind the metadata.
+        Pede só estáticos, sem NSFW nem piada: o cabeçalho dos detalhes é marca, não lugar para animação.
         """
         return self._lista(
             f"{self.base_url}logos/game/{game_id}?types=static&nsfw=false&humor=false"
         )
 
     def get_image_uri(self, game_id: str, animated: bool = False) -> Any:
-        """Get the image for a SGDB game id"""
         uri = f"{self.base_url}grids/game/{game_id}?dimensions=600x900"
         if animated:
             uri += "&types=animated"
@@ -228,34 +200,27 @@ class SgdbHelper:
             case 404:
                 raise SgdbGameNotFound(res.status_code)
             case _:
-                # raise_for_status() only raises on 4xx/5xx; guard against an
-                # unexpected 2xx/3xx silently returning None.
+                # raise_for_status() só levanta em 4xx/5xx; guarda contra um 2xx/3xx inesperado devolver None.
                 res.raise_for_status()
                 raise SgdbBadRequest(res.status_code)
 
     def conditionaly_update_cover(
         self, game: Jogo, additional_data: Optional[dict] = None
     ) -> None:
-        """Update the game's cover if appropriate"""
-
-        # Obvious skips
         use_sgdb = shared.schema.get_boolean("sgdb")
         if not use_sgdb or game.blacklisted:
             return
 
         prefer_sgdb = shared.schema.get_boolean("sgdb-prefer")
 
-        # Do nothing if a cover is already present and not preferring SGDB.
-        # Every suffix `save_cover` writes: checking only .tiff/.gif let a
-        # hand-picked animated .webp pass for "no cover", and saving the
-        # download then deleted it.
+        # Sem efeito se já há capa e não se prefere o SGDB. Confere todo sufixo que `save_cover` grava: só .tiff/.gif
+        # deixava um .webp animado escolhido à mão passar por "sem capa", e o download o apagava.
         if not prefer_sgdb and any(
             (shared.covers_dir / f"{game.game_id}{suffix}").is_file()
             for suffix in (*ANIMATED_SUFFIXES, ".tiff")
         ):
             return
 
-        # Get ID for the game
         try:
             sgdb_id = self.get_game_id(game)
         except (HTTPError, SgdbError) as error:
@@ -264,25 +229,20 @@ class SgdbHelper:
             )
             raise error
 
-        # Build different SGDB options to try
         image_uri_kwargs_sets = [{"animated": False}]
         if shared.schema.get_boolean("sgdb-animated"):
             image_uri_kwargs_sets.insert(0, {"animated": True})
 
-        # Download covers
         for uri_kwargs in image_uri_kwargs_sets:
             try:
                 uri = self.get_image_uri(sgdb_id, **uri_kwargs)
-                # Só duas capas animadas por vez em toda a importação: cada jogo
-                # busca numa thread própria, todas de uma vez, e uma animada pode
-                # ter 200 MB (o dobro na RAM durante o download).
+                # Só duas capas animadas por vez: cada jogo busca numa thread própria e uma animada pode ter 200 MB (o dobro na RAM).
                 with (
                     _downloads_animados
                     if uri_kwargs["animated"]
                     else contextlib.nullcontext()
                 ):
-                    # download_bytes streams with a size cap and raises on HTTP
-                    # errors, so an error page is never saved as a cover image
+                    # download_bytes limita o tamanho e levanta em erro HTTP: uma página de erro nunca vira capa.
                     content = download_bytes(
                         uri,
                         timeout=10,
@@ -296,28 +256,19 @@ class SgdbHelper:
                     converted = None
                     try:
                         tmp_file_path.write_bytes(content)
-                        # `convert_cover` takes a Path (it reads `.suffix`); it used
-                        # to be handed the raw str and only survived because the
-                        # resize branch short-circuits before that attribute.
+                        # `convert_cover` recebe um Path (lê `.suffix`).
                         converted = convert_cover(tmp_file_path)
-                        # A failed conversion returns None, and `save_cover` deletes
-                        # every existing cover for the game *before* it checks its
-                        # argument (passing None is how the details dialog clears a
-                        # cover). Handing the failure straight through therefore
-                        # destroyed the cover the game already had — a bad download
-                        # left it worse off than not trying at all.
+                        # A conversão que falha devolve None, e `save_cover` apaga as capas existentes *antes* de checar o
+                        # argumento (None é como a edição limpa a capa): passar a falha adiante destruía a capa que o jogo já tinha.
                         if converted is None:
                             raise SgdbNoImageFound()
                         save_cover(game.game_id, converted)
                     finally:
-                        # Remove the raw download and whatever temp the conversion
-                        # produced. Nothing downstream owns them: `save_cover`
-                        # copies, so both were being left in %TEMP% forever.
+                        # Remove o download e o temporário da conversão: `save_cover` copia, e ficariam no %TEMP% para sempre.
                         tmp_file_path.unlink(missing_ok=True)
                         if converted is not None and converted != tmp_file_path:
                             converted.unlink(missing_ok=True)
             except SgdbAuthError as error:
-                # Let caller handle auth errors
                 raise error
             except (HTTPError, SgdbError, RequestException) as error:
                 logging.warning(
@@ -328,10 +279,8 @@ class SgdbHelper:
                 )
                 continue
             else:
-                # Stop as soon as one is finished
                 return
 
-        # No image was added
         logging.warning(
             'No matching image found for game "%s" (SGDB ID %s)',
             game.name,

@@ -4,16 +4,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Capa a partir de um vídeo: o ffmpeg o converte num WebP animado do tamanho
-das capas (``shared.image_size``), sem áudio.
+"""Capa a partir de um vídeo: o ffmpeg o converte num WebP animado do tamanho das capas, sem áudio.
 
-Daí em diante é uma capa animada como as do SteamGridDB: ``save_cover`` a
-guarda como está e ``copias_animadas`` gera as cópias da grade e dos detalhes.
-O enquadramento é o das imagens escolhidas de um arquivo (``enquadramento``):
-um vídeo largo vai inteiro no meio, sobre uma cópia esticada e borrada dele.
-
-O ``ffmpeg.exe`` vai no instalador, ao lado do Python do app; fora dele (rodando
-do código-fonte), vale o que estiver no PATH.
+Daí em diante é uma capa animada como as do SteamGridDB. O enquadramento é o de ``enquadramento``.
+O ``ffmpeg.exe`` vai no instalador, ao lado do Python do app; rodando do código-fonte, vale o do PATH.
 """
 
 import io
@@ -33,14 +27,11 @@ from cartridges.utils.enquadramento import escala_sobre_fundo
 
 SUFIXOS = (".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi")
 
-# Só o começo do vídeo vira capa: um WebP de minutos seria enorme e levaria
-# minutos para codificar. 30 quadros por segundo é o que ``copias_animadas``
-# mantém; um vídeo mais lento conserva a própria taxa.
+# Só o começo do vídeo vira capa (um WebP de minutos seria enorme). 30 quadros/s é o que ``copias_animadas`` mantém.
 DURACAO_MAXIMA_S = 15
 QUADROS_POR_SEGUNDO = 30
 
-# A conversão de 15 s leva uns 20 s num computador modesto; o limite só existe
-# para um arquivo que trave o ffmpeg não deixar o diálogo carregando para sempre.
+# Só para um arquivo que trave o ffmpeg não deixar o diálogo carregando para sempre (15 s de vídeo levam uns 20 s).
 LIMITE_DE_TEMPO = 300
 
 
@@ -60,22 +51,18 @@ def executavel() -> Optional[Path]:
     return Path(achado) if achado else None
 
 
-# Pixel não quadrado (DVD, alguns celulares) vira quadrado antes de tudo, para o
-# tamanho medido ser o que se vê. A rotação dos celulares o ffmpeg já aplica.
+# Pixel não quadrado (DVD, celulares) vira quadrado antes de tudo, para o tamanho medido ser o que se vê.
 _PIXEL_QUADRADO = "scale=trunc(iw*sar/2)*2:ih,setsar=1"
 
 
 def filtro(largura: int, altura: int, capa: tuple[int, int]) -> str:
-    """O filtro do ffmpeg que leva quadros de ``largura`` x ``altura`` à capa."""
     largura_capa, altura_capa = capa
     inicio = f"{_PIXEL_QUADRADO},fps=fps='min(source_fps,{QUADROS_POR_SEGUNDO})',format=rgb24"
     escala = escala_sobre_fundo(largura, altura, capa)
     if escala is None:
         return f"{inicio},scale={largura_capa}:{altura_capa}:flags=bicubic"
-    # O fundo de ``composite_cover`` é a imagem reduzida a 2x2 e ampliada de
-    # volta com interpolação bilinear. O ``scale`` do ffmpeg não interpola a
-    # partir de 2 pixels (sai em quatro blocos chapados), então o degradê vem de
-    # um desfoque leve num 8x12 antes de ampliar: o mesmo resultado à vista.
+    # O fundo de ``composite_cover`` é a imagem a 2x2 ampliada com bilinear; o ``scale`` do ffmpeg não interpola
+    # de 2 pixels (sai em blocos chapados), então o degradê vem de um desfoque leve num 8x12.
     frente_l, frente_a = int(largura * escala), int(altura * escala)
     return (
         f"{inicio},split[origem][fundo_origem];"
@@ -114,7 +101,6 @@ def _rodar(argumentos: list[str]) -> bytes:
 
 
 def _tamanho(video: Path) -> tuple[int, int]:
-    """Largura e altura do primeiro quadro, já com rotação e pixel quadrado."""
     png = _rodar(
         ["-i", str(video), "-map", "0:v:0", "-frames:v", "1", "-vf", _PIXEL_QUADRADO,
          "-f", "image2pipe", "-c:v", "png", "-"]
@@ -126,45 +112,34 @@ def _tamanho(video: Path) -> tuple[int, int]:
         raise VideoFalhou(_("O arquivo não pôde ser lido como vídeo.")) from erro
 
 
-# Onde gravar as cópias reduzidas de uma capa e em que tamanho: o
-# ``copias_animadas.caminho_para`` de cada ``copias_animadas.tamanhos()``.
-# Chega por parâmetro para este módulo não depender do GTK.
+# Onde gravar as cópias reduzidas de uma capa e em que tamanho (``copias_animadas``).
 Copias = Callable[[Path], Iterable[tuple[Path, tuple[int, int]]]]
 
 
 def _saida_webp(rotulo: str, destino: Path, qualidade: int) -> list[str]:
-    # Com perda, como as capas animadas do SteamGridDB; o nível 2 de compressão
-    # custa ~10% a mais de arquivo que o 4 e codifica ~25% mais rápido, e é a
-    # codificação que domina o tempo da conversão.
+    # Com perda, como as capas do SteamGridDB; o nível 2 custa ~10% de arquivo e codifica ~25% mais rápido que o 4.
     return ["-map", f"[{rotulo}]", "-c:v", "libwebp_anim", "-lossless", "0",
             "-quality", str(qualidade), "-compression_level", "2", "-loop", "0",
             "-f", "webp", str(destino)]  # fmt: skip
 
 
 def converter(video: Path, copias: Copias = lambda _capa: ()) -> Path:
-    """Um WebP animado, em %TEMP%, com o começo de ``video`` como capa.
+    """Um WebP animado, em %TEMP%, com o começo de ``video`` como capa. Roda fora da thread principal.
 
-    As cópias reduzidas que ``copias`` pedir saem do mesmo ffmpeg, ao lado da
-    capa: a prévia da edição toca assim que a capa aparece, em vez de esperar a
-    geração delas pelo Pillow (dezenas de segundos para centenas de quadros), e
-    o Aplicar as reaproveita (``copias_animadas.adotar``).
-
-    Roda fora da thread principal: o ffmpeg leva segundos. Levanta
-    ``VideoFalhou`` com uma mensagem para o usuário.
+    As cópias reduzidas que ``copias`` pedir saem do mesmo ffmpeg (o Pillow levaria dezenas de segundos) e o
+    Aplicar as reaproveita. Levanta ``VideoFalhou``.
     """
     largura, altura = _tamanho(video)
     descritor, nome = tempfile.mkstemp(suffix=".webp")
     os.close(descritor)
     destino = Path(nome)
     reduzidas = list(copias(destino))
-    # Um ramo do filtro por saída: a capa e cada cópia, reduzida da capa com o
-    # mesmo Lanczos de ``copias_animadas``.
+    # Um ramo do filtro por saída: a capa e cada cópia, reduzida com o mesmo Lanczos de ``copias_animadas``.
     grafo = f"[0:v:0]{filtro(largura, altura, shared.image_size)},split={1 + len(reduzidas)}[capa]"
     grafo += "".join(f"[r{indice}]" for indice in range(len(reduzidas)))
     saidas = _saida_webp("capa", destino, 85)
     for indice, (caminho, (largura_copia, altura_copia)) in enumerate(reduzidas):
         grafo += f";[r{indice}]scale={largura_copia}:{altura_copia}:flags=lanczos[c{indice}]"
-        # A mesma qualidade das cópias do Pillow
         saidas += _saida_webp(f"c{indice}", caminho, 90)
     try:
         _rodar(

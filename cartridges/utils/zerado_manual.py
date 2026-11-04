@@ -4,16 +4,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Jogos Zerados adicionados à mão: jogos terminados que nunca passaram pelo
-Cartridges (console, outro PC, anos atrás).
+"""Jogos Zerados adicionados à mão: jogos terminados fora do app (console, outro PC, anos atrás).
 
-Viram uma tumba zerada: ``imported_N``, sem atalho, sem executável, sem
-tempo de jogo. Por isso backup, edição, Excluir e ordenação não precisam saber
-que eles existem.
-
-Sem repetição: um jogo que já está em Jogos Zerados ou na biblioteca não é
-criado de novo, e um desinstalado com a mesma identidade é marcado em vez de
-ganhar uma cópia.
+Viram um jogo zerado ``imported_N``, sem atalho, executável nem tempo de jogo; backup, edição, Excluir e
+ordenação não precisam saber que ele existe. Sem repetição: o que já está em Jogos Zerados ou na biblioteca
+não é criado de novo, e um desinstalado com a mesma identidade é marcado em vez de ganhar cópia.
 """
 
 from time import time
@@ -29,25 +24,19 @@ from cartridges.utils.steam import SteamAPIHelper, SteamRateLimiter
 
 
 def _chaves(nome: str, appid: Optional[str]) -> set[str]:
-    """As duas identidades de um jogo, appID e nome limpo: um
-    resultado da Steam é o mesmo jogo pelo appID ou pelo nome."""
+    """As duas identidades de um jogo, appID e nome limpo."""
     chaves = {f"nome:{clean_for_search(nome or '').casefold()}"}
     if appid:
         chaves.add(f"steam:{appid}")
     return chaves
 
 
-# Chave de `_chaves` → os jogos (fora da lista negra) com ela, com a posição de cada
-# um na store: `situacao` decide pela ordem da store (o último da biblioteca vence).
+# Chave de `_chaves` → os jogos (fora da lista negra) com ela e a posição de cada um na store (o último da biblioteca vence).
 Indice = dict[str, list[tuple[int, Jogo]]]
 
 
 def indice() -> Indice:
-    """Os jogos por chave, para várias `situacao` seguidas sem relimpar cada nome.
-
-    O seletor pergunta por cada resultado da busca: sem o índice, cada pergunta
-    percorria a biblioteca inteira limpando o nome de cada jogo.
-    """
+    """Os jogos por chave, para várias `situacao` seguidas sem relimpar cada nome da biblioteca."""
     por_chave: Indice = {}
     for posicao, jogo in enumerate(shared.store):
         if jogo.blacklisted:
@@ -60,12 +49,11 @@ def indice() -> Indice:
 def situacao(
     nome: str, appid: Optional[str] = None, jogos: Optional[Indice] = None
 ) -> tuple[str, Optional[Jogo]]:
-    """Onde o jogo ``nome``/``appid`` já está: ``"zerado"``, ``"biblioteca"``,
-    ``"desinstalado"`` (o jogado por último, se houver vários) ou ``"novo"``.
+    """Onde o jogo já está: ``"zerado"``, ``"biblioteca"``, ``"desinstalado"`` (o jogado por último) ou ``"novo"``.
 
-    ``jogos``: um `indice` já montado (sem ele, é montado agora)."""
+    ``jogos``: um `indice` já montado."""
     por_chave = indice() if jogos is None else jogos
-    # Pela posição: o jogo com as duas chaves conta uma vez, na ordem da store.
+    # Pela posição: o jogo com as duas chaves conta uma vez.
     achados = {
         posicao: jogo
         for chave in _chaves(nome, appid)
@@ -88,7 +76,7 @@ def situacao(
 
 
 def criar(nome: str, appid: Optional[str] = None) -> Jogo:
-    """Registra a tumba zerada, já na grade de Jogos Zerados."""
+    """Cria o jogo zerado, já na grade de Jogos Zerados."""
     dados = {
         "game_id": shared.store.proximo_id_importado(),
         "source": "imported",
@@ -107,12 +95,9 @@ def criar(nome: str, appid: Optional[str] = None) -> Jogo:
 
 
 def buscar_dados(jogo: Jogo) -> None:
-    """Steam → HowLongToBeat → SteamGridDB, um depois do outro, como na
-    atualização de metadados (`metadata_refresh`). Sem appID não há o que
-    buscar: um jogo que a Steam não conhece recebe a capa pela edição.
+    """Steam → HowLongToBeat → SteamGridDB, em sequência, como na atualização de metadados.
 
-    `sem_ligacao`: o bloqueio de `situacao` já impede um zerado com o appID de
-    um jogo da biblioteca, e a ligação não precisa rodar por baixo.
+    Sem appID não há o que buscar. `sem_ligacao`: `situacao` já impede um zerado com o appID de um jogo da biblioteca.
     """
     ordem = [
         manager
@@ -142,8 +127,7 @@ def buscar_dados(jogo: Jogo) -> None:
 
 
 def adicionar(nome: str, appid: Optional[str] = None) -> Optional[Jogo]:
-    """O clique no diálogo. ``None`` quando o jogo já está em Jogos Zerados ou
-    na biblioteca (a linha já vem desativada; isto é a segunda trava)."""
+    """O clique no diálogo. ``None`` se o jogo já está em Jogos Zerados ou na biblioteca (segunda trava)."""
     estado, existente = situacao(nome, appid)
     if estado == "desinstalado" and existente is not None:
         existente.definir_status("beaten")
@@ -158,7 +142,6 @@ def adicionar(nome: str, appid: Optional[str] = None) -> Optional[Jogo]:
 
 
 def helper_da_steam() -> SteamAPIHelper:
-    """O helper do manager, como na edição: um `SteamRateLimiter` por busca
-    vazaria a thread de recarga dele."""
+    """O helper do manager: um `SteamRateLimiter` por busca vazaria a thread de recarga dele."""
     manager = shared.store.managers.get(SteamAPIManager)
     return manager.steam_api_helper if manager else SteamAPIHelper(SteamRateLimiter())

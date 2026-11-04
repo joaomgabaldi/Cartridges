@@ -2,10 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Os arquivos do logo de um jogo, sem o gi: o que a store precisa para mover e apagar.
-
-O resto (busca, decodificação) continua em `game_logo`, que reexporta estes nomes.
-"""
+"""Os arquivos do logo de um jogo: o que a store precisa para mover e apagar."""
 
 from pathlib import Path
 from typing import Optional
@@ -20,7 +17,6 @@ def sidecar_path(game_id: str) -> Path:
 
 
 def remove_logo(game_id: str, keep: Optional[str] = None) -> None:
-    """Delete ``game_id``'s cached logo files (except ``keep``, if given)."""
     for suffix in IMAGE_SUFFIXES:
         path = shared.logos_dir / f"{game_id}{suffix}"
         if path.name != keep:

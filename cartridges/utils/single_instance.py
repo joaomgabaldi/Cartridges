@@ -17,23 +17,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Keep a second copy of the app from running alongside the first.
+"""Impede que uma segunda cópia do app rode junto da primeira.
 
-The previous (GTK) version relied on GApplication, which promises this — that is
-what the application id is for — but delivers it over the D-Bus session bus, and Windows has no session bus
-running. GLib tries to start one by spawning ``gdbus.exe``; when that fails
-(a mismatched MSYS2 build, missing dependencies) it prints
-
-    gdbus.exe dbus binary failed to launch bus, maybe incompatible version
-
-and GApplication quietly falls back to behaving like a non-unique app. Nothing
-crashes, so the failure is easy to read as cosmetic — but the uniqueness check
-is gone with it, and two Cartridges windows both loading and writing the same
-game files means one of them saving over the other's playtime.
-
-A named mutex is the platform's own answer to this question and needs nothing
-running to work. Windows destroys it when the process ends, including when it
-is killed, so a crash cannot leave a lock behind that blocks the next start.
+Duas cópias gravando os mesmos arquivos de jogo fariam uma sobrescrever o tempo de jogo da outra. Um mutex
+nomeado não depende de nada rodando, e o Windows o destrói quando o processo termina (inclusive se morto),
+então uma queda não deixa uma trava que bloqueie a próxima abertura.
 """
 
 import hashlib
@@ -45,22 +33,8 @@ from typing import Any, Callable, Optional
 
 from cartridges import shared
 
-# Session-local namespace, which is the same granularity as the data being
-# protected: the games, covers and logos this guard exists to keep two copies
-# from writing at once all live under the *user's* profile, so two different
-# users are never touching the same files in the first place.
-#
-# `Global\` was wrong in both directions. Where the cross-session handle is
-# openable it locks out a second Windows user entirely — they cannot start the
-# app at all while the first is logged in, over data they do not share — and
-# where it is not, `CreateMutexW` fails with ERROR_ACCESS_DENIED and the guard
-# silently falls open, which is the case it was added to prevent.
-#
-# The name is arbitrary but must never change: it is the identity of the lock.
-#
-# Só o canal final sem `CARTRIDGES_DADOS` usa os nomes de sempre (D76). O `-dev` e os testes têm os seus, um por
-# pasta de dados: com os de sempre, o app de desenvolvimento se acharia a segunda cópia do Cartridges instalado
-# aberto nesta máquina e o acordaria em vez de abrir.
+# Namespace local da sessão, a granularidade dos dados protegidos (no perfil do usuário). `Global\` falhava nos dois sentidos: trancava um segundo usuário do Windows ou, sem acesso, o `CreateMutexW` dava ERROR_ACCESS_DENIED e a guarda abria em silêncio. O nome nunca pode mudar: é a identidade da trava.
+# Só o canal final sem `CARTRIDGES_DADOS` usa os nomes de sempre; o `-dev` e os testes têm os seus, por pasta de dados, senão o app de desenvolvimento acordaria o instalado em vez de abrir.
 _NOME_DO_CANAL_FINAL = "Local\\io.github.joaomgabaldi.Cartridges"
 
 
@@ -76,18 +50,14 @@ def nomes() -> tuple[str, str]:
 
 _ERROR_ALREADY_EXISTS = 183
 
-# Held for the lifetime of the process. Keeping the handle in a module global
-# is the whole mechanism: if it were garbage collected the mutex would be
-# released and the guard would stop guarding.
+# Vive com o processo: se o handle fosse coletado, o mutex seria liberado e a guarda deixaria de valer.
 _handle: Optional[Any] = None
 
 
 def acquire() -> bool:
-    """Claim the single-instance lock. False when another copy already has it.
+    """Toma a trava de instância única; False se outra cópia já a tem.
 
-    Always true off Windows, where this is not the mechanism in use, and also
-    true if the lock cannot be created at all — a guard that cannot be built is
-    not a reason to refuse to start the app.
+    True também se a trava nem puder ser criada: uma guarda que não se constrói não é motivo para recusar a abertura.
     """
     global _handle  # pylint: disable=global-statement
 
@@ -98,9 +68,6 @@ def acquire() -> bool:
         import ctypes  # pylint: disable=import-outside-toplevel
 
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        # Spelled out with plain ctypes types rather than through `wintypes`,
-        # which cannot even be imported on other platforms: HANDLE is a
-        # pointer, BOOL an int, and the name a wide string.
         kernel32.CreateMutexW.argtypes = (
             ctypes.c_void_p,
             ctypes.c_int,
@@ -121,9 +88,7 @@ def acquire() -> bool:
         return True
 
     if last_error == _ERROR_ALREADY_EXISTS:
-        # Someone else owns the mutex. This handle refers to the same object
-        # but owns nothing, so closing it releases no lock — it is just not
-        # left dangling in a process that is about to exit anyway.
+        # Outra cópia é dona do mutex: este handle não possui nada, fechá-lo não solta a trava.
         kernel32.CloseHandle(ctypes.c_void_p(handle))
         return False
 
@@ -132,9 +97,7 @@ def acquire() -> bool:
 
 
 def release() -> None:
-    """Solta o lock antes de um reinício pedido pelo próprio app (restauração
-    de backup): o processo novo sobe enquanto este ainda termina de sair, e
-    sem isto ele se acharia a segunda cópia e fecharia."""
+    """Solta o lock antes de um reinício pedido pelo app (restauração de backup): sem isso, o processo novo se acharia a segunda cópia e fecharia."""
     global _handle  # pylint: disable=global-statement
 
     if _handle is None or sys.platform != "win32":
@@ -148,28 +111,21 @@ def release() -> None:
     _handle = None
 
 
-# Título da janela principal (Principal.qml). Não passa por tradução — a
-# interface é hardcoded — então dá para casar contra ele daqui, onde o gettext
-# do launcher pode nem ter sido instalado ainda.
+# Título da janela principal (Principal.qml), sem tradução: dá para casar daqui, antes de o gettext existir.
 _MAIN_WINDOW_TITLE = "Kyron"
 
 
-# Evento nomeado que a segunda cópia acende para a primeira: a janela principal
-# pode estar escondida (fechada com tarefas rodando, só a das tarefas à vista), e
-# uma janela que o Qt escondeu não volta por Win32 — o Qt segue achando que ela
-# não está na tela. Só a primeira cópia sabe se mostrar. Mesmo escopo e mesma
-# regra do mutex (`nomes()[1]`).
+# Evento nomeado que a segunda cópia acende para a primeira: a janela principal pode estar escondida pelo Qt,
+# e uma janela escondida por ele não volta por Win32. Só a primeira cópia sabe se mostrar. Mesmo escopo do mutex.
 
 _EVENT_MODIFY_STATE = 0x0002
 _INFINITE = 0xFFFFFFFF
 
 
 def watch_second_launch(callback: Callable[[], None]) -> None:
-    """Chama ``callback`` sempre que uma segunda cópia do app tentar abrir.
+    """Chama ``callback`` (numa thread de fundo) sempre que uma segunda cópia tentar abrir.
 
-    Numa thread de fundo: quem chama entrega o resultado à thread da interface.
-    Best-effort como o resto do módulo: sem o evento, só se perde o retorno da
-    janela escondida.
+    Best-effort: sem o evento, só se perde o retorno da janela escondida.
     """
     if sys.platform != "win32":
         return
@@ -213,30 +169,21 @@ def _wake_running_instance() -> None:
     kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
     if not (handle := kernel32.OpenEventW(_EVENT_MODIFY_STATE, False, nomes()[1])):
         return
-    # Este processo acabou de ser iniciado pelo usuário e carrega o direito de
-    # foreground: cede-o à primeira cópia, que é quem vai mostrar a janela.
+    # Este processo carrega o direito de foreground do clique do usuário: cede-o à primeira cópia, que mostra a janela.
     ctypes.WinDLL("user32").AllowSetForegroundWindow(ctypes.c_uint32(0xFFFFFFFF))
     kernel32.SetEvent(handle)
     kernel32.CloseHandle(handle)
 
 
 def present_running_instance() -> None:
-    """Traz a janela da instância que já está rodando para a frente.
+    """Traz para a frente a janela da instância que já roda (achada via Win32), senão o segundo clique no atalho parece não fazer nada.
 
-    O GApplication faria isso sozinho (o activate da segunda ativação apresenta
-    a janela), mas esse caminho viaja pelo D-Bus, que não existe no Windows —
-    é o mesmo motivo de o lock acima existir. Então o segundo processo acha a
-    janela via Win32 e a realça antes de sair; sem isto, o segundo clique no
-    atalho parece simplesmente não fazer nada.
-
-    Best-effort de ponta a ponta: qualquer falha custa só o realce, nunca pode
-    impedir o processo de sair limpo.
+    Best-effort: qualquer falha custa só o realce, nunca impede o processo de sair limpo.
     """
     if sys.platform != "win32":
         return
 
-    # Com o próprio `try`: se acordar a primeira cópia falhar, o realce abaixo
-    # ainda é tentado.
+    # `try` próprio: se acordar a primeira cópia falhar, o realce abaixo ainda é tentado.
     try:
         _wake_running_instance()
     except Exception as error:  # pylint: disable=broad-exception-caught
@@ -270,9 +217,7 @@ def present_running_instance() -> None:
             class_name = ctypes.create_unicode_buffer(64)
             user32.GetWindowTextW(hwnd, title, 64)
             user32.GetClassNameW(hwnd, class_name, 64)
-            # O par título + classe "Qt*" (as janelas do Qt registram classes como
-            # Qt6120QWindowIcon) evita realçar uma pasta do Explorer que por acaso
-            # se chame Cartridges, e também o Cartridges GTK (classes gdkSurface*).
+            # Título + classe "Qt*" (ex.: Qt6120QWindowIcon) evita realçar uma pasta do Explorer com o mesmo nome e a versão anterior (GTK).
             if title.value == _MAIN_WINDOW_TITLE and class_name.value.lower().startswith(
                 "qt"
             ):
@@ -285,15 +230,11 @@ def present_running_instance() -> None:
             return
 
         hwnd = ctypes.c_void_p(found[0])
-        # Principal escondida (só a janela das tarefas à vista): quem a mostra é
-        # a primeira cópia, ao acordar. Dar foreground aqui à HWND escondida a
-        # faria reaparecer sem que o Qt soubesse que ela está na tela.
+        # Principal escondida: quem a mostra é a primeira cópia; dar foreground à HWND escondida a faria reaparecer sem o Qt saber.
         if not user32.IsWindowVisible(hwnd):
             return
         if user32.IsIconic(hwnd):
             user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-        # Funciona porque este processo acabou de ser iniciado pelo usuário e
-        # ainda carrega o direito de foreground dessa interação.
         user32.SetForegroundWindow(hwnd)
     except Exception as error:  # pylint: disable=broad-exception-caught
         logging.warning("Could not present the running Cartridges window: %s", error)

@@ -17,21 +17,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Poll the repack feed and light up the "update available" notice per game.
+"""Consulta o feed de repacks e acende o aviso de "atualização disponível" por jogo.
 
-The network half runs on a worker thread; the moment it lands, everything that
-touches game state or the UI is bounced back onto the main thread, because the
-save/update signals drive GTK widgets and those are not thread-safe.
-
-The state model is deliberately tiny and lives on the games themselves (see
-:class:`~cartridges.jogo.Jogo`), so this class holds no per-game memory and
-caches no game lists — exactly the constraint the design calls for. Novelty is
-decided per game by a single timestamp, ``update_dismissed_ts``: a digest is
-"new to this game" when it is more recent than the last patch the user
-dismissed. A freshly opted-in game has a dismissed timestamp of 0, so it is
-caught up on the most recent digest that mentions it the first time the feed is
-read, and everything after that is gated by what the user has acknowledged. The
-feed only carries recent posts, so this can never surface an old back-catalogue.
+A rede roda numa thread de trabalho; o que toca jogos ou tela volta à principal. O estado vive nos jogos (:class:`~cartridges.jogo.Jogo`): um digest é novo para o jogo se for mais recente que o último patch dispensado (``update_dismissed_ts``). Um jogo recém-ativado (0) é posto em dia com o digest mais recente que o cita, e o feed só traz posts recentes.
 """
 
 import logging
@@ -50,44 +38,26 @@ _INTERVAL_KEY = "updates-check-interval"
 
 
 class UpdatesChecker:
-    """Owns the recurring repack-feed poll and applies its results."""
+    """Dono da consulta recorrente ao feed e da aplicação dos resultados."""
 
     def __init__(self) -> None:
-        # Temporizador da próxima consulta: cancelável e nunca armado duas vezes.
         self._timer: Optional[threading.Timer] = None
-        # Sobe a cada armação e a cada `stop()`: uma partida que já disparou mas ainda
-        # espera na fila da thread principal confere o número e se descarta.
+        # Sobe a cada armação e a cada `stop()`: a partida já disparada que espera na fila confere o número e se descarta.
         self._armacao = 0
-        # A single in-flight poll guard: a slow network request must not stack
-        # up behind the timer firing again. Guarded by `_lock` because the
-        # test-and-set is what keeps exactly one worker thread alive, and
-        # `check_async` is reachable from the timer, from startup and from the
-        # details dialog — an invariant worth enforcing rather than documenting.
+        # Uma consulta por vez: `check_async` é chamada pelo timer, pela abertura e pela edição.
         self._lock = threading.Lock()
         self._running = False
-        # Set once the app is shutting down. A poll already on the worker thread
-        # cannot be cancelled, so instead its result is dropped: `_apply` walks
-        # the store, saves games and touches the UI, none of which is
-        # legal once `do_shutdown` has run.
+        # No encerramento: a consulta em voo não se cancela, então o resultado é descartado (`_apply` mexe na store e na tela).
         self._stopped = False
-        # The "you have updates" toast is a greeting, shown once per app run
-        # after the first poll that produced results — not on every 12h re-poll.
+        # O aviso "há atualizações" sai uma vez por execução, não a cada consulta.
         self._startup_toast_shown = False
 
-    # -- scheduling -----------------------------------------------------------
-
     def start(self) -> None:
-        """Kick off an immediate poll and arm the recurring timer.
-
-        Safe to call once at startup. The interval comes from settings; 0 turns
-        the whole feature off without touching any game.
-        """
+        """Consulta já e arma o timer recorrente. O intervalo vem das preferências; 0 desliga tudo sem tocar nos jogos."""
         self._stopped = False
         self.check_async()
 
-        # Cancel before reading the setting, not after: returning early on a 0
-        # interval used to leave a previously armed timer running, so turning
-        # the feature off only took effect on the next launch.
+        # Cancela antes de ler a opção: com intervalo 0, o timer já armado seguiria rodando.
         self._cancelar_timer()
         self._armar()
 
@@ -96,7 +66,6 @@ class UpdatesChecker:
         if interval_hours <= 0:
             return
         self._armacao += 1
-        # O temporizador roda numa thread própria; a consulta volta à principal.
         self._timer = threading.Timer(
             min(interval_hours * 3600, threading.TIMEOUT_MAX),
             na_thread_principal, (self._on_timer, self._armacao)
@@ -111,7 +80,6 @@ class UpdatesChecker:
             self._timer = None
 
     def stop(self) -> None:
-        """Cancel the recurring timer and disown any poll still in flight."""
         self._stopped = True
         self._cancelar_timer()
 
@@ -121,18 +89,11 @@ class UpdatesChecker:
         self.check_async()
         self._armar()  # recorrente
 
-    # -- the poll -------------------------------------------------------------
-
     def check_async(self) -> None:
-        """Run one poll off the main thread, unless one is already running.
-
-        The network request is skipped entirely when no game opted in: the
-        feature costs nothing until at least one game asks to be watched.
-        """
+        """Uma consulta fora da principal, se não houver uma. Sem jogo ativado, nem faz a requisição."""
         if self._stopped:
             return
-        # Over a snapshot, like every other walk of the store here: an import
-        # adds games from its own worker thread while this runs.
+        # Sobre um retrato: a importação adiciona jogos de outra thread.
         if not any(getattr(game, "track_updates", False) for game in list(shared.store)):
             return
         with self._lock:
@@ -146,22 +107,17 @@ class UpdatesChecker:
         try:
             posts = fetch_feed()
         except requests.RequestException as error:
-            # A failed poll is a non-event: the notices simply don't change this
-            # round. Logged at info because a flaky network is expected.
+            # Consulta que falha não é evento: os avisos não mudam.
             logging.info("Repack update feed poll failed: %s", error)
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Unexpected error polling repack update feed", exc_info=True)
         finally:
             na_thread_principal(self._apply, posts)
 
-    # -- applying results (main thread) --------------------------------------
-
     def _apply(self, posts: Optional[list[UpdatePost]]) -> None:
-        """Fold a finished poll into game state. Runs on the main thread."""
         with self._lock:
             self._running = False
-        # The window and the store may already be gone; a result that arrives
-        # after shutdown is thrown away rather than written back.
+        # Resultado que chega depois do encerramento é descartado.
         if self._stopped or not posts:
             return
 
@@ -169,13 +125,7 @@ class UpdatesChecker:
         self._maybe_show_startup_toast()
 
     def _evaluate_all(self, posts: list[UpdatePost]) -> None:
-        """Run every tracked game against a poll's results.
-
-        Walks a snapshot rather than the store itself. This is a fuzzy title
-        comparison per game and per digest entry over the whole library, which
-        is far too long to hold the store still for — and it is reachable while
-        an import is adding games from its own thread.
-        """
+        """Confere cada jogo acompanhado com o resultado. Sobre um retrato: a comparação difusa é longa demais para segurar a store, e a importação adiciona jogos."""
         for game in list(shared.store):
             if getattr(game, "removed", False) or not getattr(
                 game, "track_updates", False
@@ -184,12 +134,7 @@ class UpdatesChecker:
             self._evaluate_game(game, posts)
 
     def _maybe_show_startup_toast(self) -> None:
-        """Greet the user once with a toast naming games that have an update.
-
-        Fires after the first poll that reached evaluation, so it lands just
-        after the import toasts rather than on every background re-poll. Lists
-        every tracked game whose notice is currently up, dismissed ones aside.
-        """
+        """Avisa uma vez, após a primeira consulta avaliada, os jogos com atualização pendente (os dispensados ficam de fora)."""
         if self._startup_toast_shown:
             return
         self._startup_toast_shown = True
@@ -208,17 +153,11 @@ class UpdatesChecker:
             joined = ", ".join(names[:-1]) + _(" e ") + names[-1]
             message = _("Atualizações para {} disponíveis").format(joined)
 
-        # Texto puro: a fila de avisos não interpreta markup, então o "&" ou "<" de
-        # um nome de jogo aparece como é. Ela também enfileira, sem furar a fila.
+        # Texto puro: a fila de avisos não interpreta markup.
         shared.aplicativo.avisos.adicionar(message)
 
     def _evaluate_game(self, game: Jogo, posts: list[UpdatePost]) -> None:
-        """Raise the notice for ``game`` if an undismissed patch mentions it.
-
-        The newest matching digest wins, and its repack link rides along so the
-        notice can open the right page. ``posts`` is newest-first, so the first
-        match is the newest one and the loop can stop there.
-        """
+        """Acende o aviso de ``game`` se um patch não dispensado o cita. Vence o digest mais novo (``posts`` vem do mais novo), com o link do repack."""
         best_ts = 0
         best_url = ""
         for post in posts:
@@ -228,16 +167,11 @@ class UpdatesChecker:
                 best_url = entry.url
                 break
 
-        # A patch counts only when it is strictly newer than the last one the
-        # user dismissed — that single comparison is the whole "don't nag about
-        # a patch I already handled, but do speak up for an even newer one" rule.
+        # Só conta patch estritamente mais novo que o último dispensado.
         if best_ts <= game.update_dismissed_ts:
             return
 
-        # Persist when *either* the advertised patch or its link changed. Keying
-        # only off the timestamp would miss the case where the notice was already
-        # raised (same digest) but its repack link is still missing — e.g. a
-        # game flagged by an older build that predates the stored URL.
+        # Grava se o patch *ou* o link mudou: só pelo timestamp perderia o aviso já aceso sem link (versão antiga).
         if best_ts != game.update_available_ts or best_url != game.update_url:
             game.update_available_ts = best_ts
             game.update_url = best_url
@@ -249,17 +183,14 @@ class UpdatesChecker:
                 best_url or "(no link)",
             )
             game.save()
-            # A página de detalhes segue o `atualizado` do jogo.
             game.update()
 
     @staticmethod
     def _match_in_post(game: Jogo, post: UpdatePost) -> Optional[DigestEntry]:
-        """Return the digest entry that confidently matches ``game``, or None.
+        """A entrada do digest que casa com ``game`` com confiança (``CONFIDENT_SCORE``), ou None.
 
-        Confidence is the title matcher's own bar (``CONFIDENT_SCORE``): the
-        numeric-signature gate keeps a sequel's patch from ever lighting up the
-        base game, and the edition rules let "Game: Definitive Edition" in the
-        library still match a plain "Game" in the digest.
+        A assinatura numérica impede que o patch de uma sequência acenda o jogo base, e as regras de edição
+        deixam "Game: Definitive Edition" casar com "Game".
         """
         for entry in post.entries:
             if compare_titles(game.name, entry.name).score >= CONFIDENT_SCORE:

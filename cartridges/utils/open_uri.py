@@ -19,9 +19,8 @@
 
 """Entrega uma URL ao navegador do usuário, com segurança.
 
-Várias dessas URLs vêm de um feed RSS ou de um JSON de terceiros: só ``http``/``https``
-é seguido. Uma URL ``file:`` ou ``javascript:`` que chegue a um texto não pode virar
-uma abertura pelo sistema só porque alguém clicou numa linha.
+As URLs vêm de feeds RSS e JSON de terceiros: só ``http``/``https`` é seguido,
+para que um ``file:`` ou ``javascript:`` não vire abertura pelo sistema.
 """
 
 import logging
@@ -33,10 +32,7 @@ _ALLOWED_SCHEMES = ("http://", "https://")
 
 
 def abrir_url(url: str) -> bool:
-    """Abre ``url`` no navegador padrão (Qt, sem gi); só ``http``/``https``, o resto é recusado.
-
-    :returns: False quando a URL veio vazia ou com outro esquema: nada é aberto.
-    """
+    """Abre ``url`` no navegador padrão; False (e nada se abre) se vazia ou de outro esquema."""
     url = (url or "").strip()
     if not url.lower().startswith(_ALLOWED_SCHEMES):
         if url:

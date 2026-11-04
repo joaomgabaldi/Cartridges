@@ -6,10 +6,8 @@
 
 """Como uma imagem (ou um vídeo) escolhida de um arquivo vira o retrato da capa.
 
-Mais alta que a capa, ou mais larga em até ``MAX_STRETCH``, ela é só esticada.
-Mais larga que isso, vai inteira no meio, sobre uma cópia esticada e borrada
-dela mesma. A regra mora aqui, sem GTK, porque a capa de imagem
-(``save_cover.composite_cover``) e a de vídeo (``capa_video``) a seguem igual.
+Mais alta que a capa, ou mais larga em até ``MAX_STRETCH``, ela é só esticada; mais larga que isso,
+vai inteira no meio, sobre uma cópia esticada e borrada dela mesma. Vale para a capa de imagem e a de vídeo.
 """
 
 from typing import Optional

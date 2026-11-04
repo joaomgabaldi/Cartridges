@@ -19,11 +19,8 @@
 
 """O DPAPI do Windows, para guardar segredos (a conta da Tuya, a conta Microsoft).
 
-`CryptProtectData` cifra com uma chave amarrada à conta do Windows de quem roda
-o app: decifra só quem já é esse usuário, neste PC — o mesmo modelo de um
-navegador guardando senha salva. Um blob DPAPI não abre numa instalação nova,
-em outro PC nem em outra conta do Windows: lá, `abrir` devolve ``None`` e quem
-chamou trata como "nada salvo".
+A chave é amarrada à conta do Windows de quem roda o app: um blob não abre numa instalação nova,
+em outro PC nem em outra conta; lá, `abrir` devolve ``None`` e quem chamou trata como "nada salvo".
 """
 
 import ctypes
@@ -42,11 +39,7 @@ class _DATA_BLOB(ctypes.Structure):
     _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
 
 
-# As duas funções têm a mesma forma no que interessa aqui: o segundo, terceiro,
-# quarto e quinto parâmetros só recebem `None` nas chamadas deste módulo (sem
-# descrição, sem entropia extra, sem prompt), então uma assinatura serve às
-# duas — a diferença real entre elas (o `ppszDataDescr` de saída da
-# `CryptUnprotectData`) nunca é usada.
+# Uma assinatura serve às duas: os parâmetros que diferem (`ppszDataDescr`) só recebem `None` aqui.
 _ARGTYPES = [
     ctypes.POINTER(_DATA_BLOB),
     wintypes.LPCWSTR,
@@ -65,18 +58,12 @@ _kernel32.LocalFree.restype = wintypes.LPVOID
 
 
 def _blob(dados: bytes) -> tuple[_DATA_BLOB, Any]:
-    """Um DATA_BLOB apontando para ``dados``, com o buffer que o sustenta.
-
-    O DATA_BLOB só guarda o ponteiro, não o dono da memória — sem uma
-    referência Python viva ao buffer enquanto a chamada ao DPAPI está em
-    curso, o coletor de lixo pode liberá-lo antes da leitura.
-    """
+    """Um DATA_BLOB para ``dados`` e o buffer que o sustenta (o blob só guarda o ponteiro; sem o buffer vivo, o coletor o libera)."""
     buffer = ctypes.create_string_buffer(dados, len(dados))
     return _DATA_BLOB(len(dados), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_char))), buffer
 
 
 def _chamar(funcao: Any, dados: bytes) -> Optional[bytes]:
-    """Roda ``CryptProtectData`` ou ``CryptUnprotectData`` sobre ``dados``."""
     entrada, _buffer = _blob(dados)
     saida = _DATA_BLOB()
     if not funcao(

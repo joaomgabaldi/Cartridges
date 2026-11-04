@@ -19,44 +19,11 @@
 
 """Fetch completion time estimates from HowLongToBeat.
 
-HowLongToBeat publishes no API. Its search is ``POST /api/search/site``, guarded
-by a short-lived token from ``GET /api/search/site/init``, sent back as the
-``x-auth-token`` header. The token itself encodes the IP and User-Agent, so the
-credential and the search must come from one session sending identical
-headers, and it expires: a 403 means "re-init and retry", which is exactly what
-the site's own front end does.
+No API: the search is ``POST /api/search/site``, guarded by a short-lived token from ``GET /api/search/site/init`` (sent as ``x-auth-token``). The token encodes IP and User-Agent, so credential and search must share one session; a 403 means "re-init and retry".
 
-Three routes exist, and :func:`fetch_times` picks between them:
+:func:`fetch_times` picks a route: ``resolve`` (search by title, needs the credential), ``get_times_by_id`` (the server-rendered ``/game/<id>`` page: no credential, used once the id is known) or ``resolve_chapters`` (games the site only catalogues by chapter). Times are in seconds.
 
-* :meth:`HLTBHelper.resolve` searches by title. Needs the credential, and is
-  only used the first time a game is looked up.
-* :meth:`HLTBHelper.get_times_by_id` reads the server-rendered ``/game/<id>``
-  page, where the same numbers are embedded in the markup. No credential, no
-  handshake — so once a game's id is known, every later refresh takes this
-  route and never touches the guarded endpoint.
-* :meth:`HLTBHelper.resolve_chapters` assembles a breakdown for the few games
-  the site only catalogues chapter by chapter (``_CHAPTER_SERIES``), which have
-  no single page to point at.
-
-Times are in seconds — the same unit :attr:`Game.playtime` uses — so the two
-never need converting to sit side by side. They are never compared: this
-module only provides a reference table.
-
-The path is renamed every so often, and it is the only thing that changes: on
-2026-08-24 ``/api/bleed`` started answering 404 overnight and the pair below
-took its place, serving the same JSON, with the same three credential keys and
-the same search body. Only the two constants had to move.
-
-Until 2026-09-23 the init also handed out a honeypot pair (``hpKey``/``hpVal``)
-that had to be echoed as ``x-hp-*`` headers and inside the body. The site
-dropped it and so did this module; if it ever comes back, the symptom is every
-search rejected with the init answering 200.
-
-When it breaks again — and it will — the symptom is ``HowLongToBeat init
-failed`` in the log, at DEBUG, wrapping a 404 from the site itself rather than
-from Cloudflare. The new name is found by sweeping the homepage's JS chunks for
-``"/api/…"``: the paths are in there as plain strings, and the search one is
-whichever has an ``/init`` sibling.
+The path is renamed every so often (``/api/bleed`` once answered 404 overnight; only the two constants moved). The symptom is ``HowLongToBeat init failed`` at DEBUG wrapping a 404 from the site itself: the new name is in the homepage's JS chunks as ``"/api/…"`` strings, the search one with an ``/init`` sibling. The old honeypot pair (``hpKey``/``hpVal``), if it returns, rejects every search with the init answering 200.
 """
 
 import logging
@@ -78,13 +45,9 @@ BASE_URL = "https://howlongtobeat.com"
 SEARCH_URL = f"{BASE_URL}/api/search/site"
 INIT_URL = f"{BASE_URL}/api/search/site/init"
 REQUEST_TIMEOUT_SECONDS = 15
-# Os corpos são lidos em stream com teto (`read_capped`, o mesmo de Steam, SGDB
-# e wallhaven); o teto é o `MAX_RESPONSE_BYTES` importado acima, lido na hora
-# da chamada. Passar dele é RequestException, que todo chamador daqui já trata
-# como "o site não respondeu direito".
+# Os corpos são lidos em stream com o teto `MAX_RESPONSE_BYTES`; passar dele é RequestException, tratada como "o site não respondeu direito".
 
-# The token embeds the User-Agent that asked for it, so every request in a
-# session must send this exact string or the credential is rejected.
+# O token embute o User-Agent que o pediu: toda requisição da sessão envia esta string exata, senão a credencial é recusada.
 _BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -96,55 +59,30 @@ _BROWSER_HEADERS = {
     "Referer": f"{BASE_URL}/",
 }
 
-# Entry types that are not the base game. Their times are real but belong to
-# something else, so showing them for the game would simply be wrong.
+# Tipos que não são o jogo base: os tempos são reais, mas de outra coisa.
 _IGNORED_GAME_TYPES = frozenset({"dlc", "mod"})
 
-# The same filter for the chapter route, where "dlc" has to be allowed through.
-# HowLongToBeat types a chaptered game's first chapter as a game and every
-# later one as DLC of it — Poppy Playtime's chapters 2 to 5 are all "dlc" —
-# so the ordinary filter threw away four fifths of the answer.
-#
-# Letting them in is safe precisely here and nowhere else: this route never
-# substitutes an entry for the game, it lists each one as its own chapter, and
-# a candidate only qualifies if the wanted title is its exact opening followed
-# by a chapter marker. A soundtrack or a season pass cannot pass that.
+# O mesmo filtro para a rota de capítulos, onde "dlc" precisa passar: o site tipa o primeiro capítulo como jogo e os demais como DLC
+# (os capítulos 2 a 5 de Poppy Playtime são "dlc"). É seguro só aqui: esta rota lista cada entrada como capítulo, e o candidato
+# precisa ter o título pedido como abertura exata seguido de um marcador de capítulo, o que trilha ou passe de temporada não passa.
 _CHAPTER_IGNORED_GAME_TYPES = frozenset({"mod"})
 
-# Games sold as one product that HowLongToBeat only catalogues chapter by
-# chapter, with no entry for the whole thing. Their times are assembled from
-# the chapters instead of matched to a single page.
-#
-# Deliberately a hand-written list rather than a rule. Every general version of
-# "sum the entries that extend this title" is wrong somewhere expensive:
-# "Final Fantasy" would collect its entire franchise, and "The Last of Us"
-# would swallow "Part II" — a different game with different times. A new case
-# is one line here, and until it is added the game simply has no times, which
-# is the failure mode worth having.
+# Jogos vendidos como um produto que o site só cataloga por capítulo. Lista escrita à mão e não regra: toda versão geral de "somar
+# as entradas que estendem o título" erra caro ("Final Fantasy" juntaria a franquia, "The Last of Us" engoliria o "Part II"). Um caso novo é uma linha;
+# até lá o jogo fica sem tempos, a falha que vale ter.
 _CHAPTER_SERIES = frozenset({"poppy playtime"})
 
-# The word that has to open what a candidate adds to the title, immediately
-# followed by the chapter number: "Poppy Playtime: Chapter 1 - A Tight Squeeze",
-# "Poppy Playtime - Chapter 3". Requiring it in that exact position — rather
-# than anywhere in the title — is what keeps "Poppy Playtime Forever: Chapter 9"
-# out: that entry extends a different title and merely happens to be chaptered.
+# A palavra que abre o que o candidato acrescenta ao título, seguida do número ("Poppy Playtime: Chapter 1 - ..."). Exigi-la nessa
+# posição mantém "Poppy Playtime Forever: Chapter 9" de fora: estende outro título.
 _CHAPTER_WORDS = frozenset({"chapter", "chapters", "episode", "capitulo"})
 
-# When HowLongToBeat blocks an IP it answers 403 to everything, and a single
-# search costs up to four requests (homepage, init, search, then a forced
-# re-init and retry, because a 403 is indistinguishable from an expired
-# credential). The startup backfill walks the whole library and only logs a
-# failure, so a thousand-game library used to fire some four thousand requests
-# at a site that had already refused the first one — which is both pointless
-# and the surest way to stay blocked. After this many consecutive failures the
-# helper stops asking for a while and fails every lookup locally instead.
+# Um IP bloqueado recebe 403 em tudo, e uma busca custa até quatro requisições (um 403 não se distingue de credencial expirada). O
+# preenchimento da abertura percorre a biblioteca toda: mil jogos disparariam quatro mil requisições a um site que já recusou a primeira,
+# o jeito mais certo de continuar bloqueado. Após tantas falhas seguidas o helper para de perguntar por um tempo e falha localmente.
 _BREAKER_FAILURE_THRESHOLD = 3
 _BREAKER_COOLDOWN_SECONDS = 15 * 60
 
-# The three fields as they appear in the JSON embedded in a game page. The
-# quote-and-colon anchor matters: without it, `"comp_main":` would also match
-# `"comp_main_count":`, `"comp_main_avg":` and friends, which sit right beside
-# it and mean something else entirely.
+# Os três campos no JSON embutido na página. A âncora aspas-e-dois-pontos importa: sem ela `"comp_main":` casaria com `"comp_main_count":` e afins.
 _PAGE_FIELD_RES = {
     "hltb_main": re.compile(r'"comp_main":\s*(\d+)'),
     "hltb_main_extra": re.compile(r'"comp_plus":\s*(\d+)'),
@@ -165,32 +103,18 @@ class HLTBUnavailableError(HLTBError):
 
 
 class HLTBTimes(TypedDict, total=False):
-    """Completion times for a game, in seconds.
-
-    Mirrors the shape :meth:`Game.update_values` expects, so the result of a
-    lookup applies to a game without any translation step.
-    """
+    """Completion times for a game, in seconds, in the shape :meth:`Game.update_values` expects."""
 
     hltb_id: Optional[int]
     hltb_main: int
     hltb_main_extra: int
     hltb_completionist: int
-    # Per-chapter breakdown, for the handful of games that only exist on
-    # HowLongToBeat as separate chapters (see ``_CHAPTER_SERIES``). Empty for
-    # every normal game, so a lookup always states which of the two a game is
-    # rather than leaving a stale breakdown behind.
+    # Por capítulo, para os jogos que só existem assim (``_CHAPTER_SERIES``). Vazio nos demais, para não sobrar um detalhamento velho.
     hltb_chapters: list[dict]
 
 
 class HLTBRateLimiter(RateLimiter):
-    """Rate limiter for HowLongToBeat.
-
-    The site publishes no limit and has clearly been on the receiving end of
-    scrapers, so this is deliberately gentle: roughly one request every 1.5 s
-    sustained, with a small burst so a handful of games still import at once.
-    Most refreshes cost a single request anyway — they go through the
-    unguarded game page rather than the search.
-    """
+    """Rate limiter for HowLongToBeat: o site não publica limite e sofre com scrapers, então é gentil de propósito (~1 requisição a cada 1,5 s, com um pequeno surto)."""
 
     refill_period_seconds = 60
     refill_period_tokens = 40
@@ -198,32 +122,21 @@ class HLTBRateLimiter(RateLimiter):
 
 
 def format_hltb_time(seconds: Optional[int]) -> str:
-    """Render a completion time as compact hours ("16 h", "22,5 h").
-
-    Uses a comma decimal to match :func:`format_playtime`, and drops the
-    decimal when it would be ``,0``. Returns an em dash for missing data so a
-    partially-filled row still lines up.
-    """
+    """Horas compactas ("16 h", "22,5 h"), com vírgula como :func:`format_playtime` e sem o ``,0``; travessão se não há dado, para a linha alinhar."""
     if not seconds or seconds <= 0:
         return "—"
 
     hours = round(seconds / 3600, 1)
     if hours < 0.1:
-        # Under six minutes is a rounding artefact, not an estimate. Showing
-        # "0 h" would read as "no data", which is a different claim.
+        # Menos de seis minutos é artefato de arredondamento; "0 h" leria como "sem dados".
         return _("< 0,1 h")
 
     text = str(int(hours)) if hours.is_integer() else str(hours).replace(".", ",")
-    # The variable is a number of hours, e.g. "16" or "22,5"
     return _("{} h").format(text)
 
 
 def _coerce_seconds(value: Any) -> Optional[int]:
-    """Return ``value`` as a positive number of seconds, or None.
-
-    HowLongToBeat sends 0 for "nobody has submitted this time", which must not
-    become a displayed "0 h".
-    """
+    """``value`` como segundos positivos, ou None (o site manda 0 para "ninguém enviou este tempo", que não pode virar "0 h")."""
     try:
         seconds = int(float(value))
     except (TypeError, ValueError):
@@ -232,11 +145,7 @@ def _coerce_seconds(value: Any) -> Optional[int]:
 
 
 def parse_entry(entry: dict) -> HLTBTimes:
-    """Extract id and completion times from a raw search result.
-
-    Only keys with real data are included, so applying the result to a game
-    never blanks a time the game already had.
-    """
+    """Id e tempos de um resultado cru da busca; só chaves com dado real, para não apagar um tempo que o jogo já tinha."""
     times = HLTBTimes()
 
     if (game_id := _coerce_seconds(entry.get("game_id"))) is not None:
@@ -257,28 +166,19 @@ _TIME_KEYS = ("hltb_main", "hltb_main_extra", "hltb_completionist")
 
 
 def _n_times(times: HLTBTimes) -> int:
-    """How many of the three estimates an entry actually carries."""
     return sum(1 for key in _TIME_KEYS if times.get(key))
 
 
 def is_chapter_series(name: str) -> bool:
-    """True when ``name`` is one of the hand-listed chaptered games."""
     return " ".join(tokenize(name)) in _CHAPTER_SERIES
 
 
 def chapter_times(chapters: dict[int, dict]) -> HLTBTimes:
-    """Turn per-chapter entries into a breakdown, chapter order preserved.
+    """Entradas por capítulo viram um detalhamento, na ordem dos capítulos.
 
-    No total is produced, on purpose. Adding the chapters up would invent a
-    number that exists nowhere on HowLongToBeat, and it would be wrong for the
-    common case anyway: someone playing Poppy Playtime asks how long *the
-    chapter they are on* takes, not how long the series would take end to end.
-
-    The three single-value fields and ``hltb_id`` are blanked rather than left
-    alone: a game that had been matched to the wrong single entry before must
-    not keep those leftovers next to its real breakdown, and a None id is what
-    keeps later refreshes searching by name instead of pinning the game to one
-    chapter's page.
+    Sem total, de propósito: somar inventaria um número que não existe no site, e quem joga quer o tempo *do capítulo em que está*.
+    Os três campos únicos e ``hltb_id`` são zerados: um jogo antes casado com a entrada errada não pode manter essas sobras, e um id None
+    mantém os refreshes buscando por nome em vez de fixar o jogo na página de um capítulo.
     """
     times = HLTBTimes(
         hltb_id=None,
@@ -298,12 +198,7 @@ def chapter_times(chapters: dict[int, dict]) -> HLTBTimes:
 
 
 def has_times(times: HLTBTimes) -> bool:
-    """True when the lookup produced something worth keeping.
-
-    Either one of the three estimates, or a chapter breakdown — a chaptered
-    game carries no single estimate at all, and callers use this to decide
-    whether a lookup succeeded.
-    """
+    """True se a consulta produziu algo útil: uma das três estimativas ou um detalhamento por capítulo (um jogo por capítulos não tem estimativa única)."""
     return any(times.get(key) for key in _TIME_KEYS) or bool(
         times.get("hltb_chapters")
     )
@@ -318,15 +213,10 @@ class HLTBHelper:
         self.rate_limiter = rate_limiter or HLTBRateLimiter()
         self._session = requests.Session()
         self._session.headers.update(_BROWSER_HEADERS)
-        # One credential is shared by every lookup in the process; the lock
-        # stops parallel import workers each fetching their own.
+        # Uma credencial para todas as consultas; a trava impede os workers paralelos de buscar uma cada.
         self._credential: Optional[str] = None
         self._credential_lock = threading.Lock()
-        # Circuit breaker state. It lives on the helper rather than on a caller
-        # because the helper is the app-wide instance (see `shared_helper`):
-        # the import pipeline, the backfill and the details dialog all go
-        # through this object, so one of them tripping the breaker spares the
-        # other two as well.
+        # Estado do disjuntor, no helper (instância única do app, `shared_helper`): se um dos três chamadores (importação, preenchimento, edição) o abre, poupa os outros.
         self._breaker_lock = threading.Lock()
         self._failures = 0
         self._blocked_until = 0.0
@@ -334,10 +224,7 @@ class HLTBHelper:
     # region Circuit breaker
 
     def _breaker_check(self) -> None:
-        """Fail a lookup locally while the breaker is open.
-
-        :raises HLTBUnavailableError: if the cooldown has not elapsed
-        """
+        """Falha a consulta localmente enquanto o disjuntor está aberto (``HLTBUnavailableError`` antes do fim do resfriamento)."""
         with self._breaker_lock:
             remaining = self._blocked_until - time.time()
         if remaining > 0:
@@ -348,12 +235,7 @@ class HLTBHelper:
             )
 
     def _breaker_record(self, ok: bool) -> None:
-        """Count one outcome; open the breaker on a run of failures.
-
-        Any answer at all closes it again: the site being reachable is the only
-        thing the counter is tracking, so a miss for one game must not be held
-        against the next.
-        """
+        """Conta um resultado e abre o disjuntor numa sequência de falhas. Qualquer resposta o fecha: só importa o site estar alcançável, não um jogo sem resultado."""
         with self._breaker_lock:
             if ok:
                 self._failures = 0
@@ -374,14 +256,11 @@ class HLTBHelper:
     # region Credential
 
     def _fetch_credential(self) -> Optional[str]:
-        """Get a fresh search credential, or None if the site refused."""
-        # The site loads the homepage before it ever searches; do the same so
-        # any cookie the init endpoint expects is already in the jar.
+        """Uma credencial nova, ou None se o site recusou."""
+        # O site carrega a homepage antes de buscar: o mesmo aqui, para o cookie que o init espera já estar no jar.
         with self.rate_limiter:
             try:
-                # stream + with: os cookies vêm dos headers, o corpo nunca é
-                # lido — sem stream o requests baixava a homepage inteira para
-                # ninguém.
+                # stream + with: os cookies vêm dos headers e o corpo nunca é lido (sem stream baixaria a homepage inteira à toa).
                 with self._session.get(
                     f"{BASE_URL}/", timeout=REQUEST_TIMEOUT_SECONDS, stream=True
                 ):
@@ -421,7 +300,6 @@ class HLTBHelper:
 
     @staticmethod
     def _build_body(name: str) -> dict:
-        """Build the search body as the site's code does."""
         return {
             "searchType": "games",
             "searchTerms": name.split(),
@@ -455,12 +333,7 @@ class HLTBHelper:
     def _post_search(
         self, name: str, credential: str
     ) -> tuple[Optional[list[dict]], bool]:
-        """Run one search attempt.
-
-        :return: ``(entries, stale)``. ``entries`` is None on failure; ``stale``
-            is True only when the credential was rejected, which is the one
-            case worth retrying with a fresh one.
-        """
+        """Uma tentativa de busca: ``(entries, stale)``. ``entries`` é None na falha; ``stale`` só se a credencial foi recusada, o único caso que vale repetir."""
         headers = {
             "Content-Type": "application/json",
             "x-auth-token": credential,
@@ -490,11 +363,7 @@ class HLTBHelper:
         return [entry for entry in data if isinstance(entry, dict)], False
 
     def search(self, name: str) -> list[dict]:
-        """Return the raw HowLongToBeat entries matching ``name``.
-
-        :raises HLTBUnavailableError: if the endpoint refused twice, or if the
-            breaker is open after a run of such failures
-        """
+        """As entradas cruas do HowLongToBeat para ``name``. ``HLTBUnavailableError`` se o endpoint recusou duas vezes ou o disjuntor está aberto."""
         name = (name or "").strip()
         if not name:
             raise HLTBGameNotFoundError()
@@ -509,7 +378,6 @@ class HLTBHelper:
         return entries
 
     def _search(self, name: str) -> list[dict]:
-        """One full search: credential, search, and one forced retry."""
         credential = self._credential_or_fetch()
         if credential is not None:
             entries, stale = self._post_search(name, credential)
@@ -518,9 +386,7 @@ class HLTBHelper:
             if not stale:
                 raise HLTBUnavailableError("HowLongToBeat search failed")
 
-        # Either there was no credential, or the one held has expired. One
-        # forced refresh and one retry, matching what the site's front end
-        # does — a second failure is a real outage, not a stale token.
+        # Sem credencial ou expirada: uma renovação forçada e uma repetição, como o front end do site; a segunda falha é queda real.
         credential = self._credential_or_fetch(force=True)
         if credential is None:
             raise HLTBUnavailableError("could not obtain a HowLongToBeat credential")
@@ -531,15 +397,9 @@ class HLTBHelper:
         return entries
 
     def find_candidates(self, name: str) -> list[tuple[dict, TitleMatch]]:
-        """Return plausible entries for ``name``, best match first.
+        """Entradas plausíveis para ``name``, a melhor primeiro, pelo mesmo casador da Steam (a busca real devolve "The Outer Worlds", a edição Spacer's Choice, "The Outer Worlds 2" e dois DLCs juntos).
 
-        Uses the same matcher as the Steam lookup, so a game is not confused
-        with its sequel here either — the live search really does return
-        "The Outer Worlds", its Spacer's Choice edition, "The Outer Worlds 2"
-        and two DLCs together, so this filtering is doing real work.
-
-        Entries are matched on their title and, failing that, on their alias,
-        which is where HowLongToBeat keeps alternate and regional names.
+        Casa pelo título e, na falta, pelo alias, onde o site guarda nomes alternativos e regionais.
         """
         entries = [
             entry
@@ -563,14 +423,9 @@ class HLTBHelper:
         return ranked
 
     def resolve(self, name: str) -> HLTBTimes:
-        """Find ``name`` on HowLongToBeat and return its completion times.
+        """Os tempos de ``name``. Só um casamento confiante e com tempo é adotado (uma entrada com os três campos zerados é esboço e trocaria "sem dados" por travessões enganosos).
 
-        Only a confident match is adopted, and only when it carries a time: an
-        entry with all three fields at zero is a stub someone created, and
-        returning it would replace "no data" with a misleading row of dashes.
-
-        :raises HLTBGameNotFoundError: if nothing confident has usable times
-        :raises HLTBUnavailableError: if the endpoint could not be reached
+        Levanta ``HLTBGameNotFoundError`` ou ``HLTBUnavailableError``.
         """
         for candidate, match in self.find_candidates(name):
             if not match.confident:
@@ -592,22 +447,10 @@ class HLTBHelper:
         raise HLTBGameNotFoundError()
 
     def resolve_chapters(self, name: str) -> HLTBTimes:
-        """Collect the chapters of a chaptered game, best entry per number.
+        """Os capítulos de um jogo por capítulos (só ``_CHAPTER_SERIES``), a melhor entrada por número.
 
-        Only ever called for the titles in ``_CHAPTER_SERIES``. A candidate is
-        collected only when the wanted title is its exact opening and the very
-        next words are a chapter marker and its number: "Poppy Playtime:
-        Chapter 1 - A Tight Squeeze" qualifies, "Poppy Playtime Forever:
-        Chapter 9" does not, because what it adds before the marker makes it
-        another title. Two chapters are the minimum: with one, this is not a
-        chaptered game and the ordinary route deserves the chance to match it.
-
-        DLC-typed entries count here — that is how the site files every chapter
-        after the first — which is why this walks the raw search rather than
-        reusing :meth:`find_candidates`.
-
-        :raises HLTBGameNotFoundError: if fewer than two chapters were found
-        :raises HLTBUnavailableError: if the endpoint could not be reached
+        O candidato só vale se o título pedido é a abertura exata seguida de um marcador de capítulo e do número ("Poppy Playtime: Chapter 1 - ..." sim; "Poppy Playtime Forever: Chapter 9" não). São precisos dois capítulos, senão a rota comum tenta casar. Entradas tipadas como DLC contam (assim o site cataloga os capítulos após o primeiro), por isso percorre a busca crua e não :meth:`find_candidates`.
+        Levanta ``HLTBGameNotFoundError`` ou ``HLTBUnavailableError``.
         """
         wanted = tokenize(name)
         chapters: dict[int, dict] = {}
@@ -619,8 +462,7 @@ class HLTBHelper:
             tokens = tokenize(title)
             if tokens[: len(wanted)] != wanted:
                 continue
-            # `tokenize` canonicalises numerals, so "Chapter III" arrives here
-            # as ["chapter", "3"] and needs no separate handling.
+            # `tokenize` canoniza numerais: "Chapter III" chega como ["chapter", "3"].
             rest = tokens[len(wanted) :]
             if len(rest) < 2 or rest[0] not in _CHAPTER_WORDS or not rest[1].isdigit():
                 continue
@@ -630,8 +472,7 @@ class HLTBHelper:
 
             number = int(rest[1])
             known = chapters.get(number)
-            # A chapter can appear twice (a re-release, a bundle listing). Keep
-            # whichever entry carries more of the three estimates.
+            # Um capítulo pode aparecer duas vezes (relançamento, pacote): fica a entrada com mais das três estimativas.
             if known is None or _n_times(times) > _n_times(known["times"]):
                 chapters[number] = {"title": title, "times": times}
 
@@ -647,16 +488,10 @@ class HLTBHelper:
         return chapter_times(chapters)
 
     def get_times_by_id(self, hltb_id: int) -> HLTBTimes:
-        """Read a known game's times from its public page.
+        """Os tempos de um jogo conhecido, lidos da página pública (renderizada no servidor com o mesmo JSON, sem credencial):
+        não toca o endpoint guardado nem refaz uma busca por título que poderia cair em outro jogo.
 
-        The game page is server-rendered with the same JSON the search returns,
-        and needs no credential — so a game whose id is already known refreshes
-        without ever touching the guarded endpoint, and without re-running a
-        title search that could drift onto a different game.
-
-        :raises HLTBGameNotFoundError: if the page carries no usable times
-        :raises HLTBUnavailableError: if the page could not be fetched, or if
-            the breaker is open after a run of such failures
+        Levanta ``HLTBGameNotFoundError`` (sem tempos) ou ``HLTBUnavailableError`` (falha ao buscar, ou disjuntor aberto).
         """
         self._breaker_check()
         with self.rate_limiter:
@@ -676,8 +511,7 @@ class HLTBHelper:
                 self._breaker_record(ok=False)
                 raise HLTBUnavailableError("game page unreachable") from error
 
-        # The page answered, whatever it happened to contain: a game with no
-        # times on it says nothing about whether the site is reachable.
+        # A página respondeu: um jogo sem tempos nada diz sobre o site estar alcançável.
         self._breaker_record(ok=True)
 
         times = HLTBTimes(hltb_id=int(hltb_id))
@@ -695,34 +529,20 @@ class HLTBHelper:
 def fetch_times(
     helper: HLTBHelper, name: str, hltb_id: Optional[int] = None
 ) -> HLTBTimes:
-    """Get a game's times by the cheapest route that fits what is known.
+    """Os tempos de um jogo pela rota mais barata: um id conhecido vai direto à página pública (sem credencial e sem nova busca que poderia cair em outro jogo); a busca é o recurso, para jogos não identificados e ids que deixaram de resolver.
 
-    A known id goes straight to the public game page: no credential, one
-    request, and — more importantly — no second title search that could quietly
-    land on a different game than the one matched the first time. Searching is
-    the fallback, for games never identified before and for ids that stopped
-    resolving (entries do get merged or removed).
-
-    Every caller that looks a game up goes through here — the import pipeline,
-    the startup backfill and the button in the details dialog — so the three can
-    never drift into disagreeing about which route wins.
-
-    :raises HLTBGameNotFoundError: if nothing usable was found
-    :raises HLTBUnavailableError: if HowLongToBeat could not be reached
+    Todo chamador passa por aqui, então nunca divergem sobre qual rota vence. Levanta ``HLTBGameNotFoundError`` ou ``HLTBUnavailableError``.
     """
     cleaned = clean_for_search(name or "")
     if not cleaned:
         raise HLTBGameNotFoundError()
 
-    # Chaptered games are handled before anything else, id included: there is
-    # no single page for them, so an id sitting on such a game is a leftover
-    # from a lookup that matched the wrong thing.
+    # Jogos por capítulos primeiro, id inclusive: não há página única, então um id nele é sobra de um casamento errado.
     if is_chapter_series(cleaned):
         try:
             return helper.resolve_chapters(cleaned)
         except HLTBGameNotFoundError:
-            # The listing changed shape (chapters merged into one entry, say).
-            # Fall through and try to match it like any other game.
+            # A listagem mudou de forma (capítulos unidos numa entrada, por exemplo): segue e casa como qualquer jogo.
             logging.debug("Falling back to a plain lookup for %s", cleaned)
 
     if hltb_id:
@@ -735,10 +555,6 @@ def fetch_times(
 
 
 def _plain(times: HLTBTimes) -> HLTBTimes:
-    """Mark a result as coming from a single entry, not from chapters.
-
-    Stated rather than implied, so a game that used to be treated as chaptered
-    does not keep a stale breakdown beside its new times.
-    """
+    """Marca o resultado como de uma entrada única, não de capítulos, para um jogo antes por capítulos não manter um detalhamento velho."""
     times.setdefault("hltb_chapters", [])
     return times

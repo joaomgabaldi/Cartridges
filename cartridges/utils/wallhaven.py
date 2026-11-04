@@ -19,17 +19,10 @@
 
 """Busca de papéis de parede no wallhaven.cc.
 
-A chave da API é opcional: a busca SFW responde sem autenticação nenhuma, e a
-chave só serve para NSFW e para os filtros da conta de quem a informou. Por
-isso ela mora nas preferências como um extra, e não como um pré-requisito — ao
-contrário do SteamGridDB, cuja tela fica inerte sem chave.
+A chave da API é opcional: a busca SFW responde sem autenticação; a chave só serve para NSFW e para os filtros da conta.
 
-O que este módulo NÃO faz é escolher formato. Medido nos 92 jogos de uma
-biblioteca real, só 21% têm papel de parede em retrato no site: filtrar por um
-formato só e parar aí deixaria jogos sem imagem. Então a busca vai em degraus —
-o formato pedido primeiro, qualquer formato depois — e é o corte
-(:func:`cartridges.utils.session_wallpaper.enquadrar`) que resolve a
-diferença. Quem chama decide por qual formato começar.
+O módulo não escolhe formato: só 21% dos jogos de uma biblioteca real têm papel de parede em retrato no site.
+A busca vai em degraus (o formato pedido, depois qualquer um) e o corte (``session_wallpaper.enquadrar``) resolve a diferença.
 """
 
 import logging
@@ -44,28 +37,18 @@ from cartridges.utils.download import get_capped
 
 BASE = "https://wallhaven.cc/api/v1/search"
 
-# Só "general". A categoria "anime" foi testada e saiu: ela não traz mais arte
-# DE JOGO, traz fan art de personagem no traço de anime — comparadas lado a
-# lado numa busca real, as duas devolvem retrato de personagem, e a segunda
-# apenas troca o render realista pelo desenhado. "people" nunca esteve aqui:
-# ali o que existe são ensaios e cosplay.
+# Só "general": "anime" traz fan art de personagem, não arte de jogo, e "people" só ensaios e cosplay.
 CATEGORIES = "100"
 
-# Sempre SFW. A chave da conta pode liberar o resto no site; um papel de parede
-# que aparece sozinho em três monitores quando um jogo abre não é lugar para
-# isso.
+# Sempre SFW, mesmo que a chave da conta libere o resto: o papel de parede aparece sozinho em vários monitores.
 PURITY = "100"
 
-# Sufixos que o site publica. O `path` sempre traz um deles.
 IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png")
 
-# Só o que a tela de escolha e o corte consomem. O resto da resposta (cores,
-# tags, uploader) é grande e não é usado em lugar nenhum.
+# Só o que a tela de escolha e o corte consomem; o resto da resposta é grande e não é usado.
 _CAMPOS = ("id", "path", "resolution", "dimension_x", "dimension_y", "favorites")
 
-# Edições e remasterizações não mudam a arte do jogo, e carregadas na busca
-# deixam títulos inteiros sem resultado ("Conan Exiles Enhanced" volta vazio,
-# "Conan Exiles" não).
+# Edições e remasterizações não mudam a arte e deixam a busca sem resultado ("Conan Exiles Enhanced" volta vazio).
 _SUFIXO_EDICAO = re.compile(
     r"\s*[-–]?\s*\(?\b("
     r"game of the year|goty|definitive|anniversary|enhanced|remastered|"
@@ -82,11 +65,8 @@ class WallhavenError(Exception):
 def consultas(nome: str) -> list[str]:
     """As formas de procurar ``nome``, da mais fiel à mais solta.
 
-    O terceiro degrau corta o subtítulo, e é onde mora a única armadilha:
-    "Aliens: Dark Descent" vira "Aliens", que traz o filme, não o jogo. Daí a
-    guarda de duas palavras — ela derruba justamente os casos ruins
-    ("Alien", "Vampire", "Commandos") e preserva os bons ("Watch Dogs 2",
-    "The Outer Worlds").
+    O terceiro degrau corta o subtítulo, e "Aliens: Dark Descent" vira "Aliens" (o filme): daí a guarda
+    de duas palavras, que derruba os casos ruins ("Alien", "Vampire") e preserva "Watch Dogs 2".
     """
     limpo = re.sub(r"[™®©]", "", nome)
     limpo = limpo.replace("_", " ").replace("’", "'")
@@ -115,13 +95,8 @@ def buscar(
 ) -> list[dict[str, Any]]:
     """Uma página de resultados para ``consulta``, do mais favoritado ao menos.
 
-    ``largura`` e ``altura`` são o mínimo que os cortes dos monitores-alvo
-    precisam: entram como ``atleast`` para nenhum candidato ser ampliado depois
-    do corte. Um 1920x1080 não passa nesse filtro com um monitor em pé — e é
-    isso que se quer, porque dele sairia um recorte de 607px esticado para 1080.
-
-    ``formato`` é o ``ratios`` do site (``"portrait"`` ou ``"landscape"``);
-    ``None`` aceita qualquer um.
+    ``largura`` e ``altura`` são o mínimo dos cortes dos monitores-alvo (``atleast``), para nenhum candidato
+    ser ampliado depois do corte. ``formato`` é o ``ratios`` do site (``"portrait"``/``"landscape"``); ``None`` aceita qualquer um.
 
     :raises WallhavenError: rede fora, resposta não-JSON ou chave recusada
     """
@@ -138,8 +113,7 @@ def buscar(
 
     cabecalhos = {}
     if chave := shared.schema.get_string("wallhaven-key").strip():
-        # No cabeçalho, e não no `?apikey=`: a URL vai parar em log de proxy e
-        # em histórico de erro, e a chave junto.
+        # No cabeçalho, não no `?apikey=`: a URL vai parar em log de proxy e de erro.
         cabecalhos["X-API-Key"] = chave
 
     try:
@@ -163,16 +137,13 @@ def buscar(
             continue
         registro = {campo: item.get(campo) for campo in _CAMPOS}
         miniaturas = item.get("thumbs")
-        # A miniatura "large" (432x243, ~23 KB) preserva a proporção original;
-        # a "small" já vem cortada em 3x2 pelo site e mentiria sobre o que o
-        # corte vai fazer.
+        # A "large" preserva a proporção original; a "small" vem cortada em 3x2 pelo site.
         registro["thumb"] = (
             miniaturas.get("large") if isinstance(miniaturas, dict) else None
         ) or item["path"]
         resultados.append(registro)
 
-    # Relevância decide QUAIS 24 chegam; dentro deles, o mais favoritado é o
-    # melhor palpite de qualidade que o site oferece.
+    # A relevância decide quais 24 chegam; dentro deles, o mais favoritado é o melhor palpite de qualidade.
     resultados.sort(key=lambda item: item.get("favorites") or 0, reverse=True)
     return resultados
 
@@ -182,10 +153,8 @@ def melhor_para(
 ) -> Optional[dict[str, Any]]:
     """O melhor candidato para ``nome``, descendo os degraus até achar um.
 
-    Em cada forma do nome, ``formato`` primeiro e qualquer formato depois.
-    Devolve ``None`` quando nenhum degrau deu resultado — e aí quem chamou cai
-    na capa do jogo. Nunca levanta: a escolha automática roda enquanto o jogo
-    abre, e um tropeço de rede ali não pode virar erro na cara de ninguém.
+    Em cada forma do nome, ``formato`` primeiro e qualquer formato depois. ``None`` se nenhum degrau deu
+    resultado (quem chamou cai na capa). Nunca levanta: roda enquanto o jogo abre.
     """
     for consulta in consultas(nome):
         for degrau in (formato, None):

@@ -19,18 +19,7 @@
 
 """A conta de nuvem da Tuya, salva para o assistente não pedir de novo.
 
-O Access ID e o Access Secret vêm do painel de desenvolvedor da Tuya — não do
-app Smart Life — e só servem para a busca inicial de dispositivos; o dia a dia
-das fitas fala direto com a chave local, gravada à parte em `fitas.json`. Sem
-isto salvo, todo IP trocado ou fita nova obrigaria a voltar ao painel da Tuya
-para pegar os dois códigos de novo.
-
-Gravados com o DPAPI do Windows (`CryptProtectData`), amarrado à conta do
-Windows de quem roda o app: decifra só quem já é esse usuário, neste PC — o
-mesmo modelo de um navegador guardando senha salva. O arquivo vai no backup com
-o resto da pasta do app, mas um blob DPAPI não decifra numa instalação nova nem
-numa conta diferente: lá, `carregar` devolve ``None`` e o assistente pede os
-códigos de novo.
+O Access ID e o Access Secret só servem para a busca inicial de dispositivos (o dia a dia usa a chave local, em `fitas.json`). Gravados com o DPAPI, amarrado à conta do Windows: o arquivo vai no backup, mas o blob não decifra em outra instalação ou conta, e `carregar` devolve ``None``.
 """
 
 import json
@@ -52,9 +41,7 @@ class Conta(NamedTuple):
 def salvar(conta: Conta) -> None:
     """Grava as credenciais, criptografadas. Nunca levanta.
 
-    Pelo temporário e troca, como o resto do que o app grava: uma queda de
-    energia no meio não pode deixar um arquivo truncado que nem o DPAPI nem o
-    JSON leem de volta, apagando a conta salva sem aviso nenhum.
+    Por temporário e troca: uma queda no meio não pode deixar um arquivo truncado que apague a conta salva.
     """
     protegido = dpapi.proteger(json.dumps(conta._asdict()).encode("utf-8"))
     if protegido is None:
@@ -72,12 +59,7 @@ def salvar(conta: Conta) -> None:
 
 
 def carregar() -> Optional[Conta]:
-    """As credenciais salvas, ou ``None``.
-
-    ``None`` sem arquivo, sem chave do Windows que abra o blob (outra conta,
-    outro PC), ou com o arquivo corrompido — em todos os casos o assistente
-    volta a pedir os códigos, como se nada tivesse sido salvo.
-    """
+    """As credenciais salvas, ou ``None`` (sem arquivo, outra conta ou PC, arquivo corrompido)."""
     try:
         protegido = shared.tuya_conta_arquivo.read_bytes()
     except FileNotFoundError:
