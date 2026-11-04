@@ -19,12 +19,8 @@
 
 """Onde as fitas de LED são configuradas, uma vez.
 
-O módulo Tuya só aceita comandos de quem tem a chave local dele, que sai da conta de desenvolvedor da Tuya, pela
-nuvem. Este assistente pede as credenciais, lista os dispositivos e grava a chave dos que o usuário apontar.
-
-O Access Secret fica salvo (criptografado pelo DPAPI, amarrado à conta do Windows) só para pré-preencher esta
-tela, e só depois de uma busca que prova que os dois códigos são válidos. Quem acende uma fita é a chave local,
-gravada à parte, em claro, no `fitas.json`.
+O Access Secret fica salvo (DPAPI, amarrado à conta do Windows) só para pré-preencher a tela, e só depois de uma busca
+que prova os dois códigos. Quem acende uma fita é a chave local, gravada em claro no `fitas.json`.
 """
 
 import logging
@@ -41,15 +37,12 @@ from cartridges.utils.thread_principal import na_thread_principal
 
 PAINEL_DA_TUYA = "https://auth.tuya.com/?from=https%3A%2F%2Fdeveloper.tuya.com%3Fredirect%3Dhttps%3A%2F%2Fplatform.tuya.com"
 
-# As regiões que a Tuya oferece, na mesma ordem da lista da tela. As duas
-# listas precisam andar juntas: o índice escolhido na tela é o índice aqui.
+# As regiões da Tuya, na ordem da lista da tela: o índice escolhido lá é o índice daqui.
 REGIOES = ("us", "eu", "cn", "in")
 
 
 def credencial_valida(nuvem: Any, resposta: Any) -> bool:
-    """A busca provou que os dois códigos funcionam? A tinytuya devolve lista vazia também quando o token é
-    recusado (o erro fica em `nuvem.error`), então a lista sozinha não prova nada.
-    """
+    """A busca provou que os dois códigos funcionam? A tinytuya devolve lista vazia também com o token recusado (erro em `nuvem.error`)."""
     return bool(getattr(nuvem, "token", None)) and not getattr(
         nuvem, "error", None
     ) and isinstance(resposta, list)
@@ -60,14 +53,10 @@ CATEGORIAS = ("dd", "dj")
 
 
 def fitas_da_nuvem(resposta: Any) -> list[Fita]:
-    """Converte a lista que a nuvem devolve em fitas.
+    """Converte a lista que a nuvem devolve em fitas: só fita de LED e lâmpada (``CATEGORIAS``, ou sem categoria), com chave local.
 
-    Só fita de LED e lâmpada entram (``CATEGORIAS``), e dispositivo sem categoria também; sem chave local fica de
-    fora. Sem IP entra com o campo vazio: a nuvem devolve o IP público do roteador, e quem acha o IP da fita é a
-    varredura de ``com_enderecos``.
-
-    Aceita qualquer coisa como entrada: quando a busca falha, a ``tinytuya`` devolve um dicionário de erro no lugar
-    da lista, e isso não pode virar exceção na thread.
+    Sem IP entra com o campo vazio (a nuvem dá o IP público do roteador; ``com_enderecos`` acha o da fita). Aceita qualquer
+    entrada: com a busca falhando a ``tinytuya`` devolve um dicionário de erro, que não pode virar exceção na thread.
     """
     if not isinstance(resposta, list):
         return []
@@ -100,11 +89,9 @@ def com_enderecos(
     mapa: dict[str, str],
     versoes: Optional[dict[str, str]] = None,
 ) -> list[Fita]:
-    """Põe em cada fita o endereço na rede de casa e a versão do protocolo que ela anunciou.
+    """Põe em cada fita o endereço na rede local e a versão do protocolo anunciados na varredura por broadcast.
 
-    A nuvem não sabe o IP local: quem sabe é a varredura por broadcast, uma única vez, aqui. O endereço achado fica
-    gravado (o IP das fitas é fixo) e a fita não achada mantém o que já tinha. A versão vem da mesma varredura: um
-    módulo 3.4 ou 3.5 falado como 3.3 nunca responde.
+    A nuvem não sabe o IP local. A fita não achada mantém o que tinha; um módulo 3.4 ou 3.5 falado como 3.3 nunca responde.
     """
     configuradas = {fita.id: fita for fita in fitas()}
     versoes = versoes or {}
@@ -114,8 +101,7 @@ def com_enderecos(
             or fita.ip
             or getattr(configuradas.get(fita.id), "ip", ""),
             versao=versoes.get(fita.id) or fita.versao,
-            # A nuvem não sabe do brilho por dispositivo nem da calibração:
-            # eles são daqui.
+            # O brilho por dispositivo e a calibração são daqui, não da nuvem.
             brilho=getattr(configuradas.get(fita.id), "brilho", fita.brilho),
             calibracao=getattr(configuradas.get(fita.id), "calibracao", fita.calibracao),
         )
@@ -156,7 +142,7 @@ def _entregar(eu: "weakref.ref[FitaWizard]", busca: int, encontrados: list[Fita]
 class FitaWizard(QObject):
     """O assistente das fitas, sem tela: a `ConfiguracaoDasFitas.qml` lê e grava estas propriedades.
 
-    Só na thread principal. O resultado de uma busca que o usuário já deixou para trás é descartado.
+    Só na thread principal; o resultado de uma busca já deixada para trás é descartado.
     """
 
     alterado = Signal()
@@ -176,7 +162,6 @@ class FitaWizard(QObject):
         self._preencher_credenciais()
 
     def _preencher_credenciais(self) -> None:
-        """Pré-preenche com a conta salva da vez anterior, se houver."""
         conta = tuya_conta.carregar()
         if conta is None:
             return
@@ -255,8 +240,7 @@ class FitaWizard(QObject):
         if self._fechado:
             return
 
-        # Busca vazia fica nas credenciais, com o aviso ali: aplicar uma lista vazia apagaria as fitas já configuradas,
-        # sem caminho de volta.
+        # Busca vazia fica nas credenciais: aplicar uma lista vazia apagaria as fitas já configuradas.
         if not encontrados:
             self._encontradas, self._marcadas = [], set()
             self._sem_resultado = True
@@ -283,8 +267,7 @@ class FitaWizard(QObject):
     @Slot()
     def salvar(self) -> None:
         escolhidas = [fita for fita in self._encontradas if fita.id in self._marcadas]
-        # Quem sai da configuração sai antes de o arquivo mudar: depois o app não conhece mais a fita e não a devolveria
-        # ao estado de antes.
+        # Quem sai da configuração sai antes de o arquivo mudar: depois o app não conhece mais a fita e não a devolveria ao estado anterior.
         saindo = [fita for fita in fitas() if fita.id not in self._marcadas]
         gravar_fitas(escolhidas)
         if saindo:

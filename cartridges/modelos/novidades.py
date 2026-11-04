@@ -4,8 +4,7 @@
 
 """A lógica de tela das Novidades: o selo do botão, a página com os posts do feed e o "Atualizar".
 
-O `NewsChecker` faz a busca e guarda os posts; aqui eles viram dicionários para o QML (que nunca recebe um `NewsPost`)
-e os avisos do "Atualizar" saem pela fila do app. Tudo na thread principal.
+O `NewsChecker` busca e guarda os posts; aqui viram dicionários para o QML e os avisos saem pela fila do app. Tudo na thread principal.
 """
 
 import weakref
@@ -40,8 +39,7 @@ class Novidades(QObject):
         self._checker = checker
         self._posts: list[dict] = []
         self._pagina_a_vista = False
-        # As linhas expandidas, fora do delegate: a página é destruída ao voltar, e as linhas se mantêm até os posts
-        # mudarem.
+        # As linhas expandidas, fora do delegate: a página é destruída ao voltar, e as linhas se mantêm até os posts mudarem.
         self._abertas: set[str] = set()
         # O "Atualizar" apertado: quem responde é o fim da busca. O aviso "Atualizando…" não some sozinho.
         self._pedido = False
@@ -133,8 +131,7 @@ class Novidades(QObject):
         self._avisos_sem_pedido()
         self._pedido = True
         self._aviso = self._avisos.adicionar("Atualizando novidades…", segundos=0)
-        # Chave desligada: o checker está parado e a busca em voo foi abandonada; `check_async` responde "falha" na
-        # hora.
+        # Chave desligada: o checker está parado e a busca em voo foi abandonada; `check_async` responde "falha" na hora.
         if not self._checker.loading or not self.visivel:
             self._checker.check_async()
         self.alterado.emit()

@@ -4,9 +4,8 @@
 
 """O controle do Xbox na grade: lê o XInput e entrega sinais que o QML liga à interface.
 
-Só lê enquanto a janela está ativa e a preferência `gamepad` está ligada; com a janela inativa o `QTimer` para. A DLL
-continua carregada e só é solta durante uma sessão de jogo (`suspender`), para o jogo ficar com o controle só para
-ele. Tudo na thread principal.
+Só lê com a janela ativa e a preferência `gamepad` ligada. A DLL continua carregada e só é solta durante uma sessão de jogo
+(`suspender`), para o jogo ficar com o controle. Tudo na thread principal.
 """
 
 import weakref
@@ -148,10 +147,8 @@ class ControleDaGrade(QObject):
 
     @Slot()
     def suspender(self) -> None:
-        """Entrega o controle ao jogo da sessão: para de ler na hora e solta a DLL depois do prazo.
-
-        O prazo é o da vibração de abertura, que sai logo antes: soltar antes deixaria os motores ligados,
-        porque o desligamento agendado dela não acharia mais a DLL.
+        """Entrega o controle ao jogo da sessão: para de ler na hora e solta a DLL depois do prazo da vibração de abertura
+        (soltar antes deixaria os motores ligados: o desligamento agendado dela não acharia a DLL).
         """
         if self._suspenso:
             return
@@ -166,8 +163,7 @@ class ControleDaGrade(QObject):
         self._leitor.vibrar()  # os motores parados antes de a DLL sair
         self._leitor.soltar()
         self._leitor = None
-        # Redescoberta: o controle que estava aí ao voltar não é uma conexão nova; só uma leitura sem
-        # controle rearma o `conectado`.
+        # Redescoberta: o controle que estava aí ao voltar não é uma conexão nova; só uma leitura sem controle rearma o `conectado`.
         self._sem_controle = False
 
     @Slot()
@@ -322,7 +318,7 @@ class ControleDaGrade(QObject):
 
     @Slot()
     def trocarCapa(self) -> None:  # noqa: N802
-        """A capa central mudou no Big Picture; no máximo um toque por duração + 60 ms, para ficarem distintos."""
+        """A capa central mudou no Big Picture; no máximo um toque por duração + 60 ms."""
         agora = self._relogio()
         if self._ultimo_toque_capa_us is not None and agora - self._ultimo_toque_capa_us < (RUMBLE_CAPA[2] + 60) * 1000:
             return
@@ -331,7 +327,6 @@ class ControleDaGrade(QObject):
 
     @Slot()
     def saltar(self) -> None:
-        """Um salto de dez jogos (LB/RB) no Big Picture."""
         self._vibrar(RUMBLE_PULO)
 
     def _vibrar(self, preset: tuple[float, float, int]) -> bool:

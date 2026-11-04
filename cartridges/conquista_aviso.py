@@ -1,8 +1,4 @@
-"""O cartão que aparece por cima do jogo quando uma conquista é desbloqueada.
-
-Fica 5 s na tela; várias de uma vez entram em fila. A janela (`janela_do_aviso.py`) nunca pega o foco.
-Só o primeiro cartão de uma fila toca o som, se "Tocar som com o aviso" estiver ligado.
-"""
+"""O cartão que aparece por cima do jogo quando uma conquista é desbloqueada; avisos em fila, o som só no primeiro."""
 
 import array
 import io
@@ -58,9 +54,7 @@ def _tocar_som() -> None:
 
 
 def _no_volume(dados: bytes, volume: int) -> bytes:
-    """O WAV (PCM 16-bit) escalado a ``volume`` por cento (``PlaySound`` não tem volume). Outro formato
-    levanta ``ValueError``.
-    """
+    """O WAV (PCM 16-bit) escalado a ``volume`` por cento (``PlaySound`` não tem volume); outro formato levanta ``ValueError``."""
     if volume >= 100:
         return dados
     with wave.open(io.BytesIO(dados)) as entrada:
@@ -96,8 +90,7 @@ def _reproduzir(dados: bytes, volume: int) -> None:
         dados = _no_volume_guardado(dados, volume)
     except Exception:  # pylint: disable=broad-exception-caught
         logging.warning("Não foi possível ajustar o volume do aviso de conquista", exc_info=True)
-    # SND_MEMORY não aceita SND_ASYNC: por isso a thread. SND_NODEFAULT: se não
-    # der para tocar, silêncio, e não o som padrão do Windows por cima do jogo.
+    # SND_MEMORY não aceita SND_ASYNC: por isso a thread. SND_NODEFAULT: sem som, silêncio, e não o padrão do Windows.
     try:
         winsound.PlaySound(dados, winsound.SND_MEMORY | winsound.SND_NODEFAULT)
     except Exception:  # pylint: disable=broad-exception-caught
@@ -141,7 +134,6 @@ class Aviso:
 
 
 def _criar_janela(aviso: Aviso) -> Any:
-    """A janela do aviso: `titulo`, `entrar(canto)`, `sair(ao_terminar)` e `fechar()`."""
     from cartridges.janela_do_aviso import JanelaDoAviso  # noqa: PLC0415
 
     return JanelaDoAviso(aviso)
@@ -153,7 +145,6 @@ _vez = 0  # muda a cada aviso: o temporizador de um aviso já fechado não fecha
 
 
 def na_tela() -> Optional[str]:
-    """O título do aviso visível agora (para teste e diagnóstico)."""
     return _atual.titulo if _atual is not None else None
 
 
@@ -185,8 +176,7 @@ def _proximo(com_som: bool = True) -> bool:
         _atual = None
         _destruir(janela)
         if _fila:
-            # Fora desta chamada, para uma falha repetida não empilhar recursão.
-            # Quem falhou não tocou nada: o seguinte herda a vez do som.
+            # Fora desta chamada, para uma falha repetida não empilhar recursão; o seguinte herda a vez do som.
             na_thread_principal(_proximo, com_som)
     return False
 
@@ -224,7 +214,6 @@ def _forcar_saida(vez: int, janela: Any) -> bool:
 
 
 def _saiu(vez: int, janela: Any) -> None:
-    """A saída terminou: a janela se vai e o próximo aviso entra."""
     global _atual  # pylint: disable=global-statement
     try:
         if vez != _vez or _atual is not janela:

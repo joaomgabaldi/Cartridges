@@ -5,14 +5,13 @@
 """Os seletores do diálogo de edição: capa e logo do SteamGridDB (`SeletorDeImagens.qml`), jogo da Steam
 (`SeletorDaSteam.qml`) e jogo do Ludusavi (`SeletorDoLudusavi.qml`).
 
-Cada um é uma lista de miniaturas: a busca devolve os endereços, as linhas entram quando a miniatura chega e as
-miniaturas chegam uma a uma. Escolher baixa a imagem original e a entrega ao diálogo de edição
-(`entregar_capa_baixada`, `entregar_logo_baixado`, `usar_titulo_no_logo`). Só na thread principal; as threads (busca,
-miniaturas, download) entregam por `na_thread_principal` e o que chega a um seletor que já fechou, ou que já buscou
-outra coisa, é descartado (e o arquivo, apagado).
+Cada um é uma lista de miniaturas: a busca devolve os endereços e a linha entra quando a miniatura chega. Escolher baixa a
+original e a entrega ao diálogo de edição (`entregar_capa_baixada`, `entregar_logo_baixado`, `usar_titulo_no_logo`). Só na
+thread principal; as threads entregam por `na_thread_principal` e o que chega a um seletor fechado, ou que já buscou outra
+coisa, é descartado (e o arquivo, apagado).
 
-Todo arquivo do seletor mora numa pasta própria em %TEMP%, apagada em `fechar`. O original baixado vai para fora dela:
-é de quem o recebe.
+Todo arquivo do seletor mora numa pasta própria em %TEMP%, apagada em `fechar`; o original baixado vai para fora dela: é de
+quem o recebe.
 """
 
 import io
@@ -77,8 +76,7 @@ MAX_LOGOS = 24
 # As extensões com que uma miniatura pode ser gravada; qualquer outra na URL vira ".png".
 _PREVIEW_SUFFIXES = (".png", ".apng", ".jpg", ".jpeg", ".webp", ".gif")
 
-# Dimensões das capas retrato no SteamGridDB. Sem o filtro a API devolve também as capas horizontais; só
-# 600x900 elimina quase todas as animadas, que costumam usar os outros tamanhos retrato.
+# Dimensões das capas retrato no SteamGridDB: sem o filtro a API devolve também as horizontais; só 600x900 elimina quase todas as animadas.
 PORTRAIT_DIMENSIONS = "600x900,342x482,660x930"
 
 
@@ -106,7 +104,6 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
     baixandoChanged = Signal()  # noqa: N815
     progressoChanged = Signal()  # noqa: N815
 
-    # O que cada tipo diz quando não acha nada ou o download falha.
     _prefixo_da_pasta = "cartridges_sgdb_"
     _texto_de_nada = ""
     _texto_de_falha = ""
@@ -115,20 +112,17 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
 
     def __init__(self, destino: Any, parent: Any = None) -> None:
         super().__init__(parent)
-        # Referência fraca: o destino é o `ModeloDaEdicao`, pai deste modelo. Um ciclo entre os dois seria
-        # recolhido pelo coletor de ciclos do Python numa thread qualquer (a que estiver alocando, como uma
-        # thread de busca ou um Timer), finalizando um QObject fora da thread principal: access violation.
-        # Sem ciclo, a destruição é por contagem de referências. `_destino` pode, então, ser None.
+        # Referência fraca: o destino é o `ModeloDaEdicao`, pai deste modelo. Um ciclo entre os dois seria recolhido pelo
+        # coletor de ciclos numa thread qualquer, finalizando um QObject fora da thread principal: access violation.
+        # `_destino` pode ser None.
         self._destino_fraco = weakref.ref(destino)
         self.sgdb = SgdbHelper()
         self._linhas: list[dict[str, Any]] = []
         self._aberto = False
         # Uma busca nova, uma escolha ou o fechamento invalidam o que as threads de download entregam. As miniaturas têm
-        # a geração delas (`_geracao_da_busca`): escolher uma imagem não as interrompe, e voltar à grade a encontra
-        # completa.
+        # geração própria (`_geracao_da_busca`): escolher uma imagem não as interrompe, e voltar à grade a encontra completa.
         self._generation = 0
         self._geracao_da_busca = 0
-        # O que a busca devolveu e ainda espera a miniatura: a linha só entra no modelo quando ela chega.
         self._itens: list[tuple[str, bool]] = []
         self._closed = True
         self._last_query: Optional[str] = None
@@ -262,7 +256,6 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
 
     @Slot()
     def buscarAgora(self) -> None:  # noqa: N802
-        """Enter no campo: busca já, sem esperar o atraso."""
         if self._aberto:
             self.search()
 
@@ -368,8 +361,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
                     except OSError:
                         arquivo = None
             na_thread_principal(self._previa_pronta, geracao, numero, arquivo)
-        # Depois de todas as miniaturas (a fila roda na ordem): sem isto, toda miniatura falhando
-        # deixava o seletor em "carregando" pela vida inteira.
+        # Depois de todas as miniaturas (a fila roda na ordem): sem isto, toda miniatura falhando deixava o seletor em "carregando" para sempre.
         na_thread_principal(self._fim_das_previas, geracao)
 
     def _limpar(self) -> None:
@@ -398,9 +390,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
                 pass
 
     def _receber(self, geracao: int, itens: list[tuple[str, bool]]) -> None:
-        """A busca achou ``itens``: eles esperam a miniatura, e a linha só entra no modelo quando ela chega (até a
-        primeira, o spinner central; depois, uma a uma).
-        """
+        """A busca achou ``itens``: esperam a miniatura, e a linha só entra no modelo quando ela chega (até a primeira, o spinner central)."""
         if geracao != self._geracao_da_busca or self._closed:
             return
         self._itens = list(itens)
@@ -427,9 +417,9 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
             self._pedir_copia(linha, geracao)
 
     def _pedir_copia(self, linha: dict[str, Any], geracao: int) -> None:
-        """A prévia animada toca a cópia reduzida ao tamanho da grade (`copias_animadas`), e não a original, que pode
-        ter centenas de MB: assim todas tocam ao mesmo tempo. Até ela chegar (ou se falhar), a célula mostra só o
-        primeiro quadro, parado; a original nunca toca.
+        """A prévia animada toca a cópia reduzida ao tamanho da grade (`copias_animadas`), não a original, que pode ter
+        centenas de MB: assim todas tocam ao mesmo tempo. Até a cópia chegar (ou se falhar), a célula mostra só o primeiro
+        quadro; a original nunca toca.
         """
         tamanho = copias_animadas.tamanhos()[0]
         destino = copias_animadas.caminho_para(linha["arquivo"], tamanho)
@@ -457,8 +447,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         if not self._aberto or self._baixando or not 0 <= indice < len(self._linhas):
             return
         linha = self._linhas[indice]
-        # Só o download tem geração nova: as miniaturas seguem chegando (a grade já não está à vista, então não
-        # voltam por cima do carregamento) e "Voltar" a encontra completa.
+        # Só o download tem geração nova: as miniaturas seguem chegando e "Voltar" a encontra completa.
         self._generation += 1
         self._cancelar_debounce()
         self._baixando = True
@@ -478,8 +467,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
 
     def _progresso_recebido(self, geracao: int, recebido: int, total: Optional[int]) -> None:
         if geracao == self._generation and self._baixando:
-            # Chegou mais do que o servidor informou: o total real não é conhecido, e "30,0 MB de 20,0 MB"
-            # pareceria erro do aplicativo.
+            # Chegou mais do que o servidor informou: o total real é desconhecido, e "30,0 MB de 20,0 MB" pareceria erro do aplicativo.
             if total is not None and recebido > total:
                 total = None
             self._progresso = recebido / total if total else -1.0
@@ -508,7 +496,6 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
             logging.warning("Could not download the chosen image: %s: %s", type(erro).__name__, erro)
             self._falhou(geracao)
             return
-        # Fora da pasta do seletor, que cai em `fechar`: o arquivo é de quem o recebe.
         arquivo: Optional[Path] = None
         try:
             descritor, nome = tempfile.mkstemp(prefix=self._prefixo_da_pasta, suffix=self._sufixo(url))
@@ -539,13 +526,11 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         self._concluir(arquivo, geracao)
 
     def _concluir(self, arquivo: Path, geracao: int) -> None:
-        """O arquivo baixado chegou: entrega a quem o recebe e fecha."""
         self._entregar(arquivo)
         self.fechar()
 
     @Slot()
     def fechar(self) -> None:
-        """Cancela a busca e o download e apaga todos os arquivos do seletor."""
         self._closed = True
         self._generation += 1
         self._geracao_da_busca = -1
@@ -603,15 +588,12 @@ class SeletorDoSgdb(_SeletorDoSteamGridDB):
         itens = []
         for grade in grades[: MAX_ANIMATED_RESULTS if animada else MAX_RESULTS]:
             if original := grade.get("url"):
-                # O SteamGridDB serve a miniatura animada como .webm, que o Qt não toca: a prévia da
-                # animada é a própria imagem; a parada usa a miniatura leve.
+                # O SteamGridDB serve a miniatura animada como .webm, que o Qt não toca: a prévia da animada é a própria imagem; a parada usa a leve.
                 itens.append((original, original if animada else (grade.get("thumb") or original)))
         return itens
 
     def _concluir(self, arquivo: Path, geracao: int) -> None:
-        """A capa é convertida aqui dentro, com a tela "Baixando…" à vista: o seletor só fecha com ela pronta; se a
-        conversão falhar, volta à grade.
-        """
+        """A capa é convertida aqui dentro, com a tela "Baixando…" à vista: o seletor só fecha com ela pronta; se a conversão falhar, volta à grade."""
         self._destino.entregar_capa_baixada(
             arquivo,
             lambda ok: self._capa_convertida(geracao, ok),
@@ -641,8 +623,7 @@ class SeletorDeLogo(_SeletorDoSteamGridDB):
 
     @staticmethod
     def _ordenados(logos: list[dict]) -> list[dict]:
-        """Todo logo usável, o melhor primeiro, julgado como a página os julga: o que o app escolheria
-        sozinho vem primeiro, e os outros não são filtrados (é para ver as alternativas)."""
+        """Todo logo usável, o melhor primeiro, julgado como a página os julga (o que o app escolheria sozinho vem primeiro); os outros não são filtrados, para ver as alternativas."""
         ordenados, restantes = [], list(logos)
         while restantes and (melhor := game_logo.pick_logo(restantes)):
             ordenados.append(melhor)
@@ -669,10 +650,8 @@ class SeletorDeLogo(_SeletorDoSteamGridDB):
         self._destino.entregar_logo_baixado(arquivo)
 
 
-# Uma página do site.
 MAX_PAPEIS = 24
-# O lado fixo da célula da grade, em pixels lógicos: a altura numa grade em pé, a largura numa deitada. O outro
-# lado sai da proporção do monitor, e a célula é a tela em miniatura (146x260 num 9:16, 260x146 num 16:9).
+# O lado fixo da célula, em pixels lógicos: a altura numa grade em pé, a largura numa deitada; o outro lado sai da proporção do monitor (146x260 num 9:16, 260x146 num 16:9).
 LADO_DA_CELULA = 260
 # A caixa em que a prévia do ajuste cabe: com uma orientação só ela tem o diálogo inteiro; no arranjo misto as
 # duas dividem a largura, e a deitada fica com a maior parte.
@@ -715,7 +694,6 @@ class _CortesDoPapel(QAbstractListModel):
         AlturaDaPrevia = Qt.ItemDataRole.UserRole + 6
         Orientacao = Qt.ItemDataRole.UserRole + 7
 
-    # papel -> (nome no QML, chave da linha)
     _NOMES = {
         Papel.Previa: (b"previa", "previa"), Papel.Posicao: (b"posicao", "posicao"),
         Papel.Desliza: (b"desliza", "desliza"), Papel.Dica: (b"dica", "dica"),
@@ -752,12 +730,11 @@ class _CortesDoPapel(QAbstractListModel):
 class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
     """O papel de parede da sessão, escolhido à mão no wallhaven em duas etapas.
 
-    Primeira: a grade de candidatos já cortados no formato dos monitores. Segunda: a imagem escolhida, baixada
-    inteira, com a barra que desliza a faixa de cada monitor. Toda a fidelidade vem de uma coisa só: a miniatura e
-    o arquivo final passam pela mesma `enquadrar`, e como ela corta em proporção o quadro de 146 px da grade e o de
-    1080 px do monitor são o mesmo quadro. "Usar esta imagem" entrega `(arquivo, Posicoes)` ao diálogo de edição;
-    "Não trocar" entrega a decisão de não mexer no papel de parede deste jogo. O que a busca, as miniaturas e o
-    download têm em comum com os seletores do SteamGridDB vem de `_SeletorDoSteamGridDB`.
+    Primeira: a grade de candidatos já cortados no formato dos monitores. Segunda: a imagem escolhida, baixada inteira, com a
+    barra que desliza a faixa de cada monitor. A miniatura e o arquivo final passam pela mesma `enquadrar`, que corta em
+    proporção: o quadro de 146 px da grade e o de 1080 px do monitor são o mesmo. "Usar esta imagem" entrega
+    `(arquivo, Posicoes)` ao diálogo de edição; "Não trocar", a decisão de não mexer no papel deste jogo. A busca, as
+    miniaturas e o download vêm de `_SeletorDoSteamGridDB`.
     """
 
     ajustandoChanged = Signal()  # noqa: N815
@@ -770,15 +747,13 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
 
     def __init__(self, destino: Any, parent: Any = None) -> None:
         super().__init__(destino, parent)
-        # Os testes põem monitores falsos aqui.
         self.monitores = monitores_das_telas
         self._formatos = Formatos(None, None)
         self._escala = 1
         self._ajustando = False
         self._so_arquivo = False
         self._cortes = _CortesDoPapel(self)
-        # A imagem aberta na segunda etapa: o original inteiro (que é o que vai ser gravado) e uma cópia pequena,
-        # de onde cada arrastada da barra recorta (recortar o 4K a cada pixel de arrasto travaria).
+        # A imagem aberta na segunda etapa: o original inteiro (o que será gravado) e uma cópia pequena de onde cada arrastada da barra recorta (recortar o 4K a cada pixel travaria).
         self._original: Optional[Path] = None
         self._previa: Optional[Image.Image] = None
 
@@ -816,7 +791,6 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
 
     @Slot(QUrl)
     def abrirArquivo(self, url: QUrl) -> None:  # noqa: N802
-        """Leva um arquivo do disco direto à etapa de ajuste, como uma imagem da busca."""
         caminho = Path(url.toLocalFile())
         if self._aberto:
             self.fechar()
@@ -850,8 +824,7 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
 
         alvo = self._formatos
         try:
-            # O formato da grade primeiro e qualquer formato depois, na mesma grade: o que menos precisa de corte
-            # aparece na frente. O mínimo é o de todos os alvos, para nenhum corte esticar.
+            # O formato da grade primeiro e qualquer formato depois, na mesma grade: o que menos precisa de corte aparece na frente; o mínimo é o de todos os alvos, para nenhum corte esticar.
             achados = buscar(consulta, *alvo.minimo, formato=alvo.ratio)
             vistos = {item["id"] for item in achados}
             achados += [item for item in buscar(consulta, *alvo.minimo) if item["id"] not in vistos]
@@ -900,7 +873,6 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
         except requests.RequestException as erro:
             logging.info("Wallpaper picker: preview download failed (%s)", erro)
             return None
-        # O nome nunca sai da resposta da API: um id "..\x" gravava fora da pasta.
         destino = pasta / f"{uuid4().hex}.png"
         cancelar()  # depois do `rmtree` do `fechar`, nada é gravado numa pasta que sobrou
         try:
@@ -960,8 +932,7 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
         for (largura, altura), nome in alvos:
             caixa = CAIXA_UNICA if len(alvos) == 1 else CAIXA_EM_PE if altura > largura else CAIXA_DEITADA
             ver_largura, ver_altura = _caber(largura, altura, caixa)
-            # Qual eixo a barra move depende das duas proporções: arte larga é cortada nas laterais, arte alta demais
-            # em cima e embaixo. A barra só existe onde há o que deslizar: arte na proporção do monitor entra inteira.
+            # Qual eixo a barra move depende das duas proporções: arte larga é cortada nas laterais, alta demais em cima e embaixo; a barra só existe onde há o que deslizar.
             dica = (
                 _("Arraste para escolher a faixa da imagem")
                 if eixo_do_corte(previa.width, previa.height, largura, altura)
@@ -983,7 +954,6 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
         self.ajustandoChanged.emit()
 
     def _desenhar(self, numero: int) -> None:
-        """Recorta a prévia do corte `numero` na faixa dele; o arquivo anterior daquele corte sai."""
         linha = self._cortes.linhas[numero]
         if self._previa is None or self._pasta is None:
             return
@@ -1012,7 +982,6 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
         if self._ajustando:
             self._ajustando = False
             self.ajustandoChanged.emit()
-        # As prévias do ajuste soltam os arquivos abertos antes de saírem.
         _largar_arquivos_abertos()
         for arquivo in arquivos:
             if arquivo is not None:
@@ -1027,7 +996,6 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
         if not self._ajustando:
             return
         self._sair_do_ajuste()
-        # As miniaturas não pararam (a escolha não as interrompe): a grade volta como estava, ou ainda chegando.
         if self._linhas or self._buscando:
             self.estadoChanged.emit()
         else:
@@ -1069,7 +1037,6 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
             self.fechar()
 
     def search(self) -> None:
-        # Uma busca nova leva de volta à grade.
         self._sair_do_ajuste()
         super().search()
 
@@ -1082,10 +1049,9 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
 class SeletorDaSteam(BuscaDoSeletor, QAbstractListModel):
     """Qual jogo da Steam é este: a lista de candidatos da loja para o título digitado.
 
-    Serve à linha "AppID da Steam" (escolher só preenche o campo) e ao "Buscar dados na Steam pelo título"
-    quando nenhum candidato é confiável (escolher continua a busca de metadados). Escolher baixa os dados
-    do jogo e os entrega ao diálogo de edição (`steam_escolhida`). Só na thread principal; o que as threads
-    entregam a um seletor que já fechou, ou que já buscou outra coisa, é descartado.
+    Serve à linha "AppID da Steam" (escolher só preenche o campo) e ao "Buscar dados na Steam pelo título" quando nenhum
+    candidato é confiável (escolher continua a busca de metadados). Só na thread principal; o que as threads entregam a um
+    seletor fechado, ou que já buscou outra coisa, é descartado.
     """
 
     class Papel(IntEnum):
@@ -1211,7 +1177,6 @@ class SeletorDaSteam(BuscaDoSeletor, QAbstractListModel):
 
     @Slot()
     def buscarAgora(self) -> None:  # noqa: N802
-        """Enter no campo: busca já, sem esperar o atraso."""
         if self._aberto:
             self.search()
 
@@ -1267,8 +1232,7 @@ class SeletorDaSteam(BuscaDoSeletor, QAbstractListModel):
         if geracao != self._generation or self._closed:
             return
         linhas = [
-            # shortcut: a busca da loja não traz o ano de lançamento; o papel `ano` fica vazio; só preenche se a busca
-            # passar a consultar o appdetails de cada candidato.
+            # shortcut: a busca da loja não traz o ano de lançamento (o papel `ano` fica vazio); só preenche se passar a consultar o appdetails de cada candidato.
             {"nome": str(candidato.get("name", "")), "appid": str(candidato.get("id", "")), "ano": ""}
             for candidato, _combina in candidatos
             if candidato.get("id")
@@ -1322,7 +1286,6 @@ class SeletorDaSteam(BuscaDoSeletor, QAbstractListModel):
 
     @Slot()
     def fechar(self) -> None:
-        """Cancela a busca pendente; o que as threads ainda entregam é descartado."""
         self._closed = True
         self._generation += 1
         self._cancelar_debounce()
@@ -1339,9 +1302,9 @@ def pasta_do_ludusavi() -> Path:
 class SeletorDoLudusavi(QAbstractListModel):
     """Escolher, na lista de jogos do Ludusavi, o jogo cujos saves entram no backup.
 
-    O nome certo só quem conhece o jogo sabe dizer; o app apenas oferece a lista do `manifest.yaml`
-    (dezenas de milhares de nomes), lida fora da thread principal e filtrada enquanto se digita. A opção
-    "Nenhum (desliga o backup)" não é uma linha da lista: a tela a desenha acima dela (`escolherNenhum`).
+    Só quem conhece o jogo sabe o nome certo; o app oferece a lista do `manifest.yaml` (dezenas de milhares de nomes), lida
+    fora da thread principal e filtrada enquanto se digita. "Nenhum (desliga o backup)" não é linha da lista: a tela a
+    desenha acima dela (`escolherNenhum`).
     """
 
     class Papel(IntEnum):
@@ -1404,7 +1367,6 @@ class SeletorDoLudusavi(QAbstractListModel):
 
     @Property(bool, notify=estadoChanged)
     def vazio(self) -> bool:
-        """A lista foi lida e o filtro não deixou nada."""
         return self._aberto and not self._carregando and not self._erro and not self._filtrados
 
     @Property(str, notify=estadoChanged)

@@ -2,12 +2,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O backup da biblioteca e a Zona de perigo das Preferências, sem tela.
+"""O backup da biblioteca e a Zona de perigo das Preferências, sem tela: exportar, importar, a pasta dos saves,
+"Restaurar saves de todos os jogos" e o Redefinir.
 
-Exportar, importar, a pasta dos saves, "Restaurar saves de todos os jogos" e o Redefinir. O trabalho pesado roda em
-threads e volta por `na_thread_principal` com referência fraca a este objeto: um resultado que chega depois de ele ser
-coletado é descartado. Perguntas e diálogos vão pelo `Aplicativo`, o reinício por `pedir_reinicio`. Só na thread
-principal.
+O trabalho pesado roda em threads e volta por `na_thread_principal` com referência fraca: um resultado que chega depois de
+este objeto ser coletado é descartado. Só na thread principal.
 """
 
 import logging
@@ -171,10 +170,10 @@ class BackupDasPreferencias(QObject):
             raise
 
     def _conferir_exportacao(self) -> None:
-        """Só com o app fechando (a principal escondida à espera da exportação) e sem nenhum progresso há
-        `PRAZO_SEM_PROGRESSO_S`: cancela o fechamento, solta a tarefa e avisa. A thread presa não morre:
-        `_exportando` segue até ela voltar, e o resultado de então é descartado (`_exportacao_acabou`). O backup
-        anterior fica intacto: a thread só grava num `.tmp` e troca no fim.
+        """Só com o app fechando (a principal escondida à espera da exportação) e sem progresso há `PRAZO_SEM_PROGRESSO_S`:
+        cancela o fechamento, solta a tarefa e avisa. A thread presa não morre (`_exportando` segue até ela voltar; o
+        resultado de então é descartado em `_exportacao_acabou`); o backup anterior fica intacto: a thread só grava num
+        `.tmp` e troca no fim.
         """
         estado = self._exportacao
         if estado is None or estado.vencida or not tarefas.fechamento_esperando():
@@ -293,8 +292,7 @@ class BackupDasPreferencias(QObject):
         )
 
     def _redefinir_confirmado(self) -> None:
-        # A limpeza é na abertura seguinte (`utils/redefinir.py`); um backup dos saves no meio gravaria na pasta que ela
-        # apaga.
+        # A limpeza é na abertura seguinte (`utils/redefinir.py`); um backup dos saves no meio gravaria na pasta que ela apaga.
         if backup_de_saves.em_andamento() or self._preparando:
             self._aguarde()
             return
@@ -326,8 +324,8 @@ def _dispensar(avisos: Any, aviso: Any) -> None:
 
 
 def _terminar_exportacao(estado: _Exportacao, mostrar: bool) -> None:
-    """Tira a exportação da contagem, sempre. Com um diálogo a mostrar (``mostrar``), o fechamento em espera é
-    cancelado ANTES de a tarefa sair da contagem: senão o app sai primeiro."""
+    """Tira a exportação da contagem, sempre. Com um diálogo a mostrar (``mostrar``), o fechamento em espera é cancelado
+    ANTES de a tarefa sair da contagem: senão o app sai primeiro."""
     if mostrar:
         try:
             tarefas.cancelar_fechamento()
@@ -406,8 +404,8 @@ def _preparo_acabou(eu: Any, avisos: Any, aviso: Any, resultado: str) -> None:
         _dialogo(_("Backup inválido"), _("O arquivo não é um backup válido do Kyron."))
     elif resultado == "falhou":
         _dialogo(_("Não foi possível restaurar"), _("Não foi possível restaurar o backup. Tente novamente."))
-    # Confere de novo: a preparação leva segundos, e a pessoa pode ter começado um backup ou uma restauração dos saves
-    # nesse meio tempo. O backup já copiado é desfeito, para não ser aplicado por surpresa numa abertura futura.
+    # Confere de novo: a preparação leva segundos e a pessoa pode ter começado um backup ou restauração de saves; o backup
+    # já copiado é desfeito para não ser aplicado por surpresa numa abertura futura.
     elif backup_de_saves.em_andamento():
         try:
             backup.cancelar_agendado()

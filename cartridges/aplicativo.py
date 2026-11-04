@@ -54,8 +54,7 @@ class Aplicativo(QObject):
         self.varredura_conquistas = None
         # Lida pelo `main()` depois do `exec()`: o app sai e se reabre.
         self.reiniciar = False
-        # Pilha de pedidos: o novo cobre o de cima e, quando fecha, o anterior volta. `_na_tela` diz qual pedido cada
-        # diálogo do QML mostra.
+        # Pilha de pedidos: o novo cobre o de cima; `_na_tela` diz qual pedido cada diálogo do QML mostra.
         self._pilha: list[_Pedido] = []
         self._na_tela: dict[str, _Pedido | None] = {"dialogo": None, "confirmacao": None}
         self._colunas = shared.schema.get_uint("library-rows")
@@ -120,9 +119,7 @@ class Aplicativo(QObject):
         varrer_atalhos: bool = False,
         ao_terminar: Callable[[], None] | None = None,
     ) -> None:
-        """``silenciosa``: a importação disparada pelo app não avisa quando nada é achado; a pedida pelo usuário avisa
-        sempre.
-        """
+        """``silenciosa``: a importação disparada pelo app não avisa quando nada é achado."""
         if self._importando:
             # A segunda importação não roda junto; o retorno de quem a pediu sai no fim da que está em curso.
             atual = shared.importer
@@ -188,9 +185,7 @@ class Aplicativo(QObject):
         ao_responder: Callable[[bool], None],
         destrutivo: bool = False,
     ) -> None:
-        """Pergunta com dois botões; ``ao_responder(True)`` se confirmou, ``False`` se saiu. Sair é "Cancelar" se
-        ``destrutivo``, senão "Dispensar".
-        """
+        """Pergunta com dois botões; ``ao_responder(True)`` se confirmou. Sair é "Cancelar" se ``destrutivo``, senão "Dispensar"."""
         sair = "Cancelar" if destrutivo else "Dispensar"
         self._empilhar(_Pedido("confirmacao", (titulo, corpo, rotulo, sair, destrutivo), ao_responder))
 
@@ -222,7 +217,6 @@ class Aplicativo(QObject):
             return
         preferencias = shared.preferencias
         if abrir_preferencias and pagina is not None and preferencias is not None and preferencias.abrir(pagina):
-            # Uma vez só, quando as Preferências fecham.
             ligacao: list = []
             fraco = weakref.ref(preferencias)  # a conexão vive no próprio objeto: referência forte formaria um ciclo
 

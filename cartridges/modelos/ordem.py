@@ -2,11 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Regras puras da biblioteca: ordem da grade, filtros, busca e opções do menu.
-
-Sem Qt: a `Linha` é a fotografia de um jogo e as funções só olham para ela. O modelo e os proxies (`biblioteca.py`)
-apenas aplicam estas regras.
-"""
+"""Regras puras da biblioteca (ordem da grade, filtros, busca e opções do menu), sem Qt: a `Linha` é a fotografia de um
+jogo; o modelo e os proxies (`biblioteca.py`) só as aplicam."""
 
 import functools
 import unicodedata
@@ -77,11 +74,7 @@ class Linha:
 
 
 def url_da_copia(caminho: Path | None, indice: int = 0) -> str:
-    """URL da cópia animada da capa (``indice`` 0: a da grade; 1: a de detalhes), ou "" se não há.
-
-    "" também quando a capa é parada, a cópia não existe ou é mais velha que a capa (a tela a larga
-    e o ``preparar`` a refaz).
-    """
+    """URL da cópia animada da capa (``indice`` 0: a da grade; 1: a de detalhes), ou "" se não há, a capa é parada ou a cópia é mais velha que ela."""
     if caminho is None or caminho.suffix not in ANIMATED_SUFFIXES:
         return ""
     copia = copias_animadas.caminho_para(caminho, copias_animadas.tamanhos()[indice])

@@ -54,9 +54,8 @@ _LIMIARES = tuple(tuple((v + 0.5) / 64 for v in linha) for linha in _BAYER_8)
 def bytes_do_fundo(largura: int, altura: int) -> bytes:
     """O fundo em RGB de 8 bits (`largura·altura·3` bytes, linha a linha).
 
-    Cada linha tem um valor exato por canal; o arredondamento usa os limiares
-    da matriz Bayer 8×8 completa, então nenhum pixel difere do exato em mais de 1 tom.
-    A linha é montada com 8 pixels que se repetem (sem laço por pixel).
+    Cada linha tem um valor exato por canal, arredondado pelos limiares da matriz Bayer 8×8 (nenhum pixel difere do exato em
+    mais de 1 tom); a linha é montada com 8 pixels que se repetem.
     """
     repeticoes = -(-largura // 8)
     linhas = []
@@ -74,8 +73,7 @@ def bytes_do_fundo(largura: int, altura: int) -> bytes:
 def jogos_da_biblioteca(linhas: Iterable[Linha]) -> list[Linha]:
     """Os jogos que aparecem na biblioteca, do jogado mais recentemente ao mais antigo.
 
-    As linhas vêm do `ModeloDaBiblioteca`, que já tira bloqueados e pendentes de restauração;
-    sobram os desinstalados (que estão ali por causa de Jogos Zerados).
+    O `ModeloDaBiblioteca` já tira bloqueados e pendentes; sobram os desinstalados (ali por causa de Jogos Zerados).
     """
     visiveis = [linha for linha in linhas if not linha.removido]
     # Duas ordenações estáveis: nome crescente primeiro, depois jogado_em decrescente.
@@ -154,8 +152,7 @@ _dados_tique: bytes | None = None
 
 
 def _tocar_dados(dados: bytes) -> None:
-    # SND_MEMORY não aceita SND_ASYNC: por isso a thread. SND_NODEFAULT: sem som
-    # padrão do Windows por cima do jogo se não der para tocar.
+    # SND_MEMORY não aceita SND_ASYNC: por isso a thread. SND_NODEFAULT: sem som padrão do Windows por cima do jogo.
     try:
         winsound.PlaySound(dados, winsound.SND_MEMORY | winsound.SND_NODEFAULT)
     except Exception:

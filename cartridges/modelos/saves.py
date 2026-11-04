@@ -6,9 +6,8 @@
 
 """As versões guardadas dos saves de um jogo ("Restaurar save").
 
-As funções puras vêm do antigo `saves/dialogo.py`. `SavesDoJogo` (contexto `saves`) é o que o `DialogoDeVersoes.qml`
-mostra: escolher uma versão pede a confirmação e só então chama `backup_de_saves.restaurar`. O QML só recebe
-dicionários e ids, nunca um `Jogo` nem uma `Versao`.
+`SavesDoJogo` (contexto `saves`) é o que o `DialogoDeVersoes.qml` mostra: escolher uma versão pede a confirmação e só então
+chama `backup_de_saves.restaurar`. O QML só recebe dicionários e ids, nunca um `Jogo` nem uma `Versao`.
 """
 
 import weakref

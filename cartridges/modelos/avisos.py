@@ -2,11 +2,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A fila de avisos: um por vez, na ordem em que chegaram.
+"""A fila de avisos: um por vez, na ordem de chegada.
 
-Quem está na fila não está na tela, e um aviso que expirasse antes de aparecer ninguém veria:
-por isso `dispensar_depois` só começa a contar quando o aviso ganha a vez. Cada aviso sai com o fade
-antes de o próximo entrar (`_SAIDA_MS`), e o tempo para com o mouse em cima. Tudo na thread principal.
+`dispensar_depois` só começa a contar quando o aviso ganha a vez (quem está na fila não está na tela). Cada aviso sai com o
+fade (`_SAIDA_MS`) antes de o próximo entrar, e o tempo para com o mouse em cima. Tudo na thread principal.
 """
 
 import itertools
@@ -71,9 +70,8 @@ class FilaDeAvisos(QObject):
         segundos: float = 5,
         chave: Hashable | None = None,
     ) -> int:
-        """Enfileira o aviso e devolve o id. `segundos=0`: só sai por `dispensar`.
-
-        Um aviso com a mesma `chave` de um que está na tela ou na fila sai, e o novo vai ao fim da fila.
+        """Enfileira o aviso e devolve o id; `segundos=0` só sai por `dispensar`. Um aviso com a mesma `chave` de um na tela ou
+        na fila o substitui e vai ao fim da fila.
         """
         if chave is not None:
             self.dispensar_chave(chave)

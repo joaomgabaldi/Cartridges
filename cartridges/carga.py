@@ -12,8 +12,7 @@ from typing import Any
 from cartridges import shared
 from cartridges.jogo import Jogo
 
-# O tipo de cada campo que um game_id.json persiste, fora os quatro de identidade (conferidos em
-# `carregar_jogos_do_disco`).
+# O tipo de cada campo que um game_id.json persiste, fora os de identidade (conferidos em `carregar_jogos_do_disco`).
 _NUMBER = (int, float)
 # Todo id que o app gera: `imported_12`, `shortcuts_<hash>`.
 _GAME_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
@@ -77,8 +76,7 @@ _GAME_FIELD_TYPES: dict[str, Any] = {
     "hltb_chapters": list,
 }
 
-# Os campos cujo default na classe é None: só neles `null` quer dizer "não
-# informado". Nos outros, `"version": null` virava `None > 1.6` na carga.
+# Campos cujo default é None: só neles `null` é "não informado" (`"version": null` virava `None > 1.6`).
 _NULLABLE_GAME_KEYS = frozenset(
     {
         "metacritic",
@@ -100,9 +98,7 @@ _NULLABLE_GAME_KEYS = frozenset(
 
 
 def sanitize_game_fields(data: dict, record_name: str) -> dict:
-    """Descarta campos de tipo errado num registro editado à mão: cai o campo, não o jogo, e o default da
-    classe vale como "não informado". Muta e devolve ``data``.
-    """
+    """Descarta campos de tipo errado num registro editado à mão: cai o campo, não o jogo. Muta e devolve ``data``."""
     for key, expected in _GAME_FIELD_TYPES.items():
         if key not in data:
             continue
@@ -120,9 +116,7 @@ def sanitize_game_fields(data: dict, record_name: str) -> dict:
 
 
 def carregar_jogos_do_disco(store: Any) -> int:
-    """Lê cada ficha de ``shared.games_dir`` e a entrega a ``store.add_game``; devolve quantas chegaram sem
-    erro. Uma ficha ruim custa só aquele jogo.
-    """
+    """Lê cada arquivo de ``shared.games_dir`` e o entrega a ``store.add_game``; devolve quantos chegaram sem erro."""
     games: list[tuple[Jogo, str]] = []
     if shared.games_dir.is_dir():
         for game_file in shared.games_dir.iterdir():
@@ -135,10 +129,8 @@ def carregar_jogos_do_disco(store: Any) -> int:
             except (OSError, json.decoder.JSONDecodeError) as error:
                 logging.warning("Skipping unreadable game record %s: %s", game_file.name, error)
                 continue
-            # Um registro sem um dos campos sem default não é carregável: o `Jogo.__init__` lê `source` fora do guarda
-            # do JSON, e um arquivo corrompido derrubaria a abertura inteira. O executável pode ser vazio só num jogo
-            # zerado recriado por backup. O game_id vira nome de arquivo (capa, logo, exclusão): um "..\x" de um backup
-            # alheio apontava para fora da pasta do app.
+            # `Jogo.__init__` lê `source` fora do guarda do JSON: sem ele a abertura inteira cairia. O executável vazio só vale
+            # num jogo zerado recriado por backup. O game_id vira nome de arquivo: um "..\x" de backup alheio saía da pasta.
             if (
                 not isinstance(data, dict)
                 or not all(

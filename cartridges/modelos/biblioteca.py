@@ -4,11 +4,9 @@
 
 """Modelo da biblioteca: o que o QML enxerga de cada jogo, e as páginas que o filtram.
 
-Um modelo-fonte (`ModeloDaBiblioteca`) guarda uma `Linha` por jogo, sem ordem própria; cada página
-(biblioteca, zerados) é um `FiltroDaPagina` sobre ele, que ordena e filtra pelas regras puras de
-`ordem.py`. O QML só lê os papéis, nunca um `Jogo`; por isso o modelo guarda fotografias e o
-`Jogo` (que pode ter nascido numa thread do importador) só é tocado na thread principal, em
-`atualizar` e `iniciar`.
+Um modelo-fonte (`ModeloDaBiblioteca`) guarda uma `Linha` por jogo, sem ordem própria; cada página (biblioteca, zerados) é um
+`FiltroDaPagina` sobre ele, ordenado pelas regras de `ordem.py`. O QML só lê papéis, nunca um `Jogo`: o modelo guarda
+fotografias, e o `Jogo` (que pode ter nascido numa thread do importador) só é tocado na thread principal.
 """
 
 import weakref
@@ -141,10 +139,8 @@ class ModeloDaBiblioteca(QAbstractListModel):
         store.capa_trocou_de_id.connect(self.trocar_id, Qt.ConnectionType.QueuedConnection)
 
     def atualizar(self, jogo: Jogo) -> None:
-        """Insere, atualiza ou tira o jogo do modelo. Só na thread principal.
-
-        Ficam os jogos da biblioteca e os zerados (removidos); bloqueados, desinstalados comuns e
-        pendentes de restauração saem.
+        """Insere, atualiza ou tira o jogo do modelo. Só na thread principal. Ficam os jogos da biblioteca e os zerados;
+        bloqueados, desinstalados comuns e pendentes de restauração saem.
         """
         if jogo.blacklisted or (jogo.removed and not jogo.zerado) or _pendente(jogo.game_id):
             self.retirar(jogo.game_id)
@@ -181,7 +177,7 @@ class ModeloDaBiblioteca(QAbstractListModel):
             copias_animadas.preparar(capas)
 
     def _capa_animada_sem_copia(self, linha: Linha) -> Path | None:
-        """O arquivo da capa, se ela é animada (e não falhou antes); o ``preparar`` vê quais cópias, da grade ou grande, faltam."""
+        """O arquivo da capa, se ela é animada (e não falhou antes); o ``preparar`` vê quais cópias faltam."""
         if (linha.jogo_id, linha.capa) in self._sem_copia:
             return None
         jogo = self._jogos.get(linha.jogo_id)
@@ -299,8 +295,7 @@ class FiltrosDaBiblioteca(QObject):
     def recalcularOpcoes(self) -> None:  # noqa: N802
         """Refeito ao abrir o menu, não a cada mudança: um import em andamento o mexeria sem ninguém olhar."""
         self._generos, self._anos = ordem.opcoes(self._fonte.linhas())
-        # Um valor escolhido que saiu da biblioteca deixaria a grade vazia, apontando para uma opção que o menu nem
-        # oferece.
+        # Um valor escolhido que saiu da biblioteca deixaria a grade vazia, apontando para uma opção que o menu nem oferece.
         if self._genero and self._genero not in self._generos:
             self.genero = ""
         if self._ano and self._ano not in self._anos:
@@ -382,7 +377,6 @@ class FiltroDaPagina(QSortFilterProxyModel):
 
     @Slot(result=str)
     def primeiro(self) -> str:
-        """O `jogoId` da primeira linha, para o Enter da busca."""
         return self.data(self.index(0, 0), ModeloDaBiblioteca.Papel.JogoId) or ""
 
     @Slot(str, result=int)

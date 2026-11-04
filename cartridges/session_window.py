@@ -27,19 +27,16 @@ from cartridges.utils import session_log
 
 
 class SessionWindow(QObject):
-    """O relógio da sessão manual, mostrada na janela "Jogando {nome}" (QML).
+    """O relógio da sessão manual, na janela "Jogando {nome}" (QML), para jogos cuja saída não se detecta (Steam/Epic/UWP).
 
-    Não dá para detectar a saída do jogo (Steam/Epic/UWP passam a outro processo): o usuário clica em "Já terminei de
-    jogar". O tempo vai para ``game.playtime`` a cada minuto, então uma queda perde no máximo o último minuto. A
-    janela em si é do `ModeloDaSessao` (`abrir_janela_manual`).
+    O tempo vai para ``game.playtime`` a cada minuto: uma queda perde no máximo o último.
     """
 
     # Uma sessão acompanhada por vez; também mantém este objeto vivo.
     active: "Optional[SessionWindow]" = None
 
     TICK_INTERVAL = 60
-    # Um intervalo maior que isto entre duas gravações é o PC dormindo, não jogo: o relógio monotônico conta o sono. É
-    # creditado como um tick só.
+    # Um intervalo maior que isto entre duas gravações é o PC dormindo (o relógio monotônico conta o sono): creditado como um tick só.
     MAX_GAP = TICK_INTERVAL + 30
 
     def __init__(self, game: Any) -> None:
@@ -56,15 +53,12 @@ class SessionWindow(QObject):
 
     @property
     def elapsed(self) -> int:
-        """Os segundos da sessão, inclusive os ainda não gravados.
-
-        `flush` grava a cada minuto adiantando `session_start`; sem somar o que
-        já foi gravado, o relógio voltava a zero a cada gravação.
+        """Os segundos da sessão, inclusive os ainda não gravados: `flush` adianta `session_start` a cada minuto, e sem somar o
+        já gravado o relógio voltaria a zero.
         """
         return self.session_seconds + int(monotonic() - self.session_start)
 
     def flush(self) -> None:
-        """Soma o tempo decorrido ao total do jogo e grava."""
         now = monotonic()
         elapsed = int(now - self.session_start)
         if elapsed > self.MAX_GAP:

@@ -1,9 +1,4 @@
-"""A janela do aviso de conquista: um `QQuickView` sem moldura que mostra o `CartaoDoAviso.qml`.
-
-Nunca toma o foco (um jogo em tela cheia minimiza quando o perde), fica fora da barra de tarefas e do Alt+Tab e por
-cima do jogo. As flags do Qt pedem isso; o `janela_por_cima` garante no Win32, depois do `create()` e antes do
-`show()`.
-"""
+"""A janela do aviso de conquista: um `QQuickView` sem moldura que mostra o `CartaoDoAviso.qml`."""
 
 import weakref
 from pathlib import Path
@@ -20,6 +15,7 @@ from cartridges.utils import janela_por_cima
 
 _CARTAO = Path(__file__).resolve().parent / "qml" / "CartaoDoAviso.qml"
 
+# Nunca toma o foco (um jogo em tela cheia minimiza quando o perde), fica fora da barra de tarefas e do Alt+Tab e por cima do jogo.
 _FLAGS = (
     Qt.WindowType.Tool
     | Qt.WindowType.FramelessWindowHint
@@ -30,7 +26,6 @@ _FLAGS = (
 
 
 def _icone_chegou(ref: "weakref.ref[JanelaDoAviso]", caminho: Path) -> None:
-    """O arquivo do ícone chega na thread principal; a janela pode já ter fechado."""
     janela = ref()
     if janela is not None and not janela._destruida:  # pylint: disable=protected-access
         janela.cartao.setProperty("icone", QUrl.fromLocalFile(str(caminho)).toString())
@@ -56,8 +51,7 @@ class JanelaDoAviso(QQuickView):
             self.setColor(QColor(Qt.GlobalColor.transparent))
         self.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
         self.engine().addImageProvider("icone", ProvedorDeIcones())
-        # A estrela é só do aviso sem ícone; com ele a caminho (ou que falhou), fica o quadrado vazio. O fade segue os
-        # efeitos de animação do Windows.
+        # A estrela é só do aviso sem ícone; com o ícone a caminho (ou que falhou), fica o quadrado vazio.
         animar = getattr(shared.aplicativo, "animacoesDoSistema", True) is not False
         self.setInitialProperties(
             {
@@ -81,8 +75,7 @@ class JanelaDoAviso(QQuickView):
     def entrar(self, canto: str) -> None:
         self.create()
         if not janela_por_cima.preparar(self):
-            # Sem os estilos o cartão ativaria e tiraria o jogo da tela cheia:
-            # quem chama descarta a janela, que nunca chegou a ser mostrada.
+            # Sem os estilos o cartão ativaria e tiraria o jogo da tela cheia; quem chama descarta a janela.
             raise RuntimeError("a janela do aviso não pôde ser preparada")
         self.cartao.setProperty("opacidade", 0.0)
         janela_por_cima.mostrar_sem_tomar_o_foco(self)
@@ -107,8 +100,7 @@ class JanelaDoAviso(QQuickView):
             if janela is not None and not janela._destruida:  # pylint: disable=protected-access
                 ao_terminar()
 
-        # Fora do sinal da animação: quem recebe fecha esta janela, e o cartão não pode ser
-        # apagado no meio da própria emissão.
+        # Fora do sinal da animação: o cartão não pode ser apagado no meio da própria emissão.
         QTimer.singleShot(0, chamar)
 
     def fechar(self) -> None:

@@ -4,9 +4,9 @@
 
 """O que a página do jogo, o diálogo das conquistas e a tela da sessão mostram (`conquistasDoJogo`).
 
-As funções puras montam os dicionários que o QML lê (cartões, ícone, fileira); `ConquistasDoJogo` segue o jogo da
-página de detalhes, o do diálogo e o da sessão, refaz cada vista quando o domínio avisa (`mudou`) e pede os ícones
-fora da tela. O QML nunca recebe um `Jogo`. Só na thread principal.
+As funções puras montam os dicionários que o QML lê; `ConquistasDoJogo` segue o jogo da página de detalhes, o do diálogo e o
+da sessão, refaz cada vista quando o domínio avisa (`mudou`) e pede os ícones fora da tela. O QML nunca recebe um `Jogo`.
+Só na thread principal.
 """
 
 import logging
@@ -40,10 +40,8 @@ def _agora() -> float:
 
 
 def data_por_extenso(quando: int) -> Optional[str]:
-    """A data por extenso; ``None`` se o carimbo não couber num calendário.
-
-    O histórico aceita qualquer inteiro de 64 bits, e ``datetime.fromtimestamp`` levanta OverflowError, OSError ou
-    ValueError para os absurdos (ou, no Windows, para qualquer carimbo negativo). Sem data a fileira continua boa.
+    """A data por extenso; ``None`` se o carimbo não couber num calendário: o histórico aceita qualquer inteiro de 64 bits, e
+    ``datetime.fromtimestamp`` levanta OverflowError, OSError ou ValueError para os absurdos (no Windows, qualquer negativo).
     """
     try:
         texto = str(relative_date(quando))
@@ -72,7 +70,6 @@ def cartao_da_pagina(atual: Optional[Progresso], urls: dict[str, str]) -> dict[s
     resto = atual.feitas - ICONES_NO_CARTAO
     return {
         "visivel": True,
-        # A primeira variável é quantas foram desbloqueadas; a segunda, o total
         "contagem": _("{} de {}").format(atual.feitas, atual.total),
         "porcentagem": f"{atual.porcentagem}%",
         "fracao": atual.fracao,
@@ -88,7 +85,6 @@ def cartao_da_sessao(atual: Optional[Progresso], mostrar_ocultas: bool, urls: di
         return {"visivel": False, "contagem": "", "porcentagem": "", "fracao": 0.0, "icones": []}
     return {
         "visivel": True,
-        # A primeira variável é quantas foram desbloqueadas; a segunda, o total
         "contagem": _("{} de {}").format(atual.feitas, atual.total),
         "porcentagem": f"{atual.porcentagem}%",
         "fracao": atual.fracao,
@@ -158,8 +154,7 @@ class ConquistasDoJogo(QObject):
         self._v: dict[str, Any] = {"pagina": _PAGINA_VAZIA, "sessao": _SESSAO_VAZIA, **_DIALOGO_FECHADO}
         # O jogo do diálogo; o da página é o dos detalhes. Só o id: o `Jogo` vem da loja na abertura.
         self._dialogo = ""
-        # A lista é um retrato do momento em que o diálogo abriu: (progresso, ocultas, nome). Conquista nova, troca da
-        # preferência ou jogo que perde o cartão não a mudam; só os ícones, que chegam depois.
+        # A lista é um retrato do momento em que o diálogo abriu: (progresso, ocultas, nome); só os ícones, que chegam depois, mudam.
         self._retrato: Optional[tuple[Progresso, bool, str]] = None
         self._logo: tuple[str, int] = ("", 0)
         # Ícones: origem → URL `file:` já baixada; as pedidas e ainda a caminho; e as que cada vista usa.
@@ -232,7 +227,6 @@ class ConquistasDoJogo(QObject):
         self._pedir("dialogo", _origens(atual.desbloqueadas + atual.bloqueadas, mostrar))
         return self._guardar({
             "aberto": True, "nome": nome, "logo": self._logo[0], "larguraDoLogo": self._logo[1],
-            # A primeira variável é quantas foram desbloqueadas; a segunda, o total
             "resumo": _("{} de {} conquistas desbloqueadas").format(atual.feitas, atual.total),
             "fracao": atual.fracao,
             "desbloqueadas": [fileira(linha, mostrar, self._urls) for linha in atual.desbloqueadas],
@@ -290,8 +284,7 @@ class ConquistasDoJogo(QObject):
             self.alterado.emit()
 
     def mudou(self, game_id: Optional[str]) -> None:
-        """O histórico, o catálogo ou uma conta mudou: refaz a página e a sessão do jogo (``None`` = todas). A lista do
-        diálogo aberto não muda: é o retrato de quando abriu."""
+        """O histórico, o catálogo ou uma conta mudou: refaz a página e a sessão do jogo (``None`` = todas); a lista do diálogo aberto não muda."""
         if not eh_thread_principal():
             na_thread_principal(self.mudou, game_id)
             return

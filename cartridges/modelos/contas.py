@@ -4,15 +4,13 @@
 
 """As contas das lojas (Microsoft, Epic e EA) e as janelas de login.
 
-`LoginDaLoja` é a janela de login da EA e da Epic: a página da loja abre no navegador e a pessoa cola o que copiou. As
-duas só diferem nos textos, no campo, no botão da página e no endereço à mostra; essa descrição é uma `Loja`
-(`conquistas/ea/janela.py`, `conquistas/epic/janela.py`). A troca vai à rede numa thread e o resultado volta na
-principal. Com a janela já fechada, só a conta conectada conta (a leitura dos jogos ainda acontece). O texto colado
-(traz cookies) nunca vai para o log.
+`LoginDaLoja` é a janela de login da EA e da Epic: a página da loja abre no navegador e a pessoa cola o que copiou. As duas
+só diferem nos textos, no campo, no botão e no endereço (uma `Loja`, em `conquistas/*/janela.py`). A troca vai à rede numa
+thread e o resultado volta na principal; com a janela já fechada, só a conta conectada conta. O texto colado (traz cookies)
+nunca vai para o log.
 
-`ContasDasLojas` é o grupo "Contas" (`GrupoDasContas.qml`): três linhas, o login pendente da Microsoft e as duas
-janelas. Quem hospeda o grupo (Preferências, assistente) o cria e chama `fechar()` ao fechar a tela. Só na thread
-principal.
+`ContasDasLojas` é o grupo "Contas" (`GrupoDasContas.qml`): três linhas, o login pendente da Microsoft e as duas janelas.
+Quem hospeda o grupo o cria e chama `fechar()` ao fechar a tela. Só na thread principal.
 """
 
 import logging
@@ -34,8 +32,8 @@ from cartridges.conquistas.xbox import conta as xbox_conta
 from cartridges.conquistas.xbox import login as xbox_login
 
 _OK, _RECUSADO, _FALHOU = "ok", "recusado", "falhou"
-# Os logins com a troca na rede. A thread só tem uma referência fraca (o QObject nunca é largado por ela); esta é a
-# forte, só da thread principal: o login conecta e lê os jogos mesmo que a tela que o hospedava já tenha fechado.
+# Os logins com a troca na rede: a thread só tem referência fraca (o QObject nunca é largado por ela); esta é a forte, da thread
+# principal: o login conecta e lê os jogos mesmo que a tela que o hospedava já tenha fechado.
 _em_voo: set["LoginDaLoja"] = set()
 
 
@@ -146,7 +144,6 @@ class LoginDaLoja(QObject):
 
     @Slot()
     def abrir(self) -> None:
-        """Mostra a janela e abre a página de login no navegador."""
         self._fechada = False
         self._mostrar(aberto=True)
         self._abrir_url(self._loja.conta.PAGINA_DE_LOGIN)
@@ -205,8 +202,7 @@ class LoginDaLoja(QObject):
         _em_voo.discard(self)
         self._mostrar(ocupada=False)
         if resultado == _OK:
-            # A conta já conectou, com a janela aberta ou não (Cancelar, Esc, tela fechada durante a troca): a
-            # leitura dos jogos da loja tem de acontecer.
+            # A conta já conectou, com a janela aberta ou não (Cancelar, Esc, tela fechada durante a troca): a leitura dos jogos tem de acontecer.
             try:
                 self.fechar()
             except Exception:  # pylint: disable=broad-exception-caught
@@ -225,7 +221,7 @@ class LoginDaLoja(QObject):
 
 
 def _varrer_jogos_da_loja(filtro: Callable[[Any], bool], loja: str) -> None:
-    """Depois do login: lê na hora as conquistas dos jogos da loja, sem aviso de novas, sem esperar a próxima abertura."""
+    """Depois do login: lê na hora as conquistas dos jogos da loja, sem aviso de novas."""
     try:
         varredura = getattr(shared.aplicativo, "varredura_conquistas", None)
         if varredura is not None:
@@ -238,16 +234,14 @@ def _varrer_jogos_da_loja(filtro: Callable[[Any], bool], loja: str) -> None:
 def _ao_entrar_xbox(
     grupo: "weakref.ref[ContasDasLojas]", avisos: Any, quem: object, resultado: "xbox_login.Resultado"
 ) -> None:
-    """O fim do login da conta Microsoft. Sem o grupo (a tela fechou), sobra só a leitura dos jogos: nada de aviso nem
-    de linha."""
+    """O fim do login da conta Microsoft. Sem o grupo (a tela fechou), sobra só a leitura dos jogos."""
     vivo = grupo()
     if vivo is not None:
         # Só esquece o pedido que terminou: o OK tardio de um cancelado não apaga o pedido novo.
         if vivo._quem_pediu is quem:  # noqa: SLF001
             vivo._pedido = None  # noqa: SLF001
         vivo._atualizar()  # noqa: SLF001
-    # Cancelar durante a troca de código pode deixar a conta conectada: o que vale é o estado da conta, não o
-    # resultado que chegou.
+    # Cancelar durante a troca de código pode deixar a conta conectada: vale o estado da conta, não o resultado que chegou.
     if resultado is xbox_login.Resultado.CANCELADO and xbox_conta.conectada():
         resultado = xbox_login.Resultado.OK
     textos = {
@@ -382,8 +376,7 @@ class ContasDasLojas(QObject):
             quem = self._quem_pediu = object()
             self._pedido = xbox_login.entrar(partial(_ao_entrar_xbox, weakref.ref(self), self._avisos, quem))
         except Exception as erro:  # pylint: disable=broad-exception-caught
-            # Porta local bloqueada, limite de handles, falha ao criar a thread: o clique não levanta e a pessoa vê o
-            # aviso.
+            # Porta local bloqueada, limite de handles, falha ao criar a thread: o clique não levanta e a pessoa vê o aviso.
             logging.warning("Falha ao iniciar o login da conta Microsoft: %s", type(erro).__name__)
             self._ao_entrar(xbox_login.Resultado.FALHOU)
             return
@@ -434,8 +427,7 @@ class ContasDasLojas(QObject):
 
     @Slot()
     def fechar(self) -> None:
-        """Cancela o login pendente, fecha as janelas de login e solta os ouvintes das contas. Pode ser chamado
-        mais de uma vez."""
+        """Cancela o login pendente, fecha as janelas de login e solta os ouvintes das contas. Pode ser chamado mais de uma vez."""
         self._fechado = True
         xbox_login.cancelar_pendente()
         for login in list(self._logins.values()):

@@ -17,12 +17,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O assistente de calibração da iluminação, no estilo da calibração HDR do Windows: uma cor de referência
-por etapa, grande na tela, com o dispositivo aceso nela.
-
-Só o modelo, sem tela: quem desenha é o ``AssistenteDeCalibracao.qml``, ligado a ``preferencias.calibracao``.
-Tudo fica em memória até o Concluir; Cancelar ou fechar não grava nada. Só na thread principal.
-"""
+"""A calibração da iluminação, no estilo da calibração HDR do Windows; tudo fica em memória até o Concluir."""
 
 from typing import Any, Optional
 
@@ -46,14 +41,12 @@ ETAPA_DO_BRANCO = len(REFERENCIAS)
 
 PAGINAS_DA_CALIBRACAO = ("inicio", "etapa", "etapa_todos", "teste")
 
-# A escolha "Todos os dispositivos" na lista do início: todos acesos ao mesmo tempo, para comparar entre si e com a
-# tela.
+# A escolha "Todos os dispositivos" na lista do início: todos acesos ao mesmo tempo, para comparar entre si e com a tela.
 TODOS = "__todos__"
 
 INTERVALO_DO_TESTE = 3
 
-# A saturação das referências: a 100% aumentar a Intensidade não mudaria nada na parede e o valor seria gravado sem ser
-# visto; a 70% a faixa inteira do controle (50% a 150%) aparece.
+# A saturação das referências: a 100% a Intensidade não mudaria nada na parede; a 70% a faixa inteira (50% a 150%) aparece.
 SATURACAO_DA_REFERENCIA = 700
 
 
@@ -274,8 +267,7 @@ class AssistenteDeCalibracao(QObject):
             self.etapa += 1
             self._mostrar_etapa()
         else:
-            # Depois do Branco, o teste, direto. Não há "aplicar também a outros": para fitas iguais há "Todos os
-            # dispositivos".
+            # Depois do Branco, o teste, direto: para fitas iguais há "Todos os dispositivos".
             self.testar()
 
     @Slot()
@@ -342,9 +334,7 @@ class AssistenteDeCalibracao(QObject):
         self.avancar_teste()
 
     def avancar_teste(self) -> None:
-        """O botão Avançar: a próxima cor, com os 3 s contados de novo; senão a cor pedida podia sumir logo em
-        seguida.
-        """
+        """O botão Avançar: a próxima cor, com os 3 s contados de novo (senão a cor pedida sumiria logo)."""
         if self._encerrado:
             return
         self._proxima_do_teste()
@@ -392,9 +382,7 @@ class AssistenteDeCalibracao(QObject):
         self._encerrar()
 
     def _encerrar(self) -> None:
-        """Fechou de qualquer jeito: o teste para e as fitas voltam à cor do app (com a calibração gravada, se
-        houve Concluir). Uma vez só: Cancelar, Concluir, Esc e o fechamento das Preferências chegam aqui.
-        """
+        """Fechou de qualquer jeito: o teste para e as fitas voltam à cor do app. Cancelar, Concluir, Esc e o fechamento das Preferências chegam aqui."""
         if self._encerrado:
             return
         self._encerrado = True

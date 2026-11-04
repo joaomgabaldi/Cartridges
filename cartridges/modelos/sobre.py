@@ -2,11 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O diálogo Sobre: as páginas e os textos.
-
-As funções puras leem os logs e a metainfo; `Sobre` é o estado do `DialogoSobre.qml` (página à vista, versão,
-novidades da versão, o texto de depuração) e as ações dele. Tudo na thread principal.
-"""
+"""O diálogo Sobre: as páginas e os textos. As funções puras leem os logs e a metainfo; `Sobre` é o estado do
+`DialogoSobre.qml` e as ações dele. Tudo na thread principal."""
 
 import logging
 import lzma

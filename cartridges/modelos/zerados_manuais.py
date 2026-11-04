@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O "Adicionar a Jogos Zerados": marcar como zerado um jogo já desinstalado ou adicionar um que nunca passou pelo
-app. Sem tela: o `SeletorDeZerados.qml` só desenha as `linhas`.
+"""O "Adicionar a Jogos Zerados": marcar como zerado um jogo já desinstalado ou adicionar um que nunca passou pelo app. Sem
+tela: o `SeletorDeZerados.qml` só desenha as `linhas`.
 
-A tela de detalhes só abre para o que está em alguma grade, e um desinstalado sem a marca não está em nenhuma. O campo
-do topo busca na Steam (só com Enter, que a loja limita as requisições) e a última linha cria o jogo só pelo nome; a
-regra de quem pode entrar fica em `zerado_manual`. Tudo na thread principal; a busca roda numa thread e entrega por
-`na_thread_principal`, e o que chega a uma geração velha, ou com o diálogo fechado, é descartado.
+A tela de detalhes só abre para o que está em alguma grade, e um desinstalado sem a marca não está em nenhuma. O campo do
+topo busca na Steam (só com Enter, que a loja limita as requisições) e a última linha cria o jogo só pelo nome; a regra de
+quem entra fica em `zerado_manual`. A busca roda numa thread e entrega por `na_thread_principal`; o que chega a uma
+geração velha, ou com o diálogo fechado, é descartado.
 """
 
 import logging
@@ -43,10 +43,9 @@ def candidatos() -> list[Jogo]:
 
 
 def descricao(jogo: Jogo) -> str:
-    """Tempo e última vez jogado: o que separa duas fichas de mesmo nome."""
+    """Tempo e última vez jogado: o que separa duas linhas de mesmo nome."""
     if not jogo.last_played:
         return "Nunca jogado"
-    # As variáveis são o tempo de jogo e a data da última vez jogado
     return "{} · Jogado por último: {}".format(format_playtime(jogo.playtime), relative_date(jogo.last_played))
 
 
@@ -151,8 +150,7 @@ class SeletorDeZerados(QObject):
         if linha is None or not linha["ativa"] or destino is None:
             return
         if destino[0] == "jogo":
-            # Fica aberto: quem veio marcar os jogos antigos costuma ter vários. Linha velha (o jogo foi reinstalado,
-            # ou a ficha trocada na store desde que a lista abriu): só sai da lista, sem mexer no jogo.
+            # Fica aberto: quem veio marcar os jogos antigos costuma ter vários. Linha velha (jogo reinstalado, ou trocado na store desde que a lista abriu): só sai da lista, sem mexer no jogo.
             jogo = destino[1]
             if shared.store.get(jogo.game_id) is jogo and jogo.removed:
                 jogo.definir_status("beaten")

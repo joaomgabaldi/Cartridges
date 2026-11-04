@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A continuação da restauração de um backup, sem tela: a pasta de atalhos, os jogos sem atalho, a escolha do atalho e
-o conflito de dados.
+"""A continuação da restauração de um backup, sem tela: a pasta de atalhos, os jogos sem atalho, a escolha do atalho e o
+conflito de dados.
 
-As regras são do `utils/restauracao.py`; este modelo só guia o fluxo dos quatro modais da janela (o QML recebe
-dicionários e ids, nunca um `Jogo`). Só na thread principal.
+As regras são do `utils/restauracao.py`; este modelo guia o fluxo dos quatro modais (o QML recebe dicionários e ids, nunca
+um `Jogo`). Só na thread principal.
 """
 
 import weakref
@@ -99,8 +99,8 @@ class ContinuacaoDaRestauracao(QObject):
 
     @Slot()
     def continuar(self) -> None:
-        """A cada abertura enquanto houver pendências: a pasta de atalhos é obrigatória, a importação roda mesmo com
-        "Importar jogos automaticamente" desligado, e a janela dos jogos sem atalho abre no fim dela."""
+        """A cada abertura enquanto houver pendências: a pasta de atalhos é obrigatória, a importação roda mesmo com "Importar
+        jogos automaticamente" desligado, e a janela dos jogos sem atalho abre no fim."""
         local = shared.schema.get_string("shortcuts-location")
         if not local or not Path(local).expanduser().is_dir():
             self._texto_da_pasta = (
@@ -164,7 +164,6 @@ class ContinuacaoDaRestauracao(QObject):
                 modelo._excluir_de_vez(jogo_id)  # noqa: SLF001
 
         self._aplicativo.pedir_confirmacao(
-            # A variável é o nome do jogo
             _("Excluir {}?").format(jogo.name),
             _("Tem certeza que deseja excluir este jogo? Esta ação é irreversível."),
             _("Excluir"),
@@ -263,8 +262,7 @@ class ContinuacaoDaRestauracao(QObject):
         if decisao == "este_pc":
             self.mostrarPendentes()
             return
-        # A varredura adota o jogo pelo atalho novo e o tira das pendências. A lista fica travada até lá: duas
-        # importações ao mesmo tempo zerariam as listas de jogos achados uma da outra.
+        # A varredura adota o jogo pelo atalho novo e o tira das pendências; a lista fica travada até lá (duas importações juntas zerariam as listas de jogos achados uma da outra).
         self._travada = True
         self.alterado.emit()
         self._aplicativo.importar(ao_terminar=self._depois_da_importacao, varrer_atalhos=True, silenciosa=True)

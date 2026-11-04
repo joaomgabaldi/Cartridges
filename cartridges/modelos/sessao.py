@@ -4,8 +4,8 @@
 
 """O `ModeloDaSessao`: a camada da sessão e a janela principal.
 
-`ProcessSession` e `SessionWindow` chamam aqui (`shared.sessao`) para mostrar e esconder a camada da sessão, avisar o
-fim e trazer a janela de volta. O QML só lê as propriedades e chama os slots. Tudo na thread principal.
+`ProcessSession` e `SessionWindow` chamam aqui (`shared.sessao`) para mostrar e esconder a camada, avisar o fim e trazer a
+janela de volta. Tudo na thread principal.
 """
 
 import ctypes
@@ -63,8 +63,8 @@ def _posicionar(hwnd: int, x: int, y: int) -> None:
 def pode_anotar(jogo: Any) -> bool:
     """Onde a anotação se edita: num jogo sendo jogado, ou que já tem uma.
 
-    A anotação responde "onde eu parei?", que só é pergunta enquanto se joga; o jogo que já tem
-    uma precisa continuar tendo onde apagá-la. Num zerado ela é só leitura.
+    A anotação responde "onde eu parei?", que só é pergunta enquanto se joga, e a existente precisa de onde apagá-la. Num
+    zerado é só leitura.
     """
     if jogo.zerado:
         return False
@@ -86,13 +86,11 @@ class ModeloDaSessao(QObject):
         self._jogo: Any = None  # o jogo da sessão; None sem sessão (camada escondida)
         self._manual: SessionWindow | None = None
         self._janela: QWindow | None = None
-        # O jogo cuja anotação o balão da camada edita: fica depois do fim da sessão, para o que foi
-        # digitado com o balão aberto ainda chegar a ele ao fechar.
+        # O jogo cuja anotação o balão da camada edita: fica depois do fim da sessão, para o que foi digitado com o balão aberto chegar a ele ao fechar.
         self._anotando: Any = None
         self._logo = ""
         self._largura_do_logo = 0
         self._anotacao = ""
-        # O relógio só existe onde se vê: com a janela levada ao monitor da sessão.
         self._relogio_visivel = False
         self._tique = QTimer(self)
         self._tique.setInterval(1000)
@@ -146,8 +144,7 @@ class ModeloDaSessao(QObject):
         return _("Jogando {}").format(self.nome)
 
     def show_session_blocker(self, game: Any) -> None:
-        # A mesma sessão trocando de rastreador (o `fall_back` de `ProcessSession` passando a vez à
-        # janela manual): o jogo segue aberto e tudo o que veste a sessão já está vestido.
+        # A mesma sessão trocando de rastreador (o `fall_back` passando a vez à janela manual): o jogo segue aberto e tudo o que veste a sessão já está vestido.
         if self._jogo is game:
             return
         self._jogo = self._anotando = game
@@ -155,23 +152,18 @@ class ModeloDaSessao(QObject):
         if (caminho := game_logo.cached_logo_path(game)) and (carregado := game_logo.load_logo(caminho, 640, 140)):
             self._logo, self._largura_do_logo = _url_da_capa(carregado[0]), carregado[1]
         self._anotacao = game.notes or ""
-        # O relógio só faz sentido onde pode ser visto: com a janela levada a outro monitor ela fica à
-        # vista a sessão inteira; senão está minimizada. A pergunta é se a mudança aconteceu, e não se a
-        # opção está ligada (com o monitor escolhido desligado a opção está ligada e a janela minimizou).
+        # O relógio só faz sentido onde se vê: com a janela levada a outro monitor. A pergunta é se a mudança aconteceu, não se
+        # a opção está ligada (com o monitor escolhido desligado ela está ligada e a janela minimizou).
         self._relogio_visivel = window_geometry.session_geometry() is not None
         if self._relogio_visivel:
             self._tique.start()
         self.alterado.emit()
-        # A arte nos outros monitores prepara numa thread: nada espera por ela.
         if shared.schema.get_boolean("session-wallpaper"):
             session_wallpaper.comecar(game)
-        # As fitas de LED vestem a cor do jogo (a rede corre em threads). `comecar` volta sozinho com o recurso
-        # desligado ou sem fita configurada.
+        # As fitas de LED vestem a cor do jogo (a rede corre em threads); `comecar` volta sozinho sem o recurso ou sem fita.
         session_fita.comecar(game)
-        # E o vigia das conquistas: a partir daqui, uma conquista que sair no jogo aparece por cima dele e pisca a
-        # iluminação. Nunca levanta.
+        # O vigia das conquistas: daqui, uma conquista que sair no jogo aparece por cima dele e pisca a iluminação. Nunca levanta.
         sessao_conquistas.comecar(game)
-        # O controle fica todo com o jogo: nenhuma leitura e, depois da vibração de abertura, nem a DLL.
         if self._controle is not None:
             self._controle.suspender()
 
@@ -185,17 +177,14 @@ class ModeloDaSessao(QObject):
         # Primeiro: uma falha no que vem depois não deixa o controle suspenso para sempre.
         if self._controle is not None:
             self._controle.retomar()
-        # Antes do `present()` de quem chamou: a janela reaparece já no lugar de origem, sem pular.
-        # Sem efeito quando ela não saiu do lugar.
+        # Antes do `present()` de quem chamou: a janela reaparece já no lugar de origem, sem pular (sem efeito se não saiu).
         window_geometry.restore_from_monitor(self._janela)
-        # O jogo foi aberto pelo Big Picture: de volta ao carrossel em tela cheia, com ele no centro.
         if self._big_picture is not None and self._big_picture.visivel:
             self._big_picture.voltouDoJogo()
         session_wallpaper.restaurar()
         # O vigia para antes de a iluminação voltar à cor do app: um pulso pedido depois disso não teria sessão.
         sessao_conquistas.parar()
-        # Uma última leitura do jogo: o que saiu nos últimos instantes ainda não está no histórico (o vigia olha a
-        # cada poucos segundos). Só no fim da sessão, nunca no fechamento do app (`encerrar` não passa por aqui).
+        # Uma última leitura do jogo: o que saiu nos últimos instantes ainda não está no histórico (o vigia olha a cada poucos segundos). Só no fim da sessão, nunca no fechamento do app.
         self._varrer_jogo_da_sessao(jogo)
         self._devolver_as_fitas(jogo)
 
@@ -212,10 +201,8 @@ class ModeloDaSessao(QObject):
             logging.getLogger(__name__).warning("Falha ao ler as conquistas no fim da sessão", exc_info=True)
 
     def _devolver_as_fitas(self, jogo: Any) -> None:
-        """De volta à cor do app, e os avisos do que faltou na sessão que acabou.
-
-        Os avisos vão agora, e não durante o jogo: no meio da partida chamariam a atenção que a luz calma
-        existe para não chamar. Uma falha aqui nunca impede a janela de voltar.
+        """De volta à cor do app, e os avisos do que faltou na sessão que acabou. Os avisos vão agora, não durante o jogo
+        (chamariam a atenção que a luz calma existe para não chamar). Uma falha aqui nunca impede a janela de voltar.
         """
         try:
             session_fita.voltar()
@@ -224,8 +211,7 @@ class ModeloDaSessao(QObject):
                 self._avisos.adicionar(
                     _("A iluminação não acompanhou a tela de {}. Use o modo janela sem bordas.").format(jogo.name)
                 )
-            # Dispositivo que passou parte da sessão sem responder: a cor voltou sozinha quando ele voltou, mas
-            # a luz faltou nesse meio-tempo.
+            # Dispositivo que passou parte da sessão sem responder: a cor voltou sozinha, mas a luz faltou nesse meio-tempo.
             fora_do_ar = session_fita.fitas_fora_do_ar()
             if len(fora_do_ar) == 1:
                 self._avisos.adicionar(
@@ -277,10 +263,8 @@ class ModeloDaSessao(QObject):
         janela.requestActivate()
 
     def move_to_session_monitor(self) -> bool:
-        """Leva a janela, maximizada, ao monitor da sessão. Diz se foi (senão quem chamou minimiza).
-
-        Sem monitor além do principal a opção é desligada aqui e fica desligada: se um segundo
-        monitor voltar, quem religa é o usuário, nas Preferências.
+        """Leva a janela, maximizada, ao monitor da sessão; diz se foi (senão quem chamou minimiza). Sem monitor além do
+        principal a opção é desligada aqui e fica desligada: quem religa é o usuário, nas Preferências.
         """
         if self._janela is None or not shared.schema.get_boolean("session-move-window"):
             return False
@@ -315,9 +299,7 @@ class ModeloDaSessao(QObject):
 
     @Slot(str)
     def gravarAnotacao(self, texto: str) -> None:  # noqa: N802
-        """A anotação do balão da camada. Grava também num jogo zerado: só uma caixa não editável deixa de gravar, e a
-        da camada nunca é.
-        """
+        """A anotação do balão da camada. Grava também num jogo zerado: só uma caixa não editável deixa de gravar, e a da camada nunca é."""
         jogo = self._anotando
         if jogo is None:
             return
@@ -336,8 +318,8 @@ class ModeloDaSessao(QObject):
         try:
             hwnd = int(janela.winId())
             esquerda, topo, direita, base = _retangulo_da_janela(hwnd)
-            # 37 px visíveis até a área de trabalho (12 + a sombra de 25); o retângulo já soma 8 de moldura invisível. O
-            # retângulo e a área vêm em px físicos: a margem (lógica) é escalada pela razão de pixels da tela da janela.
+            # 37 px visíveis até a área de trabalho (12 + a sombra de 25); o retângulo já soma 8 de moldura invisível e vem em px
+            # físicos, então a margem (lógica) é escalada pela razão de pixels da tela da janela.
             margem = round(29 * janela.devicePixelRatio())
             x, y = canto_inferior_direito(_area_de_trabalho(), direita - esquerda, base - topo, margem=margem)
             _posicionar(hwnd, x, y)
@@ -348,13 +330,11 @@ class ModeloDaSessao(QObject):
     def principalFechando(self) -> None:  # noqa: N802
         """Fechar a principal com a janela manual ou o aviso de conquista na tela fecha o app.
 
-        Sem isto a manual ou o aviso (janela de topo sem dono), que também são janelas, manteriam o app vivo. O
-        `encerrar()` grava a sessão e tira o aviso, no `QEvent.Quit` (`AplicacaoQt.saindo`), antes de o Qt fechar as
-        janelas.
+        Sem isto eles (janelas de topo sem dono) manteriam o app vivo; o `encerrar()` grava a sessão e tira o aviso, no
+        `QEvent.Quit` (`AplicacaoQt.saindo`), antes de o Qt fechar as janelas.
         """
         if self._manual is not None or conquista_aviso.na_tela() is not None:
-            # Na volta do laço, com a principal já fora da tela: um `quit()` aqui dentro do `closing` emitiria o
-            # `aboutToQuit` (a parede e as fitas, que esperam) com ela ainda à vista, congelada.
+            # Na volta do laço, com a principal já fora da tela: um `quit()` dentro do `closing` emitiria o `aboutToQuit` (parede e fitas, que esperam) com ela ainda à vista, congelada.
             QTimer.singleShot(0, self._sair)
 
     @Slot()
@@ -369,18 +349,15 @@ class ModeloDaSessao(QObject):
     def encerrar(self) -> None:
         """O app fechando no meio da sessão: grava o tempo e o histórico, sem tocar na interface.
 
-        Vem no `QEvent.Quit` (`AplicacaoQt.saindo`), antes de o Qt fechar as janelas: só o que é rápido e tem de
-        vir antes delas. A janela "Jogando" fica desarmada, e o `closing` que o Qt manda a ela depois não roda o fim
-        normal da sessão (nem grava outra linha no histórico); o vigia das conquistas para e o aviso sai da tela. A
-        parede e as fitas, que podem demorar, ficam para o `devolver()`, com as janelas já fora da tela. Só a
-        primeira chamada faz algo.
+        Vem no `QEvent.Quit` (`AplicacaoQt.saindo`), antes de o Qt fechar as janelas: só o que é rápido e tem de vir antes
+        delas. A janela "Jogando" fica desarmada (o `closing` que o Qt manda depois não roda o fim normal da sessão nem grava
+        outra linha no histórico), o vigia das conquistas para e o aviso sai da tela. Parede e fitas, que podem demorar,
+        ficam para o `devolver()`. Só a primeira chamada faz algo.
         """
-        # A janela não volta ao monitor de antes aqui: a geometria gravada ao fechar é a de antes da sessão
-        # (`window_geometry.session_geometry`).
+        # A janela não volta ao monitor de antes aqui: a geometria gravada ao fechar é a de antes da sessão (`window_geometry.session_geometry`).
         if self._encerrado:
             return
-        # Só vai num sentido: um `quit()` cancelado deixaria a sessão encerrada. O `closing` da principal nunca recusa
-        # depois do `saindo` (`PainelDasTarefas.encerrando`).
+        # Só vai num sentido: um `quit()` cancelado deixaria a sessão encerrada; o `closing` da principal nunca recusa depois do `saindo` (`PainelDasTarefas.encerrando`).
         self._encerrado = True
         self._tique.stop()
         self._manual = None  # sem `alterado`: a interface já está indo embora
@@ -396,15 +373,13 @@ class ModeloDaSessao(QObject):
             processo.flush()
             if processo.started:
                 session_log.record(processo.game.game_id, processo.session_seconds)
-        # Antes de a parede e as fitas voltarem (no `devolver`); sem a leitura final, que é só do fim normal da sessão.
-        # Nunca levanta.
+        # Antes de a parede e as fitas voltarem (no `devolver`); sem a leitura final, que é só do fim normal da sessão. Nunca levanta.
         sessao_conquistas.parar()
         conquista_aviso.fechar()  # fora da sessão (sem vigia) o aviso também sai; nunca levanta
 
     def devolver(self) -> None:
-        """O `aboutToQuit`, depois do `big_picture.encerrar()`: a parede e as fitas voltam ao que eram.
-
-        Grava antes, se o `saindo` não veio (o desligar do Windows emite o `aboutToQuit` antes do `quit()`).
+        """O `aboutToQuit`, depois do `big_picture.encerrar()`: a parede e as fitas voltam ao que eram. Grava antes, se o
+        `saindo` não veio (o desligar do Windows emite o `aboutToQuit` antes do `quit()`).
         """
         try:
             self.encerrar()
@@ -413,6 +388,5 @@ class ModeloDaSessao(QObject):
             logging.getLogger(__name__).exception("Não foi possível gravar a sessão ao fechar o app")
         # Depois de gravar: é a última chance de desfazer a troca, sem processo para fazê-la depois.
         session_wallpaper.restaurar()
-        # As fitas voltam ao que eram quando o app abriu. Aqui se espera (com prazo): depois disto não há processo
-        # para desfazer nada, e o que não couber no prazo fica para o `abrir` do próximo arranque.
+        # As fitas voltam ao que eram quando o app abriu. Aqui se espera (com prazo): depois disto não há processo para desfazer nada, e o que não couber fica para o `abrir` do próximo arranque.
         session_fita.fechar()

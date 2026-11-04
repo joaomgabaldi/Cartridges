@@ -4,9 +4,9 @@
 
 """O modelo das Preferências: as chaves, as travas e a busca, sem tela.
 
-O QML lê `valores` e `estado` e grava por `definir` e `definirTexto`. O que tem efeito (a trava do minimizar, o cinza
-do controle e do 3D, as regras dos textos) mora aqui, em Python, e é testado sem QML. `valores` é refeito no `changed`
-do `schema` (ouvinte com referência fraca) enquanto a tela está aberta. Só na thread principal.
+O QML lê `valores` e `estado` e grava por `definir` e `definirTexto`; o que tem efeito (a trava do minimizar, o cinza do
+controle e do 3D, as regras dos textos) mora aqui e é testado sem QML. `valores` é refeito no `changed` do `schema` enquanto
+a tela está aberta. Só na thread principal.
 """
 
 import logging
@@ -83,9 +83,8 @@ _log = logging.getLogger(__name__)
 class AtualizacoesDaBiblioteca(QObject):
     """As atualizações em lote (metadados e capas) que as Preferências disparam, vistas pela tela.
 
-    A atualização de metadados não é daqui: roda por `metadata_refresh` pela vida do processo, e esta classe só a
-    espelha enquanto as Preferências estão abertas (`seguir`); fechar a tela não cancela nada. As capas são um lote
-    que termina quando o último jogo responde. Só na thread principal.
+    A de metadados roda por `metadata_refresh` pela vida do processo e esta classe só a espelha enquanto a tela está aberta
+    (`seguir`); fechar não cancela nada. Só na thread principal.
     """
 
     alterado = Signal()
@@ -130,7 +129,6 @@ class AtualizacoesDaBiblioteca(QObject):
     @Property(str, notify=alterado)
     def progresso(self) -> str:
         refresh = self._refresh()
-        # As variáveis são quantos jogos já foram e quantos há
         return _("{} de {}").format(refresh.done, refresh.total)
 
     @Property(bool, notify=alterado)
@@ -212,10 +210,8 @@ class AtualizacoesDaBiblioteca(QObject):
 
     @Slot()
     def atualizarCapas(self) -> None:  # noqa: N802
-        """O lote de capas do SteamGridDB para os jogos da biblioteca."""
         if self._baixando:
             return
-        # Os removidos continuam na store: ficam de fora.
         jogos = [jogo for jogo in shared.store if not jogo.removed]
         total = len(jogos)
         if not total:
@@ -239,8 +235,7 @@ class AtualizacoesDaBiblioteca(QObject):
                     if aplicativo is not None:
                         aplicativo.pedir_dialogo(erro.title, erro.subtitle, [], lambda: None)
                     break
-            # Só quem ainda está na store: um reset no meio do lote apagou a biblioteca, e o `update()` de um jogo
-            # apagado o punha de volta na grade.
+            # Só quem ainda está na store: um reset no meio do lote apagou a biblioteca, e o `update()` de um jogo apagado o punha de volta na grade.
             for jogo in jogos:
                 if shared.store.get(jogo.game_id) is jogo:
                     jogo.update()
@@ -260,9 +255,8 @@ class AtualizacoesDaBiblioteca(QObject):
 class FitasDasPreferencias(QObject):
     """A iluminação inteligente vista pelas Preferências: o brilho, a cor do app e o "Testar".
 
-    Abrir a tela não acende nada (`reler` só conta as fitas); quem acende é a mão: o brilho e a cor mostram a
-    prévia na hora, e fechar a tela não mexe nas fitas. O teste conversa com as fitas numa
-    thread e volta por `na_thread_principal` com referência fraca. Só na thread principal.
+    Abrir a tela não acende nada (`reler` só conta as fitas); o brilho e a cor mostram a prévia na hora, e fechar a tela não
+    mexe nas fitas. O teste roda numa thread e volta por `na_thread_principal` com referência fraca.
     """
 
     alterado = Signal()
@@ -369,7 +363,6 @@ class FitasDasPreferencias(QObject):
 
     @Slot()
     def abrirCorDoPulso(self) -> None:  # noqa: N802
-        """O balão abriu: as fitas mostram a cor do alerta enquanto ele estiver aberto."""
         self._balao_do_pulso = True
         self._previa(session_fita.cor_do_pulso())
 
@@ -393,8 +386,7 @@ class FitasDasPreferencias(QObject):
 
     @Slot()
     def voltarCorDoPulso(self) -> None:  # noqa: N802
-        # O dourado exato: a ida e volta pela cor da tela pode arredondar uma unidade. O botão de voltar fica fora do
-        # balão: sem ele aberto, não há prévia a mostrar.
+        # O dourado exato (a ida e volta pela cor da tela pode arredondar uma unidade). O botão de voltar fica fora do balão: sem ele aberto, não há prévia.
         session_fita.redefinir_tom_do_pulso()
         if self._balao_do_pulso:
             self._previa(session_fita.cor_do_pulso())
@@ -445,7 +437,6 @@ class FitasDasPreferencias(QObject):
     def _teste_terminou(self, parar: threading.Event, mudas: list[str], cancelado: bool) -> None:
         if self._parar is parar:
             self._parar = None
-        # Com a tela fechada não há onde escrever: só o botão volta ao "Testar".
         if self._aberta:
             if cancelado:
                 self._resultado = _("Teste interrompido")
@@ -475,7 +466,7 @@ def _entregar_teste(eu: "weakref.ref[FitasDasPreferencias]", *args: Any) -> None
 class BrilhoPorDispositivo(QObject):
     """A janela "Brilho máximo por dispositivo": cada fita acende no próprio número, sem o brilho geral por cima.
 
-    Só o Salvar grava; fechar de qualquer jeito devolve as fitas à cor do app (o brilho geral sobre o teto salvo).
+    Só o Salvar grava; fechar de qualquer jeito devolve as fitas à cor do app.
     """
 
     fechado = Signal()
@@ -586,10 +577,8 @@ class Preferencias(QObject):
         self.alterado.emit()
 
     def _config_fechou(self) -> None:
-        """O assistente fechou: refaz a contagem e arranca, se houver o que arrancar.
-
-        Quem tinha o recurso ligado e acabou de configurar a primeira fita nunca teve o estado de antes guardado, e
-        sem este arranque o fechamento do app não teria o que devolver.
+        """O assistente fechou: refaz a contagem e arranca, se houver o que arrancar (quem acabou de configurar a primeira fita
+        nunca teve o estado de antes guardado, e sem o arranque o fechamento do app não teria o que devolver).
         """
         config, self._config = self._config, None
         if config is not None:
@@ -659,15 +648,12 @@ class Preferencias(QObject):
         contas, self._contas = self._contas, None
         calibracao, config, brilho = self._calibracao, self._config, self._brilho
         passos = (
-            # O login pendente e as janelas de login.
             lambda: contas is not None and contas.fechar(),
-            # O assistente de calibração devolve as fitas à cor do app ao se encerrar.
             lambda: calibracao is not None and calibracao.cancelar(),
             # Antes do `fitas.fechar()`: o fechamento do assistente relê as fitas.
             lambda: config is not None and config.fechar(),
             lambda: brilho is not None and brilho.cancelar(),
             self._fitas.fecharCorDoPulso,
-            # Só fecha o estado da tela: as fitas ficam como estão.
             self._fitas.fechar,
             lambda: self._biblioteca.seguir(False),
             self._biblioteca.descartarPergunta,
@@ -703,8 +689,7 @@ class Preferencias(QObject):
             return
         shared.schema[chave] = valor
         if chave == "session-fita" and valor:
-            # Grava antes: o `reacender` decide pela chave. Sem ele o estado de antes das fitas só seria guardado no
-            # arranque seguinte do app. Desligar não chama nada: o ciclo se desfaz no fechamento do app.
+            # Grava antes: o `reacender` decide pela chave, senão o estado de antes das fitas só seria guardado no arranque seguinte. Desligar não chama nada.
             session_fita.reacender()
 
     @Slot(str, str)
@@ -722,9 +707,8 @@ class Preferencias(QObject):
     def _ler_monitores(self) -> None:
         """Os monitores ligados agora (o hardware é lido ao abrir) e o que as duas opções fazem com eles.
 
-        Sem nenhum além do principal, as duas opções não têm onde agir: ficam desligadas (e não só apagadas),
-        e quando um segundo monitor voltar quem religa é a pessoa. Com algum, a escolha que a lista mostra é
-        gravada (a antiga pelo nome vira o caminho; um monitor desligado cai no primeiro).
+        Sem nenhum além do principal, elas ficam desligadas (e não só apagadas) e, quando um segundo voltar, quem religa é a
+        pessoa; com algum, a escolha da lista é gravada (a antiga pelo nome vira o caminho; um monitor desligado cai no primeiro).
         """
         self._monitores = window_geometry.monitores_da_sessao()
         if not self._monitores:
@@ -797,13 +781,11 @@ class Preferencias(QObject):
             "bigPictureAtivo": gamepad and com_3d,
             "somDoBigPictureAtivo": com_3d,
             "subtituloSem3d": "" if com_3d else SEM_3D,
-            # Sem o Ludusavi no pacote não há saves a configurar (lido ao abrir, em `backup.reler`).
             "savesDisponiveis": self._backup.savesDisponiveis,
             "monitores": rotulos,
             "monitorEscolhido": escolhido,
             "semSegundoMonitor": sem_segundo,
-            # Sem contar horas não há tela de sessão para levar a lugar nenhum: o monitor e o papel de parede
-            # acompanham a contagem. As fitas não: valem também fora da sessão (a cor do app).
+            # Sem contar horas não há tela de sessão: monitor e papel de parede acompanham a contagem. As fitas não: valem também fora da sessão.
             "moverAtivo": contando and not sem_segundo,
             "monitorAtivo": contando and not sem_segundo and shared.schema.get_boolean("session-move-window"),
             "papelDeParedeAtivo": contando,

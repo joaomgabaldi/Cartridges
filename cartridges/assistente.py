@@ -17,11 +17,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O assistente da primeira abertura: pasta dos jogos, capas e o resto do essencial.
-
-Aparece uma vez, quando não há nada configurado. Cada controle grava na hora: fechar a qualquer momento
-deixa o que já foi escolhido valendo.
-"""
+"""O assistente da primeira abertura: pasta dos jogos, capas e o resto do essencial. Cada controle grava na hora."""
 
 import dataclasses
 import logging
@@ -69,11 +65,7 @@ def _em_thread(tarefa: Callable[[], None]) -> None:
 
 
 def precisa_mostrar() -> bool:
-    """O assistente deve abrir? Só na primeira abertura de quem ainda não tem nada.
-
-    Quem já tem jogos (atualização de versão ou backup restaurado) é marcado como concluído aqui, para o
-    assistente nunca aparecer por cima de uma biblioteca existente.
-    """
+    """O assistente deve abrir? Só na primeira abertura; quem já tem jogos (atualização ou backup restaurado) é marcado como concluído."""
     if shared.schema.get_boolean("assistente-concluido"):
         return False
     if shared.games_dir.is_dir() and any(shared.games_dir.iterdir()):
@@ -83,8 +75,7 @@ def precisa_mostrar() -> bool:
 
 
 def quadro_das_capas(instante: float) -> tuple[float, float, float]:
-    """Um quadro do ciclo, ``instante`` em ms desde o começo dele: (deslocamento do placeholder, opacidade do
-    placeholder, opacidade da capa)."""
+    """Um quadro do ciclo em ``instante`` (ms): (deslocamento do placeholder, opacidade do placeholder, opacidade da capa)."""
     deslize_fim = _PARADO + _DESLIZE
     sozinha_fim = deslize_fim + _SOZINHA
     x, vazia, capa = 0.0, 1.0, 1.0
@@ -125,8 +116,7 @@ def _entregar_backup(eu: "weakref.ref[Assistente]", resultado: str) -> None:
 class Assistente(QObject):
     """As regras do assistente; a `JanelaDoAssistente.qml` só desenha. Só na thread principal.
 
-    Três saídas, cada uma fecha as contas uma vez: `concluir`, o X (`fecharNoX`, sem marca) e o backup
-    agendado (`ao_restaurar`).
+    Saídas, cada uma fecha as contas uma vez: `concluir`, o X (`fecharNoX`, sem marca) e o backup agendado (`ao_restaurar`).
     """
 
     alterado = Signal()
@@ -206,7 +196,6 @@ class Assistente(QObject):
 
     @Property(bool, notify=alterado)
     def podeContinuar(self) -> bool:  # noqa: N802
-        # Sem pasta escolhida, não há o que continuar: só "Pular" segue em frente.
         return self._paginas[self._indice] != "jogos" or bool(shared.schema.get_string("shortcuts-location"))
 
     @Property(str, notify=alterado)
@@ -262,7 +251,7 @@ class Assistente(QObject):
 
     @Slot()
     def concluir(self) -> None:
-        """Fecha o assistente de vez: "Pular configuração" e "Abrir a biblioteca". Quem fecha a janela é o `ao_terminar`."""
+        """Fecha o assistente de vez ("Pular configuração" e "Abrir a biblioteca"); quem fecha a janela é o `ao_terminar`."""
         # Um segundo clique não abre a biblioteca duas vezes; com o backup sendo preparado, quem sai é a restauração.
         if self._saindo or self._preparando:
             return
@@ -285,8 +274,7 @@ class Assistente(QObject):
     def restaurarBackup(self, url: QUrl) -> None:  # noqa: N802
         """Valida e agenda o backup numa thread; sem confirmação, pois não há nada a perder.
 
-        A validação leva segundos: os botões da tela 0 ficam inativos (`preparando`), senão um segundo clique
-        restauraria duas vezes.
+        Os botões da tela 0 ficam inativos (`preparando`): um segundo clique restauraria duas vezes.
         """
         if self._preparando or self._saindo or url.isEmpty() or not url.toLocalFile():
             return

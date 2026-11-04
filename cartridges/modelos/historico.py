@@ -2,11 +2,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O que a tela do histórico de sessões mostra (`historico`): as linhas, o resumo e o gráfico, já calculados.
+"""O que a tela do histórico de sessões mostra (`historico`): linhas, resumo e gráfico, já calculados.
 
-As regras são as de `session_history.py` (puras); aqui só se junta o que o QML lê e se faz a exclusão de uma sessão,
-que desconta o tempo do total do jogo. Segue um jogo por vez e relê o arquivo de sessões a cada mudança: a tela mostra o
-que está gravado, e não o que ela acha que gravou. Só na thread principal.
+As regras são as de `session_history.py`; aqui se junta o que o QML lê e se exclui uma sessão (descontando o tempo do total
+do jogo). Relê o arquivo de sessões a cada mudança: a tela mostra o que está gravado. Só na thread principal.
 """
 
 import weakref
@@ -31,9 +30,7 @@ from cartridges.session_history import (
 from cartridges.utils import game_logo, session_log
 from cartridges.utils.format_playtime import format_playtime
 
-# O logo é a manchete da caixa inteira, não o título de uma coluna: bem maior que o da página de detalhes (72 de
-# altura),
-# e a largura útil é a da caixa (1040) menos as margens de 24.
+# O logo é a manchete da caixa inteira: bem maior que o da página de detalhes (72 de altura); a largura útil é a da caixa (1040) menos as margens de 24.
 ALTURA_DO_LOGO = 120
 LARGURA_DO_LOGO = 1040 - 2 * 24
 
@@ -97,9 +94,7 @@ class HistoricoDeSessoes(QObject):
 
     @Slot()
     def fechar(self) -> None:
-        # Só `aberto` muda: o cartão segue com o conteúdo durante a animação de saída. O próximo `abrir` sobrescreve
-        # tudo; as sessões, os dias e as posições ficam até lá, para a dica do gráfico e um "Mostrar mais" nos 120 ms de
-        # saída não esvaziarem o que ainda está à vista.
+        # Só `aberto` muda: o cartão segue com o conteúdo durante a animação de saída (120 ms); o próximo `abrir` sobrescreve tudo.
         self._jogo = None
         self._v = {**self._v, "aberto": False}
         self.alterado.emit()
@@ -113,8 +108,7 @@ class HistoricoDeSessoes(QObject):
         return self._jogo() if self._jogo else None
 
     def _reler(self) -> None:
-        """Relê o arquivo e refaz tudo o que a tela mostra, em vez de tirar uma linha: a exclusão mexe no resumo e no
-        gráfico também."""
+        """Relê o arquivo e refaz tudo o que a tela mostra: a exclusão mexe no resumo e no gráfico também."""
         jogo = self._mostrado()
         self._sessoes = session_log.load(jogo.game_id) if jogo is not None else []
         if not self._sessoes:
@@ -126,7 +120,6 @@ class HistoricoDeSessoes(QObject):
             self._avisar_tudo()
             return
         sete, trinta = resumo_dos_ultimos_dias(self._sessoes, date.today())
-        # As variáveis são os tempos jogados nos últimos 7 e 30 dias
         resumo = _("Últimos 7 dias: {} · últimos 30 dias: {}").format(tempo_ou_nenhuma(sete), tempo_ou_nenhuma(trinta))
         self._v.update(resumo=resumo, vazio=False, **self._tabela(), **self._grafico())
         self._avisar_tudo()
@@ -142,7 +135,6 @@ class HistoricoDeSessoes(QObject):
         duracao = format_playtime(sessao["seconds"])
         return {
             "titulo": format_session_date(sessao["end"]),
-            # As variáveis são a hora em que a sessão terminou e sua duração
             "subtitulo": _("Terminou às {} · {}").format(datetime.fromtimestamp(sessao["end"]).strftime("%H:%M"), duracao),
             "fim": sessao["end"],
             "segundos": sessao["seconds"],
@@ -159,7 +151,6 @@ class HistoricoDeSessoes(QObject):
             dias, quebras = sem_lacunas_longas(dias)
         geometria = geometria_do_grafico(dias, quebras)
         self._dias, self._posicoes = dias, geometria.get("posicoes", [])
-        # A variável é o tempo jogado no período escolhido
         total = _("{} no período").format(tempo_ou_nenhuma(sum(segundos for _dia, segundos in dias)))
         return {"grafico": geometria, "totalDoPeriodo": total}
 
@@ -186,12 +177,10 @@ class HistoricoDeSessoes(QObject):
         if jogo is None:
             return
         if not session_log.delete(jogo.game_id, fim, segundos):
-            # A linha sumiu entre abrir a tela e confirmar (outra janela, o arquivo editado à mão). Nada a descontar:
-            # o total continua correspondendo ao que sobrou no histórico.
+            # A linha sumiu entre abrir a tela e confirmar (outra janela, arquivo editado à mão): nada a descontar.
             self._reler()
             return
-        # Nunca abaixo de zero: um total menor que a sessão só acontece com um registro editado à mão, e o certo aí é
-        # zerar, não guardar um tempo de jogo negativo que a ordenação levaria a sério.
+        # Nunca abaixo de zero: um total menor que a sessão só vem de um registro editado à mão, e o certo é zerar.
         jogo.playtime = max(0, jogo.playtime - segundos)
         jogo.save()
         jogo.update()

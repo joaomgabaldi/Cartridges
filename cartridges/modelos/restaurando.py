@@ -2,11 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A janela da abertura enquanto um backup agendado é restaurado.
-
-Sem ela, um backup grande deixava o app minutos sem nenhuma janela, parecendo que não tinha aberto. Mostra o andamento
-e não fecha: a restauração foi pedida e confirmada nas Preferências, e no fim o app abre sozinho (`app.main`).
-"""
+"""A janela da abertura enquanto um backup agendado é restaurado: mostra o andamento e não fecha (um backup grande deixava o
+app minutos sem janela); no fim o app abre sozinho (`app.main`)."""
 
 from collections.abc import Callable
 from typing import Any
@@ -15,9 +12,8 @@ from PySide6.QtCore import Property, QObject, Signal, Slot
 
 
 def entregar_so_ao_mudar(entregar: Callable[[float], Any]) -> Callable[[float], None]:
-    """Embrulha ``entregar`` (a entrega à tela, chamada pela thread de trabalho) para só passar adiante quando a
-    porcentagem inteira muda: o trabalho avisa a cada pedaço de 1 MB e a cada arquivo pequeno, e cada entrega agendada
-    custa uma volta do laço de eventos."""
+    """Embrulha ``entregar`` (a entrega à tela, chamada pela thread de trabalho) para só passar adiante quando a porcentagem
+    inteira muda: o trabalho avisa a cada pedaço de 1 MB e cada entrega agendada custa uma volta do laço de eventos."""
     ultima = -1
 
     def avancar(fracao: float) -> None:

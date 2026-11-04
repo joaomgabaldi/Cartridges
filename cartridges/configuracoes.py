@@ -2,12 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-r"""Preferências do app no registro do Windows, com a API do `Gio.Settings` que o código usa.
-
-Tipos e padrões vêm do gschema (`data/*.gschema.xml.in`), lido uma vez. Os valores moram em
-`HKCU\<subchave>` com os mesmos tipos da versão anterior (GTK) (`b`/`i`/`u` em REG_DWORD,
-`x` em REG_QWORD, `s` em REG_SZ), então as preferências existentes continuam valendo.
-"""
+r"""Preferências no registro do Windows (`HKCU\<subchave>`), com tipo e padrão de cada chave vindos do gschema; compatível com a versão anterior (GTK)."""
 
 import ast
 import logging
@@ -46,9 +41,7 @@ def _padrao(tipo: str, texto: str) -> bool | int | str:
 
 @cache
 def _esquemas() -> dict[str, dict[str, tuple]]:
-    """id do esquema -> {chave: (tipo, padrão, faixa, escolhas)}; `faixa` é ``(mín, máx)`` do
-    `<range>` e `escolhas` o conjunto das `<choices>`, ou ``None``. Um tipo fora dos cinco
-    levanta na carga."""
+    """id do esquema -> {chave: (tipo, padrão, faixa, escolhas)}; `faixa` é ``(mín, máx)``, `escolhas` as `<choices>`, ou ``None``."""
     esquemas = {}
     for esquema in ET.parse(_GSCHEMA).getroot().iter("schema"):
         chaves = {}
@@ -178,7 +171,6 @@ class Configuracoes:
         self._gravar(chave, "s", valor)
 
     def __setitem__(self, chave: str, valor: bool | int | str) -> None:
-        """``schema[chave] = valor``, como no ``Gio.Settings`` do PyGObject: o tipo é o da chave."""
         self._gravar(chave, self._definicao(chave)[0], valor)
 
     def reset(self, chave: str) -> None:
