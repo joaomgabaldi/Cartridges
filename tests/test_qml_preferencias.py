@@ -747,7 +747,7 @@ def test_amostra_abre_o_seletor_e_a_cor_vai_ao_modelo(app, fitas_espiadas):
     assert _esperar(lambda: app.achar("linhaDaCorDoAppBalao").property("opened") is True)
     seletor = app.achar("linhaDaCorDoAppSeletor")
     # O seletor parte da cor do app (o roxo).
-    assert abs(seletor.property("matiz") - session_fita.ROXO_DO_APP[0]) <= 1
+    assert abs(seletor.property("matiz") - session_fita.COR_PADRAO_DO_APP[0]) <= 1
     QMetaObject.invokeMethod(seletor, "mover", Qt.ConnectionType.DirectConnection, Q_ARG("QVariant", 120), Q_ARG("QVariant", 900))
     matiz, saturacao = session_fita.tom_do_app()
     assert abs(matiz - 120) <= 1 and abs(saturacao - 900) <= 2
@@ -765,7 +765,7 @@ def test_voltar_a_cor_padrao_so_fora_do_roxo(app, fitas_espiadas):
     assert _esperar(lambda: app.achar("linhaDaCorDoAppVoltar").property("visible") is True)
     assert app.achar("linhaDaCorDoAppVoltar").property("dica") == "Voltar à cor padrão"
     _clique(app, "linhaDaCorDoAppVoltar")
-    assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
+    assert session_fita.tom_do_app() == session_fita.COR_PADRAO_DO_APP
     assert _esperar(lambda: app.achar("linhaDaCorDoAppVoltar").property("visible") is False)
 
 

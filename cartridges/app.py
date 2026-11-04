@@ -408,6 +408,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     session_wallpaper.restaurar_orfaos()
     # As fitas de LED: desfaz o que uma execução anterior deixou e acende na cor do app (numa thread). Antes do QML, que
     # segura a thread principal por um ou dois segundos: na `main` elas acendem com a janela, não depois dela.
+    session_fita.migrar_roxo_antigo()  # antes de acender: o roxo de antes do Kyron vira o ciano
     session_fita.abrir()
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))
     if not motor.rootObjects():

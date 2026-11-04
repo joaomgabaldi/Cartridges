@@ -48,10 +48,13 @@ from cartridges.utils.ler_json import ler_json
 if TYPE_CHECKING:
     from cartridges.game import Game
 
-# Matiz e saturação do #9141ac, o roxo da paleta do app. É o padrão da "cor do
-# app" — a das fitas quando não há jogo correndo —, que o usuário pode trocar
-# nas Preferências. O brilho não entra: ele é do usuário.
-ROXO_DO_APP = (284, 620)
+# Matiz e saturação do #22D3EE, o ciano do Kyron. É o padrão da "cor do app" — a
+# das fitas quando não há jogo correndo —, que o usuário pode trocar nas
+# Preferências. O brilho não entra: ele é do usuário.
+COR_PADRAO_DO_APP = (188, 857)
+# O padrão de antes do Kyron (#9141ac). Só ele e o "Restaurar padrão" antigo
+# gravavam (284, 620); a amostra roxa da paleta grava (285, 622).
+ROXO_ANTIGO = (284, 620)
 
 
 class Fita(NamedTuple):
@@ -1284,7 +1287,7 @@ def _servir_previa(fita: Fita) -> None:
 
 
 def tom_do_app() -> tuple[int, int]:
-    """Matiz e saturação da cor do app: a escolhida, ou o roxo de fábrica."""
+    """Matiz e saturação da cor do app: a escolhida, ou o ciano de fábrica."""
     return (
         shared.schema.get_int("fita-matiz-app"),
         shared.schema.get_int("fita-saturacao-app"),
@@ -1298,8 +1301,14 @@ def salvar_tom_do_app(matiz: int, saturacao: int) -> None:
 
 
 def redefinir_tom_do_app() -> None:
-    """Volta a cor do app ao roxo de fábrica."""
-    salvar_tom_do_app(*ROXO_DO_APP)
+    """Volta a cor do app ao ciano de fábrica."""
+    salvar_tom_do_app(*COR_PADRAO_DO_APP)
+
+
+def migrar_roxo_antigo() -> None:
+    """Quem ficou com o roxo de fábrica de antes do Kyron passa ao ciano; outra cor não muda."""
+    if tom_do_app() == ROXO_ANTIGO:
+        salvar_tom_do_app(*COR_PADRAO_DO_APP)
 
 
 def cor_do_app() -> Cor:

@@ -298,7 +298,7 @@ class FitasDasPreferencias(QObject):
 
     @Property(bool, notify=alterado)
     def corDoAppPadrao(self) -> bool:  # noqa: N802
-        return session_fita.tom_do_app() == session_fita.ROXO_DO_APP
+        return session_fita.tom_do_app() == session_fita.COR_PADRAO_DO_APP
 
     @Property(QColor, notify=alterado)
     def corDoPulso(self) -> QColor:  # noqa: N802
@@ -363,7 +363,7 @@ class FitasDasPreferencias(QObject):
 
     @Slot()
     def voltarCorDoApp(self) -> None:  # noqa: N802
-        # O roxo exato: a ida e volta pela cor da tela pode arredondar uma unidade, e o padrão tem de ser o padrão.
+        # O padrão exato: a ida e volta pela cor da tela pode arredondar uma unidade, e o padrão tem de ser o padrão.
         session_fita.redefinir_tom_do_app()
         self._previa(session_fita.cor_do_app())
         self.alterado.emit()

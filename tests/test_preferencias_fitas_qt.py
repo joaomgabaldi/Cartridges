@@ -178,7 +178,7 @@ def test_escolher_a_cor_do_app_nas_preferencias_grava_e_mostra(p, previas):
     """Sem botão de aplicar: as Preferências gravam na hora, e a fita acompanha."""
     _com_fitas()
     # Abrir a tela não conta como escolha.
-    assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
+    assert session_fita.tom_do_app() == session_fita.COR_PADRAO_DO_APP
     assert p.fitas.corDoAppPadrao is True
     assert previas == []
 
@@ -192,7 +192,7 @@ def test_escolher_a_cor_do_app_nas_preferencias_grava_e_mostra(p, previas):
     assert abs(p.fitas.corDoApp.hsvHueF() * 360 - 210) <= 2
 
     p.fitas.voltarCorDoApp()
-    assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
+    assert session_fita.tom_do_app() == session_fita.COR_PADRAO_DO_APP
     assert p.fitas.corDoAppPadrao is True
 
 
@@ -200,8 +200,8 @@ def test_voltar_a_cor_padrao_grava_o_roxo_exato(p, previas):
     session_fita.salvar_tom_do_app(200, 800)
     p.fitas.voltarCorDoApp()
     # O roxo exato, e não a ida e volta pela cor da tela (que pode arredondar uma unidade).
-    assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
-    assert previas == [(session_fita.Cor(*session_fita.ROXO_DO_APP, session_fita.brilho_padrao()), None)]
+    assert session_fita.tom_do_app() == session_fita.COR_PADRAO_DO_APP
+    assert previas == [(session_fita.Cor(*session_fita.COR_PADRAO_DO_APP, session_fita.brilho_padrao()), None)]
 
 
 def test_brilho_mostra_na_hora(p, previas):

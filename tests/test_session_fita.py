@@ -82,10 +82,10 @@ def test_cor_escolhida_sem_escolha_e_none():
     assert session_fita.cor_escolhida("sem-nada") is None
 
 
-def test_jogo_sem_capa_usa_o_roxo_do_app(tmp_path, schema):
+def test_jogo_sem_capa_usa_a_cor_do_app(tmp_path, schema):
     jogo = SimpleNamespace(game_id="sem-capa", name="X", get_cover_path=lambda: None)
     cor = session_fita.cor_do_jogo(jogo)
-    assert (cor.matiz, cor.saturacao) == session_fita.ROXO_DO_APP
+    assert (cor.matiz, cor.saturacao) == session_fita.COR_PADRAO_DO_APP
 
 
 def test_salvar_cor_nao_levanta_sem_permissao(tmp_path, monkeypatch, schema):
@@ -284,7 +284,7 @@ def test_abrir_guarda_o_estado_e_veste_o_roxo(falsas, schema):
 
     for modulo in modulos.values():
         assert estado_mandado(modulo) is True
-        assert session_fita.cor_de_hex(cor_mandada(modulo))[:2] == session_fita.ROXO_DO_APP
+        assert session_fita.cor_de_hex(cor_mandada(modulo))[:2] == session_fita.COR_PADRAO_DO_APP
 
 
 def test_devolver_repoe_o_estado_e_limpa_a_chave(falsas, schema):
@@ -1245,8 +1245,8 @@ def test_fita_sem_endereco_nao_chega_a_abrir_conexao(monkeypatch, schema):
 
 
 
-def test_a_cor_do_app_vem_de_fabrica_no_roxo(schema):
-    assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
+def test_a_cor_do_app_vem_de_fabrica_no_ciano(schema):
+    assert session_fita.tom_do_app() == session_fita.COR_PADRAO_DO_APP
 
 
 def test_a_cor_escolhida_vira_a_cor_oficial_do_app(falsas, schema):
@@ -1261,10 +1261,10 @@ def test_a_cor_escolhida_vira_a_cor_oficial_do_app(falsas, schema):
     assert (cor.matiz, cor.saturacao) == (0, 1000)
 
 
-def test_voltar_ao_roxo_desfaz_a_escolha(schema):
+def test_voltar_ao_padrao_desfaz_a_escolha(schema):
     session_fita.salvar_tom_do_app(210, 800)
     session_fita.redefinir_tom_do_app()
-    assert session_fita.tom_do_app() == session_fita.ROXO_DO_APP
+    assert session_fita.tom_do_app() == session_fita.COR_PADRAO_DO_APP
 
 
 def test_jogo_sem_capa_usa_a_cor_escolhida_para_o_app(schema):
@@ -2745,3 +2745,25 @@ def test_retentativa_atropelada_por_outra_troca_nao_volta_a_suspensao(pulso, rel
 
 
 # endregion
+
+
+def test_cor_padrao_e_o_ciano_do_kyron():
+    assert session_fita.COR_PADRAO_DO_APP == session_fita.rgb_para_cor(0x22 / 255, 0xD3 / 255, 0xEE / 255, 0)[:2] == (188, 857)
+
+
+def test_migra_o_roxo_antigo_gravado(schema):
+    session_fita.salvar_tom_do_app(*session_fita.ROXO_ANTIGO)
+    session_fita.migrar_roxo_antigo()
+    assert session_fita.tom_do_app() == (188, 857)
+
+
+def test_nao_migra_outra_cor(schema):
+    # (285, 622) é o roxo da paleta; só (284, 620), o padrão antigo, migra.
+    for cor in ((285, 622), (30, 500)):
+        session_fita.salvar_tom_do_app(*cor)
+        session_fita.migrar_roxo_antigo()
+        assert session_fita.tom_do_app() == cor
+
+
+def test_sem_nada_gravado_o_padrao_e_ciano(schema):
+    assert session_fita.tom_do_app() == (188, 857)
