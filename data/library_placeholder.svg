@@ -1,1 +1,15 @@
-<svg width="200" height="300" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill="url(#a)" d="M0 0h200v300H0z"/><path fill-rule="evenodd" clip-rule="evenodd" d="M63.125 113.125c-8.146 0-14.75 6.604-14.75 14.75v44.25c0 8.146 6.604 14.75 14.75 14.75h73.75c8.146 0 14.75-6.604 14.75-14.75v-44.25c0-8.146-6.604-14.75-14.75-14.75h-73.75Zm22.125 14.75a7.375 7.375 0 0 0-7.375 7.375v29.5a7.375 7.375 0 0 0 7.375 7.375h29.5a7.375 7.375 0 0 0 7.375-7.375v-29.5a7.375 7.375 0 0 0-7.375-7.375h-29.5ZM129.5 150a7.375 7.375 0 1 1 14.75 0 7.375 7.375 0 0 1-14.75 0Zm-66.375-7.375a7.375 7.375 0 1 0 0 14.75 7.375 7.375 0 0 0 0-14.75Z" fill="#fff"/><defs><linearGradient id="a" x1="100" y1="0" x2="100" y2="300" gradientUnits="userSpaceOnUse"><stop stop-color="#9A9996"/><stop offset="1" stop-color="#5E5C64"/></linearGradient></defs></svg>
+<svg width="200" height="300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="200" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3F3F46"/><stop offset="1" stop-color="#27272A"/>
+    </linearGradient>
+    <linearGradient id="k" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22D3EE"/><stop offset="100%" stop-color="#818CF8"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="300" fill="url(#bg)"/>
+  <g transform="translate(100 150) scale(0.72) translate(-133 -128)">
+    <rect x="78" y="72" width="26" height="112" rx="13" fill="#FFFFFF"/>
+    <path d="M116 128 L168 76 L188 76 L138 128 L188 180 L168 180 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="6" stroke-linejoin="round"/>
+  </g>
+</svg>
