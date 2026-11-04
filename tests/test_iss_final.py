@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from cartridges import shared
+from cartridges.utils import app_updater
 
 _RAIZ = Path(__file__).resolve().parent.parent
 _spec = importlib.util.spec_from_file_location("montar_app_qt", _RAIZ / "build-aux" / "windows" / "montar_app_qt.py")
@@ -77,10 +78,14 @@ def instalacao(final):
 
 
 def _apagados(iss: str) -> set[str]:
-    linhas = _sem_comentarios(_secao(iss, "InstallDelete"))
+    linhas = [l for l in _sem_comentarios(_secao(iss, "InstallDelete")) if l.startswith("Type: filesandordirs")]
     pastas = {re.fullmatch(r'Type: filesandordirs; Name: "\{app\}\\(\w+)"', l)[1] for l in linhas}
     assert len(pastas) == len(linhas)
     return pastas
+
+
+def _atalhos_apagados(iss: str) -> list[str]:
+    return re.findall(r'^Type: files; Name: "([^"]+)"$', _secao(iss, "InstallDelete"), re.M)
 
 
 def test_iss_final_apaga_a_arvore_do_gtk_e_a_do_qt(final):
@@ -124,13 +129,62 @@ def test_iss_final_reabre_o_app_tambem_em_silencio(final):
 
 def test_iss_final_mantem_o_appid_e_o_exe(final):
     assert "AppId={{88FC7AF8-9F74-40EC-AAED-FA6356261CBB}\n" in final
-    assert "DefaultDirName={autopf64}\\Cartridges Revamped\n" in final
-    assert '#define MyAppExeName "Cartridges.exe"' in final
+    assert "DefaultDirName={autopf64}\\Kyron\n" in final
+    assert '#define MyAppExeName "Kyron.exe"' in final
     assert 'Filename: "{app}\\bin\\{#MyAppExeName}"' in _secao(final, "Run")
     for linha in _sem_comentarios(_secao(final, "Icons")):
         assert 'Filename: "{app}\\bin\\{#MyAppExeName}"' in linha
-    assert '#define MyAppName "Cartridges"' in final
-    assert "OutputBaseFilename=Cartridges Windows\n" in final
+    assert '#define MyAppName "Kyron"' in final
+    assert "OutputBaseFilename=Kyron Windows\n" in final
+    assert "VersionInfoOriginalFileName=Kyron Windows.exe\n" in final
+    assert "UsePreviousAppDir=no" not in final
+
+
+def test_iss_de_desenvolvimento_usa_os_nomes_novos(renderizado):
+    dev = _ramo(renderizado, "DESENVOLVIMENTO", "Repo", "PastaApp")
+    assert '#define MyAppName "Kyron (desenvolvimento)"' in dev
+    assert "DefaultDirName={autopf64}\\Kyron (desenvolvimento)\n" in dev
+    assert "OutputBaseFilename=Kyron desenvolvimento\n" in dev
+    assert "AppId={{3C2D6B0E-5F71-4A8B-9E24-7D1A0C9B6F35}\n" in dev
+
+
+def test_iss_apaga_atalhos_antigos(final, renderizado):
+    assert _atalhos_apagados(final) == ["{autoprograms}\\Cartridges.lnk", "{autodesktop}\\Cartridges.lnk"]
+    dev = _ramo(renderizado, "DESENVOLVIMENTO", "Repo", "PastaApp")
+    assert _atalhos_apagados(dev) == [
+        "{autoprograms}\\Cartridges Qt (desenvolvimento).lnk",
+        "{autodesktop}\\Cartridges Qt (desenvolvimento).lnk",
+    ]
+    # A migração da instalação "só para mim" também procura o atalho pelo nome antigo.
+    assert "{userprograms}\\Cartridges.lnk" in final and "{userdesktop}\\Cartridges.lnk" in final
+
+
+def test_iss_atalhos_e_exe_kyron(final):
+    linhas = _sem_comentarios(_secao(final, "Icons"))
+    assert len(linhas) == 2
+    # {#MyAppExeName} é Kyron.exe (conferido em test_iss_final_mantem_o_appid_e_o_exe)
+    assert all('Filename: "{app}\\bin\\{#MyAppExeName}"' in l for l in linhas)
+    assert "AppId={{88FC7AF8-9F74-40EC-AAED-FA6356261CBB}\n" in final
+
+
+def test_iss_corrige_fixados_do_cartridges_exe(instalacao):
+    assert "CartridgesExe := Lowercase(ExpandConstant('{app}\\bin\\cartridges.exe'));" in instalacao
+    # Forma (x86) que o instalador de 32 bits enxerga, calculada como a do pythonw.exe
+    assert "CartridgesExeX86 := Normalizar(ExpandConstant('{commonpf32}')) + Copy(CartridgesExe," in instalacao
+    assert "(Alvo = CartridgesExe) or (Alvo = CartridgesExeX86)" in instalacao
+    # E o fixado corrigido passa a abrir o Kyron.exe
+    assert "ExpandConstant('{app}\\bin\\{#MyAppExeName}')" in instalacao
+
+
+def test_iss_encerra_o_exe_antigo(final):
+    # Nada no [Setup] desliga o Restart Manager do Inno (CloseApplications=yes é o padrão).
+    assert not re.search(r"^CloseApplications\s*=\s*(no|false|0)", _secao(final, "Setup"), re.I | re.M)
+    # O atualizador o força em modo silencioso: com isso o Cartridges.exe aberto de uma 2.0.0 sai, pois
+    # segura o python315.dll que o [Files] troca, e o instalador termina com bin\\Kyron.exe.
+    assert "/FORCECLOSEAPPLICATIONS" in app_updater.INSTALLER_ARGUMENTS
+    assert "/SILENT" in app_updater.INSTALLER_ARGUMENTS
+    assert 'Source: "{#PastaApp}\\*"; DestDir: "{app}"; Flags: recursesubdirs' in _secao(final, "Files")
+    assert 'Type: filesandordirs; Name: "{app}\\bin"' in _secao(final, "InstallDelete")
 
 
 def test_iss_final_empacota_a_pasta_montada(final, renderizado):

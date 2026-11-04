@@ -6,7 +6,7 @@
 
 """Monta a pasta do app Qt instalado, para o Inno Setup empacotar.
 
-    <destino>\\bin\\Cartridges.exe     o lançador (carrega ..\\python\\python315.dll)
+    <destino>\\bin\\Kyron.exe     o lançador (carrega ..\\python\\python315.dll)
     <destino>\\bin\\ffmpeg.exe         capa de vídeo; `capa_video` o procura ao lado do `sys.executable`
     <destino>\\bin\\ludusavi.exe       backup dos saves; `ludusavi` o procura do mesmo jeito
     <destino>\\python\\               Python embutido do python.org
@@ -129,7 +129,7 @@ def montar(
     ffmpeg: Path | None = None, ludusavi: Path | None = None,
 ) -> None:  # fmt: skip
     """Monta `destino` a partir do repositório (`raiz`), do Python embutido já extraído (`python`),
-    das bibliotecas do pip (`lib`), do `Cartridges.exe` compilado (`lancador`) e dos executáveis de
+    das bibliotecas do pip (`lib`), do `Kyron.exe` compilado (`lancador`) e dos executáveis de
     terceiros (`ffmpeg`, `ludusavi`), cada um com um arquivo LICENSE ao lado."""
     if canal not in CANAIS:
         sys.exit(f"Canal inválido: {canal!r}. Use um de {CANAIS}.")
@@ -155,7 +155,7 @@ def montar(
     (destino / MARCADOR).write_text("montar_app_qt.py\n", encoding="utf-8")
 
     (destino / "bin").mkdir()
-    shutil.copy2(lancador, destino / "bin" / "Cartridges.exe")
+    shutil.copy2(lancador, destino / "bin" / "Kyron.exe")
 
     (destino / "licencas").mkdir()
     for nome, origem in LICENCAS.items():
@@ -282,7 +282,7 @@ def versao_do_app(raiz: Path = RAIZ) -> str:
 
 
 def compilar_lancador(cache: Path, raiz: Path = RAIZ) -> Path:
-    """Compila o Cartridges.exe com o MSVC 14.44 (o mesmo do compilar.bat do QWindowKit)."""
+    """Compila o Kyron.exe com o MSVC 14.44 (o mesmo do compilar.bat do QWindowKit)."""
     fonte = raiz / "build-aux" / "windows" / "lancador"
     saida = cache / "lancador"
     shutil.rmtree(saida, ignore_errors=True)
@@ -304,12 +304,12 @@ def compilar_lancador(cache: Path, raiz: Path = RAIZ) -> Path:
         f'set "PATH={Path(pf86) / "Microsoft Visual Studio" / "Installer"};%PATH%"\r\n'
         f'call "{vs}\\VC\\Auxiliary\\Build\\vcvars64.bat" -vcvars_ver=14.44 >nul || exit /b 1\r\n'
         f'rc /nologo /DVERSAO={versao} /DVERSAO_NUM={versao.replace(".", ",")},0 /fo cartridges.res "{fonte}\\cartridges.rc" || exit /b 1\r\n'
-        f'cl /nologo /O2 /MT /utf-8 /W3 "{fonte}\\cartridges.c" cartridges.res /Fe:Cartridges.exe '
+        f'cl /nologo /O2 /MT /utf-8 /W3 "{fonte}\\cartridges.c" cartridges.res /Fe:Kyron.exe '
         "/link /SUBSYSTEM:WINDOWS user32.lib || exit /b 1\r\n",
         encoding="ascii",
     )
     subprocess.run(["cmd", "/c", str(roteiro)], cwd=saida, check=True)
-    return saida / "Cartridges.exe"
+    return saida / "Kyron.exe"
 
 
 def renderizar_iss(destino: Path, raiz: Path = RAIZ) -> Path:

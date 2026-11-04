@@ -7,14 +7,14 @@
 #error Passe /DRepo=<raiz do repositório> e /DPastaApp=<pasta que o montar_app_qt.py montou>.
 #endif
 #ifdef DESENVOLVIMENTO
-#define MyAppName "Cartridges Qt (desenvolvimento)"
+#define MyAppName "Kyron (desenvolvimento)"
 #else
-#define MyAppName "Cartridges"
+#define MyAppName "Kyron"
 #endif
 #define MyAppVersion "@VERSION@"
 #define MyAppPublisher "joaomgabaldi"
 #define MyAppURL "https://github.com/joaomgabaldi/Cartridges"
-#define MyAppExeName "Cartridges.exe"
+#define MyAppExeName "Kyron.exe"
 
 [Setup]
 #ifdef DESENVOLVIMENTO
@@ -24,7 +24,7 @@ AppId={{88FC7AF8-9F74-40EC-AAED-FA6356261CBB}
 #endif
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-; Sem a versão: ela já tem coluna própria em "Aplicativos instalados", e o nome do app é só "Cartridges".
+; Sem a versão: ela já tem coluna própria em "Aplicativos instalados", e o nome do app é só "Kyron".
 AppVerName={#MyAppName}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
@@ -33,11 +33,11 @@ AppCopyright=Copyright © 2026 {#MyAppPublisher}. Licenciado sob a GPL-3.0-or-la
 VersionInfoVersion={#MyAppVersion}
 VersionInfoTextVersion={#MyAppVersion}
 VersionInfoDescription=Instalador do {#MyAppName}
-VersionInfoOriginalFileName=Cartridges Windows.exe
+VersionInfoOriginalFileName=Kyron Windows.exe
 #ifdef DESENVOLVIMENTO
-DefaultDirName={autopf64}\Cartridges Qt (desenvolvimento)
+DefaultDirName={autopf64}\Kyron (desenvolvimento)
 #else
-DefaultDirName={autopf64}\Cartridges Revamped
+DefaultDirName={autopf64}\Kyron
 #endif
 DisableProgramGroupPage=yes
 LicenseFile={#Repo}\LICENSE
@@ -46,9 +46,9 @@ LicenseFile={#Repo}\LICENSE
 PrivilegesRequired=admin
 UsedUserAreasWarning=no
 #ifdef DESENVOLVIMENTO
-OutputBaseFilename=Cartridges Qt desenvolvimento
+OutputBaseFilename=Kyron desenvolvimento
 #else
-OutputBaseFilename=Cartridges Windows
+OutputBaseFilename=Kyron Windows
 #endif
 SetupIconFile={#Repo}\build-aux\windows\icon.ico
 Compression=lzma
@@ -125,6 +125,9 @@ Type: filesandordirs; Name: "{app}\bin"
 Type: filesandordirs; Name: "{app}\python"
 Type: filesandordirs; Name: "{app}\lib"
 Type: filesandordirs; Name: "{app}\app"
+; Atalhos do nome antigo (o app agora se chama Kyron)
+Type: files; Name: "{autoprograms}\Cartridges Qt (desenvolvimento).lnk"
+Type: files; Name: "{autodesktop}\Cartridges Qt (desenvolvimento).lnk"
 #else
 Type: filesandordirs; Name: "{app}\bin"
 Type: filesandordirs; Name: "{app}\etc"
@@ -133,6 +136,9 @@ Type: filesandordirs; Name: "{app}\share"
 Type: filesandordirs; Name: "{app}\python"
 Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\licencas"
+; Atalhos do nome antigo (o app agora se chama Kyron)
+Type: files; Name: "{autoprograms}\Cartridges.lnk"
+Type: files; Name: "{autodesktop}\Cartridges.lnk"
 #endif
 
 [Files]
@@ -245,8 +251,8 @@ begin
   end;
   Result := Pasta;
   try
-    ApagarAtalhoAntigo(ExpandConstant('{userprograms}\{#MyAppName}.lnk'), Pasta);
-    ApagarAtalhoAntigo(ExpandConstant('{userdesktop}\{#MyAppName}.lnk'), Pasta);
+    ApagarAtalhoAntigo(ExpandConstant('{userprograms}\Cartridges.lnk'), Pasta);
+    ApagarAtalhoAntigo(ExpandConstant('{userdesktop}\Cartridges.lnk'), Pasta);
     if ApagarInstalacaoAntiga(Pasta) then
     begin
       RegDeleteKeyIncludingSubkeys(HKCU, ChaveDoUsuario);
@@ -260,8 +266,8 @@ begin
 end;
 
 // Fixados na barra de tarefas do usuário que abrem o app pelo caminho antigo:
-// o pythonw.exe desta instalação (de antes do Cartridges.exe) ou o exe da
-// instalação "só para mim" que acabou de sair. Passam a abrir o Cartridges.exe,
+// o pythonw.exe ou o Cartridges.exe (nome antigo do lançador) desta instalação, ou o exe da
+// instalação "só para mim" que acabou de sair. Passam a abrir o Kyron.exe,
 // e a janela volta a se agrupar com o fixado. Os do menu Iniciar ficam num
 // arquivo sem formato documentado e não são tocados.
 // O instalador é de 32 bits: nele, o WScript.Shell lê "C:\Program Files" como
@@ -269,16 +275,21 @@ end;
 // CreateShellLink do Inno (o mesmo do [Icons]), que grava o caminho certo.
 procedure CorrigirFixados(const PastaAntiga: String);
 var
-  Pasta, Alvo, Pythonw, PythonwX86, Pf64: String;
+  Pasta, Alvo, Pythonw, PythonwX86, CartridgesExe, CartridgesExeX86, Pf64: String;
   Busca: TFindRec;
   Shell, Lnk: Variant;
 begin
   Pasta := ExpandConstant('{userappdata}\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\');
   Pythonw := Lowercase(ExpandConstant('{app}\bin\pythonw.exe'));
   PythonwX86 := Pythonw;
+  CartridgesExe := Lowercase(ExpandConstant('{app}\bin\cartridges.exe'));
+  CartridgesExeX86 := CartridgesExe;
   Pf64 := Normalizar(ExpandConstant('{commonpf64}'));
   if Pos(Pf64, Pythonw) = 1 then
+  begin
     PythonwX86 := Normalizar(ExpandConstant('{commonpf32}')) + Copy(Pythonw, Length(Pf64) + 1, Length(Pythonw));
+    CartridgesExeX86 := Normalizar(ExpandConstant('{commonpf32}')) + Copy(CartridgesExe, Length(Pf64) + 1, Length(CartridgesExe));
+  end;
   if not FindFirst(Pasta + '*.lnk', Busca) then
     Exit;
   try
@@ -289,7 +300,7 @@ begin
         Lnk := Shell.CreateShortcut(Pasta + Busca.Name);
         Alvo := Lnk.TargetPath;
         Alvo := Lowercase(Alvo);
-        if (Alvo = Pythonw) or (Alvo = PythonwX86) or ((PastaAntiga <> '') and (Pos(PastaAntiga, Alvo) = 1)) then
+        if (Alvo = Pythonw) or (Alvo = PythonwX86) or (Alvo = CartridgesExe) or (Alvo = CartridgesExeX86) or ((PastaAntiga <> '') and (Pos(PastaAntiga, Alvo) = 1)) then
         begin
           CreateShellLink(Pasta + Busca.Name, '{#MyAppName}', ExpandConstant('{app}\bin\{#MyAppExeName}'),
             '', ExpandConstant('{app}\bin'), ExpandConstant('{app}\icon.ico'), 0, SW_SHOWNORMAL);
@@ -329,11 +340,11 @@ begin
     // pasta escolhida em Preferências fica onde está, e o texto diz isso.
 #ifdef DESENVOLVIMENTO
     if MsgBox('Remover também a cópia de desenvolvimento dos dados (biblioteca, capas e ' +
-              'preferências do Cartridges Qt de desenvolvimento)? Os dados do Cartridges ' +
+              'preferências do Kyron de desenvolvimento)? Os dados do Kyron ' +
               'instalado normalmente não são afetados.',
               mbConfirmation, MB_YESNO) = IDYES then
 #else
-    if MsgBox('Remover também a biblioteca do Cartridges (lista de jogos, capas, ' +
+    if MsgBox('Remover também a biblioteca do Kyron (lista de jogos, capas, ' +
               'histórico de sessões e os backups dos saves dos jogos guardados na ' +
               'pasta padrão) e as configurações? Os jogos instalados no ' +
               'computador não serão afetados.',

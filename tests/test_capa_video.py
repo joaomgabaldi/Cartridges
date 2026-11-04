@@ -42,7 +42,7 @@ def quadros_e_duracao(caminho: Path) -> tuple[int, int]:
 
 def test_executavel_procura_ao_lado_do_python_do_app(tmp_path, monkeypatch):
     # No app instalado o `sys.executable` é o lançador; o `ffmpeg.exe` do instalador fica ao lado dele.
-    lancador = tmp_path / "bin" / "Cartridges.exe"
+    lancador = tmp_path / "bin" / "Kyron.exe"
     lancador.parent.mkdir()
     (lancador.parent / "ffmpeg.exe").touch()
     monkeypatch.setattr(capa_video.sys, "executable", str(lancador))

@@ -12,7 +12,7 @@ Uso: python notas_release.py <metainfo.xml.in> <versão> [<última versão publi
 import sys
 import xml.etree.ElementTree as ET
 
-INSTALACAO = "Baixe **Cartridges Windows.exe** abaixo e execute ou receba a atualização pelo próprio aplicativo."
+INSTALACAO = "Baixe **Kyron Windows.exe** abaixo e execute ou receba a atualização pelo próprio aplicativo."
 
 
 def notas(metainfo: str, versao: str, anterior: str = "") -> str:

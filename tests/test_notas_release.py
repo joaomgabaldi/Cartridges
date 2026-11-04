@@ -50,7 +50,7 @@ def test_notas_da_versao_pedida(tmp_path):
         "- Agora as buscas estão mais rápidas.\n"
         "- Foi corrigido o desenho da janela.\n\n"
         "## Instalação\n\n"
-        "Baixe **Cartridges Windows.exe** abaixo e execute ou receba a atualização pelo próprio aplicativo.\n"
+        "Baixe **Kyron Windows.exe** abaixo e execute ou receba a atualização pelo próprio aplicativo.\n"
     )
 
 
@@ -94,7 +94,7 @@ def test_junta_as_versoes_nunca_publicadas(tmp_path):
         "- Foi corrigido o desenho da janela.\n"
         "- Item pulado.\n\n"
         "## Instalação\n\n"
-        "Baixe **Cartridges Windows.exe** abaixo e execute ou receba a atualização pelo próprio aplicativo.\n"
+        "Baixe **Kyron Windows.exe** abaixo e execute ou receba a atualização pelo próprio aplicativo.\n"
     )
 
 

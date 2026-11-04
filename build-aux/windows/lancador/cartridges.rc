@@ -16,12 +16,12 @@ BEGIN
     BLOCK "041604B0"
     BEGIN
       VALUE "CompanyName", "joaomgabaldi"
-      VALUE "FileDescription", "Cartridges"
+      VALUE "FileDescription", "Kyron"
       VALUE "FileVersion", TEXTO(VERSAO)
-      VALUE "InternalName", "Cartridges"
+      VALUE "InternalName", "Kyron"
       VALUE "LegalCopyright", "Copyright \251 2026 joaomgabaldi. Licenciado sob a GPL-3.0-or-later."
-      VALUE "OriginalFilename", "Cartridges.exe"
-      VALUE "ProductName", "Cartridges"
+      VALUE "OriginalFilename", "Kyron.exe"
+      VALUE "ProductName", "Kyron"
       VALUE "ProductVersion", TEXTO(VERSAO)
       VALUE "Comments", "Seus jogos em um s\363 lugar"
     END

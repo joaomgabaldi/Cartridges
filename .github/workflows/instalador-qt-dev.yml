@@ -63,6 +63,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Cartridges-Qt-desenvolvimento
-          path: _dist/instalador/Cartridges Qt desenvolvimento.exe
+          name: Kyron-desenvolvimento
+          path: _dist/instalador/Kyron desenvolvimento.exe
           if-no-files-found: error

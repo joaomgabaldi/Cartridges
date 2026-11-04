@@ -111,7 +111,7 @@ jobs:
           # Última versão final publicada: as notas juntam as que vieram depois dela.
           anterior=$(gh release list --exclude-pre-releases --exclude-drafts -L 1 --json tagName --jq '.[0].tagName // ""')
           python build-aux/windows/notas_release.py data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in "$versao" "${anterior#v}" > notas.md
-          cp "_dist/instalador/Cartridges Windows.exe" Cartridges.Windows.exe
+          cp "_dist/instalador/Kyron Windows.exe" Kyron.Windows.exe
           if pre=$(gh release view "$tag" --json isPrerelease --jq .isPrerelease 2>/dev/null); then
             if [ "$pre" != "true" ]; then
               echo "::error::A versão $tag já foi publicada. Suba a versão em cartridges/shared.py."
@@ -120,8 +120,8 @@ jobs:
             git tag -f "$tag"
             git push -f origin "refs/tags/$tag"
             gh release edit "$tag" --notes-file notas.md
-            gh release upload "$tag" Cartridges.Windows.exe --clobber
+            gh release upload "$tag" Kyron.Windows.exe --clobber
           else
-            gh release create "$tag" Cartridges.Windows.exe --prerelease --latest=false \
-              --target "$(git rev-parse HEAD)" --title "Cartridges $versao" --notes-file notas.md
+            gh release create "$tag" Kyron.Windows.exe --prerelease --latest=false \
+              --target "$(git rev-parse HEAD)" --title "Kyron $versao" --notes-file notas.md
           fi

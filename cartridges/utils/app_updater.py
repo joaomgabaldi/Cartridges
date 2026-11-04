@@ -166,7 +166,7 @@ def notes_to_markup(notes: str) -> str:
 def installed_root() -> Optional[Path]:
     """Pasta da instalação, ou None quando o app roda do código-fonte.
 
-    O app instalado roda de ``{app}\\bin\\Cartridges.exe`` e o Inno Setup deixa o
+    O app instalado roda de ``{app}\\bin\\Kyron.exe`` e o Inno Setup deixa o
     ``unins000.exe`` em ``{app}``. Rodando do código-fonte, o pai da pasta do
     Python não tem desinstalador, e o app nunca tenta se atualizar. A cópia de
     desenvolvimento nunca se atualiza, nem com um desinstalador ao lado: a versão

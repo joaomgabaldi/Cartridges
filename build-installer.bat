@@ -1,10 +1,10 @@
 :inicio
 @echo off
-rem Gera o instalador do Cartridges: online pelo workflow do GitHub ou offline aqui.
+rem Gera o instalador do Kyron: online pelo workflow do GitHub ou offline aqui.
 rem A logica esta em build-aux\windows\instalador-online.ps1 e build-installer.ps1;
 rem este arquivo existe para dar dois cliques.
 
-title Cartridges - build do instalador
+title Kyron - build do instalador
 echo [1] Online: gera a pre-release pelo GitHub Actions e faz o git pull
 echo [2] Offline: compila e empacota neste PC
 choice /c 12 /n /m "Escolha 1 ou 2: "

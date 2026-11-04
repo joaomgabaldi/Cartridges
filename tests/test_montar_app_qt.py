@@ -67,7 +67,7 @@ def insumos(tmp_path):
     _tocar(qwk / "qmsetup" / "LICENSE", "MIT")
     _tocar(raiz / "build-aux/windows/licencas/adwaita-icon-theme.txt", "CC-BY-SA ou LGPL")
     _tocar(raiz / "build-aux/windows/licencas/libadwaita.txt", "LGPL 2.1")
-    lancador = _tocar(tmp_path / "Cartridges.exe")
+    lancador = _tocar(tmp_path / "Kyron.exe")
     return dict(
         raiz=raiz, python=python, lib=lib, lancador=lancador,
         ffmpeg=_externo(tmp_path, "ffmpeg", "GPL do FFmpeg"), ludusavi=_externo(tmp_path, "ludusavi", "MIT do Ludusavi"),
@@ -78,7 +78,7 @@ def test_monta_a_arvore_do_app(insumos, tmp_path):
     destino = tmp_path / "saida"
     montar_app_qt.montar(destino, "desenvolvimento", **insumos)
 
-    assert (destino / "bin" / "Cartridges.exe").is_file()
+    assert (destino / "bin" / "Kyron.exe").is_file()
     assert (destino / "python" / "python315.dll").is_file()
     assert (destino / "lib" / "requests" / "__init__.py").is_file()
     assert (destino / "app" / "cartridges" / "qml" / "Aplicativo.qml").is_file()
@@ -155,7 +155,7 @@ def test_remonta_por_cima_do_que_ele_mesmo_montou(insumos, tmp_path):
     _tocar(destino / "resto.txt")
     montar_app_qt.montar(destino, "desenvolvimento", **insumos)
     assert not (destino / "resto.txt").exists()
-    assert (destino / "bin" / "Cartridges.exe").is_file()
+    assert (destino / "bin" / "Kyron.exe").is_file()
 
 
 def test_montar_mantem_o_qt5compat(insumos, tmp_path):
@@ -196,7 +196,7 @@ def test_monta_o_ffmpeg_ao_lado_do_lancador(insumos, tmp_path):
     destino = tmp_path / "saida"
     montar_app_qt.montar(destino, "final", **insumos)
     assert (destino / "bin" / "ffmpeg.exe").is_file()
-    assert (destino / "bin" / "Cartridges.exe").is_file()
+    assert (destino / "bin" / "Kyron.exe").is_file()
 
 
 def test_monta_o_ludusavi_ao_lado_do_lancador(insumos, tmp_path):

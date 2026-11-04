@@ -4,9 +4,9 @@
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * Cartridges.exe: abre o Python embutido do app (..\python\python315.dll) já
+ * Kyron.exe: abre o Python embutido do app (..\python\python315.dll) já
  * rodando `-m cartridges`. O Python roda dentro deste processo, então é
- * "Cartridges.exe" que o Windows mostra no Gerenciador de Tarefas, na barra de
+ * "Kyron.exe" que o Windows mostra no Gerenciador de Tarefas, na barra de
  * tarefas e nas configurações de GPU, e não "pythonw.exe".
  *
  * A DLL é carregada à mão (LoadLibraryExW + GetProcAddress): o lançador não
@@ -46,7 +46,7 @@ int WINAPI wWinMain(HINSTANCE instancia, HINSTANCE anterior, PWSTR linha, int ex
     if (!argv || n == 0 || n >= MAX_PATH)
         return falha();
 
-    /* <instalação>\bin\Cartridges.exe -> <instalação>\python\python315.dll */
+    /* <instalação>\bin\Kyron.exe -> <instalação>\python\python315.dll */
     wcscpy_s(dll, MAX_PATH, exe);
     barra = wcsrchr(dll, L'\\');
     if (!barra || (barra - dll) + wcslen(L"\\..\\python\\python315.dll") >= MAX_PATH)

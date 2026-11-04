@@ -34,7 +34,7 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 # Nada de fora da pasta: nem outro Python, nem outro ffmpeg, nem DLL do runner.
 os.environ["PATH"] = str(Path(os.environ["SystemRoot"], "System32"))
 # No app instalado o `sys.executable` é o lançador: `capa_video` e `ludusavi` procuram ao lado dele.
-sys.executable = str(destino / "bin" / "Cartridges.exe")
+sys.executable = str(destino / "bin" / "Kyron.exe")
 
 import certifi  # noqa: E402
 import PySide6.QtQuick  # noqa: E402, F401

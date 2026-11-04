@@ -27,7 +27,7 @@ Etapa 'Empacotando com o Inno Setup'
 & $iscc "/DRepo=$repo" "/DPastaApp=$pasta" "/O$dist\instalador" "$pasta.iss" | Select-Object -Last 3
 if ($LASTEXITCODE -ne 0) { Falha 'O Inno Setup falhou.' }
 
-$exe = Join-Path $dist 'instalador\Cartridges Windows.exe'
+$exe = Join-Path $dist 'instalador\Kyron Windows.exe'
 if (-not (Test-Path $exe)) { Falha "O instalador não apareceu em $exe." }
 
 $info = Get-Item $exe
