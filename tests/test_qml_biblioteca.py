@@ -1160,6 +1160,21 @@ def test_soltar_atalho_fica_desligado_com_a_confirmacao_da_pagina_do_jogo(app_qt
     app.fechar()
 
 
+def test_o_botao_do_menu_principal_abre_e_fecha_o_menu(app_qt):
+    """O segundo clique no botão fecha o menu (antes o aperto fechava e o clique reabria)."""
+    from PySide6.QtCore import QPointF  # noqa: PLC0415
+    from PySide6.QtTest import QTest  # noqa: PLC0415
+
+    app = _App(_tres())
+    botao, menu = app.achar("botaoMenu"), app.achar("menuPrincipal")
+    centro = botao.mapToScene(QPointF(botao.width() / 2, botao.height() / 2)).toPoint()
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, pos=centro)
+    assert _esperar(lambda: menu.property("opened") is True)
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, pos=centro)
+    assert _esperar(lambda: menu.property("visible") is False)
+    app.fechar()
+
+
 def test_voltar_com_o_menu_principal_aberto_nao_volta_de_pagina(app_qt):
     """m2: a tecla Voltar é do menu aberto; Alt+← o fecha ao voltar, e ele não fica sobre a outra página."""
     from PySide6.QtTest import QTest  # noqa: PLC0415

@@ -46,7 +46,7 @@ from PySide6.QtQuick import QQuickItem, QQuickWindow
 
 # Liga o log detalhado por padrão. A variável de ambiente CARTRIDGES_LOG_DETALHADO
 # ("1" ou "0") vence esta constante.
-ATIVO = True
+ATIVO = False
 
 _VARIAVEL = "CARTRIDGES_LOG_DETALHADO"
 _LIMITE = 500

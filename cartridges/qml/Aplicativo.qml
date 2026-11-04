@@ -173,11 +173,12 @@ Principal {
             visible: janela.paginaAtual === "todos"
             icone: "list-add"
             dica: "Adicionar jogo"
-            onClicked: menuDeAdicionar.open()
+            onClicked: menuDeAdicionar.opened ? menuDeAdicionar.close() : menuDeAdicionar.open()
             menuAberto: menuDeAdicionar.opened
             MenuDoTema {
                 id: menuDeAdicionar
                 objectName: "menuDeAdicionar"
+                fechamento: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
                 y: janela.baseDaBarra(parent)
                 // A seta aponta o centro do botão (34 de largura), com o menu alinhado à esquerda dele.
                 setaEm: parent.width / 2
@@ -212,11 +213,13 @@ Principal {
             visible: janela.paginaAtual === "todos" || janela.paginaAtual === "zerados"
             icone: "open-menu"
             dica: "Menu principal"
-            onClicked: menuPrincipal.open()
+            onClicked: menuPrincipal.opened ? menuPrincipal.close() : menuPrincipal.open()
             menuAberto: menuPrincipal.opened
             MenuPrincipal {
                 id: menuPrincipal
                 objectName: "menuPrincipal"
+                // Apertar o botão não fecha: o clique dele fecha (abre e fecha no mesmo botão).
+                fechamento: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
                 servicoDoSobre: janela.servicoDoSobre
                 y: janela.baseDaBarra(parent)
                 x: parent.width - width

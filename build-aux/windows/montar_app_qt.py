@@ -300,6 +300,8 @@ def compilar_lancador(cache: Path, raiz: Path = RAIZ) -> Path:
         sys.exit("Não achei o Visual Studio 2022 (vswhere).")
     roteiro.write_text(
         "@echo off\r\n"
+        # O vcvars chama o vswhere pelo nome; sem a pasta dele no PATH, avisa que não o achou (e segue).
+        f'set "PATH={Path(pf86) / "Microsoft Visual Studio" / "Installer"};%PATH%"\r\n'
         f'call "{vs}\\VC\\Auxiliary\\Build\\vcvars64.bat" -vcvars_ver=14.44 >nul || exit /b 1\r\n'
         f'rc /nologo /DVERSAO={versao} /DVERSAO_NUM={versao.replace(".", ",")},0 /fo cartridges.res "{fonte}\\cartridges.rc" || exit /b 1\r\n'
         f'cl /nologo /O2 /MT /utf-8 /W3 "{fonte}\\cartridges.c" cartridges.res /Fe:Cartridges.exe '

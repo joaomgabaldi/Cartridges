@@ -31,9 +31,9 @@
     <release version="2.0.0" date="2026-11-01">
       <description translate="no">
         <ul>
-          <li>O aplicativo foi refeito por dentro e continua com o mesmo visual de antes.</li>
+          <li>O aplicativo está mais rápido e com melhor qualidade de imagem.</li>
+          <li>O aplicativo ganhou novas animações, mais suaves e naturais.</li>
           <li>A janela não tem mais a borda invisível que atrapalhava cliques e o encaixe nas laterais da tela.</li>
-          <li>A biblioteca, as preferências, o histórico de sessões e os backups continuam como estavam.</li>
         </ul>
       </description>
     </release>

@@ -584,10 +584,12 @@ Item {
                         objectName: "botaoStatus"
                         text: detalhes.rotuloDoStatus
                         dica: "Status deste jogo na biblioteca"
-                        onClicked: menuDeStatus.open()
+                        onClicked: menuDeStatus.opened ? menuDeStatus.close() : menuDeStatus.open()
                         MenuDoTema {
                             id: menuDeStatus
                             objectName: "menuDeStatus"
+                            // Apertar o botão não fecha: o clique dele fecha (abre e fecha no mesmo botão).
+                            fechamento: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
                             x: (parent.width - width) / 2
                             y: parent.height + 6
                             setaEm: width / 2
@@ -755,10 +757,11 @@ Item {
                             icone: "system-search"
                             dica: "Buscar"
                             dicaAtiva: hovered && !menuDeBuscas.opened
-                            onClicked: menuDeBuscas.open()
+                            onClicked: menuDeBuscas.opened ? menuDeBuscas.close() : menuDeBuscas.open()
                             MenuDoTema {
                                 id: menuDeBuscas
                                 objectName: "menuDeBuscas"
+                                fechamento: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
                                 x: (parent.width - width) / 2
                                 y: parent.height + 6
                                 setaEm: width / 2

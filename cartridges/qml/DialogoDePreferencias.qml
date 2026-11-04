@@ -225,7 +225,9 @@ MolduraDoDialogo {
                 contentHeight: !dialogo.buscando ? paginas.implicitHeight + 48
                     : dialogo.resultados.length > 0 ? resultadosDaBusca.implicitHeight + 48 : height
                 boundsBehavior: Flickable.StopAtBounds
-                RolagemDaRoda { alvo: rolagem }
+                // A mola da biblioteca, a pedido do usuário (04/11); sem animações, o passo do `ScrolledWindow` (V3).
+                RolagemPorMola { objectName: "molaDasPreferencias"; alvo: rolagem; ativa: Tema.animacoes }
+                RolagemDaRoda { alvo: rolagem; ativa: !Tema.animacoes }
                 clip: true
                 ScrollBar.vertical: BarraDeRolagem {}
 

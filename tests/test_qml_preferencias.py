@@ -1395,8 +1395,20 @@ def test_a_roda_nas_preferencias_anda_o_passo_do_gtk(app):
     centro = rolagem.mapToScene(QPointF(rolagem.width() / 2, rolagem.height() / 2))
     QCoreApplication.sendEvent(app.janela, QWheelEvent(centro, centro, QPoint(0, 0), QPoint(0, -120), Qt.MouseButton.NoButton,
                                                        Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False))
-    QTest.qWait(30)
+    mola = app.achar("molaDasPreferencias")
+    if mola.property("ativa"):  # com animações, a mola da biblioteca: 120 px por entalhe, assentando no destino
+        esperado = mola.property("passo")
+        assert _esperar(lambda: not mola.property("correndo"), limite=5.0)
+    else:
+        QTest.qWait(30)
     assert abs(rolagem.property("contentY") - esperado) < 1
+    # A mola move a rolagem das Preferências e assenta no destino (os testes rodam sem animações, então chamada direta).
+    from PySide6.QtCore import Q_ARG  # noqa: PLC0415
+
+    antes = rolagem.property("contentY")
+    QMetaObject.invokeMethod(mola, "empurrar", Qt.ConnectionType.DirectConnection, Q_ARG("QVariant", 1))
+    assert _esperar(lambda: not mola.property("correndo"), limite=5.0)
+    assert abs(rolagem.property("contentY") - (antes + 120)) <= 0.5
 
 
 def test_o_primeiro_tab_vai_a_primeira_linha_habilitada_da_pagina(app):
