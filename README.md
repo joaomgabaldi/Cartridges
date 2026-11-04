@@ -6,7 +6,7 @@
   Seus jogos em um só lugar — launcher de jogos para Windows, em Qt (PySide6)
 </div>
 
-O Kyron se chamava Cartridges até a versão 2.0.0.
+Até a versão 2026.11.04, o Kyron se chamava Cartridges.
 
 Este é um fork da versão para Windows do [Cartridges](https://codeberg.org/kramo/cartridges), o launcher
 criado por kramo para o GNOME. O projeto original (abandonado) reúne jogos de vários launchers do Linux; esta
