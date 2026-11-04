@@ -1,9 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// Linha de texto: o título é o rótulo dentro do campo, que encolhe ao focar ou preencher; lápis à direita enquanto não
-// edita, os botões que a linha receber (`acessorios`) e o contorno de destaque com o foco. O texto vai sempre em
-// PlainText.
 LinhaDoGrupo {
     id: linha
 
@@ -49,7 +46,7 @@ LinhaDoGrupo {
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: 9 }
             focus: true
             padding: 0
-            // O estilo Basic soma 4 ao recuo da esquerda (`padding + 4`): o texto saía 4 px à direita do rótulo.
+            // O estilo Basic soma 4 ao recuo da esquerda: o texto saía 4 px à direita do rótulo.
             leftPadding: 0
             rightPadding: 0
             selectByMouse: true

@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// Linha ativável: título, subtítulo e, à direita, um ícone ou o rótulo de um botão. A linha inteira aciona. Os textos vão
-// em PlainText: o subtítulo pode ser um caminho.
 LinhaDoGrupo {
     id: linha
 
@@ -12,7 +10,6 @@ LinhaDoGrupo {
     property string rotuloSecundario
     property bool secundarioAtivo: true
 
-    // O botão da linha inteira: quem hospeda a linha leva o foco até ele.
     property alias botaoDaLinha: botao
 
     signal acionada()
@@ -45,7 +42,6 @@ LinhaDoGrupo {
         id: ladoDireito
         anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
         spacing: 12
-        // Acima do botão da linha inteira (fica depois dele na ordem de pintura).
         Botao {
             id: botaoSecundario
             objectName: linha.objectName + "BotaoSecundario"
@@ -60,7 +56,7 @@ LinhaDoGrupo {
             visible: linha.icone !== ""
             nome: linha.icone
         }
-        // Só o desenho do botão: a linha inteira é o controle (foco, Enter e clique), então não há segunda parada de Tab.
+        // Só o desenho do botão: a linha inteira é o controle, então não há segunda parada de Tab.
         Rectangle {
             objectName: linha.objectName + "Rotulo"
             anchors.verticalCenter: parent.verticalCenter

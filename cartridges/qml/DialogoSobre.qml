@@ -6,20 +6,15 @@ import QtCore
 import QtQuick.Dialogs
 import QtQuick.Effects
 
-// As páginas do diálogo "Sobre", numa `MolduraDoDialogo`. Só desenha: os textos, a página à vista e as ações são do
-// `modelo` (o `Sobre`, cartridges/modelos/sobre.py). Na principal o cabeçalho não tem título (o nome surge ao rolar); nas
-// subpáginas, a seta de voltar e o título da página. Texto de terceiros (o log) em PlainText; a licença é a única em
-// StyledText, e só o link dela é aberto. Esc volta uma página e, na principal, fecha. Alt+letra abre a linha ou aciona o
-// botão.
+// As páginas do "Sobre", numa `MolduraDoDialogo`; só desenha, o estado é do `modelo` (cartridges/modelos/sobre.py). Texto
+// de terceiros (o log) em PlainText; a licença é a única em StyledText, e só o link dela é aberto.
 MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoSobre"
 
     property QtObject modelo
     readonly property string pagina: modelo ? modelo.pagina : "principal"
-    // A página de onde se veio, para o foco voltar à linha dela.
     property string paginaAnterior: "principal"
-    // Há um alerta por cima: os atalhos Alt do Sobre ficam quietos.
     property bool avisoAberto: false
     readonly property var linhas: ({ novidades: linhaNovidades, creditos: linhaCreditos, legal: linhaLegal,
                                      problemas: linhaProblemas, depuracao: linhaDepuracao })
@@ -36,7 +31,6 @@ MolduraDoDialogo {
         var de = paginaAnterior
         paginaAnterior = pagina
         rolagem.contentY = 0
-        // O anel só aparece se o teclado já estava em uso: com o mouse, sem anel.
         var foco = Window.window ? Window.window.activeFocusItem : null
         var teclado = pedidoPorTeclado || (!!foco && foco.visualFocus === true)
         Qt.callLater(() => dialogo.focar(de, teclado))
@@ -56,7 +50,6 @@ MolduraDoDialogo {
         onActivated: { dialogo.pedidoPorTeclado = true; dialogo.modelo.voltar(); dialogo.pedidoPorTeclado = false }
     }
 
-    // Criado só ao clicar: o seletor nativo não precisa existir antes.
     Loader {
         id: cargaDoSalvar
         active: false
@@ -70,8 +63,6 @@ MolduraDoDialogo {
         onLoaded: item.open()
     }
 
-    // Uma linha da página principal; Alt+`mnemonico` a abre. O mnemônico é a primeira letra do título e aparece
-    // sublinhado enquanto o Alt está seguro.
     component LinhaDoSobre: LinhaDeAcao {
         id: linha
         property string destino
@@ -84,7 +75,6 @@ MolduraDoDialogo {
         Text {
             objectName: linha.objectName + "Rotulo"
             anchors { left: parent.left; leftMargin: 14; right: parent.right; rightMargin: 14 + 16 + 12; verticalCenter: parent.verticalCenter; verticalCenterOffset: linha._separador / 2 }
-            // O título vem do modelo (texto do app); o StyledText só serve ao sublinhado.
             text: dialogo.altSegurado ? "<u>" + linha.titulo.charAt(0) + "</u>" + linha.titulo.slice(1) : linha.titulo
             textFormat: dialogo.altSegurado ? Text.StyledText : Text.PlainText
             elide: Text.ElideRight
@@ -146,7 +136,6 @@ MolduraDoDialogo {
         Item {
             id: corpo
             width: rolagem.width
-            // O cartão não encolhe nas subpáginas: guarda a altura da principal, medida à vista.
             property real alturaDaPrincipal: 0
             implicitHeight: Math.max(alturaDaPrincipal, principal.visible ? principal.implicitHeight : 0, novidades.visible ? novidades.implicitHeight : 0,
                 creditos.visible ? creditos.implicitHeight : 0, legal.visible ? legal.implicitHeight : 0,
@@ -174,7 +163,7 @@ MolduraDoDialogo {
                     layer.effect: MultiEffect {
                         shadowEnabled: true
                         shadowColor: Qt.rgba(0, 0, 6 / 255, 0.05)
-                        blurMax: 12  // o padrão (32) borrava demais
+                        blurMax: 12
                         shadowBlur: 1.0
                         shadowVerticalOffset: 1
                     }
@@ -230,7 +219,6 @@ MolduraDoDialogo {
                     }
                     background: Rectangle {
                         radius: height / 2
-                        // O fundo é derivado de `currentColor`, que aqui é o destaque: 10%, 15% e 30%.
                         color: Qt.alpha(Tema.destaqueTexto, botaoDaVersao.down ? 0.30 : botaoDaVersao.hovered ? 0.15 : 0.10)
                         AnelDeFoco { ativo: botaoDaVersao.visualFocus; raio: parent.radius; afastamento: 1 }
                     }
@@ -240,7 +228,7 @@ MolduraDoDialogo {
                     Layout.topMargin: 18
                     Layout.bottomMargin: 18
                     spacing: 18
-                    // `visible` explícito em todos: criado com o diálogo escondido, o grupo mediria zero para sempre (armadilha 19).
+                    // `visible` explícito em todos: criado com o diálogo escondido, o grupo mediria zero para sempre.
                     GrupoDeLinhas {
                         Layout.fillWidth: true
                         visible: linhaNovidades.aparece

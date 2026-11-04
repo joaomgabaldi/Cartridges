@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// "Jogos sem atalho": a lista dos jogos restaurados cujo atalho não foi achado, com "Escolher atalho…" e "Excluir" em
-// cada um. Só desenha: a lista e as ações são do `restauracao`. Esc vale "Lembrar mais tarde".
+// "Jogos sem atalho": os jogos restaurados cujo atalho não foi achado; só desenha, a lista e as ações são do
+// `restauracao`.
 ModalDaRestauracao {
     id: dialogo
     objectName: "dialogoDosPendentes"
@@ -47,14 +47,12 @@ ModalDaRestauracao {
         objectName: "listaDosPendentes"
         width: parent.width
         height: Math.min(grupo.implicitHeight, 420)
-        // Travada enquanto a importação de uma escolha de atalho roda.
         enabled: !restauracao.listaTravada
         contentHeight: grupo.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         RolagemDaRoda { alvo: lista }
         ScrollBar.vertical: BarraDeRolagem {}
-        // O Tab leva o foco a uma linha fora da vista: a lista rola até ela.
         Connections {
             target: lista.Window.window
             function onActiveFocusItemChanged() {

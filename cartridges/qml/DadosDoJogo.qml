@@ -1,7 +1,6 @@
 import QtQuick
 
-// "Dados do jogo": o conflito entre o backup e os dados locais do mesmo jogo. Dois cartões, "Backup" e "Este PC", e a
-// escolha de qual manter ou mesclar. Só desenha: os números e a decisão são do `restauracao`. Esc fecha sem decidir.
+// "Dados do jogo": o conflito entre o backup e os dados locais do mesmo jogo; só desenha, a decisão é do `restauracao`.
 ModalDaRestauracao {
     id: dialogo
     objectName: "dialogoDosDadosDoJogo"
@@ -29,10 +28,10 @@ ModalDaRestauracao {
     component Cartao: Rectangle {
         id: cartao
         property string rotulo
-        property string objeto  // "Backup" ou "EstePc"
+        property string objeto
         property string icone
         property var dados: ({})
-        width: (parent.width - 24 - 2 * parent.spacing) / 2  // 24: o aviso entre os dois
+        width: (parent.width - 24 - 2 * parent.spacing) / 2
         height: dentro.implicitHeight + 28
         radius: 12
         color: Tema.cartao
@@ -85,7 +84,6 @@ ModalDaRestauracao {
             width: 24
             height: 24
             anchors.verticalCenter: parent.verticalCenter
-            // A cor de aviso do tema, e não um amarelo fixo.
             Icone { anchors.centerIn: parent; nome: "dialog-warning"; cor: Tema.avisoIcone }
         }
         Cartao { rotulo: "Este PC"; objeto: "EstePc"; icone: "computer"; dados: restauracao.conflito.estePc || ({}) }

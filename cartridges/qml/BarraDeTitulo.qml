@@ -1,18 +1,16 @@
 import QtQuick
 
-// Barra de título própria, com os botões de sistema que o QWindowKit liga ao Windows (snap layouts no maximizar, hit-test
-// de borda). `janela` e `agente` vêm de Principal.qml. `sombra` liga a linha de baixo quando o conteúdo está rolado.
-// Desabilitada (`enabled: false`), o QWindowKit a trata como se não existisse: nem arrasto, nem botões do sistema
-// (`isInTitleBarDraggableArea` e `isInSystemButtons` conferem o `isEnabled`). É assim que um modal a tranca.
+// Barra de título própria, com os botões de sistema que o QWindowKit liga ao Windows. `janela` e `agente` vêm de
+// Principal.qml.
+// Desabilitada, o QWindowKit a trata como inexistente (`isInTitleBarDraggableArea` e `isInSystemButtons` conferem o
+// `isEnabled`): é assim que um modal a tranca.
 Rectangle {
     id: barra
 
     required property Window janela
-    // O WindowAgent; nulo nos testes, que rodam sem a ponte do QWindowKit.
     property QtObject agente
     property string titulo: ""
     property bool sombra: false
-    // Sem fundo: a página de trás (os detalhes do jogo) passa por baixo.
     property bool transparente: false
     property bool comMaximizar: true
     property bool comFechar: true
@@ -46,7 +44,6 @@ Rectangle {
         Text {
             anchors { centerIn: parent; verticalCenterOffset: -1.5 }
             objectName: "tituloDaBarraTexto"
-            // O nome do jogo é texto de terceiros e pode ser longo; deixa folga para os botões dos dois lados.
             width: Math.min(implicitWidth, Math.max(0, parent.width - 2 * Math.max(areaDoInicio.width + 12, areaDoFim.width + sistema.width + 12)))
             elide: Text.ElideRight
             text: barra.titulo

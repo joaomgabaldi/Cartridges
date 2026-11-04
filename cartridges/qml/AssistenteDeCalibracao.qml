@@ -2,10 +2,8 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// "Calibrar as cores", por cima das Preferências: mostra a cor de referência de cada etapa, acende o dispositivo nela e
-// oferece os controles até os dois ficarem iguais. Só desenha: o estado vem do `assistente`
-// (cartridges/calibracao_janela.py), que existe só enquanto a janela está aberta; as Preferências o ligam ao
-// `preferencias.calibracao`. Esc cancela; o foco volta a quem o abriu.
+// "Calibrar as cores", por cima das Preferências; só desenha, o estado vem do `assistente`
+// (cartridges/calibracao_janela.py).
 MolduraDoDialogo {
     id: dialogo
     objectName: "assistenteDeCalibracao"
@@ -30,7 +28,6 @@ MolduraDoDialogo {
         else if (pagina === "teste") botaoPausar.forceActiveFocus(Qt.TabFocusReason)
     }
     onPaginaChanged: Qt.callLater(focarPagina)
-    // Depois do foco inicial da moldura, que também é adiado.
     onAbertoChanged: if (aberto) Qt.callLater(() => Qt.callLater(focarPagina))
 
     component Pagina: ColumnLayout {
@@ -255,8 +252,8 @@ MolduraDoDialogo {
                 color: Tema.texto
                 font { family: Tema.fonte; pixelSize: Tema.corpo }
             }
-            // Criada com o diálogo já à vista: o cartão some enquanto a altura é zero, e um `Column` não conta as linhas
-            // que nascem sob um pai escondido (a altura nunca sairia de zero).
+            // Criada com o diálogo já à vista: um `Column` não conta linhas que nascem sob um pai escondido (a altura
+            // nunca sairia de zero).
             Loader {
                 id: cargaDaLista
                 Layout.fillWidth: true

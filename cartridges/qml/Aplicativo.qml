@@ -3,24 +3,17 @@ import QtQuick.Controls.Basic
 import QtQuick.Shapes
 
 // A janela do app: as páginas da biblioteca, os botões da barra e as camadas de aviso e confirmação.
-// `paginaTodos`, `paginaZerados`, `filtros`, `aplicativo` e `ponte` vêm do contexto (cartridges/app.py).
 Principal {
     id: janela
 
-    // Lido aqui, fora dos Avisos, porque lá o nome da propriedade é o mesmo.
+    // Lido aqui e não nos Avisos: lá o nome da propriedade é o mesmo.
     readonly property QtObject ligacao: ponte
-    // O AppUpdater, pelo mesmo motivo; sem ele no contexto (os testes dos outros diálogos) a camada fica sem o diálogo da
-    // versão.
     readonly property QtObject servicoDeAtualizacao: typeof atualizador === "undefined" ? null : atualizador
-    // O "Sobre", pelo mesmo motivo; sem ele no contexto o item do menu some e nenhum diálogo existe.
     readonly property QtObject servicoDoSobre: typeof sobre === "undefined" ? null : sobre
     readonly property bool sobreAberto: servicoDoSobre !== null && servicoDoSobre.aberto
-    // O "Adicionar a Jogos Zerados", pelo mesmo motivo; sem ele no contexto o botão "+" some e nenhum modal existe.
     readonly property QtObject servicoDeZerados: typeof zeradosManuais === "undefined" ? null : zeradosManuais
     readonly property bool zeradosAberto: servicoDeZerados !== null && servicoDeZerados.aberto
-    // As Novidades, pelo mesmo motivo; sem elas no contexto (os arneses que não as registram) o botão fica oculto.
     readonly property QtObject servicoDeNovidades: typeof novidades === "undefined" ? null : novidades
-    // "todos", "zerados", "novidades" ou "jogo" (a página de detalhes, por cima de uma das duas).
     readonly property string paginaAtual: pilha.depth === 0 ? "todos"
         : (pilha.currentItem && pilha.currentItem.objectName === "paginaDoJogo" ? "jogo"
         : (pilha.currentItem && pilha.currentItem.objectName === "paginaDasNovidades" ? "novidades" : "zerados"))
@@ -30,8 +23,6 @@ Principal {
         if (paginaAtual === "jogo") return
         if (detalhes.mostrar(jogoId)) empurrar(paginaDoJogo, { anotarAoEntrar: anotar })
     }
-    // Fecha a página de detalhes, ou sai de Jogos Zerados; o foco volta ao cartão de onde se saiu. Pelo teclado, o cartão
-    // de volta acende o anel.
     function voltarPeloTeclado() {
         const abaixo = pilha.depth > 1 ? pilha.get(pilha.depth - 2) : todos
         if (abaixo && abaixo.marcarTeclado) abaixo.marcarTeclado()
@@ -43,10 +34,9 @@ Principal {
         else if (paginaAtual !== "todos") sairDaPilha()
     }
 
-    // O `StackView` não anima o primeiro `push` numa pilha vazia nem o `clear` que a esvazia (a página de baixo, "Todos
-    // os jogos", fica fora dela): o deslize e a sombra da transição dessas duas passagens são feitos aqui, à mão.
+    // O `StackView` não anima o primeiro `push` numa pilha vazia nem o `clear` que a esvazia: o deslize e a sombra dessas
+    // passagens são à mão.
     property bool _saindoDaPilha: false
-    // Esvaziar a pilha de uma página de detalhes esquece o jogo; com a saída animada, isso fica para depois do deslize.
     property bool _esquecerAoSair: false
     function _terminarSaida() {
         deslizeDaPagina.stop()
@@ -57,7 +47,7 @@ Principal {
         pilha.clear(StackView.Immediate)
     }
     function empurrar(componente, propriedades) {
-        // Um push durante a saída animada: a saída termina na hora, senão o `onFinished` apagaria a página nova.
+        // Um push durante a saída animada termina a saída na hora, senão o `onFinished` apagaria a página nova.
         if (_saindoDaPilha) _terminarSaida()
         _empurrando = true
         const vazia = pilha.depth === 0
@@ -84,7 +74,6 @@ Principal {
         _saindoDaPilha = true
         _esquecerAoSair = jogo
         deslizeDaPagina.target = pilha.currentItem
-        // De onde a página está: com ela ainda entrando, não salta para x=0 antes de sair.
         deslizeDaPagina.from = pilha.currentItem.x
         deslizeDaPagina.to = pilha.width
         avancoDaPilha.from = pilha.avanco
@@ -95,17 +84,16 @@ Principal {
     NumberAnimation {
         id: deslizeDaPagina
         property: "x"
-        duration: 210  // a mola da versão anterior (GTK) acabava em cerca de 215 ms
+        duration: 210
         easing.type: Easing.OutCubic
         onFinished: if (janela._saindoDaPilha) janela._terminarSaida()
     }
     NumberAnimation { id: avancoDaPilha; target: pilha; property: "avanco"; duration: 210; easing.type: Easing.OutCubic }
 
-    // O `y` de um menu aberto por um botão da barra: abaixo dos 47 px dela, fora da área de arrasto do QWindowKit.
+    // O menu da barra abre abaixo dos 47 px dela, fora da área de arrasto do QWindowKit.
     function baseDaBarra(botao) { return botao.height + (alturaDaBarra - botao.height) / 2 }
 
     telaCheia: bigPicture.visivel || sessao.emAndamento
-    // Com um diálogo na frente, a barra de título não arrasta nem aciona nada.
     barraTrancada: modalAberto
 
     tituloDaBarra: paginaAtual === "todos" ? "Todos os jogos" : paginaAtual === "zerados" ? "Jogos Zerados"
@@ -116,11 +104,8 @@ Principal {
 
     sombraDaBarra: !!paginaDoControle && paginaDoControle.rolado === true
     barraTransparente: paginaAtual === "jogo"
-    // O fundo da barra desliza com a página que entra e, na volta a Todos, com a que sai. O `avanco` da pilha acompanha o
-    // deslize; o `XAnimator` da página não atualiza o `x` no meio do caminho.
+    // O `XAnimator` da página não atualiza o `x` no meio do caminho: o `avanco` da pilha acompanha o deslize.
     readonly property real deslocamentoDoFundo: avancoDaPilha.running || pilha.busy ? Math.round(pilha.width * (1 - pilha.avanco)) : 0
-    // Na ida, a barra nova entra com a página e a de antes (`barraDeAntes`) fica onde a página ainda não chegou. A volta
-    // segue trocando a barra de uma vez.
     property bool _empurrando: false
     readonly property bool _barraCongelada: _empurrando && deslocamentoDoFundo > 0
     deslocamentoDaBarra: _barraCongelada ? deslocamentoDoFundo : 0
@@ -138,8 +123,6 @@ Principal {
         }
     ]
 
-    // Digitar com o foco num botão da barra abre a busca, e Esc volta de Jogos Zerados. Quem decide é a página à vista
-    // (`capturar`).
     function capturarNaPagina(event) {
         if (paginaDoControle && typeof paginaDoControle.capturar === "function" && paginaDoControle.capturar(event))
             event.accepted = true
@@ -148,8 +131,6 @@ Principal {
         Keys.onPressed: event => janela.capturarNaPagina(event)
     }
 
-    // Alt+←, a tecla Voltar do teclado e o botão Voltar do mouse voltam uma página, sem diálogo na frente e fora do Big
-    // Picture e da sessão.
     readonly property bool podeVoltarPorAtalho: paginaAtual !== "todos" && !modalAberto && !bigPicture.visivel
         && !sessao.emAndamento
     Shortcut {
@@ -213,7 +194,6 @@ Principal {
             MenuPrincipal {
                 id: menuPrincipal
                 objectName: "menuPrincipal"
-                // Apertar o botão não fecha: o clique dele fecha (abre e fecha no mesmo botão).
                 fechamento: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
                 servicoDoSobre: janela.servicoDoSobre
                 y: janela.baseDaBarra(parent)
@@ -287,8 +267,6 @@ Principal {
         objectName: "pilha"
         anchors { fill: parent; topMargin: janela.alturaDoTopo }
         visible: depth > 0
-        // A página nova desliza da direita e a de baixo recua um quarto da largura; ao voltar, o contrário (210 ms). O
-        // `avanco` (0 a 1) leva o escurecimento e a sombra da página de baixo, logo abaixo.
         property real avanco: 0
         pushEnter: Transition { ParallelAnimation {
             XAnimator { from: pilha.width; to: 0; duration: Tema.animacoes ? 210 : 0; easing.type: Easing.OutCubic }
@@ -303,8 +281,6 @@ Principal {
         enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto && !bigPicture.visivel && !sessao.emAndamento
     }
 
-    // A barra de antes, congelada no quadro anterior ao `push`, à esquerda da borda da página que entra; recua com a
-    // página de baixo. Fora do deslize, sem largura, a cópia acompanha a barra (`live`) para ter o quadro pronto.
     Item {
         objectName: "barraDeAntes"
         width: janela._barraCongelada ? janela.deslocamentoDoFundo : 0
@@ -322,8 +298,6 @@ Principal {
         }
     }
 
-    // A página de baixo escurece (20%) e a que entra projeta uma sombra (32 px) na borda esquerda. Na ida, cobre também a
-    // barra de antes.
     Item {
         objectName: "sombraDaTransicao"
         anchors { fill: parent; topMargin: janela._barraCongelada ? 0 : janela.alturaDoTopo }
@@ -348,7 +322,6 @@ Principal {
         PaginaDaBiblioteca {
             objectName: "paginaDeZerados"
             pagina: paginaZerados
-            // Coberta pelos detalhes, ela não anima capas.
             ativa: StackView.status !== StackView.Inactive && !bigPicture.visivel && !sessao.emAndamento
             onAbrirDetalhes: id => janela.abrirDetalhes(id)
             onEditar: id => edicao.abrir(id)
@@ -381,7 +354,6 @@ Principal {
         }
     }
 
-    // O jogo mostrado foi excluído, removido ou saiu dos Jogos Zerados: a página fecha.
     Connections {
         target: detalhes
         function onSair() { if (janela.paginaAtual === "jogo") janela.voltar() }
@@ -407,69 +379,53 @@ Principal {
         anchors.fill: parent
     }
 
-    // Abaixo da camada de avisos: o erro de uma validação aparece na frente do diálogo.
     DialogoDeEdicao {
         id: dialogoDeEdicao
-        // Fechado a partir de um menu, o foco não tem para onde voltar: vai à página à vista.
         onRetornoPerdido: janela.paginaDoControle.focarGrade()
     }
 
-    // O histórico de sessões, aberto pelo tempo de jogo da página de detalhes; abaixo da camada da sessão.
     DialogoDoHistorico {
         id: dialogoDoHistorico
     }
 
-    // A lista de conquistas, aberta pelo cartão da página de detalhes; abaixo da camada da sessão.
     DialogoDeConquistas {
         id: dialogoDeConquistas
     }
 
-    // As Preferências: por cima da edição (o erro do SteamGridDB a deixa aberta) e abaixo da camada da sessão.
     DialogoDePreferencias {
         id: dialogoDePreferencias
         avisoAberto: camadaDeAvisos.dialogoAberto
-        // Fechado a partir de um menu, o foco não tem para onde voltar: vai ao editor, se aberto, ou à página à vista.
         onRetornoPerdido: edicao.aberto ? dialogoDeEdicao.devolverFoco() : janela.paginaDoControle.focarGrade()
     }
 
-    // As versões guardadas dos saves, abertas pelo menu do jogo; acima das páginas e abaixo dos avisos.
     DialogoDeVersoes {
         id: dialogoDeVersoes
-        // Aberto pelo menu do jogo, que já fechou: o foco vai à página à vista.
         onRetornoPerdido: janela.paginaDoControle.focarGrade()
     }
 
-    // O "Sobre", aberto pelo menu principal; acima das páginas e abaixo dos avisos.
     DialogoSobre {
         id: dialogoSobre
         modelo: janela.servicoDoSobre
         avisoAberto: camadaDeAvisos.dialogoAberto
-        // Aberto pelo menu principal, que já fechou: o foco vai à página à vista.
         onRetornoPerdido: janela.paginaDoControle.focarGrade()
     }
 
-    // O "Adicionar a Jogos Zerados", aberto pelo "+" da página; acima das páginas e abaixo dos avisos.
     SeletorDeZerados {
         id: seletorDeZerados
         modelo: janela.servicoDeZerados
-        // Aberto pelo botão da barra, que ficou desabilitado: o foco vai à página à vista.
         onRetornoPerdido: janela.paginaDoControle.focarGrade()
     }
 
-    // A continuação da restauração de um backup: acima das páginas e abaixo dos avisos. A pasta de atalhos vem primeiro e
-    // os outros três se empilham sobre a lista dos jogos sem atalho, na ordem em que se abrem.
     DialogoDaPastaDeAtalhos {
         id: dialogoDaPasta
     }
     JanelaDosPendentes {
         id: janelaDosPendentes
-        // A lista de trás só volta a ouvir quando a escolha e o conflito saem.
         enabled: !restauracao.escolhaAberta && !restauracao.conflitoAberto
         onRetornoPerdido: janela.paginaDoControle.focarGrade()
     }
     EscolhaDoAtalho {
         id: escolhaDoAtalho
-        // A lista foi relida e quem abriu sumiu: o foco vai ao "Lembrar mais tarde", ou à página à vista.
         onRetornoPerdido: restauracao.pendentesAbertos ? janelaDosPendentes.focarInicial() : janela.paginaDoControle.focarGrade()
     }
     DadosDoJogo {
@@ -477,7 +433,6 @@ Principal {
         onRetornoPerdido: restauracao.pendentesAbertos ? janelaDosPendentes.focarInicial() : janela.paginaDoControle.focarGrade()
     }
 
-    // Por cima do diálogo de edição, que os abre; o foco volta ao botão que abriu cada um.
     SeletorDeImagens {
         id: seletorDeCapa
         objectName: "seletorDeCapa"
@@ -521,14 +476,12 @@ Principal {
         onRetornoPerdido: dialogoDeEdicao.devolverFoco()
     }
 
-    // Acima das páginas e abaixo dos avisos. A entrada e a saída são do `bigPicture` (Python).
     BigPicture {
         id: camadaDoBigPicture
         anchors.fill: parent
         visible: bigPicture.visivel
         animarPasso: bigPicture.animacoes
         sessaoEmAndamento: sessao.emAndamento
-        // Com a confirmação do comando na frente a camada não recebe teclas nem toques; ao fechar, retoma o foco.
         enabled: !camadaDeAvisos.dialogoAberto && !sessao.emAndamento
         onVisibleChanged: if (visible) forceActiveFocus()
         onEnabledChanged: if (enabled && visible) forceActiveFocus()
@@ -541,8 +494,6 @@ Principal {
         function onSaiu(jogoId) { todos.focarJogo(jogoId) }
     }
 
-    // Entrando no Big Picture (por exemplo ao conectar o controle) nenhum menu fica aberto por cima dele: com ou sem
-    // fila de entrada (a biblioteca vazia não tem fila), na passagem de `visivel` para verdadeiro.
     property bool _bigPictureVisto: false
     Connections {
         target: bigPicture
@@ -556,15 +507,12 @@ Principal {
         }
     }
 
-    // Acima do Big Picture e abaixo dos avisos.
     CamadaDaSessao {
         id: camadaDaSessao
         anchors.fill: parent
         visible: sessao.emAndamento
     }
 
-    // Com os saves em andamento, ou com a janela das tarefas aberta e alguma tarefa, a principal só some; o painel
-    // repassa o resto à sessão (a manual e o aviso de conquista na tela fecham o app).
     onClosing: (fechar) => fechar.accepted = painelDasTarefas.principalFechando()
 
     Loader {
@@ -576,8 +524,6 @@ Principal {
     Avisos {
         id: camadaDeAvisos
         objectName: "camadaDeAvisos"
-        // Acima de toda moldura (`z` 10): a pergunta da atualização e as confirmações abrem na frente das Preferências,
-        // da edição etc.
         z: 20
         onRetornoPerdido: janela.paginaDoControle.focarGrade()
         anchors.fill: parent
@@ -592,7 +538,8 @@ Principal {
         id: alvoDeSoltar
         objectName: "alvoDeSoltar"
         anchors.fill: parent
-        // A lista do `modalAberto`, à mão: ligado nele, a ordem dos bindings muda e o foco que volta das Preferências não acha o botão do menu.
+        // A lista do `modalAberto`, à mão: ligado nele, a ordem dos bindings muda e o foco que volta das Preferências não
+        // acha o botão do menu.
         enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto
             && !(janela.paginaDoControle && janela.paginaDoControle.dialogoAberto === true)
         onEntered: (arrasto) => arrasto.accepted = arrasto.hasUrls
@@ -706,8 +653,6 @@ Principal {
             if (p === raiz) return true
         return false
     }
-    // O que o direcional nunca altera: texto, número, deslizante e lista de escolha. O `SeletorDeCor` não tem vizinho na
-    // direção: as setas dele mudam a cor.
     function ehEditor(item) {
         return typeof item.cursorPosition === "number" || typeof item.stepSize === "number"
             || (item.popup !== undefined && typeof item.currentIndex === "number")
@@ -720,8 +665,8 @@ Principal {
             atual = atual.nextItemInFocusChain(true)
             if (!atual || atual === foco) break
             if (!atual.visible || !atual.enabled || !descende(atual, escopo)) continue
-            // O candidato tem de se cruzar com o foco no eixo perpendicular (a faixa vertical para ←/→, a horizontal para
-            // ↑/↓); sem isso o toque lateral saltaria para outra altura do diálogo.
+            // O candidato tem de se cruzar com o foco no eixo perpendicular, senão o toque lateral saltaria para outra
+            // altura do diálogo.
             var r = atual.mapToItem(null, 0, 0)
             var cruza = dx !== 0 ? r.y < r0.y + foco.height && r.y + atual.height > r0.y
                                  : r.x < r0.x + foco.width && r.x + atual.width > r0.x
@@ -762,8 +707,6 @@ Principal {
                 foco && typeof foco.currentIndex === "number" ? foco.currentIndex : -1,
                 foco && typeof foco.highlightedIndex === "number" ? foco.highlightedIndex : -1]
     }
-    // Um passo com diálogo ou menu na frente. Primeiro o vizinho geométrico; sem ele, a tecla de seta (menus, listas e
-    // grades andam por elas), exceto nos controles de valor, onde a seta mudaria o que está escolhido. Devolve se mexeu.
     function passoNosPopups(dx, dy) {
         var foco = janela.activeFocusItem
         var escopo = foco ? escopoDoFoco(foco) : null
@@ -785,13 +728,10 @@ Principal {
         return false
     }
 
-    // O Big Picture manda no controle desde o escuro da entrada até o fim da saída: a grade escondida não recebe nada.
     readonly property bool bigPictureNaFrente: bigPicture.visivel || bigPicture.ocupada
 
-    Binding { target: controle; property: "modoBigPicture"; value: bigPicture.visivel && !janela.popupAberto }  // com diálogo na frente vale a repetição da grade
+    Binding { target: controle; property: "modoBigPicture"; value: bigPicture.visivel && !janela.popupAberto }
 
-    // Com a camada da sessão à vista o controle não age por baixo dela: nem abre outro jogo, nem entra no Big Picture ao
-    // ser conectado. O `ModeloDaSessao` também suspende a leitura; isto vale mesmo sem ela.
     Connections {
         target: controle
         enabled: !sessao.emAndamento
@@ -844,7 +784,6 @@ Principal {
         }
         function onAtivar() {
             if (janela.popupAberto) {
-                // Um campo de texto de várias linhas não ativa nada: o Return seria uma quebra de linha.
                 var foco = janela.activeFocusItem
                 if (!foco || typeof foco.lineCount !== "number") controle.teclar(Qt.Key_Return)
                 return
@@ -872,7 +811,6 @@ Principal {
         }
     }
 
-    // O ponteiro some enquanto o controle está em uso e volta quando o mouse anda mais de 1 px.
     HoverHandler {
         id: ponteiro
         cursorShape: janela.ponteiroEscondido ? Qt.BlankCursor : Qt.ArrowCursor

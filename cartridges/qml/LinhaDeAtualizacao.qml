@@ -2,9 +2,6 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Window
 
-// Uma linha de Preferências com título, subtítulo e, à direita, o botão "Atualizar". Enquanto o trabalho roda, o botão dá
-// lugar ao botão plano de parar (`podeParar`) ou ao girador. A barra de progresso fica fora da linha (um grupo abaixo do
-// cartão): quem usa a desenha. A linha apagada (`enabled: false`) apaga tudo.
 LinhaDoGrupo {
     id: linha
 
@@ -15,13 +12,12 @@ LinhaDoGrupo {
     signal acionada()
     signal parada()
 
-    // O foco acompanha a troca do botão: o "Atualizar" some ao começar (o foco ficaria num item invisível e o Esc
-    // deixaria de chegar ao diálogo). Vai ao "parar" ou, sem ele, à própria linha (que continua sob o diálogo); ao
-    // terminar, volta ao "Atualizar".
+    // O foco acompanha a troca do botão: o "Atualizar" some ao começar e o Esc deixaria de chegar ao diálogo; vai ao
+    // "parar" ou à própria linha.
     property bool _focoVeioDoBotao: false
-    property bool _focoNaLinha: false  // o foco já foi entregue ao "parar" (ou à linha)
+    property bool _focoNaLinha: false
     function _dentro(item) {
-        for (var p = item; p; p = p.parent) // `parent`: o `parentItem` do C++ não existe no QML
+        for (var p = item; p; p = p.parent)
             if (p === linha) return true
         return false
     }
@@ -41,7 +37,6 @@ LinhaDoGrupo {
             Qt.callLater(() => botao.forceActiveFocus(Qt.TabFocusReason))
         }
     }
-    // Se a pessoa levou o foco para outro lugar durante a atualização, ele fica onde ela o deixou.
     Connections {
         target: linha.Window.window
         function onActiveFocusItemChanged() {

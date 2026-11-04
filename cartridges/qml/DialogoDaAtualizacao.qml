@@ -1,11 +1,10 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// A pergunta da versão nova e o "Baixando atualização…", na camada dos avisos: acima das Preferências. `atualizador` é o
-// AppUpdater (cartridges/utils/app_updater.py). As notas vão em RichText porque o `notes_to_markup` as entrega só com
-// <b>, <tt> e <br> (o resto do texto da release é escapado); o corpo e os rótulos, em PlainText.
+// A pergunta da versão nova e o download, na camada dos avisos. As notas vão em RichText porque o `notes_to_markup` as
+// entrega só com <b>, <tt> e <br>; o resto é PlainText.
 // Atualizar destacado, mas não como padrão: a caixa aparece sem ser pedida, e um Enter perdido (digitando na busca) não
-// pode começar o download. O foco inicial fica em "Agora não"; Esc vale "Agora não" (e "Cancelar" no download).
+// pode começar o download.
 DialogoDeAlerta {
     id: dialogo
 
@@ -35,7 +34,6 @@ DialogoDeAlerta {
         if (resposta === "atualizar") atualizador.responder(true)
         else recusar()
     }
-    // Da pergunta ao download o diálogo segue aberto: o foco vai ao botão que sobrou.
     onBaixandoChanged: if (aberto) Qt.callLater(focarInicial)
 
     Flickable {

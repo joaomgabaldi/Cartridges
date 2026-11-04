@@ -1,8 +1,7 @@
 import QtQuick
 import Qt5Compat.GraphicalEffects
 
-// Uma capa e o seu reflexo, no espaço da capa (0,0 a largura,altura). O reflexo é filho da capa: herda a mesma
-// transformação 3D.
+// Uma capa e o seu reflexo, no espaço da capa; o reflexo é filho dela e herda a transformação 3D.
 Item {
     id: capa
     objectName: "capaDoBigPicture"
@@ -13,7 +12,7 @@ Item {
     required property real altura
     property real escala: 1
     property bool central: false
-    property url placeholder  // a imagem da capa que falta: a da grade
+    property url placeholder
     property bool animar: false
     property real opacidadeDoReflexo: 0.35
 
@@ -23,7 +22,6 @@ Item {
     Item {
         id: face
         anchors.fill: parent
-        // Sem capa, ou com a capa ilegível ou ainda carregando: o placeholder da biblioteca, que o reflexo copia junto.
         Image {
             objectName: "placeholderDaCapa"
             anchors.fill: parent
@@ -39,12 +37,10 @@ Item {
             anchors.fill: parent
             source: capa.jogo.capa
             asynchronous: true
-            fillMode: Image.Stretch  // esticada para 2:3, sem corte
+            fillMode: Image.Stretch
             sourceSize.height: Math.round(300 * capa.escala)
             mipmap: true
         }
-        // A central, na resolução dos detalhes (630 de altura); só quando pronta, sem piscar.
-        // Capa animada não ganha: toca a cópia da grade.
         Image {
             id: emAlta
             objectName: "capaEmAlta"
@@ -69,7 +65,6 @@ Item {
         }
     }
 
-    // O mipmap e a suavização da camada dão amostragem trilinear sob o giro.
     OpacityMask {
         objectName: "reflexo"
         y: capa.altura + 4

@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// Linha de botão: título em negrito, centralizado, em 40 de altura + 2 em cima e embaixo; `destrutivo` pinta de vermelho.
 LinhaDoGrupo {
     id: linha
 

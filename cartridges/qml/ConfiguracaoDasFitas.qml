@@ -2,9 +2,8 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// "Configurar a iluminação inteligente": o assistente que busca os dispositivos na conta da Tuya, por cima de quem o
-// hospeda. Só desenha: o estado é do `assistente` (um `FitaWizard`, cartridges/fita_wizard.py); as Preferências o ligam
-// ao `preferencias.configuracaoDasFitas`. Esc fecha; o foco volta a quem o abriu.
+// "Configurar a iluminação inteligente": busca os dispositivos na conta da Tuya; só desenha, o estado é do `assistente`
+// (cartridges/fita_wizard.py).
 MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoDaConfiguracaoDasFitas"
@@ -21,8 +20,7 @@ MolduraDoDialogo {
     nomeAcessivel: "Configurar a iluminação inteligente"
     onFecharPedido: if (assistente) assistente.fechar()
 
-    // O foco acompanha a página: o primeiro campo ao abrir, o botão ao voltar de uma busca, o "Aplicar" na lista. Na
-    // busca o foco fica no próprio diálogo, para o Esc seguir valendo.
+    // Na busca o foco fica no próprio diálogo, para o Esc seguir valendo.
     function focarPagina() {
         if (!aberto) return
         if (pagina === "credenciais") (paginaAnterior === "" ? campoDoId : botaoBuscar).forceActiveFocus(Qt.TabFocusReason)
@@ -89,7 +87,6 @@ MolduraDoDialogo {
                         }
                     }
 
-                    // Enter nos campos não faz nada.
                     LinhaDeTexto {
                         id: campoDoId
                         objectName: "campoDoAccessId"
@@ -120,7 +117,6 @@ MolduraDoDialogo {
                     }
                 }
 
-                // Uma busca sem resultado volta para cá, e não para a lista: lá o único botão é "Aplicar".
                 ColumnLayout {
                     width: parent.width
                     spacing: 12
@@ -158,14 +154,13 @@ MolduraDoDialogo {
                     titulo: "Selecione os dispositivos"
                     descricao: "Ao aplicar, somente os dispositivos marcados são mantidos. Desmarcar um dispositivo o remove."
 
-                    // Pela contagem, e não pela lista: marcar um dispositivo refaz a lista, e as linhas (com o
-                    // foco) têm de ficar onde estão.
+                    // Pela contagem, e não pela lista: marcar um dispositivo refaz a lista, e as linhas (com o foco) têm
+                    // de ficar onde estão.
                     Repeater {
                         model: dialogo.assistente ? dialogo.assistente.dispositivos.length : 0
                         LinhaDeAlternancia {
                             id: linhaDoDispositivo
                             required property int index
-                            // Ao refazer a lista a contagem pode andar um instante atrás: sem a linha, o vazio.
                             readonly property var dispositivo: dialogo.assistente && index < dialogo.assistente.dispositivos.length
                                 ? dialogo.assistente.dispositivos[index] : { id: "", nome: "", subtitulo: "", ativo: false, marcado: false }
                             objectName: "dispositivoDasFitas-" + dispositivo.id

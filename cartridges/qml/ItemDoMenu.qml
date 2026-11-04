@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O item de menu: 32 de altura, raio 9, marca à esquerda e seta do submenu à direita. `radio`: a marca é a bolinha, com
-// aro também desligada.
 MenuItem {
     id: item
 

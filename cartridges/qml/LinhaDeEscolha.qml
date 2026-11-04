@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// Linha de escolha: o valor e a seta soltos no fim da linha; a linha inteira abre o popover, com a marca no item
-// escolhido.
 LinhaDoGrupo {
     id: linha
 
@@ -27,9 +25,8 @@ LinhaDoGrupo {
         hoverEnabled: true
         Accessible.name: linha.titulo
         onActivated: indice => linha.escolhido(indice)
-        // O A do controle (e o Enter) abre a lista; fechada, o Qt não a abre com essa tecla.
-        // O soltar da mesma tecla é engolido: o `ComboBox` o leria como "escolher o realçado" e fecharia a lista que
-        // acabou de abrir.
+        // O A do controle (e o Enter) abre a lista, e o soltar da mesma tecla é engolido: o `ComboBox` o leria como
+        // "escolher o realçado" e a fecharia.
         property bool _abertaPelaTecla: false
         readonly property var _teclasDeAbrir: [Qt.Key_Return, Qt.Key_Enter]
         Keys.onPressed: event => {

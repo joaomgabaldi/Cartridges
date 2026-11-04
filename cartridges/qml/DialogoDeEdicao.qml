@@ -5,19 +5,14 @@ import QtQuick.Effects
 import QtQuick.Layouts
 import QtQuick.Window
 
-// O diálogo de editar um jogo e o de adicionar um novo. Só desenha: o que ele edita é o `edicao`
-// (cartridges/modelos/edicao.py) e a regra de validar e gravar é de cartridges/edicao.py. Modal para o mouse, o teclado e
-// o controle; o foco volta a quem o abriu.
+// O diálogo de editar e o de adicionar um jogo; só desenha, o estado é do `edicao` (cartridges/modelos/edicao.py).
 MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoDeEdicao"
 
-    // O último foco dentro do diálogo (para o devolver depois de um erro).
     property Item ultimoFoco: null
     property bool avancadasAbertas: false
-    // O que o seletor de arquivo aberto escolhe: "executavel", "capa", "logo" ou "papel".
     property string alvoDoSeletor: "executavel"
-    // Com um seletor ou as Preferências por cima, nada daqui recebe o mouse nem o Tab.
     readonly property bool ativo: !preferencias.aberto && !edicao.seletorDeCapa.aberto && !edicao.seletorDeLogo.aberto
         && !edicao.seletorDePapelDeParede.aberto && !edicao.seletorDaSteam.aberto && !edicao.seletorDoLudusavi.aberto
 
@@ -54,10 +49,8 @@ MolduraDoDialogo {
         function onFocoDevolvido() { dialogo.devolverFoco() }
     }
 
-    // Criado só ao clicar: o seletor nativo não precisa existir antes. Um só serve aos quatro usos.
     function abrirSeletor(alvo) {
         alvoDoSeletor = alvo
-        // O `Loader` é síncrono: ao ativar, o `onLoaded` já abre o seletor.
         if (cargaDoSeletor.item) cargaDoSeletor.item.open(); else cargaDoSeletor.active = true
     }
     Loader {
@@ -78,8 +71,6 @@ MolduraDoDialogo {
         onLoaded: item.open()
     }
 
-    // Uma linha ativável com botões planos no fim: clicar na linha aciona o botão `ativavel`. Desabilitada, apaga a 50%
-    // como as outras linhas.
     component LinhaDeArte: LinhaDoGrupo {
         id: linhaDeArte
         default property alias botoes: lado.data
@@ -166,7 +157,7 @@ MolduraDoDialogo {
                     Item {
                         anchors.fill: parent
                         opacity: edicao.convertendoCapa ? 0 : 1
-                        enabled: !edicao.convertendoCapa  // somem, e não recebem clique nem Tab
+                        enabled: !edicao.convertendoCapa
                         Behavior on opacity { enabled: Tema.animacoes; NumberAnimation { duration: Tema.duracaoCurta } }
 
                         Sombra { camadas: Tema.sombraCartao; raio: 12 }
@@ -189,11 +180,11 @@ MolduraDoDialogo {
                             AnimatedImage {
                                 id: previa
                                 objectName: "previaDaCapa"
-                                // A URL que não se leu (arquivo quebrado): no lugar dela, o placeholder.
                                 property string ilegivel: ""
                                 anchors.fill: parent
                                 source: edicao.capa !== "" && edicao.capa !== ilegivel ? edicao.capa : paginaTodos.placeholder
-                                // Adiado: o `AnimatedImage` falha dentro da própria atribuição do `source`, que não se reavalia ali.
+                                // Adiado: o `AnimatedImage` falha dentro da própria atribuição do `source`, que não se
+                                // reavalia ali.
                                 onStatusChanged: if (status === Image.Error && source.toString() === edicao.capa) {
                                     const url = edicao.capa
                                     Qt.callLater(() => ilegivel = url)
@@ -298,9 +289,8 @@ MolduraDoDialogo {
                         onClicked: dialogo.abrirSeletor("papel")
                     }
                 }
-                // A cor que as fitas de LED vestem enquanto este jogo corre. Sem escolha, ela sai da capa; por isso o
-                // botão de voltar ao automático só aparece quando houve escolha. Cada movimento no seletor já acende as
-                // fitas (a prévia); o Aplicar é que grava.
+                // Sem escolha, a cor das fitas sai da capa; cada movimento no seletor já acende as fitas (prévia) e o
+                // Aplicar é que grava.
                 LinhaDeArte {
                     objectName: "linhaDaFita"
                     visible: !edicao.zerado
@@ -447,7 +437,6 @@ MolduraDoDialogo {
                 }
             }
 
-            // Um zerado não é mais lançado: sem a linha do executável nem a das atualizações.
             GrupoDeLinhas {
                 width: parent.width
                 visible: !edicao.zerado
@@ -565,7 +554,6 @@ MolduraDoDialogo {
                     Column {
                         id: avancadas
                         width: parent.width
-                        // O 1 px de cima: a primeira linha de dentro não é a primeira do cartão (nem arredonda em cima).
                         topPadding: 1
                         LinhaDeTexto {
                             id: campoAppid
@@ -575,7 +563,6 @@ MolduraDoDialogo {
                             inputMethodHints: Qt.ImhDigitsOnly
                             text: edicao.appid
                             onEditado: edicao.appid = text
-                            // Enter no AppID não aplica: só o executável e o nome do processo chamam o Aplicar.
                             BotaoDeLinha {
                                 objectName: "botaoBuscarAppid"
                                 enabled: edicao.nome.trim() !== ""

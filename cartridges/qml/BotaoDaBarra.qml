@@ -1,18 +1,14 @@
 import QtQuick
 import QtQuick.Window
 
-// Botão de ícone da barra de título: plano, 34x34, raio 9. `icone` é o nome em `data/icones`; `dica` é o tooltip.
 Botao {
     dicaSomeAoClicar: false
     id: botao
 
-    // O menu deste botão está aberto: a dica sairia por cima dele.
     property bool menuAberto: false
-    // Apagado e fora do foco, mas habilitado: um botão desabilitado não recebe hover e a dica (o porquê) não abriria.
+    // Habilitado, apenas apagado: um botão desabilitado não recebe hover e a dica (o porquê) não abriria.
     property bool indisponivel: false
-    // O ponto de "há novidade" no canto do ícone; nunca recebe o clique (o botão inteiro é o alvo).
     property bool selo: false
-    // O WindowAgent da Principal, depois do setup (nulo nos testes).
     readonly property QtObject agente: Window.window && Window.window.agentePronto ? Window.window.agente : null
 
     estilo: "plano"

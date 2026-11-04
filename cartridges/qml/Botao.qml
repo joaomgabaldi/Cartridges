@@ -1,9 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O botão do app. `estilo`: "normal", "plano", "sugestao", "destrutivo"; `pilula`, `circular`, `icone` (nome de
-// `data/icones`), `dica`. Altura 34, raio 9, texto em negrito; desabilitado a 50%. Enter e Espaço acionam; o foco do
-// teclado desenha o `AnelDeFoco`.
+// O botão do app. `estilo`: "normal", "plano", "sugestao", "destrutivo"; `pilula`, `circular`, `icone` (nome em
+// `data/icones`), `dica`.
 Button {
     id: botao
 
@@ -13,18 +12,13 @@ Button {
     property string icone
     property int tamanhoDoIcone: 16
     property string dica
-    // O mnemônico é a primeira letra: sublinhada enquanto o Alt está seguro (o texto é do app, nunca de terceiros).
     property bool sublinharPrimeira: false
-    // Corta o rótulo com reticências quando o botão é mais estreito que ele.
     property bool cortarRotulo: false
     property bool dicaAtiva: hovered
-    // O botão que abre diálogo esconde a dica ao clicar; quem abre balão desliga isto (`Dica.someAoClicar`).
     property bool dicaSomeAoClicar: true
-    // Sem o realce do ponteiro (o botão insensível, que ainda mostra a dica).
     property bool semRealce: false
     property real raio: pilula || circular ? height / 2 : 9
     property real afastamentoDoAnel: estilo === "plano" ? -2 : 1
-    // A cor do texto e do ícone; quem precisa de outra (o aviso, branco) a troca.
     property color corDoTexto: estilo === "sugestao" ? Tema.textoDoDestaque : estilo === "destrutivo" ? Tema.destrutivoTexto : Tema.texto
 
     readonly property bool _soIcone: text === "" && icone !== ""
@@ -48,8 +42,8 @@ Button {
     topPadding: 0
     bottomPadding: 0
 
-    // A largura do rótulo inteiro: com `cortarRotulo` o `Text` encolhe, e o `implicitWidth` do botão não pode encolher junto.
-    // Só nos botões que cortam o rótulo (um `TextMetrics` em todo botão apareceria entre os `Text` dos testes de formato).
+    // A largura do rótulo inteiro: com `cortarRotulo` o `Text` encolhe, e o `implicitWidth` do botão não pode encolher
+    // junto.
     Loader {
         id: medida
         active: botao.cortarRotulo

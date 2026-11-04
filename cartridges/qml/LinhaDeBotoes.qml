@@ -1,8 +1,5 @@
 import QtQuick
 
-// Linha com botões no fim. Sem `ativavel`, a linha não aciona nada: só os botões respondem (a "Pasta dos saves" e o
-// "Buscar atualizações"). Com ele, clicar na linha aciona esse botão, com hover de 4% e 8%; é o caso dos botões planos de
-// ícone das fitas.
 LinhaDoGrupo {
     id: linha
 

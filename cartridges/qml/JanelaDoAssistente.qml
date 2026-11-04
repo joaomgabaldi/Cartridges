@@ -4,10 +4,8 @@ import QtQuick.Dialogs
 import QtQuick.Effects
 import QtQuick.Window
 
-// O assistente da primeira abertura: janela própria com a barra do app (título, minimizar e fechar; 640x640 no total, o
-// conteúdo com 593), antes da biblioteca, num motor próprio. As oito telas num carrossel sem gesto, os pontos e o rodapé
-// "Voltar" | "Pular" "Continuar". Só desenha: o estado é do `assistente` (cartridges/assistente.py). Os modais por cima
-// (iluminação, logins, aviso) deixam o fundo `enabled: false`.
+// O assistente da primeira abertura: janela própria com a barra do app, num motor próprio, antes da biblioteca; só
+// desenha, o estado é do `assistente` (cartridges/assistente.py).
 Window {
     id: raiz
     objectName: "janelaDoAssistente"
@@ -17,7 +15,6 @@ Window {
     readonly property var modelo: assistente
     readonly property string paginaAtual: modelo.paginas[modelo.indice] || ""
     readonly property bool modalAberto: fitas.visible || loginEpic.visible || loginEa.visible || dialogo.visible
-    // Sem a marca `comAgente` (os testes), não há ponte do QWindowKit e a moldura é a nativa.
     readonly property bool semAgente: typeof comAgente === "undefined"
     readonly property QtObject agente: carga.item
     readonly property real topo: semAgente ? 0 : barra.altura
@@ -45,9 +42,8 @@ Window {
 
     onClosing: (fechar) => fechar.accepted = raiz.modelo.fecharNoX()
 
-    // O foco do teclado acompanha a tela: quem o tinha pode ter sumido (a tela saiu da vista, o rodapé escondeu, um modal
-    // fechou com o fundo desabilitado e o devolveu à janela). Aí ele vai ao primeiro controle da tela. O anel só aparece
-    // se o teclado já estava em uso: lembra se o último foco veio dele.
+    // O foco acompanha a tela: quem o tinha pode ter sumido; ele vai ao primeiro controle da tela, com anel só se o
+    // teclado já estava em uso.
     property bool _teclado: false
     onActiveFocusItemChanged: if (activeFocusItem && activeFocusItem !== contentItem) _teclado = activeFocusItem.visualFocus === true
 
@@ -81,7 +77,6 @@ Window {
         function onDialogoPedido(titulo, corpo) { dialogo.abrir(titulo, corpo, [], "") }
     }
 
-    // Criados só ao clicar: o seletor nativo não precisa existir antes.
     Loader {
         id: cargaDaPasta
         active: false
@@ -101,9 +96,6 @@ Window {
         onLoaded: item.open()
     }
 
-    // Uma tela: margem 36/12 e espaço 36 entre o ícone, o texto e o conteúdo; o título e a descrição a 12. `compacta` (a
-    // das conquistas): ícone de 96, título title-2, margem 24 e espaço 24. Com rolagem quando não cabe. Só a tela à vista
-    // fica habilitada: o Tab não alcança as outras.
     component Pagina: Flickable {
         id: pagina
         property string nome
@@ -153,7 +145,6 @@ Window {
                 opacity: Tema.opacidadeApagado
             }
             Column {
-                // 547 de largura para os textos numa janela de 640.
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: Math.min(547, parent.width)
                 spacing: 12
@@ -223,22 +214,19 @@ Window {
             property real _t: 0
             property int _para: 0
             readonly property real _w: Math.sqrt(500 / 0.5)
-            // Resposta ao degrau do oscilador crítico: 1 - (1 + wt)e^(-wt).
             on_TChanged: posicao = _de + (_para - _de) * (1 - (1 + _w * _t) * Math.exp(-_w * _t))
             property int _ultimo: -1
             Component.onCompleted: { _ultimo = raiz.modelo.indice; posicao = _ultimo }
             NumberAnimation {
                 id: relogioDoCarrossel; target: carrossel; property: "_t"; from: 0; to: 0.5; duration: 500
-                onFinished: carrossel.posicao = carrossel._para  // cai no índice exato, sem o resto da curva
+                onFinished: carrossel.posicao = carrossel._para
             }
             Connections {
                 target: raiz.modelo
                 function onIndiceChanged() {
-                    // O `alterado` do modelo dispara a cada ajuste: só uma troca de tela reinicia a animação.
                     if (raiz.modelo.indice === carrossel._ultimo) return
                     carrossel._ultimo = raiz.modelo.indice
                     relogioDoCarrossel.stop()
-                    // `animar` já foi relido pelo modelo a esta troca (`animarMudou`).
                     if (!raiz.modelo.animar) { carrossel.posicao = raiz.modelo.indice; return }
                     carrossel._de = carrossel.posicao
                     carrossel._para = raiz.modelo.indice
@@ -246,8 +234,6 @@ Window {
                 }
             }
 
-            // Sem gesto: só os botões trocam de tela. A troca é animada só com as animações do Windows ligadas, com mola
-            // de amortecimento crítico (massa 0,5, rigidez 500). A posição é em telas (`posicao`); os pontos a seguem.
             Row {
                 id: fileira
                 x: -carrossel.posicao * carrossel.width
@@ -315,8 +301,6 @@ Window {
                     descricao: "O SteamGridDB fornece capas e logos para os seus jogos. Para usá-lo, informe uma chave da API."
                     primeiro: linhaDaChaveSgdb
 
-                    // A capa de exemplo com o placeholder por cima, que desliza e revela a capa; no lugar do ícone. Anima
-                    // só com a tela à vista.
                     Item {
                         id: palco
                         objectName: "palcoDasCapas"
@@ -327,7 +311,6 @@ Window {
                         width: 120
                         height: 180
 
-                        // Raio 6 nas duas imagens (máscara; `clip` só corta em retângulo).
                         Item {
                             id: mascaraDaCapa
                             anchors.fill: parent
@@ -371,7 +354,6 @@ Window {
 
                     GrupoDePreferencias {
                         objectName: "grupoDaChaveSgdb"
-                        // O grupo fica 34 px mais longe da capa que os 12 do `Box`.
                         topPadding: 34
                         descricao: 'É necessária uma chave da API para usar o SteamGridDB. <a href="https://www.steamgriddb.com/profile/preferences/api">Obtenha aqui</a>.'
                         descricaoRica: true
@@ -522,7 +504,7 @@ Window {
             }
         }
 
-        // O rodapé é conteúdo da janela (a barra é a do app, com o QWindowKit): arrastar sobre os botões não move a janela.
+        // O rodapé é conteúdo da janela: arrastar sobre os botões não move a janela.
         Column {
             id: rodape
             objectName: "rodape"
@@ -610,7 +592,6 @@ Window {
         z: 10
     }
 
-    // O contorno de 1 px da janela sem moldura nativa.
     Rectangle {
         anchors.fill: parent
         z: 1000

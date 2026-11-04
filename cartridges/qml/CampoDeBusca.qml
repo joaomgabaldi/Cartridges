@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O campo de busca: 34 de altura, raio 9, lupa à esquerda e, com texto, o botão de limpar à direita, que limpa e mantém o
-// foco. `textEdited` também sai ao limpar.
 TextField {
     id: campo
 

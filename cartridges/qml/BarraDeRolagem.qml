@@ -1,14 +1,12 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// A barra de rolagem sobreposta: 3 px a 4 da borda; com o mouse em cima, 8 px a 8 da borda e fundo a 10%. Some 1 s depois
-// do último uso. Cursor a 20%, 40% ao passar e 60% pressionado.
 ScrollBar {
     id: barra
 
     readonly property bool ativa: hovered || pressed
     readonly property bool emPe: orientation === Qt.Vertical
-    property color cor: Tema.corBase  // a cor-base segue o tema; a tela da sessão (sempre escura) passa a sua
+    property color cor: Tema.corBase
     property bool acordada: false
 
     property real grossura: ativa ? 8 : 3

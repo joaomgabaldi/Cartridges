@@ -3,10 +3,8 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
 
-// As Preferências: cabeçalho de 47 (lupa, título, X), uma página por aba e a barra das abas no pé. A lupa troca o título
-// pelo campo de busca; com texto, os resultados vêm numa lista só, cada um com "Página → Grupo", e clicar num leva à
-// página e à linha. Só desenha: o estado é do `preferencias` (cartridges/modelos/preferencias.py). Modal para o mouse, o
-// teclado e o controle; o foco volta a quem o abriu.
+// As Preferências: cabeçalho com lupa, título e X, uma página por aba e a barra das abas no pé. Só desenha: o estado é do
+// `preferencias` (cartridges/modelos/preferencias.py).
 MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoDePreferencias"
@@ -26,7 +24,6 @@ MolduraDoDialogo {
     readonly property bool buscando: filtro !== ""
     property var resultados: []
     property bool avisoAberto: false
-    // O X do cabeçalho (o `objectName` dele é o da base, comum a todos os diálogos).
     readonly property Item botaoFechar: cabecalho.botaoFechar
 
     aberto: preferencias.aberto
@@ -45,8 +42,7 @@ MolduraDoDialogo {
         rolagem.contentY = 0
         filtro = ""
         buscaAtiva = false
-        // O foco começa no X: o primeiro Tab vai à primeira linha habilitada da página, e não pelas cinco abas, que ficam
-        // no fim da ordem do Tab.
+        // O foco começa no X: o primeiro Tab vai à primeira linha habilitada da página, e não pelas cinco abas.
         focoInicial = cabecalho.botaoFechar
     } else {
         confirmacaoDosMetadados.aberto = false
@@ -66,7 +62,7 @@ MolduraDoDialogo {
         repetidorDeAbas.itemAt(indice).forceActiveFocus(Qt.TabFocusReason)
     }
     function contem(pai, item) {
-        for (var p = item; p; p = p.parent) // `parent`: o `parentItem` do C++ não existe no QML
+        for (var p = item; p; p = p.parent)
             if (p === pai) return true
         return false
     }
@@ -81,8 +77,6 @@ MolduraDoDialogo {
         botaoDaLupa.forceActiveFocus(Qt.TabFocusReason)
     }
 
-    // As linhas das Preferências, na ordem das páginas, com a página e o grupo de cada uma. As filhas de um expansor (que
-    // não são `buscavel`) ficam de fora.
     function procurar() {
         var achados = []
         if (filtro === "") { resultados = achados; return }
@@ -127,7 +121,6 @@ MolduraDoDialogo {
         Qt.callLater(() => focarLinha(resultado.linha))
     }
 
-    // Uma preferência mudou com a busca aberta (uma linha pode ter aparecido ou sumido): refaz os resultados.
     Connections {
         target: preferencias
         function onAlterado() { if (dialogo.filtro !== "") Qt.callLater(dialogo.procurar) }
@@ -143,7 +136,7 @@ MolduraDoDialogo {
     }
 
     Shortcut {
-        sequences: [StandardKey.Find] // Ctrl+F e a tecla Find do padrão; `sequence` ligaria só a primeira (aviso do Qt)
+        sequences: [StandardKey.Find]  // Ctrl+F e a tecla Find; `sequence` ligaria só a primeira (aviso do Qt)
         enabled: dialogo.aberto && raiz.enabled && !dialogo.avisoAberto
         onActivated: dialogo.entrarNaBusca()
     }
@@ -155,7 +148,6 @@ MolduraDoDialogo {
         objectName: "cartaoDasPreferencias"
         Layout.fillWidth: true
         Layout.fillHeight: true
-        // Com o brilho por dispositivo, o assistente das fitas, a calibração, uma pergunta ou o login por cima, o Tab não volta para cá.
         enabled: preferencias.brilhoPorDispositivo === null && preferencias.configuracaoDasFitas === null
             && preferencias.calibracao === null && !loginEpic.aberto && !loginEa.aberto && !confirmacaoDosMetadados.aberto
 
@@ -213,7 +205,6 @@ MolduraDoDialogo {
                 contentHeight: !dialogo.buscando ? paginas.implicitHeight + 48
                     : dialogo.resultados.length > 0 ? resultadosDaBusca.implicitHeight + 48 : height
                 boundsBehavior: Flickable.StopAtBounds
-                // A mola da biblioteca; sem animações, o passo padrão.
                 RolagemPorMola { objectName: "molaDasPreferencias"; alvo: rolagem; ativa: Tema.animacoes }
                 RolagemDaRoda { alvo: rolagem; ativa: !Tema.animacoes }
                 clip: true
@@ -335,11 +326,9 @@ MolduraDoDialogo {
         }
     }
 
-    // Os diálogos internos e as janelas de login ficam acima do cartão (o `z` do aviso, dentro dele, é 100) e fora do layout:
-    // cada um cobre a janela inteira por conta própria, e o `Item` sem tamanho só os segura.
+    // Filhos diretos do cartão, não do layout: o `z` só ordena irmãos, e assim o véu e o cartão deles ficam acima do
+    // aviso (`z` 100) e do contorno (`z` 20).
     Item {
-        // Filho direto do cartão e não do layout: o `z` só ordena irmãos, e assim o véu e o cartão deles ficam acima do aviso
-        // (`z` 100) e do contorno do cartão (`z` 20).
         parent: dialogo.cartao
         z: 200
         width: 0

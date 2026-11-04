@@ -1,21 +1,17 @@
 import QtQuick
 
-// O aviso embaixo (um por vez, com botão opcional) e os diálogos que o domínio pede. Os textos vão sempre em PlainText:
-// nome de jogo e comando não são marcação.
+// O aviso embaixo e os diálogos que o domínio pede. Os textos vão em PlainText: nome de jogo e comando não são marcação.
 Item {
     id: camada
 
     property QtObject ponte
     property QtObject fila
     property QtObject app
-    // O AppUpdater (pergunta da versão nova e download); null onde não há atualizador (testes).
     property QtObject atualizador
-    // O aviso fica abaixo dos diálogos; as Preferências têm o delas.
     property Item lugarDoAviso: null
     signal retornoPerdido()
     readonly property bool dialogoAberto: confirmacao.aberto || dialogoDeErros.aberto || confirmacaoDoApp.aberto || dialogoDaAtualizacao.aberto
 
-    // A pilha dos diálogos: o último a abrir fica por cima.
     property int ordem: 10
     function subir(dialogo) { dialogo.z = ++ordem }
 
@@ -64,7 +60,6 @@ Item {
 
         Sombra { camadas: Tema.sombraAviso; raio: aviso.radius }
 
-        // O corpo do aviso não deixa o clique passar para a grade por baixo; com o mouse em cima, o tempo para.
         MouseArea { anchors.fill: parent; enabled: aviso.visible }
         HoverHandler {
             enabled: aviso.visible
@@ -121,8 +116,7 @@ Item {
         }
     }
 
-    // Barreira de segurança: Enter ou A logo ao abrir cancelam, nunca iniciam o comando; o foco começa em "Dispensar". O
-    // que tinha o foco antes (a camada do Big Picture, um cartão) o retoma.
+    // Barreira de segurança: Enter ou A logo ao abrir cancelam, nunca iniciam o comando; o foco começa em "Dispensar".
     DialogoDeAlerta {
         id: confirmacao
         objectName: "confirmacaoDoComando"
@@ -141,7 +135,6 @@ Item {
         onSecundario: camada.app.dialogoFechado(true)
     }
 
-    // Esc e o X valem "não".
     DialogoDeConfirmacao {
         id: confirmacaoDoApp
         objectName: "confirmacaoDoApp"

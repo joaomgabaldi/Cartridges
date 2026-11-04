@@ -1,9 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// "Restaurar save": uma linha por versão guardada dos saves do jogo, da mais recente à mais antiga. Só desenha: o estado
-// é do `saves` (cartridges/modelos/saves.py); escolher uma linha pede a confirmação do app. Esc fecha e o foco volta ao
-// cartão que abriu o menu.
+// "Restaurar save": uma linha por versão guardada dos saves do jogo; só desenha, o estado é do `saves`
+// (cartridges/modelos/saves.py).
 ModalDaRestauracao {
     id: dialogo
     objectName: "dialogoDeVersoes"

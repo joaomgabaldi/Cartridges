@@ -1,9 +1,5 @@
 import QtQuick
 
-// Uma linha com título, subtítulo e, à direita, a amostra de cor que abre o `SeletorDeCor` num balão. Cada movimento no
-// seletor emite `escolhida`; quem usa grava e devolve a cor em `cor`. Fora do padrão (`padrao: false`) aparece o botão de
-// voltar a ele. `aberta` e `fechada` contam do balão (o pulso das conquistas mostra a própria cor só enquanto ele está
-// aberto). Desabilitada, apaga a 50% como as outras linhas.
 LinhaDoGrupo {
     id: linha
 

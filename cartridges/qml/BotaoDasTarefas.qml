@@ -1,22 +1,17 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O botão redondo do canto inferior esquerdo que abre as tarefas em andamento.
-// Não fica à vista: entra deslizando quando uma tarefa começa, recua depois de `entradaMs` e volta quando o mouse
-// passa rente à borda, no canto. Cobre a área das páginas sem tirar nada delas: só o canto é vigiado, por um
-// `HoverHandler`, e o botão recolhido não recebe o mouse. `painelDasTarefas` vem do contexto (cartridges/app.py).
+// O botão redondo do canto inferior esquerdo que abre as tarefas em andamento; entra deslizando quando uma tarefa começa
+// e volta quando o mouse passa rente ao canto.
 Item {
     id: raiz
     objectName: "botaoDasTarefas"
 
-    // "todos", "zerados" ou "jogo"; fora das duas bibliotecas o botão não aparece.
     property string pagina: "todos"
     property bool modalAberto: false
     property bool emBigPicture: false
     property bool emSessao: false
 
-    // Tempos e medidas (propriedades para os testes): a entrada dura 10 s, a saída do canto 5 s, o canto é de 72 px
-    // e, com o botão escondido, só a faixa de 16 px junto à borda o chama.
     property int entradaMs: 10000
     property int saidaMs: 5000
     property int canto: 72
@@ -32,16 +27,12 @@ Item {
     readonly property bool pode: podeAgora()
     property bool aVista: false
     property bool noCanto: false
-    // Desligado só no instante em que o botão some sem deslizar.
     property bool deslizar: true
     readonly property bool girando: aVista
-    // O lugar do botão à vista, que nunca desliza: a janela das tarefas se põe acima dele.
     readonly property Item alvo: lugarDoBotao
     property int vistas: 0
 
-    // Nada some com o botão à vista e nada aparece sem tarefa: o que muda a regra reavalia.
     function reavaliar() {
-        // Na sessão e no Big Picture o botão está atrás da camada cheia: some sem deslizar.
         if (!podeAgora()) esconder(!(emSessao || emBigPicture))
     }
     onPodeChanged: reavaliar()
@@ -60,7 +51,6 @@ Item {
         recuo.interval = espera
         recuo.restart()
     }
-    // Com o mouse no canto, a entrada automática não tira o botão de baixo dele; sair do canto agenda a saída de novo.
     function recolher() {
         if (!noCanto) aVista = false
     }
@@ -70,17 +60,12 @@ Item {
     function aoSair() { agendar(saidaMs) }
 
     function aoMover(x, y) {
-        // Escondido, só a faixa colada à borda chama o botão; à vista, o canto cobre o botão inteiro, para o mouse
-        // chegar até ele sem que recue.
         var dentro = x < (aVista ? canto : faixa) && y > height - canto
-        // Sem tarefas não há o que mostrar, mas o canto continua anotado: uma tarefa que começa com o mouse parado
-        // ali não recua debaixo dele.
         if (painelDasTarefas.quantas === 0) {
             noCanto = dentro
             return
         }
         if (dentro) {
-            // Fechar a janela com o mouse ainda no canto deixa o botão escondido: o próximo movimento o traz de volta.
             if (!noCanto || !aVista) {
                 noCanto = true
                 aoEntrar()
@@ -96,7 +81,7 @@ Item {
             aoSair()
         }
     }
-    // O botão fica por cima do vigia e tira o hover dele: em cima do botão o mouse continua no canto, e o botão não recua.
+    // O botão fica por cima do vigia e tira o hover dele: em cima do botão o mouse continua no canto.
     function aoPassarNoBotao(sobre) {
         if (sobre) {
             noCanto = true
@@ -128,8 +113,8 @@ Item {
         onTriggered: raiz.recolher()
     }
 
-    // Só no canto: um `HoverHandler` do tamanho da página, por cima dela, tirava o hover de todas as capas (mesmo com
-    // `blocking: false`, medido no Qt 6.12).
+    // Só no canto: um `HoverHandler` do tamanho da página tirava o hover de todas as capas (mesmo com `blocking: false`,
+    // medido no Qt 6.12).
     Item {
         id: vigia
         objectName: "vigiaDoCanto"
@@ -160,7 +145,6 @@ Item {
         height: raiz.tamanho
         x: raiz.aVista ? raiz.margem : -(raiz.tamanho + raiz.margem)
         y: lugarDoBotao.y
-        // Recolhido, o botão não recebe nada: o clique no lugar dele chega à capa.
         enabled: raiz.aVista && raiz.pode
         visible: x + width > 0
         Accessible.name: "Tarefas em andamento"

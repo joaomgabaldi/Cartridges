@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 
-// A escolha do atalho de um jogo restaurado: o título é o nome do jogo e há uma linha por atalho candidato. Sem
-// candidatos não abre: o modelo pede direto o seletor de arquivos (`procurarPedido`), que este modal cria sob demanda.
+// A escolha do atalho de um jogo restaurado. Sem candidatos não abre: o modelo pede direto o seletor de arquivos
+// (`procurarPedido`).
 ModalDaRestauracao {
     id: dialogo
     objectName: "dialogoDaEscolhaDoAtalho"
@@ -27,7 +27,6 @@ ModalDaRestauracao {
             objectName: "candidato-" + index
             titulo: modelData.titulo
             subtitulo: modelData.subtitulo
-            // Os testes e o controle acionam a linha pelo botão que a cobre.
             function click() { botaoDaLinha.click() }
             onAcionada: restauracao.usarAtalho(modelData.caminho)
         }
@@ -43,7 +42,6 @@ ModalDaRestauracao {
             onClicked: restauracao.procurar()
         }
     }
-    // O seletor nativo só existe depois do primeiro pedido, e nunca nos testes.
     Loader {
         id: carga
         active: false

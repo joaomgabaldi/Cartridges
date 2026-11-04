@@ -1,20 +1,16 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O balão do "Onde eu parei": carrega `texto` ao abrir e emite `gravar` ao fechar (só se `editavel`). Usado pela página
-// de detalhes e pela tela da sessão.
+// O balão do "Onde eu parei": carrega `texto` ao abrir e emite `gravar` ao fechar (só se `editavel`).
 Popup {
     id: raiz
     property string texto
     property bool editavel: true
     signal gravar(string texto)
 
-    // O tamanho vale para as duas caixas e fica guardado (`caixaDaAnotacao`).
     readonly property var caixa: typeof caixaDaAnotacao !== "undefined" ? caixaDaAnotacao : null
     readonly property real janelaLargura: Overlay.overlay ? Overlay.overlay.width : 0
     readonly property real janelaAltura: Overlay.overlay ? Overlay.overlay.height : 0
-    // O balão fica centrado no botão e a largura cresce para os dois lados: o espaço livre é o dobro do menor lado entre
-    // o centro do botão e a borda da janela.
     function centroNaCena() { return parent ? parent.mapToItem(null, parent.width / 2, parent.height) : Qt.point(0, 0) }
     function livreLargura() { var c = centroNaCena(); return 2 * Math.min(c.x, janelaLargura - c.x) - 32 }
     function livreAltura() { return janelaAltura - centroNaCena().y - 6 - 32 - 8 }
@@ -101,8 +97,6 @@ Popup {
                         raiz.caixa.gravar()
                     }
                 }
-                // O balão cresce para os dois lados e o canto anda metade; com o dobro do deslocamento, o puxador
-                // acompanha o mouse.
                 onActiveTranslationChanged: if (active)
                     raiz.caixa.arrastar(puxador.inicioLargura, puxador.inicioAltura, activeTranslation.x * 2, activeTranslation.y,
                                         raiz.janelaLargura, raiz.janelaAltura, raiz.livreLargura(), raiz.livreAltura())

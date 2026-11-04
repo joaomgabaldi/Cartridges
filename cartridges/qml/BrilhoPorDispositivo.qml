@@ -2,9 +2,8 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// "Brilho máximo por dispositivo", por cima das Preferências: uma linha de número por fita. Só desenha: o estado é do
-// `preferencias.brilhoPorDispositivo` (cartridges/modelos/preferencias.py), que existe só enquanto a janela está aberta.
-// Cada mudança acende as fitas no número dela; só o Salvar grava. Esc cancela.
+// "Brilho máximo por dispositivo", por cima das Preferências; só desenha, o estado é de
+// `preferencias.brilhoPorDispositivo`.
 MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoDoBrilhoPorDispositivo"
@@ -13,7 +12,6 @@ MolduraDoDialogo {
 
     aberto: !!modelo
     largura: 420
-    // O foco abre no primeiro controle, o Cancelar.
     focoInicial: botaoCancelar
     nomeAcessivel: "Brilho máximo por dispositivo"
     onFecharPedido: if (modelo) modelo.cancelar()
@@ -59,8 +57,8 @@ MolduraDoDialogo {
             y: 24
             width: rolagem.width - 24
 
-            // Criado com o diálogo já à vista: o grupo some enquanto a altura é zero, e um `Column` não conta as linhas
-            // que nascem sob um pai escondido (a altura nunca sairia de zero).
+            // Criado com o diálogo já à vista: um `Column` não conta linhas que nascem sob um pai escondido (a altura
+            // nunca sairia de zero).
             Loader {
                 width: parent.width
                 active: dialogo.visible
@@ -72,7 +70,7 @@ MolduraDoDialogo {
                         LinhaDeNumero {
                             required property var modelData
                             objectName: "brilhoDoDispositivo-" + modelData.id
-                            // O nome é texto de fora (a conta da Tuya): a `LinhaDeNumero` o mostra em PlainText.
+                            // O nome é texto de fora (a conta da Tuya): PlainText.
                             titulo: modelData.nome
                             de: 1
                             ate: 100

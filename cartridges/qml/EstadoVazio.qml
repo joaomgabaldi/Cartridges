@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Shapes
 
-// O aviso de página sem jogos: ícone de 128 px a 55%, título, descrição de 12 px e, se houver, o botão em pílula.
 Item {
     id: estado
 
@@ -12,12 +11,10 @@ Item {
     property string descricao
     property string rotuloDoBotao
     property bool botaoHabilitado: true
-    // O Big Picture usa o aviso em branco sobre o fundo preto.
     property color corDoTitulo: Tema.texto
     property color corDaDescricao: Tema.texto
     property color corDoIcone: Tema.texto
     signal botaoClicado()
-    // O controle alcança o botão da página vazia.
     readonly property bool botaoFocado: botao.activeFocus
     function focarBotao() { botao.forceActiveFocus(Qt.TabFocusReason) }
     function acionarBotao() { botao.click() }

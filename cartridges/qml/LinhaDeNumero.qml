@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O valor em texto, que aceita digitação, e os botões redondos de 30 (− e +), 6 entre eles com 2 de margem. `alterado`
-// leva o número que a pessoa pediu; quem usa grava e devolve o valor em `value` (a caixa só mostra o que a linha recebe).
 LinhaDoGrupo {
     id: linha
 
@@ -43,7 +41,7 @@ LinhaDoGrupo {
         implicitWidth: Math.max(valor.contentWidth, 16) + rightPadding
         contentItem: TextInput {
             id: valor
-            // Uma parada de Tab só, a da própria caixa: o SpinBox liga o `activeFocusOnTab` do item ao assumi-lo.
+            // Uma parada de Tab só: o SpinBox liga o `activeFocusOnTab` do item ao assumi-lo.
             Component.onCompleted: activeFocusOnTab = false
             text: caixa.displayText
             readOnly: !caixa.editable
@@ -84,6 +82,5 @@ LinhaDoGrupo {
         background: null
     }
 
-    // O valor da linha manda na caixa, mesmo depois de a pessoa mexer nela.
     Binding { target: caixa; property: "value"; value: linha.value }
 }

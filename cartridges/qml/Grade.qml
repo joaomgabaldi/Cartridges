@@ -1,18 +1,16 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// A grade de capas da biblioteca: cartões de 200x347, com 3 de respiro de cada lado e 12 de espaçamento, a 15 de margem,
-// centralizada na janela.
+// A grade de capas da biblioteca: cartões de 200x347 com 3 de respiro e 12 de espaçamento, centralizada na janela.
 GridView {
     id: grade
 
     property QtObject biblioteca
     property int colunasMaximas: 0
     property bool tocarSempre: false
-    // A página da grade está por cima (a coberta pelos Jogos Zerados não anima).
     property bool ativa: true
-    // Onde a rolagem parou: os cartões só ligam ou desligam a animação 200 ms depois dela, para os que só cruzam a tela
-    // não abrirem a cópia.
+    // Os cartões só ligam ou desligam a animação 200 ms depois da rolagem parar, para os que só cruzam a tela não abrirem
+    // a cópia.
     property real contentYParado: 0
     onContentYChanged: assentarRolagem.restart()
     Component.onCompleted: contentYParado = contentY
@@ -24,15 +22,11 @@ GridView {
 
     signal abrirDetalhes(string jogoId)
     signal editar(string jogoId)
-    // O foco do cartão (anel e botões) só aparece depois de uma tecla; o mouse o apaga.
     property bool porTeclado: false
 
     readonly property int espacamento: 12
     readonly property int margem: 15
-    // Há 3 de respiro em volta do cartão: o passo é 200 + 6 + 12 = 218 na horizontal e
-    // 347 + 6 + 12 = 365 na vertical; o cartão fica centrado na célula, a 18 da borda (15 + 3).
     readonly property int respiro: 6
-    // A célula leva o espaçamento inteiro; a margem de 15 é a diferença para o que ela já tem.
     readonly property int colunas: {
         var cabem = Math.max(1, Math.floor((width - 2 * margem + espacamento) / larguraDaCelula))
         return colunasMaximas > 0 ? Math.min(cabem, colunasMaximas) : cabem
@@ -41,17 +35,14 @@ GridView {
     readonly property int larguraDaCelula: 200 + respiro + espacamento
     cellWidth: larguraDaCelula
     cellHeight: 347 + respiro + espacamento
-    // A grade fica centrada pelo número de colunas que cabem; poucos jogos ficam à esquerda dela.
     leftMargin: Math.max(0, (width - colunas * larguraDaCelula) / 2)
     rightMargin: leftMargin
-    // O GridView só refaz as colunas quando a largura ou a célula mudam: com a biblioteca vazia na
-    // abertura a margem é grande e a grade ficava em poucas colunas. Mexer na célula e devolver o
-    // vínculo força o recálculo; as duas margens chamam, para a ordem em que mudam não importar.
+    // O GridView só refaz as colunas quando a largura ou a célula mudam: mexer na célula e devolver o vínculo força o
+    // recálculo; as duas margens chamam.
     function refazerColunas() {
         cellWidth = larguraDaCelula + 1
         cellWidth = Qt.binding(() => larguraDaCelula)
     }
-    // O Flickable não recoloca o conteúdo quando a margem muda sozinha.
     onLeftMarginChanged: { contentX = -leftMargin; refazerColunas() }
     onRightMarginChanged: refazerColunas()
     topMargin: margem - espacamento / 2
@@ -67,12 +58,9 @@ GridView {
 
     RolagemPorMola { objectName: "rolagemPorMola"; alvo: grade; ativa: Tema.animacoes }
 
-    // Enter e Espaço abrem os detalhes. Sem tecla de menu, de propósito; o menu abre pelo botão "Mais opções" e pelo
-    // clique direito.
     Keys.onReturnPressed: { porTeclado = true; abrirDoAtual() }
     Keys.onEnterPressed: { porTeclado = true; abrirDoAtual() }
     Keys.onSpacePressed: { porTeclado = true; abrirDoAtual() }
-    // Tab percorre os cartões um a um; nas pontas o foco sai da grade.
     Keys.onTabPressed: event => {
         porTeclado = true
         if (currentIndex < count - 1) { currentIndex++; positionViewAtIndex(currentIndex, GridView.Contain) }
@@ -83,14 +71,12 @@ GridView {
         if (currentIndex > 0) { currentIndex--; positionViewAtIndex(currentIndex, GridView.Contain) }
         else event.accepted = false
     }
-    // Setas: só marcam o uso do teclado; o GridView é quem move o `currentIndex`.
     Keys.onLeftPressed: event => { porTeclado = true; event.accepted = false }
     Keys.onRightPressed: event => { porTeclado = true; event.accepted = false }
     Keys.onUpPressed: event => { porTeclado = true; event.accepted = false }
     Keys.onDownPressed: event => { porTeclado = true; event.accepted = false }
     // Só o ponteiro que anda apaga o anel: o Qt reenvia o hover quando a página volta com o mouse parado.
     property point _ultimoPonteiro
-    // A volta pelo teclado: o primeiro hover depois dela só registra onde o ponteiro está.
     property bool _registrarPonteiro: false
     function marcarTeclado() {
         porTeclado = true
@@ -106,7 +92,6 @@ GridView {
         }
     }
 
-    // Entrar ou sair capa (importar, buscar, esconder) não anima: o salto é o de sempre.
     property bool contagemMudou: false
     onCountChanged: { contagemMudou = true; fimDaContagem.restart() }
     Timer { id: fimDaContagem; interval: 150; onTriggered: grade.contagemMudou = false }
@@ -115,7 +100,6 @@ GridView {
         if (currentItem) grade.abrirDetalhes(currentItem.jogoId)
     }
 
-    // O foco volta ao cartão do jogo (ao sair do Big Picture), ou ao primeiro se ele não está na página.
     function focarJogo(jogoId) {
         var i = biblioteca.indiceDe(jogoId)
         currentIndex = i >= 0 ? i : 0
@@ -128,19 +112,15 @@ GridView {
     function fecharMenu() { menuDoJogo.close() }
     readonly property bool rolado: contentY - (originY - topMargin) > 0
 
-    // O passo do controle: um cartão para o lado ou para cima/baixo, sem passar da borda.
-    // Devolve se o cartão atual mudou; na borda, quem chamou decide (em ↑ na primeira linha, vai à barra).
     function moverSelecao(dx, dy) {
         porTeclado = true
         forceActiveFocus()
         if (count === 0) return false
         var i = currentIndex
         var alvo = i
-        // ← e → seguem a ordem dos jogos: do fim de uma linha passam ao começo da outra.
         if (dx < 0) alvo = i > 0 ? i - 1 : i
         else if (dx > 0) alvo = i < count - 1 ? i + 1 : i
         else if (dy < 0) alvo = i - colunas >= 0 ? i - colunas : i
-        // Embaixo de uma coluna sem cartão a grade não anda: o foco fica onde está.
         else if (dy > 0) alvo = i + colunas < count ? i + colunas : i
         if (alvo === i) return false
         currentIndex = alvo
@@ -148,8 +128,6 @@ GridView {
         return true
     }
 
-    // A rolagem do controle (`_scroll_to_focus`): 200 ms, OutCubic. Na primeira linha volta à margem de cima, na última vai
-    // ao fim; nas outras só o bastante para o cartão caber. Uma animação em curso é interrompida e a nova parte de onde está.
     function rolarAte(indice) {
         var topo = originY + Math.floor(indice / colunas) * cellHeight
         var base = topo + cellHeight
@@ -194,15 +172,13 @@ GridView {
 
         function abrirMenu() { cartao.abrirMenu() }
 
-        // As capas deslizam até o lugar novo, com mola de amortecimento crítico (massa 1, rigidez 450), quando a grade
-        // refaz as linhas: mudou o número de colunas ou alguma capa mudou de linha. O `x` da célula não inclui a margem
-        // esquerda, então recentrar a grade (que é seco) não passa por aqui.
+        // Mola de amortecimento crítico (massa 1, rigidez 450) quando a grade refaz as linhas; recentrar a grade (que é
+        // seco) não passa por aqui.
         // shortcut: parte de onde a capa está desenhada, mas não herda a velocidade da mola em curso.
         property real xAnterior: NaN
         property real yAnterior: NaN
         property real baseX: 0
         property real baseY: 0
-        // 1 - progresso da mola: (1 + tau) e^-tau, com tau de 0 a 8,3 em 387 ms.
         property real tau: 8.3
         readonly property real restante: tau >= 8.3 ? 0 : (1 + tau) * Math.exp(-tau)
         readonly property real desvioX: baseX * restante
@@ -236,13 +212,11 @@ GridView {
             zerado: parent.zerado
             carregando: parent.carregando
             capaAnimada: parent.capaAnimada
-            // Só o que cruza a janela da grade toca; o GridView ainda guarda cartões além das bordas.
             naVista: grade.ativa && grade.visible
                 && parent.y + parent.height > grade.contentYParado && parent.y < grade.contentYParado + grade.height
             tocarSempre: grade.tocarSempre
             focado: grade.activeFocus && grade.porTeclado && parent.GridView.isCurrentItem
             menuAberto: menuDoJogo.visible && menuDoJogo.jogoId === jogoId
-            // O índice vai junto: ao voltar, o foco é do cartão de onde a página saiu.
             onAbrirDetalhes: id => { grade.porTeclado = false; grade.currentIndex = index; grade.abrirDetalhes(id) }
             onEditar: id => grade.editar(id)
             onMenuPedido: (id, ancora) => {

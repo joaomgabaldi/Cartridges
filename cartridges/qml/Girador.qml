@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
 
-// Um arco que gira, cresce e encolhe, na cor do texto. Só anima com `running`.
 Item {
     id: girador
 

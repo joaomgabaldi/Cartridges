@@ -2,13 +2,10 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// O cartão de conquistas da página do jogo, logo abaixo do HowLongToBeat. Só desenha `conquistasDoJogo.pagina`; o clique
-// abre a lista completa.
 ColumnLayout {
     id: bloco
     objectName: "blocoDeConquistas"
 
-    // O botão-cartão, para a página incluí-lo na navegação por setas e pelo controle.
     readonly property alias botao: cartao
     readonly property var dados: conquistasDoJogo.pagina
 
@@ -34,7 +31,6 @@ ColumnLayout {
         implicitWidth: leftPadding + Math.max(260, contentItem.implicitWidth) + rightPadding
         Accessible.name: "Conquistas, " + (bloco.dados.contagem || "")
         hoverEnabled: true
-        // O Enter também abre (o Espaço e o clique já são do botão).
         Keys.onReturnPressed: clicked()
         Keys.onEnterPressed: clicked()
         onClicked: conquistasDoJogo.abrir(detalhes.jogoId)

@@ -1,14 +1,11 @@
 import QtQuick
 import QtQuick.Window
 
-// A janela "Jogando {nome}" da sessão manual: sem moldura, com a barra própria de 47 px (título centrado, minimizar e
-// fechar, sem maximizar), 300×150 no total e tamanho fixo. Fechar pela barra e o botão fazem o mesmo: encerrar a sessão
-// com registro. Posta pelo Python.
+// A janela "Jogando {nome}" da sessão manual: sem moldura, com a barra própria, tamanho fixo. Posta pelo Python.
 Window {
     id: raiz
     objectName: "janelaDaSessao"
 
-    // Os testes rodam sem a ponte do QWindowKit.
     property bool semAgente: false
     readonly property QtObject agente: carga.item
     property bool _posta: false
@@ -21,7 +18,7 @@ Window {
     minimumHeight: height
     maximumHeight: height
     color: Tema.fundo
-    transientParent: null  // solta: não some junto com a janela principal
+    transientParent: null
     flags: Qt.Window
     visible: true
 
@@ -49,7 +46,7 @@ Window {
         maximumHeight = 200
     }
 
-    // Acima do relógio: o retângulo da janela só vale depois do primeiro quadro e da moldura removida.
+    // O retângulo da janela só vale depois do primeiro quadro e da moldura removida.
     onFrameSwapped: {
         if (_posta) return
         _posta = true
@@ -78,7 +75,6 @@ Window {
         onClicked: sessao.janelaManualFechada()
     }
 
-    // O contorno claro de 1 px; o raio é o do DWM.
     Rectangle {
         objectName: "contornoDaJanelaDaSessao"
         anchors.fill: parent

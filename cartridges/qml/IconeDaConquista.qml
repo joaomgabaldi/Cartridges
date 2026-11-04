@@ -2,10 +2,7 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Window
 
-// O ícone de uma conquista, na página do jogo, no diálogo e na tela da sessão.
-// A oculta é um ladrilho com uma interrogação; as outras mostram a estrela no ladrilho até a imagem chegar (`url`,
-// um arquivo `file:`) e para sempre, se ela não chegar. A bloqueada que só tem o ícone colorido (`cinza`) vai em cinza.
-// `semLadrilho` (a página do jogo): até a imagem chegar, e para sempre se ela falhar, fica só o espaço vazio, sem ladrilho.
+// O ícone de uma conquista. `semLadrilho`: até a imagem chegar (ou se falhar) fica só o espaço vazio.
 Item {
     id: icone
     objectName: "iconeDaConquista"
@@ -24,13 +21,11 @@ Item {
     implicitWidth: tamanho
     implicitHeight: tamanho
 
-    // O lugar do ícone que não há (oculta) ou que ainda não chegou: um quadrado do canto dos ícones de verdade.
     Rectangle {
         objectName: "ladrilhoDaConquista"
         anchors.fill: parent
         visible: !icone.imagemPronta && !icone.semLadrilho
         radius: 6
-        // O fundo é o texto a 0,6 x 0,12 = 7,2% (5,8% no claro, onde o texto já tem 0,8).
         color: Qt.alpha(icone.corDoLadrilho, icone.corDoLadrilho.a * 0.072)
 
         Text {
@@ -65,7 +60,6 @@ Item {
         anchors.fill: parent
         visible: icone.imagemPronta
         source: icone.oculta ? "" : icone.url
-        // O quadrado central, qualquer que seja a proporção do arquivo.
         fillMode: Image.PreserveAspectCrop
         asynchronous: false
         sourceSize: Qt.size(icone.tamanho * Screen.devicePixelRatio, icone.tamanho * Screen.devicePixelRatio)

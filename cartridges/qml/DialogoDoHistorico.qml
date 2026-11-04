@@ -3,10 +3,8 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
 
-// O histórico de sessões de um jogo: o logo (ou o nome) e o resumo no topo, e lado a lado a tabela das sessões e o painel
-// do gráfico. Só desenha: o estado é do `historico` (cartridges/modelos/historico.py). Modal para o mouse, o teclado e o
-// controle; o foco volta a quem o abriu. A faixa de cima não mostra título: o logo (ou o nome) é a manchete, e o título
-// só vive no nome acessível.
+// O histórico de sessões de um jogo: resumo no topo, tabela e gráfico lado a lado; só desenha, o estado é do `historico`
+// (cartridges/modelos/historico.py).
 // A raiz é só um `Item`: a confirmação de exclusão cobre a janela e não pode morar dentro do cartão.
 Item {
     id: raiz
@@ -16,23 +14,20 @@ Item {
         objectName: "dialogoDoHistorico"
 
         property var excluindo: ({ fim: 0, segundos: 0, duracao: "", titulo: "" })
-        // O que sobra da altura do cartão para a tabela: o que o cartão pode ter, menos o cabeçalho e tudo o que não é a
-        // tabela (a manchete, o resumo, os respiros). Sem ler a altura do próprio cartão (laço).
+        // Altura que sobra para a tabela, sem ler a do próprio cartão (laço).
         readonly property real alturaMaximaDoCartao: emFolha ? height - 30 : height - 2 * margemV
         readonly property real alturaLivreDaTabela: alturaMaximaDoCartao - cabecalho.implicitHeight
             - (manchete.implicitHeight + resumo.implicitHeight + 5 * 12)
-        // 34 do seletor, 12, o total, 12 e o gráfico no piso: o painel nunca fica mais baixo que isto.
         readonly property real pisoDoPainel: 34 + 12 + totalDoPeriodo.implicitHeight + 12 + 240
 
         function contem(pai, item) {
-            for (var p = item; p; p = p.parent) // `parent`: o `parentItem` do C++ não existe no QML
+            for (var p = item; p; p = p.parent)
                 if (p === pai) return true
             return false
         }
-        // Depois de uma exclusão ou de "Mostrar mais" a linha ou o botão que tinha o foco pode ter sumido.
         function garantirFoco() {
             var f = Window.window ? Window.window.activeFocusItem : null
-            if (visible && !(f && f.visible && dentro(f))) // o botão escondido ainda é filho do diálogo
+            if (visible && !(f && f.visible && dentro(f)))
                 cabecalho.botaoFechar.forceActiveFocus(Qt.TabFocusReason)
         }
         function trazer(rolagem, item) {
@@ -162,7 +157,6 @@ Item {
                     font { family: Tema.fonte; pixelSize: Tema.corpo }
                 }
 
-                // A tabela e o painel do gráfico: o painel tem sempre a altura da faixa, e a faixa segue a da tabela.
                 RowLayout {
                     objectName: "colunasDoHistorico"
                     visible: !historico.vazio
@@ -172,9 +166,8 @@ Item {
                     Layout.topMargin: 12
                     spacing: 24
 
-                    // A altura é a das linhas, até 440 e até o que a janela deixa, mas nunca abaixo do piso do painel: o
-                    // gráfico fica à vista (a altura máxima da lista é só um teto). Só quando nem o piso cabe, o
-                    // cartão inteiro rola.
+                    // A altura nunca fica abaixo do piso do painel, para o gráfico ficar à vista; só quando nem o piso
+                    // cabe o cartão inteiro rola.
                     Flickable {
                         id: tabela
                         objectName: "tabelaDeSessoes"
@@ -212,7 +205,7 @@ Item {
                                             id: alvoDaLinha
                                             objectName: "alvoDaLinhaDaSessao"
                                             anchors.fill: parent
-                                            focusPolicy: Qt.StrongFocus  // um `Control`: o anel só aparece com o teclado (`visualFocus`)
+                                            focusPolicy: Qt.StrongFocus
                                             contentItem: Item {}
                                             background: Item {}
                                             Binding { target: linha; property: "foco"; value: alvoDaLinha.visualFocus }
@@ -260,8 +253,6 @@ Item {
                         }
                     }
 
-                    // O seletor de período fica em cima, onde o olho chega antes do gráfico: é ele que diz o que o
-                    // gráfico mostra.
                     ColumnLayout {
                         id: painel
                         objectName: "painelDoGrafico"

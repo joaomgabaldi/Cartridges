@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Window
 
-// O logo do jogo ou o nome, nunca os dois: a manchete do histórico de sessões e da lista de conquistas.
-// `logo` é um arquivo `file:` (vazio = sem logo); o nome é de terceiros, sempre texto puro.
+// O logo do jogo ou o nome, nunca os dois. O nome é de terceiros: sempre texto puro.
 Item {
     id: cabecalho
 

@@ -2,8 +2,6 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Window
 
-// A amostra em círculo e o balão com o `SeletorDeCor`. No automático (`roda`), a amostra é uma roda de cores com o furo
-// transparente, do matiz 0 no topo.
 Botao {
     id: amostra
 
@@ -38,7 +36,7 @@ Botao {
         return linhas
     }
 
-    // O aperto fora do botão fecha o balão e a soltura não pode reabri-lo: decide pela ordem dos eventos, sem relógio.
+    // O aperto fora do botão fecha o balão e a soltura não pode reabri-lo: decide pela ordem dos eventos.
     property bool _fechouAgora: false
     property bool _estavaAberto: false
     function apertou() { _estavaAberto = balao.opened || _fechouAgora }
@@ -78,8 +76,7 @@ Botao {
             visible: amostra.roda
             onVisibleChanged: if (visible) requestPaint()
             onPaint: {
-                // 36 fatias a partir do topo (-90 graus), com sobra de 0,02 rad contra a fresta entre elas; o furo é 35%
-                // do raio.
+                // 36 fatias com sobra de 0,02 rad contra a fresta entre elas.
                 var c = getContext("2d")
                 c.reset()
                 var r = width / 2
@@ -103,7 +100,6 @@ Botao {
     Popup {
         id: balao
         objectName: amostra.nomeDoBalao
-        // Sem espaço embaixo do botão, o balão sobe para o outro lado e não cobre a amostra.
         property bool porCima: false
         function recalcularLado() {
             const janela = amostra.Window.height > 0 ? amostra.Window.height : Number.MAX_VALUE
@@ -112,11 +108,10 @@ Botao {
         x: (amostra.width - width) / 2
         y: porCima ? -height - 6 : amostra.height + 6
         padding: 12
-        margins: 8  // o balão não sai da janela, mesmo com a linha no pé da rolagem
+        margins: 8
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         enter: null
         exit: null
-        // A altura muda com o seletor (45 tons ou o seletor livre): o lado se refaz com o balão aberto.
         Connections { target: amostra; function onEditandoChanged() { if (balao.visible) balao.recalcularLado() } }
         onAboutToShow: {
             amostra.editando = false

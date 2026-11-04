@@ -1,21 +1,17 @@
 import QtQuick
 import QtQuick.Window
 
-// A janela "Tarefas em andamento": de topo, sem moldura e com a barra própria (título, minimizar e fechar), não modal,
-// com entrada na barra de tarefas. Um bloco por tarefa; continua aberta quando a última acaba. Posta pelo Python logo
-// acima do botão (`alvo`), depois do primeiro quadro; invisível até lá. `painelDasTarefas` vem do contexto.
+// A janela "Tarefas em andamento": de topo, sem moldura, não modal; posta pelo Python acima do botão (`alvo`), depois do
+// primeiro quadro. `painelDasTarefas` vem do contexto.
 Window {
     id: raiz
     objectName: "janelaDasTarefas"
 
-    // O lugar do botão à vista (BotaoDasTarefas.alvo), posto por quem a carrega.
     property Item alvo: null
     property bool pronta: false
-    // Os testes rodam sem a ponte do QWindowKit.
     property bool semAgente: false
     readonly property QtObject agente: carga.item
 
-    // O nome de uma tarefa não quebra: um nome longo alarga a janela, com 360 de mínimo.
     property real larguraDoConteudo: 0
     readonly property real larguraPedida: Math.max(360, larguraDoConteudo + 48)
 
@@ -27,11 +23,10 @@ Window {
     minimumHeight: alturaPedida
     maximumHeight: alturaPedida
     height: alturaPedida
-    // O aviso de erro precisa de lugar, se a lista for curta.
     readonly property real alturaPedida: Math.max(barra.altura + conteudo.implicitHeight, aviso.aberto ? aviso._alturaPedida + 2 * aviso.margemV : 0)
     color: Tema.fundo
     opacity: pronta ? 1 : 0
-    transientParent: null  // solta: não some junto com a principal
+    transientParent: null
     flags: Qt.Window
     visible: true
 
@@ -68,7 +63,6 @@ Window {
         larguraDoConteudo = maior
     }
 
-    // A superfície e a altura da moldura só existem depois do primeiro quadro.
     onFrameSwapped: {
         if (pronta) return
         if (alvo) {
@@ -77,8 +71,8 @@ Window {
         }
         pronta = true
     }
-    // Com a principal escondida (fechada com trabalho em andamento), fechar esta encerra o app. Fechada com o aviso
-    // aberto: libera o erro inesperado já (se o fechamento for recusado, o `onDispensado` nunca viria).
+    // Com a principal escondida, fechar esta encerra o app; com o aviso aberto, libera o erro inesperado já (se o
+    // fechamento for recusado, o `onDispensado` nunca viria).
     onClosing: { painelDasTarefas.avisoFechado(); painelDasTarefas.janelaFechada() }
 
     Connections {
@@ -177,7 +171,6 @@ Window {
         }
     }
 
-    // O contorno claro de 1 px; o raio é o do DWM.
     Rectangle {
         objectName: "contornoDasTarefas"
         anchors.fill: parent
@@ -189,7 +182,6 @@ Window {
         border { width: 1; color: Tema.contorno }
     }
 
-    // Um erro inesperado com a principal escondida.
     DialogoDeAviso {
         id: aviso
         objectName: "avisoNaJanelaDasTarefas"

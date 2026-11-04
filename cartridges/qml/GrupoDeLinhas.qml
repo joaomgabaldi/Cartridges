@@ -1,7 +1,5 @@
 import QtQuick
 
-// Um cartão com raio 12, sombra e as linhas empilhadas; o grupo some quando nenhuma aparece. `separada`: cada linha é o
-// seu próprio cartão, com 12 entre elas.
 Item {
     id: grupo
 

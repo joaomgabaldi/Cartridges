@@ -2,10 +2,8 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// Diálogo de alerta: título e corpo centrados, o que for declarado dentro abaixo deles, tudo rolando junto, e os botões
-// embaixo, em partes iguais (empilhados quando não cabem). Largura natural entre 300 e 372; `largo`: se os botões não
-// couberem lado a lado em 372, alarga até 600 em vez de empilhar.
-// `respostas`: [{ id, rotulo, aparencia: "normal"|"sugestao"|"destrutivo", objeto }]. Os textos vão em PlainText.
+// Diálogo de alerta: título e corpo centrados, botões embaixo em partes iguais (empilhados quando não cabem).
+// `respostas`: [{ id, rotulo, aparencia: "normal"|"sugestao"|"destrutivo", objeto }]. Textos em PlainText.
 MolduraDoDialogo {
     id: alerta
 
@@ -13,10 +11,8 @@ MolduraDoDialogo {
     property string corpo
     property bool largo: false
     property var respostas: []
-    // A resposta do Esc; o foco inicial vai à `respostaInicial` e, sem ela, à primeira.
     property string respostaDeEscape: ""
     property string respostaInicial: ""
-    // Falso: quem usa manda no `aberto` (uma pergunta que continua aberta depois de respondida).
     property bool fechaAoResponder: true
     property alias objetoDoTitulo: textoDoTitulo.objectName
     property alias objetoDoCorpo: textoDoCorpo.objectName
@@ -41,7 +37,7 @@ MolduraDoDialogo {
             if (botoes.itemAt(i)) maior = Math.max(maior, botoes.itemAt(i).implicitWidth)
         return botoes.count * maior + 12 * (botoes.count - 1) + 48
     }
-    // A largura que cada texto pediria sem quebrar (os gêmeos escondidos): a do `Text` de verdade segue a do cartão, que sai daqui.
+    // A largura que cada texto pediria sem quebrar (os gêmeos escondidos): a do `Text` de verdade segue a do cartão.
     readonly property real _larguraDoTexto: mensagem._temExtra ? 372 : Math.max(gemeoDoTitulo.implicitWidth, gemeoDoCorpo.implicitWidth) + 48
     Text { id: gemeoDoTitulo; visible: false; text: alerta.titulo; textFormat: Text.PlainText; font: textoDoTitulo.font }
     Text { id: gemeoDoCorpo; visible: false; text: alerta.corpo; textFormat: Text.PlainText; font: textoDoCorpo.font }
@@ -71,10 +67,12 @@ MolduraDoDialogo {
         interactive: contentHeight > height
         ScrollBar.vertical: BarraDeRolagem {}
 
-        // Posições à mão: um Column escondido não se reorganiza, e o texto trocado antes de abrir deixaria a altura velha.
+        // Posições à mão: um Column escondido não se reorganiza, e o texto trocado antes de abrir deixaria a altura
+        // velha.
         Item {
             id: mensagem
-            // A largura do cartão, e não a da `rolagem`: a do layout muda depois da altura pedida, que depende deste texto (laço).
+            // A largura do cartão, e não a da `rolagem`: a do layout muda depois da altura pedida, que depende deste
+            // texto (laço).
             width: alerta.cartao.width
             // Pelo conteúdo, nunca pelo `visible`: com o diálogo escondido ele é sempre falso.
             readonly property real _fimDoTexto: alerta.corpo !== "" ? textoDoCorpo.y + textoDoCorpo.height : textoDoTitulo.y + textoDoTitulo.height
@@ -130,7 +128,6 @@ MolduraDoDialogo {
         objectName: "respostasDoAlerta"
         Layout.fillWidth: true
         readonly property int quantos: botoes.count
-        // Pela largura do cartão, não pela do layout (que só vem depois da altura pedida, e a altura depende de `empilhado`).
         readonly property real larguraDeCada: quantos > 0 ? (alerta.cartao.width - 48 - 12 * (quantos - 1)) / quantos : 0
         readonly property bool empilhado: {
             for (var i = 0; i < botoes.count; ++i)

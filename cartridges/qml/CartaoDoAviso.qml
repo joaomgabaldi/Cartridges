@@ -2,8 +2,7 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Shapes
 
-// O cartão do aviso de conquista: ícone, rótulo, título e descrição. A janela por cima do jogo (`janela_do_aviso.py`) é
-// só ele; o assistente e o exemplo das Preferências mostram o mesmo cartão. Os textos são de terceiros: sempre texto
+// O cartão do aviso de conquista; a janela por cima do jogo (`janela_do_aviso.py`) é só ele. Textos de terceiros: texto
 // puro.
 Item {
     id: cartao
@@ -12,21 +11,18 @@ Item {
     property string rotulo: ""
     property string titulo: ""
     property string descricao: ""
-    property string icone: ""  // URL `file:` do ícone já baixado; vazio = ainda a caminho (ou sem ícone)
-    // A estrela é só do aviso que não tem ícone nenhum; com o ícone a caminho (ou que falhou), fica o quadrado vazio de 48 px.
+    property string icone: ""
     property bool semIcone: true
-    property bool opaco: false  // a reserva sem transparência: fundo cheio e cantos retos
+    property bool opaco: false
     property bool embutido: false
-    // O fade segue os efeitos de animação do Windows; a janela do aviso o passa de fora.
     property bool animar: Tema.animacoes
     property real opacidade: 1
-    // Mudar anima a opacidade até 1 (true) ou 0 (false); `terminou` no fim de cada animação.
     property bool mostrado: false
     signal terminou()
 
     readonly property int raio: opaco ? 0 : 12
-    // Até 36 caracteres por linha. A largura do caractere é a do Pango, 0,617 do corpo da fonte: o
-    // `averageCharacterWidth` do Qt é menor e quebrava o rótulo e a descrição em duas linhas.
+    // Até 36 caracteres por linha, com a largura do Pango (0,617 do corpo): o `averageCharacterWidth` do Qt é menor e
+    // quebrava o texto em duas linhas.
     readonly property real larguraMaxima: 36 * 0.617 * Tema.corpo
     readonly property real larguraDaLegenda: 36 * 0.617 * Tema.legenda
 
@@ -55,7 +51,6 @@ Item {
         Sombra { objectName: "sombraDoAviso"; visible: cartao.embutido; camadas: [[0, 0, 1, 1, 1, 1, 0.14], [2, 8, 0, 0, 0, 0, 0.35]]; raio: cartao.raio }
     }
 
-    // A faixa da borda esquerda segue a curva do cartão (raio 12) e afina até zero no topo e na base.
     Shape {
         objectName: "bordaDoAviso"
         anchors.fill: parent
@@ -73,7 +68,6 @@ Item {
             PathArc { x: 12; y: 0; radiusX: 9; radiusY: 12; direction: PathArc.Clockwise }
         }
     }
-    // A reserva sem transparência tem os cantos retos: a borda é uma faixa reta.
     Rectangle { objectName: "bordaRetaDoAviso"; visible: cartao.opaco; width: 3; height: parent.height; color: Tema.destaque }
 
     Row {

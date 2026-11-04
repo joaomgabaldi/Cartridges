@@ -1,13 +1,12 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// A barra de progresso; `value` vai de 0 a 1.
 ProgressBar {
     id: barra
 
     from: 0
     to: 1
-    property color corDaTrilha: Tema.botaoSobre  // a tela da sessão, sempre escura, passa branco a 15%
+    property color corDaTrilha: Tema.botaoSobre
 
     implicitHeight: 8
     background: Rectangle { radius: height / 2; color: barra.corDaTrilha }

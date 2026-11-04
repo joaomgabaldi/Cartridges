@@ -2,9 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// O cabeçalho dos diálogos: 47 de altura, plano, título em negrito centrado e o X circular. Botões da página entram em
-// `inicio` e `fim` (34 de altura, 6 da borda). Dentro de uma `MolduraDoDialogo`, no topo. O arrasto daqui não move a
-// janela. `sombra`: a linha quando há rolagem.
+// O cabeçalho dos diálogos: 47 de altura, título centrado e o X circular; botões da página entram em `inicio` e `fim`.
+// `sombra`: a linha quando há rolagem.
 Item {
     id: cabecalho
 
@@ -12,7 +11,6 @@ Item {
     property bool comFechar: true
     property bool sombra: false
     property alias objetoDoTitulo: textoDoTitulo.objectName
-    // As Preferências trocam o título pelo campo de busca, em crossfade.
     property alias opacidadeDoTitulo: textoDoTitulo.opacity
     property alias inicio: areaDoInicio.data
     property alias fim: areaDoFim.data
@@ -50,7 +48,7 @@ Item {
         spacing: 6
     }
 
-    Control {  // um `Control`: o anel só aparece com o teclado (`visualFocus`)
+    Control {
         id: botaoFechar
         objectName: "fecharDoCabecalho"
         visible: cabecalho.comFechar

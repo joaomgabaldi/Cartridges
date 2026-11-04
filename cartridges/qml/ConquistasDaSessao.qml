@@ -2,14 +2,11 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// O cartão de conquistas da tela da sessão: o progresso e os ícones de todas as conquistas, para consultar de relance no
-// outro monitor. Passivo: nada recebe foco nem clique; passar o mouse num ícone mostra a dica. Só desenha
-// `conquistasDoJogo.sessao`.
+// O cartão de conquistas da tela da sessão, passivo (nada recebe foco nem clique).
 Rectangle {
     id: cartao
     objectName: "conquistasDaSessao"
 
-    // Com poucos ícones o cartão fica do tamanho deles; com muitos, cresce até aqui e passa a rolar.
     property real larguraMaxima: 600
 
     readonly property var dados: conquistasDoJogo.sessao
@@ -59,16 +56,14 @@ Rectangle {
             objectName: "barraDaSessao"
             Layout.fillWidth: true
             value: cartao.dados.fracao || 0
-            corDaTrilha: Qt.rgba(1, 1, 1, 0.15)  // branco, porque a camada é sempre escura
+            corDaTrilha: Qt.rgba(1, 1, 1, 0.15)
         }
 
-        // Uma linha só, rolando para os lados: em grade, um jogo com muitas conquistas virava um paredão de ícones que
-        // empurrava o resto da tela.
         ListView {
             id: lista
             objectName: "iconesDaSessao"
             Layout.fillWidth: true
-            Layout.preferredHeight: cartao.tamanho + 14  // a folga para a barra de rolagem, que fica sobre a borda de baixo
+            Layout.preferredHeight: cartao.tamanho + 14
             orientation: ListView.Horizontal
             spacing: 6
             clip: true
@@ -76,10 +71,9 @@ Rectangle {
             keyNavigationEnabled: false
             activeFocusOnTab: false
             // Um número, e não a lista: a atualização ao vivo troca os dados de cada ícone sem recriar a fileira nem
-            // arrancar a rolagem de quem está lendo.
+            // arrancar a rolagem.
             model: cartao.quantos
 
-            // A próxima sessão começa do início da lista; a atualização ao vivo, não.
             readonly property string jogo: sessao.jogoId
             onJogoChanged: positionViewAtBeginning()
 
@@ -96,7 +90,6 @@ Rectangle {
                 oculta: dados.oculta === true
 
                 HoverHandler { id: sobre }
-                // A dica do app; o texto já sai escapado por `progresso.dica`, com `<b>` e `<br>`.
                 Dica {
                     id: dica
                     objectName: "dicaDaSessao"
@@ -112,9 +105,7 @@ Rectangle {
                 }
             }
 
-            // A roda do mouse rola para os lados com a mola do app (a lista não tem para onde ir na vertical).
             RolagemPorMola { objectName: "molaDaSessao"; alvo: lista; horizontal: true; ativa: Tema.animacoes }
-            // O touchpad rola direto: a mola é só do mouse.
             WheelHandler {
                 acceptedDevices: Tema.animacoes ? PointerDevice.TouchPad : PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: evento => {

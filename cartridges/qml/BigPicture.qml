@@ -23,21 +23,18 @@ Item {
     readonly property real reflexoAlcance: 0.55
     readonly property real reflexoOpacidade: 0.35
 
-    // As quatro que a entrada e a saída animam; em repouso valem 1/0/0/1.
-    property real posicao: 0  // segue o índice (`onIndiceChanged`); a fila da entrada e da saída a escreve quadro a quadro
+    property real posicao: 0
     property real virada: 1
     property real opacidadeCapas: 1
     property real progressoAbertura: 0
     property real opacidadeDoRodape: 1
     property bool animarPasso: true
-    // Com a camada da sessão por cima, a capa animada não toca (`Aplicativo.qml` liga).
     property bool sessaoEmAndamento: false
 
     property real escala: Screen.devicePixelRatio
     property real alturaCapa: height * 0.55
     property real larguraCapa: alturaCapa * 2 / 3
 
-    // Pôr a posição sem animar (lista refeita, valor inicial): só um passo do carrossel desliza.
     property bool saltando: false
     function irDireto(valor) {
         saltando = true
@@ -47,12 +44,10 @@ Item {
     Component.onCompleted: irDireto(indice)
     onIndiceChanged: { posicao = indice; assentarCentral() }
     onPosicaoChanged: assentarCentral()
-    // A central exibida muda quando o passo chega ao índice atual, não quando ele começa.
     property int centralExibida: 0
     function assentarCentral() { if (Math.abs(posicao - indice) < 0.001) centralExibida = indice }
 
-    // Lista refeita com o centro em outro índice: pula direto. Vem antes do `alterado`, então `indice` ainda é o antigo;
-    // mudança só de capa não passa por aqui.
+    // Lista refeita com o centro em outro índice: pula direto. Vem antes do `alterado`, então `indice` ainda é o antigo.
     Connections {
         target: bigPicture
         function onJogosMudaram() {
@@ -64,7 +59,7 @@ Item {
         NumberAnimation { id: passo; duration: tela.duracaoDoPasso; easing.type: Easing.OutCubic }
     }
 
-    // A fila indiana de entrada e saída: a conta é a `quadro_da_fila` de regras_do_big_picture.py.
+    // A conta da fila é a `quadro_da_fila` de regras_do_big_picture.py.
     property real t: 0
     property real baseDaFila: 0
     property bool entrando: true
@@ -92,7 +87,7 @@ Item {
         opacidadeDoRodape = 1
     }
     function iniciarFila(entrar) {
-        passo.stop()  // o passo em curso para onde está: a saída parte da posição visual
+        passo.stop()
         entrando = entrar
         baseDaFila = entrar ? 0 : posicao
         naFila = true
@@ -114,7 +109,6 @@ Item {
         }
         bigPicture.filaTerminou()
     }
-    // Na saída o quadro só volta com a camada já escondida, no escuro: antes o carrossel reapareceria.
     onVisibleChanged: if (!visible) {
         abertura.stop()
         progressoAbertura = 0
@@ -158,9 +152,8 @@ Item {
         function onPrepararCapas() { tela.preparar() }
     }
 
-    // As capas da fila decodificadas antes de escurecer, no tamanho das vagas (300 e 630 de altura, vezes a escala do
-    // monitor): o cache do Qt Quick só acerta com a mesma URL, `sourceSize` e `fillMode`. Vivem até o fim da fila de
-    // entrada.
+    // Capas da fila decodificadas antes de escurecer, no tamanho das vagas: o cache do Qt Quick só acerta com a mesma
+    // URL, `sourceSize` e `fillMode`.
     property var preparo: []
     property bool preparoAvisado: true
     function preparar() {
@@ -172,7 +165,6 @@ Item {
         preparo = []
         preparoAvisado = true
     }
-    // Pronta, ilegível ou sem capa contam: só a que ainda carrega segura a troca.
     function conferirPreparo() {
         if (preparoAvisado || repetidorDoPreparo.count < preparo.length || preparoDaCentral.status === Image.Loading)
             return
@@ -184,7 +176,7 @@ Item {
         bigPicture.capasProntas()
     }
     Item {
-        visible: false  // fora da tela: só decodifica e prende o cache
+        visible: false
         Repeater {
             id: repetidorDoPreparo
             model: tela.preparo
@@ -232,7 +224,6 @@ Item {
         return Qt.matrix4x4(1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z, 0, 0, 0, 1)
     }
 
-    // Do espaço da capa ao da tela; a projeção zera o z para nada ser recortado em profundidade.
     function transformacao(i) {
         const [x, angulo, prof, a] = arranjo(i)
         const fator = 1 + (escalaNaAbertura - 1) * progressoAbertura * (1 - a)
@@ -249,8 +240,8 @@ Item {
             .times(translacao(-larguraCapa / 2, -alturaCapa / 2, 0))
     }
 
-    // O toque do Qt Quick acerta a capa errada sob a projeção: projeta os cantos e testa a caixa alinhada que
-    // os contém, da capa mais próxima do centro à mais distante.
+    // O toque do Qt Quick acerta a capa errada sob a projeção: projeta os cantos e testa a caixa que os contém, da capa
+    // mais próxima do centro à mais distante.
     function capaEm(px, py) {
         const visiveis = []
         for (let i = Math.max(0, Math.floor(posicao - capasDeCadaLado) + 1);
@@ -282,17 +273,15 @@ Item {
         }
         const acao = acoes[evento.key]
         if (!acao) return
-        evento.accepted = true  // consome a tecla mesmo ocupada
+        evento.accepted = true
         if (!bigPicture.ocupada) acao()
     }
 
     Rectangle { anchors.fill: parent; color: "black" }
 
-    // Em pixels reais do monitor da janela (Review Focus 4).
     Image {
         objectName: "fundo"
         anchors.fill: parent
-        // Só com o Big Picture à vista: escondido, o degradê não é gerado (nem na abertura do app).
         source: !bigPicture.visivel ? ""
                 : "image://fundo/" + Math.max(1, Math.round(tela.width * tela.escala))
                   + "x" + Math.max(1, Math.round(tela.height * tela.escala))
@@ -301,7 +290,6 @@ Item {
         asynchronous: false  // provedor Python na thread de imagens trava: ela espera o GIL segurando o mutex do cache
     }
 
-    // Máscara do reflexo, compartilhada: transparente até 55% da capa e opaca na base.
     Rectangle {
         id: mascaraDoReflexo
         visible: false
@@ -318,8 +306,8 @@ Item {
         id: palco
         anchors.fill: parent
 
-        // 17 vagas fixas em anel, não uma por jogo: a vaga `index` mostra o jogo da
-        // janela [base, base+16] com i ≡ index (mod 17). Ao andar uma capa, só uma vaga troca.
+        // 17 vagas fixas em anel: a vaga `index` mostra o jogo da janela [base, base+16] com i ≡ index (mod 17); ao andar
+        // uma capa, só uma vaga troca.
         readonly property int vagas: 2 * tela.capasDeCadaLado + 1
         readonly property int base: Math.floor(tela.posicao) - tela.capasDeCadaLado
         Repeater {
@@ -328,7 +316,6 @@ Item {
                 id: vaga
                 required property int index
                 readonly property int i: palco.base + ((index - palco.base) % palco.vagas + palco.vagas) % palco.vagas
-                // Só à vista: na entrada a lista nasce antes da tela cheia, e no tamanho da janela a vaga decodificaria à toa.
                 active: bigPicture.visivel && i >= 0 && i < tela.jogos.length
                         && Math.abs(i - tela.posicao) < tela.capasDeCadaLado
                 z: -Math.abs(i - tela.posicao)
@@ -341,8 +328,7 @@ Item {
                     altura: tela.alturaCapa
                     escala: tela.escala
                     opacidadeDoReflexo: tela.reflexoOpacidade
-                    // Só no fim do passo: segurando a tecla nenhuma capa de passagem carrega a cópia em alta, e a antiga
-                    // central a guarda até o passo acabar.
+                    // Só no fim do passo: segurando a tecla, nenhuma capa de passagem carrega a cópia em alta.
                     central: vaga.i === tela.centralExibida
                     animar: bigPicture.animarCentral && bigPicture.visivel && !tela.sessaoEmAndamento
                     opacity: (1 - tela.progressoAbertura) * tela.opacidadeCapas
@@ -363,12 +349,11 @@ Item {
         WheelHandler {
             enabled: !bigPicture.ocupada
             acceptedDevices: PointerDevice.Mouse
-            // Um passo por entalhe (120); roda horizontal não move.
             property int acumulado: 0
-            onEnabledChanged: acumulado = 0  // ocupada: o resto não vale para depois
+            onEnabledChanged: acumulado = 0
             onWheel: (evento) => {
                 if (evento.angleDelta.y === 0) return
-                if (acumulado * evento.angleDelta.y < 0) acumulado = 0  // mudou de sentido
+                if (acumulado * evento.angleDelta.y < 0) acumulado = 0
                 acumulado += evento.angleDelta.y
                 while (Math.abs(acumulado) >= 120) {
                     const lado = acumulado < 0 ? 1 : -1

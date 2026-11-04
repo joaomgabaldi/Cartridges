@@ -1,9 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// Linha expansora com interruptor: ícone no início, título, interruptor e seta. O interruptor liga e desliga; a seta e a
-// linha recolhem e abrem as linhas filhas, que só aparecem com o interruptor ligado. Os filhos entram em `linhas` e ficam
-// fora da busca. Nasce recolhida: abrir a tela com a chave já ligada mostra a linha fechada.
+// Linha expansora com interruptor: as filhas (`linhas`) só aparecem com o interruptor ligado e ficam fora da busca. Nasce
+// recolhida.
 LinhaDoGrupo {
     id: linha
 
@@ -23,7 +22,6 @@ LinhaDoGrupo {
     // As filhas ficam escondidas, e não só com altura zero, para não receberem o Tab fechadas.
     Behavior on implicitHeight { enabled: Tema.animacoes; NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
 
-    // Hover e foco do cabeçalho, no lugar dos da base (que cobririam as filhas).
     Rectangle {
         anchors { left: parent.left; right: parent.right; top: parent.top; topMargin: linha._topo }
         height: linha._cabecalho
@@ -130,13 +128,11 @@ LinhaDoGrupo {
         }
     }
 
-    // As filhas descem abaixo do cabeçalho. O vão de 0,01 no início tira a primeira filha de `y <= 0`: ela desenha o
-    // separador de cima, como toda linha que não é a primeira do cartão.
+    // O vão de 0,01 no início tira a primeira filha de `y <= 0`: ela desenha o separador de cima.
     Column {
         id: filhas
         readonly property bool separada: false
         anchors { left: parent.left; right: parent.right; top: parent.top; topMargin: linha._topo + linha._cabecalho }
-        // A altura anima com a linha, e o que passa dela some.
         height: Math.max(0, linha.implicitHeight - linha._topo - linha._cabecalho)
         clip: true
         visible: linha.aberta || height > 0

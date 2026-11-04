@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// As horas jogadas por dia, em linha. Só desenha: a geometria (posições, grade, rótulos, quebras) vem pronta do
-// `historico` (cartridges/session_history.py); aqui só entram as medidas em pixels e as cores do Tema.
+// As horas jogadas por dia, em linha; só desenha: a geometria vem pronta do `historico` (cartridges/session_history.py).
 Item {
     id: raiz
     objectName: "graficoDoHistorico"
@@ -30,8 +29,6 @@ Item {
 
     function cor(c, alfa) { return Qt.rgba(c.r, c.g, c.b, alfa) }
 
-    // Escreve `t` com o centro vertical em `y`; `alinhamento` é onde `x` cai no texto (0 = começo, 0,5 = meio, 1 = fim).
-    // Preso à área: um "set 26" centrado num dia 1º perto da borda não sai cortado.
     function escrever(ctx, t, x, y, alinhamento) {
         var largura = ctx.measureText(t).width
         ctx.fillText(t, Math.min(Math.max(0, x - largura * alinhamento), width - largura), y)
@@ -72,8 +69,6 @@ Item {
         var pontos = []
         for (var p = 0; p < n; ++p) pontos.push([xDe(p), yDe(g.horas[p])])
 
-        // Cada pausa cortada: uma linha tracejada no meio do vão, e a linha do gráfico não o atravessa, para ninguém
-        // ler o vão como dias seguidos.
         ctx.strokeStyle = cor(Tema.texto, 0.35)
         ctx.lineWidth = 1
         ctx.setLineDash([4, 4])
@@ -109,7 +104,6 @@ Item {
             inicio = fim
         }
 
-        // Pontos só enquanto cabem: num período de anos eles viram uma faixa.
         if (n === 1 || larguraUtil / (ultima + 1) >= 8) {
             ctx.fillStyle = cor(Tema.destaqueTexto, 1)
             for (var d = 0; d < n; ++d) {

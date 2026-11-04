@@ -2,10 +2,8 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// A janela de login da EA e da Epic: os passos, o campo onde se cola o que a loja mostrou, o erro e os botões. Só
-// desenha: o estado é do `login` (um `LoginDaLoja`, cartridges/modelos/contas.py); sem `login`, ela some. Modal para o
-// mouse, o teclado e o controle (a `MolduraDoDialogo` cobre a janela inteira); Esc, o X e "Cancelar" fecham; Enter no
-// campo de uma linha conecta. O que a loja devolve e o texto colado são de terceiros: sempre PlainText.
+// A janela de login da EA e da Epic; só desenha, o estado é do `login` (cartridges/modelos/contas.py). O que a loja
+// devolve e o texto colado são de terceiros: PlainText.
 MolduraDoDialogo {
     id: janela
 
@@ -14,13 +12,12 @@ MolduraDoDialogo {
 
     aberto: !!login && login.aberto
     largura: 460
-    // O foco cai no primeiro campo: o texto da linha na Epic, o campo de várias linhas na EA.
     focoInicial: campoAtual
     nomeAcessivel: login ? login.titulo : ""
     onFecharPedido: if (login) login.fechar()
 
-    // O texto do modelo (a recusa o limpa) e o do campo andam juntos. Só o campo à vista é sincronizado: o de uma
-    // linha, escondido, cortaria em 32767 caracteres e devolveria o corte ao modelo.
+    // Só o campo à vista é sincronizado: o de uma linha, escondido, cortaria em 32767 caracteres e devolveria o corte ao
+    // modelo.
     Connections {
         target: janela.login
         function onMudou() {
@@ -128,7 +125,6 @@ MolduraDoDialogo {
             Accessible.role: Accessible.AlertMessage
             Accessible.name: text
         }
-        // Sem navegador, o código só aparece na página de redirecionamento: o endereço fica à mostra e selecionável.
         TextEdit {
             objectName: "enderecoDoLogin"
             Layout.fillWidth: true

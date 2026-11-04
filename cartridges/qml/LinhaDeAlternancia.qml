@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// Linha com título, explicação e o interruptor; a linha inteira aciona, com hover de 4% e 8% pressionada.
 LinhaDoGrupo {
     id: linha
 
@@ -12,7 +11,6 @@ LinhaDoGrupo {
     reservaADireita: chave.width
     sobre: areaDaLinha.containsMouse && !chave.hovered
     pressionada: areaDaLinha.pressed
-    // O contorno de foco é da linha, não do interruptor; o Tab para aqui, no Switch, e o anel sai na linha.
     foco: chave.visualFocus
 
     MouseArea {

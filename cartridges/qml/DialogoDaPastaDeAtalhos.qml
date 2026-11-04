@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Dialogs
 
-// "Pasta de atalhos": obrigatória, sem Esc nem X; só sai com a pasta escolhida. O seletor nativo é criado só ao clicar.
-// Só desenha: o texto e a gravação são do `restauracao`.
+// "Pasta de atalhos": obrigatória, sem Esc nem X; só sai com a pasta escolhida.
 ModalDaRestauracao {
     id: dialogo
     objectName: "dialogoDaPastaDeAtalhos"

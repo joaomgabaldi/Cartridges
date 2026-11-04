@@ -3,8 +3,7 @@ import QtQuick.Controls.Basic
 import QtQuick.Effects
 import QtQuick.Window
 
-// Um jogo da grade: a capa e o nome dentro do mesmo cartão arredondado. Ao passar o mouse: jogar no canto superior
-// esquerdo e "Mais opções" no direito (só o ponteiro).
+// Um jogo da grade: a capa e o nome no mesmo cartão arredondado; ao passar o mouse, jogar e "Mais opções".
 Rectangle {
     id: cartao
 
@@ -13,22 +12,16 @@ Rectangle {
     required property string capa
     required property bool zerado
     required property bool carregando
-    // A cópia WebP animada no tamanho da grade; "" se a capa é parada ou a cópia ainda não saiu.
     property string capaAnimada: ""
-    // O cartão está dentro da janela visível da grade (o delegate liga).
     property bool naVista: true
-    // "Animar capas" (com os efeitos de animação do Windows ligados): as capas à vista tocam sem o mouse.
     property bool tocarSempre: false
-    // Há um patch esperando no feed (e o jogo não é zerado): o halo dourado em volta do cartão.
     property bool temAtualizacao: false
-    // Passar o mouse toca a capa animada com ou sem "Animar capas", também em Jogos Zerados. Sem animação o cartão mostra
-    // a capa parada; fora da vista, janela minimizada ou oculta, nada toca e o arquivo da cópia é largado.
     readonly property bool animando: capaAnimada !== "" && naVista && (tocarSempre || passando)
         && Window.visibility !== Window.Minimized && Window.visibility !== Window.Hidden
     // Parar pausa no quadro atual (`tocador_capas.py`): o arquivo da cópia fica aberto por 30 s, e só então a capa volta
-    // ao primeiro quadro; a grade limita as pausadas a 8 (`liberar`). Retomar segue de onde parou.
-    // O ponteiro está sobre o cartão. Propriedade comum (não só `passagem.hovered`) para os testes, que no offscreen não
-    // conseguem produzir o hover, a ligarem.
+    // ao primeiro quadro.
+    // O ponteiro está sobre o cartão. Propriedade comum (não só `passagem.hovered`) porque os testes não produzem hover
+    // no offscreen.
     property bool passando: passagem.hovered
     property bool retendo: false
     signal pausou()
@@ -45,7 +38,6 @@ Rectangle {
     }
     Timer { id: retencao; interval: 30000; onTriggered: cartao.retendo = false }
     property bool focado: false
-    // O modelo da biblioteca: só `iniciar` é chamado nele; o QML nunca vê um Jogo.
     property QtObject modelo
 
     signal abrirDetalhes(string jogoId)
@@ -55,7 +47,6 @@ Rectangle {
     readonly property int larguraDaCapa: 200
     readonly property int alturaDaCapa: 300
     readonly property int alturaDoNome: 47
-    // Só o ponteiro e o menu aberto mostram os botões: o foco do teclado e o controle não.
     readonly property bool mostrarBotoes: !zerado && (passando || menuAberto)
     property bool menuAberto: false
     readonly property string nomeAcessivel: Accessible.name
@@ -120,7 +111,6 @@ Rectangle {
         height: cartao.alturaDaCapa
         visible: false
         layer.enabled: true
-        // Cantos de cima arredondados, os de baixo retos: o retângulo passa do fim para o raio sumir embaixo.
         Rectangle { width: parent.width; height: parent.height + cartao.radius; radius: cartao.radius }
     }
 
@@ -140,17 +130,14 @@ Rectangle {
         Image {
             id: imagem
             objectName: "capaParada"
-            // A URL que não se leu (arquivo quebrado): no lugar dela, o placeholder. Uma capa nova muda a URL (`?v=`).
             property string ilegivel: ""
             // Para a `CortinaDaAbertura` (Python), que não lê o enum do `status`.
             readonly property bool carregandoArquivo: status === Image.Loading
             anchors.fill: parent
             source: cartao.capa !== "" && cartao.capa !== ilegivel ? cartao.capa : (cartao.modelo ? cartao.modelo.placeholder : "")
             onStatusChanged: if (status === Image.Error && source.toString() === cartao.capa) ilegivel = cartao.capa
-            // A capa que não é 2:3 é esticada para 200x300; o placeholder também.
             fillMode: Image.Stretch
             asynchronous: true
-            // Na resolução real da tela, para a capa não ficar borrada em DPI alto.
             sourceSize: Qt.size(cartao.larguraDaCapa * Screen.devicePixelRatio,
                                 cartao.alturaDaCapa * Screen.devicePixelRatio)
         }
@@ -207,7 +194,6 @@ Rectangle {
                     : (pressao.containsMouse ? Qt.rgba(0.15, 0.15, 0.15, 0.65) : Qt.rgba(0, 0, 0, 0.65))
                 Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
                 Accessible.role: Accessible.Button
-                // Sem dica visível: o nome é só para quem usa leitor de tela.
                 Accessible.name: dica
                 Icone {
                     anchors.centerIn: parent

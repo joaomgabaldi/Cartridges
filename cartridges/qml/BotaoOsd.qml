@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O botão circular sobre uma capa: 34x34, preto a 65%, 15% de branco ao passar e 25% ao apertar, ícone branco a 90%.
-// Enter e Espaço acionam; o foco do teclado desenha o `AnelDeFoco`.
 Button {
     id: botao
 

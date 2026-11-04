@@ -1,8 +1,8 @@
 pragma Singleton
 import QtQuick
 
-// As capas animadas pausadas de todas as grades (Todos e Zerados): guardam o quadro e o arquivo, no máximo 8 ao todo
-// (`MAX_PAUSADAS_ABERTAS` de `tocador_capas.py`); passando disso, a mais antiga volta ao primeiro quadro (`liberar`).
+// As capas animadas pausadas de todas as grades: no máximo 8 (`MAX_PAUSADAS_ABERTAS` de `tocador_capas.py`); a mais
+// antiga volta ao primeiro quadro (`liberar`).
 QtObject {
     property var lista: []
     readonly property int maximo: 8

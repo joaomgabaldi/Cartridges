@@ -1,13 +1,12 @@
 import QtQuick
 
-// A confirmação de um aviso com título, corpo e, se houver, uma lista de itens (título e subtítulo).
-// Os textos vão sempre em PlainText: caminhos e mensagens de erro não são marcação.
+// Confirmação de um aviso com título, corpo e lista de itens. Textos em PlainText: caminhos e mensagens de erro não são
+// marcação.
 DialogoDeAlerta {
     id: dialogo
 
     property var itens: []
     property string rotuloDoBotao: "Dispensar"
-    // O segundo botão (o padrão); vazio = escondido.
     property string rotuloSecundario: ""
 
     signal dispensado()
@@ -19,7 +18,6 @@ DialogoDeAlerta {
         itens = novosItens
         rotuloSecundario = novoRotuloSecundario || ""
         aberto = true
-        // Reaberto com outro conteúdo, o foco vai de novo ao botão inicial.
         Qt.callLater(focarInicial)
     }
     function acionarSecundario() { responder("secundario") }

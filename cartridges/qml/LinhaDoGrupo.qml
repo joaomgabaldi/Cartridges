@@ -1,19 +1,16 @@
 import QtQuick
 
-// A base das linhas: título e subtítulo à esquerda, o sufixo à direita, separador em cima, hover e opacidade de
-// desabilitada. Sozinha, é uma linha sem ação. Medidas: 50 de altura mínima + 2 de respiro em cima e embaixo; 14 das
-// laterais; título em 12 px e subtítulo em 10 px apagado, 3 entre eles.
-//
+// A base das linhas: título e subtítulo à esquerda, sufixo à direita, separador em cima, hover e opacidade de
+// desabilitada.
 // Quem herda declara o sufixo como filho, ancorado à direita com margem 14, põe `reservaADireita` (a largura do sufixo)
 // e, se a linha inteira aciona, liga `sobre` e `pressionada`.
 FocusScope {
     id: linha
 
-    // `aparece` é a regra de cada linha (ex.: só com um interruptor ligado). O grupo conta por ela, não pelo `visible`
-    // efetivo (que depende do próprio grupo: laço).
+    // `aparece` é a regra de cada linha; o grupo conta por ela, não pelo `visible` efetivo (que depende do próprio grupo:
+    // laço).
     property bool aparece: true
-    // Só as linhas das Preferências são buscáveis (`buscavel: true`); as dos assistentes e do editor ignoram a busca.
-    // Nas Preferências use `aparece` para a regra da linha, nunca `visible` (um `visible:` de instância foge da contagem do grupo).
+    // Nas Preferências use `aparece`, nunca `visible` (um `visible:` de instância foge da contagem do grupo).
     property bool buscavel: false
     visible: aparece
 
@@ -26,7 +23,6 @@ FocusScope {
     property bool sobre: false
     property bool pressionada: false
     property bool foco: false
-    // O título e o subtítulo somem da base (a `LinhaDeBotao` e a `LinhaDeTexto` desenham os seus).
     property bool comTextos: true
     property alias textos: colunaDeTextos
 
@@ -97,7 +93,6 @@ FocusScope {
         }
     }
 
-    // O contorno segue os cantos do cartão: arredondado em cima na primeira linha e embaixo na última.
     AnelDeFoco {
         ativo: linha.foco
         raio: linha.raioDaLinha

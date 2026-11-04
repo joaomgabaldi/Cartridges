@@ -3,17 +3,14 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
 
-// A lista completa de conquistas de um jogo: o logo (ou o nome), o resumo e a barra no topo, e os grupos "Desbloqueadas"
-// (da mais recente para a mais antiga) e "Bloqueadas", apagadas. Só desenha: o estado é do `conquistasDoJogo`
-// (cartridges/modelos/conquistas.py). Modal para o mouse, o teclado e o controle; o foco volta a quem o abriu. Sem título
-// visível: o logo (ou o nome) é a manchete, e o título só vive no nome acessível. Todo texto de conquista é de terceiros:
-// texto puro.
+// A lista completa de conquistas de um jogo, só desenha: o estado é do `conquistasDoJogo`. Todo texto de conquista é de
+// terceiros: texto puro.
 MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoDeConquistas"
 
     function contem(pai, item) {
-        for (var p = item; p; p = p.parent) // `parent`: o `parentItem` do C++ não existe no QML
+        for (var p = item; p; p = p.parent)
             if (p === pai) return true
         return false
     }
@@ -23,7 +20,6 @@ MolduraDoDialogo {
         if (topo < rolagem.contentY) rolagem.contentY = Math.max(0, topo - 8)
         else if (base > rolagem.contentY + rolagem.height) rolagem.contentY = base - rolagem.height + 8
     }
-    // As setas andam entre as fileiras, na ordem do Tab, e nunca saem da lista (o X do cabeçalho fica de fora).
     function irParaVizinha(de, adiante) {
         var proximo = de.nextItemInFocusChain(adiante)
         if (proximo && contem(rolagem.contentItem, proximo)) proximo.forceActiveFocus(Qt.TabFocusReason)
@@ -35,7 +31,6 @@ MolduraDoDialogo {
     focoInicial: cabecalho.botaoFechar
     nomeAcessivel: "Conquistas"
     onFecharPedido: conquistasDoJogo.fechar()
-    // Fechado a partir de um menu, o foco não tem para onde voltar: vai à página à vista.
     onRetornoPerdido: if (Window.window && Window.window.paginaDoControle) Window.window.paginaDoControle.focarGrade()
     onAbertoChanged: if (aberto) rolagem.contentY = 0
 
@@ -77,7 +72,6 @@ MolduraDoDialogo {
                     readonly property var modelData: secao.fileiras[index] || ({})
                     property alias alvo: alvoDaLinha
                     comTextos: false
-                    // Ícone de 36 e, no mínimo, 50 + 4; o texto longo alarga a fileira.
                     alturaMinima: Math.max(50, linha.implicitHeight + 12)
                     opacity: modelData.desbloqueada ? 1 : Tema.opacidadeApagado
 
@@ -154,7 +148,7 @@ MolduraDoDialogo {
                         id: alvoDaLinha
                         objectName: "alvoDaFileiraDeConquista"
                         anchors.fill: parent
-                        focusPolicy: Qt.StrongFocus  // um `Control`: o anel só aparece com o teclado (`visualFocus`)
+                        focusPolicy: Qt.StrongFocus
                         contentItem: Item {}
                         background: Item {}
                         Binding { target: fileira; property: "foco"; value: alvoDaLinha.visualFocus }

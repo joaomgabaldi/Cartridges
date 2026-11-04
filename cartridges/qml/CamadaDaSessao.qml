@@ -3,8 +3,8 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
 
-// A tela da sessão: cobre a janela inteira, barra de título incluída, enquanto o jogo roda. Lê só o `sessao`
-// (cartridges/modelos/sessao.py); o texto do jogo é sempre texto puro.
+// A tela da sessão: cobre a janela inteira, barra de título incluída, enquanto o jogo roda. O texto do jogo é sempre
+// texto puro.
 Rectangle {
     id: raiz
     objectName: "camadaDaSessao"
@@ -17,8 +17,8 @@ Rectangle {
         onWheel: wheel => wheel.accepted = true
     }
 
-    // O anel de foco só vem se o teclado (ou o controle) já estava em uso quando o jogo foi aberto. Lembrado enquanto a
-    // camada está escondida, porque ao abrir a página de trás já foi desabilitada e o foco dela já saiu.
+    // O anel de foco só vem se o teclado já estava em uso ao abrir o jogo; lembrado enquanto escondida, porque a página
+    // de trás já perdeu o foco.
     property bool _tecladoEmUso: false
     Connections {
         target: raiz.Window.window
@@ -26,7 +26,6 @@ Rectangle {
         function onActiveFocusItemChanged() {
             const foco = raiz.Window.window.activeFocusItem
             if (!foco || foco === raiz.Window.window.contentItem) return
-            // A grade sabe se o último gesto foi do teclado (`porTeclado`); os controles, pelo `visualFocus`.
             let teclado = false
             for (let p = foco; p; p = p.parent)
                 if (p.porTeclado === true || p.visualFocus === true) { teclado = true; break }
@@ -34,7 +33,6 @@ Rectangle {
         }
     }
 
-    // Esconder fecha o balão aberto (e é esse fechamento que grava a anotação).
     onVisibleChanged: {
         if (visible) {
             botaoTerminei.forceActiveFocus(_tecladoEmUso ? Qt.TabFocusReason : Qt.OtherFocusReason)
@@ -49,11 +47,10 @@ Rectangle {
         anchors.centerIn: parent
         spacing: 18
 
-        // A largura natural do nome, até a da janela menos 48: só o logo é limitado a 640.
         ColumnLayout {
             objectName: "colunaDoJogo"
             Layout.alignment: Qt.AlignHCenter
-            Layout.fillWidth: false  // um layout dentro de outro estica por padrão
+            Layout.fillWidth: false
             Layout.maximumWidth: raiz.width - 48
             spacing: 18
 
@@ -111,8 +108,7 @@ Rectangle {
                 onClicked: sessao.terminar()
             }
 
-            // Sobre a camada escura o branco vale nos dois temas: o `currentColor` seria o texto do tema, e o hover
-            // sumiria no tema claro.
+            // Sobre a camada escura o branco vale nos dois temas: o `currentColor` seria o texto do tema.
             Botao {
                 id: botaoAnotacao
                 objectName: "botaoAnotacaoDaSessao"
@@ -148,7 +144,6 @@ Rectangle {
             }
         }
 
-        // Escondido sem conquistas, e aí não ocupa espaço: a tela fica como era.
         ConquistasDaSessao {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: 12

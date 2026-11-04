@@ -1,13 +1,11 @@
 import QtQuick
 import QtQuick.Window
 
-// A janela "Restaurando o backup" da abertura: sem moldura nativa, com a barra do app só com minimizar (fechar, não). Num
-// motor próprio, antes da biblioteca; `restaurando` vem do contexto. O `app` a fecha depois de a principal aparecer.
+// A janela "Restaurando o backup" da abertura, num motor próprio antes da biblioteca; `restaurando` vem do contexto.
 Window {
     id: raiz
     objectName: "janelaRestaurando"
 
-    // Sem a marca `comAgente` (os testes), não há ponte do QWindowKit.
     readonly property bool semAgente: typeof comAgente === "undefined"
     readonly property QtObject agente: carga.item
     readonly property real alturaPedida: barra.altura + conteudo.implicitHeight
