@@ -1,6 +1,6 @@
 import QtQuick
 
-// O seletor de cor da fita de LED (D51): um quadrado com o matiz na horizontal e a saturação na vertical
+// O seletor de cor da fita de LED: um quadrado com o matiz na horizontal e a saturação na vertical
 // (cheia em cima, branco embaixo), com o brilho fixo. A fita só usa matiz e saturação; o brilho é a linha
 // "Brilho (%)". Cada movimento emite `escolhida`, para as fitas acenderem a cor na hora.
 // Teclado: setas esquerda e direita mexem no matiz, para cima e para baixo na saturação; com Shift, passos maiores.

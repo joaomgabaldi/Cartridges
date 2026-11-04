@@ -17,7 +17,7 @@ Item {
     // Um jogo foi escolhido (clique, Enter, A do controle ou Enter da busca) e a página dele deve abrir.
     signal abrirDetalhes(string jogoId)
     signal editar(string jogoId)
-    // Esc em Jogos Zerados volta (`pop-on-escape` da `AdwNavigationPage`); "Todos os jogos" não tem para onde.
+    // Esc em Jogos Zerados volta; "Todos os jogos" não tem para onde.
     signal voltar()
 
     // Página vazia com o botão "Importar": é ele que recebe o foco, não a grade invisível.
@@ -30,7 +30,7 @@ Item {
     // O controle do Xbox (Aplicativo.qml): o menu do jogo está aberto, e os comandos sobre o cartão atual.
     readonly property bool menuDoJogoAberto: grade.menuAberto
     // A grade rolada: a barra de título mostra a linha de baixo.
-    // Com a busca aberta, a linha fica sob ela (`undershoot` abaixo da `SearchBar`), e a da barra de título apaga:
+    // Com a busca aberta, a linha fica sob ela, e a da barra de título apaga:
     // só uma linha, nunca duas.
     readonly property bool buscaVisivel: comBusca && buscaAberta
     readonly property bool rolado: grade.rolado && !buscaVisivel
@@ -43,13 +43,13 @@ Item {
             grade.forceActiveFocus()
             return true
         }
-        // Página vazia: o foco alcança o botão "Importar" (`window.blp:20-29`).
+        // Página vazia: o foco alcança o botão "Importar".
         if (grade.count === 0) {
             if (dy <= 0 || !aviso.visible || aviso.rotuloDoBotao === "" || aviso.botaoFocado) return false
             aviso.focarBotao()
             return true
         }
-        // O `GtkFlowBox` responde que andou mesmo contra a parede (o toque é o de passar): só ↑ na primeira linha sai.
+        // A grade responde que andou mesmo contra a parede (o toque é o de passar): só ↑ na primeira linha sai.
         return grade.moverSelecao(dx, dy) || dy >= 0
     }
     // O x (na janela) do centro do cartão atual, para achar o botão da barra mais próximo.
@@ -57,7 +57,7 @@ Item {
         return grade.currentItem ? grade.currentItem.mapToItem(null, grade.currentItem.width / 2, 0).x : 0
     }
     // Um controle apareceu: acende a seleção, sem tirar o foco de quem digita na busca. Com o foco fora da grade, vai ao
-    // primeiro jogo (`_focus_first`); devolve se foi.
+    // primeiro jogo; devolve se foi.
     function mostrarSelecao() {
         if (buscaAberta) return false
         if (vazioComBotao) { aviso.focarBotao(); return false }
@@ -83,9 +83,9 @@ Item {
     }
     function alternarBusca() { buscaAberta = !buscaAberta }
 
-    // O `key-capture-widget` da `main` é a página inteira (`window.blp:180`): digitar com o foco na grade ou num botão da
+    // Digitar com o foco na grade ou num botão da
     // barra abre a busca e leva a letra. Só a página "Todos os jogos" (a busca dos Zerados não existe, e Detalhes e
-    // Zerados à vista não a abrem, G13). Espaço não conta: ele aciona o botão ou o cartão em foco.
+    // Zerados à vista não a abrem). Espaço não conta: ele aciona o botão ou o cartão em foco.
     // Devolve se a tecla foi tomada.
     function capturar(event) {
         if (event.key === Qt.Key_Escape) {
@@ -115,8 +115,7 @@ Item {
         }
     }
 
-    // A `SearchBar` dentro do `.top-bar` da `ToolbarView`: transparente, sem linha própria (CSS 2853 vence a 2839),
-    // padding 6 em volta do campo de 34 (46 no total); abre em 250 ms.
+    // A barra de busca: transparente, sem linha própria, padding 6 em volta do campo de 34 (46 no total); abre em 250 ms.
     Item {
         id: barraDeBusca
         objectName: "barraDeBusca"
@@ -126,7 +125,7 @@ Item {
         clip: true
         Behavior on height { enabled: Tema.animacoes; NumberAnimation { duration: 250 } }
 
-        // O `GtkSearchEntry` espera 150 ms depois da última tecla para filtrar; Enter e Esc aplicam na hora.
+        // O campo espera 150 ms depois da última tecla para filtrar; Enter e Esc aplicam na hora.
         Timer {
             id: esperaDaBusca
             interval: 150
@@ -138,7 +137,7 @@ Item {
             objectName: "campoDeBusca"
             x: Math.round((parent.width - width) / 2)
             y: 6
-            // `Adw.Clamp` de 500, com os 6 de padding dos lados.
+            // Largura máxima de 500, com os 6 de padding dos lados.
             width: Math.min(500, parent.width - 12)
             height: 34
             placeholderText: "Buscar"
@@ -170,7 +169,7 @@ Item {
                 nome: "edit-find"
                 opacity: 0.7
             }
-            // `edit-clear-symbolic` à direita: limpa e mantém o foco no campo.
+            // O botão de limpar, à direita: limpa e mantém o foco no campo.
             Icone {
                 id: limpar
                 objectName: "limparBusca"
@@ -202,7 +201,7 @@ Item {
         anchors { top: barraDeBusca.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         biblioteca: raiz.pagina
         colunasMaximas: aplicativo.colunasMaximas
-        // Só com "Animar capas" e os efeitos de animação do Windows ligados (como na `main`).
+        // Só com "Animar capas" e os efeitos de animação do Windows ligados.
         tocarSempre: aplicativo.tocarSempre && aplicativo.animacoesDoSistema
         ativa: raiz.ativa
         visible: !aviso.visible
@@ -210,7 +209,7 @@ Item {
         onEditar: id => raiz.editar(id)
     }
 
-    // `toolbarview.undershoot-top` (CSS 2914): sob a busca aberta, a linha de 1 px mais o degradê de 4 px em `shade_color`
+    // Sob a busca aberta, a linha de 1 px mais o degradê de 4 px em `shade_color`
     // a 75%, enquanto a grade está rolada. Sem a busca, a mesma linha é a `sombraDaBarra` da barra de título.
     Item {
         id: linhaBusca
@@ -231,7 +230,7 @@ Item {
         Rectangle { anchors { left: parent.left; right: parent.right; top: parent.top } height: 1; color: linhaBusca.sombra }
     }
 
-    // `overshoot` do scrolledwindow (CSS 2343): dois degradês radiais em `currentColor`, 12% numa faixa de 3% da altura e
+    // O efeito de fim de rolagem: dois degradês radiais em `currentColor`, 12% numa faixa de 3% da altura e
     // 5% numa de 50%, com o centro na borda; somem ao soltar. Dispara com `verticalOvershoot` (`DragOverBounds`).
     Repeater {
         model: [{ topo: true }, { topo: false }]
@@ -284,7 +283,7 @@ Item {
         objectName: raiz.comBusca ? "estadoVazio" : "estadoVazioDeZerados"
         anchors { top: barraDeBusca.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         visible: raiz.pagina && (raiz.pagina.vazia || raiz.pagina.semResultados)
-        // `window.blp`: busca sem resultado, `system-search`; Zerados vazio, `object-select`; "Nenhum jogo" não tem ícone.
+        // Busca sem resultado, `system-search`; Zerados vazio, `object-select`; "Nenhum jogo" não tem ícone.
         iconeDoApp: raiz.pagina.vazia && raiz.comBusca
         icone: raiz.pagina.vazia ? (raiz.comBusca ? "" : "object-select") : "system-search"
         titulo: raiz.pagina.vazia ? (raiz.comBusca ? "Nenhum jogo" : "Nenhum jogo zerado") : "Nenhum jogo encontrado"

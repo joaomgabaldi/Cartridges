@@ -3,8 +3,8 @@ import QtQuick.Effects
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// A base dos modais da continuação da restauração (D81): um `Adw.Dialog` com cabeçalho (título centrado e X) e o corpo em
-// coluna, com as margens 12/24/24/24 e o espaço de 18 do `_caixa()` de `restauracao_dialogs.py`. Só desenha: o que cada um
+// A base dos modais da continuação da restauração: um diálogo com cabeçalho (título centrado e X) e o corpo em
+// coluna, com as margens 12/24/24/24 e o espaço de 18. Só desenha: o que cada um
 // mostra e faz é o `restauracao` (cartridges/modelos/restauracao.py). O foco inicial vai ao `inicial` e, ao fechar, volta a
 // quem o tinha. Sem `fechavel`, nem o Esc nem o X saem (a pasta de atalhos é obrigatória).
 MolduraDoDialogo {
@@ -20,7 +20,7 @@ MolduraDoDialogo {
     // Esc ou X.
     signal saiu()
 
-    // Uma capa de `width`×`height` com o raio 12 da classe `.card` (`restauracao_dialogs._capa`): `clip` só corta em
+    // Uma capa de `width`×`height` com raio 12: `clip` só corta em
     // retângulo, então a imagem passa por uma máscara.
     component Capa: Item {
         id: capa
@@ -51,7 +51,7 @@ MolduraDoDialogo {
         }
     }
 
-    // Uma `boxed-list` rolável (`ScrolledWindow` com `max_content_height`): o cartão fica atrás, para a sombra não ser
+    // Uma lista rolável: o cartão fica atrás, para a sombra não ser
     // cortada pela rolagem. `model` e `delegate` são os da `ListView`; as linhas são `LinhaDoGrupo`.
     component Cartela: Item {
         id: cartela
@@ -75,7 +75,7 @@ MolduraDoDialogo {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: BarraDeRolagem {}
-            // O Tab leva o foco a uma linha fora da vista: a lista rola até ela (o `GtkScrolledWindow` faz o mesmo).
+            // O Tab leva o foco a uma linha fora da vista: a lista rola até ela.
             Connections {
                 target: cartela.Window.window
                 function onActiveFocusItemChanged() {

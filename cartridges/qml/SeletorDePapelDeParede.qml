@@ -4,16 +4,16 @@ import QtQuick.Effects
 import QtQuick.Layouts
 
 // O seletor do papel de parede da sessão: uma grade de candidatos do wallhaven já cortados no formato dos monitores
-// (`Adw.Dialog` de 860x700) e, depois da escolha, a barra que desliza a faixa de cada monitor.
+// (diálogo de 860x700) e, depois da escolha, a barra que desliza a faixa de cada monitor.
 // Só desenha: a busca, os cortes e o download são do `seletor` (SeletorDePapelDeParede, cartridges/modelos/seletores.py).
 // Modal para o mouse, o teclado e o controle (abre por cima do diálogo de edição, que fica desabilitado);
-// o foco volta ao botão que o abriu. Esc fecha o seletor inteiro, como na versão anterior.
+// o foco volta ao botão que o abriu. Esc fecha o seletor inteiro.
 SeletorBase {
     id: seletorDePapel
 
     property QtObject seletor
 
-    // `min-children-per-line: 1`, `max-children-per-line: 4`.
+    // De uma a quatro colunas.
     readonly property int colunas: Math.max(1, Math.min(4, Math.floor((conteudo.width - 24 - 12) / (seletor.larguraDaCelula + 18))))
 
     aberto: seletor.aberto
@@ -111,7 +111,7 @@ SeletorBase {
             GridView {
                 id: grade
                 objectName: seletorDePapel.objectName + "Grade"
-                // `FlowBox homogeneous` centrado: só as colunas ocupam a largura; a roda nas laterais rola pelo `WheelHandler`.
+                // Centrado: só as colunas ocupam a largura; a roda nas laterais rola pelo `WheelHandler`.
                 width: seletorDePapel.colunas * cellWidth
                 height: parent.height
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -120,10 +120,10 @@ SeletorBase {
                 model: seletorDePapel.seletor
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
-                // O `FlowBoxChild` soma 3 de cada lado da miniatura, e o `FlowBox` afasta 12 (medido na `main`).
+                // A célula soma 3 de cada lado da miniatura, e o espaço entre elas é 12.
                 cellWidth: seletorDePapel.seletor.larguraDaCelula + 18
                 cellHeight: seletorDePapel.seletor.alturaDaCelula + 18
-                // A barra é da página inteira, como o `ScrolledWindow` da `main`: fica na borda, não sobre a última coluna.
+                // A barra é da página inteira: fica na borda, não sobre a última coluna.
                 ScrollBar.vertical: BarraDeRolagem {
                     objectName: seletorDePapel.objectName + "Rolagem"
                     parent: grade.parent
@@ -147,7 +147,7 @@ SeletorBase {
                         width: seletorDePapel.seletor.larguraDaCelula
                         height: seletorDePapel.seletor.alturaDaCelula
                         padding: 0
-                        hoverEnabled: false  // `.no-hover`
+                        hoverEnabled: false
                         focus: true
                         focusPolicy: Qt.StrongFocus
                         Accessible.name: "Papel de parede " + (celula.index + 1)
@@ -160,7 +160,7 @@ SeletorBase {
                         Keys.onUpPressed: seletorDePapel.moverFoco(celula.index - seletorDePapel.colunas)
                         onClicked: seletorDePapel.seletor.escolher(celula.index)
 
-                        // `.wallpaper-preview`: raio 8, sem borda; o contorno do foco é o da `flowboxchild`.
+                        // Raio 8, sem borda.
                         background: Item { AnelDeFoco { ativo: botao.visualFocus; raio: 8; afastamento: 0 } }
                         // A miniatura já vem cortada no formato do monitor (a mesma `enquadrar` do arquivo final).
                         contentItem: Item {
@@ -228,7 +228,7 @@ SeletorBase {
                                 fillMode: Image.PreserveAspectFit
                                 cache: false
                             }
-                            // `caption dim-label`.
+                            // Legenda esmaecida.
                             Text {
                                 width: corte.larguraDaPrevia
                                 visible: corte.desliza
@@ -239,7 +239,7 @@ SeletorBase {
                                 color: Tema.textoSecundario
                                 font { family: Tema.fonte; pixelSize: Tema.legenda }
                             }
-                            // O `Gtk.Scale` da libadwaita: calha de 10 (15% do texto; 20% ao passar), o trecho andado na
+                            // O controle deslizante: calha de 10 (15% do texto; 20% ao passar), o trecho andado na
                             // cor de destaque e o marcador branco de 20 com contorno e sombra, em 12 de folga.
                             Slider {
                                 id: barra

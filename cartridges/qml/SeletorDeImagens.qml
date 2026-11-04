@@ -3,7 +3,7 @@ import QtQuick.Controls.Basic
 import QtQuick.Effects
 import QtQuick.Layouts
 
-// O seletor de capa ou de logo do SteamGridDB: um campo de busca e uma grade de miniaturas (`Adw.Dialog` de 720x620).
+// O seletor de capa ou de logo do SteamGridDB: um campo de busca e uma grade de miniaturas (diálogo de 720x620).
 // Só desenha: a busca, as miniaturas e o download são do `seletor` (cartridges/modelos/seletores.py).
 // Modal para o mouse, o teclado e o controle (abre por cima do diálogo de edição, que fica desabilitado);
 // o foco volta ao botão que o abriu.
@@ -16,10 +16,10 @@ SeletorBase {
     property string rotuloDoAtalho
     property string dicaDoAtalho
     property bool atalhoAlterna: false
-    // O logo é um letreiro horizontal: células de 323x110, uma ou duas por linha. A capa tem 200x210, de duas a quatro (medido na `main`: o `FlowBox` homogêneo dá à célula a largura natural da prévia, não o `width_request`).
+    // O logo é um letreiro horizontal: células de 323x110, uma ou duas por linha. A capa tem 200x210, de duas a quatro (a célula tem a largura natural da prévia).
     property bool horizontal: false
 
-    // A `FlowBox` encolhe a capa até o `width_request` de 140, para caberem as duas colunas do mínimo em janela estreita.
+    // A capa encolhe até 140, para caberem as duas colunas do mínimo em janela estreita.
     readonly property int larguraDaCelula: horizontal ? 323 : Math.max(140, Math.min(200, Math.floor((conteudo.width - 36) / 2)))
     readonly property int alturaDaCelula: horizontal ? 110 : 210
     readonly property int colunas: Math.max(horizontal ? 1 : 2,
@@ -116,7 +116,7 @@ SeletorBase {
             GridView {
                 id: grade
                 objectName: seletorDeImagens.objectName + "Grade"
-                // `FlowBox homogeneous` centrado: só as colunas ocupam a largura; a roda nas laterais rola pelo `WheelHandler`.
+                // Centrado: só as colunas ocupam a largura; a roda nas laterais rola pelo `WheelHandler`.
                 width: seletorDeImagens.colunas * cellWidth
                 height: parent.height
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -127,7 +127,7 @@ SeletorBase {
                 boundsBehavior: Flickable.StopAtBounds
                 cellWidth: seletorDeImagens.larguraDaCelula + 12
                 cellHeight: seletorDeImagens.alturaDaCelula + 12
-                // A barra é da página inteira, como o `ScrolledWindow` da `main`: fica na borda, não sobre a última coluna.
+                // A barra é da página inteira: fica na borda, não sobre a última coluna.
                 ScrollBar.vertical: BarraDeRolagem {
                     objectName: seletorDeImagens.objectName + "Rolagem"
                     parent: grade.parent
@@ -153,7 +153,7 @@ SeletorBase {
                         width: seletorDeImagens.larguraDaCelula
                         height: seletorDeImagens.alturaDaCelula
                         padding: 0
-                        hoverEnabled: false  // `.no-hover`: a célula não reage ao mouse
+                        hoverEnabled: false  // a célula não reage ao mouse
                         focus: true
                         focusPolicy: Qt.StrongFocus
                         Accessible.name: "Miniatura " + (celula.index + 1)
@@ -166,8 +166,8 @@ SeletorBase {
                         Keys.onUpPressed: seletorDeImagens.moverFoco(celula.index - seletorDeImagens.colunas)
                         onClicked: seletorDeImagens.seletor.escolher(celula.index)
 
-                        // O contorno do foco é o da `flowboxchild`; o logo ganha o fundo escuro da página de destino
-                        // (`.logo-preview`: preto a 55%, raio 12), porque a maioria dos logos é branca sobre transparência.
+                        // O logo ganha o fundo escuro da página de destino
+                        // (preto a 55%, raio 12), porque a maioria dos logos é branca sobre transparência.
                         background: Item {
                             Sombra { visible: !seletorDeImagens.horizontal; camadas: Tema.sombraCartao; raio: 12 }
                             Rectangle {
@@ -218,7 +218,7 @@ SeletorBase {
                                     }
                                 }
                             }
-                            // O logo: com 12 de folga, sem ampliar (`SCALE_DOWN`).
+                            // O logo: com 12 de folga, sem ampliar.
                             Image {
                                 anchors.centerIn: parent
                                 visible: seletorDeImagens.horizontal

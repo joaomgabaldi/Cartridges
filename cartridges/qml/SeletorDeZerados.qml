@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// "Adicionar a Jogos Zerados" (D85): um campo de busca na Steam e a lista dos desinstalados (ou dos resultados), num
-// `Adw.Dialog` de 460x520. Só desenha: as regras, a busca e a escolha são do `modelo` (o `SeletorDeZerados`,
+// "Adicionar a Jogos Zerados": um campo de busca na Steam e a lista dos desinstalados (ou dos resultados), num
+// diálogo de 460x520. Só desenha: as regras, a busca e a escolha são do `modelo` (o `SeletorDeZerados`,
 // cartridges/modelos/zerados_manuais.py). Nome de jogo e aviso, texto de terceiros, em PlainText. Modal para o mouse, o
 // teclado e o controle (o fundo fica desabilitado); Esc fecha e o foco volta a quem abriu.
 SeletorBase {
@@ -19,7 +19,7 @@ SeletorBase {
     titulo: "Adicionar a Jogos Zerados"
     placeholder: "Buscar na Steam"
     nomeDaBusca: "Buscar na Steam"
-    // Sem `Adw.Clamp` na barra: o campo ocupa a largura, com 12 dos lados.
+    // O campo ocupa a largura, com 12 dos lados.
     larguraDoCampo: 10000
     margemDoCampo: 12
     rolado: lista.contentY > 0
@@ -85,7 +85,7 @@ SeletorBase {
                 // A mesma mola das grades: a lista também rola com inércia.
                 RolagemPorMola { alvo: lista; ativa: Tema.animacoes }
 
-                // `Adw.Clamp` com 12 de margem: o aviso (que rola com a lista) e a `boxed-list` contínua.
+                // Com 12 de margem: o aviso (que rola com a lista) e o cartão contínuo.
                 Column {
                     id: conteudoDaLista
                     x: (lista.width - width) / 2

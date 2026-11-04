@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Window
 
-// A página Novidades (D83): os posts do feed, num único `boxed-list` de linhas que expandem (`Adw.ExpanderRow`, como a
-// `window.blp` da `main`). Tudo vem de `novidades` (cartridges/modelos/novidades.py); o texto do feed é de terceiros e
+// A página Novidades: os posts do feed, num único cartão de linhas que expandem. Tudo vem de `novidades`
+// (cartridges/modelos/novidades.py); o texto do feed é de terceiros e
 // sempre em PlainText.
 Item {
     id: raiz
@@ -65,7 +65,7 @@ Item {
     focus: true
     Keys.onEscapePressed: voltar()
 
-    // Aberta, a página reconhece os posts; fechada, deixa de reconhecê-los (D83).
+    // Aberta, a página reconhece os posts; fechada, deixa de reconhecê-los.
     StackView.onStatusChanged: novidades.paginaVisivel(StackView.status === StackView.Active || StackView.status === StackView.Activating)
     // Depois do foco que a própria StackView dá à página ao ativá-la.
     StackView.onActivated: Qt.callLater(() => focarInicial())
@@ -75,7 +75,7 @@ Item {
 
     Connections {
         target: novidades
-        // A lista refeita volta ao topo e só: o foco não é puxado (o Tab já entra nela), como a `main`.
+        // A lista refeita volta ao topo e só: o foco não é puxado (o Tab já entra nela).
         function onListaRefeita() { lista.positionViewAtBeginning() }
     }
 
@@ -101,7 +101,7 @@ Item {
         onBotaoClicado: novidades.atualizar()
     }
 
-    // `Adw.Clamp` de até 800, com margens 18/12.
+    // Largura máxima de 800, com margens 18/12.
     ListView {
         id: lista
         objectName: "listaDasNovidades"
@@ -135,7 +135,7 @@ Item {
             // Sem resumo nem link não há o que abrir: a linha é simples, sem seta.
             readonly property bool expansivel: modelData.resumo !== "" || modelData.url !== ""
             property bool aberta: false
-            // A linha expandida mora no `novidades`: a página é destruída ao voltar (DA-37).
+            // A linha expandida mora no `novidades`: a página é destruída ao voltar.
             readonly property string chave: modelData.url + "|" + modelData.titulo
             property bool _pronta: false  // a linha restaurada como aberta nasce aberta, sem animar de fechada
             Component.onCompleted: { aberta = novidades.estaAberta(chave); _pronta = true }
@@ -160,7 +160,7 @@ Item {
             Keys.onRightPressed: if (expansivel) aberta = true
             Keys.onLeftPressed: aberta = false
 
-            // Hover e pressão do cabeçalho (a linha do `Adw.ExpanderRow`), no lugar dos da base.
+            // Hover e pressão do cabeçalho, no lugar dos da base.
             Rectangle {
                 anchors { left: parent.left; right: parent.right; top: parent.top; topMargin: linha._separador }
                 height: linha._cabecalho
@@ -218,7 +218,7 @@ Item {
                     font { family: Tema.fonte; pixelSize: Tema.legenda }
                 }
             }
-            // `expander-row-arrow`: na cor do texto (o `style.css` tira o destaque), apagada, gira ao abrir.
+            // A seta: na cor do texto, apagada, gira ao abrir.
             Icone {
                 visible: linha.expansivel
                 anchors { right: parent.right; rightMargin: 14; top: parent.top; topMargin: linha._separador + (linha._cabecalho - height) / 2 }

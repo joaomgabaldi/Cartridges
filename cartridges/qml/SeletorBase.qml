@@ -1,9 +1,9 @@
 import QtQuick
 import QtQuick.Layouts
 
-// A casca dos seletores (`Adw.Dialog` + `ToolbarView` com a `HeaderBar` e a `SearchBar`): moldura, cabeçalho de 47 com o
+// A casca dos seletores: moldura, cabeçalho de 47 com o
 // X à direita (depois do botão extra), a faixa de busca de 46 (campo de 34 centrado, até 450) e a área do conteúdo.
-// O foco inicial é o do diálogo da `main`: o primeiro botão do cabeçalho, ou o campo; nunca forçado depois.
+// O foco inicial é o primeiro botão do cabeçalho, ou o campo; nunca forçado depois.
 // `fim`: os botões do cabeçalho; o que for declarado dentro entra abaixo da faixa de busca (com `Layout.fillHeight: true`).
 MolduraDoDialogo {
     id: base
@@ -14,7 +14,7 @@ MolduraDoDialogo {
     property bool comBusca: true
     property string placeholder: "Buscar jogo…"
     property string nomeDaBusca: "Buscar jogo"
-    // `Adw.Clamp (maximum-size: 450)`; Ludusavi e Zerados não têm clamp e margens de 12.
+    // Largura máxima de 450; Ludusavi e Zerados não têm limite e usam margens de 12.
     property real larguraDoCampo: 450
     property real margemDoCampo: 6
     // A linha de baixo da barra aparece com o conteúdo rolado.

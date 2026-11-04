@@ -3,7 +3,7 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
 // O seletor do jogo do Ludusavi: o campo de busca, "Nenhum (desliga o backup)" e a lista de jogos do manifesto
-// (`Adw.Dialog` de 480x560). Só desenha: a leitura da lista e o filtro são do `seletor` (SeletorDoLudusavi,
+// (diálogo de 480x560). Só desenha: a leitura da lista e o filtro são do `seletor` (SeletorDoLudusavi,
 // cartridges/modelos/seletores.py). Modal para o mouse, o teclado e o controle (abre por cima do diálogo de edição, que
 // fica desabilitado); o foco volta ao botão que o abriu.
 SeletorBase {
@@ -16,7 +16,7 @@ SeletorBase {
     altura: 560
     titulo: "Jogo no Ludusavi"
     placeholder: "Buscar jogo"
-    // Sem `Adw.Clamp`: o campo ocupa a largura, com 12 dos lados.
+    // O campo ocupa a largura, com 12 dos lados.
     larguraDoCampo: 10000
     margemDoCampo: 12
     rolado: lista.contentY > 0
@@ -44,7 +44,7 @@ SeletorBase {
         }
     }
 
-    // A caixa do "Nenhum": uma `boxed-list` com margem de 12 dos lados, e 6 de espaço até a lista.
+    // A caixa do "Nenhum": um cartão com margem de 12 dos lados, e 6 de espaço até a lista.
     Item {
         Layout.fillWidth: true
         implicitHeight: nenhum.height + 6

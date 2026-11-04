@@ -1,28 +1,27 @@
 pragma Singleton
 import QtQuick
 
-// Cores, fonte e ritmo do app: os da libadwaita 1.10 que a `main` usa, no tema claro ou escuro do Windows (D100).
-// Medidos no gabarito (`capturas/gabarito-gtk`). API e exemplos: `docs/auditoria-gtk-qt/COMPONENTES.md`.
+// Cores, fonte e ritmo do app, no tema claro ou escuro do Windows.
 QtObject {
     id: tema
 
     readonly property string fonte: "Segoe UI"
     readonly property bool escuro: Qt.styleHints.colorScheme === Qt.Dark
     // A cor de destaque escolhida pelo usuário no Windows: o `AccentColor` cru, posto na paleta por
-    // `aplicar_cor_de_destaque` (`apply_windows_theme` da `main`).
+    // `aplicar_cor_de_destaque`.
     readonly property color destaque: sistema.accent
     readonly property color textoDoDestaque: "#ffffff"
-    // --accent-color: o destaque como texto, foco e link. Nunca o `destaque` cru sobre o fundo do app.
+    // O destaque como texto, foco e link. Nunca o `destaque` cru sobre o fundo do app.
     readonly property color destaqueTexto: derivada(destaque)
 
-    // Tipografia: Segoe UI 9 pt = 12 px a 96 DPI; os títulos são os percentuais da libadwaita.
+    // Tipografia: Segoe UI 9 pt = 12 px a 96 DPI; os títulos são percentuais do corpo.
     readonly property int corpo: 12
-    readonly property int titulo1: 22       // .title-1, 181%
-    readonly property int titulo2: 16       // .title-2, 136%
-    readonly property int titulo3: 16       // .title-3, 136%
-    readonly property int titulo4: 14       // .title-4, 118%
-    readonly property int legenda: 10       // .caption e o subtítulo das linhas ("smaller"), 82%
-    // A altura de linha que o GTK dá (medida): 1 px a mais que a do Qt. Onde a altura do bloco conta, use com
+    readonly property int titulo1: 22       // 181%
+    readonly property int titulo2: 16       // 136%
+    readonly property int titulo3: 16       // 136%
+    readonly property int titulo4: 14       // 118%
+    readonly property int legenda: 10       // legenda e subtítulo das linhas, 82%
+    // A altura de linha esperada: 1 px a mais que a do Qt. Onde a altura do bloco conta, use com
     // `lineHeightMode: Text.FixedHeight`.
     readonly property int alturaDoCorpo: 17
     readonly property int alturaDaLegenda: 14
@@ -32,17 +31,16 @@ QtObject {
     readonly property int pesoTitulo2: 800
     readonly property int pesoTitulo3: 700
     readonly property int pesoTitulo4: 700
-    readonly property int pesoForte: 700    // .heading, .caption-heading e todo botão com texto
+    readonly property int pesoForte: 700    // títulos, legendas em destaque e todo botão com texto
 
-    // `currentColor` da libadwaita: o texto, com o alfa dele (0,8 no claro). As misturas abaixo somam o alfa do estado a esse.
+    // A cor do texto, com o alfa dele (0,8 no claro). As misturas abaixo somam o alfa do estado a esse.
     readonly property color corBase: escuro ? "#ffffff" : Qt.rgba(0, 0, 6 / 255, 0.8)
 
-    // window_bg_color e window_fg_color.
     readonly property color fundo: escuro ? "#222226" : "#fafafb"
     readonly property color texto: escuro ? "#ffffff" : Qt.rgba(0, 0, 6 / 255, 0.8)
-    // .dimmed: 55% do texto.
+    // Esmaecido: 55% do texto.
     readonly property color textoSecundario: escuro ? Qt.rgba(1, 1, 1, 0.55) : Qt.rgba(0, 0, 6 / 255, 0.44)
-    // headerbar_bg_color: só o anel do selo usa; a barra da janela é plana (ToolbarView), da cor do `fundo` (gabarito).
+    // Só o anel do selo usa; a barra da janela é plana, da cor do `fundo`.
     readonly property color barra: escuro ? "#2e2e32" : "#ffffff"
     readonly property color barraInativa: escuro ? "#222226" : "#fafafb"
     readonly property color sombraDaBarra: escuro ? Qt.rgba(0, 0, 6 / 255, 0.36) : Qt.rgba(0, 0, 6 / 255, 0.12)
@@ -60,29 +58,29 @@ QtObject {
     // Item de menu: 10% ao passar, 19% pressionado.
     readonly property color menuSobre: mistura(0.10)
     readonly property color menuPressionado: mistura(0.19)
-    // destructive_bg_color e destructive_color (texto e ícone destrutivos).
+    // O fundo, o texto e o ícone destrutivos.
     readonly property color destrutivo: escuro ? "#c01c28" : "#e01b24"
     readonly property color destrutivoTexto: derivada(destrutivo)
-    // warning_color (o ícone de aviso).
+    // O ícone de aviso.
     readonly property color avisoIcone: derivada(escuro ? "#cd9309" : "#e5a50a")
     readonly property color erro: escuro ? "#ff938c" : "#c30000"
-    // card_bg_color, dialog_bg_color (só o de alerta), popover_bg_color, view_bg_color.
+    // Cartão, diálogo (só o de alerta), popover e lista.
     readonly property color cartao: escuro ? Qt.rgba(1, 1, 1, 0.08) : "#ffffff"
     readonly property color sombraDoCartao: escuro ? Qt.rgba(0, 0, 6 / 255, 0.36) : Qt.rgba(0, 0, 6 / 255, 0.07)
     readonly property color dialogo: escuro ? "#36363a" : "#fafafb"
     readonly property color popover: escuro ? "#36363a" : "#ffffff"
     readonly property color vista: escuro ? "#1d1d20" : "#ffffff"
-    // shade_color dobrado: o escurecimento atrás de um diálogo (floating-sheet > dimming).
+    // `shade_color` dobrado: o escurecimento atrás de um diálogo.
     readonly property color esmaecido: escuro ? Qt.rgba(0, 0, 6 / 255, 0.5) : Qt.rgba(0, 0, 6 / 255, 0.14)
     // Superfície opaca, para o que ainda não foi trocado por cartão, diálogo ou popover.
     readonly property color superficie: dialogo
-    // --border-color: 15% do texto.
+    // Borda: 15% do texto.
     readonly property color borda: mistura(0.15)
-    // O fundo do aviso embaixo (toast da libadwaita), nos dois temas.
+    // O fundo do aviso embaixo, nos dois temas.
     readonly property color aviso: "#505053"
     // O contorno claro de 1 px da janela e dos diálogos (`outline`), nos dois temas.
     readonly property color contorno: Qt.rgba(1, 1, 1, 0.07)
-    // disabled-opacity e dim-opacity.
+    // Opacidade do desabilitado e do esmaecido.
     readonly property real opacidadeDesabilitado: 0.5
     readonly property real opacidadeApagado: 0.55
 
@@ -94,12 +92,12 @@ QtObject {
 
     readonly property string fonteDeIcones: Qt.fontFamilies().includes("Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets"
 
-    // Transições da libadwaita: 200 ms cubic-bezier(0.25, 0.46, 0.45, 0.94). Use com `Easing.Bezier`, em `easing.bezierCurve`.
+    // Transições: 200 ms cubic-bezier(0.25, 0.46, 0.45, 0.94). Use com `Easing.Bezier`, em `easing.bezierCurve`.
     readonly property int duracaoCurta: 200
     readonly property int duracaoMedia: 200
     readonly property var curva: [0.25, 0.46, 0.45, 0.94, 1, 1]
 
-    // Os efeitos de animação do Windows (a `main` os segue pelo GTK). Os testes rodam sem a animação de abrir e fechar
+    // Os efeitos de animação do Windows. Os testes rodam sem a animação de abrir e fechar
     // diálogos (`tests/conftest.py`), para o `visible` ser síncrono.
     readonly property bool animacoes: !Qt.application.arguments.includes("--sem-animacao-de-dialogo")
         && (typeof aplicativo === "undefined" || aplicativo === null || aplicativo.animacoesDoSistema !== false)
@@ -108,7 +106,7 @@ QtObject {
 
     function mistura(alfa) { return Qt.rgba(corBase.r, corBase.g, corBase.b, corBase.a * alfa) }
 
-    // `oklab(from cor min(l, 0.5) a b)` no claro e `max(l, 0.85)` no escuro: as cores "standalone" da libadwaita.
+    // `oklab(from cor min(l, 0.5) a b)` no claro e `max(l, 0.85)` no escuro: as cores de texto sobre o fundo claro ou escuro.
     function derivada(cor) {
         const linear = c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
         const srgb = c => { c = Math.min(1, Math.max(0, c)); return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055 }

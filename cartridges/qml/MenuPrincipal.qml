@@ -2,13 +2,13 @@ import QtQuick
 import QtQuick.Controls.Basic
 
 // O menu principal, o mesmo nas duas páginas: filtros e ordenação. `filtros` vem do contexto (app.py).
-// Como o `GtkPopoverMenu` da `main` (`window.blp:1213`): os submenus deslizam dentro do mesmo popover, com o cabeçalho
+// Os submenus deslizam dentro do mesmo popover, com o cabeçalho
 // "‹ Título" para voltar, em vez de abrir em cascata ao lado. Todos os itens são filhos deste menu, cada um com a sua
-// `pagina`; só os da página atual aparecem. Escolher uma opção fecha o popover (como na `main`).
+// `pagina`; só os da página atual aparecem. Escolher uma opção fecha o popover.
 MenuDoTema {
     id: menu
 
-    // O `Sobre` (D84); nulo onde ele não está no contexto (os arneses dos outros diálogos): o item some.
+    // O `Sobre`; nulo onde ele não está no contexto (os arneses dos outros diálogos): o item some.
     property QtObject servicoDoSobre: null
 
     // "raiz", "filtrar", "genero", "ano", "status" ou "ordenar".
@@ -32,7 +32,7 @@ MenuDoTema {
         return lista
     }
 
-    // Troca a página sem fechar o popover (como o `GtkPopoverMenu`): o mouse e o Enter dos itens de navegação chegam aqui.
+    // Troca a página sem fechar o popover: o mouse e o Enter dos itens de navegação chegam aqui.
     // `irPara` + o `Menu` fechando e reabrindo é só o caminho de quem aciona o item por `click()`/`triggered`.
     function navegar(qual, avanca) {
         sentido = avanca ? 1 : -1
@@ -95,7 +95,7 @@ MenuDoTema {
         visible: pagina === menu.pagina && exibido
         height: visible ? implicitHeight : 0
     }
-    // ← volta e → entra, como no `GtkPopoverMenu`; o foco é do menu, não dos itens, então o atalho é do menu.
+    // ← volta e → entra; o foco é do menu, não dos itens, então o atalho é do menu.
     Shortcut {
         sequence: "Left"
         enabled: menu.opened && menu.pagina !== "raiz"
@@ -178,7 +178,7 @@ MenuDoTema {
     ItemDaPagina {
         objectName: "itemPreferencias"
         text: "Preferências"
-        // Como a `main`: a ação some durante a importação.
+        // A ação some durante a importação.
         enabled: naPagina && !aplicativo.importando
         onTriggered: preferencias.abrir()
     }

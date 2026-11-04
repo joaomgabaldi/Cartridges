@@ -48,8 +48,8 @@ Column {
         }
     }
 
-    // O progresso fica abaixo do cartão, num grupo só dele, com 12 de margem (`metadata_update_group`); o texto "N de M"
-    // vai sobre a barra (`show-text`).
+    // O progresso fica abaixo do cartão, num grupo só dele, com 12 de margem; o texto "N de M"
+    // vai sobre a barra.
     Column {
         width: parent.width
         spacing: 12
@@ -71,7 +71,7 @@ Column {
                 onParada: preferencias.biblioteca.cancelarMetadados()
             }
         }
-        // `show-text` no GTK 4: o texto vai acima da trilha de 8, menor (`smaller`), esmaecido e com algarismos de largura fixa.
+        // O texto vai acima da trilha de 8, menor, esmaecido e com algarismos de largura fixa.
         Column {
             width: parent.width
             spacing: 0
@@ -99,7 +99,7 @@ Column {
         descricao: "Importa atalhos de jogos (.lnk e .url) de uma pasta. Funciona com Steam, Epic, Ubisoft Connect, Xbox/Microsoft Store e outros."
         separada: true
 
-        // As filhas ficam fora da busca (`buscavel` falso): a `main` só indexa as linhas de nível de grupo.
+        // As filhas ficam fora da busca (`buscavel` falso): só as linhas de nível de grupo entram.
         LinhaExpansora {
             buscavel: true
             objectName: "interruptor-shortcuts"

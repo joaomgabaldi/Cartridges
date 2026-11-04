@@ -12,7 +12,7 @@ Window {
     // O texto no centro da barra; por padrão, o título da janela.
     property string tituloDaBarra: title
     // O que for declarado dentro de Principal vai para a área, que ocupa a janela inteira, por cima da barra: um modal
-    // cobre a barra (J05); as páginas descem `alturaDoTopo`.
+    // cobre a barra; as páginas descem `alturaDoTopo`.
     default property alias conteudo: area.data
     // Botões da página na barra: `inicio` à esquerda, `fim` à direita (cada um chama
     // `agente.setHitTestVisible(item, true)`, senão o QWindowKit trata o clique como arrasto).
@@ -40,16 +40,16 @@ Window {
     property alias sombraDaBarra: barra.sombra
     // A barra sem fundo, com a página dos detalhes por baixo.
     property alias barraTransparente: barra.transparente
-    // O que passa por baixo da barra transparente: fica sob ela mesmo quando um modal a põe abaixo da área (J05).
+    // O que passa por baixo da barra transparente: fica sob ela mesmo quando um modal a põe abaixo da área.
     property alias fundoDaBarra: fundoSobABarra.data
-    // A barra entra com a página nova (na `main` a barra é da página); `barraDeTitulo`, para a cópia da barra de antes.
+    // A barra entra com a página nova; `barraDeTitulo`, para a cópia da barra de antes.
     property real deslocamentoDaBarra: 0
     readonly property Item barraDeTitulo: barra
 
     color: usarMica ? "transparent" : Tema.fundo
     title: "Kyron"
 
-    // Tamanho e limites só depois do setup: antes, o QWindowKit os sobrescreve (P11).
+    // Tamanho e limites só depois do setup: antes, o QWindowKit os sobrescreve.
     Component.onCompleted: {
         if (agente) {
             agente.setup(janela)
@@ -62,12 +62,12 @@ Window {
         // Antes de mostrar: a janela só aparece desenhada, com as capas (`cortina_da_abertura.py`). Opcional como a
         // `geometria`: os arneses dos testes não a põem no contexto.
         if (typeof cortinaDaAbertura !== "undefined") cortinaDaAbertura.cobrir(janela)
-        // gschema da `main`: 1170x795; window.blp: mínimo 360x100.
+        // Tamanho inicial 1170x795; mínimo 360x100.
         width = 1170
         height = 795
         minimumWidth = 360
         minimumHeight = 100
-        // Depois do tamanho de hoje: o lugar e o tamanho gravados ao fechar (D87); sem nada gravado, fica este.
+        // Depois do tamanho de hoje: o lugar e o tamanho gravados ao fechar; sem nada gravado, fica este.
         // Opcional: os arneses dos testes não põem `geometria` no contexto.
         const servico = typeof geometria === "undefined" ? null : geometria
         if (servico) servico.restaurar(janela)
@@ -112,7 +112,7 @@ Window {
         anchors.fill: parent
     }
 
-    // window.csd: o contorno claro de 1 px; some com a janela maximizada ou em tela cheia. O raio é o do DWM (R9).
+    // O contorno claro de 1 px; some com a janela maximizada ou em tela cheia. O raio é o do DWM.
     Rectangle {
         objectName: "contornoDaJanela"
         anchors.fill: parent

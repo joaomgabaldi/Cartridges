@@ -7,7 +7,7 @@ Column {
     id: pagina
     objectName: "paginaGeral"
 
-    // Sem 3D o Big Picture não abre: as duas linhas dele dizem por quê no lugar do subtítulo (D47).
+    // Sem 3D o Big Picture não abre: as duas linhas dele dizem por quê no lugar do subtítulo.
     readonly property string sem3d: preferencias.estado.subtituloSem3d || ""
     // Sem o Ludusavi no pacote não há saves a configurar: as linhas deles somem e os textos não os prometem.
     readonly property bool saves: preferencias.estado.savesDisponiveis === true
@@ -145,7 +145,7 @@ Column {
             titulo: "Importar de arquivo"
             onAcionada: pagina.abrir(cargaDoAbrir)
         }
-        // A linha não aciona nada: só os dois botões respondem (`preferences.blp:72-86`).
+        // A linha não aciona nada: só os dois botões respondem.
         LinhaDeBotoes {
             buscavel: true
             aparece: pagina.saves
@@ -177,14 +177,14 @@ Column {
         }
     }
 
-    // O AppUpdater (D82); sem ele no contexto (os testes das outras páginas), o botão avisa que não foi possível.
+    // O AppUpdater; sem ele no contexto (os testes das outras páginas), o botão avisa que não foi possível.
     readonly property QtObject servicoDeAtualizacao: typeof atualizador === "undefined" ? null : atualizador
 
     GrupoDePreferencias {
         objectName: "grupoAtualizacoes"
         titulo: "Atualizações"
 
-        // Não ativável: só o botão "Buscar" responde (`preferences.blp:96-104`).
+        // Não ativável: só o botão "Buscar" responde.
         LinhaDeBotoes {
             buscavel: true
             objectName: "linhaBuscarAtualizacoes"
@@ -194,7 +194,7 @@ Column {
             Botao {
                 objectName: "linhaBuscarAtualizacoesBotao"
                 text: "Buscar"
-                // Só o botão apaga durante a busca, como na `main`.
+                // Só o botão apaga durante a busca.
                 enabled: !pagina.servicoDeAtualizacao || !pagina.servicoDeAtualizacao.buscando
                 onClicked: {
                     if (pagina.servicoDeAtualizacao) pagina.servicoDeAtualizacao.buscarAgora()

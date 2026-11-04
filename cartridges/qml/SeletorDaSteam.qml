@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// O seletor do jogo da Steam: um campo de busca e a lista de candidatos da loja (`Adw.Dialog` de 560x520, a lista num
-// `boxed-list` de até 500). Só desenha: a busca e a escolha são do `seletor` (SeletorDaSteam, cartridges/modelos/seletores.py).
+// O seletor do jogo da Steam: um campo de busca e a lista de candidatos da loja (diálogo de 560x520, a lista num
+// cartão de até 500). Só desenha: a busca e a escolha são do `seletor` (SeletorDaSteam, cartridges/modelos/seletores.py).
 // Modal para o mouse, o teclado e o controle (abre por cima do diálogo de edição, que fica desabilitado);
 // o foco volta ao botão que o abriu.
 SeletorBase {
@@ -75,7 +75,7 @@ SeletorBase {
                 RolagemDaRoda { alvo: lista }
                 ScrollBar.vertical: BarraDeRolagem {}
 
-                // `Adw.Clamp` de 500 com 12 de margem: a `boxed-list` contínua, as linhas coladas com separador.
+                // Largura máxima de 500 com 12 de margem: o cartão contínuo, as linhas coladas com separador.
                 GrupoDeLinhas {
                     id: grupo
                     x: (lista.width - width) / 2

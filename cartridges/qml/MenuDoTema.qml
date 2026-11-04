@@ -1,9 +1,9 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O popover da libadwaita (popover.menu): raio 15, sombra, 6 de respiro, largura natural (mínimo 120). Todo menu do app,
+// O popover dos menus: raio 15, sombra, 6 de respiro, largura natural (mínimo 120). Todo menu do app,
 // inclusive os submenus, é um MenuDoTema: o `delegate` e o `background` valem só para o menu que os declara.
-// `setaEm`: o x do centro da seta, em relação ao menu (como o `has-arrow` do GTK); negativo, sem seta.
+// `setaEm`: o x do centro da seta, em relação ao menu; negativo, sem seta.
 Menu {
     id: menu
 

@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import QtQuick.Window
 
 // A página de detalhes de um jogo: a capa à esquerda, os dados à direita e, embaixo, as ações. Abaixo de 850 px vira uma
-// coluna (o `Adw.Breakpoint` da `main`): capa em cima, tudo centralizado.
+// coluna (janela abaixo de 850 px de largura): capa em cima, tudo centralizado.
 // Tudo o que ela mostra vem de `detalhes` (cartridges/modelos/detalhes.py), exposto pelo contexto;
 // nenhum botão age sozinho, só emite o sinal (Aplicativo.qml os liga).
 Item {
@@ -30,19 +30,19 @@ Item {
         || dialogoExcluir.visible || dialogoAtualizacao.visible
     // As confirmações da página: Aplicativo.qml as soma a `modalAberto`, e a barra de título fica trancada.
     readonly property bool dialogoAberto: dialogoExcluir.aberto || dialogoAtualizacao.aberto
-    // `Adw.Breakpoint (max-width: 850px)`.
+    // Janela abaixo de 850 px de largura.
     readonly property bool compacta: width <= 850
     readonly property int larguraDaCapa: compacta ? 280 : 420
     readonly property int alturaDaCapa: larguraDaCapa * 3 / 2
-    // `max-width-chars: 72` (e 24 no título): a largura do "0" do Segoe UI vezes o número de caracteres. O texto usa a
-    // largura média do Pango, maior que a do "0": a quebra de linha da janela real da `main` pede 7,4 por caractere.
+    // Largura máxima de 72 caracteres (24 no título): a largura do "0" do Segoe UI vezes o número de caracteres. O texto usa a
+    // largura média, maior que a do "0": a quebra de linha pede 7,4 por caractere.
     readonly property real tetoDoTexto: 72 * 7.4
     readonly property real tetoDoTitulo: 24 * zeroDoTitulo.advanceWidth
     // O logo só vale enquanto o arquivo decodifica: um PNG truncado passa pela leitura do cabeçalho.
     readonly property bool logoVisivel: detalhes.logo !== "" && logo.status !== Image.Error
     // `warning_color` (a cor de aviso do tema, como texto).
     readonly property color corDeAviso: Tema.avisoIcone
-    // Entrou pelo teclado? (`:focus-visible`: o anel do foco inicial só aparece então.)
+    // Entrou pelo teclado? O anel do foco inicial só aparece então.
     property bool tecladoEmUso: false
 
     TextMetrics { id: zeroDoTitulo; text: "0"; font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 } }
@@ -85,7 +85,7 @@ Item {
         mostrarBotao(botao)
         return true
     }
-    // O viewport segue o foco (`window.blp:480`): o botão fora da vista rola para dentro dela.
+    // O viewport segue o foco: o botão fora da vista rola para dentro dela.
     function mostrarBotao(botao) {
         var topo = botao.mapToItem(rolagem.contentItem, 0, 0).y
         var fim = topo + botao.height
@@ -108,7 +108,7 @@ Item {
     Keys.onEnterPressed: abrirDetalhesDoAtual()
 
     // Quem estava com o foco ao abrir a página (a grade, que sabe se o último gesto foi do teclado) diz como se chegou aqui:
-    // com o mouse, o foco inicial não tem anel (`:focus-visible`).
+    // com o mouse, o foco inicial não tem anel.
     Component.onCompleted: {
         for (var p = Window.window ? Window.window.activeFocusItem : null; p; p = p.parent) {
             if (p.porTeclado === true || p.visualFocus === true) { tecladoEmUso = true; break }
@@ -123,9 +123,9 @@ Item {
     property bool anotarAoEntrar: false
     function abrirAnotacao() { if (botaoAnotacao.visible) balaoDaAnotacao.open() }
 
-    // `#details_view`: branco no tema claro e preto no escuro, sob a capa desfocada (muda o resultado da opacidade dela).
+    // Branco no tema claro e preto no escuro, sob a capa desfocada (muda o resultado da opacidade dela).
     // Também cobre a biblioteca por baixo durante a transição.
-    // A barra de título é transparente aqui (`ToolbarView` plana da `main`): a mesma imagem continua sob ela, em
+    // A barra de título é transparente aqui: a mesma imagem continua sob ela, em
     // `Aplicativo.fundoDaBarra`. Por isso o `y` negativo: esticada pela janela inteira, cortada aqui no fim da barra.
     readonly property int sobreABarra: Window.window && Window.window.alturaDaBarra ? Window.window.alturaDaBarra : 0
     Rectangle { anchors.fill: parent; color: Tema.escuro ? "black" : "white"; z: -2 }
@@ -149,12 +149,12 @@ Item {
         }
     }
 
-    // Uma linha de dados (`dim-label`, 12 px): a largura natural do texto até o teto de 72 caracteres.
+    // Uma linha de dados (12 px, esmaecida): a largura natural do texto até o teto de 72 caracteres.
     component Dado: Text {
         id: dado
         Layout.fillWidth: true
         Layout.preferredWidth: Math.min(gemeo.implicitWidth, raiz.tetoDoTexto)
-        // O rótulo da `main` é `halign: start`: nunca passa da largura que pede, nem quando a coluna é mais larga.
+        // O rótulo fica no início: nunca passa da largura que pede, nem quando a coluna é mais larga.
         Layout.maximumWidth: Math.min(gemeo.implicitWidth, raiz.tetoDoTexto)
         Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignLeft
         visible: text !== ""
@@ -163,7 +163,7 @@ Item {
         horizontalAlignment: raiz.compacta ? Text.AlignHCenter : Text.AlignLeft
         color: Tema.textoSecundario
         font { family: Tema.fonte; pixelSize: Tema.corpo }
-        // O Pango da `main` dá 17 px à linha do Segoe UI de 12 (o Qt, 16): a coluna inteira ficava 14 px mais baixa.
+        // A linha do Segoe UI de 12 tem 17 px (o Qt dá 16); a diferença pesa 14 px na coluna inteira.
         lineHeightMode: Text.FixedHeight
         lineHeight: Tema.alturaDoCorpo
         // O mesmo texto sem quebra: a largura que ele pediria sozinho.
@@ -199,7 +199,7 @@ Item {
         }
     }
 
-    // `MenuButton` plano com rótulo: o texto e a seta `pan-down` (altura 34, padding 10).
+    // Botão de menu plano com rótulo: o texto e a seta (altura 34, padding 10).
     component BotaoDeMenu: Botao {
         id: botaoDeMenu
         dicaSomeAoClicar: false
@@ -270,7 +270,7 @@ Item {
                 Layout.preferredHeight: raiz.alturaDaCapa
                 Layout.alignment: raiz.compacta ? Qt.AlignHCenter | Qt.AlignTop : Qt.AlignTop
 
-                // `.card`: o contorno e a sombra do cartão, fora do corte arredondado.
+                // O contorno e a sombra do cartão, fora do corte arredondado.
                 Sombra { camadas: Tema.sombraCartao; raio: 12 }
                 Item {
                     id: mascara
@@ -296,7 +296,7 @@ Item {
                         anchors.fill: parent
                         source: detalhes.capa !== "" && detalhes.capa !== ilegivel ? detalhes.capa : raiz.placeholder
                         onStatusChanged: if (status === Image.Error && source.toString() === detalhes.capa) ilegivel = detalhes.capa
-                        // `content-fit: contain` (o padrão do `Gtk.Picture`): um arquivo fora de 2:3 aparece inteiro.
+                        // Um arquivo fora de 2:3 aparece inteiro.
                         fillMode: Image.PreserveAspectFit
                         asynchronous: true
                         // Na resolução real da tela: a capa guardada tem mais pixels que a da grade.
@@ -333,7 +333,7 @@ Item {
                 Layout.alignment: raiz.compacta ? Qt.AlignHCenter | Qt.AlignTop : Qt.AlignVCenter
                 spacing: 0
 
-                // O logo (altura reservada só com ele) ou o título, nunca os dois. `margin-bottom: 12` do cabeçalho
+                // O logo (altura reservada só com ele) ou o título, nunca os dois. Margem de baixo de 12
                 // (e 30 de margem em cima na janela estreita).
                 Item {
                     Layout.fillWidth: true
@@ -379,7 +379,7 @@ Item {
                     }
                 }
 
-                // `heading`: negrito, na cor do texto.
+                // Negrito, na cor do texto.
                 Dado {
                     objectName: "desenvolvedora"
                     Layout.topMargin: 6
@@ -416,7 +416,7 @@ Item {
                         && (detalhes.hltb.celulas.length > 0 || detalhes.hltb.capitulos.length > 0)
                     spacing: 0
 
-                    // `caption-heading dim-label`: 700, 9,8 px.
+                    // Peso 700, 9,8 px, esmaecido.
                     Text {
                         Layout.leftMargin: 3
                         Layout.bottomMargin: 6
@@ -440,7 +440,7 @@ Item {
                                 delegate: Row {
                                     id: celula
                                     required property var modelData
-                                    // `.hltb-cell`: padding 10/20 por fora do mínimo de 76 (3 células + 2 filetes = 350, como na `main`).
+                                    // Padding 10/20 por fora do mínimo de 76 (3 células + 2 filetes = 350).
                                     Rectangle {
                                         visible: celula.modelData.separador
                                         width: 1
@@ -487,7 +487,7 @@ Item {
                         radius: 12
                         color: Tema.cartao
                         Sombra { camadas: Tema.sombraCartao; raio: 12 }
-                        // `.hltb-chapters`: padding 12/16, colunas a 16, valores com mínimo 68 e centrados.
+                        // Padding 12/16, colunas a 16, valores com mínimo 68 e centrados.
                         GridLayout {
                             id: tabela
                             x: 16; y: 12
@@ -549,7 +549,7 @@ Item {
                     Linha { text: detalhes.jogadoPorUltimo }
                     // Com sessões gravadas o total abre o histórico: continua um rótulo comum (nem link, nem botão, que
                     // destoariam das duas linhas ao lado); o sublinhado na cor do texto, o cursor de mão e a dica avisam.
-                    // shortcut: o total não recebe o foco do teclado nem do controle (como o rótulo da main), sai se pedirem.
+                    // shortcut: o total não recebe o foco do teclado nem do controle, sai se pedirem.
                     Linha {
                         id: tempoDeJogo
                         objectName: "tempoDeJogo"
@@ -627,7 +627,7 @@ Item {
                     }
                 }
 
-                // `#details_view_update_notice`: padding 8/16, raio 12, a cor de aviso a 15% (25% ao passar), 200 ms.
+                // O aviso de atualização: padding 8/16, raio 12, a cor de aviso a 15% (25% ao passar), 200 ms.
                 Button {
                     id: avisoDeAtualizacao
                     objectName: "avisoDeAtualizacao"
@@ -668,7 +668,7 @@ Item {
                     Dica { texto: "Abrir a página da atualização"; ativa: avisoDeAtualizacao.hovered }
                 }
 
-                // A barra de ação: "Jogar" (pílula `opaque`) e os botões redondos, 15 depois dele e 6 entre si.
+                // A barra de ação: "Jogar" (pílula opaca) e os botões redondos, 15 depois dele e 6 entre si.
                 GridLayout {
                     Layout.topMargin: 24
                     Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignLeft
@@ -676,7 +676,7 @@ Item {
                     columnSpacing: 0
                     rowSpacing: 0
 
-                    // `#details_view_play_button`: texto branco sobre preto a 80% no claro; o inverso no escuro.
+                    // Texto branco sobre preto a 80% no claro; o inverso no escuro.
                     Button {
                         id: botaoJogar
                         objectName: "botaoJogarDaPagina"
@@ -707,12 +707,12 @@ Item {
                         background: Rectangle {
                             radius: height / 2
                             color: Tema.escuro ? "white" : Qt.rgba(0, 0, 0, 0.8)
-                            // `button.opaque`: um véu claro ao passar e um escuro ao apertar.
+                            // Um véu claro ao passar e um escuro ao apertar.
                             Rectangle {
                                 anchors.fill: parent
                                 radius: parent.radius
                                 visible: botaoJogar.hovered || botaoJogar.down
-                                // `button.opaque:hover`: 10% de `currentColor`, o texto do botão (preto no tema escuro, branco no claro).
+                                // 10% da cor do texto do botão (preto no tema escuro, branco no claro).
                                 color: botaoJogar.down ? Qt.rgba(0, 0, 6 / 255, 0.2) : Qt.alpha(botaoJogar.corDoTexto, botaoJogar.corDoTexto.a * 0.1)
                             }
                             AnelDeFoco { ativo: botaoJogar.visualFocus; raio: parent.radius }
@@ -765,7 +765,7 @@ Item {
                                 x: (parent.width - width) / 2
                                 y: parent.height + 6
                                 setaEm: width / 2
-                                // O título da seção, como no menu da `main`: sem ação.
+                                // O título da seção: sem ação.
                                 TituloDeSecao { objectName: "tituloDoMenuDeBuscas"; texto: "Buscar em…" }
                                 ItemDoMenu { text: "IGDB"; onTriggered: detalhes.buscarEm("igdb") }
                                 ItemDoMenu { text: "SteamGridDB"; onTriggered: detalhes.buscarEm("sgdb") }
@@ -798,7 +798,7 @@ Item {
         rotuloConfirmar: "Já instalei"
         rotuloCancelar: "Ainda não"
         sugerido: true
-        respostaInicial: "confirmar"  // `window.py:2059`
+        respostaInicial: "confirmar"
         onConfirmado: raiz.atualizacaoConfirmada()
         onRetornoPerdido: raiz.forceActiveFocus()
     }

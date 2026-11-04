@@ -1,6 +1,6 @@
 import QtQuick
 
-// A roda do mouse nas listas rolantes dos diálogos e das páginas: o padrão do `Gtk.ScrolledWindow`, em que cada entalhe
+// A roda do mouse nas listas rolantes dos diálogos e das páginas: cada entalhe
 // anda `pow(altura visível, 2/3)` pixels (cerca de 78 nas Preferências); o `Flickable` puro anda uns 23. Sem mola: a
 // mola é só das duas bibliotecas e da lista de zerados (`RolagemPorMola`) e das Preferências (com animações). Só o mouse; o touchpad segue o do Flickable.
 // Filho do Flickable: `RolagemDaRoda { alvo: rolagem }`.

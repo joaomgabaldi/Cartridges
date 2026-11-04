@@ -1,6 +1,6 @@
 import QtQuick
 
-// A roda do mouse com inércia de mola (`spring_scroll.py` da `main`): cada entalhe soma `passo` px ao destino, que a
+// A roda do mouse com inércia de mola: cada entalhe soma `passo` px ao destino, que a
 // mola leva por amortecimento crítico (massa 1, rigidez 220), herdando a velocidade da que ainda corre. Só o mouse:
 // o touchpad segue o comportamento do Flickable. Filho do Flickable (`alvo`): `RolagemPorMola { alvo: grade }`.
 Item {

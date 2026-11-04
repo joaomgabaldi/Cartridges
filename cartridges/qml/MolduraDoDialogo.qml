@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Window
 
-// O Adw.Dialog: escurece a janela inteira (barra de título incluída), mostra o cartão com raio 15, sombra e contorno, e
-// anima a abertura e o fechamento com a mola da libadwaita (medida na DLL 1.10: massa 1, rigidez 500, amortecimento 0,62;
-// escala 0,8 + 0,2p; opacidade p até 1). Medidas, API e exemplos: `docs/auditoria-gtk-qt/COMPONENTES.md`.
+// O diálogo: escurece a janela inteira (barra de título incluída), mostra o cartão com raio 15, sombra e contorno, e
+// anima a abertura e o fechamento com uma mola (massa 1, rigidez 500, amortecimento 0,62;
+// escala 0,8 + 0,2p; opacidade p até 1).
 //
 // `aberto` manda; `visible` continua verdadeiro até o fim da animação de saída. O conteúdo é um ColumnLayout: os filhos
 // usam `Layout.fillWidth`/`Layout.fillHeight`. O foco vai ao `focoInicial` ao abrir e volta a quem o tinha ao fechar.
@@ -12,21 +12,21 @@ FocusScope {
     id: moldura
 
     property bool aberto: false
-    // content-width e content-height; `altura` 0 acompanha o conteúdo. Ambas encolhem para caber na janela.
+    // Largura e altura do conteúdo; `altura` 0 acompanha o conteúdo. Ambas encolhem para caber na janela.
     property real largura: 360
     property real altura: 0
-    // Janela abaixo de 450x360 (medido na `main`): vira a folha de baixo (bottom sheet). O AlertDialog nunca vira.
+    // Janela abaixo de 450x360: vira a folha de baixo (bottom sheet). O AlertDialog nunca vira.
     property bool podeSerFolha: true
     property real raio: 15
     property color cor: Tema.fundo
-    // Sem `fechavel`, nem o Esc nem o toque fora pedem o fechamento (`can-close` falso).
+    // Sem `fechavel`, nem o Esc nem o toque fora pedem o fechamento.
     property bool fechavel: true
-    // O controle do Xbox manda ↑/↓ nos diálogos (`_focus_scope` da `main`: o direcional anda por `child_focus`): sem isto, o
+    // O controle do Xbox manda ↑/↓ nos diálogos: sem isto, o
     // que nenhum controle trata leva o foco ao vizinho da ordem do Tab, sem sair do diálogo.
     property bool setasMovemOFoco: false
     // Uma página rolável: com ela, ↑/↓ rolam quando o vizinho do Tab fica fora dela (nada a que ir) e PgUp/PgDn rolam sempre.
     property Flickable rolagemDasSetas: null
-    // Alt seguro: os mnemônicos aparecem sublinhados (`gtk-enable-mnemonics` da `main`).
+    // Alt seguro: os mnemônicos aparecem sublinhados.
     property bool altSegurado: false
     property Item focoInicial: null
     property string nomeAcessivel: ""
@@ -40,11 +40,11 @@ FocusScope {
 
     property Item retorno: null
     property bool _tecladoEmUso: false
-    // Um dos diálogos da pilha de pedidos do `Aplicativo` (R5).
+    // Um dos diálogos da pilha de pedidos do `Aplicativo`.
     property bool naPilha: false
     property bool _cobertaAoFechar: false
 
-    // Margens do adw-floating-sheet: crescem com a janela. A 795 de altura dão 30 (medido no gabarito).
+    // Margens do diálogo flutuante: crescem com a janela. A 795 de altura dão 30.
     readonly property int margemH: Math.floor(30 + 90 * Math.max(0, (width - 720) / 720))
     readonly property int margemV: Math.floor(20 + 100 * Math.max(0, (height - 720) / 720))
     readonly property real _alturaPedida: altura > 0 ? altura : coluna.implicitHeight
@@ -91,7 +91,7 @@ FocusScope {
     }
     function focarInicial() {
         if (!aberto) return
-        // O anel só aparece se o teclado já estava em uso (`focus-visible` do GTK); aberto com o mouse, sem anel.
+        // O anel só aparece se o teclado já estava em uso; aberto com o mouse, sem anel.
         const motivo = _tecladoEmUso ? Qt.TabFocusReason : Qt.OtherFocusReason
         if (focoInicial && focoInicial.visible && focoInicial.enabled) focoInicial.forceActiveFocus(motivo)
         else moldura.forceActiveFocus()
@@ -102,7 +102,7 @@ FocusScope {
         retorno = null
         // Fechou um diálogo coberto (a pilha): o foco é do de cima e fica com ele.
         if (_cobertaAoFechar) return
-        // Da pilha (R5), com a outra ainda aberta (um diálogo reaproveitado por cima de uma pergunta): o foco é dela.
+        // Da pilha, com a outra ainda aberta (um diálogo reaproveitado por cima de uma pergunta): o foco é dela.
         const outra = naPilha && parent ? Array.from(parent.children).find(f => f !== moldura && f.naPilha === true && f.aberto && f.visible) : null
         if (outra) { outra.focarInicial(); return }
         if (alvo && alvo !== Window.contentItem && alvo.visible && alvo.enabled) alvo.forceActiveFocus(Qt.TabFocusReason)
@@ -156,7 +156,7 @@ FocusScope {
         function onActiveChanged() { if (!moldura.Window.window.active) moldura.altSegurado = false }
     }
 
-    // O foco por seta ou Tab acompanha a rolagem das setas (o `GtkScrolledWindow` rola até o foco).
+    // O foco por seta ou Tab acompanha a rolagem das setas.
     Connections {
         target: moldura.Window.window
         function onActiveFocusItemChanged() {
@@ -173,7 +173,7 @@ FocusScope {
         }
     }
 
-    // O pedido vem de uma tecla (Esc): quem usa pode devolver o foco com o anel visível (`:focus-visible`), sem ter tido foco antes.
+    // O pedido vem de uma tecla (Esc): quem usa pode devolver o foco com o anel visível, sem ter tido foco antes.
     property bool pedidoPorTeclado: false
     Keys.onEscapePressed: if (fechavel) { pedidoPorTeclado = true; fecharPedido(); pedidoPorTeclado = false }
     // Modal para o teclado e o controle: nenhuma tecla chega à página de trás. O Tab passa, para circular.
@@ -208,8 +208,8 @@ FocusScope {
         event.accepted = event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab
     }
 
-    // floating-sheet > dimming. Ao fechar, deixa passar o clique (`can-target` falso, como na DLL). A `main` segura o toque
-    // fora do diálogo flutuante (`dialog_backdrop.py`): nem fecha nem arrasta. Na folha de baixo, fecha.
+    // O escurecimento atrás do diálogo. Ao fechar, deixa passar o clique (`can-target` falso). O toque
+    // fora do diálogo flutuante não faz nada: nem fecha nem arrasta. Na folha de baixo, fecha.
     Rectangle {
         objectName: "esmaecimentoDaMoldura"
         anchors.fill: parent
@@ -248,7 +248,7 @@ FocusScope {
             anchors.fill: parent
             spacing: 0
         }
-        // outline: 1px solid rgba(255,255,255,.07); outline-offset: -1px.
+        // Contorno claro de 1 px por dentro da borda (branco a 7%).
         Rectangle {
             anchors.fill: parent
             z: 20

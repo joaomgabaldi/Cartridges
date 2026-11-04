@@ -27,7 +27,7 @@ MenuDoTema {
         onTriggered: if (menu.modelo) menu.modelo.remover(menu.jogoId)
     }
 
-    // Lido ao abrir, como o `hidden-when` da `main`: o backup que termina com o menu aberto só aparece na próxima vez.
+    // Lido ao abrir: o backup que termina com o menu aberto só aparece na próxima vez.
     property bool temSave: false
     onAboutToShow: temSave = saves.temBackup(jogoId)
     SeparadorDoMenu {

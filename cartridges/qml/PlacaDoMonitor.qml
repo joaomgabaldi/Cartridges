@@ -1,6 +1,6 @@
 import QtQuick
 
-// A placa do "Identificar monitores": o número da tela, grande, num quadrado (a janela é do `window_geometry`, D68).
+// A placa do "Identificar monitores": o número da tela, grande, num quadrado.
 Rectangle {
     id: placa
     objectName: "placaDoMonitor"
@@ -9,7 +9,7 @@ Rectangle {
 
     implicitWidth: 200
     implicitHeight: 200
-    color: Tema.fundo  // a janela comum da `main`: fundo e texto do tema, sem borda
+    color: Tema.fundo  // fundo e texto do tema, sem borda
     border.width: 0
 
     Text {

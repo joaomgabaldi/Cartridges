@@ -42,7 +42,7 @@ Column {
     GrupoDePreferencias {
         objectName: "grupoAoIniciarUmJogo"
         titulo: "Ao iniciar um jogo"
-        // Sem contar horas, ou sem segundo monitor, o grupo inteiro apaga, título e descrição incluídos (`preferences.py:689-712`).
+        // Sem contar horas, ou sem segundo monitor, o grupo inteiro apaga, título e descrição incluídos.
         enabled: preferencias.estado.moverAtivo === true
         descricao: "Move o Kyron para outro monitor (se disponível) em vez de minimizá-lo para a barra de tarefas."
 
@@ -71,7 +71,7 @@ Column {
     GrupoDePreferencias {
         objectName: "grupoPapelDeParede"
         titulo: "Papel de parede"
-        // Sem contar horas não há sessão para trocar o papel de parede: o grupo inteiro apaga, como na `main`.
+        // Sem contar horas não há sessão para trocar o papel de parede: o grupo inteiro apaga.
         enabled: preferencias.estado.papelDeParedeAtivo === true
         descricao: "Durante a sessão, substitui temporariamente o papel de parede dos outros monitores por uma imagem relacionada ao jogo."
 

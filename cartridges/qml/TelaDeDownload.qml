@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// A página "Baixando…" dos seletores (`TelaDeDownload` da `main`): 280 de largura, espaços de 12, o título `title-3`, a barra e o
-// tamanho em `dim-label numeric`. Sem total conhecido (`progresso` negativo ou sem texto), a barra só pulsa.
+// A página "Baixando…" dos seletores: 280 de largura, espaços de 12, o título, a barra e o
+// tamanho esmaecido, com algarismos de largura fixa. Sem total conhecido (`progresso` negativo ou sem texto), a barra só pulsa.
 Column {
     id: tela
 
