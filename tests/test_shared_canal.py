@@ -17,7 +17,7 @@ import pytest
 
 from cartridges import shared as shared_real
 
-MENSAGEM = "A instalação do Cartridges está danificada. Reinstale o aplicativo."
+MENSAGEM = "A instalação do Kyron está danificada. Reinstale o aplicativo."
 
 
 @pytest.fixture

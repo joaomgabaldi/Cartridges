@@ -151,7 +151,7 @@ def release() -> None:
 # Título da janela principal (Principal.qml). Não passa por tradução — a
 # interface é hardcoded — então dá para casar contra ele daqui, onde o gettext
 # do launcher pode nem ter sido instalado ainda.
-_MAIN_WINDOW_TITLE = "Cartridges"
+_MAIN_WINDOW_TITLE = "Kyron"
 
 
 # Evento nomeado que a segunda cópia acende para a primeira: a janela principal

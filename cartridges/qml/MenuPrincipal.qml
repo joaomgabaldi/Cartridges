@@ -185,7 +185,7 @@ MenuDoTema {
     ItemDaPagina {
         objectName: "itemSobre"
         exibido: menu.servicoDoSobre !== null
-        text: "Sobre o Cartridges"
+        text: "Sobre o Kyron"
         onTriggered: menu.servicoDoSobre.abrir()
     }
 

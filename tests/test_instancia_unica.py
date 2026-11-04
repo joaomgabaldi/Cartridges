@@ -145,12 +145,12 @@ def test_segunda_abertura_desfaz_o_minimizar(app_qt):  # noqa: ARG001
 
 
 def _user32_falso(monkeypatch, visivel, janelas=((42, "Qt6120QWindowIcon"),)):
-    """Um user32 em que o EnumWindows passa pelas `janelas` (hwnd, classe), todas com o título "Cartridges"."""
+    """Um user32 em que o EnumWindows passa pelas `janelas` (hwnd, classe), todas com o título "Kyron"."""
     classes = dict(janelas)
     user32 = MagicMock()
 
     def titulo(_hwnd, buffer, _n):
-        buffer.value = "Cartridges"
+        buffer.value = "Kyron"
 
     def classe(hwnd, buffer, _n):
         buffer.value = classes[hwnd]

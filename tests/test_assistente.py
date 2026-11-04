@@ -355,8 +355,8 @@ def test_textos_das_telas(janela):
     def titulo(nome):
         return janela.achar(nome).property("titulo")
 
-    assert janela.raiz.title() == "Cartridges"
-    assert texto("titulo_boas_vindas") == "Boas-vindas ao Cartridges"
+    assert janela.raiz.title() == "Kyron"
+    assert texto("titulo_boas_vindas") == "Boas-vindas ao Kyron"
     assert texto("descricao_boas_vindas") == (
         "Reúna os seus jogos em uma única biblioteca, com capas, tempo de jogo e "
         "conquistas. Configure o essencial em poucos passos."
@@ -366,7 +366,7 @@ def test_textos_das_telas(janela):
     assert texto("botaoPularConfiguracao") == "Pular configuração"
     assert texto("titulo_jogos") == "Seus jogos"
     assert texto("descricao_jogos") == (
-        "O Cartridges adiciona à biblioteca os jogos cujos atalhos estão em uma pasta. "
+        "O Kyron adiciona à biblioteca os jogos cujos atalhos estão em uma pasta. "
         "Escolha a pasta onde estão, ou onde ficarão, os atalhos dos seus jogos. Novos "
         "atalhos colocados nela aparecem na biblioteca sempre que o aplicativo é aberto."
     )
@@ -387,20 +387,20 @@ def test_textos_das_telas(janela):
     assert titulo("linhaDaChaveDaSteam") == "Chave da API"
     assert texto("titulo_iluminacao") == "Iluminação inteligente"
     assert texto("descricao_iluminacao") == (
-        "O Cartridges pode mudar a cor dos seus dispositivos de iluminação compatíveis "
+        "O Kyron pode mudar a cor dos seus dispositivos de iluminação compatíveis "
         "com a Tuya de acordo com o jogo em execução."
     )
     assert texto("botaoConfigurar") == "Configurar"
     assert texto("titulo_controle") == "Controle"
     assert texto("descricao_controle") == (
-        "O Cartridges pode abrir o Big Picture automaticamente quando um controle é conectado."
+        "O Kyron pode abrir o Big Picture automaticamente quando um controle é conectado."
     )
     assert titulo("linhaBigPicture") == "Abrir o Big Picture ao conectar um controle"
     assert janela.achar("linhaBigPicture").property("subtitulo") == (
         "Abre o Big Picture ao iniciar o aplicativo com um controle conectado ou ao conectar um controle na biblioteca"
     )
     assert texto("titulo_monitores") == "Outros monitores"
-    assert texto("descricao_monitores") == "Escolha o que o Cartridges faz com os demais monitores ao iniciar um jogo."
+    assert texto("descricao_monitores") == "Escolha o que o Kyron faz com os demais monitores ao iniciar um jogo."
     assert titulo("linhaMover") == "Mover o aplicativo para outro monitor ao iniciar um jogo"
     assert titulo("linhaMonitor") == "Monitor"
     assert titulo("linhaIdentificar") == "Identificar monitores"
@@ -755,7 +755,7 @@ def test_backup_invalido_avisa_e_continua(monkeypatch, schema, tmp_path, sincron
     assistente, _, restaurou = _assistente()
     pedidos = _dialogos(assistente)
     assistente.restaurarBackup(QUrl.fromLocalFile(str(tmp_path / "x.zip")))
-    assert pedidos == [("Backup inválido", "O arquivo não é um backup válido do Cartridges.")]
+    assert pedidos == [("Backup inválido", "O arquivo não é um backup válido do Kyron.")]
     assert restaurou == [] and schema.get_boolean("assistente-concluido") is False
     assert not assistente.preparando and not assistente.avisos.visivel
 
@@ -938,8 +938,8 @@ def test_anel_de_foco_so_aparece_com_o_teclado(janela):
 
 
 def test_barra_com_titulo_texto_no_clamp_de_600_e_botao_escolher_com_fundo(janela):
-    """V6: a barra mostra "Cartridges"; o texto da tela cabe no `AdwClamp` de 600 da `StatusPage`; "Escolher" é um botão cinza de 34."""
-    assert janela.achar("barraDoAssistente").property("titulo") == "Cartridges"
+    """V6: a barra mostra "Kyron"; o texto da tela cabe no `AdwClamp` de 600 da `StatusPage`; "Escolher" é um botão cinza de 34."""
+    assert janela.achar("barraDoAssistente").property("titulo") == "Kyron"
     descricao = janela.achar("descricao_boas_vindas")
     assert descricao.property("width") <= 600
     assert descricao.property("lineHeight") == 17

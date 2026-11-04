@@ -320,7 +320,7 @@ class Assistente(QObject):
             self._sair()
             self._ao_restaurar()
         elif resultado == "invalido":
-            self.dialogoPedido.emit(_("Backup inválido"), _("O arquivo não é um backup válido do Cartridges."))
+            self.dialogoPedido.emit(_("Backup inválido"), _("O arquivo não é um backup válido do Kyron."))
         else:
             self.dialogoPedido.emit(
                 _("Não foi possível restaurar"), _("Não foi possível restaurar o backup. Tente novamente.")

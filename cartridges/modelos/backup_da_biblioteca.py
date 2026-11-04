@@ -295,9 +295,9 @@ class BackupDasPreferencias(QObject):
     def redefinir(self) -> None:
         eu = weakref.ref(self)
         _perguntar(
-            _("Redefinir o Cartridges?"),
+            _("Redefinir o Kyron?"),
             _(
-                "Tem certeza que deseja redefinir o Cartridges? Todos os jogos, configurações, contas conectadas "
+                "Tem certeza que deseja redefinir o Kyron? Todos os jogos, configurações, contas conectadas "
                 "e cópias dos saves armazenadas na pasta do aplicativo serão excluídos, e o aplicativo será "
                 "reiniciado. Esta ação é irreversível."
             ),
@@ -314,7 +314,7 @@ class BackupDasPreferencias(QObject):
             redefinir.agendar()
         except OSError:
             _log.exception("Não foi possível agendar a redefinição")
-            self._avisar(_("Não foi possível redefinir o Cartridges"))
+            self._avisar(_("Não foi possível redefinir o Kyron"))
             return
         _reiniciar()
 
@@ -417,7 +417,7 @@ def _preparo_acabou(eu: Any, avisos: Any, aviso: Any, resultado: str) -> None:
         return
     modelo._preparando = False  # noqa: SLF001
     if resultado == "invalido":
-        _dialogo(_("Backup inválido"), _("O arquivo não é um backup válido do Cartridges."))
+        _dialogo(_("Backup inválido"), _("O arquivo não é um backup válido do Kyron."))
     elif resultado == "falhou":
         _dialogo(_("Não foi possível restaurar"), _("Não foi possível restaurar o backup. Tente novamente."))
     # Confere de novo: a preparação leva segundos, e a pessoa pode ter começado um backup ou uma restauração dos saves

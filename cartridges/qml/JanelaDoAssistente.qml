@@ -22,7 +22,7 @@ Window {
     readonly property QtObject agente: carga.item
     readonly property real topo: semAgente ? 0 : barra.altura
 
-    title: "Cartridges"
+    title: "Kyron"
     width: 640
     height: 640
     minimumWidth: 640
@@ -95,7 +95,7 @@ Window {
         active: false
         sourceComponent: FileDialog {
             fileMode: FileDialog.OpenFile
-            nameFilters: ["Backup do Cartridges (*.zip)"]
+            nameFilters: ["Backup do Kyron (*.zip)"]
             onAccepted: raiz.modelo.restaurarBackup(selectedFile)
         }
         onLoaded: item.open()
@@ -205,7 +205,7 @@ Window {
         visible: !raiz.semAgente
         janela: raiz
         agente: raiz.agente
-        titulo: "Cartridges"  // o título da janela, que o `Adw.HeaderBar` sem título-widget mostra
+        titulo: "Kyron"  // o título da janela, que o `Adw.HeaderBar` sem título-widget mostra
         comMaximizar: false
     }
 
@@ -259,7 +259,7 @@ Window {
                 Pagina {
                     nome: "boas_vindas"
                     imagem: raiz.modelo.imagens.logo
-                    titulo: "Boas-vindas ao Cartridges"
+                    titulo: "Boas-vindas ao Kyron"
                     descricao: "Reúna os seus jogos em uma única biblioteca, com capas, tempo de jogo e conquistas. Configure o essencial em poucos passos."
                     primeiro: botaoComecar
 
@@ -297,7 +297,7 @@ Window {
                     nome: "jogos"
                     icone: "folder"
                     titulo: "Seus jogos"
-                    descricao: "O Cartridges adiciona à biblioteca os jogos cujos atalhos estão em uma pasta. Escolha a pasta onde estão, ou onde ficarão, os atalhos dos seus jogos. Novos atalhos colocados nela aparecem na biblioteca sempre que o aplicativo é aberto."
+                    descricao: "O Kyron adiciona à biblioteca os jogos cujos atalhos estão em uma pasta. Escolha a pasta onde estão, ou onde ficarão, os atalhos dos seus jogos. Novos atalhos colocados nela aparecem na biblioteca sempre que o aplicativo é aberto."
                     primeiro: linhaDaPasta.botaoDaLinha
 
                     GrupoDeLinhas {
@@ -445,7 +445,7 @@ Window {
                     nome: "iluminacao"
                     icone: "display-brightness"
                     titulo: "Iluminação inteligente"
-                    descricao: "O Cartridges pode mudar a cor dos seus dispositivos de iluminação compatíveis com a Tuya de acordo com o jogo em execução."
+                    descricao: "O Kyron pode mudar a cor dos seus dispositivos de iluminação compatíveis com a Tuya de acordo com o jogo em execução."
                     primeiro: botaoConfigurar
 
                     BotaoDoModal {
@@ -461,7 +461,7 @@ Window {
                     nome: "controle"
                     icone: "input-gaming"
                     titulo: "Controle"
-                    descricao: "O Cartridges pode abrir o Big Picture automaticamente quando um controle é conectado."
+                    descricao: "O Kyron pode abrir o Big Picture automaticamente quando um controle é conectado."
 
                     GrupoDeLinhas {
                         width: parent.width
@@ -479,7 +479,7 @@ Window {
                     nome: "monitores"
                     icone: "video-joined-displays"
                     titulo: "Outros monitores"
-                    descricao: "Escolha o que o Cartridges faz com os demais monitores ao iniciar um jogo."
+                    descricao: "Escolha o que o Kyron faz com os demais monitores ao iniciar um jogo."
 
                     GrupoDeLinhas {
                         width: parent.width

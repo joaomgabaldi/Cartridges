@@ -53,7 +53,7 @@ def janela(app_qt):  # noqa: ARG001
 
 def test_textos(janela):
     restaurando, raiz, achar = janela
-    assert raiz.title() == "Cartridges"
+    assert raiz.title() == "Kyron"
     assert raiz.isVisible()
     assert achar("tituloDaRestauracao").property("text") == "Restaurando o backup"
     assert achar("textoDaRestauracao").property("text") == "O aplicativo será aberto quando a restauração terminar."

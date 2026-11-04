@@ -47,7 +47,7 @@ Window {
     readonly property Item barraDeTitulo: barra
 
     color: usarMica ? "transparent" : Tema.fundo
-    title: "Cartridges"
+    title: "Kyron"
 
     // Tamanho e limites só depois do setup: antes, o QWindowKit os sobrescreve (P11).
     Component.onCompleted: {

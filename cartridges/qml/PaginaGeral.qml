@@ -42,7 +42,7 @@ Column {
         visible: false  // sem isto o `Column` soma um espaço vazio por Loader
         sourceComponent: FileDialog {
             fileMode: FileDialog.SaveFile
-            nameFilters: ["Backup do Cartridges (*.zip)"]
+            nameFilters: ["Backup do Kyron (*.zip)"]
             // O nome sugerido vai na pasta Documentos: um nome solto abriria o seletor na pasta do aplicativo.
             selectedFile: pagina.sugestaoDoBackup()
             onAccepted: preferencias.backup.exportar(selectedFile)
@@ -55,7 +55,7 @@ Column {
         visible: false  // sem isto o `Column` soma um espaço vazio por Loader
         sourceComponent: FileDialog {
             fileMode: FileDialog.OpenFile
-            nameFilters: ["Backup do Cartridges (*.zip)"]
+            nameFilters: ["Backup do Kyron (*.zip)"]
             onAccepted: preferencias.backup.importar(selectedFile)
         }
         onLoaded: item.open()
@@ -212,7 +212,7 @@ Column {
         LinhaDeBotao {
             buscavel: true
             objectName: "linhaRedefinir"
-            titulo: "Redefinir Cartridges"
+            titulo: "Redefinir Kyron"
             destrutivo: true
             onAcionada: preferencias.backup.redefinir()
         }

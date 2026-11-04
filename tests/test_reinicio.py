@@ -31,14 +31,14 @@ def test_relancar_abre_o_mesmo_comando_desacoplado(monkeypatch):
     assert kw["close_fds"] is True
 
 
-def test_relancar_pelo_cartridges_exe_nao_repete_o_script(monkeypatch):
+def test_relancar_reconhece_o_kyron_exe_nao_repete_o_script(monkeypatch):
     chamadas = []
     monkeypatch.setattr(modulo_app, "_popen", lambda args, **_kw: chamadas.append(args))
-    exe = r"C:\Program Files\Cartridges Revamped\bin\Cartridges.exe"
+    exe = r"C:\Program Files\Cartridges Revamped\bin\Kyron.exe"
     monkeypatch.setattr(sys, "executable", exe)
     monkeypatch.setattr(sys, "argv", [r"C:\Program Files\Cartridges Revamped\bin\cartridges", "x"])
     modulo_app.relancar()
-    assert chamadas == [[exe, "x"]]  # o Cartridges.exe já põe o `-m cartridges`
+    assert chamadas == [[exe, "x"]]  # o Kyron.exe já põe o `-m cartridges`
 
 
 def test_main_so_relanca_quando_pedido(monkeypatch):

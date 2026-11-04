@@ -45,7 +45,7 @@ class JanelaDoAviso(QQuickView):
         self.titulo = aviso.titulo
         self._destruida = False
         self._ao_terminar: Optional[Callable[[], None]] = None
-        self.setTitle("Cartridges — aviso")
+        self.setTitle("Kyron — aviso")
         self.setFlags(_FLAGS)
         opaco = not janela_por_cima.FUNDO_TRANSPARENTE
         if opaco:

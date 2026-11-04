@@ -632,7 +632,7 @@ def test_recusa_pasta_dentro_da_pasta_do_app(tmp_path, relativa) -> None:
 
     with pytest.raises(pasta.TrocaRecusada) as recusa:
         pasta.trocar(nova)
-    assert str(recusa.value) == "Escolha uma pasta fora da pasta de dados do Cartridges."
+    assert str(recusa.value) == "Escolha uma pasta fora da pasta de dados do Kyron."
     assert pasta.atual() == tmp_path / "fora"
 
 
@@ -642,7 +642,7 @@ def test_recusa_pasta_que_contem_a_pasta_do_app(tmp_path, monkeypatch) -> None:
 
     with pytest.raises(pasta.TrocaRecusada) as recusa:
         pasta.trocar(tmp_path / "Local")
-    assert str(recusa.value) == "Escolha uma pasta fora da pasta de dados do Cartridges."
+    assert str(recusa.value) == "Escolha uma pasta fora da pasta de dados do Kyron."
 
 
 def test_a_padrao_continua_aceita(tmp_path) -> None:

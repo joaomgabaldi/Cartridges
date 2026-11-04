@@ -29,7 +29,7 @@ MolduraDoDialogo {
     setasMovemOFoco: true
     rolagemDasSetas: rolagem
     focoInicial: linhaNovidades.aparece ? linhaNovidades.botaoDaLinha : linhaCreditos.botaoDaLinha
-    nomeAcessivel: "Sobre o Cartridges"
+    nomeAcessivel: "Sobre o Kyron"
     onFecharPedido: pagina === "principal" ? modelo.fechar() : modelo.voltar()
     onAbertoChanged: if (aberto) { paginaAnterior = "principal"; rolagem.contentY = 0 }
     onPaginaChanged: {
@@ -115,7 +115,7 @@ MolduraDoDialogo {
     CabecalhoDoDialogo {
         id: cabecalho
         // A principal não tem título: "Cartridges" aparece quando o nome sai de vista (`main_title_revealer`).
-        titulo: dialogo.pagina === "principal" ? "Cartridges" : (dialogo.modelo ? dialogo.modelo.titulos[dialogo.pagina] : "")
+        titulo: dialogo.pagina === "principal" ? "Kyron" : (dialogo.modelo ? dialogo.modelo.titulos[dialogo.pagina] : "")
         objetoDoTitulo: "tituloDaPaginaDoSobre"
         opacidadeDoTitulo: dialogo.pagina !== "principal" || rolagem.contentY > nomeDoApp.y + nomeDoApp.height ? 1 : 0
         sombra: rolagem.contentY > 0
@@ -190,7 +190,7 @@ MolduraDoDialogo {
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
-                    text: "Cartridges"
+                    text: "Kyron"
                     textFormat: Text.PlainText
                     color: Tema.texto
                     font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 }

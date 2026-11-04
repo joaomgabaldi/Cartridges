@@ -391,7 +391,7 @@ def test_grupos_do_plano_8b_aparecem(app):
     """O backup e a Zona de perigo entraram no 8a (Task 7); "Atualizações" na Task 1 do 8b e "Barra superior" na Task 2."""
     _abrir(app)
     todos = "\n".join(_textos(app.achar("dialogoDePreferencias")))
-    for texto in ("Barra superior", "Atualizações", "Backup da sua biblioteca", "Zona de perigo", "Redefinir Cartridges"):
+    for texto in ("Barra superior", "Atualizações", "Backup da sua biblioteca", "Zona de perigo", "Redefinir Kyron"):
         assert texto in todos
 
 
@@ -591,7 +591,7 @@ def test_textos_da_personalizacao(app):
     )
     assert app.achar("grupoAoIniciarUmJogo").property("titulo") == "Ao iniciar um jogo"
     assert app.achar("grupoAoIniciarUmJogo").property("descricao") == (
-        "Move o Cartridges para outro monitor (se disponível) em vez de minimizá-lo para a barra de tarefas."
+        "Move o Kyron para outro monitor (se disponível) em vez de minimizá-lo para a barra de tarefas."
     )
     assert _linha(app, "interruptor-session-move-window") == ("Mover para outro monitor", "")
     assert app.achar("linhaDoMonitor").property("titulo") == "Monitor"
@@ -697,7 +697,7 @@ def test_linhas_da_iluminacao_apagadas_sem_o_interruptor(app, fitas_espiadas):
     _abrir(app, "session")
     assert app.achar("grupoIluminacao").property("titulo") == "Iluminação inteligente"
     assert app.achar("grupoIluminacao").property("descricao") == (
-        "Muda a cor da iluminação inteligente enquanto o Cartridges está aberto: a cor do aplicativo fora do jogo e "
+        "Muda a cor da iluminação inteligente enquanto o Kyron está aberto: a cor do aplicativo fora do jogo e "
         "a cor do jogo durante a sessão. Ao fechar o aplicativo, a iluminação inteligente volta ao estado anterior."
     )
     assert _linha(app, "interruptor-session-fita") == ("Mudar a cor da iluminação inteligente", "1 dispositivo configurado")

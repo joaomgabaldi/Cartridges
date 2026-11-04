@@ -201,7 +201,7 @@ def test_main_avisa_da_pasta_dos_saves_logo_depois_do_aviso_de_falha(app_qt, mon
         "As cópias dos saves do backup foram para a pasta padrão. "
         "Para voltar a usar D:\\Saves & Cia, escolha-a novamente em Preferências.",
     )
-    redefinir_ = ("Não foi possível redefinir", "Não foi possível concluir a redefinição do Cartridges. Tente novamente.")
+    redefinir_ = ("Não foi possível redefinir", "Não foi possível concluir a redefinição do Kyron. Tente novamente.")
     # Em pilha, como a `main`: o último a abrir é o que se vê; cada um que fecha devolve a tela ao anterior.
     assert pedidos == [restaurar, pasta, redefinir_]
     aplicativo.dialogoFechado()

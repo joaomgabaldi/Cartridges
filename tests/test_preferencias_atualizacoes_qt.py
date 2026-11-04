@@ -97,7 +97,7 @@ def test_buscar_fica_apagado_enquanto_busca(janela, monkeypatch, tmp_path):
     pendentes[0]()  # a resposta chega pela fila da thread principal
     assert esperar(lambda: janela.atualizador.buscando is False)
     assert linha.property("enabled") is True
-    assert _aviso(janela) == "O Cartridges já está na versão mais recente."
+    assert _aviso(janela) == "O Kyron já está na versão mais recente."
     assert botao.property("enabled") is True
 
 

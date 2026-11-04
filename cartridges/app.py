@@ -271,7 +271,7 @@ def _avisos_da_abertura(aplicativo: Any, restauracao_falhou: bool) -> None:
     if redefinir.falha is not None:
         aplicativo.pedir_dialogo(
             "Não foi possível redefinir",
-            "Não foi possível concluir a redefinição do Cartridges. Tente novamente.",
+            "Não foi possível concluir a redefinição do Kyron. Tente novamente.",
             [],
             lambda: None,
         )
@@ -584,8 +584,8 @@ def _mostrar_assistente(app: AplicacaoQt, argv: list[str], abertura: _Abertura, 
 
 def relancar() -> None:
     """Abre o app de novo, desacoplado deste processo, que já está saindo (D75)."""
-    if Path(sys.executable).stem.lower() == "cartridges":
-        # O Cartridges.exe já põe o `-m cartridges` sozinho.
+    if Path(sys.executable).stem.lower() == "kyron":
+        # O Kyron.exe já põe o `-m cartridges` sozinho.
         comando, pasta = [sys.executable, *sys.argv[1:]], None
     else:
         comando, pasta = [sys.executable, "-m", "cartridges", *sys.argv[1:]], str(_RAIZ.parent)
@@ -607,8 +607,8 @@ def main(argv: list[str]) -> int:
         single_instance.present_running_instance()
         return 0
     app = AplicacaoQt(argv)
-    app.setApplicationName("Cartridges")
-    app.setApplicationDisplayName("Cartridges")
+    app.setApplicationName("Kyron")
+    app.setApplicationDisplayName("Kyron")
     app.setWindowIcon(QIcon(str(_ICONE)))
     aplicar_cor_de_destaque()
     abertura = _Abertura()

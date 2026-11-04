@@ -44,7 +44,7 @@ Column {
         titulo: "Ao iniciar um jogo"
         // Sem contar horas, ou sem segundo monitor, o grupo inteiro apaga, título e descrição incluídos (`preferences.py:689-712`).
         enabled: preferencias.estado.moverAtivo === true
-        descricao: "Move o Cartridges para outro monitor (se disponível) em vez de minimizá-lo para a barra de tarefas."
+        descricao: "Move o Kyron para outro monitor (se disponível) em vez de minimizá-lo para a barra de tarefas."
 
         Interruptor {
             chave: "session-move-window"
@@ -97,7 +97,7 @@ Column {
         id: grupoIluminacao
         objectName: "grupoIluminacao"
         titulo: "Iluminação inteligente"
-        descricao: "Muda a cor da iluminação inteligente enquanto o Cartridges está aberto: a cor do aplicativo fora do jogo e a cor do jogo durante a sessão. Ao fechar o aplicativo, a iluminação inteligente volta ao estado anterior."
+        descricao: "Muda a cor da iluminação inteligente enquanto o Kyron está aberto: a cor do aplicativo fora do jogo e a cor do jogo durante a sessão. Ao fechar o aplicativo, a iluminação inteligente volta ao estado anterior."
 
         readonly property bool ligada: preferencias.valores["session-fita"] === true
 

@@ -199,7 +199,7 @@ def test_grupos_na_ordem_da_main(montar):
     _p, pagina = montar()
     titulos = [i.property("titulo") for i in pagina.item.childItems() if i.property("titulo")]
     assert titulos == ["Comportamento", "Backup da sua biblioteca", "Atualizações", "Zona de perigo"]
-    assert pagina.achar("linhaRedefinir").property("titulo") == "Redefinir Cartridges"
+    assert pagina.achar("linhaRedefinir").property("titulo") == "Redefinir Kyron"
     assert pagina.achar("linhaRedefinir").property("destrutivo") is True
     for nome, titulo in (
         ("linhaExportarBackup", "Exportar para arquivo"),
@@ -454,7 +454,7 @@ def test_escolher_pasta_sem_url_nao_troca(monkeypatch, modelo, flush_idle):
         "Escolha uma pasta fora da pasta atual dos saves.",
         "Escolha uma pasta que não contenha a pasta atual dos saves.",
         "A pasta escolhida já tem arquivos com os mesmos nomes dos saves. Escolha outra pasta.",
-        "Escolha uma pasta fora da pasta de dados do Cartridges.",
+        "Escolha uma pasta fora da pasta de dados do Kyron.",
     ],
 )
 def test_troca_recusada_mostra_a_mensagem_de_cada_motivo(monkeypatch, modelo, aplicativo, flush_idle, mensagem):
@@ -578,7 +578,7 @@ def test_restaurar_backup_que_ganha_saves_em_andamento_na_preparacao_nao_sai(
 @pytest.mark.parametrize(
     ("erro", "titulo", "corpo"),
     [
-        (backup.BackupInvalido("x"), "Backup inválido", "O arquivo não é um backup válido do Cartridges."),
+        (backup.BackupInvalido("x"), "Backup inválido", "O arquivo não é um backup válido do Kyron."),
         (OSError("disco cheio"), "Não foi possível restaurar", "Não foi possível restaurar o backup. Tente novamente."),
     ],
 )
@@ -607,9 +607,9 @@ def test_redefinir_pede_a_confirmacao_com_o_texto_da_main(modelo, aplicativo, mo
     monkeypatch.setattr(redefinir, "agendar", lambda: pytest.fail("agendou sem confirmar"))
     modelo.redefinir()
     (pedido,) = aplicativo.confirmacoes
-    assert pedido["titulo"] == "Redefinir o Cartridges?"
+    assert pedido["titulo"] == "Redefinir o Kyron?"
     assert pedido["corpo"] == (
-        "Tem certeza que deseja redefinir o Cartridges? Todos os jogos, configurações, contas conectadas e "
+        "Tem certeza que deseja redefinir o Kyron? Todos os jogos, configurações, contas conectadas e "
         "cópias dos saves armazenadas na pasta do aplicativo serão excluídos, e o aplicativo será "
         "reiniciado. Esta ação é irreversível."
     )
@@ -638,7 +638,7 @@ def test_redefinir_que_nao_consegue_agendar_avisa(monkeypatch, modelo, aplicativ
 
     monkeypatch.setattr(redefinir, "agendar", recusa)
     textos = _confirmar(monkeypatch, modelo, aplicativo, em_andamento=False)
-    assert textos == ["Não foi possível redefinir o Cartridges"]
+    assert textos == ["Não foi possível redefinir o Kyron"]
     assert aplicativo.reinicios == 0
 
 

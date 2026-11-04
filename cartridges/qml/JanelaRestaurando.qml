@@ -13,7 +13,7 @@ Window {
     readonly property QtObject agente: carga.item
     readonly property real alturaPedida: barra.altura + conteudo.implicitHeight
 
-    title: "Cartridges"
+    title: "Kyron"
     width: 420
     minimumWidth: width
     maximumWidth: width
@@ -58,7 +58,7 @@ Window {
         visible: !raiz.semAgente
         janela: raiz
         agente: raiz.agente
-        titulo: "Cartridges"
+        titulo: "Kyron"
         comMaximizar: false
         comFechar: false
     }

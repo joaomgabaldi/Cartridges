@@ -285,7 +285,7 @@ def test_item_sobre_no_menu_principal_depois_de_preferencias(janela):
         "(function() { var r = []; for (var i = 0; i < count; ++i) r.push(itemAt(i).objectName); return r })()",
     ).toVariant()
     assert nomes.index("itemSobre") == nomes.index("itemPreferencias") + 1
-    assert janela.achar("itemSobre").property("text") == "Sobre o Cartridges"
+    assert janela.achar("itemSobre").property("text") == "Sobre o Kyron"
     _clique(janela, "itemSobre")
     assert janela.sobre.aberto is True
     assert esperar(lambda: janela.achar("dialogoSobre").property("visible") is True)
@@ -293,14 +293,14 @@ def test_item_sobre_no_menu_principal_depois_de_preferencias(janela):
 
 def test_pagina_principal_mostra_nome_versao_e_linhas(janela):
     _abrir(janela)
-    assert janela.achar("nomeDoApp").property("text") == "Cartridges"
+    assert janela.achar("nomeDoApp").property("text") == "Kyron"
     assert janela.achar("desenvolvedorDoApp").property("text") == "joaomgabaldi"
     assert janela.achar("versaoDoApp").property("text") == "2026.10.26"
     assert all(janela.achar(n).property("visible") is True for n in LINHAS)
     assert [janela.achar(n).property("titulo") for n in LINHAS] == [
         "Novidades", "Solução de problemas", "Créditos", "Aviso legal",
     ]  # fmt: skip
-    # DA-21: sem título na principal; "Cartridges" só aparece ao rolar (opacidade 0).
+    # DA-21: sem título na principal; "Kyron" só aparece ao rolar (opacidade 0).
     assert janela.achar("tituloDaPaginaDoSobre").property("opacity") == 0
 
 

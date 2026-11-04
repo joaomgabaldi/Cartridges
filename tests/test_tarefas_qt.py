@@ -916,7 +916,7 @@ def janela(nome):
 
 
 def principal():
-    return next(j for j in QGuiApplication.topLevelWindows() if j.title() == "Cartridges")
+    return next(j for j in QGuiApplication.topLevelWindows() if j.title() == "Kyron")
 
 
 def passo_1():

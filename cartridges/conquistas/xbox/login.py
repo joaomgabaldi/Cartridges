@@ -28,7 +28,7 @@ from typing import Callable, Optional
 from cartridges.conquistas.xbox import conta
 from cartridges.utils.thread_principal import na_thread_principal
 
-TEXTO_OK = "Login concluído. Pode fechar esta aba e voltar ao Cartridges."
+TEXTO_OK = "Login concluído. Pode fechar esta aba e voltar ao Kyron."
 TEXTO_FALHOU = "O login não foi concluído. Pode fechar esta aba."
 # Quanto uma conexão pode ficar aberta sem terminar a requisição.
 _TEMPO_DA_CONEXAO = 5
@@ -53,7 +53,7 @@ _pendente: Optional["Pedido"] = None
 
 def _pagina(texto: str) -> bytes:
     return (
-        '<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Cartridges</title>'
+        '<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Kyron</title>'
         f'<body style="font-family:sans-serif;margin:3em"><p>{html.escape(texto)}</p></body></html>'
     ).encode("utf-8")
 

@@ -55,7 +55,7 @@ def canal() -> Literal["desenvolvimento", "final"]:
         valor = None
     if valor not in ("final", "desenvolvimento"):
         raise SystemExit(
-            "A instalação do Cartridges está danificada. Reinstale o aplicativo."
+            "A instalação do Kyron está danificada. Reinstale o aplicativo."
         )
     return valor
 

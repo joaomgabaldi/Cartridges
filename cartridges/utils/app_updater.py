@@ -363,7 +363,7 @@ class AppUpdater(QObject):
                 na_thread_principal(
                     self._responder_busca,
                     responder,
-                    "O Cartridges já está na versão mais recente.",
+                    "O Kyron já está na versão mais recente.",
                 )
                 return
             na_thread_principal(self._perguntar_agora, release, responder)
@@ -497,7 +497,7 @@ class AppUpdater(QObject):
         self._progresso = 0.0
         self.alterado.emit()
 
-        target = download_dir() / f"Cartridges-{release.version}.exe"
+        target = download_dir() / f"Kyron-{release.version}.exe"
 
         def progress(fraction: float) -> None:
             na_thread_principal(self._atualizar_progresso, fraction, cancel)

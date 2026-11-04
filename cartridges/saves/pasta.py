@@ -212,7 +212,7 @@ def trocar(nova: Path) -> None:
     # nela vai para `.anterior` e é apagado): só a padrão sobrevive a isso.
     e_padrao = _chave(nova) == _chave(padrao())
     if not e_padrao and (dentro(nova, shared.app_dir) or dentro(shared.app_dir, nova)):
-        raise TrocaRecusada(_("Escolha uma pasta fora da pasta de dados do Cartridges."))
+        raise TrocaRecusada(_("Escolha uma pasta fora da pasta de dados do Kyron."))
 
     # Antes de decidir: uma sobra do app na pasta que vai valer seria usada pelo Ludusavi.
     _apagar_sobras(nova)

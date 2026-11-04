@@ -459,7 +459,7 @@ def test_fechar_o_app_no_meio_do_download_descarta_o_resultado(tmp_path, monkeyp
     monkeypatch.setattr(app_updater, "na_thread_principal", lambda f, *a: fila.append((f, a)))
     monkeypatch.setattr(app_updater.threading, "Thread", lambda target, **_kw: types.SimpleNamespace(start=target))
     updater = AppUpdater()
-    alvo = app_updater.download_dir() / "Cartridges-2026.09.13.exe"
+    alvo = app_updater.download_dir() / "Kyron-2026.09.13.exe"
 
     # 1. O download termina, mas o app fecha antes de o resultado ser tratado.
     monkeypatch.setattr(app_updater.requests, "get", lambda *_a, **_k: _FakeResponse(_PAYLOAD))
@@ -679,7 +679,7 @@ def test_busca_sem_versao_nova_avisa(busca, monkeypatch):
     AppUpdater().buscar_agora(busca.avisos.append)
 
     assert busca.perguntas == []
-    assert busca.avisos == ["O Cartridges já está na versão mais recente."]
+    assert busca.avisos == ["O Kyron já está na versão mais recente."]
 
 
 def test_busca_sem_rede_avisa(busca, monkeypatch):
