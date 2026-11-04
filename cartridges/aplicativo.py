@@ -31,7 +31,7 @@ class _Pedido:
 
 
 def _animacoes_do_sistema() -> bool:
-    """"Efeitos de animação" do Windows (SPI_GETCLIENTAREAANIMATION), o que o GTK da `main` seguia."""
+    """"Efeitos de animação" do Windows (SPI_GETCLIENTAREAANIMATION)."""
     ligado = ctypes.c_int(1)
     if not ctypes.windll.user32.SystemParametersInfoW(0x1042, 0, ctypes.pointer(ligado), 0):
         return True
@@ -42,9 +42,7 @@ class Aplicativo(QObject):
     importandoChanged = Signal()  # noqa: N815
     colunasMaximasChanged = Signal()  # noqa: N815
     tocarSempreChanged = Signal()  # noqa: N815
-    # Diálogo de erros da importação: título, corpo e a lista [{titulo, subtitulo}] (texto puro).
     dialogoPedido = Signal(str, str, list)  # noqa: N815
-    # A pergunta do domínio (D72): título, corpo, rótulo de confirmar, rótulo de sair e se é destrutiva.
     confirmacaoPedida = Signal(str, str, str, str, bool)  # noqa: N815
     animacoesDoSistemaChanged = Signal()  # noqa: N815
 
@@ -52,19 +50,16 @@ class Aplicativo(QObject):
         super().__init__(parent)
         self._avisos = avisos if avisos is not None else FilaDeAvisos(self)
         self._importando = False
-        # Posto por `app.py`; a tela de preferências chama `check_async()` nele.
         self.verificador_de_atualizacoes = None
-        # Posta por `app.py` depois das outras varreduras; a edição e a importação a chamam.
         self.varredura_conquistas = None
-        # Lida pelo `main()` depois do `exec()`: o app sai e se reabre (D75).
+        # Lida pelo `main()` depois do `exec()`: o app sai e se reabre.
         self.reiniciar = False
-        # R5: uma pilha, como o `Adw.Dialog.present` da `main`: o pedido novo cobre o de cima e, quando este fecha, o
-        # anterior volta. O QML tem um diálogo de cada tipo: `_na_tela` diz qual pedido cada um mostra agora.
+        # Pilha de pedidos: o novo cobre o de cima e, quando fecha, o anterior volta. `_na_tela` diz qual pedido cada
+        # diálogo do QML mostra.
         self._pilha: list[_Pedido] = []
         self._na_tela: dict[str, _Pedido | None] = {"dialogo": None, "confirmacao": None}
         self._colunas = shared.schema.get_uint("library-rows")
         self._tocar_sempre = shared.schema.get_boolean("cover-autoplay")
-        # Relido a cada `WM_SETTINGCHANGE` (`reler_animacoes`, D88), como a `main`.
         self._animacoes_do_sistema = _animacoes_do_sistema()
         # A `Configuracoes` entrega o aviso na thread principal; a referência fraca não prende o objeto.
         eu = weakref.ref(self)
@@ -85,7 +80,6 @@ class Aplicativo(QObject):
 
     @Property(QObject, constant=True)
     def avisos(self) -> FilaDeAvisos:
-        """A fila única de avisos do app (a mesma da `Ponte`)."""
         return self._avisos
 
     @Property(bool, notify=importandoChanged)
@@ -126,14 +120,11 @@ class Aplicativo(QObject):
         varrer_atalhos: bool = False,
         ao_terminar: Callable[[], None] | None = None,
     ) -> None:
-        """``varrer_atalhos`` varre a pasta de atalhos mesmo com a fonte desligada em Preferências.
-
-        ``silenciosa``: a importação que o próprio app dispara não avisa quando nada é achado;
-        a que o usuário pede avisa sempre, senão o clique parece não ter funcionado.
+        """``silenciosa``: a importação disparada pelo app não avisa quando nada é achado; a pedida pelo usuário avisa
+        sempre.
         """
         if self._importando:
-            # A segunda importação não roda junto, mas o retorno de quem a pediu não se perde (a "Jogos sem atalho" da
-            # restauração ficaria travada): ele sai no fim da que está em curso (DA-63).
+            # A segunda importação não roda junto; o retorno de quem a pediu sai no fim da que está em curso.
             atual = shared.importer
             if ao_terminar is not None and atual is not None:
                 anterior = atual.ao_terminar
@@ -154,7 +145,6 @@ class Aplicativo(QObject):
 
     @Property(bool, notify=dialogoPedido)
     def dialogoComPreferencias(self) -> bool:  # noqa: N802
-        """O diálogo pedido oferece o botão "Preferências"."""
         pedido = self._na_tela["dialogo"]
         return pedido is not None and pedido.preferencias is not None
 
@@ -166,10 +156,7 @@ class Aplicativo(QObject):
         ao_fechar: Callable[[], None],
         preferencias: str | None = None,
     ) -> None:
-        """``preferencias``: a página que o botão "Preferências" abre (``""`` = a primeira); None = sem o botão.
-
-        Com outro diálogo na tela, este o cobre; ao fechar, o anterior volta (R5).
-        """
+        """``preferencias``: página que o botão "Preferências" abre (``""`` = a primeira); None = sem o botão."""
         self._empilhar(_Pedido("dialogo", (titulo, corpo, itens), ao_fechar, preferencias))
 
     def _empilhar(self, pedido: _Pedido) -> None:
@@ -201,10 +188,8 @@ class Aplicativo(QObject):
         ao_responder: Callable[[bool], None],
         destrutivo: bool = False,
     ) -> None:
-        """Pergunta com dois botões; ``ao_responder(True)`` se confirmou, ``False`` se saiu (Esc, X ou o botão de sair).
-
-        O botão de sair é "Cancelar" se ``destrutivo``, senão "Dispensar".
-        Com outro diálogo na tela, este o cobre; ao responder, o anterior volta (R5).
+        """Pergunta com dois botões; ``ao_responder(True)`` se confirmou, ``False`` se saiu. Sair é "Cancelar" se
+        ``destrutivo``, senão "Dispensar".
         """
         sair = "Cancelar" if destrutivo else "Dispensar"
         self._empilhar(_Pedido("confirmacao", (titulo, corpo, rotulo, sair, destrutivo), ao_responder))
@@ -237,7 +222,7 @@ class Aplicativo(QObject):
             return
         preferencias = shared.preferencias
         if abrir_preferencias and pagina is not None and preferencias is not None and preferencias.abrir(pagina):
-            # Como o `closed` da `main`: uma vez só, quando as Preferências fecham.
+            # Uma vez só, quando as Preferências fecham.
             ligacao: list = []
             fraco = weakref.ref(preferencias)  # a conexão vive no próprio objeto: referência forte formaria um ciclo
 
@@ -253,16 +238,11 @@ class Aplicativo(QObject):
 
     @Slot(str)
     def avisar(self, texto: str) -> None:
-        """Um aviso simples na fila do app (o QML não alcança a `FilaDeAvisos.adicionar`)."""
         self._avisos.adicionar(texto)
 
     @Slot()
     def pedir_reinicio(self) -> None:
-        """Sai do app e o reabre: o `main()` solta a trava e chama o `relancar()` depois do `exec()` (D75).
-
-        O `quit()`, e não o `exit()`: o fechamento passa pelo `saindo` e pelo `aboutToQuit` inteiros, e o `closing` da
-        principal não o recusa (`PainelDasTarefas.encerrando`).
-        """
+        """Sai e reabre o app: o `main()` chama `relancar()` depois do `exec()`."""
         self.reiniciar = True
         QCoreApplication.quit()
 
@@ -276,8 +256,7 @@ class Aplicativo(QObject):
             caminhos.append(Path(url.toLocalFile()) if url.isLocalFile() else None)
         textos, importar = soltar_atalhos.ao_soltar(caminhos, self._importando)
         if importar:
-            # A varredura leva alguns segundos e só avisa no fim; até lá, este fica na tela.
-            # Os outros avisos esperam atrás dele, na fila.
+            # A varredura leva segundos; até lá este aviso fica na tela e os outros esperam na fila.
             aguarde = self._avisos.adicionar("Importando atalhos…", segundos=0)
             self.importar(varrer_atalhos=True, ao_terminar=lambda: self._avisos.dispensar(aguarde))
         for texto in textos:

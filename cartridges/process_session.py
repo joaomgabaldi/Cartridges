@@ -17,24 +17,16 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Track a game's playtime automatically by watching its process.
+"""Acompanha o tempo de jogo observando o processo do jogo.
 
-Once the game is launched we wait for its process to appear, count the time it
-stays running, and end the session automatically when it exits. Elapsed time is
-flushed into ``game.playtime`` every poll so a crash only loses the last poll's
-worth of time.
+Depois de lançado, espera o processo aparecer, conta o tempo em que ele roda e encerra a sessão sozinha quando ele
+sai. O tempo vai para ``game.playtime`` a cada consulta, então uma queda só perde o último intervalo.
 
-A game is recognised by any of three things, whichever answers first: the
-executable name the user configured, the install folder read out of the launch
-command, and — for Microsoft Store and Game Pass games — the package family
-name, read out of the launch command too, since there is nothing sensible for
-the user to type there. None of them excludes the others; see :meth:`_is_running`.
-
-What none of them can see (Steam and Epic, which hand off to a launcher) still
-falls back to the manual :class:`~cartridges.session_window.SessionWindow`. The
-exception is a packaged game whose package is never seen at all: that ends the
-session with no record and says so, because for a package "never seen" means the
-game did not start rather than that we lost sight of it.
+O jogo é reconhecido por qualquer um de três sinais: o nome do executável configurado, a pasta de instalação lida do
+comando e, nos jogos da Microsoft Store e do Game Pass, o nome de família do pacote (ver :meth:`_is_running`). O que
+nenhum vê (Steam e Epic, que passam por um launcher) cai na :class:`~cartridges.session_window.SessionWindow` manual.
+A exceção é um jogo empacotado cujo pacote nunca aparece: a sessão termina sem registro e avisa, pois aí "nunca visto"
+significa que o jogo não iniciou.
 """
 
 import logging
@@ -58,109 +50,82 @@ if TYPE_CHECKING:
 
 
 class ProcessSession:
-    """Automatic, process-watching play session for a single game."""
+    """Sessão automática de um jogo, observando o processo."""
 
-    # Only one session is tracked at a time, matching SessionWindow. Keeping the
-    # reference here also stops the instance being garbage-collected while its
-    # timer is running.
+    # Uma sessão acompanhada por vez, como a SessionWindow; a referência aqui também impede a coleta do objeto enquanto
+    # o timer roda.
     active: "Optional[ProcessSession]" = None
 
-    # Seconds between process-list checks. Kept short so the grace period below
-    # (which the user configures) is what really governs how long we wait.
+    # Segundos entre consultas à lista de processos; curto para que a tolerância configurada pelo usuário seja o que
+    # governa a espera.
     POLL_INTERVAL = 2
-    # How long to wait for the process to appear before giving up. Launchers,
-    # shader compilation and anti-cheat bootstrappers can delay the real exe.
+    # Quanto esperar o processo aparecer antes de desistir: launchers, compilação de shaders e anti-cheats atrasam o exe
+    # de verdade.
     STARTUP_GRACE = 300
-    # Shorter for a packaged game: shell activation either produces a process of
-    # the package within seconds or it failed. Waiting the full five minutes
-    # before falling back would drop the manual window on top of a game already
-    # running, which is worse than admitting defeat early.
+    # Menor para jogo empacotado: a ativação pelo shell produz um processo do pacote em segundos ou falhou; esperar os
+    # cinco minutos abriria a janela manual por cima de um jogo já rodando.
     PACKAGE_STARTUP_GRACE = 90
-    # How often to write accumulated time to disk (crash/power-loss safety net).
+    # Com que frequência gravar o tempo acumulado no disco (rede de segurança contra queda ou falta de luz).
     PERSIST_INTERVAL = 60
-    # A gap between two polls longer than this is not play: the monotonic clock
-    # keeps counting while the PC sleeps, and a game left paused overnight
-    # would otherwise be credited the whole night on the first poll after
-    # waking. Such a gap is credited as a single poll interval.
+    # Um intervalo entre duas consultas maior que isto não é jogo: o relógio monotônico continua contando com o PC
+    # dormindo, e um jogo pausado de noite renderia a noite inteira. Esse intervalo é creditado como uma consulta só.
     MAX_GAP = POLL_INTERVAL + 30
 
     def __init__(self, game: "Jogo") -> None:
         self.game = game
-        # Only when the user asked for it. The field keeps its value while the
-        # switch is off (the dialog pre-fills it from the launch command), and
-        # a game now reaching here via its install folder must not resurrect a
-        # name its owner deliberately turned off.
+        # Só quando o usuário pediu. O campo mantém o valor com a chave desligada (o diálogo o pré-preenche do comando),
+        # e um jogo que chega aqui pela pasta não pode ressuscitar um nome que o dono desligou.
         self.exe_name = game.process_executable.strip() if game.track_process else ""
-        # Package family name to accept as "this game is running", empty for a
-        # game that isn't a Store/Game Pass one. A single name is enough: sibling
-        # packages were the worry (Call of Duty ships one launchable package per
-        # title plus a shared "COREBase") but watching a live session showed no
-        # hand-off between them — every process a title spawns, launcher and game
-        # alike, reports that title's own family name and nothing else's.
+        # Nome de família do pacote que vale como "o jogo está rodando", vazio fora da Store/Game Pass. Um nome basta:
+        # pacotes irmãos eram a preocupação (Call of Duty tem um pacote por título e um "COREBase" compartilhado), mas
+        # todo processo de um título, launcher ou jogo, reporta a família do próprio título.
         aumid = aumid_from_command(game.executable)
         self.package_family = aumid.split("!", 1)[0] if aumid else ""
-        # Install folder taken from the launch command, empty when there is no
-        # executable path in it to be sure of. Watched *in addition to*
-        # `exe_name` rather than instead of it: the folder catches the game
-        # handing off to a differently named executable, and the name catches a
-        # game whose command points into a subfolder — Battlefield 6 launches
-        # `SP\bf6.exe` but keeps its multiplayer binary one level up, outside
-        # the folder the command gives us. Neither covers the other.
+        # Pasta de instalação tirada do comando, vazia se ele não tem caminho de executável seguro. Vigiada além de
+        # `exe_name`, não no lugar: a pasta pega o jogo que passa a outro executável, e o nome pega o jogo cujo comando
+        # aponta para uma subpasta (Battlefield 6 lança `SP\bf6.exe` mas guarda o multiplayer um nível acima). Nenhum
+        # cobre o outro.
         self.install_dir = install_dir_from_command(game.executable)
-        # Seconds to keep waiting after the process disappears before ending the
-        # session, so a game that restarts itself isn't cut off. User-adjustable.
+        # Segundos a esperar depois que o processo some antes de encerrar, para o jogo que se reinicia não ser cortado.
+        # Ajustável pelo usuário.
         self.grace = max(0, shared.schema.get_int("process-tracking-grace"))
-        self.session_seconds = 0  # this session's running total, for the toast
-        self.started = False  # has the process been seen at least once?
-        self.counting = False  # are we currently accruing time?
-        # All three are monotonic readings, never wall-clock: they measure
-        # intervals (see `_accumulate`), so a clock change must not move them.
-        self.last_tick: Optional[float] = None  # when we last accrued time
-        self.last_persist = 0.0  # last time we saved to disk
-        self.waited = 0  # seconds spent waiting for the process to appear
+        self.session_seconds = 0
+        self.started = False
+        self.counting = False
+        # Todas monotônicas, nunca de parede: medem intervalos (ver `_accumulate`).
+        self.last_tick: Optional[float] = None
+        self.last_persist = 0.0
+        self.waited = 0
         self.startup_grace = (
             self.PACKAGE_STARTUP_GRACE if self.package_family else self.STARTUP_GRACE
         )
-        self.missing_since: Optional[float] = None  # when the process vanished
+        self.missing_since: Optional[float] = None
         self.timer: Optional[QTimer] = None  # criado em `start`, parado uma vez só
 
     @property
     def elapsed(self) -> int:
-        """Seconds counted so far, including the stretch not yet banked.
+        """Segundos contados até agora, incluindo o trecho ainda não gravado.
 
-        `session_seconds` alone only moves on a poll, so a clock reading it
-        would sit still for two seconds and then jump two. Adding the current
-        stretch is also what makes the clock agree with the total the session
-        ends up recording: it stays at zero while we are still waiting for the
-        game to appear, and stops while the game is gone during the grace wait,
-        which is exactly the time that never reaches `game.playtime`.
+        `session_seconds` só se move numa consulta, e o relógio ficaria parado dois segundos e saltaria dois. Somar o
+        trecho atual também faz o relógio bater com o total que a sessão grava: fica em zero enquanto se espera o jogo
+        aparecer e para quando o jogo some durante a espera, tempo que nunca chega a `game.playtime`.
         """
         if self.counting and self.last_tick is not None:
             return self.session_seconds + int(monotonic() - self.last_tick)
         return self.session_seconds
 
     def _is_running(self) -> bool:
-        """Is the game running right now?
+        """O jogo está rodando agora?
 
-        All three answers are accepted, any one of them being enough. Package
-        identity is asked first because it is the most telling: it survives the
-        game relaunching itself under a different executable — switching to the
-        campaign in Call of Duty replaces ``cod23-cod.exe`` with
-        ``sp23\\sp23-cod.exe``, and both report the same package — and it is the
-        only thing that tells two Game Pass titles apart.
+        Aceita qualquer um dos três sinais. O pacote é perguntado primeiro por ser o mais revelador: sobrevive ao jogo
+        se relançar com outro executável (a campanha de Call of Duty troca ``cod23-cod.exe`` por
+        ``sp23\\sp23-cod.exe``, mesmo pacote) e é o único que distingue dois títulos do Game Pass. Mas não no lugar
+        dos outros: só responde onde ``OpenProcess`` consegue, e um handle recusado volta como o mesmo "sem pacote" de
+        um processo comum; assim, um pacote mudo não prova que o jogo não roda, e o nome de processo configurado para
+        um jogo da Store é respeitado.
 
-        It is asked first, though, not *instead* of the others. It can only
-        answer where ``OpenProcess`` succeeds, and a handle we were refused
-        comes back from the monitor as the same "no package" a plain unpackaged
-        process does, so a package that says nothing is not evidence of a game
-        that isn't running. A user who went to the trouble of configuring a
-        process name for a Store game gets it honoured rather than silently
-        ignored, exactly as the classic path already accepts the name or the
-        folder.
-
-        The name is tried before the folder only because it is the cheaper
-        question: it reads the process list, while the folder has to open each
-        process to ask where it was loaded from.
+        O nome vem antes da pasta por ser mais barato: lê a lista de processos, enquanto a pasta abre cada processo
+        para ver de onde foi carregado.
         """
         if self.package_family and is_package_running(self.package_family):
             return True
@@ -172,7 +137,7 @@ class ProcessSession:
         """Begin watching for the game's process."""
         ProcessSession.active = self
         self.last_persist = monotonic()
-        # Block the main window so a second session can't be started from there
+        # Bloqueia a janela principal para não iniciar uma segunda sessão por ela.
         shared.sessao.show_session_blocker(self.game)
         self.timer = QTimer()
         self.timer.timeout.connect(self._poll)
@@ -189,16 +154,12 @@ class ProcessSession:
 
         if not self.started:
             if running:
-                # Process appeared: start the clock
                 self.started = True
                 self.counting = True
                 self.last_tick = monotonic()
                 self.missing_since = None
-                # O instante que separa uma sessão que conta de uma que não
-                # conta. Sem esta linha, uma sessão que não registra nada e uma
-                # que registra deixam exatamente o mesmo rastro no log, e a
-                # diferença entre as duas é justamente o que se quer saber
-                # quando um jogo não acumula tempo.
+                # O instante que separa uma sessão que conta de uma que não conta: sem esta linha as duas deixam o mesmo
+                # rastro no log.
                 logging.debug(
                     "%s seen running after %ss; counting playtime",
                     self.game.name,
@@ -209,16 +170,10 @@ class ProcessSession:
                 if self.waited >= self.startup_grace:
                     self._parar_timer()
                     if self.package_family:
-                        # A packaged game that never showed one process of its
-                        # family did not start. The activation reached the
-                        # shell, and what came up instead was the Xbox app
-                        # saying the title needs an update, needs a re-login or
-                        # is no longer installed — that window belongs to a
-                        # different package, so nothing of ours is ever seen.
-                        # Handing that to the manual window would put a counter
-                        # on screen that runs until somebody comes back to close
-                        # it, and `do_shutdown` would then write hours of
-                        # playtime the game never had.
+                        # Um jogo empacotado que nunca mostrou um processo da família não iniciou: a ativação chegou ao
+                        # shell e o que subiu foi o app Xbox avisando de atualização, novo login ou jogo desinstalado
+                        # (outro pacote). A janela manual poria um contador na tela até alguém fechá-lo, e `do_shutdown`
+                        # gravaria horas de jogo que não existiram.
                         logging.info(
                             "No process of %s ever appeared; %s never started, "
                             "ending the session without a record",
@@ -227,12 +182,9 @@ class ProcessSession:
                         )
                         self.stop(record=False, never_launched=True)
                     else:
-                        # Here "never seen" really can mean "lost track of it":
-                        # a launcher handed off to an executable under another
-                        # name, or the game installed itself somewhere other
-                        # than the folder its command names. Asking the user to
-                        # clock out beats dropping a session that may well be
-                        # running.
+                        # Aqui "nunca visto" pode ser "perdi de vista": um launcher passou a outro executável, ou o jogo
+                        # se instalou fora da pasta do comando. Pedir ao usuário para encerrar é melhor que descartar
+                        # uma sessão que pode estar rodando.
                         logging.info(
                             "%s never appeared; falling back to the manual "
                             "session window for %s",
@@ -246,16 +198,14 @@ class ProcessSession:
         if running:
             self.missing_since = None
             if not self.counting:
-                # Resuming after a brief disappearance (e.g. the game relaunched
-                # itself): start a fresh stretch so the downtime isn't counted
+                # Retomada depois de um sumiço breve (o jogo se relançou): novo trecho, sem contar o intervalo.
                 self.counting = True
                 self.last_tick = monotonic()
             self._accumulate()
             self._maybe_persist()
         else:
             if self.counting:
-                # Just vanished: bank the time up to now, then pause counting so
-                # the grace wait below is never counted as playtime
+                # Acabou de sumir: grava o tempo até agora e pausa a contagem, para a espera abaixo nunca contar.
                 self._accumulate()
                 self.counting = False
             if self.missing_since is None:
@@ -265,14 +215,11 @@ class ProcessSession:
                 self.stop(record=True)
 
     def _accumulate(self) -> None:
-        """Add the time since the last tick to the running totals.
+        """Soma o tempo desde o último tick aos totais.
 
-        Measured on the monotonic clock, not the wall clock. `time()` can jump:
-        an NTP correction, a manual clock change or a resume from sleep with a
-        drifted RTC all move it, and a forward jump was credited to the game as
-        playtime it never had (a backward jump was silently dropped by the
-        ``> 0`` test, which is how the asymmetry stayed invisible). `monotonic`
-        exists precisely for measuring an interval and cannot be moved.
+        Medido no relógio monotônico, não no de parede: `time()` pula (NTP, mudança manual, volta do repouso com RTC
+        desajustado), e um salto para a frente era creditado como jogo que não houve (o para trás caía no teste ``>
+        0``, e a assimetria passava despercebida).
         """
         now = monotonic()
         if self.counting and self.last_tick is not None:
@@ -289,8 +236,8 @@ class ProcessSession:
             if elapsed > 0:
                 self.game.playtime += elapsed
                 self.session_seconds += elapsed
-                # Carry the sub-second remainder, or truncating every two-second
-                # poll would quietly lose time on a long session.
+                # Carrega o resto de menos de um segundo, senão truncar cada consulta de dois segundos perderia tempo
+                # numa sessão longa.
                 now = self.last_tick + elapsed
         self.last_tick = now
 
@@ -302,10 +249,8 @@ class ProcessSession:
             self.last_persist = now
 
     def flush(self) -> None:
-        """Persist any accumulated time without touching the UI.
-
-        Used on application shutdown, when widgets may already be gone but the
-        session's last stretch of playtime still has to reach the disk.
+        """Grava o tempo acumulado sem mexer na interface: usado no desligamento do app, quando os widgets já podem
+        ter sumido.
         """
         if self.started:
             self._accumulate()
@@ -317,17 +262,13 @@ class ProcessSession:
         fall_back: bool = False,
         never_launched: bool = False,
     ) -> None:
-        """End the session, optionally recording the elapsed time.
+        """Encerra a sessão, gravando o tempo se pedido.
 
-        ``fall_back`` hands the session over to the manual window instead of
-        dropping it: we never saw the game, so the choice is between asking the
-        user to clock out and silently losing the whole session.
+        ``fall_back`` entrega a sessão à janela manual em vez de descartá-la: nunca vimos o jogo, e a escolha é entre
+        pedir ao usuário que encerre e perder a sessão em silêncio.
 
-        ``never_launched`` is the case where that choice does not arise. For a
-        packaged game, "no process of this package was ever seen" is not us
-        having lost track of the game, it is the game not having started, so the
-        session ends with no record at all and the user is told as much rather
-        than left with a counter to notice. The two are mutually exclusive.
+        ``never_launched``: para um jogo empacotado, "nenhum processo do pacote visto" significa que o jogo não
+        iniciou; a sessão termina sem registro e o usuário é avisado. Os dois são mutuamente exclusivos.
         """
         self._parar_timer()
 
@@ -338,14 +279,9 @@ class ProcessSession:
             # avoid import cycles
             from cartridges.session_window import SessionWindow
 
-            # Only the tracker changes hands. The game is still running, so the
-            # blocker, the wallpaper, the LED strips, the parked window and the
-            # suspended controller all stay as they are: `show_session_blocker`
-            # recognises the same game and dresses nothing again.
-            #
-            # Deliberately no `shared.sessao.present()`: the main window is out of
-            # the way (minimised, or parked on the session monitor) and the game
-            # may well be in the foreground.
+            # Só o rastreador muda de mãos: o jogo continua rodando, então o bloqueador, o papel de parede, as fitas, a
+            # janela estacionada e o controle suspenso ficam como estão (`show_session_blocker` reconhece o mesmo jogo).
+            # Sem `shared.sessao.present()`: a principal está fora do caminho e o jogo pode estar em primeiro plano.
             SessionWindow(self.game).present()
             return
 
@@ -356,7 +292,6 @@ class ProcessSession:
             shared.sessao.avisar(_("Não foi possível detectar {} em execução").format(self.game.name))
 
         if record and self.started:
-            # Capture the final running stretch (a no-op if already paused)
             self._accumulate()
             # Anotada depois do accumulate e antes do save, para que a linha do
             # histórico e o total do jogo contem os mesmos segundos.
@@ -365,10 +300,8 @@ class ProcessSession:
             self.game.update()
             shared.sessao.session_toast(self.game, self.session_seconds)
         elif record:
-            # Pedimos para registrar, mas o processo nunca apareceu: encerrar a
-            # sessão pelo botão da janela bloqueada durante a espera cai aqui.
-            # Não há o que registrar — nada foi medido —, e o silêncio era
-            # indistinguível de uma sessão gravada normalmente.
+            # Pediu-se para registrar, mas o processo nunca apareceu (encerrar pelo botão da janela bloqueada durante a
+            # espera cai aqui): nada foi medido, e o silêncio era indistinguível de uma sessão gravada.
             logging.info(
                 "Session for %s ended before %s was ever seen; nothing recorded",
                 self.game.name,
@@ -378,7 +311,6 @@ class ProcessSession:
                 or "the game",
             )
 
-        # Bring the main window back now that the session is over
         shared.sessao.present()
 
     def close(self, *_args: Any) -> None:

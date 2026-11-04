@@ -73,8 +73,7 @@ class Ponte(QObject):
             return
 
         def desfazer() -> None:
-            # O que `on_undo_action` fazia na janela GTK. O jogo pode ter saído enquanto o aviso estava na tela.
-            # Excluído da store (ou sem a ficha em disco) enquanto o aviso esperava: gravar o ressuscitaria.
+            # O jogo pode ter saído enquanto o aviso estava na tela: gravar o ressuscitaria.
             if (j := ref_jogo()) is not None and _ainda_existe(j):
                 j.removed = False
                 j.save()

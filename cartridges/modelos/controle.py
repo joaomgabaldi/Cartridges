@@ -4,9 +4,9 @@
 
 """O controle do Xbox na grade: lê o XInput e entrega sinais que o QML liga à interface.
 
-Só lê enquanto a janela está ativa e a preferência `gamepad` está ligada; com a janela inativa o
-`QTimer` para; a DLL continua carregada e só é solta durante uma sessão de jogo (`suspender`), para o
-jogo ficar com o controle só para ele. Tudo roda na thread principal. A lógica de direção e botões é a do `gamepad.py` da `main`.
+Só lê enquanto a janela está ativa e a preferência `gamepad` está ligada; com a janela inativa o `QTimer` para. A DLL
+continua carregada e só é solta durante uma sessão de jogo (`suspender`), para o jogo ficar com o controle só para
+ele. Tudo na thread principal.
 """
 
 import weakref
@@ -53,11 +53,11 @@ def _estado_do_app() -> Qt.ApplicationState:
 
 class ControleDaGrade(QObject):
     mover = Signal(int, int)
-    ativar = Signal()  # A
-    voltar = Signal()  # B
+    ativar = Signal()
+    voltar = Signal()
     menuPrincipal = Signal()  # Start  # noqa: N815
     menuDoJogo = Signal()  # Y  # noqa: N815
-    buscar = Signal()  # Back
+    buscar = Signal()
     usado = Signal()  # qualquer comando: o QML esconde o ponteiro do mouse
     presente = Signal()  # um controle apareceu (ou o foco voltou): o QML acende a seleção
     pular = Signal(int)  # LB (-10) e RB (+10): só o Big Picture usa
@@ -82,7 +82,7 @@ class ControleDaGrade(QObject):
         self._botoes = 0
         self._modo_big_picture = False
         self._sem_controle = True  # a última leitura (ou o início) não tinha controle: o próximo é uma conexão
-        self._janela: QWindow | None = None  # a principal: só ela dá o controle (`window.is_active()` da `main`)
+        self._janela: QWindow | None = None  # a principal: só ela dá o controle
         self._ultimo_toque_capa_us: int | None = None
         self._ajustar_base()
         self._geracao_de_vibracao = 0
@@ -142,11 +142,9 @@ class ControleDaGrade(QObject):
             self._ajustar_base()
             self._timer.start()
         elif not desejado and self._timer.isActive():
-            # Só para de ler. A vibração em curso termina sozinha e a DLL fica carregada, como na `main`.
+            # Só para de ler. A vibração em curso termina sozinha e a DLL fica carregada.
             self._timer.stop()
             self._direcao = None
-
-    # Sessão de jogo ---------------------------------------------------------
 
     @Slot()
     def suspender(self) -> None:
@@ -185,8 +183,6 @@ class ControleDaGrade(QObject):
     def vibrarAbertura(self) -> None:  # noqa: N802
         """Um jogo iniciando: a vibração mais longa, com a preferência `gamepad-rumble`."""
         self._vibrar(RUMBLE_LAUNCH)
-
-    # Leitura ----------------------------------------------------------------
 
     def _ler(self) -> None:
         pad = self._leitor.ler()
@@ -307,14 +303,12 @@ class ControleDaGrade(QObject):
 
     @Slot()
     def encerrar(self) -> None:
-        """O app fecha: para a leitura e os motores (o `detach` da `main`); uma vibração em curso não sobrevive."""
+        """O app fecha: para a leitura e os motores; uma vibração em curso não sobrevive."""
         self._timer.stop()
         self._soltura.stop()
         self._geracao_de_vibracao += 1  # o desligamento agendado de uma vibração antiga não vale mais
         if self._leitor is not None:
             self._leitor.vibrar()
-
-    # Vibração ---------------------------------------------------------------
 
     @Slot()
     def bater(self) -> None:

@@ -2,17 +2,17 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Os seletores do diálogo de edição (D41, camada 2): capa e logo do SteamGridDB (`SeletorDeImagens.qml`),
-jogo da Steam (`SeletorDaSteam.qml`) e jogo do Ludusavi (`SeletorDoLudusavi.qml`).
+"""Os seletores do diálogo de edição: capa e logo do SteamGridDB (`SeletorDeImagens.qml`), jogo da Steam
+(`SeletorDaSteam.qml`) e jogo do Ludusavi (`SeletorDoLudusavi.qml`).
 
 Cada um é uma lista de miniaturas: a busca devolve os endereços, as linhas entram quando a miniatura chega e as
 miniaturas chegam uma a uma. Escolher baixa a imagem original e a entrega ao diálogo de edição
-(`entregar_capa_baixada`, `entregar_logo_baixado`, `usar_titulo_no_logo`). Só na thread principal; as
-threads (busca, miniaturas, download) entregam por `na_thread_principal` e o que chega a um seletor que já
-fechou, ou que já buscou outra coisa, é descartado (e o arquivo, apagado).
+(`entregar_capa_baixada`, `entregar_logo_baixado`, `usar_titulo_no_logo`). Só na thread principal; as threads (busca,
+miniaturas, download) entregam por `na_thread_principal` e o que chega a um seletor que já fechou, ou que já buscou
+outra coisa, é descartado (e o arquivo, apagado).
 
-Todo arquivo do seletor mora numa pasta própria em %TEMP%, apagada em `fechar`. O original baixado vai para
-fora dela: é de quem o recebe.
+Todo arquivo do seletor mora numa pasta própria em %TEMP%, apagada em `fechar`. O original baixado vai para fora dela:
+é de quem o recebe.
 """
 
 import io
@@ -123,9 +123,9 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         self.sgdb = SgdbHelper()
         self._linhas: list[dict[str, Any]] = []
         self._aberto = False
-        # Uma busca nova, uma escolha ou o fechamento invalidam o que as threads de download entregam. As miniaturas
-        # têm a geração delas (`_geracao_da_busca`): escolher uma imagem não as interrompe, como na `main`, e voltar
-        # à grade a encontra completa.
+        # Uma busca nova, uma escolha ou o fechamento invalidam o que as threads de download entregam. As miniaturas têm
+        # a geração delas (`_geracao_da_busca`): escolher uma imagem não as interrompe, e voltar à grade a encontra
+        # completa.
         self._generation = 0
         self._geracao_da_busca = 0
         # O que a busca devolveu e ainda espera a miniatura: a linha só entra no modelo quando ela chega.
@@ -146,8 +146,6 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
     @property
     def _destino(self) -> Any:
         return self._destino_fraco()
-
-    # -- o modelo --------------------------------------------------------------------------------
 
     def roleNames(self) -> dict[int, QByteArray]:  # noqa: N802
         return {
@@ -171,8 +169,6 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
             case self.Papel.CopiaAnimada:
                 return linha.get("copia", "")
         return None
-
-    # -- propriedades ----------------------------------------------------------------------------
 
     @Property(bool, notify=abertoChanged)
     def aberto(self) -> bool:
@@ -226,8 +222,6 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         """"4,4 MB de 21,0 MB" (ou só o recebido, sem o total); vazio até chegar o primeiro dado."""
         return self._progresso_texto
 
-    # -- buscar ----------------------------------------------------------------------------------
-
     def _buscar(self, consulta: str, animada: bool) -> list[tuple[str, str]]:
         """Na thread de busca: ``(url da original, url da miniatura)`` de cada resultado. Pode levantar."""
         raise NotImplementedError
@@ -246,7 +240,7 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         jogos = self.sgdb.search_games(consulta)
         # Só dicts com "id": um item de shape inesperado (200) não pode matar a thread.
         jogos = [j for j in jogos or [] if isinstance(j, dict) and j.get("id") is not None]
-        # Como o caminho automático: o melhor do ranking; sem ninguém nele, o primeiro da lista (D105).
+        # Como o caminho automático: o melhor do ranking; sem ninguém nele, o primeiro da lista.
         ranking = rank_candidates(consulta, jogos)
         return (ranking[0][0] if ranking else jogos[0])["id"] if jogos else None
 
@@ -378,8 +372,6 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         # deixava o seletor em "carregando" pela vida inteira.
         na_thread_principal(self._fim_das_previas, geracao)
 
-    # -- resultados ------------------------------------------------------------------------------
-
     def _limpar(self) -> None:
         for linha in self._linhas:
             if linha["arquivo"] is not None:
@@ -407,7 +399,8 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
 
     def _receber(self, geracao: int, itens: list[tuple[str, bool]]) -> None:
         """A busca achou ``itens``: eles esperam a miniatura, e a linha só entra no modelo quando ela chega (até a
-        primeira, o spinner central; depois, uma a uma, como na `main`)."""
+        primeira, o spinner central; depois, uma a uma).
+        """
         if geracao != self._geracao_da_busca or self._closed:
             return
         self._itens = list(itens)
@@ -435,7 +428,9 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
 
     def _pedir_copia(self, linha: dict[str, Any], geracao: int) -> None:
         """A prévia animada toca a cópia reduzida ao tamanho da grade (`copias_animadas`), e não a original, que pode
-        ter centenas de MB: assim todas tocam ao mesmo tempo, como na `main`. Até ela chegar (ou se falhar), a célula mostra só o primeiro quadro, parado; a original nunca toca."""
+        ter centenas de MB: assim todas tocam ao mesmo tempo. Até ela chegar (ou se falhar), a célula mostra só o
+        primeiro quadro, parado; a original nunca toca.
+        """
         tamanho = copias_animadas.tamanhos()[0]
         destino = copias_animadas.caminho_para(linha["arquivo"], tamanho)
 
@@ -456,8 +451,6 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
             self._show_empty(_("Não foi possível carregar as pré-visualizações"), _("Tente novamente."), erro=True)
         else:
             self.estadoChanged.emit()
-
-    # -- escolher --------------------------------------------------------------------------------
 
     @Slot(int)
     def escolher(self, indice: int) -> None:
@@ -550,8 +543,6 @@ class _SeletorDoSteamGridDB(BuscaDoSeletor, QAbstractListModel):
         self._entregar(arquivo)
         self.fechar()
 
-    # -- fechar ----------------------------------------------------------------------------------
-
     @Slot()
     def fechar(self) -> None:
         """Cancela a busca e o download e apaga todos os arquivos do seletor."""
@@ -618,8 +609,9 @@ class SeletorDoSgdb(_SeletorDoSteamGridDB):
         return itens
 
     def _concluir(self, arquivo: Path, geracao: int) -> None:
-        """A capa é convertida aqui dentro, com a tela "Baixando…" à vista (`sgdb_picker.py:328`): o seletor só fecha com ela
-        pronta; se a conversão falhar, volta à grade."""
+        """A capa é convertida aqui dentro, com a tela "Baixando…" à vista: o seletor só fecha com ela pronta; se a
+        conversão falhar, volta à grade.
+        """
         self._destino.entregar_capa_baixada(
             arquivo,
             lambda ok: self._capa_convertida(geracao, ok),
@@ -676,8 +668,6 @@ class SeletorDeLogo(_SeletorDoSteamGridDB):
     def _entregar(self, arquivo: Path) -> None:
         self._destino.entregar_logo_baixado(arquivo)
 
-
-# -- papel de parede (wallhaven) ---------------------------------------------------------------------
 
 # Uma página do site.
 MAX_PAPEIS = 24
@@ -792,8 +782,6 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
         self._original: Optional[Path] = None
         self._previa: Optional[Image.Image] = None
 
-    # -- propriedades ----------------------------------------------------------------------------
-
     cortes = Property(QObject, lambda self: self._cortes, constant=True)
 
     @Property(bool, notify=ajustandoChanged)
@@ -813,8 +801,6 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
         """Aberto com um arquivo do disco: sem busca, sem "Não trocar", e "Voltar" desiste da escolha."""
         return self._so_arquivo
 
-    # -- buscar ----------------------------------------------------------------------------------
-
     def _abrir_mais(self) -> None:
         self._so_arquivo = False
         self._formatos = formatos(self.monitores())
@@ -830,7 +816,7 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
 
     @Slot(QUrl)
     def abrirArquivo(self, url: QUrl) -> None:  # noqa: N802
-        """Leva um arquivo do disco direto à etapa de ajuste, como uma imagem da busca (como na `main`)."""
+        """Leva um arquivo do disco direto à etapa de ajuste, como uma imagem da busca."""
         caminho = Path(url.toLocalFile())
         if self._aberto:
             self.fechar()
@@ -850,7 +836,6 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
 
     def _thread_do_arquivo(self, caminho: Path, geracao: int, pasta: Optional[Path]) -> None:
         try:
-            # Sem limite de tamanho, como na `main`.
             conteudo = caminho.read_bytes()
             sufixo = caminho.suffix.lower()
             self._preparar(conteudo, sufixo if sufixo in WALLHAVEN_SUFFIXES else ".jpg", geracao, pasta)
@@ -925,8 +910,6 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
             destino.unlink(missing_ok=True)
             return None
         return destino
-
-    # -- escolher: a segunda etapa ---------------------------------------------------------------
 
     def _corpo_do_download(self, url: str, animada: bool, geracao: int) -> None:
         pasta = self._pasta
@@ -1086,7 +1069,7 @@ class SeletorDePapelDeParede(_SeletorDoSteamGridDB):
             self.fechar()
 
     def search(self) -> None:
-        # Uma busca nova leva de volta à grade, como o `search()` da `main` (`wallpaper_picker.py:217`).
+        # Uma busca nova leva de volta à grade.
         self._sair_do_ajuste()
         super().search()
 
@@ -1147,8 +1130,6 @@ class SeletorDaSteam(BuscaDoSeletor, QAbstractListModel):
             self.helper = gerente.steam_api_helper if gerente else SteamAPIHelper(SteamRateLimiter())
         return self.helper
 
-    # -- o modelo --------------------------------------------------------------------------------
-
     def roleNames(self) -> dict[int, QByteArray]:  # noqa: N802
         return {
             self.Papel.Nome: QByteArray(b"nome"),
@@ -1171,8 +1152,6 @@ class SeletorDaSteam(BuscaDoSeletor, QAbstractListModel):
             case self.Papel.Ano:
                 return linha["ano"]
         return None
-
-    # -- propriedades ----------------------------------------------------------------------------
 
     @Property(bool, notify=abertoChanged)
     def aberto(self) -> bool:
@@ -1209,8 +1188,6 @@ class SeletorDaSteam(BuscaDoSeletor, QAbstractListModel):
     @Property(str, notify=estadoChanged)
     def descricaoDoEstado(self) -> str:  # noqa: N802
         return self._descricao
-
-    # -- buscar ----------------------------------------------------------------------------------
 
     @Slot(str)
     def abrir(self, nome: str) -> None:
@@ -1290,7 +1267,8 @@ class SeletorDaSteam(BuscaDoSeletor, QAbstractListModel):
         if geracao != self._generation or self._closed:
             return
         linhas = [
-            # shortcut: a busca da loja não traz o ano de lançamento; o papel `ano` fica vazio; só preenche se a busca passar a consultar o appdetails de cada candidato.
+            # shortcut: a busca da loja não traz o ano de lançamento; o papel `ano` fica vazio; só preenche se a busca
+            # passar a consultar o appdetails de cada candidato.
             {"nome": str(candidato.get("name", "")), "appid": str(candidato.get("id", "")), "ano": ""}
             for candidato, _combina in candidatos
             if candidato.get("id")
@@ -1303,8 +1281,6 @@ class SeletorDaSteam(BuscaDoSeletor, QAbstractListModel):
         self.endResetModel()
         self._buscando = False
         self.estadoChanged.emit()
-
-    # -- escolher --------------------------------------------------------------------------------
 
     @Slot(int)
     def escolher(self, indice: int) -> None:

@@ -4,10 +4,9 @@
 
 """O que a página de detalhes de um jogo mostra: textos prontos, logo e fundo desfocado.
 
-As funções puras repetem as regras de `show_details_page` e vizinhas da janela GTK: recebem o
-`Jogo` e devolvem o texto da linha, ou `""` quando a linha some. `DetalhesDoJogo` é o modelo que
-o QML lê (`detalhes`): segue um jogo por vez, atualiza-se quando ele muda e busca o logo e o
-desfoque fora da thread principal.
+As funções puras recebem o `Jogo` e devolvem o texto da linha, ou `""` quando a linha some. `DetalhesDoJogo` é o
+modelo que o QML lê (`detalhes`): segue um jogo por vez, atualiza-se quando ele muda e busca o logo e o desfoque fora
+da thread principal.
 """
 
 import ctypes
@@ -36,7 +35,7 @@ from cartridges.utils.thread_principal import na_thread_principal
 _COLUNAS_HLTB = (_("História"), _("Extras"), _("Completista"))
 _CHAVES_HLTB = ("hltb_main", "hltb_main_extra", "hltb_completionist")
 _RESERVA = desfoque.LUMINANCIA_RESERVA
-# Sem capa, o fundo é o placeholder pequeno esticado, sem desfoque (`GameCover._apply_blur` da `main`).
+# Sem capa, o fundo é o placeholder pequeno esticado, sem desfoque.
 _FUNDO_SEM_CAPA = (Path(__file__).resolve().parent.parent.parent / "data" / "library_placeholder_small.svg").as_uri()
 _BUSCAS = {
     "igdb": "https://www.igdb.com/search?type=1&q=",
@@ -44,9 +43,6 @@ _BUSCAS = {
     "pcgw": "https://www.pcgamingwiki.com/w/index.php?search=",
     "hltb": "https://howlongtobeat.com/?q=",
 }
-
-
-# -- regras puras ------------------------------------------------------------------------------
 
 
 def data_de_lancamento(jogo: Jogo) -> str:
@@ -169,9 +165,6 @@ def _alto_contraste() -> bool:
     except (AttributeError, OSError):
         pass
     return False
-
-
-# -- o fundo ------------------------------------------------------------------------------------
 
 
 class ProvedorDeDesfoque(QQuickImageProvider):
@@ -310,7 +303,7 @@ class DetalhesDoJogo(QObject):
         self._buscas_de_logo: set[str] = set()
         # O `jogo_excluido` sai de threads do importador: a conexão enfileirada leva à principal.
         store.jogo_excluido.connect(self._excluido, Qt.ConnectionType.QueuedConnection)
-        # Referência fraca: o gancho é global e o modelo pode morrer antes (como o da grade).
+        # Referência fraca: o gancho é global e o modelo pode morrer antes.
         fraca = weakref.ref(self)
         copias_animadas.soltar_da_pagina = lambda game_id: (m := fraca()) and m.soltar_copia(game_id)
         copias_animadas.ao_terminar_da_pagina = lambda game_id, resultado: (m := fraca()) and m.copia_pronta(game_id, resultado)
@@ -322,8 +315,6 @@ class DetalhesDoJogo(QObject):
     def loja(self) -> Any:
         """A loja de onde saem os jogos (outros modelos buscam o jogo por ela)."""
         return self._store
-
-    # -- seguir o jogo ---------------------------------------------------------------------------
 
     @Slot(str, result=bool)
     def mostrar(self, game_id: str) -> bool:
@@ -425,7 +416,7 @@ class DetalhesDoJogo(QObject):
     def _mesclar(self, campos: dict[str, Any]) -> None:
         novo = {**self._v, **campos}
         tema = QGuiApplication.styleHints().colorScheme()
-        # Sem esquema de cores no sistema (Unknown) vale o 0.3 do alto contraste, como na janela GTK.
+        # Sem esquema de cores no sistema (Unknown) vale o 0.3 do alto contraste.
         fixo = _alto_contraste() or tema == Qt.ColorScheme.Unknown
         novo["opacidadeDoFundo"] = opacidade_do_fundo(self._luminancia, tema == Qt.ColorScheme.Dark, fixo)
         if novo != self._v:
@@ -434,8 +425,6 @@ class DetalhesDoJogo(QObject):
 
     def _tema_mudou(self, *_args: Any) -> None:
         self._mesclar({})
-
-    # -- ações -----------------------------------------------------------------------------------
 
     def _mostrado(self) -> Jogo | None:
         return self._jogo() if self._jogo else None
@@ -507,8 +496,6 @@ class DetalhesDoJogo(QObject):
         if (jogo := self._mostrado()) is not None:
             jogo.dismiss_update()
 
-    # -- logo ------------------------------------------------------------------------------------
-
     def _logo(self, jogo: Jogo) -> dict[str, Any]:
         """Os campos do logo em disco, se vale para o jogo; senão o título, e a busca em segundo plano."""
         caminho = game_logo.cached_logo_path(jogo)
@@ -527,8 +514,6 @@ class DetalhesDoJogo(QObject):
             return
         if carregado := game_logo.load_logo(caminho):
             self._mesclar({"logo": _url_da_capa(carregado[0]), "larguraDoLogo": carregado[1]})
-
-    # -- fundo -----------------------------------------------------------------------------------
 
     def _fundo(self, jogo: Jogo, chave: str) -> dict[str, Any]:
         """Calcula o desfoque da capa fora da principal; a capa trocada com a página aberta o recalcula."""

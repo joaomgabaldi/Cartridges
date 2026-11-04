@@ -19,16 +19,12 @@
 
 """Onde as fitas de LED são configuradas, uma vez.
 
-O módulo Tuya só aceita comandos de quem tem a chave local dele, e essa chave
-não está no app Smart Life — ela sai da conta de desenvolvedor da Tuya, pela
-nuvem. Este assistente faz essa viagem uma vez: pede as credenciais da conta,
-lista os dispositivos e grava a chave dos que o usuário apontar como fitas.
+O módulo Tuya só aceita comandos de quem tem a chave local dele, que sai da conta de desenvolvedor da Tuya, pela
+nuvem. Este assistente pede as credenciais, lista os dispositivos e grava a chave dos que o usuário apontar.
 
-O Access Secret fica salvo — criptografado pelo DPAPI do Windows, amarrado à
-conta do Windows de quem roda o app — só para pré-preencher esta tela na
-próxima vez, e só depois de uma busca que prova que os dois códigos são
-válidos. O dia a dia das fitas nunca usa isso: quem acende uma fita é a chave
-local, achada aqui e gravada à parte, em claro, no `fitas.json`.
+O Access Secret fica salvo (criptografado pelo DPAPI, amarrado à conta do Windows) só para pré-preencher esta
+tela, e só depois de uma busca que prova que os dois códigos são válidos. Quem acende uma fita é a chave local,
+gravada à parte, em claro, no `fitas.json`.
 """
 
 import logging
@@ -43,7 +39,6 @@ from cartridges.utils import open_uri, session_fita, tuya_conta
 from cartridges.utils.session_fita import Fita, devolver_removidas, fitas, gravar_fitas
 from cartridges.utils.thread_principal import na_thread_principal
 
-# O painel de desenvolvedor da Tuya, de onde saem o Access ID e o Access Secret.
 PAINEL_DA_TUYA = "https://auth.tuya.com/?from=https%3A%2F%2Fdeveloper.tuya.com%3Fredirect%3Dhttps%3A%2F%2Fplatform.tuya.com"
 
 # As regiões que a Tuya oferece, na mesma ordem da lista da tela. As duas
@@ -52,36 +47,27 @@ REGIOES = ("us", "eu", "cn", "in")
 
 
 def credencial_valida(nuvem: Any, resposta: Any) -> bool:
-    """A busca provou que os dois códigos funcionam?
-
-    A tinytuya devolve lista vazia também quando o token é recusado (o erro
-    fica em `nuvem.error`), então a lista sozinha não prova nada.
+    """A busca provou que os dois códigos funcionam? A tinytuya devolve lista vazia também quando o token é
+    recusado (o erro fica em `nuvem.error`), então a lista sozinha não prova nada.
     """
     return bool(getattr(nuvem, "token", None)) and not getattr(
         nuvem, "error", None
     ) and isinstance(resposta, list)
 
 
-# Categorias da nuvem da Tuya que falam cor pelos pontos 20/21/24: fita de LED
-# (dd) e lâmpada (dj). O resto da conta — interruptor, tomada, sensor, controle
-# IR — não tem o que fazer aqui.
+# Categorias da nuvem da Tuya que falam cor pelos pontos 20/21/24: fita de LED (dd) e lâmpada (dj).
 CATEGORIAS = ("dd", "dj")
 
 
 def fitas_da_nuvem(resposta: Any) -> list[Fita]:
     """Converte a lista que a nuvem devolve em fitas.
 
-    Só fita de LED e lâmpada entram (``CATEGORIAS``); dispositivo sem categoria
-    na resposta entra também. Dispositivo sem chave local fica de fora: sem ela
-    não há conversa possível.
-    Sem IP, entra com o campo vazio — a nuvem devolve o IP público do roteador,
-    que não serve para nada aqui. Quem acha o IP da fita é a varredura que este
-    assistente roda logo depois (``com_enderecos``), uma vez só; o app nunca
-    varre sozinho.
+    Só fita de LED e lâmpada entram (``CATEGORIAS``), e dispositivo sem categoria também; sem chave local fica de
+    fora. Sem IP entra com o campo vazio: a nuvem devolve o IP público do roteador, e quem acha o IP da fita é a
+    varredura de ``com_enderecos``.
 
-    Aceita qualquer coisa como entrada de propósito: quando a busca falha, a
-    ``tinytuya`` devolve um dicionário de erro no lugar da lista, e isso não
-    pode virar exceção dentro da thread.
+    Aceita qualquer coisa como entrada: quando a busca falha, a ``tinytuya`` devolve um dicionário de erro no lugar
+    da lista, e isso não pode virar exceção na thread.
     """
     if not isinstance(resposta, list):
         return []
@@ -90,8 +76,6 @@ def fitas_da_nuvem(resposta: Any) -> list[Fita]:
     for item in resposta:
         if not isinstance(item, dict):
             continue
-        # Sem categoria entra: resposta que não traz o campo não é prova de
-        # que o dispositivo não fala cor.
         categoria = item.get("category")
         if categoria and categoria not in CATEGORIAS:
             continue
@@ -116,17 +100,11 @@ def com_enderecos(
     mapa: dict[str, str],
     versoes: Optional[dict[str, str]] = None,
 ) -> list[Fita]:
-    """Põe em cada fita o endereço que ela tem na rede de casa, e a versão do
-    protocolo que ela anunciou.
+    """Põe em cada fita o endereço na rede de casa e a versão do protocolo que ela anunciou.
 
-    A nuvem não sabe o IP local das fitas; quem sabe é a varredura por
-    broadcast, que roda uma única vez, aqui. O endereço achado fica gravado e o
-    app não procura mais: o IP das fitas é fixo, e se um dia mudar é só rodar
-    este assistente de novo. A fita que a varredura não achou mantém o endereço
-    que já tinha na configuração, se tinha um.
-
-    A versão vem da mesma varredura: a nuvem costuma não dizê-la, e um módulo
-    3.4 ou 3.5 falado como 3.3 nunca responde.
+    A nuvem não sabe o IP local: quem sabe é a varredura por broadcast, uma única vez, aqui. O endereço achado fica
+    gravado (o IP das fitas é fixo) e a fita não achada mantém o que já tinha. A versão vem da mesma varredura: um
+    módulo 3.4 ou 3.5 falado como 3.3 nunca responde.
     """
     configuradas = {fita.id: fita for fita in fitas()}
     versoes = versoes or {}
@@ -158,8 +136,6 @@ def _buscar(eu: "weakref.ref[FitaWizard]", busca: int, chave: str, segredo: str,
         # Dentro do try: sem a biblioteca instalada, um ImportError aqui deixaria a tela presa no "Buscando…".
         nuvem = _nuvem(regiao, chave, segredo)
         resposta = nuvem.getdevices()
-        # A tinytuya devolve lista vazia também quando o token é recusado (o erro fica em `nuvem.error`), então só a
-        # lista não prova que a credencial funcionou, e uma credencial que não funcionou não merece ficar salva.
         if credencial_valida(nuvem, resposta):
             tuya_conta.salvar(tuya_conta.Conta(chave, segredo, regiao))
         encontrados = fitas_da_nuvem(resposta)
@@ -178,10 +154,9 @@ def _entregar(eu: "weakref.ref[FitaWizard]", busca: int, encontrados: list[Fita]
 
 
 class FitaWizard(QObject):
-    """O assistente das fitas, sem tela: a tela (`ConfiguracaoDasFitas.qml`) lê e grava estas propriedades.
+    """O assistente das fitas, sem tela: a `ConfiguracaoDasFitas.qml` lê e grava estas propriedades.
 
-    Só na thread principal. A busca vai à nuvem numa thread e volta por `na_thread_principal`; o resultado de uma
-    busca que o usuário já deixou para trás (fechou o assistente, ou pediu outra) é descartado.
+    Só na thread principal. O resultado de uma busca que o usuário já deixou para trás é descartado.
     """
 
     alterado = Signal()
@@ -280,9 +255,8 @@ class FitaWizard(QObject):
         if self._fechado:
             return
 
-        # Busca vazia fica nas credenciais, com o aviso ali. A página dos dispositivos só tem o botão "Aplicar", e
-        # aplicar uma lista vazia apagaria as fitas já configuradas: num clique, e sem caminho de volta para corrigir
-        # a credencial errada.
+        # Busca vazia fica nas credenciais, com o aviso ali: aplicar uma lista vazia apagaria as fitas já configuradas,
+        # sem caminho de volta.
         if not encontrados:
             self._encontradas, self._marcadas = [], set()
             self._sem_resultado = True
@@ -309,12 +283,11 @@ class FitaWizard(QObject):
     @Slot()
     def salvar(self) -> None:
         escolhidas = [fita for fita in self._encontradas if fita.id in self._marcadas]
-        # Quem sai da configuração sai antes de o arquivo mudar: depois da gravação o app não conhece mais essa fita,
-        # não tem como devolvê-la ao estado de antes, e ela ficaria na cor do Cartridges para sempre.
+        # Quem sai da configuração sai antes de o arquivo mudar: depois o app não conhece mais a fita e não a devolveria
+        # ao estado de antes.
         saindo = [fita for fita in fitas() if fita.id not in self._marcadas]
         gravar_fitas(escolhidas)
         if saindo:
-            # Rede: fora da thread de UI, como todo o resto da conversa.
             threading.Thread(target=devolver_removidas, args=(saindo,), daemon=True).start()
         self.fechar()
 

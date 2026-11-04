@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O "Adicionar a Jogos Zerados" (D85): marcar como zerado um jogo já desinstalado ou adicionar um que nunca passou pelo
-app. As regras do `zerados_picker.py` da `main`, sem tela: o `SeletorDeZerados.qml` só desenha as `linhas`.
+"""O "Adicionar a Jogos Zerados": marcar como zerado um jogo já desinstalado ou adicionar um que nunca passou pelo
+app. Sem tela: o `SeletorDeZerados.qml` só desenha as `linhas`.
 
 A tela de detalhes só abre para o que está em alguma grade, e um desinstalado sem a marca não está em nenhuma. O campo
 do topo busca na Steam (só com Enter, que a loja limita as requisições) e a última linha cria o jogo só pelo nome; a

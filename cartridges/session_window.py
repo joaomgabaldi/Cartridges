@@ -29,33 +29,27 @@ from cartridges.utils import session_log
 class SessionWindow(QObject):
     """O relógio da sessão manual, mostrada na janela "Jogando {nome}" (QML).
 
-    We can't detect when the game itself exits (Steam/Epic/UWP just hand off to
-    another process), so the user clicks "Já terminei de jogar" to end the
-    session. Elapsed time is flushed into ``game.playtime`` every minute, so a
-    crash, freeze or power loss only ever loses the last partial minute.
-    A janela em si é do `ModeloDaSessao` (`abrir_janela_manual`).
+    Não dá para detectar a saída do jogo (Steam/Epic/UWP passam a outro processo): o usuário clica em "Já terminei de
+    jogar". O tempo vai para ``game.playtime`` a cada minuto, então uma queda perde no máximo o último minuto. A
+    janela em si é do `ModeloDaSessao` (`abrir_janela_manual`).
     """
 
-    # Only one session is tracked at a time. Also keeps this object alive.
+    # Uma sessão acompanhada por vez; também mantém este objeto vivo.
     active: "Optional[SessionWindow]" = None
 
-    # Seconds between the periodic flushes.
     TICK_INTERVAL = 60
-    # A gap longer than this between two flushes is the PC having slept, not
-    # play: the monotonic clock counts the time asleep. It is credited as one
-    # tick interval instead of as the whole night.
+    # Um intervalo maior que isto entre duas gravações é o PC dormindo, não jogo: o relógio monotônico conta o sono. É
+    # creditado como um tick só.
     MAX_GAP = TICK_INTERVAL + 30
 
     def __init__(self, game: Any) -> None:
         super().__init__()
         SessionWindow.active = self
         self.game = game
-        # Monotonic, not wall clock: this measures an interval, and `time()`
-        # moves under NTP corrections, manual clock changes and resume-from-sleep.
+        # Monotônico, não de parede: mede um intervalo, e `time()` se move com NTP, mudança manual e volta do repouso.
         self.session_start = monotonic()
-        self.session_seconds = 0  # this session's running total, for the toast
+        self.session_seconds = 0
         self._fechada = False
-        # Save accumulated time every minute (crash/power-loss safety net)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.flush)
         self.timer.start(self.TICK_INTERVAL * 1000)
@@ -70,7 +64,7 @@ class SessionWindow(QObject):
         return self.session_seconds + int(monotonic() - self.session_start)
 
     def flush(self) -> None:
-        """Add elapsed time to the game's total and persist it."""
+        """Soma o tempo decorrido ao total do jogo e grava."""
         now = monotonic()
         elapsed = int(now - self.session_start)
         if elapsed > self.MAX_GAP:
@@ -79,9 +73,8 @@ class SessionWindow(QObject):
         if elapsed > 0:
             self.game.playtime += elapsed
             self.session_seconds += elapsed
-            # Advance by the whole seconds actually banked, not to `now`: the
-            # discarded remainder would otherwise be lost on every minute tick.
-            self.session_start += elapsed  # makes flush idempotent if called again
+            # Avança pelos segundos inteiros gravados, não até `now`: o resto descartado se perderia a cada minuto.
+            self.session_start += elapsed
             self.game.save()
 
     def present(self) -> None:
@@ -90,7 +83,7 @@ class SessionWindow(QObject):
         shared.sessao.abrir_janela_manual(self)
 
     def close(self, *_args: Any) -> None:
-        """Encerra a sessão (o `on_close` da `main`). Chamar de novo não faz nada."""
+        """Encerra a sessão. Chamar de novo não faz nada."""
         if self._fechada:
             return
         self._fechada = True
@@ -107,5 +100,4 @@ class SessionWindow(QObject):
 
         shared.sessao.session_toast(self.game, self.session_seconds)
 
-        # Bring the main window back now that the session is over
         shared.sessao.present()

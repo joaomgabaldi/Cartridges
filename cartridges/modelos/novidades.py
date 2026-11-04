@@ -2,10 +2,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A lógica de tela das Novidades (D83): o selo do botão, a página com os posts do feed e o "Atualizar".
+"""A lógica de tela das Novidades: o selo do botão, a página com os posts do feed e o "Atualizar".
 
-O `NewsChecker` faz a busca e guarda os posts; aqui eles viram dicionários para o QML (que nunca recebe um
-`NewsPost`) e os avisos do "Atualizar" saem pela fila do app. Tudo na thread principal.
+O `NewsChecker` faz a busca e guarda os posts; aqui eles viram dicionários para o QML (que nunca recebe um `NewsPost`)
+e os avisos do "Atualizar" saem pela fila do app. Tudo na thread principal.
 """
 
 import weakref
@@ -40,7 +40,8 @@ class Novidades(QObject):
         self._checker = checker
         self._posts: list[dict] = []
         self._pagina_a_vista = False
-        # As linhas expandidas, fora do delegate: a página é destruída ao voltar e a `main` mantém as linhas até os posts mudarem.
+        # As linhas expandidas, fora do delegate: a página é destruída ao voltar, e as linhas se mantêm até os posts
+        # mudarem.
         self._abertas: set[str] = set()
         # O "Atualizar" apertado: quem responde é o fim da busca. O aviso "Atualizando…" não some sozinho.
         self._pedido = False
@@ -50,8 +51,6 @@ class Novidades(QObject):
         checker.buscaTerminou.connect(self._ao_terminar_a_busca)
         checker.naoVistasMudou.connect(self.alterado)
         self._refazer()
-
-    # -- o que o QML lê ------------------------------------------------------
 
     @Property(bool, notify=alterado)
     def visivel(self) -> bool:
@@ -78,13 +77,11 @@ class Novidades(QObject):
 
     @Slot(str, bool)
     def definirAberta(self, chave: str, aberta: bool) -> None:  # noqa: N802
-        """Guarda a linha expandida (DA-37): reabrir a página a mostra como estava; só posts novos zeram."""
+        """Guarda a linha expandida: reabrir a página a mostra como estava; só posts novos zeram."""
         if aberta:
             self._abertas.add(chave)
         else:
             self._abertas.discard(chave)
-
-    # -- a chave e o ciclo de vida -------------------------------------------
 
     def acompanhar_a_chave(self) -> None:
         """Passa a ligar e desligar o feed quando `show-news-button` muda (referência fraca: o schema é do app)."""
@@ -114,8 +111,6 @@ class Novidades(QObject):
         self._checker.stop()
         self._largar_o_pedido()
 
-    # -- a página ------------------------------------------------------------
-
     @Slot()
     def abrir(self) -> None:
         """Abrir a página reconhece tudo o que há nela; sem nada em cache (primeira vez, ou só falhas), busca agora."""
@@ -129,7 +124,7 @@ class Novidades(QObject):
     def paginaVisivel(self, visivel: bool) -> None:  # noqa: N802
         self._pagina_a_vista = visivel
         if visivel:
-            # Só os posts novos refazem a lista (`_ao_mudar_os_posts`): refazê-la aqui recolheria as linhas abertas (DA-37).
+            # Só os posts novos refazem a lista (`_ao_mudar_os_posts`): refazê-la aqui recolheria as linhas abertas.
             self._checker.mark_seen()
 
     @Slot()
@@ -138,7 +133,8 @@ class Novidades(QObject):
         self._avisos_sem_pedido()
         self._pedido = True
         self._aviso = self._avisos.adicionar("Atualizando novidades…", segundos=0)
-        # Chave desligada: o checker está parado e a busca em voo foi abandonada; `check_async` responde "falha" na hora.
+        # Chave desligada: o checker está parado e a busca em voo foi abandonada; `check_async` responde "falha" na
+        # hora.
         if not self._checker.loading or not self.visivel:
             self._checker.check_async()
         self.alterado.emit()
@@ -148,8 +144,6 @@ class Novidades(QObject):
         """Só um endereço da lista atual: o QML não escolhe o que o navegador abre."""
         if url and any(post["url"] == url for post in self._posts):
             abrir_url(url)
-
-    # -- o que o checker avisa -----------------------------------------------
 
     def _refazer(self) -> bool:
         """Refaz a lista (as datas relativas mudam com o tempo); `True` se ela mudou."""

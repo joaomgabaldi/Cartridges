@@ -1,11 +1,7 @@
 """O cartão que aparece por cima do jogo quando uma conquista é desbloqueada.
 
-Ícone, rótulo ("Conquista desbloqueada", ou "Todas as conquistas
-desbloqueadas" na que fecha 100%, com "★ Rara" quando for o caso), título e
-descrição. Fica 5 s na tela; várias de uma vez entram em fila e aparecem uma
-depois da outra. A janela (`janela_do_aviso.py`) nunca pega o foco.
-Só o primeiro cartão de uma fila toca o som, se "Tocar som com o aviso"
-estiver ligado; os seguintes entram em silêncio.
+Fica 5 s na tela; várias de uma vez entram em fila. A janela (`janela_do_aviso.py`) nunca pega o foco.
+Só o primeiro cartão de uma fila toca o som, se "Tocar som com o aviso" estiver ligado.
 """
 
 import array
@@ -30,7 +26,6 @@ DURACAO = 5
 _LIMITE_DA_SAIDA = 1  # segundos até a saída ser dada por terminada, com ou sem animação
 
 
-# `data/` fica ao lado do pacote `cartridges` (como o tique do Big Picture).
 _ARQUIVO_DO_SOM = Path(__file__).resolve().parent.parent / "data" / "sons" / "conquista.wav"
 _dados_do_som: Optional[bytes] = None
 
@@ -63,9 +58,7 @@ def _tocar_som() -> None:
 
 
 def _no_volume(dados: bytes, volume: int) -> bytes:
-    """O WAV (PCM 16-bit) com as amostras escaladas a ``volume`` por cento.
-
-    ``PlaySound`` não tem volume: o som tocado já vem mais baixo. Outro formato
+    """O WAV (PCM 16-bit) escalado a ``volume`` por cento (``PlaySound`` não tem volume). Outro formato
     levanta ``ValueError``.
     """
     if volume >= 100:
@@ -148,7 +141,7 @@ class Aviso:
 
 
 def _criar_janela(aviso: Aviso) -> Any:
-    """A janela do aviso (Task 4): `titulo`, `entrar(canto)`, `sair(ao_terminar)` e `fechar()`."""
+    """A janela do aviso: `titulo`, `entrar(canto)`, `sair(ao_terminar)` e `fechar()`."""
     from cartridges.janela_do_aviso import JanelaDoAviso  # noqa: PLC0415
 
     return JanelaDoAviso(aviso)

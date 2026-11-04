@@ -5,13 +5,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A regra da edição de um jogo, sem tela (D41).
+"""A regra da edição de um jogo, sem tela.
 
-O que o `DetailsDialog.apply_preferences` da `main` fazia, separado dos widgets:
-o `Formulario` é o que a tela edita, `validar` dá a primeira mensagem de erro e
-`aplicar` grava o formulário no `Jogo`, na mesma ordem e com os mesmos guardas.
-Quem desenha (o `ModeloDaEdicao` e o `DialogoDeEdicao.qml`) só preenche o
-formulário e mostra o resultado. Tudo aqui roda na thread principal.
+O `Formulario` é o que a tela edita, `validar` dá a primeira mensagem de erro e `aplicar` grava o formulário
+no `Jogo`. Tudo aqui roda na thread principal.
 """
 
 import logging
@@ -40,7 +37,6 @@ from cartridges.utils.thread_principal import na_thread_principal
 STATUS_VALUES = ("", *STATUS_LABELS)
 # Os do suporte a controle: None é "não informado".
 CONTROLLER_VALUES = (None, "full", "partial")
-# Os rótulos do seletor, uma só fonte com a ordem acima.
 CONTROLLER_LABELS = {None: _("Não informada"), "full": _("Total"), "partial": _("Parcial")}
 
 
@@ -80,15 +76,13 @@ class Formulario:
     appid: str = ""
     # None = não mexeu; "" = "Nenhum" (desliga o backup dos saves).
     ludusavi_escolhido: Optional[str] = None
-    # O que a última busca trouxe (`metacritic`, `gamepad_recommended`,
-    # `description`, `steam_review`, `steam_appid`, `hltb`). Só entra no jogo o
-    # que chegou: uma chave ausente (ou None) deixa o valor gravado.
+    # O que a última busca trouxe (`metacritic`, `gamepad_recommended`, `description`, `steam_review`, `steam_appid`,
+    # `hltb`). Só entra no jogo o que chegou: chave ausente (ou None) deixa o valor gravado.
     buscado: dict = field(default_factory=dict)
-    # A capa que a tela mostra: a do jogo ao abrir; com ``capa_mudou``, a
-    # provisória (um temporário, que passa a ser do `aplicar`) ou None (excluída).
+    # A capa que a tela mostra: a do jogo ao abrir; com ``capa_mudou``, a provisória (temporário que passa a ser do
+    # `aplicar`) ou None (excluída).
     capa: Optional[Path] = None
     capa_mudou: bool = False
-    # None = não mexeu.
     logo: Optional[Escolha] = None
     papel_de_parede: Optional[Escolha] = None
     # A cor da fita de LED (`session_fita.Cor`): a que a linha mostrou ao abrir (ou ao voltar ao
@@ -109,15 +103,13 @@ class Formulario:
             publicadora=jogo.publisher or "",
             lancamento=jogo.release_date or "",
             genero=jogo.genre or "",
-            # Um valor que ninguém reconhece (ficha editada à mão) abre como
-            # "não informado" / "Sem status", como a página de detalhes o mostra.
+            # Um valor que ninguém reconhece (ficha editada à mão) abre como "não informado" / "Sem status".
             controle=jogo.controller_support if jogo.controller_support in CONTROLLER_VALUES else None,
             status=jogo.status if jogo.status in STATUS_VALUES else "",
             nota=jogo.stars,
             executavel=jogo.executable,
             admin=jogo.run_as_admin,
             rastrear_processo=jogo.track_process,
-            # O nome gravado, ou o do .exe que o comando aponta (vazio se nenhum).
             executavel_do_processo=jogo.process_executable or exe_name_from_command(jogo.executable),
             notificar_atualizacoes=jogo.track_updates,
             conquistas=jogo.conquistas,
@@ -129,9 +121,7 @@ class Formulario:
 @dataclass
 class Resultado:
     jogo: Optional[Jogo]
-    # O zerado saiu da store com a tela aberta: fechar sem gravar nada.
     fechar_sem_gravar: bool = False
-    # Era zerado e virou um desinstalado comum: não há mais página de detalhes dele.
     sair_dos_detalhes: bool = False
     # A capa nova não foi gravada (arquivo preso): a provisória é a capa desta sessão e não pode ser apagada.
     capa_presa: bool = False
@@ -140,8 +130,7 @@ class Resultado:
 def exe_name_from_command(command: str) -> str:
     """O nome do .exe do jogo num comando, ou "" quando não há (Steam/Epic/UWP).
 
-    Prefere um .exe entre aspas (o atalho clássico e o "Adicionar"), depois um
-    .exe solto, ignorando os lançadores em que o comando vem embrulhado.
+    Prefere um .exe entre aspas, depois um .exe solto, ignorando lançadores em que o comando vem embrulhado.
     """
     if not command:
         return ""
@@ -165,11 +154,8 @@ def empacotado(executavel: str) -> bool:
 
 
 def acompanha_sem_nome(executavel: str) -> bool:
-    """O jogo já é acompanhado sem o nome do executável?
-
-    Pela identidade do pacote ou pela pasta de instalação que o comando revela:
-    nos dois casos a sessão já é automática e o rastreio pelo nome não muda
-    nada. Lê o disco (a subida até a raiz do jogo).
+    """O jogo já é acompanhado sem o nome do executável (pela identidade do pacote ou pela pasta de instalação)? Lê o
+    disco.
     """
     return empacotado(executavel) or bool(install_dir_from_command(executavel))
 
@@ -192,7 +178,6 @@ def validar(form: Formulario, jogo: Optional[Jogo]) -> Optional[str]:
     """A primeira mensagem de erro, na ordem do Aplicar; None se o formulário vale."""
     if form.nome == "":
         return _("O título do jogo não pode ficar vazio.")
-    # Um zerado não tem linha de executável na tela.
     if form.executavel == "" and (jogo is None or not jogo.removed):
         return _("O executável não pode ficar vazio.")
     lancamento = form.lancamento.strip()
@@ -222,8 +207,7 @@ def descartar_provisoria(caminho: Path) -> None:
 def preparar_capa(arquivo: Path) -> Optional[Path]:
     """Uma imagem escolhida vira a provisória da capa: um temporário em %TEMP%, ou None se ilegível.
 
-    Fora da thread principal. Uma capa animada segue como está; uma parada é enquadrada
-    (`composite_cover`) e reduzida ao tamanho das capas (`convert_cover`).
+    Fora da thread principal. Capa animada segue como está; parada é enquadrada e reduzida ao tamanho das capas.
     """
     try:
         with Image.open(arquivo) as imagem:
@@ -247,7 +231,7 @@ def preparar_capa(arquivo: Path) -> Optional[Path]:
 def preparar_capa_de_video(arquivo: Path) -> tuple[Optional[Path], str]:
     """O vídeo escolhido vira a provisória (um WebP animado) e as cópias dela; ou ``(None, erro)``.
 
-    Fora da thread principal. O ffmpeg só existe no instalador (ou no PATH): sem ele, o vídeo não é lido.
+    Fora da thread principal. O ffmpeg só existe no instalador (ou no PATH).
     """
     if capa_video.executavel() is None:
         return None, _("O arquivo não pôde ser lido como vídeo.")
@@ -288,31 +272,24 @@ FOLGA_SATURACAO = 10
 
 
 def mesmo_tom(uma: session_fita.Cor, outra: session_fita.Cor) -> bool:
-    """Matiz e saturação, sem o brilho: o brilho de cada jogo é separado da escolha de cor.
-
-    A distância de matiz é circular: 359 e 0 são vizinhos, e um vermelho de capa cai bem em cima
-    dessa emenda.
-    """
+    """Matiz e saturação, sem o brilho. A distância de matiz é circular: 359 e 0 são vizinhos."""
     distancia = abs(uma.matiz - outra.matiz) % 360
     return min(distancia, 360 - distancia) <= FOLGA_MATIZ and abs(uma.saturacao - outra.saturacao) <= FOLGA_SATURACAO
 
 
 def aplicar_fita(form: Formulario, jogo: Jogo) -> None:
-    """Grava a cor da fita, mas só quando ela é escolha de verdade.
-
-    Quem abriu a tela para renomear um jogo não pediu cor nenhuma, e gravar aqui marcaria esse jogo
-    como "cor escolhida à mão" para sempre: ele nunca mais acompanharia a capa.
+    """Grava a cor da fita, mas só quando ela é escolha de verdade: quem abriu a tela só para renomear não pediu
+    cor, e gravar marcaria o jogo como "cor escolhida à mão" para sempre.
     """
-    # Sem fita configurada a linha nem chega a ser preenchida, e apagar a cor que o jogo já tem em
-    # disco seria perdê-la sem aviso. A redefinição pedida passa, porque apagar é o que ela quer.
+    # Sem fita configurada a linha nem é preenchida, e apagar a cor que o jogo já tem seria perdê-la sem aviso; a
+    # redefinição pedida passa.
     mostrada, na_tela = form.fita_mostrada, form.fita_na_tela
     if mostrada is None or na_tela is None:
         if form.fita_redefinir:
             session_fita.redefinir(jogo.game_id)
         return
-    # Contra o que a linha mostrou, e não contra o automático de agora: um jogo novo ganha a capa neste
-    # mesmo Aplicar, e o automático mudaria debaixo da comparação sem que ninguém tivesse mexido na cor.
-    # Cor e brilho separados: mexer só no brilho não é escolher cor, e o jogo segue na cor automática.
+    # Contra o que a linha mostrou, não contra o automático de agora (um jogo novo ganha a capa neste mesmo Aplicar).
+    # Cor e brilho separados: mexer só no brilho não é escolher cor.
     escolha_nova = not mesmo_tom(na_tela, mostrada)
     brilho_novo = na_tela.brilho != mostrada.brilho
     if escolha_nova:
@@ -358,9 +335,8 @@ def _aplicar_papel_de_parede(jogo: Jogo, escolha: Optional[Escolha]) -> None:
 
 
 def _appid_era_a_fonte(jogo: Jogo) -> bool:
-    """As conquistas guardadas vieram do appID (Steam, ou fonte nenhuma)?
-
-    Nas lojas com conta e na Ubisoft elas são da conta ou dos arquivos do launcher.
+    """As conquistas guardadas vieram do appID (Steam, ou fonte nenhuma)? Nas lojas com conta e na Ubisoft são da
+    conta ou dos arquivos do launcher.
     """
     fonte = fontes.gravada(jogo)
     return fonte is None or fonte.tipo == fontes.STEAM
@@ -378,11 +354,8 @@ def _capa_do_sgdb_chegou(jogo: Jogo, manager: Any) -> None:
 def saiu_da_store(jogo: Optional[Jogo]) -> bool:
     """Um zerado que a store soltou com a tela aberta: aplicar não pode gravá-lo de novo.
 
-    Um jogo REMOVIDO (zerado) pode ter saído da store enquanto a tela estava aberta:
-    uma ligação de zerado por appID rodando por baixo, ou uma importação que apagou
-    a ficha. Aplicar a gravaria de novo e o tempo contaria em dobro numa fusão
-    futura. Um jogo vivo nunca é apagado da store por baixo assim, e um jogo novo
-    não está nela por design: o guarda é só do zerado. Vale antes da validação.
+    Só vale para o zerado (um jogo vivo não sai da store por baixo, e um jogo novo não está nela). Vale antes da
+    validação.
     """
     return jogo is not None and jogo.removed and shared.store.get(jogo.game_id) is not jogo
 
@@ -390,8 +363,8 @@ def saiu_da_store(jogo: Optional[Jogo]) -> bool:
 def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resultado:
     """Grava o formulário no jogo (ou cria o jogo, com ``jogo=None``).
 
-    ``appid_inicial`` é o AppID que o campo mostrava ao abrir. Quem chama já
-    validou; um formulário inválido levanta `ValueError` sem gravar nada.
+    ``appid_inicial`` é o AppID que o campo mostrava ao abrir. Um formulário inválido levanta `ValueError` sem gravar
+    nada.
     """
     if saiu_da_store(jogo):
         return Resultado(jogo, fechar_sem_gravar=True)
@@ -410,7 +383,6 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
                 "game_id": shared.store.proximo_id_importado(),
                 "source": "imported",
                 "added": int(time()),
-                # Campo de identidade, sem padrão na classe.
                 "executable": "",
             }
         )
@@ -509,8 +481,7 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
     if jogo.steam_appid and str(jogo.steam_appid) != str(appid_anterior):
         ligar_zerado(jogo)
 
-    # O cartão de conquistas da página não segue o `update` (nada do que a página lê do jogo mudou): o interruptor e o
-    # histórico apagado pedem a refeita (como o `update_conquistas_block` da `main`).
+    # O cartão de conquistas da página não segue o `update`: o interruptor e o histórico apagado pedem a refeita.
     if shared.conquistas is not None:
         shared.conquistas.mudou(jogo.game_id)
 
@@ -522,7 +493,6 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
         if (verificador := getattr(shared.aplicativo, "verificador_de_atualizacoes", None)) is not None:
             verificador.check_async()
 
-    # Sem capa, o SteamGridDB procura uma.
     if form.capa is None and (sgdb := shared.store.managers.get(SgdbManager)) is not None:
         jogo.set_loading(1)
         sgdb.reset_cancellable()

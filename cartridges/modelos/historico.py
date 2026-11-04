@@ -31,7 +31,8 @@ from cartridges.session_history import (
 from cartridges.utils import game_logo, session_log
 from cartridges.utils.format_playtime import format_playtime
 
-# O logo é a manchete da caixa inteira, não o título de uma coluna: bem maior que o da página de detalhes (72 de altura),
+# O logo é a manchete da caixa inteira, não o título de uma coluna: bem maior que o da página de detalhes (72 de
+# altura),
 # e a largura útil é a da caixa (1040) menos as margens de 24.
 ALTURA_DO_LOGO = 120
 LARGURA_DO_LOGO = 1040 - 2 * 24
@@ -79,8 +80,6 @@ class HistoricoDeSessoes(QObject):
         self._posicoes: list[int] = []
         self._dias: list[tuple[date, int]] = []
 
-    # -- abrir e fechar --------------------------------------------------------------------------
-
     @Slot(str)
     def abrir(self, game_id: str) -> None:
         """Mostra o histórico do jogo, no mês; ignora (sem mudar nada) um jogo que a loja não tem."""
@@ -98,10 +97,9 @@ class HistoricoDeSessoes(QObject):
 
     @Slot()
     def fechar(self) -> None:
-        # Só `aberto` muda: o cartão segue com o conteúdo durante a animação de saída (na `main` o `Adw.Dialog` sai
-        # intacto). O próximo `abrir` sobrescreve tudo.
-        # As sessões, os dias e as posições ficam até o próximo `abrir`: a dica do gráfico e um "Mostrar mais" nos 120 ms
-        # de saída não podem esvaziar o que ainda está à vista.
+        # Só `aberto` muda: o cartão segue com o conteúdo durante a animação de saída. O próximo `abrir` sobrescreve
+        # tudo; as sessões, os dias e as posições ficam até lá, para a dica do gráfico e um "Mostrar mais" nos 120 ms de
+        # saída não esvaziarem o que ainda está à vista.
         self._jogo = None
         self._v = {**self._v, "aberto": False}
         self.alterado.emit()
@@ -113,8 +111,6 @@ class HistoricoDeSessoes(QObject):
 
     def _mostrado(self) -> Any:
         return self._jogo() if self._jogo else None
-
-    # -- o que a tela mostra ----------------------------------------------------------------------
 
     def _reler(self) -> None:
         """Relê o arquivo e refaz tudo o que a tela mostra, em vez de tirar uma linha: a exclusão mexe no resumo e no
@@ -166,8 +162,6 @@ class HistoricoDeSessoes(QObject):
         # A variável é o tempo jogado no período escolhido
         total = _("{} no período").format(tempo_ou_nenhuma(sum(segundos for _dia, segundos in dias)))
         return {"grafico": geometria, "totalDoPeriodo": total}
-
-    # -- ações ------------------------------------------------------------------------------------
 
     @Slot()
     def mostrarMais(self) -> None:  # noqa: N802

@@ -4,8 +4,7 @@
 
 """A parte do controle do Xbox que só fala com o Windows (XInput): a DLL, a leitura e a vibração.
 
-Sem gi nem Qt: serve à grade do app Qt (`modelos/controle.py`).
-Os valores (constantes, zona morta, presets de vibração) são os da `main`.
+Sem gi nem Qt: serve à grade do app (`modelos/controle.py`).
 """
 
 import ctypes
@@ -14,52 +13,37 @@ import time
 from ctypes import wintypes
 from typing import Any, Optional
 
-# How often the pad is read while the window has focus. 30 Hz is well past the
-# rate a person can navigate a grid at, and halves the wakeups of a 60 Hz loop.
+# Com que frequência o controle é lido com a janela em foco: 30 Hz passa do ritmo em que se navega uma grade e tem
+# metade das ativações de um laço de 60 Hz.
 POLL_INTERVAL_MS = 33
-# XInput is slow to answer for an empty slot (a documented quirk, roughly a
-# millisecond per unused slot), so unplugged slots are only scanned occasionally
-# instead of on every tick.
+# O XInput demora a responder para um slot vazio (cerca de 1 ms por slot), então os desconectados só são varridos de vez
+# em quando.
 SCAN_INTERVAL_US = 2_000_000
 
-# Key-repeat feel for a held direction: a pause before it starts running, then
-# a steady rate. Tuned by hand — expect to adjust these two with a pad in hand.
+# Repetição de uma direção segurada: uma pausa antes de correr, depois um ritmo constante. Ajustado à mão.
 REPEAT_DELAY_US = 400_000
 REPEAT_INTERVAL_US = 120_000
 
-# Stick thresholds. The release value sits below the press value on purpose:
-# with a single threshold, a stick resting near the edge flickers across it and
-# the selection stutters. Requiring a return past the lower value to re-arm is
-# what makes a held direction read as one continuous push.
+# Limiares do stick. O de soltar fica abaixo do de apertar de propósito: com um limiar só, um stick no limite pisca e a
+# seleção engasga.
 THUMB_PRESS = 16_000
 THUMB_RELEASE = 10_000
 
-# A dormant pad also wakes on the stick alone, but only on a near-full push:
-# half of the 0–32767 range on either axis. Connect-time drift sits far below
-# this, so it still cannot wake anything, while someone who navigates by stick
-# and never touches a button is not made to reach for one first. Set this high
-# on purpose — the stick is pushed all the way or not at all, so there is no
-# gentle nudge here to miss.
+# Um controle dormente também acorda só com o stick, mas só num empurrão quase total (metade da faixa 0–32767): a deriva
+# da conexão fica bem abaixo disso.
 THUMB_WAKE = 16_384
 
-# Length of a scroll between rows, matching the feel of the viewport's own
-# scroll-to-focus that this module takes over from
+# Duração de uma rolagem entre linhas, no ritmo da rolagem até o foco do próprio viewport, que este módulo substitui.
 SCROLL_DURATION_MS = 200
 
-# Rumble presets, as (left motor, right motor, milliseconds). The two motors
-# are not interchangeable: the left one is the heavy low-frequency weight and
-# reads as a thud, the right one is light and high-frequency and reads as a
-# click. Hence the tick on the right and the wall on the left.
+# Presets de vibração (motor esquerdo, direito, milissegundos). Os motores não são intercambiáveis: o esquerdo é o peso
+# grave (baque), o direito é leve e agudo (clique); daí o tique à direita e a parede à esquerda.
 RUMBLE_MOVE = (0.0, 0.14, 12)  # per card crossed, deliberately barely there
-# Nowhere further to go. Leans on the heavy motor with a little of the light
-# one for definition, so it lands as a firm stop rather than a vague hum — it
-# is now the only feedback for hitting the end, the system beep having been
-# silenced for pad navigation.
+# Sem mais para onde ir: o motor pesado com um pouco do leve, para soar como parada firme; é o único aviso de chegar ao
+# fim, já que o bipe do sistema foi silenciado na navegação por controle.
 RUMBLE_EDGE = (0.6, 0.2, 70)
-# Both motors, near full, and long enough to read as a send-off rather than a
-# tick. This one is allowed to be the loudest thing the pad does: it fires once,
-# it confirms an action that takes over the whole screen, and it is the last
-# thing the app says before the window minimises and gets out of the way.
+# Os dois motores, quase no máximo e longos, como despedida: dispara uma vez, confirma uma ação que toma a tela inteira
+# e é a última coisa que o app diz antes de a janela minimizar.
 RUMBLE_LAUNCH = (0.85, 0.85, 400)
 # Salto de dez jogos no Big Picture (LB/RB): só o motor leve, mais longo que o
 # tique de um passo, para soar como um deslize e não como um clique.
@@ -69,7 +53,6 @@ RUMBLE_PULO = (0.0, 0.35, 25)
 # ficarem distintos em vez de emendarem num zumbido.
 RUMBLE_CAPA = (0.5, 1.0, 90)
 
-# XInput button masks
 XINPUT_DPAD_UP = 0x0001
 XINPUT_DPAD_DOWN = 0x0002
 XINPUT_DPAD_LEFT = 0x0004
@@ -118,25 +101,17 @@ class XInputVibration(ctypes.Structure):
 
 
 def carregar_xinput() -> Any:
-    """Return the newest XInput DLL present, or None on failure.
+    """A DLL do XInput mais nova presente, ou None em caso de falha.
 
-    1.4 ships with Windows 8 and later; the older names are only reached on
-    systems where it is missing. Any failure disables the feature silently —
-    a missing DLL must never stop the app from starting.
+    A 1.4 vem com o Windows 8 em diante; os nomes antigos só valem onde ela falta. Qualquer falha desliga o recurso em
+    silêncio: uma DLL ausente nunca pode impedir o app de iniciar.
     """
     for name in ("xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll"):
         try:
             library = ctypes.WinDLL(name)  # type: ignore[attr-defined]
-            # Looking the exports up has to happen inside the try as well. A
-            # DLL can load perfectly and still not export what we need — the
-            # xinput stubs and wrapper DLLs people drop next to games (and
-            # Wine/Proton's own builds) are the common case, and a missing
-            # XInputSetState raises AttributeError here rather than at load.
-            # Outside the try that escaped through GamepadManager.__init__ into
-            # do_activate, where PyGObject swallows it at the vfunc boundary:
-            # the process survived, but everything scheduled after the gamepad
-            # manager — the update and news checkers included — never ran, for
-            # a feature that is meant to fail silently.
+            # A busca das exportações também fica dentro do try: uma DLL pode carregar sem exportar o necessário (stubs
+            # e wrappers ao lado de jogos, builds do Wine/Proton), e um XInputSetState ausente levanta AttributeError
+            # aqui, não no load; fora do try, escapava pela inicialização e travava tudo o que vinha depois.
             library.XInputGetState.argtypes = [
                 wintypes.DWORD,
                 ctypes.POINTER(XInputState),
@@ -148,10 +123,8 @@ def carregar_xinput() -> Any:
             ]
             library.XInputSetState.restype = wintypes.DWORD
         except (OSError, AttributeError):
-            # OSError: DLL absent. AttributeError: not Windows at all, where
-            # ctypes has no WinDLL — the feature simply does not exist there —
-            # or a DLL that loads without the entry points we need. Either way,
-            # move on to the next candidate name.
+            # OSError: DLL ausente. AttributeError: fora do Windows (ctypes sem WinDLL) ou DLL que carrega sem as
+            # entradas necessárias. Nos dois casos, segue para o próximo nome.
             continue
         logging.debug("Gamepad support using %s", name)
         return library

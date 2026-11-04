@@ -91,14 +91,13 @@ _ICONE = _RAIZ.parent / "data" / "icons" / "hicolor" / "scalable" / "apps" / f"{
 
 
 def _configurar_log() -> None:
-    """O log completo da `main` (D89): arquivo, console, ganchos de exceção, avisos do Qt e quedas nativas."""
+    """O log completo: arquivo, console, ganchos de exceção, avisos do Qt e quedas nativas."""
     try:
         setup_logging()
     except ValueError:
-        # dictConfig embrulha qualquer falha dos handlers em ValueError (uma rotação de log que não sobreviveu a uma
-        # queda, um `cartridges.log` preso por outro processo). Ficar sem log NENHUM é o pior resultado possível, e o
-        # app instalado não tem console: um arquivo só desta sessão, que a rotação seguinte comprime e descarta.
-        # O mesmo handler do log normal, com os mesmos guards: o teto de `MAX_BYTES`, sem ele só com o log detalhado.
+        # dictConfig embrulha falhas dos handlers em ValueError (rotação que não sobreviveu a uma queda, log preso por
+        # outro processo). Ficar sem log NENHUM é o pior resultado e o app instalado não tem console: um arquivo só
+        # desta sessão.
         try:
             reserva = SessionFileHandler(
                 shared.log_dir / f"cartridges-{os.getpid()}.log", backup_count=0, sem_limite=detalhado.ativo()
@@ -118,10 +117,9 @@ def _medidas_da_tela(app: QGuiApplication) -> None:
 
 
 def _limpar_e_ativar_copias(modelo: ModeloDaBiblioteca) -> None:
-    """Limpa a pasta das cópias animadas numa thread e, só depois, libera o modelo a pedir as que faltam.
+    """Limpa a pasta das cópias animadas numa thread e só depois libera o modelo a pedir as que faltam.
 
-    A limpeza apaga todo `.tmp` da pasta, então nenhuma geração pode começar antes dela terminar.
-    Os ids saem da loja aqui, na principal, antes de a thread começar.
+    Nenhuma geração começa antes da limpeza, que apaga todo `.tmp`; os ids saem da loja na principal.
     """
     ids = {jogo.game_id for jogo in shared.store}
 
@@ -133,11 +131,10 @@ def _limpar_e_ativar_copias(modelo: ModeloDaBiblioteca) -> None:
 
 
 class AplicacaoQt(QGuiApplication):
-    """O `QGuiApplication` do app, que avisa o `quit()` antes de o Qt fechar as janelas.
+    """O `QGuiApplication` que avisa o `quit()` antes de o Qt fechar as janelas.
 
-    No Qt 6 o `quit()` manda o `QEvent.Quit`, e é nele que cada janela de topo recebe o `closing`, antes do
-    `aboutToQuit`. O `saindo` chega antes delas: a sessão é encerrada sem interface, e o `closing` da janela
-    "Jogando" que vem depois já não tem o que fazer.
+    No Qt 6 o `quit()` manda o `QEvent.Quit`, e é nele que cada janela recebe o `closing`, antes do
+    `aboutToQuit`: o `saindo` chega antes e encerra a sessão sem interface.
     """
 
     saindo = Signal()
@@ -165,17 +162,16 @@ def _carregar_contas() -> None:
 
 
 def _ligar_conquistas(aplicativo: Aplicativo) -> VarreduraConquistas:
-    """A varredura de conquistas da abertura, depois das outras (como na `main`): uma passada por execução."""
+    """A varredura de conquistas da abertura, depois das outras: uma passada por execução."""
     aplicativo.varredura_conquistas = VarreduraConquistas()
     aplicativo.varredura_conquistas.start()
     return aplicativo.varredura_conquistas
 
 
 def _comecar_varreduras(aplicativo: Aplicativo, verificador, novidades, varredura_hltb, varredura_tamanho) -> None:  # noqa: ANN001
-    """Na ordem da `main`: atualizações, novidades, HowLongToBeat, tamanho em disco, o cache dos saves e as conquistas."""
     verificador.start()
     novidades.acompanhar_a_chave()
-    novidades.ligar()  # só busca com `show-news-button` ligado
+    novidades.ligar()
     varredura_hltb.start()
     varredura_tamanho.start()
     backup_de_saves.atualizar_cache()
@@ -189,10 +185,10 @@ def _parar_varredura_de_conquistas() -> None:
 
 @dataclass
 class _Abertura:
-    """O que a abertura já criou. O `aboutToQuit` pode vir antes de tudo existir (o Windows desligando durante a
-    restauração): o que ainda é ``None`` o `_fechar` pula."""
+    """O que a abertura já criou; o `aboutToQuit` pode vir antes de tudo existir (Windows desligando),
+    e o `_fechar` pula o que é ``None``.
+    """
 
-    # A geometria da principal (D87): o primeiro passo do `_fechar` a grava.
     geometria: Any = None
     big_picture: Any = None
     controle: Any = None
@@ -208,16 +204,15 @@ class _Abertura:
     painel: Any = None
     motor: Any = None
     aplicativo: Any = None
-    # O motor da janela "Restaurando o backup" (com o `Restaurando` dentro); vive até o fim do `main()`.
+    # Motor da janela "Restaurando o backup"; vive até o fim do `main()`.
     restauracao: Any = None
-    # O motor do assistente da primeira abertura (com o `Assistente` dentro, D86); vive até o fim do `main()`.
+    # Motor do assistente da primeira abertura; vive até o fim do `main()`.
     assistente: Any = None
-    # O filtro do `WM_SETTINGCHANGE` (D88), instalado no app; sai no fim do `_fechar`.
+    # Filtro do `WM_SETTINGCHANGE`, instalado no app; sai no fim do `_fechar`.
     ajustes: Any = None
-    # A `CortinaDaAbertura` da principal: a janela da restauração ou do assistente fecha quando ela revela a principal.
+    # A janela da restauração ou do assistente fecha quando a principal é revelada.
     cortina: Any = None
-    # Os objetos que só o contexto do QML conhece (o Qt não é dono de objeto Python): sem uma referência aqui, saem
-    # da memória quando o `_abrir` devolve e a grade, o histórico e as versões dos saves ficam sem modelo.
+    # Objetos que só o contexto do QML conhece: o Qt não é dono deles, e sem referência aqui sairiam da memória.
     mantidos: Any = None
 
 
@@ -226,36 +221,36 @@ def _de(objeto: Any, metodo: str) -> Callable[[], Any]:
 
 
 def _fechar(abertura: _Abertura) -> None:
-    """O `aboutToQuit`, na ordem da `main`; o `stop()` de cada um vem antes do `encerrar()`."""
+    """O `aboutToQuit`; o `stop()` de cada um vem antes do `encerrar()`."""
     a = abertura
     _encerrar_em_ordem(
-        # Primeiro (D87): um `aboutToQuit` sem `closing` antes (o Windows desligando) grava aqui; a janela já fechada
-        # pelo `quit()` não é lida de novo (o `closing` dela gravou).
+        # Primeiro: um `aboutToQuit` sem `closing` antes (Windows desligando) grava a geometria aqui.
         _de(a.geometria, "gravar"),
-        _de(a.big_picture, "encerrar"),  # a cortina preta do fade nunca fica no monitor (ADR 0003)
-        _de(a.controle, "encerrar"),  # os motores do controle parados (`detach` da `main`)
+        _de(a.big_picture, "encerrar"),
+        _de(a.controle, "encerrar"),
         # As Preferências com um modal aberto (calibração, assistente das fitas, brilho, contas): fecham antes de a
         # sessão devolver as fitas (a prévia que saem não as acende de novo) e antes do login pendente.
         _de(a.preferencias, "fechar"),
-        _de(a.sessao, "devolver"),  # a parede e as fitas, com as janelas já fora da tela (grava antes se o `saindo` não veio)
-        login.cancelar_pendente,  # um login da conta Microsoft esperando o navegador não sobrevive ao app
+        _de(a.sessao, "devolver"),
+        login.cancelar_pendente,
         ea_conta.gravar_pendente,  # o `remid` novo da EA que não coube no disco: última tentativa
         _de(a.novidades, "parar"),  # antes do `stop` do verificador: nenhum resultado do feed chega a uma tela que fecha
         _de(a.verificador, "stop"),
         _de(a.varredura_hltb, "stop"),
         _de(a.varredura_tamanho, "stop"),
         _parar_varredura_de_conquistas,
-        _de(a.edicao, "cancelar"),  # apaga os temporários de um editor ainda aberto
-        async_manager.encerrar,  # drena as gravações, a do tempo da sessão inclusive
+        _de(a.edicao, "cancelar"),
+        async_manager.encerrar,
         copias_animadas.encerrar,
-        icones.encerrar,  # os ícones na fila não seguram o processo com a rede travada
-        _de(a.atualizador, "stop"),  # por último: nenhum passo anterior roda o laço de eventos, então um resultado do download já na fila só é tratado depois deste `stop()` e é descartado (D82)
+        icones.encerrar,
+        # por último: um resultado do download já na fila só é tratado depois deste `stop()` e é descartado
+        _de(a.atualizador, "stop"),
         _de(a.ajustes, "desligar"),  # o Qt guarda só o ponteiro: o filtro sai antes de o objeto Python poder morrer
     )
 
 
 def _avisos_da_abertura(aplicativo: Any, restauracao_falhou: bool) -> None:
-    """Depois da janela, na ordem da `main`; pela fila da D72, um diálogo espera o anterior fechar."""
+    """Depois da janela; pela fila de pedidos, um diálogo espera o anterior fechar."""
     if restauracao_falhou:
         aplicativo.pedir_dialogo(
             "Não foi possível restaurar", "Não foi possível restaurar o backup. Tente novamente.", [], lambda: None
@@ -278,8 +273,9 @@ def _avisos_da_abertura(aplicativo: Any, restauracao_falhou: bool) -> None:
 
 
 def _importar_na_abertura(aplicativo: Any, continuacao: Any) -> None:
-    """Depois de a janela aparecer. Com restauração pendente a importação é a da continuação (pasta de atalhos
-    obrigatória, roda mesmo com a importação automática desligada); senão, a automática."""
+    """Depois de a janela aparecer. Com restauração pendente a importação é a da continuação
+    (roda mesmo com a automática desligada); senão, a automática.
+    """
     if restauracao.existe():
         QTimer.singleShot(0, continuacao.continuar)
     elif shared.schema.get_boolean("auto-import"):
@@ -287,7 +283,7 @@ def _importar_na_abertura(aplicativo: Any, continuacao: Any) -> None:
 
 
 def _seguir_animacoes(aplicativo: Aplicativo, big_picture: BigPicture) -> None:
-    """O Big Picture segue as animações do Windows relidas pelo `Aplicativo` (D88); referências fracas."""
+    """O Big Picture segue as animações do Windows relidas pelo `Aplicativo`; referências fracas."""
     aplicativo_fraco, big_picture_fraco = weakref.ref(aplicativo), weakref.ref(big_picture)
 
     def seguir() -> None:
@@ -298,7 +294,7 @@ def _seguir_animacoes(aplicativo: Aplicativo, big_picture: BigPicture) -> None:
 
 
 def _instalar_filtro_de_ajustes(app: AplicacaoQt, aplicativo: Aplicativo) -> FiltroDeAjustes:
-    """Cada `WM_SETTINGCHANGE` das janelas do app relê as animações (D88) e a cor de destaque."""
+    """Cada `WM_SETTINGCHANGE` das janelas do app relê as animações e a cor de destaque."""
     aplicativo_fraco = weakref.ref(aplicativo)
 
     def ao_mudar() -> None:
@@ -313,8 +309,7 @@ def _instalar_filtro_de_ajustes(app: AplicacaoQt, aplicativo: Aplicativo) -> Fil
 
 def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None:
     """A biblioteca e a janela principal, preenchendo ``abertura``. ``0`` no `--sair-apos-carregar`, ``1`` sem janela."""
-    # A ponte para a thread principal nasce quando `thread_principal` é importado, aqui na principal.
-    # O `stop()` de cada um vem antes do `encerrar()`: o que ainda entregariam não tem para onde ir.
+    # A ponte para a thread principal nasce com o import de `thread_principal`, aqui na principal.
     abertura.verificador = verificador = UpdatesChecker()
     abertura.varredura_hltb = varredura_hltb = HLTBBackfill()
     abertura.varredura_tamanho = varredura_tamanho = InstallSizeSweep()
@@ -370,7 +365,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     painel_das_tarefas.gravar_geometria = geometria.gravar
     abertura.sessao = sessao = ModeloDaSessao(avisos, controle=controle, big_picture=big_picture)
     shared.sessao = sessao
-    # O domínio avisa por aqui quando o histórico, o catálogo ou uma conta das conquistas muda (D58).
+    # O domínio avisa por aqui quando o histórico, o catálogo ou uma conta das conquistas muda.
     conquistas = ConquistasDoJogo(detalhes, sessao)
     shared.conquistas = conquistas
     # O Big Picture diz se há 3D; a referência fraca não prende o objeto Qt numa função guardada.
@@ -380,9 +375,8 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     )
     shared.preferencias = preferencias
     shared.edicao = edicao
-    # Antes de o Qt fechar as janelas: sem isto a janela "Jogando" fecharia pelo fim normal da sessão, com interface.
-    # Só o rápido (gravar, parar o vigia); a parede e as fitas vão ao `aboutToQuit` (`_fechar`, `sessao.devolver`).
-    # O desligar do Windows emite o `aboutToQuit` antes do `quit()`; lá o `devolver()` grava primeiro.
+    # Antes de o Qt fechar as janelas: sem isto a janela "Jogando" fecharia pelo fim normal da sessão, com interface. A
+    # parede e as fitas vão ao `aboutToQuit`.
     app.saindo.connect(sessao.encerrar)
     motor.addImageProvider("desfoque", detalhes.provedor)
     motor.addImageProvider("fundo", ProvedorDoFundo())
@@ -399,15 +393,14 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
         ("cortinaDaAbertura", cortina_da_abertura),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
-    # O Qt não é dono do que vai ao contexto: tudo precisa de uma referência Python até o fim do `main()`.
     abertura.mantidos = (
         modelo, filtros, pagina_biblioteca, pagina_zerados, ponte, controle, detalhes, avisos, historico, saves, sobre, zerados_manuais,
         caixa_da_anotacao, cortina_da_abertura,
     )  # fmt: skip
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.
     session_wallpaper.restaurar_orfaos()
-    # As fitas de LED: desfaz o que uma execução anterior deixou e acende na cor do app (numa thread). Antes do QML, que
-    # segura a thread principal por um ou dois segundos: na `main` elas acendem com a janela, não depois dela.
+    # Desfaz o que uma execução anterior deixou nas fitas e acende na cor do app (numa thread), antes do QML, que segura
+    # a thread principal por um ou dois segundos.
     session_fita.migrar_roxo_antigo()  # antes de acender: o roxo de antes do Kyron vira o ciano
     session_fita.abrir()
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))
@@ -415,18 +408,18 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
         # Sem janela o `app.exec()` não roda e o `aboutToQuit` (o `fechar()` no `ModeloDaSessao.devolver()`) não vem.
         session_fita.fechar()
         return 1
-    big_picture.definir_janela(motor.rootObjects()[0])  # a janela que vai à tela cheia
-    controle.definir_janela(motor.rootObjects()[0])  # só a principal ativa dá o controle (C-24)
-    sessao.definir_janela(motor.rootObjects()[0])  # a que volta da barra de tarefas no fim da sessão
-    painel_das_tarefas.definir_janela(motor.rootObjects()[0])  # a que o fechamento esconde com trabalho em andamento
-    # Antes de o Qt mandar o `closing` às janelas: um `quit()` não é recusado pelo trabalho em andamento (D78).
+    big_picture.definir_janela(motor.rootObjects()[0])
+    controle.definir_janela(motor.rootObjects()[0])  # só a principal ativa dá o controle
+    sessao.definir_janela(motor.rootObjects()[0])
+    painel_das_tarefas.definir_janela(motor.rootObjects()[0])
+    # Antes de o Qt mandar o `closing` às janelas: um `quit()` não é recusado pelo trabalho em andamento.
     app.saindo.connect(painel_das_tarefas.encerrando)
     shared.aplicativo = aplicativo
     abertura.ajustes = _instalar_filtro_de_ajustes(app, aplicativo)
-    aplicativo.verificador_de_atualizacoes = verificador  # a tela de preferências chama `check_async()` ao ligar o aviso
+    aplicativo.verificador_de_atualizacoes = verificador
     _comecar_varreduras(aplicativo, verificador, novidades, varredura_hltb, varredura_tamanho)
-    # Depois da janela e antes dos avisos da abertura. A pergunta da versão nova não entra na fila da D72: se um diálogo
-    # dela abrir com a pergunta na tela, a pergunta espera escondida (`DialogoDaAtualizacao.outroAberto`).
+    # Depois da janela e antes dos avisos da abertura. A pergunta da versão nova fica fora da fila de pedidos: com um
+    # diálogo aberto, ela espera escondida (`DialogoDaAtualizacao.outroAberto`).
     atualizador.start()
     _importar_na_abertura(aplicativo, continuacao)
     return None
@@ -440,15 +433,16 @@ def _acordar(abertura: _Abertura) -> None:
         return
     for motor in (abertura.restauracao, abertura.assistente):
         for janela in motor.rootObjects() if motor is not None else ():
-            if janela.isVisible():  # já fechada (a abertura quebrou, o assistente saiu): outra está à vista, ou o app sai
+            if janela.isVisible():
                 janela.setWindowStates(janela.windowStates() & ~Qt.WindowState.WindowMinimized)
                 janela.raise_()
                 janela.requestActivate()
 
 
 def _com_barra_propria(motor: QQmlApplicationEngine) -> None:
-    """As janelas da abertura (restauração e assistente) têm a barra do app, como a `Adw.HeaderBar` da `main`: o QWindowKit
-    e a marca `comAgente` no contexto. Os testes carregam o QML sem isto e ficam com a moldura de uma janela comum."""
+    """As janelas da abertura (restauração e assistente) têm a barra do app: o QWindowKit e a marca
+    `comAgente` no contexto. Os testes carregam o QML sem isto.
+    """
     from cartridges.janela import qwk  # noqa: PLC0415
 
     qwk.registrar(motor)
@@ -456,7 +450,6 @@ def _com_barra_propria(motor: QQmlApplicationEngine) -> None:
 
 
 def _janela_da_restauracao() -> QQmlApplicationEngine:
-    """A janela "Restaurando o backup" num motor próprio, com o `Restaurando` (filho do motor) no contexto."""
     motor = QQmlApplicationEngine()
     _com_barra_propria(motor)
     motor.addImageProvider("icone", ProvedorDeIcones())
@@ -486,11 +479,11 @@ def _fechar_quando_a_principal_aparecer(abertura: _Abertura, motor: QQmlApplicat
 
 
 def _restaurar_e_abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> None:
-    """Aplica o backup agendado numa thread, com a janela da restauração na tela; a abertura continua na thread
-    principal quando ele termina. Volta na hora: quem chama roda o `exec()`.
+    """Aplica o backup agendado numa thread, com a janela da restauração na tela; a abertura continua
+    na principal quando ele termina. Volta na hora.
 
-    Os fechamentos não prendem objeto Qt: o motor (e o `Restaurando`, filho dele) mora na ``abertura``, e o resto vai
-    por referência fraca. A thread de trabalho nunca solta a última referência a um QObject.
+    Os fechamentos não prendem objeto Qt: o motor mora na ``abertura`` e o resto vai por referência fraca;
+    a thread de trabalho nunca solta a última referência a um QObject.
     """
     abertura.restauracao = _janela_da_restauracao()
     restaurando_fraco = weakref.ref(abertura.restauracao.rootContext().contextProperty("restaurando"))
@@ -507,7 +500,8 @@ def _restaurar_e_abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -
             logging.getLogger(__name__).exception("Falha ao abrir o app depois da restauração do backup")
             codigo = 1
         finally:
-            # Mesmo com a abertura quebrada: uma janela sem fechar, presa em 100%, só sairia pelo Gerenciador de Tarefas.
+            # Mesmo com a abertura quebrada: uma janela sem fechar, presa em 100%, só sairia pelo Gerenciador de
+            # Tarefas.
             if (restaurando := restaurando_fraco()) is not None:
                 restaurando.terminar()
             _fechar_quando_a_principal_aparecer(abertura, abertura.restauracao, codigo)
@@ -522,7 +516,6 @@ def _restaurar_e_abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -
         except Exception:  # noqa: BLE001
             logging.getLogger(__name__).exception("Falha inesperada ao restaurar o backup")
             resultado = False
-        # Pela mesma fila do progresso: o fim vem depois da última fração.
         na_thread_principal(terminou, resultado)
 
     # Não daemon: o app que sai no meio (o Windows desligando) espera a troca das pastas terminar.
@@ -530,16 +523,15 @@ def _restaurar_e_abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -
 
 
 def _mostrar_assistente(app: AplicacaoQt, argv: list[str], abertura: _Abertura, restauracao_falhou: bool = False) -> bool:
-    """O assistente da primeira abertura (D86), antes da biblioteca: ``True`` se ele está na tela (quem chama vai direto
+    """O assistente da primeira abertura, antes da biblioteca: ``True`` se está na tela (quem chama vai
     ao `exec()`; o `_abrir` vem quando ele termina), ``False`` para seguir ao `_abrir`.
 
-    Nunca no `--sair-apos-carregar` (o modo de teste da carga, sem tela). Cada saída fecha a janela num `finally`,
-    depois de a próxima existir: o app sem nenhuma janela, nem por um instante, sairia. O X fecha sem outra janela, e
-    o app sai (o `_fechar` pula o que ainda é ``None``).
+    Nunca no `--sair-apos-carregar`. Cada saída fecha a janela num `finally`, depois de a próxima existir,
+    para o app não ficar sem janela.
     """
     if "--sair-apos-carregar" in argv or not assistente.precisa_mostrar():
         return False
-    # Conectar uma conta no assistente lê os jogos da loja (D61): sem biblioteca ainda, sobre uma store vazia.
+    # Conectar uma conta no assistente lê os jogos da loja: sem biblioteca ainda, sobre uma store vazia.
     shared.store = Store()
     app_fraco = weakref.ref(app)
 
@@ -563,7 +555,6 @@ def _mostrar_assistente(app: AplicacaoQt, argv: list[str], abertura: _Abertura, 
 
     def ao_restaurar() -> None:
         try:
-            # A janela "Restaurando o backup" nasce antes de esta fechar; o backup agendado segue como na abertura.
             _restaurar_e_abrir(app_fraco(), argv, abertura)
         except Exception:  # noqa: BLE001
             logging.getLogger(__name__).exception("Falha ao restaurar o backup agendado pelo assistente")
@@ -584,7 +575,7 @@ def _mostrar_assistente(app: AplicacaoQt, argv: list[str], abertura: _Abertura, 
 
 
 def relancar() -> None:
-    """Abre o app de novo, desacoplado deste processo, que já está saindo (D75)."""
+    """Abre o app de novo, desacoplado deste processo, que já está saindo."""
     if Path(sys.executable).stem.lower() == "kyron":
         # O Kyron.exe já põe o `-m cartridges` sozinho.
         comando, pasta = [sys.executable, *sys.argv[1:]], None
@@ -602,8 +593,8 @@ _popen = subprocess.Popen  # o ponto que o guarda dos testes troca (`sem_relanca
 
 
 def main(argv: list[str]) -> int:
-    # Antes de tudo: uma segunda cópia não lê os jogos, muito menos grava por cima da primeira (D76). Quem realça a
-    # primeira é este processo, antes de sair: senão o segundo clique no atalho parece não fazer nada.
+    # Antes de tudo: uma segunda cópia não lê os jogos nem grava por cima da primeira; este processo realça a primeira
+    # antes de sair.
     if not single_instance.acquire():
         single_instance.present_running_instance()
         return 0
@@ -623,26 +614,25 @@ def main(argv: list[str]) -> int:
     elif redefinido is False:
         logging.error("Não foi possível redefinir o Cartridges", exc_info=redefinir.falha)
     _medidas_da_tela(app)
-    # Controls no estilo Basic, redesenhado pelo Tema.qml (D38); antes do primeiro motor (o da restauração, se houver).
+    # Controls no estilo Basic, redesenhado pelo Tema.qml; antes do primeiro motor.
     QQuickStyle.setStyle("Basic")
-    # A segunda abertura traz a principal; durante a restauração, a janela dela.
     single_instance.watch_second_launch(lambda: na_thread_principal(_acordar, abertura))
 
-    # Um backup agendado nas Preferências é aplicado antes de qualquer leitura de dados: fitas, papel de parede e a
-    # biblioteca já nascem do backup. Um backup grande leva minutos: roda numa thread, com a janela da restauração.
+    # Um backup agendado é aplicado antes de qualquer leitura de dados; leva minutos, por isso roda numa thread com a
+    # janela da restauração.
     if backup.ha_pendente():
         _restaurar_e_abrir(app, argv, abertura)
     else:
         # Sem backup agendado, só a recuperação de uma troca interrompida, que apenas renomeia pastas.
         restauracao_falhou = backup.aplicar_pendente() is False
-        # A primeira abertura: o assistente antes da biblioteca (D86); a biblioteca abre quando ele termina.
+        # A primeira abertura: o assistente antes da biblioteca, que abre quando ele termina.
         if not _mostrar_assistente(app, argv, abertura, restauracao_falhou):
             codigo = _abrir(app, argv, abertura)
             if codigo is not None:
                 return codigo
             _avisos_da_abertura(abertura.aplicativo, restauracao_falhou)
     codigo = app.exec()
-    # O gancho do log (D89) sai antes da destruição do app e do interpretador: um aviso tardio do Qt vai ao stderr.
+    # O gancho do log sai antes da destruição do app e do interpretador: um aviso tardio do Qt vai ao stderr.
     qInstallMessageHandler(None)
     if abertura.aplicativo is not None and abertura.aplicativo.reiniciar:
         # A trava sai antes: o processo novo precisa conseguir tomá-la.

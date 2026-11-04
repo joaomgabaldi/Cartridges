@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O modelo das Preferências (D66): as chaves, as travas e a busca, sem tela.
+"""O modelo das Preferências: as chaves, as travas e a busca, sem tela.
 
-O QML lê `valores` e `estado` e grava por `definir` e `definirTexto`. O que tem efeito (a trava do minimizar, o
-cinza do controle e do 3D, as regras dos textos) mora aqui, em Python, e é testado sem QML. `valores` é refeito no
-`changed` do `schema` (ouvinte com referência fraca) enquanto a tela está aberta. Só na thread principal.
+O QML lê `valores` e `estado` e grava por `definir` e `definirTexto`. O que tem efeito (a trava do minimizar, o cinza
+do controle e do 3D, as regras dos textos) mora aqui, em Python, e é testado sem QML. `valores` é refeito no `changed`
+do `schema` (ouvinte com referência fraca) enquanto a tela está aberta. Só na thread principal.
 """
 
 import logging
@@ -32,7 +32,6 @@ from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.utils import janela_por_cima, open_uri, session_fita, window_geometry
 from cartridges.utils.thread_principal import na_thread_principal
 
-# As 19 de `bind_switches` da main, mais as que ela ligava por widget próprio. `show-news-button` voltou na D83 (a D64 o tirara).
 CHAVES_GRAVAVEIS = frozenset(
     {
         "minimize-after-launch",
@@ -64,7 +63,7 @@ CHAVES_GRAVAVEIS = frozenset(
         "conquistas-iluminacao",
     }
 )
-# Chaves com regra própria (`definirTexto` e as tasks seguintes): só lidas por `valores`.
+# Chaves com regra própria (`definirTexto`): só lidas por `valores`.
 CHAVES_DE_TEXTO = frozenset({"sgdb-key", "wallhaven-key", "conquistas-chave-steam"})
 CHAVES_DA_TELA = (
     CHAVES_GRAVAVEIS
@@ -99,7 +98,7 @@ class AtualizacoesDaBiblioteca(QObject):
         self._seguindo = False
         self._ligacao: int | None = None
         self._refresh_seguido: Any = None
-        # Os jogos e os incompletos da hora da pergunta: a resposta vale para eles, como na `main`.
+        # Os jogos e os incompletos da hora da pergunta: a resposta vale para eles.
         self._pergunta: tuple[list[Any], list[Any]] | None = None
 
     @staticmethod
@@ -216,7 +215,7 @@ class AtualizacoesDaBiblioteca(QObject):
         """O lote de capas do SteamGridDB para os jogos da biblioteca."""
         if self._baixando:
             return
-        # Os removidos continuam na store como lápides: ficam de fora.
+        # Os removidos continuam na store: ficam de fora.
         jogos = [jogo for jogo in shared.store if not jogo.removed]
         total = len(jogos)
         if not total:
@@ -462,7 +461,7 @@ class FitasDasPreferencias(QObject):
 
     @Slot()
     def fechar(self) -> None:
-        """A tela fechou. Não toca nas fitas (a `main` só devolve a cor no balão do pulso e nos diálogos internos)."""
+        """A tela fechou. Não toca nas fitas (só o balão do pulso e os diálogos internos devolvem a cor)."""
         self._aberta = False
         self._balao_do_pulso = False
 
@@ -594,7 +593,7 @@ class Preferencias(QObject):
         """
         config, self._config = self._config, None
         if config is not None:
-            config.deleteLater()  # filho daqui: o QML ainda pode estar no clique que o fechou
+            config.deleteLater()
         self._fitas.recontar()
         if session_fita.ligada():
             session_fita.reacender()
@@ -615,7 +614,7 @@ class Preferencias(QObject):
     def _calibracao_fechou(self) -> None:
         calibracao, self._calibracao = self._calibracao, None
         if calibracao is not None:
-            calibracao.deleteLater()  # filho daqui: o QML ainda pode estar no clique que o fechou
+            calibracao.deleteLater()
         self.alterado.emit()
 
     @Property(bool, notify=alterado)
@@ -680,7 +679,7 @@ class Preferencias(QObject):
             except Exception:  # noqa: BLE001
                 _log.exception("Falha ao fechar as Preferências")
         if contas is not None:
-            contas.deleteLater()  # filho daqui: o QML ainda pode estar no clique que o fechou
+            contas.deleteLater()
         self.alterado.emit()
 
     def _soltar_ouvinte(self) -> None:
@@ -713,7 +712,7 @@ class Preferencias(QObject):
         if chave not in CHAVES_DE_TEXTO:
             _log.warning("Texto de preferência fora da lista recusado: %r", chave)
             return
-        # A `main` grava a chave do SteamGridDB como veio e aparou as outras duas.
+        # A chave do SteamGridDB é gravada como veio; as outras duas são aparadas.
         if chave != "sgdb-key":
             texto = texto.strip()
         shared.schema[chave] = texto

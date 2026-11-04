@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A janela da abertura enquanto um backup agendado é restaurado (D74).
+"""A janela da abertura enquanto um backup agendado é restaurado.
 
 Sem ela, um backup grande deixava o app minutos sem nenhuma janela, parecendo que não tinha aberto. Mostra o andamento
 e não fecha: a restauração foi pedida e confirmada nas Preferências, e no fim o app abre sozinho (`app.main`).

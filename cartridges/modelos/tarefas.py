@@ -164,12 +164,12 @@ def comecar(nome: str, total: int) -> Tarefa:
 
 
 def pode_mostrar(quantas: int, pagina: str, modal_aberto: bool, big_picture: bool, sessao: bool) -> bool:
-    """O botão do canto só aparece com tarefa, numa das duas bibliotecas e sem nada por cima (D77)."""
+    """O botão do canto só aparece com tarefa, numa das duas bibliotecas e sem nada por cima."""
     return quantas > 0 and pagina in ("todos", "zerados") and not (modal_aberto or big_picture or sessao)
 
 
 def acao_ao_fechar(saves_em_andamento: bool, janela_aberta: bool, tarefas: int) -> str:
-    """O que fechar a principal faz, na ordem da `main` (D78).
+    """O que fechar a principal faz.
 
     Os saves vêm primeiro: fechar agora deixaria o Ludusavi órfão. Com a janela das tarefas aberta e alguma tarefa, a
     principal só some; sem tarefa, a janela das tarefas vai junto (senão manteria o app vivo sozinha). Fechar depois a
@@ -198,7 +198,7 @@ def _painel_esperando() -> Optional["PainelDasTarefas"]:
 
 
 def painel_aberto_sem_a_principal() -> Optional["PainelDasTarefas"]:
-    """O painel, se a janela das tarefas está aberta e a principal, escondida; a janela ativa que sobrou (B05)."""
+    """O painel, se a janela das tarefas está aberta e a principal, escondida; a janela ativa que sobrou."""
     painel = _painel() if _painel is not None else None
     return painel if painel is not None and painel.aberta and painel.principalEscondida else None
 
@@ -219,8 +219,9 @@ def cancelar_fechamento() -> bool:
 
 
 class PainelDasTarefas(QObject):
-    """O que a tela das tarefas pede ao Python: quantas há, se a janela está aberta e onde pô-la; e o fechamento
-    da principal com trabalho em andamento (D78)."""
+    """O que a tela das tarefas pede ao Python: quantas há, se a janela está aberta e onde pô-la; e o fechamento da
+    principal com trabalho em andamento.
+    """
 
     alterado = Signal()
     frente = Signal()  # a janela já aberta deve vir para a frente
@@ -243,7 +244,7 @@ class PainelDasTarefas(QObject):
         self._ao_fechar_aviso: Optional[Callable[[], None]] = None
         global _painel  # noqa: PLW0603
         _painel = weakref.ref(self)
-        # Posto pelo `app.py` (`GeometriaDaJanela.gravar`): o `closing` grava onde a principal está (D87).
+        # Posto pelo `app.py` (`GeometriaDaJanela.gravar`): o `closing` grava onde a principal está.
         self.gravar_geometria: Callable[[], None] = lambda: None
         # Referência fraca implícita: o Qt desliga a conexão quando o painel é destruído.
         lista.rowsInserted.connect(self._contar)
@@ -268,7 +269,7 @@ class PainelDasTarefas(QObject):
         return self._escondida and self._janela is not None and not self._janela.isVisible()
 
     def pedir_aviso(self, titulo: str, corpo: str, ao_fechar: Callable[[], None]) -> None:
-        """O aviso na janela das tarefas (`_janela_para_o_dialogo` da `main`)."""
+        """O aviso na janela das tarefas."""
         anterior = self._ao_fechar_aviso
         if anterior is not None:
             # Já há um aviso à vista: o texto dele fica (não é trocado por baixo de quem lê) e fechar libera os dois.
@@ -370,7 +371,7 @@ class PainelDasTarefas(QObject):
     @Slot(result=bool)
     def principalFechando(self) -> bool:  # noqa: N802
         """O `closing` da principal: True deixa fechar; False a esconde (o app segue com a janela das tarefas)."""
-        # Antes de qualquer ação, com a janela ainda à vista e ainda não destruída pelo `close()` (D87).
+        # Antes de qualquer ação, com a janela ainda à vista e ainda não destruída pelo `close()`.
         self.gravar_geometria()
         # O `closing` que vem do `quit()` (o reinício, o fim da sessão do Windows, a janela das tarefas fechada com a
         # principal escondida): recusá-lo cancelaria o `quit()` com a sessão já encerrada pelo `saindo`.
@@ -393,7 +394,7 @@ class PainelDasTarefas(QObject):
             self.alterado.emit()
             # O `Loader` desfaz a janela das tarefas sem evento de fechamento: o Qt não vê a última janela fechada.
             QTimer.singleShot(0, _sair)
-        # A sessão manual e o aviso de conquista na tela agendam o `_sair` (plano 6).
+        # A sessão manual e o aviso de conquista na tela agendam o `_sair`.
         if shared.sessao is not None:
             shared.sessao.principalFechando()
         return True

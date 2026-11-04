@@ -107,7 +107,6 @@ class ModeloDaBiblioteca(QAbstractListModel):
         return list(self._linhas)
 
     def contagem(self, pagina: str) -> int:
-        """Quantos jogos a página tem, sem contar filtros."""
         return self._contagem[pagina]
 
     @Property(str, constant=True)
@@ -300,7 +299,8 @@ class FiltrosDaBiblioteca(QObject):
     def recalcularOpcoes(self) -> None:  # noqa: N802
         """Refeito ao abrir o menu, não a cada mudança: um import em andamento o mexeria sem ninguém olhar."""
         self._generos, self._anos = ordem.opcoes(self._fonte.linhas())
-        # Um valor escolhido que saiu da biblioteca deixaria a grade vazia, apontando para uma opção que o menu nem oferece.
+        # Um valor escolhido que saiu da biblioteca deixaria a grade vazia, apontando para uma opção que o menu nem
+        # oferece.
         if self._genero and self._genero not in self._generos:
             self.genero = ""
         if self._ano and self._ano not in self._anos:

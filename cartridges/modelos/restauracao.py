@@ -2,9 +2,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A continuação da restauração de um backup (D81), sem tela: a pasta de atalhos, os jogos sem atalho, a escolha do
-atalho e o conflito de dados. As regras são do `utils/restauracao.py`; este modelo só guia o fluxo dos quatro modais
-da janela (o QML recebe dicionários e ids, nunca um `Jogo`). Só na thread principal."""
+"""A continuação da restauração de um backup, sem tela: a pasta de atalhos, os jogos sem atalho, a escolha do atalho e
+o conflito de dados.
+
+As regras são do `utils/restauracao.py`; este modelo só guia o fluxo dos quatro modais da janela (o QML recebe
+dicionários e ids, nunca um `Jogo`). Só na thread principal.
+"""
 
 import weakref
 from datetime import datetime
@@ -54,8 +57,6 @@ class ContinuacaoDaRestauracao(QObject):
         self._conflito: dict[str, Any] = {}
         self._decisao: tuple[str, Path, str] | None = None  # (restaurado, atalho, novo) à espera da escolha
 
-    # region Estado
-
     @Property(bool, notify=alterado)
     def aberta(self) -> bool:
         return self._pedindo_pasta or self._pendentes_abertos or bool(self._escolha) or bool(self._conflito)
@@ -96,9 +97,6 @@ class ContinuacaoDaRestauracao(QObject):
     def conflitoAberto(self) -> bool:  # noqa: N802
         return bool(self._conflito)
 
-    # endregion
-    # region A pasta de atalhos
-
     @Slot()
     def continuar(self) -> None:
         """A cada abertura enquanto houver pendências: a pasta de atalhos é obrigatória, a importação roda mesmo com
@@ -123,9 +121,6 @@ class ContinuacaoDaRestauracao(QObject):
         self._pedindo_pasta = False
         self.alterado.emit()
         self.continuar()
-
-    # endregion
-    # region Os jogos sem atalho
 
     def _ler_pendentes(self) -> list[dict[str, str]]:
         return [
@@ -182,9 +177,6 @@ class ContinuacaoDaRestauracao(QObject):
             restauracao.excluir(jogo)
         self.mostrarPendentes()
 
-    # endregion
-    # region A escolha do atalho
-
     @Slot(str)
     def escolherAtalho(self, jogo_id: str) -> None:  # noqa: N802
         jogo = shared.store.get(jogo_id)
@@ -239,7 +231,7 @@ class ContinuacaoDaRestauracao(QObject):
                     _("Já existe um atalho com este nome na pasta de atalhos."), "", [], lambda: None
                 )
             return
-        # Outra falha de cópia (OSError) sobe, como na `main`: o Qt a entrega ao `sys.excepthook`, que loga e abre o erro inesperado (D89).
+        # Outra falha de cópia (OSError) sobe: o Qt a entrega ao `sys.excepthook`, que loga e abre o erro inesperado.
         self._usar(caminho)
 
     def _usar(self, caminho: Path) -> None:
@@ -278,7 +270,7 @@ class ContinuacaoDaRestauracao(QObject):
         self._aplicativo.importar(ao_terminar=self._depois_da_importacao, varrer_atalhos=True, silenciosa=True)
 
     def _depois_da_importacao(self) -> None:
-        """Fim da importação de uma escolha: relê a lista e só a reabre se ainda estava aberta (como a `main`)."""
+        """Fim da importação de uma escolha: relê a lista e só a reabre se ainda estava aberta."""
         if self._pendentes_abertos:
             self.mostrarPendentes()
             return
@@ -287,9 +279,6 @@ class ContinuacaoDaRestauracao(QObject):
         self.alterado.emit()
         if not self._pendentes:
             self._aplicativo.avisos.adicionar(_("Restauração concluída"))
-
-    # endregion
-    # region O conflito de dados
 
     @Slot()
     def cancelarConflito(self) -> None:  # noqa: N802
@@ -309,4 +298,3 @@ class ContinuacaoDaRestauracao(QObject):
             return
         self._concluir(jogo, caminho, shared.store.get(novo_id), decisao)
 
-    # endregion

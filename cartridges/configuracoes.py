@@ -5,7 +5,7 @@
 r"""Preferências do app no registro do Windows, com a API do `Gio.Settings` que o código usa.
 
 Tipos e padrões vêm do gschema (`data/*.gschema.xml.in`), lido uma vez. Os valores moram em
-`HKCU\<subchave>` com os mesmos tipos que a versão GTK grava (`b`/`i`/`u` em REG_DWORD,
+`HKCU\<subchave>` com os mesmos tipos da versão anterior (GTK) (`b`/`i`/`u` em REG_DWORD,
 `x` em REG_QWORD, `s` em REG_SZ), então as preferências existentes continuam valendo.
 """
 
@@ -80,8 +80,7 @@ class Configuracoes:
         return definicao[:2]
 
     def aceita(self, chave: str, valor: object) -> bool:
-        """Se ``valor`` serve à chave: o tipo, o `<range>` e as `<choices>` do gschema. Chave
-        desconhecida é ``False``. O que passa aqui `__setitem__` grava sem levantar."""
+        """Se ``valor`` serve à chave: o tipo, o `<range>` e as `<choices>`. Chave desconhecida é ``False``."""
         if chave not in self._chaves:
             return False
         tipo, _, faixa, escolhas = self._chaves[chave]

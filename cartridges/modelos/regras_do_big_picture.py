@@ -2,11 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Big Picture: as regras puras (quais jogos entram, quando abre sozinho, carrossel, fundo, tique).
-
-Valores e comportamento da `main` (`big_picture.py`); aqui sem GTK. Spec:
-docs/superpowers/specs/2026-10-19-big-picture-design.md
-"""
+"""Big Picture: as regras puras (quais jogos entram, quando abre sozinho, carrossel, fundo, tique)."""
 
 from __future__ import annotations
 

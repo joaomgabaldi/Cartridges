@@ -17,15 +17,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Refresh the metadata of games already in the library.
+"""Atualiza os metadados dos jogos já na biblioteca.
 
-Deliberately *not* owned by the preferences screen. A whole-library refresh
-runs for minutes, and the screen is a transient the user is free to close in
-the meantime — if it owned the queue, closing it would either abandon work
-halfway through or leave it running with no way to see or stop it. So the run
-lives here, for the lifetime of the process, and the screen is only a view onto
-it (``AtualizacoesDaBiblioteca``): it reads the counters when it opens and
-follows the ``progress`` signal while it stays open.
+Não pertence à tela de Preferências: atualizar a biblioteca inteira leva minutos e a tela pode ser fechada. A execução
+vive aqui, durante o processo, e a tela só a mostra (``AtualizacoesDaBiblioteca``): lê os contadores ao abrir e
+acompanha o sinal ``progress``.
 """
 
 import logging
@@ -45,7 +41,7 @@ from cartridges.utils.thread_principal import na_thread_principal
 
 
 class MetadataRefresh(QObject):
-    """A whole-library metadata refresh, running or idle."""
+    """A atualização de metadados da biblioteca inteira, em curso ou parada."""
 
     # Emitido quando um jogo termina, e quando a atualização começa ou termina.
     progress = Signal()
@@ -68,30 +64,21 @@ class MetadataRefresh(QObject):
 
     @staticmethod
     def needs_steam(game: Jogo) -> bool:
-        """Whether the Steam lookup has anything left to give this game.
+        """A busca na Steam ainda tem algo a dar a este jogo?
 
-        Judged on two things, because neither works alone.
+        Julgado por dois critérios. Os campos sempre produzidos (desenvolvedora, data de lançamento, gênero) vêm em
+        toda busca bem-sucedida: faltar um deles é que o jogo nunca teve. Os demais não servem assim: gamepad e
+        suporte a controle vazios são respostas, não lacunas, e tratá-los como trabalho recolocaria a biblioteca
+        inteira na fila a cada execução.
 
-        The *always-produced* fields — developer, release date, genre — come
-        back from every successful lookup, so one of them missing means the
-        game never had one. The rest cannot be read this way: fresh from the
-        API, 29 of 30 games carry no gamepad recommendation and 5 no controller
-        support, and those are answers, not gaps. Treating an empty field as
-        work to do would put the whole library back in the queue on every run.
-
-        `steam_checked` covers what emptiness cannot: a game looked up before a
-        field existed is stamped with an older version, so it comes back
-        exactly once for the fields it never had the chance to receive.
+        `steam_checked` cobre o que o vazio não diz: um jogo buscado antes de um campo existir tem uma versão antiga e
+        volta uma única vez.
         """
         if not game.steam_appid:
             return True
-        # Coerced rather than compared directly. The value is read straight out
-        # of the game's JSON, and a hand-edited record can hold `null` or a
-        # string there — `None < 2` raises TypeError, and this runs inside a
-        # comprehension over the whole library on the main thread, so one bad
-        # record stopped the scope dialog from opening at all. Anything that is
-        # not a usable number reads as "never checked", which is the safe
-        # answer: the game is looked up again.
+        # Convertido, não comparado direto: o valor vem do JSON do jogo, e um registro editado à mão pode ter `null` ou
+        # texto ali; `None < 2` levantaria TypeError numa compreensão sobre a biblioteca inteira na thread principal. O
+        # que não é número lê-se como "nunca verificado".
         try:
             checked = int(game.steam_checked)
         except (TypeError, ValueError):
@@ -102,10 +89,8 @@ class MetadataRefresh(QObject):
 
     @staticmethod
     def needs_hltb(game: Jogo) -> bool:
-        """Whether HowLongToBeat has anything left to give this game.
-
-        The same rule the manager applies to itself, so asking here can never
-        queue a game the lookup would then decline to work on.
+        """O HowLongToBeat ainda tem algo a dar a este jogo? A mesma regra do manager, para nunca enfileirar um jogo
+        que a busca recusaria.
         """
         return not game.has_hltb_times
 
@@ -121,11 +106,8 @@ class MetadataRefresh(QObject):
 
     @staticmethod
     def _in_library(game: Jogo) -> bool:
-        """Whether the store still holds this exact game under its id.
-
-        Identity, not just the id: a game removed and re-imported while the
-        refresh was walking its queue is a different record, and writing this
-        one over it would undo the import.
+        """A store ainda guarda este exato jogo sob o id? Identidade, não só o id: um jogo removido e reimportado
+        durante a fila é outro registro, e gravar este desfaria a importação.
         """
         store = getattr(shared, "store", None)
         if store is None:
@@ -133,12 +115,9 @@ class MetadataRefresh(QObject):
         return store.get(game.game_id) is game
 
     def start(self, games: list[Jogo], only_missing: bool = False) -> bool:
-        """Begin refreshing ``games``. Returns False when there is nothing to do.
+        """Começa a atualizar ``games``; devolve False se não há nada a fazer.
 
-        With ``only_missing`` each game is asked which sources still owe it
-        something, and only those run for it. A game that has everything but
-        its completion times costs one HowLongToBeat lookup instead of the
-        three Steam requests it would otherwise sit through.
+        Com ``only_missing`` cada jogo é perguntado sobre quais fontes ainda lhe devem algo, e só essas rodam.
         """
         if self.running or not games:
             return False
@@ -159,24 +138,19 @@ class MetadataRefresh(QObject):
         self.progress.emit()
         self._tarefa = tarefas.comecar(_("Metadados"), self.total)
 
-        # The tags of every game in one or two requests instead of one each.
-        # Off the main thread because it is network work, and before anything
-        # else because the per-game lookups are what consume it.
+        # As tags de todos os jogos em uma ou duas requisições, fora da thread principal (é rede) e antes de tudo, pois
+        # as buscas por jogo as consomem.
         def prefetch() -> None:
             tags: dict[str, list[int]] = {}
             try:
-                # Only the games whose Steam lookup will actually run: asking
-                # for the tags of a game that is queued for HowLongToBeat alone
-                # would be paying for an answer nobody reads.
+                # Só dos jogos cuja busca na Steam vai rodar.
                 wanted = [
                     game
                     for game in games
                     if not self._only_missing or self.needs_steam(game)
                 ]
-                # `str`, because `steam_appid` is read from the game's own JSON
-                # and a hand-edited record can hold the number unquoted. The
-                # manager looks the tags up under `str(appid)`, so an int key
-                # here would simply never be found.
+                # `str`: `steam_appid` vem do JSON do jogo, onde um registro editado à mão pode ter o número sem aspas,
+                # e o manager busca as tags por `str(appid)`.
                 appids = [str(game.steam_appid) for game in wanted if game.steam_appid]
                 helper = shared.store.managers[SteamAPIManager].steam_api_helper
                 if appids:
@@ -184,13 +158,9 @@ class MetadataRefresh(QObject):
                         appids, should_stop=lambda: self.cancelled
                     )
             except Exception:  # pylint: disable=broad-exception-caught
-                # Nothing may escape this thread. It is the only thing that
-                # schedules `_run_queue`, so an exception getting out left
-                # `running` True with no queue behind it: the button never came
-                # back and no refresh could be started again for the life of
-                # the process. An empty mapping is the same conservative state
-                # a failed bulk request produces — the run goes ahead and
-                # leaves every genre exactly as it is.
+                # Nada pode escapar desta thread: ela é a única que agenda `_run_queue`, e uma exceção deixaria
+                # `running` True sem fila, sem o botão voltar nem nova atualização possível. Um mapa vazio é o estado
+                # conservador de uma requisição em massa que falhou.
                 logging.exception("Metadata refresh: could not prefetch Steam tags")
             na_thread_principal(self._run_queue, tags)
 
@@ -198,23 +168,17 @@ class MetadataRefresh(QObject):
         return True
 
     def cancel(self) -> None:
-        """Stop after the game currently in flight.
-
-        Only the queue is stopped; the running lookup is left to finish rather
-        than abandoned, so the game it is about keeps a consistent record.
+        """Para depois do jogo em andamento: só a fila para, e a busca em curso termina para o registro ficar
+        consistente.
         """
         if self.running:
             self.cancelled = True
 
     def managers_for(self, game: Jogo) -> list[Any]:
-        """The sources to run for ``game`` on this run.
+        """As fontes a rodar para ``game`` nesta execução.
 
-        Order is kept: the HowLongToBeat search goes second because the Steam
-        lookup is what corrects the title it searches for. Granularity is per
-        source rather than per field, because that is the granularity the API
-        has — one appdetails request answers developer, publisher, release
-        date, Metacritic, controller support and the gamepad recommendation
-        together, so there is no cheaper way to ask for just one of them.
+        A ordem é mantida: o HowLongToBeat vem depois porque a busca na Steam corrige o título que ele pesquisa. A
+        granularidade é por fonte, não por campo: uma requisição appdetails responde tudo junto.
         """
         if not self._only_missing:
             return list(self._managers)
@@ -222,28 +186,18 @@ class MetadataRefresh(QObject):
         return [manager for manager, needed in zip(self._managers, wanted) if needed]
 
     def _run_queue(self, tags: dict[str, list[int]]) -> None:
-        """Walk the queue, one game and one manager at a time.
+        """Percorre a fila, um jogo e um manager por vez.
 
-        Sequential on purpose. The Steam limiter spaces requests 1.5 s apart no
-        matter how many are in flight, so running them in parallel would buy
-        nothing while making the progress meaningless and cancelling
-        impossible. It also keeps the HowLongToBeat search behind the Steam
-        lookup, which is what corrects the title it searches for.
+        Sequencial de propósito: o limitador da Steam espaça as requisições em 1,5 s de qualquer jeito, então
+        paralelizar não ganharia nada e tornaria o progresso sem sentido e o cancelamento impossível.
         """
-        # "Fetch everything" has to mean it, including the completion times the
-        # HowLongToBeat manager otherwise refuses to look up twice. Those times
-        # do drift: they are a running average of user submissions, so a game
-        # imported near release sits on a small sample that keeps moving. The
-        # honest reason for the flag is smaller than that, though — an option
-        # that fetches everything except one thing is an option nobody
-        # remembers the shape of three months later.
+        # "Buscar tudo" tem de valer para tudo, inclusive os tempos do HowLongToBeat que o manager recusa buscar duas
+        # vezes: uma opção que busca tudo menos uma coisa ninguém lembra como funciona.
         additional_data = {
             "steam_tags": tags,
             "refresh_hltb": not self._only_missing,
-            # Lido pelo SteamAPIManager: no modo só-o-que-falta os campos
-            # editáveis à mão só preenchem o que está vazio, em vez de reverter
-            # edições do usuário — a fila escolhe os jogos, isto escolhe os
-            # campos.
+            # Lido pelo SteamAPIManager: no modo só-o-que-falta os campos editáveis à mão só preenchem o que está vazio,
+            # sem reverter edições do usuário. A fila escolhe os jogos, isto escolhe os campos.
             "only_missing": self._only_missing,
         }
 
@@ -256,28 +210,18 @@ class MetadataRefresh(QObject):
 
             def next_manager(index: int) -> None:
                 if index >= len(managers):
-                    # Only if the game is still the one the library holds under
-                    # that id. A reset wipes the store and the files on disk
-                    # while this queue is still walking its own list of Jogo
-                    # objects, and `save()` writes a record whether or not
-                    # anything still refers to it — so the games the user had
-                    # just deleted came back on disk and were loaded again on
-                    # the next launch. `cancel()` alone does not cover it: it
-                    # stops the queue but lets the game in flight finish, which
-                    # is exactly the one that would be rewritten.
-                    # `additional_data` é um só, reaproveitado por toda a fila
-                    # (não por jogo), então a marca da Tarefa Q2 precisa sair
-                    # daqui mesmo quando não há nada a ligar — senão o próximo
-                    # jogo da fila herdaria a marca de appID mudado deste.
+                    # Só se o jogo ainda é o que a biblioteca guarda sob esse id: uma redefinição apaga a store e os
+                    # arquivos enquanto a fila percorre a própria lista, e `save()` gravaria de volta os jogos que o
+                    # usuário acabou de excluir. `cancel()` não cobre: deixa o jogo em andamento terminar.
+                    # `additional_data` é um só para toda a fila, então a marca de appID mudado precisa sair daqui mesmo
+                    # sem nada a ligar, senão o próximo jogo a herdaria.
                     precisa_ligar = additional_data.pop("ligar_zerado", False)
                     if self._in_library(game):
                         game.save()
                         game.update()
                         if precisa_ligar:
-                            # Sem o SGDB nesta fila (só Steam e HowLongToBeat),
-                            # a corrida de capa que a ligação evita no import
-                            # não existe aqui — pode ligar assim que este jogo
-                            # termina, sem esperar o resto da fila.
+                            # Sem o SGDB nesta fila, a corrida de capa que a ligação evita no import não existe: pode
+                            # ligar assim que este jogo termina.
                             from cartridges.utils import ligacao_zerado  # noqa: PLC0415
 
                             ligacao_zerado.agendar(game)
@@ -296,8 +240,7 @@ class MetadataRefresh(QObject):
         next_game()
 
     def _finish(self) -> None:
-        # O diálogo de erro amigável saiu daqui (B17); só o log fica, para não
-        # perder o rastro de uma falha silenciosa durante um refresh longo.
+        # Só o log fica: não perder o rastro de uma falha silenciosa num refresh longo.
         for manager in self._managers:
             for error in manager.collect_errors():
                 if isinstance(error, FriendlyError):
@@ -315,10 +258,8 @@ class MetadataRefresh(QObject):
 
     @staticmethod
     def _announce(done: int, total: int, cancelled: bool) -> None:
-        """Say how it went, on the main window rather than the dialog.
-
-        By the time a long run ends the preferences are usually closed, and a
-        toast into a closed dialog is a toast nobody sees.
+        """Avisa como foi, na janela principal e não no diálogo: ao fim de uma execução longa as Preferências costumam
+        estar fechadas.
         """
         if cancelled:
             # As variáveis são quantos jogos foram atualizados e quantos havia
@@ -337,10 +278,8 @@ _refresh: Optional[MetadataRefresh] = None  # pylint: disable=invalid-name
 
 
 def get_metadata_refresh() -> MetadataRefresh:
-    """Return the shared refresh.
-
-    One per process: it is the run itself, so a second instance would mean a
-    second queue racing the first over the same games and the same rate limit.
+    """Devolve a atualização compartilhada. Uma por processo: uma segunda instância seria uma segunda fila disputando
+    os mesmos jogos e o mesmo limite de requisições.
     """
     global _refresh  # pylint: disable=global-statement
     if _refresh is None:

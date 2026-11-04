@@ -28,13 +28,13 @@ from cartridges.utils.cortina_monitor import CortinaMonitor
 
 _SO_CAPA = {ModeloDaBiblioteca.Papel.Capa, ModeloDaBiblioteca.Papel.CapaAnimada}
 
-# Fade do monitor (valores da `main`): escurece em 300 ms (entrada) ou 250 ms (saída), troca no
-# escuro, espera 120 ms e clareia em 350 ms, InOutCubic.
+# Fade do monitor: escurece em 300 ms (entrada) ou 250 ms (saída), troca no escuro, espera 120 ms e clareia em 350 ms,
+# InOutCubic.
 ESCURECER_ENTRADA_MS = 300
 ESCURECER_SAIDA_MS = 250
 PAUSA_NO_ESCURO_MS = 120
 CLAREAR_MS = 350
-# P1: no escuro, a troca espera as capas da fila decodificadas, mas não mais que isto.
+# No escuro, a troca espera as capas da fila decodificadas, mas não mais que isto.
 ESPERA_MAXIMA_DAS_CAPAS_MS = 700
 
 
@@ -77,7 +77,7 @@ def _dados(linha: Linha) -> dict[str, str]:
 class BigPicture(QObject):
     """A lista do Big Picture e o jogo central. Só na thread principal."""
 
-    alterado = Signal()  # índice, rótulos, vazia, ocupada
+    alterado = Signal()
     jogosMudaram = Signal()  # noqa: N815  # só a lista (um passo do carrossel não a notifica)
     animarCentralMudou = Signal()  # noqa: N815
     filaPedida = Signal(bool)  # noqa: N815  # True: a fila de entrada; False: a de saída (o QML a anima)
@@ -95,11 +95,11 @@ class BigPicture(QObject):
         fabrica_da_cortina: Callable[[int], CortinaMonitor | None] = CortinaMonitor,
     ) -> None:
         super().__init__(parent)
-        # Fade do monitor (ADR 0003): a cortina, a animação do alfa, a etapa e a troca em curso.
+        # Fade do monitor: a cortina, a animação do alfa, a etapa e a troca em curso.
         self._fabrica_da_cortina = fabrica_da_cortina
         self._cortina: CortinaMonitor | None = None
         self._animacao_cortina: QVariantAnimation | None = None
-        self._etapa = ""  # "escurecendo", "esperando capas", "trocando", "pausa", "clareando"
+        self._etapa = ""
         self._trocar: Callable[[], None] | None = None
         self._depois: Callable[[], None] | None = None
         self._em_fade = False
@@ -109,7 +109,8 @@ class BigPicture(QObject):
         self._pausa.timeout.connect(self._clarear)
         self._espera_das_capas = QTimer(self, singleShot=True, interval=ESPERA_MAXIMA_DAS_CAPAS_MS)
         self._espera_das_capas.timeout.connect(self._trocar_agora)
-        # As animações do Windows: lidas pelo `Aplicativo` e relidas a cada `WM_SETTINGCHANGE` (D88, `definir_animacoes_do_sistema`).
+        # As animações do Windows: lidas pelo `Aplicativo` e relidas a cada `WM_SETTINGCHANGE`
+        # (`definir_animacoes_do_sistema`).
         self._animacoes_do_sistema = animacoes_do_sistema
         self._animar_central = self._ler_animar_central()
         eu = weakref.ref(self)
@@ -118,7 +119,7 @@ class BigPicture(QObject):
         self._carrossel = regras.Carrossel([])
         self._jogos: list[dict[str, str]] = []
         self._agendado = False
-        self._ocupada = False  # a fila de entrada e saída
+        self._ocupada = False
         self._visivel = False
         self._montada = False  # a lista existe: da entrada (antes de escurecer) ao fim da saída
         self._saindo = False
@@ -128,15 +129,14 @@ class BigPicture(QObject):
         self._estava_maximizada = False
         self._pendente = False
         self._centro_pendente = ""
-        self._jogo_aberto = ""  # o jogo que a abertura em curso inicia
-        self._indo = False  # a animação de ida (a volta não lança nada)
+        self._jogo_aberto = ""
+        self._indo = False
         self._esperando_ativacao = False
         modelo.rowsInserted.connect(self._agendar)
         modelo.rowsRemoved.connect(self._agendar)
         modelo.modelReset.connect(self._agendar)
         modelo.dataChanged.connect(self._dados_mudaram)
 
-    # --- propriedades ---
     @Property("QVariantList", notify=jogosMudaram)
     def jogos(self) -> list[dict[str, str]]:
         return self._jogos
@@ -192,14 +192,14 @@ class BigPicture(QObject):
         return self._ja_saiu
 
     def definir_animacoes_do_sistema(self, ligadas: bool) -> None:
-        """O ajuste do Windows mudou com o app aberto (D88): a fila e o passo seguem."""
+        """O ajuste do Windows mudou com o app aberto: a fila e o passo seguem."""
         if ligadas == self._animacoes_do_sistema:
             return
         self._animacoes_do_sistema = ligadas
-        self.alterado.emit()  # a capa central não muda com isto: só a preferência manda nela (BP-15)
+        self.alterado.emit()  # a capa central não muda com isto: só a preferência manda nela
 
     def _ler_animar_central(self) -> bool:
-        # Só a preferência (`big_picture.py:288` da `main`); as animações do sistema valem para a grade.
+        # Só a preferência; as animações do sistema valem para a grade.
         return shared.schema.get_boolean("cover-autoplay")
 
     def _religar_animar_central(self) -> None:
@@ -213,7 +213,6 @@ class BigPicture(QObject):
         """A capa animada do jogo central toca: `cover-autoplay` ligado."""
         return self._animar_central
 
-    # --- a lista segue o modelo ---
     def _refazer(self, centro: str = "") -> None:
         linhas = regras.jogos_da_biblioteca(self._modelo.linhas())
         self._carrossel.trocar_lista([linha.jogo_id for linha in linhas], centro or None)
@@ -250,8 +249,8 @@ class BigPicture(QObject):
         if not papeis or not set(papeis) <= _SO_CAPA:
             self._agendar()
             return
-        # O `soltar_copia` manda o `DeferredDelete` logo depois do sinal: a capa animada precisa
-        # sair daqui já (D39), sem esperar o ciclo.
+        # O `soltar_copia` manda o `DeferredDelete` logo depois do sinal: a capa animada precisa sair daqui já, sem
+        # esperar o ciclo.
         por_id = {jogo["jogoId"]: jogo for jogo in self._jogos}
         for i in range(topo.row(), base.row() + 1):
             linha = self._modelo.linha(i)
@@ -259,7 +258,6 @@ class BigPicture(QObject):
                 jogo.update(capa=linha.capa, capaAnimada=linha.capa_animada)
         self.jogosMudaram.emit()
 
-    # --- navegação ---
     def _foi_para(self, mudou: bool) -> bool:  # noqa: FBT001
         if mudou:
             regras.tocar_tique()
@@ -282,7 +280,6 @@ class BigPicture(QObject):
     def fim(self) -> bool:
         return not self._ocupada and self._foi_para(self._carrossel.fim())
 
-    # --- entrar e sair ---
     def definir_janela(self, janela: QWindow) -> None:
         """A janela que vai à tela cheia; o Big Picture só fica disponível com renderizador 3D."""
         self._janela = janela
@@ -294,27 +291,26 @@ class BigPicture(QObject):
     @Slot()
     def _rever_3d(self) -> None:
         janela = self._janela
-        if janela is None or janela.rendererInterface() is None:  # ainda sem renderizador: segue disponível
+        if janela is None or janela.rendererInterface() is None:
             return
         disponivel = tem_3d(janela)
         if disponivel != self._disponivel:
             self._disponivel = disponivel
             self.alterado.emit()
 
-
     @Slot()
     def entrar(self) -> None:
         if self._visivel or self._ocupada or not self._disponivel:
             return
-        self._carrossel = regras.Carrossel([])  # sem centro a manter
+        self._carrossel = regras.Carrossel([])
         self._montada = True
-        self._refazer()  # o jogado mais recentemente no centro
+        self._refazer()
         self._pendente = False
         self._ocupada = self._em_fade = True
         self._capas_prontas = not self._jogos
         self.alterado.emit()
         if self._jogos:
-            self.prepararCapas.emit()  # antes de escurecer: o QML decodifica enquanto a cortina desce (P1)
+            self.prepararCapas.emit()  # antes de escurecer: o QML decodifica enquanto a cortina desce
         self._trocar_no_escuro(self._entrar_de_fato, ESCURECER_ENTRADA_MS, self._fim_da_entrada)
 
     def _entrar_de_fato(self) -> None:
@@ -347,7 +343,7 @@ class BigPicture(QObject):
         if self._ocupada or not self._visivel:
             return
         self._saindo = self._ocupada = True
-        self._capas_prontas = True  # a saída não espera capas
+        self._capas_prontas = True
         self._na_fila = bool(self._jogos)
         self.alterado.emit()
         if self._na_fila:
@@ -378,7 +374,7 @@ class BigPicture(QObject):
             # Mesmo com a troca falhando a camada some: o QML repõe o quadro ao esconder.
             self._visivel = self._montada = False
             self._ja_saiu = True
-            self._carrossel, self._jogos = regras.Carrossel([]), []  # fora da tela nada decodifica capa (D39)
+            self._carrossel, self._jogos = regras.Carrossel([]), []  # fora da tela nada decodifica capa
             self.jogosMudaram.emit()
             self.alterado.emit()
             self.saiu.emit(jogo)  # o foco volta à grade mesmo se a troca levantou
@@ -387,7 +383,6 @@ class BigPicture(QObject):
         self._saindo = self._ocupada = self._pendente = False
         self.alterado.emit()
 
-    # --- entrada automática ---
     @Slot(bool)
     def controleConectado(self, grade_a_vista: bool) -> None:  # noqa: FBT001, N802
         """Um controle foi conectado: entra sozinho se a preferência e o momento permitirem."""
@@ -400,7 +395,6 @@ class BigPicture(QObject):
         ):
             self.entrar()
 
-    # --- abrir o jogo ---
     @Slot()
     def abrirJogo(self) -> None:  # noqa: N802
         if (central := self._central()) is not None:
@@ -415,7 +409,7 @@ class BigPicture(QObject):
         self.aberturaPedida.emit(0.0, 1.0)
 
     def _janela_normal(self) -> None:
-        # Só sai da tela cheia (`unfullscreen()` da `main`): a maximização volta na saída do Big Picture.
+        # Só sai da tela cheia: a maximização volta na saída do Big Picture.
         if self._janela is not None:
             self._janela.showNormal()
 
@@ -431,7 +425,7 @@ class BigPicture(QObject):
     def aberturaTerminou(self) -> None:  # noqa: N802
         """O QML avisa que a capa terminou de crescer: sai da tela cheia e inicia o jogo."""
         if not self._indo:
-            return  # o fim da volta
+            return
         self._indo = False
         self._janela_normal()
         jogo = shared.store.get(self._jogo_aberto) if shared.store is not None else None
@@ -456,7 +450,7 @@ class BigPicture(QObject):
         self._destravar()
 
     def _reabrir(self) -> None:
-        self._pendente, self._centro_pendente = True, self._jogo_aberto  # o jogado agora vai ao centro
+        self._pendente, self._centro_pendente = True, self._jogo_aberto
         self.aberturaPedida.emit(1.0, 0.0)
         self._destravar()
         self.focoPedido.emit()  # o bloqueio do jogo levou o foco; sem ele o teclado não chega aqui
@@ -490,7 +484,6 @@ class BigPicture(QObject):
         if self._visivel:
             self._voltar_a_tela_cheia()
 
-    # --- fade do monitor (ADR 0003) ---
     def _hwnd(self) -> int:
         return int(self._janela.winId()) if self._janela is not None else 0
 
@@ -501,7 +494,7 @@ class BigPicture(QObject):
 
         Na entrada, a troca no escuro espera `capasProntas` (ou `ESPERA_MAXIMA_DAS_CAPAS_MS`).
         """
-        self._fechar_cortina()  # nunca deixa uma cortina anterior órfã
+        self._fechar_cortina()
         cortina = None
         hwnd = self._hwnd()
         if hwnd:
@@ -521,7 +514,7 @@ class BigPicture(QObject):
 
     def _animar_cortina(self, de: float, para: float, ms: int, etapa: str) -> None:
         self._etapa = etapa
-        if not self._animacoes_do_sistema:  # direto ao fim, como a `Adw.TimedAnimation`
+        if not self._animacoes_do_sistema:
             self._alfa_cortina(para)
             self._animacao_terminou()
             return
@@ -569,7 +562,7 @@ class BigPicture(QObject):
             if trocar is not None:
                 trocar()
         except BaseException:
-            # A cortina preta não pode ficar no monitor nem a página travada (Review Focus 1).
+            # A cortina preta não pode ficar no monitor nem a página travada.
             depois = self._depois
             self._fechar_cortina()
             if depois is not None:

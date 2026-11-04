@@ -28,10 +28,9 @@ from cartridges.configuracoes import Configuracoes
 APP_ID = "io.github.joaomgabaldi.Cartridges"
 VERSION = "2.0.0"
 PREFIX = "/io/github/joaomgabaldi/Cartridges"
-# The version of the game_id.json spec. Deliberately NOT bumped for the
-# HowLongToBeat fields: they are nullable additions that an older Cartridges
-# ignores harmlessly, whereas a bump makes `Store.add_game` reject every file
-# as "from a newer version" and hide the user's whole library on a downgrade.
+# Versão do spec do game_id.json. Deliberadamente NÃO incrementada para os campos do HowLongToBeat: são adições
+# anuláveis que uma versão antiga ignora, e um incremento faria `Store.add_game` rejeitar todo arquivo como "de uma
+# versão mais nova" e esconder a biblioteca inteira num downgrade.
 SPEC_VERSION = 1.6
 
 _INSTALACAO = Path(__file__).resolve().parent / "instalacao.json"
@@ -68,7 +67,6 @@ home = Path.home()
 # `CARTRIDGES_DADOS` e `CARTRIDGES_REGISTRO` (os testes) valem em qualquer canal.
 data_dir = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
 
-# Name of the app's own folder inside the data/config dirs.
 APP_DIR_NAME = APP_ID + _sufixo
 
 app_dir = (
@@ -77,32 +75,24 @@ app_dir = (
     else data_dir / APP_DIR_NAME
 )
 
-# Subchave sob HKCU onde ficam as preferências.
 chave_do_registro = os.environ.get("CARTRIDGES_REGISTRO") or (
     r"Software\GSettings\io\github\joaomgabaldi\Cartridges" + _sufixo
 )
 
-# Preferências no registro; só leem ao pedir um valor, nada é tocado na importação.
 schema = Configuracoes(chave_do_registro, "@APP_ID@")
 state_schema = Configuracoes(chave_do_registro + r"\State", "@APP_ID@.State")
 
 games_dir = app_dir / "games"
 covers_dir = app_dir / "covers"
-# Official horizontal logos used as the details page header. Kept apart from
-# the covers: a cover is user-facing data (it can be picked by hand, exported,
-# and must survive), a logo is a purely decorative asset we can always fetch
-# again, so deleting this folder costs nothing but a re-download.
+# Logos horizontais oficiais do cabeçalho dos detalhes. Separados das capas: o logo é decorativo e sempre pode ser
+# baixado de novo, então apagar a pasta só custa um download.
 logos_dir = app_dir / "logos"
-# A arte que veste os monitores além do principal durante a sessão: a imagem de
-# partida (uma por jogo) mais o sidecar que diz se ela foi escolhida à mão e em
-# que faixa cortá-la para cada orientação de monitor. Apagar a pasta devolve
-# todo mundo à escolha automática.
+# A arte dos monitores além do principal durante a sessão: a imagem de partida (uma por jogo) e o sidecar que diz se foi
+# escolhida à mão e em que faixa cortá-la por orientação. Apagar a pasta devolve tudo à escolha automática.
 wallpapers_dir = app_dir / "wallpapers"
 
-# As fitas de LED que acompanham a sessão: um sidecar por jogo com a cor e o
-# brilho escolhidos, e ao lado o arquivo com as fitas configuradas. O arquivo
-# carrega as chaves locais dos módulos, que é o que permite falar com eles sem
-# passar pela nuvem — por isso ele não mora no GSettings.
+# As fitas de LED da sessão: um sidecar por jogo com cor e brilho, e o arquivo das fitas configuradas, que carrega as
+# chaves locais dos módulos (por isso não mora no GSettings).
 fitas_dir = app_dir / "fitas"
 fitas_arquivo = app_dir / "fitas.json"
 
@@ -110,7 +100,6 @@ fitas_arquivo = app_dir / "fitas.json"
 # (`conquistas/historico.py`). Entra no backup.
 conquistas_dir = app_dir / "conquistas"
 
-# Catálogos e ícones das conquistas: refeitos da rede, fora do backup.
 conquistas_cache_dir = app_dir / "cache" / "conquistas"
 
 # Cópias reduzidas das capas animadas, uma por tamanho de exibição
@@ -123,25 +112,17 @@ capas_animadas_dir = app_dir / "cache" / "capas_animadas"
 # então fica fora do backup (`utils/backup.py`).
 contas_dir = app_dir / "contas"
 
-# A conta de nuvem da Tuya que o assistente das fitas usa para buscar
-# dispositivos. Fica criptografada com o DPAPI do Windows (ver
-# `utils/tuya_conta.py`), amarrada à conta do Windows de quem roda o app. Vai no
-# backup com o resto da pasta, mas só decifra de volta no mesmo PC e na mesma
-# conta; em outro, o assistente pede os códigos de novo.
+# Conta de nuvem da Tuya do assistente das fitas, criptografada com o DPAPI (ver `utils/tuya_conta.py`). Vai no backup,
+# mas só decifra no mesmo PC e na mesma conta do Windows; em outro, o assistente pede os códigos de novo.
 tuya_conta_arquivo = app_dir / "tuya_conta.json"
 
-# Deliberately NOT `GLib.get_user_cache_dir()`. On Windows that resolves to
-# CSIDL_INTERNET_CACHE — `AppData\Local\Microsoft\Windows\INetCache`, the
-# browser's temporary files folder, which Disk Cleanup and Storage Sense empty
-# by default. The session logs used to be written there, and the log of the run
-# that went wrong is exactly what a cleanup sweep takes away between the crash
-# and somebody looking for it. `AppData\Local\<app>` is the conventional
-# Windows location, and it keeps everything the app writes under one root.
+# Deliberadamente NÃO `GLib.get_user_cache_dir()`: no Windows resolve para CSIDL_INTERNET_CACHE
+# (`AppData\Local\Microsoft\Windows\INetCache`), pasta que a Limpeza de Disco e o Sensor de Armazenamento esvaziam,
+# levando o log da execução que deu errado. `AppData\Local\<app>` é o local convencional e mantém tudo sob uma raiz.
 log_dir = app_dir / "logs"
 
-# Stored cover masters are always kept at high resolution (600x900, the native
-# SteamGridDB/Steam size) so covers stay crisp. The on-screen render size is
-# derived from the monitor scale to keep memory and drawing cost reasonable.
+# Os mestres das capas guardadas ficam sempre em alta resolução (600x900, o tamanho nativo do SteamGridDB/Steam); o
+# tamanho de exibição deriva da escala do monitor.
 image_size = (600, 900)
 
 # Padrões sempre presentes. O `app.py` refaz `scale_factor`, `display_size` e
@@ -149,24 +130,19 @@ image_size = (600, 900)
 scale_factor = 1
 display_size = (200, 300)
 
-# The details page draws its cover at 420x630, not the grid's 200x300, so a
-# texture decoded at `display_size` would be stretched to fill it. This is the
-# size the page draws and therefore the size it decodes; the cover files
-# themselves are stored at 600x900, so this is still a reduction of the file.
-# Deliberately a second number rather than a bigger `display_size`: that one is
-# paid for once per game in the library, and raising it to this would double
-# the memory and drawing cost of the whole grid to sharpen one picture. Only
-# the cover on screen right now is decoded at this size — see
-# `GameCover.add_details_picture`.
+# A página de detalhes desenha a capa em 420x630, não nos 200x300 da grade, e uma textura decodificada em `display_size`
+# ficaria esticada. Segundo número de propósito: elevar `display_size` dobraria o custo de memória e desenho da grade
+# inteira para dar nitidez a uma imagem; só a capa na tela é decodificada neste tamanho (ver
+# `GameCover.add_details_picture`).
 details_size = (420, 630)
 
 # pylint: disable=invalid-name
-sessao = None  # o ModeloDaSessao (plano 5)
-conquistas = None  # o ConquistasDoJogo (plano 6)
+sessao = None
+conquistas = None
 # O `Aplicativo` do app Qt (importando, avisos); None nos testes que não o criam.
 aplicativo = None
-preferencias = None  # o Preferencias (plano 7)
-edicao = None  # o ModeloDaEdicao (plano 8a)
+preferencias = None
+edicao = None
 importer = None
 import_time = None
 store = None

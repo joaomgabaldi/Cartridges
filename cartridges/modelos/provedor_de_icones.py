@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""`image://icone/<nome>/<cor>`: os ícones simbólicos da `main`, pintados na cor pedida, como o GTK pinta os seus."""
+"""`image://icone/<nome>/<cor>`: os ícones simbólicos do app, pintados na cor pedida."""
 
 import logging
 import re

@@ -73,7 +73,7 @@ class FilaDeAvisos(QObject):
     ) -> int:
         """Enfileira o aviso e devolve o id. `segundos=0`: só sai por `dispensar`.
 
-        Um aviso com a mesma `chave` de um que está na tela ou na fila sai, e o novo vai ao fim da fila (`game.py` da `main`).
+        Um aviso com a mesma `chave` de um que está na tela ou na fila sai, e o novo vai ao fim da fila.
         """
         if chave is not None:
             self.dispensar_chave(chave)

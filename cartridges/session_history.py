@@ -4,11 +4,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""As regras puras do histórico de sessões de um jogo (D54).
-
-Sem tela: a data por extenso, os períodos do gráfico, o corte das pausas longas, o resumo dos últimos dias e a
-geometria do gráfico (onde cada dia cai no eixo, a grade, os rótulos). O modelo (`modelos/historico.py`) as entrega
-ao QML, que só desenha.
+"""As regras puras do histórico de sessões de um jogo: data por extenso, períodos do gráfico, corte das pausas longas,
+resumo dos últimos dias e a geometria do gráfico. O modelo (`modelos/historico.py`) as entrega ao QML, que só
+desenha.
 """
 
 import math
@@ -25,9 +23,8 @@ from cartridges.utils.relative_date import MONTHS
 def format_session_date(timestamp: int) -> str:
     """"12 de agosto de 2026" — a data por extenso, em pt-BR.
 
-    Datas absolutas, e não "Hoje"/"Ontem" como no resto do aplicativo: aqui a
-    lista existe para ser lida de cima a baixo, e uma coluna que mistura
-    "Terça-feira" com "3 de maio" não deixa comparar duas linhas de relance.
+    Datas absolutas, e não "Hoje"/"Ontem" como no resto do aplicativo: a lista existe para ser lida de cima a baixo, e
+    misturar "Terça-feira" com "3 de maio" não deixa comparar linhas.
     """
     date = datetime.fromtimestamp(timestamp)
     return f"{date.day} de {MONTHS[date.month - 1].lower()} de {date.year}"
@@ -43,12 +40,8 @@ def period_range(
 ) -> tuple[date, date]:
     """O primeiro e o último dia que o gráfico mostra para ``period``.
 
-    Termina no último dia com sessão, e não hoje: depois dele só há dias
-    vazios, que num jogo zerado (ou parado há meses) cresceriam para sempre e
-    empurrariam o que foi jogado para um canto. "Semana" e "Mês" são a última
-    semana e o último mês com sessões. O início nunca é anterior à primeira
-    sessão já registrada — um histórico que só começou há 2 dias não ganha 28
-    dias vazios só porque o período escolhido é "mês".
+    Termina no último dia com sessão, não hoje: depois dele só há dias vazios, que empurrariam o jogado para um canto.
+    "Semana" e "Mês" são a última semana e o último mês com sessões. O início nunca é anterior à primeira sessão.
     """
     first = min(
         (max(0, entry["end"] - entry["seconds"]) for entry in sessions),
@@ -85,9 +78,8 @@ def sem_lacunas_longas(
 ) -> tuple[list[tuple[date, int]], frozenset[int]]:
     """``days`` sem o miolo das pausas longas, e onde ficaram as quebras.
 
-    De cada sequência de mais de ``LACUNA_MAXIMA`` dias vazios entre dois dias
-    jogados ficam só o primeiro e o último, para a linha ainda descer a zero
-    dos dois lados; a quebra ``i`` fica entre ``dias[i]`` e ``dias[i + 1]``.
+    De cada sequência de mais de ``LACUNA_MAXIMA`` dias vazios ficam só o primeiro e o último, para a linha descer a
+    zero dos dois lados; a quebra ``i`` fica entre ``dias[i]`` e ``dias[i + 1]``.
     """
     dias: list[tuple[date, int]] = []
     quebras: set[int] = set()
@@ -127,11 +119,7 @@ PAGINA = 100
 
 
 def resumo_dos_ultimos_dias(sessions: list[dict[str, Any]], today: date) -> tuple[int, int]:
-    """Segundos jogados nos últimos 7 e 30 dias de calendário, hoje incluído.
-
-    A mesma conta do gráfico (``session_log.daily_seconds``), mas até hoje: o
-    gráfico termina no último dia jogado e mostra o ritmo das sessões; o resumo
-    diz quanto se jogou nos últimos dias de calendário, mesmo que seja nada.
+    """Segundos jogados nos últimos 7 e 30 dias de calendário, hoje incluído (o gráfico termina no último dia jogado).
     """
 
     def soma(dias: int) -> int:
@@ -177,8 +165,8 @@ def _sem_encostar(indices: list[int], posicoes: list[int], dias: list[tuple[date
 def _indices_rotulados(dias: list[tuple[date, int]], quebras: frozenset[int], posicoes: list[int]) -> list[int]:
     """Os dias que ganham rótulo no eixo X, no máximo uns 6.
 
-    Por mês, só os dias 1º: um rótulo "jul 26" posto num dia qualquer aparecia duas vezes seguidas quando o passo
-    caía dentro do mesmo mês. Por dia, sempre o primeiro e o último, e nenhum colado no último a ponto de encostar.
+    Por mês, só os dias 1º (senão "jul 26" apareceria duas vezes seguidas). Por dia, sempre o primeiro e o último, e
+    nenhum colado no último.
     """
     if _por_mes(dias):
         # O dia 1º pode ter caído no miolo de uma pausa cortada: aí o mês é rotulado no primeiro dia dele que sobrou
@@ -244,17 +232,15 @@ def geometria_do_grafico(dias: list[tuple[date, int]], quebras: frozenset[int]) 
 
 
 def dia_mais_perto(posicoes: list[int], fracao: float) -> int:
-    """O índice do dia mais perto de ``fracao`` (0 = a borda esquerda do gráfico, 1 = a direita): o inverso do eixo X.
+    """O índice do dia mais perto de ``fracao`` (0 = borda esquerda do gráfico, 1 = direita): o inverso do eixo X.
 
-    Busca binária nas posições, sem varrer os dias a cada movimento do mouse (em anos de histórico são milhares).
-    Fora do gráfico vale o dia da ponta.
+    Busca binária nas posições (em anos de histórico são milhares de dias). Fora do gráfico vale o dia da ponta.
     """
     ultimo = len(posicoes) - 1
     if ultimo <= 0:
         return 0
     posicao = fracao * posicoes[-1]
     depois = min(max(bisect_left(posicoes, posicao), 1), ultimo)
-    # O mais perto dos dois vizinhos.
     antes = depois - 1
     meio = (posicoes[antes] + posicoes[depois]) / 2
     return antes if posicao < meio else depois

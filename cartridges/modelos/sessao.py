@@ -2,11 +2,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O `ModeloDaSessao`: o que o `shared.win` fazia pelos rastreadores da sessão (D48).
+"""O `ModeloDaSessao`: a camada da sessão e a janela principal.
 
-`ProcessSession` e `SessionWindow` chamam aqui (`shared.sessao`) para mostrar e esconder a camada
-da sessão, avisar o fim e trazer a janela de volta. O QML só lê as propriedades e chama os slots.
-Tudo na thread principal.
+`ProcessSession` e `SessionWindow` chamam aqui (`shared.sessao`) para mostrar e esconder a camada da sessão, avisar o
+fim e trazer a janela de volta. O QML só lê as propriedades e chama os slots. Tudo na thread principal.
 """
 
 import ctypes
@@ -93,7 +92,7 @@ class ModeloDaSessao(QObject):
         self._logo = ""
         self._largura_do_logo = 0
         self._anotacao = ""
-        # O relógio só existe onde se vê: com a janela levada ao monitor da sessão (D49/Task 4).
+        # O relógio só existe onde se vê: com a janela levada ao monitor da sessão.
         self._relogio_visivel = False
         self._tique = QTimer(self)
         self._tique.setInterval(1000)
@@ -105,8 +104,6 @@ class ModeloDaSessao(QObject):
 
     def definir_janela(self, janela: QWindow) -> None:
         self._janela = janela
-
-    # -- O que o QML lê -------------------------------------------------------------------------------
 
     @Property(bool, notify=alterado)
     def emAndamento(self) -> bool:
@@ -147,8 +144,6 @@ class ModeloDaSessao(QObject):
     @Property(str, notify=alterado)
     def tituloDaJanela(self) -> str:
         return _("Jogando {}").format(self.nome)
-
-    # -- O contrato dos rastreadores ------------------------------------------------------------------
 
     def show_session_blocker(self, game: Any) -> None:
         # A mesma sessão trocando de rastreador (o `fall_back` de `ProcessSession` passando a vez à
@@ -307,11 +302,8 @@ class ModeloDaSessao(QObject):
         return 0
 
     def abrir_janela_manual(self, manual: SessionWindow) -> None:
-        # A Task 3 desenha a janela; aqui só se diz que ela deve existir.
         self._manual = manual
         self.alterado.emit()
-
-    # -- Slots do QML ---------------------------------------------------------------------------------
 
     @Slot()
     def terminar(self) -> None:
@@ -323,7 +315,9 @@ class ModeloDaSessao(QObject):
 
     @Slot(str)
     def gravarAnotacao(self, texto: str) -> None:  # noqa: N802
-        """A anotação do balão da camada. Grava também num jogo zerado: na `main` só uma caixa não editável deixa de gravar, e a da camada nunca é."""
+        """A anotação do balão da camada. Grava também num jogo zerado: só uma caixa não editável deixa de gravar, e a
+        da camada nunca é.
+        """
         jogo = self._anotando
         if jogo is None:
             return
@@ -342,8 +336,8 @@ class ModeloDaSessao(QObject):
         try:
             hwnd = int(janela.winId())
             esquerda, topo, direita, base = _retangulo_da_janela(hwnd)
-            # 37 px visíveis até a área de trabalho na `main` (12 + a sombra de 25); aqui o retângulo já soma 8 de moldura invisível.
-            # O retângulo e a área vêm em px físicos: a margem (lógica) é escalada pela razão de pixels da tela da janela.
+            # 37 px visíveis até a área de trabalho (12 + a sombra de 25); o retângulo já soma 8 de moldura invisível. O
+            # retângulo e a área vêm em px físicos: a margem (lógica) é escalada pela razão de pixels da tela da janela.
             margem = round(29 * janela.devicePixelRatio())
             x, y = canto_inferior_direito(_area_de_trabalho(), direita - esquerda, base - topo, margem=margem)
             _posicionar(hwnd, x, y)
@@ -352,9 +346,9 @@ class ModeloDaSessao(QObject):
 
     @Slot()
     def principalFechando(self) -> None:  # noqa: N802
-        """Fechar a principal com a janela manual ou o aviso de conquista na tela fecha o app, como na `main`.
+        """Fechar a principal com a janela manual ou o aviso de conquista na tela fecha o app.
 
-        Sem isto a manual ou o aviso (janela de topo sem dono, D59), que também são janelas, manteriam o app vivo. O
+        Sem isto a manual ou o aviso (janela de topo sem dono), que também são janelas, manteriam o app vivo. O
         `encerrar()` grava a sessão e tira o aviso, no `QEvent.Quit` (`AplicacaoQt.saindo`), antes de o Qt fechar as
         janelas.
         """
@@ -382,11 +376,11 @@ class ModeloDaSessao(QObject):
         primeira chamada faz algo.
         """
         # A janela não volta ao monitor de antes aqui: a geometria gravada ao fechar é a de antes da sessão
-        # (`window_geometry.session_geometry`, D52 e D87).
+        # (`window_geometry.session_geometry`).
         if self._encerrado:
             return
-        # Só vai num sentido: um `quit()` cancelado deixaria a sessão encerrada. O `closing` da principal nunca
-        # recusa depois do `saindo` (D78, `PainelDasTarefas.encerrando`).
+        # Só vai num sentido: um `quit()` cancelado deixaria a sessão encerrada. O `closing` da principal nunca recusa
+        # depois do `saindo` (`PainelDasTarefas.encerrando`).
         self._encerrado = True
         self._tique.stop()
         self._manual = None  # sem `alterado`: a interface já está indo embora
@@ -402,8 +396,8 @@ class ModeloDaSessao(QObject):
             processo.flush()
             if processo.started:
                 session_log.record(processo.game.game_id, processo.session_seconds)
-        # Antes de a parede e as fitas voltarem (no `devolver`), como no `hide_session_blocker`; sem a leitura final,
-        # que é só do fim normal da sessão. Nunca levanta.
+        # Antes de a parede e as fitas voltarem (no `devolver`); sem a leitura final, que é só do fim normal da sessão.
+        # Nunca levanta.
         sessao_conquistas.parar()
         conquista_aviso.fechar()  # fora da sessão (sem vigia) o aviso também sai; nunca levanta
 

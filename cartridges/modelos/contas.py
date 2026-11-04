@@ -2,16 +2,17 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""As contas das lojas (Microsoft, Epic e EA) e as janelas de login (D61).
+"""As contas das lojas (Microsoft, Epic e EA) e as janelas de login.
 
-`LoginDaLoja` é a janela de login da EA e da Epic: a página da loja abre no navegador e a pessoa cola o que ela
-copiou. As duas só diferem nos textos, no campo (uma linha × várias), no botão da página e no endereço à mostra; essa
-descrição é uma `Loja` (`conquistas/ea/janela.py`, `conquistas/epic/janela.py`). A troca vai à rede numa thread e o
-resultado volta na thread principal. Com a janela já fechada, só a conta conectada conta (a leitura dos jogos ainda
-acontece); o resto é descartado. O texto colado (traz cookies) nunca vai para o log.
+`LoginDaLoja` é a janela de login da EA e da Epic: a página da loja abre no navegador e a pessoa cola o que copiou. As
+duas só diferem nos textos, no campo, no botão da página e no endereço à mostra; essa descrição é uma `Loja`
+(`conquistas/ea/janela.py`, `conquistas/epic/janela.py`). A troca vai à rede numa thread e o resultado volta na
+principal. Com a janela já fechada, só a conta conectada conta (a leitura dos jogos ainda acontece). O texto colado
+(traz cookies) nunca vai para o log.
 
-`ContasDasLojas` é o grupo "Contas" (`GrupoDasContas.qml`): três linhas, o login pendente da Microsoft e as duas janelas.
-Quem hospeda o grupo (Preferências, assistente) o cria, e chama `fechar()` ao fechar a tela. Só na thread principal.
+`ContasDasLojas` é o grupo "Contas" (`GrupoDasContas.qml`): três linhas, o login pendente da Microsoft e as duas
+janelas. Quem hospeda o grupo (Preferências, assistente) o cria e chama `fechar()` ao fechar a tela. Só na thread
+principal.
 """
 
 import logging
@@ -100,8 +101,6 @@ class LoginDaLoja(QObject):
         self._erro = ""
         self._endereco_visivel = False
 
-    # -- o que a janela mostra -------------------------------------------------------------------
-
     titulo = Property(str, lambda self: self._loja.titulo, constant=True)
     passos = Property("QStringList", lambda self: list(self._loja.passos), constant=True)
     rotuloDoCampo = Property(str, lambda self: self._loja.rotulo_do_campo, constant=True)  # noqa: N815
@@ -144,8 +143,6 @@ class LoginDaLoja(QObject):
         for nome, valor in campos.items():
             setattr(self, f"_{nome}", valor)
         self.mudou.emit()
-
-    # -- o que a pessoa faz ----------------------------------------------------------------------
 
     @Slot()
     def abrir(self) -> None:
@@ -225,9 +222,6 @@ class LoginDaLoja(QObject):
             self._mostrar(texto="", erro=loja.texto_recusado)
         else:
             self._mostrar(erro=loja.texto_falhou)
-
-
-# -- o grupo das contas ---------------------------------------------------------------------------
 
 
 def _varrer_jogos_da_loja(filtro: Callable[[Any], bool], loja: str) -> None:
@@ -324,9 +318,9 @@ class ContasDasLojas(QObject):
         self._abrir = abrir
         self._em_thread = em_thread
         self._fechado = False
-        self._pedido: Any = None  # o login pendente da conta Microsoft
-        self._quem_pediu: object = None  # a marca do clique que o criou
-        self._logins: dict[str, LoginDaLoja] = {}  # as janelas à vista
+        self._pedido: Any = None
+        self._quem_pediu: object = None
+        self._logins: dict[str, LoginDaLoja] = {}
         self._linhas = self._montar()
         # Os ouvintes das contas são globais: com referência fraca, não seguram o grupo.
         eu = weakref.ref(self)
@@ -348,8 +342,6 @@ class ContasDasLojas(QObject):
     @Property(QObject, notify=loginsMudaram)
     def loginEa(self) -> QObject | None:  # noqa: N802
         return self._logins.get("ea")
-
-    # -- as linhas -------------------------------------------------------------------------------
 
     def _montar(self) -> dict[str, dict[str, str]]:
         if self._pedido is not None:
@@ -377,8 +369,6 @@ class ContasDasLojas(QObject):
     def _avisar(self, texto: str) -> None:
         self._avisos.adicionar(texto)
 
-    # -- a conta Microsoft -----------------------------------------------------------------------
-
     @Slot()
     def clicarMicrosoft(self) -> None:  # noqa: N802
         if self._pedido is not None:
@@ -392,7 +382,8 @@ class ContasDasLojas(QObject):
             quem = self._quem_pediu = object()
             self._pedido = xbox_login.entrar(partial(_ao_entrar_xbox, weakref.ref(self), self._avisos, quem))
         except Exception as erro:  # pylint: disable=broad-exception-caught
-            # Porta local bloqueada, limite de handles, falha ao criar a thread: o clique não levanta e a pessoa vê o aviso.
+            # Porta local bloqueada, limite de handles, falha ao criar a thread: o clique não levanta e a pessoa vê o
+            # aviso.
             logging.warning("Falha ao iniciar o login da conta Microsoft: %s", type(erro).__name__)
             self._ao_entrar(xbox_login.Resultado.FALHOU)
             return
@@ -400,8 +391,6 @@ class ContasDasLojas(QObject):
 
     def _ao_entrar(self, resultado: "xbox_login.Resultado") -> None:
         _ao_entrar_xbox(weakref.ref(self), self._avisos, self._quem_pediu, resultado)
-
-    # -- as contas Epic e EA ---------------------------------------------------------------------
 
     @Slot()
     def clicarEpic(self) -> None:  # noqa: N802
@@ -442,8 +431,6 @@ class ContasDasLojas(QObject):
             del self._logins[chave]
             self.loginsMudaram.emit()
         self._atualizar()
-
-    # -- o ciclo de vida -------------------------------------------------------------------------
 
     @Slot()
     def fechar(self) -> None:

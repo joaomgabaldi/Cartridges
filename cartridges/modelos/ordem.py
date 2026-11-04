@@ -4,9 +4,8 @@
 
 """Regras puras da biblioteca: ordem da grade, filtros, busca e opções do menu.
 
-Sem Qt: a `Linha` é a fotografia de um jogo e as funções só olham para ela. O modelo e os
-proxies (`biblioteca.py`) apenas aplicam estas regras, que repetem `sort_func`, `filter_func`
-e `rebuild_filter_menu` da janela GTK.
+Sem Qt: a `Linha` é a fotografia de um jogo e as funções só olham para ela. O modelo e os proxies (`biblioteca.py`)
+apenas aplicam estas regras.
 """
 
 import functools

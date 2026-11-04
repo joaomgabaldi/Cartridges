@@ -2,11 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A carga da biblioteca do disco (`games/*.json`) na abertura.
-
-Copiado de `main.py` da versão GTK (`sanitize_game_fields` e
-`load_games_from_disk`), sem a pré-decodificação das capas, que era do widget.
-"""
+"""A carga da biblioteca do disco (`games/*.json`) na abertura."""
 
 import json
 import logging
@@ -16,9 +12,8 @@ from typing import Any
 from cartridges import shared
 from cartridges.jogo import Jogo
 
-# O tipo de cada campo que um game_id.json persiste, fora os quatro de
-# identidade (conferidos em `carregar_jogos_do_disco`). `rating` e `status` têm
-# guarda própria na exibição; os demais eram aplicados por setattr sem checagem.
+# O tipo de cada campo que um game_id.json persiste, fora os quatro de identidade (conferidos em
+# `carregar_jogos_do_disco`).
 _NUMBER = (int, float)
 # Todo id que o app gera: `imported_12`, `shortcuts_<hash>`.
 _GAME_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
@@ -105,12 +100,8 @@ _NULLABLE_GAME_KEYS = frozenset(
 
 
 def sanitize_game_fields(data: dict, record_name: str) -> dict:
-    """Descarta campos de tipo errado num registro editado à mão.
-
-    ``"playtime": "5h"`` estourava TypeError na tela de detalhes e na
-    ordenação; ``"removed": "false"`` contava como verdadeiro e o jogo sumia;
-    ``"notes": 5`` derrubava os detalhes. Cai o campo, não o jogo — o default
-    da classe vale como "não informado". Muta e devolve ``data``.
+    """Descarta campos de tipo errado num registro editado à mão: cai o campo, não o jogo, e o default da
+    classe vale como "não informado". Muta e devolve ``data``.
     """
     for key, expected in _GAME_FIELD_TYPES.items():
         if key not in data:
@@ -129,15 +120,13 @@ def sanitize_game_fields(data: dict, record_name: str) -> dict:
 
 
 def carregar_jogos_do_disco(store: Any) -> int:
-    """Lê cada ficha de ``shared.games_dir`` e a entrega a ``store.add_game``.
-
-    Devolve quantas chegaram à store sem erro. Uma ficha ruim custa só aquele
-    jogo, nunca a abertura.
+    """Lê cada ficha de ``shared.games_dir`` e a entrega a ``store.add_game``; devolve quantas chegaram sem
+    erro. Uma ficha ruim custa só aquele jogo.
     """
     games: list[tuple[Jogo, str]] = []
     if shared.games_dir.is_dir():
         for game_file in shared.games_dir.iterdir():
-            # Skip leftovers such as .json.tmp from an interrupted save
+            # Ignora sobras como .json.tmp de uma gravação interrompida.
             if game_file.suffix != ".json":
                 continue
             try:
@@ -146,15 +135,10 @@ def carregar_jogos_do_disco(store: Any) -> int:
             except (OSError, json.decoder.JSONDecodeError) as error:
                 logging.warning("Skipping unreadable game record %s: %s", game_file.name, error)
                 continue
-            # A record missing one of the fields that has no default is not
-            # loadable: `Jogo.__init__` reads `source` to derive
-            # `base_source` and would raise here, outside the JSON guard
-            # above, so a single corrupt file stopped the app from opening
-            # at all rather than costing one game. O executável pode ser
-            # vazio só numa tumba: um zerado recriado pelo backup nunca
-            # teve instalação neste PC. O game_id vira nome de arquivo (capa,
-            # logo, exclusão): um "..\x" de um backup alheio apontava para fora
-            # da pasta do app.
+            # Um registro sem um dos campos sem default não é carregável: o `Jogo.__init__` lê `source` fora do guarda
+            # do JSON, e um arquivo corrompido derrubaria a abertura inteira. O executável pode ser vazio só num jogo
+            # zerado recriado por backup. O game_id vira nome de arquivo (capa, logo, exclusão): um "..\x" de um backup
+            # alheio apontava para fora da pasta do app.
             if (
                 not isinstance(data, dict)
                 or not all(
@@ -167,8 +151,7 @@ def carregar_jogos_do_disco(store: Any) -> int:
             ):
                 logging.warning("Skipping malformed game record %s", game_file.name)
                 continue
-            # Um arquivo por vez: o que escapar da limpeza acima custa esse
-            # jogo, e não a janela inteira, que abre depois desta carga.
+            # Um arquivo por vez: o que escapar da limpeza acima custa esse jogo, não a janela inteira.
             try:
                 games.append((Jogo(sanitize_game_fields(data, game_file.name)), game_file.name))
             except Exception:  # pylint: disable=broad-exception-caught

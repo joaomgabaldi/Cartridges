@@ -1,9 +1,8 @@
-"""A janela do aviso de conquista: um `QQuickView` sem moldura que mostra o `CartaoDoAviso.qml` (D59).
+"""A janela do aviso de conquista: um `QQuickView` sem moldura que mostra o `CartaoDoAviso.qml`.
 
-Ela nunca toma o foco (um jogo em tela cheia minimiza quando o perde), fica fora da barra de tarefas e
-do Alt+Tab e por cima do jogo. As flags do Qt pedem isso; o `janela_por_cima` garante no Win32, depois
-do `create()` e antes do `show()`: estilos estendidos, dono oculto, `HWND_TOPMOST` e o foco devolvido
-a quem o tinha. O fade é a opacidade do cartão, animada no QML, como na `main`.
+Nunca toma o foco (um jogo em tela cheia minimiza quando o perde), fica fora da barra de tarefas e do Alt+Tab e por
+cima do jogo. As flags do Qt pedem isso; o `janela_por_cima` garante no Win32, depois do `create()` e antes do
+`show()`.
 """
 
 import weakref
@@ -56,9 +55,9 @@ class JanelaDoAviso(QQuickView):
             self.setFormat(formato)
             self.setColor(QColor(Qt.GlobalColor.transparent))
         self.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
-        self.engine().addImageProvider("icone", ProvedorDeIcones())  # a estrela do aviso sem ícone
+        self.engine().addImageProvider("icone", ProvedorDeIcones())
         # A estrela é só do aviso sem ícone; com ele a caminho (ou que falhou), fica o quadrado vazio. O fade segue os
-        # efeitos de animação do Windows, como o `gtk-enable-animations` da `main`.
+        # efeitos de animação do Windows.
         animar = getattr(shared.aplicativo, "animacoesDoSistema", True) is not False
         self.setInitialProperties(
             {
@@ -88,7 +87,7 @@ class JanelaDoAviso(QQuickView):
         self.cartao.setProperty("opacidade", 0.0)
         janela_por_cima.mostrar_sem_tomar_o_foco(self)
         janela_por_cima.por_no_canto(self, canto)
-        self.cartao.setProperty("mostrado", True)  # 0 → 1 em 250 ms
+        self.cartao.setProperty("mostrado", True)
 
     def sair(self, ao_terminar: Callable[[], None]) -> None:
         """Some com o cartão (opacidade 1 → 0) e chama ``ao_terminar`` no fim."""
@@ -99,7 +98,7 @@ class JanelaDoAviso(QQuickView):
 
     def _terminou(self) -> None:
         if self._destruida or self._ao_terminar is None or self.cartao.property("mostrado"):
-            return  # a entrada terminou, ou não há saída pedida
+            return
         ao_terminar, self._ao_terminar = self._ao_terminar, None
         ref = weakref.ref(self)
 

@@ -17,14 +17,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O assistente de calibração da iluminação, no estilo da calibração HDR do
-Windows: uma cor de referência por etapa, grande na tela, com o dispositivo
-aceso nela, e controles até a parede bater com a tela.
+"""O assistente de calibração da iluminação, no estilo da calibração HDR do Windows: uma cor de referência
+por etapa, grande na tela, com o dispositivo aceso nela.
 
-Só o modelo (um ``QObject``, sem tela): quem desenha é o
-``AssistenteDeCalibracao.qml``, ligado a ``preferencias.calibracao``. Tudo
-fica em memória até o Concluir; Cancelar ou fechar não grava nada, e as fitas
-voltam à cor do app de qualquer jeito. Só na thread principal.
+Só o modelo, sem tela: quem desenha é o ``AssistenteDeCalibracao.qml``, ligado a ``preferencias.calibracao``.
+Tudo fica em memória até o Concluir; Cancelar ou fechar não grava nada. Só na thread principal.
 """
 
 from typing import Any, Optional
@@ -47,21 +44,16 @@ NOMES_DAS_ETAPAS = (
 )
 ETAPA_DO_BRANCO = len(REFERENCIAS)
 
-# As páginas do assistente, na ordem em que a pessoa as vê.
 PAGINAS_DA_CALIBRACAO = ("inicio", "etapa", "etapa_todos", "teste")
 
-# A escolha "Todos os dispositivos" na lista do início: todos acesos ao mesmo
-# tempo, cada um com os seus controles e a sua calibração, para comparar um com
-# o outro e com a tela enquanto se ajusta.
+# A escolha "Todos os dispositivos" na lista do início: todos acesos ao mesmo tempo, para comparar entre si e com a
+# tela.
 TODOS = "__todos__"
 
-# De quanto em quanto tempo o teste final troca de cor.
 INTERVALO_DO_TESTE = 3
 
-# A saturação das referências, na tela e na fita. No máximo (100%), aumentar a
-# Intensidade não mudaria nada na parede — a saturação já não tem para onde
-# subir —, e o valor seria gravado sem ser visto. A 70%, a faixa inteira do
-# controle (50% a 150%) aparece.
+# A saturação das referências: a 100% aumentar a Intensidade não mudaria nada na parede e o valor seria gravado sem ser
+# visto; a 70% a faixa inteira do controle (50% a 150%) aparece.
 SATURACAO_DA_REFERENCIA = 700
 
 
@@ -98,8 +90,6 @@ class AssistenteDeCalibracao(QObject):
         self._carregando = False
         self._cor_na_tela = _cor_da_etapa(0)
         self._controles: list[dict[str, Any]] = []
-
-    # region Estado para a tela
 
     def pagina(self) -> str:
         return self._pagina
@@ -197,9 +187,6 @@ class AssistenteDeCalibracao(QObject):
         if not self._carregando and not self._encerrado:
             acao()
 
-    # endregion
-    # region Etapas
-
     @Slot(str)
     def escolherDispositivo(self, id_da_fita: str) -> None:  # noqa: N802
         self.escolher(id_da_fita)
@@ -287,9 +274,8 @@ class AssistenteDeCalibracao(QObject):
             self.etapa += 1
             self._mostrar_etapa()
         else:
-            # Depois do Branco, o teste, direto. Não há "aplicar também a
-            # outros": para fitas iguais há "Todos os dispositivos", e outro
-            # dispositivo se calibra pelo "Voltar aos ajustes" do teste.
+            # Depois do Branco, o teste, direto. Não há "aplicar também a outros": para fitas iguais há "Todos os
+            # dispositivos".
             self.testar()
 
     @Slot()
@@ -303,17 +289,13 @@ class AssistenteDeCalibracao(QObject):
             self._ir_para_a_lista()
 
     def _ir_para_a_lista(self) -> None:
-        """De volta à lista: as fitas voltam à cor do app (com as calibrações
-        em edição), e não ficam na última cor de referência ou do teste."""
+        """De volta à lista: as fitas voltam à cor do app (com as calibrações em edição), não ficam na última cor."""
         if self._encerrado:
             return
         self._parar_temporizador()
         self._pagina = "inicio"
         self.alterado.emit()
         session_fita.previa(session_fita.cor_do_app(), None, self.calibracoes)
-
-    # endregion
-    # region Teste
 
     @Slot()
     def testar(self) -> None:
@@ -352,8 +334,7 @@ class AssistenteDeCalibracao(QObject):
         self.voltar_aos_ajustes()
 
     def voltar_aos_ajustes(self) -> None:
-        """Sai do teste sem perder nada: os ajustes seguem em memória até o
-        Concluir."""
+        """Sai do teste sem perder nada: os ajustes seguem em memória até o Concluir."""
         self._ir_para_a_lista()
 
     @Slot()
@@ -361,8 +342,9 @@ class AssistenteDeCalibracao(QObject):
         self.avancar_teste()
 
     def avancar_teste(self) -> None:
-        """O botão Avançar: a próxima cor, com os 3 s contados de novo — sem
-        isso, a cor pedida podia sumir logo em seguida."""
+        """O botão Avançar: a próxima cor, com os 3 s contados de novo; senão a cor pedida podia sumir logo em
+        seguida.
+        """
         if self._encerrado:
             return
         self._proxima_do_teste()
@@ -385,9 +367,6 @@ class AssistenteDeCalibracao(QObject):
             self.alterado.emit()
         else:
             self._ligar_temporizador()
-
-    # endregion
-    # region Concluir e cancelar
 
     @Slot()
     def concluir(self) -> None:
@@ -413,10 +392,9 @@ class AssistenteDeCalibracao(QObject):
         self._encerrar()
 
     def _encerrar(self) -> None:
-        """Fechou de qualquer jeito: o teste para, e as fitas voltam à cor do
-        app — com a calibração gravada, se houve Concluir. Uma vez só: o
-        Cancelar, o Concluir, o Esc e o fechamento das Preferências chegam
-        aqui."""
+        """Fechou de qualquer jeito: o teste para e as fitas voltam à cor do app (com a calibração gravada, se
+        houve Concluir). Uma vez só: Cancelar, Concluir, Esc e o fechamento das Preferências chegam aqui.
+        """
         if self._encerrado:
             return
         self._encerrado = True
@@ -424,4 +402,3 @@ class AssistenteDeCalibracao(QObject):
         session_fita.previa(session_fita.cor_do_app())
         self.fechado.emit()
 
-    # endregion

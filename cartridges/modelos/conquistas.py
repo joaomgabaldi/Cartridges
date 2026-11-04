@@ -2,12 +2,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O que a página do jogo, o diálogo das conquistas e a tela da sessão mostram (`conquistasDoJogo`, D58).
+"""O que a página do jogo, o diálogo das conquistas e a tela da sessão mostram (`conquistasDoJogo`).
 
 As funções puras montam os dicionários que o QML lê (cartões, ícone, fileira); `ConquistasDoJogo` segue o jogo da
 página de detalhes, o do diálogo e o da sessão, refaz cada vista quando o domínio avisa (`mudou`) e pede os ícones
-fora da tela.
-O QML nunca recebe um `Jogo`: lê só estes dicionários. Só na thread principal.
+fora da tela. O QML nunca recebe um `Jogo`. Só na thread principal.
 """
 
 import logging
@@ -40,9 +39,6 @@ def _agora() -> float:
     return time.monotonic()
 
 
-# -- regras puras -------------------------------------------------------------------------------
-
-
 def data_por_extenso(quando: int) -> Optional[str]:
     """A data por extenso; ``None`` se o carimbo não couber num calendário.
 
@@ -65,7 +61,7 @@ def icone(linha: Linha, mostrar_ocultas: bool, urls: dict[str, str]) -> dict[str
         "url": urls.get(visual.origem, ""),
         "cinza": visual.cinza,
         "oculta": visual.oculta,
-        # A dica do QML é StyledText: o `<br>` faz o papel do `\n` do markup Pango.
+        # A dica do QML é StyledText: o `<br>` quebra a linha.
         "dica": progresso.dica(linha, mostrar_ocultas).replace("\n", "<br>"),
     }
 
@@ -122,8 +118,6 @@ def _origens(linhas: Any, mostrar_ocultas: bool) -> set[str]:
     return {visual.origem for linha in linhas if (visual := progresso.aparencia(linha, mostrar_ocultas)).origem}
 
 
-# -- o modelo -----------------------------------------------------------------------------------
-
 _PAGINA_VAZIA = cartao_da_pagina(None, {})
 _SESSAO_VAZIA = cartao_da_sessao(None, False, {})
 _DIALOGO_FECHADO: dict[str, Any] = {
@@ -164,13 +158,13 @@ class ConquistasDoJogo(QObject):
         self._v: dict[str, Any] = {"pagina": _PAGINA_VAZIA, "sessao": _SESSAO_VAZIA, **_DIALOGO_FECHADO}
         # O jogo do diálogo; o da página é o dos detalhes. Só o id: o `Jogo` vem da loja na abertura.
         self._dialogo = ""
-        # A lista é um retrato do momento em que o diálogo abriu (como na `main`): (progresso, ocultas, nome). Conquista
-        # nova, troca da preferência ou jogo que perde o cartão não a mudam; só os ícones, que chegam depois.
+        # A lista é um retrato do momento em que o diálogo abriu: (progresso, ocultas, nome). Conquista nova, troca da
+        # preferência ou jogo que perde o cartão não a mudam; só os ícones, que chegam depois.
         self._retrato: Optional[tuple[Progresso, bool, str]] = None
         self._logo: tuple[str, int] = ("", 0)
         # Ícones: origem → URL `file:` já baixada; as pedidas e ainda a caminho; e as que cada vista usa.
         self._urls: dict[str, str] = {}
-        self._a_caminho: dict[str, float] = {}  # origem → quando foi pedida
+        self._a_caminho: dict[str, float] = {}
         self._origens: dict[str, set[str]] = {vista: set() for vista in _VISTAS}
         # Os ícones chegam às dezenas: as vistas que eles pedem são refeitas de uma vez, no máximo a cada ATRASO ms.
         self._a_refazer: set[str] = set()
@@ -184,8 +178,6 @@ class ConquistasDoJogo(QObject):
         detalhes.alterado.connect(self._detalhes_mudou)
         if sessao is not None:
             sessao.alterado.connect(self._sessao_mudou)
-
-    # -- montar as vistas ------------------------------------------------------------------------
 
     def _alvo(self, vista: str) -> str:
         if vista == "sessao":
@@ -253,8 +245,6 @@ class ConquistasDoJogo(QObject):
         self._pedir("sessao", _origens(atual.desbloqueadas + atual.bloqueadas, mostrar) if atual else set())
         return self._guardar({"sessao": cartao_da_sessao(atual, mostrar, self._urls)})
 
-    # -- ícones ----------------------------------------------------------------------------------
-
     def _pedir(self, vista: str, origens: set[str]) -> None:
         """Um `icones.carregar` por origem sem URL e que não está a caminho."""
         self._origens[vista] = origens
@@ -283,8 +273,6 @@ class ConquistasDoJogo(QObject):
         vistas, self._a_refazer = tuple(v for v in _VISTAS if v in self._a_refazer), set()
         self._refazer(vistas)
 
-    # -- quem avisa ------------------------------------------------------------------------------
-
     def _detalhes_mudou(self) -> None:
         self._refazer(("pagina",))
 
@@ -308,8 +296,6 @@ class ConquistasDoJogo(QObject):
             na_thread_principal(self.mudou, game_id)
             return
         self._refazer(("pagina", "sessao"), game_id=game_id)
-
-    # -- o diálogo -------------------------------------------------------------------------------
 
     @Slot(str)
     def abrir(self, game_id: str) -> None:

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O "Sobre o Cartridges" (D84): as páginas do `Adw.AboutDialog` da `main`, com os textos dela.
+"""O diálogo Sobre: as páginas e os textos.
 
 As funções puras leem os logs e a metainfo; `Sobre` é o estado do `DialogoSobre.qml` (página à vista, versão,
 novidades da versão, o texto de depuração) e as ações dele. Tudo na thread principal.
@@ -23,7 +23,6 @@ from cartridges.utils.open_uri import abrir_url
 METAINFO = Path(__file__).resolve().parent.parent.parent / "data" / f"{shared.APP_ID}.metainfo.xml.in"
 ICONE = Path(__file__).resolve().parent.parent.parent / "data" / "icons" / "hicolor" / "scalable" / "apps" / f"{shared.APP_ID}.svg"
 
-# O que a `main` traduzia (ABOUT_DIALOG_STRINGS) e montava em `on_about_action`.
 TITULOS = {
     "principal": "Sobre",
     "novidades": "Novidades",
@@ -122,8 +121,6 @@ class Sobre(QObject):
         self._novidades: list[dict] = []
         self._depuracao = ""
 
-    # -- o que o QML lê ------------------------------------------------------
-
     @Property(bool, notify=alterado)
     def aberto(self) -> bool:
         return self._aberto
@@ -184,8 +181,6 @@ class Sobre(QObject):
     def icone(self) -> QUrl:
         return QUrl.fromLocalFile(str(ICONE))
 
-    # -- as ações ------------------------------------------------------------
-
     @Slot()
     def abrir(self) -> None:
         """Sempre pela página principal; a versão e as novidades dela são relidas a cada abertura."""
@@ -224,7 +219,7 @@ class Sobre(QObject):
 
     @Slot()
     def copiarVersao(self) -> None:  # noqa: N802
-        """O botão da versão (`about.copy-property`): copia o número e avisa."""
+        """O botão da versão: copia o número e avisa."""
         _area_de_transferencia().setText(self._versao)
         self._avisar_copia()
 
