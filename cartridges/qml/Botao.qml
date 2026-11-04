@@ -1,9 +1,9 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O botão da libadwaita. `estilo`: "normal" (10% do texto), "plano" (.flat), "sugestao" (.suggested-action),
-// "destrutivo" (.destructive-action). `pilula` (.pill), `circular` (.circular), `icone` (nome de `data/icones`), `dica`.
-// Altura 34, raio 9, texto em negrito; desabilitado a 50%. Enter e Espaço acionam; o foco do teclado desenha o `AnelDeFoco`.
+// O botão do app. `estilo`: "normal", "plano", "sugestao", "destrutivo"; `pilula`, `circular`, `icone` (nome de
+// `data/icones`), `dica`. Altura 34, raio 9, texto em negrito; desabilitado a 50%. Enter e Espaço acionam; o foco do
+// teclado desenha o `AnelDeFoco`.
 Button {
     id: botao
 
@@ -15,12 +15,12 @@ Button {
     property string dica
     // O mnemônico é a primeira letra: sublinhada enquanto o Alt está seguro (o texto é do app, nunca de terceiros).
     property bool sublinharPrimeira: false
-    // Corta o rótulo com reticências quando o botão é mais estreito que ele (o `Gtk.Label` das respostas do `AdwAlertDialog`).
+    // Corta o rótulo com reticências quando o botão é mais estreito que ele.
     property bool cortarRotulo: false
     property bool dicaAtiva: hovered
     // O botão que abre diálogo esconde a dica ao clicar; quem abre balão desliga isto (`Dica.someAoClicar`).
     property bool dicaSomeAoClicar: true
-    // Sem o realce do ponteiro (o botão insensível da `main`, que ainda mostra a dica).
+    // Sem o realce do ponteiro (o botão insensível, que ainda mostra a dica).
     property bool semRealce: false
     property real raio: pilula || circular ? height / 2 : 9
     property real afastamentoDoAnel: estilo === "plano" ? -2 : 1
@@ -34,7 +34,7 @@ Button {
     Accessible.name: text !== "" ? text : dica
     Keys.onReturnPressed: click()
     Keys.onEnterPressed: click()
-    // Dentro de uma linha apagada só vale o apagado dela (50% no total na `main`): somados, dariam 25%.
+    // Dentro de uma linha apagada só vale o apagado dela: somados, dariam 25%.
     readonly property bool _dentroDeLinhaApagada: {
         for (let p = parent; p; p = p.parent)
             if (p.linhaApagada === true) return true
@@ -43,7 +43,6 @@ Button {
     opacity: enabled || _dentroDeLinhaApagada ? 1 : Tema.opacidadeDesabilitado
     implicitHeight: pilula ? 44 : 34
     implicitWidth: _soIcone ? implicitHeight : Math.max(contentItem.implicitWidth + leftPadding + rightPadding, 34)
-    // .text-button 5/17; .image-text 5/9; .pill 10/32.
     leftPadding: pilula ? 32 : _soIcone ? 5 : icone !== "" ? 9 : 17
     rightPadding: leftPadding
     topPadding: 0
@@ -91,9 +90,8 @@ Button {
     background: Rectangle {
         radius: botao.raio
         color: {
-            // Tudo é `currentColor`: a cor do texto do próprio botão, com o alfa do estado.
             if (botao.estilo === "sugestao") return Tema.destaque
-            const apertado = botao.down && !botao.semRealce  // o botão insensível da `main` não reage ao aperto
+            const apertado = botao.down && !botao.semRealce
             const ligado = apertado || botao.checked
             const sobre = botao.hovered && !botao.semRealce
             const alfa = botao.estilo === "plano" ? (apertado ? 0.16 : botao.checked ? 0.10 : sobre ? 0.07 : 0)
@@ -102,14 +100,13 @@ Button {
             return Qt.alpha(botao.corDoTexto, botao.corDoTexto.a * alfa)
         }
         Behavior on color { ColorAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
-        // .suggested-action: claro a 10% ao passar, escuro a 20% pressionado.
         Rectangle {
             anchors.fill: parent
             radius: parent.radius
             opacity: botao.estilo === "sugestao" && (botao.hovered || botao.down) ? 1 : 0
             visible: opacity > 0
             color: botao.down ? Qt.rgba(0, 0, 6 / 255, 0.2) : Qt.rgba(1, 1, 1, 0.1)
-            Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }  // transição de 200 ms
+            Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
         }
         AnelDeFoco { ativo: botao.visualFocus; raio: parent.radius; afastamento: botao.afastamentoDoAnel }
     }

@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// A dica (tooltip) da libadwaita: fundo rgba(0,0,6,.8), contorno branco a 10%, texto branco, raio 9, padding 6/10,
-// embaixo do item, centrada. Filho do item: `Dica { texto: "Buscar"; ativa: botao.hovered }`.
+// A dica (tooltip): fundo escuro translúcido, contorno branco a 10%, texto branco, raio 9, embaixo do item, centrada.
+// Filho do item: `Dica { texto: "Buscar"; ativa: botao.hovered }`.
 ToolTip {
     id: dica
 
@@ -12,8 +12,8 @@ ToolTip {
     objectName: "dica"
     text: texto
     delay: 500
-    // Para o botão que abre um diálogo: no GTK a dica sai junto com o ponteiro, coberto pelo diálogo. O Qt só vê o ponteiro
-    // sair quando ele anda, então o clique a esconde. Quem abre balão não liga: a dica fica, como na `main`.
+    // Para o botão que abre um diálogo: o Qt só vê o ponteiro sair quando ele anda, então o clique esconde a dica. Quem
+    // abre balão não liga: a dica fica.
     property bool someAoClicar: false
     property bool _clicada: false
     onAtivaChanged: if (!ativa) _clicada = false

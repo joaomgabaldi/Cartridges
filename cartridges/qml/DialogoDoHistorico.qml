@@ -3,10 +3,10 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
 
-// O histórico de sessões de um jogo (`Adw.Dialog` de 1040 de largura): o logo (ou o nome) e o resumo no topo, e lado a lado
-// a tabela das sessões e o painel do gráfico. Só desenha: o que ele mostra e faz é o `historico`
-// (cartridges/modelos/historico.py). Modal para o mouse, o teclado e o controle; o foco volta a quem o abriu. A faixa de
-// cima não mostra título (`show_title=False`): o logo (ou o nome) é a manchete, e o título só vive no nome acessível.
+// O histórico de sessões de um jogo: o logo (ou o nome) e o resumo no topo, e lado a lado a tabela das sessões e o painel
+// do gráfico. Só desenha: o estado é do `historico` (cartridges/modelos/historico.py). Modal para o mouse, o teclado e o
+// controle; o foco volta a quem o abriu. A faixa de cima não mostra título: o logo (ou o nome) é a manchete, e o título
+// só vive no nome acessível.
 // A raiz é só um `Item`: a confirmação de exclusão cobre a janela e não pode morar dentro do cartão.
 Item {
     id: raiz
@@ -15,7 +15,6 @@ Item {
         id: dialogo
         objectName: "dialogoDoHistorico"
 
-        // A sessão cuja exclusão a confirmação pergunta.
         property var excluindo: ({ fim: 0, segundos: 0, duracao: "", titulo: "" })
         // O que sobra da altura do cartão para a tabela: o que o cartão pode ter, menos o cabeçalho e tudo o que não é a
         // tabela (a manchete, o resumo, os respiros). Sem ler a altura do próprio cartão (laço).
@@ -36,7 +35,6 @@ Item {
             if (visible && !(f && f.visible && dentro(f))) // o botão escondido ainda é filho do diálogo
                 cabecalho.botaoFechar.forceActiveFocus(Qt.TabFocusReason)
         }
-        // O item com o foco fica à vista, na tabela e na rolagem do diálogo.
         function trazer(rolagem, item) {
             var topo = item.mapToItem(rolagem.contentItem, 0, 0).y
             var base = topo + item.height
@@ -47,12 +45,10 @@ Item {
             excluindo = sessao
             confirmacao.abrir()
         }
-        // As setas andam entre as linhas, como na `ListBox` da `main`.
         function irParaLinha(indice) {
             var linha = repetidor.itemAt(indice)
             if (linha) linha.alvo.forceActiveFocus(Qt.TabFocusReason)
         }
-        // Home, End, PageUp e PageDown entre as linhas, como o `GtkListBox`.
         function irParaLinhaPorTecla(indice, tecla) {
             var passo = Math.max(1, Math.floor(rolagem.height / Math.max(1, repetidor.itemAt(indice).height)))
             var destino = tecla === Qt.Key_Home ? 0 : tecla === Qt.Key_End ? repetidor.count - 1
@@ -80,7 +76,6 @@ Item {
             }
         }
 
-        // O seletor de período: o `Adw.ToggleGroup`, uma trilha só a 10% com cada opção dentro (padding 3, raio 9 e 6).
         component BotaoDoPeriodo: Button {
             id: botao
             focusPolicy: Qt.StrongFocus
@@ -105,7 +100,6 @@ Item {
             }
             background: Rectangle {
                 radius: 6
-                // `--active-toggle-bg-color`: branco no claro, branco a 20% no escuro.
                 color: botao.checked ? (Tema.escuro ? Qt.rgba(1, 1, 1, 0.2) : "#ffffff")
                     : botao.down ? Tema.planoPressionado : botao.hovered ? Tema.planoSobre : "transparent"
                 Behavior on color { ColorAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
@@ -118,12 +112,10 @@ Item {
             id: cabecalho
             titulo: ""
             sombra: rolagem.contentY > 0
-            // Com a confirmação ou as Preferências na frente, o Tab não alcança o X que ficou atrás.
             enabled: !confirmacao.aberto && !preferencias.aberto
             onFechar: historico.fechar()
         }
 
-        // Com a confirmação ou as Preferências na frente, nada daqui recebe o mouse nem o Tab.
         Flickable {
             id: rolagem
             objectName: "rolagemDoHistorico"
@@ -144,7 +136,6 @@ Item {
                 width: rolagem.width
                 spacing: 12
 
-                // O logo (até 992×120) ou o nome, nunca os dois.
                 CabecalhoDoJogo {
                     id: manchete
                     Layout.fillWidth: true
@@ -182,7 +173,7 @@ Item {
                     spacing: 24
 
                     // A altura é a das linhas, até 440 e até o que a janela deixa, mas nunca abaixo do piso do painel: o
-                    // gráfico fica à vista (`max_content_height` da `main` é só um teto). Só quando nem o piso cabe, o
+                    // gráfico fica à vista (a altura máxima da lista é só um teto). Só quando nem o piso cabe, o
                     // cartão inteiro rola.
                     Flickable {
                         id: tabela
@@ -217,7 +208,6 @@ Item {
                                         titulo: modelData.titulo
                                         subtitulo: modelData.subtitulo
                                         reservaADireita: lixeira.width
-                                        // Cada linha recebe o foco do teclado antes da lixeira (`ListBoxRow` da `main`).
                                         Button {
                                             id: alvoDaLinha
                                             objectName: "alvoDaLinhaDaSessao"
@@ -327,13 +317,11 @@ Item {
                     }
                 }
 
-                // A margem de baixo de 24 é da caixa inteira (12 do espaçamento e estes 12), mesmo sem as colunas.
                 Item { implicitHeight: 12 }
             }
         }
     }
 
-    // Por cima do histórico: o texto é o da `main`.
     DialogoDeConfirmacao {
         id: confirmacao
         objectName: "dialogoExcluirSessao"

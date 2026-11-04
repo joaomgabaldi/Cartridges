@@ -1,22 +1,19 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// As horas jogadas por dia, em linha (D54). Só desenha: a geometria (posições, grade, rótulos, quebras) vem pronta do
+// As horas jogadas por dia, em linha. Só desenha: a geometria (posições, grade, rótulos, quebras) vem pronta do
 // `historico` (cartridges/session_history.py); aqui só entram as medidas em pixels e as cores do Tema.
 Item {
     id: raiz
     objectName: "graficoDoHistorico"
 
-    // As margens do desenho, em pixels.
     readonly property int margemEsquerda: 44
     readonly property int margemInferior: 24
     readonly property int margemSuperior: 8
     readonly property int margemDireita: 12
 
     readonly property var geometria: historico.grafico
-    // Quantas vezes o desenho foi refeito (os testes esperam por ele).
     property int desenhos: 0
-    // O x do mouse sobre o gráfico (-1 fora dele) e a dica do dia mais perto dele.
     property real xDoMouse: -1
     readonly property real larguraUtil: width - margemEsquerda - margemDireita
     readonly property string dicaDoMouse: {
@@ -52,11 +49,10 @@ Item {
         function xDe(i) { return n === 1 ? margemEsquerda + larguraUtil / 2 : margemEsquerda + larguraUtil * g.posicoes[i] / ultima }
         function yDe(valor) { return baseY - alturaUtil * valor / g.topo }
 
-        ctx.font = "10px '" + Tema.fonte + "'"  // 10 px: o mais perto do .caption (9,84) que o Canvas aceita; igual a `Tema.legenda`
+        ctx.font = "10px '" + Tema.fonte + "'"  // 10 px: o mais perto do `.caption` que o Canvas aceita; igual a `Tema.legenda`
         ctx.textAlign = "left"
         ctx.textBaseline = "middle"
 
-        // Grade e eixo Y.
         ctx.lineWidth = 1
         for (var i = 0; i < g.grade.length; ++i) {
             var y = Math.round(yDe(g.grade[i][0])) + 0.5
@@ -69,7 +65,6 @@ Item {
             escrever(ctx, g.grade[i][1], margemEsquerda - 6, y, 1)
         }
 
-        // Eixo X; as pontas já vêm alinhadas para dentro.
         ctx.fillStyle = cor(Tema.texto, 0.6)
         for (var r = 0; r < g.rotulos.length; ++r)
             escrever(ctx, g.rotulos[r][1], xDe(g.rotulos[r][0]), baseY + margemInferior / 2 + 2, g.rotulos[r][2])
@@ -91,7 +86,6 @@ Item {
         }
         ctx.setLineDash([])
 
-        // A linha e a área sob ela, em trechos separados pelas quebras.
         var inicio = 0
         for (var t = 0; t <= g.quebras.length; ++t) {
             var fim = t < g.quebras.length ? g.quebras[t] + 1 : n
@@ -151,7 +145,6 @@ Item {
         onExited: raiz.xDoMouse = -1
     }
 
-    // A dica do app (500 ms, como a do GTK), junto do mouse.
     Dica {
         x: area.mouseX + 12
         y: area.mouseY + 16

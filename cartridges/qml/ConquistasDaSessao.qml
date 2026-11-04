@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// O cartão de conquistas da tela da sessão: o progresso e os ícones de todas as conquistas, para consultar de relance
-// no outro monitor. Passivo: nada recebe foco nem clique; passar o mouse num ícone mostra a dica.
-// Só desenha `conquistasDoJogo.sessao`.
+// O cartão de conquistas da tela da sessão: o progresso e os ícones de todas as conquistas, para consultar de relance no
+// outro monitor. Passivo: nada recebe foco nem clique; passar o mouse num ícone mostra a dica. Só desenha
+// `conquistasDoJogo.sessao`.
 Rectangle {
     id: cartao
     objectName: "conquistasDaSessao"
@@ -20,7 +20,7 @@ Rectangle {
     implicitWidth: Math.min(larguraMaxima, Math.max(topo.implicitWidth, larguraDosIcones) + 32)
     implicitHeight: coluna.implicitHeight + 32
     radius: 12
-    color: Qt.rgba(1, 1, 1, 0.08)  // o `card` da libadwaita sobre o escuro da camada
+    color: Qt.rgba(1, 1, 1, 0.08)
 
     ColumnLayout {
         id: coluna
@@ -37,7 +37,7 @@ Rectangle {
                 text: "Conquistas"
                 textFormat: Text.PlainText
                 color: "white"
-                font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }  // .heading
+                font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
             }
             Text {
                 objectName: "contagemDaSessao"
@@ -59,7 +59,7 @@ Rectangle {
             objectName: "barraDaSessao"
             Layout.fillWidth: true
             value: cartao.dados.fracao || 0
-            corDaTrilha: Qt.rgba(1, 1, 1, 0.15)  // `currentColor` a 15%: branco, porque a camada é sempre escura
+            corDaTrilha: Qt.rgba(1, 1, 1, 0.15)  // branco, porque a camada é sempre escura
         }
 
         // Uma linha só, rolando para os lados: em grade, um jogo com muitas conquistas virava um paredão de ícones que
@@ -90,14 +90,13 @@ Rectangle {
                 tamanho: cartao.tamanho
                 interrogacao: 24
                 corDoLadrilho: "white"
-                // `.session-blocker label { color: white }`: a interrogação é branca a 100%; o ladrilho e a estrela seguem o texto.
                 corDaInterrogacao: "white"
                 url: dados.url || ""
                 cinza: dados.cinza === true
                 oculta: dados.oculta === true
 
                 HoverHandler { id: sobre }
-                // A dica do app (500 ms); o texto já sai escapado por `progresso.dica`, com `<b>` e `<br>`.
+                // A dica do app; o texto já sai escapado por `progresso.dica`, com `<b>` e `<br>`.
                 Dica {
                     id: dica
                     objectName: "dicaDaSessao"
@@ -115,7 +114,7 @@ Rectangle {
 
             // A roda do mouse rola para os lados com a mola do app (a lista não tem para onde ir na vertical).
             RolagemPorMola { objectName: "molaDaSessao"; alvo: lista; horizontal: true; ativa: Tema.animacoes }
-            // O touchpad rola direto: a mola é só do mouse, como na `main`.
+            // O touchpad rola direto: a mola é só do mouse.
             WheelHandler {
                 acceptedDevices: Tema.animacoes ? PointerDevice.TouchPad : PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: evento => {
@@ -125,7 +124,7 @@ Rectangle {
                 }
             }
 
-            ScrollBar.horizontal: BarraDeRolagem { objectName: "rolagemDaSessao"; cor: "#ffffff" }  // a do tema escuro
+            ScrollBar.horizontal: BarraDeRolagem { objectName: "rolagemDaSessao"; cor: "#ffffff" }
         }
     }
 }

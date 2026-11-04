@@ -3,11 +3,11 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
 
-// A lista completa de conquistas de um jogo (`Adw.Dialog` de 520 por 640): o logo (ou o nome), o resumo e a barra no topo,
-// e os grupos "Desbloqueadas" (da mais recente para a mais antiga) e "Bloqueadas", apagadas. Só desenha: o que ele mostra e
-// faz é o `conquistasDoJogo` (cartridges/modelos/conquistas.py).
-// Modal para o mouse, o teclado e o controle, como o histórico; o foco volta a quem o abriu. Sem título visível: o logo
-// (ou o nome) é a manchete, e o título só vive no nome acessível. Todo texto de conquista é de terceiros: texto puro.
+// A lista completa de conquistas de um jogo: o logo (ou o nome), o resumo e a barra no topo, e os grupos "Desbloqueadas"
+// (da mais recente para a mais antiga) e "Bloqueadas", apagadas. Só desenha: o estado é do `conquistasDoJogo`
+// (cartridges/modelos/conquistas.py). Modal para o mouse, o teclado e o controle; o foco volta a quem o abriu. Sem título
+// visível: o logo (ou o nome) é a manchete, e o título só vive no nome acessível. Todo texto de conquista é de terceiros:
+// texto puro.
 MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoDeConquistas"
@@ -17,7 +17,6 @@ MolduraDoDialogo {
             if (p === pai) return true
         return false
     }
-    // O item com o foco fica à vista na rolagem do diálogo.
     function trazer(item) {
         var topo = item.mapToItem(rolagem.contentItem, 0, 0).y
         var base = topo + item.height
@@ -48,20 +47,19 @@ MolduraDoDialogo {
         }
     }
 
-    // Um grupo de fileiras: o título e a lista com as linhas; some quando não há linha.
     component Secao: ColumnLayout {
         id: secao
         property string titulo
         property var fileiras: []
         visible: fileiras.length > 0
-        spacing: 12  // o título do grupo e a lista: 6 + 6 do cabeçalho
+        spacing: 12
 
         Text {
             Layout.fillWidth: true
             text: secao.titulo
             textFormat: Text.PlainText
             color: Tema.texto
-            font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }  // .heading, sem recuo
+            font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
             Accessible.role: Accessible.Heading
             Accessible.name: text
         }
@@ -77,12 +75,10 @@ MolduraDoDialogo {
                     objectName: "fileiraDeConquista"
                     required property int index
                     readonly property var modelData: secao.fileiras[index] || ({})
-                    // O foco do teclado: a fileira inteira (o anel vem do `foco` da linha).
                     property alias alvo: alvoDaLinha
                     comTextos: false
-                    // Ícone de 36 e, no mínimo, 50 + 4 (o passo de 55 da `main`); o texto longo alarga a fileira.
+                    // Ícone de 36 e, no mínimo, 50 + 4; o texto longo alarga a fileira.
                     alturaMinima: Math.max(50, linha.implicitHeight + 12)
-                    // A bloqueada fica apagada, como o `dim-label` da `main`.
                     opacity: modelData.desbloqueada ? 1 : Tema.opacidadeApagado
 
                     RowLayout {
@@ -154,7 +150,6 @@ MolduraDoDialogo {
                         }
                     }
 
-                    // Cada fileira recebe o foco do teclado (`ListBoxRow` da `main`); setas andam entre elas.
                     Button {
                         id: alvoDaLinha
                         objectName: "alvoDaFileiraDeConquista"
@@ -181,7 +176,6 @@ MolduraDoDialogo {
         onFechar: conquistasDoJogo.fechar()
     }
 
-    // Com as Preferências na frente, nada daqui recebe o mouse nem o Tab.
     Flickable {
         id: rolagem
         objectName: "rolagemDeConquistas"
@@ -191,12 +185,11 @@ MolduraDoDialogo {
         Layout.minimumHeight: 0
         enabled: !preferencias.aberto
         contentWidth: width
-        contentHeight: conteudo.implicitHeight + 48  // 24 em cima e embaixo (a margem da `PreferencesPage`)
+        contentHeight: conteudo.implicitHeight + 48
         boundsBehavior: Flickable.StopAtBounds
         RolagemDaRoda { alvo: rolagem }
         clip: true
         ScrollBar.vertical: BarraDeRolagem {}
-        // PgUp e PgDn rolam a página, como a `ScrolledWindow`; as setas andam entre as fileiras.
         Keys.onPressed: event => {
             var passo = event.key === Qt.Key_PageUp ? -rolagem.height : event.key === Qt.Key_PageDown ? rolagem.height : 0
             if (passo === 0) return
@@ -219,7 +212,6 @@ MolduraDoDialogo {
                 nomeDoLogo: "logoDasConquistas"
                 nomeDoTexto: "nomeDasConquistas"
             }
-            // 12 px, sem quebra: uma linha só, centralizada.
             Text {
                 objectName: "resumoDasConquistas"
                 Layout.fillWidth: true
@@ -238,7 +230,7 @@ MolduraDoDialogo {
             Secao {
                 objectName: "secaoDesbloqueadas"
                 Layout.fillWidth: true
-                Layout.topMargin: 12  // 24 entre os grupos da página: 12 do espaçamento e estes
+                Layout.topMargin: 12
                 titulo: "Desbloqueadas"
                 fileiras: conquistasDoJogo.desbloqueadas
             }

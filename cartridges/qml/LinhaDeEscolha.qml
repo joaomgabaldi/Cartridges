@@ -1,18 +1,17 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O `Adw.ComboRow`: o valor e a seta soltos no fim da linha; a linha inteira abre o popover, com a marca no item escolhido.
+// Linha de escolha: o valor e a seta soltos no fim da linha; a linha inteira abre o popover, com a marca no item
+// escolhido.
 LinhaDoGrupo {
     id: linha
 
     property alias model: caixa.model
     property alias currentIndex: caixa.currentIndex
-    // A largura mínima do popover; quem tem opções longas a alarga.
     property int larguraDaCaixa: 180
 
     readonly property real larguraDoPopover: caixa.popup.width
 
-    // A pessoa escolheu uma opção (o índice).
     signal escolhido(int indice)
 
     reservaADireita: Math.min(valor.implicitWidth, width * 0.6) + 22
@@ -28,8 +27,9 @@ LinhaDoGrupo {
         hoverEnabled: true
         Accessible.name: linha.titulo
         onActivated: indice => linha.escolhido(indice)
-        // O A do controle (e o Enter) abre a lista, como o `activate` da `Adw.ComboRow`; fechada, o Qt não a abre com essa tecla.
-        // O soltar da mesma tecla é engolido: o `ComboBox` o leria como "escolher o realçado" e fecharia a lista que acabou de abrir.
+        // O A do controle (e o Enter) abre a lista; fechada, o Qt não a abre com essa tecla.
+        // O soltar da mesma tecla é engolido: o `ComboBox` o leria como "escolher o realçado" e fecharia a lista que
+        // acabou de abrir.
         property bool _abertaPelaTecla: false
         readonly property var _teclasDeAbrir: [Qt.Key_Return, Qt.Key_Enter]
         Keys.onPressed: event => {
@@ -39,7 +39,6 @@ LinhaDoGrupo {
             if (_abertaPelaTecla && _teclasDeAbrir.includes(event.key)) { _abertaPelaTecla = false; event.accepted = true }
         }
 
-        // A seta e o valor ficam no fim da linha; o título, à esquerda, é da base.
         leftPadding: linha.width - linha.reservaADireita - 14
         rightPadding: 36
         contentItem: Text {
@@ -88,7 +87,7 @@ LinhaDoGrupo {
                 color: opcao.down ? Tema.menuPressionado : opcao.highlighted ? Tema.menuSobre : "transparent"
             }
         }
-        // O popover cresce até o maior texto, como o GtkPopover; medido a cada abertura (os delegados só existem aberto).
+        // O popover cresce até o maior texto; medido a cada abertura (os delegados só existem aberto).
         property real larguraDoMaior: 0
         function medirOpcoes() {
             let maior = 0
@@ -106,7 +105,6 @@ LinhaDoGrupo {
             y: caixa.height + 2
             implicitHeight: contentItem.implicitHeight + 2 * padding
             padding: 6
-            // Dentro da janela, como os menus do Tema.
             popupType: Popup.Item
             contentItem: ListView {
                 id: lista

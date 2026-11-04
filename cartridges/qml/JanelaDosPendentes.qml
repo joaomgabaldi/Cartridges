@@ -3,9 +3,7 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
 // "Jogos sem atalho": a lista dos jogos restaurados cujo atalho não foi achado, com "Escolher atalho…" e "Excluir" em
-// cada um (D81). Só desenha: a lista e as ações são do `restauracao`. Esc vale "Lembrar mais tarde". Como `JanelaPendentes`
-// da `main`: o texto centrado, a nota apagada com o ícone, uma `boxed-list` de `ActionRow` (capa 32x48 no início, os dois
-// botões no fim) e o botão em pílula.
+// cada um. Só desenha: a lista e as ações são do `restauracao`. Esc vale "Lembrar mais tarde".
 ModalDaRestauracao {
     id: dialogo
     objectName: "dialogoDosPendentes"
@@ -26,7 +24,6 @@ ModalDaRestauracao {
         color: Tema.texto
         font { family: Tema.fonte; pixelSize: Tema.corpo }
     }
-    // A nota inteira é `dim-label`: o ícone e o texto.
     Row {
         width: parent.width
         spacing: 10
@@ -45,7 +42,6 @@ ModalDaRestauracao {
             font { family: Tema.fonte; pixelSize: Tema.corpo }
         }
     }
-    // `ScrolledWindow` com `max_content_height=420`.
     Flickable {
         id: lista
         objectName: "listaDosPendentes"
@@ -58,7 +54,7 @@ ModalDaRestauracao {
         boundsBehavior: Flickable.StopAtBounds
         RolagemDaRoda { alvo: lista }
         ScrollBar.vertical: BarraDeRolagem {}
-        // O Tab leva o foco a uma linha fora da vista: a lista rola até ela (o `GtkScrolledWindow` faz o mesmo).
+        // O Tab leva o foco a uma linha fora da vista: a lista rola até ela.
         Connections {
             target: lista.Window.window
             function onActiveFocusItemChanged() {
@@ -104,7 +100,6 @@ ModalDaRestauracao {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignVCenter
                             spacing: 3
-                            // O título da linha quebra (não é cortado com "…").
                             Text {
                                 objectName: "nomeDoPendente"
                                 Layout.fillWidth: true

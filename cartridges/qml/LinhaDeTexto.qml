@@ -1,20 +1,18 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O `Adw.EntryRow`: o título é o rótulo dentro do campo, que encolhe ao focar ou preencher; lápis à direita enquanto não
-// edita, os botões que a linha receber (`acessorios`) e o contorno de destaque com o foco. O texto vai sempre em PlainText.
+// Linha de texto: o título é o rótulo dentro do campo, que encolhe ao focar ou preencher; lápis à direita enquanto não
+// edita, os botões que a linha receber (`acessorios`) e o contorno de destaque com o foco. O texto vai sempre em
+// PlainText.
 LinhaDoGrupo {
     id: linha
 
     property alias text: campo.text
     property alias inputMethodHints: campo.inputMethodHints
-    // Para o que não deve aparecer na tela (TextInput.Password).
     property alias echoMode: campo.echoMode
-    // O campo recusado pela validação aparece com o destaque de erro.
     property bool erro: false
     default property alias acessorios: lado.data
 
-    // O texto mudou por ação da pessoa; Enter no campo.
     signal editado()
     signal confirmado()
 
@@ -25,7 +23,6 @@ LinhaDoGrupo {
     sobre: areaDaLinha.containsMouse && !campo.activeFocus
     foco: campo.activeFocus
 
-    // Um clique em qualquer ponto da linha leva o cursor ao campo.
     MouseArea {
         id: areaDaLinha
         anchors.fill: parent
@@ -38,13 +35,11 @@ LinhaDoGrupo {
 
         Text {
             anchors.left: parent.left
-            // Em cima (legenda) ou no meio da linha (corpo), com a transição da libadwaita.
             y: linha._rotuloEmCima ? 10 : (parent.height - height) / 2
             width: parent.width
             text: linha.titulo
             textFormat: Text.PlainText
             elide: Text.ElideRight
-            // `row.entry:disabled .dimmed`: apagada, a linha tira o `.dimmed` do rótulo, e fica só o apagado dela.
             color: linha.erro ? Tema.destrutivoTexto : linha.enabled ? Tema.textoSecundario : Tema.texto
             font { family: Tema.fonte; pixelSize: linha._rotuloEmCima ? Tema.legenda : Tema.corpo }
             Behavior on y { NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
@@ -64,18 +59,17 @@ LinhaDoGrupo {
             font { family: Tema.fonte; pixelSize: Tema.corpo }
             background: null
             Accessible.name: linha.titulo
-            // `gtk-entry-select-on-focus`: o foco do teclado ou o dado por código seleciona o texto; o clique só põe o
-            // cursor, e voltar à janela ou fechar um balão não refaz o foco na `main` (colar não pode trocar o texto todo).
+            // O foco do teclado ou o dado por código seleciona o texto; o clique só põe o cursor (colar não pode trocar o
+            // texto todo).
             onActiveFocusChanged: if (activeFocus && focusReason !== Qt.MouseFocusReason
                 && focusReason !== Qt.ActiveWindowFocusReason && focusReason !== Qt.PopupFocusReason) selectAll()
-            // Fora de foco o texto longo mostra o começo (a `GtkText` da `main`); no Qt o cursor iria ao fim e cortaria o início.
+            // Fora de foco o texto longo mostra o começo; no Qt o cursor iria ao fim e cortaria o início.
             onTextChanged: if (!activeFocus) cursorPosition = 0
             onTextEdited: linha.editado()
             onAccepted: linha.confirmado()
         }
     }
 
-    // Os acessórios à direita e o lápis (.edit-icon: 24 + 5 de respiro).
     Row {
         id: lado
         anchors { right: lapis.visible ? lapis.left : parent.right; rightMargin: lapis.visible ? 0 : 14; verticalCenter: parent.verticalCenter }
@@ -86,7 +80,6 @@ LinhaDoGrupo {
         anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
         visible: !campo.activeFocus && lado.children.length === 0
         nome: "document-edit"
-        // `.edit-icon:disabled`: 30% no total, com os 50% da linha.
         opacity: linha.enabled ? 1 : 0.6
     }
 }

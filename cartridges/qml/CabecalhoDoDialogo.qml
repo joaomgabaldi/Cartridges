@@ -2,16 +2,15 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// O cabeçalho do Adw.Dialog: 47 de altura, plano, título em negrito centrado e o X circular do `windowcontrols`.
-// Botões da página entram em `inicio` e `fim` (34 de altura, 6 da borda). Dentro de uma `MolduraDoDialogo`, no topo.
-// O arrasto daqui não move a janela: a `main` o bloqueia (`dialog_backdrop.py`). `sombra`: a linha quando há rolagem.
+// O cabeçalho dos diálogos: 47 de altura, plano, título em negrito centrado e o X circular. Botões da página entram em
+// `inicio` e `fim` (34 de altura, 6 da borda). Dentro de uma `MolduraDoDialogo`, no topo. O arrasto daqui não move a
+// janela. `sombra`: a linha quando há rolagem.
 Item {
     id: cabecalho
 
     property string titulo
     property bool comFechar: true
     property bool sombra: false
-    // O `objectName` do título (os testes de cada diálogo).
     property alias objetoDoTitulo: textoDoTitulo.objectName
     // As Preferências trocam o título pelo campo de busca, em crossfade.
     property alias opacidadeDoTitulo: textoDoTitulo.opacity
@@ -51,7 +50,6 @@ Item {
         spacing: 6
     }
 
-    // windowcontrols > button: 34 de largura, círculo de 24 a 10%, 15% ao passar, 30% pressionado.
     Control {  // um `Control`: o anel só aparece com o teclado (`visualFocus`)
         id: botaoFechar
         objectName: "fecharDoCabecalho"

@@ -1,7 +1,7 @@
 import QtQuick
 
-// "Dados do jogo": o conflito entre o backup e os dados locais do mesmo jogo (D81). Dois cartões, "Backup" e "Este PC",
-// e a escolha de qual manter ou mesclar. Só desenha: os números e a decisão são do `restauracao`. Esc fecha sem decidir.
+// "Dados do jogo": o conflito entre o backup e os dados locais do mesmo jogo. Dois cartões, "Backup" e "Este PC", e a
+// escolha de qual manter ou mesclar. Só desenha: os números e a decisão são do `restauracao`. Esc fecha sem decidir.
 ModalDaRestauracao {
     id: dialogo
     objectName: "dialogoDosDadosDoJogo"
@@ -22,7 +22,7 @@ ModalDaRestauracao {
             text: restauracao.conflito.nome || ""
             textFormat: Text.PlainText
             color: Tema.texto
-            font { family: Tema.fonte; pixelSize: Tema.titulo2; weight: Tema.pesoTitulo2 }  // title-2
+            font { family: Tema.fonte; pixelSize: Tema.titulo2; weight: Tema.pesoTitulo2 }
         }
     }
 
@@ -34,7 +34,6 @@ ModalDaRestauracao {
         property var dados: ({})
         width: (parent.width - 24 - 2 * parent.spacing) / 2  // 24: o aviso entre os dois
         height: dentro.implicitHeight + 28
-        // `.card`: raio 12 e a sombra do cartão.
         radius: 12
         color: Tema.cartao
         Sombra { camadas: Tema.sombraCartao; raio: 12 }
@@ -52,7 +51,7 @@ ModalDaRestauracao {
                 text: cartao.rotulo
                 textFormat: Text.PlainText
                 color: Tema.texto
-                font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }  // heading
+                font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
             }
             Text {
                 objectName: "tempoDoCartao" + cartao.objeto
@@ -86,7 +85,7 @@ ModalDaRestauracao {
             width: 24
             height: 24
             anchors.verticalCenter: parent.verticalCenter
-            // `warning_color` do tema (a classe `.warning` do GTK), e não um amarelo fixo.
+            // A cor de aviso do tema, e não um amarelo fixo.
             Icone { anchors.centerIn: parent; nome: "dialog-warning"; cor: Tema.avisoIcone }
         }
         Cartao { rotulo: "Este PC"; objeto: "EstePc"; icone: "computer"; dados: restauracao.conflito.estePc || ({}) }
@@ -128,6 +127,6 @@ ModalDaRestauracao {
         textFormat: Text.PlainText
         horizontalAlignment: Text.AlignHCenter
         color: Tema.textoSecundario
-        font { family: Tema.fonte; pixelSize: Tema.legenda }  // caption dim-label
+        font { family: Tema.fonte; pixelSize: Tema.legenda }
     }
 }

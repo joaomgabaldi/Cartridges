@@ -11,13 +11,12 @@ Item {
     objectName: "iconeDaConquista"
 
     property int tamanho: 36
-    property int interrogacao: 24  // o tamanho da interrogação da oculta
+    property int interrogacao: 24
     property string url: ""
     property bool cinza: false
     property bool oculta: false
     property bool semLadrilho: false
-    property color corDoLadrilho: Tema.texto  // a cor do texto em volta: branca na tela da sessão
-    // A interrogação herda o `color` do ladrilho (60% do texto); na sessão o CSS a deixa branca a 100%.
+    property color corDoLadrilho: Tema.texto
     property color corDaInterrogacao: Qt.alpha(corDoLadrilho, corDoLadrilho.a * 0.6)
 
     readonly property bool imagemPronta: !oculta && imagem.status === Image.Ready
@@ -31,8 +30,7 @@ Item {
         anchors.fill: parent
         visible: !icone.imagemPronta && !icone.semLadrilho
         radius: 6
-        // `alpha(currentColor, .12)` com `color: alpha(currentColor, .6)` no mesmo elemento: o fundo é o texto a
-        // 0,6 x 0,12 = 7,2% (5,8% no claro, onde o texto já tem 0,8).
+        // O fundo é o texto a 0,6 x 0,12 = 7,2% (5,8% no claro, onde o texto já tem 0,8).
         color: Qt.alpha(icone.corDoLadrilho, icone.corDoLadrilho.a * 0.072)
 
         Text {
@@ -43,7 +41,6 @@ Item {
             color: icone.corDaInterrogacao
             font { family: Tema.fonte; pixelSize: icone.interrogacao; weight: Font.ExtraBold }
         }
-        // O `starred-symbolic` da Adwaita, de metade do lado (`set_pixel_size(tamanho // 2)` da `main`).
         Icone {
             objectName: "estrelaDaConquista"
             anchors.centerIn: parent
@@ -76,9 +73,9 @@ Item {
         layer.effect: MultiEffect {
             maskEnabled: true
             maskSource: mascara
-            maskThresholdMin: 0.5  // borda suave nos cantos arredondados
+            maskThresholdMin: 0.5
             maskSpreadAtMin: 1.0
-            saturation: icone.cinza ? -1 : 0  // o `filter: grayscale(1)` do CSS
+            saturation: icone.cinza ? -1 : 0
         }
     }
 }

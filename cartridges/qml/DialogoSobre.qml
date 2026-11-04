@@ -6,11 +6,11 @@ import QtCore
 import QtQuick.Dialogs
 import QtQuick.Effects
 
-// "Sobre o Cartridges" (D84): as páginas do `Adw.AboutDialog` (360 de largura, altura pelo conteúdo), numa `MolduraDoDialogo`.
-// Só desenha: os textos, a página à vista e as ações são do `modelo` (o `Sobre`, cartridges/modelos/sobre.py). Na principal o
-// cabeçalho não tem título ("Cartridges" surge ao rolar); nas subpáginas, a seta de voltar e o título da página. Texto de
-// terceiros (o log) em PlainText; a licença é a única em StyledText, e só o link dela é aberto. Esc volta uma página e, na
-// principal, fecha. Alt+letra abre a linha ou aciona o botão (os mnemônicos da `main`).
+// As páginas do diálogo "Sobre", numa `MolduraDoDialogo`. Só desenha: os textos, a página à vista e as ações são do
+// `modelo` (o `Sobre`, cartridges/modelos/sobre.py). Na principal o cabeçalho não tem título (o nome surge ao rolar); nas
+// subpáginas, a seta de voltar e o título da página. Texto de terceiros (o log) em PlainText; a licença é a única em
+// StyledText, e só o link dela é aberto. Esc volta uma página e, na principal, fecha. Alt+letra abre a linha ou aciona o
+// botão.
 MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoSobre"
@@ -36,7 +36,7 @@ MolduraDoDialogo {
         var de = paginaAnterior
         paginaAnterior = pagina
         rolagem.contentY = 0
-        // O anel só aparece se o teclado já estava em uso (`:focus-visible`): com o mouse, sem anel (DA-06).
+        // O anel só aparece se o teclado já estava em uso: com o mouse, sem anel.
         var foco = Window.window ? Window.window.activeFocusItem : null
         var teclado = pedidoPorTeclado || (!!foco && foco.visualFocus === true)
         Qt.callLater(() => dialogo.focar(de, teclado))
@@ -50,14 +50,13 @@ MolduraDoDialogo {
         alvo.forceActiveFocus(teclado ? Qt.TabFocusReason : Qt.OtherFocusReason)
     }
 
-    // Alt+← volta à página anterior (a ação `navigation.pop` do `AdwNavigationView`), com o anel de foco da tecla.
     Shortcut {
         sequence: "Alt+Left"
         enabled: dialogo.aberto && !dialogo.avisoAberto && dialogo.pagina !== "principal"
         onActivated: { dialogo.pedidoPorTeclado = true; dialogo.modelo.voltar(); dialogo.pedidoPorTeclado = false }
     }
 
-    // Criado só ao clicar: o seletor nativo não precisa existir antes. O nome do log na pasta Documentos.
+    // Criado só ao clicar: o seletor nativo não precisa existir antes.
     Loader {
         id: cargaDoSalvar
         active: false
@@ -71,8 +70,8 @@ MolduraDoDialogo {
         onLoaded: item.open()
     }
 
-    // Uma linha da página principal (`AdwActionRow` com `go-next`); Alt+`mnemonico` a abre. O mnemônico é a primeira letra
-    // do título (`_Novidades`, `main.py:129`) e aparece sublinhado enquanto o Alt está seguro.
+    // Uma linha da página principal; Alt+`mnemonico` a abre. O mnemônico é a primeira letra do título e aparece
+    // sublinhado enquanto o Alt está seguro.
     component LinhaDoSobre: LinhaDeAcao {
         id: linha
         property string destino
@@ -101,7 +100,6 @@ MolduraDoDialogo {
         }
     }
 
-    // O texto do corpo de uma subpágina: `body`.
     component TextoDeCorpo: Text {
         Layout.fillWidth: true
         textFormat: Text.PlainText
@@ -114,7 +112,6 @@ MolduraDoDialogo {
 
     CabecalhoDoDialogo {
         id: cabecalho
-        // A principal não tem título: "Cartridges" aparece quando o nome sai de vista (`main_title_revealer`).
         titulo: dialogo.pagina === "principal" ? "Kyron" : (dialogo.modelo ? dialogo.modelo.titulos[dialogo.pagina] : "")
         objetoDoTitulo: "tituloDaPaginaDoSobre"
         opacidadeDoTitulo: dialogo.pagina !== "principal" || rolagem.contentY > nomeDoApp.y + nomeDoApp.height ? 1 : 0
@@ -125,7 +122,7 @@ MolduraDoDialogo {
                 id: botaoVoltar
                 objectName: "botaoVoltarDoSobre"
                 visible: dialogo.pagina !== "principal"
-                estilo: "plano"  // o botão de voltar da barra do `AdwNavigationPage` é plano
+                estilo: "plano"
                 icone: "go-previous"
                 dica: "Voltar"
                 onClicked: dialogo.modelo.voltar()
@@ -149,13 +146,12 @@ MolduraDoDialogo {
         Item {
             id: corpo
             width: rolagem.width
-            // O cartão do `AdwAboutDialog` não encolhe nas subpáginas: guarda a altura da principal, medida à vista.
+            // O cartão não encolhe nas subpáginas: guarda a altura da principal, medida à vista.
             property real alturaDaPrincipal: 0
             implicitHeight: Math.max(alturaDaPrincipal, principal.visible ? principal.implicitHeight : 0, novidades.visible ? novidades.implicitHeight : 0,
                 creditos.visible ? creditos.implicitHeight : 0, legal.visible ? legal.implicitHeight : 0,
                 problemas.visible ? problemas.implicitHeight : 0, depuracao.visible ? depuracao.implicitHeight : 0)
 
-            // --- principal: margem 12, espaço 6; os grupos a 18 da versão e entre si (`adw.css:1910`) ---
             ColumnLayout {
                 id: principal
                 visible: dialogo.pagina === "principal"
@@ -174,12 +170,11 @@ MolduraDoDialogo {
                     sourceSize: Qt.size(256, 256)
                     fillMode: Image.PreserveAspectFit
                     Accessible.ignored: true
-                    // `icon-dropshadow`: a sombra suave de 12 px a 5% embaixo do ícone.
                     layer.enabled: true
                     layer.effect: MultiEffect {
                         shadowEnabled: true
                         shadowColor: Qt.rgba(0, 0, 6 / 255, 0.05)
-                        blurMax: 12  // o raio do `icon-dropshadow`; o padrão (32) borrava demais
+                        blurMax: 12  // o padrão (32) borrava demais
                         shadowBlur: 1.0
                         shadowVerticalOffset: 1
                     }
@@ -207,7 +202,6 @@ MolduraDoDialogo {
                     color: Tema.texto
                     font { family: Tema.fonte; pixelSize: Tema.corpo }
                 }
-                // `.app-version`: botão em cápsula com o texto no destaque; copia o número (`about.copy-property`).
                 Button {
                     id: botaoDaVersao
                     objectName: "botaoDaVersao"
@@ -219,7 +213,6 @@ MolduraDoDialogo {
                     bottomPadding: 3
                     leftPadding: 18
                     rightPadding: 18
-                    // `.app-version`: padding 3/18 por fora do `min-height: 24` do botão (30 no total).
                     implicitHeight: Math.max(24, selo.implicitHeight) + topPadding + bottomPadding
                     Accessible.name: "Copiar a versão"
                     Keys.onReturnPressed: click()
@@ -237,15 +230,13 @@ MolduraDoDialogo {
                     }
                     background: Rectangle {
                         radius: height / 2
-                        // O botão do GTK deriva o fundo de `currentColor`, que aqui é o destaque: 10%, 15% e 30%.
+                        // O fundo é derivado de `currentColor`, que aqui é o destaque: 10%, 15% e 30%.
                         color: Qt.alpha(Tema.destaqueTexto, botaoDaVersao.down ? 0.30 : botaoDaVersao.hovered ? 0.15 : 0.10)
                         AnelDeFoco { ativo: botaoDaVersao.visualFocus; raio: parent.radius; afastamento: 1 }
                     }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
-                    // `margin-top: 18` mais o `border-spacing` de 6 da caixa de fora (a margem não substitui o espaço); embaixo,
-                    // `margin-bottom: 6` mais os 12 da margem da caixa de fora.
                     Layout.topMargin: 18
                     Layout.bottomMargin: 18
                     spacing: 18
@@ -269,7 +260,6 @@ MolduraDoDialogo {
                 }
             }
 
-            // --- novidades da versão: texto somente leitura, margens 12/18, com seleção ---
             ColumnLayout {
                 id: novidades
                 visible: dialogo.pagina === "novidades"
@@ -325,7 +315,6 @@ MolduraDoDialogo {
                 }
             }
 
-            // --- créditos: um grupo por seção (o título quebra a linha) com uma linha por pessoa ---
             ColumnLayout {
                 id: creditos
                 visible: dialogo.pagina === "creditos"
@@ -371,7 +360,6 @@ MolduraDoDialogo {
                 }
             }
 
-            // --- aviso legal: copyright e licença num só rótulo; o link da GPL entra no Tab e o Enter o abre ---
             ColumnLayout {
                 id: legal
                 visible: dialogo.pagina === "legal"
@@ -396,14 +384,12 @@ MolduraDoDialogo {
                     color: Tema.texto
                     font { family: Tema.fonte; pixelSize: Tema.corpo }
                     onLinkActivated: link => dialogo.modelo.abrirLicenca(link)
-                    // Cursor de mão sobre o link.
                     HoverHandler { cursorShape: licenca.hoveredLink !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor }
 
                     AnelDeFoco { objectName: "focoDaLicenca"; ativo: licenca.activeFocus; raio: 4; afastamento: -4 }
                 }
             }
 
-            // --- solução de problemas: o texto e a linha que abre o log ---
             ColumnLayout {
                 id: problemas
                 visible: dialogo.pagina === "problemas"
@@ -424,7 +410,6 @@ MolduraDoDialogo {
                 }
             }
 
-            // --- informações de depuração: o log na página inteira, com seleção; os botões ficam na barra de baixo ---
             ColumnLayout {
                 id: depuracao
                 visible: dialogo.pagina === "depuracao"
@@ -448,7 +433,6 @@ MolduraDoDialogo {
                     selectionColor: Tema.destaque
                     selectedTextColor: Tema.textoDoDestaque
                     font { family: Tema.fonte; pixelSize: Tema.corpo }
-                    // ↑/↓ rolam a página (o cursor de um `TextEdit` somente leitura não anda).
                     Keys.onUpPressed: rolagem.contentY = Math.max(0, rolagem.contentY - 40)
                     Keys.onDownPressed: rolagem.contentY = Math.max(0, Math.min(rolagem.contentHeight - rolagem.height, rolagem.contentY + 40))
                 }
@@ -456,7 +440,6 @@ MolduraDoDialogo {
         }
     }
 
-    // `GtkActionBar` da página do log: "Copiar texto" à esquerda, "Salvar como…" à direita. Alt+C e Alt+S.
     Item {
         id: barraDeAcoes
         objectName: "barraDeAcoesDoSobre"

@@ -2,12 +2,10 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// A janela de login da EA e da Epic (um `Adw.Dialog` de 460 de largura): os passos, o campo onde se cola o que a loja
-// mostrou, o erro e os botões. Só desenha: o que ela mostra e faz é o `login` (um `LoginDaLoja`,
-// cartridges/modelos/contas.py); sem `login`, ela some.
-// Modal para o mouse, o teclado e o controle, como os outros diálogos (a `MolduraDoDialogo` cobre a janela inteira);
-// Esc, o X e "Cancelar" fecham; Enter no campo de uma linha conecta. O que a loja devolve e o texto colado são de
-// terceiros: sempre PlainText.
+// A janela de login da EA e da Epic: os passos, o campo onde se cola o que a loja mostrou, o erro e os botões. Só
+// desenha: o estado é do `login` (um `LoginDaLoja`, cartridges/modelos/contas.py); sem `login`, ela some. Modal para o
+// mouse, o teclado e o controle (a `MolduraDoDialogo` cobre a janela inteira); Esc, o X e "Cancelar" fecham; Enter no
+// campo de uma linha conecta. O que a loja devolve e o texto colado são de terceiros: sempre PlainText.
 MolduraDoDialogo {
     id: janela
 
@@ -16,8 +14,7 @@ MolduraDoDialogo {
 
     aberto: !!login && login.aberto
     largura: 460
-    // A `main` não chama `grab_focus`: o foco cai no primeiro campo (medido num `Adw.Dialog` com o mesmo corpo: o texto
-    // da `Adw.EntryRow` na Epic, o `TextView` na EA).
+    // O foco cai no primeiro campo: o texto da linha na Epic, o campo de várias linhas na EA.
     focoInicial: campoAtual
     nomeAcessivel: login ? login.titulo : ""
     onFecharPedido: if (login) login.fechar()
@@ -37,7 +34,6 @@ MolduraDoDialogo {
         onFechar: if (janela.login) janela.login.fechar()
     }
 
-    // A caixa do corpo: 12 em cima, 24 dos lados e embaixo; entre os blocos, 18 na Epic e 12 na EA.
     ColumnLayout {
         Layout.fillWidth: true
         Layout.topMargin: 12
@@ -57,7 +53,6 @@ MolduraDoDialogo {
             color: Tema.texto
             font { family: Tema.fonte; pixelSize: Tema.corpo }
         }
-        // Só a EA tem o rótulo fora do campo (`heading`); na Epic o rótulo flutua dentro da fileira.
         Text {
             objectName: "rotuloDoCampoDoLogin"
             Layout.fillWidth: true
@@ -68,7 +63,6 @@ MolduraDoDialogo {
             font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
         }
 
-        // O campo de uma linha (o código da Epic): a `Adw.EntryRow` numa lista com borda; Enter conecta.
         GrupoDeLinhas {
             Layout.fillWidth: true
             visible: janela.login !== null && !janela.login.multilinha
@@ -82,8 +76,6 @@ MolduraDoDialogo {
             }
         }
 
-        // O campo de várias linhas (o pedido copiado do navegador): o `TextView` de uma `ScrolledWindow` com moldura
-        // (1 px a 15%, fundo da vista, margens 6, quebra por palavra e depois por caractere), de pelo menos 160 de altura.
         Rectangle {
             objectName: "rolagemDoLogin"
             Layout.fillWidth: true
@@ -157,7 +149,6 @@ MolduraDoDialogo {
             Layout.alignment: Qt.AlignRight
             spacing: 12
 
-            // O `Adw.Spinner` cabe em 16 px na fileira de botões (tamanho natural medido: 16x16).
             Girador {
                 objectName: "indicadorDoLogin"
                 Layout.alignment: Qt.AlignVCenter

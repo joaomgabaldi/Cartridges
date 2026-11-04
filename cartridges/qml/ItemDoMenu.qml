@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O item de menu (modelbutton): 32 de altura, raio 9, 10% ao passar e 19% pressionado, marca à esquerda e seta do
-// submenu (`go-next`, a 30%) à direita. `radio`: a marca é a bolinha do `radio` do GTK, com aro também desligada.
+// O item de menu: 32 de altura, raio 9, marca à esquerda e seta do submenu à direita. `radio`: a marca é a bolinha, com
+// aro também desligada.
 MenuItem {
     id: item
 
@@ -15,7 +15,7 @@ MenuItem {
     hoverEnabled: true
 
     contentItem: Text {
-        leftPadding: item.checkable ? 22 : 0  // lugar da marca
+        leftPadding: item.checkable ? 22 : 0
         text: item.text
         textFormat: Text.PlainText
         color: Tema.texto

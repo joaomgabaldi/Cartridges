@@ -2,11 +2,10 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// "Calibrar as cores", por cima das Preferências (`Adw.Dialog` de 520 por 620 com a `HeaderBar` e uma página por passo): a
-// cor de referência de cada etapa em um quadro, o dispositivo aceso nela e os controles até os dois ficarem iguais. Só
-// desenha: o que ele mostra e grava é o `assistente` (um `AssistenteDeCalibracao`, cartridges/calibracao_janela.py), que
-// existe só enquanto a janela está aberta. As Preferências o ligam ao `preferencias.calibracao`; quem o usar em outro
-// lugar passa o próprio `assistente`. Esc cancela; o foco volta a quem o abriu.
+// "Calibrar as cores", por cima das Preferências: mostra a cor de referência de cada etapa, acende o dispositivo nela e
+// oferece os controles até os dois ficarem iguais. Só desenha: o estado vem do `assistente`
+// (cartridges/calibracao_janela.py), que existe só enquanto a janela está aberta; as Preferências o ligam ao
+// `preferencias.calibracao`. Esc cancela; o foco volta a quem o abriu.
 MolduraDoDialogo {
     id: dialogo
     objectName: "assistenteDeCalibracao"
@@ -20,8 +19,7 @@ MolduraDoDialogo {
     nomeAcessivel: "Calibrar as cores"
     onFecharPedido: if (assistente) assistente.cancelar()
 
-    // O foco acompanha a página: o primeiro dispositivo da lista, o "Próximo" nas etapas e o "Pausar" no teste. (Fica a
-    // cargo do GTK na `main`; aqui o Qt perderia o foco ao esconder a página e o Esc deixaria de chegar ao diálogo.)
+    // O foco acompanha a página: o Qt perderia o foco ao esconder a página e o Esc deixaria de chegar ao diálogo.
     function focarPagina() {
         if (!aberto) return
         if (pagina === "inicio") {
@@ -35,19 +33,16 @@ MolduraDoDialogo {
     // Depois do foco inicial da moldura, que também é adiado.
     onAbertoChanged: if (aberto) Qt.callLater(() => Qt.callLater(focarPagina))
 
-    // A página de cada passo: 12 em cima, 24 embaixo e dos lados, 18 entre os blocos.
     component Pagina: ColumnLayout {
         anchors { fill: parent; topMargin: 12; bottomMargin: 24; leftMargin: 24; rightMargin: 24 }
         spacing: 18
     }
 
-    // Os botões da base de cada página, à direita, com 12 entre eles.
     component FilaDeBotoes: RowLayout {
         Layout.alignment: Qt.AlignRight
         spacing: 12
     }
 
-    // A cor de referência: o quadro que a pessoa compara com o dispositivo (`DrawingArea` sem borda, raio 12).
     component Amostra: Rectangle {
         Layout.fillWidth: true
         radius: 12
@@ -64,7 +59,6 @@ MolduraDoDialogo {
         Accessible.name: text
     }
 
-    // A coluna dos rótulos tem a largura do maior (a grade do GTK usa a natural).
     TextMetrics {
         id: medidaDaIntensidade
         font { family: Tema.fonte; pixelSize: Tema.corpo }
@@ -77,8 +71,6 @@ MolduraDoDialogo {
     }
     readonly property real larguraDosRotulos: Math.ceil(Math.max(medidaDaIntensidade.width, medidaDaTemperatura.width))
 
-    // Um controle deslizante com o rótulo à esquerda (`Gtk.Scale` do Adwaita: trilha de 10, botão branco de 20 e 12 de
-    // respiro). `neutro` é o ponto sem ajuste, marcado embaixo da barra: para onde o "Restaurar" leva.
     component LinhaDeControle: Item {
         id: linhaDeControle
         property string rotulo
@@ -113,7 +105,6 @@ MolduraDoDialogo {
             value: linhaDeControle.valor
             focusPolicy: Qt.StrongFocus
             hoverEnabled: true
-            // `scale`: 12 de respiro em volta; o botão fica a 2 px das pontas da trilha.
             leftPadding: 12 + 2
             rightPadding: 12 + 2
             topPadding: 0
@@ -143,7 +134,6 @@ MolduraDoDialogo {
                         }
                     }
                 }
-                // A marca do ponto sem ajuste: 1 x 6, a 6 da trilha, apagada.
                 Rectangle {
                     x: parent.inicio + 2 + (linhaDeControle.neutro - barra.from) / (barra.to - barra.from) * (parent.larguraDaTrilha - 4)
                     y: 11 + 10 + 6
@@ -166,8 +156,6 @@ MolduraDoDialogo {
         }
     }
 
-    // Os controles de um dispositivo (`indice` em `assistente.controles`): Tom e Intensidade nas cores, Temperatura
-    // no Branco.
     component Controles: Item {
         id: controles
         required property int indice
@@ -216,7 +204,6 @@ MolduraDoDialogo {
                 valor: controles.dado.temperatura
                 onMovido: v => dialogo.assistente.mudarTemperatura(v, controles.dado.id)
             }
-            // As pontas da Temperatura, em rótulos próprios, sob a barra.
             Item {
                 visible: controles.dado.branco
                 width: parent.width
@@ -257,7 +244,6 @@ MolduraDoDialogo {
         Layout.fillWidth: true
         Layout.fillHeight: true
 
-        // A escolha do dispositivo.
         Pagina {
             visible: dialogo.pagina === "inicio"
 
@@ -269,8 +255,8 @@ MolduraDoDialogo {
                 color: Tema.texto
                 font { family: Tema.fonte; pixelSize: Tema.corpo }
             }
-            // Criada com o diálogo já à vista: o cartão some enquanto a altura é zero, e um `Column` não conta as linhas que
-            // nascem sob um pai escondido (a altura nunca sairia de zero).
+            // Criada com o diálogo já à vista: o cartão some enquanto a altura é zero, e um `Column` não conta as linhas
+            // que nascem sob um pai escondido (a altura nunca sairia de zero).
             Loader {
                 id: cargaDaLista
                 Layout.fillWidth: true
@@ -288,7 +274,7 @@ MolduraDoDialogo {
                             readonly property var dispositivo: dialogo.assistente && index < dialogo.assistente.linhas.length
                                 ? dialogo.assistente.linhas[index] : { id: "", nome: "", subtitulo: "" }
                             objectName: "dispositivoDaCalibracao-" + dispositivo.id
-                            // O nome vem da conta da Tuya: a linha o mostra em PlainText.
+                            // O nome vem da conta da Tuya: sempre PlainText.
                             titulo: dispositivo.nome
                             subtitulo: dispositivo.subtitulo
                             icone: "go-next"
@@ -297,7 +283,6 @@ MolduraDoDialogo {
                     }
                 }
             }
-            // Os botões da base ficam no pé (`Gtk.Box` do fim, sem `vexpand`: o vão sobra embaixo do último bloco).
             FilaDeBotoes {
                 Botao {
                     objectName: "botaoTestarCalibracao"
@@ -308,12 +293,10 @@ MolduraDoDialogo {
             Item { Layout.fillHeight: true }
         }
 
-        // Uma cor de um dispositivo.
         Pagina {
             visible: dialogo.pagina === "etapa"
 
             Titulo { text: dialogo.assistente ? dialogo.assistente.titulo : "" }
-            // A amostra ocupa o que sobra (`vexpand`), com 240 no mínimo.
             Amostra {
                 objectName: "amostraDaCalibracao"
                 Layout.fillHeight: true
@@ -336,7 +319,6 @@ MolduraDoDialogo {
             }
         }
 
-        // Uma cor de todos os dispositivos: a amostra menor e, embaixo, os controles de cada um, numa área que rola.
         Pagina {
             visible: dialogo.pagina === "etapa_todos"
 
@@ -361,8 +343,6 @@ MolduraDoDialogo {
                     width: rolagem.width
                     spacing: 18
 
-                    // Um grupo por dispositivo: só o título e os controles, sem cartão (`PreferencesGroup.add` de um
-                    // widget que não é linha).
                     Repeater {
                         model: dialogo.pagina === "etapa_todos" ? dialogo.assistente.controles.length : 0
                         Column {
@@ -370,7 +350,7 @@ MolduraDoDialogo {
                             required property int index
                             width: grupos.width - 12
                             spacing: 6
-                            // O nome vem da conta da Tuya: o grupo o mostra em PlainText.
+                            // O nome vem da conta da Tuya: sempre PlainText.
                             Text {
                                 width: parent.width
                                 height: 34
@@ -402,7 +382,6 @@ MolduraDoDialogo {
             }
         }
 
-        // O teste final: as cores passam sozinhas.
         Pagina {
             visible: dialogo.pagina === "teste"
 

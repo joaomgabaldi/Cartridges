@@ -2,18 +2,14 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Shapes
 
-// O aviso de página sem jogos, como o Adw.StatusPage da versão anterior: ícone de 128 px a 55%, título `.title-1`,
-// descrição de 12 px e, se houver, o botão em pílula. Espaços de 36, 12 e 36 (CSS 1921-1929).
+// O aviso de página sem jogos: ícone de 128 px a 55%, título, descrição de 12 px e, se houver, o botão em pílula.
 Item {
     id: estado
 
-    // O nome do ícone simbólico (`data/icones/<nome>-symbolic.svg`), como o `icon-name` da `main`.
     property string icone
-    // O ícone simbólico do app (o da `main` em "Nenhum jogo").
     property bool iconeDoApp: false
     property string titulo
     property string descricao
-    // Sem texto, não há botão.
     property string rotuloDoBotao
     property bool botaoHabilitado: true
     // O Big Picture usa o aviso em branco sobre o fundo preto.
@@ -21,7 +17,7 @@ Item {
     property color corDaDescricao: Tema.texto
     property color corDoIcone: Tema.texto
     signal botaoClicado()
-    // O controle alcança o botão (a `main` o põe na ordem do foco da página vazia).
+    // O controle alcança o botão da página vazia.
     readonly property bool botaoFocado: botao.activeFocus
     function focarBotao() { botao.forceActiveFocus(Qt.TabFocusReason) }
     function acionarBotao() { botao.click() }
@@ -61,7 +57,6 @@ Item {
             cor: estado.corDoIcone
             opacity: Tema.opacidadeApagado
         }
-        // Do ícone ao título são 36 (12 do espaçamento e 24 daqui); do título à descrição, 12.
         Text {
             width: parent.width
             topPadding: estado.iconeDoApp || estado.nomeDoIcone !== "" ? 24 : 0
@@ -81,7 +76,6 @@ Item {
             color: estado.corDaDescricao
             font { family: Tema.fonte; pixelSize: Tema.corpo }
         }
-        // Da descrição ao botão, 36.
         Item {
             visible: estado.rotuloDoBotao !== ""
             anchors.horizontalCenter: parent.horizontalCenter

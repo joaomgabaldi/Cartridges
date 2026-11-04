@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O botão redondo do canto inferior esquerdo que abre as tarefas em andamento (D77).
+// O botão redondo do canto inferior esquerdo que abre as tarefas em andamento.
 // Não fica à vista: entra deslizando quando uma tarefa começa, recua depois de `entradaMs` e volta quando o mouse
 // passa rente à borda, no canto. Cobre a área das páginas sem tirar nada delas: só o canto é vigiado, por um
 // `HoverHandler`, e o botão recolhido não recebe o mouse. `painelDasTarefas` vem do contexto (cartridges/app.py).
@@ -169,7 +169,6 @@ Item {
             enabled: raiz.vigiarMouse
             onHoveredChanged: raiz.aoPassarNoBotao(hovered)
         }
-        // A dica da libadwaita; acima do botão, porque ele fica rente ao fundo da janela.
         Dica {
             texto: "Tarefas em andamento"
             ativa: circulo.hovered
@@ -185,7 +184,6 @@ Item {
             NumberAnimation { objectName: "deslizeDasTarefas"; duration: Tema.duracaoMedia; easing.type: Easing.OutCubic }
         }
 
-        // `view-refresh-symbolic`, branco a 90% (`.osd`).
         contentItem: Item {
             Icone {
                 id: glifo
@@ -195,8 +193,6 @@ Item {
                 opacity: 0.9
             }
         }
-        // `.circular.osd`: preto a 65%; ao passar, 15% de branco na mistura; pressionado, 25%. Com a sombra do
-        // `.botao-tarefas`: `0 2px 8px rgba(0, 0, 0, .35)`.
         background: Rectangle {
             radius: width / 2
             color: circulo.down ? Qt.rgba(0.25, 0.25, 0.25, 0.65)
@@ -206,7 +202,6 @@ Item {
         }
         AnelDeFoco { ativo: circulo.visualFocus; raio: 17; afastamento: 1 }
 
-        // Gira enquanto à vista.
         RotationAnimator {
             id: giro
             objectName: "giroDasTarefas"

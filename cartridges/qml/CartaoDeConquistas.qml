@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// O cartão de conquistas da página do jogo, logo abaixo do HowLongToBeat: as duas respondem a "quanto do jogo já foi
-// feito", uma em horas, a outra em metas. Só desenha `conquistasDoJogo.pagina`; o clique abre a lista completa.
+// O cartão de conquistas da página do jogo, logo abaixo do HowLongToBeat. Só desenha `conquistasDoJogo.pagina`; o clique
+// abre a lista completa.
 ColumnLayout {
     id: bloco
     objectName: "blocoDeConquistas"
@@ -15,7 +15,6 @@ ColumnLayout {
     visible: dados.visivel === true
     spacing: 6
 
-    // `caption-heading dim-label`.
     Text {
         Layout.leftMargin: 3
         text: "Conquistas"
@@ -32,7 +31,6 @@ ColumnLayout {
         rightPadding: 16
         topPadding: 12
         bottomPadding: 12
-        // `.conquistas-card`: min-width 260 é do conteúdo (content-box); o padding de 16 vem por fora, 292 no total.
         implicitWidth: leftPadding + Math.max(260, contentItem.implicitWidth) + rightPadding
         Accessible.name: "Conquistas, " + (bloco.dados.contagem || "")
         hoverEnabled: true
@@ -46,7 +44,7 @@ ColumnLayout {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 0  // a `Box` da `main` não tem espaçamento: a contagem e a porcentagem se tocam
+                spacing: 0
                 Text {
                     objectName: "contagemDeConquistas"
                     Layout.fillWidth: true
@@ -79,7 +77,7 @@ ColumnLayout {
                     delegate: IconeDaConquista {
                         required property var modelData
                         tamanho: 32
-                        semLadrilho: true  // a `main` deixa só o espaço de 32 px até o ícone chegar (e se falhar)
+                        semLadrilho: true
                         url: modelData.url
                         cinza: modelData.cinza
                         oculta: modelData.oculta
@@ -96,7 +94,6 @@ ColumnLayout {
             }
         }
 
-        // `button.card`: o cartão, mais 4% do texto ao passar e 8% ao apertar, com a transição de 200 ms.
         background: Rectangle {
             radius: 12
             color: Tema.cartao
@@ -110,7 +107,7 @@ ColumnLayout {
                 Behavior on color { ColorAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
                 Behavior on opacity { NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
             }
-            AnelDeFoco { ativo: cartao.visualFocus; raio: 12; afastamento: -1 }  // `button.card:focus-visible`: outline-offset -1
+            AnelDeFoco { ativo: cartao.visualFocus; raio: 12; afastamento: -1 }
         }
         Dica { texto: "Ver todas as conquistas"; ativa: cartao.hovered }
     }

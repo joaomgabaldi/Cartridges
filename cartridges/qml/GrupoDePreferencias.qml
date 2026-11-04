@@ -1,15 +1,14 @@
 import QtQuick
 
-// Um grupo de linhas das Preferências (AdwPreferencesGroup): título e descrição acima de um `GrupoDeLinhas`.
-// O grupo inteiro some quando nenhuma das linhas aparece. A descrição é texto puro; só a que leva o
-// link "Obtenha aqui" (texto nosso, `descricaoRica`) é StyledText e avisa o link tocado em `linkAcionado`.
+// Um grupo de linhas das Preferências: título e descrição acima de um `GrupoDeLinhas`. O grupo inteiro some quando
+// nenhuma das linhas aparece. A descrição é texto puro; só a que leva o link "Obtenha aqui" (texto nosso,
+// `descricaoRica`) é StyledText e avisa o link tocado em `linkAcionado`.
 Column {
     id: grupo
 
     property string titulo
     property string descricao
     property bool descricaoRica: false
-    // `separate-rows`: cada linha é um cartão.
     property alias separada: caixa.separada
     default property alias linhas: caixa.linhas
     property alias sufixo: sufixoDoTitulo.data
@@ -17,10 +16,9 @@ Column {
     signal linkAcionado(string endereco)
 
     width: parent ? parent.width : implicitWidth
-    // preferencesgroup > box: 6 entre o cabeçalho e o cartão; com descrição, 6 a mais.
     spacing: 6
-    // Com linhas das Preferências, conta-as pela regra (`aparece`), nunca pelo `visible` ou pelo `implicitHeight`:
-    // estes dependem do próprio grupo e o deixavam sempre escondido (D58).
+    // Com linhas das Preferências, conta-as pela regra (`aparece`), nunca pelo `visible` ou pelo `implicitHeight`: estes
+    // dependem do próprio grupo e o deixavam sempre escondido.
     readonly property int linhasAMostrar: {
         var n = 0
         for (var i = 0; i < caixa.itens.length; ++i) {
@@ -29,7 +27,7 @@ Column {
         }
         return n
     }
-    // Sem linha buscável (os assistentes): vale a altura, como antes da busca.
+    // Sem linha buscável (os assistentes): vale a altura.
     readonly property bool soTemOutros: {
         for (var i = 0; i < caixa.itens.length; ++i)
             if (caixa.itens[i].buscavel === true) return false
@@ -37,8 +35,7 @@ Column {
     }
     visible: soTemOutros ? caixa.implicitHeight > 0 : linhasAMostrar > 0
 
-    // O título e, à direita dele, o que o grupo puser em `sufixo` (um botão-link, como o `header-suffix` do Adwaita).
-    // box.single-line: 34 de altura mínima quando só há o título.
+    // O título e, à direita dele, o que o grupo puser em `sufixo`.
     Item {
         width: parent.width
         // Título e descrição apagam com o grupo; as linhas apagam sozinhas.
@@ -72,7 +69,7 @@ Column {
         text: grupo.descricao
         textFormat: grupo.descricaoRica ? Text.StyledText : Text.PlainText
         wrapMode: Text.Wrap
-        // A descrição é `dim-label` (55%): o link, com ela, também.
+        // A descrição é apagada (55%): o link, com ela, também.
         linkColor: Qt.alpha(Tema.destaqueTexto, Tema.destaqueTexto.a * Tema.opacidadeApagado)
         color: Tema.textoSecundario
         font { family: Tema.fonte; pixelSize: Tema.corpo }

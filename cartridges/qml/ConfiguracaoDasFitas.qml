@@ -2,11 +2,9 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// "Configurar a iluminação inteligente": o assistente que busca os dispositivos na conta da Tuya (`Adw.Dialog` de 480 por
-// 520 com a `HeaderBar` e uma `PreferencesPage` por passo). Só desenha: o que ele mostra e grava é o `assistente` (um
-// `FitaWizard`, cartridges/fita_wizard.py). Por cima de quem o hospeda: as Preferências o ligam ao
-// `preferencias.configuracaoDasFitas`; quem o usar em outro lugar passa o próprio `assistente`. Esc fecha; o foco volta a
-// quem o abriu.
+// "Configurar a iluminação inteligente": o assistente que busca os dispositivos na conta da Tuya, por cima de quem o
+// hospeda. Só desenha: o estado é do `assistente` (um `FitaWizard`, cartridges/fita_wizard.py); as Preferências o ligam
+// ao `preferencias.configuracaoDasFitas`. Esc fecha; o foco volta a quem o abriu.
 MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoDaConfiguracaoDasFitas"
@@ -53,7 +51,6 @@ MolduraDoDialogo {
         clip: true
         ScrollBar.vertical: BarraDeRolagem {}
 
-        // `PreferencesPage`: 24 em cima e embaixo, 12 dos lados e 24 entre os grupos.
         Column {
             id: paginas
             x: 12
@@ -61,7 +58,6 @@ MolduraDoDialogo {
             width: rolagem.width - 24
             spacing: 24
 
-            // As credenciais da conta de desenvolvedor.
             Column {
                 width: parent.width
                 spacing: 24
@@ -93,7 +89,7 @@ MolduraDoDialogo {
                         }
                     }
 
-                    // Enter nos campos não faz nada: a `main` não liga `apply` nem `entry-activated`.
+                    // Enter nos campos não faz nada.
                     LinhaDeTexto {
                         id: campoDoId
                         objectName: "campoDoAccessId"
@@ -107,7 +103,6 @@ MolduraDoDialogo {
                         echoMode: dialogo.segredoVisivel ? TextInput.Normal : TextInput.Password
                         text: dialogo.assistente ? dialogo.assistente.segredo : ""
                         onEditado: dialogo.assistente.segredo = text
-                        // O botão de mostrar o texto da `Adw.PasswordEntryRow`.
                         Botao {
                             objectName: "botaoMostrarOSegredo"
                             estilo: "plano"
@@ -153,7 +148,6 @@ MolduraDoDialogo {
                 }
             }
 
-            // Os dispositivos achados: marcar é manter; desmarcar remove.
             Column {
                 width: parent.width
                 spacing: 24
@@ -175,7 +169,7 @@ MolduraDoDialogo {
                             readonly property var dispositivo: dialogo.assistente && index < dialogo.assistente.dispositivos.length
                                 ? dialogo.assistente.dispositivos[index] : { id: "", nome: "", subtitulo: "", ativo: false, marcado: false }
                             objectName: "dispositivoDasFitas-" + dispositivo.id
-                            // O nome vem da conta da Tuya: a linha o mostra em PlainText.
+                            // O nome vem da conta da Tuya: sempre PlainText.
                             titulo: dispositivo.nome
                             subtitulo: dispositivo.subtitulo
                             enabled: dispositivo.ativo
@@ -197,7 +191,6 @@ MolduraDoDialogo {
         }
     }
 
-    // A busca na nuvem (`Adw.StatusPage` com o spinner de 32 como filho).
     Item {
         Layout.fillWidth: true
         Layout.fillHeight: true

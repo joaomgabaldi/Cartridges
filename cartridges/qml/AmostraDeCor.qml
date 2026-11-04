@@ -2,24 +2,19 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Window
 
-// O botão da cor (o `MenuButton` com a `DrawingArea` de 22x22 da `main`): a amostra em círculo, sem borda, e o balão com o
-// `SeletorDeCor`, centrado no botão e com seta. No automático (`roda`), a amostra é uma roda de cores com o furo
-// transparente, do matiz 0 no topo. Cada movimento no seletor emite `escolhida`; quem usa grava e devolve a cor em `cor`.
+// A amostra em círculo e o balão com o `SeletorDeCor`. No automático (`roda`), a amostra é uma roda de cores com o furo
+// transparente, do matiz 0 no topo.
 Botao {
     id: amostra
 
     property color cor
     property bool roda: false
-    // Os `objectName` do balão, do seletor e da amostra (os testes de cada tela).
     property string nomeDoBalao: objectName + "Balao"
     property string nomeDoSeletor: objectName + "Seletor"
     property string nomeDaAmostra: objectName + "Cor"
     property string nomeDaRoda: objectName + "Roda"
     readonly property alias balao: balao
-    // O balão abre na paleta (`Gtk.ColorChooserWidget`); o "+" leva ao seletor de cor livre. A paleta é a do GTK 4: nove
-    // colunas de cinco tons (azul, verde, amarelo, laranja, vermelho, roxo, marrom, branco com cinzas claros e cinzas escuros com preto).
     property bool editando: false
-    // O "+" some ao abrir o seletor: o foco vai para ele.
     onEditandoChanged: if (editando) Qt.callLater(() => seletor.forceActiveFocus(Qt.TabFocusReason))
     property Item primeiraDaPaleta: null
     readonly property var paleta: [
@@ -34,8 +29,6 @@ Botao {
         ["#77767b", "#5e5c64", "#3d3846", "#241f31", "#000000"]
     ]
 
-    // Os nomes dos tons que o `GtkColorChooserWidget` da `main` dá (a DLL do GTK; sem tradução na `main`, em inglês),
-    // vertidos para o português do app, na ordem de `paleta`.
     readonly property var nomesDosTons: {
         const cores = ["Azul", "Verde", "Amarelo", "Laranja", "Vermelho", "Roxo", "Marrom"]
         const tons = [" muito claro", " claro", "", " escuro", " muito escuro"]
@@ -45,9 +38,7 @@ Botao {
         return linhas
     }
 
-    // Uma linha que aciona a amostra (`apertou` no aperto, `alternar` na soltura): o aperto fora do botão fecha o balão, e a
-    // soltura não pode reabri-lo. Pela ordem dos eventos, sem relógio: no aperto vale o estado de antes dele (aberto agora, ou
-    // fechado neste mesmo despacho, quando o aperto chegou antes ao balão).
+    // O aperto fora do botão fecha o balão e a soltura não pode reabri-lo: decide pela ordem dos eventos, sem relógio.
     property bool _fechouAgora: false
     property bool _estavaAberto: false
     function apertou() { _estavaAberto = balao.opened || _fechouAgora }
@@ -61,7 +52,6 @@ Botao {
     signal aberta()
     signal fechada()
 
-    // `MenuButton` sem `flat` na `main`.
     dicaSomeAoClicar: false
     implicitWidth: 34
     implicitHeight: 34
@@ -88,7 +78,8 @@ Botao {
             visible: amostra.roda
             onVisibleChanged: if (visible) requestPaint()
             onPaint: {
-                // 36 fatias a partir do topo (-90 graus), uma sobra de 0,02 rad contra a fresta entre elas; o furo é 35% do raio.
+                // 36 fatias a partir do topo (-90 graus), com sobra de 0,02 rad contra a fresta entre elas; o furo é 35%
+                // do raio.
                 var c = getContext("2d")
                 c.reset()
                 var r = width / 2
@@ -112,7 +103,7 @@ Botao {
     Popup {
         id: balao
         objectName: amostra.nomeDoBalao
-        // Sem espaço embaixo do botão, o balão sobe para o outro lado dele (como o `GtkPopover`) e não cobre a amostra.
+        // Sem espaço embaixo do botão, o balão sobe para o outro lado e não cobre a amostra.
         property bool porCima: false
         function recalcularLado() {
             const janela = amostra.Window.height > 0 ? amostra.Window.height : Number.MAX_VALUE
@@ -125,7 +116,6 @@ Botao {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         enter: null
         exit: null
-        // O seletor parte da cor que a linha mostra agora; depois disso quem manda nele é a mão.
         // A altura muda com o seletor (45 tons ou o seletor livre): o lado se refaz com o balão aberto.
         Connections { target: amostra; function onEditandoChanged() { if (balao.visible) balao.recalcularLado() } }
         onAboutToShow: {
@@ -161,7 +151,6 @@ Botao {
             implicitWidth: amostra.editando ? seletor.implicitWidth : paleta.implicitWidth
             implicitHeight: amostra.editando ? seletor.implicitHeight : paleta.implicitHeight
 
-            // Um tom da paleta: 28 de lado, raio 6, com a marca no escolhido; as setas andam pela grade.
             component Tom: Control {
                 id: tom
                 property color cor
@@ -225,7 +214,6 @@ Botao {
                         }
                     }
                 }
-                // O rótulo fica acima da fila do "+", à esquerda (como o `GtkColorChooserWidget`).
                 Column {
                     spacing: 6
                     Text {

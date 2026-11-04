@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Shapes
 
-// O cartão do aviso de conquista (o `montar_cartao` da `main`): ícone, rótulo, título e descrição.
-// A janela por cima do jogo (`janela_do_aviso.py`) é só ele; o assistente e o "exemplo" das
-// Preferências mostram o mesmo cartão. Os textos são de terceiros: sempre texto puro.
+// O cartão do aviso de conquista: ícone, rótulo, título e descrição. A janela por cima do jogo (`janela_do_aviso.py`) é
+// só ele; o assistente e o exemplo das Preferências mostram o mesmo cartão. Os textos são de terceiros: sempre texto
+// puro.
 Item {
     id: cartao
     objectName: "cartaoDoAviso"
@@ -16,9 +16,8 @@ Item {
     // A estrela é só do aviso que não tem ícone nenhum; com o ícone a caminho (ou que falhou), fica o quadrado vazio de 48 px.
     property bool semIcone: true
     property bool opaco: false  // a reserva sem transparência: fundo cheio e cantos retos
-    // O cartão dentro do assistente (`conquista-aviso-cartao-embutido`): contorno branco a 14% e sombra.
     property bool embutido: false
-    // O fade segue os efeitos de animação do Windows (`gtk-enable-animations`); a janela do aviso o passa de fora.
+    // O fade segue os efeitos de animação do Windows; a janela do aviso o passa de fora.
     property bool animar: Tema.animacoes
     property real opacidade: 1
     // Mudar anima a opacidade até 1 (true) ou 0 (false); `terminou` no fim de cada animação.
@@ -26,8 +25,8 @@ Item {
     signal terminou()
 
     readonly property int raio: opaco ? 0 : 12
-    // max-width-chars: 36. A largura do caractere é a do Pango, 0,617 do corpo da fonte (a quebra da janela real da `main`;
-    // o `averageCharacterWidth` do Qt é menor e quebrava o rótulo e a descrição em duas linhas).
+    // Até 36 caracteres por linha. A largura do caractere é a do Pango, 0,617 do corpo da fonte: o
+    // `averageCharacterWidth` do Qt é menor e quebrava o rótulo e a descrição em duas linhas.
     readonly property real larguraMaxima: 36 * 0.617 * Tema.corpo
     readonly property real larguraDaLegenda: 36 * 0.617 * Tema.legenda
 
@@ -45,21 +44,18 @@ Item {
         target: cartao
         property: "opacidade"
         duration: cartao.animar ? 250 : 0
-        easing.type: Easing.OutCubic  // a curva padrão do `Adw.TimedAnimation`
+        easing.type: Easing.OutCubic
         onFinished: cartao.terminou()
     }
-
 
     Rectangle {
         anchors.fill: parent
         radius: cartao.raio
         color: cartao.opaco ? "#1c1b22" : Qt.rgba(28 / 255, 27 / 255, 34 / 255, 0.94)
-        // 0 0 0 1px alpha(white, .14), 0 2px 8px rgba(0, 0, 0, .35)
         Sombra { objectName: "sombraDoAviso"; visible: cartao.embutido; camadas: [[0, 0, 1, 1, 1, 1, 0.14], [2, 8, 0, 0, 0, 0, 0.35]]; raio: cartao.raio }
     }
 
-    // `border-left: 3px solid` com `border-radius: 12px`: a faixa segue a curva e afina até zero no topo e na base (a borda
-    // de fora tem raio 12; a de dentro, 9 na horizontal e 12 na vertical).
+    // A faixa da borda esquerda segue a curva do cartão (raio 12) e afina até zero no topo e na base.
     Shape {
         objectName: "bordaDoAviso"
         anchors.fill: parent
@@ -112,12 +108,11 @@ Item {
                 layer.effect: MultiEffect {
                     maskEnabled: true
                     maskSource: mascara
-                    maskThresholdMin: 0.5  // borda suave nos cantos arredondados
+                    maskThresholdMin: 0.5
                     maskSpreadAtMin: 1.0
                 }
             }
 
-            // O `starred-symbolic` da `main`, branco, no tamanho do ícone.
             Icone {
                 objectName: "estrelaDoAviso"
                 anchors.centerIn: parent
@@ -141,7 +136,7 @@ Item {
                 wrapMode: Text.Wrap
                 color: "#ffffff"
                 opacity: 0.75
-                lineHeight: 1.4  // `.caption`: 82% e linha de 140%
+                lineHeight: 1.4
                 font { family: Tema.fonte; pixelSize: Tema.legenda }
             }
 
@@ -154,7 +149,7 @@ Item {
                 textFormat: Text.PlainText
                 wrapMode: Text.Wrap
                 color: "#ffffff"
-                font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }  // .heading
+                font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
             }
 
             Text {

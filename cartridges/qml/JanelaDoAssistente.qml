@@ -4,10 +4,10 @@ import QtQuick.Dialogs
 import QtQuick.Effects
 import QtQuick.Window
 
-// O assistente da primeira abertura (D86): janela própria com a barra do app (`Adw.HeaderBar` com o título da janela, minimizar e
-// fechar; 640x640 no total, o conteúdo com 593), antes da biblioteca, num motor próprio. As oito telas do `.blp` da
-// `main` num carrossel sem gesto, os pontos e o rodapé "Voltar" | "Pular" "Continuar". Só desenha: o que ele mostra e grava é o `assistente` (cartridges/assistente.py).
-// Os modais por cima (iluminação, logins, aviso) deixam o fundo `enabled: false`.
+// O assistente da primeira abertura: janela própria com a barra do app (título, minimizar e fechar; 640x640 no total, o
+// conteúdo com 593), antes da biblioteca, num motor próprio. As oito telas num carrossel sem gesto, os pontos e o rodapé
+// "Voltar" | "Pular" "Continuar". Só desenha: o estado é do `assistente` (cartridges/assistente.py). Os modais por cima
+// (iluminação, logins, aviso) deixam o fundo `enabled: false`.
 Window {
     id: raiz
     objectName: "janelaDoAssistente"
@@ -45,9 +45,9 @@ Window {
 
     onClosing: (fechar) => fechar.accepted = raiz.modelo.fecharNoX()
 
-    // O foco do teclado acompanha a tela: quem o tinha pode ter sumido (a tela saiu da vista, o rodapé escondeu, um
-    // modal fechou com o fundo desabilitado e o devolveu à janela). Aí ele vai ao primeiro controle da tela.
-    // O anel só aparece se o teclado já estava em uso (`:focus-visible`, DA-06): lembra se o último foco veio dele.
+    // O foco do teclado acompanha a tela: quem o tinha pode ter sumido (a tela saiu da vista, o rodapé escondeu, um modal
+    // fechou com o fundo desabilitado e o devolveu à janela). Aí ele vai ao primeiro controle da tela. O anel só aparece
+    // se o teclado já estava em uso: lembra se o último foco veio dele.
     property bool _teclado: false
     onActiveFocusItemChanged: if (activeFocusItem && activeFocusItem !== contentItem) _teclado = activeFocusItem.visualFocus === true
 
@@ -101,9 +101,9 @@ Window {
         onLoaded: item.open()
     }
 
-    // Uma tela, como o `Adw.StatusPage` (`adw.css:1920`): margem 36/12 e espaço 36 entre o ícone, o texto e o conteúdo; o
-    // título e a descrição a 12. `compacta` (a das conquistas): ícone de 96, título title-2, margem 24 e espaço 24. Com
-    // rolagem quando não cabe. Só a tela à vista fica habilitada: o Tab não alcança as outras.
+    // Uma tela: margem 36/12 e espaço 36 entre o ícone, o texto e o conteúdo; o título e a descrição a 12. `compacta` (a
+    // das conquistas): ícone de 96, título title-2, margem 24 e espaço 24. Com rolagem quando não cabe. Só a tela à vista
+    // fica habilitada: o Tab não alcança as outras.
     component Pagina: Flickable {
         id: pagina
         property string nome
@@ -112,7 +112,6 @@ Window {
         property string titulo
         property string descricao
         property bool compacta: false
-        // O controle que recebe o foco quando a tela aparece.
         property Item primeiro: null
         default property alias conteudo: extra.data
 
@@ -131,7 +130,6 @@ Window {
 
         Column {
             id: coluna
-            // O `AdwClamp` da `StatusPage` (600 de máximo) dentro da margem de 12.
             width: Math.min(600, pagina.width - 24)
             x: (pagina.width - width) / 2
             y: Math.max(pagina.compacta ? 24 : 36, (pagina.height - implicitHeight) / 2)
@@ -155,7 +153,7 @@ Window {
                 opacity: Tema.opacidadeApagado
             }
             Column {
-                // O `AdwClamp` da `StatusPage` dá 547 aos textos numa janela de 640 (medido na `main`).
+                // 547 de largura para os textos numa janela de 640.
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: Math.min(547, parent.width)
                 spacing: 12
@@ -183,7 +181,7 @@ Window {
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
                     lineHeightMode: Text.FixedHeight
-                    lineHeight: Tema.alturaDoCorpo  // a linha de 17 px do Pango da `main`
+                    lineHeight: Tema.alturaDoCorpo
                     color: Tema.texto
                     font { family: Tema.fonte; pixelSize: Tema.corpo }
                 }
@@ -197,7 +195,6 @@ Window {
         }
     }
 
-    // A barra do app: o título da janela, só minimizar e fechar (`Adw.HeaderBar` do `assistente.blp`).
     BarraDeTitulo {
         id: barra
         objectName: "barraDoAssistente"
@@ -205,7 +202,7 @@ Window {
         visible: !raiz.semAgente
         janela: raiz
         agente: raiz.agente
-        titulo: "Kyron"  // o título da janela, que o `Adw.HeaderBar` sem título-widget mostra
+        titulo: "Kyron"
         comMaximizar: false
     }
 
@@ -249,9 +246,8 @@ Window {
                 }
             }
 
-            // Sem gesto: só os botões trocam de tela. A troca é animada só com as animações do Windows ligadas.
-            // `Adw.Carousel.scroll_to(animate=True)`: mola de amortecimento crítico (massa 0,5, rigidez 500). A posição é em
-            // telas (`posicao`); os pontos a seguem.
+            // Sem gesto: só os botões trocam de tela. A troca é animada só com as animações do Windows ligadas, com mola
+            // de amortecimento crítico (massa 0,5, rigidez 500). A posição é em telas (`posicao`); os pontos a seguem.
             Row {
                 id: fileira
                 x: -carrossel.posicao * carrossel.width
@@ -319,8 +315,8 @@ Window {
                     descricao: "O SteamGridDB fornece capas e logos para os seus jogos. Para usá-lo, informe uma chave da API."
                     primeiro: linhaDaChaveSgdb
 
-                    // A capa de exemplo com o placeholder por cima, que desliza e revela a capa; no lugar do ícone. O
-                    // quadro de cada instante é o `quadro_das_capas` da `main`. Anima só com a tela à vista.
+                    // A capa de exemplo com o placeholder por cima, que desliza e revela a capa; no lugar do ícone. Anima
+                    // só com a tela à vista.
                     Item {
                         id: palco
                         objectName: "palcoDasCapas"
@@ -331,7 +327,7 @@ Window {
                         width: 120
                         height: 180
 
-                        // `.capa-de-exemplo`: raio 6 nas duas imagens (máscara; `clip` só corta em retângulo).
+                        // Raio 6 nas duas imagens (máscara; `clip` só corta em retângulo).
                         Item {
                             id: mascaraDaCapa
                             anchors.fill: parent
@@ -369,16 +365,14 @@ Window {
                             duration: raiz.modelo.ciclo
                             loops: Animation.Infinite
                             running: raiz.modelo.animar && raiz.paginaAtual === "capas" && raiz.visible
-                            // Parada (fora da tela ou sem animações), a capa fica sozinha.
                             onRunningChanged: if (!running) palco.instante = raiz.modelo.instanteParado
                         }
                     }
 
                     GrupoDePreferencias {
                         objectName: "grupoDaChaveSgdb"
-                        // Medido na `main` (janela de 640): o grupo fica 34 px mais longe da capa que os 12 do `Box`.
+                        // O grupo fica 34 px mais longe da capa que os 12 do `Box`.
                         topPadding: 34
-                        // A mesma frase das Preferências; texto nosso, com o único link.
                         descricao: 'É necessária uma chave da API para usar o SteamGridDB. <a href="https://www.steamgriddb.com/profile/preferences/api">Obtenha aqui</a>.'
                         descricaoRica: true
                         onLinkAcionado: endereco => raiz.modelo.abrirEndereco(endereco)
@@ -407,7 +401,6 @@ Window {
                     titulo: "Conquistas"
                     descricao: "Entre com as contas das lojas para acompanhar as conquistas dos seus jogos."
 
-                    // O cartão do aviso de conquista, o de verdade, com um exemplo; no lugar do ícone.
                     CartaoDoAviso {
                         anchors.horizontalCenter: parent.horizontalCenter
                         rotulo: raiz.modelo.cartao.rotulo
@@ -418,7 +411,6 @@ Window {
                     }
                     GrupoDasContas {
                         id: grupoDasContas
-                        // Medido na `main` (janela de 640), como o espaço antes da Steam Web API, abaixo.
                         topPadding: 18
                         width: parent.width
                         contas: raiz.modelo.contas
@@ -537,12 +529,10 @@ Window {
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: 12 }
             spacing: 12
 
-            // `Adw.CarouselIndicatorDots`: o ponto da tela à vista é maior (raio 4 contra 3) e a troca desliza com o carrossel.
             Row {
                 objectName: "pontos"
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: 7
-                // `Adw.CarouselIndicatorDots`: 20 de altura (rodapé de 44 na primeira tela, como na `main`), os pontos ao centro.
                 height: 20
                 topPadding: 6
                 Repeater {
@@ -596,7 +586,6 @@ Window {
         }
     }
 
-    // Por cima do fundo: o aviso ("Preparando a restauração. Aguarde…" e os das contas), os modais e o diálogo.
     Avisos {
         anchors.fill: parent
         fila: raiz.modelo.avisos
@@ -621,7 +610,7 @@ Window {
         z: 10
     }
 
-    // window.csd: o contorno de 1 px da janela sem moldura nativa.
+    // O contorno de 1 px da janela sem moldura nativa.
     Rectangle {
         anchors.fill: parent
         z: 1000

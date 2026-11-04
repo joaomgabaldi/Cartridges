@@ -2,9 +2,8 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 
-// A escolha do atalho de um jogo restaurado: o título é o nome do jogo e há uma linha por atalho candidato (D81), numa
-// `boxed-list` de `ActionRow` ativáveis (título quebra, subtítulo com o arquivo). Sem candidatos não abre: o modelo pede
-// direto o seletor de arquivos (`procurarPedido`), que este modal cria sob demanda.
+// A escolha do atalho de um jogo restaurado: o título é o nome do jogo e há uma linha por atalho candidato. Sem
+// candidatos não abre: o modelo pede direto o seletor de arquivos (`procurarPedido`), que este modal cria sob demanda.
 ModalDaRestauracao {
     id: dialogo
     objectName: "dialogoDaEscolhaDoAtalho"

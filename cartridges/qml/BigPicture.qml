@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Window
 
-// O Cover Flow do Big Picture. Calibração copiada do Big Picture da `main` (cartridges/big_picture.py de lá);
-// o estado vem do `bigPicture` (Python). A geometria é a do protótipo (D6).
+// O Cover Flow do Big Picture; o estado vem do `bigPicture` (Python).
 Item {
     id: tela
     objectName: "bigPicture"
@@ -20,11 +19,11 @@ Item {
     readonly property int capasDeCadaLado: 8
     readonly property int duracaoDoPasso: 350
     readonly property real escalaNaAbertura: 1.6
-    readonly property int duracaoDaAbertura: 400  // DURACAO_ABERTURA_MS
+    readonly property int duracaoDaAbertura: 400
     readonly property real reflexoAlcance: 0.55
     readonly property real reflexoOpacidade: 0.35
 
-    // As quatro que a entrada e a saída (Task 3) animam; em repouso valem 1/0/0/1.
+    // As quatro que a entrada e a saída animam; em repouso valem 1/0/0/1.
     property real posicao: 0  // segue o índice (`onIndiceChanged`); a fila da entrada e da saída a escreve quadro a quadro
     property real virada: 1
     property real opacidadeCapas: 1
@@ -34,7 +33,7 @@ Item {
     // Com a camada da sessão por cima, a capa animada não toca (`Aplicativo.qml` liga).
     property bool sessaoEmAndamento: false
 
-    property real escala: Screen.devicePixelRatio  // pixels reais por pixel lógico
+    property real escala: Screen.devicePixelRatio
     property real alturaCapa: height * 0.55
     property real larguraCapa: alturaCapa * 2 / 3
 
@@ -52,8 +51,8 @@ Item {
     property int centralExibida: 0
     function assentarCentral() { if (Math.abs(posicao - indice) < 0.001) centralExibida = indice }
 
-    // Lista refeita com o centro em outro índice: pula direto, como o `definir_jogos` da `main`.
-    // Vem antes do `alterado`, então `indice` ainda é o antigo; mudança só de capa não passa por aqui.
+    // Lista refeita com o centro em outro índice: pula direto. Vem antes do `alterado`, então `indice` ainda é o antigo;
+    // mudança só de capa não passa por aqui.
     Connections {
         target: bigPicture
         function onJogosMudaram() {
@@ -65,7 +64,7 @@ Item {
         NumberAnimation { id: passo; duration: tela.duracaoDoPasso; easing.type: Easing.OutCubic }
     }
 
-    // --- A fila indiana de entrada e saída (a conta é a `quadro_da_fila` de regras_do_big_picture.py) ---
+    // A fila indiana de entrada e saída: a conta é a `quadro_da_fila` de regras_do_big_picture.py.
     property real t: 0
     property real baseDaFila: 0
     property bool entrando: true
@@ -86,7 +85,6 @@ Item {
         opacidadeCapas = capas
         opacidadeDoRodape = rodape
     }
-    // O estado de repouso: em cima da capa central, sem fila.
     function reporQuadro() {
         irDireto(indice)
         virada = 1
@@ -132,7 +130,6 @@ Item {
     }
     onTChanged: if (naFila) aplicarQuadro(t)
 
-    // --- Abrir o jogo: a central cresce e as outras esmaecem; no fim da ida o Python inicia o jogo ---
     function animarAbertura(de, para) {
         abertura.stop()
         progressoAbertura = de
@@ -161,9 +158,9 @@ Item {
         function onPrepararCapas() { tela.preparar() }
     }
 
-    // --- P1: as capas da fila decodificadas antes de escurecer ---
-    // No tamanho das vagas (300 e 630 de altura, vezes a escala do monitor): o cache do Qt Quick só acerta com a mesma
-    // URL, `sourceSize` e `fillMode`. Vivem até o fim da fila de entrada.
+    // As capas da fila decodificadas antes de escurecer, no tamanho das vagas (300 e 630 de altura, vezes a escala do
+    // monitor): o cache do Qt Quick só acerta com a mesma URL, `sourceSize` e `fillMode`. Vivem até o fim da fila de
+    // entrada.
     property var preparo: []
     property bool preparoAvisado: true
     function preparar() {
@@ -201,7 +198,6 @@ Item {
                 onStatusChanged: Qt.callLater(tela.conferirPreparo)
             }
         }
-        // A central em alta do índice 0, como a `capaEmAlta` da CapaDoBigPicture.qml.
         Image {
             id: preparoDaCentral
             objectName: "preparoDaCentral"
@@ -215,7 +211,6 @@ Item {
 
     focus: true
 
-    // (x, ângulo, profundidade, afastamento) da capa `i`: a mistura, por `virada`, da fila e do normal.
     function arranjo(i) {
         const d = i - posicao
         const a = Math.min(Math.abs(d), 1)
@@ -237,8 +232,7 @@ Item {
         return Qt.matrix4x4(1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z, 0, 0, 0, 1)
     }
 
-    // Do espaço da capa (0,0 a largura,altura) ao da tela: o mesmo encadeamento do Gsk.Transform
-    // do app. A projeção zera o z para nada ser recortado em profundidade.
+    // Do espaço da capa ao da tela; a projeção zera o z para nada ser recortado em profundidade.
     function transformacao(i) {
         const [x, angulo, prof, a] = arranjo(i)
         const fator = 1 + (escalaNaAbertura - 1) * progressoAbertura * (1 - a)
@@ -255,8 +249,8 @@ Item {
             .times(translacao(-larguraCapa / 2, -alturaCapa / 2, 0))
     }
 
-    // O toque do Qt Quick acerta a capa errada sob a projeção (ADR 0005, D44): projeta os cantos e testa a caixa alinhada
-    // que os contém (`transform_bounds` + `contains_point` da `main`), da capa mais próxima do centro à mais distante.
+    // O toque do Qt Quick acerta a capa errada sob a projeção: projeta os cantos e testa a caixa alinhada que
+    // os contém, da capa mais próxima do centro à mais distante.
     function capaEm(px, py) {
         const visiveis = []
         for (let i = Math.max(0, Math.floor(posicao - capasDeCadaLado) + 1);
@@ -288,7 +282,7 @@ Item {
         }
         const acao = acoes[evento.key]
         if (!acao) return
-        evento.accepted = true  // consome a tecla mesmo ocupada, como a `main`
+        evento.accepted = true  // consome a tecla mesmo ocupada
         if (!bigPicture.ocupada) acao()
     }
 
@@ -307,8 +301,7 @@ Item {
         asynchronous: false  // provedor Python na thread de imagens trava: ela espera o GIL segurando o mutex do cache
     }
 
-    // Máscara do reflexo, compartilhada: transparente até 55% da capa e
-    // opaca na base (espelhada pelo reflexo, fica opaca junto da capa).
+    // Máscara do reflexo, compartilhada: transparente até 55% da capa e opaca na base.
     Rectangle {
         id: mascaraDoReflexo
         visible: false
@@ -349,7 +342,7 @@ Item {
                     escala: tela.escala
                     opacidadeDoReflexo: tela.reflexoOpacidade
                     // Só no fim do passo: segurando a tecla nenhuma capa de passagem carrega a cópia em alta, e a antiga
-                    // central a guarda até o passo acabar (`done` da `main`).
+                    // central a guarda até o passo acabar.
                     central: vaga.i === tela.centralExibida
                     animar: bigPicture.animarCentral && bigPicture.visivel && !tela.sessaoEmAndamento
                     opacity: (1 - tela.progressoAbertura) * tela.opacidadeCapas
@@ -370,7 +363,7 @@ Item {
         WheelHandler {
             enabled: !bigPicture.ocupada
             acceptedDevices: PointerDevice.Mouse
-            // Um passo por entalhe (120), como o DISCRETE da `main`; roda horizontal não move.
+            // Um passo por entalhe (120); roda horizontal não move.
             property int acumulado: 0
             onEnabledChanged: acumulado = 0  // ocupada: o resto não vale para depois
             onWheel: (evento) => {
@@ -412,7 +405,7 @@ Item {
             text: bigPicture.nome
             textFormat: Text.PlainText
             color: "white"
-            font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 }  // `title-1`: 21,72 px, arredondado (o Qt só aceita inteiro)
+            font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 }
             wrapMode: Text.Wrap
             horizontalAlignment: Text.AlignHCenter
         }

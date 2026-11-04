@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O `Adw.ButtonRow`: o título em negrito, centralizado, em 40 de altura + 2 em cima e embaixo; `destrutivo` pinta de vermelho.
+// Linha de botão: título em negrito, centralizado, em 40 de altura + 2 em cima e embaixo; `destrutivo` pinta de vermelho.
 LinhaDoGrupo {
     id: linha
 

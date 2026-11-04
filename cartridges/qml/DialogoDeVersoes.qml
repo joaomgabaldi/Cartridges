@@ -1,9 +1,9 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// "Restaurar save": uma linha por versão guardada dos saves do jogo, da mais recente à mais antiga, numa `boxed-list` de
-// `ActionRow` com subtítulo e `go-next` (`saves/dialogo.py` da `main`). Só desenha: o que mostra e faz é o `saves`
-// (cartridges/modelos/saves.py); escolher uma linha pede a confirmação do app. Esc fecha e o foco volta ao cartão que abriu o menu.
+// "Restaurar save": uma linha por versão guardada dos saves do jogo, da mais recente à mais antiga. Só desenha: o estado
+// é do `saves` (cartridges/modelos/saves.py); escolher uma linha pede a confirmação do app. Esc fecha e o foco volta ao
+// cartão que abriu o menu.
 ModalDaRestauracao {
     id: dialogo
     objectName: "dialogoDeVersoes"
@@ -33,7 +33,6 @@ ModalDaRestauracao {
             function click() { botaoDaLinha.click() }
             onAcionada: saves.escolher(modelData.id)
 
-            // Move o foco para a linha `indice + passo`, limitado às pontas; a rolagem acompanha.
             function irPara(passo) {
                 var v = lista.vista
                 var alvo = Math.max(0, Math.min(v.count - 1, index + passo))

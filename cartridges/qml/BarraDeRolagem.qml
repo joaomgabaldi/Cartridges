@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// A barra sobreposta da libadwaita (scrollbar.overlay-indicator): 3 px a 4 da borda; com o mouse em cima, 8 px a 8 da
-// borda e fundo a 10%. Some 1 s depois do último uso. Cursor a 20%, 40% ao passar e 60% pressionado.
+// A barra de rolagem sobreposta: 3 px a 4 da borda; com o mouse em cima, 8 px a 8 da borda e fundo a 10%. Some 1 s depois
+// do último uso. Cursor a 20%, 40% ao passar e 60% pressionado.
 ScrollBar {
     id: barra
 

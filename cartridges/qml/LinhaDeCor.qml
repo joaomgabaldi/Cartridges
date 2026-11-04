@@ -1,9 +1,9 @@
 import QtQuick
 
-// Uma linha com título, subtítulo e, à direita, a amostra de cor que abre o `SeletorDeCor` num balão (como a linha da
-// fita do editor). Cada movimento no seletor emite `escolhida`; quem usa grava e devolve a cor em `cor`. Fora do padrão
-// (`padrao: false`) aparece o botão de voltar a ele. `aberta` e `fechada` contam do balão (o pulso das conquistas mostra a
-// própria cor só enquanto ele está aberto). Desabilitada, apaga a 50% como as outras linhas.
+// Uma linha com título, subtítulo e, à direita, a amostra de cor que abre o `SeletorDeCor` num balão. Cada movimento no
+// seletor emite `escolhida`; quem usa grava e devolve a cor em `cor`. Fora do padrão (`padrao: false`) aparece o botão de
+// voltar a ele. `aberta` e `fechada` contam do balão (o pulso das conquistas mostra a própria cor só enquanto ele está
+// aberto). Desabilitada, apaga a 50% como as outras linhas.
 LinhaDoGrupo {
     id: linha
 
@@ -20,7 +20,6 @@ LinhaDoGrupo {
     sobre: areaDaLinha.containsMouse
     pressionada: areaDaLinha.pressed
 
-    // A linha inteira abre o balão (`activatable-widget`).
     MouseArea {
         id: areaDaLinha
         anchors.fill: parent

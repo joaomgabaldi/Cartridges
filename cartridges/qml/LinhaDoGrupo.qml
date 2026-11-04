@@ -1,16 +1,16 @@
 import QtQuick
 
-// A base das linhas (AdwPreferencesRow em `list.boxed-list`): título e subtítulo à esquerda, o sufixo à direita, separador
-// em cima, hover e opacidade de desabilitada. Sozinha, é a `Adw.ActionRow` sem ação. Medidas: 50 de altura mínima + 2 de
-// respiro em cima e embaixo; 14 das laterais; título em 12 px e subtítulo em 10 px apagado, 3 entre eles.
+// A base das linhas: título e subtítulo à esquerda, o sufixo à direita, separador em cima, hover e opacidade de
+// desabilitada. Sozinha, é uma linha sem ação. Medidas: 50 de altura mínima + 2 de respiro em cima e embaixo; 14 das
+// laterais; título em 12 px e subtítulo em 10 px apagado, 3 entre eles.
 //
 // Quem herda declara o sufixo como filho, ancorado à direita com margem 14, põe `reservaADireita` (a largura do sufixo)
 // e, se a linha inteira aciona, liga `sobre` e `pressionada`.
 FocusScope {
     id: linha
 
-    // `aparece` é a regra de cada linha (ex.: só com um interruptor ligado).
-    // O grupo conta por ela, não pelo `visible` efetivo (que depende do próprio grupo: laço, D58).
+    // `aparece` é a regra de cada linha (ex.: só com um interruptor ligado). O grupo conta por ela, não pelo `visible`
+    // efetivo (que depende do próprio grupo: laço).
     property bool aparece: true
     // Só as linhas das Preferências são buscáveis (`buscavel: true`); as dos assistentes e do editor ignoram a busca.
     // Nas Preferências use `aparece` para a regra da linha, nunca `visible` (um `visible:` de instância foge da contagem do grupo).
@@ -20,7 +20,6 @@ FocusScope {
     property string titulo
     property string subtitulo
     property int quebraDoSubtitulo: Text.Wrap
-    // `.property`: o título pequeno e apagado, o valor (o subtítulo) no tamanho e na cor do texto.
     property bool propriedade: false
     property real alturaMinima: 50
     property real reservaADireita: 0
@@ -31,7 +30,6 @@ FocusScope {
     property bool comTextos: true
     property alias textos: colunaDeTextos
 
-    // O grupo com `separada`: cada linha é um cartão.
     readonly property bool separada: parent && parent.separada === true
     readonly property bool primeira: y <= 0
     readonly property bool ultima: parent ? y + height >= parent.height - 1 : true
@@ -40,7 +38,6 @@ FocusScope {
 
     width: parent ? parent.width : implicitWidth
     implicitHeight: Math.max(alturaMinima, comTextos ? colunaDeTextos.implicitHeight + 12 : 0) + 4 + _separador
-    // disabled-opacity: a linha e tudo nela.
     opacity: enabled ? 1 : Tema.opacidadeDesabilitado
     readonly property bool linhaApagada: !enabled
 

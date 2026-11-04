@@ -1,10 +1,10 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O grupo "Contas" (Microsoft, Epic e EA): o título, a descrição e uma linha por conta com o botão à direita.
-// Só desenha: o que ele mostra e faz é o `contas` (um `ContasDasLojas`, cartridges/modelos/contas.py). As janelas de login
-// (`JanelaDeLogin.qml`) ficam ao lado, cobrindo a janela inteira: quem hospeda o grupo as monta (`contas.loginEpic`,
-// `contas.loginEa`). O nome da conta é texto de terceiros: sempre PlainText.
+// O grupo "Contas" (Microsoft, Epic e EA): o título, a descrição e uma linha por conta com o botão à direita. Só desenha:
+// o estado é do `contas` (um `ContasDasLojas`, cartridges/modelos/contas.py). As janelas de login (`JanelaDeLogin.qml`)
+// ficam ao lado, cobrindo a janela inteira: quem hospeda o grupo as monta (`contas.loginEpic`, `contas.loginEa`). O nome
+// da conta é texto de terceiros: sempre PlainText.
 Column {
     id: grupo
     objectName: "grupoDasContas"
@@ -14,7 +14,6 @@ Column {
     property bool comCabecalho: true
 
     width: parent ? parent.width : implicitWidth
-    // preferencesgroup > box: 6 entre o cabeçalho e o cartão; a descrição leva mais 6 embaixo.
     spacing: 6
 
     Text {
@@ -24,7 +23,7 @@ Column {
         text: grupo.contas.titulo
         textFormat: Text.PlainText
         color: Tema.texto
-        font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }  // .heading
+        font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
         Accessible.role: Accessible.Heading
         Accessible.name: text
     }
@@ -40,8 +39,8 @@ Column {
         font { family: Tema.fonte; pixelSize: Tema.corpo }
     }
 
-    // Uma conta (`Adw.ActionRow` com o botão como sufixo): o nome em cima, o estado embaixo e o botão à direita. O nome
-    // da conta quebra a linha, em vez de ser cortado: a altura acompanha o conteúdo.
+    // Uma conta: o nome em cima, o estado embaixo e o botão à direita. O nome da conta quebra a linha, em vez de ser
+    // cortado: a altura acompanha o conteúdo.
     component LinhaDaConta: LinhaDoGrupo {
         id: linha
         property string chave

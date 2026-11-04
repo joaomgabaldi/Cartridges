@@ -1,16 +1,14 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// A `Adw.ActionRow` ativável: título, subtítulo e, à direita, um ícone ou o rótulo de um botão. A linha inteira aciona
-// (como o `activatable-widget` do Adwaita). Os textos vão em PlainText: o subtítulo pode ser um caminho.
+// Linha ativável: título, subtítulo e, à direita, um ícone ou o rótulo de um botão. A linha inteira aciona. Os textos vão
+// em PlainText: o subtítulo pode ser um caminho.
 LinhaDoGrupo {
     id: linha
 
-    // O nome do ícone em `data/icones`.
     property string icone
     property string rotulo
     property string dica
-    // Um segundo botão, à esquerda do rótulo (ex.: "Usar a padrão"); só existe com `rotuloSecundario`.
     property string rotuloSecundario
     property bool secundarioAtivo: true
 
@@ -33,7 +31,7 @@ LinhaDoGrupo {
         focusPolicy: Qt.StrongFocus
         hoverEnabled: true
         Accessible.name: linha.dica !== "" ? linha.dica : linha.titulo
-        Accessible.description: linha.subtitulo  // como a `AdwActionRow`: o título é o nome, o subtítulo descreve
+        Accessible.description: linha.subtitulo
         Accessible.role: Accessible.Button
         Keys.onReturnPressed: click()
         Keys.onEnterPressed: click()
@@ -62,8 +60,7 @@ LinhaDoGrupo {
             visible: linha.icone !== ""
             nome: linha.icone
         }
-        // O botão do sufixo da `main` (`Gtk.Button` "Escolher"): 34 de altura, raio 9 e o cinza de 10% do texto. Só o desenho:
-        // a linha inteira é o controle (foco, Enter e clique), então não há segunda parada de Tab.
+        // Só o desenho do botão: a linha inteira é o controle (foco, Enter e clique), então não há segunda parada de Tab.
         Rectangle {
             objectName: linha.objectName + "Rotulo"
             anchors.verticalCenter: parent.verticalCenter

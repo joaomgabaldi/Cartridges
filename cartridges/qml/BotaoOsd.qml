@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// `button.circular.osd`: 34x34, preto a 65%, 15% de branco ao passar e 25% ao apertar, ícone branco a 90%. Para os botões
-// sobre uma capa. Enter e Espaço acionam; o foco do teclado desenha o `AnelDeFoco`.
+// O botão circular sobre uma capa: 34x34, preto a 65%, 15% de branco ao passar e 25% ao apertar, ícone branco a 90%.
+// Enter e Espaço acionam; o foco do teclado desenha o `AnelDeFoco`.
 Button {
     id: botao
 

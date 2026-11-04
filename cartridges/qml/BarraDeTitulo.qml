@@ -1,10 +1,9 @@
 import QtQuick
 
-// Barra de título própria, com os botões de sistema que o QWindowKit liga ao Windows
-// (snap layouts no maximizar, hit-test de borda). `janela` e `agente` vêm de Principal.qml.
-// Plana (a ToolbarView da `main`): da cor do fundo; `sombra` liga a linha de baixo quando o conteúdo está rolado.
+// Barra de título própria, com os botões de sistema que o QWindowKit liga ao Windows (snap layouts no maximizar, hit-test
+// de borda). `janela` e `agente` vêm de Principal.qml. `sombra` liga a linha de baixo quando o conteúdo está rolado.
 // Desabilitada (`enabled: false`), o QWindowKit a trata como se não existisse: nem arrasto, nem botões do sistema
-// (`isInTitleBarDraggableArea` e `isInSystemButtons` conferem o `isEnabled`). É assim que um modal a tranca (J05).
+// (`isInTitleBarDraggableArea` e `isInSystemButtons` conferem o `isEnabled`). É assim que um modal a tranca.
 Rectangle {
     id: barra
 
@@ -13,25 +12,19 @@ Rectangle {
     property QtObject agente
     property string titulo: ""
     property bool sombra: false
-    // Sem fundo: a página de trás (os detalhes do jogo) passa por baixo, como na `ToolbarView` plana da `main`.
+    // Sem fundo: a página de trás (os detalhes do jogo) passa por baixo.
     property bool transparente: false
-    // Só minimizar e fechar (`:minimize,close`), como a janela das tarefas.
     property bool comMaximizar: true
-    // Sem o fechar (`:minimize`), como a janela "Restaurando o backup".
     property bool comFechar: true
-    // Os botões da página: `inicio` à esquerda do título, `fim` à direita, antes dos botões do sistema.
     default property alias inicio: areaDoInicio.data
     property alias fim: areaDoFim.data
 
-    // headerbar: min-height 47.
     readonly property int altura: 47
-    // windowcontrols > button: 24 de largura e 5 de recuo; o círculo é a imagem.
     readonly property int larguraDoBotao: 34
 
     height: altura
     color: transparente ? "transparent" : Tema.fundo
 
-    // Chamado pela Principal depois do setup do agente.
     function ligarAgente() {
         agente.setTitleBar(barra)
         agente.botaoDeSistema("minimizar", minimizar)
@@ -39,8 +32,6 @@ Rectangle {
         if (comFechar) agente.botaoDeSistema("fechar", fechar)
     }
 
-    // padding 6/7/7/7 da headerbar: o centro do conteúdo fica em 23, não em 23,5.
-    // headerbar:backdrop > windowhandle: o conteúdo da janela inativa fica a 50%, com a transição de 200 ms.
     Item {
         anchors.fill: parent
         opacity: barra.janela.active ? 1 : 0.5
@@ -95,7 +86,6 @@ Rectangle {
         }
     }
 
-    // A linha de baixo da headerbar, com o conteúdo rolado.
     Rectangle {
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
         height: 1

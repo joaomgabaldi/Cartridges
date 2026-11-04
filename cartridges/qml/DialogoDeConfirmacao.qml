@@ -1,8 +1,8 @@
 import QtQuick
 
-// Uma pergunta com dois botões (três, com `rotuloAlternativo`). O texto vai sempre em PlainText (nome de jogo e URL não são marcação).
-// Esc vale como cancelar. Nenhum botão é destacado, salvo o destrutivo, em vermelho, como o `create_dialog` da `main`; o
-// foco inicial vai ao primeiro, o de sair, como o AdwAlertDialog sem resposta padrão.
+// Uma pergunta com dois botões (três, com `rotuloAlternativo`). O texto vai sempre em PlainText (nome de jogo e URL não
+// são marcação). Esc vale como cancelar. Nenhum botão é destacado, salvo o destrutivo, em vermelho; o foco inicial vai ao
+// primeiro, o de sair.
 DialogoDeAlerta {
     id: dialogo
 
@@ -11,7 +11,7 @@ DialogoDeAlerta {
     // Vazio = sem o terceiro botão. Com ele a ordem é Cancelar | confirmar | alternativo.
     property string rotuloAlternativo: ""
     property bool destrutivo: false
-    // SUGGESTED da `main`: raro; a pergunta comum não destaca nada.
+    // Raro: a pergunta comum não destaca nada.
     property bool sugerido: false
 
     signal confirmado()
@@ -20,7 +20,7 @@ DialogoDeAlerta {
 
     function abrir() {
         aberto = true
-        // Reaberto com outro conteúdo (a pilha da D72), o foco vai de novo ao botão inicial.
+        // Reaberto com outro conteúdo, o foco vai de novo ao botão inicial.
         Qt.callLater(focarInicial)
     }
     // `escolha`: "confirmar", "alternativo" ou qualquer outra coisa (cancelar).

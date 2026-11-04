@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 
-// O `Adw.Spinner`: um arco que gira, cresce e encolhe, na cor do texto (`currentColor`). Só anima com `running`.
+// Um arco que gira, cresce e encolhe, na cor do texto. Só anima com `running`.
 Item {
     id: girador
 

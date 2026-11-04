@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// O Adw.AlertDialog: título .title-2 e corpo centrados, o que for declarado dentro abaixo deles, tudo rolando junto, e os
-// botões embaixo, em partes iguais (empilhados quando não cabem). Largura natural entre 300 e 372 (medido na `main`);
-// `largo` (`prefer-wide-layout`): se os botões não couberem lado a lado em 372, alarga até 600 em vez de empilhar.
+// Diálogo de alerta: título e corpo centrados, o que for declarado dentro abaixo deles, tudo rolando junto, e os botões
+// embaixo, em partes iguais (empilhados quando não cabem). Largura natural entre 300 e 372; `largo`: se os botões não
+// couberem lado a lado em 372, alarga até 600 em vez de empilhar.
 // `respostas`: [{ id, rotulo, aparencia: "normal"|"sugestao"|"destrutivo", objeto }]. Os textos vão em PlainText.
 MolduraDoDialogo {
     id: alerta
@@ -13,7 +13,7 @@ MolduraDoDialogo {
     property string corpo
     property bool largo: false
     property var respostas: []
-    // A resposta do Esc; o foco inicial vai à `respostaInicial` e, sem ela, à primeira, como o AdwAlertDialog.
+    // A resposta do Esc; o foco inicial vai à `respostaInicial` e, sem ela, à primeira.
     property string respostaDeEscape: ""
     property string respostaInicial: ""
     // Falso: quem usa manda no `aberto` (uma pergunta que continua aberta depois de respondida).
@@ -35,7 +35,6 @@ MolduraDoDialogo {
         respondido(id)
     }
 
-    // O que os botões pedem lado a lado, e o que o texto pede sem quebrar.
     readonly property real _larguraDosBotoes: {
         var maior = 0
         for (var i = 0; i < botoes.count; ++i)
@@ -72,7 +71,6 @@ MolduraDoDialogo {
         interactive: contentHeight > height
         ScrollBar.vertical: BarraDeRolagem {}
 
-        // .message-area: 32 em cima, 9 embaixo, 24 dos lados; 10 entre título e corpo; +8 antes do conteúdo extra.
         // Posições à mão: um Column escondido não se reorganiza, e o texto trocado antes de abrir deixaria a altura velha.
         Item {
             id: mensagem
@@ -127,7 +125,6 @@ MolduraDoDialogo {
         }
     }
 
-    // .response-area: 12 em cima, 24 nos outros lados, 12 entre os botões. Empilhados, o primeiro fica embaixo.
     Item {
         id: area
         objectName: "respostasDoAlerta"
@@ -160,8 +157,7 @@ MolduraDoDialogo {
                 leftPadding: 20
                 rightPadding: 20
                 raio: 12
-                cortarRotulo: true  // o rótulo longo de um botão empilhado termina em reticências, não vaza
-                // Setas e Tab circulam entre as respostas.
+                cortarRotulo: true
                 readonly property Item proximo: botoes.itemAt((index + 1) % area.quantos)
                 readonly property Item anterior: botoes.itemAt((index + area.quantos - 1) % area.quantos)
                 Keys.onRightPressed: proximo.forceActiveFocus(Qt.TabFocusReason)

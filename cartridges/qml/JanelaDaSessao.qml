@@ -1,20 +1,19 @@
 import QtQuick
 import QtQuick.Window
 
-// A janela "Jogando {nome}" da sessão manual (D50, R3): como a `Adw.Window` da `main` (`session_window.py`), sem moldura,
-// com a barra própria de 47 px (título centrado, minimizar e fechar, sem maximizar), 300×150 no total e tamanho fixo.
-// Fechar pela barra e o botão fazem o mesmo: encerrar a sessão com registro. Posta pelo Python.
+// A janela "Jogando {nome}" da sessão manual: sem moldura, com a barra própria de 47 px (título centrado, minimizar e
+// fechar, sem maximizar), 300×150 no total e tamanho fixo. Fechar pela barra e o botão fazem o mesmo: encerrar a sessão
+// com registro. Posta pelo Python.
 Window {
     id: raiz
     objectName: "janelaDaSessao"
 
-    // Os testes rodam sem a ponte do QWindowKit (como a `Principal`).
+    // Os testes rodam sem a ponte do QWindowKit.
     property bool semAgente: false
     readonly property QtObject agente: carga.item
     property bool _posta: false
 
     title: sessao.tituloDaJanela
-    // O `Adw.Window` da `main` não desce de 360x200, apesar do `set_default_size(300, 150)` (medido na janela real).
     width: 360
     height: 200
     minimumWidth: width
@@ -68,7 +67,6 @@ Window {
         comMaximizar: false
     }
 
-    // O botão no meio do que sobra abaixo da barra (`valign: center`, `vexpand`).
     Botao {
         id: botao
         objectName: "botaoTermineiDaJanela"
@@ -80,7 +78,7 @@ Window {
         onClicked: sessao.janelaManualFechada()
     }
 
-    // window.csd: o contorno claro de 1 px; o raio é o do DWM (R9).
+    // O contorno claro de 1 px; o raio é o do DWM.
     Rectangle {
         objectName: "contornoDaJanelaDaSessao"
         anchors.fill: parent

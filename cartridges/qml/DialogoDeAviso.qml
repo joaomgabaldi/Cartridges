@@ -5,10 +5,9 @@ import QtQuick
 DialogoDeAlerta {
     id: dialogo
 
-    // [{ titulo, subtitulo }]
     property var itens: []
     property string rotuloDoBotao: "Dispensar"
-    // O segundo botão (o padrão, como o `set_default_response` da `main`); vazio = escondido.
+    // O segundo botão (o padrão); vazio = escondido.
     property string rotuloSecundario: ""
 
     signal dispensado()
@@ -20,7 +19,7 @@ DialogoDeAlerta {
         itens = novosItens
         rotuloSecundario = novoRotuloSecundario || ""
         aberto = true
-        // Reaberto com outro conteúdo (a pilha da D72), o foco vai de novo ao botão inicial.
+        // Reaberto com outro conteúdo, o foco vai de novo ao botão inicial.
         Qt.callLater(focarInicial)
     }
     function acionarSecundario() { responder("secundario") }
@@ -36,7 +35,6 @@ DialogoDeAlerta {
     respostaInicial: rotuloSecundario !== "" ? "secundario" : "dispensar"
     onRespondido: resposta => resposta === "secundario" ? secundario() : dispensado()
 
-    // O `boxed-list` da `main` (`importer.py`): um cartão só, com as linhas separadas.
     GrupoDeLinhas {
         objectName: "listaDoDialogo"
         width: parent.width

@@ -1,8 +1,7 @@
 import QtQuick
 
-// O contorno do foco do teclado (`outline` da libadwaita): 2 px em `destaqueTexto` a 50%, com a transição de 200 ms.
-// Filho do item focável: `AnelDeFoco { ativo: botao.visualFocus; raio: 9 }`. `afastamento`: o `outline-offset` do CSS
-// (1 nos botões e no interruptor, -2 nas linhas e nos botões da barra, -1 nos campos).
+// O contorno do foco do teclado: 2 px em `destaqueTexto` a 50%. Uso: `AnelDeFoco { ativo: botao.visualFocus; raio: 9 }`;
+// `afastamento` desloca o contorno.
 Rectangle {
     id: anel
 

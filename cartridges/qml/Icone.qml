@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Window
 
-// Um ícone simbólico da `main` (`data/icones/<nome>-symbolic.svg`), na cor do texto ao redor.
+// Um ícone simbólico (`data/icones/<nome>-symbolic.svg`), na cor do texto ao redor.
 Image {
     id: icone
 

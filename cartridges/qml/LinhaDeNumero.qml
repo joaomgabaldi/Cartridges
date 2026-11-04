@@ -1,16 +1,14 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O `Adw.SpinRow`: o valor em texto, que aceita digitação, e os botões redondos de 30 (− e +), 6 entre eles com 2 de
-// margem. `alterado` leva o número que a pessoa pediu; quem usa grava e devolve o valor em `value` (a caixa só mostra o
-// que a linha recebe).
+// O valor em texto, que aceita digitação, e os botões redondos de 30 (− e +), 6 entre eles com 2 de margem. `alterado`
+// leva o número que a pessoa pediu; quem usa grava e devolve o valor em `value` (a caixa só mostra o que a linha recebe).
 LinhaDoGrupo {
     id: linha
 
     property int de: 0
     property int ate: 100
     property int passo: 1
-    // Quanto PageUp e PageDown andam.
     property int pagina: 10
     property int value: 0
 
@@ -18,13 +16,12 @@ LinhaDoGrupo {
 
     reservaADireita: caixa.width
     foco: caixa.activeFocus
-    // row.spin.focused: o contorno fica a -1 da linha.
 
     SpinBox {
         id: caixa
         objectName: linha.objectName + "Caixa"
         anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
-        // Apagada e abaixo do mínimo (o 0 da `main` sem dispositivo): o `SpinBox` não o prende ao mínimo.
+        // Apagada e abaixo do mínimo (0 sem dispositivo): o `SpinBox` não o prende ao mínimo.
         from: linha.enabled ? linha.de : Math.min(linha.de, linha.value)
         to: linha.ate
         stepSize: linha.passo

@@ -1,10 +1,9 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O `Adw.ExpanderRow` com `show-enable-switch`: ícone no início, título, interruptor e seta. O interruptor liga e desliga;
-// a seta e a linha recolhem e abrem as linhas filhas, que só aparecem com o interruptor ligado. Os filhos entram em
-// `linhas` e ficam fora da busca (a `main` só indexa as linhas de nível de grupo). Nasce recolhida: abrir a tela com a
-// chave já ligada mostra a linha fechada.
+// Linha expansora com interruptor: ícone no início, título, interruptor e seta. O interruptor liga e desliga; a seta e a
+// linha recolhem e abrem as linhas filhas, que só aparecem com o interruptor ligado. Os filhos entram em `linhas` e ficam
+// fora da busca. Nasce recolhida: abrir a tela com a chave já ligada mostra a linha fechada.
 LinhaDoGrupo {
     id: linha
 
@@ -16,7 +15,6 @@ LinhaDoGrupo {
     signal alternado()
 
     readonly property bool aberta: expandida && checked
-    // A altura do cabeçalho: a de uma linha comum de um título só.
     readonly property real _cabecalho: alturaMinima + 4
     readonly property real _topo: _separador
 
@@ -103,7 +101,6 @@ LinhaDoGrupo {
                 }
             }
         }
-        // A seta: apagada com o interruptor desligado; gira ao abrir. O anel só sai com o teclado.
         FocusScope {
             id: seta
             objectName: linha.objectName + "Seta"
@@ -126,7 +123,6 @@ LinhaDoGrupo {
             Icone {
                 anchors.centerIn: parent
                 nome: "pan-down"
-                // Recolhida aponta para baixo; aberta vira para cima, e habilitada fica no destaque.
                 cor: linha.aberta ? Tema.destaqueTexto : Tema.texto
                 rotation: linha.aberta ? 180 : 0
                 Behavior on rotation { enabled: Tema.animacoes; NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }

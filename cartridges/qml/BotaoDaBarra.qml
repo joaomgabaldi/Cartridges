@@ -29,7 +29,6 @@ Botao {
     Component.onCompleted: registrar()
     onAgenteChanged: registrar()
 
-    // .news-badge: 7x7, destaque, anel de 1,5 px na cor da headerbar, no canto superior direito do ícone.
     Rectangle {
         objectName: "seloDoBotao"
         visible: botao.selo

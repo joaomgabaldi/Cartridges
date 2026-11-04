@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Window
 
-// Uma linha de Preferências com título, subtítulo e, à direita, o botão "Atualizar" (a `Adw.ActionRow` com a `Stack` da
-// `main`). Enquanto o trabalho roda, o botão dá lugar ao botão plano de parar (`podeParar`) ou ao `Adw.Spinner`. A barra de
-// progresso fica fora da linha (um grupo abaixo do cartão): quem usa a desenha. A linha apagada (`enabled: false`) apaga tudo.
+// Uma linha de Preferências com título, subtítulo e, à direita, o botão "Atualizar". Enquanto o trabalho roda, o botão dá
+// lugar ao botão plano de parar (`podeParar`) ou ao girador. A barra de progresso fica fora da linha (um grupo abaixo do
+// cartão): quem usa a desenha. A linha apagada (`enabled: false`) apaga tudo.
 LinhaDoGrupo {
     id: linha
 

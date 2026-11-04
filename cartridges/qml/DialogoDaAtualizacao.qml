@@ -1,11 +1,11 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// A pergunta da versão nova e o "Baixando atualização…" (D82), na camada dos avisos: acima das Preferências.
-// `atualizador` é o AppUpdater (cartridges/utils/app_updater.py). As notas vão em RichText porque o `notes_to_markup`
-// as entrega só com <b>, <tt> e <br> (o resto do texto da release é escapado); o corpo e os rótulos, em PlainText.
-// Atualizar destacado, mas não como padrão: a caixa aparece sem ser pedida, e um Enter perdido (digitando na busca)
-// não pode começar o download. O foco inicial fica em "Agora não"; Esc vale "Agora não" (e "Cancelar" no download).
+// A pergunta da versão nova e o "Baixando atualização…", na camada dos avisos: acima das Preferências. `atualizador` é o
+// AppUpdater (cartridges/utils/app_updater.py). As notas vão em RichText porque o `notes_to_markup` as entrega só com
+// <b>, <tt> e <br> (o resto do texto da release é escapado); o corpo e os rótulos, em PlainText.
+// Atualizar destacado, mas não como padrão: a caixa aparece sem ser pedida, e um Enter perdido (digitando na busca) não
+// pode começar o download. O foco inicial fica em "Agora não"; Esc vale "Agora não" (e "Cancelar" no download).
 DialogoDeAlerta {
     id: dialogo
 
@@ -23,7 +23,7 @@ DialogoDeAlerta {
     fechaAoResponder: false
     objetoDoTitulo: "tituloDaAtualizacao"
     objetoDoCorpo: "corpoDaAtualizacao"
-    largo: true   // `prefer_wide_layout` (`app_updater.py`)
+    largo: true
     titulo: baixando ? "Baixando atualização…" : "Nova versão disponível: " + (pergunta.versao || "")
     corpo: baixando ? "" : "Deseja baixar e instalar a atualização agora? O aplicativo será fechado durante a instalação."
     respostas: baixando
@@ -38,7 +38,6 @@ DialogoDeAlerta {
     // Da pergunta ao download o diálogo segue aberto: o foco vai ao botão que sobrou.
     onBaixandoChanged: if (aberto) Qt.callLater(focarInicial)
 
-    // `ScrolledWindow` com `max_content_height=360` (`app_updater.py`): as notas rolam além disso.
     Flickable {
         id: notasRolagem
         width: parent.width
@@ -62,7 +61,6 @@ DialogoDeAlerta {
         }
     }
 
-    // `Gtk.ProgressBar(show_text=True)`: o texto da barra ("42 %", `font-size: smaller`, apagado) fica acima do trilho de 8 px.
     Column {
         width: parent.width
         spacing: 6

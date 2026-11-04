@@ -3,11 +3,10 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
 
-// As Preferências (`Adw.PreferencesDialog`): o `Adw.Dialog` de 640 de largura e altura máxima, com o cabeçalho de 47 (a
-// lupa à esquerda, o título no meio, o X), uma página por aba e a barra das abas no pé (`AdwViewSwitcherBar`: ícone sobre
-// rótulo). A lupa troca o título pelo campo de busca; com texto, os resultados vêm numa lista só, cada um com "Página →
-// Grupo", e clicar num leva à página e à linha. Só desenha: o que ele mostra e grava é o `preferencias`
-// (cartridges/modelos/preferencias.py). Modal para o mouse, o teclado e o controle; o foco volta a quem o abriu.
+// As Preferências: cabeçalho de 47 (lupa, título, X), uma página por aba e a barra das abas no pé. A lupa troca o título
+// pelo campo de busca; com texto, os resultados vêm numa lista só, cada um com "Página → Grupo", e clicar num leva à
+// página e à linha. Só desenha: o estado é do `preferencias` (cartridges/modelos/preferencias.py). Modal para o mouse, o
+// teclado e o controle; o foco volta a quem o abriu.
 MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoDePreferencias"
@@ -20,14 +19,11 @@ MolduraDoDialogo {
         { id: "conquistas", titulo: "Conquistas", icone: "starred" }
     ]
     readonly property var rotulosDasAbas: abas.map(a => a.titulo)
-    // A aba à vista; abre na que o `preferencias` pediu, se ela existe.
     property string aba: "general"
     readonly property int indiceDaAba: Math.max(0, abas.findIndex(a => a.id === aba))
-    // A lupa ligada: o campo toma o lugar do título. A barra das abas some só com texto na busca.
     property bool buscaAtiva: false
     property alias filtro: campoDeBusca.text
     readonly property bool buscando: filtro !== ""
-    // As linhas que casam com a busca: { linha, titulo, local, aba }.
     property var resultados: []
     property bool avisoAberto: false
     // O X do cabeçalho (o `objectName` dele é o da base, comum a todos os diálogos).
@@ -35,7 +31,7 @@ MolduraDoDialogo {
 
     aberto: preferencias.aberto
     largura: 640
-    altura: 2000  // `content-height` sem teto próprio: a janela limita
+    altura: 2000  // sem teto próprio: a janela limita
     nomeAcessivel: "Preferências"
     onFecharPedido: preferencias.fechar()
 
@@ -49,8 +45,8 @@ MolduraDoDialogo {
         rolagem.contentY = 0
         filtro = ""
         buscaAtiva = false
-        // O foco começa no X: o primeiro Tab vai à primeira linha habilitada da página (na `main`, "Contar horas de jogo"),
-        // e não pelas cinco abas, que ficam no fim da ordem do Tab.
+        // O foco começa no X: o primeiro Tab vai à primeira linha habilitada da página, e não pelas cinco abas, que ficam
+        // no fim da ordem do Tab.
         focoInicial = cabecalho.botaoFechar
     } else {
         confirmacaoDosMetadados.aberto = false
@@ -58,7 +54,6 @@ MolduraDoDialogo {
         buscaAtiva = false
     }
 
-    // O item com o foco fica à vista na rolagem.
     function mostrar(item) {
         var topo = item.mapToItem(rolagem.contentItem, 0, 0).y
         var base = topo + item.height
@@ -80,22 +75,21 @@ MolduraDoDialogo {
         buscaAtiva = true
         campoDeBusca.forceActiveFocus(Qt.ShortcutFocusReason)
     }
-    // Esc no campo, ou a lupa desligada: volta o título e as abas, com o foco na lupa.
     function sairDaBusca() {
         filtro = ""
         buscaAtiva = false
         botaoDaLupa.forceActiveFocus(Qt.TabFocusReason)
     }
 
-    // As linhas das Preferências, na ordem das páginas, com a página e o grupo de cada uma. As filhas de um expansor
-    // (que não são `buscavel`) ficam de fora, como na `main`.
+    // As linhas das Preferências, na ordem das páginas, com a página e o grupo de cada uma. As filhas de um expansor (que
+    // não são `buscavel`) ficam de fora.
     function procurar() {
         var achados = []
         if (filtro === "") { resultados = achados; return }
         function andar(item, pagina) {
             for (var i = 0; i < item.children.length; ++i) {
                 var c = item.children[i]
-                if (c.itens !== undefined && c.separada !== undefined) { // um `GrupoDeLinhas`
+                if (c.itens !== undefined && c.separada !== undefined) {
                     var grupo = c.parent
                     var tituloDoGrupo = grupo.titulo !== undefined ? grupo.titulo : (grupo.contas ? grupo.contas.titulo : "")
                     for (var j = 0; j < c.itens.length; ++j) {
@@ -113,7 +107,6 @@ MolduraDoDialogo {
         for (var k = 0; k < paginas.children.length; ++k) andar(paginas.children[k], abas[k])
         resultados = achados
     }
-    // O primeiro controle da linha que aceita o Tab.
     function focarLinha(linha) {
         function achar(item) {
             if (item.visible && item.enabled && item.activeFocusOnTab) return item
@@ -127,7 +120,6 @@ MolduraDoDialogo {
         if (alvo) alvo.forceActiveFocus(Qt.TabFocusReason)
         else linha.forceActiveFocus(Qt.TabFocusReason)
     }
-    // Clicar num resultado sai da busca, vai à página e põe o foco na linha.
     function abrirResultado(resultado) {
         aba = resultado.aba
         filtro = ""
@@ -150,7 +142,6 @@ MolduraDoDialogo {
         }
     }
 
-    // Ctrl+F liga a lupa (não com um modal por cima, nem com um aviso da camada dos avisos).
     Shortcut {
         sequences: [StandardKey.Find] // Ctrl+F e a tecla Find do padrão; `sequence` ligaria só a primeira (aviso do Qt)
         enabled: dialogo.aberto && raiz.enabled && !dialogo.avisoAberto
@@ -168,7 +159,6 @@ MolduraDoDialogo {
         enabled: preferencias.brilhoPorDispositivo === null && preferencias.configuracaoDasFitas === null
             && preferencias.calibracao === null && !loginEpic.aberto && !loginEa.aberto && !confirmacaoDosMetadados.aberto
 
-        // Digitar em qualquer ponto abre a busca (`search-started`): as teclas que nenhum controle tratou vão ao campo.
         Keys.onPressed: event => {
             if (event.text === "" || event.text.charCodeAt(0) < 32 || event.text.charCodeAt(0) === 127) return
             if (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) return
@@ -199,7 +189,6 @@ MolduraDoDialogo {
                     }
                 ]
 
-                // O campo no lugar do título, no máximo com 400 de largura.
                 CampoDeBusca {
                     id: campoDeBusca
                     objectName: "campoDeBuscaDasPreferencias"
@@ -211,7 +200,6 @@ MolduraDoDialogo {
                     placeholderText: "Buscar nas Preferências"
                     Accessible.name: "Buscar nas Preferências"
                     Behavior on opacity { enabled: Tema.animacoes; NumberAnimation { duration: Tema.duracaoCurta } }
-                    // Esc sai da busca, mesmo com texto; outro Esc fecha o diálogo.
                     Keys.onEscapePressed: dialogo.sairDaBusca()
                 }
             }
@@ -225,14 +213,12 @@ MolduraDoDialogo {
                 contentHeight: !dialogo.buscando ? paginas.implicitHeight + 48
                     : dialogo.resultados.length > 0 ? resultadosDaBusca.implicitHeight + 48 : height
                 boundsBehavior: Flickable.StopAtBounds
-                // A mola da biblioteca, a pedido do usuário (04/11); sem animações, o passo do `ScrolledWindow` (V3).
+                // A mola da biblioteca; sem animações, o passo padrão.
                 RolagemPorMola { objectName: "molaDasPreferencias"; alvo: rolagem; ativa: Tema.animacoes }
                 RolagemDaRoda { alvo: rolagem; ativa: !Tema.animacoes }
                 clip: true
                 ScrollBar.vertical: BarraDeRolagem {}
 
-                // `PreferencesPage`: 24 em cima e embaixo, 12 dos lados, e o conteúdo com no máximo 556 (os cartões de 532
-                // medidos na `main` em 640; em 480 o conteúdo ocupa a largura toda).
                 readonly property real larguraDoConteudo: Math.min(width, 556) - 24
 
                 Column {
@@ -249,7 +235,6 @@ MolduraDoDialogo {
                     PaginaDasConquistas { visible: dialogo.aba === "conquistas" }
                 }
 
-                // Os resultados: uma lista só, num cartão, com "Página → Grupo" no lugar do subtítulo da linha.
                 GrupoDeLinhas {
                     id: resultadosDaBusca
                     objectName: "resultadosDaBuscaDasPreferencias"
@@ -271,7 +256,6 @@ MolduraDoDialogo {
                     }
                 }
 
-                // Sem linha que case: o ícone de lupa, o título e a descrição.
                 EstadoVazio {
                     id: semResultado
                     objectName: "estadoSemResultadoDasPreferencias"
@@ -284,7 +268,6 @@ MolduraDoDialogo {
                 }
             }
 
-            // `AdwViewSwitcherBar`: 47 de altura com a linha de cima, que só aparece quando há mais conteúdo por rolar.
             Item {
                 id: barraDeAbas
                 objectName: "abas"
@@ -320,11 +303,9 @@ MolduraDoDialogo {
                             Accessible.name: text
                             Keys.onReturnPressed: click()
                             Keys.onEnterPressed: click()
-                            // As setas trocam de aba e levam o foco junto (sem dar a volta nas pontas).
                             Keys.onLeftPressed: dialogo.irParaAba(index - 1)
                             Keys.onRightPressed: dialogo.irParaAba(index + 1)
                             onClicked: dialogo.aba = modelData.id
-                            // O ícone de 16 sobre o rótulo de 10 em negrito (`viewswitcher.narrow`).
                             contentItem: Item {
                                 Icone {
                                     anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 4 }
@@ -364,14 +345,13 @@ MolduraDoDialogo {
         width: 0
         height: 0
 
-        // O escopo da atualização de metadados: a pergunta chega do `preferencias.biblioteca`.
         DialogoDeConfirmacao {
             id: confirmacaoDosMetadados
             objectName: "dialogoDosMetadados"
             titulo: "Atualizar metadados"
             rotuloConfirmar: "Buscar o que falta"
             rotuloAlternativo: "Buscar tudo"
-            respostaInicial: "confirmar"  // `set_default_response("missing")`
+            respostaInicial: "confirmar"
             onConfirmado: preferencias.biblioteca.buscarMetadados(true)
             onAlternativo: preferencias.biblioteca.buscarMetadados(false)
             onCancelado: preferencias.biblioteca.descartarPergunta()
@@ -380,7 +360,6 @@ MolduraDoDialogo {
         BrilhoPorDispositivo { onRetornoPerdido: dialogo.focarInicial() }
         ConfiguracaoDasFitas { onRetornoPerdido: dialogo.focarInicial() }
         AssistenteDeCalibracao { onRetornoPerdido: dialogo.focarInicial() }
-        // As janelas de login das contas, por cima das Preferências (que ficam apagadas enquanto uma está aberta).
         JanelaDeLogin {
             id: loginEpic
             objectName: "janelaDeLoginEpic"

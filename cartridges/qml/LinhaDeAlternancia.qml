@@ -1,19 +1,18 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O `Adw.SwitchRow`: título, explicação e o interruptor; a linha inteira aciona, com hover de 4% e 8% pressionada.
+// Linha com título, explicação e o interruptor; a linha inteira aciona, com hover de 4% e 8% pressionada.
 LinhaDoGrupo {
     id: linha
 
     property alias checked: chave.checked
 
-    // A pessoa ligou ou desligou a chave.
     signal alternado()
 
     reservaADireita: chave.width
     sobre: areaDaLinha.containsMouse && !chave.hovered
     pressionada: areaDaLinha.pressed
-    // Na AdwSwitchRow o contorno de foco é da linha, não do interruptor; o Tab para aqui, no Switch, e o anel sai na linha.
+    // O contorno de foco é da linha, não do interruptor; o Tab para aqui, no Switch, e o anel sai na linha.
     foco: chave.visualFocus
 
     MouseArea {
@@ -34,7 +33,6 @@ LinhaDoGrupo {
         Keys.onEnterPressed: click()
         Accessible.name: linha.titulo
         onToggled: linha.alternado()
-        // switch: padding 3, botão de 20, raio 14; fundo 15% (20% sobre, 25% pressionado); ligado, o destaque.
         indicator: Rectangle {
             implicitWidth: 46
             implicitHeight: 26
@@ -54,7 +52,6 @@ LinhaDoGrupo {
                 width: 20
                 height: 20
                 radius: 10
-                // color-mix(white 80%, view_bg), branco sobre e ligado.
                 color: chave.checked || chave.hovered || chave.pressed ? "white"
                     : Qt.rgba(0.8 + 0.2 * Tema.vista.r, 0.8 + 0.2 * Tema.vista.g, 0.8 + 0.2 * Tema.vista.b, 1)
                 Sombra { camadas: chave.enabled ? [[2, 4, 0, 0, 0, 6 / 255, 0.2]] : []; raio: 10 }

@@ -3,14 +3,13 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
 
-// A tela da sessão (D49): cobre a janela inteira, barra de título incluída, enquanto o jogo roda.
-// Lê só o `sessao` (cartridges/modelos/sessao.py); o texto do jogo é sempre texto puro.
+// A tela da sessão: cobre a janela inteira, barra de título incluída, enquanto o jogo roda. Lê só o `sessao`
+// (cartridges/modelos/sessao.py); o texto do jogo é sempre texto puro.
 Rectangle {
     id: raiz
     objectName: "camadaDaSessao"
-    color: "#EB000000"  // rgba(0, 0, 0, 0.92), como na `main`
+    color: "#EB000000"
 
-    // Quem está embaixo não recebe mouse nem roda.
     MouseArea {
         anchors.fill: parent
         hoverEnabled: true
@@ -18,9 +17,8 @@ Rectangle {
         onWheel: wheel => wheel.accepted = true
     }
 
-    // O anel de foco só vem se o teclado (ou o controle) já estava em uso quando o jogo foi aberto: na `main` o `grab_focus`
-    // depois de um clique deixa o `focus-visible` falso. Lembrado enquanto a camada está escondida, porque ao abrir a página
-    // de trás já foi desabilitada e o foco dela já saiu.
+    // O anel de foco só vem se o teclado (ou o controle) já estava em uso quando o jogo foi aberto. Lembrado enquanto a
+    // camada está escondida, porque ao abrir a página de trás já foi desabilitada e o foco dela já saiu.
     property bool _tecladoEmUso: false
     Connections {
         target: raiz.Window.window
@@ -36,7 +34,7 @@ Rectangle {
         }
     }
 
-    // Esconder fecha o balão aberto (e é esse fechamento que grava a anotação), como na `main`.
+    // Esconder fecha o balão aberto (e é esse fechamento que grava a anotação).
     onVisibleChanged: {
         if (visible) {
             botaoTerminei.forceActiveFocus(_tecladoEmUso ? Qt.TabFocusReason : Qt.OtherFocusReason)
@@ -46,13 +44,12 @@ Rectangle {
         }
     }
 
-    // A coluna do jogo e, abaixo dela, o cartão de conquistas, que pode ser mais largo que ela.
     ColumnLayout {
         objectName: "colunaDaSessao"
         anchors.centerIn: parent
         spacing: 18
 
-        // A largura natural do nome, até a da janela menos 48: só o logo é limitado a 640 (`window.py:79-80`).
+        // A largura natural do nome, até a da janela menos 48: só o logo é limitado a 640.
         ColumnLayout {
             objectName: "colunaDoJogo"
             Layout.alignment: Qt.AlignHCenter
@@ -60,7 +57,6 @@ Rectangle {
             Layout.maximumWidth: raiz.width - 48
             spacing: 18
 
-            // O logo (640×140 no máximo) ou o nome, nunca os dois.
             Item {
                 Layout.fillWidth: true
                 Layout.bottomMargin: 12
@@ -91,7 +87,7 @@ Rectangle {
                     wrapMode: Text.Wrap
                     horizontalAlignment: Text.AlignHCenter
                     color: "white"
-                    font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 }  // .title-1
+                    font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 }
                 }
             }
 
@@ -102,7 +98,7 @@ Rectangle {
                 text: sessao.relogio
                 textFormat: Text.PlainText
                 color: "white"
-                font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1; features: { "tnum": 1 } }  // title-1 numeric
+                font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1; features: { "tnum": 1 } }
             }
 
             Botao {
@@ -115,8 +111,8 @@ Rectangle {
                 onClicked: sessao.terminar()
             }
 
-            // O `MenuButton` plano da `main`: o texto e a seta para baixo. Sobre a camada escura o branco vale nos dois
-            // temas (o `currentColor` da `main` seria o texto do tema, e o hover sumiria no tema claro).
+            // Sobre a camada escura o branco vale nos dois temas: o `currentColor` seria o texto do tema, e o hover
+            // sumiria no tema claro.
             Botao {
                 id: botaoAnotacao
                 objectName: "botaoAnotacaoDaSessao"

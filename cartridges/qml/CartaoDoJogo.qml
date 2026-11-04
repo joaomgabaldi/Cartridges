@@ -3,8 +3,8 @@ import QtQuick.Controls.Basic
 import QtQuick.Effects
 import QtQuick.Window
 
-// Um jogo da grade, no desenho da versão anterior: a capa e o nome dentro do mesmo cartão arredondado.
-// Ao passar o mouse: jogar no canto superior esquerdo e "Mais opções" no direito (`toggle_play` da `main`: só o ponteiro).
+// Um jogo da grade: a capa e o nome dentro do mesmo cartão arredondado. Ao passar o mouse: jogar no canto superior
+// esquerdo e "Mais opções" no direito (só o ponteiro).
 Rectangle {
     id: cartao
 
@@ -21,15 +21,14 @@ Rectangle {
     property bool tocarSempre: false
     // Há um patch esperando no feed (e o jogo não é zerado): o halo dourado em volta do cartão.
     property bool temAtualizacao: false
-    // Como na `main` (`game_cover.py:531`): passar o mouse toca a capa animada com ou sem "Animar capas", também em
-    // Jogos Zerados. Sem animação o cartão mostra a capa parada; fora da vista, janela minimizada ou oculta, nada toca
-    // e o arquivo da cópia é largado.
+    // Passar o mouse toca a capa animada com ou sem "Animar capas", também em Jogos Zerados. Sem animação o cartão mostra
+    // a capa parada; fora da vista, janela minimizada ou oculta, nada toca e o arquivo da cópia é largado.
     readonly property bool animando: capaAnimada !== "" && naVista && (tocarSempre || passando)
         && Window.visibility !== Window.Minimized && Window.visibility !== Window.Hidden
     // Parar pausa no quadro atual (`tocador_capas.py`): o arquivo da cópia fica aberto por 30 s, e só então a capa volta
     // ao primeiro quadro; a grade limita as pausadas a 8 (`liberar`). Retomar segue de onde parou.
     // O ponteiro está sobre o cartão. Propriedade comum (não só `passagem.hovered`) para os testes, que no offscreen não
-    // conseguem produzir o hover, a poderem ligar.
+    // conseguem produzir o hover, a ligarem.
     property bool passando: passagem.hovered
     property bool retendo: false
     signal pausou()
@@ -45,25 +44,19 @@ Rectangle {
         }
     }
     Timer { id: retencao; interval: 30000; onTriggered: cartao.retendo = false }
-    // O cartão sob o foco do teclado na grade (o delegate liga).
     property bool focado: false
     // O modelo da biblioteca: só `iniciar` é chamado nele; o QML nunca vê um Jogo.
     property QtObject modelo
 
-    // O clique na capa abre os detalhes.
     signal abrirDetalhes(string jogoId)
-    // O clique direito no cartão pede o diálogo Editar.
     signal editar(string jogoId)
-    // O botão "Mais opções" (ou a tecla de menu) pede o menu do jogo, ancorado no item.
     signal menuPedido(string jogoId, Item ancora)
 
     readonly property int larguraDaCapa: 200
     readonly property int alturaDaCapa: 300
-    // 15 + a linha de 17 + 15.
     readonly property int alturaDoNome: 47
-    // Só o ponteiro e o menu aberto mostram os botões (`game.py:564`): o foco do teclado e o controle não.
+    // Só o ponteiro e o menu aberto mostram os botões: o foco do teclado e o controle não.
     readonly property bool mostrarBotoes: !zerado && (passando || menuAberto)
-    // O menu do jogo está aberto a partir deste cartão: os botões ficam à vista enquanto ele durar.
     property bool menuAberto: false
     readonly property string nomeAcessivel: Accessible.name
     readonly property string papelAcessivel: Accessible.role === Accessible.Button ? "Button" : ""
@@ -78,8 +71,6 @@ Rectangle {
     color: Tema.cartao
     readonly property bool pressionado: toque.pressed
 
-    // `.card`, ou o realce do ponteiro (`#cover_button:hover`), ou o halo da atualização: cada regra troca o
-    // `box-shadow` inteiro, e o halo vem por último e vence o ponteiro.
     Sombra {
         visible: !cartao.temAtualizacao
         opacity: passagem.hovered ? 0 : 1
@@ -101,7 +92,6 @@ Rectangle {
         active: cartao.temAtualizacao
         sourceComponent: Sombra { objectName: "haloDaAtualizacao"; camadas: [[0, 22, 5, 245 / 255, 184 / 255, 32 / 255, 0.8]]; raio: cartao.radius }
     }
-    // O véu do `button:hover`: 4% do texto ao passar, 8% pressionado, atrás da capa (só o rodapé o mostra).
     Rectangle {
         anchors.fill: parent
         radius: cartao.radius
@@ -115,7 +105,6 @@ Rectangle {
 
     HoverHandler { id: passagem }
 
-    // Clique na capa: detalhes. Clique direito: Editar (como na `main`).
     TapHandler {
         id: toque
         onTapped: cartao.abrirDetalhes(cartao.jogoId)
@@ -135,32 +124,30 @@ Rectangle {
         Rectangle { width: parent.width; height: parent.height + cartao.radius; radius: cartao.radius }
     }
 
-    // A capa parada e, por cima dela, a animada; os cantos arredondados valem para as duas.
     Item {
         id: capa
         width: cartao.larguraDaCapa
         height: cartao.alturaDaCapa
-        // Carregando, a capa some e o girador aparece (`set_loading`).
         opacity: cartao.carregando ? 0 : 1
         layer.enabled: true
         layer.effect: MultiEffect {
             maskEnabled: true
             maskSource: mascara
-            maskThresholdMin: 0.5  // borda suave nos cantos arredondados
+            maskThresholdMin: 0.5
             maskSpreadAtMin: 1.0
         }
 
         Image {
             id: imagem
             objectName: "capaParada"
-            // A URL que não se leu (arquivo quebrado): no lugar dela, o placeholder, como na `main`. Uma capa nova muda a URL (`?v=`).
+            // A URL que não se leu (arquivo quebrado): no lugar dela, o placeholder. Uma capa nova muda a URL (`?v=`).
             property string ilegivel: ""
             // Para a `CortinaDaAbertura` (Python), que não lê o enum do `status`.
             readonly property bool carregandoArquivo: status === Image.Loading
             anchors.fill: parent
             source: cartao.capa !== "" && cartao.capa !== ilegivel ? cartao.capa : (cartao.modelo ? cartao.modelo.placeholder : "")
             onStatusChanged: if (status === Image.Error && source.toString() === cartao.capa) ilegivel = cartao.capa
-            // A capa que não é 2:3 é esticada para 200x300 (`new_from_file_at_scale(..., False)`); o placeholder também.
+            // A capa que não é 2:3 é esticada para 200x300; o placeholder também.
             fillMode: Image.Stretch
             asynchronous: true
             // Na resolução real da tela, para a capa não ficar borrada em DPI alto.
@@ -199,10 +186,8 @@ Rectangle {
         elide: Text.ElideRight
     }
 
-    // O foco do teclado: contorno de 2 px em destaque a 50%, afastado -1 (CSS 382), por cima da capa.
     AnelDeFoco { ativo: cartao.focado; raio: cartao.radius; afastamento: -1 }
 
-    // Os botões só existem fora de um zerado (que não joga nem tem menu).
     Loader {
         id: carregadorDosBotoes
         anchors.fill: parent
@@ -210,10 +195,8 @@ Rectangle {
         sourceComponent: Item {
             readonly property Item ancoraDoMenu: botaoMais
             opacity: cartao.mostrarBotoes ? 1 : 0
-            // `Revealer` crossfade: 250 ms.
             Behavior on opacity { NumberAnimation { duration: 250 } }
 
-            // `.circular.osd`: 34x34, fundo preto a 65%; ao passar, 15% de branco na mistura; pressionado, 25%.
             component BotaoRedondo: Rectangle {
                 id: botao
                 property string icone
@@ -224,7 +207,7 @@ Rectangle {
                     : (pressao.containsMouse ? Qt.rgba(0.15, 0.15, 0.15, 0.65) : Qt.rgba(0, 0, 0, 0.65))
                 Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
                 Accessible.role: Accessible.Button
-                // Sem dica visível (`game.blp`): o nome é só para quem usa leitor de tela.
+                // Sem dica visível: o nome é só para quem usa leitor de tela.
                 Accessible.name: dica
                 Icone {
                     anchors.centerIn: parent

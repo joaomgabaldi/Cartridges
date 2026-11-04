@@ -2,10 +2,9 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// "Brilho máximo por dispositivo", por cima das Preferências (`Adw.Dialog` com a `HeaderBar` e uma `PreferencesPage`): uma
-// linha de número por fita. Só desenha: o que ele mostra e grava é o `preferencias.brilhoPorDispositivo`
-// (cartridges/modelos/preferencias.py), que existe só enquanto a janela está aberta. Cada mudança acende as fitas no número
-// dela; só o Salvar grava. Esc cancela.
+// "Brilho máximo por dispositivo", por cima das Preferências: uma linha de número por fita. Só desenha: o estado é do
+// `preferencias.brilhoPorDispositivo` (cartridges/modelos/preferencias.py), que existe só enquanto a janela está aberta.
+// Cada mudança acende as fitas no número dela; só o Salvar grava. Esc cancela.
 MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoDoBrilhoPorDispositivo"
@@ -14,7 +13,7 @@ MolduraDoDialogo {
 
     aberto: !!modelo
     largura: 420
-    // O foco abre no primeiro controle, o Cancelar (o `Adw.Dialog` da `main` não tem resposta padrão).
+    // O foco abre no primeiro controle, o Cancelar.
     focoInicial: botaoCancelar
     nomeAcessivel: "Brilho máximo por dispositivo"
     onFecharPedido: if (modelo) modelo.cancelar()
@@ -54,7 +53,6 @@ MolduraDoDialogo {
         clip: true
         ScrollBar.vertical: BarraDeRolagem {}
 
-        // `PreferencesPage`: 24 em cima e embaixo, 12 dos lados.
         Column {
             id: grupos
             x: 12

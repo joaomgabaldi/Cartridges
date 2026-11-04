@@ -1,9 +1,8 @@
 import QtQuick
 import QtQuick.Window
 
-// A janela "Restaurando o backup" da abertura (D74): sem moldura nativa, com a barra do app só com minimizar (a
-// `Adw.HeaderBar` com `:minimize` da `main`; fechar, não). Num motor próprio, antes da biblioteca; `restaurando` vem do
-// contexto. O `app` a fecha depois de a principal aparecer.
+// A janela "Restaurando o backup" da abertura: sem moldura nativa, com a barra do app só com minimizar (fechar, não). Num
+// motor próprio, antes da biblioteca; `restaurando` vem do contexto. O `app` a fecha depois de a principal aparecer.
 Window {
     id: raiz
     objectName: "janelaRestaurando"
@@ -72,7 +71,6 @@ Window {
         bottomPadding: 24
         spacing: 12
 
-        // title-2
         Text {
             objectName: "tituloDaRestauracao"
             width: parent.width
@@ -83,7 +81,6 @@ Window {
             color: Tema.texto
             font { family: Tema.fonte; pixelSize: Tema.titulo2; weight: Tema.pesoTitulo2 }
         }
-        // dim-label
         Text {
             objectName: "textoDaRestauracao"
             width: parent.width
@@ -98,7 +95,6 @@ Window {
             width: parent.width
             spacing: 6
 
-            // `caption numeric`, sem `dim`: a porcentagem num rótulo próprio, acima da barra.
             Text {
                 objectName: "porcentagemDaRestauracao"
                 width: parent.width
@@ -117,7 +113,6 @@ Window {
         }
     }
 
-    // window.csd: o contorno de 1 px, como o das tarefas.
     Rectangle {
         anchors.fill: parent
         z: 1000

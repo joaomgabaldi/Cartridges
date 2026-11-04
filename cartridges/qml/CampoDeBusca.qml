@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O `Gtk.SearchEntry` da `main`: 34 de altura, raio 9, fundo a 10% do texto, a lupa à esquerda (`edit-find`) e, com texto,
-// o botão de limpar à direita (`edit-clear`), que limpa e mantém o foco. `textEdited` também sai ao limpar.
+// O campo de busca: 34 de altura, raio 9, lupa à esquerda e, com texto, o botão de limpar à direita, que limpa e mantém o
+// foco. `textEdited` também sai ao limpar.
 TextField {
     id: campo
 
@@ -14,7 +14,6 @@ TextField {
     font { family: Tema.fonte; pixelSize: Tema.corpo }
     verticalAlignment: TextInput.AlignVCenter
     implicitHeight: 34
-    // padding 9, o ícone de 16 e 6 de espaço; à direita, o botão de limpar quando há texto.
     leftPadding: 9 + 16 + 6
     rightPadding: text !== "" ? 9 + 16 + 6 : 9
     topPadding: 0
