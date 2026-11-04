@@ -6,10 +6,10 @@
   </replaces>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
-  <name>Cartridges</name>
+  <name>Kyron</name>
   <summary>Seus jogos em um só lugar</summary>
   <description>
-    <p>O Cartridges é um lançador simples para todos os seus jogos. Ele importa atalhos de jogos (.lnk e .url, incluindo aplicativos da Microsoft Store) a partir de uma pasta, reunindo em um só lugar jogos da Steam, Epic, Ubisoft Connect, Xbox e outros, sem precisar fazer login. Títulos, desenvolvedoras, publicadoras e datas de lançamento são buscados na Steam, e você pode ordenar os jogos, manter em Jogos Zerados os jogos desinstalados que você terminou ou baixar capas do SteamGridDB.</p>
+    <p>O Kyron é um lançador simples para todos os seus jogos. Ele importa atalhos de jogos (.lnk e .url, incluindo aplicativos da Microsoft Store) a partir de uma pasta, reunindo em um só lugar jogos da Steam, Epic, Ubisoft Connect, Xbox e outros, sem precisar fazer login. Títulos, desenvolvedoras, publicadoras e datas de lançamento são buscados na Steam, e você pode ordenar os jogos, manter em Jogos Zerados os jogos desinstalados que você terminou ou baixar capas do SteamGridDB.</p>
   </description>
   <developer id="io.github.joaomgabaldi">
     <name translate="no">joaomgabaldi</name>
@@ -31,6 +31,7 @@
     <release version="2.0.0" date="2026-11-01">
       <description translate="no">
         <ul>
+          <li>O Cartridges agora se chama Kyron e tem um ícone novo.</li>
           <li>O aplicativo está mais rápido e com melhor qualidade de imagem.</li>
           <li>O aplicativo ganhou novas animações, mais suaves e naturais.</li>
           <li>A janela não tem mais a borda invisível que atrapalhava cliques e o encaixe nas laterais da tela.</li>

@@ -134,7 +134,7 @@ def test_novidades_da_2_0_0_aparecem_no_sobre(app_qt):  # noqa: ARG001
     assert len(sobre.novidades) >= 1
     # O texto exato é o da 2.0.0, lida pela versão (não pelo topo, que muda a cada subida).
     primeiro = novidades_da_versao(METAINFO, "2.0.0")[0]["texto"]
-    assert primeiro == "O aplicativo está mais rápido e com melhor qualidade de imagem."  # R12: sem "integrada ao Windows 11"
+    assert primeiro == "O Cartridges agora se chama Kyron e tem um ícone novo."  # R12: sem "integrada ao Windows 11"
 
 
 def test_modelo_le_as_novidades_da_versao_ao_abrir(app_qt, monkeypatch):  # noqa: ARG001

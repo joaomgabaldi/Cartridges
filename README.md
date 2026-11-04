@@ -1,10 +1,12 @@
 <div align="center">
   <img src="data/icons/hicolor/scalable/apps/io.github.joaomgabaldi.Cartridges.svg" width="128" height="128">
 
-  # Cartridges
+  # Kyron
 
   Seus jogos em um só lugar — launcher de jogos para Windows, em Qt (PySide6)
 </div>
+
+O Kyron se chamava Cartridges até a versão 2.0.0.
 
 Este é um fork da versão para Windows do [Cartridges](https://codeberg.org/kramo/cartridges), o launcher
 criado por kramo para o GNOME. O projeto original (abandonado) reúne jogos de vários launchers do Linux; esta
@@ -90,7 +92,7 @@ A interface é inteiramente em português do Brasil.
   porcentagem de jogadores que também a têm), as bloqueadas e as ocultas.
 - Ao abrir o aplicativo, um aviso informa quantas conquistas foram desbloqueadas desde a última
   vez.
-- **Durante o jogo**: quando a loja não mostra o próprio aviso, o Cartridges mostra um no canto da
+- **Durante o jogo**: quando a loja não mostra o próprio aviso, o Kyron mostra um no canto da
   tela, com som (volume ajustável) e posição à escolha. A iluminação inteligente pisca na cor e no
   estilo escolhidos. Várias conquistas de uma vez viram um único som e um único pulso.
 
@@ -212,7 +214,7 @@ dispositivos na sua conta; depois disso, o aplicativo conversa com eles direto p
 
 ## Instalação
 
-1. Baixe e instale através do instalador `Cartridges.Windows.exe` da versão mais recente em
+1. Baixe e instale através do instalador `Kyron Windows.exe` da versão mais recente em
    [Releases](https://github.com/joaomgabaldi/Cartridges/releases).
 
 O instalador pede permissão de administrador e instala para todos os usuários. Depois de instalado,
@@ -286,7 +288,7 @@ Os testes usam pastas e chaves de registro temporárias; nenhum toca nos dados d
 
 ## Histórico de versões
 
-A lista completa de mudanças de cada versão aparece no aplicativo, em *Sobre o Cartridges →
+A lista completa de mudanças de cada versão aparece no aplicativo, em *Sobre o Kyron →
 Novidades*, e está em [`data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in`](data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in).
 
 ## Créditos e licença
