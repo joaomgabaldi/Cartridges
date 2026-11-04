@@ -201,7 +201,8 @@ print(json.dumps({"codigo": codigo, "fitas": fitas, "receptores": receptores, "a
 
 
 def test_qml_que_nao_carrega_nao_deixa_as_fitas_acesas_e_o_saindo_encerra_a_sessao(tmp_path):
-    """Sem janela o `app.exec()` não roda e o `aboutToQuit` (que fecha as fitas) nunca vem.
+    """Sem janela o `app.exec()` não roda e o `aboutToQuit` (que fecha as fitas) nunca vem. As fitas acendem antes do
+    QML (com a janela, não um segundo depois dela), então o `_abrir` que não carregou as devolve.
 
     No mesmo `main()` de verdade (R2): o `saindo` tem um receptor só, o `encerrar()` da sessão, que não espera fita
     nem parede (R1: elas ficam para o `aboutToQuit`).
@@ -219,7 +220,7 @@ def test_qml_que_nao_carrega_nao_deixa_as_fitas_acesas_e_o_saindo_encerra_a_sess
     assert resultado.returncode == 0, resultado.stderr
     saida = json.loads(resultado.stdout.strip().splitlines()[-1])
     assert saida["codigo"] == 1
-    assert saida["fitas"] == []
+    assert saida["fitas"] == ["abrir", "fechar"]
     assert saida["receptores"] == 1
     assert (saida["antes"], saida["depois"]) == (False, True)
     assert saida["depois_do_saindo"] == []
@@ -247,7 +248,7 @@ gc.collect()
 contexto = abertura.motor.rootContext()
 nomes = ["filtros", "paginaTodos", "paginaZerados", "aplicativo", "ponte", "controle", "detalhes", "edicao",
          "bigPicture", "sessao", "historico", "saves", "conquistasDoJogo", "preferencias", "painelDasTarefas",
-         "restauracao", "atualizador", "novidades", "sobre", "zeradosManuais", "geometria"]
+         "restauracao", "atualizador", "novidades", "sobre", "zeradosManuais", "geometria", "cortinaDaAbertura"]
 print(json.dumps({"codigo": codigo, "mortos": [n for n in nomes if contexto.contextProperty(n) is None]}))
 """
 

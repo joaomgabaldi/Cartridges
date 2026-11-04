@@ -6,6 +6,7 @@
 
 import builtins
 import logging
+import os
 import subprocess
 import sys
 import threading
@@ -34,7 +35,10 @@ from cartridges.conquistas.ea import conta as ea_conta
 from cartridges.conquistas.epic import conta as epic_conta
 from cartridges.conquistas.varredura import VarreduraConquistas
 from cartridges.conquistas.xbox import conta, login
+from cartridges.janela.cortina_da_abertura import CortinaDaAbertura
+from cartridges.logging import detalhado
 from cartridges.logging.detalhado import instalar_filtro
+from cartridges.logging.session_file_handler import SessionFileHandler
 from cartridges.logging.setup import log_system_info, setup_logging
 from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
@@ -92,9 +96,16 @@ def _configurar_log() -> None:
         setup_logging()
     except ValueError:
         # dictConfig embrulha qualquer falha dos handlers em ValueError (uma rotação de log que não sobreviveu a uma
-        # queda, p.ex.). Ficar sem log NENHUM é o pior resultado possível para a sessão seguinte a um crash: o console
-        # segura as pontas até a rotação se curar na próxima execução.
-        logging.basicConfig(level=logging.DEBUG)
+        # queda, um `cartridges.log` preso por outro processo). Ficar sem log NENHUM é o pior resultado possível, e o
+        # app instalado não tem console: um arquivo só desta sessão, que a rotação seguinte comprime e descarta.
+        # O mesmo handler do log normal, com os mesmos guards: o teto de `MAX_BYTES`, sem ele só com o log detalhado.
+        try:
+            reserva = SessionFileHandler(
+                shared.log_dir / f"cartridges-{os.getpid()}.log", backup_count=0, sem_limite=detalhado.ativo()
+            )
+            logging.basicConfig(level=logging.DEBUG, handlers=[reserva])
+        except OSError:
+            logging.basicConfig(level=logging.DEBUG)
         logging.exception("Não foi possível configurar o log em arquivo")
     log_system_info()
 
@@ -203,6 +214,8 @@ class _Abertura:
     assistente: Any = None
     # O filtro do `WM_SETTINGCHANGE` (D88), instalado no app; sai no fim do `_fechar`.
     ajustes: Any = None
+    # A `CortinaDaAbertura` da principal: a janela da restauração ou do assistente fecha quando ela revela a principal.
+    cortina: Any = None
     # Os objetos que só o contexto do QML conhece (o Qt não é dono de objeto Python): sem uma referência aqui, saem
     # da memória quando o `_abrir` devolve e a grade, o histórico e as versões dos saves ficam sem modelo.
     mantidos: Any = None
@@ -350,6 +363,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     sobre = Sobre(avisos)
     zerados_manuais = SeletorDeZerados()
     caixa_da_anotacao = CaixaDaAnotacao()
+    abertura.cortina = cortina_da_abertura = CortinaDaAbertura()
     abertura.big_picture = big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     _seguir_animacoes(aplicativo, big_picture)
     abertura.geometria = geometria = GeometriaDaJanela()
@@ -382,21 +396,24 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
         ("painelDasTarefas", painel_das_tarefas),
         ("restauracao", continuacao), ("atualizador", atualizador), ("novidades", novidades), ("sobre", sobre),
         ("zeradosManuais", zerados_manuais), ("geometria", geometria), ("caixaDaAnotacao", caixa_da_anotacao),
+        ("cortinaDaAbertura", cortina_da_abertura),
     ):  # fmt: skip
         contexto.setContextProperty(nome, valor)
     # O Qt não é dono do que vai ao contexto: tudo precisa de uma referência Python até o fim do `main()`.
     abertura.mantidos = (
         modelo, filtros, pagina_biblioteca, pagina_zerados, ponte, controle, detalhes, avisos, historico, saves, sobre, zerados_manuais,
-        caixa_da_anotacao,
+        caixa_da_anotacao, cortina_da_abertura,
     )  # fmt: skip
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.
     session_wallpaper.restaurar_orfaos()
+    # As fitas de LED: desfaz o que uma execução anterior deixou e acende na cor do app (numa thread). Antes do QML, que
+    # segura a thread principal por um ou dois segundos: na `main` elas acendem com a janela, não depois dela.
+    session_fita.abrir()
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))
     if not motor.rootObjects():
+        # Sem janela o `app.exec()` não roda e o `aboutToQuit` (o `fechar()` no `ModeloDaSessao.devolver()`) não vem.
+        session_fita.fechar()
         return 1
-    # As fitas de LED: desfaz o que uma execução anterior deixou e acende na cor do app (numa thread). Depois da
-    # janela: sem ela não há `aboutToQuit`, e o `fechar()` (no fim do `ModeloDaSessao.devolver()`) nunca viria.
-    session_fita.abrir()
     big_picture.definir_janela(motor.rootObjects()[0])  # a janela que vai à tela cheia
     controle.definir_janela(motor.rootObjects()[0])  # só a principal ativa dá o controle (C-24)
     sessao.definir_janela(motor.rootObjects()[0])  # a que volta da barra de tarefas no fim da sessão
@@ -453,6 +470,20 @@ def _avancar(fraco: weakref.ref, fracao: float) -> None:
         restaurando.avancar(fracao)
 
 
+def _fechar_quando_a_principal_aparecer(abertura: _Abertura, motor: QQmlApplicationEngine, codigo: int | None) -> None:
+    """Fecha a janela da restauração ou do assistente. Com a principal aberta, só quando ela aparece (a cortina a esconde
+    até as capas carregarem): antes disso o app ficaria sem nenhuma janela à vista e pareceria fechado."""
+
+    def fechar() -> None:
+        for janela in motor.rootObjects():
+            janela.close()
+
+    if codigo is None and abertura.cortina is not None:
+        abertura.cortina.depois_de_revelar(fechar)
+    else:
+        fechar()
+
+
 def _restaurar_e_abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> None:
     """Aplica o backup agendado numa thread, com a janela da restauração na tela; a abertura continua na thread
     principal quando ele termina. Volta na hora: quem chama roda o `exec()`.
@@ -478,8 +509,7 @@ def _restaurar_e_abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -
             # Mesmo com a abertura quebrada: uma janela sem fechar, presa em 100%, só sairia pelo Gerenciador de Tarefas.
             if (restaurando := restaurando_fraco()) is not None:
                 restaurando.terminar()
-            for janela in abertura.restauracao.rootObjects():
-                janela.close()
+            _fechar_quando_a_principal_aparecer(abertura, abertura.restauracao, codigo)
         if codigo is not None and (qt := app_fraco()) is not None:
             qt.exit(codigo)
 
@@ -526,7 +556,7 @@ def _mostrar_assistente(app: AplicacaoQt, argv: list[str], abertura: _Abertura, 
             logging.getLogger(__name__).exception("Falha ao abrir o app depois do assistente")
             codigo = 1
         finally:
-            fechar_a_janela()
+            _fechar_quando_a_principal_aparecer(abertura, abertura.assistente, codigo)
         if codigo is not None and (qt := app_fraco()) is not None:
             qt.exit(codigo)
 

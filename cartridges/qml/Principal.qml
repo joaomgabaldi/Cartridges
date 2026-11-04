@@ -42,6 +42,9 @@ Window {
     property alias barraTransparente: barra.transparente
     // O que passa por baixo da barra transparente: fica sob ela mesmo quando um modal a põe abaixo da área (J05).
     property alias fundoDaBarra: fundoSobABarra.data
+    // A barra entra com a página nova (na `main` a barra é da página); `barraDeTitulo`, para a cópia da barra de antes.
+    property real deslocamentoDaBarra: 0
+    readonly property Item barraDeTitulo: barra
 
     color: usarMica ? "transparent" : Tema.fundo
     title: "Cartridges"
@@ -56,6 +59,9 @@ Window {
             barra.ligarAgente()
             agentePronto = true
         }
+        // Antes de mostrar: a janela só aparece desenhada, com as capas (`cortina_da_abertura.py`). Opcional como a
+        // `geometria`: os arneses dos testes não a põem no contexto.
+        if (typeof cortinaDaAbertura !== "undefined") cortinaDaAbertura.cobrir(janela)
         // gschema da `main`: 1170x795; window.blp: mínimo 360x100.
         width = 1170
         height = 795
@@ -94,6 +100,7 @@ Window {
         // Livre, fica acima da área e recebe o mouse direto; com modal, a área (e o modal nela) a cobre.
         z: janela.barraTrancada || janela._saindo ? 0 : 1
         anchors { top: parent.top; left: parent.left; right: parent.right }
+        transform: Translate { x: janela.deslocamentoDaBarra }
         janela: janela
         agente: janela.agente
         titulo: janela.tituloDaBarra

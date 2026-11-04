@@ -238,10 +238,15 @@ def test_logging_setup_sem_gi(tmp_path):
     assert filho.stdout.strip().splitlines()[-1] == "ok"
 
 
-def test_setup_logging_que_falha_cai_no_console(monkeypatch, caplog):
-    """`dictConfig` embrulha a falha de um handler em `ValueError`: o app fica com o console e a linha do erro."""
+@pytest.mark.parametrize("detalhado_ativo", [False, True])
+def test_setup_logging_que_falha_grava_num_arquivo_da_sessao(monkeypatch, caplog, tmp_path, detalhado_ativo):
+    """`dictConfig` embrulha a falha de um handler em `ValueError`: sem console no app instalado, o log vai a um arquivo
+    próprio da sessão, na pasta dos logs, que a rotação seguinte comprime e descarta como os outros. Com os guards do
+    log normal: o teto de 32 MiB, sem ele só com o log detalhado (Ruling do log detalhado)."""
     from cartridges import app as modulo_app  # noqa: PLC0415
 
+    monkeypatch.setattr(modulo_app.detalhado, "ativo", lambda: detalhado_ativo)
+    monkeypatch.setattr(shared, "log_dir", tmp_path / "logs")
     chamadas = []
 
     def falha():
@@ -251,7 +256,14 @@ def test_setup_logging_que_falha_cai_no_console(monkeypatch, caplog):
     monkeypatch.setattr(modulo_app, "log_system_info", lambda: chamadas.append("info"))
     monkeypatch.setattr(modulo_app.logging, "basicConfig", lambda **k: chamadas.append(("basicConfig", k)))
     modulo_app._configurar_log()  # noqa: SLF001
-    assert chamadas == [("basicConfig", {"level": logging.DEBUG}), "info"]
+    arquivo = tmp_path / "logs" / f"cartridges-{os.getpid()}.log"
+    (nome, argumentos), info = chamadas
+    assert (nome, info, argumentos["level"]) == ("basicConfig", "info", logging.DEBUG)
+    [reserva] = argumentos["handlers"]
+    assert isinstance(reserva, SessionFileHandler)
+    assert reserva.sem_limite is detalhado_ativo
+    assert reserva.filename == arquivo and arquivo.is_file()
+    reserva.close()
     registro = next(r for r in caplog.records if "Não foi possível configurar o log em arquivo" in r.getMessage())
     assert registro.exc_info[1].args == ("rotação quebrada",)
 
@@ -540,3 +552,15 @@ def test_rotation_survives_a_crash_between_compress_and_unlink(tmp_path):
 
     handler = SessionFileHandler(filename=path, backup_count=2)  # não pode levantar
     handler.close()
+
+
+def test_o_log_de_reserva_da_sessao_some_em_tres_rotacoes(tmp_path):
+    """O `cartridges-<pid>.log` do `_configurar_log` que falhou entra na rotação como os outros: comprimido na sessão
+    seguinte e descartado depois de `backup_count` sessões, sem acumular na pasta."""
+    (tmp_path / "cartridges-123.log").write_text("sessão sem rotação\n", encoding="utf-8")
+
+    for _ in range(3):
+        SessionFileHandler(filename=tmp_path / "cartridges.log", backup_count=2).close()
+        nomes = {item.name for item in tmp_path.iterdir()}
+        assert "cartridges-123.log" not in nomes
+    assert not any(nome.startswith("cartridges-123") for nome in nomes)

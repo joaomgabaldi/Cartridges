@@ -647,6 +647,46 @@ def test_fundo_da_barra_acompanha_o_deslize_da_pagina(app_qt):
     app.fechar()
 
 
+def test_barra_antiga_fica_ate_a_pagina_nova_cobrir(app_qt):
+    """Na `main` a barra é da página: a de Todos fica intacta onde os Detalhes ainda não chegaram, e a barra nova
+    (transparente, com a seta de voltar) entra com a página. Antes, a barra inteira trocava no `push`.
+
+    Os testes rodam sem animações (o `push` acaba na hora): o deslize é o `avancoDaPilha`, posto a andar devagar."""
+    from PySide6.QtQuick import QQuickItem  # noqa: PLC0415
+
+    app = _App(_tres())
+    janela = app.janela
+    copia = app.achar("barraDeAntes")
+    fonte = copia.findChild(QQuickItem, "copiaDaBarra")
+    contexto = QQmlEngine.contextForObject(janela)
+
+    def rodar(codigo):
+        QQmlExpression(contexto, janela, codigo).evaluate()
+
+    assert fonte.property("live") is True
+    assert copia.property("width") == 0
+    rodar("janela.empurrar(paginaDasNovidades); avancoDaPilha.duration = 60000; avancoDaPilha.from = 0;"
+          " avancoDaPilha.to = 1; avancoDaPilha.restart()")
+    # Durante o deslize: a cópia congela a barra de antes e cobre até a borda da página que entra, e a barra nova
+    # está deslocada até essa mesma borda.
+    deslocamento = janela.property("deslocamentoDoFundo")
+    assert deslocamento > 0
+    assert fonte.property("live") is False
+    assert janela.property("deslocamentoDaBarra") == deslocamento
+    assert copia.property("width") == deslocamento
+    # No fim do deslize, a barra nova está no lugar e a cópia volta a acompanhar a barra, sem largura.
+    rodar("avancoDaPilha.complete()")
+    assert janela.property("deslocamentoDaBarra") == 0
+    assert copia.property("width") == 0
+    assert fonte.property("live") is True
+    # A volta não usa a cópia: a barra de antes volta na hora, como antes.
+    rodar("janela.voltar(); avancoDaPilha.from = 0.5; avancoDaPilha.to = 0; avancoDaPilha.restart()")
+    assert janela.property("deslocamentoDoFundo") > 0
+    assert janela.property("deslocamentoDaBarra") == 0
+    rodar("avancoDaPilha.complete()")
+    app.fechar()
+
+
 def test_rotulos_da_pagina_tem_a_linha_de_17_px_da_main(app_qt):
     # Segoe UI de 12 px: o Pango da `main` dá 17 px por linha (o Qt, 16); a coluna inteira ficava 14 px mais baixa.
     app = _App(_tres())

@@ -24,7 +24,8 @@ AppId={{88FC7AF8-9F74-40EC-AAED-FA6356261CBB}
 #endif
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName={#MyAppName} {#MyAppVersion}
+; Sem a versão: ela já tem coluna própria em "Aplicativos instalados", e o nome do app é só "Cartridges".
+AppVerName={#MyAppName}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}

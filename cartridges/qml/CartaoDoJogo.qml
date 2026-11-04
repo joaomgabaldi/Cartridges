@@ -155,6 +155,8 @@ Rectangle {
             objectName: "capaParada"
             // A URL que não se leu (arquivo quebrado): no lugar dela, o placeholder, como na `main`. Uma capa nova muda a URL (`?v=`).
             property string ilegivel: ""
+            // Para a `CortinaDaAbertura` (Python), que não lê o enum do `status`.
+            readonly property bool carregandoArquivo: status === Image.Loading
             anchors.fill: parent
             source: cartao.capa !== "" && cartao.capa !== ilegivel ? cartao.capa : (cartao.modelo ? cartao.modelo.placeholder : "")
             onStatusChanged: if (status === Image.Error && source.toString() === cartao.capa) ilegivel = cartao.capa

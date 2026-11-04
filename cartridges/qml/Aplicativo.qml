@@ -38,6 +38,7 @@ Principal {
         voltar()
     }
     function voltar() {
+        _empurrando = false
         if (paginaAtual === "jogo" && pilha.depth > 1) { detalhes.esquecer(); pilha.pop() }
         else if (paginaAtual !== "todos") sairDaPilha()
     }
@@ -58,6 +59,7 @@ Principal {
     function empurrar(componente, propriedades) {
         // Um push durante a saída animada: a saída termina na hora, senão o `onFinished` apagaria a página nova.
         if (_saindoDaPilha) _terminarSaida()
+        _empurrando = true
         const vazia = pilha.depth === 0
         pilha.push(componente, propriedades || {})
         if (vazia && Tema.animacoes && pilha.currentItem) {
@@ -71,6 +73,7 @@ Principal {
         }
     }
     function sairDaPilha() {
+        _empurrando = false
         const jogo = paginaAtual === "jogo"
         if (!Tema.animacoes || pilha.depth !== 1 || !pilha.currentItem) {
             if (jogo) detalhes.esquecer()
@@ -119,6 +122,11 @@ Principal {
     // O fundo da barra desliza com a página que entra e, na volta a Todos, com a que sai (na `main` a barra é da própria
     // página). O `avanco` da pilha acompanha o deslize; o `XAnimator` da página não atualiza o `x` no meio do caminho.
     readonly property real deslocamentoDoFundo: avancoDaPilha.running || pilha.busy ? Math.round(pilha.width * (1 - pilha.avanco)) : 0
+    // Na ida, a barra nova entra com a página e a de antes (`barraDeAntes`) fica onde a página ainda não chegou. A volta
+    // segue trocando a barra de uma vez.
+    property bool _empurrando: false
+    readonly property bool _barraCongelada: _empurrando && deslocamentoDoFundo > 0
+    deslocamentoDaBarra: _barraCongelada ? deslocamentoDoFundo : 0
     fundoDaBarra: [
         Rectangle { x: janela.deslocamentoDoFundo; width: parent.width; height: parent.height; visible: janela.barraTransparente; color: Tema.escuro ? "black" : "white" },
         Image {
@@ -301,11 +309,30 @@ Principal {
         enabled: !camadaDeAvisos.dialogoAberto && !edicao.aberto && !historico.aberto && !conquistasDoJogo.aberto && !preferencias.aberto && !saves.aberto && !restauracao.aberta && !janela.sobreAberto && !janela.zeradosAberto && !bigPicture.visivel && !sessao.emAndamento
     }
 
+    // A barra de antes, congelada no quadro anterior ao `push`, à esquerda da borda da página que entra; recua com a
+    // página de baixo. Fora do deslize, sem largura, a cópia acompanha a barra (`live`) para ter o quadro pronto.
+    Item {
+        objectName: "barraDeAntes"
+        width: janela._barraCongelada ? janela.deslocamentoDoFundo : 0
+        height: janela.alturaDaBarra
+        visible: !janela.telaCheia
+        clip: true
+        enabled: false
+        ShaderEffectSource {
+            objectName: "copiaDaBarra"
+            x: pilha.depth > 1 ? Math.round(-pilha.width / 4 * pilha.avanco) : 0
+            width: janela.width
+            height: janela.alturaDaBarra
+            sourceItem: janela.barraDeTitulo
+            live: !janela._barraCongelada
+        }
+    }
+
     // `AdwNavigationView`: a página de baixo escurece e a que entra projeta uma sombra na borda esquerda. Não medidos:
-    // 20% de escurecimento e 32 px de sombra, na libadwaita.
+    // 20% de escurecimento e 32 px de sombra, na libadwaita. Na ida, cobre também a barra de antes.
     Item {
         objectName: "sombraDaTransicao"
-        anchors { fill: parent; topMargin: janela.alturaDoTopo }
+        anchors { fill: parent; topMargin: janela._barraCongelada ? 0 : janela.alturaDoTopo }
         visible: pilha.avanco > 0 && pilha.avanco < 1
         enabled: false
         readonly property real borda: pilha.width * (1 - pilha.avanco)
