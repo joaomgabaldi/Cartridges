@@ -2,10 +2,7 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// O seletor do jogo da Steam: um campo de busca e a lista de candidatos da loja (diálogo de 560x520, a lista num
-// cartão de até 500). Só desenha: a busca e a escolha são do `seletor` (SeletorDaSteam, cartridges/modelos/seletores.py).
-// Modal para o mouse, o teclado e o controle (abre por cima do diálogo de edição, que fica desabilitado);
-// o foco volta ao botão que o abriu.
+// O seletor do jogo da Steam: só desenha; a busca e a escolha são do `seletor`.
 SeletorBase {
     id: seletorDaSteam
 
@@ -24,7 +21,6 @@ SeletorBase {
 
     Binding { target: seletorDaSteam.campo; property: "text"; value: seletorDaSteam.seletor.busca }
 
-    // A seta numa linha leva o foco à vizinha; para cima da primeira, ao campo de busca.
     function moverFoco(indice) {
         if (indice < 0) { campo.forceActiveFocus(Qt.BacktabFocusReason); return }
         var linha = linhas.itemAt(indice)
@@ -75,7 +71,6 @@ SeletorBase {
                 RolagemDaRoda { alvo: lista }
                 ScrollBar.vertical: BarraDeRolagem {}
 
-                // Largura máxima de 500 com 12 de margem: o cartão contínuo, as linhas coladas com separador.
                 GrupoDeLinhas {
                     id: grupo
                     x: (lista.width - width) / 2

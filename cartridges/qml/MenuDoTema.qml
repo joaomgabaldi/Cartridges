@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O popover dos menus: raio 15, sombra, 6 de respiro, largura natural (mínimo 120). Todo menu do app,
 // inclusive os submenus, é um MenuDoTema: o `delegate` e o `background` valem só para o menu que os declara.
 // `setaEm`: o x do centro da seta, em relação ao menu; negativo, sem seta.
 Menu {
@@ -19,19 +18,16 @@ Menu {
     Component.onCompleted: medirItens()
     implicitWidth: Math.max(120, larguraDosItens + leftPadding + rightPadding)
 
-    // Dentro da janela, não numa janela à parte: o menu acompanha a barra sem moldura.
     popupType: Popup.Item
     delegate: ItemDoMenu {}
     padding: 6
     overlap: 0
-    // Use `fechamento` no lugar de `closePolicy`. Na animação de saída o menu ainda está visível, e um popup com
-    // CloseOnEscape segura os atalhos da janela: o Alt fecha o menu e o Alt+← logo depois não voltaria a página.
+    // Use `fechamento` no lugar de `closePolicy`: na animação de saída o menu ainda está visível e CloseOnEscape seguraria os atalhos da janela.
     property int fechamento: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     property bool _saindo: false
     onAboutToHide: _saindo = true
     onAboutToShow: { _saindo = false; medirItens() }
     closePolicy: _saindo ? Popup.NoAutoClose : fechamento
-    // Abre e fecha com um leve esmaecer e crescer a partir da seta.
     transformOrigin: Popup.Top
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Tema.animacoes ? 100 : 0; easing.type: Easing.OutCubic }

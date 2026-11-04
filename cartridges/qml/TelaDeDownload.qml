@@ -1,12 +1,10 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// A página "Baixando…" dos seletores: 280 de largura, espaços de 12, o título, a barra e o
-// tamanho esmaecido, com algarismos de largura fixa. Sem total conhecido (`progresso` negativo ou sem texto), a barra só pulsa.
+// Sem total conhecido (`progresso` negativo ou sem texto), a barra só pulsa.
 Column {
     id: tela
 
-    // De 0 a 1, ou -1 quando o servidor não informa o tamanho.
     property real progresso: -1
     property string texto
     property string nomeDaBarra
@@ -42,7 +40,6 @@ Column {
                 radius: 4
                 color: Tema.destaque
             }
-            // Sem total: um trecho que vai e volta.
             Rectangle {
                 id: pulso
                 visible: barra.indeterminate

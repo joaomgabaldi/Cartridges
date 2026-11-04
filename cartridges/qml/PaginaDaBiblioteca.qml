@@ -2,48 +2,36 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Shapes
 
-// Uma página de jogos: "Todos os jogos" (com busca) ou "Jogos Zerados". Os botões ficam na barra de título
-// (Aplicativo.qml); aqui estão a barra de busca, a grade e o aviso de página vazia.
-// `aplicativo` vem do contexto (cartridges/app.py).
+// Uma página de jogos: "Todos os jogos" (com busca) ou "Jogos Zerados".
 Item {
     id: raiz
 
-    // FiltroDaPagina
     property QtObject pagina
     property bool comBusca: false
     property bool buscaAberta: false
-    // A página que está por cima na pilha; a coberta não anima capas.
     property bool ativa: true
-    // Um jogo foi escolhido (clique, Enter, A do controle ou Enter da busca) e a página dele deve abrir.
     signal abrirDetalhes(string jogoId)
     signal editar(string jogoId)
-    // Esc em Jogos Zerados volta; "Todos os jogos" não tem para onde.
     signal voltar()
 
-    // Página vazia com o botão "Importar": é ele que recebe o foco, não a grade invisível.
     readonly property bool vazioComBotao: grade.count === 0 && aviso.visible && aviso.rotuloDoBotao !== ""
     function focarGrade() { if (vazioComBotao) aviso.focarBotao(); else grade.forceActiveFocus() }
     function fecharMenuDoJogo() { grade.fecharMenu() }
     function focarJogo(jogoId) { grade.focarJogo(jogoId) }
     function marcarTeclado() { grade.marcarTeclado() }
 
-    // O controle do Xbox (Aplicativo.qml): o menu do jogo está aberto, e os comandos sobre o cartão atual.
     readonly property bool menuDoJogoAberto: grade.menuAberto
-    // A grade rolada: a barra de título mostra a linha de baixo.
-    // Com a busca aberta, a linha fica sob ela, e a da barra de título apaga:
-    // só uma linha, nunca duas.
+    // Com a grade rolada, a barra de título mostra a linha de baixo; com a busca aberta, a linha fica sob ela (só uma, nunca duas).
     readonly property bool buscaVisivel: comBusca && buscaAberta
     readonly property bool rolado: grade.rolado && !buscaVisivel
-    // Devolve se o passo tem onde acontecer aqui; falso em ↑ na primeira linha (o controle vai à barra) e onde não há nada a fazer.
+    // Devolve se o passo tem onde acontecer aqui.
     function moverSelecao(dx, dy) {
-        // Na busca, ↓ só entra na grade, sem andar uma linha; ↑ vai à barra e ←/→ não fazem nada.
         if (campo.activeFocus) {
             if (dy <= 0) return false
             grade.porTeclado = true
             grade.forceActiveFocus()
             return true
         }
-        // Página vazia: o foco alcança o botão "Importar".
         if (grade.count === 0) {
             if (dy <= 0 || !aviso.visible || aviso.rotuloDoBotao === "" || aviso.botaoFocado) return false
             aviso.focarBotao()
@@ -52,12 +40,10 @@ Item {
         // A grade responde que andou mesmo contra a parede (o toque é o de passar): só ↑ na primeira linha sai.
         return grade.moverSelecao(dx, dy) || dy >= 0
     }
-    // O x (na janela) do centro do cartão atual, para achar o botão da barra mais próximo.
     function xDoAtual() {
         return grade.currentItem ? grade.currentItem.mapToItem(null, grade.currentItem.width / 2, 0).x : 0
     }
-    // Um controle apareceu: acende a seleção, sem tirar o foco de quem digita na busca. Com o foco fora da grade, vai ao
-    // primeiro jogo; devolve se foi.
+    // Um controle apareceu: acende a seleção sem tirar o foco de quem digita; fora da grade, vai ao primeiro jogo.
     function mostrarSelecao() {
         if (buscaAberta) return false
         if (vazioComBotao) { aviso.focarBotao(); return false }
@@ -67,13 +53,11 @@ Item {
         grade.forceActiveFocus()
         return foraDaGrade
     }
-    // O Y só age com o foco num cartão: na barra, na busca ou no botão da página vazia não faz nada.
     function abrirMenuDoAtual() {
         if (!grade.activeFocus) return
         grade.porTeclado = true
         if (grade.currentItem) grade.currentItem.abrirMenu()
     }
-    // O A: o botão da página vazia, o primeiro resultado da busca (o Enter do campo), ou o cartão atual.
     function abrirDetalhesDoAtual() {
         if (aviso.botaoFocado) { aviso.acionarBotao(); return }
         if (campo.activeFocus) { campo.accepted(); return }
@@ -83,10 +67,7 @@ Item {
     }
     function alternarBusca() { buscaAberta = !buscaAberta }
 
-    // Digitar com o foco na grade ou num botão da
-    // barra abre a busca e leva a letra. Só a página "Todos os jogos" (a busca dos Zerados não existe, e Detalhes e
-    // Zerados à vista não a abrem). Espaço não conta: ele aciona o botão ou o cartão em foco.
-    // Devolve se a tecla foi tomada.
+    // Digitar com o foco na grade ou num botão da barra abre a busca (só em "Todos os jogos"). Espaço não conta: aciona o botão ou o cartão.
     function capturar(event) {
         if (event.key === Qt.Key_Escape) {
             if (buscaAberta) { buscaAberta = false; return true }
@@ -107,7 +88,6 @@ Item {
         if (buscaAberta) {
             campo.forceActiveFocus()
         } else {
-            // Fechar por qualquer caminho limpa o texto, e a página volta na hora (sem a espera de 150 ms).
             campo.text = ""
             esperaDaBusca.stop()
             if (pagina) pagina.busca = ""
@@ -115,7 +95,7 @@ Item {
         }
     }
 
-    // A barra de busca: transparente, sem linha própria, padding 6 em volta do campo de 34 (46 no total); abre em 250 ms.
+    // Barra de busca: padding 6 em volta do campo de 34 (46 no total); abre em 250 ms.
     Item {
         id: barraDeBusca
         objectName: "barraDeBusca"
@@ -137,7 +117,6 @@ Item {
             objectName: "campoDeBusca"
             x: Math.round((parent.width - width) / 2)
             y: 6
-            // Largura máxima de 500, com os 6 de padding dos lados.
             width: Math.min(500, parent.width - 12)
             height: 34
             placeholderText: "Buscar"
@@ -157,7 +136,6 @@ Item {
                 if (raiz.pagina) raiz.pagina.busca = text
                 var id = raiz.pagina.primeiro()
                 if (id === "") return
-                // O foco volta ao cartão aberto, o primeiro da lista filtrada.
                 grade.currentIndex = 0
                 raiz.abrirDetalhes(id)
             }
@@ -169,7 +147,6 @@ Item {
                 nome: "edit-find"
                 opacity: 0.7
             }
-            // O botão de limpar, à direita: limpa e mantém o foco no campo.
             Icone {
                 id: limpar
                 objectName: "limparBusca"
@@ -201,7 +178,6 @@ Item {
         anchors { top: barraDeBusca.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         biblioteca: raiz.pagina
         colunasMaximas: aplicativo.colunasMaximas
-        // Só com "Animar capas" e os efeitos de animação do Windows ligados.
         tocarSempre: aplicativo.tocarSempre && aplicativo.animacoesDoSistema
         ativa: raiz.ativa
         visible: !aviso.visible
@@ -209,8 +185,7 @@ Item {
         onEditar: id => raiz.editar(id)
     }
 
-    // Sob a busca aberta, a linha de 1 px mais o degradê de 4 px em `shade_color`
-    // a 75%, enquanto a grade está rolada. Sem a busca, a mesma linha é a `sombraDaBarra` da barra de título.
+    // Sob a busca aberta: a linha de 1 px mais o degradê de 4 px em `shade_color` a 75%, com a grade rolada.
     Item {
         id: linhaBusca
         objectName: "linhaDaBusca"
@@ -230,8 +205,7 @@ Item {
         Rectangle { anchors { left: parent.left; right: parent.right; top: parent.top } height: 1; color: linhaBusca.sombra }
     }
 
-    // O efeito de fim de rolagem: dois degradês radiais em `currentColor`, 12% numa faixa de 3% da altura e
-    // 5% numa de 50%, com o centro na borda; somem ao soltar. Dispara com `verticalOvershoot` (`DragOverBounds`).
+    // Efeito de fim de rolagem: dois degradês radiais em `currentColor`, 12% numa faixa de 3% da altura e 5% numa de 50%; somem ao soltar.
     Repeater {
         model: [{ topo: true }, { topo: false }]
         Item {
@@ -246,7 +220,6 @@ Item {
             opacity: forca
             enabled: false
             clip: true
-            // Uma elipse por camada: o `farthest-side` do CSS é a elipse inscrita na faixa.
             component Camada: Item {
                 id: camada
                 required property real fracao
@@ -254,7 +227,6 @@ Item {
                 anchors { left: parent.left; right: parent.right; top: brilho.modelData.topo ? parent.top : undefined; bottom: brilho.modelData.topo ? undefined : parent.bottom }
                 height: brilho.height * fracao
                 Shape {
-                    // Um círculo de raio `height`, esticado na largura: a elipse.
                     width: camada.height * 2
                     height: camada.height
                     transform: Scale { xScale: camada.width / (camada.height * 2) }

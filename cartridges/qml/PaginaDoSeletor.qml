@@ -1,6 +1,5 @@
 import QtQuick
 
-// Uma página da pilha de um seletor: ocupa a área toda, aparece e some em 200 ms, esmaecendo.
 // Fora de vista não é `visible`, então não recebe foco nem clique.
 Item {
     id: pagina

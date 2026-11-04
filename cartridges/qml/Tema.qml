@@ -1,14 +1,12 @@
 pragma Singleton
 import QtQuick
 
-// Cores, fonte e ritmo do app, no tema claro ou escuro do Windows.
 QtObject {
     id: tema
 
     readonly property string fonte: "Segoe UI"
     readonly property bool escuro: Qt.styleHints.colorScheme === Qt.Dark
-    // A cor de destaque escolhida pelo usuário no Windows: o `AccentColor` cru, posto na paleta por
-    // `aplicar_cor_de_destaque`.
+    // A cor de destaque do Windows (`AccentColor` cru), posta na paleta por `aplicar_cor_de_destaque`.
     readonly property color destaque: sistema.accent
     readonly property color textoDoDestaque: "#ffffff"
     // O destaque como texto, foco e link. Nunca o `destaque` cru sobre o fundo do app.
@@ -38,33 +36,25 @@ QtObject {
 
     readonly property color fundo: escuro ? "#222226" : "#fafafb"
     readonly property color texto: escuro ? "#ffffff" : Qt.rgba(0, 0, 6 / 255, 0.8)
-    // Esmaecido: 55% do texto.
     readonly property color textoSecundario: escuro ? Qt.rgba(1, 1, 1, 0.55) : Qt.rgba(0, 0, 6 / 255, 0.44)
     // Só o anel do selo usa; a barra da janela é plana, da cor do `fundo`.
     readonly property color barra: escuro ? "#2e2e32" : "#ffffff"
     readonly property color barraInativa: escuro ? "#222226" : "#fafafb"
     readonly property color sombraDaBarra: escuro ? Qt.rgba(0, 0, 6 / 255, 0.36) : Qt.rgba(0, 0, 6 / 255, 0.12)
-    // Botão comum: 10% do texto; sobre, 15%; pressionado, 30%.
     readonly property color botao: mistura(0.10)
     readonly property color botaoSobre: mistura(0.15)
     readonly property color pressionado: mistura(0.30)
-    // Botão plano: 7% ao passar, 16% pressionado, 10% ligado.
     readonly property color planoSobre: mistura(0.07)
     readonly property color planoPressionado: mistura(0.16)
     readonly property color planoLigado: mistura(0.10)
-    // Linha ativável: 4% ao passar, 8% pressionada.
     readonly property color linhaSobre: mistura(0.04)
     readonly property color linhaPressionada: mistura(0.08)
-    // Item de menu: 10% ao passar, 19% pressionado.
     readonly property color menuSobre: mistura(0.10)
     readonly property color menuPressionado: mistura(0.19)
-    // O fundo, o texto e o ícone destrutivos.
     readonly property color destrutivo: escuro ? "#c01c28" : "#e01b24"
     readonly property color destrutivoTexto: derivada(destrutivo)
-    // O ícone de aviso.
     readonly property color avisoIcone: derivada(escuro ? "#cd9309" : "#e5a50a")
     readonly property color erro: escuro ? "#ff938c" : "#c30000"
-    // Cartão, diálogo (só o de alerta), popover e lista.
     readonly property color cartao: escuro ? Qt.rgba(1, 1, 1, 0.08) : "#ffffff"
     readonly property color sombraDoCartao: escuro ? Qt.rgba(0, 0, 6 / 255, 0.36) : Qt.rgba(0, 0, 6 / 255, 0.07)
     readonly property color dialogo: escuro ? "#36363a" : "#fafafb"
@@ -72,19 +62,13 @@ QtObject {
     readonly property color vista: escuro ? "#1d1d20" : "#ffffff"
     // `shade_color` dobrado: o escurecimento atrás de um diálogo.
     readonly property color esmaecido: escuro ? Qt.rgba(0, 0, 6 / 255, 0.5) : Qt.rgba(0, 0, 6 / 255, 0.14)
-    // Superfície opaca, para o que ainda não foi trocado por cartão, diálogo ou popover.
     readonly property color superficie: dialogo
-    // Borda: 15% do texto.
     readonly property color borda: mistura(0.15)
-    // O fundo do aviso embaixo, nos dois temas.
     readonly property color aviso: "#505053"
-    // O contorno claro de 1 px da janela e dos diálogos (`outline`), nos dois temas.
     readonly property color contorno: Qt.rgba(1, 1, 1, 0.07)
-    // Opacidade do desabilitado e do esmaecido.
     readonly property real opacidadeDesabilitado: 0.5
     readonly property real opacidadeApagado: 0.55
 
-    // box-shadow do CSS, como [deslocamento y, desfoque, espalhamento, r, g, b, a]; para `Sombra { camadas: ... }`.
     readonly property var sombraCartao: [[0, 0, 1, 0, 0, 6 / 255, 0.03], [1, 3, 1, 0, 0, 6 / 255, 0.07], [2, 6, 2, 0, 0, 6 / 255, 0.03]]
     readonly property var sombraDialogo: [[0, 14, 2, 0, 0, 6 / 255, 0.03], [0, 5, 2, 0, 0, 6 / 255, 0.10], [0, 0, 1, 0, 0, 0, 0.05]]
     readonly property var sombraPopover: [[0, 0, 1, 0, 0, 0, 0.05], [1, 5, 1, 0, 0, 0, 0.09], [2, 14, 3, 0, 0, 0, 0.05]]
@@ -97,8 +81,7 @@ QtObject {
     readonly property int duracaoMedia: 200
     readonly property var curva: [0.25, 0.46, 0.45, 0.94, 1, 1]
 
-    // Os efeitos de animação do Windows. Os testes rodam sem a animação de abrir e fechar
-    // diálogos (`tests/conftest.py`), para o `visible` ser síncrono.
+    // Os efeitos de animação do Windows; os testes rodam sem a animação de abrir e fechar diálogos, para o `visible` ser síncrono.
     readonly property bool animacoes: !Qt.application.arguments.includes("--sem-animacao-de-dialogo")
         && (typeof aplicativo === "undefined" || aplicativo === null || aplicativo.animacoesDoSistema !== false)
 

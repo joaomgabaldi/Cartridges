@@ -3,17 +3,12 @@ import QtQuick.Controls.Basic
 import QtQuick.Effects
 import QtQuick.Layouts
 
-// O seletor do papel de parede da sessão: uma grade de candidatos do wallhaven já cortados no formato dos monitores
-// (diálogo de 860x700) e, depois da escolha, a barra que desliza a faixa de cada monitor.
-// Só desenha: a busca, os cortes e o download são do `seletor` (SeletorDePapelDeParede, cartridges/modelos/seletores.py).
-// Modal para o mouse, o teclado e o controle (abre por cima do diálogo de edição, que fica desabilitado);
-// o foco volta ao botão que o abriu. Esc fecha o seletor inteiro.
+// O seletor do papel de parede da sessão: grade de candidatos do wallhaven já cortados no formato dos monitores e, depois da escolha, a barra que desliza a faixa de cada monitor.
 SeletorBase {
     id: seletorDePapel
 
     property QtObject seletor
 
-    // De uma a quatro colunas.
     readonly property int colunas: Math.max(1, Math.min(4, Math.floor((conteudo.width - 24 - 12) / (seletor.larguraDaCelula + 18))))
 
     aberto: seletor.aberto
@@ -22,7 +17,6 @@ SeletorBase {
     titulo: "Escolher papel de parede"
     placeholder: "Buscar no wallhaven…"
     nomeDaBusca: "Buscar no wallhaven"
-    // Um arquivo do disco não tem o que buscar: abre direto no ajuste.
     comBusca: !seletor.soArquivo
     rolado: grade.contentY > -grade.topMargin + 1
     // O primeiro foco do diálogo: "Não trocar" na grade do wallhaven; nada, com arquivo do disco; nada forçado depois.
@@ -34,7 +28,6 @@ SeletorBase {
 
     Binding { target: seletorDePapel.campo; property: "text"; value: seletorDePapel.seletor.busca }
 
-    // A seta numa célula leva o foco à vizinha; para cima da primeira linha, ao campo de busca.
     function moverFoco(indice) {
         if (indice < 0) { campo.forceActiveFocus(Qt.BacktabFocusReason); return }
         if (indice >= grade.count) return
@@ -43,7 +36,6 @@ SeletorBase {
         if (item) item.forceActiveFocus(Qt.TabFocusReason)
     }
 
-    // Um arquivo do disco não tem o que "não trocar": só a grade do wallhaven oferece a escolha.
     fim: [
         Botao {
             id: botaoNaoTrocar
@@ -61,7 +53,6 @@ SeletorBase {
         Layout.fillWidth: true
         Layout.fillHeight: true
 
-        // Buscando e ainda sem nenhuma miniatura (ou abrindo um arquivo).
         PaginaDoSeletor {
             ativa: seletorDePapel.seletor.buscando && grade.count === 0 && !seletorDePapel.seletor.vazio
                 && !seletorDePapel.seletor.baixando && !seletorDePapel.seletor.ajustando
@@ -85,7 +76,6 @@ SeletorBase {
             }
         }
 
-        // A tela "Baixando…" da imagem escolhida.
         PaginaDoSeletor {
             ativa: seletorDePapel.seletor.baixando
             TelaDeDownload {
@@ -100,8 +90,7 @@ SeletorBase {
             ativa: !seletorDePapel.seletor.vazio && !seletorDePapel.seletor.baixando && !seletorDePapel.seletor.ajustando
                 && !seletorDePapel.seletor.soArquivo && grade.count > 0
 
-            // As laterais e a barra também rolam com a roda, no passo do próprio `GridView` (linhas * 24). Sobre a grade, a roda
-            // só chega aqui quando ela já está na ponta, e aí o limite anula o giro.
+            // As laterais e a barra também rolam com a roda, no passo do `GridView` (linhas * 24); sobre a grade, o limite anula o giro na ponta.
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: event => grade.contentY = Math.max(-grade.topMargin, Math.min(grade.contentHeight - grade.height + grade.bottomMargin,
@@ -111,7 +100,6 @@ SeletorBase {
             GridView {
                 id: grade
                 objectName: seletorDePapel.objectName + "Grade"
-                // Centrado: só as colunas ocupam a largura; a roda nas laterais rola pelo `WheelHandler`.
                 width: seletorDePapel.colunas * cellWidth
                 height: parent.height
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -120,10 +108,8 @@ SeletorBase {
                 model: seletorDePapel.seletor
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
-                // A célula soma 3 de cada lado da miniatura, e o espaço entre elas é 12.
                 cellWidth: seletorDePapel.seletor.larguraDaCelula + 18
                 cellHeight: seletorDePapel.seletor.alturaDaCelula + 18
-                // A barra é da página inteira: fica na borda, não sobre a última coluna.
                 ScrollBar.vertical: BarraDeRolagem {
                     objectName: seletorDePapel.objectName + "Rolagem"
                     parent: grade.parent
@@ -160,9 +146,7 @@ SeletorBase {
                         Keys.onUpPressed: seletorDePapel.moverFoco(celula.index - seletorDePapel.colunas)
                         onClicked: seletorDePapel.seletor.escolher(celula.index)
 
-                        // Raio 8, sem borda.
                         background: Item { AnelDeFoco { ativo: botao.visualFocus; raio: 8; afastamento: 0 } }
-                        // A miniatura já vem cortada no formato do monitor (a mesma `enquadrar` do arquivo final).
                         contentItem: Item {
                             Item {
                                 id: mascara
@@ -191,8 +175,7 @@ SeletorBase {
             }
         }
 
-        // A segunda etapa: um corte por orientação dos monitores, cada um com a sua barra; "Voltar" e "Usar esta imagem" no
-        // mesmo bloco, centrado, logo abaixo das prévias (espaços de 12, margens de 12).
+        // A segunda etapa: um corte por orientação dos monitores, cada um com a sua barra.
         PaginaDoSeletor {
             id: ajuste
             objectName: seletorDePapel.objectName + "Ajuste"
@@ -228,7 +211,6 @@ SeletorBase {
                                 fillMode: Image.PreserveAspectFit
                                 cache: false
                             }
-                            // Legenda esmaecida.
                             Text {
                                 width: corte.larguraDaPrevia
                                 visible: corte.desliza
@@ -239,8 +221,7 @@ SeletorBase {
                                 color: Tema.textoSecundario
                                 font { family: Tema.fonte; pixelSize: Tema.legenda }
                             }
-                            // O controle deslizante: calha de 10 (15% do texto; 20% ao passar), o trecho andado na
-                            // cor de destaque e o marcador branco de 20 com contorno e sombra, em 12 de folga.
+                            // O controle deslizante: calha de 10, trecho andado na cor de destaque e marcador branco de 20 com contorno e sombra.
                             Slider {
                                 id: barra
                                 objectName: seletorDePapel.objectName + "Barra" + corte.index

@@ -1,6 +1,5 @@
 import QtQuick
 
-// A página Conquistas das Preferências. Só desenha: as chaves e o estado são do `preferencias` (cartridges/modelos/preferencias.py).
 Column {
     id: pagina
     objectName: "paginaDasConquistas"
@@ -90,7 +89,6 @@ Column {
             buscavel: true
             objectName: "linhaDaPosicaoDoAviso"
             titulo: "Posição do aviso"
-            // O texto mais longo inteiro, com o recuo e a seta da caixa (LinhaDeEscolha).
             larguraDaCaixa: Math.ceil(medidaDoCanto.width) + 70
             model: ["Canto superior esquerdo", "Canto superior direito", "Canto inferior esquerdo", "Canto inferior direito"]
             currentIndex: preferencias.estado.posicaoDoAviso || 0 // o estado chega depois de a tela abrir
@@ -102,7 +100,6 @@ Column {
             titulo: "Piscar a iluminação inteligente"
             subtitulo: "Os dispositivos piscam ao desbloquear uma conquista"
         }
-        // Com o balão aberto, as fitas mostram a cor escolhida; ao fechar, voltam à cor do app.
         LinhaDeCor {
             buscavel: true
             objectName: "linhaDaCorDoAlerta"

@@ -9,10 +9,8 @@ Window {
     property bool usarMica: false
     // Os testes rodam sem a ponte do QWindowKit (qwk_ponte.dll): sem agente, a barra é só um desenho.
     property bool semAgente: false
-    // O texto no centro da barra; por padrão, o título da janela.
     property string tituloDaBarra: title
-    // O que for declarado dentro de Principal vai para a área, que ocupa a janela inteira, por cima da barra: um modal
-    // cobre a barra; as páginas descem `alturaDoTopo`.
+    // O que for declarado dentro de Principal vai para a área, por cima da barra: um modal cobre a barra; as páginas descem `alturaDoTopo`.
     default property alias conteudo: area.data
     // Botões da página na barra: `inicio` à esquerda, `fim` à direita (cada um chama
     // `agente.setHitTestVisible(item, true)`, senão o QWindowKit trata o clique como arrasto).
@@ -20,12 +18,10 @@ Window {
     property alias fim: barra.fim
     readonly property int alturaDaBarra: barra.altura
     readonly property int larguraDoBotao: barra.larguraDoBotao
-    // Onde as páginas começam: abaixo da barra, ou no topo em tela cheia.
     readonly property int alturaDoTopo: telaCheia ? 0 : barra.altura
     readonly property QtObject agente: carga.item
     // Só depois do `setup`: o QWindowKit falha ao registrar itens antes dele.
     property bool agentePronto: false
-    // Tela cheia (Big Picture): a barra some e a área começa no topo.
     property bool telaCheia: false
     // Com um modal na frente a barra não arrasta nem aciona nada (nem o Snap Layouts do maximizar).
     property bool barraTrancada: false
@@ -36,13 +32,10 @@ Window {
         if (_saindo) fimDaSaida.restart()
     }
     Timer { id: fimDaSaida; interval: 140; onTriggered: janela._saindo = false }
-    // A linha de baixo da barra, com o conteúdo rolado.
     property alias sombraDaBarra: barra.sombra
-    // A barra sem fundo, com a página dos detalhes por baixo.
     property alias barraTransparente: barra.transparente
     // O que passa por baixo da barra transparente: fica sob ela mesmo quando um modal a põe abaixo da área.
     property alias fundoDaBarra: fundoSobABarra.data
-    // A barra entra com a página nova; `barraDeTitulo`, para a cópia da barra de antes.
     property real deslocamentoDaBarra: 0
     readonly property Item barraDeTitulo: barra
 
@@ -59,16 +52,13 @@ Window {
             barra.ligarAgente()
             agentePronto = true
         }
-        // Antes de mostrar: a janela só aparece desenhada, com as capas (`cortina_da_abertura.py`). Opcional como a
-        // `geometria`: os arneses dos testes não a põem no contexto.
+        // Antes de mostrar: a janela só aparece desenhada, com as capas; opcional nos testes.
         if (typeof cortinaDaAbertura !== "undefined") cortinaDaAbertura.cobrir(janela)
-        // Tamanho inicial 1170x795; mínimo 360x100.
         width = 1170
         height = 795
         minimumWidth = 360
         minimumHeight = 100
-        // Depois do tamanho de hoje: o lugar e o tamanho gravados ao fechar; sem nada gravado, fica este.
-        // Opcional: os arneses dos testes não põem `geometria` no contexto.
+        // Opcional nos testes: o lugar e o tamanho gravados ao fechar valem depois do inicial.
         const servico = typeof geometria === "undefined" ? null : geometria
         if (servico) servico.restaurar(janela)
     }
@@ -97,7 +87,6 @@ Window {
         objectName: "barraDeTitulo"
         visible: !janela.telaCheia
         enabled: !janela.barraTrancada
-        // Livre, fica acima da área e recebe o mouse direto; com modal, a área (e o modal nela) a cobre.
         z: janela.barraTrancada || janela._saindo ? 0 : 1
         anchors { top: parent.top; left: parent.left; right: parent.right }
         transform: Translate { x: janela.deslocamentoDaBarra }
@@ -112,7 +101,6 @@ Window {
         anchors.fill: parent
     }
 
-    // O contorno claro de 1 px; some com a janela maximizada ou em tela cheia. O raio é o do DWM.
     Rectangle {
         objectName: "contornoDaJanela"
         anchors.fill: parent

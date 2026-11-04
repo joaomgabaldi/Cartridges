@@ -1,18 +1,14 @@
 import QtQuick
 
-// A roda do mouse com inércia de mola: cada entalhe soma `passo` px ao destino, que a
-// mola leva por amortecimento crítico (massa 1, rigidez 220), herdando a velocidade da que ainda corre. Só o mouse:
-// o touchpad segue o comportamento do Flickable. Filho do Flickable (`alvo`): `RolagemPorMola { alvo: grade }`.
+// A roda do mouse com inércia de mola: cada entalhe soma `passo` px ao destino, que a mola leva por amortecimento crítico (massa 1, rigidez 220). Só o mouse.
 Item {
     id: mola
 
     required property Flickable alvo
     property real passo: 120
     property real rigidez: 220
-    // Perto o bastante do destino para parar, em pixels.
     property real epsilon: 0.5
     property bool ativa: true
-    // Na horizontal (a fileira de ícones da sessão): rola o `contentX`, e a roda vertical o move do mesmo jeito.
     property bool horizontal: false
 
     property real _destino: 0
@@ -34,7 +30,6 @@ Item {
         return [topo, Math.max(topo, alvo.originY + alvo.contentHeight + alvo.bottomMargin - alvo.height)]
     }
 
-    // A velocidade em `_tempo` segundos depois do início do trecho atual.
     function _velocidadeEm(t) {
         const b = _velocidade + _omega * _desvio
         return (b - _omega * _desvio - _omega * b * t) * Math.exp(-_omega * t)
@@ -89,7 +84,6 @@ Item {
         enabled: mola.ativa
         acceptedDevices: PointerDevice.Mouse
         acceptedModifiers: Qt.NoModifier
-        // Cada entalhe é 120 de `angleDelta`; para cima (positivo) é rolar para cima.
         onWheel: event => event.accepted = mola.empurrar(-event.angleDelta.y / 120)
     }
 }

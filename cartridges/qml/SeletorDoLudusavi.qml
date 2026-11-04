@@ -2,10 +2,7 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// O seletor do jogo do Ludusavi: o campo de busca, "Nenhum (desliga o backup)" e a lista de jogos do manifesto
-// (diálogo de 480x560). Só desenha: a leitura da lista e o filtro são do `seletor` (SeletorDoLudusavi,
-// cartridges/modelos/seletores.py). Modal para o mouse, o teclado e o controle (abre por cima do diálogo de edição, que
-// fica desabilitado); o foco volta ao botão que o abriu.
+// O seletor do jogo do Ludusavi: só desenha; a leitura da lista e o filtro são do `seletor`.
 SeletorBase {
     id: seletorDoLudusavi
 
@@ -16,7 +13,6 @@ SeletorBase {
     altura: 560
     titulo: "Jogo no Ludusavi"
     placeholder: "Buscar jogo"
-    // O campo ocupa a largura, com 12 dos lados.
     larguraDoCampo: 10000
     margemDoCampo: 12
     rolado: lista.contentY > 0
@@ -26,7 +22,6 @@ SeletorBase {
 
     Binding { target: seletorDoLudusavi.campo; property: "text"; value: seletorDoLudusavi.seletor.busca }
 
-    // A seta numa linha leva o foco à vizinha; para cima da primeira, ao "Nenhum".
     function moverFoco(indice) {
         if (indice < 0) { nenhum.botaoDaLinha.forceActiveFocus(Qt.BacktabFocusReason); return }
         if (indice >= lista.count) return
@@ -35,7 +30,6 @@ SeletorBase {
         if (item) item.forceActiveFocus(Qt.TabFocusReason)
     }
 
-    // O jogo que já estava escolhido aparece à vista quando a lista chega.
     Connections {
         target: seletorDoLudusavi.seletor
         function onEstadoChanged() {
@@ -44,7 +38,6 @@ SeletorBase {
         }
     }
 
-    // A caixa do "Nenhum": um cartão com margem de 12 dos lados, e 6 de espaço até a lista.
     Item {
         Layout.fillWidth: true
         implicitHeight: nenhum.height + 6
@@ -100,7 +93,6 @@ SeletorBase {
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: BarraDeRolagem {}
 
-                // Cada linha é um rótulo com 8 em cima e embaixo e 12 dos lados; o jogo já escolhido é a linha selecionada.
                 delegate: Button {
                     id: linha
                     required property int index

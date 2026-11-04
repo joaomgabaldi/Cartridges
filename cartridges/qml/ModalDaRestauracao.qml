@@ -3,25 +3,18 @@ import QtQuick.Effects
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// A base dos modais da continuação da restauração: um diálogo com cabeçalho (título centrado e X) e o corpo em
-// coluna, com as margens 12/24/24/24 e o espaço de 18. Só desenha: o que cada um
-// mostra e faz é o `restauracao` (cartridges/modelos/restauracao.py). O foco inicial vai ao `inicial` e, ao fechar, volta a
-// quem o tinha. Sem `fechavel`, nem o Esc nem o X saem (a pasta de atalhos é obrigatória).
+// A base dos modais da continuação da restauração. Sem `fechavel`, nem o Esc nem o X saem (a pasta de atalhos é obrigatória).
 MolduraDoDialogo {
     id: modal
 
     property string titulo
-    // Quem recebe o foco ao abrir.
     property Item inicial: null
     default property alias corpo: coluna.data
-    // O X do cabeçalho (foco inicial de quem não tem outro controle).
     readonly property alias botaoFechar: cabecalho.botaoFechar
 
-    // Esc ou X.
     signal saiu()
 
-    // Uma capa de `width`×`height` com raio 12: `clip` só corta em
-    // retângulo, então a imagem passa por uma máscara.
+    // Capa com raio 12: `clip` só corta em retângulo, então a imagem passa por uma máscara.
     component Capa: Item {
         id: capa
         property url fonte
@@ -51,8 +44,7 @@ MolduraDoDialogo {
         }
     }
 
-    // Uma lista rolável: o cartão fica atrás, para a sombra não ser
-    // cortada pela rolagem. `model` e `delegate` são os da `ListView`; as linhas são `LinhaDoGrupo`.
+    // Lista rolável com o cartão atrás, para a sombra não ser cortada pela rolagem.
     component Cartela: Item {
         id: cartela
         property alias model: vista.model

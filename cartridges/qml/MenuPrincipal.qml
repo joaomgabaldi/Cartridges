@@ -1,23 +1,17 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// O menu principal, o mesmo nas duas páginas: filtros e ordenação. `filtros` vem do contexto (app.py).
-// Os submenus deslizam dentro do mesmo popover, com o cabeçalho
-// "‹ Título" para voltar, em vez de abrir em cascata ao lado. Todos os itens são filhos deste menu, cada um com a sua
-// `pagina`; só os da página atual aparecem. Escolher uma opção fecha o popover.
+// O menu principal (filtros e ordenação); os submenus deslizam dentro do mesmo popover, cada item com a sua `pagina`.
 MenuDoTema {
     id: menu
 
-    // O `Sobre`; nulo onde ele não está no contexto (os arneses dos outros diálogos): o item some.
     property QtObject servicoDoSobre: null
 
-    // "raiz", "filtrar", "genero", "ano", "status" ou "ordenar".
     property string pagina: "raiz"
     // A página pedida por um item de navegação: o `Menu` fecha a cada item acionado, e o `onClosed` o reabre nela.
     property string destino: ""
     property int sentido: 1
 
-    // O `objectName` do item em foco do teclado (para os testes).
     readonly property string atual: currentIndex >= 0 && itemAt(currentIndex) ? itemAt(currentIndex).objectName : ""
     readonly property var rotulosDeFiltrar: rotulosDaPagina("filtrar", "entrada-")
     readonly property var rotulosDeOrdenar: rotulosDaPagina("ordenar", "ordenar-")
@@ -32,8 +26,6 @@ MenuDoTema {
         return lista
     }
 
-    // Troca a página sem fechar o popover: o mouse e o Enter dos itens de navegação chegam aqui.
-    // `irPara` + o `Menu` fechando e reabrindo é só o caminho de quem aciona o item por `click()`/`triggered`.
     function navegar(qual, avanca) {
         sentido = avanca ? 1 : -1
         pagina = qual
@@ -45,13 +37,10 @@ MenuDoTema {
         destino = qual
     }
 
-    // As opções (gêneros, anos) são refeitas a cada abertura, não a cada jogo importado.
     onAboutToShow: {
         filtros.recalcularOpcoes()
         medirItens()
     }
-    // Fechou por um item de navegação: abre de novo, já na outra página, no mesmo quadro. Senão, a próxima abertura
-    // começa na raiz.
     // Adiado um passo: o `Menu` fecha ao acionar o item, e o item só diz a página depois (a ordem não é fixa).
     onClosed: Qt.callLater(continuar)
     function continuar() {
@@ -66,7 +55,6 @@ MenuDoTema {
         }
     }
 
-    // A página nova entra deslizando um pouco e surgindo, dentro do mesmo popover.
     function deslizar() {
         if (!Tema.animacoes) return
         entrada.base = leftPadding
@@ -85,7 +73,6 @@ MenuDoTema {
         property bool exibido: true
         readonly property bool naPagina: pagina === menu.pagina && exibido
         visible: naPagina
-        // Fora da página, o item não ocupa lugar nem recebe as setas (nem as do controle).
         enabled: naPagina
         height: naPagina ? implicitHeight : 0
     }
@@ -95,7 +82,6 @@ MenuDoTema {
         visible: pagina === menu.pagina && exibido
         height: visible ? implicitHeight : 0
     }
-    // ← volta e → entra; o foco é do menu, não dos itens, então o atalho é do menu.
     Shortcut {
         sequence: "Left"
         enabled: menu.opened && menu.pagina !== "raiz"
@@ -113,7 +99,6 @@ MenuDoTema {
         return true
     }
 
-    // A linha de entrada de um submenu: "Título ›".
     component Entrada: ItemDaPagina {
         property string alvo
         rightPadding: 34
@@ -131,7 +116,6 @@ MenuDoTema {
         Keys.onEnterPressed: menu.navegar(alvo, true)
     }
 
-    // O cabeçalho "‹ Título" de um submenu: volta à página de cima.
     component Cabecalho: ItemDaPagina {
         id: cabecalho
         objectName: "cabecalho-" + pagina
@@ -155,7 +139,6 @@ MenuDoTema {
         Keys.onEnterPressed: menu.navegar(volta, false)
     }
 
-    // Um item de escolha única: marcado quando `atual`, e sem trocar a marca por conta própria.
     component Escolha: ItemDaPagina {
         property string grupo
         property string rotulo
@@ -171,14 +154,12 @@ MenuDoTema {
         }
     }
 
-    // --- raiz -----------------------------------------------------------------------------------------------
     Entrada { alvo: "filtrar"; text: "Filtrar por" }
     Entrada { alvo: "ordenar"; text: "Ordenar por" }
     SeparadorDaPagina {}
     ItemDaPagina {
         objectName: "itemPreferencias"
         text: "Preferências"
-        // A ação some durante a importação.
         enabled: naPagina && !aplicativo.importando
         onTriggered: preferencias.abrir()
     }
@@ -189,13 +170,11 @@ MenuDoTema {
         onTriggered: menu.servicoDoSobre.abrir()
     }
 
-    // --- Filtrar por ------------------------------------------------------------------------------------------
     Cabecalho { pagina: "filtrar"; text: "Filtrar por"; volta: "raiz" }
     SeparadorDaPagina { pagina: "filtrar" }
     Entrada { pagina: "filtrar"; alvo: "genero"; text: "Gêneros" }
     Entrada { pagina: "filtrar"; alvo: "ano"; text: "Ano de lançamento" }
     Entrada { pagina: "filtrar"; alvo: "status"; text: "Status" }
-    // "Limpar" só existe enquanto há o que limpar, numa seção própria (com o separador acima).
     SeparadorDaPagina {
         objectName: "limparSeparador"
         pagina: "filtrar"
@@ -206,13 +185,11 @@ MenuDoTema {
         objectName: "limpar"
         pagina: "filtrar"
         readonly property bool temFiltro: filtros.genero !== "" || filtros.ano !== "" || filtros.status !== ""
-        // `exibido` diz se há o que limpar; a página de filtros à vista é `naPagina`.
         exibido: temFiltro
         text: "Limpar"
         onTriggered: filtros.limpar()
     }
 
-    // --- Gêneros, Ano de lançamento, Status -------------------------------------------------------------------
     Cabecalho { pagina: "genero"; text: "Gêneros"; volta: "filtrar" }
     SeparadorDaPagina { pagina: "genero" }
     Escolha { pagina: "genero"; grupo: "genero"; rotulo: "Todos"; atual: filtros.genero === ""; onEscolhido: filtros.genero = "" }
@@ -258,7 +235,6 @@ MenuDoTema {
         }
     }
 
-    // --- Ordenar por ------------------------------------------------------------------------------------------
     Cabecalho { pagina: "ordenar"; text: "Ordenar por"; volta: "raiz" }
     SeparadorDaPagina { pagina: "ordenar" }
     Repeater {

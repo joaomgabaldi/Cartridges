@@ -3,23 +3,17 @@ import QtQuick.Controls.Basic
 import QtQuick.Effects
 import QtQuick.Layouts
 
-// O seletor de capa ou de logo do SteamGridDB: um campo de busca e uma grade de miniaturas (diálogo de 720x620).
-// Só desenha: a busca, as miniaturas e o download são do `seletor` (cartridges/modelos/seletores.py).
-// Modal para o mouse, o teclado e o controle (abre por cima do diálogo de edição, que fica desabilitado);
-// o foco volta ao botão que o abriu.
+// O seletor de capa ou de logo do SteamGridDB: só desenha; a busca, as miniaturas e o download são do `seletor`.
 SeletorBase {
     id: seletorDeImagens
 
-    // O SeletorDoSgdb ou o SeletorDeLogo.
     property QtObject seletor
-    // O botão do canto: "Animadas" (alterna) na capa, "Usar o título" (age) no logo.
     property string rotuloDoAtalho
     property string dicaDoAtalho
     property bool atalhoAlterna: false
-    // O logo é um letreiro horizontal: células de 323x110, uma ou duas por linha. A capa tem 200x210, de duas a quatro (a célula tem a largura natural da prévia).
+    // Logo: células de 323x110, uma ou duas por linha. Capa: 200x210, de duas a quatro.
     property bool horizontal: false
 
-    // A capa encolhe até 140, para caberem as duas colunas do mínimo em janela estreita.
     readonly property int larguraDaCelula: horizontal ? 323 : Math.max(140, Math.min(200, Math.floor((conteudo.width - 36) / 2)))
     readonly property int alturaDaCelula: horizontal ? 110 : 210
     readonly property int colunas: Math.max(horizontal ? 1 : 2,
@@ -40,7 +34,6 @@ SeletorBase {
 
     Binding { target: seletorDeImagens.campo; property: "text"; value: seletorDeImagens.seletor.busca }
 
-    // A seta numa célula leva o foco à vizinha; para cima da primeira linha, ao campo de busca.
     function moverFoco(indice) {
         if (indice < 0) { campo.forceActiveFocus(Qt.BacktabFocusReason); return }
         if (indice >= grade.count) return
@@ -67,7 +60,6 @@ SeletorBase {
         Layout.fillWidth: true
         Layout.fillHeight: true
 
-        // Buscando e ainda sem nenhuma miniatura: o spinner central, até chegar a primeira.
         PaginaDoSeletor {
             ativa: seletorDeImagens.seletor.buscando && grade.count === 0 && !seletorDeImagens.seletor.vazio
             Girador {
@@ -90,7 +82,6 @@ SeletorBase {
             }
         }
 
-        // A tela "Baixando…" da imagem escolhida.
         PaginaDoSeletor {
             ativa: seletorDeImagens.seletor.baixando
             TelaDeDownload {
@@ -105,8 +96,7 @@ SeletorBase {
         PaginaDoSeletor {
             ativa: !seletorDeImagens.seletor.vazio && !seletorDeImagens.seletor.baixando && grade.count > 0
 
-            // As laterais e a barra também rolam com a roda, no passo do próprio `GridView` (linhas * 24). Sobre a grade, a roda
-            // só chega aqui quando ela já está na ponta, e aí o limite anula o giro.
+            // As laterais e a barra também rolam com a roda, no passo do `GridView` (linhas * 24); sobre a grade, o limite anula o giro na ponta.
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: event => grade.contentY = Math.max(-grade.topMargin, Math.min(grade.contentHeight - grade.height + grade.bottomMargin,
@@ -116,7 +106,6 @@ SeletorBase {
             GridView {
                 id: grade
                 objectName: seletorDeImagens.objectName + "Grade"
-                // Centrado: só as colunas ocupam a largura; a roda nas laterais rola pelo `WheelHandler`.
                 width: seletorDeImagens.colunas * cellWidth
                 height: parent.height
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -127,7 +116,6 @@ SeletorBase {
                 boundsBehavior: Flickable.StopAtBounds
                 cellWidth: seletorDeImagens.larguraDaCelula + 12
                 cellHeight: seletorDeImagens.alturaDaCelula + 12
-                // A barra é da página inteira: fica na borda, não sobre a última coluna.
                 ScrollBar.vertical: BarraDeRolagem {
                     objectName: seletorDeImagens.objectName + "Rolagem"
                     parent: grade.parent
@@ -153,7 +141,7 @@ SeletorBase {
                         width: seletorDeImagens.larguraDaCelula
                         height: seletorDeImagens.alturaDaCelula
                         padding: 0
-                        hoverEnabled: false  // a célula não reage ao mouse
+                        hoverEnabled: false
                         focus: true
                         focusPolicy: Qt.StrongFocus
                         Accessible.name: "Miniatura " + (celula.index + 1)
@@ -166,8 +154,7 @@ SeletorBase {
                         Keys.onUpPressed: seletorDeImagens.moverFoco(celula.index - seletorDeImagens.colunas)
                         onClicked: seletorDeImagens.seletor.escolher(celula.index)
 
-                        // O logo ganha o fundo escuro da página de destino
-                        // (preto a 55%, raio 12), porque a maioria dos logos é branca sobre transparência.
+                        // O logo ganha fundo escuro (preto a 55%, raio 12): a maioria dos logos é branca sobre transparência.
                         background: Item {
                             Sombra { visible: !seletorDeImagens.horizontal; camadas: Tema.sombraCartao; raio: 12 }
                             Rectangle {
@@ -179,7 +166,6 @@ SeletorBase {
                             AnelDeFoco { ativo: botao.visualFocus; raio: 12; afastamento: 0 }
                         }
                         contentItem: Item {
-                            // A capa: cortada em raio 12, preenchendo a célula.
                             Item {
                                 id: mascara
                                 anchors.fill: parent
@@ -206,7 +192,6 @@ SeletorBase {
                                     asynchronous: true
                                     cache: false
                                 }
-                                // As prévias animadas tocam todas, na cópia reduzida que o seletor pede.
                                 Loader {
                                     anchors.fill: parent
                                     // Só a cópia reduzida toca; a original (até 200 MB) fica só como primeiro quadro.
@@ -218,7 +203,6 @@ SeletorBase {
                                     }
                                 }
                             }
-                            // O logo: com 12 de folga, sem ampliar.
                             Image {
                                 anchors.centerIn: parent
                                 visible: seletorDeImagens.horizontal

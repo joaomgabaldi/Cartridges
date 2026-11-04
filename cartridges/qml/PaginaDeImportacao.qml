@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Dialogs
 
-// A página Importação das Preferências. Só desenha: as chaves são do `preferencias` (cartridges/modelos/preferencias.py).
 Column {
     id: pagina
     objectName: "paginaDeImportacao"
@@ -17,7 +16,6 @@ Column {
         onAlternado: preferencias.definir(chave, checked)
     }
 
-    // Criado só ao clicar: o seletor nativo não precisa existir antes.
     function escolherPasta() {
         if (carga.item) carga.item.open(); else carga.active = true
     }
@@ -48,8 +46,6 @@ Column {
         }
     }
 
-    // O progresso fica abaixo do cartão, num grupo só dele, com 12 de margem; o texto "N de M"
-    // vai sobre a barra.
     Column {
         width: parent.width
         spacing: 12
@@ -71,7 +67,6 @@ Column {
                 onParada: preferencias.biblioteca.cancelarMetadados()
             }
         }
-        // O texto vai acima da trilha de 8, menor, esmaecido e com algarismos de largura fixa.
         Column {
             width: parent.width
             spacing: 0

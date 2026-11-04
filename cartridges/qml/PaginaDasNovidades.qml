@@ -2,15 +2,12 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Window
 
-// A página Novidades: os posts do feed, num único cartão de linhas que expandem. Tudo vem de `novidades`
-// (cartridges/modelos/novidades.py); o texto do feed é de terceiros e
-// sempre em PlainText.
+// Os posts do feed, num único cartão de linhas que expandem; o texto do feed é de terceiros e sempre PlainText.
 Item {
     id: raiz
 
     signal voltar()
 
-    // O que o controle do Xbox e a janela esperam de qualquer página (ver Aplicativo.qml).
     readonly property bool menuDoJogoAberto: false
     readonly property bool comLista: novidades.estado === "lista"
 
@@ -30,8 +27,7 @@ Item {
     function mostrarSelecao() {}
     function abrirMenuDoAtual() {}
     function xDoAtual() { return raiz.mapToItem(null, raiz.width / 2, 0).x }
-    // Só ↑ e ↓ andam, pelas paradas da lista: o cabeçalho de cada linha e, na linha aberta, o "Abrir no navegador"; devolve
-    // se o foco mudou.
+    // Só ↑ e ↓ andam, pelas paradas da lista (cabeçalho de cada linha e, na aberta, o "Abrir no navegador"); devolve se o foco mudou.
     function moverSelecao(dx, dy) {
         if (!comLista) return false
         if (dy === 0) return false
@@ -53,7 +49,6 @@ Item {
         var linha = lista.itemAtIndex(i)
         if (linha) linha.botaoDoCabecalho.forceActiveFocus(Qt.TabFocusReason)
     }
-    // O A do controle: o botão em foco age (o cabeçalho expande a linha, o link abre o navegador); sem botão, a linha do foco.
     function abrirDetalhesDoAtual() {
         var foco = Window.window ? Window.window.activeFocusItem : null
         if (foco && foco.click) { foco.click(); return }
@@ -65,12 +60,10 @@ Item {
     focus: true
     Keys.onEscapePressed: voltar()
 
-    // Aberta, a página reconhece os posts; fechada, deixa de reconhecê-los.
     StackView.onStatusChanged: novidades.paginaVisivel(StackView.status === StackView.Active || StackView.status === StackView.Activating)
     // Depois do foco que a própria StackView dá à página ao ativá-la.
     StackView.onActivated: Qt.callLater(() => focarInicial())
 
-    // Cobre a biblioteca por baixo durante a transição.
     Rectangle { anchors.fill: parent; color: Tema.fundo; z: -1 }
 
     Connections {
@@ -101,7 +94,6 @@ Item {
         onBotaoClicado: novidades.atualizar()
     }
 
-    // Largura máxima de 800, com margens 18/12.
     ListView {
         id: lista
         objectName: "listaDasNovidades"
@@ -117,7 +109,6 @@ Item {
         ScrollBar.vertical: BarraDeRolagem {}
         RolagemPorMola { alvo: lista }
 
-        // O cartão único atrás das linhas (entra no conteúdo da lista e rola com ela).
         Rectangle {
             z: -1
             width: lista.width
@@ -132,7 +123,6 @@ Item {
 
             required property int index
             required property var modelData
-            // Sem resumo nem link não há o que abrir: a linha é simples, sem seta.
             readonly property bool expansivel: modelData.resumo !== "" || modelData.url !== ""
             property bool aberta: false
             // A linha expandida mora no `novidades`: a página é destruída ao voltar.
@@ -142,7 +132,6 @@ Item {
             onAbertaChanged: novidades.definirAberta(chave, aberta)
             readonly property bool _comResumo: modelData.resumo !== ""
             readonly property bool _comLink: modelData.url !== ""
-            // Cabeçalho: título e subtítulo (que quebram) em 50 no mínimo, mais os 4 de respiro.
             readonly property real _cabecalho: Math.max(alturaMinima, textosDaLinha.implicitHeight + 12) + 4
             readonly property real _corpo: (_comResumo ? resumoDaLinha.implicitHeight + 24 + 1 : 0) + (_comLink ? 50 + 4 + 1 : 0)
 
@@ -160,7 +149,6 @@ Item {
             Keys.onRightPressed: if (expansivel) aberta = true
             Keys.onLeftPressed: aberta = false
 
-            // Hover e pressão do cabeçalho, no lugar dos da base.
             Rectangle {
                 anchors { left: parent.left; right: parent.right; top: parent.top; topMargin: linha._separador }
                 height: linha._cabecalho
@@ -195,7 +183,6 @@ Item {
                     top: parent.top; topMargin: linha._separador + (linha._cabecalho - 4 - implicitHeight) / 2 + 2
                 }
                 spacing: 3
-                // O feed é de terceiros: sempre texto puro.
                 Text {
                     width: parent.width
                     text: linha.modelData.titulo
@@ -218,7 +205,6 @@ Item {
                     font { family: Tema.fonte; pixelSize: Tema.legenda }
                 }
             }
-            // A seta: na cor do texto, apagada, gira ao abrir.
             Icone {
                 visible: linha.expansivel
                 anchors { right: parent.right; rightMargin: 14; top: parent.top; topMargin: linha._separador + (linha._cabecalho - height) / 2 }
@@ -228,7 +214,6 @@ Item {
                 Behavior on rotation { enabled: Tema.animacoes; NumberAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
             }
 
-            // As linhas de dentro: o resumo (`body`, margem 12) e a "Abrir no navegador", ativável por inteiro.
             Item {
                 id: corpoDaLinha
                 anchors { left: parent.left; right: parent.right; top: parent.top; topMargin: linha._separador + linha._cabecalho }

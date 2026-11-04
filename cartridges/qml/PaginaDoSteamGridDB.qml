@@ -1,6 +1,5 @@
 import QtQuick
 
-// A página SteamGridDB das Preferências. Só desenha: as chaves são do `preferencias` (cartridges/modelos/preferencias.py).
 Column {
     id: pagina
     objectName: "paginaDoSteamGridDB"
@@ -41,7 +40,6 @@ Column {
             chave: "sgdb"
             titulo: "Usar o SteamGridDB"
             subtitulo: "Baixa imagens ao adicionar ou importar jogos"
-            // Sem chave da API não há o que usar.
             enabled: preferencias.estado.sgdbAtivo === true
         }
         Interruptor { chave: "sgdb-prefer"; titulo: "Priorizar o SteamGridDB às imagens oficiais" }

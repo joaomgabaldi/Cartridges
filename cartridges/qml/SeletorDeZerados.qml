@@ -2,10 +2,7 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
-// "Adicionar a Jogos Zerados": um campo de busca na Steam e a lista dos desinstalados (ou dos resultados), num
-// diálogo de 460x520. Só desenha: as regras, a busca e a escolha são do `modelo` (o `SeletorDeZerados`,
-// cartridges/modelos/zerados_manuais.py). Nome de jogo e aviso, texto de terceiros, em PlainText. Modal para o mouse, o
-// teclado e o controle (o fundo fica desabilitado); Esc fecha e o foco volta a quem abriu.
+// "Adicionar a Jogos Zerados": busca na Steam e lista dos desinstalados (ou dos resultados). Nome de jogo e aviso, texto de terceiros, em PlainText.
 SeletorBase {
     id: seletor
     objectName: "seletorDeZerados"
@@ -19,7 +16,6 @@ SeletorBase {
     titulo: "Adicionar a Jogos Zerados"
     placeholder: "Buscar na Steam"
     nomeDaBusca: "Buscar na Steam"
-    // O campo ocupa a largura, com 12 dos lados.
     larguraDoCampo: 10000
     margemDoCampo: 12
     rolado: lista.contentY > 0
@@ -28,7 +24,6 @@ SeletorBase {
     onBuscaEditada: texto => modelo.mudouBusca(texto)
     onBuscaConfirmada: modelo.buscar(campo.text)
     onSetaParaBaixo: moverFoco(0)
-    // O campo guarda o texto só nesta abertura.
     onAbertoChanged: if (aberto) campo.text = ""
 
     // A seta numa linha leva o foco à vizinha ativa (a que já está na lista fica fora do foco); para cima da primeira, ao campo.
@@ -82,10 +77,8 @@ SeletorBase {
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: BarraDeRolagem {}
-                // A mesma mola das grades: a lista também rola com inércia.
                 RolagemPorMola { alvo: lista; ativa: Tema.animacoes }
 
-                // Com 12 de margem: o aviso (que rola com a lista) e o cartão contínuo.
                 Column {
                     id: conteudoDaLista
                     x: (lista.width - width) / 2
@@ -109,7 +102,6 @@ SeletorBase {
                         Repeater {
                             id: linhas
                             model: seletor.modelo ? seletor.modelo.linhas : []
-                            // Uma linha inativa fica fora do foco e não age; o motivo é o subtítulo.
                             delegate: LinhaDeAcao {
                                 id: linha
                                 required property int index

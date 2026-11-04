@@ -1,9 +1,6 @@
 import QtQuick
 
-// O seletor de cor da fita de LED: um quadrado com o matiz na horizontal e a saturação na vertical
-// (cheia em cima, branco embaixo), com o brilho fixo. A fita só usa matiz e saturação; o brilho é a linha
-// "Brilho (%)". Cada movimento emite `escolhida`, para as fitas acenderem a cor na hora.
-// Teclado: setas esquerda e direita mexem no matiz, para cima e para baixo na saturação; com Shift, passos maiores.
+// O seletor de cor da fita de LED: matiz na horizontal e saturação na vertical, brilho fixo (o brilho é a linha "Brilho (%)").
 FocusScope {
     id: raiz
 
@@ -12,7 +9,6 @@ FocusScope {
     property int saturacao: 1000
     readonly property color cor: Qt.hsva(Math.min(matiz, 359.999) / 360, saturacao / 1000, 1, 1)
 
-    // A pessoa mexeu: a cor cheia escolhida.
     signal escolhida(color cor)
 
     implicitWidth: 240
@@ -26,7 +22,6 @@ FocusScope {
         saturacao = Math.max(0, Math.min(1000, Math.round(novaSaturacao)))
         escolhida(raiz.cor)
     }
-    // Do ponteiro (em pixels do quadrado) para o matiz e a saturação.
     function apontar(x, y) {
         mover(x / quadrado.width * 360, (1 - y / quadrado.height) * 1000)
     }
@@ -47,7 +42,6 @@ FocusScope {
         radius: 6
         clip: true
 
-        // O círculo de matizes de 0 a 360 graus, esticado na horizontal.
         gradient: Gradient {
             orientation: Gradient.Horizontal
             GradientStop { position: 0 / 6; color: "#ff0000" }
@@ -58,7 +52,6 @@ FocusScope {
             GradientStop { position: 5 / 6; color: "#ff00ff" }
             GradientStop { position: 6 / 6; color: "#ff0000" }
         }
-        // A saturação: de nenhuma (branco) embaixo a cheia (sem véu) em cima.
         Rectangle {
             anchors.fill: parent
             gradient: Gradient {
@@ -66,7 +59,6 @@ FocusScope {
                 GradientStop { position: 1; color: "#ffffffff" }
             }
         }
-        // O ponto escolhido.
         Rectangle {
             id: marca
             objectName: "marcaDoSeletorDeCor"

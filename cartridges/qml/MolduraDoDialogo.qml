@@ -2,45 +2,34 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Window
 
-// O diálogo: escurece a janela inteira (barra de título incluída), mostra o cartão com raio 15, sombra e contorno, e
-// anima a abertura e o fechamento com uma mola (massa 1, rigidez 500, amortecimento 0,62;
-// escala 0,8 + 0,2p; opacidade p até 1).
-//
-// `aberto` manda; `visible` continua verdadeiro até o fim da animação de saída. O conteúdo é um ColumnLayout: os filhos
-// usam `Layout.fillWidth`/`Layout.fillHeight`. O foco vai ao `focoInicial` ao abrir e volta a quem o tinha ao fechar.
+// O diálogo: escurece a janela, mostra o cartão e anima abertura e fechamento com uma mola (massa 1, rigidez 500, amortecimento 0,62).
+// `aberto` manda; `visible` continua verdadeiro até o fim da animação de saída. Os filhos usam `Layout.fillWidth`/`Layout.fillHeight`.
 FocusScope {
     id: moldura
 
     property bool aberto: false
-    // Largura e altura do conteúdo; `altura` 0 acompanha o conteúdo. Ambas encolhem para caber na janela.
     property real largura: 360
     property real altura: 0
-    // Janela abaixo de 450x360: vira a folha de baixo (bottom sheet). O AlertDialog nunca vira.
+    // Janela abaixo de 450x360: vira a folha de baixo (o AlertDialog nunca vira).
     property bool podeSerFolha: true
     property real raio: 15
     property color cor: Tema.fundo
-    // Sem `fechavel`, nem o Esc nem o toque fora pedem o fechamento.
     property bool fechavel: true
-    // O controle do Xbox manda ↑/↓ nos diálogos: sem isto, o
-    // que nenhum controle trata leva o foco ao vizinho da ordem do Tab, sem sair do diálogo.
+    // O controle do Xbox manda ↑/↓: sem isto, o que nenhum controle trata leva o foco ao vizinho do Tab, sem sair do diálogo.
     property bool setasMovemOFoco: false
-    // Uma página rolável: com ela, ↑/↓ rolam quando o vizinho do Tab fica fora dela (nada a que ir) e PgUp/PgDn rolam sempre.
+    // Página rolável: ↑/↓ rolam quando o vizinho do Tab fica fora dela, e PgUp/PgDn rolam sempre.
     property Flickable rolagemDasSetas: null
-    // Alt seguro: os mnemônicos aparecem sublinhados.
     property bool altSegurado: false
     property Item focoInicial: null
     property string nomeAcessivel: ""
     default property alias conteudo: coluna.data
     readonly property alias cartao: cartao
 
-    // Esc, o X do cabeçalho (ligado por quem usa) ou o toque fora na folha de baixo: quem usa decide e põe `aberto: false`.
     signal fecharPedido()
-    // Quem tinha o foco ao abrir sumiu: a janela decide para onde ele vai.
     signal retornoPerdido()
 
     property Item retorno: null
     property bool _tecladoEmUso: false
-    // Um dos diálogos da pilha de pedidos do `Aplicativo`.
     property bool naPilha: false
     property bool _cobertaAoFechar: false
 
@@ -50,7 +39,7 @@ FocusScope {
     readonly property real _alturaPedida: altura > 0 ? altura : coluna.implicitHeight
     readonly property bool emFolha: podeSerFolha && (width < 450 || height < 360)
 
-    // A mola. `_t` é o tempo em segundos; ao fechar, para na primeira passagem por 0 (`clamp`); ao abrir, passa de 1 e volta.
+    // A mola; ao fechar, para na primeira passagem por 0; ao abrir, passa de 1 e volta.
     property real _de: 0
     property real _para: 0
     property real _t: 0
@@ -100,15 +89,13 @@ FocusScope {
         if (aberto) return
         const alvo = retorno
         retorno = null
-        // Fechou um diálogo coberto (a pilha): o foco é do de cima e fica com ele.
         if (_cobertaAoFechar) return
-        // Da pilha, com a outra ainda aberta (um diálogo reaproveitado por cima de uma pergunta): o foco é dela.
+        // Da pilha, com a outra ainda aberta: o foco é dela.
         const outra = naPilha && parent ? Array.from(parent.children).find(f => f !== moldura && f.naPilha === true && f.aberto && f.visible) : null
         if (outra) { outra.focarInicial(); return }
         if (alvo && alvo !== Window.contentItem && alvo.visible && alvo.enabled) alvo.forceActiveFocus(Qt.TabFocusReason)
         else retornoPerdido()
     }
-    // Cobre a janela inteira, de onde quer que tenha sido declarada (uma página fica abaixo da barra).
     function _cobrir() {
         if (!parent) return
         const origem = parent.mapToItem(null, 0, 0)
@@ -133,7 +120,6 @@ FocusScope {
     onAbertoChanged: {
         altSegurado = false
         if (aberto) {
-            // Reaberto no meio da saída, ou com o foco em lugar nenhum: o retorno de antes continua valendo.
             const foco = Window.window ? Window.window.activeFocusItem : null
             if (foco && foco !== Window.contentItem && !dentro(foco)) retorno = foco
             _tecladoEmUso = !!foco && foco.visualFocus === true
@@ -156,7 +142,6 @@ FocusScope {
         function onActiveChanged() { if (!moldura.Window.window.active) moldura.altSegurado = false }
     }
 
-    // O foco por seta ou Tab acompanha a rolagem das setas.
     Connections {
         target: moldura.Window.window
         function onActiveFocusItemChanged() {
@@ -173,10 +158,8 @@ FocusScope {
         }
     }
 
-    // O pedido vem de uma tecla (Esc): quem usa pode devolver o foco com o anel visível, sem ter tido foco antes.
     property bool pedidoPorTeclado: false
     Keys.onEscapePressed: if (fechavel) { pedidoPorTeclado = true; fecharPedido(); pedidoPorTeclado = false }
-    // Modal para o teclado e o controle: nenhuma tecla chega à página de trás. O Tab passa, para circular.
     Keys.onReleased: event => { if (event.key === Qt.Key_Alt) altSegurado = false }
     Keys.onPressed: event => {
         if (event.key === Qt.Key_Alt) altSegurado = true
@@ -190,8 +173,7 @@ FocusScope {
                 const vizinho = foco ? foco.nextItemInFocusChain(adiante) : null
                 if (vizinho && dentro(vizinho)) vizinho.forceActiveFocus(adiante ? Qt.TabFocusReason : Qt.BacktabFocusReason)
             } else {
-                // Com uma página rolável: anda a cadeia até o primeiro controle que esteja de fato abaixo (↓) ou acima (↑) do
-                // foco, sem dar a volta; se não há, rola a página.
+                // Com página rolável: anda até o primeiro controle de fato abaixo (↓) ou acima (↑) do foco, sem dar a volta; senão, rola a página.
                 const yDe = item => item.mapToItem(null, 0, 0).y
                 const y0 = foco ? yDe(foco) : 0
                 let alvo = foco
@@ -208,8 +190,7 @@ FocusScope {
         event.accepted = event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab
     }
 
-    // O escurecimento atrás do diálogo. Ao fechar, deixa passar o clique (`can-target` falso). O toque
-    // fora do diálogo flutuante não faz nada: nem fecha nem arrasta. Na folha de baixo, fecha.
+    // O escurecimento atrás do diálogo; ao fechar, deixa passar o clique. O toque fora do diálogo flutuante não faz nada; na folha de baixo, fecha.
     Rectangle {
         objectName: "esmaecimentoDaMoldura"
         anchors.fill: parent
@@ -240,7 +221,6 @@ FocusScope {
         scale: moldura.emFolha ? 1 : 0.8 + 0.2 * moldura.progresso
 
         Sombra { camadas: Tema.sombraDialogo; raio: moldura.raio }
-        // Os cliques no cartão não vão para o fundo (que, na folha de baixo, fecharia).
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
 
         ColumnLayout {
@@ -248,7 +228,6 @@ FocusScope {
             anchors.fill: parent
             spacing: 0
         }
-        // Contorno claro de 1 px por dentro da borda (branco a 7%).
         Rectangle {
             anchors.fill: parent
             z: 20

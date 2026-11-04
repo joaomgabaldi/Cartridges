@@ -1,6 +1,5 @@
 import QtQuick
 
-// A página Personalização das Preferências. Só desenha: as chaves e o estado são do `preferencias` (cartridges/modelos/preferencias.py).
 Column {
     id: pagina
     objectName: "paginaDePersonalizacao"

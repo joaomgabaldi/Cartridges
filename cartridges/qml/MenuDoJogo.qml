@@ -5,15 +5,11 @@ import QtQuick.Controls.Basic
 MenuDoTema {
     id: menu
 
-    // O jogo a que o menu se refere; a grade o troca antes de abrir.
     property string jogoId
-    // O modelo da biblioteca (ModeloDaBiblioteca ou o proxy da página).
     property QtObject modelo
 
-    // A seta do popover aponta o centro do botão "Mais opções" (34 de largura), com o menu alinhado à direita dele.
     setaEm: width - 17
 
-    // "Editar" só pede: quem abre o diálogo é a janela.
     signal editar(string jogoId)
 
     ItemDoMenu {

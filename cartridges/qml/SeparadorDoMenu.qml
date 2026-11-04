@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// 1 px na cor da borda, com 6 acima e abaixo.
 MenuSeparator {
     padding: 0
     topPadding: 6

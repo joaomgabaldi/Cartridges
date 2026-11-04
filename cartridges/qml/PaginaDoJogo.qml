@@ -4,45 +4,32 @@ import QtQuick.Effects
 import QtQuick.Layouts
 import QtQuick.Window
 
-// A página de detalhes de um jogo: a capa à esquerda, os dados à direita e, embaixo, as ações. Abaixo de 850 px vira uma
-// coluna (janela abaixo de 850 px de largura): capa em cima, tudo centralizado.
-// Tudo o que ela mostra vem de `detalhes` (cartridges/modelos/detalhes.py), exposto pelo contexto;
-// nenhum botão age sozinho, só emite o sinal (Aplicativo.qml os liga).
+// A página de detalhes de um jogo: capa à esquerda, dados à direita e ações embaixo; abaixo de 850 px vira uma coluna.
 Item {
     id: raiz
 
-    // A capa de reserva, para o jogo sem capa (a mesma da grade).
     property string placeholder: ""
 
     signal voltar()
-    // Os botões só emitem; Aplicativo.qml os liga ao `detalhes`. O `excluir` sai depois da confirmação.
     signal jogar()
     signal editar()
     signal remover()
     signal excluir()
     signal atualizacaoConfirmada()
-    // O clique no tempo de jogo (só com sessões gravadas); Aplicativo.qml abre o histórico.
     signal abrirHistorico()
 
-    // O que o controle do Xbox e a janela esperam de qualquer página (ver Aplicativo.qml).
-    // Menu, balão ou diálogo na frente: o controle navega nele pelas teclas.
     readonly property bool menuDoJogoAberto: menuDeStatus.opened || menuDeBuscas.opened || balaoDaAnotacao.opened
         || dialogoExcluir.visible || dialogoAtualizacao.visible
-    // As confirmações da página: Aplicativo.qml as soma a `modalAberto`, e a barra de título fica trancada.
     readonly property bool dialogoAberto: dialogoExcluir.aberto || dialogoAtualizacao.aberto
-    // Janela abaixo de 850 px de largura.
     readonly property bool compacta: width <= 850
     readonly property int larguraDaCapa: compacta ? 280 : 420
     readonly property int alturaDaCapa: larguraDaCapa * 3 / 2
-    // Largura máxima de 72 caracteres (24 no título): a largura do "0" do Segoe UI vezes o número de caracteres. O texto usa a
-    // largura média, maior que a do "0": a quebra de linha pede 7,4 por caractere.
+    // Larguras de texto: o "0" do Segoe UI vezes 72 caracteres (24 no título); a quebra de linha real pede 7,4 px por caractere.
     readonly property real tetoDoTexto: 72 * 7.4
     readonly property real tetoDoTitulo: 24 * zeroDoTitulo.advanceWidth
     // O logo só vale enquanto o arquivo decodifica: um PNG truncado passa pela leitura do cabeçalho.
     readonly property bool logoVisivel: detalhes.logo !== "" && logo.status !== Image.Error
-    // `warning_color` (a cor de aviso do tema, como texto).
     readonly property color corDeAviso: Tema.avisoIcone
-    // Entrou pelo teclado? O anel do foco inicial só aparece então.
     property bool tecladoEmUso: false
 
     TextMetrics { id: zeroDoTitulo; text: "0"; font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 } }
@@ -50,19 +37,16 @@ Item {
     function focarInicial() {
         (detalhes.zerado ? botaoStatus : botaoJogar).forceActiveFocus(tecladoEmUso ? Qt.TabFocusReason : Qt.OtherFocusReason)
     }
-    // Os nomes que a janela chama em qualquer página.
     function focarGrade() { focarInicial() }
     function mostrarSelecao() {}
     function abrirMenuDoAtual() {}
     function xDoAtual() { return raiz.mapToItem(null, raiz.width / 2, 0).x }
 
-    // Os botões por linha, de cima para baixo; só os que aparecem.
     function linhasDeBotoes() {
         var linhas = [[cartaoDeConquistas.botao], [botaoStatus, botaoAnotacao], [avisoDeAtualizacao],
                       [botaoJogar, botaoEditar, botaoExcluir, botaoRemover, botaoBuscar]]
         return linhas.map(l => l.filter(b => b.visible && b.enabled)).filter(l => l.length > 0)
     }
-    // O controle e as setas: movem o foco entre os botões. Devolve se o foco mudou.
     function moverSelecao(dx, dy) {
         var linhas = linhasDeBotoes()
         var foco = Window.window ? Window.window.activeFocusItem : null
@@ -85,14 +69,12 @@ Item {
         mostrarBotao(botao)
         return true
     }
-    // O viewport segue o foco: o botão fora da vista rola para dentro dela.
     function mostrarBotao(botao) {
         var topo = botao.mapToItem(rolagem.contentItem, 0, 0).y
         var fim = topo + botao.height
         if (topo < rolagem.contentY) rolagem.contentY = Math.max(0, topo)
         else if (fim > rolagem.contentY + rolagem.height) rolagem.contentY = Math.min(rolagem.contentHeight - rolagem.height, fim - rolagem.height)
     }
-    // O A do controle e o Enter: ativa o botão focado.
     function abrirDetalhesDoAtual() {
         var foco = Window.window ? Window.window.activeFocusItem : null
         if (foco && foco.click) foco.click()
@@ -107,8 +89,7 @@ Item {
     Keys.onReturnPressed: abrirDetalhesDoAtual()
     Keys.onEnterPressed: abrirDetalhesDoAtual()
 
-    // Quem estava com o foco ao abrir a página (a grade, que sabe se o último gesto foi do teclado) diz como se chegou aqui:
-    // com o mouse, o foco inicial não tem anel.
+    // Quem tinha o foco (a grade) diz se foi pelo teclado: com o mouse, o foco inicial não tem anel.
     Component.onCompleted: {
         for (var p = Window.window ? Window.window.activeFocusItem : null; p; p = p.parent) {
             if (p.porTeclado === true || p.visualFocus === true) { tecladoEmUso = true; break }
@@ -119,18 +100,13 @@ Item {
         focarInicial()
         if (anotarAoEntrar) abrirAnotacao()
     })
-    // O "Anotar" do aviso do fim da sessão abre a página já com o balão.
     property bool anotarAoEntrar: false
     function abrirAnotacao() { if (botaoAnotacao.visible) balaoDaAnotacao.open() }
 
-    // Branco no tema claro e preto no escuro, sob a capa desfocada (muda o resultado da opacidade dela).
-    // Também cobre a biblioteca por baixo durante a transição.
-    // A barra de título é transparente aqui: a mesma imagem continua sob ela, em
-    // `Aplicativo.fundoDaBarra`. Por isso o `y` negativo: esticada pela janela inteira, cortada aqui no fim da barra.
+    // Branco (claro) ou preto (escuro) sob a capa desfocada; a imagem continua sob a barra transparente (daí o `y` negativo).
     readonly property int sobreABarra: Window.window && Window.window.alturaDaBarra ? Window.window.alturaDaBarra : 0
     Rectangle { anchors.fill: parent; color: Tema.escuro ? "black" : "white"; z: -2 }
 
-    // A capa desfocada, esticada; sem capa, o placeholder pequeno esticado.
     Item {
         anchors.fill: parent
         z: -1
@@ -149,12 +125,10 @@ Item {
         }
     }
 
-    // Uma linha de dados (12 px, esmaecida): a largura natural do texto até o teto de 72 caracteres.
     component Dado: Text {
         id: dado
         Layout.fillWidth: true
         Layout.preferredWidth: Math.min(gemeo.implicitWidth, raiz.tetoDoTexto)
-        // O rótulo fica no início: nunca passa da largura que pede, nem quando a coluna é mais larga.
         Layout.maximumWidth: Math.min(gemeo.implicitWidth, raiz.tetoDoTexto)
         Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignLeft
         visible: text !== ""
@@ -166,7 +140,6 @@ Item {
         // A linha do Segoe UI de 12 tem 17 px (o Qt dá 16); a diferença pesa 14 px na coluna inteira.
         lineHeightMode: Text.FixedHeight
         lineHeight: Tema.alturaDoCorpo
-        // O mesmo texto sem quebra: a largura que ele pediria sozinho.
         Text {
             id: gemeo
             visible: false
@@ -176,7 +149,6 @@ Item {
         }
     }
 
-    // Uma linha de texto das datas, do tempo de jogo e do tamanho: cada rótulo quebra por dentro e centraliza.
     component Linha: Text {
         id: linhaDeData
         Layout.fillWidth: true
@@ -199,7 +171,6 @@ Item {
         }
     }
 
-    // Botão de menu plano com rótulo: o texto e a seta (altura 34, padding 10).
     component BotaoDeMenu: Botao {
         id: botaoDeMenu
         dicaSomeAoClicar: false
@@ -226,7 +197,6 @@ Item {
         }
     }
 
-    // O título de seção do menu de buscas (um rótulo, sem ação).
     component TituloDeSecao: Item {
         property string texto
         implicitHeight: 32
@@ -257,20 +227,17 @@ Item {
             readonly property real margem: raiz.compacta ? 12 : 24
             x: Math.max(margem, (rolagem.width - width) / 2)
             y: Math.max(margem, (rolagem.contentHeight - height) / 2)
-            // A coluna de texto encolhe, nunca a capa.
             width: Math.min(implicitWidth, rolagem.width - 2 * margem)
             columns: raiz.compacta ? 1 : 2
             columnSpacing: 48
             rowSpacing: 0
 
-            // --- A capa ---------------------------------------------------------------------------
             Item {
                 id: coluna
                 Layout.preferredWidth: raiz.larguraDaCapa
                 Layout.preferredHeight: raiz.alturaDaCapa
                 Layout.alignment: raiz.compacta ? Qt.AlignHCenter | Qt.AlignTop : Qt.AlignTop
 
-                // O contorno e a sombra do cartão, fora do corte arredondado.
                 Sombra { camadas: Tema.sombraCartao; raio: 12 }
                 Item {
                     id: mascara
@@ -291,19 +258,17 @@ Item {
                     }
                     Image {
                         objectName: "capaDaPagina"
-                        // A URL que não se leu (arquivo quebrado): no lugar dela, o placeholder, como na grade. Uma capa nova muda a URL.
+                        // URL ilegível (arquivo quebrado): usa o placeholder. Uma capa nova muda a URL.
                         property string ilegivel: ""
                         anchors.fill: parent
                         source: detalhes.capa !== "" && detalhes.capa !== ilegivel ? detalhes.capa : raiz.placeholder
                         onStatusChanged: if (status === Image.Error && source.toString() === detalhes.capa) ilegivel = detalhes.capa
-                        // Um arquivo fora de 2:3 aparece inteiro.
                         fillMode: Image.PreserveAspectFit
                         asynchronous: true
                         // Na resolução real da tela: a capa guardada tem mais pixels que a da grade.
                         sourceSize: Qt.size(raiz.larguraDaCapa * Screen.devicePixelRatio,
                                             raiz.alturaDaCapa * Screen.devicePixelRatio)
                     }
-                    // Sempre toca aqui, a menos que a janela não esteja à vista ou haja uma sessão de jogo (a camada a cobre).
                     AnimatedImage {
                         objectName: "capaAnimadaDaPagina"
                         readonly property bool aVista: Window.visibility !== Window.Minimized
@@ -325,7 +290,6 @@ Item {
                 }
             }
 
-            // --- Os dados -------------------------------------------------------------------------
             ColumnLayout {
                 id: dados
                 Layout.fillWidth: true
@@ -333,8 +297,6 @@ Item {
                 Layout.alignment: raiz.compacta ? Qt.AlignHCenter | Qt.AlignTop : Qt.AlignVCenter
                 spacing: 0
 
-                // O logo (altura reservada só com ele) ou o título, nunca os dois. Margem de baixo de 12
-                // (e 30 de margem em cima na janela estreita).
                 Item {
                     Layout.fillWidth: true
                     Layout.preferredWidth: raiz.logoVisivel ? Math.min(detalhes.larguraDoLogo, raiz.tetoDoTexto) : Math.min(gemeoDoTitulo.implicitWidth, raiz.tetoDoTitulo)
@@ -369,7 +331,6 @@ Item {
                         color: Tema.texto
                         font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 }
                     }
-                    // O título numa linha só: a largura que ele pede (até 24 caracteres; mais que isso quebra).
                     Text {
                         id: gemeoDoTitulo
                         visible: false
@@ -379,7 +340,6 @@ Item {
                     }
                 }
 
-                // Negrito, na cor do texto.
                 Dado {
                     objectName: "desenvolvedora"
                     Layout.topMargin: 6
@@ -406,7 +366,6 @@ Item {
                     text: detalhes.descricao
                 }
 
-                // HowLongToBeat: um cartão de células ou a tabela de capítulos, nunca os dois.
                 ColumnLayout {
                     id: blocoHltb
                     objectName: "blocoHltb"
@@ -416,7 +375,6 @@ Item {
                         && (detalhes.hltb.celulas.length > 0 || detalhes.hltb.capitulos.length > 0)
                     spacing: 0
 
-                    // Peso 700, 9,8 px, esmaecido.
                     Text {
                         Layout.leftMargin: 3
                         Layout.bottomMargin: 6
@@ -440,7 +398,6 @@ Item {
                                 delegate: Row {
                                     id: celula
                                     required property var modelData
-                                    // Padding 10/20 por fora do mínimo de 76 (3 células + 2 filetes = 350).
                                     Rectangle {
                                         visible: celula.modelData.separador
                                         width: 1
@@ -487,7 +444,6 @@ Item {
                         radius: 12
                         color: Tema.cartao
                         Sombra { camadas: Tema.sombraCartao; raio: 12 }
-                        // Padding 12/16, colunas a 16, valores com mínimo 68 e centrados.
                         GridLayout {
                             id: tabela
                             x: 16; y: 12
@@ -531,14 +487,12 @@ Item {
                     }
                 }
 
-                // As conquistas logo abaixo do HowLongToBeat; some sem conquistas.
                 CartaoDeConquistas {
                     id: cartaoDeConquistas
                     Layout.topMargin: 18
                     Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignLeft
                 }
 
-                // As datas, o tempo de jogo e o tamanho: uma linha, e cada rótulo quebra por dentro.
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.maximumWidth: implicitWidth
@@ -547,8 +501,7 @@ Item {
                     spacing: 12
                     Linha { text: detalhes.adicionado }
                     Linha { text: detalhes.jogadoPorUltimo }
-                    // Com sessões gravadas o total abre o histórico: continua um rótulo comum (nem link, nem botão, que
-                    // destoariam das duas linhas ao lado); o sublinhado na cor do texto, o cursor de mão e a dica avisam.
+                    // O total vira o histórico sem ser link nem botão (destoariam das duas linhas ao lado): sublinhado, cursor de mão e dica avisam.
                     // shortcut: o total não recebe o foco do teclado nem do controle, sai se pedirem.
                     Linha {
                         id: tempoDeJogo
@@ -616,7 +569,6 @@ Item {
                         text: "Onde eu parei"
                         dica: detalhes.dicaDaAnotacao
                         onClicked: balaoDaAnotacao.opened ? balaoDaAnotacao.close() : balaoDaAnotacao.open()
-                        // O balão carrega a anotação ao abrir e a grava ao fechar (num zerado, só leitura).
                         BalaoDaAnotacao {
                             id: balaoDaAnotacao
                             objectName: "balaoDaAnotacao"
@@ -627,7 +579,6 @@ Item {
                     }
                 }
 
-                // O aviso de atualização: padding 8/16, raio 12, a cor de aviso a 15% (25% ao passar), 200 ms.
                 Button {
                     id: avisoDeAtualizacao
                     objectName: "avisoDeAtualizacao"
@@ -668,7 +619,6 @@ Item {
                     Dica { texto: "Abrir a página da atualização"; ativa: avisoDeAtualizacao.hovered }
                 }
 
-                // A barra de ação: "Jogar" (pílula opaca) e os botões redondos, 15 depois dele e 6 entre si.
                 GridLayout {
                     Layout.topMargin: 24
                     Layout.alignment: raiz.compacta ? Qt.AlignHCenter : Qt.AlignLeft
@@ -676,7 +626,6 @@ Item {
                     columnSpacing: 0
                     rowSpacing: 0
 
-                    // Texto branco sobre preto a 80% no claro; o inverso no escuro.
                     Button {
                         id: botaoJogar
                         objectName: "botaoJogarDaPagina"
@@ -707,12 +656,10 @@ Item {
                         background: Rectangle {
                             radius: height / 2
                             color: Tema.escuro ? "white" : Qt.rgba(0, 0, 0, 0.8)
-                            // Um véu claro ao passar e um escuro ao apertar.
                             Rectangle {
                                 anchors.fill: parent
                                 radius: parent.radius
                                 visible: botaoJogar.hovered || botaoJogar.down
-                                // 10% da cor do texto do botão (preto no tema escuro, branco no claro).
                                 color: botaoJogar.down ? Qt.rgba(0, 0, 6 / 255, 0.2) : Qt.alpha(botaoJogar.corDoTexto, botaoJogar.corDoTexto.a * 0.1)
                             }
                             AnelDeFoco { ativo: botaoJogar.visualFocus; raio: parent.radius }
@@ -765,7 +712,6 @@ Item {
                                 x: (parent.width - width) / 2
                                 y: parent.height + 6
                                 setaEm: width / 2
-                                // O título da seção: sem ação.
                                 TituloDeSecao { objectName: "tituloDoMenuDeBuscas"; texto: "Buscar em…" }
                                 ItemDoMenu { text: "IGDB"; onTriggered: detalhes.buscarEm("igdb") }
                                 ItemDoMenu { text: "SteamGridDB"; onTriggered: detalhes.buscarEm("sgdb") }
