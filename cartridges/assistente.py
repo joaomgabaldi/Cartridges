@@ -17,7 +17,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O assistente da primeira abertura: pasta dos jogos, capas e o resto do essencial."""
+"""O assistente da primeira abertura: pasta dos jogos, capas e o resto do essencial.
+
+Aparece uma vez, quando não há nada configurado. Cada controle grava na hora: fechar a qualquer momento
+deixa o que já foi escolhido valendo.
+"""
 
 import dataclasses
 import logging
@@ -51,6 +55,7 @@ _DESLOCAMENTO = 60  # px que o placeholder anda para a esquerda
 
 _DATA = Path(__file__).resolve().parent.parent / "data"
 PAGINAS = ("boas_vindas", "jogos", "capas", "conquistas", "iluminacao", "controle", "monitores", "pronto")
+# Os interruptores das telas; nenhuma outra chave é gravada pelo `definir`.
 _INTERRUPTORES = ("big-picture-ao-conectar", "session-move-window", "session-wallpaper")
 
 
@@ -64,6 +69,11 @@ def _em_thread(tarefa: Callable[[], None]) -> None:
 
 
 def precisa_mostrar() -> bool:
+    """O assistente deve abrir? Só na primeira abertura de quem ainda não tem nada.
+
+    Quem já tem jogos (atualização de versão ou backup restaurado) é marcado como concluído aqui, para o
+    assistente nunca aparecer por cima de uma biblioteca existente.
+    """
     if shared.schema.get_boolean("assistente-concluido"):
         return False
     if shared.games_dir.is_dir() and any(shared.games_dir.iterdir()):
@@ -74,8 +84,7 @@ def precisa_mostrar() -> bool:
 
 def quadro_das_capas(instante: float) -> tuple[float, float, float]:
     """Um quadro do ciclo, ``instante`` em ms desde o começo dele: (deslocamento do placeholder, opacidade do
-    placeholder, opacidade da capa).
-    """
+    placeholder, opacidade da capa)."""
     deslize_fim = _PARADO + _DESLIZE
     sozinha_fim = deslize_fim + _SOZINHA
     x, vazia, capa = 0.0, 1.0, 1.0
@@ -114,7 +123,11 @@ def _entregar_backup(eu: "weakref.ref[Assistente]", resultado: str) -> None:
 
 
 class Assistente(QObject):
-    """As regras do assistente; a `JanelaDoAssistente.qml` só desenha."""
+    """As regras do assistente; a `JanelaDoAssistente.qml` só desenha. Só na thread principal.
+
+    Três saídas, cada uma fecha as contas uma vez: `concluir`, o X (`fecharNoX`, sem marca) e o backup
+    agendado (`ao_restaurar`).
+    """
 
     alterado = Signal()
     animarMudou = Signal()  # noqa: N815
@@ -134,6 +147,7 @@ class Assistente(QObject):
         self._config: FitaWizard | None = None
         self._animar = _animacoes_do_sistema()
         self._avisos = FilaDeAvisos(self)
+        # O texto do grupo, que as Preferências mostram, a página do assistente já explica: a tela o esconde.
         self._contas = ContasDasLojas(self._avisos, parent=self)
         self._monitores = window_geometry.monitores_da_sessao()
         self._paginas = [p for p in PAGINAS if p != "monitores" or self._monitores]
@@ -143,6 +157,7 @@ class Assistente(QObject):
             self._rotulos, self._escolhido = window_geometry.escolha_de_monitor(
                 self._monitores, shared.schema.get_string("session-monitor")
             )
+            # Gravado já na montagem: nada escolhido ainda, a lista mostra o primeiro, que passa a valer.
             if shared.schema.get_string("session-monitor") != (chave := self._monitores[self._escolhido].key):
                 shared.schema.set_string("session-monitor", chave)
         aviso = dataclasses.replace(
@@ -159,6 +174,7 @@ class Assistente(QObject):
 
     paginas = Property("QStringList", lambda self: list(self._paginas), notify=alterado)
     indice = Property(int, lambda self: self._indice, notify=alterado)
+    # A primeira e a última telas têm botões próprios; os do rodapé somem.
     rodapeVisivel = Property(bool, lambda self: 0 < self._indice < len(self._paginas) - 1, notify=alterado)  # noqa: N815
     avisos = Property(QObject, lambda self: self._avisos, constant=True)
     contas = Property(QObject, lambda self: self._contas, constant=True)
@@ -190,10 +206,12 @@ class Assistente(QObject):
 
     @Property(bool, notify=alterado)
     def podeContinuar(self) -> bool:  # noqa: N802
+        # Sem pasta escolhida, não há o que continuar: só "Pular" segue em frente.
         return self._paginas[self._indice] != "jogos" or bool(shared.schema.get_string("shortcuts-location"))
 
     @Property(str, notify=alterado)
     def subtituloDaPasta(self) -> str:  # noqa: N802
+        # Mesmo formato das Preferências: barras invertidas. A tela mostra em texto puro (um "&" vai como está).
         local = shared.schema.get_string("shortcuts-location")
         return local.replace("/", "\\") if local else _("Nenhuma pasta selecionada")
 
@@ -201,6 +219,7 @@ class Assistente(QObject):
 
     def _ir_para(self, indice: int) -> None:
         if 0 <= indice < len(self._paginas) and indice != self._indice:
+            # Antes do índice: o `Behavior` do carrossel lê `animar` no instante em que a posição muda.
             animar = _animacoes_do_sistema()
             if animar != self._animar:
                 self._animar = animar
@@ -217,6 +236,7 @@ class Assistente(QObject):
         self._ir_para(self._indice - 1)
 
     def definir_janela(self, janela: QWindow) -> None:
+        """A janela do assistente: sem renderizador 3D, a tela do controle (o Big Picture) sai."""
         self._janela = janela
         self._rever_3d()
         sinal = getattr(janela, "sceneGraphInitialized", None)
@@ -236,11 +256,13 @@ class Assistente(QObject):
         self.alterado.emit()
 
     def _sair(self) -> None:
+        """Uma vez só, em qualquer das três saídas: um login pendente não fica preso a uma janela que sai."""
         self._saindo = True
         self._contas.fechar()
 
     @Slot()
     def concluir(self) -> None:
+        """Fecha o assistente de vez: "Pular configuração" e "Abrir a biblioteca". Quem fecha a janela é o `ao_terminar`."""
         # Um segundo clique não abre a biblioteca duas vezes; com o backup sendo preparado, quem sai é a restauração.
         if self._saindo or self._preparando:
             return
@@ -250,6 +272,7 @@ class Assistente(QObject):
 
     @Slot(result=bool)
     def fecharNoX(self) -> bool:  # noqa: N802
+        """O X cancela os logins em andamento; a marca não é gravada. ``False`` recusa o fechamento."""
         if self._saindo:
             return True
         # Com o backup sendo preparado, fechar deixaria a cópia pela metade ou a restauração agendada sem a janela.
@@ -260,7 +283,11 @@ class Assistente(QObject):
 
     @Slot(QUrl)
     def restaurarBackup(self, url: QUrl) -> None:  # noqa: N802
-        """Valida e agenda o backup numa thread; sem confirmação, pois não há nada a perder."""
+        """Valida e agenda o backup numa thread; sem confirmação, pois não há nada a perder.
+
+        A validação leva segundos: os botões da tela 0 ficam inativos (`preparando`), senão um segundo clique
+        restauraria duas vezes.
+        """
         if self._preparando or self._saindo or url.isEmpty() or not url.toLocalFile():
             return
         self._preparando = True
@@ -276,7 +303,7 @@ class Assistente(QObject):
             self._aviso_da_restauracao = None
         self.alterado.emit()
         if resultado == "ok":
-            if self._saindo:
+            if self._saindo:  # já saiu por outra via: a restauração não abre a biblioteca de novo
                 return
             shared.schema.set_boolean("assistente-concluido", True)
             self._sair()
@@ -293,6 +320,7 @@ class Assistente(QObject):
         if url.isEmpty() or not url.toLocalFile():
             return
         shared.schema.set_string("shortcuts-location", str(Path(url.toLocalFile())))
+        # Sem a importação ligada a pasta escolhida não traria nenhum jogo.
         shared.schema.set_boolean("auto-import", True)
         self.alterado.emit()
 
@@ -305,6 +333,7 @@ class Assistente(QObject):
 
     @Slot(bool)
     def definirCapasAnimadas(self, ligado: bool) -> None:  # noqa: N802
+        # Uma sem a outra não tem efeito visível.
         shared.schema.set_boolean("sgdb-animated", ligado)
         shared.schema.set_boolean("cover-autoplay", ligado)
         self.alterado.emit()
@@ -316,6 +345,7 @@ class Assistente(QObject):
 
     @Slot(str)
     def abrirEndereco(self, url: str) -> None:  # noqa: N802
+        """Os links "Obtenha aqui" (texto nosso); só http/https chega ao navegador."""
         open_uri.abrir_url(url)
 
     @Slot(str, bool)
@@ -348,7 +378,8 @@ class Assistente(QObject):
     def _config_fechou(self) -> None:
         config, self._config = self._config, None
         if config is not None:
-            config.deleteLater()
+            config.deleteLater()  # filho daqui: o QML ainda pode estar no clique que o fechou
+        # Sem isso nada acenderia: o recurso nasce desligado. Só grava: as fitas acendem com a biblioteca aberta.
         if session_fita.fitas():
             shared.schema.set_boolean("session-fita", True)
         self.alterado.emit()

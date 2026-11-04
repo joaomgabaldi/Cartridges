@@ -17,8 +17,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O assistente de calibração da iluminação, no estilo da calibração HDR do Windows: uma cor de referência por etapa,
-grande na tela, com o dispositivo aceso nela.
+"""O assistente de calibração da iluminação, no estilo da calibração HDR do Windows: uma cor de referência
+por etapa, grande na tela, com o dispositivo aceso nela.
+
+Só o modelo, sem tela: quem desenha é o ``AssistenteDeCalibracao.qml``, ligado a ``preferencias.calibracao``.
+Tudo fica em memória até o Concluir; Cancelar ou fechar não grava nada. Só na thread principal.
 """
 
 from typing import Any, Optional
@@ -43,21 +46,26 @@ ETAPA_DO_BRANCO = len(REFERENCIAS)
 
 PAGINAS_DA_CALIBRACAO = ("inicio", "etapa", "etapa_todos", "teste")
 
+# A escolha "Todos os dispositivos" na lista do início: todos acesos ao mesmo tempo, para comparar entre si e com a
+# tela.
 TODOS = "__todos__"
 
 INTERVALO_DO_TESTE = 3
 
+# A saturação das referências: a 100% aumentar a Intensidade não mudaria nada na parede e o valor seria gravado sem ser
+# visto; a 70% a faixa inteira do controle (50% a 150%) aparece.
 SATURACAO_DA_REFERENCIA = 700
 
 
 def _cor_da_etapa(etapa: int) -> Cor:
+    """A cor de referência de uma etapa, no brilho padrão do app."""
     if etapa == ETAPA_DO_BRANCO:
         return Cor(0, 0, session_fita.brilho_padrao())
     return Cor(REFERENCIAS[etapa], SATURACAO_DA_REFERENCIA, session_fita.brilho_padrao())
 
 
 class AssistenteDeCalibracao(QObject):
-    """O assistente."""
+    """O assistente. ``calibracoes`` é o estado em edição, por id da fita."""
 
     alterado = Signal()
     fechado = Signal()
@@ -74,9 +82,11 @@ class AssistenteDeCalibracao(QObject):
         self._pagina = "inicio"
         self._titulo = ""
         self._indice_do_teste = 0
+        # O teste correndo; ``None`` é parado ou pausado.
         self._temporizador: Optional[QTimer] = None
         self._pausado = False
         self._encerrado = False
+        # Enquanto a etapa carrega os controles, mexer neles não é ajuste.
         self._carregando = False
         self._cor_na_tela = _cor_da_etapa(0)
         self._controles: list[dict[str, Any]] = []
@@ -95,8 +105,10 @@ class AssistenteDeCalibracao(QObject):
     @Property(QColor, notify=alterado)
     def corNaTela(self) -> QColor:  # noqa: N802
         cor = self._cor_na_tela
+        # Valor 1: o brilho é da fita, a tela mostra a cor cheia.
         return QColor.fromHsvF(min(cor.matiz, 359) / 360, cor.saturacao / 1000, 1.0)
 
+    # As faixas dos controles, das constantes da calibração (a tela não repete os números).
     @Property(int, constant=True)
     def tomMaximo(self) -> int:  # noqa: N802
         return calibracao.TOM_MAXIMO
@@ -135,13 +147,16 @@ class AssistenteDeCalibracao(QObject):
         return _("Calibrado") if self.calibracoes[id_da_fita] != NEUTRA else ""
 
     def _em_edicao(self) -> list[str]:
+        """Os dispositivos que o ajuste de agora alcança."""
         assert self.id_atual is not None
         return [fita.id for fita in self.fitas] if self.id_atual == TODOS else [self.id_atual]
 
     def _alvo(self, id_da_fita: Optional[str]) -> str:
+        """O dispositivo de um ajuste: o do controle, ou o que está em edição."""
         return id_da_fita if id_da_fita is not None else self._em_edicao()[0]
 
     def _atualizar_controles(self) -> None:
+        """Os valores desta etapa, por dispositivo em edição (sem emitir)."""
         if self.id_atual is None:
             self._controles = []
             return
@@ -259,6 +274,8 @@ class AssistenteDeCalibracao(QObject):
             self.etapa += 1
             self._mostrar_etapa()
         else:
+            # Depois do Branco, o teste, direto. Não há "aplicar também a outros": para fitas iguais há "Todos os
+            # dispositivos".
             self.testar()
 
     @Slot()
@@ -272,6 +289,7 @@ class AssistenteDeCalibracao(QObject):
             self._ir_para_a_lista()
 
     def _ir_para_a_lista(self) -> None:
+        """De volta à lista: as fitas voltam à cor do app (com as calibrações em edição), não ficam na última cor."""
         if self._encerrado:
             return
         self._parar_temporizador()
@@ -316,6 +334,7 @@ class AssistenteDeCalibracao(QObject):
         self.voltar_aos_ajustes()
 
     def voltar_aos_ajustes(self) -> None:
+        """Sai do teste sem perder nada: os ajustes seguem em memória até o Concluir."""
         self._ir_para_a_lista()
 
     @Slot()
@@ -323,6 +342,9 @@ class AssistenteDeCalibracao(QObject):
         self.avancar_teste()
 
     def avancar_teste(self) -> None:
+        """O botão Avançar: a próxima cor, com os 3 s contados de novo; senão a cor pedida podia sumir logo em
+        seguida.
+        """
         if self._encerrado:
             return
         self._proxima_do_teste()
@@ -348,6 +370,7 @@ class AssistenteDeCalibracao(QObject):
 
     @Slot()
     def concluir(self) -> None:
+        """Grava a calibração de cada dispositivo (a neutra não é gravada)."""
         if self._encerrado:
             return
         session_fita.gravar_fitas(
@@ -369,6 +392,9 @@ class AssistenteDeCalibracao(QObject):
         self._encerrar()
 
     def _encerrar(self) -> None:
+        """Fechou de qualquer jeito: o teste para e as fitas voltam à cor do app (com a calibração gravada, se
+        houve Concluir). Uma vez só: Cancelar, Concluir, Esc e o fechamento das Preferências chegam aqui.
+        """
         if self._encerrado:
             return
         self._encerrado = True

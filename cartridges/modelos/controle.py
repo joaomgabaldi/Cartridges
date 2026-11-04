@@ -2,7 +2,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O controle do Xbox na grade: lê o XInput e entrega sinais que o QML liga à interface."""
+"""O controle do Xbox na grade: lê o XInput e entrega sinais que o QML liga à interface.
+
+Só lê enquanto a janela está ativa e a preferência `gamepad` está ligada; com a janela inativa o `QTimer` para. A DLL
+continua carregada e só é solta durante uma sessão de jogo (`suspender`), para o jogo ficar com o controle só para
+ele. Tudo na thread principal.
+"""
 
 import weakref
 from collections.abc import Callable
@@ -39,7 +44,7 @@ from cartridges.xinput import (
     intervalo_de_repeticao_us,
 )
 
-Direcao = tuple[int, int]
+Direcao = tuple[int, int]  # (dx, dy), com y para baixo
 
 
 def _estado_do_app() -> Qt.ApplicationState:
@@ -53,10 +58,10 @@ class ControleDaGrade(QObject):
     menuPrincipal = Signal()  # Start  # noqa: N815
     menuDoJogo = Signal()  # Y  # noqa: N815
     buscar = Signal()
-    usado = Signal()
-    presente = Signal()
-    pular = Signal(int)
-    conectado = Signal()
+    usado = Signal()  # qualquer comando: o QML esconde o ponteiro do mouse
+    presente = Signal()  # um controle apareceu (ou o foco voltou): o QML acende a seleção
+    pular = Signal(int)  # LB (-10) e RB (+10): só o Big Picture usa
+    conectado = Signal()  # um controle lido depois de uma leitura sem controle, ou o primeiro; não o foco de volta
     modoBigPictureMudou = Signal()  # noqa: N815
 
     def __init__(
@@ -76,8 +81,8 @@ class ControleDaGrade(QObject):
         self._timer.timeout.connect(self._ler)
         self._botoes = 0
         self._modo_big_picture = False
-        self._sem_controle = True
-        self._janela: QWindow | None = None
+        self._sem_controle = True  # a última leitura (ou o início) não tinha controle: o próximo é uma conexão
+        self._janela: QWindow | None = None  # a principal: só ela dá o controle
         self._ultimo_toque_capa_us: int | None = None
         self._ajustar_base()
         self._geracao_de_vibracao = 0
@@ -92,6 +97,7 @@ class ControleDaGrade(QObject):
 
     @Property(bool, notify=modoBigPictureMudou)
     def modoBigPicture(self) -> bool:  # noqa: N802
+        """Com o Big Picture à vista a repetição do direcional acelera; sem ele, a da grade não muda."""
         return self._modo_big_picture
 
     @modoBigPicture.setter
@@ -105,6 +111,7 @@ class ControleDaGrade(QObject):
         return self._timer.isActive()
 
     def _ajustar_base(self) -> None:
+        """O que já estava pressionado ao voltar o foco é a base, não um comando novo."""
         self._ressincronizar = True
         self._engajado = False
         self._direcao: Direcao | None = None
@@ -114,6 +121,7 @@ class ControleDaGrade(QObject):
         self._travada = False
 
     def definir_janela(self, janela: QWindow) -> None:
+        """A janela principal: com Tarefas, Login ou o assistente em foco, o controle não mexe na grade de trás."""
         self._janela = janela
         janela.activeChanged.connect(self.sincronizar)
         self.sincronizar()
@@ -134,12 +142,17 @@ class ControleDaGrade(QObject):
             self._ajustar_base()
             self._timer.start()
         elif not desejado and self._timer.isActive():
-            # Só para de ler.
+            # Só para de ler. A vibração em curso termina sozinha e a DLL fica carregada.
             self._timer.stop()
             self._direcao = None
 
     @Slot()
     def suspender(self) -> None:
+        """Entrega o controle ao jogo da sessão: para de ler na hora e solta a DLL depois do prazo.
+
+        O prazo é o da vibração de abertura, que sai logo antes: soltar antes deixaria os motores ligados,
+        porque o desligamento agendado dela não acharia mais a DLL.
+        """
         if self._suspenso:
             return
         self._suspenso = True
@@ -153,23 +166,28 @@ class ControleDaGrade(QObject):
         self._leitor.vibrar()  # os motores parados antes de a DLL sair
         self._leitor.soltar()
         self._leitor = None
+        # Redescoberta: o controle que estava aí ao voltar não é uma conexão nova; só uma leitura sem
+        # controle rearma o `conectado`.
         self._sem_controle = False
 
     @Slot()
     def retomar(self) -> None:
+        """A sessão acabou: a leitura volta (com a DLL recarregada pela fábrica, se saiu) e a base é refeita."""
         if not self._suspenso:
             return
         self._suspenso = False
         self._soltura.stop()
-        self.sincronizar()
+        self.sincronizar()  # o que o controle fez durante o jogo não é comando: a base vem do `_ajustar_base`
 
     @Slot()
     def vibrarAbertura(self) -> None:  # noqa: N802
+        """Um jogo iniciando: a vibração mais longa, com a preferência `gamepad-rumble`."""
         self._vibrar(RUMBLE_LAUNCH)
 
     def _ler(self) -> None:
         pad = self._leitor.ler()
         if pad is None:
+            # Sem controle: o próximo é uma conexão nova, com base refeita e analógico dormindo.
             self._sem_controle = True
             self._ajustar_base()
             return
@@ -177,6 +195,7 @@ class ControleDaGrade(QObject):
             self._ressincronizar = False
             self._botoes = pad.wButtons
             self._direcao = self._direcao_de(pad)
+            # Direcional já segurado ao voltar o foco não repete sozinho: fica travado até soltar.
             self._travada = self._direcao is not None
             self._desde = self._relogio()
             self._repeticoes = 0
@@ -190,6 +209,7 @@ class ControleDaGrade(QObject):
         self._tratar_botoes(pad)
 
     def _direcao_de(self, pad) -> Direcao | None:
+        """O direcional vence o analógico; o analógico escolhe o eixo dominante."""
         botoes = pad.wButtons
         if botoes & XINPUT_DPAD_UP:
             return (0, -1)
@@ -232,11 +252,13 @@ class ControleDaGrade(QObject):
         if direcao is None or self._travada:
             return
         if self._modo_big_picture:
+            # A primeira repetição espera o atraso; as outras aceleram quanto mais tempo se segura.
             if self._repeticoes == 0:
                 devido = agora - self._desde >= REPEAT_DELAY_US
             else:
                 devido = agora - self._ultimo_passo >= intervalo_de_repeticao_us(agora - self._desde)
         else:
+            # A primeira repetição espera o atraso; as outras vêm em ritmo constante.
             devido = agora - self._desde >= REPEAT_DELAY_US + REPEAT_INTERVAL_US * self._repeticoes
         if devido:
             self._repeticoes += 1
@@ -248,13 +270,14 @@ class ControleDaGrade(QObject):
         self.mover.emit(*direcao)
 
     def _tratar_botoes(self, pad) -> None:
-        apertados = pad.wButtons & ~self._botoes
+        apertados = pad.wButtons & ~self._botoes  # só a borda de subida
         self._botoes = pad.wButtons
         if not apertados:
             return
         self._engajado = True
         self.usado.emit()
         if self._modo_big_picture:
+            # No Big Picture só valem A, B e os ombros: outro botão na mesma leitura não anula o salto.
             apertados &= XINPUT_A | XINPUT_B | XINPUT_LEFT_SHOULDER | XINPUT_RIGHT_SHOULDER
         if apertados & XINPUT_A:
             self.ativar.emit()
@@ -271,6 +294,7 @@ class ControleDaGrade(QObject):
 
     @Slot(int)
     def teclar(self, tecla: int) -> None:
+        """Entrega uma tecla ao item em foco da janela: é assim que o controle navega menus e diálogos."""
         janela = QGuiApplication.focusWindow()
         if janela is None:
             return
@@ -279,18 +303,21 @@ class ControleDaGrade(QObject):
 
     @Slot()
     def encerrar(self) -> None:
+        """O app fecha: para a leitura e os motores; uma vibração em curso não sobrevive."""
         self._timer.stop()
         self._soltura.stop()
-        self._geracao_de_vibracao += 1
+        self._geracao_de_vibracao += 1  # o desligamento agendado de uma vibração antiga não vale mais
         if self._leitor is not None:
             self._leitor.vibrar()
 
     @Slot()
     def bater(self) -> None:
+        """Não há para onde ir: o toque firme da borda."""
         self._vibrar(RUMBLE_EDGE)
 
     @Slot()
     def passar(self) -> None:
+        """Um cartão atravessado: o tique leve."""
         self._vibrar(RUMBLE_MOVE)
 
     @Slot()
@@ -299,11 +326,12 @@ class ControleDaGrade(QObject):
         agora = self._relogio()
         if self._ultimo_toque_capa_us is not None and agora - self._ultimo_toque_capa_us < (RUMBLE_CAPA[2] + 60) * 1000:
             return
-        if self._vibrar(RUMBLE_CAPA):
+        if self._vibrar(RUMBLE_CAPA):  # um toque que não vibrou não ocupa a vez do próximo
             self._ultimo_toque_capa_us = agora
 
     @Slot()
     def saltar(self) -> None:
+        """Um salto de dez jogos (LB/RB) no Big Picture."""
         self._vibrar(RUMBLE_PULO)
 
     def _vibrar(self, preset: tuple[float, float, int]) -> bool:
@@ -316,6 +344,7 @@ class ControleDaGrade(QObject):
         eu = weakref.ref(self)
 
         def parar() -> None:
+            # Uma vibração mais nova é dona do próprio desligamento.
             controle = eu()
             if controle is not None and controle._leitor is not None and geracao == controle._geracao_de_vibracao:
                 controle._leitor.vibrar()

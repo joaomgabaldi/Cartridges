@@ -3,7 +3,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """O "Adicionar a Jogos Zerados": marcar como zerado um jogo já desinstalado ou adicionar um que nunca passou pelo
-app.
+app. Sem tela: o `SeletorDeZerados.qml` só desenha as `linhas`.
+
+A tela de detalhes só abre para o que está em alguma grade, e um desinstalado sem a marca não está em nenhuma. O campo
+do topo busca na Steam (só com Enter, que a loja limita as requisições) e a última linha cria o jogo só pelo nome; a
+regra de quem pode entrar fica em `zerado_manual`. Tudo na thread principal; a busca roda numa thread e entrega por
+`na_thread_principal`, e o que chega a uma geração velha, ou com o diálogo fechado, é descartado.
 """
 
 import logging
@@ -30,6 +35,7 @@ MOTIVO = {
 
 
 def candidatos() -> list[Jogo]:
+    """Os desinstalados que ainda não são zerados, em ordem de nome."""
     return sorted(
         (jogo for jogo in shared.store if jogo.removed and not jogo.blacklisted and not jogo.zerado),
         key=lambda jogo: jogo.name.casefold(),
@@ -37,6 +43,7 @@ def candidatos() -> list[Jogo]:
 
 
 def descricao(jogo: Jogo) -> str:
+    """Tempo e última vez jogado: o que separa duas fichas de mesmo nome."""
     if not jogo.last_played:
         return "Nunca jogado"
     # As variáveis são o tempo de jogo e a data da última vez jogado
@@ -44,7 +51,7 @@ def descricao(jogo: Jogo) -> str:
 
 
 def _buscar_na_steam(seletor_fraco: "weakref.ref[SeletorDeZerados]", texto: str, geracao: int) -> None:
-    """O corpo da thread da busca."""
+    """O corpo da thread da busca. Referência fraca: a thread não prende o seletor."""
     aviso = ""
     achados: list[tuple[dict, Any]] = []
     try:
@@ -67,8 +74,7 @@ def _entregar(seletor_fraco: "weakref.ref[SeletorDeZerados]", texto: str, achado
 
 class SeletorDeZerados(QObject):
     """O estado do `SeletorDeZerados.qml` (contexto `zeradosManuais`): os desinstalados para marcar e, com a busca, os
-    jogos para adicionar.
-    """
+    jogos para adicionar. Chaves das linhas: `jogo:<game_id>`, `steam:<appid>` e `nome`."""
 
     alterado = Signal()
 
@@ -78,7 +84,9 @@ class SeletorDeZerados(QObject):
         self._estado = "vazio"
         self._aviso = ""
         self._linhas: list[dict[str, Any]] = []
+        # Chave → o que a linha cria: ("jogo", Jogo), ("steam", nome, appid) ou ("nome", texto).
         self._destinos: dict[str, tuple] = {}
+        # Resposta de uma busca antiga (ou do diálogo já fechado) não pinta a lista.
         self._geracao = 0
         self._ultima: Optional[tuple[str, list, str]] = None
 
@@ -117,6 +125,7 @@ class SeletorDeZerados(QObject):
 
     @Slot(str)
     def mudouBusca(self, texto: str) -> None:  # noqa: N802
+        """Só o campo vazio age sozinho; a busca na Steam espera o Enter."""
         if self._aberto and not texto.strip():
             self._geracao += 1
             self._mostrar_desinstalados()
@@ -136,11 +145,14 @@ class SeletorDeZerados(QObject):
 
     @Slot(str)
     def escolher(self, chave: str) -> None:
+        """Só uma linha da lista atual e ativa; o resto é ignorado."""
         linha = next((item for item in self._linhas if item["chave"] == chave), None)
         destino = self._destinos.get(chave)
         if linha is None or not linha["ativa"] or destino is None:
             return
         if destino[0] == "jogo":
+            # Fica aberto: quem veio marcar os jogos antigos costuma ter vários. Linha velha (o jogo foi reinstalado,
+            # ou a ficha trocada na store desde que a lista abriu): só sai da lista, sem mexer no jogo.
             jogo = destino[1]
             if shared.store.get(jogo.game_id) is jogo and jogo.removed:
                 jogo.definir_status("beaten")
@@ -152,6 +164,7 @@ class SeletorDeZerados(QObject):
             self.alterado.emit()
             return
         zerado_manual.adicionar(destino[1], destino[2])
+        # Redesenha em vez de tirar a linha: o jogo recém-adicionado volta desativado, e a linha do nome com ele.
         if self._ultima is not None:
             self._mostrar_resultados(*self._ultima, self._geracao)
 
@@ -174,6 +187,7 @@ class SeletorDeZerados(QObject):
         self._aviso = aviso
         self._destinos = {}
         self._linhas = []
+        # Um índice por desenho: cada linha pergunta se o jogo já existe.
         jogos = zerado_manual.indice()
         for achado, _pontuacao in achados:
             appid = str(achado.get("id", ""))

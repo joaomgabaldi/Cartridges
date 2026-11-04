@@ -2,7 +2,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Regras puras da biblioteca: ordem da grade, filtros, busca e opções do menu."""
+"""Regras puras da biblioteca: ordem da grade, filtros, busca e opções do menu.
+
+Sem Qt: a `Linha` é a fotografia de um jogo e as funções só olham para ela. O modelo e os proxies (`biblioteca.py`)
+apenas aplicam estas regras.
+"""
 
 import functools
 import unicodedata
@@ -43,11 +47,12 @@ class Linha:
     carregando: bool
     # URL da cópia WebP animada no tamanho da grade, quando já existe; senão "".
     capa_animada: str = ""
+    # Há um patch esperando no feed e o jogo não é um zerado: o halo dourado do cartão (`update-available`).
     tem_atualizacao: bool = False
 
     @classmethod
     def de(cls, jogo: Jogo) -> "Linha":
-        caminho = jogo.get_cover_path()
+        caminho = jogo.get_cover_path()  # uma só leitura: a capa e a cópia animada olham o mesmo arquivo
         return cls(
             jogo.game_id,
             jogo.name,
@@ -72,7 +77,11 @@ class Linha:
 
 
 def url_da_copia(caminho: Path | None, indice: int = 0) -> str:
-    """URL da cópia animada da capa (``indice`` 0: a da grade; 1: a de detalhes), ou "" se não há."""
+    """URL da cópia animada da capa (``indice`` 0: a da grade; 1: a de detalhes), ou "" se não há.
+
+    "" também quando a capa é parada, a cópia não existe ou é mais velha que a capa (a tela a larga
+    e o ``preparar`` a refaz).
+    """
     if caminho is None or caminho.suffix not in ANIMATED_SUFFIXES:
         return ""
     copia = copias_animadas.caminho_para(caminho, copias_animadas.tamanhos()[indice])
@@ -85,6 +94,7 @@ def url_da_copia(caminho: Path | None, indice: int = 0) -> str:
 
 
 def _url_da_capa(caminho: Path | None) -> str:
+    """URL `file:` da capa; o `?v=` muda quando o arquivo é regravado, e a grade recarrega."""
     if caminho is None:
         return ""
     try:
@@ -110,24 +120,28 @@ class _Inverso:
 
 
 def _data_de_lancamento(linha: Linha) -> int:
+    """Ano*10000 + mês*100 + dia (0 se faltar), ou -1 sem data utilizável."""
     ano, mes, dia = parse_release_date(linha.lancamento)
     return -1 if ano is None else ano * 10000 + (mes or 0) * 100 + (dia or 0)
 
 
 @functools.lru_cache(maxsize=16384)  # a `Linha` é congelada (hashável); sem isto cada comparação refaz a data
 def chave(linha: Linha, modo: str) -> tuple:
-    nome = (chave_alfabetica(linha.nome), linha.jogo_id)
+    """Chave de ordenação: a ordem crescente das chaves é a ordem da grade."""
+    nome = (chave_alfabetica(linha.nome), linha.jogo_id)  # o id desempata dois jogos de mesmo nome
     if modo == "a-z":
         return (nome,)
     if modo == "z-a":
         return (_Inverso(nome),)
     if modo in ("released_newest", "released_oldest"):
         data = _data_de_lancamento(linha)
-        if data < 0:
+        if data < 0:  # sem data: fim, nos dois sentidos
             return (1, 0, nome)
         return (0, -data if modo == "released_newest" else data, nome)
     if modo == "rating":
+        # Nota 0 é ausência de nota: vai para o fim, e não abaixo das notas baixas.
         return (1, 0, nome) if not linha.estrelas else (0, -linha.estrelas, nome)
+    # Tamanho 0 ("não medido") cai no fim sozinho: é o menor valor, e a ordem é decrescente.
     if modo == "newest":
         return (-linha.adicionado, nome)
     if modo == "oldest":
@@ -136,10 +150,11 @@ def chave(linha: Linha, modo: str) -> tuple:
         return (-linha.tempo_de_jogo, nome)
     if modo == "install_size":
         return (-linha.tamanho, nome)
-    return (-linha.jogado_em, nome)
+    return (-linha.jogado_em, nome)  # last_played, e qualquer modo desconhecido
 
 
 def passa(linha: Linha, busca: str, genero: str, ano: str, status: str) -> bool:
+    """Se a linha passa pela busca e pelos filtros; `""` é "Todos". Campo ausente só passa em "Todos"."""
     if busca:
         busca = busca.lower()
         if not any(busca in campo.lower() for campo in (linha.nome, linha.desenvolvedora, linha.publicadora, linha.anotacoes)):
@@ -152,11 +167,13 @@ def passa(linha: Linha, busca: str, genero: str, ano: str, status: str) -> bool:
 
 
 def chave_alfabetica(texto: str) -> str:
+    """Ordem alfabética que não exila os acentos: NFKD separa a marca da letra-base e a marca é descartada."""
     decomposto = unicodedata.normalize("NFKD", texto.casefold())
     return "".join(c for c in decomposto if not unicodedata.combining(c))
 
 
 def opcoes(linhas: Iterable[Linha]) -> tuple[list[str], list[str]]:
+    """Gêneros (ordem alfabética) e anos (decrescente) do que a biblioteca e os zerados têm."""
     generos: set[str] = set()
     anos: set[str] = set()
     for linha in linhas:

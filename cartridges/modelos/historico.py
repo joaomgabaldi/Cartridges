@@ -2,7 +2,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O que a tela do histórico de sessões mostra (`historico`): as linhas, o resumo e o gráfico, já calculados."""
+"""O que a tela do histórico de sessões mostra (`historico`): as linhas, o resumo e o gráfico, já calculados.
+
+As regras são as de `session_history.py` (puras); aqui só se junta o que o QML lê e se faz a exclusão de uma sessão,
+que desconta o tempo do total do jogo. Segue um jogo por vez e relê o arquivo de sessões a cada mudança: a tela mostra o
+que está gravado, e não o que ela acha que gravou. Só na thread principal.
+"""
 
 import weakref
 from datetime import date, datetime
@@ -26,6 +31,9 @@ from cartridges.session_history import (
 from cartridges.utils import game_logo, session_log
 from cartridges.utils.format_playtime import format_playtime
 
+# O logo é a manchete da caixa inteira, não o título de uma coluna: bem maior que o da página de detalhes (72 de
+# altura),
+# e a largura útil é a da caixa (1040) menos as margens de 24.
 ALTURA_DO_LOGO = 120
 LARGURA_DO_LOGO = 1040 - 2 * 24
 
@@ -41,6 +49,7 @@ def _prop(tipo: Any, nome: str, notify: Any) -> Property:
 
 class HistoricoDeSessoes(QObject):
     alterado = Signal()
+    # Sinais próprios: trocar o período não refaz as linhas da tabela, e "Mostrar mais" não redesenha o gráfico.
     tabelaMudou = Signal()  # noqa: N815
     graficoMudou = Signal()  # noqa: N815
 
@@ -73,12 +82,14 @@ class HistoricoDeSessoes(QObject):
 
     @Slot(str)
     def abrir(self, game_id: str) -> None:
+        """Mostra o histórico do jogo, no mês; ignora (sem mudar nada) um jogo que a loja não tem."""
         jogo = self._store.get(game_id)
         if jogo is None:
             return
         self._jogo = weakref.ref(jogo)
         self._mostradas = PAGINA
         logo, largura = "", 0
+        # Só o que já está em disco: a busca no SteamGridDB é da página de detalhes, de onde isto é aberto.
         if (caminho := game_logo.cached_logo_path(jogo)) and (carregado := game_logo.load_logo(caminho, LARGURA_DO_LOGO, ALTURA_DO_LOGO)):
             logo, largura = _url_da_capa(carregado[0]), carregado[1]
         self._v.update(aberto=True, nome=jogo.name, logo=logo, larguraDoLogo=largura, periodo="month")
@@ -86,7 +97,9 @@ class HistoricoDeSessoes(QObject):
 
     @Slot()
     def fechar(self) -> None:
-        # Só `aberto` muda: o cartão segue com o conteúdo durante a animação de saída.
+        # Só `aberto` muda: o cartão segue com o conteúdo durante a animação de saída. O próximo `abrir` sobrescreve
+        # tudo; as sessões, os dias e as posições ficam até lá, para a dica do gráfico e um "Mostrar mais" nos 120 ms de
+        # saída não esvaziarem o que ainda está à vista.
         self._jogo = None
         self._v = {**self._v, "aberto": False}
         self.alterado.emit()
@@ -100,9 +113,12 @@ class HistoricoDeSessoes(QObject):
         return self._jogo() if self._jogo else None
 
     def _reler(self) -> None:
+        """Relê o arquivo e refaz tudo o que a tela mostra, em vez de tirar uma linha: a exclusão mexe no resumo e no
+        gráfico também."""
         jogo = self._mostrado()
         self._sessoes = session_log.load(jogo.game_id) if jogo is not None else []
         if not self._sessoes:
+            # Sem sessão não há o que listar nem desenhar: a frase do resumo explica o vazio.
             self._posicoes, self._dias = [], []
             self._v.update(
                 resumo=_("Nenhuma sessão registrada."), vazio=True, sessoes=[], haMais=False, totalDoPeriodo="", grafico={}
@@ -134,6 +150,7 @@ class HistoricoDeSessoes(QObject):
         }
 
     def _grafico(self) -> dict[str, Any]:
+        """Os dias do período escolhido; as pausas longas só se cortam em "Todo o período"."""
         periodo = self._v["periodo"]
         primeiro, ultimo = period_range(self._sessoes, periodo, date.today())
         dias = session_log.daily_seconds(self._sessoes, primeiro, ultimo)
@@ -148,6 +165,7 @@ class HistoricoDeSessoes(QObject):
 
     @Slot()
     def mostrarMais(self) -> None:  # noqa: N802
+        """Acrescenta a próxima página de sessões ao fim da tabela."""
         self._mostradas += PAGINA
         self._v.update(self._tabela())
         self.tabelaMudou.emit()
@@ -163,10 +181,13 @@ class HistoricoDeSessoes(QObject):
 
     @Slot("qint64", "qint64")
     def excluir(self, fim: int, segundos: int) -> None:
+        """Apaga a sessão e desconta o tempo do total do jogo (a confirmação é da tela)."""
         jogo = self._mostrado()
         if jogo is None:
             return
         if not session_log.delete(jogo.game_id, fim, segundos):
+            # A linha sumiu entre abrir a tela e confirmar (outra janela, o arquivo editado à mão). Nada a descontar:
+            # o total continua correspondendo ao que sobrou no histórico.
             self._reler()
             return
         # Nunca abaixo de zero: um total menor que a sessão só acontece com um registro editado à mão, e o certo aí é

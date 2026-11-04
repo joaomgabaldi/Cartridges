@@ -2,7 +2,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A fila de avisos: um por vez, na ordem em que chegaram."""
+"""A fila de avisos: um por vez, na ordem em que chegaram.
+
+Quem está na fila não está na tela, e um aviso que expirasse antes de aparecer ninguém veria:
+por isso `dispensar_depois` só começa a contar quando o aviso ganha a vez. Cada aviso sai com o fade
+antes de o próximo entrar (`_SAIDA_MS`), e o tempo para com o mouse em cima. Tudo na thread principal.
+"""
 
 import itertools
 from collections import deque
@@ -11,6 +16,7 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 
+# O fade de saída do `Avisos.qml` (`Tema.duracaoCurta`).
 _SAIDA_MS = 200
 
 
@@ -22,7 +28,7 @@ class _Aviso:
     ao_clicar: Callable[[], None] | None
     segundos: float
     chave: Hashable | None
-    depois: float | None = None
+    depois: float | None = None  # `dispensar_depois` pedido enquanto esperava a vez
 
 
 class FilaDeAvisos(QObject):
@@ -41,10 +47,12 @@ class FilaDeAvisos(QObject):
         self._saida.setSingleShot(True)
         self._saida.setInterval(_SAIDA_MS)
         self._saida.timeout.connect(self._proximo)
+        # Quanto faltava ao parar o relógio (mouse sobre o aviso); None = não está parado.
         self._restante: int | None = None
 
     @Property(str, notify=mudou)
     def texto(self) -> str:
+        """Fica o do último aviso depois que ele some, para o texto não sumir antes do fade."""
         return self._texto
 
     @Property(str, notify=mudou)
@@ -63,7 +71,10 @@ class FilaDeAvisos(QObject):
         segundos: float = 5,
         chave: Hashable | None = None,
     ) -> int:
-        """Enfileira o aviso e devolve o id."""
+        """Enfileira o aviso e devolve o id. `segundos=0`: só sai por `dispensar`.
+
+        Um aviso com a mesma `chave` de um que está na tela ou na fila sai, e o novo vai ao fim da fila.
+        """
         if chave is not None:
             self.dispensar_chave(chave)
         novo = _Aviso(next(self._ids), texto, botao, ao_clicar, segundos, chave)
@@ -78,6 +89,7 @@ class FilaDeAvisos(QObject):
 
     @Slot(int)
     def dispensar(self, id: int) -> None:  # noqa: A002
+        """Tira o aviso, esteja ele na tela ou na fila."""
         if self._atual is not None and self._atual.id == id:
             self.fechar()
         else:
@@ -109,6 +121,7 @@ class FilaDeAvisos(QObject):
 
     @Slot()
     def pausar(self) -> None:
+        """Mouse sobre o aviso: o tempo para. Sem tempo correndo (`segundos=0`), nada a parar."""
         if self._atual is not None and self._relogio.isActive():
             self._restante = self._relogio.remainingTime()
             self._relogio.stop()
@@ -120,6 +133,7 @@ class FilaDeAvisos(QObject):
             self._restante = None
 
     def _contar(self, ms: int) -> None:
+        # Com o mouse em cima, o novo prazo só começa a correr quando ele sair.
         if self._restante is not None:
             self._restante = ms
         else:

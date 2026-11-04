@@ -17,7 +17,17 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O que o app está fazendo em segundo plano, num lugar só."""
+"""O que o app está fazendo em segundo plano, num lugar só.
+
+Cada trabalho longo (importação, HowLongToBeat, metadados, tamanho em disco)
+avisa aqui quando começa, a cada jogo e quando termina. O botão do canto da
+biblioteca e a janela "Tarefas em andamento" só leem ``lista``: um trabalho
+novo entra com três chamadas, sem mexer em nenhum dos dois.
+
+Os trabalhos rodam em threads, e a lista é lida pela interface: toda mudança é
+entregue na thread principal. A ordem das entregas é a das chamadas, então um
+``terminar()`` logo depois do ``comecar()`` nunca chega antes dele.
+"""
 
 import weakref
 from collections.abc import Callable
@@ -81,7 +91,7 @@ class Tarefa(QObject):
 
 
 class ListaDeTarefas(QAbstractListModel):
-    """As tarefas em andamento, na ordem em que começaram."""
+    """As tarefas em andamento, na ordem em que começaram. Só a thread principal mexe."""
 
     NOME = Qt.ItemDataRole.UserRole + 1
     FEITOS = NOME + 1
@@ -119,9 +129,11 @@ class ListaDeTarefas(QAbstractListModel):
         self.beginInsertRows(QModelIndex(), linha, linha)
         self._tarefas.append(tarefa)
         self.endInsertRows()
+        # `sender()` em vez de uma lambda: a conexão não prende nem o modelo nem a tarefa.
         tarefa.mudou.connect(self._tarefa_mudou)
 
     def remover(self, tarefa: Tarefa) -> None:
+        # Repetir o `terminar()` não faz nada: a tarefa já não está aqui.
         if tarefa not in self._tarefas:
             return
         linha = self._tarefas.index(tarefa)
@@ -137,8 +149,8 @@ class ListaDeTarefas(QAbstractListModel):
             self.dataChanged.emit(indice, indice, [self.FEITOS, self.TOTAL])
 
 
-# Criada na importação, que o app faz na thread principal (`app.py`): um QObject nasce na thread que o cria, e é nela
-# que a lista recebe os sinais das tarefas.
+# Criada na importação, que o app faz na thread principal (`app.py`): um QObject nasce na
+# thread que o cria, e é nela que a lista recebe os sinais das tarefas.
 lista = ListaDeTarefas()
 
 
@@ -152,10 +164,18 @@ def comecar(nome: str, total: int) -> Tarefa:
 
 
 def pode_mostrar(quantas: int, pagina: str, modal_aberto: bool, big_picture: bool, sessao: bool) -> bool:
+    """O botão do canto só aparece com tarefa, numa das duas bibliotecas e sem nada por cima."""
     return quantas > 0 and pagina in ("todos", "zerados") and not (modal_aberto or big_picture or sessao)
 
 
 def acao_ao_fechar(saves_em_andamento: bool, janela_aberta: bool, tarefas: int) -> str:
+    """O que fechar a principal faz.
+
+    Os saves vêm primeiro: fechar agora deixaria o Ludusavi órfão. Com a janela das tarefas aberta e alguma tarefa, a
+    principal só some; sem tarefa, a janela das tarefas vai junto (senão manteria o app vivo sozinha). Fechar depois a
+    janela das tarefas, com a principal escondida, encerra o app; com os saves ainda em andamento, só quando eles
+    acabam (`PainelDasTarefas.janelaFechada`).
+    """
     if saves_em_andamento:
         return "mostrar_e_esconder"
     if not janela_aberta:
@@ -167,6 +187,8 @@ def _sair() -> None:
     QCoreApplication.quit()
 
 
+# O painel em uso (o último criado): quem termina um trabalho com erro durante a espera do fechamento
+# o procura aqui para trazer a principal de volta (`cancelar_fechamento`).
 _painel: Optional["weakref.ref[PainelDasTarefas]"] = None
 
 
@@ -176,15 +198,20 @@ def _painel_esperando() -> Optional["PainelDasTarefas"]:
 
 
 def painel_aberto_sem_a_principal() -> Optional["PainelDasTarefas"]:
+    """O painel, se a janela das tarefas está aberta e a principal, escondida; a janela ativa que sobrou."""
     painel = _painel() if _painel is not None else None
     return painel if painel is not None and painel.aberta and painel.principalEscondida else None
 
 
 def fechamento_esperando() -> bool:
+    """O app está fechando: a principal está escondida à espera de um trabalho em andamento."""
     return _painel_esperando() is not None
 
 
 def cancelar_fechamento() -> bool:
+    """Se o app está fechando (`fechamento_esperando`), cancela: a principal volta e o app segue aberto. Devolve se
+    havia o que cancelar. Só na principal; antes de o trabalho sair da contagem (`backup_de_saves.terminar_tarefa`),
+    senão o app sai primeiro."""
     if (painel := _painel_esperando()) is None:
         return False
     painel.mostrarPrincipal()
@@ -197,7 +224,8 @@ class PainelDasTarefas(QObject):
     """
 
     alterado = Signal()
-    frente = Signal()
+    frente = Signal()  # a janela já aberta deve vir para a frente
+    # Um erro inesperado com a principal escondida: o aviso abre nesta janela (título, corpo).
     avisoPedido = Signal(str, str)  # noqa: N815
 
     def __init__(self) -> None:
@@ -207,7 +235,8 @@ class PainelDasTarefas(QObject):
         self._janela: Optional[QWindow] = None
         self._escondida = False
         self._saindo = False
-        # A espera de sair até o fim dos saves (`janelaFechada`).
+        # A espera de sair até o fim dos saves (`janelaFechada`). O backup não avisa o fim: pergunta-se a
+        # `em_andamento()` na thread principal, sem bloqueá-la.
         self._espera = QTimer(self)
         self._espera.setInterval(250)
         self._espera.timeout.connect(self._conferir_a_espera)
@@ -215,6 +244,7 @@ class PainelDasTarefas(QObject):
         self._ao_fechar_aviso: Optional[Callable[[], None]] = None
         global _painel  # noqa: PLW0603
         _painel = weakref.ref(self)
+        # Posto pelo `app.py` (`GeometriaDaJanela.gravar`): o `closing` grava onde a principal está.
         self.gravar_geometria: Callable[[], None] = lambda: None
         # Referência fraca implícita: o Qt desliga a conexão quando o painel é destruído.
         lista.rowsInserted.connect(self._contar)
@@ -235,11 +265,14 @@ class PainelDasTarefas(QObject):
 
     @Property(bool, notify=alterado)
     def principalEscondida(self) -> bool:  # noqa: N802
+        # A visibilidade de agora também: o fim de uma sessão traz a principal de volta sem passar por aqui.
         return self._escondida and self._janela is not None and not self._janela.isVisible()
 
     def pedir_aviso(self, titulo: str, corpo: str, ao_fechar: Callable[[], None]) -> None:
+        """O aviso na janela das tarefas."""
         anterior = self._ao_fechar_aviso
         if anterior is not None:
+            # Já há um aviso à vista: o texto dele fica (não é trocado por baixo de quem lê) e fechar libera os dois.
             def ambos() -> None:
                 anterior()
                 ao_fechar()
@@ -257,9 +290,11 @@ class PainelDasTarefas(QObject):
 
     @Slot()
     def encerrando(self) -> None:
+        """O `quit()` começou (`AplicacaoQt.saindo`): daqui em diante o `closing` da principal não recusa."""
         self._saindo = True
 
     def definir_janela(self, janela: QWindow) -> None:
+        """A principal, que o fechamento esconde e a segunda abertura mostra."""
         self._janela = janela
 
     def _contar(self, *_args) -> None:
@@ -273,6 +308,7 @@ class PainelDasTarefas(QObject):
 
     @Slot()
     def mostrar(self) -> None:
+        """Abre a janela; aberta, só a traz para a frente."""
         if self._aberta:
             self.frente.emit()
             return
@@ -281,9 +317,16 @@ class PainelDasTarefas(QObject):
 
     @Slot()
     def janelaFechada(self) -> None:  # noqa: N802
+        """A janela das tarefas fechou. Com a principal escondida, era a única do app: ele encerra.
+
+        Com os saves ainda em andamento, o encerramento espera o fim deles, com todas as janelas escondidas: sair agora
+        mataria a thread do backup e deixaria o `ludusavi.exe` órfão (uma restauração pararia no meio). A segunda
+        abertura desfaz a espera (`mostrarPrincipal`).
+        """
         if self._aberta:
             self._aberta = False
             self.alterado.emit()
+        # A visibilidade de agora, e não a marca: o fim de uma sessão traz a principal de volta (`sessao.present`).
         if self._janela is None or self._janela.isVisible():
             return
         from cartridges.saves import backup_de_saves  # noqa: PLC0415  (ele importa este módulo)
@@ -298,17 +341,19 @@ class PainelDasTarefas(QObject):
                 janela.hide()
             self._espera.start()
             return
+        # Na volta do laço: um `quit()` dentro do `closing` fecharia de novo, por dentro, a janela que está fechando,
+        # e o `aboutToQuit` (a parede e as fitas) rodaria com ela ainda na tela.
         QTimer.singleShot(0, _sair)
 
     def _conferir_a_espera(self) -> None:
         if self._janela is not None and self._janela.isVisible():
-            self._desfazer_a_espera()
+            self._desfazer_a_espera()  # a principal voltou por outro caminho: o app segue aberto
             return
         from cartridges.saves import backup_de_saves  # noqa: PLC0415
 
         if not backup_de_saves.em_andamento():
             self._espera.stop()
-            QGuiApplication.setQuitOnLastWindowClosed(True)
+            QGuiApplication.setQuitOnLastWindowClosed(True)  # um quit recusado não deixa o processo sem janela
             _sair()
 
     def _desfazer_a_espera(self) -> None:
@@ -319,12 +364,14 @@ class PainelDasTarefas(QObject):
         janelas, self._escondidas_na_espera = self._escondidas_na_espera, []
         for janela in janelas:
             try:
-                janela.setVisible(True)
-            except RuntimeError:
+                janela.setVisible(True)  # `show()` perderia a maximização
+            except RuntimeError:  # já destruída (o aviso de conquista que saiu por tempo)
                 continue
 
     @Slot(result=bool)
     def principalFechando(self) -> bool:  # noqa: N802
+        """O `closing` da principal: True deixa fechar; False a esconde (o app segue com a janela das tarefas)."""
+        # Antes de qualquer ação, com a janela ainda à vista e ainda não destruída pelo `close()`.
         self.gravar_geometria()
         # O `closing` que vem do `quit()` (o reinício, o fim da sessão do Windows, a janela das tarefas fechada com a
         # principal escondida): recusá-lo cancelaria o `quit()` com a sessão já encerrada pelo `saindo`.
@@ -343,16 +390,21 @@ class PainelDasTarefas(QObject):
                 self._janela.hide()
             return False
         if acao == "fechar_as_duas":
-            self._aberta = False
+            self._aberta = False  # o `Loader` desfaz a janela das tarefas
             self.alterado.emit()
             # O `Loader` desfaz a janela das tarefas sem evento de fechamento: o Qt não vê a última janela fechada.
             QTimer.singleShot(0, _sair)
+        # A sessão manual e o aviso de conquista na tela agendam o `_sair`.
         if shared.sessao is not None:
             shared.sessao.principalFechando()
         return True
 
     @Slot()
     def mostrarPrincipal(self) -> None:  # noqa: N802
+        """A segunda abertura do app: a principal volta (escondida ou minimizada) e vem para a frente.
+
+        Durante a espera do fim dos saves para sair, a espera é desfeita: o app segue aberto, com as janelas de antes.
+        """
         if (janela := self._janela) is None:
             return
         self._desfazer_a_espera()
@@ -360,11 +412,12 @@ class PainelDasTarefas(QObject):
             self._escondida = False
             self.alterado.emit()
         janela.setWindowStates(janela.windowStates() & ~Qt.WindowState.WindowMinimized)
-        janela.setVisible(True)
+        janela.setVisible(True)  # `show()` chama `showNormal()` e perderia a maximização
         janela.raise_()
         janela.requestActivate()
 
     @Slot(QWindow, float, float, float, float)
     def posicionar(self, janela: QWindow, x: float, y: float, largura: float, altura: float) -> None:
+        """Leva a moldura da janela para logo acima do botão, cujo retângulo é (x, y, largura, altura) na tela."""
         botao = (round(x), round(y), round(largura), round(altura))
         janela.setFramePosition(QPoint(*window_geometry.posicao_acima_do_botao(botao, janela.frameGeometry().height())))

@@ -2,7 +2,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O que a tela do Big Picture lê: a lista de jogos, o jogo central e o fundo."""
+"""O que a tela do Big Picture lê: a lista de jogos, o jogo central e o fundo.
+
+`BigPicture` segue o `ModeloDaBiblioteca` (a mesma lista que a grade mostra, ordenada do jogado
+mais recentemente ao mais antigo) e guarda o índice do jogo central; o QML só lê as propriedades e
+chama os slots de navegação. `ProvedorDoFundo` entrega o degradê pontilhado em pixels reais.
+"""
 
 import logging
 import weakref
@@ -29,6 +34,7 @@ ESCURECER_ENTRADA_MS = 300
 ESCURECER_SAIDA_MS = 250
 PAUSA_NO_ESCURO_MS = 120
 CLAREAR_MS = 350
+# No escuro, a troca espera as capas da fila decodificadas, mas não mais que isto.
 ESPERA_MAXIMA_DAS_CAPAS_MS = 700
 
 
@@ -41,7 +47,7 @@ class ProvedorDoFundo(QQuickImageProvider):
     def requestImage(self, id_: str, size: QSize, requested_size: QSize) -> QImage:  # noqa: ARG002, N802
         try:
             largura, altura = (max(1, int(v)) for v in id_.split("x"))
-            dados = regras.bytes_do_fundo(largura, altura)
+            dados = regras.bytes_do_fundo(largura, altura)  # vivo até o .copy(): o QImage não copia
             imagem = QImage(dados, largura, altura, largura * 3, QImage.Format.Format_RGB888).copy()
         except Exception:
             logging.warning("Falha ao gerar o fundo do Big Picture", exc_info=True)
@@ -53,6 +59,7 @@ class ProvedorDoFundo(QQuickImageProvider):
 
 
 def tem_3d(janela: QWindow) -> bool:
+    """Sem renderizador, ou com o de software, o Cover Flow não roda bem."""
     renderizador = janela.rendererInterface()
     return renderizador is not None and renderizador.graphicsApi() != QSGRendererInterface.GraphicsApi.Software
 
@@ -68,13 +75,13 @@ def _dados(linha: Linha) -> dict[str, str]:
 
 
 class BigPicture(QObject):
-    """A lista do Big Picture e o jogo central."""
+    """A lista do Big Picture e o jogo central. Só na thread principal."""
 
     alterado = Signal()
     jogosMudaram = Signal()  # noqa: N815  # só a lista (um passo do carrossel não a notifica)
     animarCentralMudou = Signal()  # noqa: N815
     filaPedida = Signal(bool)  # noqa: N815  # True: a fila de entrada; False: a de saída (o QML a anima)
-    saiu = Signal(str)
+    saiu = Signal(str)  # o jogo central na saída: o foco volta ao cartão dele na grade
     prepararCapas = Signal()  # noqa: N815  # P1: o QML decodifica as capas da fila e responde `capasProntas`
     aberturaPedida = Signal(float, float)  # noqa: N815  # (de, para): o QML anima `progressoAbertura` e responde `aberturaTerminou`
     focoPedido = Signal()  # noqa: N815  # o bloqueio do jogo levou o foco: a camada o retoma
@@ -88,6 +95,7 @@ class BigPicture(QObject):
         fabrica_da_cortina: Callable[[int], CortinaMonitor | None] = CortinaMonitor,
     ) -> None:
         super().__init__(parent)
+        # Fade do monitor: a cortina, a animação do alfa, a etapa e a troca em curso.
         self._fabrica_da_cortina = fabrica_da_cortina
         self._cortina: CortinaMonitor | None = None
         self._animacao_cortina: QVariantAnimation | None = None
@@ -113,7 +121,7 @@ class BigPicture(QObject):
         self._agendado = False
         self._ocupada = False
         self._visivel = False
-        self._montada = False
+        self._montada = False  # a lista existe: da entrada (antes de escurecer) ao fim da saída
         self._saindo = False
         self._ja_saiu = False
         self._disponivel = True
@@ -150,6 +158,7 @@ class BigPicture(QObject):
 
     @Property(str, constant=True)
     def placeholder(self) -> str:
+        """A imagem da capa que falta: a mesma da grade."""
         return self._modelo.placeholder
 
     @Property(bool, notify=alterado)
@@ -166,6 +175,7 @@ class BigPicture(QObject):
 
     @Property(bool, notify=alterado)
     def animacoes(self) -> bool:
+        """As animações do Windows estão ativas: sem elas a fila e o passo vão direto ao fim."""
         return self._animacoes_do_sistema
 
     @Property(bool, notify=alterado)
@@ -178,15 +188,18 @@ class BigPicture(QObject):
 
     @Property(bool, notify=alterado)
     def jaSaiu(self) -> bool:  # noqa: N802
+        """O usuário saiu do Big Picture nesta sessão: a entrada automática não volta."""
         return self._ja_saiu
 
     def definir_animacoes_do_sistema(self, ligadas: bool) -> None:
+        """O ajuste do Windows mudou com o app aberto: a fila e o passo seguem."""
         if ligadas == self._animacoes_do_sistema:
             return
         self._animacoes_do_sistema = ligadas
-        self.alterado.emit()
+        self.alterado.emit()  # a capa central não muda com isto: só a preferência manda nela
 
     def _ler_animar_central(self) -> bool:
+        # Só a preferência; as animações do sistema valem para a grade.
         return shared.schema.get_boolean("cover-autoplay")
 
     def _religar_animar_central(self) -> None:
@@ -197,6 +210,7 @@ class BigPicture(QObject):
 
     @Property(bool, notify=animarCentralMudou)
     def animarCentral(self) -> bool:  # noqa: N802
+        """A capa animada do jogo central toca: `cover-autoplay` ligado."""
         return self._animar_central
 
     def _refazer(self, centro: str = "") -> None:
@@ -209,6 +223,11 @@ class BigPicture(QObject):
     @Slot()
     @Slot(str)
     def atualizar(self, centro: str = "") -> None:
+        """Refaz a lista mantendo o jogo central (ou `centro`); se ele sumiu, fica o vizinho.
+
+        Só vale com a lista montada e fora da saída; durante a fila e o fade fica pendente (só o
+        centro mais recente) e roda quando a página destrava.
+        """
         if not self._montada or self._saindo:
             return
         if self._ocupada:
@@ -217,6 +236,7 @@ class BigPicture(QObject):
         self._refazer(centro)
 
     def _agendar(self, *_args: object) -> None:
+        """Várias mudanças seguidas (uma importação) viram um só `atualizar` no próximo ciclo."""
         if self._montada and not self._agendado:
             self._agendado = True
             QTimer.singleShot(0, self, self._rodar_agendado)
@@ -261,6 +281,7 @@ class BigPicture(QObject):
         return not self._ocupada and self._foi_para(self._carrossel.fim())
 
     def definir_janela(self, janela: QWindow) -> None:
+        """A janela que vai à tela cheia; o Big Picture só fica disponível com renderizador 3D."""
         self._janela = janela
         self._rever_3d()
         sinal = getattr(janela, "sceneGraphInitialized", None)
@@ -289,7 +310,7 @@ class BigPicture(QObject):
         self._capas_prontas = not self._jogos
         self.alterado.emit()
         if self._jogos:
-            self.prepararCapas.emit()
+            self.prepararCapas.emit()  # antes de escurecer: o QML decodifica enquanto a cortina desce
         self._trocar_no_escuro(self._entrar_de_fato, ESCURECER_ENTRADA_MS, self._fim_da_entrada)
 
     def _entrar_de_fato(self) -> None:
@@ -307,6 +328,7 @@ class BigPicture(QObject):
         self._destravar()
 
     def _destravar(self) -> None:
+        """Fila e fade acabaram: a página volta a aceitar entrada e aplica o `atualizar` pendente."""
         if self._na_fila or self._em_fade:
             return
         self._ocupada = False
@@ -331,6 +353,7 @@ class BigPicture(QObject):
 
     @Slot()
     def filaTerminou(self) -> None:  # noqa: N802
+        """O QML avisa que a fila (de entrada ou de saída) chegou ao fim."""
         if not self._na_fila:
             return
         self._na_fila = False
@@ -348,12 +371,13 @@ class BigPicture(QObject):
                 else:
                     self._janela.showNormal()
         finally:
+            # Mesmo com a troca falhando a camada some: o QML repõe o quadro ao esconder.
             self._visivel = self._montada = False
             self._ja_saiu = True
-            self._carrossel, self._jogos = regras.Carrossel([]), []
+            self._carrossel, self._jogos = regras.Carrossel([]), []  # fora da tela nada decodifica capa
             self.jogosMudaram.emit()
             self.alterado.emit()
-            self.saiu.emit(jogo)
+            self.saiu.emit(jogo)  # o foco volta à grade mesmo se a troca levantou
 
     def _fim_da_saida(self) -> None:
         self._saindo = self._ocupada = self._pendente = False
@@ -361,6 +385,7 @@ class BigPicture(QObject):
 
     @Slot(bool)
     def controleConectado(self, grade_a_vista: bool) -> None:  # noqa: FBT001, N802
+        """Um controle foi conectado: entra sozinho se a preferência e o momento permitirem."""
         if regras.pode_entrar_sozinho(
             preferencia=shared.schema.get_boolean("big-picture-ao-conectar"),
             controle_ligado=shared.schema.get_boolean("gamepad"),
@@ -384,24 +409,29 @@ class BigPicture(QObject):
         self.aberturaPedida.emit(0.0, 1.0)
 
     def _janela_normal(self) -> None:
+        # Só sai da tela cheia: a maximização volta na saída do Big Picture.
         if self._janela is not None:
             self._janela.showNormal()
 
     def _voltar_a_tela_cheia(self) -> None:
         if self._janela is not None:
+            # Minimizada pelo "Jogar", a janela precisa ser restaurada antes: pedir a tela cheia a uma janela
+            # minimizada a devolvia em modo janela, com o Big Picture aberto.
             if self._janela.visibility() == QWindow.Visibility.Minimized:
                 self._janela.showNormal()
             self._janela.showFullScreen()
 
     @Slot()
     def aberturaTerminou(self) -> None:  # noqa: N802
+        """O QML avisa que a capa terminou de crescer: sai da tela cheia e inicia o jogo."""
         if not self._indo:
             return
         self._indo = False
         self._janela_normal()
         jogo = shared.store.get(self._jogo_aberto) if shared.store is not None else None
         try:
-            # Confirmado o comando de um jogo restaurado, abre pelo mesmo caminho.
+            # Confirmado o comando de um jogo restaurado, abre pelo mesmo caminho. Referência fraca: o
+            # callback fica na ponte, que sobrevive a este objeto.
             eu, jogo_id = weakref.ref(self), self._jogo_aberto
             aberto = jogo is not None and jogo.launch(ao_confirmar=lambda: (b := eu()) and b._abrir(jogo_id))
         except Exception:
@@ -411,8 +441,10 @@ class BigPicture(QObject):
             self._desistir_da_abertura()
         elif shared.sessao is None or not shared.sessao.jogoId:
             self._voltar_sem_sessao()
+        # Com sessão, o `ModeloDaSessao` chama `voltouDoJogo` quando ela termina.
 
     def _desistir_da_abertura(self) -> None:
+        """O jogo não abriu (comando a conferir, erro, sumiu): a capa volta e a tela cheia também."""
         self.aberturaPedida.emit(1.0, 0.0)
         self._voltar_a_tela_cheia()
         self._destravar()
@@ -425,14 +457,16 @@ class BigPicture(QObject):
 
     @Slot()
     def voltouDoJogo(self) -> None:  # noqa: N802
+        # Uma entrada ou saída em curso não é a espera do jogo: ela segue com o próprio `depois`, que uma
+        # sequência nova descartaria (`_fechar_cortina`).
         if not self._ocupada or self._em_fade or self._na_fila or self._saindo:
             return
         self._voltar_a_tela_cheia()
         self._reabrir()
 
     def _voltar_sem_sessao(self) -> None:
-        # Com "minimizar ao abrir" o `launch` acabou de minimizar a janela, e `isActive` só muda no ciclo seguinte: não
-        # dá para decidir pelo foco.
+        # Com "minimizar ao abrir" o `launch` acabou de minimizar a janela, e `isActive` só muda no
+        # ciclo seguinte: não dá para decidir pelo foco. Põe a tela cheia quando ela voltar a ficar ativa.
         self._reabrir()
         if not shared.schema.get_boolean("minimize-after-launch"):
             self._voltar_a_tela_cheia()
@@ -456,6 +490,10 @@ class BigPicture(QObject):
     def _trocar_no_escuro(
         self, trocar: Callable[[], None], ms_escurecer: int, depois: Callable[[], None] | None
     ) -> None:
+        """Escurece o monitor, troca, espera um instante e clareia. Sem cortina, só troca.
+
+        Na entrada, a troca no escuro espera `capasProntas` (ou `ESPERA_MAXIMA_DAS_CAPAS_MS`).
+        """
         self._fechar_cortina()
         cortina = None
         hwnd = self._hwnd()
@@ -509,13 +547,14 @@ class BigPicture(QObject):
 
     @Slot()
     def capasProntas(self) -> None:  # noqa: N802
+        """O QML decodificou as capas da fila (ou não tinha o que decodificar)."""
         self._capas_prontas = True
         if self._etapa == "esperando capas":
             self._trocar_agora()
 
     def _trocar_agora(self) -> None:
         if self._etapa not in {"escurecendo", "esperando capas"}:
-            return
+            return  # a espera venceu depois de a sequência acabar
         self._espera_das_capas.stop()
         self._etapa = "trocando"
         trocar, self._trocar = self._trocar, None
@@ -549,7 +588,7 @@ class BigPicture(QObject):
         self._espera_das_capas.stop()
         animacao, self._animacao_cortina = self._animacao_cortina, None
         if animacao is not None:
-            animacao.stop()
+            animacao.stop()  # parar antes do fim não emite `finished`
             animacao.deleteLater()
         self._etapa = ""
         self._trocar = self._depois = None
@@ -559,5 +598,6 @@ class BigPicture(QObject):
 
     @Slot()
     def encerrar(self) -> None:
+        """O app fecha (`aboutToQuit`): nenhuma cortina fica no monitor, em qualquer etapa do fade."""
         self._fechar_cortina()
         self._em_fade = False

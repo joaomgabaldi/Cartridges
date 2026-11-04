@@ -2,7 +2,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Modelo da biblioteca: o que o QML enxerga de cada jogo, e as páginas que o filtram."""
+"""Modelo da biblioteca: o que o QML enxerga de cada jogo, e as páginas que o filtram.
+
+Um modelo-fonte (`ModeloDaBiblioteca`) guarda uma `Linha` por jogo, sem ordem própria; cada página
+(biblioteca, zerados) é um `FiltroDaPagina` sobre ele, que ordena e filtra pelas regras puras de
+`ordem.py`. O QML só lê os papéis, nunca um `Jogo`; por isso o modelo guarda fotografias e o
+`Jogo` (que pode ter nascido numa thread do importador) só é tocado na thread principal, em
+`atualizar` e `iniciar`.
+"""
 
 import weakref
 from dataclasses import replace
@@ -32,10 +39,12 @@ from cartridges.modelos import ordem
 from cartridges.modelos.ordem import Linha
 from cartridges.utils import copias_animadas, restauracao
 
+# Como em `configuracoes.py`: `cartridges` não tem `__init__`, a partir deste arquivo.
 _PLACEHOLDER = Path(__file__).resolve().parent.parent.parent / "data" / "library_placeholder.svg"
 
 
 def _pendente(game_id: str) -> bool:
+    """Jogo restaurado cujo atalho não foi achado: só existe na janela de pendências."""
     return restauracao.e_pendente(game_id)
 
 
@@ -58,7 +67,9 @@ class ModeloDaBiblioteca(QAbstractListModel):
         self._linhas: list[Linha] = []
         self._jogos: dict[str, Jogo] = {}
         self._contagem = {"biblioteca": 0, "zerados": 0}
+        # Só depois da limpeza da pasta das cópias (`ativar_copias`): ela apaga todo `.tmp`.
         self._copias_ativas = False
+        # (jogo, capa) cuja cópia terminou sem sair (capa parada, ilegível, disco): não pede de novo.
         self._sem_copia: set[tuple[str, str]] = set()
 
     def roleNames(self) -> dict[int, QByteArray]:
@@ -112,6 +123,7 @@ class ModeloDaBiblioteca(QAbstractListModel):
 
     @Slot(str)
     def retirar(self, game_id: str) -> None:
+        """Tira o jogo do modelo. Só na thread principal."""
         if (i := self._linha_de(game_id)) >= 0:
             self.beginRemoveRows(QModelIndex(), i, i)
             self._contar(self._linhas.pop(i), -1)
@@ -120,6 +132,7 @@ class ModeloDaBiblioteca(QAbstractListModel):
 
     @Slot(str, str)
     def trocar_id(self, antigo: str, novo: str) -> None:  # noqa: ARG002
+        """Um jogo adotado mudou de id: sai a linha do antigo; a do novo entra pelo `atualizar` normal."""
         self.retirar(antigo)
 
     def ligar_store(self, store: Any) -> None:
@@ -128,12 +141,18 @@ class ModeloDaBiblioteca(QAbstractListModel):
         store.capa_trocou_de_id.connect(self.trocar_id, Qt.ConnectionType.QueuedConnection)
 
     def atualizar(self, jogo: Jogo) -> None:
+        """Insere, atualiza ou tira o jogo do modelo. Só na thread principal.
+
+        Ficam os jogos da biblioteca e os zerados (removidos); bloqueados, desinstalados comuns e
+        pendentes de restauração saem.
+        """
         if jogo.blacklisted or (jogo.removed and not jogo.zerado) or _pendente(jogo.game_id):
             self.retirar(jogo.game_id)
             return
         nova = Linha.de(jogo)
         self._jogos[jogo.game_id] = jogo
         i = self._linha_de(jogo.game_id)
+        # Jogo novo na lista (carga, volta do bloqueio): olha também a cópia grande, como o `ativar_copias`.
         if self._copias_ativas and (i < 0 or not nova.capa_animada) and (caminho := self._capa_animada_sem_copia(nova)):
             copias_animadas.preparar([(jogo.game_id, caminho)])
         if i < 0:
@@ -148,11 +167,13 @@ class ModeloDaBiblioteca(QAbstractListModel):
             self.dataChanged.emit(self.index(i), self.index(i))
 
     def ativar_copias(self) -> None:
+        """Libera o pedido das cópias animadas (a pasta já foi limpa) e pede as que faltam. Só na principal."""
         self._copias_ativas = True
         copias_animadas.ao_terminar_copia = self.copia_terminou
         # Referência fraca: o gancho é global e o modelo pode morrer antes (nos testes, por exemplo).
         fraca = weakref.ref(self)
         copias_animadas.soltar_do_jogo = lambda game_id: (m := fraca()) and m.soltar_copia(game_id)
+        # Na ordem da grade (a biblioteca e depois os zerados): as capas que a pessoa vê primeiro ficam prontas antes.
         modo = shared.state_schema.get_string("sort-mode")
         linhas = sorted(self._linhas, key=lambda linha: (linha.zerado, ordem.chave(linha, modo)))
         capas = [(linha.jogo_id, caminho) for linha in linhas if (caminho := self._capa_animada_sem_copia(linha))]
@@ -168,13 +189,15 @@ class ModeloDaBiblioteca(QAbstractListModel):
         return caminho if caminho is not None and caminho.suffix in ANIMATED_SUFFIXES else None
 
     def soltar_copia(self, game_id: str) -> None:
-        """Esvazia a cópia animada do jogo na grade, e o ``AnimatedImage`` larga o arquivo."""
+        """Esvazia a cópia animada do jogo na grade, e o ``AnimatedImage`` larga o arquivo. Só na principal."""
         if (i := self._linha_de(game_id)) >= 0 and self._linhas[i].capa_animada:
             self._linhas[i] = replace(self._linhas[i], capa_animada="")
             self.dataChanged.emit(self.index(i), self.index(i), [self.Papel.CapaAnimada])
+            # O ``AnimatedImage`` só larga o arquivo quando destrói o filme, num ``deleteLater``.
             QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def copia_terminou(self, game_id: str, resultado: str) -> None:
+        """Uma cópia ficou pronta (ou não saiu): atualiza a linha. Só na thread principal."""
         jogo = self._jogos.get(game_id)
         if jogo is None:
             return
@@ -189,6 +212,7 @@ class ModeloDaBiblioteca(QAbstractListModel):
 
     @Slot(str)
     def remover(self, jogoId: str) -> None:  # noqa: N803
+        """"Remover" do menu do jogo: o aviso com "Desfazer" sai do próprio `remove_game`."""
         if (jogo := self._jogos.get(jogoId)) is not None:
             jogo.remove_game()
 
@@ -208,6 +232,7 @@ class FiltrosDaBiblioteca(QObject):
         super().__init__(parent)
         self._fonte = fonte
         self._genero = self._ano = self._status = ""
+        # Lido uma vez: a ordenação compara milhares de pares, e cada leitura vai ao registro.
         self._modo = shared.state_schema.get_string("sort-mode")
         self._generos: list[str] = []
         self._anos: list[str] = []
@@ -272,7 +297,10 @@ class FiltrosDaBiblioteca(QObject):
 
     @Slot()
     def recalcularOpcoes(self) -> None:  # noqa: N802
+        """Refeito ao abrir o menu, não a cada mudança: um import em andamento o mexeria sem ninguém olhar."""
         self._generos, self._anos = ordem.opcoes(self._fonte.linhas())
+        # Um valor escolhido que saiu da biblioteca deixaria a grade vazia, apontando para uma opção que o menu nem
+        # oferece.
         if self._genero and self._genero not in self._generos:
             self.genero = ""
         if self._ano and self._ano not in self._anos:
@@ -354,10 +382,12 @@ class FiltroDaPagina(QSortFilterProxyModel):
 
     @Slot(result=str)
     def primeiro(self) -> str:
+        """O `jogoId` da primeira linha, para o Enter da busca."""
         return self.data(self.index(0, 0), ModeloDaBiblioteca.Papel.JogoId) or ""
 
     @Slot(str, result=int)
     def indiceDe(self, jogoId: str) -> int:  # noqa: N802, N803
+        """A linha do jogo nesta página, ou -1 (o foco volta a ele ao sair do Big Picture)."""
         achados = self.match(self.index(0, 0), ModeloDaBiblioteca.Papel.JogoId, jogoId, 1, Qt.MatchFlag.MatchExactly)
         return achados[0].row() if achados else -1
 
@@ -374,7 +404,7 @@ class FiltroDaPagina(QSortFilterProxyModel):
         if self._pagina == "zerados":
             if not linha.zerado:
                 return False
-            busca = ""
+            busca = ""  # a busca é só da biblioteca
         else:
             if linha.removido:
                 return False

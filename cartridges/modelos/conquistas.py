@@ -2,7 +2,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O que a página do jogo, o diálogo das conquistas e a tela da sessão mostram (`conquistasDoJogo`)."""
+"""O que a página do jogo, o diálogo das conquistas e a tela da sessão mostram (`conquistasDoJogo`).
+
+As funções puras montam os dicionários que o QML lê (cartões, ícone, fileira); `ConquistasDoJogo` segue o jogo da
+página de detalhes, o do diálogo e o da sessão, refaz cada vista quando o domínio avisa (`mudou`) e pede os ícones
+fora da tela. O QML nunca recebe um `Jogo`. Só na thread principal.
+"""
 
 import logging
 import time
@@ -22,9 +27,11 @@ from cartridges.utils.relative_date import relative_date
 from cartridges.utils.thread_principal import eh_thread_principal, na_thread_principal
 
 ICONES_NO_CARTAO = 4
+# A largura útil do diálogo (520 menos as margens) e uma altura que não empurra a lista para baixo da dobra.
 LARGURA_DO_LOGO = 472
 ALTURA_DO_LOGO = 96
 ATRASO_DOS_ICONES = 100
+# O `icones.carregar` não avisa quando o download falha (o limite dele é 10 s): passada a espera, o pedido se repete.
 ESPERA_DO_ICONE = 30.0
 
 
@@ -33,16 +40,22 @@ def _agora() -> float:
 
 
 def data_por_extenso(quando: int) -> Optional[str]:
-    """A data por extenso; ``None`` se o carimbo não couber num calendário."""
+    """A data por extenso; ``None`` se o carimbo não couber num calendário.
+
+    O histórico aceita qualquer inteiro de 64 bits, e ``datetime.fromtimestamp`` levanta OverflowError, OSError ou
+    ValueError para os absurdos (ou, no Windows, para qualquer carimbo negativo). Sem data a fileira continua boa.
+    """
     try:
         texto = str(relative_date(quando))
     except (OverflowError, OSError, ValueError):
         logging.getLogger(__name__).debug("Carimbo fora do calendário: %r", quando)
         return None
+    # `relative_date` devolve minúsculas, para seguir um rótulo com dois-pontos; aqui a data aparece sozinha.
     return texto[:1].upper() + texto[1:]
 
 
 def icone(linha: Linha, mostrar_ocultas: bool, urls: dict[str, str]) -> dict[str, Any]:
+    """O ícone de uma conquista: a URL já baixada ("" até chegar), o cinza, a interrogação e a dica."""
     visual = progresso.aparencia(linha, mostrar_ocultas)
     return {
         "url": urls.get(visual.origem, ""),
@@ -70,6 +83,7 @@ def cartao_da_pagina(atual: Optional[Progresso], urls: dict[str, str]) -> dict[s
 
 
 def cartao_da_sessao(atual: Optional[Progresso], mostrar_ocultas: bool, urls: dict[str, str]) -> dict[str, Any]:
+    """O cartão da tela da sessão: o progresso e todas as conquistas, desbloqueadas e depois bloqueadas."""
     if atual is None:
         return {"visivel": False, "contagem": "", "porcentagem": "", "fracao": 0.0, "icones": []}
     return {
@@ -110,6 +124,7 @@ _DIALOGO_FECHADO: dict[str, Any] = {
     "aberto": False, "nome": "", "logo": "", "larguraDoLogo": 0, "resumo": "", "fracao": 0.0,
     "desbloqueadas": [], "bloqueadas": [],
 }  # fmt: skip
+# O que cada vista mostra quando falha ou perde o jogo.
 _VAZIAS = {"pagina": {"pagina": _PAGINA_VAZIA}, "dialogo": _DIALOGO_FECHADO, "sessao": {"sessao": _SESSAO_VAZIA}}
 _VISTAS = ("pagina", "dialogo", "sessao")
 
@@ -139,11 +154,15 @@ class ConquistasDoJogo(QObject):
         self._detalhes = detalhes
         self._loja = detalhes.loja
         self._sessao = sessao
-        self._jogo_da_sessao = ""
+        self._jogo_da_sessao = ""  # o jogo que a vista da sessão mostra ("" sem sessão)
         self._v: dict[str, Any] = {"pagina": _PAGINA_VAZIA, "sessao": _SESSAO_VAZIA, **_DIALOGO_FECHADO}
+        # O jogo do diálogo; o da página é o dos detalhes. Só o id: o `Jogo` vem da loja na abertura.
         self._dialogo = ""
+        # A lista é um retrato do momento em que o diálogo abriu: (progresso, ocultas, nome). Conquista nova, troca da
+        # preferência ou jogo que perde o cartão não a mudam; só os ícones, que chegam depois.
         self._retrato: Optional[tuple[Progresso, bool, str]] = None
         self._logo: tuple[str, int] = ("", 0)
+        # Ícones: origem → URL `file:` já baixada; as pedidas e ainda a caminho; e as que cada vista usa.
         self._urls: dict[str, str] = {}
         self._a_caminho: dict[str, float] = {}
         self._origens: dict[str, set[str]] = {vista: set() for vista in _VISTAS}
@@ -170,7 +189,7 @@ class ConquistasDoJogo(QObject):
         return progresso.do_jogo(jogo) if jogo is not None else None
 
     def _refazer(self, vistas: tuple[str, ...] = _VISTAS, game_id: Optional[str] = None) -> None:
-        """Refaz as vistas cujo jogo é ``game_id`` (ou todas)."""
+        """Refaz as vistas cujo jogo é ``game_id`` (ou todas). Cada uma no seu `try`: a falha de uma não cala a outra."""
         mudou = False
         for vista in vistas:
             alvo = self._alvo(vista)
@@ -204,6 +223,7 @@ class ConquistasDoJogo(QObject):
         if self._retrato is None:
             atual, jogo = self._atual(game_id), self._loja.get(game_id)
             if atual is None or jogo is None:
+                # Sem catálogo, sem fonte ou com a conta desconectada não há o que listar: o diálogo nem abre.
                 self._dialogo = ""
                 self._origens["dialogo"] = set()
                 return self._guardar(_DIALOGO_FECHADO)
@@ -226,6 +246,7 @@ class ConquistasDoJogo(QObject):
         return self._guardar({"sessao": cartao_da_sessao(atual, mostrar, self._urls)})
 
     def _pedir(self, vista: str, origens: set[str]) -> None:
+        """Um `icones.carregar` por origem sem URL e que não está a caminho."""
         self._origens[vista] = origens
         eu = weakref.ref(self)
         agora = _agora()
@@ -243,6 +264,7 @@ class ConquistasDoJogo(QObject):
     def _icone_chegou(self, origem: str, caminho: Path) -> None:
         self._a_caminho.pop(origem, None)
         self._urls[origem] = QUrl.fromLocalFile(str(caminho)).toString()
+        # Só as vistas que usam este ícone; jogo trocado no meio: a URL fica guardada e mais nada.
         self._a_refazer.update(vista for vista, usadas in self._origens.items() if origem in usadas)
         if self._a_refazer and not self._atraso.isActive():
             self._atraso.start()
@@ -255,6 +277,7 @@ class ConquistasDoJogo(QObject):
         self._refazer(("pagina",))
 
     def _sessao_mudou(self) -> None:
+        """Só um jogo novo (ou o fim) refaz o cartão: o `alterado` também sai com outros campos da sessão."""
         jogo = self._sessao.jogoId
         if jogo == self._jogo_da_sessao:
             return
@@ -267,7 +290,8 @@ class ConquistasDoJogo(QObject):
             self.alterado.emit()
 
     def mudou(self, game_id: Optional[str]) -> None:
-        """O histórico, o catálogo ou uma conta mudou: refaz a página e a sessão do jogo (``None`` = todas)."""
+        """O histórico, o catálogo ou uma conta mudou: refaz a página e a sessão do jogo (``None`` = todas). A lista do
+        diálogo aberto não muda: é o retrato de quando abriu."""
         if not eh_thread_principal():
             na_thread_principal(self.mudou, game_id)
             return
@@ -275,12 +299,14 @@ class ConquistasDoJogo(QObject):
 
     @Slot(str)
     def abrir(self, game_id: str) -> None:
+        """Abre a lista do jogo; ignora um jogo que a loja não tem ou que não tem cartão."""
         jogo = self._loja.get(game_id)
         if jogo is None:
             return
         self._dialogo = game_id
         self._retrato = None
         logo, largura = "", 0
+        # Só o que já está em disco: a busca no SteamGridDB é da página de detalhes, de onde isto é aberto.
         if (caminho := game_logo.cached_logo_path(jogo)) and (
             carregado := game_logo.load_logo(caminho, LARGURA_DO_LOGO, ALTURA_DO_LOGO)
         ):

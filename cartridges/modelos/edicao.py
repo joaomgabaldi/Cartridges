@@ -2,7 +2,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O formulário que o `DialogoDeEdicao.qml` edita."""
+"""O formulário que o `DialogoDeEdicao.qml` edita.
+
+Só guarda o `Formulario` de `cartridges.edicao` e chama a regra: validar e gravar são dela. O que mora aqui é o que a
+tela precisa para desenhar (os índices dos seletores, as linhas que somem, a operação em voo) e para falar com a
+pessoa (o erro, a pasta que não abriu). Só na thread principal.
+"""
 
 import dataclasses
 import logging
@@ -43,6 +48,7 @@ def _filtro(nome: str, sufixos: list[str] | tuple[str, ...]) -> str:
 
 
 def filtro_de_capa() -> str:
+    """As imagens que o Pillow lê e os vídeos que o ffmpeg converte. Sem SVG: o Pillow não o rasteriza."""
     # `.palm` e `.pdf` só o Pillow escreve.
     imagens = set(Image.registered_extensions()) - {".palm", ".pdf", ".svg"}
     return _filtro(_("Imagens e vídeos"), [*imagens, *capa_video.SUFIXOS])
@@ -53,6 +59,7 @@ def _segundo_monitor() -> bool:
 
 
 def _largar_arquivos_abertos() -> None:
+    # O ``AnimatedImage`` só larga o arquivo quando destrói o filme, num ``deleteLater``.
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
@@ -92,7 +99,9 @@ class ModeloDaEdicao(QObject):
     notificarAtualizacoesChanged = Signal()  # noqa: N815
     conquistasChanged = Signal()  # noqa: N815
     appidChanged = Signal()  # noqa: N815
+    # O erro de validação veio do AppID: a seção "Opções avançadas" precisa estar à vista.
     avancadasPedidas = Signal()  # noqa: N815
+    # O diálogo de erro fechou: o foco volta ao diálogo de edição.
     focoDevolvido = Signal()  # noqa: N815
     capaChanged = Signal()  # noqa: N815
     imagensChanged = Signal()  # noqa: N815
@@ -101,7 +110,7 @@ class ModeloDaEdicao(QObject):
 
     def __init__(self, aplicativo: Any, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._aplicativo = aplicativo
+        self._aplicativo = aplicativo  # `pedir_dialogo`
         self._jogo: Optional[Jogo] = None
         self._form = Formulario()
         self._aberto = False
@@ -115,13 +124,16 @@ class ModeloDaEdicao(QObject):
         self._pedido_da_capa = 0
         self._capas_em_voo = 0
         self._segundo_monitor = False
+        # Os seletores do SteamGridDB entregam aqui (`entregar_*`, `usar_titulo_no_logo`).
         self._seletor_de_capa = SeletorDoSgdb(self, self)
         self._seletor_de_logo = SeletorDeLogo(self, self)
         self._seletor_de_papel = SeletorDePapelDeParede(self, self)
         self._seletor_da_steam = SeletorDaSteam(self, self)
         self._seletor_do_ludusavi = SeletorDoLudusavi(self, self)
         self._buscando_metadados = False
+        # A lista de jogos do Ludusavi (o `manifest.yaml`) já foi baixada? Lido ao abrir.
         self._ludusavi_disponivel = True
+        # A fita de LED: a prévia acesa nas fitas (que o fechar desfaz) e se há dispositivo configurado.
         self._fita_previa_usada = False
         self._fita_disponivel = False
 
@@ -164,6 +176,7 @@ class ModeloDaEdicao(QObject):
     appid = Property(str, _ler("appid"), _gravar("appid", "appidChanged"), notify=appidChanged)
     nota = Property(int, _ler("nota"), notify=notaChanged)
 
+    # Os seletores guardam a posição; o valor gravado sai das listas da regra.
     @Property(int, notify=controleIndiceChanged)
     def controleIndice(self) -> int:  # noqa: N802
         return edicao.CONTROLLER_VALUES.index(self._form.controle)
@@ -205,6 +218,7 @@ class ModeloDaEdicao(QObject):
 
     @Property(bool, notify=abertoChanged)
     def zerado(self) -> bool:
+        """Um zerado não é mais lançado: sem a linha do executável nem a das atualizações."""
         return bool(self._jogo and self._jogo.zerado)
 
     @Property(bool, notify=ocupadoChanged)
@@ -213,6 +227,7 @@ class ModeloDaEdicao(QObject):
 
     @Property(bool, notify=appidChanged)
     def appidValido(self) -> bool:  # noqa: N802
+        """O AppID digitado é só números (ou vazio): a linha fica vermelha e o Aplicar, bloqueado, se não."""
         return edicao.appid_aceito(self._form.appid.strip())
 
     @Property(bool, notify=derivadosChanged)
@@ -221,6 +236,7 @@ class ModeloDaEdicao(QObject):
 
     @Property(bool, notify=derivadosChanged)
     def rastreioVisivel(self) -> bool:  # noqa: N802
+        """O jogo só cai na sessão manual (e precisa do nome do executável) quando nada o acompanha."""
         return not self._acompanha
 
     @Property(bool, notify=derivadosChanged)
@@ -251,6 +267,7 @@ class ModeloDaEdicao(QObject):
 
     @Property(bool, notify=buscandoMetadadosChanged)
     def buscandoMetadados(self) -> bool:  # noqa: N802
+        """O botão ao lado do título gira enquanto a Steam e o HowLongToBeat respondem."""
         return self._buscando_metadados
 
     @Slot()
@@ -268,11 +285,13 @@ class ModeloDaEdicao(QObject):
         self._seletor_do_ludusavi.abrir(atual)
 
     def ludusavi_escolhido(self, nome: str) -> None:
+        """O jogo que o seletor do Ludusavi entregou ("" desliga o backup dos saves)."""
         if self._aberto:
             self._form.ludusavi_escolhido = nome
             self.ludusaviChanged.emit()
 
     def _appid_para_buscar(self) -> str:
+        """O AppID digitado nas opções avançadas, se é número e difere do gravado."""
         texto = self._form.appid.strip()
         return texto if texto and texto != self._appid_inicial and edicao.appid_aceito(texto) else ""
 
@@ -283,11 +302,18 @@ class ModeloDaEdicao(QObject):
 
     @Slot()
     def buscarMetadados(self) -> None:  # noqa: N802
+        """Procura o título na Steam e, com o nome que ela confirmou, no HowLongToBeat.
+
+        Nada é gravado aqui: o que chega só preenche o formulário, para a pessoa conferir antes do Aplicar.
+        Até terminar, o Aplicar fica bloqueado (gravar no meio perderia o que ainda está a caminho).
+        """
         nome = self._form.nome.strip()
         if not self._aberto or not nome or self._buscando_metadados:
             return
         self._definir_buscando_metadados(True)
         self.iniciar_operacao()
+        # Um AppID já ligado a este jogo vale mais que buscar o nome de novo: é o que a busca anterior
+        # resolveu ou o que a pessoa escolheu à mão. O gravado só vale com o título intacto.
         gravado = self._jogo.steam_appid if self._jogo and nome == (self._jogo.name or "").strip() else None
         appid = self._appid_para_buscar() or self._form.buscado.get("steam_appid") or gravado
         args = (self._geracao, nome, appid, self._seletor_da_steam.helper_da_steam())
@@ -300,6 +326,8 @@ class ModeloDaEdicao(QObject):
             else:
                 appid, dados = helper.resolve(clean_for_search(nome))
         except SteamGameNotFoundError:
+            # Nada em que o comparador confie: em vez de adotar o mais parecido (para "The Outer Worlds",
+            # a continuação), a pessoa diz qual é o jogo.
             na_thread_principal(self._metadados_escolher, geracao, nome)
             return
         except Exception:  # noqa: BLE001  # a tela diz só "não encontrado"; sem isto a thread morreria com o Aplicar bloqueado
@@ -317,18 +345,20 @@ class ModeloDaEdicao(QObject):
         self._seletor_da_steam.abrir_para_metadados(nome)
 
     def steam_escolhida(self, appid: str, dados: dict, para_metadados: bool) -> None:
+        """O jogo que o seletor da Steam entregou: só o AppID, ou a continuação da busca de metadados."""
         if not self._aberto:
             return
         if not para_metadados:
             self.appid = appid
             return
+        # Retoma a busca que `_metadados_escolher` largou: a perna do HowLongToBeat vem a seguir.
         self._definir_buscando_metadados(True)
         self.iniciar_operacao()
         self._metadados_chegaram(self._geracao, dados, appid)
 
     def _metadados_chegaram(self, geracao: int, dados: Optional[dict], appid: str) -> None:
         if geracao != self._geracao or not self._aberto:
-            return
+            return  # o diálogo fechou (ou é de outro jogo)
         if not dados:
             self.terminar_operacao()
             self._definir_buscando_metadados(False)
@@ -340,9 +370,11 @@ class ModeloDaEdicao(QObject):
             )
             return
         form = self._form
+        # Outro jogo: o que a busca anterior trouxe não é dele. O AppID não volta: é sobrescrito logo abaixo.
         if dados.get("name") and clean_game_name(dados["name"]) != form.nome.strip():
             form.buscado = {}
         buscado = form.buscado
+        # Direto no formulário, sem o setter: mudar o título pelo setter descartaria o que acabou de chegar.
         if dados.get("name"):
             form.nome = clean_game_name(dados["name"])
         if appid:
@@ -366,13 +398,14 @@ class ModeloDaEdicao(QObject):
             self.lancamentoChanged, self.generoChanged, self.controleIndiceChanged, self.ludusaviChanged,
         ):  # fmt: skip
             sinal.emit()
+        # Com o título que a Steam acabou de confirmar: é ele que faz o HowLongToBeat achar o jogo.
         nome = form.nome.strip()
         # O gravado só vale com o título intacto; lido aqui, na principal, e não na thread.
         gravado = self._jogo.hltb_id if self._jogo and nome == (self._jogo.name or "").strip() else None
         threading.Thread(target=self._thread_do_hltb, args=(geracao, nome, gravado), daemon=True).start()
 
     def _thread_do_hltb(self, geracao: int, nome: str, gravado: Any) -> None:
-        """Fora da thread principal."""
+        """Fora da thread principal. Um erro aqui é silêncio: os dados da Steam, que a pessoa pediu, já chegaram."""
         tempos = None
         try:
             tempos = fetch_times(shared_hltb_helper(), nome, gravado)
@@ -385,6 +418,7 @@ class ModeloDaEdicao(QObject):
             return
         self.terminar_operacao()
         self._definir_buscando_metadados(False)
+        # O título mudou no meio do caminho: a pessoa disse que é outro jogo, e a resposta é do antigo.
         if nome != self._form.nome.strip():
             return
         if tempos and has_times(tempos):
@@ -393,12 +427,18 @@ class ModeloDaEdicao(QObject):
             logging.info("No HowLongToBeat times found for %s", nome)
 
     def _invalidar_buscado(self) -> None:
+        """O título mudou: o que a última busca trouxe era de outro jogo, e o AppID dela também.
+
+        A pessoa disse que é outro jogo; manter o AppID prenderia a próxima busca ao que ela acabou de
+        corrigir. Se ela mexeu no AppID depois da busca, o que digitou fica.
+        """
         buscado, self._form.buscado = self._form.buscado, {}
         if buscado.get("steam_appid") is not None and self._form.appid.strip() == buscado["steam_appid"]:
             self.appid = self._appid_inicial
 
     @Property(bool, notify=fitaChanged)
     def fitaDisponivel(self) -> bool:  # noqa: N802
+        """Sem nenhum dispositivo configurado não há cor para escolher: as duas linhas ficam apagadas."""
         return self._fita_disponivel
 
     @Property(str, notify=fitaChanged)
@@ -407,18 +447,23 @@ class ModeloDaEdicao(QObject):
             return _("Nenhum dispositivo configurado")
         if self._fita_manual():
             return _("Escolhida manualmente")
+        # Com a cor acompanhando a tela, o automático não é mais a cor da capa: ela é só o ponto de
+        # partida de cada sessão.
         return _("Automático") if session_fita.acompanha_tela() else _("Extraída da capa")
 
     @Property(QColor, notify=fitaChanged)
     def fitaCor(self) -> QColor:  # noqa: N802
+        """A cor cheia (sem o brilho da fita), como o seletor a mostra."""
         cor = self._form.fita_na_tela
         if cor is None:
+            # Sem dispositivo o círculo usa a cor de partida do seletor, branca.
             return QColor("white")
         return QColor.fromRgbF(*session_fita.cor_para_rgb(cor))
 
     @Property(int, notify=fitaChanged)
     def fitaBrilho(self) -> int:  # noqa: N802
         cor = self._form.fita_na_tela
+        # Sem dispositivo o campo fica em 0 (nada o preenche).
         return session_fita.por_cento(cor.brilho) if cor is not None else 0
 
     @Property(bool, notify=fitaChanged)
@@ -427,6 +472,8 @@ class ModeloDaEdicao(QObject):
 
     @Property(bool, notify=fitaChanged)
     def fitaAutomatica(self) -> bool:  # noqa: N802
+        """A amostra mostra a roda de cores: a cor acompanha a tela, não há escolha à mão, e ninguém
+        mexeu na cor desde que a tela a mostrou."""
         form = self._form
         return (
             session_fita.acompanha_tela()
@@ -443,19 +490,30 @@ class ModeloDaEdicao(QObject):
         )
 
     def _fita_manual(self) -> bool:
+        """Vale a cor escolhida à mão (e não um "voltar ao automático" pedido)."""
         jogo = self._jogo
         return jogo is not None and not self._form.fita_redefinir and session_fita.escolhida(jogo.game_id)
 
     def _cor_automatica(self) -> session_fita.Cor:
+        """A cor que a linha deve mostrar agora.
+
+        Com a redefinição pedida é o automático, mesmo havendo escolha em disco: a escolha só será
+        apagada no Aplicar, mas a tela já mostra o que o Aplicar vai deixar valendo. O automático sai da
+        capa que a tela mostra, e não da gravada: a capa trocada e ainda não aplicada é a que o jogo vai
+        ter. Jogo novo sem capa fica com o roxo do app.
+        """
         jogo = self._jogo
         if self._fita_manual():
             return session_fita.cor_do_jogo(jogo)
+        # O brilho do jogo fica, inclusive o de uma escolha que vai ser desfeita: "voltar ao
+        # automático" é sobre a cor.
         brilho = session_fita.brilho_gravado(jogo.game_id) if jogo else None
         return session_fita.cor_da_capa(self._form.capa, brilho)
 
     def _atualizar_fita(self) -> None:
-        # Sem dispositivo não se calcula a cor: tirar a dominante da capa custa milissegundos na thread principal, e
-        # seriam gastos por uma fita que não existe.
+        """Mostra a cor que vale hoje: a escolhida ou a que sai da capa."""
+        # Sem dispositivo não se calcula a cor: tirar a dominante da capa custa milissegundos na thread
+        # principal, e seriam gastos por uma fita que não existe.
         self._fita_disponivel = bool(session_fita.fitas())
         if not self._fita_disponivel:
             self._form.fita_mostrada = self._form.fita_na_tela = None
@@ -464,6 +522,12 @@ class ModeloDaEdicao(QObject):
         self.fitaChanged.emit()
 
     def _fita_segue_capa(self) -> None:
+        """A capa mudou: a linha da cor acompanha, se ninguém mexeu na cor.
+
+        Uma cor mexida e ainda não aplicada é escolha de gente, e trocar a capa depois não a desfaz. O
+        brilho é separado da cor: mexido, ele fica como está, e a cor segue a capa nova. Não acende a
+        prévia: ela é para quem mexe na cor, não na capa.
+        """
         form = self._form
         if form.fita_mostrada is None or form.fita_na_tela is None:
             return
@@ -483,7 +547,8 @@ class ModeloDaEdicao(QObject):
         session_fita.previa(cor)
 
     def _encerrar_previa_da_fita(self) -> None:
-        """Devolve as fitas à cor do app depois de a tela sumir."""
+        """Devolve as fitas à cor do app depois de a tela sumir. Só quando houve prévia: sem isso,
+        abrir e fechar a tela de um jogo qualquer repintaria as fitas à toa."""
         if self._fita_previa_usada:
             self._fita_previa_usada = False
             session_fita.previa(session_fita.cor_do_app())
@@ -511,12 +576,13 @@ class ModeloDaEdicao(QObject):
 
     @Slot()
     def redefinirFita(self) -> None:  # noqa: N802
+        """Marca a intenção de voltar ao automático. Quem apaga é o Aplicar."""
         if not self._aberto or self._jogo is None or self._form.fita_mostrada is None:
             return
         antes = self._form.fita_na_tela
         self._form.fita_redefinir = True
         self._atualizar_fita()
-        if self._form.fita_na_tela != antes:
+        if self._form.fita_na_tela != antes:  # sem mudança de cor, nada se repinta
             self._previa_da_fita()
 
     seletorDeCapa = Property(QObject, lambda self: self._seletor_de_capa, constant=True)  # noqa: N815
@@ -526,10 +592,12 @@ class ModeloDaEdicao(QObject):
     filtroDoLogo = Property(  # noqa: N815
         str, lambda self: _filtro(_("Imagens de logo"), game_logo.IMAGE_SUFFIXES), constant=True
     )
+    # O papel de parede de um arquivo usa o filtro das capas, "Imagens e vídeos".
     filtroDoPapel = Property(str, lambda self: filtro_de_capa(), constant=True)  # noqa: N815
 
     @Property(str, notify=capaChanged)
     def capa(self) -> str:
+        """A URL da capa que a tela mostra ("" sem capa)."""
         return _url_da_capa(self._form.capa)
 
     @Property(bool, notify=capaChanged)
@@ -569,6 +637,7 @@ class ModeloDaEdicao(QObject):
         return self._segundo_monitor and edicao.estado_do_papel(self._form, self._jogo) != "auto"
 
     def _provisoria(self) -> Optional[Path]:
+        """A capa que a tela criou e ainda é dela (a do disco não é)."""
         return self._form.capa if self._form.capa_mudou else None
 
     def _trocar_capa(self, nova: Optional[Path]) -> None:
@@ -600,6 +669,10 @@ class ModeloDaEdicao(QObject):
         ao_terminar: Optional[Callable[[bool], None]] = None,
         vigente: Optional[Callable[[], bool]] = None,
     ) -> None:
+        """A capa que o seletor do SteamGridDB baixou: vira provisória como a de um arquivo, e o original sai.
+
+        ``ao_terminar(convertida)`` avisa o seletor, que só fecha com a capa pronta e volta à grade se ela falhar.
+        ``vigente()`` diz se o seletor ainda a espera: fechado no meio da conversão, a capa pronta é descartada."""
         if self._aberto:
             self._converter_capa(arquivo, apagar_origem=True, ao_terminar=ao_terminar, vigente=vigente)
         else:
@@ -644,22 +717,25 @@ class ModeloDaEdicao(QObject):
         vigente: Optional[Callable[[], bool]] = None,
     ) -> None:
         if geracao != self._geracao or not self._aberto:
+            # O diálogo fechou (ou é de outro jogo): a capa pronta não tem onde entrar.
             if nova is not None:
                 edicao.descartar_provisoria(nova)
             return
         self._capas_em_voo -= 1
         self.terminar_operacao()
         if vigente is not None and not vigente():
+            # O seletor fechou no meio da conversão: a pessoa desistiu, e a capa do editor não muda.
             if nova is not None:
                 edicao.descartar_provisoria(nova)
             self.capaChanged.emit()
             return
         if pedido != self._pedido_da_capa:
+            # Uma escolha mais nova foi pedida depois desta: vale a última.
             if nova is not None:
                 edicao.descartar_provisoria(nova)
             self.capaChanged.emit()
             if ao_terminar is not None:
-                ao_terminar(True)
+                ao_terminar(True)  # a escolha mais nova é que vale; este seletor já cumpriu o que lhe cabia
             return
         if nova is not None:
             self._trocar_capa(nova)
@@ -673,6 +749,7 @@ class ModeloDaEdicao(QObject):
     @Slot()
     def excluirCapa(self) -> None:  # noqa: N802
         if self._aberto and self._form.capa is not None:
+            # Uma conversão a caminho perde para a exclusão pedida depois dela.
             self._pedido_da_capa += 1
             self._trocar_capa(None)
 
@@ -682,6 +759,7 @@ class ModeloDaEdicao(QObject):
             self._trocar_escolha("logo", Escolha("manual", Path(caminho)))
 
     def entregar_logo_baixado(self, arquivo: Path) -> None:
+        """O logo que o seletor do SteamGridDB baixou: é da tela até o Aplicar, que o apaga depois de gravado."""
         if self._aberto:
             self._trocar_escolha("logo", Escolha("manual", arquivo, temporario=True))
         else:
@@ -698,10 +776,12 @@ class ModeloDaEdicao(QObject):
 
     @Slot(QUrl)
     def escolherPapel(self, url: QUrl) -> None:  # noqa: N802
+        """O arquivo do disco vai à etapa de ajuste da faixa, igual a uma imagem do wallhaven."""
         if self._aberto and url.toLocalFile():
             self._seletor_de_papel.abrirArquivo(url)
 
     def entregar_papel_baixado(self, arquivo: Path, posicoes: session_wallpaper.Posicoes) -> None:
+        """O papel de parede que o seletor do wallhaven baixou, com a faixa escolhida: é da tela até o Aplicar."""
         if self._aberto:
             self._trocar_escolha("papel_de_parede", Escolha("manual", arquivo, posicoes, temporario=True))
         else:
@@ -720,6 +800,7 @@ class ModeloDaEdicao(QObject):
         if atributo == "executavel":
             self._recalcular()
         elif atributo == "rastrear_processo" and self._form.rastrear_processo:
+            # Ligar o rastreio já sugere o nome do .exe do comando.
             if not self._form.executavel_do_processo.strip():
                 self.executavelDoProcesso = edicao.exe_name_from_command(self._form.executavel)
         elif atributo == "appid":
@@ -728,6 +809,7 @@ class ModeloDaEdicao(QObject):
             self._invalidar_buscado()
 
     def _recalcular(self) -> None:
+        # Lê o disco a cada mudança do comando: no disco local custa microssegundos.
         comando = self._form.executavel
         self._empacotado = edicao.empacotado(comando)
         self._acompanha = edicao.acompanha_sem_nome(comando)
@@ -735,6 +817,7 @@ class ModeloDaEdicao(QObject):
         self.derivadosChanged.emit()
 
     def iniciar_operacao(self) -> None:
+        """Uma busca ou conversão a caminho: o Aplicar fica bloqueado até ela terminar."""
         self._ocupacoes += 1
         if self._ocupacoes == 1:
             self.ocupadoChanged.emit()
@@ -756,12 +839,14 @@ class ModeloDaEdicao(QObject):
 
     @Slot()
     def adicionar(self) -> None:
+        # Com um diálogo aberto, nada.
         if not self._aberto:
             self._abrir(None)
 
     def _abrir(self, jogo: Optional[Jogo]) -> None:
         self._jogo = jogo
         self._form = Formulario.do_jogo(jogo)
+        # O AppID que o campo mostrava ao abrir: é com ele que `aplicar` vê se a pessoa o mexeu.
         self._appid_inicial = self._form.appid
         self._ocupacoes = 0
         self._capas_em_voo = 0
@@ -784,6 +869,7 @@ class ModeloDaEdicao(QObject):
             sinal.emit()
 
     def _fechar(self, descartar: bool = True) -> None:
+        """Fecha o diálogo. ``descartar``: as provisórias da tela saem (no Aplicar, são do `aplicar`)."""
         for seletor in (
             self._seletor_de_capa, self._seletor_de_logo, self._seletor_de_papel, self._seletor_da_steam,
             self._seletor_do_ludusavi,
@@ -791,6 +877,7 @@ class ModeloDaEdicao(QObject):
             seletor.fechar()
         provisoria = self._provisoria()
         escolhas = [e for e in (self._form.logo, self._form.papel_de_parede) if e is not None]
+        # Aplicar ou cancelar: as fitas voltam à cor do app (a do jogo só vale na sessão).
         self._encerrar_previa_da_fita()
         self._aberto = False
         self._jogo = None
@@ -803,6 +890,7 @@ class ModeloDaEdicao(QObject):
         self.buscandoMetadadosChanged.emit()
         self._fita_disponivel = False
         self.fitaChanged.emit()
+        # A prévia larga o arquivo (o da capa animada) antes de ele sair, ou de o `aplicar` o apagar.
         self.capaChanged.emit()
         self.imagensChanged.emit()
         _largar_arquivos_abertos()
@@ -821,6 +909,7 @@ class ModeloDaEdicao(QObject):
 
     @Slot(int)
     def definirNota(self, nota: int) -> None:  # noqa: N802
+        """Clicar na nota atual a remove: sem isso, 1 estrela seria o piso."""
         self._form.nota = 0 if self._form.nota == nota else nota
         self.notaChanged.emit()
 
@@ -843,6 +932,7 @@ class ModeloDaEdicao(QObject):
 
     @Slot()
     def aplicar(self) -> None:
+        # O mesmo portão do botão, na porta do Enter: com uma operação em voo, nada é gravado.
         if not self._aberto or self._ocupacoes:
             return
         form, jogo = self._form, self._jogo
@@ -850,9 +940,12 @@ class ModeloDaEdicao(QObject):
             self._fechar()
             return
         if (erro := edicao.validar(form, jogo)) is not None:
+            # Se sem o AppID o erro muda, foi ele: a seção que o guarda precisa estar à vista.
             if edicao.validar(dataclasses.replace(form, appid=""), jogo) != erro:
                 self.avancadasPedidas.emit()
             self._aplicativo.pedir_dialogo(edicao.titulo_do_erro(jogo is None), erro, [], self.focoDevolvido.emit)
             return
+        # A página de detalhes, se aberta, segue o jogo pelo `atualizado`: mostra o novo ou sai sozinha.
         edicao.aplicar(form, jogo, self._appid_inicial)
+        # A capa nova é do `aplicar` (ele a apaga depois da recarga, ou a guarda como a da sessão).
         self._fechar(descartar=False)

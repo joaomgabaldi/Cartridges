@@ -2,7 +2,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O que a página de detalhes de um jogo mostra: textos prontos, logo e fundo desfocado."""
+"""O que a página de detalhes de um jogo mostra: textos prontos, logo e fundo desfocado.
+
+As funções puras recebem o `Jogo` e devolvem o texto da linha, ou `""` quando a linha some. `DetalhesDoJogo` é o
+modelo que o QML lê (`detalhes`): segue um jogo por vez, atualiza-se quando ele muda e busca o logo e o desfoque fora
+da thread principal.
+"""
 
 import ctypes
 import logging
@@ -30,6 +35,7 @@ from cartridges.utils.thread_principal import na_thread_principal
 _COLUNAS_HLTB = (_("História"), _("Extras"), _("Completista"))
 _CHAVES_HLTB = ("hltb_main", "hltb_main_extra", "hltb_completionist")
 _RESERVA = desfoque.LUMINANCIA_RESERVA
+# Sem capa, o fundo é o placeholder pequeno esticado, sem desfoque.
 _FUNDO_SEM_CAPA = (Path(__file__).resolve().parent.parent.parent / "data" / "library_placeholder_small.svg").as_uri()
 _BUSCAS = {
     "igdb": "https://www.igdb.com/search?type=1&q=",
@@ -46,6 +52,7 @@ def data_de_lancamento(jogo: Jogo) -> str:
 
 
 def nota(jogo: Jogo) -> str:
+    """Cheias até a nota, vazias depois: cinco símbolos sempre, para comparar pelo desenho."""
     estrelas = jogo.stars
     # A variável são as cinco estrelas, cheias ou vazias
     return _("Minha nota: {}").format("★" * estrelas + "☆" * (5 - estrelas)) if estrelas else ""
@@ -62,6 +69,7 @@ def avaliacoes(jogo: Jogo) -> str:
 
 
 def controle(jogo: Jogo) -> str:
+    """Só os dois estados que a Steam afirma: sem nenhum, a linha some em vez de dizer "sem suporte"."""
     return {
         "full": _("Compatibilidade total com controle"),
         "partial": _("Compatibilidade parcial com controle"),
@@ -85,6 +93,7 @@ def tempo_de_jogo(jogo: Jogo) -> str:
 
 
 def tamanho(jogo: Jogo) -> str:
+    """Some num zerado (a instalação não existe mais) e num jogo ainda não medido."""
     texto = "" if jogo.zerado else format_size(jogo.install_size)
     # A variável é o tamanho da instalação, por exemplo "87,4 GB"
     return _("Tamanho: {}").format(texto) if texto else ""
@@ -95,6 +104,13 @@ def rotulo_do_status(jogo: Jogo) -> str:
 
 
 def hltb(jogo: Jogo) -> dict:
+    """O bloco do HowLongToBeat: um cartão de células, ou a tabela de capítulos (nunca os dois).
+
+    Cada célula vem com `separador`: a linha vertical à esquerda dela, que só existe quando há
+    uma célula visível antes. Ligá-lo à célula da direita é o que faz um buraco no meio colapsar
+    certo ("História" e "Completista" juntos ficam com um separador só). Sem células nem
+    capítulos, o bloco inteiro some.
+    """
     colunas = list(_COLUNAS_HLTB)
     if capitulos := (jogo.hltb_chapters or []):
         return {
@@ -119,6 +135,7 @@ def hltb(jogo: Jogo) -> dict:
 
 
 def mostra_anotacao(jogo: Jogo) -> bool:
+    """O botão da anotação: em "Jogando" ou com texto (senão o texto ficaria preso). Num zerado, só com texto."""
     texto = (jogo.notes or "").strip()
     if jogo.zerado:
         return bool(texto)
@@ -140,6 +157,7 @@ class _AltoContraste(ctypes.Structure):
 
 
 def _alto_contraste() -> bool:
+    """Se o Windows está em alto contraste (SPI_GETHIGHCONTRAST, bit HCF_HIGHCONTRASTON)."""
     estado = _AltoContraste(ctypes.sizeof(_AltoContraste), 0, None)
     try:
         if ctypes.windll.user32.SystemParametersInfoW(0x42, estado.cbSize, ctypes.byref(estado), 0):
@@ -158,6 +176,7 @@ class ProvedorDeDesfoque(QQuickImageProvider):
         self._png: dict[str, bytes] = {}
 
     def guardar(self, game_id: str, png: bytes) -> None:
+        """Só o jogo mostrado precisa do seu desfoque: o anterior sai."""
         with self._lock:
             self._png = {game_id: png}
 
@@ -167,6 +186,7 @@ class ProvedorDeDesfoque(QQuickImageProvider):
         return QImage.fromData(png, "PNG") if png else QImage()
 
 
+# Todas as propriedades e o valor de quando nenhum jogo foi mostrado.
 _PADRAO: dict[str, Any] = {
     **dict.fromkeys(
         (
@@ -192,12 +212,13 @@ def _prop(tipo: Any, nome: str, notify: Any) -> Property:
 
 
 def _entregar(fraco: Any, nome: str, *args: Any) -> None:
+    """Entrega na principal, se o modelo ainda existe."""
     if (modelo := fraco()) is not None:
         getattr(modelo, nome)(*args)
 
 
-# As threads seguram o modelo só por referência fraca: um QObject sem pai finalizado na thread de trabalho (a última
-# referência caindo ali) dá access violation.
+# As threads seguram o modelo só por referência fraca: um QObject sem pai finalizado na thread de trabalho
+# (a última referência caindo ali) dá access violation. Se o modelo morreu, o resultado é descartado.
 def _buscar_logo(fraco: Any, jogo: Jogo) -> None:
     caminho = None
     try:
@@ -214,15 +235,18 @@ def _calcular_fundo(fraco: Any, game_id: str, chave: str, caminho: Path) -> None
     try:
         resultado = desfoque.calcular(caminho)
     except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        # Sem a entrega abaixo a chave ficaria marcada e o fundo parado até a capa mudar.
         logging.warning("Erro inesperado ao desfocar a capa de %s", game_id, exc_info=True)
     finally:
         na_thread_principal(_entregar, fraco, "_fundo_chegou", game_id, chave, resultado)
 
 
 class DetalhesDoJogo(QObject):
-    """O jogo da página de detalhes, em propriedades que o QML lê."""
+    """O jogo da página de detalhes, em propriedades que o QML lê. Só na thread principal."""
 
+    # Um só aviso para todas as propriedades: a página é pequena e reavaliar tudo custa nada.
     alterado = Signal()
+    # O jogo mostrado foi excluído, removido ou saiu dos Jogos Zerados: a página deve fechar.
     sair = Signal()
 
     _p = partial(_prop, notify=alterado)
@@ -259,17 +283,19 @@ class DetalhesDoJogo(QObject):
     fundo = _p(str, "fundo")
     opacidadeDoFundo = _p(float, "opacidadeDoFundo")  # noqa: N815
     del _p
+    # Os status do menu, [valor, rótulo]: uma só fonte, a do `jogo`.
     statusOpcoes = Property("QVariantList", lambda self: [[k, v] for k, v in STATUS_LABELS.items()], constant=True)  # noqa: N815
 
     def __init__(self, store: Any, parent: QObject | None = None, avisos: Any = None) -> None:
         super().__init__(parent)
-        self._avisos = avisos
+        self._avisos = avisos  # a FilaDeAvisos, para o "excluído"
         self.provedor = ProvedorDeDesfoque()
         self._store = store
         self._v: dict[str, Any] = dict(_PADRAO)
         # Só referência fraca ao jogo: a página não pode prender um jogo que a store já soltou.
         self._jogo: weakref.ref | None = None
         self._removido = False
+        # O jogo que a página segue agora; "" depois de `sair`/`esquecer`: resultado atrasado é descartado.
         self._atual = ""
         self._luminancia = _RESERVA
         self._versao_do_fundo = 0
@@ -287,10 +313,12 @@ class DetalhesDoJogo(QObject):
 
     @property
     def loja(self) -> Any:
+        """A loja de onde saem os jogos (outros modelos buscam o jogo por ela)."""
         return self._store
 
     @Slot(str, result=bool)
     def mostrar(self, game_id: str) -> bool:
+        """Passa a seguir o jogo; `False` (sem mudar nada) se ele não está na loja."""
         jogo = self._store.get(game_id)
         if jogo is None:
             return False
@@ -316,23 +344,28 @@ class DetalhesDoJogo(QObject):
         self._chave_do_fundo = ""
 
     def soltar_copia(self, game_id: str) -> None:
-        """Esvazia a cópia animada da página, e o ``AnimatedImage`` larga o arquivo."""
+        """Esvazia a cópia animada da página, e o ``AnimatedImage`` larga o arquivo. Só na principal."""
         if game_id == self._atual and self._v["capaAnimada"]:
             self._mesclar({"capaAnimada": ""})
+            # O ``AnimatedImage`` só larga o arquivo quando destrói o filme, num ``deleteLater``.
             QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def copia_pronta(self, game_id: str, _resultado: str) -> None:
+        """Uma cópia do jogo ficou pronta: a página toca a grande, sem esperar outra mudança. Só na principal."""
         if game_id == self._atual and (jogo := self._mostrado()) is not None:
             caminho = jogo.get_cover_path()
+            # A linha só se refaz sem a cópia grande (o único caso em que a da grade serve).
             url = url_da_copia(caminho, 1) or Linha.de(jogo).capa_animada
             self._mesclar({"capaAnimada": url})
 
     @staticmethod
     def _copia_animada(caminho: Path | None, linha: Linha) -> str:
+        """A cópia grande, ou a da grade enquanto a grande não existe."""
         return url_da_copia(caminho, 1) or linha.capa_animada
 
     @Slot()
     def esquecer(self) -> None:
+        """A página fechou: para de seguir o jogo e descarta o que ainda estiver a caminho."""
         self._desligar()
 
     @Slot()
@@ -342,7 +375,7 @@ class DetalhesDoJogo(QObject):
             return
         removido, self._removido = self._removido, jogo.removed
         if jogo.removed and (not removido or not jogo.zerado):
-            self._desligar()
+            self._desligar()  # a página fecha: sem repetir o `sair` nem buscar logo para quem ninguém vê
             self.sair.emit()
             return
         self._atualizar(jogo, False)
@@ -367,11 +400,12 @@ class DetalhesDoJogo(QObject):
             "temAtualizacao": bool(jogo.has_update and not jogo.zerado),
             "mostraAnotacao": mostra_anotacao(jogo), "dicaDaAnotacao": dica_da_anotacao(jogo),
             "anotacao": jogo.notes or "", "anotacaoEditavel": not jogo.zerado,
-            # O total só abre a lista das sessões que o formaram se elas existem (o tempo restaurado de um backup é um
-            # total sem sessões); lido só aqui, a cada mudança do jogo, e só de um jogo com tempo.
+            # O total só abre a lista das sessões que o formaram se elas existem (o tempo restaurado de um backup é
+            # um total sem sessões); lido só aqui, a cada mudança do jogo, e só de um jogo com tempo.
             "temSessoes": bool(tempo_de_jogo(jogo)) and bool(session_log.load(jogo.game_id)),
         }  # fmt: skip
         if trocou:
+            # O logo e o fundo do jogo anterior não ficam atrás dos metadados deste.
             campos.update(logo="", larguraDoLogo=0, fundo="")
             self._luminancia = _RESERVA
             self._chave_do_fundo = ""
@@ -382,6 +416,7 @@ class DetalhesDoJogo(QObject):
     def _mesclar(self, campos: dict[str, Any]) -> None:
         novo = {**self._v, **campos}
         tema = QGuiApplication.styleHints().colorScheme()
+        # Sem esquema de cores no sistema (Unknown) vale o 0.3 do alto contraste.
         fixo = _alto_contraste() or tema == Qt.ColorScheme.Unknown
         novo["opacidadeDoFundo"] = opacidade_do_fundo(self._luminancia, tema == Qt.ColorScheme.Dark, fixo)
         if novo != self._v:
@@ -396,20 +431,23 @@ class DetalhesDoJogo(QObject):
 
     @Slot()
     def jogar(self) -> None:
+        # O botão some na tela de um zerado; isto cobre o que chega por outro caminho.
         if (jogo := self._mostrado()) is not None and not jogo.zerado:
             jogo.launch()
 
     @Slot()
     def remover(self) -> None:
+        # Um zerado já saiu da biblioteca: o "Desfazer" o traria de volta desinstalado.
         if (jogo := self._mostrado()) is not None and not jogo.zerado:
-            jogo.remove_game()
+            jogo.remove_game()  # o `atualizado` dele fecha a página (`sair`)
 
     @Slot()
     def excluir(self) -> None:
+        # De novo o `zerado`: a pergunta ficou na tela e o jogo pode ter mudado.
         if (jogo := self._mostrado()) is None or not jogo.zerado:
             return
         nome = jogo.name
-        self._store.excluir(jogo)
+        self._store.excluir(jogo)  # o `jogo_excluido` dela fecha a página (`sair`)
         if self._avisos is not None:
             # A variável é o nome do jogo
             self._avisos.adicionar(_("{} excluído").format(nome))
@@ -418,6 +456,8 @@ class DetalhesDoJogo(QObject):
     def definirStatus(self, valor: str) -> None:  # noqa: N802
         if (jogo := self._mostrado()) is None:
             return
+        # O `atualizado` do `update` decide: zerado desinstalado e fora dos zerados fecha a página
+        # (`sair`); zerado reinstalado volta à biblioteca e a página só troca de modo.
         jogo.definir_status(valor)
         jogo.save()
         jogo.update()
@@ -427,6 +467,7 @@ class DetalhesDoJogo(QObject):
         if (jogo := self._mostrado()) is None:
             return
         if site == "hltb" and jogo.hltb_id:
+            # Quem já tem o id do HowLongToBeat vai direto à página do jogo.
             abrir_url(f"https://howlongtobeat.com/game/{jogo.hltb_id}")
         elif prefixo := _BUSCAS.get(site):
             abrir_url(prefixo + quote(jogo.name))
@@ -434,6 +475,7 @@ class DetalhesDoJogo(QObject):
     @Slot(str)
     def gravarAnotacao(self, texto: str) -> None:  # noqa: N802
         jogo = self._mostrado()
+        # A caixa de um zerado é só leitura: fechar não grava nada.
         if jogo is None or jogo.zerado:
             return
         texto = texto.strip()
@@ -446,6 +488,7 @@ class DetalhesDoJogo(QObject):
     @Slot()
     def abrirAtualizacao(self) -> None:
         if (jogo := self._mostrado()) is not None and jogo.has_update and not jogo.zerado:
+            # A URL vem de um feed de terceiros: o esquema é conferido em `abrir_url`.
             abrir_url(jogo.update_url)
 
     @Slot()
@@ -454,6 +497,7 @@ class DetalhesDoJogo(QObject):
             jogo.dismiss_update()
 
     def _logo(self, jogo: Jogo) -> dict[str, Any]:
+        """Os campos do logo em disco, se vale para o jogo; senão o título, e a busca em segundo plano."""
         caminho = game_logo.cached_logo_path(jogo)
         if caminho and (carregado := game_logo.load_logo(caminho)):
             return {"logo": _url_da_capa(carregado[0]), "larguraDoLogo": carregado[1]}
@@ -464,8 +508,8 @@ class DetalhesDoJogo(QObject):
 
     def _logo_chegou(self, game_id: str, caminho: Path | None) -> None:
         self._buscas_de_logo.discard(game_id)
-        # Julgado contra o jogo na tela, não contra um contador: voltar ao mesmo jogo com a busca ainda de pé não pode
-        # descartar o resultado dela.
+        # Julgado contra o jogo na tela, não contra um contador: voltar ao mesmo jogo com a busca ainda
+        # de pé não pode descartar o resultado dela.
         if not caminho or game_id != self._atual:
             return
         if carregado := game_logo.load_logo(caminho):
@@ -489,6 +533,7 @@ class DetalhesDoJogo(QObject):
         if game_id != self._atual or chave != self._chave_do_fundo:
             return
         if resultado is None:
+            # Sem capa legível: o fundo de reserva.
             self._luminancia = _RESERVA
             self._mesclar({"fundo": _FUNDO_SEM_CAPA})
             return
