@@ -90,6 +90,16 @@ def test_parse_release_without_digest_keeps_empty_hash():
         ("latest", "2026.09.12", False),
         ("2026.9.13", "2026.09.12", False),
         ("2026.09.13", "0.0.1-dev", False),
+        # Ponte para a 2.0: versão normal é mais nova que qualquer data.
+        ("2.0.0", "2026.10.28", True),
+        ("2.0.1", "2099.12.31", True),
+        ("10.2.3", "2026.10.28", True),
+        ("2026.10.28", "2.0.0", False),
+        ("2.0.0", "2.0.0", False),
+        ("2.0", "2026.10.28", False),
+        ("2.0.0-beta", "2026.10.28", False),
+        ("v2.0.0", "2026.10.28", False),
+        ("2026.10.260", "2026.10.28", False),
     ],
 )
 def test_is_newer(version, current, expected):

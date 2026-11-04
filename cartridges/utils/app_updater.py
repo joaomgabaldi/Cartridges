@@ -77,6 +77,9 @@ MAX_INSTALLER_BYTES = 512 * 1024 * 1024
 ASK_RETRY_SECONDS = 60
 
 _VERSION_RE = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
+# Versão normal da 2.0 em diante. Até 3 dígitos no primeiro número, para uma
+# data sem zero ("2026.9.13") não passar por versão normal.
+_NORMAL_RE = re.compile(r"^\d{1,3}\.\d+\.\d+$")
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 _CODE_RE = re.compile(r"`([^`]+)`")
 
@@ -119,10 +122,13 @@ def parse_release(data: dict) -> Optional[Release]:
 
 
 def is_newer(version: str, current: str) -> bool:
-    """``AAAA.MM.DD`` já ordena como texto; outro formato nunca é mais novo."""
-    if not (_VERSION_RE.fullmatch(version) and _VERSION_RE.fullmatch(current)):
+    """``AAAA.MM.DD`` já ordena como texto; uma versão normal (``2.0.0``) é mais
+    nova que qualquer data; outra combinação nunca é mais nova."""
+    if not _VERSION_RE.fullmatch(current):
         return False
-    return version > current
+    if _NORMAL_RE.fullmatch(version):
+        return True
+    return bool(_VERSION_RE.fullmatch(version)) and version > current
 
 
 def notes_to_markup(notes: str) -> str:
