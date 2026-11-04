@@ -7,14 +7,14 @@ mas tem de deixar rastro no log. A ausência do arquivo continua sem aviso:
 
 import logging
 
-from cartridges import main as main_module
+from cartridges.carga import carregar_jogos_do_disco
 from cartridges.utils import session_fita
 
 
 def test_jogo_com_json_invalido_deixa_aviso(store, app_dirs, caplog):
     (app_dirs.games / "imported_9.json").write_text("{not json", encoding="utf-8")
 
-    main_module.CartridgesApplication.load_games_from_disk(None)
+    carregar_jogos_do_disco(store)
 
     aviso = next(r for r in caplog.records if "imported_9.json" in r.getMessage())
     assert aviso.levelno == logging.WARNING

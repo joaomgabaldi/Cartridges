@@ -50,13 +50,13 @@ from pathlib import Path
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 from uuid import uuid4
 
-from gi.repository import GLib
 from PIL import Image, ImageFilter, ImageOps
 
 from cartridges import shared
 from cartridges.utils import window_geometry
 from cartridges.utils.download import MAX_WALLPAPER_BYTES, download_bytes
 from cartridges.utils.ler_json import ler_json
+from cartridges.utils.thread_principal import na_thread_principal
 from cartridges.utils.wallhaven import IMAGE_SUFFIXES, melhor_para
 
 if TYPE_CHECKING:
@@ -692,10 +692,10 @@ def aplicar(game: "Game", sessao: int) -> None:
         logging.warning("Não foi possível preparar a arte da sessão: %s", erro)
         return
 
-    GLib.idle_add(_vestir, sessao, quadros)
+    na_thread_principal(_vestir, sessao, quadros)
 
 
-def _vestir(sessao: int, quadros: list[tuple[str, Path]]) -> bool:
+def _vestir(sessao: int, quadros: list[tuple[str, Path]]) -> None:
     """Põe na parede o que :func:`aplicar` preparou. Roda na thread de UI.
 
     Aqui, e não na thread que preparou, porque é onde a sessão pode ser
@@ -708,7 +708,7 @@ def _vestir(sessao: int, quadros: list[tuple[str, Path]]) -> bool:
                 arquivo.unlink(missing_ok=True)
             except OSError:
                 pass
-        return GLib.SOURCE_REMOVE
+        return
 
     try:
         originais = json.loads(shared.schema.get_string(_CHAVE_ORIGINAIS) or "{}")
@@ -729,7 +729,7 @@ def _vestir(sessao: int, quadros: list[tuple[str, Path]]) -> bool:
                     if (atual := area.papel(monitor)) is not None:
                         originais[monitor] = atual
             if not originais:
-                return GLib.SOURCE_REMOVE
+                return
             shared.schema.set_string(_CHAVE_ORIGINAIS, json.dumps(originais))
 
             for monitor, arquivo in quadros:
@@ -738,7 +738,6 @@ def _vestir(sessao: int, quadros: list[tuple[str, Path]]) -> bool:
                     area.vestir(monitor, str(arquivo))
     except Exception as erro:  # pylint: disable=broad-except
         logging.warning("Não foi possível vestir os monitores: %s", erro)
-    return GLib.SOURCE_REMOVE
 
 
 def restaurar() -> None:

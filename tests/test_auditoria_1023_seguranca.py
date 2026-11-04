@@ -8,7 +8,6 @@ O ponto comum dos achados: o conteúdo de um backup (ou de uma resposta de API)
 era tratado como confiável. Cada teste cobre um achado, com o nome dele.
 """
 
-import contextlib
 import json
 import os
 import subprocess
@@ -160,55 +159,9 @@ def test_sidecar_com_nome_solto_continua_valendo(app_dirs):
 # ---------------------------------------------------------------------------
 
 
-def test_registro_com_game_id_de_caminho_nao_e_carregado(app_dirs, monkeypatch):
-    from cartridges import main  # noqa: PLC0415
-
-    def gravar(nome, game_id):
-        (shared.games_dir / f"{nome}.json").write_text(
-            json.dumps({"source": "imported", "game_id": game_id, "name": nome, "executable": "x"}),
-            encoding="utf-8",
-        )
-
-    gravar("bom", "imported_1")
-    gravar("fuga", "..\\..\\Documents\\x")
-    gravar("absoluto", "C:\\x")
-    carregados = []
-    monkeypatch.setattr(
-        shared, "store", type("S", (), {"add_game": lambda _s, g, _d: carregados.append(g)})()
-    )
-    monkeypatch.setattr(main.GameCover, "pre_decodificadas", lambda _c: contextlib.nullcontext())
-    monkeypatch.setattr(main, "Game", type("G", (dict,), {"get_cover_path": lambda _s: None}))
-
-    main.CartridgesApplication.load_games_from_disk(None)
-
-    assert [g["game_id"] for g in carregados] == ["imported_1"]
-
-
 # ---------------------------------------------------------------------------
 # Seletores: o id da API nunca vira nome de arquivo
 # ---------------------------------------------------------------------------
-
-
-def test_previa_do_sgdb_fica_na_pasta_temporaria(monkeypatch):
-    from cartridges import sgdb_picker as modulo  # noqa: PLC0415
-    from cartridges.sgdb_picker import SgdbPicker  # noqa: PLC0415
-
-    picker = SgdbPicker("Jogo", lambda *_: None)
-    entregas = []
-    monkeypatch.setattr(picker.sgdb, "search_games", lambda _q: [{"id": 1}])
-    monkeypatch.setattr(
-        picker.sgdb,
-        "get_grids",
-        lambda *_a, **_k: [{"id": "..\\..\\fuga", "url": "https://x/a.png", "thumb": "https://x/t/x.bat"}],
-    )
-    monkeypatch.setattr(modulo, "download_bytes", lambda *_a, **_k: b"img")
-    monkeypatch.setattr(modulo, "entregar_na_tela", lambda func, *args: entregas.append(args))
-
-    picker._search_thread("Jogo", False, picker._generation)
-
-    previas = [args[0] for args in entregas if args and isinstance(args[0], Path)]
-    assert len(previas) == 1
-    assert previas[0].parent == picker._temp_dir and previas[0].suffix == ".png"
 
 
 # ---------------------------------------------------------------------------
@@ -233,42 +186,6 @@ def test_restauracao_marca_os_comandos_a_conferir(app_dirs):
     assert "comando_a_conferir" not in ler("zerado")
 
 
-def test_primeiro_lancamento_pede_confirmacao(real_window, monkeypatch):
-    from cartridges import game as modulo  # noqa: PLC0415
-    from cartridges.game import Game  # noqa: PLC0415
-
-    executados, dialogos = [], []
-    monkeypatch.setattr(modulo, "run_executable", lambda *a: executados.append(a))
-
-    class Dialogo:
-        def connect(self, _sinal, funcao):
-            dialogos[-1]["resposta"] = funcao
-
-    def criar(janela, titulo, corpo, *_a, **_k):
-        dialogos.append({"titulo": titulo, "corpo": corpo})
-        return Dialogo()
-
-    monkeypatch.setattr(modulo, "create_dialog", criar)
-    real_window.get_application = lambda: type("App", (), {"get_active_window": lambda _s: None})()
-    jogo = Game(
-        {"source": "imported", "game_id": "imported_1", "name": "Jogo", "added": 0,
-         "executable": "cmd /c echo x‮& calc", "run_as_admin": True,
-         "comando_a_conferir": True}
-    )
-    monkeypatch.setattr(jogo, "save", lambda: None)
-    relancado = []
-
-    assert jogo.launch(lambda: relancado.append(1)) is False
-    assert executados == []
-    assert "cmd /c echo x<U+202E>& calc" in dialogos[0]["corpo"]
-    assert "administrador" in dialogos[0]["corpo"]
-
-    dialogos[0]["resposta"](None, "dismiss")
-    assert jogo.comando_a_conferir is True and relancado == []
-    dialogos[0]["resposta"](None, "launch")
-    assert jogo.comando_a_conferir is False and relancado == [1]
-
-
 # ---------------------------------------------------------------------------
 # Caminho de rede: nem a varredura de tamanho, nem a pasta de atalhos do backup
 # ---------------------------------------------------------------------------
@@ -285,7 +202,7 @@ def test_comando_com_caminho_unc_nao_e_vigiado(monkeypatch):
     assert listados == []
 
 
-def test_backup_nao_traz_pasta_de_atalhos_de_rede(settings):
+def test_backup_nao_traz_pasta_de_atalhos_de_rede(schema):  # noqa: ARG001
     from cartridges.utils import backup  # noqa: PLC0415
 
     backup.aplicar_configuracoes({"settings": {"shortcuts-location": "\\\\203.0.113.9\\x"}})

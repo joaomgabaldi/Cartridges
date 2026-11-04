@@ -6,15 +6,12 @@
 
 import json
 import logging
-import sys
 from types import SimpleNamespace
 
 import pytest
-from gi.repository import Adw
 
 from cartridges import shared
 from cartridges.fita_wizard import REGIOES, fitas_da_nuvem
-from cartridges.logging.setup import LIB_LOGGERS
 from cartridges.utils import session_fita, tuya_conta
 from cartridges.utils.session_fita import Fita
 
@@ -76,6 +73,8 @@ def test_a_tinytuya_fica_calada_no_arquivo_de_log():
     da biblioteca é o que separa o segredo do arquivo que vai anexado a
     relatório de bug — e não pode sumir numa refatoração.
     """
+    from cartridges.logging.setup import LIB_LOGGERS  # noqa: PLC0415
+
     nivel = logging.getLevelNamesMapping()[LIB_LOGGERS["tinytuya"]["level"]]
     assert nivel >= logging.WARNING
 
@@ -85,9 +84,10 @@ def test_a_tinytuya_fica_calada_no_arquivo_de_log():
 
 @pytest.fixture
 def pastas(tmp_path, monkeypatch):
-    """A configuração das fitas vai para uma pasta descartável."""
+    """A configuração das fitas e a conta da Tuya vão para uma pasta descartável."""
     monkeypatch.setattr(shared, "fitas_dir", tmp_path / "fitas")
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
+    monkeypatch.setattr(shared, "tuya_conta_arquivo", tmp_path / "tuya_conta.json")
     return tmp_path
 
 
@@ -114,7 +114,7 @@ def _assistente(monkeypatch):
 def test_busca_vazia_fica_nas_credenciais_e_nao_apaga_a_configuracao(
     pastas, monkeypatch
 ):
-    """A página dos dispositivos só tem "Salvar", e salvar vazio apaga tudo.
+    """A página dos dispositivos só tem "Aplicar", e aplicar vazio apaga tudo.
 
     Sem esta volta, quem reabre o assistente e erra a Secret perde as fitas
     configuradas num clique, sem caminho de volta para corrigir a credencial.
@@ -125,8 +125,8 @@ def test_busca_vazia_fica_nas_credenciais_e_nao_apaga_a_configuracao(
 
     assistente._mostrar([])
 
-    assert assistente.stack.get_visible_child_name() == "credenciais"
-    assert assistente.aviso_label.get_visible()
+    assert assistente.pagina == "credenciais"
+    assert assistente.semResultado
     assert session_fita.fitas() == configuradas
 
 
@@ -135,8 +135,8 @@ def test_busca_com_resultado_vai_para_a_lista_e_tira_o_aviso(pastas, monkeypatch
     assistente._mostrar([])
     assistente._mostrar([Fita("Centro", "eb0", "1.2.3.4", "k")])
 
-    assert assistente.stack.get_visible_child_name() == "dispositivos"
-    assert not assistente.aviso_label.get_visible()
+    assert assistente.pagina == "dispositivos"
+    assert not assistente.semResultado
 
 
 def test_fita_desmarcada_volta_ao_estado_guardado_e_sai_da_chave(
@@ -165,18 +165,15 @@ def test_fita_desmarcada_volta_ao_estado_guardado_e_sai_da_chave(
     )
 
     assistente = _assistente(monkeypatch)
-    # O diálogo nunca foi apresentado (não há janela de verdade aqui), e fechar
-    # um assim é um Adwaita-CRITICAL na saída dos testes. O que importa deste
-    # `salvar` é o que ele grava e manda, não o fechamento.
-    monkeypatch.setattr(assistente, "close", lambda: None)
-    assistente._linhas = [
-        (Adw.SwitchRow(active=True), ficou),
-        (Adw.SwitchRow(active=False), saiu),
-    ]
+    assistente._mostrar([ficou, saiu])
+    assistente.marcar("eb1", False)
+    fechou = []
+    assistente.fechado.connect(lambda: fechou.append(True))
     assistente.salvar()
 
     assert session_fita.fitas() == [ficou]
     assert enviados == [("eb1", False, "")]
+    assert fechou == [True]
     # A que ficou continua na chave: quem a devolve é o fechamento do app.
     assert json.loads(schema.get_string("fita-estado-anterior")) == {
         "eb0": guardado["eb0"]
@@ -188,65 +185,71 @@ def test_assistente_abre_pre_preenchido_com_a_conta_salva(pastas, monkeypatch):
 
     assistente = _assistente(monkeypatch)
 
-    assert assistente.api_key_row.get_text() == "chave-salva"
-    assert assistente.api_secret_row.get_text() == "segredo-salvo"
-    assert assistente.regiao_row.get_selected() == REGIOES.index("cn")
+    assert assistente.chave == "chave-salva"
+    assert assistente.segredo == "segredo-salvo"
+    assert assistente.regiao == REGIOES.index("cn")
 
 
-def _tinytuya_falso(monkeypatch, resposta, token="token-valido", error=None):
-    """Põe no lugar da tinytuya real uma nuvem que devolve ``resposta``.
+def _nuvem_falsa(monkeypatch, resposta, token="token-valido", error=None):
+    """Põe no lugar da fábrica da nuvem uma que devolve ``resposta``.
 
     ``token`` e ``error`` reproduzem os atributos que a `tinytuya.Cloud` de
-    verdade grava no `__init__` (antes mesmo de `getdevices` rodar).
+    verdade grava no `__init__` (antes mesmo de `getdevices` rodar). Devolve as
+    chamadas feitas: ``(regiao, chave, segredo)``.
     """
-    monkeypatch.setitem(
-        sys.modules,
-        "tinytuya",
-        SimpleNamespace(
-            Cloud=lambda **_kw: SimpleNamespace(
-                getdevices=lambda: resposta, token=token, error=error
-            )
-        ),
+    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
+
+    chamadas = []
+    monkeypatch.setattr(
+        wizard_module,
+        "_nuvem",
+        lambda regiao, chave, segredo: chamadas.append((regiao, chave, segredo))
+        or SimpleNamespace(getdevices=lambda: resposta, token=token, error=error),
     )
+    return chamadas
+
+
+def _sem_enderecos(monkeypatch):
+    monkeypatch.setattr(session_fita, "enderecos_na_rede", lambda: ({}, {}))
 
 
 def test_busca_com_sucesso_salva_a_conta_para_a_proxima_vez(
     pastas, monkeypatch, flush_idle
 ):
     """Credencial provada válida fica salva; é o que evita voltar ao painel."""
-    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
-
-    _tinytuya_falso(
+    chamadas = _nuvem_falsa(
         monkeypatch,
         [{"name": "Centro", "id": "eb0", "key": "k", "ip": "1.2.3.4", "version": "3.3"}],
     )
-    monkeypatch.setattr(wizard_module, "enderecos_na_rede", lambda: ({}, {}))
+    _sem_enderecos(monkeypatch)
     assistente = _assistente(monkeypatch)
-    assistente.api_key_row.set_text("minha-chave")
-    assistente.api_secret_row.set_text("meu-segredo")
-    assistente.regiao_row.set_selected(REGIOES.index("eu"))
+    assistente.chave = "minha-chave"
+    assistente.segredo = "meu-segredo"
+    assistente.regiao = REGIOES.index("eu")
 
     assistente.buscar()
     flush_idle()
 
+    assert chamadas == [("eu", "minha-chave", "meu-segredo")]
     assert tuya_conta.carregar() == tuya_conta.Conta("minha-chave", "meu-segredo", "eu")
+    assert assistente.pagina == "dispositivos"
 
 
 def test_busca_sem_sucesso_nao_salva_a_conta(pastas, monkeypatch, flush_idle):
     """Erro de credencial (dicionário, não lista) não é uma conta para guardar."""
-    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
-
     erro = {"Error": "Invalid Key", "Err": "901"}
-    _tinytuya_falso(monkeypatch, erro, token=None, error=erro)
-    monkeypatch.setattr(wizard_module, "enderecos_na_rede", lambda: ({}, {}))
+    _nuvem_falsa(monkeypatch, erro, token=None, error=erro)
+    _sem_enderecos(monkeypatch)
     assistente = _assistente(monkeypatch)
-    assistente.api_key_row.set_text("chave-errada")
-    assistente.api_secret_row.set_text("segredo-errado")
+    assistente.chave = "chave-errada"
+    assistente.segredo = "segredo-errado"
 
     assistente.buscar()
     flush_idle()
 
     assert tuya_conta.carregar() is None
+    assert assistente.pagina == "credenciais"
+    assert assistente.semResultado
 
 
 # endregion

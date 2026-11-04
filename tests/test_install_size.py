@@ -120,3 +120,64 @@ def test_folder_size_ignores_links(tmp_path) -> None:
         pytest.skip("criar link simbólico exige privilégio no Windows")
 
     assert folder_size(str(tmp_path / "game")) == 3000
+
+
+# -- a varredura, sem GLib ----------------------------------------------------
+
+import ast
+import threading
+import time
+from pathlib import Path
+from types import SimpleNamespace
+
+from PySide6.QtCore import QEventLoop, QTimer
+
+from cartridges import shared
+from cartridges.utils import install_size
+
+
+def _rodar_ate(condicao, limite=5.0) -> bool:
+    fim = time.monotonic() + limite
+    while not condicao() and time.monotonic() < fim:
+        laco = QEventLoop()
+        QTimer.singleShot(10, laco.quit)
+        laco.exec()
+    return condicao()
+
+
+@pytest.mark.parametrize("modulo", ("install_size", "updates_checker"))
+def test_sem_gi(modulo: str) -> None:
+    fonte = Path(__file__).resolve().parent.parent / "cartridges" / "utils" / f"{modulo}.py"
+    importados = set()
+    for no in ast.walk(ast.parse(fonte.read_text(encoding="utf-8"))):
+        if isinstance(no, ast.Import):
+            importados.update(a.name.split(".")[0] for a in no.names)
+        elif isinstance(no, ast.ImportFrom) and no.module:
+            importados.add(no.module.split(".")[0])
+    assert "gi" not in importados
+
+
+def test_tamanho_medido_chega_na_principal(monkeypatch, tmp_path, store, make_game) -> None:
+    pasta = tmp_path / "Jogo"
+    write(pasta / "jogo.exe", 3000)
+    jogo = make_game(game_id="a", name="a", install_size=0, install_size_ts=0)
+    store.add_game(jogo, {})
+    monkeypatch.setattr(install_size, "install_size_folder", lambda _cmd: str(pasta))
+    vistos = []
+    aplicar = install_size.InstallSizeSweep._apply
+    monkeypatch.setattr(
+        install_size.InstallSizeSweep,
+        "_apply",
+        lambda self, *a: (vistos.append(threading.current_thread() is threading.main_thread()), aplicar(self, *a))[1],
+    )
+
+    varredura = install_size.InstallSizeSweep()
+    try:
+        varredura.run_async()
+        assert _rodar_ate(lambda: vistos)
+    finally:
+        varredura.stop()
+
+    assert vistos == [True]
+    assert (jogo.install_size, jogo.saves, jogo.updates) == (3000, 1, 1)
+    assert jogo.install_size_ts > 0

@@ -2,362 +2,80 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Test harness for the parts of Cartridges that need the app's own runtime.
+r"""Harness de testes do Cartridges (PySide6 + QML).
 
-The suite runs on a hidden Windows desktop (no window shows up on the user's
-screen); set ``CARTRIDGES_TESTES_NA_TELA=1`` to see the windows while debugging.
-
-Runs against the **real** GTK stack from MSYS2 (``C:\\msys64\\ucrt64``), not a
-stub. That was a choice between two costs: a stub of ``gi`` runs anywhere and is
-fast, but it has to reimplement GObject signals, ``Gtk.Template`` and the GLib
-main loop well enough that a test failure means something — and everything the
-stub gets subtly wrong turns into a test that passes while the app breaks. The
-real stack is already installed here (it is what the app runs on), so the stub
-would be inventing a second, worse copy of something we have.
-
-Two things still have to be faked, and both for the same reason: they are
-generated at build time and would otherwise point at the user's real data.
-
-* ``cartridges.shared`` is produced by meson from ``shared.py.in`` and does not
-  exist in the source tree. It is synthesised here instead of being read from
-  ``_build``, because the real one calls ``Gio.Settings.new`` (which aborts the
-  process when the schema is not installed) and resolves ``games_dir`` to the
-  live library. A test that deletes a game must never be able to delete a real
-  one.
-* ``shared.win`` is the application window. Only the two mappings the store
-  touches are provided; anything else is a test reaching further than it should.
-
-The gresource has to be registered before ``cartridges.game`` is imported —
-its ``Gtk.Template`` reads the .ui out of it at class-creation time.
+Nenhum teste lê ou grava os dados reais do usuário: a fixture ``dados_temporarios``
+aponta ``CARTRIDGES_DADOS`` para uma pasta temporária e ``CARTRIDGES_REGISTRO`` para
+uma subchave temporária de ``HKCU\Software\CartridgesTestes``.
 """
 
 import builtins
 import json
+import os
 import shutil
-import subprocess
 import sys
+import tempfile
 import threading
+import time
 import types
+import uuid
+import winreg
 import winsound
-from enum import IntEnum, auto
 from pathlib import Path
+from urllib.parse import urlsplit
+from typing import Any
 
 import pytest
+from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-# Before anything imports GTK/Gdk: afterwards the thread has windows and the
-# desktop switch is refused.
-from tests import area_de_trabalho_oculta  # noqa: E402
+_RAIZ_REGISTRO = r"Software\CartridgesTestes"
+from tests.apoio_registro import _apagar_chave  # noqa: E402
 
-area_de_trabalho_oculta.entrar()
 
-# The UI is hardcoded in pt-BR and `cartridges.in` installs these as builtins;
-# module bodies call `_()` at class-definition time, so they must exist first.
+# Antes de qualquer `import cartridges`: o `shared` real calcula os caminhos ao ser importado,
+# e sem isso cairia nos dados reais do usuário. Cada teste ganha a sua própria pasta e subchave
+# (`dados_temporarios`); estas valem para o que roda na importação e entre testes.
+_DADOS_DA_SESSAO = tempfile.mkdtemp(prefix="cartridges-testes-")
+_REGISTRO_DA_SESSAO = f"{_RAIZ_REGISTRO}\\sessao-{uuid.uuid4()}"
+os.environ["CARTRIDGES_DADOS"] = _DADOS_DA_SESSAO
+os.environ["CARTRIDGES_REGISTRO"] = _REGISTRO_DA_SESSAO
+# O log detalhado (rastreio de toda chamada) fica desligado nos testes; os que precisam o ligam.
+os.environ["CARTRIDGES_LOG_DETALHADO"] = "0"
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "varredura_real: o teste prova a `enderecos_na_rede` de verdade (com a tinytuya falsa)")
+
+
+def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
+    _apagar_chave(winreg.HKEY_CURRENT_USER, _REGISTRO_DA_SESSAO)
+    shutil.rmtree(_DADOS_DA_SESSAO, ignore_errors=True)
+
+
+# Como no app: o texto da interface passa por `_()` já na definição das classes.
 builtins._ = lambda message: message  # type: ignore[attr-defined]
 builtins.ngettext = (  # type: ignore[attr-defined]
     lambda singular, plural, n: singular if n == 1 else plural
 )
 
-import gi  # noqa: E402
 
-gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
+from cartridges import shared  # noqa: E402
+from cartridges.utils import window_geometry as _window_geometry  # noqa: E402
 
-from gi.repository import Gio, GLib  # noqa: E402
+_MONITORS_REAL = _window_geometry.monitors  # a enumeração de verdade (`monitors_de_verdade`)
+from cartridges.configuracoes import Configuracoes  # noqa: E402
 
-_GRESOURCE = ROOT / "_build" / "data" / "cartridges.gresource"
-if not _GRESOURCE.is_file():  # pragma: no cover - environment guard
-    raise RuntimeError(
-        f"{_GRESOURCE} is missing. Build once with `meson setup _build && "
-        "ninja -C _build` so the templates can be loaded."
-    )
-Gio.Resource.load(str(_GRESOURCE))._register()  # pylint: disable=protected-access
-
-# Both are needed before any template class is *instantiated*: the .ui files
-# name Adwaita types, and a GType that has not been registered yet makes
-# Gtk.Builder fail with "Invalid object type 'AdwClamp'" — which surfaces much
-# later as an attribute being None, not as the template error it really is.
-from gi.repository import Adw, Gtk  # noqa: E402
-
-Gtk.init()
-Adw.init()
-
-# O main.py carrega o GdkWin32 antes de qualquer janela existir: uma superfície
-# embrulhada antes dele ganha uma classe genérica, sem `get_handle`. Os testes
-# precisam da mesma ordem, senão o primeiro que realiza uma janela (ex.:
-# test_conquistas_ui) tira o HWND de todos os seguintes no processo.
-gi.require_version("GdkWin32", "4.0")
-from gi.repository import GdkWin32  # noqa: E402,F401  pylint: disable=unused-import
+# `import_time` fixo, como antes.
+shared.import_time = 1_700_000_000
 
 
-# Defaults copied from data/io.github.joaomgabaldi.Cartridges.gschema.xml.in. Copied rather
-# than parsed so a test that depends on one of these values fails loudly when
-# the schema changes underneath it, instead of quietly following it.
-_SCHEMA_DEFAULTS = {
-    "assistente-concluido": False,
-    "auto-import": False,
-    "cover-autoplay": False,
-    "minimize-after-launch": False,
-    "playtime-tracking": True,
-    "process-tracking-grace": 5,
-    "session-move-window": False,
-    "session-monitor": "",
-    "session-wallpaper": False,
-    "session-wallpaper-saved": "",
-    "fita-brilho-padrao": 180,
-    "fita-matiz-app": 284,
-    "fita-saturacao-app": 620,
-    "session-fita": False,
-    "fita-acompanha-tela": False,
-    "fita-estado-anterior": "",
-    "wallhaven-key": "",
-    "remove-missing": True,
-    "shortcuts": True,
-    "shortcuts-location": "",
-    "shortcuts-recursive": True,
-    "steam-metadata": True,
-    "hltb-metadata": True,
-    "sgdb-key": "",
-    "conquistas-chave-steam": "",
-    "conquistas-mostrar-ocultas": False,
-    "conquistas-aviso-posicao": "inferior-direito",
-    "conquistas-aviso": True,
-    "conquistas-aviso-som": True,
-    "conquistas-aviso-som-volume": 100,
-    "conquistas-iluminacao": True,
-    "conquistas-pulso-matiz": 45,
-    "conquistas-pulso-saturacao": 1000,
-    "conquistas-pulso-estilo": "respirar",
-    "sgdb": False,
-    "sgdb-prefer": False,
-    "sgdb-animated": False,
-    "library-rows": 0,
-    "gamepad": False,
-    "gamepad-rumble": True,
-    "big-picture-ao-conectar": False,
-    "big-picture-som": True,
-    "updates-check-interval": 12,
-    "news-check-interval": 6,
-    "show-news-button": False,
-    "sort-mode": "last_played",
-    "pasta-dos-saves": "",
-}
-
-_STATE_DEFAULTS = {
-    "width": 1170,
-    "height": 795,
-    "is-maximized": False,
-    "x": -2147483648,
-    "y": -2147483648,
-    "steam-limiter-tokens-history": "[]",
-    "news-last-seen-ts": 0,
-    "notas-largura": 320,
-    "notas-altura": 120,
-    "conquistas-ultima-varredura": 0,
-    "conquistas-ultima-conta-steam": "",
-}
-
-
-class FakeSchema:
-    """Dict-backed stand-in for ``Gio.Settings``.
-
-    Typed getters are kept separate (rather than one ``get``) so a test that
-    asks for the wrong type fails here instead of somewhere downstream.
-    """
-
-    def __init__(self, values: dict) -> None:
-        self._values = dict(values)
-        self.handlers: list[tuple[str, object]] = []
-
-    def list_keys(self) -> list[str]:
-        return list(self._values)
-
-    def get_boolean(self, key: str) -> bool:
-        return bool(self._values[key])
-
-    def get_int(self, key: str) -> int:
-        return int(self._values[key])
-
-    def get_uint(self, key: str) -> int:
-        return int(self._values[key])
-
-    def get_int64(self, key: str) -> int:
-        return int(self._values[key])
-
-    def get_string(self, key: str) -> str:
-        return str(self._values[key])
-
-    def set_boolean(self, key: str, value: bool) -> None:
-        self._values[key] = bool(value)
-
-    def set_int(self, key: str, value: int) -> None:
-        self._values[key] = int(value)
-
-    def set_int64(self, key: str, value: int) -> None:
-        self._values[key] = int(value)
-
-    def set_string(self, key: str, value: str) -> None:
-        self._values[key] = str(value)
-
-    def __setitem__(self, key: str, value) -> None:
-        self._values[key] = value
-
-    def connect(self, signal: str, callback) -> int:
-        self.handlers.append((signal, callback))
-        return len(self.handlers)
-
-    def bind(self, *_args, **_kwargs) -> None:
-        return None
-
-    def handler_is_connected(self, _handler_id) -> bool:
-        return True
-
-    def disconnect(self, _handler_id) -> None:
-        return None
-
-
-class FakeToastQueue:
-    def __init__(self) -> None:
-        self.added: list = []
-        self.dismissed: list = []
-
-    def add(self, toast) -> None:
-        self.added.append(toast)
-
-    def dismiss(self, toast) -> None:
-        self.dismissed.append(toast)
-
-    def dismiss_after(self, toast, _seconds) -> None:
-        self.dismissed.append(toast)
-
-
-class FakeAction:
-    def __init__(self) -> None:
-        self.enabled = True
-
-    def set_enabled(self, enabled: bool) -> None:
-        self.enabled = enabled
-
-
-class FakeApplication:
-    """``Game.__init__`` takes a reference to the application."""
-
-    def __init__(self) -> None:
-        self.state = AppState.DEFAULT
-        self.activated: list = []
-        self._actions: dict = {}
-
-    def activate_action(self, name, target=None) -> None:
-        self.activated.append((name, target))
-
-    def lookup_action(self, name) -> FakeAction:
-        return self._actions.setdefault(name, FakeAction())
-
-
-class FakeWindow:
-    """Only what the store, the session and a Game reach for."""
-
-    def __init__(self) -> None:
-        self.game_covers: dict = {}
-        self.toasts: dict = {}
-        self.toast_queue = FakeToastQueue()
-        self.session_blocker_shown: list = []
-        self.notes_toast_games: list = []
-        self.presented = 0
-        self.application = FakeApplication()
-
-    def get_application(self) -> FakeApplication:
-        return self.application
-
-    # DetailsDialog snapshots and restores the library's scroll position so
-    # editing a game does not move the grid underneath the user.
-    def store_library_scroll(self) -> None:
-        self.scroll_stored = True
-
-    def restore_library_scroll(self) -> None:
-        self.scroll_restored = True
-
-    def show_session_blocker(self, game: Any) -> None:
-        self.session_blocker_shown.append(game)
-
-    def hide_session_blocker(self) -> None:
-        self.session_blocker_shown.append(None)
-
-    def session_toast(self, game: Any, seconds: int) -> None:
-        """O aviso de fim de sessão é montado pela janela de verdade.
-
-        Delegado em vez de imitado: é ali que mora a regra de não interpretar o
-        título como markup, e um duplo aqui a testaria no lugar dela.
-        """
-        from cartridges.window import CartridgesWindow  # noqa: PLC0415
-
-        CartridgesWindow.session_toast(self, game, seconds)
-
-    def on_session_toast_notes(self, _toast: Any, game: Any) -> None:
-        self.notes_toast_games.append(game)
-
-    def present(self) -> None:
-        self.presented += 1
-
-
-class AppState(IntEnum):
-    DEFAULT = auto()
-    LOAD_FROM_DISK = auto()
-    IMPORT = auto()
-
-
-def _install_shared() -> types.ModuleType:
-    """Put a synthetic ``cartridges.shared`` in place before anything imports it."""
-    import cartridges  # noqa: PLC0415
-
-    shared = types.ModuleType("cartridges.shared")
-    shared.AppState = AppState
-    shared.APP_ID = "io.github.joaomgabaldi.Cartridges"
-    shared.VERSION = "0000.00.00"
-    # Must match the real build: `game_cover` resolves gresource paths off it,
-    # and a wrong value aborts the process with a Gdk-ERROR on import.
-    shared.PREFIX = "/io/github/joaomgabaldi/Cartridges"
-    shared.SPEC_VERSION = 1.6
-    shared.APP_DIR_NAME = "Cartridges"
-    shared.image_size = (600, 900)
-    shared.scale_factor = 1
-    shared.display_size = (200, 300)
-    shared.details_size = (280, 420)
-    # Repointed per test by the `app_dirs` fixture. Deliberately left as a path
-    # that does not exist, so a test that skips the fixture and writes anyway
-    # fails instead of touching the real library.
-    placeholder = Path(__file__).resolve().parent / "_unset"
-    shared.home = placeholder
-    shared.data_dir = placeholder
-    shared.app_dir = placeholder / "Cartridges"
-    shared.games_dir = placeholder / "games"
-    shared.covers_dir = placeholder / "covers"
-    shared.logos_dir = placeholder / "logos"
-    shared.wallpapers_dir = placeholder / "wallpapers"
-    shared.fitas_dir = placeholder / "fitas"
-    shared.conquistas_dir = placeholder / "conquistas"
-    shared.conquistas_cache_dir = placeholder / "cache" / "conquistas"
-    shared.capas_animadas_dir = placeholder / "cache" / "capas_animadas"
-    shared.contas_dir = placeholder / "contas"
-    shared.fitas_arquivo = placeholder / "fitas.json"
-    shared.tuya_conta_arquivo = placeholder / "tuya_conta.json"
-    shared.log_dir = placeholder / "logs"
-    shared.schema = FakeSchema(_SCHEMA_DEFAULTS)
-    shared.state_schema = FakeSchema(_STATE_DEFAULTS)
-    shared.win = None
-    shared.importer = None
-    shared.import_time = 1_700_000_000
-    shared.store = None
-    shared.log_files = []
-
-    sys.modules["cartridges.shared"] = shared
-    cartridges.shared = shared  # type: ignore[attr-defined]
-    return shared
-
-
-shared = _install_shared()
+@pytest.fixture(autouse=True)
+def import_time_fixo(monkeypatch):
+    """Um `Importer` grava `shared.import_time` com a hora de agora; o teste seguinte não pode herdá-la."""
+    monkeypatch.setattr(shared, "import_time", 1_700_000_000, raising=False)
 
 
 # O `ludusavi.exe` desta máquina nunca roda nos testes. O corte é na sessão toda, e não num
@@ -438,30 +156,26 @@ def app_dirs(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def schema(monkeypatch):
-    """A schema reset to the shipped defaults for each test."""
-    fake = FakeSchema(_SCHEMA_DEFAULTS)
-    monkeypatch.setattr(shared, "schema", fake, raising=False)
-    return fake
+def chave_do_registro(monkeypatch):
+    """Uma subchave de registro nova por teste, dentro da da sessão (apagada no fim dela)."""
+    chave = _REGISTRO_DA_SESSAO + "\\" + uuid.uuid4().hex
+    monkeypatch.setattr(shared, "chave_do_registro", chave, raising=False)
+    return chave
 
 
 @pytest.fixture(autouse=True)
-def com_3d(request, monkeypatch):
-    """As janelas falsas não têm renderizador: as Preferências veem 3D disponível.
-
-    ``tests/test_big_picture.py`` testa o ``tem_3d`` de verdade e fica de fora."""
-    if request.module.__name__.endswith("test_big_picture"):
-        return
-    from cartridges import big_picture  # noqa: PLC0415
-
-    monkeypatch.setattr(big_picture, "tem_3d", lambda _janela: True)
+def schema(monkeypatch, chave_do_registro):
+    """Preferências nos padrões do gschema, numa subchave temporária própria do teste."""
+    real = Configuracoes(chave_do_registro, "@APP_ID@")
+    monkeypatch.setattr(shared, "schema", real, raising=False)
+    return real
 
 
 @pytest.fixture(autouse=True)
-def state_schema(monkeypatch):
-    fake = FakeSchema(_STATE_DEFAULTS)
-    monkeypatch.setattr(shared, "state_schema", fake, raising=False)
-    return fake
+def state_schema(monkeypatch, chave_do_registro):
+    real = Configuracoes(chave_do_registro + r"\State", "@APP_ID@.State")
+    monkeypatch.setattr(shared, "state_schema", real, raising=False)
+    return real
 
 
 @pytest.fixture(autouse=True)
@@ -472,39 +186,304 @@ def sem_som(monkeypatch):
     return tocados
 
 
-@pytest.fixture
-def settings(tmp_path, monkeypatch):
-    """GSettings de verdade, com backend em memória.
+@pytest.fixture(autouse=True)
+def sem_cortina_de_verdade(monkeypatch):
+    """Nenhum teste abre a janela preta TOPMOST do fade: sem a fábrica falsa, a cortina falha ao criar."""
+    from cartridges.utils import cortina_monitor  # noqa: PLC0415
 
-    Instala em `shared.schema` e `shared.state_schema` os schemas compilados de
-    `_build/data` (com as chaves e os tipos reais), sobre um backend que não
-    toca no registro do usuário, e devolve o par `(principal, estado)`. Serve a
-    quem depende do tipo GVariant de cada chave — o `FakeSchema` não o tem.
-    """
-    schemas = tmp_path / "_schemas"
-    schemas.mkdir()
-    shutil.copy(ROOT / "_build" / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml", schemas)
-    # Fora do PATH, o do mesmo ucrt64/bin do Python que roda os testes.
-    compiler = shutil.which("glib-compile-schemas") or str(
-        Path(sys.executable).with_name("glib-compile-schemas.exe")
-    )
-    subprocess.run([compiler, str(schemas)], check=True)
-    source = Gio.SettingsSchemaSource.new_from_directory(str(schemas), None, False)
-    memory = Gio.memory_settings_backend_new()
-    main = Gio.Settings.new_full(source.lookup("io.github.joaomgabaldi.Cartridges", False), memory, None)
-    state = Gio.Settings.new_full(
-        source.lookup("io.github.joaomgabaldi.Cartridges.State", False), memory, None
-    )
-    monkeypatch.setattr(shared, "schema", main)
-    monkeypatch.setattr(shared, "state_schema", state)
-    return main, state
+    def recusa():
+        raise OSError("cortina de verdade nos testes")
+
+    monkeypatch.setattr(cortina_monitor, "_api", recusa)
 
 
 @pytest.fixture(autouse=True)
-def win(monkeypatch):
-    fake = FakeWindow()
-    monkeypatch.setattr(shared, "win", fake, raising=False)
-    return fake
+def sem_janela_por_cima_de_verdade(monkeypatch):
+    """Nenhum teste deixa uma janela TOPMOST nem muda estilos Win32 de verdade: sem o `user32_falso`,
+    `janela_por_cima.preparar` falha (e o aviso de conquista não entra)."""
+    from cartridges.utils import janela_por_cima  # noqa: PLC0415
+
+    def recusa():
+        raise AssertionError("o teste tentou falar com o user32 de verdade (janela_por_cima)")
+
+    monkeypatch.setattr(janela_por_cima, "_api", recusa)
+    monkeypatch.setattr(janela_por_cima, "_dono", None)
+
+
+@pytest.fixture(autouse=True)
+def sem_monitor_de_verdade(monkeypatch):
+    """Os testes não dependem de quantos monitores a máquina tem: `window_geometry.monitors` devolve um principal e
+    um segundo, falsos. Quem exercita a enumeração de verdade a restaura (`monitors_de_verdade`)."""
+    from cartridges.utils import window_geometry  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        window_geometry,
+        "monitors",
+        lambda: [
+            window_geometry.Monitor(r"\\.\DISPLAY1", 0, 0, 1920, 1080, True, 1, r"\\?\DISPLAY#FALSO#1"),
+            window_geometry.Monitor(r"\\.\DISPLAY2", 1920, 0, 1080, 1920, False, 2, r"\\?\DISPLAY#FALSO#2"),
+        ],
+    )
+
+
+@pytest.fixture
+def monitors_de_verdade(monkeypatch):
+    from cartridges.utils import window_geometry  # noqa: PLC0415
+
+    monkeypatch.setattr(window_geometry, "monitors", _MONITORS_REAL)
+
+
+@pytest.fixture(autouse=True)
+def sem_placa_de_verdade(monkeypatch):
+    """Nenhum teste põe a placa "Identificar monitores" numa tela de verdade: sem um `criar` falso, falha."""
+    from cartridges.utils import window_geometry  # noqa: PLC0415
+
+    def recusa(*_args, **_kwargs):
+        raise AssertionError("placa: nenhuma janela vai a um monitor nos testes")
+
+    monkeypatch.setattr(window_geometry, "_criar_placa", recusa)
+    monkeypatch.setattr(window_geometry, "_placas", [])
+
+
+class User32Falso:
+    """O user32 que `janela_por_cima` usa, sem janela de verdade: anota as chamadas.
+
+    Estilos e donos ficam num dicionário por HWND; ``primeiro_plano`` é o que
+    ``GetForegroundWindow`` devolve (o teste o muda quando a janela aparece).
+    """
+
+    DONO = 9000
+
+    def __init__(self) -> None:
+        self.chamadas: list[tuple[str, tuple]] = []
+        self.estilos: dict[int, int] = {}
+        self.donos: dict[int, int] = {}
+        self.primeiro_plano = 50
+        self.tamanho = (300, 80)
+        self.falhas: dict[str, Any] = {}  # nome -> valor devolvido no lugar do de sempre
+
+    def __getattr__(self, nome):
+        if nome.startswith("_"):
+            raise AttributeError(nome)
+        real = getattr(self, "_" + nome)
+
+        def chamar(*args):
+            self.chamadas.append((nome, args))
+            if nome in self.falhas:
+                return self.falhas[nome]
+            return real(*args)
+
+        return chamar
+
+    def pedidos(self, nome):
+        return [args for n, args in self.chamadas if n == nome]
+
+    def _GetWindowLongPtrW(self, hwnd, _indice):
+        return self.estilos.get(int(hwnd), 0)
+
+    def _SetWindowLongPtrW(self, hwnd, indice, valor):
+        from cartridges.utils import janela_por_cima as jpc  # noqa: PLC0415
+
+        if indice == jpc.GWLP_HWNDPARENT:
+            antes, self.donos[int(hwnd)] = self.donos.get(int(hwnd), 0), int(valor)
+        else:
+            antes, self.estilos[int(hwnd)] = self.estilos.get(int(hwnd), 0), int(valor)
+        return antes
+
+    def _GetWindow(self, hwnd, _qual):
+        return self.donos.get(int(hwnd), 0)
+
+    def _GetWindowRect(self, _hwnd, ref):
+        ref._obj.left, ref._obj.top = 0, 0
+        ref._obj.right, ref._obj.bottom = self.tamanho
+
+    def _GetMonitorInfoW(self, _monitor, ref):
+        r = ref._obj.rcMonitor
+        r.left, r.top, r.right, r.bottom = 0, 0, 1920, 1080
+        return 1
+
+    def _GetForegroundWindow(self):
+        return self.primeiro_plano
+
+    def _CreateWindowExW(self, *_args):
+        return self.DONO
+
+    def _IsWindow(self, hwnd):
+        return int(bool(hwnd))
+
+    def _IsIconic(self, _hwnd):
+        return 0
+
+    def _SetLayeredWindowAttributes(self, *_args):
+        return 1
+
+    def _SetWindowPos(self, *_args):
+        return 1
+
+    def _SetForegroundWindow(self, _hwnd):
+        return 1
+
+    def _MonitorFromWindow(self, *_args):
+        return 1
+
+
+@pytest.fixture
+def user32_falso(monkeypatch):
+    """Troca o user32 do `janela_por_cima` pelo `User32Falso` (o dono oculto é o `User32Falso.DONO`)."""
+    from cartridges.utils import janela_por_cima  # noqa: PLC0415
+
+    falso = User32Falso()
+    monkeypatch.setattr(janela_por_cima, "_api", lambda: falso)
+    return falso
+
+
+@pytest.fixture(autouse=True)
+def sem_jogo_de_verdade(monkeypatch):
+    """Nenhum teste inicia um jogo: o `launch` que chegar ao `run_executable` falha alto.
+
+    Também zera a sessão: o `ModeloDaSessao` (`shared.sessao`), os rastreadores ativos e o vigia das conquistas não
+    passam de um teste ao outro.
+    """
+    from cartridges import jogo, process_session, session_window  # noqa: PLC0415
+    from cartridges.conquistas import sessao as sessao_conquistas  # noqa: PLC0415
+
+    def recusa(*_args, **_kwargs):
+        raise AssertionError("run_executable: nenhum jogo é iniciado nos testes")
+
+    monkeypatch.setattr(jogo, "run_executable", recusa)
+    monkeypatch.setattr(shared, "sessao", None, raising=False)
+    monkeypatch.setattr(shared, "conquistas", None, raising=False)
+    monkeypatch.setattr(shared, "preferencias", None, raising=False)
+    monkeypatch.setattr(shared, "edicao", None, raising=False)
+    monkeypatch.setattr(process_session.ProcessSession, "active", None)
+    monkeypatch.setattr(session_window.SessionWindow, "active", None)
+    monkeypatch.setattr(sessao_conquistas, "_vigia", None)
+
+
+@pytest.fixture(autouse=True)
+def sem_relancar_de_verdade(monkeypatch):
+    """Nenhum teste reabre o app (D75): o `_popen` do `relancar()` levanta; quem prova o comando troca o `_popen`."""
+    from cartridges import app as modulo_app  # noqa: PLC0415
+
+    def recusa(*_args, **_kwargs):
+        raise AssertionError("relancar: o app não é reaberto nos testes")
+
+    monkeypatch.setattr(modulo_app, "_popen", recusa)
+
+
+@pytest.fixture(autouse=True)
+def sem_instalador_de_verdade(monkeypatch, tmp_path):
+    """Nenhum teste abre um instalador nem apaga a pasta de downloads de verdade: o `_abrir_instalador` levanta (e o
+    teste falha ao fim, mesmo que o erro tenha sido engolido) e o `download_dir` aponta para o `tmp_path`.
+
+    Devolve a lista dos caminhos pedidos; quem prova o guarda de propósito a esvazia.
+    """
+    from cartridges.utils import app_updater  # noqa: PLC0415
+
+    chamadas: list = []
+
+    def recusa(caminho):
+        chamadas.append(caminho)
+        raise AssertionError("atualizador: nenhum instalador é aberto nos testes")
+
+    monkeypatch.setattr(app_updater, "_abrir_instalador", recusa)
+    monkeypatch.setattr(app_updater, "download_dir", lambda: tmp_path / "Cartridges-update")
+    yield chamadas
+    assert not chamadas, f"o teste tentou abrir o instalador: {chamadas}"
+
+
+@pytest.fixture(autouse=True)
+def sem_navegador_de_verdade(monkeypatch):
+    """Nenhum login abre o navegador: o padrão de `LoginDaLoja` e o de `login.entrar` (Xbox) levantam, e o
+    teste falha ao fim se algum foi chamado (o login engole a exceção, como faria com um navegador ausente).
+
+    Devolve a lista das URLs pedidas; quem prova o guarda de propósito a esvazia.
+    """
+    from cartridges.conquistas.xbox import login as login_xbox  # noqa: PLC0415
+    from cartridges.modelos import contas as modelo_das_contas  # noqa: PLC0415
+    from cartridges.utils import open_uri  # noqa: PLC0415
+
+    chamadas: list[str] = []
+
+    def recusa(url):
+        chamadas.append(url)
+        raise AssertionError("navegador: nenhum login abre nos testes")
+
+    # O funil de `abrir_url` (Novidades, Sobre, detalhes...): quem importa o nome e o troca no próprio módulo não passa por aqui.
+    monkeypatch.setattr(open_uri.QDesktopServices, "openUrl", staticmethod(lambda url: recusa(url.toString())))
+
+    monkeypatch.setattr(modelo_das_contas, "_abrir_navegador", recusa)
+    original = login_xbox._abrir_navegador  # noqa: SLF001
+    monkeypatch.setattr(login_xbox, "_abrir_navegador", recusa)
+    # O padrão de `entrar` foi fixado na definição: trocar o atributo do módulo não o alcança. Troca-se o primeiro
+    # padrão, e só se ele for mesmo o navegador (se a assinatura mudar, o teste avisa em vez de trocar o parâmetro errado).
+    assert login_xbox.entrar.__defaults__[0] is original, "o primeiro padrão de login.entrar já não é o navegador"
+    monkeypatch.setattr(login_xbox.entrar, "__defaults__", (recusa, *login_xbox.entrar.__defaults__[1:]))
+    # Os logins com a troca na rede não passam de um teste ao outro.
+    monkeypatch.setattr(modelo_das_contas, "_em_voo", set())
+    yield chamadas
+    assert not chamadas, f"o teste abriu o navegador: {chamadas}"
+
+
+@pytest.fixture(autouse=True)
+def sem_rede(monkeypatch):
+    """Nenhum teste fala com a rede (D57): tudo do app sai por `requests`, e o envio vira uma falha de conexão."""
+    import requests  # noqa: PLC0415
+
+    enviar = requests.sessions.Session.send
+
+    def recusa(self, requisicao, **kwargs):
+        # O laço local (servidor de teste em 127.0.0.1) não é rede.
+        if urlsplit(requisicao.url).hostname not in ("127.0.0.1", "localhost", "::1"):
+            raise requests.ConnectionError("rede bloqueada nos testes")
+        kwargs["proxies"] = {}  # nem um proxy de ambiente recebe o tráfego do laço local
+        return enviar(self, requisicao, **kwargs)
+
+    monkeypatch.setattr(requests.sessions.Session, "send", recusa)
+
+
+@pytest.fixture(autouse=True)
+def fila_da_principal_vazia(app_qt, app_dirs, schema):  # noqa: ARG001
+    """O que um teste deixou na fila da thread principal (`na_thread_principal`) acaba antes do teste seguinte."""
+    yield
+    QCoreApplication.processEvents()
+
+
+@pytest.fixture
+def flush_idle(app_qt):  # noqa: ARG001
+    """Gira o laço de eventos por um instante: o que foi enfileirado para a thread principal chega."""
+
+    def girar(limite=0.1):
+        fim = time.monotonic() + limite
+        while time.monotonic() < fim:
+            laco = QEventLoop()
+            QTimer.singleShot(10, laco.quit)
+            laco.exec()
+
+    return girar
+
+
+class AvisosAnotados:
+    """No lugar da `FilaDeAvisos`: guarda os textos e a última chamada inteira."""
+
+    def __init__(self) -> None:
+        self.textos: list[str] = []
+        self.ultima: dict | None = None
+
+    def adicionar(self, texto, botao="", ao_clicar=None, segundos=5, chave=None) -> int:
+        self.textos.append(texto)
+        self.ultima = {"texto": texto, "botao": botao, "ao_clicar": ao_clicar, "segundos": segundos, "chave": chave}
+        return len(self.textos)
+
+
+@pytest.fixture
+def avisos(monkeypatch):
+    """Os avisos que o app mostraria, em `shared.aplicativo` (sem varredura de conquistas)."""
+    anotados = AvisosAnotados()
+    monkeypatch.setattr(
+        shared, "aplicativo", types.SimpleNamespace(avisos=anotados, varredura_conquistas=None), raising=False
+    )
+    return anotados
 
 
 @pytest.fixture(autouse=True)
@@ -587,37 +566,22 @@ def sem_thread_de_backup_sobrando():
     assert not sobraram, f"threads de backup_de_saves ainda vivas depois do teste: {sobraram}"
 
 
-@pytest.fixture
-def flush_idle():
-    """Drain everything ``GLib.idle_add`` has queued.
+class _FakeSinal:
+    """Um sinal do `Jogo` que só anota quem a store ligou nele."""
 
-    The store defers work that touches widgets (re-keying ``game_covers``) to
-    the main loop. Under test there is no loop running, so the callbacks sit in
-    the default context until something iterates it — which is exactly what
-    lets a test assert that the work was deferred rather than done inline.
-    """
+    def __init__(self, nome: str, ligacoes: list) -> None:
+        self.nome = nome
+        self.ligacoes = ligacoes
 
-    def drain(limit: int = 1000) -> int:
-        context = GLib.MainContext.default()
-        iterations = 0
-        while context.pending() and iterations < limit:
-            context.iteration(False)
-            iterations += 1
-        return iterations
-
-    yield drain
-    # Leftover sources would otherwise fire during an unrelated later test.
-    drain()
+    def connect(self, callback, _tipo=None) -> None:
+        self.ligacoes.append((self.nome, callback))
 
 
 class FakeGame:
-    """Duck-type standing in for ``Game`` in store tests.
+    """Duck-type standing in for ``Jogo`` in store tests.
 
-    A real ``Game`` is a ``Gtk.Template`` widget that reaches for
-    ``shared.win.get_application()`` in its constructor. The store never needs
-    any of that — it reads a handful of fields and calls ``save``/``update`` —
-    so the fake keeps these tests about the store rather than about widget
-    construction. ``saves`` is a counter because several tests are precisely
+    The store never needs a real ``Jogo`` — it reads a handful of fields and
+    calls ``save``/``update`` — so the fake keeps these tests about the store. ``saves`` is a counter because several tests are precisely
     about how *many* times a scan writes a record.
     """
 
@@ -649,11 +613,13 @@ class FakeGame:
         self.backup_dos_saves_desligado = overrides.pop("backup_dos_saves_desligado", False)
         for key, value in overrides.items():
             setattr(self, key, value)
-        # Derived exactly the way Game.__init__ derives it.
+        # Derived exactly the way Jogo.__init__ derives it.
         self.base_source = self.source.split("_")[0]
         self.saves = 0
         self.updates = 0
         self.signals: list = []
+        self.salvar = _FakeSinal("salvar", self.signals)
+        self.atualizado = _FakeSinal("atualizado", self.signals)
 
     def save(self) -> None:
         self.saves += 1
@@ -662,22 +628,19 @@ class FakeGame:
         self.updates += 1
 
     def update_values(self, data: dict) -> None:
-        # Duck-types Game.update_values (plain setattr, no _KNOWN_KEYS
+        # Duck-types Jogo.update_values (plain setattr, no _KNOWN_KEYS
         # filtering).
         for key, value in data.items():
             setattr(self, key, value)
 
     @property
     def zerado(self) -> bool:
-        # A mesma regra de Game.zerado.
+        # A mesma regra de Jogo.zerado.
         return self.removed and not self.blacklisted and self.status == "beaten"
 
-    def connect(self, signal, callback) -> None:
-        self.signals.append((signal, callback))
-
     def get_cover_path(self) -> Path | None:
-        # Duck-types Game.get_cover_path: the backup exporter calls this on
-        # whatever `shared.store` holds, real Game or this fake.
+        # Duck-types Jogo.get_cover_path: the backup exporter calls this on
+        # whatever `shared.store` holds, real Jogo or this fake.
         from cartridges.utils.save_cover import ANIMATED_SUFFIXES  # noqa: PLC0415
 
         for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
@@ -716,33 +679,6 @@ def store():
 
 
 @pytest.fixture
-def real_window(store, monkeypatch):
-    """A genuine ``CartridgesWindow``, widgets and all.
-
-    Used where the thing under test *is* the widget wiring — which grid a
-    filter reads its search box from, for instance. Building it is cheap enough
-    (no display is presented, only realised) that faking it would cost more
-    fidelity than it saves.
-    """
-    from cartridges.window import CartridgesWindow  # noqa: PLC0415
-
-    instance = CartridgesWindow()
-    monkeypatch.setattr(shared, "win", instance, raising=False)
-    yield instance
-    # A janela nunca é destruída aqui; sem soltar o que ela ligou nos singletons
-    # (o quadro de tarefas, por exemplo), ela seguiria ouvindo os testes seguintes.
-    instance.detach_global_handlers()
-
-
-@pytest.fixture
-def details_dialog(win):
-    """A ``DetailsDialog`` for the Apply-button bookkeeping."""
-    from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
-
-    return DetailsDialog()
-
-
-@pytest.fixture
 def write_record(app_dirs):
     """Write a game's JSON record the way ``FileManager`` would."""
 
@@ -768,104 +704,69 @@ def write_asset(app_dirs):
     return writer
 
 
-@pytest.fixture
-def sessao_sem_efeitos(monkeypatch):
-    """O bloqueador da janela de verdade, sem parede, fita nem controle."""
-    import cartridges.window as window_module  # noqa: PLC0415
+@pytest.fixture(autouse=True)
+def sem_area_de_trabalho(monkeypatch):
+    """O papel de parede de verdade da área de trabalho nunca é tocado: sem COM nos testes.
 
-    vestidas = []
-    monkeypatch.setattr(window_module.session_fita, "comecar", vestidas.append)
-    monkeypatch.setattr(window_module.session_fita, "voltar", lambda: None)
-    monkeypatch.setattr(window_module.session_wallpaper, "comecar", lambda _g: None)
-    monkeypatch.setattr(window_module.session_wallpaper, "restaurar", lambda: None)
-    monkeypatch.setattr(
-        window_module.window_geometry, "restore_from_monitor", lambda _w: None
-    )
-    # O vigia de conquistas é global ao processo: um teste que mostra o
-    # bloqueador sem escondê-lo o deixaria vivo para o teste seguinte.
-    monkeypatch.setattr(window_module.sessao_conquistas, "comecar", lambda _g: None)
-    monkeypatch.setattr(window_module.sessao_conquistas, "parar", lambda: None)
-    return vestidas
+    Quem precisa da `IDesktopWallpaper` troca `_AreaDeTrabalho` por um falso.
+    """
+
+    def proibida(*_args, **_kwargs):
+        raise AssertionError("o teste tentou abrir a área de trabalho de verdade (IDesktopWallpaper)")
+
+    from cartridges.utils import session_wallpaper  # noqa: PLC0415
+
+    monkeypatch.setattr(session_wallpaper, "_AreaDeTrabalho", proibida)
 
 
 @pytest.fixture(autouse=True)
-def _quadro_de_tarefas_limpo():
-    """O quadro de tarefas é global ao processo: entregas que ficaram na fila e
-    tarefas que ninguém terminou passariam de um teste para o seguinte."""
-    yield
-    from cartridges.utils import tarefas  # noqa: PLC0415
+def sem_fita_de_verdade(monkeypatch):
+    """Nenhum teste fala com uma fita de LED: o `_dispositivo` (a tinytuya, com rede) falha alto.
 
-    contexto = GLib.MainContext.default()
-    for _ in range(1000):
-        if not contexto.pending():
-            break
-        contexto.iteration(False)
-    tarefas.lista.remove_all()
-
-
-@pytest.fixture
-def capas_falsas(monkeypatch):
-    """O tocador e a fila das cópias animadas, falsos, para testar o GameCover.
-
-    O tocador de verdade sobe uma thread que vive até o fim do processo, e a
-    fila gera cópias em segundo plano. Aqui o tocador só anota o que pediram e
-    ``pedir`` guarda os pedidos, com o ``pronto`` de cada um para o teste
-    chamar quando quiser.
+    Quem prova a conversa troca `_dispositivo` por um módulo falso (`falsas`, de `tests/apoio_fita.py`).
     """
-    from cartridges.utils import copias_animadas, tocador_capas  # noqa: PLC0415
+    from cartridges.utils import session_fita  # noqa: PLC0415
 
-    class TocadorFalso:
-        def __init__(self):
-            self.tocados = []
-            self.parados = []
-            self.posicao = 0
+    def proibido(*_args, **_kwargs):
+        raise AssertionError("o teste tentou falar com uma fita de verdade (tinytuya)")
 
-        def tocar(
-            self,
-            dono,
-            copia,
-            ao_quadro,
-            ao_falhar,
-            posicao_inicial_ms=0,
-            ao_fechar=None,
-        ):
-            self.tocados.append(
-                types.SimpleNamespace(
-                    dono=dono,
-                    copia=copia,
-                    ao_quadro=ao_quadro,
-                    ao_falhar=ao_falhar,
-                    inicio=posicao_inicial_ms,
-                    ao_fechar=ao_fechar,
-                )
-            )
+    monkeypatch.setattr(session_fita, "_dispositivo", proibido)
 
-        def parar(self, dono):
-            self.parados.append(dono)
 
-        def posicao_ms(self, _dono):
-            return self.posicao
+@pytest.fixture(autouse=True)
+def sem_tuya_de_verdade(request, monkeypatch):
+    """Nenhum teste fala com a nuvem da Tuya nem varre a rede atrás de fitas: as duas portas falham alto.
 
-        def esquecer(self, _copia):
-            pass
+    Quem prova o assistente troca `fita_wizard._nuvem` e `session_fita.enderecos_na_rede` por falsos. Os que provam a
+    própria `enderecos_na_rede` (com a `tinytuya` falsa em `sys.modules`) levam a marca `varredura_real`.
+    """
+    from cartridges import fita_wizard  # noqa: PLC0415
+    from cartridges.utils import session_fita  # noqa: PLC0415
 
-        def suspender(self, suspenso):
-            self.suspenso = suspenso
+    def proibido(*_args, **_kwargs):
+        raise AssertionError("tuya: nenhuma busca na nuvem nem na rede nos testes")
 
-    tocador = TocadorFalso()
-    pedidos = []
-    abandonadas = []
-    monkeypatch.setattr(tocador_capas, "tocador", tocador)
-    monkeypatch.setattr(copias_animadas, "abandonar", abandonadas.append)
-    monkeypatch.setattr(
-        copias_animadas,
-        "pedir",
-        lambda origem, destino, tamanho, pronto: pedidos.append(
-            types.SimpleNamespace(
-                origem=origem, destino=destino, tamanho=tamanho, pronto=pronto
-            )
-        ),
-    )
-    return types.SimpleNamespace(
-        tocador=tocador, pedidos=pedidos, abandonadas=abandonadas
-    )
+    monkeypatch.setattr(fita_wizard, "_nuvem", proibido)
+    if request.node.get_closest_marker("varredura_real") is None:
+        monkeypatch.setattr(session_fita, "enderecos_na_rede", proibido)
+
+
+@pytest.fixture(autouse=True)
+def dados_temporarios(tmp_path, monkeypatch):
+    """Pasta e subchave de registro próprias de cada teste (as da sessão ficam no topo do arquivo)."""
+    registro = f"{_RAIZ_REGISTRO}\\{uuid.uuid4()}"
+    monkeypatch.setenv("CARTRIDGES_DADOS", str(tmp_path))
+    monkeypatch.setenv("CARTRIDGES_REGISTRO", registro)
+    yield tmp_path
+    _apagar_chave(winreg.HKEY_CURRENT_USER, registro)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def app_qt():
+    """Uma única `QGuiApplication` para a sessão toda, sem janela na tela."""
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PySide6.QtGui import QGuiApplication  # noqa: PLC0415
+
+    # A opção desliga a animação de abrir e fechar diálogos (`Tema.animacoes`): os testes leem o `visible` na hora.
+    app = QGuiApplication.instance() or QGuiApplication(["pytest", "--sem-animacao-de-dialogo"])
+    yield app

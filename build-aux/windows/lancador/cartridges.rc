@@ -1,6 +1,6 @@
 1 ICON "../icon.ico"
 
-/* VERSAO e VERSAO_NUM vêm do montar_app.py. Sem o bloco fixo (FILEVERSION),
+/* VERSAO e VERSAO_NUM vêm do montar_app_qt.py. Sem o bloco fixo (FILEVERSION),
    o Windows ignora os textos e o Gerenciador de Tarefas não mostra o nome.
    VERSAO chega sem aspas: a linha de comando do Windows as perde no caminho. */
 #define TEXTO_(x) #x

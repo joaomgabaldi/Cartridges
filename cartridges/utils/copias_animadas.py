@@ -31,8 +31,8 @@ except ImportError:  # Pillow sem WebP: ``_PorQuadro`` cai no caminho da lista
     _webp = None  # pylint: disable=invalid-name
 
 from cartridges import shared
-from cartridges.utils import tarefas, tocador_capas
 from cartridges.utils.na_tela import entregar_na_tela
+from cartridges.utils.thread_principal import eh_thread_principal
 
 # Como terminou um pedido. ``ilegivel`` é só a origem que não abre; ``falhou``
 # é a cópia que não pôde ser gravada (disco cheio, permissão negada): nada foi
@@ -334,10 +334,6 @@ def _rodar(
             descartado = trabalho.invalido
     if resultado is None or descartado:
         return
-    if resultado == "pronta":
-        # O caminho da cópia é estável: quem já toca a anterior tem de largá-la
-        # antes de receber o aviso. Fora da ``_trava``: o tocador tem a dele.
-        tocador_capas.tocador.esquecer(destino)
     for pronto in prontos:
         entregar_na_tela(_entregar, pronto, resultado)
 
@@ -347,16 +343,39 @@ def _entregar(pronto: Callable[[Resultado], None], resultado: Resultado) -> bool
     return False  # o GLib repetiria o callback que devolvesse um valor verdadeiro
 
 
+# Quem larga os arquivos de cópia que a tela segura abertos (o modelo da biblioteca): o
+# ``AnimatedImage`` mantém o ``.webp`` aberto sem compartilhar a exclusão, e o Windows não deixa
+# apagar nem regravar um arquivo assim (WinError 32). Chamado com o id do jogo, na thread principal.
+soltar_do_jogo: Callable[[str], None] | None = None
+# O mesmo pedido, para a cópia grande que a página de detalhes toca.
+soltar_da_pagina: Callable[[str], None] | None = None
+
+
+def soltar(game_id: str) -> None:
+    """Pede à tela que largue as cópias do jogo, antes de apagá-las ou regravá-las.
+
+    Só a thread principal toca a tela; de outra thread não faz nada (a cópia presa fica para a
+    limpeza da próxima abertura, que a apaga se o jogo deixou de existir).
+    """
+    if eh_thread_principal():
+        for gancho in (soltar_do_jogo, soltar_da_pagina):
+            if gancho is not None:
+                gancho(game_id)
+
+
 def apagar(game_id: str) -> None:
     """Apaga as cópias do jogo e invalida os trabalhos dele, pendentes ou não."""
+    soltar(game_id)
     # Os trabalhos invalidados abaixo nunca avisam: a tarefa precisa saber que
-    # não deve mais esperá-los. Pode vir de uma thread de segundo plano, e a
-    # tarefa é da thread principal. Quem pediu as cópias de novo (a capa nova)
-    # o fez depois desta chamada, e a entrega mantém a ordem.
-    # Sempre agendado: ler ``_lote`` aqui, fora da thread principal e sem
-    # trava, podia ver None um instante antes de um ``preparar`` criar o lote,
-    # e a tarefa ficaria esperando para sempre. O descarte já ignora o None.
-    entregar_na_tela(_descartar_do_lote, game_id)
+    # não deve mais esperá-los. Na principal o descarte é na hora: enfileirado, ele
+    # rodaria depois do ``preparar`` da capa nova (``save_cover._refazer_copias``) e
+    # a levaria junto. De outra thread, a entrega mantém a ordem, e é a tarefa,
+    # da thread principal, que descarta; ler ``_lote`` aqui, sem trava, podia ver None
+    # um instante antes de um ``preparar`` criar o lote. O descarte já ignora o None.
+    if eh_thread_principal():
+        _descartar_do_lote(game_id)
+    else:
+        entregar_na_tela(_descartar_do_lote, game_id)
     with _trava:
         for destino, trabalho in list(_trabalhos.items()):
             if trabalho.chave == game_id:
@@ -370,8 +389,6 @@ def apagar(game_id: str) -> None:
         except OSError:
             logging.warning("Não foi possível apagar a cópia animada %s", arquivo.name)
             continue
-        # Fora da ``_trava``, pelo mesmo motivo do ``_rodar``.
-        tocador_capas.tocador.esquecer(arquivo)
 
 
 def abandonar(origem: Path) -> None:
@@ -388,14 +405,13 @@ def abandonar(origem: Path) -> None:
             if (trabalho := _trabalhos.pop(destino, None)) is not None:
                 trabalho.invalido = True
     # O mesmo desconto do ``apagar``: a tarefa não espera trabalho invalidado.
-    entregar_na_tela(_descartar_do_lote, origem.stem)
+    _descartar_do_lote(origem.stem)
     for destino in destinos:
         try:
             destino.unlink(missing_ok=True)
         except OSError:
             logging.warning("Não foi possível apagar a cópia animada %s", destino.name)
             continue
-        tocador_capas.tocador.esquecer(destino)
 
 
 def adotar(origem: Path, capa: Path) -> None:
@@ -407,6 +423,7 @@ def adotar(origem: Path, capa: Path) -> None:
     do ``apagar`` da capa velha e antes do ``preparar``. Uma cópia que não
     copia é só gerada de novo.
     """
+    soltar(capa.stem)
     for tamanho in tamanhos():
         fonte, destino = caminho_para(origem, tamanho), caminho_para(capa, tamanho)
         # ``gerar`` só põe a cópia no lugar inteira: existindo, está pronta.
@@ -423,7 +440,6 @@ def adotar(origem: Path, capa: Path) -> None:
         finally:
             with contextlib.suppress(OSError):
                 temporario.unlink(missing_ok=True)
-        tocador_capas.tocador.esquecer(destino)
 
 
 def _dono_e_tamanho(arquivo: Path) -> tuple[str, str]:
@@ -496,7 +512,7 @@ def encerrar() -> None:
 class _Lote:
     """O que a tarefa "Capas animadas" em andamento ainda espera."""
 
-    def __init__(self, tarefa: tarefas.Tarefa, total: int) -> None:
+    def __init__(self, tarefa: "tarefas.Tarefa", total: int) -> None:
         self.tarefa = tarefa
         self.total = total
         self.feitos = 0
@@ -506,6 +522,22 @@ class _Lote:
 # Só a thread principal troca isto. Há no máximo uma tarefa: um pedido novo
 # durante ela entra no mesmo lote em vez de abrir outro item na lista.
 _lote: _Lote | None = None
+
+
+def _em_dia(origem: Path, destino: Path, game_id: str) -> bool:
+    """A cópia existe e não é mais velha que a capa; uma velha é largada pela tela para ser refeita.
+
+    Cinto de segurança: a capa trocada com a cópia antiga presa manteria a animação velha na grade.
+    """
+    try:
+        if not destino.exists():
+            return False
+        if destino.stat().st_mtime_ns >= origem.stat().st_mtime_ns:
+            return True
+    except OSError:
+        return True  # a capa sumiu ou a cópia está ilegível: não há o que refazer aqui
+    soltar(game_id)
+    return False
 
 
 def preparar(capas: list[tuple[str, Path]]) -> None:
@@ -522,7 +554,7 @@ def preparar(capas: list[tuple[str, Path]]) -> None:
     for game_id, origem in capas:
         for tamanho in tamanhos():
             destino = caminho_para(origem, tamanho)
-            if destino.exists() or (_lote and destino in _lote.pendentes):
+            if (_lote and destino in _lote.pendentes) or _em_dia(origem, destino, game_id):
                 continue
             novos.setdefault(destino, (game_id, origem, tamanho))
     if not novos:
@@ -531,6 +563,11 @@ def preparar(capas: list[tuple[str, Path]]) -> None:
     # O lote e as pendências ficam prontos antes do primeiro ``pedir``: um aviso
     # nunca chega a um lote que ainda acha que terminou.
     if _lote is None:
+        # Aqui e não no topo: a lista de `tarefas` é um QObject e nasce na thread que
+        # importa o módulo (a principal, no app); a store importa este módulo só para
+        # apagar e migrar cópias.
+        from cartridges.modelos import tarefas  # pylint: disable=import-outside-toplevel
+
         _lote = _Lote(tarefas.comecar(_("Capas animadas"), len(novos)), len(novos))
     else:
         _lote.total += len(novos)
@@ -542,12 +579,26 @@ def preparar(capas: list[tuple[str, Path]]) -> None:
         pedir(origem, destino, tamanho, partial(_voltou, lote, destino))
 
 
-def _voltou(lote: _Lote, destino: Path, _resultado: Resultado) -> None:
+# Quem quer saber de cada cópia que termina (o modelo da biblioteca): (game_id, resultado), na
+# thread principal. Um só, e global: o pedido pode ter vindo de outro lugar (``save_cover``).
+ao_terminar_copia: Callable[[str, Resultado], None] | None = None
+# O mesmo aviso para a cópia grande que a página de detalhes toca.
+ao_terminar_da_pagina: Callable[[str, Resultado], None] | None = None
+
+
+def _voltou(lote: _Lote, destino: Path, resultado: Resultado) -> None:
     # Um aviso tardio de lote que já terminou ou foi cancelado, ou de cópia que
     # a tarefa já deixou de esperar, não conta nem reabre nada.
     if lote is not _lote or destino not in lote.pendentes:
         return
-    del lote.pendentes[destino]
+    game_id = lote.pendentes.pop(destino)
+    # Um gancho que levanta não pode deixar a última cópia sem encerrar o lote.
+    for gancho in (ao_terminar_copia, ao_terminar_da_pagina):
+        if gancho is not None:
+            try:
+                gancho(game_id, resultado)
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.warning("Falha ao avisar o fim da cópia de %s", game_id, exc_info=True)
     lote.feitos += 1
     lote.tarefa.atualizar(lote.feitos)
     if not lote.pendentes:

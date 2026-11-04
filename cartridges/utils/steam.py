@@ -251,7 +251,7 @@ class SteamAPIHelper:
                     payload = response.json()
                     # JSON válido que não é objeto (null, lista — proxy no
                     # meio) fazia `.get()` estourar AttributeError, que nenhum
-                    # except daqui ou do steam_picker cobre: a thread do picker
+                    # except daqui ou do seletor da Steam cobre: a thread do picker
                     # morria e o spinner ficava eterno. Shape errado vale o
                     # mesmo "não encontrado" do JSON inválido logo abaixo.
                     items = payload.get("items") if isinstance(payload, dict) else None

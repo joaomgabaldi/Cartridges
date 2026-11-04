@@ -4,40 +4,70 @@
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * Cartridges.exe: o mesmo que o pythonw.exe, mas já apontando para o script
- * bin\cartridges. O Python roda dentro deste processo, então é "Cartridges.exe"
- * que o Windows mostra no Gerenciador de Tarefas, na barra de tarefas e nas
- * configurações de GPU, e não "pythonw.exe".
+ * Cartridges.exe: abre o Python embutido do app (..\python\python315.dll) já
+ * rodando `-m cartridges`. O Python roda dentro deste processo, então é
+ * "Cartridges.exe" que o Windows mostra no Gerenciador de Tarefas, na barra de
+ * tarefas e nas configurações de GPU, e não "pythonw.exe".
+ *
+ * A DLL é carregada à mão (LoadLibraryExW + GetProcAddress): o lançador não
+ * depende da biblioteca de importação nem dos cabeçalhos do Python. Compilado
+ * com o MSVC (/MT: nenhum runtime além do que o Windows já tem).
  */
 
 #include <stdlib.h>
+#include <wchar.h>
 #include <windows.h>
 
-/* Declarado à mão para o lançador não depender dos cabeçalhos do Python */
-int Py_Main(int argc, wchar_t **argv);
+typedef int (*PyMainFn)(int, wchar_t **);
+
+static int falha(void)
+{
+    MessageBoxW(NULL, L"Não foi possível abrir o Cartridges. Reinstale o aplicativo.",
+                L"Cartridges", MB_OK | MB_ICONERROR);
+    return 1;
+}
 
 int WINAPI wWinMain(HINSTANCE instancia, HINSTANCE anterior, PWSTR linha, int exibir)
 {
     wchar_t exe[MAX_PATH];
-    wchar_t script[MAX_PATH];
+    wchar_t dll[MAX_PATH];
     wchar_t *barra;
+    HMODULE python;
+    PyMainFn py_main;
     int i;
-    int argc = __argc + 1;
+    int argc = __argc + 2;
     wchar_t **argv = calloc(argc + 1, sizeof *argv);
+    wchar_t m[] = L"-m";
+    wchar_t pacote[] = L"cartridges";
 
     DWORD n = GetModuleFileNameW(NULL, exe, MAX_PATH);
+    /* A pasta atual não entra na busca de DLLs */
+    SetDllDirectoryW(L"");
     if (!argv || n == 0 || n >= MAX_PATH)
-        return 1;
+        return falha();
 
-    wcscpy(script, exe);
-    barra = wcsrchr(script, L'\\');
-    if (!barra || (barra - script) + wcslen(L"\\cartridges") >= MAX_PATH)
-        return 1;
-    wcscpy(barra + 1, L"cartridges");
+    /* <instalação>\bin\Cartridges.exe -> <instalação>\python\python315.dll */
+    wcscpy_s(dll, MAX_PATH, exe);
+    barra = wcsrchr(dll, L'\\');
+    if (!barra || (barra - dll) + wcslen(L"\\..\\python\\python315.dll") >= MAX_PATH)
+        return falha();
+    wcscpy_s(barra, MAX_PATH - (barra - dll), L"\\..\\python\\python315.dll");
+
+    /* Com o caminho alterado, o Windows procura as dependências da DLL
+       (vcruntime140.dll, ...) na pasta dela. */
+    python = LoadLibraryExW(dll, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    if (!python)
+        return falha();
+    py_main = (PyMainFn)GetProcAddress(python, "Py_Main");
+    if (!py_main)
+        return falha();
 
     argv[0] = exe;
-    argv[1] = script;
+    argv[1] = m;
+    argv[2] = pacote;
     for (i = 1; i < __argc; i++)
-        argv[i + 1] = __wargv[i];
-    return Py_Main(argc, argv);
+        argv[i + 2] = __wargv[i];
+    /* Sem console: um código diferente de zero (instalação danificada, QML que não carrega) sairia em silêncio. */
+    int r = py_main(argc, argv);
+    return r ? falha() : 0;
 }

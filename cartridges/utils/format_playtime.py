@@ -50,6 +50,33 @@ def format_stopwatch(seconds: int) -> str:
     return f"{seconds // 3600}:{seconds // 60 % 60:02}:{seconds % 60:02}"
 
 
+# Base 1024 com os rótulos curtos, que é o que o Explorer mostra: o número aqui
+# existe para ser comparado com o de lá, e uma medida em base 1000 mostraria
+# 94 GB onde o Windows mostra 87.
+_UNITS = ("B", "KB", "MB", "GB", "TB")
+
+
+def format_size(size: int) -> str:
+    """Tamanho legível, com vírgula decimal ("87,4 GB")."""
+    if size <= 0:
+        return ""
+
+    value = float(size)
+    unit = 0
+    while value >= 1024 and unit < len(_UNITS) - 1:
+        value /= 1024
+        unit += 1
+
+    # Uma casa decimal só a partir de MB: "1,4 KB" é precisão que ninguém pediu,
+    # e em bytes a fração não existe.
+    if unit < 2:
+        return f"{round(value)} {_UNITS[unit]}"
+
+    rounded = round(value, 1)
+    text = str(int(rounded)) if rounded.is_integer() else str(rounded).replace(".", ",")
+    return f"{text} {_UNITS[unit]}"
+
+
 if __name__ == "__main__":
     import builtins
 

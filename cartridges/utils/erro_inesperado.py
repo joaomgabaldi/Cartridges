@@ -1,7 +1,12 @@
-"""Avisa o usuário de um erro não tratado, num diálogo da janela principal.
+"""Avisa o usuário de um erro não tratado, num diálogo da janela principal (D89).
 
 Chamado pelos ganchos de exceção de `cartridges.logging.setup`, de qualquer
-thread: o diálogo sempre é aberto na thread da tela, via `GLib.idle_add`.
+thread: o diálogo sempre é pedido na thread da tela, via `na_thread_principal`,
+à fila de diálogos do `Aplicativo` (D72). Sem `shared.aplicativo` (o assistente,
+a restauração) o erro fica só no log. Depois do `aboutToQuit` o `shared.aplicativo`
+continua lá: o pedido entra na pilha, que não roda mais, e só o log fica. Com a principal escondida e a
+janela das tarefas aberta, o diálogo abre nela, como na `main`; sem ela, espera a principal voltar.
+Nada é enviado a lugar nenhum.
 Sem enxurrada: um diálogo aberto por vez, e o mesmo erro (tipo + arquivo:linha
 do último quadro do app) só avisa uma vez por execução do app. Só `Exception`
 merece diálogo: `KeyboardInterrupt`, `SystemExit` e afins só vão para o log.
@@ -12,10 +17,8 @@ import threading
 import traceback
 from pathlib import Path
 
-from gi.repository import GLib
-
 from cartridges import shared
-from cartridges.utils.create_dialog import create_dialog
+from cartridges.utils.thread_principal import na_thread_principal
 
 _PACOTE = Path(__file__).resolve().parent.parent.name
 _trava = threading.Lock()
@@ -40,28 +43,25 @@ def _liberar() -> None:
         _aberto = False
 
 
-def _abrir(janela) -> bool:  # type: ignore
+def _abrir() -> None:
+    """Na thread principal. Nunca levanta: um erro aqui voltaria ao gancho."""
     try:
-        dialogo = create_dialog(
-            janela,
-            _("Ocorreu um erro inesperado"),
-            _("Uma ação do aplicativo não foi concluída. Os detalhes foram registrados no log."),
-        )
-        dialogo.connect("closed", lambda *_a: _liberar())
+        aplicativo = getattr(shared, "aplicativo", None)
+        if aplicativo is None:  # o app fechou entre o erro e a entrega
+            _liberar()
+            return
+        titulo = _("Ocorreu um erro inesperado")
+        corpo = _("Uma ação do aplicativo não foi concluída. Os detalhes foram registrados no log.")
+        from cartridges.modelos import tarefas  # pylint: disable=import-outside-toplevel  # o gancho do log carrega este módulo cedo
+
+        painel = tarefas.painel_aberto_sem_a_principal()
+        if painel is not None:
+            painel.pedir_aviso(titulo, corpo, _liberar)
+        else:
+            aplicativo.pedir_dialogo(titulo, corpo, [], _liberar)
     except Exception:  # pylint: disable=broad-exception-caught
         _liberar()
         logging.warning("Falha ao abrir o aviso de erro inesperado", exc_info=True)
-    return False
-
-
-def _janela_para_o_dialogo():  # type: ignore
-    """A principal; se ela está escondida (backup de saída), a ativa do app."""
-    janela = getattr(shared, "win", None)
-    if janela is not None and hasattr(janela, "is_visible") and not janela.is_visible():
-        ativa = janela.get_application().get_active_window()
-        if ativa is not None:
-            return ativa
-    return janela
 
 
 def avisar(tipo, rastro) -> None:  # type: ignore
@@ -70,8 +70,7 @@ def avisar(tipo, rastro) -> None:  # type: ignore
     try:
         if not (isinstance(tipo, type) and issubclass(tipo, Exception)):
             return
-        janela = _janela_para_o_dialogo()
-        if janela is None:
+        if getattr(shared, "aplicativo", None) is None:
             return
         chave = _chave(tipo, rastro)
         with _trava:
@@ -80,7 +79,7 @@ def avisar(tipo, rastro) -> None:  # type: ignore
             _aberto = True
             _ja_avisados.add(chave)
         try:
-            GLib.idle_add(_abrir, janela)
+            na_thread_principal(_abrir)
         except Exception:  # pylint: disable=broad-exception-caught
             _liberar()
             raise

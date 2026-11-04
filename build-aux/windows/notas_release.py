@@ -16,17 +16,19 @@ INSTALACAO = "Baixe **Cartridges Windows.exe** abaixo e execute ou receba a atua
 
 
 def notas(metainfo: str, versao: str, anterior: str = "") -> str:
-    """``anterior`` é a última versão publicada como final. As que vieram depois
-    dela e nunca viraram release entram junto, para que as novidades delas não
-    se percam; sem ``anterior``, só a ``versao``."""
+    """``anterior`` é a última versão publicada como final. As releases do arquivo
+    entre a ``versao`` (inclusive) e a ``anterior`` (exclusive) entram juntas, para
+    que as novidades de uma versão que nunca saiu não se percam; sem ``anterior``
+    (ou se ela não está no arquivo), só a ``versao``."""
     releases = ET.parse(metainfo).findall("releases/release")
-    if not any(r.get("version") == versao for r in releases):
+    versoes = [r.get("version") for r in releases]
+    if versao not in versoes:
         raise SystemExit(f'Não há <release version="{versao}"> em {metainfo}.')
-    # AAAA.MM.DD se compara como texto; o metainfo já vem da mais nova para a mais antiga.
-    incluidas = [
-        r for r in releases
-        if r.get("version") == versao or (anterior and anterior < r.get("version", "") <= versao)
-    ]
+    # O metainfo vem da mais nova para a mais antiga; a ordem do arquivo é a que vale
+    # (data e X.Y.Z não se comparam como texto).
+    inicio = versoes.index(versao)
+    fim = versoes.index(anterior) if anterior in versoes[inicio:] else inicio + 1
+    incluidas = releases[inicio : max(fim, inicio + 1)]
     # No metainfo os itens não levam ponto final; nas notas, levam.
     itens = [li.text.strip() for release in incluidas for li in release.iter("li")]
     linhas = "\n".join(f"- {item if item.endswith('.') else item + '.'}" for item in itens)

@@ -29,12 +29,10 @@ import logging
 import shutil
 import stat
 import zipfile
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from pathlib import Path, PurePosixPath
 from time import sleep, time
 from typing import Any, Callable, Iterable, Literal, Optional
-
-from gi.repository import Gio, GLib
 
 from cartridges import shared
 from cartridges.conquistas import arquivos
@@ -63,6 +61,8 @@ _COMPLETO = ".completo"
 # Quanto da restauração se lê de uma vez: o progresso anda a cada pedaço.
 _PEDACO = 1024 * 1024
 _TENTATIVAS_DE_APAGAR = 5
+# De quanto em quanto a exportação, na fila da trava dos saves, avisa que está viva.
+_ESPERA_DA_TRAVA_S = 5
 # Quanto de um save é lido por vez ao copiá-lo para o backup.
 _BLOCO = 1024 * 1024
 # Marca, dentro de `.anterior`, que os saves da pasta padrão não saíram da
@@ -130,7 +130,7 @@ pasta_dos_saves_desfeita: str | None = None  # pylint: disable=invalid-name
 
 def _filtrar_chaves(chaves: Iterable[str]) -> list[str]:
     """``chaves`` sem as de sessão em andamento e as desta máquina. Separada de `_chaves_do_app`
-    para poder ser testada sem um `Gio.Settings` de verdade."""
+    para poder ser testada sem as configurações de verdade."""
     return [
         chave
         for chave in chaves
@@ -139,7 +139,7 @@ def _filtrar_chaves(chaves: Iterable[str]) -> list[str]:
 
 
 def _chaves_do_app() -> list[str]:
-    return _filtrar_chaves(shared.schema.props.settings_schema.list_keys())
+    return _filtrar_chaves(shared.schema.list_keys())
 
 
 def ler_configuracoes() -> dict[str, Any]:
@@ -150,57 +150,39 @@ def ler_configuracoes() -> dict[str, Any]:
     """
     return {
         "settings": {
-            chave: shared.schema.get_value(chave).unpack() for chave in _chaves_do_app()
+            chave: shared.schema.get_value(chave) for chave in _chaves_do_app()
         },
         "state": {
-            chave: shared.state_schema.get_value(chave).unpack()
+            chave: shared.state_schema.get_value(chave)
             for chave in _CHAVES_DE_ESTADO
         },
     }
 
 
-def _variante(chave: Gio.SettingsSchemaKey, valor: Any) -> Optional[GLib.Variant]:
-    """``valor`` como o schema o guarda, ou ``None`` se o schema não o aceita."""
-    tipo = chave.get_value_type().dup_string()
-    # GLib.Variant("b", ...) aceita qualquer coisa e a torna verdadeira; um
-    # "sim" digitado à mão ligaria a opção em vez de ser descartado.
-    if tipo == "b" and not isinstance(valor, bool):
-        return None
-    try:
-        variante = GLib.Variant(tipo, valor)
-    except (TypeError, ValueError, OverflowError):
-        return None
-    # Fora das opções do schema (um `sort-mode` que não existe): o GSettings
-    # recusaria com um aviso crítico e deixaria o valor de antes no lugar.
-    return variante if chave.range_check(variante) else None
-
-
 def _aplicar(settings: Any, valores: Any, chaves: Iterable[str]) -> None:
     valores = valores if isinstance(valores, dict) else {}
-    schema = settings.props.settings_schema
     for chave in chaves:
-        variante = None
+        valido = False
         if chave == "shortcuts-location" and arquivos.eh_caminho_de_rede(valores.get(chave)):
             # Uma pasta de rede vinda de um backup alheio faria a importação
             # conectar naquela máquina e trazer atalhos de lá.
             logging.warning("Configuração %s ignorada no backup: pasta de rede", chave)
         elif chave in valores:
-            variante = _variante(schema.get_key(chave), valores[chave])
-            if variante is None:
+            valido = settings.aceita(chave, valores[chave])
+            if not valido:
                 logging.warning("Configuração %s ignorada no backup: valor inválido", chave)
-        if variante is None:
+        if not valido:
             # Idêntico ao backup: o que ele não tem, ou tem num valor que esta
             # versão não aceita, fica no padrão.
             settings.reset(chave)
         else:
-            settings.set_value(chave, variante)
+            settings[chave] = valores[chave]
 
 
 def aplicar_configuracoes(configuracoes: dict[str, Any]) -> None:
     """Deixa as configurações como estão em ``configuracoes``."""
     _aplicar(shared.schema, configuracoes.get("settings"), _chaves_do_app())
     _aplicar(shared.state_schema, configuracoes.get("state"), _CHAVES_DE_ESTADO)
-    Gio.Settings.sync()
 
 
 # endregion
@@ -280,16 +262,17 @@ def _compressao(caminho: Path) -> int:
     )
 
 
-def _incluir(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
+def _incluir(arquivo: zipfile.ZipFile, caminho: Path, nome: str, progresso: Callable[[], None]) -> None:
     try:
         arquivo.write(caminho, nome, compress_type=_compressao(caminho))
+        progresso()
     except FileNotFoundError:
         # Apagado entre a listagem e a leitura (uma capa trocada agora): o
         # backup sai sem ele, em vez de não sair.
         logging.debug("%s sumiu durante o backup", caminho)
 
 
-def _incluir_save(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
+def _incluir_save(arquivo: zipfile.ZipFile, caminho: Path, nome: str, progresso: Callable[[], None]) -> None:
     """Como `_incluir`, para um arquivo da pasta dos saves, que pode estar num
     OneDrive sem conexão: só o erro de LER vira `SavesInacessiveis`, inclusive o
     arquivo que sumiu (com a trava dos saves, nada some de forma legítima: é a pasta
@@ -312,10 +295,26 @@ def _incluir_save(arquivo: zipfile.ZipFile, caminho: Path, nome: str) -> None:
             if not bloco:
                 break
             destino.write(bloco)
+            progresso()  # por bloco: um save de gigabytes não pode parecer parado
+
+
+@contextmanager
+def _trava_dos_saves(progresso: Callable[[], None]):
+    """A trava do Ludusavi, esperada com um aviso de progresso a cada tique: o Ludusavi a segura por minutos, e
+    quem espera atrás dele não está parado."""
+    trava = backup_de_saves.trava_dos_saves()
+    while not trava.acquire(timeout=_ESPERA_DA_TRAVA_S):
+        progresso()
+    try:
+        yield
+    finally:
+        trava.release()
 
 
 def exportar(
-    destino: Path, configuracoes: dict[str, Any]
+    destino: Path,
+    configuracoes: dict[str, Any],
+    progresso: Callable[[], None] | None = None,
 ) -> Literal["ausente", "vazia"] | None:
     """Grava o backup em ``destino``. Pode rodar fora da thread principal;
     ``configuracoes`` vem de `ler_configuracoes`, lida na principal.
@@ -323,7 +322,11 @@ def exportar(
     Devolve ``"ausente"`` se a pasta dos saves escolhida não existe ou não pode ser
     alcançada, e ``"vazia"`` se existe mas não tem nenhuma cópia de save: nos dois o
     .zip é gerado sem saves e quem chamou precisa avisar. Em todo o resto, ``None``;
-    a pasta padrão ausente ou vazia não conta (ainda não houve backup de save)."""
+    a pasta padrão ausente ou vazia não conta (ainda não houve backup de save).
+
+    ``progresso()``, se dado, é chamado (na thread de quem exporta) a cada arquivo gravado e a
+    cada bloco de save lido: quem espera vê que a exportação não está parada."""
+    progresso = progresso or (lambda: None)
     manifesto = {
         "version": VERSAO,
         "app_version": shared.VERSION,
@@ -344,10 +347,10 @@ def exportar(
                 compress_type=zipfile.ZIP_DEFLATED,
             )
             for caminho, nome in _entradas():
-                _incluir(arquivo, caminho, nome)
+                _incluir(arquivo, caminho, nome, progresso)
             # Com a trava do Ludusavi: um backup de save em andamento não pode
             # entrar aqui pela metade.
-            with backup_de_saves.trava_dos_saves():
+            with _trava_dos_saves(progresso):
                 # A pasta é lida uma vez, antes da listagem: o aviso e o que entra no
                 # .zip partem da mesma leitura, mesmo que ela apareça ou suma depois.
                 pasta = pasta_dos_saves.atual()
@@ -364,7 +367,7 @@ def exportar(
                         # alcance não é "sem saves".
                         aviso = "vazia" if pasta.is_dir() else "ausente"
                 for caminho, nome in entradas:
-                    _incluir_save(arquivo, caminho, nome)
+                    _incluir_save(arquivo, caminho, nome, progresso)
         temporario.replace(destino)
     finally:
         temporario.unlink(missing_ok=True)
@@ -665,7 +668,6 @@ def aplicar_pendente(progresso: Optional[Callable[[float], None]] = None) -> Opt
             # Os saves do backup entraram na pasta padrão, na troca acima.
             escolhida = shared.schema.get_string(_CHAVE_DA_PASTA_DOS_SAVES)
             shared.schema.reset(_CHAVE_DA_PASTA_DOS_SAVES)
-            Gio.Settings.sync()
             # Só depois de zerada: uma falha antes daqui devolve tudo, a escolha
             # inclusive, e não há o que avisar.
             pasta_dos_saves_desfeita = escolhida or None

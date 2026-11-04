@@ -304,7 +304,7 @@ def test_conta_ja_guardada_nao_e_regravada(tmp_path, monkeypatch, state_schema, 
 def test_varios_jogos_da_varredura_enfileiram_uma_gravacao(tmp_path, monkeypatch, state_schema):
     _steam_com_contas(tmp_path, monkeypatch, "123", "456")
     enfileiradas = []
-    monkeypatch.setattr(arquivos.GLib, "idle_add", lambda funcao, *args: enfileiradas.append(args))
+    monkeypatch.setattr(arquivos, "na_thread_principal", lambda funcao, *args: enfileiradas.append(args))
     _conta_ativa(monkeypatch, 456)
     for _jogo in range(3):
         _esperados()

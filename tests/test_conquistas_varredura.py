@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from cartridges import shared
 from cartridges.conquistas import catalogo, historico, sessao, varredura
 from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.conquistas.varredura import VarreduraConquistas
@@ -34,8 +35,8 @@ def _rodar(games, flush_idle):
     return instancia
 
 
-def _avisos(win):
-    return [toast.get_title() for toast in win.toast_queue.added]
+def _avisos(avisos):
+    return avisos.textos
 
 
 def _da_steam_aberta(store, make_game, numero, appid=None):
@@ -53,24 +54,24 @@ def _registrado(store, make_game, numero, **campos):
     return game
 
 
-def test_primeira_varredura_grava_sem_avisar(store, make_game, pastas, win, flush_idle):
+def test_primeira_varredura_grava_sem_avisar(store, make_game, pastas, avisos, flush_idle):
     _goldberg(pastas, "570", [("ACH_A", 100)])
     game = _registrado(store, make_game, 1, steam_appid="570")
     _rodar([game], flush_idle)
     assert historico.ler(game.game_id) == {"ACH_A": 100}
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
 
 
-def test_conquista_nova_desde_a_ultima_abertura(store, make_game, pastas, win, flush_idle):
+def test_conquista_nova_desde_a_ultima_abertura(store, make_game, pastas, avisos, flush_idle):
     game = _registrado(store, make_game, 1, steam_appid="570")
     historico.registrar(game.game_id, [Desbloqueio("ACH_A", 100)])
     _goldberg(pastas, "570", [("ACH_A", 100), ("ACH_B", 200)])
     _rodar([game], flush_idle)
     assert historico.ler(game.game_id) == {"ACH_A": 100, "ACH_B": 200}
-    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+    assert _avisos(avisos) == ["1 nova conquista em Jogo 1"]
 
 
-def test_aviso_soma_os_jogos(store, make_game, pastas, win, flush_idle):
+def test_aviso_soma_os_jogos(store, make_game, pastas, avisos, flush_idle):
     um = _registrado(store, make_game, 1, steam_appid="570")
     dois = _registrado(store, make_game, 2, steam_appid="620")
     historico.registrar(um.game_id, [])
@@ -78,7 +79,7 @@ def test_aviso_soma_os_jogos(store, make_game, pastas, win, flush_idle):
     _goldberg(pastas, "570", [("A", 1), ("B", 2)])
     _goldberg(pastas, "620", [("C", 3)])
     _rodar([um, dois], flush_idle)
-    assert _avisos(win) == ["3 novas conquistas em 2 jogos"]
+    assert _avisos(avisos) == ["3 novas conquistas em 2 jogos"]
 
 
 def test_mesmo_appid_em_dois_jogos(store, make_game, pastas, flush_idle):
@@ -114,7 +115,7 @@ def test_appid_corrigido_durante_a_leitura_descarta_a_leitura(
 
 
 def test_jogo_em_sessao_com_vigia_fica_para_o_vigia(
-    store, make_game, pastas, win, flush_idle, monkeypatch
+    store, make_game, pastas, avisos, flush_idle, monkeypatch
 ):
     """Durante a sessão o vigia é dono do histórico do jogo: se a varredura fundisse
     a conquista nova antes dele, o vigia não veria novidade (sem cartão e sem pulso)."""
@@ -128,7 +129,7 @@ def test_jogo_em_sessao_com_vigia_fica_para_o_vigia(
     _rodar([game, outro], flush_idle)
     assert historico.ler(game.game_id) == {"ACH_A": 100}  # o vigia cuida deste
     assert historico.ler(outro.game_id) == {"ACH_C": 300}  # os outros seguem normalmente
-    assert _avisos(win) == ["1 nova conquista em Jogo 2"]
+    assert _avisos(avisos) == ["1 nova conquista em Jogo 2"]
 
 
 def test_vigia_parado_nao_segura_a_varredura(store, make_game, pastas, flush_idle, monkeypatch):
@@ -140,13 +141,13 @@ def test_vigia_parado_nao_segura_a_varredura(store, make_game, pastas, flush_idl
     assert historico.ler(game.game_id) == {"ACH_A": 100}
 
 
-def test_chave_recusada_avisa_uma_vez(store, make_game, pastas, win, flush_idle, monkeypatch):
+def test_chave_recusada_avisa_uma_vez(store, make_game, pastas, avisos, flush_idle, monkeypatch):
     monkeypatch.setattr(
         catalogo, "obter", lambda _appid, _exe, rede=True, usar_chave=True: catalogo.Renovacao(None, chave_recusada=True)
     )
     jogos = [_da_steam_aberta(store, make_game, n) for n in (1, 2, 3)]
     _rodar(jogos, flush_idle)
-    assert _avisos(win).count(
+    assert _avisos(avisos).count(
         "A chave da Steam Web API foi recusada. Verifique-a nas Preferências."
     ) == 1
 
@@ -196,7 +197,7 @@ def test_concluir_nao_levanta_e_zera_a_lista(monkeypatch):
     assert instancia._novas == []
 
 
-def test_varredura_de_um_jogo_fica_calada(store, make_game, pastas, win, flush_idle, monkeypatch):
+def test_varredura_de_um_jogo_fica_calada(store, make_game, pastas, avisos, flush_idle, monkeypatch):
     monkeypatch.setattr(
         catalogo, "obter", lambda _appid, _exe, rede=True, usar_chave=True: catalogo.Renovacao(None, chave_recusada=True)
     )
@@ -207,13 +208,13 @@ def test_varredura_de_um_jogo_fica_calada(store, make_game, pastas, win, flush_i
     instancia._worker([game], instancia._generation, avisar=False)
     flush_idle()
     assert historico.ler(game.game_id) == {"ACH_A": 100, "ACH_B": 200}
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
     assert instancia._novas == []
     # A passada completa que vem depois, sem nada novo, também não avisa do que
     # a varredura de um jogo só já guardou.
     instancia._worker([game], instancia._generation)
     flush_idle()
-    assert [aviso for aviso in _avisos(win) if "conquista" in aviso] == []
+    assert [aviso for aviso in _avisos(avisos) if "conquista" in aviso] == []
 
 
 class _ThreadFalsa:
@@ -282,7 +283,7 @@ def test_varrer_jogos_entrega_o_filtro_a_thread_sem_aplicar(
 
 
 def test_filtro_roda_na_thread_e_deixa_de_fora_quem_nao_passa(
-    store, make_game, pastas, win, flush_idle
+    store, make_game, pastas, avisos, flush_idle
 ):
     a = _da_steam_aberta(store, make_game, 1, "570")
     b = _da_steam_aberta(store, make_game, 2, "620")
@@ -294,7 +295,7 @@ def test_filtro_roda_na_thread_e_deixa_de_fora_quem_nao_passa(
 
 
 def test_filtro_que_levanta_deixa_o_jogo_de_fora_sem_derrubar_a_thread(
-    store, make_game, pastas, win, flush_idle
+    store, make_game, pastas, avisos, flush_idle
 ):
     a = _da_steam_aberta(store, make_game, 1, "570")
     b = _da_steam_aberta(store, make_game, 2, "620")
@@ -312,7 +313,7 @@ def test_filtro_que_levanta_deixa_o_jogo_de_fora_sem_derrubar_a_thread(
 
 
 def test_varrer_jogos_fica_calada_e_nao_guarda_a_data(
-    store, make_game, pastas, win, flush_idle, state_schema, monkeypatch
+    store, make_game, pastas, avisos, flush_idle, state_schema, monkeypatch
 ):
     a = _registrado(store, make_game, 1, steam_appid="570")
     b = _registrado(store, make_game, 2, steam_appid="620")
@@ -332,19 +333,19 @@ def test_varrer_jogos_fica_calada_e_nao_guarda_a_data(
     assert ligada == [1]
     assert historico.ler(a.game_id) == {"ACH_A": 100, "ACH_B": 200}
     assert historico.ler(b.game_id) == {"ACH_X": 100}
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
     assert state_schema.get_int64("conquistas-ultima-varredura") == 0
 
 
-def _janela_com_jogo_aberto(win, game):
+def _telas_do_jogo(monkeypatch):
+    """O `shared.conquistas` falso: anota os `game_id` que as telas precisam reler."""
     chamadas = []
-    win.active_game = game
-    win.update_conquistas_block = chamadas.append
+    monkeypatch.setattr(shared, "conquistas", SimpleNamespace(mudou=chamadas.append), raising=False)
     return chamadas
 
 
 def test_pagina_aberta_atualiza_quando_so_o_catalogo_chegou(
-    store, make_game, pastas, win, flush_idle, monkeypatch
+    store, make_game, pastas, avisos, flush_idle, monkeypatch
 ):
     monkeypatch.setattr(
         catalogo,
@@ -353,35 +354,32 @@ def test_pagina_aberta_atualiza_quando_so_o_catalogo_chegou(
     )
     game = _da_steam_aberta(store, make_game, 1, "570")
     historico.registrar(game.game_id, [], fonte="steam:570")
-    chamadas = _janela_com_jogo_aberto(win, game)
+    chamadas = _telas_do_jogo(monkeypatch)
     _rodar([game], flush_idle)
-    assert chamadas == [game]
+    assert chamadas == [game.game_id]
 
 
-def test_pagina_aberta_nao_atualiza_sem_novidade(store, make_game, pastas, win, flush_idle):
+def test_pagina_aberta_nao_atualiza_sem_novidade(store, make_game, pastas, avisos, flush_idle, monkeypatch):
     game = _da_steam_aberta(store, make_game, 1, "570")
     historico.registrar(game.game_id, [], fonte="steam:570")
-    chamadas = _janela_com_jogo_aberto(win, game)
+    chamadas = _telas_do_jogo(monkeypatch)
     _rodar([game], flush_idle)
     assert chamadas == []
 
 
-def test_pagina_de_outro_jogo_nao_atualiza(store, make_game, pastas, win, flush_idle, monkeypatch):
+def test_so_o_jogo_lido_avisa_as_telas(store, make_game, pastas, avisos, flush_idle, monkeypatch):
     monkeypatch.setattr(
         catalogo,
         "obter",
         lambda _appid, _exe, rede=True, usar_chave=True: catalogo.Renovacao(catalogo.Catalogo((), 1, False)),
     )
     game = _da_steam_aberta(store, make_game, 1, "570")
-    outro = _da_steam_aberta(store, make_game, 2, "620")
+    _da_steam_aberta(store, make_game, 2, "620")
     historico.registrar(game.game_id, [], fonte="steam:570")
-    chamadas = _janela_com_jogo_aberto(win, outro)
+    chamadas = _telas_do_jogo(monkeypatch)
     _rodar([game], flush_idle)
-    # O catálogo do jogo chegou (e a página dele atualizaria), mas a aberta é a de outro.
-    assert chamadas == []
-    chamadas = _janela_com_jogo_aberto(win, game)
-    _rodar([game], flush_idle)
-    assert chamadas == [game]
+    # Quem decide se a página, o diálogo ou a sessão mostram o jogo é o `ConquistasDoJogo`.
+    assert chamadas == [game.game_id]
 
 
 # --- duas passadas: arquivos primeiro, rede depois ---------------------------------
@@ -409,7 +407,7 @@ def test_arquivos_de_todos_os_jogos_antes_de_qualquer_catalogo(
 
 
 def test_aviso_de_conquista_nova_nao_espera_a_rede(
-    store, make_game, pastas, win, flush_idle, monkeypatch
+    store, make_game, pastas, avisos, flush_idle, monkeypatch
 ):
     """O aviso sai depois da passada dos arquivos, antes do primeiro catálogo."""
     um = _registrado(store, make_game, 1, steam_appid="570")
@@ -419,13 +417,13 @@ def test_aviso_de_conquista_nova_nao_espera_a_rede(
 
     def obter(_appid, _exe, rede=True, usar_chave=True):
         flush_idle()  # o laço principal que rodaria enquanto a thread espera a rede
-        vistos.append(_avisos(win))
+        vistos.append(_avisos(avisos))
         return catalogo.Renovacao(None)
 
     monkeypatch.setattr(catalogo, "obter", obter)
     _rodar([um], flush_idle)
     assert vistos == [["1 nova conquista em Jogo 1"]]
-    assert _avisos(win) == ["1 nova conquista em Jogo 1"]  # uma vez só
+    assert _avisos(avisos) == ["1 nova conquista em Jogo 1"]  # uma vez só
 
 
 def test_historico_gravado_antes_do_primeiro_catalogo(
@@ -545,7 +543,7 @@ def test_geracao_nova_para_a_segunda_passada(store, make_game, pastas, flush_idl
 
 
 def test_catalogo_que_estoura_nao_derruba_a_passada(
-    store, make_game, pastas, win, flush_idle, monkeypatch
+    store, make_game, pastas, avisos, flush_idle, monkeypatch
 ):
     def obter(appid, _exe, rede=True, usar_chave=True):
         if appid == "1":
@@ -556,19 +554,18 @@ def test_catalogo_que_estoura_nao_derruba_a_passada(
     jogos = [_da_steam_aberta(store, make_game, n) for n in (1, 2)]
     instancia = _rodar(jogos, flush_idle)
     assert instancia._running is False
-    assert _avisos(win) == [
+    assert _avisos(avisos) == [
         "A chave da Steam Web API foi recusada. Verifique-a nas Preferências."
     ]
 
 
-def test_entregar_catalogo_nao_levanta_no_laco_principal(store, make_game, win):
+def test_entregar_catalogo_nao_levanta_no_laco_principal(store, make_game, monkeypatch):
     game = _registrado(store, make_game, 1, steam_appid="570")
-    win.active_game = game
 
-    def estoura(_game):
-        raise RuntimeError("widget morto")
+    def estoura(_game_id):
+        raise RuntimeError("tela morta")
 
-    win.update_conquistas_block = estoura
+    monkeypatch.setattr(shared, "conquistas", SimpleNamespace(mudou=estoura), raising=False)
     resultado = varredura.Catalogacao(game, "570", mudou=True)
     assert VarreduraConquistas()._entregar_catalogo(resultado) is False
 
@@ -589,7 +586,7 @@ def test_chave_recusada_poupa_o_schema_dos_jogos_seguintes(
 
 
 def test_tres_jogos_com_chave_recusada_um_pedido_e_um_aviso(
-    store, make_game, pastas, win, flush_idle, monkeypatch, schema
+    store, make_game, pastas, avisos, flush_idle, monkeypatch, schema
 ):
     pedidos = []
 
@@ -606,7 +603,7 @@ def test_tres_jogos_com_chave_recusada_um_pedido_e_um_aviso(
     jogos = [_da_steam_aberta(store, make_game, n) for n in (1, 2, 3)]
     _rodar(jogos, flush_idle)
     assert len(pedidos) == 1 and "GetSchemaForGame" in pedidos[0]
-    assert _avisos(win) == [
+    assert _avisos(avisos) == [
         "A chave da Steam Web API foi recusada. Verifique-a nas Preferências."
     ]
     # Os três ficam com o "nenhum" guardado: a próxima abertura não pergunta.
@@ -633,18 +630,18 @@ def _da_steam(store, make_game, numero, appid="570"):
 
 
 def test_conquista_antiga_de_jogo_da_steam_nao_conta_no_aviso(
-    store, make_game, pastas, win, flush_idle, state_schema
+    store, make_game, pastas, avisos, flush_idle, state_schema
 ):
     state_schema.set_int64("conquistas-ultima-varredura", ANTERIOR)
     game = _da_steam(store, make_game, 1)
     _goldberg(pastas, "570", [("ACH_A", VELHA), ("ACH_B", VELHA)])
     _rodar([game], flush_idle)
     assert historico.ler(game.game_id) == {"ACH_A": VELHA, "ACH_B": VELHA}
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
 
 
 def test_conquista_depois_da_varredura_anterior_conta(
-    store, make_game, pastas, win, flush_idle, state_schema
+    store, make_game, pastas, avisos, flush_idle, state_schema
 ):
     state_schema.set_int64("conquistas-ultima-varredura", ANTERIOR)
     game = _da_steam(store, make_game, 1)
@@ -652,33 +649,33 @@ def test_conquista_depois_da_varredura_anterior_conta(
     _rodar([game], flush_idle)
     assert set(historico.ler(game.game_id)) == {"ACH_A", "ACH_B", "ACH_C"}
     # A nova e a sem data contam; a de um ano antes, não.
-    assert _avisos(win) == ["2 novas conquistas em Jogo 1"]
+    assert _avisos(avisos) == ["2 novas conquistas em Jogo 1"]
 
 
-def test_dentro_da_margem_conta(store, make_game, pastas, win, flush_idle, state_schema):
+def test_dentro_da_margem_conta(store, make_game, pastas, avisos, flush_idle, state_schema):
     state_schema.set_int64("conquistas-ultima-varredura", ANTERIOR)
     game = _da_steam(store, make_game, 1)
     _goldberg(pastas, "570", [("ACH_A", ANTERIOR - 60)])
     _rodar([game], flush_idle)
-    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+    assert _avisos(avisos) == ["1 nova conquista em Jogo 1"]
 
 
 def test_jogo_fora_da_steam_com_data_antiga_conta_como_antes(
-    store, make_game, pastas, win, flush_idle, state_schema
+    store, make_game, pastas, avisos, flush_idle, state_schema
 ):
     state_schema.set_int64("conquistas-ultima-varredura", ANTERIOR)
     game = _registrado(store, make_game, 1, steam_appid="570")
     historico.registrar(game.game_id, [])
     _goldberg(pastas, "570", [("ACH_A", VELHA)])
     _rodar([game], flush_idle)
-    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+    assert _avisos(avisos) == ["1 nova conquista em Jogo 1"]
 
 
-def test_sem_varredura_anterior_registrada_conta(store, make_game, pastas, win, flush_idle):
+def test_sem_varredura_anterior_registrada_conta(store, make_game, pastas, avisos, flush_idle):
     game = _da_steam(store, make_game, 1)
     _goldberg(pastas, "570", [("ACH_A", VELHA)])
     _rodar([game], flush_idle)
-    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+    assert _avisos(avisos) == ["1 nova conquista em Jogo 1"]
 
 
 def test_varredura_completa_guarda_quando_comecou(
@@ -796,32 +793,32 @@ def test_fonte_pendente_do_xbox_nunca_e_gravada(store, make_game, pastas, flush_
     assert historico.fonte(game.game_id) is None
 
 
-def test_primeira_leitura_do_xbox_nao_avisa(store, make_game, pastas, win, flush_idle, xbox):
+def test_primeira_leitura_do_xbox_nao_avisa(store, make_game, pastas, avisos, flush_idle, xbox):
     xbox.desbloqueios = [Desbloqueio("XBOX:1", 100), Desbloqueio("XBOX:2", 200)]
     game = _registrado(store, make_game, 1, executable=_AUMID)
     historico.registrar(game.game_id, [Desbloqueio("ACH_STEAM", 5)])  # já havia histórico, de outra fonte
     _rodar([game], flush_idle)
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
 
 
-def test_xbox_novas_desde_a_ultima_abertura_avisam(store, make_game, pastas, win, flush_idle, xbox):
+def test_xbox_novas_desde_a_ultima_abertura_avisam(store, make_game, pastas, avisos, flush_idle, xbox):
     game = _registrado(store, make_game, 1, executable=_AUMID)
     historico.registrar(game.game_id, [Desbloqueio("XBOX:1", 100)], fonte="xbox:7", conta="111")
     xbox.desbloqueios = [Desbloqueio("XBOX:1", 100), Desbloqueio("XBOX:2", 200)]
     _rodar([game], flush_idle)
-    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+    assert _avisos(avisos) == ["1 nova conquista em Jogo 1"]
 
 
-def test_aviso_do_xbox_soma_os_jogos_num_so(store, make_game, pastas, win, flush_idle, xbox):
+def test_aviso_do_xbox_soma_os_jogos_num_so(store, make_game, pastas, avisos, flush_idle, xbox):
     jogos = [_registrado(store, make_game, n, executable=_AUMID.replace("Jogo", f"J{n}")) for n in (1, 2)]
     for jogo in jogos:
         historico.registrar(jogo.game_id, [], fonte="xbox:7", conta="111")
     xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
     _rodar(jogos, flush_idle)
-    assert _avisos(win) == ["2 novas conquistas em 2 jogos"]
+    assert _avisos(avisos) == ["2 novas conquistas em 2 jogos"]
 
 
-def test_varredura_de_um_jogo_do_xbox_fica_calada(store, make_game, pastas, win, flush_idle, xbox):
+def test_varredura_de_um_jogo_do_xbox_fica_calada(store, make_game, pastas, avisos, flush_idle, xbox):
     game = _registrado(store, make_game, 1, executable=_AUMID)
     historico.registrar(game.game_id, [], fonte="xbox:7", conta="111")
     xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
@@ -829,10 +826,10 @@ def test_varredura_de_um_jogo_do_xbox_fica_calada(store, make_game, pastas, win,
     instancia._worker([game], instancia._generation, False)
     flush_idle()
     assert historico.ler(game.game_id) == {"XBOX:1": 100}
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
 
 
-def test_reconectar_nao_avisa_o_que_ja_existia(store, make_game, pastas, win, flush_idle, xbox, monkeypatch):
+def test_reconectar_nao_avisa_o_que_ja_existia(store, make_game, pastas, avisos, flush_idle, xbox, monkeypatch):
     from cartridges.conquistas.xbox import conta  # noqa: PLC0415
 
     game = _registrado(store, make_game, 1, executable=_AUMID)
@@ -843,12 +840,12 @@ def test_reconectar_nao_avisa_o_que_ja_existia(store, make_game, pastas, win, fl
     monkeypatch.setattr(conta, "conectada", lambda: True)
     xbox.desbloqueios = [Desbloqueio("XBOX:1", 100), Desbloqueio("XBOX:2", 200)]
     _rodar([game], flush_idle)
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
     assert "XBOX:2" in historico.ler(game.game_id)
 
 
 def test_outra_conta_nao_avisa_o_que_a_nova_ja_tinha(
-    store, make_game, pastas, win, flush_idle, xbox
+    store, make_game, pastas, avisos, flush_idle, xbox
 ):
     """A conta A cai e o usuário entra com a B, que já tinha conquistas que a A não tinha:
     a fonte (`xbox:<titleId>`) é a mesma, mas a conta não: é a primeira leitura da B."""
@@ -857,23 +854,23 @@ def test_outra_conta_nao_avisa_o_que_a_nova_ja_tinha(
     xbox.xuid = "BBB"
     xbox.desbloqueios = [Desbloqueio("XBOX:1", 100), Desbloqueio("XBOX:2", 200)]
     _rodar([game], flush_idle)
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
     assert historico.conta(game.game_id) == "BBB"
     assert "XBOX:2" in historico.ler(game.game_id)
     # Na leitura seguinte já é a conta B: o que entrar de novo avisa.
     xbox.desbloqueios.append(Desbloqueio("XBOX:3", 300))
     _rodar([game], flush_idle)
-    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+    assert _avisos(avisos) == ["1 nova conquista em Jogo 1"]
 
 
 def test_xbox_sem_conta_gravada_conta_como_primeira_leitura(
-    store, make_game, pastas, win, flush_idle, xbox
+    store, make_game, pastas, avisos, flush_idle, xbox
 ):
     game = _registrado(store, make_game, 1, executable=_AUMID)
     historico.registrar(game.game_id, [Desbloqueio("XBOX:1", 100)], fonte="xbox:7")
     xbox.desbloqueios = [Desbloqueio("XBOX:1", 100), Desbloqueio("XBOX:2", 200)]
     _rodar([game], flush_idle)
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
     assert historico.conta(game.game_id) == "111"
 
 
@@ -1010,16 +1007,16 @@ def test_ler_xbox_sem_rede(store, make_game, xbox):
     assert varredura.ler_da_conta(game, varredura.Fonte("xbox", "7")) == (None, True)
 
 
-def test_pagina_aberta_atualiza_quando_a_fonte_muda(store, make_game, pastas, win, flush_idle):
+def test_pagina_aberta_atualiza_quando_a_fonte_muda(store, make_game, pastas, avisos, flush_idle, monkeypatch):
     _goldberg(pastas, "570", [])
     game = _registrado(store, make_game, 1, steam_appid="570")
-    chamadas = _janela_com_jogo_aberto(win, game)
+    chamadas = _telas_do_jogo(monkeypatch)
     _rodar([game], flush_idle)
-    assert chamadas == [game]
+    assert chamadas == [game.game_id]
 
 
 def test_executavel_editado_entre_a_leitura_e_a_entrega_descarta_a_leitura(
-    store, make_game, pastas, win, flush_idle, xbox
+    store, make_game, pastas, avisos, flush_idle, xbox
 ):
     game = _registrado(store, make_game, 1, executable=_AUMID)
     historico.registrar(game.game_id, [Desbloqueio("ACH_STEAM", 5)], fonte="steam:570")
@@ -1030,11 +1027,11 @@ def test_executavel_editado_entre_a_leitura_e_a_entrega_descarta_a_leitura(
     flush_idle()
     assert historico.ler(game.game_id) == {"ACH_STEAM": 5}
     assert historico.fonte(game.game_id) == "steam:570"
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
 
 
 def test_executavel_editado_durante_a_leitura_da_conta_nao_grava(
-    store, make_game, pastas, win, flush_idle, xbox, monkeypatch
+    store, make_game, pastas, avisos, flush_idle, xbox, monkeypatch
 ):
     from cartridges.conquistas.xbox import api  # noqa: PLC0415
 
@@ -1050,7 +1047,7 @@ def test_executavel_editado_durante_a_leitura_da_conta_nao_grava(
     _rodar([game], flush_idle)
     assert historico.ler(game.game_id) is None
     assert historico.fonte(game.game_id) is None
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
 
 
 # -- A Epic -----------------------------------------------------------------------
@@ -1092,23 +1089,23 @@ def test_jogo_da_epic_entra_e_grava_fonte_e_conta(store, make_game, pastas, flus
     assert historico.ler(game.game_id) == {"EPIC:1": 100}
 
 
-def test_primeira_leitura_da_epic_nao_avisa(store, make_game, pastas, win, flush_idle, epic):
+def test_primeira_leitura_da_epic_nao_avisa(store, make_game, pastas, avisos, flush_idle, epic):
     epic.desbloqueios = [Desbloqueio("EPIC:1", 100), Desbloqueio("EPIC:2", 200)]
     game = _registrado(store, make_game, 1, executable=_URL_EPIC)
     _rodar([game], flush_idle)
     assert historico.ler(game.game_id) == {"EPIC:1": 100, "EPIC:2": 200}  # a leitura houve, em silêncio
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
 
 
-def test_epic_novas_desde_a_ultima_abertura_avisam(store, make_game, pastas, win, flush_idle, epic):
+def test_epic_novas_desde_a_ultima_abertura_avisam(store, make_game, pastas, avisos, flush_idle, epic):
     game = _registrado(store, make_game, 1, executable=_URL_EPIC)
     historico.registrar(game.game_id, [Desbloqueio("EPIC:1", 100)], fonte="epic:ns1", conta="c1")
     epic.desbloqueios = [Desbloqueio("EPIC:1", 100), Desbloqueio("EPIC:2", 200)]
     _rodar([game], flush_idle)
-    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+    assert _avisos(avisos) == ["1 nova conquista em Jogo 1"]
 
 
-def test_aviso_soma_xbox_e_epic_num_so(store, make_game, pastas, win, flush_idle, xbox, epic):
+def test_aviso_soma_xbox_e_epic_num_so(store, make_game, pastas, avisos, flush_idle, xbox, epic):
     jogo_x = _registrado(store, make_game, 1, executable=_AUMID)
     jogo_e = _registrado(store, make_game, 2, executable=_URL_EPIC)
     historico.registrar(jogo_x.game_id, [], fonte="xbox:7", conta="111")
@@ -1116,7 +1113,7 @@ def test_aviso_soma_xbox_e_epic_num_so(store, make_game, pastas, win, flush_idle
     xbox.desbloqueios = [Desbloqueio("XBOX:1", 100)]
     epic.desbloqueios = [Desbloqueio("EPIC:1", 100)]
     _rodar([jogo_x, jogo_e], flush_idle)
-    assert _avisos(win) == ["2 novas conquistas em 2 jogos"]
+    assert _avisos(avisos) == ["2 novas conquistas em 2 jogos"]
 
 
 def test_pendente_da_epic_resolvido_na_rede(store, make_game, pastas, flush_idle, epic):
@@ -1151,13 +1148,13 @@ def test_epic_sem_conta_nao_vai_a_rede_e_fica_oculta(store, make_game, pastas, f
     assert epic.chamadas == 0 and historico.fonte(game.game_id) is None
 
 
-def test_outra_conta_epic_e_primeira_leitura(store, make_game, pastas, win, flush_idle, epic):
+def test_outra_conta_epic_e_primeira_leitura(store, make_game, pastas, avisos, flush_idle, epic):
     game = _registrado(store, make_game, 1, executable=_URL_EPIC)
     historico.registrar(game.game_id, [Desbloqueio("EPIC:1", 100)], fonte="epic:ns1", conta="c1")
     epic.conta = "c2"
     epic.desbloqueios = [Desbloqueio("EPIC:1", 100), Desbloqueio("EPIC:2", 200)]
     _rodar([game], flush_idle)
-    assert _avisos(win) == [] and historico.conta(game.game_id) == "c2"
+    assert _avisos(avisos) == [] and historico.conta(game.game_id) == "c2"
 
 
 # -- A EA ---------------------------------------------------------------------------
@@ -1199,7 +1196,7 @@ def test_pendente_da_ea_resolvido_na_rede(store, make_game, pastas, flush_idle, 
     assert historico.ler(game.game_id) == {"EA:1": 100}
 
 
-def test_aviso_soma_xbox_epic_e_ea_num_so(store, make_game, pastas, win, flush_idle, xbox, epic, ea):
+def test_aviso_soma_xbox_epic_e_ea_num_so(store, make_game, pastas, avisos, flush_idle, xbox, epic, ea):
     jogo_x = _registrado(store, make_game, 1, executable=_AUMID)
     jogo_e = _registrado(store, make_game, 2, executable=_URL_EPIC)
     jogo_a = _registrado(store, make_game, 3)
@@ -1211,7 +1208,7 @@ def test_aviso_soma_xbox_epic_e_ea_num_so(store, make_game, pastas, win, flush_i
     epic.desbloqueios = [Desbloqueio("EPIC:1", 100)]
     ea.desbloqueios = [Desbloqueio("EA:1", 100)]
     _rodar([jogo_x, jogo_e, jogo_a], flush_idle)
-    assert _avisos(win) == ["3 novas conquistas em 3 jogos"]
+    assert _avisos(avisos) == ["3 novas conquistas em 3 jogos"]
 
 
 # -- A Ubisoft ----------------------------------------------------------------------
@@ -1243,14 +1240,14 @@ def test_ubisoft_sem_spool_grava_so_a_fonte(store, make_game, pastas, flush_idle
     assert not historico.ler(game.game_id)
 
 
-def test_primeira_leitura_da_ubisoft_nao_avisa(store, make_game, pastas, win, flush_idle):
+def test_primeira_leitura_da_ubisoft_nao_avisa(store, make_game, pastas, avisos, flush_idle):
     gravar_spool(pastas, "65043", [(23, NOVA), (12, NOVA)])
     _rodar([_da_ubisoft(store, make_game)], flush_idle)
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
 
 
 def test_spool_que_nasce_depois_nao_avisa_o_que_a_conta_tinha(
-    store, make_game, pastas, win, flush_idle, state_schema
+    store, make_game, pastas, avisos, flush_idle, state_schema
 ):
     game = _da_ubisoft(store, make_game)
     _rodar([game], flush_idle)  # nunca aberto neste PC: só a fonte
@@ -1258,11 +1255,11 @@ def test_spool_que_nasce_depois_nao_avisa_o_que_a_conta_tinha(
     gravar_spool(pastas, "65043", [(23, VELHA), (12, NOVA)], conta="aaa")
     _rodar([game], flush_idle)
     assert historico.ler(game.game_id) == {"UBI:23": VELHA, "UBI:12": NOVA}
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
 
 
 def test_conquista_nova_da_ubisoft_desde_a_ultima_abertura_avisa(
-    store, make_game, pastas, win, flush_idle, state_schema
+    store, make_game, pastas, avisos, flush_idle, state_schema
 ):
     gravar_spool(pastas, "65043", [(23, VELHA)])
     game = _da_ubisoft(store, make_game)
@@ -1271,10 +1268,10 @@ def test_conquista_nova_da_ubisoft_desde_a_ultima_abertura_avisa(
     gravar_spool(pastas, "65043", [(23, VELHA), (12, NOVA), (5, VELHA + 10)])
     _rodar([game], flush_idle)
     # A nova conta; a antiga que chegou agora (sincronizada da conta) não.
-    assert _avisos(win) == ["1 nova conquista em Jogo 1"]
+    assert _avisos(avisos) == ["1 nova conquista em Jogo 1"]
 
 
-def test_outra_conta_ubisoft_nao_avisa_o_que_ja_tinha(store, make_game, pastas, win, flush_idle, state_schema):
+def test_outra_conta_ubisoft_nao_avisa_o_que_ja_tinha(store, make_game, pastas, avisos, flush_idle, state_schema):
     primeiro = gravar_spool(pastas, "65043", [(23, VELHA)], conta="aaa")
     game = _da_ubisoft(store, make_game)
     _rodar([game], flush_idle)
@@ -1285,7 +1282,7 @@ def test_outra_conta_ubisoft_nao_avisa_o_que_ja_tinha(store, make_game, pastas, 
     _rodar([game], flush_idle)
     assert historico.conta(game.game_id) == "bbb"
     assert historico.ler(game.game_id) == {"UBI:23": VELHA, "UBI:7": NOVA}
-    assert _avisos(win) == []
+    assert _avisos(avisos) == []
 
 
 def test_spool_ilegivel_nao_grava_nada(store, make_game, pastas, flush_idle):
@@ -1328,13 +1325,13 @@ def test_ubisoft_nao_vai_a_rede(store, make_game, pastas, flush_idle, monkeypatc
     assert chamadas == []
 
 
-def test_pagina_aberta_atualiza_quando_so_o_catalogo_da_ubisoft_chegou(store, make_game, pastas, win, flush_idle):
+def test_pagina_aberta_atualiza_quando_so_o_catalogo_da_ubisoft_chegou(store, make_game, pastas, avisos, flush_idle, monkeypatch):
     game = _da_ubisoft(store, make_game)
     historico.registrar(game.game_id, [], fonte="ubisoft:65043")
     gravar_pacote(pastas, "65043", {"pt-BR": {1: ("A", "a")}})
-    chamadas = _janela_com_jogo_aberto(win, game)
+    chamadas = _telas_do_jogo(monkeypatch)
     _rodar([game], flush_idle)
-    assert chamadas == [game]
+    assert chamadas == [game.game_id]
 
 
 def test_ubisoft_em_sessao_fica_para_o_vigia(store, make_game, pastas, flush_idle, monkeypatch):
@@ -1343,3 +1340,21 @@ def test_ubisoft_em_sessao_fica_para_o_vigia(store, make_game, pastas, flush_idl
     monkeypatch.setattr(sessao, "acompanhando", lambda g: g is game)
     _rodar([game], flush_idle)
     assert historico.ler(game.game_id) is None
+
+
+def test_varredura_avisa_pela_fila_em_texto_puro(store, make_game, pastas, avisos, flush_idle):
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    game.name = "A & B <i>"
+    historico.registrar(game.game_id, [Desbloqueio("ACH_A", 100)])
+    _goldberg(pastas, "570", [("ACH_A", 100), ("ACH_B", 200)])
+    _rodar([game], flush_idle)
+    assert avisos.textos == ["1 nova conquista em A & B <i>"]
+
+
+def test_varredura_atualiza_as_telas_do_jogo(store, make_game, pastas, avisos, flush_idle, monkeypatch):
+    _goldberg(pastas, "570", [("ACH_A", 100)])
+    game = _registrado(store, make_game, 1, steam_appid="570")
+    historico.registrar(game.game_id, [Desbloqueio("ACH_B", 1)])
+    chamadas = _telas_do_jogo(monkeypatch)
+    _rodar([game], flush_idle)
+    assert chamadas and set(chamadas) == {game.game_id}

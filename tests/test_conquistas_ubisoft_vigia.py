@@ -20,12 +20,16 @@ CAT = Catalogo(
 )
 
 
+class _TimerFalso:
+    def stop(self):
+        pass
+
+
 @pytest.fixture(autouse=True)
 def sem_timeout(monkeypatch):
-    """O tique é chamado à mão; nada de GLib.timeout de verdade nos testes."""
+    """O tique é chamado à mão; nada de QTimer de verdade nos testes."""
     fontes_ = []
-    monkeypatch.setattr(vigia.GLib, "timeout_add_seconds", lambda _s, f: fontes_.append(f) or 7)
-    monkeypatch.setattr(vigia.GLib, "source_remove", lambda _id: None)
+    monkeypatch.setattr(vigia, "_repetir", lambda _s, f: fontes_.append(f) or _TimerFalso())
     return fontes_
 
 

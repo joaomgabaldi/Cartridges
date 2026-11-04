@@ -1,0 +1,52 @@
+import QtQuick
+import QtQuick.Controls.Basic
+
+// "Restaurar save": uma linha por versão guardada dos saves do jogo, da mais recente à mais antiga, numa `boxed-list` de
+// `ActionRow` com subtítulo e `go-next` (`saves/dialogo.py` da `main`). Só desenha: o que mostra e faz é o `saves`
+// (cartridges/modelos/saves.py); escolher uma linha pede a confirmação do app. Esc fecha e o foco volta ao cartão que abriu o menu.
+ModalDaRestauracao {
+    id: dialogo
+    objectName: "dialogoDeVersoes"
+
+    aberto: saves.aberto
+    titulo: "Restaurar save"
+    largura: 420
+    inicial: botaoFechar
+    onSaiu: saves.fechar()
+    onAbertoChanged: if (aberto) lista.vista.contentY = 0
+
+    ModalDaRestauracao.Cartela {
+        id: lista
+        width: parent.width
+        objetoDaLista: "listaDeVersoes"
+        model: saves.versoes
+
+        delegate: LinhaDeAcao {
+            id: linha
+            required property int index
+            required property var modelData
+            objectName: "versao-" + modelData.id
+            titulo: modelData.titulo
+            subtitulo: modelData.subtitulo
+            icone: "go-next"
+            quebraDoSubtitulo: Text.Wrap
+            function click() { botaoDaLinha.click() }
+            onAcionada: saves.escolher(modelData.id)
+
+            // Move o foco para a linha `indice + passo`, limitado às pontas; a rolagem acompanha.
+            function irPara(passo) {
+                var v = lista.vista
+                var alvo = Math.max(0, Math.min(v.count - 1, index + passo))
+                v.positionViewAtIndex(alvo, ListView.Contain)
+                var item = v.itemAtIndex(alvo)
+                if (item) item.botaoDaLinha.forceActiveFocus(Qt.TabFocusReason)
+            }
+            Keys.onUpPressed: irPara(-1)
+            Keys.onDownPressed: irPara(1)
+            Keys.onPressed: event => {
+                if (event.key === Qt.Key_PageUp) { irPara(-5); event.accepted = true }
+                else if (event.key === Qt.Key_PageDown) { irPara(5); event.accepted = true }
+            }
+        }
+    }
+}

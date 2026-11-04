@@ -20,7 +20,7 @@ from time import time
 from typing import Optional
 
 from cartridges import shared
-from cartridges.game import Game
+from cartridges.jogo import Jogo
 from cartridges.store.managers.hltb_manager import HLTBManager
 from cartridges.store.managers.sgdb_manager import SgdbManager
 from cartridges.store.managers.steam_api_manager import SteamAPIManager
@@ -39,7 +39,7 @@ def _chaves(nome: str, appid: Optional[str]) -> set[str]:
 
 # Chave de `_chaves` → os jogos (fora da lista negra) com ela, com a posição de cada
 # um na store: `situacao` decide pela ordem da store (o último da biblioteca vence).
-Indice = dict[str, list[tuple[int, Game]]]
+Indice = dict[str, list[tuple[int, Jogo]]]
 
 
 def indice() -> Indice:
@@ -59,7 +59,7 @@ def indice() -> Indice:
 
 def situacao(
     nome: str, appid: Optional[str] = None, jogos: Optional[Indice] = None
-) -> tuple[str, Optional[Game]]:
+) -> tuple[str, Optional[Jogo]]:
     """Onde o jogo ``nome``/``appid`` já está: ``"zerado"``, ``"biblioteca"``,
     ``"desinstalado"`` (o jogado por último, se houver vários) ou ``"novo"``.
 
@@ -71,8 +71,8 @@ def situacao(
         for chave in _chaves(nome, appid)
         for posicao, jogo in por_chave.get(chave, ())
     }
-    na_biblioteca: Optional[Game] = None
-    desinstalados: list[Game] = []
+    na_biblioteca: Optional[Jogo] = None
+    desinstalados: list[Jogo] = []
     for _posicao, jogo in sorted(achados.items(), key=lambda item: item[0]):
         if jogo.zerado:
             return ("zerado", jogo)
@@ -87,7 +87,7 @@ def situacao(
     return ("novo", None)
 
 
-def criar(nome: str, appid: Optional[str] = None) -> Game:
+def criar(nome: str, appid: Optional[str] = None) -> Jogo:
     """Registra a tumba zerada, já na grade de Jogos Zerados."""
     dados = {
         "game_id": shared.store.proximo_id_importado(),
@@ -100,13 +100,13 @@ def criar(nome: str, appid: Optional[str] = None) -> Game:
     }
     if appid:
         dados["steam_appid"] = str(appid)
-    jogo = Game(dados)
+    jogo = Jogo(dados)
     shared.store.add_game(jogo, {})
     jogo.save()
     return jogo
 
 
-def buscar_dados(jogo: Game) -> None:
+def buscar_dados(jogo: Jogo) -> None:
     """Steam → HowLongToBeat → SteamGridDB, um depois do outro, como na
     atualização de metadados (`metadata_refresh`). Sem appID não há o que
     buscar: um jogo que a Steam não conhece recebe a capa pela edição.
@@ -141,7 +141,7 @@ def buscar_dados(jogo: Game) -> None:
     proximo(0)
 
 
-def adicionar(nome: str, appid: Optional[str] = None) -> Optional[Game]:
+def adicionar(nome: str, appid: Optional[str] = None) -> Optional[Jogo]:
     """O clique no diálogo. ``None`` quando o jogo já está em Jogos Zerados ou
     na biblioteca (a linha já vem desativada; isto é a segunda trava)."""
     estado, existente = situacao(nome, appid)

@@ -1,0 +1,76 @@
+# test_app_conquistas.py
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+"""A varredura de conquistas ligada à abertura e ao fechamento do app, com tudo falso (sem QML, sem rede)."""
+
+from types import SimpleNamespace
+
+import pytest
+
+from cartridges import app, shared
+from tests.apoio_app_conquistas import _Gravador
+
+
+def test_abertura_carrega_as_contas_antes_da_varredura(monkeypatch):
+    passos = []
+    monkeypatch.setattr(app, "conta", _Gravador(passos, "xbox"))
+    monkeypatch.setattr(app, "epic_conta", _Gravador(passos, "epic"))
+    monkeypatch.setattr(app, "ea_conta", _Gravador(passos, "ea"))
+
+    class _Varredura:
+        def start(self):
+            passos.append("varredura.start")
+
+    monkeypatch.setattr(app, "VarreduraConquistas", _Varredura)
+    aplicativo = SimpleNamespace(varredura_conquistas=None)
+
+    app._carregar_contas()  # noqa: SLF001
+    passos.append("---")
+    varredura = app._ligar_conquistas(aplicativo)  # noqa: SLF001
+
+    assert passos == ["xbox.carregar", "epic.carregar", "ea.carregar", "---", "varredura.start"]
+    assert aplicativo.varredura_conquistas is varredura and isinstance(varredura, _Varredura)
+
+
+def _fechar(monkeypatch, falhar=()):
+    passos = []
+    monkeypatch.setattr(app, "login", _Gravador(passos, "login", falhar))
+    monkeypatch.setattr(app, "ea_conta", _Gravador(passos, "ea", falhar))
+    monkeypatch.setattr(app, "icones", _Gravador(passos, "icones", falhar))
+    monkeypatch.setattr(app, "async_manager", _Gravador(passos, "async", falhar))
+    monkeypatch.setattr(app, "copias_animadas", _Gravador(passos, "copias", falhar))
+    monkeypatch.setattr(
+        shared, "aplicativo", SimpleNamespace(varredura_conquistas=_Gravador(passos, "varredura", falhar)), raising=False
+    )
+    app._fechar(app._Abertura(  # noqa: SLF001
+        big_picture=_Gravador(passos, "bp", falhar), sessao=_Gravador(passos, "sessao", falhar),
+        verificador=_Gravador(passos, "verificador", falhar), varredura_hltb=_Gravador(passos, "hltb", falhar),
+        varredura_tamanho=_Gravador(passos, "tamanho", falhar), edicao=_Gravador(passos, "edicao", falhar),
+        preferencias=_Gravador(passos, "preferencias", falhar),
+    ))  # fmt: skip
+    return passos
+
+
+_ORDEM = [
+    "bp.encerrar", "preferencias.fechar", "sessao.devolver", "login.cancelar_pendente", "ea.gravar_pendente", "verificador.stop",
+    "hltb.stop", "tamanho.stop", "varredura.stop", "edicao.cancelar", "async.encerrar", "copias.encerrar",
+    "icones.encerrar",
+]  # fmt: skip
+
+
+def test_encerrar_cancela_o_login_e_os_icones(monkeypatch):
+    assert _fechar(monkeypatch) == _ORDEM
+
+
+@pytest.mark.parametrize("falha", ["cancelar_pendente", "gravar_pendente", "stop", "encerrar", "cancelar", "fechar"])
+def test_uma_falha_nao_impede_os_passos_seguintes(monkeypatch, falha):
+    assert _fechar(monkeypatch, falhar=(falha,)) == _ORDEM
+
+
+def test_encerrar_sem_varredura_nao_levanta(monkeypatch):
+    passos = _fechar(monkeypatch)
+    passos.clear()
+    monkeypatch.setattr(shared, "aplicativo", None, raising=False)
+    app._parar_varredura_de_conquistas()  # noqa: SLF001
+    assert passos == []

@@ -14,6 +14,7 @@ renamed shortcut can ever be corrected.
 import threading
 
 import pytest
+from PySide6.QtCore import Qt
 
 from cartridges.store.store import Store, _is_derived_command, _path_key
 
@@ -609,19 +610,16 @@ def test_clear_empties_all_three_indexes(store, make_game, seed):
     assert store._games_by_shortcut == {}
 
 
-def test_cleanup_game_dismisses_toasts_on_the_idle(
-    store, make_game, seed, win, flush_idle
-):
-    """T1.46 Toasts are libadwaita widgets and this runs on an import worker."""
+def test_cleanup_game_avisa_a_janela_pelo_sinal(store, make_game, seed):
+    """T1.46 Isto roda numa thread do importador: a store não toca no aviso de
+    desfazer, só emite `jogo_excluido` (a janela o recebe enfileirado)."""
     game = seed(make_game(game_id=A_ID))
-    toast = object()
-    win.toasts[(game, "remove")] = toast
+    excluidos = []
+    store.jogo_excluido.connect(excluidos.append, Qt.ConnectionType.DirectConnection)
 
     store.cleanup_game(game)
 
-    assert win.toast_queue.dismissed == [], "must not touch widgets inline"
-    flush_idle()
-    assert win.toast_queue.dismissed == [toast]
+    assert excluidos == [A_ID]
 
 
 def test_atomic_dump_replaces_without_leaving_scratch(tmp_path) -> None:

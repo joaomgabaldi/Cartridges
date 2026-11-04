@@ -1,4 +1,3 @@
-/subprojects/blueprint-compiler
 /.vscode
 .prettierignore
 
@@ -18,3 +17,17 @@ __pycache__/
 /CLAUDE.md
 /CONTEXT.md
 /RESTAURAR.md
+
+# Ambiente de desenvolvimento Qt
+/.venv/
+/capturas/
+
+# Gravado so pelo montar_app_qt.py
+cartridges/instalacao.json
+
+# QWindowKit: dependencias baixadas e a DLL compilada
+/build-aux/windows/qwk/_deps/
+/cartridges/janela/*.dll
+
+# Pastas de teste manual (atalhos de mentira)
+/_dev/

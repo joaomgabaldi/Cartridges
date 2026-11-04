@@ -24,7 +24,7 @@ touches game state or the UI is bounced back onto the main thread, because the
 save/update signals drive GTK widgets and those are not thread-safe.
 
 The state model is deliberately tiny and lives on the games themselves (see
-:class:`~cartridges.game.Game`), so this class holds no per-game memory and
+:class:`~cartridges.jogo.Jogo`), so this class holds no per-game memory and
 caches no game lists — exactly the constraint the design calls for. Novelty is
 decided per game by a single timestamp, ``update_dismissed_ts``: a digest is
 "new to this game" when it is more recent than the last patch the user
@@ -39,10 +39,10 @@ import threading
 from typing import Optional
 
 import requests
-from gi.repository import Adw, GLib
 
 from cartridges import shared
-from cartridges.game import Game
+from cartridges.jogo import Jogo
+from cartridges.utils.thread_principal import na_thread_principal
 from cartridges.utils.title_match import CONFIDENT_SCORE, compare_titles
 from cartridges.utils.updates_feed import DigestEntry, UpdatePost, fetch_feed
 
@@ -53,9 +53,11 @@ class UpdatesChecker:
     """Owns the recurring repack-feed poll and applies its results."""
 
     def __init__(self) -> None:
-        # GLib source id of the recurring timer, so it can be cancelled and
-        # never scheduled twice.
-        self._timeout_id: Optional[int] = None
+        # Temporizador da próxima consulta: cancelável e nunca armado duas vezes.
+        self._timer: Optional[threading.Timer] = None
+        # Sobe a cada armação e a cada `stop()`: uma partida que já disparou mas ainda
+        # espera na fila da thread principal confere o número e se descarta.
+        self._armacao = 0
         # A single in-flight poll guard: a slow network request must not stack
         # up behind the timer firing again. Guarded by `_lock` because the
         # test-and-set is what keeps exactly one worker thread alive, and
@@ -65,7 +67,7 @@ class UpdatesChecker:
         self._running = False
         # Set once the app is shutting down. A poll already on the worker thread
         # cannot be cancelled, so instead its result is dropped: `_apply` walks
-        # the store, saves games and touches `shared.win`, none of which is
+        # the store, saves games and touches the UI, none of which is
         # legal once `do_shutdown` has run.
         self._stopped = False
         # The "you have updates" toast is a greeting, shown once per app run
@@ -86,27 +88,38 @@ class UpdatesChecker:
         # Cancel before reading the setting, not after: returning early on a 0
         # interval used to leave a previously armed timer running, so turning
         # the feature off only took effect on the next launch.
-        if self._timeout_id is not None:
-            GLib.source_remove(self._timeout_id)
-            self._timeout_id = None
+        self._cancelar_timer()
+        self._armar()
 
+    def _armar(self) -> None:
         interval_hours = shared.schema.get_int(_INTERVAL_KEY)
         if interval_hours <= 0:
             return
-        self._timeout_id = GLib.timeout_add_seconds(
-            interval_hours * 3600, self._on_timer
+        self._armacao += 1
+        # O temporizador roda numa thread própria; a consulta volta à principal.
+        self._timer = threading.Timer(
+            min(interval_hours * 3600, threading.TIMEOUT_MAX),
+            na_thread_principal, (self._on_timer, self._armacao)
         )
+        self._timer.daemon = True
+        self._timer.start()
+
+    def _cancelar_timer(self) -> None:
+        self._armacao += 1
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
 
     def stop(self) -> None:
         """Cancel the recurring timer and disown any poll still in flight."""
         self._stopped = True
-        if self._timeout_id is not None:
-            GLib.source_remove(self._timeout_id)
-            self._timeout_id = None
+        self._cancelar_timer()
 
-    def _on_timer(self) -> bool:
+    def _on_timer(self, armacao: int) -> None:
+        if self._stopped or armacao != self._armacao:
+            return
         self.check_async()
-        return True  # keep the timer running
+        self._armar()  # recorrente
 
     # -- the poll -------------------------------------------------------------
 
@@ -139,22 +152,21 @@ class UpdatesChecker:
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Unexpected error polling repack update feed", exc_info=True)
         finally:
-            GLib.idle_add(self._apply, posts)
+            na_thread_principal(self._apply, posts)
 
     # -- applying results (main thread) --------------------------------------
 
-    def _apply(self, posts: Optional[list[UpdatePost]]) -> bool:
+    def _apply(self, posts: Optional[list[UpdatePost]]) -> None:
         """Fold a finished poll into game state. Runs on the main thread."""
         with self._lock:
             self._running = False
         # The window and the store may already be gone; a result that arrives
         # after shutdown is thrown away rather than written back.
         if self._stopped or not posts:
-            return False
+            return
 
         self._evaluate_all(posts)
         self._maybe_show_startup_toast()
-        return False
 
     def _evaluate_all(self, posts: list[UpdatePost]) -> None:
         """Run every tracked game against a poll's results.
@@ -187,31 +199,20 @@ class UpdatesChecker:
             for game in list(shared.store)
             if not getattr(game, "removed", False) and game.has_update
         ]
-        if not names or shared.win is None:
+        if not names or shared.aplicativo is None:
             return
 
         if len(names) == 1:
-            # The variable is the game's name
             message = _("Atualização para {} disponível").format(names[0])
         else:
             joined = ", ".join(names[:-1]) + _(" e ") + names[-1]
-            # The variable is a list of game names
             message = _("Atualizações para {} disponíveis").format(joined)
 
-        toast = Adw.Toast.new(message)
-        # Adw.Toast parses its title as Pango markup by default. Game names come
-        # from shortcuts and store metadata, so an "&" or a "<" in one would
-        # either mangle the toast or make Pango reject the whole string and drop
-        # it. Switched off for the same reason `Game.create_toast` does.
-        toast.set_use_markup(False)
-        # Default timeout, like every other toast: the notice on the game itself
-        # is what carries the news from here on, so this one only has to be seen,
-        # not read twice. No priority bump either — this greeting lands in the
-        # middle of the startup import, and jumping the queue is exactly what
-        # made it cut the import toasts in half. It waits its turn (`ToastQueue`).
-        shared.win.toast_queue.add(toast)
+        # Texto puro: a fila de avisos não interpreta markup, então o "&" ou "<" de
+        # um nome de jogo aparece como é. Ela também enfileira, sem furar a fila.
+        shared.aplicativo.avisos.adicionar(message)
 
-    def _evaluate_game(self, game: Game, posts: list[UpdatePost]) -> None:
+    def _evaluate_game(self, game: Jogo, posts: list[UpdatePost]) -> None:
         """Raise the notice for ``game`` if an undismissed patch mentions it.
 
         The newest matching digest wins, and its repack link rides along so the
@@ -248,11 +249,11 @@ class UpdatesChecker:
                 best_url or "(no link)",
             )
             game.save()
+            # A página de detalhes segue o `atualizado` do jogo.
             game.update()
-            self._refresh_details_if_active(game)
 
     @staticmethod
-    def _match_in_post(game: Game, post: UpdatePost) -> Optional[DigestEntry]:
+    def _match_in_post(game: Jogo, post: UpdatePost) -> Optional[DigestEntry]:
         """Return the digest entry that confidently matches ``game``, or None.
 
         Confidence is the title matcher's own bar (``CONFIDENT_SCORE``): the
@@ -264,15 +265,3 @@ class UpdatesChecker:
             if compare_titles(game.name, entry.name).score >= CONFIDENT_SCORE:
                 return entry
         return None
-
-    @staticmethod
-    def _refresh_details_if_active(game: Game) -> None:
-        """Repaint the open details page when it is showing this game."""
-        win = shared.win
-        if win is None:
-            return
-        if (
-            getattr(win, "active_game", None) is game
-            and win.navigation_view.get_visible_page() == win.details_page
-        ):
-            win.update_details_notice(game)

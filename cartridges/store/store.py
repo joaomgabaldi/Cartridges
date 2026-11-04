@@ -20,22 +20,22 @@
 import json
 import logging
 import re
+import weakref
 from pathlib import Path
 from threading import RLock
 from typing import Any, Generator, MutableMapping, Optional
 from uuid import uuid4
 
-from gi.repository import GLib
+from PySide6.QtCore import QObject, Qt, Signal
 
 from cartridges import shared
 from cartridges.conquistas import historico
-from cartridges.game import Game
+from cartridges.jogo import ANIMATED_SUFFIXES, Jogo
 from cartridges.store.managers.manager import Manager
 from cartridges.store.pipeline import Pipeline
 from cartridges.utils import copias_animadas, session_log
-from cartridges.utils.game_logo import IMAGE_SUFFIXES, remove_logo
+from cartridges.utils.logo_arquivos import IMAGE_SUFFIXES, remove_logo
 from cartridges.utils.run_executable import aumid_from_command
-from cartridges.utils.save_cover import ANIMATED_SUFFIXES
 from cartridges.utils.wallhaven import IMAGE_SUFFIXES as WALLPAPER_SUFFIXES
 
 
@@ -43,9 +43,9 @@ def _path_key(path: str) -> str:
     """A shortcut path in the one shape comparisons may use.
 
     Two conventions have to be flattened before two paths naming one file can be
-    told to be equal. Separators, because the interpreter this ships with (MSYS2
-    ucrt64) has `os.sep` and `os.altsep` the other way round, so a library
-    written by one build and rescanned by another disagrees with itself — and
+    told to be equal. Separators, because the interpreter the previous (GTK) version
+    shipped (MSYS2 ucrt64) had `os.sep` and `os.altsep` the other way round, so
+    a library written by one build and rescanned by another disagrees with itself — and
     the anchor index is keyed by exactly this value, so a disagreement there
     means a game is not recognised, is imported again, and has its old record
     removed with everything on it. And case, because Windows paths are
@@ -84,7 +84,7 @@ def _partes_do_comando(comando: str) -> tuple[Optional[str], str]:
     return resto or None, ""
 
 
-def _is_derived_command(game: Game) -> bool:
+def _is_derived_command(game: Jogo) -> bool:
     """Does this game's launch command look like one the importer built?
 
     True for the two shapes a packaged (Store / Game Pass) game can take: the
@@ -228,28 +228,38 @@ def _migrate_game_files(old_id: str, new_id: str) -> None:
     session_log.mover_jogo(old_id, new_id)
 
 
-class Store:
+class Store(QObject):
     """Class in charge of handling games being added to the app."""
+
+    # Os dois são emitidos também das threads do importador: quem mexe na tela
+    # conecta com a conexão automática (enfileirada na thread principal).
+    # Um jogo saiu da store e dos arquivos: a janela fecha o aviso de desfazer
+    # a remoção dele (era `shared.win.toasts[(game, "remove")]`).
+    jogo_excluido = Signal(str)
+    # (id antigo, id novo) de um jogo adotado: a grade troca a chave da capa
+    # dele e a recarrega do arquivo, que mudou de nome junto.
+    capa_trocou_de_id = Signal(str, str)
 
     managers: dict[type[Manager], Manager]
     pipeline_managers: set[Manager]
-    source_games: MutableMapping[str, MutableMapping[str, Game]]
-    # Flat game_id -> Game index kept in sync with source_games so lookups by id
+    source_games: MutableMapping[str, MutableMapping[str, Jogo]]
+    # Flat game_id -> Jogo index kept in sync with source_games so lookups by id
     # are O(1) instead of scanning every game (adding N games was O(N²)).
-    games_by_id: dict[str, Game]
+    games_by_id: dict[str, Jogo]
     # None marks a path more than one record claims: see `_index_shortcut`
-    _games_by_shortcut: dict[tuple[str, str], Optional[Game]]
+    _games_by_shortcut: dict[tuple[str, str], Optional[Jogo]]
     new_game_ids: set[str]
     duplicate_game_ids: set[str]
 
     def __init__(self) -> None:
+        super().__init__()
         self.managers = {}
         self.pipeline_managers = set()
         self.source_games = {}
         self.games_by_id = {}
         self.new_game_ids = set()
         self.duplicate_game_ids = set()
-        # (base source, shortcut path) -> Game, for games that came from a
+        # (base source, shortcut path) -> Jogo, for games that came from a
         # shortcut file. The anchor `adopt_legacy_game` looks games up by; kept as
         # an index because the alternative is scanning the library once per
         # imported game.
@@ -264,14 +274,14 @@ class Store:
 
     def __contains__(self, obj: object) -> bool:
         """Check if the game is present in the store with the `in` keyword"""
-        if not isinstance(obj, Game):
+        if not isinstance(obj, Jogo):
             return False
         with self._lock:
             if not (source_mapping := self.source_games.get(obj.base_source)):
                 return False
             return obj.game_id in source_mapping
 
-    def __iter__(self) -> Generator[Game, None, None]:
+    def __iter__(self) -> Generator[Jogo, None, None]:
         """Iterate through the games in the store with `for ... in`
 
         Iterates a snapshot rather than the live mappings. Holding the lock for
@@ -296,7 +306,7 @@ class Store:
                 len(source_mapping) for source_mapping in self.source_games.values()
             )
 
-    def __getitem__(self, game_id: str) -> Game:
+    def __getitem__(self, game_id: str) -> Jogo:
         """Get a game by its id with `store["game_id_goes_here"]`"""
         try:
             return self.games_by_id[game_id]
@@ -310,7 +320,7 @@ class Store:
             self.games_by_id = {}
             self._games_by_shortcut = {}
 
-    def get(self, game_id: str, default: Any = None) -> Game | Any:
+    def get(self, game_id: str, default: Any = None) -> Jogo | Any:
         """Get a game by its ID, with a fallback if not found"""
         try:
             game = self[game_id]
@@ -350,7 +360,7 @@ class Store:
         else:
             self.pipeline_managers.discard(self.managers[manager_type])
 
-    def excluir(self, game: Game, apagar_sessoes: bool = True) -> None:
+    def excluir(self, game: Jogo, apagar_sessoes: bool = True) -> None:
         """Apaga um zerado: arquivos, sessões e o lugar dele na store.
 
         Sem tumba, ao contrário do "Remover" de um jogo vivo: a tumba existe
@@ -374,7 +384,7 @@ class Store:
         # de conquistas só some com o Excluir.
         historico.apagar(game.game_id)
 
-    def cleanup_game(self, game: Game, apagar_sessoes: bool = True) -> None:
+    def cleanup_game(self, game: Jogo, apagar_sessoes: bool = True) -> None:
         """Remove a game's files, dismiss any loose toasts"""
         # Covers may be a still .tiff or an animated .gif/.webp/.apng
         # The session wallpaper and the LED strip colour are filed by id too,
@@ -408,18 +418,11 @@ class Store:
         if apagar_sessoes:
             session_log.apagar_jogo(game.game_id)
 
-        # The toasts are libadwaita widgets and this runs on an import worker
-        # thread, so the dismissal has to be handed to the main loop — the same
-        # rule DisplayManager follows for everything it touches.
-        def dismiss_undo_toasts() -> bool:
-            if toast := shared.win.toasts.pop((game, "remove"), None):
-                shared.win.toast_queue.dismiss(toast)
-            return GLib.SOURCE_REMOVE
-
-        GLib.idle_add(dismiss_undo_toasts)
+        # Roda numa thread do importador: a janela recebe isto enfileirado.
+        self.jogo_excluido.emit(game.game_id)
 
     @staticmethod
-    def _refresh_derived_executable(stored_game: Game, game: Game) -> bool:
+    def _refresh_derived_executable(stored_game: Jogo, game: Jogo) -> bool:
         """Adopt a rescanned launch command when the stored one was derived.
 
         A duplicate is normally ignored wholesale, and for most games that is
@@ -470,7 +473,7 @@ class Store:
         stored_game.executable = game.executable
         return True
 
-    def _index_shortcut(self, game: Game) -> None:
+    def _index_shortcut(self, game: Jogo) -> None:
         """Record a game under the shortcut file it came from.
 
         Caller holds the lock. A key two different records claim is poisoned
@@ -542,7 +545,7 @@ class Store:
                     return  # the live record already there keeps the key
         self._games_by_shortcut[key] = game
 
-    def _reindex_shortcut(self, game: Game, shortcut_path: str) -> None:
+    def _reindex_shortcut(self, game: Jogo, shortcut_path: str) -> None:
         """Move ``game`` to a new shortcut path, index included.
 
         Caller holds the lock. Retiring the old key is the whole point; the new
@@ -555,7 +558,7 @@ class Store:
         game.shortcut_path = shortcut_path
         self._index_shortcut(game)
 
-    def apontar_atalho(self, game: Game, shortcut_path: str) -> None:
+    def apontar_atalho(self, game: Jogo, shortcut_path: str) -> None:
         """Faz ``game`` reclamar o atalho em ``shortcut_path``: a escolha manual
         da janela de pendências da restauração. A próxima varredura acha o
         jogo por esse caminho (a âncora, ver `adopt_legacy_game`) e o adota
@@ -564,7 +567,7 @@ class Store:
             self._reindex_shortcut(game, shortcut_path)
         game.save()
 
-    def adopt_legacy_game(self, game: Game) -> Optional[Game]:
+    def adopt_legacy_game(self, game: Jogo) -> Optional[Jogo]:
         """Re-file a stored game under ``game``'s id, keeping everything it has.
 
         A game id is a hash of how the game is identified, so changing what goes
@@ -618,7 +621,7 @@ class Store:
 
         return self._adotar(legacy, game)
 
-    def adotar_manual(self, game: Game, alvo: str) -> Optional[Game]:
+    def adotar_manual(self, game: Jogo, alvo: str) -> Optional[Jogo]:
         """Faz o atalho que a varredura achou assumir o jogo adicionado à mão
         que abre o mesmo alvo, com tudo o que ele tem, em vez de importá-lo
         como um segundo jogo ao lado do manual.
@@ -630,7 +633,7 @@ class Store:
         candidato = self._candidato_manual(game, alvo)
         return self._adotar(candidato, game) if candidato is not None else None
 
-    def _candidato_manual(self, game: Game, alvo: str) -> Optional[Game]:
+    def _candidato_manual(self, game: Jogo, alvo: str) -> Optional[Jogo]:
         """O único jogo da biblioteca adicionado à mão que abre ``alvo``."""
         chave = _path_key(alvo)
         # Argumentos no atalho escolhem o que o alvo abre: o atalho de um jogo
@@ -649,7 +652,7 @@ class Store:
             ]
         return candidatos[0] if len(candidatos) == 1 else None
 
-    def _adotar(self, legacy: Game, game: Game) -> Game:
+    def _adotar(self, legacy: Jogo, game: Jogo) -> Jogo:
         """Re-file ``legacy`` under ``game``'s id, source and shortcut."""
         legacy_id = legacy.game_id
 
@@ -686,31 +689,35 @@ class Store:
             # logo.
             self._reindex_shortcut(legacy, game.shortcut_path)
 
-        # The cover widget is cached by id too, and DisplayManager does a
+        # The cover widget is cached by id too, and the grid does a
         # read-modify-write on that map from the main thread — so the re-key has
         # to happen there, not here, or the two interleave and the grid ends up
-        # holding a cover the game no longer points at.
-        def rekey_cover() -> bool:
-            if shared.win is not None:
-                cover = shared.win.game_covers.pop(legacy_id, None)
-                if cover is not None:
-                    shared.win.game_covers[game.game_id] = cover
-                    # Its file moved with the rest: left on the old name, the
-                    # blur fell back to the placeholder and the animation was
-                    # gone until the next restart.
-                    if cover.path is not None and cover.path.stem == legacy_id:
-                        cover.new_cover(
-                            shared.covers_dir / f"{game.game_id}{cover.path.suffix}"
-                        )
-            return GLib.SOURCE_REMOVE
-
-        GLib.idle_add(rekey_cover)
+        # holding a cover the game no longer points at. Its file moved with the
+        # rest: left on the old name, the blur fell back to the placeholder and
+        # the animation was gone until the next restart.
+        self.capa_trocou_de_id.emit(legacy_id, game.game_id)
 
         legacy.save()
         return legacy
 
+    def _conectar_managers(self, game: Jogo) -> None:
+        """Liga cada sinal que um manager escuta (`salvar`, `atualizado`) ao `run` dele.
+
+        Direta, como era o `connect` do GObject: o manager roda na thread que
+        emitiu, que pode ser um worker sem laço de eventos. A referência fraca
+        evita o ciclo jogo → conexão → lambda → jogo, que o coletor não vê
+        através do lado C++ e prenderia todo jogo excluído na memória.
+        """
+        ref = weakref.ref(game)
+        for manager in self.managers.values():
+            for signal in manager.signals:
+                getattr(game, signal).connect(
+                    lambda m=manager: (g := ref()) is not None and m.run(g, {}),
+                    Qt.ConnectionType.DirectConnection,
+                )
+
     def add_game(
-        self, game: Game, additional_data: dict, run_pipeline: bool = True
+        self, game: Jogo, additional_data: dict, run_pipeline: bool = True
     ) -> Optional[Pipeline]:
         """Add a game to the app"""
 
@@ -765,9 +772,7 @@ class Store:
                     ] = game
                     self.games_by_id[game.game_id] = game
                     self._index_shortcut(game)
-                for manager in self.managers.values():
-                    for signal in manager.signals:
-                        game.connect(signal, manager.run)
+                self._conectar_managers(game)
                 if game.zerado:
                     game.update()
             return None
@@ -789,7 +794,7 @@ class Store:
             # Um zerado reinstalado continua zerado: quem o tira da página é a
             # pessoa, desmarcando "Zerado". Até lá o atalho novo só é anotado
             # na ficha — é por ele que desmarcar decide se o jogo volta à
-            # biblioteca (`Game.definir_status`). `era_zerado` (não
+            # biblioteca (`Jogo.definir_status`). `era_zerado` (não
             # `stored_game.zerado` de novo) porque o seletor pode ter marcado a
             # tumba nesse meio-tempo — quem virou zerado agora segue por aqui,
             # não pelo ramo de reinstalação comum.
@@ -883,9 +888,7 @@ class Store:
             return None
 
         # Connect signals
-        for manager in self.managers.values():
-            for signal in manager.signals:
-                game.connect(signal, manager.run)
+        self._conectar_managers(game)
 
         # Add the game to the store
         with self._lock:
@@ -913,7 +916,16 @@ class Store:
         # realmente espere (ex.: nos testes, sem managers registrados) pode
         # terminar dentro da própria chamada de `advance()`, e conectar depois
         # perderia esse "advanced".
-        pipeline.connect("advanced", self._ao_avancar_pipeline)
+        # Direta: o receptor oculto da lambda tem a afinidade da thread que conecta
+        # (às vezes um worker, sem laço de eventos), e a conexão automática
+        # enfileiraria a chamada nela para sempre.
+        # Referência fraca, como em `_conectar_managers`: a lambda presa à
+        # conexão (lado C++) seguraria o próprio pipeline, e com ele o jogo.
+        ref = weakref.ref(pipeline)
+        pipeline.advanced.connect(
+            lambda: (p := ref()) is not None and self._ao_avancar_pipeline(p),
+            Qt.ConnectionType.DirectConnection,
+        )
         pipeline.advance()
         return pipeline
 

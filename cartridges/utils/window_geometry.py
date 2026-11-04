@@ -50,21 +50,30 @@ used for it: on Windows ``get_connector()`` and ``get_description()`` are both
 label a monitor with and nothing stable to store.
 """
 
+from __future__ import annotations
+
 import ctypes
+import functools
 import logging
+import weakref
+from collections.abc import Callable
 from ctypes import wintypes
+from pathlib import Path
 from typing import Any, NamedTuple, Optional
 
-from gi.repository import GLib, Gtk
+from PySide6.QtCore import QObject, QTimer, Slot
+from PySide6.QtGui import QWindow
+
+from cartridges import shared
 
 _MONITOR_DEFAULTTONULL = 0x00000000
 # SWP_NOZORDER | SWP_NOACTIVATE: place it exactly, without raising or focusing
 _PLACE = 0x0004 | 0x0010
-_SWP_NOSIZE = 0x0001
-# Distância entre a janela solta das tarefas e o canto do app: a margem do botão,
-# o botão e a folga que o separa dela.
-_MARGEM_BOTAO = 12
-_ALTURA_BOTAO = 34
+# O retângulo que o GTK da `main` gravava inclui a sombra da janela (a diferença de 28x29 que `main.py` cita): o Qt não a
+# tem. Esquerda/topo e largura/altura a descontar na primeira abertura depois da `main` (DA-72). O reparte entre os
+# lados é aproximado (14 e 14; o 1 a mais de altura fica embaixo): a sombra do GTK4 é um pouco maior embaixo.
+_SOMBRA_DO_GTK = (14, 14, 28, 29)
+# A folga entre o botão das tarefas e a janela solta que se abre acima dele.
 _FOLGA_BOTAO = 12
 _MONITORINFOF_PRIMARY = 0x00000001
 _SW_HIDE = 0
@@ -91,6 +100,10 @@ _user32.MonitorFromRect.argtypes = [ctypes.POINTER(wintypes.RECT), wintypes.DWOR
 _user32.MonitorFromRect.restype = wintypes.HANDLE
 _user32.IsIconic.argtypes = [wintypes.HWND]
 _user32.IsIconic.restype = wintypes.BOOL
+_user32.IsZoomed.argtypes = [wintypes.HWND]
+_user32.IsZoomed.restype = wintypes.BOOL
+_user32.IsWindowVisible.argtypes = [wintypes.HWND]
+_user32.IsWindowVisible.restype = wintypes.BOOL
 
 
 class _MONITORINFOEXW(ctypes.Structure):
@@ -348,48 +361,77 @@ def monitores_da_sessao() -> list[Monitor]:
     return [monitor for monitor in monitors() if not monitor.primary]
 
 
-def preencher_escolha_de_monitor(row: Gtk.Widget, monitores: list[Monitor]) -> None:
-    """Enche a linha ``row`` (um ``Adw.ComboRow``) com ``monitores`` e grava a escolha.
+def escolha_de_monitor(monitores: list[Monitor], gravado: str) -> tuple[list[str], int]:
+    """Os rótulos da lista de monitores e a posição do que está gravado.
 
-    O que está guardado é o caminho do monitor (:attr:`Monitor.key`), e não a
+    O que fica guardado é o caminho do monitor (:attr:`Monitor.key`), e não a
     posição na lista nem o nome ``DISPLAYn``, que o Windows troca entre as
     telas: desligar um monitor, ou o Windows renomear as telas, não faz a
     escolha passar a apontar para outro. Uma escolha antiga, gravada pelo
-    nome, é regravada com o caminho. Em compensação, se o monitor escolhido
-    estiver desligado (ou for o principal, guardado de antes de ele sair da
-    lista), a escolha vira o primeiro da lista e é gravada: é a única forma de
-    a lista mostrar o que vai acontecer de verdade.
+    nome, também é reconhecida (:meth:`Monitor.is_stored`). Se o monitor
+    gravado estiver desligado (ou for o principal, guardado de antes de ele sair
+    da lista), a posição é a do primeiro: quem chama grava essa escolha, que é a
+    única forma de a lista mostrar o que vai acontecer de verdade.
 
-    ``row`` é anotada como ``Gtk.Widget`` porque este módulo só importa ``Gtk``.
+    Só o número no rótulo, porque só o número tem resposta: resolução e posição
+    empatam entre telas iguais, e é o botão "Identificar monitores" que diz qual
+    é qual — na própria tela, que é onde se olha.
     """
-    from cartridges import shared  # noqa: PLC0415
+    rotulos = [_("Monitor {}").format(m.number) for m in monitores]
+    escolhido = next((i for i, m in enumerate(monitores) if m.is_stored(gravado)), 0)
+    return rotulos, escolhido
 
-    # Só o número, porque só o número tem resposta: resolução e posição
-    # empatam entre telas iguais, e é o botão "Identificar monitores" que
-    # diz qual é qual — na própria tela, que é onde se olha.
-    row.set_model(
-        Gtk.StringList.new([_("Monitor {}").format(m.number) for m in monitores])
+
+# As placas na tela, seguradas aqui até fecharem: quem as pediu (as Preferências) pode já ter fechado.
+_placas: list[Any] = []
+_PLACA = Path(__file__).resolve().parent.parent / "qml" / "PlacaDoMonitor.qml"
+
+
+def _criar_placa(monitor: Monitor, lado: int) -> Any:
+    """A placa do ``monitor``: uma ``QQuickView`` sem moldura com o número, no centro da tela (D68)."""
+    from PySide6.QtCore import QUrl, Qt  # noqa: PLC0415
+    from PySide6.QtQuick import QQuickView  # noqa: PLC0415
+
+    placa = QQuickView()
+    # Janela comum sem moldura, como o `Gtk.Window(decorated=False)` da `main`: recebe foco e aparece na barra de tarefas.
+    placa.setFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
+    placa.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
+    placa.setInitialProperties({"numero": monitor.number})
+    placa.setSource(QUrl.fromLocalFile(str(_PLACA)))
+    if placa.rootObject() is None:
+        erros = "; ".join(erro.toString() for erro in placa.errors())
+        placa.deleteLater()
+        raise RuntimeError(f"a placa do monitor não carregou: {erros}")
+    placa.resize(lado, lado)
+    placa.show()
+    # Depois do `show`: antes dele a janela ainda não tem lugar na área de trabalho.
+    _place(
+        placa,
+        Geometry(
+            monitor.x + (monitor.width - lado) // 2,
+            monitor.y + (monitor.height - lado) // 2,
+            lado,
+            lado,
+            False,
+        ),
     )
-
-    stored = shared.schema.get_string("session-monitor")
-    selected = next(
-        (index for index, m in enumerate(monitores) if m.is_stored(stored)), 0
-    )
-    row.set_selected(selected)
-
-    def gravar(*_args: Any) -> None:
-        escolhido = row.get_selected()
-        if escolhido < len(monitores):
-            shared.schema.set_string("session-monitor", monitores[escolhido].key)
-
-    row.connect("notify::selected", gravar)
-    # Gravado à mão porque `set_selected` acima só avisa quando muda de
-    # valor, e o caso que precisa gravar — nada escolhido ainda, palpite
-    # caindo no índice 0 — é justamente um que não muda nada.
-    gravar()
+    return placa
 
 
-def identify_monitors(seconds: int = 3) -> None:
+def _fechar_placa(ref: Any) -> None:
+    placa = ref()
+    if placa is None:
+        return
+    if placa in _placas:
+        _placas.remove(placa)
+    try:
+        placa.close()
+        placa.deleteLater()
+    except RuntimeError:  # o objeto Qt já foi apagado
+        pass
+
+
+def identificar_monitores(segundos: int = 3, criar: Optional[Callable[[Monitor, int], Any]] = None) -> None:
     """Pisca o número de cada monitor sobre ele, como as configurações do Windows.
 
     A pergunta "qual deles é o 2?" não tem resposta em texto: dois monitores
@@ -399,42 +441,21 @@ def identify_monitors(seconds: int = 3) -> None:
 
     Mora aqui, e não junto da tela de preferências, porque é a mesma pergunta
     que o resto do arquivo responde: onde ficam os monitores, e como se põe uma
-    janela em cima de um deles.
+    janela em cima de um deles. Só na thread principal.
     """
+    criar = criar or _criar_placa
     for monitor in monitors():
-        badge = Gtk.Window(decorated=False, resizable=False)
-        label = Gtk.Label()
-        label.set_markup(f'<span size="96pt" weight="bold">{monitor.number}</span>')
-        badge.set_child(label)
         # Um quarto do lado menor da tela, para o número sair do mesmo tamanho
         # relativo em telas de tamanhos diferentes.
-        side = max(200, min(monitor.width, monitor.height) // 4)
-        badge.set_default_size(side, side)
-        badge.connect("map", _center_badge, monitor, side)
-        badge.present()
-        GLib.timeout_add_seconds(seconds, _close_badge, badge)
+        lado = max(200, min(monitor.width, monitor.height) // 4)
+        placa = criar(monitor, lado)
+        if placa is None:
+            continue
+        _placas.append(placa)
+        QTimer.singleShot(segundos * 1000, functools.partial(_fechar_placa, weakref.ref(placa)))
 
 
-def _center_badge(badge: Gtk.Window, monitor: Monitor, side: int) -> None:
-    """No "map", e não no "realize": veja :func:`apply_placement`."""
-    _place(
-        badge,
-        Geometry(
-            monitor.x + (monitor.width - side) // 2,
-            monitor.y + (monitor.height - side) // 2,
-            side,
-            side,
-            False,
-        ),
-    )
-
-
-def _close_badge(badge: Gtk.Window) -> bool:
-    badge.close()
-    return GLib.SOURCE_REMOVE
-
-
-def read(window: Gtk.Window) -> Optional[Geometry]:
+def read(window: Any) -> Optional[Geometry]:
     """The window's frame rectangle, or None if it can no longer be asked.
 
     For a maximized window this is the monitor's work area, which is not a size
@@ -461,45 +482,110 @@ def read(window: Gtk.Window) -> Optional[Geometry]:
         rect.top,
         rect.right - rect.left,
         rect.bottom - rect.top,
-        window.is_maximized(),
+        bool(_user32.IsZoomed(hwnd)),
     )
 
 
-def apply_size(window: Gtk.Window, geometry: Geometry) -> None:
-    """Ask for the stored size. Must run before the window is shown.
+def gravar(schema: Any, janela: Any, tela_cheia: bool) -> bool:
+    """Grava onde a janela está, se ainda dá para perguntar; diz se gravou (as regras do `save_window_geometry` da `main`).
 
-    Approximate on purpose: GTK sizes the content area while the stored figure
-    covers the frame, so this lands within the frame's width of the right answer
-    and :func:`apply_placement` corrects it exactly, before anything is visible.
-    Doing it here as well keeps the window from being laid out at a default size
-    it is never going to have.
-
-    Só o tamanho, e não `usable`: na primeira abertura não há posição salva, e
-    exigir uma deixava a janela no mínimo do GTK (508x104) em vez do padrão do
-    schema.
+    Em tela cheia (Big Picture) o retângulo é o da tela, não o da janela: vale a geometria gravada antes. Fechar o app
+    no meio de uma sessão: a janela está estacionada no monitor do jogo, e o que tem de ser lembrado é de onde ela saiu
+    (D52). Minimizada, `read` não responde, e fica a gravada antes.
     """
-    if geometry.width > 0 and geometry.height > 0:
-        window.set_default_size(geometry.width, geometry.height)
+    if tela_cheia:
+        return False
+    geometry = session_geometry() or read(janela)
+    if geometry is None:
+        return False
+    schema.set_int("x", geometry.x)
+    schema.set_int("y", geometry.y)
+    schema.set_boolean("is-maximized", geometry.maximized)
+    # A maximized window's rectangle is its monitor, not a size to reopen at,
+    # so the last real size is left in place for it to be restored to.
+    if not geometry.maximized:
+        schema.set_int("width", geometry.width)
+        schema.set_int("height", geometry.height)
+    return True
 
 
-def apply_placement(window: Gtk.Window, geometry: Geometry) -> None:
-    """Put the window back on its monitor. Call this from "map", not "realize".
+def restaurar(janela: Any, geometria: Geometry) -> None:
+    """Põe a janela de volta no lugar e no tamanho gravados. Sem nada gravado (`usable` falso), não mexe nela.
 
-    A realized window already has a Win32 handle, so placing it there looks like
-    it should work and does nothing: GTK positions the window again on its way
-    to the screen, discarding whatever it was moved to beforehand.
-
-    Order matters: the window is moved first and maximized second, because
-    maximizing fills whichever monitor the window currently sits on. The other
-    way round always fills the primary one, which is the entire bug this exists
-    to fix.
+    Order matters: the window is moved first and maximized second, because maximizing fills whichever monitor the
+    window currently sits on. The other way round always fills the primary one.
     """
-    _place(window, geometry)
-    if geometry.maximized:
+    if not geometria.usable:
+        # Primeira abertura: o 1170x795 lógico já vem do `Principal.qml` (DA-71, feito em F); o `SetWindowPos` trabalha em
+        # pixels físicos e o encolheria fora de 100% de escala.
+        return
+    if not _place(janela, geometria) and (atual := read(janela)) is not None:
+        # A posição gravada não existe mais (um monitor desligado): a janela fica onde o Windows a pôs, no tamanho
+        # gravado, como a `main` (o `apply_size` vinha antes do lugar).
+        _place(janela, geometria._replace(x=atual.x, y=atual.y))
+    if geometria.maximized:
         # Deliberately not conditional on `_place` succeeding: if the stored
         # position was refused the user still asked for a maximized window, and
         # should get one wherever Windows has decided to put it.
-        window.maximize()
+        janela.showMaximized()
+
+
+def sem_a_sombra_do_gtk(geometria: Geometry) -> Geometry:
+    """A geometria gravada pela `main` convertida para o Qt: tira a sombra do GTK do retângulo. Maximizada não muda
+    (o retângulo é o do monitor)."""
+    if not geometria.usable or geometria.maximized:
+        return geometria
+    esquerda, topo, largura, altura = _SOMBRA_DO_GTK
+    return geometria._replace(
+        x=geometria.x + esquerda,
+        y=geometria.y + topo,
+        width=max(1, geometria.width - largura),
+        height=max(1, geometria.height - altura),
+    )
+
+
+# Existe depois que o Qt gravou a geometria pela primeira vez: dali em diante o retângulo gravado já é o dele.
+_MARCA_DO_QT = "geometria-qt"
+
+
+class GeometriaDaJanela(QObject):
+    """A geometria da principal no contexto do QML (`geometria`, D87): restaurada no `onCompleted` do `Principal.qml`,
+    gravada no `closing` (`PainelDasTarefas.principalFechando`) e no primeiro passo do `_fechar`.
+
+    A janela fica numa referência comum, como no `PainelDasTarefas`: ela não segura o objeto C++ (o dono é o motor),
+    e uma janela já destruída responde com `RuntimeError`. Uma fraca morreria com o invólucro Python, que o PySide
+    solta a qualquer momento.
+    """
+
+    def __init__(self, parent: Optional[QObject] = None) -> None:
+        super().__init__(parent)
+        self._janela: Any = None
+
+    @Slot(QObject)
+    def restaurar(self, janela: Any) -> None:
+        self._janela = janela
+        try:
+            geometria = stored(shared.state_schema)
+            if not (shared.app_dir / _MARCA_DO_QT).exists():
+                geometria = sem_a_sombra_do_gtk(geometria)
+            restaurar(janela, geometria)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Could not restore the window geometry", exc_info=True)
+
+    @Slot()
+    def gravar(self) -> None:
+        """Nunca levanta: roda no fechamento."""
+        janela = self._janela
+        try:
+            # Já fechada pelo `quit()`: o `close()` do Qt destrói a janela nativa e o `winId()` criaria outra, num
+            # lugar qualquer. O `closing` dela já gravou.
+            if janela is None or not janela.isVisible():
+                return
+            if gravar(shared.state_schema, janela, janela.visibility() == QWindow.Visibility.FullScreen):
+                (shared.app_dir / _MARCA_DO_QT).parent.mkdir(parents=True, exist_ok=True)
+                (shared.app_dir / _MARCA_DO_QT).touch()
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.warning("Could not save the window geometry", exc_info=True)
 
 
 # Where the window was before a play session sent it to another monitor, and
@@ -520,7 +606,7 @@ def session_geometry() -> Optional[Geometry]:
     return _before_session
 
 
-def move_to_monitor(window: Gtk.Window, stored: str) -> bool:
+def move_to_monitor(window: Any, stored: str) -> bool:
     """Park ``window`` maximized on the monitor ``stored`` names. Says whether it went.
 
     ``stored`` is the ``session-monitor`` preference: a :attr:`Monitor.key`,
@@ -579,7 +665,7 @@ def move_to_monitor(window: Gtk.Window, stored: str) -> bool:
     return True
 
 
-def restore_from_monitor(window: Gtk.Window) -> None:
+def restore_from_monitor(window: Any) -> None:
     """Put the window back exactly where :func:`move_to_monitor` found it.
 
     A no-op when no move happened, so the end of every session can call it
@@ -599,7 +685,7 @@ def restore_from_monitor(window: Gtk.Window) -> None:
     if placement is None or (hwnd := _hwnd(window)) is None:
         return
 
-    if not window.get_visible():
+    if not _user32.IsWindowVisible(hwnd):
         _set_placement(hwnd, placement, _SW_HIDE)
         return
 
@@ -645,63 +731,16 @@ def _get_placement(hwnd: int) -> "Optional[_WINDOWPLACEMENT]":
     return placement
 
 
-def posicao_acima_do_botao(
-    app_rect: tuple[int, int, int, int],
-    app_sombra: tuple[float, float],
-    nova_sombra: tuple[float, float],
-    app_altura: float,
-    nova_altura: float,
-    escala: float,
-) -> tuple[int, int]:
-    """Onde pôr o canto (x, y) do retângulo Win32 de uma janela solta para que ela
-    fique no canto inferior esquerdo do app, logo acima do botão das tarefas.
+def posicao_acima_do_botao(botao: tuple[int, int, int, int], altura_da_janela: int) -> tuple[int, int]:
+    """O canto (x, y) da moldura de uma janela solta para que ela fique logo acima do botão das tarefas.
 
-    Só aritmética, para poder ser conferida sem janela nenhuma. O retângulo do
-    Windows inclui a sombra que o GTK desenha em volta de cada janela;
-    `get_surface_transform` diz quanto dela há à esquerda e em cima. É descontada
-    dos dois lados, para as bordas *visíveis* é que ficarem alinhadas: a esquerda
-    da nova a 12 px da esquerda do app, e a base a 12 + 34 + 12 px acima da base
-    do app (margem do botão, o botão e a folga).
-
-    `app_rect` é (esquerda, topo, direita, base) em pixels do Windows; as sombras
-    e as alturas estão em unidades do GTK, que a escala converte em pixels.
+    `botao` é (x, y, largura, altura) em coordenadas lógicas da tela (as do Qt: a escala não entra na conta);
+    `altura_da_janela` é a da moldura inteira. A janela fica alinhada à esquerda do botão, com a folga de 12 px.
     """
-    visivel_esq = app_rect[0] + app_sombra[0] * escala
-    visivel_baixo = app_rect[1] + (app_sombra[1] + app_altura) * escala
-    alvo_baixo = visivel_baixo - (_MARGEM_BOTAO + _ALTURA_BOTAO + _FOLGA_BOTAO) * escala
-    x = int(visivel_esq + _MARGEM_BOTAO * escala - nova_sombra[0] * escala)
-    y = int(alvo_baixo - nova_altura * escala - nova_sombra[1] * escala)
-    return x, y
+    return botao[0], botao[1] - _FOLGA_BOTAO - altura_da_janela
 
 
-def posicionar_acima_do_botao(janela: Gtk.Window, win: Gtk.Window) -> bool:
-    """Leva a janela solta para o canto inferior esquerdo de ``win``. Diz se foi.
-
-    Chame depois do "map": a superfície e a altura só existem então (veja
-    :func:`apply_placement`). Só move, sem mudar o tamanho nem a ordem das
-    janelas nem tirar o foco de ninguém.
-    """
-    if (hwnd_app := _hwnd(win)) is None or (hwnd_nova := _hwnd(janela)) is None:
-        return False
-
-    rect = wintypes.RECT()
-    if not _user32.GetWindowRect(hwnd_app, ctypes.byref(rect)):
-        return False
-
-    surface = win.get_surface()
-    escala = surface.get_scale() if hasattr(surface, "get_scale") else 1
-    x, y = posicao_acima_do_botao(
-        (rect.left, rect.top, rect.right, rect.bottom),
-        win.get_surface_transform(),
-        janela.get_surface_transform(),
-        win.get_height(),
-        janela.get_height(),
-        escala,
-    )
-    return bool(_user32.SetWindowPos(hwnd_nova, 0, x, y, 0, 0, _SWP_NOSIZE | _PLACE))
-
-
-def _place(window: Gtk.Window, geometry: Geometry) -> bool:
+def _place(window: Any, geometry: Geometry) -> bool:
     """Move and size the window's frame to ``geometry``.
 
     A stored position is not trusted blindly. Monitors get unplugged and
@@ -734,22 +773,19 @@ def _place(window: Gtk.Window, geometry: Geometry) -> bool:
     )
 
 
-def _hwnd(window: Gtk.Window) -> Optional[int]:
+def _hwnd(window: Any) -> Optional[int]:
     """The window's Win32 handle, or None before it is realized.
+
+    Uma `QWindow` (a janela principal do Qt) dá o ``winId()``, que no Windows já é o HWND.
 
     Everything here is best-effort: a failure costs the user a window that opens
     where it last did, which is what happens without this module at all, so it
     must never be allowed to take the application down with it.
     """
+    if window is None or not isinstance(window, QWindow):
+        return None
     try:
-        import gi  # pylint: disable=import-outside-toplevel
-
-        gi.require_version("GdkWin32", "4.0")
-        from gi.repository import GdkWin32  # pylint: disable=import-outside-toplevel
-
-        if (surface := window.get_surface()) is None:
-            return None
-        return GdkWin32.Win32Surface.get_handle(surface) or None
+        return int(window.winId()) or None
     except Exception as error:  # pylint: disable=broad-exception-caught
         logging.warning("Could not read the window handle: %s", error)
         return None

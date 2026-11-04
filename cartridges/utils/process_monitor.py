@@ -141,8 +141,8 @@ def _win32_path(path: str) -> str:
     Every path comparison in this module has a Win32 value on one side —
     `QueryFullProcessImageNameW` reports backslashes, and so does `%SystemRoot%`
     — and a Python-normalised value on the other. Those two only agree if
-    `os.sep` is a backslash, and on the interpreter this app actually ships with
-    it is not: the MSYS2 ucrt64 build reports `os.name == "nt"` and uses
+    `os.sep` is a backslash, and on the interpreter the previous (GTK) version
+    shipped it was not: the MSYS2 ucrt64 build reports `os.name == "nt"` and uses
     `ntpath`, but with `sep` and `altsep` the other way round, so `normpath`,
     `realpath` and `join` all hand back forward slashes.
 

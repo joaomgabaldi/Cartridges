@@ -19,8 +19,8 @@
 
 """Keep a second copy of the app from running alongside the first.
 
-GApplication already promises this — that is what the application id is for —
-but it delivers it over the D-Bus session bus, and Windows has no session bus
+The previous (GTK) version relied on GApplication, which promises this — that is
+what the application id is for — but delivers it over the D-Bus session bus, and Windows has no session bus
 running. GLib tries to start one by spawning ``gdbus.exe``; when that fails
 (a mismatched MSYS2 build, missing dependencies) it prints
 
@@ -36,10 +36,14 @@ running to work. Windows destroys it when the process ends, including when it
 is killed, so a crash cannot leave a lock behind that blocks the next start.
 """
 
+import hashlib
 import logging
+import os
 import sys
 import threading
 from typing import Any, Callable, Optional
+
+from cartridges import shared
 
 # Session-local namespace, which is the same granularity as the data being
 # protected: the games, covers and logos this guard exists to keep two copies
@@ -53,7 +57,22 @@ from typing import Any, Callable, Optional
 # silently falls open, which is the case it was added to prevent.
 #
 # The name is arbitrary but must never change: it is the identity of the lock.
-_MUTEX_NAME = "Local\\io.github.joaomgabaldi.Cartridges.SingleInstance"
+#
+# Só o canal final sem `CARTRIDGES_DADOS` usa os nomes de sempre (D76). O `-dev` e os testes têm os seus, um por
+# pasta de dados: com os de sempre, o app de desenvolvimento se acharia a segunda cópia do Cartridges instalado
+# aberto nesta máquina e o acordaria em vez de abrir.
+_NOME_DO_CANAL_FINAL = "Local\\io.github.joaomgabaldi.Cartridges"
+
+
+def nomes() -> tuple[str, str]:
+    """O nome do mutex e o do evento da segunda abertura, para a pasta de dados deste processo."""
+    if shared.canal() == "final" and not os.environ.get("CARTRIDGES_DADOS"):
+        base = _NOME_DO_CANAL_FINAL
+    else:
+        resumo = hashlib.sha1(str(shared.app_dir).casefold().encode("utf-8")).hexdigest()[:8]
+        base = f"Local\\{shared.APP_DIR_NAME}.{resumo}"
+    return f"{base}.SingleInstance", f"{base}.Present"
+
 
 _ERROR_ALREADY_EXISTS = 183
 
@@ -89,7 +108,7 @@ def acquire() -> bool:
         )
         kernel32.CreateMutexW.restype = ctypes.c_void_p
 
-        handle = kernel32.CreateMutexW(None, False, _MUTEX_NAME)
+        handle = kernel32.CreateMutexW(None, False, nomes()[0])
         last_error = ctypes.get_last_error()
     except (OSError, AttributeError, ValueError) as error:
         logging.warning("Could not create the single-instance lock: %s", error)
@@ -129,7 +148,7 @@ def release() -> None:
     _handle = None
 
 
-# Título da janela principal (window.blp). Não passa por tradução — a
+# Título da janela principal (Principal.qml). Não passa por tradução — a
 # interface é hardcoded — então dá para casar contra ele daqui, onde o gettext
 # do launcher pode nem ter sido instalado ainda.
 _MAIN_WINDOW_TITLE = "Cartridges"
@@ -137,10 +156,9 @@ _MAIN_WINDOW_TITLE = "Cartridges"
 
 # Evento nomeado que a segunda cópia acende para a primeira: a janela principal
 # pode estar escondida (fechada com tarefas rodando, só a das tarefas à vista), e
-# uma janela que o GTK escondeu não volta por Win32 — o GTK segue achando que ela
+# uma janela que o Qt escondeu não volta por Win32 — o Qt segue achando que ela
 # não está na tela. Só a primeira cópia sabe se mostrar. Mesmo escopo e mesma
-# regra do mutex: o nome nunca muda.
-_EVENT_NAME = "Local\\io.github.joaomgabaldi.Cartridges.Present"
+# regra do mutex (`nomes()[1]`).
 
 _EVENT_MODIFY_STATE = 0x0002
 _INFINITE = 0xFFFFFFFF
@@ -171,7 +189,7 @@ def watch_second_launch(callback: Callable[[], None]) -> None:
         kernel32.WaitForSingleObject.restype = ctypes.c_uint32
 
         # Reinício automático (auto-reset): cada acendida acorda uma vez.
-        if not (handle := kernel32.CreateEventW(None, False, False, _EVENT_NAME)):
+        if not (handle := kernel32.CreateEventW(None, False, False, nomes()[1])):
             return
     except (OSError, AttributeError, ValueError) as error:
         logging.warning("Could not create the second-launch event: %s", error)
@@ -193,7 +211,7 @@ def _wake_running_instance() -> None:
     kernel32.OpenEventW.restype = ctypes.c_void_p
     kernel32.SetEvent.argtypes = (ctypes.c_void_p,)
     kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
-    if not (handle := kernel32.OpenEventW(_EVENT_MODIFY_STATE, False, _EVENT_NAME)):
+    if not (handle := kernel32.OpenEventW(_EVENT_MODIFY_STATE, False, nomes()[1])):
         return
     # Este processo acabou de ser iniciado pelo usuário e carrega o direito de
     # foreground: cede-o à primeira cópia, que é quem vai mostrar a janela.
@@ -252,11 +270,11 @@ def present_running_instance() -> None:
             class_name = ctypes.create_unicode_buffer(64)
             user32.GetWindowTextW(hwnd, title, 64)
             user32.GetClassNameW(hwnd, class_name, 64)
-            # O par título + classe "gdk*" (as janelas GTK no Windows registram
-            # classes gdkSurface*) evita realçar uma pasta do Explorer que por
-            # acaso se chame Cartridges.
+            # O par título + classe "Qt*" (as janelas do Qt registram classes como
+            # Qt6120QWindowIcon) evita realçar uma pasta do Explorer que por acaso
+            # se chame Cartridges, e também o Cartridges GTK (classes gdkSurface*).
             if title.value == _MAIN_WINDOW_TITLE and class_name.value.lower().startswith(
-                "gdk"
+                "qt"
             ):
                 found.append(hwnd)
                 return False  # para a enumeração: achou
@@ -269,7 +287,7 @@ def present_running_instance() -> None:
         hwnd = ctypes.c_void_p(found[0])
         # Principal escondida (só a janela das tarefas à vista): quem a mostra é
         # a primeira cópia, ao acordar. Dar foreground aqui à HWND escondida a
-        # faria reaparecer visível mas sem foco de teclado (`is_active()` falso).
+        # faria reaparecer sem que o Qt soubesse que ela está na tela.
         if not user32.IsWindowVisible(hwnd):
             return
         if user32.IsIconic(hwnd):

@@ -46,15 +46,15 @@ import threading
 from time import time
 from typing import Optional
 
-from gi.repository import GLib
-
 from cartridges import shared
-from cartridges.game import Game
-from cartridges.utils import tarefas
+from cartridges.jogo import Jogo
+from cartridges.modelos import tarefas
+from cartridges.utils.format_playtime import format_size  # noqa: F401  (reexportado)
 from cartridges.utils.game_folder import game_folder
 from cartridges.utils.passada_agendada import PassadaAgendada
 from cartridges.utils.process_monitor import install_dir_from_command
 from cartridges.utils.run_executable import aumid_from_command
+from cartridges.utils.thread_principal import na_thread_principal
 
 # Startup is busy (window, disk load, and usually an auto-import right after).
 _START_DELAY_SECONDS = 25
@@ -154,33 +154,6 @@ def folder_size(directory: str) -> int:
     return total
 
 
-# Base 1024 com os rótulos curtos, que é o que o Explorer mostra: o número aqui
-# existe para ser comparado com o de lá, e uma medida em base 1000 mostraria
-# 94 GB onde o Windows mostra 87.
-_UNITS = ("B", "KB", "MB", "GB", "TB")
-
-
-def format_size(size: int) -> str:
-    """Tamanho legível, com vírgula decimal ("87,4 GB")."""
-    if size <= 0:
-        return ""
-
-    value = float(size)
-    unit = 0
-    while value >= 1024 and unit < len(_UNITS) - 1:
-        value /= 1024
-        unit += 1
-
-    # Uma casa decimal só a partir de MB: "1,4 KB" é precisão que ninguém pediu,
-    # e em bytes a fração não existe.
-    if unit < 2:
-        return f"{round(value)} {_UNITS[unit]}"
-
-    rounded = round(value, 1)
-    text = str(int(rounded)) if rounded.is_integer() else str(rounded).replace(".", ",")
-    return f"{text} {_UNITS[unit]}"
-
-
 class InstallSizeSweep(PassadaAgendada):
     """Uma varredura em segundo plano pelo tamanho de cada jogo no disco."""
 
@@ -213,11 +186,11 @@ class InstallSizeSweep(PassadaAgendada):
         ).start()
 
     @staticmethod
-    def _is_stale(game: Game) -> bool:
+    def _is_stale(game: Jogo) -> bool:
         """Este jogo precisa ser medido agora?"""
         return (int(time()) - (game.install_size_ts or 0)) >= _REFRESH_AFTER_SECONDS
 
-    def _worker(self, games: list[Game], generation: int) -> None:
+    def _worker(self, games: list[Jogo], generation: int) -> None:
         measured = 0
         tarefa: Optional[tarefas.Tarefa] = None
         try:
@@ -225,7 +198,7 @@ class InstallSizeSweep(PassadaAgendada):
             # medir — nem o que mostrar nas tarefas: um jogo aberto pela loja
             # passaria pela fila em milissegundos a cada abertura, e o botão do
             # canto piscaria por nada.
-            com_pasta: list[tuple[Game, str]] = []
+            com_pasta: list[tuple[Jogo, str]] = []
             for game in games:
                 if self._deve_parar(generation):
                     return
@@ -237,7 +210,7 @@ class InstallSizeSweep(PassadaAgendada):
                 if folder:
                     com_pasta.append((game, folder))
                 elif game.install_size:
-                    GLib.idle_add(self._apply, game, 0)
+                    na_thread_principal(self._apply, game, 0)
             if not com_pasta:
                 return
 
@@ -260,11 +233,11 @@ class InstallSizeSweep(PassadaAgendada):
                 size = folder_size(folder)
                 if not size:
                     if game.install_size:
-                        GLib.idle_add(self._apply, game, 0)
+                        na_thread_principal(self._apply, game, 0)
                     continue
 
                 measured += 1
-                GLib.idle_add(self._apply, game, size)
+                na_thread_principal(self._apply, game, size)
         finally:
             if tarefa is not None:
                 tarefa.terminar()
@@ -277,17 +250,17 @@ class InstallSizeSweep(PassadaAgendada):
 
     # -- aplicando os resultados (thread principal) ---------------------------
 
-    def _apply(self, game: Game, size: int) -> bool:
+    def _apply(self, game: Jogo, size: int) -> None:
         """Grava o tamanho de um jogo e o repinta. Roda no thread principal."""
         if self._stopped or game.removed:
-            return False
+            return
         # Identidade no store, não só o snapshot: um reset apaga a biblioteca
         # enquanto o worker anda pela lista dele, e o `save()` abaixo
         # regravaria o JSON de um jogo recém-apagado. Mesmo idioma do
         # `_in_library` do MetadataRefresh e do HLTBBackfill.
         store = getattr(shared, "store", None)
         if store is None or store.get(game.game_id) is not game:
-            return False
+            return
 
         game.install_size = size
         # Sem carimbo quando o tamanho some: sem ele, a próxima varredura mede
@@ -296,23 +269,5 @@ class InstallSizeSweep(PassadaAgendada):
         if size:
             game.install_size_ts = int(time())
         game.save()
-
-        win = shared.win
-        if win is None:
-            return False
-
-        # A tela de detalhes desenha o tamanho quando é aberta; um jogo medido
-        # enquanto ele está aberto ficaria sem a linha até sair e voltar.
-        if (
-            getattr(win, "active_game", None) is game
-            and win.navigation_view.get_visible_page() == win.details_page
-        ):
-            win.update_install_size_label(game)
-
-        # A ordenação por tamanho lê o valor que acabou de mudar. Sem isto, a
-        # grade fica na ordem que a varredura encontrou, que é a de antes dela.
-        if win.sort_state == "install_size":
-            win.library.invalidate_sort()
-            win.zerados_library.invalidate_sort()
-        return False
-
+        # A página de detalhes e a ordenação por tamanho seguem o `atualizado`.
+        game.update()

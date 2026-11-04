@@ -78,7 +78,7 @@ def test_excluir_pode_preservar_as_sessoes(store, make_game):
     assert [s["seconds"] for s in session_log.load("g2")] == [60]
 
 
-def test_resumo_usa_os_dias_do_grafico(win):
+def test_resumo_usa_os_dias_do_grafico():
     from cartridges.session_history import resumo_dos_ultimos_dias  # noqa: PLC0415
 
     hoje = date(2026, 9, 23)
@@ -94,22 +94,6 @@ def test_zero_segundos_vira_nenhuma_sessao():
 
     assert tempo_ou_nenhuma(0) == "nenhuma sessão"
     assert tempo_ou_nenhuma(3600) == "1 hora"
-
-
-def test_tabela_mostra_100_e_carrega_mais(win, monkeypatch):
-    from cartridges import session_history  # noqa: PLC0415
-    from cartridges.game import Game  # noqa: PLC0415
-
-    for indice in range(250):
-        session_log.record("g", 60, 1_700_000_000 + indice * 100)
-    jogo = Game({"source": "shortcuts", "game_id": "g", "name": "G", "executable": "x", "added": 0})
-    dialogo = session_history.SessionHistoryDialog(jogo)
-    assert len(dialogo._rows) == 100
-    dialogo.mostrar_mais()
-    assert len(dialogo._rows) == 200
-    dialogo.mostrar_mais()
-    assert len(dialogo._rows) == 250
-    assert not dialogo.mais_button.get_visible()
 
 
 def test_record_concorrente_com_mover_jogo_nao_perde_linha():

@@ -2,11 +2,12 @@
 
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from types import SimpleNamespace
 
 from cartridges import shared
-from cartridges.main import CartridgesApplication
+from cartridges.modelos.avisos import FilaDeAvisos
+from cartridges.modelos.novidades import Novidades
 from cartridges.utils import backup
+from tests.apoio_novidades import CheckerFalso
 
 _GSCHEMA = Path(__file__).parent.parent / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml.in"
 
@@ -21,15 +22,12 @@ def test_vai_no_backup():
     assert backup._filtrar_chaves(["show-news-button"]) == ["show-news-button"]
 
 
-def test_feed_acompanha_a_chave():
-    chamadas = []
-    checker = SimpleNamespace(
-        start=lambda: chamadas.append("start"), stop=lambda: chamadas.append("stop")
-    )
-    app = SimpleNamespace(news_checker=checker)
+def test_feed_acompanha_a_chave(app_qt):
+    checker = CheckerFalso()
+    novidades = Novidades(FilaDeAvisos(), checker)
 
-    CartridgesApplication.on_show_news_changed(app)
+    novidades.ligar()
     shared.schema.set_boolean("show-news-button", True)
-    CartridgesApplication.on_show_news_changed(app)
+    novidades.ligar()
 
-    assert chamadas == ["stop", "start"]
+    assert checker.chamadas == ["stop", "start"]

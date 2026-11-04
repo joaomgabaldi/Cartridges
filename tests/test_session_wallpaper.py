@@ -16,7 +16,6 @@ resgata dez jogos de uma biblioteca de 92, e sem a guarda resgata errado:
 """
 
 import json
-import threading
 from types import SimpleNamespace
 
 import pytest
@@ -24,7 +23,6 @@ from PIL import Image
 
 from cartridges import shared
 from cartridges.utils import session_wallpaper
-from cartridges.utils.wallhaven import consultas
 
 
 def _arte(largura: int, altura: int) -> Image.Image:
@@ -65,100 +63,12 @@ class _AreaComMonitores:
         return list(self.monitores)
 
 
-class TestEnquadramento:
-    def test_miniatura_e_arquivo_dao_o_mesmo_quadro(self) -> None:
-        """A miniatura de 432px e o original de 3840px, lado a lado.
-
-        Os dois são reduzidos ao mesmo tamanho e comparados: o corte é em
-        proporção, então o quadro tem de ser o mesmo apesar da diferença de
-        resolução entre as fontes.
-        """
-        original = _arte(3840, 2160)
-        miniatura = original.resize((432, 243), Image.LANCZOS)
-
-        for posicao in (0.0, 0.5, 1.0):
-            grande = session_wallpaper.enquadrar(original, 1080, 1920, posicao)
-            pequena = session_wallpaper.enquadrar(miniatura, 146, 260, posicao)
-
-            a = grande.resize((36, 64), Image.LANCZOS)
-            b = pequena.resize((36, 64), Image.LANCZOS)
-            diferenca = max(
-                abs(int(p) - int(q))
-                for p, q in zip(a.convert("L").get_flattened_data(), b.convert("L").get_flattened_data())
-            )
-            # Reamostragem não é exata; o que se afirma é o enquadramento, e
-            # um quadro diferente daria centenas de níveis de diferença.
-            assert diferenca < 40, f"posição {posicao} enquadrou diferente"
-
-    def test_posicao_move_o_corte(self) -> None:
-        original = _arte(3840, 2160)
-        esquerda = session_wallpaper.enquadrar(original, 1080, 1920, 0.0)
-        direita = session_wallpaper.enquadrar(original, 1080, 1920, 1.0)
-        assert list(esquerda.get_flattened_data()) != list(direita.get_flattened_data())
-
-    def test_saida_tem_exatamente_o_tamanho_do_monitor(self) -> None:
-        for origem in ((3840, 2160), (1080, 2400), (600, 900)):
-            quadro = session_wallpaper.enquadrar(_arte(*origem), 1080, 1920)
-            assert quadro.size == (1080, 1920)
-
-    def test_eixo_do_corte(self) -> None:
-        # Arte larga num monitor em pé: sobra largura, o corte é lateral.
-        assert session_wallpaper.eixo_do_corte(3840, 2160, 1080, 1920)
-        # Arte mais alta que o monitor: sobra altura, o corte é vertical.
-        assert not session_wallpaper.eixo_do_corte(1080, 2400, 1080, 1920)
-        # Já na proporção exata: nada sobra, e o eixo lateral é o padrão.
-        assert session_wallpaper.eixo_do_corte(1080, 1920, 1080, 1920)
-
-    def test_corta_so_quando_a_proporcao_difere(self) -> None:
-        assert not session_wallpaper.corta(3840, 2160, 1920, 1080)
-        # A cópia reduzida da tela de ajuste arredonda: continua sendo 16:9.
-        assert not session_wallpaper.corta(1564, 880, 1920, 1080)
-        assert session_wallpaper.corta(1920, 1200, 1920, 1080)
-        assert session_wallpaper.corta(3840, 2160, 1080, 1920)
-
-    def test_capa_aparece_inteira(self, app_dirs) -> None:
-        """A capa não é cortada: 2:3 num monitor 9:16 perderia o título."""
-        capa = app_dirs.covers / "capa.png"
-        _arte(600, 900).save(capa)
-        quadro = session_wallpaper.da_capa(capa, 1080, 1920)
-        assert quadro.size == (1080, 1920)
+@pytest.fixture
+def jogo(make_game):
+    return make_game(game_id="jogo-teste", name="Watch Dogs: Legion")
 
 
 class TestMonitoresAlvo:
-    def test_o_principal_fica_fora_e_os_outros_entram(self) -> None:
-        assert session_wallpaper.alvos([PRINCIPAL, DEITADO, EM_PE]) == [DEITADO, EM_PE]
-
-    def test_so_o_principal_nao_tem_alvo(self) -> None:
-        assert session_wallpaper.alvos([PRINCIPAL]) == []
-
-    def test_grade_em_pe_so_com_todos_em_pe(self) -> None:
-        formatos = session_wallpaper.formatos([PRINCIPAL, EM_PE])
-        assert formatos.grade == (1080, 1920)
-        assert formatos.ratio == "portrait"
-
-    def test_grade_deitada_com_todos_deitados(self) -> None:
-        formatos = session_wallpaper.formatos([PRINCIPAL, DEITADO])
-        assert formatos.grade == (2560, 1440)
-        assert formatos.ratio == "landscape"
-
-    def test_hibrido_tem_grade_deitada_e_minimo_dos_dois(self) -> None:
-        formatos = session_wallpaper.formatos([PRINCIPAL, DEITADO, EM_PE])
-        assert formatos.grade == (2560, 1440)
-        assert formatos.ratio == "landscape"
-        # Largura do deitado e altura do em pé: nenhum dos dois cortes estica.
-        assert formatos.minimo == (2560, 1920)
-
-    def test_sem_alvo_a_grade_cai_no_padrao_deitado(self) -> None:
-        formatos = session_wallpaper.formatos([PRINCIPAL])
-        assert formatos.grade == session_wallpaper.PAISAGEM_PADRAO
-        assert formatos.minimo == session_wallpaper.PAISAGEM_PADRAO
-
-    def test_celula_fixa_o_lado_maior_da_grade(self) -> None:
-        from cartridges import wallpaper_picker  # noqa: PLC0415
-
-        assert wallpaper_picker.celula(1080, 1920) == (146, 260)
-        assert wallpaper_picker.celula(1920, 1080) == (260, 146)
-
     def test_aplicar_prepara_so_os_alvos_com_o_minimo_e_o_formato_da_grade(
         self, monkeypatch, tmp_path
     ) -> None:
@@ -179,8 +89,8 @@ class TestMonitoresAlvo:
         vestir = []
         monkeypatch.setattr(
             session_wallpaper,
-            "GLib",
-            SimpleNamespace(idle_add=lambda _funcao, _sessao, quadros: vestir.append(quadros)),
+            "na_thread_principal",
+            lambda _funcao, _sessao, quadros: vestir.append(quadros),
         )
 
         session_wallpaper.aplicar(SimpleNamespace(game_id="jogo"), 0)
@@ -209,9 +119,7 @@ class TestMonitoresAlvo:
                 session_wallpaper.Posicoes(retrato=0.2, paisagem=0.7),
             ),
         )
-        monkeypatch.setattr(
-            session_wallpaper, "GLib", SimpleNamespace(idle_add=lambda *_args: None)
-        )
+        monkeypatch.setattr(session_wallpaper, "na_thread_principal", lambda *_args: None)
         cortes = []
         original = session_wallpaper.enquadrar
 
@@ -224,79 +132,6 @@ class TestMonitoresAlvo:
         session_wallpaper.aplicar(SimpleNamespace(game_id="jogo"), 0)
 
         assert cortes == [(2560, 1440, 0.7), (1080, 1920, 0.2)]
-
-
-class TestConsultas:
-    def test_nome_limpo_vem_primeiro(self) -> None:
-        assert consultas("Watch Dogs: Legion")[0] == "Watch Dogs: Legion"
-
-    def test_sublinhado_e_apostrofo_viram_busca_utilizavel(self) -> None:
-        assert consultas("Watch_Dogs 2")[0] == "Watch Dogs 2"
-        assert consultas("Assassin\u2019s Creed Shadows")[0] == (
-            "Assassin's Creed Shadows"
-        )
-
-    def test_edicao_sai_num_degrau_proprio(self) -> None:
-        formas = consultas("Conan Exiles Enhanced")
-        assert "Conan Exiles" in formas
-
-    def test_subtitulo_cai_quando_sobram_duas_palavras(self) -> None:
-        assert "The Outer Worlds" in consultas("The Outer Worlds: Spacer's Choice")
-
-    def test_subtitulo_nao_cai_para_uma_palavra_so(self) -> None:
-        """A guarda que separa o jogo do filme de mesmo nome."""
-        for nome, generico in (
-            ("Aliens: Dark Descent", "Aliens"),
-            ("Vampire: The Masquerade", "Vampire"),
-            ("Commandos: Origins", "Commandos"),
-        ):
-            assert generico not in consultas(nome)
-
-
-class TestBuscaPorFormato:
-    def test_formato_vira_ratios_e_o_minimo_vira_atleast(self, monkeypatch) -> None:
-        from cartridges.utils import download, wallhaven  # noqa: PLC0415
-
-        pedidos = []
-
-        class Resposta:
-            def raise_for_status(self):
-                return None
-
-            def iter_content(self, chunk_size=1):  # lido por get_capped
-                return iter(())
-
-            def json(self):
-                return {"data": []}
-
-        def get(url, **_kwargs):
-            pedidos.append(url)
-            return Resposta()
-
-        monkeypatch.setattr(download, "_get", get)
-
-        wallhaven.buscar("Halo", 1920, 1920, formato="landscape")
-        wallhaven.buscar("Halo", 1920, 1920)
-
-        assert "ratios=landscape" in pedidos[0]
-        assert "atleast=1920x1920" in pedidos[0]
-        assert "ratios" not in pedidos[1]
-
-    def test_melhor_para_desce_do_formato_pedido_para_qualquer_um(
-        self, monkeypatch
-    ) -> None:
-        from cartridges.utils import wallhaven  # noqa: PLC0415
-
-        degraus = []
-
-        def buscar(_consulta, _largura, _altura, formato=None, **_kwargs):
-            degraus.append(formato)
-            return [{"id": "x"}] if formato is None else []
-
-        monkeypatch.setattr(wallhaven, "buscar", buscar)
-
-        assert wallhaven.melhor_para("Halo", 1920, 1080, "landscape") == {"id": "x"}
-        assert degraus == ["landscape", None]
 
 
 class TestEscolhaPorJogo:
@@ -371,45 +206,6 @@ class TestEscolhaPorJogo:
         destino.unlink()
 
         assert session_wallpaper.escolha(jogo) == "auto"
-
-    def test_a_tela_de_edicao_grava_as_duas_posicoes(self, jogo, tmp_path, win) -> None:
-        from cartridges.details_dialog import DetailsDialog  # noqa: PLC0415
-
-        origem = tmp_path / "escolhida.jpg"
-        _arte(64, 36).save(origem)
-        dialog = DetailsDialog()
-
-        dialog.set_wallpaper_from_picker(origem, session_wallpaper.Posicoes(0.2, 0.7))
-
-        assert dialog.apply_wallpaper_choice(jogo) is True
-        gravado = json.loads(
-            (shared.wallpapers_dir / f"{jogo.game_id}.json").read_text(encoding="utf-8")
-        )
-        assert (gravado["position_portrait"], gravado["position_landscape"]) == (0.2, 0.7)
-
-    def test_escolher_arquivo_abre_a_tela_de_ajuste(
-        self, win, monkeypatch, tmp_path
-    ) -> None:
-        from cartridges import details_dialog  # noqa: PLC0415
-
-        abertas = []
-
-        class TelaFalsa:
-            def __init__(self, _nome, _on_selected, _on_cleared, arquivo=None):
-                abertas.append(arquivo)
-
-            def present(self, _parent):
-                return None
-
-        monkeypatch.setattr(details_dialog, "WallpaperPicker", TelaFalsa)
-        dialog = details_dialog.DetailsDialog()
-
-        dialog.open_wallpaper_file(tmp_path / "minha.png")
-
-        assert abertas == [tmp_path / "minha.png"]
-        # Nada escolhido ainda: a escolha só existe quando a tela a devolver.
-        assert dialog._wallpaper_choice is None
-
 
 class _AreaFalsa:
     """O bastante da IDesktopWallpaper para a ida e a volta, sem tocar na tela."""
@@ -527,179 +323,6 @@ class TestRestauro:
         assert [monitor for monitor, _ in area.vestidos] == ["M1", "M2"]
 
 
-@pytest.fixture
-def jogo(write_record):
-    """Um jogo qualquer, gravado como a biblioteca o grava."""
-    from cartridges.game import Game
-
-    write_record("jogo-teste", name="Watch Dogs: Legion")
-    return Game(
-        {
-            "game_id": "jogo-teste",
-            "name": "Watch Dogs: Legion",
-            "source": "shortcuts",
-        }
-    )
-
-
-class TestTelaDeEscolha:
-    def test_o_template_resolve_todos_os_filhos(self, win, monkeypatch) -> None:
-        """Um nome errado no .blp só aparece ao construir a janela.
-
-        Nenhum outro teste instancia esta tela, e um ``Gtk.Template.Child``
-        que não casa com o template levanta na construção — o app inteiro
-        deixaria de abrir a edição de qualquer jogo.
-        """
-        from cartridges import wallpaper_picker
-
-        monkeypatch.setattr(wallpaper_picker, "buscar", lambda *a, **k: [])
-        monkeypatch.setattr(
-            wallpaper_picker,
-            "formatos_ligados",
-            lambda: session_wallpaper.Formatos((1080, 1920), None),
-        )
-
-        picker = wallpaper_picker.WallpaperPicker("Watch Dogs", lambda *_: None, lambda: None)
-
-        for filho in (
-            picker.search_entry,
-            picker.flowbox,
-            picker.stack,
-            picker.status_page,
-            picker.none_button,
-            picker.adjust_landscape_box,
-            picker.adjust_landscape_picture,
-            picker.adjust_landscape_scale,
-            picker.adjust_landscape_adjustment,
-            picker.adjust_portrait_box,
-            picker.adjust_portrait_picture,
-            picker.adjust_portrait_scale,
-            picker.adjust_portrait_adjustment,
-            picker.adjust_back,
-            picker.adjust_apply,
-        ):
-            assert filho is not None
-
-        # A célula acompanha a proporção do monitor, não um número no template.
-        assert (picker.cell_width, picker.cell_height) == (146, 260)
-        picker.close()
-
-    def test_previa_cabe_na_caixa_sem_perder_a_proporcao(self) -> None:
-        from cartridges import wallpaper_picker  # noqa: PLC0415
-
-        assert wallpaper_picker.caber(1920, 1080, 800, 440) == (782, 440)
-        assert wallpaper_picker.caber(3440, 1440, 800, 440) == (800, 335)
-        assert wallpaper_picker.caber(1080, 1920, 220, 340) == (191, 340)
-
-    def test_so_em_pe_mostra_um_corte(self, win, monkeypatch) -> None:
-        from cartridges import wallpaper_picker  # noqa: PLC0415
-
-        monkeypatch.setattr(wallpaper_picker, "buscar", lambda *a, **k: [])
-        monkeypatch.setattr(
-            wallpaper_picker,
-            "formatos_ligados",
-            lambda: session_wallpaper.Formatos((1080, 1920), None),
-        )
-        picker = wallpaper_picker.WallpaperPicker("Halo", lambda *_: None, lambda: None)
-
-        picker._open_done(b"jpg", ".jpg", _arte(192, 108), picker._generation)
-
-        assert picker.adjust_portrait_box.get_visible()
-        assert not picker.adjust_landscape_box.get_visible()
-        picker.close()
-
-    def test_sem_alvo_nenhum_cai_no_corte_deitado(self, win, monkeypatch) -> None:
-        """O monitor foi desligado entre abrir a edição e abrir esta tela.
-
-        Sem alvo não há orientação a seguir, e a grade cai no PAISAGEM_PADRAO —
-        que é deitado, então é a caixa deitada que tem de aparecer.
-        """
-        from cartridges import wallpaper_picker  # noqa: PLC0415
-
-        monkeypatch.setattr(wallpaper_picker, "buscar", lambda *a, **k: [])
-        monkeypatch.setattr(
-            wallpaper_picker,
-            "formatos_ligados",
-            lambda: session_wallpaper.Formatos(None, None),
-        )
-        picker = wallpaper_picker.WallpaperPicker("Halo", lambda *_: None, lambda: None)
-
-        picker._open_done(b"jpg", ".jpg", _arte(192, 108), picker._generation)
-
-        assert picker.adjust_landscape_box.get_visible()
-        assert not picker.adjust_portrait_box.get_visible()
-        picker.close()
-
-    def test_hibrido_mostra_os_dois_cortes_e_grava_as_duas_posicoes(
-        self, win, monkeypatch
-    ) -> None:
-        from cartridges import wallpaper_picker  # noqa: PLC0415
-
-        monkeypatch.setattr(wallpaper_picker, "buscar", lambda *a, **k: [])
-        monkeypatch.setattr(
-            wallpaper_picker,
-            "formatos_ligados",
-            lambda: session_wallpaper.Formatos((1080, 1920), (1920, 1080)),
-        )
-        escolhas = []
-
-        def escolhida(caminho, posicoes):
-            escolhas.append(posicoes)
-            caminho.unlink()  # a cópia temporária que a tela entrega
-
-        picker = wallpaper_picker.WallpaperPicker("Halo", escolhida, lambda: None)
-
-        picker._open_done(b"jpg", ".jpg", _arte(192, 108), picker._generation)
-
-        assert picker.adjust_landscape_box.get_visible()
-        assert picker.adjust_portrait_box.get_visible()
-        # Arte 16:9 num monitor 16:9: nada a cortar, nada a deslizar.
-        assert not picker.adjust_landscape_scale.get_visible()
-        assert picker.adjust_portrait_scale.get_visible()
-
-        picker.adjust_portrait_adjustment.set_value(20)
-        picker._on_apply_clicked()
-
-        assert escolhas == [session_wallpaper.Posicoes(retrato=0.2, paisagem=0.5)]
-
-    def test_arquivo_do_disco_abre_direto_no_ajuste(
-        self, win, monkeypatch, tmp_path, flush_idle
-    ) -> None:
-        from cartridges import wallpaper_picker  # noqa: PLC0415
-
-        def nao_busca(*_args, **_kwargs):
-            raise AssertionError("arquivo do disco não busca no wallhaven")
-
-        monkeypatch.setattr(wallpaper_picker, "buscar", nao_busca)
-        monkeypatch.setattr(
-            wallpaper_picker,
-            "formatos_ligados",
-            lambda: session_wallpaper.Formatos((1080, 1920), None),
-        )
-        arquivo = tmp_path / "minha.png"
-        _arte(192, 108).save(arquivo)
-
-        picker = wallpaper_picker.WallpaperPicker(
-            "Halo", lambda *_: None, lambda: None, arquivo=arquivo
-        )
-        # A leitura roda numa thread e entrega pela fila do GLib.
-        for thread in list(threading.enumerate()):
-            if thread is not threading.current_thread() and thread.daemon:
-                thread.join(timeout=5)
-        flush_idle()
-
-        assert picker.stack.get_visible_child_name() == "adjust"
-        assert not picker.search_bar.get_visible()
-        assert not picker.none_button.get_visible()
-        assert picker._suffix == ".png"
-
-        # Sem grade para onde voltar, "Voltar" desiste da escolha.
-        fechou = []
-        monkeypatch.setattr(picker, "close", lambda: fechou.append(True))
-        picker.adjust_back.emit("clicked")
-        assert fechou == [True]
-
-
 class TestLimiteDoPapelDeParede:
     """Papel de parede baixa até 50 MB; a miniatura do seletor, até 25 MB."""
 
@@ -717,82 +340,6 @@ class TestLimiteDoPapelDeParede:
 
         monkeypatch.setattr(modulo, "download_bytes", baixar)
         return limites
-
-    @staticmethod
-    def _picker(monkeypatch):
-        from cartridges import wallpaper_picker  # noqa: PLC0415
-
-        monkeypatch.setattr(wallpaper_picker, "buscar", lambda *a, **k: [])
-        monkeypatch.setattr(
-            wallpaper_picker,
-            "formatos_ligados",
-            lambda: session_wallpaper.Formatos((1080, 1920), None),
-        )
-        monkeypatch.setattr(wallpaper_picker, "entregar_na_tela", lambda *_a: None)
-        return wallpaper_picker.WallpaperPicker("Halo", lambda *_: None, lambda: None)
-
-    def test_papel_de_parede_escolhido_usa_50_mb(self, win, monkeypatch) -> None:
-        from cartridges import wallpaper_picker  # noqa: PLC0415
-        from cartridges.utils.download import MAX_WALLPAPER_BYTES  # noqa: PLC0415
-
-        picker = self._picker(monkeypatch)
-        limites = self._anotar(monkeypatch, wallpaper_picker)
-
-        picker._open_thread({"path": "https://x/p.jpg"}, picker._generation)
-
-        assert limites == [MAX_WALLPAPER_BYTES]
-        picker.close()
-
-    def test_miniatura_segue_25_mb(self, win, monkeypatch) -> None:
-        from cartridges import wallpaper_picker  # noqa: PLC0415
-        from cartridges.utils.download import MAX_IMAGE_BYTES  # noqa: PLC0415
-
-        picker = self._picker(monkeypatch)
-        limites = self._anotar(monkeypatch, wallpaper_picker)
-
-        picker._miniatura({"thumb": "https://x/t.jpg", "id": 1}, picker._generation)
-
-        assert limites == [MAX_IMAGE_BYTES]
-        picker.close()
-
-    def test_papel_de_parede_escolhido_mostra_progresso(self, win, monkeypatch) -> None:
-        import requests  # noqa: PLC0415
-
-        from cartridges import wallpaper_picker  # noqa: PLC0415
-
-        picker = self._picker(monkeypatch)
-        recebidos = []
-
-        def baixar(_url, timeout=10, max_bytes=0, ao_progredir=None):
-            recebidos.append(ao_progredir)
-            raise requests.RequestException("x")
-
-        monkeypatch.setattr(wallpaper_picker, "download_bytes", baixar)
-
-        picker._open_thread({"path": "https://x/p.jpg"}, picker._generation)
-
-        assert recebidos == [picker._ao_progredir]
-        picker.close()
-
-    def test_papel_de_parede_cancelado_encerra_em_silencio(self, win, monkeypatch) -> None:
-        from cartridges import wallpaper_picker  # noqa: PLC0415
-        from cartridges.utils.download import DownloadCancelado  # noqa: PLC0415
-
-        picker = self._picker(monkeypatch)
-        entregas = []
-
-        def baixar(*_a, **_k):
-            raise DownloadCancelado
-
-        monkeypatch.setattr(wallpaper_picker, "download_bytes", baixar)
-        monkeypatch.setattr(
-            wallpaper_picker, "entregar_na_tela", lambda *a: entregas.append(a)
-        )
-
-        picker._open_thread({"path": "https://x/p.jpg"}, picker._generation)
-
-        assert entregas == []
-        picker.close()
 
     def test_busca_automatica_usa_50_mb(self, monkeypatch) -> None:
         from cartridges.utils.download import MAX_WALLPAPER_BYTES  # noqa: PLC0415

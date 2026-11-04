@@ -15,7 +15,7 @@ from cartridges import shared
 from cartridges.utils import capa_video
 
 precisa_do_ffmpeg = pytest.mark.skipif(
-    capa_video.executavel() is None, reason="ffmpeg não instalado (pacman -S mingw-w64-ucrt-x86_64-ffmpeg)"
+    capa_video.executavel() is None, reason="ffmpeg não encontrado no PATH"
 )
 
 
@@ -38,6 +38,15 @@ def quadros_e_duracao(caminho: Path) -> tuple[int, int]:
             imagem.load()
             duracao += imagem.info.get("duration", 0)
         return imagem.n_frames, duracao
+
+
+def test_executavel_procura_ao_lado_do_python_do_app(tmp_path, monkeypatch):
+    # No app instalado o `sys.executable` é o lançador; o `ffmpeg.exe` do instalador fica ao lado dele.
+    lancador = tmp_path / "bin" / "Cartridges.exe"
+    lancador.parent.mkdir()
+    (lancador.parent / "ffmpeg.exe").touch()
+    monkeypatch.setattr(capa_video.sys, "executable", str(lancador))
+    assert capa_video.executavel() == lancador.parent / "ffmpeg.exe"
 
 
 def test_eh_video_pelo_sufixo():

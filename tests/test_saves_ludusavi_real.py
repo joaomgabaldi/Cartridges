@@ -146,19 +146,15 @@ def saves_de(jogo) -> Path:
 
 
 def backup(jogo, flush_idle) -> None:
-    tarefa = backup_de_saves._comecar_tarefa("Backup", 1)  # como no pedido
+    tarefa = backup_de_saves.comecar_tarefa("Backup", 1)  # como no pedido
     backup_de_saves._backup(jogo, backup_de_saves._biblioteca(), tarefa)
     flush_idle()
 
 
 def restaurar(jogo, versao: str, flush_idle) -> None:
-    tarefa = backup_de_saves._comecar_tarefa("Restaurando", 1)
+    tarefa = backup_de_saves.comecar_tarefa("Restaurando", 1)
     backup_de_saves._restaurar(jogo, NOME, versao, backup_de_saves._biblioteca(), tarefa)
     flush_idle()
-
-
-def titulos(win) -> list[str]:
-    return [toast.get_title() for toast in win.toast_queue.added]
 
 
 def no_zip(arquivo: Path | None, nome: str) -> bytes | None:
@@ -208,7 +204,7 @@ def travado(arquivo: Path):
         kernel32.CloseHandle(handle)
 
 
-def test_real_versao_danificada_nao_toca_o_save(jogo, flush_idle, win):
+def test_real_versao_danificada_nao_toca_o_save(jogo, flush_idle, avisos):
     saves = saves_de(jogo)
     # Grande e aleatório: o meio dele no zip é dado, e não cabeçalho.
     (saves / "dados.bin").write_bytes(os.urandom(4096))
@@ -226,12 +222,12 @@ def test_real_versao_danificada_nao_toca_o_save(jogo, flush_idle, win):
     assert (saves / "save.sav").read_bytes() == b"atual"
     # Parou antes até da cópia dos saves atuais.
     assert len(backup_de_saves.versoes_do_jogo(jogo)) == 2
-    assert titulos(win) == [
+    assert avisos.textos == [
         "A versão escolhida dos saves de Jogo Real está danificada e não foi restaurada."
     ]
 
 
-def test_real_backup_com_arquivo_travado_fica_marcado(jogo, flush_idle, win):
+def test_real_backup_com_arquivo_travado_fica_marcado(jogo, flush_idle, avisos):
     saves = saves_de(jogo)
     (saves / "a.sav").write_bytes(b"a1")
     (saves / "b.sav").write_bytes(b"b1")
@@ -249,9 +245,9 @@ def test_real_backup_com_arquivo_travado_fica_marcado(jogo, flush_idle, win):
     # O travado não entra (o Ludusavi 0.31 o deixa vazio): restaurá-la estragaria o `b.sav`.
     assert no_zip(nova.arquivo, "b.sav") in (b"", None)
     aviso = "Não foi possível fazer o backup dos saves de Jogo Real."
-    assert titulos(win) == [aviso]
+    assert avisos.textos == [aviso]
 
-    tarefa = backup_de_saves._comecar_tarefa("Restaurando", 1)
+    tarefa = backup_de_saves.comecar_tarefa("Restaurando", 1)
     backup_de_saves._restaurar_todos(
         backup_de_saves._biblioteca(), [(jogo, jogo.ludusavi_nome)], tarefa
     )
@@ -260,10 +256,10 @@ def test_real_backup_com_arquivo_travado_fica_marcado(jogo, flush_idle, win):
     # A anterior, completa: a incompleta deixaria `a.sav` de uma e `b.sav` de outra.
     assert (saves / "a.sav").read_bytes() == b"a1"
     assert (saves / "b.sav").read_bytes() == b"b1"
-    assert titulos(win) == [aviso]
+    assert avisos.textos == [aviso]
 
 
-def test_real_pasta_do_jogo_movida(jogo, flush_idle, win, tmp_path):
+def test_real_pasta_do_jogo_movida(jogo, flush_idle, avisos, tmp_path):
     if conferencia._USUARIO.match(tmp_path.as_posix()):
         pytest.skip(
             "tmp_path está num perfil (X:/Users/<nome>): ali a pasta do jogo não ganha "
@@ -280,10 +276,10 @@ def test_real_pasta_do_jogo_movida(jogo, flush_idle, win, tmp_path):
 
     assert (tmp_path / "JogoB" / "steam_settings" / APPID / "save.sav").read_bytes() == b"v1"
     assert not (tmp_path / "JogoA").exists()
-    assert titulos(win) == []
+    assert avisos.textos == []
 
 
-def test_real_destino_proibido_e_recusado(jogo, flush_idle, win):
+def test_real_destino_proibido_e_recusado(jogo, flush_idle, avisos):
     saves = saves_de(jogo)
     (saves / "save.sav").write_bytes(b"v1")
     (saves / "x.dll").write_bytes(b"MZ")
@@ -296,7 +292,7 @@ def test_real_destino_proibido_e_recusado(jogo, flush_idle, win):
 
     assert (saves / "save.sav").read_bytes() == b"atual"
     assert not (saves / "x.dll").exists()
-    assert titulos(win) == [
+    assert avisos.textos == [
         (
             "O backup dos saves de Jogo Real contém arquivos fora das pastas de save "
             "e não foi restaurado."
@@ -304,7 +300,7 @@ def test_real_destino_proibido_e_recusado(jogo, flush_idle, win):
     ]
 
 
-def test_real_copia_nao_apaga_a_escolhida(jogo, flush_idle, win):
+def test_real_copia_nao_apaga_a_escolhida(jogo, flush_idle, avisos):
     save = saves_de(jogo) / "save.sav"
     for numero in range(1, 6):
         save.write_bytes(f"v{numero}".encode())
@@ -321,11 +317,11 @@ def test_real_copia_nao_apaga_a_escolhida(jogo, flush_idle, win):
     assert [v.id for v in resto] == [v.id for v in antes]
     assert copia.comentario == backup_de_saves.ANTES_DE_RESTAURAR
     assert no_zip(copia.arquivo, "save.sav") == b"atual"
-    assert titulos(win) == []
+    assert avisos.textos == []
 
 
 @pytest.mark.parametrize("manifesto", ["ausente", "sem o jogo"])
-def test_real_save_fora_da_copia_nao_e_sobrescrito(jogo, flush_idle, win, tmp_path, manifesto):
+def test_real_save_fora_da_copia_nao_e_sobrescrito(jogo, flush_idle, avisos, tmp_path, manifesto):
     # A versão leva o save que o manifesto aponta; depois o manifesto some (ou perde o
     # jogo), a cópia dos saves atuais não o guardaria e restaurar o perderia de vez.
     vivo = tmp_path / "Vivo" / "s.sav"
@@ -346,4 +342,4 @@ def test_real_save_fora_da_copia_nao_e_sobrescrito(jogo, flush_idle, win, tmp_pa
     restaurar(jogo, versao.id, flush_idle)
 
     assert vivo.read_bytes() == b"atual"
-    assert titulos(win) == ["Não foi possível restaurar o save de Jogo Real."]
+    assert avisos.textos == ["Não foi possível restaurar o save de Jogo Real."]

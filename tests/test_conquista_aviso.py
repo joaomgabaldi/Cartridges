@@ -3,37 +3,54 @@
 import array
 import io
 import logging
-import time
 import wave
 import winsound
+from pathlib import Path
 
 import pytest
-from gi.repository import Gio, GLib
-
+from PySide6.QtGui import QWindow
 from cartridges import conquista_aviso
-from cartridges.conquistas import icones, progresso
+from cartridges.conquistas import progresso
 from cartridges.conquistas.catalogo import ConquistaInfo
 from cartridges.conquistas.vigia import Desbloqueada
-from cartridges.utils import janela_por_cima
 
-_PREPARAR_REAL = janela_por_cima.preparar
-_POR_NO_CANTO_REAL = janela_por_cima.por_no_canto
-_SAIR_REAL = conquista_aviso._JanelaDoAviso.sair
+
+_CRIAR_JANELA_REAL = conquista_aviso._criar_janela
+
+
+class JanelaFalsa:
+    """O contrato da janela do aviso (a de verdade, `JanelaDoAviso`): `titulo`, `entrar`, `sair`, `fechar`."""
+
+    falham: set = set()  # títulos cujo `entrar` levanta (a janela não pôde ser preparada)
+    entraram: list = []
+
+    def __init__(self, aviso):
+        self.titulo = aviso.titulo
+        self._destruida = False
+
+    def entrar(self, canto):
+        if self.titulo in JanelaFalsa.falham:
+            raise RuntimeError("a janela do aviso não pôde ser preparada")
+        JanelaFalsa.entraram.append(self.titulo)
+
+    def sair(self, ao_terminar):
+        ao_terminar()
+
+    def fechar(self):
+        self._destruida = True
 
 
 @pytest.fixture(autouse=True)
 def sem_efeitos(monkeypatch):
-    """Sem ícone de rede, sem Win32, saída sem animação e com o relógio na mão do teste."""
-    monkeypatch.setattr(icones, "carregar", lambda _o, _e: None)
+    """Sem janela de verdade, saída sem animação e com o relógio na mão do teste."""
     monkeypatch.setattr(conquista_aviso, "_som_escalado", None)  # o volume de um teste não vaza
-    monkeypatch.setattr(janela_por_cima, "preparar", lambda _j: True)
-    monkeypatch.setattr(janela_por_cima, "por_no_canto", lambda _j, _c, margem=24: True)
-    monkeypatch.setattr(
-        conquista_aviso._JanelaDoAviso, "sair", lambda _self, ao_terminar: ao_terminar()
-    )
+    monkeypatch.setattr(conquista_aviso, "_dados_do_som", None)
+    monkeypatch.setattr(JanelaFalsa, "falham", set())
+    monkeypatch.setattr(JanelaFalsa, "entraram", [])
+    monkeypatch.setattr(conquista_aviso, "_criar_janela", JanelaFalsa)
     agendados = []
     monkeypatch.setattr(
-        conquista_aviso, "_agendar", lambda segundos, funcao: agendados.append((segundos, funcao)) or 1
+        conquista_aviso, "_agendar", lambda segundos, funcao: agendados.append((segundos, funcao))
     )
     yield agendados
     conquista_aviso.fechar()
@@ -101,15 +118,6 @@ def test_exemplo():
     assert exemplo.titulo and "★ Rara" in exemplo.rotulo
 
 
-def test_icone_que_chega_depois_do_fechamento_nao_levanta(monkeypatch, sem_efeitos):
-    entregas = []
-    monkeypatch.setattr(icones, "carregar", lambda _o, entregar: entregas.append(entregar))
-    conquista_aviso.mostrar(conquista_aviso.Aviso("r", "Um", "", "https://exemplo.test/i.jpg"))
-    assert len(entregas) == 1
-    conquista_aviso.fechar()
-    entregas[0](object())  # a textura chega com a janela já destruída: nada acontece
-
-
 def _aviso(titulo):
     return conquista_aviso.Aviso("r", titulo, "", "")
 
@@ -118,14 +126,9 @@ def test_falha_ao_mostrar_passa_para_o_proximo(monkeypatch, sem_efeitos):
     """Um cartão que falha no meio da fila não trava a fila: o idle de recuperação
     segue com o próximo, e um idle que sobra não duplica o que já está na tela."""
     idle = []
-    monkeypatch.setattr(conquista_aviso.GLib, "idle_add", lambda funcao, *args: idle.append(lambda: funcao(*args)) or 1)
+    monkeypatch.setattr(conquista_aviso, "na_thread_principal", lambda funcao, *args: idle.append(lambda: funcao(*args)))
 
-    def quebra_no_dois(janela, canto, margem=24):
-        if janela.titulo == "Dois":
-            raise RuntimeError("falha de teste")
-        return True
-
-    monkeypatch.setattr(janela_por_cima, "por_no_canto", quebra_no_dois)
+    monkeypatch.setattr(JanelaFalsa, "falham", {"Dois"})
     conquista_aviso.mostrar(_aviso("Um"))
     conquista_aviso.mostrar(_aviso("Dois"))
     conquista_aviso.mostrar(_aviso("Tres"))
@@ -142,10 +145,8 @@ def test_falha_ao_mostrar_passa_para_o_proximo(monkeypatch, sem_efeitos):
 
 def test_idle_de_recuperacao_mostra_o_proximo_quando_ninguem_chegou(monkeypatch, sem_efeitos):
     idle = []
-    monkeypatch.setattr(conquista_aviso.GLib, "idle_add", lambda funcao, *args: idle.append(lambda: funcao(*args)) or 1)
-    monkeypatch.setattr(
-        janela_por_cima, "preparar", lambda janela: janela.titulo != "Dois"
-    )
+    monkeypatch.setattr(conquista_aviso, "na_thread_principal", lambda funcao, *args: idle.append(lambda: funcao(*args)))
+    monkeypatch.setattr(JanelaFalsa, "falham", {"Dois"})
     conquista_aviso.mostrar(_aviso("Um"))
     conquista_aviso.mostrar(_aviso("Dois"))
     conquista_aviso.mostrar(_aviso("Tres"))
@@ -155,30 +156,42 @@ def test_idle_de_recuperacao_mostra_o_proximo_quando_ninguem_chegou(monkeypatch,
     assert conquista_aviso.na_tela() == "Tres"
 
 
-def test_preparar_que_falha_nao_mostra_a_janela(monkeypatch, sem_efeitos):
-    """Sem os estilos o cartão ativaria e tiraria o jogo da tela cheia: ele é
-    descartado sem nunca ter sido mostrado, e a fila segue."""
-    mostradas = []
-    original = conquista_aviso._JanelaDoAviso.set_visible
+def test_janela_que_nao_entra_nao_e_mostrada(monkeypatch, sem_efeitos):
+    """Sem os estilos o cartão tiraria o jogo da tela cheia: a janela que não pôde ser
+    preparada é descartada (e fechada), e a fila segue."""
+    criadas = []
+    original = JanelaFalsa.__init__
 
-    def espia(self, visivel):
-        mostradas.append(self.titulo)
-        original(self, visivel)
+    def espia(self, aviso):
+        original(self, aviso)
+        criadas.append(self)
 
-    monkeypatch.setattr(conquista_aviso._JanelaDoAviso, "set_visible", espia)
-    monkeypatch.setattr(janela_por_cima, "preparar", lambda janela: janela.titulo != "Um")
+    monkeypatch.setattr(JanelaFalsa, "__init__", espia)
+    monkeypatch.setattr(JanelaFalsa, "falham", {"Um"})
     conquista_aviso.mostrar(_aviso("Um"))
     assert conquista_aviso.na_tela() is None
-    assert mostradas == []
+    assert JanelaFalsa.entraram == [] and criadas[0]._destruida
     conquista_aviso.mostrar(_aviso("Dois"))
     assert conquista_aviso.na_tela() == "Dois"
-    assert mostradas == ["Dois"]
+    assert JanelaFalsa.entraram == ["Dois"]
+
+
+def test_janela_que_nao_importa_nao_trava_a_fila(monkeypatch, sem_efeitos):
+    def sem_modulo(_aviso):
+        raise ImportError("cartridges.janela_do_aviso")
+
+    monkeypatch.setattr(conquista_aviso, "_criar_janela", sem_modulo)
+    conquista_aviso.mostrar(_aviso("Um"))
+    assert conquista_aviso.na_tela() is None
+    monkeypatch.setattr(conquista_aviso, "_criar_janela", JanelaFalsa)
+    conquista_aviso.mostrar(_aviso("Dois"))  # o próximo mostrar tenta de novo
+    assert conquista_aviso.na_tela() == "Dois"
 
 
 def test_saida_e_animada_e_o_proximo_so_entra_depois(monkeypatch, sem_efeitos):
     saidas = []
     monkeypatch.setattr(
-        conquista_aviso._JanelaDoAviso, "sair", lambda self, ao_terminar: saidas.append(ao_terminar)
+        JanelaFalsa, "sair", lambda self, ao_terminar: saidas.append(ao_terminar)
     )
     conquista_aviso.mostrar(_aviso("Um"))
     conquista_aviso.mostrar(_aviso("Dois"))
@@ -204,7 +217,7 @@ def test_temporizador_velho_nao_esconde_o_cartao_seguinte(sem_efeitos):
 def test_fechar_durante_a_saida_fecha_na_hora(monkeypatch, sem_efeitos):
     saidas = []
     monkeypatch.setattr(
-        conquista_aviso._JanelaDoAviso, "sair", lambda self, ao_terminar: saidas.append(ao_terminar)
+        JanelaFalsa, "sair", lambda self, ao_terminar: saidas.append(ao_terminar)
     )
     conquista_aviso.mostrar(_aviso("Um"))
     conquista_aviso.mostrar(_aviso("Dois"))
@@ -218,7 +231,7 @@ def test_fechar_durante_a_saida_fecha_na_hora(monkeypatch, sem_efeitos):
 def test_animacao_que_nunca_termina_nao_trava_a_fila(monkeypatch, sem_efeitos):
     saidas = []
     monkeypatch.setattr(
-        conquista_aviso._JanelaDoAviso, "sair", lambda self, ao_terminar: saidas.append(ao_terminar)
+        JanelaFalsa, "sair", lambda self, ao_terminar: saidas.append(ao_terminar)
     )
     conquista_aviso.mostrar(_aviso("Um"))
     conquista_aviso.mostrar(_aviso("Dois"))
@@ -236,29 +249,67 @@ def test_saida_que_falha_nao_trava_a_fila(monkeypatch, sem_efeitos):
     def quebra(self, ao_terminar):
         raise RuntimeError("falha de teste")
 
-    monkeypatch.setattr(conquista_aviso._JanelaDoAviso, "sair", quebra)
+    monkeypatch.setattr(JanelaFalsa, "sair", quebra)
     conquista_aviso.mostrar(_aviso("Um"))
     conquista_aviso.mostrar(_aviso("Dois"))
     sem_efeitos[-1][1]()
     assert conquista_aviso.na_tela() == "Dois"
 
 
-def test_animacao_de_saida_de_verdade_termina_e_destroi(monkeypatch, sem_efeitos):
-    monkeypatch.setattr(janela_por_cima, "preparar", _PREPARAR_REAL)  # sem pegar o foco
-    monkeypatch.setattr(janela_por_cima, "por_no_canto", _POR_NO_CANTO_REAL)
-    monkeypatch.setattr(conquista_aviso._JanelaDoAviso, "sair", _SAIR_REAL)
+def test_animacao_de_saida_de_verdade_termina_e_destroi(monkeypatch, sem_efeitos, user32_falso, flush_idle):  # noqa: ARG001
+    """A `JanelaDoAviso` de verdade (offscreen, user32 falso): a saída animada termina sozinha e o próximo entra."""
+    monkeypatch.setattr(conquista_aviso, "_criar_janela", _CRIAR_JANELA_REAL)
     conquista_aviso.mostrar(_aviso("Um"))
     conquista_aviso.mostrar(_aviso("Dois"))
     janela = conquista_aviso._atual
-    sem_efeitos[-1][1]()
-    contexto = GLib.MainContext.default()
-    fim = time.monotonic() + 5
-    while conquista_aviso.na_tela() != "Dois" and time.monotonic() < fim:
-        while contexto.iteration(False):
-            pass
-        time.sleep(0.01)
+    assert conquista_aviso.na_tela() == "Um"
+    sem_efeitos[-1][1]()  # o tempo do aviso acabou; o limite da saída fica na lista, sem rodar
+    for _ in range(100):
+        if conquista_aviso.na_tela() == "Dois":
+            break
+        flush_idle(0.05)
     assert conquista_aviso.na_tela() == "Dois"
     assert janela._destruida
+
+
+def test_limite_da_saida_vence_antes_do_terminou(monkeypatch, sem_efeitos, user32_falso, flush_idle):  # noqa: ARG001
+    """A `JanelaDoAviso` real sem quadros: o `_LIMITE_DA_SAIDA` fecha o aviso, o `ao_terminar` roda uma vez e um
+    `terminou` que chega depois não avança a fila de novo."""
+    monkeypatch.setattr(conquista_aviso, "_criar_janela", _CRIAR_JANELA_REAL)
+    saidas = []
+    saiu = conquista_aviso._saiu
+    monkeypatch.setattr(conquista_aviso, "_saiu", lambda vez, janela: saidas.append(janela) or saiu(vez, janela))
+    for titulo in ("Um", "Dois", "Três"):
+        conquista_aviso.mostrar(_aviso(titulo))
+    janela = conquista_aviso._atual
+    sem_efeitos[-1][1]()  # o tempo do aviso acabou: a saída começa e o limite fica agendado
+    assert sem_efeitos[-1][0] == conquista_aviso._LIMITE_DA_SAIDA
+    sem_efeitos[-1][1]()  # o limite vence antes de a animação terminar
+    assert conquista_aviso.na_tela() == "Dois"
+    assert janela._destruida and not QWindow.isVisible(janela)
+    assert saidas == [janela]
+    janela._terminou()  # o `terminou` tardio da animação de "Um"
+    flush_idle(0.5)
+    assert saidas == [janela]
+    assert conquista_aviso.na_tela() == "Dois"
+
+
+def test_cartao_do_aviso_e_o_mesmo_componente(monkeypatch, user32_falso):  # noqa: ARG001
+    """A janela mostra o `CartaoDoAviso.qml` registrado no módulo, o mesmo que o assistente e as Preferências usam."""
+    from cartridges.janela_do_aviso import JanelaDoAviso  # noqa: PLC0415
+
+    qml = Path(conquista_aviso.__file__).parent / "qml"
+    assert "CartaoDoAviso 1.0 CartaoDoAviso.qml" in (qml / "qmldir").read_text(encoding="utf-8").splitlines()
+    janela = JanelaDoAviso(conquista_aviso.Aviso("Rótulo", "Título", "Descrição", ""))
+    try:
+        assert Path(janela.source().toLocalFile()) == qml / "CartaoDoAviso.qml"
+        cartao = janela.rootObject()
+        assert cartao.objectName() == "cartaoDoAviso"
+        assert [cartao.property(nome) for nome in ("rotulo", "titulo", "descricao", "icone")] == [
+            "Rótulo", "Título", "Descrição", ""
+        ]
+    finally:
+        janela.fechar()
 
 
 # O som
@@ -307,9 +358,9 @@ def test_conquista_depois_da_fila_vazia_toca_de_novo(sons, sem_efeitos):
 def test_cartao_que_falha_no_meio_da_fila_nao_faz_o_seguinte_tocar(sons, sem_efeitos, monkeypatch):
     idle = []
     monkeypatch.setattr(
-        conquista_aviso.GLib, "idle_add", lambda funcao, *args: idle.append((funcao, args)) or 1
+        conquista_aviso, "na_thread_principal", lambda funcao, *args: idle.append((funcao, args))
     )
-    monkeypatch.setattr(janela_por_cima, "preparar", lambda janela: janela.titulo != "Um")
+    monkeypatch.setattr(JanelaFalsa, "falham", {"Um"})
     for titulo in ("Zero", "Um", "Dois"):
         conquista_aviso.mostrar(_aviso(titulo))
     sem_efeitos[-1][1]()  # "Zero" sai; "Um" falha e a recuperação fica para o idle
@@ -320,7 +371,7 @@ def test_cartao_que_falha_no_meio_da_fila_nao_faz_o_seguinte_tocar(sons, sem_efe
 
 
 def test_primeiro_que_falha_nao_cala_a_conquista_seguinte(sons, monkeypatch):
-    monkeypatch.setattr(janela_por_cima, "preparar", lambda janela: janela.titulo != "Um")
+    monkeypatch.setattr(JanelaFalsa, "falham", {"Um"})
     conquista_aviso.mostrar(_aviso("Um"))
     conquista_aviso.mostrar(_aviso("Dois"))
     assert conquista_aviso.na_tela() == "Dois"
@@ -336,7 +387,7 @@ def test_exemplo_toca_mesmo_com_fila(sons, sem_efeitos):
 
 
 def test_cartao_que_nao_entra_nao_toca(sons, monkeypatch):
-    monkeypatch.setattr(janela_por_cima, "preparar", lambda _j: False)
+    monkeypatch.setattr(JanelaFalsa, "falham", {"Um"})
     conquista_aviso.mostrar(_aviso("Um"))
     assert conquista_aviso.na_tela() is None
     assert sons == []
@@ -353,11 +404,23 @@ def test_falha_do_som_nao_impede_o_cartao(sons, monkeypatch, caplog):
     assert any("som" in r.getMessage() for r in caplog.records)
 
 
-def test_recurso_ausente_nao_impede_o_cartao(sons, monkeypatch, caplog):
-    def ausente(_caminho, _flags):
-        raise GLib.Error("recurso inexistente")
+def test_som_vem_do_arquivo_de_dados(sons, schema, monkeypatch, tmp_path):
+    arquivo = tmp_path / "conquista.wav"
+    arquivo.write_bytes(_wav([1000, -1000]))
+    monkeypatch.setattr(conquista_aviso, "_ARQUIVO_DO_SOM", arquivo)
+    schema.set_int("conquistas-aviso-som-volume", 100)
+    conquista_aviso.mostrar(_aviso("Um"))
+    assert sons[0][0] == arquivo.read_bytes()
+    assert conquista_aviso._ARQUIVO_DO_SOM.name == "conquista.wav"
 
-    monkeypatch.setattr(Gio, "resources_lookup_data", ausente)
+
+def test_o_arquivo_de_som_do_app_existe():
+    real = Path(conquista_aviso.__file__).resolve().parent.parent / "data" / "sons" / "conquista.wav"
+    assert real.is_file()
+
+
+def test_sem_o_arquivo_de_som_o_aviso_aparece(sons, monkeypatch, tmp_path, caplog):
+    monkeypatch.setattr(conquista_aviso, "_ARQUIVO_DO_SOM", tmp_path / "nao_existe.wav")
     with caplog.at_level(logging.WARNING):
         conquista_aviso.mostrar(_aviso("Um"))
     assert conquista_aviso.na_tela() == "Um"
@@ -418,31 +481,6 @@ def test_volume_lido_a_cada_som(sons, schema, sem_efeitos):
         conquista_aviso.mostrar(_aviso("Um"))
         maiores.append(max(abs(a) for a in _amostras(sons[-1][0])[3]))
     assert maiores[0] == maiores[2] < maiores[1]
-
-
-def _rotulos(widget):
-    achados = []
-    filho = widget.get_first_child()
-    while filho:
-        if isinstance(filho, conquista_aviso.Gtk.Label):
-            achados.append(filho.get_label())
-        achados += _rotulos(filho)
-        filho = filho.get_next_sibling()
-    return achados
-
-
-def test_montar_cartao_e_o_mesmo_do_aviso_real(sem_efeitos):
-    aviso = conquista_aviso.Aviso("Rótulo", "Título", "Descrição", "")
-    cartao, imagem = conquista_aviso.montar_cartao(aviso)
-    assert cartao.has_css_class("conquista-aviso-cartao")
-    assert imagem.get_icon_name() == "starred-symbolic"
-    janela = conquista_aviso._JanelaDoAviso(aviso)
-    try:
-        assert janela.cartao.has_css_class("conquista-aviso-cartao")
-        assert janela._imagem.get_icon_name() == "starred-symbolic"
-        assert _rotulos(janela.cartao) == _rotulos(cartao) == ["Rótulo", "Título", "Descrição"]
-    finally:
-        janela.fechar()
 
 
 def test_exemplo_aceita_a_porcentagem():

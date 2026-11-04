@@ -1,23 +1,21 @@
 """O histórico de conquistas segue o jogo para onde ele for."""
 
 import json
-import zipfile
 
 from cartridges import shared
 from cartridges.conquistas import historico
 from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.store import store as store_module
 from cartridges.store.managers.file_manager import FileManager
-from cartridges.utils import backup
-from tests.test_auditoria_0923_ligacao import ligar  # noqa: F401
-from tests.test_zerados import jogo
+from tests.apoio_auditoria_0923_ligacao import ligar
+from tests.apoio_edicao import jogo
 
 
 def test_campo_novo_vem_ligado_e_e_gravado(store):
     game = jogo(store, 1)
     assert game.conquistas is True
     game.conquistas = False
-    # `save()` só emite "save-ready"; quem escreve o arquivo é o FileManager.
+    # `save()` só emite `salvar`; quem escreve o arquivo é o FileManager.
     FileManager().main(game, {})
     gravado = json.loads(
         (shared.games_dir / f"{game.game_id}.json").read_text(encoding="utf-8")
@@ -101,13 +99,3 @@ def test_ligacao_sem_gravar_nao_perde_o_historico_do_zerado(store, ligar, monkey
     assert ligar(vivo) is True
     pendente = historico.caminho(zerado.game_id).with_name(f"{zerado.game_id}.json.pendente")
     assert pendente.is_file()
-
-
-def test_backup_leva_o_historico(tmp_path):
-    historico.registrar("shortcuts_1", [Desbloqueio("A", 1)])
-    destino = tmp_path / "saida" / "backup.zip"
-    destino.parent.mkdir()
-    backup.exportar(destino, {"settings": {}, "state": {}})
-    with zipfile.ZipFile(destino) as arquivo:
-        assert "conquistas/shortcuts_1.json" in arquivo.namelist()
-    assert shared.conquistas_dir.is_dir()

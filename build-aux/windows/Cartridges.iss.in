@@ -1,14 +1,31 @@
+; ISCC /DRepo=... /DPastaApp=...: empacota a pasta que o montar_app_qt.py montou.
+; Com /DDESENVOLVIMENTO: uma cópia que convive com a instalada (outro AppId e outra pasta) e usa só os dados "-dev".
+#ifndef Repo
+#error Passe /DRepo=<raiz do repositório> e /DPastaApp=<pasta que o montar_app_qt.py montou>.
+#endif
+#ifndef PastaApp
+#error Passe /DRepo=<raiz do repositório> e /DPastaApp=<pasta que o montar_app_qt.py montou>.
+#endif
+#ifdef DESENVOLVIMENTO
+#define MyAppName "Cartridges Qt (desenvolvimento)"
+#else
 #define MyAppName "Cartridges"
+#endif
 #define MyAppVersion "@VERSION@"
 #define MyAppPublisher "joaomgabaldi"
 #define MyAppURL "https://github.com/joaomgabaldi/Cartridges"
 #define MyAppExeName "Cartridges.exe"
 
 [Setup]
+#ifdef DESENVOLVIMENTO
+AppId={{3C2D6B0E-5F71-4A8B-9E24-7D1A0C9B6F35}
+#else
 AppId={{88FC7AF8-9F74-40EC-AAED-FA6356261CBB}
+#endif
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName={#MyAppName} {#MyAppVersion}
+; Sem a versão: ela já tem coluna própria em "Aplicativos instalados", e o nome do app é só "Cartridges".
+AppVerName={#MyAppName}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
@@ -17,15 +34,23 @@ VersionInfoVersion={#MyAppVersion}
 VersionInfoTextVersion={#MyAppVersion}
 VersionInfoDescription=Instalador do {#MyAppName}
 VersionInfoOriginalFileName=Cartridges Windows.exe
+#ifdef DESENVOLVIMENTO
+DefaultDirName={autopf64}\Cartridges Qt (desenvolvimento)
+#else
 DefaultDirName={autopf64}\Cartridges Revamped
+#endif
 DisableProgramGroupPage=yes
-LicenseFile=..\..\..\LICENSE
-; Sempre como administrador: o ajuste da NVIDIA grava no driver. A migração de
-; uma instalação antiga "só para mim" lê {userprograms}/{userdesktop}.
+LicenseFile={#Repo}\LICENSE
+; Sempre como administrador: a pasta fica em Program Files. A migração de uma
+; instalação antiga "só para mim" lê {userprograms}/{userdesktop}.
 PrivilegesRequired=admin
 UsedUserAreasWarning=no
+#ifdef DESENVOLVIMENTO
+OutputBaseFilename=Cartridges Qt desenvolvimento
+#else
 OutputBaseFilename=Cartridges Windows
-SetupIconFile=..\..\..\build-aux\windows\icon.ico
+#endif
+SetupIconFile={#Repo}\build-aux\windows\icon.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -90,19 +115,30 @@ brazilianportuguese.LaunchProgram=Iniciar o %1
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [InstallDelete]
-; Atualizar por cima deixaria em {app} tudo o que saiu do app entre versoes: o
-; modulo removido do repositorio e, na primeira atualizacao depois da 2026.09.22,
-; os ~4.000 arquivos do MSYS2 que o instalador levava sem o app usar. As pastas
-; saem inteiras e voltam do pacote.
+; Atualizar por cima deixaria em {app} tudo o que saiu do app entre versões. As
+; pastas saem inteiras e voltam do pacote, e por isso `.py` e `.pyc` (por hash, sem
+; conferir a fonte) são sempre trocados juntos. No canal final saem as duas árvores:
+; a da versão GTK (bin, etc, lib, share) e a do Qt (bin, python, lib, app). A
+; biblioteca e as preferências ficam fora de {app} e não são tocadas.
+#ifdef DESENVOLVIMENTO
+Type: filesandordirs; Name: "{app}\bin"
+Type: filesandordirs; Name: "{app}\python"
+Type: filesandordirs; Name: "{app}\lib"
+Type: filesandordirs; Name: "{app}\app"
+#else
 Type: filesandordirs; Name: "{app}\bin"
 Type: filesandordirs; Name: "{app}\etc"
 Type: filesandordirs; Name: "{app}\lib"
 Type: filesandordirs; Name: "{app}\share"
+Type: filesandordirs; Name: "{app}\python"
+Type: filesandordirs; Name: "{app}\app"
+Type: filesandordirs; Name: "{app}\licencas"
+#endif
 
 [Files]
-; A pasta que o build-installer.ps1 monta com o montar_app.py: so o que o app usa.
-Source: "..\..\app\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
-Source: "..\..\..\build-aux\windows\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+; A pasta que o montar_app_qt.py monta: só o que o app usa.
+Source: "{#PastaApp}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+Source: "{#Repo}\build-aux\windows\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"
@@ -112,77 +148,6 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; IconF
 Filename: "{app}\bin\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall
 
 [Code]
-// Ajuste da NVIDIA. No método de apresentação padrão, o driver Vulkan da NVIDIA
-// descarta o alfa da margem da sombra da janela, que aparece como uma moldura
-// preta; "Preferir nativo" no perfil do programa resolve. Depois de copiar os
-// arquivos, em toda instalação e atualização (interativa ou silenciosa), o
-// nvidia-perfil.exe grava esse ajuste no driver pela NVAPI, num perfil
-// "Cartridges" só com o Cartridges.exe. Se ele não conseguir (driver ausente ou
-// antigo, erro da NVAPI), a instalação interativa mostra o passo a passo manual
-// numa página depois da instalação; a silenciosa só registra no log.
-const
-  DisplayClassKey = 'SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}';
-
-var
-  NvidiaPage: TOutputMsgWizardPage;
-  NvidiaFalhou: Boolean;
-
-// Whether any display adapter Windows knows about is NVIDIA's. Each one has a
-// subkey under the display class with the vendor in ProviderName, readable
-// without elevation. All of them are checked: the NVIDIA card need not be the
-// first, and a virtual display adapter (Parsec, for one) is enough to push it
-// down. A card that was swapped out can leave its subkey behind; the utility
-// then finds no NVAPI and the manual page shows to someone who has no NVIDIA.
-function HasNvidiaGpu: Boolean;
-var
-  Adapters: TArrayOfString;
-  Provider: String;
-  I: Integer;
-begin
-  Result := False;
-  if not RegGetSubkeyNames(HKLM, DisplayClassKey, Adapters) then
-    Exit;
-  for I := 0 to GetArrayLength(Adapters) - 1 do
-    if RegQueryStringValue(HKLM, DisplayClassKey + '\' + Adapters[I], 'ProviderName', Provider) then
-      if Pos('NVIDIA', Uppercase(Provider)) > 0 then
-      begin
-        Result := True;
-        Exit;
-      end;
-end;
-
-// Roda o nvidia-perfil.exe escondido e devolve o código de saída (-1 se ele
-// nem chegou a rodar). O código e o que ele escreve (a etapa e a mensagem da
-// NVAPI, quando falha) vão para o log do instalador. O próprio utilitário
-// desiste em 30 s se a NVAPI travar.
-function AjustarNvidia(const Acao: String): Integer;
-begin
-  if not ExecAndLogOutput(ExpandConstant('{app}\bin\nvidia-perfil.exe'),
-              Acao + ' "' + ExpandConstant('{app}\bin\{#MyAppExeName}') + '"',
-              '', SW_HIDE, ewWaitUntilTerminated, Result, nil) then
-    Result := -1;
-  Log('nvidia-perfil ' + Acao + ': ' + IntToStr(Result));
-end;
-
-procedure InitializeWizard;
-begin
-  NvidiaPage := CreateOutputMsgPage(wpInstalling,
-    'Placa de vídeo NVIDIA',
-    'Evita a moldura preta ao redor da janela',
-    'Não foi possível configurar a placa de vídeo automaticamente. Para evitar a ' +
-    'moldura preta, faça o seguinte ajuste:' + #13#10 + #13#10 +
-    '1. Abra o Painel de Controle NVIDIA e acesse Gerenciar as configurações 3D.' + #13#10 +
-    '2. Na aba Configurações de programa, adicione o Cartridges.exe da pasta bin da ' +
-    'instalação (por padrão, C:\Program Files\Cartridges Revamped\bin).' + #13#10 +
-    '3. No método de apresentação Vulkan/OpenGL ("Vulkan/OpenGL present method"), ' +
-    'escolha "Preferir nativo" ("Prefer native") e aplique.');
-end;
-
-function ShouldSkipPage(PageID: Integer): Boolean;
-begin
-  Result := (PageID = NvidiaPage.ID) and not NvidiaFalhou;
-end;
-
 // Migração de uma instalação antiga "só para mim" (%LOCALAPPDATA%\Programs),
 // de quando o instalador ainda oferecia esse modo. O instalador elevado não a
 // enxerga e criaria uma segunda cópia. O desinstalador dela não serve: o código
@@ -214,7 +179,7 @@ begin
     Exit;
   Shell := CreateOleObject('WScript.Shell');
   Lnk := Shell.CreateShortcut(Atalho);
-  // Numa String antes do Lowercase: o Inno 6 (o da CI) não aceita o Variant
+  // Numa String antes do Lowercase, que espera uma String e não um Variant
   Alvo := Lnk.TargetPath;
   if Pos(PastaAntiga, Lowercase(Alvo)) = 1 then
   begin
@@ -341,23 +306,13 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
-var
-  Codigo: Integer;
 begin
   if CurStep <> ssPostInstall then
     Exit;
+#ifdef DESENVOLVIMENTO
+  Exit; // sem migração da instalação antiga
+#endif
   CorrigirFixados(MigrarInstalacaoDoUsuario);
-  if HasNvidiaGpu then
-  begin
-    // 0 funcionou; 3 o exe já está num perfil de outra pessoa ou programa, que
-    // fica como está; 4 sem driver ou placa NVIDIA (a chave no registro sobrou
-    // de uma placa trocada), sem moldura para evitar; 1 e 2 (e -1, não rodou)
-    // pedem o passo a passo manual.
-    Codigo := AjustarNvidia('aplicar');
-    NvidiaFalhou := (Codigo <> 0) and (Codigo <> 3) and (Codigo <> 4);
-    if NvidiaFalhou then
-      Log('nvidia: a página com o ajuste manual vai aparecer');
-  end;
 end;
 
 // Offer to remove the user's library and settings on uninstall. They live
@@ -365,10 +320,6 @@ end;
 // default uninstall would otherwise leave them behind.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
-  // Antes de apagar os arquivos, enquanto o utilitário ainda existe: desfaz o
-  // perfil "Cartridges" no driver. Uma falha só vai para o log.
-  if (CurUninstallStep = usUninstall) and FileExists(ExpandConstant('{app}\bin\nvidia-perfil.exe')) then
-    AjustarNvidia('remover');
   if CurUninstallStep = usPostUninstall then
   begin
     // Accented, like every other string here. The compiler reads this file as
@@ -376,17 +327,30 @@ begin
     // script with and without one produces byte-identical installers.
     // A pasta dos saves só sai se for a padrão (dentro de {localappdata}); uma
     // pasta escolhida em Preferências fica onde está, e o texto diz isso.
+#ifdef DESENVOLVIMENTO
+    if MsgBox('Remover também a cópia de desenvolvimento dos dados (biblioteca, capas e ' +
+              'preferências do Cartridges Qt de desenvolvimento)? Os dados do Cartridges ' +
+              'instalado normalmente não são afetados.',
+              mbConfirmation, MB_YESNO) = IDYES then
+#else
     if MsgBox('Remover também a biblioteca do Cartridges (lista de jogos, capas, ' +
               'histórico de sessões e os backups dos saves dos jogos guardados na ' +
               'pasta padrão) e as configurações? Os jogos instalados no ' +
               'computador não serão afetados.',
               mbConfirmation, MB_YESNO) = IDYES then
+#endif
     begin
       // Limite conhecido: numa instalacao para todos os usuarios o desinstalador
       // roda elevado, e se o UAC for respondido com outra conta, {localappdata}
       // e HKCU sao os dessa conta, nao os de quem usa o app.
+#ifdef DESENVOLVIMENTO
+      // A cópia de desenvolvimento só usa os dados "-dev"; os do app instalado não são tocados.
+      DelTree(ExpandConstant('{localappdata}\io.github.joaomgabaldi.Cartridges-dev'), True, True, True);
+      RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\GSettings\io\github\joaomgabaldi\Cartridges-dev');
+#else
       DelTree(ExpandConstant('{localappdata}\io.github.joaomgabaldi.Cartridges'), True, True, True);
       RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\GSettings\io\github\joaomgabaldi\Cartridges');
+#endif
       RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\io\github\joaomgabaldi');
       RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\io\github');
       RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\GSettings\io');

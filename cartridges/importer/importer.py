@@ -20,26 +20,35 @@
 
 import logging
 import threading
+import weakref
 from time import time
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
-from gi.repository import Adw, Gio, GLib, Gtk
+from PySide6.QtCore import Qt, QTimer
 
 from cartridges import shared
 from cartridges.errors.error_producer import ErrorProducer
 from cartridges.errors.friendly_error import FriendlyError
-from cartridges.game import Game
 from cartridges.importer.source import Source, SourceScanError
+from cartridges.jogo import Jogo
+from cartridges.modelos import tarefas
+from cartridges.store.managers import async_manager
 from cartridges.store.managers.async_manager import AsyncManager
 from cartridges.store.pipeline import Pipeline
-from cartridges.utils import restauracao, tarefas
+from cartridges.utils import restauracao
+from cartridges.utils.thread_principal import na_thread_principal
+
+if TYPE_CHECKING:
+    from cartridges.aplicativo import Aplicativo
 
 
 # pylint: disable=too-many-instance-attributes
 class Importer(ErrorProducer):
     """A class in charge of scanning sources for games"""
 
-    summary_toast: Optional[Adw.Toast] = None
+    # O id do aviso do resumo na fila (`FilaDeAvisos`); o da importação anterior
+    # sai da tela quando a próxima começa.
+    summary_toast: Optional[int] = None
 
     sources: set[Source]
 
@@ -52,8 +61,11 @@ class Importer(ErrorProducer):
     imported_game_ids: set[str]
     scanned_source_ids: set[str]
 
-    def __init__(self) -> None:
+    def __init__(self, aplicativo: Optional["Aplicativo"] = None) -> None:
         super().__init__()
+        # Dono do estado "importando", da fila de avisos e do diálogo de erros.
+        self.aplicativo = aplicativo
+        self._relogio: Optional[QTimer] = None
 
         shared.import_time = int(time())
 
@@ -104,22 +116,22 @@ class Importer(ErrorProducer):
         self.sources.add(source)
 
     def run(self) -> None:
-        """Use several Gio.Task to import games from added sources"""
-        shared.win.get_application().state = shared.AppState.IMPORT
+        """Roda as fontes no executor de rede; o `monitor_import` acompanha na thread principal."""
+        if self.__class__.summary_toast is not None:
+            self.aplicativo.avisos.dispensar(self.__class__.summary_toast)
+            self.__class__.summary_toast = None
 
-        if self.__class__.summary_toast:
-            shared.win.toast_queue.dismiss(self.__class__.summary_toast)
-
-        shared.win.get_application().lookup_action("import").set_enabled(False)
-        shared.win.get_application().lookup_action("add_game").set_enabled(False)
-        shared.win.get_application().lookup_action("preferences").set_enabled(False)
+        self.aplicativo.definir_importando(True)
 
         self.n_pipelines_done = 0
         self.n_source_tasks_done = 0
         with self._pipelines_lock:
             self._counted_done_pipelines.clear()
 
-        GLib.timeout_add(100, self.monitor_import)
+        self._relogio = QTimer()
+        self._relogio.setInterval(100)
+        self._relogio.timeout.connect(self._tic)
+        self._relogio.start()
 
         # Collect all errors and reset the cancellables for the managers
         # - Only one importer exists at any given time
@@ -132,15 +144,22 @@ class Importer(ErrorProducer):
 
         for source in self.sources:
             logging.debug("Importing games from source %s", source.source_id)
-            task = Gio.Task.new(None, None, self.source_callback, (source,))
             self.n_source_tasks_created += 1
-            task.run_in_thread(
-                lambda _task,
-                _obj,
-                _data,
-                _cancellable,
-                src=source: self.source_task_thread_func((src,))
-            )
+            async_manager.rodar_na_rede(self._tarefa_da_fonte, source)
+
+    def _tarefa_da_fonte(self, source: Source) -> None:
+        """Na thread de rede; a conclusão sempre volta à principal, senão a importação nunca acaba."""
+        try:
+            self.source_task_thread_func((source,))
+        except Exception:  # pylint: disable=broad-exception-caught
+            logging.exception("Erro inesperado na fonte %s", source.source_id)
+        finally:
+            na_thread_principal(self.source_callback, source)
+
+    def _tic(self) -> None:
+        # Um tique que já estava na fila quando o relógio parou não repete o fim.
+        if self._relogio is not None and self._relogio.isActive():
+            self.monitor_import()
 
     def monitor_import(self) -> bool:
         """Acompanha a importação: a tarefa na janela de tarefas nasce com o
@@ -158,10 +177,16 @@ class Importer(ErrorProducer):
         if not self.finished:
             return True
 
+        # Parado antes de tudo: um erro no fim não pode repetir o `finish_import` a cada tique.
+        if self._relogio is not None:
+            self._relogio.stop()
         if self.tarefa is not None:
-            self.tarefa.terminar()
-            self.tarefa = None
-            self._progresso = None
+            tarefa, self.tarefa, self._progresso = self.tarefa, None, None
+            try:
+                tarefa.terminar()
+            except Exception:  # noqa: BLE001
+                # O `finish_import` roda mesmo assim: senão `importando` ficaria ligado.
+                logging.exception("Erro ao terminar a tarefa da importação")
         self.finish_import()
         return False
 
@@ -170,22 +195,22 @@ class Importer(ErrorProducer):
         logging.info("Import done")
         # Antes de `remove_games` e do reset abaixo: as duas leem
         # `duplicate_game_ids`.
-        self.resolver_pendencias()
-        self.remove_games()
+        try:
+            self.resolver_pendencias()
+            self.remove_games()
+        except Exception:  # noqa: BLE001
+            logging.exception("Erro ao encerrar a importação")
+        # Fora do `try`: com erro acima, os jogos novos ainda chegam à varredura.
         self.imported_game_ids = shared.store.new_game_ids
         shared.store.new_game_ids = set()
         shared.store.duplicate_game_ids = set()
-        self.__class__.summary_toast = self.create_summary_toast()
-        self.create_error_dialog()
-        shared.win.get_application().lookup_action("import").set_enabled(True)
-        shared.win.get_application().lookup_action("add_game").set_enabled(True)
-        shared.win.get_application().lookup_action("preferences").set_enabled(True)
-        shared.win.get_application().state = shared.AppState.DEFAULT
-        # Re-apply the current sort so freshly imported games land in order
-        shared.win.library.invalidate_sort()
-        shared.win.zerados_library.invalidate_sort()
-        # Um pendente resolvido volta a aparecer; o filtro é quem o escondia.
-        shared.win.library.invalidate_filter()
+        try:
+            self.__class__.summary_toast = self.create_summary_toast()
+            self.create_error_dialog()
+        except Exception:  # noqa: BLE001
+            # Com erro ou sem, a importação acaba: `importando` desliga e o resto roda.
+            logging.exception("Erro ao encerrar a importação")
+        self.aplicativo.definir_importando(False)
         self.varrer_conquistas_dos_importados()
         if self.ao_terminar is not None:
             self.ao_terminar()
@@ -200,9 +225,7 @@ class Importer(ErrorProducer):
         levanta: nada aqui derruba o fim da importação.
         """
         try:
-            varredura = getattr(
-                shared.win.get_application(), "varredura_conquistas", None
-            )
+            varredura = getattr(self.aplicativo, "varredura_conquistas", None)
             if varredura is None:
                 return
             jogos = [
@@ -222,7 +245,12 @@ class Importer(ErrorProducer):
         achou. Só depois de varrer a pasta de atalhos até o fim: uma
         varredura que não aconteceu não sabe quem está lá."""
         if "shortcuts" in self.scanned_source_ids and restauracao.existe():
+            antes = restauracao.ids()
             restauracao.resolver(shared.store.duplicate_game_ids)
+            # O modelo só avalia "pendente" em `atualizar`: quem saiu da lista volta à grade.
+            for game_id in antes - restauracao.ids():
+                if (jogo := shared.store.get(game_id)) is not None:
+                    jogo.update()
 
     def remove_games(self) -> None:
         """Set removed to True for missing games"""
@@ -311,7 +339,7 @@ class Importer(ErrorProducer):
                 continue
 
             # Handle the result depending on its type
-            if isinstance(iteration_result, Game):
+            if isinstance(iteration_result, Jogo):
                 game = iteration_result
                 additional_data = {}
             elif isinstance(iteration_result, tuple):
@@ -334,12 +362,9 @@ class Importer(ErrorProducer):
             )
             if pipeline is not None:
                 logging.info("Imported %s (%s)", game.name, game.game_id)
-                pipeline.connect(
-                    "advanced",
-                    self.pipeline_advanced_callback,
-                )
                 with self._pipelines_lock:
                     self.game_pipelines.add(pipeline)
+                self._contar_ao_avancar(pipeline)
 
         # Only a scan that ran to the end licenses removing that source's
         # missing games
@@ -350,9 +375,21 @@ class Importer(ErrorProducer):
                 "Keeping %s games: the scan did not finish", source.source_id
             )
 
-    def source_callback(self, _obj: Any, _result: Any, data: tuple) -> None:
+    def _contar_ao_avancar(self, pipeline: Pipeline) -> None:
+        """Conta o fim do pipeline quando ele avançar. Um escopo por pipeline: uma lambda criada
+        no laço das fontes enxergaria sempre o último."""
+        # Direta, porque o sinal sai de qualquer thread; referências fracas, para a
+        # conexão (lado C++) não prender o pipeline nem a importação.
+        eu, ref = weakref.ref(self), weakref.ref(pipeline)
+        pipeline.advanced.connect(
+            lambda: (i := eu()) and (p := ref()) and i.pipeline_advanced_callback(p),
+            Qt.ConnectionType.DirectConnection,
+        )
+        # Um pipeline sem manager assíncrono pode ter terminado dentro do `add_game`.
+        self.pipeline_advanced_callback(pipeline)
+
+    def source_callback(self, source: Source) -> None:
         """Callback executed when a source is fully scanned"""
-        source, *_rest = data
         logging.debug("Import done for source %s", source.source_id)
         self.n_source_tasks_done += 1
 
@@ -380,11 +417,13 @@ class Importer(ErrorProducer):
             errors.extend(manager.collect_errors())
 
         # Filter out non friendly errors
-        errors = set(
-            tuple(
-                (error.title, error.subtitle)
-                for error in (
-                    filter(lambda error: isinstance(error, FriendlyError), errors)
+        errors = sorted(
+            set(
+                tuple(
+                    (error.title, error.subtitle)
+                    for error in (
+                        filter(lambda error: isinstance(error, FriendlyError), errors)
+                    )
                 )
             )
         )
@@ -394,39 +433,17 @@ class Importer(ErrorProducer):
             self.timeout_toast()
             return
 
-        # Create error dialog
-        dialog = Adw.AlertDialog()
-        dialog.set_heading(_("Aviso"))
-        dialog.add_response("close", _("Dispensar"))
-        dialog.add_response("open_preferences_import", _("Preferências"))
-        dialog.set_default_response("open_preferences_import")
-        dialog.connect("response", self.dialog_response_callback)
-
+        # O QML mostra tudo em texto puro: o "&" de um caminho chega como está.
         if len(errors) == 1:
-            dialog.set_heading((error := next(iter(errors)))[0])
-            dialog.set_body(error[1])
+            titulo, corpo = errors[0]
+            itens = []
         else:
-            # Display the errors in a list
-            list_box = Gtk.ListBox()
-            list_box.set_selection_mode(Gtk.SelectionMode.NONE)
-            list_box.set_css_classes(["boxed-list"])
-            list_box.set_margin_top(9)
-            for error in errors:
-                row = Adw.ActionRow.new()
-                # Adw.PreferencesRow parses title and subtitle as Pango markup
-                # by default, and these carry file paths and API messages: a
-                # single "&" (D:\Games & Emulators) makes Pango reject the
-                # string and the row renders blank — losing the error text at
-                # the one moment the user needs to read it.
-                row.set_title(GLib.markup_escape_text(error[0]))
-                row.set_subtitle(GLib.markup_escape_text(error[1]))
-                list_box.append(row)
-            dialog.set_body(_("Os seguintes erros ocorreram durante a importação:"))
-            dialog.set_extra_child(list_box)
+            titulo = _("Aviso")
+            corpo = _("Os seguintes erros ocorreram durante a importação:")
+            itens = [{"titulo": t, "subtitulo": s} for t, s in errors]
+        self.aplicativo.pedir_dialogo(titulo, corpo, itens, self.timeout_toast, preferencias="")
 
-        dialog.present(shared.win)
-
-    def undo_import(self, *_args: Any) -> None:
+    def undo_import(self, *_args: object) -> None:
         # Games may have vanished since the import (e.g. removed by hand),
         # so missing ids are skipped instead of crashing the undo
         for game_id in self.imported_game_ids:
@@ -443,8 +460,9 @@ class Importer(ErrorProducer):
 
         self.imported_game_ids = set()
         self.removed_game_ids = set()
-        if self.__class__.summary_toast:
-            shared.win.toast_queue.dismiss(self.__class__.summary_toast)
+        if self.__class__.summary_toast is not None:
+            self.aplicativo.avisos.dispensar(self.__class__.summary_toast)
+            self.__class__.summary_toast = None
 
         logging.info("Import undone")
 
@@ -460,13 +478,8 @@ class Importer(ErrorProducer):
             ngettext("{} jogo", "{} jogos", len(names)).format(len(names))
         )
 
-    def create_summary_toast(self) -> Adw.Toast:
-        """Toast summarizing which games were imported and removed"""
-
-        # Timeout 0: how long the summary stays is decided by `timeout_toast`,
-        # once the warnings dialog (if any) is out of the way.
-        toast = Adw.Toast(timeout=0)
-
+    def create_summary_toast(self) -> Optional[int]:
+        """Aviso com o resumo do que foi importado e removido; devolve o id na fila."""
         with self._pipelines_lock:
             pipelines = list(self.game_pipelines)
         added_names = [
@@ -497,56 +510,25 @@ class Importer(ErrorProducer):
             )
 
         if parts:
-            toast_title = " · ".join(parts)
-            toast.set_button_label(_("Desfazer"))
-            toast.connect("button-clicked", self.undo_import)
+            titulo, botao, ao_clicar = " · ".join(parts), _("Desfazer"), self.undo_import
         else:
-            toast_title = _("Nenhum jogo novo encontrado")
-            toast.set_button_label(_("Preferências"))
-            toast.connect(
-                "button-clicked",
-                self.dialog_response_callback,
-                "open_preferences",
-                "import",
-            )
+            titulo, botao, ao_clicar = _("Nenhum jogo novo encontrado"), _("Preferências"), self._abrir_preferencias
 
-        toast.set_title(toast_title)
+        if not parts and self.silenciosa:
+            return None
+        # segundos=0: quanto o resumo fica é decidido por `timeout_toast`, depois dos diálogos.
+        return self.aplicativo.avisos.adicionar(titulo, botao, ao_clicar, segundos=0)
 
-        if parts or not self.silenciosa:
-            shared.win.toast_queue.add(toast)
+    @staticmethod
+    def _abrir_preferencias() -> None:
+        if shared.preferencias is not None:
+            shared.preferencias.abrir("import")
 
-        return toast
+    def timeout_toast(self, *_args: object) -> None:
+        """Dá 5 segundos ao resumo depois que o usuário dispensou os avisos.
 
-    def open_preferences(
-        self,
-        page_name: Optional[str] = None,
-        expander_row: Optional[Adw.ExpanderRow] = None,
-    ) -> Adw.PreferencesDialog:
-        return shared.win.get_application().on_preferences_action(
-            page_name=page_name, expander_row=expander_row
-        )
-
-    def timeout_toast(self, *_args: Any) -> None:
-        """Manually timeout the toast after the user has dismissed all warnings.
-
-        Handed to the queue rather than timed here: the summary may still be
-        waiting behind another toast, and a countdown started now would run out
-        before it ever reached the screen.
+        Entregue à fila em vez de contado aqui: o resumo pode ainda esperar atrás de
+        outro aviso, e uma contagem iniciada agora acabaria antes de ele aparecer.
         """
-        if self.__class__.summary_toast:
-            shared.win.toast_queue.dismiss_after(self.__class__.summary_toast, 5)
-
-    def dialog_response_callback(self, _widget: Any, response: str, *args: Any) -> None:
-        """Handle after-import dialogs callback"""
-        logging.debug("After-import dialog response: %s (%s)", response, str(args))
-        if response == "open_preferences":
-            self.open_preferences(*args)
-        elif response == "open_preferences_import":
-            # May return None if the preferences dialog is already open, and
-            # Adw.Dialog emits "closed" (there is no "close-request" signal)
-            if preferences := self.open_preferences(*args):
-                preferences.connect("closed", self.timeout_toast)
-            else:
-                self.timeout_toast()
-        else:
-            self.timeout_toast()
+        if self.__class__.summary_toast is not None:
+            self.aplicativo.avisos.dispensar_depois(self.__class__.summary_toast, 5)

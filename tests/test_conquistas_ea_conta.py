@@ -208,12 +208,12 @@ def test_carregar_abre_o_que_foi_guardado(monkeypatch):
     "conteudo",
     ["não é json", "[]", '{"nome": "J", "persona": "2", "cookies": "@@@"}', '{"nome": "J", "cookies": "QUJD"}'],
 )
-def test_carregar_arquivo_ilegivel(conteudo, win, flush_idle):
+def test_carregar_arquivo_ilegivel(conteudo, avisos, flush_idle):
     shared.contas_dir.mkdir(parents=True)
     (shared.contas_dir / "ea.json").write_text(conteudo, encoding="utf-8")
     conta.carregar()
     flush_idle()
-    assert not conta.conectada() and not win.toast_queue.added
+    assert not conta.conectada() and not avisos.textos
 
 
 # ---- renovação -------------------------------------------------------------
@@ -379,7 +379,7 @@ def test_recusado_igual_ao_vigente_renova(monkeypatch):
     assert conta.autorizacao(True, recusado="TOK1") == "TOK2"
 
 
-def test_login_required_na_renovacao_desconecta_e_avisa_uma_vez(monkeypatch, flush_idle, win):
+def test_login_required_na_renovacao_desconecta_e_avisa_uma_vez(monkeypatch, flush_idle, avisos):
     _login(monkeypatch)
     rede_falsa(monkeypatch, conta, {conta.TOKEN: [_recusa(), _recusa()]}, nome="_pedir")
     assert conta.autorizacao(forcar=True) is None
@@ -389,7 +389,7 @@ def test_login_required_na_renovacao_desconecta_e_avisa_uma_vez(monkeypatch, flu
     monkeypatch.setattr(conta, "_sessao", conta._Sessao("R9", "N9", "Z", "9"))
     assert conta.autorizacao(forcar=True) is None
     flush_idle()
-    assert [t.get_title() for t in win.toast_queue.added] == [_AVISO]
+    assert avisos.textos == [_AVISO]
 
 
 def test_dois_set_cookie_remid_usam_o_primeiro(monkeypatch):
@@ -448,7 +448,7 @@ def test_ouvintes_sao_avisados_ao_conectar_e_ao_sair(monkeypatch, flush_idle):
 # ---- sair ------------------------------------------------------------------
 
 
-def test_sair_apaga_conta_e_caches(monkeypatch, flush_idle, win):
+def test_sair_apaga_conta_e_caches(monkeypatch, flush_idle, avisos):
     _login(monkeypatch)
     shared.conquistas_cache_dir.mkdir(parents=True, exist_ok=True)
     for arquivo in ("ea-biblioteca.json", "ea-jogos.json", "ea-ABC.json"):
@@ -458,7 +458,7 @@ def test_sair_apaga_conta_e_caches(monkeypatch, flush_idle, win):
     flush_idle()
     assert not conta.conectada() and not (shared.contas_dir / "ea.json").exists()
     assert [p.name for p in shared.conquistas_cache_dir.iterdir()] == ["epic-ns1.json"]
-    assert not win.toast_queue.added
+    assert not avisos.textos
 
 
 def test_sair_sem_pasta_de_caches(monkeypatch):

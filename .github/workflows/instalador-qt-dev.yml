@@ -1,0 +1,68 @@
+name: Gerar instalador Qt (desenvolvimento)
+
+# O app Qt da migração, em cópia à parte do instalado (outro AppId, pasta e dados "-dev").
+# Só gera o instalador e o guarda como artefato: não publica release, não faz commit nem push.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  instalador:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # O mesmo Python do app (PySide6 6.12.0 só tem rodas para ele): roda os scripts e o pip --target.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.15.1"
+
+      - name: Ferramentas do script
+        run: python -m pip install py7zr==1.1.4
+
+      # SDK do Qt e QWindowKit baixados por tools/baixar_qt_sdk.py (o script confere o SHA-1 e
+      # refaz o que não estiver completo).
+      - uses: actions/cache@v4
+        with:
+          path: build-aux/windows/qwk/_deps
+          key: qwk-deps-${{ hashFiles('tools/baixar_qt_sdk.py', 'build-aux/windows/qwk/compilar.bat', 'build-aux/windows/qwk/CMakeLists.txt', 'build-aux/windows/qwk/ponte.cpp') }}
+
+      - name: SDK do Qt e QWindowKit
+        run: python tools/baixar_qt_sdk.py
+
+      - name: qwk_ponte.dll
+        shell: cmd
+        run: build-aux\windows\qwk\compilar.bat
+
+      - name: Montar o app
+        run: python build-aux/windows/montar_app_qt.py --canal desenvolvimento --destino _dist/qt-dev
+
+      # A mesma versão do PC do desenvolvedor, instalada como no instalador.yml.
+      - name: Inno Setup 7
+        run: |
+          $url = 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe'
+          $exe = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
+          curl.exe -fsSL -o $exe $url
+          if ((Get-FileHash $exe -Algorithm SHA256).Hash -ne '0362A383ED217D4C4239B5933866DD96D3EB2102737DA92F80F6057A4B40DF2F') {
+            throw 'O SHA-256 do instalador do Inno Setup 7 não confere.'
+          }
+          Start-Process $exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/ALLUSERS' -Wait
+          if (-not (Test-Path "$env:ProgramFiles\Inno Setup 7\ISCC.exe")) { throw 'O Inno Setup 7 não foi instalado.' }
+
+      - name: Instalador
+        run: |
+          $repo = (Get-Location).Path
+          & "$env:ProgramFiles\Inno Setup 7\ISCC.exe" '/DDESENVOLVIMENTO' "/DRepo=$repo" "/DPastaApp=$repo\_dist\qt-dev" "/O$repo\_dist\instalador" "$repo\_dist\qt-dev.iss"
+          if ($LASTEXITCODE -ne 0) { throw 'O ISCC falhou.' }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cartridges-Qt-desenvolvimento
+          path: _dist/instalador/Cartridges Qt desenvolvimento.exe
+          if-no-files-found: error

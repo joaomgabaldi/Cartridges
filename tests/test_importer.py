@@ -17,14 +17,23 @@ looking successful. It cannot be inferred from how the loop ended; it needs its
 own flag.
 """
 
-from types import SimpleNamespace
-
 import pytest
 
 from cartridges import shared
+from cartridges.aplicativo import Aplicativo
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.importer.importer import Importer
 from cartridges.importer.source import SourceScanError
+
+
+@pytest.fixture(autouse=True)
+def tarefas_vazias(app_qt, flush_idle):  # noqa: ARG001
+    from cartridges.modelos import tarefas  # noqa: PLC0415
+
+    yield
+    flush_idle(0.05)
+    for tarefa in list(tarefas.lista._tarefas):  # noqa: SLF001
+        tarefas.lista.remover(tarefa)
 
 
 class FakeSource:
@@ -68,7 +77,7 @@ def importer(store):
     ``Importer.__init__`` resets the store's id bookkeeping, which is why the
     store fixture has to come first.
     """
-    return Importer()
+    return Importer(Aplicativo())
 
 
 def scan(importer_, source):
@@ -263,8 +272,8 @@ def test_a_tombstone_is_not_removed_again(importer, make_game, store):
 # region Tarefas em andamento
 
 
-def test_importacao_sem_jogo_novo_nao_vira_tarefa(importer, flush_idle, monkeypatch):
-    from cartridges.utils import tarefas  # noqa: PLC0415
+def test_importacao_sem_jogo_novo_nao_vira_tarefa(importer, monkeypatch, flush_idle):
+    from cartridges.modelos import tarefas  # noqa: PLC0415
 
     monkeypatch.setattr(importer, "finish_import", lambda: None)
     importer.n_source_tasks_created = 1
@@ -273,40 +282,36 @@ def test_importacao_sem_jogo_novo_nao_vira_tarefa(importer, flush_idle, monkeypa
     importer.n_source_tasks_done = 1  # a verificação acabou sem achar nada
     importer.monitor_import()
     flush_idle()
-    assert tarefas.lista.get_n_items() == 0
+    assert tarefas.lista.rowCount() == 0
 
 
-def test_jogo_novo_vira_tarefa_que_termina_com_a_importacao(
-    importer, flush_idle, monkeypatch
-):
-    from cartridges.utils import tarefas  # noqa: PLC0415
+def test_jogo_novo_vira_tarefa_que_termina_com_a_importacao(importer, monkeypatch, flush_idle):
+    from cartridges.modelos import tarefas  # noqa: PLC0415
 
     monkeypatch.setattr(importer, "finish_import", lambda: None)
     importer.n_source_tasks_created = 1
     importer.game_pipelines.update({object(), object()})
     importer.monitor_import()
     flush_idle()
-    tarefa = tarefas.lista.get_item(0)
-    assert (tarefa.nome, tarefa.feitos, tarefa.total) == ("Importação", 0, 2)
+    lista = tarefas.lista
+    assert [lista.data(lista.index(0), papel) for papel in (lista.NOME, lista.FEITOS, lista.TOTAL)] == ["Importação", 0, 2]
 
     importer.n_pipelines_done = 2
     importer.n_source_tasks_done = 1
     assert importer.monitor_import() is False
     flush_idle()
-    assert tarefas.lista.get_n_items() == 0
+    assert tarefas.lista.rowCount() == 0
 
 
-def test_monitor_so_atualiza_a_tarefa_quando_o_progresso_muda(
-    importer, flush_idle, monkeypatch
-):
-    from cartridges.utils import tarefas  # noqa: PLC0415
+def test_monitor_so_atualiza_a_tarefa_quando_o_progresso_muda(importer, monkeypatch, flush_idle):
+    from cartridges.modelos import tarefas  # noqa: PLC0415
 
     monkeypatch.setattr(importer, "finish_import", lambda: None)
     importer.n_source_tasks_created = 1
     importer.game_pipelines.update({object(), object()})
     importer.monitor_import()
     flush_idle()
-    tarefa = tarefas.lista.get_item(0)
+    tarefa = tarefas.lista._tarefas[0]  # noqa: SLF001
     chamadas = []
     monkeypatch.setattr(tarefa, "atualizar", lambda *args: chamadas.append(args))
 
@@ -326,28 +331,19 @@ def test_monitor_so_atualiza_a_tarefa_quando_o_progresso_muda(
 # region Conquistas dos jogos importados
 
 
-class _AppFalso:
-    def __init__(self, varredura):
-        self.varredura_conquistas = varredura
-        self.state = None
-        self._acoes = {}
-
-    def lookup_action(self, nome):
-        return self._acoes.setdefault(nome, SimpleNamespace(set_enabled=lambda _on: None))
-
-
-def _terminar_importacao(importer, real_window, monkeypatch, varredura, importados, na_store):
+def _terminar_importacao(importer, monkeypatch, varredura, importados, na_store):
     for jogo in na_store:
         shared.store.add_game(jogo, {}, run_pipeline=False)
     shared.store.new_game_ids = set(importados)
-    app = _AppFalso(varredura)
-    monkeypatch.setattr(real_window, "get_application", lambda: app)
+    app = importer.aplicativo
+    app.varredura_conquistas = varredura
+    app.definir_importando(True)
     importer.finish_import()
     return app
 
 
 def test_fim_da_importacao_pede_a_varredura_dos_jogos_importados(
-    importer, real_window, make_game, monkeypatch
+    importer, make_game, monkeypatch
 ):
     a = make_game(game_id="shortcuts_a", steam_appid="570")
     b = make_game(game_id="shortcuts_b", steam_appid="620")
@@ -355,27 +351,27 @@ def test_fim_da_importacao_pede_a_varredura_dos_jogos_importados(
     pedidos = []
     varredura = type("V", (), {"varrer_jogos": lambda _s, jogos: pedidos.append(list(jogos))})()
     app = _terminar_importacao(
-        importer, real_window, monkeypatch, varredura, {"shortcuts_a", "shortcuts_b", "x_sumido"},
+        importer, monkeypatch, varredura, {"shortcuts_a", "shortcuts_b", "x_sumido"},
         [a, b, antigo],
     )
     assert len(pedidos) == 1
     assert {j.game_id for j in pedidos[0]} == {"shortcuts_a", "shortcuts_b"}
-    assert app.state == shared.AppState.DEFAULT  # depois de o estado voltar ao normal
+    assert app.importando is False  # depois de o estado voltar ao normal
 
 
 def test_fim_da_importacao_sem_jogo_novo_nao_pede_varredura(
-    importer, real_window, make_game, monkeypatch
+    importer, make_game, monkeypatch
 ):
     pedidos = []
     varredura = type("V", (), {"varrer_jogos": lambda _s, jogos: pedidos.append(list(jogos))})()
     _terminar_importacao(
-        importer, real_window, monkeypatch, varredura, set(), [make_game(game_id="shortcuts_c")]
+        importer, monkeypatch, varredura, set(), [make_game(game_id="shortcuts_c")]
     )
     assert pedidos == []
 
 
 def test_varredura_que_estoura_nao_derruba_o_fim_da_importacao(
-    importer, real_window, make_game, monkeypatch
+    importer, make_game, monkeypatch
 ):
     def estoura(_s, _jogos):
         raise RuntimeError("falhou")
@@ -384,18 +380,88 @@ def test_varredura_que_estoura_nao_derruba_o_fim_da_importacao(
     terminou = []
     importer.ao_terminar = lambda: terminou.append(1)
     _terminar_importacao(
-        importer, real_window, monkeypatch, varredura, {"shortcuts_a"},
+        importer, monkeypatch, varredura, {"shortcuts_a"},
         [make_game(game_id="shortcuts_a", steam_appid="570")],
     )
     assert terminou == [1]
 
 
-def test_fim_da_importacao_sem_varredura_nao_levanta(importer, real_window, make_game, monkeypatch):
+def test_fim_da_importacao_sem_varredura_nao_levanta(importer, make_game, monkeypatch):
     terminou = []
     importer.ao_terminar = lambda: terminou.append(1)
     _terminar_importacao(
-        importer, real_window, monkeypatch, None, {"shortcuts_a"}, [make_game(game_id="shortcuts_a")]
+        importer, monkeypatch, None, {"shortcuts_a"}, [make_game(game_id="shortcuts_a")]
     )
+    assert terminou == [1]
+
+
+# endregion
+
+
+# region Fim da importação e jogo adicionado à mão
+
+
+def test_fim_da_importacao_roda_uma_vez_mesmo_com_erro(importer, monkeypatch):
+    from PySide6.QtCore import QTimer  # noqa: PLC0415
+
+    chamadas, terminou = [], []
+
+    def estoura():
+        chamadas.append(1)
+        raise RuntimeError("falhou")
+
+    monkeypatch.setattr(importer, "resolver_pendencias", estoura)
+    importer.ao_terminar = lambda: terminou.append(1)
+    importer._relogio = QTimer()  # noqa: SLF001
+    importer._relogio.start(100)  # noqa: SLF001
+    importer.aplicativo.definir_importando(True)
+
+    importer._tic()  # noqa: SLF001
+    importer._tic()  # noqa: SLF001
+
+    assert chamadas == [1]
+    assert not importer._relogio.isActive()  # noqa: SLF001
+    assert importer.aplicativo.importando is False
+    assert terminou == [1]
+
+
+def test_erro_no_fim_nao_perde_os_jogos_importados(importer, make_game, monkeypatch):
+    def estoura():
+        raise RuntimeError("falhou")
+
+    monkeypatch.setattr(importer, "resolver_pendencias", estoura)
+    pedidos = []
+    varredura = type("V", (), {"varrer_jogos": lambda _s, jogos: pedidos.append(list(jogos))})()
+    _terminar_importacao(
+        importer, monkeypatch, varredura, {"shortcuts_a"},
+        [make_game(game_id="shortcuts_a", steam_appid="570")],
+    )
+    assert importer.imported_game_ids == {"shortcuts_a"}
+    assert shared.store.new_game_ids == set()
+    assert [[j.game_id for j in p] for p in pedidos] == [["shortcuts_a"]]
+
+
+def test_terminar_que_levanta_nao_prende_a_importacao(importer, monkeypatch):
+    from PySide6.QtCore import QTimer  # noqa: PLC0415
+
+    class Tarefa:
+        def atualizar(self, *_):
+            pass
+
+        def terminar(self):
+            raise RuntimeError("falhou")
+
+    terminou = []
+    importer.ao_terminar = lambda: terminou.append(1)
+    importer.tarefa = Tarefa()
+    importer._relogio = QTimer()  # noqa: SLF001
+    importer._relogio.start(100)  # noqa: SLF001
+    importer.aplicativo.definir_importando(True)
+    monkeypatch.setattr(type(importer), "finished", property(lambda _: True))
+    importer._tic()  # noqa: SLF001
+    assert not importer._relogio.isActive()  # noqa: SLF001
+    assert importer.tarefa is None
+    assert importer.aplicativo.importando is False
     assert terminou == [1]
 
 

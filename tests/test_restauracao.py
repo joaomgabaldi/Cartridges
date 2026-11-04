@@ -57,7 +57,6 @@ def test_resolver_tira_o_encontrado_o_adotado_e_o_excluido(store, make_game):
     restauracao.gravar(["achado", "sem_atalho", "desinstalado", "adotado"], 5)
 
     restauracao.resolver({"achado"})
-
     assert restauracao.ids() == frozenset({"sem_atalho"})
 
 
@@ -121,21 +120,24 @@ def test_resolver_pendencias_so_depois_de_varrer_os_atalhos(store, make_game):
     assert restauracao.existe() is False
 
 
-def test_biblioteca_esconde_pendente(real_window, store):
-    from cartridges.game import Game  # noqa: PLC0415
+def test_biblioteca_esconde_pendente(app_qt):
+    from cartridges.jogo import Jogo  # noqa: PLC0415
+    from cartridges.modelos.biblioteca import ModeloDaBiblioteca  # noqa: PLC0415
 
-    jogos = {}
-    for game_id in ("pendente", "normal"):
-        jogo = Game(
-            {"source": "shortcuts", "game_id": game_id, "name": game_id,
-             "executable": "x", "added": 0}
-        )
-        real_window.library.append(jogo)
-        jogos[game_id] = jogo
+    modelo = ModeloDaBiblioteca()
     restauracao.gravar(["pendente"], 1)
+    jogos = {
+        game_id: Jogo({"source": "shortcuts", "game_id": game_id, "name": game_id, "executable": "x", "added": 0})
+        for game_id in ("pendente", "normal")
+    }
+    for jogo in jogos.values():
+        modelo.atualizar(jogo)
+    assert [linha.jogo_id for linha in modelo.linhas()] == ["normal"]
 
-    assert real_window.filter_func(jogos["pendente"].get_parent()) is False
-    assert real_window.filter_func(jogos["normal"].get_parent()) is True
+    # Resolvida a pendência, o jogo volta à grade quando passa de novo pelo modelo.
+    restauracao.gravar([], 1)
+    modelo.atualizar(jogos["pendente"])
+    assert sorted(linha.jogo_id for linha in modelo.linhas()) == ["normal", "pendente"]
 
 
 # --------------------------------------------------------------------------
@@ -155,12 +157,6 @@ def pasta_de_atalhos(tmp_path, schema):
     schema["shortcuts-recursive"] = False
     return pasta
 
-
-@pytest.fixture
-def retirados(win):
-    lista = []
-    win.retirar_da_grade = lista.append
-    return lista
 
 
 def test_candidatos_sem_os_do_backup_e_por_nome(store, make_game, pasta_de_atalhos):
@@ -248,18 +244,17 @@ def test_jogo_do_atalho_e_resumo(store, make_game, pasta_de_atalhos):
     assert restauracao.resumo(novo) == (6000, 1, 1_700_000_090)
 
 
-def test_manter_backup(store, make_game, pasta_de_atalhos, retirados):
+def test_manter_backup(store, make_game, pasta_de_atalhos):
     caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
     restauracao.decidir(restaurado, caminho, novo, "backup")
     assert store.get("shortcuts_novo") is None
-    assert retirados == [novo]
     assert restaurado.shortcut_path == str(caminho)
     assert restaurado.playtime == 36000
     # Continua pendente até a importação adotá-lo pelo atalho novo.
     assert restauracao.e_pendente("gt") is True
 
 
-def test_mesclar_dados(store, make_game, pasta_de_atalhos, retirados):
+def test_mesclar_dados(store, make_game, pasta_de_atalhos):
     caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
     restauracao.decidir(restaurado, caminho, novo, "mesclar")
     assert store.get("shortcuts_novo") is None
@@ -269,7 +264,7 @@ def test_mesclar_dados(store, make_game, pasta_de_atalhos, retirados):
     assert restaurado.shortcut_path == str(caminho)
 
 
-def test_mesclar_soma_as_conquistas(store, make_game, pasta_de_atalhos, retirados):
+def test_mesclar_soma_as_conquistas(store, make_game, pasta_de_atalhos):
     from cartridges.conquistas import historico  # noqa: PLC0415
     from cartridges.conquistas.formatos import Desbloqueio  # noqa: PLC0415
 
@@ -282,7 +277,7 @@ def test_mesclar_soma_as_conquistas(store, make_game, pasta_de_atalhos, retirado
 
 
 def test_manter_backup_soma_as_conquistas_do_novo(
-    store, make_game, pasta_de_atalhos, retirados
+    store, make_game, pasta_de_atalhos
 ):
     """Conquista desbloqueada é fato, não versão que se escolhe: o jogo novo
     sai, mas o que ele tinha vai para o restaurado."""
@@ -299,7 +294,7 @@ def test_manter_backup_soma_as_conquistas_do_novo(
 
 
 def test_manter_este_pc_soma_as_conquistas_do_restaurado(
-    store, make_game, pasta_de_atalhos, retirados
+    store, make_game, pasta_de_atalhos
 ):
     from cartridges.conquistas import historico  # noqa: PLC0415
     from cartridges.conquistas.formatos import Desbloqueio  # noqa: PLC0415
@@ -313,7 +308,7 @@ def test_manter_este_pc_soma_as_conquistas_do_restaurado(
     assert historico.ler("gt") is None
 
 
-def test_manter_este_pc(store, make_game, pasta_de_atalhos, retirados):
+def test_manter_este_pc(store, make_game, pasta_de_atalhos):
     caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
     restauracao.decidir(restaurado, caminho, novo, "este_pc")
     assert store.get("gt") is None
@@ -322,17 +317,16 @@ def test_manter_este_pc(store, make_game, pasta_de_atalhos, retirados):
     assert restauracao.existe() is False
 
 
-def test_sem_jogo_novo_so_aponta(store, make_game, pasta_de_atalhos, retirados):
+def test_sem_jogo_novo_so_aponta(store, make_game, pasta_de_atalhos):
     caminho = pasta_de_atalhos / "GT7.lnk"
     restauracao.gravar(["gt"], 100)
     restaurado = make_game(game_id="gt", added=10)
     store.add_game(restaurado, {}, run_pipeline=False)
     restauracao.decidir(restaurado, caminho, None, "backup")
     assert restaurado.shortcut_path == str(caminho)
-    assert retirados == []
 
 
-def test_excluir_pendente_apaga_de_vez(store, make_game, retirados):
+def test_excluir_pendente_apaga_de_vez(store, make_game):
     restauracao.gravar(["gt", "outro"], 1)
     jogo = make_game(game_id="gt")
     store.add_game(jogo, {}, run_pipeline=False)
@@ -344,12 +338,15 @@ def test_excluir_pendente_apaga_de_vez(store, make_game, retirados):
 
 
 def test_importacao_da_restauracao_varre_atalhos_mesmo_com_a_fonte_desligada(schema, monkeypatch):
-    from cartridges import main as main_module  # noqa: PLC0415
+    from cartridges import aplicativo as aplicativo_module  # noqa: PLC0415
 
     fontes = []
 
     class ImporterFalso:
         ao_terminar = None
+
+        def __init__(self, _aplicativo):
+            pass
 
         def add_source(self, fonte):
             fontes.append(type(fonte).__name__)
@@ -357,14 +354,14 @@ def test_importacao_da_restauracao_varre_atalhos_mesmo_com_a_fonte_desligada(sch
         def run(self):
             pass
 
-    monkeypatch.setattr(main_module, "Importer", ImporterFalso)
+    monkeypatch.setattr(aplicativo_module, "Importer", ImporterFalso)
     schema["shortcuts"] = False
-    app = main_module.CartridgesApplication.__new__(main_module.CartridgesApplication)
+    app = aplicativo_module.Aplicativo()
 
-    main_module.CartridgesApplication.on_import_action(app)
+    app.importar()
     assert fontes == []
 
-    main_module.CartridgesApplication.on_import_action(app, varrer_atalhos=True)
+    app.importar(varrer_atalhos=True)
     assert fontes == ["ShortcutsSource"]
 
 

@@ -19,11 +19,11 @@ import threading
 import time
 from typing import Any, Callable, Optional
 
-from gi.repository import GLib
-
 from cartridges.conquistas import catalogo, contas, fontes, historico, progresso
+from cartridges.conquistas import vigia as _vigia_base
 from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.conquistas.vigia import MARGEM_DA_STEAM, Desbloqueada, completou, desbloqueadas, para_avisar
+from cartridges.utils.thread_principal import na_thread_principal
 
 INTERVALO = 15
 
@@ -43,7 +43,7 @@ def _em_thread(trabalho: Callable[[], Any], entregar: Callable[[Any], None]) -> 
             logging.warning("Falha numa tarefa da conta em segundo plano (%s)", type(erro).__name__)
             resultado = None
         try:
-            GLib.idle_add(devolver, resultado)
+            na_thread_principal(devolver, resultado)
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Falha ao entregar o resultado de uma tarefa da conta", exc_info=True)
 
@@ -66,7 +66,7 @@ class Vigia:
         self._loja = loja
         # A hora em que a sessão começou; None antes de `iniciar`.
         self._inicio: Optional[float] = None
-        self._fonte_glib = 0
+        self._fonte_glib: Optional[Any] = None
         # O titleId (Xbox), namespace (Epic) ou conjunto (EA) da fonte gravada.
         self._id = ""
         # Enquanto a base não foi gravada, o que chega entra em silêncio.
@@ -77,14 +77,14 @@ class Vigia:
 
     @property
     def ativo(self) -> bool:
-        return bool(self._fonte_glib)
+        return self._fonte_glib is not None
 
     def iniciar(self) -> None:
         try:
             fonte = fontes.gravada(self.game)
             loja = self._loja if self._loja is not None else contas.da_fonte(fonte)
             if (
-                self._fonte_glib
+                self._fonte_glib is not None
                 or fonte is None
                 or loja is None
                 or fonte.tipo != loja.TIPO
@@ -97,20 +97,20 @@ class Vigia:
             self._base_feita = False
             self._pedindo = False
             self._geracao += 1
-            self._fonte_glib = GLib.timeout_add_seconds(INTERVALO, self._tique)
+            self._fonte_glib = _vigia_base._repetir(INTERVALO, self._tique)
             self._olhar()
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Falha ao preparar o vigia da conta de %s", self.game.name, exc_info=True)
 
     def parar(self) -> None:
-        if self._fonte_glib:
-            GLib.source_remove(self._fonte_glib)
-            self._fonte_glib = 0
+        if self._fonte_glib is not None:
+            self._fonte_glib.stop()
+            self._fonte_glib = None
         self._geracao += 1
         self._pedindo = False
 
     def _tique(self) -> bool:
-        """Callback do timer: nunca levanta, e devolve True para continuar."""
+        """Callback do timer: nunca levanta."""
         self._olhar()
         return True
 

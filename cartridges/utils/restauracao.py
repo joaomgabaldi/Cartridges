@@ -22,7 +22,7 @@ from typing import Iterable, Optional
 
 from cartridges import shared
 from cartridges.conquistas import historico
-from cartridges.game import Game
+from cartridges.jogo import Jogo
 from cartridges.importer.shortcuts_source import atalhos_da_pasta
 from cartridges.store.store import _path_key
 from cartridges.utils import session_log
@@ -115,7 +115,7 @@ def resolver(encontrados: set[str]) -> None:
     gravar(restantes, restaurado_em())
 
 
-def pendentes() -> list[Game]:
+def pendentes() -> list[Jogo]:
     jogos = [jogo for game_id in ids() if (jogo := shared.store.get(game_id)) is not None]
     return sorted(jogos, key=lambda jogo: jogo.name.casefold())
 
@@ -148,7 +148,7 @@ class AtalhoJaExiste(Exception):
     """Já existe na pasta de atalhos um arquivo com o nome do escolhido."""
 
 
-def _do_backup(jogo: Game) -> bool:
+def _do_backup(jogo: Jogo) -> bool:
     """Veio no backup, e não da importação depois dele."""
     return (jogo.added or 0) < restaurado_em()
 
@@ -157,7 +157,7 @@ def _pasta() -> Path:
     return Path(shared.schema.get_string("shortcuts-location")).expanduser()
 
 
-def candidatos(jogo: Game) -> list[Path]:
+def candidatos(jogo: Jogo) -> list[Path]:
     """Os atalhos da pasta que nenhum jogo do backup usa, os de nome mais
     parecido com o de ``jogo`` primeiro. Os de jogos que a importação criou
     depois da restauração entram: escolher um deles resolve o conflito."""
@@ -196,7 +196,7 @@ def copiar_para_a_pasta(origem: Path) -> Path:
     return destino
 
 
-def jogo_do_atalho(caminho: Path) -> Optional[Game]:
+def jogo_do_atalho(caminho: Path) -> Optional[Jogo]:
     """O jogo que a importação criou a partir de ``caminho`` depois da
     restauração, se houver."""
     chave = _path_key(str(caminho))
@@ -212,7 +212,7 @@ def jogo_do_atalho(caminho: Path) -> Optional[Game]:
     return None
 
 
-def tem_historico(jogo: Game) -> bool:
+def tem_historico(jogo: Jogo) -> bool:
     """Horas jogadas ou sessões. As duas, e não só as sessões: o tempo é
     gravado a cada minuto de jogo, e a sessão só entra no histórico quando
     termina bem. Um jogo cuja sessão caiu no meio tem horas e nenhuma sessão,
@@ -220,20 +220,19 @@ def tem_historico(jogo: Game) -> bool:
     return bool(jogo.playtime) or bool(session_log.load(jogo.game_id))
 
 
-def resumo(jogo: Game) -> tuple[int, int, int]:
+def resumo(jogo: Jogo) -> tuple[int, int, int]:
     """(segundos jogados, número de sessões, última vez jogado) para os
     cartões da tela de conflito."""
     return jogo.playtime or 0, len(session_log.load(jogo.game_id)), jogo.last_played or 0
 
 
-def excluir(jogo: Game) -> None:
+def excluir(jogo: Jogo) -> None:
     """Exclui ``jogo`` de vez, sem tumba, e o tira das pendências."""
-    shared.win.retirar_da_grade(jogo)
     shared.store.excluir(jogo)
     remover(jogo.game_id)
 
 
-def decidir(restaurado: Game, caminho: Path, novo: Optional[Game], decisao: str) -> None:
+def decidir(restaurado: Jogo, caminho: Path, novo: Optional[Jogo], decisao: str) -> None:
     """Aplica a escolha feita para ``restaurado`` com o atalho ``caminho``.
 
     ``novo`` é o jogo que a importação já criou a partir de ``caminho``, se

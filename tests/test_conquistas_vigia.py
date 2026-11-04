@@ -2,10 +2,13 @@
 
 import json
 import os
+import threading
+import time
 
 import pytest
+from PySide6.QtCore import QTimer
 
-from cartridges.conquistas import arquivos, catalogo, fontes, historico, vigia
+from cartridges.conquistas import arquivos, catalogo, fontes, historico, vigia, vigia_da_conta
 from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
 from cartridges.conquistas.formatos import Desbloqueio
 from cartridges.conquistas.fontes import Fonte
@@ -21,12 +24,19 @@ CAT = Catalogo(
 )
 
 
+_REPETIR_REAL = vigia._repetir
+
+
+class _TimerFalso:
+    def stop(self):
+        pass
+
+
 @pytest.fixture(autouse=True)
 def sem_timeout(monkeypatch):
-    """O tique é chamado à mão; nada de GLib.timeout de verdade nos testes."""
+    """O tique é chamado à mão; nada de QTimer de verdade nos testes."""
     fontes = []
-    monkeypatch.setattr(vigia.GLib, "timeout_add_seconds", lambda _s, f: fontes.append(f) or 7)
-    monkeypatch.setattr(vigia.GLib, "source_remove", lambda _id: None)
+    monkeypatch.setattr(vigia, "_repetir", lambda _s, f: fontes.append(f) or _TimerFalso())
     return fontes
 
 
@@ -767,3 +777,40 @@ def test_completou_so_na_virada_para_100():
     assert vigia.completou(None, tudo)
     assert not vigia.completou(tudo, tudo)
     assert not vigia.completou(None, metade)
+
+
+def test_vigia_usa_um_timer_qt_e_para_uma_vez(pastas, make_game, monkeypatch):
+    monkeypatch.setattr(vigia, "_repetir", _REPETIR_REAL)
+    instancia, _avisos = _vigia(make_game)
+    chamadas = []
+    monkeypatch.setattr(instancia, "_olhar", lambda: chamadas.append(1))  # antes do iniciar: o timer liga a este
+    instancia.iniciar()
+    timer = instancia._fonte
+    assert isinstance(timer, QTimer) and timer.isActive() and instancia.ativo
+    assert timer.interval() == vigia.INTERVALO * 1000
+    timer.timeout.emit()
+    assert chamadas == [1]
+    instancia.parar()
+    assert not timer.isActive() and not instancia.ativo
+    instancia.parar()  # a segunda vez não levanta
+
+
+def test_vigia_da_conta_entrega_na_thread_principal(flush_idle):
+    onde = {}
+    entregas = []
+
+    def trabalho():
+        onde["trabalho"] = threading.current_thread()
+        return 7
+
+    def entregar(resultado):
+        onde["entrega"] = threading.current_thread()
+        entregas.append(resultado)
+
+    vigia_da_conta._em_thread(trabalho, entregar)
+    fim = time.monotonic() + 5
+    while not entregas and time.monotonic() < fim:
+        flush_idle()
+    assert entregas == [7]
+    assert onde["trabalho"] is not threading.main_thread()
+    assert onde["entrega"] is threading.main_thread()
