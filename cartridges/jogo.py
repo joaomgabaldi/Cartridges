@@ -387,7 +387,7 @@ class Jogo(QObject):
         ``inis_conferidos``: relançamento de uma conferência que passou por uma animação (Big Picture) e já não vê a marca.
         """
         # Dentro da função: o `backup_de_saves` importa o `Jogo`.
-        from cartridges.emuladores import aplicacao  # noqa: PLC0415
+        from cartridges.emuladores import aplicacao, busca  # noqa: PLC0415
         from cartridges.saves import backup_de_saves  # noqa: PLC0415
 
         conferidos, self._inis_conferidos = inis_conferidos or self._inis_conferidos, False
@@ -406,7 +406,8 @@ class Jogo(QObject):
                     self._nova_rodada(ao_confirmar)
                     self._mostrar_preparo()
                 return False
-            if aplicacao.valores_para(self) != (None, None):
+            # Jogo de loja não tem .ini de emulador: abre direto, sem thread.
+            if not busca.eh_de_loja(self.executable) and aplicacao.valores_para(self) != (None, None):
                 self._conferir_inis(ao_confirmar)
                 return False
 

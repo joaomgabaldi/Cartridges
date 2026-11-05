@@ -24,6 +24,7 @@ Roda numa thread: toca o disco. A pasta do jogo é entrada não confiável: não
 
 import logging
 import os
+import re
 import stat
 from pathlib import Path
 from typing import Iterable, Optional
@@ -31,12 +32,31 @@ from typing import Iterable, Optional
 from cartridges.conquistas import arquivos
 from cartridges.emuladores import ini
 from cartridges.utils.game_folder import game_folder
+from cartridges.utils.run_executable import aumid_from_command
 
 _PROFUNDIDADE = 8
 _LIMITE_DE_ENTRADAS = 50_000
 _CHANGER = "language.changer.ini"
 _GSE_USER = "configs.user.ini"
 _DO_APPID = frozenset({"steam_emu.ini", "codex.ini", "ali213.ini"})
+_UNINS = re.compile(r"unins\d*\.exe", re.IGNORECASE)
+# Quanto subir do exe atrás do desinstalador (Jogo\Projeto\Binaries\Win64\x.exe são 4 níveis).
+_SUBIDAS_ATE_O_UNINS = 5
+_LAUNCHERS = frozenset(
+    {
+        "steam.exe", "epicgameslauncher.exe", "upc.exe", "ubisoftconnect.exe", "eadesktop.exe", "origin.exe",
+        "galaxyclient.exe", "battle.net.exe", "xboxpcapp.exe",
+    }
+)
+_PRIMEIRO_CAMINHO = re.compile(r'"([^"]+)"|(\S+)')
+# Os URIs com que as lojas abrem um jogo: um comando que começa por um deles é de loja.
+_URIS_DE_LOJA = (
+    "steam://", "epicgames://", "com.epicgames.launcher://", "goggalaxy://", "gog://", "battlenet://", "origin://",
+    "ea://", "uplay://", "ubisoftconnect://", "rockstar://", "ms-windows-store://", "ms-xbl://", "psremoteplay://",
+    "geforcenow://", "amazon://", "itch://", "humble://", "zoom://", "indiegala://",
+)
+# O launcher sem aspas: o caminho tem espaços ("C:\Program Files (x86)\Steam\steam.exe -applaunch 440").
+_LAUNCHER_SEM_ASPAS = re.compile(r'^[A-Za-z]:[\\/][^"]*?[\\/]([^\\/"]+\.exe)(?:\s|$)', re.IGNORECASE)
 
 
 def _chave(caminho: object) -> str:
@@ -57,15 +77,45 @@ def _tem_engine(pasta: Path) -> bool:
         return False
 
 
+def eh_de_loja(executavel: str) -> bool:
+    """Jogo aberto por uma loja (steam://, uplay:// e outras URIs, pacote da Microsoft Store, o próprio launcher): não tem .ini de emulador. Só olha o texto."""
+    comando = (executavel or "").strip()
+    if comando.strip('"').casefold().startswith(_URIS_DE_LOJA) or aumid_from_command(comando):
+        return True
+    primeiro = _PRIMEIRO_CAMINHO.match(comando)
+    if primeiro and Path(primeiro.group(1) or primeiro.group(2)).name.casefold() in _LAUNCHERS:
+        return True
+    sem_aspas = _LAUNCHER_SEM_ASPAS.match(comando)
+    return bool(sem_aspas) and sem_aspas.group(1).casefold() in _LAUNCHERS
+
+
+def _pasta_do_unins(pasta: Path) -> Optional[Path]:
+    """A pasta do exe, ou a mais próxima acima dela, que tem o desinstalador (unins000.exe): a raiz que o instalador criou."""
+    for candidata in [pasta, *pasta.parents][: _SUBIDAS_ATE_O_UNINS + 1]:
+        if candidata.parent == candidata:
+            return None
+        try:
+            with os.scandir(candidata) as it:
+                if any(_UNINS.fullmatch(e.name) and e.is_file(follow_symlinks=False) for e in it):
+                    return candidata
+        except OSError:
+            continue
+    return None
+
+
 def raiz_do_jogo(executavel: str, executaveis_dos_outros: Iterable[str]) -> Optional[Path]:
+    if eh_de_loja(executavel):
+        return None
     pasta = game_folder(executavel or "")
     if not pasta:
         return None
-    bases = arquivos.bases_da_pasta(Path(pasta))
-    raiz = bases[-1]
-    # Unreal: Raiz\Projeto\Binaries\Win64\x.exe — só sobe mais um nível se a pasta acima tem `Engine`
-    if any(b.name.casefold() == "binaries" for b in bases[:-1]) and _tem_engine(raiz.parent):
-        raiz = raiz.parent
+    raiz = _pasta_do_unins(Path(pasta))
+    if raiz is None:
+        bases = arquivos.bases_da_pasta(Path(pasta))
+        raiz = bases[-1]
+        # Sem desinstalador, Unreal: Raiz\Projeto\Binaries\Win64\x.exe só sobe mais um nível se a pasta acima tem `Engine`
+        if any(b.name.casefold() == "binaries" for b in bases[:-1]) and _tem_engine(raiz.parent):
+            raiz = raiz.parent
     if _raiz_valida(raiz) is None:
         return None
 

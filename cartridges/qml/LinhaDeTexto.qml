@@ -18,10 +18,12 @@ LinhaDoGrupo {
     signal terminado()
 
     readonly property bool _rotuloEmCima: campo.activeFocus || campo.text !== ""
+    // A dica (a regra do campo) só aparece durante a edição ou com erro.
+    readonly property bool _dicaVisivel: subtitulo !== "" && (campo.activeFocus || erro)
 
     comTextos: false
-    // Com subtítulo, a dica fica sob o campo e a linha cresce.
-    alturaMinima: subtitulo !== "" ? 70 : 50
+    // Com a dica visível, ela fica sob o campo e a linha cresce.
+    alturaMinima: _dicaVisivel ? 70 : 50
     sobre: areaDaLinha.containsMouse && !campo.activeFocus
     foco: campo.activeFocus
 
@@ -77,7 +79,7 @@ LinhaDoGrupo {
             id: dica
             objectName: linha.objectName + "Subtitulo"
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: 9 }
-            visible: linha.subtitulo !== ""
+            visible: linha._dicaVisivel
             text: linha.subtitulo
             textFormat: Text.PlainText
             elide: Text.ElideRight

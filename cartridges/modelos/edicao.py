@@ -22,7 +22,7 @@ from PySide6.QtGui import QColor, QGuiApplication
 
 from cartridges import edicao, shared
 from cartridges.edicao import Escolha, Formulario
-from cartridges.emuladores import idiomas, ini
+from cartridges.emuladores import aplicacao, idiomas, ini
 from cartridges.jogo import STATUS_LABELS, Jogo
 from cartridges.modelos.ordem import _url_da_capa  # noqa: PLC2701
 from cartridges.modelos.seletores import (
@@ -842,6 +842,8 @@ class ModeloDaEdicao(QObject):
         self._form = Formulario.do_jogo(jogo)
         # O AppID que o campo mostrava ao abrir: é com ele que `aplicar` vê se a pessoa o mexeu.
         self._appid_inicial = self._form.appid
+        # (idioma, nome) do .ini mostrados nos campos vazios: devolvidos sem mudança, o jogo continua no padrão.
+        self._do_ini = ("", "")
         self._ocupacoes = 0
         self._capas_em_voo = 0
         self._geracao += 1
@@ -862,6 +864,33 @@ class ModeloDaEdicao(QObject):
             self.buscandoMetadadosChanged,
         ):  # fmt: skip
             sinal.emit()
+        if jogo is not None and jogo.inis and not (jogo.idioma_proprio and jogo.nome_proprio):
+            threading.Thread(target=self._ler_do_ini, args=(list(jogo.inis), self._geracao), daemon=True).start()
+
+    def _ler_do_ini(self, inis: list[str], geracao: int) -> None:
+        """Fora da thread principal (toca o disco): o que os .ini do jogo trazem hoje, para os campos não ficarem vazios."""
+        try:
+            idioma, nome = aplicacao.valores_do_ini(inis)
+        except Exception:  # noqa: BLE001  # o .ini é de terceiros: sem os valores, os campos só ficam no padrão
+            logging.exception("Could not read the emulator .ini values")
+            return
+        na_thread_principal(self._mostrar_do_ini, geracao, idioma, nome)
+
+    def _mostrar_do_ini(self, geracao: int, idioma: str, nome: str) -> None:
+        if not self._aberto or geracao != self._geracao:
+            return
+        # Com padrão do Kyron definido, é ele que o jogo vai receber: o campo fica no padrão, não no que o .ini traz.
+        sem_padrao_de_idioma = not shared.schema.get_string("idioma-do-jogador")
+        sem_padrao_de_nome = not shared.schema.get_string("nome-do-jogador")
+        idioma = idioma if sem_padrao_de_idioma and idioma in idiomas.IDIOMAS and not self._form.idioma_proprio else ""
+        nome = nome if sem_padrao_de_nome and ini.nome_valido(nome) and not self._form.nome_proprio else ""
+        self._do_ini = (idioma, nome)
+        if idioma:
+            self._form.idioma_proprio = idioma
+            self.idiomaProprioChanged.emit()
+        if nome:
+            self._form.nome_proprio = nome
+            self.nomeProprioChanged.emit()
 
     def _fechar(self, descartar: bool = True) -> None:
         """Fecha o diálogo. ``descartar``: as provisórias da tela saem (no Aplicar, são do `aplicar`)."""
@@ -941,6 +970,12 @@ class ModeloDaEdicao(QObject):
             self._aplicativo.pedir_dialogo(edicao.titulo_do_erro(jogo is None), erro, [], self.focoDevolvido.emit)
             return
         # A página de detalhes, se aberta, segue o jogo pelo `atualizado`: mostra o novo ou sai sozinha.
+        idioma_do_ini, nome_do_ini = self._do_ini
+        form = dataclasses.replace(
+            form,
+            idioma_proprio="" if idioma_do_ini and form.idioma_proprio == idioma_do_ini else form.idioma_proprio,
+            nome_proprio="" if nome_do_ini and form.nome_proprio.strip() == nome_do_ini else form.nome_proprio,
+        )
         edicao.aplicar(form, jogo, self._appid_inicial)
         # A capa nova é do `aplicar` (ele a apaga depois da recarga, ou a guarda como a da sessão).
         self._fechar(descartar=False)

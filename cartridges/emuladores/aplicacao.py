@@ -48,6 +48,20 @@ def _modelo_com_marcador(caminho: Path) -> bool:
     return "&" in (ini.ler(caminho, "steam_emu.ini").idioma or "")
 
 
+def valores_do_ini(inis: Optional[list[str]]) -> tuple[str, str]:
+    """(idioma, nome) que os .ini trazem hoje: o primeiro idioma conhecido e o primeiro nome aceito, pulando os modelos do language.changer. "" quando nenhum traz. Toca o disco."""
+    idioma = nome = ""
+    for caminho in map(Path, inis or []):
+        if caminho.name.casefold() not in ini.FORMATOS:
+            continue
+        valores = ini.ler(caminho)
+        if not idioma and (valores.idioma or "").strip().casefold() in IDIOMAS:
+            idioma = valores.idioma.strip().casefold()
+        if not nome and ini.nome_valido((valores.nome or "").strip()):
+            nome = valores.nome.strip()
+    return idioma, nome
+
+
 FALTANDO, APLICADO, FALHOU = "faltando", "aplicado", "falhou"
 
 

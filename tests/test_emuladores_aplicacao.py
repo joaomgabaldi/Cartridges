@@ -143,3 +143,18 @@ def test_adotar_appid(tmp_path):
     assert aplicacao.adotar_appid(jogo, None) is False
     jogo.appid_manual = True
     assert aplicacao.adotar_appid(jogo, "400") is False and jogo.steam_appid == "620"
+
+
+def test_valores_do_ini_pega_o_primeiro_de_cada_chave(tmp_path):
+    gse = tmp_path / "steam_settings" / "configs.user.ini"
+    gse.parent.mkdir()
+    gse.write_bytes(b"[user::general]\naccount_name=joaomgabaldi\n")
+    rune = tmp_path / "steam_emu.ini"
+    rune.write_bytes(b"[Settings]\r\nUserName=outro\r\nLanguage=Brazilian\r\n")
+    codex = tmp_path / "codex.ini"
+    codex.write_bytes(b"[Settings]\r\nLanguage=klingon\r\n")  # desconhecido: o próximo arquivo vale
+    modelo = tmp_path / "steam_emu_t.ini"
+    modelo.write_bytes(b"[Settings]\r\nLanguage=&LANG&\r\n")
+    inis = [str(modelo), str(gse), str(codex), str(rune)]
+    assert aplicacao.valores_do_ini(inis) == ("brazilian", "joaomgabaldi")
+    assert aplicacao.valores_do_ini(None) == ("", "")

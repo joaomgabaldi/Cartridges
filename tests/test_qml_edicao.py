@@ -1876,3 +1876,33 @@ def test_idioma_e_nome_proprios_so_com_ini_e_aplicam_ao_salvar(app, monkeypatch)
     app.edicao.aplicar()
     assert jogo1.nome_proprio == "Joao"
     assert _esperar(lambda: len(chamados) == 2)
+
+
+def test_campos_proprios_mostram_o_que_o_ini_traz(app, monkeypatch, tmp_path):
+    from cartridges.emuladores import aplicacao  # noqa: PLC0415
+
+    monkeypatch.setattr(aplicacao, "aplicar_no_jogo", lambda j: aplicacao.APLICADO)
+    ini = tmp_path / "steam_emu.ini"
+    ini.write_bytes(b"[Settings]\r\nUserName=joaomgabaldi\r\nLanguage=brazilian\r\n")
+    jogo = shared.store.get("shortcuts_z1")
+    jogo.inis = [str(ini)]
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: app.edicao.nomeProprio == "joaomgabaldi")
+    assert app.edicao.idiomaProprioIndice == 1  # Português (Brasil), logo depois de "Padrão do Kyron"
+    app.edicao.aplicar()  # sem mexer: o jogo continua seguindo o padrão
+    assert jogo.idioma_proprio == "" and jogo.nome_proprio == ""
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: app.edicao.nomeProprio == "joaomgabaldi")
+    app.edicao.nomeProprio = "Outro"
+    app.edicao.aplicar()  # mexeu só no nome: só ele vira próprio
+    assert jogo.nome_proprio == "Outro" and jogo.idioma_proprio == ""
+    jogo.nome_proprio = ""
+    shared.schema.set_string("idioma-do-jogador", "english")  # com padrão do Kyron, o idioma fica no padrão
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: app.edicao.nomeProprio == "joaomgabaldi")
+    assert app.edicao.idiomaProprioIndice == 0
+    assert app.achar("campoDoNomeProprio").property("_dicaVisivel") is False  # a regra só aparece editando
+    app.edicao.nomeProprio = "João"
+    assert app.achar("campoDoNomeProprio").property("_dicaVisivel") is True  # ou com erro
+    app.edicao.cancelar()
+    shared.schema.set_string("idioma-do-jogador", "")

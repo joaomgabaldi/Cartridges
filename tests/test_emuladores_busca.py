@@ -199,3 +199,47 @@ def test_procurar_lista_configs_user_ini_do_gse_que_falta(tmp_path):
     raiz = tmp_path / "Jogo"
     txt = _arq(raiz / "steam_settings/steam_appid.txt", "620")
     assert busca.procurar(raiz) == sorted([txt, raiz / "steam_settings/configs.user.ini"])
+
+
+def test_raiz_e_a_pasta_do_desinstalador(tmp_path):
+    _arq(tmp_path / "Jogo" / "unins000.exe")
+    exe = _exe(tmp_path / "Jogo" / "Proj" / "Binaries" / "Win64")
+    assert busca.raiz_do_jogo(exe, []) == tmp_path / "Jogo"
+
+
+def test_desinstalador_na_pasta_do_exe(tmp_path):
+    _arq(tmp_path / "Jogo" / "bin" / "UNINS001.EXE")
+    exe = _exe(tmp_path / "Jogo" / "bin")
+    assert busca.raiz_do_jogo(exe, []) == tmp_path / "Jogo" / "bin"
+
+
+def test_desinstalador_com_outro_jogo_dentro_nao_vale(tmp_path):
+    _arq(tmp_path / "Pacote" / "unins000.exe")
+    exe = _exe(tmp_path / "Pacote" / "A")
+    outro = _exe(tmp_path / "Pacote" / "B")
+    assert busca.raiz_do_jogo(exe, [outro]) is None
+
+
+@pytest.mark.parametrize(
+    "comando",
+    [
+        "steam://rungameid/440",
+        "com.epicgames.launcher://apps/x%3Ay%3AZ?action=launch",
+        "uplay://launch/635/0",
+        "goggalaxy://openGameView/1207658924",
+        "\"itch://games/123\"",
+        r'"C:\Program Files (x86)\Steam\steam.exe" -applaunch 440',
+        r"C:\Program Files (x86)\Steam\steam.exe -applaunch 440",
+        r"shell:AppsFolder\Microsoft.Halo_8wekyb3d8bbwe!App",
+    ],
+)
+def test_jogo_de_loja_nao_procura(comando):
+    assert busca.eh_de_loja(comando) is True
+    assert busca.raiz_do_jogo(comando, []) is None
+
+
+def test_exe_comum_nao_e_de_loja(tmp_path):
+    exe = _exe(tmp_path / "Jogo")
+    assert busca.eh_de_loja(exe) is False
+    assert busca.eh_de_loja(f'"{exe}" -url https://exemplo.com') is False
+    assert busca.eh_de_loja("http://exemplo.com/jogo") is False  # URI que não é de loja

@@ -346,3 +346,10 @@ def test_conferindo_inis_so_para_o_launch_que_a_comecou(play, tmp_path):
     assert jogo.launch() is False and jogo.conferindo_inis is False
     soltar()
     assert len(executados) == 1
+
+
+def test_jogo_de_loja_abre_direto_sem_conferir(play):
+    executados, fila, _soltar = play
+    jogo = Jogo({"game_id": "shortcuts_9", "source": "shortcuts", "name": "TF2", "executable": "steam://rungameid/440", "added": 0})
+    assert jogo.launch() is True
+    assert len(executados) == 1 and not fila
