@@ -851,8 +851,9 @@ class _Launch:
         self.chamadas = 0
         self.ao_confirmar = None
 
-    def __call__(self, ao_confirmar=None):
+    def __call__(self, ao_confirmar=None, inis_conferidos=False):
         self.chamadas += 1
+        self.inis_conferidos = inis_conferidos
         self.ao_confirmar = ao_confirmar
         if self.efeito is not None:
             self.efeito()
@@ -933,6 +934,37 @@ def test_confirmar_o_comando_abre_pelo_mesmo_caminho(abrivel):
     assert a.bp.ocupada and a.aberturas[-1] == (0.0, 1.0)
     a.bp.aberturaTerminou()
     assert launch.chamadas == 2
+
+
+def test_conferencia_rapida_dos_inis_anima_uma_vez(abrivel):
+    a = abrivel
+    jogo = a.jogos["b"]
+    launch = jogo.launch
+    launch.devolve, launch.efeito = False, lambda: setattr(jogo, "_conferindo", True)
+    _ida(a)
+    assert a.bp.ocupada and a.aberturas == [(0.0, 1.0)]  # a capa fica aberta esperando a conferência
+    launch.devolve, launch.efeito = True, None
+    jogo._conferindo, jogo._inis_conferidos = False, True  # o fim da conferência relança
+    launch.ao_confirmar()
+    assert launch.chamadas == 2 and launch.inis_conferidos
+    assert a.aberturas.count((0.0, 1.0)) == 1
+
+
+def test_conferencia_com_dialogo_devolve_a_capa(abrivel):
+    a = abrivel
+    jogo = a.jogos["b"]
+    launch = jogo.launch
+    launch.devolve, launch.efeito = False, lambda: setattr(jogo, "_conferindo", True)
+    _ida(a)
+    jogo.procurando_inis.emit(lambda: None, lambda: None)
+    assert not a.bp.ocupada and a.aberturas == [(0.0, 1.0), (1.0, 0.0)]
+    launch.devolve, launch.efeito = True, None
+    jogo._inis_conferidos = True  # "Jogar mesmo assim"
+    launch.ao_confirmar()
+    jogo._inis_conferidos = False
+    assert a.aberturas[-1] == (0.0, 1.0)
+    a.bp.aberturaTerminou()
+    assert launch.chamadas == 2 and launch.inis_conferidos
 
 
 def test_confirmar_depois_de_sair_nao_abre(abrivel):

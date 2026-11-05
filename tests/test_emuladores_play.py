@@ -46,6 +46,7 @@ def play(monkeypatch, schema):
     monkeypatch.setattr(modulo, "threading", SimpleNamespace(Thread=_ThreadNaHora))
     monkeypatch.setattr(modulo, "na_thread_principal", lambda f, *a: fila.append((f, a)))
     monkeypatch.setattr(Jogo, "save", lambda self: None)
+    monkeypatch.setattr(modulo.shared, "store", None)  # uma store falsa que outro arquivo deixou não entra aqui
 
     def soltar():
         while fila:
@@ -208,3 +209,49 @@ def test_ponte_jogar_mesmo_assim_e_cancelar(play, tmp_path, app_qt):
     ponte.cancelarPreparo()
     soltar()
     assert len(executados) == 1
+
+def test_cancelar_e_jogar_de_novo_reabre_o_preparo(play, tmp_path):
+    executados, fila, soltar = play
+    jogo = _jogo(_pasta(tmp_path))
+    pedidos = _contar(jogo.procurando_inis)
+
+    jogo.launch()
+    _um(fila)
+    pedidos[0][1]()  # Cancelar
+    assert jogo.launch() is False  # o fim ainda está na fila
+    assert len(pedidos) == 2
+    soltar()
+    assert len(executados) == 1
+
+
+def test_jogar_mesmo_assim_e_jogar_de_novo_reabre_o_preparo(play, tmp_path):
+    executados, fila, soltar = play
+    jogo = _jogo(_pasta(tmp_path))
+    pedidos = _contar(jogo.procurando_inis)
+
+    jogo.launch()
+    _um(fila)
+    pedidos[0][0]()  # Jogar mesmo assim
+    assert len(executados) == 1 and not jogo.inis_conferidos  # a marca não sobra para o próximo play
+    jogo.launch()
+    assert len(pedidos) == 2
+    soltar()
+    assert len(executados) == 2  # a rodada nova lança no fim; a antiga não
+
+
+def test_ponte_ignora_o_preparo_de_outro_jogo(play, tmp_path, app_qt):
+    executados, fila, soltar = play
+    ponte = Ponte()
+    a, b = _jogo(_pasta(tmp_path, "A")), _jogo(_pasta(tmp_path, "B"), game_id="shortcuts_2", name="Outro")
+    ponte.ligar(a)
+    ponte.ligar(b)
+    pedidos = _contar(ponte.preparoPedido)
+
+    a.launch()
+    b.launch()
+    _um(fila)  # procurando de a
+    fila.insert(0, fila.pop(1))  # procurando de b chega com o diálogo de a na tela
+    _um(fila)
+    assert [p[0] for p in pedidos] == ["Preparando Portal"]
+    soltar()
+    assert len(executados) == 2  # ninguém decidiu: os dois abrem no fim

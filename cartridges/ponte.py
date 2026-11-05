@@ -4,6 +4,7 @@
 
 """A `Ponte`: leva os sinais dos jogos ao QML."""
 
+import logging
 import weakref
 from typing import Any, Callable
 
@@ -65,6 +66,10 @@ class Ponte(QObject):
 
         def preparar(jogar: Callable[[], Any], cancelar: Callable[[], Any]) -> None:
             if (p := ponte()) is not None and (j := ref_jogo()) is not None:
+                if p._preparo is not None and p._preparo[0] is not ref_jogo:  # noqa: SLF001
+                    # Um diálogo por vez: sem resposta, a busca deste jogo o lança quando acabar.
+                    logging.debug("Preparo de %s ignorado: outro já está na tela", j.name)
+                    return
                 p._preparo = (ref_jogo, jogar, cancelar)  # noqa: SLF001
                 p.preparoPedido.emit(
                     f"Preparando {j.name}",

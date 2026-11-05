@@ -121,7 +121,7 @@ class _LaunchQueAnota:
         self.chamadas = 0
         self.no_instante = None
 
-    def __call__(self, ao_confirmar=None):
+    def __call__(self, ao_confirmar=None, inis_conferidos=False):  # noqa: ARG002
         if self.jogo.comando_a_conferir:
             self.jogo._conferir_comando(ao_confirmar or self)  # noqa: SLF001  # o pedido de confirmação de verdade
             return False

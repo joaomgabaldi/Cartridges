@@ -129,6 +129,9 @@ class BigPicture(QObject):
         self._centro_pendente = ""
         self._jogo_aberto = ""
         self._indo = False
+        # A capa fica aberta esperando a conferência rápida dos .ini; e o relançamento que dela vem.
+        self._esperando_inis = False
+        self._inis_conferidos = False
         self._esperando_ativacao = False
         modelo.rowsInserted.connect(self._agendar)
         modelo.rowsRemoved.connect(self._agendar)
@@ -397,6 +400,7 @@ class BigPicture(QObject):
             return
         self._ocupada = self._indo = True
         self._jogo_aberto = jogo_id
+        self._inis_conferidos = False
         self.alterado.emit()
         self.aberturaPedida.emit(0.0, 1.0)
 
@@ -419,17 +423,44 @@ class BigPicture(QObject):
         self._indo = False
         self._janela_normal()
         jogo = shared.store.get(self._jogo_aberto) if shared.store is not None else None
+        conferidos, self._inis_conferidos = self._inis_conferidos, False
         try:
             # Confirmado o comando de um jogo restaurado, abre pelo mesmo caminho; referência fraca: o callback fica na ponte, que sobrevive a este objeto.
             eu, jogo_id = weakref.ref(self), self._jogo_aberto
-            aberto = jogo is not None and jogo.launch(ao_confirmar=lambda: (b := eu()) and b._abrir(jogo_id))
+            aberto = jogo is not None and jogo.launch(
+                ao_confirmar=lambda: (b := eu()) and b._continuar_abertura(jogo_id), inis_conferidos=conferidos
+            )
         except Exception:
             self._desistir_da_abertura()
             raise
-        if not aberto:
+        if not aberto and jogo is not None and jogo.conferindo_inis:
+            # Conferência rápida dos .ini: a capa fica aberta e o relançamento termina a abertura sem animar de novo.
+            self._esperando_inis = True
+            jogo.procurando_inis.connect(self._inis_pedem_dialogo, Qt.ConnectionType.UniqueConnection)
+        elif not aberto:
             self._desistir_da_abertura()
         elif shared.sessao is None or not shared.sessao.jogoId:
             self._voltar_sem_sessao()
+
+    def _continuar_abertura(self, jogo_id: str) -> None:
+        """O relançamento pedido pelo jogo (comando confirmado ou .ini conferidos)."""
+        jogo = shared.store.get(jogo_id) if shared.store is not None else None
+        conferidos = jogo is not None and jogo.inis_conferidos
+        if self._esperando_inis and jogo_id == self._jogo_aberto:
+            self._esperando_inis, self._indo, self._inis_conferidos = False, True, conferidos
+            self.aberturaTerminou()
+            return
+        self._abrir(jogo_id)
+        if self._indo and self._jogo_aberto == jogo_id:
+            # A animação demora: a marca do jogo some antes do `launch`, então vai junto.
+            self._inis_conferidos = conferidos
+
+    @Slot(object, object)
+    def _inis_pedem_dialogo(self, _jogar: object, _cancelar: object) -> None:
+        """A busca dos .ini vai mostrar o diálogo: a capa volta enquanto ele está na tela."""
+        if self._esperando_inis:
+            self._esperando_inis = False
+            self._desistir_da_abertura()
 
     def _desistir_da_abertura(self) -> None:
         """O jogo não abriu (comando a conferir, erro, sumiu): a capa volta e a tela cheia também."""

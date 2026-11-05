@@ -125,7 +125,9 @@ class Jogo(QObject):
     loading: int = 0
     # Uma conferência dos .ini em andamento; e o uso único que deixa o relançamento dela passar sem conferir de novo.
     _conferindo: bool = False
+    _procurando: bool = False  # a busca começou e o diálogo foi pedido
     _inis_conferidos: bool = False
+    _rodada: Any = None  # ({"decidido"}, jogar, cancelar) da decisão mais recente
     filtered: bool = False
 
     # Com default, ao contrário dos de identidade: um arquivo antigo sem este campo levantava AttributeError no FileManager e o jogo deixava de ser gravado.
@@ -311,36 +313,57 @@ class Jogo(QObject):
 
         self.confirmar_comando.emit(confirmar)
 
+    @property
+    def conferindo_inis(self) -> bool:
+        """A conferência dos .ini está no caminho rápido: o jogo abre em instantes, sem o diálogo."""
+        return self._conferindo and not self._procurando
+
+    @property
+    def inis_conferidos(self) -> bool:
+        """Verdadeiro só durante o relançamento que vem da conferência (quem relança depois de uma animação o repassa ao `launch`)."""
+        return self._inis_conferidos
+
+    def _nova_rodada(self, ao_confirmar: Optional[Callable[[], Any]]) -> None:
+        """Uma decisão sobre a mesma busca: só a rodada mais recente lança quando ela termina."""
+        ref = weakref.ref(self)  # quem guarda as respostas (a ponte) não prende o jogo
+        rodada = {"decidido": False}
+
+        def jogar() -> None:
+            if rodada["decidido"] or (j := ref()) is None:
+                return
+            rodada["decidido"] = True
+            j._inis_conferidos = True
+            try:
+                (ao_confirmar or j.launch)()
+            finally:
+                j._inis_conferidos = False
+
+        def cancelar() -> None:
+            rodada["decidido"] = True
+
+        self._rodada = (rodada, jogar, cancelar)
+
+    def _mostrar_preparo(self) -> None:
+        self._procurando = True
+        _rodada, jogar, cancelar = self._rodada
+        self.procurando_inis.emit(jogar, cancelar)
+
+    def _fim_da_conferencia(self) -> None:
+        self._conferindo = self._procurando = False
+        self.inis_procurados.emit()
+        self._rodada[1]()
+
     def _conferir_inis(self, ao_confirmar: Optional[Callable[[], Any]]) -> None:
         """Aplica o idioma e o nome numa thread (toca o disco) e relança na principal; nunca impede o jogo de abrir."""
         from cartridges.emuladores import aplicacao, busca  # noqa: PLC0415
 
-        self._conferindo = True
-        ref = weakref.ref(self)  # quem guarda as respostas (a ponte) não prende o jogo
-        decidido = False
-
-        def jogar() -> None:
-            nonlocal decidido
-            if decidido or (j := ref()) is None:
-                return
-            decidido = True
-            j._inis_conferidos = True
-            (ao_confirmar or j.launch)()
-
-        def cancelar() -> None:
-            nonlocal decidido
-            decidido = True
-
-        def fim() -> None:
-            if (j := ref()) is not None:
-                j._conferindo = False
-                j.inis_procurados.emit()
-            jogar()
+        self._conferindo, self._procurando = True, False
+        self._nova_rodada(ao_confirmar)
 
         def conferir() -> None:
             try:
                 if not aplicacao.aplicar_no_jogo(self) and busca.raiz_do_jogo(self.executable, []) is not None:
-                    na_thread_principal(self.procurando_inis.emit, jogar, cancelar)
+                    na_thread_principal(self._mostrar_preparo)
                     aplicacao.atualizar_inis(self, aplicacao.executaveis_dos_outros(self))
                     aplicacao.aplicar_no_jogo(self)
                     # Excluído durante a busca: gravar o ressuscitaria.
@@ -348,17 +371,20 @@ class Jogo(QObject):
                         self.save()
             except Exception:  # noqa: BLE001
                 logging.exception("Falha ao conferir os .ini de %s", self.name)
-            na_thread_principal(fim)
+            na_thread_principal(self._fim_da_conferencia)
 
         threading.Thread(target=conferir, name="conferencia-dos-inis", daemon=True).start()
 
-    def launch(self, ao_confirmar: Optional[Callable[[], Any]] = None) -> bool:
-        """``ao_confirmar``: como relançar depois da confirmação do comando de um jogo restaurado; sem ele, este mesmo ``launch``."""
+    def launch(self, ao_confirmar: Optional[Callable[[], Any]] = None, inis_conferidos: bool = False) -> bool:
+        """``ao_confirmar``: como relançar depois da confirmação do comando ou da conferência dos .ini; sem ele, este mesmo ``launch``.
+
+        ``inis_conferidos``: relançamento de uma conferência que passou por uma animação (Big Picture) e já não vê a marca.
+        """
         # Dentro da função: o `backup_de_saves` importa o `Jogo`.
         from cartridges.emuladores import aplicacao  # noqa: PLC0415
         from cartridges.saves import backup_de_saves  # noqa: PLC0415
 
-        conferidos, self._inis_conferidos = self._inis_conferidos, False
+        conferidos, self._inis_conferidos = inis_conferidos or self._inis_conferidos, False
         # Antes do comando a conferir: o jogo não abre no meio da restauração dos saves dele.
         if backup_de_saves.restaurando(self):
             self._avisar(_("Aguarde o fim da restauração dos saves de {}."))
@@ -367,7 +393,11 @@ class Jogo(QObject):
             self._conferir_comando(ao_confirmar or self.launch)
             return False
         if not conferidos:
-            if self._conferindo:  # clique repetido durante a conferência
+            if self._conferindo:
+                # Clique repetido: ignorado enquanto ninguém decidiu; depois de decidido, a mesma busca pede de novo.
+                if self._rodada[0]["decidido"]:
+                    self._nova_rodada(ao_confirmar)
+                    self._mostrar_preparo()
                 return False
             if aplicacao.valores_para(self) != (None, None):
                 self._conferir_inis(ao_confirmar)
