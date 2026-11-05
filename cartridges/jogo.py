@@ -83,6 +83,11 @@ PERSISTED_ATTRS = (
     "saves_local_desconhecido_avisado",
     "backup_dos_saves_desligado",
     "comando_a_conferir",
+    "inis",
+    "idioma_proprio",
+    "nome_proprio",
+    "appid_manual",
+    "idiomas_steam",
 )
 
 _KNOWN_KEYS = frozenset(PERSISTED_ATTRS)
@@ -184,6 +189,15 @@ class Jogo(QObject):
     backup_dos_saves_desligado: bool = False
     # Veio de um backup restaurado: o comando pode ter sido escrito por outra pessoa e roda num shell (ou como administrador); o primeiro lançamento o mostra e só segue com a confirmação.
     comando_a_conferir: bool = False
+    # Caminhos dos .ini de emulador de Steam do jogo; None é "nunca procurado", [] é "procurado e não há".
+    inis: Optional[list[str]] = None
+    # Idioma e nome do jogador só deste jogo; "" segue o padrão do Kyron.
+    idioma_proprio: str = ""
+    nome_proprio: str = ""
+    # O AppID foi escrito à mão: a leitura dos .ini não o troca mais.
+    appid_manual: bool = False
+    # Idiomas que a Steam lista para o AppID; None é "ainda não consultado".
+    idiomas_steam: Optional[list[str]] = None
 
     def __init__(self, data: dict[str, Any], parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
@@ -254,6 +268,13 @@ class Jogo(QObject):
                 logging.debug("Ignoring unknown field %s in a game record", key)
                 continue
             setattr(self, key, value)
+        # Registro editado à mão: valor de tipo errado volta ao padrão em vez de derrubar quem o usa.
+        for chave in ("inis", "idiomas_steam"):
+            if not isinstance(getattr(self, chave), list):
+                setattr(self, chave, None)
+        for chave in ("idioma_proprio", "nome_proprio"):
+            if not isinstance(getattr(self, chave), str):
+                setattr(self, chave, "")
 
     def update(self) -> None:
         self.atualizado.emit()

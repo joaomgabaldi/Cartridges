@@ -191,6 +191,18 @@
     <key name="pasta-dos-saves" type="s">
       <default>""</default>
     </key>
+    <!-- Nome e idioma do jogador aplicados aos .ini dos emuladores de Steam de
+         cada jogo. Vazio quer dizer "não alterar". -->
+    <key name="nome-do-jogador" type="s">
+      <default>""</default>
+    </key>
+    <key name="idioma-do-jogador" type="s">
+      <default>""</default>
+    </key>
+    <!-- A varredura única dos .ini dos jogos já existentes foi feita. -->
+    <key name="inis-varridos" type="b">
+      <default>false</default>
+    </key>
   </schema>
 
   <schema id="@APP_ID@.State" path="@PREFIX@/State/">

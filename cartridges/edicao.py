@@ -373,6 +373,8 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
     appid_final = appid_digitado if appid_digitado != appid_inicial or appid_buscado is not None else None
     if appid_final is not None:
         jogo.steam_appid = appid_final or None
+        if appid_digitado != appid_inicial:
+            jogo.appid_manual = bool(appid_final)  # escrito à mão: os .ini não o trocam mais
         if appid_buscado == appid_final:
             # A busca é a mesma da importação: o jogo fica em dia e o "só o que falta" não volta a ele.
             jogo.steam_checked = STEAM_METADATA_VERSION

@@ -50,7 +50,8 @@ def test_as_chaves_gravadas_sao_as_da_versao_gtk():
         "process_executable", "track_updates", "update_available_ts",
         "update_dismissed_ts", "update_url", "conquistas", "ludusavi_nome",
         "saves_local_desconhecido_avisado", "backup_dos_saves_desligado",
-        "comando_a_conferir",
+        "comando_a_conferir", "inis", "idioma_proprio", "nome_proprio", "appid_manual",
+        "idiomas_steam",
     )  # fmt: skip
 
 
@@ -423,3 +424,11 @@ def test_jogo_nao_importa_interface():
         check=True,
     )
     assert saida.stdout.strip() == "[]"
+
+
+def test_campos_dos_ini_toleram_tipo_errado():
+    assert _jogo().inis is None and _jogo().idiomas_steam is None
+    assert (_jogo().idioma_proprio, _jogo().nome_proprio, _jogo().appid_manual) == ("", "", False)
+    jogo = _jogo(inis="x", idiomas_steam=3, idioma_proprio=1, nome_proprio=None)
+    assert (jogo.inis, jogo.idiomas_steam, jogo.idioma_proprio, jogo.nome_proprio) == (None, None, "", "")
+    assert _jogo(inis=["a"]).inis == ["a"]

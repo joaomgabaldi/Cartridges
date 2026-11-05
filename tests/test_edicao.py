@@ -323,6 +323,7 @@ PERSISTED_METADATA = {
 # O que a ficha guarda e não é metadado do jogo: identidade, contas do app, o rastreio e o aviso dispensado.
 NOT_GAME_METADATA = {
     "added", "blacklisted", "comando_a_conferir", "executable", "game_id", "install_size", "install_size_ts",
+    "idioma_proprio", "idiomas_steam", "inis", "appid_manual", "nome_proprio",
     "last_played", "name", "playtime", "removed", "shortcut_mtime", "shortcut_path", "source", "track_process",
     "update_dismissed_ts", "version",
 }  # fmt: skip
@@ -727,3 +728,17 @@ def test_edicao_usa_o_temporario_do_save_cover():
     from cartridges.utils import save_cover  # noqa: PLC0415
 
     assert modulo._temporario is save_cover._temporario  # noqa: SLF001
+
+
+def test_appid_digitado_liga_appid_manual_e_apagado_desliga(edicao, store, sgdb):
+    game = jogo(store, 60, steam_appid="620")
+    _aplicar(edicao, game, appid="400")
+    assert game.appid_manual is True
+    _aplicar(edicao, game, appid="")
+    assert game.appid_manual is False and game.steam_appid is None
+
+
+def test_appid_do_campo_intocado_nao_liga_appid_manual(edicao, store, sgdb):
+    game = jogo(store, 61, steam_appid="620")
+    _aplicar(edicao, game)
+    assert game.appid_manual is False
