@@ -280,6 +280,28 @@ def test_falha_na_gravacao_avisa_depois_de_lancar(play, tmp_path, monkeypatch):
     assert avisos[-1] == ("Não foi possível aplicar o idioma e o nome do jogador em Portal.", "")  # depois do "iniciado"
 
 
+def test_cancelado_e_falhou_nao_avisa(play, tmp_path, monkeypatch):
+    executados, fila, soltar = play
+    jogo = _jogo(_pasta(tmp_path))
+    pedidos, avisos = _contar(jogo.procurando_inis), _contar(jogo.aviso)
+    monkeypatch.setattr(varredura, "procurar_jogo", lambda j, **k: aplicacao.FALHOU)
+    jogo.launch()
+    _um(fila)
+    pedidos[0][1]()
+    soltar()
+    assert executados == [] and avisos == []
+
+
+def test_play_nao_consulta_a_steam(play, tmp_path, monkeypatch):
+    executados, fila, soltar = play
+    chamadas = []
+    monkeypatch.setattr(varredura, "_buscar_idiomas", chamadas.append)
+    jogo = _jogo(_pasta(tmp_path), steam_appid="10")
+    jogo.launch()
+    soltar()
+    assert chamadas == [] and len(executados) == 1
+
+
 def test_jogo_que_saiu_da_biblioteca_nao_abre(play, tmp_path, store):
     executados, fila, soltar = play
     pasta = _pasta(tmp_path)

@@ -327,7 +327,7 @@ class Jogo(QObject):
     def _nova_rodada(self, ao_confirmar: Optional[Callable[[], Any]]) -> None:
         """Uma decisão sobre a mesma busca: só a rodada mais recente lança quando ela termina."""
         ref = weakref.ref(self)  # quem guarda as respostas (a ponte) não prende o jogo
-        rodada = {"decidido": False}
+        rodada = {"decidido": False, "cancelado": False}
 
         def jogar() -> None:
             if rodada["decidido"] or (j := ref()) is None:
@@ -340,7 +340,7 @@ class Jogo(QObject):
                 j._inis_conferidos = False
 
         def cancelar() -> None:
-            rodada["decidido"] = True
+            rodada["decidido"] = rodada["cancelado"] = True
 
         self._rodada = (rodada, jogar, cancelar)
 
@@ -356,7 +356,7 @@ class Jogo(QObject):
         if self.removed or (shared.store is not None and shared.store.get(self.game_id) is not self):
             return
         self._rodada[1]()
-        if falhou:
+        if falhou and not self._rodada[0]["cancelado"]:  # jogo que não abriu não leva aviso
             self._avisar(_("Não foi possível aplicar o idioma e o nome do jogador em {}."))
 
     def _conferir_inis(self, ao_confirmar: Optional[Callable[[], Any]]) -> None:
@@ -374,7 +374,7 @@ class Jogo(QObject):
                 if resultado == aplicacao.FALTANDO and busca.raiz_do_jogo(self.executable, []) is not None:
                     na_thread_principal(self._mostrar_preparo)
                     # Adota o AppID como a varredura; só grava o jogo se ele ainda está na biblioteca.
-                    resultado = varredura.procurar_jogo(self)
+                    resultado = varredura.procurar_jogo(self, buscar_idiomas=False)  # o play não espera a Steam
             except Exception:  # noqa: BLE001
                 logging.exception("Falha ao conferir os .ini de %s", self.name)
             na_thread_principal(self._fim_da_conferencia, resultado == aplicacao.FALHOU)

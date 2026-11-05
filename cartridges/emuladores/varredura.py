@@ -49,12 +49,12 @@ def _buscar_idiomas(jogo: Jogo) -> None:
     jogo.idiomas_steam = dados.get("idiomas_steam")
 
 
-def _varrer_um(jogo: Jogo) -> tuple[bool, Optional[str]]:
+def _varrer_um(jogo: Jogo, buscar_idiomas: bool = True) -> tuple[bool, Optional[str]]:
     """(o AppID do jogo mudou, o resultado de `aplicar_no_jogo` ou None se houve erro)."""
     antes = (jogo.inis, jogo.steam_appid, jogo.idiomas_steam)
     try:
         mudou = aplicacao.adotar_appid(jogo, aplicacao.atualizar_inis(jogo, aplicacao.executaveis_dos_outros(jogo)))
-        if jogo.inis and jogo.steam_appid and jogo.idiomas_steam is None:
+        if buscar_idiomas and jogo.inis and jogo.steam_appid and jogo.idiomas_steam is None:
             _buscar_idiomas(jogo)
         resultado = aplicacao.aplicar_no_jogo(jogo)
     except Exception:  # noqa: BLE001  (um jogo com problema não pode parar a varredura única)
@@ -77,12 +77,12 @@ def _despachar(mudados: list[Jogo]) -> None:
     na_thread_principal(get_metadata_refresh().start, mudados)
 
 
-def procurar_jogo(jogo: Jogo) -> Optional[str]:
+def procurar_jogo(jogo: Jogo, *, buscar_idiomas: bool = True) -> Optional[str]:
     """Procura os .ini de um jogo fora da varredura (jogo novo, executável trocado, play), adota o AppID e aplica.
 
     Roda numa thread de trabalho. Devolve o resultado de `aplicar_no_jogo` (None se houve erro).
     """
-    mudou, resultado = _varrer_um(jogo)
+    mudou, resultado = _varrer_um(jogo, buscar_idiomas)
     if mudou:
         _despachar([jogo])
     return resultado
