@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 import requests
-from PySide6.QtCore import QMetaObject, Qt
+from PySide6.QtCore import QMetaObject, QPointF, Qt
 from PySide6.QtTest import QTest
 
 from cartridges import shared
@@ -680,3 +680,36 @@ def test_controle_alcanca_o_link_da_linha_aberta_e_o_a_o_abre(janela, feed, monk
     assert primeira.property("aberta") is True and len(abertos) == 1, "o A abre o link, não recolhe a linha"
     controle.mover.emit(0, -1)
     assert esperar(lambda: primeira.property("activeFocus") is True)
+
+
+def test_cartao_acompanha_as_linhas(janela, feed):
+    """O cartão começa na primeira linha e termina na última."""
+    feed.posts = [post(300 - i, titulo=f"T{i}") for i in range(5)]
+    _abrir_a_pagina(janela)
+    assert esperar(lambda: len(_posts_na_lista(janela)) == 5)
+    lista = janela.achar("listaDasNovidades")
+    linhas = sorted(_posts_na_lista(janela), key=lambda i: i.property("y"))
+    cartao = achar(lista, "cartaoDasNovidades")
+    topo = cartao.mapToScene(QPointF(0, 0)).y()
+    assert topo == pytest.approx(linhas[0].mapToScene(QPointF(0, 0)).y())
+    fim = linhas[-1].mapToScene(QPointF(0, linhas[-1].property("height"))).y()
+    assert topo + cartao.property("height") == pytest.approx(fim)
+
+
+def test_clique_fora_do_cartao_nao_vaza_para_a_biblioteca(janela, feed):
+    """A margem ao lado do cartão é da página: o clique não atravessa a pilha até a capa de baixo."""
+    feed.posts = [post(200, titulo="Alfa")]
+    _abrir_a_pagina(janela)
+    assert esperar(lambda: len(_posts_na_lista(janela)) == 1)
+    pagina = janela.achar("paginaDasNovidades")
+    lista = janela.achar("listaDasNovidades")
+    ponto = lista.mapToScene(QPointF(-6, 40)).toPoint()
+    assert ponto.x() > 0
+    QTest.mousePress(janela.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
+    try:
+        dono = janela.janela.mouseGrabberItem()
+        while dono is not None and dono != pagina:
+            dono = dono.parentItem()
+        assert dono == pagina
+    finally:
+        QTest.mouseRelease(janela.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
