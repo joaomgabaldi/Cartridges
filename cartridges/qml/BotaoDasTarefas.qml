@@ -182,7 +182,8 @@ Item {
             color: circulo.down ? Qt.rgba(0.25, 0.25, 0.25, 0.65)
                 : circulo.hovered ? Qt.rgba(0.15, 0.15, 0.15, 0.65) : Qt.rgba(0, 0, 0, 0.65)
             Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
-            Sombra { camadas: [[2, 8, 0, 0, 0, 0, 0.35]]; raio: parent.radius }
+            // Sem deslocamento: os anéis deslocados deixam uma meia-lua sob o círculo translúcido, que parece uma borda.
+            Sombra { camadas: [[0, 8, 0, 0, 0, 0, 0.3]]; raio: parent.radius }
         }
         AnelDeFoco { ativo: circulo.visualFocus; raio: 17; afastamento: 1 }
 
