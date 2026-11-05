@@ -79,14 +79,63 @@ def test_reaplicar_pula_jogo_com_idioma_proprio(store, tmp_path, schema):
     assert b"Language=english" in (pa / "steam_emu.ini").read_bytes()
 
 
-def test_reaplicar_nova_cancela_a_anterior(store, tmp_path, schema, monkeypatch):
-    schema.set_string("nome-do-jogador", "Ana")
+def test_reaplicar_nova_cancela_a_anterior(store, monkeypatch):
+    import threading  # noqa: PLC0415
+
+    preso, solto = threading.Event(), threading.Event()
     vistos = []
-    monkeypatch.setattr(varredura, "_reaplicar_um", lambda j: vistos.append(j))
-    jogo = _jogo("x.exe", inis=["a.ini"])
-    varredura.reaplicar([jogo]).join()
+
+    def um(jogo):
+        vistos.append(jogo.game_id)
+        if jogo.game_id == "a":
+            preso.set()
+            solto.wait(5)
+
+    monkeypatch.setattr(varredura, "_reaplicar_um", um)
+    jogos = [_jogo("x.exe", jid, inis=["a.ini"]) for jid in ("a", "b", "c")]
+    primeira = varredura.reaplicar(jogos)
+    assert preso.wait(5)
+    primeiro_cancelar = varredura._cancelar_reaplicacao
+    assert not primeiro_cancelar.is_set()
+    segunda = varredura.reaplicar([])
+    assert primeiro_cancelar.is_set()  # foi o `reaplicar` quem cancelou
+    solto.set()
+    primeira.join()
+    segunda.join()
+    assert vistos == ["a"]
+
+
+def test_reaplicar_so_nome_processa_jogo_so_com_idioma_proprio(store, monkeypatch):
+    vistos = []
+    monkeypatch.setattr(varredura, "_reaplicar_um", vistos.append)
+    jogo = _jogo("x.exe", inis=["a.ini"], idioma_proprio="french")
+    varredura.reaplicar([jogo], ("nome",)).join()
     assert vistos == [jogo]
-    varredura._cancelar_reaplicacao.set()  # a seguinte marcaria isto
-    antigo = varredura._cancelar_reaplicacao
-    varredura.reaplicar([jogo]).join()
-    assert antigo.is_set()
+
+
+def test_varrer_erro_num_jogo_nao_para_a_varredura(store, tmp_path, monkeypatch, refresh):
+    chamadas, ligados = refresh
+    ruim = _jogo(_pasta(tmp_path, "A") / "j.exe", "shortcuts_1", steam_appid="10")
+    bom = _jogo(_pasta(tmp_path, "B") / "j.exe", "shortcuts_2", steam_appid="10")
+    store.add_game(ruim, {}, run_pipeline=False)
+    store.add_game(bom, {}, run_pipeline=False)
+    original = varredura.aplicacao.atualizar_inis
+
+    def falha_no_primeiro(jogo, outros):
+        if jogo is ruim:
+            raise ValueError("boom")
+        return original(jogo, outros)
+
+    monkeypatch.setattr(varredura.aplicacao, "atualizar_inis", falha_no_primeiro)
+    varredura.varrer([ruim, bom]).join()
+    assert bom.steam_appid == "620"
+    assert chamadas == [[bom]] and ligados == [bom]
+    assert shared.schema.get_boolean("inis-varridos")
+
+
+def test_varrer_nao_salva_jogo_que_saiu_da_store(store, tmp_path, monkeypatch, refresh):
+    salvos = []
+    monkeypatch.setattr(Jogo, "save", lambda self: salvos.append(self))
+    fora = _jogo(_pasta(tmp_path) / "j.exe")  # nunca entrou na store
+    varredura.varrer([fora]).join()
+    assert fora.steam_appid == "620" and salvos == []

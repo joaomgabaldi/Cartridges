@@ -30,6 +30,7 @@ from cartridges.modelos import tarefas
 from cartridges.utils.thread_principal import na_thread_principal
 
 _cancelar_reaplicacao: Optional[threading.Event] = None
+_espera = None  # o QTimer do debounce, vivo enquanto o app
 
 
 def _da_biblioteca(jogo: Jogo) -> bool:
@@ -56,8 +57,8 @@ def _varrer_um(jogo: Jogo) -> bool:
         if jogo.inis and jogo.steam_appid and jogo.idiomas_steam is None:
             _buscar_idiomas(jogo)
         aplicacao.aplicar_no_jogo(jogo)
-    except OSError as erro:
-        logging.warning("Falha ao varrer os .ini de %s: %s", jogo.name, erro)
+    except Exception:  # noqa: BLE001  (um jogo com problema não pode parar a varredura única)
+        logging.exception("Falha ao varrer os .ini de %s", jogo.name)
         return False
     if (jogo.inis, jogo.steam_appid, jogo.idiomas_steam) != antes and _da_biblioteca(jogo):
         jogo.save()
@@ -76,14 +77,14 @@ def _rodar_varredura(jogos: list[Jogo]) -> None:
         tarefa.terminar()
         # Marcada mesmo com falha: tentar de novo a cada abertura prenderia o app numa varredura que não termina.
         shared.schema.set_boolean("inis-varridos", True)
-    if mudados:
-        from cartridges.metadata_refresh import get_metadata_refresh  # noqa: PLC0415
-        from cartridges.utils import ligacao_zerado  # noqa: PLC0415
+        if mudados:
+            from cartridges.metadata_refresh import get_metadata_refresh  # noqa: PLC0415
+            from cartridges.utils import ligacao_zerado  # noqa: PLC0415
 
-        # O Steam do refresh não veria mudança (o AppID já foi trocado): a ligação com o zerado é pedida aqui.
-        for jogo in mudados:
-            ligacao_zerado.agendar(jogo)
-        na_thread_principal(get_metadata_refresh().start, mudados)
+            # O Steam do refresh não veria mudança (o AppID já foi trocado): a ligação com o zerado é pedida aqui.
+            for jogo in mudados:
+                ligacao_zerado.agendar(jogo)
+            na_thread_principal(get_metadata_refresh().start, mudados)
 
 
 def _da_lista(jogos: Iterable[Jogo]) -> list[Jogo]:
@@ -100,8 +101,8 @@ def varrer(jogos: list[Jogo]) -> threading.Thread:
 def _reaplicar_um(jogo: Jogo) -> None:
     try:
         aplicacao.aplicar_no_jogo(jogo)
-    except OSError as erro:
-        logging.warning("Falha ao gravar os .ini de %s: %s", jogo.name, erro)
+    except Exception:  # noqa: BLE001
+        logging.exception("Falha ao gravar os .ini de %s", jogo.name)
 
 
 def _rodar_reaplicacao(jogos: list[Jogo], cancelar: threading.Event) -> None:
@@ -139,15 +140,19 @@ def _jogos_da_biblioteca() -> list[Jogo]:
 
 def ligar_ao_app() -> None:
     """Chamada na thread principal depois da carga: a varredura única e a reaplicação quando o padrão muda."""
+    global _espera  # noqa: PLW0603
+    if _espera is not None:
+        return
     from PySide6.QtCore import QTimer  # noqa: PLC0415
 
     mudados: set[str] = set()
-    espera = QTimer()
+    _espera = espera = QTimer()
     espera.setSingleShot(True)
     espera.setInterval(800)  # a linha de texto avisa a cada tecla
 
     def disparar() -> None:
-        campos, _ = list(mudados), mudados.clear()
+        campos = list(mudados)
+        mudados.clear()
         reaplicar(_jogos_da_biblioteca(), campos)
 
     espera.timeout.connect(disparar)
@@ -158,6 +163,5 @@ def ligar_ao_app() -> None:
 
     shared.schema.connect("changed::nome-do-jogador", lambda *_: mudou("nome"))
     shared.schema.connect("changed::idioma-do-jogador", lambda *_: mudou("idioma"))
-    ligar_ao_app.espera = espera  # o QTimer vive enquanto o app
     if not shared.schema.get_boolean("inis-varridos"):
         varrer(_jogos_da_biblioteca())
