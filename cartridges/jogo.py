@@ -126,6 +126,7 @@ class Jogo(QObject):
     # Uma conferência dos .ini em andamento; e o uso único que deixa o relançamento dela passar sem conferir de novo.
     _conferindo: bool = False
     _procurando: bool = False  # a busca começou e o diálogo foi pedido
+    _launch_iniciou: bool = False  # o `launch` mais recente foi o que começou a conferência
     _inis_conferidos: bool = False
     _rodada: Any = None  # ({"decidido"}, jogar, cancelar) da decisão mais recente
     filtered: bool = False
@@ -315,8 +316,8 @@ class Jogo(QObject):
 
     @property
     def conferindo_inis(self) -> bool:
-        """A conferência dos .ini está no caminho rápido: o jogo abre em instantes, sem o diálogo."""
-        return self._conferindo and not self._procurando
+        """A conferência que o último `launch` começou está no caminho rápido: o jogo abre em instantes, sem o diálogo."""
+        return self._launch_iniciou and self._conferindo and not self._procurando
 
     @property
     def inis_conferidos(self) -> bool:
@@ -363,6 +364,7 @@ class Jogo(QObject):
         from cartridges.emuladores import aplicacao, busca, varredura  # noqa: PLC0415
 
         self._conferindo, self._procurando = True, False
+        self._launch_iniciou = True
         self._nova_rodada(ao_confirmar)
 
         def conferir() -> None:
@@ -389,6 +391,7 @@ class Jogo(QObject):
         from cartridges.saves import backup_de_saves  # noqa: PLC0415
 
         conferidos, self._inis_conferidos = inis_conferidos or self._inis_conferidos, False
+        self._launch_iniciou = False  # um launch ignorado não deixa quem o chamou esperando a conferência de outro
         # Antes do comando a conferir: o jogo não abre no meio da restauração dos saves dele.
         if backup_de_saves.restaurando(self):
             self._avisar(_("Aguarde o fim da restauração dos saves de {}."))

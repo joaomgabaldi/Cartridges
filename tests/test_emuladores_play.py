@@ -312,3 +312,14 @@ def test_gse_sem_configs_user_ini_abre_sem_dialogo_e_cria(play, tmp_path):
     soltar()
     assert pedidos == [] and len(executados) == 1
     assert b"account_name=Fulano" in gse.read_bytes()
+
+
+def test_conferindo_inis_so_para_o_launch_que_a_comecou(play, tmp_path):
+    """Um launch ignorado (Big Picture com a conferência de outro clique em curso) não fica esperando o relançamento."""
+    executados, fila, soltar = play
+    pasta = _pasta(tmp_path)
+    jogo = _jogo(pasta, inis=[str(pasta / "steam_emu.ini")])
+    assert jogo.launch() is False and jogo.conferindo_inis is True
+    assert jogo.launch() is False and jogo.conferindo_inis is False
+    soltar()
+    assert len(executados) == 1

@@ -940,7 +940,7 @@ def test_conferencia_rapida_dos_inis_anima_uma_vez(abrivel):
     a = abrivel
     jogo = a.jogos["b"]
     launch = jogo.launch
-    launch.devolve, launch.efeito = False, lambda: setattr(jogo, "_conferindo", True)
+    launch.devolve, launch.efeito = False, lambda: jogo.__dict__.update(_conferindo=True, _launch_iniciou=True)
     _ida(a)
     assert a.bp.ocupada and a.aberturas == [(0.0, 1.0)]  # a capa fica aberta esperando a conferência
     launch.devolve, launch.efeito = True, None
@@ -950,11 +950,21 @@ def test_conferencia_rapida_dos_inis_anima_uma_vez(abrivel):
     assert a.aberturas.count((0.0, 1.0)) == 1
 
 
+def test_launch_ignorado_durante_outra_conferencia_nao_deixa_esperando(abrivel):
+    """A conferência começou por outro clique: o launch da Big Picture é ignorado e a capa volta."""
+    a = abrivel
+    jogo = a.jogos["b"]
+    launch = jogo.launch
+    launch.devolve, launch.efeito = False, lambda: jogo.__dict__.update(_conferindo=True, _launch_iniciou=False)
+    _ida(a)
+    assert not a.bp.ocupada and a.aberturas == [(0.0, 1.0), (1.0, 0.0)]
+
+
 def test_conferencia_com_dialogo_devolve_a_capa(abrivel):
     a = abrivel
     jogo = a.jogos["b"]
     launch = jogo.launch
-    launch.devolve, launch.efeito = False, lambda: setattr(jogo, "_conferindo", True)
+    launch.devolve, launch.efeito = False, lambda: jogo.__dict__.update(_conferindo=True, _launch_iniciou=True)
     _ida(a)
     jogo.procurando_inis.emit(lambda: None, lambda: None)
     assert not a.bp.ocupada and a.aberturas == [(0.0, 1.0), (1.0, 0.0)]
