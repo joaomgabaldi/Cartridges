@@ -77,12 +77,15 @@ def test_aplicar_sem_valores_nao_toca_o_disco(schema, tmp_path):
 def test_aplicar_somente_leitura_nao_levanta(schema, tmp_path, caplog):
     schema.set_string("nome-do-jogador", "Ana")
     bloqueado, livre = _ini(tmp_path / "a"), _ini(tmp_path / "b")
+    original = bloqueado.read_bytes()
     os.chmod(bloqueado, stat.S_IREAD)
     try:
         assert aplicacao.aplicar_no_jogo(_jogo(inis=[str(bloqueado), str(livre)])) is True
     finally:
         os.chmod(bloqueado, stat.S_IWRITE | stat.S_IREAD)
     assert b"UserName=Ana" in livre.read_bytes()
+    assert bloqueado.read_bytes() == original
+    assert [r.levelname for r in caplog.records].count("WARNING") == 1
 
 
 def test_modelo_do_language_changer_com_marcador_so_muda_o_nome(schema, tmp_path):
@@ -109,7 +112,9 @@ def test_atualizar_inis_grava_lista_e_devolve_appid(tmp_path):
 
 def test_adotar_appid(tmp_path):
     jogo = _jogo(steam_appid="10", ludusavi_nome="X", saves_local_desconhecido_avisado=True)
+    jogo.idiomas_steam = ["german"]
     assert aplicacao.adotar_appid(jogo, "620") is True
+    assert jogo.idiomas_steam is None
     assert (jogo.steam_appid, jogo.ludusavi_nome, jogo.saves_local_desconhecido_avisado) == ("620", "", False)
     assert aplicacao.adotar_appid(jogo, "620") is False
     assert aplicacao.adotar_appid(jogo, None) is False

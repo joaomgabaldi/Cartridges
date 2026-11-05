@@ -270,7 +270,8 @@ class Jogo(QObject):
             setattr(self, key, value)
         # Registro editado à mão: valor de tipo errado volta ao padrão em vez de derrubar quem o usa.
         for chave in ("inis", "idiomas_steam"):
-            if not isinstance(getattr(self, chave), list):
+            valor = getattr(self, chave)
+            if not isinstance(valor, list) or not all(isinstance(i, str) for i in valor):
                 setattr(self, chave, None)
         for chave in ("idioma_proprio", "nome_proprio"):
             if not isinstance(getattr(self, chave), str):

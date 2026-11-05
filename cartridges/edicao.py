@@ -382,6 +382,7 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
             # O nome no Ludusavi veio do appID antigo: o próximo backup o procura de novo, e o aviso de local desconhecido pode reaparecer.
             jogo.ludusavi_nome = ""
             jogo.saves_local_desconhecido_avisado = False
+            jogo.idiomas_steam = buscado.get("idiomas_steam")  # os do AppID anterior não valem
     # Depois do appID: o jogo escolhido à mão ganha do zeramento causado por ele.
     if form.ludusavi_escolhido is not None:
         jogo.ludusavi_nome = form.ludusavi_escolhido

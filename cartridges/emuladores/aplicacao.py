@@ -77,6 +77,7 @@ def adotar_appid(jogo, appid: Optional[str]) -> bool:
     if not appid or jogo.appid_manual or appid == jogo.steam_appid:
         return False
     jogo.steam_appid = appid
+    jogo.idiomas_steam = None  # eram os do AppID anterior
     jogo.ludusavi_nome = ""
     jogo.saves_local_desconhecido_avisado = False
     return True

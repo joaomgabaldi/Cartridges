@@ -738,6 +738,16 @@ def test_appid_digitado_liga_appid_manual_e_apagado_desliga(edicao, store, sgdb)
     assert game.appid_manual is False and game.steam_appid is None
 
 
+def test_mudar_appid_descarta_idiomas_do_anterior(edicao, store, sgdb):
+    game = jogo(store, 62, steam_appid="620", idiomas_steam=["german"])
+    _aplicar(edicao, game, appid="400")
+    assert game.idiomas_steam is None
+    form = edicao.Formulario.do_jogo(game)
+    _buscar(form, "10", idiomas_steam=["french"])
+    edicao.aplicar(form, game, "400")
+    assert game.idiomas_steam == ["french"]
+
+
 def test_appid_do_campo_intocado_nao_liga_appid_manual(edicao, store, sgdb):
     game = jogo(store, 61, steam_appid="620")
     _aplicar(edicao, game)

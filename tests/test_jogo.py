@@ -432,3 +432,4 @@ def test_campos_dos_ini_toleram_tipo_errado():
     jogo = _jogo(inis="x", idiomas_steam=3, idioma_proprio=1, nome_proprio=None)
     assert (jogo.inis, jogo.idiomas_steam, jogo.idioma_proprio, jogo.nome_proprio) == (None, None, "", "")
     assert _jogo(inis=["a"]).inis == ["a"]
+    assert _jogo(inis=["a", 3]).inis is None
