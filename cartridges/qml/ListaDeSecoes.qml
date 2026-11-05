@@ -35,7 +35,8 @@ Rectangle {
     // Ao abrir numa seção abaixo da dobra (janela muito baixa), traz o item atual à vista.
     function mostrarAtual() {
         var k = secoes.findIndex(s => s.id === secao)
-        if (k >= 0) mostrarItem(repetidor.itemAt(k))
+        var item = k >= 0 ? repetidor.itemAt(k) : null  // sem delegates ainda, não há o que mostrar
+        if (item) mostrarItem(item)
     }
     function irPara(indice) {
         if (indice >= 0 && indice < secoes.length) repetidor.itemAt(indice).forceActiveFocus(Qt.TabFocusReason)
