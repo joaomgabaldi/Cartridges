@@ -100,6 +100,7 @@ def _aberto_com(monkeypatch, animacoes=True, quantidade=4):
     from tests.apoio_qml_biblioteca import _App, _jogos  # noqa: PLC0415
 
     monkeypatch.setattr(modulo, "tem_3d", lambda _janela: True)
+    monkeypatch.setattr(shared, "store", shared.store)  # a store falsa do `_App` não passa deste teste
     jogos = _jogos(*((n, f"Jogo {n}", {"last_played": 100 - n}) for n in range(quantidade)))
     app = _App(jogos, animacoes=animacoes)
     app.big_picture.definir_janela(app.janela)

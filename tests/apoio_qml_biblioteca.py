@@ -134,6 +134,8 @@ class _App:
         self.edicao = ModeloDaEdicao(self.aplicativo)
         self.historico = HistoricoDeSessoes(self.loja)
         # O `SavesDoJogo` liga o `jogo_excluido` da store; uma store de verdade, posta por quem importa o `_App`, fica.
+        # A falsa sai no `fechar`: deixada, os testes de outros arquivos achariam os jogos daqui.
+        self._store_de_antes = shared.store
         if not hasattr(shared.store, "jogo_excluido"):
             shared.store = self.loja
         self.saves = SavesDoJogo(self.aplicativo)
@@ -193,6 +195,8 @@ class _App:
     def fechar(self):
         self.janela.close()
         self.janela.deleteLater()
+        if shared.store is self.loja:
+            shared.store = self._store_de_antes
 
 
 def _tres():
