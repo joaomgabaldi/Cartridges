@@ -492,6 +492,7 @@ def _marcar_comandos_a_conferir() -> None:
             continue
         if isinstance(dados, dict) and dados.get("executable"):
             dados["comando_a_conferir"] = True
+            dados["inis"] = None  # caminhos de outro PC ou de outra instalação: procurados de novo
             gravar_atomico(arquivo, json.dumps(dados, indent=4, sort_keys=True))
 
 

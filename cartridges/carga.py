@@ -70,6 +70,7 @@ _GAME_FIELD_TYPES: dict[str, Any] = {
             "saves_local_desconhecido_avisado",
             "backup_dos_saves_desligado",
             "comando_a_conferir",
+            "appid_manual",
         ),
         bool,
     ),

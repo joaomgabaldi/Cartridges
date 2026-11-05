@@ -184,3 +184,9 @@ def test_file_manager_grava_exatamente_as_chaves_da_ficha(app_dirs):
 
     assert set(json.loads(texto)) == set(PERSISTED_ATTRS)
     assert texto.startswith('{\n    "added": 0,')  # indent=4, sort_keys
+
+
+def test_appid_manual_de_tipo_errado_cai_no_saneador():
+    for ruim in ("false", None, 0, "sim"):
+        assert "appid_manual" not in sanitize_game_fields({"appid_manual": ruim}, "p.json"), ruim
+    assert sanitize_game_fields({"appid_manual": True}, "p.json") == {"appid_manual": True}

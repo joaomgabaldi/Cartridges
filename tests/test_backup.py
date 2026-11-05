@@ -1058,7 +1058,7 @@ def test_restaurar_marca_os_comandos_a_conferir(tmp_path, monkeypatch):
     monkeypatch.setattr(backup, "aplicar_configuracoes", lambda _c: None)
     _encher_pasta_do_app()
     (shared.games_dir / "imported_1.json").write_text(
-        json.dumps({"game_id": "imported_1", "source": "imported", "name": "M", "executable": "x"}),
+        json.dumps({"game_id": "imported_1", "source": "imported", "name": "M", "executable": "x", "inis": ["C:/a.ini"]}),
         encoding="utf-8",
     )
     destino = _exportar(tmp_path)
@@ -1070,6 +1070,7 @@ def test_restaurar_marca_os_comandos_a_conferir(tmp_path, monkeypatch):
 
     dados = json.loads((shared.games_dir / "imported_1.json").read_text("utf-8"))
     assert dados["comando_a_conferir"] is True
+    assert dados["inis"] is None
 
 
 def test_restaurar_mantem_a_conta_microsoft_deste_pc(tmp_path, monkeypatch):
