@@ -4,17 +4,8 @@
 
 """Checks for the HowLongToBeat integration.
 
-Runnable without the GTK stack — ``cartridges.utils.hltb`` imports nothing from
-the app beyond the title matcher and the rate limiter::
-
-    python3 tests/test_hltb.py
-
-Only ``requests.Session`` is faked; the credential handshake, title matching
-and parsing all run as production code. The fixtures are **verbatim live
-responses** captured from howlongtobeat.com, not invented ones — an earlier
-version of this integration passed a full suite built on a guessed API shape
-and then failed against the real site, so the fixtures being real is the point
-of the exercise.
+Only ``requests.Session`` is faked; the credential handshake, title matching and parsing run as production code.
+The fixtures are **verbatim live responses** captured from howlongtobeat.com, not invented ones.
 """
 
 import builtins
@@ -44,9 +35,6 @@ from cartridges.utils.hltb import (  # noqa: E402
     parse_entry,
 )
 
-# --------------------------------------------------------------------------
-# Live fixtures
-# --------------------------------------------------------------------------
 
 # What GET <INIT_URL> answers since 23/09/2026. The token is base64 of
 # "<ms>::<ip>|<user-agent>|..." — hence bound to the session.
@@ -152,12 +140,7 @@ class FakeResponse:
         return self._payload
 
     def iter_content(self, chunk_size=65536):
-        """O que o requests entrega em stream: o corpo, em pedaços.
-
-        O helper passou a ler todo corpo via ``_read_capped`` (stream com teto)
-        em vez de ``.json()``/``.text`` — o fake entrega os mesmos bytes que o
-        real entregaria.
-        """
+        """O que o requests entrega em stream: o corpo, em pedaços."""
         body = (
             json.dumps(self._payload).encode("utf-8")
             if self._payload is not None
@@ -212,10 +195,7 @@ class FakeSession:
 
     def get(self, url, params=None, timeout=None, stream=None):
         self.gets.append(url)
-        # Casado com a constante do modulo, e nao com o caminho escrito a mao:
-        # o HowLongToBeat renomeia o endpoint de tempos em tempos, e um literal
-        # aqui derrubava estes testes todos junto — dando 23 falhas vermelhas
-        # para uma correcao de duas linhas que ja estava certa.
+        # Casado com a constante do módulo, e não com o caminho escrito à mão: o HowLongToBeat renomeia o endpoint de tempos em tempos.
         if hltb_module.INIT_URL in url:
             self.inits += 1
             self.uses_of_current_token = 0
@@ -237,9 +217,7 @@ class FakeSession:
 
         if self.search_status != 200:
             return FakeResponse(status_code=self.search_status, text="denied")
-        # Simulate a token that ages out after N uses. The counter is per
-        # credential — a fresh one has to work again, otherwise the fixture
-        # would be testing an outage rather than an expiry.
+        # A token that ages out after N uses, counted per credential: a fresh one has to work again.
         if self.token_uses is not None and self.uses_of_current_token > self.token_uses:
             return FakeResponse(status_code=403, text="denied")
         return FakeResponse(payload={**SEARCH_RESPONSE, "data": list(self.results)})
@@ -259,11 +237,7 @@ def make_helper(session):
     helper._session = session  # pylint: disable=protected-access
     helper._credential = None  # pylint: disable=protected-access
     helper._credential_lock = threading.Lock()  # pylint: disable=protected-access
-    # The circuit breaker's state. Built by hand like the rest, because this
-    # bypasses __init__ to avoid opening a real session — which means every
-    # field the helper gains has to be added here too, and the breaker's was
-    # not: `search` calls `_breaker_check` first, so every test that reached
-    # the network path died on a missing attribute instead of testing anything.
+    # The circuit breaker's state, built by hand because this bypasses __init__: every field the helper gains has to be added here too.
     helper._breaker_lock = threading.Lock()  # pylint: disable=protected-access
     helper._failures = 0  # pylint: disable=protected-access
     helper._blocked_until = 0.0  # pylint: disable=protected-access
@@ -378,15 +352,7 @@ class TestResolve(unittest.TestCase):
             make_helper(session).resolve("The Outer Worlds")
 
     def test_named_rerelease_is_not_adopted_on_its_own(self):
-        """"Spacer's Choice Edition" is reported as related, never adopted.
-
-        Tempting to call this over-strict — it is the same game re-packaged.
-        But the live numbers say otherwise: the re-release takes 63213 s to
-        finish against the original's 47991, a 4-hour difference. Showing one
-        for the other would be wrong data, so leaving the block empty is the
-        better failure. (A plain "Definitive Edition" *is* accepted; it is the
-        content-naming subtitle that disqualifies this one.)
-        """
+        """"Spacer's Choice Edition" is reported as related, never adopted: its times differ by hours from the original's (63213 s vs 47991 s), so showing one for the other would be wrong data."""
         session = FakeSession(results=[SEARCH_RESULTS[1]])
         with self.assertRaises(HLTBGameNotFoundError):
             make_helper(session).resolve("The Outer Worlds")
@@ -460,12 +426,7 @@ class TestGamePageFallback(unittest.TestCase):
 
 
 class TestFetchTimes(unittest.TestCase):
-    """The routing every caller shares: known id first, title search after.
-
-    All three entry points — the import pipeline, the startup backfill and the
-    button in the details dialog — go through `fetch_times`, so these checks are
-    what stops them from drifting into three different answers for one game.
-    """
+    """The routing every caller shares: known id first, title search after (import, backfill and details button all go through `fetch_times`)."""
 
     def test_known_id_skips_the_search(self):
         session = FakeSession()
@@ -502,11 +463,7 @@ class TestFetchTimes(unittest.TestCase):
             fetch_times(make_helper(session), "The Outer Worlds")
 
     def test_curly_apostrophe_is_folded_before_searching(self):
-        """The regression: "Assassin’s Creed Shadows" found nothing at all.
-
-        The matcher was never the problem — the search term was, and the terms
-        posted are what this pins down.
-        """
+        """The regression: "Assassin’s Creed Shadows" found nothing at all; the search term was the problem, and the terms posted are what this pins down."""
         session = FakeSession(
             results=[
                 {
@@ -525,11 +482,8 @@ class TestFetchTimes(unittest.TestCase):
         )
 
 
-# The five entries POST <SEARCH_URL> returns for "Poppy Playtime", captured live,
-# in the order it returns them. The `game_type` column is the whole reason this
-# fixture exists: only chapter 1 is a "game", every later chapter is filed as
-# "dlc" of it. The ordinary type filter therefore threw away four of the five,
-# which is exactly how this game ended up with no times at all.
+# The five entries POST <SEARCH_URL> returns for "Poppy Playtime", captured live, in order. Only chapter 1 is a "game"; later
+# chapters are filed as "dlc" of it, so the ordinary type filter dropped four of the five.
 POPPY_RESULTS = [
     {
         "game_id": 99160,
@@ -577,10 +531,7 @@ POPPY_RESULTS = [
 class TestChapteredGames(unittest.TestCase):
     """Games catalogued only chapter by chapter, e.g. Poppy Playtime.
 
-    The list of such games is hand-written on purpose, so the first thing worth
-    protecting is that nothing else falls into this path: a rule that collected
-    "everything extending this title" would sum a franchise or fold a sequel
-    into its predecessor.
+    The list is hand-written on purpose; nothing else may fall into this path (a franchise summed, a sequel folded into its predecessor).
     """
 
     def test_only_the_listed_titles_take_this_route(self):
@@ -636,8 +587,7 @@ class TestChapteredGames(unittest.TestCase):
         for key in ("hltb_main", "hltb_main_extra", "hltb_completionist"):
             self.assertIsNone(times[key])
         self.assertIsNone(times["hltb_id"])
-        # Still counts as a successful lookup, or the game would be searched
-        # again on every launch.
+        # Still a successful lookup, or the game would be searched again on every launch.
         self.assertTrue(has_times(times))
 
     def test_unrelated_result_is_not_collected(self):
@@ -685,12 +635,7 @@ class TestChapteredGames(unittest.TestCase):
 
 
 class TestBlockVisibility(unittest.TestCase):
-    """The rule CartridgesWindow.update_hltb_block applies to the separators.
-
-    Kept here rather than in the window (which needs GTK) because the bug it
-    guards against is arithmetic: a game with only "main" and "completionist"
-    drawing two dividers for a single gap.
-    """
+    """The separators rule for the times block: a game with only "main" and "completionist" must not draw two dividers for one gap."""
 
     @staticmethod
     def layout(flags):
@@ -710,14 +655,7 @@ class TestBlockVisibility(unittest.TestCase):
         self.assertEqual(self.layout([False, False, False]), ([False, False], False))
 
 
-# ---------------------------------------------------------------------------
-# Circuit breaker (T6.18 - T6.20)
-#
-# Every lookup costs four requests (search + homepage + init + search) and, once
-# the site starts refusing, all four fail and the backfill moves straight on to
-# the next game. A library of a thousand games meant four thousand requests at
-# 40/min against a site that had already said no.
-# ---------------------------------------------------------------------------
+# Circuit breaker: once the site starts refusing, every lookup's four requests fail and the backfill moves on to the next game.
 
 
 class TestCircuitBreaker(unittest.TestCase):
@@ -729,14 +667,14 @@ class TestCircuitBreaker(unittest.TestCase):
         return helper
 
     def test_a_run_of_failures_opens_the_breaker(self) -> None:
-        """T6.18 The next call must not touch the network at all."""
+        """The next call must not touch the network at all."""
         helper = self.make_blocked_helper()
 
         with self.assertRaises(HLTBUnavailableError):
             helper._breaker_check()  # pylint: disable=protected-access
 
     def test_the_breaker_stops_a_real_lookup_before_any_request(self) -> None:
-        """T6.18 Asserted at the seam that matters: no request is made."""
+        """Asserted at the seam that matters: no request is made."""
         session = FakeSession()
         helper = make_helper(session)
         for _ in range(hltb_module._BREAKER_FAILURE_THRESHOLD):
@@ -756,7 +694,7 @@ class TestCircuitBreaker(unittest.TestCase):
         helper._breaker_check()  # pylint: disable=protected-access
 
     def test_the_cooldown_expiring_lets_a_lookup_through(self) -> None:
-        """T6.19 A pause, not a permanent refusal."""
+        """A pause, not a permanent refusal."""
         helper = self.make_blocked_helper()
         # Step past the cooldown rather than waiting fifteen minutes for it.
         helper._blocked_until = (  # pylint: disable=protected-access
@@ -766,7 +704,7 @@ class TestCircuitBreaker(unittest.TestCase):
         helper._breaker_check()  # pylint: disable=protected-access
 
     def test_any_success_closes_the_breaker(self) -> None:
-        """T6.20 The counter tracks whether the site answers, nothing else."""
+        """The counter tracks whether the site answers, nothing else."""
         helper = self.make_blocked_helper()
         helper._breaker_record(ok=True)  # pylint: disable=protected-access
 
@@ -774,12 +712,7 @@ class TestCircuitBreaker(unittest.TestCase):
         self.assertEqual(0, helper._failures)  # pylint: disable=protected-access
 
     def test_a_success_resets_a_partial_run(self) -> None:
-        """T6.20 A miss for one game must not be held against the next.
-
-        Failures have to be *consecutive*, or a library with a few obscure
-        titles scattered through it would trip a breaker that is meant to
-        detect the site being down.
-        """
+        """A miss for one game must not be held against the next: failures have to be *consecutive*, or scattered obscure titles would trip a breaker meant to detect the site being down."""
         helper = make_helper(FakeSession())
         record = helper._breaker_record  # pylint: disable=protected-access
 
@@ -802,9 +735,7 @@ class TestCircuitBreaker(unittest.TestCase):
 
 
 class TestResponseCap(unittest.TestCase):
-    """Auditoria 26/08, B7: os corpos eram lidos inteiros com .json()/.text —
-    o único leitor de rede do app sem teto de bytes. Passar do teto é falha de
-    rede como outra qualquer."""
+    """Os corpos eram lidos inteiros com .json()/.text, sem teto de bytes; passar do teto é falha de rede como outra qualquer."""
 
     def test_an_oversized_page_is_a_network_failure(self):
         session = FakeSession()

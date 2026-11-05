@@ -169,7 +169,7 @@ def test_importar_com_importacao_em_andamento_nao_comeca_outra(fonte, app_qt):
 
 
 def test_retorno_de_uma_importacao_pedida_durante_outra_nao_se_perde(fonte, app_qt):
-    """DA-63: `on_import_action` da `main` sempre guarda o `ao_terminar`; aqui a segunda não roda junta, mas o retorno
+    """`importar` guarda o `ao_terminar` mesmo com uma importação em curso: a segunda não roda junta, mas o retorno
     sai no fim da que está em curso (senão a "Jogos sem atalho" da restauração ficaria travada)."""
     fonte.jogos = _jogos("A")
     app = Aplicativo(FilaRegistrada())
@@ -361,7 +361,7 @@ def test_importados_sao_varridos_em_silencio(fonte, store, app_qt):
 
 
 def test_pendente_resolvido_volta_a_grade(store, app_qt):
-    """D37: o modelo só avalia a pendência em `atualizar`; resolvê-la na importação reapresenta o jogo."""
+    """O modelo só avalia a pendência em `atualizar`; resolvê-la na importação reapresenta o jogo."""
     from cartridges.importer.importer import Importer  # noqa: PLC0415
 
     modelo = ModeloDaBiblioteca()
@@ -518,7 +518,7 @@ def test_aviso_de_soltar_comeca_escondido(app_qt):
     janela.fechar()
 
 
-# region: o botão "Preferências" onde a `main` o tinha (D70)
+# region: o botão "Preferências" do diálogo de erros
 
 
 def _com_preferencias(monkeypatch, fila):
@@ -537,7 +537,7 @@ def test_dialogo_de_erros_tem_o_botao_preferencias(app_qt):
     secundario = janela.achar("botaoSecundarioDoDialogo")
     assert dialogo.property("rotuloSecundario") == "Preferências"
     assert secundario.property("visible") is True
-    assert secundario.property("activeFocus") is True  # o `set_default_response` da `main`
+    assert secundario.property("activeFocus") is True  # é o botão padrão
     janela.fechar()
 
 

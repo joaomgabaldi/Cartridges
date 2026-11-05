@@ -1,4 +1,4 @@
-"""Erro não tratado vai para o cartridges.log, não só para o console (D89).
+"""Erro não tratado vai para o cartridges.log, não só para o console.
 
 O app instalado roda no pythonw, sem console: um erro dentro de um slot do Qt (abrir a tela de edição, salvar) sumia
 sem deixar rastro no log. Todo teste devolve os ganchos do processo (`sys.excepthook`, `threading.excepthook`,
@@ -36,9 +36,6 @@ def ganchos_do_processo(monkeypatch):
     yield
     sys.excepthook, threading.excepthook, sys.unraisablehook = guardados
     qInstallMessageHandler(anterior_do_qt)
-
-
-# --- O log -------------------------------------------------------------------------------------------------------
 
 
 def test_aviso_critico_do_qt_vai_para_o_log(app_qt, caplog):  # noqa: ARG001
@@ -242,7 +239,7 @@ def test_logging_setup_sem_gi(tmp_path):
 def test_setup_logging_que_falha_grava_num_arquivo_da_sessao(monkeypatch, caplog, tmp_path, detalhado_ativo):
     """`dictConfig` embrulha a falha de um handler em `ValueError`: sem console no app instalado, o log vai a um arquivo
     próprio da sessão, na pasta dos logs, que a rotação seguinte comprime e descarta como os outros. Com os guards do
-    log normal: o teto de 32 MiB, sem ele só com o log detalhado (Ruling do log detalhado)."""
+    log normal: o teto de 32 MiB, sem ele só com o log detalhado."""
     from cartridges import app as modulo_app  # noqa: PLC0415
 
     monkeypatch.setattr(modulo_app.detalhado, "ativo", lambda: detalhado_ativo)
@@ -266,9 +263,6 @@ def test_setup_logging_que_falha_grava_num_arquivo_da_sessao(monkeypatch, caplog
     reserva.close()
     registro = next(r for r in caplog.records if "Não foi possível configurar o log em arquivo" in r.getMessage())
     assert registro.exc_info[1].args == ("rotação quebrada",)
-
-
-# --- Aviso ao usuário (D89) ----------------------------------------------------------------------------------------
 
 
 class _AplicativoQueAnota:
@@ -392,7 +386,7 @@ def test_falha_ao_montar_o_dialogo_nao_derruba_e_libera(aviso, monkeypatch, flus
 
 
 def test_principal_escondida_o_dialogo_espera_na_fila(app_qt, monkeypatch, flush_idle):  # noqa: ARG001
-    """Pré-voo 13: sem a janela das tarefas, o pedido vai à pilha (R5), por cima, e está lá quando a principal voltar."""
+    """Sem a janela das tarefas, o pedido vai à pilha, por cima, e está lá quando a principal voltar."""
     from cartridges.aplicativo import Aplicativo  # noqa: PLC0415
 
     aplicativo = Aplicativo()
@@ -481,15 +475,12 @@ def _rastro_do_app(n):
     return None
 
 
-# --- O arquivo de log da sessão (`SessionFileHandler`, trazidos de test_ui_logic.py) --------------------------------
-
-
 def _registro(mensagem="hello"):
     return logging.LogRecord("test", logging.INFO, __file__, 1, mensagem, None, None)
 
 
 def test_the_log_stops_at_the_cap_and_says_so(tmp_path, monkeypatch):
-    """T7.5 An unbounded session log made the next startup read it all back."""
+    """An unbounded session log made the next startup read it all back."""
     monkeypatch.setattr(SessionFileHandler, "MAX_BYTES", 2000)
     handler = SessionFileHandler(filename=tmp_path / "cartridges.log", backup_count=2)
     handler.setFormatter(logging.Formatter("%(message)s"))
@@ -505,7 +496,7 @@ def test_the_log_stops_at_the_cap_and_says_so(tmp_path, monkeypatch):
 
 
 def test_emit_never_raises_into_the_caller(tmp_path):
-    """T7.5 This runs inside somebody's logging call, often while handling an error."""
+    """This runs inside somebody's logging call, often while handling an error."""
     handler = SessionFileHandler(filename=tmp_path / "cartridges.log", backup_count=2)
     handler.setFormatter(logging.Formatter("%(message)s"))
     handler.close()
@@ -514,7 +505,7 @@ def test_emit_never_raises_into_the_caller(tmp_path):
 
 
 def test_rotation_keeps_the_previous_session(tmp_path):
-    """T7.5 backup_count limits how many sessions are kept, not their size."""
+    """backup_count limits how many sessions are kept, not their size."""
     path = tmp_path / "cartridges.log"
     first = SessionFileHandler(filename=path, backup_count=2)
     first.setFormatter(logging.Formatter("%(message)s"))
@@ -529,7 +520,7 @@ def test_rotation_keeps_the_previous_session(tmp_path):
 
 
 def test_rotation_survives_an_undecodable_log(tmp_path):
-    """T7.5 A half-written file from a crash must not stop the app from starting."""
+    """A half-written file from a crash must not stop the app from starting."""
     path = tmp_path / "cartridges.log"
     path.write_bytes(b"\xff\xfe invalid \x00 bytes")
 
@@ -540,7 +531,7 @@ def test_rotation_survives_an_undecodable_log(tmp_path):
 
 
 def test_rotation_survives_a_crash_between_compress_and_unlink(tmp_path):
-    """B10: a queda deixava `.log` e `.log.xz` no mesmo número; a próxima
+    """A queda deixava `.log` e `.log.xz` no mesmo número; a próxima
     inicialização levantava na rotação, o dictConfig virava ValueError e a
     sessão rodava sem log nenhum — justamente a sessão depois de um crash."""
     import lzma  # noqa: PLC0415

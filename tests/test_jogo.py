@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""`Jogo`: o jogo separado do widget, com as regras de domínio do antigo `Game`."""
+"""`Jogo`: o modelo do jogo e as regras de domínio."""
 
 import json
 import os
@@ -35,11 +35,8 @@ def _contar(sinal) -> list:
     return emitidos
 
 
-# -- As chaves da ficha não mudam ---------------------------------------------
-
-
 def test_as_chaves_gravadas_sao_as_da_versao_gtk():
-    """A ficha em `games/*.json` é lida pela versão GTK também: nenhuma chave
+    """A ficha em `games/*.json` é lida também pela versão anterior (GTK): nenhuma chave
     renomeada, acrescentada ou retirada, e na mesma ordem."""
     assert PERSISTED_ATTRS == (
         "added", "executable", "game_id", "source", "last_played", "playtime",
@@ -65,7 +62,7 @@ def test_padroes_de_uma_ficha_minima():
     assert gravado["conquistas"] is True
     assert gravado["status"] == "" and gravado["rating"] == 0
     assert jogo.base_source == "shortcuts"
-    json.dumps(gravado)  # tudo serializável, como antes
+    json.dumps(gravado)  # tudo serializável
 
 
 def test_status_labels():
@@ -73,9 +70,6 @@ def test_status_labels():
     assert status_label("beaten") == "Zerado"
     assert status_label("banana") == ""
     assert status_label("") == ""
-
-
-# -- Domínio ------------------------------------------------------------------
 
 
 def test_zerado():
@@ -173,9 +167,6 @@ def test_get_cover_path_acha_a_capa_apng(app_dirs):
     assert _jogo().get_cover_path() == apng
 
 
-# -- Sinais -------------------------------------------------------------------
-
-
 def test_save_e_update_emitem_os_sinais():
     jogo = _jogo()
     salvos, atualizados = _contar(jogo.salvar), _contar(jogo.atualizado)
@@ -219,9 +210,6 @@ def test_remove_game_avisa_com_desfazer():
     avisos = _contar(zerado.aviso)
     zerado.remove_game()
     assert avisos == [("Fim movido para Jogos Zerados", "remove")]
-
-
-# -- launch -------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -285,9 +273,6 @@ def test_comando_restaurado_relanca_pelo_ao_confirmar(executados):
 
     assert relancados == [True]
     assert executados == []
-
-
-# -- launch com sessão -------------------------------------------------------
 
 
 class _SessaoQueAnota:
@@ -384,7 +369,7 @@ def test_launch_sem_rastreio_so_sai_da_frente_com_a_preferencia(com_sessao, sche
 
 
 def test_segundo_launch_encerra_o_primeiro(com_sessao):
-    """Review Focus 2: a sessão anterior é encerrada, com registro, antes de outra começar."""
+    """A sessão anterior é encerrada, com registro, antes de outra começar."""
     from cartridges import jogo as modulo  # noqa: PLC0415
 
     passos = com_sessao.passos
@@ -418,9 +403,6 @@ def test_launch_sem_sessao_nao_rastreia(executados, schema):
 def test_conftest_proibe_o_run_executable():
     with pytest.raises(AssertionError, match="nenhum jogo"):
         _jogo().launch()
-
-
-# -- Fronteira ----------------------------------------------------------------
 
 
 def test_jogo_nao_importa_interface():

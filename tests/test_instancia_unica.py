@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Uma instância só por pasta de dados (D76) e a segunda abertura. Os testes vieram de `test_tarefas_ui.py` e de
-`test_reinicio.py` com os mesmos nomes.
+"""Uma instância só por pasta de dados e a segunda abertura.
 
 Nenhum teste cria o mutex nem o evento com o nome do canal final: os nomes são trocados ou vêm da pasta temporária.
 """
@@ -56,9 +55,6 @@ def _nomes_de_teste(monkeypatch):
     monkeypatch.setattr(single_instance, "nomes", lambda: (f"{base}.SingleInstance", f"{base}.Present"))
 
 
-# -- os nomes da trava ----------------------------------------------------------------------------------------
-
-
 def test_nomes_da_trava_no_canal_final_sao_os_de_sempre(tmp_path, monkeypatch):
     """Uma cópia do `shared.py` com o `instalacao.json` do canal final, como os testes do canal: só calcula nomes."""
     monkeypatch.delenv("CARTRIDGES_DADOS", raising=False)
@@ -90,9 +86,6 @@ def test_release_sem_lock_nao_faz_nada(monkeypatch):
     assert single_instance._handle is None  # noqa: SLF001
 
 
-# -- acordar a primeira cópia ---------------------------------------------------------------------------------
-
-
 def test_segunda_copia_do_app_acorda_a_primeira(monkeypatch):
     """A janela principal escondida só a primeira cópia sabe mostrar."""
     _nomes_de_teste(monkeypatch)
@@ -105,7 +98,7 @@ def test_segunda_copia_do_app_acorda_a_primeira(monkeypatch):
 
 
 def test_segunda_abertura_mostra_a_principal_escondida(app_qt, monkeypatch, flush_idle):  # noqa: ARG001
-    """Review Focus 5: a principal escondida pelas tarefas volta, e não fica marcada como escondida."""
+    """A principal escondida pelas tarefas volta, e não fica marcada como escondida."""
     monkeypatch.setattr(backup_de_saves, "_tarefas_abertas", 0)
     principal = QWindow()
     principal.resize(200, 200)
@@ -139,9 +132,6 @@ def test_segunda_abertura_desfaz_o_minimizar(app_qt):  # noqa: ARG001
         assert principal.visibility() != QWindow.Visibility.Minimized
     finally:
         principal.destroy()
-
-
-# -- o realce pela segunda cópia (user32 falso) ---------------------------------------------------------------
 
 
 def _user32_falso(monkeypatch, visivel, janelas=((42, "Qt6120QWindowIcon"),)):
@@ -195,7 +185,7 @@ def test_falha_ao_acordar_a_primeira_copia_nao_pula_o_realce(monkeypatch):
 
 
 def test_present_procura_a_janela_do_qt(monkeypatch):
-    """A janela do app é do Qt; a do Cartridges GTK (classe `gdk*`) com o mesmo título não é a nossa."""
+    """A janela do app é do Qt; a da versão anterior (GTK, classe `gdk*`) com o mesmo título não é a nossa."""
     monkeypatch.setattr(single_instance, "_wake_running_instance", lambda: None)
     user32 = _user32_falso(monkeypatch, visivel=True, janelas=((7, "gdkSurfaceToplevel"), (42, "Qt6120QWindowIcon")))
     single_instance.present_running_instance()
@@ -206,8 +196,6 @@ def test_present_procura_a_janela_do_qt(monkeypatch):
     single_instance.present_running_instance()
     user32.SetForegroundWindow.assert_not_called()
 
-
-# -- a segunda cópia do main() ---------------------------------------------------------------------------------
 
 # O `main()` de verdade com a trava já tomada; o realce é trocado (a busca de janelas seria na área de trabalho real).
 _SEGUNDA_COPIA = r"""
@@ -224,7 +212,7 @@ print(json.dumps({"codigo": codigo, "realces": realces, "nome": single_instance.
 
 
 def test_segunda_copia_do_main_sai_sem_carregar(tmp_path, monkeypatch):
-    """Review Focus 5: com a trava da mesma pasta de dados tomada, o segundo processo sai com 0 sem ler os jogos."""
+    """Com a trava da mesma pasta de dados tomada, o segundo processo sai com 0 sem ler os jogos."""
     games = tmp_path / "games"
     games.mkdir(exist_ok=True)
     (games / "imported_1.json").write_text(

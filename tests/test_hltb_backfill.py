@@ -172,9 +172,6 @@ def test_backfill_para_no_stop(monkeypatch, store, make_game):
     assert (jogo.updates, store["b"].updates) == (0, 0)  # nada aplicado depois do stop
 
 
-# -- PassadaAgendada ---------------------------------------------------------
-
-
 class _Passada(PassadaAgendada):
     atraso_inicial = 0.05
     espera_da_importacao = 0.05

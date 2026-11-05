@@ -2,11 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A regra da edição (`cartridges.edicao`), sem tela: validar e aplicar o formulário.
-
-Os casos de regra que moravam nos testes do `DetailsDialog` (`test_ui_logic.py`,
-`test_zerados.py`, `test_auditoria_0918_store.py`) estão aqui, sobre o formulário.
-"""
+"""A regra da edição (`cartridges.edicao`), sem tela: validar e aplicar o formulário."""
 
 import subprocess
 import sys
@@ -162,12 +158,11 @@ def test_adicionar_cria_imported_com_proximo_id(edicao, store, sgdb):
 
 
 # endregion
-# region Zerado que saiu da store (Review Focus 1)
+# region Zerado que saiu da store
 
 
 def test_zerado_que_saiu_da_store_nao_volta(edicao, store, sgdb, app_dirs):
-    """A ligação por appID (ou uma importação) apagou o zerado com o diálogo aberto:
-    aplicar não pode gravar a ficha de novo, nem pôr o jogo de volta na store."""
+    """Se o zerado saiu da store com o diálogo aberto, aplicar não grava a ficha nem o põe de volta na store."""
     zerado = jogo(store, 40, removed=True, status="beaten", playtime=120)
     form = edicao.Formulario.do_jogo(zerado)
     form.nome = "Outro nome"
@@ -292,8 +287,7 @@ def test_buscados_so_entram_quando_chegaram(edicao, store, sgdb):
     assert (game.metacritic, game.description) == (70, "d")
 
 
-# Todo campo de metadados que a ficha guarda, com um valor diferente do padrão
-# da classe: um campo que a edição esquece aparece como mudança.
+# Todo campo de metadados que a ficha guarda, com valor diferente do padrão da classe: um que a edição esquece aparece como mudança.
 PERSISTED_METADATA = {
     "developer": "Team Cherry",
     "publisher": "Team Cherry",
@@ -335,8 +329,7 @@ NOT_GAME_METADATA = {
 
 
 def test_the_guard_covers_every_persisted_field():
-    """O `PERSISTED_METADATA` é escrito à mão: um campo novo na ficha obriga a escolher entre pô-lo na guarda
-    acima ou dizer aqui por que ele não pertence a ela."""
+    """Campo novo em `PERSISTED_ATTRS` obriga a pô-lo na guarda acima ou a dizer aqui por que ele não pertence a ela."""
     from cartridges.jogo import PERSISTED_ATTRS  # noqa: PLC0415
 
     cobertos = set(PERSISTED_METADATA) | NOT_GAME_METADATA
@@ -433,8 +426,7 @@ def _pasta_de_jogo(tmp_path):
 
 
 def test_rastrear_sem_nome_e_forcado_desligado(edicao, store, sgdb, tmp_path):
-    """Com a pasta reconhecida ou a identidade do pacote, o tempo já é contado:
-    o switch escondido não trava o Aplicar nem fica ligado."""
+    """Com a pasta reconhecida ou a identidade do pacote, o tempo já é contado: o switch escondido não trava o Aplicar."""
     for comando in (_pasta_de_jogo(tmp_path), "explorer.exe shell:AppsFolder\\Pacote_8wekyb3d8bbwe!App"):
         assert edicao.acompanha_sem_nome(comando)
         form = edicao.Formulario.do_jogo(None)
@@ -541,8 +533,7 @@ def abandonadas(monkeypatch):
 
 
 def test_capa_aplicada_e_lida_ate_a_recarga(edicao, store, sgdb, app_dirs, tmp_path, abandonadas):
-    """A provisória só sai depois da recarga que o `save_cover` agenda: até lá a
-    tela de detalhes ainda pode lê-la."""
+    """A provisória só sai depois da recarga que o `save_cover` agenda: até lá a tela de detalhes ainda pode lê-la."""
     game = jogo(store, 84)
     provisoria = tmp_path / "escolhida.tiff"
     Image.new("RGB", (60, 90), "red").save(provisoria)
@@ -644,7 +635,6 @@ def test_edicao_sem_gi():
         "assert 'gi' not in sys.modules"
     )
     subprocess.run([sys.executable, "-c", codigo], check=True, cwd=Path(__file__).resolve().parent.parent)
-
 
 
 # region Capa preparada e capa presa

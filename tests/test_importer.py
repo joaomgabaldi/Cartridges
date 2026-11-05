@@ -4,17 +4,8 @@
 
 """When it is safe to mark a game as missing.
 
-``remove_games`` is the only code in the app that can lose a user's library, and
-it is licensed by exactly one thing: the source's id being in
-``scanned_source_ids``. Everything here is about that licence being granted only
-for a scan that actually ran to the end.
-
-The trap this guards is subtle enough that it was written into the code twice
-and got the wrong answer once. A generator that raises is closed, so the
-``continue`` that follows cannot resume it: the next ``next()`` raises
-``StopIteration`` — the same exception a clean finish raises — and the loop ends
-looking successful. It cannot be inferred from how the loop ended; it needs its
-own flag.
+``remove_games`` is licensed only by the source's id being in ``scanned_source_ids``, granted only for a scan that ran to the end.
+A generator that raises is closed, so the loop ends with the same ``StopIteration`` as a clean finish: it needs its own flag.
 """
 
 import pytest
@@ -58,10 +49,7 @@ class FakeSource:
         return self._generate()
 
     def _generate(self):
-        # Yielded as ``(game, additional_data)`` tuples, which is the shape every
-        # real source produces. The bare-Game branch of the importer is typed
-        # against the actual ``Game`` class, so a duck-type would be rejected as
-        # an invalid return type and silently skipped.
+        # Yielded as ``(game, additional_data)`` tuples, as every real source does: a duck-typed game would be skipped by the importer.
         for index, game in enumerate(self._games):
             if self._raises is not None and index == self._raise_after:
                 raise self._raises
@@ -72,11 +60,7 @@ class FakeSource:
 
 @pytest.fixture
 def importer(store):
-    """An Importer wired to a clean store.
-
-    ``Importer.__init__`` resets the store's id bookkeeping, which is why the
-    store fixture has to come first.
-    """
+    """An Importer wired to a clean store (``Importer.__init__`` resets the store's id bookkeeping, so the store fixture comes first)."""
     return Importer(Aplicativo())
 
 
@@ -84,19 +68,13 @@ def scan(importer_, source):
     importer_.source_task_thread_func((source,))
 
 
-# ---------------------------------------------------------------------------
-# Granting the licence to remove
-# ---------------------------------------------------------------------------
-
-
 def test_clean_scan_marks_the_source(importer, make_game):
-    """T2.1"""
     scan(importer, FakeSource(games=[make_game(game_id="shortcuts_1")]))
     assert "shortcuts" in importer.scanned_source_ids
 
 
 def test_generic_exception_does_not_mark_the_source(importer, make_game):
-    """T2.2 The regression: a failed scan reaching the same StopIteration."""
+    """The regression: a failed scan reaching the same StopIteration."""
     source = FakeSource(
         games=[make_game(game_id="shortcuts_1")],
         raises=OSError("drive went away mid-scan"),
@@ -109,7 +87,7 @@ def test_generic_exception_does_not_mark_the_source(importer, make_game):
 
 
 def test_source_scan_error_does_not_mark_and_reaches_the_user(importer):
-    """T2.3 A scan that quietly produces half a library is worse than one that says so."""
+    """A scan that quietly produces half a library is worse than one that says so."""
     source = FakeSource(
         raises=SourceScanError("Não foi possível ler os atalhos", "PowerShell ausente")
     )
@@ -118,20 +96,19 @@ def test_source_scan_error_does_not_mark_and_reaches_the_user(importer):
     assert "shortcuts" not in importer.scanned_source_ids
     errors = [e for e in importer.errors if isinstance(e, SourceScanError)]
     assert errors
-    # A FriendlyError is what makes the importer's warning dialog show it
-    # instead of silently dropping it as an unrecognised exception type.
+    # A FriendlyError is what makes the importer's warning dialog show it.
     assert isinstance(errors[0], FriendlyError)
     assert errors[0].title == "Não foi possível ler os atalhos"
 
 
 def test_unavailable_source_does_not_mark(importer):
-    """T2.4 A disconnected drive is not "every game was uninstalled"."""
+    """A disconnected drive is not "every game was uninstalled"."""
     scan(importer, FakeSource(available=False))
     assert importer.scanned_source_ids == set()
 
 
 def test_partial_scan_keeps_its_games_but_not_the_licence(importer, make_game, store):
-    """T2.5 Progress is kept; the authority to delete is not."""
+    """Progress is kept; the authority to delete is not."""
     games = [make_game(game_id=f"shortcuts_{i}") for i in range(3)]
     source = FakeSource(games=games, raises=RuntimeError("boom"), raise_after=3)
 
@@ -141,13 +118,7 @@ def test_partial_scan_keeps_its_games_but_not_the_licence(importer, make_game, s
     assert "shortcuts" not in importer.scanned_source_ids
 
 
-# ---------------------------------------------------------------------------
-# remove_games filters
-# ---------------------------------------------------------------------------
-
-
 def test_remove_games_skips_an_unscanned_source(importer, make_game, store):
-    """T2.6"""
     game = make_game(game_id="shortcuts_1")
     store.add_game(game, {})
     store.new_game_ids = set()
@@ -185,7 +156,7 @@ def test_remove_games_leaves_a_zerado_alone(importer, make_game, store):
 
 @pytest.mark.parametrize("bucket", ["duplicate_game_ids", "new_game_ids"])
 def test_remove_games_skips_games_seen_this_run(importer, make_game, store, bucket):
-    """T2.7 A game the scan just saw is not missing."""
+    """A game the scan just saw is not missing."""
     game = make_game(game_id="shortcuts_1")
     store.add_game(game, {})
     store.new_game_ids = set()
@@ -199,7 +170,7 @@ def test_remove_games_skips_games_seen_this_run(importer, make_game, store, buck
 
 
 def test_remove_games_skips_manually_added_games(importer, make_game, store):
-    """T2.8 "imported" games have no source to go missing from."""
+    """"imported" games have no source to go missing from."""
     game = make_game(game_id="imported_1", source="imported")
     store.add_game(game, {})
     store.new_game_ids = set()
@@ -213,7 +184,7 @@ def test_remove_games_skips_manually_added_games(importer, make_game, store):
 def test_remove_games_skips_a_source_disabled_in_the_schema(
     importer, make_game, store, schema
 ):
-    """T2.8 A source the user turned off did not scan, whatever the ids say."""
+    """A source the user turned off did not scan, whatever the ids say."""
     game = make_game(game_id="shortcuts_1")
     store.add_game(game, {})
     store.new_game_ids = set()
@@ -226,7 +197,6 @@ def test_remove_games_skips_a_source_disabled_in_the_schema(
 
 
 def test_remove_missing_disabled_removes_nothing(importer, make_game, store, schema):
-    """T2.9"""
     game = make_game(game_id="shortcuts_1")
     store.add_game(game, {})
     store.new_game_ids = set()
@@ -239,12 +209,7 @@ def test_remove_missing_disabled_removes_nothing(importer, make_game, store, sch
 
 
 def test_a_successful_empty_scan_still_removes(importer, make_game, store):
-    """T2.10 An emptied folder is a real answer, not a failure.
-
-    This is the line between the two: a source that *failed* produces nothing
-    and must not remove, but a source that scanned an empty folder produces
-    nothing and must. Only the completion flag tells them apart.
-    """
+    """An emptied folder is a real answer, not a failure: only the completion flag tells it from a source that failed."""
     game = make_game(game_id="shortcuts_1")
     store.add_game(game, {})
     store.new_game_ids = set()

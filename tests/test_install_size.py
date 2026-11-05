@@ -4,13 +4,9 @@
 
 """Medir quanto um jogo ocupa no disco, e dizer o número em português.
 
-A parte interessante da medição é o que ela deixa de contar: uma pasta que não
-dá para ler não pode derrubar a soma (instalações do Game Pass negam acesso no
-meio do caminho), e um link não pode ser seguido — o mesmo arquivo contado dos
-dois lados de uma junção daria um jogo com o dobro do tamanho.
-
-Os números conferem com o que o Explorer mostra, que é com o que eles vão ser
-comparados: base 1024, uma casa decimal, vírgula.
+A parte interessante é o que a medição deixa de contar: uma pasta ilegível não derruba a soma (instalações do Game Pass
+negam acesso no meio do caminho) e um link não é seguido (o mesmo arquivo dos dois lados de uma junção dobraria o jogo).
+Os números conferem com o Explorer: base 1024, uma casa decimal, vírgula.
 """
 
 import os
@@ -63,9 +59,7 @@ def test_folder_size_of_missing_folder_is_zero(tmp_path) -> None:
 
 
 def test_a_folder_holding_a_whole_library_is_refused(tmp_path) -> None:
-    """Um atalho para ``steam.exe -applaunch`` nomeia o cliente, cuja pasta tem
-    a biblioteca Steam inteira dentro. Medir isso daria um jogo de 400 GB no
-    topo justamente da ordenação feita para decidir o que apagar."""
+    """Um atalho para ``steam.exe -applaunch`` nomeia o cliente, cuja pasta tem a biblioteca Steam inteira: medir isso daria um jogo de 400 GB."""
     steam = tmp_path / "Games" / "Steam"
     write(steam / "steam.exe", 100)
     write(steam / "steamapps" / "common" / "Outro Jogo" / "data.pak", 5000)
@@ -91,9 +85,7 @@ def make_junction(link, target) -> None:
 
 
 def test_folder_size_does_not_follow_junctions(tmp_path) -> None:
-    """Auditoria 26/08, A2: `is_dir(follow_symlinks=False)` é True para junção,
-    então o alvo era contado junto — o dobro do tamanho na feature feita para
-    decidir o que apagar."""
+    """`is_dir(follow_symlinks=False)` é True para junção, então o alvo era contado junto e o tamanho dobrava."""
     write(tmp_path / "game" / "data.pak", 10)
     write(tmp_path / "biblioteca" / "grande.pak", 1000)
     make_junction(tmp_path / "game" / "resto", tmp_path / "biblioteca")
@@ -102,8 +94,7 @@ def test_folder_size_does_not_follow_junctions(tmp_path) -> None:
 
 
 def test_folder_size_survives_a_junction_cycle(tmp_path) -> None:
-    """Junção para o próprio ancestral: sem o `is_junction()` a varredura
-    re-entrava em círculo até o caminho estourar o limite do SO."""
+    """Junção para o próprio ancestral: sem o `is_junction()` a varredura re-entrava em círculo."""
     write(tmp_path / "game" / "data.pak", 10)
     make_junction(tmp_path / "game" / "loop", tmp_path / "game")
 
@@ -121,8 +112,6 @@ def test_folder_size_ignores_links(tmp_path) -> None:
 
     assert folder_size(str(tmp_path / "game")) == 3000
 
-
-# -- a varredura, sem GLib ----------------------------------------------------
 
 import ast
 import threading

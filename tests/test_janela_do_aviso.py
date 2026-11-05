@@ -120,7 +120,7 @@ def test_preparar_que_falha_nao_mostra_a_janela(abrir, user32_falso):
 
 
 def test_mostrar_nao_toma_o_foco_e_devolve_quem_tinha(abrir, user32_falso):
-    """Review Focus 1: o processo na frente, o Windows ativa o aviso ao mostrá-lo; o foco volta ao jogo."""
+    """O processo na frente, o Windows ativa o aviso ao mostrá-lo; o foco volta ao jogo."""
     janela = abrir()
     janela.visibleChanged.connect(lambda _v: setattr(user32_falso, "primeiro_plano", jpc.handle(janela)))
     janela.entrar("inferior-direito")
@@ -129,7 +129,7 @@ def test_mostrar_nao_toma_o_foco_e_devolve_quem_tinha(abrir, user32_falso):
 
 
 def test_janela_do_aviso_sai_da_barra_e_fica_por_cima(abrir, user32_falso):
-    """Review Focus 1: sem moldura, sem foco, clique atravessa; estilos Win32, dono oculto e TOPMOST."""
+    """Sem moldura, sem foco, clique atravessa; estilos Win32, dono oculto e TOPMOST."""
     janela = abrir()
     janela.entrar("inferior-direito")
     flags = janela.flags()
@@ -214,15 +214,12 @@ def test_opaco_sem_fundo_transparente(abrir, monkeypatch):
     assert opaca.rootObject().property("raio") == 0
 
 
-# -- Auditoria GTK x Qt, pacote E --------------------------------------------------------------------
-
-
 def _expr(item, texto):
     return QQmlExpression(QQmlEngine.contextForObject(item), item, texto).evaluate()[0]
 
 
 def test_cartao_tem_as_fontes_e_os_limites_da_main(abrir):
-    """A3/A4: rótulo e descrição são caption (10, linha de 140%), o título é heading (12, 700); cada um quebra em 36
+    """Rótulo e descrição são caption (10, linha de 140%), o título é heading (12, 700); cada um quebra em 36
     caracteres medidos na própria fonte, então o caption quebra mais cedo que o título."""
     longo = "palavra " * 30
     janela = abrir(rotulo=longo, titulo=longo, descricao=longo)
@@ -243,7 +240,7 @@ def test_cartao_tem_as_fontes_e_os_limites_da_main(abrir):
 
 
 def test_estrela_so_no_aviso_sem_icone_nenhum(abrir, entregas):
-    """A5: com o ícone a caminho (ou que falhou) fica o quadrado vazio de 48 px, sem a estrela."""
+    """Com o ícone a caminho (ou que falhou) fica o quadrado vazio de 48 px, sem a estrela."""
     sem = abrir()
     assert sem.rootObject().property("semIcone") is True
     assert _filho(sem, "estrelaDoAviso").property("visible") is True
@@ -254,14 +251,14 @@ def test_estrela_so_no_aviso_sem_icone_nenhum(abrir, entregas):
 
 
 def test_estrela_e_o_starred_da_main(abrir):
-    """I2: o `starred-symbolic` da Adwaita, branco, de 48 px (e não o glifo da Segoe)."""
+    """O `starred-symbolic` da Adwaita, branco, de 48 px (e não o glifo da Segoe)."""
     estrela = _filho(abrir(), "estrelaDoAviso")
     assert estrela.property("nome") == "starred" and estrela.property("tamanho") == 48
     assert _expr(estrela, "cor.toString()") == "#ffffff"
 
 
 def test_fade_em_ease_out_cubic_e_segue_as_animacoes_do_windows(abrir, monkeypatch, flush_idle):
-    """A1/A7: a curva é a do `Adw.TimedAnimation`; com os efeitos do Windows desligados o fade pula ao fim."""
+    """O fade é ease-out cúbico de 250 ms; com os efeitos do Windows desligados ele pula ao fim."""
     janela = abrir()
     raiz = janela.rootObject()
     assert _expr(raiz, "animacao.easing.type === Easing.OutCubic") is True
@@ -279,7 +276,7 @@ def test_fade_em_ease_out_cubic_e_segue_as_animacoes_do_windows(abrir, monkeypat
 
 
 def test_borda_esquerda_acompanha_a_curva_e_a_reserva_opaca_tem_faixa_reta(abrir, monkeypatch):
-    """A2: a borda de 3 px é a meia-lua do CSS (raio 12 fora, 9x12 dentro); sem transparência os cantos são retos."""
+    """A borda de 3 px é a meia-lua do CSS (raio 12 fora, 9x12 dentro); sem transparência os cantos são retos."""
     transparente = abrir().rootObject()
     assert transparente.findChild(QObject, "bordaDoAviso").property("visible") is True
     assert transparente.findChild(QObject, "bordaRetaDoAviso").property("visible") is False
@@ -291,7 +288,7 @@ def test_borda_esquerda_acompanha_a_curva_e_a_reserva_opaca_tem_faixa_reta(abrir
 
 
 def test_cartao_embutido_tem_contorno_e_sombra(abrir):
-    """A6: no assistente o cartão leva `0 0 0 1px alpha(white,.14), 0 2px 8px rgba(0,0,0,.35)`."""
+    """No assistente o cartão leva `0 0 0 1px alpha(white,.14), 0 2px 8px rgba(0,0,0,.35)`."""
     raiz = abrir().rootObject()
     sombra = raiz.findChild(QObject, "sombraDoAviso")
     assert raiz.property("embutido") is False and sombra.property("visible") is False

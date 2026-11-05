@@ -2,10 +2,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A geometria da janela principal (D87, P20): gravada ao fechar, restaurada ao abrir.
+"""A geometria da janela principal: gravada ao fechar, restaurada ao abrir.
 
-Nenhuma janela de verdade é movida: `_place`, `read` e `session_geometry` são falsos, e o estado é o `state_schema`
-temporário do conftest.
+Nenhuma janela de verdade é movida: `_place`, `read` e `session_geometry` são falsos e o estado é o `state_schema` do conftest.
 """
 
 import os
@@ -75,9 +74,6 @@ class _JanelaFalsa:
         self.maximizada += 1
 
 
-# --- trazidos de test_ui_logic.py --------------------------------------------------------------------------------
-
-
 def test_a_geometry_needs_a_size_to_be_usable():
     """Um retângulo sem tamanho é o que uma janela ainda sem lugar informa."""
     assert Geometry(0, 0, 0, 0, False).usable is False
@@ -100,15 +96,13 @@ def test_a_maximized_geometry_keeps_the_restored_size():
     assert (geometry.width, geometry.height) == (1170, 795)
 
 
-
 def test_a_negative_coordinate_is_usable():
     """Um monitor real em coordenada negativa vale como posição gravada."""
     assert Geometry(-476, 100, 800, 600, False).usable
 
 
 def test_a_minimized_window_is_not_read(monkeypatch):
-    """A1: fechar pela taskbar com a janela minimizada (o estado normal
-    enquanto um jogo roda) gravava o retângulo icônico como geometria."""
+    """Fechar pela taskbar com a janela minimizada (o estado normal enquanto um jogo roda) gravava o retângulo icônico como geometria."""
 
     class FakeUser32:
         @staticmethod
@@ -124,11 +118,9 @@ def test_a_minimized_window_is_not_read(monkeypatch):
 
     assert window_geometry.read(object()) is None
 
-# --- gravar --------------------------------------------------------------------------------------------------------
-
 
 def test_fechar_em_tela_cheia_nao_grava_a_geometria(monkeypatch, state_schema):
-    """P20: em tela cheia (Big Picture) o retângulo é o da tela, não o da janela; vale o gravado antes."""
+    """Em tela cheia (Big Picture) o retângulo é o da tela, não o da janela; vale o gravado antes."""
 
     def nao_le(*_args):
         # `pytest.fail` (BaseException): um AssertionError seria engolido pelo `except Exception` do `gravar()`.
@@ -168,7 +160,7 @@ def test_fechar_minimizada_nao_grava(monkeypatch, state_schema):
 
 
 def test_fechar_durante_a_sessao_grava_a_geometria_de_antes(win32_falso, state_schema):
-    """D52: a janela está no monitor do jogo; o que fica é onde ela estava antes da sessão."""
+    """A janela está no monitor do jogo; o que fica é onde ela estava antes da sessão."""
     win32_falso.lida = Geometry(1920, 0, 1080, 1920, True)  # estacionada, maximizada no segundo monitor
     win32_falso.sessao = Geometry(200, 100, 1000, 700, False)
     assert window_geometry.gravar(state_schema, object(), tela_cheia=False) is True
@@ -209,9 +201,6 @@ def test_gravar_sem_janela_nao_levanta(state_schema):
     antes = _gravado(state_schema)
     GeometriaDaJanela().gravar()
     assert _gravado(state_schema) == antes
-
-
-# --- restaurar -----------------------------------------------------------------------------------------------------
 
 
 def test_posicao_fora_dos_monitores_e_ignorada(monkeypatch):
@@ -272,7 +261,7 @@ def _principal(geometria):
 
 
 def test_sem_geometria_gravada_usa_o_tamanho_do_qt(app_qt, win32_falso, state_schema):  # noqa: ARG001
-    """Nada gravado (a primeira abertura): a janela fica no tamanho padrão da `main`, 1170×795."""
+    """Nada gravado (a primeira abertura): a janela fica no tamanho padrão, 1170×795."""
     assert state_schema.get_int("x") == UNSET
     geometria = GeometriaDaJanela()
     motor, componente, janela = _principal(geometria)
@@ -287,14 +276,14 @@ def test_sem_geometria_gravada_usa_o_tamanho_do_qt(app_qt, win32_falso, state_sc
 
 
 def _ja_gravado_pelo_qt(monkeypatch, tmp_path):
-    """A marca de que o Qt já gravou a geometria: o retângulo gravado já é o dele (sem a sombra do GTK)."""
+    """A marca de que o Qt já gravou a geometria: o retângulo gravado já é o dele."""
     monkeypatch.setattr(shared, "app_dir", tmp_path)
     (tmp_path / "geometria-qt").touch()
 
 
 def test_primeira_abertura_depois_da_main_desconta_a_sombra_do_gtk(monkeypatch, win32_falso, state_schema, tmp_path):
-    """DA-72: o retângulo gravado pela `main` inclui a sombra do GTK (28x29); a primeira abertura no Qt a desconta,
-    uma vez só (depois que o Qt grava, a marca existe e o retângulo vale como está)."""
+    """O retângulo gravado pela versão anterior (GTK) inclui a sombra (28x29); a primeira abertura no Qt a desconta,
+    uma vez só (depois que o Qt grava, a marca existe)."""
     monkeypatch.setattr(shared, "app_dir", tmp_path / "dados")
     for chave, valor in (("x", 100), ("y", 50), ("width", 900), ("height", 600)):
         state_schema.set_int(chave, valor)
@@ -330,16 +319,13 @@ def test_principal_restaura_depois_do_tamanho(app_qt, monkeypatch, win32_falso, 
     del motor, componente
 
 
-# --- os pontos que gravam ------------------------------------------------------------------------------------------
-
-
 class _SessaoFalsa:
     def principalFechando(self):  # noqa: N802
         pass
 
 
 def test_principal_fechando_grava_antes_de_esconder(app_qt, monkeypatch):  # noqa: ARG001
-    """D78, caso 1: com saves em andamento a principal se esconde; a geometria é gravada antes, com ela à vista."""
+    """Com saves em andamento a principal se esconde; a geometria é gravada antes, com ela à vista."""
     monkeypatch.setattr(backup_de_saves, "_tarefas_abertas", 0)
     monkeypatch.setattr(backup_de_saves, "em_andamento", lambda: True)
     monkeypatch.setattr(shared, "sessao", _SessaoFalsa(), raising=False)
@@ -365,8 +351,7 @@ def test_principal_fechando_grava_antes_de_esconder(app_qt, monkeypatch):  # noq
 def test_fechar_grava_a_geometria_primeiro(monkeypatch):
     """O primeiro passo do `_fechar` grava a geometria (o `aboutToQuit` que chega sem `closing`).
 
-    No `quit()` do reinício e da atualização o Qt fecha a janela antes: quem grava é o `closing`, e este passo vira
-    no-op (a janela já não está visível). Aqui só a ordem.
+    No `quit()` do reinício e da atualização o `closing` já gravou e este passo vira no-op. Aqui só a ordem.
     """
     from cartridges import app as modulo_app  # noqa: PLC0415
 

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A janela que aparece na abertura enquanto um backup agendado é restaurado (D74)."""
+"""A janela que aparece na abertura enquanto um backup agendado é restaurado."""
 
 import time
 from pathlib import Path

@@ -39,9 +39,6 @@ def _modelo(store, *jogos):
     return DetalhesDoJogo(store)
 
 
-# -- regras puras --------------------------------------------------------------------------------
-
-
 def test_nota_cinco_simbolos(app_qt):
     assert modulo.nota(_jogo(rating=3)) == "Minha nota: ★★★☆☆"
     assert modulo.nota(_jogo(rating=0)) == ""
@@ -169,9 +166,6 @@ def test_opacidade_do_fundo_segue_o_esquema_de_cores(app_qt, store, monkeypatch)
         assert detalhes.opacidadeDoFundo == valor, esquema
 
 
-# -- o modelo --------------------------------------------------------------------------------------
-
-
 def test_mostrar_preenche_as_propriedades(app_qt, store):
     jogo = _jogo(developer="Estúdio", status="playing", has_hltb=None)
     detalhes = _modelo(store, jogo)
@@ -255,9 +249,6 @@ def test_sair_do_zerado_sem_voltar(app_qt, store):
     assert saidas == [1]
 
 
-# -- logo --------------------------------------------------------------------------------------------
-
-
 def _logo_em_disco(nome):
     shared.logos_dir.mkdir(parents=True, exist_ok=True)
     caminho = shared.logos_dir / nome
@@ -326,9 +317,6 @@ def test_busca_que_falha_libera_o_jogo(app_qt, store, schema, monkeypatch):
     detalhes.mostrar("a")
     assert _rodar_ate(lambda: not detalhes._buscas_de_logo)  # noqa: SLF001
     assert detalhes.logo == ""
-
-
-# -- desfoque ----------------------------------------------------------------------------------------
 
 
 def test_desfoque_sem_capa_usa_placeholder(app_qt, store, tmp_path):
@@ -519,9 +507,6 @@ def test_esquecer_descarta_logo_e_desfoque_atrasados(app_qt, store, schema, monk
     assert detalhes.logo == "" and detalhes.fundo == ""
 
 
-# -- vida útil -----------------------------------------------------------------------------------------
-
-
 def test_detalhes_nao_prende_o_jogo(app_qt, store):
     jogo = _jogo()
     detalhes = _modelo(store, jogo)
@@ -552,9 +537,6 @@ def test_set_loading_avisa_quando_o_estado_muda(app_qt, store):
     jogo.set_loading(-1)
     assert len(avisos) == 2
     assert detalhes.carregando is False
-
-
-# -- as cópias animadas da página ----------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)

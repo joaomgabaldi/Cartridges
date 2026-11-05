@@ -2,9 +2,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A janela de login das lojas (EA e Epic), sem tela: colar o texto copiado do navegador e conectar (D61).
+"""A janela de login das lojas (EA e Epic), sem tela: colar o texto copiado do navegador e conectar.
 
-Trazido de `test_conquistas_ea_janela.py` e `test_conquistas_epic_janela.py`, parametrizado pela descrição `LOJA`.
+Parametrizado pela descrição `LOJA`.
 """
 
 import inspect

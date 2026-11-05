@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O `.iss` do canal final, que roda por cima da versão GTK em modo silencioso pelo atualizador.
+"""O `.iss` do canal final, que roda por cima da versão anterior (GTK) em modo silencioso pelo atualizador.
 
 Lê o texto renderizado e resolve os `#ifdef` à mão, sem o ISCC: um `[InstallDelete]` a mais apaga algo do usuário,
 um a menos mistura as árvores e uma página ou `MsgBox` trava a atualização.
@@ -97,7 +97,7 @@ def test_iss_de_desenvolvimento_apaga_so_a_arvore_do_qt(renderizado):
 
 
 def test_iss_final_nao_apaga_dados_nem_registro_ao_instalar(final, instalacao):
-    # Fica a migração da instalação "só para mim" (D97), que lê {localappdata} só para não apagar os dados e
+    # Fica a migração da instalação "só para mim", que lê {localappdata} só para não apagar os dados e
     # só toca a chave de desinstalação dela no HKCU.
     assert not _secao(final, "Registry") and not _secao(final, "UninstallDelete")
     assert "GSettings" not in instalacao

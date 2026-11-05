@@ -2,12 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A linha "Iluminação inteligente" do editor, sobre o `ModeloDaEdicao` (D51).
-
-Eram os testes do `DetailsDialog` em `test_session_fita.py`: a cor mostrada, a prévia nas fitas, o
-"voltar ao automático", o brilho e o que o Aplicar grava. Nenhuma fita de verdade: `session_fita.previa` é
-espionada e `_dispositivo` levanta (conftest).
-"""
+"""A linha "Iluminação inteligente" do editor, sobre o `ModeloDaEdicao`; nenhuma fita de verdade (`session_fita.previa` é espionada e `_dispositivo` levanta)."""
 
 from types import SimpleNamespace
 
@@ -396,7 +391,7 @@ def test_cor_gravada_sem_fita_configurada_nao_mostra_o_voltar(editor, store, app
 
 
 def test_voltar_ao_automatico_so_acende_se_a_cor_muda(editor, store, app_dirs, previas):
-    """Na `main` a prévia sai pelo `notify::rgba`: sem mudança de cor, nada é repintado."""
+    """Sem mudança de cor, nada é repintado."""
     _com_fita()
     game = _jogo(store, app_dirs)
     editor.abrir(game.game_id)

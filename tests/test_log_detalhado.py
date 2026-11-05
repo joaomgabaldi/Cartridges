@@ -231,9 +231,6 @@ def test_ferramenta_ocupada_so_gera_aviso(monkeypatch, caplog):
     assert any("Log detalhado desligado" in r.getMessage() for r in caplog.records)
 
 
-# --- Eventos do Qt, log e interruptor ------------------------------------------------------------------------------
-
-
 @pytest.fixture
 def filtro(app_qt, monkeypatch, caplog):
     """O filtro instalado no app de teste; ao fim sai do app (o app_qt vive a sessão toda)."""
@@ -436,9 +433,6 @@ def test_depuracao_do_qt_so_no_modo_detalhado(monkeypatch, caplog):
     assert "Qt-DEBUG: dentro" in mensagens and not any("fora" in m for m in mensagens)
 
 
-# --- Rodada de correção: o filtro não mexe nos filhos; o dictConfig não cala os loggers dos módulos -------------------
-
-
 def test_subclasse_python_com_pai_continua_inteira_sob_o_filtro(filtro):  # pylint: disable=unused-argument
     """O ChildAdded dispara dentro do construtor; o filtro não pode tocar nem guardar o filho (sem processEvents aqui)."""
     from PySide6.QtCore import Property, QEvent, QObject, QMetaObject, Slot  # pylint: disable=import-outside-toplevel
@@ -566,9 +560,6 @@ def test_qml_real_com_filtro_e_rastreio_nao_gera_erros_do_qt(filtro, tmp_path): 
         qInstallMessageHandler(anterior)
     ruins = [m for m in mensagens if "undefined" in m or "is not a function" in m or "No Wrapper found" in m]
     assert ruins == []
-
-
-# --- Telas que só alternam `visible`, páginas da pilha e identificação do alvo ---------------------------------------
 
 
 _QML_BOTAO = b"""

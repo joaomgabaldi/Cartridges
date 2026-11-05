@@ -44,8 +44,7 @@ def test_acesso_negado_de_vez_levanta(tmp_path, monkeypatch):
 
 
 def test_logo_lido_durante_a_troca_nao_vira_aviso(app_dirs, monkeypatch, caplog):
-    # Passeio de 28/09: "Unreadable logo sidecar … Permission denied" ao abrir
-    # o histórico enquanto a busca do logo gravava o mesmo arquivo.
+    # Regressão: "Unreadable logo sidecar … Permission denied" ao abrir o histórico enquanto a busca do logo gravava o mesmo arquivo.
     game_logo.shared.logos_dir.mkdir(parents=True, exist_ok=True)
     (game_logo.shared.logos_dir / "jogo.json").write_text(
         '{"name": "Jogo", "file": null}', encoding="utf-8"

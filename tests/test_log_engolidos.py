@@ -23,8 +23,7 @@ def test_jogo_com_json_invalido_deixa_aviso(store, app_dirs, caplog):
 def test_jogo_que_o_hltb_nao_conhece_nao_deixa_rastro_de_erro(
     monkeypatch, store, make_game, caplog
 ):
-    # "Não encontrado" é resposta, não erro: eram 6 tracebacks por abertura no
-    # log de quem usa. Uma falha de verdade continua com o rastro.
+    # "Não encontrado" é resposta, não erro; uma falha de verdade continua com o rastro.
     from types import SimpleNamespace  # noqa: PLC0415
 
     from cartridges.store.managers import hltb_manager  # noqa: PLC0415

@@ -93,7 +93,7 @@ def test_cartao_mostrado_nao_tem_botao_na_barra_de_tarefas(janela, user32_falso)
 
 
 def test_dono_volta_depois_que_o_qt_o_tira_ao_mostrar(janela, user32_falso):
-    """O Qt refaz o dono da janela ao mostrá-la (o da `transientParent`: nenhum), medido na D59."""
+    """O Qt refaz o dono da janela ao mostrá-la (o da `transientParent`: nenhum)."""
     assert jpc.preparar(janela) is True
     janela.visibleChanged.connect(lambda _v: user32_falso.donos.clear())
     jpc.mostrar_sem_tomar_o_foco(janela)
@@ -109,9 +109,7 @@ def test_cartao_mostrado_com_o_app_na_frente_nao_toma_o_foco(janela, user32_fals
 
 
 def test_por_no_canto_passa_por_notopmost_antes_de_topmost(janela, user32_falso):
-    """Logo depois de o primeiro plano mudar, o Windows aceitava o HWND_TOPMOST
-    sem aplicá-lo, e o cartão ficava atrás do jogo e da barra de tarefas. Pedir
-    HWND_NOTOPMOST antes faz o HWND_TOPMOST valer (medido em 06/10/2026)."""
+    """Logo depois de o primeiro plano mudar, o Windows aceitava o HWND_TOPMOST sem aplicá-lo; pedir HWND_NOTOPMOST antes o faz valer."""
     assert jpc.por_no_canto(janela, "inferior-direito") is True
     assert [args[1] for args in user32_falso.pedidos("SetWindowPos")] == [jpc.HWND_NOTOPMOST, jpc.HWND_TOPMOST]
 
@@ -156,9 +154,7 @@ def test_sem_user32_nao_ha_aviso_nem_excecao(janela, monkeypatch):
 
 
 def test_declarar_os_tipos_aqui_nao_estraga_o_user32_do_window_geometry(monkeypatch, monitors_de_verdade):  # noqa: ARG001
-    """``ctypes.windll.user32`` é compartilhado: declarar o ``GetMonitorInfoW`` com a
-    estrutura simples deixava ``window_geometry.monitors()`` sem nenhum monitor.
-    Só declara os tipos e lê os monitores: nenhuma janela é tocada."""
+    """``ctypes.windll.user32`` é compartilhado: declarar o ``GetMonitorInfoW`` com a estrutura simples deixava ``window_geometry.monitors()`` sem nenhum monitor."""
     from cartridges.utils import window_geometry  # noqa: PLC0415
 
     monkeypatch.setattr(jpc, "_api", _API_REAL)  # aqui o de verdade: só declara os tipos

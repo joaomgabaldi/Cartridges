@@ -45,10 +45,7 @@ def test_versao_ausente_assume_a_do_modulo_mais_comum():
     assert fita.versao == "3.3"
 
 
-# A `getdevices` da tinytuya não levanta quando a credencial está errada: ela
-# devolve um dicionário de erro no lugar da lista. Sem estas três, um
-# `AttributeError` dentro da thread deixaria o assistente parado para sempre na
-# página "Buscando…".
+# A `getdevices` da tinytuya devolve um dicionário de erro, não levanta: sem estas três o assistente ficaria parado em "Buscando…".
 
 
 def test_dicionario_de_erro_da_nuvem_nao_vira_fita():
@@ -65,14 +62,7 @@ def test_item_que_nao_e_dicionario_e_pulado():
 
 
 def test_a_tinytuya_fica_calada_no_arquivo_de_log():
-    """A API Secret da conta não pode acabar no `cartridges.log`.
-
-    Em DEBUG a tinytuya loga o dicionário de cabeçalhos de cada chamada à
-    nuvem, e enquanto ela não tem token esse dicionário traz a Secret em claro.
-    O `file_handler` do app grava tudo que chega em DEBUG, então o silenciamento
-    da biblioteca é o que separa o segredo do arquivo que vai anexado a
-    relatório de bug — e não pode sumir numa refatoração.
-    """
+    """A API Secret da conta não pode acabar no `cartridges.log`: a tinytuya a loga em DEBUG, então silenciar a biblioteca não pode sumir."""
     from cartridges.logging.setup import LIB_LOGGERS  # noqa: PLC0415
 
     nivel = logging.getLevelNamesMapping()[LIB_LOGGERS["tinytuya"]["level"]]
@@ -92,11 +82,7 @@ def pastas(tmp_path, monkeypatch):
 
 
 def _assistente(monkeypatch):
-    """O assistente de verdade, com a thread da rede rodando na hora.
-
-    Mesmo dublê de ``threading`` do teste do "Testar" nas Preferências: o que
-    interessa aqui é o que a tarefa faz, e não que ela tenha uma thread.
-    """
+    """O assistente de verdade, com a thread da rede rodando na hora (mesmo dublê de `threading` do teste do "Testar")."""
     import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
 
     monkeypatch.setattr(
@@ -114,11 +100,7 @@ def _assistente(monkeypatch):
 def test_busca_vazia_fica_nas_credenciais_e_nao_apaga_a_configuracao(
     pastas, monkeypatch
 ):
-    """A página dos dispositivos só tem "Aplicar", e aplicar vazio apaga tudo.
-
-    Sem esta volta, quem reabre o assistente e erra a Secret perde as fitas
-    configuradas num clique, sem caminho de volta para corrigir a credencial.
-    """
+    """A página dos dispositivos só tem "Aplicar", e aplicar vazio apaga tudo: reabrir o assistente e errar a Secret não pode perder as fitas."""
     configuradas = [Fita("Centro", "eb0", "1.2.3.4", "k")]
     session_fita.gravar_fitas(configuradas)
     assistente = _assistente(monkeypatch)
@@ -142,12 +124,7 @@ def test_busca_com_resultado_vai_para_a_lista_e_tira_o_aviso(pastas, monkeypatch
 def test_fita_desmarcada_volta_ao_estado_guardado_e_sai_da_chave(
     pastas, monkeypatch, schema
 ):
-    """Tirar uma fita da configuração não pode deixá-la acesa para sempre.
-
-    Depois da gravação o app não conhece mais essa fita: o fechamento não a
-    devolve, ainda limpa a chave, e ela fica na cor do Cartridges até alguém
-    abrir o app Smart Life.
-    """
+    """Tirar uma fita da configuração não pode deixá-la acesa: depois da gravação o app não a conhece mais e o fechamento não a devolve."""
     ficou = Fita("Centro", "eb0", "1.2.3.4", "k")
     saiu = Fita("Direita", "eb1", "1.2.3.5", "k")
     session_fita.gravar_fitas([ficou, saiu])
@@ -191,12 +168,7 @@ def test_assistente_abre_pre_preenchido_com_a_conta_salva(pastas, monkeypatch):
 
 
 def _nuvem_falsa(monkeypatch, resposta, token="token-valido", error=None):
-    """Põe no lugar da fábrica da nuvem uma que devolve ``resposta``.
-
-    ``token`` e ``error`` reproduzem os atributos que a `tinytuya.Cloud` de
-    verdade grava no `__init__` (antes mesmo de `getdevices` rodar). Devolve as
-    chamadas feitas: ``(regiao, chave, segredo)``.
-    """
+    """Põe no lugar da fábrica da nuvem uma que devolve ``resposta``, com `token` e `error` como a `tinytuya.Cloud` real; devolve ``(regiao, chave, segredo)`` de cada chamada."""
     import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
 
     chamadas = []

@@ -2,9 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O grupo das contas (Microsoft, Epic e EA) sem tela: `ContasDasLojas` (D61).
+"""O grupo das contas (Microsoft, Epic e EA) sem tela: `ContasDasLojas`.
 
-Trazido de `test_conquistas_preferencias.py` (as contas), com o aviso na `FilaDeAvisos` no lugar do toast do hospedeiro.
 O `login.entrar` do Xbox, o `conectar` e o `abrir` do navegador são sempre falsos.
 """
 
@@ -49,9 +48,6 @@ def _varredura_falsa(avisos, varridos, pedidos=None):
             varridos.extend(game for game in games if filtro is None or filtro(game))
 
     shared.aplicativo.varredura_conquistas = Varredura()
-
-
-# A conta Microsoft
 
 
 def test_conta_desconectada(monkeypatch, avisos):
@@ -236,9 +232,6 @@ def test_fechar_cancela_o_login_e_solta_o_ouvinte(monkeypatch, avisos):
     assert removidos == [1]
 
 
-# A conta Epic
-
-
 def test_descricao_do_grupo_das_contas(avisos):
     grupo = _contas(avisos)
     assert grupo.titulo == "Contas"
@@ -368,9 +361,6 @@ def test_fechar_o_grupo_fecha_a_janela_e_solta_o_ouvinte(monkeypatch, avisos):
     assert grupo.loginEpic is None
 
 
-# A conta EA
-
-
 def test_conta_ea_desconectada(monkeypatch, avisos):
     monkeypatch.setattr(ea_conta, "conectada", lambda: False)
     assert _contas(avisos).ea == {"titulo": "Conta EA", "subtitulo": "Não conectada", "botao": "Entrar"}
@@ -448,9 +438,6 @@ def test_fechar_o_grupo_fecha_a_janela_da_ea_e_solta_o_ouvinte(monkeypatch, avis
     assert janela.aberto is False and removidos == [1]
 
 
-# O grupo como um todo
-
-
 def test_fechar_duas_vezes_nao_levanta(monkeypatch, avisos):
     monkeypatch.setattr(epic_conta, "conectada", lambda: False)
     monkeypatch.setattr(ea_conta, "conectada", lambda: False)
@@ -492,7 +479,7 @@ def test_ouvinte_do_grupo_nao_prende_o_grupo(monkeypatch, avisos):
 
 
 def test_conta_que_cai_atualiza_a_linha_e_o_cartao(avisos, flush_idle, monkeypatch):
-    """Review Focus 2: a conta Microsoft recusada no meio da varredura, com a linha do grupo, a página e a lista
+    """A conta Microsoft recusada no meio da varredura, com a linha do grupo, a página e a lista
     do jogo abertas: um aviso só, a linha volta a "Não conectada" e o cartão some."""
     jogo = Jogo({"game_id": "imported_1", "source": "imported", "name": "Jogo 1"})
     catalogo.guardar(
@@ -518,7 +505,7 @@ def test_conta_que_cai_atualiza_a_linha_e_o_cartao(avisos, flush_idle, monkeypat
     assert avisos.textos == ["A conta Microsoft foi desconectada. Entre novamente nas Preferências."]
     assert grupo.microsoft["subtitulo"] == "Não conectada" and grupo.microsoft["botao"] == "Entrar"
     assert modelo.pagina["visivel"] is False
-    assert modelo.aberto is True  # D13: a lista aberta segue como estava
+    assert modelo.aberto is True  # a lista aberta segue como estava
 
 
 # O hospedeiro fecha e larga o grupo no meio da troca: a conta conecta mesmo assim, e a leitura dos jogos acontece.

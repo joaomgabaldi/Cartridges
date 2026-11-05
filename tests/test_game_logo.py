@@ -2,16 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""When a cached logo lookup is worth repeating.
-
-A hit is kept for good: the logo on screen stays until the game is renamed or
-another logo is picked by hand. Only a miss ("no logo") is asked again, after
-``MISS_TTL_SECONDS``.
-
-The other half is the locked entry: a logo the user chose themselves. That one
-must never expire, never be re-matched against the title, and never be
-overwritten by a transient failure.
-"""
+"""When a cached logo lookup is worth repeating: a hit is kept for good, only a miss is asked again after ``MISS_TTL_SECONDS``, and a locked entry (the user's own pick) never expires or gets overwritten."""
 
 import json
 import time
@@ -61,8 +52,7 @@ A_YEAR = 365 * 24 * 60 * 60
 
 
 def test_an_old_hit_is_kept_for_good(make_game, sidecar):
-    """O logo que está na tela fica: um acerto de um ano atrás não é buscado
-    de novo nem deixa de valer."""
+    """O logo que está na tela fica: um acerto de um ano atrás não é buscado de novo nem deixa de valer."""
     sidecar("shortcuts_1", filename="shortcuts_1.png", age=A_YEAR)
     game = make_game(game_id="shortcuts_1")
     assert game_logo.logo_lookup_needed(game) is False
@@ -83,8 +73,7 @@ def test_a_zerado_keeps_its_logo_past_the_expiry(make_game, sidecar):
 
 
 def test_a_zerado_keeps_its_logo_after_a_rename(make_game, sidecar):
-    """O zerado já passou pela biblioteca com o título acertado, e uma tumba
-    nunca busca de novo: descartar o logo pelo nome só o apagaria."""
+    """O zerado já passou pela biblioteca com o título acertado e nunca busca de novo: descartar o logo pelo nome só o apagaria."""
     sidecar("shortcuts_1", name="Nome antigo", filename="shortcuts_1.png", age=60)
     game = make_game(
         game_id="shortcuts_1", name="Nome novo", removed=True, status="beaten"
@@ -93,7 +82,7 @@ def test_a_zerado_keeps_its_logo_after_a_rename(make_game, sidecar):
 
 
 def test_a_locked_hit_never_expires(make_game, sidecar):
-    """T6.22 The user decided this one; the ranking does not get a second vote."""
+    """The user decided this one; the ranking does not get a second vote."""
     sidecar(
         "shortcuts_1",
         filename="shortcuts_1.png",
@@ -104,7 +93,7 @@ def test_a_locked_hit_never_expires(make_game, sidecar):
 
 
 def test_a_locked_title_choice_never_expires(make_game, sidecar):
-    """T6.22 "Use the title instead" is stored as a locked lookup with no image."""
+    """"Use the title instead" is stored as a locked lookup with no image."""
     sidecar("shortcuts_1", filename=None, locked=True, age=10**9)
     game = make_game(game_id="shortcuts_1")
 
@@ -113,7 +102,7 @@ def test_a_locked_title_choice_never_expires(make_game, sidecar):
 
 
 def test_a_locked_entry_survives_a_rename(make_game, sidecar):
-    """T6.22 A renamed game re-asks — unless the user already answered."""
+    """A renamed game re-asks — unless the user already answered."""
     sidecar("shortcuts_1", name="Halo", filename="shortcuts_1.png", locked=True)
     assert (
         game_logo.logo_lookup_needed(
@@ -135,7 +124,7 @@ def test_an_automatic_entry_does_not_survive_a_rename(make_game, sidecar):
 
 
 def test_a_hit_whose_file_vanished_expires_on_the_miss_clock(make_game, sidecar):
-    """T6.21 The user emptied the cache; waiting weeks to notice is wrong."""
+    """The user emptied the cache; waiting weeks to notice is wrong."""
     sidecar("shortcuts_1", filename=None, age=game_logo.MISS_TTL_SECONDS + 60)
     assert game_logo.logo_lookup_needed(make_game(game_id="shortcuts_1")) is True
 
@@ -162,11 +151,7 @@ def test_hidden_games_are_never_looked_up(make_game, flag):
 
 
 def test_a_transient_failure_does_not_overwrite_a_good_hit(make_game, sidecar):
-    """T6.23 A miss written over a hit is how a working logo disappears.
-
-    Asserted through the reader rather than by driving a network failure: what
-    matters is that the recorded hit is still the answer afterwards.
-    """
+    """A miss written over a hit is how a working logo disappears; asserted through the reader."""
     sidecar("shortcuts_1", filename="shortcuts_1.png", age=60)
     game = make_game(game_id="shortcuts_1")
     before = game_logo.cached_logo_path(game)
@@ -188,9 +173,7 @@ def test_a_corrupt_timestamp_is_treated_as_expired(make_game):
 
 
 def test_an_oversized_candidate_is_not_usable():
-    """Auditoria 26/08, B8: o ranking desempata PARA o maior, e o loader de
-    PNG decodifica inteiro na main thread — um candidato desmedido é pulado
-    para o pick escolher o próximo."""
+    """O ranking desempata para o maior e o loader de PNG decodifica inteiro na thread principal: um candidato desmedido é pulado."""
     huge = {"url": "https://x/logo.png", "width": 15000, "height": 8000}
     fine = {"url": "https://x/logo.png", "width": 1280, "height": 480}
 

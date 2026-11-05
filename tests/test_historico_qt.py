@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O `HistoricoDeSessoes` e a geometria do gráfico: tudo o que a tela do histórico mostra, sem tela (D54)."""
+"""O `HistoricoDeSessoes` e a geometria do gráfico: tudo o que a tela do histórico mostra, sem tela."""
 
 from datetime import date, datetime, timedelta
 from time import time
@@ -55,9 +55,6 @@ def _logo_em_disco(jogo, monkeypatch, tmp_path, largura, altura):
     caminho = tmp_path / "logo.png"
     Image.new("RGBA", (largura, altura), "red").save(caminho)
     monkeypatch.setattr(modulo.game_logo, "cached_logo_path", lambda _jogo: caminho)
-
-
-# -- as linhas e o resumo ---------------------------------------------------------------------
 
 
 def test_uma_linha_por_sessao():
@@ -114,9 +111,6 @@ def test_sem_sessao_diz_nenhuma_e_esconde_as_colunas():
     assert historico.grafico == {}
 
 
-# -- o cabeçalho ------------------------------------------------------------------------------
-
-
 @pytest.mark.parametrize(
     ("origem", "largura"),
     [
@@ -142,9 +136,6 @@ def test_sem_logo_o_nome():
     assert historico.logo == ""
     assert historico.larguraDoLogo == 0
     assert historico.nome == "Probe"
-
-
-# -- excluir ----------------------------------------------------------------------------------
 
 
 def test_excluir_desconta_do_total():
@@ -202,9 +193,6 @@ def test_total_nunca_fica_negativo():
     historico.excluir(1_700_000_000, 3600)
 
     assert jogo.playtime == 0
-
-
-# -- o gráfico --------------------------------------------------------------------------------
 
 
 def test_periodo_comeca_no_mes_e_segue_a_escolha():
@@ -290,9 +278,6 @@ def test_nome_com_marcacao_chega_inteiro():
     historico, _ = _aberto(jogo)
 
     assert historico.nome == "A & B <i>itálico</i>"
-
-
-# -- a geometria pura ---------------------------------------------------------------------------
 
 
 def test_geometria_vazia():
@@ -418,9 +403,6 @@ def test_dica_e_mostrar_mais_na_saida_nao_esvaziam_o_que_esta_a_vista():
     assert len(historico.sessoes) >= antes
 
 
-# -- sinais próprios (tabela e gráfico) ------------------------------------------------------
-
-
 def _contar(historico):
     contagem = {"alterado": 0, "tabelaMudou": 0, "graficoMudou": 0}
     for nome in contagem:
@@ -461,6 +443,6 @@ def test_fechar_so_avisa_o_aberto_e_guarda_o_conteudo_para_a_animacao_de_saida()
 
     historico.fechar()
 
-    # Só `aberto` muda: o cartão sai com o conteúdo intacto (I1).
+    # Só `aberto` muda: o cartão sai com o conteúdo intacto.
     assert contagem == {"alterado": 1, "tabelaMudou": 0, "graficoMudou": 0}
     assert historico.aberto is False and historico.nome == jogo.name and len(historico.sessoes) == 1
