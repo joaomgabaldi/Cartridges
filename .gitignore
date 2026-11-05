@@ -31,3 +31,5 @@ cartridges/instalacao.json
 
 # Pastas de teste manual (atalhos de mentira)
 /_dev/
+
+.superpowers/
