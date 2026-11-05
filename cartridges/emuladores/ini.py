@@ -1,3 +1,22 @@
+# ini.py
+#
+# Copyright 2026 joaomgabaldi
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Ler e gravar o idioma e o nome do jogador nos .ini dos emuladores de Steam.
 
 Trabalha em bytes: só a linha da chave muda, o resto do arquivo (Latin-1, GBK, BOM, CRLF ou LF) sai idêntico.
@@ -51,7 +70,11 @@ def _texto(linha: bytes) -> str:
 
 def _cabecalho(linha: bytes) -> Optional[str]:
     t = _texto(linha)
-    return t[1:-1].strip().casefold() if t.startswith("[") and t.endswith("]") else None
+    fim = t.find("]")
+    if not t.startswith("[") or fim < 0:
+        return None
+    resto = t[fim + 1:].strip()  # `[Settings] ; comentário` também é cabeçalho
+    return t[1:fim].strip().casefold() if not resto or resto.startswith((";", "#")) else None
 
 
 def _chave_valor(linha: bytes):
@@ -120,7 +143,13 @@ def _gravar(caminho: Path, dados: bytes) -> None:
 
 
 def aplicar(caminho: Path, nome: Optional[str], idioma: Optional[str], formato: Optional[str] = None) -> bool:
-    """Grava nome e idioma onde diferem. `None` = não mexer. `True` se gravou; `OSError` propaga."""
+    """Grava nome e idioma onde diferem. `None` = não mexer. `True` se gravou; `OSError` propaga.
+
+    `ValueError` para valor que quebraria a linha ou o formato (fora do ASCII imprimível, `=`, `;`, `#`).
+    """
+    for valor in (nome, idioma):
+        if valor is not None and not (valor.isascii() and valor.isprintable() and not set(valor) & set("=;#")):
+            raise ValueError(f"Valor recusado para o .ini: {valor!r}")
     fmt = _formato(caminho, formato)
     if fmt is None or not fmt[0]:
         return False
@@ -166,3 +195,8 @@ def aplicar(caminho: Path, nome: Optional[str], idioma: Optional[str], formato: 
 
 def nome_valido(texto: str) -> bool:
     return re.fullmatch(r"[A-Za-z0-9_.\-\[\]()!@$&+~^ ]{1,32}", texto) is not None and texto == texto.strip()
+
+
+def nome_aceito(texto: str) -> bool:
+    """O que as telas aceitam no campo do nome: vazio (usa o padrão) ou um nome válido."""
+    return not texto.strip() or nome_valido(texto.strip())

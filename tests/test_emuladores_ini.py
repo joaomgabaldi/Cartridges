@@ -111,3 +111,28 @@ def test_nome_valido():
     assert ini.nome_valido("a" * 32)
     for ruim in ["João", "a" * 33, "a=b", " x", "x ", "", "a\n"]:
         assert not ini.nome_valido(ruim)
+
+
+@pytest.mark.parametrize("cabecalho", [b"[Settings] ; x", b"[Settings] # x", b"[Settings]\t;"])
+def test_cabecalho_com_comentario_no_fim(tmp_path, cabecalho):
+    f = tmp_path / "steam_emu.ini"
+    f.write_bytes(cabecalho + b"\nUserName=Velho\n")
+    assert ini.ler(f).nome == "Velho"
+    assert ini.aplicar(f, "Ana", None) is True
+    assert f.read_bytes() == cabecalho + b"\nUserName=Ana\n"
+
+
+@pytest.mark.parametrize("valor", ["a=b", "a;b", "a#b", "a\rb", "a\nb", "Ação", "a\x00b"])
+def test_aplicar_recusa_valor_que_quebra_o_formato(tmp_path, valor):
+    f = tmp_path / "steam_emu.ini"
+    f.write_bytes(b"[Settings]\nUserName=Velho\n")
+    with pytest.raises(ValueError):
+        ini.aplicar(f, valor, None)
+    with pytest.raises(ValueError):
+        ini.aplicar(f, None, valor)
+    assert f.read_bytes() == b"[Settings]\nUserName=Velho\n"
+
+
+def test_nome_aceito():
+    assert ini.nome_aceito("") and ini.nome_aceito("  ") and ini.nome_aceito(" Ana ")
+    assert not ini.nome_aceito("Ação") and not ini.nome_aceito("x" * 33)
