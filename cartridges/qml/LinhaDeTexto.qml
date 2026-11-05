@@ -8,6 +8,8 @@ LinhaDoGrupo {
     property alias inputMethodHints: campo.inputMethodHints
     property alias echoMode: campo.echoMode
     property bool erro: false
+    // Texto de exemplo do campo vazio, visível com o campo em foco (sem foco o título ocupa o lugar).
+    property string exemplo
     default property alias acessorios: lado.data
 
     signal editado()
@@ -16,7 +18,8 @@ LinhaDoGrupo {
     readonly property bool _rotuloEmCima: campo.activeFocus || campo.text !== ""
 
     comTextos: false
-    alturaMinima: 50
+    // Com subtítulo, a dica fica sob o campo e a linha cresce.
+    alturaMinima: subtitulo !== "" ? 70 : 50
     sobre: areaDaLinha.containsMouse && !campo.activeFocus
     foco: campo.activeFocus
 
@@ -43,13 +46,15 @@ LinhaDoGrupo {
         }
         TextField {
             id: campo
-            anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: 9 }
+            anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: 9 + (dica.visible ? 20 : 0) }
             focus: true
             padding: 0
             // O estilo Basic soma 4 ao recuo da esquerda: o texto saía 4 px à direita do rótulo.
             leftPadding: 0
             rightPadding: 0
             selectByMouse: true
+            placeholderText: linha._rotuloEmCima ? linha.exemplo : ""
+            placeholderTextColor: Tema.textoSecundario
             color: linha.erro ? Tema.destrutivoTexto : Tema.texto
             selectionColor: Qt.alpha(Tema.destaque, 0.25)
             selectedTextColor: Tema.texto
@@ -64,6 +69,17 @@ LinhaDoGrupo {
             onTextChanged: if (!activeFocus) cursorPosition = 0
             onTextEdited: linha.editado()
             onAccepted: linha.confirmado()
+        }
+        Text {
+            id: dica
+            objectName: linha.objectName + "Subtitulo"
+            anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: 9 }
+            visible: linha.subtitulo !== ""
+            text: linha.subtitulo
+            textFormat: Text.PlainText
+            elide: Text.ElideRight
+            color: linha.erro ? Tema.destrutivoTexto : Tema.textoSecundario
+            font { family: Tema.fonte; pixelSize: Tema.legenda }
         }
     }
 

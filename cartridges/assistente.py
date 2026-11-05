@@ -32,6 +32,7 @@ from PySide6.QtGui import QWindow
 
 from cartridges import conquista_aviso, shared
 from cartridges.aplicativo import _animacoes_do_sistema
+from cartridges.emuladores import idiomas, ini
 from cartridges.fita_wizard import FitaWizard
 from cartridges.modelos import big_picture
 from cartridges.modelos.avisos import FilaDeAvisos
@@ -318,6 +319,27 @@ class Assistente(QObject):
         shared.schema.set_string("sgdb-key", chave)
         shared.schema.set_boolean("sgdb", bool(chave))
         self.alterado.emit()
+
+    nomeDoJogador = Property(str, lambda _self: shared.schema.get_string("nome-do-jogador"), notify=alterado)  # noqa: N815
+    idiomaDoJogador = Property(str, lambda _self: shared.schema.get_string("idioma-do-jogador"), notify=alterado)  # noqa: N815
+    opcoesDeIdioma = Property("QVariantList", lambda _self: idiomas.para_qml(), constant=True)  # noqa: N815
+
+    @Slot(str, result=bool)
+    def nomeDoJogadorValido(self, texto: str) -> bool:  # noqa: N802
+        return not texto.strip() or ini.nome_valido(texto.strip())
+
+    @Slot(str)
+    def definirNomeDoJogador(self, texto: str) -> None:  # noqa: N802
+        # Nome fora da regra não é gravado (a tela mostra o aviso); vazio limpa o padrão.
+        if self.nomeDoJogadorValido(texto):
+            shared.schema.set_string("nome-do-jogador", texto.strip())
+            self.alterado.emit()
+
+    @Slot(str)
+    def definirIdiomaDoJogador(self, codigo: str) -> None:  # noqa: N802
+        if codigo == "" or codigo in idiomas.IDIOMAS:
+            shared.schema.set_string("idioma-do-jogador", codigo)
+            self.alterado.emit()
 
     @Slot(bool)
     def definirCapasAnimadas(self, ligado: bool) -> None:  # noqa: N802

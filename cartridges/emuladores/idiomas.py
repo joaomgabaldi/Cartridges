@@ -55,6 +55,11 @@ IDIOMAS: dict[str, str] = {
     "vietnamese": "Vietnamita",
 }
 
+def para_qml() -> list[dict[str, str]]:
+    """As opções das telas: ``{codigo, nome}`` na ordem de ``IDIOMAS``."""
+    return [{"codigo": codigo, "nome": nome} for codigo, nome in IDIOMAS.items()]
+
+
 _POR_NOME = {nome: codigo for codigo, nome in IDIOMAS.items()}
 
 

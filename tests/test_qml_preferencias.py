@@ -1434,3 +1434,36 @@ def _filhos_text(raiz):
             achados.append(atual)
         pilha.extend(atual.childItems())
     return achados
+
+
+def _digitar(item, texto):
+    item.setProperty("text", texto)
+    QMetaObject.invokeMethod(item, "editado", Qt.ConnectionType.DirectConnection)
+
+
+def test_nome_do_jogador_grava_e_o_invalido_nao(app):
+    shared.schema["nome-do-jogador"] = ""
+    _abrir(app)
+    campo = app.achar("campoDoNomeDoJogador")
+    assert _linha(app, "campoDoNomeDoJogador")[1] == "Até 32 caracteres, sem acentos."
+    _digitar(campo, "Joao")
+    assert shared.schema.get_string("nome-do-jogador") == "Joao"
+    _digitar(campo, "João")
+    assert shared.schema.get_string("nome-do-jogador") == "Joao"  # o inválido não é gravado
+    assert campo.property("erro") is True
+    assert _linha(app, "campoDoNomeDoJogador")[1] == "Use até 32 caracteres, sem acentos."
+    _digitar(campo, "")
+    assert shared.schema.get_string("nome-do-jogador") == ""
+    assert campo.property("erro") is False
+
+
+def test_idioma_dos_jogos_grava_o_codigo(app):
+    shared.schema["idioma-do-jogador"] = ""
+    _abrir(app)
+    linha = app.achar("linhaDoIdiomaDosJogos")
+    assert linha.property("currentIndex") == 0
+    QMetaObject.invokeMethod(linha, "escolhido", Qt.ConnectionType.DirectConnection, Q_ARG(int, 1))
+    assert shared.schema.get_string("idioma-do-jogador") == "brazilian"
+    assert _esperar(lambda: linha.property("currentIndex") == 1)
+    QMetaObject.invokeMethod(linha, "escolhido", Qt.ConnectionType.DirectConnection, Q_ARG(int, 0))
+    assert shared.schema.get_string("idioma-do-jogador") == ""

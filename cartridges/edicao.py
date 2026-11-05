@@ -9,6 +9,7 @@
 
 import logging
 import re
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import time
@@ -18,6 +19,7 @@ from PIL import Image, UnidentifiedImageError
 
 from cartridges import shared
 from cartridges.conquistas import fontes, historico
+from cartridges.emuladores import aplicacao, idiomas, ini
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.jogo import STATUS_LABELS, Jogo
 from cartridges.store.managers.sgdb_manager import SgdbManager
@@ -68,6 +70,9 @@ class Formulario:
     # O "Adicionar" já vem com as conquistas ligadas.
     conquistas: bool = True
     appid: str = ""
+    # Idioma (código da Steam) e nome do jogador só deste jogo; "" = o padrão do Kyron.
+    idioma_proprio: str = ""
+    nome_proprio: str = ""
     # None = não mexeu; "" = "Nenhum" (desliga o backup dos saves).
     ludusavi_escolhido: Optional[str] = None
     # O que a última busca trouxe; chave ausente (ou None) deixa o valor gravado.
@@ -104,6 +109,8 @@ class Formulario:
             notificar_atualizacoes=jogo.track_updates,
             conquistas=jogo.conquistas,
             appid=str(jogo.steam_appid or ""),
+            idioma_proprio=jogo.idioma_proprio,
+            nome_proprio=jogo.nome_proprio,
             capa=jogo.get_cover_path(),
         )
 
@@ -330,6 +337,18 @@ def saiu_da_store(jogo: Optional[Jogo]) -> bool:
     return jogo is not None and jogo.removed and shared.store.get(jogo.game_id) is not jogo
 
 
+def _aplicar_inis_em_thread(jogo: Jogo) -> None:
+    """O idioma e o nome do jogo valem já: a gravação nos .ini toca o disco, então sai da thread principal."""
+
+    def tarefa() -> None:
+        try:
+            aplicacao.aplicar_no_jogo(jogo)
+        except Exception:  # noqa: BLE001
+            logging.exception("Falha ao aplicar o idioma e o nome em %s", jogo.name)
+
+    threading.Thread(target=tarefa, name="aplicar-inis-da-edicao", daemon=True).start()
+
+
 def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resultado:
     """Grava o formulário no jogo (ou cria o jogo, com ``jogo=None``); ``appid_inicial`` é o AppID que o campo mostrava ao abrir.
 
@@ -404,6 +423,12 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
     jogo.track_updates = form.notificar_atualizacoes
     conquistas_antes = jogo.conquistas
     jogo.conquistas = form.conquistas
+    proprios_antes = (jogo.idioma_proprio, jogo.nome_proprio)
+    if form.idioma_proprio == "" or form.idioma_proprio in idiomas.IDIOMAS:
+        jogo.idioma_proprio = form.idioma_proprio
+    # Nome fora da regra não é gravado; o resto da edição segue.
+    if form.nome_proprio.strip() == "" or ini.nome_valido(form.nome_proprio.strip()):
+        jogo.nome_proprio = form.nome_proprio.strip()
 
     capa_presa = False
     if form.capa_mudou:
@@ -452,6 +477,9 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
     if acabou_de_ligar and shared.aplicativo is not None:
         if (verificador := getattr(shared.aplicativo, "verificador_de_atualizacoes", None)) is not None:
             verificador.check_async()
+
+    if proprios_antes != (jogo.idioma_proprio, jogo.nome_proprio):
+        _aplicar_inis_em_thread(jogo)
 
     if form.capa is None and (sgdb := shared.store.managers.get(SgdbManager)) is not None:
         jogo.set_loading(1)

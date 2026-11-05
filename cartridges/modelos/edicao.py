@@ -21,6 +21,7 @@ from PySide6.QtCore import Property, QCoreApplication, QEvent, QObject, QUrl, Si
 from PySide6.QtGui import QColor, QGuiApplication
 
 from cartridges import edicao, shared
+from cartridges.emuladores import idiomas, ini
 from cartridges.edicao import Escolha, Formulario
 from cartridges.jogo import STATUS_LABELS, Jogo
 from cartridges.modelos.ordem import _url_da_capa  # noqa: PLC2701
@@ -98,6 +99,8 @@ class ModeloDaEdicao(QObject):
     notificarAtualizacoesChanged = Signal()  # noqa: N815
     conquistasChanged = Signal()  # noqa: N815
     appidChanged = Signal()  # noqa: N815
+    idiomaProprioChanged = Signal()  # noqa: N815
+    nomeProprioChanged = Signal()  # noqa: N815
     # O erro de validação veio do AppID: a seção "Opções avançadas" precisa estar à vista.
     avancadasPedidas = Signal()  # noqa: N815
     # O diálogo de erro fechou: o foco volta ao diálogo de edição.
@@ -171,6 +174,36 @@ class ModeloDaEdicao(QObject):
     )
     appid = Property(str, _ler("appid"), _gravar("appid", "appidChanged"), notify=appidChanged)
     nota = Property(int, _ler("nota"), notify=notaChanged)
+    nomeProprio = Property(  # noqa: N815
+        str, _ler("nome_proprio"), _gravar("nome_proprio", "nomeProprioChanged"), notify=nomeProprioChanged
+    )
+
+    @Property(bool, notify=nomeProprioChanged)
+    def nomeProprioValido(self) -> bool:  # noqa: N802
+        """Vazio (o padrão) ou dentro da regra; fora dela o campo avisa e o nome não é gravado."""
+        texto = self._form.nome_proprio.strip()
+        return texto == "" or ini.nome_valido(texto)
+
+    # "Padrão do Kyron" (""), depois os idiomas da Steam na ordem de `IDIOMAS`.
+    opcoesDeIdioma = Property(  # noqa: N815
+        "QVariantList", lambda self: [_("Padrão do Kyron"), *idiomas.IDIOMAS.values()], constant=True
+    )
+
+    @Property(int, notify=idiomaProprioChanged)
+    def idiomaProprioIndice(self) -> int:  # noqa: N802
+        return 1 + list(idiomas.IDIOMAS).index(self._form.idioma_proprio) if self._form.idioma_proprio in idiomas.IDIOMAS else 0
+
+    @idiomaProprioIndice.setter
+    def idiomaProprioIndice(self, indice: int) -> None:  # noqa: N802
+        codigos = ["", *idiomas.IDIOMAS]
+        if 0 <= indice < len(codigos) and codigos[indice] != self._form.idioma_proprio:
+            self._form.idioma_proprio = codigos[indice]
+            self.idiomaProprioChanged.emit()
+
+    @Property(bool, notify=abertoChanged)
+    def iniVisivel(self) -> bool:  # noqa: N802
+        """Só os jogos com .ini de emulador de Steam têm idioma e nome próprios."""
+        return bool(self._jogo and self._jogo.inis)
 
     @Property(int, notify=controleIndiceChanged)
     def controleIndice(self) -> int:  # noqa: N802
@@ -823,7 +856,7 @@ class ModeloDaEdicao(QObject):
             self.nomeChanged, self.desenvolvedoraChanged, self.publicadoraChanged, self.lancamentoChanged,
             self.generoChanged, self.executavelChanged, self.adminChanged, self.rastrearProcessoChanged,
             self.executavelDoProcessoChanged, self.notificarAtualizacoesChanged, self.conquistasChanged,
-            self.appidChanged, self.notaChanged, self.controleIndiceChanged, self.statusIndiceChanged,
+            self.appidChanged, self.idiomaProprioChanged, self.nomeProprioChanged, self.notaChanged, self.controleIndiceChanged, self.statusIndiceChanged,
             self.ludusaviChanged, self.ocupadoChanged, self.abertoChanged, self.capaChanged, self.imagensChanged,
             self.buscandoMetadadosChanged,
         ):  # fmt: skip

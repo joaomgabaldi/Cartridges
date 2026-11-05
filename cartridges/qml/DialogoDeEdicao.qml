@@ -579,6 +579,24 @@ MolduraDoDialogo {
                             enabled: edicao.ludusaviDisponivel
                             onAcionada: edicao.escolherJogoNoLudusavi()
                         }
+                        LinhaDeEscolha {
+                            objectName: "linhaDoIdiomaProprio"
+                            aparece: edicao.iniVisivel
+                            titulo: "Idioma do jogo"
+                            model: edicao.opcoesDeIdioma
+                            currentIndex: edicao.idiomaProprioIndice
+                            onEscolhido: indice => edicao.idiomaProprioIndice = indice
+                        }
+                        LinhaDeTexto {
+                            objectName: "campoDoNomeProprio"
+                            aparece: edicao.iniVisivel
+                            erro: !edicao.nomeProprioValido
+                            titulo: "Nome do jogador"
+                            exemplo: "Padrão do Kyron"
+                            subtitulo: erro ? "Use até 32 caracteres, sem acentos." : "Até 32 caracteres, sem acentos."
+                            text: edicao.nomeProprio
+                            onEditado: edicao.nomeProprio = text
+                        }
                     }
                 }
             }

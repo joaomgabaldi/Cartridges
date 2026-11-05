@@ -196,6 +196,31 @@ Column {
     }
 
     GrupoDePreferencias {
+        objectName: "grupoIdiomaENome"
+        titulo: "Idioma e nome do jogador"
+        descricao: "Aplicados automaticamente aos jogos que guardam essas informações em arquivos de configuração."
+
+        LinhaDeTexto {
+            buscavel: true
+            objectName: "campoDoNomeDoJogador"
+            titulo: "Nome do jogador"
+            subtitulo: erro ? "Use até 32 caracteres, sem acentos." : "Até 32 caracteres, sem acentos."
+            erro: !preferencias.nomeDoJogadorValido(text)
+            // Lido uma vez: com a ligação, o espaço digitado sumiria antes da letra seguinte.
+            Component.onCompleted: text = preferencias.valores["nome-do-jogador"] || ""
+            onEditado: preferencias.definirTexto("nome-do-jogador", text)
+        }
+        LinhaDeEscolha {
+            buscavel: true
+            objectName: "linhaDoIdiomaDosJogos"
+            titulo: "Idioma dos jogos"
+            model: ["Não alterar"].concat(preferencias.opcoesDeIdioma.map(i => i.nome))
+            currentIndex: 1 + preferencias.opcoesDeIdioma.findIndex(i => i.codigo === preferencias.valores["idioma-do-jogador"])
+            onEscolhido: indice => preferencias.definirTexto("idioma-do-jogador", indice === 0 ? "" : preferencias.opcoesDeIdioma[indice - 1].codigo)
+        }
+    }
+
+    GrupoDePreferencias {
         objectName: "grupoZonaDePerigo"
         titulo: "Zona de perigo"
         separada: true

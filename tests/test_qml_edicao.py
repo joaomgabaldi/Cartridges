@@ -1843,3 +1843,31 @@ def test_anel_de_foco_do_titulo_tem_os_cantos_de_cima_arredondados(app):
     assert _esperar(lambda: anel.property("visible") is True)
     assert _avaliar(anel, "topLeftRadius") == 12 and _avaliar(anel, "topRightRadius") == 12
     assert _avaliar(anel, "bottomLeftRadius") == 0 and _avaliar(anel, "bottomRightRadius") == 0
+
+
+def test_idioma_e_nome_proprios_so_com_ini_e_aplicam_ao_salvar(app, monkeypatch):
+    from cartridges.emuladores import aplicacao  # noqa: PLC0415
+
+    chamados = []
+    monkeypatch.setattr(aplicacao, "aplicar_no_jogo", lambda j: chamados.append(j.game_id) or True)
+    app.edicao.abrir("shortcuts_z2")  # sem .ini: as duas linhas não aparecem
+    assert app.achar("linhaDoIdiomaProprio").property("aparece") is False
+    assert app.achar("campoDoNomeProprio").property("aparece") is False
+    app.edicao.cancelar()
+    shared.store.get("shortcuts_z1").inis = ["C:/x/steam_settings.ini"]
+    app.edicao.abrir("shortcuts_z1")
+    assert app.achar("linhaDoIdiomaProprio").property("aparece") is True
+    campo = app.achar("campoDoNomeProprio")
+    assert campo.property("aparece") is True and campo.property("subtitulo") == "Até 32 caracteres, sem acentos."
+    app.edicao.idiomaProprioIndice = 1
+    app.edicao.nomeProprio = "João"
+    assert campo.property("erro") is True and campo.property("subtitulo") == "Use até 32 caracteres, sem acentos."
+    app.edicao.aplicar()
+    jogo1 = shared.store.get("shortcuts_z1")
+    assert jogo1.idioma_proprio == "brazilian" and jogo1.nome_proprio == ""  # nome inválido não grava; o resto sim
+    assert _esperar(lambda: chamados == ["shortcuts_z1"])
+    app.edicao.abrir("shortcuts_z1")
+    app.edicao.nomeProprio = "Joao"
+    app.edicao.aplicar()
+    assert jogo1.nome_proprio == "Joao"
+    assert _esperar(lambda: len(chamados) == 2)

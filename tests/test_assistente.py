@@ -18,7 +18,7 @@ import winreg
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QMetaObject, QPointF, Qt, QUrl
+from PySide6.QtCore import Q_ARG, QMetaObject, QPointF, Qt, QUrl
 from PySide6.QtTest import QTest
 
 from cartridges import app as modulo_app
@@ -945,3 +945,18 @@ def test_barra_com_titulo_texto_no_clamp_de_600_e_botao_escolher_com_fundo(janel
     assert descricao.property("lineHeight") == 17
     botao = janela.achar("linhaDaPastaRotulo")
     assert botao.property("height") == 34 and botao.property("radius") == 9
+
+
+def test_idioma_e_nome_do_jogador_gravam_na_hora(janela, schema):
+    janela.ir_para("jogos")
+    campo, linha = janela.achar("campoDoNomeDoJogadorNoAssistente"), janela.achar("linhaDoIdiomaNoAssistente")
+    campo.setProperty("text", "Joao")
+    QMetaObject.invokeMethod(campo, "editado", Qt.ConnectionType.DirectConnection)
+    assert schema.get_string("nome-do-jogador") == "Joao"
+    campo.setProperty("text", "João")
+    QMetaObject.invokeMethod(campo, "editado", Qt.ConnectionType.DirectConnection)
+    assert schema.get_string("nome-do-jogador") == "Joao"
+    assert campo.property("erro") is True and campo.property("subtitulo") == "Use até 32 caracteres, sem acentos."
+    QMetaObject.invokeMethod(linha, "escolhido", Qt.ConnectionType.DirectConnection, Q_ARG(int, 1))
+    assert schema.get_string("idioma-do-jogador") == "brazilian"
+    assert janela.achar("grupoIdiomaENome").property("titulo") == "Idioma e nome do jogador"

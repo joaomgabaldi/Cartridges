@@ -279,6 +279,7 @@ Window {
                     nome: "jogos"
                     icone: "folder"
                     titulo: "Seus jogos"
+                    compacta: true
                     descricao: "O Kyron adiciona à biblioteca os jogos cujos atalhos estão em uma pasta. Escolha a pasta onde estão, ou onde ficarão, os atalhos dos seus jogos. Novos atalhos colocados nela aparecem na biblioteca sempre que o aplicativo é aberto."
                     primeiro: linhaDaPasta.botaoDaLinha
 
@@ -291,6 +292,29 @@ Window {
                             subtitulo: raiz.modelo.subtituloDaPasta
                             rotulo: "Escolher"
                             onAcionada: cargaDaPasta.active ? cargaDaPasta.item.open() : cargaDaPasta.active = true
+                        }
+                    }
+
+                    GrupoDePreferencias {
+                        objectName: "grupoIdiomaENome"
+                        topPadding: 34
+                        titulo: "Idioma e nome do jogador"
+                        descricao: "Aplicados automaticamente aos jogos que guardam essas informações em arquivos de configuração."
+
+                        LinhaDeTexto {
+                            objectName: "campoDoNomeDoJogadorNoAssistente"
+                            titulo: "Nome do jogador"
+                            subtitulo: erro ? "Use até 32 caracteres, sem acentos." : "Até 32 caracteres, sem acentos."
+                            erro: !raiz.modelo.nomeDoJogadorValido(text)
+                            Component.onCompleted: text = raiz.modelo.nomeDoJogador
+                            onEditado: raiz.modelo.definirNomeDoJogador(text)
+                        }
+                        LinhaDeEscolha {
+                            objectName: "linhaDoIdiomaNoAssistente"
+                            titulo: "Idioma dos jogos"
+                            model: ["Não alterar"].concat(raiz.modelo.opcoesDeIdioma.map(i => i.nome))
+                            currentIndex: 1 + raiz.modelo.opcoesDeIdioma.findIndex(i => i.codigo === raiz.modelo.idiomaDoJogador)
+                            onEscolhido: indice => raiz.modelo.definirIdiomaDoJogador(indice === 0 ? "" : raiz.modelo.opcoesDeIdioma[indice - 1].codigo)
                         }
                     }
                 }

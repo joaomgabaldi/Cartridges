@@ -24,6 +24,7 @@ from PySide6.QtGui import QColor
 
 from cartridges import conquista_aviso, metadata_refresh, shared
 from cartridges.calibracao_janela import AssistenteDeCalibracao
+from cartridges.emuladores import idiomas, ini
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.fita_wizard import FitaWizard
 from cartridges.modelos.backup_da_biblioteca import BackupDasPreferencias
@@ -64,7 +65,9 @@ CHAVES_GRAVAVEIS = frozenset(
     }
 )
 # Chaves com regra própria (`definirTexto`): só lidas por `valores`.
-CHAVES_DE_TEXTO = frozenset({"sgdb-key", "wallhaven-key", "conquistas-chave-steam"})
+CHAVES_DE_TEXTO = frozenset(
+    {"sgdb-key", "wallhaven-key", "conquistas-chave-steam", "nome-do-jogador", "idioma-do-jogador"}
+)
 CHAVES_DA_TELA = (
     CHAVES_GRAVAVEIS
     | CHAVES_DE_TEXTO
@@ -692,6 +695,12 @@ class Preferencias(QObject):
             # Grava antes: o `reacender` decide pela chave, senão o estado de antes das fitas só seria guardado no arranque seguinte. Desligar não chama nada.
             session_fita.reacender()
 
+    opcoesDeIdioma = Property("QVariantList", lambda _self: idiomas.para_qml(), constant=True)  # noqa: N815
+
+    @Slot(str, result=bool)
+    def nomeDoJogadorValido(self, texto: str) -> bool:  # noqa: N802
+        return not texto.strip() or ini.nome_valido(texto.strip())
+
     @Slot(str, str)
     def definirTexto(self, chave: str, texto: str) -> None:
         if chave not in CHAVES_DE_TEXTO:
@@ -700,6 +709,11 @@ class Preferencias(QObject):
         # A chave do SteamGridDB é gravada como veio; as outras duas são aparadas.
         if chave != "sgdb-key":
             texto = texto.strip()
+        # Nome fora da regra e idioma desconhecido não são gravados; vazio limpa o padrão.
+        if chave == "nome-do-jogador" and texto and not ini.nome_valido(texto):
+            return
+        if chave == "idioma-do-jogador" and texto and texto not in idiomas.IDIOMAS:
+            return
         shared.schema[chave] = texto
         if chave == "sgdb-key" and not texto:
             shared.schema["sgdb"] = False
